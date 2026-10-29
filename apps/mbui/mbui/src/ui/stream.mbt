@@ -924,6 +924,13 @@ pub fn Tester::stream_codec_said(self : Tester, id : Int, e : String) -> Unit {
 }
 
 ///|
+/// Whether a stream asking for it is shown by the host's own video layer (@hostapi.stream_layers): one that shows a
+/// video in the colours it is tagged with (Display P3's wider than sRGB's), not the app's sRGB canvas.
+pub fn stream_layers_here() -> Bool {
+  h_stream_layers()
+}
+
+///|
 /// This host plays system audio carried alongside a remote screen; recorded with the run's environment.
 pub fn stream_audio_here() -> Bool {
   match fake.val { Some(f) => f.audio_here; None => @hostapi.stream_audio_here() }

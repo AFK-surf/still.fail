@@ -1,6 +1,7 @@
 // A view of the display (`screen.view`, docs/remote-screens.md): ScreenCaptureKit captures it scaled into the view's
 // bounds; VideoToolbox encodes H.264 on the hardware encoder (`codec: "h265"`: H.265 where this Mac encodes it, else
-// H.264; `codec: "jpeg"`: Core Image each picture as a JPEG of quality 0.8), a picture only once one is asked for and
+// H.264; `codec: "jpeg"`: Core Image each picture as a JPEG of quality 0.8), its colours sRGB (BT.709's primaries) or,
+// `gamut: "p3"` (a client that shows a stream tagged so as it is), Display P3's, tagged so in the stream, a picture only once one is asked for and
 // only a new one (the screen changed) unless a key frame is asked for; CGEvent posts the input. While a view is open the display is kept on: opening one wakes a display gone to
 // sleep (whose capture is black but for the cursor), and it does not go to sleep again until the view ends.
 //
@@ -76,6 +77,23 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   /// view, a client without either).
   let jpeg: Bool
   let hevc: Bool
+  /// The pictures in Display P3 (`gamut: "p3"`, a video's only), else in sRGB: never the display's own space (a
+  /// wide-gamut display's colours, shown as sRGB, come out washed out).
+  let p3: Bool
+  /// The pictures' colours as the stream says them (its VUI: colour_primaries 1 or 12, transfer 13, matrix 1, studio
+  /// range): sRGB's or Display P3's, as captured; without them a decoder guesses (BT.601's matrix on some, sRGB's
+  /// primaries), and a client that honours them shows P3's as P3.
+  var colors: [(CFString, CFString)] {
+    [
+      (kVTCompressionPropertyKey_ColorPrimaries, p3 ? kCVImageBufferColorPrimaries_P3_D65 : kCVImageBufferColorPrimaries_ITU_R_709_2),
+      (kVTCompressionPropertyKey_TransferFunction, kCVImageBufferTransferFunction_sRGB),
+      (kVTCompressionPropertyKey_YCbCrMatrix, kCVImageBufferYCbCrMatrix_ITU_R_709_2),
+    ]
+  }
+  /// The same as a picture's attachments.
+  var colorTags: [(CFString, CFString)] {
+    zip([kCVImageBufferColorPrimariesKey, kCVImageBufferTransferFunctionKey, kCVImageBufferYCbCrMatrixKey], colors.map(\.1)).map { ($0, $1) }
+  }
   /// What the session encodes: "h264", "h265", or "jpeg".
   var codec = "h264"
   lazy var images = CIContext(options: [.useSoftwareRenderer: false])
@@ -129,6 +147,7 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     audio = (options["audio"] as? Bool) == true
     jpeg = (options["codec"] as? String) == "jpeg"
     hevc = (options["codec"] as? String) == "h265"
+    p3 = !jpeg && (options["gamut"] as? String) == "p3"
     input = ScreenInput(channel: channel, displayID: displayID)
   }
 
@@ -198,6 +217,10 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     defer { transferring.unlock() }
     if transfer == nil {
       VTPixelTransferSessionCreate(allocator: nil, pixelTransferSessionOut: &transfer)
+      // NV12 made (a made-up picture's) with the BT.709 matrix the encoder tags; the colours themselves left as they are.
+      if let transfer, !jpeg {
+        VTSessionSetProperty(transfer, key: kVTPixelTransferPropertyKey_DestinationYCbCrMatrix, value: kCVImageBufferYCbCrMatrix_ITU_R_709_2)
+      }
     }
     if pool == nil || poolSize != size {
       let attributes: [CFString: Any] = [
@@ -284,6 +307,8 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
         configuration.width = width
         configuration.height = height
         configuration.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+        // The space the stream says it is in (`p3`), not the display's own.
+        configuration.colorSpaceName = p3 ? CGColorSpace.displayP3 : CGColorSpace.sRGB
         configuration.colorMatrix = CGDisplayStream.yCbCrMatrix_ITU_R_709_2
         configuration.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(fps))
         configuration.queueDepth = 5
@@ -498,6 +523,8 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
       _ = set(kVTCompressionPropertyKey_ExpectedFrameRate, fps)
       // A key frame when asked for, and at least every 10 s besides.
       _ = set(kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, 10)
+      // The pictures' colours in the stream's VUI (as each picture is tagged: `colors`).
+      for (key, value) in colors { _ = set(key, value) }
       VTCompressionSessionPrepareToEncodeFrames(made)
       finer = false
       session = made
@@ -533,6 +560,9 @@ class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     let ts = max(lastTs + 1, latestAt)
     lastTs = ts
     let properties = key ? [kVTEncodeFrameOptionKey_ForceKeyFrame: kCFBooleanTrue!] as CFDictionary : nil
+    // The encoder writes the VUI from the picture's own tags over the session's: each the same (a part scaled is
+    // tagged BT.709's transfer by the transfer session, the colours left as they are).
+    for (key, value) in colorTags { CVBufferSetAttachment(picture, key, value, .shouldPropagate) }
     let status = VTCompressionSessionEncodeFrame(
       current, imageBuffer: picture, presentationTimeStamp: CMTime(value: ts, timescale: 1_000_000), duration: .invalid,
       frameProperties: properties, infoFlagsOut: nil

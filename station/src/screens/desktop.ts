@@ -134,7 +134,7 @@ export class Desktop implements ScreenSource {
     // `audio` in its info, and none is pulled.
     const audio = options.audio === true && !options.peek;
     for (let attempt = 0; ; attempt++) {
-      const view = new HelperView(codec, await helper.connect({ op: "screen.view", codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}), ...(this.#status?.display ? { display: this.#status.display.id } : {}), ...(audio ? { audio: true } : {}), ...(synthetic ? { synthetic: this.#o.synthetic } : {}) }), () => this.#views.delete(view), new MacInput(), "ScreenCaptureKit", audio);
+      const view = new HelperView(codec, await helper.connect({ op: "screen.view", codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}), ...(options.gamut ? { gamut: options.gamut } : {}), ...(this.#status?.display ? { display: this.#status.display.id } : {}), ...(audio ? { audio: true } : {}), ...(synthetic ? { synthetic: this.#o.synthetic } : {}) }), () => this.#views.delete(view), new MacInput(), "ScreenCaptureKit", audio);
       this.#views.add(view);
       try {
         await view.ready;

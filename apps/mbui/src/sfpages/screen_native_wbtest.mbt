@@ -106,6 +106,17 @@ test "a late system column refits the whole picture and its control panel opens 
 }
 
 ///|
+test "a remote screen asks for Display P3 only where the system's video layer shows it" {
+  let r = screen_rig(w=951.0, h=669.0, platform=1)
+  let s = screens_open.get(screen_key("ws-1/st-1", "browser:tab-1")).unwrap()
+  assert_true(text(Some(r.told("screen.view").last().unwrap()), "gamut") == "")
+  r.t.set_stream_layers(true)
+  s.pause(s.src)
+  s.open(s.src)
+  assert_eq(text(Some(r.told("screen.view").last().unwrap()), "gamut"), "p3")
+}
+
+///|
 test "screen system audio negotiates only on a capable host, mutes immediately and stops on pause" {
   let r = screen_rig(w=951.0, h=669.0, platform=1)
   r.t.set_stream_audio(true)

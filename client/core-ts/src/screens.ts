@@ -95,12 +95,14 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
       // The 画质 chosen (none: 自动): how high the station lets the bit rate go.
       const q = get(params, "quality");
       const quality = !peek && (q === "smooth" || q === "hd" || q === "original") ? q : null;
+      // The UI shows a video tagged Display P3 as such: the station may send wider colours than sRGB's.
+      const p3 = get(params, "gamut") === "p3";
       return {
         kind: "view",
         station,
         screen: text(params, "screen"),
         view: text(params, "view"),
-        ask: { maxWidth: size("maxWidth", MAX_WIDTH), maxHeight: size("maxHeight", MAX_HEIGHT), codecs, control: control !== false && !peek, ...(peek ? { peek: true } : {}), ...(get(params, "audio") === "pcm_s16le" && !peek ? { audio: "pcm_s16le" as const } : {}), ...(quality ? { quality } : {}), ...(fit ? { fit } : {}) },
+        ask: { maxWidth: size("maxWidth", MAX_WIDTH), maxHeight: size("maxHeight", MAX_HEIGHT), codecs, control: control !== false && !peek, ...(peek ? { peek: true } : {}), ...(get(params, "audio") === "pcm_s16le" && !peek ? { audio: "pcm_s16le" as const } : {}), ...(quality ? { quality } : {}), ...(fit ? { fit } : {}), ...(p3 ? { gamut: "p3" as const } : {}) },
         auto: !peek && typeof control !== "boolean",
       };
     }

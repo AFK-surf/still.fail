@@ -457,6 +457,12 @@ test("a view's ask: its 画质 among those known, none for a preview's", () => {
   assert.equal(asked({ ...ask, quality: "original", peek: true }).quality, undefined);
 });
 
+test("a view's ask: Display P3 only as `gamut: \"p3\"` says, else sRGB (none)", () => {
+  const ask = { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"] };
+  assert.equal(asked({ ...ask, gamut: "p3" }).gamut, "p3");
+  for (const gamut of [undefined, "P3", "rec2020", true]) assert.equal("gamut" in asked({ ...ask, gamut }), false, String(gamut));
+});
+
 test("the pointer a source says beside its pictures goes to the view as its state's cursor", async () => {
   const hub = new ScreenHub();
   const source = new FakeSource();
@@ -1338,6 +1344,10 @@ test("the desktop's view: a connection to the helper, asked for each frame, its 
   view.close();
   assert.equal(await pending, null);
   assert.equal(await view.next(), null);
+  // A client showing Display P3 as such: the helper asked for it.
+  const wide = await desktop.open({ maxWidth: 1280, maxHeight: 720, codecs: ["h264"], gamut: "p3" });
+  assert.equal(fake.views.at(-1).gamut, "p3");
+  wide.close();
   await desktop.close();
   fake.close();
 });
