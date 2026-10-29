@@ -14,17 +14,19 @@ const TEXT = 400;
 /// `seq`: the message it is about (its `n` in the chat), which a notification opens the chat at.
 export type Notice = { to: string[]; kind: string; session: string; thread: number; seq: number | null; title: string; by: string; text: string; at: number };
 
-/// What a turn's end is worth telling its chat, and in what words: blocked, or done having said something there (the
-/// chat's last message is the agent's, from this turn). Any other end says nothing; a failed one, the station's ⚠️ does.
-export function turnNotice(turn: TurnSummary, last: MessageRow | null, key: string, file: string): [string, string] | null {
+/// What a turn's end is worth telling its chat, and in what words: blocked on something new it asks (`fresh`: see
+/// store.blockedAsk), or done having said something there (the chat's last message is the agent's, from this turn). A
+/// turn blocked on what was already told, or on nothing that waits for anyone, is told as one that ended done. Any other
+/// end says nothing; a failed one, the station's ⚠️ does.
+export function turnNotice(turn: TurnSummary, last: MessageRow | null, key: string, file: string, fresh: boolean): [string, string] | null {
   const theirs = last !== null && last.authorKind === "agent" && last.author === key && last.createdAt >= (turn.startedAt as number) ? last : null;
   const text = theirs !== null && theirs.text.trim() !== "" ? theirs.text : null;
-  if (turn.declared === "block") {
+  if (turn.declared === "block" && fresh) {
     const need = typeof turn.need === "string" && turn.need.trim() !== "" ? turn.need : null;
     return ["block", need ?? text ?? ""];
   }
   if (turn.outcome === "failed") return null;
-  if (turn.declared === "final") return theirs !== null ? ["done", text ?? file] : null;
+  if (turn.declared === "final" || turn.declared === "block") return theirs !== null ? ["done", text ?? file] : null;
   return null;
 }
 
@@ -65,7 +67,8 @@ export function turnNotices(s: Store, key: string, since: number, ended: number 
   for (const thread of store.sessionThreads(s, key)) {
     if (thread.surface !== STILLFAIL_SURFACE || thread.hiddenAt !== null) continue;
     const last = store.lastMessage(s, thread.id);
-    const told = turnNotice(turn, last, key, translate(lang, "station.notice.file"));
+    const fresh = turn.declared === "block" && store.blockedAsk(s, thread.id, key, turn)?.fresh === true;
+    const told = turnNotice(turn, last, key, translate(lang, "station.notice.file"), fresh);
     if (told === null) continue;
     const by = authorNames(api, thread.id)("agent", key) ?? "";
     const n = notice(s, thread.id, last?.n ?? null, key, told[0], by, told[1], null);
