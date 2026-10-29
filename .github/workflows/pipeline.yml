@@ -449,6 +449,8 @@ jobs:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' }}
     runs-on: [self-hosted, mini1]
+    outputs:
+      hand: ${{ steps.hand.outputs.key }}
     environment: production
     timeout-minutes: 10
     steps:
@@ -472,14 +474,22 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: sh scripts/release-put.sh --stage "$RUNNER_TEMP/release"
-      - uses: actions/upload-artifact@v4
-        with: { name: "release-station-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
+      # (handed to put through the bucket, not a run artifact: scripts/release-put.sh --hand)
+      - id: hand
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -o pipefail
+          sh scripts/release-put.sh --hand "$RUNNER_TEMP/release" | tee "$RUNNER_TEMP/hand.out"
+          echo "key=$(tail -1 "$RUNNER_TEMP/hand.out")" >> "$GITHUB_OUTPUT"
 
   # The Android app (fail.still.android.beta: mbui's, apps/mbui, in the place of the Kotlin one), on android/beta/latest.json.
   android:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.android_beta == 'true' }}
     runs-on: [self-hosted, mini1]
+    outputs:
+      hand: ${{ steps.hand.outputs.key }}
     environment: production
     timeout-minutes: 10
     steps:
@@ -499,8 +509,14 @@ jobs:
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
-      - uses: actions/upload-artifact@v4
-        with: { name: "release-android-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
+      # (handed to put through the bucket, not a run artifact: scripts/release-put.sh --hand)
+      - id: hand
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -o pipefail
+          sh scripts/release-put.sh --hand "$RUNNER_TEMP/release" | tee "$RUNNER_TEMP/hand.out"
+          echo "key=$(tail -1 "$RUNNER_TEMP/hand.out")" >> "$GITHUB_OUTPUT"
 
   # The Mac app (fail.still.desktop.beta: mbui's, apps/mbui, in the Electron app's place), on mac/beta/latest.json and
   # desktop/stillfail-beta-mac.yml (which moves an installed Electron beta over): built, signed and notarized on the
@@ -510,6 +526,8 @@ jobs:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.mac_beta == 'true' }}
     runs-on: [self-hosted, mini1]
+    outputs:
+      hand: ${{ steps.hand.outputs.key }}
     environment: production
     timeout-minutes: 10
     steps:
@@ -531,8 +549,14 @@ jobs:
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
-      - uses: actions/upload-artifact@v4
-        with: { name: "release-desktop-mac-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
+      # (handed to put through the bucket, not a run artifact: scripts/release-put.sh --hand)
+      - id: hand
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -o pipefail
+          sh scripts/release-put.sh --hand "$RUNNER_TEMP/release" | tee "$RUNNER_TEMP/hand.out"
+          echo "key=$(tail -1 "$RUNNER_TEMP/hand.out")" >> "$GITHUB_OUTPUT"
 
   # The beta Windows app (fail.still.desktop.beta: mbui's, apps/mbui, in the Electron app's place, as the Mac one), on
   # win/beta/latest.json and desktop/stillfail-beta.yml (which moves an installed Electron beta over): built on GitHub's
@@ -641,6 +665,16 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: actions/download-artifact@v4
         with: { pattern: "release-*-${{ github.sha }}", path: "${{ runner.temp }}/release", merge-multiple: true }
+      # what mini1's jobs handed through the bucket (scripts/release-put.sh --hand)
+      - name: What mini1's jobs handed over
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          HANDED: ${{ needs.station.outputs.hand }} ${{ needs.android.outputs.hand }} ${{ needs.desktop.outputs.hand }}
+        run: |
+          [ -n "$(echo $HANDED)" ] || exit 0
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          # shellcheck disable=SC2086 # names, one word each
+          sh scripts/release-put.sh --unhand "$RUNNER_TEMP/release" $HANDED
       - name: Put the releases (their files, then their feeds)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
