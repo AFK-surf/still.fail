@@ -60,7 +60,7 @@ let share_scale : Double = 3.0
 /// window has not the room for it (@sf.whole_fitted): what is copied is all of it, as it is laid out everywhere. Read down: still.fail's name (its dot orange) and when it is; what leads the first kind's share (用 6 个 Claude
 /// 订阅账号消耗了, its ring's dot before it); the tokens each kind of account used over the 7 days as rings, a kind each
 /// (Activity's rings: each its share of all kinds' tokens; 2026-10-29 用户「只算 token 和价格」, where it was a week's
-/// quota), beside them the first kind's first model's tokens large, the model and what they would cost (2.1 亿 | Opus 5.5
+/// quota), beside them the first kind's first model's tokens large, the model and what they would cost (2.1 亿 | Opus 5.5 |
 /// token，折合 $1,420); each other model a line with its own, each other kind a line over its models (no kind's models
 /// added up: 2026-10-30 用户「按模型分开写 token 和钱」); today over the last 7 days (the
 /// chats archived, what was spent), each day's chats archived a bar under them (today's orange, each day's date under
@@ -101,7 +101,7 @@ fn night_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
     |> ignore
     if spent.length() > 0 {
       // the first kind's said round its first model's tokens, a sentence read down (用 6 个 Claude 订阅账号消耗了 | 2.1 亿 |
-      // Opus 5.5 token，折合 $1,420: 2026-10-26 用户「你要么这么说"是用 x 个账号消耗了 xxx% 的周额度"」, then 「只算 token 和价格」), what leads
+      // Opus 5.5 | token，折合 $1,420: 2026-10-26 用户「你要么这么说"是用 x 个账号消耗了 xxx% 的周额度"」, then 「只算 token 和价格」), what leads
       // it over the rings and the tokens
       let first = Some(spent[0])
       let top = items(first, "models").get(0)
@@ -110,6 +110,8 @@ fn night_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
         pic_rings(c, spent)
         c.box(style=pic_hero_words, fn() {
           c.text(text(top, "tokensText"), style=pic_number) |> ignore
+          // (the model a line of its own: with what they would cost after it, a line too long beside the rings)
+          c.text(text(top, "name"), style=pic_unit) |> ignore
           c.text(text(top, "of"), style=pic_unit) |> ignore
         })
         |> ignore

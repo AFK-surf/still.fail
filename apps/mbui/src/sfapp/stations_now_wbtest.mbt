@@ -114,7 +114,7 @@ test "the card to share's looks: each chosen under it draws the picture in it at
 /// The words of the picture whose places say how it is laid out (each said alone, not a part of a line of several).
 // kept across runs: a table, never written
 let picture_part_words : Array[String] = [
-  "10月26日 04:12", "2.1 亿", "Opus 5.5 token，折合 $1,420", "今天", "12 个", "近 7 天", "57 个", "$1,911", "10/20", "10/26", "平均每个对话 5.2 个",
+  "10月26日 04:12", "2.1 亿", "token，折合 $1,420", "今天", "12 个", "近 7 天", "57 个", "$1,911", "10/20", "10/26", "平均每个对话 5.2 个",
   "一生万物，万物归一",
 ]
 
@@ -169,7 +169,7 @@ fn share_card_laid(t : @ui.Tester) -> Unit raise {
   // token 和钱」: no kind's models added up)
   let lead = word("用 6 个 Claude 订阅账号消耗了")
   let share = word("2.1 亿")
-  let of = word("Opus 5.5 token，折合 $1,420")
+  let of = word("token，折合 $1,420")
   assert_true(lead.length() == 1 && share.length() == 1 && of.length() == 1 && share[0].4 > of[0].4 * 2.0, msg="\{(lead, share, of)}")
   assert_true(
     lead[0].2 < share[0].2 && of[0].2 > share[0].2 && of[0].1 == share[0].1 && lead[0].1 < share[0].1,

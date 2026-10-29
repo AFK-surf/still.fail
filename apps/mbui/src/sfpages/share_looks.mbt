@@ -106,7 +106,7 @@ fn poster_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
           let scale = if used.length() > 4 { @sf.share_poster_number_less } else { @sf.share_poster_number_scale }
           c.text(text(first, "lead"), style=poster_words) |> ignore
           c.rich([@ui.span(used, scale~)], style=poster_number) |> ignore
-          c.text(text(top, "of"), style=poster_words) |> ignore
+          c.text(text(top, "name") + " " + text(top, "of"), style=poster_words) |> ignore
           // its other models, each its own tokens and cost (no kind adds its models' up)
           for m in models[1:] {
             c.text(text(Some(m), "name") + "  " + text(Some(m), "lineText"), style=poster_small) |> ignore
@@ -195,9 +195,12 @@ fn receipt_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
     if spent.length() > 0 {
       c.box(style=receipt_items, fn() {
         // each kind a line, its models under it, each its own tokens and cost
-        for q in spent {
+        for k, q in spent {
           let q = Some(q)
-          c.text(text(q, "name") + " ×" + count(q, "accounts").to_string(), style=receipt_line) |> ignore
+          c.box(style=if k == 0 { receipt_kind_first } else { receipt_kind }, fn() {
+            c.text(text(q, "name") + " ×" + count(q, "accounts").to_string(), style=receipt_line) |> ignore
+          })
+          |> ignore
           for m in items(q, "models") {
             c.box(style=receipt_model, fn() { receipt_item(c, text(Some(m), "name"), text(Some(m), "lineText"), false) }) |> ignore
           }
@@ -504,6 +507,17 @@ let receipt_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_
 ///|
 // kept across runs: a value (no field of it changes)
 let receipt_line : @ui.TextStyle = @ui.text_style(size=Sm, color=Data(@sf.share_receipt_dim), w=Cut, wrap=false)
+
+///|
+/// A kind's line: as far from the model over it as its models' lines are from each other (receipt_item's top), and
+/// that again.
+// kept across runs: a value (no field of it changes)
+let receipt_kind : @ui.Style = @ui.css("w=Full pt=S2")
+
+///|
+/// The first kind's line: as far from the subtotals as a line is.
+// kept across runs: a value (no field of it changes)
+let receipt_kind_first : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// A kind's model, set in under its kind's line.

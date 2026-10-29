@@ -1384,7 +1384,7 @@ pub fn fixture_fleet(f : Fixture) -> Json {
           "share": 1.0,
           "lead": "用 1 个 Claude 订阅账号消耗了",
           "models": [
-            { "name": "Opus 5.5", "tokens": 42000000, "tokensText": "4200 万", "costText": "$96.40", "lineText": "4200 万 · $96.40", "of": "Opus 5.5 token，折合 $96.40" },
+            { "name": "Opus 5.5", "tokens": 42000000, "tokensText": "4200 万", "costText": "$96.40", "lineText": "4200 万 · $96.40", "of": "token，折合 $96.40" },
           ],
         },
       ],
@@ -1409,9 +1409,9 @@ pub fn fixture_fleet(f : Fixture) -> Json {
         "share": 0.81,
         "lead": "用 6 个 Claude 订阅账号消耗了",
         "models": [
-          { "name": "Opus 5.5", "tokens": 210000000, "tokensText": "2.1 亿", "costText": "$1,420", "lineText": "2.1 亿 · $1,420", "of": "Opus 5.5 token，折合 $1,420" },
-          { "name": "Sonnet 5.5", "tokens": 38000000, "tokensText": "3800 万", "costText": "$171", "lineText": "3800 万 · $171", "of": "Sonnet 5.5 token，折合 $171" },
-          { "name": "Haiku 4.5", "tokens": 4000000, "tokensText": "400 万", "costText": "$13.20", "lineText": "400 万 · $13.20", "of": "Haiku 4.5 token，折合 $13.20" },
+          { "name": "Opus 5.5", "tokens": 210000000, "tokensText": "2.1 亿", "costText": "$1,420", "lineText": "2.1 亿 · $1,420", "of": "token，折合 $1,420" },
+          { "name": "Sonnet 5.5", "tokens": 38000000, "tokensText": "3800 万", "costText": "$171", "lineText": "3800 万 · $171", "of": "token，折合 $171" },
+          { "name": "Haiku 4.5", "tokens": 4000000, "tokensText": "400 万", "costText": "$13.20", "lineText": "400 万 · $13.20", "of": "token，折合 $13.20" },
         ],
       },
       {
@@ -1423,7 +1423,7 @@ pub fn fixture_fleet(f : Fixture) -> Json {
         "share": 0.15,
         "lead": "用 2 个 ChatGPT 订阅账号消耗了",
         "models": [
-          { "name": "GPT-5.5 Codex", "tokens": 47000000, "tokensText": "4700 万", "costText": "$262", "lineText": "4700 万 · $262", "of": "GPT-5.5 Codex token，折合 $262" },
+          { "name": "GPT-5.5 Codex", "tokens": 47000000, "tokensText": "4700 万", "costText": "$262", "lineText": "4700 万 · $262", "of": "token，折合 $262" },
         ],
       },
       {
@@ -1435,8 +1435,8 @@ pub fn fixture_fleet(f : Fixture) -> Json {
         "share": 0.04,
         "lead": "用 2 个 OpenCode Go 订阅账号消耗了",
         "models": [
-          { "name": "Kimi K2", "tokens": 8000000, "tokensText": "800 万", "costText": "$32.40", "lineText": "800 万 · $32.40", "of": "Kimi K2 token，折合 $32.40" },
-          { "name": "GLM-4.6", "tokens": 3000000, "tokensText": "300 万", "costText": "$12.70", "lineText": "300 万 · $12.70", "of": "GLM-4.6 token，折合 $12.70" },
+          { "name": "Kimi K2", "tokens": 8000000, "tokensText": "800 万", "costText": "$32.40", "lineText": "800 万 · $32.40", "of": "token，折合 $32.40" },
+          { "name": "GLM-4.6", "tokens": 3000000, "tokensText": "300 万", "costText": "$12.70", "lineText": "300 万 · $12.70", "of": "token，折合 $12.70" },
         ],
       },
     ],

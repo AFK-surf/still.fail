@@ -75,7 +75,7 @@ export function spentOf(profiles: J[], stations: FleetStation[], days: Set<strin
     return {
       name, tokens: m.tokens, tokensText, costText,
       lineText: priced ? `${tokensText} · ${costText}` : tokensText,
-      of: priced ? t("core-logic.fleet.model_tokens_of", { model: name, cost: costText }) : t("core-logic.fleet.model_tokens", { model: name }),
+      of: priced ? t("core-logic.fleet.tokens_of", { cost: costText }) : t("core-logic.fleet.tokens"),
     };
   };
   const all = [...kinds.values()].reduce((sum, k) => sum + k.tokens, 0);
@@ -84,7 +84,7 @@ export function spentOf(profiles: J[], stations: FleetStation[], days: Set<strin
     .sort(([a, x], [b, y]) => y.tokens - x.tokens || order(a) - order(b))
     .map(([kind, k]) => {
       const accounts = k.accounts.size;
-      // said as a sentence round its first model's tokens: 用 6 个 Claude 订阅账号消耗了 | 2.1 亿 | Opus 5.5 token，折合 $1,420;
+      // said as a sentence round its first model's tokens: 用 6 个 Claude 订阅账号消耗了 | 2.1 亿 | Opus 5.5 | token，折合 $1,420;
       // or as its ring's key, a line beside the others' (Claude 订阅 · 6 个账号), each model a line under it
       const name = groupTitle(kind as (typeof GROUPS)[number]);
       const lead = kind === "key" ? t("core-logic.fleet.keys_by", { n: accounts }) : t("core-logic.fleet.accounts_by", { n: accounts, kind: name });

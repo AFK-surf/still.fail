@@ -40,16 +40,16 @@ test("the card shared says, by kind of account, how many accounts the chats used
     // the same model on another station, one line with the first's; a call of no model said
     at("w/b", [call("2026-10-20", "p1", 400_000, 98_900, 3, { model: "anthropic/claude-opus-5-5" }), call("2026-10-26", "pk", 50_000, 0, 0.25)]),
   ], new Set(["2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25", "2026-10-26"]));
-  // said round its first model's tokens: 用 2 个 Claude 订阅账号消耗了 | 100 万 | Opus 5.5 token，折合 $5.00
+  // said round its first model's tokens: 用 2 个 Claude 订阅账号消耗了 | 100 万 | Opus 5.5 | token，折合 $5.00
   assert.deepEqual(spent.map((x: J) => [x.kind, x.accounts, x.tokens, x.lead, x.accountsText]), [
     ["claude", 2, 2_000_000, "用 2 个 Claude 订阅账号消耗了", "2 个账号"],
     ["chatgpt", 1, 500_000, "用 1 个 ChatGPT 订阅账号消耗了", "1 个账号"],
     ["key", 1, 50_000, "用 1 个 API Key 消耗了", "1 个账号"],
   ]);
   assert.deepEqual(spent.map((x: J) => x.models.map((m: J) => [m.name, m.tokens, m.lineText, m.of])), [
-    [["Opus 5.5", 1_000_000, "100 万 · $5.00", "Opus 5.5 token，折合 $5.00"], ["Sonnet 5.5", 1_000_000, "100 万 · $5.00", "Sonnet 5.5 token，折合 $5.00"]],
-    [["GPT-5.5", 500_000, "50 万 · ≥$1.50", "GPT-5.5 token，折合 ≥$1.50"]],
-    [["未知模型", 50_000, "5 万 · $0.25", "未知模型 token，折合 $0.25"]],
+    [["Opus 5.5", 1_000_000, "100 万 · $5.00", "token，折合 $5.00"], ["Sonnet 5.5", 1_000_000, "100 万 · $5.00", "token，折合 $5.00"]],
+    [["GPT-5.5", 500_000, "50 万 · ≥$1.50", "token，折合 ≥$1.50"]],
+    [["未知模型", 50_000, "5 万 · $0.25", "token，折合 $0.25"]],
   ]);
   assert.deepEqual(spent.map((x: J) => Math.round(x.share * 1000) / 1000), [0.784, 0.196, 0.02]);
 });

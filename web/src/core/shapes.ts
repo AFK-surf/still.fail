@@ -3713,7 +3713,7 @@ export interface FleetModel {
 	costText: string;
 	/** Both, as a line ends: 2.1 亿 · $1,420. */
 	lineText: string;
-	/** What says it after its tokens: Opus 5.5 token，折合 $1,420. */
+	/** What says it after its tokens and its name: token，折合 $1,420 (token, none priced). */
 	of: string;
 }
 

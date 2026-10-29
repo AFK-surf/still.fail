@@ -118,8 +118,8 @@
     "one": "1 account",
     "other": "{n} accounts"
   },
-  "core-logic.fleet.model_tokens_of": "{model} tokens, {cost} at API prices",
-  "core-logic.fleet.model_tokens": "{model} tokens",
+  "core-logic.fleet.tokens_of": "tokens, {cost} at API prices",
+  "core-logic.fleet.tokens": "tokens",
   "core-logic.fleet.other_models": {
     "one": "1 other model",
     "other": "{n} other models"

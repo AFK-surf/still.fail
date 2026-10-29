@@ -2822,7 +2822,7 @@ export const SHAPES: Record<string, Shape> = {
     ["tokensText", "String", { doc: "Those, short: 2.1 亿." }],
     ["costText", "String", { doc: "What they would cost at API prices: $1,420 (≥ with calls without a price; empty with none priced)." }],
     ["lineText", "String", { doc: "Both, as a line ends: 2.1 亿 · $1,420." }],
-    ["of", "String", { doc: "What says it after its tokens: Opus 5.5 token，折合 $1,420." }],
+    ["of", "String", { doc: "What says it after its tokens and its name: token，折合 $1,420 (token, none priced)." }],
   ]),
   FleetToday: struct([
     ["title", "String"],
