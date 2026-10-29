@@ -87,7 +87,7 @@ test "分享这一轮 on the bar lets go and shares the message's turn as a pict
   let calls : Array[Made] = []
   let t = fake_core(calls)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
-  t.tap_text("分享这一轮")
+  t.click(Button, label="分享这一轮")
   assert_eq(pk.ts, "")
   let asked = named(calls, "chat.publishPreview")
   assert_eq(asked.length(), 1)

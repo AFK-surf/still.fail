@@ -71,7 +71,8 @@ pub fn picking(
   match here.list {
     Some(_) => {
       let share = here.view.thread.map(fn(thread) { fn() { open_publish(src, here_ref(here), thread, turn=Some(turn)) } })
-      @sfbase.pickable(c, ts, author, role, words, fill, @sfbase.mouse_picks(), body, share~)
+      let link = @sfbase.message_link(here.station, here.session, turn)
+      @sfbase.pickable(c, ts, author, role, words, fill, @sfbase.mouse_picks(), body, share~, link~)
     }
     None => body()
   }
@@ -207,6 +208,8 @@ pub fn others_message(
   route : (() -> Unit)?,
   body : () -> Unit,
 ) -> Unit {
+  // its link and its turn's picture on its head as a mouse picks; a finger has them on the bar of what it holds picked
+  let share = if @sfbase.mouse_picks() { share } else { None }
   let row = if share is Some(_) { c.id("message/" + key) } else { 0 }
   if row != 0 { c.cursor(row, Arrow) }
   c.box(style=if share is Some(_) { msg_row_share } else { msg_row }, id=row, fn() {
