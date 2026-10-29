@@ -36,14 +36,30 @@ pub fn link_peek(
     chat_peek(c, src, station, href, id, chats.iter().find_first(fn(l) { l.href == href }))
     return
   }
-  if !(href.has_prefix("https://") || href.has_prefix("http://")) {
+  web_peek(c, src, station, href, words, id)
+}
+
+///|
+/// A web link's card over what draws it (`id`) while the pointer rests on it, as the link's station reads it (a page's
+/// tile, a pull request's or an issue's card), opened at its `side` (under it, else beside a list it would cover: a
+/// chat's things'); nothing for what is no web link.
+pub fn web_peek(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  href : String,
+  words : String,
+  id : Int,
+  side? : @ui.Side = Bottom,
+) -> Unit {
+  if station == "" || !(href.has_prefix("https://") || href.has_prefix("http://")) {
     return
   }
   // (read as the pointer comes onto it: Peeks.tsx Hover's `warm`)
   if c.hovered(id) {
     ignore((src.topic)("linkPreview", link_params(station, href)))
   }
-  hover(c, "link-peek/" + id.to_string(), id, tile=!rich_link(href), fn() { link_card(c, src, station, href, words) })
+  hover(c, "link-peek/" + id.to_string(), id, tile=!rich_link(href), side~, fn() { link_card(c, src, station, href, words) })
   |> ignore
 }
 

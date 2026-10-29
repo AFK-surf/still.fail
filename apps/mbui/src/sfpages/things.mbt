@@ -41,6 +41,7 @@ pub fn things_choose(r : ChatRef, kind : String) -> Unit {
 
 ///|
 /// The kinds, in the order the page offers them (things.ts KINDS), and what each is called.
+// kept across runs: a value (no field of it changes)
 let thing_kinds : Array[String] = ["media", "files", "links", "pulls"]
 
 ///|
@@ -217,12 +218,19 @@ pub fn thing_menu(c : @ui.Ctx, id : Int, seq : Double, url : String, away : (Dou
       @sf.menu_held(c, "thing") |> ignore
       let menu : Array[@sf.MenuItem?] = [Some(@sf.menu_item_of(@sf.t("web-main.things.show"), fn() { away(seq) }, icon="chat"))]
       if url != "" {
-        menu.push(Some(@sf.menu_item_of(@sf.t("common.link.copy"), fn() { menu_doing.copy = url }, icon="copy")))
+        menu.push(Some(@sf.menu_item_of(@sf.t("common.link.copy"), fn() { copy_link(c, url) }, icon="copy")))
       }
       @sf.menu(menu, from=@sf.at_point(x, y))
     }
     None => ()
   }
+}
+
+///|
+/// A link's address copied, said so.
+fn copy_link(c : @ui.Ctx, url : String) -> Unit {
+  c.copy_text(url)
+  say(c, @sf.t("common.link.copied"))
 }
 
 ///|
@@ -262,7 +270,7 @@ fn media_tile(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, t : Json?
 
 ///|
 /// A file, a link or a pull request of the chat's, a row: its mark, what it is called (cut to its line) and a line
-/// under it of what else is known of it, 在对话里看 at its end. Pressed, a file opens in the preview, a link and a pull
+/// under it of what else is known of it, at its end a link's copy and 在对话中查看. Pressed, a file opens in the preview, a link and a pull
 /// request in the browser.
 fn thing_row(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, kind : String, t : Json?, away : (Double) -> Unit) -> Unit {
   let p = @sf.theme().p
@@ -300,7 +308,8 @@ fn thing_row(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, kind : Str
   thing_menu(c, id, seq, url, away)
   // pointed at, a link's card over it, a pull request's as a message's link to it shows it (peeks.mbt)
   if kind != "files" {
-    link_peek(c, src, r.station, url, name, id)
+    // (at its left: under it, it would cover the rows after it)
+    web_peek(c, src, r.station, url, name, id, side=Left)
   }
   let show = c.id("things/show/" + kind + "/" + text(t, "key"))
   if c.clicked(show) {
@@ -322,6 +331,11 @@ fn thing_row(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, kind : Str
       }
     })
     |> ignore
+    // what is done with it at once (the user, 2026-10-29: 快捷操作，复制 url 之类的): a link's copied, then 在对话中查看
+    if url != "" &&
+      @sf.icon_button(c, "copy", key="things/copy/" + kind + "/" + text(t, "key"), round=true, label=@sf.t("common.link.copy")) {
+      c.tell("things/copy", fn() { copy_link(c, url) })
+    }
     if @sf.icon_button(c, "chat", key="things/show/" + kind + "/" + text(t, "key"), round=true, label=@sf.t("web-main.things.show")) {
       away(seq)
     }

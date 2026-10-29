@@ -32,7 +32,7 @@ let lastClosed = 0;
  * `warm`: what it reads, asked for as soon as the pointer comes onto it (during the card's delay), so the card mostly
  * opens with it already there. `tile`: a narrower card.
  */
-export function Hover({ children, content, tile = false, warm }: { children: ReactElement; content: ReactNode; tile?: boolean; warm?: (() => void) | undefined }) {
+export function Hover({ children, content, tile = false, warm, side = "bottom" }: { children: ReactElement; content: ReactNode; tile?: boolean; warm?: (() => void) | undefined; side?: "bottom" | "left" }) {
   const [instant, setInstant] = useState(false);
   return (
     <HoverCard.Root openDelay={320} closeDelay={120} onOpenChange={(open) => {
@@ -46,7 +46,7 @@ export function Hover({ children, content, tile = false, warm }: { children: Rea
     }}>
       <HoverCard.Trigger asChild onPointerEnter={warm} onFocus={warm}>{children}</HoverCard.Trigger>
       <HoverCard.Portal>
-        <HoverCard.Content className={`${css.card}${tile ? ` ${css.cardTile}` : ""}`} data-instant={instant || undefined} side="bottom" align="start" sideOffset={6} collisionPadding={8}>
+        <HoverCard.Content className={`${css.card}${tile ? ` ${css.cardTile}` : ""}`} data-instant={instant || undefined} side={side} align="start" sideOffset={6} collisionPadding={8}>
           {content}
         </HoverCard.Content>
       </HoverCard.Portal>
@@ -87,9 +87,11 @@ const RICH = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(?:pull|issues)\/\d+(?:[
 
 /** A web link in a message, and its card: what the core reads of it (the `linkPreview` topic, kept), asked for as the
  *  pointer comes onto the link. */
-export function LinkHover({ href, label, children }: { href: string; label: string; children: ReactElement }) {
+export function LinkHover({ href, label, children, side }: { href: string; label: string; children: ReactElement;
+  /** Beside it, where under it the card would cover a list's next rows (a chat's things'). */
+  side?: "left" | undefined }) {
   const station = useStation();
-  return <Hover tile={!RICH.test(href)} warm={() => prime({ topic: "linkPreview", station: station.address, url: href })} content={<LinkCard href={href} label={label} />}>{children}</Hover>;
+  return <Hover side={side ?? "bottom"} tile={!RICH.test(href)} warm={() => prime({ topic: "linkPreview", station: station.address, url: href })} content={<LinkCard href={href} label={label} />}>{children}</Hover>;
 }
 
 

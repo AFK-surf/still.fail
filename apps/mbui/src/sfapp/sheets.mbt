@@ -430,7 +430,7 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
             close()
             go_to(r, seq)
           })
-          @sfpages.link_peek(c, src, r.station, text(pv, "url"), @sfpages.pull_title(pv), pid)
+          @sfpages.web_peek(c, src, r.station, text(pv, "url"), @sfpages.pull_title(pv), pid, side=Left)
           if info_row(c, "info/pull/" + text(pv, "key"), fn() {
               @sfpages.pull_mark(c, pv, 16.0)
               c.box(style=@sf.full_width, fn() { c.text(@sfpages.pull_title(pv), style=info_pull_title) |> ignore }) |> ignore
@@ -457,7 +457,7 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
           _ => ()
         }
       })
-      c.box(h=Px(10.0), fn() {  }) |> ignore
+      c.box(style=info_lists_gap, fn() {  }) |> ignore
     }
     if agents.length() > 0 {
       info_list(c, fn() {
@@ -1667,6 +1667,11 @@ fn open_things(src : Source, r : ChatRef, thread : Double) -> Unit {
 ///|
 /// How many pull requests the info names itself (the rest: 全部 N 个).
 let info_pulls_most : Int = 3
+
+///|
+/// What is between the info's lists (its pull requests', its agents'): 10, as under its agents'.
+// kept across runs: a value (no field of it changes)
+let info_lists_gap : @ui.Style = @ui.css("h=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
