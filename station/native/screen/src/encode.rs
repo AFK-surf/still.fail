@@ -7,6 +7,10 @@
 // QP no higher than STILL_QP and twice the bit rate for it, where the link carries STILL_FROM or more. That is another
 // encoder of the same kind, made for that picture with those set before it starts (`still`): an encoder takes them
 // once it started without heeding them (NVIDIA's, both codecs: the same picture again the same size to the byte).
+// The bit rate asked as it goes (the station's pace) the same: NVIDIA's encoders keep the one they started at whatever
+// CODECAPI_AVEncCommonMeanBitRate is set to (asked 6 Mbit/s, ~25 went on), but its output type set again with the new
+// MF_MT_AVG_BITRATE starts their rate control anew at it (`restart`: under a millisecond, its next picture a key frame,
+// the same parameter sets), which the view does when the rate asked has gone far enough from it (pace.rs `restarts`).
 use std::collections::VecDeque;
 
 use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
@@ -47,8 +51,10 @@ pub struct H264 {
     pub hevc: bool,
     /// The parameter sets the output type names (an encoder that does not put them in band).
     pub header: Vec<u8>,
-    /// The bit rate asked.
+    /// The bit rate asked, and the one its rate control runs at (an encoder that `keeps_rate`: the one it started at,
+    /// or was `restart`ed at).
     bitrate: u32,
+    started: u32,
     /// The hardware encoder's name (to make another of it), empty for the software one.
     mft: String,
     /// The pictures a second it is set for (pace.rs `encoder_fps`: the view's 帧率, at most 60; 60 where none is asked):
@@ -87,6 +93,17 @@ fn hardware(hevc: bool) -> Vec<IMFActivate> {
         CoTaskMemFree(Some(found as _));
     }
     all
+}
+
+/// The parameter sets its output type names.
+fn sequence_header(transform: &IMFTransform) -> Option<Vec<u8>> {
+    unsafe {
+        let t = transform.GetOutputCurrentType(0).ok()?;
+        let n = t.GetBlobSize(&MF_MT_MPEG_SEQUENCE_HEADER).ok()?;
+        let mut blob = vec![0u8; n as usize];
+        t.GetBlob(&MF_MT_MPEG_SEQUENCE_HEADER, &mut blob, None).ok()?;
+        Some(blob)
+    }
 }
 
 fn friendly(activate: &IMFActivate) -> String {
@@ -237,16 +254,7 @@ impl H264 {
             let provides = info.dwFlags & (MFT_OUTPUT_STREAM_PROVIDES_SAMPLES.0 as u32 | MFT_OUTPUT_STREAM_CAN_PROVIDE_SAMPLES.0 as u32) != 0;
             transform.ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0)?;
             transform.ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0)?;
-            let header = transform
-                .GetOutputCurrentType(0)
-                .ok()
-                .and_then(|t| {
-                    let n = t.GetBlobSize(&MF_MT_MPEG_SEQUENCE_HEADER).ok()?;
-                    let mut blob = vec![0u8; n as usize];
-                    t.GetBlob(&MF_MT_MPEG_SEQUENCE_HEADER, &mut blob, None).ok()?;
-                    Some(blob)
-                })
-                .unwrap_or_default();
+            let header = sequence_header(&transform).unwrap_or_default();
             let events = if asynchronous { Some(transform.cast::<IMFMediaEventGenerator>()?) } else { None };
             Ok(H264 {
                 transform,
@@ -264,6 +272,7 @@ impl H264 {
                 hevc,
                 header,
                 bitrate,
+                started: bitrate,
                 fps,
                 mft: if hardware { name } else { String::new() },
                 _manager: manager,
@@ -271,12 +280,38 @@ impl H264 {
         }
     }
 
-    /// From the next frame on, about this many bits a second (an encoder that cannot change it as it goes keeps its own).
+    /// From the next frame on, about this many bits a second (an encoder that `keeps_rate` once `restart`ed).
     pub fn rate(&mut self, bitrate: u32) {
         self.bitrate = bitrate;
         if let Some(c) = self.codec.as_ref() {
             set(c, &CODECAPI_AVEncCommonMeanBitRate, VARIANT::from(bitrate));
         }
+    }
+
+    /// Whether it keeps the bit rate it started at whatever `rate` asks (NVIDIA's, both codecs). Microsoft's software
+    /// encoder heeds it from the next frame; Intel's and AMD's are said to.
+    pub fn keeps_rate(&self) -> bool {
+        self.mft.starts_with("NVIDIA")
+    }
+
+    /// The bit rate its rate control runs at, and the one asked.
+    pub fn rates(&self) -> (u32, u32) {
+        (self.started, self.bitrate)
+    }
+
+    /// Its rate control started anew at the bit rate asked: its output type set again with it (no picture may be in
+    /// it). The next picture comes out a key frame; the caller asks for one too.
+    pub fn restart(&mut self) -> Result<()> {
+        unsafe {
+            let output = self.transform.GetOutputCurrentType(0)?;
+            output.SetUINT32(&MF_MT_AVG_BITRATE, self.bitrate)?;
+            self.transform.SetOutputType(0, &output, 0)?;
+            if let Some(header) = sequence_header(&self.transform) {
+                self.header = header;
+            }
+        }
+        self.started = self.bitrate;
+        Ok(())
     }
 
     /// A picture is in it, not out yet.
@@ -425,7 +460,7 @@ mod tests {
     use super::*;
 
     /// A desktop's page (NV12): light, lines of small dark marks as text, a coloured side bar, a grey ramp.
-    fn page(gpu: &Gpu, width: u32, height: u32) -> ID3D11Texture2D {
+    fn page(width: u32, height: u32) -> Vec<u8> {
         let (w, h) = (width as usize, height as usize);
         let mut bytes = vec![128u8; w * h * 3 / 2];
         let mut seed = 7u32;
@@ -456,6 +491,28 @@ mod tests {
                 }
             }
         }
+        bytes
+    }
+
+    /// A picture that moves (NV12): the page scrolled by `i`, a patch of grain changing as video does.
+    fn moving(gpu: &Gpu, page: &[u8], width: u32, height: u32, i: usize) -> ID3D11Texture2D {
+        let (w, h) = (width as usize, height as usize);
+        let mut bytes = vec![128u8; w * h * 3 / 2];
+        for y in 0..h {
+            let from = (y + i * 6) % h;
+            bytes[y * w..y * w + w].copy_from_slice(&page[from * w..from * w + w]);
+        }
+        let mut seed = (i as u32).wrapping_mul(2_654_435_761).wrapping_add(1);
+        for y in h / 10..h / 10 + h / 3 {
+            for x in w / 4..w / 4 + w / 3 {
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                bytes[y * w + x] = ((x + y + i * 3) % 200) as u8 / 2 + (seed >> 26) as u8 * 2;
+            }
+        }
+        texture(gpu, width, height, &bytes)
+    }
+
+    fn texture(gpu: &Gpu, width: u32, height: u32, bytes: &[u8]) -> ID3D11Texture2D {
         let desc = D3D11_TEXTURE2D_DESC {
             Width: width,
             Height: height,
@@ -503,7 +560,7 @@ mod tests {
             return;
         };
         let (width, height, rate) = (3840, 2160, 8_000_000);
-        let picture = page(&gpu, width, height);
+        let picture = texture(&gpu, width, height, &page(width, height));
         for hevc in [false, true] {
             let made = if hevc { H264::hevc(&gpu, width, height, rate, 60) } else { H264::new(&gpu, width, height, rate, 60, false) };
             let Ok(mut moving) = made else {
@@ -524,6 +581,56 @@ mod tests {
             let key = if hevc { crate::hevc::picture(&sharp.stream).key } else { crate::avc::picture(&sharp.stream).key };
             assert!(key, "the still one's is a key frame");
             assert!(sharp.stream.len() > again.stream.len() * 3 / 2, "{} bytes, not finer than {}", sharp.stream.len(), again.stream.len());
+        }
+    }
+
+    #[test]
+    fn a_rate_asked_lower_is_kept() {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let _ = MFStartup(MF_VERSION, MFSTARTUP_LITE);
+        }
+        let Ok(gpu) = Gpu::new() else {
+            eprintln!("no GPU here: not tried");
+            return;
+        };
+        let (width, height) = (3840, 2160);
+        let page = page(width, height);
+        for hevc in [false, true] {
+            let made = if hevc { H264::hevc(&gpu, width, height, 25_000_000, 60) } else { H264::new(&gpu, width, height, 25_000_000, 60, false) };
+            let Ok(mut encoder) = made else {
+                eprintln!("no {} encoder here", if hevc { "H.265" } else { "H.264" });
+                continue;
+            };
+            let mut n = 0;
+            let mut through = |encoder: &mut H264, count: usize, key: bool| {
+                let mut bytes = Vec::new();
+                for i in 0..count {
+                    let picture = moving(&gpu, &page, width, height, n);
+                    let e = one(encoder, &gpu, &picture, n as i64 * 16_667, key && i == 0);
+                    n += 1;
+                    bytes.push(e.stream.len());
+                }
+                bytes
+            };
+            let before = through(&mut encoder, 30, true);
+            let started = before[10..].iter().sum::<usize>() as f64 * 8.0 * 60.0 / 20.0;
+            // As the view does: asked, then started anew where it keeps the rate it started at.
+            encoder.rate(6_000_000);
+            let restarted = encoder.keeps_rate();
+            if restarted {
+                let at = Instant::now();
+                encoder.restart().unwrap();
+                eprintln!("{}: started anew in {:?}", encoder.name, at.elapsed());
+            }
+            let bytes = through(&mut encoder, 90, restarted);
+            // Its rate control settled: a second of pictures, at 60 a second.
+            let rate = bytes[30..].iter().sum::<usize>() as f64 * 8.0;
+            eprintln!("{}: {:.1} Mbit/s, asked 6 Mbit/s: {:.1} Mbit/s (its first picture {} bytes)", encoder.name, started / 1e6, rate / 1e6, bytes[0]);
+            // The picture takes more than 6 Mbit/s at the rate it started at (else nothing is shown here).
+            assert!(started > 12_000_000.0, "{}: {started} bit/s at the start", encoder.name);
+            assert!(rate < 6_000_000.0 * 1.5, "{}: {rate} bit/s", encoder.name);
+            assert_eq!(encoder.rates(), (6_000_000, 6_000_000));
         }
     }
 }

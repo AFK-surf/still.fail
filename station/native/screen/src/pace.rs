@@ -38,6 +38,30 @@ impl KeyClock {
     }
 }
 
+/// An encoder that keeps the bit rate its rate control started at (encode.rs `keeps_rate`) is started anew at the one
+/// asked (`restart`, its next picture a key frame) when that is RESTART_DOWN of it or less and RESTART_DOWN_MS went
+/// since it last started (the link carries less: each frame too large holds the next back), or RESTART_UP times it or
+/// more and RESTART_UP_MS went (as the pace goes up a step at a time: a key frame every so often, not at each step);
+/// with a key frame going anyway, whenever they differ by RESTART_ANY or more.
+pub const RESTART_DOWN: f64 = 0.8;
+pub const RESTART_DOWN_MS: f64 = 1000.0;
+pub const RESTART_UP: f64 = 1.5;
+pub const RESTART_UP_MS: f64 = 1000.0;
+pub const RESTART_ANY: f64 = 0.05;
+
+/// Whether an encoder whose rate control runs at `at` is started anew at `asked`, `since` ms after it last started,
+/// the next picture going as a key frame anyway (`key`) or not.
+pub fn restarts(at: u32, asked: u32, since: f64, key: bool) -> bool {
+    let (at, asked) = (at as f64, asked as f64);
+    if key {
+        (asked - at).abs() >= at * RESTART_ANY
+    } else if asked <= at * RESTART_DOWN {
+        since >= RESTART_DOWN_MS
+    } else {
+        asked >= at * RESTART_UP && since >= RESTART_UP_MS
+    }
+}
+
 /// The frame rate asked, within 1…MAX_FPS; none when not said (or not a number).
 pub fn fps(v: Option<u64>) -> Option<u32> {
     v.map(|n| n.clamp(1, MAX_FPS as u64) as u32)
@@ -145,6 +169,33 @@ mod tests {
         clock.keyed(6_000.0);
         assert!(!clock.due(10_000.0));
         assert!(clock.due(16_000.0));
+    }
+
+    #[test]
+    fn an_encoder_keeping_its_rate_starts_anew_now_and_then() {
+        // Lowered: at once, a second after it last started; not by a little.
+        assert!(restarts(25_000_000, 6_000_000, 1000.0, false));
+        assert!(!restarts(25_000_000, 6_000_000, 900.0, false));
+        assert!(!restarts(25_000_000, 21_000_000, 60_000.0, false));
+        // Raised: by half again, a second on.
+        assert!(restarts(6_000_000, 9_000_000, 1000.0, false));
+        assert!(!restarts(6_000_000, 9_000_000, 900.0, false));
+        assert!(!restarts(6_000_000, 8_000_000, 60_000.0, false));
+        // A key frame going anyway: as soon as it differs at all (as the station asks: by 5 % or more).
+        assert!(restarts(6_000_000, 6_400_000, 0.0, true));
+        assert!(!restarts(6_000_000, 6_100_000, 0.0, true));
+        // A view's start (1.5 Mbit/s, up by half each 0.5 s to a 4K desktop's own, ~25 Mbit/s): every other step,
+        // then near enough (the next key frame takes the rest).
+        let (mut at, mut since, mut asked, mut times) = (1_500_000u32, 0.0, 1_500_000f64, 0);
+        for _ in 0..8 {
+            asked = (asked * 1.5).min(24_883_200.0);
+            since += 500.0;
+            if restarts(at, asked as u32, since, false) {
+                (at, since, times) = (asked as u32, 0.0, times + 1);
+            }
+        }
+        assert_eq!(times, 3);
+        assert!(asked < at as f64 * RESTART_UP, "{at}");
     }
 
     #[test]

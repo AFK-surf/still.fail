@@ -182,7 +182,11 @@ client, so any client that acknowledges what it drew is paced.
   where a 1080p picture at a few hundred kbit/s blurs its text. Once the smaller picture's rate stays at its own for
   3 s, the view's own size again. Each change is a config and a key frame, as any change of size is. The desktop's helper changes its encoder's average bit rate from the
   next frame (macOS: VideoToolbox's `AverageBitRate`; Windows: the encoder's `CODECAPI_AVEncCommonMeanBitRate`); a
-  browser tab's JPEGs keep theirs.
+  browser tab's JPEGs keep theirs. NVIDIA's encoders (both codecs) take that value without heeding it, keeping the rate
+  they started at: theirs is started anew at the rate asked (its output type set again with it, under a millisecond,
+  the next frame a key frame with the same parameter sets) once the rate asked is 0.8 of it or less and a second went
+  since it last started, 1.5 times it or more and a second went, or differs by 5 % with a key frame going anyway
+  (stillfail-screen's pace.rs `restarts`).
 - **Regions.** A client that zooms the picture in (two fingers on a phone) shows a part of the screen as large as its
   stage: a whole 1920×1080 picture enlarged five times there blurs its text. It says the part it shows (`look`,
   0..1 of the screen, and the device pixels it is shown in) once it has stayed 200 ms (the core's `LOOK_MS`: a pinch
