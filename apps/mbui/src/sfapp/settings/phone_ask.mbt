@@ -27,7 +27,7 @@ pub fn phone_card(
     ask_words(c, tr("android-misc.adb.ask.chat.title"), reason)
     match core {
       Some(core) if mine =>
-        answered_in_place(c, "phone/" + request, ended.map(fn(e) { (e.0 == "granted", phone_outcome_words(e.0, e.1, e.2)) }), fn() {
+        answered_in_place(c, "phone/" + request, ended.map(fn(e) { (e.0 == "granted", [@ui.span(phone_outcome_words(e.0, e.1, e.2))]) }), fn() {
           phone_foot(c, core, station, request, lasts, how)
         })
       _ =>
@@ -123,7 +123,7 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
 /// How a request ended, in a line: a dot (green while granted) and 已允许调试手机 · 本对话内, 已拒绝调试手机, or why it
 /// ended (已收回, 对话已归档, 授权已到期); laid as vault_outcome's (`inline`: by the message's picture).
 pub fn phone_outcome(c : @ui.Ctx, status : String, scope : String, why : String, inline? : Bool = true) -> Unit {
-  ask_outcome(c, status == "granted", phone_outcome_words(status, scope, why), inline~)
+  ask_outcome(c, status == "granted", [@ui.span(phone_outcome_words(status, scope, why))], inline~)
 }
 
 ///|

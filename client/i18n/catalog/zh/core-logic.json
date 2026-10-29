@@ -375,7 +375,7 @@
   "core-logic.looks.failing.offline": "{name} 离线 · 尚未读取会话",
   "core-logic.looks.failing.network": "本机网络不可用 · 尚未读取会话",
   "core-logic.looks.failing.retrying": "无法连接「{name}」，正在重试",
-  "core-logic.looks.failing.lock": "安全模式未放行「{name}」 · 尚未读取会话",
+  "core-logic.looks.failing.lock": "安全模式未放行「{name}」· 尚未读取会话",
   "core-logic.looks.failing.updating": "{name} 正在更新 · 尚未读取会话",
   "core-logic.looks.link.down": "无法连接 station",
   "core-logic.looks.link.down.named": "无法连接「{name}」",

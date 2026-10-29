@@ -95,7 +95,7 @@ test "desk: an agent's request to use a secret is its card in place of its words
     h=600.0,
   )
   t.draw()
-  for words in ["使用「GitHub token」", "gh run rerun 1846 --failed", "允许", "拒绝"] {
+  for words in ["使用 GitHub token", "gh run rerun 1846 --failed", "允许", "拒绝"] {
     assert_true(t.find(words) is Some(_), msg=words)
   }
   // in place of the words

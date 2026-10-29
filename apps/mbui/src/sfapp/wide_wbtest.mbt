@@ -2521,7 +2521,7 @@ test "wide: 密钥's waiting request is its card as in its chat (Vault.tsx Reque
   let t = wide_tester(calls)
   app.nav.replace(Setting(@settings.Route::Vault))
   t.run_for(@ui.nav_push_ms)
-  for w in ["使用「GitHub token」", "git push origin main", "允许", "拒绝", "本对话内", "打开对话"] {
+  for w in ["使用 GitHub token", "git push origin main", "允许", "拒绝", "本对话内", "打开对话"] {
     assert_true(t.find(w) is Some(_), msg=w)
   }
   // no more numbered rows of grants

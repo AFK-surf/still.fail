@@ -17,9 +17,22 @@ import { ENTER, play } from "@stillfail/ui/motion.ts";
 /** What a request's card says: the item, how it would be given, the command it is for (or, one to keep, what it is). */
 export type Asked = { name: string; mode: string; command?: string | null | undefined; save?: VaultSave | undefined; station?: string | undefined };
 
-/** Its title: 使用「GitHub token」, 存入密码「UniFi UX7 管理员」. */
-export const askTitle = (a: Asked): string =>
-  a.save ? t("web-pages.vault.ask.save", { kind: t(`web-pages.vault.ask.kind.${a.save.kind}`), name: a.name }) : t("web-pages.vault.ask.use", { name: a.name });
+/**
+ * The words of `key` with the item's name in them set apart by how it looks (`css.name` in a quiet line, `css.titleName`
+ * in a title), not by quotes (docs/ui-panels.md 文字).
+ */
+function named(key: string, args: Record<string, string>, name: string, className: string): ReactNode {
+  const parts = t(key, { ...args, name: NAME }).split(NAME);
+  return parts.flatMap((p, i) => i === 0 ? [p] : [<span key={i} className={className}>{name}</span>, p]);
+}
+
+/** Where the name goes while the words are filled in (named), to split them there. */
+const NAME = "\u0000";
+
+/** Its title: 使用 GitHub token, 存入密码 UniFi UX7 管理员 (the name heavier than the words). */
+export const askTitle = (a: Asked): ReactNode =>
+  a.save ? named("web-pages.vault.ask.save", { kind: t(`web-pages.vault.ask.kind.${a.save.kind}`) }, a.name, css.titleName)
+    : named("web-pages.vault.ask.use", {}, a.name, css.titleName);
 
 /**
  * A request as a card: its title (and, one to keep, the account), the command, a risk; `children` at its foot. `fill`:
@@ -43,14 +56,14 @@ export function AskCard({ ask, fill = false, children }: { ask: Asked; fill?: bo
 
 const scopeName = (scope: string | undefined): string => t(`web-pages.vault.scope.${scope === "once" || scope === "hour" ? scope : "chat"}`);
 
-/** How it ended, in a line: 已存入密码「…」, 已允许使用「…」· 本对话内, 已拒绝使用「…」, 已过期. */
+/** How it ended, in a line: 已存入密码 …, 已允许使用 … · 本对话内, 已拒绝使用 …, 已过期 (the name in the strong ink). */
 function Outcome({ ask }: { ask: Ask }) {
   const kind = ask.save ? t(`web-pages.vault.ask.kind.${ask.save.kind}`) : "";
   const words = ask.status === "granted"
-    ? ask.save ? t("web-pages.vault.ask.kept", { kind, name: ask.name }) : t("web-pages.vault.ask.granted", { name: ask.name, scope: scopeName(ask.scope) })
-    : ask.status === "denied" ? t(ask.save ? "web-pages.vault.ask.notKept" : "web-pages.vault.ask.denied", { name: ask.name })
+    ? ask.save ? named("web-pages.vault.ask.kept", { kind }, ask.name, css.name) : named("web-pages.vault.ask.granted", { scope: scopeName(ask.scope) }, ask.name, css.name)
+    : ask.status === "denied" ? named(ask.save ? "web-pages.vault.ask.notKept" : "web-pages.vault.ask.denied", {}, ask.name, css.name)
     : t("web-pages.vault.ask.expired");
-  return <div className={css.outcome}><span className={css.dot} data-tone={ask.status} aria-hidden="true" />{words}</div>;
+  return <div className={css.outcome}><span className={css.dot} data-tone={ask.status} aria-hidden="true" /><span>{words}</span></div>;
 }
 
 /** The request `ask` the post `m` makes. `rows`: the answer's buttons in it (the decisions page has them at its foot). */

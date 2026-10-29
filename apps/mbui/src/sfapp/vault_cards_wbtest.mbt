@@ -130,7 +130,7 @@ test "a request's card is whole with its post: its answer the core's with it, no
   }
   let t = @ui.Tester::new(fn(c) { ask_card(c, src) }, w=390.0, h=844.0, platform=2)
   t.draw()
-  for w in ["使用「GitHub token」", "允许", "拒绝", "本对话内"] {
+  for w in ["使用 GitHub token", "允许", "拒绝", "本对话内"] {
     assert_true(t.find(w) is Some(_), msg=w)
   }
   assert_true(!asked.contains("vaults"), msg="the vaults topic asked: \{asked}")
@@ -143,7 +143,7 @@ test "a request to use a secret: its title and command, 允许 for the chat (the
   let src = vault_src(["r1"], true, calls)
   let t = @ui.Tester::new(fn(c) { ask_card(c, src) }, w=390.0, h=844.0, platform=2)
   t.draw()
-  for w in ["使用「GitHub token」", "gh run rerun 1846 --failed", "允许", "拒绝", "本对话内"] {
+  for w in ["使用 GitHub token", "gh run rerun 1846 --failed", "允许", "拒绝", "本对话内"] {
     assert_true(t.find(w) is Some(_), msg=w)
   }
   // nothing out of the ordinary: no risk said
@@ -185,7 +185,7 @@ test "a request to keep a secret: 存入 or 不存, kept as once; its kind and a
   let src = vault_src(["r1"], true, calls, save=true)
   let t = @ui.Tester::new(fn(c) { ask_card(c, src, save=true) }, w=390.0, h=844.0, platform=2)
   t.draw()
-  for w in ["存入密码「UniFi UX7」", "zzj", "存入", "不存"] {
+  for w in ["存入密码 UniFi UX7", "zzj", "存入", "不存"] {
     assert_true(t.find(w) is Some(_), msg=w)
   }
   assert_true(t.find("本对话内") is None)
@@ -203,7 +203,7 @@ test "a secret the person types in: its field over 存入, which waits for somet
   let src = vault_src(["r1"], true, calls, save=true)
   let t = @ui.Tester::new(fn(c) { ask_card(c, src, typed="token") }, w=390.0, h=844.0, platform=2)
   t.draw()
-  for w in ["存入Token「OpenCode Go」", "粘贴 Token", "不存"] {
+  for w in ["存入Token OpenCode Go", "粘贴 Token", "不存"] {
     assert_true(t.find(w) is Some(_), msg=w)
   }
   // (the button: the last words with 存入 in them, the title says it too)
@@ -229,7 +229,7 @@ test "a file the person picks: 选择文件 over 存入, which waits for one; pi
   let src = vault_src(["r1"], true, calls, save=true)
   let t = @ui.Tester::new(fn(c) { ask_card(c, src, typed="file") }, w=390.0, h=844.0, platform=2)
   t.draw()
-  assert_true(t.find("存入文件「OpenCode Go」") is Some(_))
+  assert_true(t.find("存入文件 OpenCode Go") is Some(_))
   let (x, y) = t.find_last("存入").unwrap()
   t.tap(x, y)
   t.draw()
@@ -345,7 +345,7 @@ fn vault_ask(c : @ui.Ctx, src : Source) -> Unit {
 test "how a request ended: one line, its item named" {
   reset()
   let src = vault_src([], true, [])
-  for case in [(false, "granted", "已允许使用「GitHub token」 · 本对话内"), (true, "granted", "已存入密码「UniFi UX7」"), (false, "denied", "已拒绝使用「GitHub token」"), (true, "denied", "未存入「UniFi UX7」")] {
+  for case in [(false, "granted", "已允许使用 GitHub token · 本对话内"), (true, "granted", "已存入密码 UniFi UX7"), (false, "denied", "已拒绝使用 GitHub token"), (true, "denied", "未存入 UniFi UX7")] {
     let (save, status, words) = case
     let t = @ui.Tester::new(fn(c) { ask_card(c, src, save~, status~) }, w=390.0, h=844.0, platform=2)
     t.draw()

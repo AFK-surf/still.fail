@@ -37,6 +37,40 @@ fn fill(key : String, args : Array[(String, String)]) -> String {
 }
 
 ///|
+/// The words for `key` with `{name}`s put in, as runs: its `{name}` (an item's name) in `named`'s run, set apart from
+/// the words around it by how it looks rather than by quotes, the rest in `words`'s.
+fn fill_named(
+  key : String,
+  args : Array[(String, String)],
+  named : (String) -> @ui.Run,
+  words : (String) -> @ui.Run,
+) -> Array[@ui.Run] {
+  let mut s = match english(key, args~) {
+    Some(w) => w
+    None => tr(key)
+  }
+  let mut name = ""
+  for a in args {
+    if a.0 == "name" {
+      name = a.1
+    } else {
+      s = s.replace_all(old="{" + a.0 + "}", new=a.1)
+    }
+  }
+  let runs : Array[@ui.Run] = []
+  let parts = s.split("{name}").collect()
+  for i, p in parts {
+    if i > 0 {
+      runs.push(named(name))
+    }
+    if p.length() > 0 {
+      runs.push(words(p.to_string()))
+    }
+  }
+  runs
+}
+
+///|
 /// The words for `key` from these tables (`args` choosing a count's of one), None for a key they have none for: what
 /// the app's own words fall back to (src/sfapp/strings.mbt), so a key of these pages said elsewhere (the desktop's
 /// pages, src/sfdesk) is said once, here.

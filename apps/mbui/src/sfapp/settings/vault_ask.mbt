@@ -238,7 +238,7 @@ pub fn vault_card(
 /// after it over the room it leaves, its dot and its words in the middle of it. The answer stays laid out (unseen):
 /// the card keeps its size to the point, and the list it is in changes its height only once it is out of sight
 /// (sfbase's list_turns.mbt Turns::in_turn).
-pub fn answered_in_place(c : @ui.Ctx, key : String, ended : (Bool, String)?, answer : () -> Unit) -> Unit {
+pub fn answered_in_place(c : @ui.Ctx, key : String, ended : (Bool, Array[@ui.Run])?, answer : () -> Unit) -> Unit {
   let was = @motion.presence(
     c,
     "answered-was/" + key,
@@ -263,7 +263,7 @@ pub fn answered_in_place(c : @ui.Ctx, key : String, ended : (Bool, String)?, ans
           c.layer(fn() {
             let o = c.box(style=answered_over, fn() {
               c.box(style=if granted { ask_dot_on } else { ask_dot }, fn() {  }) |> ignore
-              c.text(words, style=ask_ended_words) |> ignore
+              c.rich(words, style=ask_ended_words) |> ignore
             })
             c.look(o, now.unwrap_or(@ui.look()))
           })
@@ -286,21 +286,25 @@ pub fn vault_ask_words(c : @ui.Ctx, ask : Asked) -> Unit {
 }
 
 ///|
-/// What is asked (AskCard's what): its title (使用「…」, 存入密码「…」 and the account), the command, and only what is
+/// What is asked (AskCard's what): its title (使用 …, 存入密码 … and the account; the item's name in it heavier than the
+/// words around it, not in quotes), the command, and only what is
 /// out of the ordinary: a command that reads the secret itself, one run on another station.
 fn vault_asked(c : @ui.Ctx, ask : Asked) -> Unit {
   let t = @sf.theme()
   let save = ask.save_kind != ""
   c.box(style=ask_what, fn() {
-    let title = if save {
-      fill("android-settings.vault.ask.save", [
-        ("kind", tr("android-settings.vault.ask.kind." + ask.save_kind)),
-        ("name", ask.name),
-      ])
+    let named = fn(n) { @ui.span(n, weight=600, color=t.p.text) }
+    let words = fn(w) { @ui.span(w, weight=400, color=t.p.text) }
+    let runs = if save {
+      fill_named(
+        "android-settings.vault.ask.save",
+        [("kind", tr("android-settings.vault.ask.kind." + ask.save_kind)), ("name", ask.name)],
+        named,
+        words,
+      )
     } else {
-      fill("android-settings.vault.ask.use", [("name", ask.name)])
+      fill_named("android-settings.vault.ask.use", [("name", ask.name)], named, words)
     }
-    let runs = [@ui.span(title, weight=600, color=t.p.text)]
     let sub = if ask.username != "" { ask.username } else { ask.filename }
     if save && sub != "" {
       runs.push(@ui.span("  " + sub, color=t.p.muted))
@@ -352,22 +356,23 @@ pub fn ask_buttons(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 /// How a request ended (`status`: granted, denied, else expired; `scope`: how long a use was granted), in a line: a dot
-/// (green once granted) and 已存入密码「…」, 已允许使用「…」 · 本对话内, 已拒绝使用「…」.
+/// (green once granted) and 已存入密码 …, 已允许使用 … · 本对话内, 已拒绝使用 ….
 pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String, inline? : Bool = true) -> Unit {
   ask_outcome(c, status == "granted", vault_outcome_words(ask, status, scope), inline~)
 }
 
 ///|
 /// A request's outcome line (vault_outcome's, phone_outcome's): a dot (green once `granted`) and its words.
-pub fn ask_outcome(c : @ui.Ctx, granted : Bool, words : String, inline? : Bool = true) -> Unit {
+pub fn ask_outcome(c : @ui.Ctx, granted : Bool, words : Array[@ui.Run], inline? : Bool = true) -> Unit {
   // the dot in the middle of the words' first line, not of all of them (on two lines it stays by the first); under the
   // message's picture, as wide as it, laid over the line as the picture is over its head (message.mbt: inline at the
   // head's start, the words past it where the name is; else out in the margin, the words at the row's start)
+  let line = c.sp(c.theme().leading(ask_ended_leading).unwrap_or(c.text_size(ask_ended_size).1))
   c.box(style=ask_ended, fn() {
-    c.box(style=if inline { ask_ended_past } else { ask_ended_at }, fn() { c.text(words, style=ask_ended_words) |> ignore })
+    c.box(style=if inline { ask_ended_past } else { ask_ended_at }, fn() { c.rich(words, style=ask_ended_words) |> ignore })
     |> ignore
     c.layer(fn() {
-      c.box(style=if inline { ask_dot_line } else { ask_dot_line_out }, fn() {
+      c.box(style=(if inline { ask_dot_line } else { ask_dot_line_out }).then(@ui.style(h=Fixed(line))), fn() {
         c.box(style=if granted { ask_dot_on } else { ask_dot }, fn() {  }) |> ignore
       })
       |> ignore
@@ -378,21 +383,30 @@ pub fn ask_outcome(c : @ui.Ctx, granted : Bool, words : String, inline? : Bool =
 }
 
 ///|
-/// How a request ended, in words (vault_outcome's).
-pub fn vault_outcome_words(ask : Asked, status : String, scope : String) -> String {
+/// How a request ended, in words (vault_outcome's): the item's name in the words' strong ink (ended_name), the rest
+/// quiet.
+pub fn vault_outcome_words(ask : Asked, status : String, scope : String) -> Array[@ui.Run] {
   let save = ask.save_kind != ""
   let scope = if scope == "once" || scope == "hour" { scope } else { "chat" }
+  let said = fn(key, args) { fill_named(key, args, ended_name, fn(w) { @ui.span(w) }) }
   match status {
     "granted" if save =>
-      fill("android-settings.vault.ask.kept", [
+      said("android-settings.vault.ask.kept", [
         ("kind", tr("android-settings.vault.ask.kind." + ask.save_kind)),
         ("name", ask.name),
       ])
-    "granted" => fill("android-settings.vault.ask.granted", [("name", ask.name), ("scope", tr("android-settings.vault.scope." + scope))])
-    "denied" if save => fill("android-settings.vault.ask.notKept", [("name", ask.name)])
-    "denied" => fill("android-settings.vault.ask.denied", [("name", ask.name)])
-    _ => tr("android-settings.vault.ask.expired")
+    "granted" => said("android-settings.vault.ask.granted", [("name", ask.name), ("scope", tr("android-settings.vault.scope." + scope))])
+    "denied" if save => said("android-settings.vault.ask.notKept", [("name", ask.name)])
+    "denied" => said("android-settings.vault.ask.denied", [("name", ask.name)])
+    _ => [@ui.span(tr("android-settings.vault.ask.expired"))]
   }
+}
+
+///|
+/// An item's name in a line saying how its request ended: set apart from the quiet words around it by the strong ink
+/// and a heavier weight, not by quotes (the user, 2026-10-30: 「名字不要再用方括号括起来，而是用 GUI 的方式来处理」).
+fn ended_name(name : String) -> @ui.Run {
+  @ui.span(name, weight=500, color=@sf.theme().p.text)
 }
 
 ///|
@@ -708,10 +722,10 @@ let ask_ended_past : @ui.Style = @ui.style(w=Full, pl=@sf.message_head_in)
 let ask_ended_at : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// Where the dot stands: as wide as the message's picture (18) and under it, as high as a line of the words (20), the
-/// dot in its middle.
+/// Where the dot stands: as wide as the message's picture (18) and under it, the dot in its middle; as high as a line
+/// of the words, the theme's (ask_outcome).
 // kept across runs: a value (no field of it changes)
-let ask_dot_line : @ui.Style = @ui.css("row w=S4_5 h=S5 align=ACenter justify=JCenter")
+let ask_dot_line : @ui.Style = @ui.css("row w=S4_5 align=ACenter justify=JCenter")
 
 ///|
 /// The same out in the margin, where the picture is then (message_avatar_out).
@@ -736,7 +750,14 @@ let answered_over : @ui.Style = @ui.css("row w=Full h=Full gap=S2 align=ACenter"
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ask_ended_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
+let ask_ended_words : @ui.TextStyle = @ui.text_style(size=ask_ended_size, leading=ask_ended_leading, color=Muted)
+
+///|
+/// Its words' size and line (ask_ended_words), the line the dot beside them stands in the middle of.
+let ask_ended_size : @ui.TextSize = Meta
+
+///|
+let ask_ended_leading : @ui.Leading = L5
 
 ///|
 /// Its dot, 6 round: green once granted, else quiet.
