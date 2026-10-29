@@ -800,6 +800,7 @@ let kept_answers : String =
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"给我几个选项 083209 card:要不要换图标 083209|先不换 083209|一起换 083209*|不用了 083209!\",\"here\":\"01M5QJH610HMA4AZABQ4BCT7WM/588849b213a0d42e829860437fe89e5a3ed1b2eaf7587ea1a82e41a1543ae635\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"给我几个选项 083209 card:要不要换图标 083209|先不换 083209|一起换 083209*|不用了 083209!\",\"here\":\"01M5R22RW948S38E7N6SKE9HN6/3a3e17699f82e1e8eb22263b4fbacfe67ea42e9e7c5866e00ea1fb1f2fe0bc85\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"给我几个选项 083209 card:要不要换图标 083209|先不换 083209|一起换 083209*|不用了 083209!\",\"here\":\"01M639EK1Q063TH22EQTJYX6GD/66ae9e5ef2bc4ca201c531a341716c022e79ed4bec4db868866dac73c1a5056f\"}",{"refs":[]}]
+  #|["words","{\"call\":\"ref.pasted\",\"text\":\"给我几个选项 083209 card:要不要换图标 083209|先不换 083209|一起换 083209*|不用了 083209!\",\"here\":\"01M63DGH3ZPW66G0E6DQ2WKWZP/9a34ea89fa7fcfd42e706bbf07b80cca2e3fc904be0a6fc9324d68536ccfa53e\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"设置\",\"here\":\"ws1/st1\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"说一句长一点的话 201409 post:选词测试 201409 这一句话里有好几个可以单独选中的词语\",\"here\":\"01M5FDNR4389X6Q598XJD7AATG/520b6a571d08d22df83045c22428708aeb44836d502176bee3a9a9a8576db2a4\"}",{"refs":[]}]
   #|["words","{\"call\":\"ref.pasted\",\"text\":\"说一句长一点的话 201409 post:选词测试 201409 这一句话里有好几个可以单独选中的词语\",\"here\":\"01M5P6BKWD59HK10WF252R5YT9/19797874433dcc971b0c2b3f266264543997e8d4d97f18e90320718b8f6880a6\"}",{"refs":[]}]
