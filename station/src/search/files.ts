@@ -25,9 +25,10 @@ const MOST = 1000;
 const MOST_SAID = 100;
 /// Words shorter than this are looked for at the start of names alone: `*u*` is in nearly every name on the machine.
 export const SHORT = 3;
-/// A search's files are found again only after this long: a client asks a search it shows again whenever the station's
-/// chats change (many times a second on a busy station), and files do not change with them.
-export const KEPT_MS = 60_000;
+/// A search's files are found again only after this long: the same words asked at once by several of a person's
+/// devices (as they connect again), or again and again by a client from before it let go of what it no longer shows,
+/// are one search of the machine; a file made since is found a few seconds later.
+export const KEPT_MS = 5_000;
 /// Past this many searches of the machine a minute, one asked again is answered with what it found last (up to
 /// STALE_MS old) rather than searched again; one not asked lately is searched all the same.
 export const PER_MINUTE = 20;
