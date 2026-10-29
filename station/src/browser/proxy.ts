@@ -1,7 +1,10 @@
 // The station's browser as each session reaches it (docs/remote-screens.md, "Whose a tab is"): a WebSocket on the
 // agents' door, ws://127.0.0.1:<door>/browser/<the session's key, base64url>, passed through to the browser's DevTools
 // as it is. What goes by tells which tabs the session opens: a Target.createTarget asked on it, and the targetId its
-// answer gives (a tab one of those opens is the session's too: tabs.ts). The address stays when Chrome is started again
+// answer gives (a tab one of those opens is the session's too: tabs.ts). Nothing asked on it brings the browser in front
+// of what the person at the machine is doing: each tab asked for is opened in a window of its own, behind the others
+// (the front tab of its window, so drawn and seen without being brought forward), and a tab asked to be brought forward
+// (Target.activateTarget, Page.bringToFront) is answered as done and left where it is. The address stays when Chrome is started again
 // or another station process takes the door: a client that lost its connection connects to the same one again.
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Duplex } from "node:stream";
@@ -18,6 +21,12 @@ const MAX = 256 * 1024 * 1024;
 const OPEN_MS = 10_000;
 /// An answer longer than this is no Target.createTarget's: it is passed on unread.
 const ANSWER_MAX = 4096;
+/// How a tab is opened: in a window of its own, behind the person's (measured on a Mac, Edge 156, 2026-10-29: a tab
+/// opened so leaves the app in front where it is, and is drawn; a tab behind another in its window is not, and a tab
+/// brought forward or opened in front makes the browser the front app).
+export const BEHIND = { newWindow: true, background: true } as const;
+/// What would bring the browser in front: answered here, never passed on.
+const FRONT = new Set(["Target.activateTarget", "Page.bringToFront"]);
 
 /// Where `session` reaches the browser, after the door's origin (`http://127.0.0.1:<port>`).
 export function sessionPath(session: string): string {
@@ -79,11 +88,19 @@ export function pass(client: WebSocket, upstream: WebSocket, opened: (targetId: 
     }
   };
   client.on("message", (data, binary) => {
-    if (!binary && data.toString().includes('"Target.createTarget"')) {
+    let out: RawData | string = data;
+    const text = binary ? "" : data.toString();
+    if (text.includes('"Target.createTarget"') || text.includes('"Target.activateTarget"') || text.includes('"Page.bringToFront"')) {
       const m = parsed(data);
-      if (m?.method === "Target.createTarget" && m.id !== undefined) asked.add(key(m.sessionId, m.id));
+      if (m?.method === "Target.createTarget" && m.id !== undefined) {
+        asked.add(key(m.sessionId, m.id));
+        out = JSON.stringify({ ...m, params: { ...m.params, ...BEHIND } });
+      } else if (FRONT.has(m?.method) && m.id !== undefined) {
+        if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify({ id: m.id, ...(typeof m.sessionId === "string" ? { sessionId: m.sessionId } : {}), result: {} }));
+        return;
+      }
     }
-    if (upstream.readyState === WebSocket.OPEN) upstream.send(data, { binary });
+    if (upstream.readyState === WebSocket.OPEN) upstream.send(out, { binary });
   });
   upstream.on("message", (data, binary) => {
     if (!binary && asked.size > 0 && byteLength(data) <= ANSWER_MAX) {

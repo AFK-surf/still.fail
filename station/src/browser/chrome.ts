@@ -70,7 +70,9 @@ export function chromeArgs(o: { profile: string; port: number; headless: boolean
     "--disable-backgrounding-occluded-windows",
     "--disable-renderer-backgrounding",
     "--disable-background-timer-throttling",
-    ...(o.headless ? ["--headless=new", "--window-size=1280,900"] : []),
+    // Headful, no window of its own as it starts: one would make it the machine's front app, over what the person
+    // there is doing (its tabs come in windows opened behind: proxy.ts BEHIND; measured on a Mac, Edge 156, 2026-10-29).
+    ...(o.headless ? ["--headless=new", "--window-size=1280,900"] : ["--no-startup-window"]),
     ...(o.userAgent ? [`--user-agent=${o.userAgent}`] : []),
   ];
 }

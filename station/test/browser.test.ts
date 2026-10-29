@@ -89,9 +89,11 @@ test("Chrome is started as a person's browser: no automation switches, headless 
   assert.ok(headful.includes("--user-data-dir=/d/browser/profile"));
   assert.ok(headful.includes("--remote-debugging-port=0"));
   assert.ok(headful.includes("--disable-blink-features=AutomationControlled"), "navigator.webdriver stays false");
+  assert.ok(headful.includes("--no-startup-window"), "no window that would come in front of the person's as it starts");
   for (const a of headful) assert.doesNotMatch(a, /enable-automation|remote-debugging-pipe|headless|user-agent|use-mock-keychain|password-store/);
   const headless = chromeArgs({ profile: "/p", port: 9333, headless: true, userAgent: "UA" });
   assert.ok(headless.includes("--headless=new") && headless.includes("--remote-debugging-port=9333") && headless.includes("--user-agent=UA"));
+  assert.ok(!headless.includes("--no-startup-window"));
   assert.equal(
     headfulAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36"),
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
@@ -282,12 +284,15 @@ test("a person's pointer lands on the page where they see it; a quick second pre
   assert.deepEqual(cdp.of("Input.insertText")[0]!.params, { text: "你好" });
 });
 
-test("a tab behind another is brought to the front when a view opens on it", async () => {
+test("a view never brings its tab forward (that would bring the browser in front of the person at the machine)", async () => {
   const cdp = new FakeCdp();
   cdp.answers["Runtime.evaluate"] = () => ({ result: { value: "hidden" } });
   const v = new TabView({ cdp, session: "S", targetId: "T", now: () => 0 });
   await v.start({ maxWidth: 100, maxHeight: 100, codecs: ["jpeg"] }, { width: 10, height: 10 });
-  assert.deepEqual(cdp.of("Target.activateTarget")[0]!.params, { targetId: "T" });
+  v.keyframe();
+  await v.input({ t: "pointer", kind: "down", x: 0.5, y: 0.5, buttons: 1 });
+  await turn();
+  assert.deepEqual(cdp.of("Target.activateTarget"), []);
 });
 
 /// Tabs over a fake browser connection, into a registry; each view's connection a new fake.
@@ -620,7 +625,7 @@ test("whose each tab is outlives the station process, and is forgotten for tabs 
   t.close();
 });
 
-test("a tab of the station's own: opened at a page (the browser started for it) once it is among the screens, brought forward, closed when asked", async () => {
+test("a tab of the station's own: opened at a page in a window of its own behind the others (the browser started for it) once it is among the screens, closed when asked", async () => {
   const chrome = fakeChrome();
   const { clock: c } = clock();
   const screens = makeScreens();
@@ -628,12 +633,10 @@ test("a tab of the station's own: opened at a page (the browser started for it) 
   assert.equal(b.available(), true, "a Chrome is there to start");
   const id = await b.openTab("https://claude.ai/oauth/authorize?x=1");
   const cdp = chrome.made[0]!;
-  assert.deepEqual(cdp.of("Target.createTarget").map((x) => x.params), [{ url: "https://claude.ai/oauth/authorize?x=1" }]);
+  assert.deepEqual(cdp.of("Target.createTarget").map((x) => x.params), [{ url: "https://claude.ai/oauth/authorize?x=1", newWindow: true, background: true }]);
   assert.ok(screens.get(`browser:${id}`), "among the screens by the time it is given");
   assert.equal(b.hasTab(id), true);
   assert.equal(b.tabs().find((t) => t.id === id)?.session, undefined, "no session's");
-  await b.front(id);
-  assert.deepEqual(cdp.of("Target.activateTarget").map((x) => x.params), [{ targetId: id }]);
   await b.closeTab(id);
   assert.deepEqual(cdp.of("Target.closeTarget").map((x) => x.params), [{ targetId: id }]);
   await b.closeTab("no-such-tab");
@@ -667,13 +670,17 @@ test("a session's address of the browser: its key, and nothing else", () => {
   assert.equal(sessionOfPath("/browser/a/devtools/browser/1"), null);
 });
 
-test("a session's connection through the door reaches the browser as it is, and the tabs it opens are its own", async () => {
+test("a session's connection through the door reaches the browser as it is, the tabs it opens its own, each in a window of its own behind the others, none brought forward", async () => {
   // Chrome's DevTools of the test's making: answers Target.createTarget with a new tab, echoes the rest.
   const chrome = new WebSocketServer({ host: "127.0.0.1", port: 0 });
   await new Promise<void>((r) => chrome.once("listening", () => r()));
+  const creates: any[] = [];
+  const fronts: string[] = [];
   chrome.on("connection", (ws) =>
     ws.on("message", (raw) => {
       const m = JSON.parse(raw.toString());
+      if (m.method === "Target.createTarget") creates.push(m);
+      if (m.method === "Target.activateTarget" || m.method === "Page.bringToFront") fronts.push(m.method);
       const result = m.method === "Target.createTarget" ? { targetId: `T${m.id}` } : { echo: m.params };
       ws.send(JSON.stringify({ id: m.id, ...(m.sessionId ? { sessionId: m.sessionId } : {}), result }));
     }));
@@ -698,6 +705,18 @@ test("a session's connection through the door reaches the browser as it is, and 
   await answered(3);
   assert.deepEqual(answers[0], { id: 1, result: { echo: { a: 1 } } });
   assert.deepEqual(owned, [["T2", "EMBER/1.2"], ["T2", "EMBER/1.2"]], "each asked on its own target session");
+  // Each opened in a window of its own behind the others, the rest of what was asked as it was.
+  assert.deepEqual(creates, [
+    { id: 2, method: "Target.createTarget", params: { url: "about:blank", newWindow: true, background: true } },
+    { id: 2, sessionId: "S", method: "Target.createTarget", params: { url: "about:blank", newWindow: true, background: true } },
+  ]);
+  // Bringing a tab forward is answered as done, and never reaches the browser.
+  client.send(JSON.stringify({ id: 3, method: "Target.activateTarget", params: { targetId: "T2" } }));
+  client.send(JSON.stringify({ id: 4, sessionId: "S", method: "Page.bringToFront", params: {} }));
+  client.send(JSON.stringify({ id: 5, method: "Browser.getVersion", params: {} }));
+  await answered(6);
+  assert.deepEqual(answers.slice(3), [{ id: 3, result: {} }, { id: 4, sessionId: "S", result: {} }, { id: 5, result: { echo: {} } }]);
+  assert.deepEqual(fronts, []);
 
   // Only programs on this machine: a web page (it says its Origin) is refused.
   const page = new WebSocket(at, { headers: { origin: "https://evil.example" } });

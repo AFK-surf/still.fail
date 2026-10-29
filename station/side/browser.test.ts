@@ -13,6 +13,7 @@ import { test } from "node:test";
 import { StationBrowser } from "../src/browser/browser.ts";
 import { type Cdp, connectCdp } from "../src/browser/cdp.ts";
 import { chromeHost } from "../src/browser/chrome.ts";
+import { BEHIND } from "../src/browser/proxy.ts";
 import { COPY_BINDING, jpegSize } from "../src/browser/view.ts";
 import type { Clip } from "../src/screens/source.ts";
 import { makeScreens } from "../src/screens/source.ts";
@@ -248,6 +249,40 @@ test("a login's page in the station's Chrome: a tab of the station's own, laid o
     await browser.closeTab(id);
     await until(() => !screens.get(`browser:${id}`), "the tab gone");
     assert.equal(browser.hasTab(id), false);
+  } finally {
+    agent?.close();
+    await browser.stop().catch(() => {});
+    await browser.close();
+    server.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("every tab is drawn without being brought forward: the station's and an agent's (each in a window of its own, behind the others) cast at once", { skip: binary === undefined && "no Chrome here" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "side-browser-windows-"));
+  const screens = makeScreens();
+  const browser = new StationBrowser({ dir, chrome: chromeHost({ dir }), screens });
+  const server = createServer((_, res) => res.writeHead(200, { "content-type": "text/html" }).end(PAGE));
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+  let agent: Cdp | null = null;
+  try {
+    const own = await browser.openTab(url);
+    // The agent's tab as the door passes it on (proxy.ts): in a window of its own.
+    agent = await connectCdp(browser.status().ws!);
+    const { targetId } = await agent.send("Target.createTarget", { url, ...BEHIND });
+    const visible = async (id: string) => {
+      const { sessionId } = await agent!.send("Target.attachToTarget", { targetId: id, flatten: true });
+      return (await agent!.send("Runtime.evaluate", { expression: "document.visibilityState", returnByValue: true }, sessionId)).result?.value;
+    };
+    assert.deepEqual([await visible(own), await visible(targetId)], ["visible", "visible"], "neither behind the other");
+    // Previews (which bring nothing forward) of both cast frames.
+    for (const id of [own, targetId]) {
+      const tab = await until(() => screens.get(`browser:${id}`), "the tab is a screen");
+      const view = await tab.open({ maxWidth: 400, maxHeight: 300, codecs: ["jpeg"], peek: true });
+      assert.ok((await view.next())?.config?.codec === "jpeg", `a frame of ${id}`);
+      view.close();
+    }
   } finally {
     agent?.close();
     await browser.stop().catch(() => {});

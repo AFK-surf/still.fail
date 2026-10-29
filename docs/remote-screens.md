@@ -12,6 +12,14 @@
   `DevToolsActivePort`. It stays up while used, and goes after a long idle (an hour); logins persist in the profile.
   It outlives a station process (as jobs do): the next one finds it by `DevToolsActivePort` and takes it up; one that
   dies in use is started again, on the same port when it is free (`station/src/browser/`).
+- It never comes in front of what the person at the machine is doing. It starts with no window
+  (`--no-startup-window`; a window it starts with makes it the front app). Every tab is opened in a window of its own,
+  behind the others (`Target.createTarget` with `newWindow: true, background: true`: the station's, and a session's
+  as its door passes it on), where it is the front tab of its window, so drawn: its screenshots and screencast come
+  without its being brought forward. Nothing brings a tab forward: a view does not, and a session's
+  `Target.activateTarget` and `Page.bringToFront` are answered as done and not passed on. Measured on a Mac (Edge 156,
+  2026-10-29, Finder in front): a tab opened in front, or brought forward, made the browser the front app; one opened
+  so stayed behind, `visible`, and gave screenshots of its page; a tab behind another in its window gave none.
 - Sites must see a person's browser: headful wherever the machine shows windows (`--headless=new` only where it
   shows none), no automation switches, and two tells undone: Chrome reports `navigator.webdriver = true` for any
   debuggable browser (`--disable-blink-features=AutomationControlled`), and headless says `HeadlessChrome` in its user
@@ -32,8 +40,9 @@
   `/peer`). A tab opened at Chrome's own port is nobody's. When a session is archived or deleted, the tabs it opened
   are closed.
 - Every tab is a screen source (`browser:<targetId>`): CDP screencast for frames, `Input.dispatch*` for input, on a
-  CDP connection of the view's own. Chrome draws (and casts) only the front tab of a window, so a view brings its tab
-  to the front when it opens, when a key frame is asked for and when the person clicks.
+  CDP connection of the view's own. Chrome draws (and casts) only the front tab of a window: a tab is alone in its
+  window (above), but for one a page opens itself, which goes in front of the page that opened it there; that one casts
+  nothing until the other is closed.
 
 ## Remote control
 

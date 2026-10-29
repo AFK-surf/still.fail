@@ -231,21 +231,11 @@ export class TabView implements ScreenView {
         this.#p.sized?.(v);
       }
     }
-    if (!this.#peek) await this.front();
     await cdp.send(
       "Page.startScreencast",
       { format: "jpeg", quality: QUALITY, maxWidth: Math.max(1, Math.round(bounds.maxWidth)), maxHeight: Math.max(1, Math.round(bounds.maxHeight)), everyNthFrame: 1 },
       session,
     );
-  }
-
-  /// Brings the tab to the front of its window when it is behind another: a tab not shown is not drawn, so not cast.
-  async front() {
-    const { cdp, session, targetId } = this.#p;
-    try {
-      const r = await cdp.send("Runtime.evaluate", { expression: "document.visibilityState", returnByValue: true }, session);
-      if (r?.result?.value !== "visible") await cdp.send("Target.activateTarget", { targetId });
-    } catch {}
   }
 
   next(): Promise<Frame | null> {
@@ -260,7 +250,6 @@ export class TabView implements ScreenView {
 
   keyframe() {
     this.#keyframe = true;
-    if (!this.#peek) void this.front();
     if (this.#waiter && this.#last) {
       const w = this.#waiter;
       this.#waiter = null;
@@ -281,8 +270,6 @@ export class TabView implements ScreenView {
           return;
         }
         if (event.kind === "down") {
-          // A tab behind another is brought forward as it is clicked (it shows nothing until it is).
-          await this.front();
           const button = buttonOf(event.buttons & ~before) === "none" ? "left" : buttonOf(event.buttons & ~before);
           const now = this.#p.now();
           const c = this.#click;

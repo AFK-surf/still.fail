@@ -527,9 +527,9 @@ test("a login's page opened in the station's browser: the page its command opene
     assert.equal(await m.logins.openPage(login.id, by), "browser:T1");
     assert.deepEqual([...b.tabs.values()], [waiting.url], "the page it opened, which comes back to it here");
     await m.until(login.id, (l) => l.screen === "browser:T1", "its tab told");
-    // Asked again (from another device): the same tab, brought forward.
+    // Asked again (from another device): the same tab.
     assert.equal(await m.logins.openPage(login.id), "browser:T1");
-    assert.deepEqual(b.fronted, ["T1"]);
+    assert.deepEqual([...b.tabs.keys()], ["T1"]);
     // A read-only member is not told of it.
     const limited = Logins.limited(m.logins.get(login.id)!);
     assert.deepEqual([limited.browser, limited.screen], [undefined, undefined]);
