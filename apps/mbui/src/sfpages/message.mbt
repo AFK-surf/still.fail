@@ -209,8 +209,8 @@ pub fn others_message(
 ) -> Unit {
   let row = if share is Some(_) { c.id("message/" + key) } else { 0 }
   if row != 0 { c.cursor(row, Arrow) }
-  c.box(style=msg_row, id=row, fn() {
-    let col = c.box(style=msg_main, fn() {
+  c.box(style=if share is Some(_) { msg_row_share } else { msg_row }, id=row, fn() {
+    let col = c.box(style=if share is Some(_) { msg_main_share } else { msg_main }, fn() {
       c.box(style=if inline { msg_head_inline } else { msg_head }, fn() {
         name()
         if !inline {
@@ -997,8 +997,17 @@ let route_mark : Double = 12.0
 let msg_row : @ui.Style = @ui.css("w=Full")
 
 ///|
+/// Keep the header actions clear of the preceding message's time at the same edge.
+// kept across runs: a value (no field of it changes)
+let msg_row_share : @ui.Style = @ui.css("w=Full mt=S1_5")
+
+///|
 // kept across runs: a value (no field of it changes)
 let msg_main : @ui.Style = @ui.css("w=Full gap=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let msg_main_share : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// Its head (msgHead): 24 high at least, its name, route and time 6 apart.
