@@ -399,6 +399,19 @@ CREATE TABLE IF NOT EXISTS session_usage (
   session TEXT PRIMARY KEY,
   usage TEXT NOT NULL
 );
+-- How full each window of each profile's allowance read, each time it read otherwise than the time before (store.ts
+-- setProfileQuota; its window by its label, ends when it resets, minutes how long it is), kept 8 days and the last
+-- reading before them: what a window used over the last 7 days is read from them (accounts/spent.ts), a window that
+-- reset in them counted from its start, not only what it reads now.
+CREATE TABLE IF NOT EXISTS quota_readings (
+  profile TEXT NOT NULL,
+  label TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  used REAL NOT NULL,
+  ends INTEGER,
+  minutes INTEGER,
+  PRIMARY KEY (profile, label, at)
+) WITHOUT ROWID;
 `;
 
 /// Each message as it reads now: its latest edit's words, files and quotes.

@@ -542,6 +542,8 @@ export interface QuotaCredits {
 export interface QuotaWindow {
 	label: string;
 	usedPercent: number;
+	/** What it used over the last 7 days, in percent of its allowance (past 100 where it reset in them); absent on older stations. */
+	spentWeek?: number;
 	resetsAt?: number;
 	mark: string;
 	left: number;
