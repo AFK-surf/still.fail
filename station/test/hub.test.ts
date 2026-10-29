@@ -337,6 +337,49 @@ test("stop aborts the running turn and confirms once it ends", async () => {
   await r.close();
 });
 
+test("stopped while it runs, what it has going in the background does not bring it back", async () => {
+  const r = new Rig();
+  const stopped: string[] = [];
+  r.hub.setJobs({
+    stop: async (id) => {
+      stopped.push(id);
+      r.store.jobEnded(id, "stopped", null);
+      return r.store.getJob(id)!;
+    },
+  });
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  r.store.insertJob({ ...watchJob(key), id: "watch", token: "twatch", port: null, watch: true });
+  const session = r.claude.last();
+  session.tasks = [{ id: "b1", kind: "command", description: "watch CI" }];
+  await r.hub.stop(key);
+  await settle();
+  // A job's notice its turn cannot take (as Codex's, between steps) waits for the turn's end.
+  session.unsteerable = true;
+  r.hub.notify(key, "Job watch ended");
+  // Its background command ended during the turn: Claude runs what it said as a turn of its own the moment the stopped
+  // one ends.
+  session.end({ kind: "aborted" });
+  session.busyNow = true;
+  session.events({ type: "turnStarted" });
+  await settle();
+  assert.equal(r.chat.lastText(), "已停止当前任务");
+  assert.ok(session.disposed, "its process ends, with its background work");
+  assert.equal(r.store.lastTurn(key)!.outcome, "aborted", "no turn after the stop");
+  assert.equal(r.store.getJob("watch")!.state, "stopped");
+  assert.equal(r.claude.count(), 1, "nothing it was told meanwhile starts a turn");
+  // Someone's message brings it back, told what was stopped.
+  await r.accept(reply(m, "9999.3", "<@UBOT> go on", { addressed: true }));
+  await settle();
+  const next = r.claude.last();
+  assert.notEqual(next, session);
+  assert.ok(matches(next.prompts[0]!, ["people stopped you", "- background command b1 (watch CI)\n", "go on"]), next.prompts[0]);
+  assert.ok(!next.prompts[0]!.includes("Job watch ended"), next.prompts[0]);
+  await r.close();
+});
+
 test("stop while waiting ends the wait and its process", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
   const r = new Rig();
