@@ -554,6 +554,7 @@ pub using @sfbase {
   type Station,
   type Topic,
   type VaultAsk,
+  type PhoneAsk,
   type Workspace,
   upload_id,
   ups,

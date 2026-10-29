@@ -23,6 +23,8 @@ pub fn adb_phone_said(String) -> Unit
 
 pub fn adb_ready(@ui.Ctx) -> AdbReady
 
+pub fn adb_texts() -> Json
+
 pub let all_places : Array[String]
 
 pub fn appearance(Json?) -> String
@@ -207,6 +209,10 @@ pub fn page(@ui.Ctx, Core, Here, Route, root? : Bool, top? : Double) -> Unit
 pub fn panels_frame(Core) -> Unit
 
 pub fn pending_login(Core, String, String) -> Json?
+
+pub fn phone_card(@ui.Ctx, Core?, String, String, String, Bool, lasts? : String, who? : String?) -> Unit
+
+pub fn phone_outcome(@ui.Ctx, String, String, String) -> Unit
 
 pub fn place_action(Core, Here, String) -> ((@sf.Beside) -> Unit)?
 

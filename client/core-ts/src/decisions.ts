@@ -65,6 +65,9 @@ export function cardShown(card: J): J {
   if (request !== null) v.vault = request;
   const ask = vaultAsk(get(card, "vault"));
   if (ask !== null) v.vaultAsk = ask;
+  // An agent's request for its person's phone (docs/adb-share.md): what it asks, and once decided, how.
+  const phone = phoneAsk(get(card, "adb"));
+  if (phone !== null) v.phoneAsk = phone;
   if (kind(card) === "options") v.options = optionsShown(get(card, "options"));
   else if (kind(card) === "text") {
     const p = trimmed(get(card, "placeholder"));
@@ -100,6 +103,18 @@ function vaultAsk(v: J): J | null {
   if (kind !== null) {
     const username = trimmed(get(get(v, "save"), "username"));
     out.save = { kind, ...(username !== null ? { username } : {}), ...(get(get(v, "save"), "typed") === true ? { typed: true } : {}) };
+  }
+  return out;
+}
+
+/// A request for a person's phone as its card says it (station/src/adb/grants.ts): its id, why, and once decided how.
+function phoneAsk(v: J): J | null {
+  const request = trimmed(get(v, "request"));
+  if (request === null) return null;
+  const out: J = { request, reason: str(get(v, "reason")) ?? "" };
+  for (const field of ["status", "scope", "why", "lasts"]) {
+    const said = trimmed(field === "lasts" ? get(v, field) : get(get(v, "outcome"), field));
+    if (said !== null) out[field] = said;
   }
   return out;
 }

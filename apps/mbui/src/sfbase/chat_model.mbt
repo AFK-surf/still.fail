@@ -133,6 +133,21 @@ pub(all) struct Card {
   vault : String
   /// with `vault`: the request as the card says it (MessageCard.vaultAsk), drawn in place of the post's words
   ask : VaultAsk?
+  /// an agent's request for its person's phone (MessageCard.phoneAsk), drawn in place of the post's words
+  phone : PhoneAsk?
+}
+
+///|
+/// An agent's request to debug its person's phone as its card says it (PhoneAsk, docs/adb-share.md): its id, the
+/// agent's reason, and once decided how (`status`: granted, denied, ended; `scope`: hour, chat; `why` it ended).
+pub(all) struct PhoneAsk {
+  request : String
+  reason : String
+  status : String
+  scope : String
+  why : String
+  /// the longest its owner lets it be granted for: hour, chat
+  lasts : String
 }
 
 ///|
@@ -378,6 +393,18 @@ pub fn message_of(m : Json) -> Message {
                 scope: text(a, "scope"),
                 station: text(a, "station"),
                 answer: text(a, "answer"),
+                lasts: text(a, "lasts"),
+              })
+            _ => None
+          },
+          phone: match field(c, "phoneAsk") {
+            Some(Object(_)) as a =>
+              Some({
+                request: text(a, "request"),
+                reason: text(a, "reason"),
+                status: text(a, "status"),
+                scope: text(a, "scope"),
+                why: text(a, "why"),
                 lasts: text(a, "lasts"),
               })
             _ => None

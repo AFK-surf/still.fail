@@ -8,7 +8,18 @@ export const MINUTES = 60;
 export const MAX_MINUTES = 8 * 60;
 
 export type Offer = { station: string; connect: number | null; pair: number | null; device: string; android: string; package: string; minutes: number };
-export type AdbCall = { kind: "share"; offer: Offer } | { kind: "stop" } | { kind: "pair"; code: string } | { kind: "grant" };
+export type AdbCall =
+  | { kind: "share"; offer: Offer }
+  | { kind: "stop" }
+  | { kind: "pair"; code: string; station?: string }
+  | { kind: "grant"; station?: string }
+  /// The ports the app found for adbd, and what the phone is: lent with them to every station a grant wants it on.
+  | { kind: "ports"; ports: Omit<Offer, "station" | "minutes"> }
+  /// A chat's request for this person's phone decided (`scope`: "hour" | "chat"; null refuses it), or a grant taken back.
+  | { kind: "decide"; station: string; request: string; scope: "hour" | "chat" | null }
+  | { kind: "revoke"; station: string; request: string }
+  /// The person's 默认最长授权: the longest a chat's grant of their phone may last (every station told).
+  | { kind: "lasts"; lasts: "hour" | "chat" };
 
 export function parseAdb(name: string, params: unknown): AdbCall | null {
   const text = (field: string) => {
@@ -34,9 +45,30 @@ export function parseAdb(name: string, params: unknown): AdbCall | null {
     case "adb.stop":
       return { kind: "stop" };
     case "adb.pair":
-      return { kind: "pair", code: text("code") };
+      return { kind: "pair", code: text("code"), ...(text("station") !== "" ? { station: text("station") } : {}) };
     case "adb.grant":
-      return { kind: "grant" };
+      return { kind: "grant", ...(text("station") !== "" ? { station: text("station") } : {}) };
+    case "adb.setLasts": {
+      const l = get(params, "lasts");
+      if (l !== "hour" && l !== "chat") throw CoreError.invalid(t("core-misc.params.missing", { field: "lasts" }));
+      return { kind: "lasts", lasts: l };
+    }
+    case "adb.ports":
+      return { kind: "ports", ports: { connect: port("connect"), pair: port("pair"), device: text("device"), android: text("android"), package: text("package") } };
+    case "adb.decide":
+    case "adb.revoke": {
+      const station = text("station");
+      try {
+        StationAddr.parse(station);
+      } catch {
+        throw CoreError.invalid(t("core-misc.params.missing", { field: "station" }));
+      }
+      const request = text("request");
+      if (request === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "request" }));
+      if (name === "adb.revoke") return { kind: "revoke", station, request };
+      const s = get(params, "scope");
+      return { kind: "decide", station, request, scope: s === "hour" || s === "chat" ? s : null };
+    }
     default:
       return null;
   }

@@ -500,6 +500,10 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       vault_ask_card(c, here, m, card, ask)
       return
     }
+    Some({ phone: Some(phone), .. } as card) => {
+      phone_ask_card(c, here, m, card, phone)
+      return
+    }
     _ => ()
   }
   let placed : Map[String, Attachment] = {}

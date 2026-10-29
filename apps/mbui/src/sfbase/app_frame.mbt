@@ -184,6 +184,8 @@ fn init {
   @ui.on_message(@hostapi.system_channel, fn(json, _) { system_said(json) })
   // what the phone has for 共享调试, as its host says by itself (the app's Android: AdbShare.java)
   @ui.on_message("native:adb.phone", fn(json, _) { @settings.adb_phone_said(json) })
+  // its notifications' words, for a share a chat's grant starts with no page shown (AdbShare.java `adb.texts`)
+  @ui.native_call("adb.texts", @settings.adb_texts()) |> ignore
 }
 
 ///|

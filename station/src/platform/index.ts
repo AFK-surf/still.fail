@@ -82,6 +82,10 @@ export type Platform = {
   groupOutlivesLeader: boolean;
   /// Memory of each group (kB).
   groupMemory(pgids: number[]): Promise<Map<number, number>>;
+  /// The processes holding a TCP socket whose own (local) port is `port` on this machine: who is at the other end of a
+  /// loopback connection a listener took from that port (adb/servers.ts: only a grant's adb server is let in). Empty
+  /// when it cannot be told.
+  tcpPortPids(port: number): Promise<number[]>;
 
   // Paths.
   paths: {

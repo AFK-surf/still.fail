@@ -183,6 +183,8 @@ pub let fix_outside : Array[(String, String, Bool)]
 
 pub fn fix_own(Array[Json]) -> Array[Json]
 
+pub let fix_phone : @ref.Ref[String]
+
 pub fn fix_pick() -> Json
 
 pub let fix_places : Map[String, Json]
@@ -450,6 +452,8 @@ pub fn outgoing_json(String, Json, String, String) -> Json
 pub let peeks_answer : String
 
 pub fn person(String, String, Bool) -> Json
+
+pub fn phone_post() -> Json
 
 pub fn play_fixture(String) -> (@sfbase.DriveAt, @kit.MediaStatus?)?
 

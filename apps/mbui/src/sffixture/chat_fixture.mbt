@@ -1293,11 +1293,37 @@ pub fn vault_post(typed : Bool) -> Json {
 }
 
 ///|
+/// How chat-phone's request for the person's phone, at the chat's end, went once decided here ("": waiting).
+pub let fix_phone : Ref[String] = Ref("")
+
+///|
+/// chat-phone's last post: an agent asking to debug the person's phone (docs/adb-share.md), its card as the core says
+/// it, answered here; decided, how it went.
+pub fn phone_post() -> Json {
+  let ask : Map[String, Json] = { "request": "p-1", "reason": "装上刚编好的测试包，看首屏在折叠屏展开时排得对不对" }
+  if fix_phone.val != "" {
+    ask["status"] = Json::string(fix_phone.val)
+    if fix_phone.val == "granted" {
+      ask["scope"] = Json::string("chat")
+    }
+  }
+  msg(61, "agent", by_agent("Anthropic", "claude", "s-c1"), "申请调试你的手机：装上刚编好的测试包，看首屏在折叠屏展开时排得对不对", "刚刚", {
+    "card": { "type": "options", "phoneAsk": Json::object(ask) },
+    "createdAt": Json::number(1.0e9),
+  })
+}
+
+///|
 /// The chat `v` with what was answered here in it.
 pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
   let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed"
-  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault) {
+  let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted"
+  // (chat-phone-granted: its request approved already)
+  if f.mode == "chat-phone-granted" && fix_phone.val == "" {
+    fix_phone.val = "granted"
+  }
+  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault && !phone) {
     return v
   }
   match v {
@@ -1337,6 +1363,10 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       // chat-vault's request to keep a password, last
       if vault {
         all.push(vault_post(f.mode == "chat-vault-typed"))
+      }
+      // chat-phone's request for the person's phone, last
+      if phone {
+        all.push(phone_post())
       }
       // each answer's message, after the rest
       for seq, label in fix_replied {
@@ -1389,6 +1419,11 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
       Some(Ok(Json::object({})))
     }
     // chat-vault's request decided: how it went on its card at once, as the core puts it
+    "adb.decide" if text(p, "request") == "p-1" => {
+      fix_phone.val = if text(p, "scope") != "" { "granted" } else { "denied" }
+      f.changed()
+      Some(Ok(Json::object({})))
+    }
     "vault.approve" | "vault.deny" if text(p, "request") == "r-ux7" => {
       fix_vault.val = if name == "vault.approve" { "granted" } else { "denied" }
       f.changed()

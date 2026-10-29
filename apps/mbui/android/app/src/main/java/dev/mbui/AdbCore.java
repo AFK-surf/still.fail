@@ -76,6 +76,7 @@ final class AdbCore {
         } catch (Throwable e) {
             topics.remove(id);
             Host.log("adb core: " + e);
+            return -1;
         }
         return id;
     }

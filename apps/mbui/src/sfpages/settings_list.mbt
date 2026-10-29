@@ -225,6 +225,10 @@ pub fn settings_parts(c : @ui.Ctx, core : Core, here : @settings.Here) -> Array[
   if platform == 0 {
     device.push(settings_row(LocalStation, "local-station", "monitor", @sf.t("web-pages.localStation.title")))
   }
+  // 共享调试, the phone's (docs/adb-share.md): its page says which chats it is lent to
+  if platform == 2 {
+    device.push(settings_row(AdbShare(""), "adb", "phone", @sf.t("android-misc.adb.title")))
+  }
   device.push(settings_row(KeptFiles, "files", "disk", @sf.t("android-settings.files.title"), value=@settings.kept_said(c, core)))
   parts.push({ heading: @sf.t("android-settings.home.device"), rows: device })
   // 关于: this build, or the newer one there is
@@ -255,6 +259,7 @@ pub fn settings_row_of(r : @settings.Route) -> @settings.Route {
     Fonts => Appearance
     SecurityOpen => Security
     VaultItems | VaultItem(_, _) => Vault
+    AdbShare("") => AdbShare("")
     Station(_) | AdbShare(_) => Stations
     Profile(_, _) | PickModels(_, _) | ProfileModels(_, _) | NewProfile(_) | ProfileAccount(_) => Profiles("")
     Connects(_) | Connect(_, _) | RunSettings(_, _) => Connects("")

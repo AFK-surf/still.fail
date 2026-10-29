@@ -338,6 +338,7 @@ pub fn fixture_page(mode : String) -> String {
       "stations"
     "settings-adb" | "settings-adb-off" | "settings-adb-unpaired" | "settings-adb-pairing" | "settings-adb-connected" | "settings-adb-failed" =>
       "adb:ws1/st1"
+    "settings-adb-chats" => "adb:"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-login" | "settings-profile-login-station" =>
       "profile:ws1/st1#cc"
     "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
@@ -2591,6 +2592,21 @@ fn fx_adb_share() -> Json {
       lent("failed", [
         ("message", str("the phone did not reach adb: 无法连接手机上的 adb：Connection refused (os error 111)")),
         ("refusedPort", Json::number(41239.0)),
+      ])
+    // settings' 共享调试: two chats granted it, one asking
+    "chats" =>
+      obj([
+        ("sharing", Json::boolean(false)),
+        ("phase", str("off")),
+        ("tunnels", Json::number(0.0)),
+        (
+          "grants",
+          Json::array([
+            obj([("station", str("ws1/st1")), ("id", str("p-1")), ("reason", str("装上刚编好的测试包，看首屏在折叠屏展开时排得对不对")), ("status", str("granted")), ("scope", str("chat"))]),
+            obj([("station", str("ws1/st2")), ("id", str("p-2")), ("reason", str("录一段登录流程的视频")), ("status", str("granted")), ("scope", str("hour"))]),
+            obj([("station", str("ws1/st1")), ("id", str("p-3")), ("reason", str("看通知权限弹窗的文案")), ("status", str("pending"))]),
+          ]),
+        ),
       ])
     _ => obj([("sharing", Json::boolean(false)), ("phase", str("idle")), ("tunnels", Json::number(0.0))])
   }
