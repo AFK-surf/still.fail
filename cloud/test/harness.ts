@@ -71,6 +71,7 @@ export async function harness(
     /** Push notifications: the VAPID key (base64url point and scalar), the FCM service account's JSON. */
     vapid?: { publicKey: string; privateKey: string };
     fcm?: string;
+    apns?: string;
     /** "real": the machine's time instead of NOW_MS (dev.ts, which real stations sign in to). */
     clock?: "real";
     /** The grant key (its private JWK, kid "test-grant"): one made now unless given (dev.ts's RESUME keeps it). */
@@ -167,6 +168,7 @@ export async function harness(
         ...(options.relayNames ? { RELAY_NAMES: options.relayNames } : {}),
         ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
         ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
+        ...(options.apns ? { APNS_KEY: options.apns } : {}),
         ...(options.reviewAccounts ? { REVIEW_ACCOUNTS: options.reviewAccounts } : {}),
         ...(options.mail ? { TEST_MAIL: "1" } : {}),
         ...(options.axiom ? { AXIOM_TOKEN: options.axiom === "real" ? process.env.AXIOM_TOKEN! : "test-axiom-token", AXIOM_DATASET: options.axiom === "real" ? process.env.AXIOM_DATASET ?? "ember" : "ember-test" } : {}),

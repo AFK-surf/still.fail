@@ -34,7 +34,7 @@
 <p>still.fail's agents run on your own stations. Your devices connect directly to your stations with end-to-end encryption; when a direct connection isn't possible, traffic is forwarded through a relay server, which only passes on encrypted data and can't see the content. <strong>Our servers don't store your chat content, attachments or files.</strong></p>
 <p>There are two exceptions, where content passes through or is stored with us:</p>
 <ul>
-<li><strong>Push notifications</strong>: to show notifications on your devices, your station sends the chat title, the sender's name and the first 140 characters of the message through our servers to Google's Firebase Cloud Messaging (Android) or your browser's push service (web). We only forward this text; we don't store it. On a device where you turn off “Show content in notifications”, its notifications only say what happened (such as “New message”), and the message's text is not forwarded;</li>
+<li><strong>Push notifications</strong>: to show notifications on your devices, your station sends the chat title, the sender's name and the first 140 characters of the message through our servers to Google's Firebase Cloud Messaging (Android), Apple Push Notification service (iOS) or your browser's push service (web). We only forward this text; we don't store it. On a device where you turn off “Show content in notifications”, its notifications only say what happened (such as “New message”), and the message's text is not forwarded;</li>
 <li><strong>Issue reports</strong>: issue reports that you or the agents on your station choose to submit (title, description, context and logs) are stored on our servers so we can investigate.</li>
 </ul>
 <p>Publicly shared chats are also stored on the publisher's station; visitors' browsers read them directly from the station over an encrypted connection. The key after the <code>#</code> in a share link is never sent to our servers.</p>
@@ -75,6 +75,7 @@
 <tr><th>Provider</th><th>Location</th><th>Purpose</th><th>Information involved</th></tr>
 <tr><td>Cloudflare, Inc.</td><td>United States; global network</td><td>Hosting the website, servers and data storage; request logs; sending verification code emails; relay servers</td><td>All information stored on our servers listed in section 4, request logs, connection metadata</td></tr>
 <tr><td>Google LLC</td><td>United States</td><td>Google sign-in; Android push (Firebase Cloud Messaging)</td><td>Google account information, push tokens and notification text</td></tr>
+<tr><td>Apple Inc.</td><td>United States</td><td>iOS push (Apple Push Notification service)</td><td>Push tokens and notification text</td></tr>
 <tr><td>Your browser's push service (e.g. Google, Mozilla, Apple)</td><td>Varies by browser</td><td>Web push notifications</td><td>Push endpoints and encrypted notification content</td></tr>
 <tr><td>PostHog, Inc.</td><td>United States</td><td>Usage statistics, error tracking, session replay</td><td>Account ID, usage events, error information, masked session replays</td></tr>
 <tr><td>Axiom, Inc.</td><td>United States</td><td>Request tracing, station run logs</td><td>Account ID, session ID, request paths and durations; station ID and its scrubbed run logs</td></tr>

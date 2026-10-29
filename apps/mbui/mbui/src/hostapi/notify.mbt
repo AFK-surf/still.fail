@@ -13,7 +13,7 @@
 // system shows them under), else kept and said on the log as a bare Mac executable's; no asking (Windows asks no app),
 // no pushes. Linux: the desktop's, through the app's GApplication (GNotification: linux_life.h) when the program is an
 // app (MBUI_APP_ID), else kept as a bare Mac executable's; no asking, no pushes. iOS: UNUserNotificationCenter
-// (ios_app.m), no pushes. A scripted run taps one by its words everywhere (@hostapi.drive 6, src/ui/drive.mbt
+// (ios_app.m), pushes APNs' (the token asked for as the app starts; the system shows them). A scripted run taps one by its words everywhere (@hostapi.drive 6, src/ui/drive.mbt
 // `notice`), as on Android.
 
 ///|
@@ -91,4 +91,11 @@ pub fn notice_opened() -> String {
 /// This device's push token for the app ("" none: no push service in this build).
 pub fn push_token() -> String {
   nt_text(1)
+}
+
+///|
+/// The push service that knows `push_token`: "fcm" (Android's Firebase Cloud Messaging), "apns" or "apns-sandbox"
+/// (iOS's, a development build's the sandbox's); "" with no token.
+pub fn push_service() -> String {
+  nt_text(2)
 }

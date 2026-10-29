@@ -30,6 +30,8 @@ pub(all) struct NoticeHost {
   answer : () -> Bool?
   opened : () -> String
   token : () -> String
+  /// the push service that knows the token: "fcm", "apns", "apns-sandbox"
+  service : () -> String
 }
 
 ///|
@@ -44,6 +46,7 @@ pub fn host_notices() -> NoticeHost {
     answer: fn() { @ui.notice_answer() },
     opened: fn() { @ui.notice_opened() },
     token: fn() { @hostapi.push_token() },
+    service: fn() { @hostapi.push_service() },
   }
 }
 
@@ -127,12 +130,14 @@ pub fn push_sync(src : Source, wanted : Bool?) -> Unit {
     Some(true) =>
       match (notice_host.val.token)() {
         "" => ()
-        token =>
-          (src.call)(
-            "push.register",
-            { "kind": Json::string("fcm"), "token": Json::string(token) },
-            fn(_) {  },
-          )
+        token => {
+          let registration : Map[String, Json] = match (notice_host.val.service)() {
+            "apns" => { "kind": "apns", "token": Json::string(token), "sandbox": false }
+            "apns-sandbox" => { "kind": "apns", "token": Json::string(token), "sandbox": true }
+            _ => { "kind": "fcm", "token": Json::string(token) }
+          }
+          (src.call)("push.register", Json::object(registration), fn(_) {  })
+        }
       }
     None => ()
   }

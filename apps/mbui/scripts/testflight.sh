@@ -53,9 +53,16 @@ profile() {
     i=$((i+1))
   done
   [ "$found" = yes ] || fail "$kind profile does not authorize signing certificate"
-  # Only entitlements used by this native app; never copy arbitrary profile permissions.
-  jq -n --arg app "$IOS_TEAM_ID.$bid" --arg team "$IOS_TEAM_ID" --arg group "$IOS_APP_GROUP" \
-    '{"application-identifier":$app,"com.apple.developer.team-identifier":$team,"com.apple.security.application-groups":[$group],"get-task-allow":false,"beta-reports-active":true}' > "$T/$kind.entitlements"
+  # Only entitlements used by this native app; never copy arbitrary profile permissions. Pushes (APNs) only for the
+  # app, which the profile must allow (Push Notifications on for its App ID): production's, as TestFlight's are.
+  if [ "$kind" = app ]; then
+    jq -e '."aps-environment" == "production"' "$T/entitlements.json" >/dev/null || fail "app profile lacks push notifications (aps-environment production)"
+    aps='{"aps-environment":"production"}'
+  else
+    aps='{}'
+  fi
+  jq -n --arg app "$IOS_TEAM_ID.$bid" --arg team "$IOS_TEAM_ID" --arg group "$IOS_APP_GROUP" --argjson aps "$aps" \
+    '{"application-identifier":$app,"com.apple.developer.team-identifier":$team,"com.apple.security.application-groups":[$group],"get-task-allow":false,"beta-reports-active":true} + $aps' > "$T/$kind.entitlements"
   plutil -convert xml1 "$T/$kind.entitlements"
 }
 profile app fail.still.iphone

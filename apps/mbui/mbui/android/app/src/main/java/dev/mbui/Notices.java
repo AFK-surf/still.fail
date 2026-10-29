@@ -156,9 +156,10 @@ public final class Notices {
         Host.main.post(Host::requestFrame);
     }
 
-    /** 0: a notification tapped, once; 1: the push token ("" none). */
+    /** 0: a notification tapped, once; 1: the push token ("" none); 2: the push service that knows it (FCM). */
     static String text(int what) {
         if (what == 1) return pushToken;
+        if (what == 2) return pushToken.isEmpty() ? "" : "fcm";
         if (what != 0) return "";
         String o = opened;
         opened = "";

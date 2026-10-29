@@ -175,7 +175,7 @@
   "core-misc.params.not_object": "Invalid params: must be an object",
   "core-misc.params.not_text": "Must be text",
   "core-misc.params.one_frame": "Give exactly one of text, binary or close",
-  "core-misc.params.push_registration": "Must be either {kind: \"web\", endpoint, keys: {p256dh, auth}} or {kind: \"fcm\", token}",
+  "core-misc.params.push_registration": "Must be either {kind: \"web\", endpoint, keys: {p256dh, auth}} or {kind: \"fcm\" | \"apns\", token, sandbox?}",
   "core-misc.params.station": "Invalid params: station required",
   "core-misc.params.unknown_field": "Invalid params: no {field} field",
   "core-misc.pill.back": "Connected",

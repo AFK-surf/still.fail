@@ -1,5 +1,5 @@
 // Push notifications (docs/notifications.md): devices register where they can be pushed to (a browser's Web Push
-// subscription, the Android app's FCM token) with the signed-in account and session; a station sends the notices of
+// subscription, the Android app's FCM token, the iOS app's APNs token) with the signed-in account and session; a station sends the notices of
 // its chats, signed with its key, naming who they are for by email; still.fail cloud makes each one's text and pushes it
 // to the devices of those people who are members of the station's workspace (the one the notices say, for a station in
 // several), each device once. A device its push
@@ -8,6 +8,7 @@
 import { clock, readJson, readText, reply } from "./auth";
 import type { PushDevice, PushRegistration } from "./directory";
 import type { Env } from "./env";
+import { apnsKey, apnsPush } from "./apns";
 import { fcmPush, serviceAccount } from "./fcm";
 import { langOf, requestLang, type Lang } from "./i18n.ts";
 import { line, noticeBodyFor, shown, showsOf, type Shows } from "./noticeText";
@@ -42,6 +43,8 @@ function validEndpoint(value: unknown): value is string {
   }
 }
 const validToken = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_:.-]{1,4096}$/.test(value);
+/** An APNs device token: hex (32 bytes today; Apple says it may grow). */
+const validApnsToken = (value: unknown): value is string => typeof value === "string" && /^[0-9a-fA-F]{64,200}$/.test(value);
 /** Browsers give base64url keys, some with padding. */
 const unpadded = (value: unknown) => (typeof value === "string" ? value.replace(/=+$/, "") : value);
 
@@ -56,6 +59,7 @@ export async function registration(request: Request, env: Env, sub: string, sid:
   const dir = env.DIRECTORY.getByName("primary");
   if (request.method === "DELETE") {
     if (validEndpoint(input.endpoint)) await dir.unregisterPush(sub, { endpoint: input.endpoint });
+    else if (validApnsToken(input.token)) await dir.unregisterPush(sub, { token: input.token.toLowerCase() });
     else if (validToken(input.token)) await dir.unregisterPush(sub, { token: input.token });
     else return reply({ error: "invalid_request" }, 400);
     return new Response(null, { status: 204 });
@@ -70,6 +74,9 @@ export async function registration(request: Request, env: Env, sub: string, sid:
   } else if (input.kind === "fcm") {
     if (!validToken(input.token)) return reply({ error: "invalid_request" }, 400);
     device = { kind: "fcm", token: input.token };
+  } else if (input.kind === "apns") {
+    if (!validApnsToken(input.token) || (input.sandbox !== undefined && typeof input.sandbox !== "boolean")) return reply({ error: "invalid_request" }, 400);
+    device = { kind: "apns", token: input.token.toLowerCase(), sandbox: input.sandbox === true };
   } else {
     return reply({ error: "invalid_request" }, 400);
   }
@@ -136,6 +143,7 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
   if (!targets) return workspace ? reply({ error: "not_in_workspace" }, 403) : reply({ error: "invalid_signature" }, 401);
   const keys = vapid(env);
   const fcm = serviceAccount(env.FCM_SERVICE_ACCOUNT);
+  const apns = apnsKey(env.APNS_KEY);
   const pushes: Promise<{ device: PushRegistration; outcome: Outcome }>[] = [];
   for (const n of notices) {
     const base = `${targets.workspace}/${station}`;
@@ -155,13 +163,16 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
     });
     // A device signed in with several of the people named gets it once.
     const devices = new Map<string, PushRegistration>();
-    for (const email of n.to) for (const device of targets.devices[email.toLowerCase()] ?? []) devices.set(device.kind === "web" ? `web ${device.endpoint}` : `fcm ${device.token}`, device);
+    for (const email of n.to) for (const device of targets.devices[email.toLowerCase()] ?? []) devices.set(device.kind === "web" ? `web ${device.endpoint}` : `${device.kind} ${device.token}`, device);
     for (const device of devices.values()) {
       if (pushes.length >= MAX_PUSHES) break;
       // (a kind it does not show, or of a workspace it turned off, is not sent)
       if (!shown(device.shows, n.kind, targets.workspace)) continue;
       const said = payload(device.lang, device.shows);
-      const push = device.kind === "web" ? (keys ? webPush(keys, device, JSON.stringify(said), said.tag!) : null) : fcm ? fcmPush(fcm, device.token, said) : null;
+      const push =
+        device.kind === "web" ? (keys ? webPush(keys, device, JSON.stringify(said), said.tag!) : null)
+        : device.kind === "apns" ? (apns ? apnsPush(apns, device.token, device.sandbox, said) : null)
+        : fcm ? fcmPush(fcm, device.token, said) : null;
       if (!push) continue;
       pushes.push(push.then((outcome) => ({ device, outcome }), (error) => {
         console.warn(`push: ${error}`);
