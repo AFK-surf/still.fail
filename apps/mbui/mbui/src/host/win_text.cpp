@@ -30,6 +30,9 @@ typedef struct {
   int style;  // 1 italic, 2 the code face
   double w, h, ox, oy;
   int color;
+  // its ink across, from where it starts (punct_ink); known: worked out
+  double ink_l, ink_r;
+  bool ink_known;
 } glyph_entry;
 
 static IDWriteFactory2 *dw;
@@ -463,7 +466,7 @@ static int intern(const WCHAR *s, int len, double size, int weight, int style) {
   }
   memcpy(pool + pool_len, s, (size_t)len * sizeof(WCHAR));
   int id = n_entries++;
-  entries[id] = {(int)pool_len, len, size, weight, style, 0, 0, 0, 0, 0};
+  entries[id] = {(int)pool_len, len, size, weight, style, 0, 0, 0, 0, 0, 0, 0, false};
   pool_len += len;
   if ((size_t)n_entries * 2 > table_cap) {
     free(table);
@@ -474,6 +477,60 @@ static int intern(const WCHAR *s, int len, double size, int weight, int style) {
     table_put(id);
   }
   return id;
+}
+
+// CJK punctuation two in a row set solid, as Core Text sets it on the Apple hosts (and DirectWrite would, for a font
+// with chws: Microsoft YaHei, the fallback Han is drawn in, has neither chws nor halt, so "），" stood a whole empty
+// half em apart). 1: a closing mark or a pause (，。、：；and the closing brackets), its ink in its first half in a
+// Simplified Chinese font; 2: an opening bracket, its ink in its second half. ！？ and the quotes (narrow in YaHei)
+// are left as they are.
+static int punct_kind(WCHAR c) {
+  switch (c) {
+    case 0xFF0C: case 0x3002: case 0x3001: case 0xFF1A: case 0xFF1B: case 0xFF0E:
+    case 0xFF09: case 0x300D: case 0x300F: case 0x3011: case 0x300B: case 0x3009: case 0x3015: case 0xFF3D:
+    case 0xFF5D:
+      return 1;
+    case 0xFF08: case 0x300C: case 0x300E: case 0x3010: case 0x300A: case 0x3008: case 0x3014: case 0xFF3B:
+    case 0xFF5B:
+      return 2;
+  }
+  return 0;
+}
+
+// Where glyph `key`'s ink is across, from where it starts: worked out once, from the face it is drawn in.
+static void punct_ink(int key) {
+  glyph_entry *e = &entries[key];
+  if (e->ink_known) return;
+  IDWriteTextLayout *l = make_layout(pool + e->off, e->len, e->size, e->weight, e->style);
+  DWRITE_TEXT_METRICS tm;
+  DWRITE_OVERHANG_METRICS om;
+  l->GetMetrics(&tm);
+  l->SetMaxWidth(tm.widthIncludingTrailingWhitespace);
+  l->SetMaxHeight(tm.height);
+  l->GetOverhangMetrics(&om);
+  l->Release();
+  e->ink_l = -om.left;
+  e->ink_r = tm.widthIncludingTrailingWhitespace + om.right;
+  e->ink_known = true;
+}
+
+// Each pair of full-width marks in a line's clusters (out, as mb_host_shape gives them): the first's advance a half
+// em less where its ink still ends before the second's begins (a closing mark's empty second half; before an opening
+// bracket, that bracket's empty first half), as chws sets them. An opening bracket then a closing one ("（）") is
+// left.
+static void punct_solid(const WCHAR *s, double size, double *out, int32_t k) {
+  double half = size / 2, tol = size * 0.05;
+  for (int32_t i = 0; i + 1 < k; i++) {
+    int a = (int)out[i * 4 + 3], b = (int)out[(i + 1) * 4 + 3];
+    if (a < 0 || b < 0 || out[i * 4 + 1] != 1 || out[(i + 1) * 4 + 1] != 1) continue;
+    int ka = punct_kind(s[(int)out[i * 4]]), kb = punct_kind(s[(int)out[(i + 1) * 4]]);
+    if (!ka || !kb || (ka == 2 && kb == 1)) continue;
+    double adv = out[i * 4 + 2];
+    if (fabs(adv - size) > tol || fabs(out[(i + 1) * 4 + 2] - size) > tol) continue;
+    punct_ink(a);
+    punct_ink(b);
+    if (entries[a].ink_r <= adv - half + entries[b].ink_l + tol) out[i * 4 + 2] = adv - half;
+  }
 }
 
 extern "C" int32_t mb_host_shape(moonbit_string_t text, double size, int32_t weight, int32_t style, double *out) {
@@ -512,6 +569,7 @@ extern "C" int32_t mb_host_shape(moonbit_string_t text, double size, int32_t wei
     pos += clen;
   }
   l->Release();
+  punct_solid(s, size, out, k);
   return k;
 }
 
@@ -537,6 +595,7 @@ static void ahead_forget(void);
 static void faces_changed(void) {
   for (int i = 0; i < n_formats; i++) formats[i].f->Release();
   n_formats = 0;
+  for (int i = 0; i < n_entries; i++) entries[i].ink_known = false;
   ahead_forget();
   reset_atlas();
 }
