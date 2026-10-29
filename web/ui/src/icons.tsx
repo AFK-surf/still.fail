@@ -213,6 +213,30 @@ export function Info(props: IconProps) {
   return <Svg {...props}><path d="M20.5 12C20.5 17.5 17.5 20.5 12 20.5C6.5 20.5 3.5 17.5 3.5 12C3.5 6.5 6.5 3.5 12 3.5C17.5 3.5 20.5 6.5 20.5 12Z M10.5 11H12V16H13.5" /><circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none" /></Svg>;
 }
 
+export function KeyBack(props: IconProps) {
+  return <Svg {...props}><path d="M8.5 5.5H18Q20.5 5.5 20.5 8V16Q20.5 18.5 18 18.5H8.5L3 12Z" /><path d="M11.5 9.5L16.5 14.5 M16.5 9.5L11.5 14.5" /></Svg>;
+}
+
+export function KeyBoard(props: IconProps) {
+  return <Svg {...props}><rect x="3" y="4.5" width="3.6" height="3.6" rx="1" fill="currentColor" stroke="none" /><rect x="7.8" y="4.5" width="3.6" height="3.6" rx="1" fill="currentColor" stroke="none" /><rect x="12.6" y="4.5" width="3.6" height="3.6" rx="1" fill="currentColor" stroke="none" /><rect x="17.4" y="4.5" width="3.6" height="3.6" rx="1" fill="currentColor" stroke="none" /><rect x="3" y="9.6" width="3.6" height="3.6" rx="1" fill="currentColor" stroke="none" /><rect x="7.8" y="9.6" width="3.6" height="3.6" rx="1" fill="currentColor" stroke="none" /><rect x="12.6" y="9.6" width="3.6" height="3.6" rx="1" fill="currentColor" stroke="none" /><rect x="17.4" y="9.6" width="3.6" height="3.6" rx="1" fill="currentColor" stroke="none" /><rect x="6.5" y="15.6" width="11" height="2.6" rx="1.3" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function KeyShiftLock(props: IconProps) {
+  return <Svg {...props}><path d="M12 2.5L20 10.5H15.5V16H8.5V10.5H4Z" fill="currentColor" stroke="none" /><path d="M8.5 20.5H15.5" /></Svg>;
+}
+
+export function KeyShiftOnce(props: IconProps) {
+  return <Svg {...props}><path d="M12 4.5L20 12.5H15.5V19H8.5V12.5H4Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function KeyShift(props: IconProps) {
+  return <Svg {...props}><path d="M12 4.5L20 12.5H15.5V19H8.5V12.5H4Z" /></Svg>;
+}
+
+export function KeySwap(props: IconProps) {
+  return <Svg {...props}><path d="M14.5 4.5H16Q19.5 4.5 19.5 8 M9.5 19.5H8Q4.5 19.5 4.5 16" /></Svg>;
+}
+
 export function Key(props: IconProps) {
   return <Svg {...props}><circle cx="15.5" cy="8.5" r="5" /><path d="M12 12L3.5 20.5 M5 19L7 21 M8 16L10 18" /></Svg>;
 }
@@ -613,6 +637,12 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "im": Im,
   "image-upload": ImageUpload,
   "info": Info,
+  "key-back": KeyBack,
+  "key-board": KeyBoard,
+  "key-shift-lock": KeyShiftLock,
+  "key-shift-once": KeyShiftOnce,
+  "key-shift": KeyShift,
+  "key-swap": KeySwap,
   "key": Key,
   "keyboard": Keyboard,
   "landscape": Landscape,

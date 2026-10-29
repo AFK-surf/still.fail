@@ -242,6 +242,11 @@ detlint (docs/detlint.md) counts, file by file, only going down:
 - `style-text`: a named style (a top-level `let`, a `.then(…)` of one) said as `@ui.style(…)` with nothing but
   tokens and numbers in it: forbidden; its message is the `@ui.css("…")` to write instead.
 
+What draws a look that is not the theme's is outside them all (detlint.json `style.outside`): a program of its own
+drawing to units of its own, every size a share of the window's width (still.fail's keyboard, laid out as WeChat's
+in its units, 1080 across), has no place on the theme's scale, and its numbers are its design's data, as a
+layout table's are. A page, a part of the library, anything of the app's own look is never put there.
+
 `Tester::census()` gives the values the last frame used, by kind (sizes of words, weights, paddings, corners,
 colours): an app counts how many each kind has across its screens, which should go down.
 

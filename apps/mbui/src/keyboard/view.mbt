@@ -217,6 +217,10 @@ priv struct Paint {
   ink : Int64
   on_green : Int64
   quiet : Int64
+  /// the bar's icons
+  tool : Int64
+  /// the 中英 key's arcs
+  faint : Int64
   edge : Int64
   shadow : Int64
   grey_shadow : Int64
@@ -238,6 +242,8 @@ fn paint() -> Paint {
       ink: 0xFFFFFFE6L,
       on_green: 0x000000FFL,
       quiet: 0xFFFFFF66L,
+      tool: 0xFFFFFF80L,
+      faint: 0xFFFFFF40L,
       edge: 0xFFFFFF1AL,
       shadow: 0x0000008CL,
       grey_shadow: 0x0000008CL,
@@ -255,6 +261,8 @@ fn paint() -> Paint {
       ink: 0x000000E6L,
       on_green: 0xFFFFFFFFL,
       quiet: 0x00000066L,
+      tool: 0x00000080L,
+      faint: 0x00000040L,
       edge: 0x0000001AL,
       shadow: 0x00000026L,
       grey_shadow: 0x0000003FL,
@@ -375,7 +383,7 @@ fn bar(c : @ui.Ctx, s : State, p : Paint, w : Double) -> Unit {
       }
       let other = c.id("other")
       bar_button(c, s, p, 828.0, other, fn() {
-        @sf.icon(c, "keyboard", size=48.0 * u, color=p.ink) |> ignore
+        @sf.icon(c, "key-board", size=64.0 * u, color=p.tool) |> ignore
       })
       if c.clicked(other) {
         @ui.native_call("keyboard.switch", Json::object(Map([]))) |> ignore
@@ -445,10 +453,23 @@ fn keys(c : @ui.Ctx, s : State, p : Paint) -> Unit {
       justify=JCenter,
       fn() {
         match k.key {
-          // 中 over 英 (or 英 over 中), the other one small at its foot's right
-          Lang => {
-            c.text(k.label, size=46.0 * u, color=ink, wrap=false) |> ignore
-            c.text(k.small, size=30.0 * u, color=p.quiet, wrap=false) |> ignore
+          // 中 at its top left, 英 small and quiet at its foot's right (or the other way), the two arcs of a swap
+          // between them, as WeChat's
+          Lang =>
+            c.box(w=Px(k.w * u), h=Px(k.h * u), align=ACenter, justify=JCenter, fn() {
+              @sf.icon(c, "key-swap", size=72.0 * u, color=p.faint) |> ignore
+              lang_word(c, k, u, k.label, 0.33, 0.4, 40.0, ink)
+              lang_word(c, k, u, k.small, 0.65, 0.64, 32.0, p.quiet)
+            })
+            |> ignore
+          Back => @sf.icon(c, "key-back", size=68.0 * u, color=ink) |> ignore
+          ShiftKey => {
+            let name = match s.board.shift {
+              Off => "key-shift"
+              Once => "key-shift-once"
+              Locked => "key-shift-lock"
+            }
+            @sf.icon(c, name, size=74.0 * u, color=ink) |> ignore
           }
           // ， with 。 small over it
           Words(_) if k.small != "" => {
@@ -505,6 +526,22 @@ fn frame(c : @ui.Ctx) -> Unit {
     bar(c, s, p, w)
     keys(c, s, p)
   })
+  |> ignore
+}
+
+///|
+/// Words of the 中英 key centred at (`fx`, `fy`) of it (shares of its width and height), `size` units.
+fn lang_word(c : @ui.Ctx, k : Cap, u : Double, words : String, fx : Double, fy : Double, size : Double, color : Int64) -> Unit {
+  let side = size * 1.4 * u
+  c.box(
+    left=k.w * fx * u - side / 2.0,
+    top=k.h * fy * u - side / 2.0,
+    w=Px(side),
+    h=Px(side),
+    align=ACenter,
+    justify=JCenter,
+    fn() { c.text(words, size=size * u, color~, wrap=false) |> ignore },
+  )
   |> ignore
 }
 

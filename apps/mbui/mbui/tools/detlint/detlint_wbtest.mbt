@@ -56,6 +56,31 @@ fn lines(fs : Array[Finding]) -> Array[Int] {
 }
 
 ///|
+test "style outside" {
+  // a look drawn to units of its own (an input method's keys, another product's, laid out to the window's width) is
+  // not the theme's: no style rule counts it
+  let conf = conf_value().set(
+    "style",
+    @rjson.Value::Obj([("outside", Arr([Str("src/keys/*.mbt")]))]),
+  )
+  let cfg = Config::new(conf)
+  let view =
+    #|
+    #|fn view(c : @ui.Ctx, u : Double) -> Unit {
+    #|  c.box(radius=16.0 * u, bg=0xFCFCFCFFL, fn() { c.text("Q", size=60.0 * u) |> ignore }) |> ignore
+    #|}
+    #|
+  let files = [("src/keys/view.mbt", view), ("src/app/view.mbt", view)]
+  for rule in ["style-literal", "box-loose", "style-exact"] {
+    assert_eq(
+      lint_of(files, rule~, cfg~).map(fn(f) { f.file }).filter(fn(f) { f == "src/keys/view.mbt" }),
+      [],
+    )
+  }
+  assert_eq(lines(lint_of(files, rule="box-loose", cfg~)), [3, 3])
+}
+
+///|
 test "style" {
   let conf = conf_value().set(
     "style",
