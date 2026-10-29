@@ -2,7 +2,7 @@
 // and in what order, a Slack message's link typed instead.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { arrange, readConnects, relayBot, relayView, slackLink, type RelayConnect, type RelayPlace } from "../src/relay-pick.ts";
+import { MENTIONS, arrange, mentionQuery, mentionView, readConnects, readPeople, relayBot, relayView, slackLink, type RelayConnect, type RelayPlace } from "../src/relay-pick.ts";
 import { parseCall } from "../src/core/calls.ts";
 import { tr } from "../src/i18n.ts";
 import { answers, call, cloudCore } from "./helpers.ts";
@@ -66,4 +66,32 @@ test("a_client_asks_the_core_what_the_picker_shows", async () => {
   const v = (answers(host.takeEmitted(), 1) as J).ok;
   assert.deepEqual(v.rows.map((r: J) => r.name), ["#dev"]);
   assert.equal(v.bot, "a");
+});
+
+test("an_at_in_the_note_offers_the_people_there_and_picking_one_writes_their_name", () => {
+  const people = [{ id: "U1", name: "pengxiao", aka: "Peng Xiao" }, { id: "U2", name: "ann" }, { id: "U3", name: "张三" }, { id: "U4", name: "xiaoming" }];
+  assert.deepEqual(mentionQuery("hi @pe"), { at: 3, query: "pe" });
+  assert.equal(mentionQuery("mail a@b"), null, "an @ in a word is not one");
+  assert.equal(mentionQuery("@ann\nlook"), null, "nor one on a line before");
+  assert.equal(mentionView(people, "look").query, null);
+  // Their name or other name has it, those starting with it first, then by name.
+  assert.deepEqual(mentionView(people, "@xiao").rows.map((p) => p.id), ["U4", "U1"]);
+  assert.deepEqual(mentionView(people, "@Peng X").rows.map((p) => p.id), ["U1"]);
+  assert.deepEqual(mentionView(people, "@").rows.map((p) => p.id), ["U2", "U1", "U4", "U3"]);
+  assert.equal(mentionView(Array.from({ length: 9 }, (_, i) => ({ id: `U${i}`, name: `p${i}` })), "@p").rows.length, MENTIONS);
+  // Picked: the note with their name in place of what was typed, and nothing is offered for it any more.
+  const picked = mentionView(people, "请 @张").rows[0]!;
+  assert.equal(picked.note, "请 @张三 ");
+  assert.deepEqual(mentionView(people, picked.note).rows, []);
+  assert.deepEqual(readPeople([{ id: "U1", name: "a", aka: "", picture: "p" }, { id: "", name: "b" }, "x"]), [{ id: "U1", name: "a", picture: "p" }]);
+});
+
+test("a_client_asks_the_core_whom_the_note_can_mention", async () => {
+  const people = [{ id: "U1", name: "ann" }];
+  assert.deepEqual(parseCall("chat.relayMentions", { people, note: "@a" }), { kind: "relayMentions", people, note: "@a" });
+  const { host, core } = await cloudCore();
+  const ui = core.connect();
+  call(core, ui, 1, "chat.relayMentions", { people, note: "hi @a" });
+  await host.settle();
+  assert.deepEqual((answers(host.takeEmitted(), 1) as J).ok, { query: "a", rows: [{ id: "U1", name: "ann", note: "hi @ann " }] });
 });

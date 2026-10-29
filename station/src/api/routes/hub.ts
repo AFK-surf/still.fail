@@ -27,7 +27,7 @@ import {
   openChat,
   say,
 } from "../../sessions/lifecycle.ts";
-import { relay, relayPlaces } from "../../sessions/relay.ts";
+import { relay, relayPeople, relayPlaces } from "../../sessions/relay.ts";
 import { cc } from "../../sessions/cc.ts";
 import { shown } from "../../jobs/jobs.ts";
 import { withLock, workspaceFile } from "../../sessions/archive.ts";
@@ -622,6 +622,21 @@ export const routes = (tools: Tools): Route[] => {
           session(s, key, r);
           await as(400, () => addToThread(a.hub, t.id, key));
           return threadView(r, t.id);
+        }),
+    },
+    // The people of where the chat would be relayed (`?connect=&channel=`, or `?link=` of a Slack message), for its note
+    // to mention (docs/relay.md「附言里 @ 人」).
+    {
+      method: "GET",
+      pattern: /^\/*threads\/+([^/]+)\/+relay\/+people\/*$/,
+      handle: (r, [rawId]) =>
+        write(async (s, a) => {
+          const t = thread(s, segment(rawId!));
+          const q = (name: string) => (r.query.find(([k]) => k === name)?.[1] ?? "").trim();
+          const [connect, channel, link] = [q("connect"), q("channel"), q("link")];
+          if (link === "" && (connect === "" || channel === "")) throw new Refused(400, tr(r.lang, "station.relay.pick"));
+          const target = link !== "" ? { link, ...(connect !== "" ? { connect } : {}) } : { connect, channel };
+          return ok({ people: await as(400, () => relayPeople(a.hub, t, target)) });
         }),
     },
     // Where the chat can be relayed (docs/relay.md): each connect's channels and groups its bot is in.

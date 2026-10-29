@@ -5,8 +5,9 @@ import { test } from "node:test";
 import type { Place, ThreadRef } from "../src/sessions/chat.ts";
 import { stationLang, tr } from "../src/ops/i18n.ts";
 import { newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
-import { relay, relayPlaces } from "../src/sessions/relay.ts";
-import { SlackSurface } from "../src/slack/surface.ts";
+import { mentioned, relay, relayPeople, relayPlaces } from "../src/sessions/relay.ts";
+import { MEMBERS_MS } from "../src/connects/surface.ts";
+import { PEOPLE_MS, SlackSurface } from "../src/slack/surface.ts";
 import { SlackClient } from "../src/slack/web.ts";
 import { Rig, message, settle, testClock, type Setup } from "./hub-fakes.ts";
 import { FakeSlack } from "./slack-fake.ts";
@@ -173,6 +174,35 @@ test("the station's first message there mentions who relayed it, where the platf
   await r.close();
 });
 
+test("a note's @names of the people there are mentioned as the platform mentions them", async () => {
+  const people = [{ id: "UANN", name: "Ann" }, { id: "UANNA", name: "Anna Li" }, { id: "UZS", name: "张三" }];
+  const at = (id: string) => `<@${id}>`;
+  assert.equal(mentioned("@Anna Li and @Ann, look", people, at), "<@UANNA> and <@UANN>, look", "the longest name first");
+  assert.equal(mentioned("@张三帮看下", people, at), "<@UZS>帮看下", "a name in a script without spaces runs on into the words");
+  assert.equal(mentioned("@Annie, @Bo, mail x@Ann.c", people, at), "@Annie, @Bo, mail x@Ann.c", "one going on into more of a word is not theirs; nobody's left as written");
+  assert.equal(mentioned("@Ann", [], at), "@Ann");
+  assert.equal(mentioned("@Peng Xiao look", [{ id: "UPX", name: "pengxiao", aka: "Peng Xiao" }], at), "<@UPX> look", "by their other name too");
+  // Relayed: the station's first message there mentions them; who is there is asked of the platform only for an @.
+  const { r, begun } = relayRig();
+  const asked: string[] = [];
+  Object.assign(r.chat, { peopleIn: async (channel: string) => (asked.push(channel), people) });
+  const [, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+  assert.deepEqual(await relayPeople(r.hub, thread, { connect: "cl", channel: "C1" }), people);
+  assert.deepEqual(await relayPeople(r.hub, thread, { link: "https://acme.slack.com/archives/C1/p1650000000000100" }), people);
+  await assert.rejects(relayPeople(r.hub, thread, { connect: "cl", channel: "C9" }), /not in C9/);
+  assert.deepEqual(asked, ["C1", "C1"]);
+  await relay(r.hub, thread, ADA, { connect: "cl", channel: "C2" }, "no one");
+  assert.deepEqual(asked, ["C1", "C1"], "not asked without an @");
+  await relay(r.hub, thread, ADA, { connect: "cl", channel: "C1" }, "@张三 could you look?");
+  assert.deepEqual(asked, ["C1", "C1", "C1"]);
+  assert.ok(begun[1]![1].endsWith("\n\n<@UZS> could you look?"), begun[1]![1]);
+  // Where they cannot be read, the note goes as written.
+  Object.assign(r.chat, { peopleIn: async () => { throw new Error("missing_scope"); } });
+  await relay(r.hub, thread, ADA, { connect: "cl", channel: "C2" }, "@张三 look");
+  assert.ok(begun[2]![1].endsWith("\n\n@张三 look"), begun[2]![1]);
+  await r.close();
+});
+
 test("relaying is refused where the bot is not, through a connect that cannot, and for a chat with no agent", async () => {
   const { r, begun } = relayRig();
   const [, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
@@ -248,3 +278,46 @@ test("Slack: the channels the bot is in, page by page; a conversation begins wit
     await fake.close();
   }
 });
+
+test("Slack: the people in a channel, named as users.list names them, bots and deactivated accounts left out; kept a while", async () => {
+  const fake = await FakeSlack.start();
+  const time = testClock();
+  try {
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), clock: time.clock });
+    fake.answer("conversations.members", (seen: { params: Record<string, string> }) =>
+      seen.params.cursor === "m2" ? { ok: true, members: ["UBOT", "UOLD"], response_metadata: { next_cursor: "" } } : { ok: true, members: ["UANN", "UBO"], response_metadata: { next_cursor: "m2" } },
+    );
+    fake.answer("users.list", (seen: { params: Record<string, string> }) =>
+      seen.params.cursor === "u2"
+        ? { ok: true, members: [{ id: "UBO", real_name: "Bo", profile: { display_name: "", real_name: "Bo" } }, { id: "UBOT", is_bot: true, profile: { real_name: "Bot" } }, { id: "UOLD", deleted: true, profile: { real_name: "Old" } }], response_metadata: { next_cursor: "" } }
+        : { ok: true, members: [{ id: "UANN", profile: { display_name: "ann", real_name: "Ann Lee", image_72: "https://img/ann.png" } }, { id: "UOUT", profile: { real_name: "Not there" } }], response_metadata: { next_cursor: "u2" } },
+    );
+    assert.deepEqual(await surface.peopleIn("C1"), [
+      { id: "UANN", name: "ann", aka: "Ann Lee", picture: "https://img/ann.png" },
+      { id: "UBO", name: "Bo" },
+    ]);
+    assert.deepEqual(fake.calls("conversations.members").map((c) => [c.params.channel, c.params.cursor ?? null]), [["C1", null], ["C1", "m2"]]);
+    const asked = () => [fake.calls("conversations.members").length, fake.calls("users.list").length];
+    assert.deepEqual(asked(), [2, 2]);
+    // Asked again soon (the note's @, then relaying): nothing asked of Slack.
+    assert.equal((await surface.peopleIn("C1")).length, 2);
+    assert.deepEqual(asked(), [2, 2]);
+    // Who is in the channel, read again after a minute; the workspace's people kept.
+    await time.adjust(MEMBERS_MS);
+    await surface.peopleIn("C1");
+    assert.deepEqual(asked(), [4, 2]);
+    // Someone the workspace's people did not have: those read again (once a minute at most).
+    fake.answer("conversations.members", { ok: true, members: ["UANN", "UNEW"], response_metadata: { next_cursor: "" } });
+    fake.answer("users.list", { ok: true, members: [{ id: "UANN", profile: { display_name: "ann" } }, { id: "UNEW", profile: { real_name: "New" } }], response_metadata: { next_cursor: "" } });
+    await time.adjust(MEMBERS_MS);
+    assert.deepEqual((await surface.peopleIn("C1")).map((p) => p.id), ["UANN", "UNEW"]);
+    assert.deepEqual(asked(), [5, 3]);
+    // And after PEOPLE_MS in any case.
+    await time.adjust(PEOPLE_MS);
+    await surface.peopleIn("C1");
+    assert.deepEqual(asked(), [6, 4]);
+  } finally {
+    await fake.close();
+  }
+});
+

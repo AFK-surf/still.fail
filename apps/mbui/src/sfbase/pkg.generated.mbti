@@ -1189,6 +1189,8 @@ pub fn relay_connect(String) -> Json?
 
 pub fn relay_go(Source, Json?, done? : () -> Unit) -> Unit
 
+pub fn relay_mentions(@ui.Ctx, Source, Json?) -> Array[Json]
+
 pub fn relay_open(Source, String, Double) -> Unit
 
 pub fn relay_reset() -> Unit
@@ -2711,6 +2713,10 @@ pub(all) struct Relaying {
   view : @signals.Signal[Json?]
   asked : @signals.Signal[String]
   busy : @signals.Signal[Bool]
+  people : @signals.Signal[Array[Json]]
+  people_of : @signals.Signal[String]
+  mentions : @signals.Signal[Json?]
+  mentions_asked : @signals.Signal[String]
   query : @ui.Field
   note : @ui.Field
 }

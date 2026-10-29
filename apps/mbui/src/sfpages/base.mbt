@@ -170,6 +170,7 @@ using @sfbase {
   relaying,
   relay_open,
   relay_view,
+  relay_mentions,
   relay_reset,
   relay_go,
   relay_connect,

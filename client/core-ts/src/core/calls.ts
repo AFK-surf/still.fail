@@ -17,7 +17,7 @@ import type { Topic } from "../protocol.ts";
 import { draftAt } from "../refs.ts";
 import { StationAddr } from "../station/addr.ts";
 import type { FindAt, FindHit } from "../chat-find.ts";
-import { readConnects, type RelayConnect } from "../relay-pick.ts";
+import { readConnects, readPeople, type RelayConnect, type RelayPerson } from "../relay-pick.ts";
 import { fromBase64, get, isObject } from "../util.ts";
 import { orEmpty, read } from "./params.ts";
 
@@ -140,6 +140,8 @@ export type Call =
   | { kind: "commandsFind"; query: string; offered: unknown[] }
   /// What a chat's relay picker shows (relay-pick.ts): the connects read, what was typed, all asked for, the bot picked.
   | { kind: "relayView"; connects: RelayConnect[]; query: string; all: boolean; bot: string | null }
+  /// Who its note can mention now (relay-pick.ts): the people of the place picked, the note as written.
+  | { kind: "relayMentions"; people: RelayPerson[]; note: string }
   /// A history step's call and what came back, read by what they are (tool-step.ts).
   | { kind: "historyTool"; name: string; call: string; result: string | null; failed: boolean; said: boolean }
   /// Where a chat's find goes (chat-find.ts): what was found, where the reader is, which way, what the view shows.
@@ -852,6 +854,13 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
         ["bot", S, "opt"],
       ]);
       return { kind: "relayView", connects: readConnects(p.connects), query: p.query as string, all: p.all === true, bot: p.bot as string | null };
+    }
+    case "chat.relayMentions": {
+      const p = read(params, [
+        ["people", "values", "default"],
+        ["note", S, "default"],
+      ]);
+      return { kind: "relayMentions", people: readPeople(p.people), note: p.note as string };
     }
     case "commands.find": {
       const p = read(params, [

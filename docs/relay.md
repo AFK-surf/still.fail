@@ -15,7 +15,13 @@
 - 站点记得每个频道和群最近一次被接力过去的时间（`relayed_to` 表），接力过的排在前面（最近的在前），其余按名字排。打开时一共超过 8 个、又有接力过的，先只列最近接力过的 5 个，下面「显示全部 N 个」；一输入就在全部里搜，名字以输入开头的在前。
 - 每一项说接力过去会怎样：Slack 频道是「新 thread」（最常见，选中后才写）；飞书话题群是「新话题」；飞书普通群是「接管群会话」：普通群本来就是一个会话（docs/feishu.md「会话怎么分」），接力等于在群里开新会话，群里之后的话都归这个对话，原来的会话照常留着。
 - 搜索框里粘一条 Slack 消息的链接（频道里的消息，或 thread 里的回复，带 `thread_ts` 的那种），列表换成「接力到这个 Slack thread」：接到那条消息所在的 thread。用选中的 bot，它不在链接的工作区时站点按工作区找别的连接；bot 不在那个频道、那个 thread 已经有别的对话的 agent 在（和 `slack_api` 的规则一样），都拒绝。
-- 选中一个后列表收起，只剩选中的那一行（「更换」回到列表），下面一行「那里由 [头像] bot 名 回复」写明在那边发言的 bot，再下面才出现可选的「开头附一句」，跟着第一条消息发出去（比如 @ 某人）；按钮写明去向（「接力到 #频道」）。
+- 选中一个后列表收起，只剩选中的那一行（「更换」回到列表），下面一行「那里由 [头像] bot 名 回复」写明在那边发言的 bot，再下面才出现可选的「开头附一句」，跟着第一条消息发出去（比如 @ 某人，见下）；按钮写明去向（「接力到 #频道」）。
+
+## 附言里 @ 人
+
+- 在「开头附一句」里打 `@`（在开头或空格后），附言框下面列出选中的频道或群里的人（头像、名字；Slack 的显示名和全名不一样时，全名在右边），接着打的字按名字和全名过滤，以它开头的在前，最多 6 个。点一个（或按回车选第一个），附言里打的 `@…` 换成 `@名字 `。
+- 这份名单第一次打 `@` 时才读（换了地方再读一次）：Slack 是 `conversations.members` 加 `users.list`（去掉 bot、停用的账号和 Slackbot），飞书是群成员（`im/v1/chats/:id/members`）。读不到就不列，附言照常能写。站点记着读过的：谁在哪个频道或群记 1 分钟，Slack 整个 workspace 的人（`users.list`，要一页页翻完，Slack 又限它一分钟 20 来次）记 10 分钟；频道里有它没记着的人（新加入 workspace 的），最多一分钟重读一次。所以打 `@` 和接力时那次读，多半不用再问平台，刚进频道的人最多晚一分钟能被 @ 到。
+- 接力时站点再读一次那里的人，把附言里 `@名字`（名字或全名，`@` 在开头或不跟在字母数字后面）换成平台的 @（Slack `<@U…>`，飞书 `<at id=…></at>`）：长的名字先配，英文名后面紧跟着字母数字的不算（`@Ann` 不会配到 `@Annie`）。所以不从列表里选、手打完整的名字也一样能 @ 到；配不上的照原样发。读不到那里的人时附言原样发。
 
 ## 接力时站点做什么（`station/src/sessions/relay.ts`）
 
@@ -43,6 +49,7 @@
 
 - `GET /threads/:id/relay`：`{connects: [{id, kind: slack|feishu|lark, name, team, botImage, preferred, places: [{id, name, kind: channel|topics|group, private?, used?}], error?}]}`，`used` 是最近一次接力到那里的时间（毫秒），每个连接的 places 按上面的顺序排。读不出某个连接的频道时，那一组带 `error`，其余照给。
 - `POST /threads/:id/relay`：`{connect, channel, note?}` 或 `{link, connect?, note?}`，答 `{thread, to, place, link}`。
+- `GET /threads/:id/relay/people?connect=&channel=`（或 `?link=&connect=`）：`{people: [{id, name, aka?, picture?}]}`，那里的人，附言可以 @ 的。
 - `GET /threads/:id` 里 still.fail 对话的 `cc`：`[{thread, surface, channel, threadTs, channelName}]`，可以抄送到的会话；没有就不给。`POST /threads/:id/messages` 带 `cc: [thread id…]`：发出后抄送到其中属于这个对话的那些（不等它）。
-- core 的操作：`chat.relayPlaces {thread}`、`chat.relay {thread, connect?, channel?, link?, note?}`、`chat.cc {thread, to, on}`（chat 视图的 `cc: [{thread, place, via, on}]`）；挑选框列什么、怎么排（上面的规则）由 core 的 `chat.relayView` 算（`client/core-ts/src/relay-pick.ts`），网页、手机、桌面都用它。
-- 平台的部分在 `ChatSurface` 上：`places()`、`begin(channel, message)`、`edit(thread, ts, message)`、`threadOf(link)`、`permalink(thread)`；Slack 和飞书各自实现，再加平台只要实现这几个。
+- core 的操作：`chat.relayPlaces {thread}`、`chat.relayPeople {thread, connect?, channel?, link?}`、`chat.relay {thread, connect?, channel?, link?, note?}`、`chat.cc {thread, to, on}`（chat 视图的 `cc: [{thread, place, via, on}]`）；挑选框列什么、怎么排（上面的规则）由 core 的 `chat.relayView` 算，附言里 `@` 列谁、选了之后附言变成什么由 `chat.relayMentions` 算（都在 `client/core-ts/src/relay-pick.ts`），网页、手机、桌面都用它。
+- 平台的部分在 `ChatSurface` 上：`places()`、`peopleIn(channel)`、`begin(channel, message)`、`edit(thread, ts, message)`、`threadOf(link)`、`permalink(thread)`；Slack 和飞书各自实现，再加平台只要实现这几个。

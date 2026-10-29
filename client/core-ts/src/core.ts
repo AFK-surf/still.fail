@@ -7,7 +7,7 @@ import { type AccountProvider, type AccountProviderFactory, type AccountSessions
 import * as brand from "./brand.ts";
 import * as commands from "./commands.ts";
 import { findGo } from "./chat-find.ts";
-import { relayView } from "./relay-pick.ts";
+import { mentionView, relayView } from "./relay-pick.ts";
 import { wordsAnswer } from "./words.ts";
 import { toolCall, toolResult, type ToolPart } from "./tool-step.ts";
 import * as fonts from "./fonts.ts";
@@ -300,6 +300,10 @@ export class Core {
       handlers.relayView = (_i, call) => {
         const c = call as Extract<Call, { kind: "relayView" }>;
         return Effect.sync(() => relayView(c.connects, c.query, c.all, c.bot, t));
+      };
+      handlers.relayMentions = (_i, call) => {
+        const c = call as Extract<Call, { kind: "relayMentions" }>;
+        return Effect.sync(() => mentionView(c.people, c.note));
       };
       handlers.commandsFind = (_i, call) => {
         const c = call as Extract<Call, { kind: "commandsFind" }>;

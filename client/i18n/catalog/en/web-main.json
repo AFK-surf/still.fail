@@ -878,6 +878,7 @@
   "web-main.relay.kind.groupNote": "A group is one conversation: after relaying, what is said in it goes to this chat; the group's earlier conversation stays in still.fail",
   "web-main.relay.note": "Opening note (optional)",
   "web-main.relay.notePlaceholder": "e.g. @someone could you look at this plan",
+  "web-main.relay.people": "People to mention",
   "web-main.relay.go": "Relay",
   "web-main.relay.verb": "Relay",
   "web-main.relay.done": "Relayed to {place}",

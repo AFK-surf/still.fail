@@ -100,6 +100,9 @@ test("a chat's relaying through the routes (docs/relay.md): where to, read past 
     assert.deepEqual(await r.ask("GET", `/threads/${id}/relay`), [200, { connects: [] }]);
     assert.deepEqual(await r.ask("POST", `/threads/${id}/relay`, {}), [400, { error: en("station.relay.pick") }]);
     assert.deepEqual(await r.ask("POST", `/threads/${id}/relay`, { connect: "cl", channel: "C1" }), [400, { error: "connect cl cannot take this chat" }]);
+    // Who its note can mention there: asked where, checked as relaying is.
+    assert.deepEqual(await r.ask("GET", `/threads/${id}/relay/people`), [400, { error: en("station.relay.pick") }]);
+    assert.deepEqual(await r.ask("GET", `/threads/${id}/relay/people`, undefined, [["connect", "cl"], ["channel", "C1"]]), [400, { error: "connect cl cannot take this chat" }]);
     // Another action of a thread is still none.
     assert.deepEqual(await r.ask("GET", `/threads/${id}/nope`), [404, { error: `no route GET /threads/${id}/nope` }]);
   } finally {

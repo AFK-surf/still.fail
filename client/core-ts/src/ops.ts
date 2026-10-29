@@ -85,6 +85,7 @@ export const PARAMS: Record<string, string> = {
   "chat.pin": "pinned?:boolean session:string",
   "chat.relayPlaces": "thread:number",
   "chat.relay": "thread:number connect?:string channel?:string link?:string note?:string",
+  "chat.relayPeople": "thread:number connect?:string channel?:string link?:string",
   "decision.dismiss": "thread:number seq:number",
   "decision.close": "thread:number seq:number option:string",
   "chat.report": "thread:number seq:number",
@@ -366,6 +367,13 @@ function stationOp(name: string, params: unknown): Request | null {
     case "chat.relay": {
       const thread = p.u64("thread");
       return op("POST", () => `/threads/${thread}/relay`, p.pick(["connect", "channel", "link", "note"]), { kind: "thread", archived: false });
+    }
+    // The people of where it would be relayed (a connect's channel or group, or the thread of a message's `link`), for
+    // the note to mention, read as asked.
+    case "chat.relayPeople": {
+      const thread = p.u64("thread");
+      const query = ["connect", "channel", "link"].flatMap((k) => (p.word(k) !== null ? [`${k}=${encode(p.word(k)!)}`] : [])).join("&");
+      return op("GET", () => `/threads/${thread}/relay/people?${query}`, null, NONE);
     }
     case "decision.dismiss": {
       const thread = p.u64("thread");

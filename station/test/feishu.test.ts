@@ -12,6 +12,7 @@ import { questionCard, textCards, took } from "../src/feishu/cards.ts";
 import { CONTROL, DATA, Parts, decode, encode, header } from "../src/feishu/frame.ts";
 import { messageOf, resourceOf } from "../src/feishu/parse.ts";
 import { ADDONS, Registrations, encodeAddons } from "../src/feishu/register.ts";
+import { MEMBERS_MS } from "../src/connects/surface.ts";
 import { FeishuSurface } from "../src/feishu/surface.ts";
 import { FeishuThreads } from "../src/feishu/threads.ts";
 import { FeishuClient } from "../src/feishu/web.ts";
@@ -211,6 +212,26 @@ test("surface: a topic group's topics are conversations of their own, answered i
     assert.equal(reply.length, 1);
     assert.equal(reply[0]!.body.reply_in_thread, true);
     assert.equal(JSON.parse(reply[0]!.body.content).body.elements[0].content, "答案");
+  } finally {
+    await r.close();
+  }
+});
+
+test("surface: the people in a group, by their name in it, kept a minute", async () => {
+  const r = await surfaceRig();
+  try {
+    r.fake.answer("GET /open-apis/im/v1/chats/oc_g/members", (seen: Json) =>
+      seen.query?.page_token === "p2"
+        ? { code: 0, data: { items: [{ member_id: "ou_2", name: "李四" }], has_more: false } }
+        : { code: 0, data: { items: [{ member_id: "ou_1", name: "张三" }, { member_id: "ou_x", name: "" }], has_more: true, page_token: "p2" } },
+    );
+    const people = [{ id: "ou_1", name: "张三" }, { id: "ou_2", name: "李四" }];
+    assert.deepEqual(await r.surface.peopleIn("oc_g"), people);
+    assert.deepEqual(await r.surface.peopleIn("oc_g"), people);
+    assert.equal(r.fake.calls("GET", "/open-apis/im/v1/chats/oc_g/members").length, 2, "asked again soon: kept");
+    await r.t.adjust(MEMBERS_MS);
+    await r.surface.peopleIn("oc_g");
+    assert.equal(r.fake.calls("GET", "/open-apis/im/v1/chats/oc_g/members").length, 4);
   } finally {
     await r.close();
   }
