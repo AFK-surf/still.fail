@@ -116,7 +116,7 @@ test "a Windows station's 设置 switches running as administrator, waiting whil
   assert_eq(asked.length(), 1, msg="switched")
   assert_eq(field(Some(asked[0]), "on"), Some(Json::boolean(true)))
   // (a change under way: the switch waits, not pressed again)
-  t.run_for(500)
+  t.run_for(@ui.nav_push_ms)
   t.click(Switch, label="以管理员身份运行")
   t.draw()
   assert_eq(asked.length(), 1, msg="not again while it is under way")

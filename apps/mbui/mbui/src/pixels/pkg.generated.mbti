@@ -1,0 +1,72 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/pixels"
+
+// Values
+pub fn cubic_points(Array[Double], Double, Double, Double, Double, Double, Double, Double, Double, Double) -> Unit
+
+pub fn drawn_box(Int32, Int32, FixedArray[Byte]) -> (Int32, Int32, Int32, Int32)
+
+pub fn edge_colour(Int32, Int32, FixedArray[Byte]) -> String
+
+pub fn fill_cover(FixedArray[Double], Int32, Int32, Array[Array[Double]], even_odd? : Bool) -> Unit
+
+pub fn image_size(Bytes) -> (Int32, Int32)?
+
+pub fn is_png(Bytes) -> Bool
+
+pub fn jpeg(Int32, Int32, FixedArray[Byte], quality? : Int32) -> Bytes
+
+pub fn png(Int32, Int32, FixedArray[Byte]) -> Bytes
+
+pub fn stroke_cover(FixedArray[Double], Int32, Int32, Array[Double], Bool, Double) -> Unit
+
+pub fn svg_path(String, Double) -> Array[(Array[Double], Bool)]
+
+pub fn thumbhash(Bytes) -> (Int32, Int32, FixedArray[Byte])?
+
+pub fn thumbhash_ratio(Bytes) -> Double?
+
+pub fn tinted(Int64, Int64?) -> Int64
+
+// Errors
+
+// Types and methods
+pub struct Canvas {
+  w : Int32
+  h : Int32
+  px : FixedArray[Byte]
+}
+pub fn Canvas::draw(Self, Int32, Int32, FixedArray[Byte], (Int32, Int32, Int32, Int32), (Double, Double, Double, Double), premultiplied? : Bool) -> Unit
+pub fn Canvas::fill(Self, Int64) -> Unit
+pub fn Canvas::new(Int32, Int32) -> Self
+pub fn Canvas::pixels(Self) -> FixedArray[Byte]
+
+type PngRows
+pub fn PngRows::add(Self, FixedArray[Byte], Int32) -> Unit
+pub fn PngRows::end(Self) -> Bytes
+pub fn PngRows::new(Int32, Int32) -> Self
+pub fn PngRows::rows(Self) -> Int32
+
+pub(all) struct Vector {
+  w : Double
+  h : Double
+  layers : Array[VectorPath]
+} derive(Eq, Show)
+pub fn Vector::rgba(Self, Int32, Int32, tint? : Int64) -> FixedArray[Byte]
+
+pub(all) struct VectorPath {
+  d : String
+  fill : Int64
+  stroke : Int64
+  width : Double
+  even_odd : Bool
+  sx : Double
+  sy : Double
+  tx : Double
+  ty : Double
+} derive(Eq, Show)
+pub fn VectorPath::outlines(Self, Double, Double) -> Array[(Array[Double], Bool)]
+
+// Type aliases
+
+// Traits

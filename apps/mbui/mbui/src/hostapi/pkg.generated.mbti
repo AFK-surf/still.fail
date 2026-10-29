@@ -1,0 +1,826 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/hostapi"
+
+import {
+  "moonbitlang/core/ref",
+}
+
+// Values
+pub let a11y_channel : String
+
+pub fn a11y_on() -> Bool
+
+pub fn a11y_tree(String) -> Unit
+
+pub fn app_version() -> Int32
+
+pub fn atlas_generation() -> Int32
+
+pub let atlas_plot : Int32
+
+pub fn atlas_size(Bool) -> Int32
+
+pub fn back_enabled(Bool) -> Unit
+
+pub fn badge_shown() -> Bool
+
+pub fn bench_mode() -> Int32
+
+pub fn browser_login(path? : String) -> BrowserLogin?
+
+pub let clip_file_max : Int32
+
+pub let clip_none : Int32
+
+pub let clip_pixels_max : Int32
+
+pub let clip_png : Int32
+
+pub let clip_png_max : Int32
+
+pub fn clip_read() -> ClipRead?
+
+pub fn clip_set_png(Bytes, String) -> Unit
+
+pub fn clip_set_text(String, String) -> Unit
+
+pub let clip_source_max : Int32
+
+pub let clip_too_large : Int32
+
+pub let clip_unreadable : Int32
+
+pub fn clipboard_secret_off() -> Unit
+
+pub fn clipboard_set(String) -> Unit
+
+pub fn clipboard_set_image(Bytes) -> Unit
+
+pub fn clipboard_set_secret(String, clear_ms~ : Double) -> Unit
+
+pub let colour_atlas_u : Int32
+
+pub fn copy_shown() -> Bool
+
+pub fn cpu_ms() -> Double
+
+pub fn decode_charset(Bytes, String) -> String?
+
+pub fn decode_text(Bytes, truncated? : Bool) -> (String, String)
+
+pub fn draw_marks(Bytes, String) -> MarkedImage?
+
+pub fn drawn_pixels(Int32, Int32, Int32, Int32, FixedArray[Byte]) -> Bool
+
+pub fn drawn_pixels_of(FixedArray[Double], Int32, Double, Double, Double, Double, Int32, Int32, FixedArray[Byte]) -> Bool
+
+pub fn drive(Int32, String) -> Bool
+
+pub fn dropped_pick(Int32) -> Pick
+
+pub fn edit_can(Int32) -> Unit
+
+pub fn env(String) -> String
+
+pub fn env_text(String) -> String
+
+pub fn event_finger() -> Int32
+
+pub fn event_time() -> Double
+
+pub fn exit(Int32) -> Unit
+
+pub fn face_add(Int32, String, Int32) -> Bool
+
+pub fn face_add_bytes(Int32, Bytes, Int32) -> Bool
+
+pub fn face_add_family(Int32, String) -> Bool
+
+pub fn face_clear(Int32) -> Unit
+
+pub let face_code : Int32
+
+pub fn face_of_style(Int32) -> Int32
+
+pub let face_text : Int32
+
+pub let face_ui : Int32
+
+pub let faces_most : Int32
+
+pub fn font_metrics(Double, Int32, Int32, FixedArray[Double]) -> Unit
+
+pub fn font_scale() -> Double
+
+pub fn frame_awaiting(Int32, String) -> Unit
+
+pub fn frame_late() -> Double
+
+pub fn from_base64(String) -> String
+
+pub fn full_screen() -> Bool
+
+pub fn gallery_access() -> GalleryAccess
+
+pub fn gallery_answers() -> Int32
+
+pub fn gallery_ask() -> Unit
+
+pub fn gallery_read() -> GalleryRead?
+
+pub fn glyph(Int32, FixedArray[Double]) -> Unit
+
+pub fn glyph_put(Int32, Int32, Int32) -> Unit
+
+pub fn glyphs_ahead(FixedArray[Int32], Int32) -> Unit
+
+pub fn gpu_ms() -> Double
+
+pub fn h264_here() -> Bool
+
+pub fn haptic(Int32) -> Unit
+
+pub let haptic_confirm : Int32
+
+pub let haptic_context_click : Int32
+
+pub let haptic_keyboard_tap : Int32
+
+pub let haptic_long_press : Int32
+
+pub let haptic_reject : Int32
+
+pub let haptic_text_handle_move : Int32
+
+pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit
+
+pub fn host() -> &Host
+
+pub fn image_free(Int32) -> Unit
+
+pub fn image_info(Int32, FixedArray[Double]) -> Int32
+
+pub fn image_load(String, Int32) -> Int32
+
+pub fn image_load_bytes(Bytes, Int32) -> Int32
+
+pub fn image_pixels(Int32, FixedArray[Byte]) -> Bool
+
+pub fn ime_action(Int32) -> Unit
+
+pub let ime_action_go : Int32
+
+pub let ime_action_none : Int32
+
+pub let ime_action_number : Int32
+
+pub let ime_action_search : Int32
+
+pub fn ime_inset() -> Double
+
+pub fn install_package(String, Bytes) -> Unit
+
+pub fn keep(String, String, Bytes, way? : KeepWay) -> Keep?
+
+pub fn keep_awake(Bool) -> Unit
+
+pub fn keep_begin(String, String, way? : KeepWay) -> Keep?
+
+pub fn key_catch(Bool) -> Unit
+
+pub fn keyboard() -> Int32
+
+pub fn local_font_families() -> String
+
+pub fn local_station() -> String
+
+pub fn local_station_act(String) -> Unit
+
+pub fn log(String) -> Unit
+
+pub fn mem_bytes() -> Double
+
+pub fn menu_setup(String) -> Unit
+
+pub fn mods_held() -> Int32
+
+pub fn native_call(String, String) -> NativeCall?
+
+pub fn native_pointing() -> Int32
+
+pub fn nav_bar(NavBar) -> Bool
+
+pub fn nav_bar_able() -> Bool
+
+pub fn nav_bar_again() -> Unit
+
+pub fn nav_bar_none() -> Unit
+
+pub let nav_tapped_at : FixedArray[Double]
+
+pub fn notice_answer() -> Bool?
+
+pub fn notice_ask() -> Bool
+
+pub fn notice_cancel(String) -> Unit
+
+pub fn notice_opened() -> String
+
+pub fn notice_permission() -> String
+
+pub fn notice_settings() -> Bool
+
+pub fn notice_show(channel~ : String, tag~ : String, title~ : String, body~ : String, opens~ : String) -> Unit
+
+pub fn now() -> Double
+
+pub fn open_tab(String) -> Bool
+
+pub fn open_url(String) -> Bool
+
+pub fn over_done(open_app~ : Bool) -> Unit
+
+pub fn own_clock() -> Bool
+
+pub fn pdf_close(Int32) -> Unit
+
+pub fn pdf_open(Bytes) -> Int32
+
+pub fn pdf_page_load(Int32, Int32, Int32) -> Int32
+
+pub fn pdf_page_size(Int32, Int32, FixedArray[Double]) -> Unit
+
+pub fn pdf_pages(Int32) -> Int32
+
+pub fn pick(PickKind, hold? : Bool) -> Pick?
+
+pub fn pick_photo(String) -> Pick?
+
+pub fn platform() -> Int32
+
+pub let polled : @ref.Ref[() -> Unit]
+
+pub fn post_next() -> (String, String, Bytes)?
+
+pub fn post_take() -> Int32
+
+pub fn present(FixedArray[Double], Int32, Double, Double, Double) -> Unit
+
+pub fn push_token() -> String
+
+pub fn reduce_motion() -> Bool
+
+pub fn reduce_transparency() -> Bool
+
+pub fn ref_begin(Double, Double, Double, Int32) -> Unit
+
+pub fn ref_end(String) -> Bool
+
+pub fn ref_frame(String) -> Bool
+
+pub fn ref_text(String, Double, Int32, Int32, Double, Double, Int32, FixedArray[Double]) -> Unit
+
+pub fn render_dirty(Double, Double, Double, Double) -> Unit
+
+pub fn request_frame() -> Unit
+
+pub fn run(String, FuncRef[(Double, Double, Double, Double) -> Unit], FuncRef[(Int32, Double, Double, Int32) -> Unit], FuncRef[(Double, Double, Double, Double, Int32) -> Unit], FuncRef[(Int32, Int32) -> Unit], FuncRef[(Int32, String, Int32, Int32) -> Unit]) -> Unit
+
+pub fn save_file(String, Bytes) -> Bool
+
+pub fn set_app_state(FuncRef[(Int32) -> Unit]) -> Unit
+
+pub fn set_back(FuncRef[(Int32, Double, Double, Int32) -> Unit]) -> Unit
+
+pub fn set_badge(Int32) -> Unit
+
+pub fn set_cursor(Int32) -> Unit
+
+pub fn set_dark(Bool) -> Unit
+
+pub fn set_full_screen(Bool) -> Unit
+
+pub fn set_host(&Host) -> Unit
+
+pub fn set_ime(Bool, Double, Double, Double, Double, String, Int32, Int32) -> Unit
+
+pub fn set_outside(FuncRef[(Int32, Int32, Int32) -> Unit]) -> Bool
+
+pub fn set_sideways(Bool) -> Unit
+
+pub fn set_turnable(Bool) -> Unit
+
+pub fn shape(String, Double, Int32, Int32, FixedArray[Double]) -> Int32
+
+pub fn share(String, String, String, Bytes) -> Bool
+
+pub fn shared_in() -> String
+
+pub fn shared_in_file(Int32) -> Bytes
+
+pub fn sideways() -> Bool
+
+pub fn stream_close(Int32) -> Unit
+
+pub fn stream_codec(Int32, String, Bytes) -> Unit
+
+pub fn stream_feeds() -> Bool
+
+pub fn stream_frame(Int32, Bytes, Bool, Double) -> Unit
+
+pub fn stream_h264(Int32, Bytes, Int32, Int32) -> Unit
+
+pub fn stream_jpeg(Int32, Bytes, Double) -> Unit
+
+pub fn stream_next(Int32) -> String
+
+pub fn stream_open() -> Int32
+
+pub fn stream_show(Int32, Double) -> Unit
+
+pub let stream_tex_base : Int32
+
+pub fn style_face(Int32) -> Int32
+
+pub let style_italic : Int32
+
+pub let style_mono : Int32
+
+pub let style_no_ligatures : Int32
+
+pub let style_serif : Int32
+
+pub let style_tabular : Int32
+
+pub let style_words : Int32
+
+pub let system_channel : String
+
+pub fn system_dark() -> Bool
+
+pub fn system_said(String) -> Array[SystemSaid]
+
+pub fn text_key(String, Double, Int32, Int32) -> Int32
+
+pub fn text_menu(Bool, Double, Double, Double, Double, Int32) -> Unit
+
+pub let text_menu_copy : Int32
+
+pub let text_menu_cut : Int32
+
+pub let text_menu_paste : Int32
+
+pub let text_menu_redo : Int32
+
+pub let text_menu_select_all : Int32
+
+pub let text_menu_undo : Int32
+
+pub fn turned_sideways() -> Bool
+
+pub fn update_install(String, String, Double, String) -> Unit
+
+pub fn update_state() -> String
+
+pub fn utc_offset_min(Double) -> Int32
+
+pub fn view_close(Int32) -> Unit
+
+pub fn view_control(Int32, Int32, Double) -> Unit
+
+pub fn view_info(Int32, FixedArray[Double]) -> Int32
+
+pub fn view_open(Int32, String) -> Int32
+
+pub fn view_place(Int32, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Bool) -> Unit
+
+pub fn view_read_answer(Int32, Int32, Bytes, Double, Bool) -> Unit
+
+pub fn view_read_next(Int32, FixedArray[Double]) -> Int32
+
+pub fn view_site_body(Int32, Int32) -> Bytes
+
+pub fn view_site_chunk(Int32, Int32, Bytes) -> Unit
+
+pub fn view_site_end(Int32, Int32, String) -> Unit
+
+pub fn view_site_head(Int32, Int32, Int32, String) -> Unit
+
+pub fn view_site_load(Int32, String) -> Unit
+
+pub fn view_site_next(Int32) -> String
+
+pub fn view_site_state(Int32) -> String
+
+pub fn view_still(Int32) -> Bytes
+
+pub fn view_tell(Int32, Int32, String) -> Unit
+
+pub let view_tex_base : Int32
+
+pub fn view_text(Int32, Int32) -> String?
+
+pub fn wake_after(Double) -> Unit
+
+pub fn wall_ms() -> Double
+
+pub fn window_act(Int32) -> Unit
+
+pub fn window_corner() -> Double
+
+pub fn window_corner_at(Int32) -> Double
+
+pub fn window_drag() -> Unit
+
+pub fn window_hold() -> Unit
+
+pub fn window_inset() -> Bool
+
+pub fn window_open(String) -> Bool
+
+pub fn window_opens() -> Bool
+
+pub fn window_setup(Double, Double, Double, Double, inset? : Bool) -> Unit
+
+pub fn window_show() -> Unit
+
+pub fn window_snap(Double, Double, Double, Double) -> Unit
+
+pub fn window_snap_state() -> Int32
+
+pub fn window_zoomed() -> Bool
+
+pub fn word_at(String, Int32) -> (Int32, Int32)
+
+// Errors
+
+// Types and methods
+pub struct Atlas {
+  // private fields
+}
+pub fn Atlas::clear(Self) -> Unit
+pub fn Atlas::drawn(Self, Int32) -> Unit
+pub fn Atlas::holds(Self, Int32, Int32) -> Bool
+pub fn Atlas::new(Int32) -> Self
+pub fn Atlas::next_frame(Self) -> Unit
+pub fn Atlas::place(Self, Int32, Int32, Int32, (Int32) -> Unit) -> (Int32, Int32, Int32)?
+pub fn Atlas::sized(Self) -> Bool
+
+pub struct BrowserLogin {
+  redirect : String
+  // private fields
+}
+pub fn BrowserLogin::back(Self) -> String?
+pub fn BrowserLogin::end(Self) -> Unit
+pub fn BrowserLogin::open(Self, String) -> Bool
+
+pub(all) struct ClipGot {
+  text : String
+  picture : Int32
+  png : Bytes
+  files : Array[(String, Bytes)]
+}
+
+pub struct ClipRead {
+  // private fields
+}
+pub fn ClipRead::got(Self) -> ClipGot?
+pub fn ClipRead::id(Self) -> Int32
+
+pub(all) enum GalleryAccess {
+  Whole
+  Chosen
+  Refused
+  NoGallery
+}
+
+pub(all) struct GalleryPhoto {
+  id : Int64
+  src : String
+  added : Int64
+  modified : Int64
+  taken : Int64
+  video : Bool
+}
+
+pub struct GalleryRead {
+  // private fields
+}
+pub fn GalleryRead::id(Self) -> Int32
+pub fn GalleryRead::photos(Self) -> Array[GalleryPhoto]?
+
+pub(all) enum Hinge {
+  NoHinge
+  Closed
+  Half
+  Open
+} derive(Eq, Show)
+
+pub struct Keep {
+  // private fields
+}
+pub fn Keep::append(Self, Bytes) -> Bool
+pub fn Keep::end(Self) -> Unit
+pub fn Keep::finish(Self) -> Unit
+pub fn Keep::kept(Self) -> Kept
+
+pub(all) enum KeepWay {
+  Downloads
+  Choose
+  Photos
+} derive(Eq, Show)
+
+pub(all) enum Kept {
+  Keeping
+  KeptAt(String)
+  CalledOff
+  Failed
+}
+
+pub struct MarkedImage {
+  // private fields
+}
+pub fn MarkedImage::id(Self) -> Int32
+pub fn MarkedImage::made(Self) -> Bytes?
+
+pub struct NativeCall {
+  id : Int32
+}
+pub fn NativeCall::got(Self) -> (Bool, String)?
+pub fn NativeCall::id(Self) -> Int32
+
+pub(all) struct NavBar {
+  floating : Array[NavFloating]
+  groups : Array[NavGroup]
+  selected : String
+  ink : Int64
+  chosen_ink : Int64
+  more_icon : String
+  bare : Bool
+  title : String
+}
+pub fn NavBar::to_json(Self) -> String
+
+pub(all) struct NavFloating {
+  item : NavItem
+  x : Double
+  y : Double
+  w : Double
+  h : Double
+  blocked : Bool
+}
+
+pub(all) struct NavGroup {
+  items : Array[NavItem]
+  foot : Bool
+  foldable : Bool
+}
+
+pub(all) struct NavItem {
+  id : String
+  title : String
+  icon : String
+  dot : Bool
+  prominent : Bool
+  menu : Array[(String, String, Bool, String)]
+}
+
+pub struct Pick {
+  // private fields
+}
+pub fn Pick::files(Self) -> Array[Picked]?
+pub fn Pick::id(Self) -> Int32
+
+pub(all) enum PickKind {
+  Photos
+  Files
+  Camera
+} derive(Eq)
+
+pub(all) struct Picked {
+  name : String
+  bytes : Bytes
+  held : Int32
+  size : Double
+  src : String
+}
+
+pub(all) enum SizeClass {
+  Compact
+  Medium
+  Expanded
+} derive(Eq, Show)
+
+pub(all) enum SystemSaid {
+  Shown(away~ : Double)
+  Link(String)
+  Over(Bool)
+  Bars(top~ : Double, bottom~ : Double, left~ : Double, right~ : Double)
+  SizeClasses(width~ : SizeClass, height~ : SizeClass)
+  Fold(hinge~ : Hinge, divisions~ : Array[(Double, Double, Double, Double)])
+  Network
+  InstallAllow(name~ : String)
+  InstallFailed(name~ : String, error~ : String)
+  Menu(String)
+  NavTapped(String)
+  NavAction(x~ : Double, y~ : Double, w~ : Double, h~ : Double)
+} derive(Eq, Show)
+
+// Type aliases
+
+// Traits
+pub(open) trait Host {
+  fn window_setup(Self, Double, Double, Double, Double, Bool) -> Unit = _
+  fn window_inset(Self) -> Bool = _
+  fn window_hold(Self) -> Unit = _
+  fn window_show(Self) -> Unit = _
+  fn full_screen(Self) -> Bool = _
+  fn set_full_screen(Self, Bool) -> Unit = _
+  fn window_corner(Self) -> Double = _
+  fn window_corner_at(Self, Int32) -> Double = _
+  fn window_drag(Self) -> Unit = _
+  fn window_act(Self, Int32) -> Unit = _
+  fn window_zoomed(Self) -> Bool = _
+  fn window_snap(Self, Double, Double, Double, Double) -> Unit = _
+  fn window_snap_state(Self) -> Int32 = _
+  fn window_opens(Self) -> Bool = _
+  fn window_open(Self, String) -> Bool = _
+  fn set_cursor(Self, Int32) -> Unit = _
+  fn set_badge(Self, Int32) -> Unit = _
+  fn menu_setup(Self, String) -> Unit = _
+  fn local_station(Self) -> String = _
+  fn local_station_act(Self, String) -> Unit = _
+  fn mods_held(Self) -> Int32 = _
+  fn run(Self, String, FuncRef[(Double, Double, Double, Double) -> Unit], FuncRef[(Int32, Double, Double, Int32) -> Unit], FuncRef[(Double, Double, Double, Double, Int32) -> Unit], FuncRef[(Int32, Int32) -> Unit], FuncRef[(Int32, String, Int32, Int32) -> Unit]) -> Unit = _
+  fn now(Self) -> Double = _
+  fn wall_ms(Self) -> Double = _
+  fn utc_offset_min(Self, Double) -> Int32 = _
+  fn event_time(Self) -> Double = _
+  fn event_finger(Self) -> Int32 = _
+  fn frame_late(Self) -> Double = _
+  fn platform(Self) -> Int32 = _
+  fn request_frame(Self) -> Unit = _
+  fn wake_after(Self, Double) -> Unit = _
+  fn font_metrics(Self, Double, Int32, Int32, FixedArray[Double]) -> Unit = _
+  fn shape(Self, String, Double, Int32, Int32, FixedArray[Double]) -> Int32 = _
+  fn text_key(Self, String, Double, Int32, Int32) -> Int32 = _
+  fn glyph(Self, Int32, FixedArray[Double]) -> Unit = _
+  fn glyph_put(Self, Int32, Int32, Int32) -> Unit = _
+  fn atlas_size(Self, Bool) -> Int32 = _
+  fn glyphs_ahead(Self, FixedArray[Int32], Int32) -> Unit = _
+  fn face_add(Self, Int32, String, Int32) -> Bool = _
+  fn face_add_bytes(Self, Int32, Bytes, Int32) -> Bool = _
+  fn face_clear(Self, Int32) -> Unit = _
+  fn face_add_family(Self, Int32, String) -> Bool = _
+  fn local_font_families(Self) -> String = _
+  fn atlas_generation(Self) -> Int32 = _
+  fn present(Self, FixedArray[Double], Int32, Double, Double, Double) -> Unit = _
+  fn set_ime(Self, Bool, Double, Double, Double, Double, String, Int32, Int32) -> Unit = _
+  fn text_menu(Self, Bool, Double, Double, Double, Double, Int32) -> Unit = _
+  fn edit_can(Self, Int32) -> Unit = _
+  fn clipboard_set(Self, String) -> Unit = _
+  fn clipboard_set_secret(Self, String, Double) -> Unit = _
+  fn clipboard_secret_off(Self) -> Unit = _
+  fn clipboard_set_image(Self, Bytes) -> Unit = _
+  fn log(Self, String) -> Unit = _
+  fn bench_mode(Self) -> Int32 = _
+  fn set_outside(Self, FuncRef[(Int32, Int32, Int32) -> Unit]) -> Bool = _
+  fn frame_awaiting(Self, Int32, String) -> Unit = _
+  fn own_clock(Self) -> Bool = _
+  fn reduce_motion(Self) -> Bool = _
+  fn exit(Self, Int32) -> Unit = _
+  fn mem_bytes(Self) -> Double = _
+  fn set_back(Self, FuncRef[(Int32, Double, Double, Int32) -> Unit]) -> Unit = _
+  fn back_enabled(Self, Bool) -> Unit = _
+  fn reduce_transparency(Self) -> Bool = _
+  fn gpu_ms(Self) -> Double = _
+  fn cpu_ms(Self) -> Double = _
+  fn env(Self, String) -> String = _
+  fn set_app_state(Self, FuncRef[(Int32) -> Unit]) -> Unit = _
+  fn system_dark(Self) -> Bool = _
+  fn font_scale(Self) -> Double = _
+  fn native_pointing(Self) -> Int32 = _
+  fn keyboard(Self) -> Int32 = _
+  fn a11y_on(Self) -> Bool = _
+  fn a11y_tree(Self, String) -> Unit = _
+  fn set_dark(Self, Bool) -> Unit = _
+  fn set_sideways(Self, Bool) -> Unit = _
+  fn set_turnable(Self, Bool) -> Bool = _
+  fn share(Self, String, String, String, Bytes) -> Bool = _
+  fn shared_in(Self) -> String = _
+  fn shared_in_file(Self, Int32) -> Bytes = _
+  fn app_version(Self) -> Int32 = _
+  fn update_install(Self, String, String, Double, String) -> Unit = _
+  fn update_state(Self) -> String = _
+  fn install_package(Self, String, Bytes) -> Unit = _
+  fn drive(Self, Int32, String) -> Bool = _
+  fn image_load(Self, String, Int32) -> Int32 = _
+  fn image_load_bytes(Self, Bytes, Int32) -> Int32 = _
+  fn image_info(Self, Int32, FixedArray[Double]) -> Int32 = _
+  fn image_free(Self, Int32) -> Unit = _
+  fn image_pixels(Self, Int32, FixedArray[Byte]) -> Bool = _
+  fn drawn_pixels(Self, Int32, Int32, Int32, Int32, FixedArray[Byte]) -> Bool = _
+  fn drawn_pixels_of(Self, FixedArray[Double], Int32, Double, Double, Double, Double, Int32, Int32, FixedArray[Byte]) -> Bool = _
+  fn view_site_next(Self, Int32) -> String = _
+  fn view_site_body(Self, Int32, Int32) -> Bytes = _
+  fn view_site_head(Self, Int32, Int32, Int32, String) -> Unit = _
+  fn view_site_chunk(Self, Int32, Int32, Bytes) -> Unit = _
+  fn view_site_end(Self, Int32, Int32, String) -> Unit = _
+  fn view_site_state(Self, Int32) -> String = _
+  fn view_site_load(Self, Int32, String) -> Unit = _
+  fn view_tell(Self, Int32, Int32, String) -> Unit = _
+  fn view_open(Self, Int32, String) -> Int32 = _
+  fn view_place(Self, Int32, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Double, Bool) -> Unit = _
+  fn view_close(Self, Int32) -> Unit = _
+  fn view_control(Self, Int32, Int32, Double) -> Unit = _
+  fn view_info(Self, Int32, FixedArray[Double]) -> Int32 = _
+  fn view_read_next(Self, Int32, FixedArray[Double]) -> Int32 = _
+  fn view_read_answer(Self, Int32, Int32, Bytes, Double, Bool) -> Unit = _
+  fn pdf_open(Self, Bytes) -> Int32 = _
+  fn pdf_pages(Self, Int32) -> Int32 = _
+  fn pdf_page_size(Self, Int32, Int32, FixedArray[Double]) -> Unit = _
+  fn pdf_page_load(Self, Int32, Int32, Int32) -> Int32 = _
+  fn pdf_close(Self, Int32) -> Unit = _
+  fn view_text(Self, Int32, Int32) -> String? = _
+  fn view_still(Self, Int32) -> Bytes = _
+  fn save_file(Self, String, Bytes) -> Bool = _
+  fn word_at(Self, String, Int32) -> (Int32, Int32) = _
+  fn open_url(Self, String) -> Bool = _
+  fn over_done(Self, Bool) -> Unit = _
+  fn open_tab(Self, String) -> Bool = _
+  fn hold_words(Self, String, String, String) -> Unit = _
+  fn post_take(Self) -> Int32 = _
+  fn post_next(Self) -> (String, String, Bytes)? = _
+  fn ref_begin(Self, Double, Double, Double, Int32) -> Unit = _
+  fn ref_text(Self, String, Double, Int32, Int32, Double, Double, Int32, FixedArray[Double]) -> Unit = _
+  fn ref_end(Self, String) -> Bool = _
+  fn ref_frame(Self, String) -> Bool = _
+  fn bl_start(Self, String) -> Int32 = _
+  fn bl_port(Self, Int32) -> Int32 = _
+  fn bl_open(Self, Int32, String) -> Int32 = _
+  fn bl_back(Self, Int32) -> String = _
+  fn bl_end(Self, Int32) -> Unit = _
+  fn pk_start(Self, Int32) -> Int32 = _
+  fn pk_state(Self, Int32) -> Int32 = _
+  fn pk_count(Self, Int32) -> Int32 = _
+  fn pk_name(Self, Int32, Int32) -> String = _
+  fn pk_bytes(Self, Int32, Int32) -> Bytes = _
+  fn pk_info(Self, Int32, Int32) -> String = _
+  fn pk_end(Self, Int32) -> Unit = _
+  fn kp_begin(Self, String, String, Int32) -> Int32 = _
+  fn kp_append(Self, Int32, Bytes) -> Int32 = _
+  fn kp_finish(Self, Int32) -> Unit = _
+  fn kp_state(Self, Int32) -> Int32 = _
+  fn kp_where(Self, Int32) -> String = _
+  fn kp_end(Self, Int32) -> Unit = _
+  fn ga_access(Self) -> Int32 = _
+  fn ga_ask(Self) -> Unit = _
+  fn ga_answers(Self) -> Int32 = _
+  fn ga_read(Self) -> Int32 = _
+  fn ga_read_state(Self, Int32) -> Int32 = _
+  fn ga_read_rows(Self, Int32) -> String = _
+  fn ga_read_end(Self, Int32) -> Unit = _
+  fn pk_photo(Self, String) -> Int32 = _
+  fn cs_known(Self, String) -> Int32 = _
+  fn cs_decode(Self, Bytes, String) -> String = _
+  fn mk_start(Self, Bytes, String) -> Int32 = _
+  fn mk_state(Self, Int32) -> Int32 = _
+  fn mk_png(Self, Int32) -> Bytes = _
+  fn nt_show(Self, String, String, String, String, String) -> Unit = _
+  fn rn_dirty(Self, Double, Double, Double, Double) -> Unit = _
+  fn nv_bar(Self, String) -> Int32 = _
+  fn nv_able(Self) -> Bool = _
+  fn nt_cancel(Self, String) -> Unit = _
+  fn nt_state(Self, Int32) -> Int32 = _
+  fn nt_text(Self, Int32) -> String = _
+  fn st_open(Self) -> Int32 = _
+  fn st_h264(Self, Int32, Bytes, Int32, Int32) -> Unit = _
+  fn st_frame(Self, Int32, Bytes, Int32, Double) -> Unit = _
+  fn st_jpeg(Self, Int32, Bytes, Double) -> Unit = _
+  fn st_next(Self, Int32) -> String = _
+  fn st_show(Self, Int32, Double) -> Unit = _
+  fn st_close(Self, Int32) -> Unit = _
+  fn st_h264_here(Self) -> Int32 = _
+  fn st_feeds(Self) -> Int32 = _
+  fn st_codec(Self, Int32, String, Bytes) -> Unit = _
+  fn cl_read(Self) -> Int32 = _
+  fn cl_state(Self, Int32) -> Int32 = _
+  fn cl_picture(Self, Int32) -> Int32 = _
+  fn cl_text(Self, Int32) -> String = _
+  fn cl_png(Self, Int32) -> Bytes = _
+  fn cl_files(Self, Int32) -> Int32 = _
+  fn cl_file_name(Self, Int32, Int32) -> String = _
+  fn cl_file(Self, Int32, Int32) -> Bytes = _
+  fn cl_end(Self, Int32) -> Unit = _
+  fn cl_set(Self, String, Bytes, String) -> Unit = _
+  fn dv_copy_shown(Self) -> Int32 = _
+  fn dv_key_catch(Self, Int32) -> Unit = _
+  fn dv_ime_inset(Self) -> Double = _
+  fn dv_keep_awake(Self, Int32) -> Unit = _
+  fn dv_haptic(Self, Int32) -> Unit = _
+  fn dv_ime_action(Self, Int32) -> Unit = _
+  fn ncall_call(Self, String, String) -> Int32 = _
+  fn ncall_state(Self, Int32) -> Int32 = _
+  fn ncall_result(Self, Int32) -> String = _
+  fn ncall_end(Self, Int32) -> Unit = _
+}
