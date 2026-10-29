@@ -1187,7 +1187,9 @@ class FakeHelperApp {
             setImmediate(() => void this.#listen());
             return;
           }
-          conn.write(helperMessage(1, Buffer.from(JSON.stringify({ width: 64, height: 36, encoder: "fake" }))));
+          conn.write(helperMessage(1, Buffer.from(JSON.stringify({ width: 64, height: 36, encoder: "fake", ...(ask.audio === true ? { audio: true } : {}) }))));
+          if (ask.audio === true) conn.write(helperMessage(8, Buffer.from(JSON.stringify({ codec: "pcm_s16le", sampleRate: 48000, channels: 2 }))));
+          let sounds = 0;
           this.copy = (payload) => conn.write(helperMessage(5, payload));
           let n = 0;
           let key = true;
@@ -1216,6 +1218,13 @@ class FakeHelperApp {
               else if (kind === 4) this.clips.push(Buffer.from(payload));
               else if (kind === 5) this.watches.push(payload[0]!);
               else if (kind === 6) this.reveals.push(payload.toString());
+              else if (kind === 9) {
+                // A packet of system output, 20 ms on from the last; counted on the view's ask.
+                ask.audioAsked = (ask.audioAsked ?? 0) + 1;
+                const packet = Buffer.alloc(3848, ++sounds);
+                packet.writeBigUInt64BE(BigInt(1_000_000 + sounds * 20_000), 0);
+                conn.write(helperMessage(9, packet));
+              }
             }
           };
           if (rest.length > 0) viewing(rest);
@@ -1344,6 +1353,48 @@ test("the desktop for a view without H.264 (an agent's): JPEG pictures, its conf
   view.close();
   await desktop.close();
   fake.close();
+});
+
+test("the Mac's desktop sends its system output to a view that asked for it, pulled packet by packet; never to one that did not", { skip: WINDOWS }, async () => {
+  const { app, dir } = helperRelease();
+  const fake = new FakeHelperApp({ capture: true, control: true, display, live: { capture: true, control: true } });
+  const desktop = new Desktop({ supported: true, helper: new HelperApp({ app, dir, launch: fake.launch }), changed: () => {} });
+  const hub = new ScreenHub();
+  hub.add(desktop);
+  // A failure must not leave the fake helper listening (the file's tests would never end).
+  try {
+    for (const requested of [true, false]) {
+      fake.views = [];
+      const v = await open(hub, member, { codecs: ["h264"], control: true, ...(requested ? { audio: "pcm_s16le" } : {}) }, "/admin/api/screens/desktop/view");
+      assert.equal(v.answer.status, 200);
+      if (requested) {
+        // The helper asked for the system output too; the client told the format before the first packet.
+        assert.equal(fake.views[0].audio, true);
+        assert.deepEqual(json(await until(v.frames, KIND.audioConfig)), { codec: "pcm_s16le", sampleRate: 48000, channels: 2 });
+        for (const n of [1, 2]) {
+          const packet = await until(v.frames, KIND.audio);
+          assert.equal(packet.length, 8 + 3840);
+          assert.equal(packet.readBigUInt64BE(), BigInt(1_000_000 + n * 20_000));
+          assert.deepEqual(packet.subarray(8), Buffer.alloc(3840, n));
+        }
+      } else {
+        await until(v.frames, KIND.video);
+        assert.equal(fake.views[0].audio, undefined);
+      }
+      await v.stream.finish();
+      await v.served;
+      if (!requested) assert.equal(fake.views[0].audioAsked, undefined, "no audio pulled from a view that did not ask");
+    }
+    // A preview never asks for it, whatever it says.
+    fake.views = [];
+    const peek = await desktop.open({ maxWidth: 640, maxHeight: 360, codecs: ["h264"], audio: true, peek: true });
+    assert.equal(fake.views[0].audio, undefined);
+    assert.equal(await peek.nextAudio!(), null);
+    peek.close();
+  } finally {
+    await desktop.close();
+    fake.close();
+  }
 });
 
 test("a view the station opens itself (an agent's) shows who has it, driving or not, until it closes", async () => {
