@@ -1355,24 +1355,26 @@ pub fn fixture_kept(name : String, params : Json, bytes : Bytes?) -> Result[(Jso
 
 ///|
 /// The card shared of the agents at work (the core's `fleet` view, views/fleet.ts), as the made-up workspace has it:
-/// its one Claude subscription's week, Studio's one chat at work; the card to share's (share-card, share-card-…) three
-/// kinds of subscription (six Claude accounts' 489%, 4.89 accounts' weeks; two ChatGPT's, two OpenCode Go's), nine
-/// chats at work on three stations, and their week.
+/// its one Claude subscription's tokens, Studio's one chat at work; the card to share's (share-card, share-card-…) three
+/// kinds of subscription (six Claude accounts' 2.5 亿 tokens, two ChatGPT's, two OpenCode Go's: 3.1 亿 in all, as the
+/// week's input tokens say), nine chats at work on three stations, and their week.
 pub fn fixture_fleet(f : Fixture) -> Json {
   if !f.mode.has_prefix("share-card") {
     return {
       "at": "10月26日 04:12",
-      "quota": [
+      "spent": [
         {
           "kind": "claude",
           "name": "Claude 订阅",
           "accounts": 1,
           "accountsText": "1 个账号",
-          "used": 37,
-          "usedText": "37%",
-          "share": 0.37,
+          "tokens": 42000000,
+          "tokensText": "4200 万",
+          "costText": "$96.40",
+          "lineText": "4200 万 · $96.40",
+          "share": 1.0,
           "lead": "用 1 个 Claude 订阅账号消耗了",
-          "of": "的周额度",
+          "of": "token，折合 $96.40",
         },
       ],
       "chats": 1,
@@ -1386,39 +1388,45 @@ pub fn fixture_fleet(f : Fixture) -> Json {
   let labels = ["10/20", "10/21", "10/22", "10/23", "10/24", "10/25", "10/26"]
   {
     "at": "10月26日 04:12",
-    "quota": [
+    "spent": [
       {
         "kind": "claude",
         "name": "Claude 订阅",
         "accounts": 6,
         "accountsText": "6 个账号",
-        "used": 489,
-        "usedText": "489%",
-        "share": 0.815,
+        "tokens": 252000000,
+        "tokensText": "2.5 亿",
+        "costText": "$1,604",
+        "lineText": "2.5 亿 · $1,604",
+        "share": 0.81,
         "lead": "用 6 个 Claude 订阅账号消耗了",
-        "of": "的周额度",
+        "of": "token，折合 $1,604",
       },
       {
         "kind": "chatgpt",
         "name": "ChatGPT 订阅",
         "accounts": 2,
         "accountsText": "2 个账号",
-        "used": 17,
-        "usedText": "17%",
-        "share": 0.085,
+        "tokens": 47000000,
+        "tokensText": "4700 万",
+        "costText": "$262",
+        "lineText": "4700 万 · $262",
+        "share": 0.15,
         "lead": "用 2 个 ChatGPT 订阅账号消耗了",
-        "of": "的周额度",
+        "of": "token，折合 $262",
       },
       {
         "kind": "opencode",
         "name": "OpenCode Go 订阅",
         "accounts": 2,
         "accountsText": "2 个账号",
-        "used": 6,
-        "usedText": "6%",
-        "share": 0.03,
+        "tokens": 11000000,
+        "tokensText": "1100 万",
+        "costText": "$45.10",
+        "lineText": "1100 万 · $45.10",
+        "share": 0.04,
         "lead": "用 2 个 OpenCode Go 订阅账号消耗了",
-        "of": "的周额度",
+        "of": "token，折合 $45.10",
       },
     ],
     "chats": 9,

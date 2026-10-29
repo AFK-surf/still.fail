@@ -91,16 +91,16 @@ fn span_stats(span : Json?) -> Array[(String, String)] {
 ///|
 /// 大字报: one number, as large as the picture holds, on still.fail's orange to its edges, in the night's black: what
 /// leads the first kind's share over it, what it is of under it; then the chats at work now, large, and where; still.fail
-/// large at its foot (what is passed on says whose it is), its line beside the time. No quota read: the chats at work
+/// large at its foot (what is passed on says whose it is), its line beside the time. Nothing used: the chats at work
 /// are its number, the tasks across devices its line.
 fn poster_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
-  let quota = items(fleet, "quota")
+  let spent = items(fleet, "spent")
   look_box(c, id, flat, @sf.share_poster_ground, fn() {
     c.box(style=poster_inner, fn() {
       c.box(style=poster_hero, fn() {
-        if quota.length() > 0 {
-          let first = Some(quota[0])
-          let used = text(first, "usedText")
+        if spent.length() > 0 {
+          let first = Some(spent[0])
+          let used = text(first, "tokensText")
           let scale = if used.length() > 4 { @sf.share_poster_number_less } else { @sf.share_poster_number_scale }
           c.text(text(first, "lead"), style=poster_words) |> ignore
           c.rich([@ui.span(used, scale~)], style=poster_number) |> ignore
@@ -113,7 +113,7 @@ fn poster_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
       })
       |> ignore
       c.box(style=poster_more, fn() {
-        if quota.length() > 0 {
+        if spent.length() > 0 {
           c.text(text(fleet, "chatsText"), style=poster_big) |> ignore
           c.text(text(fleet, "where"), style=poster_small) |> ignore
         } else if text(fleet, "tasksText") != "" {
@@ -144,10 +144,10 @@ fn poster_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
 ///|
 /// 小票: a till's receipt of the agents' week, on its paper. Read down: still.fail and when, in its middle; each day a
 /// line, its chats archived at its end (today's date in the orange); the chats archived and the tokens read as its
-/// subtotals; each kind of subscription a line (its accounts, its share); between double dashes the week's spend,
+/// subtotals; each kind of account a line (its accounts, its tokens and cost); between double dashes the week's spend,
 /// large, its total; a barcode made of what it says, still.fail's line under it.
 fn receipt_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
-  let quota = items(fleet, "quota")
+  let spent = items(fleet, "spent")
   let week = field(fleet, "week")
   let stats = span_stats(week)
   look_box(c, id, flat, @sf.share_receipt_ground, fn() {
@@ -186,11 +186,11 @@ fn receipt_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
       })
       |> ignore
     }
-    if quota.length() > 0 {
+    if spent.length() > 0 {
       c.box(style=receipt_items, fn() {
-        for q in quota {
+        for q in spent {
           let q = Some(q)
-          receipt_item(c, text(q, "name") + " ×" + count(q, "accounts").to_string(), text(q, "usedText"), false)
+          receipt_item(c, text(q, "name") + " ×" + count(q, "accounts").to_string(), text(q, "lineText"), false)
         }
       })
       |> ignore
@@ -271,10 +271,10 @@ fn barcode(c : @ui.Ctx, words : String) -> Unit {
 ///|
 /// 终端: still.fail fetched in a terminal, as a system's fetch says what it runs on. Its window's dots and title; the
 /// command; still.fail's mark large (its white face, the terminal being dark) beside who and when; a line a figure, its key in the code
-/// face in the orange: each kind's share, the chats at work, the devices, the tasks across devices, the week's chats
+/// face in the orange: each kind's tokens, the chats at work, the devices, the tasks across devices, the week's chats
 /// archived, tokens and spend; the palette; the prompt again, its cursor.
 fn terminal_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
-  let quota = items(fleet, "quota")
+  let spent = items(fleet, "spent")
   let stats = span_stats(field(fleet, "week"))
   look_box(c, id, flat, @sf.share_terminal_ground, fn() {
     c.box(style=term_bar, fn() {
@@ -300,9 +300,9 @@ fn terminal_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
     })
     |> ignore
     c.box(style=term_block, fn() {
-      for k, q in quota {
+      for k, q in spent {
         let q = Some(q)
-        term_key_line(c, if k == 0 { "quota" } else { "" }, text(q, "name") + " ×" + count(q, "accounts").to_string(), text(q, "usedText"))
+        term_key_line(c, if k == 0 { "tokens" } else { "" }, text(q, "name") + " ×" + count(q, "accounts").to_string(), text(q, "lineText"))
       }
       term_key_line(c, "chats", text(fleet, "chatsText"), "")
       term_key_line(c, "devices", text(fleet, "where"), "")

@@ -2,7 +2,7 @@
 // 有利于 app 传播」「hover 这个出一个卡片」「有个复制图片应该就行」), opened from the rail's Station place's card
 // (rail_cards.mbt) and the Station page's first card. The card to share: a
 // picture of the agents at work on the person's stations, copied whole to paste where others see it (a chat, a post):
-// a poster (the `fleet` view): the subscriptions' weekly quota used as rings, today and the last 7 days, the chats at
+// a poster (the `fleet` view): the tokens each kind of account used as rings, today and the last 7 days, the chats at
 // work now, still.fail's line (no QR code: 2026-10-26 用户「不用放 still fail 的二维码」); 复制图片 under it puts it on the
 // clipboard, drawn apart as sharp on any screen (Ctx::take_shot at share_scale).
 
@@ -58,13 +58,14 @@ let share_scale : Double = 3.0
 /// either theme (@sf.share_ground: 「分享卡片的颜色搞高级点」), and laid out one way whatever it is seen on (a portrait poster
 /// @sf.share_w_most wide: 「分享图片不应该分电脑和手机…按最合理的布局生成」), seen whole in the panel, drawn smaller where the
 /// window has not the room for it (@sf.whole_fitted): what is copied is all of it, as it is laid out everywhere. Read down: still.fail's name (its dot orange) and when it is; what leads the first kind's share (用 6 个 Claude
-/// 订阅账号消耗了, its ring's dot before it); the subscriptions' weekly quota used as rings, a kind each (Activity's rings:
-/// each the share of all its accounts' weeks, 489% of six 0.815 of it; 「489% 就是 4.89 个号的周额度」), beside them the
-/// first kind's share large and what it is of (489% | 的周额度); each other kind a line; today over the last 7 days (the
+/// 订阅账号消耗了, its ring's dot before it); the tokens each kind of account used over the 7 days as rings, a kind each
+/// (Activity's rings: each its share of all kinds' tokens; 2026-10-29 用户「只算 token 和价格」, where it was a week's
+/// quota), beside them the first kind's tokens large and what they would cost (1.2B | token，折合 $1,234); each other
+/// kind a line; today over the last 7 days (the
 /// chats archived, what was spent), each day's chats archived a bar under them (today's orange, each day's date under
 /// its bar); the chats at work now, a dot before them, and the tasks agents ran across devices over the 7 days (how
-/// many, and under it how many a chat on average), the devices' icon before them; still.fail's line. With no quota
-/// read: the chats at work large in its place.
+/// many, and under it how many a chat on average), the devices' icon before them; still.fail's line. With nothing
+/// used: the chats at work large in its place.
 fn share_picture(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   @sf.whole_fitted(c, share_picture_key, c.id(share_picture_key), @sf.share_w_most, fn(whole) {
     share_poster(c, src, w, whole)
@@ -85,9 +86,9 @@ fn share_poster(c : @ui.Ctx, src : Source, w : Workspace, id : Int, flat? : Bool
 }
 
 ///|
-/// The night's look: still.fail's own colours, the weeks' quota as rings.
+/// The night's look: still.fail's own colours, the kinds' tokens as rings.
 fn night_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
-  let quota = items(fleet, "quota")
+  let spent = items(fleet, "spent")
   c.box(style=if flat { pic_box_flat } else { pic_box }, id~, fn() {
     c.box(style=pic_head, fn() {
       c.box(style=pic_grow, fn() {
@@ -97,21 +98,22 @@ fn night_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
       c.text(text(fleet, "at"), style=pic_at) |> ignore
     })
     |> ignore
-    if quota.length() > 0 {
-      // the first kind's said round its share, a sentence read down (用 6 个 Claude 订阅账号消耗了 | 489% | 的周额度:
-      // 2026-10-26 用户「你要么这么说"是用 x 个账号消耗了 xxx% 的周额度"」), what leads it over the rings and the share
-      let first = Some(quota[0])
+    if spent.length() > 0 {
+      // the first kind's said round its tokens, a sentence read down (用 6 个 Claude 订阅账号消耗了 | 1.2B | token，折合
+      // $1,234: 2026-10-26 用户「你要么这么说"是用 x 个账号消耗了 xxx% 的周额度"」, then 「只算 token 和价格」), what leads
+      // it over the rings and the tokens
+      let first = Some(spent[0])
       pic_lead(c, first)
       c.box(style=pic_hero, fn() {
-        pic_rings(c, quota)
+        pic_rings(c, spent)
         c.box(style=pic_hero_words, fn() {
-          c.text(text(first, "usedText"), style=pic_number) |> ignore
+          c.text(text(first, "tokensText"), style=pic_number) |> ignore
           c.text(text(first, "of"), style=pic_unit) |> ignore
         })
         |> ignore
       })
       |> ignore
-      pic_other_kinds(c, quota)
+      pic_other_kinds(c, spent)
     } else {
       c.box(style=pic_hero, fn() {
         c.text(count(fleet, "chats").to_string(), style=pic_number) |> ignore
@@ -130,11 +132,11 @@ fn night_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
       }
       _ => ()
     }
-    // the chats at work now (with the quota large: said here), the tasks chats ran on other stations over the week
+    // the chats at work now (with the tokens large: said here), the tasks chats ran on other stations over the week
     let tasks = text(fleet, "tasksText")
-    if quota.length() > 0 || tasks != "" {
+    if spent.length() > 0 || tasks != "" {
       c.box(style=pic_lines, fn() {
-        if quota.length() > 0 {
+        if spent.length() > 0 {
           pic_line(c, fn() { c.box(style=pic_live_dot, fn() {  }) |> ignore }, text(fleet, "chatsText"), text(fleet, "where"), false)
         }
         if tasks != "" {
@@ -169,7 +171,7 @@ fn pic_line(c : @ui.Ctx, mark : () -> Unit, words : String, more : String, apart
 }
 
 ///|
-/// The colour of the ring of kind `k` (in the quota's order), the last one's past them.
+/// The colour of the ring of kind `k` (in the core's order), the last one's past them.
 fn ring_color(k : Int) -> Int64 {
   @sf.share_rings[if k < @sf.share_rings.length() { k } else { @sf.share_rings.length() - 1 }]
 }
@@ -187,15 +189,15 @@ fn pic_lead(c : @ui.Ctx, first : Json?) -> Unit {
 
 ///|
 /// Each kind but the first, a line as its ring's key (the first's said whole over them): its colour's dot, its name, its
-/// accounts dimmer, its share at the line's end in ink, the shares one under another. One line each whatever its name:
+/// accounts dimmer, its tokens and cost at the line's end in ink, one under another. One line each whatever its name:
 /// said as a sentence, a name long enough broke it, a character on a line of its own (2026-10-26 用户：「这里折行了不太
 /// 好看」); a name too long for its line cut short, nothing else.
-fn pic_other_kinds(c : @ui.Ctx, quota : Array[Json]) -> Unit {
-  if quota.length() < 2 {
+fn pic_other_kinds(c : @ui.Ctx, spent : Array[Json]) -> Unit {
+  if spent.length() < 2 {
     return
   }
   c.box(style=@sf.full_width, fn() {
-    for k, q in quota {
+    for k, q in spent {
       if k == 0 {
         continue
       }
@@ -205,7 +207,7 @@ fn pic_other_kinds(c : @ui.Ctx, quota : Array[Json]) -> Unit {
         c.text(text(q, "name"), style=pic_key_name) |> ignore
         c.text(text(q, "accountsText"), style=pic_key_accounts) |> ignore
         c.box(style=pic_grow, fn() {  }) |> ignore
-        c.text(text(q, "usedText"), style=pic_key_share) |> ignore
+        c.text(text(q, "lineText"), style=pic_key_share) |> ignore
       })
       |> ignore
     }
@@ -214,11 +216,11 @@ fn pic_other_kinds(c : @ui.Ctx, quota : Array[Json]) -> Unit {
 }
 
 ///|
-/// The rings: a kind of subscription each, from the outside in (as many as there are colours), as much of each drawn as
-/// its accounts' weeks used (the core's `share`: @sf.rings).
-fn pic_rings(c : @ui.Ctx, quota : Array[Json]) -> Unit {
+/// The rings: a kind of account each, from the outside in (as many as there are colours), as much of each drawn as its
+/// share of all kinds' tokens (the core's `share`: @sf.rings).
+fn pic_rings(c : @ui.Ctx, spent : Array[Json]) -> Unit {
   let rings : Array[(Double, Int64)] = []
-  for k, q in quota {
+  for k, q in spent {
     if k >= @sf.share_rings.length() {
       break
     }

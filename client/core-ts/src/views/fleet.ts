@@ -1,6 +1,6 @@
 // The card shared of a workspace's agents at work (the `fleet` view; 2026-10-26 用户：「来点花哨的设计和更多信息」，then 「改成
-// xx 个 xx 订阅账号的 xx% 周额度，分天和周统计，还有当前 chat 数量」「模型调用不需要」「不如归档 chat 多少个」): how much of
-// its subscriptions' weekly quota was used, by kind of subscription; how many chats were archived and what was spent
+// xx 个 xx 订阅账号的 xx% 周额度，分天和周统计，还有当前 chat 数量」「模型调用不需要」「不如归档 chat 多少个」, then of the
+// quota 「只算 token 和价格」): what its chats used over the last 7 days, by kind of account; how many chats were archived and what was spent
 // today and over the last 7 days, each day's chats archived; how many chats are at work now (a chat whose task runs on
 // another station at work too), and how many stations were used today, by today's chats or for the tasks they ran
 // (「应该改成今天会话分布在几个设备而不是正在运行的会话」「那不是运行任务没有算进去」); how many tasks chats ran on other
@@ -12,7 +12,7 @@ import { isWatch, remoteOwner } from "../jobs.ts";
 import * as present from "../present.ts";
 import { arr as arrU, get as getU } from "../util.ts";
 import { GROUPS, groupTitle } from "./profiles.ts";
-import { localDay } from "./usage.ts";
+import { count, localDay, money } from "./usage.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -22,45 +22,57 @@ const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? 
 
 /// A station as the card reads it: up or not, its chats' rows as listed, when each of its archived chats was archived,
 /// its jobs (the tasks other stations' chats run on it among them), the tasks other stations' chats ran on it (when
-/// each began, and whose session: its usage's `remoteRuns`).
-export type FleetStation = { station: string; online: boolean; rows: J[]; archived: number[]; jobs: J[]; runs: { at: number; session: string }[] };
+/// each began, and whose session: its usage's `remoteRuns`), its chats' calls (its usage's `rows`: by day, chat,
+/// profile and model).
+export type FleetStation = { station: string; online: boolean; rows: J[]; archived: number[]; jobs: J[]; runs: { at: number; session: string }[]; calls: J[] };
 
-/// Whether a quota's window is its week's (每周…, Weekly…, 7 天).
-function weekly(w: J): boolean {
-  const [mark] = format.windowMark(str(get(w, "label")) ?? "");
-  return mark === "W" || mark === "7D";
-}
-
-/// The workspace's subscriptions by kind (the profiles view's items), each kind's accounts with a week's quota read and
-/// how much of a week's quota they used in all, each account's share of its own added up: two can use more than one's
-/// (80% and 90%: 170%, 1.7 accounts' weeks), and that as a share of all their weeks (`share`, its ring: 170% of two,
-/// 0.85). The most weekly quota used first; a kind that used none (0%) left out (「0% 不要显示」). Keys (API Key) have no quota.
-export function quotaOf(profiles: J[]): J[] {
-  const kinds = new Map<string, number[]>();
-  for (const p of profiles) {
-    const kind = str(get(p, "group"));
-    if (kind === null || kind === "key") continue;
-    const quota = get(get(p, "profile"), "quota");
-    if (get(quota, "state") !== "ok") continue;
-    const week = arr(get(quota, "windows")).find(weekly);
-    if (week === undefined || typeof week.usedPercent !== "number") continue;
-    kinds.set(kind, [...(kinds.get(kind) ?? []), week.usedPercent]);
+/// What the workspace's chats used over the last 7 days, by kind of account (2026-10-29 用户：「应该是每个 chat 自己统计」
+/// 「用了哪些账号分别用了多少」「只算 token 和价格」; it was how full each account's week read, which counts what was used
+/// before the days and outside still.fail, and none of a week that reset in them): the calls each station's chats made
+/// on its accounts (`stations`' `calls`, the usage rows of the days `days`), each on the account its profile is (the
+/// profiles view's items, `profiles`: an account on two stations once), each kind the accounts that made any, their
+/// tokens (read and written, the cache's too) and what they would cost at API prices (as the usage page counts them,
+/// ≥ with calls of a model without a price), its share of all kinds' tokens its ring. The most tokens first; a call of
+/// an account no longer listed left out.
+export function spentOf(profiles: J[], stations: FleetStation[], days: Set<string>): J[] {
+  const accountOf = new Map<string, J>();
+  for (const p of profiles) for (const m of arr(get(p, "members"))) accountOf.set(`${get(m, "station")}\n${get(m, "profileId")}`, p);
+  const kinds = new Map<string, { accounts: Set<string>; tokens: number; cost: number; unpriced: number }>();
+  const n = (row: J, k: string) => (typeof get(row, k) === "number" ? row[k] : 0);
+  for (const s of stations) {
+    for (const row of s.calls) {
+      if (!days.has(str(get(row, "day")) ?? "")) continue;
+      const account = accountOf.get(`${s.station}\n${str(get(row, "profile")) ?? ""}`);
+      const kind = str(get(account, "group"));
+      if (account === undefined || kind === null) continue;
+      const tokens = n(row, "input") + n(row, "cacheRead") + n(row, "cacheWrite") + n(row, "output");
+      if (tokens === 0) continue;
+      const k = kinds.get(kind) ?? { accounts: new Set<string>(), tokens: 0, cost: 0, unpriced: 0 };
+      k.accounts.add(String(get(account, "key")));
+      k.tokens += tokens;
+      if (typeof get(row, "cost") === "number") k.cost += row.cost;
+      else k.unpriced += n(row, "calls");
+      kinds.set(kind, k);
+    }
   }
+  const all = [...kinds.values()].reduce((sum, k) => sum + k.tokens, 0);
   const order = (k: string) => GROUPS.indexOf(k as (typeof GROUPS)[number]);
   return [...kinds.entries()]
-    .map(([kind, used]) => ({ kind, used, all: used.reduce((n, u) => n + u, 0) }))
-    .sort((a, b) => b.all - a.all || order(a.kind) - order(b.kind))
-    .map(({ kind, used, all }) => {
-      const percent = format.round(all);
-      const share = Math.min(1, all / (used.length * 100));
-      // said as a sentence round the share (「是用 x 个账号消耗了 xxx% 的周额度」): 用 6 个 Claude 订阅账号消耗了 | 489% | 的周额度;
-      // or as its ring's key, a line beside the others': Claude 订阅 · 6 个账号 … 489%
+    .sort(([a, x], [b, y]) => y.tokens - x.tokens || order(a) - order(b))
+    .map(([kind, k]) => {
+      const accounts = k.accounts.size;
+      const tokensText = count(k.tokens);
+      const costText = `${k.unpriced > 0 ? "≥" : ""}${money(k.cost)}`;
+      // said as a sentence round its tokens (as the usage page says them): 用 6 个 Claude 订阅账号消耗了 | 3.1 亿 | token，折合
+      // $1,234; or as its ring's key, a line beside the others': Claude 订阅 · 6 个账号 … 3.1 亿 · $1,234
       const name = groupTitle(kind as (typeof GROUPS)[number]);
-      const lead = t("core-logic.fleet.quota_by", { n: used.length, kind: name });
-      const accountsText = t("core-logic.fleet.accounts", { n: used.length });
-      return { kind, name, accounts: used.length, accountsText, used: percent, usedText: `${percent}%`, share, lead, of: t("core-logic.fleet.quota_of") };
-    })
-    .filter((q) => q.used > 0);
+      const lead = kind === "key" ? t("core-logic.fleet.keys_by", { n: accounts }) : t("core-logic.fleet.accounts_by", { n: accounts, kind: name });
+      return {
+        kind, name, accounts, accountsText: t("core-logic.fleet.accounts", { n: accounts }),
+        tokens: k.tokens, tokensText, costText, lineText: `${tokensText} · ${costText}`,
+        share: all > 0 ? k.tokens / all : 0, lead, of: t("core-logic.fleet.tokens_of", { cost: costText }),
+      };
+    });
 }
 
 /// The card: `stations` as read, the workspace's profiles (the profiles view's items), the usage view of the last 7 days
@@ -103,7 +115,7 @@ export function fleetView(stations: FleetStation[], profiles: J[], usage: J, now
   }
   return {
     at: format.dateClock(now, offset),
-    quota: quotaOf(profiles),
+    spent: spentOf(profiles, online, new Set(Array.from({ length: 7 }, (_, i) => localDay(now - i * 86_400_000, offset)))),
     chats: chats.size,
     chatsText: t("core-logic.fleet.chats", { n: chats.size }),
     where: t("core-logic.fleet.machines", { n: used.size }),
