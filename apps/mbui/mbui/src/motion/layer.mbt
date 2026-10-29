@@ -161,6 +161,9 @@ priv struct Rec {
   mut list : Int
   /// how far down from its place it is drawn on its way there this frame (0: in its place; makes_room)
   mut moving_dy : Double
+  /// how tall it shows this frame (as tall as it is laid out, or less: grown for its cause, coming out with its move;
+  /// makes_room)
+  mut shown_h : Double
   /// where it was drawn last frame (its last build's place), taken as this frame first lays it out: every build of a
   /// frame (frame_body) moves it from there, none from another build's place, which was never drawn; and its offsets
   /// then, which a move this frame sets from (not adds to, once a build)
@@ -203,6 +206,12 @@ priv struct Rec {
   mut g_now : Bool
   /// whether its ground set off as last with what it holds (reshape's `carry`)
   mut g_carry : Bool
+  /// a move grown for its cause (layout, not in a list: its words a line more): the height it showed at as that set
+  /// off, how far it has gone to the height it is laid out at (0 → 1); and the same as the frame before left them
+  mut hh : Double
+  hp : Anim
+  mut was_hh : Double
+  mut was_hp : Double
   /// a node new in a shape gone with what it holds, carried on its ground (reshape's `carry`): that shape's key (0:
   /// none), and the edges of it it keeps to (1: its right, rather than its left; 2: its foot, rather than its top)
   mut on : Int
@@ -243,6 +252,7 @@ fn Rec::new() -> Rec {
     driven: false,
     drove: 0.0,
     moving_dy: 0.0,
+    shown_h: 0.0,
     enter: None,
     ef: Anim::new(1.0),
     em: Anim::new(1.0),
@@ -280,6 +290,10 @@ fn Rec::new() -> Rec {
     was_gr: (0.0, 0.0, 0.0, 0.0),
     was_gp: 1.0,
     g_now: false,
+    hh: 0.0,
+    hp: Anim::new(1.0),
+    was_hh: 0.0,
+    was_hp: 1.0,
     g_carry: false,
     on: 0,
     on_edges: 0,
@@ -843,7 +857,7 @@ pub fn layout_rest(key : String) -> Double {
   }
   match mo.recs.get(k) {
     Some(r) => {
-      [r.ox, r.oy, r.ef, r.em, r.gp].each(at)
+      [r.ox, r.oy, r.ef, r.em, r.gp, r.hp].each(at)
       // (carried on a shape's ground: until that is there)
       match mo.recs.get(r.on) {
         Some(ar) if r.on != 0 => at(ar.gp)
@@ -1321,14 +1335,15 @@ fn makes_room(c : @ui.Ctx) -> Unit {
           continue
         }
         ignore(mr.oy.get())
+        ignore(mr.hp.get())
         let (_, my, _, mh) = c.node_rect(me.node)
         let mdy = c.look_of(me.node).dy
         if my >= ny + nh - 0.5 {
           // laid under it, drawn up over it: its words from that one's top on not drawn
           bottom = dmin(bottom, my + mdy - (ny + dy))
         } else if my + mh <= ny + 0.5 {
-          // laid over it, drawn down over it
-          top = dmax(top, my + mdy + mh - (ny + dy))
+          // laid over it, drawn down over it (as much of it as shows: grown, coming out with its move)
+          top = dmax(top, my + mdy + dmin(mh, mr.shown_h) - (ny + dy))
         }
       }
       // (its edge soft: what it draws fades in over room_soft as it is shown, the softness going as the room opens
@@ -1411,6 +1426,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           r.ef.name = said
           r.em.name = said
           r.gp.name = said
+          r.hp.name = said
           mo.recs[e.key] = r
           r
         }
@@ -1442,6 +1458,9 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         r.was_gw = r.gw
         r.was_gh = r.gh
         r.was_gr = r.gr
+        r.hp.step(c)
+        r.was_hp = r.hp.get()
+        r.was_hh = r.hh
         r.g_now = false
       }
       let lm = if li >= 0 { mo.lists.get(ref) } else { None }
@@ -1543,6 +1562,34 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
             r.oy.value = cy + dy
             r.oy.animate(0.0, spec)
           }
+        }
+      }
+      // grown for its cause (its words a line more), not in a list (whose rows make room for each other: makes_room):
+      // what it holds is laid out as tall as it ends at once, but shows only as tall as it showed, going to as tall as
+      // it is laid out with its move, so that what it has more comes out as it gets there, not drawn over what stands
+      // by it that it moves away from or towards (the composer's field over its send, 2026-10-29: 「输入框变高的时候
+      // 会盖住发送按钮」). Shrunk, or resized by nothing it moves for, it shows whole (a growth on its way going on, as far
+      // off its new height as it was off its old).
+      r.shown_h = nh
+      if e.flip && li < 0 {
+        let shown = r.was_hh + (r.was_h - r.was_hh) * r.was_hp
+        let caused = e.by != "" && r.was_by != "" && e.by != r.was_by
+        if still || !was_seen || reborn {
+          r.hp.snap(1.0)
+        } else if caused && (nh - r.was_h).abs() > 0.5 {
+          r.hh = shown
+          r.hp.snap(if nh > shown + 0.5 { 0.0 } else { 1.0 })
+          if nh > shown + 0.5 {
+            r.hp.animate(1.0, e.spec)
+          }
+        } else if (nh - r.was_h).abs() > 0.5 {
+          r.hh = r.was_hh + (nh - r.was_h)
+        }
+        let p = r.hp.get()
+        if p < 1.0 {
+          let h = r.hh + (nh - r.hh) * p
+          r.shown_h = dmax(h, 0.0)
+          c.cut_to_top(e.node, dmax(h, 0.0), soft=dmin(room_soft, nh - h))
         }
       }
       // coming in: a row new to its list, or (entering) a node not there the frame before

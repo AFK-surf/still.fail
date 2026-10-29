@@ -1591,6 +1591,29 @@ pub fn Tester::drawn_glyphs(self : Tester) -> Array[(Double, Double, Int64)] {
 }
 
 ///|
+/// What shows of each glyph drawn in the last frame (seen at all: not wholly cut by its clip): its picture's box (x0,
+/// y0, x1, y1) cut by its clip.
+pub fn Tester::glyphs_shown(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  ignore(self)
+  let c = g()
+  let a = c.inst
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    if a[b + 5] == 1.0 && a[b + 11] > 0.0 {
+      let x0 = dmax(a[b], a[b + 16])
+      let y0 = dmax(a[b + 1], a[b + 17])
+      let x1 = dmin(a[b] + a[b + 2], a[b + 18])
+      let y1 = dmin(a[b + 1] + a[b + 3], a[b + 19])
+      if x1 > x0 && y1 > y0 {
+        out.push((x0, y0, x1, y1))
+      }
+    }
+  }
+  out
+}
+
+///|
 /// The rich paragraph whose text contains `s`, as laid out, and where it
 /// is (its content's top left).
 pub fn Tester::rich_of(self : Tester, s : String) -> (RichLayout, Double, Double)? {
