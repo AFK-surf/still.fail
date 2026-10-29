@@ -1428,6 +1428,7 @@ dependencies = [
 [[package]]
 name = "iroh"
 version = "1.0.3"
+source = "git+https://github.com/zzj3720/iroh?rev=e024a40f67592791fbac49dd77a4b613e8d4de78#e024a40f67592791fbac49dd77a4b613e8d4de78"
 dependencies = [
  "backon",
  "blake3",

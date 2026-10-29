@@ -21,4 +21,4 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"
 swarm-discovery = { path = "../../../vendor/swarm-discovery" }
 iroh-mdns-address-lookup = { path = "../../../vendor/iroh-mdns-address-lookup" }
 noq-udp = { path = "../../../vendor/noq-udp" }
-iroh = { path = "../../../vendor/iroh" }
+iroh = { git = "https://github.com/zzj3720/iroh", rev = "e024a40f67592791fbac49dd77a4b613e8d4de78" }

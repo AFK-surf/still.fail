@@ -118,7 +118,8 @@ station 的逻辑在 macOS、Linux、Windows 上是同一份。各平台不同�
 
 在原型（分支 proto-rust-shell-ts 的 `proto/ts-station/native`）基础上补齐 station 的 iroh 用法（`mesh/station/src/main.rs` `serve_mesh`、`keep.rs`、`peer.rs`）：
 - `bind({secretKey, alpns, relayUrls, discovery})`：同原型；另加 `online()`（等到连上家 relay）、`setRelays(urls)`（cloud 推来新的 relay 列表）、`home()`（当前家 relay）。
-- keeper：`keep(relayUrl)` 起一个只挂这个 relay 的附属 endpoint（ALPN `stillfail/keep/1`），`unkeep(relayUrl)`。
+- 同时挂在所有 relay 上：`bind` 时给的每个 relay 各有一条到 relay 的连接，地址里写着全部（vendored iroh 的 `home_on_every_relay`），一条连接到它就有经每个 relay 的路径；每条路径每秒保活一次，3 秒收不到就放弃（`PATH_KEEP_ALIVE`、`PATH_IDLE`），包改走别的路径，relay 回来后路径重开。
+- keeper：`keep(urls)` 只给 bind 之后才加进来的 relay 起一个只挂这个 relay 的附属 endpoint（ALPN `stillfail/keep/1`），bind 时就有的不再要。
 - 连接：`connect(addr, alpn)`（站间 peer 用），`Connection.paths()`（relay 还是直连，给 trace 用）、`closed()`、`close(code, reason)`、`acceptBi/openBi`。
 - 流：`read()`、`write()`、`finish()`、`reset()`、`stopped()`。
 - 所有异步操作不阻塞 Node 主线程（napi async，tokio 多线程运行时）。

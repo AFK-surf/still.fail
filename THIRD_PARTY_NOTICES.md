@@ -8,7 +8,7 @@ These patched crates come from the corresponding crates.io releases. The iroh an
 
 | Crate | Version | Upstream license | Included notices |
 | --- | --- | --- | --- |
-| iroh | 1.0.3 | MIT OR Apache-2.0; BSD-3-Clause for the separately attributed code | [MIT](vendor/iroh/LICENSE-MIT), [Apache](vendor/iroh/LICENSE-APACHE), [BSD](vendor/iroh/LICENSE-BSD3) |
+| iroh | 1.0.3 | MIT OR Apache-2.0; BSD-3-Clause for the separately attributed code | [MIT](https://github.com/zzj3720/iroh/blob/stillfail/LICENSE-MIT), [Apache](https://github.com/zzj3720/iroh/blob/stillfail/LICENSE-APACHE), [BSD](https://github.com/zzj3720/iroh/blob/stillfail/iroh/LICENSE-BSD3) |
 | iroh-mdns-address-lookup | 0.4.0 | MIT OR Apache-2.0 | [MIT](vendor/iroh-mdns-address-lookup/LICENSE-MIT), [Apache](vendor/iroh-mdns-address-lookup/LICENSE-APACHE) |
 | noq-udp | 1.3.0 | MIT OR Apache-2.0 | [MIT](vendor/noq-udp/LICENSE-MIT), [Apache](vendor/noq-udp/LICENSE-APACHE) |
 | swarm-discovery | 0.6.3 | Apache-2.0 | [Apache](vendor/swarm-discovery/LICENSE.Apache_2.0) |
