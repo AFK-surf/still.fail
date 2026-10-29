@@ -138,11 +138,12 @@ const normal = (id: string) => id.replace(/[\t\n\r ]+/g, " ").trim().toLowerCase
 /// link in a sentence). The lines round it stay one paragraph, as Markdown has them.
 function lineParagraphs(nodes: Node[]): Node[][] {
   // its lines, a text split where it breaks (each piece where it stands in the text, where the text is as written)
-  const lines: Node[][] = [[]];
+  let line: Node[] = [];
+  const lines: Node[][] = [line];
   for (const n of nodes) {
     const value = n.value ?? "";
     if (n.type !== "text" || !value.includes("\n")) {
-      lines[lines.length - 1].push(n);
+      line.push(n);
       continue;
     }
     const from = n.position?.start.offset;
@@ -150,18 +151,15 @@ function lineParagraphs(nodes: Node[]): Node[][] {
     const placed = from !== undefined && to !== undefined && to - from === value.length;
     let at = 0;
     for (const piece of value.split("\n")) {
-      if (at > 0) lines.push([]);
-      if (piece !== "") {
-        const start = placed ? { offset: from + at } : {};
-        const end = placed ? { offset: from + at + piece.length } : {};
-        lines[lines.length - 1].push({ type: "text", value: piece, position: placed ? { start, end } : undefined });
-      }
+      if (at > 0) lines.push((line = []));
+      if (piece !== "") line.push(placed ? { type: "text", value: piece, position: { start: { offset: from + at }, end: { offset: from + at + piece.length } } } : { type: "text", value: piece });
       at += piece.length + 1;
     }
   }
   const lone = (line: Node[]): boolean => {
     const seen = line.filter((x) => !(x.type === "text" && (x.value ?? "").trim() === ""));
-    return seen.length === 1 && (seen[0].type === "link" || seen[0].type === "image");
+    const [only] = seen;
+    return seen.length === 1 && (only?.type === "link" || only?.type === "image");
   };
   if (lines.length < 2 || !lines.some(lone)) return [nodes];
   // the lines between the lone ones together again, their breaks as they were
@@ -171,14 +169,14 @@ function lineParagraphs(nodes: Node[]): Node[][] {
     if (run.length > 0) out.push(run);
     run = [];
   };
-  for (const line of lines) {
-    if (lone(line)) {
+  for (const each of lines) {
+    if (lone(each)) {
       end();
-      out.push(line.filter((x) => !(x.type === "text" && (x.value ?? "").trim() === "")));
+      out.push(each.filter((x) => !(x.type === "text" && (x.value ?? "").trim() === "")));
       continue;
     }
     if (run.length > 0) run.push({ type: "text", value: "\n" });
-    run.push(...line);
+    run.push(...each);
   }
   end();
   return out;
