@@ -1755,6 +1755,7 @@ export const SHAPES: Record<string, Shape> = {
     ["refusedPort", opt("u32"), { doc: "`connectPort`, when a tunnel to it found nothing listening there: the app looks for adbd's ports anew." }],
     ["grants", vec("AdbGrant"), { default: true, doc: "This person's chats' grants of their phone live now, and their requests waiting, every station's (docs/adb-share.md)." }],
     ["wanted", vec("String"), { default: true, doc: "The stations a live grant lends this phone to now." }],
+    ["known", "bool", { default: true, doc: "Whether the grants kept on the device were read: before, `wanted` empty says nothing of them (a core just started)." }],
     ["lasts", opt("String"), { doc: "This person's 默认最长授权 for their phone: `hour` or `chat` (the longest a chat's grant may last; `adb.setLasts`)." }],
     ["lends", vec("AdbLend"), { default: true, doc: "This phone lent to each station a grant wants it on (`adb.ports` given): how each stands." }],
   ], { doc: "This phone's adb as lent to a station's agents (the `adbShare` topic; client/core-ts/src/adb.ts, docs/adb-share.md).\n`phase`: `off`, `connecting` (the link opening, or opening again after it went: `message` says why) or `offered`;\n`adb`, as the station's adb holds the phone once offered: `connecting`, `connected`, `unpaired`, `unauthorized`,\n`off` (Wireless debugging is), `missing` (no adb there) or `failed`, `message` saying more. Stopped by itself (its hour up, a station too old), it\nis off with why in `message`. `serial`: what the agents reach it at on the station; `until`: when it stops." }),

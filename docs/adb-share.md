@@ -21,6 +21,13 @@
 >   port, is not let in.
 > - **The phone lends while a grant is live**, to the station of that chat (one offer per station, its grants listed):
 >   its foreground service and notification say which chats it is lent to, each with 停止. No per-station switch.
+> - **Lent with no one at it** (2026-10-30: granted once, the phone is the chat's without its person at it): the grants the phone is lent for are
+>   kept on the device (the core's `adb-grants`, `adbShare` `known` once read), so a core started anew lends for them at
+>   once and the app's service does not take 「none read yet」 for 「none granted」; a process started by the phone
+>   starting again or the app updating (`AdbBoot`) starts the core and the service while one is live (`grantsUntil`);
+>   and each time the station's adb comes to hold the phone it lets the app turn Wireless debugging on itself
+>   (`pm grant … WRITE_SECURE_SETTINGS`) and keeps Android's idling off its connection (`deviceidle whitelist`), no one
+>   asked. phone_use says when and why a granted phone was last offered no longer.
 > - **Settings, 共享调试** (one page, not a station's): 默认最长授权, the phone's settings (本机设置: what it lacks, the
 >   switches it can turn on), the stations it is paired with, and the grants live now (each with 收回).
 > - **Recorded** in the chat as a system message each: asked, approved, refused, taken back, ended.

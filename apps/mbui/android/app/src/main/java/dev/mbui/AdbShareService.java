@@ -201,14 +201,30 @@ public final class AdbShareService extends Service {
                 refused = gone;
                 ports.again();
             }
+            // (for the grants, a core just started that has not read those kept on the device yet: none wanted there
+            // is not none granted, and it is lent on as it was)
+            if (AdbShare.GRANTS.equals(station) && !v.optBoolean("known", true)) {
+                say();
+                return;
+            }
             boolean here = AdbShare.GRANTS.equals(station)
                     ? v.optJSONArray("wanted") != null && v.optJSONArray("wanted").length() > 0
                     : v.optBoolean("sharing") && station.equals(v.optString("station"));
             if (AdbShare.GRANTS.equals(station)) {
                 org.json.JSONArray grants = v.optJSONArray("grants");
                 int chats = 0;
-                if (grants != null) for (int i = 0; i < grants.length(); i++) if ("granted".equals(grants.optJSONObject(i).optString("status"))) chats++;
+                long until = 0;
+                if (grants != null) for (int i = 0; i < grants.length(); i++) {
+                    JSONObject g = grants.optJSONObject(i);
+                    if (!"granted".equals(g.optString("status"))) continue;
+                    chats++;
+                    until = Math.max(until, g.optLong("exp", 0) * 1000);
+                }
                 name = AdbShare.t("android-misc.adb.notify.chats", "n", String.valueOf(chats));
+                // (kept: the process that starts while one is live lends for them at once, AdbShare.install)
+                android.content.SharedPreferences k = AdbShare.kept(this);
+                if (chats == 0) k.edit().remove(AdbShare.GRANTS_UNTIL).apply();
+                else if (k.getLong(AdbShare.GRANTS_UNTIL, 0) != until) k.edit().putLong(AdbShare.GRANTS_UNTIL, until).apply();
             }
             if (here) lent = true;
             if (here && v.has("until") && !v.isNull("until")) AdbShare.keepUntil(this, v.optLong("until"));
