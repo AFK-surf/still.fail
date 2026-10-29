@@ -503,6 +503,8 @@
   "android-misc.screen.key.up": "上方向键",
   "android-misc.screen.key.down": "下方向键",
   "android-misc.screen.key.right": "右方向键",
+  "android-misc.screen.key.mouseLeft": "左键",
+  "android-misc.screen.key.mouseRight": "右键",
   "android-misc.screen.starting": "正在打开画面",
   "android-misc.screen.ended": "已结束",
   "android-misc.screen.outdated": "此 station 需要更新",

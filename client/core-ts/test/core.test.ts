@@ -562,6 +562,18 @@ test("a_screen_s_picture_size_is_kept_on_the_device", async () => {
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 1).screenCodec, undefined);
+  // The mouse's buttons over it: off, or none (shown); nothing else.
+  call(core, ui, 8, "prefs.set", { screenMouse: "off" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).screenMouse, "off");
+  call(core, ui, 9, "prefs.set", { screenMouse: "on" });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 9).length, 1);
+  call(core, ui, 10, "prefs.set", { screenMouse: null });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).screenMouse, undefined);
 });
 
 test("the_language_is_as_chosen_else_as_the_device_is", async () => {

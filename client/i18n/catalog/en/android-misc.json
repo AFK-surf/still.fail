@@ -530,6 +530,8 @@
   "android-misc.screen.key.up": "Up arrow",
   "android-misc.screen.key.down": "Down arrow",
   "android-misc.screen.key.right": "Right arrow",
+  "android-misc.screen.key.mouseLeft": "Left click",
+  "android-misc.screen.key.mouseRight": "Right click",
   "android-misc.screen.starting": "Opening the screen",
   "android-misc.screen.ended": "Ended",
   "android-misc.screen.outdated": "This station needs an update",

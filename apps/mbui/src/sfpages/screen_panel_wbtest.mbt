@@ -109,6 +109,28 @@ test "组合键 while driving: a Windows station's, tiles at 控制中心's top,
 }
 
 ///|
+test "常用键 while driving: F1–F12 and the keys the row has not, each sent down and up; 控制中心 stays open" {
+  let r = screen_rig()
+  r.live()
+  open_center(r)
+  r.t.tap_text("F5")
+  r.t.draw()
+  let ins = r.inputs()
+  assert_eq(ins.length(), 2)
+  assert_eq(kind_of_input(ins[0]), "down")
+  assert_eq(text(Some(ins[0]), "key"), "F5")
+  assert_eq(text(Some(ins[0]), "code"), "F5")
+  assert_eq(kind_of_input(ins[1]), "up")
+  // still open: another pressed after it
+  r.t.tap_text("PgDn")
+  r.t.draw()
+  assert_eq(text(Some(r.inputs()[2]), "code"), "PageDown")
+  assert_true(r.t.find(tr("web-pages.screen.keys")) is Some(_))
+  shut(r)
+  screen_done(r.t)
+}
+
+///|
 test "a Mac station's combos are a Mac's" {
   let mac = combos_for("macOS 26.6.2")
   assert_eq(mac[0].keys, "⌘ Tab")

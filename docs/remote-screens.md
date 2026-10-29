@@ -367,8 +367,15 @@ moving together scroll. The page draws its own pointer while the finger moves it
 once the finger has been still 600 ms. Directly, a tap clicks where it is, a press held right-clicks, a drag drags. Either
 way two fingers spreading zoom the picture (the zoom never sent as input); zoomed, the trackpad's pointer is kept in sight,
 and the station sends the part in sight alone, as sharp as the phone shows it (Pace, "Regions").
-A keys row under the picture while driving sends what a phone's keyboard lacks (Esc, Tab, the arrows) and holds ⌘ ⌃ ⌥ ⇧
-for the next key, typed or tapped (⌘ then c: `{t:"key", code:"KeyC", mods:4}`). On Android a stage made shorter by the
+A keys row under the picture while driving has the mouse's two buttons first (左键, 右键: a click where the pointer is,
+the trackpad's or else the screen's own), sends what a phone's keyboard lacks (Esc, Tab, the arrows) and holds ⌘ ⌃ ⌥ ⇧
+for the next key or click, typed or tapped (⌘ then c: `{t:"key", code:"KeyC", mods:4}`; ⌘ then 左键: ⌘'s key down
+round the click). Where the row is not there (全屏 and sideways, the keyboard down) the two buttons stay in sight while
+driving, side by side as a mouse has them over the frame's foot corner (全屏 and sideways), each a round button
+floating on its own, the two dragged anywhere together by either as the folded tools are (back to their corner once
+the window turns). 控制中心's 鼠标左右键 hides them all, the keys row's too
+(`prefs.screenMouse`: `off`). Each is felt as it goes down (a haptic: the right button as a context click), as a click
+made by a tap is; a press on them, as on anything over the stage, is theirs alone: the stage's gestures never see it. On Android a stage made shorter by the
 keyboard keeps the picture as large as it was, the pointer in sight (`ViewZoom.refit`), rather than fitting it smaller. 全屏 puts
 the screen alone on the phone: Android hides the system bars, turns sideways and draws it edge to edge; the phone web
 asks the browser's full screen and, where it lets a page, to turn sideways. The tools fold into one button over the
@@ -382,7 +389,8 @@ bits a second as they came, packets lost, the way, the picture's size and codec,
 picture's bounds this device asks for (`prefs.screenQuality`: 自动 as the window is, 流畅 1280×720, 高清 1920×1080, 原画
 the screen's own size; another opens the view again), 组合键 while driving (the keys this device's system keeps for
 itself, as the station's system names them: ⌘Tab, Alt+Tab, the Windows key…, each a key with its `mods`; Ctrl+Alt+Del
-cannot be sent, Windows keeps it from any app), sending files, a window of its own, 全屏 and 断开. 在新窗口打开 moves the view to a window of its own (`?window`: back closes it).
+cannot be sent, Windows keeps it from any app), 常用键 while driving in the mbui app (F1–F12, Del, Home, End, PgUp,
+PgDn, with the modifiers the keys row holds; 控制中心 stays open for the next), sending files, a window of its own, 全屏 and 断开. 在新窗口打开 moves the view to a window of its own (`?window`: back closes it).
 
 The mbui app goes by its native input (apps/mbui/docs/architecture.md, `@sf.soft_keyboard()`): with touch as Android
 above, with keyboard and mouse as the web on a computer (apps/mbui/src/sfapp/screen_view.mbt): the library's viewer bar
