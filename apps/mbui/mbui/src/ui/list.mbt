@@ -460,6 +460,7 @@ pub fn Ctx::list(
         glide_shows: false,
         bar: Bar::new(),
         laid: -1,
+        pinned_by: 0.0,
         began: (0, 0.0, 0.0, false, false),
         left: (0, 0.0, 0.0, false, false),
         glide_began: (0.0, 0.0, -1.0, 0.0, -1.0),
@@ -752,7 +753,10 @@ fn Ctx::place_list(
     first = a
     last = a
   }
+  // (what the hand scrolled toward the end since the last layout: of a shortfall at the end, that much is its)
+  let scrolled_down = dmax(st.pending, 0.0)
   st.pending = 0.0
+  st.pinned_by = 0.0
   let mut pinned_end = false
   // down, then up, then down again if the start was reached
   for pass in 0..<2 {
@@ -775,6 +779,7 @@ fn Ctx::place_list(
       top = top + d
       bottom = bottom_edge
       pinned_end = true
+      st.pinned_by = dmax(d - scrolled_down, 0.0)
       blocked_end = blocked_end + d
       hit_end = true
     }
@@ -796,6 +801,8 @@ fn Ctx::place_list(
       }
       blocked_top = blocked_top - d
       hit_top = true
+      // (put back up as far: short of the view, it moved its rows none so)
+      st.pinned_by = dmax(st.pinned_by + d, 0.0)
       top = iy
       bottom = bottom + d
       pinned_end = false

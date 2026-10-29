@@ -75,6 +75,9 @@ struct ListState {
   // whether gliding to it): laid out again in that frame, it is laid from where it began, unless something moved it
   // since (Ctx::place_list); its glide with it, as it was then (`glide_began`: set out or not, its way)
   mut laid : Int
+  // how far its last layout put its rows down to hold its foot at the view's, for what they lost (a row gone, one
+  // shorter), not for what the hand scrolled past it: what is in view moved so by its change, not scrolled
+  mut pinned_by : Double
   mut began : (Int, Double, Double, Bool, Bool)
   mut left : (Int, Double, Double, Bool, Bool)
   mut glide_began : (Double, Double, Double, Double, Double)

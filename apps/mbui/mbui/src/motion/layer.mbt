@@ -6,7 +6,8 @@
 // - layout animation by key (Motion's `layout`, FLIP, Compose's animateItem placement): a node with a key whose
 //   laid-out place changed since the last frame is drawn from where it was and goes to its new place on a spring (or
 //   a tween, or a progress the app drives), carrying on from where it had got to. In a list a place is the row's
-//   place in the list's content, not on the screen, so scrolling moves nothing;
+//   place in the list's content, not on the screen, so scrolling moves nothing (but what the list put its rows down
+//   by to hold its foot as they changed: a row gone at its end, the rows over it coming down over its place);
 // - a list's rows by key (list_keys, ListMotion.kt): rows new to the list come in (an enter transition), rows gone
 //   leave by a copy of how they were last drawn, shrinking and fading where they were, rows that went ahead of others
 //   pass over them, the rest close over what left, a little late;
@@ -1495,6 +1496,17 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       }
       let lm = if li >= 0 { mo.lists.get(ref) } else { None }
       let was_seen = r.was_seen >= frame - 1 && r.was_ref == ref
+      // its list held at its foot as its rows changed (one gone, at its end): all it showed put down as far as they
+      // lost, its place in it the same, moved so for that change all the same (the rows over a row gone come down
+      // over it, those under it stay), and one come into view over them so comes down with them, from out of view
+      let pinned = if li >= 0 { c.list_pinned_by(li) } else { 0.0 }
+      let pinned_in = e.flip &&
+        !was_seen &&
+        pinned > 0.5 &&
+        (match lm {
+          Some(l) => l.changed_frame == frame
+          None => false
+        })
       // where it shows in its list's view
       let vy = if li >= 0 {
         let (_, ly, _, _) = c.node_rect(li)
@@ -1527,12 +1539,18 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         r.driven = false
         r.moved_now = false
       }
-      if !(e.flip && was_seen) || reborn {
+      if !(e.flip && (was_seen || pinned_in)) || reborn {
         undo()
       }
-      if e.flip && was_seen && !reborn {
-        let dx = r.was_x - rx
-        let dy = if e.screen { r.was_vy - vy } else { r.was_y - ry }
+      if e.flip && (was_seen || pinned_in) && !reborn {
+        let dx = if was_seen { r.was_x - rx } else { 0.0 }
+        let dy = if !was_seen {
+          -pinned
+        } else if e.screen {
+          r.was_vy - vy
+        } else {
+          r.was_y - ry - pinned
+        }
         if dx.abs() <= 0.5 && dy.abs() <= 0.5 {
           undo()
         }

@@ -804,6 +804,7 @@ test "a list's running sums are its rows' heights added up" {
     glide_shows: false,
     bar: Bar::new(),
     laid: -1,
+    pinned_by: 0.0,
     began: (0, 0.0, 0.0, false, false),
     left: (0, 0.0, 0.0, false, false),
     glide_began: (0.0, 0.0, -1.0, 0.0, -1.0),

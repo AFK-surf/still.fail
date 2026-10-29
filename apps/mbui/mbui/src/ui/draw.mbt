@@ -1562,6 +1562,17 @@ pub fn Ctx::list_scrolled(self : Ctx, li : Int) -> Double {
 }
 
 ///|
+/// How far list node `li`'s layout this frame put its rows down to hold its foot at its view's for what they lost (a
+/// row gone, one shorter), the hand's scroll aside: what shows in it moved that far by its change, its place in it
+/// the same (0 none, or not laid out this frame).
+pub fn Ctx::list_pinned_by(self : Ctx, li : Int) -> Double {
+  match self.lists.get(self.nodes[li].id) {
+    Some(st) if st.laid == self.frame_no => st.pinned_by
+    _ => 0.0
+  }
+}
+
+///|
 /// Whether motion is reduced (the app's own choice, else the host's setting; or MBUI_REDUCE_MOTION=1): every motion at
 /// its end at once.
 pub fn reduced_motion() -> Bool {

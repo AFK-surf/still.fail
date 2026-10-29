@@ -479,6 +479,51 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
 }
 
 ///|
+test "a list held at its end, a row gone: what is over it comes down over its place, what is under it stays" {
+  let keys = Ref::new(Array::makei(20, fn(i) { i }))
+  let t = @ui.Tester::new(
+    fn(c) {
+      let ks = keys.val
+      @motion.list_keys(c, "rows", ks.map(fn(k) { "row/\{k}" })) |> ignore
+      c.list("rows", ks.length(), 40.0, fn(i) {
+        let k = ks[i]
+        let n = c.box(w=Fill(1.0), h=Px(40.0), bg=0x202020FFL, id=c.id("row/\{k}"), fn() {
+          c.text("<\{k}>") |> ignore
+        })
+        @motion.layout(
+          c,
+          n,
+          "row/\{k}",
+          exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=Leave)),
+        )
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=400.0,
+  )
+  t.scroll_to_end()
+  t.frame()
+  t.frame()
+  assert_eq(t.drawn_of("<19>").unwrap().1, 360.0)
+  assert_eq(t.drawn_of("<14>").unwrap().1, 160.0)
+  // 15 goes: the list's foot stays where it is, so what is under 15 stays, and what is over it comes down to close
+  // over its place (late, as rows close over one gone), never all of it put a row down at once
+  keys.val = keys.val.filter(fn(k) { k != 15 })
+  t.frame()
+  assert_eq(t.drawn_of("<14>").unwrap().1, 160.0)
+  assert_eq(t.drawn_of("<16>").unwrap().1, 240.0)
+  assert_eq(t.drawn_of("<19>").unwrap().1, 360.0)
+  // (9, come into view over them, comes down with them from out of view)
+  assert_eq(t.drawn_of("<9>").unwrap().1, -40.0)
+  t.run_for(@motion.layout_rest("row/14") - t.time())
+  assert_eq(t.drawn_of("<9>").unwrap().1, 0.0)
+  assert_eq(t.drawn_of("<14>").unwrap().1, 200.0)
+  assert_eq(t.drawn_of("<13>").unwrap().1, 160.0)
+  assert_eq(t.drawn_of("<16>").unwrap().1, 240.0)
+}
+
+///|
 test "a list's rows alike at its start and its end are none of its change: only those between come, go and go ahead" {
   let keys = Ref::new(["p", "q", "x", "y", "r", "s"])
   let t = @ui.Tester::new(
