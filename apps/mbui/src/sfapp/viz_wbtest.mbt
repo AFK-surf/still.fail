@@ -452,3 +452,25 @@ test "an inline page not drawn yet holds its place with a placeholder, gone once
   assert_false(placeholder())
   assert_false(view_covered(t, page))
 }
+
+///|
+test "a chat left keeps its pages, as the few left before it: gone back to, they show as they were" {
+  let t = chat_tester("chat-viz")
+  t.frame()
+  let (page, _) = viz_views(t)
+  let key = viz_frames.keys().filter(fn(k) { k.has_suffix("/release.html") }).collect()[0]
+  let chat = key.unsafe_substring(start=0, end=key.length() - "release.html".length())
+  let (station, session) = match chat.unsafe_substring(start=5, end=chat.length() - 1).split(":").collect() {
+    [a, .. rest] => (a.to_owned(), rest.map(fn(v) { v.to_owned() }).join(":"))
+    _ => abort("no chat in \{key}")
+  }
+  viz_chat_left(station, session)
+  assert_true(viz_frames.contains(key))
+  assert_false(t.views().contains("close \{page}"))
+  // others left after it: it the oldest of more than are kept, its pages let go
+  for i in 0..<@sfbase.viz_chats_kept {
+    viz_chat_left("ws1/other", "s-\{i}")
+  }
+  assert_false(viz_frames.contains(key))
+  assert_true(t.views().contains("close \{page}"))
+}

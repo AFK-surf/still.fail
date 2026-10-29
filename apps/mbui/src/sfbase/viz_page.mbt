@@ -132,6 +132,9 @@ pub fn viz_frame(
   ground? : Int64 = @sf.theme().p.bg,
 ) -> Unit {
   let dark = @sf.theme().dark
+  if !viz_left_chats.is_empty() {
+    viz_shown_again(key)
+  }
   let f = match viz_frames.get(key) {
     Some(f) => f
     None => {
@@ -291,9 +294,37 @@ pub fn viz_close(prefix : String) -> Unit {
 }
 
 ///|
-/// A chat left: its pages let go.
+/// How many chats left last keep their pages (each its view, hidden while not painted): one gone back to shows them
+/// as they were, not loaded and drawn again behind a placeholder (the user, 2026-10-29: 每次切换 chat 都会闪一下).
+pub let viz_chats_kept : Int = 4
+
+///|
+/// The chats left whose pages are kept (their keys' prefix), the one left last at the end.
+pub let viz_left_chats : Array[String] = []
+
+///|
+/// A chat left: its pages kept, as those of the few left before it; the one left longest ago lets its go.
 pub fn viz_chat_left(station : String, session : String) -> Unit {
-  viz_close("chat/" + station + ":" + session + "/")
+  let prefix = "chat/" + station + ":" + session + "/"
+  match viz_left_chats.search(prefix) {
+    Some(i) => ignore(viz_left_chats.remove(i))
+    None => ()
+  }
+  viz_left_chats.push(prefix)
+  while viz_left_chats.length() > viz_chats_kept {
+    viz_close(viz_left_chats.remove(0))
+  }
+}
+
+///|
+/// A page drawn again: its chat is shown, no longer one left (its pages not let go for others left after it).
+fn viz_shown_again(key : String) -> Unit {
+  for i, p in viz_left_chats {
+    if key.has_prefix(p) {
+      ignore(viz_left_chats.remove(i))
+      return
+    }
+  }
 }
 
 ///|
@@ -749,6 +780,7 @@ pub let viz_mermaid_box : @ui.Style = @ui.css("w=Full")
 /// What the visualizations keep put back as the app begins anew (sfbase's reset).
 pub fn viz_pages_reset() -> Unit {
   viz_frames.clear()
+  viz_left_chats.clear()
   viz_heights.clear()
   viz_full.val = None
   viz_unmade.clear()
