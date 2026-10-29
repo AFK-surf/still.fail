@@ -30,7 +30,7 @@ Object.defineProperty(globalThis, "navigator", { configurable: true, value: { us
 Object.defineProperty(globalThis, "navigator", { value: { userAgent: navigator.userAgent, language: navigator.language, languages: navigator.languages, platform: navigator.platform, hardwareConcurrency: navigator.hardwareConcurrency, appVersion: "" }, configurable: true });
 
 const dist = (path) => fileURLToPath(new URL(`../dist/${path}`, import.meta.url));
-const { render, renderPhone } = await import(pathToFileURL(dist("site-ssr/prerender.js")).href);
+const { render, renderPhone, renderFeatures } = await import(pathToFileURL(dist("site-ssr/prerender.js")).href);
 // STILLFAIL_SITE=beta: the test channel's site, youdid.wtf (web/vite.demo.config.ts).
 // The page in Chinese at /, in English at /en/; the phone beside the computer on each (phone.html, en/phone.html).
 const root = process.env.STILLFAIL_SITE === "beta" ? "site-beta" : "site";
@@ -66,6 +66,9 @@ function drawnBy(html) {
   return code.toString();
 }
 
+/** The phone's page as Vite built it (site/phone.html, en/phone.html), for the phones showing what it is for. */
+const phonePage = { zh: readFileSync(dist(`${root}/phone.html`), "utf8"), en: readFileSync(dist(`${root}/en/phone.html`), "utf8") };
+
 for (const [lang, file, mark, build] of [
   ["zh", "index.html", "<!--site-->", render], ["en", "en/index.html", "<!--site-->", render],
   ["zh", "phone.html", "<!--demo-->", renderPhone], ["en", "en/phone.html", "<!--demo-->", renderPhone],
@@ -79,6 +82,19 @@ for (const [lang, file, mark, build] of [
   const head = `<link rel="preload" href="/assets/${latin}" as="font" type="font/woff2" crossorigin><style>${drawnBy(built)}</style>`;
   writeFileSync(page, built.replace(link, head).replace("</body>", `${link}\n</body>`));
   console.log(`prerendered ${page}`);
+}
+// The phones showing what it is for (words.ts featurePage): the phone's page with its app's frame at each one's page,
+// and neither its scripts nor the sheet (what it draws is all in its head).
+for (const lang of ["zh", "en"]) {
+  const html = phonePage[lang];
+  const link = sheetLink.exec(html)?.[0];
+  if (!link || !html.includes("<!--demo-->")) throw new Error(`the ${lang} phone page has no <!--demo--> or sheet`);
+  for (const { file, html: frame } of renderFeatures(lang)) {
+    const built = html.replace("<!--demo-->", frame).replace(/<script type="module"[^>]*><\/script>\s*/g, "").replace(/<link rel="modulepreload"[^>]*>\s*/g, "");
+    const page = dist(`${root}/${lang === "en" ? "en/" : ""}${file}`);
+    writeFileSync(page, built.replace(link, `<link rel="preload" href="/assets/${latin}" as="font" type="font/woff2" crossorigin><style>${drawnBy(built)}</style>`));
+    console.log(`prerendered ${page}`);
+  }
 }
 // The faces are each page's from its head: said again in the sheet, each would be a face of its own, loaded once more
 // (from the cache) and saying so (document.fonts' loadingdone), on which the scene reads its rows again (OneComputer.tsx).

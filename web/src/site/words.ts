@@ -47,7 +47,7 @@ const ZH = {
   start: "开始使用",
   scenesTitle: "能用来做什么",
   /** What it is for, each by what it does (`soon`: not yet), shown on the phone's app at its page (`at`: its path in
-   *  the workspace, or "chat": its chat, the story played). */
+   *  the workspace, or "chat": its chat, the story played), as it opens there (featurePage). */
   scenes: [
     { title: "Agent", text: "Claude Code、Codex 等 agent 在你的电脑上运行，用手机、Slack 或飞书指挥", soon: false, at: "chat" },
     { title: "资源管理", text: "每台的 CPU、内存、磁盘和文件都在一处，任务按负载排队", soon: false, at: "s/local/overview" },
@@ -116,6 +116,14 @@ const EN: typeof ZH = {
 };
 
 export const WORDS: Record<SiteLang, typeof ZH> = { zh: ZH, en: EN };
+
+/**
+ * The page of a phone showing what it is for (a scene's `at`): the phone's app opened there, built to HTML with the site
+ * (web/site-prerender.mjs) and nothing more, no script: a picture of it, as the phone shows it (the phone's rules go
+ * by the screen's width, which in its frame is a phone's), not one more app run on the page's thread. None for the
+ * chat: its list draws its messages only once it has measured them, so built it would be empty; that one is the app run.
+ */
+export const featurePage = (at: string): string | null => at === "chat" ? null : `phone-${at.replaceAll("/", "-")}`;
 
 export const SiteLangContext = createContext<SiteLang>("zh");
 

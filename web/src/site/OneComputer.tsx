@@ -15,7 +15,7 @@ import { useEffect, useRef } from "react";
 import type { MountedDemo } from "../demo/mount.tsx";
 import * as css from "./site.css.ts";
 import { APP, Button, Demo, type DemoProps } from "./Site.tsx";
-import { useSay, useSiteLang } from "./words.ts";
+import { featurePage, useSay, useSiteLang } from "./words.ts";
 
 /** How many steps the scene is scrolled through. */
 const STEPS = 3;
@@ -142,8 +142,9 @@ function drawnAs(row: HTMLElement, sheet: string[]): HTMLElement {
 }
 
 /**
- * A phone showing what it is for: the phone's app at its page (site/phone.html?at=), asked for once it is near the
- * screen, by the page's script (as the one beside the computer is): nothing of it is read while the page loads.
+ * A phone showing what it is for: the phone's app at its page, as built (featurePage) or run (site/phone.html?at=),
+ * asked for once it is near the screen, by the page's script (as the one beside the computer is): nothing of it is read
+ * while the page loads.
  */
 function FeaturePhone({ at, title }: { at: string; title: string }) {
   const lang = useSiteLang();
@@ -154,7 +155,8 @@ function FeaturePhone({ at, title }: { at: string; title: string }) {
     const near = new IntersectionObserver(([entry]) => {
       if (!entry?.isIntersecting) return;
       near.disconnect();
-      el.src = `${lang === "en" ? "/en/phone" : "/phone"}?at=${encodeURIComponent(at)}`;
+      const built = featurePage(at);
+      el.src = built ? `${lang === "en" ? "/en/" : "/"}${built}` : `${lang === "en" ? "/en/phone" : "/phone"}?at=${encodeURIComponent(at)}`;
     }, { rootMargin: "600px 0px" });
     near.observe(el);
     return () => near.disconnect();
