@@ -22,6 +22,9 @@ priv struct StepsOwn {
   focus : @sf.LiveMap[String, Int]
   marked : @signals.Signal[(String, String)]
   went : Map[String, Bool]
+  /// each history's first item as its list was last built, by the list's key, and the frame the pages before last came
+  /// in above it
+  tops : Map[String, (String, Int)]
   /// 只看收发, for every history (as the web keeps it): a signal, what each history's rows are worked out by
   only_io : @signals.Signal[Bool]
 }
@@ -35,6 +38,7 @@ let steps_own : StepsOwn = {
   focus: @sf.LiveMap::new(),
   marked: @signals.signal(("", ""), same=fn(a, b) { a == b }),
   went: {},
+  tops: {},
   only_io: @signals.signal(false, same=fn(a, b) { a == b }),
 }
 
@@ -47,6 +51,7 @@ fn steps_reset() -> Unit {
   steps_own.focus.clear()
   steps_own.marked.set(("", ""))
   steps_own.went.clear()
+  steps_own.tops.clear()
   steps_own.only_io.set(false)
 }
 
@@ -141,10 +146,28 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
     None => ()
   }
   let first = head.first
+  // the page before come in above the first item: rows came before it (the edge's row the list's first), what is in
+  // view stays where it is (sfbase chat_list's older_came); kept by its index, the reader is left at the top of the
+  // page come in, near its top again, and the page before that is asked for, and so on to the history's start
+  let (was, came_at) = steps_own.tops.get(lkey).unwrap_or(("", -1))
+  let mut came_at = came_at
+  if was != "" && was != first {
+    let (all, _) = steps_rows_of_topic(src, params, lkey)
+    match all.search_by(fn(i) { text(Some(i), "key") == was }) {
+      Some(at) if at > 0 => {
+        c.list_moved(lkey, 1, at)
+        came_at = c.frame_number()
+      }
+      _ => ()
+    }
+  }
+  steps_own.tops[lkey] = (first, came_at)
+  let came = came_at == c.frame_number()
   // the pages before as it nears its top (useLoadNear), or for an entry before what is loaded, once each (read back
   // by that alone: not built again as it scrolls)
+  // (where it stood as last laid out, not yet with the rows just come above: not near for them)
   let near = match c.list_info_as(lkey, fn(i) { i.map(fn(i) { i.first >= 0 && i.first <= 2 }) }) {
-    Some(info) => info.first >= 0 && info.first <= 2
+    Some(info) => !came && info.first >= 0 && info.first <= 2
     None => false
   }
   match (more && (near || steps_own.focus.contains(fk)), steps_own.older.get() != first) {
