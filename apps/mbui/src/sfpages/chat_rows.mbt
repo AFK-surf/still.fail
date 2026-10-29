@@ -452,7 +452,7 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : 
   let st = match steadies.get(row) {
     Some(s) => s
     None => {
-      let s = { key, words, mono, was: "", was_mono: false, at: -1.0e9 }
+      let s = { key, words, mono, was: "", was_mono: false, at: -1.0e9, asked: 0.0 }
       steadies[row] = s
       s
     }
@@ -476,18 +476,27 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : 
   }
   let k = swap.get()
   let style = if hot { now_words_hot } else { now_words }
-  c.box(style=now_room, fn() {
+  // the line short of what they asked of it last frame: it cut them where it ends, and cuts them there as they roll
+  let cut = match @motion.measured_size(c, "now-room/" + row) {
+    Some((w, _)) => w < st.asked - 0.5
+    None => false
+  }
+  let room = c.box(style=now_room, fn() {
     if k < 1.0 {
       // the one before rolled up out of its line as the new one rolls in under it, the two one over the other in a
       // window a line high: the line never empty, never two things' words in it at once (docs/motion.md rule 4; a
-      // crossfade had both there, the user 2026-10-29: 「会闪」 of the one out before the other in)
+      // crossfade had both there, the user 2026-10-29: 「会闪」 of the one out before the other in). The window as wide
+      // as the line has room for, as the words at rest are (the user 2026-10-29: 「activity 滚动的时候会超长」 of a
+      // window each step's whole width, past the screen's edge): the words in it whole and cut by its edge as it
+      // goes from the one's width to the other's, or cut short where the line ends, as at rest
       let line = c.text_size(Meta).1
       let from = c.words_across(st.was, style, mono=st.was_mono)
       let to = c.words_across(st.words, style, mono=st.mono)
       let across = from + (to - from) * k
-      let window = c.box(style=@ui.style(w=Fixed(across), h=Fixed(line), clip=true), fn() {
+      st.asked = across
+      let window = c.box(style=@ui.style(w=Cut, max_w=Fixed(across), h=Fixed(line), clip=true), fn() {
         let wide = if from > to { from } else { to }
-        let both = c.box(style=@ui.style(w=Fixed(wide)), fn() {
+        let both = c.box(style=@ui.style(w=if cut { Full } else { Fixed(wide) }), fn() {
           c.rich([@ui.span(st.was, mono=st.was_mono)], style~) |> ignore
           c.rich([@ui.span(st.words, mono=st.mono)], style~) |> ignore
         })
@@ -495,10 +504,11 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : 
       })
       ignore(window)
     } else {
+      st.asked = c.words_across(st.words, style, mono=st.mono)
       c.rich([@ui.span(st.words, mono=st.mono)], style~) |> ignore
     }
   })
-  |> ignore
+  @motion.measure(c, room, "now-room/" + row)
 }
 
 ///|
@@ -510,6 +520,8 @@ priv struct Steady {
   mut was : String
   mut was_mono : Bool
   mut at : Double
+  /// how wide the words asked their line to be, the last frame they were laid out
+  mut asked : Double
 }
 
 ///|
