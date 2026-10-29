@@ -495,12 +495,23 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
 /// packets sent and lost on it, and how much the station may send on it unacknowledged now and how often that was cut
 /// for loss), so a part of a video slow to come is seen here, the station's time apart from the way's. (Its stream told
 /// nothing as it was acknowledged until 2026-10-28, which this took for the device having stopped it: nothing was ever
-/// said, and a desktop app's images coming at 30 KB/s from ccvm for an hour left no word of how.)
+/// said, and a desktop app's images coming at 30 KB/s from ccvm for an hour left no word of how.) `ways` says every
+/// way the connection has, `*` the chosen one, with the packets sent on each while the reply went: a connection has a
+/// way through every relay (#2580), and with none chosen noq sends on all of them (2026-10-30: attachments at 11–50
+/// KB/s on a way of 70 ms, `way=?` on half of them, the chosen way alone not saying where the bytes went).
 function slowly(stream: Stream, conn: Connection, method: string, path: string, bytes: number, made: number, from: number) {
+  const before = sentOn(conn);
   void stream.stopped().then((code) => {
     const ms = wall.now() - from;
     if (typeof code === "number" || ms < SLOW_REPLY_MS) return;
-    const way = (conn.paths?.() ?? []).find((p) => p.selected);
+    const paths = conn.paths?.() ?? [];
+    const way = paths.find((p) => p.selected);
+    const after = sentOn(conn);
+    const ways = paths.map((p, i) => {
+      const [key, sent] = after[i]!;
+      const was = before.find(([k]) => k === key)?.[1] ?? 0;
+      return `${p.selected ? "*" : ""}${key} ${Math.round(p.rttMs)}ms +${sent - was}/${p.lostPackets} cwnd=${p.cwnd ?? "?"}`;
+    });
     log.info("mesh", "a reply went slowly", {
       route: `${method} ${route(path.split("?")[0] ?? path)}`,
       bytes,
@@ -514,8 +525,21 @@ function slowly(stream: Stream, conn: Connection, method: string, path: string, 
       lost: way?.lostPackets ?? null,
       cwnd: way?.cwnd ?? null,
       cuts: way?.congestionEvents ?? null,
+      ways: ways.join(", "),
     });
   }, () => {});
+}
+
+/// The packets sent so far on each of a connection's ways, by a key unique among them (its relay or address, `#n` for
+/// its n-th way there).
+function sentOn(conn: Connection): [string, number][] {
+  const seen = new Map<string, number>();
+  return (conn.paths?.() ?? []).map((p) => {
+    const at = p.relay ?? p.ip ?? "?";
+    const n = seen.get(at) ?? 0;
+    seen.set(at, n + 1);
+    return [n ? `${at}#${n}` : at, p.txPackets];
+  });
 }
 
 /// An answer onto its stream: its head line, then its body. A body that is a stream (GET /events) ends when the caller
