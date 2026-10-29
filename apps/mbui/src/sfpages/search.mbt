@@ -87,9 +87,10 @@ pub let search_out_ms : Double = @ui.move_page_ms
 pub let search_list_rise : Double = 56.0
 
 ///|
-/// The search's way up: 0 its field in the list, 1 at the top (Search.kt `up`, Home.kt `away`: the same times).
+/// The search's way up: 0 its field in the list, 1 at the top (Search.kt `up`, Home.kt `away`: the same times). Let go
+/// while not drawn (a chat opened from it over Home a while), it is where the search rests: up while open.
 fn search_up(c : @ui.Ctx) -> @motion.Anim {
-  @motion.anim(c, "search/up", 0.0, global=true)
+  @motion.anim(c, "search/up", if search.open && !search.leaving { 1.0 } else { 0.0 }, global=true)
 }
 
 ///|

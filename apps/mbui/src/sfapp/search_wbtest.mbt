@@ -137,6 +137,36 @@ test "a message found opens its chat at it, with the words to mark there" {
 }
 
 ///|
+test "a chat opened from the search, read a while, back: the search as it was left, its field up, what it found" {
+  let t = search_tester()
+  t.type_text("签名")
+  let cancel_at = t.shown_of("取消")
+  t.tap_text("签名证书续期")
+  assert_eq(app.nav.depth(), 2)
+  t.run_for(@ui.nav_push_ms)
+  // (long enough in the chat that what Home moves by, not drawn meanwhile, is let go)
+  for _ in 0..<200 {
+    t.draw()
+  }
+  t.back()
+  t.run_for(@ui.nav_push_ms)
+  t.draw()
+  assert_eq(app.nav.depth(), 1)
+  assert_true(@sfpages.search_opened())
+  assert_eq(@sfpages.finder_query(), "签名")
+  // its field still up with 取消 beside it, not back in the list with the words left in it (the list under the page
+  // then, the page taking its touches)
+  assert_eq(t.shown_of("取消"), cancel_at)
+  assert_eq(t.look_of("取消").map(fn(l) { l.2 }), Some(1.0))
+  // 取消: back to Home, its list's again
+  t.tap_text("取消")
+  t.run_for(@sfpages.search_out_ms)
+  t.draw()
+  assert_true(!@sfpages.search_opened())
+  assert_eq(@sfpages.finder_query(), "")
+}
+
+///|
 test "what else was found opens where it is: a file its reader, a service its chat and its page" {
   let t = search_tester()
   t.type_text("签名")
