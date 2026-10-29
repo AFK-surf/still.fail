@@ -786,17 +786,7 @@ impl Inner {
             .secret_key(key)
             .alpns(alpns)
             .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays.clone())) })
-            // Home on every relay at once, each path kept alive each second and given up after 3 s of silence: one
-            // connection to a station goes through every relay it is on, and on through another as one goes (the
-            // station's mesh addon: PATH_KEEP_ALIVE, PATH_IDLE).
-            .home_on_every_relay()
-            .transport_config(
-                QuicTransportConfig::builder()
-                    .congestion_controller_factory(Arc::new(cubic))
-                    .default_path_keep_alive_interval(std::time::Duration::from_secs(1))
-                    .default_path_max_idle_timeout(std::time::Duration::from_secs(3))
-                    .build(),
-            );
+            .transport_config(QuicTransportConfig::builder().congestion_controller_factory(Arc::new(cubic)).build());
         if a.get("relayOnly").and_then(Value::as_bool).unwrap_or(false) {
             builder = builder.clear_ip_transports();
         }
