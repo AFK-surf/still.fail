@@ -186,7 +186,7 @@ Station 的高级网络设置默认折叠在设置页底部；拥塞控制算法
 - 标志是一张脸：圆角方块上两只圆眼睛、两团腮红（#2047 以前那张应用图标的脸，眼睛稍大，16 px 也看得清）。浅色界面里是黑脸白眼睛（`#1C1D20`），深色界面里是白脸黑眼睛（`#F4F4F5`），腮红 `#F6BC9F` 不变。脸就是一台设备的屏幕：官网说的「One devices.」，插图里每台 station 都是这张脸。
 - 字标 still.fail 不变：Inter Bold，只有中间的点是橙色。官网标题「One devices.」的句号也是这个橙点。
 - 橙色只给这个点、「连起来」的地方（官网和插图里设备间的连线和流动的点、station 的灯）和测试版的胶带，别处不拿橙色当装饰。
-- 应用图标：正式版浅色黑脸、深色白脸；测试版（youdid.wtf）同一张脸，右上角斜贴一条橙色胶带，上面写 BETA（胶带在 x − y = 42 到 62 之间，Android 圆形遮罩里也完整，不碰眼睛）；调试版灰底。跟着系统深浅色换的地方：Mac 的 Dock（app 开着时，`AppIconDark.icns`，mbui 宿主的 `dock_icon`；关着时是黑脸）、iOS（asset catalog 的深色图标）、Android 桌面（`values-night`）、浏览器标签页（favicon 里的 `prefers-color-scheme`）。Windows、Linux、网页应用图标、浏览器扩展、still.fail Helper 只有黑脸。
+- 应用图标：正式版浅色黑脸、深色白脸；测试版（youdid.wtf）同一张脸，右上角斜贴一条橙色胶带，上面写 BETA（胶带在 x − y = 42 到 62 之间，Android 圆形遮罩里也完整，不碰眼睛）；调试版灰底。跟着系统深浅色换的地方：Mac（macOS 26 起由系统按深浅色换，app 开没开都一样：`mac-icon.swift --icon` 写的 Icon Composer 图标，actool 编进 `Assets.car`；更早的 macOS 只有黑脸）、iOS（asset catalog 的深色图标）、Android 桌面（`values-night`）、浏览器标签页（favicon 里的 `prefers-color-scheme`）。Windows、Linux、网页应用图标、浏览器扩展、still.fail Helper 只有黑脸。
 - Station 图标（底栏、侧栏、设置里那个圈）不跟着换：一段弧一台 station 的圆环，中间还是小机器人（2026-10-26 用户：「感觉 stations 那个 svg 不用换」）。
 - 空状态插图（2026-10-27 用户：「重新设计一下我们这些插图」）照官网的说法画：几台设备和连着它们的线，没有地面、背景色块。线一样粗，设备用墨色描边、上面的内容用浅灰；橙色只给连上的线（线上跑着的点）和 station 的灯，没连上的是灰色虚线，还没有的东西是虚线轮廓，断开的是拔开的插头。station 画成一台机器（圆角盒子），正面是那张脸，右上角一盏灯；睡着时闭眼、灯是灰点。没有插图的空状态只写字，不补画。全部由 `design/brand/illus.py` 生成。
 - 启动画面是静止的标志，不浮动。

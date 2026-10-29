@@ -8,10 +8,10 @@ A face, and words with one orange dot (2026-10-29; the rules for where it goes a
   site's "One devices.", every station in the illustrations.
 - **The wordmark**: still.fail (youdid.wtf on the test channel) in Inter Bold, tracked −0.02em, its period a round
   orange dot (`#E5704A`) drawn a little closer to the words it joins.
-- **The app icons**: the face on its app's tile. still.fail the black face, `-dark` its white one (the Dock while the
-  app runs on a dark system, iOS's dark icon, Android's values-night); youdid.wtf the same with an orange tape across
-  the top right corner, BETA on it (between x − y = 42 and 62 of the tile's 100: inside a launcher's round mask, clear
-  of the eyes); the debug build grey. `icon-<app>.svg` is the square a system rounds (iOS, a web app's icons),
+- **The app icons**: the face on its app's tile. still.fail the black face, `-dark` its white one (macOS 26's icon on a
+  dark system, from the Icon Composer document `mac-icon.swift --icon` writes; iOS's dark icon; Android's values-night);
+  youdid.wtf the same with an orange tape across the top right corner, BETA on it (between x − y = 42 and 62 of the
+  tile's 100: inside a launcher's round mask, clear of the eyes); the debug build grey. `icon-<app>.svg` is the square a system rounds (iOS, a web app's icons),
   `icon-mac-<app>.svg` macOS's (an 824 tile at 100 of 1024, its corner 185, its shadow).
 - **The illustrations** (web/public/illus-*.svg, made by `illus.py`): devices and the wires that join them, as the
   site draws its idea. One line weight; devices outlined in ink, what is on them in a lighter grey; orange only for a
