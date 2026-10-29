@@ -106,7 +106,6 @@ function MediaTile({ thing, keeper, onShow }: { thing: ChatThing; keeper: string
 /** A file, a link or a pull request, a row: its mark, what it is called and what else is known of it; 在对话中查看 at its end. */
 function ThingRow({ kind, thing, keeper, onShow }: { kind: Kind; thing: ChatThing; keeper: string; onShow(seq: number): void }) {
   const [open, setOpen] = useState(false);
-  const toast = useToast();
   const times = thing.count && thing.count > 1 ? `×${thing.count}` : "";
   const [name, meta, mark] = kind === "files"
     ? [thing.file!.name, [fileSize(thing.file!.size), thing.by], <File size={16} />]
@@ -129,10 +128,8 @@ function ThingRow({ kind, thing, keeper, onShow }: { kind: Kind; thing: ChatThin
         {kind === "files"
           ? <button type="button" className={css.rowOpen} onClick={() => setOpen(true)}>{words}</button>
           // (pointed at, the link's card: a pull request's as a message's link to it shows it)
-        : <LinkHover href={thing.url!} label={name} side="left"><a className={css.rowOpen} href={thing.url} target="_blank" rel="noopener noreferrer">{words}</a></LinkHover>}
-        {/* What is done with it at once: a link's copied, then 在对话中查看. */}
-      {thing.url && <IconButton label={t("common.link.copy")} icon={Copy} onClick={() => void navigator.clipboard.writeText(thing.url!).then(() => toast(t("common.link.copied")))} />}
-      <IconButton label={t("web-main.things.show")} icon={Chat} onClick={() => onShow(thing.seq)} />
+        : <LinkHover href={thing.url!} label={name} side="left" onShow={() => onShow(thing.seq)}><a className={css.rowOpen} href={thing.url} target="_blank" rel="noopener noreferrer">{words}</a></LinkHover>}
+        <IconButton label={t("web-main.things.show")} icon={Chat} onClick={() => onShow(thing.seq)} />
         {kind === "files" && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={thing.file!.owner ?? keeper} file={thing.file!} />}
       </div>
     </ThingMenu>

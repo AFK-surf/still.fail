@@ -42,7 +42,8 @@ pub fn link_peek(
 ///|
 /// A web link's card over what draws it (`id`) while the pointer rests on it, as the link's station reads it (a page's
 /// tile, a pull request's or an issue's card), opened at its `side` (under it, else beside a list it would cover: a
-/// chat's things'); nothing for what is no web link.
+/// chat's things'); nothing for what is no web link. Under the card what is done with the link at once (the user,
+/// 2026-10-29: 快捷操作放 hover 的卡片上): its address copied, and with `show` 在对话中查看.
 pub fn web_peek(
   c : @ui.Ctx,
   src : Source,
@@ -51,6 +52,7 @@ pub fn web_peek(
   words : String,
   id : Int,
   side? : @ui.Side = Bottom,
+  show? : (() -> Unit)? = None,
 ) -> Unit {
   if station == "" || !(href.has_prefix("https://") || href.has_prefix("http://")) {
     return
@@ -59,7 +61,40 @@ pub fn web_peek(
   if c.hovered(id) {
     ignore((src.topic)("linkPreview", link_params(station, href)))
   }
-  hover(c, "link-peek/" + id.to_string(), id, tile=!rich_link(href), side~, fn() { link_card(c, src, station, href, words) })
+  hover(c, "link-peek/" + id.to_string(), id, tile=!rich_link(href), side~, fn() {
+    link_card(c, src, station, href, words)
+    link_foot(c, href, show)
+  })
+  |> ignore
+}
+
+///|
+/// A web link's card's foot, as a file's (file_foot): at its end 在对话中查看 where `show` is given, then its address to
+/// copy (已复制 a moment once copied), in the card's bottom end corner.
+fn link_foot(c : @ui.Ctx, href : String, show : (() -> Unit)?) -> Unit {
+  c.box(style=peek_file_foot, fn() {
+    c.box(style=peek_ref, fn() {  }) |> ignore
+    match show {
+      Some(go) =>
+        if @sf.panel_button(c, "link-peek/show/" + href, @sf.t("web-main.things.show"), tone=Quiet) {
+          c.tell("link-peek/show", go)
+        }
+      None => ()
+    }
+    let key = "link-peek/copy/" + href
+    let said = copied_paths.contains(href) &&
+      (if @kit.after(c, key + "/said", true, @sf.copied_ms) {
+        copied_paths.remove(href)
+        false
+      } else {
+        true
+      })
+    if @sf.panel_button(c, key, @sf.t(if said { "common.copied" } else { "common.link.copy" }), tone=Quiet) {
+      c.copy_text(href)
+      @kit.after(c, key + "/said", false, @sf.copied_ms) |> ignore
+      copied_paths.add(href)
+    }
+  })
   |> ignore
 }
 
@@ -654,7 +689,7 @@ fn mono(c : @ui.Ctx, words : String, style : @ui.TextStyle) -> Unit {
 }
 
 ///|
-/// The paths copied from a card a moment ago (saying so: 已复制).
+/// The paths (and web links) copied from a card a moment ago (saying so: 已复制).
 // kept across runs: a moment's words, gone as the moment is
 let copied_paths : Set[String] = Set::new()
 

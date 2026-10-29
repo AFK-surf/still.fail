@@ -768,7 +768,7 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke, onLetter
         {/* Pointed at, its card (as a message's link to it); right clicked, 在对话中查看 and its link copied. */}
         {pulls.slice(0, PULLS_SHOWN).map((p) => (
           <ThingMenu key={p.key} thing={p} onShow={(seq) => { if (thread) onShow(thread.id, seq); }}>
-            <div className={css.infoPull}><LinkHover href={p.url!} label={pullTitle(p)} side="left"><div className={css.infoPull}><PanelRow icon={<PullMark pull={p} />} label={pullTitle(p)} end={`#${p.number}`} onClick={() => window.open(p.url!, "_blank", "noopener")} /></div></LinkHover></div>
+            <div className={css.infoPull}><LinkHover href={p.url!} label={pullTitle(p)} side="left" onShow={() => { if (thread) onShow(thread.id, p.seq); }}><div className={css.infoPull}><PanelRow icon={<PullMark pull={p} />} label={pullTitle(p)} end={`#${p.number}`} onClick={() => window.open(p.url!, "_blank", "noopener")} /></div></LinkHover></div>
           </ThingMenu>
         ))}
         {pulls.length > PULLS_SHOWN && <PanelRow icon={<List size={14} />} label={t("web-main.things.pullsAll", { n: pulls.length })} onClick={() => onThings("pulls")} />}
