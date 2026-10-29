@@ -5,7 +5,9 @@ import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 // side, its corner the button's in its foot); what is asked over the answer's buttons. Once decided, a line.
 export const card = style({ width: "fit-content", minWidth: "min(100%, 320px)", maxWidth: "min(100%, 560px)", boxSizing: "border-box", marginTop: "2px" });
 export const what = style({ display: "grid", gap: "2px", minWidth: "0" });
-export const title = style({ fontSize: vars.textUi, lineHeight: vars.leadingUi, fontWeight: "600", color: vars.text, overflowWrap: "anywhere" });
+export const title = style({ fontSize: vars.textUi, lineHeight: vars.leadingUi, fontWeight: "400", color: vars.text, overflowWrap: "anywhere" });
+/** The item's name in its title: heavier than the words around it, in place of quotes (docs/ui-panels.md 文字). */
+export const titleName = style({ fontWeight: "600" });
 /** The account a secret to keep is for, after its title. */
 export const sub = style({ marginLeft: "8px", fontWeight: "400", color: vars.muted });
 /** The command, one line of it (the rest in its tip). */
@@ -21,6 +23,8 @@ export const note = style({ margin: "0", fontSize: vars.textMeta, lineHeight: va
 export const outcome = style({
   display: "flex", alignItems: "center", gap: "8px", marginTop: "2px", fontSize: vars.textUi, lineHeight: vars.leadingUi, color: vars.muted,
 });
+/** The item's name in it: the strong ink, a weight heavier, in place of quotes. */
+export const name = style({ fontWeight: "500", color: vars.text });
 export const dot = style({
   width: "6px", height: "6px", borderRadius: "50%", flex: "none", background: vars.subtle,
   selectors: { "&[data-tone=granted]": { background: vars.green } },

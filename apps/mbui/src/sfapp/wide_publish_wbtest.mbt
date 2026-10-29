@@ -29,7 +29,7 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
   assert_true(t.find("已隐藏 1 处") is Some(_))
   // its messages as the chat's list draws them (the viewer's own at its end, an agent's vault request as it ended)
   assert_true(picture_mine_at_end(t), msg=t.words().map(fn(w) { w.0 }).join("|"))
-  assert_true(t.find("已允许使用「Axiom 查询 token」") is Some(_))
+  assert_true(t.find("已允许使用 Axiom 查询 token") is Some(_))
   // each message's box to tick in a column of its own before them (and before their pictures out in the margin)
   assert_true(ticks_before_words(t, @sf.message_avatar_reach), msg=t.all(Checkbox, label="放进图片").map(fn(n) { n.rect }).to_string())
   t.click(Button, label="复制图片")
@@ -51,6 +51,29 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
   // its button says so a moment, in words
   t.frame()
   assert_true(t.find("已复制") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+}
+
+///|
+test "wide: a vault request's outcome line has its dot in the middle of its words' line, its name set apart without quotes" {
+  reset()
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, fixture("chat-info")) }, w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.nav_push_ms)
+  t.click(Button, label="对话信息")
+  t.frame()
+  t.frame()
+  t.tap_text("分享图片")
+  t.frame()
+  t.frame()
+  // (the words as the theme sets a meta line: the dot by that line's middle, not by a line of a height of its own; the
+  // chat's own line under the picture's too)
+  let lines = t.text_runs().filter(fn(r) { r.text.contains("本对话内") })
+  assert_true(lines.length() > 0 && lines.all(fn(r) { r.text == "已允许使用 Axiom 查询 token · 本对话内" }), msg="\{lines}")
+  for r in lines {
+    let mid = (r.top + r.bottom) / 2.0
+    let dots = t.boxes().filter(fn(b) { b.w == 6.0 && b.h == 6.0 && b.x < r.x0 && b.y >= r.top - 6.0 && b.y <= r.bottom })
+    assert_eq(dots.map(fn(b) { b.y + b.h / 2.0 }), [mid])
+  }
 }
 
 ///|
