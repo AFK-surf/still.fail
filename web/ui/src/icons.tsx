@@ -261,6 +261,14 @@ export function More(props: IconProps) {
   return <Svg {...props}><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none" /></Svg>;
 }
 
+export function MouseLeft(props: IconProps) {
+  return <Svg {...props}><rect x="6" y="3" width="12" height="18" rx="6" /><path d="M6 10.5H18 M12 3V10.5" /><path d="M11.1 4.1V9.6H6.9V9A5.1 5.1 0 0 1 11.1 4.1Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
+export function MouseRight(props: IconProps) {
+  return <Svg {...props}><rect x="6" y="3" width="12" height="18" rx="6" /><path d="M6 10.5H18 M12 3V10.5" /><path d="M12.9 4.1V9.6H17.1V9A5.1 5.1 0 0 0 12.9 4.1Z" fill="currentColor" stroke="none" /></Svg>;
+}
+
 export function Move(props: IconProps) {
   return <Svg {...props}><path d="M12 3.5V20.5 M3.5 12H20.5 M9.5 6L12 3.5L14.5 6 M9.5 18L12 20.5L14.5 18 M6 9.5L3.5 12L6 14.5 M18 9.5L20.5 12L18 14.5" /></Svg>;
 }
@@ -617,6 +625,8 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "monitor": Monitor,
   "moon": Moon,
   "more": More,
+  "mouse-left": MouseLeft,
+  "mouse-right": MouseRight,
   "move": Move,
   "num-1": Num1,
   "num-2": Num2,

@@ -529,6 +529,8 @@ android-misc.screen.key.command
 android-misc.screen.key.control
 android-misc.screen.key.down
 android-misc.screen.key.left
+android-misc.screen.key.mouseLeft
+android-misc.screen.key.mouseRight
 android-misc.screen.key.option
 android-misc.screen.key.right
 android-misc.screen.key.shift
@@ -1779,7 +1781,9 @@ web-pages.screen.combo.switchApp
 web-pages.screen.combo.switchWindow
 web-pages.screen.combo.taskManager
 web-pages.screen.combos
+web-pages.screen.keys
 web-pages.screen.leave
+web-pages.screen.mouseButtons
 web-pages.screen.panel
 web-pages.screen.quality
 web-pages.screen.quality.auto

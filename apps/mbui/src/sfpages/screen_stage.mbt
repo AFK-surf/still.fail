@@ -550,8 +550,9 @@ fn screen_gestures(
       d.take_move() |> ignore
       let x = d.x - ox
       let y = d.y - oy
-      // down now, or down and up since the last frame (a tap)
-      if (d.down || tapped) && !g.down {
+      // down now, or down and up since the last frame (a tap); not a press on what lies over the stage (the folded
+      // tools, the mouse's buttons, the keys row over its foot), which is theirs alone
+      if (d.down || tapped) && !g.down && c.press_within(stage) {
         g.down = true
         g.presses += 1
         g.drives = s.driving()
@@ -716,6 +717,8 @@ fn screen_gestures(
               if g.pad {
                 sent.push(pointer_input("down", u.pad.at(), btn_primary))
                 sent.push(pointer_input("up", u.pad.at(), btn_primary))
+                // a click felt, as the mouse's buttons are
+                buzz.push(KeyboardTap)
                 g.taps += 1
                 g.tap_open = true
                 g.tx = g.sx
@@ -725,6 +728,7 @@ fn screen_gestures(
                   Some(at) => {
                     sent.push(pointer_input("down", at, btn_primary))
                     sent.push(pointer_input("up", at, btn_primary))
+                    buzz.push(KeyboardTap)
                   }
                   None => ()
                 }

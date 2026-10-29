@@ -29,10 +29,11 @@ priv struct ScreenUi {
   mut in_tab : Bool
   mut tools_open : Bool
   /// how far the folded tools were dragged from their corner (so they cover another part of the screen)
-  mut tools_dx : Double
-  mut tools_dy : Double
-  /// where they were as a drag of them began
-  mut tools_from : (Double, Double)?
+  tools_moved : Afloat
+  /// how far the mouse's buttons were dragged from theirs
+  mouse_moved : Afloat
+  /// 鼠标左右键 as last chosen in 控制中心, before the prefs say so (none: as they say)
+  mut mouse_set : Bool?
   /// the display's scale last asked for (0 none): asked once, not again each frame its pick still shows it
   mut scale_asked : Int
   /// the display's resolution last asked for (0 wide none): asked once, as the scale is
@@ -58,6 +59,8 @@ priv struct ScreenUi {
   mut reading : @ui.ClipboardRead?
   /// the modifiers held from the keys row as each key went down (by its code), for it to go up with them too
   down_with : Map[String, Int]
+  /// the press (by the frame it went down in) a mouse button last buzzed for, so it buzzes once as it goes down
+  mut buzzed : Int
   /// the copies made on the screen put on the device's clipboard
   mut copies : Int
   /// the device kept awake, the window sideways, a phone let turn as held: as last told to the host
@@ -99,9 +102,9 @@ fn screen_ui(key : String) -> ScreenUi {
         fulled: false,
         in_tab: false,
         tools_open: false,
-        tools_dx: 0.0,
-        tools_dy: 0.0,
-        tools_from: None,
+        tools_moved: afloat_new(),
+        mouse_moved: afloat_new(),
+        mouse_set: None,
         scale_asked: 0,
         size_asked: (0, 0),
         saying: false,
@@ -118,6 +121,7 @@ fn screen_ui(key : String) -> ScreenUi {
         drop_to: None,
         reading: None,
         down_with: {},
+        buzzed: -1,
         copies: 0,
         awake: false,
         sideways_told: false,
@@ -283,6 +287,9 @@ pub fn screen_page(
           c.layer(fn() { c.box(style=screen_foot_center.then(@sf.sides_clear(@ui.Space::S2.px())), fn() { keys_capsule(c, s, u) }) |> ignore })
           |> ignore
         }
+        if !typing && mouse_shown(s, u) {
+          c.layer(fn() { mouse_float(c, s, u) }) |> ignore
+        }
         c.layer(fn() {
           c.box(style=screen_top_end.then(@sf.sides_clear(@ui.Space::S3.px())), fn() { full_tools(c, s, u, typing, catcher, close) }) |> ignore
         })
@@ -308,6 +315,9 @@ pub fn screen_page(
           if s.driving() && typing {
             c.layer(fn() { c.box(style=screen_foot_center, fn() { keys_capsule(c, s, u) }) |> ignore })
             |> ignore
+          } else if mouse_shown(s, u) {
+            // else the mouse's buttons, floating over its foot's corner
+            c.layer(fn() { mouse_float(c, s, u) }) |> ignore
           }
         })
         |> ignore
@@ -862,21 +872,7 @@ fn full_tools(
   close : () -> Unit,
 ) -> Unit {
   let capsule = c.id("screen-tools-capsule")
-  // kept inside the window as it was last laid out (opened longer, or the window turned)
-  // (laid out moved as far as it was drawn: its corner's place is that less how far)
-  let (laid_dx, laid_dy) = (u.tools_dx, u.tools_dy)
-  let keep = fn() {
-    match c.laid_rect(capsule) {
-      Some((x, y, w, h)) => {
-        let (ww, wh) = c.window_size()
-        let x0 = x - laid_dx
-        let y0 = y - laid_dy
-        u.tools_dx = dmax(-x0, dmin(ww - w - x0, u.tools_dx))
-        u.tools_dy = dmax(-y0, dmin(wh - h - y0, u.tools_dy))
-      }
-      None => ()
-    }
-  }
+  let (laid_dx, laid_dy) = (u.tools_moved.dx, u.tools_moved.dy)
   // a round button 4 in from the capsule's edge: its corner 20 + 4
   c.box(style=full_tools_box, id=capsule, tx=laid_dx, ty=laid_dy, fn() {
     let (icon, label) = if u.tools_open {
@@ -885,27 +881,7 @@ fn full_tools(
       ("more", @sf.t("android-misc.screen.tools"))
     }
     let id = c.id("screen-tools")
-    c.drag_on(id, axis=Free)
-    match c.drag_of(id) {
-      Some(d) => {
-        if d.moving {
-          let (fx, fy) = match u.tools_from {
-            Some(f) => f
-            None => {
-              let f = (u.tools_dx, u.tools_dy)
-              u.tools_from = Some(f)
-              f
-            }
-          }
-          u.tools_dx = fx + d.x - d.x0
-          u.tools_dy = fy + d.y - d.y0
-        } else {
-          u.tools_from = None
-        }
-        d.take_end() |> ignore
-      }
-      None => ()
-    }
+    afloat_dragged(c, u.tools_moved, id)
     if round_button(c, "screen-tools", icon, label, on=u.tools_open) {
       u.tools_open = !u.tools_open
     }
@@ -925,7 +901,7 @@ fn full_tools(
     }
   })
   |> ignore
-  keep()
+  afloat_kept(c, u.tools_moved, capsule, laid_dx, laid_dy)
 }
 
 ///|
@@ -1021,13 +997,21 @@ priv struct RowKey {
   icon : String
   /// where the row has not the room for every key: the k-th to leave it for its ⋯ (Ctx::box `drop`; 0: never)
   drop : Int
+  /// a mouse button (btn_primary, btn_secondary) clicked where the pointer is, instead of a key; 0 a key
+  button : Int
 }
 
 ///|
 fn screen_row_keys() -> Array[RowKey] {
-  let k = fn(label, name, key, code, mod_, icon, drop) -> RowKey { { label, name, key, code, mod_, icon, drop } }
-  // (short of room the least used leave first: ⌥, ⌃, ⇧, Tab, ⌘, then up and down, left and right last; Esc stays)
+  let k = fn(label, name, key, code, mod_, icon, drop) -> RowKey { { label, name, key, code, mod_, icon, drop, button: 0 } }
+  let b = fn(name, icon, button) -> RowKey {
+    { label: "", name, key: "", code: "", mod_: 0, icon, drop: 0, button }
+  }
+  // (short of room the least used leave first: ⌥, ⌃, ⇧, Tab, ⌘, then up and down, left and right last; the mouse's
+  // buttons and Esc stay)
   [
+    b(@sf.t("android-misc.screen.key.mouseLeft"), "mouse-left", btn_primary),
+    b(@sf.t("android-misc.screen.key.mouseRight"), "mouse-right", btn_secondary),
     k("Esc", "Esc", "Escape", "Escape", 0, "", 0),
     k("Tab", "Tab", "Tab", "Tab", 0, "", 4),
     k("⌘", @sf.t("android-misc.screen.key.command"), "", "", mod_meta, "", 5),
@@ -1042,12 +1026,14 @@ fn screen_row_keys() -> Array[RowKey] {
 }
 
 ///|
-/// The keys a phone's keyboard has not (Esc, Tab, the arrows) and the modifiers (⌘ ⌃ ⌥ ⇧: held, shown solid, for the
-/// next key, typed or here), in a row. Where it has not the room for them all, the least used leave it (RowKey's
+/// The mouse's two buttons (clicked where the pointer is: the trackpad's, else the screen's own), the keys a phone's
+/// keyboard has not (Esc, Tab, the arrows) and the modifiers (⌘ ⌃ ⌥ ⇧: held, shown solid, for the next key or click,
+/// typed or here), in a row. Where it has not the room for them all, the least used leave it (RowKey's
 /// `drop`; a modifier held never), and a ⋯ key at its end turns the row to them, as a keyboard turns to its other
 /// keys (lit while turned; pressed again, back): nothing scrolled, nothing wrapped, nothing over the keyboard.
 fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
-  let keys = screen_row_keys()
+  let mouse = mouse_shown(s, u)
+  let keys = screen_row_keys().filter(fn(k) { k.button == 0 || mouse })
   let held = fn(k : RowKey) { k.mod_ != 0 && (u.held.mods & k.mod_) != 0 }
   let leaves = fn(k : RowKey) { if held(k) { 0 } else { k.drop } }
   let slot = fn(k : RowKey) { c.id("screen-key-slot/" + s.view + "/" + k.name) }
@@ -1073,9 +1059,14 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
       }
     })
     c.semantics(i, Button, id~, label=k.name, pressed=on, actions=[Activate])
+    if k.button != 0 {
+      button_felt(c, u, id, k.button, c.clicked(id))
+    }
     if c.clicked(id) {
       if k.mod_ != 0 {
         u.held.toggle(k.mod_)
+      } else if k.button != 0 {
+        button_clicked(c, s, u, k.button)
       } else {
         let mods = u.held.take()
         let n = c.frame_number()
@@ -1106,6 +1097,144 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     }
   })
   |> ignore
+}
+
+///|
+/// Mouse button `button` clicked where the pointer is (the trackpad's, else the screen's own), the modifiers the keys
+/// row holds round it.
+fn button_clicked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, button : Int) -> Unit {
+  let mods = u.held.take()
+  let at = pointer_now(s, u).unwrap_or(u.pad.at())
+  let n = c.frame_number()
+  c.tell("screen-click/" + s.view + "/\{button}/\{n}", fn() { click(fn(j) { s.input(s.src, j) }, at, button, mods) })
+}
+
+///|
+/// A mouse button `id` felt as it goes down (the click itself goes as it is let go; a tap down and up between two
+/// frames, felt as it is clicked): once a press, the right button as a context click, the left as a key.
+fn button_felt(c : @ui.Ctx, u : ScreenUi, id : Int, button : Int, clicked : Bool) -> Unit {
+  let p = c.press()
+  if !clicked && !(p.down && c.press_within(id)) {
+    return
+  }
+  let at = p.frame
+  if u.buzzed != at {
+    u.buzzed = at
+    let kind : @ui.Haptic = if button == btn_secondary { ContextClick } else { KeyboardTap }
+    c.after_build("screen-felt/\{at}", fn() { @ui.haptic(kind) })
+  }
+}
+
+///|
+/// Whether the mouse's buttons show while driving (prefs `screenMouse`, 控制中心's 鼠标左右键): the keys row's two, and
+/// their floating pair in 全屏 and sideways.
+fn mouse_shown(s : ScreenSess, u : ScreenUi) -> Bool {
+  s.driving() &&
+  (match u.mouse_set {
+    Some(on) => on
+    None => text((s.src.topic)("prefs", {}).value, "screenMouse") != "off"
+  })
+}
+
+///|
+/// 左键 and 右键 side by side over the frame's foot corner (全屏 and sideways, the keyboard down: the keys row is not
+/// there), each a round button floating on its own, the two dragged anywhere together by either, as the folded tools
+/// are.
+fn mouse_float(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  let capsule = c.id("screen-mouse-capsule")
+  let (laid_dx, laid_dy) = (u.mouse_moved.dx, u.mouse_moved.dy)
+  c.box(style=screen_foot_end.then(@sf.sides_clear(@ui.Space::S3.px())), fn() {
+    c.box(style=mouse_pair_box, id=capsule, tx=laid_dx, ty=laid_dy, fn() {
+      afloat_dragged(c, u.mouse_moved, capsule)
+      for b in [
+        ("screen-mouse-left", "mouse-left", "android-misc.screen.key.mouseLeft", btn_primary),
+        ("screen-mouse-right", "mouse-right", "android-misc.screen.key.mouseRight", btn_secondary),
+      ] {
+        let id = c.id(b.0)
+        let label = @sf.t(b.2)
+        let i = c.box(style=mouse_button_box, id~, fn() {
+          @sf.icon(c, b.1, size=round_icon, color=c.color(Fg)) |> ignore
+        })
+        c.semantics(i, Button, id~, label~, actions=[Activate])
+        let clicked = c.clicked(id)
+        button_felt(c, u, id, b.3, clicked)
+        if clicked {
+          button_clicked(c, s, u, b.3)
+        }
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+  afloat_kept(c, u.mouse_moved, capsule, laid_dx, laid_dy)
+}
+
+///|
+/// How far a floating capsule (the folded tools, the mouse's buttons) was dragged from its corner, and from where a
+/// drag of it began.
+priv struct Afloat {
+  mut dx : Double
+  mut dy : Double
+  mut from : (Double, Double)?
+  /// the window's size as it was last built: its layout before is of another window once it changes
+  mut win : (Double, Double)
+}
+
+///|
+fn afloat_new() -> Afloat {
+  { dx: 0.0, dy: 0.0, from: None, win: (0.0, 0.0) }
+}
+
+///|
+/// Drag area `id` moving the capsule with the finger (a press on it that does not move is a tap of what is under it).
+fn afloat_dragged(c : @ui.Ctx, f : Afloat, id : Int) -> Unit {
+  c.drag_on(id, axis=Free)
+  match c.drag_of(id) {
+    Some(d) => {
+      if d.moving {
+        let (fx, fy) = match f.from {
+          Some(at) => at
+          None => {
+            let at = (f.dx, f.dy)
+            f.from = Some(at)
+            at
+          }
+        }
+        f.dx = fx + d.x - d.x0
+        f.dy = fy + d.y - d.y0
+      } else {
+        f.from = None
+      }
+      d.take_end() |> ignore
+    }
+    None => ()
+  }
+}
+
+///|
+/// The capsule kept inside the window as it was last laid out (moved past its edge, opened longer): laid out moved as
+/// far as it was drawn (`laid_dx`, `laid_dy`), its corner's place is that less how far. The window turned, back to its
+/// corner.
+fn afloat_kept(c : @ui.Ctx, f : Afloat, capsule : Int, laid_dx : Double, laid_dy : Double) -> Unit {
+  // (the window turned or resized: back to its corner, where it is laid out in the window as it is now; what was
+  // laid out before is of another window)
+  let now = c.window_size()
+  if f.win != now {
+    f.win = now
+    f.dx = 0.0
+    f.dy = 0.0
+    return
+  }
+  match c.laid_rect(capsule) {
+    Some((x, y, w, h)) => {
+      let (ww, wh) = now
+      let x0 = x - laid_dx
+      let y0 = y - laid_dy
+      f.dx = dmax(-x0, dmin(ww - w - x0, f.dx))
+      f.dy = dmax(-y0, dmin(wh - h - y0, f.dy))
+    }
+    None => ()
+  }
 }
 
 ///|

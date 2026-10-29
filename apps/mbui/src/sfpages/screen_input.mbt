@@ -132,6 +132,15 @@ fn stroke(send : (Json) -> Unit, key : String, code : String, mods : Int) -> Uni
 }
 
 ///|
+/// A mouse button pressed and let go at `at`, the keys of `mods` held round it (⌘-click, ⇧-click).
+fn click(send : (Json) -> Unit, at : (Double, Double), button : Int, mods : Int) -> Unit {
+  mods_round(send, mods, "down")
+  send(pointer_input("down", at, button))
+  send(pointer_input("up", at, button))
+  mods_round(send, mods, "up")
+}
+
+///|
 /// The keys held on this device (@ui.mods_held: mod_shift_key, mod_ctrl, mod_alt, mod_cmd) as the station takes them.
 fn mods_of_held(held : Int) -> Int {
   (if (held & @ui.mod_alt) != 0 { mod_alt } else { 0 }) |

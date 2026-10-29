@@ -420,6 +420,15 @@ fn center_panel(
     @sf.panel_group(c, label=@sf.t("web-pages.screen.combos"), fn() {
       combo_tiles(c, s, combos_for(screen_os(src, s.station)), done)
     })
+    @sf.panel_group(c, label=@sf.t("web-pages.screen.keys"), fn() { key_tiles(c, s, u) })
+    // the mouse's buttons shown or not (the keys row's, the floating pair), kept on this device
+    @sf.panel_group(c, fn() {
+      let on = mouse_shown(s, u)
+      if @sf.switch_row(c, "screen-mouse-shown", @sf.t("web-pages.screen.mouseButtons"), on) != on {
+        u.mouse_set = Some(!on)
+        prefs_chosen(c, s, "screenMouse", if on { "off" } else { "" })
+      }
+    })
   }
   if s.phase() == "live" {
     @sf.panel_group(c, fn() {
@@ -581,6 +590,61 @@ fn combo_tiles(c : @ui.Ctx, s : ScreenSess, combos : Array[Combo], done : () -> 
             let n = c.frame_number()
             c.tell("screen-combo/" + s.view + "/\{n}", fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, k.mods) })
             done()
+          }
+        }
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The keys a phone's keyboard and the keys row have not (F1–F12, Delete, Home, End, Page Up and Down), as on a
+/// keyboard: its name, what it sends.
+// kept across runs: a value (nothing of it changes)
+let screen_panel_keys : Array[(String, String)] = [
+  ("F1", "F1"),
+  ("F2", "F2"),
+  ("F3", "F3"),
+  ("F4", "F4"),
+  ("F5", "F5"),
+  ("F6", "F6"),
+  ("F7", "F7"),
+  ("F8", "F8"),
+  ("F9", "F9"),
+  ("F10", "F10"),
+  ("F11", "F11"),
+  ("F12", "F12"),
+  ("Del", "Delete"),
+  ("Home", "Home"),
+  ("End", "End"),
+  ("PgUp", "PageUp"),
+  ("PgDn", "PageDown"),
+]
+
+///|
+/// The keys of `screen_panel_keys` as small tiles, six to a row, a tap sending the key down and up with the modifiers
+/// the keys row holds; 控制中心 stays open (F5, Page Down… are pressed again and again).
+fn key_tiles(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  let keys = screen_panel_keys
+  let per = 6
+  c.box(style=tiles_box, fn() {
+    for r in 0..<((keys.length() + per - 1) / per) {
+      c.box(style=tiles_row, fn() {
+        for i in (r * per)..<(r * per + per) {
+          if i >= keys.length() {
+            c.box(style=key_tile_gap, fn() {  }) |> ignore
+            continue
+          }
+          let (label, key) = keys[i]
+          let id = c.id("screen-panel-key/" + key)
+          let t = c.box(style=key_tile_box, id~, fn() { c.text(label, style=key_tile_words) |> ignore })
+          c.semantics(t, Button, id~, label~, actions=[Activate])
+          if c.clicked(id) {
+            let mods = u.held.take()
+            let n = c.frame_number()
+            c.tell("screen-panel-key/" + s.view + "/\{n}", fn() { stroke(fn(j) { s.input(s.src, j) }, key, key, mods) })
           }
         }
       })

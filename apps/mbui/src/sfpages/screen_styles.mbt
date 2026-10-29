@@ -35,6 +35,23 @@ let screen_top_center : @ui.Style = @ui.css("w=Full pt=S3 align=ACenter")
 let screen_foot_center : @ui.Style = @ui.css("w=Full h=Full p=S2 align=ACenter justify=JEnd")
 
 ///|
+/// 左键 and 右键 side by side, 8 apart, nothing drawn round them: moved together.
+// kept across runs: a value (no field of it changes)
+let mouse_pair_box : @ui.Style = @ui.css("row gap=S2 align=ACenter")
+
+///|
+/// One of them, floating on its own: round, 44 (a press's least), on the floating ground (the ink at 8% pressed).
+// kept across runs: a value (no field of it changes)
+let mouse_button_box : @ui.Style = @ui.css(
+  #|w=S11 h=S11 radius=Full bg=Floating shadow=Sm align=ACenter justify=JCenter pressed{bg=Hover}
+)
+
+///|
+/// Over the frame's foot, at its end, 12 in (the mouse's buttons, 全屏 and sideways).
+// kept across runs: a value (no field of it changes)
+let screen_foot_end : @ui.Style = @ui.css("w=Full h=Full p=S3 align=AEnd justify=JEnd")
+
+///|
 /// Over the frame's top right corner, 12 in (全屏's folded tools).
 // kept across runs: a value (no field of it changes)
 let screen_top_end : @ui.Style = @ui.css("w=Full p=S3 align=AEnd")
@@ -619,6 +636,21 @@ let tile_box : @ui.Style = @ui.style(w=@sf.grow).then(
 ///|
 // kept across runs: a value (no field of it changes)
 let tile_gap : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("h=S16"))
+
+///|
+/// A key's tile in 常用键: its name alone, 44 high, its corner 12.
+// kept across runs: a value (no field of it changes)
+let key_tile_box : @ui.Style = @ui.style(w=@sf.grow).then(
+  @ui.css("h=S11 radius=Xl bg=Tint align=ACenter justify=JCenter pressed{bg=Hover}"),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let key_tile_gap : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("h=S11"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let key_tile_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg, weight=Semibold, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

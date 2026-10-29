@@ -378,6 +378,8 @@ test "live frames are drawn and acknowledged; driven directly a tap clicks, a pr
   assert_eq(kind_of_input(ins[1]), "up")
   assert_true(close_to(number(Some(ins[0]), "x"), 0.25))
   assert_true(close_to(number(Some(ins[0]), "y"), 0.75))
+  // felt, as the mouse's buttons are
+  assert_eq(r.t.haptics(), [@ui.KeyboardTap])
   // held: a right click, the device buzzing
   let (hx, hy) = r.at(0.5, 0.5)
   r.t.press_at(hx, hy)
@@ -388,7 +390,7 @@ test "live frames are drawn and acknowledged; driven directly a tap clicks, a pr
   assert_eq(kind_of_input(held[0]), "down")
   assert_eq(number(Some(held[0]), "buttons"), 2.0)
   assert_true(close_to(number(Some(held[0]), "x"), 0.5))
-  assert_eq(r.t.haptics(), [@ui.LongPress])
+  assert_eq(r.t.haptics(), [@ui.KeyboardTap, @ui.LongPress])
   // a drag: down where it began, moves, up where it ended
   let (ax, ay) = r.at(0.2, 0.5)
   let (bx, by) = r.at(0.6, 0.5)
@@ -1058,5 +1060,118 @@ test "this machine's own display is not opened from here: said so, without 重�
   let r = screen_rig(screen="desktop", here="ws-1/st-2")
   assert_eq(r.told("screen.view").length(), 1)
   r.t.run_for(@sf.later_ms)
+  screen_done(r.t)
+}
+
+///|
+test "the keys row's mouse buttons click where the pointer is: 右键 a right click, 左键 a left one with ⌘ held round it" {
+  let r = screen_rig()
+  r.state("live", others=[], more={ "kind": "desktop" })
+  r.config()
+  r.frame(1000.0)
+  assert_true(r.sess().pad(r.sess().src))
+  // 右键: down and up of the secondary button where the trackpad's pointer is (the middle)
+  r.press_key(tr("android-misc.screen.key.mouseRight"))
+  let right = r.inputs()
+  assert_eq(right.length(), 2)
+  assert_eq(kind_of_input(right[0]), "down")
+  assert_eq(number(Some(right[0]), "buttons"), btn_secondary.to_double())
+  assert_true(close_to(number(Some(right[0]), "x"), 0.5))
+  assert_true(close_to(number(Some(right[0]), "y"), 0.5))
+  assert_eq(kind_of_input(right[1]), "up")
+  // felt as it went down
+  assert_eq(r.t.haptics(), [@ui.ContextClick])
+  // ⌘ held, then 左键: ⌘ down, the click, ⌘ up; ⌘ let go after it
+  r.press_key("Command")
+  r.press_key(tr("android-misc.screen.key.mouseLeft"))
+  let left = r.inputs()[2:].to_array()
+  assert_eq(left.length(), 4)
+  assert_eq(text(Some(left[0]), "key"), "Meta")
+  assert_eq(kind_of_input(left[0]), "down")
+  assert_eq(kind_of_input(left[1]), "down")
+  assert_eq(number(Some(left[1]), "buttons"), btn_primary.to_double())
+  assert_eq(kind_of_input(left[2]), "up")
+  assert_eq(text(Some(left[3]), "key"), "Meta")
+  assert_eq(kind_of_input(left[3]), "up")
+  // ⌘ let go after it: the next click goes alone
+  r.press_key(tr("android-misc.screen.key.mouseLeft"))
+  assert_eq(r.inputs().length(), 8)
+  screen_done(r.t)
+}
+
+///|
+test "全屏 and sideways, driving: 左键 and 右键 in a capsule of their own over the frame's foot corner, dragged anywhere; a tap clicks where the pointer is" {
+  let r = screen_rig()
+  r.live(others=[])
+  // sideways: over the frame's corner, without the keyboard
+  r.t.resize(844.0, 390.0)
+  r.t.draw()
+  r.tap_label(tr("android-misc.screen.key.mouseRight"))
+  let right = r.inputs()
+  assert_eq(right.length(), 2)
+  assert_eq(number(Some(right[0]), "buttons"), btn_secondary.to_double())
+  // 全屏: the same capsule, apart from the folded tools (not opened)
+  r.t.resize(390.0, 844.0)
+  r.t.draw()
+  open_center(r)
+  r.t.tap_text("全屏")
+  r.t.run_for(@kit.presence_out_ms + @sf.later_ms)
+  r.t.resize(844.0, 390.0)
+  r.t.draw()
+  assert_true(r.ui().full)
+  assert_true(r.labelled("退出全屏") is None)
+  r.tap_label(tr("android-misc.screen.key.mouseLeft"))
+  let left = r.inputs()[2:].to_array()
+  assert_eq(left.length(), 2)
+  assert_eq(number(Some(left[0]), "buttons"), btn_primary.to_double())
+  // each felt once, as it went down
+  assert_eq(r.t.haptics(), [@ui.ContextClick, @ui.KeyboardTap])
+  // held down, felt before it is let go, and not again as it is
+  let (hx, hy) = r.labelled(tr("android-misc.screen.key.mouseLeft")).unwrap()
+  r.t.press_at(hx, hy)
+  r.t.draw()
+  assert_eq(r.t.haptics().length(), 3)
+  assert_eq(r.inputs().length(), 4)
+  r.t.release(hx, hy)
+  r.t.draw()
+  assert_eq(r.t.haptics().length(), 3)
+  assert_eq(r.inputs().length(), 6)
+  assert_eq(r.t.squeeze_faults(), [])
+  // dragged by a button of it: moved with the finger, no click sent
+  let (rx, ry) = r.labelled(tr("android-misc.screen.key.mouseRight")).unwrap()
+  r.t.drag(rx, ry, rx - 300.0, ry - 150.0)
+  r.t.draw()
+  assert_eq(r.inputs().length(), 6)
+  let (mx, my) = r.labelled(tr("android-misc.screen.key.mouseRight")).unwrap()
+  assert_true((mx - (rx - 300.0)).abs() < 2.0 && (my - (ry - 150.0)).abs() < 2.0, msg="moved to \{mx}, \{my}")
+  // only looking: none
+  r.state("live", control=false)
+  r.t.draw()
+  assert_true(r.labelled(tr("android-misc.screen.key.mouseLeft")) is None)
+  screen_done(r.t)
+}
+
+///|
+test "鼠标左右键 in 控制中心 hides the mouse's buttons (the keys row's and the floating pair) and keeps it on the device; on again, back" {
+  let r = screen_rig()
+  r.live(others=[])
+  assert_true(r.labelled(tr("android-misc.screen.key.mouseLeft")) is Some(_))
+  open_center(r)
+  r.t.click(Switch, label=tr("web-pages.screen.mouseButtons"))
+  r.t.draw()
+  assert_eq(text(r.told("prefs.set").last(), "screenMouse"), "off")
+  shut(r)
+  assert_true(r.labelled(tr("android-misc.screen.key.mouseLeft")) is None)
+  r.t.resize(844.0, 390.0)
+  r.t.draw()
+  assert_true(r.labelled(tr("android-misc.screen.key.mouseRight")) is None)
+  r.t.resize(390.0, 844.0)
+  r.t.draw()
+  open_center(r)
+  r.t.click(Switch, label=tr("web-pages.screen.mouseButtons"))
+  r.t.draw()
+  assert_true(r.told("prefs.set").last() is Some(Object(o)) && o.get("screenMouse") == Some(Json::null()))
+  shut(r)
+  assert_true(r.labelled(tr("android-misc.screen.key.mouseLeft")) is Some(_))
   screen_done(r.t)
 }

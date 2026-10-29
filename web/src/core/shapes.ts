@@ -5593,6 +5593,11 @@ export interface PrefsView {
 	 */
 	screenCodec?: string;
 	/**
+	 * Whether the mouse's left and right buttons show over a station's screen driven by touch (the keys row's,
+	 * and the floating pair in 全屏 and sideways): `off` hidden, or (none) shown.
+	 */
+	screenMouse?: string;
+	/**
 	 * The size a service's page is shown at on this device (its preview's 尺寸), by its station and job
 	 * (`<station>\n<job>`): its width, or `<width>x<height>`; none: as big as the preview.
 	 */
