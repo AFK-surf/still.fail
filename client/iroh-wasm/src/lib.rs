@@ -49,13 +49,7 @@ struct Options {
 fn transport() -> QuicTransportConfig {
     let mut cubic = noq_proto::congestion::CubicConfig::default();
     cubic.initial_window(256 * 1024);
-    // Each path kept alive each second, given up after 3 s of silence (the station's mesh addon: PATH_KEEP_ALIVE,
-    // PATH_IDLE): the connection goes on through another relay meanwhile.
-    QuicTransportConfig::builder()
-        .congestion_controller_factory(Arc::new(cubic))
-        .default_path_keep_alive_interval(std::time::Duration::from_secs(1))
-        .default_path_max_idle_timeout(std::time::Duration::from_secs(3))
-        .build()
+    QuicTransportConfig::builder().congestion_controller_factory(Arc::new(cubic)).build()
 }
 
 /// An endpoint with the device's key on still.fail's relays (none: relays off).
@@ -69,7 +63,6 @@ pub fn bind(options: JsValue) -> Promise {
         let endpoint = IrohEndpoint::builder(Minimal)
             .secret_key(SecretKey::from_bytes(&bytes))
             .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays)) })
-            .home_on_every_relay()
             .transport_config(transport())
             .bind()
             .await

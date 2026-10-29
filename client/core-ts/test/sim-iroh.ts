@@ -42,9 +42,8 @@ const href = (url: string) => new URL(url).href;
 export const START = Date.UTC(2026, 9, 6, 9, 0, 0);
 /// QUIC's idle timeout, as iroh has it.
 export const IDLE_MS = 30_000;
-/// How long iroh hears nothing on a path before it lets it go: 3 s on every still.fail endpoint (the station's mesh
-/// addon PATH_IDLE, the app's shell; iroh's own is 15 s).
-export const PATH_IDLE_MS = 3_000;
+/// How long iroh hears nothing on a path before it lets it go (iroh socket.rs PATH_MAX_IDLE_TIMEOUT).
+export const PATH_IDLE_MS = 15_000;
 
 /// Time for a simulated run: nothing passes but what it is moved on by, and moving on goes from one timer to the next,
 /// each run in order (by when it is due, then by when it was set), what it wakes run before the next. A test's clock
@@ -148,14 +147,10 @@ class Way {
   readonly net: SimNet;
   relay: string | null;
   readonly sides: ["device" | "station", "device" | "station"];
-  /// The relays both ends are on, each a path of the connection (iroh's multipath, both home on every relay): one gone
-  /// PATH_IDLE_MS, its packets go on through another that is up.
-  readonly alts: string[];
-  constructor(net: SimNet, relay: string | null, sides: ["device" | "station", "device" | "station"], alts: string[] = []) {
+  constructor(net: SimNet, relay: string | null, sides: ["device" | "station", "device" | "station"]) {
     this.net = net;
     this.relay = relay;
     this.sides = sides;
-    this.alts = alts;
   }
   #legs(): Leg[] {
     return this.relay === null ? [this.net.direct] : this.sides.map((side) => this.net.leg(this.relay!, side));
@@ -178,25 +173,10 @@ class Way {
   }
   /// Until when nothing gets through it any more, a hole punched for it gone quiet (`SimNet.lan`).
   silentUntil = 0;
-  /// Direct at the addresses the other end said (`SimEndpoint.addAddr`): not a punched hole, it does not go quiet.
-  atAddress = false;
   /// Until when it is down (its relay's, or it gone quiet), or 0.
   downUntil(): number {
     const silent = this.silentUntil > this.net.now() ? this.silentUntil : 0;
-    if (this.relay === null) return silent;
-    const down = this.net.downUntil(this.relay);
-    const alt = this.alts.find((r) => href(r) !== href(this.relay!) && this.net.downUntil(r) === 0);
-    if (down > 0 && alt !== undefined) {
-      // Its path through the relay given up once it heard nothing on it PATH_IDLE_MS, the packets go through `alt`.
-      const moves = this.net.downSince(this.relay) + PATH_IDLE_MS;
-      if (this.net.now() >= moves) {
-        this.net.note(`a path moved from ${this.relay} to ${alt}`);
-        this.relay = alt;
-        return this.downUntil();
-      }
-      return Math.max(silent, Math.min(down, moves));
-    }
-    return Math.max(silent, down);
+    return Math.max(silent, this.relay === null ? 0 : this.net.downUntil(this.relay));
   }
 }
 
@@ -570,21 +550,14 @@ export class SimEndpoint {
     const ips = [...(addr.ips ?? []), ...(known?.ips ?? [])];
     if (this.relayOnly || !there.direct || ips.length === 0 || (this.net.away && (addr.ips?.length ?? 0) > 0)) {
       const told = [...(addr.relays ?? []), ...(known?.relays ?? []), ...this.relays].map(href);
-      // The path through the relay of the quickest round trip carries it, as iroh's path selector chooses among relays
-      // (an endpoint on one relay alone, on that one).
-      const reachable = told.filter((r) => there.reachableOn(r));
-      const both = reachable.filter((r) => this.relays.some((o) => this.net.server(o) === this.net.server(r)));
-      const ms = (r: string) => this.net.leg(r, this.side).ms + this.net.leg(r, there.side).ms;
-      relay = (both.length > 1 ? [...both].sort((x, y) => ms(x) - ms(y))[0] : reachable[0]) ?? null;
+      relay = told.find((r) => there.reachableOn(r)) ?? null;
       if (relay === null) return NEVER;
       // iroh sends its first packets on every path it knows of, going onto each relay of them: those it was told of, and
       // those its lookups found (the relays the other end is at home on).
       for (const r of new Set([...told, ...(this.lookup ? there.relays : [])])) this.net.onto(this, r);
       await this.#goOnto(relay);
     }
-    // A path through every relay both are on (the device's endpoint home on each of its relays, as the station is).
-    const alts = relay === null ? [] : [...new Set([...(addr.relays ?? []), ...(known?.relays ?? []), ...this.relays].map(href))].filter((r) => there.reachableOn(r) && this.relays.some((o) => this.net.server(o) === this.net.server(r)));
-    const way = new Way(this.net, relay, [this.side, there.side], alts);
+    const way = new Way(this.net, relay, [this.side, there.side]);
     // A handshake: a round trip, its packets lost as the way loses them (sent again after QUIC's initial probe timeout,
     // a second, twice as long each time). One the other end holds, or through a relay that is down, is never answered.
     let handshake = 2 * way.oneWay() + this.net.jitter();
@@ -602,7 +575,7 @@ export class SimEndpoint {
     }
     const first = this.net.now() - started;
     const mine = new SimConnection(this.net, this, there.id(), spoken, way, first);
-    const theirs = new SimConnection(this.net, there, this.id(), spoken, new Way(this.net, relay, [there.side, this.side], alts), 2 * way.oneWay());
+    const theirs = new SimConnection(this.net, there, this.id(), spoken, new Way(this.net, relay, [there.side, this.side]), 2 * way.oneWay());
     mine.peer = theirs;
     theirs.peer = mine;
     this.net.opened(mine);
@@ -620,11 +593,10 @@ export class SimEndpoint {
         if (lan.quietAfterMs === undefined) return;
         // The punched path goes quiet; iroh hears nothing on it for its idle time, then goes back to the relay.
         void this.net.sleep(lan.quietAfterMs).then(() => {
-          if (mine.reason !== null || mine.way.atAddress) return;
+          if (mine.reason !== null) return;
           mine.way.silentUntil = theirs.way.silentUntil = this.net.now() + PATH_IDLE_MS;
           this.net.note(`${this.id().slice(0, 8)} to ${there.id().slice(0, 8)} direct gone quiet`);
           void this.net.sleep(PATH_IDLE_MS).then(() => {
-            if (mine.way.atAddress) return;
             mine.way.relay = theirs.way.relay = through;
             this.net.note(`${this.id().slice(0, 8)} to ${there.id().slice(0, 8)} back through ${through}`);
           });
@@ -640,17 +612,6 @@ export class SimEndpoint {
 
   addAddr(addr: IrohAddr): void {
     this.#known.set(addr.id, { ...this.#known.get(addr.id), ...addr });
-    // Addresses of a station on this LAN, its connections there open: iroh opens a path to them, and their packets go
-    // that way (dialled at an address, not punched: it stays).
-    const there = this.net.endpoint(addr.id);
-    if ((addr.ips?.length ?? 0) === 0 || this.relayOnly || this.net.away || !there?.direct) return;
-    for (const c of this.conns)
-      if (c.remoteId() === addr.id && c.reason === null && c.way.relay !== null) {
-        c.way.relay = c.peer.way.relay = null;
-        c.way.silentUntil = c.peer.way.silentUntil = 0;
-        c.way.atAddress = c.peer.way.atAddress = true;
-        this.net.note(`${this.id().slice(0, 8)} to ${addr.id.slice(0, 8)} direct at its addresses`);
-      }
   }
   async networkChange(): Promise<void> {}
   relayStatus(): { url: string; connected: boolean }[] {
@@ -723,7 +684,6 @@ export class SimNet {
   /// Where each endpoint went: by endpoint, then relay (the one an entry goes on to), the URLs it went there through.
   readonly #onto = new Map<SimEndpoint, Map<string, Set<string>>>();
   readonly #down = new Map<string, number>();
-  readonly #downSince = new Map<string, number>();
   readonly #conns: SimConnection[] = [];
   /// What befell it, as a failure says: the run's events in order (`note`).
   readonly log: string[] = [];
@@ -801,22 +761,17 @@ export class SimNet {
   down(url: string, ms: number): void {
     const at = href(url);
     const until = this.now() + ms;
-    if (this.downUntil(at) === 0) this.#downSince.set(at, this.now());
     this.#down.set(at, Math.max(until, this.#down.get(at) ?? 0));
     this.note(`${at} down for ${ms} ms`);
     if (ms >= IDLE_MS)
       void this.sleep(IDLE_MS).then(() => {
-        for (const c of this.#conns) if (c.way.downUntil() > 0 && c.way.relay === at && c.reason === null && this.now() - c.heard >= IDLE_MS) c.timedOut();
+        for (const c of this.#conns) if (c.way.relay === at && c.reason === null && this.now() - c.heard >= IDLE_MS) c.timedOut();
       });
     void this.sleep(ms).then(() => this.note(`${at} up`));
   }
   downUntil(relay: string): number {
     const until = this.#down.get(href(relay)) ?? 0;
     return until > this.now() ? until : 0;
-  }
-  /// When the relay at `url` last went down.
-  downSince(relay: string): number {
-    return this.#downSince.get(href(relay)) ?? this.now();
   }
   opened(conn: SimConnection): void {
     this.#conns.push(conn, conn.peer);
