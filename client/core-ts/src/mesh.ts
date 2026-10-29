@@ -1075,6 +1075,14 @@ export class Mesh {
           if (link.failure.message === noAnswer()) self.#stuck = true;
           failedIn(span, link.failure);
           span.set("stillfail.relay", relayStatus(endpoint));
+          // What a dial that failed was given and had beside it: the addresses it was told the station is reached straight
+          // at, and the ways of this device's other links to the same station (in another workspace), open on the same
+          // endpoint. 2026-10-29: a Mac's dials to its station failed for half an hour, both workspaces' at once, the
+          // spans saying nothing of either.
+          const straight = self.#straightAt(addr);
+          if (straight.length > 0) span.set("stillfail.ips", straight.join(", "));
+          const beside = self.#besideOf(addr);
+          if (beside !== "") span.set("stillfail.beside", beside);
         }
         span.end();
         opening.result = link._tag === "Success" ? { ok: link.success } : { err: link.failure };
@@ -1200,6 +1208,15 @@ export class Mesh {
       );
       return Deferred.await(won);
     });
+  }
+
+  /// This device's open links to the station at `addr` under its other addresses (another workspace's), as a span says
+  /// them: each one's workspace and ways (`Link.paths`); "" with none.
+  #besideOf(addr: string): string {
+    const id = stationId(addr);
+    const out: string[] = [];
+    for (const [a, o] of this.#links) if (a !== addr && stationId(a) === id && o.result && "ok" in o.result && o.result.ok.closed() === null) out.push(`${a.slice(0, a.length - id.length - 1)}: ${o.result.ok.paths()}`);
+    return out.join(" | ");
   }
 
   /// Where the station last said a device dials it straight (its LAN, its tailnet), but the kinds its workspace turned off.

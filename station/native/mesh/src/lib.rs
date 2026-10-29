@@ -248,8 +248,16 @@ impl Endpoint {
                     }
                     let tx = tx.clone();
                     napi::bindgen_prelude::spawn(async move {
-                        if let Ok(conn) = incoming.await {
-                            let _ = tx.send(conn);
+                        // One whose handshake fails is said, where it came from and how long it took: a device whose
+                        // dials to the station never got through said nothing here, which way its packets came or
+                        // whether any came at all (2026-10-29).
+                        let from = incoming.remote_addr();
+                        let started = Instant::now();
+                        match incoming.await {
+                            Ok(conn) => {
+                                let _ = tx.send(conn);
+                            }
+                            Err(error) => eprintln!("mesh: a connection's handshake failed from {from:?} after {} ms: {error:#}", started.elapsed().as_millis()),
                         }
                     });
                 }

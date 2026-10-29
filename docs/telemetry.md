@@ -126,7 +126,14 @@ Inside a trace:
   (`ember.stream`); `station.connect` for the events stream a view asked for;
   `mesh.connect` when a request has to open the link first (credential, iroh
   connection; every way dialled at once, `stillfail.via` the relay of the one
-  that came through first), with the still.fail cloud requests it made; still.fail
+  that came through first), with the still.fail cloud requests it made; one that
+  failed says what it was given and had beside it: `stillfail.ips` (the addresses
+  the station said it is reached straight at, given to the dial) and
+  `stillfail.beside` (this device's other open links to the same station, in
+  another workspace: each one's workspace and paths, as `mesh.route`'s). The
+  station says a connection whose handshake failed on its log (`mesh: a
+  connection's handshake failed from …`: a relay's or an address, and how long
+  it took); none said means none came. still.fail
   cloud requests made inside the trace (`/v1/me`, credentials, workspaces).
 - **core, on its own**: `mesh.route` when a station's requests move to another
   way (`stillfail.why`: `better` by its pings, `asked`, `lost`, `direct` as a
