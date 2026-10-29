@@ -72,7 +72,7 @@ test "on Android the page the system's back lets go goes on as fast as the finge
 }
 
 ///|
-test "on Android a page the system's back lets go after the finger held still sets out from rest, from where it was" {
+test "on Android a page the system's back lets go after the finger held still sets out at once, from where it was" {
   let nav = Nav::new(1)
   let t = Tester::new(back_view(nav), platform=2)
   nav.push(2)
@@ -89,9 +89,13 @@ test "on Android a page the system's back lets go after the finger held still se
   }
   on_back(2, 0.0, 1.0, 0)
   back_step(t)
+  // gone a quarter of the way left in its first frame (from rest, a critically damped spring would be under 10 on:
+  // the page seen to stop where it was let go), and slowing from there
   let first = t.rect_of("title 2").unwrap().0
-  // (a moving finger's page is past 160 by then)
-  assert_true(first > 120.0 && first < 140.0)
+  assert_true(first > 170.0 && first < 200.0, msg="first frame at \{first}")
+  back_step(t)
+  let second = t.rect_of("title 2").unwrap().0
+  assert_true(second - first > 30.0 && second - first < first - 120.0, msg="then at \{second}")
   t.run_for(nav.rest() - t.time())
   assert_eq(nav.depth(), 1)
 }

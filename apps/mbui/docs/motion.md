@@ -117,7 +117,7 @@ the curves: a move's length and curve are a Move's (Curves, above), what goes go
 | Kind | Preset | Value | The web's |
 |---|---|---|---|
 | 1 | let go, small: a row, a card | spring 0.28 s, no bounce | `MOVE`, web/ui/src/motion.ts:26 |
-| 1 | let go, large: a sheet, the pictures' strip, a page swiped back (gone on or come back, from where the finger last had it at its time) | spring 0.32 s, no bounce | web/src/mobile/app.tsx:526 (a sheet), web/src/FilePreview.tsx:743 (`SLIDE`) |
+| 1 | let go, large: a sheet, the pictures' strip, a page swiped back (gone on or come back, from where the finger last had it at its time, never setting out slower than the spring's own way there that only slows: ω times the way left) | spring 0.32 s, no bounce | web/src/mobile/app.tsx:526 (a sheet), web/src/FilePreview.tsx:743 (`SLIDE`) |
 | 2 | by its trigger: a menu, a popover, a picker, a select, the `@` menu, the switcher | in 140 ms ease-out, from 0.97 and clear, growing out of its trigger's side; out at once (`@kit.pop_in`, `pop_out`) | web/ui/src/styles/controls.css.ts:71 (`popKeyframes`) |
 | 2 | a hover's card: the pointer rested on, left | in 160 ms ease-out from 0.96 and clear; out 90 ms on `Leave` to 0.97 and clear | web/src/Hover.css.ts:10-22 |
 | 2 | a tip | in 120 ms ease-out, a fade; out at once (`@kit.tip_in`) | web/ui/src/parts.css.ts:336 |

@@ -604,7 +604,7 @@ fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double
 /// The finger the system's gesture followed lifted, told at `t` (its steps come a frame or so after the finger's, the
 /// end of them later still): how fast it went (`vel`) and from when the page goes on. Its last step said within the
 /// time a moving finger's are apart (scroll.mbt's tracker_gap_ms), it was moving as its steps say, from that step's
-/// time; longer ago, it was held still before it lifted: from now, at rest.
+/// time; longer ago, it was held still before it lifted: from now, its own speed none.
 fn[P] Nav::lifted(self : Nav[P], t : Double) -> Double {
   let last = self.track.newest()
   if t - last > tracker_gap_ms {
@@ -634,11 +634,17 @@ fn[P] Nav::come_back(self : Nav[P], w : Double, at : Double) -> Unit {
 ///|
 /// On to `p1` (mode 2 or 4) on the let-go spring from where the finger left the page `w` wide at `at` (the frames'
 /// clock), moving as the finger did (`vel`, points a ms): where it is in the frames after it comes from that time, so
-/// the first of them shows it gone on as far as the finger would have taken it.
+/// the first of them shows it gone on as far as the finger would have taken it. Never slower at first than the
+/// spring's own way there that only slows (ω times the way left, the way left shrinking as e^-ωt): from a finger
+/// slower than that, or held still, a critically damped spring sets out from near rest and gathers speed over its
+/// first 60 ms, the page seen to stop where it was let go before it goes.
 fn[P] Nav::spring_to(self : Nav[P], mode : Int, p1 : Double, w : Double, at : Double) -> Unit {
   self.go(mode, p1, 0.0, Linear)
   let s = SpringPath::new(self.p, k=nav_let_go_k, c=2.0 * nav_let_go_k.sqrt(), rest=nav_let_go_rest / w)
-  s.go(at, p1, v=self.vel * 1000.0 / w, what="a page let go")
+  let way = p1 - self.p
+  let finger = self.vel * 1000.0 / w
+  let own = nav_let_go_k.sqrt() * way
+  s.go(at, p1, v=if way >= 0.0 { dmax(finger, own) } else { dmin(finger, own) }, what="a page let go")
   self.sprung = Some(s)
   self.t0 = at
   self.dur = s.end() - at
