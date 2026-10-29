@@ -204,6 +204,26 @@ test "the chat's bars over the picture flying back into it, coming back as it la
 }
 
 ///|
+test "the way back is a move of its own: most of it as it sets out, at rest as it lands, never the way in run backwards" {
+  let held : Ref[(() -> Unit)?] = Ref(None)
+  let t = photo_sent(Ref(0.0), held, bar=true)
+  let at = t.locate("img:sent-key")
+  t.tap(at[0].0, at[0].1)
+  t.run_for(fly_open_ms)
+  t.back()
+  let v = pv_leaving.val.unwrap()
+  let back = t.time()
+  // a quarter of its time out: over half of its way back, the bars over it as much
+  t.run_for(fly_close_ms / 4.0)
+  assert_true(v.flying() < 0.5, msg="\{v.flying()}")
+  // its last tenth: hardly any of the way left, so the thumbnail and the bars come back by nothing at the end
+  t.run_for(back + fly_close_ms * 0.9 - t.time())
+  assert_true(v.flying() < 0.02, msg="\{v.flying()}")
+  t.run_for(back + fly_close_ms - t.time())
+  assert_true(pv_leaving.val is None)
+}
+
+///|
 test "a picture under the composer goes out from under it at its own size first, then grows; back the same way" {
   let held : Ref[(() -> Unit)?] = Ref(None)
   let t = photo_sent(Ref(640.0), held, bar=true, listed=true)
@@ -231,12 +251,15 @@ test "a picture under the composer goes out from under it at its own size first,
   t.run_for(start + open_ms - t.time())
   let to = v.zoom.rect().unwrap()
   assert_true(drawn_at(t, to))
-  // back: shrunk, then in under the composer to its thumbnail, the same curve run back
+  // back: shrunk, then in under the composer to its thumbnail, one move of its own on the same curve
   t.back()
   let back = t.time()
   let close_ms = fly_close_ms / (1.0 - lift)
-  t.run_for((1.0 - out) * close_ms - near)
+  t.run_for(way_at(1.0 - lift) * close_ms - near)
   assert_true(v.flying() > 0.0 && v.lifted() == 1.0)
+  t.run_for(near * 2.0)
+  assert_eq(v.flying(), 0.0)
+  assert_true(v.lifted() < 1.0)
   t.run_for(back + close_ms - t.time())
   assert_true(pv_leaving.val is None)
   assert_true(drawn_at(t, (th.x, th.y, th.w, th.h)))

@@ -240,9 +240,9 @@ pub(all) struct Viewer {
   fly : @motion.Value
   mut fly_back : Bool
   mut fly_from : Thumb?
-  /// the share of the flight's way (`fly`, at an even pace) that is its thumbnail going out from under the chat's bar
-  /// or composer, at its own size, to where they hide none of it, before it grows (or after it has shrunk, going
-  /// back): 0 when nothing hides it
+  /// the share of the flight's way (`fly`, where it has got to on its Move) that is its thumbnail going out from under
+  /// the chat's bar or composer, at its own size, to where they hide none of it, before it grows (or after it has
+  /// shrunk, going back): 0 when nothing hides it
   mut fly_lift : Double
   /// a video going back: where its player last drew its picture (as a finger left it, zoomed in or taken down), what
   /// it flies back from
@@ -1311,7 +1311,7 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
             // Viewer::flying, Viewer::lifted)
             v.fly_lift = lift_share(t, fly_open_ms)
             v.fly.set(0.0)
-            ignore(v.fly.start(1.0, @motion.tween(fly_open_ms / (1.0 - v.fly_lift), ease=Linear)))
+            ignore(v.fly.start(1.0, @motion.tween(fly_open_ms / (1.0 - v.fly_lift), ease=Move)))
             pv_hidden.val = v.id()
           }
           None => ()
@@ -1509,7 +1509,9 @@ pub fn Viewer::fly_home(self : Viewer, picture : String) -> Unit {
 ///|
 /// Back towards thumbnail `t` from as far along as it was, in as much of its time: shrinking, then (if the bar or the
 /// composer hides it now) going in under them at its own size. The way re-shared for where `t` is now, so that it
-/// has grown, or gone out, as far as it had.
+/// has grown, or gone out, as far as it had. A move of its own, on Move from where it is: quick as it sets out, at
+/// rest as it lands (the way in run backwards would land at its quickest, the thumbnail and the bars come back at
+/// once: a flash).
 fn Viewer::fly_home_from(self : Viewer, t : Thumb) -> Unit {
   if !self.flies {
     self.flies = true
@@ -1527,7 +1529,7 @@ fn Viewer::fly_home_from(self : Viewer, t : Thumb) -> Unit {
   }
   self.fly_lift = lift
   self.fly.set(q)
-  ignore(self.fly.start(0.0, @motion.tween(dmax(1.0, fly_close_ms / (1.0 - lift) * q), ease=Linear)))
+  ignore(self.fly.start(0.0, @motion.tween(dmax(1.0, fly_close_ms / (1.0 - lift) * q), ease=Move)))
 }
 
 ///|
@@ -1868,7 +1870,7 @@ pub fn Viewer::flying(self : Viewer) -> Double {
   if !self.flies {
     return 1.0
   }
-  let e = @ui.Ease::Move.at(self.fly.get())
+  let e = self.fly.get()
   if e <= self.fly_lift {
     0.0
   } else {
@@ -1883,7 +1885,7 @@ pub fn Viewer::lifted(self : Viewer) -> Double {
   if !self.flies || self.fly_lift <= 0.0 {
     return 1.0
   }
-  dmin(@ui.Ease::Move.at(self.fly.get()) / self.fly_lift, 1.0)
+  dmin(self.fly.get() / self.fly_lift, 1.0)
 }
 
 ///|
