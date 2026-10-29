@@ -33,9 +33,9 @@ pub let pk : ChatPick = { ts: "", author: "", role: "", share: None, link: "", s
 pub let share_offered : Ref[(Int, Double, Double, () -> Unit)?] = Ref(None)
 
 ///|
-/// Links to this message and pictures of its turn, beside its author's name and time, as a mouse picks (mouse_picks):
-/// shown while the pointer rests on the message. A finger has no resting pointer: both are on the bar of what it holds
-/// picked instead (pick_layer), not on every message's head.
+/// Links to this message and pictures of its turn, beside its author's name and time, where a mouse is the native
+/// input: shown while the pointer rests on the message. A finger has no resting pointer: where it is the native input
+/// both are on the bar of what it holds picked instead (pick_layer), not on every message's head.
 pub fn share_turn_tool(c : @ui.Ctx, key : String, row : Int, link : String, go : () -> Unit) -> Unit {
   match c.menu_asked(row) {
     Some((x, y)) => share_offered.val = Some((c.frame_number(), x, y, go))

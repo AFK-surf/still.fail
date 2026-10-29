@@ -208,8 +208,9 @@ pub fn others_message(
   route : (() -> Unit)?,
   body : () -> Unit,
 ) -> Unit {
-  // its link and its turn's picture on its head as a mouse picks; a finger has them on the bar of what it holds picked
-  let share = if @sfbase.mouse_picks() { share } else { None }
+  // its link and its turn's picture on its head where a mouse is what it is used with (laid out by the native input:
+  // the head as it is whichever hand is on it now); a finger has them on the bar of what it holds picked
+  let share = if @sf.more_held() { None } else { share }
   let row = if share is Some(_) { c.id("message/" + key) } else { 0 }
   if row != 0 { c.cursor(row, Arrow) }
   c.box(style=if share is Some(_) { msg_row_share } else { msg_row }, id=row, fn() {
