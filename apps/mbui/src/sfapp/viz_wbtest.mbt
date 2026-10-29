@@ -424,3 +424,31 @@ test "inline HTML is set in the faces the app is set in, a face still.fail keeps
   assert_true(doc.contains("fonts.gstatic.com https://app.still.fail;"))
   reset()
 }
+
+///|
+test "an inline page not drawn yet holds its place with a placeholder, gone once it is drawn" {
+  reset()
+  let src = fixture("chat-viz")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2, finish=false)
+  t.run_for(@ui.nav_push_ms)
+  let (page, _) = viz_views(t)
+  // the line's grey (whatever its breath's alpha), over all its place
+  let line = @sf.palette_of(false).line >> 8
+  let placeholder = fn() {
+    let (x, y, w, h) = view_rect(t, page).unwrap()
+    t.drawn_rects().iter().any(fn(r) {
+      r.4 >> 8 == line && r.0 <= x + 1.0 && r.1 <= y + 1.0 && r.0 + r.2 >= x + w - 1.0 && r.1 + r.3 >= y + h - 1.0
+    })
+  }
+  assert_true(placeholder())
+  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":231.4}")
+  t.frame()
+  t.frame()
+  // its height said, its host not done drawing it: still held
+  assert_true(placeholder())
+  t.finish(2, page)
+  t.frame()
+  assert_false(placeholder())
+  assert_false(view_covered(t, page))
+}

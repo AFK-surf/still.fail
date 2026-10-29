@@ -268,7 +268,11 @@ function Frame({ html, title, heightKey, state = null, onState, onError }: {
   const source = host === null
     ? { srcDoc }
     : { src: host, onLoad: () => frame.current?.contentWindow?.postMessage({ stillfailVizDocument: srcDoc }, "*") };
-  return <iframe ref={frame} className={page ? css.vizPage : css.vizFrame} sandbox="allow-scripts" {...source} title={title} style={{ ...(page ? {} : { height }), ...(shown ? {} : { visibility: "hidden" }) }} />;
+  const iframe = <iframe ref={frame} className={page ? css.vizPage : css.vizFrame} sandbox="allow-scripts" {...source} title={title} style={{ ...(page ? {} : { height }), ...(shown ? {} : { visibility: "hidden" }) }} />;
+  if (page) return iframe;
+  // While hidden, its place is held as while its file came (vizWait), not left an empty gap (2026-10-29); the frame
+  // always in the same place in it, not loaded again as that goes.
+  return <div className={css.vizHeld}>{!shown && <div className={css.vizWait} style={{ position: "absolute", inset: 0 }} aria-busy="true" />}{iframe}</div>;
 }
 
 /** An HTML file's content drawn as a visualization, where its file is not read through a station's session (the share

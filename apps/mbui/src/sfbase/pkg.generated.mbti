@@ -1065,7 +1065,7 @@ pub fn pick_reset() -> Unit
 
 pub fn pick_workspace(Source, String) -> Unit
 
-pub fn pickable(@ui.Ctx, String, String, String, String, Bool, Bool, () -> Unit, keep? : Bool, marks? : (Int32) -> Unit, share? : (() -> Unit)?) -> Unit
+pub fn pickable(@ui.Ctx, String, String, String, String, Bool, Bool, () -> Unit, keep? : Bool, marks? : (Int32) -> Unit, share? : (() -> Unit)?, link? : String) -> Unit
 
 pub fn picked_sig(Json?) -> String
 
@@ -1653,6 +1653,10 @@ pub let viz_unmade : Map[String, Bool]
 
 pub let viz_wait : @ui.Style
 
+pub let viz_wait_fill : @ui.Style
+
+pub let viz_wait_ground : @ui.Style
+
 pub let viz_wait_under : @ui.Style
 
 pub let viz_way : @ui.Style
@@ -1888,6 +1892,7 @@ pub(all) struct ChatPick {
   mut author : String
   mut role : String
   mut share : (() -> Unit)?
+  mut link : String
   sel : @kit.Pick
   mut taken_at : Int32
 }

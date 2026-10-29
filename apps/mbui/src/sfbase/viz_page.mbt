@@ -222,9 +222,22 @@ pub fn viz_frame(
     |> ignore
   } else {
     let h = if f.height > 0 { f.height } else { viz_first_height }
-    c.box(style=@ui.style(w=Full, h=Fixed(h.to_double())), fn() {
-      c.native(f.view) |> ignore
-      cover(viz_ground)
+    // till it has drawn itself, its place as while its file came (the line's grey, breathing, its corners the
+    // placeholder's, the view's hole cut to them): not an empty gap (the user, 2026-10-29)
+    let waiting = !f.shown || !f.view.host_done()
+    let frame = @ui.style(w=Full, h=Fixed(h.to_double()))
+    c.box(style=frame, fn() {
+      c.native(f.view, radius=if waiting { c.theme().corner(Xl) } else { 0.0 }) |> ignore
+      if waiting {
+        c.layer(fn() {
+          c.box(style=viz_wait_ground, fn() {
+            let i = c.box(style=viz_wait_fill, fn() {  })
+            @sf.breathe(c, i)
+          })
+          |> ignore
+        })
+        |> ignore
+      }
     })
     |> ignore
   }
@@ -379,6 +392,16 @@ pub let viz_wait_under : @ui.Style = @ui.css("w=Full pb=S2")
 ///|
 // kept across runs: a value (no field of it changes)
 pub let viz_wait : @ui.Style = @ui.style(w=Full, h=@sf.viz_wait_h, radius=Xl, bg=Line)
+
+///|
+/// Its place while it draws itself: as `viz_wait`, as tall as its frame.
+// kept across runs: a value (no field of it changes)
+pub let viz_wait_fill : @ui.Style = @ui.css("w=Full h=Full radius=Xl bg=Line")
+
+///|
+/// The ground covering its view while it waits: its corners the placeholder's (the view's hole cut to them).
+// kept across runs: a value (no field of it changes)
+pub let viz_wait_ground : @ui.Style = @ui.css("w=Full h=Full radius=Xl bg=Bg")
 
 ///|
 /// The page and the ways under it, 4 under them.
