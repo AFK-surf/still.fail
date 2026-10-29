@@ -68,7 +68,8 @@ pub fn chat_list(
   // `askClear`), which shows whenever the end does, no bell over it
   let ask_clear = if asks_of(v).is_empty() || !v.ask_clear { 0.0 } else { float_lift + float_side }
   // (an iPhone Duo's cards: 32 in however narrow the chat's, row_side)
-  let side = if narrow && !@sf.native_on() { row_side_narrow } else { row_side(c) }
+  // (narrow beside the system's bars, an iPhone Duo's: as wide as the composer, as main has it: chat_list row_side)
+  let side = if narrow { if @sf.native_on() { composer_side() } else { row_side_narrow } } else { row_side(c) }
   // the sides are only the page's margin either way: wide, the pictures out in it stand by their heads' line, not by
   // the words under it, so a table scrolls out over it to the pane's edges as it does narrow
   let gutter = side
