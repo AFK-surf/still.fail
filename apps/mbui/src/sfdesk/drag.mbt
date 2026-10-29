@@ -231,13 +231,15 @@ pub fn drag_frame(c : @ui.Ctx, src : Source, ws : String, outside? : Bool = true
     }
     _ => if !down { fdrag.press = None }
   }
-  // files from the computer let go: read as a pick's, then up into the folder they were let go on (on the files' page)
+  // files from the computer let go on a folder (on the files' page): read as a pick's, then up into it; let go elsewhere
+  // they are not taken here (what is there may take them otherwise: a field, by their paths)
+  let folder_at = fn(x, y) { fdrag_at(c, x, y) is Some({ into: Some(_), .. }) }
   while outside {
-    match @ui.take_drop() {
+    match @ui.take_drop(over=folder_at) {
       Some((x, y, pick)) =>
         match fdrag_at(c, x, y) {
           Some({ into: Some(into), .. }) => fdrag.dropped.push((pick, into))
-          _ => pick.files() |> ignore
+          _ => ()
         }
       None => break
     }

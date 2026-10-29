@@ -346,6 +346,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   }
   // the parts kept that this frame did not show let go (kept_part.mbt)
   parts_frame_end(c)
+  // what was let go on the window from outside that no build took: files' paths into the field there, the drops
+  // let go (drop.mbt)
+  drops_frame_end(c)
   // words picked with the pointer held: to what is under it as laid out now (desktop.mbt), drawn so
   c.select_after_layout()
   // what the builds said, where a Tester asks (said.mbt)

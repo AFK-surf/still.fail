@@ -1524,6 +1524,14 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   }
   // words dragged in from another app and let go on it beside its field (on the field they go where they were let go):
   // into its field at its caret, as a paste's
+  // files from this machine's Finder let go on it (or on its field) where it is a station: as a 文件 row is, by its
+  // station and path; elsewhere into its field as their paths, as words
+  if !locked && @sfbase.finder_by_station() {
+    match c.paths_into(cap, field_key) {
+      Some(paths) => refs_put(src, d.key, @sfbase.finder_dragged(src, paths))
+      None => ()
+    }
+  }
   if !locked {
     c.words_into(cap, field_key)
   }

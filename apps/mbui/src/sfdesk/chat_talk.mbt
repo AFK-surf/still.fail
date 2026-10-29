@@ -58,6 +58,19 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
   // words dragged in from another app and let go anywhere on the pane but a field (a field takes them where they
   // were let go: ⌘F's, the composer's): into the composer's field at its caret, as a paste's; not an archived chat's,
   // whose composer a press does not open either
+  // files from this machine's Finder let go anywhere on it but another field, where it is a station: into the draft by
+  // their station and path, as a row of the 文件 tab let go there (chat_drop); elsewhere as words, as above
+  if !(view is Some({ archived: true, .. })) && @sfbase.finder_by_station() {
+    match c.paths_into(pane, @sfpages.composer_field_key) {
+      Some(paths) => {
+        let dragged = @sfbase.finder_dragged(src, paths)
+        c.tell("chat-drop/" + draft, fn() {
+          writing_drop(src, writing(src, draft), r.station, dragged.map(@sfpages.dropped_of), @sfpages.drops_as_files(src, draft))
+        })
+      }
+      None => ()
+    }
+  }
   if !(view is Some({ archived: true, .. })) {
     c.words_into(pane, @sfpages.composer_field_key)
   }

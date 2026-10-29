@@ -483,7 +483,7 @@ pub fn system_size_class() -> SystemSizeClass?
 
 pub fn system_tabletop() -> (Double, Double)?
 
-pub fn take_drop() -> (Double, Double, Pick)?
+pub fn take_drop(over? : (Double, Double) -> Bool) -> (Double, Double, Pick)?
 
 pub fn takes_drops() -> Bool
 
@@ -1113,6 +1113,7 @@ pub fn Ctx::pager_rest(Self, String) -> Double
 pub fn Ctx::paint_rect(Self, Double, Double, Double, Double, radius~ : Double, Int64) -> Unit
 pub fn Ctx::part_kept(Self, Int32) -> Bool
 pub fn Ctx::passes(Self, Int32) -> Unit
+pub fn Ctx::paths_into(Self, Int32, String) -> Array[DroppedPath]?
 pub fn Ctx::picture(Self, String, x~ : Double, y~ : Double, w~ : Double, h~ : Double, w_? : Size, h_? : Size, max_px? : Int32) -> Int32
 pub fn Ctx::place(Self, (Double, Double, Double, Double), Double, Double, side? : Side, along? : Along, offset? : Double, along_offset? : Double, padding? : Double, flip? : Bool) -> (Double, Double, Side)
 pub fn Ctx::place_by_size(Self, Int32, (Double, Double) -> (Double, Double)) -> Unit
@@ -1281,6 +1282,12 @@ pub struct Drawing {
 pub fn Drawing::copy(Self) -> Self
 pub fn Drawing::is_empty(Self) -> Bool
 pub fn Drawing::new() -> Self
+
+pub(all) struct DroppedPath {
+  path : String
+  dir : Bool
+  size : Double
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) enum Ease {
   Move
@@ -2279,7 +2286,7 @@ pub fn Tester::drawn_shadows(Self) -> Array[(Double, Double, Double, Double, Dou
 pub fn Tester::drawn_shapes(Self) -> Array[(Double, Double, Double, Double, Double, Int64)]
 pub fn Tester::drawn_text(Self) -> String
 pub fn Tester::drive(Self, String, max? : Int32, each? : (Self) -> Unit) -> Array[String]
-pub fn Tester::drop_files(Self, Double, Double, Array[(String, Bytes)]) -> Unit
+pub fn Tester::drop_files(Self, Double, Double, Array[(String, Bytes)], paths? : Array[String]) -> Unit
 pub fn Tester::drop_words(Self, Double, Double, String) -> Unit
 pub fn Tester::dump(Self) -> String
 pub fn Tester::edit_can(Self) -> Int32
