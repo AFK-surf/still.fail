@@ -471,13 +471,14 @@ const listed = new Map<string, { at: number; files: string[] }>();
 
 /// A relative path not under the working directory, as agents write one from inside a repository (`ifc/a.ex` for
 /// `<workspace>/cue/apps/x/lib/ifc/a.ex`): the file of a repository in `dirs` (one of them, or two levels below)
-/// whose path ends with it; the shortest, when several do. Null when none does. `latest`: of several repositories that
-/// have it, the one last fetched or checked out (the station's clones, <data>/repos: an old copy of a project beside
-/// the one worked on has the same files).
+/// whose path ends with it, or a directory of one (git lists only files); the shortest, when several do. Null when none
+/// does. `latest`: of several repositories that have it, the one last fetched or checked out (the station's clones,
+/// <data>/repos: an old copy of a project beside the one worked on has the same files).
 function inRepositories(dirs: (string | null)[], given: string, latest = false): string | null {
   // As git lists them: `/` between the parts, whatever this machine uses.
   const tail = cleanPosix(given).slice(1);
-  if (tail === "" || tail.endsWith("/")) return null;
+  if (tail === "") return null;
+  const names = naming(tail);
   const repos = new Set<string>();
   const look = (dir: string, depth: number) => {
     if (existsSync(join(dir, ".git"))) return void repos.add(dir);
@@ -506,11 +507,20 @@ function inRepositories(dirs: (string | null)[], given: string, latest = false):
     }
     const at = latest ? touched(repo) : 0;
     for (const f of seen.files) {
-      if (!(f === tail || f.endsWith(`/${tail}`))) continue;
-      if (best === null || at > bestAt || (at === bestAt && repo.length + f.length < best.length)) [best, bestAt] = [join(repo, f), at];
+      const m = names.exec(f);
+      if (m === null) continue;
+      const path = join(repo, f.slice(0, m.index + m[0].length));
+      if (best === null || at > bestAt || (at === bestAt && path.length < best.length)) [best, bestAt] = [path, at];
     }
   }
   return best === null ? null : canonical(best);
+}
+
+/// What finds a path named by `tail` (its parts between `/`) in a file's path as git lists it: the file, or the directory
+/// of it the tail ends at. A part `...` or `…` is any directories, as agents shorten a long path in the middle.
+function naming(tail: string): RegExp {
+  const parts = tail.split("/").map((p) => (p === "..." || p === "…" ? ".+" : p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  return new RegExp(`(?:^|/)${parts.join("/")}(?=/|$)`);
 }
 
 /// When a repository was last fetched, checked out or committed to (its git directory's files), in ms.

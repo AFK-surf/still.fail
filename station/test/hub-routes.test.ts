@@ -486,6 +486,10 @@ test("a file a message names by its path: its peek and the file whole, only with
     const [found, d] = await peek("x/lib/ifc/destination.ex");
     assert.deepEqual([found, d.lines?.text[0]], [200, "defmodule D do"]);
     assert.equal((await peek("y/ifc/destination.ex"))[0], 404);
+    // A directory of it, as the file's is named; a path shortened in the middle (`...`, `…`), any directories there.
+    for (const dir of ["x/lib/ifc", "apps/x/lib/ifc/", "lib"]) assert.deepEqual((await peek(dir))[1].entries, dir === "lib" ? ["ifc/"] : ["destination.ex"], dir);
+    for (const short of ["apps/.../ifc/destination.ex", "apps/…/destination.ex", ".../lib/ifc"]) assert.equal((await peek(short))[0], 200, short);
+    assert.equal((await peek("apps/.../y/destination.ex"))[0], 404);
     // Else one of the station's clones (<data>/repos), as agents read them without a worktree: the one fetched last.
     for (const [name, age] of [["old", 3600], ["new", 0]] as const) {
       const clone = join(r.data, "repos", name);
