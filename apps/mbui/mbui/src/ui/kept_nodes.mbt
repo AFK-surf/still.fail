@@ -248,6 +248,9 @@ fn Ctx::row_nodes_out(self : Ctx, rn : RowNodes) -> Unit {
       }
       rn.store.push(o)
     }
+    // (where each is, as who it is is found by it: Ctx::node_known)
+    self.nodes[i].slot = i
+    o.slot = -1
   }
 }
 
@@ -269,6 +272,8 @@ fn Ctx::row_nodes_lent(self : Ctx, rn : RowNodes) -> Unit {
     let o = self.nodes[c0 + j]
     self.nodes[c0 + j] = rn.store[j]
     rn.store[j] = o
+    self.nodes[c0 + j].slot = c0 + j
+    o.slot = -1
   }
 }
 
@@ -289,9 +294,17 @@ fn rows_nodes_end(c : Ctx) -> Unit {
     match kept_nodes.get(key) {
       Some(rn) => {
         rn.watch.stop()
-        // (its nodes not in the frame's: its own, spares now; in it, the frame's, and what it holds of the frame's)
+        // (its nodes not in the frame's: its own, at the end of the frame's now, each found there by who it is as what
+        // it was is built again (a page covered a while, back: Ctx::node_known), so far as there is room, else spares;
+        // in it, the frame's, and what it holds of the frame's)
         for o in rn.store {
-          spare_nodes.push(o)
+          if c.nodes.length() < 2 * known_made.val + known_room {
+            o.slot = c.nodes.length()
+            c.nodes.push(o)
+          } else {
+            o.slot = -1
+            spare_nodes.push(o)
+          }
         }
       }
       None => ()
@@ -308,6 +321,7 @@ fn nodes_forget() -> Unit {
   }
   kept_nodes.clear()
   spare_nodes.clear()
+  known_nodes.clear()
   nodes_run.fresh = true
   nodes_run.whole = true
   nodes_run.told = false
@@ -754,6 +768,8 @@ fn Ctx::nodes_put_back(self : Ctx, rn : RowNodes, parent : Int) -> Int {
     let o = self.nodes[c0 + j]
     self.nodes[c0 + j] = rn.store[j]
     rn.store[j] = o
+    self.nodes[c0 + j].slot = c0 + j
+    o.slot = -1
   }
   let at = fn(k : Int) { if k >= 0 { c0 + k } else { -1 } }
   for j in 0..<n {
@@ -949,6 +965,16 @@ fn Ctx::part_nodes(self : Ctx, id : Int, key : String, body : () -> Unit, read_o
     rn.read != read_out ||
     rn.seed != self.id_seed ||
     rn.owner != self.owner
+  // (its nodes of before out of the frame's, as a part not built a while (a page covered) has them: put where its
+  // build makes them, for each to be known as who it is (Ctx::node_known), laid out as before; left in the frame's
+  // (a frame built anew), found there)
+  if rn.store.length() > 0 {
+    let r0 = rn.store[0]
+    match known_nodes.get(r0.ident) {
+      Some(o) if physical_equal(o, r0) => self.row_nodes_lent(rn)
+      _ => ()
+    }
+  }
   let b = self.nodes_begin(rn)
   let r = self.count
   nodes_run.building = Some(rn)

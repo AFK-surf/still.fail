@@ -835,3 +835,38 @@ test "the soft keyboard moving: what reads how far it reaches is built as it mov
   t.run_for(rows_still_ms)
   assert_eq(reach.val, 240.0)
 }
+
+///|
+test "a page covered for a while and back: its nodes known again as they were, not laid out each of them anew" {
+  let covered = @signals.signal(false)
+  let t = Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+        if covered.get() {
+          // (another page in its place while it is covered: built in its slots)
+          for i in 0..<10 {
+            c.box(h=Px(30.0), fn() { c.text("over \{i}", size=12.0) |> ignore }) |> ignore
+          }
+        } else {
+          marked_column(@signals.signal(1))(c)
+        }
+      })
+      |> ignore
+    },
+    w=320.0,
+    h=420.0,
+    platform=2,
+  )
+  t.draw()
+  t.frame()
+  covered.set(true)
+  t.frame()
+  t.frame()
+  t.frame()
+  covered.set(false)
+  let placed = commit_counts[0]
+  t.frame()
+  // (back: what holds it, laid out again; its 40 boxes as they were)
+  assert_true(commit_counts[0] - placed < 12, msg="laid anew: \{commit_counts[0] - placed}")
+  assert_true(t.find("box 3") is Some(_))
+}
