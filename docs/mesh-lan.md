@@ -1,12 +1,5 @@
 # A station on the device's LAN
 
-> **Since 2026-10-29** a device reaches a station with one connection on its main endpoint (home on every relay, iroh
-> from zzj3720/iroh `stillfail`): the station's LAN and tailnet addresses are given to that connection, iroh
-> opens a path to them beside its relay paths, and every path is given up after 3 s of silence (not 15 s), its
-> packets going on on another. The separate LAN and tailnet endpoints below are dialled only while the station's
-> workspace turned the main endpoint's ways off (`ways_off`: `direct`, or one of still.fail's relays). What follows is
-> why they were made, and how they work in that case.
-
 A device on the same LAN as a station reaches it directly, on an endpoint that dials the station's LAN addresses and
 nothing else. It does not rely on iroh's hole punching.
 
