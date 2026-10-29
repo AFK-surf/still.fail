@@ -1327,8 +1327,8 @@ pub fn phone_post() -> Json {
 pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
   let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file"
-  let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted"
-  // (chat-phone-granted: its request approved already)
+  let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks"
+  // (chat-phone-granted: its request approved already; chat-phone-lacks: waiting, on a phone without Developer options)
   if f.mode == "chat-phone-granted" && fix_phone.val == "" {
     fix_phone.val = "granted"
   }

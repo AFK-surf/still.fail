@@ -1065,6 +1065,12 @@ pub fn fixture(mode : String) -> Source {
       "{\"supported\":true,\"developer\":true,\"wireless\":true,\"wifi\":true,\"canSwitch\":false,\"reads\":false}",
     )
   }
+  // (chat-phone-lacks: a phone without Developer options yet, its request's card saying so)
+  if f.mode == "chat-phone-lacks" {
+    @settings.adb_phone_said(
+      "{\"supported\":true,\"developer\":false,\"wireless\":false,\"wifi\":true,\"canSwitch\":false,\"reads\":false}",
+    )
+  }
   let read_bytes = fn(name : String, params : Json, done : (Result[(Json, Bytes), Json]) -> Unit) {
     match fixture_kept(name, params, None) {
       Some(r) => {

@@ -98,7 +98,8 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
     if @sf.button(c, tr("android-settings.vault.act.deny"), key="phone/" + request + "/no", tone=Ghost, busy=pending == Some(false), disabled=under) {
       decide(false)
     }
-    if scopes.length() < 2 {
+    // (nothing to allow yet: no length to choose)
+    if scopes.length() < 2 || lacks is Some(_) {
       return
     }
     let entries = scopes.map(fn(s) { @kit.menu_radio(s, s == scope, label=tr("android-settings.vault.scope." + s)) })
