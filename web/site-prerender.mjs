@@ -19,6 +19,8 @@ Object.assign(globalThis, {
   cancelAnimationFrame: (t) => clearTimeout(t),
   addEventListener: noop,
   removeEventListener: noop,
+  // Where the page is (the app's own links are written out from it as it renders: a chat's composer's).
+  location: new URL("https://still.fail/"),
   // A document with no body: what the app would put on the page (更新 at the sidebar's top) is drawn in place (brand.tsx).
   document: { documentElement: { dataset: { theme: "dark" }, hasAttribute: () => false }, body: null, getElementById: () => null, getElementsByTagName: () => [], querySelector: () => null, addEventListener: noop, removeEventListener: noop },
 });

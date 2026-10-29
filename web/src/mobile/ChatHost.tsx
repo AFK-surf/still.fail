@@ -10,20 +10,22 @@ import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRe
 import { useParams } from "react-router";
 import { StationContext, type Station } from "../station.tsx";
 import { useApp } from "./app.tsx";
-import { ChatScreen, ChatWaiting, openAttach, openedAs, sendSharing, useComposerBar, type Draft } from "./Chat.tsx";
+import { ChatScreen, ChatWaiting, composerShown, openAttach, openedAs, sendSharing, useComposerBar, type Draft } from "./Chat.tsx";
 import { ComposerExtras } from "../Chat.tsx";
 import { openRefSheet, openStationFiles } from "./StationFiles.tsx";
 import { useDraft } from "../draft.ts";
 import { settling, useMorph } from "../morph.ts";
 import { useStationCall, type Attachment } from "../api.ts";
 import { NewChatScreen } from "./NewChat.tsx";
+import { Picture } from "../picture.ts";
+import { useTopic } from "../core/react.ts";
 import * as css from "./ChatHost.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import { t } from "../i18n.ts";
 import { whenRowIn } from "../madeChat.ts";
-import type { ChatCacheCold, ChatCcTo } from "../core/shapes.ts";
+import type { ChatCacheCold, ChatCcTo, ChatView } from "../core/shapes.ts";
 
 // The composer's height, set at its page's root (MobileComposer), as that element's own; the room it leaves a chat's
 // list, a length worked out there and inherited (ChatHost.css.ts): one changing with the other only past a few lines.
@@ -109,7 +111,10 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
     : !stations ? <ChatWaiting text={t("common.readingStations")} />
     : !station ? <ChatWaiting gone={t("web-mobile.noStation")} />
     : <StationContext.Provider value={station}><ChatScreen /></StationContext.Provider>, [id, stations, station]);
-  const composer = shown && <MobileComposer shown={shown} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} />;
+  // Drawn as a picture (../picture.ts), its page's effects never run to say what the composer writes to: as its chat says.
+  const pictured = useTopic<ChatView>(useContext(Picture) && station && chat !== undefined ? { topic: "chat", station: station.address, session: openedAs(chat) } : null).value;
+  const seen = shown ?? (pictured && station ? composerShown(pictured, station.address) : null);
+  const composer = seen && <MobileComposer shown={seen} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} />;
   return (
     <HostContext.Provider value={host}>
       <div className={css.mChatHost} ref={root} data-new={id === undefined || undefined}>

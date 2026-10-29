@@ -320,6 +320,18 @@ export class Virtual {
     const total = this.total();
     return { rows, after: total - this.lead - this.trail - end, scrollTop: this.top - this.drift, total: total - this.drift, drift: this.drift };
   }
+  /** Every item, from the list's start, as `layout` would make them all: the list drawn whole, where nothing scrolls it
+   *  or measures it (the app drawn as a picture: ../picture.ts). */
+  whole(): Layout {
+    const rows: Row[] = [];
+    let end = 0;
+    for (let i = 0; i < this.items.length; i++) {
+      rows.push({ key: this.items[i]!.key, index: i, space: this.tops[i]! - end });
+      end = this.tops[i]! + this.heightOf(i);
+    }
+    const total = this.natural();
+    return { rows, after: total - this.lead - this.trail - end, scrollTop: 0, total, drift: 0 };
+  }
   /** Changes when row descriptions change; hidden history records leave it alone. */
   get itemsVersion(): number { return this.revision; }
   get mode(): Anchor { return this.anchor; }
