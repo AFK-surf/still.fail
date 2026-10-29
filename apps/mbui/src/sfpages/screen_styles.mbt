@@ -100,30 +100,6 @@ let screen_title_words : @ui.TextStyle = @ui.text_style(
 let screen_line_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, wrap=false, w=Cut)
 
 ///|
-/// 只看 / 控制 (Parts.kt Seg at 32 high, its corner 16, 2 in): a track of the ink at 6%, the chosen one on a light
-/// thumb with a hairline round it, its word in the ink (the other muted), 10 in from each side.
-// kept across runs: a value (no field of it changes)
-let seg_track : @ui.Style = @ui.css("row h=S8 p=S0_5 radius=Xl1_5 bg=Tint")
-
-///|
-// kept across runs: a value (no field of it changes)
-let seg_item : @ui.Style = @ui.css("row h=Full px=S2_5 align=ACenter justify=JCenter")
-
-///|
-/// The thumb: lifted out of the track (white; the dark theme's 0x3A3B40) with a hairline round it (the line's colour,
-/// 0.5), concentric with the track.
-// kept across runs: a value (no field of it changes)
-let seg_thumb : @ui.Style = @ui.css("radius=Inner bg=Lifted border=B0_5 border_color=Line")
-
-///|
-// kept across runs: a value (no field of it changes)
-let seg_on_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let seg_off_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
 /// 全屏's tools: a capsule floating still, a round button 4 in from its edge, 4 between.
 // kept across runs: a value (no field of it changes)
 let full_tools_box : @ui.Style = @ui.css("p=S1 gap=S1 align=ACenter radius=Xl4 bg=Floating shadow=Sm")

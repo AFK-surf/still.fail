@@ -700,6 +700,8 @@ pub fn icon_action(@ui.Ctx, String, String, String, disabled? : Bool) -> Bool
 
 pub fn icon_button(@ui.Ctx, String, key? : String, size? : Double, icon_size? : Double, on? : Bool, lit? : Bool, round? : Bool, corner? : Double, linked? : @ui.CornerOf, ink? : Int64, quiet? : Int64, disabled? : Bool, label? : String, shortcut? : String) -> Bool
 
+pub let icon_button_side : Double
+
 pub let icon_fallback : Int64
 
 pub fn icon_parts(@ui.Ctx, String, Array[Int32], size? : Double, color? : Int64) -> Int32
@@ -1638,7 +1640,7 @@ pub let seg_card_radius : @ui.Radius
 
 pub let seg_pill_min : @ui.Len
 
-pub fn segmented(@ui.Ctx, String, Array[String], Int32, item_w? : Double, ink? : Int64, thumb? : Int64) -> Int32
+pub fn segmented(@ui.Ctx, String, Array[String], Int32, item_w? : Double, ink? : Int64, thumb? : Int64, icons? : Array[String], bar? : Bool, said? : String) -> Int32
 
 pub fn segmented_height() -> Double
 

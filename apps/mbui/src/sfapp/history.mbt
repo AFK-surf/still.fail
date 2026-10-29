@@ -94,12 +94,14 @@ fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
     })
     |> ignore
     history_actions(c, src, r, a)
-    dui.history_tab = seg(
-      c,
-      "history/tab",
-      [tr("android-chat.history.tab.steps"), tr("android-chat.history.tab.details")],
-      dui.history_tab,
-    )
+    @sf.head_end(c, fn() {
+      dui.history_tab = @sf.segmented(
+        c,
+        "history/tab",
+        [tr("android-chat.history.tab.steps"), tr("android-chat.history.tab.details")],
+        dui.history_tab,
+      )
+    })
   })
   |> ignore
   history_summary(c, a)
