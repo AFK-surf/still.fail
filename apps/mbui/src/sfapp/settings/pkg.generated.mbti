@@ -88,6 +88,8 @@ pub fn fixture_changed() -> Unit
 
 pub fn fixture_desk() -> String
 
+pub fn fixture_elevation(Json?) -> Unit
+
 pub fn fixture_followed() -> Unit
 
 pub fn fixture_outflow(Bool) -> Unit

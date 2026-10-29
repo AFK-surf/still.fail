@@ -592,6 +592,32 @@ test("a_mac_stations_grants_are_said_in_words_with_what_goes_without_them_and_ho
   assert.ok("ok" in conform("StationPermissions", shown.permissions), JSON.stringify(conform("StationPermissions", shown.permissions)));
 });
 
+test("a_windows_stations_running_as_administrator_is_said_with_how_a_change_goes_and_how_it_failed", () => {
+  const c = { now: 0, offsetMin: 0 };
+  const topic = { topic: "overview", station: "w/s" };
+  const shown = (elevation: J): J => (p.decorate(topic, { elevation }, c) as J).elevation;
+  const base = { on: false, elevated: false, canElevate: true, manage: true };
+  let o = shown(base);
+  assert.deepEqual(o, { on: false, busy: false, line: "agent 的命令都以管理员权限运行，不再弹 UAC；没有逐条批准，station 由整个 workspace 共用", canChange: true });
+  assert.ok("ok" in conform("StationElevation", o), JSON.stringify(conform("StationElevation", o)));
+  // Windows' prompt up: the switch where it goes, waiting; who must answer it, and that nothing is lost if nobody does.
+  o = shown({ ...base, step: "asking", want: true });
+  assert.deepEqual([o.on, o.busy, o.canChange], [true, true, false]);
+  assert.match(o.line, /需要有人在这台电脑前点「是」.*station 不受影响/);
+  assert.match(shown({ ...base, on: true, elevated: true, step: "restarting", want: false }).line, /^正在重启 station/);
+  // Failed: nothing changed, said why; an error with its words.
+  o = shown({ ...base, failed: "unanswered", want: true });
+  assert.deepEqual([o.on, o.busy, o.canChange], [false, false, true]);
+  assert.match(o.failed, /^2 分钟内没人确认 UAC/);
+  assert.equal(shown({ ...base, failed: "error", message: "拒绝访问" }).failed, "切换失败，设置没有改变：拒绝访问");
+  assert.equal(shown({ ...base, failed: "declined" }).failed, "UAC 被拒绝，设置没有改变");
+  // Its user no administrator, or a member not its managers: not switched from here.
+  assert.deepEqual([shown({ ...base, canElevate: false }).canChange, shown({ ...base, canElevate: false }).line], [false, "运行 station 的 Windows 账号不是管理员，不能以管理员身份运行"]);
+  assert.equal(shown({ ...base, manage: false }).canChange, false);
+  // Not Windows, or a station from before it: none.
+  assert.equal("elevation" in (p.decorate(topic, { counts: {} }, c) as J), false);
+});
+
 test("a_connect_says_where_it_is_reached_how_it_runs_and_what_switching_it_does", () => {
   const base: J = { id: "f1", name: "助手", kind: "feishu", mode: "single-session", requireMention: true, session: "s1", feishu: { appId: "cli_1", domain: "lark" }, bind: { runtime: "claude" } };
   const c = p.connect(base);

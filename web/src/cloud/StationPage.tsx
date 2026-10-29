@@ -29,6 +29,7 @@ import { ScreensSection } from "../screen/ScreenList.tsx";
 import { PermissionsSection } from "../StationPermissions.tsx";
 import { SearchSection } from "../StationSearch.tsx";
 import { ContextSection } from "../StationContext.tsx";
+import { ElevationSection } from "../StationElevation.tsx";
 import { LoginsSection } from "../MachineLogins.tsx";
 import { NavAction, NavList, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
@@ -343,6 +344,8 @@ function Settings({ s, manager, marked }: { s: StationView; manager: boolean; ma
       {s.online && o?.search && <SearchSection station={s.station} search={o.search} manager={manager} />}
       {/* Whether a session whose prompt cache is over goes on afresh by itself; none from a station from before it. */}
       {o?.context && <ContextSection station={s.station} context={o.context} manager={manager} />}
+      {/* Whether it runs as the machine's administrator (a Windows station only). */}
+      {s.online && o?.elevation && <ElevationSection station={s.station} elevation={o.elevation} />}
       {manager && <Workspaces s={s} />}
       {o?.network && <NetworkSection station={s.station} network={o.network} manager={manager} />}
     </>

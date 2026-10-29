@@ -5098,6 +5098,23 @@ export interface StationPermissions {
 	canRequest: boolean;
 }
 
+/** Whether a Windows station runs as the machine's administrator (docs/station-ts-native.md), as its page shows it. */
+export interface StationElevation {
+	/** Where its switch stands: the setting, or what a change under way goes to (`elevation.set`). */
+	on: boolean;
+	/** A change is under way (Windows' prompt up, the station restarting): the switch waits. */
+	busy: boolean;
+	/** What it means, or how the change under way goes. */
+	line: string;
+	/** How the last change failed (nothing changed then), in a line; none when it did not. */
+	failed?: string;
+	/**
+	 * The viewer may switch it now (one of the workspace's owners and admins, its Windows user an administrator,
+	 * no change under way).
+	 */
+	canChange: boolean;
+}
+
 /** A station's overview, with what the clients show of its connects and profiles. */
 export interface Overview {
 	automaticDecisions?: AutomaticDecisionView;
@@ -5163,6 +5180,11 @@ export interface Overview {
 	 * shows nothing).
 	 */
 	permissions?: StationPermissions;
+	/**
+	 * Whether it runs as the machine's administrator (a Windows station only; none from one older than it, which
+	 * then shows nothing).
+	 */
+	elevation?: StationElevation;
 }
 
 /** How a connection to a station goes: straight there, through a relay, or still being chosen. */
