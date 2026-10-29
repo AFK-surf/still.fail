@@ -439,7 +439,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
         const v = get(get(registration, "keys"), k);
         return typeof v === "string" && v !== "";
       };
-      const ok = kind === "web" ? text("endpoint") && keys("p256dh") && keys("auth") : kind === "fcm" ? text("token") : false;
+      const ok = kind === "web" ? text("endpoint") && keys("p256dh") && keys("auth") : kind === "fcm" || kind === "apns" ? text("token") : false;
       if (!ok) throw CoreError.invalid(t("core-misc.params.push_registration"));
       return { kind: "pushRegister", registration };
     }

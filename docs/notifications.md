@@ -11,8 +11,8 @@ them, an agent failed, or another person said something. Two ways carry it:
   front.
 - **Push**, while no client runs: the station tells still.fail cloud, which
   pushes to the person's registered devices — Web Push (VAPID) for browsers,
-  Firebase Cloud Messaging for Android. The desktop app has no push; it keeps
-  running in the background on macOS and hears them locally.
+  Firebase Cloud Messaging for Android, APNs for iOS. The desktop app has no
+  push; it keeps running in the background on macOS and hears them locally.
 
 A notice is never shown for the chat the person is looking at, and one chat
 has one notification at a time (its `tag`: a newer one replaces the older).
@@ -83,7 +83,7 @@ Calls:
 | Call | Params | Result |
 | --- | --- | --- |
 | `push.key` | — | `{ vapid }`: still.fail cloud's VAPID public key (base64url), to subscribe a browser |
-| `push.register` | `{ kind: "web", endpoint, keys: { p256dh, auth } }` or `{ kind: "fcm", token }` | — ; registers this device with every signed-in account, and again with each account signed in later (kept in storage). The core adds what the device shows (`lang`, `kinds`, `preview`, as `notify.set` keeps them) and registers it again with every account whenever they change |
+| `push.register` | `{ kind: "web", endpoint, keys: { p256dh, auth } }`, `{ kind: "fcm", token }` or `{ kind: "apns", token, sandbox? }` (the APNs token in hex; `sandbox`: a development build's) | — ; registers this device with every signed-in account, and again with each account signed in later (kept in storage). The core adds what the device shows (`lang`, `kinds`, `preview`, as `notify.set` keeps them) and registers it again with every account whenever they change |
 | `push.unregister` | — | — ; takes this device's registration off every account |
 | `notify.set` | `on?`, `asked?`, `kinds?`, `preview?`, `workspaces?` | the `notify` value; kept on the device. `workspaces` (a workspace's id → heard of, each given one changing) turns a workspace's notices off or on again: one turned off has none shown and none pushed (its registration says `muted`, the cloud sends nothing of it), and adds nothing to the app's badge (`workspaceMarks` `badge`; its own mark stays); every other one, those joined later too, is heard of. `kinds` (`{ wait, failed, done, message }`, each given one changing) says which notices are shown: `wait` covers `wait` and `block`; `done` is `off`, `away` (only while no page of the app is in front: shown and focused; the default) or `always`. `preview` off: a notice's body says only what kind of thing happened (待你决定, 出错, 已完成, 有新消息), not what was said; a push's too, as the cloud makes it for the device (its registration says `preview`), so what was said does not leave for the push service. Off also takes this device's registration off every account, and `push.register` does nothing while off |
 | `notify.permission` | `state` | — ; what the system lets this device show, as its app finds it: `granted`, `denied`, `default` (not asked yet) or `unknown`. Not kept: each app says it as it starts and again as it comes back to the front (a browser also as its site permission changes: web/src/notify.ts; the desktop app from its main process: apps/desktop/src/notify-permission.ts; Android from its activity) |
@@ -107,7 +107,7 @@ with `notice.claim`, so it is shown once however many pages are open; one not ta
 ## still.fail cloud
 
 - `GET /v1/push/key` → `{ vapid }` (no auth).
-- `POST /v1/push` (bearer access token) `{ kind: "web", endpoint, keys: { p256dh, auth } }` or `{ kind: "fcm", token }`, with `lang?` and what the device shows: `kinds?` (as `notify.set`), `preview?` → 204. One row per account and endpoint/token: a device signed in with several accounts has one for each (registered again with the same account, it moves to this session, with what it says now). A device that two of a notice's people are signed in with gets it once. A device that said what it shows is sent only those kinds (`block` is `wait`; `done` unless `off`, as no page of it is in front when a push is shown), with its `preview` off a body of only what happened (`cloud.notice.hidden.*`); one that said nothing (an older app) gets every kind in full.
+- `POST /v1/push` (bearer access token) `{ kind: "web", endpoint, keys: { p256dh, auth } }`, `{ kind: "fcm", token }` or `{ kind: "apns", token, sandbox? }`, with `lang?` and what the device shows: `kinds?` (as `notify.set`), `preview?` → 204. One row per account and endpoint/token: a device signed in with several accounts has one for each (registered again with the same account, it moves to this session, with what it says now). A device that two of a notice's people are signed in with gets it once. A device that said what it shows is sent only those kinds (`block` is `wait`; `done` unless `off`, as no page of it is in front when a push is shown), with its `preview` off a body of only what happened (`cloud.notice.hidden.*`); one that said nothing (an older app) gets every kind in full.
 - `DELETE /v1/push` (bearer) `{ endpoint }` or `{ token }` → 204; only the caller's account's row goes.
 - A session signed out (`/v1/auth/logout`, revoked) takes its registrations with it.
 - `POST /v1/stations/notify`, signed by the station like its traces: headers
@@ -129,7 +129,9 @@ with `notice.claim`, so it is shown once however many pages are open; one not ta
   404/410 (gone) for is dropped, with every account it was registered with.
 
 Push payload (Web Push: the encrypted body, `aes128gcm`; FCM: a data message,
-high priority, every value a string):
+high priority, every value a string; APNs: an alert, its `aps` the title and
+body, `thread-id` the tag, `apns-collapse-id` a hash of the tag so a chat's
+newer push replaces the one shown, beside `aps` the same keys):
 
 ```jsonc
 { "type": "notice", "kind": "done", "title": "…", "body": "…",
@@ -140,9 +142,13 @@ high priority, every value a string):
 
 Secrets: `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (P-256, base64url raw
 public point / private scalar `d`), `VAPID_SUBJECT` (a `mailto:`);
-`FCM_SERVICE_ACCOUNT` (the Firebase service account's JSON). Without VAPID keys
-`/v1/push/key` answers 404 and web registrations are refused; without the
-service account FCM pushes are skipped.
+`FCM_SERVICE_ACCOUNT` (the Firebase service account's JSON); `APNS_KEY` (the
+team's APNs key: `{ keyId, teamId, key: the .p8's PEM, topic? }`, the topic the
+app's bundle id, `fail.still.iphone` by default; the deploy directory's
+`apns.json`, GitHub's `APNS_JSON`). Without VAPID keys `/v1/push/key` answers
+404 and web registrations are refused; without the service account FCM pushes
+are skipped, without the APNs key APNs pushes. APNs is spoken to straight from
+the worker (its HTTP/2 API, an ES256 provider token kept 40 minutes).
 
 ## Station
 
@@ -173,3 +179,11 @@ cloud sends nothing. An older cloud answers 404, and nothing more comes of it.
   about (`seq`: the card for `wait`, else the message noticed), with Back
   returning to its chat list; without a `seq` (an older station or cloud) the
   chat opens where it would. 我 → 通知 turns them off, kept by the core.
+- iOS: the app asks for its APNs token each start (an app signed with the
+  `aps-environment` entitlement: TestFlight's and the App Store's) and
+  registers it with `push.register` (`sandbox` when its profile says
+  development). The system shows a push itself; while the app is in front it
+  shows none (the app shows its local notices there). Tapping one opens its
+  chat at the message it is about, as on Android. A push does not wake the app,
+  so it neither brings the chat's messages nor puts another workspace's name
+  before the title.

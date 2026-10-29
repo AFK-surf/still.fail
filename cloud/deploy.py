@@ -78,9 +78,11 @@ DEPLOY = deploy_dir()
 KEYS = DEPLOY / "keys.json"
 POSTHOG = DEPLOY / "posthog.json"
 AXIOM = DEPLOY / "axiom.json"
-# Push notifications (docs/notifications.md): the VAPID key ({public, private, subject}) and Firebase's service account.
+# Push notifications (docs/notifications.md): the VAPID key ({public, private, subject}), Firebase's service account
+# and the APNs key ({keyId, teamId, key, topic?}).
 VAPID = DEPLOY / "vapid.json"
 FCM = DEPLOY / "fcm-service-account.json"
+APNS = DEPLOY / "apns.json"
 REVIEW = DEPLOY / "review-accounts.json"
 
 
@@ -168,6 +170,10 @@ def push() -> dict:
         value["FCM_SERVICE_ACCOUNT"] = FCM.read_text()
     else:
         print(f"note: {FCM} is missing; no pushes to Android")
+    if APNS.exists():
+        value["APNS_KEY"] = APNS.read_text()
+    else:
+        print(f"note: {APNS} is missing; no pushes to iOS")
     return value
 
 
@@ -331,6 +337,7 @@ def main() -> None:
         print("axiom", "present" if AXIOM.exists() else f"missing: no traces without {AXIOM}")
         print("vapid", "present" if VAPID.exists() else f"missing: no Web Push without {VAPID}")
         print("fcm", "present" if FCM.exists() else f"missing: no pushes to Android without {FCM}")
+        print("apns", "present" if APNS.exists() else f"missing: no pushes to iOS without {APNS}")
         print("beta zone", beta_zone(), "active" if beta_ready(account_id()) else "not active: web-beta and site-beta will be skipped")
         return
 

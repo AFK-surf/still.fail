@@ -1283,6 +1283,25 @@ test("a_push_registration_says_what_this_device_shows_and_is_given_again_as_that
   core.close();
 });
 
+test("an_ios_apns_token_is_registered_as_it_is_and_taken_off_by_it", async () => {
+  const { host, core } = await started();
+  const sent: [string, J][] = [];
+  stationReplies(host, (req) => {
+    if (!req.url.endsWith("/v1/push")) return undefined;
+    sent.push([req.method, JSON.parse(new TextDecoder().decode(req.body ?? new Uint8Array()))]);
+    return {};
+  });
+  const ui = core.connect();
+  const token = "ab".repeat(32);
+  call(core, ui, 1, "push.register", { kind: "apns", token, sandbox: true });
+  await host.settle();
+  assert.deepEqual(sent.map(([m, p]) => [m, p.kind, p.token, p.sandbox]), [["POST", "apns", token, true]]);
+  call(core, ui, 2, "push.unregister", {});
+  await host.settle();
+  assert.deepEqual(sent.slice(1), [["DELETE", { token }]]);
+  core.close();
+});
+
 /// What came out: subscription values (deltas applied) into `values`, and the calls' answers (core/tests.rs `answers`).
 function answersOf(host: FakeHost, values: Map<number, unknown>): Map<number, { ok: J } | { err: string }> {
   const out = new Map<number, { ok: J } | { err: string }>();

@@ -12,11 +12,12 @@ priv struct FakeSystem {
   mut answer : Bool?
   mut opened : String
   mut token : String
+  mut service : String
 }
 
 ///|
 fn fake_system() -> FakeSystem {
-  { shown: [], cancelled: [], permission: "granted", asks: 0, answer: None, opened: "", token: "" }
+  { shown: [], cancelled: [], permission: "granted", asks: 0, answer: None, opened: "", token: "", service: "fcm" }
 }
 
 ///|
@@ -40,6 +41,7 @@ fn use_system(s : FakeSystem) -> Unit {
       o
     },
     token: fn() { s.token },
+    service: fn() { s.service },
   }
 }
 
@@ -289,6 +291,15 @@ test "pushes: none registered without a token, taken off while off; a token regi
   assert_eq(reg.length(), 1)
   assert_true(reg[0].params.stringify().contains("\"token\":\"tok-1\""))
   assert_true(reg[0].params.stringify().contains("\"kind\":\"fcm\""))
+  // iOS's: an APNs token, said with which of APNs' servers knows it
+  let calls4 : Array[Made] = []
+  let sys4 = fake_system()
+  sys4.token = "ab12"
+  sys4.service = "apns-sandbox"
+  notify_core(calls4, sys4, notify=Ref({ "on": true, "asked": true, "push": true, "show": [] })) |> ignore
+  let reg = named(calls4, "push.register")
+  assert_eq(reg.length(), 1)
+  assert_eq(reg[0].params, { "kind": "apns", "token": "ab12", "sandbox": true })
 }
 
 ///|

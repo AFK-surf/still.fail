@@ -925,6 +925,7 @@ static void say_activity(NSUserActivity *a) {
 // (below) the system's notifications, the default network, the app's time off the screen, the keyboard put away by
 // the person: watched from the start
 static void notice_start(void);
+static void push_got(NSData *token);
 static void network_start(void);
 static void watch_shown(void);
 static void watch_keyboard(void);
@@ -962,6 +963,13 @@ static void watch_heat(void) {
   watch_shown();
   watch_keyboard();
   return YES;
+}
+// The device's APNs token (asked for as notice_start starts), each time the system gives it: a new one replaces it.
+- (void)application:(UIApplication *)app didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)token {
+  push_got(token);
+}
+- (void)application:(UIApplication *)app didFailToRegisterForRemoteNotificationsWithError:(NSError *)e {
+  say([NSString stringWithFormat:@"push: no token: %@", e.localizedDescription]);
 }
 - (UISceneConfiguration *)application:(UIApplication *)app
     configurationForConnectingSceneSession:(UISceneSession *)session
@@ -1544,9 +1552,14 @@ void mb_host_set_dark(int32_t dark) {
 // the front with that (the center's delegate, set as the app starts: a tap that launched it comes too); shown while the
 // app is in front as well (the app decides what to show). Each is also kept (one per tag) and said on the log (NOTICE
 // <tag>\t<title>\t<body>), and a scripted run taps one by its words (drive 6), which gives the app what it opens as a
-// tap would. No pushes (APNs wants a signed app's entitlement; Android's FCM is not done either).
+// tap would. Pushes are APNs': the token asked for as the app starts (an app signed without the aps-environment
+// entitlement gets none, and has no pushes), given to the app as `push_token`, `push_service` saying which of APNs'
+// servers knows it ("apns", "apns-sandbox": a development build's). The system shows a push itself, the app in front
+// or not; in front it shows nothing, as the app's own notices say it there (Android shows pushes only behind too), and
+// a tap opens what the push says (its url and seq, as Android's Push.java does).
 static NSMutableArray<NSArray<NSString *> *> *notices;
 static NSString *notice_opened = @"";
+static NSString *push_token = @"";
 // what the system allows: 0 not known yet, 1 granted, 2 denied, 3 not asked; the answer to an ask: -1 none, 0, 1
 static _Atomic int32_t notice_allowed = 0;
 static _Atomic int32_t notice_answered = -1;
@@ -1564,12 +1577,22 @@ static void notice_drop(NSString *tag) {
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center
        willPresentNotification:(UNNotification *)notification
          withCompletionHandler:(void (^)(UNNotificationPresentationOptions))done {
+  if ([notification.request.trigger isKindOfClass:UNPushNotificationTrigger.class]) {
+    done(UNNotificationPresentationOptionNone);
+    return;
+  }
   done(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionList | UNNotificationPresentationOptionSound);
 }
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center
     didReceiveNotificationResponse:(UNNotificationResponse *)response
              withCompletionHandler:(void (^)(void))done {
-  NSString *opens = response.notification.request.content.userInfo[@"opens"];
+  NSDictionary *info = response.notification.request.content.userInfo;
+  NSString *opens = info[@"opens"];
+  // a push's: what it is about, as a notice the app shows opens it (its url, a line, the message's seq)
+  if (![opens isKindOfClass:NSString.class] && [info[@"url"] isKindOfClass:NSString.class]) {
+    NSString *seq = [info[@"seq"] isKindOfClass:NSString.class] ? info[@"seq"] : @"";
+    opens = [NSString stringWithFormat:@"%@\n%@", info[@"url"], seq];
+  }
   NSString *tag = response.notification.request.identifier;
   dispatch_async(dispatch_get_main_queue(), ^{
     if ([opens isKindOfClass:NSString.class]) notice_opened = opens;
@@ -1602,6 +1625,34 @@ static void notice_start(void) {
   notice_refresh();
   [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil
                                                 usingBlock:^(NSNotification *n) { notice_refresh(); }];
+  // (asked each start, as Apple wants: the token may have changed; shown or not is the system's settings' say)
+  [UIApplication.sharedApplication registerForRemoteNotifications];
+}
+
+static void push_got(NSData *token) {
+  NSMutableString *hex = [NSMutableString stringWithCapacity:token.length * 2];
+  const uint8_t *b = token.bytes;
+  for (NSUInteger i = 0; i < token.length; i++) [hex appendFormat:@"%02x", b[i]];
+  if ([hex isEqualToString:push_token]) return;
+  say(@"push: a token");
+  push_token = hex;
+  [the_view requestFrame];
+}
+
+// Which of APNs' servers knows the token: the sandbox's for a build its profile says is a development one (the
+// aps-environment of embedded.mobileprovision: an App Store or TestFlight build's says production, or has none).
+static NSString *push_service(void) {
+  static NSString *service;
+  if (service) return service;
+  service = @"apns";
+  NSString *path = [NSBundle.mainBundle pathForResource:@"embedded" ofType:@"mobileprovision"];
+  NSString *text = path ? [[NSString alloc] initWithData:[NSData dataWithContentsOfFile:path] encoding:NSISOLatin1StringEncoding] : nil;
+  NSRange key = text ? [text rangeOfString:@"<key>aps-environment</key>"] : NSMakeRange(NSNotFound, 0);
+  if (key.location != NSNotFound) {
+    NSRange rest = NSMakeRange(NSMaxRange(key), MIN((NSUInteger)64, text.length - NSMaxRange(key)));
+    if ([text rangeOfString:@"<string>development</string>" options:0 range:rest].location != NSNotFound) service = @"apns-sandbox";
+  }
+  return service;
 }
 
 void mb_host_notice_show(moonbit_string_t channel, moonbit_string_t tag, moonbit_string_t title, moonbit_string_t body,
@@ -1667,8 +1718,10 @@ int32_t mb_host_notice_state(int32_t what) {
   return 1;
 }
 
-// A notification tapped, once; no push token or push here.
+// 0: a notification tapped, once; 1: the APNs token ("" none yet); 2: the push service that knows it.
 moonbit_string_t mb_host_notice_text(int32_t what) {
+  if (what == 1) return mb_string_from_ns(push_token);
+  if (what == 2) return mb_string_from_ns(push_token.length ? push_service() : @"");
   if (what != 0) return mb_string_from_ns(@"");
   NSString *o = notice_opened;
   notice_opened = @"";

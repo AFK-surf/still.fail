@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { exportPKCS8, generateKeyPair } from "jose";
+import { exportPKCS8, generateKeyPair, jwtVerify } from "jose";
 import { harness, type OutboundRequest } from "./harness.ts";
 import { line, noticeBody, noticeBodyFor, shown, showsOf } from "../src/noticeText.ts";
 import { encrypt, fromB64url, senderKeys, toB64url, vapidAuthorization } from "../src/webpush.ts";
@@ -371,6 +371,57 @@ test("signing a session out takes its registrations; the account's other session
     // All of them.
     await h.fetch("/v1/auth/logout", { method: "POST", headers: { authorization: `Bearer ${laptop.refresh_token}`, "content-type": "application/json" }, body: '{"all":true}' });
     assert.deepEqual(await (await notify(h, station, [notice(["bob@example.test"])])).json(), { sent: 0 });
+  } finally {
+    await h.close();
+  }
+});
+
+test("iOS devices get an APNs alert signed with the team's key, a chat's replacing the last; a token APNs no longer has is dropped", async () => {
+  const { privateKey, publicKey } = await generateKeyPair("ES256", { extractable: true });
+  const key = { keyId: "KEY1234567", teamId: "TEAM123456", key: await exportPKCS8(privateKey) };
+  const alice = "a1".repeat(32), gone = "b2".repeat(32), sandboxed = "c3".repeat(32);
+  const got: OutboundRequest[] = [];
+  const h = await harness({
+    apns: JSON.stringify(key),
+    push: (request) => {
+      got.push(request);
+      if (request.url.endsWith(gone)) return { status: 410, body: JSON.stringify({ reason: "Unregistered", timestamp: 1 }) };
+      return { status: 200, body: "" };
+    },
+  });
+  try {
+    const { id, station, aliceTokens, bobTokens } = await workspace(h);
+    for (const bad of [{ kind: "apns", token: "zz".repeat(32) }, { kind: "apns", token: alice, sandbox: "yes" }]) assert.equal((await register(h, aliceTokens, "POST", bad)).status, 400);
+    assert.equal((await register(h, aliceTokens, "POST", { kind: "apns", token: alice.toUpperCase() })).status, 204);
+    assert.equal((await register(h, bobTokens, "POST", { kind: "apns", token: gone })).status, 204);
+    assert.equal((await register(h, bobTokens, "POST", { kind: "apns", token: sandboxed, sandbox: true })).status, 204);
+    assert.deepEqual(await (await notify(h, station, [notice(["alice@example.test", "bob@example.test"], { kind: "failed", text: "token runs out", seq: 12 })])).json(), { sent: 2 });
+
+    const toAlice = got.find((r) => r.url === `https://api.push.apple.com/3/device/${alice}`)!;
+    assert.ok(got.some((r) => r.url === `https://api.sandbox.push.apple.com/3/device/${sandboxed}`), "a development build's token, to the sandbox");
+    const [head, claims] = toAlice.headers.authorization!.replace(/^bearer /, "").split(".").slice(0, 2).map((p) => JSON.parse(Buffer.from(p, "base64url").toString()));
+    assert.deepEqual([head.alg, head.kid, claims.iss], ["ES256", key.keyId, key.teamId]);
+    assert.ok(await jwtVerify(toAlice.headers.authorization!.replace(/^bearer /, ""), publicKey), "signed with the key");
+    assert.equal(toAlice.headers["apns-topic"], "fail.still.iphone");
+    assert.equal(toAlice.headers["apns-push-type"], "alert");
+    const tag = `${id}/${station.id}/ember:c-1/x y`;
+    assert.match(toAlice.headers["apns-collapse-id"]!, /^[0-9a-f]{48}$/, "the chat's, within APNs' 64 bytes");
+    const body = JSON.parse(new TextDecoder().decode(toAlice.body));
+    assert.deepEqual(body.aps, { alert: { title: "部署挂了", body: "出错 · token runs out" }, sound: "default", "thread-id": tag });
+    assert.equal(body.url, `/o/${id}/${station.id}/${encodeURIComponent("ember:c-1/x y")}?message=12`, "what a tap opens");
+    assert.equal(body.seq, "12");
+
+    // The gone token is dropped; the same chat again has the same collapse id; the provider token is kept.
+    assert.deepEqual(await (await notify(h, station, [notice(["alice@example.test", "bob@example.test"])])).json(), { sent: 2 });
+    const again = got.filter((r) => r.url.endsWith(alice));
+    assert.equal(again.length, 2);
+    assert.equal(again[1]!.headers["apns-collapse-id"], toAlice.headers["apns-collapse-id"]);
+    assert.equal(again[1]!.headers.authorization, toAlice.headers.authorization);
+    assert.equal(got.filter((r) => r.url.endsWith(gone)).length, 1);
+
+    // Taken off by its token, as the app's core says it.
+    assert.equal((await register(h, aliceTokens, "DELETE", { token: alice })).status, 204);
+    assert.deepEqual(await (await notify(h, station, [notice(["alice@example.test"])])).json(), { sent: 0 });
   } finally {
     await h.close();
   }

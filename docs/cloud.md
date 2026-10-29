@@ -133,7 +133,7 @@ station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 
 ## 推送通知
 
-设备（浏览器的 Web Push 订阅、安卓的 FCM token）登记在登录的账号和会话下（`POST/DELETE /v1/push`，会话退出时一起删掉）；station 把自己 chat 的通知签名后发到 `POST /v1/stations/notify`（在几个 workspace 里的 station 用 `workspace` 说是哪个的，缺省为主 workspace，不在那个 workspace 回 403），still.fail cloud 只推给通知里点名、并且是那个 workspace 成员的人。bug 报告（`/v1/feedback`）同样可以带 `workspace`。接口、签名和推送内容见 [notifications.md](notifications.md)，代码在 `cloud/src/push.ts`、`webpush.ts`、`fcm.ts`。
+设备（浏览器的 Web Push 订阅、安卓的 FCM token、iOS 的 APNs token）登记在登录的账号和会话下（`POST/DELETE /v1/push`，会话退出时一起删掉）；station 把自己 chat 的通知签名后发到 `POST /v1/stations/notify`（在几个 workspace 里的 station 用 `workspace` 说是哪个的，缺省为主 workspace，不在那个 workspace 回 403），still.fail cloud 只推给通知里点名、并且是那个 workspace 成员的人。bug 报告（`/v1/feedback`）同样可以带 `workspace`。接口、签名和推送内容见 [notifications.md](notifications.md)，代码在 `cloud/src/push.ts`、`webpush.ts`、`fcm.ts`、`apns.ts`。
 
 API Worker 的密钥（都可以不设：没有 VAPID 就没有 Web Push，`/v1/push/key` 回 404；没有服务账号就不推安卓）：
 
@@ -144,6 +144,7 @@ API Worker 的密钥（都可以不设：没有 VAPID 就没有 Web Push，`/v1/
   ```
 
 - `FCM_SERVICE_ACCOUNT`：Firebase 项目的服务账号 JSON（Firebase 控制台 → 项目设置 → 服务账号 → 生成新的私钥），原样放在部署目录的 `fcm-service-account.json`。
+- `APNS_KEY`：苹果推送（APNs）的密钥，`{ "keyId", "teamId", "key": .p8 的全文, "topic"?: bundle id，缺省 fail.still.iphone }`（Apple Developer → Keys 建，Environment 选 Sandbox & Production），放在部署目录的 `apns.json`。
 
 ## 部署
 

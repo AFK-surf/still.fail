@@ -33,7 +33,7 @@
 <p>still.fail 的 agent 运行在你自己的 station 上。你的设备和 station 之间是端到端加密的直接连接；直连不通时，会经过中继服务器转发，中继只转发加密数据，看不到内容。<strong>我们的服务器不保存你的聊天内容、附件和文件。</strong></p>
 <p>有两个例外，内容会经过或保存在我们这里：</p>
 <ul>
-<li><strong>推送通知</strong>：为了在你的设备上弹出通知，station 会把聊天标题、发言人名字和消息的前 140 个字经我们的服务器转发给 Google 的 Firebase 云消息（Android）或你浏览器的推送服务（网页）。我们只转发，不保存这些文字。在某台设备上关掉「通知里显示内容」后，发往这台设备的通知只说发生了什么（如「有新消息」），消息的文字不再转发；</li>
+<li><strong>推送通知</strong>：为了在你的设备上弹出通知，station 会把聊天标题、发言人名字和消息的前 140 个字经我们的服务器转发给 Google 的 Firebase 云消息（Android）、Apple 的推送通知服务（iOS）或你浏览器的推送服务（网页）。我们只转发，不保存这些文字。在某台设备上关掉「通知里显示内容」后，发往这台设备的通知只说发生了什么（如「有新消息」），消息的文字不再转发；</li>
 <li><strong>问题反馈</strong>：你或你的 station 上的 agent 主动提交的问题反馈（标题、描述、上下文和日志）会保存在我们的服务器上，用于排查问题。</li>
 </ul>
 <p>公开分享的聊天也保存在发布者的 station 上，访问者的浏览器通过加密连接直接从 station 读取。分享链接中 <code>#</code> 后面的密钥不会发送到我们的服务器。</p>
@@ -74,6 +74,7 @@
 <tr><th>服务商</th><th>所在地</th><th>用途</th><th>涉及的信息</th></tr>
 <tr><td>Cloudflare, Inc.</td><td>美国，全球网络</td><td>托管网站、服务器和数据存储，请求日志，发送验证码邮件，中继服务器</td><td>第 4 节中服务器保存的全部信息、请求日志、连接元数据</td></tr>
 <tr><td>Google LLC</td><td>美国</td><td>Google 登录；Android 推送（Firebase 云消息）</td><td>Google 账号信息、推送令牌和通知文字</td></tr>
+<tr><td>Apple Inc.</td><td>美国</td><td>iOS 推送（Apple 推送通知服务）</td><td>推送令牌和通知文字</td></tr>
 <tr><td>你的浏览器的推送服务（如 Google、Mozilla、Apple）</td><td>因浏览器而异</td><td>网页推送通知</td><td>推送地址和加密后的通知内容</td></tr>
 <tr><td>PostHog, Inc.</td><td>美国</td><td>使用统计、错误追踪、会话回放</td><td>账号 ID、使用事件、错误信息、遮盖后的会话回放</td></tr>
 <tr><td>Axiom, Inc.</td><td>美国</td><td>请求链路追踪、station 运行日志</td><td>账号 ID、会话 ID、请求路径和耗时；station ID 和脱敏后的运行日志</td></tr>

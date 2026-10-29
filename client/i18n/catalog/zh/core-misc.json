@@ -175,7 +175,7 @@
   "core-misc.params.not_object": "参数无效：应为对象",
   "core-misc.params.not_text": "参数应为文字",
   "core-misc.params.one_frame": "text、binary、close 必须且只能提供一个",
-  "core-misc.params.push_registration": "要么是 {kind: \"web\", endpoint, keys: {p256dh, auth}}，要么是 {kind: \"fcm\", token}",
+  "core-misc.params.push_registration": "要么是 {kind: \"web\", endpoint, keys: {p256dh, auth}}，要么是 {kind: \"fcm\" 或 \"apns\", token, sandbox?}",
   "core-misc.params.station": "参数无效：缺少 station",
   "core-misc.params.unknown_field": "参数无效：不存在 {field} 字段",
   "core-misc.pill.back": "已连接",

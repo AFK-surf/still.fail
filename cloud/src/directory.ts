@@ -82,7 +82,10 @@ const fail = (status: number, code: string): never => {
 type Row = Record<string, SqlStorageValue>;
 
 /** A device to push to, as registered (POST /v1/push). */
-export type PushDevice = { kind: "web"; endpoint: string; p256dh: string; auth: string } | { kind: "fcm"; token: string };
+export type PushDevice =
+  | { kind: "web"; endpoint: string; p256dh: string; auth: string }
+  | { kind: "fcm"; token: string }
+  | { kind: "apns"; token: string; sandbox: boolean };
 /** A device registered, with the language its notifications are said in (Chinese for one registered before languages). */
 export type PushRegistration = PushDevice & { id: string; lang: Lang; shows: Shows | null };
 
@@ -140,6 +143,8 @@ export class Directory extends DurableObject<Env> {
     if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "lang")) this.#run("ALTER TABLE push ADD COLUMN lang TEXT");
     // Nor what a device shows of notices (JSON: noticeText.ts Shows; null all, in full), before a device said.
     if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "shows")) this.#run("ALTER TABLE push ADD COLUMN shows TEXT");
+    // Nor whether an APNs token is a development build's (1) or not, before there was APNs.
+    if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "sandbox")) this.#run("ALTER TABLE push ADD COLUMN sandbox INTEGER");
     // Nor had workspaces a mark of their own (an emoji, an icon, as a station's), before they could; their first letter till then.
     const marked = new Set(this.#rows("PRAGMA table_info(workspaces)").map((r) => r.name as string));
     for (const column of ["emoji TEXT", "icon TEXT"]) {
@@ -1091,7 +1096,7 @@ export class Directory extends DurableObject<Env> {
   }
 
   // ── push registrations (docs/notifications.md) ──────────────────────────
-  // A device's push subscription (Web Push) or token (FCM) is registered with each account signed in on it, one row
+  // A device's push subscription (Web Push) or token (FCM, APNs) is registered with each account signed in on it, one row
   // each, which belongs to the sign-in session that registered it last; signing that session out takes it
   // (revokeSessions).
 
@@ -1102,6 +1107,8 @@ export class Directory extends DurableObject<Env> {
     const said = shows ? JSON.stringify(shows) : null;
     if (device.kind === "web") {
       this.#run("INSERT INTO push (id, sub, sid, kind, endpoint, p256dh, auth, created, lang, shows) VALUES (?, ?, ?, 'web', ?, ?, ?, ?, ?, ?)", ulid(), sub, sid, device.endpoint, device.p256dh, device.auth, nowSeconds(), lang, said);
+    } else if (device.kind === "apns") {
+      this.#run("INSERT INTO push (id, sub, sid, kind, token, sandbox, created, lang, shows) VALUES (?, ?, ?, 'apns', ?, ?, ?, ?, ?)", ulid(), sub, sid, device.token, device.sandbox ? 1 : 0, nowSeconds(), lang, said);
     } else {
       this.#run("INSERT INTO push (id, sub, sid, kind, token, created, lang, shows) VALUES (?, ?, ?, 'fcm', ?, ?, ?, ?)", ulid(), sub, sid, device.token, nowSeconds(), lang, said);
     }
@@ -1134,13 +1141,16 @@ export class Directory extends DurableObject<Env> {
     const devices: Record<string, PushRegistration[]> = {};
     for (const email of new Set(emails.map((e) => e.toLowerCase()))) {
       devices[email] = this.#rows(
-        `SELECT p.id, p.kind, p.endpoint, p.p256dh, p.auth, p.token, p.lang, p.shows FROM push p JOIN users u ON u.sub = p.sub JOIN members m ON m.sub = p.sub AND m.workspace = ?
+        `SELECT p.id, p.kind, p.endpoint, p.p256dh, p.auth, p.token, p.sandbox, p.lang, p.shows FROM push p JOIN users u ON u.sub = p.sub JOIN members m ON m.sub = p.sub AND m.workspace = ?
          WHERE lower(u.email) = ? ORDER BY p.id LIMIT ?`,
         workspace, email, LIMITS.pushPerUser,
       ).map((r): PushRegistration => {
         const lang = langOf(r.lang as string | null);
         const shows = typeof r.shows === "string" ? showsOf(JSON.parse(r.shows) as Record<string, unknown>) : null;
-        return r.kind === "web" ? { id: r.id as string, lang, shows, kind: "web", endpoint: r.endpoint as string, p256dh: r.p256dh as string, auth: r.auth as string } : { id: r.id as string, lang, shows, kind: "fcm", token: r.token as string };
+        const id = r.id as string;
+        if (r.kind === "web") return { id, lang, shows, kind: "web", endpoint: r.endpoint as string, p256dh: r.p256dh as string, auth: r.auth as string };
+        if (r.kind === "apns") return { id, lang, shows, kind: "apns", token: r.token as string, sandbox: r.sandbox === 1 };
+        return { id, lang, shows, kind: "fcm", token: r.token as string };
       });
     }
     return { workspace, devices };
