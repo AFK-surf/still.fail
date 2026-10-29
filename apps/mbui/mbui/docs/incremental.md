@@ -1,5 +1,8 @@
 # Work by what changed
 
+Superseded as the way there by docs/retained.md (2026-10-30): the view is made once and what changes is bound, not
+built every frame and skipped where it can be proven the same. What follows is where the frame-built way got to.
+
 A frame is a function of the state and the time, and mbui is deterministic. So the work a frame does should be in
 proportion to what changed since the last one, and what changed should be known from what read what, not found by
 comparing frames afterwards nor guessed by rules. This is the design mbui is moving to; the steps at the end say how,
