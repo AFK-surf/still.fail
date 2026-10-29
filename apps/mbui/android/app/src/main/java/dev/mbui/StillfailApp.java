@@ -9,7 +9,8 @@ import android.os.Bundle;
  * still.fail mbui's process, before its activity (mbui's MainActivity, the host's): what still.fail's Android app sets
  * going in its MainActivity.onCreate. A crash's exception kept (Crashes), the core started where the process is
  * started for the app's activity (coreAhead), the native heap watched (MemoryWatch), the bar's switches timed from the
- * finger lifted (BarTiming), 共享调试's native calls put (AdbShare), the push token asked for (Push).
+ * finger lifted (BarTiming), 共享调试's native calls put (AdbShare), the push token asked for (Push); in the keyboard's
+ * process (Keyboard.java) only the crash kept.
  */
 public final class StillfailApp extends Application {
     static StillfailApp app;
@@ -19,6 +20,8 @@ public final class StillfailApp extends Application {
         super.onCreate();
         app = this;
         Crashes.install(this);
+        // the keyboard's own process (Keyboard, the manifest's android:process): the keyboard alone, none of the app's
+        if (getProcessName().endsWith(":keyboard")) return;
         coreAhead();
         MemoryWatch.start(this);
         BarTiming.start(this);

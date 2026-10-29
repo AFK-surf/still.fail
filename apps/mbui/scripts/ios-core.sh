@@ -13,8 +13,9 @@ else
   CORE_TARGET=aarch64-apple-ios-sim
   HERMES_SLICE=out/core/hermes/Library/Frameworks/universal/hermes.xcframework/ios-arm64_x86_64-simulator
 fi
-# mbui/core's queue and the app's engine (its core_engine.m, which includes src/sfcore/apple_engine.m)
-APP_EXTRA="--extra=src/core/core_native.c --extra=src/$PKG/core_engine.m"
+# mbui/core's queue, the keyboard's files (src/pinyin) and the app's engine (its core_engine.m, which includes
+# src/sfcore/apple_engine.m)
+APP_EXTRA="--extra=src/core/core_native.c --extra=src/pinyin/read_file.c --extra=src/$PKG/core_engine.m"
 # the engine, the shell (and what it needs of the system: scripts/core.sh shell's native-static-libs for iOS), Hermes
 APP_LINK="out/core/$CORE_TARGET/libmbui_core.a out/core/$CORE_TARGET/libstillfail_shell.a -F$HERMES_SLICE -framework hermes \
   -Wl,-rpath,@executable_path/Frameworks -lc++ -framework AuthenticationServices -framework Security -framework LocalAuthentication \

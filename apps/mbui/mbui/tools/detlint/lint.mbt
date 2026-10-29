@@ -17,6 +17,8 @@ priv struct Config {
   skip : Array[String]
   // the token files: where a style's numbers are said (style-literal does not count them there)
   style_tokens : Array[String]
+  /// what draws a look not the theme's (detlint.json `style.outside`): no style rule counts it
+  style_outside : Array[String]
   // what tells outside of a frame: field calls ((src.call)(…): their field's name) and package functions
   effect_fields : Array[String]
   effect_calls : Array[String]
@@ -82,6 +84,7 @@ fn Config::new(d : @rjson.Value) -> Config {
     scripts: strs(d.get("scripts"), []),
     skip: strs(d.get("skip"), []),
     style_tokens: strs(sect(d, "style").get("tokens"), []),
+    style_outside: strs(sect(d, "style").get("outside"), []),
     effect_fields: strs(be.get("fields"), ["call", "subscribe"]),
     effect_calls: strs(be.get("calls"), build_effect_calls),
     effect_methods: strs(be.get("methods"), build_effect_methods),
@@ -630,6 +633,9 @@ let style_makers : Array[String] = ["style", "patch", "text_style", "text_patch"
 ///|
 /// style-literal, box-loose, style-exact (docs/style.md): tests are not counted
 fn lint_style(f : MbtFile, cfg : Config, out : Array[Finding]) -> Unit {
+  if matches(f.rel, cfg.style_outside) {
+    return
+  }
   let toks = f.toks
   let tokens_file = matches(f.rel, cfg.style_tokens)
   let counted : Map[Int, Unit] = Map::new()

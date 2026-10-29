@@ -10,8 +10,9 @@
 H="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EMBER=${EMBER:-$(cd "$TOOLS/.." 2>/dev/null && pwd)/ember-src}
 APP_KIND=core
-# mbui/core's queue and the app's engine (src/<app>/android_engine.c, which includes src/sfcore/android_engine.c)
-APP_EXTRA="--extra=src/core/core_native.c --extra=src/$PKG/android_engine.c"
+# mbui/core's queue, the keyboard's files (src/pinyin) and the app's engine (src/<app>/android_engine.c, which includes
+# src/sfcore/android_engine.c)
+APP_EXTRA="--extra=src/core/core_native.c --extra=src/pinyin/read_file.c --extra=src/$PKG/android_engine.c"
 APP_LINK="-L$jni -lstillfail_hermes"
 # (the engine's C API, engine.h)
 CFLAGS="$CFLAGS -I$H/../engine"
@@ -50,6 +51,9 @@ app_assets() {
   fi
   cp -p out/core/core.hbc $apk/assets/
   echo "core.hbc $(size $apk/assets/core.hbc)"
+  # the keyboard's words (src/pinyin, mbui's Keyboard.java copies assets/keyboard to where the keyboard reads them)
+  mkdir -p $apk/assets/keyboard
+  cp -p src/pinyin/words.txt $apk/assets/keyboard/
 }
 
 app_cmd() {

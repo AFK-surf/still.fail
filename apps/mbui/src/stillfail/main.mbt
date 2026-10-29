@@ -320,6 +320,11 @@ fn local_cloud(url : String) -> Bool {
 
 ///|
 fn main {
+  // the app as the system's keyboard (mbui's Keyboard.java, in a process of its own): the keyboard alone
+  if @ui.env("MBUI_KEYBOARD") == "1" {
+    @keyboard.run()
+    return
+  }
   // MBUI_PLATFORM=android: run as a phone's system has it (a test's trace recorded again on a Mac on the system its
   // Tester plays: scripts/rerecord.sh), and pointed at by a finger as a phone is; MBUI_POINTING=finger or mouse: pointed
   // at so, whatever the system
