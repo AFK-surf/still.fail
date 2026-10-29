@@ -77,3 +77,32 @@ test "wide: a message right clicked offers 分享这一轮, which shares its tur
   assert_eq(number(Some(asked[0].params), "thread"), 7.0)
   assert_eq(number(Some(asked[0].params), "turn"), 11.0)
 }
+
+///|
+test "wide: hovering a message offers 分享这一轮, which shares its turn as a picture (chat.publishPreview by its seq)" {
+  reset()
+  let calls : Array[Made] = []
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.nav_push_ms)
+  let (x, y, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
+  let before = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
+  t.move(x + 24.0, y + 8.0)
+  t.frame()
+  t.frame()
+  assert_eq(t.rect_of("做完了：列表、跳到最新的按钮").unwrap(), before)
+  t.click(Button, label="分享这一轮")
+  t.frame()
+  let asked = named(calls, "chat.publishPreview")
+  assert_eq(asked.length(), 1)
+  assert_eq(number(Some(asked[0].params), "thread"), 7.0)
+  assert_eq(number(Some(asked[0].params), "turn"), 11.0)
+}

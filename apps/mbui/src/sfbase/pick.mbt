@@ -7,7 +7,8 @@
 // quoting it. How a finger picks is mbui's (@kit.Pick, over @ui.Ctx::words: a message's paragraphs as one text, where
 // each is, the passage drawn behind them); what is here is the chat's: which message, its handles', its bar's and its
 // pill's look. Where the words go is the frame's (`quote`). A message of a chat's list offers its turn shared as a
-// picture too (`share`): on the finger's bar, and in the menu a right click on it opens (share_offered).
+// picture too (`share`): on the finger's bar, beside its words while hovered with a mouse, and in the menu a right
+// click on it opens (share_offered).
 
 ///|
 /// What is picked in the chat: one passage of one message at a time (mbui's @kit.Pick), the message it is of, who
@@ -91,7 +92,24 @@ pub fn pickable(
   // built first: a link held in it is the link's menu (its hold told while building), not a pick
   let box = c.box(style=if fill { pick_fill } else { pick_own }, id~, fn() {
     marks(id)
-    body()
+    match share {
+      Some(go) if !@sf.more_held() => {
+        c.box(style=if fill { pick_share_row } else { pick_share_own }, fn() {
+          c.box(style=if fill { pick_fill } else { pick_own }, body) |> ignore
+          // Its room stays put as the pointer comes and goes; no words move under a selection.
+          c.box(style=pick_share_room, fn() {
+            let button = key + "/share"
+            c.hand_shown(c.hovered(id) || c.hovered(c.id(button)), fn() {
+              if @sf.icon_button(c, "external", key=button, label=@sf.t("web-main.chat.shareTurn")) {
+                pick_clear()
+                go()
+              }
+            })
+          }) |> ignore
+        }) |> ignore
+      }
+      _ => body()
+    }
   })
   // its words kept as laid out while a press is in it or a passage of it is picked (what the hold and the handles
   // ask), or what is marked in it asks
@@ -445,6 +463,18 @@ let pick_fill : @ui.Style = @ui.css("w=Full")
 ///|
 // kept across runs: a value (no field of it changes)
 let pick_own : @ui.Style = @ui.css("w=Hug")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_share_row : @ui.Style = @ui.css("row w=Full gap=S1 align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_share_own : @ui.Style = @ui.css("row w=Hug gap=S1 align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_share_room : @ui.Style = @ui.css("w=S8 h=S8")
 
 ///|
 /// What the pill, and a finger's handles and bar, are placed by: all of the layer (where it starts in the window).
