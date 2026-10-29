@@ -5,6 +5,8 @@ import { MESSAGE_FILE_CORNER } from "./Chat.css.ts";
 /** A chat's things (Things.tsx): the kinds and the field, then the chosen kind's, the pictures a grid, the rest rows. */
 export const things = style({ flex: "1", minHeight: "0", overflowY: "auto", display: "flex", flexDirection: "column", padding: "0 16px 24px" });
 export const thingsHead = style({ display: "flex", flexDirection: "column", gap: "8px", padding: "12px 0" });
+/** The kinds to choose from: across the row, as the field under them is. */
+export const thingsKinds = style({ alignSelf: "stretch" });
 export const thingsKind = style({ fontSize: vars.textUi, fontWeight: "500" });
 export const thingsNone = style({ margin: "0", padding: "12px 0", fontSize: vars.textMeta, color: vars.muted });
 export const thingsMore = style({ display: "flex", justifyContent: "center", padding: "8px 0" });

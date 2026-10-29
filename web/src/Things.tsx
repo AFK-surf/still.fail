@@ -67,7 +67,7 @@ export function Things({ station, thread, keeper, onShow, initial }: { station: 
       <div className={css.things}>
         <div className={css.thingsHead}>
           {has.length > 1
-            ? <Segmented<Kind> label={t("web-main.things.title")} value={kind} onChange={(k) => choose(k)} options={has.map((k) => ({ value: k, label: `${t(`web-main.things.${k}`)} ${view.counts[k]}` }))} />
+            ? <Segmented<Kind> className={css.thingsKinds} label={t("web-main.things.title")} value={kind} onChange={(k) => choose(k)} options={has.map((k) => ({ value: k, label: `${t(`web-main.things.${k}`)} ${view.counts[k]}` }))} />
             : <span className={css.thingsKind}>{t(`web-main.things.${kind}`)}</span>}
           <input className={controlsCss.input} type="search" value={q} placeholder={t("web-main.things.find")} aria-label={t("web-main.things.find")} onChange={(e) => setQ(e.target.value)} />
         </div>

@@ -150,7 +150,12 @@ pub fn things_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, shee
     c.box(style=things_head.then(side), fn() {
       if has.length() > 1 {
         let labels = has.map(fn(k) { thing_kind_name(k) + " " + count(counts, k).to_string() })
-        let chosen = @sf.segmented(c, "things/kinds/" + key, labels, has.search(kind).unwrap_or(0))
+        // (across the row, as the field under it is: their columns share it)
+        let item_w = match c.laid_size(room_id) {
+          Some((w, _)) if w > 0.0 => @sf.segmented_item_w(w, labels.length())
+          _ => 0.0
+        }
+        let chosen = @sf.segmented(c, "things/kinds/" + key, labels, has.search(kind).unwrap_or(0), item_w~)
         match has.get(chosen) {
           Some(k) if k != kind => at.kind = k
           _ => ()

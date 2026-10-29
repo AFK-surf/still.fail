@@ -1640,6 +1640,8 @@ pub fn segmented(@ui.Ctx, String, Array[String], Int32, item_w? : Double, ink? :
 
 pub fn segmented_height() -> Double
 
+pub fn segmented_item_w(Double, Int32) -> Double
+
 pub fn segments(@ui.Ctx, Double, Double, Int64, Int64) -> Int32
 
 pub fn select(@ui.Ctx, String, String, Array[(String, String)], (String) -> Unit, placeholder? : String, label? : String, disabled? : Bool, w? : Double, hints? : Map[String, String], whole? : Bool, icons? : Map[String, String]) -> Unit
