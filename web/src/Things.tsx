@@ -2,18 +2,20 @@
 // videos, its other files, the web links in its messages and the pull requests among them, each once and the latest
 // first. The same on the wide screen (a tab beside the chat, pages/ChatPage.tsx) and the phone (a sheet,
 // mobile/Chat.tsx): the kinds it has to choose from, a field finding among the chosen kind's by their words, then that
-// kind's: the pictures a grid, the rest a row each. A picture or a file opens in the preview (an image stepping through
+// kind's: the pictures by the day and the message they were sent with, in lines as high as fill them (each its own
+// shape), the rest a row each. A picture or a file opens in the preview (an image stepping through
 // the chat's), a link or a pull request in the browser; 在对话中查看 at a row's end (a picture's menu) goes to the
 // message it was last said in. The chat's info names its pull requests itself (ThingsPulls).
 import { useState, type ReactNode } from "react";
 import { ContextMenu } from "radix-ui";
 import { useTopic } from "./core/react.ts";
-import type { ChatThing, ChatThingsView } from "./core/shapes.ts";
+import type { ChatThing, ChatThingsView, ThingDay } from "./core/shapes.ts";
 import { FilePreview, fileSize, Gallery, kindOf, useFileShown, useVideoStill } from "./FilePreview.tsx";
 import { Empty, IconButton, Time } from "./ui.tsx";
 import { Segmented } from "@stillfail/ui/parts.tsx";
 import { Spinner, Waiting } from "@stillfail/ui/waiting.tsx";
-import { Chat, Copy, File, Link, PlayMark } from "@stillfail/ui/icons.tsx";
+import { Chat, Copy, File, Link, Play } from "@stillfail/ui/icons.tsx";
+import { clock } from "@stillfail/ui/viewer/playing.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { LinkHover } from "./Peeks.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
@@ -71,7 +73,7 @@ export function Things({ station, thread, keeper, onShow, initial }: { station: 
         </div>
         {shown.length === 0 && <p className={css.thingsNone}>{t("web-main.find.none")}</p>}
         {kind === "media"
-          ? <div className={css.thingsGrid}>{shown.map((m) => <MediaTile key={m.key} thing={m} keeper={keeper} onShow={onShow} />)}</div>
+          ? <MediaDays days={view.mediaDays} keeper={keeper} onShow={onShow} />
           : <div className={css.thingsRows}>{shown.map((m) => <ThingRow key={m.key} kind={kind} thing={m} keeper={keeper} onShow={onShow} />)}</div>}
         {!view.whole && <div className={css.thingsMore}><Spinner /></div>}
       </div>
@@ -79,7 +81,44 @@ export function Things({ station, thread, keeper, onShow, initial }: { station: 
   );
 }
 
-/** A picture or a video, a square tile covered by its picture (a video's still, its play mark over it); pressed, the preview. */
+/** A line of tiles this high where they reach across it, a tile at most this tall (a phone's screenshot shows its top)
+ * and wide (as the app's, sfpages things.mbt). */
+const LINE_HIGH = 112;
+const TALLEST = 0.56;
+const WIDEST = 2.4;
+
+/** A picture's or a video's width over its height (a square where its file does not say). */
+const aspectOf = (t: ChatThing) => (t.file?.width && t.file?.height ? t.file.width / t.file.height : 1);
+
+/** The pictures and videos by the day (its heading) and the message they were sent with (when, who, its first words over
+ * them): a message's in lines filled across, each tile its own shape, the last line not stretched. */
+function MediaDays({ days, keeper, onShow }: { days: ThingDay[]; keeper: string; onShow(seq: number): void }) {
+  return (
+    <div className={css.mediaDays}>
+      {days.map((d, i) => (
+        <section key={`${d.day}/${i}`} className={css.mediaDay}>
+          {d.day && <h3 className={css.mediaDayHead}>{d.day}</h3>}
+          {d.groups.map((g) => (
+            <div key={g.seq} className={css.mediaGroup}>
+              <p className={css.mediaSaid}>
+                {(g.clock || g.by) && <span className={css.mediaSaidWhen}>{[g.clock, g.by].filter((s) => s !== "").join(" · ")}</span>}
+                {g.words && <span className={css.mediaSaidWords}>{g.words}</span>}
+              </p>
+              <div className={css.mediaLines}>
+                {g.items.map((m) => <MediaTile key={m.key} thing={m} keeper={keeper} onShow={onShow} />)}
+                {/* (the last line's room taken up here: its tiles not stretched across it) */}
+                <span className={css.mediaRest} aria-hidden="true" />
+              </div>
+            </div>
+          ))}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/** A picture or a video, a tile of its own shape (between TALLEST and WIDEST: its top shown where it is longer) covered by
+ * its picture (a video's still, its length in its foot corner); pressed, the preview. */
 function MediaTile({ thing, keeper, onShow }: { thing: ChatThing; keeper: string; onShow(seq: number): void }) {
   const file = thing.file!;
   const owner = file.owner ?? keeper;
@@ -88,12 +127,13 @@ function MediaTile({ thing, keeper, onShow }: { thing: ChatThing; keeper: string
   const still = useVideoStill(owner, file, video);
   const [open, setOpen] = useState(false);
   const url = video ? still.url : picture.url;
+  const aspect = Math.min(Math.max(aspectOf(thing), TALLEST), WIDEST);
   return (
     <>
       <ThingMenu thing={thing} onShow={onShow}>
-        <button type="button" className={css.tile} onClick={() => setOpen(true)} aria-label={t(video ? "web-main.file.play" : "web-main.file.view", { name: file.name })}>
+        <button type="button" className={css.tile} style={{ flex: `${aspect} 1 ${aspect * LINE_HIGH}px`, aspectRatio: String(aspect) }} onClick={() => setOpen(true)} aria-label={t(video ? "web-main.file.play" : "web-main.file.view", { name: file.name })}>
           {url && (video && !still.poster ? <video className={css.tilePicture} src={url} muted playsInline preload="auto" aria-hidden="true" /> : <img className={css.tilePicture} src={url} alt="" />)}
-          {video && <span className={css.tilePlay} aria-hidden="true"><PlayMark size={22} /></span>}
+          {video && <span className={css.tileLength} aria-hidden="true"><Play size={10} />{file.duration ? clock(file.duration / 1000) : null}</span>}
         </button>
       </ThingMenu>
       <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={owner} file={file} />

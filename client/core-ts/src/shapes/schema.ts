@@ -2646,7 +2646,19 @@ export const SHAPES: Record<string, Shape> = {
     ["files", vec("ChatThing"), { doc: "Its other files (`file`), the same." }],
     ["links", vec("ChatThing"), { doc: "The web links in its messages (`url`, `site`, `title`) other than pull requests, each once, the latest first." }],
     ["pulls", vec("ChatThing"), { doc: "The pull requests linked in it (`url`, `repository`, `number`; `title`, `state` once its card is read), each once, the latest first." }],
+    ["mediaDays", vec("ThingDay"), { doc: "`media` by the day and the message they were sent with, the latest first (what the page shows)." }],
   ], { doc: "What was said in a chat besides words (the `chatThings` view {station, thread, q}), as far as it is on the device;\neach kind those that have every word of `q`." }),
+  ThingDay: struct([
+    ["day", "String", { doc: "Its heading: 今天, 昨天, 星期三, 9月20日 (empty where when is not known)." }],
+    ["groups", vec("ThingGroup"), { doc: "Its messages' pictures and videos, the latest message first." }],
+  ], { doc: "A day's pictures and videos of a chat's (`chatThings`)." }),
+  ThingGroup: struct([
+    ["seq", "i64", { client: "I54", doc: "The message they were sent with." }],
+    ["clock", "String", { doc: "When it was said: 14:05 (empty where not known)." }],
+    ["by", "String", { said: true, doc: "Who said it." }],
+    ["words", "String", { said: true, doc: "What it says, its first words on a line (empty for none)." }],
+    ["items", vec("ChatThing"), { doc: "Its pictures and videos, in the order it has them." }],
+  ], { doc: "The pictures and videos a message was sent with (`chatThings` `mediaDays`)." }),
   ThingCounts: struct([
     ["media", "u32"],
     ["files", "u32"],
@@ -2660,6 +2672,7 @@ export const SHAPES: Record<string, Shape> = {
     ["time", opt(map("Stamp")), { doc: "`createdAt`, `updatedAt` in words." }],
     ["by", "String", { said: true, doc: "Who said it then." }],
     ["file", opt("Attachment"), { doc: "A picture's, a video's, a file's: as its message has it (its `owner`)." }],
+    ["words", opt("String"), { said: true, doc: "A picture's, a video's, a file's: what its message says, its first words on a line." }],
     ["url", opt("String"), { doc: "A link's, a pull request's: its address." }],
     ["site", opt("String"), { doc: "A link's host and path, as its card says where it goes." }],
     ["title", opt("String"), { said: true, doc: "A link's words where they are not its address; a pull request's title once its card is read." }],

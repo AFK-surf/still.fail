@@ -31,7 +31,7 @@ import { markdown, type MdStore } from "../markdown.ts";
 import { withDrive } from "../drive-browse.ts";
 import { heardFiles } from "../elsewhere.ts";
 import { isImage, near, placeFiles } from "../placed.ts";
-import { KINDS as THING_KINDS, isVideo, thingsHaving, thingsOf } from "../things.ts";
+import { KINDS as THING_KINDS, isVideo, mediaDays, thingsHaving, thingsOf } from "../things.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import { askAnswers } from "./vault.ts";
@@ -2101,7 +2101,8 @@ export class Views implements Owner {
 
   /// What was said in a chat besides words (`chatThings`), as far as it is on the device (`whole` once all is): its
   /// pictures and videos, files, web links and pull requests, each the latest first, how many of each, those of each
-  /// that have the words `q` (all of them without any). A pull request says what its card says of it (its title, how it
+  /// that have the words `q` (all of them without any), the pictures and videos also by the day and the message they were
+  /// sent with (`mediaDays`). A pull request says what its card says of it (its title, how it
   /// stands, its checks, when it last changed) once its station has read it.
   #chatThings(station: string, id: number, q: string): Value | undefined {
     const chat = this.value({ topic: "chat", station, thread: id, session: null });
@@ -2127,7 +2128,9 @@ export class Views implements Owner {
     const all = { ...read.things, pulls };
     const words = refs.terms(q);
     const counts = Object.fromEntries(THING_KINDS.map((k) => [k, all[k].length]));
-    return { ok: { title: read.title, whole: read.whole, counts, ...Object.fromEntries(THING_KINDS.map((k) => [k, thingsHaving(all[k], words)])) } };
+    const found = Object.fromEntries(THING_KINDS.map((k) => [k, thingsHaving(all[k], words)])) as typeof all;
+    const days = mediaDays(found.media, (ms) => format.dayLabel(ms, clock.now, clock.offsetMin), (ms) => format.clock(ms, clock.offsetMin));
+    return { ok: { title: read.title, whole: read.whole, counts, ...found, mediaDays: days } };
   }
 
   /// What a chat's agents said in Slack and were given from it (not this chat's own thread), each after the message it

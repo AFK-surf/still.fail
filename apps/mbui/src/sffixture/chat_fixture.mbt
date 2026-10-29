@@ -393,6 +393,8 @@ pub fn fixture_file(name : String) -> String {
 pub fn fixture_file_png(name : String) -> Bytes {
   let (w, h, a, b) = match name {
     "home-after.png" => (60, 130, (0xF5, 0xF3, 0xEF), (0xE5, 0x70, 0x4A))
+    "before.png" => (60, 130, (0xF5, 0xF3, 0xEF), (0x9A, 0xA4, 0xB0))
+    "after.png" => (60, 130, (0xF5, 0xF3, 0xEF), (0x5B, 0x7B, 0xB2))
     "compare.png" => (160, 90, (0x5B, 0x7B, 0xB2), (0xF2, 0xB0, 0x1E))
     // a screen's preview (chat-screens): a frame of a tab, 16:10
     "peek.png" => (160, 100, (0xFF, 0xFF, 0xFF), (0x5B, 0x7B, 0xB2))
@@ -1939,12 +1941,27 @@ pub fn fixture_things(q : String, many? : Bool = true) -> Json {
     }
     Json::object(m)
   }
+  // (each with what its message says and when, the core's `words`; a message's latest first, as the core lists them)
+  let said = fn(t : Json, words : String) -> Json {
+    match t {
+      Object(m) if words != "" => {
+        let m = m.copy()
+        m["words"] = Json::string(words)
+        Json::object(m)
+      }
+      t => t
+    }
+  }
   let media = [
-    thing("5/work/s-c1/compare.png", 5, "Claude", "1 小时前", { "file": file("compare.png", 1600, 900, 402000) }),
-    thing("5/work/s-c1/home-after.png", 5, "Claude", "1 小时前", { "file": file("home-after.png", 1170, 2532, 812000) }),
-    thing("4/work/s-c1/演示录屏.mp4", 4, "Claude", "2 小时前", { "file": file("演示录屏.mp4", 1920, 1080, 3200000) }),
-    thing("4/work/s-c1/插画参考.png", 4, "Ana", "2 小时前", { "file": file("插画参考.png", 1200, 800, 245760) }),
+    said(thing("9/work/s-c1/after.png", 9, "Claude", "10 分钟前", { "file": file("after.png", 1170, 2532, 702000) }), "列表高度改前改后"),
+    said(thing("9/work/s-c1/before.png", 9, "Claude", "10 分钟前", { "file": file("before.png", 1170, 2532, 698000) }), "列表高度改前改后"),
+    said(thing("5/work/s-c1/home-after.png", 5, "Claude", "1 小时前", { "file": file("home-after.png", 1170, 2532, 812000) }), "首页按天分组：电脑上和手机上各截了一张"),
+    said(thing("5/work/s-c1/compare.png", 5, "Claude", "1 小时前", { "file": file("compare.png", 1600, 900, 402000) }), "首页按天分组：电脑上和手机上各截了一张"),
+    said(thing("4/work/s-c1/演示录屏.mp4", 4, "Claude", "2 小时前", { "file": film_file("演示录屏.mp4", 1920, 1080, 3200000, 12000, 360) }), "录了一段滑动"),
+    thing("3/work/s-c1/插画参考.png", 3, "Ana", "昨天 22:40", { "file": file("插画参考.png", 1200, 800, 245760) }),
   ]
+  // (when each message was said, the day's heading and its time)
+  let when : Map[Int, (String, String)] = { 9: ("今天", "19:20"), 5: ("今天", "18:12"), 4: ("今天", "17:05"), 3: ("昨天", "22:40") }
   let files = [
     thing("5/work/s-c1/build.log", 5, "Claude", "1 小时前", { "file": file("build.log", 0, 0, 18432) }),
     thing("3/work/s-c1/性能报告.pdf", 3, "Claude", "2 小时前", { "file": file("性能报告.pdf", 0, 0, 1048576) }),
@@ -1980,7 +1997,7 @@ pub fn fixture_things(q : String, many? : Bool = true) -> Json {
   let having = fn(list : Array[Json]) -> Json {
     Json::array(
       list.filter(fn(t) {
-        let said = (text(Some(t), "title") + " " + text(field(Some(t), "file"), "name") + " " + text(Some(t), "url")).to_lower()
+        let said = (text(Some(t), "title") + " " + text(field(Some(t), "file"), "name") + " " + text(Some(t), "words") + " " + text(Some(t), "url")).to_lower()
         words.iter().all(fn(w) { said.contains(w) })
       }),
     )
@@ -1998,5 +2015,49 @@ pub fn fixture_things(q : String, many? : Bool = true) -> Json {
     "files": having(files),
     "links": having(links),
     "pulls": having(pulls),
+    "mediaDays": media_days(having(media), when),
   }
+}
+
+///|
+/// Pictures and videos (`media`, the latest first) by the day and the message they were sent with, as the core's
+/// `mediaDays` (things.ts): `when` each message's day and time.
+fn media_days(media : Json, when : Map[Int, (String, String)]) -> Json {
+  let days : Array[(String, Array[(Int, Array[Json])])] = []
+  let list = match media {
+    Array(a) => a
+    _ => []
+  }
+  for t in list {
+    let seq = number(Some(t), "seq").to_int()
+    let (day, _) = when.get(seq).unwrap_or(("", ""))
+    if days.length() == 0 || days[days.length() - 1].0 != day {
+      days.push((day, []))
+    }
+    let groups = days[days.length() - 1].1
+    if groups.length() > 0 && groups[groups.length() - 1].0 == seq {
+      groups[groups.length() - 1].1.insert(0, t)
+    } else {
+      groups.push((seq, [t]))
+    }
+  }
+  Json::array(
+    days.map(fn(d) {
+      Json::object({
+        "day": Json::string(d.0),
+        "groups": Json::array(
+          d.1.map(fn(g) {
+            let first = Some(g.1[0])
+            Json::object({
+              "seq": Json::number(g.0.to_double()),
+              "clock": Json::string(when.get(g.0).unwrap_or(("", "")).1),
+              "by": Json::string(text(first, "by")),
+              "words": Json::string(text(first, "words")),
+              "items": Json::array(g.1),
+            })
+          }),
+        ),
+      })
+    }),
+  )
 }

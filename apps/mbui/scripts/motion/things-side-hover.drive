@@ -1,6 +1,6 @@
 # As things-side.drive: a row pointed at, then a tile, then a pull request right clicked (its menu).
 timeout 20000
-until 媒体 4
+until 媒体 6
 wait 1200
 tap PR 4
 wait 900

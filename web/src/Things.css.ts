@@ -10,18 +10,33 @@ export const thingsKinds = style({ alignSelf: "stretch" });
 export const thingsKind = style({ fontSize: vars.textUi, fontWeight: "500" });
 export const thingsNone = style({ margin: "0", padding: "12px 0", fontSize: vars.textMeta, color: vars.muted });
 export const thingsMore = style({ display: "flex", justifyContent: "center", padding: "8px 0" });
-/** The pictures: as many across as leave each 96 at least, 4 apart, square. */
-export const thingsGrid = style({ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: "4px" });
+/** The pictures by the day: its heading 12 over it, 8 to its first message; a message's 6 under what it says. */
+export const mediaDays = style({ display: "flex", flexDirection: "column" });
+export const mediaDay = style({ display: "flex", flexDirection: "column", gap: "8px", paddingBottom: "8px" });
+export const mediaDayHead = style({ margin: "0", paddingTop: "12px", fontSize: vars.textUi, fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const mediaGroup = style({ display: "flex", flexDirection: "column", gap: "6px" });
+/** When and who (in the quiet grey), then its first words, cut to the line. */
+export const mediaSaid = style({ margin: "0", display: "flex", gap: "8px", minWidth: "0", fontSize: vars.textMeta, whiteSpace: "nowrap" });
+export const mediaSaidWhen = style({ flex: "none", color: vars.muted });
+export const mediaSaidWords = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", color: vars.text });
+/** A message's tiles in lines 4 apart, each tile its shape at least the line's height, growing to fill its line. */
+export const mediaLines = style({ display: "flex", flexWrap: "wrap", gap: "4px" });
+/** After the tiles: the last line's room, so its tiles keep their height. */
+export const mediaRest = style({ flex: "1000 1 0", height: "0" });
 export const tile = style({
-  position: "relative", aspectRatio: "1", padding: "0", border: "0", overflow: "hidden", cursor: "pointer",
+  position: "relative", padding: "0", border: "0", overflow: "hidden", cursor: "pointer", minWidth: "0",
   borderRadius: MESSAGE_FILE_CORNER, cornerShape: vars.cornerShape, background: vars.neutralBg,
 });
-/** Its picture (a video's still) covering it. */
+/** Its picture (a video's still) covering it, its top where it is longer. */
 export const tilePicture = style({
-  width: "100%", height: "100%", objectFit: "cover", display: "block", transition: `opacity ${vars.dur} ${vars.easeOut}`,
+  width: "100%", height: "100%", objectFit: "cover", objectPosition: "top", display: "block", transition: `opacity ${vars.dur} ${vars.easeOut}`,
   selectors: { [`${tile}:hover &`]: { opacity: "0.85" } },
 });
-export const tilePlay = style({ position: "absolute", inset: "0", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" });
+/** A video's length in its foot corner, a capsule concentric with it (13 round, 18 high: 4 in). */
+export const tileLength = style({
+  position: "absolute", left: "4px", bottom: "4px", height: "18px", display: "flex", alignItems: "center", gap: "4px", padding: "0 6px",
+  borderRadius: "999px", background: "rgba(0, 0, 0, 0.65)", color: "#fff", fontSize: vars.textCaption,
+});
 export const thingsRows = style({ display: "flex", flexDirection: "column", gap: "2px" });
 /** A row: what opens it (its mark, its two lines) and 在对话中查看 at its end, round as an option, the pointer's ground on it. */
 export const row = style({
