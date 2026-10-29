@@ -33,6 +33,10 @@
 //    rows are as wide as it, their grounds its own edge to edge), nor a page's or a pane's, among its heads and bars in
 //    its column, as far in as its words say.
 //
+// 8. What else a box with rule 7's rows holds (a section's heading and words, a control under them) stands as far in
+//    from its left as the rows' words: the rows' grounds reach nearer its edge, their words are where its words stand
+//    (2026-10-29: 高级网络设置's card held a page's section, its words 6 in beside the rows' 16).
+//
 // 2. In a box that lays them out one after another (a column, a row), what it shows beside each other of one kind (the
 //    same kind of node, the same ground and corner, as wide in a column or as tall in a row: rows, cards, sections)
 //    stand equally apart: each pair of them next to each other as far apart as the most of those pairs are. What
@@ -751,6 +755,52 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
           out.push(
             "rule 7: \{self.named(i)} lights up in \{self.named(q)}, " + off.join(", ") + " (\{self.lit_reach} in)",
           )
+        }
+      }
+    }
+    // 8. what else stands in a box with such rows (a section's heading and words, a control under them) stands as far
+    // in as the rows' words: the rows' grounds are the rows shown under the hand, their words where the box's words
+    // stand
+    for entry in rows {
+      let (q, list) = entry
+      let a = self.nodes[q]
+      let in_rows = fn(k : Int) {
+        let mut p = k
+        while p >= 0 && p != q {
+          if list.contains(p) {
+            return true
+          }
+          p = self.nodes[p].parent
+        }
+        false
+      }
+      // (what the rows hold, their words and icons: as far in as the nearest of it)
+      let mut words_in = 1.0e9
+      for k in 0..<n {
+        let b = self.nodes[k]
+        if whole[k] && !list.contains(k) && b.gap_content() && in_rows(k) {
+          words_in = dmin(words_in, b.x - a.x)
+        }
+      }
+      if words_in >= 1.0e9 {
+        continue
+      }
+      for k in 0..<n {
+        let b = self.nodes[k]
+        if !whole[k] || layer[k] != layer[q] || !b.gap_content() || in_rows(k) {
+          continue
+        }
+        // (in this box: the nearest box with a ground round it is it)
+        let mut p = b.parent
+        while p >= 0 && p != q && ground_of(p) is None {
+          p = self.nodes[p].parent
+        }
+        if p != q {
+          continue
+        }
+        let d = b.x - a.x
+        if d < words_in - gap_slack {
+          out.push("rule 8: \{self.named(k)} stands \{d} in from \{self.named(q)}'s left, its rows' words \{words_in}")
         }
       }
     }

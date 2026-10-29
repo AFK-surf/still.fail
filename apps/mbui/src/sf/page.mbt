@@ -415,6 +415,11 @@ fn narrow_page(
 }
 
 ///|
+/// What the app's fixtures ask of a page's list as it is laid out (scrolled down to a block: settings fixture.mbt's
+/// fixture_open), given its key and how many rows it has; nothing in the app itself.
+pub let page_list_opened : Ref[(@ui.Ctx, String, Int) -> Unit] = Ref(fn(_, _, _) {  })
+
+///|
 /// A narrow page's blocks in its list, those from `chrome` on (what it holds: its own head, what it is for, its
 /// groups, cards, headings, notes) in the page's room 12 from its sides (pg_room), as a panel's are in the room it
 /// leaves; the frame's own over them (back, the large title) from the page's edges; 30 under the last, then `foot`.
@@ -430,6 +435,7 @@ fn narrow_list(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], foot : Dou
     }
   })
   |> ignore
+  (page_list_opened.val)(c, "settings/" + key, n + 1)
 }
 
 ///|
@@ -536,6 +542,7 @@ pub fn desk_lanes(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], foot? :
     }
   })
   |> ignore
+  (page_list_opened.val)(c, "settings/" + key, blocks.length() + 1)
 }
 
 // ── sections, groups, rows ──────────────────────────────────────────────

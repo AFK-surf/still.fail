@@ -143,6 +143,8 @@ pub fn keys(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
 
 pub fn keys_dialog(@ui.Ctx, @sfbase.Source) -> Unit
 
+pub fn laid_beside(@sfbase.Page) -> Bool
+
 pub fn landing(@sfbase.Workspace) -> Bool
 
 pub fn last_files_page(String) -> @sfbase.DriveAt?
@@ -379,7 +381,7 @@ pub fn tape_shows_left() -> Double
 
 pub fn tape_shows_right() -> Double
 
-pub fn tape_side(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, SideOf) -> Unit
+pub fn tape_side(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, SideOf, leaving? : Bool) -> Unit
 
 pub let tape_side_max : Double
 
@@ -494,6 +496,7 @@ pub struct ContextMenu {
   mut words : String
   mut frame : Int32
   mut copying : String
+  mut share : (() -> Unit)?
 }
 
 pub(all) struct Favorite {
@@ -603,6 +606,8 @@ pub(all) struct Wide {
   mut tape_ask : TapePane?
   mut tape_chat : String
   mut tape_panel : String
+  mut tape_built : (String, Int32)
+  mut tape_last_side : SideOf?
   mut tape_pull : TapePane?
   mut tape_drag : Double
   mut tape_backing : Bool

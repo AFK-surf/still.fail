@@ -252,6 +252,8 @@ pub fn start_login(Core, String, NewProfile, String, String) -> Unit
 
 pub fn station_name(String) -> String
 
+pub let station_network_open : Map[String, Bool]
+
 pub fn station_of(Core, Here, String) -> Json?
 
 pub let station_parts : Map[String, String]

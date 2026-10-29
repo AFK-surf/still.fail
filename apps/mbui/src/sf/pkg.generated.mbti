@@ -838,7 +838,7 @@ pub let list_pad : Double
 
 pub let list_room : @ui.Space
 
-pub fn list_row(@ui.Ctx, Int32, ListAt, Int64, () -> Unit, () -> Unit, mark? : () -> Unit, high? : Bool, end_room? : Double, corner? : () -> Unit, corner_w? : Double, lines? : Int32, after? : () -> Unit, slotted? : Bool) -> Int32
+pub fn list_row(@ui.Ctx, Int32, ListAt, Int64, () -> Unit, () -> Unit, mark? : () -> Unit, high? : Bool, end_room? : Double, corner? : () -> Unit, corner_w? : Double, lines? : Int32, after? : () -> Unit, slotted? : Bool, end_slot? : Double, corner_end? : Double) -> Int32
 
 pub fn list_row_in(ListAt) -> @ui.Style
 
@@ -1066,7 +1066,11 @@ pub fn native_capsule_h() -> Double?
 
 pub fn native_card_corner() -> Double
 
+pub fn native_card_corner_at(Int32) -> Double
+
 pub fn native_clear() -> Double
+
+pub fn native_foot() -> Double
 
 pub fn native_foot_corner() -> Double?
 
@@ -1170,7 +1174,7 @@ pub fn own_head(@ui.Ctx, (Double) -> Unit, String, rename? : () -> Unit, rename_
 
 pub fn page(@ui.Ctx, String, String, Array[() -> Unit], on_back~ : () -> Unit, frame? : PageFrame, lead? : String, about? : String, actions? : () -> Unit, head? : () -> Unit, small? : String) -> Unit
 
-pub fn page_bar(@ui.Ctx, () -> Unit) -> Unit
+pub fn page_bar(@ui.Ctx, () -> Unit, corners? : (Double, Double)?) -> Unit
 
 pub fn page_bleed() -> @ui.Style
 
@@ -1179,6 +1183,8 @@ pub fn page_card(@ui.Ctx, () -> Unit, footed? : Bool) -> Unit
 pub fn page_choice(@ui.Ctx, String, Array[String], Int32, item_w? : Double) -> Int32
 
 pub fn page_head(@ui.Ctx, String, meta? : String, actions? : () -> Unit) -> Unit
+
+pub let page_list_opened : @ref.Ref[(@ui.Ctx, String, Int32) -> Unit]
 
 pub let page_narrow_most : Double
 
@@ -1203,6 +1209,8 @@ pub let pane_bar : @ref.Ref[((@ui.Ctx, PageBar, () -> Unit) -> Unit)?]
 pub fn pane_composer_corner() -> Double
 
 pub let pane_corner : Double
+
+pub let pane_edge : Double
 
 pub fn pane_foot_card() -> @ui.Style
 
@@ -1416,11 +1424,11 @@ pub fn presented_drawn_of(Int32) -> Bool
 
 pub fn presented_open_of(Int32) -> Bool
 
+pub fn presenter_visible() -> Bool
+
 pub fn presenters_reset() -> Unit
 
 pub fn presenting() -> Bool
-
-pub fn presenter_visible() -> Bool
 
 pub fn press_ripple(@ui.Ctx, Int32, Double) -> Unit
 
@@ -1622,6 +1630,8 @@ pub let select_chevron : Double
 
 pub let select_w : Double
 
+pub fn service_of_link(String) -> (String, String)?
+
 pub fn set_dark(Bool?) -> Unit
 
 pub fn set_language(String?) -> Unit
@@ -1742,6 +1752,8 @@ pub let side_tab_h : @ui.Len
 
 pub let side_tab_side : Double
 
+pub fn sides_clear(Double) -> @ui.Style
+
 pub let sign_in_side : @ui.Space
 
 pub let sign_in_title_size : @ui.TextSize
@@ -1848,11 +1860,11 @@ pub fn system_top_room(Double) -> @ui.Space
 
 pub fn t(String, args? : Array[(String, String)]) -> String
 
+pub fn t_around(String, String, args? : Array[(String, String)]) -> (String, String)
+
 pub let tag_max : @ui.Len
 
 pub let take_over_max : @ui.Len
-
-pub fn t_around(String, String, args? : Array[(String, String)]) -> (String, String)
 
 pub fn tape_bar_clear_start(Double) -> Double
 
@@ -2133,6 +2145,8 @@ pub fn with_ground(@ui.Ctx, Int64, () -> Unit) -> Unit
 pub fn with_look(Look, () -> Unit) -> Unit
 
 pub fn within_room(@ui.Ctx, @kit.PopState, () -> Unit, inner? : @ui.Style, most? : Double) -> Unit
+
+pub fn workspace_badge(@ui.Ctx, String, String, String, Double, still? : Bool) -> Unit
 
 pub let workspace_letter : @ui.TextStyle
 
@@ -2437,7 +2451,7 @@ pub(all) struct MenuItem {
 pub(all) struct NativeBars {
   mut on : Bool
   mut side : Double
-  mut corner : Double
+  corners : FixedArray[Double]
 }
 
 pub(all) struct NativeOver {
@@ -2670,8 +2684,6 @@ pub fn Surface::corner(Self) -> Double
 pub fn Surface::inner_radius(Self) -> @ui.Radius
 pub fn Surface::radius(Self) -> @ui.Radius
 pub fn Surface::style(Self) -> @ui.Style
-
-pub fn workspace_badge(@ui.Ctx, String, String, String, Double, still? : Bool) -> Unit
 
 type SyncRest
 

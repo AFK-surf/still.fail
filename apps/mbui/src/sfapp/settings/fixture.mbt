@@ -215,7 +215,8 @@ pub fn fixture_page(mode : String) -> String {
   } else {
     mode
   }
-  // a sheet up over the page, or the page scrolled down (fixture_open)
+  // a sheet up over the page, or the page scrolled down (fixture_open; the library's pages too)
+  @sf.page_list_opened.val = fn(c, key, rows) { fixture_scroll(c, key, rows~) }
   let up = fn(sheet : String, list : String, block : Int) {
     fixture_open.sheet = sheet
     fixture_open.list = list
@@ -241,6 +242,12 @@ pub fn fixture_page(mode : String) -> String {
     "settings-station-mark" => up("mark", "", 0)
     // the page's 设置 (its variables' sheet up over it), its 软件与设备
     "settings-station-env" => station_parts["ws1/st1"] = "settings"
+    // its 设置 with 高级网络设置 opened: its congestion control, a section of the page after it
+    "settings-station-network" => {
+      station_parts["ws1/st1"] = "settings"
+      station_network_open["ws1/st1"] = true
+      up("", "settings/station/ws1/st1", -1)
+    }
     // its 进程: what still.fail uses of the machine
     "settings-station-processes" => station_parts["ws1/st1"] = "processes"
     "settings-station-lower" => {
@@ -325,7 +332,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings" => "home"
-    "settings-station-mark" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" =>
+    "settings-station-mark" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-network" =>
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
@@ -2161,12 +2168,13 @@ fn fixture_sheet(core : Core, here : Here) -> Unit {
 }
 
 ///|
-/// A page's list scrolled as a fixture's mode asks (its first frames), by its key.
-fn fixture_scroll(c : @ui.Ctx, key : String) -> Unit {
+/// A page's list scrolled as a fixture's mode asks (its first frames), by its key: to its block, or (a block under 0,
+/// the list's `rows` known) its last.
+fn fixture_scroll(c : @ui.Ctx, key : String, rows? : Int = 0) -> Unit {
   if fixture_open.list == key && fixture_open.frames < 4 {
     fixture_open.frames += 1
     // (the list asks for the frames its scroll takes)
-    c.list_scroll_to(key, fixture_open.block)
+    c.list_scroll_to(key, if fixture_open.block < 0 { rows - 1 } else { fixture_open.block })
   }
 }
 

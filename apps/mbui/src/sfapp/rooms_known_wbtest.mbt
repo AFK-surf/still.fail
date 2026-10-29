@@ -29,7 +29,7 @@
 /// A chat's bar's agent and its station two keys of their own with touch (@sf.tile_split): 132 room fewer. A column's
 /// edge pressed only where it is drawn, its line in the middle, as the web's (the user, 2026-10-28: 左右各 6px, 同
 /// web; @ui's as_drawn): 41 room fewer.)
-let rooms_known : Map[String, Int] = { "room": 303, "apart": 0, "hover": 0 }
+let rooms_known : Map[String, Int] = { "room": 301, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

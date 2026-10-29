@@ -1512,7 +1512,7 @@ let en : Map[String, String] = {
   "web-pages.stations.page.part.machine": "Software & device",
   "web-pages.stations.page.part.overview": "Overview",
   "web-pages.stations.page.part.settings": "Settings",
-  "web-pages.stations.context.afresh": "Start afresh when the cache expires",
+  "web-pages.stations.context.afresh": "Start afresh when cache expires",
   "web-pages.stations.context.afreshLine": "Once an agent has been idle past its cache, the next message starts a fresh context instead of reading the whole conversation again",
   "web-pages.stations.context.section": "Context",
   "web-pages.stations.context.what": "change the context setting",

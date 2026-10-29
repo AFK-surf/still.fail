@@ -949,6 +949,8 @@ pub fn outside_sharable(OutsideAsk) -> Bool
 
 pub fn outside_yes(Source, OutsideAsk) -> Unit
 
+pub fn over_flight(@ui.Ctx, Int32) -> Unit
+
 pub let own_code_face : Int32
 
 pub fn own_screen(String, String) -> Bool
@@ -1051,7 +1053,7 @@ pub fn pick_reset() -> Unit
 
 pub fn pick_workspace(Source, String) -> Unit
 
-pub fn pickable(@ui.Ctx, String, String, String, String, Bool, Bool, () -> Unit, keep? : Bool, marks? : (Int32) -> Unit) -> Unit
+pub fn pickable(@ui.Ctx, String, String, String, String, Bool, Bool, () -> Unit, keep? : Bool, marks? : (Int32) -> Unit, share? : (() -> Unit)?) -> Unit
 
 pub fn picked_sig(Json?) -> String
 
@@ -1261,6 +1263,8 @@ pub fn seq_s(Double) -> String
 
 pub fn service_ask(Source, ServicePage, String, String, Array[(String, String)], Bytes, Int32, Array[(String, String)], Sink, follow? : Bool, cookies? : Bool) -> Unit
 
+pub fn service_card_of(Source, String) -> (String, String, Bool)
+
 pub fn service_fetches(ServicePage) -> Bool
 
 pub let service_files : Map[String, FilePage]
@@ -1270,6 +1274,8 @@ pub fn service_keep_cookie(ServicePage, String) -> Unit
 pub fn service_key(String, String) -> String
 
 pub fn service_left(Source, String, String) -> Unit
+
+pub fn service_link_card(@ui.Ctx, Source, String, String?) -> Unit
 
 pub fn service_marked(ServicePage, Json) -> Unit
 
@@ -1294,6 +1300,8 @@ pub fn set_update_source(UpdateSource?) -> Unit
 pub fn settings_core(Source, Workspace) -> @settings.Core
 
 pub let share_card_of : @ref.Ref[(Source, Workspace) -> Unit]
+
+pub let share_offered : @ref.Ref[(Int32, Double, Double, () -> Unit)?]
 
 pub let share_over : @ref.Ref[Bool]
 
@@ -1378,7 +1386,6 @@ pub let svc_keep : @ref.Ref[(Json) -> Unit]
 pub let svc_presets : Array[(String, Int32, Int32)]
 
 pub let svc_viewports : Map[String, Viewport?]
-
 
 pub let table_rows : Int32
 
@@ -1540,7 +1547,7 @@ pub let viz_css : String
 
 pub fn viz_css_color(Int64) -> String
 
-pub fn viz_document(String, Json?, Bool, Int64) -> String
+pub fn viz_document(String, Json?, Bool, Int64, scroll? : Bool) -> String
 
 pub let viz_file_box : @ui.Style
 
@@ -1860,6 +1867,7 @@ pub(all) struct ChatPick {
   mut ts : String
   mut author : String
   mut role : String
+  mut share : (() -> Unit)?
   sel : @kit.Pick
   mut taken_at : Int32
 }
@@ -2612,6 +2620,7 @@ pub(all) struct Reading {
   asked : @signals.Signal[Double]
   mut asked_newer : Double
   mut latest_asked : Bool
+  mut end_asked : Bool
   mut told : String
   mut seen_whole : Double
   mut top_seq : Double
@@ -2896,12 +2905,14 @@ pub(all) struct Thumb {
   radius : Double
   letterbox : Bool
   picture : String
+  seen : (Double, Double, Double, Double)?
 }
 
 pub(all) struct ThumbLook {
   radius : Double
   letterbox : Bool
   picture : String
+  id : Int32
 }
 
 pub(all) struct Topic {
@@ -3050,14 +3061,13 @@ pub(all) struct Viewer {
   reads : @signals.Signal[Int32]
   mut pinned : @kit.MediaStatus?
   steps : Stepping
-  mut vx : Double
-  mut vt : Double
   mut swiping : Bool
   mut down_x : Double
   mut down_y : Double
   mut at_left : Bool
   mut at_right : Bool
   mut caught : Bool
+  mut strip_down : Double
   mut flies : Bool
   fly : @motion.Value
   mut fly_back : Bool
@@ -3140,6 +3150,7 @@ pub(all) struct VizFrame {
   mut grown : Int32
   mut shown : Bool
   mut dark : Bool
+  mut font_scale : Double
   mut ground : Int64
 }
 
