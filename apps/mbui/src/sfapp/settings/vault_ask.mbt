@@ -563,6 +563,7 @@ let ask_ended : @ui.Style = @ui.css("w=Full mt=S0_5")
 
 ///|
 /// Its words inline: past the message's picture, where its name is (message.mbt msg_head_inline).
+// kept across runs: a value (no field of it changes)
 let ask_ended_past : @ui.Style = @ui.style(w=Full, pl=@sf.message_head_in)
 
 ///|
@@ -578,6 +579,7 @@ let ask_dot_line : @ui.Style = @ui.css("row w=S4_5 h=S5 align=ACenter justify=JC
 
 ///|
 /// The same out in the margin, where the picture is then (message_avatar_out).
+// kept across runs: a value (no field of it changes)
 let ask_dot_line_out : @ui.Style = ask_dot_line.then(@ui.style(ml=@sf.message_avatar_out))
 
 ///|
