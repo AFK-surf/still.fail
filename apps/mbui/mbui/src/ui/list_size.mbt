@@ -106,6 +106,11 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
     r.ms = ms
     r.to = -1.0
   }
+  // (told again as long as another, by the same cause: what it goes with timed anew once it knows its way, words sent
+  // flying to it; from the same moment, on the same way)
+  if ms != r.ms {
+    r.ms = ms
+  }
   let to = match cause {
     Goes(_) => 0.0
     _ => natural
@@ -300,6 +305,18 @@ pub fn[T] ListRows::rows(
   } else if !self.going.is_empty() || !self.causes.by.is_empty() {
     self.going.clear()
     self.causes.by.clear()
+    moved = true
+  }
+  // (coming as long as another motion of its cause, told anew how long: words sent, timed once they know their way)
+  let retimed : Array[(String, Double, Double)] = []
+  self.causes.by.each(fn(k, cm) {
+    match (cm, ms(k)) {
+      ((Comes(at), was), Some(now_ms)) if now_ms != was => retimed.push((k, at, now_ms))
+      _ => ()
+    }
+  })
+  for r in retimed {
+    self.causes.by[r.0] = (Comes(r.1), r.2)
     moved = true
   }
   self.given = true

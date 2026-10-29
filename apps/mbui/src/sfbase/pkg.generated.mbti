@@ -539,7 +539,11 @@ pub fn flight_landing_words(@ui.Ctx, SendFlight, Int32) -> Unit
 
 pub fn flight_len(Bool) -> Double
 
+pub let flight_most_ms : Double
+
 pub let flight_ms : Double
+
+pub fn flight_ms_of(SendFlight) -> Double
 
 pub fn flight_of(String) -> SendFlight?
 
@@ -568,6 +572,8 @@ pub fn flight_up_of(@ui.Ctx, SendFlight) -> Double
 pub let flight_wait_ms : Double
 
 pub fn flight_waiting(@ui.Ctx, String) -> Unit
+
+pub fn flight_way_ms(Bool, Double) -> Double
 
 pub let flight_words_key : String
 
@@ -607,7 +613,9 @@ pub fn go_forward() -> Bool
 
 pub fn go_place(String, way? : Int32) -> Bool
 
-pub fn go_to(ChatRef, Double) -> Unit
+pub fn go_to(ChatRef, Double, passage? : String) -> Unit
+
+pub let go_to_passages : Map[String, String]
 
 pub let go_to_words : Map[String, Array[String]]
 
@@ -1093,7 +1101,9 @@ pub fn pick_reset() -> Unit
 
 pub fn pick_workspace(Source, String) -> Unit
 
-pub fn pickable(@ui.Ctx, String, String, String, String, Bool, Bool, () -> Unit, keep? : Bool, marks? : (Int32) -> Unit, share? : (() -> Unit)?, link? : String) -> Unit
+pub fn pickable(@ui.Ctx, String, String, String, String, Bool, Bool, () -> Unit, keep? : Bool, marks? : (Int32) -> Unit, share? : (() -> Unit)?, link? : String, lit? : (Int32, Int32, Int64)?) -> Unit
+
+pub let picked_alpha : Double
 
 pub fn picked_sig(Json?) -> String
 
@@ -2137,6 +2147,7 @@ pub(all) struct Emits {
   mut aimed : (Double, Double)?
   mut aimed_at : Double
   mut landed : (Double, Double)?
+  mut home : (Double, Double)?
   mut watched : Bool
   mut copied : String
   mut trace : (Double, Double, Double)
@@ -2754,6 +2765,8 @@ pub(all) struct Reading {
   mut flash : String
   flash_lit : @motion.Anim
   mut flash_n : Int32
+  mut flash_passage : String
+  mut flash_centre : Bool
   mut found_at : String
   mut found_words : Array[String]
   found_drawn : @motion.Anim
@@ -2865,6 +2878,10 @@ pub(all) struct SendFlight {
   gone : @motion.Anim
   carried : Bool
   from_top : Double
+  mut ms : Double
+  mut timed : Bool
+  mut set_out : Double
+  mut after : Double
 }
 
 pub(all) struct ServicePage {

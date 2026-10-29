@@ -1154,7 +1154,7 @@ fn shown_rows(
     watched~,
     ms=fn(k) {
       match flight {
-        Some(f) if f.key == k => Some(flight_len(f.desk || f.carried))
+        Some(f) if f.key == k => Some(flight_ms_of(f))
         _ => None
       }
     },

@@ -28,7 +28,7 @@ test "words sent are in the list the frame they are sent, the core not answering
     }
     None => fail("nothing flies")
   }
-  t.run_for(flight_ms)
+  t.run_for(@sfbase.flight_most_ms)
   assert_true(send_flight.get() is None)
   // still there, as sent, till the core has it
   assert_eq(sent_rows(), ["o:local:1"])
@@ -111,7 +111,7 @@ test "the core's row goes on from what was sent: the words fly on to it, it does
     }
     None => fail("nothing flies")
   }
-  t.run_for(flight_ms)
+  t.run_for(@sfbase.flight_most_ms)
   assert_true(send_flight.get() is None)
   assert_true(t.find("先上屏") is Some(_))
   fix_clock.val = None
