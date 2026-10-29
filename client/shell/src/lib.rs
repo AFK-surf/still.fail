@@ -339,6 +339,8 @@ struct Inner {
     next: AtomicU64,
     /// The accounts' databases open, by id, with their files.
     sqls: Mutex<HashMap<u64, (Option<PathBuf>, rusqlite::Connection)>>,
+    /// How long an account's database is waited for as it is opened, while another process holds it (`open_wait`).
+    open_wait: std::time::Duration,
     /// Where a message for the app goes straight from here (`sf_shell_set_say`): none, nothing is tapped.
     say: Mutex<Option<(Say, Ctx)>>,
     /// Where a tapped view's records are offered first (`sf_shell_set_media`): none, all are said.
@@ -1120,10 +1122,11 @@ impl Inner {
                     let path = dir.join(format!("{name}.db"));
                     (Some(path.clone()), rusqlite::Connection::open(&path).map_err(err)?)
                 };
-                conn.busy_timeout(std::time::Duration::from_secs(5)).map_err(err)?;
+                conn.busy_timeout(self.open_wait).map_err(err)?;
                 conn.set_prepared_statement_cache_capacity(256);
                 // One process at a time: another one finds it busy.
                 conn.execute_batch("PRAGMA locking_mode = EXCLUSIVE; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;").map_err(err)?;
+                conn.busy_timeout(DB_WAIT).map_err(err)?;
                 let id = self.next.fetch_add(1, Ordering::Relaxed);
                 sqls.insert(id, (path, conn));
                 Ok(json!({ "id": id }))
@@ -1243,8 +1246,27 @@ impl Inner {
     }
 }
 
+/// How long a statement on an account's database waits while another connection holds it.
+const DB_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// How long an account's database is waited for as it is opened: as long as a statement, but none in a window of the
+/// app's own (MBUI_WINDOW: a run started beside the app's, which holds them all as long as it runs). That run keeps
+/// them in memory at once (the core's data.ts), where it waited 5 s for each and every one before: its window showed
+/// nothing for 15 s (2026-10-29 用户: 独立窗口要等很久才显示内容).
+fn open_wait() -> std::time::Duration {
+    if std::env::var_os("MBUI_WINDOW").is_some_and(|w| !w.is_empty()) {
+        std::time::Duration::ZERO
+    } else {
+        DB_WAIT
+    }
+}
+
 impl Shell {
     pub fn start(dir: PathBuf, complete: Complete, ctx: *mut c_void) -> std::io::Result<Shell> {
+        Shell::start_waiting(dir, complete, ctx, open_wait())
+    }
+
+    fn start_waiting(dir: PathBuf, complete: Complete, ctx: *mut c_void, open_wait: std::time::Duration) -> std::io::Result<Shell> {
         std::fs::create_dir_all(&dir)?;
         let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(2).thread_name("stillfail-shell").enable_all().build()?;
         let (jobs, queue) = mpsc::channel::<Job>();
@@ -1256,7 +1278,7 @@ impl Shell {
         let tls = Arc::new(tls_config());
         let http = Mutex::new(http_client(&tls));
         let db = Arc::new(Mutex::new(DbHandle { path: dir.join("core.db"), conn: None }));
-        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default(), say: Mutex::default(), media: Mutex::default() });
+        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default(), open_wait, say: Mutex::default(), media: Mutex::default() });
         STATS.lock().unwrap().shells.push(Arc::downgrade(&inner));
         Ok(Shell { runtime, inner })
     }
@@ -1707,6 +1729,22 @@ mod tests {
         assert!(sync("sql.open", r#"{"name":"../x"}"#)["error"].is_string());
         let memory = sync("sql.open", r#"{"name":":memory:"}"#)["value"]["id"].as_u64().unwrap();
         assert_eq!(sync("sql.all", &format!(r#"{{"id":{memory},"sql":"SELECT 2"}}"#))["value"], json!([[2]]));
+    }
+
+    #[test]
+    fn a_window_of_its_own_finds_an_accounts_database_held_busy_at_once() {
+        let dir = TempDir::new();
+        let app = Shell::start_waiting(dir.path().to_path_buf(), complete, std::ptr::null_mut(), DB_WAIT).unwrap();
+        let window = Shell::start_waiting(dir.path().to_path_buf(), complete, std::ptr::null_mut(), std::time::Duration::ZERO).unwrap();
+        let sync = |shell: &Shell, op: &str, json: &str| -> Value { serde_json::from_slice(&shell.call_sync(op, json.as_bytes())).unwrap() };
+        assert!(sync(&app, "sql.open", r#"{"name":"account-a"}"#)["value"]["id"].is_u64());
+        // held by the app's run: busy, said at once (not after DB_WAIT)
+        let asked = std::time::Instant::now();
+        let busy = sync(&window, "sql.open", r#"{"name":"account-a"}"#);
+        assert!(busy["error"].as_str().unwrap().contains("locked"), "{busy}");
+        assert!(asked.elapsed() < DB_WAIT / 5, "{:?}", asked.elapsed());
+        // one no one holds: opened as ever
+        assert!(sync(&window, "sql.open", r#"{"name":"account-b"}"#)["value"]["id"].is_u64());
     }
 
     #[test]
