@@ -451,7 +451,7 @@ pub fn Ctx::pager(
   self.with_parent(i, fn() {
     for k in (st.index - 1)..=(st.index + 1) {
       if k >= 0 && k < count {
-        let slot = self.alloc(kind_box)
+        let slot = self.alloc_part(kind_box, true, true, key=item_key(k))
         let sn = self.nodes[slot]
         sn.w = Fill(1.0)
         sn.h = Fill(1.0)

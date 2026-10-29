@@ -285,7 +285,7 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
     self.width = st.vw
     self.height = st.vh
   }
-  let r = self.alloc(kind_box)
+  let r = self.alloc_part(kind_box, true, true, key=item_key(k))
   self.nodes[r].item = k
   // (in a part kept: what the row tells moves the part's too, kept_part.mbt)
   let (row_was, part_was) = (part_now.row, part_now.part)

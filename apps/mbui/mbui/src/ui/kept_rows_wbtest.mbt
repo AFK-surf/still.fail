@@ -737,3 +737,50 @@ test "a list's rows kept as their nodes on the device's pixels as a host lays th
   t.run_for(rows_fling_ms)
   assert_eq(rows_off_pixels(), [])
 }
+
+///|
+/// 40 boxes of words in a column (no list: a page's own boxes) under a bar of `more` marks.
+fn marked_column(more : @signals.Signal[Int]) -> (Ctx) -> Unit {
+  fn(c) {
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      c.box(dir=Row, h=Px(20.0), gap=4.0, fn() {
+        for _ in 0..<more.get() {
+          c.box(w=Px(10.0), h=Px(10.0), bg=0x3366CCFFL, fn() {  }) |> ignore
+        }
+      })
+      |> ignore
+      c.box(w=Fill(1.0), fn() {
+        for i in 0..<40 {
+          c.box(h=Px(50.0), dir=Row, padx=10.0, gap=8.0, align=ACenter, fn() {
+            c.box(w=Fill(1.0), fn() { c.text("box \{i}", size=12.0) |> ignore }) |> ignore
+            c.text("\{i * 7}", size=10.0) |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+test "a node more built before the page's boxes: they are laid out as before, each knowing itself, not by its place" {
+  let more = @signals.signal(1)
+  let t = Tester::new(marked_column(more), w=320.0, h=420.0, platform=2)
+  t.draw()
+  t.frame()
+  t.frame()
+  // a mark more in the bar: the frame built anew for it, every box with it; who each is is where it is in the tree,
+  // so only the mark, the bar and what holds them are laid out anew
+  more.set(2)
+  let placed = commit_counts[0]
+  t.frame()
+  assert_true(commit_counts[0] - placed < 8, msg="laid anew: \{commit_counts[0] - placed}")
+  assert_true(t.find("box 3") is Some(_))
+  // and one less, back as it was
+  more.set(1)
+  let placed2 = commit_counts[0]
+  t.frame()
+  assert_true(commit_counts[0] - placed2 < 8, msg="laid anew: \{commit_counts[0] - placed2}")
+}

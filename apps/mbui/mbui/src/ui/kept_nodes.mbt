@@ -776,6 +776,10 @@ fn Ctx::nodes_put_back(self : Ctx, rn : RowNodes, parent : Int) -> Int {
     p.first = c0
   }
   p.last = c0
+  // (counted among what its parent holds with no id, as made: what is built after it there is who it was)
+  if n > 0 && self.nodes[c0].keyless {
+    p.kids = p.kids + 1
+  }
   self.count = c0 + n
   rn.base = c0
   rn.in_pool = true

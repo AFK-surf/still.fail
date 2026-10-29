@@ -863,9 +863,10 @@ fn Ctx::alloc(self : Ctx, kind : Int) -> Int {
 /// only when asked: a box sets all of its look, a text all of its words,
 /// and only texts, rich text and editors read words (an image only its
 /// source, which it sets).
-fn Ctx::alloc_part(self : Ctx, kind : Int, look : Bool, words : Bool) -> Int {
+fn Ctx::alloc_part(self : Ctx, kind : Int, look : Bool, words : Bool, key? : Int = 0) -> Int {
   let i = self.count
   if i < self.nodes.length() {
+    self.node_known(i, kind, key)
     let n = self.nodes[i]
     n.reset_rest()
     if look {
@@ -875,7 +876,17 @@ fn Ctx::alloc_part(self : Ctx, kind : Int, look : Bool, words : Bool) -> Int {
       n.reset_words()
     }
   } else {
-    self.nodes.push(Node::new())
+    self.nodes.push(
+      match spare_nodes.pop() {
+        Some(sp) => sp
+        None => Node::new()
+      },
+    )
+    self.node_known(i, kind, key)
+    let n = self.nodes[i]
+    n.reset_rest()
+    n.reset_look()
+    n.reset_words()
   }
   self.count = i + 1
   let n = self.nodes[i]
@@ -893,6 +904,118 @@ fn Ctx::alloc_part(self : Ctx, kind : Int, look : Bool, words : Bool) -> Int {
     p.last = i
   }
   i
+}
+
+///|
+/// The key of what holds a list's item `k` (a row, a pager's page), who it is by its item (Ctx::node_known).
+fn item_key(k : Int) -> Int {
+  mix(0x6974656d, k + 1)
+}
+
+///|
+/// Who each node of the last pass of a build was, for the next to find it by (Ctx::node_known).
+// kept across runs: taken anew as each pass of a build begins (Ctx::nodes_known), from the nodes it made
+let known_nodes : Map[Int, Node] = {}
+
+///|
+/// How many nodes past twice those a pass made the frame's may hold, kept for one to come (Ctx::node_known).
+let known_room : Int = 256
+
+///|
+/// How many nodes the last pass of a build made.
+// kept across runs: only counts
+let known_made : Ref[Int] = { val: 0 }
+
+///|
+/// The passes of a build so far, for a node to say which made it (Node's `made_pass`).
+// kept across runs: only counts
+let known_pass : Ref[Int] = { val: 0 }
+
+///|
+/// As a pass of a build begins, before the frame's nodes are made again: who each node the last one made is (its
+/// `ident`), and where it is, for each made now to be put where that one of before is (Ctx::node_known).
+fn Ctx::nodes_known(self : Ctx) -> Unit {
+  known_nodes.clear()
+  known_pass.val = known_pass.val + 1
+  known_made.val = self.count
+  for k in 0..<self.count {
+    let n = self.nodes[k]
+    n.slot = k
+    if !known_nodes.contains(n.ident) {
+      known_nodes[n.ident] = n
+    }
+  }
+}
+
+///|
+/// Node `i` about to be made as a `kind` under the one being built, with `key` (its id; 0: none): who it is is what
+/// holds it, the scope it is built in (Ctx::scope: a stack's page's, a row's) and its key there, or how many before it
+/// there have none, not its place in the frame's order (as
+/// Compose's groups by their call, Flutter's elements by their type and key). The node that was it last pass is put in
+/// slot `i`, with what is kept of it (its flex node, its layout, its words shaped): a node more or less built before
+/// it elsewhere (a bar's button as it shows) leaves it as it was, laid out as before. One taken already, or not among
+/// the frame's nodes still to be made (a list's row's, held by the row): `i` as it is.
+fn Ctx::node_known(self : Ctx, i : Int, kind : Int, key : Int) -> Unit {
+  let ident = if self.cur >= 0 {
+    let p = self.nodes[self.cur]
+    // (the first built in a scope of its own, under what was not: who it is is that scope's, wherever what holds it is
+    // (a stack's page under its slot, whichever slot that is now))
+    let at = if self.id_seed != p.seed {
+      mix(self.id_seed, 0x73636f70)
+    } else {
+      p.ident
+    }
+    if key != 0 {
+      mix(mix(at, kind + 1), key)
+    } else {
+      p.kids = p.kids + 1
+      mix(mix(at, -kind - 1), p.kids)
+    }
+  } else {
+    mix(mix(kind + 1, 1), self.id_seed)
+  }
+  let found = match known_nodes.get(ident) {
+    Some(o) => {
+      let j = o.slot
+      if j > i &&
+        j < self.nodes.length() &&
+        physical_equal(self.nodes[j], o) &&
+        o.made_pass != known_pass.val {
+        let was = self.nodes[i]
+        self.nodes[j] = was
+        was.slot = j
+        self.nodes[i] = o
+        true
+      } else {
+        physical_equal(self.nodes[i], o)
+      }
+    }
+    None => false
+  }
+  // (none was it: the node in slot `i` is another's of before, still to be made, a node more built before it: kept
+  // for that one at the end of the frame's, a spare in its place; so far as the frame's nodes are not twice those
+  // made last, what was kept so for one that did not come left there)
+  if !found && self.nodes.length() < 2 * known_made.val + known_room {
+    let was = self.nodes[i]
+    match known_nodes.get(was.ident) {
+      Some(o) if physical_equal(o, was) && was.made_pass != known_pass.val => {
+        was.slot = self.nodes.length()
+        self.nodes.push(was)
+        self.nodes[i] = match spare_nodes.pop() {
+          Some(sp) => sp
+          None => Node::new()
+        }
+      }
+      _ => ()
+    }
+  }
+  let n = self.nodes[i]
+  n.ident = ident
+  n.keyless = key == 0 && self.cur >= 0
+  n.seed = self.id_seed
+  n.slot = i
+  n.kids = 0
+  n.made_pass = known_pass.val
 }
 
 ///|
@@ -1003,7 +1126,7 @@ pub fn Ctx::box(
   points? : Bool = false,
   body : () -> Unit,
 ) -> Int {
-  let i = self.alloc_part(kind_box, false, false)
+  let i = self.alloc_part(kind_box, false, false, key=id)
   let n = self.nodes[i]
   if selected && id != 0 {
     self.lit_asked.add(id)

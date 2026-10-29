@@ -556,6 +556,8 @@ let building : Ref[Bool] = Ref::new(false)
 ///|
 /// The view built (a pass of frame_body): what each build collects begins from nothing; the root, the window's size.
 fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
+  // (who each node the last pass made is, where it is, before the rows' are taken out of the frame's: Ctx::node_known)
+  c.nodes_known()
   // (the rows kept as their nodes out of the frame's, for this build to make its own: kept_nodes.mbt)
   c.rows_detach()
   c.inners.clear()
