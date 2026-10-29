@@ -103,9 +103,11 @@ test "wide: the message header offers its position link and its turn's picture s
   assert_eq(t.clipboard(), "https://app.still.fail/o/ws1/st1/s-c1?message=11")
   assert_eq(named(calls, "chat.publishPreview").length(), 0)
   let button = t.get(Button, label="分享图片").rect
-  // Beside the author's name and time, above the words, rather than at their far end.
+  // Both actions stay on the header line, with the picture after the link.
   assert_true(button.1 + button.3 <= before.1)
-  assert_true(button.0 < before.0 + 200.0)
+  let link = t.get(Button, label="复制链接").rect
+  assert_true(link.0 + link.2 <= button.0)
+  assert_eq(link.1, button.1)
   t.move(button.0 + button.2 / 2.0, button.1 + button.3 / 2.0)
   t.frame()
   assert_true(t.query(Button, label="分享图片") is Some(_))

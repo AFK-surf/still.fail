@@ -221,7 +221,10 @@ pub fn others_message(
         }
         message_time(c, key, time)
         match share {
-          Some(go) => @sfbase.share_turn_tool(c, key, row, share_link, go)
+          Some(go) => {
+            c.spacer()
+            @sfbase.share_turn_tool(c, key, row, share_link, go)
+          }
           None => ()
         }
       })
