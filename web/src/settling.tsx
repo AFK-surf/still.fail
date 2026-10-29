@@ -75,6 +75,7 @@ export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, d
     if (!drawnOpen) return;
     const el = box.current;
     from.current = el && el.childElementCount > 0 && inSight(el) ? stood.current ?? el.getBoundingClientRect().height : null;
+    console.log(`DBG settle from=${from.current} stood=${stood.current} now=${el?.getBoundingClientRect().height} kids=${el?.childElementCount} sight=${el ? inSight(el) : "-"} t=${Math.round(performance.now())}`);
     setDrawnOpen(false);
     gone?.();
   }, [box, open, drawnOpen, setDrawnOpen, gone]);
@@ -85,6 +86,7 @@ export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, d
     const el = box.current;
     if (drawnOpen || was === null || !el || !el.isConnected) return;
     const now = el.getBoundingClientRect().height;
+    console.log(`DBG settle2 was=${was} now=${now} t=${Math.round(performance.now())}`);
     if (Math.abs(now - was) < 0.5) return;
     const pane = listPaneOf(el);
     if (pane) listSizing(pane, motionMs(OPEN.duration));

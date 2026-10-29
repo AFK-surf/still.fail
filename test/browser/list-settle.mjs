@@ -264,6 +264,7 @@ createRoot(root).render(<DemoApp phone={location.hash === '#phone'} />);
     const page = await context.newPage();
     if (process.env.THROTTLE) await (await context.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.THROTTLE) });
     page.on('pageerror', (e) => failures.push(`${name}: page error ${e.message}`));
+    page.on('console', (m) => { if (m.text().startsWith('DBG')) console.log(name, m.text()); });
     await page.goto(base + '/list-settle-check.html' + (phone ? '#phone' : ''));
     await page.waitForFunction(() => !!window.demo && !!document.querySelector('[data-vk^="m:"]'), null, { timeout: 30000 });
     await page.evaluate(helpers);
