@@ -361,13 +361,13 @@ test "an iPhone Duo on its side: a service alone in the side panel a card in it,
 
 ///|
 /// The icon of the item of the bars handed last whose id is `id` (None: no such item).
-fn nav_icon_of(t : @ui.Tester, id : String) -> String? {
+fn nav_icon_of(t : @ui.Tester, id : String, field? : String = "icon") -> String? {
   let mut found : String? = None
   fn walk(j : Json) -> Unit {
     match j {
       Object(m) => {
         if m.get("id") is Some(String(s)) && s == id && found is None {
-          found = match m.get("icon") {
+          found = match m.get(field) {
             Some(String(i)) => Some(i)
             _ => Some("")
           }
@@ -392,15 +392,35 @@ test "an iPhone Duo: a chat's actions each its own in the system's bars, its his
   let t = native_chat(669.0, 951.0, true)
   let id = "page/chat/history"
   assert_eq(nav_icon_of(t, id), Some(@sf.icon_path("panel-open")))
+  assert_eq(nav_icon_of(t, id, field="title"), Some(@sf.t("web-pages.chat.openPanel")))
   assert_eq(nav_icon_of(t, "page/chat/info"), Some(@sf.icon_path("more")))
   t.post(@hostapi.system_channel, "{\"nav\":\"\{id}\"}")
   t.run_for(@ui.nav_push_ms)
   assert_eq(nav_icon_of(t, id), Some(@sf.icon_path("panel-close")))
+  assert_eq(nav_icon_of(t, id, field="title"), Some(@sf.t("web-pages.chat.closePanel")))
+  t.post(@hostapi.system_channel, "{\"nav\":\"\{id}\"}")
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(nav_icon_of(t, id, field="title"), Some(@sf.t("web-pages.chat.openPanel")))
   // (none of the chat's own buttons by its title: its ⋯)
   assert_true(said_at(t, @sf.t("web-pages.chat.info")) is None)
   t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/info\"}")
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find(@sf.t("web-pages.chat.info.from")) is Some(_))
+}
+
+///|
+test "Duo side panel switch closes all tabs even when a job is in front of its history" {
+  let t = native_chat(951.0, 669.0, true, side=84.0, mode="chat-tabs-side")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  assert_eq(side_now(r), (["s-c1", "jobs"], "jobs"))
+  assert_eq(nav_icon_of(t, "page/chat/history", field="title"), Some(@sf.t("web-pages.chat.closePanel")))
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/history\"}")
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(side_now(r), ([], ""))
+  assert_eq(nav_icon_of(t, "page/chat/history", field="title"), Some(@sf.t("web-pages.chat.openPanel")))
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/history\"}")
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(side_now(r), (["s-c1"], "s-c1"))
 }
 
 ///|
