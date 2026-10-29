@@ -23,7 +23,8 @@ import { Browser } from "./browser/service.ts";
 import { dataDir, flag, ownData } from "./ops/files.ts";
 import { setStationLang, stationLang, tr } from "./ops/i18n.ts";
 import { type Control, launcher } from "./ops/launcher.ts";
-import { hearErrors, log } from "./ops/log.ts";
+import { hearErrors, hearLines, log } from "./ops/log.ts";
+import { stationLog } from "./ops/log-export.ts";
 import { ConfigFile } from "./ops/config.ts";
 import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
@@ -134,18 +135,22 @@ function run() {
   keepRunnerIn(join(data, "run", "bin"));
   // Error lines to still.fail's error tracking, while config.json says so (telemetry.errors) and the build has a key.
   const settings = new ConfigFile(data);
+  const stationId = () => {
+    try {
+      return JSON.parse(readFileSync(join(data, "mesh", "cloud.json"), "utf8")).station ?? null;
+    } catch {
+      return null;
+    }
+  };
   const reports = new ErrorReports({
     key: builtKey(join(app, "dist", "admin")),
     enabled: () => settings.raw()?.telemetry?.errors === true,
-    station: () => {
-      try {
-        return JSON.parse(readFileSync(join(data, "mesh", "cloud.json"), "utf8")).station ?? null;
-      } catch {
-        return null;
-      }
-    },
+    station: stationId,
   });
   hearErrors((line, error) => reports.report(line, error));
+  // Every line to still.fail, scrubbed, unless config.json turns it off (telemetry.logs: false); sent once the mesh is up.
+  stationLog.configure({ enabled: () => settings.raw()?.telemetry?.logs !== false, station: stationId, version });
+  hearLines((line) => stationLog.add(line));
   const paths = Layer.succeed(Paths)({ data, app });
   // still.fail Helper, one for the screens and the drive, and one look at its grants.
   const base = Layer.mergeAll(Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer, ScreenRegistry.layer.pipe(Layer.provideMerge(Grants.layer), Layer.provideMerge(Helper.layer))).pipe(Layer.provideMerge(paths));
@@ -241,7 +246,7 @@ function run() {
     if (stopping) return;
     stopping = true;
     log.info("station", "stopping", { why });
-    Effect.runFork(Fiber.interrupt(fiber)).addObserver(() => void reports.shutdown().finally(() => process.exit(0)));
+    Effect.runFork(Fiber.interrupt(fiber)).addObserver(() => void Promise.all([reports.shutdown(), stationLog.shutdown()]).finally(() => process.exit(0)));
   };
   control.on("stop", () => stop("asked to stop"));
   control.on("handover", () => stop("handed over to the next station process"));

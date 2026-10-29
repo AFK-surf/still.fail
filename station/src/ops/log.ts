@@ -4,10 +4,21 @@ import { wall } from "./fibers.ts";
 
 type Fields = Record<string, unknown>;
 
-function line(level: string, at: string, message: string, fields?: Fields) {
+function line(level: Level, at: string, message: string, fields?: Fields) {
+  const now = wall.now();
   const rest = fields ? Object.entries(fields).map(([k, v]) => ` ${k}=${typeof v === "string" ? v : JSON.stringify(v)}`).join("") : "";
-  process.stderr.write(`${new Date(wall.now()).toISOString()} ${level.padStart(5)} ${at}: ${message}${rest}\n`);
+  process.stderr.write(`${new Date(now).toISOString()} ${level.padStart(5)} ${at}: ${message}${rest}\n`);
+  try {
+    onLine?.({ ms: now, level, at, message, fields: fields ?? {} });
+  } catch {}
 }
+
+export type Level = "INFO" | "WARN" | "ERROR";
+export type Line = { ms: number; level: Level; at: string; message: string; fields: Fields };
+
+/// Who hears of every line besides stderr (the station's log sent to still.fail, src/ops/log-export.ts).
+let onLine: ((line: Line) => void) | null = null;
+export const hearLines = (f: typeof onLine) => (onLine = f);
 
 /// Who hears of error lines besides stderr (the error reports, src/ops/telemetry.ts): the line's message with its
 /// fields but `error`, and its `error` field.

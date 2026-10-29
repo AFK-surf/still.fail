@@ -26,6 +26,8 @@ export type ControlPlaneShape = {
   readonly notify: (notices: Notice[], workspace?: string) => Effect.Effect<void, Error>;
   /// A batch of the mesh's spans; dropped where the provider takes none.
   readonly traces: (spans: unknown[]) => Effect.Effect<void, Error>;
+  /// A batch of the station's log (OTLP JSON, ops/log-export.ts); dropped where the provider takes none.
+  readonly logs: (body: string) => Effect.Effect<void, Error>;
   /// Where the station's releases and installer are (`<base>/releases/station.json`, `<base>/install.sh`), while in a
   /// workspace.
   readonly releaseBase: () => string | null;
@@ -44,6 +46,25 @@ export type PlaneParts = {
 
 export function makeControlPlane({ state, changes, key, up, provider }: PlaneParts): ControlPlaneShape {
   const spec = () => specOf(provider ?? state.provider());
+  type Telemetry = NonNullable<ProviderSpec["telemetry"]>;
+  /// A batch of telemetry posted where `path` says, signed like the presence socket over its body's hash.
+  const telemetry = (path: (t: Telemetry) => string | null, made: (station: string) => string) =>
+    Effect.tryPromise({
+      try: async () => {
+        const plane = spec();
+        const s = state.state;
+        const to = plane.telemetry === null ? null : path(plane.telemetry);
+        if (s === null || plane.telemetry === null || to === null) return;
+        const body = made(s.station);
+        const ts = nowSecs();
+        const digest = sha256hex(body);
+        const headers = { "content-type": "application/json", ...signedHeaders(plane.telemetry.prefixes, s.station, ts, (prefix) => key.sign(`${prefix}-station-telemetry-v1:${s.origin}:${s.station}:${ts}:${digest}`)) };
+        const response = await fetch(`${s.origin}${to}`, { method: "POST", headers, body, signal: AbortSignal.timeout(30_000) });
+        await response.body?.cancel();
+        if (!response.ok) throw new Error(`${plane.name} answered ${response.status}`);
+      },
+      catch: (e) => e as Error,
+    });
   return {
     state,
     changes,
@@ -58,21 +79,8 @@ export function makeControlPlane({ state, changes, key, up, provider }: PlanePar
         },
         catch: (e) => e as Error,
       }),
-    traces: (spans) =>
-      Effect.tryPromise({
-        try: async () => {
-          const plane = spec();
-          const s = state.state;
-          if (s === null || plane.telemetry === null) return;
-          const body = otlpBody(s.station, spans);
-          const ts = nowSecs();
-          const digest = sha256hex(body);
-          const headers = { "content-type": "application/json", ...signedHeaders(plane.telemetry.prefixes, s.station, ts, (prefix) => key.sign(`${prefix}-station-telemetry-v1:${s.origin}:${s.station}:${ts}:${digest}`)) };
-          const response = await fetch(`${s.origin}${plane.telemetry.path}`, { method: "POST", headers, body, signal: AbortSignal.timeout(30_000) });
-          if (!response.ok) throw new Error(`${plane.name} answered ${response.status}`);
-        },
-        catch: (e) => e as Error,
-      }),
+    traces: (spans) => telemetry((t) => t.path, (station) => otlpBody(station, spans)),
+    logs: (body) => telemetry((t) => t.logs, () => body),
     releaseBase: () => {
       const origin = state.state?.origin;
       return origin ? spec().releaseBase(origin) : null;

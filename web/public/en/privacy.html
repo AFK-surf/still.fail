@@ -13,7 +13,7 @@
 <nav><a class="home" href="/">still.fail</a><a href="/en/terms">Terms</a><a href="/en/trademark">Trademarks</a><a href="/privacy" lang="zh-CN">中文</a></nav>
 
 <h1>Privacy policy</h1>
-<p class="meta">Effective: October 27, 2026</p>
+<p class="meta">Effective: October 29, 2026</p>
 <p class="note">This is a translation for convenience. If it differs from the <a href="/privacy">Chinese version</a>, the Chinese version governs.</p>
 
 <p>This policy explains what personal information the still.fail hosted service collects, how it's used, who it's shared with, how long it's kept, and what rights you have. Please read it carefully, especially the parts in bold.</p>
@@ -47,7 +47,7 @@
 <li><strong>Push tokens</strong>: the tokens or push endpoints your devices or browsers register to receive notifications, with that device's notification settings (its language, which kinds of notifications it shows, whether it shows their content);</li>
 <li><strong>Issue reports</strong>: see section 3;</li>
 <li><strong>Network and log information</strong>: the IP address, request path, time and browser information (User-Agent) when you access the Service, recorded in Cloudflare's request logs; relay servers can see connections' IP addresses, node public keys and traffic volume. To prevent abuse, we rate-limit sign-ins using salted hashes of IP addresses and email addresses;</li>
-<li><strong>Usage statistics and error information</strong>: the web app and the Android app send PostHog action events, counts, durations, program errors and stack traces, and the web app also records session replays (all text, input and images on the page are masked at recording time). This data is tied to your account ID only, without your email address or name. <strong>You can turn off “Send usage and error reports” in the app's settings</strong>; once it's off, that device sends nothing to PostHog. Clients, stations and servers also send request traces to Axiom, including account ID, session ID, request path and duration. <strong>These statistics and traces don't include chat text, file names, prompts, agent output or conversation titles.</strong> Traces are used to diagnose failures and performance problems and aren't affected by that switch. Station error logs are sent only if the station's user turns them on; they're off by default.</li>
+<li><strong>Usage statistics and error information</strong>: the web app and the Android app send PostHog action events, counts, durations, program errors and stack traces, and the web app also records session replays (all text, input and images on the page are masked at recording time). This data is tied to your account ID only, without your email address or name. <strong>You can turn off “Send usage and error reports” in the app's settings</strong>; once it's off, that device sends nothing to PostHog. Clients, stations and servers also send request traces to Axiom, including account ID, session ID, request path and duration. <strong>These statistics and traces don't include chat text, file names, prompts, agent output or conversation titles.</strong> Traces are used to diagnose failures and performance problems and aren't affected by that switch. Stations also send their run logs to Axiom by default (what the station did and when: its connections to still.fail and to other stations, errors, versions), with home directory paths, email addresses, things that look like keys or tokens, quoted text and fields that may hold what someone wrote removed first; they don't include chat text or file contents. The station's user can turn this off in the station's <code>config.json</code> (<code>"telemetry": { "logs": false }</code>). Station error reports to PostHog are sent only if the station's user turns them on; they're off by default.</li>
 </ul>
 <p>The still.fail website (still.fail) itself doesn't use analytics.</p>
 
@@ -77,7 +77,7 @@
 <tr><td>Google LLC</td><td>United States</td><td>Google sign-in; Android push (Firebase Cloud Messaging)</td><td>Google account information, push tokens and notification text</td></tr>
 <tr><td>Your browser's push service (e.g. Google, Mozilla, Apple)</td><td>Varies by browser</td><td>Web push notifications</td><td>Push endpoints and encrypted notification content</td></tr>
 <tr><td>PostHog, Inc.</td><td>United States</td><td>Usage statistics, error tracking, session replay</td><td>Account ID, usage events, error information, masked session replays</td></tr>
-<tr><td>Axiom, Inc.</td><td>United States</td><td>Request tracing</td><td>Account ID, session ID, request paths and durations</td></tr>
+<tr><td>Axiom, Inc.</td><td>United States</td><td>Request tracing, station run logs</td><td>Account ID, session ID, request paths and durations; station ID and its scrubbed run logs</td></tr>
 <tr><td>Alibaba Cloud</td><td>Beijing, China; Hong Kong, China</td><td>Relay servers, to improve connections in mainland China</td><td>Connection metadata (IP addresses, node public keys, traffic volume), no content</td></tr>
 </table>
 <p>Beyond this, we disclose your information only when required by laws and regulations, when lawfully requested by law enforcement or judicial authorities, or when genuinely necessary to protect the life or property of you, other users or the public. Other members of a workspace can see your name, email address and avatar.</p>
@@ -93,7 +93,7 @@
 <li>Push tokens: deleted when you sign out or the device stops receiving notifications;</li>
 <li>Account, workspace and station information: kept while you use the Service, and deleted as soon as you delete your account or the workspace;</li>
 <li>Issue reports: kept as needed after the issue is resolved, deleted along with your account, and you can ask us to delete them at any time;</li>
-<li>Request logs, usage statistics and traces: kept for the retention periods of Cloudflare, PostHog and Axiom respectively, then deleted automatically.</li>
+<li>Request logs, usage statistics, traces and station run logs: kept for the retention periods of Cloudflare, PostHog and Axiom respectively, then deleted automatically.</li>
 </ul>
 <p>Where laws or regulations require a longer retention period, that period applies.</p>
 

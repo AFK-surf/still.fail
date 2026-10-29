@@ -13,7 +13,7 @@
 <nav><a class="home" href="/">still.fail</a><a href="/terms">服务条款</a><a href="/trademark">商标说明</a><a href="/en/privacy" lang="en">English</a></nav>
 
 <h1>隐私政策</h1>
-<p class="meta">生效日期：2026 年 10 月 27 日</p>
+<p class="meta">生效日期：2026 年 10 月 29 日</p>
 
 <p>本政策说明 still.fail 托管服务会收集哪些个人信息、怎么用、交给谁、存多久，以及你有哪些权利。请仔细阅读，特别是加粗的部分。</p>
 
@@ -46,7 +46,7 @@
 <li><strong>推送令牌</strong>：你的设备或浏览器为接收通知而登记的令牌或推送地址，以及这台设备的通知设置（语言、接收哪几类通知、是否显示内容）；</li>
 <li><strong>问题反馈</strong>：见第 3 节；</li>
 <li><strong>网络和日志信息</strong>：访问本服务时的 IP 地址、请求路径、时间和浏览器信息（User-Agent），记在 Cloudflare 的请求日志中；中继服务器能看到连接的 IP 地址、节点公钥和流量大小。为防止滥用，我们用加盐哈希后的 IP 地址和邮箱来限制登录频率；</li>
-<li><strong>使用统计和错误信息</strong>：网页版和 Android 应用会向 PostHog 发送操作事件、次数、耗时、程序错误和调用栈，网页版还会录制会话回放（页面上所有文字、输入内容和图片在录制时就被遮盖）。这些数据只以你的账号 ID 标识，不附带邮箱和名字。<strong>你可以在应用的设置中关闭“发送使用统计和错误报告”</strong>，关闭后这台设备不再向 PostHog 发送任何数据。客户端、station 和服务器还会向 Axiom 发送请求链路追踪，包括账号 ID、会话 ID、请求路径和耗时。<strong>这些统计和追踪不包含聊天文字、文件名、提示词、agent 输出和对话标题。</strong>链路追踪用于排查故障和性能问题，不受这个开关影响。station 的错误日志只有在 station 的使用者开启后才会发送，默认关闭。</li>
+<li><strong>使用统计和错误信息</strong>：网页版和 Android 应用会向 PostHog 发送操作事件、次数、耗时、程序错误和调用栈，网页版还会录制会话回放（页面上所有文字、输入内容和图片在录制时就被遮盖）。这些数据只以你的账号 ID 标识，不附带邮箱和名字。<strong>你可以在应用的设置中关闭“发送使用统计和错误报告”</strong>，关闭后这台设备不再向 PostHog 发送任何数据。客户端、station 和服务器还会向 Axiom 发送请求链路追踪，包括账号 ID、会话 ID、请求路径和耗时。<strong>这些统计和追踪不包含聊天文字、文件名、提示词、agent 输出和对话标题。</strong>链路追踪用于排查故障和性能问题，不受这个开关影响。station 默认还会向 Axiom 发送运行日志（station 做了什么、什么时候做的：它和 still.fail、和其他 station 的连接，错误，版本），发送前去掉家目录路径、邮箱、像密钥或令牌的字符串、引号里的文字和可能是人写的字段，不包含聊天文字和文件内容；station 的使用者可以在 station 的 <code>config.json</code> 里关闭（<code>"telemetry": { "logs": false }</code>）。发往 PostHog 的 station 错误报告只有在 station 的使用者开启后才会发送，默认关闭。</li>
 </ul>
 <p>still.fail 官网（still.fail）本身不使用统计工具。</p>
 
@@ -76,7 +76,7 @@
 <tr><td>Google LLC</td><td>美国</td><td>Google 登录；Android 推送（Firebase 云消息）</td><td>Google 账号信息、推送令牌和通知文字</td></tr>
 <tr><td>你的浏览器的推送服务（如 Google、Mozilla、Apple）</td><td>因浏览器而异</td><td>网页推送通知</td><td>推送地址和加密后的通知内容</td></tr>
 <tr><td>PostHog, Inc.</td><td>美国</td><td>使用统计、错误追踪、会话回放</td><td>账号 ID、使用事件、错误信息、遮盖后的会话回放</td></tr>
-<tr><td>Axiom, Inc.</td><td>美国</td><td>请求链路追踪</td><td>账号 ID、会话 ID、请求路径和耗时</td></tr>
+<tr><td>Axiom, Inc.</td><td>美国</td><td>请求链路追踪、station 运行日志</td><td>账号 ID、会话 ID、请求路径和耗时；station ID 和脱敏后的运行日志</td></tr>
 <tr><td>阿里云</td><td>中国北京、中国香港</td><td>中继服务器，改善中国大陆的连接</td><td>连接元数据（IP 地址、节点公钥、流量大小），不含内容</td></tr>
 </table>
 <p>除此之外，只有在法律法规要求、执法或司法机关依法要求，或为保护你、其他用户或公众的生命财产安全确有必要时，我们才会披露你的信息。workspace 的其他成员能看到你的名字、邮箱和头像。</p>
@@ -92,7 +92,7 @@
 <li>推送令牌：退出登录或设备不再接收时删除；</li>
 <li>账号、workspace 和 station 信息：在你使用本服务期间保存，注销账号或删除 workspace 时立即删除；</li>
 <li>问题反馈：问题处理完后视需要保存，注销账号时一并删除，你也可以随时要求删除；</li>
-<li>请求日志、使用统计和链路追踪：分别按 Cloudflare、PostHog、Axiom 的保留期限保存，到期自动删除。</li>
+<li>请求日志、使用统计、链路追踪和 station 运行日志：分别按 Cloudflare、PostHog、Axiom 的保留期限保存，到期自动删除。</li>
 </ul>
 <p>法律法规要求更长保存期限的，从其规定。</p>
 

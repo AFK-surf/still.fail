@@ -113,6 +113,29 @@ test("a station's spans are signed with its key, over the body", async () => {
   }
 });
 
+test("a station's log goes on to Axiom's logs, signed with its key; a member's account cannot send one", async () => {
+  const urls: string[] = [];
+  const axiom = fakeAxiom();
+  const h = await harness({ axiom: (request) => (urls.push(request.url), axiom.answer(request)) });
+  try {
+    const station = await enrolled(h);
+    const body = JSON.stringify({ resourceLogs: [{ resource: { attributes: [] }, scopeLogs: [{ scope: { name: "stillfail-station" }, logRecords: [{ timeUnixNano: "1", severityText: "WARN", body: { stringValue: "no presence socket" } }] }] }] });
+    const logs = (b: string, headers: Record<string, string>) => h.fetch("/v1/telemetry/logs", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: b });
+    assert.equal((await logs(body, await signed(h, station, body))).status, 202);
+    assert.deepEqual(urls, ["https://api.axiom.co/v1/logs"]);
+    assert.deepEqual(axiom.got[0]!.body, JSON.parse(body));
+    // Spans are no log, a forged body is refused, and an account is no station.
+    const spans = batch();
+    assert.equal((await logs(spans, await signed(h, station, spans))).status, 400);
+    assert.equal((await logs(batch("x"), await signed(h, station, body))).status, 401);
+    const alice = await h.login("alice");
+    assert.equal((await logs(body, { authorization: `Bearer ${alice.access_token}` })).status, 401);
+    assert.equal(axiom.got.length, 1);
+  } finally {
+    await h.close();
+  }
+});
+
 test("each sender has its own budget a minute", async () => {
   const axiom = fakeAxiom();
   const h = await harness({ axiom: axiom.answer });

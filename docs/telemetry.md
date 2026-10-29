@@ -38,6 +38,19 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 打开后（改配置立即生效，关掉也立即停）上报：error 级别的每一条日志。每条带 station 的 id（有 mesh 登记时）和 `release`。日志的字段一律不发（可能带着人写的东西），只发那句话和其中的错误信息；错误信息里家目录下的路径换成 `~`，引号括起来的内容换成 `"…"`（比如 JSON 解析错误会把输入引出来）。
 
+### station 的日志
+
+`station/src/ops/log-export.ts`，**默认开**（2026-10-29 用户定：「应该脱敏默认发，然后用户可以关闭，不然 debug 都没法搞」）。起因是用户 station 之间共享 skill 不同步，要看的是两台连 still.fail cloud 的记录（`presence` 那几行），我们这边一条都没有，只能找用户要日志文件。在 `config.json` 里关掉（改配置立即生效）：
+
+```json
+{ "telemetry": { "logs": false } }
+```
+
+- 发什么：`stillfail.log` 里的每一行（INFO、WARN、ERROR），作为 OpenTelemetry 日志，每 5 秒一批（至多 500 行）发到 control plane 的 `/v1/telemetry/logs`（和 station 的 span 一样用 station 的 key 签名），still.fail cloud 转给 Axiom 的 `/v1/logs`，同一个数据集。资源属性 `service.name: stillfail-station`、`service.version`、`stillfail.station`；每行 `log.target`（`presence`、`share`…）和各字段 `log.<名字>`。
+- 脱敏：家目录下的路径换成 `~`；邮箱和用邮箱拼成的 profile id（`zzj3720-gmail-com`）换成 `<email>`；JWT、常见前缀的 API key/token、AWS access key 换成 `<secret>`；引号括起来的内容换成 `"…"`；可能是人写的字段（`text`、`name`、`title`、`command`、`args`、`prompt`、`body`、`question`、`content`）整个换成 `…`；`workspace` 字段不是 workspace id（是名字）时也换成 `…`；每个值最多 2000 字。
+- 发不出去（还没登记、mesh 还没起来）的先攒着，最多 5000 行，再多就丢最老的、下一批里说丢了几行；一批发失败就丢掉，不重发；失败每 10 分钟在 stderr 说一次。Comma 不收（`telemetry: null`）。
+- 查：Axiom 里 `['ember'] | where ['service.name'] == "stillfail-station" and ['resource.stillfail.station'] startswith "<station id 前几位>"`，按 `_time` 看 `body` 和 `attributes.log.*`。
+
 ## 安卓
 
 `apps/android/.../Crashes.kt`（`Tombstone.kt`）报闪退，`BarTiming.kt` 报下方栏切换的耗时，和网页版的错误进同一个项目（`$exception`，`app: android`，`release` 是版本号 `0.1.<n>`，`distinct_id` 是登录账号的 id，和网页版标识的人一样）。
