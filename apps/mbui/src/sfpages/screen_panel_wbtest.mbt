@@ -160,6 +160,72 @@ test "缩放 with more steps than fit side by side: picked from a list with no s
 }
 
 ///|
+test "分辨率 while driving a station that changes it: its modes, the one nearest this screen's shape said, one chosen sent once" {
+  // (an iPhone Duo's inner screen, sideways)
+  let r = screen_rig(w=951.0, h=669.0, platform=1)
+  r.live()
+  let resolution : Json = {
+    "width": 2560.0,
+    "height": 1440.0,
+    "modes": [
+      { "width": 2560.0, "height": 1440.0 },
+      { "width": 1920.0, "height": 1080.0 },
+      { "width": 1680.0, "height": 1050.0 },
+      { "width": 1600.0, "height": 1200.0 },
+      { "width": 1280.0, "height": 720.0 },
+    ],
+  }
+  r.state("live", more={ "resolution": resolution })
+  open_center(r)
+  assert_true(r.t.find(tr("web-pages.screen.resolution")) is Some(_))
+  // (the stage a little wider than 4:3: 1600×1200 nearest)
+  assert_true(r.t.find("1600×1200 最贴合") is Some(_))
+  r.t.tap_text("2560×1440")
+  r.t.run_for(@ui.nav_push_ms)
+  assert_true(r.t.find(tr("common.search")) is None)
+  // the nearest marked in the list itself
+  assert_true(r.t.find("1600×1200（推荐）") is Some(_))
+  // (the list's row, drawn over the panel's note naming the same)
+  let (px, py) = r.t.find_last("1600×1200").unwrap()
+  r.t.tap(px, py)
+  r.t.run_for(@ui.nav_push_ms)
+  let ins = r.inputs()
+  assert_eq(ins.length(), 1)
+  assert_eq(text(Some(ins[0]), "t"), "resolution")
+  assert_eq(number(Some(ins[0]), "width"), 1600.0)
+  assert_eq(number(Some(ins[0]), "height"), 1200.0)
+  shut(r)
+  screen_done(r.t)
+}
+
+///|
+test "the modes offered: three of each shape, the one now and the nearest kept whatever their shape" {
+  // (the user's display's, 2026-10-29)
+  let modes = [
+    (3840, 2160), (2560, 1600), (2560, 1440), (2048, 1536), (1920, 1440), (1920, 1200), (1920, 1080), (1600, 1200),
+    (1680, 1050), (1600, 1024), (1440, 1080), (1600, 900), (1280, 1024), (1440, 900), (1280, 960), (1366, 768),
+    (1360, 768), (1280, 800), (1152, 864), (1280, 768), (1280, 720), (1024, 768), (1176, 664), (800, 600),
+  ]
+  let fits = resolution_fitting(modes, 951.0, 669.0)
+  let shown = resolution_shown(modes, (3840, 2160), fits)
+  assert_true(shown.contains((1920, 1080)))
+  assert_true(shown.length() <= 11, msg="\{shown}")
+  assert_true(shown.contains((3840, 2160)))
+  assert_true(shown.contains(modes[fits]))
+  assert_eq(shown[0], (3840, 2160))
+  // the one now kept though its shape has had three
+  assert_true(resolution_shown(modes, (1600, 900), fits).contains((1600, 900)))
+}
+
+///|
+test "the mode nearest a stage's shape: the larger of two as near" {
+  let modes = [(2560, 1440), (1920, 1080), (1600, 1200), (1280, 960)]
+  assert_eq(resolution_fitting(modes, 800.0, 450.0), 0)
+  assert_eq(resolution_fitting(modes, 800.0, 600.0), 2)
+  assert_eq(resolution_fitting([], 800.0, 600.0), -1)
+}
+
+///|
 test "no 缩放 from a station that does not change it" {
   let r = screen_rig()
   r.live()

@@ -408,6 +408,76 @@ fn ScreenSess::undriven(self : ScreenSess) -> String? {
 }
 
 ///|
+/// The screen's display resolution while this viewer drives one whose station changes it (Windows): now, and the modes
+/// it takes (landscape, the largest first); None elsewhere, or while only looking.
+fn ScreenSess::resolution(self : ScreenSess) -> ((Int, Int), Array[(Int, Int)])? {
+  if !self.driving() {
+    return None
+  }
+  match field(self.state, "resolution") {
+    Some(Object(_)) as r => {
+      let modes = items(r, "modes").filter_map(fn(j) {
+        let m = Some(j)
+        let (w, h) = (number(m, "width").to_int(), number(m, "height").to_int())
+        if w > 0 && h > 0 {
+          Some((w, h))
+        } else {
+          None
+        }
+      })
+      if modes.is_empty() {
+        None
+      } else {
+        Some(((number(r, "width").to_int(), number(r, "height").to_int()), modes))
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// The mode of `modes` whose shape is nearest the stage's (`w`×`h`, as this device shows the screen): the one that
+/// fills it best, the larger of two as near.
+fn resolution_fitting(modes : Array[(Int, Int)], w : Double, h : Double) -> Int {
+  if modes.is_empty() || w <= 0.0 || h <= 0.0 {
+    return -1
+  }
+  let want = w / h
+  let mut best = 0
+  let mut off = @double.infinity
+  for i, m in modes {
+    // (how many times wider or narrower than the stage's shape, 1 the same)
+    let k = m.0.to_double() / m.1.to_double() / want
+    let d = if k >= 1.0 { k } else { 1.0 / k }
+    // (the largest first: a later one only when nearer by more than a rounding's)
+    if d < off - 0.001 {
+      best = i
+      off = d
+    }
+  }
+  best
+}
+
+///|
+/// The modes worth offering of `modes` (the largest first): of each shape (its width to its height, to a tenth) the
+/// three largest, with the one it is at now (`now`) and the one nearest this device's (`fits`, its index; -1 none) kept
+/// whatever their shape; in the order they came. A display offers some two dozen, most of them the same shapes
+/// smaller: a list too long to pick from on a phone (the user, 2026-10-29).
+fn resolution_shown(modes : Array[(Int, Int)], now : (Int, Int), fits : Int) -> Array[(Int, Int)] {
+  let per : Map[Int, Int] = Map([])
+  let shown : Array[(Int, Int)] = []
+  for i, m in modes {
+    let shape = (m.0.to_double() / m.1.to_double() * 10.0).round().to_int()
+    let had = per.get(shape).unwrap_or(0)
+    per[shape] = had + 1
+    if had < 3 || m == now || i == fits {
+      shown.push(m)
+    }
+  }
+  shown
+}
+
+///|
 /// The screen's display scale while this viewer drives one whose station changes it (Windows): now, the one its system
 /// recommends, the steps it takes (in percent, lowest first); None elsewhere, or while only looking.
 fn ScreenSess::scale(self : ScreenSess) -> (Int, Int, Array[Int])? {

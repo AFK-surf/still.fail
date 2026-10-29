@@ -153,6 +153,17 @@ function scaleOf(v: unknown): { percent: number; recommended: number; steps: num
   return { percent: v.percent, recommended: v.recommended, steps: [...v.steps] };
 }
 
+/// A display's resolution as a station says it (`state.resolution`), checked: null when it is not one.
+type Size = { width: number; height: number };
+function resolutionOf(v: unknown): { width: number; height: number; modes: Size[] } | null {
+  const px = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n > 0 && n <= 16384;
+  const size = (m: unknown): m is Size => isObject(m) && px(m.width) && px(m.height);
+  if (!isObject(v) || !size(v)) return null;
+  const modes = (v as { modes?: unknown }).modes;
+  if (!Array.isArray(modes) || modes.length === 0 || !modes.every(size)) return null;
+  return { width: v.width, height: v.height, modes: modes.map((m: Size) => ({ width: m.width, height: m.height })) };
+}
+
 export function checkInput(input: unknown): J {
   const bad = () => CoreError.invalid(t("core-misc.screen.badInput"));
   if (!isObject(input)) throw bad();
@@ -183,6 +194,12 @@ export function checkInput(input: unknown): J {
     case "scale":
       if (!finite(input.percent) || !Number.isInteger(input.percent) || input.percent < 100 || input.percent > 500) throw bad();
       return { t: "scale", percent: input.percent };
+    // The display's resolution, one of its modes (a screen whose state says `resolution`).
+    case "resolution": {
+      const px = (n: unknown) => finite(n) && Number.isInteger(n) && n >= 640 && n <= 16384;
+      if (!px(input.width) || !px(input.height)) throw bad();
+      return { t: "resolution", width: input.width, height: input.height };
+    }
     // A file dropped into the view, shown in the machine's file manager (a screen whose `drop` says `reveal`).
     case "reveal":
       if (typeof input.path !== "string" || input.path === "" || input.path.length > 4096) throw bad();
@@ -441,6 +458,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     let onIt: string[] | null = null;
     // Its display's scale as the stream last said (a Windows station's desktop, to a view that drives it).
     let displayScale: { percent: number; recommended: number; steps: number[] } | null = null;
+    let displaySize: { width: number; height: number; modes: Size[] } | null = null;
     let driving: string[] | null = null;
     // Decided once the station's list is read (below) for a view opened with no `control` asked.
     let wanted = c.ask.control && may;
@@ -486,7 +504,20 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       const scale = state.control ? displayScale : null;
       if (scale) state.scale = scale;
       else delete state.scale;
-      progress({ state: { ...state, others: [...others], controllers: [...controllers], clipboard: [...clipboard], ...(drop ? { drop: { ...drop } } : {}), ...(scale ? { scale: { ...scale, steps: [...scale.steps] } } : {}) } });
+      const resolution = state.control ? displaySize : null;
+      if (resolution) state.resolution = resolution;
+      else delete state.resolution;
+      progress({
+        state: {
+          ...state,
+          others: [...others],
+          controllers: [...controllers],
+          clipboard: [...clipboard],
+          ...(drop ? { drop: { ...drop } } : {}),
+          ...(scale ? { scale: { ...scale, steps: [...scale.steps] } } : {}),
+          ...(resolution ? { resolution: { ...resolution, modes: resolution.modes.map((m) => ({ ...m })) } } : {}),
+        },
+      });
     };
     const write = (bytes: Uint8Array) => {
       if (out !== null) Queue.offerUnsafe(out, bytes);
@@ -675,6 +706,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 }
                 const scale = scaleOf(s.scale);
                 if (scale) displayScale = scale;
+                const size = resolutionOf(s.resolution);
+                if (size) displaySize = size;
                 if (s.ended !== undefined && s.ended !== null && s.ended !== false) {
                   // The station stopping (an update, a restart): opened again once it is back.
                   if (s.ended === "stopping") return { dropped: true, seen } as Outcome;

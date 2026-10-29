@@ -431,6 +431,19 @@ each("a_view_brings_its_frames_with_their_bytes_and_takes_acks_key_frames_and_in
   await host.settle();
   said(host, log);
   assert.equal(log.find((m) => m.id === 8)?.error?.code, "invalid_params");
+  // Its display's resolution likewise: said to a view that drives it, set with the input it takes.
+  const modes = [{ width: 2560, height: 1440 }, { width: 1920, height: 1080 }];
+  v!.send(stateFrame({ resolution: { width: 2560, height: 1440, modes } }));
+  await host.settle();
+  said(host, log);
+  assert.deepEqual(lastState(log, 1).resolution, { width: 2560, height: 1440, modes });
+  call(core, ui, 9, "screen.input", { view: "v", input: { t: "resolution", width: 1920, height: 1080 } });
+  await host.settle();
+  assert.deepEqual(v!.got.at(-1), { input: { t: "resolution", width: 1920, height: 1080 } });
+  call(core, ui, 10, "screen.input", { view: "v", input: { t: "resolution", width: 1920.5, height: 1080 } });
+  await host.settle();
+  said(host, log);
+  assert.equal(log.find((m) => m.id === 10)?.error?.code, "invalid_params");
   // The page goes: the stream closes.
   core.receive(ui, { kind: "cancel", id: 1, cancel: true });
   await host.settle();

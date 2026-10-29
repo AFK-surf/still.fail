@@ -6,6 +6,10 @@
 //   stillfail-screen scale [percent]
 //                             one JSON line: the main display's scale {percent, recommended, steps: [percent…]}, set to
 //                             `percent` first when it is given (one of its steps); or {error}
+//   stillfail-screen resolution [WxH]
+//                             one JSON line: the main display's resolution {width, height, modes: [{width, height}…]}
+//                             (landscape, at its depth, the largest first), set to `WxH` first when it is given (one of
+//                             its modes; for now, not kept in the registry); or {error}
 //   stillfail-screen view     a JSON line {codec: "h265"|"h264"|"jpeg", maxWidth, maxHeight, bitrate?, audio?: true, encoder?: "software"},
 //                             then messages
 //                             (a kind byte, the payload's length in 4 bytes big-endian, the payload) both ways until
@@ -68,6 +72,8 @@ mod image;
 mod input;
 #[cfg_attr(not(windows), allow(dead_code))]
 mod region;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod resolution;
 mod scale;
 #[cfg(windows)]
 mod view;
@@ -137,13 +143,21 @@ fn main() {
             Some(percent) => println!("{}", percent.parse().map(scale::set).unwrap_or_else(|_| serde_json::json!({ "error": "not a percent" }))),
             None => println!("{}", scale::read()),
         },
+        // The main display's resolution; with WxH, set to it first.
+        Some("resolution") => match std::env::args().nth(2) {
+            Some(size) => println!(
+                "{}",
+                resolution::parse(&size).map(|(w, h)| resolution::set(w, h)).unwrap_or_else(|| serde_json::json!({ "error": "not WxH" }))
+            ),
+            None => println!("{}", resolution::read()),
+        },
         Some("view") => {
             let mut input = std::io::stdin().lock();
             let Some(request) = request_line(&mut input) else { std::process::exit(2) };
             view::run(&request, &mut input, Out::new());
         }
         _ => {
-            eprintln!("usage: stillfail-screen status | view | scale [percent]");
+            eprintln!("usage: stillfail-screen status | view | scale [percent] | resolution [WxH]");
             std::process::exit(2);
         }
     }

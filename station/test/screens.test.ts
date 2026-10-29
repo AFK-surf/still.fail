@@ -480,6 +480,43 @@ test("the display's scale: told to a person who drives it, set as they ask; a re
   await Promise.all([driver.served, viewer.served]);
 });
 
+test("the display's resolution: told to a person who drives it, set as they ask; a read-only member neither hears nor sets it", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  const modes = [{ width: 2560, height: 1440 }, { width: 1920, height: 1080 }, { width: 1600, height: 1200 }];
+  let resolution = { width: 2560, height: 1440, modes };
+  const set: string[] = [];
+  Object.assign(source, {
+    resolution: async () => resolution,
+    setResolution: async (width: number, height: number) => (set.push(`${width}x${height}`), (resolution = { ...resolution, width, height })),
+  });
+  hub.add(source);
+  const driver = await open(hub, member);
+  const states: any[] = [];
+  await until(driver.frames, KIND.video, states);
+  while (!states.some((s) => s.resolution)) states.push(json(await until(driver.frames, KIND.state)));
+  assert.deepEqual(states.find((s) => s.resolution).resolution, { width: 2560, height: 1440, modes });
+  await driver.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "resolution", width: 1600, height: 1200 }))));
+  // Not a size, or not numbers: dropped before the source.
+  await driver.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "resolution", width: 10, height: 10 }))));
+  await driver.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "resolution", width: "1600", height: 1200 }))));
+  for (;;) {
+    const got = await driver.frames.next();
+    if (got?.kind === KIND.state && json(got.payload).resolution?.width === 1600) break;
+  }
+  assert.deepEqual(set, ["1600x1200"]);
+  const viewer = await open(hub, reader, { codecs: ["h264"], control: true });
+  const seen: any[] = [];
+  await until(viewer.frames, KIND.video, seen);
+  await viewer.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "resolution", width: 1920, height: 1080 }))));
+  await settle();
+  assert.deepEqual(set, ["1600x1200"]);
+  assert.ok(!seen.some((s) => s.resolution));
+  await driver.stream.finish();
+  await viewer.stream.finish();
+  await Promise.all([driver.served, viewer.served]);
+});
+
 test("input reaches the source from a member who asked to drive, checked; a read-only member's is dropped", async () => {
   const hub = new ScreenHub();
   const source = new FakeSource();
@@ -823,6 +860,16 @@ if (mode === "scale") {
   console.log(JSON.stringify({ percent: fs.existsSync(kept) ? Number(fs.readFileSync(kept, "utf8")) : 300, recommended: 150, steps }));
   process.exit(0);
 }
+if (mode === "resolution") {
+  const kept = log + ".resolution", modes = ["2560x1600", "1920x1200", "1600x1200"], asked = process.argv[4];
+  if (asked !== undefined) {
+    if (!modes.includes(asked)) { console.log(JSON.stringify({ error: asked + " is not a mode of this display" })); process.exit(0); }
+    fs.writeFileSync(kept, asked); fs.appendFileSync(log, JSON.stringify({ resolution: asked }) + "\\n");
+  }
+  const [w, h] = (fs.existsSync(kept) ? fs.readFileSync(kept, "utf8") : "2560x1600").split("x").map(Number);
+  console.log(JSON.stringify({ width: w, height: h, modes: modes.map((m) => ({ width: Number(m.split("x")[0]), height: Number(m.split("x")[1]) })) }));
+  process.exit(0);
+}
 const out = (kind, payload) => { const head = Buffer.alloc(5); head[0] = kind; head.writeUInt32BE(payload.length, 1); process.stdout.write(Buffer.concat([head, payload])); };
 let carry = Buffer.alloc(0), request = null, n = 0;
 process.stdin.on("data", (chunk) => {
@@ -951,6 +998,38 @@ test("Windows' desktop: the display's scale set while viewed, put back as it was
   assert.equal((await desktop.scale())?.percent, 300);
   const scales = readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((l) => "scale" in l).map((l) => l.scale);
   assert.deepEqual(scales, [150, 125, 300]);
+  await desktop.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("Windows' desktop: the display's resolution set while viewed, put back as it was once the last view ends", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "sf-winscreen-"));
+  const script = join(dir, "fake-screen.cjs");
+  const log = join(dir, "log");
+  writeFileSync(script, FAKE_SCREEN);
+  writeFileSync(log, "");
+  const start = (_binary: string, args: string[]) => spawn(process.execPath, [script, args[0]!, log, ...args.slice(1)], { stdio: ["pipe", "pipe", "inherit"] });
+  let changed = 0;
+  const desktop = new WindowsDesktop({ binary: "stillfail-screen.exe", changed: () => changed++, start });
+  const modes = [{ width: 2560, height: 1600 }, { width: 1920, height: 1200 }, { width: 1600, height: 1200 }];
+  assert.deepEqual(await desktop.resolution(), { width: 2560, height: 1600, modes });
+  const a = await desktop.open({ maxWidth: 1280, maxHeight: 800, codecs: ["h264"] });
+  const b = await desktop.open({ maxWidth: 1280, maxHeight: 800, codecs: ["h264"] });
+  assert.deepEqual(await desktop.setResolution(1920, 1200), { width: 1920, height: 1200, modes });
+  assert.deepEqual(await desktop.setResolution(1600, 1200), { width: 1600, height: 1200, modes });
+  // Not one of its modes: refused as stillfail-screen says, nothing changed.
+  await assert.rejects(desktop.setResolution(1024, 768), /1024x768 is not a mode/);
+  assert.equal((await desktop.resolution())?.width, 1600);
+  // One view left: as it was set.
+  a.close();
+  assert.equal((await desktop.resolution())?.width, 1600);
+  // The last one gone: as it was before the first change.
+  b.close();
+  assert.equal((await desktop.resolution())?.width, 2560);
+  const sizes = readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((l) => "resolution" in l).map((l) => l.resolution);
+  assert.deepEqual(sizes, ["1920x1200", "1600x1200", "2560x1600"]);
+  // (listed anew each time its size changed)
+  assert.ok(changed >= 3);
   await desktop.close();
   rmSync(dir, { recursive: true, force: true });
 });

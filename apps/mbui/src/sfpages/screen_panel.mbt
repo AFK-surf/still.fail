@@ -484,6 +484,48 @@ fn center_panel(
       })
     None => ()
   }
+  // its resolution, the mode nearest the shape this device shows it in said (UU Remote's 分辨率)
+  match s.resolution() {
+    Some((size, all)) =>
+      @sf.panel_group(c, label=@sf.t("web-pages.screen.resolution"), fn() {
+        let fitting = resolution_fitting(all, u.box_w, u.box_h)
+        let modes = resolution_shown(all, size, fitting)
+        let now = modes.search(size).unwrap_or(-1)
+        c.box(style=center_choice, fn() {
+          // (the nearest marked in the list too, not only in the note under it: the user, 2026-10-29)
+          let labels = modes.map(fn(m) {
+            let size = "\{m.0}×\{m.1}"
+            if fitting >= 0 && m == all[fitting] {
+              @sf.t("web-pages.screen.resolutionMark", args=[("size", size)])
+            } else {
+              size
+            }
+          })
+          let chosen = @sf.segmented(c, "screen-resolution", labels, now)
+          if size == u.size_asked || chosen == now {
+            u.size_asked = (0, 0)
+          }
+          if chosen != now && chosen >= 0 && modes[chosen] != u.size_asked {
+            let (w, h) = modes[chosen]
+            u.size_asked = (w, h)
+            let n = c.frame_number()
+            c.tell("screen-resolution/" + s.view + "/\{n}", fn() {
+              s.input(src, {
+                "t": Json::string("resolution"),
+                "width": Json::number(w.to_double()),
+                "height": Json::number(h.to_double()),
+              })
+            })
+          }
+        })
+        |> ignore
+        if fitting >= 0 {
+          let (w, h) = all[fitting]
+          @sf.panel_note(c, @sf.t("web-pages.screen.resolutionFits", args=[("size", "\{w}×\{h}")]))
+        }
+      })
+    None => ()
+  }
   @sf.panel_group(c, fn() {
     if s.drops_to() is Some(_) &&
       @sf.menu_item(c, @sf.t("android-misc.screen.sendFile"), key="screen-center-send", panel=true, icon="upload") {

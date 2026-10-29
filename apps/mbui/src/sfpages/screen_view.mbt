@@ -35,6 +35,8 @@ priv struct ScreenUi {
   mut tools_from : (Double, Double)?
   /// the display's scale last asked for (0 none): asked once, not again each frame its pick still shows it
   mut scale_asked : Int
+  /// the display's resolution last asked for (0 wide none): asked once, as the scale is
+  mut size_asked : (Int, Int)
   mut saying : Bool
   /// how many times the rail's line was asked for: its 3 s start again from each
   mut sayings : Int
@@ -101,6 +103,7 @@ fn screen_ui(key : String) -> ScreenUi {
         tools_dy: 0.0,
         tools_from: None,
         scale_asked: 0,
+        size_asked: (0, 0),
         saying: false,
         sayings: 0,
         box_w: 0.0,
