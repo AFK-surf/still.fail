@@ -36,7 +36,7 @@ type Json = any;
 
 test("every tool has a name, a description and an object's input schema; the chat tools in their order", () => {
   const r = new Rig();
-  const ours = [...chatTools(r.hub), ...archiveTools(r.hub), ...stationTools(() => null), ...adbTools(() => [], () => null), ...feedbackTools(r.store, () => null, () => null)];
+  const ours = [...chatTools(r.hub), ...archiveTools(r.hub), ...stationTools(() => null), ...adbTools(() => []), ...feedbackTools(r.store, () => null, () => null)];
   assert.deepEqual(
     chatTools(r.hub).map((t) => t.name),
     ["chat_post", "slack_api", "chat_state", "chat_history", "chat_list", "chat_read", "session_send", "chat_create", "session_history"],
@@ -1248,12 +1248,10 @@ test("station_* reach the transport, pretty-printed; adb_devices and feedback_se
   assert.equal(await tools[0]!.run("s", {}), JSON.stringify({ ok: true, stations: [] }, null, 2));
   assert.deepEqual(calls, [["station_list", "s", {}]]);
   await assert.rejects(stationTools(() => null)[1]!.run("s", { station: "x", action: "list" }), /cannot be reached/);
-  const page = "https://app.still.fail/w/w1/s/st1/adb";
-  const none = await adbTools(() => [], () => page)[0]!.run("s", {});
-  assert.ok(none.startsWith("No phone is shared") && none.includes(page));
-  const one = await adbTools(() => [{ serial: "127.0.0.1:37123", adb: "connected" }], () => page)[0]!.run("s", {});
-  assert.ok(one.includes("127.0.0.1:37123") && one.includes("adb -s <serial>") && one.includes("/s/st1/adb"));
-  assert.ok(!(await adbTools(() => [], () => null)[0]!.run("s", {})).includes("http"));
+  const none = await adbTools(() => [])[0]!.run("s", {});
+  assert.ok(none.startsWith("No phone is shared") && none.includes("phone_use") && !none.includes("http"));
+  const one = await adbTools(() => [{ serial: "127.0.0.1:37123", adb: "connected" }])[0]!.run("s", {});
+  assert.ok(one.includes("127.0.0.1:37123") && one.includes("adb -s <serial>") && one.includes("phone_use") && !one.includes("http"));
   const r = new Rig();
   const [key] = newSession(r.hub, web("local"));
   const sent: Json[] = [];

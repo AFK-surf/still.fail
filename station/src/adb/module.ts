@@ -15,7 +15,7 @@ export const AdbLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const plane = yield* ControlPlane;
     const parts = yield* Parts;
-    const { place, hub } = yield* Agents;
+    const { hub } = yield* Agents;
     const store = yield* Store;
     const events = yield* Events;
     const servers = yield* Effect.acquireRelease(Effect.sync(() => new GrantServers(adbPath)), (s) => Effect.promise(() => s.close()));
@@ -74,10 +74,7 @@ export const AdbLive = Layer.effectDiscard(
     );
     parts.tools(
       // Phones lent with an app's switch (from before grants): any agent's. A phone granted to chats is theirs alone.
-      adbTools(() => lent.list().filter((p) => !grants.ofOwner(p.owner.email).some((r) => r.status === "granted")), () => {
-        const s = place();
-        return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}/adb` : null;
-      }),
+      adbTools(() => lent.list().filter((p) => !grants.ofOwner(p.owner.email).some((r) => r.status === "granted"))),
     );
   }),
 );

@@ -9,7 +9,7 @@ type Json = any;
 export const ADB_DEVICES = {
   name: "adb_devices",
   description:
-    "The Android phones people shared with every agent of this station (an app from before chats' grants; a phone granted to a chat with phone_use is that chat's alone and not listed here), each with the adb serial it is reached at on this machine (127.0.0.1:<port>), its model, owner and whether adb is connected; and the link that opens this station's 共享调试 page in a person's app, to ask them for theirs.",
+    "The Android phones people shared with every agent of this station (an app from before chats' grants; a phone granted to a chat with phone_use is that chat's alone and not listed here), each with the adb serial it is reached at on this machine (127.0.0.1:<port>), its model, owner and whether adb is connected. To ask for a phone, use phone_use.",
   inputSchema: {
     "type": "object",
     "properties": {},
@@ -17,11 +17,10 @@ export const ADB_DEVICES = {
   },
 };
 
-/// What the agent is told: the phones, how to use them, and how to ask for one (`page`: this station's 共享调试 page).
-export function listed(phones: Json[], page: string | null): string {
-  const ask = "To use the phone of the person you work for, ask with phone_use: it is granted to this chat alone. " + (page !== null
-      ? `To ask a person for their phone (or to pair it), send them this link in the conversation, bare on a line of its own (it shows as a card saying how their phone's sharing stands): ${page} — it opens this station's 共享调试 page in their still.fail Android app, where they tap 开始共享.`
-      : "A person shares their phone from the still.fail Android app: this station's page, 共享调试.");
+/// What the agent is told: the phones, how to use them, and how to ask for one (phone_use: the station's 共享调试 page no
+/// longer lends a phone, so a link to it asks for nothing).
+export function listed(phones: Json[]): string {
+  const ask = "To use the phone of the person you work for, ask with phone_use: its card in your chat is how they grant it, to this chat alone. Never post a link to 共享调试 to ask for it.";
   if (phones.length === 0) return `No phone is shared with this station now. ${ask}`;
   let text = `${JSON.stringify(phones, null, 2)}\n\n`;
   text +=
@@ -30,10 +29,9 @@ export function listed(phones: Json[], page: string | null): string {
   return text;
 }
 
-/// `phones`: the phones offered now (`{serial, device, android, owner: {name, email}, adb, message}` each); `page`: where
-/// a person opens this station's 共享调试, once the station is in a workspace.
-export function adbTools(phones: () => Json[], page: () => string | null): Tool[] {
-  return [{ ...ADB_DEVICES, run: async () => listed(phones(), page()) }];
+/// `phones`: the phones offered now (`{serial, device, android, owner: {name, email}, adb, message}` each).
+export function adbTools(phones: () => Json[]): Tool[] {
+  return [{ ...ADB_DEVICES, run: async () => listed(phones()) }];
 }
 
 export const PHONE_USE = {
