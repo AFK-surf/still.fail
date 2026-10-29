@@ -1040,7 +1040,7 @@ test("a_new_chat_stays_on_the_station_picked_while_it_is_down_and_says_so", asyn
   // What is picked on the page then is the down one's, not the other's.
   call(core, ui, 3, "newChat.pick", { scope: "ws", effort: "high" });
   await host.settle();
-  assert.equal(core.inner.data.record("choice", "ws:ws:station:st2").effort, "high");
+  assert.equal((core.inner.data.record("choice", "ws:ws:station:st2") as J).effort, "high");
   assert.equal(core.inner.data.record("choice", "ws:ws:station:st"), undefined);
   core.close();
 });
