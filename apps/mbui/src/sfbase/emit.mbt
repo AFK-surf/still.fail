@@ -563,7 +563,8 @@ pub fn emit_out(c : @ui.Ctx, i : Int, e : Emits, seq : Double, from_x : Double) 
     Some((_, _, cw, ch)) => {
       let s = 0.35 + 0.65 * k
       c.look(i, @ui.look(alpha=if u < 0.35 { @ui.Ease::Out.at(u / 0.35) } else { 1.0 }, scale=s, ox=if cw > 0.0 { from_x / cw } else { 0.0 }, oy=if ch > 0.0 { 12.0 / ch } else { 0.0 }))
-      c.cut_to_top(i, ch * k)
+      // (what has come out fading to the edge it unrolls from under, by each pixel: @ui.cut_soft)
+      c.cut_to_top(i, ch * k, soft=@ui.cut_soft(ch * k, ch * (1.0 - k)))
     }
     None => c.look(i, @ui.look(alpha=0.0))
   }

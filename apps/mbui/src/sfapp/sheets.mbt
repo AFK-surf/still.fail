@@ -335,9 +335,8 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
   c.box(w=Fill(1.0), fn() {
     // (clear of an untitled dialog's close button over its end: @sf.untitled_clear)
     c.box(style=@sf.untitled_clear(), dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=AStart, fn() {
-      c.box(w=Fill(1.0), max_h=48.0, clip=true, fn() {
-        c.text(title, size=t.t.title, weight=700, color=t.p.text, line=24.0) |> ignore
-      })
+      // (two lines at most, the last ending in an ellipsis: not a third cut off below them)
+      c.box(w=Fill(1.0), fn() { c.text(title, size=t.t.title, weight=700, color=t.p.text, line=24.0, max_lines=2) |> ignore })
       |> ignore
       if open {
         let id = c.id("info/rename")

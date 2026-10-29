@@ -77,6 +77,10 @@ pub fn css(String) -> Style
 
 pub fn current() -> Ctx
 
+pub fn cut_soft(Double, Double) -> Double
+
+pub let cut_soft_most : Double
+
 pub let cycle_step_ms : Double
 
 pub fn dashed_outlines(Double, Double, Double, Double) -> Array[(Array[Double], Bool)]
