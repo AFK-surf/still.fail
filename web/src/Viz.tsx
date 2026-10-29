@@ -22,8 +22,7 @@ import { useToast } from "@stillfail/ui/toast.tsx";
 import { Tip } from "./ui.tsx";
 import * as css from "./Viz.css.ts";
 import { t } from "./i18n.ts";
-import { faceSheets } from "./fonts.ts";
-import { onPrefs, prefs } from "./prefs.ts";
+import { faceSheets, onFaces } from "./fonts.ts";
 
 /** still.fail's own icons (design/icons, the one source), for a frame's data-icon / data-lucide marks: each SVG's inside. */
 const ICONS = JSON.stringify(Object.fromEntries(Object.entries(import.meta.glob<string>("../../design/icons/*.svg", { query: "?raw", import: "default", eager: true }))
@@ -164,9 +163,7 @@ function useThemeChange(onChange: () => void) {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     const media = matchMedia("(prefers-color-scheme: dark)");
     media.addEventListener("change", fire);
-    // The faces: fonts.ts sets them from the prefs (it heard them first); told only when they are others.
-    let faces = prefs().faces;
-    const unwatch = onPrefs(() => { if (prefs().faces !== faces) { faces = prefs().faces; fire(); } });
+    const unwatch = onFaces(fire);
     return () => { observer.disconnect(); media.removeEventListener("change", fire); unwatch(); };
   }, []);
 }

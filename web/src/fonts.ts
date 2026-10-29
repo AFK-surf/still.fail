@@ -58,6 +58,17 @@ export function followFonts(): void {
   onPrefs(again);
 }
 
+/** Calls back when the faces the page is set in change, once they are set on the root (followFonts heard them first);
+ * returns how to stop. */
+export function onFaces(f: () => void): () => void {
+  let last = prefs().faces;
+  return onPrefs(() => {
+    if (prefs().faces === last) return;
+    last = prefs().faces;
+    f();
+  });
+}
+
 /** Families installed here, where the browser lets a page ask (Chromium's Local Font Access: the desktop app, Chrome,
  * Edge); asked only when its person asks, as the browser asks them first. */
 export const canListLocal = typeof window !== "undefined" && "queryLocalFonts" in window;
