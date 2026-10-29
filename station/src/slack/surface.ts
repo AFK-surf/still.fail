@@ -358,7 +358,7 @@ export class SlackSurface extends ConnectedSurface {
         this.botToken,
       );
       // (the files are its newest message, nothing the bot can add words to)
-      this.heard(thread.channel, thread.threadTs, (wall.now() / 1000).toFixed(6));
+      this.heard(thread.channel, thread.threadTs, "");
       if (first === null) {
         first = await this.sharedTs(shared, uploaded[0]![0], thread.channel);
         if (first === null) {
@@ -577,13 +577,11 @@ export class SlackSurface extends ConnectedSurface {
     return true;
   }
 
-  /// A thread's newest message (`mine`: one the bot posted, as it posted it).
+  /// A thread's newest message, as they came (`mine`: one the bot posted, as it posted it).
   private heard(channel: string, threadTs: string, ts: string, mine: Said | null = null) {
     const key = `${channel}/${threadTs}`;
-    const was = this.ends.get(key);
-    if (was !== undefined && (number(was.ts) ?? 0) > (number(ts) ?? 0)) return;
     // (the oldest go once there are many: threads long quiet)
-    if (was === undefined && this.ends.size > 2000) this.ends.delete(this.ends.keys().next().value!);
+    if (!this.ends.has(key) && this.ends.size > 2000) this.ends.delete(this.ends.keys().next().value!);
     this.ends.set(key, { ts, mine });
   }
 

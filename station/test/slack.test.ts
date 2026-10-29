@@ -318,9 +318,9 @@ describe("slack", { concurrency: true }, () => {
       assert.equal(await surface.edit(thread, answer, "讲完了。"), true);
       assert.deepEqual(blocks(fake.calls("chat.update")[1]!).map((b: any) => b.type), ["markdown", "context"]);
       // Someone writes and the agent works again: the message as it was.
-      fake.event("e1", { type: "message", channel: "C1", user: "U1", ts: "8000001.500000", thread_ts: "1.1", text: "我试试" });
+      fake.event("e1", { type: "message", channel: "C1", user: "U1", ts: "1.5", thread_ts: "1.1", text: "我试试" });
       await fake.until("acknowledged", () => fake.acks.some((a) => a.envelope_id === "e1"));
-      surface.working(thread, "8000001.500000", "正在思考…");
+      surface.working(thread, "1.5", "正在思考…");
       await fake.until("the line taken back", () => fake.calls("chat.update").length === 3);
       assert.deepEqual(blocks(fake.calls("chat.update")[2]!), [{ type: "markdown", text: "讲完了。" }]);
       // Done saying nothing: the person's message is the newest, so the line is a small message of its own.

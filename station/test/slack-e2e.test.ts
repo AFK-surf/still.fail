@@ -91,6 +91,12 @@ test("an app_mention over Socket Mode starts a turn; the agent's chat_post lands
     const turns = store.listTurns(key);
     assert.equal(turns.length, 1, "not nudged");
     assert.deepEqual([turns[0]!.summary.outcome, turns[0]!.summary.ending], ["completed", "all_done"]);
+    // Ended all_done: where it stands, under its own message (changed, nothing posted again).
+    await slackStandIn.until("where it stands said", () => slackStandIn.calls("chat.update").length > 0);
+    const stands = slackStandIn.calls("chat.update")[0]!.params;
+    assert.deepEqual([stands.ts, JSON.parse(stands.blocks!).map((b: any) => b.type)], ["8000001.000100", ["markdown", "context"]]);
+    assert.match(stands.blocks!, /✓ 已完成/);
+    assert.equal(slackStandIn.calls("chat.postMessage").length, 1);
     // While it worked, the thread said so, and the line was cleared at the end: at once, or (the line changed just
     // before) once its couple of seconds are up: what was due by then has gone.
     const cleared = () => slackStandIn.calls("assistant.threads.setStatus").some((c) => c.params.status === "");
