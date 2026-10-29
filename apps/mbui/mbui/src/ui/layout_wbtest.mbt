@@ -835,6 +835,9 @@ test "a list's running sums are its rows' heights added up" {
         direction: Ltr,
         layer: 0,
         part: 0,
+        row_causes: {},
+        sizes: {},
+        sizes_mover: Mover::new(),
   }
   let mut seed = 7
   let next = fn(n : Int) -> Int {

@@ -389,6 +389,10 @@ pub fn round_like(Double, room? : Double) -> Double
 
 pub fn round_like_out(Double, room? : Double) -> Double
 
+pub fn row_gone(Double, Double) -> Bool
+
+pub let row_size_ms : Double
+
 pub fn rows_unkept() -> Array[(String, Int32)]
 
 pub fn run(String, (Ctx) -> Unit) -> Unit
@@ -1147,6 +1151,7 @@ pub fn Ctx::right_clicked(Self, Int32) -> (Double, Double)?
 pub fn Ctx::roving(Self, String, orientation? : Orientation, wrap? : Bool, current? : Int32, () -> Unit) -> Unit
 pub fn Ctx::roving_prefer(Self, Int32) -> Unit
 pub fn Ctx::row(Self, w? : Size, h? : Size, pad? : Double, padx? : Double, pady? : Double, gap? : Double, align? : Align, justify? : Justify, bg? : Int64, radius? : Double, () -> Unit) -> Int32
+pub fn Ctx::row_size(Self, String, RowSize, ms? : Double) -> Unit
 pub fn Ctx::rtl(Self) -> Bool
 pub fn Ctx::say(Self, String) -> Unit
 pub fn Ctx::scope(Self, Int32, () -> Unit) -> Unit
@@ -1988,6 +1993,12 @@ pub(all) enum Role {
   ScrollArea
 } derive(Eq, Show, @debug.Debug)
 
+pub(all) enum RowSize {
+  Comes(Double)
+  Goes(Double)
+  Changed(Double)
+} derive(Eq)
+
 pub(all) struct Run {
   text : String
   weight : Int32
@@ -2279,9 +2290,10 @@ pub fn Tester::draw(Self) -> Unit
 pub fn Tester::drawlist(Self, bytes? : Bool) -> String
 pub fn Tester::drawlist_images(Self) -> Array[(Int32, String, Bytes)]
 pub fn Tester::drawn_again(Self, Bool) -> Unit
-pub fn Tester::drawn_glass(Self) -> Array[(Double, Double, Double, Double, Int32, Int32)]
 pub fn Tester::drawn_fades(Self) -> Array[(Int32, Double, Double, Double, Double, Double, Double)]
 pub fn Tester::drawn_fades_across(Self) -> Array[(Int32, Double, Double, Double, Double, Double, Double)]
+pub fn Tester::drawn_glass(Self) -> Array[(Double, Double, Double, Double, Int32, Int32)]
+pub fn Tester::drawn_glass_corners(Self) -> Array[(Double, Double, Double, Double, Double)]
 pub fn Tester::drawn_glyphs(Self) -> Array[(Double, Double, Int64)]
 pub fn Tester::drawn_image_clips(Self) -> Array[((Double, Double, Double, Double), (Double, Double, Double, Double))]
 pub fn Tester::drawn_images(Self) -> Array[Array[Double]]
@@ -2437,6 +2449,7 @@ pub fn Tester::set_reduce_transparency(Self, Bool) -> Unit
 pub fn Tester::set_stream_audio(Self, Bool) -> Unit
 pub fn Tester::set_stream_feeds(Self, Bool) -> Unit
 pub fn Tester::set_stream_layers(Self, Bool) -> Unit
+pub fn Tester::set_stream_layers_srgb(Self, Bool) -> Unit
 pub fn Tester::set_unreadable_font(Self, String) -> Unit
 pub fn Tester::set_wall(Self, Double) -> Unit
 pub fn Tester::set_window_inset(Self, Bool) -> Unit

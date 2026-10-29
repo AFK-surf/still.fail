@@ -394,7 +394,6 @@
     "fixture-import": {},
     "motion-spring": {
       "src/gallery/view.mbt": 1,
-      "src/sfbase/under_post.mbt": 1,
       "src/shelf/reader.mbt": 1
     }
   },

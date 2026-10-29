@@ -495,6 +495,9 @@ pub fn Ctx::list(
         direction: self.direction,
         layer: self.layer_cur,
         part: 0,
+        row_causes: {},
+        sizes: {},
+        sizes_mover: Mover::new(),
       }
       self.lists[id] = s
       self.own(id)
@@ -588,7 +591,10 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   self.nodes[r].item = k
   let row = st.row
   // (in a part kept: what the row asks of time is the part's, kept_part.mbt)
+  row_causes_built.push(None)
   part_rows(st.part, fn() { self.with_parent(r, fn() { self.scope(k, fn() { row(k) }) }) })
+  // (what it said changed its height, for its layout: list_size.mbt)
+  row_built_said[r] = row_causes_built.pop().unwrap_or(None)
   self.id_seed = saved_seed
   self.cur = saved_cur
   self.owner = saved_owner
@@ -634,6 +640,7 @@ fn Ctx::place_list(
   st.hand_said.get() |> ignore
   self.list_step(st)
   self.shows_motion(st.ease_mover, st.rest_at(self.clock, self.frame_no) > self.clock)
+  self.shows_motion(st.sizes_mover, st.sizes_rest() > self.clock)
   // laid out again in the same frame (built again from what its layout read: readback.mbt), from where it stood as
   // the frame's first layout of it began, unless something moved it since its last: a row laid there for the first
   // time may have been laid at a height it does not keep (a fold's words whole until it knows how tall they are), and
@@ -681,10 +688,22 @@ fn Ctx::place_list(
     // (kept as its nodes where nothing it shows changed: kept_nodes.mbt; as its last build drew it where parts are
     // kept so: kept_rows.mbt)
     let (r, h) = if self.rows_on() {
-      let r = self.row_of(li, st, k, iw)
+      let r = self.row_of(li, st, k, iw, force=st.row_sizing(k, self.clock))
       (r, self.row_slot(r, self.layout(r, ix, y, iw, nan)))
     } else {
       self.row_laid(li, st, k, ix, y, iw)
+    }
+    // as tall as what changed its height has it now (list_size.mbt), what it holds cut there
+    let shown = st.row_sized(k, r, h, self.clock, self.frame_no)
+    // (as tall as it is laid out once there: a row kept as its nodes keeps what it was last cut to otherwise)
+    let sized = (shown - h).abs() > 0.001
+    self.nodes[r].clip = sized
+    let h = if sized {
+      self.nodes[r].fh = shown
+      self.row_slot(r, shown)
+    } else {
+      self.nodes[r].fh = h
+      h
     }
     st.set_height(k, h)
     (r, h)
@@ -876,6 +895,12 @@ fn Ctx::place_list(
         st.last_scroll = dmax(st.last_scroll, self.clock)
       }
     }
+  }
+  st.sizes_kept(self.clock)
+  // (a row's height under way, said by a row built as it was laid out: frames till it is over, each laid out again)
+  if st.sizes_rest() > self.clock {
+    self.moving(st.sizes_mover, (Sizes::{ st, }) as &Moving, what="a list's rows' heights")
+    self.shows_motion(st.sizes_mover, true)
   }
   st.left = (st.anchor, st.anchor_off, st.pending, st.at_end, st.glide)
   // a finger pulls past the end it reached; a fling stops there

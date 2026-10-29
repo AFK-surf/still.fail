@@ -15,10 +15,17 @@ test "23-dismiss" {
     f.run_for(@sfapp.flight_ms)
     f.gone("正在发送")
     f.see("=先合 B 083209")
+    // (the card's room open to its 忽略, wholly shown: Ctx::row_size)
+    f.run_for(@ui.row_size_ms)
     f.tap("=忽略")
     f.answered("decision.dismiss", 1)
     f.gone("=忽略")
     f.see("=先合 B 083209")
+    // (its options closing as it was let go: to their end, docs/list-motion.md)
+    let closing = @sfapp.under_rest()
+    if closing > f.t.time() {
+      f.run_to(closing)
+    }
     f.check(@sfapp.under_rest() < 0.0, "something under the post moves: \{@sfapp.under_rest()}")
     f.end()
   })

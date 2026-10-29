@@ -1,8 +1,8 @@
-// What changes a chat's list's height plays one at a time (turns.mbt, ListTurns.kt): each from where the one before
-// was declared to end, the list at rest.
+// What changes a chat's list's height waits for nothing (turns.mbt, docs/list-motion.md): a row comes, what is under a
+// post changes, the moment it does, together; each one's room goes to its new height from then (Ctx::row_size).
 
 ///|
-test "turns: a row comes in at once when none plays; a change asked after it waits its 320 ms, then holds the next" {
+test "turns: rows coming and what changes under a post go the moment they are asked, together, none waiting" {
   reset()
   let tu = turns_of("test")
   let phase = Ref::new(0)
@@ -12,12 +12,11 @@ test "turns: a row comes in at once when none plays; a change asked after it wai
       match phase.val {
         0 => {
           ignore(tu.in_turn(c, "k", false, close_turn_ms, seen=true))
-          tu.admit(c, "a", row_turn_ms)
           phase.val = 1
         }
         1 => {
-          // (something coming under a post on screen, asked after the row: its turn after the row's)
           ignore(tu.in_turn(c, "k", true, close_turn_ms, seen=true))
+          tu.admit(c, "a", row_turn_ms)
           tu.admit(c, "b", row_turn_ms)
           phase.val = 2
         }
@@ -31,36 +30,24 @@ test "turns: a row comes in at once when none plays; a change asked after it wai
   )
   t.draw()
   t.draw()
-  let a_at = tu.started_at("a")
-  assert_true(a_at >= 0.0)
+  assert_eq(tu.shown.get("k"), Some(true))
   assert_false(tu.waiting.contains("a"))
-  // the change and the next row wait for the row's turn
-  assert_eq(tu.shown.get("k"), Some(false))
-  assert_true(tu.waiting.contains("b"))
-  // (each turn holds the next two frames past its motion: turn_calm_ms)
-  t.run_for(row_turn_ms + turn_calm_ms)
-  assert_eq(tu.shown.get("k"), Some(true))
-  assert_eq(tu.started_at("k"), a_at + row_turn_ms + turn_calm_ms)
-  assert_true(tu.waiting.contains("b"))
-  // the change holds the next row for its 520 ms
-  t.run_for(close_turn_ms + turn_calm_ms)
   assert_false(tu.waiting.contains("b"))
-  assert_true((tu.started_at("b") - (a_at + row_turn_ms + close_turn_ms + 2.0 * turn_calm_ms)).abs() < 0.001)
+  let at = tu.started_at("k")
+  assert_true(at >= 0.0)
+  assert_eq(tu.started_at("a"), at)
+  assert_eq(tu.started_at("b"), at)
   t.assert_idle()
 }
 
 ///|
-test "turns: what goes from under a post on screen stays, its room with it, and goes at once once out of sight" {
+test "turns: what goes from under a post on screen goes at once, as out of sight (no frame of the list's says which)" {
   reset()
   let tu = turns_of("test")
-  let seen = Ref::new(true)
   let shown = Ref::new(true)
-  let first = Ref::new(true)
   let t = @ui.Tester::new(
     fn(c) {
-      tu.step(c, -1.0)
-      shown.val = tu.in_turn(c, "k", first.val, close_turn_ms, seen=seen.val)
-      first.val = false
+      ignore(tu.in_turn(c, "k", shown.val, close_turn_ms, seen=true))
       c.box(fn() {  }) |> ignore
     },
     w=100.0,
@@ -68,171 +55,8 @@ test "turns: what goes from under a post on screen stays, its room with it, and 
     platform=2,
   )
   t.draw()
+  shown.val = false
   t.draw()
-  // on screen: still shown, nothing asked, however long
-  assert_true(shown.val)
-  assert_true(tu.asks.is_empty())
-  t.run_for(turn_most_ms)
-  assert_true(shown.val)
-  assert_eq(tu.start("k"), None)
-  // out of sight: gone at once, its motion over long before
-  seen.val = false
-  t.draw()
-  assert_false(shown.val)
-  assert_eq(tu.start("k"), Some(unseen_at))
-  assert_true(tu.asks.is_empty())
-  t.assert_idle()
-}
-
-///|
-test "turns: the next waits for the list at rest (its glide's declared end), not only the turn before" {
-  reset()
-  let tu = turns_of("test")
-  let rest = Ref::new(-1.0)
-  let phase = Ref::new(0)
-  let t = @ui.Tester::new(
-    fn(c) {
-      tu.step(c, rest.val)
-      if phase.val == 0 {
-        tu.admit(c, "a", row_turn_ms)
-        tu.admit(c, "b", row_turn_ms)
-        phase.val = 1
-      }
-      c.box(fn() {  }) |> ignore
-    },
-    w=100.0,
-    h=100.0,
-    platform=2,
-  )
-  t.draw()
-  t.draw()
-  let a_at = tu.started_at("a")
-  // the list glides after what came till a while past it
-  rest.val = a_at + row_turn_ms + test_glide_ms
-  t.run_for(row_turn_ms)
-  assert_true(tu.waiting.contains("b"))
-  t.run_for(test_glide_ms)
-  assert_false(tu.waiting.contains("b"))
-  assert_eq(tu.started_at("b"), a_at + row_turn_ms + test_glide_ms)
-}
-
-///|
-test "a decision answered here: your answer comes in, the options staying as they are, none pressed, while on screen" {
-  // (the fixture's own core: it answers the card, and posts the answer as yours)
-  reset()
-  let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  open_fixture("chat")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
-  t.move(195.0, 400.0)
-  for _ in 0..<6 {
-    if t.find("把首页和聊天页的截图都更新") is Some(_) {
-      break
-    }
-    t.wheel(195.0, 400.0, -300.0)
-  }
-  t.tap_text("把首页和聊天页的截图都更新")
-  t.draw()
-  t.draw()
-  let tu = turns_of("ws1/st1\u{1}s-c1")
-  let rd = reading_of("ws1/st1\u{1}s-c1")
-  // your answer came in, in the turn kept for it as you picked; the options there
-  assert_true(rd.admitted.contains("m:ts108"))
-  assert_eq(tu.shown.get("ask/ts8"), Some(true))
-  // all that comes of it come: they stay, no turn asked to close them
-  t.run_for(turn_most_ms)
-  assert_eq(tu.shown.get("ask/ts8"), Some(true))
-  assert_true(tu.asks.iter().all(fn(a) { a.what != Change("ask/ts8") }))
-  assert_true(t.find("把首页和聊天页的截图都更新") is Some(_))
-  // (the line that said who decides faded where it is, its room kept: the one picked is marked)
-  assert_true(faded(t, "等 林 决定"))
-}
-
-///|
-test "turns: a turn kept for the viewer's row goes to it, before what was asked after it, whenever the row comes" {
-  reset()
-  let tu = turns_of("test")
-  let phase = Ref::new(0)
-  let t = @ui.Tester::new(
-    fn(c) {
-      tu.step(c, -1.0)
-      match phase.val {
-        0 => {
-          ignore(tu.in_turn(c, "k", false, close_turn_ms, seen=true))
-          // (a row under way: what is kept waits behind it)
-          tu.admit(c, "a", row_turn_ms)
-          tu.keep_turn(c)
-          phase.val = 1
-        }
-        1 => {
-          // (a change under a post seen before the answer's row)
-          ignore(tu.in_turn(c, "k", true, close_turn_ms, seen=true))
-          phase.val = 2
-        }
-        2 => {
-          tu.admit(c, "b", row_turn_ms)
-          ignore(tu.in_turn(c, "k", true, close_turn_ms, seen=true))
-          phase.val = 3
-        }
-        _ => ignore(tu.in_turn(c, "k", true, close_turn_ms, seen=true))
-      }
-      c.box(fn() {  }) |> ignore
-    },
-    w=100.0,
-    h=100.0,
-    platform=2,
-  )
-  t.draw()
-  t.draw()
-  t.draw()
-  let a_at = tu.started_at("a")
-  assert_true(tu.waiting.contains("b"))
-  // the row in the kept turn, right after the one before; the change after it
-  t.run_for(row_turn_ms + turn_calm_ms)
-  assert_false(tu.waiting.contains("b"))
-  assert_eq(tu.started_at("b"), a_at + row_turn_ms + turn_calm_ms)
   assert_eq(tu.shown.get("k"), Some(false))
-  t.run_for(row_turn_ms + turn_calm_ms)
-  assert_eq(tu.shown.get("k"), Some(true))
-  assert_eq(tu.started_at("k"), tu.started_at("b") + row_turn_ms + turn_calm_ms)
-}
-
-///|
-/// How long the test's list says it glides after what came (its declared rest, Turns::step's `list_rest`).
-let test_glide_ms : Double = 500.0
-
-///|
-test "turns: words sent wait for nothing (a row before them, a list never at rest); what is asked after them waits for their landing" {
-  reset()
-  let tu = turns_of("test")
-  let phase = Ref::new(0)
-  let t = @ui.Tester::new(
-    fn(c) {
-      // (an answer streaming in: the list never at rest)
-      tu.step(c, @double.infinity)
-      match phase.val {
-        0 => {
-          tu.admit(c, "a", row_turn_ms)
-          tu.send(c, flight_wait_ms + flight_ms)
-          tu.admit(c, "b", row_turn_ms)
-          phase.val = 1
-        }
-        _ => ()
-      }
-      c.box(fn() {  }) |> ignore
-    },
-    w=100.0,
-    h=100.0,
-    platform=2,
-  )
-  t.draw()
-  t.draw()
-  // (sending holds nothing of what was sent: no turn of its own)
-  assert_true(tu.asks.iter().all(fn(a) { a.what != Send }))
-  // the row asked after them waits for their landing, said as they land
-  assert_true(tu.waiting.contains("b"))
-  let landed = t.time()
-  tu.over(t.ctx(), Send, landed)
-  assert_eq(tu.sent_until, landed + turn_calm_ms)
+  assert_true(tu.started_at("k") >= 0.0)
 }

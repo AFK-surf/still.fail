@@ -131,6 +131,8 @@ pub fn chat_ref(String, String) -> ChatRef
 
 pub fn chat_ref_of(ChatItem) -> ChatRef
 
+pub fn chat_scope(String, String) -> String
+
 pub fn chat_tick(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 
 pub fn chat_view_made(Json) -> ChatView
@@ -285,6 +287,8 @@ pub fn drive_read_all(Source, String, String, String, Int32, String, listed~ : (
 
 pub fn drive_reader(@ui.Ctx, Source, DriveAt, () -> Unit) -> Unit
 
+pub let drive_scope : String
+
 pub fn drive_viewer_file(@ui.Ctx, Source, DriveAt) -> @sf.ViewerFile
 
 pub fn dv_absolute(String, String) -> String
@@ -363,11 +367,12 @@ pub fn elapsed(Double) -> String
 
 pub fn elsewhere_of(Json) -> Elsewhere
 
+pub fn emit_awaited(Emits, Double) -> Bool
+
 pub fn emit_clock(@ui.Ctx, Turn) -> Double
 
 pub let emit_drop_ms : Double
 
-pub fn emit_awaited(Emits, Double) -> Bool
 pub fn emit_emitting(Emits, Double) -> Bool
 
 pub fn emit_flight(@ui.Ctx, String, Emits, Array[String]) -> (Double, Double, Double, Double)?
@@ -616,6 +621,8 @@ pub let go_tos : Map[String, Double]
 
 pub fn halo_of(Int64) -> Int64
 
+pub fn held_build(Int32) -> Unit
+
 pub fn held_order(String, Array[ChatDay], Bool) -> Array[ChatDay]
 
 pub let held_pictures_waiting : @ref.Ref[Bool]
@@ -623,6 +630,10 @@ pub let held_pictures_waiting : @ref.Ref[Bool]
 pub fn held_seed(String, @hostapi.Picked) -> String
 
 pub let highlight_limit : Int32
+
+pub fn history_scope(String, String) -> String
+
+pub fn hold(Source, String, String, Map[String, Json]) -> Topic
 
 pub fn host_notices() -> NoticeHost
 
@@ -637,6 +648,8 @@ pub fn items(Json?, String) -> Array[Json]
 pub fn java_hash(String) -> Int32
 
 pub fn job_output_lines(Source, String, String, Double, Int64, Bool) -> Array[Array[@ui.Run]]?
+
+pub fn jobs_scope(String) -> String
 
 pub fn keep_bytes(@ui.Ctx, String, String, Bytes, way? : @hostapi.KeepWay, saved? : String, failed? : String) -> Unit
 
@@ -665,6 +678,10 @@ pub fn kept_read(String) -> Bytes?
 pub fn leaving_done() -> Unit
 
 pub let left_pages : Array[Page]
+
+pub fn let_go(Source, String) -> Unit
+
+pub fn let_go_all(Source, String) -> Unit
 
 pub fn lift_of(Thumb) -> Double
 
@@ -2276,6 +2293,12 @@ pub(all) struct FreshChat {
   room : @signals.Signal[Double]
 }
 
+pub(all) struct Going {
+  entry : Entry
+  at : Double
+  after : String
+}
+
 pub(all) struct Install {
   runtime : String
   state : String
@@ -2748,6 +2771,12 @@ pub(all) struct Reading {
   mut motion_of : Array[String]
   mut motion_list : String
   mut motion_keys : Array[String]
+  came_at : Map[String, Double]
+  changed_at : Map[String, Double]
+  going : Map[String, Going]
+  mut last_rows : Array[(String, Entry)]
+  mut rows_now : Double
+  rows_mover : @ui.Mover
 }
 pub fn Reading::sees(Self, Int32, Double?) -> Bool
 

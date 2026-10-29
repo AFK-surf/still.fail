@@ -63,7 +63,7 @@ test "29-glass" {
     }
     // (the list come to its end after them: gliding to what came at it, the rows over what came in over its end going
     // up for it)
-    for moves in ["a list gliding", "Anim \"layout "] {
+    for moves in ["a list gliding", "Anim \"layout ", "a list's rows' heights"] {
       let rest = f.t.rest_of(moves)
       if rest > f.t.time() && rest < @double.infinity {
         f.run_to(rest)

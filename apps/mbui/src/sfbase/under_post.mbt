@@ -3,9 +3,10 @@
 // in its turn among what changes the list's height (list_turns.mbt).
 
 ///|
-/// ListMotion.kt closeGap: the room left closed by the rows' spring (critically damped, 350), a little late (100 ms).
+/// The room under a post going to its new height: a row's move, as every row's height in a chat's list goes
+/// (docs/list-motion.md: what changes together moves as one, on one curve from one moment).
 // kept across runs: a curve, never written
-pub let close_gap : @motion.Spec = @motion.spring(stiffness=350.0, threshold=0.002, delay=100.0)
+pub let close_gap : @motion.Spec = @motion.tween(@ui.row_size_ms, ease=Move)
 
 ///|
 /// How long the archive buttons take to come and go (Chat.kt ArchiveEase's 280 ms), 忽略 too.
@@ -52,9 +53,9 @@ pub fn under_post(
   key : String,
   shown : Bool,
   enter? : @motion.Trans,
-  open? : @motion.Spec = archive_tween,
+  open? : @motion.Spec = close_gap,
   exit~ : @motion.Trans,
-  close? : @motion.Spec = archive_tween,
+  close? : @motion.Spec = close_gap,
   start_at? : Double,
   body : () -> Unit,
 ) -> Unit {

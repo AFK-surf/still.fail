@@ -47,16 +47,18 @@ test "where a chat stands gone from its end (a person wrote): what is over it st
   let (_, need_y) = t.find(need).unwrap()
   let (_, last_y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   assert_true(need_y > last_y)
-  // the core no longer says it: its room stays as a floor (as an agent's line's), the last message where it was, its
-  // copy fading under nothing
+  // the core no longer says it: it fades as its room closes (docs/list-motion.md), what is over it coming down with
+  // it, a step of the way each frame, never at once
   said.val = false
   t.draw()
-  // (each quarter of the way its copy leaves)
-  for _ in 0..<4 {
-    t.run_for(@sf.leave_ms / 4.0)
+  let mut was = last_y
+  for _ in 0..<8 {
+    t.run_for(@ui.row_size_ms / 8.0)
     let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
-    assert_true((y - last_y).abs() < 0.5, msg="\{y} \{last_y}")
+    assert_true(y >= was - 0.5 && y - was < 60.0, msg="\{y} \{was}")
+    was = y
   }
+  assert_true(was > last_y + 1.0, msg="\{was} \{last_y}")
 }
 
 ///|

@@ -247,8 +247,9 @@ test "the core's row joined to the viewer's last as the words fly: the rows abov
     }
     None => fail("nothing flies")
   }
+  // (on its way up with the words from the frame they were sent: their row's room opening, Ctx::row_size)
   let (_, y) = seen_once(t, "先看一下列表")
-  assert_true((y - was).abs() < 0.5, msg="put up at once: \{was} → \{y}")
+  assert_true(y <= was + 0.5 && was - y < 10.0, msg="put up at once: \{was} → \{y}")
   // every frame on the words' way, up from where it was to where it is at the end, never past it nor back down
   let ys = [y]
   while t.time() < lands + 50.0 {

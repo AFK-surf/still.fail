@@ -7,9 +7,10 @@
 /// words are drawn (y) as its room starts opening (its turn's declared start), halfway (half its 220 ms) and at its end.
 fn activity_opening(t : @ui.Tester, words : String) -> (Double, Double, Double) raise {
   t.run_for(fix_deliver_ms)
+  // (in the list as it came: its room opening from then, Ctx::row_size)
   let at = turns_of("ws1/st1\u{1}s-c1").start_of("act:s-c1")
-  assert_true(at >= t.time() && at < @double.infinity, msg="\{at} \{t.time()}")
-  t.run_for(at - t.time())
+  assert_true(at >= 0.0 && at < @double.infinity, msg="\{at} \{t.time()}")
+  t.run_for(dmax(at - t.time(), 0.0))
   let (_, from) = t.drawn_of(words).unwrap()
   t.run_for(working_turn_ms / 2.0)
   let (_, mid) = t.drawn_of(words).unwrap()

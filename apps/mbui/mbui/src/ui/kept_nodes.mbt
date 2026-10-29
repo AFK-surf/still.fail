@@ -451,6 +451,8 @@ fn Ctx::row_laid(
   if self.nodes_keep_in(st) &&
     rn.ok &&
     !rn.in_pool &&
+    // (not while its list's rows' heights go to others: what changed each said again as it is built, list_size.mbt)
+    !st.row_sizing(k, self.clock) &&
     rn.n > 0 &&
     !rn.watch.is_stale() &&
     rn.iw == iw &&

@@ -130,6 +130,11 @@ struct ListState {
   // the part kept it was built in (Ctx::kept_part, 0 none): what its rows, built as it is laid out, ask of time is
   // the part's
   mut part : Int
+  /// what changed its rows' heights (Ctx::row_size): what each row built said last, by the row's place, and each
+  /// row's way from the height it had to the one it is laid out at, by the row's key (list_size.mbt)
+  row_causes : Map[Int, (String, RowSize, Double)]
+  sizes : Map[String, RowSizing]
+  sizes_mover : Mover
 }
 
 ///|
