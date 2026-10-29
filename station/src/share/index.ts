@@ -35,6 +35,7 @@ import { codexAuthFile } from "../agents/machine-logins.ts";
 import { CONSOLE_FILE } from "../accounts/console.ts";
 import { cursorEmail, grokEmail } from "../accounts/profiles.ts";
 import type { Cloud } from "../cloud/state.ts";
+import { Refused } from "../mesh/bus.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { writePrivate } from "../ops/files.ts";
@@ -113,6 +114,9 @@ type State = {
   moved: Record<string, { to: string; tell: string[] }>;
 };
 
+/// Whose word a failed request is: the other station's (it answered with a refusal), or this one's (it could not ask, or
+/// no answer came).
+const whoSaid = (e: unknown) => (e instanceof Refused ? "them" : "here");
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
 const hashOf = (v: unknown) => createHash("sha256").update(typeof v === "string" ? v : JSON.stringify(v)).digest("hex");
 const newId = () => `sh-${randomBytes(10).toString("hex")}`;
@@ -397,8 +401,10 @@ export class Sharing {
       try {
         await this.deps.ask(peer, ws, request);
         return true;
-      } catch {
+      } catch (e) {
         pending = true;
+        // Said, as a copy that could not be had is: else nothing on the host says why a station never got a share.
+        log.info("share", "a station could not be told of a share", { id: request.id, peer, by: whoSaid(e), error: (e as Error).message });
         return false;
       }
     };
@@ -487,7 +493,7 @@ export class Sharing {
       } catch (e) {
         pending = true;
         this.unreachable.set(had.host, this.time.now());
-        log.info("share", "a share could not be had from its host", { id, host: had.host, error: (e as Error).message });
+        log.info("share", "a share could not be had from its host", { id, host: had.host, by: whoSaid(e), error: (e as Error).message });
       }
     }
     // Hosts of borrowed subscriptions that did not answer: asked whether they do now.
