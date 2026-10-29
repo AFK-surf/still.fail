@@ -115,6 +115,25 @@ public class Keyboard extends InputMethodService {
         super.onConfigurationChanged(c);
         Host.systemDark = night(c);
         Host.fontScale = c.fontScale;
+        barKeys();
+    }
+
+    /** The system's keys under the keyboard (put it away, the next input method) drawn dark on its light ground, light
+     *  on its dark one, as the keyboard's own words are: the system draws them light by default, faint on a light
+     *  keyboard. */
+    private void barKeys() {
+        android.app.Dialog d = getWindow();
+        android.view.Window w = d == null ? null : d.getWindow();
+        if (w == null) return;
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            int light = android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+            w.getInsetsController().setSystemBarsAppearance(Host.systemDark ? 0 : light, light);
+        } else {
+            View decor = w.getDecorView();
+            int flag = View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            int was = decor.getSystemUiVisibility();
+            decor.setSystemUiVisibility(Host.systemDark ? was & ~flag : was | flag);
+        }
     }
 
     /** The keyboard's files: the APK's assets/keyboard copied here once for each install or update of the APK. */
@@ -240,6 +259,7 @@ public class Keyboard extends InputMethodService {
     @Override
     public void onStartInputView(EditorInfo info, boolean restarting) {
         super.onStartInputView(info, restarting);
+        barKeys();
         Host.view = view;
         Host.resumed = true;
         Host.focused = true;

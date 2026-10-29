@@ -221,6 +221,8 @@ priv struct Paint {
   tool : Int64
   /// the 中英 key's arcs
   faint : Int64
+  /// the candidates' unfolding chevron
+  fold : Int64
   edge : Int64
   shadow : Int64
   grey_shadow : Int64
@@ -244,6 +246,7 @@ fn paint() -> Paint {
       quiet: 0xFFFFFF66L,
       tool: 0xFFFFFF80L,
       faint: 0xFFFFFF40L,
+      fold: 0xFFFFFF99L,
       edge: 0xFFFFFF1AL,
       shadow: 0x0000008CL,
       grey_shadow: 0x0000008CL,
@@ -263,6 +266,7 @@ fn paint() -> Paint {
       quiet: 0x00000066L,
       tool: 0x00000080L,
       faint: 0x00000040L,
+      fold: 0x00000099L,
       edge: 0x0000001AL,
       shadow: 0x00000026L,
       grey_shadow: 0x0000003FL,
@@ -325,9 +329,9 @@ fn bar(c : @ui.Ctx, s : State, p : Paint, w : Double) -> Unit {
         c.text(comp.preedit(), size=40.0 * u, color=p.ink, wrap=false) |> ignore
       })
       |> ignore
-      c.box(left=0.0, top=60.0 * u, w=Px(w - 120.0 * u), h=Px(94.0 * u), fn() {
+      c.box(left=0.0, top=60.0 * u, w=Px(w - 140.0 * u), h=Px(94.0 * u), fn() {
         c.sideways("candidates" + s.offered.to_string(), pad=0.0, fn() {
-          c.row(gap=14.0 * u, padx=13.0 * u, h=Px(94.0 * u), fn() {
+          c.row(gap=31.0 * u, padx=13.0 * u, h=Px(94.0 * u), fn() {
             let cands = comp.candidates()
             for i, cand in cands {
               if i >= candidates_most {
@@ -337,13 +341,13 @@ fn bar(c : @ui.Ctx, s : State, p : Paint, w : Double) -> Unit {
               let lit = i == 0 || c.pressed(id)
               c.box(
                 id~,
-                padx=26.0 * u,
+                padx=20.0 * u,
                 h=Px(94.0 * u),
                 justify=JCenter,
                 radius=20.0 * u,
                 bg=if lit { p.light } else { 0L },
                 fn() {
-                  c.text(cand.text, size=50.0 * u, color=if i == 0 { p.first } else { p.ink }, wrap=false)
+                  c.text(cand.text, size=56.0 * u, color=if i == 0 { p.first } else { p.ink }, wrap=false)
                   |> ignore
                 },
               )
@@ -359,8 +363,8 @@ fn bar(c : @ui.Ctx, s : State, p : Paint, w : Double) -> Unit {
       })
       |> ignore
       // (WeChat's: all the candidates opened under it; for now the strip scrolls)
-      c.box(left=w - 107.0 * u, top=60.0 * u, w=Px(107.0 * u), h=Px(94.0 * u), align=ACenter, justify=JCenter, fn() {
-        @sf.icon(c, "chevron-down", size=48.0 * u, color=p.ink) |> ignore
+      c.box(left=w - 130.0 * u, top=60.0 * u, w=Px(107.0 * u), h=Px(94.0 * u), align=ACenter, justify=JCenter, fn() {
+        @sf.icon(c, "chevron-down", size=76.0 * u, color=p.fold) |> ignore
       })
       |> ignore
     }
@@ -390,7 +394,7 @@ fn bar(c : @ui.Ctx, s : State, p : Paint, w : Double) -> Unit {
       }
       let hide = c.id("hide")
       bar_button(c, s, p, 954.0, hide, fn() {
-        @sf.icon(c, "chevron-down", size=48.0 * u, color=p.ink) |> ignore
+        @sf.icon(c, "chevron-down", size=59.0 * u, color=p.tool) |> ignore
       })
       if c.clicked(hide) {
         @ui.native_call("keyboard.hide", Json::object(Map([]))) |> ignore
