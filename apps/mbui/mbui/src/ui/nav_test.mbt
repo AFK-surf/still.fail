@@ -88,7 +88,7 @@ test "a page from the left comes in from there, the one under it out to the righ
   assert_eq(t.rect_of("title 1").unwrap().0, -195.0)
   assert_eq(t.rect_of("title 0").unwrap().0, 195.0)
   t.release(200.0, 400.0)
-  t.run_for(@ui.nav_let_go_ms)
+  t.run_for(nav.rest() - t.time())
   assert_eq(nav.depth(), 1)
   assert_eq(t.rect_of("title 0").unwrap().0, 0.0)
   t.assert_idle()

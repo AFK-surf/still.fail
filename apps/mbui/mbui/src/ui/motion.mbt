@@ -67,8 +67,7 @@ pub(all) enum Ease {
   /// one of the three `move_*_ms`, by how far it goes.
   Move
   /// (.2, .7, .2, 1), the web's --ease-out: what comes (faded in, grown from a little smaller, up from a line below),
-  /// a control answering (pointed at, pressed, a switch's knob, a fill), and what goes on from the hand's let go where
-  /// no spring takes its speed (a page swiped back)
+  /// a control answering (pointed at, pressed, a switch's knob, a fill)
   Out
   /// (.4, 0, 1, 1): what goes (faded out, shrinking, off the screen), gone the faster the further it is
   Leave
