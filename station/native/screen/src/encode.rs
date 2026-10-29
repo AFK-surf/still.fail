@@ -2,7 +2,9 @@
 // the machine has one that takes them, else Microsoft's software encoder (given each picture's bytes). H.265 the same
 // way, on the hardware only (Main; where the machine has no HEVC encoder, the view goes on in H.264). Low latency (a
 // picture out for each in), no B-frames, constrained baseline where the encoder has it, a key frame when asked for and
-// at least every 10 s besides. One picture is in it at a time: the view asks for the next only once one went.
+// at least every 10 s besides. One picture is in it at a time: the view asks for the next only once one went. A still
+// screen's picture sent again as a key frame (docs/remote-screens.md "Still") is encoded finer than the moving ones: its
+// QP no higher than STILL_QP and twice the bit rate for it, where the link carries STILL_FROM or more.
 use std::collections::VecDeque;
 
 use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
@@ -43,10 +45,19 @@ pub struct H264 {
     pub hevc: bool,
     /// The parameter sets the output type names (an encoder that does not put them in band).
     pub header: Vec<u8>,
+    /// The bit rate asked, and whether the picture in it is a still one's, encoded finer (`push`'s `still`).
+    bitrate: u32,
+    finer: bool,
     _manager: Option<IMFDXGIDeviceManager>,
 }
 
 const FPS: u32 = 60;
+/// A still picture's key frame: its QP at most this (of 51), at STILL_BOOST times the bit rate, where the bit rate asked
+/// is STILL_FROM or more (a narrow link's would take seconds to go).
+const STILL_QP: u32 = 28;
+const MOVING_QP: u32 = 51;
+const STILL_BOOST: u32 = 2;
+const STILL_FROM: u32 = 4_000_000;
 
 fn set(codec: &ICodecAPI, api: &GUID, value: VARIANT) -> bool {
     unsafe { codec.SetValue(api, &value).is_ok() }
@@ -230,6 +241,8 @@ impl H264 {
                 name: format!("{name}, {profile}, {bitrate} bps"),
                 hevc,
                 header,
+                bitrate,
+                finer: false,
                 _manager: manager,
             })
         }
@@ -237,8 +250,22 @@ impl H264 {
 
     /// From the next frame on, about this many bits a second (an encoder that cannot change it as it goes keeps its own).
     pub fn rate(&mut self, bitrate: u32) {
+        self.bitrate = bitrate;
         if let Some(c) = self.codec.as_ref() {
-            set(c, &CODECAPI_AVEncCommonMeanBitRate, VARIANT::from(bitrate));
+            set(c, &CODECAPI_AVEncCommonMeanBitRate, VARIANT::from(if self.finer { bitrate.saturating_mul(STILL_BOOST) } else { bitrate }));
+        }
+    }
+
+    /// The pictures from the next on encoded finer (a still one's key frame) or as the moving ones are. An encoder that
+    /// takes no QP bound keeps its own (the bit rate's rise alone).
+    fn finer(&mut self, on: bool) {
+        if on == self.finer {
+            return;
+        }
+        self.finer = on;
+        if let Some(c) = self.codec.as_ref() {
+            set(c, &CODECAPI_AVEncVideoMaxQP, VARIANT::from(if on { STILL_QP } else { MOVING_QP }));
+            set(c, &CODECAPI_AVEncCommonMeanBitRate, VARIANT::from(if on { self.bitrate.saturating_mul(STILL_BOOST) } else { self.bitrate }));
         }
     }
 
@@ -253,8 +280,10 @@ impl H264 {
         Ok(self.pending.is_empty() && (self.events.is_none() || self.credits > 0))
     }
 
-    /// `texture` (NV12, its size) in, at `ts` (µs), a key frame when `key`.
-    pub fn push(&mut self, gpu: &Gpu, texture: &ID3D11Texture2D, ts: i64, key: bool) -> Result<()> {
+    /// `texture` (NV12, its size) in, at `ts` (µs), a key frame when `key`; `still`: the same picture again (the screen
+    /// at rest), encoded finer.
+    pub fn push(&mut self, gpu: &Gpu, texture: &ID3D11Texture2D, ts: i64, key: bool, still: bool) -> Result<()> {
+        self.finer(key && still && self.bitrate >= STILL_FROM);
         unsafe {
             let buffer = if self.gpu {
                 let buffer = MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, texture, 0, false)?;

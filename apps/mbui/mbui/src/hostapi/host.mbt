@@ -176,6 +176,8 @@ pub(open) trait Host {
   nt_text(Self, Int) -> String = _
   st_audio_here(Self) -> Int = _
   st_audio(Self, Int, Bytes) -> Unit = _
+  st_h265_here(Self) -> Int = _
+  st_hevc(Self, Int, Bytes, Int, Int) -> Unit = _
   st_open(Self) -> Int = _
   st_h264(Self, Int, Bytes, Int, Int) -> Unit = _
   st_frame(Self, Int, Bytes, Int, Double) -> Unit = _
@@ -2614,3 +2616,15 @@ fn st_audio_here() -> Int { current.val.st_audio_here() }
 
 ///|
 fn st_audio(id : Int, data : Bytes) -> Unit { current.val.st_audio(id, data) }
+
+///|
+impl Host with st_h265_here(_) { 0 }
+
+///|
+impl Host with st_hevc(_, _, _, _, _) { () }
+
+///|
+fn st_h265_here() -> Int { current.val.st_h265_here() }
+
+///|
+fn st_hevc(id : Int, hvcc : Bytes, w : Int, h : Int) -> Unit { current.val.st_hevc(id, hvcc, w, h) }

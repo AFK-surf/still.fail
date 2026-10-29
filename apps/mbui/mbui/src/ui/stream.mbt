@@ -36,6 +36,8 @@ pub struct Stream {
   priv broken : () -> Unit
   /// H.264 (a config came), else JPEG; the config's picture size
   priv mut h264 : Bool
+  /// (its config H.265's: `hevc`)
+  priv mut hevc : Bool
   priv mut cw : Int
   priv mut ch : Int
   /// frames let go until a key frame
@@ -92,6 +94,7 @@ pub fn Stream::new(shown~ : (Double) -> Unit, broken~ : () -> Unit) -> Stream {
     shown,
     broken,
     h264: false,
+    hevc: false,
     cw: 0,
     ch: 0,
     need_key: true,
@@ -124,6 +127,7 @@ pub fn Stream::h264(self : Stream, avcc : Bytes, w : Int, h : Int) -> Unit {
   }
   self.open()
   self.h264 = true
+  self.hevc = false
   self.cw = w
   self.ch = h
   self.need_key = true
@@ -181,7 +185,8 @@ pub fn Stream::frame(self : Stream, data : Bytes, key : Bool, ts : Double) -> Un
   }
   self.open()
   self.hand_over(ts)
-  if self.id == 0 || !self.h264 || !h_h264_here() || (self.need_key && !key) {
+  let decodes = if self.hevc { h265_here() } else { h_h264_here() }
+  if self.id == 0 || !self.h264 || !decodes || (self.need_key && !key) {
     self.let_go(ts)
     return
   }
@@ -192,6 +197,47 @@ pub fn Stream::frame(self : Stream, data : Bytes, key : Bool, ts : Double) -> Un
       self.fed()
     }
     None => h_stream_frame(self.id, data, key, ts)
+  }
+}
+
+///|
+/// Whether this host decodes H.265 (the sender is then asked for it first: `hevc`). Under a Tester, false unless
+/// Tester::set_h265; a run's tape keeps the host's (its ENV line says it only when it does).
+pub fn h265_here() -> Bool {
+  match fake.val {
+    Some(f) => f.h265_here
+    None => {
+      if h265_known.val < 0 {
+        h265_known.val = if @hostapi.h265_here() { 1 } else { 0 }
+      }
+      h265_known.val == 1
+    }
+  }
+}
+
+///|
+// kept across runs: the real host's (asked once)
+let h265_known : Ref[Int] = Ref::new(-1)
+
+///|
+/// A config for H.265 (`hvcc`: its HEVCDecoderConfigurationRecord; the picture `w` × `h` pixels), as `h264`'s: its
+/// access units after it go to `frame` (each NAL after its length). Only where `h265_here`: elsewhere its frames are
+/// let go.
+pub fn Stream::hevc(self : Stream, hvcc : Bytes, w : Int, h : Int) -> Unit {
+  if self.closed {
+    return
+  }
+  self.open()
+  self.h264 = true
+  self.hevc = true
+  self.cw = w
+  self.ch = h
+  self.need_key = true
+  if self.id != 0 && h265_here() {
+    match fake.val {
+      Some(f) => fake_fed(f, self.id, "hevc \{w}x\{h} hvcc=\{hvcc.length()}")
+      None => @hostapi.stream_hevc(self.id, hvcc, w, h)
+    }
   }
 }
 
@@ -729,3 +775,9 @@ pub fn Stream::audio(self : Stream, data : Bytes) -> Unit {
 
 ///|
 pub fn Tester::set_stream_audio(self : Tester, on : Bool) -> Unit { self.fake.audio_here = on }
+
+///|
+/// Whether its host decodes H.265 (h265_here; false until set).
+pub fn Tester::set_h265(self : Tester, on : Bool) -> Unit {
+  self.fake.h265_here = on
+}

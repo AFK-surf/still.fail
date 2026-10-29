@@ -8,7 +8,7 @@
 //
 //   ENV {"motion":0|1,"glass":0|1,"dark":0|1,"inset":0|1,"h264":0|1,"feed":0|1,"ime":H,"copy":0|1,"font":S}    motion reduced,
 //       transparency reduced (glass solid), dark, the window's inset, H.264 decoded (a tape without it: not), its
-//       decoder driven from here (stream_feed.mbt; a tape without it: not), the soft
+//       decoder driven from here (stream_feed.mbt; a tape without it: not), H.265 decoded ("h265":1, said only then), the soft
 //       keyboard's height (points; each step of its motion a line), the system saying a copy itself (device.mbt), the
 //       system's size of words (font_scale; said only when not 1, a line without it: 1)
 
@@ -32,6 +32,10 @@ fn env_at_frame() -> Unit {
     "feed": Json::number(if h_stream_feeds() { 1.0 } else { 0.0 }),
     "ime": Json::number(g().dev.ime_inset),
     "copy": Json::number(if copy_shown() { 1.0 } else { 0.0 }),
+  }
+  // (said only where it does: a tape without it, not)
+  if h265_here() {
+    m["h265"] = Json::number(1.0)
   }
   let fs = font_scale()
   if fs != 1.0 {
@@ -62,6 +66,7 @@ fn replay_env(f : FakeHost, line : String) -> Unit {
   f.inset = on("inset", f.inset)
   f.h264 = on("h264", f.h264)
   f.audio_here = on("audio", false)
+  f.h265_here = on("h265", false)
   f.stream_feeds = on("feed", f.stream_feeds)
   f.dev.copy_shown = on("copy", f.dev.copy_shown)
   match m.get("ime") {

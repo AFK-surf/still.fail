@@ -88,6 +88,15 @@ pub fn stream_codec(id : Int, cmd : String, data : Bytes) -> Unit {
 }
 
 ///|
+/// Whether this host decodes H.265 (a stream's sender is then asked for it first).
+pub fn h265_here() -> Bool { st_h265_here() != 0 }
+
+///|
+/// A config for H.265: its hvcC and the picture's size, as `stream_h264`'s; its access units go to `stream_frame`
+/// (each NAL after its length). Only where `h265_here`.
+pub fn stream_hevc(id : Int, hvcc : Bytes, w : Int, h : Int) -> Unit { st_hevc(id, hvcc, w, h) }
+
+///|
 /// Whether the host plays a stream's 48 kHz stereo PCM16 system audio.
 pub fn stream_audio_here() -> Bool { st_audio_here() != 0 }
 

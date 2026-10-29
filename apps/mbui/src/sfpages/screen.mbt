@@ -563,8 +563,9 @@ fn quality_bounds(quality : String) -> (Int, Int) {
 }
 
 ///|
-/// Opens the view (again: after a pause, or 重新打开): `screen.view`, the frames it can decode said (H.264 where the
-/// host decodes it), as large as 画质 asks.
+/// Opens the view (again: after a pause, or 重新打开): `screen.view`, the frames it can decode said (H.265 first where
+/// the host decodes it, H.264 where it does), as large as 画质 asks, and the 画质 itself (how high the station lets the
+/// bit rate go).
 fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
   if self.call != 0 || own_screen(self.station, self.screen) {
     return
@@ -585,6 +586,9 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
   } else {
     [Json::string("jpeg")]
   }
+  if @ui.h265_here() {
+    codecs.insert(0, Json::string("h265"))
+  }
   let params : Map[String, Json] = {
     "station": Json::string(self.station),
     "screen": Json::string(self.screen),
@@ -592,6 +596,9 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     "codecs": Json::array(codecs),
     "maxWidth": Json::number(mw.to_double()),
     "maxHeight": Json::number(mh.to_double()),
+  }
+  if quality != "" {
+    params["quality"] = Json::string(quality)
   }
   if @ui.stream_audio_here() { params["audio"] = Json::string("pcm_s16le") }
   match self.fit {
@@ -772,6 +779,7 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
         let st = if part is Some(_) { Some(self.part_stream()) } else { self.stream }
         match (bytes, st) {
           (Some(b), Some(st)) if kind == "h264" => st.h264(b, w, h)
+          (Some(b), Some(st)) if kind == "h265" => st.hevc(b, w, h)
           _ => ()
         }
         if part is Some(_) {
@@ -839,7 +847,8 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
             (self.codec, self.stream)
           }
           match (codec, st) {
-            (Some("h264"), Some(st)) => st.frame(b, key, ts)
+            (Some("h264"), Some(st)) | (Some("h265"), Some(st)) =>
+              st.frame(b, key, ts)
             (Some("jpeg"), Some(st)) => st.jpeg(b, ts)
             _ => screen_ack(self.src, self, ts)
           }

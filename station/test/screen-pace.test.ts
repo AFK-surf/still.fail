@@ -2,7 +2,7 @@
 // is asked for, from the acknowledgements alone, on a clock the test moves.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DOWN, DOWNSIZE_MS, FrameLatency, DOWNSIZE_SHARE, HOLD_MS, LOW_BOUNDS, MAX_UNACKED, MIN_RATE, Pacer, QUEUE_MS, START_RATE, START_UNACKED, START_UP, Sizer, UP, UPSIZE_MS, UP_AFTER_MS, UP_EVERY_MS, ownRate } from "../src/mesh/screen-pace.ts";
+import { CUT, DOWN, DOWNSIZE_MS, FrameLatency, DOWNSIZE_SHARE, LOW_BOUNDS, MAX_RATE, MAX_UNACKED, MIN_RATE, Pacer, QUEUE_MS, START_RATE, START_UNACKED, START_UP, Sizer, UPSIZE_MS, UP_AFTER_MS, UP_EVERY_MS, ownRate, queueMs, rateCeiling } from "../src/mesh/screen-pace.ts";
 
 function paced() {
   let now = 0;
@@ -62,43 +62,75 @@ test("a queue building stops the frames until an acknowledgement", () => {
   assert.equal(p.pacer.may(), false);
   p.pacer.acked(4000);
   assert.equal(p.pacer.may(), true);
+  // A far link's round trip varies more: half of it, where that is more than QUEUE_MS.
+  assert.equal(queueMs(20), QUEUE_MS);
+  assert.equal(queueMs(150), 75);
 });
 
-test("the bit rate: down to what went through once a queue stays, not for a loss's moment; up again a step at a time", () => {
-  const p = paced();
+/// A source at 60 frames a second over a link that carries `capacity()` bits a second (each frame decoded once it is
+/// through, after `base` ms more), each frame as large as the rate the pacer asks makes it: the pacer's rate each ms.
+function bottleneck(capacity: (t: number) => number, ms: number, base = 10, start: number | null = null, own = ownRate(1920, 1080)) {
+  let now = 0;
+  const pacer = new Pacer(() => now, start);
+  pacer.ceiling(own);
+  const due: { at: number; ts: number }[] = [];
+  let free = 0;
+  let ts = 0;
+  const rates: number[] = [];
+  for (let t = 0; t < ms; t++) {
+    now = t;
+    while (due.length > 0 && due[0]!.at <= t) pacer.acked(due.shift()!.ts);
+    if (t % 16 === 0 && pacer.may()) {
+      const bytes = Math.round(pacer.rate()! / 60 / 8);
+      ts += 1000;
+      pacer.sent(ts, bytes);
+      free = Math.max(free, t) + (bytes * 8 * 1000) / capacity(t);
+      due.push({ at: Math.ceil(free) + base, ts });
+    }
+    rates.push(pacer.rate()!);
+  }
+  return rates;
+}
+
+test("the bit rate: down towards what went through once frames stay held back, never below half at a time; up again a step at a time", () => {
   const own = ownRate(1920, 1080);
-  p.pacer.ceiling(own);
-  assert.equal(p.pacer.rate(), own);
-  // A steady 20 ms link, a frame each 16 ms of 10 kB: 5 Mbit/s goes through.
-  let t = 0;
-  const step = (trip: number) => {
-    p.at(t);
-    const [ts] = p.send(1);
-    t += trip;
-    p.at(t);
-    if (ts !== undefined) p.pacer.acked(ts);
-    t += 16 - trip > 0 ? 16 - trip : 0;
-  };
-  for (let i = 0; i < 100; i++) step(20);
-  assert.equal(p.pacer.rate(), own, "nothing queues: as it was");
-  // One frame held a round trip (a packet lost and sent again): not slower.
-  step(60);
-  assert.equal(p.pacer.rate(), own);
-  // Frames held for longer than two round trips and HOLD_MS: the link is slower than they are.
-  const from = t;
-  while (t - from <= Math.max(HOLD_MS, 40) + 40) step(60);
-  const down = p.pacer.rate()!;
-  assert.ok(down < own, "lower");
-  assert.ok(down <= 5_000_000 * DOWN + 1 && down >= MIN_RATE, `about what went through: ${down}`);
-  // Nothing queues for UP_AFTER_MS: up by UP each UP_EVERY_MS, no higher than its own.
-  const quiet = t;
-  while (t - quiet < UP_AFTER_MS) step(20);
-  const before = p.pacer.rate()!;
-  const up = t;
-  while (t - up < UP_EVERY_MS + 20) step(20);
-  assert.ok(Math.abs(p.pacer.rate()! - Math.min(own, before * UP)) < 1, `${p.pacer.rate()} after ${before}`);
-  for (let i = 0; i < 2000; i++) step(20);
-  assert.equal(p.pacer.rate(), own);
+  // A link that carries 5 Mbit/s for 4 s, then 100.
+  const rates = bottleneck((t) => (t < 4000 ? 5_000_000 : 100_000_000), 20_000);
+  const low = Math.min(...rates.slice(0, 4000));
+  assert.ok(low < 5_000_000, `lowered to under the link: ${low}`);
+  assert.ok(low >= 5_000_000 * DOWN * 0.5, `about what went through: ${low}`);
+  // Each cut at most halves it.
+  for (let t = 1; t < rates.length; t++) assert.ok(rates[t]! >= rates[t - 1]! * CUT - 1, `at ${t}: ${rates[t - 1]} to ${rates[t]}`);
+  // The link wide again: up by UP each UP_EVERY_MS once nothing queued for UP_AFTER_MS, to its own.
+  assert.equal(rates.at(-1), own);
+  const rising = rates.slice(4000).findIndex((r, i, a) => i > 0 && r > a[i - 1]!);
+  assert.ok(rising >= 0 && rising <= UP_AFTER_MS + 2 * UP_EVERY_MS, `up again after ${rising} ms`);
+});
+
+test("a late acknowledgement alone lowers nothing: a still or idle screen's frames, held back by none", () => {
+  let now = 0;
+  const pacer = new Pacer(() => now);
+  const own = ownRate(1920, 1080);
+  pacer.ceiling(own);
+  let ts = 1000;
+  pacer.sent(ts, 10_000);
+  now = 20;
+  pacer.acked(ts);
+  // A frame now and then (a sharper picture of a still screen, a cursor's blink), each large and a while on the way.
+  for (let i = 0; i < 20; i++) {
+    now += 1000;
+    assert.equal(pacer.may(), true);
+    pacer.sent((ts += 1000), 300_000);
+    now += 400;
+    pacer.acked(ts);
+  }
+  assert.equal(pacer.rate(), own);
+  // A frame held a round trip (a packet lost and sent again) while the next waits: not slower either.
+  pacer.sent((ts += 1000), 10_000);
+  now += pacer.rtt()! + queueMs(pacer.rtt()!) + 1;
+  assert.equal(pacer.may(), false);
+  pacer.acked(ts);
+  assert.equal(pacer.rate(), own);
 });
 
 test("a view starting at START_RATE goes up by START_UP a step until a queue first builds, then by UP", () => {
@@ -149,6 +181,9 @@ test("the picture made smaller while the link carries a quarter of its own rate 
   asked = null;
   for (const start = now; now <= start + UPSIZE_MS + 100 && asked === null; now += 100) asked = sizer.step(ownRate(1280, 720), ownRate(1280, 720), small);
   assert.deepEqual(asked, { maxWidth: 1920, maxHeight: 1080 });
+  // 原画 is never made smaller.
+  const whole = new Sizer(() => now, { maxWidth: 7680, maxHeight: 4320 }, "original");
+  for (let i = 0; i < 100; i++, now += 100) assert.equal(whole.step(low, low, big), null);
   // A view asked no larger than the small bounds is never made smaller.
   const phone = new Sizer(() => now, { maxWidth: 1280, maxHeight: 720 });
   for (let i = 0; i < 100; i++, now += 100) assert.equal(phone.step(MIN_RATE, MIN_RATE, small), null);
@@ -174,4 +209,14 @@ test("frame latency: capture to drawn (the acknowledgement less half the round t
   now = 12_200;
   latency.acked(1_000, 40);
   assert.equal(latency.take(), null);
+});
+
+test("the most a view is asked at goes by its 画质: 原画 × 8 a pixel, 高清 × 4, at most MAX_RATE; else the source's own", () => {
+  assert.equal(rateCeiling(1920, 1080), ownRate(1920, 1080));
+  assert.equal(rateCeiling(1920, 1080, "smooth"), ownRate(1920, 1080));
+  assert.equal(rateCeiling(1920, 1080, "hd"), 1920 * 1080 * 4);
+  assert.equal(rateCeiling(1920, 1080, "original"), 1920 * 1080 * 8);
+  assert.equal(rateCeiling(3840, 2160, "original"), MAX_RATE);
+  // A small picture's own (at least 1 Mbit/s) is never lowered.
+  assert.equal(rateCeiling(320, 200, "original"), 1_000_000);
 });

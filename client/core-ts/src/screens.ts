@@ -92,12 +92,15 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
       const f = get(params, "fit");
       const [w, h, scale] = [get(f, "width"), get(f, "height"), get(f, "scale")];
       const fit = !peek && finite(w) && finite(h) && finite(scale) && w > 0 && h > 0 && scale > 0 ? { width: Math.round(w), height: Math.round(h), scale } : null;
+      // The 画质 chosen (none: 自动): how high the station lets the bit rate go.
+      const q = get(params, "quality");
+      const quality = !peek && (q === "smooth" || q === "hd" || q === "original") ? q : null;
       return {
         kind: "view",
         station,
         screen: text(params, "screen"),
         view: text(params, "view"),
-        ask: { maxWidth: size("maxWidth", MAX_WIDTH), maxHeight: size("maxHeight", MAX_HEIGHT), codecs, control: control !== false && !peek, ...(peek ? { peek: true } : {}), ...(get(params, "audio") === "pcm_s16le" && !peek ? { audio: "pcm_s16le" as const } : {}), ...(fit ? { fit } : {}) },
+        ask: { maxWidth: size("maxWidth", MAX_WIDTH), maxHeight: size("maxHeight", MAX_HEIGHT), codecs, control: control !== false && !peek, ...(peek ? { peek: true } : {}), ...(get(params, "audio") === "pcm_s16le" && !peek ? { audio: "pcm_s16le" as const } : {}), ...(quality ? { quality } : {}), ...(fit ? { fit } : {}) },
         auto: !peek && typeof control !== "boolean",
       };
     }

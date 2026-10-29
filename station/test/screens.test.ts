@@ -14,7 +14,7 @@ import { test } from "node:test";
 import { Admin } from "../src/api/admin.ts";
 import { Events } from "../src/api/events.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
-import { FrameIn, KIND, MAX_CLIP_IN, MAX_IN, SCREEN_TYPE, answerScreen, frame, parseClip, parseInput } from "../src/mesh/screens.ts";
+import { FrameIn, KIND, MAX_CLIP_IN, MAX_IN, SCREEN_TYPE, answerScreen, asked, frame, parseClip, parseInput } from "../src/mesh/screens.ts";
 import { ALPN, Reader, writeLine } from "../src/mesh/serve.ts";
 import { HELPER_APP, HelperApp } from "../src/helper/app.ts";
 import { Desktop, HelperView, TO_HELPER, helperClip, helperMessage } from "../src/screens/desktop.ts";
@@ -28,7 +28,7 @@ import { KEYS, WinInput } from "../src/screens/win-input.ts";
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 import { settle, testClock } from "./hub-fakes.ts";
-import { MAX_UNACKED, QUEUE_MS, START_RATE, START_UNACKED, STILL_MS, ownRate } from "../src/mesh/screen-pace.ts";
+import { MAX_UNACKED, QUEUE_MS, START_RATE, START_UNACKED, STILL_MS, ownRate, rateCeiling } from "../src/mesh/screen-pace.ts";
 import type { Clock } from "effect";
 import { memoryMesh, vanish } from "./memory-mesh.ts";
 import { Superseded } from "../src/mesh/superseded.ts";
@@ -421,6 +421,40 @@ test("a still screen's picture goes again sharper as the rate goes up, a key fra
   assert.equal(view.keyframes, steps.length);
   await v.stream.finish();
   await v.served;
+});
+
+test("原画 asked: the rate goes up past the source's own, to its pixels × 8; 高清 × 4; a client that says none, its own", async () => {
+  for (const [quality, top] of [["original", rateCeiling(1920, 1080, "original")], ["hd", rateCeiling(1920, 1080, "hd")], [undefined, ownRate(1920, 1080)]] as const) {
+    const hub = new ScreenHub();
+    const source = new FakeSource();
+    source.make = () => new StillView();
+    hub.add(source);
+    const time = testClock();
+    const v = await open(hub, member, { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: true, ...(quality ? { quality } : {}) }, undefined, time.clock);
+    await until(v.frames, KIND.video);
+    const view = source.views[0] as StillView;
+    let ts = 1000;
+    for (let i = 0; i < 20; i++) {
+      await v.stream.write(frame(KIND.ack, ts8(ts)));
+      await settle();
+      await time.adjust(STILL_MS);
+      await settle();
+      if (view.keyframes === i) break;
+      ts = Number((await until(v.frames, KIND.video)).readBigUInt64BE(1));
+    }
+    assert.equal(Math.max(...view.rates), top, `${quality}`);
+    await v.stream.finish();
+    await v.served;
+  }
+});
+
+test("a view's ask: its 画质 among those known, none for a preview's", () => {
+  const ask = { maxWidth: 1920, maxHeight: 1080, codecs: ["h265", "h264"] };
+  assert.equal(asked({ ...ask, quality: "original" }).quality, "original");
+  assert.equal(asked({ ...ask, quality: "hd" }).quality, "hd");
+  assert.equal(asked({ ...ask, quality: "best" }).quality, undefined);
+  assert.equal(asked(ask).quality, undefined);
+  assert.equal(asked({ ...ask, quality: "original", peek: true }).quality, undefined);
 });
 
 test("the pointer a source says beside its pictures goes to the view as its state's cursor", async () => {

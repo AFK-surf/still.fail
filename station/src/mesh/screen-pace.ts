@@ -3,10 +3,12 @@
 // decoded (the round trip), and how much went through in the last second.
 //
 // Frames go while those on the way go through as fast as the link has gone lately: the oldest not acknowledged waiting
-// no longer than the quickest round trip of the last RTT_WINDOW_MS and QUEUE_MS. A far link so carries as many frames
-// a second as a near one. Once one waits longer a queue is building (a link slower than the frames, a packet lost and
-// sent again): none goes until an acknowledgement, and the bit rate goes down to what went through, so the frames
-// that come next are as many and smaller rather than fewer and late. It goes up again a step at a time while nothing
+// no longer than the quickest round trip of the last RTT_WINDOW_MS and `queueMs` of it. A far link so carries as many
+// frames a second as a near one. Once one waits longer a queue is building (a link slower than the frames, a packet lost
+// and sent again): none goes until an acknowledgement, and once frames stay held back, the bit rate goes down to what
+// went through (no lower than half of what it was at a time), so the frames that come next are as many and smaller
+// rather than fewer and late. A screen that changes little holds nothing back, and an acknowledgement late alone (a
+// large picture of a still screen) lowers nothing. It goes up again a step at a time while nothing
 // is lowered, to the source's own. A view starts at START_RATE (its first frame, a whole picture, is its largest: on a
 // narrow link one at the source's own rate held the view up for a second) and goes up by START_UP each step until it
 // is first lowered.
@@ -15,18 +17,22 @@
 export const START_UNACKED = 2;
 export const MAX_UNACKED = 16;
 /// How much longer than its quickest round trip the oldest frame not acknowledged may be waiting while the next goes:
-/// the queue a view lets build in front of a link, no more.
-export const QUEUE_MS = 15;
+/// the queue a view lets build in front of a link, no more: QUEUE_MS, or QUEUE_SHARE of the round trip where that is
+/// more (a far link's round trip varies by more than a near one's).
+export const QUEUE_MS = 30;
+export const QUEUE_SHARE = 0.5;
+export const queueMs = (rtt: number) => Math.max(QUEUE_MS, rtt * QUEUE_SHARE);
 /// How long a round trip counts towards the quickest (the link changes: another way, a relay).
 export const RTT_WINDOW_MS = 10_000;
 /// What went through is counted over this long.
 export const DELIVERY_WINDOW_MS = 1000;
-/// The lowest bit rate asked; down to `DOWN` of what went through once a queue stayed for two round trips and
-/// `HOLD_MS` (a packet lost and sent again holds the frames behind it for about a round trip, then they all come: that
-/// is not the link being too slow), and again each round trip and `HOLD_MS` it stays; up by `UP` each `UP_EVERY_MS` once
-/// nothing queued for `UP_AFTER_MS`.
+/// The lowest bit rate asked; down to `DOWN` of what went through (and no lower than `CUT` of what it was) once frames
+/// stayed held back for two round trips and `HOLD_MS` (a packet lost and sent again holds the frames behind it for
+/// about a round trip, then they all come: that is not the link being too slow), and again each round trip and
+/// `HOLD_MS` it stays; up by `UP` each `UP_EVERY_MS` once nothing queued for `UP_AFTER_MS`.
 export const MIN_RATE = 300_000;
 export const DOWN = 0.85;
+export const CUT = 0.5;
 export const HOLD_MS = 200;
 export const UP = 1.15;
 export const UP_EVERY_MS = 500;
@@ -38,6 +44,18 @@ export const START_UP = 1.5;
 
 /// The bit rate a source encodes a picture of this size at when not asked (still.fail Helper's, stillfail-screen's).
 export const ownRate = (width: number, height: number) => Math.max(1_000_000, width * height * 3);
+
+/// The 画质 a view asks (the client's `quality`): none for 自动 or a client from before it.
+export type Quality = "smooth" | "hd" | "original";
+/// The most a view is asked at, whatever its 画质.
+export const MAX_RATE = 60_000_000;
+/// The most a picture of this size is asked at, by its 画质: 原画 its pixels × 8 a second, 高清 × 4 (at most MAX_RATE,
+/// at least its own), else its own (`ownRate`). On a LAN a desktop's text at its own rate stays soft as it moves.
+export function rateCeiling(width: number, height: number, quality?: Quality): number {
+  const own = ownRate(width, height);
+  const per = quality === "original" ? 8 : quality === "hd" ? 4 : 0;
+  return per === 0 ? own : Math.max(own, Math.min(MAX_RATE, width * height * per));
+}
 
 export class Pacer {
   /// The frames sent and not acknowledged, oldest first: their timestamps, sizes and when they went.
@@ -51,8 +69,10 @@ export class Pacer {
   #ceiling: number | null = null;
   #down = -Infinity;
   #up = -Infinity;
-  /// Since when the frames have been queuing (none acknowledged as soon as the link takes since), or null.
+  /// Since when frames have been held back (`may` said no, and again within UP_AFTER_MS and two round trips each time),
+  /// or null; and when last.
   #since: number | null = null;
+  #held = -Infinity;
   #first = Infinity;
   readonly #now: () => number;
   /// `start`: the bit rate the source was opened at (none: its own).
@@ -92,7 +112,7 @@ export class Pacer {
     this.#trips.push({ at: now, ms: trip });
     // The latest is kept however old: a still screen sends nothing for long.
     while (this.#trips.length > 1 && this.#trips[0]!.at < now - RTT_WINDOW_MS) this.#trips.shift();
-    if (base !== null && trip > base + QUEUE_MS) this.#queuing(now);
+    if (base !== null && trip > base + queueMs(base)) this.#queuing(now);
     else this.#steady(now);
   }
 
@@ -106,8 +126,15 @@ export class Pacer {
     if (this.#out.length === 0) return true;
     const rtt = this.rtt();
     if (rtt === null) return this.#out.length < START_UNACKED;
-    const may = this.#out.length < MAX_UNACKED && this.#now() - this.#out[0]!.at <= rtt + QUEUE_MS;
-    if (!may) this.#queuing(this.#now());
+    const now = this.#now();
+    const may = this.#out.length < MAX_UNACKED && now - this.#out[0]!.at <= rtt + queueMs(rtt);
+    if (!may) {
+      // A frame held back: the link carries less than the frames (an acknowledgement late alone, a screen still or
+      // changing little, holds nothing back and lowers nothing).
+      this.#since ??= now;
+      this.#held = now;
+      this.#queuing(now);
+    }
     return may;
   }
 
@@ -130,18 +157,26 @@ export class Pacer {
   }
 
   #queuing(now: number) {
-    this.#since ??= now;
+    if (this.#since === null || this.#calm(now)) return;
     const rtt = this.rtt() ?? 0;
     if (this.#rate === null || now - this.#since < Math.max(HOLD_MS, 2 * rtt) || now - this.#down < rtt + HOLD_MS) return;
     // What went through is not known yet (the first frame, a whole picture, is most of it): nothing to go by.
     if (now - this.#first < MEASURED_MS) return;
     this.#down = now;
     const through = this.#delivered(now);
-    if (through > 0) this.#rate = Math.max(MIN_RATE, Math.min(this.#rate, through * DOWN));
+    if (through > 0) this.#rate = Math.max(MIN_RATE, Math.min(this.#rate, Math.max(this.#rate * CUT, through * DOWN)));
+  }
+
+  /// Nothing held back for UP_AFTER_MS and two round trips: the queue gone.
+  #calm(now: number): boolean {
+    if (now - this.#held <= Math.max(UP_AFTER_MS, 2 * (this.rtt() ?? 0))) return false;
+    this.#since = null;
+    return true;
   }
 
   #steady(now: number) {
-    this.#since = null;
+    // Frames held back lately: as it is (the link carries no more than it goes at).
+    if (this.#since !== null && !this.#calm(now)) return;
     if (this.#rate === null || this.#ceiling === null || this.#rate >= this.#ceiling) return;
     // Starting: never lowered yet. Up once it has not been lowered for UP_AFTER_MS (a frame held a moment by a packet
     // lost, which lowers nothing, holds nothing up).
@@ -199,15 +234,18 @@ export const UPSIZE_MS = 3000;
 /// How large a picture a view asks of its source by the rate the pace asks: as the view asked it, or LOW_BOUNDS while
 /// the link carries a quarter or less of what a picture that size is encoded at (fewer pixels, each sharper: text that
 /// a 1080p picture at a few hundred kbit/s blurs stays readable at 720p). Back once the smaller picture's rate stays at
-/// its own.
+/// its own. Never smaller when the view asked 原画.
 export class Sizer {
   readonly #now: () => number;
   #asked: { maxWidth: number; maxHeight: number };
   #low = false;
   #since: number | null = null;
-  constructor(now: () => number, asked: { maxWidth: number; maxHeight: number }) {
+  /// 原画 asked: the picture is never made smaller (a link that carries less gets fewer frames of it).
+  readonly #whole: boolean;
+  constructor(now: () => number, asked: { maxWidth: number; maxHeight: number }, quality?: Quality) {
     this.#now = now;
     this.#asked = asked;
+    this.#whole = quality === "original";
   }
 
   get low(): boolean {
@@ -230,8 +268,8 @@ export class Sizer {
   /// With the rate asked now, what went through, and the picture's size now: the bounds to ask for, when they change;
   /// else null.
   step(rate: number, through: number, size: { width: number; height: number }): { maxWidth: number; maxHeight: number } | null {
-    // Asked no larger than the small one: nothing to make smaller.
-    if (this.#asked.maxWidth <= LOW_BOUNDS.maxWidth && this.#asked.maxHeight <= LOW_BOUNDS.maxHeight) return null;
+    // Asked no larger than the small one, or 原画: nothing to make smaller.
+    if (this.#whole || (this.#asked.maxWidth <= LOW_BOUNDS.maxWidth && this.#asked.maxHeight <= LOW_BOUNDS.maxHeight)) return null;
     const own = ownRate(size.width, size.height);
     const now = this.#now();
     const holds = this.#low ? rate >= own * 0.98 : rate <= own * DOWNSIZE_SHARE && through >= rate * USED;
