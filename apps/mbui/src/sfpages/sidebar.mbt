@@ -398,7 +398,7 @@ fn pin_moved(key : String, days : Array[ChatDay]) -> Bool {
 /// where it was to where it is (a mouse's on motion.ts MOVE, a finger's on the phone's row spring), carrying on from
 /// wherever it had got to; growing in where it is when new (240 ms after 100, from 90% and nothing); one gone drawn
 /// where it was as it shrinks to 90% and fades (200 ms, ease-out), the rows after it closing over it; one going up
-/// past others over them.
+/// past others both: gone from where it was, grown in where it is (motion's list_keys), never across them.
 pub fn row_moving(c : @ui.Ctx, lid : Int, list : String, key : String, i : Int) -> Unit {
   @motion.layout(
     c,

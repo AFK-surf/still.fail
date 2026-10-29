@@ -2,31 +2,26 @@
 // changes, words sent flying into their bubble, the way to the newest coming and going.
 
 ///|
-test "Home: a chat with news goes to the top on the rows' spring, the rows it passes going down" {
+test "Home: a chat with news goes to the top, from where it was and coming in there, never across the rows it passes" {
   // (the clock set after reset, which puts the fixture's own back)
   reset()
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  let (_, y_ci) = t.drawn_of("盯着 CI，绿了告诉我").unwrap()
   let (_, y_top) = t.drawn_of("整理发布清单").unwrap()
   // its news comes (the fixture's first step)
   clock.val = 2001.0
   t.frame()
-  // laid out at the top already, drawn where it was
-  let (_, y0) = t.drawn_of("盯着 CI，绿了告诉我").unwrap()
-  assert_true((y0 - y_ci).abs() < 0.5, msg="\{y0} \{y_ci}")
-  t.frame()
-  t.frame()
-  t.frame()
-  let (_, y1) = t.drawn_of("盯着 CI，绿了告诉我").unwrap()
-  assert_true(y1 < y0 - 1.0 && y1 > y_top, msg="\{y1}")
-  // the first row, pushed down a row, goes there too
+  // half way: the first row, pushed down a row, on its way there on the rows' spring; it at the top (once it shows),
+  // not on its way across the others
+  t.run_for(@motion.row_spring.duration(66.0, 0.0, 0.0) / 2.0)
   let (_, f1) = t.drawn_of("整理发布清单").unwrap()
-  assert_true(f1 > y_top && f1 < y_top + 66.0, msg="\{f1}")
+  assert_true(f1 > y_top && f1 < y_top + 66.0, msg="\{f1} \{y_top}")
+  let (_, y0) = t.drawn_of("盯着 CI，绿了告诉我").unwrap()
+  assert_true((y0 - y_top).abs() < 0.5, msg="\{y0} \{y_top}")
   // the rows' spring at rest
-  t.run_for(@motion.row_spring.duration(y_ci - y_top, 0.0, 0.0))
+  t.run_for(@motion.row_spring.duration(66.0, 0.0, 0.0))
   let (_, y2) = t.drawn_of("盯着 CI，绿了告诉我").unwrap()
   assert_true((y2 - y_top).abs() < 0.5)
   let (_, f2) = t.drawn_of("整理发布清单").unwrap()
