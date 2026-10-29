@@ -22,7 +22,7 @@ pub fn agent_avatar(@ui.Ctx, @sfbase.Source, MessageHere, String, String, String
 
 pub fn agent_badge(@ui.Ctx, String, Double, Int64) -> Unit
 
-pub fn agent_card(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, Json) -> Unit
+pub fn agent_card(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, Json, across? : Bool) -> Unit
 
 pub fn agent_mark(@ui.Ctx, String, String, String, side? : Double, said? : String, ground? : Int64, corner? : @ui.Radius, joined? : Bool) -> Unit
 
