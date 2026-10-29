@@ -710,6 +710,38 @@ test("the sidebar items a change can touch are read as the whole sidebar has the
   }
 });
 
+test("writing in an agent's Slack thread makes its item the viewer's (我参与的), chat or no chat", async () => {
+  const r = rig();
+  try {
+    // Someone else's agents, each with a Slack thread: one with no chat, one in a chat of its own.
+    r.store.insertSession({ key: "alone", connect: "slack:T1", runtime: "claude", profile: "cc", workspace: join(r.data, "alone"), token: "t1", createdAt: 1, lastActiveAt: 1, createdBy: "z@x" });
+    const [, chatted] = await r.ask("POST", "/sessions", { runtime: "claude" });
+    const thread = (ts: string, session: string) => {
+      const t = r.store.openThread("slack:T1", "C1", ts, null, null);
+      r.store.joinThread(t.id, session, "slack:T1");
+      return t.id;
+    };
+    const quiet = thread("1.1", "alone");
+    const busy = thread("2.1", chatted.key);
+    r.store.insertMessage(newMessage(quiet, "1.1", "person", "UZ", "explain rdp"));
+    r.store.insertMessage(newMessage(busy, "2.1", "person", "UZ", "and this"));
+    const other = { ...viewer, sub: "b", email: "b@x", name: "B" };
+    r.store.setSlackIdentity("b@x", "UB", true);
+    const mine = () => {
+      const store = openStore(r.data);
+      const rows = chats(store, other, false);
+      store.db.close();
+      return Object.fromEntries(rows.map((row: any) => [row.session, row.mine]));
+    };
+    assert.deepEqual(mine(), { alone: false, [chatted.key]: false }, "not written in yet");
+    r.store.insertMessage(newMessage(quiet, "1.2", "person", "UB", "can our windows join?"));
+    r.store.insertMessage(newMessage(busy, "2.2", "person", "UB", "me too"));
+    assert.deepEqual(mine(), { alone: true, [chatted.key]: true });
+  } finally {
+    await r.close();
+  }
+});
+
 test("an archived chat is listed as it was, from the database or from the file a station before wrote it out to", async () => {
   const r = rig();
   try {
