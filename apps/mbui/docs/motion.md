@@ -79,24 +79,53 @@ the sidebar, a side panel) waits for its first frame's lateness as a slide does.
    the cause and the motion's declared end (`ends()`), never from `moving()` (the framework's determinism.md: logic
    waits for no motion's end).
 
+## Curves
+
+How a motion goes from its start to its end says what it is, so there is one way for each, and a motion uses the
+one of what it is (the user, 2026-10-29: 「整体看一下我们动效的曲线，看看能不能系统性规范一下」). A timed motion's curve
+is one of `@ui.Ease`, which has no other; a spring is one of `@motion`'s (detlint's `motion-spring` lets the app's own
+only fall). The web says the same curves and lengths (`@stillfail/ui/curves.ts`: `moveEase`, `MOVE_*_MS`, and in
+styles `--ease-out`, `--ease-leave`, `--ease-move`).
+
+| What it is | Curve | Length |
+|---|---|---|
+| A move: seen where it was and where it goes, going there (kinds 3 and 5, a picture flown open, the search rising) | `Move`: a critically damped spring's way from rest | by how far it goes: `move_near_ms` (a row, the composer, a card: Motion's 0.28 s), `move_page_ms` (a page, a sheet, a picture, a side panel: 0.32 s), `move_far_ms` (across the window: the tape, the sidebar: 0.38 s) |
+| What the hand let go of, or moves with its hand's speed (kind 1); rows making way | a spring: `move_spring`, `sheet_spring`, given the hand's speed | the spring's own |
+| What comes (faded in, from a little smaller, up from a line below) and a control answering (kind 7) | `Out` (.2, .7, .2, 1), the web's --ease-out | the presets below: 120–240 ms |
+| What goes (faded out, shrinking, off the screen) | `Leave` (.4, 0, 1, 1) | shorter than its coming |
+| What the hand holds or lifts: a switch's knob held, a ripple's sink, a card lifted, the long-press menu, the loupe | `lift_spring`, the one with a bounce | the spring's own |
+| A loop's each way, a stroke drawn | `InOut` | its own |
+| Words sent | `Flight` (.6, 0, .2, 1), from rest as a move is | 520 ms |
+| Progress handed to another curve, a cycle's turn | `Linear` | |
+
+Why a move is a spring's way and not an ease-out. A curve fast from its start puts much of a long way there in its
+first frame: on the web's ease-out the tape, 700 points over 380 ms, was 54 points on in the first frame at 120 Hz
+and 110 at 60, half way there in a seventh of its time, then crept for the last third (the composer 「一帧动老远」, the
+sidebar a jump and a crawl). The speed at its start is also what a frame drawn a little late or early turns into a
+step: 3.5 times the mean speed on the ease-out, under twice it at most on a spring from rest, so the same 2 ms off
+the display's beat is 13 points off on the tape there and 4 here. A spring's way has no step at its start, is at
+its fastest a tenth of the way in, and lands without a crawl one can see. What comes or goes over a few points (a
+fade, a 0.97 scale, 6 points up) is not a move: its fast start is what makes it feel at once.
+
 ## Presets
 
 Each kind has a few, each named once: the app's in `src/sf/motion.mbt`, the framework's in mbui where it makes that
 motion (kit's panels and controls, `@motion`'s springs, ui's pages pushed), as the table says; every motion uses one
-of them. Their numbers are the web's at the same place (paths from the repository's root), not made up here.
+of them. Their numbers are the web's at the same place (paths from the repository's root), not made up here, but for
+the curves: a move's length and curve are a Move's (Curves, above), what goes goes on `Leave`.
 
 | Kind | Preset | Value | The web's |
 |---|---|---|---|
 | 1 | let go, small: a row, a card | spring 0.28 s, no bounce | `MOVE`, web/ui/src/motion.ts:26 |
 | 1 | let go, large: a sheet, the pictures' strip | spring 0.32 s, no bounce | web/src/mobile/app.tsx:526 (a sheet), web/src/FilePreview.tsx:743 (`SLIDE`) |
 | 2 | by its trigger: a menu, a popover, a picker, a select, the `@` menu, the switcher | in 140 ms ease-out, from 0.97 and clear, growing out of its trigger's side; out at once (`@kit.pop_in`, `pop_out`) | web/ui/src/styles/controls.css.ts:71 (`popKeyframes`) |
-| 2 | a hover's card: the pointer rested on, left | in 160 ms ease-out from 0.96 and clear; out 90 ms ease-in to 0.97 and clear | web/src/Hover.css.ts:10-22 |
+| 2 | a hover's card: the pointer rested on, left | in 160 ms ease-out from 0.96 and clear; out 90 ms on `Leave` to 0.97 and clear | web/src/Hover.css.ts:10-22 |
 | 2 | a tip | in 120 ms ease-out, a fade; out at once (`@kit.tip_in`) | web/ui/src/parts.css.ts:336 |
 | 2 | a sheet | up 380 ms `--m-ease`, down 300 ms; its scrim to 0.28 over 300 ms | web/src/mobile/app.css.ts:82-97 |
 | 2 | a dialog | in 200 ms ease-out from 0.98, a little low, and clear; its ground's fade 180 ms; out at once (`@kit.dialog_in`, `ground_in`) | web/ui/src/parts.css.ts:180, 193 |
 | 2 | a message | in 220 ms ease-out, up from 6 below (`@sf.enter_ms`, `enter_rise`) | `ENTER`, web/ui/src/motion.ts:19-20 |
 | 2 | a row new to a list | grown in from 0.9 and clear over 240 ms ease-out, 100 ms after (`@sf.row_grown_in`) | web/src/listMotion.ts:54 |
-| 2 | what goes from a list: a row, the agent's line, what leaves the outbox | out 200 ms CSS's ease-out, a copy shrinking to 0.9 as it fades (`@sf.leave`) | `LEAVE`, web/ui/src/motion.ts:21-22, web/src/listMotion.ts:116 |
+| 2 | what goes from a list: a row, the agent's line, what leaves the outbox | out 200 ms on `Leave`, a copy shrinking to 0.9 as it fades (`@sf.leave`) | `LEAVE`, web/ui/src/motion.ts:21-22, web/src/listMotion.ts:116 |
 | 2 | a bar | in 380 ms `--m-ease`, out 300 ms | web/src/mobile/Bar.css.ts:17 |
 | 2 | a toast | in 200 ms ease-out, out 150 ms | web/ui/src/toast.css.ts:16-18 |
 | 2 | what is put in the composer: a file's card, a picture's tile, a quote's card; a notice over a chat's composer (archived, its cache over, its station down) | in 180 ms ease-out, up from 6 below (`@sf.waiting_in`); what a draft or a chat opens with is there at once; a notice no longer said leaves as a row does (`@sf.leave`), drawn as it was | web/src/Chat.css.ts:286, 449; web/src/Jobs.css.ts:217 |
@@ -104,22 +133,22 @@ of them. Their numbers are the web's at the same place (paths from the repositor
 | 2 | ⌘K | its scrim faded in over 120 ms, its panel grown out of 0.97 from its top over 140 ms ease-out; out at once | web/src/Switcher.css.ts:19, 25 |
 | 2 | a chat's find bar, in place of its buttons | in 120 ms ease-out, a fade (`@kit.tip_in`); out at once | web/src/ChatFind.css.ts:10 |
 | 2 | woken over a picture or a film: the viewer's bars, the player's controls | in 120 ms, resting out 320 ms, ease-out (`@sf.wake_ms`, `sleep_ms`: kit's media's) | web/src/FilePreview.css.ts:37, 54; web/ui/src/viewer/media.css.ts:23-25 |
-| 3 | a shape: the composer, a card | 260 ms ease-out (`@sf.shape_ms`) | web/src/morph.ts `useMorph` |
-| 3 | the composer to another page | 340 ms ease-out (`@sf.composer_page_ms`) | web/src/dock.tsx, web/src/styles/global.css.ts:257 (the view transition) |
-| 3 | a layout switched: the sidebar, a side panel, the tape | 380 ms ease-out (`@sf.move_state_ms`) | `moveState`, web/ui/src/motion.ts:287 |
+| 3 | a shape: the composer, a card | a near Move, 450 ms (`@sf.shape_ms`) | web/src/morph.ts `useMorph` |
+| 3 | the composer to another page | a page's Move, 500 ms (`@sf.composer_page_ms`) | web/src/dock.tsx, web/src/styles/global.css.ts:257 (the view transition) |
+| 3 | a layout switched: the sidebar, the tape | a far Move, 600 ms (`@sf.move_state_ms`); a side panel a page's | `moveState`, web/ui/src/motion.ts:287 |
 | 3 | rows making way, the agent's line among them | spring 0.28 s (`@sf.move_spring`) | `MOVE`, web/src/listMotion.ts |
 | 4 | words sent | 520 ms on the flight's curve (0.6, 0, 0.2, 1), set alike and broken into lines alike in the field and in the message (the theme's `words`, the composer's width), so moved, in pieces: what is on one line in both, each from where it was typed to where the message has it | web/src/madeChat.ts:329-331 (sfbase/flight.mbt); ChatHost.kt `pieces`, SendText.kt |
 | 4 | the composer under words sent: as tall as it was till they are a quarter of the way, then down as a shape | `@sf.shape_ms` from then | ChatHost.kt `hold` (the web keeps only the list's foot, dock.tsx) |
 | 4 | the composer's hint under words sent: gone at once, back once they are out of its field | 200 ms on the arrival's curve (`@sf.hint_back_ms`) | web/src/madeChat.css.ts:19-20 |
-| 4 | a picture into the viewer and back | 320 ms `--m-ease`; back 280 ms | none on the web, which fades it in over 140 ms (web/src/FilePreview.css.ts); Android's FilePreview.kt (sfbase/viewer.mbt) |
-| 5 | pushed, popped | 300 ms `--m-standard`; swiped back and let go, 200 ms | web/src/mobile/app.css.ts:16, 22-30 |
-| 5 | risen | 380 ms `--m-ease` | web/src/mobile/app.css.ts:32 |
-| 5 | another place on the bar | 220 ms `--m-ease`, from its side | web/src/mobile/app.css.ts:34 |
+| 4 | a picture into the viewer and back | a page's Move, 500 ms, each way | none on the web, which fades it in over 140 ms (web/src/FilePreview.css.ts); Android's FilePreview.kt (sfbase/viewer.mbt) |
+| 5 | pushed, popped | a page's Move, 500 ms; swiped back and let go, on at `Out` | web/src/mobile/app.css.ts:16, 22-30 |
+| 5 | risen | a page's Move, 500 ms | web/src/mobile/app.css.ts:32 |
+| 5 | another place on the bar | a page's Move from its side; in place, faded in on `Out` | web/src/mobile/app.css.ts:34 |
 | 6 | the glide | a share of what is left, τ 100 ms | `GLIDE_TAU`, web/ui/src/motion.ts:33 |
 | 7 | pressed, pointed at; a switch turned | 140 ms ease-out (`@sf.dur_ms`, `@kit.switch_ms`) | `--dur`, web/src/styles/global.css.ts:104; web/ui/src/parts.css.ts:85, 94 |
 | 7 | a segmented thumb | 240 ms ease-out | web/ui/src/parts.css.ts:64 |
 | 7 | a known progress | to a part told anew over 200 ms ease-out (`@kit.progress_ms`) | web/ui/src/waiting.css.ts:61 |
-| 7 | a picture's zoom told where | 260 ms, a quick start and a soft landing (`@kit.zoom_glide_ms`) | Android's Zoom.kt |
+| 7 | a picture's zoom told where | a page's Move (`@kit.zoom_glide_ms`) | Android's Zoom.kt |
 | 7 | a finger's ripple | in 450 ms, out 375 ms | none on the web (Android's RippleDrawable) |
 | 8 | breath (to 0.5, a restarting service's dot to 0.35), spinner, band | 1400 ms ease-in-out each way (`@sf.breath`); 800 ms a turn; 1400 ms | web/ui/src/waiting.css.ts, web/src/Jobs.css.ts:18, web/ui/src/styles/spinner.css.ts |
 | 9 | a message gone to | in 160 ms, held to 900 ms, gone by 1700 ms | web/src/Jobs.css.ts:199 |

@@ -388,7 +388,12 @@
       "src/sfdesk/settings_frame.mbt": 1,
       "src/sfdesk/shortcuts.mbt": 2
     },
-    "fixture-import": {}
+    "fixture-import": {},
+    "motion-spring": {
+      "src/gallery/view.mbt": 1,
+      "src/sfbase/under_post.mbt": 1,
+      "src/shelf/reader.mbt": 1
+    }
   },
   "excused": {
     "frame-request": {},
@@ -446,6 +451,7 @@
     },
     "cursor-hand": {},
     "tier-outside-shell": {},
-    "fixture-import": {}
+    "fixture-import": {},
+    "motion-spring": {}
   }
 }

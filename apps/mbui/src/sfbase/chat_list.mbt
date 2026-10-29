@@ -1132,7 +1132,7 @@ pub fn flash_start(rd : Reading) -> Unit {
       eases=[
         fn(t) { @ui.Ease::Out.at(t) },
         fn(t) { t },
-        fn(t) { @ui.Ease::Standard.at(t) },
+        fn(t) { @ui.Ease::Leave.at(t) },
       ],
     ),
   )

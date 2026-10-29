@@ -48,7 +48,7 @@ pub let sheet_scrim_ms : Double = 300.0
 ///|
 /// The scrim's fade: sheet_scrim_ms on CSS's ease (Sheet.kt's scrim tween).
 fn scrim_fade() -> @motion.Spec {
-  @motion.tween(sheet_scrim_ms, ease=Css)
+  @motion.tween(sheet_scrim_ms, ease=Out)
 }
 
 ///|

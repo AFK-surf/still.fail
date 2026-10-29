@@ -347,6 +347,13 @@ fn lint_mbt(
       !moving_listed(f, c.at) {
       add("motion-read", c.at, f.line_text(c.at))
     }
+    // a spring of the app's own: each is one of @motion's (the app's docs/motion.md, Curves)
+    if (c.name == "spring" || c.name == "motion_spring") &&
+      app &&
+      !in_t &&
+      ((c.kind == "pkg" && c.qual == "@motion") || c.kind == "method") {
+      add("motion-spring", c.at, f.line_text(c.at))
+    }
     // the app as it is screenshotted is not the app
     if c.name == "stable" &&
       c.kind == "method" &&

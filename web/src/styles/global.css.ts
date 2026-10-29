@@ -2,6 +2,7 @@ import { globalStyle } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { passageFlashHeldKeyframes, passageFlashKeyframes, searchStrokeKeyframes, strokeRevealKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { STILL, stillAtOnce, stillFlash } from "@stillfail/ui/styles/still.ts";
+import { LEAVE_EASE_CSS, MOVE_EASE_CSS } from "@stillfail/ui/curves.ts";
 
 /**
  * Corners, after Codex: plain rounding by default; where the browser draws superellipses, rounded rectangles get a
@@ -106,7 +107,10 @@ globalStyle(":root", {
     "--text-heading": "22px", "--leading-heading": "30px",
     // Big numbers (usage).
     "--text-display": "28px",
+    // one curve for each thing a motion can be (@stillfail/ui/curves.ts): what comes, what goes, a move
     "--ease-out": "cubic-bezier(.2, .7, .2, 1)",
+    "--ease-leave": LEAVE_EASE_CSS,
+    "--ease-move": MOVE_EASE_CSS,
     "--dur": "140ms",
   },
 });
@@ -286,7 +290,7 @@ globalStyle("[data-search-marks]", { position: "absolute", inset: "0", pointerEv
 globalStyle("[data-search-marks] svg", { position: "absolute", overflow: "visible" });
 globalStyle("[data-search-marks] path", {
   fill: "none", stroke: vars.accent, strokeWidth: "3", strokeLinecap: "round", vectorEffect: "non-scaling-stroke",
-  strokeDasharray: "1", strokeDashoffset: "1", animation: `${searchStrokeKeyframes} 520ms cubic-bezier(.4, 0, .2, 1) forwards`,
+  strokeDasharray: "1", strokeDashoffset: "1", animation: `${searchStrokeKeyframes} 520ms ease-in-out forwards`,
 });
 globalStyle("[data-search-marks][data-settled] path", { animation: "none", strokeDashoffset: "0" });
 globalStyle(`${STILL} [data-search-marks] path`, stillAtOnce);
@@ -298,7 +302,7 @@ globalStyle("mark[data-stroke]::after", {
   content: '""', position: "absolute", left: "-2px", right: "-2px", top: "calc(100% - 5px)", height: "6px", pointerEvents: "none",
   background: vars.accent, maskImage: STROKE, maskSize: "100% 100%",
   maskRepeat: "no-repeat", clipPath: "inset(0 100% 0 0)",
-  animation: `${strokeRevealKeyframes} 520ms cubic-bezier(.4, 0, .2, 1) calc(var(--n, 0) * 180ms) forwards`,
+  animation: `${strokeRevealKeyframes} 520ms ease-in-out calc(var(--n, 0) * 180ms) forwards`,
 });
 globalStyle(`${STILL} mark[data-stroke]::after`, stillAtOnce);
 /** The quoted passage, marked for a moment where it was said after following a quote (Chat.tsx flashRange): a rounded

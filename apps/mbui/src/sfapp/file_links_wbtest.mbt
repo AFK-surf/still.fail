@@ -43,6 +43,7 @@ test "a table's cells of the message's pictures (MBUI_FIXTURE=chat-table-images)
   assert_true(t.find("phone.png") is None)
   // the picture itself, opening in the preview
   t.click(Button, label=@sf.t("web-main.file.view", args=[("name", "phone.png")]))
-  t.run_for(@ui.nav_push_ms)
+  // (on its way in)
+  t.run_for(fly_open_ms / 2.0)
   assert_true(t.find("phone.png") is Some(_))
 }

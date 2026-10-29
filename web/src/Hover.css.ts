@@ -20,7 +20,7 @@ export const card = style([popover, panelCard, {
   transformOrigin: "var(--radix-hover-card-content-transform-origin)",
   selectors: {
     '&[data-state="open"]': { animation: `${enter} 160ms ${vars.easeOut}` },
-    '&[data-state="closed"]': { animation: `${exit} 90ms ease-in forwards` },
+    '&[data-state="closed"]': { animation: `${exit} 90ms var(--ease-leave) forwards` },
     "&[data-instant]": { animation: "none" },
   },
 }]);

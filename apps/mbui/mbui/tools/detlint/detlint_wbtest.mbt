@@ -1850,6 +1850,31 @@ test "follow-layout" {
 }
 
 ///|
+test "motion-spring" {
+  // the app's own springs, by @motion's and a Ctx's; its presets, a test's and the framework's not counted
+  let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/motion\"]}}"))
+  let fs = found(
+    [
+      (
+        "src/app/sheet.mbt",
+        "fn v(c : @ui.Ctx, a : @motion.Anim) -> Unit {\n" +
+        "  a.animate(0.0, @motion.spring(ratio=1.0, stiffness=400.0))\n" +
+        "  let k = c.spring(\"bars\", 1.0, stiffness=600.0, damping=50.0)\n" +
+        "  a.animate(0.0, @motion.motion_spring(0.3, bounce=0.2))\n" +
+        "  a.animate(0.0, @motion.sheet_spring)\n" +
+        "}\n",
+      ),
+      ("src/app/sheet_wbtest.mbt", "test \"t\" {\n  a.animate(0.0, @motion.spring())\n}\n"),
+      ("src/motion/spec.mbt", "pub let s : Spec = motion_spring(0.28)\n"),
+    ],
+    "motion-spring",
+    3,
+    cfg~,
+  )
+  assert_eq(lines(fs), [2, 3, 4])
+}
+
+///|
 test "motion-read" {
   // the app reading whether a motion runs; a Tester's list of what moves, a test's and the framework's not counted
   let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/motion\"]}}"))

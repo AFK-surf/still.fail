@@ -1063,7 +1063,7 @@ pub fn note_box(c : @ui.Ctx, note : (Int, Int, String, Int64)) -> Unit {
   if marking.popped != id {
     marking.popped = id
     pop.snap(0.0)
-    pop.animate(1.0, @motion.tween(note_pop_ms, ease=Arrive))
+    pop.animate(1.0, @motion.tween(note_pop_ms, ease=Out))
   }
   let p = pop.get()
   let remove = c.id("marks/note-remove")

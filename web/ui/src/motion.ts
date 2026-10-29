@@ -3,13 +3,19 @@
 // transition's fixed run from a fixed start, which lags a goal that moves and jumps when cut off. CSS transitions stay
 // for a thing's own look (hover, colour, opacity, a bar's fill).
 import { animate, frame, MotionGlobalConfig, motionValue, type AnimationPlaybackControls, type MotionValue } from "motion";
+import { LEAVE_EASE_CSS, MOVE_FAR_MS, moveEase } from "./curves.ts";
 
 export { animate, type AnimationPlaybackControls };
 
-/** The page's --ease-out. */
+// One curve for each thing a motion can be (the app's apps/mbui/docs/motion.md, Curves; mbui's @ui.Ease): what comes and
+// a control answering on EASE_OUT, what goes on LEAVE_EASE_CSS, a move (seen where it was and where it goes) on the
+// move's curve over a length by how far it goes; what the hand lets go of or what follows a goal that moves, a spring.
+
+/** The page's --ease-out: what comes (faded in, from a little smaller, up from a line below), a control answering. */
 export const EASE_OUT = [0.2, 0.7, 0.2, 1] as const;
 /** The page's --ease-out, as CSS. */
 export const EASE_OUT_CSS = "cubic-bezier(0.2, 0.7, 0.2, 1)";
+export { LEAVE_EASE_CSS, MOVE_EASE_CSS, MOVE_FAR_MS, MOVE_NEAR_MS, MOVE_PAGE_MS, moveEase } from "./curves.ts";
 /**
  * One way in and one way out for what comes and goes in the message list (a message, what settles under it): coming,
  * up from a little below as it fades in (as `[data-enter]` draws a new message); going, a copy where it was shrinking a
@@ -18,7 +24,7 @@ export const EASE_OUT_CSS = "cubic-bezier(0.2, 0.7, 0.2, 1)";
  */
 export const ENTER = { duration: 220, easing: EASE_OUT_CSS } as const;
 export const ENTER_FROM = { opacity: 0, transform: "translateY(6px)" } as const;
-export const LEAVE = { duration: 200, easing: "ease-out" } as const;
+export const LEAVE = { duration: 200, easing: LEAVE_EASE_CSS } as const;
 export const LEAVE_TO = { opacity: 0, transform: "scale(0.9)" } as const;
 
 /** How the small web services and what makes way for them move (Previews.tsx): a spring, so a goal that moves on while
@@ -284,7 +290,7 @@ const keyframes = (frames: Record<string, [string, string]>) =>
  * rules stay the truth: the values it holds while moving are let go of when it ends. Resolves once all have got there
  * (not if a later one cuts them off).
  */
-export function moveState(moves: [HTMLElement, string[]][], change: () => void, transition: object = { duration: 0.38, ease: EASE_OUT }): Promise<void> {
+export function moveState(moves: [HTMLElement, string[]][], change: () => void, transition: object = { duration: MOVE_FAR_MS / 1000, ease: moveEase }): Promise<void> {
   const from = moves.map(([el, props]) => { const style = getComputedStyle(el); return props.map((p) => style.getPropertyValue(p)); });
   // Where the panes they are in are scrolled. Its end is read laid out, and a pane that its end makes shorter (a row
   // folding away at the bottom of a list) is pulled up at once, before they are held where they were: put back below.
@@ -321,7 +327,7 @@ export function moveState(moves: [HTMLElement, string[]][], change: () => void, 
  * Moves each of `moves`' properties from the value given to where the rules put it now (a thing coming in, drawn at
  * its place from the first frame); a moveState on the same element later goes on from wherever this had got to.
  */
-export function arrive(moves: [HTMLElement, Record<string, string>][], transition: object = { duration: 0.38, ease: EASE_OUT }): void {
+export function arrive(moves: [HTMLElement, Record<string, string>][], transition: object = { duration: MOVE_FAR_MS / 1000, ease: moveEase }): void {
   for (const [el, from] of moves) {
     changing.get(el)?.stop();
     const style = getComputedStyle(el);

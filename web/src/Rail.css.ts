@@ -61,7 +61,7 @@ export const edge = style({
       // Odd widths on whole pixels, the bar's middle and the line's one (left 6, 1 wide; left 4, 5 wide).
       content: '""', position: "absolute", top: "50%", left: 4, width: 5, height: 24, borderRadius: 999,
       background: vars.lineStrong, opacity: 0, transform: "translateY(-50%)",
-      transition: `height 180ms cubic-bezier(.16, 1, .3, 1), opacity 180ms cubic-bezier(.16, 1, .3, 1), background-color 150ms ${vars.easeOut}`,
+      transition: `height 180ms ${vars.easeOut}, opacity 180ms ${vars.easeOut}, background-color 150ms ${vars.easeOut}`,
     },
     // The line itself (the hairline of the other edges, ui.css.ts resizeHandle), on hover and while dragged.
     "&::before": {

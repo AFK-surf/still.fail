@@ -148,8 +148,8 @@ fn MoveRun::at(self : MoveRun, now : Double) -> Double {
 pub fn Ctx::move_state(
   self : Ctx,
   moves : Array[(String, Array[String])],
-  duration? : Double = 380.0,
-  ease? : Ease = Out,
+  duration? : Double = move_far_ms,
+  ease? : Ease = Move,
   loc~ : SourceLoc,
 ) -> Unit {
   if self.still() {

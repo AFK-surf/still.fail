@@ -893,7 +893,7 @@ fn swipe_to_archive(
             // off to the left, then archived (no copy of it left behind as it leaves the list: it is out of sight)
             rows.swiped_off[key] = true
             unghost(true)
-            off.animate(-width, @motion.tween(swipe_off_ms, ease=Standard), velocity=v)
+            off.animate(-width, @motion.tween(swipe_off_ms, ease=Out))
           }
         } else {
           back(v)
@@ -923,7 +923,7 @@ fn swipe_to_archive(
       rows.felt_past[key] = past
     })
   }
-  let fill = @motion.animate(c, key + "/fill", if past { 1.0 } else { 0.0 }, spec=@motion.tween(swipe_fill_ms))
+  let fill = @motion.animate(c, key + "/fill", if past { 1.0 } else { 0.0 }, spec=@motion.tween(swipe_fill_ms, ease=Out))
   c.drag_area(id, axis=Horizontal, w=Fill(1.0), fn() {
     c.box(style=@sf.list_row_slot(at), fn() {
       if moved < 0.0 {

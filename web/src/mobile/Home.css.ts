@@ -11,7 +11,7 @@ export const mHome = style({ position: "absolute", inset: "0", userSelect: "none
 globalStyle(`${mHome} input, ${mHome} textarea`, { userSelect: "text", WebkitTouchCallout: "default" });
 export const mHomePanes = style({ position: "absolute", inset: "0", overflow: "hidden" });
 export const mHomeSlide = style({
-  position: "absolute", inset: "0", transition: "transform 240ms var(--m-standard)",
+  position: "absolute", inset: "0", transition: "transform 500ms var(--m-standard)",
   selectors: {
     "&:nth-child(2)": { transform: "translateX(100%)" },
     "&:nth-child(3)": { transform: "translateX(200%)" },
@@ -40,7 +40,7 @@ export const mPull = style({
   position: "absolute", top: "calc(var(--m-top) + 58px)", left: "50%", zIndex: "2", display: "grid", placeItems: "center",
   width: "36px", height: "36px", translate: "-50% 0", borderRadius: "50%", color: "var(--m-subtle)", pointerEvents: "none",
   opacity: "var(--pull)", transform: "translateY(calc(var(--gap) / 2 - 18px)) scale(calc(.6 + var(--pull) * .4))",
-  transition: "opacity 200ms var(--m-ease), transform 200ms var(--m-ease), color 120ms",
+  transition: "opacity 200ms var(--ease-out), transform 200ms var(--ease-out), color 120ms",
   selectors: {
     // With the finger, not behind it.
     "&[data-pulling]": { transition: "color 120ms" },
@@ -196,10 +196,10 @@ globalStyle(`${mSearchField} svg`, { flex: "none" });
 // Away while the search is open (`data-away`); as it closes they come back in the same 240 ms as its field goes back,
 // so the field lands where the list's is, together.
 globalStyle(`${mHome}[data-away] ${mHomePanes}`, { transform: "translateY(-56px)", opacity: "0", pointerEvents: "none" });
-globalStyle(`${mHomePanes}`, { transition: "transform 240ms var(--m-standard), opacity 200ms var(--m-standard)" });
-globalStyle(`${mHome}[data-away] ${mHomePanes}`, { transition: "transform 280ms var(--m-ease), opacity 200ms var(--m-standard)" });
+globalStyle(`${mHomePanes}`, { transition: "transform 500ms var(--m-standard), opacity 200ms var(--ease-out)" });
+globalStyle(`${mHome}[data-away] ${mHomePanes}`, { transition: "transform 500ms var(--m-ease), opacity 200ms var(--ease-out)" });
 globalStyle(`${mHome}[data-away] ${mHomeBar}`, { opacity: "0", pointerEvents: "none" });
-globalStyle(`${mHomeBar}`, { transition: "opacity 200ms var(--m-standard)" });
+globalStyle(`${mHomeBar}`, { transition: "opacity 200ms var(--ease-out)" });
 export const mSearchPage = style({ position: "absolute", inset: "0", zIndex: "4", display: "flex", flexDirection: "column" });
 export const mSearchBar = style({
   flex: "none", display: "flex", alignItems: "center", gap: "12px", padding: "calc(var(--m-top) + 8px) 16px 8px",
@@ -219,7 +219,7 @@ export const mSearchCancel = style({
 });
 export const mSearchResults = style({
   flex: "1", minHeight: "0", overflowY: "auto", overscrollBehavior: "contain", paddingBottom: "calc(var(--m-foot) + 20px)",
-  animation: "none", transition: "opacity 200ms var(--m-standard)",
+  animation: "none", transition: "opacity 200ms var(--ease-out)",
   selectors: { [`${mSearchPage}[data-leaving] &`]: { opacity: "0" } },
 });
 globalStyle(`${mSearchPage}[data-leaving] ${mSearchCancel}`, { opacity: "0", transition: "opacity 150ms" });

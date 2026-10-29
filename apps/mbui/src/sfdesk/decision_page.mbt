@@ -391,9 +391,9 @@ fn zou_leave(c : @ui.Ctx, x : Json, way : Int) -> Unit {
   let a = zou_anim(c, "zou/leave")
   a.snap(0.0)
   if way == 3 {
-    a.animate(1.0, @motion.tween(zou_up_ms, ease=Bezier(0.55, 0.0, 0.85, 0.35)))
+    a.animate(1.0, @motion.tween(zou_up_ms, ease=Leave))
   } else {
-    a.animate(1.0, @motion.tween(zou_off_ms, ease=Bezier(0.4, 0.0, 0.9, 0.6)))
+    a.animate(1.0, @motion.tween(zou_off_ms, ease=Leave))
   }
   zou_rise(c)
 }

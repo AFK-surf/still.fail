@@ -68,7 +68,7 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
         enter=@motion.trans(
           fade=0.0,
           spec=@motion.Snap(0.0),
-          fade_spec=@motion.tween(options_out_ms, ease=CssOut, delay=options_out_ms),
+          fade_spec=@motion.tween(options_out_ms, ease=Leave, delay=options_out_ms),
         ),
         open=close_gap,
         exit=@motion.trans(spec=@motion.Snap(0.0)),
@@ -370,6 +370,7 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
         @motion.measure(c, av, "emit-avatar/" + rk + "/" + a.key)
         let ring = @motion.animate(c, "ring/" + here.station + "/" + a.key, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(
           ring_out_ms,
+          ease=Leave,
         ))
         let rl = c.layer(fn() { work_ring(c, a.wait is Some(_)) })
         c.look(rl, @ui.look(alpha=ring))

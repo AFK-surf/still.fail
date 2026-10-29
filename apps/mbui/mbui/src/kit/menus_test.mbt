@@ -365,8 +365,8 @@ test "dropdown menu: put by a rectangle, its own motion and a scrim; gone once i
       along=End,
       offset=6.0,
       scrim=0x00000047L,
-      enter=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.tween(motion_ms)),
-      exit=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.tween(motion_ms)),
+      enter=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.tween(motion_ms, ease=Out)),
+      exit=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.tween(motion_ms, ease=Out)),
     ).open
   })
   // (put by its rectangle once laid out: a layout read back, drawn now)

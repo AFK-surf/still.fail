@@ -64,7 +64,7 @@ pub let pop_ms : Double = 140.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let pop_out : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion.tween(pop_out_ms, ease=LeaveFade))
+pub let pop_out : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion.tween(pop_out_ms, ease=Leave))
 
 ///|
 pub let pop_out_ms : Double = 100.0

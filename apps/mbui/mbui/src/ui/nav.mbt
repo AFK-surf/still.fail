@@ -156,7 +156,7 @@ pub fn[P] Nav::new(
     p1: 0.0,
     t0: -1.0,
     dur: 0.0,
-    curve: Standard,
+    curve: Move,
     x0: 0.0,
     vel: 0.0,
     track: Tracker::new(),
@@ -307,12 +307,12 @@ fn[P] Nav::settle(self : Nav[P]) -> Unit {
 }
 
 ///|
-/// How long a page takes to slide in over the one on top, and back off it (popped).
-pub let nav_push_ms : Double = 300.0
+/// How long a page takes to slide in over the one on top, and back off it (popped): a page's Move.
+pub let nav_push_ms : Double = move_page_ms
 
 ///|
-/// How long a page takes to rise from the bottom (Nav::rise), and to sink back.
-pub let nav_rise_ms : Double = 380.0
+/// How long a page takes to rise from the bottom (Nav::rise), and to sink back: a page's Move.
+pub let nav_rise_ms : Double = move_page_ms
 
 ///|
 /// How long a page let go short of going back takes to come back to its place.
@@ -441,7 +441,7 @@ pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
   self.settle()
   self.pages.push(nav_page(page, Some(self.top())))
   self.p = 1.0
-  self.go(1, 0.0, nav_push_ms, Standard, brings=true)
+  self.go(1, 0.0, nav_push_ms, Move, brings=true)
 }
 
 ///|
@@ -469,7 +469,7 @@ pub fn[P] Nav::rise(self : Nav[P], page : P) -> Unit {
   e.rise = true
   self.pages.push(e)
   self.p = 1.0
-  self.go(1, 0.0, nav_rise_ms, Arrive, brings=true)
+  self.go(1, 0.0, nav_rise_ms, Move, brings=true)
 }
 
 ///|
@@ -503,8 +503,8 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
   self.leaving = self.pages.pop()
   self.topped()
   match self.leaving {
-    Some(e) if e.rise => self.go(2, 1.0, nav_rise_ms, Arrive, brings=true)
-    _ => self.go(2, 1.0, nav_push_ms, Standard, brings=true)
+    Some(e) if e.rise => self.go(2, 1.0, nav_rise_ms, Move, brings=true)
+    _ => self.go(2, 1.0, nav_push_ms, Move, brings=true)
   }
   true
 }
@@ -578,10 +578,10 @@ fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double
         if self.p > 1.0 / 3.0 || flung {
           self.let_go()
         } else {
-          self.go(4, 0.0, nav_return_ms, Standard)
+          self.go(4, 0.0, nav_return_ms, Out)
         }
       }
-    3 => if self.mode == 3 { self.go(4, 0.0, nav_return_ms, Standard) }
+    3 => if self.mode == 3 { self.go(4, 0.0, nav_return_ms, Out) }
     _ =>
       if self.mode == 3 {
         self.let_go()
@@ -596,7 +596,7 @@ fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double
 fn[P] Nav::let_go(self : Nav[P]) -> Unit {
   self.leaving = self.pages.pop()
   self.topped()
-  self.go(2, 1.0, dmax(nav_let_go_ms * (1.0 - self.p), nav_let_go_min_ms), LetGo)
+  self.go(2, 1.0, dmax(nav_let_go_ms * (1.0 - self.p), nav_let_go_min_ms), Out)
 }
 
 ///|

@@ -326,9 +326,11 @@ test "a preview's frames: each acknowledged peek_ms after the one before, the pi
   assert_eq(acks().length(), 1)
   assert_eq(text(Some(acks()[0].params), "view"), view)
   assert_eq(number(Some(acks()[0].params), "ts"), 101.0)
-  t.run_for(@ui.nav_push_ms)
+  // (half of peek_ms on: the page still coming in, the first drawn on it)
+  let shown = peek_ms / 2.0
+  t.run_for(shown)
   assert_true(image_line(t, "mem:sf/peek/\{view}/0") != "")
-  // the next waits out peek_ms from the first's (nav_push_ms of it gone already)
+  // the next waits out peek_ms from the first's (`shown` of it gone already)
   (s.on_value)({ "frame": { "ts": 102 } }, Some(fixture_file_png("peek.png")))
   t.frame()
   assert_eq(acks().length(), 1)
@@ -336,7 +338,7 @@ test "a preview's frames: each acknowledged peek_ms after the one before, the pi
   assert_true(image_line(t, "mem:sf/peek/\{view}/0") != "")
   // (a tenth of peek_ms each side of the second's due)
   let near = peek_ms / 10.0
-  t.run_for(peek_ms - @ui.nav_push_ms - near)
+  t.run_for(peek_ms - shown - near)
   assert_eq(acks().length(), 1)
   assert_true(image_line(t, "mem:sf/peek/\{view}/1") != "")
   assert_eq(image_line(t, "mem:sf/peek/\{view}/0"), "")

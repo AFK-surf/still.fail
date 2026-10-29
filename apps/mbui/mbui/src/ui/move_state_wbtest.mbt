@@ -2,8 +2,8 @@
 // (margins, a share of the parent's, a place in it).
 
 ///|
-/// How long a move takes by default: the web's moveState's (380 ms).
-let move_ms : Double = 380.0
+/// How long a move takes by default: a far Move.
+let move_ms : Double = move_far_ms
 
 ///|
 /// A dock that folds (the web's sidebar block, shell.css.ts dock): 300 wide, flush, square and on the page's ground
@@ -69,7 +69,7 @@ test "a state moved to: each property from what it showed to what is built, on t
   // half its time in: the web's ease-out (0.2, 0.7, 0.2, 1) at a half, of each property
   let half = move_ms / 2.0
   t.run_for(half)
-  let p = Out.at(0.5)
+  let p = Ease::Move.at(0.5)
   let w = 300.0 + (56.0 - 300.0) * p
   assert_true((width_of(d.node.val) - w).abs() < 0.01)
   let (x, y, _, _) = g().node_rect(d.node.val)
@@ -80,7 +80,7 @@ test "a state moved to: each property from what it showed to what is built, on t
   assert_true((px - (6.0 * p + w + 6.0 * p + 8.0 * p)).abs() < 0.01)
   // its end: what is built, and nothing moves after it
   t.run_for(move_ms - half)
-  assert_eq(t.time(), start + move_ms)
+  assert_true((t.time() - (start + move_ms)).abs() < 1.0e-6)
   assert_eq(width_of(d.node.val), 56.0)
   t.assert_idle()
 }
@@ -155,7 +155,7 @@ test "a move whose first frame is late to the screen moves from where that frame
   t.frame_late(move_first_very_late_ms)
   t.run_for(first_frame_ms)
   t.run_for(start + nav_late_most + move_ms / 2.0 - t.time())
-  assert_true((width_of(d.node.val) - (56.0 + (300.0 - 56.0) * Out.at(0.5))).abs() < 1.0e-6)
+  assert_true((width_of(d.node.val) - (56.0 + (300.0 - 56.0) * Ease::Move.at(0.5))).abs() < 1.0e-6)
   t.run_for(start + nav_late_most + move_ms - t.time())
   assert_eq(width_of(d.node.val), 300.0)
   t.assert_idle()
@@ -220,7 +220,7 @@ test "a value of the view's own moves with the boxes that list it" {
   fold.val = true
   t.draw()
   t.run_for(move_ms / 2.0)
-  assert_true((line.val - Out.at(0.5)).abs() < 0.000001)
+  assert_true((line.val - Ease::Move.at(0.5)).abs() < 0.000001)
   t.run_for(move_ms / 2.0)
   assert_eq(line.val, 1.0)
 }

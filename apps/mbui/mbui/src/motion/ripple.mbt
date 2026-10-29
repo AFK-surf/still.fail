@@ -72,7 +72,7 @@ let press_sink_most : Double = 0.04
 ///|
 /// The way down and back up: a spring with a little give.
 // kept across runs: a value (no field of it changes)
-let sink_spring : Spec = motion_spring(0.25, bounce=0.35)
+let sink_spring : Spec = lift_spring
 
 ///|
 /// The share of `p` between `a` and `b` (RippleShader subProgress).
@@ -121,7 +121,7 @@ pub fn ripple(
     }
     let p = Anim::new(0.0)
     p.name = "ripple"
-    p.animate(0.5, tween(ripple_enter_ms, ease=Standard))
+    p.animate(0.5, tween(ripple_enter_ms, ease=Out))
     list.push({ x: px - bx + out_x, y: py - by + top, progress: p, at: c.moment(), lifted: false, lifted_at: 0.0, leaving: false })
     ripples[id] = list
   }
@@ -136,6 +136,9 @@ pub fn ripple(
     if r.lifted && !r.leaving && c.moment() >= out_at {
       r.leaving = true
       r.progress.animate(1.0, tween(ripple_exit_ms, ease=Linear), start_at=out_at)
+    } else if r.lifted && !r.leaving {
+      // (what holds it built again at that moment, as it changes then: kept_part.mbt)
+      c.shows_until(out_at)
     }
   }
   // those faded away let go, before what is drawn of the rest (built again in the frame, it builds the same)

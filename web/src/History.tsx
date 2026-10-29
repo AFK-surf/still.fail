@@ -10,7 +10,7 @@ import { Agent, Bell, CheckCircle, ChevronDown, ChevronRight, Command, Copy, Fil
 import { DropdownMenu } from "radix-ui";
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { animate, EASE_OUT, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
+import { animate, MOVE_NEAR_MS, moveEase, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import { useApi, useHistory, useHistoryDetail, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryMark, type HistoryMessage, type HistoryStep, type HistoryTask, type HistoryTurn, type HistoryView, type Place } from "./api.ts";
 import { ElsewhereLogo, ICON, IconButton, Pill, SlackLogo, Tip, Waiting, WaitLine } from "./ui.tsx";
 import { useCopyChatLink } from "./ChatRef.tsx";
@@ -645,7 +645,7 @@ function Fold({ children, of, source, lines = 5, head = null, className }: { chi
     // Its fold's height limit held off while it moves, what is past its height hidden.
     // Held at where it was until the motion takes it (from the next frame): the new height is never seen at once.
     Object.assign(el.style, { maxHeight: "none", overflow: "hidden", height: `${from}px` });
-    const now = animate(el, { height: [`${from}px`, `${to}px`] }, { duration: 0.24, ease: EASE_OUT });
+    const now = animate(el, { height: [`${from}px`, `${to}px`] }, { duration: MOVE_NEAR_MS / 1000, ease: moveEase });
     run.current = now;
     void now.finished.then(() => { if (run.current === now) { Object.assign(el.style, { height: "", maxHeight: "", overflow: "" }); run.current = null; if (open) setWhole(false); } }, () => {});
   };

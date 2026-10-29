@@ -123,7 +123,7 @@ test "a picture looked at on an iPhone Duo: the system's tabs put away, its acti
   }
   // closed from the system's bar: the tabs back as it goes, the picture still on its way
   t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/close\"}")
-  t.run_for(fly_close_ms / 4.0)
+  t.run_for(pv_fade_ms / 4.0)
   assert_true(pv_leaving.val is Some(_))
   assert_true(t.nav_said().contains("\"bare\":false"), msg=t.nav_said())
   t.run_for(fly_close_ms)

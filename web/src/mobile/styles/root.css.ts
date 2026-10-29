@@ -78,8 +78,9 @@ export const m = style({
     "--m-bubble": "rgb(50 45 36 / .075)",
     "--m-thumb": "#FFFFFF",
     "--m-lifted": "#FFFFFF",
-    "--m-ease": "cubic-bezier(.2, .8, .2, 1)",
-    "--m-standard": "cubic-bezier(.4, 0, .2, 1)",
+    // a page, a sheet, a bar moving: the move's curve (@stillfail/ui/curves.ts), as --ease-move
+    "--m-ease": "var(--ease-move)",
+    "--m-standard": "var(--ease-move)",
     "--m-top": "var(--safe-top)",
     "--m-foot": "var(--safe-bottom)",
   },
@@ -122,7 +123,7 @@ globalStyle(`:root:not([data-theme="light"]):has(${m}), :root:not([data-theme="l
 export const mDark = style({
   colorScheme: "dark",
   vars: {
-    ...darkVars, "--m-ease": "cubic-bezier(.2, .8, .2, 1)", "--m-standard": "cubic-bezier(.4, 0, .2, 1)",
+    ...darkVars, "--m-ease": "var(--ease-move)", "--m-standard": "var(--ease-move)",
     "--m-top": "var(--safe-top)", "--m-foot": "var(--safe-bottom)",
   },
 });
@@ -137,7 +138,7 @@ globalStyle(`${m} button:not(${wide} *)`, { font: "inherit" });
 globalStyle(`:where(${m} button:not(${wide} *))`, { color: "inherit" });
 globalStyle(`${m} button`, { WebkitTapHighlightColor: "transparent" });
 globalStyle(`${m} p:not(${wide} *)`, { margin: "0" });
-globalStyle(`${m} [data-enter]:not(${wide} *)`, { animation: `${mRiseKeyframes} 320ms var(--m-standard) both` });
+globalStyle(`${m} [data-enter]:not(${wide} *)`, { animation: `${mRiseKeyframes} 220ms var(--ease-out) both` });
 
 // Waiting (@stillfail/ui waiting.tsx) on the phone: its pill in the phone's grey (as its message bubbles), a page's bones
 // in the phone's line, not the wide screen's (what they are drawn over is the page's own, as it will be).

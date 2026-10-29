@@ -18,11 +18,11 @@ pub fn strokes_ms(n : Int) -> Double {
 }
 
 ///|
-/// How far the `i`th stroke is drawn in once `drawn` ms of them have gone by (Ease.Standard over its 520 ms, starting
+/// How far the `i`th stroke is drawn in once `drawn` ms of them have gone by (InOut over its 520 ms, a stroke drawn, starting
 /// 180 ms after the one before).
 pub fn stroke_part(drawn : Double, i : Int) -> Double {
   let p = (drawn - i.to_double() * stroke_gap_ms) / stroke_ms
-  @ui.Standard.at(if p < 0.0 { 0.0 } else if p > 1.0 { 1.0 } else { p })
+  @ui.InOut.at(if p < 0.0 { 0.0 } else if p > 1.0 { 1.0 } else { p })
 }
 
 ///|

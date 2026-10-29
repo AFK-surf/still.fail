@@ -31,9 +31,9 @@ pub fn spring(
 }
 
 ///|
-/// Compose's tween(durationMillis, delayMillis, easing): by default
-/// FastOutSlowIn (Standard).
-pub fn tween(ms : Double, ease? : @ui.Ease = Standard, delay? : Double = 0.0) -> Spec {
+/// Compose's tween(durationMillis, delayMillis, easing), its curve said:
+/// what the motion is (@ui.Ease: one curve for each).
+pub fn tween(ms : Double, ease~ : @ui.Ease, delay? : Double = 0.0) -> Spec {
   Tween(ms, ease, delay)
 }
 
@@ -75,10 +75,17 @@ pub let row_spring : Spec = Spring(1.0, 350.0, 1.0, 0.0)
 pub let sheet_spring : Spec = motion_spring(0.32, threshold=0.5)
 
 ///|
-/// Sheet.kt MenuSpring: the long-press menu's scale (motionSpring(.24,
-/// bounce .08), at rest within .001).
+/// What the hand holds or lifts (the one spring with a bounce: still.fail's
+/// docs/motion.md): a finger's ripple sinking (Android's), a switch's knob
+/// held, a card lifted, the long-press menu's scale, the loupe following the
+/// finger (motionSpring(.25, bounce .35)).
 // kept across runs: a constant: its fields are not mut, nothing changes it
-pub let menu_spring : Spec = motion_spring(0.24, bounce=0.08, threshold=0.001)
+pub let lift_spring : Spec = motion_spring(0.25, bounce=0.35)
+
+///|
+/// The long-press menu's scale: lifted by the hand (lift_spring).
+// kept across runs: a constant: its fields are not mut, nothing changes it
+pub let menu_spring : Spec = lift_spring
 
 ///|
 /// Where a spring is `t` seconds after it was let go `d` from its rest with

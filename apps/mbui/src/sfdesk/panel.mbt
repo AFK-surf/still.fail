@@ -256,10 +256,10 @@ pub let side_pane : @ui.Style = @ui.css("w=Full h=Full clip")
 
 ///|
 /// How long the side panel takes to slide in and out (ChatSide.tsx useSidePanel: 0.28 s and 0.24 s, the page's ease-out).
-pub let side_in_ms : Double = 280.0
+pub let side_in_ms : Double = @ui.move_page_ms
 
 ///|
-pub let side_out_ms : Double = 240.0
+pub let side_out_ms : Double = @ui.move_page_ms
 
 ///|
 /// What the panel keeps of its own (its tabs are the core's): the width it was dragged to (None: its own), and its

@@ -50,7 +50,7 @@ pub let zoom_fling_ms : Double = 325.0
 ///|
 /// How long a zoom said with a glide takes there (still.fail's: 260 ms on a quick start and a soft landing, Ease.Soft):
 /// Zoom::new's, unless said otherwise.
-pub let zoom_glide_ms : Double = 260.0
+pub let zoom_glide_ms : Double = @ui.move_page_ms
 
 ///|
 /// A picture's zoom, as Zoom.kt's: fitted within a margin (12, or 32 on a stage 640 wide or more), never enlarged;
@@ -340,7 +340,7 @@ fn Zoom::glide_to(self : Zoom, s : Double, x : Double, y : Double, glide : Bool)
   // said once as it sets out: the motion asks the frames until it is there
   self.gliding = true
   self.glide.set(0.0)
-  ignore(self.glide.start(1.0, @motion.tween(self.glide_ms, ease=Soft)))
+  ignore(self.glide.start(1.0, @motion.tween(self.glide_ms, ease=Move)))
 }
 
 ///|

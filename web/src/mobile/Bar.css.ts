@@ -14,7 +14,7 @@ const dark = (rules: StyleRule): StyleRule => ({
  */
 export const mBarHost = style({
   position: "absolute", left: "22px", right: "22px", bottom: "calc(22px + var(--m-foot))", height: "56px", zIndex: 6,
-  transition: "transform 380ms var(--m-ease), opacity 300ms",
+  transition: "transform 500ms var(--m-ease), opacity 300ms",
   selectors: {
     // Over a page pushed over a place: gone down and out of the way, back as that page goes.
     "&[data-away]": { transform: "translateY(120px)", opacity: 0, pointerEvents: "none" },
@@ -88,7 +88,7 @@ export const mBarLing = style({
 
 /** The action's icon in it: another page's, coming in, pops (the circle stays). */
 const pop = keyframes({ from: { transform: "scale(.5)", opacity: 0 }, to: { transform: "none", opacity: 1 } });
-export const mBarAction = style({ display: "grid", placeItems: "center", animation: `${pop} 220ms var(--m-ease)` });
+export const mBarAction = style({ display: "grid", placeItems: "center", animation: `${pop} 220ms var(--ease-out)` });
 
 /** The notch's edge, lit as the glass's own rim. */
 export const mBarNotchRim = style([{

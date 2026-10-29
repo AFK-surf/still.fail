@@ -48,7 +48,7 @@ pub let lift_held : Double = 0.35
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lift_spring : @motion.Spec = @motion.motion_spring(0.32, bounce=0.28)
+let lift_spring : @motion.Spec = @motion.lift_spring
 
 ///|
 /// How far over a sheet coming up over it what is lifted stays.

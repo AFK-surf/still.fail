@@ -87,11 +87,11 @@ export const mJump = style({
   color: "var(--m-ink) !important", opacity: "0", transform: "translateY(18px) scale(.6)", pointerEvents: "none",
   // Gone, not drawn at all once faded (its frosted glass would still be worked out over the list at every frame).
   visibility: "hidden",
-  transition: "opacity 150ms, transform 180ms var(--m-standard), visibility 0s 180ms", cursor: "pointer",
+  transition: "opacity 150ms, transform 180ms var(--ease-out), visibility 0s 180ms", cursor: "pointer",
   selectors: {
     "&[data-shown]": {
       opacity: "1", transform: "none", pointerEvents: "auto", visibility: "visible",
-      transition: "opacity 180ms, transform 220ms var(--m-standard), visibility 0s",
+      transition: "opacity 180ms, transform 220ms var(--ease-out), visibility 0s",
     },
     // With how many new messages wait at the end: a pill, growing leftwards from where it sits.
     "&[data-count]": { width: "auto", display: "flex", alignItems: "center", gap: "4px", padding: "0 14px 0 10px", borderRadius: "18px", whiteSpace: "nowrap" },

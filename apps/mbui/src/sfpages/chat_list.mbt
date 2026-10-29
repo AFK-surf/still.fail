@@ -109,7 +109,7 @@ pub fn chat_list(
               Some(l) => l.leaving
               None => false
             }
-            let fade = @motion.animate(c, "fade/" + mk, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(linger_out_ms))
+            let fade = @motion.animate(c, "fade/" + mk, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(linger_out_ms, ease=Leave))
             let p = open.get()
             // (its room whole once its opening is at its end: a tween's, 1 only there)
             rd.act_whole[keys[i]] = p >= 1.0

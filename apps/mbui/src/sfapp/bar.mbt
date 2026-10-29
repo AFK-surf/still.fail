@@ -170,7 +170,7 @@ fn bar_set_out() -> Double {
 
 ///|
 /// How long the bar takes to come back (a page it shows on), and to go (a page pushed over it).
-pub let bar_show_ms : Double = 380.0
+pub let bar_show_ms : Double = @ui.move_page_ms
 
 ///|
 let bar_hide_ms : Double = 300.0
@@ -1060,7 +1060,7 @@ fn tint_of(id : String, on : Bool) -> Double {
       g
     }
   }
-  g.go(if on { 1.0 } else { 0.0 }, tint_ms, Css)
+  g.go(if on { 1.0 } else { 0.0 }, tint_ms, Out)
   g.value
 }
 
@@ -1154,7 +1154,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   }
   // told each frame: shown or not, the notch as the place has it
   if tell {
-    m.vis.go(if shown { 1.0 } else { 0.0 }, if shown { bar_show_ms } else { bar_hide_ms }, Arrive)
+    m.vis.go(if shown { 1.0 } else { 0.0 }, if shown { bar_show_ms } else { bar_hide_ms }, if shown { Move } else { Leave })
   }
   if tell && !shown {
     if m.mode {
@@ -1257,8 +1257,8 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
       _ => false
     })
   if tell {
-    m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, ball_fade_ms, Css)
-    m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, ball_grow_ms, Css)
+    m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, ball_fade_ms, Out)
+    m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, ball_grow_ms, Out)
   }
   // first drawn (or under reduced motion): everything where it goes, at once
   if tell && (!m.placed || c.still()) {
@@ -1372,8 +1372,8 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
           body=fn() {
             // from one action to another with another icon (令 and a ＋): the icon swaps, the circle stays
             let v = swap_icon
-            let css : @ui.Ease = Css
-            let arrive : @ui.Ease = Arrive
+            let css : @ui.Ease = Out
+            let arrive : @ui.Ease = Out
             if bar.icon_was != "" {
               let p = css.at(dclamp(v * 300.0 / 120.0, 0.0, 1.0))
               let old = action_icon(c, bar.icon_was)

@@ -131,6 +131,8 @@ test "on the tape with the window's buttons in the app's top row (a Mac's) what 
     assert_true(near_at(covered(t, "展开侧边栏").map(fn(e) { e.1 }), left), msg=at)
     // its side panel in use: the page's strip at the left holds them; at the right as before
     tap_said(t, "打开侧栏")
+    // (the pointer gone: no tip shown under it as the panel comes, which back would close first)
+    t.leave()
     t.run_for(@sfdesk.side_move_ms)
     assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel, msg=at)
     assert_true(near_at(covered(t, "收起侧边栏").map(fn(e) { e.1 }), left), msg=at)
@@ -162,6 +164,8 @@ test "on the tape the page or the side panel in use has the window but a strip o
     assert_true(near_at(covered(t, "展开侧边栏").map(fn(e) { e.1 }), shows), msg=at)
     // its side panel open: a strip at the right too, the page between the two; the panel in use, the page a strip
     tap_said(t, "打开侧栏")
+    // (the pointer gone: no tip shown under it as the panel comes, which back would close first)
+    t.leave()
     t.run_for(@sfdesk.side_move_ms)
     assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel, msg=at)
     assert_true(near_at(covered(t, "收起侧边栏").map(fn(e) { e.1 }), shows), msg=at)
@@ -236,6 +240,8 @@ test "on the tape the edge beside the page, the sidebar's or the side panel's in
     // the side panel in use, as wide as the window leaves past a strip of the page at first: dragged 200 narrower over
     // a second, the page beside it showing as much more as it goes
     tap_said(t, "打开侧栏")
+    // (the pointer gone: no tip shown under it as the panel comes, which back would close first)
+    t.leave()
     t.run_for(@sfdesk.side_move_ms)
     assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel, msg=at)
     let page_end = fn() raise { covered(t, "收起侧边栏").unwrap().1 }
@@ -474,6 +480,8 @@ test "on the tape a chat's side panel is a panel of its own after the page's: op
   let t = tape_chat(0, 720.0, 800.0)
   page_over(t, 720.0)
   tap_said(t, "打开侧栏")
+  // (the pointer gone: no tip shown under it as the panel comes, which back would close first)
+  t.leave()
   t.run_for(@sfdesk.side_move_ms)
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
   // the panel whole at the window's right, the page's edge showing at its left
@@ -594,6 +602,8 @@ test "on the tape a chat opened from the page in use goes over it, as on a phone
   assert_eq(app.nav.depth(), 3)
   // its side panel in use: back brings the page over first, the chat opened still over the other
   tap_said(t, "打开侧栏")
+  // (the pointer gone: no tip shown under it as the panel comes, which back would close first)
+  t.leave()
   t.run_for(@sfdesk.side_move_ms)
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
   t.back()
