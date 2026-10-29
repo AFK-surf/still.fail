@@ -87,6 +87,8 @@ export type StationInfo = { address: string; id: string; name: string; emoji: st
 /// Whether a station is taken for down: its link found it so, or — not found out yet this time — it was, last.
 export function down(link: J): boolean {
   const state = get(link, "state");
+  // (gone for its update: down from the moment it goes, as it will be a while)
+  if (state !== "online" && get(link, "cause") === "updating") return true;
   return state === "offline" || (state === "connecting" && get(link, "last") === "offline");
 }
 
@@ -1589,6 +1591,12 @@ export class Views implements Owner {
         row.stateRest = lead.rest;
       }
     }
+    // Gone for its update: said on its second line, in place of where its agents were as it went (what one needs of the
+    // viewer kept), as it is back by itself in a while (2026-10-29: only its unplugged mark said it was away, not why).
+    if (!s.online && get(this.link(s.address), "cause") === "updating" && row.stateLead !== "need") {
+      row.stateText = row.offline;
+      for (const k of ["stateLead", "stateLeadText", "stateRest", "stateAbout"]) delete row[k];
+    }
     if (typeof raw.pinned === "number") pinnedAt.set(row, raw.pinned);
     return row;
   }
@@ -1687,8 +1695,8 @@ export class Views implements Owner {
         line: !s.online && cause === "lock" ? t("core-views.station.lock_short") : looks.stationLine(s.online, host),
         online: s.online,
         reconnecting: s.online && state !== "online" && state !== "error",
-        ...stationState(s.online, blocked !== null, summary, typeof s.lastSeen === "number" ? s.lastSeen : null, overview !== undefined, running, c),
-        problems: stationProblems(s.online, silent, blocked, typeof s.lastSeen === "number"),
+        ...stationState(s.online, blocked !== null || cause === "updating", summary, typeof s.lastSeen === "number" ? s.lastSeen : null, overview !== undefined, running, c),
+        problems: stationProblems(s.online, silent, blocked, typeof s.lastSeen === "number", cause === "updating"),
         // Down for a security mode: why, in place of the page's 离线 words.
         ...(blocked !== null ? { blocked } : {}),
         lastSeen: s.lastSeen,
@@ -2552,8 +2560,8 @@ const SILENT_MS = 15_000;
 /// How a station is in a few words, as its page's head and its card say it (StationCards.tsx state): down for a security
 /// mode, its line; away, when it was last online (or never); up, connecting until its overview is read, then its
 /// agents at work (`busy`) or idle.
-export function stationState(online: boolean, blocked: boolean, summary: string, lastSeen: number | null, read: boolean, running: number, c: present.Clock): { stateText: string; stateBusy: boolean } {
-  if (!online && blocked) return { stateText: summary, stateBusy: false };
+export function stationState(online: boolean, saysWhy: boolean, summary: string, lastSeen: number | null, read: boolean, running: number, c: present.Clock): { stateText: string; stateBusy: boolean } {
+  if (!online && saysWhy) return { stateText: summary, stateBusy: false };
   if (!online) {
     return { stateText: lastSeen !== null ? t("core-views.station.last_online", { time: format.relativeTime(lastSeen * 1000, c.now, c.offsetMin) }) : t("core-views.station.never_online"), stateBusy: false };
   }
@@ -2563,9 +2571,11 @@ export function stationState(online: boolean, blocked: boolean, summary: string,
 
 /// What may be wrong with a station, each in words, worst first (StationCards.tsx problems): silent though up, down for
 /// a security mode (why), away (red once it has been online, else amber: never connected).
-export function stationProblems(online: boolean, silent: boolean, blocked: string | null, seen: boolean): { key: string; level: string; text: string }[] {
+export function stationProblems(online: boolean, silent: boolean, blocked: string | null, seen: boolean, updating = false): { key: string; level: string; text: string }[] {
   if (online && silent) return [{ key: "silent", level: "amber", text: t("core-views.station.silent", { name: brand.name() }) }];
   if (!online && blocked !== null) return [{ key: "blocked", level: "red", text: blocked }];
+  // Gone for its update: back by itself once it is done.
+  if (!online && updating) return [{ key: "updating", level: "amber", text: t("core-views.station.updating_back") }];
   if (!online) return [{ key: "away", level: seen ? "red" : "amber", text: seen ? t("core-views.station.away", { name: brand.name() }) : t("core-views.station.never_connected", { name: brand.name() }) }];
   return [];
 }

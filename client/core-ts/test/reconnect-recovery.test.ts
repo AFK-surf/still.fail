@@ -472,14 +472,26 @@ test("a_station_its_update_takes_down_is_said_updating_until_it_has_been_down_lo
     subscribe(s.core, 1, 1, { topic: "chat", station: ST, thread: 7 });
     subscribe(s.core, 1, 2, { topic: "chats", scope: "ws" });
     await s.host.time.pass(1000, 250);
-    await takenDown(s);
+    const chat = () => values.get(1) as Shown;
+    const row = () => (values.get(2) as Listed).days.flatMap((d) => d.items).find((i) => i.id === "k1") as { offline?: string; stateText?: string } | undefined;
+    // Gone: said so at once, while its link is still coming back, not only once it is taken for offline.
+    stationLater(s.host, (req) => (req.url.includes("/admin/api") ? Promise.reject(new HostError("连不上")) : undefined));
+    s.gate.stream = "fail";
+    s.end();
     await s.host.time.pass(500, 250);
     apply(s.host, values);
-    const chat = () => values.get(1) as Shown;
-    const row = () => (values.get(2) as Listed).days.flatMap((d) => d.items).find((i) => i.id === "k1");
+    assert.equal((s.core.inner.stations.link(ST)?.state as { state?: string }).state, "reconnecting");
     assert.equal((s.core.inner.stations.link(ST)?.state as { cause?: string }).cause, "updating");
+    assert.equal(chat().offline, true);
     assert.equal(chat().offlineNote, t("core-logic.looks.offline.updating", { name: "studio" }));
     assert.equal(row()?.offline, t("core-views.station.updating", { name: "studio" }));
+    // Its row says so on its second line.
+    assert.equal(row()?.stateText, t("core-views.station.updating", { name: "studio" }));
+    await s.host.time.pass(60_000, 1000);
+    apply(s.host, values);
+    assert.equal((s.core.inner.stations.link(ST)?.state as { state?: string }).state, "offline");
+    assert.equal((s.core.inner.stations.link(ST)?.state as { cause?: string }).cause, "updating");
+    assert.equal(chat().offlineNote, t("core-logic.looks.offline.updating", { name: "studio" }));
     // Down longer than an update takes: no longer taken for its update.
     await s.host.time.pass(UPDATE_DOWN_MS + OFFLINE_RETRY_MS, 60_000);
     apply(s.host, values);

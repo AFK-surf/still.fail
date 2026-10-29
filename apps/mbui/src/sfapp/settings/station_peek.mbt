@@ -44,16 +44,7 @@ pub fn station_peek_card(c : @ui.Ctx, address : String) -> Unit {
         if flag(s, "online") {
           peek_figures(c, core, s)
         } else {
-          let blocked = text(s, "blocked")
-          c.text(
-            if blocked != "" {
-              blocked
-            } else {
-              fill("android-settings.stations.offline", [("app", "still.fail")])
-            },
-            style=peek_said,
-          )
-          |> ignore
+          c.text(peek_down(s), style=peek_said) |> ignore
         }
       }
     })
@@ -92,14 +83,7 @@ pub fn station_peek_part(c : @ui.Ctx, address : String) -> Unit {
       })
       |> ignore
       if s is Some(_) {
-        let blocked = text(s, "blocked")
-        let said = if online {
-          text(s, "summary")
-        } else if blocked != "" {
-          blocked
-        } else {
-          fill("android-settings.stations.offline", [("app", "still.fail")])
-        }
+        let said = if online { text(s, "summary") } else { peek_down(s) }
         c.box(style=peek_part_status, fn() {
           c.box(style=peek_part_dot_room, fn() {
             c.box(style=peek_part_dot.then(@ui.style(bg=if online { Positive } else { Subtle })), fn() {  }) |> ignore
@@ -205,6 +189,20 @@ let peek_words : @ui.Style = @ui.css("w=Full gap=S2_5")
 let peek_said : @ui.TextStyle = @sf.meta.then(@sf.full_words)
 
 ///|
+/// A station down, why and what comes of it, as the core says it: down for a security mode, why (its `blocked`); gone
+/// for its update, that it comes back by itself (its first problem's words); else how to bring it back.
+fn peek_down(s : Json?) -> String {
+  let blocked = text(s, "blocked")
+  if blocked != "" {
+    return blocked
+  }
+  match field(s, "problems") {
+    Some(Array([first, ..])) if text(Some(first), "key") == "updating" => text(Some(first), "text")
+    _ => fill("android-settings.stations.offline", [("app", "still.fail")])
+  }
+}
+
+///|
 /// The station of `address` in the workspace's stations, once they are read.
 fn peek_station(core : Core, address : String) -> Json? {
   let ws = match address.find("/") {
@@ -235,14 +233,7 @@ fn station_peek(c : @ui.Ctx, core : Core, address : String, close : () -> Unit) 
         if flag(s, "online") {
           peek_figures(c, core, s)
         } else {
-          // down for a security mode: why (the core's `blocked`), not how to bring it back
-          let blocked = text(s, "blocked")
-          let said = if blocked != "" {
-            blocked
-          } else {
-            fill("android-settings.stations.offline", [("app", "still.fail")])
-          }
-          c.text(said, style=peek_said) |> ignore
+          c.text(peek_down(s), style=peek_said) |> ignore
         }
       })
       |> ignore

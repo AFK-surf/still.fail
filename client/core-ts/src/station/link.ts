@@ -84,7 +84,8 @@ export type LiveView = { steps: unknown[]; phase: unknown | null; rate: number |
 /// say why, in place of 离线 (2026-10-23: a station added to another workspace showed only 离线 there). `updating`: it
 /// went down while its overview said it was updating itself (the installer hands over to a new process or restarts
 /// it), for at most UPDATE_DOWN_MS: an update takes it down for a while and it comes back by itself (2026-10-29: it
-/// said only 离线, and people could not tell why).
+/// said only 离线, and people could not tell why). Said from the moment it goes (reconnecting too), and taken for down
+/// then (views.ts `down`).
 export type DownCause = "network" | "station" | "unreached" | "lock" | "updating";
 
 /// How long a station down while updating is taken to be updating: the station's own limit for an update (updates.ts
@@ -400,9 +401,11 @@ export class Links {
     const state = value.state;
     if ((state === "online" || state === "offline") && this.#core.data.record("link", address) !== state) this.#core.data.put("link", address, state);
     const was = link.state.state;
-    link.state = value;
     if (state === "online") link.down = null;
     else if (was === "online") link.down = this.#core.host.nowMs();
+    // Gone as its update takes it down: said so from the moment it goes, not only once it is taken for offline.
+    if (state !== "online" && value.cause !== "lock" && value.cause !== "network" && this.#updating(address)) value = { ...value, cause: "updating" };
+    link.state = value;
     // Not reached: nothing is being caught up on (its stream says so again once it opens).
     if (state !== "online") link.catching = null;
     this.#told.changed(address, "link");
