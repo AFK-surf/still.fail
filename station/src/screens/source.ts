@@ -12,6 +12,8 @@ export type Codec = "h265" | "h264" | "jpeg";
 export type FrameConfig = { codec: Codec; width: number; height: number; description?: Uint8Array; region?: Region };
 
 /// A part of the screen, 0..1 of its width and height: its left, its top, its width, its height.
+export type AudioFrame = { ts: number; data: Uint8Array };
+
 export type Region = { x: number; y: number; w: number; h: number };
 
 /// One encoded frame: H.264 or H.265 as length-prefixed NAL units (AVCC, HVCC), or a whole JPEG. `ts`: microseconds, rising.
@@ -28,7 +30,7 @@ export type ScreenInput =
 /// `bitrate`: what to encode at first (bits a second; none: the source's own), until `ScreenView.rate` says otherwise.
 /// `fit`: the viewer's own screen (a phone), in its CSS pixels and their scale: a source that lays itself out (a tab of
 /// the browser) does so for it while the view is open, as that phone's browser would; others take no notice.
-export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number; fit?: ViewFit };
+export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number; fit?: ViewFit; audio?: boolean };
 export type ViewFit = { width: number; height: number; scale: number };
 
 /// The least part of the screen a look shows, of its width or height (a 50th: zoomed in 50 times).
@@ -62,6 +64,8 @@ export function clipFits(clip: Clip): boolean {
 export interface ScreenView {
   /// The next frame once there is a new one, or null when the view ended (the source went away).
   next(): Promise<Frame | null>;
+  /// Negotiated system output: 48 kHz stereo PCM16, one bounded packet, null when unavailable.
+  nextAudio?(): Promise<AudioFrame | null>;
   /// Starts the next frame as a key frame (a client's decoder lost its state).
   keyframe(): void;
   input(event: ScreenInput): Promise<void>;

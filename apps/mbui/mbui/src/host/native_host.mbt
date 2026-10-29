@@ -974,3 +974,9 @@ impl @hostapi.Host for Native with ncall_result(_, id) {
 impl @hostapi.Host for Native with ncall_end(_, id) {
   ncall_end(id)
 }
+
+///|
+impl @hostapi.Host for Native with st_audio_here(_) { st_audio_here() }
+
+///|
+impl @hostapi.Host for Native with st_audio(_, id, data) { st_audio(id, data) }

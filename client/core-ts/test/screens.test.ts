@@ -809,3 +809,27 @@ each("a_station_before_the_clipboard_offers_none_and_a_paste_to_it_is_refused", 
   assert.deepEqual(views[0]!.got, [], "nothing sent to a station that would not know it");
   core.close();
 });
+
+each("screen_audio_packets_survive_fragmentation_and_validate_the_format", (seed) => {
+  const wire = (kind: number, payload: Uint8Array) => {
+    const out = new Uint8Array(5 + payload.length);
+    out[0] = kind;
+    new DataView(out.buffer).setUint32(1, payload.length);
+    out.set(payload, 5);
+    return out;
+  };
+  const config = new TextEncoder().encode(JSON.stringify({ codec: "pcm_s16le", sampleRate: 48000, channels: 2 }));
+  const payload = new Uint8Array(3848);
+  new DataView(payload.buffer).setBigUint64(0, 123456789n);
+  payload.set(bytesOf(3840, seed), 8);
+  const reader = new FrameReader();
+  const got: StationFrame[] = [];
+  for (const piece of cut(join([wire(5, config), wire(6, payload)]), random(seed))) {
+    reader.push(piece);
+    for (let v = reader.next(); v !== null; v = reader.next()) got.push(v);
+  }
+  assert.deepEqual(got, [{ audioConfig: { codec: "pcm_s16le", sampleRate: 48000, channels: 2 } },
+    { audio: { ts: 123456789, data: payload.slice(8) } }]);
+  reader.push(wire(6, new Uint8Array(12)));
+  assert.throws(() => reader.next(), /invalid screen audio packet/);
+});

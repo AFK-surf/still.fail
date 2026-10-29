@@ -34,3 +34,10 @@ extern "C" fn st_feeds() -> Int = "mb_host_stream_feeds"
 ///|
 #borrow(cmd, data)
 extern "C" fn st_codec(id : Int, cmd : String, data : Bytes) -> Unit = "mb_host_stream_codec"
+
+///|
+extern "C" fn st_audio_here() -> Int = "mb_host_stream_audio_here"
+
+///|
+#borrow(data)
+extern "C" fn st_audio(id : Int, data : Bytes) -> Unit = "mb_host_stream_audio"

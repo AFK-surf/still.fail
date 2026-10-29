@@ -18,12 +18,15 @@
 #import <CoreMedia/CoreMedia.h>
 #import <CoreVideo/CoreVideo.h>
 #import <ImageIO/ImageIO.h>
+#import <AVFoundation/AVFoundation.h>
 #include "avc.h"
 
 // (linked wherever this is, whatever the app's own link flags say)
 __asm__(".linker_option \"-framework\", \"VideoToolbox\"");
 __asm__(".linker_option \"-framework\", \"CoreMedia\"");
 __asm__(".linker_option \"-framework\", \"CoreVideo\"");
+
+__asm__(".linker_option \"-framework\", \"AVFoundation\"");
 
 void mb_host_request_frame(void);
 
@@ -55,6 +58,9 @@ void mb_host_request_frame(void);
 @property CMVideoFormatDescriptionRef format;
 @property int lengthSize, w, h;
 @property VTDecompressionSessionRef session;
+@property AVAudioEngine *audioEngine;
+@property AVAudioPlayerNode *audioPlayer;
+@property NSUInteger audioQueued, audioGeneration;
 @property uint32_t generation;
 @property BOOL needKey, closed;
 @property NSMutableArray<NSNumber *> *inside;
@@ -394,6 +400,10 @@ void mb_host_stream_close(int32_t sid) {
     [s.events removeAllObjects];
     [s.decoded removeAllObjects];
   }
+  [s.audioPlayer stop];
+  [s.audioEngine stop];
+  s.audioGeneration++;
+  s.audioQueued = 0;
   [streams removeObjectForKey:@(sid)];
   dispatch_async(s.queue, ^{
     stop(s);
@@ -412,4 +422,70 @@ void mb_host_stream_codec(int32_t sid, moonbit_string_t cmd, moonbit_bytes_t dat
 id<MTLTexture> mb_stream_texture(int sid) {
   MBStream *s = stream_of(sid);
   return s ? s.tex : nil;
+}
+
+// Audio belongs to the stream, not to its video decoder: changing picture size does not interrupt sound.
+int32_t mb_host_stream_audio_here(void) { return 1; }
+void mb_host_stream_audio(int32_t sid, moonbit_bytes_t data) {
+  MBStream *s = stream_of(sid);
+  if (!s || s.closed) return;
+  NSUInteger length = (NSUInteger)Moonbit_array_length(data);
+  if (length == 0) {
+    [s.audioPlayer stop];
+    [s.audioEngine stop];
+    s.audioGeneration++;
+    s.audioQueued = 0;
+    return;
+  }
+  if (length != 3840) return;
+  AVAudioFormat *format = [[AVAudioFormat alloc] initStandardFormatWithSampleRate:48000 channels:2];
+  if (!s.audioEngine) {
+    s.audioEngine = [AVAudioEngine new];
+    s.audioPlayer = [AVAudioPlayerNode new];
+    [s.audioEngine attachNode:s.audioPlayer];
+    [s.audioEngine connect:s.audioPlayer to:s.audioEngine.mainMixerNode format:format];
+  }
+  if (!s.audioEngine.running) {
+    [s.audioPlayer stop];
+    s.audioGeneration++;
+    s.audioQueued = 0;
+#if TARGET_OS_IPHONE
+    AVAudioSession *session = AVAudioSession.sharedInstance;
+    NSError *sessionError = nil;
+    if (![session setCategory:AVAudioSessionCategoryPlayback withOptions:AVAudioSessionCategoryOptionMixWithOthers error:&sessionError] ||
+        ![session setActive:YES error:&sessionError]) return;
+#endif
+    NSError *error = nil;
+    if (![s.audioEngine startAndReturnError:&error]) return;
+  }
+  // Keep 60 ms of startup jitter reserve, at most 300 ms after a transport stall.
+  if (s.audioQueued >= 15) {
+    [s.audioPlayer stop];
+    s.audioGeneration++;
+    s.audioQueued = 0;
+  }
+  AVAudioPCMBuffer *buffer = [[AVAudioPCMBuffer alloc] initWithPCMFormat:format frameCapacity:960];
+  if (!buffer) return;
+  buffer.frameLength = 960;
+  for (NSUInteger frame = 0; frame < 960; frame++) {
+    for (NSUInteger channel = 0; channel < 2; channel++) {
+      NSUInteger i = (frame * 2 + channel) * 2;
+      int16_t sample = (int16_t)((uint16_t)data[i] | ((uint16_t)data[i + 1] << 8));
+      buffer.floatChannelData[channel][frame] = (float)sample / 32768.0f;
+    }
+  }
+  NSUInteger generation = s.audioGeneration;
+  s.audioQueued++;
+  __weak MBStream *weak = s;
+  [s.audioPlayer scheduleBuffer:buffer completionCallbackType:AVAudioPlayerNodeCompletionDataPlayedBack completionHandler:^(AVAudioPlayerNodeCompletionCallbackType type) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      MBStream *live = weak;
+      if (live && live.audioGeneration == generation && live.audioQueued > 0) {
+        live.audioQueued--;
+        // An underrun must refill the same reserve before starting again.
+        if (live.audioQueued == 0) [live.audioPlayer stop];
+      }
+    });
+  }];
+  if (!s.audioPlayer.playing && s.audioQueued >= 3) [s.audioPlayer play];
 }

@@ -493,3 +493,6 @@ void mb_streams_lost(void) {
     s->tex_w = s->tex_h = 0;
   }
 }
+
+int32_t mb_host_stream_audio_here(void) { return 0; }
+void mb_host_stream_audio(int32_t id, moonbit_bytes_t data) { (void)id; (void)data; }

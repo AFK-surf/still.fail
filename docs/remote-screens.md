@@ -72,6 +72,9 @@ JPEG frames are all key frames and their config has no `description`.
   body never ends).
 - **View**: a stream whose head line carries a `screen` object:
   `{"method":"POST","path":"/admin/api/screens/<id>/view","headers":{},"screen":{"maxWidth":1920,"maxHeight":1080,"codecs":["h264","jpeg"],"control":true}}`.
+  With `"audio": "pcm_s16le"` a capable source also sends system output audio (never microphone audio).
+  Windows desktop currently captures it; the Apple native client plays it. Older sources ignore the request.
+  Previews never request or capture audio. No audio frames are sent without negotiation.
   With `"peek": true` it is a preview (a link's card in a chat, below): it only looks (`control` is false), is not in
   `viewers`, and brings no tab forward (a tab behind another casts nothing then); only of a screen the list says
   `peek` (a tab of the browser: the desktop's view wakes its display), else 501.
@@ -92,6 +95,8 @@ JPEG frames are all key frames and their config has no `description`.
 | 2 `video` | station → client | 1 byte flags (bit 0: key frame), 8 bytes timestamp (µs, big-endian), then the frame: H.265 or H.264 as length-prefixed NALs (parameter sets in the config only), or one JPEG. |
 | 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, control?, access?, viewers?: [names], controlledBy?: [names], scale?: {percent, recommended, steps}, video?: {capture, encoder?, hardware?}, latency?: {frame, before}, ended?: reason}`: first `{title, control, access?, video?}` (`video`: what captures the pictures and whether the encoder is the hardware's, for the statistics) (`control`: whether this view's input is taken), then what changes; `latency` each second while frames come (screen-pace.ts `FrameLatency`: ms from a picture's capture to its drawing on the device, and to its going out of the station); `scale`, to a view that drives a screen whose display scale is changed (Windows' desktop), as it opens and after each change it asked; `cursor`: the screen's pointer (0..1 of the screen, whatever part the frames show, its shape a CSS cursor's name, `none` hidden) as it moves, from a source whose pictures leave it out (the desktop's video); `ended`: `finished` (the client finished), `gone` (the source went: the core says the view's phase is `gone` then, over for good, as for a screen no longer listed), `stopping` (the station stops) |
 | 4 `clipboard` | station → client | 1 byte type (1 text in UTF-8, 2 PNG), the content: the screen's clipboard each time it changes (a copy made on it), only to a view that drives it; not what it held as the view opened. |
+| 5 `audioConfig` | station → client | JSON `{codec:"pcm_s16le", sampleRate:48000, channels:2}` before the first audio packet. |
+| 6 `audio` | station → client | 8-byte timestamp (µs, big-endian) followed by exactly 3840 bytes: 960 stereo frames of interleaved signed little-endian PCM16 (20 ms). |
 | 16 `input` | client → station | JSON, coordinates normalised to 0..1 of the screen (the whole of it, whatever part the frames show): `{t:"pointer", x, y, buttons, kind:"down"\|"up"\|"move"}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind:"down"\|"up", key, code, mods}`, `{t:"text", text}` (IME/paste result), `{t:"scale", percent}` (the display's scale, one of the `steps` its `scale` said; from a view that drives it), `{t:"reveal", path}` (the file manager showing a file dropped into the view; a screen whose `drop` says `reveal`) |
 | 17 `ack` | client → station | 8 bytes: the timestamp of the last frame it decoded (drawn). What the station sends next goes by them (Pace, below). |
 | 18 `keyframe` | client → station | empty: decoder lost its state, send a key frame |
@@ -414,3 +419,11 @@ the modifiers down, the key down and up, the modifiers up; text goes as `text`, 
 wait or ask; screenshots still work. A missing grant answers with the access message and the screen's link, for the
 agent to post with need_human. Clients open a view with `control: false` while a person only watches, so the agent is
 not held off by a watcher.
+
+### System audio
+
+Windows WASAPI shared loopback continuously drains the default output endpoint, retaining up to 300 ms of consecutive
+20 ms packets. The station pulls one packet per completed transport write, independently of video
+changes. PCM uses 1.536 Mbit/s before framing. Apple playback starts after a 60 ms jitter reserve and caps its queue at 300 ms and clears it on mute,
+reconnect and close. Timestamps describe capture; playback currently starts on arrival rather than aligning
+to the video presentation clock. Muting is local; capture and transport continue until the view closes.

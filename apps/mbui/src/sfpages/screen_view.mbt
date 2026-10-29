@@ -368,6 +368,12 @@ fn screen_native(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catch
   if s.pastes() {
     @sf.native_over_act("screen-paste", @sf.t("android-misc.screen.paste"), "paste", fn() { paste_asked(c, s, u) })
   }
+  if s.audio_ready {
+    @sf.native_over_act("screen-audio", @sf.t(if s.audio_muted { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }),
+      if s.audio_muted { "volume-x" } else { "volume" }, fn() {
+        s.toggle_audio()
+      })
+  }
   if s.open_now() {
     @sf.native_over_act("screen-center", @sf.t("web-pages.screen.panel"), "sliders", fn() {
       let from = screen_native_anchor(c)

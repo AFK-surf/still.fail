@@ -6,7 +6,7 @@
 //   stillfail-screen scale [percent]
 //                             one JSON line: the main display's scale {percent, recommended, steps: [percent…]}, set to
 //                             `percent` first when it is given (one of its steps); or {error}
-//   stillfail-screen view     a JSON line {codec: "h265"|"h264"|"jpeg", maxWidth, maxHeight, bitrate?, encoder?: "software"},
+//   stillfail-screen view     a JSON line {codec: "h265"|"h264"|"jpeg", maxWidth, maxHeight, bitrate?, audio?: true, encoder?: "software"},
 //                             then messages
 //                             (a kind byte, the payload's length in 4 bytes big-endian, the payload) both ways until
 //                             its input ends:
@@ -21,6 +21,7 @@
 //        8 bounds    JSON         {maxWidth, maxHeight, region?}: the pictures from now on fitted into these, of
 //                             `region` of the display alone ({x, y, w, h}, 0..1 of it: a client zoomed in) or, without
 //                             it, of the whole
+//        9 audio     (empty)      the latest 20 ms of system output (only with audio:true)
 //   out  1 info      JSON     first: {width, height, encoder, codec, regions: true} (h265 where asked and the hardware has it), or
 //                             {error, code: "capture"|"display"|"encoder"}
 //        2 config    4 bytes width, 4 bytes height, then the avcC or hvcC (none for JPEG): before the first frame and whenever
@@ -34,6 +35,9 @@
 //                             show, as it was cut (null the whole), said before a frame whose part is another than the
 //                             last one's (that frame a key frame)
 //
+//   out  8 audio config JSON  {codec:"pcm_s16le", sampleRate:48000, channels:2}, or {error}
+//        9 audio     8 bytes timestamp (µs), then 3840 bytes stereo PCM16 little-endian
+//
 // Windows.Graphics.Capture captures the main display (the cursor drawn in, no border), a picture only when the screen
 // changed (an HDR display's as FP16, made SDR by a pixel shader: hdr.rs); the GPU's video processor scales it into the
 // view's bounds as NV12 (or BGRA for a JPEG); Media Foundation encodes H.264 on the hardware encoder (the software one
@@ -44,6 +48,10 @@
 mod avc;
 #[cfg_attr(not(windows), allow(dead_code))]
 mod hevc;
+#[cfg(windows)]
+mod audio;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod audio_queue;
 #[cfg(windows)]
 mod capture;
 #[cfg(windows)]

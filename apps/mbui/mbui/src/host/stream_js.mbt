@@ -39,3 +39,9 @@ extern "js" fn st_feeds() -> Int =
 ///|
 extern "js" fn st_codec(id : Int, cmd : String, data : Bytes) -> Unit =
   #|(i, c, d) => { if (globalThis.__mbhost && globalThis.__mbhost.streamCodec) globalThis.__mbhost.streamCodec(i, c, d) }
+
+///|
+fn st_audio_here() -> Int { 0 }
+
+///|
+fn st_audio(_id : Int, _data : Bytes) -> Unit { () }

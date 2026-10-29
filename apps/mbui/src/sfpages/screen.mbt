@@ -66,6 +66,8 @@ priv struct ScreenSess {
   /// the call answered: the view ended (the last state says why)
   finished : @signals.Signal[Bool]
   /// the frames' codec and size, from the latest config
+  mut audio_ready : Bool
+  mut audio_muted : Bool
   mut codec : String?
   mut size : (Int, Int)?
   /// something was shown since it opened: a frame kept on screen through a reconnect or an end
@@ -147,6 +149,8 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         state: None,
         failure: @signals.signal(None),
         finished: @signals.signal(false),
+        audio_ready: false,
+        audio_muted: false,
         codec: None,
         size: None,
         shown_any: false,
@@ -519,6 +523,7 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     "maxWidth": Json::number(mw.to_double()),
     "maxHeight": Json::number(mh.to_double()),
   }
+  if @ui.stream_audio_here() { params["audio"] = Json::string("pcm_s16le") }
   match self.fit {
     Some((w, h, scale)) =>
       params["fit"] = Json::object({
@@ -541,6 +546,8 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     fn(value, bytes) { me.take(value, bytes) },
     fn(r) {
       me.call = 0
+      me.audio_ready = false
+      match me.stream { Some(st) => st.audio(Bytes::new(0)); None => () }
       match r {
         Ok(_) => me.finished.set(true)
         Err(e) => me.failure.set(Some(text(Some(e), "message")))
@@ -562,6 +569,8 @@ fn ScreenSess::asked_again(self : ScreenSess, src : Source) -> Unit {
 ///|
 /// Stops viewing (the app went out of sight); the last frame stays, `open` goes on from it.
 fn ScreenSess::pause(self : ScreenSess, src : Source) -> Unit {
+  self.audio_ready = false
+  match self.stream { Some(st) => st.audio(Bytes::new(0)); None => () }
   if self.call != 0 {
     (src.cancel)(self.call)
     self.call = 0
@@ -665,6 +674,13 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
     Some(Object(_) as s) => self.state = Some(s)
     _ => ()
   }
+  match o.get("audioConfig") {
+    Some(config) => self.audio_ready = text(Some(config), "codec") == "pcm_s16le" && number(Some(config), "sampleRate") == 48000.0 && number(Some(config), "channels") == 2.0
+    None => ()
+  }
+  if o.contains("audio") && self.audio_ready && !self.audio_muted {
+    match (self.stream, bytes) { (Some(st), Some(data)) => st.audio(data); _ => () }
+  }
   match o.get("config") {
     Some(Object(_) as c) => {
       let kind = text(Some(c), "codec")
@@ -760,3 +776,9 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
 /// The most a clipboard carries of a picture, each way (client/core-ts/src/screen-frames.ts; ScreenClips.kt).
 let clip_png_max : Int = 8 * 1024 * 1024
 
+
+///|
+fn ScreenSess::toggle_audio(self : ScreenSess) -> Unit {
+  self.audio_muted = !self.audio_muted
+  if self.audio_muted { match self.stream { Some(st) => st.audio(Bytes::new(0)); None => () } }
+}

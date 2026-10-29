@@ -1786,3 +1786,6 @@ int32_t mb_host_h264_here(void) {
 
 // The device beyond the window (device.mbt): a key catcher, the soft keyboard, the clipboard, awake, haptics.
 #include "android_device.h"
+
+int32_t mb_host_stream_audio_here(void) { return 0; }
+void mb_host_stream_audio(int32_t id, moonbit_bytes_t data) { (void)id; (void)data; }

@@ -27,6 +27,7 @@ fn env_at_frame() -> Unit {
     "glass": Json::number(if h_reduce_transparency() { 1.0 } else { 0.0 }),
     "dark": Json::number(if system_dark() { 1.0 } else { 0.0 }),
     "inset": Json::number(if window_inset() { 1.0 } else { 0.0 }),
+    "audio": Json::number(if stream_audio_here() { 1.0 } else { 0.0 }),
     "h264": Json::number(if h_h264_here() { 1.0 } else { 0.0 }),
     "feed": Json::number(if h_stream_feeds() { 1.0 } else { 0.0 }),
     "ime": Json::number(g().dev.ime_inset),
@@ -60,6 +61,7 @@ fn replay_env(f : FakeHost, line : String) -> Unit {
   f.dark = on("dark", f.dark)
   f.inset = on("inset", f.inset)
   f.h264 = on("h264", f.h264)
+  f.audio_here = on("audio", false)
   f.stream_feeds = on("feed", f.stream_feeds)
   f.dev.copy_shown = on("copy", f.dev.copy_shown)
   match m.get("ime") {

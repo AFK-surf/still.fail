@@ -100,7 +100,7 @@ export interface StationWire {
 /// before previews would take it for a view; one is asked only of a screen its list says can be previewed).
 /// `fit`: the stage it is shown on, on a phone or a tablet (its CSS pixels and their scale): a tab of the station's
 /// browser is laid out for it while the view drives it (docs/remote-screens.md).
-export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean; peek?: boolean; fit?: { width: number; height: number; scale: number } };
+export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean; peek?: boolean; audio?: "pcm_s16le"; fit?: { width: number; height: number; scale: number } };
 
 export function noMeasure(): Effect.Effect<void, CoreError> {
   return Effect.fail(new CoreError("unsupported", t("station.core.oneWay")));

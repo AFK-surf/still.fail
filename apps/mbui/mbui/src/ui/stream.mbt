@@ -708,3 +708,24 @@ pub fn Tester::set_stream_feeds(self : Tester, on : Bool) -> Unit {
 pub fn Tester::stream_codec_said(self : Tester, id : Int, e : String) -> Unit {
   fake_said(self.fake, id, "c " + e)
 }
+
+///|
+/// This host plays system audio carried alongside a remote screen; recorded with the run's environment.
+pub fn stream_audio_here() -> Bool {
+  match fake.val { Some(f) => f.audio_here; None => @hostapi.stream_audio_here() }
+}
+
+///|
+/// PCM16 stereo at 48 kHz, 20 ms per packet; empty stops queued audio immediately.
+pub fn Stream::audio(self : Stream, data : Bytes) -> Unit {
+  if self.closed || (data.length() != 0 && data.length() != 3840) { return }
+  if data.length() == 0 && !self.opened { return }
+  self.open()
+  match fake.val {
+    Some(f) => fake_fed(f, self.id, "audio bytes=\{data.length()}")
+    None => @hostapi.stream_audio(self.id, data)
+  }
+}
+
+///|
+pub fn Tester::set_stream_audio(self : Tester, on : Bool) -> Unit { self.fake.audio_here = on }
