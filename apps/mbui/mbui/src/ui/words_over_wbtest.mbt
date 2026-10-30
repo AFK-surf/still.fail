@@ -33,3 +33,40 @@ test "words over words: what a whole ground hides is not seen, nor a ground fade
   t.draw()
   assert_eq(g().words_over_faults().length(), 1)
 }
+
+///|
+/// The window's tree with words of its own at its top left, and over them (`over`: "tree", a node of the tree's; "old",
+/// an old view's) other words in the same place.
+fn tree_words_laid_over(over : String) -> Tester {
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0, words_over_held=false)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.over(Is(true)) |> ignore
+      b.box(fn(w) { w.width(Is(Some(200.0))).words(Is("under these")) |> ignore }) |> ignore
+    })
+    |> ignore
+    if over == "tree" {
+      root.box(fn(b) {
+        b.over(Is(true)) |> ignore
+        b.box(fn(w) { w.width(Is(Some(200.0))).words(Is("over those")) |> ignore }) |> ignore
+      })
+      |> ignore
+    } else {
+      old(root, fn(c) { c.text("over those", wrap=false) |> ignore }).over(Is(true)) |> ignore
+    }
+  })
+  t.draw()
+  t
+}
+
+///|
+test "words over words in the window's tree: a node's over another's found, as made and as kept drawn again; an old view's over a node's too" {
+  let t = tree_words_laid_over("tree")
+  let made = g().words_over_faults().map(fn(f) { (f.0, f.1) })
+  // (drawn again, the nodes' instances as kept)
+  t.frame_at(t.time() + 16.0)
+  let kept = g().words_over_faults().map(fn(f) { (f.0, f.1) })
+  let _ = tree_words_laid_over("old")
+  let mixed = g().words_over_faults().map(fn(f) { (f.0, f.1) })
+  assert_eq((made, kept, mixed), ([("under these", "over those")], [("under these", "over those")], [("under these", "over those")]))
+}

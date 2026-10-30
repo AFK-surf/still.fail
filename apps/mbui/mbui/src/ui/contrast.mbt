@@ -25,11 +25,26 @@ priv struct InstOwners {
   /// own), kept beside its owner: what of its picture is its own room, not the room its picture spills into
   /// (words_over.mbt)
   cell : Array[(Double, Double)]
+  /// the node of the window's tree that drew each instance (None: not one of its), and the one being made
+  /// (`tree_painting`): its words by node (words_over.mbt)
+  tree : Array[@view.NodeId?]
+  mut tree_painting : @view.NodeId?
+  tree_words : Map[@view.NodeId, String]
   own_colours : Set[Int]
 }
 
 ///|
-let inst_owners : InstOwners = { on: false, track: false, painting: -1, owner: [], cell: [], own_colours: Set::new() }
+let inst_owners : InstOwners = {
+  on: false,
+  track: false,
+  painting: -1,
+  owner: [],
+  cell: [],
+  tree: [],
+  tree_painting: None,
+  tree_words: Map([]),
+  own_colours: Set::new(),
+}
 
 ///|
 /// The frame's contrast asked again from nothing: no instance's owner known, no node said in its own colours.
@@ -37,6 +52,8 @@ fn inst_owners_clear() -> Unit {
   inst_owners.painting = -1
   inst_owners.owner.clear()
   inst_owners.cell.clear()
+  inst_owners.tree.clear()
+  inst_owners.tree_painting = None
   inst_owners.own_colours.clear()
   bone_insts.clear()
 }
@@ -63,14 +80,29 @@ fn inst_owners_kept() -> Bool {
 fn inst_owned(k : Int) -> Unit {
   let o = inst_owners.owner
   let cl = inst_owners.cell
+  let tr = inst_owners.tree
   while o.length() <= k {
     o.push(-1)
   }
   while cl.length() <= k {
     cl.push((0.0, 1.0))
   }
+  while tr.length() <= k {
+    tr.push(None)
+  }
   o[k] = inst_owners.painting
   cl[k] = (0.0, 1.0)
+  tr[k] = inst_owners.tree_painting
+}
+
+///|
+/// The node of the window's tree that drew instance `k`, None not one of its.
+fn inst_tree_owner(k : Int) -> @view.NodeId? {
+  if k < inst_owners.tree.length() {
+    inst_owners.tree[k]
+  } else {
+    None
+  }
 }
 
 ///|
@@ -104,28 +136,31 @@ fn inst_owner(k : Int) -> Int {
 ///|
 /// The owners moved as Ctx::raise_tops moves the instances, `tops` (from, to) after the rest of the `count` painted.
 fn inst_owners_raised(tops : Array[(Int, Int)], count : Int) -> Unit {
-  let raised : Array[(Int, (Double, Double))] = []
+  let raised : Array[(Int, (Double, Double), @view.NodeId?)] = []
   for r in tops {
     for q in r.0..<r.1 {
-      raised.push((inst_owner(q), inst_cell_of(q)))
+      raised.push((inst_owner(q), inst_cell_of(q), inst_tree_owner(q)))
     }
   }
-  let moved : Array[(Int, (Double, Double))] = []
+  let moved : Array[(Int, (Double, Double), @view.NodeId?)] = []
   for k, r in tops {
     let end = if k + 1 < tops.length() { tops[k + 1].0 } else { count }
     for q in r.1..<end {
-      moved.push((inst_owner(q), inst_cell_of(q)))
+      moved.push((inst_owner(q), inst_cell_of(q), inst_tree_owner(q)))
     }
   }
   let was = inst_owners.painting
+  let was_tree = inst_owners.tree_painting
   let mut to = tops[0].0
   for o in moved + raised {
     inst_owners.painting = o.0
+    inst_owners.tree_painting = o.2
     inst_owned(to)
     inst_owners.cell[to] = o.1
     to = to + 1
   }
   inst_owners.painting = was
+  inst_owners.tree_painting = was_tree
 }
 
 ///|

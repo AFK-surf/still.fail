@@ -99,7 +99,16 @@ let view_due : @signals.Signal[Int] = @signals.signal(0)
 ///|
 /// Each node's instances as last made (where it is its own), by node: composed into each frame painted.
 // kept across runs: put back as a run begins (view_forget)
-let view_blocks : Map[@view.NodeId, FixedArray[Double]] = Map([])
+let view_blocks : Map[@view.NodeId, ViewBlock] = Map([])
+
+///|
+/// A node's instances as made (`inst`, where it is its own) and, made where who drew what is kept (inst_owners_kept:
+/// a Tester's), each one's glyph cell across (`cells`, inst_owners' `cell`): what goes with them wherever they are
+/// composed, the node theirs (contrast.mbt, words_over.mbt).
+priv struct ViewBlock {
+  inst : FixedArray[Double]
+  cells : Array[(Double, Double)]
+}
 
 ///|
 /// What drawing the tree did, counted from its making: nodes' instances made (paint generation), nodes' instances
@@ -190,6 +199,7 @@ fn view_forget() -> Unit {
   old_whole.val = true
   old_around.val = false
   view_blocks.clear()
+  inst_owners.tree_words.clear()
   view_paint_work.made = 0
   view_paint_work.copied = 0
   view_paint_work.handed = 0
@@ -252,6 +262,7 @@ fn view_brought(tree : @view.Tree) -> Unit {
   // (what was let go lets go of what it drew)
   for id in tree.take_removed() {
     view_blocks.remove(id)
+    inst_owners.tree_words.remove(id)
   }
   old_place(tree)
 }
@@ -407,7 +418,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         b
       }
     }
-    self.view_blit(block, x, y, a)
+    self.view_blit(c.id, block, x, y, a)
     view_paint_work.copied = view_paint_work.copied + 1
   })
   // what the old frame puts over all of it at its root (its layers: the overlays its views open, menus, sheets,
@@ -428,9 +439,13 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
 ///|
 /// Content `c`'s instances made (its ground, its words) where it is its own (its top left at 0, 0, wholly opaque), out
 /// of the frame's: what is kept for it, composed wherever it is drawn (Ctx::view_blit).
-fn Ctx::view_made(self : Ctx, c : @view.Content) -> FixedArray[Double] {
+fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   view_paint_work.made = view_paint_work.made + 1
   let start = self.ninst
+  // (who drew what kept: the node's, each glyph's cell as it is made)
+  let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
+  inst_owners.painting = -1
+  inst_owners.tree_painting = Some(c.id)
   if c.ground != 0L {
     self.emit_rect(0.0, 0.0, c.w, c.h, 0.0, c.ground, 0.0, 0L, 1.0)
   }
@@ -438,17 +453,27 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> FixedArray[Double] {
     let tl = layout_text(c.words, view_words_size, 400, c.w + 0.5, true, line=view_line_h)
     self.emit_text(tl, 0.0, 0.0, c.ink, 1.0)
   }
+  inst_owners.painting = was
+  inst_owners.tree_painting = was_tree
   let len = (self.ninst - start) * inst_size
-  let block = FixedArray::make(len, 0.0)
-  self.inst.blit_to(block, len~, src_offset=start * inst_size)
+  let inst = FixedArray::make(len, 0.0)
+  self.inst.blit_to(inst, len~, src_offset=start * inst_size)
+  let cells : Array[(Double, Double)] = []
+  if inst_owners_kept() {
+    for k in start..<self.ninst {
+      cells.push(inst_cell_of(k))
+    }
+  }
+  inst_owners.tree_words[c.id] = c.words
   self.ninst = start
-  block
+  { inst, cells }
 }
 
 ///|
 /// A content's instances (`block`, where it is its own) into the frame, composed where the scene draws it: moved to
 /// (x, y), as opaque as `a` (each instance: as the old view fades what it paints), cut by the clip painted in now.
-fn Ctx::view_blit(self : Ctx, block : FixedArray[Double], x : Double, y : Double, a : Double) -> Unit {
+fn Ctx::view_blit(self : Ctx, id : @view.NodeId, made : ViewBlock, x : Double, y : Double, a : Double) -> Unit {
+  let block = made.inst
   let n = block.length() / inst_size
   while (self.ninst + n) * inst_size > self.inst.length() {
     self.grow()
@@ -480,6 +505,19 @@ fn Ctx::view_blit(self : Ctx, block : FixedArray[Double], x : Double, y : Double
     for j in 0..<12 {
       s[b + 40 + j] = clip_stack[k + 12 + j]
     }
+  }
+  // (who drew them, the node, each glyph's cell as made: kept with them wherever they are composed)
+  if inst_owners_kept() {
+    let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
+    inst_owners.painting = -1
+    inst_owners.tree_painting = Some(id)
+    for i in 0..<n {
+      let k = self.ninst + i
+      inst_owned(k)
+      inst_owners.cell[k] = if i < made.cells.length() { made.cells[i] } else { (0.0, 1.0) }
+    }
+    inst_owners.painting = was
+    inst_owners.tree_painting = was_tree
   }
   self.ninst = self.ninst + n
 }
