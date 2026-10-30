@@ -1,5 +1,5 @@
 #!/bin/sh
-# Puts another iroh-relay on one of still.fail's relays on machines of their own (Beijing's, Hong Kong's), run there as
+# Puts another iroh-relay on one of still.fail's relays on machines of their own (Beijing's, Hong Kong's, Shenzhen's), run there as
 # root, given the zzj3720/iroh commit station/native/mesh/Cargo.toml pins (its build is in the releases bucket:
 # .github/workflows/relay.yml). From Studio, the one machine that reaches them:
 #   ssh root@39.105.157.122 sh -s <commit> < cloud/relay-update.sh
