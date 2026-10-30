@@ -21,6 +21,8 @@ pub struct Made {
   priv mut on_press : (() -> Unit)?
   /// the list's row or the part kept as its nodes it was last put in, if it was (kept_nodes.mbt): told with it
   priv held : Ref[RowNodes?]
+  /// what it is where it is built the old way (made_island): its name, what it is built from besides what it reads
+  priv island : (String, () -> String, Bool)?
 }
 
 ///|
@@ -60,7 +62,27 @@ fn made_watch(held : Ref[RowNodes?]) -> @signals.Watch {
 /// filled anew in its place as any of it changes), holding `kids`.
 pub fn made_box(fill : (Ctx) -> Unit, kids? : Array[Made] = []) -> Made {
   let held = Ref(None)
-  { fill, kids: Kept(kids), node: None, watch: made_watch(held), on_press: None, held }
+  { fill, kids: Kept(kids), node: None, watch: made_watch(held), on_press: None, held, island: None }
+}
+
+///|
+/// What `body` builds the old way (Ctx::box and the rest, each frame it is built), in a box of its own filling what
+/// holds it, kept as its nodes by a watch of its own (Ctx::kept_as_nodes): built again only as what it read changes or
+/// what it is built from besides (`key`, worked out where it is put) does. Made once where it is (`name`), whatever
+/// else of the frame is built anew: what is made once holds it, and what it reads it reads itself, never what was
+/// handed it as it was made (docs/retained.md, the way there's 3: the old view as an island). `read_out`: what reads
+/// the widgets reads it.
+pub fn made_island(name : String, key : () -> String, body : (Ctx) -> Unit, read_out? : Bool = true) -> Made {
+  let held = Ref(None)
+  {
+    fill: body,
+    kids: Kept([]),
+    node: None,
+    watch: made_watch(held),
+    on_press: None,
+    held,
+    island: Some((name, key, read_out)),
+  }
 }
 
 ///|
@@ -74,6 +96,7 @@ pub fn made_holding(fill : (Ctx) -> Unit, kids : () -> Array[Made]) -> Made {
     watch: made_watch(held),
     on_press: None,
     held,
+    island: None,
   }
 }
 
@@ -238,6 +261,14 @@ pub fn Ctx::made(self : Ctx, key : String, make : () -> Made) -> Unit {
 ///|
 /// Node `m` put here among the frame's, then what it holds in it.
 fn Ctx::made_put(self : Ctx, m : Made) -> Unit {
+  match m.island {
+    Some((name, key, read_out)) => {
+      let k = @signals.untracked(key)
+      self.part_nodes(self.id(name), k, fn() { (m.fill)(self) }, read_out, own=true)
+      return
+    }
+    None => ()
+  }
   let slot = self.count
   // (in a list's row or a part kept as its nodes: its nodes are the row's, kept with it, never put back by it too (one
   // node in two places), filled as the row is built; what makes it changed builds the row again: made_watch)
