@@ -32,6 +32,32 @@ test "words in bones: a bar on each of their lines, as long as the line, no glyp
 }
 
 ///|
+test "a ground with words in bones over it, laid beside them as a card's row lays its ground: what it holds carries it, as words would" {
+  // (still.fail's group rows: the card's ground a layer of its own, the row's words beside it in the same box; white
+  // on a page's #f5f3ef, 1.11 to 1, seen by what is in it)
+  for top in [0.0, 24.0, 24.4] {
+    let t = Tester::new(
+      fn(c) {
+        c.box(w=Px(300.0), h=Px(200.0), bg=0xF5F3EFFFL, fn() {
+          c.box(h=Px(top), fn() {  }) |> ignore
+          c.bones(bones_ink, fn() {
+            c.box(w=Px(200.0), h=Px(46.0), fn() {
+              c.layer(fn() { c.box(w=Px(200.0), h=Px(46.0), bg=0xFFFFFFFFL, fn() {  }) |> ignore }) |> ignore
+              c.text("骨架里的字", size=16.0, line=24.0) |> ignore
+            })
+            |> ignore
+          })
+        })
+        |> ignore
+      },
+      w=300.0,
+      h=200.0,
+    )
+    assert_eq(t.contrast_faults(), [], msg="\{top}")
+  }
+}
+
+///|
 test "a box in bones takes no press, says nothing to a screen reader; a coloured ground in their colour, a grey one its own" {
   let pressed = Ref(false)
   let t = Tester::new(
