@@ -625,6 +625,7 @@ function turnSummary(r: Json, startedAt: number): TurnSummary {
   if (r.about_thread !== null && r.about_n !== null && r.about_ts !== null) v.about = { thread: r.about_thread, seq: r.about_n, ts: r.about_ts };
   if (r.wait_seconds !== null) v.waitSeconds = r.wait_seconds;
   if (r.wait_for !== null) v.waitFor = r.wait_for;
+  if (r.wait_watch !== null && r.wait_watch !== undefined) v.waitWatch = r.wait_watch === 1;
   v.detail = r.detail;
   v.startedAt = startedAt;
   v.endedAt = r.ended_at;
@@ -640,7 +641,7 @@ export function sessionStats(s: Store, key: string | string[] | null): Map<strin
        (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
        (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
        (SELECT substr(m.text, 1, 300) FROM session_first f JOIN merged m ON m.thread = f.thread AND m.n = f.n WHERE f.session = s.key) AS first_text,
-       l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
+       l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
      FROM sessions s
      LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
      ${Array.isArray(key) ? `WHERE s.key IN (${key.map(() => "?").join(", ")})` : key !== null ? "WHERE s.key = ?" : ""}`;

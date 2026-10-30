@@ -28,7 +28,9 @@ available to workspace members through its returned link.
 
 For an explicitly requested ongoing watch (CI, deployment, metrics, review queue) that outlives your own work, set `watch: true` and loop,
 notifying on changes. The chat appears under 监控中, does not auto-archive, and asks before manual archiving.
-End `waiting`: its timeout will not wake you while the watch runs; a notice, completion or user message will.
+End `waiting` with `watch: true` when the watch is all you wait on: people see the chat as watching, and its timeout will not
+wake you; a notice, completion or user message will. Waiting on anything else meanwhile (a build, a CI loop), leave
+`watch` out: people see what you wait for, and the timeout asks you again as usual.
 Give the next post a title naming the watch (e.g. 监控 · PR #482 的 CI); watch chats can be renamed immediately.
 Stop the job when no longer needed; the chat then becomes ordinary again.
 

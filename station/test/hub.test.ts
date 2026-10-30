@@ -211,9 +211,10 @@ test("a wait does not run out while a watch of its session runs", async (t) => {
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
   r.store.insertJob(watchJob(key));
-  await r.call(key, "chat_state", { kind: "waiting", seconds: 10, for: "CI 跑完" });
+  await r.call(key, "chat_state", { kind: "waiting", seconds: 10, for: "盯 CI", watch: true });
   r.claude.last().complete();
   await settle();
+  assert.equal(r.store.sessionStats(null).get(key)!.lastTurn!.waitWatch, true, "the wait is its watch, as it said");
   for (let i = 0; i < 4; i++) {
     t.mock.timers.tick(10_000);
     await settle();
@@ -224,6 +225,34 @@ test("a wait does not run out while a watch of its session runs", async (t) => {
   t.mock.timers.tick(11_000);
   await settle();
   assert.equal(r.claude.last().prompts.length, 2);
+  await r.close();
+});
+
+test("a wait for something else runs out while a watch of its session runs", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  r.store.insertJob(watchJob(key));
+  await r.call(key, "chat_state", { kind: "waiting", seconds: 10, for: "读中继的日志" });
+  r.claude.last().complete();
+  await settle();
+  assert.equal(r.store.sessionStats(null).get(key)!.lastTurn!.waitWatch, false);
+  t.mock.timers.tick(11_000);
+  await settle();
+  assert.equal(r.claude.last().prompts.length, 2, "its watch does not stand in for what it waits on");
+  await r.close();
+});
+
+test("a wait said to be a watch needs one running", async () => {
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  await assert.rejects(r.call(key, "chat_state", { kind: "waiting", seconds: 10, for: "盯 CI", watch: true }), /watch/);
   await r.close();
 });
 

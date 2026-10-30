@@ -226,8 +226,10 @@ export function rowWatch(agents: J[]): J {
   return { text: t("core-views.present.watching_names", { names: names.join(separator) }), ask: t("core-views.present.watch_ask", { names: named }) };
 }
 
+/// Waiting on its watch: one runs and the agent said its wait is that (`waitWatch`; said before it, taken so). Waiting on
+/// anything else, a watch running or not, it waits as any.
 export function watching(s: J): boolean {
-  return isObject(get(s, "watch")) && waiting(s) !== null;
+  return isObject(get(s, "watch")) && waiting(s) !== null && get(get(s, "lastTurn"), "waitWatch") !== false;
 }
 
 export function shownStatus(s: J): string {
@@ -540,10 +542,10 @@ export function session(s: J): J {
   }
   if (waiting(s) !== null) {
     const what = nonEmpty(get(turn, "waitFor"));
-    const watching = isObject(get(s, "watch"));
-    text = watching ? t("core-views.present.watching") : what !== null ? t("core-views.present.waiting_for", { what }) : t("core-views.present.waiting");
-    lead = watching ? "watch" : "wait";
-    rest = watching ? text : what ?? "";
+    const watched = watching(s);
+    text = watched ? t("core-views.present.watching") : what !== null ? t("core-views.present.waiting_for", { what }) : t("core-views.present.waiting");
+    lead = watched ? "watch" : "wait";
+    rest = watched ? text : what ?? "";
   }
   const o = s as J;
   const strOf = (k: string): string | null => (typeof o[k] === "string" ? o[k] : null);

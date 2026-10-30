@@ -66,7 +66,7 @@ export type SessionStore = {
   setRuntimeSessionId(key: string, id: string | null): void;
   /// The runtime sessions it ran in, the first first (optional: none known without it).
   runtimeSessions?(key: string): string[];
-  setWaitFor(turn: string, what: string): void;
+  setWaitFor(turn: string, what: string, watch: boolean): void;
   setNeed(turn: string, what: string): void;
   setAbout(turn: string, about: [number, number, string] | null): void;
   lastTurn(key: string): any | null;
@@ -406,9 +406,10 @@ export class SessionActor {
     });
   }
 
-  waitFor(what: string): Promise<void> {
+  /// What its wait is for, and whether that is its watch keeping on (`watch`).
+  waitFor(what: string, watch: boolean): Promise<void> {
     return this.enqueue(async () => {
-      if (this.turn) this.deps.store.setWaitFor(this.turn.id, what);
+      if (this.turn) this.deps.store.setWaitFor(this.turn.id, what, watch);
     });
   }
 
@@ -1374,8 +1375,9 @@ export class SessionActor {
               }
               this.waiting = null;
               this.phase = "idle";
-              // Keeping watch: the watch brings it back (its notices, its end), not the clock; it waits on.
-              if (this.deps.store.listJobs(this.key).some((j) => j.watch && j.state === "running")) return this.wait(seconds);
+              // Waiting on its watch: the watch brings it back (its notices, its end), not the clock; it waits on. A wait
+              // for something else runs out as any, a watch running or not (one said before `watch`: taken as its watch).
+              if (this.deps.store.lastTurn(this.key)?.waitWatch !== false && this.deps.store.listJobs(this.key).some((j) => j.watch && j.state === "running")) return this.wait(seconds);
               log.info("session", "the wait is over without word; asking again", { session: this.key, seconds });
               await this.startTurn("nudge", waitOver(seconds));
             }),

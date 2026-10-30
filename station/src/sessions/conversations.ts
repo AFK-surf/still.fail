@@ -346,11 +346,17 @@ export async function chatState(hub: Hub, key: string, args: Args): Promise<stri
   // Checked whole before anything is recorded: its words (what it waits for, needs, ends with) and what it is about.
   let kind: DeclaredState;
   let words: string | null;
+  let watch = false;
   if (args.kind === "waiting") {
     const seconds = args.seconds === undefined ? null : jsNumber(args.seconds);
     if (seconds === null) throw new Error("seconds is required for waiting: how long until the work brings you back");
     const what = args.for === undefined ? "" : jsString(args.for).trim();
     if (what === "") throw new Error("for is required for waiting: what you wait for, in a few words people read");
+    if (args.watch !== undefined && typeof args.watch !== "boolean") throw new Error("watch must be true or false");
+    watch = args.watch === true;
+    if (watch && !hub.store.listJobs(key).some((j) => j.watch && j.state === "running")) {
+      throw new Error("watch: true is for waiting on a watch of yours that runs (job_start with watch); none does: leave it out, or start the watch first");
+    }
     const whole = Number.isNaN(seconds) ? 0 : Math.trunc(Math.max(0, seconds));
     kind = { kind: "waiting", seconds: Math.min(MAX_WAIT_SECONDS, Math.max(MIN_WAIT_SECONDS, whole)) };
     words = what;
@@ -369,13 +375,16 @@ export async function chatState(hub: Hub, key: string, args: Args): Promise<stri
   }
   const actor = actorOf(hub, key);
   if (words !== null) {
-    if (kind.kind === "waiting") await actor?.waitFor(words);
+    if (kind.kind === "waiting") await actor?.waitFor(words, watch);
     else await actor?.need(words);
   }
   await actor?.about(about);
   await actor?.declare(kind);
   if (kind.kind === "all_done") suggestArchive(hub, key);
-  return kind.kind === "waiting" ? `Recorded state waiting: you are asked again in ${kind.seconds} seconds unless something brings you back first.` : `Recorded state ${saidAs(kind)}.`;
+  if (kind.kind !== "waiting") return `Recorded state ${saidAs(kind)}.`;
+  return watch
+    ? "Recorded state waiting on your watch: its notices, its end or a message bring you back."
+    : `Recorded state waiting: you are asked again in ${kind.seconds} seconds unless something brings you back first.`;
 }
 
 /// chat_history: earlier messages of one of the session's conversations.

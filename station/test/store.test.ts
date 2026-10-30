@@ -816,7 +816,7 @@ test("a turn nobody's message started goes on with the work of the one before; a
   assert.equal(store.hasTurns("a"), false);
   store.startTurnFor("t1", "a", "input", { profile: "cc", person: "me@x", thread: 7 });
   store.endTurn("t1", "completed", null, "waiting", 60);
-  store.setWaitFor("t1", "CI");
+  store.setWaitFor("t1", "CI", false);
   // Turns started in the same ms tie in ORDER BY started_at (as in the Rust): keep them apart.
   store.db.exec("UPDATE turns SET started_at = started_at - 1000 WHERE id = 't1'");
   store.startTurn("t2", "a", "nudge");
@@ -827,7 +827,7 @@ test("a turn nobody's message started goes on with the work of the one before; a
   assert.equal(store.stopWait("a"), true);
   const last = store.lastTurn("a")!;
   assert.deepEqual([last.outcome, last.declared, last.waitSeconds, last.detail], ["aborted", null, null, "other: stopped while waiting"]);
-  assert.equal(store.listTurns("a")[0]!.summary.waitFor, "CI");
+  assert.deepEqual([store.listTurns("a")[0]!.summary.waitFor, store.listTurns("a")[0]!.summary.waitWatch], ["CI", false]);
   assert.equal(store.toldNotes("a") > 0, true, "a new session was told every note");
   store.setToldNotes("a", 3);
   assert.equal(store.toldNotes("a"), 3);

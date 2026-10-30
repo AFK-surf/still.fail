@@ -52,6 +52,7 @@ export const SHAPES: Record<string, Shape> = {
     ["declared", opt("String")],
     ["waitSeconds", opt("i64"), { client: opt("I54"), doc: "For waiting: at most how long, in seconds, until the agent is asked again (a station yet to update says none)." }],
     ["waitFor", opt("String"), { said: true, doc: "For waiting: what it waits for, in the agent's words (a station yet to update says nothing)." }],
+    ["waitWatch", opt("bool"), { doc: "For waiting: whether what it waits on is only its session's watch keeping on (the agent's `watch`). A station\nbefore it says nothing: taken as its watch while one runs." }],
     ["ending", opt("String"), { doc: "How the agent ended it in today's words: all_done, need_help or waiting (`declared` keeps the words from before:\nfinal, block; a station before cards may say need_decision, which the core reads as need_help). A station yet to\nupdate says nothing." }],
     ["need", opt("String"), { said: true, doc: "For need_help: what a person has to give, do or decide, in the agent's words; for all_done, what the chat ends\nwith." }],
     ["about", opt("TurnAbout"), { doc: "The message its state is about (the agent's `about`; for need_help, the card waiting by default). A station\nbefore it says nothing." }],

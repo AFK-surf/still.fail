@@ -151,8 +151,9 @@ export type TurnAbout = { thread: number; seq: number; ts: string };
 
 export type TurnSummary = {
   kind: string; outcome: string | null; declared: string | null; ending: string | null; need: string | null;
-  about: TurnAbout | null; waitSeconds: number | null; waitFor: string | null; detail: string | null; startedAt: number;
-  endedAt: number | null;
+  about: TurnAbout | null; waitSeconds: number | null; waitFor: string | null;
+  /// Whether the wait is its session's watch keeping on (chat_state waiting `watch`); null said before it.
+  waitWatch: boolean | null; detail: string | null; startedAt: number; endedAt: number | null;
 };
 
 export type TurnRow = { id: string; summary: TurnSummary };
@@ -433,11 +434,12 @@ export function toTurnSummary(r: Json): TurnSummary {
   return {
     kind: r.kind, outcome: r.outcome, declared: r.declared === null ? null : saidBefore(r.declared),
     ending: r.declared === null ? null : ending(r.declared), need: r.need, about: toAbout(r), waitSeconds: r.wait_seconds,
-    waitFor: r.wait_for, detail: r.detail, startedAt: r.started_at, endedAt: r.ended_at,
+    waitFor: r.wait_for, waitWatch: r.wait_watch === null || r.wait_watch === undefined ? null : r.wait_watch === 1, detail: r.detail, startedAt: r.started_at, endedAt: r.ended_at,
   };
 }
 
-/// TurnSummary as serde writes it: camelCase, the skipped Nones (ending, need, about, waitSeconds, waitFor) left out.
+/// TurnSummary as serde writes it: camelCase, the skipped Nones (ending, need, about, waitSeconds, waitFor, waitWatch) left
+/// out.
 export function turnSummaryJson(t: TurnSummary): Record<string, Json> {
   const v: Record<string, Json> = { kind: t.kind, outcome: t.outcome, declared: t.declared };
   if (t.ending !== null) v.ending = t.ending;
@@ -445,6 +447,7 @@ export function turnSummaryJson(t: TurnSummary): Record<string, Json> {
   if (t.about !== null) v.about = t.about;
   if (t.waitSeconds !== null) v.waitSeconds = t.waitSeconds;
   if (t.waitFor !== null) v.waitFor = t.waitFor;
+  if (t.waitWatch !== null) v.waitWatch = t.waitWatch;
   v.detail = t.detail;
   v.startedAt = t.startedAt;
   v.endedAt = t.endedAt;

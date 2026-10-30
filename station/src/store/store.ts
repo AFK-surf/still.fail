@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addListState, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addListState, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 
@@ -41,7 +41,7 @@ export const JOBS_UP = "SELECT * FROM (SELECT * FROM jobs WHERE state = 'running
 export const STATS_OF = `SELECT
     (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
     (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
-    l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
+    l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
   FROM sessions s
   LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
   WHERE s.key = ?`;
@@ -144,6 +144,7 @@ export class Store {
       addWatchColumn(db);
       addQueueColumns(db);
       addSizeColumn(db);
+      addWaitWatchColumn(db);
       addWorkspaceColumns(db);
       addUsageColumns(db);
       addUsageTotals(db);
@@ -1488,9 +1489,10 @@ export class Store {
     });
   }
 
-  /// What a turn waits for once it ends as waiting (chat_state waiting `for`), in the agent's words.
-  setWaitFor(id: string, what: string): void {
-    this.#run("UPDATE turns SET wait_for = ? WHERE id = ?", what, id);
+  /// What a turn waits for once it ends as waiting (chat_state waiting `for`), in the agent's words, and whether that is
+  /// its session's watch keeping on (`watch`).
+  setWaitFor(id: string, what: string, watch: boolean): void {
+    this.#run("UPDATE turns SET wait_for = ?, wait_watch = ? WHERE id = ?", what, watch ? 1 : 0, id);
   }
 
   /// The message a turn's state is about (`about`: thread, entry and ts), or none.
@@ -1584,7 +1586,7 @@ export class Store {
          (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
          (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
          (SELECT substr(m.text, 1, 300) FROM session_first f JOIN merged m ON m.thread = f.thread AND m.n = f.n WHERE f.session = s.key) AS first_text,
-         l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
+         l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
        FROM sessions s
        LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
        ${key !== null ? "WHERE s.key = ?" : ""}`;
