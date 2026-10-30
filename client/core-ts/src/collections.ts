@@ -41,6 +41,9 @@ const SPECS: Record<string, Spec> = {
   vaultItems: { fields: { items: items("id") } },
   driveTransfers: { fields: { transfers: { key: ["station", "id"] } } },
   downloads: { fields: { downloads: items("id") } },
+  // (a station's item changes as it says something new, each a few seconds: the others go out as they went)
+  stations: items("station"),
+  newChat: { fields: { stations: items("station") } },
 };
 
 export function specOf(topic: Topic): Spec | null {

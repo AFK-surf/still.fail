@@ -18,12 +18,13 @@ import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import * as jobs from "../jobs.ts";
 import * as looks from "../looks.ts";
+import { conformTy, type Ty } from "../conform.ts";
 import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import * as refs from "../refs.ts";
 import { chatsLinked } from "../refLinks.ts";
 import type { Value, Watch } from "../store.ts";
-import { arr as arrU, deepFreeze, get as getU, isObject } from "../util.ts";
+import { arr as arrU, deepFreeze, get as getU, isObject, shaped, sharedValue } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
 import { archiveHintOf, badgeKindsOf, jobsSeenOf, type ArchiveHint } from "../prefs.ts";
@@ -532,6 +533,11 @@ export class Views implements Owner {
   readonly #loading = new Set<string>();
   /// Since when each station up has had no host reading (by address): unanswered that long, it is said to be silent.
   readonly #hostless = new Map<string, number>();
+  /// Each station's overview and host reading as the stations' list shows them, made again only as the station said
+  /// something new (or, the overview's times in words, the minute changed): a host reading of one station, every few
+  /// seconds from each, made every station's anew, the list and the new chat's view after it (50-80 ms a time on a
+  /// phone, 2026-10-31).
+  readonly #stationShown = new Map<string, { overview: unknown; minute: number; shown: J; host: unknown; presented: J }>();
   /// The live views that show agents' requests about vault items (a chat's cards, the 奏 page's), by the view: the
   /// requests, each in its workspace, and how they were answered here when it was made (`#vaultCard`), so that a change
   /// of the vault shows it again only where it changes what the cards say (`vaultChanged`).
@@ -1690,8 +1696,7 @@ export class Views implements Owner {
     const items = stations.map((s) => {
       const overview = this.ok({ topic: "overview", station: s.address });
       const hostRaw = this.ok({ topic: "host", station: s.address });
-      const host = hostRaw === undefined ? null : present.host(hostRaw);
-      const shown = overview === undefined ? null : present.decorate({ topic: "overview", station: s.address }, structuredClone(overview), c);
+      const { host, shown } = this.#stationParts(s.address, overview, hostRaw, c);
       let summary: string;
       const cause = get(this.link(s.address), "cause");
       if (!s.online && cause === "updating") summary = t("core-views.station.updating_short");
@@ -1749,6 +1754,25 @@ export class Views implements Owner {
     });
     if (view !== undefined) this.#againIn(view, silentNext);
     return { ok: items };
+  }
+
+  /// A station's host reading and overview as its list's item shows them: made once for each the station said (and each
+  /// minute, for the overview's times in words), shared after (`shaped`: never changed, not copied or shaped again as
+  /// they go out).
+  #stationParts(station: string, overview: J, hostRaw: J, c: present.Clock): { host: J; shown: J } {
+    const minute = Math.floor(c.now / 60_000);
+    let kept = this.#stationShown.get(station);
+    if (!kept || kept.overview !== overview || kept.minute !== minute) {
+      const shown = overview === undefined ? null : asShaped("Overview", present.decorate({ topic: "overview", station }, structuredClone(overview), c));
+      kept = { overview, minute, shown, host: kept?.host, presented: kept?.presented ?? null };
+      this.#stationShown.set(station, kept);
+    }
+    if (kept.host !== hostRaw || kept.presented === undefined) {
+      const presented = hostRaw === undefined ? null : asShaped("Host", present.host(hostRaw));
+      kept.host = hostRaw;
+      kept.presented = presented;
+    }
+    return { host: kept.presented, shown: kept.shown };
   }
 
   #connects(scope: string, mine: boolean): Value | undefined {
@@ -2422,6 +2446,15 @@ export class Views implements Owner {
 
 /// When each pinned list row was pinned (the rows say only `pinned: true`).
 const pinnedAt = new WeakMap<object, number>();
+
+/// `value` put through shape `ty` once, as it would go out, and marked so (`shaped`: shared, never changed, not copied or
+/// shaped again where it goes out inside another value); as it is when it does not fit (its topic's shape says why).
+function asShaped(ty: Ty, value: J): J {
+  const out = conformTy(ty, value);
+  if (!("ok" in out) || out.ok === null || typeof out.ok !== "object") return value;
+  shaped.add(sharedValue(out.ok));
+  return out.ok;
+}
 
 /// What a chat's page draws by each message, decided here so the page only draws it (docs/client-core.md): the chats it
 /// links to (`linked`: each its title and whether it is archived), whether the
