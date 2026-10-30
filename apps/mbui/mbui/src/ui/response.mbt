@@ -158,8 +158,9 @@ fn Ctx::long_press(self : Ctx, id : Int) -> Bool {
 }
 
 ///|
-/// Whether a press is down on `id` (no wait for what scrolls: Ctx::pressed has it), read so (hand.mbt).
-fn Ctx::held_down(self : Ctx, id : Int) -> Bool {
+/// Whether a press is down on `id`, from the moment it went down (no wait for what scrolls: Ctx::pressed has it, for
+/// how a thing shows it is pressed), read so (hand.mbt): what a gesture on it follows, whatever it shows.
+pub fn Ctx::held_down(self : Ctx, id : Int) -> Bool {
   if id != 0 {
     hand.pressed.has(id) |> ignore
   }

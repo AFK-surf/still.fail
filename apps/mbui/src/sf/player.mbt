@@ -1576,7 +1576,7 @@ fn phone_gestures(
   let press = c.press()
   // two fingers: a pinch round the point between them, which moves the picture as it moves
   match c.second_pointer() {
-    Some((x2, y2)) if picture && c.pressed(stage) && z.nw > 0.0 => {
+    Some((x2, y2)) if picture && c.held_down(stage) && z.nw > 0.0 => {
       let cx = (px + x2) / 2.0
       let cy = (py + y2) / 2.0
       let d = ((px - x2) * (px - x2) + (py - y2) * (py - y2)).sqrt()
@@ -1591,10 +1591,12 @@ fn phone_gestures(
     }
     _ => v.pinch = (0.0, 0.0, 0.0)
   }
-  if press.fresh && (c.pressed(stage) || c.clicked(stage)) {
+  if press.fresh && (c.held_down(stage) || c.clicked(stage)) {
     v.caught = z.stop_fling()
   }
-  if down && c.pressed(stage) {
+  // (held from the moment it went down: what it does follows the finger from there, whatever shows it pressed later
+  // over what scrolls, Ctx::pressed)
+  if down && c.held_down(stage) {
     let dx = px - press.x
     let dy = py - press.y
     if v.drag == NoDrag && press.moved && !v.pinched {
