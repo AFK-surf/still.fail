@@ -838,6 +838,7 @@ test "a list's running sums are its rows' heights added up" {
         part: 0,
         causes: None,
         sizes: {},
+        sizes_end: -1.0,
         sizes_mover: Mover::new(),
   }
   let mut seed = 7

@@ -2,16 +2,23 @@
 // 列表内容的动效协同起来的效果，需要系统性设计一下」「为啥每个改动都要自己处理一遍」). The page gives its list its rows
 // each build, each by its key and its version (ListRows): from one build to the next the list itself works out what
 // came (a key new to it: its room opening from nothing), what went (a key gone: kept in the list as it last was while
-// its room closes) and what changed (another version: from the height it had to the new one), each from that moment,
-// on a move's curve, the row laid out that tall and cut there. Every row stands where the rows before it end, so rows
-// never lie over one another nor leave a gap, however many change at once, and nothing waits for another; what is in
-// view stays where the list's own rule has it. A row's height going is its layout's alone: what is kept of a row's
-// build is kept (its height looked up by its key as it is laid out), nothing is built again for it.
+// its room closes) and what changed (another version: from the height it had to the new one), the row laid out that
+// tall and cut there. Every row stands where the rows before it end, so rows never lie over one another nor leave a
+// gap, however many change at once, and nothing waits for another; what is in view stays where the list's own rule has
+// it. A row's height going is its layout's alone: what is kept of a row's build is kept (its height looked up by its
+// key as it is laid out), nothing is built again for it.
+//
+// What changes together moves as one (2026-10-30 the user: 「在有决策卡片的时候发消息，整个消息列表会频繁来回移动」):
+// the rows on their way go on one way, the list's, set out at the last cause's moment and over at the latest end any
+// of them was given (a message sent, as long as its words fly). Each was off from its height by some way as it set
+// out, and what is left of each is the same share of it at every moment, so what is over and under them, the sum of
+// theirs, goes one way: a card's options closing over a message sent under it, each on a curve of its own, had what
+// was over them go up for the one, then down for the other. What a row's content does to its height itself (what is
+// in it opening or closing: Ctx::row_way) is its own, the list closing only what was off as it changed.
 
 ///|
 /// What changed a row's height, and when (the frames' clock): it came into the list (from nothing), it goes from it
-/// (to nothing: the row stays in the list till then, Ctx::row_gone), or what it holds changed (from the height it had
-/// then).
+/// (to nothing: the row stays in the list till then), or what it holds changed (from the height it had then).
 pub(all) enum RowSize {
   Comes(Double)
   Goes(Double)
@@ -26,20 +33,21 @@ fn RowSize::at(self : RowSize) -> Double {
 }
 
 ///|
-/// A row's way from one height to another: from `from` at `start` (its cause's moment, or later where what it is
-/// laid out at changed on its way), over `ms`, to what it is laid out at (none, going); `last` the height it was last
-/// laid out at, `to` the one it went to then.
+/// A row on the list's way, as it stood the last time what it goes by changed (the way set out again or given another
+/// end, what it is laid out at stepping, another cause): `h` tall at `at`, laid out `to` tall then, on the way from
+/// `start` to `end`. Where it is at any moment after is worked out from that alone, whatever frames came between (what
+/// was off of it then closing as the way goes from then).
 priv struct RowSizing {
   mut cause : RowSize
-  mut from : Double
-  mut start : Double
-  mut ms : Double
-  mut last : Double
+  mut h : Double
   mut to : Double
-  /// the frame it was last laid out in, and its way as that frame found it (a frame laid out twice, built again from
-  /// what it read, lays it out the same: from there each time)
+  mut at : Double
+  mut start : Double
+  mut end : Double
+  /// the frame it was last laid out in, and how it stood as that frame found it (a frame laid out twice, built again
+  /// from what it read, lays it out the same: from there each time)
   mut frame : Int
-  mut was : (Double, Double, Double)
+  mut was : (RowSize, Double, Double, Double, Double, Double)
 }
 
 ///|
@@ -49,107 +57,120 @@ priv struct RowSizing {
 pub let row_size_ms : Double = 300.0
 
 ///|
-/// Whether the row `key` of list `list` is gone (its way to nothing over by `now`): what keeps it in the list till
-/// then drops it (its declared end, never whether it moves: docs/motion.md rule 3).
-pub fn row_gone(at : Double, now : Double) -> Bool {
-  // (a hair short of it, a sum of ms rounded off, is there)
-  now >= at + row_size_ms - 0.001
+/// Where the list's way is at `t` (0 → 1): Move's, from its start to its end.
+fn RowCauses::way_at(self : RowCauses, t : Double) -> Double {
+  if self.end <= self.start {
+    return 1.0
+  }
+  Ease::Move.at((t - self.start) / (self.end - self.start))
 }
 
 ///|
-/// Row `k`, laid out `natural` tall, as tall as what changed it has it at `now` (its list's ListRows, by its key): its
-/// way set out the first time it is laid out with it (from the height it was had at, nothing for one coming), and again
-/// from where it is for a new one.
+/// Row `k`, laid out `natural` tall, as tall as what changed it has it at `now` (its list's ListRows, by its key): off
+/// from it as it was as its cause came (from nothing, one coming; from the height it had, one changed), by less as the
+/// list's way goes.
 fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Double, frame : Int) -> Double {
-  let (key, cause, ms) = match self.causes {
+  let (c, key, cause) = match self.causes {
     Some(c) if k < c.keys.length() => {
       c.read()
       match c.by.get(c.keys[k]) {
-        Some((cause, ms)) => (c.keys[k], cause, ms)
+        Some((cause, _)) => (c, c.keys[k], cause)
         None => return natural
       }
     }
     _ => return natural
   }
+  let to = match cause {
+    Goes(_) => 0.0
+    _ => natural
+  }
+  // (its way over before it was laid out on it, or as it is: as tall as it is; a hair short of its end, a sum of ms
+  // rounded off, at it, as ListRows::rows has it over there, laid out again or built anew)
+  if now >= c.end - 0.001 {
+    return to
+  }
+  // (its rows laid out on the way till its end, as it was declared: what is dropped of it a hair before is the list's)
+  self.sizes_end = c.end
+  let own = c.own.contains(key)
   let r = match self.sizes.get(key) {
     Some(r) => r
-    // (its way over before it was ever laid out: as tall as it is)
-    None if now >= cause.at() + ms => return if cause is Goes(_) { 0.0 } else { natural }
     None => {
       let from = match cause {
         Comes(_) => 0.0
         _ => if self.heights[k] >= 0.0 { self.heights[k] } else { natural }
       }
-      let r = { cause, from, start: cause.at(), ms, last: from, to: -1.0, frame: -1, was: (from, from, -1.0) }
+      // (off as its cause came, from its moment: laid out first a while on, it is where the way has it by then)
+      let at = cause.at()
+      let r = { cause, h: from, to, at, start: c.start, end: c.end, frame: -1, was: (cause, from, to, at, c.start, c.end) }
       self.sizes[key] = r
       r
     }
   }
   if r.frame == frame {
-    let (from, last, to) = r.was
-    r.from = from
-    r.last = last
-    r.to = to
+    let (was_cause, h, was_to, at, start, end) = r.was
+    r.cause = was_cause
+    r.h = h
+    r.to = was_to
+    r.at = at
+    r.start = start
+    r.end = end
   } else {
     r.frame = frame
-    r.was = (r.from, r.last, r.to)
+    r.was = (r.cause, r.h, r.to, r.at, r.start, r.end)
   }
-  if r.cause != cause {
-    // set out again from where it is (as last laid out: the way it was on gives way to the new one)
-    r.from = match cause {
-      Comes(_) if r.cause is Goes(_) => r.last
-      Comes(_) => 0.0
-      _ => r.last
+  // where it is at `t` as it stood (laid out `now_to` tall then): what was off of it closing as its way goes; one
+  // whose content goes on the way itself, only what was off of it as it changed, what it does itself its own
+  let at_t = fn(t : Double, now_to : Double) {
+    let q = fn(u : Double) {
+      if r.end <= r.start {
+        1.0
+      } else {
+        Ease::Move.at((u - r.start) / (r.end - r.start))
+      }
     }
+    let q0 = q(r.at)
+    let off = if own { r.h - r.to } else { r.h - now_to }
+    if q0 >= 1.0 {
+      now_to
+    } else {
+      now_to + off * (1.0 - q(t)) / (1.0 - q0)
+    }
+  }
+  // what it goes by changed (another cause, the way set out again or given another end, what it is laid out at
+  // stepping: a picture come to its size, the core's row joined to the one before): on from where it is now, as it
+  // stood, so it neither steps nor stops
+  if r.cause != cause || r.start != c.start || r.end != c.end || (!own && (to - r.to).abs() > 0.5) {
+    r.h = at_t(now, if own { to } else { r.to })
+    r.to = to
+    r.at = now
+    r.start = c.start
+    r.end = c.end
     r.cause = cause
-    r.start = cause.at()
-    r.ms = ms
-    r.to = -1.0
   }
-  // (told again as long as another, by the same cause: what it goes with timed anew once it knows its way, words sent
-  // flying to it; from the same moment, on the same way)
-  if ms != r.ms {
-    r.ms = ms
-  }
-  let to = match cause {
-    Goes(_) => 0.0
-    _ => natural
-  }
-  // (what it is laid out at changed on its way, a picture in it come to its size: on from where it is to that, as a
-  // move's way given another end goes on, never a step)
-  // (not for what lays it out a hair otherwise: on the device's pixels or not, a frame built again)
-  // (its end kept where its cause put it: the way from where it is now to the new end in what is left of it)
-  let p = Ease::Move.at((now - r.start) / r.ms)
-  if r.to >= 0.0 && (to - r.to).abs() > 0.5 && p < 0.9 {
-    r.from = (r.last - to * p) / (1.0 - p)
-  }
-  r.to = to
-  let h = if p >= 1.0 { to } else { r.from + (to - r.from) * p }
-  r.last = h
-  h
+  at_t(now, to)
 }
 
 ///|
-/// When the last of a list's rows' ways to their heights is over (-1: none under way).
+/// Whether row `k`'s content goes to its height on the rows' way at `now` (Ctx::row_way).
+fn ListState::row_own_way(self : ListState, k : Int, now : Double) -> Bool {
+  match self.causes {
+    Some(c) => now < c.end - 0.001 && k < c.keys.length() && c.own.contains(c.keys[k])
+    None => false
+  }
+}
+
+///|
+/// When the list's way a row was last laid out on is over (-1: none was).
 fn ListState::sizes_rest(self : ListState) -> Double {
-  let mut t = -1.0
-  self.sizes.each(fn(_, r) { t = dmax(t, r.start + r.ms) })
-  t
+  self.sizes_end
 }
 
 ///|
-/// What is over of the rows' ways forgotten once its row is no longer in the list's last build (the keys said this
-/// time), the causes of rows past its end with them.
+/// The rows' ways forgotten once the list's is over.
 fn ListState::sizes_kept(self : ListState, now : Double) -> Unit {
-  let past : Array[String] = []
-  self.sizes.each(fn(k, r) {
-    // (one going kept a while past its end: its row out of the list by then, Ctx::row_gone)
-    if now >= r.start + r.ms + (if r.cause is Goes(_) { row_size_ms } else { 0.0 }) {
-      past.push(k)
-    }
-  })
-  for k in past {
-    self.sizes.remove(k)
+  match self.causes {
+    Some(c) if now < c.end - 0.001 => ()
+    _ => self.sizes.clear()
   }
 }
 
@@ -183,6 +204,12 @@ pub struct RowCauses {
   /// went)
   priv said : @signals.Signal[Int]
   priv mut n : Int
+  /// the rows' way: set out at the last cause's moment, over at the latest end one was given (-1: none under way)
+  priv mut start : Double
+  priv mut end : Double
+  /// the rows whose content goes on the way itself (Ctx::row_way), by their keys: the list closes only what was off
+  /// as their cause came
+  priv own : Set[String]
 }
 
 ///|
@@ -227,7 +254,7 @@ pub struct ListRows[T] {
 
 ///|
 pub fn[T] ListRows::new() -> ListRows[T] {
-  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0 }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
+  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new() }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
 }
 
 ///|
@@ -263,6 +290,18 @@ pub fn[T] ListRows::rows(
   }
   // (whether any of what the list and its rows read of it changed: told them as it did)
   let mut moved = false
+  // the rows' way over: what went out of the list at its end, what made it forgotten
+  // (a hair short of it, a sum of ms rounded off, is there)
+  if self.causes.end >= 0.0 && now >= self.causes.end - 0.001 {
+    moved = moved || !self.going.is_empty() || !self.causes.by.is_empty()
+    self.going.clear()
+    self.causes.by.clear()
+    self.causes.start = -1.0
+    self.causes.end = -1.0
+    self.causes.own.clear()
+  }
+  // (whether a row sets out now: the rows' way sets out again from here)
+  let mut began = false
   if same && watched {
     ()
   } else if self.given && watched {
@@ -272,15 +311,15 @@ pub fn[T] ListRows::rows(
         None =>
           if comes(items[i]) {
             self.causes.by[k] = (Comes(now), ms(k).unwrap_or(row_size_ms))
-            moved = true
+            began = true
           }
         // (changed as it comes: still coming, on to what it is now)
         Some(w) if w != v =>
           match self.causes.by.get(k) {
-            Some((Comes(at), ms)) if now < at + ms => ()
+            Some((Comes(_), _)) => ()
             _ => {
               self.causes.by[k] = (Changed(now), row_size_ms)
-              moved = true
+              began = true
             }
           }
         _ => ()
@@ -296,7 +335,7 @@ pub fn[T] ListRows::rows(
       if !here.contains(k) && !self.going.contains(k) {
         self.going[k] = { item, at: now, after: prev }
         self.causes.by[k] = (Goes(now), row_size_ms)
-        moved = true
+        began = true
       }
       if here.contains(k) || self.going.contains(k) {
         prev = k
@@ -320,31 +359,21 @@ pub fn[T] ListRows::rows(
     moved = true
   }
   self.given = true
-  // what is over of it forgotten: what went, out of the list at its declared end
-  let over : Array[String] = []
-  self.going.each(fn(k, g) { if row_gone(g.at, now) { over.push(k) } })
-  for k in over {
-    self.going.remove(k) |> ignore
+  // the rows' way: from the last cause's moment to the latest end any was given
+  if began {
+    self.causes.start = now
     moved = true
   }
-  let past : Array[String] = []
-  self.causes.by.each(fn(k, cm) {
-    let (cause, ms) = cm
-    if !self.going.contains(k) && (now >= cause.at() + ms || cause is Goes(_)) {
-      past.push(k)
-    }
-  })
-  for k in past {
-    self.causes.by.remove(k)
-    moved = true
+  let mut end = -1.0
+  self.causes.by.each(fn(_, cm) { end = dmax(end, cm.0.at() + cm.1) })
+  if self.causes.by.is_empty() {
+    self.causes.start = -1.0
+    self.causes.own.clear()
   }
-
-  // (built again at the end of the first of them to go: out of the list then)
-  let mut next = @double.infinity
-  // (at the moment row_gone says it is out, a hair short of its sum)
-  self.going.each(fn(_, g) { next = dmin(next, g.at + row_size_ms - 0.001) })
-  if next < @double.infinity {
-    c.shows_until(next)
+  self.causes.end = end
+  // (built again at its end: what goes out of the list then)
+  if !self.going.is_empty() && end > now {
+    c.shows_until(end - 0.001)
   }
   if !same {
     self.was.clear()
@@ -412,6 +441,8 @@ pub fn[T] ListRows::went(self : ListRows[T], key : String) -> Double? {
 /// Whether a row come into the list still opens its room: built again as the last of them is open.
 pub fn[T] ListRows::opening(self : ListRows[T], c : Ctx) -> Bool {
   let now = c.moment()
+  // (by the end it was given: where another changed after it came, the rows' way it goes on is longer, the last of
+  // its opening, most of it in view by then)
   let mut last = -1.0
   self.causes.by.each(fn(_, cm) {
     match cm {
@@ -424,5 +455,27 @@ pub fn[T] ListRows::opening(self : ListRows[T], c : Ctx) -> Bool {
     true
   } else {
     false
+  }
+}
+
+///|
+/// What changes the heights of the rows the list laying them out now has (Ctx::place_list): what a row's content reads
+/// of its way as it is built.
+// kept across runs: set and put back as each list lays its rows out
+let rows_laid_by : Ref[(RowCauses, Int)?] = Ref(None)
+
+///|
+/// The way the rows of the list a row is built in go to their heights (its start, how long), while it is under way:
+/// what in the row changes its height itself as its version changes (a card's options closing as it is answered) goes
+/// on it, from its start and as long, so that it moves as one with the rows round it (None: built in no such list, or
+/// none on its way).
+pub fn Ctx::row_way(self : Ctx) -> (Double, Double)? {
+  match rows_laid_by.val {
+    Some((c, k)) if c.end > self.clock && c.start >= 0.0 && k < c.keys.length() => {
+      // (what it does to its row's height its own from now: ListState::row_sized)
+      c.own.add(c.keys[k])
+      Some((c.start, c.end - c.start))
+    }
+    _ => None
   }
 }

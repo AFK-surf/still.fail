@@ -137,6 +137,8 @@ struct ListState {
   /// row's way from the height it had to the one it is laid out at, by the row's key (list_size.mbt)
   mut causes : RowCauses?
   sizes : Map[String, RowSizing]
+  /// where the last way its rows were laid out on ends: what moves till then, laid out again each frame
+  mut sizes_end : Double
   sizes_mover : Mover
 }
 

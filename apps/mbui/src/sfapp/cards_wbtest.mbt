@@ -136,3 +136,34 @@ test "忽略 on screen: let go at once (decision.dismiss), the card's options an
   assert_true(t.find("忽略") is None)
   t.assert_idle()
 }
+
+///|
+test "words sent at the chat's end under a card waiting: it closes as they come in, what is over them going one way" {
+  // (2026-10-30 the user: 「消息滚动在最底下的时候，在有决策卡片的时候发消息，整个消息列表会频繁来回移动」)
+  let calls : Array[Made] = []
+  let t = cards_core(calls, mode="chat-ask-end")
+  let post = "列表的动效改好了"
+  assert_true(t.find("一起改") is Some(_))
+  t.tap_text("发消息")
+  t.type_text("先把 app 的合了")
+  tap_send(t)
+  // what is over the card stands where the rows under it end: from the words sent till the station has them (the
+  // fixture's fix_deliver_ms), the card's options closing as they come in, it goes one way
+  let mut y = t.rect_of(post).unwrap().1
+  let mut way = 0.0
+  let from = t.time()
+  while t.time() < from + @sffixture.fix_deliver_ms - 50.0 {
+    t.frame()
+    let y2 = t.rect_of(post).unwrap().1
+    let d = y2 - y
+    if d.abs() > 0.01 {
+      if way != 0.0 && d * way < 0.0 {
+        fail("the card's post turned back at \{t.time() - from} ms: \{y} to \{y2}")
+      }
+      way = d
+    }
+    y = y2
+  }
+  assert_true(t.find("一起改") is None)
+  assert_true(t.find("你 回复了") is Some(_))
+}

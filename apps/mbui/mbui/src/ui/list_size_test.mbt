@@ -111,3 +111,98 @@ test "list: a row read from stays where it shows as one over it grows and one un
   assert_eq(y_of(t, 7), y7)
   assert_eq(t.row(5).map(fn(r) { r.3 }), None)
 }
+
+///|
+/// A list of 20 rows held at its end, row 18 120 tall: as it is closed, what is in it goes to 50 on the rows' way
+/// (Ctx::row_way), and row 20 comes at the end at that
+/// moment, as long as `comes_ms`: row 18 goes down its way each frame and the rows over it go one way only.
+fn closing_under_coming(comes_ms~ : Double) -> Unit raise {
+  let n = [20]
+  let since = [-1.0]
+  let way = [@ui.row_size_ms]
+  let rows : @ui.ListRows[Int] = @ui.ListRows::new()
+  let t = @ui.Tester::new(
+    fn(c) {
+      let now = Array::makei(n[0], fn(i) { i })
+      let closed = since[0] >= 0.0
+      let (items, _) = rows.rows(
+        c,
+        now.map(fn(i) { "r" + i.to_string() }),
+        now,
+        fn(i) { if i == 18 && closed { "closed" } else { "" } },
+        ms=fn(k) { if k == "r20" { Some(comes_ms) } else { None } },
+      )
+      c.list(
+        "list",
+        items.length(),
+        50.0,
+        fn(k) {
+          let i = items[k]
+          let h = if i != 18 {
+            50.0
+          } else if closed {
+            if since[0] == 0.0 {
+              match c.row_way() {
+                Some((at, ms)) => {
+                  since[0] = at
+                  way[0] = ms
+                }
+                None => abort("no rows' way as row 18 closes")
+              }
+            }
+            let p = (c.now_before(since[0] + way[0]) - since[0]) / way[0]
+            120.0 - 70.0 * @ui.Ease::Move.at(if p > 1.0 { 1.0 } else { p })
+          } else {
+            120.0
+          }
+          c.box(h=Px(h), fn() { c.text("Row \{i}", wrap=false) |> ignore }) |> ignore
+        },
+        stick_end=true,
+        sized=rows.sized(),
+      )
+      |> ignore
+    },
+    w=300.0,
+    h=400.0,
+  )
+  assert_eq(bottom_of(t, 19), 400.0)
+  since[0] = 0.0
+  n[0] = 21
+  t.draw()
+  let mut y = y_of(t, 15)
+  let mut h = t.row(18).unwrap().3
+  let mut way_y = 0.0
+  let from = t.time()
+  while t.time() < from + 650.0 {
+    t.frame()
+    let y2 = y_of(t, 15)
+    let h2 = t.row(18).unwrap().3
+    // the row closing: down its way, a step each frame till it is closed
+    if h2 > h + 0.001 || (h > 50.5 && h2 > h - 0.001) {
+      fail("row 18 at \{t.time()}: \{h} to \{h2}")
+    }
+    // the rows over it: one way only
+    let d = y2 - y
+    if d.abs() > 0.01 {
+      if way_y != 0.0 && d * way_y < 0.0 {
+        fail("row 15 turned back at \{t.time()}: \{y} to \{y2}")
+      }
+      way_y = d
+    }
+    y = y2
+    h = h2
+  }
+  assert_eq(t.row(18).unwrap().3, 50.0)
+  assert_eq(t.row(20).unwrap().3, 50.0)
+  assert_eq(bottom_of(t, 20), 400.0)
+}
+
+///|
+test "list: a row closing on the rows' way as one comes under it: it goes down each frame, the rows over it never back" {
+  closing_under_coming(comes_ms=@ui.row_size_ms)
+}
+
+///|
+test "list: a row closing on the rows' way under one coming for longer (words flying to it): the rows over go one way" {
+  closing_under_coming(comes_ms=520.0)
+}
