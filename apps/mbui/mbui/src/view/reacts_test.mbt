@@ -321,3 +321,81 @@ test "padding: sides bound By, then pad said: pad's alone, what sides read chang
   tree.frame(400.0, 800.0, now=10.0) |> ignore
   assert_eq(at(), (3.0, 3.0))
 }
+
+///|
+test "reacts: told outside any event, its read and what it does are of one moment: the host's, not the logic's before it" {
+  let now = Ref(0.0)
+  let s = @signals.signal(0, same=fn(a, b) { a == b })
+  let read_at : Array[Double] = []
+  let done_at : Array[Double] = []
+  let node : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { node.val = Some(root.box(fn(_) {  })) }, time=fn() { now.val })
+  tree.frame(390.0, 844.0) |> ignore
+  let n = node.val.unwrap()
+  n.reacts(
+    fn() {
+      let v = s.get()
+      read_at.push(n.cause_at())
+      v
+    },
+    fn(_) { done_at.push(n.cause_at()) },
+  )
+  // (the host on to 20, the logic still at 0: a change told outside any event)
+  now.val = 20.0
+  s.set(1)
+  assert_eq(read_at, [0.0, 20.0])
+  assert_eq(done_at, [0.0, 20.0])
+}
+
+///|
+test "reacts: what it does is one change: what follows what it writes sees all of it written, never half (no reaction to its own first write)" {
+  let busy = @signals.signal(false, same=fn(a, b) { a == b })
+  let got = @signals.signal(0, same=fn(a, b) { a == b })
+  let asked = Ref(0)
+  let node : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) { node.val = Some(root.box(fn(_) {  })) }, time=fn() { 0.0 })
+  tree.frame(390.0, 844.0) |> ignore
+  // (asks while it has nothing and is not asking; the answer comes at once: not asking, then what came)
+  node.val.unwrap().reacts(fn() { (busy.get(), got.get()) }, fn(s) {
+    let (b, g) = s
+    if !b && g == 0 && asked.val < 10 {
+      asked.val = asked.val + 1
+      busy.set(true)
+      busy.set(false)
+      got.set(1)
+    }
+  })
+  assert_eq(asked.val, 1)
+  assert_eq(got.get(), 1)
+}
+
+///|
+test "reacts: its node let go by what was due before the change that tells it (no frame between): nothing more read or done, nothing followed again" {
+  let now = Ref(0.0)
+  let there = @signals.signal(true, same=fn(a, b) { a == b })
+  let s = @signals.signal(0, same=fn(a, b) { a == b })
+  let (reads, done) = (Ref(0), Ref(0))
+  let tree = @view.Tree::new(
+    fn(root) {
+      // (let go at 100, as what is due then)
+      root.at_moment(100.0, fn() { there.set(false) }) |> ignore
+      root.show(fn() { there.get() }, fn(v) {
+        v.reacts(
+          fn() {
+            reads.val = reads.val + 1
+            s.get()
+          },
+          fn(_) { done.val = done.val + 1 },
+        )
+      })
+    },
+    time=fn() { now.val },
+  )
+  tree.frame(390.0, 844.0) |> ignore
+  assert_eq((reads.val, done.val), (1, 1))
+  // (the host on to 150, no frame drawn; told outside any event)
+  now.val = 150.0
+  s.set(1)
+  assert_eq((reads.val, done.val), (1, 1))
+  assert_true(!s.watched())
+}

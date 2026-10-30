@@ -236,3 +236,88 @@ test "window tree: a part leaving goes on as the host draws it, from when it was
 ///|
 /// How long a part takes to leave, here.
 let part_leave_ms : Double = 300.0
+
+///|
+/// A window whose one node takes a press only while the hand of the moment is a finger (its presses said by the current
+/// input), on a machine with both (the host saying what each event comes from): after a press by `first`, one by
+/// `then`, no frame between: whether each was taken.
+fn pressed_by_hand(first : Bool, then : Bool) -> (Bool, Bool) {
+  let taps = Ref(0)
+  let t = Tester::new(fn(_c) {  }, platform=0)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b
+      .width(Is(Some(100.0)))
+      .height(Is(Some(100.0)))
+      .presses(By(fn() { pointing() is Finger }))
+      .on_press(fn() { taps.val = taps.val + 1 })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  let pressed = fn(finger_said : Bool) {
+    let before = taps.val
+    t.host_says_finger(Some(finger_said))
+    t.advance(frame_period_default)
+    finger(0, 50.0, 50.0)
+    t.advance(frame_period_default)
+    finger(2, 50.0, 50.0)
+    taps.val > before
+  }
+  let a = pressed(first)
+  let b = pressed(then)
+  (a, b)
+}
+
+///|
+test "a node taking presses by the hand of the moment: the first press of the other hand is routed by that hand, no frame between" {
+  assert_eq(pressed_by_hand(false, true), (false, true))
+  assert_eq(pressed_by_hand(true, false), (true, false))
+}
+
+///|
+test "a finger told late, something due before it: what was due sees the hand before it; the press found by the finger's; what follows the hand told at the finger's moment" {
+  let t = Tester::new(fn(_c) {  }, platform=0)
+  let t0 = t.time()
+  let due_saw : Ref[Pointing?] = Ref(None)
+  let causes : Array[Double] = []
+  let taps = Ref(0)
+  set_view_app(fn(root) {
+    root.at_moment(t0 + due_at_ms, fn() { due_saw.val = Some(pointing()) }) |> ignore
+    root.reacts(fn() { pointing() }, fn(_) { causes.push(root.cause_at()) })
+    root.box(fn(b) {
+      b
+      .width(Is(Some(100.0)))
+      .height(Is(Some(100.0)))
+      .presses(By(fn() { pointing() is Finger }))
+      .on_press(fn() { taps.val = taps.val + 1 })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  let t0 = t.time()
+  // (a mouse's hand till now; the host on to 80, no frame drawn; a finger down at 50 and up at 60 told then)
+  t.advance(told_at_ms)
+  t.touch_raw(0, 7, 50.0, 50.0, t0 + down_at_ms)
+  t.touch_raw(2, 7, 50.0, 50.0, t0 + up_at_ms)
+  assert_eq(due_saw.val, Some(Mouse))
+  assert_eq(taps.val, 1)
+  assert_eq(causes.last(), Some(t0 + down_at_ms))
+}
+
+///|
+/// The late finger's (above): what is due at 30, the finger down at 50 and up at 60, told only as the host is at 80.
+let due_at_ms : Double = 30.0
+
+///|
+let down_at_ms : Double = 50.0
+
+///|
+let up_at_ms : Double = 60.0
+
+///|
+let told_at_ms : Double = 80.0

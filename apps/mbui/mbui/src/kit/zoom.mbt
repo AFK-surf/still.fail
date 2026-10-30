@@ -356,6 +356,13 @@ fn Zoom::moved(self : Zoom) -> Unit {
 }
 
 ///|
+/// Read where what is worked out from what it was told (at a moment of its own: Zoom::rect_at) follows each time it is
+/// told otherwise.
+pub fn Zoom::told(self : Zoom) -> Unit {
+  self.place.get() |> ignore
+}
+
+///|
 /// The picture's place on the stage (x, y, w, h), once its size is known: as it was told, and where a glide or a fling
 /// has it now, read of their motions (what reads it is built again as it is told otherwise and as they go, wherever it
 /// is read; not as where Zoom::step was called).
@@ -379,6 +386,32 @@ pub fn Zoom::rect(self : Zoom) -> (Double, Double, Double, Double)? {
   let w = d.nw * scale
   let h = d.nh * scale
   Some((d.bw / 2.0 + x - w / 2.0, d.bh / 2.0 + y - h / 2.0, w, h))
+}
+
+///|
+/// Where the picture shows at the moment `at` (an event's: what it is decided by, where the finger is on it then), by
+/// what it was told and the ways it is on, read of nothing followed; Zoom::rect's at that moment.
+pub fn Zoom::rect_at(self : Zoom, at : Double) -> (Double, Double, Double, Double)? {
+  if self.nw <= 0.0 || self.nh <= 0.0 {
+    return None
+  }
+  let (scale, x, y) = self.shown_now(at)
+  let w = self.nw * scale
+  let h = self.nh * scale
+  Some((self.bw / 2.0 + x - w / 2.0, self.bh / 2.0 + y - h / 2.0, w, h))
+}
+
+///|
+/// How big it is shown at the moment `at` (by what it was told and the ways it is on, read of nothing followed).
+pub fn Zoom::scale_at(self : Zoom, at : Double) -> Double {
+  self.shown_now(at).0
+}
+
+///|
+/// Whether it is zoomed in at the moment `at` (Zoom::zoomed's, at that moment, nothing followed).
+pub fn Zoom::zoomed_at(self : Zoom, at : Double) -> Bool {
+  let (scale, _, _) = self.shown_now(at)
+  scale > self.fit() * 1.01
 }
 
 ///|

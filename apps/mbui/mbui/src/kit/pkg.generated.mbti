@@ -767,14 +767,18 @@ pub fn Zoom::natural(Self, Double, Double, at? : Double) -> Unit
 pub fn Zoom::new(margin? : (Double) -> Double, enlarge? : Bool, min_scale? : (Double) -> Double, max_scale? : (Double) -> Double, free? : Bool, fit_step? : Double) -> Self
 pub fn Zoom::pan(Self, Double, Double, at? : Double) -> Unit
 pub fn Zoom::rect(Self) -> (Double, Double, Double, Double)?
+pub fn Zoom::rect_at(Self, Double) -> (Double, Double, Double, Double)?
 pub fn Zoom::reset(Self, at? : Double) -> Unit
 pub fn Zoom::resize_keeping(Self, Double, Double, (Double, Double)?, Double, when? : Double) -> Unit
+pub fn Zoom::scale_at(Self, Double) -> Double
 pub fn Zoom::step(Self) -> Unit
 pub fn Zoom::stop_fling(Self, at? : Double) -> Bool
 pub fn Zoom::stop_glide(Self, at? : Double) -> Unit
+pub fn Zoom::told(Self) -> Unit
 pub fn Zoom::transform(Self, Double, Double, Double, Double, Double, at? : Double) -> Unit
 pub fn Zoom::zoom_to(Self, Double, Double, Double, Bool, at? : Double) -> Unit
 pub fn Zoom::zoomed(Self) -> Bool
+pub fn Zoom::zoomed_at(Self, Double) -> Bool
 
 // Type aliases
 

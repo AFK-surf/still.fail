@@ -108,6 +108,15 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
   // the bottom bar's glass, where the bar is laid out: a finger on it the bar's at each event's moment (drawn by the old
   // view over the pages; what the old frame puts over all of it at its root, its notch's key, menus and sheets, first)
   bar_glass_node(v, src, fn() { workspace_in_view(src).0 })
+  // an image opened over the pages, over the bar: nodes of the tree's of its own (sfbase's viewer_tree.mbt); what is
+  // opened otherwise, the old view's over them (narrow_over's preview)
+  // (its stage the box it is laid out in, this node's: the window's less the system's bars beside it, as the root's
+  // sides say it, followed)
+  @sfbase.viewer_node(v, src, fn() {
+    let (w, h) = v.window()
+    let (left, right) = sides_room()
+    (dmax(0.0, w - left - right), h)
+  })
 }
 
 ///|

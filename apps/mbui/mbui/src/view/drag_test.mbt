@@ -700,3 +700,47 @@ test "timed work called off again and again with no frame, the clock never moved
 /// How many times a test does the same over again (a press and a hold, timed work come and called off) to see that
 /// nothing of each is left behind.
 let rounds : Int = 5
+
+///|
+/// A box (100 by 100, `pad` in from the window's top left) whose menu is asked for by the pointer's secondary button,
+/// what it was told.
+fn menu_tree(seen : Array[@view.Menu], pad : @signals.Signal[Double]) -> @view.Tree {
+  @view.Tree::new(
+    fn(root) {
+      root.box(fn(p) {
+        p.pad(By(fn() { pad.get() })) |> ignore
+        p.box(fn(b) { b.width(Is(Some(100.0))).height(Is(Some(100.0))).on_menu(fn(m) { seen.push(m) }) |> ignore })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+}
+
+///|
+test "a menu asked for inside an event whose change moved its node: at that event's moment, where the node is as of then" {
+  let seen : Array[@view.Menu] = []
+  let pad = @signals.signal(0.0, same=fn(a, b) { a == b })
+  let t = menu_tree(seen, pad)
+  t.frame(390.0, 844.0) |> ignore
+  let asked = Ref(false)
+  t.event(50.0, fn() {
+    pad.set(20.0)
+    asked.val = t.menu_at(30.0, 30.0, 100.0)
+  })
+  assert_true(asked.val)
+  assert_eq(seen.map(fn(m) { (m.x, m.y, m.at) }), [(10.0, 10.0, 50.0)])
+}
+
+///|
+test "a menu asked for after its node moved, no frame between: only where it is now" {
+  let seen : Array[@view.Menu] = []
+  let pad = @signals.signal(0.0, same=fn(a, b) { a == b })
+  let t = menu_tree(seen, pad)
+  t.frame(390.0, 844.0) |> ignore
+  pad.set(20.0)
+  assert_true(!t.menu_at(10.0, 10.0, 100.0))
+  assert_true(t.menu_at(30.0, 30.0, 110.0))
+  assert_eq(seen.map(fn(m) { (m.x, m.y, m.at) }), [(10.0, 10.0, 110.0)])
+}

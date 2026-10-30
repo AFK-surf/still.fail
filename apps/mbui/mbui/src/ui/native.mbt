@@ -1266,6 +1266,7 @@ pub fn Pdf::close(self : Pdf) -> Unit {
   }
   for src in gone {
     image_cache.remove(src)
+    image_forget(src)
   }
   h_pdf_close(self.doc)
 }
@@ -1323,7 +1324,11 @@ pub fn Ctx::picture(
   max_px? : Int = 4096,
 ) -> Int {
   let i = self.image(src, w=w_, h=h_, fit=FitFill, bg=0L, fade=false)
-  picture_at[i] = (x, y, w, h, max_px)
+  let at = (x, y, w, h, max_px)
+  picture_at[i] = at
+  // (said again of its node where what built it is kept, its nodes put back elsewhere among the frame's: a part or a
+  // row holding a picture kept as any other, not built every frame for it)
+  built_again(fn(by) { picture_at[i + by] = at })
   i
 }
 
@@ -1401,11 +1406,13 @@ pub fn wheel_of(c : Ctx, id : Int) -> (Double, Double, Int) {
 ///|
 /// How an image shown from `src` stands: 1 one of its decodes is ready, -1 it could not be decoded, 0 not yet.
 pub fn image_state(src : String) -> Int {
+  // (followed: as the host says a decode of it is ready, or failed)
+  image_decodes_read(src)
   match image_cache.get(src) {
     Some(list) => {
       let mut failed = list.length() > 0
+      // (as the host's words have said it, at their moments: image_decoded)
       for e in list {
-        e.poll(g().clock)
         if e.state == 1 {
           return 1
         }

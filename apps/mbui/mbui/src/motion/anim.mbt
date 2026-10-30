@@ -357,7 +357,7 @@ pub fn animate(
   c : @ui.Ctx,
   key : String,
   target : Double,
-  spec? : Spec = spring(),
+  spec? : Spec = animate_spring,
   from? : Double,
   loc~ : SourceLoc,
 ) -> Double {

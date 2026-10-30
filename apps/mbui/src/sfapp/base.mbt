@@ -85,6 +85,7 @@ pub using @sfbase {
   note_list,
   pv_leaving,
   pv_strip,
+  viewer_built,
   pv_thumbs,
   reading_pill,
   runs_by_line,

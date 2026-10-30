@@ -91,7 +91,8 @@ let last_touch_y : Ref[Double] = Ref(0.0)
 /// first, then what it comes to worked out and taken as the app's pointer's, in the same event (what was due never
 /// sees a finger not down yet, nor misses one that is).
 fn touch_in(phase : Int, id : Int, x : Double, y : Double) -> Unit {
-  view_event(fn() {
+  // (a finger's, so as of its moment: pointer_in's)
+  view_event_said(fn() { pointing_said_by_host(1) }, fn() {
     let kind = touch_kind(phase, id)
     if kind >= 0 && kind <= 3 {
       last_touch_x.val = x

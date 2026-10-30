@@ -31,13 +31,22 @@ pub struct Tester {
 pub let frame_period_default : Double = 1000.0 / 60.0
 
 ///|
+/// The run before let go of, before the next one's inputs are said: the window's tree disposed (what it made, what its
+/// bindings followed, what was due on its timeline), what is made once forgotten. Said where a run is begun before
+/// its Tester is made (what the app is given before it, its made-up core opening a page, then reaches no tree of the
+/// run before), and as a Tester starts.
+pub fn run_let_go() -> Unit {
+  made_forget()
+  view_forget()
+}
+
+///|
 /// What a test leaves behind forgotten before the next starts: the window's context made anew (every field of it as a
 /// window's first frame has it, by construction), and the state kept outside it (the package's own tables, those of
 /// the packages over it: on_reset) emptied; then checked (leaked_state), so that what is added later and not
 /// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
-  made_forget()
-  view_forget()
+  run_let_go()
   the_ctx.val = Ctx::new()
   looks_reset()
   hand_reset()
@@ -74,6 +83,7 @@ fn reset_globals() -> Unit {
   messages_reset()
   drop_reset()
   image_cache.clear()
+  images_said.clear()
   views_told_text.clear()
   views_told_info.clear()
   sites_told_state.clear()
@@ -645,6 +655,15 @@ pub fn Tester::set_frame_times(self : Tester, times : Array[Double]) -> Unit {
 ///|
 /// Draws one frame at `at` on the clock, whatever the display's frames (a host's run replayed: where it drew).
 pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
+  self.frame_shown_at(at, at)
+}
+
+///|
+/// Draws one frame the host times for when it is shown, ahead of where it is: the host at `now` (the logic brought
+/// there, nothing later: no step or end taken past it), what is drawn sampled at `shown` (a moment later, as a host's
+/// frame is drawn for its vsync). The next events may come at any moment from `now`.
+pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Unit {
+  let at = now
   self.fake.time = at
   // decodes started last frame are done, the views opened are ready: the host's events for them (unless the test
   // says when: Tester::finish)
@@ -663,7 +682,7 @@ pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
     }
     None => ()
   }
-  on_frame(self.w, self.h, self.fake.scale, self.fake.time)
+  on_frame(self.w, self.h, self.fake.scale, if shown > at { shown } else { at })
   self.frames = self.frames + 1
   self.hold_words_over()
   self.hold_rows_steady()
@@ -682,6 +701,14 @@ pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
 /// drawn_order and the like read): what holds of every frame, those an input's draw goes through on its way too.
 pub fn Tester::each_frame(self : Tester, f : (() -> Unit)?) -> Unit {
   self.each = f
+}
+
+///|
+/// The window `w` by `h` from the next frame on, as a host lays the app out anew (above its keyboard as it comes up,
+/// Tester::set_ime_inset): no frame drawn for it here.
+pub fn Tester::resize_next(self : Tester, w : Double, h : Double) -> Unit {
+  tester_size.val = Some((w, h))
+  self.fake.wants = true
 }
 
 ///|

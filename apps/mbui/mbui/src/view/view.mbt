@@ -133,6 +133,8 @@ struct Node {
   /// its properties' bindings, by property: what stops each
   props : Map[Int, () -> Unit]
   mut on_press : (() -> Unit)?
+  /// what the pointer's secondary button pressed on it asks for (View::on_menu)
+  mut on_menu : ((Menu) -> Unit)?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
   /// how many fingers held on it at once it takes (View::on_drag's `fingers`): one more calls the hold off
@@ -357,6 +359,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.slot = false
       n.hosted = false
       n.on_press = None
+      n.on_menu = None
       n.on_drag = None
       n.takes = None
       n.drag_end = None
@@ -386,6 +389,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         drop_next: 0,
         props: {},
         on_press: None,
+        on_menu: None,
         on_drag: None,
         fingers: 1,
         drag_said: 0,
@@ -770,20 +774,30 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
   let watch : Ref[@signals.Watch?] = Ref(None)
   let w = @signals.watch(fn() {
     guard live.val && watch.val is Some(w) else { return }
-    let v = w.read(read)
-    if last.val != Some(v) {
-      last.val = Some(v)
-      self.committed(fn() {
+    // (read and done as of one moment, the change's that told it: what the read works out at the cause's moment is
+    // of the same moment the change is committed at)
+    self.at_cause(fn() {
+      // (still bound once what was due by then is settled: one let go then reads nothing more, follows nothing again)
+      guard live.val else { return false }
+      let v = w.read(read)
+      if last.val != Some(v) {
+        last.val = Some(v)
         if live.val {
-          then(v)
+          @signals.untracked(fn() { then(v) })
         }
-      })
-    }
+        true
+      } else {
+        false
+      }
+    })
   })
   watch.val = Some(w)
   let v = w.read(read)
   last.val = Some(v)
+  // (one change, as each after it is: Tree::at_cause)
+  @signals.start_batch()
   @signals.untracked(fn() { then(v) })
+  @signals.end_batch()
   fn() {
     live.val = false
     watch.val = None
@@ -796,6 +810,17 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
 /// the host's now): what had left by then let go first, `f` done with that moment as its cause's, nothing it reads
 /// followed by what is reading.
 fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
+  self.at_cause(fn() {
+    @signals.untracked(f)
+    true
+  })
+}
+
+///|
+/// `f` done as of the moment of the change being committed (the one being committed, else the host's now): the tree
+/// brought there first (what had left by then let go), that moment its cause's for all `f` reads and does; what is
+/// marked taken where `f` says it changed something.
+fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   let at = if self.cause_at >= 0.0 {
     self.cause_at
   } else {
@@ -807,9 +832,15 @@ fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
   self.advance(at)
   let was = self.cause_at
   self.cause_at = at
-  @signals.untracked(f)
+  // (one change, as an event is: what it writes told once all of it is written, never what follows it running
+  // between two of its writes and seeing half of it)
+  @signals.start_batch()
+  let changed = f()
+  @signals.end_batch()
   self.cause_at = was
-  self.marked()
+  if changed {
+    self.marked()
+  }
 }
 
 ///|
@@ -1087,6 +1118,71 @@ pub fn View::words(self : View, words : Live[String], ink? : Int64 = 0x000000FFL
   })
   self.bind(8, words, Both, fn(s) { tree.nodes[at].look.words = s })
   self
+}
+
+///|
+/// Where the pointer's secondary button was pressed on a node (View::on_menu): in its own terms as it is drawn then, in
+/// the window's, and when (the event's own moment).
+pub(all) struct Menu {
+  x : Double
+  y : Double
+  wx : Double
+  wy : Double
+  at : Double
+} derive(Eq, Show, Debug)
+
+///|
+/// What the pointer's secondary button pressed on it asks for (its menu, where it was pressed): run as one change at
+/// the press's moment, outside any tracking. Its primary press and a finger are its on_press's and on_drag's, as ever.
+pub fn View::on_menu(self : View, f : (Menu) -> Unit) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.on_menu = Some(f)
+  self
+}
+
+///|
+/// The pointer's secondary button pressed at (x, y) in the window at `at`: where the topmost node drawn there that takes
+/// a press asks for a menu (View::on_menu), its menu asked for, as one event of that moment; true then. None asks where
+/// the topmost is one that does not (or hosts the old view, or nothing is there).
+pub fn Tree::menu_at(self : Tree, x : Double, y : Double, at : Double) -> Bool {
+  // (one moment for all of it, as a drag's (Tree::drag_at): an event's own, or the one it is told in; the tree brought
+  // there first only where it is not in one already)
+  let t = if self.cause_at >= 0.0 { self.cause_at } else { at }
+  if self.cause_at < 0.0 {
+    self.bring_to(t)
+  }
+  let asked = Ref(false)
+  self.event(t, fn() {
+    // (where things are as of then, what the change under way set before it counted)
+    self.laid_now()
+    let found : Ref[NodeId?] = Ref(None)
+    let now = self.logic_at()
+    self.each_drawn(fn(c, cx, cy, _) {
+      if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.pressless_at(c.id.at) {
+        let n = self.nodes[c.id.at]
+        let here = match n.takes {
+          Some(f) => @signals.untracked(fn() { f(x - cx, y - cy, now) })
+          None => true
+        }
+        if here && (n.on_menu is Some(_) || n.on_drag is Some(_) || n.on_press is Some(_) || n.hosted) {
+          found.val = Some(c.id)
+        }
+      }
+    })
+    match found.val {
+      Some(id) =>
+        match self.nodes[id.at].on_menu {
+          Some(f) => {
+            asked.val = true
+            let (nx, ny, _) = self.placed(id.at)
+            f({ x: x - nx, y: y - ny, wx: x, wy: y, at: t })
+          }
+          None => ()
+        }
+      None => ()
+    }
+  })
+  asked.val
 }
 
 ///|
@@ -1568,6 +1664,7 @@ fn View::let_go(self : View) -> Unit {
     f()
   }
   n.on_press = None
+  n.on_menu = None
   self.drag_ended()
   n.on_drag = None
   n.drag_said = n.drag_said + 1
@@ -1990,9 +2087,19 @@ fn Tree::time_now(self : Tree) -> Double {
 /// An event from outside handled at `at` (its own time) by `f`: what had ended by then settled first, `f` run outside
 /// any tracking as one change with `at` as its cause's moment (what it shows or lets go, it does as of then).
 pub fn Tree::event(self : Tree, at : Double, f : () -> Unit) -> Unit {
+  self.event_said(at, fn() {  }, f)
+}
+
+///|
+/// One event at `at` whose own facts (`said`: what it came by, as a host says it) are so as of its moment: what was due
+/// by then done first (seeing what was so before it), then `said` committed and told (what follows it brought to it,
+/// the event's moment their cause), then `f` taken as Tree::event takes it, finding things as they are with it. Inside
+/// another event, both in that one's, as one change.
+pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> Unit) -> Unit {
   // (in an event already: its moment, settled as it began)
   if self.cause_at >= 0.0 {
     @signals.start_batch()
+    @signals.untracked(said)
     @signals.untracked(f)
     @signals.end_batch()
     return
@@ -2000,6 +2107,10 @@ pub fn Tree::event(self : Tree, at : Double, f : () -> Unit) -> Unit {
   self.settle(at)
   let was = self.cause_at
   self.cause_at = at
+  // (its facts told before it is taken: what is bound to them so as it is found)
+  @signals.start_batch()
+  @signals.untracked(said)
+  @signals.end_batch()
   @signals.start_batch()
   @signals.untracked(f)
   @signals.end_batch()

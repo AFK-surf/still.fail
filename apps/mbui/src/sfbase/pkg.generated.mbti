@@ -7,6 +7,7 @@ import {
   "mbui/motion",
   "mbui/signals",
   "mbui/ui",
+  "mbui/view",
   "moonbitlang/core/buffer",
   "moonbitlang/core/debug",
   "moonbitlang/core/ref",
@@ -819,6 +820,8 @@ pub fn marks_any() -> Bool
 
 pub fn marks_back(@ui.Ctx) -> Unit
 
+pub fn marks_changed() -> Unit
+
 pub fn marks_commit(Array[Mark], before? : Array[Mark]) -> Unit
 
 pub fn marks_draw(@ui.Ctx, (Double, Double, Double, Double), Double, Double) -> Unit
@@ -826,6 +829,8 @@ pub fn marks_draw(@ui.Ctx, (Double, Double, Double, Double), Double, Double) -> 
 pub fn marks_drawn() -> Array[Mark]
 
 pub fn marks_finger(@ui.Ctx, Int32, Double, Double, (Double, Double, Double, Double), Double) -> Unit
+
+pub fn marks_finger_off() -> Unit
 
 pub fn marks_foot(@ui.Ctx) -> Unit
 
@@ -853,6 +858,8 @@ pub fn marks_redo() -> Unit
 
 pub fn marks_remove(Int32) -> Unit
 
+pub fn marks_said() -> Unit
+
 pub fn marks_shown_color() -> Int64
 
 pub fn marks_start() -> Unit
@@ -860,6 +867,8 @@ pub fn marks_start() -> Unit
 pub fn marks_undo() -> Unit
 
 pub fn marks_writing_bottom(@kit.Zoom) -> Double?
+
+pub fn marks_writing_bottom_in(@kit.Zoom, (Double, Double, Double, Double)?) -> Double?
 
 pub fn menu_bar(@ui.Ctx, Source) -> Unit
 
@@ -1597,9 +1606,13 @@ pub fn view_of_chat(Source, ChatRef) -> (ChatView?, Array[Entry], Json?)
 
 pub let viewer : @signals.Signal[Viewer?]
 
+pub let viewer_built : ViewerBuilt
+
 pub fn viewer_folder_label(Source, String, String, String) -> String
 
 pub fn viewer_layer(@ui.Ctx, Source) -> Unit
+
+pub fn viewer_node(@view.View, Source, () -> (Double, Double)) -> Unit
 
 pub fn viewer_place(Viewer, Source) -> (Int32, Int32)
 
@@ -3024,6 +3037,7 @@ pub(all) enum Stepping {
 }
 
 pub(all) struct Strip {
+  way : @motion.Way
   mut leaving : Leaving?
   mut pinned : Double?
   near : Map[String, Viewer]
@@ -3174,6 +3188,7 @@ pub(all) struct Viewer {
   mut download_asked : Bool
   mut install_after : Bool
   mut awake : Bool
+  awake_told : @signals.Signal[Int32]
   mut near_bar : Bool
   zoom : @kit.Zoom
   vzoom : @kit.Zoom
@@ -3187,7 +3202,7 @@ pub(all) struct Viewer {
   mut image : String
   mut started : Bool
   mut closing : Bool
-  fade : @motion.Value
+  fade : @motion.Way
   mut held : Bool
   mut last_x : Double
   mut last_y : Double
@@ -3205,12 +3220,14 @@ pub(all) struct Viewer {
   mut swiping : Bool
   mut down_x : Double
   mut down_y : Double
+  mut down_lx : Double
+  mut down_ly : Double
   mut at_left : Bool
   mut at_right : Bool
   mut caught : Bool
   mut strip_down : Double
   mut flies : Bool
-  fly : @motion.Value
+  fly : @motion.Way
   mut fly_back : Bool
   mut fly_from : Thumb?
   mut fly_lift : Double
@@ -3222,6 +3239,12 @@ pub(all) struct Viewer {
   mut media : @kit.Media?
   mut copied : Int32
   mut head_w : Double
+  serial : Int32
+  mut in_tree : Bool
+  fingers : Map[Int32, (Double, Double)]
+  speed : @ui.Velocity
+  mut hold_off : () -> Unit
+  lift : @motion.Way
 }
 pub fn Viewer::ask_install(Self, @ui.Ctx) -> Unit
 pub fn Viewer::ask_save(Self, @ui.Ctx) -> Unit
@@ -3234,7 +3257,7 @@ pub fn Viewer::dark(Self) -> Bool
 pub fn Viewer::desk_back(Self, Source) -> String
 pub fn Viewer::download(Self, Source) -> Json?
 pub fn Viewer::draft_key(Self) -> String
-pub fn Viewer::drag_zoomed(Self, @kit.Zoom, @motion.Anim, Double, Double, Bool, Bool) -> Unit
+pub fn Viewer::drag_zoomed(Self, @kit.Zoom, @motion.Way, Double, Double, Bool, Bool, Double) -> Unit
 pub fn Viewer::draw_flight(Self, @ui.Ctx, String, (Double, Double, Double, Double), Double, ground? : Int64) -> Unit
 pub fn Viewer::fetch(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::finish_marks(Self, @ui.Ctx, Bool) -> Unit
@@ -3248,6 +3271,7 @@ pub fn Viewer::gestures(Self, @ui.Ctx, Source, Int32, @kit.Zoom, Bool, Bool) -> 
 pub fn Viewer::go(Self, @ui.Ctx, Source, Int32, Double) -> Unit
 pub fn Viewer::id(Self) -> String
 pub fn Viewer::image_stage(Self, @ui.Ctx, Source, Int32) -> Unit
+pub fn Viewer::image_view(Self, @ui.Ctx, Source, Int32, Bool) -> Unit
 pub fn Viewer::kept_whole(Self) -> Bool
 pub fn Viewer::left_with_frame(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::let_go(Self) -> Unit
@@ -3255,8 +3279,10 @@ pub fn Viewer::lifted(Self) -> Double
 pub fn Viewer::lines_stage(Self, @ui.Ctx, PKind, Int32, (Int32) -> String, (Int32) -> Array[@ui.Run]?, String?, markdown? : String?) -> Bool
 pub fn Viewer::listed_size(Self) -> Double
 pub fn Viewer::marks_frame(Self, @ui.Ctx) -> Unit
+pub fn Viewer::marks_rect(Self, Double) -> (Double, Double, Double, Double)?
 pub fn Viewer::natural_size(Self, Source) -> (Double, Double)
 pub fn Viewer::near(Self, Source) -> (Self?, Self?)
+pub fn Viewer::near_ids(Self, Source) -> (String?, String?)
 pub fn Viewer::note(Self, @ui.Ctx, () -> Unit) -> Unit
 pub fn Viewer::opened_from(Self) -> Json
 pub fn Viewer::part_call(Self) -> String
@@ -3268,6 +3294,7 @@ pub fn Viewer::read_near(Self, Source, Self?, Self?) -> Unit
 pub fn Viewer::read_on(Self, Source) -> Unit
 pub fn Viewer::read_part(Self, Source, Double, Int32, String, (Result[(Json, Bytes), Json]) -> Unit) -> Unit
 pub fn Viewer::read_whole(Self, Source, (Result[Bytes, Json]) -> Unit) -> Unit
+pub fn Viewer::set_out(Self, @ui.Ctx, Source, Double) -> Unit
 pub fn Viewer::shown_kind(Self) -> PKind?
 pub fn Viewer::shown_picture(Self, @ui.Ctx, Source, (Double, Double, Double, Double)) -> String
 pub fn Viewer::shut(Self, @ui.Ctx) -> Unit
@@ -3278,6 +3305,12 @@ pub fn Viewer::toggle(Self) -> Unit
 pub fn Viewer::told_of(Self) -> Bool
 pub fn Viewer::view(Self) -> @ui.NativeView?
 pub fn Viewer::wake(Self) -> Unit
+pub fn Viewer::wheel(Self, @ui.Ctx, Int32, @kit.Zoom) -> Unit
+
+pub(all) struct ViewerBuilt {
+  mut drawing : Int32
+  mut bars : Int32
+}
 
 pub(all) struct Viewport {
   width : Int32

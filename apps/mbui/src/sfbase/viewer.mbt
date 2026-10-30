@@ -179,8 +179,10 @@ pub(all) struct Viewer {
   mut download_asked : Bool
   /// …or to be installed (an APK)
   mut install_after : Bool
-  /// the bars shown: till a tap (a click) hides them, and another brings them back (the user, 2026-10-28)
+  /// the bars shown: till a tap (a click) hides them, and another brings them back (the user, 2026-10-28); told as it
+  /// changes (`awake_told`: what shows the bars follows it)
   mut awake : Bool
+  awake_told : @signals.Signal[Int]
   /// a mouse's pointer along the top, where the bar is: there while it is, hidden or not
   mut near_bar : Bool
   zoom : @kit.Zoom
@@ -201,7 +203,7 @@ pub(all) struct Viewer {
   /// drawn once (its way in set going), closed (only drawn going), how far it has faded in (0 … 1, a motion)
   mut started : Bool
   mut closing : Bool
-  fade : @motion.Value
+  fade : @motion.Way
   // a finger on the stage: where it was last frame, how far it has gone, the last tap (time, where)
   mut held : Bool
   mut last_x : Double
@@ -223,9 +225,11 @@ pub(all) struct Viewer {
   steps : Stepping
   /// a finger moving it sideways to the one before or after (fitted, not zoomed)
   mut swiping : Bool
-  /// where the finger went down
+  /// where the finger went down (in the window's terms; on the stage, `down_lx`, `down_ly`: the canvas's own)
   mut down_x : Double
   mut down_y : Double
+  mut down_lx : Double
+  mut down_ly : Double
   /// zoomed in, its left and its right edge in the stage as the finger went down (a fling on past one goes beside it)
   mut at_left : Bool
   mut at_right : Bool
@@ -237,7 +241,7 @@ pub(all) struct Viewer {
   /// its flight from the chat's thumbnail (or back into it): whether it flies, how far (0 the thumbnail … 1 the
   /// stage, a motion), back or not, from where
   mut flies : Bool
-  fly : @motion.Value
+  fly : @motion.Way
   mut fly_back : Bool
   mut fly_from : Thumb?
   /// the share of the flight's way (`fly`, where it has got to on its Move) that is its thumbnail going out from under
@@ -261,7 +265,24 @@ pub(all) struct Viewer {
   mut copied : Int
   /// how wide the floating bar has been (it never narrows once open: @sf.viewer_frame_bar)
   mut head_w : Double
+  /// which opening of a viewer it is (the window's tree picks its node by it: viewer_tree.mbt)
+  serial : Int
+  /// drawn by a node of the window's tree (viewer_tree.mbt), not by the old view's layer
+  mut in_tree : Bool
+  /// the fingers on its stage by their ids (Drag's `finger`), where each is now; how fast the one moving it goes, by
+  /// its events' own moments; what calls off the hold waited for (its picture's menu)
+  fingers : Map[Int, (Double, Double)]
+  speed : @ui.Velocity
+  mut hold_off : () -> Unit
+  /// how far the picture is lifted over the keyboard while marking (its way said as the keyboard or what is written
+  /// changes, at that moment: viewer_tree.mbt)
+  lift : @motion.Way
 }
+
+///|
+/// How many viewers have been opened: the next one's `serial`.
+// kept across runs: only a count
+let viewers_opened : Ref[Int] = Ref(0)
 
 ///|
 /// A thumbnail of the chat's the viewer flies from and back into (FilePreview.kt Thumb): where it is laid out (in the
@@ -642,6 +663,7 @@ pub fn new_viewer(
     download_asked: false,
     install_after: false,
     awake: true,
+    awake_told: @signals.signal(0),
     near_bar: false,
     zoom: @kit.Zoom::new(),
     // (a film edge to edge, enlarged, as the player puts it: what it flies to and from)
@@ -656,7 +678,7 @@ pub fn new_viewer(
     image: "",
     started: false,
     closing: false,
-    fade: @motion.Value::new(0.0),
+    fade: @motion.Way::new(0.0),
     held: false,
     last_x: 0.0,
     last_y: 0.0,
@@ -674,12 +696,15 @@ pub fn new_viewer(
     swiping: false,
     down_x: 0.0,
     down_y: 0.0,
+    down_lx: 0.0,
+    down_ly: 0.0,
     at_left: false,
     at_right: false,
     caught: false,
     strip_down: 0.0,
     flies: false,
-    fly: @motion.Value::new(0.0),
+    // (at the stage till a flight says otherwise: its share of the ground whole)
+    fly: @motion.Way::new(1.0),
     fly_back: false,
     fly_from: None,
     fly_lift: 0.0,
@@ -694,6 +719,15 @@ pub fn new_viewer(
     media: None,
     copied: 0,
     head_w: 0.0,
+    serial: {
+      viewers_opened.val = viewers_opened.val + 1
+      viewers_opened.val
+    },
+    in_tree: false,
+    fingers: Map([]),
+    speed: @ui.Velocity::new(),
+    hold_off: fn() {  },
+    lift: @motion.Way::new(0.0),
   }
   // (one named by its path read anew each time: it may have changed since)
   if !named {
@@ -760,6 +794,8 @@ pub(all) struct Leaving {
 
 ///|
 pub(all) struct Strip {
+  /// where the strip of pictures is (the one shown's offset across), its way said at each cause's moment
+  way : @motion.Way
   mut leaving : Leaving?
   /// where the strip is held for a fixture's shot (a swipe halfway), else None
   mut pinned : Double?
@@ -768,7 +804,7 @@ pub(all) struct Strip {
 }
 
 ///|
-pub let pv_strip : Strip = { leaving: None, pinned: None, near: Map([]) }
+pub let pv_strip : Strip = { way: @motion.Way::new(0.0), leaving: None, pinned: None, near: Map([]) }
 
 ///|
 /// The images beside one asked of the core (`imageNear`), each by its params: let go with the chat they are of
@@ -795,6 +831,9 @@ pub fn near_left(src : Source, station : String) -> Unit {
 /// PDF closed).
 pub fn close_now() -> Unit {
   marks_leave()
+  // (closed at once: nothing of its strip goes on)
+  pv_strip.leaving = None
+  pv_strip.way.put(0.0)
   match viewer.get() {
     Some(v) => v.let_go()
     None => ()
@@ -1064,9 +1103,13 @@ pub fn Viewer::kept_whole(self : Viewer) -> Bool {
 ///|
 /// The whole of it: a chat's in one `station.file`; a drive's a part (4 MB) at a time, as its reader reads.
 pub fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Json]) -> Unit) -> Unit {
+  // (its answer one change, whoever asked (the one shown, or read ahead beside it): what came, or that it failed, told
+  // with its no longer being read, never what follows either running between them and asking again)
   let done = fn(r) {
+    @signals.start_batch()
     self.got.set(None)
     done(r)
+    @signals.end_batch()
   }
   match self.drive {
     // one a message names: as it is now (at most 16 MB)
@@ -1289,6 +1332,17 @@ pub fn viewer_set_out(c : @ui.Ctx, src : Source) -> Unit {
         None => return
       }
   }
+  // (one a node of the window's tree draws is set out as that node is made: viewer_tree.mbt)
+  if !v.in_tree {
+    v.set_out(c, src, c.moment())
+  }
+}
+
+///|
+/// Viewer `v` set out at the moment `at` (its cause's: where it is a node of the window's tree, as that node is made,
+/// viewer_tree.mbt), once: growing from its thumbnail, or fading in.
+pub fn Viewer::set_out(self : Viewer, c : @ui.Ctx, src : Source, at : Double) -> Unit {
+  let v = self
   if !v.started {
     v.started = true
     // it comes up in the keyboard's place: what was being typed into lets go of it first
@@ -1310,8 +1364,8 @@ pub fn viewer_set_out(c : @ui.Ctx, src : Source) -> Unit {
             // Viewer::flying, Viewer::lifted)
             let (lift, far) = fly_way(t, Some(to))
             v.fly_lift = lift
-            v.fly.set(0.0)
-            ignore(v.fly.start(1.0, @motion.move(points=far)))
+            v.fly.put(0.0)
+            v.fly.go(1.0, @motion.move(points=far), at~)
             pv_hidden.val = v.id()
           }
           None => ()
@@ -1320,9 +1374,9 @@ pub fn viewer_set_out(c : @ui.Ctx, src : Source) -> Unit {
     }
     // as web's: fading in (FilePreview.css.ts fp: 140 ms ease-out), when there is no thumbnail to grow from
     if !v.flies {
-      ignore(v.fade.start(1.0, @motion.tween(pv_fade_ms, ease=Out)))
+      v.fade.go(1.0, @motion.tween(pv_fade_ms, ease=Out), at~)
     } else {
-      v.fade.set(1.0)
+      v.fade.put(1.0)
     }
   }
 }
@@ -1338,12 +1392,16 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
         None => return
       }
   }
+  // (drawn by a node of the window's tree, as what takes the hand there: viewer_tree.mbt)
+  if v.in_tree {
+    return
+  }
   viewer_set_out(c, src)
   src_now.val = src.now
   v.marks_frame(c)
   let p = v.flying()
   // (the motions ask for their frames, said once as they set out: the flight, the fade)
-  let landed = v.flies && v.fly_back && !v.fly.is_animating()
+  let landed = v.flies && v.fly_back && !v.fly.goes_at(c.moment())
   // (landed by the frame's time, the same in each build of the frame; what is let go is the viewer going, built
   // no more)
   if landed {
@@ -1351,7 +1409,7 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
     leaving_done()
     pv_hidden.val = ""
   }
-  if v.flies && !v.fly_back && !v.fly.is_animating() {
+  if v.flies && !v.fly_back && !v.fly.goes_at(c.moment()) {
     v.flies = false
     pv_hidden.val = ""
   }
@@ -1361,7 +1419,7 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
   if v.leaving_grab {
     v.left_with_frame(c, src)
   }
-  if v.closing && !v.flies && !v.leaving_grab && !v.fade.is_animating() {
+  if v.closing && !v.flies && !v.leaving_grab && !v.fade.goes_at(c.moment()) {
     // faded out: gone
     leaving_done()
     return
@@ -1467,11 +1525,9 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
     // closed at once: the one going is only drawn (what was going before it, gone)
     marks_leave()
     leaving_done()
-    viewer.set(None)
-    pv_leaving.set(Some(self))
     // an image shrinks back into its thumbnail when the chat shows it (from where a flight in has got to), else
     // it fades out
-    match (thumb_of(c, self.id()), self.shown_kind(), self.zoom.rect()) {
+    match (thumb_of(c, self.id()), self.shown_kind(), self.zoom.rect_at(viewer_moment(c))) {
       (Some(t), Some(KImage), Some(r)) => {
         self.fly_from = Some(t)
         self.fly_back = true
@@ -1497,8 +1553,11 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
       }
       // the way in played backwards (web's fp: ease-out on the way in, the same curve run back on the way out): the
       // ground and the picture stay nearly whole at first, then go
-      _ => ignore(self.fade.start(0.0, @motion.tween(pv_fade_ms, ease=Leave)))
+      _ => self.fade.go(0.0, @motion.tween(pv_fade_ms, ease=Leave), at=viewer_moment(c))
     }
+    // (closed: the one going from here, its way said: what follows its going reads where it goes)
+    viewer.set(None)
+    pv_leaving.set(Some(self))
     // the views under the canvas go at once (they cannot fade)
     match self.view() {
       // (once the frame's builds are over: closed as the back is taken or the marks are put, once)
@@ -1506,6 +1565,13 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
       None => ()
     }
   }
+}
+
+///|
+/// The moment what is told the viewer now happens at: the event's, where a node of the window's tree takes it (its
+/// cause's: viewer_tree.mbt), else the frame's.
+fn viewer_moment(c : @ui.Ctx) -> Double {
+  @ui.tree_cause().unwrap_or(c.moment())
 }
 
 ///|
@@ -1530,9 +1596,10 @@ fn Viewer::fly_home_from(self : Viewer, t : Thumb, from : (Double, Double, Doubl
   if !self.flies {
     self.flies = true
     self.fly_lift = 0.0
-    self.fly.set(1.0)
+    self.fly.put(1.0)
   }
-  let (was, q) = (self.fly_lift, self.fly.get())
+  let at = viewer_moment(@ui.current())
+  let (was, q) = (self.fly_lift, self.fly.value_at(at))
   let (lift, far) = fly_way(t, from)
   let q = if q >= was {
     lift + (q - was) / (1.0 - was) * (1.0 - lift)
@@ -1542,9 +1609,9 @@ fn Viewer::fly_home_from(self : Viewer, t : Thumb, from : (Double, Double, Doubl
     0.0
   }
   self.fly_lift = lift
-  self.fly.set(q)
+  self.fly.put(q)
   // (what is left of its way: as far as it had come)
-  ignore(self.fly.start(0.0, @motion.move(points=far)))
+  self.fly.go(0.0, @motion.move(points=far), at~)
 }
 
 ///|
@@ -1581,17 +1648,27 @@ pub fn Viewer::left_with_frame(self : Viewer, c : @ui.Ctx, src : Source) -> Unit
 /// A tap (a click) on the stage shows or hides the bars: nothing else hides them.
 pub fn Viewer::toggle(self : Viewer) -> Unit {
   self.awake = !self.awake
+  self.awake_said()
 }
 
 ///|
 pub fn Viewer::wake(self : Viewer) -> Unit {
-  self.awake = true
+  if !self.awake {
+    self.awake = true
+    self.awake_said()
+  }
+}
+
+///|
+fn Viewer::awake_said(self : Viewer) -> Unit {
+  self.awake_told.set(@signals.untracked(fn() { self.awake_told.get() }) + 1)
 }
 
 ///|
 /// Whether the bars show: awake, or a mouse's pointer along the top where the bar is, or while the whole of an image
 /// comes, or over a page whose taps are its own.
 pub fn Viewer::bars_shown(self : Viewer) -> Bool {
+  self.awake_told.get() |> ignore
   self.awake || self.near_bar || self.coming() || (self.shown_kind() == Some(KHtml) && !self.source) || marking.on
 }
 
@@ -1630,6 +1707,7 @@ pub fn Viewer::finish_marks(self : Viewer, c : @ui.Ctx, to_draft : Bool) -> Unit
     }
     None => marking.error = pv("android-chat.file.drawFailed")
   }
+  marks_changed()
 }
 
 
@@ -1660,6 +1738,7 @@ pub fn Viewer::marks_frame(self : Viewer, c : @ui.Ctx) -> Unit {
             // (the host's picture of the marks, said once)
             keep_bytes(c, marking.job_name, "image/png", png)
           }
+          marks_changed()
         }
         // (drawn on the host's side: its word that it is done brings the frame that takes it)
         None => ()
@@ -2044,60 +2123,81 @@ fn Viewer::picture_menu(self : Viewer, c : @ui.Ctx, stage : Int, at : (Double, D
     (Some((x, y)), Some((rx, ry, rw, rh)), Some(b)) if x >= rx && x < rx + rw && y >= ry && y < ry + rh => {
       // held by a finger: the press is the menu's, felt
       @sf.menu_held(c, "preview") |> ignore
-      let (label, glyph) = @sf.picture_out_way()
-      let out = fn() {
-        if @sf.picture_to_album() {
-          keep_bytes(
-            c,
-            self.name,
-            self.mime,
-            b,
-            way=Photos,
-          )
-        } else {
-          c.copy_image(b)
-          self.copied += 1
-        }
-      }
-      @sf.menu([Some(@sf.menu_item_of(label, out, icon=glyph))], from=@sf.at_point(x, y))
+      self.picture_menu_at(c, x, y, b)
     }
     _ => ()
   }
 }
 
 ///|
+/// The picture's own menu (Viewer::picture_menu) at (`x`, `y`), its whole `b` here.
+fn Viewer::picture_menu_at(self : Viewer, c : @ui.Ctx, x : Double, y : Double, b : Bytes) -> Unit {
+  let (label, glyph) = @sf.picture_out_way()
+  let out = fn() {
+    if @sf.picture_to_album() {
+      keep_bytes(c, self.name, self.mime, b, way=Photos)
+    } else {
+      c.copy_image(b)
+      self.copied += 1
+    }
+  }
+  @sf.menu([Some(@sf.menu_item_of(label, out, icon=glyph))], from=@sf.at_point(x, y))
+}
+
+///|
 /// An image fitted to the stage, to double-tap, pan and zoom (the wheel, the bar's − and +); until the whole of it
 /// comes, the chat's thumbnail (or its likeness) stands in its place.
 pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Unit {
+  self.image_view(c, src, stage, true)
+}
+
+///|
+/// The image stage (Viewer::image_stage) drawn, and with `inputs` what it takes of the hand and tells its zoom as it is
+/// built (the old view's way); without, drawing alone: where it is a node of the window's tree, what the hand does
+/// and what the zoom is told are the node's, at their own moments (viewer_tree.mbt).
+pub fn Viewer::image_view(self : Viewer, c : @ui.Ctx, src : Source, stage : Int, inputs : Bool) -> Unit {
   let v = self
   let picture = v.picture(src)
   if v.image != "" && @ui.image_state(v.image) == -1 {
-    tap_stage(c, v, stage)
+    if inputs {
+      tap_stage(c, v, stage)
+    }
     v.note(c, fn() {
       c.text(pv("android-chat.file.image.failed"), size=@sf.theme().t.body, color=dark_muted) |> ignore
     })
     return
   }
   // its size: as sent, else as decoded, else its stand-in's
-  let (nw, nh) = v.natural_size(src)
   let z = v.zoom
-  // the keyboard over the stage, not the stage made shorter for it (FilePreview.kt: the zoom's box is the window's)
   let ime = c.ime_inset()
-  z.boxed(c.width, c.height + ime)
-  z.natural(nw, nh)
-  z.step()
+  if inputs {
+    let (nw, nh) = v.natural_size(src)
+    // the keyboard over the stage, not the stage made shorter for it (FilePreview.kt: the zoom's box is the window's)
+    z.boxed(c.width, c.height + ime)
+    z.natural(nw, nh)
+    z.step()
+  }
   // lifted while the keyboard is up, as far as keeps what is being written (or the open note's pin, its box under it)
   // 24 clear of it (FilePreview.kt lift: animateFloatAsState's spring)
   let below = match marks_writing_bottom(z) {
     Some(b) => b + marks_keyboard_gap - c.height
     None => 0.0
   }
-  let lift = @motion.animate(c, "preview/lift", if ime > 0.0 && below > 0.0 { below } else { 0.0 })
+  let lift = if v.in_tree {
+    v.lift.get()
+  } else {
+    @motion.animate(c, "preview/lift", if ime > 0.0 && below > 0.0 { below } else { 0.0 })
+  }
   let rect = fn() { z.rect().map(fn(r) { (r.0, r.1 - lift, r.2, r.3) }) }
   let (before, after) = v.near(src)
-  // (once the frame's builds are over: a step taken further on in this one reads beside the image it comes to)
-  c.after_build("pv-near", fn() { v.read_near(src, before, after) })
-  if marking.on {
+  // (once the frame's builds are over: a step taken further on in this one reads beside the image it comes to; one the
+  // window's tree draws reads ahead as what is beside it is said, viewer_tree.mbt)
+  if !v.in_tree {
+    c.after_build("pv-near", fn() { v.read_near(src, before, after) })
+  }
+  if !inputs {
+    ()
+  } else if marking.on {
     // marking: one finger draws, two pinch as ever (no stepping meanwhile)
     if c.second_pointer() is Some(_) || v.pinched {
       v.gestures(c, src, stage, z, false, false)
@@ -2145,16 +2245,15 @@ pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int
     }
   }
   // the strip: the one shown and those beside it, the stage's width and the gap apart (FilePreview.kt strip)
-  let strip = @motion.anim(c, "preview/strip", 0.0, global=true)
+  let strip = pv_strip.way
   match pv_strip.pinned {
-    Some(x) => strip.snap(x)
+    Some(x) => strip.put(x)
     None => ()
   }
   let sx = strip.get()
-  // (let go at the end its way declared as it set out)
-  if strip.over() {
-    pv_strip.leaving = None
-  }
+  // (the one going shown while the strip's way goes, as it was said at its cause: read only, whatever frames were
+  // drawn, or drawn ahead, before)
+  let sliding = strip.goes_at(c.moment())
   let width = c.width + slide_gap
   let flying = v.flies
   match rect() {
@@ -2183,12 +2282,12 @@ pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int
   }
   match pv_strip.leaving {
     // the one going, drawn from where it was (it has no place of its own any more)
-    Some(l) => {
+    Some(l) if sliding => {
       let lx = l.x + sx - l.dir.to_double() * l.width
       c.layer(fn() { c.picture(l.picture, x=lx, y=l.y, w=l.w, h=l.h, max_px=stage_px) |> ignore }) |> ignore
     }
     // those beside it, out of sight until a swipe brings them in
-    None =>
+    _ =>
       if sx != 0.0 {
         for side in [(before, -1.0), (after, 1.0)] {
           match side.0 {
@@ -2216,10 +2315,7 @@ pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int
 /// The images beside this one (FilePreview.kt before, after): a chat's as the core tells them (`imageNear`, each with
 /// the session that keeps it), a folder's by its order; their viewers kept (and read ahead) while they are beside it.
 pub fn Viewer::near(self : Viewer, src : Source) -> (Viewer?, Viewer?) {
-  if self.shown_kind() != Some(KImage) {
-    return (None, None)
-  }
-  let made = fn(id : String, f : () -> Viewer) -> Viewer {
+  self.near_by(src, fn(id, f) {
     match pv_strip.near.get(id) {
       Some(n) => n
       None => {
@@ -2228,6 +2324,20 @@ pub fn Viewer::near(self : Viewer, src : Source) -> (Viewer?, Viewer?) {
         n
       }
     }
+  })
+}
+
+///|
+/// Which images are beside this one (Viewer::near's, by their ids): what is said of them, no viewer made for them.
+pub fn Viewer::near_ids(self : Viewer, src : Source) -> (String?, String?) {
+  self.near_by(src, fn(id, _) { id })
+}
+
+///|
+/// The images beside this one, each as `made` takes it (its id, and how its viewer is made).
+fn[T] Viewer::near_by(self : Viewer, src : Source, made : (String, () -> Viewer) -> T) -> (T?, T?) {
+  if self.shown_kind() != Some(KImage) {
+    return (None, None)
   }
   match self.steps {
     NoSteps => (None, None)
@@ -2239,7 +2349,7 @@ pub fn Viewer::near(self : Viewer, src : Source) -> (Viewer?, Viewer?) {
       }
       near_asked[Json::object(p).stringify()] = p
       let told = (src.topic)("imageNear", p).value
-      let side = fn(k : String) -> Viewer? {
+      let side = fn(k : String) -> T? {
         match field(told, k) {
           Some(Object(_) as j) => {
             let a = attachment_of(j)
@@ -2261,7 +2371,7 @@ pub fn Viewer::near(self : Viewer, src : Source) -> (Viewer?, Viewer?) {
       if at < 0 {
         return (None, None)
       }
-      let side = fn(i : Int) -> Viewer? {
+      let side = fn(i : Int) -> T? {
         match files.get(i) {
           Some(f) =>
             Some(
@@ -2377,16 +2487,17 @@ pub fn Viewer::natural_size(self : Viewer, src : Source) -> (Double, Double) {
 /// as this one goes out to the other (the strip on SLIDE from where the finger left it, at its speed); with none
 /// there, back.
 pub fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity : Double) -> Unit {
-  let strip = @motion.anim(c, "preview/strip", 0.0, global=true)
+  let strip = pv_strip.way
+  let at = viewer_moment(c)
   let (before, after) = self.near(src)
   let to = if dir < 0 { before } else { after }
   match to {
-    None => strip.animate(0.0, @motion.sheet_spring, velocity~)
+    None => strip.go(0.0, @motion.sheet_spring, at~, velocity~)
     Some(n) => {
-      let width = c.width + slide_gap
-      let from = strip.get()
+      let width = self.zoom.bw + slide_gap
+      let from = strip.value_at(at)
       // (as it shows: its stand-in while its whole is not decoded)
-      pv_strip.leaving = match self.zoom.rect() {
+      pv_strip.leaving = match self.zoom.rect_at(at) {
         Some(r) if self.picture(src) != "" => {
           let (x, y, w, h) = r
           Some({ picture: self.shown_picture(c, src, r), x, y, w, h, dir, width })
@@ -2395,12 +2506,13 @@ pub fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity 
       }
       // shown at once: no fade; its bars as they were (only a tap hides or shows them, the user 2026-10-28)
       n.started = true
-      n.fade.set(1.0)
+      n.fade.put(1.0)
       n.awake = self.awake
+      n.awake_said()
       viewer.set(Some(n))
       pv_strip.near.remove(n.id())
-      strip.snap(from + dir.to_double() * width)
-      strip.animate(0.0, @motion.sheet_spring, velocity~)
+      strip.put(from + dir.to_double() * width)
+      strip.go(0.0, @motion.sheet_spring, at~, velocity~)
       // the frame built again from the one it stepped to: a swipe let go steps in the middle of the stage's build,
       // which would go on to draw this one's picture where the strip now puts the next one (a frame of this one in its
       // place, or of nothing where the one before comes)
@@ -2427,7 +2539,7 @@ pub fn Viewer::gestures(
   // what the finger did, by its events' own times (how fast, how far apart), not the frames'
   let at = c.pointer_at()
   let (px, py, _) = c.pointer()
-  let strip = @motion.anim(c, "preview/strip", 0.0, global=true)
+  let strip = pv_strip.way
   // two fingers: a pinch, round the point between them, which moves the picture as it moves
   match c.second_pointer() {
     Some((x2, y2)) if c.pressed(stage) && z.nw > 0.0 => {
@@ -2444,7 +2556,7 @@ pub fn Viewer::gestures(
       // a second finger as one swipes: the strip goes back (FilePreview.kt), not left between two pictures
       if v.swiping {
         v.swiping = false
-        strip.animate(0.0, @motion.sheet_spring)
+        strip.go(0.0, @motion.sheet_spring, at=c.moment())
       }
       // one finger again after it: followed from where it is then
       v.held = false
@@ -2460,7 +2572,7 @@ pub fn Viewer::gestures(
       if z.zoomed() {
         // zoomed in: it goes with the finger (at once after a pinch, the press moved already)
         if (v.moved > 8.0 || v.pinched) && (dx != 0.0 || dy != 0.0) {
-          v.drag_zoomed(z, strip, dx, dy, has_before, has_after)
+          v.drag_zoomed(z, strip, dx, dy, has_before, has_after, c.moment())
         }
       } else {
         // fitted, one finger sideways moves the strip (FilePreview.kt swipe), under the finger from where it went
@@ -2475,7 +2587,7 @@ pub fn Viewer::gestures(
         if v.swiping {
           let next = strip.get() + dx
           let none = if next > 0.0 { !has_before } else { !has_after }
-          strip.snap(if none { strip.get() + dx / 3.0 } else { next })
+          strip.put(if none { strip.get() + dx / 3.0 } else { next })
         } else if v.moved > 8.0 && (dx != 0.0 || dy != 0.0) {
           z.pan(dx, dy)
         }
@@ -2491,7 +2603,7 @@ pub fn Viewer::gestures(
         v.caught = z.stop_fling()
         let s = strip.get()
         if s != 0.0 {
-          strip.snap(s)
+          strip.put(s)
           v.caught = true
         }
         v.strip_down = s
@@ -2516,7 +2628,7 @@ pub fn Viewer::gestures(
           v.strip_down = strip.get()
         }
         let none = if tx > 0.0 { !has_before } else { !has_after }
-        strip.snap(strip.get() + (if none { tx / 3.0 } else { tx }))
+        strip.put(strip.get() + (if none { tx / 3.0 } else { tx }))
         v.moved = tx.abs() + ty.abs()
         v.swiping = true
         v.held = true
@@ -2545,7 +2657,7 @@ pub fn Viewer::gestures(
       } else if to > 0 {
         v.go(c, src, 1, vx * 1000.0)
       } else {
-        strip.animate(0.0, @motion.sheet_spring, velocity=vx * 1000.0)
+        strip.go(0.0, @motion.sheet_spring, at=c.moment(), velocity=vx * 1000.0)
       }
     } else if v.held && z.zoomed() && (v.moved > 8.0 || v.pinched) {
       // zoomed in, let go moving: on at the finger's speed, slowing, to a stop or its edge
@@ -2588,6 +2700,16 @@ pub fn Viewer::gestures(
       v.toggle()
     }
   }
+  v.wheel(c, stage, z)
+}
+
+///|
+/// The wheel over the stage: a desktop's pans (⇧ sideways), with ⌃ or ⌘ held (or a trackpad's pinch) zooms round the
+/// pointer; a phone's zooms. (Taken by the old view still where the stage is a node of the window's tree: the tree has
+/// no wheel of its own yet.)
+pub fn Viewer::wheel(self : Viewer, c : @ui.Ctx, stage : Int, z : @kit.Zoom) -> Unit {
+  let desk = @sf.pointer_rests()
+  let (px, py, _) = c.pointer()
   // the wheel: a desktop's pans (⇧ sideways), with ⌃ or ⌘ held (or a trackpad's pinch) zooms round the pointer
   // (FilePreview.tsx useZoom onWheel: a pinch's small steps finer than a wheel's notches); a phone's zooms
   let (wx, wy, mods) = @ui.wheel_of(c, stage)
@@ -2617,36 +2739,37 @@ pub fn Viewer::gestures(
 pub fn Viewer::drag_zoomed(
   self : Viewer,
   z : @kit.Zoom,
-  strip : @motion.Anim,
+  strip : @motion.Way,
   dx : Double,
   dy : Double,
   has_before : Bool,
   has_after : Bool,
+  at : Double,
 ) -> Unit {
   // how far the strip goes for a point of the finger's way toward the one before (> 0) or after
   let give = fn(toward : Double) { if (if toward > 0.0 { has_before } else { has_after }) { 1.0 } else { 1.0 / 3.0 } }
   let mut across = dx
-  let s = strip.get()
+  let s = strip.value_at(at)
   if s != 0.0 && across != 0.0 && (across > 0.0) != (s > 0.0) {
     let back = -s / give(s)
     if across.abs() <= back.abs() {
-      strip.snap(s + across * give(s))
+      strip.put(s + across * give(s))
       across = 0.0
     } else {
-      strip.snap(0.0)
+      strip.put(0.0)
       across = across - back
     }
   }
-  let x0 = z.x
-  z.pan(across, dy)
-  let left = across - (z.x - x0)
+  let x0 = z.rect_at(at).map(fn(r) { r.0 }).unwrap_or(0.0)
+  z.pan(across, dy, at~)
+  let left = across - (z.rect_at(at).map(fn(r) { r.0 }).unwrap_or(0.0) - x0)
   let from_edge = if left > 0.0 { self.at_left } else { self.at_right }
   if left.abs() > 0.001 && (has_before || has_after) && from_edge {
     if !self.swiping {
       self.swiping = true
       pv_strip.leaving = None
     }
-    strip.snap(strip.get() + left * give(left))
+    strip.put(strip.value_at(at) + left * give(left))
   }
 }
 
@@ -3234,6 +3357,7 @@ pub fn file_viewer_reset() -> Unit {
   marking.job_name = ""
   marking.write_field.set("")
   marking.note_field.set("")
+  marks_changed()
   pv_thumbs.clear()
   pv_lists.clear()
   pv_frames.clear()
@@ -3242,6 +3366,7 @@ pub fn file_viewer_reset() -> Unit {
   pv_hidden.val = ""
   pv_read.clear()
   pv_strip.leaving = None
+  pv_strip.way.put(0.0)
   pv_strip.pinned = None
   pv_strip.near.clear()
   near_asked.clear()

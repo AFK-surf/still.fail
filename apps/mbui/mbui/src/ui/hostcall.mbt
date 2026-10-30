@@ -1195,6 +1195,25 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
     view_stood(id)
     return
   }
+  // (a picture decoded, or not to be: ready at this word's moment, what reads how big that picture is following it,
+  // image.mbt's image_decoded)
+  // what reads that picture told alone, by what is said of it: nothing else of the frame is built again for it (no
+  // event from outside of the frame's whole)
+  if kind == outside_image {
+    if state != 0 {
+      let at = view_moment()
+      image_decoded(id, if at >= 0.0 { at } else { g().clock })
+    }
+    // (its sizes recorded now (hostrec.mbt), drawn or not: one never drawn is still asked of a Tester)
+    if state == 1 && fake.val is None && text_recording() {
+      let out = FixedArray::make(4, 0.0)
+      if @hostapi.image_info(id, out) == 1 {
+        rec_image_ready(id, out)
+      }
+    }
+    outside_end(kind, id)
+    return
+  }
   outside_came()
   if kind == outside_update {
     // (how it goes changed: what it says now set, followed by what reads it; held while the host works at it)
@@ -1213,13 +1232,6 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
   }
   if kind == outside_view && state != 0 {
     views_told[id] = true
-  }
-  // a picture decoded: its sizes recorded now (hostrec.mbt), drawn or not (one never drawn is still asked of a Tester)
-  if kind == outside_image && state == 1 && fake.val is None && text_recording() {
-    let out = FixedArray::make(4, 0.0)
-    if @hostapi.image_info(id, out) == 1 {
-      rec_image_ready(id, out)
-    }
   }
   outside_end(kind, id)
   // an answer brought (what was picked, read, drawn, grabbed: told, followed by what waits on it; a view the host is

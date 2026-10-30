@@ -552,6 +552,13 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       view_input_went(-1)
       false
     }
+    // (the secondary button on a node that asks for a menu: its menu, at the press's moment; the rest of the press
+    // nobody's)
+    (0, _) if button == 2 && tree.menu_at(x, y, at) => {
+      view_held.val = Some(Nowhere)
+      h_frame_owed()
+      true
+    }
     (0, _) =>
       match tree.target_at(x, y) {
         // (held by a node of the tree's: the finger its, each event at its moment)
@@ -568,7 +575,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           view_held.val = Some(Nowhere)
           true
         }
-        // (the secondary button presses nothing: no menu of a node's yet)
+        // (the secondary button presses nothing where nothing asks for a menu)
         Pressed(id) => {
           view_held.val = Some(if button == 2 { Nowhere } else { Node(id) })
           // (the hold its, called off as any is: the window behind, the node taking no press, a second finger)
@@ -864,9 +871,19 @@ fn old_part_of(id : @view.NodeId) -> Int {
 /// An event from outside handled by `f` at its own moment (the host's event time, taken once): the window's tree
 /// settled to it first, `f` run as one change with it as its cause's moment; an event in one, at that one's (Tree::event).
 fn view_event(f : () -> Unit) -> Unit {
+  view_event_said(fn() {  }, f)
+}
+
+///|
+/// One event (view_event's) whose own facts (`said`: what the host says it came by) are so as of its moment, told
+/// before it is taken (Tree::event_said).
+fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
   match view_app.val {
-    Some(t) => t.event(h_event_time(), f)
-    None => f()
+    Some(t) => t.event_said(h_event_time(), said, f)
+    None => {
+      said()
+      f()
+    }
   }
 }
 
@@ -1072,4 +1089,27 @@ fn view_presses_at(x : Double, y : Double) -> @view.NodeId? {
     Dragged(id) | Pressed(id) => Some(id)
     _ => None
   }
+}
+
+///|
+/// Old view `v` (as `old` made it) taking a finger only where what it builds takes presses (a hit target of its own
+/// there, as the old frame finds it as the tree has things then: old_hits_place); elsewhere what is under it in the
+/// tree takes it, as though it were not there (a bar of buttons over a node that takes the rest: the viewer's over its
+/// canvas).
+pub fn old_takes_own(v : @view.View) -> @view.View {
+  let id = v.id()
+  v.takes(fn(lx, ly, _) {
+    let (nx, ny, _, _) = v.rect()
+    let (x, y) = (nx + lx, ny + ly)
+    let c = g()
+    let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
+    let k = press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y)
+    k >= 0 && old_hits.iter().any(fn(h) { h.id == id && k >= h.from && k < h.to })
+  })
+}
+
+///|
+/// Old view `v` taking no finger at all: what it draws is drawn, what is under it in the tree takes every press there.
+pub fn old_takes_none(v : @view.View) -> @view.View {
+  v.takes(fn(_, _, _) { false })
 }

@@ -517,7 +517,6 @@ fn Ctx::kept_census(self : Ctx, into : Array[Int]) -> Unit {
   into.push(self.covers.length())
   into.push(self.springs.length())
   into.push(native_nodes.length())
-  into.push(picture_at.length())
   into.push(stream_nodes.length())
   into.push(dr.overlay.length())
   into.push(dr.raised.length())
@@ -535,7 +534,7 @@ let kept_census_names : Array[String] = [
   "words' shape read back", "what shows across read back",
   "a move", "an action asked", "what it tells outside", "a shot", "what dismisses",
   "where the focus returns", "a list of its own", "a field of its own", "what it owns", "a focus group", "a cover",
-  "a spring", "a native view", "a picture at a rect", "a stream", "what is drawn over", "what is raised", "a scrim",
+  "a spring", "a native view", "a stream", "what is drawn over", "what is raised", "a scrim",
   "words to pick", "what a package keeps of it",
 ]
 

@@ -772,3 +772,37 @@ fn Ctx::log_scroll(self : Ctx) -> Unit {
     None => ()
   }
 }
+
+///|
+/// How fast a finger goes, from its samples (each where it was and when: its events' own moments), as a list's fling
+/// reads it (Tracker: Compose's VelocityTracker's least squares): for what works out its own fling from a finger's events
+/// (a node of the window's tree's: @view.Drag), none of the frames between.
+pub struct Velocity {
+  priv x : Tracker
+  priv y : Tracker
+}
+
+///|
+pub fn Velocity::new() -> Velocity {
+  { x: Tracker::new(), y: Tracker::new() }
+}
+
+///|
+/// None of the samples before: a finger anew.
+pub fn Velocity::reset(self : Velocity) -> Unit {
+  self.x.reset()
+  self.y.reset()
+}
+
+///|
+/// The finger at (x, y) at `t` (ms).
+pub fn Velocity::add(self : Velocity, t : Double, x : Double, y : Double) -> Unit {
+  self.x.add(t, x)
+  self.y.add(t, y)
+}
+
+///|
+/// How fast it goes as of its newest sample, across and down (points per ms), held to what a fling takes.
+pub fn Velocity::get(self : Velocity) -> (Double, Double) {
+  (dclamp(self.x.velocity(), -max_fling, max_fling), dclamp(self.y.velocity(), -max_fling, max_fling))
+}

@@ -1,14 +1,20 @@
 ///|
+/// The made-up source the last preview_tester opened its file from (another made, its file opened again).
+// kept across runs: set by each preview_tester before it is read
+let preview_src : Ref[Source?] = Ref(None)
+
+///|
 /// Long past any wait the viewer's bars ever had: left alone this long they are still there (only a tap hides them).
 let left_alone_ms : Double = 10000.0
 
 ///|
 /// The made-up chat with one of its made-up files open in the preview (preview_fixture.mbt), the window `w` wide, on
-/// `platform`'s screen.
-fn preview_tester(what : String, w? : Double = 390.0, platform? : Int = 0) -> @ui.Tester {
-  reset()
+/// `platform`'s screen; `finish` false, its pictures decoded only as the test says (Tester::finish).
+fn preview_tester(what : String, w? : Double = 390.0, platform? : Int = 0, finish? : Bool = true) -> @ui.Tester {
+  new_run()
   let src = fixture("chat-preview-" + what)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform~)
+  preview_src.val = Some(src)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform~, finish~)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   t.draw()
   // seen once it is in (grown from its thumbnail, or faded in)
@@ -38,13 +44,13 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   // a picture read whole, held in memory only (FilePreview.kt: FileData.fetch), not kept on the device
   assert_true(fix_fetches.iter().all(fn(f) { !flag(Some(f.1), "keep") }))
   // 600 × 400 in 390 × 844 with 12 round it: (390 - 24) / 600
-  assert_true((v.zoom.scale - 366.0 / 600.0).abs() < 0.001)
+  assert_true((shown_scale(t, v.zoom) - 366.0 / 600.0).abs() < 0.001)
   t.tap(195.0, 422.0)
   t.advance(double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   // (its glide: @ui.move_most_ms from the tap)
   t.run_for(@ui.move_most_ms)
-  assert_true((v.zoom.scale - 1.525).abs() < 0.01)
+  assert_true((shown_scale(t, v.zoom) - 1.525).abs() < 0.01)
   // (the next two taps a double tap of their own)
   t.run_for(double_tap_ms)
   t.tap(195.0, 422.0)
@@ -52,7 +58,7 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   t.tap(195.0, 422.0)
   // (its glide: @ui.move_most_ms from the tap)
   t.run_for(@ui.move_most_ms)
-  assert_true((v.zoom.scale - 366.0 / 600.0).abs() < 0.001)
+  assert_true((shown_scale(t, v.zoom) - 366.0 / 600.0).abs() < 0.001)
   // back closes it at once (only drawn going, back into its thumbnail or fading out), the chat under it again
   t.back()
   assert_true(viewer.get() is None)
@@ -122,7 +128,7 @@ test "a video plays in the one player (@sf.player_view), its bytes read through 
 
 ///|
 test "a video in the chat: the station's still of it (its poster) on the black, the play mark and its name over it" {
-  reset()
+  new_run()
   let asked : Array[String] = []
   let src : Source = {
     ..fixture("chat"),
@@ -161,7 +167,7 @@ test "a video in the chat: the station's still of it (its poster) on the black, 
 
 ///|
 test "a video in the chat says how long it is at its name's end, as its message does (the station read it from its header)" {
-  reset()
+  new_run()
   let src : Source = { ..fixture("chat"), poster: fn(_, _, name) { fixture_file(name) } }
   let a : Attachment = {
     name: "一段很长很长很长很长很长很长很长很长很长的屏幕录制.mp4",
@@ -294,7 +300,7 @@ test "a video's ‹ and › go to a frame's very start, a frame on from the one 
 ///|
 /// A chat's video (16:9, its still the station's poster) alone on a page, the viewer over it once it is tapped open.
 fn video_in_chat() -> @ui.Tester {
-  reset()
+  new_run()
   let src : Source = { ..fixture("chat"), poster: fn(_, _, name) { fixture_file(name) } }
   let a : Attachment = {
     name: "演示录屏.mp4",
@@ -406,7 +412,7 @@ test "a video closed before its first frame shows: back into its thumbnail with 
 ///|
 /// A chat's video of `size` bytes the station made no poster of, alone on a page.
 fn posterless(size : Double) -> @ui.Tester {
-  reset()
+  new_run()
   let src : Source = { ..fixture("chat"), poster: fn(_, _, _) { "!" } }
   let a : Attachment = {
     name: "录屏.mp4",
@@ -496,7 +502,7 @@ test "an APK told of: 安装 first, handed to the system's installer once its by
 
 ///|
 test "an APK asked for: downloaded by the core, how far it has come in its words over a bar (FileProgress) as it tells it" {
-  reset()
+  new_run()
   let src = fixture("chat-preview-apk")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
@@ -545,7 +551,7 @@ test "Markdown rendered; code as it is; a table" {
 /// A file a message names by its path (`path`, the made-up station's: fixture_named) open in the preview, the window
 /// 390 wide.
 fn named_tester(path : String) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture("chat-preview-named")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
@@ -609,7 +615,7 @@ test "a file a message names that comes whole in its first part: shown as any fi
 test "two fingers pinch an image round the point between them; no tap comes of it" {
   let t = preview_tester("image")
   let v = viewer.get().unwrap()
-  let fit = v.zoom.scale
+  let fit = shown_scale(t, v.zoom)
   let awake = v.awake
   t.touch(0, 150.0, 422.0)
   t.draw()
@@ -618,7 +624,7 @@ test "two fingers pinch an image round the point between them; no tap comes of i
   t.touch(5, 330.0, 422.0)
   t.draw()
   // 90 apart, then 180: twice as big
-  assert_true((v.zoom.scale - fit * 2.0).abs() < 0.001)
+  assert_true((shown_scale(t, v.zoom) - fit * 2.0).abs() < 0.001)
   t.touch(6, 330.0, 422.0)
   t.draw()
   t.touch(2, 150.0, 422.0)
@@ -632,7 +638,7 @@ test "stepping through the chat's images: the way to the next (imageNear), a tap
   assert_true(t.find("界面草图.png") is Some(_))
   // fitted 600 × 400 in 366 wide: the way to the one after on the right
   let v = viewer.get().unwrap()
-  let (_, after) = v.near(fixture("chat-preview-step"))
+  let (_, after) = v.near(preview_src.val.unwrap())
   assert_true(after is Some(_))
   t.tap(390.0 - 8.0 - 18.0, 422.0)
   assert_eq(viewer.get().unwrap().file.name, "第二版.png")
@@ -665,7 +671,7 @@ test "a swipe carries the picture under the finger from where it went down; a se
   t.touch(6, 100.0, 422.0)
   t.draw()
   t.release(250.0, 422.0)
-  t.run_for(t.rest_of("preview/strip") - t.time())
+  t.run_for(strip_rest(t))
   assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
   assert_true(at(0.0))
 }
@@ -685,20 +691,20 @@ test "a step keeps the bars as they were: hidden by a tap, the next comes withou
 test "pinched smaller than fitted and let go: back to fitted" {
   let t = preview_tester("image")
   let v = viewer.get().unwrap()
-  let fit = v.zoom.scale
+  let fit = shown_scale(t, v.zoom)
   t.touch(0, 150.0, 422.0)
   t.draw()
   t.touch(4, 330.0, 422.0)
   t.draw()
   t.touch(5, 240.0, 422.0)
   t.draw()
-  assert_true(v.zoom.scale < fit * 0.75)
+  assert_true(shown_scale(t, v.zoom) < fit * 0.75)
   t.touch(6, 240.0, 422.0)
   t.draw()
   t.touch(2, 150.0, 422.0)
   t.draw()
   t.run_for(@ui.move_most_ms)
-  assert_true((v.zoom.scale - fit).abs() < 0.001)
+  assert_true((shown_scale(t, v.zoom) - fit).abs() < 0.001)
 }
 
 ///|
@@ -708,7 +714,7 @@ test "a swipe back as the step to the next still slides: a finger catches it the
   assert_eq(viewer.get().unwrap().file.name, "第二版.png")
   // at once, the next mostly in: a quick 60 to the right, the way back
   t.drag(100.0, 422.0, 160.0, 422.0, steps=3)
-  t.run_for(t.rest_of("preview/strip") - t.time())
+  t.run_for(strip_rest(t))
   assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
   // and a finger down on a slide and up again: it stays at the one nearest, no tap of it
   t.drag(300.0, 422.0, 100.0, 422.0)
@@ -718,7 +724,7 @@ test "a swipe back as the step to the next still slides: a finger catches it the
   t.draw()
   t.touch(2, 195.0, 422.0)
   t.draw()
-  t.run_for(t.rest_of("preview/strip") - t.time())
+  t.run_for(strip_rest(t))
   assert_eq(viewer.get().unwrap().file.name, "第二版.png")
   assert_eq(viewer.get().unwrap().awake, awake)
 }
@@ -738,13 +744,14 @@ test "the frame a swipe is let go in shows both pictures where the finger left t
     if way.0 < way.1 {
       // from the second, back toward the first
       t.drag(300.0, 422.0, 100.0, 422.0)
-      t.run_for(t.rest_of("preview/strip") - t.time())
+      t.run_for(strip_rest(t))
     }
     let from = viewer.get().unwrap().file.name
     t.hold_drag(way.0, 422.0, way.1, 422.0)
     let held = drawn_pictures(t)
+    // (the frame drawn at the moment it is let go: from where the finger left them, nothing moved yet)
     t.touch(2, way.1, 422.0)
-    t.frame()
+    t.frame_at(t.time())
     assert_true(viewer.get().unwrap().file.name != from)
     let drawn = drawn_pictures(t)
     assert_eq(drawn.length(), held.length())
@@ -770,7 +777,7 @@ fn zoom_in_middle(t : @ui.Tester) -> @kit.Zoom raise {
   t.run_for(@ui.move_most_ms)
   t.run_for(double_tap_ms)
   let z = viewer.get().unwrap().zoom
-  assert_true(z.zoomed())
+  assert_true(z.zoomed_at(t.time()))
   z
 }
 
@@ -781,19 +788,19 @@ test "zoomed in, let go moving it goes on that way, slowing, to its edge; a fing
   let z = zoom_in_middle(t)
   // a quick move left (60 in 50 ms), let go: on after the finger, three of its moves' time later well on
   t.drag(250.0, 422.0, 190.0, 422.0, steps=3)
-  let let_go = z.x
+  let let_go = shown_x(t, z)
   assert_true(let_go < 0.0)
   t.run_for(3.0 * @ui.input_step_ms)
-  assert_true(z.x < let_go - 20.0)
+  assert_true(shown_x(t, z) < let_go - 20.0)
   // a finger down on it: it stops there, and the bars stay as they were
   let awake = v.awake
   t.touch(0, 195.0, 422.0)
   t.draw()
-  let held = z.x
+  let held = shown_x(t, z)
   t.touch(2, 195.0, 422.0)
   t.draw()
   t.run_for(@kit.zoom_fling_ms)
-  assert_eq(z.x, held)
+  assert_eq(shown_x(t, z), held)
   assert_eq(v.awake, awake)
   // flung harder: it stops at its edge (its right edge at the stage's), when its way said it ends
   t.drag(250.0, 422.0, 130.0, 422.0, steps=3)
@@ -810,7 +817,7 @@ test "zoomed in, dragged on past its edge the next comes in; a quick move that c
   let z = zoom_in_middle(t)
   // quick (95 a move), from its middle: to its edge and 22.5 past, let go there: back, and it stays at its edge
   t.drag(385.0, 422.0, 5.0, 422.0, steps=4)
-  t.run_for(t.rest_of("preview/strip") - t.time())
+  t.run_for(strip_rest(t))
   assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
   let (x, _, w, _) = z.rect().unwrap()
   assert_true((x + w - 390.0).abs() < 0.001)
@@ -824,7 +831,7 @@ test "zoomed in, dragged slowly far past its edge it stops there, nothing beside
   let t = preview_tester("step")
   let z = zoom_in_middle(t)
   t.drag(385.0, 422.0, 5.0, 422.0, steps=20)
-  t.run_for(t.rest_of("preview/strip") - t.time())
+  t.run_for(strip_rest(t))
   assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
   let (x, _, w, _) = z.rect().unwrap()
   assert_true((x + w - 390.0).abs() < 0.001)
@@ -862,7 +869,7 @@ test "marking: a box drawn on the picture is numbered, its note kept, its quote 
 
 ///|
 test "a picture of the chat grows from its thumbnail; back closes it at once and it flies back into the thumbnail, then nothing moves" {
-  reset()
+  new_run()
   let src = fixture("chat-preview-named")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
@@ -986,7 +993,7 @@ test "marking: a box's pin up and right of its corner wherever the marks before 
 
 ///|
 test "a desktop's video opened over its chat has the keys: Space plays it each time, the chat's composer under it never taking them" {
-  reset()
+  new_run()
   let src = fixture("chat-preview-video")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
@@ -1048,4 +1055,23 @@ test "marking: a note written and done, the picture put in the chat: its quote t
   assert_true(viewer.get() is None)
   assert_true(t.semantics().iter().any(fn(s) { s.value == "这里对齐" }))
   assert_false(t.ctx().field_focused())
+}
+
+///|
+/// How long till the strip of pictures is where its way said it goes (none: 0).
+fn strip_rest(t : @ui.Tester) -> Double {
+  dmax(0.0, pv_strip.way.end() - t.time())
+}
+
+///|
+/// How big the picture is shown at the tester's moment (where it is drawn then: Zoom::rect_at).
+fn shown_scale(t : @ui.Tester, z : @kit.Zoom) -> Double {
+  z.scale_at(t.time())
+}
+
+///|
+/// How far across from the stage's middle the picture's middle is shown at the tester's moment.
+fn shown_x(t : @ui.Tester, z : @kit.Zoom) -> Double {
+  let (x, _, w, _) = z.rect_at(t.time()).unwrap()
+  x + w / 2.0 - z.bw / 2.0
 }

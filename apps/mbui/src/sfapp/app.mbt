@@ -32,6 +32,14 @@ fn init {
 }
 
 ///|
+/// A run begun before its Tester is made (the made-up core given what it opens first, then the Tester): the run
+/// before let go of first (its window's tree follows nothing this one says), then the app as at the start (reset).
+fn new_run() -> Unit {
+  @ui.run_let_go()
+  reset()
+}
+
+///|
 /// As at the start: Home alone, nothing chosen here yet (tests; every Tester as it starts: init above). Each global
 /// of this package is put back here (or in what this calls) as its `let` has it, or says why it is kept across runs
 /// (scripts/check.sh checks).

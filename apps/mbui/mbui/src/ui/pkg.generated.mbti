@@ -337,6 +337,10 @@ pub fn old(@view.View, (Ctx) -> Unit, key? : () -> String) -> @view.View
 
 pub fn old_islands_around() -> Bool
 
+pub fn old_takes_none(@view.View) -> @view.View
+
+pub fn old_takes_own(@view.View) -> @view.View
+
 pub fn old_views_here(Ctx) -> Unit
 
 pub fn old_views_look(Ctx, Look) -> Bool
@@ -418,6 +422,8 @@ pub fn rows_steady_known(Array[(String, Int32)]) -> Unit
 pub fn rows_unkept() -> Array[(String, Int32)]
 
 pub fn run(String, (Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit
+
+pub fn run_let_go() -> Unit
 
 pub fn runtime() -> @effect.Runtime
 
@@ -2398,7 +2404,9 @@ pub fn Tester::frame_hash(Self) -> Int64
 pub fn Tester::frame_late(Self, Double) -> Unit
 pub fn Tester::frame_perf(Self) -> FramePerf
 pub fn Tester::frame_period(Self) -> Double
+pub fn Tester::frame_shown_at(Self, Double, Double) -> Unit
 pub fn Tester::frames(Self, Int32, ms? : Double) -> Array[Int64]
+pub fn Tester::frames_owed(Self) -> Unit
 pub fn Tester::gallery(Self, Array[@hostapi.GalleryPhoto]) -> Unit
 pub fn Tester::gap_faults(Self) -> Array[String]
 pub fn Tester::get(Self, Role, label? : String) -> SemNode raise
@@ -2484,6 +2492,7 @@ pub fn Tester::refuse_native(Self, Int32, String) -> Unit
 pub fn Tester::release(Self, Double, Double) -> Unit
 pub fn Tester::replay_frames(Self, String) -> Array[(Int32, String, String)]
 pub fn Tester::resize(Self, Double, Double) -> Unit
+pub fn Tester::resize_next(Self, Double, Double) -> Unit
 pub fn Tester::rest_of(Self, String) -> Double
 pub fn Tester::rest_why(Self) -> String
 pub fn Tester::rich_of(Self, String) -> (RichLayout, Double, Double)?
@@ -2768,6 +2777,14 @@ pub(all) enum Tracking {
   Exact(Double)
 } derive(Eq, Show, @debug.Debug)
 pub fn Tracking::px(Self, Double) -> Double
+
+pub struct Velocity {
+  // private fields
+}
+pub fn Velocity::add(Self, Double, Double, Double) -> Unit
+pub fn Velocity::get(Self) -> (Double, Double)
+pub fn Velocity::new() -> Self
+pub fn Velocity::reset(Self) -> Unit
 
 pub(all) struct ViewPaintWork {
   mut made : Int32

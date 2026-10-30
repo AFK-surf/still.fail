@@ -746,8 +746,9 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
 /// A pointer's event, with the keys held as it went down (0 for an event other than a press), and what it came from
 /// where the host says (`by`: 1 a finger, 0 a mouse or a pen; the hand of the moment from it on: pointing).
 fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? : Int = -1) -> Unit {
-  // (one event, at its own moment: view_host.mbt)
-  view_event(fn() { pointer_in_now(kind, x, y, button, mods, by~) })
+  // (one event, at its own moment, the hand it came by so as of then: what was due before it sees the one before, what
+  // takes it (the tree's nodes, what they take presses by bound to it, or the old view) this one: view_host.mbt)
+  view_event_said(fn() { pointing_said_by_host(by) }, fn() { pointer_in_now(kind, x, y, button, mods, by~) })
 }
 
 ///|
@@ -760,11 +761,9 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
   // view's island) is no input of the old view's: taped alone, view_host.mbt)
   if (kind <= 3 || view_holds()) && view_pointer(kind, x, y, button) {
     input_taped("pointer", h_event_time(), args)
-    pointing_said_by_host(by)
     return
   }
   took_input("pointer", h_event_time(), args)
-  pointing_said_by_host(by)
   // (a press down, up or called off, a second finger, the pointer gone: what reads what came is built again; a pointer
   // moved is the hand's place, read by what reads it: hand.mbt)
   if kind != 1 {
