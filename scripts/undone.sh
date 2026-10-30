@@ -58,17 +58,19 @@ for m in $(git rev-list --no-merges --since="$since" -n 120 "$base" -- $files); 
   GIT_INDEX_FILE="$work/index" git apply --cached --check "$work/here" 2>/dev/null || continue
   # Applying forwards says no more than that its context is there: a hunk that only adds applies again wherever the
   # lines round it come twice (a test it added ending as the one before it does), whatever became of what it added.
-  # Undone is this change's own taking back: a hunk of it whose every line it added this one takes away, or whose
-  # every line it took away this one puts back (the lines as they are, in that file). One whose lines this changed
-  # some of is changed since, not undone.
+  # Undone is this change's own taking back: a text hunk of it whose every line it added this one takes away, or whose
+  # every line it took away this one puts back (the lines as they are, in that file: a file it added this one deletes
+  # takes them all away); a file it changed that is no text (binary) as it was before it. One whose lines this
+  # changed some of is changed since, not undone.
   git diff --no-renames "$base" "$tree" -- $files > "$work/mine" 2>/dev/null || true
   [ -s "$work/moved" ] && { moved "$work/mine" > "$work/mine2"; mv "$work/mine2" "$work/mine"; }
   taken=$(awk -v mine="$work/mine" '
-    function file_of(l) { return substr(l, 7) }
+    # (a file by its diff header: b/ its path, as a file deleted or added has it too)
+    function path_of(l,   p) { p = l; sub(/^diff --git a\/.* b\//, "", p); return p }
     BEGIN {
       while ((getline l < mine) > 0) {
-        if (l ~ /^\+\+\+ b\//) { f = file_of(l); continue }
-        if (l ~ /^--- /) continue
+        if (l ~ /^diff --git /) { f = path_of(l); continue }
+        if (l ~ /^(---|\+\+\+) /) continue
         if (l ~ /^-/) { gone[f SUBSEP substr(l, 2)]++ }
         else if (l ~ /^\+/) { back[f SUBSEP substr(l, 2)]++ }
       }
@@ -78,12 +80,20 @@ for m in $(git rev-list --no-merges --since="$since" -n 120 "$base" -- $files); 
       if (nr > 0 && na == 0 && br == nr) undone = 1
       na = 0; ga = 0; nr = 0; br = 0
     }
-    /^\+\+\+ b\// { hunk_end(); f = file_of($0); next }
-    /^--- / { next }
+    /^diff --git / { hunk_end(); f = path_of($0); next }
+    /^(---|\+\+\+) / { next }
     /^@@/ { hunk_end(); next }
-    /^\+/ { x = substr($0, 2); if (x ~ /^[ \t]*$/) next; na++; if ((f SUBSEP x) in gone && gone[f SUBSEP x] > 0) { ga++; gone[f SUBSEP x]-- } next }
-    /^-/ { x = substr($0, 2); if (x ~ /^[ \t]*$/) next; nr++; if ((f SUBSEP x) in back && back[f SUBSEP x] > 0) { br++; back[f SUBSEP x]-- } next }
+    /^\+/ { x = substr($0, 2); if (x ~ /^[ \t]*$/) next; na++; if (gone[f SUBSEP x] > 0) { ga++; gone[f SUBSEP x]-- } next }
+    /^-/ { x = substr($0, 2); if (x ~ /^[ \t]*$/) next; nr++; if (back[f SUBSEP x] > 0) { br++; back[f SUBSEP x]-- } next }
     END { hunk_end(); print undone ? 1 : 0 }' "$work/here")
+  # (a file it changed that is no text: undone where it is as before it, or gone where it added it)
+  for f in $(git diff --numstat --no-renames "$m^" "$m" -- $files | awk '$1 == "-" { print $3 }'); do
+    to=$f
+    [ -s "$work/moved" ] && to=$(awk -v f="$f" '$1 == f { print $2; exit } END { }' "$work/moved") && [ -n "$to" ] || to=$f
+    was=$(git rev-parse -q --verify "$m^:$f" 2>/dev/null || echo none)
+    now=$(git rev-parse -q --verify "$tree:$to" 2>/dev/null || echo none)
+    [ "$was" = "$now" ] && taken=1
+  done
   [ "$taken" = 1 ] || continue
   touched=$(git diff --name-only --no-renames "$m^" "$m" -- $files | tr '\n' ' ')
   undone="$undone
