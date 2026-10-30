@@ -1241,3 +1241,52 @@ test "the pointer held on an old view as the window's tree is made anew: what is
     assert_eq(b_taps.val, 1, msg~)
   }
 }
+
+///|
+test "keys: a widget of an old view's with the focus takes its own (an arrow along its group) before a node of the tree's; one it takes not (across it, Escape, with ⌘), the node's" {
+  let told : Array[Int] = []
+  let t = Tester::new(fn(_c) {  }, platform=0, keyboard=true)
+  set_view_app(fn(root) {
+    old(root, fn(c) {
+      c.roving("group", orientation=Horizontal, fn() {
+        c.row(fn() {
+          for name in ["a", "b"] {
+            let id = c.id(name)
+            let b = c.box(w=Px(50.0), h=Px(30.0), id~, fn() {  })
+            c.semantics(b, Button, id~, label=name)
+            c.focusable(id)
+          }
+        })
+        |> ignore
+      })
+    })
+    .over(Is(true))
+    |> ignore
+    root.box(fn(n) {
+      // (every key but Tab its own)
+      n.on_key(fn(k) {
+        if k.code == key_tab {
+          return false
+        }
+        told.push(k.code)
+        true
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  on_key(key_tab, 0)
+  t.draw()
+  assert_eq(t.focused().map(fn(s) { s.label }), Some("a"))
+  on_key(key_right, 0)
+  t.draw()
+  assert_eq((t.focused().map(fn(s) { s.label }), told.copy()), (Some("b"), []))
+  // keys it takes not as its own: Down (not along it), Escape, + with ⌘, an arrow with ⌘: the node's
+  for k in [(key_down, 0), (key_escape, 0), (key_of_char('+'), mod_cmd), (key_right, mod_cmd)] {
+    on_key(k.0, k.1)
+    t.draw()
+  }
+  assert_eq(told.copy(), [key_down, key_escape, key_of_char('+'), key_right])
+  assert_eq(t.focused().map(fn(s) { s.label }), Some("b"))
+}

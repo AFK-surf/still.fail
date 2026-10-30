@@ -139,6 +139,8 @@ struct Node {
   mut on_wheel : ((Wheel) -> Unit)?
   /// what a key does to it (View::on_key): true where it took the key
   mut on_key : ((Key) -> Bool)?
+  /// what back does to it (View::takes_back)
+  mut on_back : (() -> Unit)?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
   /// how many fingers held on it at once it takes (View::on_drag's `fingers`): one more calls the hold off
@@ -384,6 +386,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.on_menu = None
       n.on_wheel = None
       n.on_key = None
+      n.on_back = None
       n.on_drag = None
       n.takes = None
       n.drag_end = None
@@ -417,6 +420,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         on_menu: None,
         on_wheel: None,
         on_key: None,
+        on_back: None,
         on_drag: None,
         fingers: 1,
         drag_said: 0,
@@ -1441,11 +1445,24 @@ pub fn Tree::key_at(self : Tree, code : Int, mods : Int, at : Double) -> Bool {
   let took = Ref(false)
   self.event(t, fn() {
     // (the topmost first: what a node holds after it, its later kids before its earlier)
-    let asked : Array[Int] = []
-    self.keyed_from(0, asked)
-    for i in asked {
+    let found : Array[Int] = []
+    self.topmost_from(0, fn(n) { n.on_key is Some(_) }, found)
+    // (each as it was asked: its node and what it said then, asked only while both are still so as its turn comes (one
+    // above it may have let it go, its index another's since, or said anew), the tree still there)
+    let asked = found.filter_map(fn(i) {
       let n = self.nodes[i]
-      guard n.live && !self.pressless_at(i) && n.on_key is Some(f) else { continue }
+      match n.on_key {
+        Some(f) => Some(({ at: i, gen: n.gen }, f))
+        None => None
+      }
+    })
+    for e in asked {
+      let (id, f) = e
+      guard self.nodes[0].live else { break }
+      let n = self.nodes[id.at]
+      guard n.live && n.gen == id.gen && n.on_key is Some(g) && physical_equal(g, f) && !self.pressless_at(id.at) else {
+        continue
+      }
       if @signals.untracked(fn() { f({ code, mods, at: t }) }) {
         took.val = true
         break
@@ -1456,17 +1473,46 @@ pub fn Tree::key_at(self : Tree, code : Int, mods : Int, at : Double) -> Bool {
 }
 
 ///|
-/// The nodes from `at` down that take keys, the one drawn last first (Tree::key_at).
-fn Tree::keyed_from(self : Tree, at : Int, out : Array[Int]) -> Unit {
+/// The nodes from `at` down that `has` says of, the one drawn last first (after what holds it, its later kids before its
+/// earlier): Tree::key_at's, back_taker's.
+fn Tree::topmost_from(self : Tree, at : Int, has : (Node) -> Bool, out : Array[Int]) -> Unit {
   let n = self.nodes[at]
   let mut k = n.kids.length() - 1
   while k >= 0 {
-    self.keyed_from(n.kids[k], out)
+    self.topmost_from(n.kids[k], has, out)
     k = k - 1
   }
-  if n.on_key is Some(_) {
+  if has(n) {
     out.push(at)
   }
+}
+
+///|
+/// What back does to it, while it takes input (as a key's: View::on_key): `f`, as back is done (the system's back let
+/// go there, a back with no gesture, a back button), as one change outside any tracking; the topmost such takes back
+/// before any other (Tree::back_taker).
+pub fn View::takes_back(self : View, f : () -> Unit) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.on_back = Some(f)
+  self
+}
+
+///|
+/// What takes back now of the tree's: the node drawn last that takes back (View::takes_back) and may take input, with
+/// what it does; none where no node does.
+pub fn Tree::back_taker(self : Tree) -> (NodeId, () -> Unit)? {
+  if self.nodes.length() == 0 || !self.nodes[0].live {
+    return None
+  }
+  let found : Array[Int] = []
+  self.topmost_from(0, fn(n) { n.on_back is Some(_) }, found)
+  for i in found {
+    let n = self.nodes[i]
+    if n.live && !self.pressless_at(i) && n.on_back is Some(f) {
+      return Some(({ at: i, gen: n.gen }, f))
+    }
+  }
+  None
 }
 
 ///|
@@ -2004,6 +2050,8 @@ fn View::let_go(self : View) -> Unit {
   n.on_press = None
   n.on_menu = None
   n.on_wheel = None
+  n.on_key = None
+  n.on_back = None
   self.drag_ended()
   n.on_drag = None
   n.drag_said = n.drag_said + 1

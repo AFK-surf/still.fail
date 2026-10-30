@@ -89,6 +89,16 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   }))
   // (its keys, at their moment, where nothing over it (a menu, a field being written in) takes them first)
   .on_key(fn(k) { vw.key_on(src, k) })
+  // (back: leaving marking first, else closing it; a sheet, a menu over it, theirs first: Ctx::back_taker)
+  .takes_back(fn() {
+    if !vw.closing {
+      if marking.on {
+        marks_back(@ui.current())
+      } else {
+        vw.shut(@ui.current())
+      }
+    }
+  })
   |> ignore
   vw.in_tree = true
   n.owns(fn() {
@@ -277,7 +287,7 @@ fn image_ends(n : @view.View, vw : Viewer) -> Unit {
 ///|
 /// The bars over the picture and what is said with them (viewer_layer's, for a viewer the window's tree draws): the
 /// steps to the pictures beside it, its bar (or marking's foot), what it was asked to save once its bytes came, the
-/// download told, back.
+/// download told (back is its layer's: image_layer).
 fn image_bars(c : @ui.Ctx, src : Source, v : Viewer) -> Unit {
   // (marking as it is: the bars follow what a finger on the picture did to it)
   marks_said()
@@ -310,9 +320,6 @@ fn image_bars(c : @ui.Ctx, src : Source, v : Viewer) -> Unit {
     v.download_asked = false
     let (station, key, name, size, from) = (v.station, v.key, v.name, v.file.size, v.opened_from())
     c.tell("download/" + name, fn() { download_start(src, station, key, name, size, from~) })
-  }
-  if !v.closing {
-    c.take_back(fn() { if marking.on { marks_back(c) } else { v.shut(c) } })
   }
 }
 

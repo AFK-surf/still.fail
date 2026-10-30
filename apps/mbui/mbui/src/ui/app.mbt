@@ -1357,18 +1357,13 @@ fn Ctx::back_gesture(self : Ctx, kind : Int, x : Double, t : Double, progress? :
         }
         return false
       }
-      guard self.back is Some(f) else { return false }
-      let (left, w) = if self.back_node >= 0 && self.back_node < self.count {
-        let n = self.nodes[self.back_node]
-        (n.x, n.fw)
-      } else {
-        (0.0, self.width)
-      }
+      // (what takes back now: a node of the window's tree's, else what the old views said: Ctx::back_taker)
+      guard self.back_taker() is Some(h) else { return false }
       if kind == 0 {
         self.back_off = false
-        self.back_held = Some({ f, left, w, owner: self.back_owner() })
+        self.back_held = Some(h)
       }
-      f(kind, x - left, w, t, progress)
+      (h.f)(kind, x - h.left, h.w, t, progress)
       true
     }
     (_, Some(h)) => {
@@ -1452,7 +1447,7 @@ fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
     // (begun where what takes back may take input now (view_host.mbt's old_owner_open): held by it from here,
     // Ctx::back_gesture; else the whole of it nobody's)
     0 =>
-      if old_owner_open(c.back_owner()) {
+      if c.back_open() {
         c.back_gesture(0, from_left, t, progress~) |> ignore
       } else {
         c.back_held = None
@@ -1461,7 +1456,7 @@ fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
     1 => c.back_gesture(1, from_left, t, progress~) |> ignore
     // (back said with no gesture: what takes back now, where it may take input)
     2 if c.back_held is None && !c.back_off =>
-      if old_owner_open(c.back_owner()) {
+      if c.back_open() {
         c.back_gesture(4, 0.0, t) |> ignore
       }
     2 => c.back_gesture(4, 0.0, t) |> ignore
