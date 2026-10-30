@@ -593,6 +593,13 @@ fn effect_oper(e : ReactiveNode) -> Unit {
 
 ///|
 fn effect_scope_oper(e : ReactiveNode) -> Unit {
+  // (a watch stopped, by itself or by what owns it: it follows nothing from here, so it is stale, and gone: what kept
+  // it by what it read keeps nothing by it, Watch::gone)
+  if e.kind is WatchNode {
+    let o : WatchOwn = coerce(e.own)
+    o.stale.val = true
+    o.gone.val = true
+  }
   e.flags = NONE
   dispose_all_deps_in_reverse(e)
   match e.subs {
@@ -723,6 +730,9 @@ pub fn[T, U] Computed::lend(self : Computed[T], to : Computed[U]) -> Unit {
 priv struct WatchOwn {
   told : () -> Unit
   marked : Ref[(() -> Unit)?]
+  /// stale, as Watch's; and stopped (Watch::stop, or by what owns it as that one stops: Watch::gone)
+  stale : Ref[Bool]
+  gone : Ref[Bool]
 }
 
 ///|
@@ -757,7 +767,7 @@ pub fn watch(changed : () -> Unit) -> Watch {
     }
   }
   // (told, it runs nothing of what it read: what it read stays followed till it reads anew, run_effect)
-  let own : WatchOwn = { told, marked: Ref(None) }
+  let own : WatchOwn = { told, marked: Ref(None), stale, gone: Ref(false) }
   let node = ReactiveNode::new(NONE, WatchNode, own=coerce(own))
   // (made where an owner is set (set_owner: a scope that is not reading, an old view's): that owner's, let go with it;
   // not what is reading's, whose reading anew would let it go)
@@ -838,6 +848,14 @@ pub fn Watch::is_stale(self : Watch) -> Bool {
 /// The watch stale, as though what it read changed (`changed` not called): read anew before it is relied on.
 pub fn Watch::touch(self : Watch) -> Unit {
   self.stale.val = true
+}
+
+///|
+/// Whether the watch was stopped (Watch::stop, or by what owned it as that stopped: a scope, an effect run again): it
+/// follows nothing, and nothing that kept a thing by it may keep it so; a new one, owned where it is made again, may.
+pub fn Watch::gone(self : Watch) -> Bool {
+  let o : WatchOwn = coerce(self.node.own)
+  o.gone.val
 }
 
 ///|

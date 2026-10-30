@@ -224,3 +224,33 @@ test "window tree: an old view made and let go before any frame lets go of nothi
   on_c.set(false)
   assert_true(s.watched())
 }
+
+///|
+test "window tree: a kept part made in one old view, then in another in its place with the same key: it follows what it reads there, and is let go with it at once" {
+  // (0: old view A, 1: old view B in its place, 2: neither)
+  let which = @signals.signal(0, same=fn(a, b) { a == b })
+  let s = @signals.signal(0, same=fn(a, b) { a == b })
+  let build = fn(c : Ctx) {
+    c.kept_part(c.id("part"), "part", fn() { c.text("part \{s.get()}", size=12.0) |> ignore })
+  }
+  let t = Tester::new(fn(_c) {  })
+  t.keep_parts(true)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.show(fn() { which.get() == 0 }, fn(v) { old(v, build).over(Is(true)) |> ignore })
+    root.show(fn() { which.get() == 1 }, fn(v) { old(v, build).over(Is(true)) |> ignore })
+  })
+  t.draw()
+  t.drawn_now()
+  which.set(1)
+  t.drawn_now()
+  // (what it reads changed: drawn so, by B's)
+  s.set(1)
+  t.drawn_now()
+  let words = t.words().filter(fn(w) { w.0.has_prefix("part") }).map(fn(w) { w.0 })
+  assert_eq(words, ["part 1"])
+  // (B let go: what its part read let go with it, no frame needed)
+  assert_true(s.watched())
+  which.set(2)
+  assert_false(s.watched())
+}
