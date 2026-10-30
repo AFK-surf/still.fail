@@ -446,7 +446,7 @@ fn card_button(c : @ui.Ctx, id : Int, icon_name : String, label : String) -> Uni
 ///|
 /// What a message carries is rounded (its files' cards, screens' and services' cards, pictures, videos, pasted text):
 /// one corner for them all, a row's (the ladder's 18): a card's 26 on a card a row high reads as a capsule.
-pub let message_file_corner : Double = row_corner
+pub let message_file_corner : Double = ask_corner
 
 ///|
 pub let message_file_radius : @ui.Radius = rounded(message_file_corner)

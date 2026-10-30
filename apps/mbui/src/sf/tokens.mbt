@@ -582,9 +582,27 @@ pub fn capsule_in(corner : Double, height : Double, room? : Double = 1.0e30) -> 
 /// How far in a capsule `height` high stands from a card's sides and foot where it is in the card's foot corners (a
 /// button, a field there: concentric with the card's corner), and its ground reaching past the card's words (card_pad
 /// in) to there: across the card, or at its start with its words where they were (`words_in`: its own padding).
-pub fn card_foot_in(height : Double) -> Double {
-  capsule_in(card_corner, height)
+/// `corner`: the card's, where it is not the ladder's card step (a card in a message: ask_corner); one too tight for
+/// the capsule (its end as round as the corner or rounder, pressing it to the card's edges) has it follow the corner
+/// instead, square, corner_inset in (@sf.button under foot_round).
+pub fn card_foot_in(height : Double, corner? : Double = card_corner) -> Double {
+  let d = capsule_in(corner, height)
+  // (a capsule pressed to the card's edges, capsule_least in or less, does not stand in its corner: it follows it)
+  if d > capsule_least {
+    d
+  } else {
+    corner_inset
+  }
 }
+
+///|
+/// How far in a capsule must stand to stand in a corner (card_foot_in): any nearer, it is pressed to the edges.
+let capsule_least : Double = 4.0
+
+///|
+/// A card in a message (a question's, a login's, a post's options): as round as a message's bubble, the ladder's row
+/// step (18), as all else a message carries (message_file_corner): one corner for what is in a chat's list.
+pub let ask_corner : Double = row_corner
 
 ///|
 /// What scrolls in a small panel held to the room it has (@kit.in_room's `reach`): its box out across the panel's
@@ -649,22 +667,22 @@ pub fn head_back(height : Double) -> @ui.Style {
 /// `start`: what leads it is that high instead (a field before a button: the row as high as the higher, the lower in
 /// its middle stands as much further from the foot as it is less high, each concentric with its corner); `words_first`:
 /// words lead it (where the card's words stand), only its end reaching.
-pub fn foot_reach(height : Double, start? : Double, words_first? : Bool = false) -> @ui.Style {
-  let out = room(card_foot_in(height) - card_pad)
+pub fn foot_reach(height : Double, start? : Double, words_first? : Bool = false, corner? : Double = card_corner) -> @ui.Style {
+  let out = room(card_foot_in(height, corner~) - card_pad)
   if words_first {
     return @ui.style(mr=out, mb=out)
   }
   let lead = start.unwrap_or(height)
-  let under = room(card_foot_in(dmax(height, lead)) - card_pad)
-  @ui.style(ml=room(card_foot_in(lead) - card_pad), mr=out, mb=under)
+  let under = room(card_foot_in(dmax(height, lead), corner~) - card_pad)
+  @ui.style(ml=room(card_foot_in(lead, corner~) - card_pad), mr=out, mb=under)
 }
 
 ///|
 /// What stands over such a row of capsules `height` high, across the card (a field over its buttons): out to the sides
 /// they reach (foot_reach), so that its ends and theirs line up, the buttons' words then where the field's are, not at
 /// its edge.
-pub fn over_foot_reach(height : Double) -> @ui.Style {
-  let out = room(card_foot_in(height) - card_pad)
+pub fn over_foot_reach(height : Double, corner? : Double = card_corner) -> @ui.Style {
+  let out = room(card_foot_in(height, corner~) - card_pad)
   @ui.style(ml=out, mr=out)
 }
 
@@ -2041,7 +2059,7 @@ pub let ask_card_room : @ui.Style = @ui.css("w=Cut min_w=Within(320) max_w=Fixed
 pub let ask_card_room_most : @ui.Style = @ui.css("w=Cut min_w=Within(560) max_w=Fixed(560)")
 
 ///|
-pub let login_card_corner : @ui.Radius = rounded(card_corner)
+pub let login_card_corner : @ui.Radius = rounded(ask_corner)
 
 ///|
 pub let file_sheet_w : @ui.Len = Fixed(30.0)

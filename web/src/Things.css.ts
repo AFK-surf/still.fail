@@ -32,9 +32,10 @@ export const tilePicture = style({
   width: "100%", height: "100%", objectFit: "cover", objectPosition: "top", display: "block", transition: `opacity ${vars.dur} ${vars.easeOut}`,
   selectors: { [`${tile}:hover &`]: { opacity: "0.85" } },
 });
-/** A video's length in its foot corner, a capsule concentric with it (13 round, 18 high: 4 in). */
+/** A video's length in its foot corner, a capsule concentric with it (18 high: the tile's corner less its half in). */
+const LENGTH_IN = `calc(${MESSAGE_FILE_CORNER} - 9px)`;
 export const tileLength = style({
-  position: "absolute", left: "4px", bottom: "4px", height: "18px", display: "flex", alignItems: "center", gap: "4px", padding: "0 6px",
+  position: "absolute", left: LENGTH_IN, bottom: LENGTH_IN, height: "18px", display: "flex", alignItems: "center", gap: "4px", padding: "0 6px",
   borderRadius: "999px", background: "rgba(0, 0, 0, 0.65)", color: "#fff", fontSize: vars.textCaption,
 });
 export const thingsRows = style({ display: "flex", flexDirection: "column", gap: "2px" });

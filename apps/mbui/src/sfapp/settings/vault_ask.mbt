@@ -194,7 +194,7 @@ pub fn vault_ask(
   said? : Array[String] = [],
 ) -> Unit {
   let answer = topic_answer(core, ws, request, mine, who)
-  @sf.card(c, fill=ask.picks_file(), fn() {
+  @sf.card(c, fill=ask.picks_file(), corner=@sf.ask_corner, fn() {
     vault_asked(c, ask)
     for line in said {
       if line != "" {
@@ -223,7 +223,7 @@ pub fn vault_card(
   answer : Answer,
   ended? : (String, String)? = None,
 ) -> Unit {
-  @sf.card(c, fill=ask.picks_file(), fn() {
+  @sf.card(c, fill=ask.picks_file(), corner=@sf.ask_corner, fn() {
     vault_asked(c, ask)
     answered_in_place(c, "vault/" + request, ended.map(fn(e) { (e.0 == "granted", vault_outcome_words(ask, e.0, e.1)) }), fn() {
       vault_foot(c, core, ws, request, answer, ask.save_kind != "", typed=ask.typed_in(), foot=answer is (Approve(_) | SetUp))
@@ -282,7 +282,7 @@ pub let answered_fade_ms : Double = 200.0
 ///|
 /// What is asked as its card alone, with no answer at its foot (AskCard without children: where nothing is answered).
 pub fn vault_ask_words(c : @ui.Ctx, ask : Asked) -> Unit {
-  @sf.card(c, fn() { vault_asked(c, ask) }) |> ignore
+  @sf.card(c, corner=@sf.ask_corner, fn() { vault_asked(c, ask) }) |> ignore
 }
 
 ///|
@@ -351,7 +351,10 @@ pub fn ask_words(c : @ui.Ctx, title : String, note : String) -> Unit {
 /// Its answer's buttons, as vault_foot lays them last on its card: a line of them, on to a second what has not the room
 /// on the first, out in the card's foot corners.
 pub fn ask_buttons(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=ask_foot.then(@sf.foot_reach(@sf.button_height())), flow=true, line_gap=ask_foot_lines, body) |> ignore
+  c.box(style=ask_foot.then(@sf.foot_reach(@sf.button_height(), corner=@sf.ask_corner)), flow=true, line_gap=ask_foot_lines, fn() {
+    @sf.foot_buttons(@sf.ask_corner, body)
+  })
+  |> ignore
 }
 
 ///|
@@ -501,7 +504,7 @@ pub fn vault_foot(
   match (answer, typed) {
     (Approve(_), Some(ty)) =>
       // (reaching out to the foot's corners as the buttons do: a field's ends, a file's button, where theirs are)
-      c.box(style=if foot { ask_typed.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_typed }, fn() {
+      c.box(style=if foot { ask_typed.then(@sf.over_foot_reach(@sf.button_height(), corner=@sf.ask_corner)) } else { ask_typed }, fn() {
         if ty.kind == "login" && ty.username == "" {
           let words = tr("android-settings.vault.ask.typed.username")
           username = @sf.input(c, "vault/" + request + "/username", placeholder=words, disabled=under, solid=true, field=typed_field(request, "/username")).text
@@ -574,7 +577,7 @@ pub fn vault_foot(
     (match (c.laid_size(room_id), c.laid_size(acts_id), c.laid_size(c.id("vault/" + request + "/scope"))) {
       (Some((fw, _)), Some((aw, _)), Some((sw, _))) => {
         // (its foot reaching out past the card's words to its corners on a page card: that room the line's too)
-        let out = if foot { 2.0 * dmax(0.0, @sf.card_pad - @sf.card_foot_in(@sf.button_height())) } else { 0.0 }
+        let out = if foot { 2.0 * dmax(0.0, @sf.card_pad - @sf.card_foot_in(@sf.button_height(), corner=@sf.ask_corner)) } else { 0.0 }
         aw + ask_foot_gap + sw > fw + out + 0.5
       }
       _ => false
@@ -626,17 +629,19 @@ pub fn vault_foot(
   }
   c.box(style=ask_room, id=room_id, fn() {
     if over {
-      c.box(style=if foot { ask_over.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_over }, pick) |> ignore
+      c.box(style=if foot { ask_over.then(@sf.over_foot_reach(@sf.button_height(), corner=@sf.ask_corner)) } else { ask_over }, pick) |> ignore
     }
-    c.box(style=if foot { ask_foot.then(@sf.foot_reach(@sf.button_height())) } else { ask_foot }, flow=true, line_gap=ask_foot_lines, fn() {
-      acts()
-      if !over {
-        pick()
-      }
-      match extra {
-        Some(f) => f()
-        None => ()
-      }
+    c.box(style=if foot { ask_foot.then(@sf.foot_reach(@sf.button_height(), corner=@sf.ask_corner)) } else { ask_foot }, flow=true, line_gap=ask_foot_lines, fn() {
+      @sf.foot_buttons(@sf.ask_corner, fn() {
+        acts()
+        if !over {
+          pick()
+        }
+        match extra {
+          Some(f) => f()
+          None => ()
+        }
+      })
     })
     |> ignore
   })

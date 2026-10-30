@@ -126,7 +126,12 @@ pub fn button(
     align=ACenter,
     justify=JCenter,
     bg=ground,
-    radius=height / 2.0,
+    // (in a card's foot whose corner is too tight for the capsule: following it, square: foot_round)
+    radius=if foot_round.val > 0.0 && card_foot_in(height, corner=foot_round.val) == corner_inset {
+      inner_corner(foot_round.val, corner_inset)
+    } else {
+      height / 2.0
+    },
     border=if line != 0L && line != ground { 1.0 } else { 0.0 },
     border_color=line,
     opacity=seen,
@@ -849,9 +854,25 @@ pub fn page_head(
 ///|
 /// A page card of words (pages.css.ts card): card_pad in from every side, round by the ladder's card step; a solid
 /// button in its foot corner stands there itself (foot_reach), its corner the card's whatever is in it.
-pub fn card(c : @ui.Ctx, gap? : Double = 14.0, fill? : Bool = false, body : () -> Unit) -> Int {
+/// `corner`: a card in a message's (ask_corner), its buttons in its foot under it (foot_buttons).
+pub fn card(c : @ui.Ctx, gap? : Double = 14.0, fill? : Bool = false, corner? : Double = card_corner, body : () -> Unit) -> Int {
   let t = theme()
-  c.box(pad=card_pad, gap~, bg=t.p.card, radius=card_corner, w=if fill { card_across } else { Auto }, body)
+  c.box(pad=card_pad, gap~, bg=t.p.card, radius=corner, w=if fill { card_across } else { Auto }, body)
+}
+
+///|
+/// The corner of the card whose foot the buttons being built stand in (0: none, or a card's of the ladder's card step):
+/// where it is too tight for a button's capsule (its end rounder than the corner: a card in a message, ask_corner), the
+/// button follows it, square, corner_inset in (card_foot_in), all of the row alike.
+pub let foot_round : Ref[Double] = Ref(0.0)
+
+///|
+/// A card's foot row of buttons (`body`) under its corner `corner` (foot_round).
+pub fn foot_buttons(corner : Double, body : () -> Unit) -> Unit {
+  let was = foot_round.val
+  foot_round.val = corner
+  body()
+  foot_round.val = was
 }
 
 ///|
@@ -3775,11 +3796,12 @@ pub fn options_card(
   let mut picked : Int? = None
   let ot = option_type()
   let ground = if history { 0L } else if wide { alpha(t.p.text, 0.05) } else { t.p.chip }
-  let padding = if history { 0.0 } else { options_card_pad }
+  // (under a post, a card in a message: as round as a bubble, ask_corner, its rows as round and so out to its edges)
+  let padding = if history || wide { 0.0 } else { options_card_pad }
   // (in the wide frame as wide as what it says and 460 at least, on the text at 5%: Decisions.css.ts options)
   c.box(w=Fill(1.0), align=if wide { AStart } else { AStretch }, fn() {
     let across = @ui.style(w=Full, max_w=Fixed(options_most(options, ot, wide)))
-    c.box(style=across, radius=options_card_radius, bg=ground, pad=padding, fn() {
+    c.box(style=across, radius=if wide { ask_corner } else { options_card_radius }, bg=ground, pad=padding, fn() {
       // (nothing drawn between two: SettingParts.kt DecisionOptions)
       for i, o in options {
         let id = c.id(key + "/" + i.to_string())
