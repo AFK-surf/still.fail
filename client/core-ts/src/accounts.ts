@@ -8,7 +8,7 @@
 //
 // Storage (the Rust core's, so either core reads the other's): `accounts` is a JSON array of StoredAccount
 // (`access_expires` in epoch seconds), `login` the sign-in in progress.
-import { Deferred, Effect } from "effect";
+import { Clock, Deferred, Effect } from "effect";
 import { CoreError, HostError, asCoreError } from "./error.ts";
 import type { Host, HttpResponse } from "./host.ts";
 import { t } from "./i18n.ts";
@@ -18,6 +18,9 @@ import { base64url, isObject, parseJson, pointer, sha256, toJsonBytes, utf8 } fr
 
 export const STORAGE_KEY = "accounts";
 export const LOGIN_KEY = "login";
+/// A refresh answers one small JSON document. Its shared flight must end even when the old HTTP exchange goes
+/// silent without a network-change event. The session stays signed in; a later caller can ask again.
+const REFRESH_TIMEOUT_MS = 60_000;
 
 export type StoredAccount = {
   sub: string;
@@ -191,16 +194,18 @@ export class Accounts {
   /// A usable access token, refreshing it when it expires within a minute (once at a time per account). A refused
   /// refresh forgets the account.
   accessToken(sub: string): Effect.Effect<string, CoreError> {
-    return Effect.suspend(() => {
+    return Effect.gen({ self: this }, function* () {
       const now = this.#host.nowMs() / 1000;
       const a = this.#get(sub);
-      if (!a) return Effect.fail(CoreError.signedOut(t("core-logic.accounts.signed_out")));
-      if (a.access_expires - 60 > now) return Effect.succeed(a.access);
+      if (!a) return yield* Effect.fail(CoreError.signedOut(t("core-logic.accounts.signed_out")));
+      if (a.access_expires - 60 > now) return a.access;
       const existing = this.#refreshing.get(sub);
-      if (existing) return Deferred.await(existing);
+      if (existing) return yield* Deferred.await(existing);
+      const clock = yield* Clock.Clock;
       const done = Deferred.makeUnsafe<string, CoreError>();
       this.#refreshing.set(sub, done);
-      // The refresh runs to its end whoever waits (it rotates the session): a fiber of its own.
+      // The refresh runs to its end whoever waits (it rotates the session): a fiber of its own, on the caller's
+      // clock. Ending the HTTP attempt must not interrupt keeping the rotated tokens once they arrived.
       Effect.runFork(
         this.#refresh(sub).pipe(
           Effect.exit,
@@ -210,9 +215,10 @@ export class Accounts {
               Deferred.doneUnsafe(done, exit);
             }),
           ),
+          Effect.provideService(Clock.Clock, clock),
         ),
       );
-      return Deferred.await(done);
+      return yield* Deferred.await(done);
     });
   }
 
@@ -289,7 +295,10 @@ export class Accounts {
       if (span && this.#unanswered !== null) span.set("stillfail.auth.unanswered_ago_ms", Math.trunc(this.#host.monotonicMs() - this.#unanswered));
       const traceparent = span ? span.context.traceparent() : null;
       this.#unanswered = this.#host.monotonicMs();
-      const sent = yield* Effect.result(Effect.mapError(this.#post("/v1/auth/refresh", account.refresh, body, traceparent), asCoreError));
+      const sent = yield* Effect.result(Effect.timeoutOrElse(
+        Effect.mapError(this.#post("/v1/auth/refresh", account.refresh, body, traceparent), asCoreError),
+        { duration: REFRESH_TIMEOUT_MS, orElse: () => Effect.fail(new CoreError("timeout", t("core-logic.mesh.timed_out"))) },
+      ));
       if (sent._tag === "Failure") {
         if (span) {
           span.set("error.type", sent.failure.code);

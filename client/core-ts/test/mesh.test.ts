@@ -143,24 +143,30 @@ const network = (host: FakeHost) => new Wake(host.nowMs(), 0, true, false);
 for (const held of ["credential", "stream", "write"] as const) {
   sim(`an_opening_stalled_at_${held}_ends_and_lets_the_next_send_through`, async (s) => {
     const bind = s.iroh.bind.bind(s.iroh);
+    let binds = 0;
     const connections: IrohConnection[] = [];
     let released = false;
     const stalled = Effect.ensuring(Effect.never, Effect.sync(() => { released = true; }));
-    s.iroh = { bind: (options) => Effect.map(bind(options), (endpoint) => {
-      const connect = endpoint.connect.bind(endpoint);
-      endpoint.connect = (...args) => Effect.map(connect(...args), (conn) => {
-        connections.push(conn);
-        if (connections.length === 1) {
-          const openBi = conn.openBi.bind(conn);
-          conn.openBi = () => held === "stream" ? stalled : Effect.map(openBi(), (stream) => {
-            if (held === "write") stream.write = () => stalled;
-            return stream;
+    s.iroh = {
+      bind: (options) => {
+        binds++;
+        return Effect.map(bind(options), (endpoint) => {
+          const connect = endpoint.connect.bind(endpoint);
+          endpoint.connect = (...args) => Effect.map(connect(...args), (conn) => {
+            connections.push(conn);
+            if (connections.length === 1) {
+              const openBi = conn.openBi.bind(conn);
+              conn.openBi = () => held === "stream" ? stalled : Effect.map(openBi(), (stream) => {
+                if (held === "write") stream.write = () => stalled;
+                return stream;
+              });
+            }
+            return conn;
           });
-        }
-        return conn;
-      });
-      return endpoint;
-    }) };
+          return endpoint;
+        });
+      },
+    };
     const { mesh, station } = await setup(s);
     let asks = 0;
     const credentials: CredentialSource = (device, fresh) => Effect.suspend(() =>
@@ -173,6 +179,7 @@ for (const held of ["credential", "stream", "write"] as const) {
     assert.notEqual(connections[0]?.closeReason(), null, "the half-open connection must be closed");
     const link = await s.run(mesh.link(station.id(), credentials));
     assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+    assert.equal(binds, 1, "a stalled credential or stream must not rebind the endpoint that already connected");
     await close(s, station, mesh);
   });
 }

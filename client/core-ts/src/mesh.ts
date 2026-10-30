@@ -129,6 +129,15 @@ export const RECHECK_MS = 5 * 60 * 1000;
 
 const noAnswer = () => t("core-logic.mesh.no_answer");
 const meshError = (message: string) => new CoreError("mesh", message);
+/// The opening's budget ran out. Only an unanswered handshake is evidence that the endpoint may be stuck; a
+/// credential or stream stalled after it connected must not rebuild all of that endpoint's relay connections.
+class OpeningTimeout extends CoreError {
+  readonly connected: boolean;
+  constructor(connected: boolean) {
+    super("mesh", noAnswer());
+    this.connected = connected;
+  }
+}
 /// A connection that failed under the transport (refused, reset, lost on the way): said to people as where it failed
 /// (`unreached` dialling, `cut` once it was up), what the transport said kept as its `cause` for telemetry, not shown.
 const transportError = (key: "core-logic.mesh.unreached" | "core-logic.mesh.cut") => (e: { message: string }) => {
@@ -1148,7 +1157,8 @@ export class Mesh {
         } else link = yield* Effect.result(first);
         if (self.#hedges.get(addr)?.serial === serial) self.#hedges.delete(addr);
         // (asked before `failedIn` says it with the time it failed at)
-        const unanswered = link._tag === "Failure" && link.failure.message === noAnswer();
+        const timeout = link._tag === "Failure" && link.failure instanceof OpeningTimeout ? link.failure : null;
+        const unanswered = timeout !== null;
         if (link._tag === "Success") {
           self.#stuck = false;
           const path = link.success.path();
@@ -1165,7 +1175,7 @@ export class Mesh {
           }
           span.set("stillfail.paths", link.success.paths());
         } else {
-          if (unanswered) self.#stuck = true;
+          if (timeout !== null && !timeout.connected) self.#stuck = true;
           failedIn(span, link.failure);
           span.set("stillfail.relay", relayStatus(endpoint));
           // What a dial that failed was given and had beside it: the addresses it was told the station is reached straight
@@ -2088,7 +2098,7 @@ function open(
       yield* onARelay(endpoint, ips.length > 0);
       opened.onto = since();
       yield* Effect.sleep(CONNECT_TIMEOUT_MS);
-      return yield* Effect.fail(meshError(noAnswer()));
+      return yield* Effect.fail(new OpeningTimeout(connection !== null));
     });
     return Effect.raceFirst(establish, deadline).pipe(Effect.onExit((exit) => Effect.sync(() => {
       if (exit._tag === "Failure") {
