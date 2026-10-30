@@ -536,5 +536,5 @@ fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
 ///|
 /// A grouped profile's allowance, a line under its words (Profiles.kt: padding top 6).
 // kept across runs: a value (no field of it changes)
-let quota_line : @ui.Style = @ui.css("pt=S1_5")
+let quota_line : @ui.Style = @ui.css("w=Full pt=S1_5")
 

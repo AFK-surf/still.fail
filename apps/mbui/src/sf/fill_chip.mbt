@@ -74,7 +74,8 @@ pub fn fill_chip(
       })
       |> ignore
     }
-    c.box(style=if small { chip_words_small } else { chip_words }, fn() {
+    let words_style = if small { chip_words_small } else { chip_words }
+    c.box(style=if chip_joined(mark, words) { words_style.then(chip_joined_gap) } else { words_style }, fn() {
       if mark != "" {
         c.text(mark, style=chip_text) |> ignore
       }
@@ -86,6 +87,34 @@ pub fn fill_chip(
   c.bone_whole(b)
   tip(c, "fill-chip/" + key, id, said)
 }
+
+///|
+/// How far its mark is from its figure (5, chip_words): none where they read as one phrase in Chinese, the mark ending
+/// in a Han character and the figure beginning with one (内存剩 12.3 G, 每周剩 95%), as Chinese sets no space between
+/// its characters; 5 where either side is a letter or a figure (CPU 空闲 72%, 5H 62%, 每周 95%), the space Chinese
+/// leaves beside Latin.
+pub fn chip_apart(c : @ui.Ctx, mark : String, words : String) -> Double {
+  if mark == "" || chip_joined(mark, words) {
+    0.0
+  } else {
+    c.space(S1_25)
+  }
+}
+
+///|
+fn chip_joined(mark : String, words : String) -> Bool {
+  mark != "" && words != "" && han(mark.unsafe_charcode_at(mark.length() - 1)) && han(words.unsafe_charcode_at(0))
+}
+
+///|
+/// Whether the code unit is a Han character's (CJK's unified ideographs and their extension A, the compatibility ones).
+fn han(u : Int) -> Bool {
+  (u >= 0x3400 && u <= 0x9FFF) || (u >= 0xF900 && u <= 0xFAFF)
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let chip_joined_gap : @ui.Style = @ui.css("gap=S0")
 
 ///|
 /// How strong its fill is (of the level's colour, the accent's ink, the muted grey): as far off the chip's ground as

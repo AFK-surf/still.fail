@@ -56,6 +56,8 @@ priv struct SettingsFixture {
   mut pair_ended : String
   /// MBA online too (settings-profiles-pick: Profile's ＋ asks which station)
   mut mba_online : Bool
+  /// the subscriptions' allowances a month's window too, three in all (settings-profiles-monthly: OpenCode Go's)
+  mut monthly : Bool
   /// how far the made-up workspace has changed on its own (settings-workspace-motion, settings-stations-motion): 1 a
   /// person and a station come, 2 one of each goes (fixture_motion)
   mut motion : Int
@@ -91,6 +93,7 @@ let fx : SettingsFixture = {
   pairing: false,
   pair_ended: "",
   mba_online: false,
+  monthly: false,
   motion: 0,
   drive_kept: fx_drive_kept,
   kept_cleared: [],
@@ -172,6 +175,7 @@ fn fixture_reset() -> Unit {
   fx.pairing = false
   fx.pair_ended = ""
   fx.mba_online = false
+  fx.monthly = false
   fx.motion = 0
   fixture_open.sheet = ""
   fixture_open.list = ""
@@ -338,6 +342,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-stations-add" => up("add", "", 0)
     // Profile's ＋ with more than one station online: which to add it on (pressed by the film's step)
     "settings-profiles-pick" => fx.mba_online = true
+    "settings-profiles-monthly" => fx.monthly = true
     "settings-stations-existing" => up("add-existing", "", 0)
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
@@ -456,7 +461,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile-quota" => "profile:ws1/st1#cx"
     "settings-profile-models" => "profile-models:ws1/st1#cx"
     "settings-me-reading" => "me"
-    "settings-profiles-pick" => "profiles"
+    "settings-profiles-pick" | "settings-profiles-monthly" => "profiles"
     "settings-connect" => "connect:ws1/st1#k1"
     _ =>
       if m.has_prefix("settings-") {
@@ -530,10 +535,17 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
       ("state", str("ok")),
       (
         "windows",
+        Json::array(
         [
           obj([("label", str("5 小时")), ("usedPercent", Json::number(38.0)), ("mark", str("5H")), ("left", Json::number(62.0)), ("level", str("ok")), ("refills", str("2 小时后恢复"))]),
           obj([("label", str("本周")), ("usedPercent", Json::number(81.0)), ("mark", str("W")), ("left", Json::number(19.0)), ("level", str("amber")), ("refills", str("星期一恢复"))]),
-        ],
+        ].iter().concat(
+          (if fx.monthly {
+            [obj([("label", str("每月")), ("usedPercent", Json::number(3.0)), ("mark", str("M")), ("left", Json::number(97.0)), ("level", str("ok")), ("refills", str("11 月 1 日恢复"))])]
+          } else {
+            []
+          }).iter(),
+        ).collect()),
       ),
       ("checkedAt", Json::number(0.0)),
       ("time", obj([("checkedAt", stamp_of("3 分钟前"))])),
