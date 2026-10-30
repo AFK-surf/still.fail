@@ -137,9 +137,10 @@ test("a read of the relay's counters answered after a later one counts nothing t
     const late = budget.poll();
     while ((await relay.slowedReads()) === 0) await new Promise((r) => setTimeout(r, 5));
     await relay.carried(10 * mib);
-    await budget.poll();
+    // Asked while the first is under way (it takes that one's answer, or reads again once it has: either counts once).
+    const later = budget.poll();
     await relay.releaseRead();
-    await late;
+    await Promise.all([late, later]);
     // Counted once, all of it by the next read.
     await budget.poll();
     assert.equal((await budget.statistics()).bytes, 120 * mib);
