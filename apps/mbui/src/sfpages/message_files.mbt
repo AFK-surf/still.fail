@@ -812,8 +812,9 @@ let video_middle : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCen
 let video_foot_room : @ui.Style = @ui.css("w=Full h=Full justify=JEnd")
 
 ///|
+/// The band over a video's foot: its words as far in as a file card's (16 across: clear of its card's corner), 8 down.
 // kept across runs: a value (no field of it changes)
-let video_name_band : @ui.Style = @ui.style(w=Full, px=S2, py=S1_5, bg=@sf.video_shade)
+let video_name_band : @ui.Style = @ui.style(w=Full, px=S4, py=S2, bg=@sf.video_shade)
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -723,7 +723,7 @@ export const msgVideoPlay = style({
   background: "rgba(0, 0, 0, 0.65)", pointerEvents: "none",
 });
 export const msgVideoName = style({
-  position: "absolute", bottom: "0", left: "0", right: "0", padding: "6px 8px",
+  position: "absolute", bottom: "0", left: "0", right: "0", padding: `8px ${FILE_CARD_PAD.x}px`,
   background: "rgba(0, 0, 0, 0.65)", fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 /** Under its words while the core downloads it (chatDownloads.ts): how far, 4 below them. */
