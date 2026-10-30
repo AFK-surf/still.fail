@@ -76,6 +76,8 @@ pub fn copy_shown() -> Bool
 
 pub fn corner_middle(Double, Double) -> Double
 
+pub fn corner_roots() -> @paint.CornerRoots
+
 pub let cover_slide_ms : Double
 
 pub fn css(String) -> Style
@@ -749,24 +751,6 @@ pub(all) enum Color {
   Data(Int64)
 } derive(Eq, Show, @debug.Debug)
 
-pub(all) struct CornerFit {
-  least : Double
-  most : Double
-  near : Double
-  far : Double
-}
-
-pub(all) enum CornerOf {
-  Window
-  Own(Double)
-  Follow(CornerOf, Double, Double)
-} derive(Eq, Show, @debug.Debug)
-pub fn CornerOf::capsule_at(Self, Double) -> Double?
-pub fn CornerOf::follows(Self) -> Bool
-pub fn CornerOf::inset(Self) -> Double?
-pub fn CornerOf::radius(Self) -> Double
-pub fn CornerOf::source(Self) -> Double?
-
 type CoverAsk
 
 type CoverState
@@ -938,7 +922,7 @@ pub struct Ctx {
   arounds : Array[Int32]
   inner_faults : Array[String]
   mut corner_ladder : Array[Double]
-  mut corner_fit : CornerFit?
+  mut corner_fit : @paint.CornerFit?
   lit_asked : @set.Set[Int32]
   hand_chooses : @set.Set[Int32]
   mut hand_was : (Double, Double)
@@ -1929,11 +1913,11 @@ pub(all) enum Radius {
   Around
   Exact(Double)
   Corners(Double, Double, Double, Double)
-  Linked(CornerOf)
-  LinkedEach(CornerOf, CornerOf, CornerOf, CornerOf)
+  Linked(@paint.CornerOf)
+  LinkedEach(@paint.CornerOf, @paint.CornerOf, @paint.CornerOf, @paint.CornerOf)
 } derive(Eq, Show, @debug.Debug)
 pub fn Radius::each(Self) -> FixedArray[Double]?
-pub fn Radius::links(Self) -> FixedArray[CornerOf]?
+pub fn Radius::links(Self) -> FixedArray[@paint.CornerOf]?
 
 pub(all) struct RadiusScale {
   sm : Double
@@ -2722,7 +2706,7 @@ pub(all) struct Theme {
   leading : LeadingScale
   radii : RadiusScale
   corner_ladder : Array[Double]
-  corner_fit : CornerFit?
+  corner_fit : @paint.CornerFit?
   lit_apart : Double
   lit_reach : Double
   text_line : Double
@@ -2798,6 +2782,12 @@ pub struct WordsPiece {
 }
 
 // Type aliases
+pub using @paint {type CornerFit}
+
+pub using @paint {type CornerOf}
+
+pub using @paint {type CornerRoots}
+
 pub using @paint {type Glass}
 
 pub using @paint {type Shape}

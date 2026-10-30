@@ -79,6 +79,13 @@ pub(all) struct Content {
 } derive(Eq, Debug)
 
 ///|
+/// Whether it draws anything of its own: a ground, words, shapes, or what hosts it (the one place that says what a node
+/// draws, for what asks whether it draws nothing: Tree::alone).
+pub fn Content::draws(self : Content) -> Bool {
+  self.ground != 0L || self.words != "" || !self.shapes.is_empty() || self.hosted
+}
+
+///|
 /// A node's content unfolded where the window draws it (what holds it drawn off and faded with it): for a test, or a
 /// host that takes the window whole.
 pub(all) struct Drawn {
@@ -3217,7 +3224,7 @@ pub fn Tree::alone(self : Tree, id : NodeId) -> Bool {
   self.each_drawn(fn(c, _, _, _) {
     if c.id != id && c.id.at != 0 {
       let n = self.nodes[c.id.at]
-      if c.ground != 0L || c.words != "" || c.hosted || n.on_press is Some(_) || n.on_drag is Some(_) {
+      if c.draws() || n.on_press is Some(_) || n.on_drag is Some(_) {
         alone = false
       }
     }

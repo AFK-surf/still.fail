@@ -9,7 +9,7 @@ fn linked_panel(d : Double) -> (Ctx) -> Unit {
   fn(c) {
     c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-        let edge = Follow(Window, 6.0, 34.0)
+        let edge : CornerOf = Follow(Window, 6.0, 34.0)
         c.box(
           style=style(radius=LinkedEach(Own(34.0), edge, edge, Own(34.0))),
           w=Px(300.0),
@@ -99,19 +99,22 @@ test "corners linked: a link's radius, whether it follows, where it stands" {
   )
   t.draw()
   g().corner_fit = Some(fit_ranges)
-  let edge = Follow(Window, 6.0, 34.0)
-  assert_eq(edge.radius(), concentric(16.0, 6.0))
-  assert_true(edge.follows())
-  assert_eq(edge.inset(), Some(6.0))
-  assert_eq(edge.source(), Some(16.0))
+  let at = corner_roots()
+  assert_eq(at, { window: 16.0, fit: Some(fit_ranges) })
+  let edge : CornerOf = Follow(Window, 6.0, 34.0)
+  assert_eq(edge.radius(at), concentric(16.0, 6.0))
+  assert_true(edge.follows(at))
+  assert_eq(edge.inset(at), Some(6.0))
+  assert_eq(edge.source(at), Some(16.0))
   // too far in to follow it (4.8, squarer than the ranges let a corner be): alone, standing nowhere it says
-  let deep = Follow(Window, 14.0, 34.0)
-  assert_eq(deep.radius(), 34.0)
-  assert_false(deep.follows())
-  assert_eq(deep.inset(), None)
+  let deep : CornerOf = Follow(Window, 14.0, 34.0)
+  assert_eq(deep.radius(at), 34.0)
+  assert_false(deep.follows(at))
+  assert_eq(deep.inset(at), None)
   // a capsule 30 high in a 34 (a circle reads it as 32.52): 17.52 in, further than the ranges let; one 40 high, 12.52
-  assert_eq(Own(34.0).capsule_at(30.0), None)
-  match Own(34.0).capsule_at(40.0) {
+  let own : CornerOf = Own(34.0)
+  assert_eq(own.capsule_at(30.0, at), None)
+  match own.capsule_at(40.0, at) {
     Some(d) => assert_true((d - (34.0 * smooth_round - 20.0)).abs() < 1.0e-9)
     None => fail("a capsule 40 high stands in a 34")
   }

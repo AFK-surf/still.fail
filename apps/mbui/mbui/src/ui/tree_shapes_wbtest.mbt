@@ -53,3 +53,32 @@ test "a node's shapes: drawn where it is, the same as composed again in a later 
   assert_true(physical_equal(view_shape_bands.get(id.val.unwrap()).unwrap(), bands))
   assert_eq(t.shape_cover(110.0, 110.0), covered)
 }
+
+///|
+test "a node with shapes alone beside the one old view, the whole window: that old view is not all the tree draws while it has them" {
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let mark = [shape_of([([2.0, 2.0, 18.0, 2.0, 18.0, 18.0, 2.0, 18.0], true)], fill=0x000000FFL)]
+  let t = Tester::new(fn(_c) {  })
+  set_view_app(fn(root) {
+    old(root, fn(c) { c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore }).grow(Is(1.0)) |> ignore
+    root.box(fn(n) {
+      n
+      .over(Is(true))
+      .offset(Is((100.0, 100.0)))
+      .width(Is(Some(20.0)))
+      .height(Is(Some(20.0)))
+      .shapes(By(fn() { if on.get() { mark } else { [] } }))
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let seen = fn() { (old_whole.val, t.drawn_shapes().length() > 0) }
+  assert_eq(seen(), (false, true))
+  on.set(false)
+  t.frame_at(t.time() + frame_period_default)
+  assert_eq(seen(), (true, false))
+  on.set(true)
+  t.frame_at(t.time() + frame_period_default)
+  assert_eq(seen(), (false, true))
+}

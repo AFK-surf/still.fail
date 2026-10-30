@@ -658,7 +658,10 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
     let b = k * inst_size
     match inst_by(k) {
       Node(id) => {
-        if a[b + 5] != 1.0 {
+        // (its words, and its shapes as an old view's icon or line is: kind 11, by its strongest piece)
+        let kind = a[b + 5]
+        let is_words = kind == 1.0
+        if !is_words && kind != 11.0 {
           continue
         }
         let px = a[b] + a[b + 2] / 2.0
@@ -666,25 +669,37 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
         if px < 0.0 || py < 0.0 || px > self.window_w || py > self.window_h || !in_inst_clip(a, b, px, py) {
           continue
         }
-        let (ground, _) = match self.ground_under(k, px, py) {
+        let (ground, beneath) = match self.ground_under(k, px, py) {
           Some(g) => g
           None => continue
         }
         if self.covered_after(k, px, py, Node(id)) {
           continue
         }
-        let shown = Rgb::laid(ground, inst_rgb(a, b), a[b + 11])
+        let ink = inst_rgb(a, b)
+        let shown = Rgb::laid(ground, ink, a[b + 11])
+        // (a cut through to a ground under it, or that ground's own colour; words are never that)
+        if !is_words &&
+          (same_rgb(shown, ground) || (a[b + 11] >= 0.999 && beneath.iter().any(fn(u) { same_rgb(u, ink) }))) {
+          continue
+        }
         let r = contrast_of(shown, ground)
-        let least = contrast_words_least(view_words_size, 400)
-        let text = self.by_said(Node(id))
+        let (what, least) = if is_words {
+          ("words \"\{self.by_said(Node(id))}\" \{view_words_size}/400", contrast_words_least(view_words_size, 400))
+        } else if tree_node_size(id) is Some((w, h)) && w <= icon_most && h <= icon_most {
+          ("icon", contrast_icon_least)
+        } else {
+          ("line", marks)
+        }
         let said = if r < least - 0.005 {
-          "words \"\{text}\" \{view_words_size}/400 (a node of the window's tree's) at \{a[b].round()},\{a[b + 1].round()}: " +
+          "\{what} (a node of the window's tree's) at \{a[b].round()},\{a[b + 1].round()}: " +
           "\{shown.hex()} on \{ground.hex()} \{ratio_said(r)}:1, under \{least}"
         } else {
           ""
         }
+        // (words at their faintest letter, an icon or a line at its strongest piece)
         match tree_lines.get(id) {
-          Some((had, _)) if had <= r => ()
+          Some((had, _)) if (is_words && had <= r) || (!is_words && had >= r) => ()
           Some(_) => tree_lines[id] = (r, said)
           None => {
             tree_lines[id] = (r, said)
@@ -834,4 +849,13 @@ pub fn Tester::contrast_faults(self : Tester, marks? : Double = contrast_mark_le
   // (drawn as before from the next frame on, built whole: frame_watch.mbt)
   test_stepped()
   c.contrast_faults_drawn(marks)
+}
+
+///|
+/// How big node `id` of the window's tree is drawn (an icon is one no bigger than icon_most each way), None not drawn.
+fn tree_node_size(id : @view.NodeId) -> (Double, Double)? {
+  match view_app.val {
+    Some(t) => t.drawn_of(id).map(fn(d) { (d.w, d.h) })
+    None => None
+  }
 }

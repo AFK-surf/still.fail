@@ -3,18 +3,70 @@ package "mbui/paint"
 
 import {
   "mbui/pixels",
+  "moonbitlang/core/debug",
 }
 
 // Values
+pub fn concentric(Double, Double) -> Double
+
+pub fn concentric_out(Double, Double) -> Double
+
+pub fn corner_middle(Double, Double) -> Double
+
 pub fn dashed_outlines(Double, Double, Double, Double) -> Array[(Array[Double], Bool)]
 
+pub fn det_pow(Double, Double) -> Double
+
+pub fn round_like(Double, room? : Double) -> Double
+
+pub fn round_like_out(Double, room? : Double) -> Double
+
+pub fn sd_box(Double, Double, Double, Double, Double) -> Double
+
+pub fn sd_clip(Double, Double, Double, Double, Double, Double, (Double, Double, Double, Double), (Double, Double, Double, Double), band? : Double) -> Double
+
+pub fn sd_corner(Double, Double, Double, Double, Double, Double, band? : Double) -> Double
+
 pub fn shape_of(Array[(Array[Double], Bool)], fill? : Int64, even_odd? : Bool, stroke? : Int64, width? : Double) -> Shape
+
+pub let smooth_exponent : Double
+
+pub fn smooth_middle(Double) -> Double
+
+pub let smooth_round : Double
+
+pub let smooth_scale : Double
+
+pub fn smoothness(Double, Double) -> Double
 
 pub fn vector_shapes(@pixels.Vector, Double, Double, tint? : Int64) -> Array[Shape]
 
 // Errors
 
 // Types and methods
+pub(all) struct CornerFit {
+  least : Double
+  most : Double
+  near : Double
+  far : Double
+} derive(Eq, Show, @debug.Debug)
+
+pub(all) enum CornerOf {
+  Window
+  Own(Double)
+  Follow(CornerOf, Double, Double)
+} derive(Eq, Show, @debug.Debug)
+pub fn CornerOf::capsule_at(Self, Double, CornerRoots) -> Double?
+pub fn CornerOf::follows(Self, CornerRoots) -> Bool
+pub fn CornerOf::inset(Self, CornerRoots) -> Double?
+pub fn CornerOf::radius(Self, CornerRoots) -> Double
+pub fn CornerOf::source(Self, CornerRoots) -> Double?
+
+pub(all) struct CornerRoots {
+  window : Double
+  fit : CornerFit?
+} derive(Eq, Show, @debug.Debug)
+
 pub(all) struct Glass {
   blur : Double
   tint : Int64
@@ -42,7 +94,7 @@ pub(all) struct Shape {
   even_odd : Bool
   stroke : Int64
   width : Double
-} derive(Eq, Show)
+} derive(Eq, Show, @debug.Debug)
 
 // Type aliases
 

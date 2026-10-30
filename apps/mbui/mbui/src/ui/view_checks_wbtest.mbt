@@ -87,3 +87,45 @@ fn side_by_side() -> (Int, Int, Bool) {
 test "words over words: two nodes of the tree's words side by side, their glyphs' pictures meeting but not their cells: none, made and moved as kept" {
   assert_eq(side_by_side(), (0, 0, true))
 }
+
+///|
+/// An icon of a node of the tree's (a 20 square's shapes in `ink` on a white ground), what is over it drawn after it
+/// (`covered`: a solid ground of another node; else nothing) and how opaque its node is: the contrast faults said of an
+/// icon, as made and as its instances kept drawn again.
+fn icon_faults(ink : Int64, covered : Bool, alpha : Double) -> (Array[String], Array[String]) {
+  let t = tree_tester(fn(root) {
+    root.box(fn(b) { b.over(Is(true)).ground(Is(0xFFFFFFFFL)) |> ignore }) |> ignore
+    root.box(fn(n) {
+      n
+      .over(Is(true))
+      .offset(Is((40.0, 40.0)))
+      .width(Is(Some(20.0)))
+      .height(Is(Some(20.0)))
+      .alpha(Is(alpha))
+      .shapes(Is([shape_of([([2.0, 2.0, 18.0, 2.0, 18.0, 18.0, 2.0, 18.0], true)], fill=0x000000FFL)]))
+      .tint(Is(ink))
+      |> ignore
+    })
+    |> ignore
+    if covered {
+      root.box(fn(b) {
+        b.over(Is(true)).offset(Is((30.0, 30.0))).width(Is(Some(40.0))).height(Is(Some(40.0))).ground(Is(0x336699FFL))
+        |> ignore
+      })
+      |> ignore
+    }
+  })
+  let icons = fn() { t.contrast_faults().filter(fn(f) { f.has_prefix("icon (a node of the window's tree's)") }) }
+  let first = icons()
+  (first, icons())
+}
+
+///|
+test "contrast: a node of the tree's icon too faint on its ground found, as an old view's is, as made and kept drawn again; covered, unseen or strong enough, none" {
+  let (first, again) = icon_faults(0xDDDDDDFFL, false, 1.0)
+  assert_true(first.length() == 1 && again == first, msg="\{first} \{again}")
+  assert_true(first[0].contains("under \{contrast_icon_least}"), msg="\{first}")
+  assert_eq(icon_faults(0xDDDDDDFFL, true, 1.0), ([], []))
+  assert_eq(icon_faults(0xDDDDDDFFL, false, 0.0), ([], []))
+  assert_eq(icon_faults(0x333333FFL, false, 1.0), ([], []))
+}

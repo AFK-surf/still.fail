@@ -357,7 +357,7 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       // works it out, as round as its box lets it where that is rounder than its half)
       match b.links {
         Some(ls) =>
-          match (ls[k].inset(), ls[k].source()) {
+          match (ls[k].inset(corner_roots()), ls[k].source(corner_roots())) {
             (Some(e), Some(src)) => {
               if (dx - e).abs() > 0.5 || (dy - e).abs() > 0.5 || (ra - src).abs() > 0.5 {
                 out.push(

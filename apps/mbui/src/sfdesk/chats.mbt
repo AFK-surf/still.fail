@@ -119,7 +119,7 @@ fn band_new_tape() -> @ui.Style {
     let inset = @sf.room_of(list.band_in + list.heading_in)
     return nav_new().then(@ui.style(pl=inset, pr=inset, pt=S1))
   }
-  let corner = @sf.tape_side_corners()[1].radius()
+  let corner = @sf.tape_side_corners()[1].radius(@ui.corner_roots())
   nav_new().then(
     @ui.style(
       pr=@sf.room_of(@sf.line_end_in(corner, band_new_end, side=filter_side)),
@@ -156,7 +156,7 @@ fn band_new_tape_over() -> Double {
   let alone = brand + band_new_top + lift
   // (on the tape's line in the tape's corner; under a taller top row, 更新's or the window's buttons', it can not
   // stand so high: where it stands alone)
-  let at = if (@sf.tape_side_corners()[1].radius() - @sf.tape_corner).abs() <= 0.5 {
+  let at = if (@sf.tape_side_corners()[1].radius(@ui.corner_roots()) - @sf.tape_corner).abs() <= 0.5 {
     @sf.tape_line
   } else {
     alone

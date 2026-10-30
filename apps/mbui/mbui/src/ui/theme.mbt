@@ -670,8 +670,11 @@ pub fn Theme::corner(self : Theme, r : Radius) -> Double {
         dmax(exact_ok(c, "Radius"), exact_ok(d, "Radius")),
       )
     // (where it comes from, now: corner_of.mbt)
-    Linked(c) => c.radius()
-    LinkedEach(a, b, c, d) => dmax(dmax(a.radius(), b.radius()), dmax(c.radius(), d.radius()))
+    Linked(c) => c.radius(corner_roots())
+    LinkedEach(a, b, c, d) => {
+      let at = corner_roots()
+      dmax(dmax(a.radius(at), b.radius(at)), dmax(c.radius(at), d.radius(at)))
+    }
   }
 }
 
@@ -681,7 +684,10 @@ pub fn Theme::corner(self : Theme, r : Radius) -> Double {
 pub fn Radius::each(self : Radius) -> FixedArray[Double]? {
   match self {
     Corners(a, b, c, d) => Some(FixedArray::from_array([a, b, c, d]))
-    LinkedEach(a, b, c, d) => Some(FixedArray::from_array([a.radius(), b.radius(), c.radius(), d.radius()]))
+    LinkedEach(a, b, c, d) => {
+      let at = corner_roots()
+      Some(FixedArray::from_array([a.radius(at), b.radius(at), c.radius(at), d.radius(at)]))
+    }
     InnerOr(own) => own.each()
     _ => None
   }
@@ -697,20 +703,6 @@ pub fn Radius::links(self : Radius) -> FixedArray[CornerOf]? {
     InnerOr(own) => own.links()
     _ => None
   }
-}
-
-///|
-/// What lies in a rounded container's corner and what the corner rule may make of it to be concentric with it (still.fail's
-/// docs/ui-panels.md 圆角阶梯, 适应范围): its corner `least` at least and `most` at most, standing `near` to `far` from
-/// the container's edges. The outermost container is the window, its corner the system's (@hostapi.window_corner: a
-/// Mac's 16, Windows 11's 8, square full screen): where none of these makes a thing concentric with what it lies in
-/// (the container too square for it, or too round: a window's 8, a phone's screen), it stands as it would alone, its
-/// own corner where it is, and the rule asks nothing more of it there.
-pub(all) struct CornerFit {
-  least : Double
-  most : Double
-  near : Double
-  far : Double
 }
 
 ///|
