@@ -49,10 +49,6 @@ test "a Mac's window: the top row drags it on every page, with a bar there or no
   t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
   t.run_for(@ui.move_most_ms)
   row_drags(t, "settings", 400.0)
-  let t = wide_tester(calls, mode="decisions", window_inset=true)
-  open_decisions()
-  t.run_for(@ui.move_most_ms)
-  row_drags(t, "奏", 400.0)
   for place in ["stations", "profiles", "usage"] {
     let t = wide_tester(calls, window_inset=true)
     app.nav.replace(Place(place))
@@ -76,12 +72,6 @@ test "a Mac's window: the top row drags it on every page, with a bar there or no
   t.tap(650.0, 400.0)
   t.run_for(@ui.move_most_ms * 2.0)
   row_drags(t, "the tape's settings page", 200.0)
-  let t = wide_tester(calls, mode="decisions", w=690.0, h=840.0, window_inset=true)
-  open_decisions()
-  t.run_for(@ui.move_most_ms)
-  t.tap(650.0, 400.0)
-  t.run_for(@ui.move_most_ms * 2.0)
-  row_drags(t, "the tape's 奏", 200.0)
 }
 
 ///|

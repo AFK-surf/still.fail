@@ -121,8 +121,6 @@ test("parses_each_call", () => {
   assert.deepEqual(parseCall("decision.answer", { station: "w/s", thread: 7, seq: 4, option: " 先不改 " }), { kind: "decisionAnswer", station: "w/s", thread: 7, seq: 4, option: "先不改" });
   assert.equal(code(() => parseCall("decision.answer", { station: "w/s", thread: 7, seq: 4, option: " " })), "invalid_params");
   assert.equal(code(() => parseCall("decision.answer", { station: "w/s", thread: 7, option: "x" })), "invalid_params");
-  assert.deepEqual(parseCall("decision.defer", { station: "w/s", thread: 7, seq: 4 }), { kind: "decisionDefer", station: "w/s", thread: 7, seq: 4 });
-  assert.equal(code(() => parseCall("decision.defer", { station: "w/s", thread: 7 })), "invalid_params");
   assert.deepEqual(parseCall("decision.reply", { station: "w/s", thread: 7, seq: 4, text: " sk_test_1 " }), { kind: "decisionReply", station: "w/s", thread: 7, seq: 4, text: "sk_test_1", attachments: [], quotes: [] });
   assert.equal(code(() => parseCall("decision.reply", { station: "w/s", thread: 7, seq: 4, text: "  " })), "invalid_params");
   assert.equal(code(() => parseCall("decision.reply", { station: "w/s", thread: 7, text: "x" })), "invalid_params");
@@ -391,19 +389,11 @@ test("prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over", asyn
   await host.settle();
   apply(host, values);
   assert.deepEqual([v(values, 1).onlyMine, v(values, 1).onlyWatching], [true, false]);
-  set(22, { onlyDecisions: true });
-  await host.settle();
-  apply(host, values);
-  assert.deepEqual([v(values, 1).onlyMine, v(values, 1).onlyWatching, v(values, 1).onlyDecisions], [false, false, true]);
-  set(23, { onlyWatching: true });
-  await host.settle();
-  apply(host, values);
-  assert.deepEqual([v(values, 1).onlyWatching, v(values, 1).onlyDecisions], [true, false]);
   set(24, { onlyMine: true });
   await host.settle();
   apply(host, values);
   // Each workspace keeps its own filter; the one-for-all fields stay as they were for the workspaces not chosen in.
-  set(25, { listFilter: { w1: "watching", w2: "decisions" } });
+  set(25, { listFilter: { w1: "watching", w2: "archive" } });
   set(26, { listFilter: { w2: "all" } });
   await host.settle();
   apply(host, values);

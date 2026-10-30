@@ -29,7 +29,7 @@ pub let all_places : Array[String]
 
 pub let answered_fade_ms : Double
 
-pub fn answered_in_place(@ui.Ctx, String, (Bool, String)?, () -> Unit) -> Unit
+pub fn answered_in_place(@ui.Ctx, String, (Bool, Array[@ui.Run])?, () -> Unit) -> Unit
 
 pub fn appearance(Json?) -> String
 
@@ -39,7 +39,7 @@ pub fn ask_action(String) -> Unit
 
 pub fn ask_buttons(@ui.Ctx, () -> Unit) -> Unit
 
-pub fn ask_outcome(@ui.Ctx, Bool, String, inline? : Bool) -> Unit
+pub fn ask_outcome(@ui.Ctx, Bool, Array[@ui.Run], inline? : Bool) -> Unit
 
 pub fn ask_words(@ui.Ctx, String, String) -> Unit
 
@@ -284,6 +284,8 @@ pub fn station_peek_card(@ui.Ctx, String) -> Unit
 
 pub fn station_peek_part(@ui.Ctx, String) -> Unit
 
+pub fn station_via(Json?) -> String
+
 pub fn stations_of(Core, Here) -> Read
 
 pub let status_top : @ref.Ref[Double]
@@ -322,7 +324,7 @@ pub let vault_lasts : Array[String]
 
 pub fn vault_outcome(@ui.Ctx, Asked, String, String, inline? : Bool) -> Unit
 
-pub fn vault_outcome_words(Asked, String, String) -> String
+pub fn vault_outcome_words(Asked, String, String) -> Array[@ui.Run]
 
 pub fn vault_problem(String, Map[String, String], Bool, String) -> String
 

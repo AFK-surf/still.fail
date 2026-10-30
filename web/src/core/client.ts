@@ -143,9 +143,6 @@ export type Topic =
   | { topic: "workspaceMarks"; workspace?: string }
   // How its members' devices reach a workspace's stations, each way on or off (client/core-ts/src/views/ways.ts).
   | { topic: "workspaceWays"; workspace: string }
-  // The decisions waiting for the viewer in a workspace's chats, those set aside last, and how many
-  // (client/core-ts/src/decisions.ts). A core from before it answers an error.
-  | { topic: "decisions"; workspace: string }
   // The workspace's security mode (its lock), and what turning it on would sign (client/core-ts/src/views/lock.ts).
   // A core from before it has neither.
   | { topic: "lock"; workspace: string }

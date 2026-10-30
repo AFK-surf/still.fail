@@ -1,4 +1,4 @@
-// The new-chat action and the lists' menu above the sidebar's lists (the chats', 奏).
+// The new-chat action and the lists' menu above the sidebar's lists (the chats', the archive).
 import { t } from "./i18n.ts";
 import { Compose } from "@stillfail/ui/icons.tsx";
 import { ICON } from "./ui.tsx";
@@ -18,7 +18,7 @@ export function SidebarActions({ newChat, archive, workspace, syncing, showFilte
     <NavAction icon={<Compose {...ICON} className={nav.navCompose} />} label={t("web-main.sidebar.newChat")} to={newChat} onClick={(e) => move(e, newChat, "new")}
       beside={<>
         <SyncMark syncing={syncing} />
-        {showFilter && <MineFilter compact archive={archive} watching decisions={{ to: `${workspace}/decisions`, chats: workspace }} />}
+        {showFilter && <MineFilter compact archive={archive} watching chats={workspace} />}
       </>} />
   );
 }

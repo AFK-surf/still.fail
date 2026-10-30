@@ -77,7 +77,7 @@ let bar_room : Double = 56.0 + 22.0 + 16.0 + 32.0
 ///|
 /// The chats' family of places, whose pages have 令 in the notch.
 // kept across runs: a table, never written
-let chat_family : Array[String] = ["chats", "decisions", "archive"]
+let chat_family : Array[String] = ["chats", "archive"]
 
 ///|
 /// The places' middles on a bar `w` wide holding `n` with the notch `k` open (Bar.kt barCentres).
@@ -843,7 +843,6 @@ fn place_of(page : Page) -> String? {
   match page {
     Home => Some("chats")
     Files => Some("files")
-    Decisions => Some("decisions")
     Place(p) => Some(p)
     _ => None
   }
@@ -1133,14 +1132,9 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     _ => ""
   }
   let notched = action != ""
-  // the dots: 奏 waiting (the accent), a station in trouble (red)
-  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(ws.id) })
-  let decisions = count(field(field(marks.value, "workspaces"), ws.id), "decisions")
+  // the dots: a station in trouble (red)
   let chats = (src.topic)("chats", { "scope": Json::string(ws.id), "mine": Json::boolean(false) })
   let dots : Map[String, Int64] = Map([])
-  if decisions > 0 {
-    dots["decisions"] = t.p.accent
-  }
   match field(chats.value, "trouble") {
     Some(Object(_)) => dots["stations"] = t.p.red
     _ => ()

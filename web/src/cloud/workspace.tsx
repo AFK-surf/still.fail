@@ -28,7 +28,6 @@ import * as railCss from "../Rail.css.ts";
 import { drivePath } from "../drive/useDrive.ts";
 import { Folder, Server } from "@stillfail/ui/icons.tsx";
 import { AttentionEntry } from "../Attention.tsx";
-import { DecisionDeskProvider, DecisionPage } from "../DecisionDesk.tsx";
 import { MarkCounts } from "../ChatMark.tsx";
 import { WorkspaceBadge } from "../WorkspaceMark.tsx";
 import { OpenJobsChip } from "../OpenJobs.tsx";
@@ -95,7 +94,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
   const stations = useStationList(known, entry.id) ?? NO_STATIONS;
   const path = useLocation().pathname;
   const navigate = useGo();
-  const detail = /\/(s\/[^/]+\/.+|settings|new$|decisions$|files$)/.test(path);
+  const detail = /\/(s\/[^/]+\/.+|settings|new$|files$)/.test(path);
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
   // A place in the rail (Station, Profile, 连接, 用量) is a page of its own beside the chats, not one of the settings: those
   // left out of it are reached in the settings, and are among them there.
@@ -117,12 +116,9 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
   // root (Rail.tsx widthFor), the shell says the width it opens at itself.
   const ahead = useSyncExternalStore(never, () => false, () => true);
   const opening = ahead ? openingWidth(side) : "";
-  // 奏: the page of the decision picked in the sidebar's 奏 (DecisionDesk.tsx); come to it any way, the sidebar shows 奏.
-  const decisions = /^\/w\/[^/]+\/decisions$/.test(path);
   const [mode, setMode] = useSidebarMode();
   const lock = useLock(entry.id);
   const waiting = lock?.me?.waiting === true;
-  useEffect(() => { if (decisions && mode !== "decisions") setMode("decisions"); }, [decisions]); // eslint-disable-line react-hooks/exhaustive-deps
   // The archive's page, come to any way (a link, the phone's way): the sidebar shows the archive.
   const archive = /^\/w\/[^/]+\/archive$/.test(path);
   useEffect(() => { if (archive && mode !== "archive") setMode("archive"); }, [archive]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -141,7 +137,6 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
 
   return (
     <WorkspacePeople id={entry.id}>
-      <DecisionDeskProvider workspace={entry.id}>
       <WorkspaceKept entry={entry} />
       <div className={shellCss.shell} data-detail={detail} data-rail="" style={opening ? { "--sidebar-w": opening } as CSSProperties : undefined}>
 
@@ -207,7 +202,6 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route path="s/:station/*" element={<StationPages stations={known && stations} />} />
             <Route path="files" element={<DriveHome scope={entry.id} />} />
             <Route path="archive" element={<ArchivePage scope={entry.id} wide={wide} />} />
-            <Route path="decisions" element={<DecisionPage onOpen={(to) => navigate(to)} />} />
             <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toMadeChat(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
           </Routes>
@@ -215,7 +209,6 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
         </main>
         <Previews />
       </div>
-      </DecisionDeskProvider>
     </WorkspacePeople>
   );
 });
@@ -353,7 +346,7 @@ function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | und
 const WorkspaceSidebar = memo(function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
   return (
     <nav ref={useGlassBands()} className={nav.sidebar} aria-label={t("web-pages.workspace.navigation")}>
-      <ChatList top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>} scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} decisions={`/w/${entry.id}/decisions`}
+      <ChatList top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>} scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`}
         below={<SidebarTodo scope={entry.id} />} />
       <WorkspaceSidebarFooter entry={entry} />
     </nav>
@@ -366,7 +359,7 @@ function SidebarTodo({ scope }: { scope: string }) {
   return <div className={railed ? `${nav.navTodo} ${railCss.narrowOnly}` : nav.navTodo}><AttentionEntry scope={scope} /></div>;
 }
 
-/** Under the sidebar's lists: workspace controls, and what wants the viewer (奏 among it). */
+/** Under the sidebar's lists: workspace controls, and what wants the viewer. */
 function WorkspaceSidebarFooter({ entry }: { entry: WorkspaceEntry }) {
   const railed = useRailItems().includes("attention");
   return (

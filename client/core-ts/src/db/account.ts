@@ -26,8 +26,8 @@ import { readItem, type Said } from "../elsewhere.ts";
 type J = any;
 
 /// What the core finds a chat row by that only it can say (views/marks.ts, decisions.ts): how urgent the row is for
-/// its person, whether it asks something, whether the 奏 page lists it (it asks, was answered, or its agent works).
-export type Derive = { tone(row: J): string | null; asks(row: J): boolean; desk?(row: J): boolean };
+/// its person, whether it asks something.
+export type Derive = { tone(row: J): string | null; asks(row: J): boolean };
 
 /// A chat row before and after a burst (undefined: not there).
 export type RowChange = { id: string; before: J | undefined; after: J | undefined };
@@ -223,7 +223,7 @@ const MD_SHOWN_EVERY = 86_400_000;
 const PRECIOUS = /^(INSERT|DELETE|UPDATE)[^(]*\b(outbox|pending|first|changing|draft|workspace_pref)\b/i;
 
 /// The chat columns of a row, and its JSON without them.
-type ChatCols = { json: string; unread: number | null; thread: number | null; session: string | null; clientKey: string | null; lastActive: number; pinnedAt: number | null; mine: number; running: number; tone: string | null; asks: number; desk: number };
+type ChatCols = { json: string; unread: number | null; thread: number | null; session: string | null; clientKey: string | null; lastActive: number; pinnedAt: number | null; mine: number; running: number; tone: string | null; asks: number };
 
 export class AccountDb {
   readonly sub: string;
@@ -674,15 +674,14 @@ export class AccountDb {
       running,
       tone: this.#derive.tone(row),
       asks: this.#derive.asks(row) ? 1 : 0,
-      desk: this.#derive.desk?.(row) ? 1 : 0,
     };
   }
 
   #putChatRow(station: string, archived: number, id: string, row: J, ord: number, before: J | undefined): void {
     const c = this.#chatCols(row);
     this.#run(
-      "INSERT OR REPLACE INTO chat (station, id, archived, ord, thread, session, client_key, last_active, pinned_at, unread, mine, running, tone, asks, desk, json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [station, id, archived, ord, c.thread, c.session, c.clientKey, c.lastActive, c.pinnedAt, c.unread, c.mine, c.running, c.tone, c.asks, c.desk, c.json],
+      "INSERT OR REPLACE INTO chat (station, id, archived, ord, thread, session, client_key, last_active, pinned_at, unread, mine, running, tone, asks, json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [station, id, archived, ord, c.thread, c.session, c.clientKey, c.lastActive, c.pinnedAt, c.unread, c.mine, c.running, c.tone, c.asks, c.json],
     );
     const kept = frozen(JSON.parse(JSON.stringify(row)));
     this.#cache.set(K("chat", station, archived, id), kept);
@@ -799,15 +798,6 @@ export class AccountDb {
     const marks = stations.map(() => "?").join(", ");
     return this.sql
       .all(`SELECT station, id, json, unread FROM chat WHERE archived = 0 AND station IN (${marks}) AND (tone IS NOT NULL OR asks = 1)`, stations)
-      .map((r) => [String(r[0]), this.#chatRow(String(r[0]), 0, String(r[1]), r[2], r[3])]);
-  }
-
-  /// The rows of these stations the 奏 page lists (db/account.ts Derive.desk), in the stations' order.
-  desk(stations: string[]): [string, J][] {
-    if (stations.length === 0) return [];
-    const marks = stations.map(() => "?").join(", ");
-    return this.sql
-      .all(`SELECT station, id, json, unread FROM chat WHERE archived = 0 AND desk = 1 AND station IN (${marks}) ORDER BY station, ord`, stations)
       .map((r) => [String(r[0]), this.#chatRow(String(r[0]), 0, String(r[1]), r[2], r[3])]);
   }
 

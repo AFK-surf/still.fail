@@ -410,10 +410,6 @@ fn main {
     if @ui.env("MBUI_OPEN_PAGE") == "files" {
       @sfapp.open_page(Files)
     }
-    // MBUI_OPEN_PAGE=decisions: the 奏 page over Home from the start (its way in is the bottom bar's)
-    if @ui.env("MBUI_OPEN_PAGE") == "decisions" {
-      @sfapp.open_decisions()
-    }
     // where newer builds of the app come from (src/sfapp/updates.mbt): still.fail cloud's feed MBUI_UPDATE_FEED (the
     // local cloud's in e2e); none by default, as this build ships apart from still.fail's own (its release elsewhere).
     // youdid.wtf's core (MBUI_BETA=1, still.fail's own: MBUI_OWN=1) asks the feed's beta, <feed>/beta, itself: its feed

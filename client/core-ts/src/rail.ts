@@ -5,21 +5,21 @@ import { current, tr, type Lang } from "./i18n.ts";
 
 /// Every place the rail can show, in the order its settings list them: the chats' lists (each the sidebar's list it
 /// shows, `listFilter`'s word), 待处理 (a panel), the pages.
-export const RAIL_PLACES = ["chats", "mine", "watching", "archive", "decisions", "attention", "files", "stations", "profiles", "connects", "usage"];
+export const RAIL_PLACES = ["chats", "mine", "watching", "archive", "attention", "files", "stations", "profiles", "connects", "usage"];
 /// What it shows when none was chosen.
 export const RAIL_DEFAULT = ["attention", "chats", "files", "stations", "profiles", "connects", "usage"];
-const RAIL_LISTS: Record<string, string> = { chats: "all", mine: "mine", watching: "watching", archive: "archive", decisions: "decisions" };
+const RAIL_LISTS: Record<string, string> = { chats: "all", mine: "mine", watching: "watching", archive: "archive" };
 /// Each place's words, as the rail's tip and its settings say them (the web's own keys; Station and Profile are names).
 const RAIL_WORDS: Record<string, string> = {
   chats: "web-main.rail.chats", mine: "web-main.filter.chats.mine", watching: "web-main.filter.watching", archive: "web-main.filter.archived",
-  decisions: "web-main.rail.decisions", attention: "web-main.attention.entry", files: "web-pages.drive.title",
+  attention: "web-main.attention.entry", files: "web-pages.drive.title",
   connects: "web-pages.settings.nav.connects", usage: "web-pages.settings.nav.usage",
 };
 const RAIL_NAMES: Record<string, string> = { stations: "Station", profiles: "Profile" };
 /// What can be put in it, by kind, as the panel that adds them groups them: pages of their own, the chats' lists, 待处理.
 const RAIL_KINDS: [string, string[]][] = [
   ["places", ["files", "stations", "profiles", "connects", "usage"]],
-  ["lists", ["chats", "mine", "watching", "archive", "decisions"]],
+  ["lists", ["chats", "mine", "watching", "archive"]],
   ["attention", ["attention"]],
 ];
 

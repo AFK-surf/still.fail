@@ -4,7 +4,7 @@ import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { settledLine } from "./Decisions.css.ts";
 import { pillInner, surfaceCorner, TEXT_IN, PANEL_PILL } from "@stillfail/ui/styles/align.ts";
 
-// A station's logins (MachineLogins.tsx, docs/remote-login.md): the login card (a chat's, 奏's, and the station page's
+// A station's logins (MachineLogins.tsx, docs/remote-login.md): the login card (a chat's and the station page's
 // for one under way) and the station page's rows of those ended. Grey but for what is off, and the code.
 
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;

@@ -513,7 +513,7 @@ export function askingMessage(s: Store, thread: number, about: number | null, du
   return m && m.n === n && m.authorKind === "agent" ? [m, messages] : null;
 }
 
-/// What a turn of `key` that ended blocked asks the thread's people, as the sidebar and 奏 show it, and whether it is
+/// What a turn of `key` that ended blocked asks the thread's people, as the sidebar and 待处理 show it, and whether it is
 /// new: its card still pending, else the message its need asks with (`askingMessage`); null when nothing there waits
 /// for them (answered since, or never asked in it). Not new when an earlier turn of `key` ended blocked after it was
 /// posted: it has waited since, and they were told then.

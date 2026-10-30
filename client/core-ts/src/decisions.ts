@@ -1,7 +1,6 @@
 // Cards (decisions.rs): what an agent's post asks people to answer it with (options to pick from, or a field to write
 // in), for the viewer: a row's card and line (奏 · …), how each card in a chat's messages stands, the options in the
-// order they are shown (the recommended one last), and the 奏 page's day. Setting one aside is kept with the prefs
-// (`decisionsDeferred`); dismissing one is kept by the station for the viewer.
+// order they are shown (the recommended one last). Dismissing one is kept by the station for the viewer.
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import * as present from "./present.ts";
@@ -13,16 +12,6 @@ const arr = (v: unknown): J[] => arrU(v) ?? [];
 const get = (v: unknown, k: string): J => getU(v, k);
 const trimmed = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
 const lines = (text: string): string[] => text.split("\n").map((l) => l.replace(/\r$/, "").trim());
-
-/// A card on the 奏 page by its station, chat and post (also how the prefs keep it set aside).
-export function deferralKey(station: string, thread: number, seq: number): string {
-  return `${station}\t${thread}\t${seq}`;
-}
-
-export function deferredAt(prefs: J, station: string, thread: number, seq: number): number | null {
-  const v = get(get(prefs, "decisionsDeferred"), deferralKey(station, thread, seq));
-  return typeof v === "number" ? v : null;
-}
 
 /// The answers an options card offers, as shown: labelled ones, the recommended moved last.
 export function optionsShown(options: J): J[] {
@@ -185,62 +174,9 @@ function firstLine(text: string): string {
   return clean.replace(/^[#>\-* ]+/, "").trim();
 }
 
-export function asks(row: J, seq: number, text: string): string {
-  const thread = u64(get(row, "thread")) ?? null;
-  for (const a of arr(get(row, "agents"))) {
-    if (present.shownStatus(a) !== "block") continue;
-    const about = present.stateAbout(a, thread);
-    if (about !== null && about !== seq) continue;
-    const need = trimmed(get(get(a, "lastTurn"), "need"));
-    if (need !== null) return need;
-  }
-  const first = firstLine(text);
-  return first === "" ? line(text) : first;
-}
-
 export function question(text: string): string {
   const first = firstLine(text);
   return first === "" ? line(text) : first;
-}
-
-/// How the viewer answered a card.
-export function answerText(a: J): string {
-  const card = get(a, "card");
-  const labels = arr(get(card, "options"));
-  if (get(a, "closed") === true) {
-    const closing = labels.filter((o) => get(o, "action") === "close").map((o) => get(o, "label")).filter((l) => typeof l === "string");
-    return closing.length === 1 ? t("core-logic.decisions.answer.chose", { label: closing[0].trim() }) : t("core-logic.decisions.answer.handled");
-  }
-  const reply = (str(get(a, "reply")) ?? "").trim();
-  if (get(a, "quoted") === true) {
-    const label = labels.map((o) => get(o, "label")).find((l) => typeof l === "string" && l.trim() === reply);
-    if (label !== undefined) return t("core-logic.decisions.answer.chose", { label: label.trim() });
-  }
-  const first = format.cleanText(lines(reply).find((l) => l !== "") ?? "");
-  return first === "" ? t("core-logic.decisions.answer.replied") : t("core-logic.decisions.answer.reply", { text: first });
-}
-
-/// The 奏 page's day.
-export function today(view: J, c: present.Clock): J {
-  if (!isObject(view)) return view;
-  const day = format.localDay(c.now, c.offsetMin);
-  const at = (v: J, k: string): number => (typeof get(v, k) === "number" ? v[k] : 0);
-  const answered = arr(get(view, "answered"))
-    .filter((a) => format.localDay(at(a, "answeredAt"), c.offsetMin) === day)
-    .map((a) => ({ ...a, clock: format.clock(at(a, "answeredAt"), c.offsetMin) }));
-  const waits = answered.map((a) => Math.max(at(a, "answeredAt") - at(a, "askedAt"), 0));
-  const working = get(view, "working");
-  const todayV: J = { count: answered.length, working: Array.isArray(working) ? working.length : 0 };
-  if (waits.length > 0) todayV.waited = waitedText(waits.reduce((x, y) => x + y, 0) / waits.length);
-  return { ...view, answered, today: todayV };
-}
-
-export function waitedText(ms: number): string {
-  const m = format.round(ms / 60_000);
-  if (m < 1) return t("core-logic.decisions.waited.under_minute");
-  if (m < 60) return t("core-logic.jobs.span.minutes", { n: m });
-  if (m < 24 * 60) return m % 60 === 0 ? t("core-logic.jobs.span.hours", { n: m / 60 }) : t("core-logic.format.duration.hm", { h: Math.trunc(m / 60), m: m % 60 });
-  return t("core-logic.jobs.span.days", { n: Math.trunc(m / (24 * 60)) });
 }
 
 /// The card a row waits on, as its station gives it.
@@ -408,38 +344,4 @@ export function reply(card: J, text: string, hasExtras: boolean): [string, J[]] 
   if (!(k === "text" || k === "options") || (text.trim() === "" && !hasExtras)) return null;
   const q = quoteOf(card);
   return q === null ? null : [text.trim(), q];
-}
-
-/// The decision the wide 奏 page shows, kept between its views: its key (null: none picked yet; "": the one in the place
-/// of the one set aside) and where in the list it was last.
-export type Shown = { key: string | null; at: number };
-
-/// Picked (`decision.show`): shown from now on.
-export function picked(was: Shown, key: string): Shown {
-  return { key, at: was.at };
-}
-
-/// Set aside (`decision.defer`): if it is the one shown, the one then in its place shows (itself if it is the only one).
-export function setAside(was: Shown, key: string): Shown {
-  return was.key === key ? { key: "", at: was.at } : was;
-}
-
-/// Where the one shown is in the list's `keys`: the one picked while it is there, else the one now where it was (the
-/// last when the list got shorter), which is then the one shown (`next`, kept for the next view); null for none.
-/// Nothing picked yet, the first shows, whichever it is.
-export function shownIn(was: Shown, keys: string[]): { at: number | null; next: Shown } {
-  const found = was.key === null ? -1 : keys.indexOf(was.key);
-  const at = found >= 0 ? found : Math.min(was.at, keys.length - 1);
-  return { at: at >= 0 ? at : null, next: { key: was.key !== null && at >= 0 ? keys[at]! : was.key, at: Math.max(at, 0) } };
-}
-
-/// The order of the 奏 page: not set aside first (oldest asked first), then set aside (latest last).
-export function order<T>(items: [T, number, number | null][]): [T, number, number | null][] {
-  return [...items].sort((a, b) => {
-    const sa = a[2] !== null ? 1 : 0;
-    const sb = b[2] !== null ? 1 : 0;
-    if (sa !== sb) return sa - sb;
-    if ((a[2] ?? 0) !== (b[2] ?? 0)) return (a[2] ?? 0) - (b[2] ?? 0);
-    return a[1] - b[1];
-  });
 }

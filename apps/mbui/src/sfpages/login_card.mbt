@@ -1,7 +1,7 @@
 // A station's login to a command-line tool its agents use, as a card, the one on every screen (ember
 // web/src/MachineLogins.tsx LoginCard, ActiveCard, CancelLogin, PasteSteps, CodeField, CardCode, StepButton;
-// MachineLogins.css.ts card…; the web's phone the same card): in a chat under the agent's message (decision.mbt), on 奏,
-// on the station page's 登录 while it is under way (station_cards.mbt, settings' station_logins.mbt).
+// MachineLogins.css.ts card…; the web's phone the same card): in a chat under the agent's message (decision.mbt), on
+// the station page's 登录 while it is under way (station_cards.mbt, settings' station_logins.mbt).
 // Its title with 取消 as its × in the card's corner; what the person does now by its step — a device code with 复制并打开,
 // a page to open, a loopback login's page once the core listens for the browser's callback, a page whose code is pasted
 // back — the step's button the card's width, solid while it is the next thing to do, and where the station has a

@@ -94,6 +94,7 @@ export const NOTES: [number, string][] = [
   [87, "adb_devices no longer gives a 共享调试 link: that page no longer lends a phone, so a link to it asks for nothing. Ask for the phone of the person you work for only with phone_use (its card is how they grant it)."],
   [88, "A phone granted with phone_use lends itself with no one at it (its app keeps it up in the background, started again with the phone; the station lets it turn Wireless debugging on itself). When phone_use says it is not lent now, it says when and why it was last offered: call it again in a minute and look at that before asking its person to do anything."],
   [89, "A login kept in the vault gives its account too: the grant (and secret_list's grants) says it, and secret_run puts it in STILLFAIL_USERNAME beside the password, so a login typed in on its card needs no second ask for the account."],
+  [90, "奏, the page that listed every card waiting for a person, is gone from still.fail: a card is answered under its message in the chat, and reaches the person who decides it in their 待处理 until they look at it. Cards and card.assignee work as before."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

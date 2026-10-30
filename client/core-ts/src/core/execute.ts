@@ -148,10 +148,6 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         if (!book) return Effect.fail(CoreError.invalid(t("core-misc.reader.gone")));
         return Effect.succeed({ at: searchBook(book, call.query, call.limit) });
       }
-      case "decisionDefer":
-        inner.views?.decisionDeferred(call.station, call.thread, call.seq);
-        prefs.deferDecision(inner.data, `${call.station}\t${call.thread}\t${call.seq}`, inner.host.nowMs());
-        return Effect.succeed(null);
       case "draftPut": {
         return Effect.succeed(inner.composers.putDraft(call.station, call.chat, call.draft));
       }

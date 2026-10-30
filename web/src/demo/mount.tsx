@@ -155,7 +155,6 @@ function demoValueOf(topic: Topic): unknown {
     case "vaultUses": return { item: String(topic.item ?? ""), uses: [] };
     case "usage": return station.usage(topic.days ?? 7);
     case "resources": return station.resources();
-    case "decisions": return station.decisions(chats);
     case "drive": return station.driveFolder(topic.root, topic.path);
     case "memory": return station.op("memory.get");
     // (the demo reaches no page: nothing to show of a link but where it goes)

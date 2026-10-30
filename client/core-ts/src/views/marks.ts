@@ -145,7 +145,6 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
     // Of those, the ones not looked at since they came to want them: what the badge counts.
     const fresh = new Counts();
     let said = 0;
-    let waiting = 0;
     let elsewhere = 0;
     const items: J[] = [];
     const me = views.me(id);
@@ -162,7 +161,6 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
       // a failure let go (忽略) wants them no more, here or in 待处理, until the chat fails again
       const failure = asked === "alert" ? failureOf(address, row) : null;
       const tone = failure !== null && gone.has(failure) ? null : asked;
-      if (waits) waiting++;
       const seen = get(row, "unread") !== true;
       const lists = [counts];
       if (get(row, "mine") === true) lists.push(mine);
@@ -177,7 +175,7 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
       else if (get(row, "mine") === true && present.rowState(arr(get(row, "agents"))) === "block") elsewhere++;
       // 待处理 (`items`), of what the badge counts: its failures until they run again, are archived or let go, read or
       // not (a chat read is still broken: pengxiao, 2026-10-28), as the workspace's mark counts them; its cards that
-      // came to want them and were not looked at since (one looked at: its row and 奏 still say it).
+      // came to want them and were not looked at since (one looked at: its row still says it).
       if ((tone === "alert" && kinds.failed) || (!seen && tone === "wait" && kinds.wait)) {
         const [text, what] = stateText(row);
         const item: J = {
@@ -211,7 +209,6 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
     if (views.heard(id)) total += badge;
     const mark: J = { alert: counts.alert, unread: counts.unread, badge, items };
     if (counts.wait > 0) mark.wait = counts.wait;
-    if (waiting > 0) mark.decisions = waiting;
     if (elsewhere > 0) mark.elsewhere = elsewhere;
     const tone = counts.tone();
     if (tone !== null) {

@@ -191,10 +191,6 @@ pub fn dashes(Array[(Double, Double)], Array[@ui.Line]) -> Unit
 
 pub fn days_new(String, Array[ChatDay]) -> Bool
 
-pub fn decision_key(Json) -> String
-
-pub fn decision_show(Source, Workspace, Json) -> Unit
-
 pub let desk_cell_size : Double
 
 pub let desk_code_line : Double
@@ -1269,8 +1265,6 @@ pub fn runs_by_line(Array[@ui.Run]) -> Array[Array[@ui.Run]]
 
 pub fn same_pane(DriveAt, DriveAt) -> Bool
 
-pub fn sample_decision() -> Json
-
 pub let sample_source : Source
 
 pub fn say(@ui.Ctx, String) -> Unit
@@ -1359,7 +1353,7 @@ pub fn settings_core(Source, Workspace) -> @settings.Core
 
 pub let share_card_of : @ref.Ref[(Source, Workspace) -> Unit]
 
-pub let share_offered : @ref.Ref[(Int32, Double, Double, () -> Unit)?]
+pub let share_offered : @ref.Ref[(Int32, Double, Double, () -> Unit, String)?]
 
 pub let share_over : @ref.Ref[Bool]
 
@@ -2588,7 +2582,6 @@ pub(all) enum Page {
   DrivePlay(DriveAt)
   Service(String, String)
   PreviewFile(String, String, String, String)
-  Decisions
   History(ChatRef, String, Int32?)
   Words(String, String)
   NewChat

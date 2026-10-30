@@ -1,5 +1,5 @@
 // The core's answers to its pure calls (`markdown`, `code.ink`, `reader.book`, `reader.text`, `reader.search`,
-// `commands.find`, a chat's side panel's tabs: chat-tabs.ts, the 奏 page's queue: decisions.ts, where a chat's find goes:
+// `commands.find`, a chat's side panel's tabs: chat-tabs.ts, where a chat's find goes:
 // chat-find.ts, what a chat's relay picker shows: relay-pick.ts), and to each step of a device's browsing (drive-browse.ts
 // `Browsing`: a topic of it or a call, given what it held before and what it reads, answering with what it holds
 // after; and the rail as drawn from the prefs kept, `railView`), worked
@@ -18,7 +18,6 @@ import { book, bookAnswer, searchBook } from "../src/reader.ts";
 import { find } from "../src/commands.ts";
 import { railView } from "../src/rail.ts";
 import { changed, tabsOf, type Change } from "../src/chat-tabs.ts";
-import { order, picked, setAside, shownIn, type Shown } from "../src/decisions.ts";
 import { findGo, type FindAt, type FindHit } from "../src/chat-find.ts";
 import { readConnects, relayView } from "../src/relay-pick.ts";
 import { toolCall, toolResult, type ToolPart } from "../src/tool-step.ts";
@@ -44,7 +43,6 @@ type Kept = {
   "reader.book": Record<string, { answer?: unknown; text?: string; search?: Record<string, unknown> }>;
   "commands.find": Record<string, unknown>;
   "chat.tabs": Record<string, unknown>;
-  "decisions.queue": Record<string, unknown>;
   "chat.find.go": Record<string, unknown>;
   "chat.relayView": Record<string, unknown>;
   "history.tool": Record<string, unknown>;
@@ -64,8 +62,6 @@ for (const [key, entry] of Object.entries(was["reader.book"] ?? {})) searches.se
 const finds = new Set(Object.keys(was["commands.find"] ?? {}));
 // A chat's tabs: by what was asked (what is kept for it, its agents, whether it has a chat yet, its session, a change).
 const tabs = new Set(Object.keys(was["chat.tabs"] ?? {}));
-// The 奏 page's queue: by what was asked (its items, the one shown as kept, a pick or a setting aside).
-const queues = new Set(Object.keys(was["decisions.queue"] ?? {}));
 // Where a chat's find goes: by what was asked (what was found, where the reader is, which way, what shows).
 const goes = new Set(Object.keys(was["chat.find.go"] ?? {}));
 // What a chat's relay picker shows: by what was asked (the connects read, what was typed, all asked for, the bot).
@@ -95,7 +91,6 @@ for (const file of outputs) {
       searches.set(key, queries);
     } else if (ask.call === "commands.find") finds.add(String(ask.key ?? ""));
     else if (ask.call === "chat.tabs") tabs.add(String(ask.key ?? ""));
-    else if (ask.call === "decisions.queue") queues.add(String(ask.key ?? ""));
     else if (ask.call === "chat.find.go") goes.add(String(ask.key ?? ""));
     else if (ask.call === "chat.relayView") relays.add(String(ask.key ?? ""));
     else if (ask.call === "history.tool") tools.add(String(ask.key ?? ""));
@@ -110,7 +105,7 @@ for (const file of outputs) {
 
 // Each worked out by the core as it is now.
 const sorted = (keys: Iterable<string>) => [...keys].sort();
-const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {}, "decisions.queue": {}, "chat.find.go": {}, "chat.relayView": {}, "history.tool": {}, words: {}, browse: {}, railView: {} };
+const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {}, "chat.find.go": {}, "chat.relayView": {}, "history.tool": {}, words: {}, browse: {}, railView: {} };
 for (const text of sorted(texts)) kept.markdown[text] = markdown(text);
 for (const key of sorted(rails)) kept.railView[key] = railView(JSON.parse(key) as { rail?: unknown; rails?: unknown }, "zh");
 for (const key of sorted(codes)) {
@@ -144,19 +139,6 @@ for (const key of sorted(tabs)) {
     kept["chat.tabs"][key] = { next, tabs: tabsOf(next ?? ask.kept, agents, noChat, session) };
   } else kept["chat.tabs"][key] = tabsOf(ask.kept, agents, noChat, session);
 }
-// The 奏 page's queue (decisions.ts): its items (`[key, asked, set aside at]`) in their order and the one shown in it,
-// with what is kept for the next view; or what is kept after a pick (`picked`) or a setting aside (`setAside`).
-for (const key of sorted(queues)) {
-  const ask = JSON.parse(key) as { items?: [string, number, number | null][]; was?: Shown; picked?: string; setAside?: string };
-  const was = ask.was ?? { key: null, at: 0 };
-  if (ask.picked !== undefined) kept["decisions.queue"][key] = { was: picked(was, ask.picked) };
-  else if (ask.setAside !== undefined) kept["decisions.queue"][key] = { was: setAside(was, ask.setAside) };
-  else {
-    const keys = order(ask.items ?? []).map((i) => i[0]);
-    const { at, next } = shownIn(was, keys);
-    kept["decisions.queue"][key] = { order: keys, shown: at, was: next };
-  }
-}
 for (const key of sorted(words)) {
   const ask = JSON.parse(key) as { call?: unknown; text?: unknown; caret?: unknown; here?: unknown };
   const text = String(ask.text ?? "");
@@ -184,7 +166,7 @@ for (const key of keys) kept.browse[key] = browseStep(steps.get(key)!);
 const content = HEAD + Object.entries(kept).flatMap(([call, answers]) => sorted(Object.keys(answers)).map((key) => `  #|${JSON.stringify([call, key, (answers as Record<string, unknown>)[key]])}\n`)).join("");
 // (a step a line: what changes of them reads as the steps that came or went)
 const askedSteps = `{\n${keys.map((k) => `${JSON.stringify(k)}: ${JSON.stringify(steps.get(k))}`).join(",\n")}\n}\n`;
-const counts = `${texts.size} texts, ${codes.size} codes, ${searches.size} books, ${finds.size} lists, ${tabs.size} tabs, ${queues.size} queues, ${steps.size} browsing steps, ${rails.size} rails`;
+const counts = `${texts.size} texts, ${codes.size} codes, ${searches.size} books, ${finds.size} lists, ${tabs.size} tabs, ${steps.size} browsing steps, ${rails.size} rails`;
 if (check) {
   if (content !== before || askedSteps !== readFileSync(browseAsks, "utf8")) {
     console.error(`kept-answers: the core answers otherwise now than apps/mbui/src/sfkept/kept.mbt keeps: run client/core-ts/scripts/kept-answers.ts (${counts})`);

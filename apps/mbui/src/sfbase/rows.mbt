@@ -322,26 +322,6 @@ pub fn seq_key(station : String, thread : Double, seq : Double) -> String {
 }
 
 ///|
-/// A decision's own key: its station, chat and post.
-pub fn decision_key(item : Json) -> String {
-  let v = Some(item)
-  seq_key(text(v, "station"), number(v, "thread"), number(v, "seq"))
-}
-
-///|
-/// `d` the one the wide 奏 page shows from now on (`decision.show`: the core keeps it; DecisionDesk.tsx pick).
-pub fn decision_show(src : Source, w : Workspace, d : Json) -> Unit {
-  let v = Some(d)
-  let p : Map[String, Json] = {
-    "workspace": Json::string(w.id),
-    "station": Json::string(text(v, "station")),
-    "thread": Json::number(number(v, "thread")),
-    "seq": Json::number(number(v, "seq")),
-  }
-  (src.call)("decision.show", Json::object(p), fn(_) {  })
-}
-
-///|
 /// How many services are left up long in the workspace (the `longJobs` topic).
 pub fn long_jobs(src : Source, w : Workspace) -> Int {
   items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups").fold(init=0, fn(n, g) {

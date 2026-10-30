@@ -67,7 +67,7 @@ export const CHAT_POST = {
       },
       "card": {
         "type": "object",
-        "description": "Still.fail chats only: what people answer this message with, shown with it and on their list of things waiting for them (奏). {\"type\": \"options\", \"options\": [...]} when they choose between answers you can name (1 to 6, recommend one if you can): shown under the message, numbered in the order given with the recommended one moved last; a tap answers. Where the message itself lists or numbers the same choices, put them in that order too (the recommended one last), so its numbers and the card's agree. {\"type\": \"text\", \"placeholder\": \"…\"} when they must write something (a value, a name, a key): a field on their 奏 page. {\"type\": \"login\", \"login\": \"<id>\"} for a login the login tool started: they finish it from the card in their own browser, and it closes as the login ends. An option with action=close ends the wait silently; other answers reach you as their message quoting this one, and anything they write in the chat instead answers it too. A card waits until a person writes in the chat or you post a newer one. It says nothing of your turn: end the turn need_human (with need) after posting one.",
+        "description": "Still.fail chats only: what people answer this message with, shown with it and in their 待处理 (what waits for them) until they look at it. {\"type\": \"options\", \"options\": [...]} when they choose between answers you can name (1 to 6, recommend one if you can): shown under the message, numbered in the order given with the recommended one moved last; a tap answers. Where the message itself lists or numbers the same choices, put them in that order too (the recommended one last), so its numbers and the card's agree. {\"type\": \"text\", \"placeholder\": \"…\"} when they must write something (a value, a name, a key): they write it in the chat. {\"type\": \"login\", \"login\": \"<id>\"} for a login the login tool started: they finish it from the card in their own browser, and it closes as the login ends. An option with action=close ends the wait silently; other answers reach you as their message quoting this one, and anything they write in the chat instead answers it too. A card waits until a person writes in the chat or you post a newer one. It says nothing of your turn: end the turn need_human (with need) after posting one.",
         "properties": {
           "type": {
             "type": "string",
@@ -120,7 +120,7 @@ export const CHAT_POST = {
           },
           "assignee": {
             "type": "string",
-            "description": "The email of the person who must decide, chosen explicitly by you from the conversation. Only their 奏 list includes this card; others can still answer in the chat. Always set it for new cards. Omitted: whoever started the chat decides."
+            "description": "The email of the person who must decide, chosen explicitly by you from the conversation. Only their 待处理 includes this card; others can still answer in the chat. Always set it for new cards. Omitted: whoever started the chat decides."
           },
           "placeholder": {
             "type": "string",

@@ -86,11 +86,11 @@ export type ChatFilter = "all" | "mine" | "watching";
 
 export function useChatFilter(): [ChatFilter, (value: ChatFilter) => void] {
   const [mode, setMode] = useSidebarMode();
-  return [mode === "decisions" || mode === "archive" ? "all" : mode, setMode];
+  return [mode === "archive" ? "all" : mode, setMode];
 }
 
-/** What the wide screen's sidebar shows: one of the chat lists, the decisions waiting for the viewer (奏), or the archive. */
-export type SidebarMode = ChatFilter | "decisions" | "archive";
+/** What the wide screen's sidebar shows: one of the chat lists, or the archive. */
+export type SidebarMode = ChatFilter | "archive";
 
 /**
  * The sidebar's mode in the workspace in view: each workspace keeps its own (`listFilter`); one never chosen in goes by
@@ -98,7 +98,7 @@ export type SidebarMode = ChatFilter | "decisions" | "archive";
  */
 export function useSidebarMode(): [SidebarMode, (value: SidebarMode) => void] {
   const workspace = useWorkspaceId();
-  const mode: SidebarMode = usePrefs((p) => p.listFilter[workspace] ?? (p.onlyDecisions ? "decisions" : p.onlyWatching ? "watching" : p.onlyMine ? "mine" : "all"));
+  const mode: SidebarMode = usePrefs((p) => p.listFilter[workspace] ?? (p.onlyWatching ? "watching" : p.onlyMine ? "mine" : "all"));
   return [mode, (value) => setSidebarMode(workspace, value)];
 }
 

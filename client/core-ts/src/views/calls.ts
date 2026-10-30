@@ -368,7 +368,6 @@ export class ViewCalls {
         const card = yield* self.#pendingCard(c.station, c.thread, c.seq);
         const answer = decisions.answer(card, c.option);
         if (answer === null) return yield* Effect.fail(CoreError.invalid(t("core-misc.call.no_option")));
-        prefs.undeferDecision(inner.data, decisions.deferralKey(c.station, c.thread, c.seq));
         if (decisions.closes(card, c.option)) {
           const op = yield* request("decision.close", { station: c.station, thread: c.thread, seq: c.seq, option: c.option });
           const change = local.changing(c.station, c.thread, "", { card: null, decision: null }, null);
@@ -389,7 +388,6 @@ export class ViewCalls {
         const reply = decisions.reply(card, c.text, extras);
         if (reply === null) return yield* Effect.fail(CoreError.invalid(t("core-misc.call.reply_in_chat")));
         const [text, quotes] = reply;
-        prefs.undeferDecision(inner.data, decisions.deferralKey(c.station, c.thread, c.seq));
         return yield* send(c.station, c.thread, outgoing(inner, c.station, text, c.attachments, [...quotes, ...arr(c.quotes)], null, c.uploads), ctx);
       });
     };
@@ -400,13 +398,6 @@ export class ViewCalls {
         const result = yield* Effect.result(handlers.op!(inner, { kind: "op", op: c.op }, progress, at, ctx));
         local.letGoEnded(c.station, c.thread, c.seq, result._tag === "Success", inner.data.rowsRev(c.station));
         return yield* settle(result);
-      });
-    };
-    handlers.decisionShow = (_inner, call) => {
-      const c = call as Of<"decisionShow">;
-      return Effect.sync(() => {
-        views.showDecision(c.workspace, c.station, c.thread, c.seq);
-        return null;
       });
     };
     handlers.chatRef = (_inner, call) => {

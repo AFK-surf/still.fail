@@ -733,7 +733,7 @@ test "wide: under a phone's status bar, 更新 below it (the bar takes what is p
 }
 
 ///|
-test "wide: the lists' filter (components.tsx MineFilter): its tip; its menu has the list shown checked, 奏 its page, a filter back to the chats from it" {
+test "wide: the lists' filter (components.tsx MineFilter): its tip; its menu has the list shown checked, 已归档 its list, a filter back to the chats from it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   let open_filter = fn() {
@@ -743,13 +743,13 @@ test "wide: the lists' filter (components.tsx MineFilter): its tip; its menu has
   }
   open_filter()
   assert_true(t.find("全部会话") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
-  // 奏: its page, the menu closed
-  t.tap_text("奏")
+  // 已归档: its list, the menu closed
+  t.tap_text("已归档")
   t.frame()
-  assert_true(app.nav.top() == Decisions)
+  assert_eq(@sfdesk.side_place(), "archive")
   assert_false(@sf.presenting())
-  // from 奏, 我参与的: the chats, filtered (prefs.set listFilter)
-  let (fx, fy, fw, fh) = t.query(Button, label="筛选会话：奏").unwrap().rect
+  // from 已归档, 我参与的: the chats, filtered (prefs.set listFilter)
+  let (fx, fy, fw, fh) = t.query(Button, label="筛选会话：已归档").unwrap().rect
   t.tap(fx + fw / 2.0, fy + fh / 2.0)
   t.frame()
   t.tap_text("我参与的")

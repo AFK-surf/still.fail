@@ -225,7 +225,6 @@
     "one": "Disconnects from Feishu. Its 1 session keeps its history but gets no new messages. You need to delete the app in the developer console yourself.",
     "other": "Disconnects from Feishu. Its {n} sessions keep their history but get no new messages. You need to delete the app in the developer console yourself."
   },
-  "web-mobile.decisions.title": "Decisions",
   "web-mobile.history.account": "Account",
   "web-mobile.history.accountNote": "In auto mode, the account switches when quota runs out or sign-in expires; a chosen account is always used.",
   "web-mobile.history.accountWarn": "Needs another account",
@@ -269,10 +268,6 @@
   "web-mobile.home.archiveAsk": "Archive \"{title}\"?",
   "web-mobile.home.archiveFailed": "Couldn't archive: {error}",
   "web-mobile.home.archived": "Archived",
-  "web-mobile.home.decisions": {
-    "one": "Decisions: 1 waiting",
-    "other": "Decisions: {n} waiting"
-  },
   "web-mobile.home.emptyMany": "No chats yet. @ them in Slack, or",
   "web-mobile.home.emptyMine": "No chats you're in",
   "web-mobile.home.emptyOne": "No chats yet. @ it in Slack, or",

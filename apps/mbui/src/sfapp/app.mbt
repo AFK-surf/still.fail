@@ -703,8 +703,6 @@ fn page_view(
         Archived => setting_page(c, src, w, @settings.Route::Archive)
         Settings => setting_page(c, src, w, @settings.Route::Home)
         Setting(r) => setting_page(c, src, w, r)
-        // 奏: a place of the bar at the stack's root, else a page pushed
-        Decisions => decisions_page(c, src, w)
         History(r, key, entry) => history_page(c, src, r, key, entry)
         Words(head, words) => words_page(c, src, head, words)
         Screen(at) => @sfpages.screen_page(c, src, at, system_frame())
@@ -713,7 +711,7 @@ fn page_view(
       // place's top page with the bar and a chat have frosted bars there instead; a book and a film their own)
       let own_top = match page {
         Home | Chat(_) | NewChat | DriveRead(_) | DrivePlay(_) => true
-        Place(_) | Files | Decisions => root
+        Place(_) | Files => root
         _ => false
       }
       if !own_top && status_top() > 0.0 {

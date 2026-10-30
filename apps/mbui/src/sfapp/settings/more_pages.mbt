@@ -47,7 +47,7 @@ pub let bar_size : Int = 4
 ///|
 /// Every place, in the picker's order (Places.kt PLACES).
 // kept across runs: a table of constants, never written
-pub let all_places : Array[String] = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive"]
+pub let all_places : Array[String] = ["chats", "files", "stations", "profiles", "connects", "usage", "archive"]
 
 ///|
 /// What settings' row says of the bars (barsValue): how many, or the one bar's places.

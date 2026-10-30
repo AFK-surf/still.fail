@@ -66,7 +66,7 @@ function Outcome({ ask }: { ask: Ask }) {
   return <div className={css.outcome}><span className={css.dot} data-tone={ask.status} aria-hidden="true" /><span>{words}</span></div>;
 }
 
-/** The request `ask` the post `m` makes. `rows`: the answer's buttons in it (the decisions page has them at its foot). */
+/** The request `ask` the post `m` makes. `rows`: the answer's buttons in it (none where the message is drawn out of its chat). */
 export function VaultAsk({ message: m, ask, rows = true }: { message: ChatMessage; ask: Ask; rows?: boolean }) {
   const station = useStation().address;
   const box = useRef<HTMLDivElement>(null);

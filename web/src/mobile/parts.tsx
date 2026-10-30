@@ -230,7 +230,7 @@ export function TopBack({ label, onBack, trailing }: { label: string; onBack: ()
 export interface PlaceAction { key: string; label: string; run: () => void }
 
 /**
- * A place's page's head (文件, Station, Profile, 连接, 用量, 已归档, 奏). Its top page, the bottom bar under it: Home's
+ * A place's page's head (文件, Station, Profile, 连接, 用量, 已归档). Its top page, the bottom bar under it: Home's
  * top bar, the gear to the settings and the page's name, what else it does at its end (its primary action is in the
  * bar's notch). Opened from elsewhere (the settings, a link): a page like any other, back to where it came from, with
  * its primary action at its end too.

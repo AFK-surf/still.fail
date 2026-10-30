@@ -2,7 +2,7 @@
 // device's bars (prefs `bars`, kept whole by the core), floating over the foot of a place's top page.
 //
 // - A frosted glass, its rim lit; a frosted ball of 68 over the place in view (under its icon, over 令), 6 past the
-//   bar on every side. The page's primary action (placeActions.tsx: 令 on a chat page, 对话 奏 已归档; a page's ＋)
+//   bar on every side. The page's primary action (placeActions.tsx: 令 on a chat page, 对话 已归档; a page's ＋)
 //   sits in a notch cut into the bar's top, as far from it all round, the notch's shoulders rounded into the edge;
 //   between two pages that have one, only its icon changes; on a page without, it shrinks away and the notch closes.
 // - A tap on a place goes there; the ball travels on a spring as quick as the way is long (time ∝ √distance).
@@ -18,11 +18,10 @@ import { springStep } from "@stillfail/ui/spring.ts";
 import { useFrameDraw } from "./gesture.ts";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { ComponentType, ReactNode } from "react";
-import { Archive, Chart, Chats, Folder, Im, Ling, Plus, Quota, Zou, type IconProps } from "@stillfail/ui/icons.tsx";
+import { Archive, Chart, Chats, Folder, Im, Ling, Plus, Quota, type IconProps } from "@stillfail/ui/icons.tsx";
 import { railLabel } from "../Rail.tsx";
 import { prefs, setPrefs, usePrefs } from "../prefs.ts";
 import { useChats, useStatus } from "../api.ts";
-import { useWorkspaceMarks } from "../lastChat.ts";
 import { StationGlyph, glyphCounts } from "../StationGlyph.tsx";
 import { reducedMotion } from "@stillfail/ui/motion.ts";
 import * as css from "./Bar.css.ts";
@@ -31,13 +30,13 @@ import type { PlaceAction } from "./parts.tsx";
 import { t } from "../i18n.ts";
 
 /** The places a bar can hold (the core's BAR_PLACES), and the chats' family: 令 is their primary action. */
-export type BarPlace = "chats" | "decisions" | "files" | "stations" | "profiles" | "connects" | "usage" | "archive";
-export const BAR_PLACES: BarPlace[] = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive"];
-export const CHAT_FAMILY: BarPlace[] = ["chats", "decisions", "archive"];
+export type BarPlace = "chats" | "files" | "stations" | "profiles" | "connects" | "usage" | "archive";
+export const BAR_PLACES: BarPlace[] = ["chats", "files", "stations", "profiles", "connects", "usage", "archive"];
+export const CHAT_FAMILY: BarPlace[] = ["chats", "archive"];
 
 /** Each place's page, under the workspace (`/w/<id>`): the address a place's top page is at. */
 export const PLACE_PATHS: Record<BarPlace, string> = {
-  chats: "", decisions: "/decisions", files: "/files", stations: "/settings/stations", profiles: "/settings/profiles",
+  chats: "", files: "/files", stations: "/settings/stations", profiles: "/settings/profiles",
   connects: "/settings/connects", usage: "/settings/usage", archive: "/archive",
 };
 
@@ -63,7 +62,7 @@ const SLOT = 90; // a hop of one place: the distance that keeps the spring at te
 const ZETA = 0.635;
 const friction = (tension: number) => 2 * ZETA * Math.sqrt(tension);
 
-const ICONS: Partial<Record<BarPlace, ComponentType<IconProps>>> = { chats: Chats, decisions: Zou, files: Folder, profiles: Quota, connects: Im, usage: Chart, archive: Archive };
+const ICONS: Partial<Record<BarPlace, ComponentType<IconProps>>> = { chats: Chats, files: Folder, profiles: Quota, connects: Im, usage: Chart, archive: Archive };
 
 /** One number on a spring, stepped by the bar's frame loop (Hooke and a damper, the step a frame's time). */
 class Spring {
@@ -130,12 +129,10 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   const items = sets[cur] ?? [];
   const others = useMemo(() => sets.map((_, i) => i).filter((i) => i !== cur), [sets, cur]);
 
-  // What waits: 奏's dot, the stations' trouble (the core's, as Home shows them).
-  const marks = useWorkspaceMarks(scope);
+  // What waits: the stations' trouble (the core's, as Home shows them).
   const chats = useChats(scope, false).value;
   const status = useStatus(scope);
-  const dots: Partial<Record<BarPlace, "accent" | "red">> = {};
-  if ((marks?.workspaces[scope]?.decisions ?? 0) > 0) dots.decisions = "accent";
+  const dots: Partial<Record<BarPlace, "red">> = {};
   if (chats?.trouble) dots.stations = "red";
   const glyph = glyphCounts({ glyph: chats?.glyph });
   // The stations in words (the core's), as the glyph draws them, and what is wrong with them: what Home's corner said.

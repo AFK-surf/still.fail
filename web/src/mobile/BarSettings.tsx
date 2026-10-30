@@ -4,7 +4,7 @@
 import { useFrameDraw } from "./gesture.ts";
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { railLabel } from "../Rail.tsx";
-import { Archive, Chart, Chats, Folder, Im, Minus, Plus, Quota, Zou, type IconProps } from "@stillfail/ui/icons.tsx";
+import { Archive, Chart, Chats, Folder, Im, Minus, Plus, Quota, type IconProps } from "@stillfail/ui/icons.tsx";
 import { StationGlyph } from "../StationGlyph.tsx";
 import type { ComponentType } from "react";
 import { useApp, SheetGrab, SheetHead } from "./app.tsx";
@@ -18,7 +18,7 @@ import * as css from "./BarSettings.css.ts";
 import { t } from "../i18n.ts";
 
 const SIZE = 4;
-const ICONS: Partial<Record<BarPlace, ComponentType<IconProps>>> = { chats: Chats, decisions: Zou, files: Folder, profiles: Quota, connects: Im, usage: Chart, archive: Archive };
+const ICONS: Partial<Record<BarPlace, ComponentType<IconProps>>> = { chats: Chats, files: Folder, profiles: Quota, connects: Im, usage: Chart, archive: Archive };
 const STILL = { online: 1, dim: 0, failing: 0, working: 0, asleep: false };
 function PlaceIcon({ place, size = 28 }: { place: BarPlace; size?: number }) {
   if (place === "stations") return <StationGlyph counts={STILL} size={size} />;

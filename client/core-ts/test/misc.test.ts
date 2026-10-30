@@ -200,12 +200,13 @@ test("the_badge_counts_as_the_prefs_say", () => {
 });
 
 test("a_phones_bottom_bars_read_whole_from_what_is_kept", () => {
-  const two = { sets: [["chats", "files", "profiles", "stations"], ["decisions", "usage", "connects", "archive"]], current: 0 };
+  const two = { sets: [["chats", "files", "profiles", "stations"], ["usage", "connects", "archive"]], current: 0 };
   assert.deepEqual(barsOf(undefined), two, "nothing kept: the two default bars");
   assert.deepEqual(barsOf({ sets: [], current: 0 }), two, "no bar left: the default");
   assert.deepEqual(barsOf({ sets: [["files", "nope", "files", "chats", "usage", "archive", "stations"]], current: 3 }), { sets: [["files", "chats", "usage", "archive"]] , current: 0 },
     "unknown places and repeats left out, four at most, the bar in view one there is");
-  assert.deepEqual(barsOf({ sets: [["x"], ["decisions"]], current: 1 }), { sets: [["decisions"]], current: 0 }, "a bar with nothing known goes");
+  assert.deepEqual(barsOf({ sets: [["x"], ["files"]], current: 1 }), { sets: [["files"]], current: 0 }, "a bar with nothing known goes");
+  assert.deepEqual(barsOf({ sets: [["chats", "decisions"], ["decisions"]], current: 1 }), { sets: [["chats"]], current: 0 }, "奏, kept by an older build, is gone");
   assert.deepEqual(barsOf({ sets: [["chats"], ["files"]], current: 1 }), { sets: [["chats"], ["files"]], current: 1 });
 });
 test("each_workspaces_bottom_bars_go_out_whole", () => {
@@ -213,6 +214,8 @@ test("each_workspaces_bottom_bars_go_out_whole", () => {
   assert.deepEqual(out.barsBy.a, { sets: [["files"]], current: 0 }, "a workspace's bars read as `bars` do");
   assert.deepEqual(out.barsBy.b, barsOf(undefined), "one unreadable: the default");
   assert.deepEqual((shown({}) as { barsBy: unknown }).barsBy, {}, "none kept: no workspace's");
+  // 奏 as a workspace's list, kept by an older build: that workspace goes by the one-for-all fields again.
+  assert.deepEqual((shown({ listFilter: { a: "decisions", b: "mine" } }) as { listFilter: unknown }).listFilter, { b: "mine" });
 });
 
 

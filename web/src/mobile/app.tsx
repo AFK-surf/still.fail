@@ -1,5 +1,5 @@
 // The app on a narrow screen, as the Android app is (apps/android/…/App.kt): the chats of one workspace are home, its
-// places (奏, 文件, Station…) the other top pages, gone to from the bottom bar under them (Bar.tsx) in place of the one
+// places (文件, Station…) the other top pages, gone to from the bottom bar under them (Bar.tsx) in place of the one
 // in view; everything else is a page pushed over them, or a sheet from the bottom. Pages move side by side: the new
 // one pushes in whole from the right and the old goes out to the left (and back the other way); settings (from the
 // gear at the top left) come from the left instead, a new chat rises from the bottom. Each page is an address, so the browser's back and a

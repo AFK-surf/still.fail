@@ -830,7 +830,7 @@ export interface BadgeKinds {
  */
 export interface BarPrefs {
 	/**
-	 * The bars, each its places in order (one to four of chats, decisions, files, stations, profiles, connects,
+	 * The bars, each its places in order (one to four of chats, files, stations, profiles, connects,
 	 * usage, archive).
 	 */
 	sets: string[][];
@@ -3170,108 +3170,6 @@ export interface Counts {
 	warm: number;
 }
 
-/**
- * A card the viewer answered today: where it is, what it asked (`text`, its post's first line), how they answered it
- * (`answer`: 选了「…」, 回复：…), and when (`clock`, 14:05).
- */
-export interface DecisionAnswered {
-	station: string;
-	stationName: string;
-	/** Its station's emoji, when its workspace gave it one. */
-	stationEmoji?: string;
-	/** Its station's icon, when its workspace gave it one: glyph:<name> (design/station-icons) or a picture's data URL; shown before the emoji. */
-	stationIcon?: string;
-	session: string;
-	thread: number;
-	title: string;
-	seq: number;
-	text: string;
-	answer: string;
-	clock: string;
-}
-
-/**
- * One card on the 奏 page: where it is, the post that asks (as a chat shows messages, with its card) and the messages
- * just before it, the card (an options card's options as shown, also as `options`), and whether the viewer set it
- * aside on this device. An options card is answered with `decision.answer`, a text card with `decision.reply`.
- */
-export interface DecisionItem {
-	station: string;
-	stationName: string;
-	/** Its station's emoji, when its workspace gave it one. */
-	stationEmoji?: string;
-	/** Its station's icon, when its workspace gave it one: glyph:<name> (design/station-icons) or a picture's data URL; shown before the emoji. */
-	stationIcon?: string;
-	/** Its chat's item id (its session's key): what its page opens by. */
-	session: string;
-	thread: number;
-	/** Its chat's title. */
-	title: string;
-	seq: number;
-	message: ChatMessage;
-	/** The one or two messages before it, oldest first. */
-	before: ChatMessage[];
-	options: DecisionOption[];
-	/** The card. A core before cards says none: an options card. */
-	card?: MessageCard;
-	/** Set aside (待定) on this device: last in the list, still pending. */
-	deferred?: boolean;
-	/** 奏 · <the post's first line> */
-	text: string;
-	/** What it asks, uncut: the need its agent ended need_human with, else the post's first line. */
-	question: string;
-}
-
-/**
- * A chat of the viewer's where an agent is at work or waiting: where it is, and what it is doing (`line`: 在做 · …,
- * 在等：…), and since when (`time.lastActiveAt`).
- */
-export interface DecisionWorking {
-	station: string;
-	stationName: string;
-	/** Its station's emoji, when its workspace gave it one. */
-	stationEmoji?: string;
-	/** Its station's icon, when its workspace gave it one: glyph:<name> (design/station-icons) or a picture's data URL; shown before the emoji. */
-	stationIcon?: string;
-	session: string;
-	thread: number;
-	title: string;
-	line: string;
-	time?: Record<string, Stamp>;
-}
-
-/**
- * The 奏 page's day: how many cards the viewer answered today, how long they waited on average (in words; none with
- * none answered), and how many of their chats have an agent at work or waiting.
- */
-export interface DecisionsToday {
-	count: number;
-	waited?: string;
-	working: number;
-}
-
-/**
- * The cards waiting in a workspace's chats for the viewer (the `decisions` view, the 奏 page, core decisions.ts):
- * pending whatever their agents do, not dismissed by them, those they set aside (待定) last; `count` for 奏 N.
- */
-export interface DecisionsView {
-	items: DecisionItem[];
-	count: number;
-	/**
-	 * Which of `items` the wide 奏 page shows: the one picked (`decision.show`) while it is listed; once it is
-	 * gone or set aside, the one now in its place (the last when it was last). Absent for none.
-	 */
-	shown?: number;
-	/** What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be. */
-	wait: ListNote;
-	/** The cards the viewer answered today, newest first. A core before them says none. */
-	answered?: DecisionAnswered[];
-	/** The viewer's chats where an agent is at work or waiting (正在办), newest first: where the next may come from. */
-	working?: DecisionWorking[];
-	/** The day in numbers. */
-	today?: DecisionsToday;
-}
-
 /** What this device is, as its host told the core at start (`client.device`), and what follows from it. */
 export interface DeviceView {
 	/** `web`, `desktop` or `android`; empty until told. */
@@ -5568,9 +5466,9 @@ export interface OpenChat {
 
 /**
  * What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), or on the wide
- * screen the decisions waiting for the viewer (奏) or the archived chats (已归档) in place of the chats.
+ * screen the archived chats (已归档) in place of the chats.
  */
-export type ListFilter = "all" | "mine" | "watching" | "decisions" | "archive";
+export type ListFilter = "all" | "mine" | "watching" | "archive";
 
 /** How the pages look: as the system does (the default), or always light, or always dark. */
 export type Appearance = "system" | "light" | "dark";
@@ -5601,10 +5499,10 @@ export interface ReaderPrefs {
 }
 
 /**
- * A place the wide screen's rail can show: a list of chats (对话, 我参与的, 监控中, 已归档, 奏), 待处理's panel, or a page
+ * A place the wide screen's rail can show: a list of chats (对话, 我参与的, 监控中, 已归档), 待处理's panel, or a page
  * (文件, Station, Profile, 连接, 用量).
  */
-export type RailPlaceId = "chats" | "mine" | "watching" | "archive" | "decisions" | "attention" | "files" | "stations" | "profiles" | "connects" | "usage";
+export type RailPlaceId = "chats" | "mine" | "watching" | "archive" | "attention" | "files" | "stations" | "profiles" | "connects" | "usage";
 
 /** What kind of place: a page of its own, one of the chats' lists, 待处理. */
 export type RailKind = "places" | "lists" | "attention";
@@ -5658,13 +5556,8 @@ export interface PrefsView {
 	/** The chat list shows only the watching chats (监控中); never with `only_mine`. */
 	onlyWatching?: boolean;
 	/**
-	 * The wide screen's sidebar shows the decisions waiting for the viewer (奏) in place of the chats; never with
-	 * `only_mine` or `only_watching`.
-	 */
-	onlyDecisions?: boolean;
-	/**
-	 * The list filter chosen in each workspace, by workspace; one not there goes by `only_mine`, `only_watching` and
-	 * `only_decisions` (one filter for all, as devices kept it before).
+	 * The list filter chosen in each workspace, by workspace; one not there goes by `only_mine` and `only_watching`
+	 * (one filter for all, as devices kept it before).
 	 */
 	listFilter?: Record<string, ListFilter>;
 	appearance?: Appearance;
@@ -5809,7 +5702,7 @@ export interface PrefsView {
 	reader?: ReaderPrefs;
 	/**
 	 * What the wide screen's rail shows, in its order (rail.ts RAIL_PLACES: chats, mine, watching, archive,
-	 * decisions, attention, files, stations, profiles, connects, usage); none: its default ones. `railView` says it as drawn.
+	 * attention, files, stations, profiles, connects, usage); none: its default ones. `railView` says it as drawn.
 	 */
 	rail?: string[];
 	/**
@@ -7010,8 +6903,6 @@ export interface WorkspaceMark {
 	 * `alert`. Absent for 0.
 	 */
 	wait?: number;
-	/** How many cards wait in it for them in all (奏 N). Absent for 0. */
-	decisions?: number;
 	tone?: string;
 	/** 1 个出错了 · 2 个在等你 · 3 个有新消息 */
 	label?: string;
@@ -7024,7 +6915,7 @@ export interface WorkspaceMark {
 	/**
 	 * 待处理, of the kinds the badge counts (`badgeKinds` wait, failed): the chats of theirs that went wrong
 	 * (`alert`), read or not, until they run again, are archived or the failure is let go (`failsGone`); the cards and needs
-	 * waiting for them (`wait`) not looked at since they came (one looked at: its row and 奏 still say it). The failed
+	 * waiting for them (`wait`) not looked at since they came (one looked at: its row still says it). The failed
 	 * first, the latest first within. `alert` counts the same failures.
 	 */
 	items?: MarkItem[];

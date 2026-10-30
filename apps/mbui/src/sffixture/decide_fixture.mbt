@@ -1,6 +1,5 @@
-// Made-up decisions, an execution history, an agent's card, jobs, for the app with no core (fixture.mbt; slice 8's
-// screenshots). MBUI_FIXTURE: "decisions" (the 奏 page with an options card in front), "decisions-text" (a text card),
-// "decisions-idle" (none left: the day so far), "history" (an agent's steps, a few opened), "history-reading" (the
+// An execution history, an agent's card, jobs, for the app with no core (fixture.mbt; slice 8's screenshots).
+// MBUI_FIXTURE: "history" (an agent's steps, a few opened), "history-reading" (the
 // steps not read yet: their bones), "history-details", the chat
 // with a sheet open over it: "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid" (an agent's card that knows
 // no figure of it, as a station from before tells none of an agent at rest), "chat-peek" (its station's card), "chat-jobs",
@@ -22,7 +21,7 @@
 /// Whether `mode` is one of this slice's.
 pub fn decide_mode(mode : String) -> Bool {
   [
-    "decisions", "decisions-text", "decisions-idle", "history", "history-reading", "history-details",
+    "history", "history-reading", "history-details",
     "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-many", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
     "chat-things", "chat-things-side", "chat-info-pulls",
@@ -345,112 +344,6 @@ pub fn fix_history() -> Json {
 }
 
 ///|
-pub fn fix_decisions(mode : String) -> Json {
-  if mode == "decisions-idle" {
-    return {
-      "items": [],
-      "count": 0,
-      "wait": { "reading": false, "failing": [] },
-      "today": { "count": 3, "waited": "12 分钟", "working": 1 },
-      "working": [
-        {
-          "station": "ws1/st2",
-          "stationName": "MBA",
-          "session": "s-c3",
-          "thread": 9,
-          "title": "第 3 个：接口的命名",
-          "line": "在做 · 改接口的名字",
-          "time": { "lastActiveAt": { "ago": "2 分钟前" } },
-        },
-      ],
-      "answered": [
-        {
-          "station": "ws1/st1",
-          "stationName": "Studio",
-          "session": "s-c1",
-          "thread": 7,
-          "title": "整理发布清单",
-          "seq": 8,
-          "text": "要不要把旧的截图也一起换掉？",
-          "answer": "选择了「一起换」",
-          "clock": "14:05",
-        },
-        {
-          "station": "ws1/st1",
-          "stationName": "Studio",
-          "session": "s-c2",
-          "thread": 8,
-          "title": "第 2 个：图标的尺寸",
-          "seq": 4,
-          "text": "图标按 24 还是 20 出？",
-          "answer": "回复：24，和设计稿一致",
-          "clock": "11:40",
-        },
-      ],
-    }
-  }
-  let claude = by_agent("anthropic", "claude", "s-c1")
-  let options_card : Json = {
-    "station": "ws1/st1",
-    "stationName": "Studio",
-    "session": "s-c1",
-    "thread": 7,
-    "title": "整理发布清单",
-    "seq": 8,
-    "before": [
-      msg(6, "person", by_person("林"), "这里的高度是怎么估的？", "40 分钟前", {
-        "mine": true,
-        "author": "lin@example.com",
-      }),
-      msg(7, "person", by_person("林"), "还有深色模式也看一下", "40 分钟前", {
-        "mine": true,
-        "author": "lin@example.com",
-        "joined": true,
-      }),
-    ],
-    "message": msg(8, "agent", claude, "高度先按 90 估，量过一次就记住。深色模式我一起看。要不要把旧的截图也一起换掉？", "30 分钟前", {}),
-    "options": [
-      { "label": "先不换", "detail": "这次只改列表，截图下次再说" },
-      { "label": "一起换", "detail": "把首页和聊天页的截图都更新", "recommended": true },
-    ],
-    "card": {
-      "type": "options",
-      "assigneeText": "等 林 决定",
-      "options": [
-        { "label": "先不换", "detail": "这次只改列表，截图下次再说" },
-        { "label": "一起换", "detail": "把首页和聊天页的截图都更新", "recommended": true },
-      ],
-    },
-    "text": "奏 · 要不要把旧的截图也一起换掉？",
-    "question": "要不要把旧的截图也一起换掉？",
-  }
-  let text_card : Json = {
-    "station": "ws1/st2",
-    "stationName": "MBA",
-    "session": "s-c4",
-    "thread": 11,
-    "title": "第 4 个：支付的测试",
-    "seq": 3,
-    "before": [
-      msg(2, "person", by_person("林"), "把支付的测试补上，用测试环境跑。", "1 小时前", {
-        "mine": true,
-        "author": "lin@example.com",
-      }),
-    ],
-    "message": msg(3, "agent", by_agent("openai", "codex", "s-c4"), "测试环境要一个 Stripe 的测试 key 才能跑，发我一下就行，我不会把它写进仓库。", "50 分钟前", {}),
-    "options": [],
-    "card": { "type": "text", "placeholder": "sk_test_…", "assigneeText": "等 林 回复" },
-    "text": "奏 · 测试环境要一个 Stripe 的测试 key",
-    "question": "测试环境要一个 Stripe 的测试 key",
-  }
-  {
-    "items": if mode == "decisions-text" { [text_card, options_card] } else { [options_card, text_card] },
-    "count": 2,
-    "wait": { "reading": false, "failing": [] },
-  }
-}
-
-///|
 pub fn fix_chat_jobs() -> Json {
   {
     "jobs": [fix_job("j-web"), fix_job("j-ci"), fix_job("j-build")],
@@ -498,7 +391,6 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
       } else {
         None
       }
-    "decisions" => Some(Some(fix_decisions(f.mode)))
     "history" if f.mode == "history-reading" => Some(None)
     "history" => Some(Some(fix_history()))
     "agentCard" if f.mode == "chat-agent-unsaid" =>

@@ -446,11 +446,11 @@ test "under it all the page's own ground, dark too (the host cleared to blue the
 }
 
 ///|
-test "the filter's menu, a finger's: the presenters' sheet of 全部会话, 我参与的, 监控中, 奏 and 已归档, the list shown checked" {
+test "the filter's menu, a finger's: the presenters' sheet of 全部会话, 我参与的, 监控中 and 已归档, the list shown checked" {
   let t = tester("home")
   t.tap(390.0 - 16.0 - 17.0, 25.0)
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
-  for words in ["全部会话", "我参与的", "监控中", "奏", "已归档"] {
+  for words in ["全部会话", "我参与的", "监控中", "已归档"] {
     assert_true(t.find(words) is Some(_), msg=words)
   }
   // 已归档: its page

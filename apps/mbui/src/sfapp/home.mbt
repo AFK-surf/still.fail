@@ -236,10 +236,9 @@ let mark_yellow : Int64 = 0xF2B01EFFL
 let others_mark : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
-/// The filter's menu chosen on Home (mobile/Home.tsx FilterButton): a filter its list, 奏 and 已归档 their pages.
+/// The filter's menu chosen on Home (mobile/Home.tsx FilterButton): a filter its list, 已归档 its page.
 fn home_filter_go(src : Source, w : Workspace, f : String) -> Unit {
   match f {
-    "decisions" => open_page(Decisions)
     "archive" => open_page(Archived)
     _ => @sfpages.set_filter(src, w, f)
   }

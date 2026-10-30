@@ -36,7 +36,7 @@ pub fn agent_mark(
 /// The badge at a mark's corner `side` across, as a 20 one's has it (ui.css.ts agentMark ::after, ::before) and no
 /// larger on a larger one: a dot 12 across ringed 2 in `ground`, 3 past the corner, blue waiting on a person (block)
 /// and red failed; the spokes 10, 2 past it. On a smaller mark all of it as much smaller, its maker still seen past it
-/// (a badge 12 across covered a 14 one's whole maker but a sliver). A phone's bar and its 奏 rows draw this one too.
+/// (a badge 12 across covered a 14 one's whole maker but a sliver). A phone's bar draws this one too.
 pub fn agent_badge(c : @ui.Ctx, badge : String, side : Double, ground : Int64) -> Unit {
   let k = dmin(side / agent_badge_full, 1.0)
   match badge {

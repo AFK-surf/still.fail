@@ -244,8 +244,7 @@ fn filter_button(
 ) -> Unit {
   if @sf.native_on() {
     let rows = [("all", "web-main.filter.chats.all"), ("mine", "web-main.filter.chats.mine"),
-      ("watching", "web-main.filter.watching"), ("decisions", "web-main.decisions.title"),
-      ("archive", "web-main.filter.archived")].map(fn(p) {
+      ("watching", "web-main.filter.watching"), ("archive", "web-main.filter.archived")].map(fn(p) {
         ("sidebar/filter/" + p.0, @sf.t(p.1), p.0 == (if shown == "chats" { "all" } else { shown }), "")
       })
     sidebar_glass(c, "sidebar/filter", @sf.t("web-main.filter.chats.named", args=[("named", filter_named(shown))]), "filter", rows)
@@ -253,11 +252,10 @@ fn filter_button(
   }
   let t = @sf.theme()
   let id = c.id("side/filter")
-  // its menu (sfpages' filter_menu): a filter its list, 奏 its place, 已归档 the archive's list (rail_go)
+  // its menu (sfpages' filter_menu): a filter its list, 已归档 the archive's list (rail_go)
   if c.clicked(id) {
     @sfpages.filter_menu(Of(id), if shown == "chats" { "all" } else { shown }, fn(f) {
       match f {
-        "decisions" => @sfbase.go_place("decisions") |> ignore
         "all" => rail_go(c, src, w, "chats")
         f => rail_go(c, src, w, f)
       }
@@ -276,10 +274,9 @@ fn filter_button(
 }
 
 ///|
-/// The list shown (list_place), named (MineFilter `named`): 奏, 已归档, 我参与的, 监控中, else 全部.
+/// The list shown (list_place), named (MineFilter `named`): 已归档, 我参与的, 监控中, else 全部.
 fn filter_named(filter : String) -> String {
   match filter {
-    "decisions" => @sf.t("web-main.decisions.title")
     "archive" => @sf.t("web-main.filter.archived")
     "mine" => @sf.t("web-main.filter.chats.mine")
     "watching" => @sf.t("web-main.filter.watching")

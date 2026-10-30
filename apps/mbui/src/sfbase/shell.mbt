@@ -165,12 +165,11 @@ pub fn open_detail(src : Source, r : ChatRef, tab : String) -> Unit {
 pub let shell : Ref[Shell] = Ref(bare_shell())
 
 ///|
-/// A place's page at the stack's root: 对话 Home, 文件 Files, 奏 Decisions, another its own.
+/// A place's page at the stack's root: 对话 Home, 文件 Files, another its own.
 pub fn place_page(place : String) -> Page {
   match place {
     "chats" => Home
     "files" => Files
-    "decisions" => Decisions
     p => Place(p)
   }
 }

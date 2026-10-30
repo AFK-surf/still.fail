@@ -8,7 +8,7 @@
 ///|
 /// Where a message is shown: its chat (its station, its session, its view), and, in a list, how that list goes to a
 /// message (by its seq, and the passage of it a quote's card pressed quoted: lit alone there); None out of one (a letter, a decision's). `inline`: no margin for
-/// the pictures (a side panel's, the 奏 page's: Chat.css.ts inlineHeads), each over its head's start. `gutter`: the
+/// the pictures (a side panel's: Chat.css.ts inlineHeads), each over its head's start. `gutter`: the
 /// room beside the words either side that is only the page's margin (`--list-gutter`: a list's sides, narrow or wide,
 /// its pictures out in it standing by their heads' line; none out of a list), which the message's own tables scroll
 /// out over to the pane's edges. In its chat's list (`list`), how it moves there: its list's turns (what it asks
@@ -144,7 +144,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
           prose_with_files(c, src, here, m, files)
         })
       }
-      // what it asks, under it (in its chat's list: not a letter's, nor the 奏 page's, which has them at its foot)
+      // what it asks, under it (in its chat's list: not a letter's)
       match here.list {
         Some(l) => message_decision(c, src, here, m, Some(l.turns))
         None => ()

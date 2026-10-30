@@ -31,8 +31,6 @@ import { StationGlyph, glyphCounts } from "./StationGlyph.tsx";
 import { useHeldOrder, useListMotion, usePointerOver } from "./listMotion.ts";
 import { useWorkspaceMarks } from "./lastChat.ts";
 import * as nav from "./Sidebar.css.ts";
-import * as decisionsCss from "./Decisions.css.ts";
-import { DecisionRows, openedAt, openedRecently } from "./DecisionDesk.tsx";
 import { ArchiveRows } from "./pages/Archive.tsx";
 import * as chatCss from "./styles/chat.css.ts";
 import { t } from "./i18n.ts";
@@ -41,12 +39,12 @@ import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 /**
  * The chats of a workspace, newest first and
  * grouped by day, as the core's `chats` view has them; optionally only the
- * ones the viewer started or the watching ones, or in their place the decisions waiting for the viewer (奏,
- * DecisionRows: picked, one shows on `decisions`) or the archived chats (ArchiveRows, its page `archive`), with
+ * ones the viewer started or the watching ones, or in their place the archived chats (ArchiveRows, its page
+ * `archive`), with
  * `newChat` above them and the filter's menu beside it. With no station its empty state leads to `stationsPage` (the page itself, where stations are
  * added: nothing is appended to it).
  */
-export function ChatList({ scope, newChat, stationsPage, archive, decisions, top, below }: { scope: string; newChat: string; stationsPage: string; archive: string; decisions: string; top?: ReactNode; below?: ReactNode }) {
+export function ChatList({ scope, newChat, stationsPage, archive, top, below }: { scope: string; newChat: string; stationsPage: string; archive: string; top?: ReactNode; below?: ReactNode }) {
   const [mode] = useSidebarMode();
   useShortcut("chat.prev", () => goToNeighbour(-1));
   useShortcut("chat.next", () => goToNeighbour(1));
@@ -54,27 +52,19 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
   const none = useTopicSelect<ChatsView, boolean>(chatsTopic(scope, "all"), (s) => !!s.value && !s.value.loading && s.value.stations.length === 0);
   // Catching up on what changed while away (its mark beside the filter): drawn again only as it changes.
   const syncing = useTopicSelect<ChatsView, string | null>(chatsTopic(scope, "all"), (s) => s.value?.syncing ?? null);
-  // To 奏 from its row in the sidebar's foot, its rows come out of that row (DecisionDesk.tsx): no sliding then.
   const archiveSeen = useRef(false);
   if (mode === "archive") archiveSeen.current = true;
-  const was = useRef(mode);
-  const instant = useRef(false);
-  if (was.current !== mode) {
-    instant.current = mode === "decisions" && openedRecently();
-    was.current = mode;
-  }
   return (
     <>
       <GoingArrived />
       <NavTop top={top} below={below}
         action={<SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`} syncing={syncing} showFilter={!none} />} />
       <div className={nav.navSlider}>
-        <div className={nav.navTrack} data-filter={mode} data-instant={instant.current || undefined} ref={sliding}>
+        <div className={nav.navTrack} data-filter={mode} ref={sliding}>
           {/* Followed at once, side by side: switching slides from one to another with nothing to wait for. */}
           <ChatPane scope={scope} filter="all" stationsPage={stationsPage} hidden={mode !== "all"} />
           <ChatPane scope={scope} filter="mine" stationsPage={stationsPage} hidden={mode !== "mine"} />
           <ChatPane scope={scope} filter="watching" stationsPage={stationsPage} hidden={mode !== "watching"} />
-          <DecisionRows active={mode === "decisions"} page={decisions} />
           {/* Made once first shown (it can be long, and is rarely looked at), kept then for sliding back to it. */}
           {archiveSeen.current ? <ArchiveRows scope={scope} hidden={mode !== "archive"} /> : <div className={nav.navScroll} />}
         </div>
@@ -175,21 +165,6 @@ export function RailStations({ scope, to, on, className }: { scope: string; to: 
     <Tip label={label} side="right">
       <NavLink className={className} to={to} data-on={on || undefined} aria-label={`Station：${label}`}><StationGlyph counts={counts} size={20} /></NavLink>
     </Tip>
-  );
-}
-
-/**
- * 奏 N in the sidebar's foot, by the stations: the decisions waiting for the viewer in the workspace (the core's
- * `decisions` count), leading to their page. Nothing while there are none (or from a core before them).
- */
-export function DecisionsEntry({ scope, to }: { scope: string; to: string }) {
-  const n = useWorkspaceMarks(scope)?.workspaces[scope]?.decisions ?? 0;
-  if (n <= 0) return null;
-  return (
-    <NavLink className={`${nav.navRow} ${decisionsCss.sideEntry}`} to={to} onClick={(e) => openedAt(e.currentTarget)} aria-label={t("web-main.decisions.entry", { n })}>
-      <span className={decisionsCss.sideEntryLead}>奏</span>
-      <span className={decisionsCss.sideEntryCount}>{t("web-main.decisions.count", { n })}</span>
-    </NavLink>
   );
 }
 

@@ -12,10 +12,9 @@ import { SCREEN_FPS, type ScreenFps } from "./station/wire.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook"];
+const FIELDS = ["onlyMine", "onlyWatching", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone"];
 const TABS_KEPT = 200;
-const DEFERRED_KEPT = 200;
 /// At most this many jobs kept as looked at in one workspace's bell.
 const JOBS_SEEN_KEPT = 200;
 /// At most this many failures kept as let go in one workspace's 待处理.
@@ -87,10 +86,10 @@ export function archiveHintOf(prefs: unknown): ArchiveHint {
 }
 
 /// The places a phone's bottom bar can hold (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt), in no order.
-export const BAR_PLACES = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive"];
+export const BAR_PLACES = ["chats", "files", "stations", "profiles", "connects", "usage", "archive"];
 /// At most this many places in one bar.
 export const BAR_SIZE = 4;
-const BARS_DEFAULT = { sets: [["chats", "files", "profiles", "stations"], ["decisions", "usage", "connects", "archive"]], current: 0 };
+const BARS_DEFAULT = { sets: [["chats", "files", "profiles", "stations"], ["usage", "connects", "archive"]], current: 0 };
 
 /// A phone's bottom bars as kept, whole: each bar one to four known places, none twice in a bar; at least one bar; the
 /// one in view one of them. What is not that (nothing kept, a place this build does not know) reads as the default or
@@ -105,12 +104,20 @@ export function barsOf(v: unknown): { sets: string[][]; current: number } {
   return { sets, current: Math.min(sets.length - 1, Math.max(0, n)) };
 }
 
+/// The lists a workspace's chat list can show (`listFilter`'s words).
+const LIST_FILTERS = ["all", "mine", "watching", "archive"];
+
+/// The list filters as kept, without those this build does not know (奏, gone: the list it shows then is all).
+function listFiltersOf(v: unknown): Map_ {
+  return isObject(v) ? Object.fromEntries(Object.entries(v).filter(([, f]) => LIST_FILTERS.includes(f as string))) : {};
+}
+
 /// The prefs as they go out: the reader's settings whole, the bottom bars (each workspace's too), the faces, and the
 /// keymap and the rail.
 export function shown(v: unknown): unknown {
   if (!isObject(v)) return v;
   const by = isObject(v.barsBy) ? Object.fromEntries(Object.entries(v.barsBy).map(([ws, b]) => [ws, barsOf(b)])) : {};
-  return { ...v, reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts), keymap: keymap.view(v), railView: railView(v) };
+  return { ...v, listFilter: listFiltersOf(v.listFilter), reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts), keymap: keymap.view(v), railView: railView(v) };
 }
 
 /// What is kept, as kept (no defaults filled in).
@@ -124,6 +131,10 @@ function kept(data: Data): Map_ {
 export function set(data: Data, patch: unknown, fill: boolean, now: number): void {
   if (!isObject(patch)) throw CoreError.invalid(t("core-misc.params.not_object"));
   const prefs = kept(data);
+  // What an older build kept for 奏 is not kept on.
+  if ("listFilter" in prefs) prefs.listFilter = listFiltersOf(prefs.listFilter);
+  delete prefs.onlyDecisions;
+  delete prefs.decisionsDeferred;
   // serde_json's Map iterates in key order.
   for (const field of Object.keys(patch).sort()) {
     const value = patch[field];
@@ -180,7 +191,7 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
     } else if (value === null) {
       delete prefs[field];
     } else {
-      const ONE_OF = ["onlyMine", "onlyWatching", "onlyDecisions"];
+      const ONE_OF = ["onlyMine", "onlyWatching"];
       if (ONE_OF.includes(field) && value === true && !fill) for (const other of ONE_OF) if (other !== field) delete prefs[other];
       prefs[field] = value;
     }
@@ -236,30 +247,6 @@ export function newChatOpened(data: Data, workspace: string): void {
   if (!open && !path) return;
   if (open) delete (prefs.openChat as Map_)[workspace];
   if (path) delete (prefs.lastChat as Map_)[workspace];
-  data.set(PREFS, prefs);
-}
-
-/// A decision set aside on this device (待定), kept as `decisionsDeferred` by where it is, with when.
-export function deferDecision(data: Data, at: string, now: number): void {
-  const prefs = kept(data);
-  if (!isObject(prefs.decisionsDeferred)) prefs.decisionsDeferred = {};
-  const map = prefs.decisionsDeferred as Map_;
-  const last = Object.values(map).reduce<number>((m, v) => (typeof v === "number" ? Math.max(m, v) : m), 0);
-  map[at] = Math.max(now, last + 1);
-  const keys = Object.keys(map);
-  if (keys.length > DEFERRED_KEPT) {
-    const byAge = keys.map((k) => [typeof map[k] === "number" ? (map[k] as number) : 0, k] as [number, string]).sort((a, b) => a[0] - b[0] || (a[1] < b[1] ? -1 : 1));
-    for (const [, key] of byAge.slice(0, keys.length - DEFERRED_KEPT)) delete map[key];
-  }
-  data.set(PREFS, prefs);
-}
-
-/// A decision no longer set aside (answered, or dismissed).
-export function undeferDecision(data: Data, at: string): void {
-  const prefs = kept(data);
-  const map = prefs.decisionsDeferred;
-  if (!isObject(map) || !(at in map)) return;
-  delete map[at];
   data.set(PREFS, prefs);
 }
 

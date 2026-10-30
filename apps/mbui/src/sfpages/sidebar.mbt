@@ -6,7 +6,7 @@
 // empty list's words. While a finger is on a list, the pointer over it or it moves, its rows keep their places
 // (listMotion.ts useHeldOrder); they move as it changes (useListMotion). The frame it is drawn in says what is over
 // it and at its foot (the bar it is under, the bottom bar), what it adds at each list's top (a search's field, what is
-// left up long), and the lists that follow the three on the track (奏, 已归档, where the frame has them so).
+// left up long), and the lists that follow the three on the track (已归档, where the frame has it so).
 
 ///|
 /// What the frame gives the lists: the room over them (the bar they run under) and at their foot, what is over the
@@ -348,7 +348,7 @@ fn open_chat() -> ChatRef? {
 }
 
 ///|
-/// The room over a list under its bar with keyboard and mouse's lists (navScroll: 4; the decisions' pane's too).
+/// The room over a list under its bar with keyboard and mouse's lists (navScroll: 4).
 pub let lists_top_in : Double = 4.0
 
 ///|
@@ -560,8 +560,8 @@ pub fn filter_menu_open() -> Bool {
 
 ///|
 /// The filter's menu (components.tsx MineFilter's DropdownMenu, mobile/Home.tsx FilterButton), opened by `from`: 全部会话,
-/// 我参与的, 监控中, 奏, then 已归档, a menu of choices, the list `shown` (all, mine, watching, decisions, archive) checked. Chosen, `go` is
-/// given which: where it goes is the frame's (a filter its list, 奏 and 已归档 their pages or lists).
+/// 我参与的, 监控中, then 已归档, a menu of choices, the list `shown` (all, mine, watching, archive) checked. Chosen, `go` is
+/// given which: where it goes is the frame's (a filter its list, 已归档 its page or list).
 pub fn filter_menu(from : @sf.Beside, shown : String, go : (String) -> Unit) -> Unit {
   let item = fn(key : String, words : String) -> @sf.MenuItem? {
     Some(@sf.menu_item_of(@sf.t(words), chosen=shown == key, fn() { go(key) }))
@@ -571,7 +571,6 @@ pub fn filter_menu(from : @sf.Beside, shown : String, go : (String) -> Unit) -> 
       item("all", "web-main.filter.chats.all"),
       item("mine", "web-main.filter.chats.mine"),
       item("watching", "web-main.filter.watching"),
-      item("decisions", "web-main.decisions.title"),
       None,
       item("archive", "web-main.filter.archived"),
     ],

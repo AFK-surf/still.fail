@@ -93,8 +93,6 @@ pub let fix_ctx : @ref.Ref[@ui.Ctx?]
 
 pub let fix_decided : Map[Int32, Json]
 
-pub fn fix_decisions(String) -> Json
-
 pub fn fix_deliver(String, String) -> Unit
 
 pub let fix_deliver_ms : Double
@@ -351,10 +349,6 @@ pub fn fixture_png(Int32, Int32) -> Bytes
 
 pub fn fixture_preview(String) -> Unit
 
-pub fn fixture_queue(Fixture, Json?) -> Json?
-
-pub fn fixture_queue_done(Fixture, String, Json, (Result[Json, Json]) -> Unit) -> (Result[Json, Json]) -> Unit
-
 pub fn fixture_rail_card(Map[String, Json]) -> Json?
 
 pub fn fixture_reset() -> Unit
@@ -610,9 +604,6 @@ pub(all) struct Fixture {
   mut step : Int32
   chat_tabs : Map[String, Json]
   tabs_shown : Map[String, Json]
-  queue_gone : Map[String, Bool]
-  queue_set_aside : Map[String, Int32]
-  mut queue_was : Json
   sidebars : Map[String, Json]
   mut share_look : String
 }

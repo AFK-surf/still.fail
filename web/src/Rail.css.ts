@@ -113,8 +113,6 @@ export const item = style({
     "&:focus-visible::before": { outline: `2px solid ${vars.fieldFocus}`, outlineOffset: 1 },
   },
 });
-/** 奏, the word, its size the icons' (vars.textTitle is the nearest of the type sizes). */
-export const zou = style({ fontSize: vars.textTitle, lineHeight: "20px", fontWeight: 600 });
 /** What waits on a place: a small dot on the icon's corner (how many is in its tip), cut out of the rail's ground. */
 export const count = style({
   position: "absolute", top: 6, right: 6, width: 8, height: 8, borderRadius: "50%", background: vars.red,
@@ -209,7 +207,6 @@ export const remove = style({
 });
 /** The panel beside the rail of what can be added (ui.tsx Panel* parts), no button: pressing elsewhere ends it. */
 export const adder = style({ width: 248, display: "grid", gap: 8 });
-export const zouSmall = style({ fontSize: vars.textBody, lineHeight: "18px", fontWeight: 600 });
 
 // Beside the rail the sidebar's foot has nothing of its own (the switcher and settings are the rail's, the stations' line
 // only for what is wrong, and that in the rail's bell when the bell is there): gone when there is nothing in it shown, not

@@ -3,15 +3,14 @@
 // still). In it the places the
 // person chose on this device (prefs `rail`, 外观's 侧边条: which, in what order; the default when none was chosen), as the
 // core has them (prefs `railView`: the places, their words, kinds and order; the page only draws them):
-// 对话 and the lists of chats beside it (我参与的, 监控中, the archive), 奏 (the word, as the desktop has always had it,
-// a dot while some wait for the viewer), 待处理 (what wants them in every workspace), 文件, the stations' glyph, Profile,
-// 连接, 用量; at its foot every workspace to switch to (each with what waits in it; a ＋ over them, as the pointer comes,
+// 对话 and the lists of chats beside it (我参与的, 监控中, the archive), 待处理 (what wants them in every workspace),
+// 文件, the stations' glyph, Profile, 连接, 用量; at its foot every workspace to switch to (each with what waits in it; a ＋ over them, as the pointer comes,
 // for making one, another account, invitations) and under them the settings, which are not among what is chosen. It is
 // changed where it is: its menu's 自定义侧边条 (or 外观's) has its places dragged up and down (any time, held with ⌘), taken out with their −,
 // added from a panel beside it by kind; a place's own menu takes it out. Its menu goes to those left out too, the one in
 // view shown at the foot of its places while it is (useRailItems). Station, 连接 and 用量 in it are pages of their
 // own beside the chats, Profile its list in the sidebar (ProfilesNav.tsx) and the one picked beside; left out of it,
-// they are among the settings. The sidebar beside shows the chats (or 奏, one of their lists), the folders the stations
+// they are among the settings. The sidebar beside shows the chats (or one of their lists), the folders the stations
 // lend (FilesNav, cloud/workspace.tsx), the profiles or the settings; coming to the last three with it closed opens it.
 // On a narrow screen there is none: the sidebar's foot keeps the switcher and the settings.
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
@@ -30,7 +29,6 @@ import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { RailStations } from "./Sidebar.tsx";
 import { isPicture } from "./StationMark.tsx";
 import { marked, WorkspaceMark } from "./WorkspaceMark.tsx";
-import { openedAt } from "./DecisionDesk.tsx";
 import { moveSidebar, onSidebarChosen, showSidebar, useSidebarToggle } from "./brand.tsx";
 import * as shellCss from "./styles/shell.css.ts";
 import * as sidebarCss from "./styles/sidebar.css.ts";
@@ -52,7 +50,7 @@ export function railLabel(item: RailItem): string {
   return prefs().railView?.places.find((p) => p.id === item)?.label ?? item;
 }
 
-/** The icons of the places drawn as one (the stations' is their glyph, 奏 its word, the workspaces each its letter). */
+/** The icons of the places drawn as one (the stations' is their glyph, the workspaces each their letter). */
 export const RAIL_ICONS: Partial<Record<RailItem, ComponentType<IconProps>>> = {
   chats: Chats, mine: User, watching: Watch, archive: Archive, attention: Bell, files: Folder, profiles: Quota, connects: Im, usage: Chart,
 };
@@ -83,7 +81,7 @@ function useEditing(): boolean {
 
 /**
  * A place left out of the rail but in view, shown at the foot of its places as one of them until the page goes elsewhere:
- * picked from the rail's menu, or (a list of chats, 奏, the archive, the files) come to some other way. The page's, not
+ * picked from the rail's menu, or (a list of chats, the archive, the files) come to some other way. The page's, not
  * kept.
  */
 let extra: RailItem | null = null;
@@ -124,7 +122,6 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const navigate = useNavigate();
   const last = useLastChat(scope, `/w/${scope}/new`) ?? `/w/${scope}`;
   const here = useWorkspaceMarks(scope)?.workspaces[scope];
-  const waiting = here?.decisions ?? 0;
   // What wants the person in each list of chats (the core's marks), on its icon while the sidebar is closed.
   const tones: Partial<Record<RailItem, string | undefined>> = { chats: here?.tone, mine: here?.mineTone, watching: here?.watchingTone };
   const kept = useKeptRail(scope);
@@ -300,7 +297,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   // From the archive's own page (the newest archived chat's, none being there), back to the chats.
   const toList = (item: RailItem) => () => { setMode(listOf(item)!); if (place !== "chats" || location.pathname === archive) navigate(last); revealPressed(); };
   const toArchive = () => { setMode("archive"); navigate(archive); revealPressed(); };
-  // A place left out of the rail in view: a list of chats or 奏 shown, the archive, the files. Station, Profile, 连接 and
+  // A place left out of the rail in view: a list of chats shown, the archive, the files. Station, Profile, 连接 and
   // 用量 left out are among the settings, so only as picked from the menu (go); gone once the page is elsewhere.
   const inView: RailItem | null = place === "chats" ? listed(mode) ?? null
     : place === "files" ? place : null;
@@ -317,7 +314,6 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     setExtra(item);
     switch (item) {
       case "chats": case "mine": case "watching": return toList(item)();
-      case "decisions": setMode("decisions"); navigate(`/w/${scope}/decisions`); return revealPressed();
       case "archive": return toArchive();
       case "files": return navigate(`/w/${scope}/files`);
       case "stations": case "profiles": case "connects": case "usage": return navigate(`${settings}/${item}`);
@@ -347,15 +343,6 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
           </Tip>
         );
       }
-      case "decisions": return (
-        <Tip key={item} label={waiting > 0 ? t("web-main.decisions.entry", { n: waiting }) : railLabel(item)} side="right">
-          <button type="button" className={css.item} data-on={on(item) || undefined} aria-label={railLabel(item)}
-            onClick={(e) => { openedAt(e.currentTarget); setMode("decisions"); navigate(`/w/${scope}/decisions`); revealPressed(); }}>
-            <span className={css.zou} aria-hidden="true">奏</span>
-            {waiting > 0 && <span className={css.count} />}
-          </button>
-        </Tip>
-      );
       case "archive": return (
         <Tip key={item} label={railLabel(item)} side="right">
           <button type="button" className={css.item} data-on={on(item) || undefined} aria-label={railLabel(item)} onClick={toArchive}><Archive size={20} /></button>
@@ -447,7 +434,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
                 const Icon = RAIL_ICONS[i];
                 return (
                   <DropdownMenu.Item key={i} className={controlsCss.menuItem} onSelect={() => go(i)}>
-                    {Icon ? <Icon {...ICON} /> : i === "decisions" ? <span className={css.zouSmall}>奏</span> : <span style={{ width: ICON.size }} />}{railLabel(i)}
+                    {Icon ? <Icon {...ICON} /> : <span style={{ width: ICON.size }} />}{railLabel(i)}
                     {/* Put in the rail, where it can be moved at once: the rail's change begins with it. */}
                     <button type="button" className={css.menuAdd} aria-label={t("web-main.rail.add", { name: railLabel(i) })} title={t("web-main.rail.add", { name: railLabel(i) })}
                       // Its own press, not the row's (going there): the menu selects on the pointer's up.
@@ -487,7 +474,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
             <PanelGroup key={k.kind} label={k.label}>
               {k.items.map((i) => {
                 const Icon = RAIL_ICONS[i];
-                return <PanelRow key={i} icon={Icon ? <Icon size={18} /> : i === "decisions" ? <span className={css.zouSmall}>奏</span> : null}
+                return <PanelRow key={i} icon={Icon ? <Icon size={18} /> : null}
                   label={railLabel(i)} end={<Plus size={14} />} onClick={() => keep([...items, i])} />;
               })}
             </PanelGroup>

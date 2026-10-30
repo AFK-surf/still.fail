@@ -319,24 +319,6 @@ export function usage(days: number) {
 }
 const money = (dollars: number) => `$${dollars.toFixed(2)}`;
 
-/** 奏 with nothing waiting (the core's `decisions`): the day in numbers, the viewer's chats at work, what was answered today. */
-export function decisions(chats: { key: string; thread: number; title: string; running: { activity: string; since: number } | null; blocked: boolean }[]) {
-  const where = { station: STATION, stationName: "Studio" };
-  const working = chats.filter((c) => c.running || c.blocked).map((c) => ({
-    ...where, session: c.key, thread: c.thread, title: c.title, line: c.running ? `在做 · ${c.running.activity}` : "等待：你决定要不要一起升 React Router 8",
-    time: { lastActiveAt: stamp(c.running?.since ?? Date.now() - 58 * 60_000) },
-  }));
-  const at = (minutes: number) => new Date(Date.now() - minutes * 60_000).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
-  return {
-    items: [], count: 0, loading: false, wait: { reading: false, failing: [], empty: false }, working,
-    answered: [
-      { ...where, session: "ember:c-demo-csv", thread: 5, title: "订单导出支持 CSV", seq: 3, text: "导出的文件名要带上日期吗？", answer: "选择了「带日期」", clock: at(40) },
-      { ...where, session: "ember:c-demo-p99", thread: 4, title: "排查 API p99 变慢", seq: 4, text: "索引迁移现在上线，还是等晚上？", answer: "回复：现在上", clock: at(150) },
-    ],
-    today: { count: 2, waited: "6 分钟", working: working.length },
-  };
-}
-
 // ---- still.fail cloud ----
 
 const user = (p: Person) => ({ sub: p.id, email: p.email ?? p.id, name: p.name, picture: p.shown.picture ?? "" });

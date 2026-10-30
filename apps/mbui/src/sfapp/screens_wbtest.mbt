@@ -482,22 +482,7 @@ test "chat-station-sheet" {
   assert_true(t.locate("=发送方式").length() > 0, msg="no panel of the station's file")
 }
 
-// The 奏 page, a chat's history; a chat's sheets over the chat pushed (shots.sh DECIDE)
-
-///|
-test "decisions" {
-  check("decisions", @ui.move_most_ms)
-}
-
-///|
-test "decisions-text" {
-  check("decisions-text", @ui.move_most_ms)
-}
-
-///|
-test "decisions-idle" {
-  check("decisions-idle", @ui.move_most_ms)
-}
+// A chat's history; a chat's sheets over the chat pushed (shots.sh DECIDE)
 
 ///|
 test "history" {

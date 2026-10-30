@@ -968,16 +968,6 @@ export class Data {
     return [...by].flatMap(([db, list]) => db.marked(list));
   }
 
-  /// The rows of these stations the 奏 page lists.
-  desk(stations: string[]): [string, any][] {
-    const by = new Map<AccountDb, string[]>();
-    for (const s of stations) {
-      const db = this.of(s);
-      if (db) by.set(db, [...(by.get(db) ?? []), s]);
-    }
-    return [...by].flatMap(([db, list]) => db.desk(list));
-  }
-
   /// The messages of one thread that have all of `terms`, oldest first (AccountDb.findInThread).
   findInThread(station: string, thread: number, terms: string[]): ReturnType<AccountDb["findInThread"]> {
     return this.of(station)?.findInThread(station, thread, terms) ?? [];

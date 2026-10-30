@@ -210,7 +210,7 @@ pub fn vault_ask(
 }
 
 ///|
-/// Request `request` in workspace `ws` as its card where it is asked (a chat's, the 奏 page's): what is asked, and its
+/// Request `request` in workspace `ws` as its card where it is asked (a chat's): what is asked, and its
 /// answer at the foot as the card says it (`answer`: card_answer), whole with its message. `ended`: how it went
 /// (granted, denied, else ended; `scope`), once answered while the card shows: said in its answer's place
 /// (answered_in_place).

@@ -144,7 +144,6 @@ android-misc.bar.pick.title
 android-misc.bar.place.archive
 android-misc.bar.place.chats
 android-misc.bar.place.connects
-android-misc.bar.place.decisions
 android-misc.bar.place.files
 android-misc.bar.place.profiles
 android-misc.bar.place.stations

@@ -8,7 +8,6 @@ import { apply as applyOps, type Op } from "../src/delta.ts";
 import * as format from "../src/format.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { merge } from "../src/entries.ts";
-import * as decisions from "../src/decisions.ts";
 import { topicKey, type Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
 import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
@@ -23,7 +22,7 @@ holdLanguage();
 type J = any;
 const DAY_MS = 86_400_000;
 
-const VIEWS = new Set(["chats", "chatSearch", "stations", "stationNet", "connects", "chat", "history", "archive", "workspaceMarks", "decisions", "chatJobs", "imageNear", "longJobs"]);
+const VIEWS = new Set(["chats", "chatSearch", "stations", "stationNet", "connects", "chat", "history", "archive", "workspaceMarks", "chatJobs", "imageNear", "longJobs"]);
 
 class Router implements Source {
   views!: Views;
@@ -328,201 +327,6 @@ test("the_beta_switch_is_offered_to_an_account_in_the_beta_or_a_station_on_it", 
   assert.ok(betaOffered(w("beta"), () => false));
 });
 
-test("the_decisions_page_lists_those_waiting_for_the_viewer_set_aside_last", async () => {
-  const t = setup();
-  const u = ui();
-  t.subscribe(1, { topic: "decisions", workspace: "ws" });
-  await t.read(u, 1);
-  t.set(workspace(), oneStation());
-  t.set(prefs(), {});
-  await t.read(u, 1);
-  sameTopics(t.started(), [workspace(), prefs(), link("ws/st"), rows("ws/st"), overview("ws/st")]);
-  t.set(link("ws/st"), { state: "online" });
-  const now = t.host.nowMs();
-  const others = deciding("other", 11, 7, now - 12000, false);
-  others.mine = true;
-  others.decision.card.assignee = "other@x.com";
-  const legacy = deciding("legacy", 12, 7, now - 14000, false);
-  delete legacy.decision.card.assignee;
-  t.set(rows("ws/st"), [deciding("k1", 7, 5, now - 1000, false), deciding("k2", 8, 3, now - 5000, false), deciding("k3", 9, 4, now - 9000, true), others, legacy, row("10", now)]);
-  await t.read(u, 1);
-  let v = u.value;
-  const order = (x: J) => x.items.map((i: J) => i.session);
-  assert.deepEqual(order(v), ["k2", "k1"]);
-  assert.deepEqual([v.count, v.wait.reading], [2, false]);
-  const it = v.items[0];
-  assert.deepEqual([it.station, it.stationName, it.thread, it.seq, it.title], ["ws/st", "studio", 8, 3, "k2 的标题"]);
-  assert.equal(it.text, "奏 · k2 要合吗？");
-  assert.deepEqual(it.options, [{ label: "先不改", detail: "留到下周" }, { label: "合", recommended: true }]);
-  assert.equal(it.card.assigneeText, "待你决策");
-  assert.deepEqual(it.message.options, it.options);
-  assert.deepEqual(it.message.decision, { resolved: false });
-  assert.equal(it.message.by.agent, "k2");
-  assert.deepEqual([it.before[0].mine, it.before.length], [true, 2]);
-  t.set(prefs(), { decisionsDeferred: { [decisions.deferralKey("ws/st", 8, 3)]: 50 } });
-  await t.read(u, 1);
-  v = u.value;
-  assert.deepEqual(order(v), ["k1", "k2"]);
-  assert.deepEqual([v.items[1].deferred, v.items[0].deferred], [true, undefined]);
-});
-
-test("the_wide_decisions_page_shows_the_one_picked_and_once_it_goes_or_is_set_aside_the_one_in_its_place", async () => {
-  const t = setup();
-  const u = ui();
-  t.subscribe(1, { topic: "decisions", workspace: "ws" });
-  t.set(workspace(), oneStation());
-  t.set(prefs(), {});
-  t.set(link("ws/st"), { state: "online" });
-  const now = t.host.nowMs();
-  // Oldest asked first: k1, k2, k3, k4.
-  const all = [deciding("k1", 1, 5, now - 4000, false), deciding("k2", 2, 5, now - 3000, false), deciding("k3", 3, 5, now - 2000, false), deciding("k4", 4, 5, now - 1000, false)];
-  t.set(rows("ws/st"), all);
-  await t.read(u, 1);
-  const shown = () => (u.value.shown === undefined ? null : u.value.items[u.value.shown].session);
-  // None picked: the first.
-  assert.equal(shown(), "k1");
-  t.views.showDecision("ws", "ws/st", 3, 5);
-  await t.read(u, 1);
-  assert.equal(shown(), "k3");
-  // One before it goes: still the one picked, wherever it now is.
-  t.set(rows("ws/st"), all.slice(1));
-  await t.read(u, 1);
-  assert.deepEqual([shown(), u.value.shown], ["k3", 1]);
-  // The one picked goes (answered elsewhere): the one now in its place.
-  t.set(rows("ws/st"), [all[1], all[3]]);
-  await t.read(u, 1);
-  assert.equal(shown(), "k4");
-  // Set aside, it goes last and the one now in its place shows: here the one before it (it was last).
-  t.set(rows("ws/st"), all);
-  t.views.showDecision("ws", "ws/st", 2, 5);
-  await t.read(u, 1);
-  t.views.decisionDeferred("ws/st", 2, 5);
-  t.set(prefs(), { decisionsDeferred: { [decisions.deferralKey("ws/st", 2, 5)]: now } });
-  await t.read(u, 1);
-  assert.deepEqual(u.value.items.map((i: J) => i.session), ["k1", "k3", "k4", "k2"]);
-  assert.equal(shown(), "k3");
-  // The only one, set aside: itself again.
-  t.set(prefs(), {});
-  t.set(rows("ws/st"), [all[0]]);
-  t.views.showDecision("ws", "ws/st", 1, 5);
-  t.views.decisionDeferred("ws/st", 1, 5);
-  t.set(prefs(), { decisionsDeferred: { [decisions.deferralKey("ws/st", 1, 5)]: now } });
-  await t.read(u, 1);
-  assert.equal(shown(), "k1");
-  // None left: none shown.
-  t.set(rows("ws/st"), []);
-  await t.read(u, 1);
-  assert.equal(u.value.shown, undefined);
-});
-
-test("a_decision_let_go_from_here_is_off_the_page_at_once_and_back_if_its_station_refused", async () => {
-  const t = setup();
-  const u = ui();
-  t.subscribe(1, { topic: "decisions", workspace: "ws" });
-  t.set(workspace(), oneStation());
-  t.set(prefs(), {});
-  t.set(link("ws/st"), { state: "online" });
-  const now = t.host.nowMs();
-  const k1 = deciding("k1", 1, 5, now - 2000, false);
-  const k2 = deciding("k2", 2, 5, now - 1000, false);
-  k2.decision.card = { type: "options", options: k2.decision.options, assignee: "me@x.com", vault: { request: "r_1" } };
-  t.set(rows("ws/st"), [k1, k2]);
-  await t.read(u, 1);
-  const order = () => u.value.items.map((i: J) => i.session);
-  assert.deepEqual(order(), ["k1", "k2"]);
-  const local = t.views.local;
-  // Let go: off at once; refused, back.
-  local.letGo("ws/st", 1, 5);
-  await t.read(u, 1);
-  assert.deepEqual(order(), ["k2"]);
-  local.letGoEnded("ws/st", 1, 5, false, t.data.rowsRev("ws/st"));
-  await t.read(u, 1);
-  assert.deepEqual(order(), ["k1", "k2"]);
-  // Taken: off until the station's rows change (they then say it is dismissed).
-  local.letGo("ws/st", 1, 5);
-  local.letGoEnded("ws/st", 1, 5, true, t.data.rowsRev("ws/st"));
-  await t.read(u, 1);
-  assert.deepEqual(order(), ["k2"]);
-  t.set(rows("ws/st"), [deciding("k1", 1, 5, now - 2000, true), k2]);
-  await t.read(u, 1);
-  assert.deepEqual(order(), ["k2"]);
-  assert.equal(local.lettingGo("ws/st", 1, 5), false);
-  // A vault request decided here: its card is off.
-  local.vaultDecided("r_1", { status: "granted", scope: "once" });
-  await t.read(u, 1);
-  assert.deepEqual(order(), []);
-});
-
-test("the_decisions_page_has_the_starters_unassigned_cards_and_needs_without_one", async () => {
-  const t = setup();
-  const u = ui();
-  t.subscribe(1, { topic: "decisions", workspace: "ws" });
-  await t.read(u, 1);
-  t.set(workspace(), oneStation());
-  t.set(prefs(), {});
-  await t.read(u, 1);
-  t.set(link("ws/st"), { state: "online" });
-  const now = t.host.nowMs();
-  const me = { id: "me@x.com", name: "我", email: "me@x.com", via: "cloud" };
-  const other = { id: "other@x.com", name: "小王", email: "other@x.com", via: "cloud" };
-  const started = deciding("started", 7, 5, now - 9000, false);
-  delete started.decision.card.assignee;
-  started.creator = me;
-  const theirs = structuredClone(started);
-  Object.assign(theirs, { id: "theirs", session: "theirs", thread: 8, creator: other });
-  const needs = row("needs", now - 5000);
-  Object.assign(needs, { thread: 9, session: "needs", creator: me, need: { seq: 6, message: said(6, "agent", "needs", "要 Stripe 的测试 key", now - 5000), before: [] } });
-  t.set(rows("ws/st"), [started, theirs, needs]);
-  await t.read(u, 1);
-  const v = u.value;
-  assert.deepEqual(v.items.map((i: J) => i.session), ["started", "needs"]);
-  assert.equal(v.items[0].card.assigneeText, "待你决策");
-  const need = v.items[1];
-  assert.deepEqual([need.seq, need.card, need.options], [6, { type: "text", assigneeText: "待你决策" }, []]);
-  assert.equal(need.text, "奏 · 要 Stripe 的测试 key");
-});
-
-test("the_decisions_page_says_what_was_answered_today_and_where_agents_are_at_work", async () => {
-  const t = setup();
-  const u = ui();
-  t.subscribe(1, { topic: "decisions", workspace: "ws" });
-  await t.read(u, 1);
-  t.set(workspace(), oneStation());
-  t.set(prefs(), {});
-  await t.read(u, 1);
-  t.set(link("ws/st"), { state: "online" });
-  const now = t.host.nowMs();
-  const options = [{ label: "先发测试版" }, { label: "不需要部署", action: "close" }];
-  const done = row("7", now - 60_000);
-  done.answered = [
-    { seq: 3, text: "**0.1.1570** 先发测试版吗？\n细节", askedAt: now - 20 * 60_000, answeredAt: now - 10 * 60_000, card: { type: "options", options }, reply: "先发测试版", quoted: true },
-    { seq: 5, text: "要部署吗？", askedAt: now - 4 * 60_000, answeredAt: now - 2 * 60_000, card: { type: "options", options }, closed: true },
-    { seq: 1, text: "昨天的", askedAt: now - 30 * 3600_000, answeredAt: now - 26 * 3600_000, card: { type: "text" }, reply: "随便" },
-  ];
-  const busy = row("8", now - 1000);
-  busy.mine = true;
-  busy.agents[0].process = "running";
-  busy.last = { text: "截三种首屏\n第二行" };
-  const others = row("9", now - 500);
-  others.agents[0].process = "running";
-  t.set(rows("ws/st"), [done, busy, others]);
-  await t.read(u, 1);
-  const v = u.value;
-  const answered = v.answered;
-  // Today's only: as the viewer's clock has it (the host's offset here).
-  const sameDay = (ms: number) => format.localDay(ms, t.host.utcOffsetMin(ms)) === format.localDay(now, t.host.utcOffsetMin(now));
-  const expected = [
-    ["选择了「不需要部署」", now - 2 * 60_000],
-    ["选择了「先发测试版」", now - 10 * 60_000],
-  ].filter(([, at]) => sameDay(at as number)).map(([a]) => a);
-  assert.deepEqual(answered.map((a: J) => a.answer), expected);
-  if (expected.length === 2) {
-    assert.deepEqual([answered[1].text, answered[1].title, answered[1].seq], ["0.1.1570 先发测试版吗？", "7 的标题", 3]);
-    assert.deepEqual(v.today, { count: 2, waited: "6 分钟", working: 1 });
-  }
-  assert.deepEqual([v.working[0].line, v.working.length], ["在做 · 截三种首屏", 1]);
-});
-
 test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async () => {
   const t = setup();
   const [chats, marks] = [ui(), ui()];
@@ -549,12 +353,11 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   assert.deepEqual([of("k1").tone, of("k1").decision.text], ["wait", "奏 · k1 要合吗？"]);
   assert.deepEqual([of("k2").tone, of("k2").decision.dismissed, of("k2").decision.text], [undefined, true, undefined]);
   const m = marks.value;
-  assert.equal(m.workspaces.ws.decisions, 2);
   assert.deepEqual([m.workspaces.ws.wait, m.workspaces.ws.alert, m.workspaces.ws.label], [2, 0, "2 个待你处理"]);
   // Of the lists the rail leads to: 我参与的 has the one of theirs waiting, 监控中 nothing.
   assert.deepEqual([m.workspaces.ws.tone, m.workspaces.ws.mineTone, m.workspaces.ws.watchingTone], ["wait", "wait", undefined]);
-  // 待处理 and the badge are the same: the cards waiting for them not looked at since they came (k3 read: its row and 奏
-  // still say it).
+  // 待处理 and the badge are the same: the cards waiting for them not looked at since they came (k3 read: its row still
+  // says it).
   assert.deepEqual([m.badge, m.workspaces.ws.badge], [1, 1]);
   assert.deepEqual(m.workspaces.ws.items.map((i: J) => [i.kind, i.session, i.seq, i.stationName]), [["wait", "k1", 5, "studio"]]);
   assert.equal(m.workspaces.ws.items[0].text, "奏 · k1 要合吗？", "its row's line");
@@ -646,15 +449,14 @@ function typing(id: string, th: number, seq: number, at: number): J {
   return r;
 }
 
-test("a_text_card_is_on_the_page_and_its_row_whatever_its_agent_does", async () => {
+test("a_text_card_is_on_its_row_whatever_its_agent_does", async () => {
   const t = setup();
-  const [page, chats] = [ui(), ui()];
-  t.subscribe(1, { topic: "decisions", workspace: "ws" });
+  const chats = ui();
   t.subscribe(2, { topic: "chats", scope: "ws" });
-  await t.readAll([[page, 1], [chats, 2]]);
+  await t.readAll([[chats, 2]]);
   t.set(workspace(), oneStation());
   t.set(prefs(), {});
-  await t.readAll([[page, 1], [chats, 2]]);
+  await t.readAll([[chats, 2]]);
   t.set(link("ws/st"), { state: "online" });
   const now = t.host.nowMs();
   const working = typing("k1", 7, 5, now - 1000);
@@ -663,13 +465,8 @@ test("a_text_card_is_on_the_page_and_its_row_whatever_its_agent_does", async () 
   needs.thread = 8;
   needs.agents[0].lastTurn = { kind: "message", declared: "block", ending: "need_help", need: "要 key", about: { thread: 8, seq: 9, ts: "9.000009" }, outcome: "completed", startedAt: 1, endedAt: 1 };
   t.set(rows("ws/st"), [working, needs]);
-  await t.readAll([[page, 1], [chats, 2]]);
-  let v = page.value;
-  assert.equal(v.count, 1);
-  const it = v.items[0];
-  assert.deepEqual([it.card, it.options], [{ type: "text", placeholder: "sk_test_…", assignee: "me@x.com", assigneeText: "待你决策" }, []]);
-  assert.deepEqual([it.message.card, it.message.options, it.text], [it.card, undefined, "奏 · Stripe 的测试 key 是多少？"]);
-  v = chats.value;
+  await t.readAll([[chats, 2]]);
+  const v = chats.value;
   const all = v.days.flatMap((d: J) => d.items);
   const of = (id: string) => all.find((r: J) => r.id === id);
   const k1 = of("k1");
@@ -2267,7 +2064,6 @@ test("what_the_core_keeps_and_shares_is_never_written_on_whatever_a_chat_holds",
     const topics: Topic[] = [
       chatTopic("ws/st", 7),
       { topic: "chats", scope: "ws" },
-      { topic: "decisions", workspace: "ws" },
       { topic: "stations", scope: "ws" },
       { topic: "connects", scope: "ws" },
       overview("ws/st"),
