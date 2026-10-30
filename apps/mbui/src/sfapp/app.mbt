@@ -346,6 +346,8 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // a chat's file downloaded by the core, all here: kept where the system keeps downloads, whatever page shows
   // (downloads.mbt)
   downloads_frame(c, src)
+  // a file opened since the last build set out before the pages, which read how it goes (sfbase viewer.mbt)
+  @sfbase.viewer_set_out(c, src)
   let t = @sf.begin(c)
   // under it all, the app's ground (what shows under the keyboard as it moves, the frame before the page follows it)
   // (the palette's colours are 0xRRGGBBAA; what the host clears to is said as 0xAARRGGBB, a window's background)

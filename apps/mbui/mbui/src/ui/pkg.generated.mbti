@@ -2327,6 +2327,7 @@ pub fn Tester::drive(Self, String, max? : Int32, each? : (Self) -> Unit) -> Arra
 pub fn Tester::drop_files(Self, Double, Double, Array[(String, Bytes)], paths? : Array[String]) -> Unit
 pub fn Tester::drop_words(Self, Double, Double, String) -> Unit
 pub fn Tester::dump(Self) -> String
+pub fn Tester::each_frame(Self, (() -> Unit)?) -> Unit
 pub fn Tester::edit_can(Self) -> Int32
 pub fn Tester::enter(Self) -> Unit
 pub fn Tester::family_given(Self, Int32) -> String

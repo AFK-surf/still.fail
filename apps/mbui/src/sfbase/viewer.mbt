@@ -1275,8 +1275,12 @@ pub fn upper(s : String) -> String {
 // ── the viewer ─────────────────────────────────────────────────────────
 
 ///|
-/// The viewer over the pages, if one is open, in its frame (viewer_frame.mbt): call after the pages are drawn.
-pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
+/// The viewer opened since the last build, set out (growing from its thumbnail, or fading in): before the pages are
+/// built, which read how it goes (the bar and the composer over a picture going out from under them: over_flight; its
+/// thumbnail hidden while it is out: thumb_shows) and would else build this frame as if it had not (the user,
+/// 2026-10-30: the picture over the chat's bar its first frame, 「它在挪出来前就盖在了顶栏上面」). Called first in each
+/// frame's build, and again by the viewer's layer (a viewer opened as the pages were built).
+pub fn viewer_set_out(c : @ui.Ctx, src : Source) -> Unit {
   let v = match viewer.val {
     Some(v) => v
     None =>
@@ -1321,6 +1325,20 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
       v.fade.set(1.0)
     }
   }
+}
+
+///|
+/// The viewer over the pages, if one is open, in its frame (viewer_frame.mbt): call after the pages are drawn.
+pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
+  let v = match viewer.val {
+    Some(v) => v
+    None =>
+      match pv_leaving.val {
+        Some(v) => v
+        None => return
+      }
+  }
+  viewer_set_out(c, src)
   src_now.val = src.now
   v.marks_frame(c)
   let p = v.flying()
