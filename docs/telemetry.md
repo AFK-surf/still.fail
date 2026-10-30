@@ -133,7 +133,12 @@ Inside a trace:
   (`ember.stream`); `station.connect` for the events stream a view asked for;
   `mesh.connect` when a request has to open the link first (credential, iroh
   connection; every way dialled at once, `stillfail.via` the relay of the one
-  that came through first), with the still.fail cloud requests it made; one that
+  that came through first), with the still.fail cloud requests it made. Where
+  its time went, in ms from the dial's start: `stillfail.onto_ms` (the endpoint
+  on a relay; 0 at once, or not before the connection was made),
+  `stillfail.dialled_ms` (the connection made), `stillfail.credential_ms` (the
+  credential had: about 0 kept on the device); and `stillfail.paths`, each way's
+  round trip and packets sent/lost as it ended (as `mesh.route`'s). One that
   failed says what it was given and had beside it: `stillfail.ips` (the addresses
   the station said it is reached straight at, given to the dial) and
   `stillfail.beside` (this device's other open links to the same station, in
