@@ -120,6 +120,8 @@ test "a link to the chat's web service alone in a paragraph is its card: its sta
   let calls : Array[Made] = []
   let t = screen_links_core(streams, cancelled, calls)
   scroll_to_words(t, "打开定价页")
+  // (clear of the composer over the list's foot, where a tap is the composer's)
+  middle_words(t, "打开定价页")
   // the link's own words its title, over the service's station with its port and how it stands, as the core says
   assert_true(t.find("Studio :5173 · 在线") is Some(_))
   assert_eq(t.run_rects("打开定价页").length(), 0, msg="a card, not a link in the words")
@@ -145,6 +147,20 @@ test "a screen its station no longer has: its title muted; a live one's in the i
   assert_true(inks_of(t, "浏览器标签页") != [c.color(Fg)])
   scroll_to_words(t, "发布清单预览")
   assert_eq(inks_of(t, "发布清单预览"), [c.color(Fg)])
+}
+
+///|
+/// The list scrolled until `words` are in the screen's middle half (found, they may lie under the bars at its ends).
+fn middle_words(t : @ui.Tester, words : String) -> Unit {
+  for _ in 0..<8 {
+    guard t.rect_of(words) is Some((_, y, _, h)) else { return }
+    let mid = y + h / 2.0
+    if mid >= 211.0 && mid <= 633.0 {
+      return
+    }
+    t.wheel(195.0, 400.0, mid - 422.0)
+    t.run_for(@ui.move_most_ms)
+  }
 }
 
 ///|
