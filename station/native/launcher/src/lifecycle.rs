@@ -22,6 +22,9 @@ pub struct Options {
     pub port: u16,
     pub named: bool,
     pub with_parent: bool,
+    /// Run by a launcher of this station becoming this one at a handover (`--resume`, run.rs `renew`): what it hands
+    /// on, taken up instead of a start.
+    pub resume: Option<String>,
 }
 
 /// How long things may take. Tests shorten them (STILLFAIL_LAUNCHER_TIMES: `ready=ms,exit=ms,…`).
@@ -109,6 +112,11 @@ pub trait Os {
     /// 127.0.0.1); none: none serves, they wait. Where the launcher keeps entrances (Windows: proxy.rs); where Node
     /// listens on sockets handed down to it (Unix), they are its already, and nothing is to be done.
     fn route(&mut self, _name: &str, _port: Option<u16>) {}
+    /// Before a handover, with the Node serving (`version`, serving on `served`) and nothing else running: where the
+    /// release at --app has a launcher unlike this one, this process becomes it (Unix: exec), keeping its pid, lock,
+    /// ports and that Node, and does not return; the new launcher goes on with the handover (`adopt`). Else (none, the
+    /// same, one that cannot take over from this; Windows) it returns and this one hands over.
+    fn renew(&mut self, _serving: &Self::Node, _version: &str, _served: &[(String, u16)]) {}
 }
 
 /// A Node and what the launcher knows of it.
@@ -236,6 +244,16 @@ impl<O: Os> Lifecycle<O> {
             let port = now.iter().find(|(n, _)| n == name).map(|(_, p)| *p);
             self.os.route(name, port);
         }
+    }
+
+    /// The Node a launcher before this one in this process (`Os::renew`) left serving, taken over: it is up and serves
+    /// on `served`, as it was there; station.json stays as it said.
+    pub fn adopt(&mut self, process: O::Node, version: String, served: Vec<(String, u16)>) {
+        log::info(&format!("Node {} serving (version {version}) taken up from the launcher before", process.pid()));
+        for (name, port) in &served {
+            self.os.route(name, Some(*port));
+        }
+        self.current = Some(Node { process, ready: Some(self.os.now()), version, served, take_by: None, taken: true, handed: false, given_up: false });
     }
 
     /// Starts the Node that serves (at first, after a crash).
@@ -442,6 +460,12 @@ impl<O: Os> Lifecycle<O> {
             log::warn("asked to hand over while a handover is under way; not again");
             return;
         }
+        // An update brings a new launcher with the new release, and only a handover is the time to become it: else the
+        // one started at the machine's start would run until its next start, and nothing it is changed in would come
+        // (a handover's carrying the vault's grants did not: 2026-10-30).
+        if let Some(node) = self.current.as_ref().filter(|n| n.taken) {
+            self.os.renew(&node.process, &node.version, &node.served);
+        }
         match self.os.spawn() {
             Ok(process) => {
                 log::info(&format!("handover: Node {} started beside the one serving", process.pid()));
@@ -639,6 +663,8 @@ mod tests {
         parent_gone: bool,
         /// Where the entrances were told to go, in turn.
         routes: Vec<(String, Option<u16>)>,
+        /// The Nodes serving when the launcher was asked to become the release's (with their versions and ports).
+        renewed: Vec<(u32, String, Vec<(String, u16)>)>,
     }
 
     impl Os for Fake {
@@ -664,6 +690,9 @@ mod tests {
         fn program(&self) -> String {
             "node".into()
         }
+        fn renew(&mut self, serving: &FakeNode, version: &str, served: &[(String, u16)]) {
+            self.renewed.push((serving.pid, version.to_string(), served.to_vec()));
+        }
     }
 
     impl Drop for Fake {
@@ -687,7 +716,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&data);
         let run = data.join("run");
         std::fs::create_dir_all(&run).unwrap();
-        let fake = Fake { dir: data, now: Instant::now(), pid: 100, told: vec![], killed: vec![], parent_gone: false, routes: vec![] };
+        let fake = Fake { dir: data, now: Instant::now(), pid: 100, told: vec![], killed: vec![], parent_gone: false, routes: vec![], renewed: vec![] };
         let times = Times { ready: s(60), exit: s(30), stop: s(30), backoff: s(1), backoff_max: s(4), stable: s(60), parent: s(2), drained: s(300), take: s(90), rollback: s(10) };
         let mut station = Lifecycle::new(fake, times, run, with_parent);
         station.start();
@@ -795,6 +824,51 @@ mod tests {
         station.heard(old, vec![json!({"carry": {"vault": {"held": [1]}}})]);
         station.ended(old, EXITED_0);
         assert_eq!(station.told(new), [r#"carried {"vault":{"held":[1]}}"#]);
+    }
+
+    #[test]
+    fn a_handover_first_lets_the_launcher_become_the_release_s_with_the_node_serving() {
+        let mut station = station("renew", false);
+        let node = station.last();
+        // Not taken over yet: there is nothing a launcher after this one could go on with.
+        station.said(Slot::Current, ready("0.1.0"));
+        station.start_next();
+        assert!(station.os.renewed.is_empty());
+        station.ended(station.last(), EXITED_1);
+        station.serves(Slot::Current, 5000);
+        station.start_next();
+        assert_eq!(station.os.renewed, [(node, "0.1.0".to_string(), vec![("admin".to_string(), 5002), ("mcp".to_string(), 5001)])]);
+        // Not renewed (none new in the release): the handover goes on here.
+        assert_ne!(station.last(), node);
+    }
+
+    #[test]
+    fn a_node_taken_up_from_the_launcher_before_serves_and_hands_over_as_one_started_here() {
+        let mut station = station("adopt", false);
+        // This launcher's own first Node aside: the one a launcher before it in this process left serving.
+        let own = station.last();
+        station.current = None;
+        station.os.killed.clear();
+        let told = Rc::new(RefCell::new(vec![]));
+        station.os.told.push((50, told.clone()));
+        std::fs::write(station.run.join("station.json"), "before").unwrap();
+        station.adopt(FakeNode { pid: 50, told }, "0.1.0".into(), vec![("admin".into(), 5002), ("mcp".into(), 5001)]);
+        assert_eq!(routes(&mut station), [to("admin", Some(5002)), to("mcp", Some(5001))]);
+        assert_eq!(station.file("station.json").as_deref(), Some("before"), "said by the launcher before");
+        assert_eq!(station.serving(), 50);
+        station.start_next();
+        let new = station.last();
+        assert_ne!(new, own);
+        station.said(Slot::Next, ready("0.2.0"));
+        assert_eq!(station.told(50), ["handover"]);
+        station.heard(50, vec![json!({"carry": {"vault": 1}})]);
+        station.ended(50, EXITED_0);
+        assert_eq!(station.told(new), [r#"carried {"vault":1}"#]);
+        station.serves(Slot::Current, 6000);
+        assert_eq!(station.station_json()["version"], "0.2.0");
+        // Taken over by then: no deadline of its own ran out meanwhile.
+        station.pass(s(3600));
+        assert!(station.os.killed.is_empty());
     }
 
     #[test]

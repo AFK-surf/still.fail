@@ -54,13 +54,13 @@ runner → 客户端：
 
 - `run --app DIR [--port N] [--data DIR] [--with-parent] [--handoff FILE]`：启动器自己处理，见下。
 - `enroll …`、`status`、`id`、`channel …`：直接 `exec` Node：`<app>/node/bin/node <app>/station/main.js <原参数>`（路径后续可调，用常量集中写）。
-- `handoff-version`：打印 `2`（Rust 版是 `1`；见「从 Rust 版切过来」）。
+- `handoff-version`：打印 `3`（Rust 版是 `1`；见「从 Rust 版切过来」。`3` 起表示能接替一个正在运行的启动器，见下「启动器自己换新」）。
 
 `run` 时：
 1. 解析 `--data`（缺省同 Rust：`$STILLFAIL_DATA`，否则 `$EMBER_DATA`，否则 `~/.stillfail`）。`flock` 住 `<data>/run/station.lock`；拿不到就退出码 3（桌面 app 靠它）。
 2. 自己先 bind 两个 TCP 监听：MCP 端口（`config.json` 的端口或 4750，被占用时规则同 `mesh/app/src/ports.rs`）和本机回环口（`--port` 或 4760，规则同 `mesh/station/src/local.rs`），把它们作为继承的 fd 传给 Node（fd 3、4），这样新旧 Node 交接时端口不空档。MCP 端口记在 `<data>/run/mcp.json`，下次启动（stop 之后重启、崩溃后重启）先绑它：留着没重启的 agent 只认得这个地址；绑不上时，Node 打开工具入口后让拿着旧地址的 agent 进程重启并 resume。数据目录不是 `~/.stillfail` 的 station（测试、开发用）不占 4750/4760，没指定端口就用随机端口。
 3. 起 Node：`node <app>/station/main.js run --app … --data … --launcher-fds 3,4,5 --launcher-carries`，fd 5 是控制管道（双向，一行一个 JSON）；`--launcher-carries` 说这个启动器会把交接时 Node 交出的内存转给新 Node（见下）。
-4. 写 `<data>/run/station.json`（一行、字段与 Rust 版相同：`{"pid":<启动器 pid>,"startedAt":<ms>,"version":…,"handoff":1,"drain":1,"channel":1}`；version 由 Node 在控制管道上告诉启动器；安装器用 sed 读，格式不能变）。
+4. 写 `<data>/run/station.json`（一行、字段与 Rust 版相同：`{"pid":<启动器 pid>,"startedAt":<ms>,"version":…,"handoff":1,"drain":1,"channel":1}`，Unix 上末尾多一个 `"renew":1`（见下「启动器自己换新」）；version 由 Node 在控制管道上告诉启动器；安装器用 sed 读，格式不能变）。
 5. 信号：
    - SIGUSR2（交接）：起一个新 Node（同样的 fd），等它在控制管道上说 `{"ready":true}`（超时 60 秒算失败：杀掉新的，写 `run/handoff-failed`，旧的照常）；然后告诉旧的 `{"op":"handover"}`，等它退出（最多 30 秒，超时 SIGKILL）；新的**接管之后**（见下）才更新 `station.json` 的 `startedAt`（pid 不变——安装器靠这个判断交接成功）。
    - station 页右上角 ⋯ 的「重启 station」（管理员，`POST /station/restart`，`station/src/ops/restart.ts`）就是请启动器做这次交接：`run/station.json` 里的 pid、`handoff: 1`，Unix 上发 SIGUSR2，Windows 上往管道写 `{"op":"handover"}`。新进程重新读 config.json（高级网络设置在这时生效），会话不中断；没有启动器（直接从源码跑）时回 409。
@@ -72,7 +72,11 @@ runner → 客户端：
 
 控制管道上 Node → 启动器：`{"ready":true,"version":"0.1.x"}`、`{"serving":"admin"|"mcp","port":N}`（回环口听好了；接手会话、agent 的门开好了）、`{"failed":"…"}`（没能接管：agent 那边没起来）、`{"drained":"idle"|"timeout"}`（启动器照 Rust 版写 `run/drained`）。
 
-交接时旧 Node 收到 `{"op":"handover"}` 先说 `{"carry":{…}}`：各部分只放在内存里、要带到新进程的东西（密钥库的授权，`StationParts.carry`），启动器原样转给新 Node `{"op":"carried","carried":{…}}`，内存到内存，不写盘、不写日志。只有带 `--launcher-carries` 起的 Node 才说这一行：更新只换 Node，启动器是旧的就不认它，会把整行写进日志。进程结束时启动器先读完它管道里剩下的行再处理退出，交出的东西不会因为先看到退出而丢。Windows 的启动器暂不传这个参数：它读管道和等进程退出在两个线程，退出可能先到，最后一行就丢了，要先让等退出的线程等读管道的线程读完。
+交接时旧 Node 收到 `{"op":"handover"}` 先说 `{"carry":{…}}`：各部分只放在内存里、要带到新进程的东西（密钥库的授权，`StationParts.carry`），启动器原样转给新 Node `{"op":"carried","carried":{…}}`，内存到内存，不写盘、不写日志。只有带 `--launcher-carries` 起的 Node 才说这一行（启动器是旧的就不认它，会把整行写进日志）。进程结束时启动器先读完它管道里剩下的行再处理退出，交出的东西不会因为先看到退出而丢。Windows 的启动器暂不传这个参数：它读管道和等进程退出在两个线程，退出可能先到，最后一行就丢了，要先让等退出的线程等读管道的线程读完。
+
+**启动器自己换新**（Unix，`run.rs` 的 `renew`）：更新带来的新启动器在新发布的 `<app>/mesh/target/release/stillfail-station`，可交接只换 Node，正在跑的启动器是开机时那个，不换的话启动器里的任何修改都要等到机器重启才生效（2026-10-30：#2850 的授权转交在 ccvm 上一直没生效，启动器是 10 月 17 日起的）。所以每次交接（SIGUSR2）先比一比：新发布里的启动器跟自己（启动时读自己可执行文件的内容算的哈希）不一样，并且它的 `handoff-version` ≥ 3，就先 `exec` 成它，再由它去交接。exec 不换 pid，锁、两个监听 socket、当前 Node 和它的控制 socket 都原样留着（exec 前去掉这几个 fd 的 close-on-exec），这些 fd 号和当前 Node 的 pid、版本、在哪些端口服务、控制 socket 里读了一半的行，用 `run … --resume <json>` 交给新启动器；新启动器把这个 Node 当作已接管的接过来（`Lifecycle::adopt`，不改 station.json），接着做这次交接。exec 前把处理的信号挡住（mask 跨 exec 保留），新启动器装好处理函数再放开，中间来的 SIGCHLD、SIGTERM 不丢。新发布里的启动器跟自己一样、说不了 3（回滚到更早的发布）、exec 失败，都照旧由自己交接。只有当前 Node 已接管、没有别的交接在进行时才换。
+
+`station.json` 的 `renew:1` 说这个启动器会自己换新。安装器只对说了它的启动器走交接；没说的（更早的启动器）更新时先 drain 再重启一次，换上新启动器，之后的更新就都是交接了。Windows 的启动器不换自己（没有 exec），安装器照旧（`install-windows.ts` 不看这个字段）。
 
 **生命周期只有一份**（`src/lifecycle.rs`）：上面第 4–7 步（ready、退避重启、连续失败放弃、交接、drain、停止和超时强杀、跟随父进程）是一个与平台无关的状态机，它的测试在三个平台上都会跑。`run.rs`（Unix）和 `run_windows.rs` 只负责三件事：起进程、在控制通道上收发消息、把事件（某行消息、进程结束、停止）告诉状态机。改重启、取消或超时策略只改这一处。各平台不同的只有两点：端口怎么交给 Node（Unix 传 fd，Windows 由启动器转发，见下），判断父进程是否还在时 Unix 用 `getppid` 有没有变，Windows 等父进程的句柄。
 
