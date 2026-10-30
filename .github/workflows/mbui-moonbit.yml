@@ -45,7 +45,7 @@ jobs:
                    curl -fsSI --retry 3 --retry-all-errors --max-time 20 $base/cores/${{ matrix.core }}; } \
             | tr -d '\r' | awk -F': ' 'tolower($1) == "etag" { print $2 }' | tr -d '\n')
           [ "$(printf '%s' "$tag" | tr -cd '"' | wc -c | tr -d ' ')" = 4 ] || { echo "::error::no ETags from $base: $tag"; exit 1; }
-          echo "key=moonbit-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-$(printf '%s' "$tag" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          echo "key=moonbit-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-$(printf '%s' "$tag trimmed" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v4
         id: had
         with:
@@ -64,6 +64,11 @@ jobs:
           else
             curl -fsSL --retry 3 --retry-all-errors https://cli.moonbitlang.com/install/unix.sh | bash
           fi
+          # (without what no job here runs: the docs', the editors' and the coverage's programs, ~40 MB of every job's
+          # download of it, ~20 jobs a commit, when GitHub stopped the account's cache downloads: "Egress is over the
+          # account limit", 2026-10-30. "trimmed" in the key: a release put in before is put in again so)
+          rm -f "$MOON_HOME"/bin/moondoc* "$MOON_HOME"/bin/moon-ide* "$MOON_HOME"/bin/moon-lsp* "$MOON_HOME"/bin/moonbit-lsp* \
+            "$MOON_HOME"/bin/moon_cove* "$MOON_HOME"/bin/moonc-prove*
           ls "$MOON_HOME/bin"
           PATH="$MOON_HOME/bin:$PATH" moon version --all
       - if: steps.had.outputs.cache-hit != 'true'
