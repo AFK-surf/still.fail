@@ -5,7 +5,7 @@
 ///|
 fn floor_now() -> Double {
   match readings.get("ws1/st1\u{1}s-c1") {
-    Some(rd) => rd.floor
+    Some(rd) => rd.floor.get()
     None => -1.0
   }
 }

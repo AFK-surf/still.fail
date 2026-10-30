@@ -106,16 +106,16 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
       return
     }
     let entries = scopes.map(fn(s) { @kit.menu_radio(s, s == scope, label=tr("android-settings.vault.scope." + s)) })
-    let m = @sf.chooser(c, "phone/" + request + "/scope", tr("android-settings.vault.scope." + scope), entries, vault_menu.val == "phone/" + request)
+    let m = @sf.chooser(c, "phone/" + request + "/scope", tr("android-settings.vault.scope." + scope), entries, vault_menu.get() == "phone/" + request)
     if m.open {
-      vault_menu.val = "phone/" + request
-    } else if vault_menu.val == "phone/" + request {
-      vault_menu.val = ""
+      vault_menu.set("phone/" + request)
+    } else if vault_menu.get() == "phone/" + request {
+      vault_menu.set("")
     }
     match m.chosen {
       Some(s) => {
         vault_picked["phone/" + request] = s
-        vault_menu.val = ""
+        vault_menu.set("")
       }
       None => ()
     }

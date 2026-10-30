@@ -21,19 +21,26 @@ let mark_colors : Array[String] = ["red", "orange", "amber", "green", "teal", "b
 /// The picker as it is while up.
 priv struct MarkPick {
   /// the emoji's side (else the icons')
-  mut emojis : Bool
+  emojis : @signals.Signal[Bool]
   /// the icons' colour ("": the words')
-  mut color : String
+  color : @signals.Signal[String]
   /// a count of times opened: its fields are their own
+  // (plain: the next ask's number, read only as one is asked)
   mut serial : Int
   /// a picture asked of the system's photo picker
-  mut asking : Bool
+  asking : @signals.Signal[Bool]
   /// a picture picked too large to put up as it is, being read to make it small (its key), "" none
-  mut reading : String
+  reading : @signals.Signal[String]
 }
 
 ///|
-let mark_pick : MarkPick = { emojis: false, color: "", serial: 0, asking: false, reading: "" }
+let mark_pick : MarkPick = {
+  emojis: @signals.signal(false, same=fn(a, b) { a == b }),
+  color: @signals.signal("", same=fn(a, b) { a == b }),
+  serial: 0,
+  asking: @signals.signal(false, same=fn(a, b) { a == b }),
+  reading: @signals.signal("", same=fn(a, b) { a == b }),
+}
 
 ///|
 /// A glyph's name and colour of an icon (glyph:<name>[:<colour>]); None for another.
@@ -170,7 +177,7 @@ let mark_picture_read : Int = 768
 
 ///|
 /// Pictures picked as marks too large to put up as they are: each its own key.
-let mark_pictures : Ref[Int] = Ref(0)
+let mark_pictures : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
 
 ///|
 /// The mark picker (openMarkPick) for `name`, whose mark is `emoji` and `icon` now: `save(emoji, icon)` sets one,
@@ -198,14 +205,14 @@ pub fn open_mark_pick(
   let picture = icon.has_prefix("data:image/") ||
     icon.has_prefix("https://") ||
     icon.has_prefix("http://")
-  mark_pick.emojis = glyph is None && !picture && emoji != ""
-  mark_pick.color = match glyph {
+  mark_pick.emojis.set(glyph is None && !picture && emoji != "")
+  mark_pick.color.set(match glyph {
     Some((_, col)) => col
     None => ""
-  }
+  })
   mark_pick.serial += 1
-  mark_pick.asking = false
-  mark_pick.reading = ""
+  mark_pick.asking.set(false)
+  mark_pick.reading.set("")
   let serial = mark_pick.serial
   // (a sheet of its own with touch, a dialog with keyboard and mouse: the presenters'; its grid scrolls in what is left)
   @sf.panel(fill("android-settings.station.emojiTitle", [("name", name)]), from=Unanchored, tall=mark_tall, fn(c, close) {
@@ -234,23 +241,23 @@ fn mark_pick_body(
       set(e, i)
     }
     // a picture too large as it is, read: made small and put up
-    if mark_pick.reading != "" {
-      match c.image_pixels(mark_pick.reading, mark_picture_read) {
+    if mark_pick.reading.get() != "" {
+      match c.image_pixels(mark_pick.reading.get(), mark_picture_read) {
         PixelsComing => ()
         PixelsRead(w, h, px) => {
-          mark_pick.reading = ""
+          mark_pick.reading.set("")
           match picture_mark_small(w, h, px) {
             Some(url) => pick("", url)
             None => (core.say)(tr("android-settings.station.imageFailed"))
           }
         }
         PixelsFailed => {
-          mark_pick.reading = ""
+          mark_pick.reading.set("")
           (core.say)(tr("android-settings.station.imageFailed"))
         }
       }
     }
-    let emojis = mark_pick.emojis
+    let emojis = mark_pick.emojis.get()
     let typed_key = "mark-typed/" + serial.to_string()
     let query_key = "mark-query/" + serial.to_string()
     // the icons' side or the emoji's, and its field: an emoji pasted or typed, or words to find an icon by (the one
@@ -262,7 +269,7 @@ fn mark_pick_body(
       } else {
         0
       })
-      mark_pick.emojis = i == 1
+      mark_pick.emojis.set(i == 1)
       if emojis {
         let typed = @sf.input(c, typed_key, placeholder=tr("android-settings.station.emojiPaste"), field=field_of(typed_key)).text
         match first_emoji(typed) {
@@ -285,16 +292,16 @@ fn mark_pick_body(
           let of = mark_color(col).unwrap_or(t.p.text)
           let id = c.id("mark-color/" + col)
           if c.clicked(id) {
-            mark_pick.color = col
+            mark_pick.color.set(col)
             match glyph {
               Some((g, _)) => set(glyph_emoji(g), "glyph:" + g + (if col == "" { "" } else { ":" + col }))
               None => ()
             }
           }
-          let ring = c.box(style=mark_colour, border=if col == mark_pick.color { mark_ring } else { 0.0 }, border_color=of, id~, fn() {
+          let ring = c.box(style=mark_colour, border=if col == mark_pick.color.get() { mark_ring } else { 0.0 }, border_color=of, id~, fn() {
             c.box(style=mark_colour_dot, bg=of, fn() {  }) |> ignore
           })
-          c.semantics(ring, Button, id~, label=if col == "" { tr("android-settings.station.glyphs") } else { col }, selected=col == mark_pick.color)
+          c.semantics(ring, Button, id~, label=if col == "" { tr("android-settings.station.glyphs") } else { col }, selected=col == mark_pick.color.get())
         }
       })
       |> ignore
@@ -321,7 +328,7 @@ fn mark_pick_body(
     } else {
       station_emoji
     }
-    let tint = mark_color(mark_pick.color)
+    let tint = mark_color(mark_pick.color.get())
     let rows = (offered.length() + mark_across - 1) / mark_across
     let blocks : Array[() -> Unit] = []
     if offered.length() == 0 {
@@ -344,7 +351,7 @@ fn mark_pick_body(
               if emojis {
                 pick(key, "")
               } else {
-                pick(glyph_emoji(key), "glyph:" + key + (if mark_pick.color == "" { "" } else { ":" + mark_pick.color }))
+                pick(glyph_emoji(key), "glyph:" + key + (if mark_pick.color.get() == "" { "" } else { ":" + mark_pick.color.get() }))
               }
             }
             // (square: as tall as it is wide)
@@ -381,21 +388,21 @@ fn mark_pick_body(
             ) {
             // the picture the system's picker answers with put up as the mark
             let asked = (core.pick_picture)(fn(bytes) {
-              mark_pick.asking = false
+              mark_pick.asking.set(false)
               match bytes {
                 Some(b) =>
                   match picture_mark(b) {
                     Some(url) => pick("", url)
                     None => {
-                      mark_pictures.val += 1
-                      mark_pick.reading = "mem:station-mark/\{mark_pictures.val}"
-                      @ui.add_image(mark_pick.reading, b)
+                      mark_pictures.set(mark_pictures.get() + 1)
+                      mark_pick.reading.set("mem:station-mark/\{mark_pictures.get()}")
+                      @ui.add_image(mark_pick.reading.get(), b)
                     }
                   }
                 None => ()
               }
             })
-            mark_pick.asking = asked
+            mark_pick.asking.set(asked)
             if !asked {
               (core.say)(tr("android-settings.station.imageFailed"))
             }

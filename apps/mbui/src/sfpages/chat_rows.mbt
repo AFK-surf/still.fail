@@ -419,7 +419,7 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
         c.look(rl, @ui.look(alpha=ring))
       })
       // away while its copy flies, its ring with it
-      if em.copied == a.key {
+      if em.copied.get() == a.key {
         c.look(face, @ui.look(alpha=0.0))
       }
       // what it does now and how long: folded away to its width's share, cut there, faded
@@ -489,36 +489,44 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : 
   let st = match steadies.get(row) {
     Some(s) => s
     None => {
-      let s = { key, words, mono, was: "", was_mono: false, at: -1.0e9, asked: 0.0 }
-      steadies[row] = s
+      let s = {
+        key: @signals.signal(key, same=fn(a, b) { a == b }),
+        words: @signals.signal(words, same=fn(a, b) { a == b }),
+        mono: @signals.signal(mono, same=fn(a, b) { a == b }),
+        was: @signals.signal("", same=fn(a, b) { a == b }),
+        was_mono: @signals.signal(false, same=fn(a, b) { a == b }),
+        at: @signals.signal(-1.0e9, same=fn(a, b) { a == b }),
+        asked: @signals.signal(0.0, same=fn(a, b) { a == b }),
+      }
+      steadies.set(row, s)
       s
     }
   }
   let swap = @motion.anim(c, "now-swap/" + row, 1.0, global=true)
-  if key == st.key || words == st.words {
-    st.key = key
-    st.words = words
-    st.mono = mono
-  } else if c.moment() >= st.at + steady_dwell_ms {
-    st.was = st.words
-    st.was_mono = st.mono
-    st.key = key
-    st.words = words
-    st.mono = mono
-    st.at = c.moment()
+  if key == st.key.get() || words == st.words.get() {
+    st.key.set(key)
+    st.words.set(words)
+    st.mono.set(mono)
+  } else if c.moment() >= st.at.get() + steady_dwell_ms {
+    st.was.set(st.words.get())
+    st.was_mono.set(st.mono.get())
+    st.key.set(key)
+    st.words.set(words)
+    st.mono.set(mono)
+    st.at.set(c.moment())
     swap.snap(0.0)
     // (a Move as long as the furthest it goes: a line up, or from the one's width to the other's)
     let style = if hot { now_words_hot } else { now_words }
-    let widened = c.words_across(st.words, style, mono=st.mono) - c.words_across(st.was, style, mono=st.was_mono)
+    let widened = c.words_across(st.words.get(), style, mono=st.mono.get()) - c.words_across(st.was.get(), style, mono=st.was_mono.get())
     swap.animate(1.0, @motion.move(over=dmax(c.text_size(Meta).1, widened.abs())))
   } else {
-    c.wake_in(st.at + steady_dwell_ms - c.moment())
+    c.wake_in(st.at.get() + steady_dwell_ms - c.moment())
   }
   let k = swap.get()
   let style = if hot { now_words_hot } else { now_words }
   // the line short of what they asked of it last frame: it cut them where it ends, and cuts them there as they roll
   let cut = match @motion.measured_size(c, "now-room/" + row) {
-    Some((w, _)) => w < st.asked - 0.5
+    Some((w, _)) => w < st.asked.get() - 0.5
     None => false
   }
   let room = c.box(style=now_room, fn() {
@@ -530,16 +538,16 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : 
       // window each step's whole width, past the screen's edge): the words in it whole and cut by its edge as it
       // goes from the one's width to the other's, or cut short where the line ends, as at rest
       let line = c.text_size(Meta).1
-      let from = c.words_across(st.was, style, mono=st.was_mono)
-      let to = c.words_across(st.words, style, mono=st.mono)
+      let from = c.words_across(st.was.get(), style, mono=st.was_mono.get())
+      let to = c.words_across(st.words.get(), style, mono=st.mono.get())
       let across = from + (to - from) * k
-      st.asked = across
+      st.asked.set(across)
       let mut rolled = -1
       let window = c.box(style=@ui.style(w=Cut, max_w=Fixed(across), h=Fixed(line), clip=true), fn() {
         let wide = if from > to { from } else { to }
         let both = c.box(style=@ui.style(w=if cut { Full } else { Fixed(wide) }), fn() {
-          c.rich([@ui.span(st.was, mono=st.was_mono)], style~) |> ignore
-          c.rich([@ui.span(st.words, mono=st.mono)], style~) |> ignore
+          c.rich([@ui.span(st.was.get(), mono=st.was_mono.get())], style~) |> ignore
+          c.rich([@ui.span(st.words.get(), mono=st.mono.get())], style~) |> ignore
         })
         c.look(both, @ui.look(dy=-line * k))
         rolled = both
@@ -552,8 +560,8 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : 
       let end = if cut { @ui.cut_soft_most } else { @ui.cut_soft(gone * k, gone * (1.0 - k)) }
       c.fade_to(rolled, window, top=roll, end~, foot=roll)
     } else {
-      st.asked = c.words_across(st.words, style, mono=st.mono)
-      c.rich([@ui.span(st.words, mono=st.mono)], style~) |> ignore
+      st.asked.set(c.words_across(st.words.get(), style, mono=st.mono.get()))
+      c.rich([@ui.span(st.words.get(), mono=st.mono.get())], style~) |> ignore
     }
   })
   @motion.measure(c, room, "now-room/" + row)
@@ -562,18 +570,18 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : 
 ///|
 /// What each activity shows, steadied (steady_words), by its row.
 priv struct Steady {
-  mut key : String
-  mut words : String
-  mut mono : Bool
-  mut was : String
-  mut was_mono : Bool
-  mut at : Double
+  key : @signals.Signal[String]
+  words : @signals.Signal[String]
+  mono : @signals.Signal[Bool]
+  was : @signals.Signal[String]
+  was_mono : @signals.Signal[Bool]
+  at : @signals.Signal[Double]
   /// how wide the words asked their line to be, the last frame they were laid out
-  mut asked : Double
+  asked : @signals.Signal[Double]
 }
 
 ///|
-let steadies : Map[String, Steady] = {}
+let steadies : @sf.LiveMap[String, Steady] = @sf.LiveMap::new()
 
 ///|
 /// What the rows keep of their own, let go (the package's reset).

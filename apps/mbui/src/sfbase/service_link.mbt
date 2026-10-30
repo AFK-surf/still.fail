@@ -231,7 +231,7 @@ pub fn link_open(src : Source, p : ServicePage, site : @ui.NativeView, sid : Str
     "preview.socket",
     {
       "station": Json::string(p.station),
-      "port": Json::number(p.port.to_double()),
+      "port": Json::number(p.port.get().to_double()),
       "path": Json::string(path),
       "socket": Json::string(sid),
       "headers": Json::array(headers),
@@ -472,6 +472,7 @@ pub let page_js_tag : String = "<script src=\"/_stillfail/page.js\"></script>"
 /// after the <head> tag, else after <html>, else after the doctype, else first; its first bytes wait until <head> or
 /// <html> is there (or 4 KB, or its end), so it never goes before a doctype cut in two.
 pub(all) struct Tagging {
+  // (plain: a page's body on its way to its view, nothing shown)
   start : @buffer.Buffer
   mut placed : Bool
 }

@@ -6,6 +6,7 @@
 /// The core the settings' panels put up by what has none at hand draw with (a station's card, a device asking): the
 /// frame's, said by panels_frame.
 // kept across runs: said again by every frame (panels_frame)
+// (plain: said to what is built inside it, around that build and put back after; not a value of the page's)
 let panels_core : Ref[Core?] = Ref(None)
 
 ///|

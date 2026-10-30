@@ -53,7 +53,7 @@ fn native_workspace_placed(c : @ui.Ctx) -> Unit {
   let floating : Array[@hostapi.NavFloating] = []
   let blocked = @sf.presenter_visible()
   let semantics = c.semantics_tree()
-  if !bar.bare && !switcher_open() && (!wide.tape || wide.tape_at.get() == Side) {
+  if !bar.bare && !switcher_open() && (!wide.tape.get() || wide.tape_at.get() == Side) {
     // Semantic anchors also survive a sidebar drawn from its kept part.
     for s in semantics {
       if !s.hidden || blocked {
@@ -113,7 +113,7 @@ let cards_foot : Double = 0.0
 /// Whether the wide frame lays its cards across beside the column of the system's glass (sfapp's sides: their ground
 /// under the column).
 pub fn on_cards() -> Bool {
-  @sf.native_on() && wide.tape
+  @sf.native_on() && wide.tape.get()
 }
 
 // ---- what a page hands the system's bars: the one way a page has into them. Each answers whether it took it (the
@@ -242,7 +242,7 @@ fn hex_of(k : Int64) -> String {
 /// The system's column down the window's trailing edge as the system says its bars take it now (none upright, nor
 /// without its bars).
 fn native_side_now() -> Unit {
-  @sf.native_bars.side = if @sf.native_bars.on { dmax(0.0, @ui.system_bars().right) } else { 0.0 }
+  @sf.native_bars.side.set(if @sf.native_bars.on.get() { dmax(0.0, @ui.system_bars().right) } else { 0.0 })
 }
 
 ///|
@@ -269,8 +269,8 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
   // without them (the cards on the tape with no room for its column, the page past the window's edge) and the next
   // with them; what came of it said as the frame ends, as it hands them. Not counted on after a frame that left it
   // without them: one it refused, or one that handed none)
-  if !@sf.native_bars.on && @sf.native_able() && !nav_untaken.val {
-    @sf.native_bars.on = true
+  if !@sf.native_bars.on.get() && @sf.native_able() && !nav_untaken.val {
+    @sf.native_bars.on.set(true)
   }
   floating_bar.val = None
   @sf.native_over_clear()
@@ -307,25 +307,25 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
       // (something up over the whole window, the viewer: the tabs put away, its actions alone in the bars)
       let over = @sf.native_over
       nav_over_was.clear()
-      let bar = if over.up {
+      let bar = if over.up.get() {
         let acts : Array[@hostapi.NavItem] = over.acts.map(fn(a) {
           nav_over_was[a.0] = a.3
           { id: a.0, title: a.1, icon: @sf.icon_path(a.2), dot: false, prominent: over.active.contains(a.0), menu: [] }
         })
-        { ..rail_nav(src, w, all, acts), bare: true, title: over.title }
+        { ..rail_nav(src, w, all, acts), bare: true, title: over.title.get() }
       } else {
         rail_nav(src, w, all, card)
       }
-      @sf.native_bars.on = @hostapi.nav_bar(bar)
-      nav_untaken.val = @sf.native_able() && !@sf.native_bars.on
+      @sf.native_bars.on.set(@hostapi.nav_bar(bar))
+      nav_untaken.val = @sf.native_able() && !@sf.native_bars.on.get()
       floating_bar.val = Some(bar)
       native_side_now()
     }
     None => {
       @hostapi.nav_bar_none()
       nav_untaken.val = @sf.native_able()
-      @sf.native_bars.on = false
-      @sf.native_bars.side = 0.0
+      @sf.native_bars.on.set(false)
+      @sf.native_bars.side.set(0.0)
     }
   }
 }
@@ -344,7 +344,7 @@ fn rail_left() -> Double {
 /// Whether the sidebar's ground runs the window's height (its top and foot under the system's bars, what is in it
 /// clear of them): open beside the system's tabs, off the tape, as the system's own sidebars do.
 fn side_full_height(bar : Bool) -> Bool {
-  @sf.native_on() && !bar && !wide.tape
+  @sf.native_on() && !bar && !wide.tape.get()
 }
 
 ///|
@@ -519,8 +519,8 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     if id.has_prefix("place/") && id != now {
       tabs_kept[tab_kept_key(w.id, now)] = app.nav.pages()
       // (what was open over the tab left closed with it: a chat's ⋯, a menu)
-      chat_own.info_open = false
-      chat_own.jobs_open = false
+      chat_own.info_open.set(false)
+      chat_own.jobs_open.set(false)
       @sf.close_all_presented()
     }
     if id == now {

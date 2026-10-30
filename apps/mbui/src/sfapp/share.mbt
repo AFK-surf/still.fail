@@ -72,7 +72,7 @@ let share_in : ShareIn = {
 
 ///|
 /// Over another app, its sheet closed by hand: the app goes once it has sunk away (ShareScreen: onClose after its spring).
-let share_closing : Ref[Bool] = Ref(false)
+let share_closing : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 /// 打开 still.fail, as a link's words (ShareSheet.kt SignInFirst: 15, semibold, the link's ink).
@@ -215,17 +215,17 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
       }
       _ => ()
     }
-  } else if share_in.raised.get() && sheet_host.kind != ShareSheet {
+  } else if share_in.raised.get() && sheet_host.kind.get() != ShareSheet {
     // closed (the scrim, back, dragged down): let go; over another app, the app goes once the sheet has sunk away
     share_in.shared.set(None)
     share_in.files.set([])
     share_in.raised.set(false)
     if share_over.val {
-      share_closing.val = true
+      share_closing.set(true)
     }
   }
-  if share_closing.val && share_over.val && !@sf.presented_drawn() {
-    share_closing.val = false
+  if share_closing.get() && share_over.val && !@sf.presented_drawn() {
+    share_closing.set(false)
     @ui.over_done(open_app=false)
   }
 }

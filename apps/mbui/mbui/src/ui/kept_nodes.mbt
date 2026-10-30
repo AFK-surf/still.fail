@@ -62,6 +62,8 @@ priv struct RowNodes {
   marks : Array[Int]
   /// what it read of how lists stand (Ctx::list_info_as, read back)
   info : Array[(String, () -> Bool)]
+  /// what it said is on show (Ctx::lives), said again as it is kept
+  lives : Array[String]
   used : Array[() -> Unit]
   again : Array[(Int) -> Unit]
   /// what it read of the layout as it was built, and what it read (Ctx::laid_rect, laid_size, left_out): read back once
@@ -123,6 +125,8 @@ priv struct NodesRun {
   mut told : Bool
   /// (the row told last, list and item: what says why a frame is asked for, Tester::assert_idle)
   mut told_by : (Int, Int)
+  /// (and where what it read was set, as it was told)
+  mut told_at : String
   /// the passes of frames' builds so far, and the frames' starts (rows_frame_start, Ctx::rows_detach): a row told in
   /// one before it is laid in it reads anew as it is
   mut pass : Int
@@ -146,6 +150,7 @@ let nodes_run : NodesRun = {
   part_fresh: false,
   told: false,
   told_by: (0, 0),
+  told_at: "",
   pass: 0,
   building: None,
   aside: 0,
@@ -365,6 +370,7 @@ fn rows_nodes_end(c : Ctx) -> Unit {
 ///|
 /// Put back as a run begins (reset_globals): no row kept, what they read let go.
 fn nodes_forget() -> Unit {
+  lives_forget()
   for _, rn in kept_nodes {
     rn.watch.stop()
   }
@@ -409,6 +415,7 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     }
     nodes_run.told = true
     nodes_run.told_by = (list, item)
+    nodes_run.told_at = @signals.last_set_at() + (if moving_told.val != "" { " (moving: \{moving_told.val})" } else { "" })
     // (between frames: one owed; in one, the next asked for as it ends: on_frame)
     if !frame_running.val {
       h_frame_owed()
@@ -445,6 +452,7 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     said: [],
     marks: [],
     info: [],
+    lives: [],
     used: [],
     again: [],
     laid: [],
@@ -608,6 +616,7 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
   self.build_marks(rn.marks)
   rn.used.clear()
   rn.again.clear()
+  rn.lives.clear()
   rn.laid.clear()
   rn.inner_now.clear()
   rn.building_at = self.count
@@ -691,7 +700,7 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
 /// frame (a list of a row's own: a part lays its lists out each frame; a native view, a pager's page, a layer, a
 /// shot); "" none. (What is placed by the clock (Ctx::moved_by: a page sliding) is kept with what moves it, its node's
 /// own, placed again as each frame is laid out and painted. A field is kept as the rest: what changes what it holds is
-/// an event, which builds the frame anew, and one with the focus is built each frame: Ctx::editor.)
+/// an event, which builds the frame anew; one with the focus too, its caret blinking as it is painted: Ctx::editor.)
 fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int, part~ : Bool) -> String {
   for j in 0..<n {
     let nd = self.nodes[r + j]
@@ -787,6 +796,9 @@ fn Ctx::nodes_put_back(self : Ctx, rn : RowNodes, parent : Int) -> Int {
 ///|
 /// What row or part `rn`'s build said of the frame, said again of its nodes where they are now.
 fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
+  for k in rn.lives {
+    lives_now[k] = true
+  }
   let by = rn.base - rn.said_base
   self.say_again(rn.said, { ..unmoved, by: by })
   for f in rn.used {

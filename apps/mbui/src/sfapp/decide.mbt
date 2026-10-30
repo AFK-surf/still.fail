@@ -8,42 +8,42 @@
 /// What this slice keeps while the app runs.
 priv struct Decide {
   /// asks let go here, before the core says so (Chat.kt AskDismiss `gone`), by station, thread and post
-  gone : Map[String, Bool]
+  gone : @sf.LiveMap[String, Bool]
   /// the jobs' sheet shows all of them, not only those that matter now
-  mut jobs_all : Bool
+  jobs_all : @signals.Signal[Bool]
   /// the letters' sheet: the chat opened in it, by its key ("" the list of them)
-  mut letters_open : String
+  letters_open : @signals.Signal[String]
   /// the chats whose letters were read for their sheet (the core's `chatLetters`), by station and session: their
   /// threads, let go as the chat is (chat.mbt chat_left)
-  letters_held : Map[String, Double]
+  letters_held : @sf.LiveMap[String, Double]
   /// a job's sheet: what it said (0) or its output (1)
-  mut job_tab : Int
+  job_tab : @signals.Signal[Int]
   /// the history's tab: its steps (0) or its details (1)
-  mut history_tab : Int
+  history_tab : @signals.Signal[Int]
   /// groups and steps of a history opened, by their key
-  opened : Map[String, Bool]
+  opened : @sf.LiveMap[String, Bool]
 }
 
 ///|
 let dui : Decide = {
-  gone: {},
-  jobs_all: false,
-  letters_open: "",
-  letters_held: {},
-  job_tab: 0,
-  history_tab: 0,
-  opened: {},
+  gone: @sf.LiveMap::new(),
+  jobs_all: @signals.signal(false, same=fn(a, b) { a == b }),
+  letters_open: @signals.signal("", same=fn(a, b) { a == b }),
+  letters_held: @sf.LiveMap::new(),
+  job_tab: @signals.signal(0, same=fn(a, b) { a == b }),
+  history_tab: @signals.signal(0, same=fn(a, b) { a == b }),
+  opened: @sf.LiveMap::new(),
 }
 
 ///|
 /// As at the start (tests).
 fn decide_reset() -> Unit {
   dui.gone.clear()
-  dui.jobs_all = false
-  dui.letters_open = ""
+  dui.jobs_all.set(false)
+  dui.letters_open.set("")
   dui.letters_held.clear()
-  dui.job_tab = 0
-  dui.history_tab = 0
+  dui.job_tab.set(0)
+  dui.history_tab.set(0)
   dui.opened.clear()
   history_placed.clear()
   history_short.clear()

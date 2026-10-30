@@ -43,6 +43,9 @@
 
 ///|
 pub(all) struct SendFlight {
+  /// told as any of what follows changes after it set out (placed, timed: flight_told): what reads it (flight_read)
+  /// built again for it
+  said : @signals.Signal[Int]
   /// the chat it was sent in (its draft's key; its list's turns', turns.mbt), its words, and where they were: their
   /// first line's top left, the field's room (a new chat's: its own, then its chat's as the page becomes it)
   mut chat : String
@@ -180,6 +183,7 @@ pub fn flight_start(
         marks,
         files,
         key,
+        said: @signals.signal(0),
         placed: false,
         placed_frame: -1,
         way: @motion.Anim::new(0.0),
@@ -255,6 +259,7 @@ pub fn flight_carry_start(
         marks,
         files,
         key: "",
+        said: @signals.signal(0),
         placed: false,
         placed_frame: -1,
         way: @motion.Anim::new(0.0),
@@ -300,7 +305,7 @@ pub fn flight_carry_into(
 /// A new chat's first words, and its files, where they were, while its chat is made (over the new chat's page: till
 /// the page is the chat, which draws them then).
 pub fn flight_carry_waiting(c : @ui.Ctx) -> Unit {
-  match send_flight.get() {
+  match flight_read() {
     Some(f) if f.carried => {
       flight_waiting(c, f.chat)
       flight_files(c, f.chat)
@@ -366,7 +371,7 @@ pub fn flight_carried(chat : String) -> Bool {
 ///|
 /// The flight of chat `chat`'s words, while there is one.
 pub fn flight_of(chat : String) -> SendFlight? {
-  match send_flight.get() {
+  match flight_read() {
     Some(f) if f.chat == chat => Some(f)
     _ => None
   }
@@ -513,6 +518,7 @@ pub fn flight_takes(chat : String, key : String) -> Bool {
 pub fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
   if !f.placed {
     f.placed = true
+    flight_told(f)
     // the message sent is in the list, its row by its key (its outbox entry's id, or the message's): what a run waits
     // for (`said`), not the words' way there
     c.say("sent row in the list \{f.key}")
@@ -539,6 +545,10 @@ pub fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
 fn flight_timed(c : @ui.Ctx, f : SendFlight) -> Unit {
   // (a new chat's first words go with their page's change, the composer going to the chat's foot on their clock,
   // told as the page changed: as long as any, flight_carry_ms)
+  // (placed and not timed yet: timed by the next frame's build, once its row is laid out, so read so)
+  if f.placed && !f.timed && !f.carried && c.frame_number() <= f.placed_frame {
+    c.shows_until(c.moment())
+  }
   if !f.placed || f.timed || f.carried || c.frame_number() <= f.placed_frame {
     return
   }
@@ -550,6 +560,7 @@ fn flight_timed(c : @ui.Ctx, f : SendFlight) -> Unit {
     ""
   }
   f.timed = true
+  flight_told(f)
   match @motion.measured_rect(c, to) {
     Some((x, y, _, _)) => {
       let ms = flight_way_ms(flies_desk(f), dmax((x - f.from_x).abs(), (y - f.from_y).abs()))
@@ -1050,4 +1061,23 @@ pub fn flight_quote_landing(c : @ui.Ctx, f : SendFlight, card : Int, key : Strin
     )
     @ui.look(dx~, dy~)
   })
+}
+
+///|
+/// What flies changed after it set out (placed in its list, timed): what reads it told.
+fn flight_told(f : SendFlight) -> Unit {
+  f.said.set(@signals.untracked(fn() { f.said.get() }) + 1)
+}
+
+///|
+/// What flies (send_flight), read so: what reads it built again as it is told (flight_told), not only as another
+/// sets out.
+pub fn flight_read() -> SendFlight? {
+  match send_flight.get() {
+    Some(f) => {
+      f.said.get() |> ignore
+      Some(f)
+    }
+    None => None
+  }
 }

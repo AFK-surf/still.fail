@@ -332,7 +332,7 @@ fn login_field(id : String) -> @ui.Field {
     Some(f) => f
     None => {
       let f = @ui.Field::new()
-      logins_here.fields[id] = f
+      logins_here.fields.set(id, f)
       f
     }
   }

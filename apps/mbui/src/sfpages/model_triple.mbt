@@ -12,25 +12,25 @@
 /// none) and that panel (@sf.last_presented), the one asked open (a screen's fixture, a page's), its filter's field
 /// and words; the borrowing it asks to confirm ("" none).
 priv struct Triple {
-  mut open : String
-  mut shown : Int
-  mut asked : String
+  open : @signals.Signal[String]
+  shown : @signals.Signal[Int]
+  asked : @signals.Signal[String]
   field : @ui.Field
-  mut query : String
-  mut borrow_asking : String
+  query : @signals.Signal[String]
+  borrow_asking : @signals.Signal[String]
 }
 
 ///|
-let triple : Triple = { open: "", shown: 0, asked: "", field: @ui.Field::new(), query: "", borrow_asking: "" }
+let triple : Triple = { open: @signals.signal("", same=fn(a, b) { a == b }), shown: @signals.signal(0, same=fn(a, b) { a == b }), asked: @signals.signal("", same=fn(a, b) { a == b }), field: @ui.Field::new(), query: @signals.signal("", same=fn(a, b) { a == b }), borrow_asking: @signals.signal("", same=fn(a, b) { a == b }) }
 
 ///|
 fn triple_reset() -> Unit {
-  triple.open = ""
-  triple.shown = 0
-  triple.asked = ""
+  triple.open.set("")
+  triple.shown.set(0)
+  triple.asked.set("")
   triple.field.set("")
-  triple.query = ""
-  triple.borrow_asking = ""
+  triple.query.set("")
+  triple.borrow_asking.set("")
 }
 
 ///|
@@ -86,13 +86,13 @@ pub fn open_triple_panel(
   side? : @ui.Side = Bottom,
 ) -> Unit {
   let me = station + "\u{1}" + of
-  if triple.open == me {
-    @sf.close_presented_of(triple.shown)
+  if triple.open.get() == me {
+    @sf.close_presented_of(triple.shown.get())
     return
   }
-  triple.open = me
+  triple.open.set(me)
   triple.field.set("")
-  triple.query = ""
+  triple.query.set("")
   pick_draft(src, station, of, { "open": Json::boolean(true) })
   @sf.panel(
     @sf.t("android-chat.new.model"),
@@ -102,7 +102,7 @@ pub fn open_triple_panel(
     // (as wide as its columns' words, no wider: 2026-10-26 用户「没啥内容也这么宽感觉会很奇怪」)
     fits=true,
     foot=fn(c, close) { triple_foot(c, src, station, of, saved, close) },
-    gone=fn() { triple.open = "" },
+    gone=fn() { triple.open.set("") },
     focus=false,
     // (the models scroll by themselves, what goes with the one picked beside them in view)
     lists=true,
@@ -111,7 +111,7 @@ pub fn open_triple_panel(
     ruled=true,
     side~,
   )
-  triple.shown = @sf.last_presented()
+  triple.shown.set(@sf.last_presented())
 }
 
 ///|
@@ -147,9 +147,9 @@ pub fn model_triple(
   let saving = doing(dkey)
   let id = c.id("triple/" + me)
   let can = options.length() > 0 && !saving
-  let open = triple.open == me
-  if can && !open && (c.clicked(id) || triple.asked == me) {
-    triple.asked = ""
+  let open = triple.open.get() == me
+  if can && !open && (c.clicked(id) || triple.asked.get() == me) {
+    triple.asked.set("")
     open_triple_panel(src, station, of, Of(id), saved~)
   }
   let runtime = text(value, "runtime")
@@ -291,12 +291,12 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
 fn triple_body(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
   let options = items(v, "options")
   let draft = field(v, "draft")
-  let words = triple.query.trim(chars=" ").to_string().to_lower()
+  let words = triple.query.get().trim(chars=" ").to_string().to_lower()
   if options.length() > 8 {
     // (a small panel's search, as a pick's: its ground sets it apart from the models, no line under it)
     c.box(style=triple_search, fn() {
       let res = @sf.input(c, "triple/filter", placeholder=@sf.t("web-main.model.search"), small=true, field=triple.field)
-      triple.query = res.text
+      triple.query.set(res.text)
     })
     |> ignore
   }
@@ -549,13 +549,13 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, saved :
   let borrow = field(v, "borrow")
   triple_runs_who(c, src, station, of, v)
   if @sf.button(c, @sf.t("common.cancel"), key="triple/cancel", tone=Ghost) {
-    triple.open = ""
+    triple.open.set("")
     close()
   }
   if borrow is Some(Object(_)) {
     if @sf.button(c, text(borrow, "action"), key="triple/borrow", tone=Primary, disabled=!flag(borrow, "allowed")) {
-      triple.open = ""
-      triple.borrow_asking = station + "\u{1}" + of
+      triple.open.set("")
+      triple.borrow_asking.set(station + "\u{1}" + of)
       close()
     }
   } else if @sf.button(
@@ -565,7 +565,7 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, saved :
       tone=Primary,
       disabled=picked == "" || !flag(v, "changed"),
     ) {
-    triple.open = ""
+    triple.open.set("")
     close()
     act(
       src,
@@ -788,7 +788,7 @@ fn borrow_dialog(c : @ui.Ctx, src : Source, station : String, of : String, v : J
   let me = station + "\u{1}" + of
   let borrow = field(v, "borrow")
   let dkey = "pick.borrow/" + station + "/" + of
-  let open = triple.borrow_asking == me && borrow is Some(Object(_))
+  let open = triple.borrow_asking.get() == me && borrow is Some(Object(_))
   let lines = items(borrow, "lines").map(fn(l) {
     match l {
       String(s) => s
@@ -798,9 +798,9 @@ fn borrow_dialog(c : @ui.Ctx, src : Source, station : String, of : String, v : J
   match wide_confirm(c, "borrow/" + me, open, text(borrow, "title"), lines, text(borrow, "action"), doing(dkey), flag(borrow, "allowed")) {
     Some(true) =>
       act(src, text(borrow, "action"), dkey, "pick.borrow", Json::object(pick_params(station, of)), done=@sf.t("web-main.model.borrowed"), ok=fn(_) {
-        triple.borrow_asking = ""
+        triple.borrow_asking.set("")
       })
-    Some(false) => triple.borrow_asking = ""
+    Some(false) => triple.borrow_asking.set("")
     None => ()
   }
 }
@@ -1156,5 +1156,5 @@ pub let triple_muted_xs : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted,
 ///|
 /// The control of the pick `of` on `station` with its panel open (a screen's fixture).
 pub fn open_triple(station : String, of : String) -> Unit {
-  triple.asked = station + "\u{1}" + of
+  triple.asked.set(station + "\u{1}" + of)
 }

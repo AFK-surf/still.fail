@@ -21,9 +21,9 @@ priv struct DraftRef {
   at : String
   size : Double
   /// "path": named by its path; "file": sent (a folder as a zip)
-  mut mode : String
+  mode : @signals.Signal[String]
   /// sent as a file: it going up, then up (its `done` the attachment)
-  mut up : Pending?
+  up : @signals.Signal[Pending?]
   /// its place among what was put in the draft (next_pending's count, as the draft's files: one row in that order)
   order : Int
 }
@@ -41,7 +41,7 @@ fn draft_ref(
 ) -> DraftRef {
   let order = next_pending.val
   next_pending.val += 1
-  { station, station_name, path: dv_absolute(root, at), name, dir, root, at, size, mode: "path", up: None, order }
+  { station, station_name, path: dv_absolute(root, at), name, dir, root, at, size, mode: @signals.signal("path", same=fn(a, b) { a == b }), up: @signals.signal(None), order }
 }
 
 ///|
@@ -65,7 +65,7 @@ fn ref_words(r : DraftRef) -> String {
 fn with_ref_words(words : String, key : String) -> String {
   let lines = [words]
   for r in refs_of(key) {
-    if r.mode == "path" {
+    if r.mode.get() == "path" {
       lines.push(ref_words(r))
     }
   }
@@ -76,8 +76,8 @@ fn with_ref_words(words : String, key : String) -> String {
 /// The station files sent as files that are up: their attachments.
 fn ref_attachments(key : String) -> Array[Json] {
   refs_of(key).filter_map(fn(r) {
-    match r.up {
-      Some(p) if r.mode == "file" => p.done.get()
+    match r.up.get() {
+      Some(p) if r.mode.get() == "file" => p.done.get()
       _ => None
     }
   })
@@ -87,9 +87,9 @@ fn ref_attachments(key : String) -> Array[Json] {
 /// A station file of the draft still going up as a file.
 fn refs_uploading(key : String) -> Bool {
   refs_of(key).iter().any(fn(r) {
-    match r.up {
-      Some(p) => r.mode == "file" && p.done.get() is None && p.error.get() is None
-      None => r.mode == "file"
+    match r.up.get() {
+      Some(p) => r.mode.get() == "file" && p.done.get() is None && p.error.get() is None
+      None => r.mode.get() == "file"
     }
   })
 }
@@ -122,7 +122,7 @@ fn set_drops_as_files(src : Source, key : String, on : Bool) -> Unit {
 /// (a folder zipped there: `drive.stage`), else read from the station that has it and put up to the chat's. Once up it
 /// is kept, switched back or not.
 fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : DraftRef) -> Unit {
-  match r.up {
+  match r.up.get() {
     Some(p) if p.done.get() is Some(_) || p.error.get() is None => return
     _ => ()
   }
@@ -136,7 +136,7 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
     id,
     name,
     size: r.size.to_int(),
-    image: "",
+    image: @signals.signal("", same=fn(a, b) { a == b }),
     width: 0,
     height: 0,
     pasted: None,
@@ -144,13 +144,13 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
     done: @signals.signal(None),
     sent: @signals.signal(0),
     error: @signals.signal(None),
-    core_id: "",
-    retry: false,
+    core_id: @signals.signal("", same=fn(a, b) { a == b }),
+    retry: @signals.signal(false, same=fn(a, b) { a == b }),
     retrying: @signals.signal(false),
-    unseen: None,
+    unseen: @signals.signal(None, same=fn(a, b) { a == b }),
     seed: "",
   }
-  r.up = Some(p)
+  r.up.set(Some(p))
   let failed = fn(e : Json) {
     p.error.set(Some(
       match text(Some(e), "message") {
@@ -190,8 +190,8 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
         None => {
           let bytes = all.to_bytes()
           let p2 = { ..p, size: bytes.length() }
-          r.up = Some(p2)
-          upload_part(src, d, station, p2, bytes, upload_id(d.key + "\u{1}" + d.id + "\u{1}" + file_seed(station, p2.name, bytes), d.files.length()), 0)
+          r.up.set(Some(p2))
+          upload_part(src, d, station, p2, bytes, upload_id(d.key + "\u{1}" + d.id.get() + "\u{1}" + file_seed(station, p2.name, bytes), d.files.length()), 0)
         }
         Some(e) => failed(e)
       }
@@ -203,7 +203,7 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
 /// Whether `id` is the file a station file of the draft goes up as.
 fn ref_upload(key : String, id : Int) -> Bool {
   refs_of(key).iter().any(fn(r) {
-    match r.up {
+    match r.up.get() {
       Some(p) => p.id == id
       None => false
     }
@@ -213,12 +213,12 @@ fn ref_upload(key : String, id : Int) -> Bool {
 ///|
 /// A station file's card tapped: its sheet (the draft's key, the file), closed (drawn sinking away until it has gone).
 priv struct StationFilesUi {
-  mut ref : (String, DraftRef)?
-  mut ref_closing : Bool
+  ref : @signals.Signal[(String, DraftRef)?]
+  ref_closing : @signals.Signal[Bool]
 }
 
 ///|
-let sfs : StationFilesUi = { ref: None, ref_closing: false }
+let sfs : StationFilesUi = { ref: @signals.signal(None), ref_closing: @signals.signal(false, same=fn(a, b) { a == b }) }
 
 ///|
 /// A station file in the draft (StationFiles.kt RefCard), in the files' row (draft_files_row): its name and where it is (named by its path:
@@ -229,13 +229,13 @@ fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
   let remove = c.id("composer/unref/" + r.station + "|" + r.path)
   let card = c.id("composer/ref/" + r.station + "|" + r.path)
   if c.clicked(remove) {
-    draft_refs[key] = refs_of(key).filter(fn(x) { !(x.station == r.station && x.path == r.path) })
+    draft_refs.set(key, refs_of(key).filter(fn(x) { !(x.station == r.station && x.path == r.path) }))
   } else if c.clicked(card) {
-    sfs.ref = Some((key, r))
-    sfs.ref_closing = false
+    sfs.ref.set(Some((key, r)))
+    sfs.ref_closing.set(false)
   }
-  let named = r.mode == "path"
-  let up = if named { None } else { r.up }
+  let named = r.mode.get() == "path"
+  let up = if named { None } else { r.up.get() }
   let busy = !named &&
     (match up {
       Some(p) => p.done.get() is None && p.error.get() is None
@@ -296,14 +296,14 @@ fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
 /// A station file's card tapped (StationFiles.kt openRefSheet): its name, where it is, how it goes (发送方式: 路径, or
 /// 文件 / zip: a folder only of the chat's own station), and whether this chat takes such files as files.
 fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit {
-  let (k, r) = match sfs.ref {
+  let (k, r) = match sfs.ref.get() {
     Some(x) => x
     None => return
   }
   if k != key {
     return
   }
-  let closing = sfs.ref_closing
+  let closing = sfs.ref_closing.get()
   let t = @sf.theme()
   let zips = r.dir && r.station == station
   let folder = match r.path.rev_find("/") {
@@ -318,10 +318,10 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
     fit=true,
     closing~,
     reader=true,
-    close=fn() { sfs.ref_closing = true },
+    close=fn() { sfs.ref_closing.set(true) },
     gone=fn() {
-      sfs.ref = None
-      sfs.ref_closing = false
+      sfs.ref.set(None)
+      sfs.ref_closing.set(false)
     },
     fn() {
       c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=14.0, fn() {
@@ -331,7 +331,7 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
       if !r.dir || zips {
         c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=14.0, gap=8.0, fn() {
           c.text(tr("web-main.file.sendAs"), size=t.t.meta, color=t.p.muted) |> ignore
-          let now = if r.mode == "path" { 0 } else { 1 }
+          let now = if r.mode.get() == "path" { 0 } else { 1 }
           // the two halves of the sheet's width (Seg fill = true), inside the track's 2 each side
           let picked = @sf.segmented(
             c,
@@ -344,7 +344,7 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
             item_w=(c.width - 44.0) / 2.0,
           )
           if picked != now {
-            r.mode = if picked == 0 { "path" } else { "file" }
+            r.mode.set(if picked == 0 { "path" } else { "file" })
             // (the composer puts it up: ref_send_up; a pick asks for its frame)
 
           }
@@ -385,9 +385,9 @@ fn refs_put(src : Source, key : String, items : Array[Dragged]) -> Unit {
     }
     let name = if i.station_name != "" { i.station_name } else { station_name_by(src, i.station) }
     let r = draft_ref(i.station, name, i.root, i.path, i.name, i.dir, size=i.size)
-    have.push({ ..r, mode: if as_files && !i.dir { "file" } else { "path" } })
+    have.push({ ..r, mode: @signals.signal(if as_files && !i.dir { "file" } else { "path" }, same=fn(a, b) { a == b }), up: @signals.signal(r.up.get()) })
   }
-  draft_refs[key] = have
+  draft_refs.set(key, have)
 }
 
 ///|

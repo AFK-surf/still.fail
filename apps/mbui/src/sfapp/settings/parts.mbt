@@ -11,10 +11,10 @@ let warn : Int64 = 0xD9962BFFL
 /// Drawn in the wide frame's pane (a desktop's width, src/sfapp/wide.mbt): the pages as the web's settings pages
 /// stand (pages.css.ts page: their head's title 22 in 600, no back where the sidebar is the way back, a column 760 wide
 /// at most in the middle, 40 from the sides at least); `wide_deep`: a page under another of them (back shown).
-pub let wide : Ref[Bool] = Ref(false)
+pub let wide : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
-pub let wide_deep : Ref[Bool] = Ref(false)
+pub let wide_deep : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 /// What a page's blocks stand in from the pane's sides in the wide frame (their own 16 inside it).
@@ -46,7 +46,7 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
     }
     return
   }
-  if wide.val {
+  if wide.get() {
     let side = wide_side(c)
     c.list("settings/" + key, blocks.length() + 1, 80.0, fn(i) {
       if i == blocks.length() {
@@ -63,7 +63,7 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
   // what it shows ends over the navigation bar (SettingParts.kt pages: windowInsetsPadding(navigationBars)), and at a
   // place's top, over the bottom bar too (Stations.kt BarRoom); there it starts under the app's top bar, scrolling
   // under it (PlacePage.kt: `padding(top = top)` inside what scrolls)
-  let foot = nav_foot.val + (if at_root.val { bar_room.val } else { 0.0 })
+  let foot = nav_foot.get() + (if at_root.val { bar_room.get() } else { 0.0 })
   let top = top_room()
   let head = if top > 0.0 { 1 } else { 0 }
   let n = head + blocks.length() + (if foot > 0.0 { 1 } else { 0 })
@@ -94,7 +94,7 @@ pub fn wide_head(
   on_back? : () -> Unit,
   about? : String = "",
   lead? : String = "",
-  deep? : Bool = wide_deep.val,
+  deep? : Bool = wide_deep.get(),
 ) -> Unit {
   let t = @sf.theme()
   head_block.val = block_at.val
@@ -150,10 +150,12 @@ let wide_head_lead : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color
 /// Which of a wide page's blocks is being laid out (-1: none, outside its list), and which drew its head (-1: a head
 /// over the list): a section's head right under the page's knows it is the first (section_header).
 // kept across runs: said again by every block and head as it is laid out (scroll_page, wide_head)
+// (plain: said to what is built inside it, around that build and put back after; not a value of the page's)
 let block_at : Ref[Int] = Ref(-1)
 
 ///|
 // kept across runs: said again by every head as it is laid out (wide_head)
+// (plain: said to what is built inside it, around that build and put back after; not a value of the page's)
 let head_block : Ref[Int] = Ref(-1)
 
 ///|
@@ -202,7 +204,7 @@ fn nav_back(c : @ui.Ctx, label : String) -> Bool {
 /// Back at the top of a large-title page (Stations.kt TopBack): `on_back` when it is said, else the page popped;
 /// `trailing` at its other end (a ＋).
 fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit, on_back? : () -> Unit) -> Unit {
-  if wide.val {
+  if wide.get() {
     // (the large title under it is the head's: large_title)
     top_trailing.val = trailing
     top_on_back.val = on_back
@@ -210,8 +212,8 @@ fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit, on
     return
   }
   // under the status bar (TopBack: windowInsetsPadding(statusBars))
-  if status_top.val > 0.0 {
-    gap(c, status_top.val)
+  if status_top.get() > 0.0 {
+    gap(c, status_top.get())
   }
   c.box(style=top_back_line, fn() {
     if nav_back(c, label) {
@@ -235,16 +237,20 @@ let top_back_line : @ui.Style = @ui.css("row w=Full px=S2_5 pt=S1_5 pb=S1 align=
 
 ///|
 /// What a large-title page's top had (top_back), for its head in the wide frame (large_title).
+// (plain: said to what is built inside it, around that build and put back after; not a value of the page's)
 let top_trailing : Ref[(() -> Unit)?] = Ref(None)
 
 ///|
+// (plain: said to what is built inside it, around that build and put back after; not a value of the page's)
 let top_on_back : Ref[(() -> Unit)?] = Ref(None)
 
 ///|
+// (plain: said to what is built inside it, around that build and put back after; not a value of the page's)
 let top_label : Ref[String] = Ref("")
 
 ///|
 /// The core of the page being drawn (its head's back, in the wide frame).
+// (plain: said to what is built inside it, around that build and put back after; not a value of the page's)
 let frame_core : Ref[Core?] = Ref(None)
 
 ///|
@@ -259,12 +265,12 @@ fn nav_bar(
   on_back? : () -> Unit,
   about? : String = "",
 ) -> Unit {
-  if wide.val {
+  if wide.get() {
     ignore(sub)
     wide_head(c, core, back, title, trailing?=trailing, on_back?=on_back, about~)
     return
   }
-  if @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg, top=status_top.val) {
+  if @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg, top=status_top.get()) {
     match on_back {
       Some(f) => f()
       None => (core.pop)()
@@ -275,10 +281,10 @@ fn nav_bar(
 ///|
 /// How far the status bar and the navigation bar reach in over the view (the app's, src/sfapp/bars.mbt, said each frame):
 /// what a page's bar and its foot are padded by.
-pub let status_top : Ref[Double] = Ref(0.0)
+pub let status_top : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
 
 ///|
-pub let nav_foot : Ref[Double] = Ref(0.0)
+pub let nav_foot : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
 
 ///|
 /// A bar's room, `h` high (none when it is 0): the status bar's over a page, the navigation bar's under it.
@@ -290,15 +296,17 @@ fn bar_room_gap(c : @ui.Ctx, h : Double) -> Unit {
 
 ///|
 /// The room a place's top page keeps at its foot for the bottom bar (App.kt LocalBarRoom: none on a wide screen).
-pub let bar_room : Ref[Double] = Ref(0.0)
+pub let bar_room : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
 
 ///|
 /// Whether the page being drawn is a place of the bottom bar's at the stack's root (`page`'s `root`).
+// (plain: said to what is built inside it, around that build and put back after; not a value of the page's)
 let at_root : Ref[Bool] = Ref(false)
 
 ///|
 /// Under the app's top bar (`page`'s `top`: a place's top page on a phone, PlacePage.kt), how far down what the page
 /// shows starts, scrolling under the bar; 0 where the page has a bar of its own over it.
+// (plain: said to what is built inside it, around that build and put back after; not a value of the page's)
 let root_top : Ref[Double] = Ref(0.0)
 
 ///|
@@ -339,7 +347,7 @@ fn place_page(
     let under_bar = top_room() > 0.0
     // the wide frame's place (连接, 用量: across the pane): the web's head, its title and at its end what it does, its
     // primary one a pill named as what it adds
-    if wide.val && at_root.val && !under_bar {
+    if wide.get() && at_root.val && !under_bar {
       match frame_core.val {
         Some(core) =>
           wide_head(c, core, "", title, about~, trailing=fn() {
@@ -455,7 +463,7 @@ fn large_title(
   says? : String = "",
   trailing? : () -> Unit,
 ) -> Unit {
-  if wide.val {
+  if wide.get() {
     ignore(lead)
     // what stands at the title's end: given here (a desktop page's actions), else as top_back left it
     let trailing = match trailing {
@@ -506,7 +514,7 @@ fn section_header(
 ) -> Unit {
   // the wide frame's (ui Section, parts.css.ts sectionHead: its title 14 on 22 in 600 at the column's edge, 28 over
   // it; what it holds said 3 under it in the meta's 12 muted, as the web's Section's description)
-  if wide.val {
+  if wide.get() {
     // right under the page's head: 28 under it in all (its 12 and 16), as the web's first section is (the page's head's
     // margin and the sections' own between them, not over the first)
     let first = block_at.val >= 0 && block_at.val == head_block.val + 1
@@ -609,7 +617,7 @@ let wide_meta : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=f
 /// What a section is about, under its head where the wide frame says it (page.css.ts sectionSub: 12, muted, 3 under
 /// the head, 10 over what it holds); none on a phone, whose pages say it under what it holds.
 fn section_note(c : @ui.Ctx, words : String) -> Unit {
-  if !wide.val || words == "" {
+  if !wide.get() || words == "" {
     return
   }
   c.box(style=wide_section_note, fn() { c.text(words, style=wide_note_words) |> ignore }) |> ignore
@@ -626,7 +634,7 @@ let wide_note_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, 
 ///|
 /// What stands at the column's edge in the wide frame, 16 in as the title is (a section's control); 12 on a phone.
 fn inset(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=if wide.val { wide_inset } else { phone_inset }, body) |> ignore
+  c.box(style=if wide.get() { wide_inset } else { phone_inset }, body) |> ignore
 }
 
 ///|
@@ -640,7 +648,7 @@ let phone_inset : @ui.Style = @ui.css("w=Full px=S3")
 ///|
 /// A page's note under its title, in a line or two (SettingParts.kt PageNote).
 fn page_note(c : @ui.Ctx, words : String) -> Unit {
-  if wide.val {
+  if wide.get() {
     c.box(style=wide_page_note, fn() { c.text(words, style=wide_lead) |> ignore }) |> ignore
     return
   }
@@ -687,7 +695,7 @@ fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Foot = Words
     Capsule => card_foot_ground
     Block => card_block_ground
   }
-  c.box(style=if wide.val { wide_card_room } else { card_room }, fn() {
+  c.box(style=if wide.get() { wide_card_room } else { card_room }, fn() {
     c.box(style=ground, id~, fn() {
       body()
       // Parts.kt Card: clickable over its clip (Smooth: its corner)
@@ -757,7 +765,7 @@ let card_foot_ground : @ui.Style = card_ground.then(@sf.foot_pad(settings_button
 /// a list card wide too; `boxed`, said where a page asked for the card in the wide frame before it was always one).
 fn list_card(c : @ui.Ctx, body : () -> Unit, boxed? : Bool = false) -> Unit {
   ignore(boxed)
-  c.box(style=if wide.val { wide_card_room } else { card_room }, fn() {
+  c.box(style=if wide.get() { wide_card_room } else { card_room }, fn() {
     c.box(style=list_ground, fn() {
       let was = on_card.val
       on_card.val = true
@@ -784,6 +792,7 @@ fn rows_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
 ///|
 /// Whether what is being drawn is on a list card (Parts.kt LocalOnCard): a PickRow's ground is then the card's
 /// padding in from its edge already. Set only while a list card's rows are drawn.
+// (plain: said to what is built inside it, around that build and put back after; not a value of the page's)
 let on_card : Ref[Bool] = Ref(false)
 
 ///|
@@ -810,7 +819,7 @@ fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, 
     |> ignore
   }
   match piece {
-    None => row(if wide.val { wide_list_line } else { list_line })
+    None => row(if wide.get() { wide_list_line } else { list_line })
     Some((first, last)) => card_piece(c, first, last, fn() { row(list_piece_line) })
   }
   id != 0 && hit(c, id)
@@ -822,7 +831,7 @@ fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "", piece? : (Bool, 
 /// ground, 8 in above its first row and under its last, its corners there (the halves that are no end of the card
 /// squared again by a patch of its ground), the card's 10 under it.
 fn card_piece(c : @ui.Ctx, first : Bool, last : Bool, body : () -> Unit) -> Unit {
-  c.box(style=match (last, wide.val) {
+  c.box(style=match (last, wide.get()) {
     (true, true) => wide_card_room
     (true, false) => card_room
     (false, true) => wide_card_piece_room
@@ -923,7 +932,7 @@ let list_line : @ui.Style = @ui.css("row w=Full gap=S3 radius=Inner align=ACente
 /// A row's main words, as wide as the row lets them, cut to one line.
 fn row_title(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
   // SettingParts.kt:255 (15sp); the wide frame's 13 (pages.css.ts cardRowText)
-  c.text(words, style=if wide.val { wide_row_title } else { row_title_words }, color?) |> ignore
+  c.text(words, style=if wide.get() { wide_row_title } else { row_title_words }, color?) |> ignore
 }
 
 ///|
@@ -982,7 +991,7 @@ fn row_lines(
     let title_words = fn() {
       c.text(
         title,
-        style=match (wide.val, wrap_title) {
+        style=match (wide.get(), wrap_title) {
           (true, true) => wide_row_title_lines
           (true, false) => wide_row_title
           (false, true) => row_title_lines
@@ -1005,7 +1014,7 @@ fn row_lines(
       // Connects.kt:232, Security.kt:192 (13sp)
       c.text(
         sub,
-        style=match (wide.val, wrap_sub) {
+        style=match (wide.get(), wrap_sub) {
           (true, true) => wide_row_sub_lines
           (true, false) => wide_row_sub
           (false, true) => row_sub_lines
@@ -1068,7 +1077,7 @@ fn go_row(
           presence_dot(c, "error")
         }
         // SettingParts.kt:258 (14sp)
-        let look = if wide.val { wide_value } else { @sf.value }
+        let look = if wide.get() { wide_value } else { @sf.value }
         c.text(value, style=if bad { look.then(@sf.bad) } else { look }) |> ignore
       })
       |> ignore

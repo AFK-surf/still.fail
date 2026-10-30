@@ -31,24 +31,24 @@ pub fn shortcuts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   let prefs = (core.topic)("prefs", Map::new()).value
   let keymap = field(prefs, "keymap")
   // recording: the next key press
-  let recording = keys_recording.val
+  let recording = keys_recording.get()
   if recording != "" {
     for k in c.keys() {
       let (code, mods, _) = k
       if code == @ui.key_escape && mods == 0 {
-        keys_recording.val = ""
+        keys_recording.set("")
         break
       }
       if code == 1 && mods == 0 {
         // ⌫: none
         c.after_build("keys-clear", fn() { set_keys(core, Some(recording), Json::array([])) })
-        keys_recording.val = ""
+        keys_recording.set("")
         break
       }
       match binding_of(code, mods) {
         Some(b) => {
           c.after_build("keys-set", fn() { set_keys(core, Some(recording), Json::array([Json::string(b)])) })
-          keys_recording.val = ""
+          keys_recording.set("")
           break
         }
         None => ()
@@ -108,7 +108,7 @@ pub fn shortcuts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
 fn shortcut_row(c : @ui.Ctx, core : Core, a : Json) -> Unit {
   let av = Some(a)
   let action = text(av, "action")
-  let on = keys_recording.val == action
+  let on = keys_recording.get() == action
   c.box(style=shortcut_row_box, fn() {
     c.box(style=keys_row_label, fn() { c.text(text(av, "name"), style=keys_row_words) |> ignore }) |> ignore
     if flag(av, "changed") && keys_toggle(c, "keys-reset/" + action, @sf.t("web-main.shortcuts.reset")) {
@@ -133,7 +133,7 @@ fn shortcut_row(c : @ui.Ctx, core : Core, a : Json) -> Unit {
     )
     |> ignore
     if hit(c, id) {
-      keys_recording.val = if on { "" } else { action }
+      keys_recording.set(if on { "" } else { action })
     }
   })
   |> ignore

@@ -64,10 +64,25 @@ pub(all) struct Turns {
   mut stepped : Int
   mut now : Double
   mover : @ui.Mover
+  /// told as any of the above changes (Turns::told): what reads them (the page that plays them, Turns::step) built
+  /// again for it
+  said : @signals.Signal[Int]
 }
 
 ///|
 pub let turns_by : Map[String, Turns] = {}
+
+///|
+/// What they hold changed (an ask, a turn come or over, words sent, what is under a post): what reads them told.
+fn Turns::told(self : Turns) -> Unit {
+  self.said.set(@signals.untracked(fn() { self.said.get() }) + 1)
+}
+
+///|
+/// What they hold, read so: what reads it built again as it changes (Turns::told).
+fn Turns::read(self : Turns) -> Unit {
+  self.said.get() |> ignore
+}
 
 ///|
 /// Chat `key`'s turns (its station and session, as emits_of's).
@@ -91,6 +106,7 @@ pub fn turns_of(key : String) -> Turns {
         stepped: -1,
         now: 0.0,
         mover: @ui.Mover::new(),
+        said: @signals.signal(0),
       }
       turns_by[key] = t
       t
@@ -126,6 +142,7 @@ pub fn Turns::ask(self : Turns, c : @ui.Ctx, what : TurnFor, ms : Double, after?
   let at = self.moment(c)
   // (one going after the others asked with it asked a couple of frames on: ListTurns.kt take's `after`)
   self.asks.push({ what, ms, after, at: if after { at + turn_calm_ms } else { at }, n: self.asked_n })
+  self.told()
 }
 
 ///|
@@ -143,6 +160,7 @@ pub fn Turns::admit(self : Turns, c : @ui.Ctx, key : String, ms : Double, after?
   if !self.started.contains(key) || self.waiting.contains(key) {
     self.waiting.remove(key) |> ignore
     self.started[key] = self.moment(c)
+    self.told()
   }
 }
 
@@ -151,6 +169,7 @@ pub fn Turns::admit(self : Turns, c : @ui.Ctx, key : String, ms : Double, after?
 pub fn Turns::send(self : Turns, c : @ui.Ctx, way_ms : Double) -> Unit {
   self.sent_at = self.moment(c)
   self.sent_until = self.sent_at + way_ms + turn_calm_ms
+  self.told()
 }
 
 ///|
@@ -166,6 +185,7 @@ pub fn Turns::emits(self : Turns, c : @ui.Ctx) -> Unit {
 ///|
 /// Whether messages out of avatars have their turn now.
 pub fn Turns::emitting(self : Turns) -> Bool {
+  self.read()
   self.on == Some(Emits) && self.open
 }
 
@@ -179,6 +199,7 @@ pub fn Turns::emitting(self : Turns) -> Bool {
 pub fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms : Double, seen~ : Bool) -> Bool {
   ignore(ms)
   ignore(seen)
+  self.read()
   match self.shown.get(key) {
     None => {
       self.shown[key] = target
@@ -190,6 +211,7 @@ pub fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms
         // (changed now, on screen or not: its room goes to its new height from now, with whatever else changes)
         self.shown[key] = target
         self.started[key] = self.moment(c)
+        self.told()
       }
       target
     }
@@ -213,6 +235,7 @@ pub fn Turns::keep_turn(self : Turns, c : @ui.Ctx) -> Unit {
 ///|
 /// When what is under a post `key` last changed in its turn, or a row came in (-1: not in one).
 pub fn Turns::started_at(self : Turns, key : String) -> Double {
+  self.read()
   self.started.get(key).unwrap_or(-1.0)
 }
 
@@ -220,6 +243,7 @@ pub fn Turns::started_at(self : Turns, key : String) -> Double {
 /// When what is under a post `key` last changed (in its turn, or out of sight: unseen_at), what plays for it from
 /// then; None: it has not changed since it was first asked.
 pub fn Turns::start(self : Turns, key : String) -> Double? {
+  self.read()
   self.started.get(key)
 }
 
@@ -229,17 +253,22 @@ pub fn Turns::over(self : Turns, c : @ui.Ctx, what : TurnFor, at : Double) -> Un
   // (words sent landed: what waits for them goes from here)
   if what == Send && self.sent_at >= 0.0 {
     self.sent_until = dmin(self.sent_until, at + turn_calm_ms)
+    self.told()
     c.moving(self.mover, self as &@ui.Moving, what="a chat's list turns")
     return
   }
   if self.on == Some(what) && self.open {
     self.open = false
     self.until = dmin(self.until, at + turn_calm_ms)
+    self.told()
     c.moving(self.mover, self as &@ui.Moving, what="a chat's list turns")
   }
   // (one asked and not come yet, over before it came: it goes)
   match self.asks.search_by(fn(a) { a.what == what }) {
-    Some(i) if what == Emits => self.asks.remove(i) |> ignore
+    Some(i) if what == Emits => {
+      self.asks.remove(i) |> ignore
+      self.told()
+    }
     _ => ()
   }
 }
@@ -289,6 +318,8 @@ pub fn Turns::after_sent(self : Turns, a : TurnAsk) -> Double {
 /// `list_rest`: when the list's glide after what came is over (Ctx::list_info's `glide_rest`; inf: under way, its end
 /// not known), not the reader's hand on it (listQueue.ts listStill).
 pub fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
+  // (what they hold read: built again as it changes, Turns::told)
+  self.read()
   self.list_rest = list_rest
   self.stepped = c.frame_number()
   let mut steps = 0
@@ -302,11 +333,16 @@ pub fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
     let at = self.free_at(a)
     // (its time come, to a rounding: the ends added up in ms can land a hair past the frame they are due in)
     if at > self.now + turn_slack_ms {
+      // (its time to come: built again then, not only as what it reads changes)
+      if at < @double.infinity {
+        c.shows_until(at)
+      }
       return
     }
     let at = dmin(at, self.now)
     self.asks.remove(i) |> ignore
     self.on = Some(a.what)
+    self.told()
     self.open = a.ms == @double.infinity
     self.until = at + (if self.open { turn_most_ms } else { a.ms }) + turn_calm_ms
     match a.what {
@@ -381,6 +417,7 @@ pub let dismiss_turn_ms : Double = 280.0
 /// declared to start (the turns before it in order each from where the one before them ends, the list at rest); inf
 /// while that is not known (a turn before it lasts till said over, the list's glide not set out).
 pub fn Turns::start_of(self : Turns, key : String) -> Double {
+  self.read()
   let order = self.asks.copy()
   order.sort_by(fn(a, b) {
     if a.at != b.at {

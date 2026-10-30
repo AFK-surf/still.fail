@@ -14,5 +14,5 @@ fn wide_center(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 /// The message the chat's window was last moved about for what ⌘F found (`chat.around`, once each).
-let find_around : Ref[Double] = Ref(-1.0)
+let find_around : @signals.Signal[Double] = @signals.signal(-1.0, same=fn(a, b) { a == b })
 

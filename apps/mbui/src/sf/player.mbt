@@ -87,10 +87,10 @@ pub fn new_media(key : String) -> @kit.Media {
 pub(all) struct Playing {
   media : @kit.Media
   /// the file as last given (where it is is kept with it)
-  mut file : ViewerFile?
+  file : @signals.Signal[ViewerFile?]
   opened : @signals.Signal[Bool]
-  mut subtitle_of : String
-  mut keeps : Int
+  subtitle_of : @signals.Signal[String]
+  keeps : @signals.Signal[Int]
 }
 
 ///|
@@ -103,7 +103,13 @@ pub fn playing_for(key : String) -> Playing {
   match playings.get(key) {
     Some(p) => p
     None => {
-      let p : Playing = { media: new_media("drive-play"), file: None, opened: @signals.signal(false), subtitle_of: "", keeps: 0 }
+      let p : Playing = {
+        media: new_media("drive-play"),
+        file: @signals.signal(None),
+        opened: @signals.signal(false),
+        subtitle_of: @signals.signal("", same=fn(a, b) { a == b }),
+        keeps: @signals.signal(0, same=fn(a, b) { a == b }),
+      }
       playings[key] = p
       p
     }
@@ -131,7 +137,7 @@ let player_subtitle_most : Double = 8.0 * 1024.0 * 1024.0
 /// subtitle beside it read once the folder names one, where it is kept every player_keep_ms while it plays. Its player.
 pub fn player_media(c : @ui.Ctx, key : String, file : ViewerFile, siblings : Array[ViewerEntry]) -> @kit.Media {
   let pl = playing_for(key)
-  pl.file = Some(file)
+  pl.file.set(Some(file))
   // where it was left, held on this device: waited on a moment at most from when it is first drawn (`after` asks for
   // the frame it is up on)
   let waited = @kit.after(c, "play-place", !pl.opened.get(), player_place_ms)
@@ -153,11 +159,11 @@ pub fn player_media(c : @ui.Ctx, key : String, file : ViewerFile, siblings : Arr
   }
   // the subtitle beside it, once the folder names one
   match (side_subtitle(file.name, siblings.filter(fn(e) { !e.dir }).map(fn(e) { e.name })), file.beside) {
-    (Some(sub), Some(beside)) if sub != pl.subtitle_of =>
+    (Some(sub), Some(beside)) if sub != pl.subtitle_of.get() =>
       match siblings.iter().find_first(fn(e) { e.name == sub && !e.dir }) {
         Some(side) if side.size <= player_subtitle_most => {
           // (asked once by the folder as it lists it: the same in each build of the frame)
-          pl.subtitle_of = sub
+          pl.subtitle_of.set(sub)
           pl.media.set_subtitle(true, [])
           beside(side, fn(r) {
             match r {
@@ -177,12 +183,12 @@ pub fn player_media(c : @ui.Ctx, key : String, file : ViewerFile, siblings : Arr
   // where it is, kept every 5 s while it is open
   // (the place kept now and then: nothing shown waits for it; the next wait starts in the frame this one ends)
   if pl.media.started() && pl.media.duration() > 0.0 {
-    let kept = fn() { @kit.after(c, "play-keep/" + key + "/\{pl.keeps}", true, player_keep_ms, later=true) }
+    let kept = fn() { @kit.after(c, "play-keep/" + key + "/\{pl.keeps.get()}", true, player_keep_ms, later=true) }
     if kept() {
       // (once the frame's builds are over: a build let go of keeps nothing)
       c.after_build("play-keep", fn() {
         player_keep(pl, file)
-        pl.keeps = pl.keeps + 1
+        pl.keeps.set(pl.keeps.get() + 1)
         kept() |> ignore
       })
     }
@@ -272,7 +278,7 @@ fn player_keep(pl : Playing, file : ViewerFile) -> Unit {
 pub fn player_let_go(key : String) -> Unit {
   match playings.get(key) {
     Some(pl) => {
-      match pl.file {
+      match pl.file.get() {
         Some(f) if pl.media.started() => player_keep(pl, f)
         _ => ()
       }
@@ -316,28 +322,28 @@ pub fn player(
 /// middle; the end whose next was let go of; the end whose next's wait was first drawn; where its picture was last
 /// drawn.
 priv struct PlayerView {
-  mut listing : Bool
-  mut list_closing : Bool
-  mut rates : Bool
-  mut fulled : Bool
+  listing : @signals.Signal[Bool]
+  list_closing : @signals.Signal[Bool]
+  rates : @signals.Signal[Bool]
+  fulled : @signals.Signal[Bool]
   zoom : @kit.Zoom
-  mut grabbing : Bool
-  mut grab_at : Int
-  mut held : Double
-  mut drag : PlayerDrag
-  mut drag_from : Double
-  mut drag_to : Double
-  mut drag_dy : Double
-  mut last : (Double, Double)
-  mut pinch : (Double, Double, Double)
-  mut pinched : Bool
+  grabbing : @signals.Signal[Bool]
+  grab_at : @signals.Signal[Int]
+  held : @signals.Signal[Double]
+  drag : @signals.Signal[PlayerDrag]
+  drag_from : @signals.Signal[Double]
+  drag_to : @signals.Signal[Double]
+  drag_dy : @signals.Signal[Double]
+  last : @signals.Signal[(Double, Double)]
+  pinch : @signals.Signal[(Double, Double, Double)]
+  pinched : @signals.Signal[Bool]
   /// the finger came down on the picture flinging (zoomed in), and stopped it there: no tap
-  mut caught : Bool
-  mut ended_off : String
-  mut file : String
-  mut placed : (Double, Double, Double, Double)?
+  caught : @signals.Signal[Bool]
+  ended_off : @signals.Signal[String]
+  file : @signals.Signal[String]
+  placed : @signals.Signal[(Double, Double, Double, Double)?]
   /// taken down past the line and let go: going, its picture left where the finger left it, its controls away
-  mut taken_down : Bool
+  taken_down : @signals.Signal[Bool]
 }
 
 ///|
@@ -359,27 +365,27 @@ fn view_for(key : String) -> PlayerView {
     Some(v) => v
     None => {
       let v : PlayerView = {
-        listing: false,
-        list_closing: false,
-        rates: false,
-        fulled: false,
+        listing: @signals.signal(false, same=fn(a, b) { a == b }),
+        list_closing: @signals.signal(false, same=fn(a, b) { a == b }),
+        rates: @signals.signal(false, same=fn(a, b) { a == b }),
+        fulled: @signals.signal(false, same=fn(a, b) { a == b }),
         // (a film edge to edge in its stage, enlarged as players do: no margin round it)
         zoom: @kit.Zoom::new(margin=fn(_) { 0.0 }, enlarge=true),
-        grabbing: false,
-        grab_at: 0,
-        held: -1.0,
-        drag: NoDrag,
-        drag_from: 0.0,
-        drag_to: 0.0,
-        drag_dy: 0.0,
-        last: (0.0, 0.0),
-        pinch: (0.0, 0.0, 0.0),
-        pinched: false,
-        caught: false,
-        ended_off: "",
-        file: "",
-        placed: None,
-        taken_down: false,
+        grabbing: @signals.signal(false, same=fn(a, b) { a == b }),
+        grab_at: @signals.signal(0, same=fn(a, b) { a == b }),
+        held: @signals.signal(-1.0, same=fn(a, b) { a == b }),
+        drag: @signals.signal(NoDrag, same=fn(a, b) { a == b }),
+        drag_from: @signals.signal(0.0, same=fn(a, b) { a == b }),
+        drag_to: @signals.signal(0.0, same=fn(a, b) { a == b }),
+        drag_dy: @signals.signal(0.0, same=fn(a, b) { a == b }),
+        last: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
+        pinch: @signals.signal((0.0, 0.0, 0.0), same=fn(a, b) { a == b }),
+        pinched: @signals.signal(false, same=fn(a, b) { a == b }),
+        caught: @signals.signal(false, same=fn(a, b) { a == b }),
+        ended_off: @signals.signal("", same=fn(a, b) { a == b }),
+        file: @signals.signal("", same=fn(a, b) { a == b }),
+        placed: @signals.signal(None),
+        taken_down: @signals.signal(false, same=fn(a, b) { a == b }),
       }
       player_views[key] = v
       v
@@ -392,7 +398,7 @@ fn view_for(key : String) -> PlayerView {
 /// down), while its view is open: what a viewer closing it flies back from.
 pub fn player_picture_at(key : String) -> (Double, Double, Double, Double)? {
   match player_views.get(key) {
-    Some(v) => v.placed
+    Some(v) => v.placed.get()
     None => None
   }
 }
@@ -558,27 +564,27 @@ fn where_runs(p : @kit.Media, fr : Frames, s : @kit.MediaStatus, playing : Bool,
 ///|
 /// The frame shown saved as a picture once the host has it (`<name>-<frame>.png`, to the device: the host's keep).
 fn take_grab(v : PlayerView, p : @kit.Media, name : String) -> Unit {
-  if !v.grabbing {
+  if !v.grabbing.get() {
     return
   }
   match p.native() {
     Some(n) =>
       match n.grabbed() {
         Some(png) => {
-          v.grabbing = false
+          v.grabbing.set(false)
           let base = match name.rev_find(".") {
             Some(i) if i > 0 => name.view(end_offset=i).to_owned()
             _ => name
           }
           if png.length() > 0 {
-            (viewer_host().keep)(base + "-\{v.grab_at + 1}.png", "image/png", png)
+            (viewer_host().keep)(base + "-\{v.grab_at.get() + 1}.png", "image/png", png)
           } else {
             (viewer_host().say)(t("android-chat.video.saveFrame.failed"))
           }
         }
         None => ()
       }
-    None => v.grabbing = false
+    None => v.grabbing.set(false)
   }
 }
 
@@ -586,9 +592,9 @@ fn take_grab(v : PlayerView, p : @kit.Media, name : String) -> Unit {
 /// The frame shown asked to be saved (paused, ready, none asked already).
 fn grab(v : PlayerView, p : @kit.Media, fr : Frames) -> Unit {
   match p.native() {
-    Some(n) if !v.grabbing && !n.grabbing() => {
-      v.grabbing = true
-      v.grab_at = fr.at
+    Some(n) if !v.grabbing.get() && !n.grabbing() => {
+      v.grabbing.set(true)
+      v.grab_at.set(fr.at)
       n.grab_frame(fr.start_of(fr.at))
     }
     _ => ()
@@ -656,16 +662,16 @@ fn player_still(c : @ui.Ctx, n : @ui.NativeView, still : String, x : Double, y :
 /// What the speed shows as and the speeds to pick (the menu under it: each a choice, the one it plays at checked).
 fn speed_menu(c : @ui.Ctx, v : PlayerView, p : @kit.Media, trigger : Int) -> Unit {
   let entries = player_speeds.map(fn(sp) { @kit.menu_radio(sp.to_string(), sp == p.speed(), label=speed_label(sp)) })
-  let m = dropdown(c, p.key() + "/speeds", v.rates, trigger, entries, {}, player_speeds_w, side=Top)
+  let m = dropdown(c, p.key() + "/speeds", v.rates.get(), trigger, entries, {}, player_speeds_w, side=Top)
   if !m.open {
-    v.rates = false
+    v.rates.set(false)
   }
   match m.chosen {
     Some(chosen) =>
       match player_speeds.iter().find_first(fn(sp) { sp.to_string() == chosen }) {
         Some(sp) => {
           p.set_speed(sp)
-          v.rates = false
+          v.rates.set(false)
           p.wake()
         }
         None => ()
@@ -679,12 +685,12 @@ fn speed_menu(c : @ui.Ctx, v : PlayerView, p : @kit.Media, trigger : Int) -> Uni
 /// it shows, none once it is gone), or now, or not (let go). Gone to, the card is done with.
 fn ended_card(c : @ui.Ctx, v : PlayerView, p : @kit.Media, f : @kit.MediaFrame, next : String?, go : (String) -> Unit, ink : MediaInk) -> Unit {
   let other = match next {
-    Some(o) if f.phase == Ended && v.ended_off != o => o
+    Some(o) if f.phase == Ended && v.ended_off.get() != o => o
     _ => return
   }
   let key = p.key() + "/next/" + other
   let go_now = fn() {
-    v.ended_off = other
+    v.ended_off.set(other)
     go(other)
   }
   // (what is shown does not wait for these: the card at any moment is whole, its next second and the next one to
@@ -718,7 +724,7 @@ fn ended_card(c : @ui.Ctx, v : PlayerView, p : @kit.Media, f : @kit.MediaFrame, 
         c.text(after, style=player_next_note.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
         let cancel = c.id(key + "/off")
         if c.clicked(cancel) {
-          v.ended_off = other
+          v.ended_off.set(other)
         }
         let x = c.box(style=player_next_off, id=cancel, fn() {
           c.text(t("common.cancel"), style=player_next_note.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
@@ -828,13 +834,13 @@ pub fn player_view(
   // what the view holds of the file it shows (zoomed in, its end's card, a frame being saved) not held of the next one
   // played in its place; what it holds of the player (选集 open, its speeds' menu) stays
   let v = view_for(p.key())
-  if v.file != file.key {
-    v.file = file.key
+  if v.file.get() != file.key {
+    v.file.set(file.key)
     v.zoom.fit_now()
-    v.grabbing = false
-    v.ended_off = ""
-    v.taken_down = false
-    v.drag_dy = 0.0
+    v.grabbing.set(false)
+    v.ended_off.set("")
+    v.taken_down.set(false)
+    v.drag_dy.set(0.0)
   }
   // laid out Small: a phone's player, as the viewer's frame
   if layout(c.width) is Small {
@@ -882,7 +888,7 @@ fn desk_player(
   let next = next_in(name, list)
   let prev = if index > 0 { list.get(index - 1) } else { None }
   let many = list.length() > 1
-  let listing = many && v.listing
+  let listing = many && v.listing.get()
   let panel = if listing { desk_panel_w } else { desk_none }
   let playing = plays(p, f)
   let fr = frames_of(p, s, p.scrubbing().unwrap_or(s.position))
@@ -899,7 +905,7 @@ fn desk_player(
   let full = fn() {
     let on = @ui.full_screen()
     c.set_full_screen(!on)
-    v.fulled = !on
+    v.fulled.set(!on)
     p.wake()
   }
   let z = v.zoom
@@ -987,10 +993,10 @@ fn desk_player(
     }
   }
   if c.key_pressed(@ui.key_escape) {
-    if v.rates {
-      v.rates = false
+    if v.rates.get() {
+      v.rates.set(false)
     } else if listing {
-      v.listing = false
+      v.listing.set(false)
     } else {
       desk_leave(c, v, on_back)
     }
@@ -1022,7 +1028,7 @@ fn desk_player(
         match p.native() {
           Some(n) if n.here() => {
             let (x, y, pw, ph) = picture_place(v, p, s, w, c.height, still, top=room_top, foot=room_foot)
-            v.placed = Some((x, y, pw, ph))
+            v.placed.set(Some((x, y, pw, ph)))
             c.native(n, content=Some((x, y, pw, ph))) |> ignore
             player_still(c, n, still, x, y, pw, ph)
           }
@@ -1045,7 +1051,7 @@ fn desk_player(
       let meta = joined([if many && index >= 0 { "\{index + 1} / \{list.length()}" } else { "" }, file_size(file.size), facts], " · ")
       if viewer_bar(c, key + "/bar", back_label, name, meta, !f.on && !listing, bar_ink, title=file.title, fn() {
           if many && viewer_tool(c, key + "/list", "list", t("web-pages.drive.player.list"), bar_ink, on=listing) {
-            v.listing = !listing
+            v.listing.set(!listing)
           }
           if viewer_download(c, key + "/download", bar_ink) {
             (file.save)()
@@ -1092,8 +1098,8 @@ fn desk_player(
 ///|
 /// Back from a player (`go_back`), the window as it was if the player made it fill the screen.
 fn desk_leave(c : @ui.Ctx, v : PlayerView, go_back : () -> Unit) -> Unit {
-  if v.fulled {
-    v.fulled = false
+  if v.fulled.get() {
+    v.fulled.set(false)
     if @ui.full_screen() {
       c.set_full_screen(false)
     }
@@ -1181,7 +1187,7 @@ fn desk_play_controls(
       let speed_slot = c.id(key + "/speed-slot")
       c.box(id=speed_slot, taps=false, drop=player_drop_speed, fn() {
         if media_rate(c, key + "/speed", speed_label(p.speed()), t("web-pages.drive.player.rate"), on, ink~) {
-          v.rates = !v.rates
+          v.rates.set(!v.rates.get())
           p.wake()
         }
       })
@@ -1206,7 +1212,7 @@ fn desk_play_controls(
         }
       }
       // 保存此帧: paused, the frame shown at its own size
-      let grabs = on && !playing && ready && !v.grabbing
+      let grabs = on && !playing && ready && !v.grabbing.get()
       if picture {
         let slot = c.id(key + "/save-frame-slot")
         c.box(id=slot, taps=false, drop=player_drop_grab, fn() {
@@ -1383,7 +1389,7 @@ fn desk_play_list(
           })
           |> ignore
           if viewer_tool(c, key + "/list-close", "close", t("common.close"), ink) {
-            v.listing = false
+            v.listing.set(false)
           }
         })
         |> ignore
@@ -1475,9 +1481,9 @@ fn phone_player(
       match p.native() {
         Some(n) if n.here() => {
           let (x, y, w, h) = picture_place(v, p, s, c.width, c.height, still)
-          v.placed = Some((x, y + v.drag_dy, w, h))
-          c.native(n, content=Some((x, y + v.drag_dy, w, h))) |> ignore
-          player_still(c, n, still, x, y + v.drag_dy, w, h)
+          v.placed.set(Some((x, y + v.drag_dy.get(), w, h)))
+          c.native(n, content=Some((x, y + v.drag_dy.get(), w, h))) |> ignore
+          player_still(c, n, still, x, y + v.drag_dy.get(), w, h)
         }
         _ => ()
       }
@@ -1489,8 +1495,8 @@ fn phone_player(
     player_cue(c, if p.subtitle().1 { f.said } else { "" }, f.shown > desk_half, desk_none, over=phone_cue_over())
     player_waits(c, p, f, ink)
     // what a double tap did, a held finger's 2×, where a finger along it has gone: said a moment in the middle
-    let said = match (f.note, v.held >= 0.0, v.drag) {
-      (_, _, AlongTime) => clock(p.scrubbing().unwrap_or(v.drag_to)) + " / " + (if s.duration > 0.0 { clock(s.duration) } else { "--:--" })
+    let said = match (f.note, v.held.get() >= 0.0, v.drag.get()) {
+      (_, _, AlongTime) => clock(p.scrubbing().unwrap_or(v.drag_to.get())) + " / " + (if s.duration > 0.0 { clock(s.duration) } else { "--:--" })
       (_, true, _) => t("web-pages.drive.player.held")
       (Some(note), _, _) => phone_note_words(note)
       _ => ""
@@ -1507,8 +1513,8 @@ fn phone_player(
       })
       |> ignore
     }
-    let shown = if v.drag == DownClose || v.taken_down { desk_none } else { f.shown }
-    let live = f.on && v.drag != DownClose && !v.taken_down
+    let shown = if v.drag.get() == DownClose || v.taken_down.get() { desk_none } else { f.shown }
+    let live = f.on && v.drag.get() != DownClose && !v.taken_down.get()
     // the bar at the top: back, the name, which of the folder's it is, 选集
     c.layer(fn() {
       c.box(style=@ui.style(h=Fixed(room_top)), fn() {  }) |> ignore
@@ -1525,8 +1531,8 @@ fn phone_player(
           if many && index >= 0 {
             c.text("\{index + 1} / \{list.length()}", style=phone_index_words.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
           }
-          if many && phone_key(c, key + "/list", "list", live, t("web-pages.drive.player.list"), ink, lit=v.listing) {
-            v.listing = true
+          if many && phone_key(c, key + "/list", "list", live, t("web-pages.drive.player.list"), ink, lit=v.listing.get()) {
+            v.listing.set(true)
             p.wake()
           }
           // 下载, as every file opened has it
@@ -1580,25 +1586,25 @@ fn phone_gestures(
       let cx = (px + x2) / 2.0
       let cy = (py + y2) / 2.0
       let d = ((px - x2) * (px - x2) + (py - y2) * (py - y2)).sqrt()
-      let (was_d, was_x, was_y) = v.pinch
+      let (was_d, was_x, was_y) = v.pinch.get()
       if was_d > 0.0 && d > 0.0 {
         z.transform(cx, cy, d / was_d, cx - was_x, cy - was_y)
       }
-      v.pinch = (d, cx, cy)
-      v.pinched = true
-      v.drag = MoveZoom
+      v.pinch.set((d, cx, cy))
+      v.pinched.set(true)
+      v.drag.set(MoveZoom)
       return
     }
-    _ => v.pinch = (0.0, 0.0, 0.0)
+    _ => v.pinch.set((0.0, 0.0, 0.0))
   }
   if press.fresh && (c.pressed(stage) || c.clicked(stage)) {
-    v.caught = z.stop_fling()
+    v.caught.set(z.stop_fling())
   }
   if down && c.pressed(stage) {
     let dx = px - press.x
     let dy = py - press.y
-    if v.drag == NoDrag && press.moved && !v.pinched {
-      v.drag = if z.zoomed() {
+    if v.drag.get() == NoDrag && press.moved && !v.pinched.get() {
+      v.drag.set(if z.zoomed() {
         MoveZoom
       } else if dx.abs() > dy.abs() && s.duration > 0.0 {
         AlongTime
@@ -1606,65 +1612,65 @@ fn phone_gestures(
         DownClose
       } else {
         MoveZoom
-      }
-      v.drag_from = s.position
-      v.drag_to = s.position
+      })
+      v.drag_from.set(s.position)
+      v.drag_to.set(s.position)
       p.wake()
     }
-    match v.drag {
+    match v.drag.get() {
       AlongTime => {
         // a screen's width is as much as player_drag_span of it (all of it, a short one)
         let span = dmin(s.duration, player_drag_span)
-        v.drag_to = dmax(0.0, dmin(s.duration, v.drag_from + dx / dmax(1.0, c.width) * span))
-        p.scrub_to(fr.snap(v.drag_to))
+        v.drag_to.set(dmax(0.0, dmin(s.duration, v.drag_from.get() + dx / dmax(1.0, c.width) * span)))
+        p.scrub_to(fr.snap(v.drag_to.get()))
       }
-      DownClose => v.drag_dy = dmax(0.0, dy)
+      DownClose => v.drag_dy.set(dmax(0.0, dy))
       MoveZoom => {
-        let (lx, ly) = v.last
-        if press.moved && !v.pinched {
+        let (lx, ly) = v.last.get()
+        if press.moved && !v.pinched.get() {
           z.pan(px - lx, py - ly)
         }
       }
       NoDrag => ()
     }
     // held still: 2× while it is held (playing)
-    if press.long && !press.moved && v.held < 0.0 && s.playing {
-      v.held = p.speed()
+    if press.long && !press.moved && v.held.get() < 0.0 && s.playing {
+      v.held.set(p.speed())
       p.set_speed(player_held_speed)
     }
-    v.last = (px, py)
+    v.last.set((px, py))
   } else {
-    let was = v.drag
-    let held = v.held >= 0.0
+    let was = v.drag.get()
+    let held = v.held.get() >= 0.0
     match was {
       AlongTime => p.scrub_done()
       DownClose =>
-        if v.drag_dy > player_close_dy {
+        if v.drag_dy.get() > player_close_dy {
           // going (not turned upright first): its picture stays where the finger left it, to go from there
-          v.taken_down = !p.is_sideways()
+          v.taken_down.set(!p.is_sideways())
           back()
         }
       // let go moving: on at the finger's speed, slowing, to a stop or its edge
       MoveZoom =>
-        if !v.pinched {
+        if !v.pinched.get() {
           let (fx, fy) = c.pointer_velocity()
           z.fling(fx, fy)
         }
       _ => ()
     }
     if held {
-      p.set_speed(v.held)
-      v.held = -1.0
+      p.set_speed(v.held.get())
+      v.held.set(-1.0)
     }
-    v.drag = NoDrag
-    if !v.taken_down {
-      v.drag_dy = 0.0
+    v.drag.set(NoDrag)
+    if !v.taken_down.get() {
+      v.drag_dy.set(0.0)
     }
     if !down {
-      v.pinched = false
+      v.pinched.set(false)
     }
     // a tap or a double tap (none of the above)
-    if was == NoDrag && !held && !press.long && !v.caught {
+    if was == NoDrag && !held && !press.long && !v.caught.get() {
       p.stage(c, stage, c.width)
     }
   }
@@ -1749,8 +1755,8 @@ fn phone_controls(
       c.box(style=desk_grow, fn() {  }) |> ignore
       // the speed, as a figure: its menu of speeds
       let sid = c.id(key + "/speed")
-      if phone_speed(c, key + "/speed", speed_label(p.speed()), on, t("android-misc.drive.player.speed"), ink, lit=v.rates) {
-        v.rates = !v.rates
+      if phone_speed(c, key + "/speed", speed_label(p.speed()), on, t("android-misc.drive.player.speed"), ink, lit=v.rates.get()) {
+        v.rates.set(!v.rates.get())
         p.wake()
       }
       speed_menu(c, v, p, sid)
@@ -1760,7 +1766,7 @@ fn phone_controls(
         p.toggle_subtitle()
         p.wake()
       }
-      if inspect && phone_key(c, key + "/save-frame", "camera", on && !v.grabbing, t("android-chat.video.saveFrame"), ink, drop=phone_drop_grab) {
+      if inspect && phone_key(c, key + "/save-frame", "camera", on && !v.grabbing.get(), t("android-chat.video.saveFrame"), ink, drop=phone_drop_grab) {
         grab(v, p, fr)
         p.wake()
       }
@@ -1790,9 +1796,9 @@ fn phone_timeline(c : @ui.Ctx, v : PlayerView, p : @kit.Media, s : @kit.MediaSta
   let dur = s.duration
   p.timeline(c, id, on, inset=player_track_inset, snap=fn(ms) { fr.snap(ms) })
   let part = fn(ms : Double) { if dur <= 0.0 { desk_none } else { dmin(desk_whole, dmax(desk_none, ms / dur)) } }
-  let scrub = match (p.scrubbing(), v.drag) {
+  let scrub = match (p.scrubbing(), v.drag.get()) {
     (Some(x), _) => Some(x)
-    (None, AlongTime) => Some(v.drag_to)
+    (None, AlongTime) => Some(v.drag_to.get())
     _ => None
   }
   let shown = part(scrub.unwrap_or(s.position))
@@ -1853,12 +1859,12 @@ fn phone_list_sheet(c : @ui.Ctx, v : PlayerView, p : @kit.Media, list : Array[St
     Some(f) => f
     None => return
   }
-  if !v.listing && !v.list_closing {
+  if !v.listing.get() && !v.list_closing.get() {
     return
   }
   let close = fn() {
-    v.listing = false
-    v.list_closing = true
+    v.listing.set(false)
+    v.list_closing.set(true)
   }
   let pal = theme().p
   sheet(c, {
@@ -1866,9 +1872,9 @@ fn phone_list_sheet(c : @ui.Ctx, v : PlayerView, p : @kit.Media, list : Array[St
     trailing: if index >= 0 { "\{index + 1} / \{list.length()}" } else { "" },
     height: player_list_sheet,
     draggable: true,
-    closing: !v.listing,
+    closing: !v.listing.get(),
     close,
-    gone: fn() { v.list_closing = false },
+    gone: fn() { v.list_closing.set(false) },
     body: fn() {
       c.box(style=desk_panel_list, fn() {
         c.list(p.key() + "/sheet-list", list.length(), desk_row_h, fn(i) {

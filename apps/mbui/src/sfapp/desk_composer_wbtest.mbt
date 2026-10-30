@@ -127,8 +127,8 @@ test "desk composer: Enter in a quote's comment keeps the comment and goes back 
   t.frame()
   // (the core has what its line holds, told every frame it differs: emptied, it would say "")
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
-  assert_eq(w.quotes.length(), 1)
-  assert_eq(text(Some(w.quotes[0]), "comment"), "这里要对齐")
+  assert_eq(w.quotes.get().length(), 1)
+  assert_eq(text(Some(w.quotes.get()[0]), "comment"), "这里要对齐")
   assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
   assert_eq(named(calls, "chat.send").length(), 0)
 }
@@ -322,7 +322,7 @@ test "desk composer: words pasted at once past the core's bound go as a file of 
   t.frame()
   assert_eq(desk_words(src), "")
   // (waiting with the draft: composer.add, its bytes beside it)
-  let files = @sfbase.writing(src, "ws1/st1:s-c1").files
+  let files = @sfbase.writing(src, "ws1/st1:s-c1").files.get()
   assert_eq(files.length(), 1)
   let one = files[0]
   assert_true(text(Some(one), "name").has_prefix("pasted-text-"))
@@ -343,7 +343,7 @@ test "desk composer: a file waiting and no words, Enter sends it (as send does)"
   t.frame()
   t.frame()
   assert_eq(desk_words(src), "")
-  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").files.length(), 1)
+  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").files.get().length(), 1)
   t.enter()
   t.frame()
   assert_eq(named(calls, "chat.send").length(), 1)
@@ -379,7 +379,7 @@ test "desk composer: a file up after the page last heard of it goes once as Ente
   before["uploading"] = Json::boolean(true)
   heard.val = Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 })
   t.frame()
-  let drawn = @sfbase.writing(src, "ws1/st1:s-c1").files
+  let drawn = @sfbase.writing(src, "ws1/st1:s-c1").files.get()
   assert_eq(drawn.length(), 1)
   assert_true(field(Some(drawn[0]), "done") is None)
   t.enter()
@@ -406,11 +406,11 @@ test "desk composer: the same file picked or pasted again while it is in the dra
   @sfbase.writing_add(src, w, "ws1/st1", "build.log", b"abc")
   @sfbase.writing_add(src, w, "ws1/st1", "build.log", b"abcd")
   t.frame()
-  let names = fn() { @sfbase.writing(src, "ws1/st1:s-c1").files.map(fn(f) { text(Some(f), "name") }) }
+  let names = fn() { @sfbase.writing(src, "ws1/st1:s-c1").files.get().map(fn(f) { text(Some(f), "name") }) }
   assert_eq(names(), ["照片.png", "录屏.mov", "照片2.png", "build.log", "build.log"])
   assert_eq(named(calls, "composer.add").length(), 5)
   // taken out, the same goes in again
-  let photo = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files[0]), "id")
+  let photo = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files.get()[0]), "id")
   @sfbase.writing_remove(src, @sfbase.writing(src, "ws1/st1:s-c1"), photo)
   t.frame()
   @sfbase.writing_add(src, @sfbase.writing(src, "ws1/st1:s-c1"), "ws1/st1", "照片.png", png_head())
@@ -449,7 +449,7 @@ test "desk composer: an image sent while it goes up is among its message's files
   before["uploading"] = Json::boolean(true)
   heard.val = Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 })
   t.frame()
-  let id = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files[0]), "id")
+  let id = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files.get()[0]), "id")
   t.enter()
   t.frame()
   // in the list from the frame it is sent (sent_local), as the core's outbox will have it (views.ts goingUp)

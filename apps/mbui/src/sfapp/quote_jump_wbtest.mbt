@@ -31,7 +31,7 @@ test "a quote's card pressed: the list goes to the message it quotes, and only t
     t.run_for(held - t.time())
   }
   let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
-  assert_eq(rd.flash, "ts3")
+  assert_eq(rd.flash.get(), "ts3")
   let p = @sf.theme().p
   // no band across the list: the message is not lit whole
   assert_eq(grounds_in(t, p.accent_bg).length(), 0)

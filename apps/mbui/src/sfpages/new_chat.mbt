@@ -37,6 +37,7 @@ pub(all) struct NewChatFrame {
 ///|
 /// What the page keeps of its own: which of its picks is asked open as it is next drawn (a fixture's: new_chat_ask).
 priv struct NewChatPage {
+  // (plain: asked once, nothing shown reads it)
   mut asked : String
 }
 

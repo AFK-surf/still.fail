@@ -37,35 +37,39 @@ pub(all) struct ComposerSpec {
 /// which chat it was for (another: switched to, the cursor put in it), the archived chats being restored and why
 /// restoring one failed (by their drafts).
 priv struct Composing {
-  mut picking : (String, @ui.Pick)?
+  picking : @signals.Signal[(String, @ui.Pick)?]
   let_go : @signals.Signal[Bool]
   warmed : Map[String, Int]
   comments : Map[String, @ui.Field]
-  mut roomy : Bool?
-  mut draft : String
+  roomy : @signals.Signal[Bool?]
+  draft : @signals.Signal[String]
   /// as the frame before left them (the frame each build of this one starts from: frame_body may build it twice), and
   /// that frame's number
-  mut roomy_before : Bool?
-  mut draft_before : String
+  roomy_before : @signals.Signal[Bool?]
+  draft_before : @signals.Signal[String]
+  // (plain: a once-a-frame guard, nothing shown reads it)
   mut frame : Int
   /// whether what waits in it now was in it as the frame before drew it (the same draft): what is put in since comes in
   /// (held_coming), what a draft opened with is there at once
-  mut same_draft : Bool
+  same_draft : @signals.Signal[Bool]
   /// whether a notice over a chat's composer, new to it, comes in (chat_notices: the chat shown the frame before)
-  mut notices_new : Bool
+  notices_new : @signals.Signal[Bool]
   /// what each notice over a chat's composer said as it was last drawn, by its key: drawn so as it leaves
   notices_said : Map[String, (String, (Int, String, String, Bool)?, String??, String)]
   /// the page's choices in its row as it was last drawn, as the frame before left them, and those of the page it came
   /// from that this one has not, while they leave (a new chat's, gone to its chat)
+  // (plain: a closure, what to do, not a value shown)
   mut toolbar : (() -> Unit)?
+  // (plain: a closure, what to do, not a value shown)
   mut toolbar_before : (() -> Unit)?
+  // (plain: a closure, what to do, not a value shown)
   mut toolbar_leaving : (() -> Unit)?
   restoring : @sf.LiveMap[String, Bool]
   restore_errors : @sf.LiveMap[String, String]
   /// a finger went down outside it (keyboard_let_go); its `@` menu up over it as it was last drawn (a press in it is
   /// the composer's own)
-  mut outside : Bool
-  mut menu_up : Bool
+  outside : @signals.Signal[Bool]
+  menu_up : @signals.Signal[Bool]
   /// what its field says while empty as it was last drawn, till another is to be said and it has faded out
   /// (composer_text)
   hint_shown : @signals.Signal[String]
@@ -73,20 +77,22 @@ priv struct Composing {
   /// what it says with the cursor in it already
   taking : @signals.Signal[Bool]
   /// its 抄送 menu open (cc_chooser)
-  mut cc_open : Bool
+  cc_open : @signals.Signal[Bool]
   /// the shape its field's hint was last shown on (composer_hint): changed, the hint waits till it is there
-  mut hint_shape : String
+  hint_shape : @signals.Signal[String]
   /// whether it is a box or a capsule and how roomy, as the frame began and as built now (frame, then, now): what opens
   /// or lets go of it (composer)
+  // (plain: what the frame began with, stamped with that frame: read and written by the composer's own builds in it)
   mut opened : (Int, String, String)
   /// the cursor asked into it as it is next drawn, on any screen (composer_take_focus)
-  mut wanted : Bool
+  wanted : @signals.Signal[Bool]
   /// each quote's card's colour as it was last drawn, by quote: where its ground sets out from as it is sent
   /// (flying_quotes)
   grounds : Map[String, Int64]
   /// each quote's own picture as it was last drawn in its card, by quote: what flies from there as it is sent
   pictures : Map[String, String]
   /// what its box last changed shape for and how, in which build (composer_shape)
+  // (plain: handed within one build to what stands round the composer in it, stamped with that build)
   mut shaped : (Int, String, @motion.Spec)?
 }
 
@@ -94,36 +100,36 @@ priv struct Composing {
 /// The cursor into the composer as it is next drawn, with touch too (its keyboard up): what opened it is for
 /// writing (新建对话: pengxiao, 2026-10-25).
 pub fn composer_take_focus() -> Unit {
-  composing.wanted = true
+  composing.wanted.set(true)
 }
 
 ///|
 let composing : Composing = {
-  picking: None,
+  picking: @signals.signal(None),
   let_go: @signals.signal(false, same=fn(a, b) { a == b }),
   warmed: {},
   comments: {},
-  roomy: None,
-  draft: "",
-  roomy_before: None,
-  draft_before: "",
+  roomy: @signals.signal(None, same=fn(a, b) { a == b }),
+  draft: @signals.signal("", same=fn(a, b) { a == b }),
+  roomy_before: @signals.signal(None, same=fn(a, b) { a == b }),
+  draft_before: @signals.signal("", same=fn(a, b) { a == b }),
   frame: -1,
-  same_draft: false,
-  notices_new: false,
+  same_draft: @signals.signal(false, same=fn(a, b) { a == b }),
+  notices_new: @signals.signal(false, same=fn(a, b) { a == b }),
   notices_said: {},
   toolbar: None,
   toolbar_before: None,
   toolbar_leaving: None,
   restoring: @sf.LiveMap::new(),
   restore_errors: @sf.LiveMap::new(),
-  outside: false,
-  menu_up: false,
+  outside: @signals.signal(false, same=fn(a, b) { a == b }),
+  menu_up: @signals.signal(false, same=fn(a, b) { a == b }),
   hint_shown: @signals.signal("", same=fn(a, b) { a == b }),
   taking: @signals.signal(false, same=fn(a, b) { a == b }),
-  cc_open: false,
-  hint_shape: "",
+  cc_open: @signals.signal(false, same=fn(a, b) { a == b }),
+  hint_shape: @signals.signal("", same=fn(a, b) { a == b }),
   opened: (-1, "", ""),
-  wanted: false,
+  wanted: @signals.signal(false, same=fn(a, b) { a == b }),
   grounds: {},
   pictures: {},
   shaped: None,
@@ -131,31 +137,31 @@ let composing : Composing = {
 
 ///|
 fn composing_reset() -> Unit {
-  composing.picking = None
+  composing.picking.set(None)
   composing.let_go.set(false)
   composing.warmed.clear()
   composing.comments.clear()
   composing.grounds.clear()
   composing.pictures.clear()
-  composing.roomy = None
-  composing.draft = ""
-  composing.roomy_before = None
+  composing.roomy.set(None)
+  composing.draft.set("")
+  composing.roomy_before.set(None)
   composing.toolbar = None
   composing.toolbar_before = None
   composing.toolbar_leaving = None
-  composing.draft_before = ""
+  composing.draft_before.set("")
   composing.frame = -1
-  composing.same_draft = false
-  composing.notices_new = false
+  composing.same_draft.set(false)
+  composing.notices_new.set(false)
   composing.notices_said.clear()
   composing.restoring.clear()
   composing.restore_errors.clear()
-  composing.outside = false
-  composing.menu_up = false
-  composing.cc_open = false
-  composing.hint_shape = ""
+  composing.outside.set(false)
+  composing.menu_up.set(false)
+  composing.cc_open.set(false)
+  composing.hint_shape.set("")
   composing.opened = (-1, "", "")
-  composing.wanted = false
+  composing.wanted.set(false)
   composing.hint_shown.set("")
   composing.taking.set(false)
 }
@@ -190,14 +196,14 @@ pub fn composer(
   let whose = "\u{1}" + spec.session
   if composing.frame != c.frame_number() {
     composing.frame = c.frame_number()
-    composing.roomy_before = composing.roomy
-    composing.draft_before = composing.draft
+    composing.roomy_before.set(composing.roomy.get())
+    composing.draft_before.set(composing.draft.get())
     composing.toolbar_before = composing.toolbar
     composing.taking.set(false)
   }
-  composing.same_draft = whose == composing.draft_before
-  if whose != composing.draft {
-    composing.draft = whose
+  composing.same_draft.set(whose == composing.draft_before.get())
+  if whose != composing.draft.get() {
+    composing.draft.set(whose)
     // (where the keyboard is at hand, typed into at once; not raising the screen's keyboard over the chat)
     if !@sf.soft_keyboard() && !c.field_focused() {
       c.focus_editor(composer_field_key)
@@ -209,12 +215,12 @@ pub fn composer(
   // asked for (a new chat: composer_take_focus), with touch too, its keyboard up
   // (asked again till it is found held as a frame begins: the page it was asked from let go of as the new one comes,
   // its field's focus with it, nav.mbt forget)
-  if composing.wanted && !spec.locked {
+  if composing.wanted.get() && !spec.locked {
     if c.editor_focused(composer_field_key) {
-      composing.wanted = false
+      composing.wanted.set(false)
     } else {
       // (the press that asked for it, lifted outside it, not taken for one letting go of the keyboard)
-      composing.outside = false
+      composing.outside.set(false)
       c.focus_editor(composer_field_key)
       composing.taking.set(true)
       // (this frame's alone: what reads it built again the frame after, as it has the cursor)
@@ -239,12 +245,12 @@ pub fn composer(
     held ||
     sent_box > 0.0 ||
     w.text.get() != "" ||
-    w.files.length() > 0 ||
-    w.quotes.length() > 0
+    w.files.get().length() > 0 ||
+    w.quotes.get().length() > 0
   // ready as the core says, or as soon as there are words in the field: the core's say comes a moment after them (its
   // topic), and send pressed meanwhile is not lost (what goes is the core's to take: composer.take, nothing taken
   // nothing sent)
-  let ready = (w.ready || (w.text.get().trim() != "" && !w.starting)) && !spec.locked
+  let ready = (w.ready.get() || (w.text.get().trim() != "" && !w.starting.get())) && !spec.locked
   // sent once what it refers to can be read in this workspace (OutsideShare.tsx, sfbase's outside.mbt): at once when
   // it refers to nothing of another workspace, else once the viewer has said so (outside.mbt's dialog)
   @sfbase.sharing_go(w.key)
@@ -284,7 +290,7 @@ pub fn composer(
   // dragged over: marked (the 文件 tab's rows; files from the computer the page takes)
   let dragging = !no_files && (@sfbase.drag_carried.val)() is Some(_) && c.lit(cap)
   // laid out for another page than the frame before (a new chat's roomy in the page, a chat's at its foot: dock.tsx)
-  let moved = match composing.roomy_before {
+  let moved = match composing.roomy_before.get() {
     Some(was) => was != spec.roomy
     None => false
   }
@@ -311,7 +317,7 @@ pub fn composer(
     w,
     focused || held,
     moved,
-    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}",
+    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.get().length()}|\{w.quotes.get().length()}|\{w.error.get() != ""}",
     shape,
   )
   // gone to a page with no choices in its row from one with them (a new chat become its chat, or left for one): they
@@ -363,7 +369,7 @@ pub fn composer(
               None => ()
             }
             said = composer_note(c, spec.note)
-            send_i = send_button(c, ready, w.starting, submit)
+            send_i = send_button(c, ready, w.starting.get(), submit)
           })
           |> ignore
         })
@@ -373,7 +379,7 @@ pub fn composer(
         words = composer_text(c, src, ws, spec, w, cap, multiline, hint, submit)
         c.box(style=tail_row, fn() {
           said = composer_note(c, spec.note)
-          send_i = send_button(c, ready, w.starting, submit)
+          send_i = send_button(c, ready, w.starting.get(), submit)
         })
         |> ignore
       }
@@ -389,11 +395,11 @@ pub fn composer(
   // on it; words sent from it, as they let go of it (held till then: composer_hold). Moved by nothing of these (the
   // window, the sidebar, a keyboard), or another chat's on the same page (what it holds swapped, not changed), it is
   // where it is laid out at once (docs/motion.md)
-  composing.roomy = Some(spec.roomy)
-  let holds = if whose != composing.draft_before && !moved {
+  composing.roomy.set(Some(spec.roomy))
+  let holds = if whose != composing.draft_before.get() && !moved {
     ""
   } else {
-    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}|" +
+    "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.get().length()}|\{w.quotes.get().length()}|\{w.error.get() != ""}|" +
     w.field.text()
   }
   @motion.reshape(c, box, "composer/box", by=holds, spec=shape, carry=moved)
@@ -408,8 +414,8 @@ pub fn composer(
     keyboard_let_go(c, cap)
   }
   @motion.measure(c, box, "composer/content")
-  if w.error != "" {
-    c.box(style=error_box, fn() { c.text(w.error, style=composer_error_words) |> ignore }) |> ignore
+  if w.error.get() != "" {
+    c.box(style=error_box, fn() { c.text(w.error.get(), style=composer_error_words) |> ignore }) |> ignore
   }
 }
 
@@ -442,14 +448,14 @@ fn keyboard_let_go(c : @ui.Ctx, cap : Int) -> Unit {
   let press = c.press()
   if press.fresh {
     // (on the composer or what is in it, as the press went down: the hand's, not where it was drawn)
-    composing.outside = !c.press_within(cap) && !@sf.presenting() && !composing.menu_up
+    composing.outside.set(!c.press_within(cap) && !@sf.presenting() && !composing.menu_up.get())
   }
-  if composing.outside && c.editor_focused(composer_field_key) && press.lifted && !press.long {
-    composing.outside = false
+  if composing.outside.get() && c.editor_focused(composer_field_key) && press.lifted && !press.long {
+    composing.outside.set(false)
     c.blur()
   }
   if press.lifted {
-    composing.outside = false
+    composing.outside.set(false)
   }
 }
 
@@ -461,11 +467,11 @@ fn keyboard_let_go(c : @ui.Ctx, cap : Int) -> Unit {
 fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files : Bool) -> Unit {
   // (what was put into the draft from elsewhere: built again as it is)
   @sfbase.drafts_given_read()
-  match composing.picking {
+  match composing.picking.get() {
     Some((key, picker)) =>
       match picker.files() {
         Some(files) => {
-          composing.picking = None
+          composing.picking.set(None)
           if key == w.key && !no_files {
             for f in files {
               writing_add_picked(src, w, spec.station, f)
@@ -624,7 +630,7 @@ fn composer_text(
   // fades out, then the other in where it was, never one put for the other at once
   let wanted = if hint != "" { hint } else { spec.placeholder }
   // (another chat's, or its first: what it says from the first, as it is)
-  if composing.hint_shown.get() == "" || !composing.same_draft {
+  if composing.hint_shown.get() == "" || !composing.same_draft.get() {
     composing.hint_shown.set(wanted)
   }
   let said_key = "composer/said/" + spec.draft
@@ -663,7 +669,7 @@ fn composer_text(
         leaves=ref_leaves(src, spec, w, c.editor_focused(composer_field_key)),
         files=!no_files,
         // words pasted at once past the core's bound: a file of their own (Chat.tsx onPaste)
-        paste_limit=if no_files || w.starting { 0 } else { @sfbase.paste_threshold(c, src) },
+        paste_limit=if no_files || w.starting.get() { 0 } else { @sfbase.paste_threshold(c, src) },
         look=@sfbase.refs_look(w.key, p.accent),
         field=w.field,
       )
@@ -673,7 +679,7 @@ fn composer_text(
       }
       // `@` and a few letters: the chats they find over the composer (Enter picks one there)
       let menu = ref_menu(c, src, spec, w, cap, res.focused)
-      composing.menu_up = menu
+      composing.menu_up.set(menu)
       match res.submitted {
         // (they stay in the field until they go)
         Some(words) => {
@@ -683,7 +689,7 @@ fn composer_text(
           submit()
         }
         None =>
-          if res.text != w.text.get() && !w.starting {
+          if res.text != w.text.get() && !w.starting.get() {
             writing_text(src, w, res.text)
             warm(c, src, spec)
           }
@@ -719,10 +725,10 @@ fn composer_hint(
 ) -> @motion.Anim {
   let hint = @motion.anim(c, "composer/hint", 1.0)
   // (another chat's draft swapped in is no change of shape: it is where it is laid out at once)
-  let reshaped = shape != composing.hint_shape &&
-    composing.hint_shape != "" &&
-    ("\u{1}" + spec.session == composing.draft_before || moved)
-  composing.hint_shape = shape
+  let reshaped = shape != composing.hint_shape.get() &&
+    composing.hint_shape.get() != "" &&
+    ("\u{1}" + spec.session == composing.draft_before.get() || moved)
+  composing.hint_shape.set(shape)
   if hidden || @sfbase.flight_hint_away(c, w.key) {
     hint.snap(0.0)
   } else if reshaped {
@@ -801,7 +807,7 @@ fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files 
 /// The system's file picker for draft `w`: what is picked comes in as the composer is next drawn (take_in).
 pub fn pick_files(w : Writing) -> Unit {
   match @ui.pick(Files) {
-    Some(p) => composing.picking = Some((w.key, p))
+    Some(p) => composing.picking.set(Some((w.key, p)))
     None => ()
   }
 }
@@ -840,9 +846,9 @@ fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) 
 /// just added takes the focus; Enter in it goes back to the text), then the files: a picture as its picture, pasted
 /// words as their card, a station's file as its card, a link as its card, any other file as its card.
 fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) -> Unit {
-  if w.quotes.length() > 0 {
+  if w.quotes.get().length() > 0 {
     c.box(style=quotes_column, fn() {
-      for q in w.quotes {
+      for q in w.quotes.get() {
         let v = Some(q)
         let id = text(v, "id")
         let key = "composer/quote/" + id
@@ -855,7 +861,7 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
           }
         }
         // (the one the core says asks for the focus: none where it says none, a quote of its own with no id among them)
-        if w.focus != "" && w.focus == id {
+        if w.focus.get() != "" && w.focus.get() == id {
           c.focus_editor(key)
           writing_focused(src, w)
         }
@@ -910,9 +916,9 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
     |> ignore
   }
   // (a quote's picture is its own, not among them)
-  if w.files.length() > 0 {
+  if w.files.get().length() > 0 {
     c.box(style=files_flow(), flow=true, line_gap=files_lines(), fn() {
-      for f in w.files {
+      for f in w.files.get() {
         let i = c.box(fn() { composer_file(c, src, spec, w, f) })
         held_coming(c, i, "composer/file/" + text(Some(f), "id"))
       }
@@ -927,7 +933,7 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
 /// or the composer gone to another page with, is there at once (docs/motion.md: what is on a page does not move of its
 /// own as it comes), though said so as it is (built again the frame after, it was there before).
 fn held_coming(c : @ui.Ctx, i : Int, key : String) -> Unit {
-  @motion.entering(c, i, key + "/in", @sf.waiting_in, at_once=!composing.same_draft)
+  @motion.entering(c, i, key + "/in", @sf.waiting_in, at_once=!composing.same_draft.get())
 }
 
 ///|
@@ -1033,7 +1039,7 @@ fn waiting_as(v : Json?) -> WaitingAs {
 /// Whether pasted words waiting can be put back as words (✎ on their card): while they are kept, and no chat is being
 /// made for them.
 fn restorable(w : Writing, v : Json?) -> Bool {
-  field(field(v, "pasted"), "text") is Some(String(_)) && !w.starting
+  field(field(v, "pasted"), "text") is Some(String(_)) && !w.starting.get()
 }
 
 ///|
@@ -1534,7 +1540,7 @@ fn up_files(w : Writing) -> Array[Json] {
 /// its picture is (its box's, keyed composer/file/<id>), drawn there as the composer draws it until it sets off.
 fn flying_files(c : @ui.Ctx, src : Source, w : Writing) -> Array[FlyingFile] {
   let going = going_files(w).map(fn(f) { text(Some(f), "id") })
-  w.files.filter_map(fn(f) {
+  w.files.get().filter_map(fn(f) {
     let v = Some(f)
     let id = text(v, "id")
     let key = flying_key(v, going.contains(id))
@@ -1570,7 +1576,7 @@ fn flying_files(c : @ui.Ctx, src : Source, w : Writing) -> Array[FlyingFile] {
 /// The quotes of a draft as its message has them (composer.ts sentQuote): what is said about each trimmed, its own
 /// picture named as its file goes.
 fn sent_quotes(w : Writing) -> Array[Json] {
-  w.quotes.map(fn(q) {
+  w.quotes.get().map(fn(q) {
     let v = Some(q)
     let own = field(v, "own")
     let file = match field(own, "done") {
@@ -1648,7 +1654,7 @@ fn flying_quotes(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
   let flying : Array[FlyingFile] = []
   let going = going_files(w).map(fn(f) { text(Some(f), "id") })
   for i, q in sent_quotes(w) {
-    let v = Some(w.quotes[i])
+    let v = Some(w.quotes.get()[i])
     let id = text(v, "id")
     let own = field(v, "own")
     let picture = match (own, composing.pictures.get(id), @motion.measured_rect(c, quote_picture_key(id))) {
@@ -1959,7 +1965,7 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
 fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Array[@sfbase.ChatCcTo]) -> Unit {
   let p = @sf.theme().p
   let id = c.id("composer/cc")
-  let open = if c.clicked(id) { !composing.cc_open } else { composing.cc_open }
+  let open = if c.clicked(id) { !composing.cc_open.get() } else { composing.cc_open.get() }
   let lit = c.lit(id) || open
   let on = to.filter(fn(o) { o.on }).map(fn(o) { (o.via, o.place) })
   let label = @sf.t("web-main.composer.ccLabel")
@@ -1982,7 +1988,7 @@ fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Arra
     }
   }
   let m = @sf.dropdown(c, "composer/cc/menu", open, id, entries, {}, @sf.chooser_menu_w, side=Top, along=End, marks~, check_end=true, row_end~)
-  composing.cc_open = m.open
+  composing.cc_open.set(m.open)
   match m.chosen {
     Some(v) =>
       match to.search_by(fn(o) { o.thread.to_string() == v }) {
@@ -1996,7 +2002,7 @@ fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Arra
           }
           c.tell("composer/cc", fn() { (src.call)("chat.cc", params, fn(_) {  }) })
           // one: done once ticked; several: open to tick the next
-          composing.cc_open = to.length() > 1
+          composing.cc_open.set(to.length() > 1)
         }
         None => ()
       }
@@ -2055,11 +2061,11 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
   // (built before its composer: whether this chat's composer was drawn the frame before, as the composer has it once
   // it is built in this frame, or as it left it)
   let whose = "\u{1}" + r.session
-  composing.notices_new = if composing.frame == c.frame_number() {
-    composing.draft_before == whose
+  composing.notices_new.set(if composing.frame == c.frame_number() {
+    composing.draft_before.get() == whose
   } else {
-    composing.draft == whose
-  }
+    composing.draft.get() == whose
+  })
   if v.archived {
     let restore = c.id("composer/restore")
     let busy = composing.restoring.contains(key)
@@ -2177,7 +2183,7 @@ fn composer_notice(
   if !gone {
     composing.notices_said[key] = (said, offer, failed, icon)
   }
-  let look = @motion.presence(c, key, !gone, initial=composing.notices_new, enter=@sf.waiting_in, exit=@sf.leave)
+  let look = @motion.presence(c, key, !gone, initial=composing.notices_new.get(), enter=@sf.waiting_in, exit=@sf.leave)
   if gone && look is None {
     composing.notices_said.remove(key)
     return

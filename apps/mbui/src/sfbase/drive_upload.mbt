@@ -16,8 +16,8 @@ pub(all) struct DvUpload {
   /// waiting | going | taken (asked: 替换 or 保留两者) | naming (kept beside: its name asked of the core) | failed
   state : @signals.Signal[String]
   error : @signals.Signal[String]
-  mut replace : Bool
-  mut id : String
+  replace : @signals.Signal[Bool]
+  id : @signals.Signal[String]
 }
 
 
@@ -25,10 +25,11 @@ pub(all) struct DvUpload {
 /// The files going up, the serial of the last, whether one is going now; a file being picked to go up, and where to.
 pub(all) struct DriveUploads {
   uploads : @sf.LiveArray[DvUpload]
+  // (plain: the next upload's number, read only as one is added)
   mut serial : Int
   pumping : @signals.Signal[Bool]
-  mut picking : @ui.Pick?
-  mut picking_for : DriveAt
+  picking : @signals.Signal[@ui.Pick?]
+  picking_for : @signals.Signal[DriveAt]
 }
 
 ///|
@@ -36,8 +37,8 @@ pub let ups : DriveUploads = {
   uploads: @sf.LiveArray::new(),
   serial: 0,
   pumping: @signals.signal(false, same=fn(a, b) { a == b }),
-  picking: None,
-  picking_for: { station: "", root: None, path: "" },
+  picking: @signals.signal(None),
+  picking_for: @signals.signal({ station: "", root: None, path: "" }),
 }
 
 ///|
@@ -45,8 +46,8 @@ fn ups_reset() -> Unit {
   ups.uploads.clear()
   ups.serial = 0
   ups.pumping.set(false)
-  ups.picking = None
-  ups.picking_for = { station: "", root: None, path: "" }
+  ups.picking.set(None)
+  ups.picking_for.set({ station: "", root: None, path: "" })
 }
 
 ///|
@@ -63,8 +64,8 @@ pub fn dv_upload(c : @ui.Ctx, at : DriveAt) -> Unit {
   // det-ok(build-effect): its pages call it only under the press that asks for it
   match @ui.pick(Files) {
     Some(p) => {
-      ups.picking = Some(p)
-      ups.picking_for = at
+      ups.picking.set(Some(p))
+      ups.picking_for.set(at)
     }
     None => say(c, @sf.t("android-chat.composer.noFiles"))
   }
@@ -74,11 +75,11 @@ pub fn dv_upload(c : @ui.Ctx, at : DriveAt) -> Unit {
 /// The files picked, once the system has answered: each a row of the folder, going up one after another.
 pub fn dv_take_picked(src : Source, at : DriveAt, entries : Array[DvEntry]) -> Unit {
   ignore(entries)
-  match ups.picking {
-    Some(p) if ups.picking_for == at =>
+  match ups.picking.get() {
+    Some(p) if ups.picking_for.get() == at =>
       match p.files() {
         Some(files) => {
-          ups.picking = None
+          ups.picking.set(None)
           let root = at.root.unwrap_or("")
           for f in files {
             ups.serial += 1
@@ -92,8 +93,8 @@ pub fn dv_take_picked(src : Source, at : DriveAt, entries : Array[DvEntry]) -> U
               sent: @signals.signal(0),
               state: @signals.signal("waiting"),
               error: @signals.signal(""),
-              replace: false,
-              id: "",
+              replace: @signals.signal(false, same=fn(a, b) { a == b }),
+              id: @signals.signal("", same=fn(a, b) { a == b }),
             })
           }
           dv_pump(src)
@@ -122,7 +123,7 @@ pub fn dv_pump(src : Source) -> Unit {
       ups.pumping.set(true)
       u.state.set("going")
       u.sent.set(0)
-      u.id = upload_id("drive\u{1}\{u.root}\u{1}\{u.dir}\u{1}" + file_seed(u.station, u.name.get(), u.bytes), u.serial)
+      u.id.set(upload_id("drive\u{1}\{u.root}\u{1}\{u.dir}\u{1}" + file_seed(u.station, u.name.get(), u.bytes), u.serial))
       dv_up_part(src, u, 0, dv_part_first)
     }
     None => ()
@@ -152,11 +153,11 @@ pub fn dv_up_part(src : Source, u : DvUpload, have : Int, planned : Int) -> Unit
     "station": Json::string(u.station),
     "root": Json::string(u.root),
     "path": Json::string(dv_join(u.dir, u.name.get())),
-    "id": Json::string(u.id),
+    "id": Json::string(u.id.get()),
     "offset": Json::number(have.to_double()),
     "total": Json::number(size.to_double()),
   }
-  if u.replace {
+  if u.replace.get() {
     params["replace"] = Json::boolean(true)
   }
   (src.call_bytes)("drive.upload.part", Json::object(params), part, fn(r) {
@@ -194,7 +195,7 @@ pub fn dv_up_part(src : Source, u : DvUpload, have : Int, planned : Int) -> Unit
       }
       Err(e) => {
         let taken = number(Some(e), "status") == 409.0 || text(Some(e), "code") == "exists"
-        if taken && !u.replace {
+        if taken && !u.replace.get() {
           u.state.set("taken")
         } else {
           u.state.set("failed")

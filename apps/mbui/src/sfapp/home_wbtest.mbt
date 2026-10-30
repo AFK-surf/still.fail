@@ -503,7 +503,7 @@ test "a toast with 撤销 stays its longer time; one without, its 2.6 s" {
 /// button's.
 fn rested_toast(t : @ui.Tester, words : String, action : String) -> ((Double, Double, Double, Double), (Double, Double, Double, Double)?) raise {
   app.toast.set(words)
-  app.toast_action = action
+  app.toast_action.set(action)
   app.toast_n.set(app.toast_n.get() + 1)
   t.frame()
   t.run_for(@kit.presence_in_ms)

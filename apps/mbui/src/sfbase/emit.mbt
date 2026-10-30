@@ -56,32 +56,34 @@ pub(all) struct Turn {
 ///|
 /// A chat's messages coming out of avatars.
 pub(all) struct Emits {
-  decided : Map[String, Bool]
-  done : Map[String, Bool]
+  decided : @sf.LiveMap[String, Bool]
+  done : @sf.LiveMap[String, Bool]
   /// waiting: seq, agent, its activity's folding (from when it began waiting)
   queue : Array[(Double, String, @motion.Anim)]
-  mut current : Turn?
+  current : @signals.Signal[Turn?]
   /// where the flying avatar was last sent, for which message; where it last let one out
-  mut aimed : (Double, Double)?
-  mut aimed_at : Double
-  mut landed : (Double, Double)?
+  aimed : @signals.Signal[(Double, Double)?]
+  aimed_at : @signals.Signal[Double]
+  landed : @signals.Signal[(Double, Double)?]
   /// where the flying avatar's activity's avatar was last drawn: where it goes home to (Return)
-  mut home : (Double, Double)?
+  home : @signals.Signal[(Double, Double)?]
   /// whether what comes in is watched (the page in front, the reader at its end), as last drawn
-  mut watched : Bool
+  watched : @signals.Signal[Bool]
   /// the agent whose avatar the flying copy shows as (its activity's own hidden), "" none
-  mut copied : String
+  copied : @signals.Signal[String]
   /// the flight as last worked out: how far through its pose, from where (y) to where (y), for the motion log
+  // (plain: for the motion log alone)
   mut trace : (Double, Double, Double)
   /// what it is said to move by (Ctx::moving): its turns, each pose's end known as it starts
   mover : @ui.Mover
   /// a message's coming in held for words sent from here on their way (emit_step): till their declared landing (-1:
   /// none)
-  mut held_until : Double
+  held_until : @signals.Signal[Double]
   /// the first row of what was sent from here not in the chat yet (the outbox's, under the messages), as last built
   /// ("" none): a message coming in comes in over it
-  mut out_key : String
+  out_key : @signals.Signal[String]
   /// the chat's messages as last taken (emit_take), each decided: the same version again holds none new
+  // (plain: a cache of what emit_take read, all of it tracked)
   mut taken : Array[Message]
   /// how many times it changed, as a signal (Emits::changed): what reads it (a message's row, an activity's:
   /// Emits::read) is built again as it does, kept or not (mbui's kept_nodes.mbt)
@@ -110,20 +112,20 @@ pub fn emits_of(key : String) -> Emits {
     Some(e) => e
     None => {
       let e = {
-        decided: {},
-        done: {},
+        decided: @sf.LiveMap::new(),
+        done: @sf.LiveMap::new(),
         queue: [],
-        current: None,
-        aimed: None,
-        aimed_at: -1.0,
-        landed: None,
-        home: None,
-        watched: false,
-        copied: "",
+        current: @signals.signal(None),
+        aimed: @signals.signal(None, same=fn(a, b) { a == b }),
+        aimed_at: @signals.signal(-1.0, same=fn(a, b) { a == b }),
+        landed: @signals.signal(None, same=fn(a, b) { a == b }),
+        home: @signals.signal(None, same=fn(a, b) { a == b }),
+        watched: @signals.signal(false, same=fn(a, b) { a == b }),
+        copied: @signals.signal("", same=fn(a, b) { a == b }),
         trace: (0.0, 0.0, 0.0),
         mover: @ui.Mover::new(),
-        held_until: -1.0,
-        out_key: "",
+        held_until: @signals.signal(-1.0, same=fn(a, b) { a == b }),
+        out_key: @signals.signal("", same=fn(a, b) { a == b }),
         taken: [],
         said: @signals.signal(0),
       }
@@ -154,8 +156,8 @@ pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Boo
       continue
     }
     let agent = if m.author_kind == "agent" && !m.mine && !m.system { m.by.agent } else { "" }
-    let goes = e.watched && m.said && agent != "" && showing.contains(agent)
-    e.decided[k] = goes
+    let goes = e.watched.get() && m.said && agent != "" && showing.contains(agent)
+    e.decided.put(k, goes)
     if goes {
       // its agent's activity folds from now
       e.queue.push((m.seq, agent, pose_clock(Fold.ms(), None)))
@@ -183,7 +185,7 @@ pub fn emit_held(e : Emits, seq : Double) -> Bool {
   if e.decided.get(k) != Some(true) || e.done.contains(k) {
     return false
   }
-  match e.current {
+  match e.current.get() {
     Some(t) if t.seq == seq && t.pose != Fold => false
     _ => true
   }
@@ -193,7 +195,7 @@ pub fn emit_held(e : Emits, seq : Double) -> Bool {
 /// In the list where it comes in, its avatar on its way to it (Float): not drawn yet.
 pub fn emit_awaited(e : Emits, seq : Double) -> Bool {
   e.read()
-  match e.current {
+  match e.current.get() {
     Some(t) => t.seq == seq && t.pose == Float
     None => false
   }
@@ -202,7 +204,7 @@ pub fn emit_awaited(e : Emits, seq : Double) -> Bool {
 ///|
 pub fn emit_emitting(e : Emits, seq : Double) -> Bool {
   e.read()
-  match e.current {
+  match e.current.get() {
     Some(t) => t.seq == seq && t.pose == Spit
     None => false
   }
@@ -212,7 +214,7 @@ pub fn emit_emitting(e : Emits, seq : Double) -> Bool {
 /// An agent's activity folded to its avatar: from when its first message begins waiting until its last is out.
 pub fn emit_folded(e : Emits, agent : String) -> Bool {
   e.read()
-  match e.current {
+  match e.current.get() {
     Some(t) if t.agent == agent => return true
     _ => ()
   }
@@ -227,7 +229,7 @@ pub fn emit_keeps(e : Emits) -> Map[String, Bool] {
   for q in e.queue {
     out[q.1] = true
   }
-  match e.current {
+  match e.current.get() {
     Some(t) => out[t.agent] = true
     None => ()
   }
@@ -237,26 +239,26 @@ pub fn emit_keeps(e : Emits) -> Map[String, Bool] {
 ///|
 /// Everything waiting or coming out shows at once, where it is.
 pub fn emit_release(e : Emits) -> Unit {
-  if e.queue.length() > 0 || e.current is Some(_) || e.copied != "" {
+  if e.queue.length() > 0 || e.current.get() is Some(_) || e.copied.get() != "" {
     e.changed()
   }
   for q in e.queue {
-    e.done[seq_s(q.0)] = true
+    e.done.put(seq_s(q.0), true)
   }
-  match e.current {
-    Some(t) => e.done[seq_s(t.seq)] = true
+  match e.current.get() {
+    Some(t) => e.done.put(seq_s(t.seq), true)
     None => ()
   }
   e.queue.clear()
-  e.current = None
-  e.copied = ""
+  e.current.set(None)
+  e.copied.set("")
 }
 
 ///|
 pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
   e.changed()
   if e.queue.length() == 0 {
-    e.current = None
+    e.current.set(None)
     return
   }
   let (seq, who, fold) = e.queue.remove(0)
@@ -265,13 +267,13 @@ pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
   // before was declared to end, else from this frame
   let float = who == agent || fold.over()
   let left = Fold.ms() * (1.0 - fold.get())
-  e.current = Some({
+  e.current.set(Some({
     seq,
     agent: who,
     pose: if float { Float } else { Fold },
     from: None,
     clock: if float { pose_clock(Float.ms(), at) } else { pose_clock(left, at) },
-  })
+  }))
   // said once as a turn sets out: it moves until its poses are played (Emits::rest_at)
   c.moving(e.mover, e as &@ui.Moving)
 }
@@ -282,8 +284,8 @@ pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
 impl @ui.Moving for Emits with rest_at(self, now, frame) {
   ignore(now)
   ignore(frame)
-  match self.current {
-    Some(t) => dmax(t.clock.ends(), self.held_until)
+  match self.current.get() {
+    Some(t) => dmax(t.clock.ends(), self.held_until.get())
     None => -1.0
   }
 }
@@ -294,7 +296,7 @@ impl @ui.Moving for Emits with rest_at(self, now, frame) {
 /// longer, not in proportion). The hop (Float) is a hop's, over its own height above the higher of its ends; the drop
 /// and the folding, a row's.
 fn return_ms(e : Emits) -> Double {
-  match (e.landed, e.home) {
+  match (e.landed.get(), e.home.get()) {
     (Some(l), Some(h)) => {
       let far = dmax((h.0 - l.0).abs(), (h.1 - l.1).abs())
       (Return.ms() * @ui.move_ms(far) / @ui.move_ms(emit_way_points)).round()
@@ -334,13 +336,13 @@ pub fn pose_clock(ms : Double, at : Double?) -> @motion.Anim {
 /// does not follow its end while they fly; the avatar on its way then takes till their landing to come down.
 pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Unit {
   // (what of it is read as it is built, as it was: what reads it told where it changed, Emits::changed)
-  let was_shown = (e.current, e.copied, e.held_until, e.done.length(), e.queue.length())
-  if !e.watched || @ui.reduced_motion() {
+  let was_shown = (e.current.get(), e.copied.get(), e.held_until.get(), e.done.length(), e.queue.length())
+  if !e.watched.get() || @ui.reduced_motion() {
     emit_release(e)
     turns.over(c, Emits, turns.moment(c))
     return
   }
-  if e.current is None {
+  if e.current.get() is None {
     if e.queue.length() == 0 {
       return
     }
@@ -351,27 +353,27 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
     emit_next(c, e, "", at=turns.started_at(emits_turn))
   }
   // a pose's end reached: the next pose, from its own beginning in this frame
-  let was = e.current
+  let was = e.current.get()
   let mut steps = 0
   while steps < 6 {
     steps = steps + 1
     // (none left: still on to say no copy flies, its activity's avatar back)
-    let t = match e.current {
+    let t = match e.current.get() {
       Some(t) => t
       None => break
     }
     // the avatar on its way while words sent from here land after it would: its way the rest of it until they land,
     // so it comes down as they do (not there before them, waiting)
     let t = match t.pose {
-      Float if sending >= 0.0 && sending > t.clock.ends() && sending != e.held_until && !t.clock.over() => {
+      Float if sending >= 0.0 && sending > t.clock.ends() && sending != e.held_until.get() && !t.clock.over() => {
         let u = t.clock.get()
         // (its way is linear: where it is says when now is on it)
         let now = t.clock.ends() - (1.0 - u) * pose_ms(Float, t.from)
         let way = @motion.Anim::new(u)
         way.animate(1.0, @motion.tween(sending - now, ease=Linear), start_at=now)
-        e.held_until = sending
+        e.held_until.set(sending)
         let t = { ..t, clock: way }
-        e.current = Some(t)
+        e.current.set(Some(t))
         c.moving(e.mover, e as &@ui.Moving)
         t
       }
@@ -384,58 +386,58 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
     // the next from where this one was declared to end, whichever frame sees it
     let at = t.clock.ends()
     match t.pose {
-      Fold => e.current = Some({ ..t, pose: Float, clock: pose_clock(Float.ms(), Some(at)) })
+      Fold => e.current.set(Some({ ..t, pose: Float, clock: pose_clock(Float.ms(), Some(at)) }))
       Float => {
         if sending != -1.0 {
-          if sending > e.held_until {
-            e.held_until = sending
+          if sending > e.held_until.get() {
+            e.held_until.set(sending)
             c.moving(e.mover, e as &@ui.Moving)
           }
           break
         }
-        let at = dmax(at, e.held_until)
-        e.held_until = -1.0
-        e.current = Some({ ..t, pose: Spit, from: None, clock: pose_clock(Spit.ms(), Some(at)) })
+        let at = dmax(at, e.held_until.get())
+        e.held_until.set(-1.0)
+        e.current.set(Some({ ..t, pose: Spit, from: None, clock: pose_clock(Spit.ms(), Some(at)) }))
       }
       Spit =>
-        match (e.queue.get(0), e.landed) {
+        match (e.queue.get(0), e.landed.get()) {
           // the same agent's next message is waiting: the avatar drops on to it from here, not going home to hop
           (Some(next), Some(l)) if next.1 == t.agent => {
             e.queue.remove(0) |> ignore
-            e.done[seq_s(t.seq)] = true
-            e.current = Some({
+            e.done.put(seq_s(t.seq), true)
+            e.current.set(Some({
               seq: next.0,
               agent: next.1,
               pose: Float,
               from: Some(l),
               clock: pose_clock(emit_drop_ms, Some(at)),
-            })
+            }))
           }
-          _ => e.current = Some({ ..t, pose: Return, clock: pose_clock(return_ms(e), Some(at)) })
+          _ => e.current.set(Some({ ..t, pose: Return, clock: pose_clock(return_ms(e), Some(at)) }))
         }
       Return => {
-        e.done[seq_s(t.seq)] = true
+        e.done.put(seq_s(t.seq), true)
         emit_next(c, e, t.agent, at~)
         // none left: their turn is over where this one was declared to end
-        if e.current is None {
+        if e.current.get() is None {
           turns.over(c, Emits, at)
         }
       }
     }
   }
-  e.copied = match e.current {
+  e.copied.set(match e.current.get() {
     Some(t) if t.pose != Fold => t.agent
     _ => ""
-  }
+  })
   // a pose ended here: what plays now says so (its end known as it starts)
-  match (was, e.current) {
+  match (was, e.current.get()) {
     (Some(a), Some(b)) if a.pose != b.pose || a.seq != b.seq => c.moving(e.mover, e as &@ui.Moving)
     _ => ()
   }
   let (current, copied, held, done, queue) = was_shown
-  if !physical_equal(current, e.current) ||
-    copied != e.copied ||
-    held != e.held_until ||
+  if !physical_equal(current, e.current.get()) ||
+    copied != e.copied.get() ||
+    held != e.held_until.get() ||
     done != e.done.length() ||
     queue != e.queue.length() {
     e.changed()
@@ -468,7 +470,7 @@ pub fn emit_smooth(t : Double) -> Double {
 /// when none flies (ChatMotion.flight): between where it set out and where it is going, both as last laid out.
 pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String]) -> (Double, Double, Double, Double)? {
   e.read()
-  let t = match e.current {
+  let t = match e.current.get() {
     Some(t) if t.pose != Fold => t
     _ => return None
   }
@@ -476,7 +478,7 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
     Some(r) => (r.0, r.1)
     None => return None
   }
-  e.home = Some(avatar)
+  e.home.set(Some(avatar))
   // before the message is in the list: where its avatar will be, the first activity's place (the message comes in
   // there, the activities move down), or over what was sent from here not in the chat yet (the outbox's rows, under
   // the messages: it comes in over them), 3 down its row as a message's avatar sits; as it comes in, where it was
@@ -485,8 +487,8 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
     Some(r) => Some((r.0, r.1 + 3.0))
     None => None
   }
-  let held = match e.aimed {
-    Some(a) if e.aimed_at == t.seq && t.pose != Float => Some(a)
+  let held = match e.aimed.get() {
+    Some(a) if e.aimed_at.get() == t.seq && t.pose != Float => Some(a)
     _ => None
   }
   // (the activities' avatars sit 3 down their rows, as a message's does)
@@ -501,8 +503,8 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
       None => ()
     }
   }
-  if e.out_key != "" {
-    match @motion.measured_rect(c, "emit-out/" + key + "/" + e.out_key) {
+  if e.out_key.get() != "" {
+    match @motion.measured_rect(c, "emit-out/" + key + "/" + e.out_key.get()) {
       Some(r) => {
         let y = r.1 + 3.0
         match first {
@@ -519,8 +521,8 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
     (None, None, Some(f)) => f
     _ => return None
   }
-  e.aimed = Some(landing)
-  e.aimed_at = t.seq
+  e.aimed.set(Some(landing))
+  e.aimed_at.set(t.seq)
   let u = emit_clock(c, t)
   e.trace = (u, avatar.1, landing.1)
   match t.pose {
@@ -545,7 +547,7 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
       Some((start.0 + (landing.0 - start.0) * across, y, 1.0 - stretch * 0.6, 1.0 + stretch))
     }
     Spit => {
-      e.landed = Some(landing)
+      e.landed.set(Some(landing))
       let k = emit_settle(u * Spit.ms() / 1000.0)
       let swell = 1.0 +
         0.12 *
@@ -579,7 +581,7 @@ pub fn emit_out(c : @ui.Ctx, i : Int, e : Emits, seq : Double, from_x : Double) 
   if !emit_emitting(e, seq) {
     return
   }
-  let t = e.current.unwrap()
+  let t = e.current.get().unwrap()
   let u = emit_clock(c, t)
   let k = @ui.Ease::Out.at(u)
   match @motion.measured_rect(c, "emit-col/" + seq_s(seq)) {

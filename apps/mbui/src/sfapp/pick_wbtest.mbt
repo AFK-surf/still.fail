@@ -29,7 +29,7 @@ test "held still on a message's words: the word under the finger is picked, the 
   let calls : Array[Made] = []
   let t = fake_core(calls)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
-  assert_true(pk.ts != "")
+  assert_true(pk.ts.get() != "")
   assert_eq(pk.sel.b - pk.sel.a, 1)
   // felt as it picked, once (MessagePick.kt: LongPress)
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
@@ -58,7 +58,7 @@ test "a finger sliding on widens it by words, from the word first held; the list
   assert_true(pk.sel.b > first.1 + 2)
   assert_eq(t.list_offset(), before)
   // lifting it tapped nothing: still picked
-  assert_true(pk.ts != "")
+  assert_true(pk.ts.get() != "")
   t.run_for(pick_bar_in_ms)
   t.assert_idle()
 }
@@ -71,7 +71,7 @@ test "复制 puts the passage on the clipboard and lets go; 全选 takes all of 
   let one = t.ctx().words_of(pk.sel.key).unwrap().slice(pk.sel.a, pk.sel.b)
   t.tap_text("复制")
   assert_eq(t.clipboard(), one)
-  assert_eq(pk.ts, "")
+  assert_eq(pk.ts.get(), "")
   assert_true(t.find("已复制") is Some(_))
   // (its toast gone: it says 已复制 over the composer, where the bar of the next passage picked stands)
   t.run_for(@sf.toast_ms)
@@ -88,7 +88,7 @@ test "分享这一轮 on the bar lets go and shares the message's turn as a pict
   let t = fake_core(calls)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.click(Button, label="分享这一轮")
-  assert_eq(pk.ts, "")
+  assert_eq(pk.ts.get(), "")
   let asked = named(calls, "chat.publishPreview")
   assert_eq(asked.length(), 1)
   assert_eq(text(Some(asked[0].params), "station"), "ws1/st1")
@@ -111,7 +111,7 @@ test "a handle moves its end: the passage's end follows the finger" {
   slide(t, kx, ky, kx + 50.0, ky, 5)
   t.release(kx + 50.0, ky)
   assert_true(pk.sel.b > was + 2)
-  assert_true(pk.ts != "")
+  assert_true(pk.ts.get() != "")
   t.assert_idle()
 }
 
@@ -167,7 +167,7 @@ test "a handle moved down lines to a short line and let go past its end: still p
   let calls : Array[Made] = []
   let t = long_answer_core(calls)
   hold_on(t, "列表的每一行先按估计的高度占位") |> ignore
-  assert_true(pk.ts == "ts11")
+  assert_true(pk.ts.get() == "ts11")
   let w = t.ctx().words_of(pk.sel.key).unwrap()
   let lines = w.rects(pk.sel.a, pk.sel.b)
   let last = lines[0]
@@ -188,7 +188,7 @@ test "a handle moved down lines to a short line and let go past its end: still p
   assert_eq(pk.sel.b, short_end)
   t.release(tx, ty)
   // let go: no tap away from it, the passage kept and its bar back over it
-  assert_eq(pk.ts, "ts11")
+  assert_eq(pk.ts.get(), "ts11")
   assert_eq(pk.sel.b, short_end)
   t.frame()
   assert_true(t.find("复制") is Some(_))
@@ -201,10 +201,10 @@ test "a tap anywhere else lets go of it, as back does" {
   let t = fake_core(calls)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.tap(195.0, 300.0)
-  assert_eq(pk.ts, "")
+  assert_eq(pk.ts.get(), "")
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.back()
-  assert_eq(pk.ts, "")
+  assert_eq(pk.ts.get(), "")
   // the chat is still the page shown (back let go of the pick only)
   assert_eq(app.nav.depth(), 2)
 }
@@ -214,10 +214,10 @@ test "its words no longer laid out: what was picked goes in that very frame, not
   let calls : Array[Made] = []
   let t = fake_core(calls)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
-  assert_true(pk.ts != "")
+  assert_true(pk.ts.get() != "")
   // (as if its message scrolled far off: no box laid out holds its words now)
   pk.sel.key = "gone"
   t.frame()
-  assert_eq(pk.ts, "")
+  assert_eq(pk.ts.get(), "")
   t.assert_idle()
 }

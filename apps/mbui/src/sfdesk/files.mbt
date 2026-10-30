@@ -31,16 +31,16 @@ pub fn files_go(at : DriveAt) -> Unit {
 ///|
 /// What the shell holds: where it last told the tabs the address moved to.
 priv struct Shell {
-  mut arrived : String
+  arrived : @signals.Signal[String]
 }
 
 ///|
 // kept across runs: the shell's state (shell_reset puts it back)
-let shell : Shell = { arrived: "" }
+let shell : Shell = { arrived: @signals.signal("" , same=fn(a, b) { a == b })}
 
 ///|
 fn shell_reset() -> Unit {
-  shell.arrived = ""
+  shell.arrived.set("")
 }
 
 ///|
@@ -78,10 +78,10 @@ pub fn files_shell(
   drag_frame(c, src, ws)
   // the address moved (a link, the sidebar, history): the side in front follows it
   let arrive = ws + "\n" + here.station + "\n" + here.root.unwrap_or("") + "\n" + here.path
-  if shell.arrived != arrive {
+  if shell.arrived.get() != arrive {
     c.after_build("files-arrive", fn() {
-      if shell.arrived != arrive {
-        shell.arrived = arrive
+      if shell.arrived.get() != arrive {
+        shell.arrived.set(arrive)
         files_tabs_act(src, ws, "arrive", pane=here, fn(_) {  })
       }
     })

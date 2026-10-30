@@ -24,11 +24,11 @@ pub(all) struct BrowseDoes {
 /// to bring into view.
 priv struct BrowsePlace {
   name : String
-  mut told : String
-  mut last : BrowseView?
-  mut renaming : String?
-  mut field : @ui.Field
-  mut show : String?
+  told : @signals.Signal[String]
+  last : @signals.Signal[BrowseView?]
+  renaming : @signals.Signal[String?]
+  field : @signals.Signal[@ui.Field]
+  show : @signals.Signal[String?]
 }
 
 ///|
@@ -68,11 +68,11 @@ fn browse_place(key : String) -> BrowsePlace {
     None => {
       let p : BrowsePlace = {
         name: "p\{browse_places.length() + 1}",
-        told: "",
-        last: None,
-        renaming: None,
-        field: @ui.Field::new(),
-        show: None,
+        told: @signals.signal("", same=fn(a, b) { a == b }),
+        last: @signals.signal(None),
+        renaming: @signals.signal(None, same=fn(a, b) { a == b }),
+        field: @signals.signal(@ui.Field::new()),
+        show: @signals.signal(None, same=fn(a, b) { a == b }),
       }
       browse_places[key] = p
       p
@@ -117,19 +117,19 @@ pub fn browse(
   let b0 : Browse = { key, owner, view, at, root, write, does, shown: None }
   let got = browse_topic(src, b0.where_())
   match got {
-    Some(v) => p.last = Some(v)
+    Some(v) => p.last.set(Some(v))
     None => ()
   }
-  let b = { ..b0, shown: match got { Some(v) => Some(v); None => p.last } }
+  let b = { ..b0, shown: match got { Some(v) => Some(v); None => p.last.get() } }
   let here = view + "\n" + at.station + "\n" + root + "\n" + at.path
-  if p.told != here {
+  if p.told.get() != here {
     // (a name being changed lets go as another folder is shown)
-    if p.told != "" {
-      p.renaming = None
+    if p.told.get() != "" {
+      p.renaming.set(None)
     }
     c.after_build("browse-at/" + key, fn() {
-      if p.told != here {
-        p.told = here
+      if p.told.get() != here {
+        p.told.set(here)
         browse_send(c, src, b, { "act": "at" })
       }
     })
@@ -191,7 +191,7 @@ pub fn Browse::is_chosen(self : Browse, folder : String, name : String) -> Bool 
 ///|
 /// The row whose name is being changed (`folder\nname`).
 pub fn Browse::renaming(self : Browse) -> String? {
-  browse_place(self.key).renaming
+  browse_place(self.key).renaming.get()
 }
 
 ///|
@@ -249,7 +249,7 @@ fn browse_after(src : Source, b : Browse, done : Json) -> Unit {
     _ => ()
   }
   match field(d, "show") {
-    Some(Object(_)) as s => p.show = Some(row_key(text(s, "folder"), text(s, "name")))
+    Some(Object(_)) as s => p.show.set(Some(row_key(text(s, "folder"), text(s, "name"))))
     _ => ()
   }
 }
@@ -357,14 +357,14 @@ pub fn Browse::arrange_as(self : Browse, c : @ui.Ctx, src : Source, by? : String
 /// (its field holding the name, picked but its extension: NameField's onFocus)
 fn browse_rename_start(b : Browse, folder : String, name : String, dir : Bool) -> Unit {
   let p = browse_place(b.key)
-  p.renaming = Some(row_key(folder, name))
-  p.field = @ui.Field::new()
-  p.field.set(name)
+  p.renaming.set(Some(row_key(folder, name)))
+  p.field.set(@ui.Field::new())
+  p.field.get().set(name)
   let dot = match name.rev_find(".") {
     Some(i) if i > 0 && !dir => i
     _ => name.length()
   }
-  p.field.pick(0, dot)
+  p.field.get().pick(0, dot)
 }
 
 ///|
@@ -380,7 +380,7 @@ pub fn Browse::start_rename(self : Browse, c : @ui.Ctx, src : Source, folder : S
 ///|
 /// The field a name is changed in (the row's whose name it is).
 pub fn Browse::rename_field(self : Browse) -> @ui.Field {
-  browse_place(self.key).field
+  browse_place(self.key).field.get()
 }
 
 ///|
@@ -388,7 +388,7 @@ pub fn Browse::rename_field(self : Browse) -> @ui.Field {
 /// has it; what is wrong with the name said.
 pub fn Browse::rename(self : Browse, c : @ui.Ctx, src : Source, folder : String, e : DvEntry, to : String?) -> Unit {
   let p = browse_place(self.key)
-  p.renaming = None
+  p.renaming.set(None)
   let name = match to {
     Some(t) => t.trim(chars=" \t\n").to_string()
     None => return
@@ -452,7 +452,7 @@ pub fn Browse::new_folder(self : Browse, c : @ui.Ctx, src : Source, folder : Str
                   Ok(_) => {
                     browse_send(c, src, b, { "act": "choose", "folder": Json::string(folder), "name": Json::string(name) })
                     browse_rename_start(b, folder, name, true)
-                    browse_place(b.key).show = Some(row_key(folder, name))
+                    browse_place(b.key).show.set(Some(row_key(folder, name)))
                   }
                   Err(err) => failed(err)
                 }
@@ -470,8 +470,8 @@ pub fn Browse::new_folder(self : Browse, c : @ui.Ctx, src : Source, folder : Str
 /// The row to bring into view, taken (a list draws it so once).
 pub fn Browse::take_show(self : Browse) -> String? {
   let p = browse_place(self.key)
-  let s = p.show
-  p.show = None
+  let s = p.show.get()
+  p.show.set(None)
   s
 }
 
@@ -521,7 +521,7 @@ pub fn Browse::keys(self : Browse, c : @ui.Ctx, src : Source) -> Unit {
     Some(v) => v.keys
     None => []
   }
-  if browse_place(self.key).renaming is Some(_) || c.field_focused() {
+  if browse_place(self.key).renaming.get() is Some(_) || c.field_focused() {
     return
   }
   let b = self

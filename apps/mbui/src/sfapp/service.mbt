@@ -113,7 +113,7 @@ fn preview_file_page(c : @ui.Ctx, src : Source, station : String, key : String, 
         let f = match service_files.get(service_key(station, job)) {
           Some(f) => f
           None => {
-            let f : FilePage = { html, state, station, key, path }
+            let f : FilePage = { html, state: @signals.signal(state, same=fn(a, b) { a == b }), station, key, path }
             service_files[service_key(station, job)] = f
             f
           }

@@ -38,7 +38,7 @@ let source : @shelf.Source = {
       _ => Some(Err("没有这一章"))
     }
   },
-  save_place: fn(id, chapter, offset, _at) { places[id] = (chapter, offset) },
+  save_place: fn(id, chapter, offset, _at) { places.set(id, (chapter, offset)) },
   now: fn() { @ui.wall_ms() },
 }
 

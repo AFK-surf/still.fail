@@ -34,18 +34,18 @@ pub let svc_presets : Array[(String, Int, Int)] = [
 pub(all) struct ServicePage {
   station : String
   job : String
-  mut site : @ui.NativeView?
-  mut port : Int
+  site : @signals.Signal[@ui.NativeView?]
+  port : @signals.Signal[Int]
   /// the service's cookies, by name (kept here: sent along with each request)
   cookies : Map[String, String]
-  mut viewport : Viewport?
-  mut restarting : Bool
+  viewport : @signals.Signal[Viewport?]
+  restarting : @signals.Signal[Bool]
   /// requests under way: the core's call for each
   calls : @sf.LiveMap[Int, Int]
-  mut asked : Int
+  asked : @signals.Signal[Int]
   /// the path the address field was last given, and the one last said on the log
-  mut shown_path : String
-  mut logged_path : String
+  shown_path : @signals.Signal[String]
+  logged_path : @signals.Signal[String]
   /// the address field's words (the field shows them)
   address : @ui.Field
   /// what its page has open through the app (service_link.mbt)
@@ -54,16 +54,16 @@ pub(all) struct ServicePage {
   /// Preview.kt StageState), moved by a finger on it (the toolbar's 移动), where it was drawn last, the stage's fingers,
   /// when the ground was last tapped
   view : @kit.Zoom
-  mut moving : Bool
-  mut placed : Placed?
-  mut hold : StageHold?
-  mut tapped_at : Double
+  moving : @signals.Signal[Bool]
+  placed : @signals.Signal[Placed?]
+  hold : @signals.Signal[StageHold?]
+  tapped_at : @signals.Signal[Double]
   /// its name and its chat's agent (marks go into that chat's draft: none, nothing to mark for), its marks
-  mut name : String
-  mut session : String
+  name : @signals.Signal[String]
+  session : @signals.Signal[String]
   marks : PageMarks
   /// a size being typed (the sizes sheet's 自定义): put once its field is let go of; its two fields' words
-  mut custom_typing : Bool
+  custom_typing : @signals.Signal[Bool]
   custom_w : @ui.Field
   custom_h : @ui.Field
 }
@@ -135,33 +135,36 @@ pub fn service_page_for(station : String, job : String, prefs? : Json? = None) -
       let p : ServicePage = {
         station,
         job,
-        site: None,
-        port: 0,
+        site: @signals.signal(None),
+        port: @signals.signal(0, same=fn(a, b) { a == b }),
         cookies: {},
-        viewport: match svc_viewports.get(key) {
-          Some(v) => v
-          None =>
-            match field(field(prefs, "previewSizes"), key) {
-              Some(String(s)) => size_of_kept(s)
-              _ => None
-            }
-        },
-        restarting: false,
+        viewport: @signals.signal(
+          match svc_viewports.get(key) {
+            Some(v) => v
+            None =>
+              match field(field(prefs, "previewSizes"), key) {
+                Some(String(s)) => size_of_kept(s)
+                _ => None
+              }
+          },
+          same=fn(a, b) { a == b },
+        ),
+        restarting: @signals.signal(false, same=fn(a, b) { a == b }),
         calls: @sf.LiveMap::from({}),
-        asked: 0,
-        shown_path: "",
-        logged_path: "",
+        asked: @signals.signal(0, same=fn(a, b) { a == b }),
+        shown_path: @signals.signal("", same=fn(a, b) { a == b }),
+        logged_path: @signals.signal("", same=fn(a, b) { a == b }),
         address: @ui.Field::new(),
         link: page_link_new(),
         view: stage_zoom(),
-        moving: false,
-        placed: None,
-        hold: None,
-        tapped_at: -1.0e9,
-        name: "",
-        session: "",
+        moving: @signals.signal(false, same=fn(a, b) { a == b }),
+        placed: @signals.signal(None),
+        hold: @signals.signal(None),
+        tapped_at: @signals.signal(-1.0e9, same=fn(a, b) { a == b }),
+        name: @signals.signal("", same=fn(a, b) { a == b }),
+        session: @signals.signal("", same=fn(a, b) { a == b }),
         marks: page_marks_new(),
-        custom_typing: false,
+        custom_typing: @signals.signal(false, same=fn(a, b) { a == b }),
         custom_w: @ui.Field::new(),
         custom_h: @ui.Field::new(),
       }
@@ -177,7 +180,7 @@ pub fn service_left(src : Source, station : String, job : String) -> Unit {
   let key = service_key(station, job)
   match service_pages.get(key) {
     Some(p) => {
-      match p.site {
+      match p.site.get() {
         Some(v) => v.close()
         None => ()
       }
@@ -208,8 +211,8 @@ pub(all) struct Sink {
 /// from here, its body as the page left it here (x-stillfail-body), its cookies sent along, the service's redirects
 /// followed (5 at most, to the service only), its Set-Cookie kept; a page of the service's with page.js's tag in it.
 pub fn service_serve(src : Source, p : ServicePage, req : @ui.SiteRequest, reply : @ui.SiteReply) -> Unit {
-  p.asked += 1
-  if p.asked <= 3 {
+  p.asked.set(p.asked.get() + 1)
+  if p.asked.get() <= 3 {
     @ui.log("service: the page asks \{req.verb} \{req.path}")
   }
   let bare = match req.path.find("?") {
@@ -286,7 +289,7 @@ pub fn service_serve(src : Source, p : ServicePage, req : @ui.SiteRequest, reply
 /// Whether the page's top fetch() comes to the app on its port: where the app keeps the page's cookies (a host that
 /// keeps them itself has them where the app cannot send them along).
 pub fn service_fetches(p : ServicePage) -> Bool {
-  match p.site {
+  match p.site.get() {
     Some(v) => !v.keeps_cookies()
     None => false
   }
@@ -310,7 +313,7 @@ pub fn service_ask(
   follow? : Bool = true,
   cookies? : Bool = true,
 ) -> Unit {
-  let host_keeps = match p.site {
+  let host_keeps = match p.site.get() {
     Some(v) => v.keeps_cookies()
     None => false
   }
@@ -337,7 +340,7 @@ pub fn service_ask(
   }
   let params : Map[String, Json] = {
     "station": Json::string(p.station),
-    "port": Json::number(p.port.to_double()),
+    "port": Json::number(p.port.get().to_double()),
     "method": Json::string(verb),
     "path": Json::string(path),
     "headers": Json::array(sent.map(fn(h) { Json::array([Json::string(h.0), Json::string(h.1)]) })),
@@ -693,8 +696,8 @@ pub(all) struct Placed {
 /// A finger (or two) on the stage, from where it went down (Preview.kt Stage's gesture): where they were the frame
 /// before (or when one came or went), how far one finger went, when it went down, whether on the page.
 pub(all) struct StageHold {
-  mut was : Array[(Double, Double)]
-  mut travelled : Double
+  was : @signals.Signal[Array[(Double, Double)]]
+  travelled : @signals.Signal[Double]
   down_at : Double
   on_page : Bool
 }
@@ -771,7 +774,7 @@ pub fn size_digits(s : String) -> String {
 /// A visualization's page for service_body: its file, what its widget keeps now, where it is kept.
 pub(all) struct FilePage {
   html : String
-  mut state : Json?
+  state : @signals.Signal[Json?]
   station : String
   key : String
   path : String
@@ -800,7 +803,7 @@ pub fn service_pages_reset() -> Unit {
 /// (file_serve); what its page says taken apart (a visualization's bridge its own, page.js the rest: link_said); a link
 /// elsewhere not followed in the page but handed to `leave`.
 pub fn service_site(src : Source, p : ServicePage, file : FilePage?, leave : (String) -> Unit) -> @ui.NativeView {
-  match p.site {
+  match p.site.get() {
     Some(v) => v
     None => {
       let v = @ui.NativeView::site(
@@ -816,7 +819,7 @@ pub fn service_site(src : Source, p : ServicePage, file : FilePage?, leave : (St
             Some(f) => file_said(src, f, words)
             None => ()
           }
-          match p.site {
+          match p.site.get() {
             Some(v) => link_said(src, p, v, words)
             None => ()
           }
@@ -825,8 +828,8 @@ pub fn service_site(src : Source, p : ServicePage, file : FilePage?, leave : (St
         too_slow=svc("android-chat.web.slow"),
         leave~,
       )
-      @ui.log("service: \{p.name} on \{p.station} (port \{p.port}) opened in a site view")
-      p.site = Some(v)
+      @ui.log("service: \{p.name.get()} on \{p.station} (port \{p.port.get()}) opened in a site view")
+      p.site.set(Some(v))
       v
     }
   }

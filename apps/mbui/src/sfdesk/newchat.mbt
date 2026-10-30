@@ -27,7 +27,7 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let on = station is Some(Object(_)) && text(v, "blocked") == "" && address != ""
   // (what fades as it is left for a chat by the sidebar: switch.mbt)
   if on {
-    page_switch.new_view = v
+    page_switch.new_view.set(v)
   }
   if new_drive_station(src, w) is None {
     @sfpages.new_chat_page(c, src, w, frame)
@@ -63,7 +63,7 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   // (on the tape, laid out Medium, its panel is a panel of its own beside the page's, as a chat's: the frame's,
   // tape_side)
-  if wide.tape {
+  if wide.tape.get() {
     with_bar()
     return
   }
@@ -96,7 +96,7 @@ fn new_left(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, up : Double, fa
   let files = new_files_open(src, w.id)
   let left = fn() { @sfpages.new_chat_left(c, src, w, frame, v, up, fade) }
   // (on the tape its panel is the frame's: the page alone)
-  if wide.tape {
+  if wide.tape.get() {
     left()
     return
   }

@@ -294,7 +294,7 @@ fn ScreenRig::frame(self : ScreenRig, ts : Double) -> Unit {
 fn ScreenRig::at(self : ScreenRig, x : Double, y : Double) -> (Double, Double) {
   let u = self.ui()
   let s = u.shown()
-  (u.stage_x + s.x + x * s.w, u.stage_y + s.y + y * s.h)
+  (u.stage_x.get() + s.x + x * s.w, u.stage_y.get() + s.y + y * s.h)
 }
 
 ///|
@@ -363,7 +363,7 @@ test "it asks for the view by its name, JPEG only here, as large as its stage; �
   assert_eq(text(Some(asked[0]), "view"), r.sess().view)
   assert_eq(items(Some(asked[0]), "codecs"), [Json::string("jpeg")])
   // 自动: the stage it is shown on, in the device's pixels
-  let (sw, sh) = r.sess().stage_px
+  let (sw, sh) = r.sess().stage_px.get()
   assert_true(sw > 0 && sh > 0)
   assert_eq(number(Some(asked[0]), "maxWidth"), sw.to_double())
   assert_eq(number(Some(asked[0]), "maxHeight"), sh.to_double())
@@ -465,7 +465,7 @@ test "zoomed in, the part in sight is asked for, as sharp as it is shown; its fr
   let u = r.ui()
   // not zoomed: nothing told
   assert_eq(r.told("screen.look").length(), 0)
-  u.zoom.zoom_to(u.zoom.fit() * 4.0, u.box_w / 2.0, u.box_h / 2.0, false)
+  u.zoom.zoom_to(u.zoom.fit() * 4.0, u.box_w.get() / 2.0, u.box_h.get() / 2.0, false)
   r.t.draw()
   r.t.draw()
   let looks = r.told("screen.look")
@@ -476,7 +476,7 @@ test "zoomed in, the part in sight is asked for, as sharp as it is shown; its fr
   assert_true(close_to(number(region, "x"), 0.375))
   assert_true(close_to(number(region, "w"), 0.25))
   let rh = number(region, "h")
-  assert_true(close_to(rh, u.box_h / shown.h))
+  assert_true(close_to(rh, u.box_h.get() / shown.h))
   assert_true(close_to(number(Some(looks[0]), "width") / number(Some(looks[0]), "height"), 0.25 * shown.w / (rh * shown.h)))
   // the part's frames (the station's config saying the part): a decoder of their own, drawn over the whole there
   let part : Json = { "x": 0.375, "y": number(region, "y"), "w": 0.25, "h": rh }
@@ -658,9 +658,9 @@ test "全屏 (控制中心's upright): the screen alone, sideways, its tools fol
   r.t.resize(844.0, 390.0)
   r.t.draw()
   let u = r.ui()
-  assert_true(u.full)
+  assert_true(u.full.get())
   // edge to edge: the stage is the whole window
-  assert_eq((u.box_w, u.box_h), (844.0, 390.0))
+  assert_eq((u.box_w.get(), u.box_h.get()), (844.0, 390.0))
   assert_true(r.labelled("工具") is Some(_))
   assert_true(r.labelled("关闭") is None)
   r.tap_label("工具")
@@ -669,7 +669,7 @@ test "全屏 (控制中心's upright): the screen alone, sideways, its tools fol
   r.tap_label("退出全屏")
   r.t.resize(390.0, 844.0)
   r.t.draw()
-  assert_true(!r.ui().full)
+  assert_true(!r.ui().full.get())
   assert_true(r.labelled("控制中心") is Some(_))
   screen_done(r.t)
 }
@@ -812,9 +812,9 @@ test "on a phone a page of the station's browser is laid out for the stage it is
   let r = screen_rig(until_gone=true)
   let u = r.ui()
   let fit = field(Some(r.told("screen.view")[0]), "fit")
-  assert_true(u.box_w > 0.0 && u.box_h > 0.0)
-  assert_eq(number(fit, "width"), u.box_w.round())
-  assert_eq(number(fit, "height"), u.box_h.round())
+  assert_true(u.box_w.get() > 0.0 && u.box_h.get() > 0.0)
+  assert_eq(number(fit, "width"), u.box_w.get().round())
+  assert_eq(number(fit, "height"), u.box_h.get().round())
   assert_true(number(fit, "scale") > 0.0)
   r.live()
   assert_true(!r.sess().pad(r.sess().src), msg="driven directly, as the phone's own browser")
@@ -858,7 +858,7 @@ test "out of sight the view is let go of, the last frame kept; back in sight it 
   r.t.app_state(false, false)
   r.t.draw()
   assert_eq(r.cancelled.length(), 1)
-  assert_true(r.sess().shown_any)
+  assert_true(r.sess().shown_any.get())
   r.t.app_state(true, true)
   r.t.draw()
   assert_eq(r.told("screen.view").length(), 2)
@@ -869,13 +869,13 @@ test "out of sight the view is let go of, the last frame kept; back in sight it 
 test "while it is looked at a phone may turn as it is held (the system's turn button with the rotation lock on); out of sight, upright only" {
   let r = screen_rig()
   r.live()
-  assert_true(r.ui().turnable)
+  assert_true(r.ui().turnable.get())
   r.t.app_state(false, false)
   r.t.draw()
-  assert_true(!r.ui().turnable)
+  assert_true(!r.ui().turnable.get())
   r.t.app_state(true, true)
   r.t.draw()
-  assert_true(r.ui().turnable)
+  assert_true(r.ui().turnable.get())
   screen_done(r.t)
 }
 
@@ -1134,7 +1134,7 @@ test "全屏 and sideways, driving: 左键 and 右键 in a capsule of their own 
   r.t.run_for(@kit.presence_out_ms + @sf.later_ms)
   r.t.resize(844.0, 390.0)
   r.t.draw()
-  assert_true(r.ui().full)
+  assert_true(r.ui().full.get())
   assert_true(r.labelled("退出全屏") is None)
   r.tap_label(tr("android-misc.screen.key.mouseLeft"))
   let left = r.inputs()[2:].to_array()
@@ -1197,7 +1197,7 @@ test "自动 asks again as the stage grows a tenth a side, not as it grows less 
   let r = screen_rig(w=1200.0, h=800.0, platform=0)
   r.live()
   let s = r.sess()
-  let (w, _) = s.stage_px
+  let (w, _) = s.stage_px.get()
   assert_true(w > 0)
   // a little larger (as a window is dragged) or smaller: nothing asked again
   r.t.resize(1230.0, 800.0)
@@ -1205,14 +1205,14 @@ test "自动 asks again as the stage grows a tenth a side, not as it grows less 
   r.t.resize(800.0, 600.0)
   r.t.draw()
   assert_eq(r.told("screen.bounds").length(), 0)
-  assert_eq(s.stage_px.0, w)
+  assert_eq(s.stage_px.get().0, w)
   // much larger: asked again as large as the stage is now, the view going on
   r.t.resize(2400.0, 1600.0)
   r.t.draw()
   let asked = r.told("screen.bounds")
   assert_eq(asked.length(), 1)
-  assert_true(s.stage_px.0 > w)
-  assert_eq(number(Some(asked[0]), "maxWidth"), s.stage_px.0.to_double())
+  assert_true(s.stage_px.get().0 > w)
+  assert_eq(number(Some(asked[0]), "maxWidth"), s.stage_px.get().0.to_double())
   assert_eq(r.told("screen.view").length(), 1)
   shut(r)
   screen_done(r.t)

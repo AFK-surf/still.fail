@@ -14,7 +14,7 @@ test "a draft as the core keeps it: its kept words read back into the field; wha
   let w2 = @sfbase.writing(src, "ws1/st1:s-c1")
   assert_eq(w2.text.get(), "先看第三项")
   assert_eq(text((src.topic)("composer", { "key": Json::string("ws1/st1:s-c1") }).value, "text"), "先看第三项")
-  assert_true(w2.ready)
+  assert_true(w2.ready.get())
 }
 
 ///|
@@ -32,7 +32,7 @@ test "a draft taken to be sent is empty at once and the core answers what it too
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   assert_eq(w.text.get(), "  发一下  ")
   assert_eq(w.field.text(), "  发一下  ")
-  assert_eq(w.error, "发不出去")
+  assert_eq(w.error.get(), "发不出去")
 }
 
 ///|
@@ -42,16 +42,16 @@ test "a draft's quotes: added with the focus on its comment line, said about, le
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   @sfbase.writing_quote(src, w, { "author": "Claude", "text": "其余的行按估计的高度占位", "ts": "ts8" })
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
-  assert_eq(w.quotes.length(), 1)
-  let id = text(Some(w.quotes[0]), "id")
-  assert_eq(w.focus, id)
+  assert_eq(w.quotes.get().length(), 1)
+  let id = text(Some(w.quotes.get()[0]), "id")
+  assert_eq(w.focus.get(), id)
   @sfbase.writing_focused(src, w)
   @sfbase.writing_comment(src, w, id, "这里改成量过再记")
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
-  assert_eq(w.focus, "")
-  assert_eq(text(Some(w.quotes[0]), "comment"), "这里改成量过再记")
+  assert_eq(w.focus.get(), "")
+  assert_eq(text(Some(w.quotes.get()[0]), "comment"), "这里改成量过再记")
   @sfbase.writing_unquote(src, w, id)
-  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").quotes.length(), 0)
+  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").quotes.get().length(), 0)
 }
 
 ///|
@@ -64,12 +64,12 @@ test "an image of a message quoted is its quote's own picture, not among the fil
   @sfbase.writing_quote(src, w, quote, file=image)
   @sfbase.writing_quote(src, w, quote, file=image)
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
-  assert_eq(w.files.length(), 0)
-  assert_eq(w.quotes.map(fn(q) { text(field(Some(q), "own"), "name") }), ["shot.png", "shot.png"])
-  @sfbase.writing_unquote(src, w, text(Some(w.quotes[0]), "id"))
+  assert_eq(w.files.get().length(), 0)
+  assert_eq(w.quotes.get().map(fn(q) { text(field(Some(q), "own"), "name") }), ["shot.png", "shot.png"])
+  @sfbase.writing_unquote(src, w, text(Some(w.quotes.get()[0]), "id"))
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
-  assert_eq([w.quotes.length(), w.files.length()], [1, 0])
-  assert_eq(text(field(Some(w.quotes[0]), "own"), "name"), "shot.png")
+  assert_eq([w.quotes.get().length(), w.files.get().length()], [1, 0])
+  assert_eq(text(field(Some(w.quotes.get()[0]), "own"), "name"), "shot.png")
 }
 
 ///|

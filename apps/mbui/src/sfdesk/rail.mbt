@@ -97,7 +97,7 @@ pub fn lit_place() -> String {
 pub fn side_place() -> String {
   let lit = lit_place()
   if place_bare(lit) {
-    wide.side_place
+    wide.side_place.get()
   } else if lit == "chats" && app.nav.pages().contains(Archived) {
     "archive"
   } else {
@@ -154,7 +154,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
   let in_bar : @ui.CornerOf = Follow(@sf.closed_bar_of(rail_closed_ground_in), rail_closed_ground_in, @sf.small_corner)
   rail_round.val = if bar {
     @sf.rail_ground_radius(@sf.closed_bar_of(rail_closed_ground_in), rail_closed_ground_in)
-  } else if wide.tape {
+  } else if wide.tape.get() {
     @sf.rail_ground_radius(@sf.tape_side_corners()[3], @sf.rail_in_tape() + rail_ground_in)
   } else {
     @sf.rail_ground_radius(Window, closed_bar_in + rail_closed_ground_in, alone=in_bar.radius())
@@ -163,7 +163,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
   rail_under.val = dock_ground(bar)
   let look = if bar {
     rail_closed
-  } else if wide.tape {
+  } else if wide.tape.get() {
     rail_open_tape()
   } else {
     rail_open
@@ -173,7 +173,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
     0.0
   } else if inset {
     rail_top_inset + rail_gap
-  } else if wide.tape {
+  } else if wide.tape.get() {
     // (and its first place's middle on the line of the sidebar's first row beside it, 新建对话's: pengxiao, 2026-10-25)
     dmax(@sf.rail_in_tape(), tape_first_row_mid() - rail_item_side / 2.0)
   } else {
@@ -226,7 +226,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
     if c.clicked(gear) {
       // lit (in the settings): back out of them, to the chat last open (Rail.tsx: the settings' NavLink, in them); their
       // list folded for the page's room: shown over the page, or folded again (返回会话 at its top goes back)
-      if lit == "settings" && wide.crowded {
+      if lit == "settings" && wide.crowded.get() {
         wide.peeking.set(!wide.peeking.get())
       } else if lit == "settings" {
         @sfbase.history_push()
@@ -238,7 +238,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
         wide.landed.set("")
       } else {
         open_settings()
-        wide.peek_next.set(wide.crowded)
+        wide.peek_next.set(wide.crowded.get())
       }
     }
     rail_ground(
@@ -462,7 +462,7 @@ let mark_folded_from : Double = 0.4
 /// the tape, a panel beside the page's as it is, the page's ground, which a phone's lists and pages share (the user,
 /// 2026-10-25: the medium screen's grounds the phone's, no other colours).
 pub fn apart_ground() -> Int64 {
-  if wide.tape {
+  if wide.tape.get() {
     @sf.theme().p.bg
   } else {
     closed_ground()
@@ -539,7 +539,7 @@ fn rail_place(
     // pointer on the rail, it is shown a while (Rail.tsx's rail onClickCapture); on the tape, the page brought over
     if on && place != "attention" && !place_bare(lit_place()) {
       // (folded for the page's room: shown over it, or folded again)
-      if wide.crowded {
+      if wide.crowded.get() {
         wide.peeking.set(!wide.peeking.get())
       } else {
         sidebar_toggle()
@@ -549,7 +549,7 @@ fn rail_place(
       rail_go(c, src, w, place)
       // (pressed into a place whose sidebar is folded for the page's room: shown a while from the start, as the web's
       // pressed into a folded one)
-      wide.peek_next.set(wide.crowded && !place_bare(place) && place != "attention")
+      wide.peek_next.set(wide.crowded.get() && !place_bare(place) && place != "attention")
     }
   }
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
@@ -579,8 +579,8 @@ fn rail_place(
         @sf.icon(c, rail_icon(place), size=rail_icon_size, color~) |> ignore
       }
       // hung on its ground's corner
-      if tone != "" && wide.mark > 0.0 {
-        rail_tone_mark(c, tone, shown=wide.mark)
+      if tone != "" && wide.mark.get() > 0.0 {
+        rail_tone_mark(c, tone, shown=wide.mark.get())
       }
       if dot {
         rail_hung(c, fn() { c.box(style=rail_dot, fn() {  }) |> ignore })
@@ -605,7 +605,7 @@ fn rail_carded(place : String) -> Bool {
 ///|
 /// Back to the stack's root as another workspace comes into view: what is over the pages put down, the menu closed.
 fn desk_home() -> Unit {
-  app.menu = false
+  app.menu.set(false)
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
       break
@@ -646,7 +646,7 @@ pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
           break
         }
       }
-      archive_side.landed = false
+      archive_side.landed.set(false)
       app.nav.push(Archived)
     }
     p => @sfbase.go_place(p) |> ignore
@@ -849,7 +849,7 @@ fn rail_icon(place : String) -> String {
 /// Settings from the rail's gear (or ⌘,): their list, where the shell opens it (sfapp's open_where: beside it on a
 /// medium or large screen the page of its first row, settings_landing; on a small one the list's own page).
 pub fn open_settings() -> Unit {
-  app.menu = false
+  app.menu.set(false)
   open_page(Settings)
 }
 
@@ -866,7 +866,7 @@ pub fn open_settings_at(route : @settings.Route) -> Unit {
 /// side).
 pub fn settings_beside(route : @settings.Route) -> Unit {
   @sfbase.history_push()
-  app.menu = false
+  app.menu.set(false)
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
       break

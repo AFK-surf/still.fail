@@ -57,7 +57,7 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   t.back()
   assert_true(viewer.get() is None)
   // to where its way out said it ends (@ui.move_most_ms or pv_fade_ms from when it set out)
-  t.run_for(if v.flies { @ui.move_most_ms } else { pv_fade_ms })
+  t.run_for(if v.flies.get() { @ui.move_most_ms } else { pv_fade_ms })
   assert_true(t.find("界面草图.png") is None)
   t.assert_idle()
 }
@@ -90,7 +90,7 @@ test "held by a finger round the picture, over the chat's words under the viewer
       t.run_for(@ui.long_press_ms + 20.0)
       t.release(x, y)
       t.draw()
-      assert_eq(pk.ts, "", msg="\{x}, \{y}")
+      assert_eq(pk.ts.get(), "", msg="\{x}, \{y}")
     }
   }
 }
@@ -455,7 +455,7 @@ test "a PDF's pages, drawn by the host" {
   let t = preview_tester("pdf")
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("pdf ") }))
   let v = viewer.get().unwrap()
-  assert_eq(v.pdf.unwrap().pages, 3)
+  assert_eq(v.pdf.get().unwrap().pages, 3)
   // kept on the device with its chat, by its size, as Android keeps a PDF it opens (FilePreview.kt OnDisk)
   let asked = fix_fetches.filter(fn(f) { f.0 == "station.file" && text(Some(f.1), "name") == "设计说明.pdf" })
   assert_true(asked.length() > 0)
@@ -610,7 +610,7 @@ test "two fingers pinch an image round the point between them; no tap comes of i
   let t = preview_tester("image")
   let v = viewer.get().unwrap()
   let fit = v.zoom.scale
-  let awake = v.awake
+  let awake = v.awake.get()
   t.touch(0, 150.0, 422.0)
   t.draw()
   t.touch(4, 240.0, 422.0)
@@ -623,7 +623,7 @@ test "two fingers pinch an image round the point between them; no tap comes of i
   t.draw()
   t.touch(2, 150.0, 422.0)
   t.draw()
-  assert_eq(v.awake, awake)
+  assert_eq(v.awake.get(), awake)
 }
 
 ///|
@@ -675,10 +675,10 @@ test "a step keeps the bars as they were: hidden by a tap, the next comes withou
   let t = preview_tester("step")
   t.tap(195.0, 422.0)
   t.run_for(double_tap_ms)
-  assert_true(!viewer.get().unwrap().awake)
+  assert_true(!viewer.get().unwrap().awake.get())
   t.drag(300.0, 422.0, 100.0, 422.0)
   assert_eq(viewer.get().unwrap().file.name, "第二版.png")
-  assert_true(!viewer.get().unwrap().awake)
+  assert_true(!viewer.get().unwrap().awake.get())
 }
 
 ///|
@@ -713,14 +713,14 @@ test "a swipe back as the step to the next still slides: a finger catches it the
   // and a finger down on a slide and up again: it stays at the one nearest, no tap of it
   t.drag(300.0, 422.0, 100.0, 422.0)
   t.run_for(@ui.input_step_ms)
-  let awake = viewer.get().unwrap().awake
+  let awake = viewer.get().unwrap().awake.get()
   t.touch(0, 195.0, 422.0)
   t.draw()
   t.touch(2, 195.0, 422.0)
   t.draw()
   t.run_for(t.rest_of("preview/strip") - t.time())
   assert_eq(viewer.get().unwrap().file.name, "第二版.png")
-  assert_eq(viewer.get().unwrap().awake, awake)
+  assert_eq(viewer.get().unwrap().awake.get(), awake)
 }
 
 ///|
@@ -786,7 +786,7 @@ test "zoomed in, let go moving it goes on that way, slowing, to its edge; a fing
   t.run_for(3.0 * @ui.input_step_ms)
   assert_true(z.x < let_go - 20.0)
   // a finger down on it: it stops there, and the bars stay as they were
-  let awake = v.awake
+  let awake = v.awake.get()
   t.touch(0, 195.0, 422.0)
   t.draw()
   let held = z.x
@@ -794,7 +794,7 @@ test "zoomed in, let go moving it goes on that way, slowing, to its edge; a fing
   t.draw()
   t.run_for(@kit.zoom_fling_ms)
   assert_eq(z.x, held)
-  assert_eq(v.awake, awake)
+  assert_eq(v.awake.get(), awake)
   // flung harder: it stops at its edge (its right edge at the stage's), when its way said it ends
   t.drag(250.0, 422.0, 130.0, 422.0, steps=3)
   t.run_for(z.fling_x.ends_at() - t.time())
@@ -842,11 +842,11 @@ test "marking: a box drawn on the picture is numbered, its note kept, its quote 
   let k = w / v.zoom.nw
   // from (100, 100) to (300, 200) in the picture's pixels
   t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
-  assert_eq(marking.shapes.length(), 1)
-  assert_eq(marking.shapes[0].kind, "box")
-  assert_eq(mark_numbers(marking.shapes).get(marking.shapes[0].id), Some(1))
+  assert_eq(marking.shapes.get().length(), 1)
+  assert_eq(marking.shapes.get()[0].kind, "box")
+  assert_eq(mark_numbers(marking.shapes.get()).get(marking.shapes.get()[0].id), Some(1))
   // what is said of it, then its quote
-  marking.comments[marking.shapes[0].id] = "这里对齐"
+  marking.comments[marking.shapes.get()[0].id] = "这里对齐"
   let q = marks_quotes("界面草图-标注.png", "界面草图.png", v.zoom.nw, v.zoom.nh)
   assert_eq(q.length(), 1)
   assert_eq(q[0].0, "图片 界面草图.png 标注 1")
@@ -854,9 +854,9 @@ test "marking: a box drawn on the picture is numbered, its note kept, its quote 
   assert_eq(q[0].2, "这里对齐")
   // undone, none; redone, back
   marks_undo()
-  assert_eq(marking.shapes.length(), 0)
+  assert_eq(marking.shapes.get().length(), 0)
   marks_redo()
-  assert_eq(marking.shapes.length(), 1)
+  assert_eq(marking.shapes.get().length(), 1)
   marks_leave()
 }
 
@@ -882,10 +882,10 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   t.tap(x, y)
   let v = viewer.get().unwrap()
   assert_eq(v.file.name, "compare.png")
-  assert_true(v.flies && !v.fly_back)
+  assert_true(v.flies.get() && !v.fly_back.get())
   // grown in: @ui.move_most_ms from the tap
   t.run_for(@ui.move_most_ms)
-  assert_true(!v.flies)
+  assert_true(!v.flies.get())
   // where its thumbnail is in the chat under it
   let th = thumb_of(t.ctx(), v.id()).unwrap()
   let tc = (th.x + th.w / 2.0, th.y + th.h / 2.0)
@@ -893,7 +893,7 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   // closed as back is taken: only drawn, flying back into its thumbnail
   assert_true(viewer.get() is None)
   assert_true(pv_leaving.get() is Some(_))
-  assert_true(v.flies && v.fly_back)
+  assert_true(v.flies.get() && v.fly_back.get())
   let to = v.zoom.rect().unwrap()
   // each frame of the way back the picture is drawn where its flight is, nearer the thumbnail than the frame before,
   // the last one on it
@@ -957,9 +957,9 @@ test "marking: a box's pin up and right of its corner wherever the marks before 
   let (x, y, w, _) = v.zoom.rect().unwrap()
   let k = w / v.zoom.nw
   // a line drawn by hand first, then a box from (100, 100) to (300, 200) in the picture's pixels
-  marking.tool = Pen
+  marking.tool.set(Pen)
   t.drag(x + 20.0 * k, y + 300.0 * k, x + 200.0 * k, y + 350.0 * k)
-  marking.tool = Rect
+  marking.tool.set(Rect)
   t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
   t.draw()
   // its pin (24 square, 2 left of the corner and 22 over it), its number in its middle
@@ -967,7 +967,7 @@ test "marking: a box's pin up and right of its corner wherever the marks before 
   assert_true((px + pw / 2.0 - (x + 100.0 * k - 2.0 + 12.0)).abs() < 1.0, msg="the pin's x")
   assert_true((py + ph / 2.0 - (y + 100.0 * k - 22.0 + 12.0)).abs() < 1.0, msg="the pin's y")
   // its note open: 框, the field's 添加批注（可选）, the tick; the tools and their cards away
-  assert_eq(marking.note, marking.shapes[1].id)
+  assert_eq(marking.note.get(), marking.shapes.get()[1].id)
   assert_true(t.find("框") is Some(_))
   assert_true(t.find("添加批注（可选）") is Some(_))
   t.run_for(note_pop_ms)
@@ -977,8 +977,8 @@ test "marking: a box's pin up and right of its corner wherever the marks before 
   assert_eq(tick.length(), 1)
   t.tap(tick[0].0, tick[0].1)
   t.draw()
-  assert_eq(marking.note, -1)
-  assert_eq(marking.comments.get(marking.shapes[1].id), Some("这里对齐"))
+  assert_eq(marking.note.get(), -1)
+  assert_eq(marking.comments.get(marking.shapes.get()[1].id), Some("这里对齐"))
   // the card says it, what it is under it
   assert_true(t.find("这里对齐") is Some(_))
   marks_leave()

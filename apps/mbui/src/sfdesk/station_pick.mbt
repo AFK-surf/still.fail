@@ -19,17 +19,17 @@ pub(all) struct PickAt {
 ///|
 /// The picker: where it is, what is ticked (by station and path), in the order ticked.
 priv struct StationPick {
-  mut at : PickAt?
+  at : @signals.Signal[PickAt?]
   ticked : Array[Dragged]
 }
 
 ///|
 // kept across runs: the picker's state (station_pick_reset puts it back)
-let spick : StationPick = { at: None, ticked: [] }
+let spick : StationPick = { at: @signals.signal(None), ticked: [] }
 
 ///|
 fn station_pick_reset() -> Unit {
-  spick.at = None
+  spick.at.set(None)
   spick.ticked.clear()
 }
 
@@ -60,7 +60,7 @@ pub fn station_files_pick(src : Source, key : String) -> Unit {
 ///|
 /// The picker at `at`, `ticked` ticked (a screen's fixture).
 pub fn station_pick_set(at : PickAt, ticked : Array[Dragged]) -> Unit {
-  spick.at = Some(at)
+  spick.at.set(Some(at))
   spick.ticked.clear()
   spick.ticked.push_iter(ticked.iter())
 }
@@ -100,7 +100,7 @@ fn station_pick_add(c : @ui.Ctx, key : String) -> Bool {
 fn station_pick(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   c.box(style=narrow_page, fn() {
     station_pick_way(c)
-    match spick.at {
+    match spick.at.get() {
       None => station_pick_places(c, src, ws)
       Some(at) => station_pick_folder(c, src, at)
     }
@@ -112,7 +112,7 @@ fn station_pick(c : @ui.Ctx, src : Source, ws : String) -> Unit {
 /// The way to the folder shown: all the places, then its station's place and the folders under it; each a way back.
 fn station_pick_way(c : @ui.Ctx) -> Unit {
   let steps : Array[(String, PickAt?)] = [(@sf.t("web-mobile.files.places"), None)]
-  match spick.at {
+  match spick.at.get() {
     Some(at) => {
       steps.push((at.station_name + " · " + at.root_name, Some({ ..at, path: "" })))
       let mut so_far = ""
@@ -125,7 +125,7 @@ fn station_pick_way(c : @ui.Ctx) -> Unit {
     }
     None => ()
   }
-  @sf.way_line(c, "station-pick/way", steps.map(fn(s) { s.0 }), narrow_way(), fn(i) { spick.at = steps[i].1 })
+  @sf.way_line(c, "station-pick/way", steps.map(fn(s) { s.0 }), narrow_way(), fn(i) { spick.at.set(steps[i].1) })
 }
 
 ///|
@@ -176,7 +176,7 @@ fn place_line(c : @ui.Ctx, rows : Array[(DvStation, String, String, Bool)], i : 
     let last = i == rows.length() - 1 || rows[i + 1].1 == ""
     let id = c.id("station-pick/place/" + s.station + "|" + path)
     if c.clicked(id) {
-      spick.at = Some({ station: s.station, station_name: s.name, root: path, root_name: name, path: "" })
+      spick.at.set(Some({ station: s.station, station_name: s.name, root: path, root_name: name, path: "" }))
     }
     @sf.group_row(c, first, last, id~, fn() {
       let b = c.box(style=narrow_entry, fn() {
@@ -301,7 +301,7 @@ fn station_pick_folder(c : @ui.Ctx, src : Source, at : PickAt) -> Unit {
           }
           row("e/" + e.name, false, i == n - 1, dv_kind_icon(if e.dir { "folder" } else { e.kind }), e.name, sub, !e.dir && ticked(d), fn() {
             if e.dir {
-              spick.at = Some({ ..at, path })
+              spick.at.set(Some({ ..at, path }))
             } else {
               toggle(d)
             }

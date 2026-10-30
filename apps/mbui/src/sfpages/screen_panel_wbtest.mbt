@@ -59,7 +59,7 @@ test "画质 chosen in 控制中心 is kept on the device and asked of the open 
   r.t.draw()
   let again = r.told("screen.bounds")
   assert_eq(again.length(), 2)
-  assert_eq(number(Some(again[1]), "maxWidth"), r.sess().stage_px.0.to_double())
+  assert_eq(number(Some(again[1]), "maxWidth"), r.sess().stage_px.get().0.to_double())
   assert_eq(r.told("screen.view").length(), 1)
   assert_eq(r.quality.val, "")
   shut(r)
@@ -85,7 +85,7 @@ test "帧率 chosen in 控制中心 beside 画质 is kept on the device and aske
   let asked = r.told("screen.bounds")
   assert_eq(asked.length(), 1)
   assert_eq(number(Some(asked[0]), "fps"), 30.0)
-  assert_eq(number(Some(asked[0]), "maxWidth"), r.sess().stage_px.0.to_double())
+  assert_eq(number(Some(asked[0]), "maxWidth"), r.sess().stage_px.get().0.to_double())
   assert_true(field(Some(asked[0]), "quality") is None)
   assert_true(r.t.find(@sfbase.fill("web-pages.screen.fpsHint.cap", [("fps", "30")])) is Some(_))
   // 120: said so, its note saying the display must draw that many

@@ -395,7 +395,7 @@ test "a picture sent from here is drawn in its message as it was picked, up befo
   ].map(fn(i) { i.to_byte() }))
   let w = @sfbase.writing(src, draft_key(r))
   @sfbase.writing_add(src, w, r.station, "shot.png", png)
-  let id = text(Some(w.files[0]), "id")
+  let id = text(Some(w.files.get()[0]), "id")
   let shot = @sfbase.writing_pictures.get(id).unwrap()
   let file = fn(path : String, upload : String) {
     attachment_of({
@@ -409,7 +409,7 @@ test "a picture sent from here is drawn in its message as it was picked, up befo
   assert_eq(sent_picture(r.station, file("/w/s-c1/uploads/2026-10-23-c3-shot.png", id)), Some(shot))
   // up (the core says where the station keeps it): its message's file by that name, wherever it is moved
   t.draw()
-  let up = text(field(Some(@sfbase.writing(src, draft_key(r)).files[0]), "done"), "path")
+  let up = text(field(Some(@sfbase.writing(src, draft_key(r)).files.get()[0]), "done"), "path")
   assert_true(up != "")
   assert_eq(sent_picture(r.station, file("/w/s-c1/" + up, "")), Some(shot))
   // not another station's of that name
@@ -430,7 +430,7 @@ test "a video picked shows as the host's still of it in its tile and its message
   @sfbase.writing_add_picked(src, w, r.station, picked("短片.mp4", 0, "content://media/video/7"))
   @sfbase.writing_add_picked(src, w, r.station, picked("长片.mov", 3, "content://media/video/8"))
   @sfbase.writing_add_picked(src, w, r.station, picked("合同.pdf", 0, "content://docs/9"))
-  let ids = w.files.map(fn(f) { text(Some(f), "id") })
+  let ids = w.files.get().map(fn(f) { text(Some(f), "id") })
   assert_eq(ids.length(), 3)
   assert_eq(@sfbase.writing_pictures.get(ids[0]), Some("content://media/video/7"))
   assert_eq(@sfbase.writing_pictures.get(ids[1]), Some("content://media/video/8"))
@@ -456,7 +456,7 @@ test "a video picked or pasted that the host has no picture of shows its first f
   // (macOS's pasteboard and pickers, Windows', iOS's say no address for a file: no still of the host's)
   let clip = b"\x00\x00\x00\x14ftypqt  \x00\x00\x00\x08wide"
   @sfbase.writing_add(src, w, r.station, "录屏.mov", clip)
-  let id = text(Some(w.files[0]), "id")
+  let id = text(Some(w.files.get()[0]), "id")
   assert_eq(@sfbase.writing_pictures.get(id), None)
   // the composer built: a player of it made out of sight, reading the bytes from here, its frame at 0 grabbed
   let before = t.views().length()

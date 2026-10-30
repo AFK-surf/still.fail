@@ -101,8 +101,8 @@ fn screen_count(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     let (frames, bytes) = s.came()
     if u.rate_tick >= 0 {
       let secs = (n - u.rate_tick).to_double()
-      u.fps = Some((frames - u.rate_frames).to_double() / secs)
-      u.bps = Some((bytes - u.rate_bytes).to_double() * 8.0 / secs)
+      u.fps.set(Some((frames - u.rate_frames).to_double() / secs))
+      u.bps.set(Some((bytes - u.rate_bytes).to_double() * 8.0 / secs))
     }
     u.rate_tick = n
     u.rate_frames = frames
@@ -189,7 +189,7 @@ fn screen_panel_side() -> @ui.Side {
 ///|
 fn net_panel_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor) -> Unit {
   let open = fn() { @sf.panel("", fn(c, _) { net_panel(c, s, u) }, from~, side=screen_panel_side(), w=net_panel_w, focus=false) }
-  if @sf.native_on() && !u.in_tab {
+  if @sf.native_on() && !u.in_tab.get() {
     screen_native_panel(u, "stats", open)
   } else {
     open()
@@ -246,7 +246,7 @@ fn net_panel(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
       row("web-pages.screen.stat.beforeSent", ms("before"), "")
       row(
         "web-pages.screen.stat.fps",
-        match u.fps {
+        match u.fps.get() {
           Some(f) => "\{f.round().to_int()}"
           None => "—"
         },
@@ -254,7 +254,7 @@ fn net_panel(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
       )
       row(
         "web-pages.screen.stat.bitrate",
-        match u.bps {
+        match u.bps.get() {
           Some(b) => bitrate_words(b)
           None => "—"
         },
@@ -318,8 +318,8 @@ fn diagnosis(s : ScreenSess, u : ScreenUi, net : Json?, os : String) -> Json {
       None => Json::null()
     },
     "system": if os == "" { Json::null() } else { Json::string(os) },
-    "fps": num_or_null(u.fps),
-    "bps": num_or_null(u.bps),
+    "fps": num_or_null(u.fps.get()),
+    "bps": num_or_null(u.bps.get()),
     "picture": if w > 0 {
       Json::string("\{w}x\{number(st, "height").to_int()}")
     } else {
@@ -346,7 +346,7 @@ let diag_said_ms : Double = 1500.0
 /// 控制中心 as a round button (the bar's, the rail's, the folded tools'): pressed, its panel.
 fn center_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) -> Unit {
   let key = "screen-center"
-  if round_button(c, key, "sliders", @sf.t("web-pages.screen.panel")) || u.asked_panel == "center" {
+  if round_button(c, key, "sliders", @sf.t("web-pages.screen.panel")) || u.asked_panel.get() == "center" {
     center_open(c, s, u, key, close)
   }
 }
@@ -354,7 +354,7 @@ fn center_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) 
 ///|
 /// 控制中心's panel, beside what opened it (`key`).
 fn center_open(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String, close : () -> Unit) -> Unit {
-  u.asked_panel = ""
+  u.asked_panel.set("")
   let from : @sf.Anchor = Of(c.id(key))
   @sf.panel(@sf.t("web-pages.screen.panel"), fn(c, done) { center_panel(c, s, u, from, close, done) }, from~, focus=false)
 }
@@ -364,7 +364,7 @@ fn center_open(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String, close : 
 fn center_chip(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) -> Unit {
   let key = "screen-center"
   if @sf.viewer_tool(c, key, "sliders", @sf.t("web-pages.screen.panel"), @sf.page_viewer_ink()) ||
-    u.asked_panel == "center" {
+    u.asked_panel.get() == "center" {
     center_open(c, s, u, key, close)
   }
 }
@@ -379,8 +379,8 @@ fn net_chip(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     c.text(seen_for(u), style=screen_time_words) |> ignore
   })
   c.semantics(b, Button, id~, label=@sf.t("web-pages.screen.stats"), actions=[Activate])
-  if c.clicked(id) || u.asked_panel == "net" {
-    u.asked_panel = ""
+  if c.clicked(id) || u.asked_panel.get() == "net" {
+    u.asked_panel.set("")
     net_panel_open(s, u, Of(id))
   }
 }
@@ -388,7 +388,7 @@ fn net_chip(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 ///|
 /// Whether 全屏 is on: the screen alone on a phone (ScreenUi's), the window filling the screen with keyboard and mouse.
 fn full_now(u : ScreenUi) -> Bool {
-  u.full || @ui.full_screen()
+  u.full.get() || @ui.full_screen()
 }
 
 ///|
@@ -396,11 +396,11 @@ fn full_now(u : ScreenUi) -> Bool {
 /// keyboard and mouse the window made to fill the screen, the bar kept (as the web's page in its browser's full screen).
 fn full_asked(c : @ui.Ctx, u : ScreenUi) -> Unit {
   if @sf.soft_keyboard() {
-    u.full = !u.full
+    u.full.set(!u.full.get())
   } else {
     let on = !@ui.full_screen()
     c.set_full_screen(on)
-    u.fulled = on
+    u.fulled.set(on)
   }
 }
 
@@ -426,7 +426,7 @@ fn center_panel(
     @sf.panel_group(c, fn() {
       let on = mouse_shown(s, u)
       if @sf.switch_row(c, "screen-mouse-shown", @sf.t("web-pages.screen.mouseButtons"), on) != on {
-        u.mouse_set = Some(!on)
+        u.mouse_set.set(Some(!on))
         prefs_chosen(c, s, "screenMouse", if on { "off" } else { "" })
       }
     })
@@ -448,9 +448,9 @@ fn center_panel(
       }
     })
   }
-  if s.audio_ready {
-    if @sf.menu_item(c, @sf.t(if s.audio_muted { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }),
-        key="screen-sound", panel=true, icon=if s.audio_muted { "volume-x" } else { "volume" }) {
+  if s.audio_ready.get() {
+    if @sf.menu_item(c, @sf.t(if s.audio_muted.get() { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }),
+        key="screen-sound", panel=true, icon=if s.audio_muted.get() { "volume-x" } else { "volume" }) {
       s.toggle_audio()
     }
   }
@@ -496,12 +496,12 @@ fn center_panel(
         let now = steps.search(percent).unwrap_or(-1)
         c.box(style=center_choice, fn() {
           let chosen = @sf.segmented(c, "screen-scale", steps.map(fn(p) { "\{p}%" }), now)
-          if percent == u.scale_asked || chosen == now {
-            u.scale_asked = 0
+          if percent == u.scale_asked.get() || chosen == now {
+            u.scale_asked.set(0)
           }
-          if chosen != now && chosen >= 0 && steps[chosen] != u.scale_asked {
+          if chosen != now && chosen >= 0 && steps[chosen] != u.scale_asked.get() {
             let p = steps[chosen]
-            u.scale_asked = p
+            u.scale_asked.set(p)
             let n = c.frame_number()
             c.tell("screen-scale/" + s.view + "/\{n}", fn() {
               s.input(src, Json::object({ "t": Json::string("scale"), "percent": Json::number(p.to_double()) }))
@@ -517,7 +517,7 @@ fn center_panel(
   match s.resolution() {
     Some((size, all)) =>
       @sf.panel_group(c, label=@sf.t("web-pages.screen.resolution"), fn() {
-        let fitting = resolution_fitting(all, u.box_w, u.box_h)
+        let fitting = resolution_fitting(all, u.box_w.get(), u.box_h.get())
         let modes = resolution_shown(all, size, fitting)
         let now = modes.search(size).unwrap_or(-1)
         c.box(style=center_choice, fn() {
@@ -531,12 +531,12 @@ fn center_panel(
             }
           })
           let chosen = @sf.segmented(c, "screen-resolution", labels, now)
-          if size == u.size_asked || chosen == now {
-            u.size_asked = (0, 0)
+          if size == u.size_asked.get() || chosen == now {
+            u.size_asked.set((0, 0))
           }
-          if chosen != now && chosen >= 0 && modes[chosen] != u.size_asked {
+          if chosen != now && chosen >= 0 && modes[chosen] != u.size_asked.get() {
             let (w, h) = modes[chosen]
-            u.size_asked = (w, h)
+            u.size_asked.set((w, h))
             let n = c.frame_number()
             c.tell("screen-resolution/" + s.view + "/\{n}", fn() {
               s.input(src, {

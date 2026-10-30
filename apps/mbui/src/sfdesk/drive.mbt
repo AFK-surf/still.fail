@@ -44,10 +44,10 @@ pub(all) struct FolderOf {
 /// is presented (its key, the presenter's serial: @sf.last_presented), marked while it is drawn.
 priv struct DriveHeld {
   naming : @signals.Signal[String]
-  mut naming_had : Bool
+  naming_had : @signals.Signal[Bool]
   refreshing : @sf.LiveMap[String, Bool]
   mut row_frame : Int
-  mut menu_row : String
+  menu_row : @signals.Signal[String]
   mut menu_serial : Int
   menu_items : Array[@sf.MenuItem?]
 }
@@ -55,10 +55,10 @@ priv struct DriveHeld {
 ///|
 let held : DriveHeld = {
   naming: @signals.signal("", same=fn(a, b) { a == b }),
-  naming_had: false,
+  naming_had: @signals.signal(false, same=fn(a, b) { a == b }),
   refreshing: @sf.LiveMap::new(),
   row_frame: -1,
-  menu_row: "",
+  menu_row: @signals.signal("", same=fn(a, b) { a == b }),
   menu_serial: 0,
   menu_items: [],
 }
@@ -66,10 +66,10 @@ let held : DriveHeld = {
 ///|
 fn drive_reset() -> Unit {
   held.naming.set("")
-  held.naming_had = false
+  held.naming_had.set(false)
   held.refreshing.clear()
   held.row_frame = -1
-  held.menu_row = ""
+  held.menu_row.set("")
   held.menu_serial = 0
 }
 
@@ -87,7 +87,7 @@ fn drive_row_menu(
   held.menu_items.clear()
   held.menu_items.push_iter(items.iter())
   @sf.menu(held.menu_items, from~, along~, title~)
-  held.menu_row = key
+  held.menu_row.set(key)
   held.menu_serial = @sf.last_presented()
 }
 
@@ -110,7 +110,7 @@ fn drive_row_menu_now(key : String, items : Array[@sf.MenuItem?]) -> Unit {
 ///|
 /// Whether row `key`'s menu is drawn (drive_row_menu).
 fn drive_row_menu_drawn(key : String) -> Bool {
-  held.menu_row == key && @sf.presented_drawn_of(held.menu_serial)
+  held.menu_row.get() == key && @sf.presented_drawn_of(held.menu_serial)
 }
 
 ///|
@@ -1094,7 +1094,7 @@ fn name_field(c : @ui.Ctx, key : String, b : Browse, e : DvEntry, row : RowProps
   let t = @sf.theme()
   if held.naming.get() != key {
     held.naming.set(key)
-    held.naming_had = false
+    held.naming_had.set(false)
   }
   c.box(style=name_field_box, fn() {
     let r = c.editor(
@@ -1108,7 +1108,7 @@ fn name_field(c : @ui.Ctx, key : String, b : Browse, e : DvEntry, row : RowProps
       enter_sends=true,
       field=b.rename_field(),
     )
-    if !r.focused && !held.naming_had {
+    if !r.focused && !held.naming_had.get() {
       c.focus_editor(key)
     }
     if c.key_pressed(@ui.key_escape, in_field=true) {
@@ -1122,8 +1122,8 @@ fn name_field(c : @ui.Ctx, key : String, b : Browse, e : DvEntry, row : RowProps
         }
         None =>
           if r.focused {
-            held.naming_had = true
-          } else if held.naming_had {
+            held.naming_had.set(true)
+          } else if held.naming_had.get() {
             // left: kept
             held.naming.set("")
             (row.rename)(Some(r.text))
@@ -1177,7 +1177,7 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
   let part = if size > 0 { dmin(u.sent.get().to_double() / size.to_double(), all) } else { none }
   let how_far = @sf.t("web-pages.drive.uploading", args=[("sent", @sf.file_size(u.sent.get().to_double())), ("size", @sf.file_size(size.to_double()))])
   let replace = fn() {
-    u.replace = true
+    u.replace.set(true)
     u.state.set("waiting")
     dv_pump(src)
   }

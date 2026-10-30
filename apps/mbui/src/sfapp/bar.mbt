@@ -126,6 +126,8 @@ fn imin(a : Int, b : Int) -> Int {
 /// The bar's springs said to move as one (Ctx::set_out): handed each frame's time while any of them moves, the frame
 /// they are at rest too (Moving::sample), so the bar reads where they are from it, not the clock.
 priv struct BarClock {
+  // (plain, as Spr's, Ride's and Glide's: the springs' own stepping, said to move by the Mover (Ctx::moving), which builds
+  // what reads them again each frame they move)
   mover : @ui.Mover
   /// the time last handed to it, or of the frame it last set out in
   mut now : Double
@@ -621,31 +623,32 @@ priv struct BarModel {
   ball_x : Spr
   ball_y : Spr
   /// how far the ball went to the place shown last (its spring as stiff as the way is short)
-  mut trip : Double
-  mut active_was : String
+  trip : @signals.Signal[Double]
+  active_was : @signals.Signal[String]
   /// a finger: where it has the ball (-1 none), its height once the panel is its own
-  mut drag : Double
-  mut drag_y : Double
+  drag : @signals.Signal[Double]
+  drag_y : @signals.Signal[Double]
   /// those as this frame's first build found them: what it draws by in every build of the frame (a press handled in
   /// it is drawn from the next)
-  mut drag_drawn : Double
-  mut drag_y_drawn : Double
-  mut holds : Bool
-  mut from_open : Bool
-  mut open : Bool
-  mut y0 : Double
-  mut o0 : Double
-  mut was_down : Bool
+  drag_drawn : @signals.Signal[Double]
+  drag_y_drawn : @signals.Signal[Double]
+  holds : @signals.Signal[Bool]
+  from_open : @signals.Signal[Bool]
+  open : @signals.Signal[Bool]
+  y0 : @signals.Signal[Double]
+  o0 : @signals.Signal[Double]
+  was_down : @signals.Signal[Bool]
   /// first drawn: everything where it goes at once
-  mut placed : Bool
-  mut width : Double
+  placed : @signals.Signal[Bool]
+  width : @signals.Signal[Double]
   /// a bar chosen sliding down into the bar's place; a finger that went down meanwhile (the finger's once it lands)
-  mut swap : Swap?
-  mut waits : Bool
+  swap : @signals.Signal[Swap?]
+  waits : @signals.Signal[Bool]
   /// the notch's icon going as another swaps in ("" none), how far the swap is (0 to 1)
-  mut icon_was : String
+  icon_was : @signals.Signal[String]
   icon_swap : Glide
   /// the frame it was last told in (Ctx::frame_number): told once a frame, by the first of its builds in it
+  // (plain: a once-a-frame guard, nothing shown reads it)
   mut told : Int
 }
 
@@ -674,23 +677,23 @@ let bar : BarModel = {
   tints: {},
   ball_x: spr(0.0, 300.0, ball_damping(300.0), "bar/ball-x", rest=ball_rest_within),
   ball_y: spr(0.0, ball_down, ball_damping(ball_down), "bar/ball-y", rest=ball_rest_within),
-  trip: slot_px,
-  active_was: "",
-  drag: -1.0,
-  drag_y: -1.0,
-  drag_drawn: -1.0,
-  drag_y_drawn: -1.0,
-  holds: false,
-  from_open: false,
-  open: false,
-  y0: 0.0,
-  o0: 0.0,
-  was_down: false,
-  placed: false,
-  width: 0.0,
-  swap: None,
-  waits: false,
-  icon_was: "",
+  trip: @signals.signal(slot_px, same=fn(a, b) { a == b }),
+  active_was: @signals.signal("", same=fn(a, b) { a == b }),
+  drag: @signals.signal(-1.0, same=fn(a, b) { a == b }),
+  drag_y: @signals.signal(-1.0, same=fn(a, b) { a == b }),
+  drag_drawn: @signals.signal(-1.0, same=fn(a, b) { a == b }),
+  drag_y_drawn: @signals.signal(-1.0, same=fn(a, b) { a == b }),
+  holds: @signals.signal(false, same=fn(a, b) { a == b }),
+  from_open: @signals.signal(false, same=fn(a, b) { a == b }),
+  open: @signals.signal(false, same=fn(a, b) { a == b }),
+  y0: @signals.signal(0.0, same=fn(a, b) { a == b }),
+  o0: @signals.signal(0.0, same=fn(a, b) { a == b }),
+  was_down: @signals.signal(false, same=fn(a, b) { a == b }),
+  placed: @signals.signal(false, same=fn(a, b) { a == b }),
+  width: @signals.signal(0.0, same=fn(a, b) { a == b }),
+  swap: @signals.signal(None),
+  waits: @signals.signal(false, same=fn(a, b) { a == b }),
+  icon_was: @signals.signal("", same=fn(a, b) { a == b }),
   told: -1,
   icon_swap: glide("icon-swap", 1.0),
 }
@@ -712,25 +715,25 @@ fn bar_reset() -> Unit {
   bar.tints.clear()
   bar.ball_x.back(0.0, 300.0, ball_damping(300.0))
   bar.ball_y.back(0.0, ball_down, ball_damping(ball_down))
-  bar.trip = slot_px
-  bar.active_was = ""
-  bar.drag = -1.0
-  bar.drag_y = -1.0
-  bar.drag_drawn = -1.0
-  bar.drag_y_drawn = -1.0
-  bar.holds = false
-  bar.from_open = false
-  bar.open = false
-  bar.y0 = 0.0
-  bar.o0 = 0.0
-  bar.placed = false
-  bar.was_down = false
-  bar.width = 0.0
-  bar.swap = None
-  bar.waits = false
-  bar.icon_was = ""
+  bar.trip.set(slot_px)
+  bar.active_was.set("")
+  bar.drag.set(-1.0)
+  bar.drag_y.set(-1.0)
+  bar.drag_drawn.set(-1.0)
+  bar.drag_y_drawn.set(-1.0)
+  bar.holds.set(false)
+  bar.from_open.set(false)
+  bar.open.set(false)
+  bar.y0.set(0.0)
+  bar.o0.set(0.0)
+  bar.placed.set(false)
+  bar.was_down.set(false)
+  bar.width.set(0.0)
+  bar.swap.set(None)
+  bar.waits.set(false)
+  bar.icon_was.set("")
   back_glide(bar.icon_swap, 1.0)
-  m_face.val = ""
+  m_face.set("")
   bar_clock.now = 0.0
   bar.told = -1
 }
@@ -766,8 +769,8 @@ fn BarModel::sample(self : BarModel) -> Unit {
   }
   // a bar chosen: landed (its panel's spring at the rest it declared as it set out, closed), the stack is where the
   // bar is, drawn as the bar will be; it goes in this same frame
-  match self.swap {
-    Some(_) if now >= self.o.end() && self.o.to <= 0.0 => self.swap = None
+  match self.swap.get() {
+    Some(_) if now >= self.o.end() && self.o.to <= 0.0 => self.swap.set(None)
     _ => ()
   }
 }
@@ -803,7 +806,7 @@ pub fn bar_rest() -> Double {
 /// under it; -1 when none is landing. Until then a finger does not take the panel (a bar landing lands untouched): what
 /// a test runs to before it draws the panel up again.
 pub fn bar_landed() -> Double {
-  match bar.swap {
+  match bar.swap.get() {
     Some(_) => bar.o.end()
     None => -1.0
   }
@@ -821,14 +824,14 @@ fn BarModel::jump(self : BarModel) -> Unit {
   for _, g in self.tints {
     g.snap(g.target)
   }
-  self.swap = None
+  self.swap.set(None)
 }
 
 // ── what the bar is told ───────────────────────────────────────────────
 
 ///|
 /// The notch's action's icon, as last shown (kept as it closes).
-let m_face : Ref[String] = { val: "" }
+let m_face : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
 /// A place's name (the bar's words for what a screen reader says, the place's page's title).
@@ -843,7 +846,7 @@ let bar_glyph : Ref[@sf.GlyphCounts?] = Ref(None)
 ///|
 /// What Station's place says to a screen reader as the bar last read it (Places.kt stationsSaid: the stations in the
 /// core's words, what is wrong with them), "" before or when the core said nothing of them.
-let bar_stations_said : Ref[String] = Ref("")
+let bar_stations_said : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
 /// The place a page is the top of (none: it is not a place's).
@@ -1150,7 +1153,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   // the stations at a glance in Station's place (Places.kt PlaceIcon: StationGlyph), and in words
   let (glyph, said) = stations_at_glance(src, ws.id)
   bar_glyph.val = Some(glyph)
-  bar_stations_said.val = said
+  bar_stations_said.set(said)
   let m = bar
   // told once a frame, by its first build in it: built again in the same frame (a frame's passes, or a check
   // building it whole), it draws what that build told, a ride set out from where it is not set out again from there
@@ -1173,16 +1176,16 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     if m.mode.get() {
       m.open_panel(false)
     }
-    m.drag = -1.0
-    m.drag_y = -1.0
-    m.holds = false
+    m.drag.set(-1.0)
+    m.drag_y.set(-1.0)
+    m.holds.set(false)
   }
   if tell {
-    m.drag_drawn = m.drag
-    m.drag_y_drawn = m.drag_y
+    m.drag_drawn.set(m.drag.get())
+    m.drag_y_drawn.set(m.drag_y.get())
   }
-  let drag = m.drag_drawn
-  let drag_y = m.drag_y_drawn
+  let drag = m.drag_drawn.get()
+  let drag_y = m.drag_y_drawn.get()
   if tell {
     m.k.go(if notched { 1.0 } else { 0.0 }, 300.0, 30.0)
   }
@@ -1216,13 +1219,13 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   }
   let sliding = drag >= 0.0
   let active_key = active.unwrap_or("")
-  if tell && !sliding && active_key != m.active_was {
-    m.active_was = active_key
-    m.trip = dmax(8.0, (goal_x - m.ball_x.x).abs())
+  if tell && !sliding && active_key != m.active_was.get() {
+    m.active_was.set(active_key)
+    m.trip.set(dmax(8.0, (goal_x - m.ball_x.x).abs()))
   }
-  let tension = if sliding { 300.0 } else { dclamp(300.0 * slot_px / m.trip, 90.0, 700.0) }
+  let tension = if sliding { 300.0 } else { dclamp(300.0 * slot_px / m.trip.get(), 90.0, 700.0) }
   // riding a bar chosen: after the place tapped in it as it comes down (Bar.kt ride)
-  let ride = match m.swap {
+  let ride = match m.swap.get() {
     Some({ key: Some(key), .. } as s) =>
       match s.sets[s.i].search(key) {
         Some(j) => Some((s, j))
@@ -1230,9 +1233,9 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
       }
     _ => None
   }
-  if tell && m.width != w {
+  if tell && m.width.get() != w {
     // a new width (turned): there at once
-    m.width = w
+    m.width.set(w)
     m.ball_x.put(goal_x)
   }
   match ride {
@@ -1271,7 +1274,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   }
   let ball_shown = ai >= 0 ||
     sliding ||
-    (match m.swap {
+    (match m.swap.get() {
       Some({ key: Some(_), .. }) => true
       _ => false
     })
@@ -1280,15 +1283,15 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, ball_grow_ms, Out)
   }
   // first drawn (or under reduced motion): everything where it goes, at once
-  if tell && (!m.placed || c.still()) {
-    m.placed = true
+  if tell && (!m.placed.get() || c.still()) {
+    m.placed.set(true)
     m.jump()
   }
   // for the motion log (scripts/motionplot.py): the bar going and coming, the panel (a bar chosen landing)
   if m.vis.value != m.vis.target {
     @motion.log_frame(c, "bar/vis", "value=\{m.vis.value} to=\{m.vis.target}")
   }
-  if m.swap is Some(_) {
+  if m.swap.get() is Some(_) {
     @motion.log_frame(c, "bar/swap", "value=\{m.o.x} to=\{m.o.to}")
   } else if m.o.x != m.o.to {
     @motion.log_frame(c, "bar/panel", "value=\{m.o.x} to=\{m.o.to}")
@@ -1378,7 +1381,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
       // 令 in the notch: accent glass, growing out of the bar as the notch opens about its middle, which comes up to
       // the bar's edge (laid out as it is open, drawn so); closing, it keeps the last action's icon as it shrinks
       if k_now > 0.001 {
-        let face = m_face.val
+        let face = m_face.get()
         let disc = at(
           c,
           w / 2.0 - drop / 2.0,
@@ -1393,9 +1396,9 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
             let v = swap_icon
             let css : @ui.Ease = Out
             let arrive : @ui.Ease = Out
-            if bar.icon_was != "" {
+            if bar.icon_was.get() != "" {
               let p = css.at(dclamp(v * 300.0 / 120.0, 0.0, 1.0))
-              let old = action_icon(c, bar.icon_was)
+              let old = action_icon(c, bar.icon_was.get())
               c.look(old, @ui.look(alpha=1.0 - p, scale=1.0 - 0.5 * p))
               @motion.leaving(c, old, false)
             }
@@ -1452,7 +1455,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
           c.look(ball, @ui.look(alpha=ball_shows))
         }
       }
-      match m.swap {
+      match m.swap.get() {
         None => {
           // the other bars, above this one, as the panel opens
           if m.mode.get() || m.o.x > 0.001 {
@@ -1495,7 +1498,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
         })
         c.look(lens, @ui.look(alpha=dmin(1.0, m.held.x) * m.ball_alpha.value))
       }
-      match m.swap {
+      match m.swap.get() {
         None => ()
         Some(s) => {
           // a bar being chosen: the stack of bars slides down inside the closing glass, the chosen one into the
@@ -1591,14 +1594,14 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
 /// closed (nothing to see). How far the swap is (0 to 1).
 fn show_icon(c : @ui.Ctx, next : String, out : Bool) -> Double {
   let sw = bar.icon_swap
-  if next != "" && next != m_face.val {
-    if m_face.val == "" || !out {
-      m_face.val = next
-      bar.icon_was = ""
+  if next != "" && next != m_face.get() {
+    if m_face.get() == "" || !out {
+      m_face.set(next)
+      bar.icon_was.set("")
       sw.snap(1.0)
     } else {
-      bar.icon_was = m_face.val
-      m_face.val = next
+      bar.icon_was.set(m_face.get())
+      m_face.set(next)
       sw.snap(0.0)
       sw.go(1.0, icon_swap_ms, Linear)
     }
@@ -1607,7 +1610,7 @@ fn show_icon(c : @ui.Ctx, next : String, out : Bool) -> Double {
   if sw.value != sw.target {
     @motion.log_frame(c, "bar/icon-swap", "value=\{sw.value} to=1")
   } else {
-    bar.icon_was = ""
+    bar.icon_was.set("")
   }
   sw.value
 }
@@ -1650,7 +1653,7 @@ fn place_at(
       place_face(c, key, idle, lit, tint, dots.get(key).unwrap_or(0L))
     })
     // what a screen reader says of it (Bar.kt Place: its label; Station's, the stations in words)
-    c.semantics(face, Tab, label=if key == "stations" && bar_stations_said.val != "" { bar_stations_said.val } else { place_label(key) })
+    c.semantics(face, Tab, label=if key == "stations" && bar_stations_said.get() != "" { bar_stations_said.get() } else { place_label(key) })
   })
 }
 
@@ -1687,7 +1690,7 @@ fn bar_gesture(
   // another bar chosen (and a place in it, when one was tapped): it is the bar, and the place opens, now; the panel
   // closes like a window over a stack of bars, the chosen one sliding down into the bar's place (Bar.kt pick)
   let pick = fn(i : Int, key : String?) {
-    if m.swap is Some(_) {
+    if m.swap.get() is Some(_) {
       return
     }
     let n = match others.search(i) {
@@ -1698,7 +1701,7 @@ fn bar_gesture(
     for id, g in m.tints {
       lit[id] = g.value
     }
-    m.swap = Some({
+    m.swap.set(Some({
       i,
       n,
       from: dmax(0.2, m.o.x),
@@ -1708,7 +1711,7 @@ fn bar_gesture(
       alpha: rows_alpha(m.o.x),
       drop: rows_shift(m.o.x, reach),
       lit,
-    })
+    }))
     m.mode.set(false)
     m.o.go(0.0, 200.0, 28.0)
     // its first frame, drawn as the panel was (the motion log)
@@ -1721,15 +1724,15 @@ fn bar_gesture(
   }
   // a bar chosen landing: it lands on its own spring, untouched; a finger down meanwhile is the finger's once it has
   // (its stroke from there), lifted before, nothing
-  if m.swap is Some(_) {
+  if m.swap.get() is Some(_) {
     // a bar chosen landing lands on its own spring: a finger down meanwhile does not take the ball or the panel
     // (Bar.kt waits); a tap on one of its places is that place's at once, where it is laid out (src/motion's rule)
     if d.down {
-      m.waits = true
+      m.waits.set(true)
     }
     ignore(d.take_end())
     if d.take_tap() {
-      m.waits = false
+      m.waits.set(false)
       if items.length() > 0 && py >= row_top - 4.0 {
         let now = bar_centres(w, m.k_now(), items.length())
         let j = nearest(now, items.length(), px)
@@ -1740,71 +1743,73 @@ fn bar_gesture(
     }
     return
   }
-  if m.waits {
+  if m.waits.get() {
     ignore(d.take_end())
     ignore(d.take_tap())
-    m.waits = false
-    m.was_down = false
+    m.waits.set(false)
+    m.was_down.set(false)
     if !d.down {
       return
     }
   }
-  if d.down && !m.was_down {
+  if d.down && !m.was_down.get() {
     // pressed: the panel open, opening or closing, the finger has it from here
-    m.was_down = true
-    m.y0 = py
-    m.o0 = m.o.x
+    m.was_down.set(true)
+    m.y0.set(py)
+    m.o0.set(m.o.x)
     // (opening: short of the rest its spring declared as it set out, toward open)
-    m.holds = multi && (m.o0 > 0.02 || (bar_clock.now < m.o.end() && m.o.to > 0.0))
-    m.from_open = m.holds
-    m.open = m.o.to > 0.5
-    if m.holds {
+    m.holds.set(multi && (m.o0.get() > 0.02 || (bar_clock.now < m.o.end() && m.o.to > 0.0)))
+    m.from_open.set(m.holds.get())
+    m.open.set(m.o.to > 0.5)
+    if m.holds.get() {
       m.mode.set(true)
     }
   }
   if d.down && d.moving {
     if multi {
-      let raw = m.o0 + (m.y0 - py - (if m.from_open { 0.0 } else { 8.0 })) / reach
-      if !m.holds && raw > 0.0 {
-        m.holds = true
+      let raw = m.o0.get() + (m.y0.get() - py - (if m.from_open.get() { 0.0 } else { 8.0 })) / reach
+      if !m.holds.get() && raw > 0.0 {
+        m.holds.set(true)
         m.mode.set(true)
       }
-      if m.holds {
+      if m.holds.get() {
         let over_bar = row_top - py
-        if !m.open && over_bar > opens {
-          m.open = true
-        } else if m.open && over_bar < closes {
-          m.open = false
+        if !m.open.get() && over_bar > opens {
+          m.open.set(true)
+        } else if m.open.get() && over_bar < closes {
+          m.open.set(false)
         }
-        let snap = if m.open { 1.0 } else { 0.0 }
+        let snap = if m.open.get() { 1.0 } else { 0.0 }
         let goal = dclamp(snap + lean * (raw - snap), 0.0, 1.1)
-        if m.open {
+        if m.open.get() {
           m.o.go(goal, 260.0, 17.0)
         } else {
           m.o.go(goal, 320.0, 26.0)
         }
       }
     }
-    m.drag = px
-    m.drag_y = if multi && m.holds && m.open {
-      dclamp(py, over + bar_row / 2.0, row_top + bar_track / 2.0)
-    } else {
-      -1.0
-    }
+    m.drag.set(px)
+    m.drag_y.set(
+      if multi && m.holds.get() && m.open.get() {
+        dclamp(py, over + bar_row / 2.0, row_top + bar_track / 2.0)
+      } else {
+        -1.0
+      },
+    )
   }
   // held where it went down a moment (not moved past the slop), on the bar's row: the ball the finger's there, the
   // lens over it as while it slides (iOS's tab bar), going nowhere till the finger moves; let go, a tap as any
-  let held_still = d.down && !d.moving && !m.holds && py >= row_top - 4.0
+  let held_still = d.down && !d.moving && !m.holds.get() && py >= row_top - 4.0
   if c.held("bar/held-still", held_still, bar_hold_ms) {
-    m.drag = px
-    m.drag_y = -1.0
+    m.drag.set(px)
+    m.drag_y.set(-1.0)
   }
   if d.take_end() {
-    m.was_down = false
-    let had = m.holds
-    m.holds = false
-    m.drag = -1.0
-    m.drag_y = -1.0
+    m.was_down.set(false)
+    let had = m.holds.get()
+    m.holds.set(false)
+    m.drag.set(-1.0)
+    m.drag_y.set(-1.0)
     if had {
       // let go on a row (the panel open): that bar and that place; else as the finger left it
       let in_rows = py < row_top - 4.0 && others.length() > 0
@@ -1818,8 +1823,8 @@ fn bar_gesture(
         } else {
           -1
         }
-        m.open_panel(m.open)
-        if !m.open && j >= 0 {
+        m.open_panel(m.open.get())
+        if !m.open.get() && j >= 0 {
           on_tab(items[j])
         }
       }
@@ -1832,10 +1837,10 @@ fn bar_gesture(
     }
   }
   if d.take_tap() {
-    m.was_down = false
-    m.holds = false
-    m.drag = -1.0
-    m.drag_y = -1.0
+    m.was_down.set(false)
+    m.holds.set(false)
+    m.drag.set(-1.0)
+    m.drag_y.set(-1.0)
     // a tap: a place on the bar; with the panel open, a row (that bar) or a place in it
     if m.mode.get() && py < row_top {
       if m.o.x > 0.6 && others.length() > 0 {
@@ -1862,7 +1867,7 @@ fn bar_gesture(
     }
   }
   if !d.down {
-    m.was_down = false
+    m.was_down.set(false)
   }
 }
 

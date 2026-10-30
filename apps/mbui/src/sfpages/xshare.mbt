@@ -9,17 +9,17 @@
 /// The workspaces ticked (as it was shared as it opened), whether their agents may send.
 priv struct XSharing {
   ticked : Map[String, Bool]
-  mut write : Bool
+  write : @signals.Signal[Bool]
 }
 
 ///|
-let xsharing : XSharing = { ticked: {}, write: false }
+let xsharing : XSharing = { ticked: {}, write: @signals.signal(false, same=fn(a, b) { a == b }) }
 
 ///|
 /// As at the start (the package's reset).
 fn xsharing_reset() -> Unit {
   xsharing.ticked.clear()
-  xsharing.write = false
+  xsharing.write.set(false)
 }
 
 ///|
@@ -38,7 +38,7 @@ pub fn open_xshare(src : Source, r : ChatRef, thread : Double?, from~ : @sf.Anch
       xsharing.ticked[text(Some(p), "workspace")] = true
     }
   }
-  xsharing.write = flag(share, "write")
+  xsharing.write.set(flag(share, "write"))
   @sf.panel(
     @sf.t("web-pages.chat.xshare"),
     fn(c, _) { xshare_body(c, src, r) },
@@ -63,7 +63,7 @@ fn xshare_done(src : Source, r : ChatRef, thread : Double?) -> Unit {
     "station": Json::string(r.station),
     "session": Json::string(session),
     "to": Json::array(to.map(Json::string(_))),
-    "write": Json::boolean(xsharing.write),
+    "write": Json::boolean(xsharing.write.get()),
   }
   match thread {
     Some(th) => p["thread"] = Json::number(th)
@@ -95,14 +95,14 @@ fn xshare_body(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   })
   |> ignore
   c.box(style=xshare_write, fn() {
-    xsharing.write = @sf.switch_row(
+    xsharing.write.set(@sf.switch_row(
       c,
       "xshare/write",
       @sf.t("web-pages.chat.xshare.write"),
-      xsharing.write,
+      xsharing.write.get(),
       note=@sf.t("web-pages.chat.xshare.writeNote"),
       disabled=xsharing.ticked.is_empty(),
-    )
+    ))
   })
   |> ignore
 }

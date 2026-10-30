@@ -11,7 +11,7 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
   let core = settings_core(src, w)
   let here = @settings.here_of(core, w.id, w.name)
   // (at the stack's root: no back over its head, its own or the settings' pages')
-  @settings.wide_deep.val = false
+  @settings.wide_deep.set(false)
   settings_deep.val = false
   @settings.frame(core, here, root=true)
   match place {
@@ -126,7 +126,7 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let address = text(s, "station")
         let on = picked == Some(Route::Station(address))
         station_side_row(c, src, s, on, i + 1 < listed.length(), fn() {
-          place_pick[place_key(w.id, "stations")] = Route::Station(address)
+          place_pick.set(place_key(w.id, "stations"), Route::Station(address))
           @sfbase.show_chosen()
         })
       }
@@ -227,7 +227,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             },
             more~,
           ) {
-          place_pick[place_key(w.id, "profiles")] = route
+          place_pick.set(place_key(w.id, "profiles"), route)
           @sfbase.show_chosen()
         }
       }

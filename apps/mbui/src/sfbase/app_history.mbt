@@ -166,7 +166,7 @@ fn history_go(src : Source, spot : Spot) -> Unit {
     (src.call)("prefs.set", { "workspace": Json::string(spot.ws) }, fn(_) {  })
   }
   history_now.val = Some(spot)
-  app.menu = false
+  app.menu.set(false)
   let pages = app.nav.pages()
   let mut k = 0
   while k < pages.length() && k < spot.pages.length() && spot_page(pages[k]) == spot_page(spot.pages[k]) {

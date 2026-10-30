@@ -1036,7 +1036,7 @@ fn whole(c : @ui.Ctx, src : Source, station : String, key : String, rk : String,
         if steps_own.detail.contains(rk) {
           return
         }
-        steps_own.detail[rk] = (-1.0, "")
+        steps_own.detail.set(rk, (-1.0, ""))
         let mut lo = entries[0]
         let mut hi = entries[0]
         for e in entries {
@@ -1048,8 +1048,8 @@ fn whole(c : @ui.Ctx, src : Source, station : String, key : String, rk : String,
           { "station": Json::string(station), "key": Json::string(key), "from": Json::number(lo), "to": Json::number(hi) },
           fn(res) {
             match res {
-              Ok(_) => steps_own.detail[rk] = (0.0, "")
-              Err(e) => steps_own.detail[rk] = (-2.0, error_words(e))
+              Ok(_) => steps_own.detail.set(rk, (0.0, ""))
+              Err(e) => steps_own.detail.set(rk, (-2.0, error_words(e)))
             }
           },
         )

@@ -48,7 +48,7 @@ test "a link held still: its menu (打开链接, 复制链接: the presenters' s
   // felt as it opened, once (Links.kt: LongPress)
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   // no words picked by the same press
-  assert_eq(pk.ts, "")
+  assert_eq(pk.ts.get(), "")
   t.tap_text("复制链接")
   t.frame()
   t.frame()

@@ -12,17 +12,17 @@
 /// many could not be read since the last frame (下载失败).
 priv struct Downloads {
   saving : Map[String, Bool]
-  mut unread : Int
+  unread : @signals.Signal[Int]
 }
 
 ///|
-let downloads : Downloads = { saving: {}, unread: 0 }
+let downloads : Downloads = { saving: {}, unread: @signals.signal(0, same=fn(a, b) { a == b }) }
 
 ///|
 /// None being saved (a sign-out, a test's start).
 pub fn downloads_reset() -> Unit {
   downloads.saving.clear()
-  downloads.unread = 0
+  downloads.unread.set(0)
 }
 
 ///|
@@ -169,8 +169,8 @@ pub fn coming_of(src : Source, ws : String) -> (Array[Json], Array[Json]) {
 ///|
 /// Each frame, whatever page shows: a download all here taken (once) and saved.
 pub fn downloads_frame(c : @ui.Ctx, src : Source) -> Unit {
-  if downloads.unread > 0 {
-    downloads.unread = 0
+  if downloads.unread.get() > 0 {
+    downloads.unread.set(0)
     say(c, @sf.t("android-chat.file.saveFailed"))
   }
   let listed = items((src.topic)("downloads", {}).value, "downloads")
@@ -238,7 +238,7 @@ fn save_download(src : Source, id : String, name : String, size : Double) -> Uni
       Some(k) => k.end()
       None => ()
     }
-    downloads.unread += 1
+    downloads.unread.set(downloads.unread.get() + 1)
     done("")
   }
   fn next(at : Double) {

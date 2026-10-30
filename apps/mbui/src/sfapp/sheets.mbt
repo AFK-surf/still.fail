@@ -760,7 +760,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
           },
           fn() {  },
         ) {
-        dui.jobs_all = false
+        dui.jobs_all.set(false)
         close()
         open_chat_jobs(src, r)
       }
@@ -1105,7 +1105,7 @@ fn job_groups(
             @sfbase.history_push()
             app.nav.push(Service(r.station, id))
           } else {
-            dui.job_tab = 1
+            dui.job_tab.set(1)
             close()
             open_job(src, r, id)
           }
@@ -1119,7 +1119,7 @@ fn job_groups(
       for j in plain {
         let id = text(Some(j), "id")
         if job_row(c, "job/" + id, Some(j)) {
-          dui.job_tab = 0
+          dui.job_tab.set(0)
           match pick {
             Some(f) => f(id)
             None => {
@@ -1147,7 +1147,7 @@ fn jobs_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit
     }
   }
   let jobs = items(view, "jobs")
-  let shown = if dui.jobs_all { jobs } else { jobs.filter(fn(j) { flag(Some(j), "current") }) }
+  let shown = if dui.jobs_all.get() { jobs } else { jobs.filter(fn(j) { flag(Some(j), "current") }) }
   let clear_key = "clear/" + r.station
   let rows : Array[() -> Unit] = []
   if jobs.length() == 0 {
@@ -1171,14 +1171,14 @@ fn jobs_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) -> Unit
   if jobs.length().to_double() > number(view, "current") {
     rows.push(fn() {
       if sheet_link(c, "jobs/all", fn() {
-          if dui.jobs_all {
+          if dui.jobs_all.get() {
             c.text(tr("android-misc.jobs.onlyNow"), size=@sf.theme().t.ui, color=@sf.link_ink(), wrap=false) |> ignore
           } else {
             c.text(text(view, "allText"), size=@sf.theme().t.ui, color=@sf.link_ink(), wrap=false) |> ignore
             c.text(text(view, "hiddenText"), size=t.t.caption, color=t.p.muted) |> ignore
           }
         }) {
-        dui.jobs_all = !dui.jobs_all
+        dui.jobs_all.set(!dui.jobs_all.get())
       }
     })
   }
@@ -1309,7 +1309,7 @@ fn open_job(src : Source, r : ChatRef, id : String) -> Unit {
 fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) -> Unit {
   let t = @sf.theme()
   let service = flag(j, "service")
-  let tab = if service { 1 } else { dui.job_tab }
+  let tab = if service { 1 } else { dui.job_tab.get() }
   let running = text(j, "state") == "running"
   // (on its panel's words' line, clear of an untitled dialog's close button)
   c.box(style=@sf.panel_words_in().then(@sf.untitled_clear()), dir=Row, w=Fill(1.0), pt=4.0, pb=14.0, gap=12.0, align=AStart, fn() {
@@ -1327,7 +1327,7 @@ fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) ->
       c.rich([@ui.span(command, mono=true)], size=t.t.caption, line=17.0, color=t.p.muted, w=Fill(1.0)) |> ignore
     }
     if !service {
-      dui.job_tab = @sf.segmented(c, "job/tab", [tr("android-misc.jobs.notices"), tr("android-misc.jobs.output")], tab)
+      dui.job_tab.set(@sf.segmented(c, "job/tab", [tr("android-misc.jobs.notices"), tr("android-misc.jobs.output")], tab))
     }
     if tab == 0 {
       let notices = items(j, "notices")
@@ -1596,7 +1596,7 @@ fn open_outside(url : String) -> Unit {
 /// Opens the chat's letters at their list (the library's panel, most of the window tall, dragged between half and nearly
 /// all of it); its letters held (the core's `chatLetters`) until the chat is left.
 fn open_letters(src : Source, r : ChatRef, thread : Double) -> Unit {
-  dui.letters_open = ""
+  dui.letters_open.set("")
   dui.letters_held[r.station + "\u{1}" + r.session] = thread
   @sf.panel(tr("web-main.letters.title"), from=Unanchored, tall=0.8, grows=true, fn(c, _) {
     letters_body(c, src, r, thread)
@@ -1706,7 +1706,7 @@ let letters_more : @ui.Style = @ui.css("w=Full pt=S2 align=ACenter")
 fn letter_row(c : @ui.Ctx, key : String, ch : Json?) -> Unit {
   let id = c.id("letters/row/" + key)
   if c.clicked(id) {
-    dui.letters_open = key
+    dui.letters_open.set(key)
   }
   c.box(style=letters_row.then(@sf.panel_row_reach()), id~, fn() {
     c.box(style=letters_row_head, fn() {
@@ -1769,7 +1769,7 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
       |> ignore
     })
   }
-  let opened = chats.iter().find_first(fn(ch) { text(Some(ch), "key") == dui.letters_open })
+  let opened = chats.iter().find_first(fn(ch) { text(Some(ch), "key") == dui.letters_open.get() })
   match (opened, chat) {
     (Some(ch), Some(v)) => {
       let ch = Some(ch)
@@ -1779,7 +1779,7 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
         c.box(style=letters_head.then(@sf.panel_words_out_by(letters_back_in)), fn() {
           let back = c.id("letters/back")
           if c.clicked(back) {
-            dui.letters_open = ""
+            dui.letters_open.set("")
           }
           c.box(style=letters_back, id=back, fn() {
             @sf.icon(c, "chevron-left", size=20.0, color=@sf.theme().p.accent_text) |> ignore
@@ -1822,7 +1822,7 @@ fn letters_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit
   }
   // (its rows on the panel's line as the list builds them: @sf.panel_list)
   // (no room of its own under its last: the panel's foot is under it)
-  @sf.panel_list(c, "letters-sheet/" + r.station + "/" + r.session + "/" + dui.letters_open, rows.length(), 60.0, fn(
+  @sf.panel_list(c, "letters-sheet/" + r.station + "/" + r.session + "/" + dui.letters_open.get(), rows.length(), 60.0, fn(
     i,
   ) {
     (rows[i])()

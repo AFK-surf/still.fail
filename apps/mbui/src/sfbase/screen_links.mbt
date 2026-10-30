@@ -418,9 +418,10 @@ pub(all) enum PeekRun {
 pub(all) struct Peek {
   station : String
   screen : String
-  mut run : PeekRun
+  run : @signals.Signal[PeekRun]
   /// the view it is (`screen.view`'s `view`), and its streamed call
-  mut view : String
+  view : @signals.Signal[String]
+  // (call, acked, got plain: the stream's own counts, read as frames come; nothing shown reads them)
   mut call : Int
   /// the frames come and not yet acknowledged: their `ts`, oldest first
   waiting : Array[Json]
@@ -431,7 +432,7 @@ pub(all) struct Peek {
   /// its pictures by their keys, oldest first: the one shown (the newest decoded) and any newer one decoding
   pictures : Array[String]
   /// its card's target (0: none): where it shows, the card is on the screen (peeks_settle)
-  mut target : Int
+  target : @signals.Signal[Int]
 }
 
 ///|
@@ -461,14 +462,14 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
       let p : Peek = {
         station,
         screen,
-        run: PeekOff,
-        view: "",
+        run: @signals.signal(PeekOff, same=fn(a, b) { a == b }),
+        view: @signals.signal("", same=fn(a, b) { a == b }),
         call: 0,
         waiting: [],
         acked: 0,
         got: 0,
         pictures: [],
-        target: 0,
+        target: @signals.signal(0, same=fn(a, b) { a == b }),
       }
       peeks[key] = p
       p
@@ -490,7 +491,7 @@ pub fn screen_peek(
   target? : Int = 0,
 ) -> Unit {
   let p = peek_for(key, station, screen)
-  p.target = target
+  p.target.set(target)
   peeks_built[key] = true
   // (and each frame its row or part is put back as built, kept as its nodes: mbui's kept_nodes.mbt)
   @ui.built_used(fn() { peeks_built[key] = true })
@@ -543,7 +544,7 @@ pub fn peek_picture(c : @ui.Ctx, key : String, shape : Double, ratio : Double) -
 ///|
 /// A frame of a preview as it comes: its picture (a JPEG) handed over under a key of its own, its `ts` to acknowledge.
 pub fn peek_took(p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit {
-  if p.view != view {
+  if p.view.get() != view {
     return
   }
   let f = field(Some(value), "frame")
@@ -573,8 +574,8 @@ pub fn peek_took(p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit 
 pub fn peek_start(src : Source, p : Peek) -> Unit {
   peek_views.val += 1
   let view = "mbui-peek-\{peek_views.val}"
-  p.view = view
-  p.run = PeekOn
+  p.view.set(view)
+  p.run.set(PeekOn)
   p.call = 0
   p.acked = 0
   p.waiting.clear()
@@ -589,13 +590,13 @@ pub fn peek_start(src : Source, p : Peek) -> Unit {
   }
   let id = (src.stream)("screen.view", Json::object(params), None, fn(v, b) { peek_took(p, view, v, b) }, fn(_) {
     // refused or ended (the station no longer previews it): what it shows stays
-    if p.view == view {
-      p.run = PeekEnded
+    if p.view.get() == view {
+      p.run.set(PeekEnded)
       p.call = 0
       p.waiting.clear()
     }
   })
-  if p.view == view && p.run == PeekOn {
+  if p.view.get() == view && p.run.get() == PeekOn {
     p.call = id
   }
 }
@@ -607,8 +608,8 @@ pub fn peek_stop(src : Source, p : Peek) -> Unit {
     (src.cancel)(p.call)
   }
   p.call = 0
-  p.view = ""
-  p.run = PeekOff
+  p.view.set("")
+  p.run.set(PeekOff)
   p.waiting.clear()
 }
 
@@ -616,7 +617,7 @@ pub fn peek_stop(src : Source, p : Peek) -> Unit {
 /// Every preview stopped (the app gone behind: no frame may come after it).
 pub fn peeks_stop_all(src : Source) -> Unit {
   for _, p in peeks {
-    if p.run == PeekOn {
+    if p.run.get() == PeekOn {
       peek_stop(src, p)
     }
   }
@@ -629,18 +630,18 @@ pub fn peeks_stop_all(src : Source) -> Unit {
 pub fn peeks_frame(c : @ui.Ctx, src : Source) -> Unit {
   peeks_built.clear()
   for key, p in peeks {
-    if p.run != PeekOn {
+    if p.run.get() != PeekOn {
       continue
     }
     let n = p.acked
-    let due = n == 0 || @kit.after(c, "peek-ack/\{p.view}/\{n}", true, peek_ms, later=true)
+    let due = n == 0 || @kit.after(c, "peek-ack/\{p.view.get()}/\{n}", true, peek_ms, later=true)
     if due && p.waiting.length() > 0 {
       // the next one's wait from this one's
-      @kit.after(c, "peek-ack/\{p.view}/\{n + 1}", true, peek_ms, later=true) |> ignore
-      let view = p.view
+      @kit.after(c, "peek-ack/\{p.view.get()}/\{n + 1}", true, peek_ms, later=true) |> ignore
+      let view = p.view.get()
       let ts = p.waiting[0]
       c.after_build("peek-ack/" + key, fn() {
-        if p.view == view && p.acked == n && p.waiting.length() > 0 {
+        if p.view.get() == view && p.acked == n && p.waiting.length() > 0 {
           p.waiting.remove(0) |> ignore
           p.acked = n + 1
           (src.call)("screen.ack", { "view": Json::string(view), "ts": ts }, fn(_) {  })
@@ -665,11 +666,11 @@ pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
   let gone = []
   for key, p in peeks {
     let held = peeks_built.contains(key)
-    let on = held && (p.target == 0 || c.rect_of(p.target) is Some(_))
+    let on = held && (p.target.get() == 0 || c.rect_of(p.target.get()) is Some(_))
     let want = shown && on
-    match p.run {
+    match p.run.get() {
       PeekOn => if !want { peek_stop(src, p) }
-      PeekEnded => if !want { p.run = PeekOff }
+      PeekEnded => if !want { p.run.set(PeekOff) }
       PeekOff => if want { peek_start(src, p) }
     }
     let mut newest = -1
@@ -680,7 +681,7 @@ pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
     }
     if !held {
       newest = p.pictures.length()
-      if p.run == PeekOff {
+      if p.run.get() == PeekOff {
         gone.push(key)
       }
     }

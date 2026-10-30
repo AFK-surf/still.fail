@@ -159,7 +159,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   t.tap_text("添加到消息")
   t.frame()
   t.frame()
-  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files }).unwrap_or([])
+  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get() }).unwrap_or([])
   assert_eq(refs.length(), 1)
   assert_eq(text(field(Some(refs[0]), "ref"), "path"), fix_docs + "/发布清单.md")
   assert_eq(text(field(Some(refs[0]), "ref"), "stationName"), "Studio")
@@ -171,7 +171,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   t.drag(x, y, 400.0, 400.0)
   t.frame()
   t.frame()
-  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files }).unwrap_or([])
+  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get() }).unwrap_or([])
   assert_eq(refs.length(), 2)
   assert_eq(text(field(refs.get(1), "ref"), "path"), fix_docs + "/长篇小说.txt")
 }
@@ -214,7 +214,7 @@ test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, clos
   t.tap_text("添加到消息")
   t.frame()
   t.frame()
-  let refs = @sfbase.writings.get("new:ws1").map(fn(d) { d.files }).unwrap_or([])
+  let refs = @sfbase.writings.get("new:ws1").map(fn(d) { d.files.get() }).unwrap_or([])
   assert_eq(refs.length(), 1)
   assert_eq(text(field(Some(refs[0]), "ref"), "path"), fix_docs + "/发布清单.md")
 }

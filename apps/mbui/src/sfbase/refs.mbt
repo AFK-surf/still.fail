@@ -12,17 +12,17 @@
 /// chosen in the menu; the marks in the words (where each starts and ends past its `]`) and the words the core read
 /// them in (others: moved along with an edit until it has read these); what the menu's words last found (refs_search).
 priv struct RefField {
-  mut text : String
-  mut anchor : Int
-  mut caret : Int
+  text : @signals.Signal[String]
+  anchor : @signals.Signal[Int]
+  caret : @signals.Signal[Int]
   at_of : @signals.Signal[String]
   at : @signals.Signal[(Int, String)?]
   closed : @signals.Signal[Int]
   active : @signals.Signal[Int]
   marks : @sf.LiveArray[(Int, Int)]
   marks_of : @signals.Signal[String]
-  mut marks_asked : String
-  mut found : Json?
+  marks_asked : @signals.Signal[String]
+  found : @signals.Signal[Json?]
 }
 
 ///|
@@ -48,17 +48,17 @@ fn ref_field(key : String) -> RefField {
     Some(f) => f
     None => {
       let f : RefField = {
-        text: "",
-        anchor: 0,
-        caret: 0,
+        text: @signals.signal("", same=fn(a, b) { a == b }),
+        anchor: @signals.signal(0, same=fn(a, b) { a == b }),
+        caret: @signals.signal(0, same=fn(a, b) { a == b }),
         at_of: @signals.signal("", same=fn(a, b) { a == b }),
         at: @signals.signal(None),
         closed: @signals.signal(-1),
         active: @signals.signal(0),
         marks: @sf.LiveArray::from([]),
         marks_of: @signals.signal("", same=fn(a, b) { a == b }),
-        marks_asked: "",
-        found: None,
+        marks_asked: @signals.signal("", same=fn(a, b) { a == b }),
+        found: @signals.signal(None, same=fn(a, b) { a == b }),
       }
       ref_fields[key] = f
       f
@@ -97,13 +97,13 @@ pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, he
   let f = ref_field(key)
   let now = input.text()
   let (anchor, caret) = input.selection()
-  if now == f.text && anchor == f.anchor && caret == f.caret {
+  if now == f.text.get() && anchor == f.anchor.get() && caret == f.caret.get() {
     // (words the app put in itself: their marks)
     refs_ask_marks(c, src, key, now)
     return
   }
-  let was = f.text
-  let (wa, wc) = (f.anchor, f.caret)
+  let was = f.text.get()
+  let (wa, wc) = (f.anchor.get(), f.caret.get())
   if now != was {
     let (start, took, put) = edit_of(was, now)
     // one character taken just before the caret: a mark ending there goes whole
@@ -134,9 +134,9 @@ pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, he
       c.tell("refs/pasted/" + key, fn() { refs_pasted(src, key, input, here, now, start, pasted) })
     }
   }
-  f.text = now
-  f.anchor = anchor
-  f.caret = caret
+  f.text.set(now)
+  f.anchor.set(anchor)
+  f.caret.set(caret)
   refs_ask_marks(c, src, key, now)
   if anchor == caret {
     let asked = ref_key(now, caret)
@@ -151,7 +151,7 @@ pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, he
             match at {
               None => {
                 f.closed.set(-1)
-                f.found = None
+                f.found.set(None)
               }
               Some((_, q)) =>
                 match f.at.get() {
@@ -181,14 +181,14 @@ fn refs_ask_marks(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit
     f.marks_of.set(now)
     return
   }
-  if f.marks_of.get() == now || f.marks_asked == now {
+  if f.marks_of.get() == now || f.marks_asked.get() == now {
     return
   }
-  f.marks_asked = now
+  f.marks_asked.set(now)
   c.tell("refs/marks/" + key, fn() {
     (src.call)("ref.marks", { "text": Json::string(now) }, fn(r) {
       match r {
-        Ok(v) if f.text == now => {
+        Ok(v) if f.text.get() == now => {
           f.marks.replace(items(Some(v), "marks").map(fn(m) {
             (number(Some(m), "start").to_int(), number(Some(m), "end").to_int())
           }))
@@ -205,7 +205,7 @@ fn refs_ask_marks(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit
 /// not as written (no paste in them, no Backspace).
 pub fn refs_put(key : String, input : @ui.Field, words : String, caret? : Int) -> Unit {
   let f = ref_field(key)
-  let was = f.text
+  let was = f.text.get()
   input.set(words, caret?)
   let (anchor, at) = input.selection()
   // its marks where they are now, those the change took gone
@@ -222,9 +222,9 @@ pub fn refs_put(key : String, input : @ui.Field, words : String, caret? : Int) -
       }
     }))
   }
-  f.text = words
-  f.anchor = anchor
-  f.caret = at
+  f.text.set(words)
+  f.anchor.set(anchor)
+  f.caret.set(at)
   f.at.set(None)
 }
 
@@ -234,7 +234,7 @@ pub fn refs_put(key : String, input : @ui.Field, words : String, caret? : Int) -
 pub fn refs_look(key : String, accent : Int64) -> (String) -> (String, Array[(Int, Int, Int64)]) {
   fn(s) {
     let f = ref_field(key)
-    if s != f.text || f.marks.is_empty() {
+    if s != f.text.get() || f.marks.is_empty() {
       return (s, [])
     }
     let sb = StringBuilder()
@@ -264,7 +264,7 @@ pub fn refs_look(key : String, accent : Int64) -> (String) -> (String, Array[(In
 /// flight_start). None where the field holds other words.
 pub fn refs_sent_marks(key : String, words : String) -> Array[(Int, Int)] {
   let f = ref_field(key)
-  let s = f.text
+  let s = f.text.get()
   let blank = fn(i : Int) {
     let u = s.unsafe_charcode_at(i)
     u == 32 || u == 10 || u == 9
@@ -315,7 +315,7 @@ let clear : Int64 = 0x00FFFFFFL
 /// changed since it was asked).
 pub fn refs_marked(key : String) -> Bool? {
   let f = ref_field(key)
-  if f.marks_of.get() == f.text {
+  if f.marks_of.get() == f.text.get() {
     Some(!f.marks.is_empty())
   } else {
     None
@@ -329,13 +329,13 @@ pub fn refs_marked(key : String) -> Bool? {
 /// none, in one whose menu was closed, or none read yet.
 pub fn refs_at(key : String) -> (Int, String)? {
   let f = ref_field(key)
-  if f.anchor != f.caret {
+  if f.anchor.get() != f.caret.get() {
     return None
   }
-  let read_now = f.at_of.get() == ref_key(f.text, f.caret)
+  let read_now = f.at_of.get() == ref_key(f.text.get(), f.caret.get())
   match f.at.get() {
     Some((start, _)) as at if start != f.closed.get() &&
-      (read_now || (start < f.caret && f.caret <= f.text.length() && f.text.at(start).to_int() == 64)) => at
+      (read_now || (start < f.caret.get() && f.caret.get() <= f.text.get().length() && f.text.get().at(start).to_int() == 64)) => at
     _ => None
   }
 }
@@ -347,12 +347,12 @@ pub fn refs_at(key : String) -> (Int, String)? {
 pub fn refs_search(src : Source, key : String, params : Map[String, Json]) -> Topic {
   let f = ref_field(key)
   let topic = (src.topic)("chatSearch", params)
-  match (topic.value, f.found) {
+  match (topic.value, f.found.get()) {
     (Some(_), _) => {
-      f.found = topic.value
+      f.found.set(topic.value)
       topic
     }
-    (None, Some(_)) if topic.error is None => { value: f.found, error: None, version: topic.version }
+    (None, Some(_)) if topic.error is None => { value: f.found.get(), error: None, version: topic.version }
     _ => topic
   }
 }
@@ -400,7 +400,7 @@ pub fn refs_pick(
 ) -> Unit {
   let f = ref_field(key)
   guard f.at.get() is Some((start, _)) else { return }
-  let caret = f.caret
+  let caret = f.caret.get()
   f.closed.set(start)
   c.tell("refs/pick/" + key, fn() {
     (src.call)(
@@ -544,7 +544,7 @@ pub fn writing_paste(src : Source, w : Writing, station : String, words : String
     let info = field(Some(v), "info")
     match info {
       Some(Object(_)) =>
-        writing_add(src, w, station, "pasted-text-" + upload_id(w.key + "\u{2}" + words, w.files.length() + 1) + ".txt", @utf8.encode(words), pasted=info.unwrap())
+        writing_add(src, w, station, "pasted-text-" + upload_id(w.key + "\u{2}" + words, w.files.get().length() + 1) + ".txt", @utf8.encode(words), pasted=info.unwrap())
       _ => ()
     }
   })
@@ -555,7 +555,7 @@ pub fn writing_paste(src : Source, w : Writing, station : String, words : String
 /// again with what the core said of them).
 pub fn writing_paste_again(src : Source, w : Writing, id : String) -> Unit {
   guard writing_went.get(id) is Some((station, name, bytes)) else { return }
-  let info = w.files.iter().find_first(fn(f) { text(Some(f), "id") == id }).map(fn(f) { field(Some(f), "pasted") })
+  let info = w.files.get().iter().find_first(fn(f) { text(Some(f), "id") == id }).map(fn(f) { field(Some(f), "pasted") })
   writing_remove(src, w, id)
   match info {
     Some(Some(p)) => writing_add(src, w, station, name, bytes, pasted=p)

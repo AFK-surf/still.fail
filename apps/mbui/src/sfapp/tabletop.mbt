@@ -166,7 +166,7 @@ let recent_row_here : @ui.Style = recent_row.then(@ui.css("bg=AccentBg"))
 fn open_in_place(p : Page) -> Unit {
   @sfbase.history_push()
   lower_sheet()
-  app.menu = false
+  app.menu.set(false)
   if app.nav.depth() > 1 {
     app.nav.replace(p)
   } else {

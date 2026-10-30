@@ -173,29 +173,29 @@ pub(all) enum MarkDrag {
 ///|
 /// Marking, while the viewer marks one image.
 pub(all) struct Marking {
-  mut on : Bool
-  mut tool : MarkTool
-  mut color : Int64
-  mut palette : Bool
-  mut shapes : Array[Mark]
-  mut past : Array[Array[Mark]]
-  mut future : Array[Array[Mark]]
-  mut picked : Int
-  mut drag : MarkDrag?
+  on : @signals.Signal[Bool]
+  tool : @signals.Signal[MarkTool]
+  color : @signals.Signal[Int64]
+  palette : @signals.Signal[Bool]
+  shapes : @signals.Signal[Array[Mark]]
+  past : @signals.Signal[Array[Array[Mark]]]
+  future : @signals.Signal[Array[Array[Mark]]]
+  picked : @signals.Signal[Int]
+  drag : @signals.Signal[MarkDrag?]
   /// words being written: their id (-1 new), where (image px), size, colour
-  mut writing : (Int, Double, Double, Double, Int64)?
+  writing : @signals.Signal[(Int, Double, Double, Double, Int64)?]
   /// what is said of each numbered mark (by its id), and the one whose note is open (-1 none)
-  comments : Map[Int, String]
-  mut note : Int
+  comments : @sf.LiveMap[Int, String]
+  note : @signals.Signal[Int]
   /// the note whose box came in last (it pops in as it opens: Notes.kt pop), -1 none
-  mut popped : Int
-  mut busy : Bool
-  mut error : String
-  mut next_id : Int
+  popped : @signals.Signal[Int]
+  busy : @signals.Signal[Bool]
+  error : @signals.Signal[String]
+  next_id : @signals.Signal[Int]
   /// the marked image being drawn by the host, and whether it goes into the draft (else downloaded)
-  mut job : @ui.MarkedImage?
-  mut to_draft : Bool
-  mut job_name : String
+  job : @signals.Signal[@ui.MarkedImage?]
+  to_draft : @signals.Signal[Bool]
+  job_name : @signals.Signal[String]
   /// the words being written and the open note's (their fields show them)
   write_field : @ui.Field
   note_field : @ui.Field
@@ -203,25 +203,25 @@ pub(all) struct Marking {
 
 ///|
 pub let marking : Marking = {
-  on: false,
-  tool: Rect,
-  color: 0xE5704AFFL,
-  palette: false,
-  shapes: [],
-  past: [],
-  future: [],
-  picked: -1,
-  drag: None,
-  writing: None,
-  comments: Map([]),
-  note: -1,
-  popped: -1,
-  busy: false,
-  error: "",
-  next_id: 1,
-  job: None,
-  to_draft: false,
-  job_name: "",
+  on: @signals.signal(false, same=fn(a, b) { a == b }),
+  tool: @signals.signal(Rect, same=fn(a, b) { a == b }),
+  color: @signals.signal(0xE5704AFFL, same=fn(a, b) { a == b }),
+  palette: @signals.signal(false, same=fn(a, b) { a == b }),
+  shapes: @signals.signal([]),
+  past: @signals.signal([]),
+  future: @signals.signal([]),
+  picked: @signals.signal(-1, same=fn(a, b) { a == b }),
+  drag: @signals.signal(None),
+  writing: @signals.signal(None, same=fn(a, b) { a == b }),
+  comments: @sf.LiveMap::new(),
+  note: @signals.signal(-1, same=fn(a, b) { a == b }),
+  popped: @signals.signal(-1, same=fn(a, b) { a == b }),
+  busy: @signals.signal(false, same=fn(a, b) { a == b }),
+  error: @signals.signal("", same=fn(a, b) { a == b }),
+  next_id: @signals.signal(1, same=fn(a, b) { a == b }),
+  job: @signals.signal(None),
+  to_draft: @signals.signal(false, same=fn(a, b) { a == b }),
+  job_name: @signals.signal("", same=fn(a, b) { a == b }),
   write_field: @ui.Field::new(),
   note_field: @ui.Field::new(),
 }
@@ -229,94 +229,95 @@ pub let marking : Marking = {
 ///|
 pub fn marks_start() -> Unit {
   marks_leave()
-  marking.on = true
+  marking.on.set(true)
 }
 
 ///|
 pub fn marks_leave() -> Unit {
-  marking.on = false
-  marking.tool = Rect
-  marking.palette = false
-  marking.shapes = []
-  marking.past = []
-  marking.future = []
-  marking.picked = -1
-  marking.drag = None
-  marking.writing = None
+  marking.on.set(false)
+  marking.tool.set(Rect)
+  marking.palette.set(false)
+  marking.shapes.set([])
+  marking.past.set([])
+  marking.future.set([])
+  marking.picked.set(-1)
+  marking.drag.set(None)
+  marking.writing.set(None)
   marking.comments.clear()
-  marking.note = -1
-  marking.popped = -1
-  marking.busy = false
-  marking.error = ""
-  marking.job = None
+  marking.note.set(-1)
+  marking.popped.set(-1)
+  marking.busy.set(false)
+  marking.error.set("")
+  marking.job.set(None)
 }
 
 ///|
 pub fn marks_commit(next : Array[Mark], before? : Array[Mark]) -> Unit {
-  marking.past.push(before.unwrap_or(marking.shapes))
-  marking.future = []
-  marking.shapes = next
+  marking.past.set(marking.past.get() + [before.unwrap_or(marking.shapes.get())])
+  marking.future.set([])
+  marking.shapes.set(next)
 }
 
 ///|
 pub fn marks_undo() -> Unit {
-  match marking.past.pop() {
-    Some(p) => {
-      marking.future.insert(0, marking.shapes)
-      marking.shapes = p
-    }
-    None => ()
+  let past = marking.past.get()
+  if past.length() > 0 {
+    let p = past[past.length() - 1]
+    marking.past.set(past[:past.length() - 1].to_array())
+    marking.future.set([marking.shapes.get()] + marking.future.get())
+    marking.shapes.set(p)
   }
-  marking.picked = -1
-  marking.note = -1
+  marking.picked.set(-1)
+  marking.note.set(-1)
 }
 
 ///|
 pub fn marks_redo() -> Unit {
-  if marking.future.length() > 0 {
-    let f = marking.future.remove(0)
-    marking.past.push(marking.shapes)
-    marking.shapes = f
+  let future = marking.future.get()
+  if future.length() > 0 {
+    marking.future.set(future[1:].to_array())
+    marking.past.set(marking.past.get() + [marking.shapes.get()])
+    marking.shapes.set(future[0])
   }
-  marking.picked = -1
-  marking.note = -1
+  marking.picked.set(-1)
+  marking.note.set(-1)
 }
 
 ///|
 pub fn marks_remove(id : Int) -> Unit {
-  marks_commit(marking.shapes.filter(fn(s) { s.id != id }))
-  marking.picked = -1
-  marking.note = -1
+  marks_commit(marking.shapes.get().filter(fn(s) { s.id != id }))
+  marking.picked.set(-1)
+  marking.note.set(-1)
 }
 
 ///|
 /// The words being written, put down (all of them gone: the words they were, removed).
 pub fn marks_put_down(c : @ui.Ctx) -> Unit {
-  let (id, x, y, w, color) = match marking.writing {
+  let (id, x, y, w, color) = match marking.writing.get() {
     Some(x) => x
     None => return
   }
   let text = marking.write_field.text().trim(chars=" \n\t").to_string()
-  marking.writing = None
+  marking.writing.set(None)
   c.blur()
   if id >= 0 {
-    match marking.shapes.iter().find_first(fn(s) { s.id == id }) {
+    match marking.shapes.get().iter().find_first(fn(s) { s.id == id }) {
       Some(was) =>
         if was.text != text || was.color != color {
           marks_commit(
             if text != "" {
-              marking.shapes.map(fn(s) { if s.id == id { { ..s, text, color } } else { s } })
+              marking.shapes.get().map(fn(s) { if s.id == id { { ..s, text, color } } else { s } })
             } else {
-              marking.shapes.filter(fn(s) { s.id != id })
+              marking.shapes.get().filter(fn(s) { s.id != id })
             },
           )
         }
       None => ()
     }
   } else if text != "" {
-    let m : Mark = { id: marking.next_id, kind: "words", color, w, pts: [x, y], text }
-    marking.next_id += 1
-    marks_commit(marking.shapes + [m])
+    let m : Mark = { id: marking.next_id.get(), kind: "words", color, w, pts: [x, y], text }
+    marking.next_id.set(marking.next_id.get() + 1)
+    marks_commit(marking.shapes.get() + [m])
   }
 }
 
@@ -335,11 +336,11 @@ pub fn mark_numbers(shapes : Array[Mark]) -> Map[Int, Int] {
 ///|
 /// What is drawn now: the marks and the one being drawn, not the words being written again.
 pub fn marks_drawn() -> Array[Mark] {
-  let list = match marking.drag {
-    Some(Drawing(m)) => marking.shapes + [m]
-    _ => marking.shapes
+  let list = match marking.drag.get() {
+    Some(Drawing(m)) => marking.shapes.get() + [m]
+    _ => marking.shapes.get()
   }
-  match marking.writing {
+  match marking.writing.get() {
     Some((id, _, _, _, _)) => list.filter(fn(s) { s.id != id })
     None => list
   }
@@ -355,34 +356,34 @@ pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Dou
   let y = (py - ry) / k
   match phase {
     0 => {
-      marking.palette = false
-      if marking.writing is Some(_) {
+      marking.palette.set(false)
+      if marking.writing.get() is Some(_) {
         marks_put_down(c)
         return
       }
-      if marking.note >= 0 {
-        marking.note = -1
+      if marking.note.get() >= 0 {
+        marking.note.set(-1)
         return
       }
       let reach = mark_reach / k
-      if marking.tool == Select || marking.tool == Words {
-        let hit = marking.shapes
+      if marking.tool.get() == Select || marking.tool.get() == Words {
+        let hit = marking.shapes.get()
           .rev()
           .iter()
           .find_first(fn(s) {
-            (marking.tool == Select || s.kind == "words") && s.distance(x, y) <= s.w / 2.0 + reach
+            (marking.tool.get() == Select || s.kind == "words") && s.distance(x, y) <= s.w / 2.0 + reach
           })
         match hit {
           Some(s) => {
             // an arrow's end near the finger: that end moves; words with the words tool: written again
-            if s.kind == "words" && marking.tool == Words {
-              marking.writing = Some((s.id, s.pts[0], s.pts[1], s.w, s.color))
+            if s.kind == "words" && marking.tool.get() == Words {
+              marking.writing.set(Some((s.id, s.pts[0], s.pts[1], s.w, s.color)))
               marking.write_field.set(s.text)
               c.focus_editor("marks/write")
               return
             }
             let mut end = -1
-            if s.kind == "arrow" && marking.picked == s.id {
+            if s.kind == "arrow" && marking.picked.get() == s.id {
               for e in 0..<2 {
                 let ex = s.pts[2 * e]
                 let ey = s.pts[2 * e + 1]
@@ -391,15 +392,15 @@ pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Dou
                 }
               }
             }
-            marking.picked = s.id
-            marking.drag = Some(Moving(s.id, x, y, s, end, marking.shapes, false))
+            marking.picked.set(s.id)
+            marking.drag.set(Some(Moving(s.id, x, y, s, end, marking.shapes.get(), false)))
           }
           None =>
-            if marking.tool == Select {
-              marking.picked = -1
+            if marking.tool.get() == Select {
+              marking.picked.set(-1)
             } else {
               let w = mark_text / k
-              marking.writing = Some((-1, x, y - w * 0.65, w, marking.color))
+              marking.writing.set(Some((-1, x, y - w * 0.65, w, marking.color.get())))
               marking.write_field.set("")
               c.focus_editor("marks/write")
             }
@@ -408,24 +409,24 @@ pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Dou
       }
       let w = mark_line / k
       let m : Mark = {
-        id: marking.next_id,
-        kind: match marking.tool {
+        id: marking.next_id.get(),
+        kind: match marking.tool.get() {
           Pen => "pen"
           Arrow => "arrow"
           _ => "box"
         },
-        color: marking.color,
+        color: marking.color.get(),
         w,
-        pts: if marking.tool == Pen { [x, y] } else { [x, y, x, y] },
+        pts: if marking.tool.get() == Pen { [x, y] } else { [x, y, x, y] },
         text: "",
       }
-      marking.next_id += 1
-      marking.drag = Some(Drawing(m))
+      marking.next_id.set(marking.next_id.get() + 1)
+      marking.drag.set(Some(Drawing(m)))
     }
     1 =>
-      match marking.drag {
+      match marking.drag.get() {
         Some(Drawing(m)) =>
-          marking.drag = Some(
+          marking.drag.set(Some(
             Drawing(
               if m.kind == "pen" {
                 { ..m, pts: m.pts + [x, y] }
@@ -433,7 +434,7 @@ pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Dou
                 { ..m, pts: [m.pts[0], m.pts[1], x, y] }
               },
             ),
-          )
+          ))
         Some(Moving(id, fx, fy, orig, end, before, _)) => {
           let next = if end >= 0 {
             let pts = orig.pts.copy()
@@ -443,15 +444,15 @@ pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Dou
           } else {
             orig.moved(x - fx, y - fy)
           }
-          marking.shapes = marking.shapes.map(fn(s) { if s.id == id { next } else { s } })
-          marking.drag = Some(Moving(id, fx, fy, orig, end, before, true))
+          marking.shapes.set(marking.shapes.get().map(fn(s) { if s.id == id { next } else { s } }))
+          marking.drag.set(Some(Moving(id, fx, fy, orig, end, before, true)))
         }
         None => ()
       }
     _ =>
-      match marking.drag {
+      match marking.drag.get() {
         Some(Drawing(m)) => {
-          marking.drag = None
+          marking.drag.set(None)
           // a tap, not a drag: nothing drawn
           let mut far = false
           let n = m.pts.length() / 2
@@ -463,20 +464,20 @@ pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Dou
             }
           }
           if far {
-            marks_commit(marking.shapes + [m])
+            marks_commit(marking.shapes.get() + [m])
             // a box or an arrow drawn: what to say about it, at once
             if m.numbered() {
-              marking.note = m.id
+              marking.note.set(m.id)
               marking.note_field.set("")
               c.focus_editor("marks/note")
             }
           }
         }
         Some(Moving(_, _, _, _, _, before, changed)) => {
-          marking.drag = None
+          marking.drag.set(None)
           if changed {
-            marking.past.push(before)
-            marking.future = []
+            marking.past.set(marking.past.get() + [before])
+            marking.future.set([])
           }
         }
         None => ()
@@ -493,7 +494,7 @@ pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Dou
 pub fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double, nh : Double) -> Unit {
   let (rx, ry, rw, _) = r
   let k = rw / dmax(1.0, nw)
-  let numbers = mark_numbers(marking.shapes)
+  let numbers = mark_numbers(marking.shapes.get())
   // what is put at (x, y) on the stage, over what came before
   let at_place = fn(x : Double, y : Double, body : () -> Unit) {
     c.layer(fn() { c.box(tx=x, ty=y, body) |> ignore }) |> ignore
@@ -521,7 +522,7 @@ pub fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double
   }
   // the picked mark's dashed frame (white at 85%, 1 wide, 4 on 3 off), its handles round and white, ringed in the ink
   let handles : Array[(Double, Double)] = []
-  match marking.shapes.iter().find_first(fn(s) { s.id == marking.picked && marking.tool == Select }) {
+  match marking.shapes.get().iter().find_first(fn(s) { s.id == marking.picked.get() && marking.tool.get() == Select }) {
     Some(s) => {
       let (bx, by, bw, bh) = s.bounds()
       let reach = mark_reach / 2.0
@@ -567,7 +568,7 @@ pub fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double
   }
   // the numbered marks' pins, each at its own size whatever the zoom, up and to the right of their point; tapped, its
   // note; a little bigger while it is open
-  for s in marking.shapes {
+  for s in marking.shapes.get() {
     match numbers.get(s.id) {
       Some(n) => {
         let (px0, py0) = if s.kind == "box" {
@@ -581,9 +582,9 @@ pub fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double
         let id = c.id("marks/pin/\{s.id}")
         if c.clicked(id) {
           marks_put_down(c)
-          marking.picked = -1
-          marking.note = if marking.note == s.id { -1 } else { s.id }
-          if marking.note >= 0 {
+          marking.picked.set(-1)
+          marking.note.set(if marking.note.get() == s.id { -1 } else { s.id })
+          if marking.note.get() >= 0 {
             marking.note_field.set(marking.comments.get(s.id).unwrap_or(""))
             c.focus_editor("marks/note")
           }
@@ -592,7 +593,7 @@ pub fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double
           let pin = picture_pin(c, n, s.color, 24.0, id~)
           // what a screen reader says of it (ImageMarks.kt Pins: 标注 n)
           c.semantics(pin, Button, id~, label=pv_fill("android-chat.marks.pin", [("n", n.to_string())]))
-          if marking.note == s.id {
+          if marking.note.get() == s.id {
             c.look(pin, @ui.look(scale=pin_open_scale, ox=2.0 / 24.0, oy=22.0 / 24.0))
           }
         })
@@ -601,7 +602,7 @@ pub fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double
     }
   }
   // the words being written, where they go, in their size and colour
-  match marking.writing {
+  match marking.writing.get() {
     Some((_, x, y, w, color)) => {
       let size = w * k
       at_place(rx + x * k, ry + y * k, fn() {
@@ -749,9 +750,9 @@ pub fn dashes(path : Array[(Double, Double)], out : Array[@ui.Line]) -> Unit {
 /// The words the marked image's quotes say (ImageMarks.kt quotes): a quote per numbered mark, where it is (for the
 /// agent), on which image, what was said of it.
 pub fn marks_quotes(made : String, original : String, nw : Double, nh : Double) -> Array[(String, String, String)] {
-  let numbers = mark_numbers(marking.shapes)
+  let numbers = mark_numbers(marking.shapes.get())
   let out = []
-  for s in marking.shapes {
+  for s in marking.shapes.get() {
     match numbers.get(s.id) {
       Some(n) => {
         let r = fn(v : Double) { "\{v.round().to_int()}" }
@@ -790,8 +791,8 @@ pub fn marks_quotes(made : String, original : String, nw : Double, nh : Double) 
 ///|
 /// The marks as the host draws them (marks.mbt's JSON), in the picture's size as shown.
 pub fn marks_json(nw : Double, nh : Double) -> String {
-  let numbers = mark_numbers(marking.shapes)
-  let list = marking.shapes.map(fn(s) {
+  let numbers = mark_numbers(marking.shapes.get())
+  let list = marking.shapes.get().map(fn(s) {
     Json::object({
       "kind": Json::string(s.kind),
       "color": Json::number(s.color.to_double()),
@@ -810,14 +811,14 @@ pub fn marks_json(nw : Double, nh : Double) -> String {
 /// Back while marking (ImageMarks.kt back): closes a note, puts down the words being written, closes the colours,
 /// lets go of the picked mark, else stops marking.
 pub fn marks_back(c : @ui.Ctx) -> Unit {
-  if marking.note >= 0 {
+  if marking.note.get() >= 0 {
     marks_note_done(c)
-  } else if marking.writing is Some(_) {
+  } else if marking.writing.get() is Some(_) {
     marks_put_down(c)
-  } else if marking.palette {
-    marking.palette = false
-  } else if marking.picked >= 0 {
-    marking.picked = -1
+  } else if marking.palette.get() {
+    marking.palette.set(false)
+  } else if marking.picked.get() >= 0 {
+    marking.picked.set(-1)
   } else {
     marks_leave()
   }
@@ -825,17 +826,17 @@ pub fn marks_back(c : @ui.Ctx) -> Unit {
 
 ///|
 pub fn marks_note_done(c : @ui.Ctx) -> Unit {
-  if marking.note >= 0 {
-    marking.comments[marking.note] = marking.note_field.text()
+  if marking.note.get() >= 0 {
+    marking.comments.put(marking.note.get(), marking.note_field.text())
   }
-  marking.note = -1
+  marking.note.set(-1)
   c.blur()
 }
 
 ///|
 /// Something drawn (or being written) to be kept.
 pub fn marks_any() -> Bool {
-  marking.shapes.length() > 0 || (marking.writing is Some(_) && marking.write_field.text().trim(chars=" \n\t") != "")
+  marking.shapes.get().length() > 0 || (marking.writing.get() is Some(_) && marking.write_field.text().trim(chars=" \n\t") != "")
 }
 
 ///|
@@ -843,12 +844,12 @@ pub fn marks_any() -> Bool {
 /// there is a chat's draft to put it in). True on the frame one of them is tapped: `go(draft)`.
 /// `ink`: what its words and icons are drawn in (a desktop's bar is the page's, preview_desk.mbt).
 pub fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : Int64 = dark_muted) -> Unit {
-  let ready = !marking.busy && marks_any()
+  let ready = !marking.busy.get() && marks_any()
   // as wide as they are: the file's name before them cut short instead
   c.box(dir=Row, gap=4.0, align=ACenter, keep=true, fn() {
-    if marking.error != "" {
+    if marking.error.get() != "" {
       c.box(padx=6.0, max_w=140.0, clip=true, fn() {
-        c.text(marking.error, size=@sf.theme().t.meta, color=0xFF7B6BFFL, wrap=false) |> ignore
+        c.text(marking.error.get(), size=@sf.theme().t.meta, color=0xFF7B6BFFL, wrap=false) |> ignore
       })
       |> ignore
     }
@@ -883,7 +884,7 @@ pub fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : 
           fn() {
             @sf.icon(c, "send", size=12.0, color=0xFFFFFFFFL) |> ignore
             c.text(
-              pv(if marking.busy { "android-chat.marks.making" } else { "android-chat.preview.put" }),
+              pv(if marking.busy.get() { "android-chat.marks.making" } else { "android-chat.preview.put" }),
               size=@sf.theme().t.meta,
               weight=600,
               color=0xFFFFFFFFL,
@@ -915,8 +916,8 @@ pub let marks_put_room : @ui.Style = @ui.css("pl=S1")
 /// (ImageMarks.kt MarksTools: 选择, 框, 箭头, 画笔, 文字 · the colour · 删除 the picked · 撤销, 重做), the colours in a row
 /// over them when asked for.
 pub fn marks_foot(c : @ui.Ctx) -> Unit {
-  if marking.note >= 0 {
-    match mark_notes().iter().find_first(fn(x) { x.0 == marking.note }) {
+  if marking.note.get() >= 0 {
+    match mark_notes().iter().find_first(fn(x) { x.0 == marking.note.get() }) {
       Some(note) => {
         // (8 over the keyboard, or the navigation bar: FilePreview.kt MarksFoot's place)
         c.box(w=Fill(1.0), padx=12.0, pb=8.0, fn() { note_box(c, note) }) |> ignore
@@ -925,7 +926,7 @@ pub fn marks_foot(c : @ui.Ctx) -> Unit {
       None => ()
     }
   }
-  marking.popped = -1
+  marking.popped.set(-1)
   // (over the picture: FilePreview.kt's darkGlass, as MarksTools has it)
   let glass = dark_glass()
   c.box(w=Fill(1.0), pb=8.0, gap=10.0, align=ACenter, fn() {
@@ -962,7 +963,7 @@ pub fn marks_foot(c : @ui.Ctx) -> Unit {
       |> ignore
     }
     c.box(gap=12.0, align=ACenter, fn() {
-      if marking.palette {
+      if marking.palette.get() {
         c.box(dir=Row, pad=4.0, gap=2.0, radius=20.0, glass~, fn() {
           for col in mark_colors {
             let id = c.id("marks/color/\{col.0}")
@@ -987,33 +988,33 @@ pub fn marks_foot(c : @ui.Ctx) -> Unit {
       c.box(dir=Row, h=Px(44.0), padx=6.0, gap=2.0, radius=picture_bar_corner, glass~, align=ACenter, fn() {
         for x in [(Select, "cursor", "select"), (Rect, "square", "rect"), (Arrow, "arrow-up-right", "arrow"), (Pen, "scribble", "pen"), (Words, "text", "text")] {
           let (tool, icon, name) = x
-          if picture_button(c, "marks/tool/" + icon, icon, dark_muted, true, held=marking.tool == tool, said=pv("android-chat.marks.tool." + name)) {
+          if picture_button(c, "marks/tool/" + icon, icon, dark_muted, true, held=marking.tool.get() == tool, said=pv("android-chat.marks.tool." + name)) {
             marks_put_down(c)
-            marking.note = -1
-            marking.tool = tool
+            marking.note.set(-1)
+            marking.tool.set(tool)
             if tool != Select {
-              marking.picked = -1
+              marking.picked.set(-1)
             }
           }
         }
         mark_gap(c)
         let swatch = c.id("marks/palette")
         if c.clicked(swatch) {
-          marking.palette = !marking.palette
+          marking.palette.set(!marking.palette.get())
         }
         let swatch_box = c.box(w=Px(32.0), h=Px(32.0), radius=picture_key, align=ACenter, justify=JCenter, id=swatch, fn() {
           mark_swatch(c, marks_shown_color())
         })
         c.semantics(swatch_box, Button, id=swatch, label=pv("android-chat.marks.color"))
         @sf.tip(c, "marks/palette/tip", swatch, pv("android-chat.marks.color"))
-        if marking.picked >= 0 && picture_button(c, "marks/remove", "trash", dark_muted, true, said=pv("common.delete")) {
-          marks_remove(marking.picked)
+        if marking.picked.get() >= 0 && picture_button(c, "marks/remove", "trash", dark_muted, true, said=pv("common.delete")) {
+          marks_remove(marking.picked.get())
         }
         mark_gap(c)
-        if picture_button(c, "marks/undo", "retry", dark_muted, true, enabled=marking.past.length() > 0, said=pv("android-chat.marks.undo")) {
+        if picture_button(c, "marks/undo", "retry", dark_muted, true, enabled=marking.past.get().length() > 0, said=pv("android-chat.marks.undo")) {
           marks_undo()
         }
-        if picture_button(c, "marks/redo", "redo", dark_muted, true, enabled=marking.future.length() > 0, said=pv("android-chat.marks.redo")) {
+        if picture_button(c, "marks/redo", "redo", dark_muted, true, enabled=marking.future.get().length() > 0, said=pv("android-chat.marks.redo")) {
           marks_redo()
         }
       })
@@ -1028,9 +1029,9 @@ pub fn marks_foot(c : @ui.Ctx) -> Unit {
 /// The numbered marks' notes in their numbers' order (ImageMarks.kt notes): the mark's id, its number, what it is (框,
 /// 箭头), its colour.
 pub fn mark_notes() -> Array[(Int, Int, String, Int64)] {
-  let numbers = mark_numbers(marking.shapes)
+  let numbers = mark_numbers(marking.shapes.get())
   let out = []
-  for s in marking.shapes {
+  for s in marking.shapes.get() {
     match numbers.get(s.id) {
       Some(n) => out.push((s.id, n, pv(if s.kind == "box" { "android-chat.marks.note.box" } else { "android-chat.marks.note.arrow" }), s.color))
       None => ()
@@ -1043,8 +1044,8 @@ pub fn mark_notes() -> Array[(Int, Int, String, Int64)] {
 /// The note of the mark `id` opened (ImageMarks.kt open): what was being written put down, nothing picked.
 pub fn marks_open_note(c : @ui.Ctx, id : Int) -> Unit {
   marks_put_down(c)
-  marking.picked = -1
-  marking.note = id
+  marking.picked.set(-1)
+  marking.note.set(id)
   marking.note_field.set(marking.comments.get(id).unwrap_or(""))
   c.focus_editor("marks/note")
 }
@@ -1060,15 +1061,15 @@ pub let note_pop_ms : Double = 140.0
 pub fn note_box(c : @ui.Ctx, note : (Int, Int, String, Int64)) -> Unit {
   let (id, n, what, color) = note
   let pop = @motion.anim(c, "marks/note-pop", 1.0, global=true)
-  if marking.popped != id {
-    marking.popped = id
+  if marking.popped.get() != id {
+    marking.popped.set(id)
     pop.snap(0.0)
     pop.animate(1.0, @motion.tween(note_pop_ms, ease=Out))
   }
   let p = pop.get()
   let remove = c.id("marks/note-remove")
   if c.clicked(remove) {
-    marking.note = -1
+    marking.note.set(-1)
     marks_remove(id)
     c.blur()
   }
@@ -1257,12 +1258,12 @@ pub fn mark_swatch(c : @ui.Ctx, color : Int64) -> Unit {
 ///|
 /// The colour shown: the words being written's, the picked mark's, else the one to draw in.
 pub fn marks_shown_color() -> Int64 {
-  match marking.writing {
+  match marking.writing.get() {
     Some((_, _, _, _, col)) => col
     None =>
-      match marking.shapes.iter().find_first(fn(s) { s.id == marking.picked }) {
+      match marking.shapes.get().iter().find_first(fn(s) { s.id == marking.picked.get() }) {
         Some(s) => s.color
-        None => marking.color
+        None => marking.color.get()
       }
   }
 }
@@ -1270,14 +1271,14 @@ pub fn marks_shown_color() -> Int64 {
 ///|
 /// A colour to draw in next; the picked mark (or the words being written) takes it at once.
 pub fn marks_pick_color(col : Int64) -> Unit {
-  marking.color = col
-  marking.palette = false
-  match marking.writing {
-    Some((id, x, y, w, _)) => marking.writing = Some((id, x, y, w, col))
+  marking.color.set(col)
+  marking.palette.set(false)
+  match marking.writing.get() {
+    Some((id, x, y, w, _)) => marking.writing.set(Some((id, x, y, w, col)))
     None =>
-      if marking.picked >= 0 {
-        let id = marking.picked
-        marks_commit(marking.shapes.map(fn(s) { if s.id == id { { ..s, color: col } } else { s } }))
+      if marking.picked.get() >= 0 {
+        let id = marking.picked.get()
+        marks_commit(marking.shapes.get().map(fn(s) { if s.id == id { { ..s, color: col } } else { s } }))
       }
   }
 }
@@ -1286,7 +1287,7 @@ pub fn marks_pick_color(col : Int64) -> Unit {
 /// Where what is being written ends on the stage (ImageMarks.kt writingBottom): the words being written's foot; the
 /// open note's pin's point and the note's box under it (NOTE_BOX, 140); None while neither is.
 pub fn marks_writing_bottom(z : @kit.Zoom) -> Double? {
-  if !marking.on {
+  if !marking.on.get() {
     return None
   }
   let (_, ry, rw, _) = match z.rect() {
@@ -1294,8 +1295,8 @@ pub fn marks_writing_bottom(z : @kit.Zoom) -> Double? {
     None => return None
   }
   let k = rw / dmax(1.0, z.nw)
-  if marking.note >= 0 {
-    return match marking.shapes.iter().find_first(fn(s) { s.id == marking.note }) {
+  if marking.note.get() >= 0 {
+    return match marking.shapes.get().iter().find_first(fn(s) { s.id == marking.note.get() }) {
       Some(s) => {
         let py0 = if s.kind == "box" { s.bounds().1 } else { s.pts[1] }
         let py = dmax(22.0 / k, dmin(dmax(22.0 / k, z.nh - 2.0 / k), py0))
@@ -1304,7 +1305,7 @@ pub fn marks_writing_bottom(z : @kit.Zoom) -> Double? {
       None => None
     }
   }
-  match marking.writing {
+  match marking.writing.get() {
     Some((_, _, y, w, _)) => Some(ry + (y + w * 1.3) * k)
     None => None
   }

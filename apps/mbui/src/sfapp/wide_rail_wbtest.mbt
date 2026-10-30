@@ -570,7 +570,7 @@ test "wide: folding moves the block as the web's: the list where it was as the b
   let (px, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
   // (its line in the middle of its strip)
   assert_eq(px + @sfdesk.edge_half, @sfdesk.closed_edge + @sfdesk.wide.side_w.get() + @sfdesk.edge_half)
-  assert_true(@sfdesk.wide.bar_mr >= 0.0)
+  assert_true(@sfdesk.wide.bar_mr.get() >= 0.0)
 }
 
 ///|
@@ -702,13 +702,13 @@ test "wide: a newer build of the desktop app: 更新 the update key in the sideb
   t.run_for(@ui.move_most_ms)
   let (fx, _, _, _) = t.query(Button, label="更新").unwrap().rect
   assert_eq(fx, @sfdesk.update_closed_in)
-  assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_update_in)
+  assert_eq(@sfdesk.wide.bar_pl.get(), @sfdesk.bar_update_in)
   // shown a while: 更新 back in the sidebar's first row, the bar starting past the sidebar with its own 12
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   t.move(rx + rw / 2.0, ry + rh / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.peeking.get())
-  assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_in)
+  assert_eq(@sfdesk.wide.bar_pl.get(), @sfdesk.bar_in)
 }
 
 ///|
@@ -725,7 +725,7 @@ test "wide: under a phone's status bar, 更新 below it (the bar takes what is p
   let (_, fy, _, fh) = t.query(Button, label="筛选会话：全部").unwrap().rect
   assert_eq((y, h), (fy, fh))
   // pressed, the newer build asked for (update_install: asked again first)
-  update.source = Some({ check: fn(_, _, done) { done(Ok(Json::null())) }, url: fn(f) { f } })
+  update.source.set(Some({ check: fn(_, _, done) { done(Ok(Json::null())) }, url: fn(f) { f } }))
   update_version.val = 1
   let (x, _, w, _) = t.query(Button, label="更新").unwrap().rect
   t.tap(x + w / 2.0, y + h / 2.0)

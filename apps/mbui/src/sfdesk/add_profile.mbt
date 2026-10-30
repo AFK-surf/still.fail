@@ -45,8 +45,8 @@ fn add_profile_flow(c : @ui.Ctx, core : Core, s : Json?, online : Array[Json]) -
   let station = text(s, "station")
   let n = @settings.new_profile_of(station)
   let form = n.form
-  if !n.opened {
-    n.opened = true
+  if !n.opened.get() {
+    n.opened.set(true)
     // (once the frame's builds are over: the build that first comes to it alone)
     c.tell("add-profile-open/" + form, fn() {
       @settings.act(core, @sf.t("web-pages.addProfile.openAction"), "profile.flow.open", obj([("station", str(station)), ("form", str(form))]))
@@ -85,13 +85,13 @@ fn add_profile_flow(c : @ui.Ctx, core : Core, s : Json?, online : Array[Json]) -
   let install = field(d, "install")
   let plan = step == "connect" && text(d, "method") == "plan"
   let planning = plan && !(install is Some(Object(_))) && sign is Some(Object(_))
-  if planning && !n.asked {
+  if planning && !n.asked.get() {
     // (start_login says it asked)
     c.tell("add-profile-login/" + form, fn() {
       @settings.start_login(core, station, n, text(sign, "runtime"), text(sign, "access"))
     })
   }
-  if !planning && n.asked {
+  if !planning && n.asked.get() {
     // left unfinished: let go
     @settings.drop_login(core, station, n)
   }
@@ -319,10 +319,10 @@ fn connect_form(
   let pending = flag(d, "pending")
   let endpoint = profile_field("add-endpoint/" + form)
   let key = profile_field("add-key/" + form)
-  if !n.filled {
-    n.filled = true
+  if !n.filled.get() {
+    n.filled.set(true)
     endpoint.set(text(d, "endpoint"))
-    n.endpoint = text(d, "endpoint")
+    n.endpoint.set(text(d, "endpoint"))
   }
   let submitting = is_doing(core, ["profile.flow.submit"], [("station", station), ("form", form)])
   let submit = fn() {
@@ -352,9 +352,9 @@ fn connect_form(
           disabled=pending,
           field=endpoint,
         )
-        if endpoint.text() != n.endpoint {
-          n.endpoint = endpoint.text()
-          edit([("endpoint", str(n.endpoint))])
+        if endpoint.text() != n.endpoint.get() {
+          n.endpoint.set(endpoint.text())
+          edit([("endpoint", str(n.endpoint.get()))])
         }
         if typed.submitted {
           submit()
@@ -395,9 +395,9 @@ fn connect_form(
     if flag(d, "showKey") {
       @sf.field(c, text(d, "keyLabel"), hint=text(d, "keyHint"), error=text(d, "error"), fn() {
         let typed = @sf.input(c, "add-profile-key/" + form, secret=true, disabled=pending, field=key)
-        if key.text() != n.key {
-          n.key = key.text()
-          edit([("key", str(n.key))])
+        if key.text() != n.key.get() {
+          n.key.set(key.text())
+          edit([("key", str(n.key.get()))])
         }
         if typed.submitted {
           submit()

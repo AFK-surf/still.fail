@@ -10,10 +10,10 @@ pub fn open_cards_fixture(mode : String) -> Unit {
     "chat-answering" => acting.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
     // a word of the last post picked (its handles and its bar), once laid out (pick.mbt)
     "chat-pick" => {
-      pk.ts = "ts11"
+      pk.ts.set("ts11")
       pk.sel.key = "pick/ts11"
-      pk.author = "Claude"
-      pk.role = "agent"
+      pk.author.set("Claude")
+      pk.role.set("agent")
       pk.sel.a = 4
       pk.sel.b = 6
     }
@@ -36,7 +36,7 @@ pub fn open_fixture(mode : String) -> Unit {
       app.nav.push(Chat(r))
       app.nav.push(History(r, "s-c1", None))
       if mode == "history-details" {
-        dui.history_tab = 1
+        dui.history_tab.set(1)
       } else {
         @sfpages.history_open(["h2/group", "h2/group/1", "h4/group", "h4/group/0"])
       }
@@ -50,7 +50,7 @@ pub fn open_fixture(mode : String) -> Unit {
     "home-attention" => @sfdesk.open_attention()
     // (what is beside it: the made-up core keeps it so, fixture.mbt fixture_chat_tabs)
     "chat-letters-side" => {
-      dui.letters_open = ""
+      dui.letters_open.set("")
       dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
     }
     "chat-model-pop" => @sfpages.open_triple(r.station, "session:s-c1")
@@ -78,12 +78,12 @@ fn open_decide_panels(mode : String, src : Source) -> Unit {
     "chat-things" => open_things(src, r, 7.0)
     "chat-letters-open" => {
       open_letters(src, r, 7.0)
-      dui.letters_open = @sffixture.fix_letters_link
+      dui.letters_open.set(@sffixture.fix_letters_link)
     }
     "chat-agent" | "chat-agent-unsaid" | "chat-agent-screens" => open_agent(src, r, "s-c1")
     "chat-jobs" => open_chat_jobs(src, r)
     "chat-job" => {
-      dui.job_tab = 0
+      dui.job_tab.set(0)
       open_job(src, r, "j-ci")
     }
     _ => ()
@@ -122,8 +122,8 @@ pub fn open_drive_fixture(mode : String) -> Unit {
             sent: @signals.signal(sent),
             state: @signals.signal(state),
             error: @signals.signal(error),
-            replace: false,
-            id: "",
+            replace: @signals.signal(false, same=fn(a, b) { a == b }),
+            id: @signals.signal("", same=fn(a, b) { a == b }),
           })
         }
         up("旅行照片.zip", 6291456, 2621440, "going", "")
@@ -149,15 +149,15 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       app.nav.push(DriveRead(at))
       let r = @sf.reading_for(reader_key(at))
       if mode != "reader" && mode != "reader-md" {
-        r.chrome = true
+        r.chrome.set(true)
       }
       if mode == "reader-contents" {
-        r.panel = @sf.ReaderPanel::Contents
-        r.contents_put = false
+        r.panel.set(@sf.ReaderPanel::Contents)
+        r.contents_put.set(false)
       }
       if mode == "reader-layout" {
-        r.panel = @sf.ReaderPanel::Layout
-        r.contents_put = false
+        r.panel.set(@sf.ReaderPanel::Layout)
+        r.contents_put.set(false)
       }
     }
     // (chat-station-files: ＋'s Station 文件 put up as the app's source is made, fixture_station_files)
@@ -462,7 +462,7 @@ pub fn open_mode(mode : String) -> Unit {
             },
           ],
           answers: {},
-          all: false,
+          all: @signals.signal(false, same=fn(a, b) { a == b }),
           done: fn(_) {  },
         })
       // what comes and goes open (the rail's key, transfers.mbt): a copy to MBA going (as the core says it)
@@ -492,7 +492,7 @@ pub fn open_mode(mode : String) -> Unit {
     @sfdesk.switcher_open_with(if mode == "switcher-found" { "签名" } else { "" })
   } else if mode == "home-sheet" || mode == "home-accounts" {
     // (home-accounts: two accounts signed in, what a new workspace asks which of)
-    home_sheet_at_start.val = true
+    home_sheet_at_start.set(true)
   }
 }
 

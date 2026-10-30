@@ -43,7 +43,7 @@ pub(all) struct Asking {
   total : Int
   clashes : Array[Clash]
   answers : Map[String, String]
-  mut all : Bool
+  all : @signals.Signal[Bool]
   done : (Map[String, String]) -> Unit
 }
 
@@ -51,14 +51,16 @@ pub(all) struct Asking {
 /// The drag: a row pressed (what, where), what is carried once it moved, the targets drawn last frame and this one,
 /// the one under the pointer, files dropped from outside still being read (their pick, where they go), what is asked.
 priv struct FDrag {
-  mut press : (Dragged, Double, Double)?
+  press : @signals.Signal[(Dragged, Double, Double)?]
   /// (told as it changes: what shows it carried, built before what takes it in the frame, built again for it)
   item : @signals.Signal[Dragged?]
+  // (targets, drawn, dropped, later plain: the frame's own work (where it may drop, as laid out; drops and asks to
+  // take up), read by the frame that does it, not shown)
   mut targets : Array[FTarget]
   mut drawn : Array[FTarget]
-  mut over : String
+  over : @signals.Signal[String]
   mut dropped : Array[(@ui.Pick, DriveAt)]
-  mut asking : Asking?
+  asking : @signals.Signal[Asking?]
   /// drops waiting for the folder they go into to be read (what is there by their names asked about first): each done
   /// once it is (true)
   mut later : Array[() -> Bool]
@@ -69,26 +71,26 @@ priv struct FDrag {
 ///|
 // kept across runs: the drag's state (drag_reset puts it back)
 let fdrag : FDrag = {
-  press: None,
+  press: @signals.signal(None),
   item: @signals.signal(None),
   targets: [],
   drawn: [],
-  over: "",
+  over: @signals.signal("", same=fn(a, b) { a == b }),
   dropped: [],
-  asking: None,
+  asking: @signals.signal(None),
   later: [],
   frame: -1,
 }
 
 ///|
 fn drag_reset() -> Unit {
-  fdrag.press = None
+  fdrag.press.set(None)
   fdrag.item.set(None)
   fdrag.targets = []
   fdrag.drawn = []
-  fdrag.over = ""
+  fdrag.over.set("")
   fdrag.dropped = []
-  fdrag.asking = None
+  fdrag.asking.set(None)
   fdrag.later = []
   fdrag.frame = -1
   fclash_shown.val = 0
@@ -106,9 +108,9 @@ fn fdrag_press(c : @ui.Ctx, item : Dragged) -> Unit {
   if !@sf.pointer_rests() {
     return
   }
-  if fdrag.press is None && fdrag.item.get() is None {
+  if fdrag.press.get() is None && fdrag.item.get() is None {
     // (where it went down: the frame that sees the press may see it moved already)
-    fdrag.press = Some((item, c.press_x, c.press_y))
+    fdrag.press.set(Some((item, c.press_x, c.press_y)))
   }
 }
 
@@ -193,7 +195,7 @@ fn fdrag_target(
 ) -> String? {
   ignore(c)
   fdrag.targets.push({ id, key, into, name, write, transfers, depth, outside })
-  if fdrag.over != key {
+  if fdrag.over.get() != key {
     return None
   }
   match (fdrag.item.get(), into) {
@@ -216,11 +218,11 @@ pub fn drag_frame(c : @ui.Ctx, src : Source, ws : String, outside? : Bool = true
   // the targets drawn last frame are where a drop lands now
   fdrag.drawn = fdrag.targets
   fdrag.targets = []
-  match (fdrag.press, fdrag.item.get()) {
+  match (fdrag.press.get(), fdrag.item.get()) {
     (Some((item, x0, y0)), None) if down =>
       if (px - x0).abs() > fdrag_slop || (py - y0).abs() > fdrag_slop {
         fdrag.item.set(Some(item))
-        fdrag.press = None
+        fdrag.press.set(None)
       }
     (_, Some(item)) if !down => {
       match fdrag_at(c, px, py) {
@@ -228,9 +230,9 @@ pub fn drag_frame(c : @ui.Ctx, src : Source, ws : String, outside? : Bool = true
         None => ()
       }
       fdrag.item.set(None)
-      fdrag.press = None
+      fdrag.press.set(None)
     }
-    _ => if !down { fdrag.press = None }
+    _ => if !down { fdrag.press.set(None) }
   }
   // files from the computer let go on a folder (on the files' page): read as a pick's, then up into it; let go elsewhere
   // they are not taken here (what is there may take them otherwise: a field, by their paths)
@@ -263,7 +265,7 @@ pub fn drag_frame(c : @ui.Ctx, src : Source, ws : String, outside? : Bool = true
       fdrag.later.push(f)
     }
   }
-  fdrag.over = match (fdrag.item.get(), @ui.files_held()) {
+  fdrag.over.set(match (fdrag.item.get(), @ui.files_held()) {
     (Some(_), _) =>
       match fdrag_at(c, px, py) {
         Some(t) => t.key
@@ -275,7 +277,7 @@ pub fn drag_frame(c : @ui.Ctx, src : Source, ws : String, outside? : Bool = true
         None => ""
       }
     _ => ""
-  }
+  })
 }
 
 ///|
@@ -299,8 +301,8 @@ fn fdrag_put_up(src : Source, into : DriveAt, files : Array[@hostapi.Picked]) ->
         sent: @signals.signal(0),
         state: @signals.signal("waiting"),
         error: @signals.signal(""),
-        replace: false,
-        id: "",
+        replace: @signals.signal(false, same=fn(a, b) { a == b }),
+        id: @signals.signal("", same=fn(a, b) { a == b }),
       })
     }
     dv_pump(src)
@@ -472,15 +474,15 @@ fn fdrag_transfer(
   }
   match entries.iter().find_first(fn(e) { e.name.to_lower() == item.name.to_lower() }) {
     Some(e) =>
-      fdrag.asking = Some({
+      fdrag.asking.set(Some({
         into,
         into_name,
         total: 1,
         clashes: [{ name: item.name, dir: item.dir, size: item.size, station: item.station_name, there: e }],
         answers: {},
-        all: false,
+        all: @signals.signal(false, same=fn(a, b) { a == b }),
         done: go,
-      })
+      }))
     None => go({})
   }
   true
@@ -492,7 +494,7 @@ fn fdrag_transfer(
 /// while something is asked: its title and what it is about as the name asked about now says them.
 fn clash_dialog(c : @ui.Ctx) -> Unit {
   ignore(c)
-  match fdrag.asking {
+  match fdrag.asking.get() {
     Some(_) if fclash_shown.val == 0 => {
       @sf.panel(
         "",
@@ -522,7 +524,7 @@ fn clash_dialog(c : @ui.Ctx) -> Unit {
         },
         // let go (Escape, ✕, a press outside): nothing goes
         gone=fn() {
-          fdrag.asking = None
+          fdrag.asking.set(None)
           fclash_shown.val = 0
         },
       )
@@ -545,7 +547,7 @@ let fclash_shown : Ref[Int] = Ref(0)
 ///|
 /// What is asked now, and the name asked about (the first not answered).
 fn clash_now() -> (Asking?, Clash?) {
-  match fdrag.asking {
+  match fdrag.asking.get() {
     Some(a) =>
       match a.clashes.iter().find_first(fn(x) { !a.answers.contains(x.name) }) {
         Some(n) => (Some(a), Some(n))
@@ -559,7 +561,7 @@ fn clash_now() -> (Asking?, Clash?) {
 /// `said` (skip, keep, replace) for the name asked about, or all the rest; all answered, what goes goes.
 fn clash_answer(a : Asking, n : Clash, said : String) -> Unit {
   let left = a.clashes.filter(fn(x) { !a.answers.contains(x.name) })
-  if a.all {
+  if a.all.get() {
     for x in left {
       a.answers[x.name] = said
     }
@@ -567,7 +569,7 @@ fn clash_answer(a : Asking, n : Clash, said : String) -> Unit {
     a.answers[n.name] = said
   }
   if a.clashes.iter().all(fn(x) { a.answers.contains(x.name) }) {
-    fdrag.asking = None
+    fdrag.asking.set(None)
     (a.done)(a.answers)
   }
 }
@@ -599,10 +601,10 @@ fn clash_body(c : @ui.Ctx) -> Unit {
       if left.length() > 1 {
         let id = c.id("files-clash/all")
         if c.clicked(id) {
-          a.all = !a.all
+          a.all.set(!a.all.get())
         }
         c.box(style=fclash_all, id~, fn() {
-          @sf.icon(c, if a.all { "check-circle" } else { "square" }, size=drag_icon, color=if a.all { t.p.accent } else { t.p.muted })
+          @sf.icon(c, if a.all.get() { "check-circle" } else { "square" }, size=drag_icon, color=if a.all.get() { t.p.accent } else { t.p.muted })
           |> ignore
           c.text(@sf.t("web-pages.files.applyAll", args=[("n", (left.length() - 1).to_string())]), style=clash_note) |> ignore
         })
@@ -771,7 +773,7 @@ pub fn dragged() -> Dragged? {
 ///|
 /// A name already where files go asked about, as a drop does (a page shown at that moment: the fixture's).
 pub fn drag_ask(a : Asking) -> Unit {
-  fdrag.asking = Some(a)
+  fdrag.asking.set(Some(a))
 }
 ///|
 /// The clash's facts (DrivePane.css.ts facts: two columns, 4 by 12 between; what is said muted).

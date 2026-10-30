@@ -59,6 +59,8 @@ fn unread_lead() -> Double {
 ///|
 /// The chat's page.
 fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
+  // (on show while built here, whoever builds it: what plays in it goes on, linger_tick)
+  @sfbase.chat_page_lives(c, r)
   let t = @sf.theme()
   let (view, list, error) = view_of_chat(src, r)
   // (named to know where it is, not pressed: what is pressed in it is what holds it's)
@@ -174,7 +176,7 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
     (Some(v), Some(rd)) if !src.read_only => {
       (src.call)("client.focus", { "left": focus_chat(r, v, None) }, fn(_) {  })
       match v.thread {
-        Some(_) if rd.placed => tell_place(src, r, v, rd)
+        Some(_) if rd.placed.get() => tell_place(src, r, v, rd)
         _ => ()
       }
     }
@@ -203,7 +205,7 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
 
 ///|
 /// Which of the chat's asks the bell went to last, by chat (it goes to the next one each time, round again).
-let ask_turns : Map[String, Int] = {}
+let ask_turns : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
 
 ///|
 /// How long the bell rises over the way to the end as that comes, and goes back down.
@@ -346,7 +348,7 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
           let alarm = text(jobs.value, "alarm")
           c.box(style=bar_key_apart(), fn() {
             if nav_button(c, "web", 20.0, key="chat-jobs") {
-              dui.jobs_all = false
+              dui.jobs_all.set(false)
               open_chat_jobs(src, r)
             }
             if alarm == "fail" || alarm == "restart" {

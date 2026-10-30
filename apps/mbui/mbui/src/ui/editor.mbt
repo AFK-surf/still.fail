@@ -750,10 +750,8 @@ pub fn Ctx::editor(
   if self.down && (self.active == id || self.word_drag == id || self.handle_drag == id) {
     hand.pointer.get() |> ignore
   }
-  // (the focus in it: its caret and what the keys do, each frame; a part kept builds it each frame, kept_part.mbt)
-  if self.has_focus(id) {
-    part_live()
-  }
+  // (the focus in it is no reason to build it each frame: its caret blinks as it is painted, woken at each step
+  // (wake_at_time), and what the keys and the hand do to it comes as an event, which builds what holds it anew)
   let st = match (self.editors.get(id), field) {
     // what the app keeps (Field): this editor shows it from now on
     (Some(s), Some(f)) if physical_equal(s, f.st) => s

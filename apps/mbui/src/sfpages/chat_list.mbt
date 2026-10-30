@@ -57,7 +57,7 @@ pub fn chat_list(
   let (rd, rk, em, turns, list, keys, flight) = (lf.rd, lf.rk, lf.em, lf.turns, lf.list, lf.keys, lf.flight)
   let n = list.length()
   // a message gone to, flashing (a notification's): a ground under its row coming in and going
-  let lit = (rd.flash, flash_of(c, rd, rd.flash))
+  let lit = (rd.flash.get(), flash_of(c, rd, rd.flash.get()))
   flashing_now.val = lit
   // the room agents' lines left, less what has come in since (under the rows, over the composer's room)
 
@@ -162,7 +162,7 @@ pub fn chat_list(
             let ri = row_box(c, side, top, lit=band, fn() {
               // (where a message out of a picture comes in over it: emit.mbt; read as it changes, Emits::read)
               em.read()
-              if keys[i] == em.out_key {
+              if keys[i] == em.out_key.get() {
                 @motion.measure(c, c.box(fn() {  }), "emit-out/" + rk + "/" + keys[i])
               }
               entry_row(c, src, here, e)
@@ -196,7 +196,7 @@ pub fn chat_list(
                 } else {
                   None
                 })
-                rd.rises[keys[i]] = a
+                rd.rises.set(keys[i], a)
               }
             }
             // (each read as it is painted: its row not built again as it rises in or fades out; built again as it has
@@ -245,16 +245,16 @@ pub fn chat_list(
       bar~,
       room~,
       finding=find_chat() == chat_key(r),
-      on_found=fn(rd) { rd.found_centre = true },
+      on_found=fn(rd) { rd.found_centre.set(true) },
       find_around~,
     )
     // gone to by a quote: what it quoted, low in the message, to the list's middle
     passage_centre(c, rd, key, "chat-list/" + key)
     // the way to the newest: away from its end, or short of the chat's end
-    rd.jump = la.away || v.newer
+    rd.jump.set(la.away || v.newer)
     to_latest(c, src, r, v, la.away || v.newer, room)
     // what waits to be decided and does not show: a bell over the way to the end
-    rd.ask = to_ask(c, r, v, la.ask_rows, la.info, la.away || v.newer, room)
+    rd.ask.set(to_ask(c, r, v, la.ask_rows, la.info, la.away || v.newer, room))
     // the picture flying out of an activity to its message and back, over the list
     emit_flyer(c, rk, em, v, src, r)
   })
@@ -481,18 +481,18 @@ fn asks_of(v : ChatView) -> Array[Double] {
 
 ///|
 /// Which of each chat's asks the bell goes to next (by the chat's key).
-pub let ask_turns : Map[String, Int] = {}
+pub let ask_turns : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
 
 ///|
 /// What ⌘F last asked the window moved about (`chat.around`), once (-1 none).
-let find_around : Ref[Double] = Ref(-1.0)
+let find_around : @signals.Signal[Double] = @signals.signal(-1.0, same=fn(a, b) { a == b })
 
 ///|
 /// The picture flying out of an activity to its message and back (useEmissions): the agent's, ringed, where emit.mbt
 /// has it, drawn only.
 fn emit_flyer(c : @ui.Ctx, rk : String, em : Emits, v : ChatView, src : Source, r : ChatRef) -> Unit {
   // (one flies from its activity's fold on, till it is home)
-  let a = match em.current {
+  let a = match em.current.get() {
     Some(t) if t.pose != @sfbase.Pose::Fold => v.agents.iter().find_first(fn(a) { a.key == t.agent })
     _ => return
   }
@@ -532,7 +532,7 @@ pub fn chat_find_list(r : ChatRef) -> FindList {
   {
     showing: fn() {
       let rd = reading_of(k)
-      (rd.top_seq, rd.bottom_seq)
+      (rd.top_seq.get(), rd.bottom_seq.get())
     },
     go: fn(seq, words) {
       go_tos[k] = seq
@@ -548,14 +548,15 @@ pub fn find_forget() -> Unit {
   let k = find_chat()
   match readings.get(k) {
     Some(rd) => {
-      rd.found_at = ""
-      rd.found_words = []
+      rd.found_at.set("")
+      rd.found_words.set([])
+      rd.told()
     }
     None => ()
   }
   go_tos.remove(k)
   go_to_words.remove(k)
-  find_around.val = -1.0
+  find_around.set(-1.0)
   find_close()
 }
 
@@ -570,7 +571,7 @@ fn list_reset() -> Unit {
   lists_drawn.clear()
   flashing_now.val = ("", 0.0)
   ask_turns.clear()
-  find_around.val = -1.0
+  find_around.set(-1.0)
 }
 
 ///|
@@ -766,11 +767,11 @@ pub let flashing_now : Ref[(String, Double)] = Ref(("", 0.0))
 /// Whether the message gone to in a chat is lit whole: led there by no quote, or by one whose passage its words do not
 /// have (Chat.tsx Quotes' jump: then the whole message); not while its words are yet to be laid out.
 fn flash_whole(c : @ui.Ctx, rd : @sfbase.Reading) -> Bool {
-  if rd.flash_passage == "" {
+  if rd.flash_passage.get() == "" {
     return true
   }
-  match c.words_of("pick/" + rd.flash) {
-    Some(w) => @sf.find_passage(w.text, rd.flash_passage) is None
+  match c.words_of("pick/" + rd.flash.get()) {
+    Some(w) => @sf.find_passage(w.text, rd.flash_passage.get()) is None
     None => false
   }
 }
@@ -784,13 +785,13 @@ fn passage_lit(c : @ui.Ctx, here : MessageHere, ts : String) -> (Int, Int, Int64
     Some(l) => reading_of(l.rk)
     None => return None
   }
-  if rd.flash != ts || rd.flash_passage == "" {
+  if rd.flash.get() != ts || rd.flash_passage.get() == "" {
     return None
   }
   let lit = flash_of(c, rd, ts)
   match c.words_of("pick/" + ts) {
     Some(w) =>
-      match @sf.find_passage(w.text, rd.flash_passage) {
+      match @sf.find_passage(w.text, rd.flash_passage.get()) {
         Some((a, b)) if lit > 0.0 => Some((a, b, @sf.alpha(@sf.theme().p.accent, @sfbase.picked_alpha * lit)))
         _ => None
       }
@@ -804,7 +805,7 @@ fn passage_wanted(here : MessageHere, ts : String) -> Bool {
   match here.list {
     Some(l) => {
       let rd = reading_of(l.rk)
-      rd.flash == ts && rd.flash_passage != ""
+      rd.flash.get() == ts && rd.flash_passage.get() != ""
     }
     None => false
   }
@@ -815,13 +816,13 @@ fn passage_wanted(here : MessageHere, ts : String) -> Bool {
 /// list's box measured as `pane`), comes to the list's middle (Chat.tsx Quotes' jump: the quoted words at the middle),
 /// once.
 fn passage_centre(c : @ui.Ctx, rd : @sfbase.Reading, list : String, pane : String) -> Unit {
-  if !rd.flash_centre || rd.flash == "" {
+  if !rd.flash_centre.get() || rd.flash.get() == "" {
     return
   }
-  match (c.words_of("pick/" + rd.flash), @motion.measured_rect(c, pane)) {
+  match (c.words_of("pick/" + rd.flash.get()), @motion.measured_rect(c, pane)) {
     (Some(w), Some((_, py, _, ph))) => {
-      rd.flash_centre = false
-      match @sf.find_passage(w.text, rd.flash_passage) {
+      rd.flash_centre.set(false)
+      match @sf.find_passage(w.text, rd.flash_passage.get()) {
         Some((a, b)) => {
           let lines = w.rects(a, b)
           if lines.length() > 0 {
@@ -896,7 +897,7 @@ fn makes_way(lf : @sfbase.ListFrame, k : String) -> String {
 /// end: the newest that did (row_keys's `over`). The list stays at its end at once, so what is at the end stays where
 /// it shows and the rows over the one that came go up for it, from where they showed.
 fn came_over(lf : @sfbase.ListFrame) -> String {
-  "over " + lf.rd.over
+  "over " + lf.rd.over.get()
 }
 
 

@@ -14,7 +14,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   let deep = under is Some(Setting(_))
   settings_deep.val = deep
   // (the settings' pages not ported yet read it too)
-  @settings.wide_deep.val = deep
+  @settings.wide_deep.set(deep)
   // a page merged for every frame: back over it only under another settings page or a place of the rail's (a connect's
   // under 连接; the sidebar is the way to the others)
   let frame : PageFrame = {

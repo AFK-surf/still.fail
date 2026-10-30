@@ -7,8 +7,8 @@
 fn dv_reset() -> Unit {
   reader_set.clear()
   draft_refs.clear()
-  sfs.ref = None
-  sfs.ref_closing = false
+  sfs.ref.set(None)
+  sfs.ref_closing.set(false)
 }
 
 // ── the bar ──────────────────────────────────────────────────────────────

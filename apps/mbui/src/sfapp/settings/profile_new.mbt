@@ -7,42 +7,42 @@
 /// The new-profile pages open, by station: the draft's form, the sign-in it started (none: ""), why that failed.
 pub(all) struct NewProfile {
   form : String
-  mut opened : Bool
-  mut dropped : Bool
+  opened : @signals.Signal[Bool]
+  dropped : @signals.Signal[Bool]
   login : @signals.Signal[String]
-  mut asked : Bool
+  asked : @signals.Signal[Bool]
   error : @signals.Signal[String]
-  mut key : String
-  mut endpoint : String
-  mut filled : Bool
+  key : @signals.Signal[String]
+  endpoint : @signals.Signal[String]
+  filled : @signals.Signal[Bool]
 }
 
 ///|
-let new_profiles : Map[String, NewProfile] = Map([])
+let new_profiles : @sf.LiveMap[String, NewProfile] = @sf.LiveMap::new()
 
 ///|
 /// A count of drafts opened.
-pub let profile_forms : Ref[Int] = Ref(0)
+pub let profile_forms : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
 
 ///|
 /// The draft of a new profile's page, made the first time it is drawn.
 pub fn new_profile_of(station : String) -> NewProfile {
   match new_profiles.get(station) {
-    Some(n) if !n.dropped => n
+    Some(n) if !n.dropped.get() => n
     _ => {
-      profile_forms.val += 1
+      profile_forms.set(profile_forms.get() + 1)
       let n = {
-        form: "mbui-profile-" + profile_forms.val.to_string(),
-        opened: false,
-        dropped: false,
+        form: "mbui-profile-" + profile_forms.get().to_string(),
+        opened: @signals.signal(false, same=fn(a, b) { a == b }),
+        dropped: @signals.signal(false, same=fn(a, b) { a == b }),
         login: @signals.signal(""),
-        asked: false,
+        asked: @signals.signal(false, same=fn(a, b) { a == b }),
         error: @signals.signal(""),
-        key: "",
-        endpoint: "",
-        filled: false,
+        key: @signals.signal("", same=fn(a, b) { a == b }),
+        endpoint: @signals.signal("", same=fn(a, b) { a == b }),
+        filled: @signals.signal(false, same=fn(a, b) { a == b }),
       }
-      new_profiles[station] = n
+      new_profiles.set(station, n)
       n
     }
   }
@@ -53,8 +53,8 @@ pub fn new_profile_of(station : String) -> NewProfile {
 /// (`login.drop`: nothing left behind).
 fn new_profile_left(core : Core, station : String) -> Unit {
   match new_profiles.get(station) {
-    Some(n) if !n.dropped => {
-      n.dropped = true
+    Some(n) if !n.dropped.get() => {
+      n.dropped.set(true)
       drop_login(core, station, n)
       (core.call)("profile.flow.drop", obj([("station", str(station)), ("form", str(n.form))]), fn(_) {  })
     }
@@ -75,7 +75,7 @@ pub fn drop_login(core : Core, station : String, n : NewProfile) -> Unit {
     }
     n.login.set("")
   }
-  n.asked = false
+  n.asked.set(false)
 }
 
 ///|
@@ -95,7 +95,7 @@ pub fn pending_login(core : Core, station : String, id : String) -> Json? {
 ///|
 /// A plan's sign-in started for the page (`login.new` with what it signs in to).
 pub fn start_login(core : Core, station : String, n : NewProfile, runtime : String, access : String) -> Unit {
-  n.asked = true
+  n.asked.set(true)
   n.error.set("")
   let p = [("station", str(station)), ("runtime", str(runtime))]
   if access != "" {
@@ -119,8 +119,8 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
   let t = @sf.theme()
   let n = new_profile_of(station)
   let form = n.form
-  if !n.opened {
-    n.opened = true
+  if !n.opened.get() {
+    n.opened.set(true)
     // (opened once the frame's builds are over: the build that first comes to it alone)
     c.tell("profile-open/" + form, fn() {
       act(core, tr("web-pages.addProfile.openAction"), "profile.flow.open", obj([("station", str(station)), ("form", str(form))]))
@@ -142,7 +142,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
   let install = field(d, "install")
   let planning = step == "connect" && text(d, "method") == "plan" && !(install is Some(Object(_))) && sign is Some(Object(_))
   // a plan's sign-in starts when it is chosen
-  if planning && !n.asked {
+  if planning && !n.asked.get() {
     // (once the frame's builds are over; start_login says it asked)
     c.tell("profile-login/" + form, fn() { start_login(core, station, n, runtime, text(sign, "access")) })
   }
@@ -321,10 +321,10 @@ fn connect_form(
   }
   let group_box = fn(f : () -> Unit) { rows_card(c, f) }
   let ekey = "profile-endpoint/" + form
-  if !n.filled {
-    n.filled = true
+  if !n.filled.get() {
+    n.filled.set(true)
     field_of(ekey).set(text(d, "endpoint"))
-    n.endpoint = text(d, "endpoint")
+    n.endpoint.set(text(d, "endpoint"))
   }
   if flag(d, "showEndpoint") {
     label(tr("common.provider.endpoint"))
@@ -332,8 +332,8 @@ fn connect_form(
       "" => "https://"
       x => x
     }).trim(chars=" ").to_owned()
-    if endpoint != n.endpoint {
-      n.endpoint = endpoint
+    if endpoint != n.endpoint.get() {
+      n.endpoint.set(endpoint)
       edit([("endpoint", str(endpoint))])
     }
     match opt_text(d, "endpointHint") {
@@ -366,8 +366,8 @@ fn connect_form(
   if flag(d, "showKey") {
     label(text(d, "keyLabel"))
     let key = field_box(c, "profile-key/" + form, tr("android-settings.profile.keyPlaceholder"), secret=true)
-    if key != n.key {
-      n.key = key
+    if key != n.key.get() {
+      n.key.set(key)
       edit([("key", str(key))])
     }
     let note = match opt_text(d, "error") {

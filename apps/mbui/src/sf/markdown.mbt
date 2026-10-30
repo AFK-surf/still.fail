@@ -37,6 +37,7 @@ priv struct Piece {
 
 ///|
 priv struct Md {
+  // (ink, n, bleed plain: the builder's own while one text is built, read by nothing else)
   c : @ui.Ctx
   size : Double
   /// the words' colour (a quote's are muted)

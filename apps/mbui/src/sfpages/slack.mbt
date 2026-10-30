@@ -11,6 +11,7 @@ priv struct SlackTokens {
   form : String
   app : @ui.Field
   bot : @ui.Field
+  // (plain: what the core was last told, compared before telling it again)
   mut app_sent : String
   mut bot_sent : String
   error : @signals.Signal[String]

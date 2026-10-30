@@ -83,7 +83,7 @@ pub fn Viewer::flows(self : Viewer) -> Bool {
 /// Whether it shows what has come of it as it comes: some has, and it did not all come in its first part (then it is
 /// a file read whole, its bytes).
 pub fn Viewer::flowing(self : Viewer) -> Bool {
-  match self.flow {
+  match self.flow.get() {
     Some(f) => self.bytes.get() is None && f.parts.get() > 0
     None => false
   }
@@ -94,11 +94,11 @@ pub fn Viewer::flowing(self : Viewer) -> Bool {
 /// that brings all of it makes it a file read whole (its bytes).
 pub fn Viewer::read_on(self : Viewer, src : Source) -> Unit {
   let v = self
-  let f = match v.flow {
+  let f = match v.flow.get() {
     Some(f) => f
     None => {
       let f = Flow::new()
-      v.flow = Some(f)
+      v.flow.set(Some(f))
       f
     }
   }

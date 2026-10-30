@@ -265,23 +265,23 @@ test "the notch's icon swaps with a short scale and fade while it stays open; cl
     platform=2,
   )
   t.draw()
-  assert_eq(m_face.val, "ling")
+  assert_eq(m_face.get(), "ling")
   face.val = "plus"
   t.frame()
   t.frame()
   t.frame()
-  assert_eq(m_face.val, "plus")
-  assert_eq(bar.icon_was, "ling")
+  assert_eq(m_face.get(), "plus")
+  assert_eq(bar.icon_was.get(), "ling")
   assert_true(p.val > 0.0 && p.val < 1.0, msg="\{p.val}")
   t.run_for(icon_swap_ms)
-  assert_eq(bar.icon_was, "")
+  assert_eq(bar.icon_was.get(), "")
   assert_true(p.val == 1.0)
   // the notch closed: nothing to see, at once
   out.val = false
   face.val = "ling"
   t.frame()
-  assert_eq(m_face.val, "ling")
-  assert_eq(bar.icon_was, "")
+  assert_eq(m_face.get(), "ling")
+  assert_eq(bar.icon_was.get(), "")
   t.assert_idle()
 }
 
@@ -291,7 +291,7 @@ test "the bar chosen in the panel slides down into the bar's place, its places l
   let (xs, y) = bar_places_at()
   t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
   // let go over the rows before the panel was all the way open, it stays open: its row tapped
-  if bar.swap is None {
+  if bar.swap.get() is None {
     t.run_for(bar.o.end() - t.time())
     t.tap_once(xs[0], 844.0 - 22.0 - 132.0 + 20.0 + 28.0)
   }
@@ -302,7 +302,7 @@ test "the bar chosen in the panel slides down into the bar's place, its places l
   let lands = bar.o.end()
   while t.time() < lands {
     t.frame()
-    match bar.swap {
+    match bar.swap.get() {
       Some(s) => {
         let k = s.t(bar.o.x)
         assert_true(k >= last)
@@ -315,7 +315,7 @@ test "the bar chosen in the panel slides down into the bar's place, its places l
     }
   }
   assert_true(seen)
-  assert_true(bar.swap is None)
+  assert_true(bar.swap.get() is None)
   match bars_picked.get() {
     Some((_, cur)) => assert_eq(cur, 1)
     None => fail("no bar picked")

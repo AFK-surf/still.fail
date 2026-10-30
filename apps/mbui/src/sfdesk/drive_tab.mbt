@@ -15,11 +15,11 @@
 /// The tab: whether it is being built, where it is by workspace (None: the places; none kept: where it starts), what
 /// was asked put into a chat's message (the chat, what), and a row let go off it (what, where, the frame).
 priv struct FChatTab {
-  mut building : Bool
+  building : @signals.Signal[Bool]
   places : Map[String, DriveAt?]
-  mut scope : String
-  mut let_go : (Dragged, Double, Double, Int)?
-  mut chat : String
+  scope : @signals.Signal[String]
+  let_go : @signals.Signal[(Dragged, Double, Double, Int)?]
+  chat : @signals.Signal[String]
   /// what is picked to go into the chat's message, in the order picked
   picked : Array[Dragged]
 }
@@ -27,11 +27,11 @@ priv struct FChatTab {
 ///|
 // kept across runs: the tab's state (tab_reset puts it back)
 let ftab : FChatTab = {
-  building: false,
+  building: @signals.signal(false, same=fn(a, b) { a == b }),
   places: {},
-  scope: "",
-  let_go: None,
-  chat: "",
+  scope: @signals.signal("", same=fn(a, b) { a == b }),
+  let_go: @signals.signal(None),
+  chat: @signals.signal("", same=fn(a, b) { a == b }),
   picked: [],
 }
 
@@ -39,11 +39,11 @@ let ftab : FChatTab = {
 fn tab_reset() -> Unit {
   panel_screens.clear()
   panel_screen_pages.clear()
-  ftab.building = false
+  ftab.building.set(false)
   ftab.places.clear()
-  ftab.scope = ""
-  ftab.let_go = None
-  ftab.chat = ""
+  ftab.scope.set("")
+  ftab.let_go.set(None)
+  ftab.chat.set("")
   ftab.picked.clear()
 }
 
@@ -84,19 +84,19 @@ fn ftab_add(c : @ui.Ctx, key : String) -> Unit {
 ///|
 /// The tab into a folder of a station (its root, the path under it).
 fn ftab_go(station : String, root : String, path : String) -> Unit {
-  ftab.places[ftab.scope] = Some({ station, root: Some(root), path })
+  ftab.places.set(ftab.scope.get(), Some({ station, root: Some(root), path }))
 }
 
 ///|
 /// Whether the tab is being built now (a folder gone to from what it draws goes there, not to the files' page).
 pub fn tab_building() -> Bool {
-  ftab.building
+  ftab.building.get()
 }
 
 ///|
 /// The tab of the workspace `ws` at `at` (None: the places), as going there in it does.
 pub fn tab_place_set(ws : String, at : DriveAt?) -> Unit {
-  ftab.places[ws] = at
+  ftab.places.set(ws, at)
 }
 
 ///|
@@ -116,9 +116,9 @@ pub fn tab_go(at : DriveAt) -> Unit {
 /// A row let go off the tab, where (x, y in the window), taken once, in the frame it was let go or the next: for the
 /// chat's composer, when let go over it, to put it into the message.
 pub fn tab_take_drop(c : @ui.Ctx) -> (Dragged, Double, Double)? {
-  match ftab.let_go {
+  match ftab.let_go.get() {
     Some((item, x, y, frame)) if c.frame_number() - frame <= 1 => {
-      ftab.let_go = None
+      ftab.let_go.set(None)
       Some((item, x, y))
     }
     _ => None
@@ -130,19 +130,19 @@ pub fn tab_take_drop(c : @ui.Ctx) -> (Dragged, Double, Double)? {
 /// drawn in, one on every screen: the places or a folder (its way, its rows picked by a press, its ways of showing as
 /// wide as its list leaves, its preview), 添加 at its foot; with a pointer its rows dragged onto the chat too.
 pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station : String, only_station? : Bool = false, scope? : String = ws) -> Unit {
-  ftab.scope = scope
+  ftab.scope.set(scope)
   // (what is picked is for this chat's message)
-  if ftab.chat != chat {
+  if ftab.chat.get() != chat {
     ftab.picked.clear()
   }
-  ftab.chat = chat
+  ftab.chat.set(chat)
   // a row let go off the tab (the desk's drag_frame lets the carried go where nothing here takes it)
   let carried = dragged()
   drag_frame(c, src, ws, outside=false)
   match carried {
     Some(i) if dragged() is None => {
       let (px, py, _) = c.pointer()
-      ftab.let_go = Some((i, px, py, c.frame_number()))
+      ftab.let_go.set(Some((i, px, py, c.frame_number())))
     }
     _ => ()
   }
@@ -157,7 +157,7 @@ pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station 
     Some(p) => p
     None => start
   }
-  ftab.building = true
+  ftab.building.set(true)
   c.box(style=ftab_box, fn() {
     c.box(style=ftab_body, fn() {
       match place {
@@ -176,7 +176,7 @@ pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station 
     |> ignore
   })
   |> ignore
-  ftab.building = false
+  ftab.building.set(false)
 }
 
 ///|
@@ -284,7 +284,7 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
     c.box(style=ftab_trail_box, fn() {
       let sid = c.id("files-tab/places")
       if c.clicked(sid) {
-        ftab.places[ftab.scope] = None
+        ftab.places.set(ftab.scope.get(), None)
       }
       let sb = c.box(style=ftab_step, id=sid, fn() { c.text(st.name, style=ftab_step_words) |> ignore })
       c.semantics(sb, Button, id=sid, label=st.name)
@@ -342,7 +342,7 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
   let open = fn(in_ : DriveAt, e : DvEntry) {
     open_entry(c, src, "tab", in_, e, folder_of(in_), fn(to) { ftab_go(to.station, to.root.unwrap_or(""), to.path) })
   }
-  let b = browse(c, src, "tab/" + ftab.chat, "tab", view, at, false, {
+  let b = browse(c, src, "tab/" + ftab.chat.get(), "tab", view, at, false, {
     open,
     preview: open,
     go: fn(p, _) { ftab_go(at.station, root, p) },
@@ -370,7 +370,7 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
         if !e.dir {
           out.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.open"), icon="external", fn() { open(in_, e) })))
         }
-        out.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.sendToChat"), icon="send", fn() { files_into(ftab.chat, dragged(in_, e)) })))
+        out.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.sendToChat"), icon="send", fn() { files_into(ftab.chat.get(), dragged(in_, e)) })))
         out.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.copyPath"), icon="copy", fn() { copy_path(c, abs) })))
         if !e.dir {
           out.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.download"), icon="download", fn() { save_entry(c, src, in_, e) })))

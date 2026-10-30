@@ -15,17 +15,26 @@
 /// none); the press something else in the message took (a link's menu, an image quoted: its frame), which picks nothing.
 pub(all) struct ChatPick {
   /// the message picked from ("" none)
-  mut ts : String
-  mut author : String
-  mut role : String
+  ts : @signals.Signal[String]
+  author : @signals.Signal[String]
+  role : @signals.Signal[String]
+  // (plain: a closure, what to do, not a value shown)
   mut share : (() -> Unit)?
-  mut link : String
+  link : @signals.Signal[String]
   sel : @kit.Pick
-  mut taken_at : Int
+  taken_at : @signals.Signal[Int]
 }
 
 ///|
-pub let pk : ChatPick = { ts: "", author: "", role: "", share: None, link: "", sel: @kit.Pick::new(), taken_at: -1 }
+pub let pk : ChatPick = {
+  ts: @signals.signal("", same=fn(a, b) { a == b }),
+  author: @signals.signal("", same=fn(a, b) { a == b }),
+  role: @signals.signal("", same=fn(a, b) { a == b }),
+  share: None,
+  link: @signals.signal("", same=fn(a, b) { a == b }),
+  sel: @kit.Pick::new(),
+  taken_at: @signals.signal(-1, same=fn(a, b) { a == b }),
+}
 
 ///|
 /// A message right clicked with a mouse, and what shares its turn: the frame, where, the share and its link ("" none),
@@ -86,7 +95,7 @@ let share_turn_room : @ui.Style = @ui.css("w=S6 h=S6")
 ///|
 /// Let go of what is picked.
 pub fn pick_clear() -> Unit {
-  pk.ts = ""
+  pk.ts.set("")
   pk.sel.clear()
 }
 
@@ -94,12 +103,12 @@ pub fn pick_clear() -> Unit {
 /// As at the start (tests): nothing picked, no press remembered.
 pub fn pick_reset() -> Unit {
   pick_clear()
-  pk.author = ""
-  pk.role = ""
+  pk.author.set("")
+  pk.role.set("")
   pk.share = None
-  pk.link = ""
+  pk.link.set("")
   share_offered.val = None
-  pk.taken_at = -1
+  pk.taken_at.set(-1)
   pk.sel.reset()
   // (the press last felt, by its frame: a Tester's frames count from 0 again, and a press another test's pick was felt
   // at took this one's feel, run after composer_wbtest or motion_wbtest, 2026-10-24)
@@ -152,7 +161,7 @@ pub fn pickable(
   })
   // its words kept as laid out while a press is in it or a passage of it is picked (what the hold and the handles
   // ask), or what is marked in it asks
-  if pk.ts == ts {
+  if pk.ts.get() == ts {
     c.words(box, key, a=pk.sel.a, b=pk.sel.b, color=@sf.alpha(@sf.theme().p.accent, picked_alpha))
   } else if lit is Some((a, b, color)) {
     // (round at the passage's two ends, square where it runs on to the next line)
@@ -167,11 +176,11 @@ pub fn pickable(
       Some((sx, sy, sw, sh)) =>
         match c.rect_of(id) {
           Some((x, y, w, h)) if sx >= x - 1.0 && sy >= y - 1.0 && sx + sw <= x + w + 1.0 && sy + sh <= y + h + 1.0 => {
-            pk.ts = ts
-            pk.author = author
-            pk.role = role
+            pk.ts.set(ts)
+            pk.author.set(author)
+            pk.role.set(role)
             pk.share = share
-    pk.link = link
+    pk.link.set(link)
           }
           _ => ()
         }
@@ -189,19 +198,19 @@ pub fn pickable(
     }
     return
   }
-  let mine = pk.ts == ts
+  let mine = pk.ts.get() == ts
   // held still on it a long press's time (the library's: where the press went down, as drawn), the word under the finger
   // picked; not while a handle or the passage it widens is held
   let may = pk.sel.handle == 0 &&
     !(mine && pk.sel.widening) &&
-    pk.taken_at != press.frame &&
+    pk.taken_at.get() != press.frame &&
     words.trim(chars=" \n\t") != ""
   if pk.sel.hold(c, key, id, may~) {
-    pk.ts = ts
-    pk.author = author
-    pk.role = role
+    pk.ts.set(ts)
+    pk.author.set(author)
+    pk.role.set(role)
     pk.share = share
-    pk.link = link
+    pk.link.set(link)
     // the press is the pick's: the list holds still, lifting it taps nothing
     c.take_press()
     let at = press.frame
@@ -213,7 +222,7 @@ pub fn pickable(
     })
   }
   // sliding on: widened by words from the word first held
-  if pk.ts == ts {
+  if pk.ts.get() == ts {
     pk.sel.slide(c)
   }
 }
@@ -245,7 +254,7 @@ pub fn pick_layer(
     pick_pop(c, quote)
     return
   }
-  if pk.ts == "" {
+  if pk.ts.get() == "" {
     return
   }
   let words = match c.words_of(pk.sel.key) {
@@ -274,7 +283,7 @@ pub fn pick_layer(
   if c.clicked(quote_id) {
     let text = words.slice(pk.sel.a, pk.sel.b).trim(chars=" \n\t").to_string()
     if text != "" {
-      quote(pk.author, text, pk.ts, pk.role)
+      quote(pk.author.get(), text, pk.ts.get(), pk.role.get())
     }
     pick_clear()
     return
@@ -296,8 +305,8 @@ pub fn pick_layer(
     }
     _ => ()
   }
-  if pk.link != "" && c.clicked(link) {
-    c.copy_text(pk.link)
+  if pk.link.get() != "" && c.clicked(link) {
+    c.copy_text(pk.link.get())
     say(c, @sf.t("common.link.copied"))
     pick_clear()
     return
@@ -392,20 +401,20 @@ pub fn pick_layer(
             if !everything {
               button(all, @sf.t("android-chat.annotate.selectAll"), "")
             }
-            if pk.share is Some(_) || pk.link != "" {
+            if pk.share is Some(_) || pk.link.get() != "" {
               c.box(style=pick_bar_rule, fn() {  }) |> ignore
             }
             if pk.share is Some(_) {
               mark(share, @sf.t("web-main.chat.shareTurn"), "photo")
             }
-            if pk.link != "" {
+            if pk.link.get() != "" {
               mark(link, @sf.t("common.link.copy"), "link")
             }
           },
         )
         // coming as a small panel does (@kit.pop_in), each passage picked anew; a handle moved, or the list let go of,
         // it is where it is
-        match @motion.presence(c, "pick/bar/\{pk.ts}/\{pk.taken_at}", true, enter=@kit.pop_in, initial=true) {
+        match @motion.presence(c, "pick/bar/\{pk.ts.get()}/\{pk.taken_at.get()}", true, enter=@kit.pop_in, initial=true) {
           Some(l) => c.look(b, l)
           None => ()
         }
@@ -424,9 +433,9 @@ pub fn pick_layer(
 /// elsewhere lets it go.
 fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Unit {
   let (x, y) = match c.selection_end() {
-    Some((ex, ey, _)) if pk.ts != "" => (ex, ey - 8.0 - pick_pop_h)
+    Some((ex, ey, _)) if pk.ts.get() != "" => (ex, ey - 8.0 - pick_pop_h)
     _ => {
-      pk.ts = ""
+      pk.ts.set("")
       return
     }
   }
@@ -434,10 +443,10 @@ fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Un
   if c.clicked(pop) {
     let text = c.selected_text().trim(chars=" \n\t").to_string()
     if text != "" {
-      quote(pk.author, text, pk.ts, pk.role)
+      quote(pk.author.get(), text, pk.ts.get(), pk.role.get())
     }
     c.selection_clear()
-    pk.ts = ""
+    pk.ts.set("")
     return
   }
   // (pressed, what is picked stays picked: it is what is quoted)

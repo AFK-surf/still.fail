@@ -351,14 +351,14 @@ fn station_places(
       if !nav.asked.contains(s.station) {
         nav.asked[s.station] = true
         (src.call)("drive.folders", { "station": Json::string(s.station), "path": Json::null() }, fn(r) {
-          nav.places[s.station] = match r {
+          nav.places.set(s.station, match r {
             Ok(v) =>
               items(Some(v), "places").map(fn(p) {
                 let p = Some(p)
                 (text(p, "name"), text(p, "path"), flag(p, "disk"))
               })
             Err(_) => []
-          }
+          })
         })
       }
     })

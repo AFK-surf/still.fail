@@ -19,7 +19,7 @@ pub fn ref_panel_put(src : Source, key : String, station : String, id : String, 
 ///|
 fn ref_panel_body(c : @ui.Ctx, src : Source, key : String, station : String, id : String) -> Unit {
   let w = @sfbase.writing(src, key)
-  guard w.files.iter().find_first(fn(f) { text(Some(f), "id") == id }) is Some(f) else { return }
+  guard w.files.get().iter().find_first(fn(f) { text(Some(f), "id") == id }) is Some(f) else { return }
   let r = field(Some(f), "ref")
   let path = text(r, "path")
   let dir = flag(r, "dir")

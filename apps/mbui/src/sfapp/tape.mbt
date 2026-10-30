@@ -324,6 +324,7 @@ fn tape_counted(words : String) -> Bool {
 
 ///|
 priv struct TapeRun {
+  // (plain: a measuring run's counts, read by no build)
   first : Double
   mut last : Double
   mut frames : Int

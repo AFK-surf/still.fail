@@ -37,21 +37,21 @@ fn init {
 /// (scripts/check.sh checks).
 fn reset() -> Unit {
   @sf.set_language(None)
-  files_cornered.val = false
-  image_quoted_at.val = -1
+  files_cornered.set(false)
+  image_quoted_at.set(-1)
   bar_glyph.val = None
-  bar_stations_said.val = ""
+  bar_stations_said.set("")
   // the stack and what the app keeps of it (src/sfbase)
   @sfbase.reset()
   // the desktop's own (src/sfdesk)
   @sfdesk.reset()
   steadies.clear()
-  sheet_host.kind = NoSheet
-  sheet_host.serial = 0
+  sheet_host.kind.set(NoSheet)
+  sheet_host.serial.set(0)
   bar_reset()
   bar_timing.val = None
   bar_timed.val = None
-  home_sheet_at_start.val = false
+  home_sheet_at_start.set(false)
   peeks_reset()
   share_in.shared.set(None)
   share_in.files.set([])
@@ -64,30 +64,30 @@ fn reset() -> Unit {
   share_in.error.set("")
   share_in.query.set("")
   share_in.find.set("")
-  share_closing.val = false
+  share_closing.set(false)
   splash_waited.set(false)
-  first_shown.val = false
-  first_waiting.val = false
-  first_has.val = 0
-  frame_bare.val = false
-  window_shown.val = false
+  first_shown.set(false)
+  first_waiting.set(false)
+  first_has.set(0)
+  frame_bare.set(false)
+  window_shown.set(false)
   @sfbase.held_pictures_waiting.val = false
   drafts.clear()
-  cui.attach = false
-  cui.picking = None
-  cui.picking_for = ""
-  cui.outside = false
+  cui.attach.set(false)
+  cui.picking.set(None)
+  cui.picking_for.set("")
+  cui.outside.set(false)
   cui.restore_error.clear()
-  cui.room_for = ("", None)
-  cui.cap_id = 0
-  cui.content_id = 0
+  cui.room_for.set(("", None))
+  cui.cap_id.set(0)
+  cui.content_id.set(0)
   cui.doing.clear()
   pick_reset()
   dv_reset()
   decide_reset()
   @settings.reset()
-  found_marking.val = ("", [], 0.0)
-  find_marking.val = []
+  found_marking.set(("", [], 0.0))
+  find_marking.set([])
   ask_turns.clear()
   wide_reset()
   invite_reset()
@@ -99,10 +99,10 @@ fn reset() -> Unit {
   attach_reset()
   // the menu bar given (menu_bar.mbt)
   // Home (home.mbt), the host told (above), a chat's page and what is in it
-  flying.val = None
+  flying.set(None)
   opened_notices.clear()
   tool_parts.clear()
-  flashing.val = ("", 0.0)
+  flashing.set(("", 0.0))
   bench_on.val = -1
   boxed_n.val = 0
   // the composer: its ids counted from the start, what waits for it
@@ -340,10 +340,10 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   let wide = @sfdesk.is_wide(c)
   // the wide frame's lines set as the desktop app's pages set them (a browser's way)
   @ui.set_web_lines(wide)
-  @settings.wide.val = wide
-  @settings.status_top.val = status_top()
-  @settings.nav_foot.val = nav_foot()
-  @settings.bar_room.val = bar_room_now()
+  @settings.wide.set(wide)
+  @settings.status_top.set(status_top())
+  @settings.nav_foot.set(nav_foot())
+  @settings.bar_room.set(bar_room_now())
   linger_tick(c, src, in_front=app_in_front())
   // the screens live in their cards (screen_links.mbt): which are on the screen, their frames acknowledged
   peeks_frame(c, src)
@@ -371,21 +371,21 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
   c.made("app-ground", fn() { app_ground(c, src) })
   // the first page built with what it shows, the pictures the device holds in it decoded as it drew them (a likeness
   // in a picture's place for the frame or two its decoding takes is not shown): shown from this frame
-  if first_waiting.val &&
-    (first_has.val == 2 || (first_has.val == 1 && !@sfbase.held_pictures_waiting.val)) {
-    first_shown.val = true
-    first_waiting.val = false
+  if first_waiting.get() &&
+    (first_has.get() == 2 || (first_has.get() == 1 && !@sfbase.held_pictures_waiting.val)) {
+    first_shown.set(true)
+    first_waiting.set(false)
   }
   // the first page built, waiting for what it shows (signed_in): not shown yet, the splash over the window's ground
   // (what the host clears to, the ground's colour) in its place, its words as while the workspaces are read
-  if first_waiting.val {
+  if first_waiting.get() {
     c.look(state_node.val, { ..@ui.still_look, alpha: 0.0 })
     c.layer(fn() { splash(c, Some(t_reading_workspaces(src)), false) }) |> ignore
   }
   // the window held (host_setup) shown with the first frame that draws more than the ground (the host shows it once
   // the frame is on it)
-  if !frame_bare.val && !window_shown.val {
-    window_shown.val = true
+  if !frame_bare.get() && !window_shown.get() {
+    window_shown.set(true)
     @hostapi.window_show()
   }
   // the window's own buttons where they are the app's (Windows'), over all of it as a title bar's are
@@ -437,8 +437,8 @@ fn app_ground(c : @ui.Ctx, src : Source) -> @ui.Made {
         c.window_drag(id)
         c.box(style=@ui.style(h=Fixed(window_band())), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
       }
-      first_waiting.val = false
-      frame_bare.val = false
+      first_waiting.set(false)
+      frame_bare.set(false)
       // (said by this build: image_item, video_item)
       @sfbase.held_pictures_waiting.val = false
       // (in a box of its own: what the frame says of it, its look while the first page waits, is said of what is built
@@ -550,7 +550,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       @sfdesk.keys(c, src, w)
       // the first page built as it opens, asking for all it shows, and shown once it has it (first_page_ms at most), as a
       // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
-      first_waiting.val = !first_page_shown(c, src, w)
+      first_waiting.set(!first_page_shown(c, src, w))
       if @sfdesk.is_wide(c) {
         // a page opened in the pane shows once the core has given what it shows, the one before staying till then
         // (LOCAL_MS at most), as a page pushed on a phone slides in then
@@ -596,7 +596,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
                   // bars' room, the keyboard's, the ground, where it stands in the stack and the way a place came in
                   let t = @sf.theme()
                   let key = "\{c.width} \{c.height} \{status_top()} \{nav_foot()} \{bar_room_now()} " +
-                    "\{t.p.bg} \{t.dark} \{app.nav.under() is None} \{app.switch_way} \{w.id}"
+                    "\{t.p.bg} \{t.dark} \{app.nav.under() is None} \{app.switch_way.get()} \{w.id}"
                   // (an island: built from its key and what it reads, the workspaces read in it, whatever else of the
                   // frame is built anew; docs/retained.md, the way there's 3)
                   c.kept_part(
@@ -628,7 +628,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         // top page other than the chats back to the chats, in place); above it the stack's own (Ctx::nav: swiped from
         // the edge, the back key), which pops as back_where does
         let root = app.nav.top()
-        if app.nav.depth() == 1 && !page_took && !app.menu && !sheet_open() && !@sf.presenting() {
+        if app.nav.depth() == 1 && !page_took && !app.menu.get() && !sheet_open() && !@sf.presenting() {
           match @sfbase.back_step() {
             Some(f) => c.on_back(f)
             None => ()
@@ -731,7 +731,7 @@ fn page_view(
   c.box(
     w=Fill(1.0),
     h=Fill(1.0),
-    tx=app.switch_way.to_double() * switch_slide * (1.0 - e),
+    tx=app.switch_way.get().to_double() * switch_slide * (1.0 - e),
     opacity=e,
     fn() {
       match page {
@@ -925,7 +925,7 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
   }
   if !now && !splash_waited.get() {
     // (the ground alone: the window held is not shown for it, view_in)
-    frame_bare.val = true
+    frame_bare.set(true)
     return
   }
   c.box(
@@ -1013,22 +1013,22 @@ fn list_ready(src : Source, w : Workspace) -> Bool {
 /// Whether the app's first page shows: once the core has answered for what it shows (first_page_ready), or
 /// `first_page_ms` after the workspace came into view, from then on.
 fn first_page_shown(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
-  if !first_shown.val {
-    first_has.val = if @kit.after(c, "first-page", true, first_page_ms) {
+  if !first_shown.get() {
+    first_has.set(if @kit.after(c, "first-page", true, first_page_ms) {
       2
     } else if first_page_ready(c, src, w) {
       1
     } else {
       0
-    }
+    })
   }
-  first_shown.val
+  first_shown.get()
 }
 
 ///|
 /// What the first page not shown yet has this frame (first_page_shown): 0 not what it shows, 1 what it shows (shown
 /// once the pictures the device holds in it are decoded too: view_in), 2 first_page_ms gone by (shown as it is).
-let first_has : Ref[Int] = Ref(0)
+let first_has : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
 
 ///|
 /// Whether the core has answered for what the app's first page shows, as a page opening waits for it: laid out Small
@@ -1044,18 +1044,18 @@ fn first_page_ready(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
 
 ///|
 /// Whether the app's first page has shown (first_page_shown).
-let first_shown : Ref[Bool] = Ref(false)
+let first_shown : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 /// Whether this frame's first page is built and not shown yet (signed_in, view_in).
-let first_waiting : Ref[Bool] = Ref(false)
+let first_waiting : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 /// Whether this frame drew the ground alone (splash), and whether the window held (host_setup) is shown (view_in).
-let frame_bare : Ref[Bool] = Ref(false)
+let frame_bare : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
-let window_shown : Ref[Bool] = Ref(false)
+let window_shown : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 /// Whether the core has answered for what the wide frame's pane shows of page `p`: a chat; an agent's history, a
@@ -1075,7 +1075,7 @@ fn pane_ready(src : Source, p : Page) -> Bool {
 fn wide_reset() -> Unit {
   @sfdesk.side_slide_reset()
   @sfpages.find_forget()
-  find_around.val = -1.0
+  find_around.set(-1.0)
 }
 
 ///|

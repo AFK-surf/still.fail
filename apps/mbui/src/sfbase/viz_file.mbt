@@ -337,6 +337,7 @@ pub(all) struct VizLoad {
   state : @signals.Signal[Json?]
   state_read : @signals.Signal[Bool]
   failed : @signals.Signal[Bool]
+  // (plain: asked once, as it is first read; nothing shown reads it)
   mut asked : Bool
 }
 
@@ -470,7 +471,7 @@ pub fn file_serve(f : FilePage, req : @ui.SiteRequest, reply : @ui.SiteReply) ->
     reply.end()
     return
   }
-  let doc = viz_served(f.html, f.state, @sf.theme().dark, 0xFFFFFFFFL, page_script_served(false))
+  let doc = viz_served(f.html, f.state.get(), @sf.theme().dark, 0xFFFFFFFFL, page_script_served(false))
   reply.head(200, [("Content-Type", "text/html; charset=utf-8"), ("Cache-Control", "no-store")])
   reply.chunk(@utf8.encode(doc))
   reply.end()
@@ -483,10 +484,10 @@ pub fn file_said(src : Source, f : FilePage, words : String) -> Unit {
     Some(Object(m)) if m.get("type") == Some(Json::string("state")) => {
       let s = m.get("state").unwrap_or(Json::null())
       if s.stringify().length() <= viz_max_state {
-        f.state = match s {
+        f.state.set(match s {
           Null => None
           x => Some(x)
-        }
+        })
         viz_keep(src, f.station, f.key, f.path, s)
       }
     }

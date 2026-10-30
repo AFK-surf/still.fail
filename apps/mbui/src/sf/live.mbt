@@ -81,9 +81,12 @@ pub fn[K, V] LiveMap::copy(self : LiveMap[K, V]) -> Map[K, V] {
 }
 
 ///|
-pub fn[K : Hash + Eq, V] LiveMap::op_set(self : LiveMap[K, V], key : K, value : V) -> Unit {
-  self.data[key] = value
-  live_changed(self.changes)
+/// (`m[key] = value`: told as a change only when it held another; a value with no Eq is put with LiveMap::set)
+pub fn[K : Hash + Eq, V : Eq] LiveMap::op_set(self : LiveMap[K, V], key : K, value : V) -> Unit {
+  if self.data.get(key) != Some(value) {
+    self.data[key] = value
+    live_changed(self.changes)
+  }
 }
 
 ///|
@@ -362,4 +365,30 @@ pub fn[K, V] LiveMap::from(all : Map[K, V]) -> LiveMap[K, V] {
 ///|
 pub fn[T, U] LiveArray::filter_map(self : LiveArray[T], f : (T) -> U?) -> Array[U] {
   self.read().filter_map(f)
+}
+
+///|
+/// `key` holding `value`, told as a change only when it held another (what is put each time it is worked out, the
+/// same again, changes nothing for what reads it).
+#callsite(autofill(loc))
+pub fn[K : Hash + Eq, V : Eq] LiveMap::put(self : LiveMap[K, V], key : K, value : V, loc~ : SourceLoc) -> Unit {
+  if self.data.get(key) != Some(value) {
+    self.data[key] = value
+    live_changed(self.changes, loc~)
+  }
+}
+
+///|
+/// Holding what `all` holds and nothing else, told as a change only when that differs from what it held.
+#callsite(autofill(loc))
+pub fn[K : Hash + Eq, V : Eq] LiveMap::put_all(self : LiveMap[K, V], all : Map[K, V], loc~ : SourceLoc) -> Unit {
+  let same = self.data.length() == all.length() &&
+    all.iter().all(fn(kv) { self.data.get(kv.0) == Some(kv.1) })
+  if !same {
+    self.data.clear()
+    for k, v in all {
+      self.data[k] = v
+    }
+    live_changed(self.changes, loc~)
+  }
 }

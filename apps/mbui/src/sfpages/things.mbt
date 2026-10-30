@@ -9,7 +9,7 @@
 ///|
 /// Each chat's page of things as it was left: the kind chosen ("" the first it has) and the words found by.
 priv struct ThingsAt {
-  mut kind : String
+  kind : @signals.Signal[String]
   field : @ui.Field
 }
 
@@ -26,7 +26,7 @@ fn things_of(key : String) -> ThingsAt {
   match things_at.get(key) {
     Some(t) => t
     None => {
-      let t = { kind: "", field: @ui.Field::new() }
+      let t = { kind: @signals.signal("", same=fn(a, b) { a == b }), field: @ui.Field::new() }
       things_at[key] = t
       t
     }
@@ -36,7 +36,7 @@ fn things_of(key : String) -> ThingsAt {
 ///|
 /// Chat `r`'s page of things to show its `kind` next (the info's 全部 N 个 for its pull requests).
 pub fn things_choose(r : ChatRef, kind : String) -> Unit {
-  things_of(r.station + "\u{1}" + r.session).kind = kind
+  things_of(r.station + "\u{1}" + r.session).kind.set(kind)
 }
 
 ///|
@@ -138,7 +138,7 @@ pub fn things_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, shee
     @sf.empty(c, fn() { c.text(@sf.t("web-main.things.none"), style=things_none) |> ignore })
     return
   }
-  let kind = if has.contains(at.kind) { at.kind } else { has[0] }
+  let kind = if has.contains(at.kind.get()) { at.kind.get() } else { has[0] }
   let shown = items(v, kind)
   let rows : Array[() -> Unit] = []
   // (the field's box: as wide as the room the grid's tiles share; named here, where the rows are not yet each a scope
@@ -156,7 +156,7 @@ pub fn things_body(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, shee
         }
         let chosen = @sf.segmented(c, "things/kinds/" + key, labels, has.search(kind).unwrap_or(0), item_w~)
         match has.get(chosen) {
-          Some(k) if k != kind => at.kind = k
+          Some(k) if k != kind => at.kind.set(k)
           _ => ()
         }
       } else {

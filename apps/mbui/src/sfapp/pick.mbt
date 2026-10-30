@@ -5,23 +5,23 @@
 /// As at the start (tests): nothing picked, no press remembered, no link's menu.
 fn pick_reset() -> Unit {
   @sfbase.pick_reset()
-  link_menu.href = ""
-  link_menu.items = []
+  link_menu.href.set("")
+  link_menu.items.set([])
   link_menu.pick = fn(_, _) {  }
-  link_menu.x = 0.0
-  link_menu.top = 0.0
-  link_menu.bottom = 0.0
-  link_menu.at = -1
-  link_menu.open = false
+  link_menu.x.set(0.0)
+  link_menu.top.set(0.0)
+  link_menu.bottom.set(0.0)
+  link_menu.at.set(-1)
+  link_menu.open.set(false)
 }
 
 ///|
 /// Back lets go of what is picked, and closes a link's menu, before it goes back a page (MessagePick.kt's
 /// BackHandler): after the stack is drawn, as what lies over the pages.
 fn pick_back(c : @ui.Ctx) -> Unit {
-  if link_menu.open {
-    c.take_back(fn() { link_menu.open = false })
-  } else if pk.ts != "" {
+  if link_menu.open.get() {
+    c.take_back(fn() { link_menu.open.set(false) })
+  } else if pk.ts.get() != "" {
     c.take_back(fn() { pick_clear() })
   }
 }
@@ -47,8 +47,8 @@ fn pickable(
   // (a link held in it is told as it is built: then its menu's, not a pick)
   let body = fn() {
     body()
-    if link_menu.at == press.frame || image_quoted_at.val == press.frame {
-      pk.taken_at = press.frame
+    if link_menu.at.get() == press.frame || image_quoted_at.get() == press.frame {
+      pk.taken_at.set(press.frame)
     }
   }
   // a search's words in it (search_marks.mbt): their strokes behind its words
@@ -59,7 +59,7 @@ fn pickable(
         Some((x, y, _, _)) => (x, y)
         None => (0.0, 0.0)
       }
-      found_strokes(c, key, found, found_marking.val.2, x, y, faint=found_marking.val.0 != ts)
+      found_strokes(c, key, found, found_marking.get().2, x, y, faint=found_marking.get().0 != ts)
     }
   })
 }

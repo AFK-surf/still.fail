@@ -283,7 +283,7 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=690.0, h=840.0, platform=2)
   say_room(t, "medium", "medium")
   t.run_for(@ui.move_most_ms)
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
   let (page, _) = viz_views(t)
   // as tall as it may be: the chat's page under all of what shows of it
   t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")

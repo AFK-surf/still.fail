@@ -26,13 +26,13 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
   ignore(width)
   let mode = list_mode(src, w)
   if mode != 3 {
-    archive_side.landed = false
+    archive_side.landed.set(false)
   }
   // (read now: the rows are made as the list is laid out, after the closed bar's drawing is over)
   let band = band_h(src, w)
   let t = @sf.theme()
   let frame : @sfpages.ListsFrame = {
-    ..@sfpages.bare_lists(band, 0.0, side_top_h(), if side_folded() || wide.tape { apart_ground() } else { t.p.sidebar }, mode, Side),
+    ..@sfpages.bare_lists(band, 0.0, side_top_h(), if side_folded() || wide.tape.get() { apart_ground() } else { t.p.sidebar }, mode, Side),
     others: [fn() { archive_pane(c, src, w) }],
   }
   // under a finger's search (sfpages' search.mbt): the band and the foot away with the lists, the search over them
@@ -73,7 +73,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   c.box(style=foot_fill, fn() {
     // (on the sidebar's own ground, whole, as the band over the lists: lists_band)
-    let band = c.box(style=foot_band.then(@ui.style(bg=Data(@sf.mix(apart_ground(), wide.band, t.p.sidebar)))), fn() {
+    let band = c.box(style=foot_band.then(@ui.style(bg=Data(@sf.mix(apart_ground(), wide.band.get(), t.p.sidebar)))), fn() {
       match trouble {
         Some(Object(_)) => {
           let go = c.id("side/station-trouble")
@@ -179,16 +179,16 @@ priv enum ArchiveLine {
 /// 已归档 as one of the lists (ArchiveRows): what to look for, its days, a row each; the newest open beside it as it
 /// opens.
 fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let params : Map[String, Json] = { "scope": Json::string(w.id), "limit": Json::number(archive_side.limit.to_double()) }
-  if archive_side.q != "" {
-    params["q"] = Json::string(archive_side.q)
+  let params : Map[String, Json] = { "scope": Json::string(w.id), "limit": Json::number(archive_side.limit.get().to_double()) }
+  if archive_side.q.get() != "" {
+    params["q"] = Json::string(archive_side.q.get())
   }
   let topic = (src.topic)("archive", params)
   match topic.value {
-    Some(_) => archive_side.last = topic.value
+    Some(_) => archive_side.last.set(topic.value)
     None => ()
   }
-  let view = archive_side.last
+  let view = archive_side.last.get()
   let days = items(view, "days")
   let lines : Array[ArchiveLine] = [Top, Search]
   if view is None {
@@ -214,17 +214,17 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   lines.push(Foot)
   // opened: its newest chat beside it (ArchivePage)
-  if app.nav.top() == Archived && !archive_side.landed && archive_side.q == "" {
+  if app.nav.top() == Archived && !archive_side.landed.get() && archive_side.q.get() == "" {
     match days.get(0) {
       Some(d) =>
         match items(Some(d), "items").get(0) {
           Some(it) => {
-            archive_side.landed = true
+            archive_side.landed.set(true)
             archive_open(it)
           }
           None => ()
         }
-      None => if view is Some(_) { archive_side.landed = true }
+      None => if view is Some(_) { archive_side.landed.set(true) }
     }
   }
   // near its end, the next ones
@@ -232,7 +232,7 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   match c.list_info_as("side/archive/" + w.id, fn(i) { i.map(fn(i) { (i.last >= i.count - 12, i.count) }) }) {
     Some(info) =>
       if flag(view, "more") && info.last >= info.count - 12 && topic.value is Some(_) && info.count == lines.length() {
-        archive_side.limit += archive_side_page
+        archive_side.limit.set(archive_side.limit.get() + archive_side_page)
       }
     None => ()
   }
@@ -297,9 +297,9 @@ fn archive_search_side(c : @ui.Ctx, gap : Bool) -> Unit {
         caret_color=t.p.accent,
       )
       let q = r.text.trim(chars=" \t\n").to_string()
-      if q != archive_side.q {
-        archive_side.q = q
-        archive_side.limit = archive_side_page
+      if q != archive_side.q.get() {
+        archive_side.q.set(q)
+        archive_side.limit.set(archive_side_page)
       }
     })
     |> ignore
@@ -505,7 +505,7 @@ fn archive_doing(src : Source, station : String, session : String) -> Bool {
 ///|
 /// The archive open with none of its chats beside it (ArchivePage): what it is.
 fn archive_main(c : @ui.Ctx) -> Unit {
-  let note = text(archive_side.last, "note")
+  let note = text(archive_side.last.get(), "note")
   c.box(style=arch_empty, fn() {
     c.text(@sf.t("web-pages.archive.title"), style=arch_empty_title) |> ignore
     if note != "" {
@@ -622,8 +622,8 @@ fn band_h(src : Source, w : Workspace) -> Double {
   band_new_top +
   band_row_h() +
   side_new_under +
-  (if wide.tape && !wide.in_bar { band_new_tape_over() } else { 0.0 }) +
-  (if wide.in_bar { bar_band_in - side_new_under } else { 0.0 }) +
+  (if wide.tape.get() && !wide.in_bar.get() { band_new_tape_over() } else { 0.0 }) +
+  (if wide.in_bar.get() { bar_band_in - side_new_under } else { 0.0 }) +
   (if todo_shown(src, w) { side_todo_around + band_row_h() } else { 0.0 })
 }
 

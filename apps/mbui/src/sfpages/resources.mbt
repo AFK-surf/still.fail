@@ -33,11 +33,11 @@ fn rs_columns_of(v : Json?) -> Array[(String, String)] {
 /// What the page shows, by station: the kind of whose (all, or a ResourceKind's key), every process flat or grouped,
 /// the column sorted by, the groups open.
 priv struct RsShown {
-  mut kind : String
-  mut flat : Bool
-  mut by : String
+  kind : @signals.Signal[String]
+  flat : @signals.Signal[Bool]
+  by : @signals.Signal[String]
   open : Map[String, Bool]
-  mut opened : Bool
+  opened : @signals.Signal[Bool]
 }
 
 ///|
@@ -49,7 +49,13 @@ fn rs_shown_of(address : String) -> RsShown {
   match rs_shown.get(address) {
     Some(s) => s
     None => {
-      let s = { kind: "all", flat: false, by: "cpu", open: {}, opened: false }
+      let s = {
+        kind: @signals.signal("all", same=fn(a, b) { a == b }),
+        flat: @signals.signal(false, same=fn(a, b) { a == b }),
+        by: @signals.signal("cpu", same=fn(a, b) { a == b }),
+        open: {},
+        opened: @signals.signal(false, same=fn(a, b) { a == b }),
+      }
       rs_shown[address] = s
       s
     }
@@ -127,23 +133,23 @@ fn rs_figures_of(c : @ui.Ctx, core : Core, address : String, v : Json?, shown : 
     let kinds = items(v, "kinds")
     let keys = ["all"] + kinds.map(fn(k) { text(Some(k), "key") })
     let labels = [@sf.t("web-main.resources.all")] + kinds.map(fn(k) { text(Some(k), "label") })
-    let at = keys.search(shown.kind).unwrap_or(0)
+    let at = keys.search(shown.kind.get()).unwrap_or(0)
     let picked = @sf.segmented(c, "resources-kind/" + address, labels, at)
     if picked != at {
-      shown.kind = keys[picked]
+      shown.kind.set(keys[picked])
     }
     let how = @sf.segmented(
       c,
       "resources-flat/" + address,
       [@sf.t("web-main.resources.grouped"), @sf.t("web-main.resources.flat")],
-      if shown.flat { 1 } else { 0 },
+      if shown.flat.get() { 1 } else { 0 },
     )
-    shown.flat = how == 1
+    shown.flat.set(how == 1)
   })
   |> ignore
-  let groups = items(v, "groups").filter(fn(g) { shown.kind == "all" || text(Some(g), "kind") == shown.kind })
+  let groups = items(v, "groups").filter(fn(g) { shown.kind.get() == "all" || text(Some(g), "kind") == shown.kind.get() })
   let columns = rs_columns_of(v)
-  if shown.flat {
+  if shown.flat.get() {
     rs_flat(c, core, address, groups, columns, shown)
   } else {
     rs_grouped(c, core, address, groups, columns, shown)
@@ -359,9 +365,9 @@ fn rs_heads(
     for k, col in columns {
       let id = c.id("resources-by/" + address + "/" + col.0)
       if c.clicked(id) {
-        shown.by = col.0
+        shown.by.set(col.0)
       }
-      let on = col.0 == shown.by
+      let on = col.0 == shown.by.get()
       let name = @sf.t("web-main.resources.column." + col.0)
       let words = if on { name + " ↓" } else { name }
       let b = c.box(style=rs_column(lay, k), id~, fn() {
@@ -437,11 +443,11 @@ fn rs_title(c : @ui.Ctx, core : Core, key : String, g : Json?, style : @ui.TextS
 /// Whose uses what (Grouped), the most of the column sorted by first, each opening to its processes (the first open at
 /// first).
 fn rs_grouped(c : @ui.Ctx, core : Core, address : String, groups : Array[Json], columns : Array[(String, String)], shown : RsShown) -> Unit {
-  let by = shown.by
+  let by = shown.by.get()
   let sorted = groups.copy()
   sorted.sort_by(fn(a, b) { rs_use(field(Some(b), "use"), by).compare(rs_use(field(Some(a), "use"), by)) })
-  if !shown.opened {
-    shown.opened = true
+  if !shown.opened.get() {
+    shown.opened.set(true)
     match groups {
       [g, ..] => shown.open[text(Some(g), "key")] = true
       [] => ()
@@ -526,7 +532,7 @@ fn rs_grouped(c : @ui.Ctx, core : Core, address : String, groups : Array[Json], 
 ///|
 /// Every process, with whose it is (Flat), the most of the column sorted by first.
 fn rs_flat(c : @ui.Ctx, core : Core, address : String, groups : Array[Json], columns : Array[(String, String)], shown : RsShown) -> Unit {
-  let by = shown.by
+  let by = shown.by.get()
   let rows : Array[(Json, Json)] = []
   for g in groups {
     for p in items(Some(g), "processes") {

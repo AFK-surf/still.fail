@@ -186,14 +186,14 @@ pub fn viewer_download(c : @ui.Ctx, key : String, ink : ViewerInk, disabled? : B
 /// down, back as it is read back up, or as the pointer comes to the window's top. Where the list it reads by was last
 /// seen: its first row in view and how far down it.
 pub(all) struct BarOnScroll {
-  mut hidden : Bool
-  mut seen : (Int, Double)
+  hidden : @signals.Signal[Bool]
+  seen : @signals.Signal[(Int, Double)]
 }
 
 ///|
 /// A bar there, nothing read yet.
 pub fn BarOnScroll::new() -> BarOnScroll {
-  { hidden: false, seen: (0, 0.0) }
+  { hidden: @signals.signal(false, same=fn(a, b) { a == b }), seen: @signals.signal((0, 0.0), same=fn(a, b) { a == b }) }
 }
 
 ///|
@@ -202,21 +202,21 @@ pub fn BarOnScroll::new() -> BarOnScroll {
 pub fn BarOnScroll::heard(self : BarOnScroll, c : @ui.Ctx, list : String) -> Unit {
   match c.list_place(list) {
     Some((first, off, _)) => {
-      let (was_first, was_off) = self.seen
+      let (was_first, was_off) = self.seen.get()
       if first == 0 && off < viewer_top_kept {
-        self.hidden = false
+        self.hidden.set(false)
       } else if first > was_first || (first == was_first && off - was_off > viewer_moved) {
-        self.hidden = true
+        self.hidden.set(true)
       } else if first < was_first || (first == was_first && was_off - off > viewer_moved) {
-        self.hidden = false
+        self.hidden.set(false)
       }
-      self.seen = (first, off)
+      self.seen.set((first, off))
     }
     None => ()
   }
   let (_, py, _) = c.pointer()
   if py >= 0.0 && py < viewer_bar_reach {
-    self.hidden = false
+    self.hidden.set(false)
   }
 }
 

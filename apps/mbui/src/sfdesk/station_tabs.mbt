@@ -112,7 +112,7 @@ fn station_tab_pane(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, tab :
       let core = settings_core(src, w)
       let here = @settings.here_of(core, w.id, w.name)
       @settings.frame(core, here)
-      @settings.wide_deep.val = false
+      @settings.wide_deep.set(false)
       @settings.page(c, core, here, AdbShare(station))
     }
     _ => setting_route(c, src, w, Station(station), frame) |> ignore

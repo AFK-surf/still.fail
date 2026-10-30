@@ -14,41 +14,42 @@
 /// presenter it is (lit meanwhile); the rows swiped off to be archived, until they have gone; each swiped row's being
 /// past its line as last felt, and the press whose menu was last felt.
 priv struct Rows {
-  mut renaming : String
-  mut rename_for : String
-  mut rename_seen : Bool
+  renaming : @signals.Signal[String]
+  rename_for : @signals.Signal[String]
+  rename_seen : @signals.Signal[Bool]
   rename_field : @ui.Field
-  mut menu_for : String
+  menu_for : @signals.Signal[String]
+  // (plain: the next menu's number, read only as one opens)
   mut menu_serial : Int
   swiped_off : Map[String, Bool]
-  mut transcripts : (String, Array[String])?
+  transcripts : @signals.Signal[(String, Array[String])?]
   felt_past : Map[String, Bool]
 }
 
 ///|
 let rows : Rows = {
-  renaming: "",
-  rename_for: "",
-  rename_seen: false,
+  renaming: @signals.signal("", same=fn(a, b) { a == b }),
+  rename_for: @signals.signal("", same=fn(a, b) { a == b }),
+  rename_seen: @signals.signal(false, same=fn(a, b) { a == b }),
   rename_field: @ui.Field::new(),
-  menu_for: "",
+  menu_for: @signals.signal("", same=fn(a, b) { a == b }),
   menu_serial: -1,
   swiped_off: {},
-  transcripts: None,
+  transcripts: @signals.signal(None, same=fn(a, b) { a == b }),
   felt_past: {},
 }
 
 ///|
 fn chat_rows_reset() -> Unit {
   row_left.val = ("", false)
-  rows.renaming = ""
-  rows.rename_for = ""
-  rows.rename_seen = false
+  rows.renaming.set("")
+  rows.rename_for.set("")
+  rows.rename_seen.set(false)
   rows.rename_field.set("")
-  rows.menu_for = ""
+  rows.menu_for.set("")
   rows.menu_serial = -1
   rows.swiped_off.clear()
-  rows.transcripts = None
+  rows.transcripts.set(None)
   rows.felt_past.clear()
 }
 
@@ -65,7 +66,7 @@ fn row_ref(item : ChatItem) -> ChatRef {
 ///|
 /// Whether `item`'s row has its menu open (its ground stays lit, its time shown, meanwhile).
 fn row_menu_open(item : ChatItem) -> Bool {
-  rows.menu_for == @sfbase.row_name(item) && @sf.presented_drawn_of(rows.menu_serial)
+  rows.menu_for.get() == @sfbase.row_name(item) && @sf.presented_drawn_of(rows.menu_serial)
 }
 
 ///|
@@ -134,7 +135,7 @@ pub fn chat_row(
   let archive = c.id("row/archive/" + key)
   let parts = [id, slot, kind, away, line]
   let r = row_ref(item)
-  let renaming = rows.renaming == key
+  let renaming = rows.renaming.get() == key
   let pressed = parts.iter().any(fn(p) { c.pressed(p) })
   // pressed by a finger, the chat is read ahead of its page (Home.kt onPress)
   if finger && pressed && row_held.val.0 != id {
@@ -611,7 +612,7 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
           @sf.t("android-chat.rename.title"),
           @sf.t("common.save"),
           fn(title) { rename(src, item, title) },
-          fn() { rows.renaming = @sfbase.row_name(item) },
+          fn() { rows.renaming.set(@sfbase.row_name(item)) },
           value=item.title,
           placeholder=@sf.t("android-chat.rename.field"),
           hint=@sf.t("android-chat.rename.note"),
@@ -663,16 +664,16 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
     Some(
       @sf.menu_item_of(@sf.t("web-main.chat.copyTranscript"), icon="file", fn() {
         // (asked of its station once the frame after it is built: rows_frame)
-        rows.transcripts = Some((item.station, match item.agents.map(fn(a) { a.key }).filter(fn(k) { k != "" }) {
+        rows.transcripts.set(Some((item.station, match item.agents.map(fn(a) { a.key }).filter(fn(k) { k != "" }) {
           [] => [item.session]
           keys => keys
-        }))
+        })))
       }),
     ),
   )
   items.push(Some(@sf.menu_item_of(@sf.t("web-main.chat.archive"), icon="archive", fn() { archive_row(src, item) })))
   @sf.menu(items, from=if finger { Of(id) } else { @sf.at_point(x, y) })
-  rows.menu_for = @sfbase.row_name(item)
+  rows.menu_for.set(@sfbase.row_name(item))
   rows.menu_serial = @sf.last_presented()
 }
 
@@ -680,10 +681,10 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
 /// What a row's menu left to do, done as the frame's builds are over (a chat's transcripts' paths asked of its
 /// station): called by the lists as they are drawn.
 fn rows_frame(c : @ui.Ctx, src : Source) -> Unit {
-  match rows.transcripts {
+  match rows.transcripts.get() {
     Some((station, keys)) =>
       c.after_build("rows/transcripts", fn() {
-        rows.transcripts = None
+        rows.transcripts.set(None)
         copy_transcripts(c, src, station, keys)
       })
     None => ()
@@ -758,8 +759,8 @@ fn copy_transcripts(c : @ui.Ctx, src : Source, station : String, keys : Array[St
 fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
   let key = "row/rename"
   let whose = @sfbase.row_name(item)
-  if rows.rename_for != whose {
-    rows.rename_for = whose
+  if rows.rename_for.get() != whose {
+    rows.rename_for.set(whose)
     rows.rename_field.set(item.title)
     c.focus_editor(key)
   }
@@ -777,14 +778,14 @@ fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
     )
     match res.submitted {
       Some(title) => {
-        rows.renaming = ""
-        rows.rename_for = ""
+        rows.renaming.set("")
+        rows.rename_for.set("")
         c.blur()
         rename(src, item, title)
       }
-      None => if !res.focused && rows.rename_for != "" && rows.rename_seen { rows.renaming = "" }
+      None => if !res.focused && rows.rename_for.get() != "" && rows.rename_seen.get() { rows.renaming.set("") }
     }
-    rows.rename_seen = res.focused
+    rows.rename_seen.set(res.focused)
   })
   |> ignore
 }
@@ -1046,16 +1047,16 @@ fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
 ///|
 /// Whether a row's title is being written in place (what the frame holds open meanwhile).
 pub fn renaming() -> Bool {
-  rows.renaming != ""
+  rows.renaming.get() != ""
 }
 
 ///|
 /// Esc to a row's title being written in place: let be. Whether there was one.
 pub fn rename_escape(c : @ui.Ctx) -> Bool {
-  if rows.renaming == "" {
+  if rows.renaming.get() == "" {
     return false
   }
-  rows.renaming = ""
+  rows.renaming.set("")
   c.blur()
   true
 }

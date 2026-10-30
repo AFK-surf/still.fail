@@ -9,28 +9,28 @@
 /// picked, the icon made (a data URL, "" none) and why it could not be, and how the icon is coming along.
 priv struct SaDraft {
   key : String
-  mut name : String
-  mut description : String
-  mut color : String
+  name : @signals.Signal[String]
+  description : @signals.Signal[String]
+  color : @signals.Signal[String]
   groups : Map[String, Bool]
   icon : @signals.Signal[String]
   icon_error : @signals.Signal[String]
   /// the icon as shown (its picture's key), "" none
-  mut shown : String
+  shown : @signals.Signal[String]
   /// what was picked: an avatar's id, or a picture of the person's own (its key), "" neither
-  mut picked : String
-  mut upload : String
-  mut upload_bg : String
+  picked : @signals.Signal[String]
+  upload : @signals.Signal[String]
+  upload_bg : @signals.Signal[String]
   /// the colour set by hand, not by what was picked
-  mut colour_set : Bool
+  colour_set : @signals.Signal[Bool]
   /// the picture being read to draw from: its source and how large, on what colour ("" none)
-  mut reading : String
-  mut reading_px : Int
-  mut reading_bg : String
-  mut asking : Bool
-  mut started : Bool
+  reading : @signals.Signal[String]
+  reading_px : @signals.Signal[Int]
+  reading_bg : @signals.Signal[String]
+  asking : @signals.Signal[Bool]
+  started : @signals.Signal[Bool]
   /// the permissions unfolded
-  mut perms : Bool
+  perms : @signals.Signal[Bool]
   name_field : @ui.Field
   desc_field : @ui.Field
   hex_field : @ui.Field
@@ -49,23 +49,23 @@ fn sa_draft(key : String, settings : Json?) -> SaDraft {
   }
   {
     key,
-    name: text(settings, "name"),
-    description: text(settings, "description"),
-    color: text(settings, "backgroundColor"),
+    name: @signals.signal(text(settings, "name"), same=fn(a, b) { a == b }),
+    description: @signals.signal(text(settings, "description"), same=fn(a, b) { a == b }),
+    color: @signals.signal(text(settings, "backgroundColor"), same=fn(a, b) { a == b }),
     groups,
     icon: @signals.signal(""),
     icon_error: @signals.signal(""),
-    shown: "",
-    picked: "",
-    upload: "",
-    upload_bg: "",
-    colour_set: false,
-    reading: "",
-    reading_px: 0,
-    reading_bg: "",
-    asking: false,
-    started: false,
-    perms: false,
+    shown: @signals.signal("", same=fn(a, b) { a == b }),
+    picked: @signals.signal("", same=fn(a, b) { a == b }),
+    upload: @signals.signal("", same=fn(a, b) { a == b }),
+    upload_bg: @signals.signal("", same=fn(a, b) { a == b }),
+    colour_set: @signals.signal(false, same=fn(a, b) { a == b }),
+    reading: @signals.signal("", same=fn(a, b) { a == b }),
+    reading_px: @signals.signal(0, same=fn(a, b) { a == b }),
+    reading_bg: @signals.signal("", same=fn(a, b) { a == b }),
+    asking: @signals.signal(false, same=fn(a, b) { a == b }),
+    started: @signals.signal(false, same=fn(a, b) { a == b }),
+    perms: @signals.signal(false, same=fn(a, b) { a == b }),
     name_field: @ui.Field::new(text=text(settings, "name")),
     desc_field: @ui.Field::new(text=text(settings, "description")),
     hex_field: @ui.Field::new(text=text(settings, "backgroundColor")),
@@ -80,11 +80,11 @@ fn sa_settings(d : SaDraft, settings : Json?) -> Json {
     groups[g] = Json::boolean(v)
   }
   obj([
-    ("name", str(d.name)),
-    ("displayName", str(d.name)),
-    ("description", str(d.description)),
+    ("name", str(d.name.get())),
+    ("displayName", str(d.name.get())),
+    ("description", str(d.description.get())),
     ("longDescription", str(text(settings, "longDescription"))),
-    ("backgroundColor", str(d.color)),
+    ("backgroundColor", str(d.color.get())),
     ("groups", Json::object(groups)),
   ])
 }
@@ -411,52 +411,52 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
   let all = @sf.app_buddies(c, fn(done) { (core.call)("buddies", obj([]), done) }) + @sf.app_makers
   let find = fn(id : String) { all.iter().find_first(fn(a) { a.id == id }) }
   let colour = fn(bg : String) {
-    d.color = bg
+    d.color.set(bg)
     d.hex_field.set(bg)
   }
   // an avatar drawn on `bg`: a mark at once, a buddy once its picture is read
   let draw = fn(a : @sf.AppAvatar, bg : String) {
     if a.mark != "" {
-      d.reading = ""
+      d.reading.set("")
       match @sf.app_avatar_icon(a, bg, 0, 0, FixedArray::make(0, b'\x00')) {
         Some(icon) => sa_icon_made(d, icon)
         None => sa_icon_failed(d, @sf.t("web-pages.slackApp.drawFailed"))
       }
     } else {
-      d.reading = @sf.avatars_base() + "/avatars/" + a.id + ".webp"
-      d.reading_px = @sf.app_icon_px
-      d.reading_bg = bg
+      d.reading.set(@sf.avatars_base() + "/avatars/" + a.id + ".webp")
+      d.reading_px.set(@sf.app_icon_px)
+      d.reading_bg.set(bg)
     }
   }
   let pick = fn(a : @sf.AppAvatar) {
-    d.picked = a.id
-    d.upload = ""
-    let bg = if d.colour_set { d.color } else { a.bg }
+    d.picked.set(a.id)
+    d.upload.set("")
+    let bg = if d.colour_set.get() { d.color.get() } else { a.bg }
     colour(bg)
     draw(a, bg)
   }
   // a new app starts as the general helper (else the first avatar), on its colour
-  if fresh && !d.started && all.length() > @sf.app_makers.length() {
-    d.started = true
+  if fresh && !d.started.get() && all.length() > @sf.app_makers.length() {
+    d.started.set(true)
     pick(find("general-helper").unwrap_or(all[0]))
   }
-  if d.reading != "" {
-    match c.image_pixels(d.reading, d.reading_px) {
+  if d.reading.get() != "" {
+    match c.image_pixels(d.reading.get(), d.reading_px.get()) {
       PixelsComing => ()
-      PixelsFailed => sa_icon_failed(d, @sf.t(if d.upload != "" { "web-pages.slackApp.readImageFailed" } else { "web-pages.slackApp.drawFailed" }))
+      PixelsFailed => sa_icon_failed(d, @sf.t(if d.upload.get() != "" { "web-pages.slackApp.readImageFailed" } else { "web-pages.slackApp.drawFailed" }))
       PixelsRead(w, h, px) => {
-        d.reading = ""
-        if d.upload != "" {
+        d.reading.set("")
+        if d.upload.get() != "" {
           let icon = @sf.app_own_icon(w, h, px)
-          d.upload_bg = @pixels.edge_colour(@sf.app_icon_px, @sf.app_icon_px, icon.pixels())
+          d.upload_bg.set(@pixels.edge_colour(@sf.app_icon_px, @sf.app_icon_px, icon.pixels()))
           sa_icon_made(d, icon)
-          if !d.colour_set {
-            colour(d.upload_bg)
+          if !d.colour_set.get() {
+            colour(d.upload_bg.get())
           }
         } else {
-          match find(d.picked) {
+          match find(d.picked.get()) {
             Some(a) =>
-              match @sf.app_avatar_icon(a, d.reading_bg, w, h, px) {
+              match @sf.app_avatar_icon(a, d.reading_bg.get(), w, h, px) {
                 Some(icon) => sa_icon_made(d, icon)
                 None => sa_icon_failed(d, @sf.t("web-pages.slackApp.drawFailed"))
               }
@@ -468,24 +468,24 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
   }
   // a picture of their own, from the system's picker
   let upload = fn() {
-    if d.asking {
+    if d.asking.get() {
       return
     }
     let asked = (core.pick_picture)(fn(bytes) {
-      d.asking = false
+      d.asking.set(false)
       match bytes {
         Some(b) => {
           sa_icons_made.val += 1
-          d.upload = "mem:desk-slack-icon/own/\{sa_icons_made.val}"
-          @ui.add_image(d.upload, b)
-          d.picked = ""
-          d.reading = d.upload
-          d.reading_px = @sf.app_own_px
+          d.upload.set("mem:desk-slack-icon/own/\{sa_icons_made.val}")
+          @ui.add_image(d.upload.get(), b)
+          d.picked.set("")
+          d.reading.set(d.upload.get())
+          d.reading_px.set(@sf.app_own_px)
         }
         None => ()
       }
     })
-    d.asking = asked
+    d.asking.set(asked)
     if !asked {
       sa_icon_failed(d, @sf.t("web-pages.slackApp.readImageFailed"))
     }
@@ -499,18 +499,18 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
     if hit(c, aid) {
       upload()
     }
-    let ground = match @sf.hex_color(d.color) {
+    let ground = match @sf.hex_color(d.color.get()) {
       Some(v) => v
       None => t.p.neutral_bg
     }
     // (what it says on the colour chosen: a near black or white, whichever reads on it; the muted grey on none)
-    let ink = match @sf.hex_color(d.color) {
+    let ink = match @sf.hex_color(d.color.get()) {
       Some(v) => @ui.ink_on(v, [0x24272BFFL, 0xFFFFFFFFL])
       None => t.p.muted
     }
     let ab = c.box(style=sa_avatar.then(@ui.style(bg=Data(ground))), id=aid, fn() {
-      if d.shown != "" {
-        c.image(d.shown, w=Fill(1.0), h=Fill(1.0), fit=FitCover, bg=0L, fade=false) |> ignore
+      if d.shown.get() != "" {
+        c.image(d.shown.get(), w=Fill(1.0), h=Fill(1.0), fit=FitCover, bg=0L, fade=false) |> ignore
       } else {
         c.box(style=sa_avatar_empty, fn() {
           @sf.icon(c, "image-upload", size=sa_upload_icon, color=ink) |> ignore
@@ -527,19 +527,19 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
     @sf.tip(c, d.key + "/avatar-tip", aid, @sf.t("web-pages.slackApp.upload"))
     c.box(style=sa_look_main, fn() {
       let name = @sf.input(c, d.key + "/name", placeholder=@sf.t("web-pages.settings.workspace.name"), field=d.name_field).text
-      d.name = name
+      d.name.set(name)
       let desc = @sf.input(c, d.key + "/desc", placeholder=@sf.t("web-pages.slackApp.descriptionPlaceholder"), field=d.desc_field).text
-      d.description = desc
+      d.description.set(desc)
       c.box(style=sa_colour, fn() {
         c.box(style=sa_swatch.then(@ui.style(bg=Data(ground))), fn() {  }) |> ignore
         c.box(style=sa_hex, fn() {
           let typed = @sf.input(c, d.key + "/hex", field=d.hex_field).text.trim(chars=" ").to_owned()
           // typed in its field: set by hand
-          if typed != d.color {
-            d.color = typed
-            d.colour_set = true
+          if typed != d.color.get() {
+            d.color.set(typed)
+            d.colour_set.set(true)
             if @sf.hex_color(typed) is Some(_) {
-              match find(d.picked) {
+              match find(d.picked.get()) {
                 Some(a) => draw(a, typed)
                 None => ()
               }
@@ -548,15 +548,15 @@ fn app_fields(c : @ui.Ctx, core : Core, d : SaDraft, sections : Array[Json], fre
         })
         |> ignore
         // what was picked's own colour, after one set by hand
-        let recommended = match find(d.picked) {
+        let recommended = match find(d.picked.get()) {
           Some(a) => a.bg
-          None => d.upload_bg
+          None => d.upload_bg.get()
         }
-        if d.colour_set && recommended != "" && recommended.to_lower() != d.color.to_lower() {
+        if d.colour_set.get() && recommended != "" && recommended.to_lower() != d.color.get().to_lower() {
           if cd_text_button(c, d.key + "/recommended", @sf.t("web-pages.slackApp.recommended")) {
-            d.colour_set = false
+            d.colour_set.set(false)
             colour(recommended)
-            match find(d.picked) {
+            match find(d.picked.get()) {
               Some(a) => draw(a, recommended)
               None => ()
             }
@@ -589,7 +589,7 @@ fn sa_avatar_picker(c : @ui.Ctx, d : SaDraft, all : Array[@sf.AppAvatar], width 
           pick(a)
         }
         let ground = @sf.hex_color(a.bg).unwrap_or(@sf.icon_fallback)
-        let on = d.picked == a.id
+        let on = d.picked.get() == a.id
         let tb = c.box(
           style=(if on { sa_tile_on } else { sa_tile }).then(@ui.style(w=Fixed(side), h=Fixed(side), bg=Data(ground))),
           id=tid,
@@ -632,14 +632,14 @@ fn sa_permissions(c : @ui.Ctx, d : SaDraft, sections : Array[Json]) -> Unit {
     c.box(style=sa_perms_line, fn() {
       let pid = c.id(d.key + "/perms")
       if hit(c, pid) {
-        d.perms = !d.perms
+        d.perms.set(!d.perms.get())
       }
       let said = @sf.t("web-pages.slackApp.permissions", args=[("on", on.to_string()), ("all", every.length().to_string())])
       let pb = c.box(style=sa_perms_summary, id=pid, fn() {
-        @sf.icon(c, if d.perms { "chevron-down" } else { "chevron-right" }, size=cd_icon, color=t.p.muted) |> ignore
+        @sf.icon(c, if d.perms.get() { "chevron-down" } else { "chevron-right" }, size=cd_icon, color=t.p.muted) |> ignore
         c.text(said, style=sa_perms_said) |> ignore
       })
-      c.semantics(pb, Button, id=pid, label=said, expanded=d.perms)
+      c.semantics(pb, Button, id=pid, label=said, expanded=d.perms.get())
       if on < every.length() && cd_text_button(c, d.key + "/perms-all", @sf.t("web-pages.slackApp.allOn")) {
         for g in every {
           d.groups[g] = true
@@ -647,7 +647,7 @@ fn sa_permissions(c : @ui.Ctx, d : SaDraft, sections : Array[Json]) -> Unit {
       }
     })
     |> ignore
-    if !d.perms {
+    if !d.perms.get() {
       return
     }
     c.box(style=sa_perm_sections, fn() {
@@ -722,8 +722,8 @@ fn sa_permission(c : @ui.Ctx, d : SaDraft, g : Json?) -> Unit {
 fn sa_icon_made(d : SaDraft, icon : @pixels.Canvas) -> Unit {
   let (jpeg, url) = @sf.app_icon_jpeg(icon)
   sa_icons_made.val += 1
-  d.shown = "mem:desk-slack-icon/\{sa_icons_made.val}"
-  @ui.add_image(d.shown, jpeg)
+  d.shown.set("mem:desk-slack-icon/\{sa_icons_made.val}")
+  @ui.add_image(d.shown.get(), jpeg)
   d.icon.set(url)
   d.icon_error.set("")
 }
@@ -731,7 +731,7 @@ fn sa_icon_made(d : SaDraft, icon : @pixels.Canvas) -> Unit {
 ///|
 /// An icon that could not be made: why.
 fn sa_icon_failed(d : SaDraft, words : String) -> Unit {
-  d.reading = ""
+  d.reading.set("")
   d.icon.set("")
   d.icon_error.set(words)
 }

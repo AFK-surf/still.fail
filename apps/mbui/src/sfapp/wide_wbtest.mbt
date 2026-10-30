@@ -230,7 +230,7 @@ test "wide: ⌘K over a chat offers what its keys and bar do (归档, 执行历�
 test "wide: ⌘K finds 检查更新 by its name or \"check update\", where the app asks for its builds; picked, the update dialog" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  update.source = Some({ check: fn(_, _, _) {  }, url: fn(f) { f } })
+  update.source.set(Some({ check: fn(_, _, _) {  }, url: fn(f) { f } }))
   t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
   t.type_text("check update")
   t.frame()
@@ -242,7 +242,7 @@ test "wide: ⌘K finds 检查更新 by its name or \"check update\", where the a
   t.frame()
   assert_true(t.find("搜索全部内容和操作") is None)
   assert_true(update_dialog_open())
-  update.source = None
+  update.source.set(None)
 }
 
 ///|
@@ -339,7 +339,7 @@ test "wide: where this machine is a station, files from the Finder let go on the
   let t = wide_tester(calls, mode="chat")
   @sfbase.machine_here.val = Some("ws1/st1")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
-  let refs = fn() { @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files }).unwrap_or([]) }
+  let refs = fn() { @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get() }).unwrap_or([]) }
   // on a message: each by where it is on this machine's station (named by its path: the chat's default)
   let (x, y) = t.find("做完了：").unwrap()
   t.drop_files(x, y, [("报告.pdf", b"%PDF"), ("截图/", b"")], paths=["/Users/lin/报告.pdf", "/Users/lin/截图"])
@@ -402,7 +402,7 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   t.frame()
   assert_true(t.find("在对话中查找") is None)
   assert_eq(@sfpages.find_chat(), "")
-  assert_true(find_marking.val.is_empty())
+  assert_true(find_marking.get().is_empty())
   // opened again: empty
   t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
   assert_eq(@sfpages.find_query(), "")
@@ -922,7 +922,7 @@ test "wide: a right click in a chat as the desktop app's: a link's 在浏览器�
   t.right_click(px + pw / 2.0, py + ph / 2.0)
   t.frame()
   assert_true(t.find("分享这一轮") is Some(_))
-  assert_true(@sfdesk.context.share is Some(_) && @sfdesk.context.link == "" && @sfdesk.context.words == "")
+  assert_true(@sfdesk.context.share is Some(_) && @sfdesk.context.link.get() == "" && @sfdesk.context.words.get() == "")
   t.key(@ui.key_escape)
   t.run_for(@kit.presence_out_ms)
   // words picked with the pointer: 复制 alone, and what is picked copied
@@ -1013,7 +1013,7 @@ test "wide: a right click on the composer's words as the desktop app's: 剪切, 
   t.tap_text("粘贴")
   t.frame()
   t.frame()
-  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.map(fn(f) { text(Some(f), "name") }) }), Some(["image.png"]))
+  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get().map(fn(f) { text(Some(f), "name") }) }), Some(["image.png"]))
 }
 
 ///|
@@ -1773,7 +1773,7 @@ test "wide: the rail as the web's: the stations their glyph and how they are; th
   let (mx, my) = t.find("新建 workspace").unwrap()
   t.tap(mx, my)
   t.frame()
-  assert_true(sheet_host.kind == NoSheet)
+  assert_true(sheet_host.kind.get() == NoSheet)
   assert_true(t.find("workspace 是一组人和他们共用的 station。你会成为它的 owner。") is Some(_))
   t.frame()
   // (its name's field has the keys as it opens)
@@ -2045,8 +2045,8 @@ test "wide: ⌘V with a picture or files on the clipboard puts them in as files 
   t.frame()
   match @sfbase.writings.get(draft_key(r)) {
     Some(d) => {
-      assert_eq(d.files.length(), 1)
-      assert_eq(text(Some(d.files[0]), "name"), "image.png")
+      assert_eq(d.files.get().length(), 1)
+      assert_eq(text(Some(d.files.get()[0]), "name"), "image.png")
       assert_eq(d.text.get(), "")
     }
     None => fail("no draft")
@@ -2064,7 +2064,7 @@ test "wide: ⌘V with a picture or files on the clipboard puts them in as files 
   t.frame()
   match @sfbase.writings.get(draft_key(r)) {
     Some(d) => {
-      assert_eq(d.files.map(fn(f) { text(Some(f), "name") }), ["image.png", "发布清单.pdf", "截图.jpg"])
+      assert_eq(d.files.get().map(fn(f) { text(Some(f), "name") }), ["image.png", "发布清单.pdf", "截图.jpg"])
       assert_eq(d.text.get(), "再看一眼签名")
     }
     None => fail("no draft")
@@ -2637,12 +2637,12 @@ test "wide: a row pressed on its state line while the core says which message th
   let (tx, ty) = t.find("整理发布清单").unwrap()
   t.tap(tx, ty)
   t.frame()
-  assert_eq(rd.flash, "")
+  assert_eq(rd.flash.get(), "")
   // its state line: the message the state is about, flashing
   let (lx, ly) = t.find("等你回复：发布前要不要再跑一遍").unwrap()
   t.tap(lx, ly)
   t.frame()
-  assert_eq(rd.flash, "ts8")
+  assert_eq(rd.flash.get(), "ts8")
 }
 
 ///|

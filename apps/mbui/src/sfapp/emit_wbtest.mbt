@@ -44,13 +44,13 @@ test "an answer said while its agent's activity shows waits, then comes out of i
   clock.val = clock.val + fix_answer_ms
   t.draw()
   // the answer is taken: it waits (folding, then the avatar on its way), not in the list yet
-  assert_eq(em.queue.length() + (if em.current is Some(_) { 1 } else { 0 }), 1)
+  assert_eq(em.queue.length() + (if em.current.get() is Some(_) { 1 } else { 0 }), 1)
   assert_true(t.find("收到：「看一下列表」") is None)
   // fold and float: it comes into the list as the avatar lands
   t.run_for(Pose::Fold.ms() + Pose::Float.ms())
   assert_true(t.find("收到：「看一下列表」") is Some(_))
   t.run_for(Pose::Spit.ms() + Pose::Return.ms())
-  assert_true(em.current is None)
+  assert_true(em.current.get() is None)
   assert_true(t.find("收到：「看一下列表」") is Some(_))
   emit_restore()
 }
@@ -85,8 +85,8 @@ test "an answer taller than the window out of the avatar, the list at its end: r
 fn landing_faces(t : @ui.Tester) -> (Double, Double) raise {
   let rk = "ws1/st1\u{1}s-c1"
   let em = emits_of(rk)
-  guard em.current is Some(turn) && turn.pose == Spit else {
-    fail("not landing: \{em.current.map(fn(c) { c.pose })}")
+  guard em.current.get() is Some(turn) && turn.pose == Spit else {
+    fail("not landing: \{em.current.get().map(fn(c) { c.pose })}")
   }
   let face = @motion.measured_rect(t.ctx(), "emit-avatar/" + rk + "/" + turn.agent).unwrap()
   let lands = @motion.measured_rect(t.ctx(), "emit-landing/" + rk + "/" + seq_s(turn.seq)).unwrap()
@@ -118,9 +118,9 @@ test "the flying avatar goes where its answer comes in: where it was aimed on it
   let end = t.time() + emit_all_ms()
   while t.time() < end && landed is None {
     t.frame()
-    match em.current {
-      Some(turn) if turn.pose == Float => aimed = em.aimed
-      Some(turn) if turn.pose == Spit => landed = em.landed
+    match em.current.get() {
+      Some(turn) if turn.pose == Float => aimed = em.aimed.get()
+      Some(turn) if turn.pose == Spit => landed = em.landed.get()
       _ => ()
     }
   }
@@ -137,7 +137,7 @@ test "with the reader scrolled up (not watched), an answer just appears" {
   let em = emits_of("ws1/st1\u{1}s-c1")
   clock.val = clock.val + fix_answer_ms
   t.draw()
-  assert_true(em.current is None)
+  assert_true(em.current.get() is None)
   assert_eq(em.queue.length(), 0)
   assert_false(emit_held(em, 102.0))
   emit_restore()
@@ -155,7 +155,7 @@ test "the answer coming in does not end its own motion: float, spit and return e
   let end = t.time() + emit_all_ms()
   while t.time() < end {
     t.frame()
-    match em.current {
+    match em.current.get() {
       Some(turn) => {
         let k = turn.pose.to_string()
         frames[k] = frames.get(k).unwrap_or(0) + 1
@@ -172,6 +172,40 @@ test "the answer coming in does not end its own motion: float, spit and return e
   assert_true(frames.get("Float").unwrap_or(0) >= 26)
   assert_true(frames.get("Spit").unwrap_or(0) >= 22)
   assert_true(frames.get("Return").unwrap_or(0) >= 13)
-  assert_true(em.current is None)
+  assert_true(em.current.get() is None)
+  emit_restore()
+}
+
+///|
+test "an answer comes out of its avatar with no field focused: the page kept as its nodes plays it on all the same" {
+  let clock = Ref::new(0.0)
+  let t = emit_core(clock)
+  // the keyboard put away: nothing on the page is built each frame for a field
+  t.keyboard_gone()
+  t.run_for(@ui.move_most_ms)
+  let em = emits_of("ws1/st1\u{1}s-c1")
+  clock.val = clock.val + fix_answer_ms
+  t.draw()
+  t.run_for(emit_all_ms())
+  assert_true(em.current.get() is None)
+  assert_true(t.find("收到：「看一下列表」") is Some(_))
+  emit_restore()
+}
+
+///|
+test "left as an answer starts out of its avatar: it goes on as the chat's page slides away, the page still on show" {
+  let clock = Ref::new(0.0)
+  let t = emit_core(clock)
+  let em = emits_of("ws1/st1\u{1}s-c1")
+  clock.val = clock.val + fix_answer_ms
+  t.draw()
+  // back to the chats: the chat's page slides out (another page the stack's top from now), on show till it has gone
+  t.back()
+  // a while into the slide, past the fold: the avatar on its way, as it would be had the chat stayed
+  t.run_for(Pose::Fold.ms() + 60.0)
+  assert_true(@ui.move_ms(390.0) > Pose::Fold.ms() + 60.0)
+  guard em.current.get() is Some(turn) && turn.pose == Float else {
+    fail("not on its way as the page slides out: \{em.current.get().map(fn(c) { c.pose })}")
+  }
   emit_restore()
 }

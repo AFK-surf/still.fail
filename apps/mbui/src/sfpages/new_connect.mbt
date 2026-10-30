@@ -16,12 +16,13 @@ priv struct NcFlow {
   resume : String
   app_id : @ui.Field
   app_secret : @ui.Field
+  // (*_sent plain: what the core was last told, compared before telling it again)
   mut app_id_sent : String
   mut app_secret_sent : String
-  mut look : SaDraft?
+  look : @signals.Signal[SaDraft?]
   mut look_sent : String
   mut icon_sent : String
-  mut gone : Bool
+  gone : @signals.Signal[Bool]
 }
 
 ///|
@@ -54,10 +55,10 @@ pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : Stri
     app_secret: @ui.Field::new(),
     app_id_sent: "",
     app_secret_sent: "",
-    look: None,
+    look: @signals.signal(None),
     look_sent: "",
     icon_sent: "",
-    gone: false,
+    gone: @signals.signal(false, same=fn(a, b) { a == b }),
   }
   let opened = Ref(false)
   let view = fn() { (core.topic)("connectFlow", { "station": str(station), "form": str(f.form) }).value }
@@ -119,8 +120,8 @@ fn nc_close(core : Core, f : NcFlow, shut : () -> Unit) -> Unit {
 ///|
 /// Its wizard and tokens' draft let go of, once.
 fn nc_drop(core : Core, f : NcFlow) -> Unit {
-  if !f.gone {
-    f.gone = true
+  if !f.gone.get() {
+    f.gone.set(true)
     (core.call)("connect.flow.drop", obj([("station", str(f.station)), ("form", str(f.form))]), fn(_) {  })
     for k in slack_token_forms.keys().to_array() {
       if k.has_prefix("flow/" + f.form) {
@@ -201,7 +202,7 @@ fn nc_body(c : @ui.Ctx, src : Source, core : Core, here : Here, f : NcFlow, v : 
   let fe = field(v, "feishu")
   let error = nc_error(core, f)
   // added on its own (a bot made by scanning): its page, once the frame is built
-  if step == "done" && opt_text(fe, "connect") is Some(_) && !f.gone {
+  if step == "done" && opt_text(fe, "connect") is Some(_) && !f.gone.get() {
     c.tell("nc-added/" + f.form, fn() { nc_watch_added(core, f, v, close) })
   }
   c.box(style=nc_body_box, fn() {
@@ -274,11 +275,11 @@ fn nc_body(c : @ui.Ctx, src : Source, core : Core, here : Here, f : NcFlow, v : 
       "feishuApp" | "done" => nc_feishu_app(c, core, f, fe, error)
       "team" => nc_team(c, core, f, v, close)
       "app" => {
-        let d = match f.look {
+        let d = match f.look.get() {
           Some(d) => d
           None => {
             let d = sa_draft("nc-look/" + f.form, field(v, "settings"))
-            f.look = Some(d)
+            f.look.set(Some(d))
             f.look_sent = sa_settings(d, field(v, "settings")).stringify()
             d
           }
@@ -714,7 +715,7 @@ fn nc_scan_foot(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, back : () -> U
 fn nc_watch_added(core : Core, f : NcFlow, v : Json?, close : () -> Unit) -> Unit {
   if text(v, "step") == "done" && text(v, "platform") == "feishu" {
     match opt_text(field(v, "feishu"), "connect") {
-      Some(id) if !f.gone => nc_added(core, f, id, close, true)
+      Some(id) if !f.gone.get() => nc_added(core, f, id, close, true)
       _ => ()
     }
   }

@@ -28,7 +28,7 @@ priv struct Go {
   asked : @signals.Signal[String]
   switching : @signals.Signal[Int]
   /// its dialog as presented (@sf.last_presented; 0 none)
-  mut shown : Int
+  shown : @signals.Signal[Int]
 }
 
 ///|
@@ -43,7 +43,7 @@ let go : Go = {
   folders: @signals.signal(None),
   asked: @signals.signal("", same=fn(a, b) { a == b }),
   switching: @signals.signal(0, same=fn(a, b) { a == b }),
-  shown: 0,
+  shown: @signals.signal(0, same=fn(a, b) { a == b }),
 }
 
 ///|
@@ -57,7 +57,7 @@ fn go_reset() -> Unit {
   go.folders.set(None)
   go.asked.set("")
   go.switching.set(0)
-  go.shown = 0
+  go.shown.set(0)
 }
 
 ///|
@@ -132,7 +132,7 @@ fn place_of(stations : Array[DvStation], station : String, abs : String) -> Driv
 /// gone to.
 pub fn go_to(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt) -> Unit) -> Unit {
   ignore(c)
-  if go.open.get() && go.shown == 0 {
+  if go.open.get() && go.shown.get() == 0 {
     @sf.panel(
       @sf.t("web-pages.files.goTo"),
       fn(c, _) { go_body(c, src, ws, here, to) },
@@ -140,14 +140,14 @@ pub fn go_to(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (Drive
       description=@sf.t("web-pages.files.goToNote"),
       gone=fn() {
         go.open.set(false)
-        go.shown = 0
+        go.shown.set(0)
       },
     )
-    go.shown = @sf.last_presented()
-  } else if !go.open.get() && go.shown > 0 {
+    go.shown.set(@sf.last_presented())
+  } else if !go.open.get() && go.shown.get() > 0 {
     // (a folder gone to: down)
-    @sf.close_presented_of(go.shown)
-    go.shown = 0
+    @sf.close_presented_of(go.shown.get())
+    go.shown.set(0)
   }
 }
 

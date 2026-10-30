@@ -20,18 +20,18 @@ pub(all) struct VizFrame {
   view : @ui.NativeView
   html : String
   page : Bool
-  mut height : Int
+  height : @signals.Signal[Int]
   /// the height it last said, and how many times running it grew a little to it (viz_runaway)
-  mut said_height : Int
-  mut grown : Int
-  mut shown : Bool
-  mut dark : Bool
-  mut font_scale : Double
-  mut ground : Int64
+  said_height : @signals.Signal[Int]
+  grown : @signals.Signal[Int]
+  shown : @signals.Signal[Bool]
+  dark : @signals.Signal[Bool]
+  font_scale : @signals.Signal[Double]
+  ground : @signals.Signal[Int64]
   /// the faces it was told (viz_faces_key)
-  mut faces : String
+  faces : @signals.Signal[String]
   /// its way in once it has drawn itself (viz_reveal); None once it is in
-  mut reveal : @motion.Anim?
+  reveal : @signals.Signal[@motion.Anim?]
 }
 
 ///|
@@ -65,24 +65,26 @@ pub fn viz_said(f : VizFrame, hears : VizHears, words : String) -> Unit {
           Some(Number(h, ..)) if h == h && h < 1.0e9 && h > 0.0 => {
             let tall = h.ceil().to_int()
             // held, it stays so until its content is shorter than where it was held
-            if f.grown > viz_runaway && tall >= f.said_height {
+            if f.grown.get() > viz_runaway && tall >= f.said_height.get() {
               return
             }
-            f.grown = if f.said_height > 0 && tall > f.said_height && tall - f.said_height <= 64 {
-              f.grown + 1
-            } else {
-              0
-            }
-            if f.grown > viz_runaway {
+            f.grown.set(
+              if f.said_height.get() > 0 && tall > f.said_height.get() && tall - f.said_height.get() <= 64 {
+                f.grown.get() + 1
+              } else {
+                0
+              },
+            )
+            if f.grown.get() > viz_runaway {
               return
             }
-            f.said_height = tall
+            f.said_height.set(tall)
             // only a height it did not creep to is kept: one kept mid-run would start the next load's run further on
-            if f.grown == 0 {
+            if f.grown.get() == 0 {
               viz_heights[f.html] = tall
             }
-            f.height = tall
-            f.shown = true
+            f.height.set(tall)
+            f.shown.set(true)
           }
           _ => ()
         }
@@ -157,15 +159,15 @@ pub fn viz_frame(
         view,
         html,
         page,
-        height: viz_heights.get(html).unwrap_or(0),
-        said_height: 0,
-        grown: 0,
-        shown: false,
-        dark,
-        font_scale: @ui.font_scale(),
-        ground,
-        faces: viz_faces_key(),
-        reveal: Some(@motion.Anim::new(0.0)),
+        height: @signals.signal(viz_heights.get(html).unwrap_or(0), same=fn(a, b) { a == b }),
+        said_height: @signals.signal(0, same=fn(a, b) { a == b }),
+        grown: @signals.signal(0, same=fn(a, b) { a == b }),
+        shown: @signals.signal(false, same=fn(a, b) { a == b }),
+        dark: @signals.signal(dark, same=fn(a, b) { a == b }),
+        font_scale: @signals.signal(@ui.font_scale(), same=fn(a, b) { a == b }),
+        ground: @signals.signal(ground, same=fn(a, b) { a == b }),
+        faces: @signals.signal(viz_faces_key(), same=fn(a, b) { a == b }),
+        reveal: @signals.signal(Some(@motion.Anim::new(0.0))),
       }
       cell.val = Some(f)
       viz_frames[key] = f
@@ -173,11 +175,11 @@ pub fn viz_frame(
     }
   }
   // the theme told only when it changes (a page told it as it loads draws again: a chart redrawn)
-  if f.dark != dark || f.ground != ground || f.font_scale != @ui.font_scale() || f.faces != viz_faces_key() {
-    f.dark = dark
-    f.font_scale = @ui.font_scale()
-    f.ground = ground
-    f.faces = viz_faces_key()
+  if f.dark.get() != dark || f.ground.get() != ground || f.font_scale.get() != @ui.font_scale() || f.faces.get() != viz_faces_key() {
+    f.dark.set(dark)
+    f.font_scale.set(@ui.font_scale())
+    f.ground.set(ground)
+    f.faces.set(viz_faces_key())
     let scheme = if dark { "dark" } else { "light" }
     let g = viz_css_color(ground)
     c.tell("viz/theme/" + key, fn() {
@@ -195,14 +197,14 @@ pub fn viz_frame(
     })
   }
   // a whole page (or a fragment that never says its height) is shown once it has loaded
-  if f.view.state() == 1 && (f.page || f.height == 0) {
-    f.shown = true
+  if f.view.state() == 1 && (f.page || f.height.get() == 0) {
+    f.shown.set(true)
   }
   // what is under it shows till it has drawn itself: the ground (a page's paper), drawn over it; and till its host has
   // drawn it (host_done: its first frame on the screen), as a page that has loaded, or said its height, is not drawn
   // yet: the empty view showed through for a frame or more
   let cover = fn(style : @ui.Style) {
-    if !f.shown || !f.view.host_done() {
+    if !f.shown.get() || !f.view.host_done() {
       c.layer(fn() { c.box(style~, fn() {  }) |> ignore }) |> ignore
     }
   }
@@ -230,7 +232,7 @@ pub fn viz_frame(
     })
     |> ignore
   } else {
-    let said = (if f.height > 0 { f.height } else { viz_first_height }).to_double()
+    let said = (if f.height.get() > 0 { f.height.get() } else { viz_first_height }).to_double()
     // as tall as it said, from the height it had as it says another: a move for its cause, so what is over and under
     // it in a list goes there with it, not in one frame (rows_steady.mbt); on the list's way where it has one (a row's
     // own content, as under_post's)
@@ -244,7 +246,7 @@ pub fn viz_frame(
     let h = tall.get()
     // till it has drawn itself, its place as while its file came (the line's grey, breathing, its corners the
     // placeholder's, the view's hole cut to them): not an empty gap (the user, 2026-10-29)
-    let waiting = !f.shown || !f.view.host_done()
+    let waiting = !f.shown.get() || !f.view.host_done()
     let frame = @ui.style(w=Full, h=Fixed(h))
     let box = c.id("viz/box/" + key)
     let w = match c.laid_size(box) {
@@ -253,7 +255,7 @@ pub fn viz_frame(
     }
     c.box(style=frame, id=box, fn() {
       // (its corners the placeholder's till what it waited on has gone from over it)
-      let rounded = waiting || f.reveal is Some(_)
+      let rounded = waiting || f.reveal.get() is Some(_)
       c.native(f.view, radius=if rounded { c.theme().corner(Xl) } else { 0.0 }) |> ignore
       viz_reveal(c, f, w, h, fn(w, h) {
         c.box(style=viz_wait_ground.then(@ui.style(w=Fixed(w), h=Fixed(h))), fn() {
@@ -282,11 +284,11 @@ pub fn viz_frame(
 /// fading out from 800 ms (300 ms). A view drawn by its host is neither blurred nor scaled, as the image is: the
 /// edge alone brings it in. One drawn already as it is first shown again (its chat kept) comes as it is.
 fn viz_reveal(c : @ui.Ctx, f : VizFrame, w : Double, h : Double, waited : (Double, Double) -> Int) -> Unit {
-  let a = match f.reveal {
+  let a = match f.reveal.get() {
     Some(a) => a
     None => return
   }
-  if !f.shown || !f.view.host_done() {
+  if !f.shown.get() || !f.view.host_done() {
     return
   }
   if a.target() == 0.0 {
@@ -294,7 +296,7 @@ fn viz_reveal(c : @ui.Ctx, f : VizFrame, w : Double, h : Double, waited : (Doubl
   }
   let p = a.get()
   if p >= 1.0 {
-    f.reveal = None
+    f.reveal.set(None)
     return
   }
   let e = @ui.Out.at(p)
