@@ -26,6 +26,7 @@ import { mathDrawing } from "./math.ts";
 import { type MdWords, wordsOf } from "./mdWords.ts";
 import { pathAttrs } from "./paths.ts";
 import { type Node, read } from "./mdRead.ts";
+import { shaped, sharedValue } from "./util.ts";
 
 export type MdNode = MdWords | [kind: string] | [kind: string, children: MdNode[]] | [kind: string, attributes: Record<string, unknown>] | [kind: string, children: MdNode[], attributes: Record<string, unknown>];
 export type Md = MdNode[];
@@ -74,6 +75,10 @@ export function markdown(text: string, store?: MdStore): Md {
   md ??= parse(text);
   const json = fresh || store === undefined ? JSON.stringify(md) : stored!;
   if (fresh && store) store.put(key, json);
+  // Never changed once made, and shared by whatever shows it (kept here by its words): as it goes out (output.ts) it is
+  // not copied, put through its shape or kept again as it was, each time a message holding it does. A chat's page of
+  // them, walked three times over as it opened, was most of what the core did to open it (2026-10-31).
+  shaped.add(sharedValue(md));
   remember(text, md, text.length + json.length);
   return md;
 }

@@ -20,7 +20,7 @@ import { replies as parts } from "./replies.ts";
 const [, , mode, dir] = process.argv;
 if (!dir) throw new Error("usage: chat-open.ts seed|run <dir>");
 
-const CHATS = 300;
+const CHATS = Number(process.env.CHATS ?? 300);
 const LONG = 20;
 const PER_LONG = 120;
 const SUB = "bench-account";
@@ -153,10 +153,21 @@ async function run(): Promise<void> {
   }
   // Let go longer than the core keeps a view (store.ts EVICT_AFTER_MS): its Markdown kept, the view made again.
   await sleep(62_000);
+  const prof2 = process.env.CHAT_OPEN_PROF ? new Session() : null;
+  if (prof2) {
+    prof2.connect();
+    await prof2.post("Profiler.enable");
+    await prof2.post("Profiler.setSamplingInterval", { interval: 100 });
+    await prof2.post("Profiler.start");
+  }
   const again: unknown[] = [];
   for (let i = 0; i < 10; i++) {
     again.push(await open(i));
     await sleep(300);
+  }
+  if (prof2) {
+    const { profile } = await prof2.post("Profiler.stop");
+    writeFileSync(process.env.CHAT_OPEN_PROF! + ".evicted", JSON.stringify(profile));
   }
   console.log(JSON.stringify({ listRows, cold, warm, evicted: again }));
   process.exit(0);

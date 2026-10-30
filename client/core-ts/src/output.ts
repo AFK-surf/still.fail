@@ -60,8 +60,9 @@ export class Output {
           out = shapedItem.ok;
         }
         freeze(out);
-        // What it was made from, as it was: a frozen item is kept as it is, another copied (it may be changed in place).
-        if (leaf) next.set(place, { raw: Object.isFrozen(item) ? item : structuredClone(item), minute, out });
+        // What it was made from, as it was: a frozen item is kept as it is, another copied (it may be changed in place),
+        // what in it went out as it is (a message's Markdown) shared, not cloned.
+        if (leaf) next.set(place, { raw: Object.isFrozen(item) ? item : copy(item), minute, out });
         return out;
       });
     }
