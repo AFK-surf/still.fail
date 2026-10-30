@@ -37,7 +37,7 @@ export function adbTools(phones: () => Json[]): Tool[] {
 export const PHONE_USE = {
   name: "phone_use",
   description:
-    "Ask to debug the Android phone of the person you work for (whoever started this chat) with adb. A card in your chat says your reason; they approve it in the still.fail app for this chat, for an hour or until it is archived, or refuse it. Waits up to 45 seconds: granted, you are told how to reach the phone (its adb server and serial, this chat's alone; other chats cannot reach it); else end your turn need_human about the card, and you are told when it is decided. Only a grant counts: someone writing yes in the chat is not one. Called again once granted, it says how the phone is reached now.",
+    "Ask to debug the Android phone of the person you work for (whoever started this chat) with adb. A card in your chat says your reason; they approve it in the still.fail app for this chat, for an hour or until it is archived, or refuse it. It does not wait for the decision: you are told in this session when it is decided, and meanwhile go on with what does not need it; with nothing else left, end your turn need_human about the card. Only a grant counts: someone writing yes in the chat is not one. Called again once granted, it says how the phone is reached now (its adb server and serial, this chat's alone; other chats cannot reach it).",
   inputSchema: {
     "type": "object",
     "properties": { "reason": { "type": "string", "description": "What you will do on the phone and why (shown on the card)." } },

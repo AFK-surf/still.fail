@@ -49,8 +49,9 @@ station's profiles), or anything the person said not to keep.
     `file` for a file: each command gets it written out where only it reads it, removed when it ends, its path in
     `env` (`KUBECONFIG`, `GOOGLE_APPLICATION_CREDENTIALS`) and `$STILLFAIL_SECRET`.
   - `name`: what the person will recognise (UniFi UX7 管理员, GitHub deploy token · AFK-surf/still.fail).
-- It waits 45 s for the person; not decided by then, end your turn need_human about the card. Only their approval in
-  the app keeps it: a yes written in the chat does not.
+- It does not wait for the person: you are told in your session when they decide. Meanwhile go on with what does not
+  need it (answer the chat, other work); with nothing else left, end your turn need_human about the card. Only their
+  approval in the app keeps it: a yes written in the chat does not.
 - Their vault not turned on (secret_list says so: security mode is on, but no device of theirs has it set up): call
   `secret_save` anyway. The card says so and offers 开启密钥库 in the app; once they turn it on, it keeps the secret.
   Tell them in a line that turning it on takes a minute and shows recovery words to write down once.

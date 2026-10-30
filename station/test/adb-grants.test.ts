@@ -53,8 +53,8 @@ function world() {
 
 test("a phone asked for in a chat: a card to the person its agent works for, granted to that chat alone", async () => {
   const w = world();
-  // Not decided within the wait: the agent is told it waits for the card.
-  const asked = await w.grants.ask("s1", "install the build and look at its first screen", 0);
+  // Asked: answered at once, the card posted, nothing decided (the agent goes on; it is told of the decision).
+  const asked = await w.grants.ask("s1", "install the build and look at its first screen");
   assert.equal(asked.status, "pending");
   assert.equal(asked.owner, "pat@example.com");
   assert.equal(w.cards.length, 1);
@@ -62,7 +62,7 @@ test("a phone asked for in a chat: a card to the person its agent works for, gra
   assert.deepEqual(w.cards[0]!.card.adb, { request: "p1", reason: "install the build and look at its first screen", lasts: "chat" });
   assert.deepEqual(w.cards[0]!.card.options.map((o: any) => o.label), ["本对话 1 小时内", "本对话直到归档", "拒绝"]);
   // Asked again before it is decided: the same request, no second card.
-  assert.equal((await w.grants.ask("s1", "again", 0)).id, "p1");
+  assert.equal((await w.grants.ask("s1", "again")).id, "p1");
   assert.equal(w.cards.length, 1);
   // Only its person decides it.
   assert.match(w.grants.decide("someone@example.com", "p1", "chat")!, /only the person/);
@@ -73,7 +73,7 @@ test("a phone asked for in a chat: a card to the person its agent works for, gra
   // That chat's alone: another chat holds nothing, and asks for its own.
   assert.equal(w.grants.held("s1").length, 1);
   assert.equal(w.grants.held("s2").length, 0);
-  assert.equal((await w.grants.ask("s1", "more", 0)).id, "p1");
+  assert.equal((await w.grants.ask("s1", "more")).id, "p1");
   // Its hour over, it ends; the agent is told.
   w.pass(3600_000);
   assert.equal(w.grants.held("s1").length, 0);
@@ -83,9 +83,9 @@ test("a phone asked for in a chat: a card to the person its agent works for, gra
 
 test("a grant until the chat is archived ends with it, and its owner takes one back", async () => {
   const w = world();
-  await w.grants.ask("s1", "debug the crash", 0);
+  await w.grants.ask("s1", "debug the crash");
   assert.equal(w.grants.decide("pat@example.com", "p1", "chat"), null);
-  await w.grants.ask("s2", "screenshots", 0);
+  await w.grants.ask("s2", "screenshots");
   assert.equal(w.grants.decide("pat@example.com", "p2", "chat"), null);
   assert.deepEqual(w.grants.ofOwner("PAT@example.com").map((r) => r.id), ["p1", "p2"]);
   w.archive("s1");
@@ -107,7 +107,7 @@ test("its owner's 默认最长授权: the card offers no longer, and a longer gr
   // an older setting (another device's, said late) does not take its place
   assert.equal(w.grants.setLasts("pat@example.com", "chat", 5), null);
   assert.equal(w.grants.lastsOf("pat@example.com"), "hour");
-  await w.grants.ask("s1", "x", 0);
+  await w.grants.ask("s1", "x");
   assert.deepEqual(w.cards[0]!.card.options.map((o: any) => o.label), ["本对话 1 小时内", "拒绝"]);
   assert.equal(w.cards[0]!.card.adb.lasts, "hour");
   assert.match(w.grants.decide("pat@example.com", "p1", "chat")!, /默认最长授权/);
@@ -116,15 +116,15 @@ test("its owner's 默认最长授权: the card offers no longer, and a longer gr
 
 test("refused, the agent is told, and a request of an archived chat is not granted", async () => {
   const w = world();
-  await w.grants.ask("s1", "x", 0);
+  await w.grants.ask("s1", "x");
   assert.equal(w.grants.decide("pat@example.com", "p1", null), null);
   assert.equal(w.grants.get("p1")!.status, "denied");
   assert.match(w.told.at(-1)!, /refused/);
-  await w.grants.ask("s2", "y", 0);
+  await w.grants.ask("s2", "y");
   w.archive("s2");
   assert.equal(w.grants.get("p2")!.status, "denied");
   assert.match(w.grants.decide("pat@example.com", "p2", "chat")!, /denied already/);
-  await assert.rejects(w.grants.ask("s1", " ", 0), /reason/);
+  await assert.rejects(w.grants.ask("s1", " "), /reason/);
 });
 
 test("who holds the other end of a loopback connection is told by its port", async () => {

@@ -5,8 +5,10 @@
 >
 > - **An agent asks** with a tool (`phone_use {reason}`, as `secret_use`): a card in its chat asks the phone's owner
 >   (the chat's starter by default: `card.assignee`) whether this chat's agent may debug their phone, with the reason;
->   pushed. The tool waits up to 45 s: approved, it answers how to use the phone (its serial, `ANDROID_ADB_SERVER_PORT`);
->   else the agent ends its turn need_human about the card and is told in its session when it is decided. Someone
+>   pushed. The tool does not wait for the decision (2026-10-30: a call held holds the agent's turn and everything said
+>   in the chat meanwhile): the agent is told in its session when it is decided, and called again once approved it
+>   answers how to use the phone (its serial, `ANDROID_ADB_SERVER_PORT`); with nothing else to do meanwhile it ends its
+>   turn need_human about the card. Someone
 >   writing yes in the chat is not a grant.
 > - **Approved for a scope**, as a vault grant's: 本对话 1 小时内 (`hour`) or 本对话直到归档 (`chat`, 30 days at most),
 >   up to the owner's 默认最长授权 (a setting of theirs, default `chat`); the card offers what that allows and
