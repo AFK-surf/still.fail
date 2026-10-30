@@ -175,7 +175,7 @@ test "a finger let go where it went down: a tap; moved within the slop, still a 
 }
 
 ///|
-test "a finger moved past the slop: a drag from where it went down, its moves, its end; no tap" {
+test "a finger moved past the slop: a drag begun where it is then, its moves, its end; no tap" {
   let said = []
   let t = gesture_tree(said)
   t.frame(390.0, 844.0) |> ignore
@@ -183,7 +183,7 @@ test "a finger moved past the slop: a drag from where it went down, its moves, i
   t.drag_at(id, Down, 10.0, 10.0, 10.0) |> ignore
   t.drag_at(id, Moved, 30.0, 10.0, 20.0) |> ignore
   t.drag_at(id, Up, 40.0, 10.0, 30.0) |> ignore
-  assert_eq(said, ["drag Down 10,10 at 20", "drag Moved 30,10 at 20", "drag Up 40,10 at 30"])
+  assert_eq(said, ["drag Down 30,10 at 20", "drag Up 40,10 at 30"])
 }
 
 ///|
@@ -218,8 +218,8 @@ test "held still: a hold at its moment, by the frame whose logic comes to it, wh
   assert_eq(held_for([]), ([], ended))
   // (moved first: no hold)
   assert_eq(held_for([300.0], moved=400.0), (
-    ["drag Down 10,10 at 400", "drag Moved 40,10 at 400"],
-    ["drag Down 10,10 at 400", "drag Moved 40,10 at 400", "drag Up 10,10 at 800"],
+    ["drag Down 40,10 at 400"],
+    ["drag Down 40,10 at 400", "drag Up 10,10 at 800"],
   ))
 }
 
@@ -354,4 +354,119 @@ test "held, told inside an event whose change moved it, before it ended: where i
     t.drag_at(id, Down, 30.0, 30.0, 100.0) |> ignore
   })
   assert_eq(seen.map(fn(d) { (d.kind, d.x, d.y, d.at) }), [(Down, 10.0, 10.0, 50.0)])
+}
+
+///|
+test "takes presses said anew: what was said before followed no more (said fixed, then by another value, either way)" {
+  let a = @signals.signal(true, same=fn(x, y) { x == y })
+  let b = @signals.signal(true, same=fn(x, y) { x == y })
+  let said : Array[String] = []
+  let held : Ref[@view.View?] = Ref(None)
+  let t = @view.Tree::new(
+    fn(root) {
+      held.val = Some(
+        root.box(fn(h) {
+          h
+          .width(Is(Some(100.0)))
+          .height(Is(Some(100.0)))
+          .presses(By(fn() { a.get() }))
+          .on_drag(fn(d) { said.push("\{d.kind}") })
+          |> ignore
+        }),
+      )
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let v = held.val.unwrap()
+  let id = gesture_id(t)
+  v.presses(Is(true)) |> ignore
+  t.drag_at(id, Down, 10.0, 10.0, 10.0) |> ignore
+  // (what it was said by before: no longer followed)
+  t.event(20.0, fn() { a.set(false) })
+  let after_fixed = (said.copy(), t.target_at(10.0, 10.0) is Dragged(_))
+  v.presses(By(fn() { b.get() })) |> ignore
+  t.event(30.0, fn() { a.set(true) })
+  t.event(40.0, fn() { a.set(false) })
+  t.drag_at(id, Moved, 50.0, 50.0, 50.0) |> ignore
+  // (and by the new one: followed)
+  t.event(60.0, fn() { b.set(false) })
+  assert_eq((after_fixed, said), ((["Down"], true), ["Down", "Moved", "Off"]))
+}
+
+///|
+/// Inside one event at 50: `s` set 1, something said for 50 that reads it, a held finger told (where things are found:
+/// `ask` it or not), `s` set 2: what that something read.
+fn read_in_event(ask : Bool) -> Array[Int] {
+  let s = @signals.signal(0, same=fn(x, y) { x == y })
+  let read : Array[Int] = []
+  let node : Ref[@view.View?] = Ref(None)
+  let t = @view.Tree::new(
+    fn(root) {
+      node.val = Some(
+        root.box(fn(h) { h.width(Is(Some(100.0))).height(Is(Some(100.0))).on_drag(fn(_) {  }) |> ignore }),
+      )
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let id = gesture_id(t)
+  t.event(50.0, fn() {
+    s.set(1)
+    node.val.unwrap().at_moment(50.0, fn() { read.push(@signals.untracked(fn() { s.get() })) }) |> ignore
+    if ask {
+      t.drag_at(id, Down, 10.0, 10.0, 50.0) |> ignore
+    }
+    s.set(2)
+  })
+  t.frame(390.0, 844.0, now=60.0) |> ignore
+  read
+}
+
+///|
+test "where things are found in an event's change runs nothing of the logic: what is due then, done as it would be with nothing asked" {
+  assert_eq(read_in_event(true), read_in_event(false))
+}
+
+///|
+test "a gesture ended mid-call (its node let go by what it told, its on_drag said anew while held): nothing more told, its hold never come" {
+  let there = @signals.signal(true, same=fn(x, y) { x == y })
+  let said : Array[String] = []
+  let node : Ref[@view.View?] = Ref(None)
+  let t = @view.Tree::new(
+    fn(root) {
+      root.show(fn() { there.get() }, fn(v) {
+        node.val = Some(
+          v.box(fn(b) {
+            b
+            .width(Is(Some(100.0)))
+            .height(Is(Some(100.0)))
+            .gesture(6.0, hold=(100.0, fn(_) { said.push("hold") }), drag=fn(d) {
+              said.push("\{d.kind}")
+              // (the drag's first word lets its node go)
+              if d.kind == Down {
+                there.set(false)
+              }
+            })
+            |> ignore
+          }),
+        )
+      })
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let id = gesture_id(t)
+  t.drag_at(id, Down, 10.0, 10.0, 10.0) |> ignore
+  t.drag_at(id, Moved, 40.0, 10.0, 20.0) |> ignore
+  let gone = said.copy()
+  // (another: held, its on_drag said anew; its hold's moment comes)
+  said.clear()
+  there.set(true)
+  t.frame(390.0, 844.0, now=30.0) |> ignore
+  let id2 = gesture_id(t)
+  t.drag_at(id2, Down, 10.0, 10.0, 40.0) |> ignore
+  node.val.unwrap().on_drag(fn(_) { said.push("new") }) |> ignore
+  t.frame(390.0, 844.0, now=300.0) |> ignore
+  assert_eq((gone, said), (["Down"], []))
 }

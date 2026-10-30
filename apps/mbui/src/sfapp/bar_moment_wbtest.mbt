@@ -269,3 +269,34 @@ test "bar: held still on a place, let go without moving: the lens while held, th
   assert_eq(bar_held_then(None), (true, true))
   assert_eq(bar_held_then(Some(50.0)), (false, false))
 }
+
+///|
+/// The bar's panel's top in the window and its track's top in it (the bar's geometry as it was told), the panel closed
+/// or open.
+fn bar_panel_at() -> (Double, Double) {
+  let l = bar_laid(bar.told.unwrap())
+  (844.0 - 22.0 - l.panel, l.row_top)
+}
+
+///|
+test "bar: the panel closed, a tap above the bar's glass (in its panel's room, nothing drawn there) is the page's under it" {
+  let (t, _) = bar_at_rest()
+  let (top, row_top) = bar_panel_at()
+  t.tap(100.0, top + row_top / 2.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(app.nav.depth(), 2)
+}
+
+///|
+test "bar: the panel drawn up and open, a tap where the notch's key is closed is the row's there: that bar chosen" {
+  let (t, _) = bar_at_rest()
+  let (xs, y) = bar_places_at()
+  t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
+  t.run_for(bar.o.end() - t.time())
+  assert_true(bar.mode.get() && bar.k_at(t.time()) <= 0.9)
+  let (top, row_top) = bar_panel_at()
+  let before = bars_picked.get().map(fn(b) { b.1 })
+  t.tap_once(195.0, top + row_top - lift - 10.0)
+  t.run_for(bar.o.end() + 50.0 - t.time())
+  assert_true(bars_picked.get().map(fn(b) { b.1 }) != before)
+}

@@ -520,6 +520,10 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
         // (the secondary button presses nothing: no menu of a node's yet)
         Pressed(id) => {
           view_held.val = Some(if button == 2 { Nowhere } else { Node(id) })
+          // (the hold its, called off as any is: the window behind, the node taking no press, a second finger)
+          if button != 2 {
+            tree.event(at, fn() { tree.hold_press(id) })
+          }
           true
         }
         // (the old view's: the part whose hit target the old frame finds there, held so till let go)
@@ -571,7 +575,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       }
     (2, Some(Node(id))) => {
       view_held.val = None
-      if tree.target_at(x, y) == Pressed(id) {
+      if tree.press_held(id) && tree.target_at(x, y) == Pressed(id) {
         tree.run_press_at(id, at) |> ignore
       }
       h_frame_owed()
@@ -585,6 +589,12 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       h_frame_owed()
       true
     }
+    (4 | 5 | 6, Some(Node(_))) => {
+      // (a second finger on a press: called off, the rest nobody's)
+      view_held.val = Some(Nowhere)
+      tree.event(at, fn() { tree.hold_lost_in(0) })
+      true
+    }
     (4 | 5 | 6, Some(Nowhere)) => true
     (2 | 3, Some(Dragging(id))) => {
       view_held.val = None
@@ -596,6 +606,12 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       view_held.val = None
       view_input_went(part)
       false
+    }
+    (3, Some(Node(id))) => {
+      // (called off: the press's hold let go, nothing pressed)
+      view_held.val = None
+      tree.press_held(id) |> ignore
+      true
     }
     (2 | 3, Some(_)) => {
       view_held.val = None
@@ -787,7 +803,7 @@ fn view_event(f : () -> Unit) -> Unit {
 /// rest of what it does nobody's.
 fn view_hold_lost() -> Unit {
   match (view_app.val, view_held.val) {
-    (Some(tree), Some(Dragging(_))) => {
+    (Some(tree), Some(Dragging(_))) | (Some(tree), Some(Node(_))) => {
       view_held.val = Some(Nowhere)
       tree.event(view_moment(), fn() { tree.hold_lost_in(0) })
     }
@@ -800,7 +816,7 @@ fn view_hold_lost() -> Unit {
 /// off): all the pointer's events till it is let go are the tree's, a second finger's too, none an old view's.
 fn view_holds() -> Bool {
   match view_held.val {
-    Some(Dragging(_)) | Some(Nowhere) => true
+    Some(Dragging(_)) | Some(Node(_)) | Some(Nowhere) => true
     _ => false
   }
 }

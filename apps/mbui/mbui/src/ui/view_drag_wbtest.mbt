@@ -104,3 +104,61 @@ test "window tree: a finger held on a node, the window no longer in front: calle
   t.run_for(500.0)
   assert_eq(said, ["Off"])
 }
+
+///|
+/// A node of the tree's pressed (a finger down on it, let go on it), with `between` done while it is down: whether it
+/// was pressed, and whether the old view under it took any of it.
+fn press_with(between : (Tester, @signals.Signal[Bool]) -> Unit) -> (Int, Int) {
+  let pressed = Ref(0)
+  let old_seen = Ref(0)
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let t = Tester::new(fn(_c) {  })
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    old(root, fn(c) {
+      let id = c.id("under")
+      if c.clicked(id) {
+        old_seen.val = old_seen.val + 1
+      }
+      c.box(w=Fill(1.0), h=Fill(1.0), id~, fn() {  }) |> ignore
+    })
+    .over(Is(true))
+    |> ignore
+    root.box(fn(b) {
+      b.over(Is(true)) |> ignore
+      b.box(fn(h) {
+        h
+        .width(Is(Some(100.0)))
+        .height(Is(Some(100.0)))
+        .presses(By(fn() { on.get() }))
+        .on_press(fn() { pressed.val = pressed.val + 1 })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  t.app_state(true, true)
+  t.touch(0, 10.0, 10.0)
+  between(t, on)
+  t.touch(2, 10.0, 10.0)
+  t.drawn_now()
+  (pressed.val, old_seen.val)
+}
+
+///|
+test "window tree: a press on a node called off as a hold is: the window behind, the node taking no press a while, a second finger" {
+  let plain = press_with(fn(_t, _on) {  })
+  let behind = press_with(fn(t, _on) { t.app_state(true, false) })
+  let pressless = press_with(fn(_t, on) {
+    on.set(false)
+    on.set(true)
+  })
+  let second = press_with(fn(t, _on) {
+    t.touch(4, 50.0, 50.0)
+    t.touch(6, 50.0, 50.0)
+  })
+  assert_eq((plain, behind, pressless, second), ((1, 0), (0, 0), (0, 0), (0, 0)))
+}

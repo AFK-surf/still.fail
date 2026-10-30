@@ -133,6 +133,10 @@ struct Node {
   mut on_press : (() -> Unit)?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
+  /// where in it a finger is taken at a moment (View::takes; none: all of it)
+  mut takes : ((Double, Double, Double) -> Bool)?
+  /// what ends what its on_drag set going (a gesture's: its hold's moment, its dispatch), as it is said anew or let go
+  mut drag_end : (() -> Unit)?
   /// a slot (show, pick, each): no box of its own, what it holds laid out as its holder's own
   mut slot : Bool
   /// drawn by what hosts the tree (View::hosted)
@@ -345,6 +349,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.hosted = false
       n.on_press = None
       n.on_drag = None
+      n.takes = None
+      n.drag_end = None
       n.look_due = false
       n.place_due = false
       n.placed = false
@@ -371,6 +377,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         props: {},
         on_press: None,
         on_drag: None,
+        takes: None,
+        drag_end: None,
         slot: false,
         hosted: false,
         look_due: false,
@@ -930,27 +938,9 @@ pub fn View::grow(self : View, g : Live[Double]) -> View {
 /// first). For what is said at a moment by how big a thing is then (how long a slide across it takes), never followed.
 pub fn View::laid_size(self : View) -> (Double, Double) {
   guard self.live() is Some(n) else { return (0.0, 0.0) }
-  let tree = self.tree
-  if tree.last_w <= 0.0 {
-    return (n.flex.width, n.flex.height)
-  }
-  // (laid out as of the logic's moment, what follows the clock sampled there too, not at a frame's to be shown ahead
-  // of it; then the clock put back where it was drawn at: what follows it worked out there again as it is next brought,
-  // the frame's target kept)
-  let at = tree.now()
-  let shown = @signals.untracked(fn() { tree.clock.get() })
-  // (what the change under way set so far pulled into its properties, as a computed read in a batch is: nothing told,
-  // no structure or effect run before the change ends)
-  @signals.untracked(fn() {
-    tree.clock.set(at)
-    tree.pull()
-    tree.brought(at)
-  })
-  let size = (n.flex.width, n.flex.height)
-  if shown != at {
-    @signals.untracked(fn() { tree.clock.set(shown) })
-  }
-  size
+  // (laid out as of the logic's moment, what the change under way set so far counted, nothing of the logic run)
+  self.tree.laid_now()
+  (n.flex.width, n.flex.height)
 }
 
 ///|
@@ -1019,7 +1009,15 @@ pub fn View::shift(self : View, d : Live[(Double, Double)]) -> View {
 /// in): what the tree finds at a point passes over it, as of the moment of the press.
 pub fn View::presses(self : View, on : Live[Bool]) -> View {
   // (whether it takes input is the logic's: said at the moment it changes, as a structure's change is, a finger held on
-  // it or in it let go of then)
+  // it or in it let go of then; said anew, what was said before let go of, as any property's binding is)
+  guard self.live() is Some(n) else { return self }
+  match n.props.get(11) {
+    Some(stop) => {
+      n.props.remove(11)
+      stop()
+    }
+    None => ()
+  }
   let set = fn(on : Bool) {
     guard self.live() is Some(n) else { return }
     n.inert = !on
@@ -1029,7 +1027,11 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
   }
   match on {
     Is(v) => set(v)
-    By(f) => self.reacts(f, set)
+    By(f) =>
+      self.owning(fn() {
+        let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
+        n.props[11] = stop
+      })
   }
   self
 }
@@ -1105,8 +1107,57 @@ pub(all) struct Drag {
 /// any tracking. One let go meanwhile is told nothing more.
 pub fn View::on_drag(self : View, f : (Drag) -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
+  self.drag_ended()
+  // (said anew: a finger held on it now is the one before's, ended)
+  match self.tree.held {
+    Some(h) if h.at == self.at && h.gen == self.gen => self.tree.held = None
+    _ => ()
+  }
   n.on_drag = Some(f)
   self
+}
+
+///|
+/// Where in it a finger is taken, as of a moment (`f` given where in it, in its own terms, and the logic's moment as a
+/// finger comes: Tree::target_at): what it draws there then, the rest passed to what is under it as though it were not
+/// there. Of the same state what draws it is drawn by, worked out at that moment.
+pub fn View::takes(self : View, f : (Double, Double, Double) -> Bool) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.takes = Some(f)
+  self
+}
+
+///|
+/// What its on_drag set going ended (said anew, let go).
+fn View::drag_ended(self : View) -> Unit {
+  let n = self.tree.nodes[self.at]
+  match n.drag_end {
+    Some(end) => {
+      n.drag_end = None
+      end()
+    }
+    None => ()
+  }
+}
+
+///|
+/// A finger put down on node `id` to press it (Tree::target_at's Pressed): the hold its till let go (Tree::press_held:
+/// whether it still is), called off as any hold is (Tree::hold_lost_in), never handed to another.
+pub fn Tree::hold_press(self : Tree, id : NodeId) -> Unit {
+  self.held = Some(id)
+}
+
+///|
+/// Whether the hold is still node `id`'s (let go as it is asked: a press let go then is its only if so).
+pub fn Tree::press_held(self : Tree, id : NodeId) -> Bool {
+  let still = match self.held {
+    Some(h) => h == id
+    None => false
+  }
+  if still {
+    self.held = None
+  }
+  still
 }
 
 ///|
@@ -1154,7 +1205,7 @@ fn Tree::laid_now(self : Tree) -> Unit {
   @signals.untracked(fn() {
     self.clock.set(at)
     self.pull()
-    self.brought(at)
+    self.laid_out(at)
   })
   if shown != at {
     @signals.untracked(fn() { self.clock.set(shown) })
@@ -1217,8 +1268,9 @@ pub fn Tree::drag_at(self : Tree, id : NodeId, kind : DragIs, x : Double, y : Do
 /// What a finger held on a node comes to (View::gesture), worked out of its raw events (View::on_drag) alone, each at
 /// its own moment: pressed (as it goes down), a tap (let go where it went down, not held long: where it is let go), a
 /// hold (still where it went down for so long: at that moment, on the tree's timeline, whatever frames come), or a drag
-/// (moved past the slop: from there on its moves, from where it went down, and how it ends: let go, Up; called off,
-/// Off). Called off before it was a drag, `drag` is told so too (Off) where it was pressed.
+/// (moved past the slop: begun (Down) where the finger is then, its moves from there, and how it ends: let go, Up;
+/// called off, Off). Called off before it was a drag, or let go after a hold, `drag` is told so too. One word an event:
+/// what a word does (letting the node go, saying another on_drag) is done before the next event is told.
 pub fn View::gesture(
   self : View,
   slop : Double,
@@ -1227,17 +1279,32 @@ pub fn View::gesture(
   hold? : (Double, (Drag) -> Unit),
   drag? : (Drag) -> Unit,
 ) -> View {
-  // (what this finger has come to so far: where it went down, whether it moved past the slop, whether held)
+  // (what this finger has come to so far: where it went down, whether it moved past the slop, whether held; whether
+  // this gesture is over for good (its node's on_drag said anew, the node let go): nothing more told from it)
   let down : Ref[Drag?] = Ref(None)
   let moved = Ref(false)
   let held = Ref(false)
+  let dead = Ref(false)
   let cancel_hold : Ref[() -> Unit] = Ref(fn() {  })
   let over = fn() {
     (cancel_hold.val)()
     cancel_hold.val = fn() {  }
     down.val = None
   }
+  let id = self.id()
+  // (still this finger's to tell of: what a callback did (let its node go, said it takes no press, said another
+  // on_drag) ends the telling at once, in this very call)
+  let going = fn() {
+    !dead.val &&
+    (match self.tree.held {
+      Some(h) => h == id
+      None => false
+    })
+  }
   self.on_drag(fn(d) {
+    if dead.val {
+      return
+    }
     match d.kind {
       Down => {
         over()
@@ -1248,10 +1315,13 @@ pub fn View::gesture(
           Some(f) => f(d)
           None => ()
         }
+        if !going() {
+          return
+        }
         match hold {
           Some((ms, f)) =>
             cancel_hold.val = self.at_moment(d.at + ms, fn() {
-              if down.val is Some(o) && !moved.val {
+              if going() && down.val is Some(o) && !moved.val {
                 held.val = true
                 f({ ..o, at: d.at + ms })
               }
@@ -1262,17 +1332,17 @@ pub fn View::gesture(
       Moved =>
         match down.val {
           Some(o) => {
-            // (how far the finger itself went: the window's terms, whatever moved the node meanwhile)
+            // (past the slop: the drag begins where the finger is now, one word for this event: what that word does is
+            // done before the next is told)
             if !moved.val && ((d.wx - o.wx).abs() > slop || (d.wy - o.wy).abs() > slop) {
               moved.val = true
               (cancel_hold.val)()
               cancel_hold.val = fn() {  }
               match drag {
-                Some(f) => f({ ..o, at: d.at })
+                Some(f) => f({ ..d, kind: Down })
                 None => ()
               }
-            }
-            if moved.val {
+            } else if moved.val {
               match drag {
                 Some(f) => f(d)
                 None => ()
@@ -1284,28 +1354,28 @@ pub fn View::gesture(
       Up | Off => {
         let was = down.val
         // (let go past the slop with no move said before: a drag all the same, from where it went down)
-        let went = moved.val ||
-          (match was {
-            Some(o) if d.kind == Up && !held.val =>
-              if (d.wx - o.wx).abs() > slop || (d.wy - o.wy).abs() > slop {
-                match drag {
-                  Some(f) => f({ ..o, at: d.at })
-                  None => ()
-                }
-                true
-              } else {
-                false
-              }
-            _ => false
-          })
+        let far = match was {
+          Some(o) if d.kind == Up && !held.val && !moved.val =>
+            (d.wx - o.wx).abs() > slop || (d.wy - o.wy).abs() > slop
+          _ => false
+        }
+        let went = moved.val || far
         let was_held = held.val
         over()
         match was {
-          Some(_) if went =>
+          Some(o) if went => {
             match drag {
-              Some(f) => f(d)
+              Some(f) => {
+                if far {
+                  f({ ..o, at: d.at })
+                }
+                if !dead.val {
+                  f(d)
+                }
+              }
               None => ()
             }
+          }
           Some(_) if d.kind == Up && !was_held =>
             match tap {
               Some(f) => f(d)
@@ -1322,6 +1392,14 @@ pub fn View::gesture(
       }
     }
   })
+  |> ignore
+  // (said anew or let go: its hold's moment let go, nothing more told)
+  guard self.live() is Some(n) else { return self }
+  n.drag_end = Some(fn() {
+    dead.val = true
+    over()
+  })
+  self
 }
 
 ///|
@@ -1359,7 +1437,9 @@ fn View::let_go(self : View) -> Unit {
     f()
   }
   n.on_press = None
+  self.drag_ended()
   n.on_drag = None
+  n.takes = None
   // (held: let go of with it, nothing more told it, nothing of it handed to what is made in its place)
   match self.tree.held {
     Some(h) if h.at == self.at && h.gen == self.gen => self.tree.held = None
@@ -2063,10 +2143,17 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
 ///|
 /// What was marked done, at the clock's now (Tree::frame, Tree::bring_to).
 fn Tree::brought(self : Tree, upto : Double) -> Unit {
-  let w = self.last_w
-  let h = self.last_h
   // what is due by now done (and the logic at `upto`, nothing due or not: what is said next is of then)
   self.advance(upto)
+  self.laid_out(upto)
+}
+
+///|
+/// What was marked laid out and drawn at `upto`, the logic not moved: no moment's work done, nothing due run (for where
+/// things are as an event finds them in the middle of its change: Tree::laid_now).
+fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
+  let w = self.last_w
+  let h = self.last_h
   if !self.due {
     return
   }
@@ -2405,12 +2492,20 @@ pub(all) enum Target {
 /// What a press at (x, y) is for: the topmost node drawn there (by the order drawn, where the scene composed draws it:
 /// the same places as what is drawn) that is held (View::on_drag), does something when pressed or hosts the old view.
 pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
+  // (the logic's moment, what is where taken as of then: View::takes)
+  let at = self.now()
   let found : Array[Target] = []
   self.each_drawn(fn(c, cx, cy, _) {
     // (what is leaving or said to take no press, or held by what is, pressed no more)
     if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.pressless_at(c.id.at) {
       let n = self.nodes[c.id.at]
-      if n.on_drag is Some(_) {
+      let here = match n.takes {
+        Some(f) => @signals.untracked(fn() { f(x - cx, y - cy, at) })
+        None => true
+      }
+      if !here {
+        ()
+      } else if n.on_drag is Some(_) {
         found.push(Dragged(c.id))
       } else if n.on_press is Some(_) {
         found.push(Pressed(c.id))

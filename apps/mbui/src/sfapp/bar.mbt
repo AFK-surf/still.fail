@@ -1517,7 +1517,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     None => active_key
   }
   let k_now = m.k_now()
-  let clip_top = dmax(0.0, over + reach * (1.0 - m.o.x))
+  let clip_top = bar_glass_top(reach, m.o.x)
   let notch_r = (drop / 2.0 + notch_gap) * k_now
   let notch_y = -lift * k_now
   let idle = if t.dark { 0xD1D5DBFFL } else { 0x6B7280FFL }
@@ -1880,6 +1880,13 @@ fn bar_laid(told : BarTold) -> BarLaid {
 }
 
 ///|
+/// The top of the bar's glass in its panel with the panel `o` open (its rows' reach `reach` above the track): what is
+/// drawn of it and where a finger is taken by it, the same.
+fn bar_glass_top(reach : Double, o : Double) -> Double {
+  dmax(0.0, over + reach * (1.0 - o))
+}
+
+///|
 /// The notch as it is at `t`: as its place has it, closed as far as the panel is up (fully by half open).
 fn BarModel::k_at(self : BarModel, t : Double) -> Double {
   self.k.value_at(t) * (1.0 - dclamp(2.0 * self.o.value_at(t), 0.0, 1.0))
@@ -2132,6 +2139,14 @@ fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
           None => Some(0.0)
         }
       }))
+      // (a finger taken where the glass is drawn at its moment: under the panel's top as far open as it is then; above it,
+      // what is under the bar's)
+      .takes(fn(_x, y, at) {
+        match told() {
+          Some(t) => y >= bar_glass_top(bar_laid(t).reach, bar.o.value_at(at))
+          None => false
+        }
+      })
       .gesture(
         @ui.touch_slop(),
         press=fn(d) {
@@ -2178,6 +2193,8 @@ fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
               None => false
             }
           }))
+          // (taken only where the notch is drawn open at its moment: closing, the panel up, what is under it the panel's)
+          .takes(fn(_x, _y, at) { bar.k_at(at) > 0.9 })
           .on_press(fn() {
             match ws() {
               Some(w) =>
