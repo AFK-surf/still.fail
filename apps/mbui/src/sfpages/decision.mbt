@@ -81,7 +81,9 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     None => None
   }
   let thread = if here.view.offline || here.view.archived { None } else { here.view.thread }
-  c.box(style=decision_box, fn() {
+  // (what comes and goes under it, each room holding the room over it: closed, nothing of it is left, a gap between
+  // rooms none of which shows with them; decision_box's gap would stay till the last frame of a close, then go at once)
+  c.box(style=decision_rooms, fn() {
     under_post(
       c,
       "options/" + key,
@@ -139,7 +141,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         |> ignore
       },
     )
-    ask_dismiss(c, src, here, m.seq, m.asked, resolved, asking=open, asked_at=start_at)
+    ask_dismiss(c, src, here, m.seq, m.asked, resolved, asking=open, asked_at=start_at, lead=true)
     // (in their place once they close: in the same turn)
     let outcome = match m.decision {
       Some({ text: Some(words), .. }) if resolved && !open => Some(words)
@@ -409,6 +411,7 @@ fn ask_dismiss(
   asked_at? : Double? = None,
   at_end? : Bool = false,
   state? : Bool = false,
+  lead? : Bool = false,
 ) -> Unit {
   guard here.view.thread is Some(thread) && !here.view.offline && !here.view.archived else { return }
   if !asked && !resolved {
@@ -466,6 +469,7 @@ fn ask_dismiss(
     shown,
     exit=@motion.trans(fade=0.0, scale=archive_scale, ox=0.0, oy=0.0, spec=archive_tween),
     start_at?=at,
+    lead~,
     fn() {
       // (let go or answered on screen: faded where it is, its room kept till it is out of sight)
       let look = @motion.presence(c, "dismiss-live/" + k, live, enter=@motion.trans(fade=0.0, spec=archive_tween))
@@ -491,6 +495,12 @@ pub let dismissed : Map[String, Bool] = {}
 /// What is under a post (decision): 8 under its words, at the column's start.
 // kept across runs: a value (no field of it changes)
 let decision_box : @ui.Style = @ui.css("w=Full gap=S1_5 align=AStart")
+
+///|
+/// What comes and goes under a post with options (its options, 忽略, how it went): rooms with no gap of their own
+/// between them, the one that needs one holding it (under_post's `lead`).
+// kept across runs: a value (no field of it changes)
+let decision_rooms : @ui.Style = @ui.css("w=Full align=AStart")
 
 ///|
 /// The options (Decisions.css.ts options): 8 over them.

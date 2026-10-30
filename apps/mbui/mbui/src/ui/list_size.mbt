@@ -97,7 +97,9 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
     None => {
       let from = match cause {
         Comes(_) => 0.0
-        _ => if self.heights[k] >= 0.0 { self.heights[k] } else { natural }
+        // (as tall as it was last laid out, by its key: what is had by its place in the list may be another row's as
+        // the rows given change)
+        _ => self.shown_h.get(key).unwrap_or(natural)
       }
       // (off as its cause came, from its moment: laid out first a while on, it is where the way has it by then)
       let at = cause.at()
@@ -148,6 +150,21 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
     r.cause = cause
   }
   at_t(now, to)
+}
+
+///|
+/// Row `k` laid out `h` tall: so tall by its key, for a change of it from there (a list whose rows' heights move).
+fn ListState::row_shown(self : ListState, k : Int, h : Double) -> Unit {
+  match self.causes {
+    Some(c) if k < c.keys.length() => {
+      // (only the rows given now kept: what went from the list long since forgotten)
+      if self.shown_h.length() > 2 * c.keys.length() + 16 {
+        self.shown_h.clear()
+      }
+      self.shown_h[c.keys[k]] = h
+    }
+    _ => ()
+  }
 }
 
 ///|

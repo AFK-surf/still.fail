@@ -57,6 +57,7 @@ pub fn under_post(
   exit~ : @motion.Trans,
   close? : @motion.Spec = close_gap,
   start_at? : Double,
+  lead? : Bool = false,
   body : () -> Unit,
 ) -> Unit {
   let to = if shown { 1.0 } else { 0.0 }
@@ -93,7 +94,7 @@ pub fn under_post(
     @motion.log_frame(c, "under/" + key, "open=\{share} alpha=\{look.alpha} scale=\{look.sx}")
   }
   @motion.reveal(c, "under/" + key, share, fn() {
-    let i = c.box(style=under_room, body)
+    let i = c.box(style=if lead { under_room_lead } else { under_room }, body)
     c.look(i, look)
     @motion.leaving(c, i, shown)
   })
@@ -118,6 +119,12 @@ pub let options_scale : Double = 0.9
 /// What is under a post: the column's width.
 // kept across runs: a value (no field of it changes)
 let under_room : @ui.Style = @ui.css("w=Full")
+
+///|
+/// What is under a post with the gap over it in its room (`lead`): the gap opening and closing with it, not left
+/// till it is gone.
+// kept across runs: a value (no field of it changes)
+let under_room_lead : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 /// What the rooms under the posts keep put back as the app begins anew (sfbase's reset).
