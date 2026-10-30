@@ -18,6 +18,7 @@ import { topicDebug, topicKey, type ClientId, type CoreMessage, type RequestId, 
 import { laterSleep, type Runner } from "./runtime.ts";
 import { Kind, type Span, type Tracer } from "./trace.ts";
 import { readAfresh } from "./markdown.ts";
+import { spent, spentSince, timed } from "./spent.ts";
 import { equal, sharedValue } from "./util.ts";
 import { holds } from "./data.ts";
 
@@ -86,7 +87,7 @@ type Entry = {
   /// How its value goes out (output.ts).
   output?: Output;
   /// A page's first subscriber waiting for its first value (OPENED): its trace, and what the core spent making it.
-  opening?: { span: Span; workMs: number; computes: number; mdFrom: number };
+  opening?: { span: Span; workMs: number; computes: number; mdFrom: number; spentFrom: Record<string, number> };
   /// Its subscribers told it waits on a station (Source.waits), while it has no value.
   waiting?: boolean;
 };
@@ -179,7 +180,7 @@ export class Store {
         const span = this.#tracer.root(`${topic.topic}.open`, Kind.Internal);
         // (made anew, or kept from a page shown a moment ago and let go: its view made again either way)
         span.set("stillfail.anew", started);
-        entry.opening = { span, workMs: 0, computes: 0, mdFrom: readAfresh.chars };
+        entry.opening = { span, workMs: 0, computes: 0, mdFrom: readAfresh.chars, spentFrom: { ...spent } };
       }
     }
     if (started) this.#start(topic);
@@ -373,6 +374,7 @@ export class Store {
     const pending = this.#pending;
     this.#pending = [];
     const t0 = this.host.monotonicMs();
+    const spentFrom = this.#tracer !== null ? { ...spent } : null;
     let slowest = "";
     let slowestMs = 0;
     for (const topic of pending) {
@@ -391,6 +393,7 @@ export class Store {
       span.set("stillfail.topics", pending.length);
       span.set("stillfail.slowest", slowest);
       span.set("stillfail.slowest_ms", Math.round(slowestMs));
+      for (const [part, ms] of spentFrom ? spentSince(spentFrom) : []) span.set(`stillfail.ms.${part}`, Math.round(ms));
       span.end();
     }
   }
@@ -462,7 +465,9 @@ export class Store {
     if ("ok" in value) {
       // What is decorated is a copy (output.ts): not what is kept.
       now.output ??= new Output();
-      const out = now.output.shape(topic, value.ok, c, this.#shaped);
+      const output = now.output;
+      const ok = value.ok;
+      const out = timed(`${topic.topic}.shape`, () => output.shape(topic, ok, c, this.#shaped));
       value = "ok" in out ? { ok: out.ok } : { err: new CoreError("shape", t("core-misc.shape", { topic: topicDebug(topic), at: out.error })) };
     }
     // What goes out: to a subscriber taking keyed ops, its lists changed item by item; to the others, the old ops.
@@ -491,6 +496,8 @@ export class Store {
       span.set("stillfail.computes", now.opening.computes + 1);
       // (Markdown read afresh meanwhile, by it or by whatever else the core did: words not kept here nor on the device)
       span.set("stillfail.md_chars", readAfresh.chars - now.opening.mdFrom);
+      // where the core's time went meanwhile, by part (spent.ts): this chat's making and whatever else ran
+      for (const [part, ms] of spentSince(now.opening.spentFrom)) span.set(`stillfail.ms.${part}`, Math.round(ms));
       if ("err" in value) span.fail();
       span.end();
       now.opening = undefined;

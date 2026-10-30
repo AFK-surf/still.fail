@@ -25,6 +25,7 @@ import { type Link, MEMORY, OUTFLOW, filePeekKey, linkPreviewKey, logKey } from 
 import { grantsShown } from "./outflow.ts";
 import * as logins from "./machine-logins.ts";
 import { laterSleep } from "../runtime.ts";
+import { timed } from "../spent.ts";
 import * as looks from "../looks.ts";
 
 /// A chat shows a window of its thread's entries: at most this many of what it shows (shownTo).
@@ -296,7 +297,7 @@ export class StationTopics implements Owner {
       }
       case "thread":
         if (error) return { err: error };
-        return this.#thread(topic);
+        return timed("thread.make", () => this.#thread(topic));
       case "letters":
         if (error) return { err: error };
         return this.#letters(topic);
