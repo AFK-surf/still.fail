@@ -72,11 +72,11 @@ test("a phone asked for in a chat: a card to the person its agent works for, gra
   assert.match(w.told.at(-1)!, /granted \(for an hour\)/);
   // That chat's alone: another chat holds nothing, and asks for its own.
   assert.equal(w.grants.held("s1").length, 1);
-  assert.equal(w.grants.held("s2").length);
+  assert.equal(w.grants.held("s2").length, 0);
   assert.equal((await w.grants.ask("s1", "more")).id, "p1");
   // Its hour over, it ends; the agent is told.
   w.pass(3600_000);
-  assert.equal(w.grants.held("s1").length);
+  assert.equal(w.grants.held("s1").length, 0);
   assert.equal(w.grants.get("p1")!.status, "ended");
   assert.match(w.told.at(-1)!, /ended \(授权已到期\)/);
 });

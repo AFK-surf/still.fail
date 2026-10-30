@@ -92,7 +92,7 @@ function harness(lock: () => ReturnType<typeof world>["state"] | null, starter =
 /// What the agent was told of request `asked` once decided: secret_save answers at once that it waits, and the decision
 /// comes to the session as a notice.
 const decided = async (h: { notified: [string, string][] }, asked: Promise<string>) => {
-  assert.match(await decided(h, asked), /You are told in this session when it is decided/);
+  assert.match(await asked, /You are told in this session when it is decided/);
   const [session, text] = h.notified.at(-1)!;
   assert.equal(session, "s1");
   return text;
