@@ -866,11 +866,15 @@ pub fn Ctx::rich(
       on_link(r.link)
     }
   }
-  // a link right clicked (a pointer's secondary button: a desktop's long press) told as held, at once
+  // a link right clicked (a pointer's secondary button: a desktop's long press) told as held, at once; its menu the
+  // link's alone, as the innermost asker's (Ctx::menu_asked): what it lies in offers none of its own with it
   match on_link_hold {
     Some(f) =>
       for k, r in runs {
         let id = link_id(base, runs, k)
+        if r.link != "" {
+          self.mark_id(id, mark_asks)
+        }
         match (r.link, self.right_clicked(id)) {
           ("", _) | (_, None) => ()
           (link, Some((x, y))) => {
