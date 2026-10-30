@@ -312,3 +312,34 @@ test "bar: the panel drawn up and open, a finger down on the page above it: the 
   t.run_for(@ui.move_most_ms)
   assert_eq((bar.mode.get(), app.nav.depth()), (false, 1))
 }
+
+///|
+/// The bar's panel drawn up and open, then a finger down on the page above it at `t1`, told `late` after it came, frames
+/// drawn at each of `frames` after it, let go at 50: whether the panel was closed as the finger came down, before any
+/// frame; where it is at 120 and where it goes; whether it is open; how deep the page's stack is.
+fn bar_caught(frames : Array[Double], late : Double) -> (Bool, Double, Double, Bool, Int) {
+  let (t, _) = bar_at_rest()
+  let (xs, y) = bar_places_at()
+  t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
+  t.run_for(bar.o.end() - t.time())
+  let t1 = t.time() + 10.0
+  t.advance(10.0 + late)
+  t.touch_at(0, 100.0, 200.0, t1)
+  let shut = !bar.mode.get()
+  for f in frames {
+    t.frame_at(t1 + f)
+  }
+  t.advance(t1 + 50.0 - t.time())
+  t.touch_at(2, 100.0, 200.0, t1 + 50.0)
+  t.frame_at(t1 + 400.0)
+  (shut, bar.o.value_at(t1 + 120.0), bar.o.to, bar.mode.get(), app.nav.depth())
+}
+
+///|
+test "bar: the panel open, a finger down on the page above it: closed at the finger's moment, before any frame, the same whichever frames came or however late it was told; the page taking nothing" {
+  let none = bar_caught([], 0.0)
+  let each = bar_caught([5.0, 15.0, 25.0, 35.0, 45.0], 0.0)
+  let late = bar_caught([40.0], 30.0)
+  assert_eq((each, late), (none, none))
+  assert_eq((none.0, none.2, none.3, none.4), (true, 0.0, false, 1))
+}

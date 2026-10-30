@@ -267,7 +267,7 @@ test "a finger still while what it is on moves: no drag; let go far from where i
   pad.set(0.0)
   t.drag_at(id, Down, 10.0, 10.0, 40.0) |> ignore
   t.drag_at(id, Up, 300.0, 300.0, 50.0) |> ignore
-  assert_eq((still, said), (["tap"], ["drag Down", "drag Up"]))
+  assert_eq((still, said), (["tap"], ["drag Up"]))
 }
 
 ///|
@@ -469,4 +469,118 @@ test "a gesture ended mid-call (its node let go by what it told, its on_drag sai
   node.val.unwrap().on_drag(fn(_) { said.push("new") }) |> ignore
   t.frame(390.0, 844.0, now=300.0) |> ignore
   assert_eq((gone, said), (["Down"], []))
+}
+
+///|
+/// A box whose finger's drag words are said in `said` (with where the finger went down), the first word of each
+/// gesture saying it takes no press (`how`: "presses") or letting it go ("gone").
+fn far_up(how : String) -> Array[String] {
+  let there = @signals.signal(true, same=fn(x, y) { x == y })
+  let takes = @signals.signal(true, same=fn(x, y) { x == y })
+  let said : Array[String] = []
+  let t = @view.Tree::new(
+    fn(root) {
+      root.show(fn() { there.get() }, fn(v) {
+        v.box(fn(b) {
+          b
+          .width(Is(Some(100.0)))
+          .height(Is(Some(100.0)))
+          .presses(By(fn() { takes.get() }))
+          .gesture(6.0, tap=fn(_) { said.push("tap") }, drag=fn(d) {
+            said.push("\{d.kind} \{d.x},\{d.y} from \{d.ox},\{d.oy} at \{d.at}")
+            if how == "presses" {
+              takes.set(false)
+            } else {
+              there.set(false)
+            }
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let id = gesture_id(t)
+  t.drag_at(id, Down, 10.0, 10.0, 10.0) |> ignore
+  t.drag_at(id, Up, 40.0, 10.0, 30.0) |> ignore
+  said
+}
+
+///|
+test "let go past the slop with no move told: one word, its end, where it went down said with it; what that word does ends it there" {
+  let end = ["Up 40,10 from 10,10 at 30"]
+  assert_eq((far_up("presses"), far_up("gone")), (end, end))
+}
+
+///|
+test "a drag's words each say where the finger went down" {
+  let said = []
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(b) {
+        b
+        .width(Is(Some(100.0)))
+        .height(Is(Some(100.0)))
+        .gesture(6.0, drag=fn(d) { said.push("\{d.kind} \{d.x} from \{d.ox},\{d.oy}") })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let id = gesture_id(t)
+  t.drag_at(id, Down, 10.0, 20.0, 10.0) |> ignore
+  t.drag_at(id, Moved, 30.0, 20.0, 20.0) |> ignore
+  t.drag_at(id, Moved, 50.0, 20.0, 30.0) |> ignore
+  t.drag_at(id, Up, 60.0, 20.0, 40.0) |> ignore
+  assert_eq(said, ["Down 30 from 10,20", "Moved 50 from 10,20", "Up 60 from 10,20"])
+}
+
+///|
+test "a node that stays: its gestures pressed and let go again and again, its timed work come or called off: what it owns back to what it was" {
+  let node : Ref[@view.View?] = Ref(None)
+  let said : Array[String] = []
+  let t = @view.Tree::new(
+    fn(root) {
+      node.val = Some(
+        root.box(fn(b) {
+          b
+          .width(Is(Some(100.0)))
+          .height(Is(Some(100.0)))
+          .gesture(6.0, tap=fn(_) { said.push("tap") }, hold=(100.0, fn(_) { said.push("hold") }), drag=fn(_) {  })
+          |> ignore
+        }),
+      )
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let v = node.val.unwrap()
+  let base = v.owned_count()
+  let id = gesture_id(t)
+  let mut at = 10.0
+  for _ in 0..<5 {
+    // (let go before its hold: the hold's moment called off)
+    t.drag_at(id, Down, 10.0, 10.0, at) |> ignore
+    t.drag_at(id, Up, 10.0, 10.0, at + 10.0) |> ignore
+    // (held past it: come)
+    t.drag_at(id, Down, 10.0, 10.0, at + 20.0) |> ignore
+    t.frame(390.0, 844.0, now=at + 200.0) |> ignore
+    t.drag_at(id, Up, 10.0, 10.0, at + 210.0) |> ignore
+    // (a moment come, one called off, steps run out and steps stopped)
+    v.at_moment(at + 220.0, fn() { said.push("come") }) |> ignore
+    let off = v.at_moment(at + 230.0, fn() { said.push("never") })
+    off()
+    off()
+    v.steps(100, 2, fn(_, _) {  }) |> ignore
+    let stop = v.steps(100, 5, fn(_, _) {  })
+    t.frame(390.0, 844.0, now=at + 250.0) |> ignore
+    stop()
+    stop()
+    at = at + 300.0
+  }
+  assert_eq((v.owned_count(), said.length(), said.contains("never")), (base, 15, false))
 }

@@ -2101,8 +2101,9 @@ priv enum BarFingerIs {
 /// place under it (the bar's way before: held, the lens; let go, a place as any tap).
 fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
   let told = fn() { bar_told_now.get() }
-  // (whether this finger moved past the slop: let go after a hold without, a tap)
-  let dragged = Ref(false)
+  // (whether this finger was held: let go after a hold without moving past the slop, a tap; let go past it with no move
+  // told, a drag's end)
+  let held = Ref(false)
   let finger = fn(how : BarFingerIs) {
     fn(d : @view.Drag) {
       match ws() {
@@ -2161,19 +2162,22 @@ fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
       .gesture(
         @ui.touch_slop(),
         press=fn(d) {
-          dragged.val = false
+          held.val = false
           (finger(Pressed))(d)
         },
         tap=finger(Tapped),
-        hold=(bar_hold_ms, finger(Held)),
+        hold=(bar_hold_ms, fn(d) {
+          held.val = true
+          (finger(Held))(d)
+        }),
         drag=fn(d) {
           match d.kind {
             Down | Moved => {
-              dragged.val = true
+              held.val = false
               (finger(Dragging))(d)
             }
             // (held still and let go without moving: a tap, as before)
-            Up if !dragged.val => (finger(Tapped))(d)
+            Up if held.val => (finger(Tapped))(d)
             _ => (finger(Ended))(d)
           }
         },
