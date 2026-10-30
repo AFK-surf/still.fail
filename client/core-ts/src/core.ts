@@ -189,7 +189,7 @@ export class Core {
       inner.provider = yield* (options.account ?? stillfailAccountProvider)({ host: inner.host, tracer: inner.tracer, status: inner.status });
       inner.accounts = inner.provider.accounts;
       inner.workspaces = new Workspaces(inner.host, inner.runner, inner.waited);
-      inner.store = new Store(inner.host, inner.runner);
+      inner.store = new Store(inner.host, inner.runner, inner.tracer);
       const store = inner.store;
       // Each signed-in account's database, opened before any network: the first view is answered from it.
       inner.data = new Data(inner.host, inner.runner, {
