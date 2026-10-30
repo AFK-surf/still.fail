@@ -58,13 +58,11 @@ pub fn button(
   let id = c.id(if key == "" { "sf-btn/" + label } else { key })
   let live = !disabled && !busy
   let h = ease_to(c, "sf-btn-h/\{id}", live && (c.lit(id) || c.pressed(id)))
-  // (turning and greyed as a control answers: over dur_ms, never at once; turning, its size the same. With an icon, the
-  // spinner in its place, the icon fading out under it as it fades in; with none, the spinner before its words, the
-  // two moved over within its width as one (the words keep their place in it, a little nearer its ends: they are
-  // what it does, said on as it does it), on the curve a thing moved is, as the spinner fades in. At work is not
-  // greyed: it is the button pressed, at full strength, its spinner what to look at (2026-10-31 the user:
-  // 从不带 loading 到带 loading……感觉有点不对, 能不能不换掉字, 在宽度不变的情况下，加个 loading 并且字挤开一点; it
-  // faded to 0.7 as the web's aria-busy does, its icon swapped at once, its words faded out under the spinner).)
+  // (turning and greyed as a control answers: over dur_ms, never at once. With an icon, the spinner in its place, the
+  // icon fading out under it as it fades in, nothing moved; with none, the spinner coming in before its words, which
+  // stay: they are what it does, said on as it does it. At work is not greyed: it is the button pressed, at full
+  // strength, its spinner what to look at (2026-10-31 the user: 从不带 loading 到带 loading……感觉有点不对, 能不能不换掉字;
+  // it faded to 0.7 as the web's aria-busy does, its icon swapped at once, its words faded out under the spinner).)
   let turning = ease_to(c, "sf-btn-busy/\{id}", busy)
   let seen = @motion.animate(
     c,
@@ -174,26 +172,23 @@ pub fn button(
         words_at = words
       }
       if icon == "" {
-        // (its words moved over by half the spinner's room, laid out as the words alone, so the button's width and all
-        // beside it stay; the spinner where it will stand from the first, growing from its middle as they make room for
-        // it: never out of the ground, never over the words)
+        // (the spinner's room opening before its words, the button wider by it as its ends keep their room, on the
+        // curve a thing reshaped is moved by, all beside it moved along; the spinner growing from its start as the room
+        // opens: never out of the ground, never over the words. Kept as wide, its ends came to 4, 2026-10-31 the user:
+        // 太贴边了.)
         let over = @motion.animate(c, "sf-btn-over/\{id}", if busy { 1.0 } else { 0.0 }, spec=button_reshape)
         let room = button_icon + gap
-        let both = c.box(dir=Row, align=ACenter, fn() {
+        c.box(dir=Row, align=ACenter, fn() {
           if busy || over > 0.0 {
-            // (none of the row's width: the spinner hangs before the words, its gap after it)
-            c.box(w=Px(0.0), h=Px(button_icon), dir=Row, justify=JEnd, fn() {
-              let s = c.box(w=Px(room), h=Px(button_icon), dir=Row, fn() { turn() })
-              c.look(
-                s,
-                @ui.look(alpha=turning, dx=room / 2.0 * (1.0 - over), scale=over, ox=button_icon / 2.0 / room),
-              )
+            c.box(w=Px(room * over), h=Px(button_icon), dir=Row, fn() {
+              let s = c.box(w=Px(button_icon), h=Px(button_icon), fn() { turn() })
+              c.look(s, @ui.look(alpha=turning, scale=over, ox=0.0))
             })
             |> ignore
           }
           words_in()
         })
-        c.look(both, @ui.look(dx=room / 2.0 * over))
+        |> ignore
       } else {
         words_in()
       }
