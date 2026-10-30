@@ -11,6 +11,9 @@ on:
     paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-ci.yml", ".github/actions/mbui-moonbit/**"]
   pull_request:
     paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-ci.yml", ".github/actions/mbui-moonbit/**"]
+  # (android-streams-real's day, below)
+  schedule:
+    - cron: "41 3 * * *"
   workflow_dispatch:
 
 
@@ -222,8 +225,12 @@ jobs:
       - name: "Started on Android 11 (scripts/android-launch.sh: its first frame, or its crash)"
         run: bash scripts/android-launch.sh
 
-  # MediaCodec is diagnostic, and must not consume the contract job's time budget.
+  # MediaCodec is diagnostic, and must not consume the contract job's time budget. Once a day (and asked for), not each
+  # push: it gates nothing, and its emulator and image were 1.1 GB of the Actions cache's downloads each push of mbui,
+  # some 9.4 GB a commit of main all told, when GitHub stopped the account's ("Egress is over the account limit",
+  # 2026-10-30, 41065605804)
   android-streams-real:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     defaults:
       run:
         working-directory: apps/mbui/mbui
