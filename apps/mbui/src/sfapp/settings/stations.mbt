@@ -69,7 +69,14 @@ fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       }
     }
     blocks.push(fn() { gap(c, 30.0) })
-    scroll_page(c, "stations", blocks)
+    // (each block by what it is: a station by its id, so one joining or leaving comes and goes where it is)
+    let keys = match list {
+      Some(a) if a.length() > 0 => a.mapi(fn(i, st) { "st/" + (match opt_text(Some(st), "station") { Some(id) => id; None => i.to_string() }) })
+      Some(_) => ["first"]
+      None => ["waiting"]
+    }
+    keys.push("foot")
+    scroll_page(c, "stations", blocks, keys~)
   })
 }
 
