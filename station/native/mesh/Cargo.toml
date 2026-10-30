@@ -51,8 +51,8 @@ napi-build = "2"
 swarm-discovery = { path = "../../../vendor/swarm-discovery" }
 iroh-mdns-address-lookup = { path = "../../../vendor/iroh-mdns-address-lookup" }
 noq-udp = { path = "../../../vendor/noq-udp" }
-iroh = { git = "https://github.com/zzj3720/iroh", rev = "a091b3326b7859ea0338240f57896f7b93406079" }
-iroh-relay = { git = "https://github.com/zzj3720/iroh", rev = "a091b3326b7859ea0338240f57896f7b93406079" }
+iroh = { git = "https://github.com/zzj3720/iroh", rev = "5c48fdf8a84062bd1ba322d4e363e64e7aae0613" }
+iroh-relay = { git = "https://github.com/zzj3720/iroh", rev = "5c48fdf8a84062bd1ba322d4e363e64e7aae0613" }
 
 [profile.release]
 strip = true
