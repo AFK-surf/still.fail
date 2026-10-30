@@ -170,7 +170,7 @@ test "a chat's link of another workspace: that workspace in view, the chat over 
   let calls : Array[Made] = []
   let t = links_core(calls, "chat")
   open_link("https://app.still.fail/w/ws2/s/st9/chats/s-x")
-  assert_eq(app.picked, "ws2")
+  assert_eq(app.picked.get(), "ws2")
   let set = named(calls, "prefs.set")
   assert_true(set.length() > 0 && text(Some(set[set.length() - 1].params), "workspace") == "ws2")
   let pages = app.nav.pages()
@@ -297,7 +297,7 @@ test "an invitation's link: what it leads to, then joined as the account (Invite
   assert_eq(text(Some(read[0].params), "account"), "u1")
   t.tap_text("以 lin@example.com 加入")
   assert_eq(named(calls, "invitation.accept").length(), 1)
-  assert_eq(app.picked, "ws3")
+  assert_eq(app.picked.get(), "ws3")
   assert_true(t.find("已加入「新的工作室」") is Some(_))
 }
 

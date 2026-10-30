@@ -215,11 +215,11 @@ pub fn workspace_in_view(src : Source) -> (Workspace?, Array[Workspace], Bool, B
   let prefs = (src.topic)("prefs", {})
   let (all, answered, invited) = workspaces_of(ws.value)
   // (the first before the prefs are read, the one last open once they are: a workspace shown, then another)
-  if app.picked == "" && prefs.value is None && prefs.error is None {
+  if app.picked.get() == "" && prefs.value is None && prefs.error is None {
     return (None, all, answered, invited)
   }
-  let kept = if app.picked != "" {
-    app.picked
+  let kept = if app.picked.get() != "" {
+    app.picked.get()
   } else {
     text(prefs.value, "workspace")
   }

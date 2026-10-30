@@ -65,9 +65,9 @@ pub(all) struct ScreenAt {
 pub(all) struct App {
   mut nav : @ui.Nav[Page]
   /// the workspace switched to here, before the core's prefs say it
-  mut picked : String
+  picked : @signals.Signal[String]
   /// the list's filter chosen here, by workspace, before the prefs say it
-  filters : Map[String, String]
+  filters : @sf.LiveMap[String, String]
   /// the filter's menu open
   mut menu : Bool
   /// a place switched to on the bar: from which side (1 from the right, -1 the left, 0 from no side)
@@ -86,8 +86,8 @@ pub(all) struct App {
 ///|
 pub let app : App = {
   nav: new_nav(),
-  picked: "",
-  filters: {},
+  picked: @signals.signal("", same=fn(a, b) { a == b }),
+  filters: @sf.LiveMap::new(),
   menu: false,
   switch_way: 0,
   held: 0,
@@ -103,12 +103,18 @@ pub let app : App = {
 pub let left_pages : Array[Page] = []
 
 ///|
+/// Told as a page is left (left_pages): what tells where it was left (the frame's pages-left) built again for it.
+// kept across runs: only counts on
+pub let left_said : @signals.Signal[Int] = @signals.signal(0)
+
+///|
 pub fn new_nav() -> @ui.Nav[Page] {
   // settings are to the left of the list, as the gear is at its top left: they come in from the left and go back
   // that way (App.kt transition, swipe)
   // what its own back comes to, back's in the history (app_history.mbt went_back)
   @ui.Nav::new(Home, from_left=fn(p) { p is Settings }, went_back~, on_leave=fn(p) {
     left_pages.push(p)
+    left_said.set(@signals.untracked(fn() { left_said.get() }) + 1)
     match p {
       Setting(r) => @settings.left(r)
       Archived => @settings.left(@settings.Route::Archive)
@@ -213,7 +219,7 @@ pub fn reset() -> Unit {
   app.nav = new_nav()
   // where it has been (app_history.mbt)
   history_reset()
-  app.picked = ""
+  app.picked.set("")
   @ui.set_motion_chosen(None)
   app.filters.clear()
   app.menu = false
@@ -345,7 +351,7 @@ pub fn back_label(p : Page) -> String {
 /// of its list or is gone from it (a profile's other stations, a profile deleted); the shell shows it (src/sfdesk
 /// places.mbt place_route). Each workspace keeps its own: one picked in another is none of this one's list.
 // kept across runs: said by a row or a page; the shell's places_reset empties it
-pub let place_pick : Map[String, @settings.Route] = {}
+pub let place_pick : @sf.LiveMap[String, @settings.Route] = @sf.LiveMap::new()
 
 ///|
 /// `place_pick`'s key for `place` in the workspace `ws`.

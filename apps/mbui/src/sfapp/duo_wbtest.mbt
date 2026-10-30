@@ -553,7 +553,7 @@ test "an iPhone Duo: switching workspace from an open chat never restores the ol
   assert_true(app.nav.top() is Chat(r) && r.station == "ws1/st1")
   t.post(@hostapi.system_channel, "{\"nav\":\"ws/ws2\"}")
   t.run_for(@ui.move_most_ms)
-  assert_eq(app.picked, "ws2")
+  assert_eq(app.picked.get(), "ws2")
   assert_true(app.nav.top() == NewChat, msg="the new workspace has no last chat")
 }
 

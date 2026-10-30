@@ -948,7 +948,16 @@ pub fn frame(
           if top > 0.0 {
             c.box(style=@ui.style(h=Fixed(top)), fn() {  }) |> ignore
           }
-          page_in(page_h)
+          // (an island, as the tape's page is: built from its key and what it reads, whatever else of the frame is
+          // built anew; docs/retained.md, the way there's 3)
+          let t = @sf.theme()
+          c.kept_part(
+            c.id("page/kept/wide"),
+            "\{main_w} \{page_h} \{gated} \{inset} \{finger} \{aside} \{w.id} \{t.p.bg} \{t.dark}",
+            fn() { page_in(page_h) },
+            read_out=true,
+            own=true,
+          )
         })
         // (what moves in the page of its own takes its place from the page's foot: a keyboard, the sidebar moving the
         // page aside, move none of it)

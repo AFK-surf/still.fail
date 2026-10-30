@@ -229,13 +229,13 @@ test "wide: a sidebar's width the person's, the same in another workspace; folde
   // the second: open, 300 wide
   t.key(@ui.key_of_char('2'), mods=@ui.mod_ctrl)
   t.run_for(@ui.move_most_ms)
-  assert_eq(app.picked, "ws2")
+  assert_eq(app.picked.get(), "ws2")
   assert_false(@sfdesk.wide.folded)
   assert_eq(@sfdesk.wide.side_w, 300.0)
   // back in the first: folded as it was left, 300 wide
   t.key(@ui.key_of_char('1'), mods=@ui.mod_ctrl)
   t.run_for(@ui.move_most_ms)
-  assert_eq(app.picked, "ws1")
+  assert_eq(app.picked.get(), "ws1")
   assert_true(@sfdesk.wide.folded)
   assert_eq(@sfdesk.wide.side_w, 300.0)
 }
@@ -246,7 +246,7 @@ test "wide: ⌃2 goes to the second workspace (prefs.set workspace)" {
   let t = wide_tester(calls)
   t.key(@ui.key_of_char('2'), mods=@ui.mod_ctrl)
   t.frame()
-  assert_eq(app.picked, "ws2")
+  assert_eq(app.picked.get(), "ws2")
   assert_true(named(calls, "prefs.set").iter().any(fn(m) { text(Some(m.params), "workspace") == "ws2" }))
 }
 
