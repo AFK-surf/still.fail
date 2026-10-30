@@ -6,6 +6,9 @@
 # (scripts/ios-core.sh). ENV="K=V;K2=V2" gives `run` the app's environment; its log is out/ios/app.log.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
+# Match mbui's explicit iOS 17.0 link target for Rust and cc-rs native dependencies too.
+# Otherwise the installed SDK's default can produce dependencies requiring a newer iOS.
+export IPHONEOS_DEPLOYMENT_TARGET=17.0
 export APP=${APP:-stillfail}
 export MBUI_IOS_PLIST=$A/ios/Info.plist
 export MBUI_IOS_ID=${MBUI_IOS_ID:-fail.still.mbui.debug}

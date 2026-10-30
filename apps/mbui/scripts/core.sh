@@ -47,13 +47,21 @@ have_deps() {
 shell() {
   local target=${1:-aarch64-apple-darwin}
   local t0=$(now)
+  case $target in *-apple-ios*)
+    # The native.ts route already keys its iOS 17 floor. Keep a source-built fallback's dependencies
+    # separate too: cc-rs caches (notably blake3) may not notice a changed deployment environment.
+    export IPHONEOS_DEPLOYMENT_TARGET=17.0
+    local CARGO_TARGET_DIR="${CARGO_TARGET_DIR}-ios17"
+    export CARGO_TARGET_DIR
+    ;;
+  esac
   (cd $EMBER/client/shell && cargo rustc --release --lib --crate-type staticlib --target $target \
-      -- --print native-static-libs 2> >(tee $OUT/shell-$target.log >&2))
+      -- --print native-static-libs 2> >(tee $OUT/shell-$target.log >&2)) || return 1
   # (rustc prints it only when it builds: a fresh build keeps the last one)
   local libs=$(grep -o 'native-static-libs: .*' $OUT/shell-$target.log | tail -1 | sed 's/native-static-libs: //')
   [ -n "$libs" ] && echo "$libs" > $OUT/shell-$target.libs
-  mkdir -p $OUT/$target
-  cp $CARGO_TARGET_DIR/$target/release/libstillfail_shell.a $OUT/$target/
+  mkdir -p $OUT/$target || return 1
+  cp $CARGO_TARGET_DIR/$target/release/libstillfail_shell.a $OUT/$target/ || return 1
   echo "shell $target in $(since $t0) s: $(stat -f %z $OUT/$target/libstillfail_shell.a) bytes; links: $(libs $target)"
 }
 

@@ -1,0 +1,145 @@
+# still.fail mbui's iOS app (fail.still.mbui and its Share extension) to TestFlight's internal group: on main, each push
+# that changes what it is built from, or by hand. Built as mbui.yml's ios job builds it (its caches, restored only),
+# signed with the shared GitHub CI Apple Distribution identity and mbui-specific profiles, uploaded with its own App
+# Store Connect key. Version 0.1.<main's commits>, as every still.fail app's: a build App Store Connect already has is
+# not built again, so a rerun never uploads twice. The group takes each build once Apple has processed it (its
+# automatic distribution): no job waits for Apple, and each takes 10 minutes at most. Setup: docs/ios-testflight.md.
+name: mbui independent TestFlight
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/mbui/**"
+      - "client/**"
+      - "media/**"
+      - "vendor/**"
+      - "scripts/native.ts"
+      - ".github/workflows/mbui-independent-testflight.yml"
+      - ".github/actions/setup/**"
+      - ".github/actions/mbui-moonbit/**"
+  workflow_dispatch:
+permissions:
+  contents: read
+# One at a time; a push meanwhile waits as one run of the newest.
+concurrency:
+  group: mbui-testflight-6826455869
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main'
+    runs-on: xcode-27
+    environment: ios-testflight
+    timeout-minutes: 10
+    outputs:
+      skip: ${{ steps.prepare.outputs.skip }}
+      build: ${{ steps.prepare.outputs.build }}
+    env:
+      MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
+      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - name: Release directories
+        run: |
+          echo "MBUI_RELEASE_PRIVATE=$RUNNER_TEMP/mbui-testflight-private" >> "$GITHUB_ENV"
+          echo "MBUI_RELEASE_SAFE=$RUNNER_TEMP/mbui-testflight-artifacts" >> "$GITHUB_ENV"
+      - name: iOS's SDK 27.1 or later
+        run: |
+          v=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "iOS SDK $v ($(xcodebuild -version | head -1))"
+          case "$v" in 2[0-6].*|27.0*) echo "::error::iOS SDK $v: an iPhone Duo letterboxes an app built before 27.1"; exit 1 ;; esac
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0, filter: "blob:none" } # (the build's number: the commits in the history)
+      # (the credentials checked, the build's number, and the signing identity in a keychain of the run's own)
+      - name: Signing identity and the build's number
+        id: prepare
+        env:
+          MBUI_TESTFLIGHT_GROUP_ID: ${{ vars.MBUI_TESTFLIGHT_GROUP_ID }}
+          MBUI_IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_B64 }}
+          MBUI_IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          MBUI_IOS_APP_PROFILE_BASE64: ${{ secrets.MBUI_IOS_APP_PROFILE_BASE64 }}
+          MBUI_IOS_SHARE_PROFILE_BASE64: ${{ secrets.MBUI_IOS_SHARE_PROFILE_BASE64 }}
+          MBUI_ASC_KEY_ID: ${{ secrets.MBUI_ASC_KEY_ID }}
+          MBUI_ASC_ISSUER_ID: ${{ secrets.MBUI_ASC_ISSUER_ID }}
+          MBUI_ASC_PRIVATE_KEY_BASE64: ${{ secrets.MBUI_ASC_PRIVATE_KEY_BASE64 }}
+        run: |
+          umask 077
+          ruby apps/mbui/scripts/ios-testflight.rb prepare
+      # (as mbui.yml's ios job; restored only: that job saves them)
+      - if: steps.prepare.outputs.skip != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: mbui-ios-${{ github.sha }}
+          restore-keys: mbui-ios-
+      - id: hermes
+        if: steps.prepare.outputs.skip != 'true'
+        run: echo "key=$(grep -E '^HERMES_(RN|APPLE_URL|APPLE_SHA256)=' apps/mbui/scripts/core.sh | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
+      - if: steps.prepare.outputs.skip != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/Library/Caches/stillfail-build
+            apps/mbui/out/core/hermesc
+          key: mbui-hermes-apple-${{ steps.hermes.outputs.key }}
+      - id: core
+        if: steps.prepare.outputs.skip != 'true'
+        run: if bash apps/mbui/scripts/core.sh hermes-kept apple; then echo "kept=true" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.prepare.outputs.skip != 'true'
+        uses: ./.github/actions/setup
+        with: { pnpm: "${{ steps.core.outputs.kept != 'true' }}" }
+      - if: steps.prepare.outputs.skip != 'true'
+        uses: ./.github/actions/mbui-moonbit
+      - name: The iOS app for a device
+        if: steps.prepare.outputs.skip != 'true'
+        run: APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui EMBER=$PWD bash apps/mbui/scripts/ios.sh build
+      # (archived and exported for the App Store through a generated Xcode project, then checked: ids, version, team,
+      # entitlements, signatures)
+      - name: Signed for the App Store, as an .ipa
+        if: steps.prepare.outputs.skip != 'true'
+        run: |
+          umask 077
+          ruby apps/mbui/scripts/ios-testflight.rb package
+      - if: steps.prepare.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mbui-testflight-${{ github.run_id }}
+          path: |
+            ${{ env.MBUI_RELEASE_SAFE }}/mbui-testflight.ipa
+            ${{ env.MBUI_RELEASE_SAFE }}/build-identity.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: The keychain, profiles and keys removed
+        if: always()
+        run: ruby apps/mbui/scripts/ios-testflight-cleanup.rb
+
+  upload:
+    needs: build
+    if: needs.build.outputs.skip == 'false'
+    runs-on: macos-15
+    environment: ios-testflight
+    timeout-minutes: 10
+    steps:
+      - name: Release directories
+        run: |
+          echo "MBUI_RELEASE_PRIVATE=$RUNNER_TEMP/mbui-testflight-private" >> "$GITHUB_ENV"
+          echo "MBUI_RELEASE_SAFE=$RUNNER_TEMP/mbui-testflight-artifacts" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v5
+        with: { sparse-checkout: apps/mbui/scripts }
+      - uses: actions/download-artifact@v4
+        with:
+          name: mbui-testflight-${{ github.run_id }}
+          path: ${{ env.MBUI_RELEASE_SAFE }}
+      - name: Uploaded to App Store Connect
+        env:
+          MBUI_TESTFLIGHT_GROUP_ID: ${{ vars.MBUI_TESTFLIGHT_GROUP_ID }}
+          MBUI_ASC_KEY_ID: ${{ secrets.MBUI_ASC_KEY_ID }}
+          MBUI_ASC_ISSUER_ID: ${{ secrets.MBUI_ASC_ISSUER_ID }}
+          MBUI_ASC_PRIVATE_KEY_BASE64: ${{ secrets.MBUI_ASC_PRIVATE_KEY_BASE64 }}
+        run: |
+          umask 077
+          ruby apps/mbui/scripts/ios-testflight.rb upload
+      - name: The key removed
+        if: always()
+        run: ruby apps/mbui/scripts/ios-testflight-cleanup.rb
