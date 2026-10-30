@@ -174,6 +174,15 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    release), given a size, a place, a cut and a place in the order, and pressed through the tree. The first island may
    be the whole app; the API takes one a page, so the old goes from the outside in, never an app beside the tree.
 
+8. **The same events, the same picture.** From the same state, the same events with their moments and the same
+   settings, any moment looked at shows the same picture, presses the same things and has made, kept, let go and set
+   leaving the same nodes, whether frames came at 60 Hz, at 120 Hz or once at that moment: frames only change how much
+   work is done. So what comes and goes is committed with the change that caused it, at that change's moment (an
+   input's its event time; the time is the host's, given to the tree, never read where it is worked out), what had
+   ended by then settled first; what a component made then reads the state as it was then. A frame settles what ends
+   by its own moment and draws; layout, words and paint wait for it and are merged. Nothing is made right by one frame
+   more, by reading the time where a value is worked out, or by waiting for things to settle.
+
 Shown by counting, on the real path, apart: bindings worked out, nodes made and let go, measures, drawing made, what is
 composed again, the scene gone through, and what is handed to the host. A colour changed touches no other component; a
 page moved makes nothing again; a list's rows reused and let go as they should be; a node let go leaves no subscription,

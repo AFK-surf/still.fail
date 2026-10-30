@@ -35,7 +35,7 @@ fn island(
   let old_taps = Ref(0)
   let bar_taps = Ref(0)
   let badge_taps = Ref(0)
-  let t = Tester::new(fn(c) {
+  let view = fn(c : Ctx) {
     builds.val = builds.val + 1
     let id = c.id("old")
     if c.clicked(id) {
@@ -49,7 +49,8 @@ fn island(
       c.text("old", size=12.0) |> ignore
     })
     |> ignore
-  })
+  }
+  let t = Tester::new(view)
   if tree {
     set_view_app(fn(root) {
       root
@@ -62,10 +63,7 @@ fn island(
         |> ignore
       })
       |> ignore
-      root.hosted(make=fn(v) {
-        v.width(Is(Some(200.0))).height(Is(Some(300.0))).offset(Is((30.0, 20.0))) |> ignore
-      })
-      |> ignore
+      old(root, view).width(Is(Some(200.0))).height(Is(Some(300.0))).offset(Is((30.0, 20.0))) |> ignore
       root.box(fn(b) {
         b
         .width(Is(Some(60.0)))
@@ -176,12 +174,11 @@ test "window tree: the bar's words changed: its instances alone made again, the 
 }
 
 ///|
-test "window tree: a run begun anew: the window's tree let go, its signals read by nothing" {
+test "window tree: a run begun anew: the window's tree before it let go, its signals read by nothing" {
   let label = @signals.signal("bar")
   island(label) |> ignore
   assert_true(label.watched())
   Tester::new(fn(c) { c.text("next", size=12.0) |> ignore }) |> ignore
-  assert_true(view_tree() is None)
   assert_false(label.watched())
 }
 
@@ -210,7 +207,8 @@ test "window tree: the badge moved: drawn where it went, nothing of it made agai
 ///|
 test "window tree: a part leaving goes on as the host draws it, from when it was told, let go at its end, then at rest" {
   let on = @signals.signal(true, same=fn(a, b) { a == b })
-  let t = Tester::new(fn(c) { c.text("old", size=12.0) |> ignore })
+  let view = fn(c : Ctx) { c.text("old", size=12.0) |> ignore }
+  let t = Tester::new(view)
   set_view_app(fn(root) {
     root.show(
       fn() { on.get() },
@@ -219,7 +217,7 @@ test "window tree: a part leaving goes on as the host draws it, from when it was
       },
       leave=300.0,
     )
-    root.hosted() |> ignore
+    old(root, view).grow(Is(1.0)) |> ignore
   })
   t.draw()
   let base = view_blocks.length()

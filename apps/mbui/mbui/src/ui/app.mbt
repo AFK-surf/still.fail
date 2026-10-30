@@ -62,7 +62,8 @@ struct Bench {
 ///|
 /// Opens the window and runs `view` for every frame until it closes.
 pub fn run(title : String, view : (Ctx) -> Unit) -> Unit {
-  g_view.val = view
+  // (the window a tree made once, the view built as it is built its one island: view_host.mbt)
+  set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
   bench.host = @hostapi.bench_mode()
   // (the app's own bench, bench_app: the framework's does not run beside it)
   bench.mode = if bench.host == bench_app { 0 } else { bench.host }
@@ -743,14 +744,15 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
   if by >= 0 {
     args.push(by.to_double())
   }
-  pointing_said_by_host(by)
   // (what the tree made once routes elsewhere than to the old view (a press on a node of its own, one outside the old
   // view's island) is no input of the old view's: taped alone, view_host.mbt)
   if kind <= 3 && view_pointer(kind, x, y, button) {
     input_taped("pointer", h_event_time(), args)
+    pointing_said_by_host(by)
     return
   }
   took_input("pointer", h_event_time(), args)
+  pointing_said_by_host(by)
   // (a press down, up or called off, a second finger, the pointer gone: what reads what came is built again; a pointer
   // moved is the hand's place, read by what reads it: hand.mbt)
   if kind != 1 {

@@ -608,6 +608,61 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
 }
 
 ///|
+/// A structure's binding (what shows, which is picked, which rows): `read` worked out as what it read changes, and
+/// where it came out otherwise, `then` done then (the structure's change committed with the change that caused it, at
+/// that change's moment: what it makes reads the state as it is then, what leaves starts leaving then), what had left
+/// by that moment let go first. Layout, words and paint of what it makes wait for the frame. Run now with the target
+/// it starts at. What stops it.
+fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
+  let live = Ref(true)
+  let last : Ref[T?] = Ref(None)
+  // (the watch reads anew as it is told; let go as it stops)
+  let watch : Ref[@signals.Watch?] = Ref(None)
+  let w = @signals.watch(fn() {
+    guard live.val && watch.val is Some(w) else { return }
+    let v = w.read(read)
+    if last.val != Some(v) {
+      last.val = Some(v)
+      self.committed(fn() {
+        if live.val {
+          then(v)
+        }
+      })
+    }
+  })
+  watch.val = Some(w)
+  let v = w.read(read)
+  last.val = Some(v)
+  @signals.untracked(fn() { then(v) })
+  fn() {
+    live.val = false
+    watch.val = None
+    w.stop()
+  }
+}
+
+///|
+/// A structure's change `f` committed now, as of the moment of the change that caused it (the one being committed, else
+/// the host's now): what had left by then let go first, `f` done with that moment as its cause's, nothing it reads
+/// followed by what is reading.
+fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
+  let at = if self.cause_at >= 0.0 {
+    self.cause_at
+  } else {
+    match self.time {
+      Some(now) => now()
+      None => @signals.untracked(fn() { self.clock.get() })
+    }
+  }
+  self.left(at)
+  let was = self.cause_at
+  self.cause_at = at
+  @signals.untracked(f)
+  self.cause_at = was
+  self.marked()
+}
+
+///|
 /// Property `prop` of the node (its one binding: one bound before is let go), set by `apply`: once, or as what it
 /// reads changes (Tree::queued: as the frame takes it), set again only if it came out otherwise than it last did,
 /// marking what its phase does again.
@@ -882,7 +937,7 @@ pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? 
   let had : Ref[View?] = Ref(None)
   // (the one leaving, shown again as it leaves: the same node, come back)
   let gone : Ref[View?] = Ref(None)
-  let stop = slot.tree.queued(when, fn(on) {
+  let stop = slot.tree.structured(when, fn(on) {
     guard slot.alive() else { return }
     match (on, had.val) {
       (true, None) => {
@@ -914,7 +969,7 @@ pub fn[K : Eq] View::pick(self : View, which : () -> K, make : (View, K) -> Unit
   guard self.alive() else { return }
   let slot = self.slot()
   let had : Ref[(K, View)?] = Ref(None)
-  let stop = slot.tree.queued(which, fn(k) {
+  let stop = slot.tree.structured(which, fn(k) {
     guard slot.alive() else { return }
     match had.val {
       Some((was, _)) if was == k => ()
@@ -948,7 +1003,7 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
   let rows : Map[K, (View, @signals.Signal[T])] = Map([])
   // (the rows leaving, by key: one whose key comes back as it leaves is the same row, come back)
   let gone_rows : Map[K, (View, @signals.Signal[T])] = Map([])
-  let stop = slot.tree.queued(items, fn(all) {
+  let stop = slot.tree.structured(items, fn(all) {
     guard slot.live() is Some(sn) else { return }
     slot.tree.work.structure = slot.tree.work.structure + 1
     let seen : Map[K, Bool] = Map([])
@@ -1156,6 +1211,14 @@ fn leave_ends(n : Node) -> Double {
 }
 
 ///|
+/// Whether anything reads the clock (a look by the time, a node leaving whose look reads how far it is gone): each
+/// frame draws something new as the clock goes, so what hosts the tree draws them one after another; else nothing
+/// moves, and at most a moment is waited for (Tree::wake).
+pub fn Tree::animating(self : Tree) -> Bool {
+  self.clock.watched()
+}
+
+///|
 /// The soonest moment a node's leaving or coming back ends, if any does: what hosts the tree has a frame drawn then.
 pub fn Tree::wake(self : Tree) -> Double? {
   let mut soonest : Double? = None
@@ -1173,12 +1236,11 @@ pub fn Tree::wake(self : Tree) -> Double? {
 }
 
 ///|
-/// At the clock's now: the nodes whose leaving is over let go, taken out of what holds them; those back, here.
-fn Tree::left(self : Tree) -> Unit {
+/// By `now`: the nodes whose leaving is over let go, taken out of what holds them; those back, here.
+fn Tree::left(self : Tree, now : Double) -> Unit {
   if self.leaving.is_empty() {
     return
   }
-  let now = @signals.untracked(fn() { self.clock.get() })
   let still : Array[NodeId] = []
   let over : Array[NodeId] = []
   for id in self.leaving {
@@ -1229,11 +1291,16 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double) -> Bool {
     s.set_height(Pt(h))
     self.layout_marked_at(0)
   }
-  // (what has left by now let go)
-  self.left()
+  // (a leaving or coming back ended by now: something to do though nothing was told)
+  match self.wake() {
+    Some(end) if end <= @signals.untracked(fn() { self.clock.get() }) => self.due = true
+    _ => ()
+  }
   if !self.due {
     return false
   }
+  // what has left by now let go
+  self.left(@signals.untracked(fn() { self.clock.get() }))
   // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own now,
   // what they set again marks what it marks)
   let mut i = 0

@@ -1,7 +1,8 @@
-// The window as a tree made once (docs/retained.md, the way there's 3): an app that says so (set_view_app) is a tree of
+// The window as a tree made once (docs/retained.md, the way there's 3): every window (ui.run's, a Tester's) is a tree of
 // the view package (src/view) whose root is the window's, and the old view, built as it is built, is one node of it
-// (View::hosted: the old island). The tree lays out, orders and draws the window: what is drawn before the island is
-// drawn under the old view, what after it over it, and the old view is built for the island's room, laid out where the
+// (`old`: the old island, the whole window's room where nothing else is made once yet; set_view_app for another
+// tree). The tree lays out, orders and draws the window: what is drawn before the island is drawn under the old view,
+// what after it over it, and the old view is built for the island's room, laid out where the
 // island is placed, painted inside it (cut to it, as opaque as it is). A press goes to what the tree finds at its
 // point: a node's own press, the old view where the island is, nothing else outside it.
 //
@@ -24,6 +25,11 @@ let view_app : Ref[@view.Tree?] = Ref(None)
 /// there is no tree).
 // kept across runs: put back as a run begins (view_forget)
 let view_island : Ref[(Double, Double, Double, Double, Double)] = Ref((0.0, 0.0, -1.0, -1.0, 1.0))
+
+///|
+/// Whether the old view is cut to its island (less than the window).
+// kept across runs: put back as a run begins (view_forget)
+let view_island_cut : Ref[Bool] = Ref(false)
 
 ///|
 /// Where a press held went down: a node's, the old view's, or nothing's.
@@ -74,7 +80,7 @@ let view_line_h : Double = 22.0
 pub fn set_view_app(make : (@view.View) -> Unit) -> Unit {
   view_forget()
   // (a change told as it is made, at the host's now: what it sets going starts then, whatever frame takes it)
-  let t = @view.Tree::new(make, measure=view_words_measure, time=fn() { h_now() })
+  let t = @view.Tree::new(make, measure=view_words_measure, time=fn() { h_event_time() })
   t.on_due(fn() {
     view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
     // (between frames, a frame for it; in one, what it marked is done in it, and what goes on asks for the next as
@@ -85,7 +91,6 @@ pub fn set_view_app(make : (@view.View) -> Unit) -> Unit {
   })
   view_app.val = Some(t)
   view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
-  h_frame_owed()
 }
 
 ///|
@@ -110,6 +115,7 @@ fn view_forget() -> Unit {
   view_app.val = None
   view_held.val = None
   view_island.val = (0.0, 0.0, -1.0, -1.0, 1.0)
+  view_island_cut.val = false
   view_blocks.clear()
   view_paint_work.made = 0
   view_paint_work.copied = 0
@@ -154,6 +160,8 @@ fn view_frame(w : Double, h : Double, t : Double) -> (Double, Double) {
     None => (0.0, 0.0, 0.0, 0.0, 1.0)
   }
   view_island.val = island
+  // (cut to its room where that is less than the window: the whole window's is the window's own cut)
+  view_island_cut.val = island.0 != 0.0 || island.1 != 0.0 || island.2 != w || island.3 != h
   (island.2, island.3)
 }
 
@@ -174,7 +182,7 @@ fn view_island_alpha() -> Double {
 ///|
 /// The old view's painting cut to its island (`on`), and no longer (where there is a tree).
 fn view_island_clip(on : Bool) -> Unit {
-  if view_app.val is None {
+  if view_app.val is None || !view_island_cut.val {
     return
   }
   if on {
@@ -315,6 +323,12 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           view_held.val = Some(Old)
           false
         }
+        // (nothing of the tree's there: the old view's where it is not cut to its island (what it draws past the window,
+        // a list scrolled on below it, is its own), else nobody's)
+        Nothing if !view_island_cut.val => {
+          view_held.val = Some(Old)
+          false
+        }
         Nothing => {
           view_held.val = Some(Nowhere)
           true
@@ -322,7 +336,12 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       }
     (1, Some(Old)) => false
     (1, Some(_)) => true
-    (1, None) => !(tree.target_at(x, y) is Hosted(_))
+    (1, None) =>
+      match tree.target_at(x, y) {
+        Hosted(_) => false
+        Nothing => view_island_cut.val
+        Pressed(_) => true
+      }
     (2, Some(Node(id))) => {
       view_held.val = None
       if tree.target_at(x, y) == Pressed(id) {
@@ -344,20 +363,39 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
 }
 
 ///|
-/// As the frame ends: what the window's tree has going (a node leaving or coming back) keeps the frames coming as the
-/// clock goes, and the moment the soonest of it ends is woken for.
+/// As the frame ends: what reads the window's tree's clock keeps the frames coming as the clock goes (a look by the
+/// time, a node fading as it leaves); what only ends at a moment (a leaving nothing draws by) is woken for then.
 fn view_frame_end(c : Ctx) -> Unit {
   let tree = match view_app.val {
     Some(t) => t
     None => return
   }
+  if tree.animating() {
+    c.motion_left = true
+  }
   match tree.wake() {
-    Some(at) => {
-      c.motion_left = true
+    Some(at) =>
       if c.wake_at <= 0.0 || at < c.wake_at {
         c.wake_at = at
       }
-    }
     None => ()
   }
+}
+
+///|
+/// The old view in node `v`: a node of `v`'s (as big and as placed as it is said to be: `.grow(Is(1.0))` for the room
+/// `v` leaves it) whose subtree is `build`, built
+/// as the old view is built, in its room, place and cut, pressed through the tree; made with the node, let go with it
+/// (its build no longer run). One a window yet: the old view is one frame (frame_watch.mbt), so a second made lets the
+/// first's build go.
+pub fn old(v : @view.View, build : (Ctx) -> Unit) -> @view.View {
+  v.hosted(make=fn(n) {
+    g_view.val = build
+    n.owns(fn() {
+      if physical_equal(g_view.val, build) {
+        g_view.val = fn(_c) {  }
+      }
+    })
+    |> ignore
+  })
 }

@@ -23,10 +23,11 @@ test "window tree: a press on the badge called off presses nothing, nor does the
 ///|
 test "window tree: shown and let go again and again: what each drew let go with it" {
   let on = @signals.signal(false, same=fn(a, b) { a == b })
-  let t = Tester::new(fn(c) { c.text("old", size=12.0) |> ignore })
+  let view = fn(c : Ctx) { c.text("old", size=12.0) |> ignore }
+  let t = Tester::new(view)
   set_view_app(fn(root) {
     root.show(fn() { on.get() }, fn(v) { v.height(Is(Some(20.0))).ground(Is(island_red)) |> ignore })
-    root.hosted() |> ignore
+    old(root, view).grow(Is(1.0)) |> ignore
   })
   t.draw()
   let base = view_blocks.length()

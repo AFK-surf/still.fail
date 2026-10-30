@@ -571,9 +571,7 @@ test "what a node is made with is its own: an effect made there stopped, its cle
   outside.set(1)
   assert_eq((runs.val, cleanups.val), (2, 1))
   on.set(false)
-  // (nothing let go as it is set: as the frame takes it)
-  assert_eq(cleanups.val, 1)
-  t.frame(390.0, 844.0) |> ignore
+  // (let go with the change that hid it, not by a frame)
   assert_eq(cleanups.val, 2)
   outside.set(2)
   // the one gone runs no more; the sibling still does
