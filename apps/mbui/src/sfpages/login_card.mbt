@@ -479,7 +479,7 @@ let lc_cancel : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justify
 
 ///|
 /// How far past the card's padding 取消 stands (lc_cancel), and its side (S6).
-let lc_cancel_off : Double = @sf.capsule_in(@sf.ask_corner, lc_cancel_side) - @sf.corner_inset
+let lc_cancel_off : Double = @sf.capsule_in(@sf.card_corner, lc_cancel_side) - @sf.corner_inset
 
 ///|
 let lc_cancel_side : Double = 24.0
@@ -520,10 +520,10 @@ let lc_step : @ui.Style = @ui.css(
 ).then(@ui.style(mx=@sf.room_of(-lc_step_reach)))
 
 ///|
-/// How far past the card's padding a step's button (32 high, in the card's foot corners where it is last, a pasted
-/// code's field so: lc_paste) reaches, to stand concentric with them (card_foot_in: the card a message's, too tight
-/// for the capsule, it stands at the card's padding, 10, following the corner: radius=Inner).
-let lc_step_reach : Double = @sf.corner_inset - @sf.card_foot_in(32.0, corner=@sf.ask_corner)
+/// How far past the card's padding a step's button (a capsule 32 high, in the card's foot corners where it is last, a
+/// pasted code's field so: lc_paste) reaches,
+/// to stand concentric with them (capsule_in: 8.87 in, the card's padding 10).
+let lc_step_reach : Double = @sf.corner_inset - @sf.capsule_in(@sf.card_corner, 32.0)
 
 ///|
 // kept across runs: a value (no field of it changes)

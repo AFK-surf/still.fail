@@ -355,7 +355,7 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) 
   let key = "adb-ask/" + href
   let stopping = "adb-stop/" + station
   c.box(style=@sf.ask_card_room, fn() {
-    @sf.card(c, corner=@sf.ask_corner, fn() {
+    @sf.card(c, fn() {
       if sharing {
         @settings.ask_words(c, @sf.t("android-misc.adb.ask.sharing", args=[("name", name)]), text(card, "line"))
         @settings.ask_buttons(c, fn() {

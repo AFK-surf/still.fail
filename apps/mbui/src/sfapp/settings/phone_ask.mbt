@@ -24,7 +24,7 @@ pub fn phone_card(
 ) -> Unit {
   // (a card of words, as a vault request's: its answer in its foot corners; answered while it shows, how it went in its
   // answer's place: answered_in_place)
-  @sf.card(c, corner=@sf.ask_corner, fn() {
+  @sf.card(c, fn() {
     ask_words(c, tr("android-misc.adb.ask.chat.title"), reason)
     match core {
       Some(core) if mine =>
