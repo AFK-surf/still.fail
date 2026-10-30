@@ -9,10 +9,11 @@
 
 ///|
 /// What the control keeps of its own (the pick is the core's): the one whose panel is open (its station and pick, ""
-/// none), the one asked open (a screen's fixture, a page's), its filter's field and words; the borrowing it asks to
-/// confirm ("" none).
+/// none) and that panel (@sf.last_presented), the one asked open (a screen's fixture, a page's), its filter's field
+/// and words; the borrowing it asks to confirm ("" none).
 priv struct Triple {
   mut open : String
+  mut shown : Int
   mut asked : String
   field : @ui.Field
   mut query : String
@@ -20,11 +21,12 @@ priv struct Triple {
 }
 
 ///|
-let triple : Triple = { open: "", asked: "", field: @ui.Field::new(), query: "", borrow_asking: "" }
+let triple : Triple = { open: "", shown: 0, asked: "", field: @ui.Field::new(), query: "", borrow_asking: "" }
 
 ///|
 fn triple_reset() -> Unit {
   triple.open = ""
+  triple.shown = 0
   triple.asked = ""
   triple.field.set("")
   triple.query = ""
@@ -73,8 +75,8 @@ fn pick_draft(src : Source, station : String, of : String, patch : Map[String, J
 
 ///|
 /// The panel of the pick `of` on `station` (the control's: see model_triple) opened beside `from`: from the control,
-/// or from elsewhere that says what runs (an agent's card's account: `side` Right, beside the card). Not twice over
-/// itself.
+/// or from elsewhere that says what runs (an agent's card's account: `side` Right, beside the card). Opened already,
+/// it closes (a trigger toggles it: one the panel does not cover, the card's, stays pressable while it is open).
 pub fn open_triple_panel(
   src : Source,
   station : String,
@@ -85,6 +87,7 @@ pub fn open_triple_panel(
 ) -> Unit {
   let me = station + "\u{1}" + of
   if triple.open == me {
+    @sf.close_presented_of(triple.shown)
     return
   }
   triple.open = me
@@ -108,6 +111,7 @@ pub fn open_triple_panel(
     ruled=true,
     side~,
   )
+  triple.shown = @sf.last_presented()
 }
 
 ///|

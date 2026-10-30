@@ -2171,6 +2171,32 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
 }
 
 ///|
+test "wide: what an agent runs as, pressed in its card, opens its model's panel beside the card; pressed again, closes it" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat-agent-card")
+  let names = t.words().filter(fn(w) { w.0 == "Claude" && w.5 > 0.5 })
+  let last = match names.iter().fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
+      match acc {
+        Some(a) if a.2 >= w.2 => acc
+        _ => Some(w)
+      }
+    }) {
+    Some(w) => w
+    None => fail("no agent's message")
+  }
+  t.move(last.1 - 20.0, last.2 + last.4 / 2.0)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  let (x, y, w, h) = t.get(Button, label="Claude · Opus 5.5").rect
+  t.click(Button, label="Claude · Opus 5.5")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(@ui.Dialog) is Some(_), msg="its model's panel opened")
+  // (the page under the panel out of the semantics tree: pressed where it is)
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(@ui.Dialog) is None, msg="its model's panel closed")
+}
+
+///|
 /// The middle of the words `s` in the chat's last message (chat-peeks: a link of each kind).
 fn peek_words_at(t : @ui.Tester, s : String) -> (Double, Double) raise {
   let (x, y, w, h) = words_rect(t, s)
