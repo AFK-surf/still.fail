@@ -55,3 +55,38 @@ export function relayLoad(text: string): Load {
   }
   return load;
 }
+
+/**
+ * A client's TCP connection to a relay on a machine of its own, as its kernel saw it (relay-load.sh's `node_conn`
+ * lines): the last stretch to a device or station, which the relay's own counters do not see. `peer` is its address cut
+ * to a /24 (/48).
+ */
+export type RelayConn = {
+  peer: string;
+  port: number;
+  /** Its round trip now and the least seen, ms. */
+  rtt: number;
+  minrtt: number;
+  /** Bytes sent on it since it opened, and those of them sent again (lost, or taken to be). */
+  sent: number;
+  again: number;
+  /** How fast it delivered lately (bits a second), and whether the relay then had nothing more to send it. */
+  rate: number;
+  limited: boolean;
+};
+
+/** At most this many connections of a minute are kept (relay-load.sh sends 200 at most), the busiest first. */
+export const MAX_CONNS = 200;
+
+export function relayConns(text: string): RelayConn[] {
+  const conns: RelayConn[] = [];
+  for (const line of text.split("\n")) {
+    const f = line.trim().split(/\s+/);
+    if (f[0] !== "node_conn" || f.length < 10) continue;
+    const [peer, port, rtt, minrtt, sent, again, rate, , limited] = f.slice(1);
+    const n = (v: string | undefined) => Number(v);
+    if (!/^[0-9a-f.:]{3,45}$/i.test(peer ?? "") || ![port, rtt, minrtt, sent, again, rate].every((v) => Number.isFinite(n(v)) && n(v) >= 0)) continue;
+    conns.push({ peer: peer!, port: n(port), rtt: n(rtt), minrtt: n(minrtt), sent: n(sent), again: n(again), rate: n(rate), limited: limited === "1" });
+  }
+  return conns.sort((a, b) => b.sent - a.sent).slice(0, MAX_CONNS);
+}

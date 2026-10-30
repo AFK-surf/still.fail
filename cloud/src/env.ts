@@ -31,6 +31,8 @@ export interface Env {
   RELAY_URL?: string;
   /** More relays beside it (comma-separated), for where it is slow or out of reach (relays.ts). */
   RELAY_URLS?: string;
+  /** "globalping": the relays are probed from China's networks every half hour (probes.ts). */
+  RELAY_PROBES?: string;
   /** Ways into the relays for devices alone (comma-separated): one relay machine's address forwarding to another's relay
    * (relays.ts). */
   RELAY_ENTRIES?: string;

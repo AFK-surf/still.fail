@@ -36,6 +36,12 @@ function fakeAxiom(status = 200) {
   return { got, answer, until };
 }
 
+/** A batch as sent, without the network still.fail cloud puts on its resources (tracing.ts networkOf). */
+const sent = (body: any) => ({
+  ...body,
+  resourceSpans: body.resourceSpans.map((r: any) => ({ ...r, resource: { ...r.resource, attributes: r.resource.attributes.filter((a: any) => !a.key.startsWith("stillfail.net.")) } })),
+});
+
 /** The spans' trace ids, in the order Axiom got them. */
 const traces = (got: { body: any }[]) => got.map((g) => g.body.resourceSpans[0].scopeSpans[0].spans[0].traceId);
 
@@ -80,7 +86,7 @@ test("a signed-in client's spans go on to Axiom with still.fail cloud's token", 
     assert.equal(axiom.got.length, 1);
     assert.equal(axiom.got[0]!.headers.authorization, "Bearer test-axiom-token");
     assert.equal(axiom.got[0]!.headers["x-axiom-dataset"], "ember-test");
-    assert.deepEqual(axiom.got[0]!.body, JSON.parse(body));
+    assert.deepEqual(sent(axiom.got[0]!.body), JSON.parse(body));
 
     // Nobody, or a token that is no good: nothing goes on.
     assert.equal((await post(h, body)).status, 401);
@@ -89,6 +95,36 @@ test("a signed-in client's spans go on to Axiom with still.fail cloud's token", 
     assert.equal((await post(h, "[]", { authorization: `Bearer ${tokens.access_token}` })).status, 400);
     assert.equal((await post(h, batch("x", 1001), { authorization: `Bearer ${tokens.access_token}` })).status, 413);
     assert.equal(axiom.got.length, 1);
+  } finally {
+    await h.close();
+  }
+});
+
+// A device's ways through the relays are compared network by network (mesh.speed): its spans carry the carrier and the
+// province Cloudflare saw them come from, never the address; what the sender said of its network itself is not kept.
+test("a client's spans carry the network they came from", async () => {
+  const axiom = fakeAxiom();
+  const h = await harness({ axiom: axiom.answer });
+  try {
+    const tokens = await h.login("alice");
+    const claimed = JSON.parse(batch("mesh.speed"));
+    claimed.resourceSpans[0].resource.attributes.push({ key: "stillfail.net.org", value: { stringValue: "said by the sender" } });
+    const response = await h.fetch("/v1/telemetry/traces", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${tokens.access_token}` },
+      body: JSON.stringify(claimed),
+      cf: { asn: 9808, asOrganization: "China Mobile", country: "CN", region: "Hunan", city: "Hengyang" },
+    } as RequestInit);
+    assert.equal(response.status, 202);
+    const attributes = Object.fromEntries(axiom.got[0]!.body.resourceSpans[0].resource.attributes.map((a: any) => [a.key, Object.values(a.value)[0]]));
+    assert.equal(attributes["service.name"], "ember-web");
+    assert.equal(attributes["stillfail.net.asn"], "9808");
+    assert.equal(attributes["stillfail.net.org"], "China Mobile");
+    assert.equal(attributes["stillfail.net.country"], "CN");
+    assert.equal(attributes["stillfail.net.region"], "Hunan");
+    assert.equal(attributes["stillfail.net.city"], "Hengyang");
+    assert.equal(axiom.got[0]!.body.resourceSpans[0].resource.attributes.filter((a: any) => a.key === "stillfail.net.org").length, 1);
+    assert.equal(axiom.got[0]!.body.resourceSpans[0].scopeSpans[0].spans[0].name, "mesh.speed");
   } finally {
     await h.close();
   }
