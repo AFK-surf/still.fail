@@ -4,12 +4,14 @@ import { DurableObject } from "cloudflare:workers";
 import worker, { RelayBudget as ProductionRelayBudget } from "../src/relay-worker";
 import { clock, nowSeconds } from "../src/auth";
 import { LIMITS } from "../src/limits";
+import { TEST_CONNECTIONS } from "./relay-limit";
 export default worker;
 
 declare const TEST_NOW_MS: number | null;
 if (TEST_NOW_MS !== null) clock.now = () => TEST_NOW_MS;
 
 export class RelayBudget extends ProductionRelayBudget {
+  protected override connections = TEST_CONNECTIONS;
   exhaustBudget(kind: "bytes" | "frames" = "bytes") {
     // The budget is counted in memory and written now and then: exhausting it means both.
     const q = this.load();
