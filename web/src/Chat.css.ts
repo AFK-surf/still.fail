@@ -293,11 +293,14 @@ export const fileCardMeta = style({
 });
 export const fileCardText = style({ flex: "1", minWidth: "0", display: "grid" });
 /**
- * A file's card in a message (a screen's too): a row high, a capsule, its sheet 12 in and its words' end 14 from the
- * other side, 8 down. What else a message carries (pictures, videos, pasted text, a screen's card with its picture)
+ * A file's card in a message (a screen's too): a row high (48), as wide as it says, a capsule, its sheet (FileTile, 30 × 36, drawn 2.75 in from
+ * its sides and 1.75 from its top and foot) as far from the capsule's end as from its top and foot, its words' end as
+ * far from the other. What else a message carries (pictures, videos, pasted text, a screen's card with its picture)
  * is rounded as a card is, every card in a chat alike.
  */
-export const FILE_CARD_PAD = { y: 8, start: 12, end: 14 } as const;
+const SHEET = { inX: 2.75, inY: 1.75 } as const;
+const SHEET_ROOM = 7.75;
+export const FILE_CARD_PAD = { y: SHEET_ROOM - SHEET.inY, start: SHEET_ROOM - SHEET.inX, end: 7 } as const;
 export const MESSAGE_FILE_CORNER = vars.rCard;
 /** A file's kind at a glance (Chat.tsx FileTile): a sheet with its extension, in the text's colour; dashed when only its
  * path goes; filling with the accent as it goes up; its extension red when it failed. */
@@ -791,7 +794,7 @@ export const pasteCardActions = style({ display: "flex", gap: "2px", flex: "none
 globalStyle(`${composerFiles} :is(${composerThumb}, ${fileCard})`, {
   borderRadius: COMPOSER_INNER, cornerShape: vars.cornerShape,
 });
-globalStyle(`${composerFiles} ${fileCard}`, { boxSizing: "border-box", height: "64px", alignItems: "center", padding: "0 14px" });
+globalStyle(`${composerFiles} ${fileCard}`, { boxSizing: "border-box", width: "236px", height: "64px", alignItems: "center", padding: "0 14px" });
 // Off the composer's frosted ground: a file to send stands on the page's own (a step up in the dark); one named by its
 // path, which stays where it is, is only outlined, dashed.
 // A quote (a mark, a note) waiting there stands on the same ground.

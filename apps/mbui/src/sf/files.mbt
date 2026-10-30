@@ -287,7 +287,8 @@ pub fn file_card(
       } else {
         file_tile(c, name, dir~, progress~, error=error != "")
       }
-      c.box(style=card_words, fn() {
+      // (in a message as wide as what it says; waiting in the composer as wide as its room, its words taking the rest)
+      c.box(style=if composer { card_words } else { card_words_hug }, fn() {
         if title != "" {
           c.box(style=name_row, fn() { c.box(style=name_stem, fn() { c.text(title, style=card_name) |> ignore }) |> ignore })
           |> ignore
@@ -457,6 +458,18 @@ pub let message_file_radius : @ui.Radius = rounded(message_file_corner)
 pub let file_card_w : Double = 236.0
 
 ///|
+/// A file's card's width in a message (card_box: as wide as what it says): its sheet and its name or its size, the
+/// wider, with its room round them; file_card_w at most.
+pub fn file_card_across(c : @ui.Ctx, name : String, size : Double) -> Double {
+  let words = dmax(
+    @ui.text_advance(name, size=c.text_size(Ui).0),
+    @ui.text_advance(file_size(size), size=c.text_size(Caption).0),
+  )
+  let room = @ui.Space::px(S1_25) + tile_w + @ui.Space::px(S2_5) + @ui.Space::px(S1_5)
+  dmin(file_card_w, (room + words).ceil())
+}
+
+///|
 let card_button_icon : Double = 13.0
 
 ///|
@@ -467,10 +480,11 @@ let card_close_icon : Double = 12.0
 let card_box : @ui.Style = @ui.style(
   row=true,
   max_w=Fixed(file_card_w),
-  // (a row high, a capsule: its sheet's ink as far in as its words' end, 14, as a screen's card: @sfbase's link_card)
-  pl=S3,
-  pr=S3_5,
-  py=S2,
+  // (a row high, a capsule, 48: its sheet's ink as far from its end as from its top and foot, 7 (the sheet's own 2
+  // drawn in it), its words' end as far from the other, as its width comes to the pixel: file_card_across)
+  pl=S1_25,
+  pr=S1_5,
+  py=S1_5,
   gap=S2_5,
   bg=Neutral,
   // (in a corner of what holds it, a composer's box: as far in as from its edges, its corner concentric)
@@ -535,6 +549,10 @@ let tile_going_spinner : Double = 16.0
 ///|
 // kept across runs: a value (no field of it changes)
 let card_words : @ui.Style = @ui.style(w=grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let card_words_hug : @ui.Style = @ui.style(w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)

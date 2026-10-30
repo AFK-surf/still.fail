@@ -29,7 +29,7 @@ pub fn message_files(
     match file_kind(a.name) {
       "image" => dmin(image_box(a, image_least).0, room)
       "video" => dmin(image_box(a, video_least).0, room)
-      _ => dmin(@sf.file_card_w, room)
+      _ => dmin(@sf.file_card_across(c, a.name, a.size), room)
     }
   })
   // (in a picture of the chat being shared, each with the room its ✕ hangs in past its top and right: publish.mbt)
@@ -46,7 +46,12 @@ pub fn message_files(
     }
   }
   let column = if mine { files_column_end } else { files_column }
-  let column = if hung > 0.0 { column.then(@ui.style(pt=@sf.room_of(hung), gap=@sf.room_of(files_gap + hung))) } else { column }
+  // (the gap between rows the room the ✕ hangs in past the next's top on top of their own, out to the scale's next step)
+  let column = if hung > 0.0 {
+    column.then(@ui.style(pt=@sf.room_of(hung), gap=@sf.room_of(scale_up(files_gap + hung))))
+  } else {
+    column
+  }
   c.box(style=column, id=at, fn() {
     for r in rows {
       c.box(style=files_row, fn() {
@@ -564,6 +569,17 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ 
   } else if done.opened {
     open_file(here, a)
   }
+}
+
+///|
+/// The spacing scale's first step `d` or more (gaps.mbt rule 6: a gap is a step of it).
+fn scale_up(d : Double) -> Double {
+  for s in @ui.space_scale() {
+    if s.px() >= d - 0.01 {
+      return s.px()
+    }
+  }
+  d
 }
 
 ///|

@@ -43,16 +43,16 @@ pub let globe_mark : LinkMark = { name: "web" }
 // ── the cards' looks (ScreenLinks.kt ScreenLinkCard, AdbLinks.kt AdbLinkCard) ──
 
 ///|
-/// A card: a row 236 wide, a capsule as a file's card (a row high), on the chat's bubble ground; its mark's 24 in its
-/// room 3 in from it, 12 in (its ink 15), its words' end 14 from the other side, 8 down; its mark and its words 10
-/// apart.
+/// A card: a row 236 wide, a capsule as a file's card (a row high, 48), on the chat's bubble ground; 6 down, its mark
+/// (24 in its room, 3 in from it) 8 in, its ink about as far from the capsule's end as from its top and foot, its words'
+/// end 10 from the other; its mark and its words 10 apart.
 // kept across runs: a value (no field of it changes)
 pub let link_card : @ui.Style = @ui.style(
   row=true,
   w=@sf.link_card_w,
-  pl=S3,
-  pr=S3_5,
-  py=S2,
+  pl=S2,
+  pr=S2_5,
+  py=S1_5,
   gap=S2_5,
   align=ACenter,
   radius=Full,
