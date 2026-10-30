@@ -8,6 +8,7 @@ fn login_core(
   answer? : (String) -> Json = fn(_) { Json::object({}) },
   relay? : Bool = true,
   w? : Double = 390.0,
+  pointing? : @ui.Pointing,
 ) -> @ui.Tester {
   reset()
   let base = fixture("chat")
@@ -26,7 +27,7 @@ fn login_core(
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=844.0, platform=2, pointing?)
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -189,4 +190,54 @@ test "a login card in a wide chat: as wide as what it says, 560 at most, not dra
   )
   let wide = step_width(t, "打开登录页")
   assert_true(wide >= 340.0 && wide <= 562.0, msg="the step's button \{wide} wide")
+}
+
+///|
+test "a login code sent (完成, or the keyboard's Done) lets go of the keyboard" {
+  for by_enter in [false, true] {
+    let calls : Array[Made] = []
+    let t = with_logins(
+      login_core(calls, login_of([("step", "open"), ("paste", true), ("url", "https://app.devin.ai/login")])),
+    )
+    t.tap_text("粘贴登录码")
+    t.type_text("ABC-123")
+    t.frame()
+    assert_true(t.ctx().field_focused())
+    if by_enter {
+      t.enter()
+    } else {
+      let (x, y) = words_node(t, "完成").unwrap()
+      t.tap(x, y)
+    }
+    assert_eq(named(calls, "machineLogin.answer").length(), 1, msg="enter \{by_enter}")
+    assert_true(!t.ctx().field_focused(), msg="enter \{by_enter}")
+    assert_true(!t.ime().0, msg="enter \{by_enter}")
+  }
+}
+
+///|
+test "the chat scrolled while a login card's code field has the keyboard: the keyboard goes (mbui: a finger scrolling a list)" {
+  let calls : Array[Made] = []
+  let t = with_logins(login_core(calls, login_of([("step", "open"), ("paste", true), ("url", "https://app.devin.ai/login")]), pointing=Finger))
+  t.tap_text("粘贴登录码")
+  t.type_text("ABC")
+  t.frame()
+  assert_true(t.ctx().field_focused())
+  assert_true(t.ime().0)
+  t.drag(195.0, 200.0, 195.0, 400.0)
+  assert_true(!t.ctx().field_focused())
+  assert_true(!t.ime().0)
+}
+
+///|
+test "a tap in a login card's code field that has the keyboard keeps it" {
+  let calls : Array[Made] = []
+  let t = with_logins(login_core(calls, login_of([("step", "open"), ("paste", true), ("url", "https://app.devin.ai/login")]), pointing=Finger))
+  let (x, y) = t.find("粘贴登录码").unwrap()
+  t.tap(x, y)
+  t.type_text("ABC")
+  t.frame()
+  t.tap(x, y)
+  t.frame()
+  assert_true(t.ctx().field_focused())
 }

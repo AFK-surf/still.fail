@@ -341,7 +341,7 @@ fn login_field(id : String) -> @ui.Field {
 ///|
 /// A login whose page gives a code to paste back (PasteSteps): where to sign in and what to bring back, then 打开登录页
 /// (solid until pressed here or a code is in) and the field, 完成 at its end once a code is in (Enter too); sent, the
-/// code stays and 完成 turns while it is checked.
+/// keyboard goes, the code stays and 完成 turns while it is checked.
 fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
   let p = @sf.theme().p
   let id = text(l, "id")
@@ -366,7 +366,9 @@ fn login_paste(c : @ui.Ctx, core : Core, station : String, l : Json?) -> Unit {
     logins_here.pressed[id] = true
     login_open(core, text(l, "url"))
   }
+  // sent, nothing is left to type: the keyboard goes (the code stays in the field as it is checked)
   let send = fn(code : String) {
+    c.blur()
     c.tell("login-answer/" + id, fn() {
       @settings.act(core, @sf.t("web-main.logins.answerWhat"), "machineLogin.answer", {
         "station": Json::string(station),

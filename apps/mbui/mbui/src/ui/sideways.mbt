@@ -566,11 +566,21 @@ fn sideways_move(c : Ctx, id : Int, x : Double, y : Double) -> Bool {
     c.dragging = true
     c.active = 0
     st.held = true
+    c.scroll_lets_go(id)
     let past = if along > 0.0 { along - slop } else { along + slop }
     st.x = dclamp(st.x - past, 0.0, st.max)
     c.sideways_scrolled(st)
   }
   false
+}
+
+///|
+/// A finger setting off scrolling `scroller` (a list, a box scrolled inside one: a code block sideways) lets go of the
+/// keyboard, whichever field has it (UIScrollView's keyboardDismissMode onDrag); a field's own words scrolled keep it.
+fn Ctx::scroll_lets_go(self : Ctx, scroller : Int) -> Unit {
+  if pointing() is Finger && self.editors.contains(self.focus) && scroller != self.focus {
+    self.blur()
+  }
 }
 
 ///|
