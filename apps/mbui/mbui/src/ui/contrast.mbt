@@ -450,7 +450,8 @@ fn Ctx::drawn_over(self : Ctx, k : Int, own : Int, px : Double, py : Double) -> 
   for j in (k + 1)..<self.ninst {
     let q = j * inst_size
     let kind = a[q + 5]
-    if kind == 1.0 || kind == 3.0 || kind == 7.0 || kind == 4.0 || kind == 9.0 || kind == 11.0 {
+    // (a bone stands for the words or the picture it is drawn in place of: over it as they would be)
+    if kind == 1.0 || kind == 3.0 || kind == 7.0 || kind == 4.0 || kind == 9.0 || kind == 11.0 || bone_insts.contains(j) {
       let cx = a[q] + a[q + 2] / 2.0
       let cy = a[q + 1] + a[q + 3] / 2.0
       if cx >= a[b] && cx <= a[b] + a[b + 2] && cy >= a[b + 1] && cy <= a[b + 1] + a[b + 3] {

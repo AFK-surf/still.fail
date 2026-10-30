@@ -101,6 +101,38 @@ test "文件's page wide with a finger and with a mouse: its ways, its heads; a 
 }
 
 ///|
+test "a folder opened in the columns while its station has not said what it holds: the columns stay where they were" {
+  reset()
+  let src = fixture("home")
+  // (设计稿 never read: as a station slow to answer)
+  let held : @sfbase.Source = {
+    ..src,
+    topic: fn(name, params) {
+      match params.get("path") {
+        Some(String(p)) if name == "drive" && p == "设计稿" => { value: None, error: None, version: 0 }
+        _ => (src.topic)(name, params)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, held) }, w=1280.0, h=800.0, platform=0)
+  app.nav.replace(Files)
+  app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Radio, label="分栏") is Some(_))
+  // (a row of the first column that no crumb names)
+  let was = rightmost(t, "会议记录")
+  let (x, y) = rightmost(t, "设计稿")
+  t.tap(x, y)
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  match app.nav.top() {
+    Drive(d) => assert_eq(d.path, "设计稿")
+    _ => fail("no folder open")
+  }
+  assert_eq(rightmost(t, "会议记录"), was)
+}
+
+///|
 test "a narrow folder's row held with a finger: what can be done to it in a sheet; right clicked with a mouse, beside the pointer" {
   let t = files_page_tester(390.0, 844.0, 2)
   let (x, y) = t.find("季度数据.csv").unwrap()
