@@ -854,8 +854,38 @@ pub fn Ctx::building(self : Ctx) -> Int {
 ///|
 /// A widget id from a key, unique within the current scope.
 pub fn Ctx::id(self : Ctx, key : String) -> Int {
-  mix(self.id_seed, stable_hash(key).to_int())
+  mix(self.id_seed, key_hash(key))
 }
+
+///|
+/// `key`'s stable_hash as an id's: the same string as one asked before (a literal key, the same each frame: a motion's
+/// name, a part's) found by itself in a small table and not hashed again; another hashed and put there.
+fn key_hash(key : String) -> Int {
+  let n = key.length()
+  if n == 0 {
+    return stable_hash(key).to_int()
+  }
+  let at = (n * 31 + key.code_unit_at(0).to_int() * 7 + key.code_unit_at(n - 1).to_int()) & (key_hashes_n - 1)
+  if physical_equal(key_hashes_of[at], key) {
+    return key_hashes[at]
+  }
+  let h = stable_hash(key).to_int()
+  key_hashes_of[at] = key
+  key_hashes[at] = h
+  h
+}
+
+///|
+/// key_hash's table: its size, the strings in it and their hashes.
+let key_hashes_n : Int = 512
+
+///|
+// kept across runs: what a pure function gave, found again only for the very string it was given
+let key_hashes_of : FixedArray[String] = FixedArray::make(512, "")
+
+///|
+// kept across runs: what a pure function gave, found again only for the very string it was given
+let key_hashes : FixedArray[Int] = FixedArray::make(512, 0)
 
 ///|
 /// Runs `body` with ids scoped by `key` (rows of a list use their index).
