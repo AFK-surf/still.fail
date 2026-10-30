@@ -25,9 +25,10 @@ export type Quota = {
   counting?: number;
 };
 
-/** Before this (2026-10-25) a failed read forgot `seen`, and the next read added all the process had counted since it
+/** 3: reads answered out of order counted traffic again (2026-10-30, `read`): that day's count starts over too.
+ * Before 2 (2026-10-25) a failed read forgot `seen`, and the next read added all the process had counted since it
  * started once more: the day's budget ran out hours early. A day counted that way may hold traffic twice and starts over. */
-const COUNTING = 2;
+const COUNTING = 3;
 
 /** How often traffic is read from the relay process while connections are open; the daily budget may overshoot by what flows in this time. */
 const POLL_MS = 60_000;
@@ -71,8 +72,21 @@ export class RelayBudget extends DurableObject<Env> {
     return q.bytes >= LIMITS.bytesPerDay || (q.frames ?? 0) >= LIMITS.framesPerDay;
   }
 
-  /** Reads the relay process's counters and adds what grew since the last read to today's traffic; null while it is not running. */
-  private async read(): Promise<Counters | null> {
+  /** The read of the relay's counters under way, which those asked meanwhile take the answer of. */
+  private reading: Promise<Counters | null> | null = null;
+
+  /** Reads the relay process's counters and adds what grew since the last read to today's traffic; null while it is not
+   * running. One at a time: answered in any order, a read older than one counted looked like a process started again
+   * (its counters below those last seen), and all it had counted was added once more (2026-10-30: 14.8 GB and 78.5M
+   * frames counted by 12:20 in Beijing, some 650 MB carried; every connect refused after). */
+  private read(): Promise<Counters | null> {
+    this.reading ??= this.readOnce().finally(() => {
+      this.reading = null;
+    });
+    return this.reading;
+  }
+
+  private async readOnce(): Promise<Counters | null> {
     let counters: Counters | null = null;
     try {
       const text = await this.env.RELAY.getByName("primary").metrics();

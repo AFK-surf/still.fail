@@ -117,6 +117,37 @@ test("a read of the relay's counters that fails does not count its traffic twice
   }
 });
 
+/// 2026-10-30: the budget counted 14.8 GB and 78.5M frames by 12:20 in Beijing, the relay's own counters some 650 MB, and
+/// refused every connect after. Connects read the counters at once, the relay answering them in any order: an answer
+/// older than one already counted looked like a process started again (its counters below those last seen), and all it
+/// had counted since it started was added once more. One read at a time: those asked meanwhile take its answer.
+test("a read of the relay's counters answered after a later one counts nothing twice", { timeout: 10000 }, async () => {
+  const h = await harness({ noGoogle: true });
+  try {
+    const relays: any = await h.mf.getDurableObjectNamespace("RELAY", "relay");
+    const budgets: any = await h.mf.getDurableObjectNamespace("RELAY_BUDGET", "relay");
+    const relay = relays.get(relays.idFromName("primary"));
+    const budget = budgets.get(budgets.idFromName("primary"));
+    const mib = 1024 ** 2;
+    await relay.carried(100 * mib);
+    await budget.poll();
+    await relay.carried(10 * mib);
+    // Asked first, answered last.
+    await relay.slowRead();
+    const late = budget.poll();
+    while ((await relay.slowedReads()) === 0) await new Promise((r) => setTimeout(r, 5));
+    await relay.carried(10 * mib);
+    await budget.poll();
+    await relay.releaseRead();
+    await late;
+    // Counted once, all of it by the next read.
+    await budget.poll();
+    assert.equal((await budget.statistics()).bytes, 120 * mib);
+  } finally {
+    await h.close();
+  }
+});
+
 test("a day's budget counted before reads kept their place starts over", { timeout: 10000 }, async () => {
   const h = await harness({ noGoogle: true });
   try {
