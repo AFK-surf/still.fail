@@ -81,12 +81,17 @@ export function workspaceProfiles(stations: J[]): J {
     const stationsOf = (ms: J[]): string[] => [...new Map(ms.map((m) => [m.stationId, m.stationName])).values()];
     const signedIn = stationsOf(members.filter(owns));
     const allow: string[] | null = share && Array.isArray(share.allow) ? share.allow : null;
+    const host = share ? String(share.host) : String(s.id);
+    // Where the account can be used, said of the account (the row) and not of one copy's share: where it is signed in,
+    // then the stations that use it only by borrowing (who may borrow is the profile page's).
+    const joined = (names: string[]) => names.join(t("core-views.list_separator"));
     const parts: string[] = [];
     if (members.length === 1 && !share) parts.push(t("core-views.profiles.only", { station: String(s.name) }));
-    else if (subscription) parts.push(t("core-views.profiles.signedIn", { station: signedIn.join(t("core-views.list_separator")) }));
-    else if (!share) parts.push(t("core-views.profiles.on", { stations: stationsOf(members).join(t("core-views.list_separator")) }));
-    if (allow !== null) parts.push(t("core-views.profiles.allowed", { stations: allow.map(name).join(t("core-views.list_separator")) }));
-    const host = share ? String(share.host) : String(s.id);
+    else if (subscription) {
+      parts.push(t("core-views.profiles.signedIn", { station: joined(signedIn) }));
+      const borrowers = stationsOf(members.filter((m) => !owns(m))).filter((x) => !signedIn.includes(x));
+      if (borrowers.length > 0) parts.push(signedIn.length > 1 ? t("core-views.profiles.lentBy", { station: name(host), stations: joined(borrowers) }) : t("core-views.profiles.lent", { stations: joined(borrowers) }));
+    } else parts.push(t("core-views.profiles.on", { stations: joined(stationsOf(members)) }));
     const kind = group(p);
     const usable = members.some((m) => m.usable);
     items.push({

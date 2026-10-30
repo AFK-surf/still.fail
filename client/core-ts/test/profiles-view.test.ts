@@ -14,7 +14,7 @@ const B = "b".repeat(64);
 const profile = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: id, access: { kind: "subscription" }, checkTone: "green", ...extra });
 const station = (id: string, name: string, online: boolean, profiles: unknown[] | null) => ({ id, station: `w/${id}`, name, online, overview: profiles === null ? undefined : { sharing: true, profiles } });
 
-test("a shared profile is listed once, from its host, with where it is signed in and who may use it", () => {
+test("a shared profile is listed once, from its host, with where it is signed in and who borrows it", () => {
   const share = { id: "sh-1", host: A, allow: [A, B] };
   const view = workspaceProfiles([
     station(A, "studio", true, [profile("max", { share: { ...share, role: "host" } }), profile("local", { access: { kind: "env" } })]),
@@ -26,7 +26,7 @@ test("a shared profile is listed once, from its host, with where it is signed in
   assert.deepEqual(shared.members.map((m: any) => [m.stationName, m.role]), [["studio", "host"], ["mini", "user"]]);
   assert.equal(shared.station, `w/${A}`, "its page is on its host");
   assert.equal(shared.profile.id, "max");
-  assert.equal(shared.where, "已在 studio 登录 · 仅限 studio、mini");
+  assert.equal(shared.where, "已在 studio 登录 · 借给 mini");
   assert.equal(shared.usable, true);
   assert.deepEqual(shared.stations.map((s: any) => [s.name, s.allowed]), [["studio", true], ["mini", true]]);
   const local = view.items.find((e: any) => !e.shared);
@@ -90,6 +90,25 @@ test("the same account signed in on two stations each is one row, each station a
     station(B, "mini", true, [profile("b", { email: "b@x.test", runtime: "claude" })]),
   ]);
   assert.equal(two.items.length, 2);
+});
+
+test("an account signed in on every station it is lent to: the row says where it is signed in, and no limit that reads as the whole account's", () => {
+  const C = "c".repeat(64);
+  const share = { id: "sh-1", host: A, allow: [C] };
+  const view = workspaceProfiles([
+    station(A, "Studio", true, [profile("codex-3720", { email: "z@x.test", runtime: "codex", share: { ...share, role: "host", users: [C] } })]),
+    station(B, "Mini1", true, [profile("codex", { email: "z@x.test", runtime: "codex" })]),
+    station(C, "ccvm", true, [profile("own", { email: "z@x.test", runtime: "codex" }), profile("sh-1", { email: "z@x.test", runtime: "codex", share: { ...share, role: "user", reachable: true } })]),
+  ]);
+  assert.equal(view.items.length, 1);
+  assert.equal(view.items[0].where, "已在 Studio、Mini1、ccvm 登录");
+  // Borrowed by one not signed in itself: the lender named, as two others are signed in too.
+  const lent = workspaceProfiles([
+    station(A, "Studio", true, [profile("codex-3720", { email: "z@x.test", runtime: "codex", share: { ...share, role: "host", users: [C] } })]),
+    station(B, "Mini1", true, [profile("codex", { email: "z@x.test", runtime: "codex" })]),
+    station(C, "ccvm", true, [profile("sh-1", { email: "z@x.test", runtime: "codex", share: { ...share, role: "user", reachable: true } })]),
+  ]);
+  assert.equal(lent.items[0].where, "已在 Studio、Mini1 登录 · Studio 借给 ccvm");
 });
 
 test("a station with two profiles signed in to the same account: its rows named by their profiles too", () => {
