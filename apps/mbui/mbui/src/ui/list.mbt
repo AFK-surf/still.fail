@@ -501,6 +501,7 @@ pub fn Ctx::list(
         part: 0,
         causes: None,
         sizes: {},
+        sizes_end: -1.0,
         sizes_mover: Mover::new(),
       }
       self.lists[id] = s
@@ -594,8 +595,12 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   let r = self.alloc_part(kind_box, true, true, key=item_key(k))
   self.nodes[r].item = k
   let row = st.row
+  // (what its content reads of its rows' way: Ctx::row_way)
+  let laid_by = rows_laid_by.val
+  rows_laid_by.val = st.causes.map(fn(c) { (c, k) })
   // (in a part kept: what the row asks of time is the part's, kept_part.mbt)
   part_rows(st.part, fn() { self.with_parent(r, fn() { self.scope(k, fn() { row(k) }) }) })
+  rows_laid_by.val = laid_by
   self.id_seed = saved_seed
   self.cur = saved_cur
   self.owner = saved_owner
@@ -690,7 +695,8 @@ fn Ctx::place_list(
     let shown = st.row_sized(k, h, self.clock, self.frame_no)
     // (as tall as it is laid out once there: a row kept as its nodes keeps what it was last cut to otherwise)
     let sized = (shown - h).abs() > 0.001
-    self.nodes[r].clip = sized
+    // (cut there too while what is in it goes to its height on the rows' way: what leaves it is not drawn past it)
+    self.nodes[r].clip = sized || st.row_own_way(k, self.clock)
     let h = if sized {
       self.nodes[r].fh = shown
       self.row_slot(r, shown)

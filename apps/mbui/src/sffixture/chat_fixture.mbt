@@ -977,6 +977,10 @@ pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Js
       fix_serial.val += 1
       let id = "out\{fix_serial.val}"
       fix_chat(session).outbox.push(outgoing_json(id, params, "sending", ""))
+      // (chat-ask-end's card answered by it at once, as the core says it: decisions.ts inMessages)
+      if f.mode == "chat-ask-end" && session == "s-c1" && !fix_decided.contains(62) {
+        fix_decided[62] = { "resolved": true, "answeredBy": "你", "text": "你 回复了" }
+      }
       f.changed()
       fix_later(fix_deliver_ms, fn() { fix_deliver(session, id) })
       Some(Ok(Json::object({})))
@@ -1323,16 +1327,37 @@ pub fn phone_post() -> Json {
 }
 
 ///|
+/// chat-ask-end's last post: an agent asking with an options card, waiting; anything sent in the chat answers it at
+/// once, as the core says it (decisions.ts inMessages: what is sending answers the last card).
+pub fn ask_end_post() -> Json {
+  msg(62, "agent", by_agent("Anthropic", "claude", "s-c1"), "列表的动效改好了，要不要顺便把网页也按同一套改？", "刚刚", {
+    "ending": "need_decision",
+    "card": {
+      "type": "options",
+      "assigneeText": "等 林 决定",
+      "options": [
+        { "label": "先不改网页", "detail": "这次只改 app" },
+        { "label": "一起改", "detail": "网页的列表也按同一套重做", "recommended": true },
+      ],
+    },
+    "decision": fix_decided.get(62).unwrap_or({ "resolved": false }),
+    "asked": Json::boolean(!fix_decided.contains(62)),
+    "createdAt": Json::number(1.0e9),
+  })
+}
+
+///|
 /// The chat `v` with what was answered here in it.
 pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
+  let ask_end = f.mode == "chat-ask-end"
   let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file"
   let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks"
   // (chat-phone-granted: its request approved already; chat-phone-lacks: waiting, on a phone without Developer options)
   if f.mode == "chat-phone-granted" && fix_phone.val == "" {
     fix_phone.val = "granted"
   }
-  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault && !phone) {
+  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault && !phone && !ask_end) {
     return v
   }
   match v {
@@ -1376,6 +1401,10 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       // chat-phone's request for the person's phone, last
       if phone {
         all.push(phone_post())
+      }
+      // chat-ask-end's card, last
+      if ask_end {
+        all.push(ask_end_post())
       }
       // each answer's message, after the rest
       for seq, label in fix_replied {

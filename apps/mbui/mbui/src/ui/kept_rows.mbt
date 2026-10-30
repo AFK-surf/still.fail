@@ -293,6 +293,9 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
   part_now.row = id
   part_now.part = st.part
   let mut ran = false
+  // (what its content reads of its rows' way: Ctx::row_way)
+  let laid_by = rows_laid_by.val
+  rows_laid_by.val = st.causes.map(fn(c) { (c, k) })
   self.with_parent(r, fn() {
     self.scope(k, fn() {
       // (its computed none of what holds it reads, else what holds it would run the row's build to see whether it
@@ -308,6 +311,7 @@ fn Ctx::row_of(self : Ctx, li : Int, st : ListState, k : Int, iw : Double, force
   })
   part_now.row = row_was
   part_now.part = part_was
+  rows_laid_by.val = laid_by
   // what it read, built or drawn again, read by the part its list is in: built before its rows are laid, it is drawn
   // again only while nothing they show changed (a row that holds a list of its own is built each frame: its list's
   // rows' are the part's alone)
