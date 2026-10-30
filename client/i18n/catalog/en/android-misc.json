@@ -580,7 +580,6 @@
   "android-misc.adb.ask.link.failed": "adb couldn't connect",
   "android-misc.adb.ask.link.missing": "the station has no adb",
   "android-misc.adb.ask.link.onPhone": "Open this message in still.fail on the phone to pair",
-  "android-misc.adb.ask.pair": "Pair",
   "android-misc.adb.stations": "Stations",
   "android-misc.adb.stations.notLent": "Not shared yet",
   "android-misc.adb.ask.pair.title": "This station isn't paired with your phone yet",

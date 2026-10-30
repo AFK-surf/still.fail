@@ -309,6 +309,8 @@ let en : Map[String, String] = {
   "android-misc.adb.ask.first": "{step} first",
   "android-misc.adb.ask.how": "See how",
   "android-misc.adb.ask.more": "Details",
+  "android-misc.adb.ask.pair.about": "Pair once on the phone, and it can reach this phone from then on.",
+  "android-misc.adb.ask.pair.title": "This station isn't paired with your phone yet",
   "android-misc.adb.ask.share": "Share",
   "android-misc.adb.ask.sharing": "Debugging shared with {name}",
   "android-misc.adb.ask.stop": "Stop sharing",

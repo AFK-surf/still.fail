@@ -185,11 +185,13 @@ fn phone_chat(mode : String, phone : Json) -> @ui.Tester {
 }
 
 ///|
-test "an approved request whose station is not paired with the phone yet: not green, 去配对 opening that station's 共享调试" {
+test "an approved request whose station is not paired with the phone yet: not green, a card opening that station's 共享调试" {
   let t = phone_chat("chat-phone-linked-unpaired", adb_phone_of(wireless=true))
   assert_true(t.find("已允许调试手机 · 本对话内 · 还差一步：这台手机还没和 station 配对") is Some(_))
   assert_true(t.find("已连上") is None)
-  t.tap_text("去配对")
+  // (a login's card's look: no button of its own, the card the way there)
+  assert_true(t.find("去配对") is None)
+  t.tap_text("这台 station 还没和你的手机配对")
   t.run_for(@ui.move_most_ms)
   // (the chat's station's own page, the one waiting on it: not settings' page, which has no station's pairing)
   assert_true(t.find("Studio") is Some(_))
@@ -197,11 +199,11 @@ test "an approved request whose station is not paired with the phone yet: not gr
   // on a computer, no adb of its own: where it is paired, said, nothing to tap
   let t = phone_chat("chat-phone-linked-unpaired-desk", adb_phone_of(supported=false))
   assert_true(t.find("在手机的 still.fail 里打开这条消息配对") is Some(_))
-  assert_true(t.find("去配对") is None)
+  assert_true(t.find("这台 station 还没和你的手机配对") is None)
   // connected: said, nothing more to do
   let t = phone_chat("chat-phone-linked-connected", adb_phone_of(wireless=true))
   assert_true(t.find("已允许调试手机 · 本对话内 · 已连上") is Some(_))
-  assert_true(t.find("去配对") is None)
+  assert_true(t.find("这台 station 还没和你的手机配对") is None)
   // offered there no longer
   let t = phone_chat("chat-phone-linked-gone", adb_phone_of(wireless=true))
   assert_true(t.find("已允许调试手机 · 本对话内 · 手机现在没有共享给这台 station") is Some(_))

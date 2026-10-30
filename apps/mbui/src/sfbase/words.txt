@@ -298,6 +298,8 @@ android-misc.act.unconfirmed
 android-misc.adb.ask.first
 android-misc.adb.ask.how
 android-misc.adb.ask.more
+android-misc.adb.ask.pair.about
+android-misc.adb.ask.pair.title
 android-misc.adb.ask.share
 android-misc.adb.ask.sharing
 android-misc.adb.ask.stop

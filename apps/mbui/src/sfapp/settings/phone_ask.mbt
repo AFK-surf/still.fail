@@ -126,9 +126,9 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
 /// How a request ended, in a line: a dot (green while granted) and 已允许调试手机 · 本对话内, 已拒绝调试手机, or why it
 /// ended (已收回, 对话已归档, 授权已到期); laid as vault_outcome's (`inline`: by the message's picture). Granted, how
 /// its station's adb holds the phone (`link`, phone_link's; "": not said, as from a station before it did): green only
-/// once it is connected, and while the station waits to be paired with it, 去配对 (`pair`: on the phone, its station's
-/// 共享调试) or, elsewhere, that it is paired on the phone (2026-10-30: approved, its station not paired, the card said
-/// 已允许 and nothing more, and its page could not be found).
+/// once it is connected, and while the station waits to be paired with it, elsewhere than on the phone (`paired_here`
+/// false: on the phone its pairing is a card of its own, decision.mbt's) that it is paired on the phone (2026-10-30:
+/// approved, its station not paired, the card said 已允许 and nothing more, and its page could not be found).
 pub fn phone_outcome(
   c : @ui.Ctx,
   status : String,
@@ -136,35 +136,18 @@ pub fn phone_outcome(
   why : String,
   inline? : Bool = true,
   link? : String = "",
-  pair? : (() -> Unit)? = None,
+  paired_here? : Bool = false,
 ) -> Unit {
   let granted = status == "granted"
   let words = phone_outcome_words(status, scope, why)
   let linked = if granted && link != "" { words + " · " + phone_link_words(link) } else { words }
   ask_outcome(c, granted && (link == "" || link == "connected"), [@ui.span(linked)], inline~)
-  if granted && link == "unpaired" {
-    match pair {
-      // (what is left, a card of its own as the request's was: what, why once, and 去配对)
-      Some(go) =>
-        c.box(style=@sf.ask_card_room, fn() {
-          @sf.card(c, fn() {
-            ask_words(c, tr("android-misc.adb.ask.pair.title"), tr("android-misc.adb.ask.pair.about"))
-            ask_buttons(c, fn() {
-              if @sf.button(c, tr("android-misc.adb.ask.pair"), key="phone-pair", tone=Primary) {
-                go()
-              }
-            })
-          })
-          |> ignore
-        })
-        |> ignore
-      // (under the line's words, where they start)
-      None =>
-        c.box(style=if inline { ask_ended_past } else { ask_ended_at }, fn() {
-          c.text(tr("android-misc.adb.ask.link.onPhone"), style=ask_note) |> ignore
-        })
-        |> ignore
-    }
+  // (elsewhere than on the phone: where it is paired, under the line's words where they start)
+  if granted && link == "unpaired" && !paired_here {
+    c.box(style=if inline { ask_ended_past } else { ask_ended_at }, fn() {
+      c.text(tr("android-misc.adb.ask.link.onPhone"), style=ask_note) |> ignore
+    })
+    |> ignore
   }
 }
 
@@ -207,7 +190,7 @@ pub fn phone_steps(core : Core?, station : String) -> Route {
 
 ///|
 /// Whether this device lends its own adb (a phone that has what it takes, or will once a step is done): where a
-/// request's 去配对 opens its station's 共享调试.
+/// request's pairing card opens its station's 共享调试.
 pub fn phone_lends(c : @ui.Ctx) -> Bool {
   match adb_ready(c) {
     AdbLends | AdbLacks(_) => true

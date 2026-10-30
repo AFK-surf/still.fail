@@ -65,7 +65,6 @@ let en : Map[String, String] = {
   "android-misc.adb.ask.link.onPhone": "Open this message in still.fail on the phone to pair",
   "android-misc.adb.ask.link.unauthorized": "waiting for USB debugging to be allowed on the phone",
   "android-misc.adb.ask.link.unpaired": "one step left: this phone isn't paired with the station yet",
-  "android-misc.adb.ask.pair": "Pair",
   "android-misc.adb.ask.pair.about": "Pair once on the phone, and it can reach this phone from then on.",
   "android-misc.adb.ask.pair.title": "This station isn't paired with your phone yet",
   "android-misc.adb.chats.about": "An agent asks in its chat; once you allow it, only that chat can use the phone.",

@@ -57,7 +57,6 @@ android-misc.adb.ask.link.off
 android-misc.adb.ask.link.onPhone
 android-misc.adb.ask.link.unauthorized
 android-misc.adb.ask.link.unpaired
-android-misc.adb.ask.pair
 android-misc.adb.ask.pair.about
 android-misc.adb.ask.pair.title
 android-misc.adb.chats.about

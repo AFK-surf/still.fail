@@ -292,7 +292,7 @@ export function linkSaid(r: PhoneRequest): string {
     case "connected":
       return `${r.owner}'s phone (your grant ${r.id}) is connected to this station's adb now: call phone_use for its adb server and serial.`;
     case "unpaired":
-      return `${r.owner}'s phone (your grant ${r.id}) is lent to this station, but this station's adb is not paired with it yet. Its card in your chat shows its person how to pair it (去配对, in the still.fail app on the phone); you are told here when it connects. Do not send them to the phone's settings yourself.`;
+      return `${r.owner}'s phone (your grant ${r.id}) is lent to this station, but this station's adb is not paired with it yet. Its card in your chat shows its person how to pair it (a card under it, 这台 station 还没和你的手机配对, in the still.fail app on the phone); you are told here when it connects. Do not send them to the phone's settings yourself.`;
     case "gone":
       return `${r.owner}'s phone (your grant ${r.id}) is not offered to this station now; it offers itself again while its 共享调试 switch is on.`;
     default:
