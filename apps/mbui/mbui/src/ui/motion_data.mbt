@@ -183,9 +183,7 @@ pub fn Ctx::every(
   if period <= 0.0 {
     return 0
   }
-  if !self.periodic.iter().any(fn(p) { p.1.to_string() == loc.to_string() }) {
-    self.periodic.push((period, loc))
-  }
+  self.tick_said(false, period, loc)
   let gone = match elapsed {
     Some(e) => e
     None => self.clock - from
@@ -226,9 +224,7 @@ pub let cycle_step_ms : Double = 100.0
 /// (Tester::cycles), as what never ends.
 #callsite(autofill(loc))
 pub fn Ctx::cycle(self : Ctx, period : Double, resident? : Bool = false, loc~ : SourceLoc) -> Double {
-  if !self.cycles.iter().any(fn(c) { c.1.to_string() == loc.to_string() }) {
-    self.cycles.push((period, loc))
-  }
+  self.tick_said(true, period, loc)
   if period <= 0.0 {
     self.cycling = true
     part_live()
@@ -484,4 +480,43 @@ fn spring_end(x0 : Double, v0 : Double, k : Double, c : Double, eps : Double) ->
   let amp = x0.abs() + (v0.abs() + z * w0 * x0.abs()) / (w0 * dmax(1.0e-6, (1.0 - z * z).abs().sqrt())) + 1.0
   let bound = dmax(amp, amp * w0)
   dmax(0.0, @dmath.ln(bound / eps) / rate)
+}
+
+///|
+/// What comes again while it shows, said where it is built (`cycle`: never ends, Ctx::cycle; else every `period`,
+/// Ctx::every): the frame's (Tester::cycles, periodic), and held by the node it is built in (`node`, else what is being
+/// built), said again of it where it is kept as its nodes (ticks_said_again).
+fn Ctx::tick_said(self : Ctx, cycle : Bool, period : Double, loc : SourceLoc, node? : Int = -1) -> Unit {
+  self.tick_add(cycle, period, loc)
+  let i = if node >= 0 { node } else { self.cur }
+  if i >= 0 && i < self.count {
+    let n = self.nodes[i]
+    match n.ticks {
+      Some(ts) => ts.push((cycle, period, loc))
+      None => n.ticks = Some([(cycle, period, loc)])
+    }
+  }
+}
+
+///|
+fn Ctx::tick_add(self : Ctx, cycle : Bool, period : Double, loc : SourceLoc) -> Unit {
+  let into = if cycle { self.cycles } else { self.periodic }
+  if !into.iter().any(fn(c) { c.1.to_string() == loc.to_string() }) {
+    into.push((period, loc))
+  }
+}
+
+///|
+/// What the nodes `from` until `to` said comes again as they were built (a row or a part kept as its nodes, put back
+/// unbuilt), said again.
+fn Ctx::ticks_said_again(self : Ctx, from : Int, to : Int) -> Unit {
+  for i in from..<to {
+    match self.nodes[i].ticks {
+      Some(ts) =>
+        for t in ts {
+          self.tick_add(t.0, t.1, t.2)
+        }
+      None => ()
+    }
+  }
 }

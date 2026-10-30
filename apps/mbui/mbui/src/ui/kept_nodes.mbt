@@ -55,25 +55,19 @@ priv struct RowNodes {
   mut theme : Theme?
   mut ok : Bool
   mut why : String
-  /// what its build said of the frame: said.mbt's build lists; what it marked used this frame; the cycles and the
-  /// moments it said come again (for what says why a frame is drawn)
+  /// what its build said of the frame: said.mbt's build lists; what it marked used this frame
   said : Array[&SaidAgain]
   marks : Array[Int]
   /// what it read of how lists stand (Ctx::list_info_as, read back)
   info : Array[(String, () -> Bool)]
   used : Array[() -> Unit]
   again : Array[(Int) -> Unit]
-  cycles : Array[(Double, SourceLoc)]
-  periodic : Array[(Double, SourceLoc)]
   /// what it read of the layout as it was built, and what it read (Ctx::laid_rect, laid_size, left_out): read back once
   /// the frame is laid out, kept or built
   laid : Array[LaidRead]
   /// what of its nodes is worked out once the frame is laid out, as its build left it (how opaque each is, its corners:
   /// what is left out of a row with no room for it, corners.mbt's `Inner`), for that to be worked out from again
   laid_looks : Array[(Double, Double, FixedArray[Double]?, Bool)]
-  /// how many of its rows leave out what they have not the room for (Ctx::fit_rows: what is left out is worked out
-  /// once the frame is laid out, readback.mbt)
-  mut fit_rows : Int
   /// how its nodes hold each other as built, from its first (-1: none of its own: what holds its root, a list's rows), and
   /// the lists it holds by their ids (a part's), laid out each frame
   links : Array[(Int, Int, Int, Int)]
@@ -376,15 +370,12 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     info: [],
     used: [],
     again: [],
-    cycles: [],
-    periodic: [],
     laid: [],
     laid_looks: [],
     links: [],
     lists: [],
     key: "",
     read: false,
-    fit_rows: 0,
     built_frame: -1,
     built_at: -1.0,
     shown: -1,
@@ -527,9 +518,6 @@ priv struct NodesBegun {
   census : Array[Int]
   info : Int
   drawn : Int
-  cycles : Int
-  periodic : Int
-  fit : Int
 }
 
 ///|
@@ -545,9 +533,6 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
     census,
     info: self.info_reads.length(),
     drawn: dr.entries.length(),
-    cycles: self.cycles.length(),
-    periodic: self.periodic.length(),
-    fit: self.fit_rows,
   }
 }
 
@@ -560,7 +545,6 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   if !part && rn.reads_all {
     nodes_run.built_read = nodes_run.built_read + 1
   }
-  rn.fit_rows = self.fit_rows - b.fit
   rn.built_frame = self.frame_no
   rn.built_at = self.clock
   rn.base = r
@@ -575,14 +559,6 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   rn.info.clear()
   for j in b.info..<self.info_reads.length() {
     rn.info.push(self.info_reads[j])
-  }
-  rn.cycles.clear()
-  for j in b.cycles..<self.cycles.length() {
-    rn.cycles.push(self.cycles[j])
-  }
-  rn.periodic.clear()
-  for j in b.periodic..<self.periodic.length() {
-    rn.periodic.push(self.periodic[j])
   }
   let census_after : Array[Int] = []
   self.kept_census(census_after)
@@ -749,17 +725,7 @@ fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
     self.info_reads.push(r)
   }
   self.moves_said_again(rn.base, rn.base + rn.n)
-  self.fit_rows = self.fit_rows + rn.fit_rows
-  for cy in rn.cycles {
-    if !self.cycles.iter().any(fn(x) { x.1.to_string() == cy.1.to_string() }) {
-      self.cycles.push(cy)
-    }
-  }
-  for pe in rn.periodic {
-    if !self.periodic.iter().any(fn(x) { x.1.to_string() == pe.1.to_string() }) {
-      self.periodic.push(pe)
-    }
-  }
+  self.ticks_said_again(rn.base, rn.base + rn.n)
   nodes_run.kept = nodes_run.kept + 1
   nodes_run.kept_at.push((rn.list, rn.item))
 }

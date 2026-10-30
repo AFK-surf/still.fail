@@ -451,10 +451,9 @@ pub struct Ctx {
   /// they move
   words_shape_reads : Map[String, Bool]
   /// the boxes whose rows left them out as last laid out (Ctx::box `drop`), by id, and those the view asked about as
-  /// it built (Ctx::left_out: what it was told); how many rows laid out this pass may leave something out
+  /// it built (Ctx::left_out: what it was told)
   left_ids : Map[Int, Bool]
   left_reads : Map[Int, (Bool, SourceLoc)]
-  mut fit_rows : Int
   laid_watch : Map[Int, Int]
   laid_rects : Map[Int, (Double, Double, Double, Double)]
   /// the boxes whose parts shown across are asked (Ctx::shown_across): when last, and the name of the boxes whose parts
@@ -732,7 +731,6 @@ fn Ctx::new() -> Ctx {
     words_shape_reads: Map::new(),
     left_ids: Map::new(),
     left_reads: Map::new(),
-    fit_rows: 0,
     laid_watch: Map::new(),
     laid_rects: Map::new(),
     shown_watch: Map::new(),

@@ -56,9 +56,7 @@ pub fn Ctx::cycle_look(
   if period <= 0.0 || i < 0 {
     return
   }
-  if !self.cycles.iter().any(fn(c) { c.1.to_string() == loc.to_string() }) {
-    self.cycles.push((period, loc))
-  }
+  self.tick_said(true, period, loc, node=i)
   self.drawn_of(i).cycle = Some(CycleLook::{ period, resident, held, look, loc })
 }
 

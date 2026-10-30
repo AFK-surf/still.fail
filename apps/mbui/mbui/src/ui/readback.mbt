@@ -70,21 +70,17 @@ pub fn Ctx::left_out(self : Ctx, id : Int, loc~ : SourceLoc) -> Bool {
 /// nowhere, and pressed nowhere (no opacity: what it holds with it), kept by id for Ctx::left_out; what the view read
 /// of it looked at again.
 fn Ctx::left_out_after_layout(self : Ctx) -> Unit {
-  if self.fit_rows > 0 || !self.left_ids.is_empty() {
-    self.left_ids.clear()
-    if self.fit_rows > 0 {
-      for i in 0..<self.count {
-        let n = self.nodes[i]
-        if n.parent >= 0 && n.fl.left_out() && self.nodes[n.parent].fl.style.fits {
-          n.opacity = 0.0
-          if n.id != 0 {
-            self.left_ids[n.id] = true
-          }
-        }
+  // (from the nodes: a row kept as its nodes leaves out what it left out as it was laid)
+  self.left_ids.clear()
+  for i in 0..<self.count {
+    let n = self.nodes[i]
+    if n.parent >= 0 && n.fl.left_out() && self.nodes[n.parent].fl.style.fits {
+      n.opacity = 0.0
+      if n.id != 0 {
+        self.left_ids[n.id] = true
       }
     }
   }
-  self.fit_rows = 0
   self.kept_left()
   let moved : Array[String] = []
   self.left_reads.each(fn(id, r) {
