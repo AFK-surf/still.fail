@@ -104,7 +104,7 @@ test "a chat's 文件 tab, the same on a touch device and on a computer: the pla
     t.tap_text("文档")
     t.frame()
     t.frame()
-    assert_true(t.find("整个文件夹") is Some(_), msg="\{platform}")
+    assert_true(t.find("整个文件夹") is Some(_), msg="\{platform} " + t.words().map(fn(w) { w.0 }).join("|"))
     // a file pressed: picked (again: no longer), then 添加 1 个
     t.tap_text("发布清单.md")
     t.frame()
@@ -114,5 +114,38 @@ test "a chat's 文件 tab, the same on a touch device and on a computer: the pla
     assert_eq(sent.length(), 1, msg="\{platform}")
     assert_eq(sent[0].abs, fix_docs + "/发布清单.md")
     assert_false(sent[0].dir)
+  }
+}
+
+///|
+test "a chat's 文件 tab: its places as the files' sidebar has them: 个人收藏, each station's home, the home's folders and its disks, then what it pins" {
+  let calls : Array[Made] = []
+  let t = tab_tester(calls)
+  let kept : Json = [{ "station": "ws1/st1", "root": Json::string(fix_docs), "path": "设计稿", "name": "设计稿" }]
+  fix_browse_prefs_set({ "driveFavorites": { "ws1": Json::string(kept.stringify()) } }) |> ignore
+  @sfdesk.tab_place_set("ws1", None)
+  // (the station's places asked of the made-up core on the first frame, its rows on the next)
+  t.frame()
+  t.frame()
+  assert_true(named(calls, "drive.folders").length() > 0)
+  assert_true(t.find("个人收藏") is Some(_))
+  assert_true(t.find("设计稿") is Some(_), msg="the favourite")
+  assert_true(t.find("外接硬盘") is Some(_), msg="Studio's disk")
+  assert_true(t.find("下载") is Some(_), msg="a folder of Studio's home")
+  assert_true(t.find("备份盘") is Some(_), msg="Studio's pinned folder not among its places")
+  assert_true(t.find("照片") is Some(_), msg="MBA's pinned folder")
+  // a favourite pressed: the tab in it
+  t.tap_text("设计稿")
+  t.frame()
+  t.frame()
+  assert_true(t.find("图标.png") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  // a disk pressed: the tab at its top
+  @sfdesk.tab_place_set("ws1", None)
+  t.frame()
+  t.tap_text("外接硬盘")
+  t.frame()
+  match @sfdesk.tab_place("ws1") {
+    Some(Some(at)) => assert_eq(at.root, Some("/Volumes/外接硬盘"))
+    _ => fail("the tab not at the disk")
   }
 }
