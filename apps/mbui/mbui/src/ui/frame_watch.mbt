@@ -835,7 +835,10 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     }
   } else if nodes_run.told {
     "what a part or a list's row read changed" +
-    (if nodes_run.told_at != "" { ", set at \{nodes_run.told_at}" } else { "" })
+    (match nodes_run.told_at {
+      Some(at) => ", set at \{at}"
+      None => ""
+    })
   } else if !paint_base.laid_same {
     "the one before it laid out otherwise"
   } else {
