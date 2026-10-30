@@ -357,8 +357,8 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) 
   c.box(style=@sf.ask_card_room, fn() {
     @sf.card(c, fn() {
       if sharing {
-        @settings.ask_words(c, @sf.t("android-misc.adb.ask.sharing", args=[("name", name)]), text(card, "line"))
-        @settings.ask_buttons(c, fn() {
+        @sf.ask_words(c, @sf.t("android-misc.adb.ask.sharing", args=[("name", name)]), text(card, "line"))
+        @sf.ask_buttons(c, fn() {
           if @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Primary) {
             open_adb(src, station)
           }
@@ -370,10 +370,10 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) 
       }
       let title = @sf.t("android-misc.adb.ask.title", args=[("name", name)])
       match ready {
-        @settings.AdbCannot(why) => @settings.ask_words(c, title, why)
+        @settings.AdbCannot(why) => @sf.ask_words(c, title, why)
         @settings.AdbLacks(step) => {
-          @settings.ask_words(c, title, @sf.t("android-misc.adb.ask.first", args=[("step", step)]))
-          @settings.ask_buttons(c, fn() {
+          @sf.ask_words(c, title, @sf.t("android-misc.adb.ask.first", args=[("step", step)]))
+          @sf.ask_buttons(c, fn() {
             if @sf.button(c, @sf.t("android-misc.adb.ask.how"), key=key + "/how", tone=Primary) {
               open_adb(src, station)
             }
@@ -383,8 +383,8 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) 
           // lent to another station now: lending it here moves it
           let now = (src.topic)("adbShare", {}).value
           let elsewhere = flag(now, "sharing") && text(now, "station") != station
-          @settings.ask_words(c, title, @sf.t(if elsewhere { "android-misc.adb.elsewhere" } else { "android-misc.adb.hour" }))
-          @settings.ask_buttons(c, fn() {
+          @sf.ask_words(c, title, @sf.t(if elsewhere { "android-misc.adb.elsewhere" } else { "android-misc.adb.hour" }))
+          @sf.ask_buttons(c, fn() {
             if @sf.button(c, @sf.t("android-misc.adb.ask.share"), key=key + "/share", tone=Primary, busy=@settings.adb_asking()) {
               @settings.adb_lend(station, name)
             }
@@ -394,7 +394,7 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) 
           })
         }
         // (not known yet what the phone has: the question alone, its answer as it comes)
-        @settings.AdbUnknown => @settings.ask_words(c, title, "")
+        @settings.AdbUnknown => @sf.ask_words(c, title, "")
       }
     })
     |> ignore

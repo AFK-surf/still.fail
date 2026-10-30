@@ -892,10 +892,11 @@ pub fn page_head(
 
 ///|
 /// A page card of words (pages.css.ts card): card_pad in from every side, round by the ladder's card step; a solid
-/// button in its foot corner stands there itself (foot_reach), its corner the card's whatever is in it.
-pub fn card(c : @ui.Ctx, gap? : Double = 14.0, fill? : Bool = false, body : () -> Unit) -> Int {
+/// button in its foot corner stands there itself (foot_reach), its corner the card's whatever is in it; `ground` other
+/// than the theme's card (over a picture: a player's).
+pub fn card(c : @ui.Ctx, gap? : Double = 14.0, fill? : Bool = false, ground? : Int64, body : () -> Unit) -> Int {
   let t = theme()
-  c.box(pad=card_pad, gap~, bg=t.p.card, radius=card_corner, w=if fill { card_across } else { Auto }, body)
+  c.box(pad=card_pad, gap~, bg=ground.unwrap_or(t.p.card), radius=card_corner, w=if fill { card_across } else { Auto }, body)
 }
 
 ///|

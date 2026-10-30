@@ -25,7 +25,7 @@ pub fn phone_card(
   // (a card of words, as a vault request's: its answer in its foot corners; answered while it shows, how it went in its
   // answer's place: answered_in_place)
   @sf.card(c, fn() {
-    ask_words(c, tr("android-misc.adb.ask.chat.title"), reason)
+    @sf.ask_words(c, tr("android-misc.adb.ask.chat.title"), reason)
     match core {
       Some(core) if mine =>
         answered_in_place(c, "phone/" + request, ended.map(fn(e) { (e.0 == "granted", [@ui.span(phone_outcome_words(e.0, e.1, e.2))]) }), fn() {
@@ -33,7 +33,7 @@ pub fn phone_card(
         })
       _ =>
         match who {
-          Some(w) if w != "" => c.text(w, style=ask_note) |> ignore
+          Some(w) if w != "" => c.text(w, style=@sf.ask_note) |> ignore
           _ => ()
         }
     }
@@ -87,10 +87,10 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
     })
   }
   match lacks {
-    Some(step) => c.text(fill("android-misc.adb.ask.first", [("step", step)]), style=ask_note) |> ignore
+    Some(step) => c.text(fill("android-misc.adb.ask.first", [("step", step)]), style=@sf.ask_note) |> ignore
     None => ()
   }
-  ask_buttons(c, fn() {
+  @sf.ask_buttons(c, fn() {
     if lacks is Some(_) {
       if @sf.button(c, tr("android-misc.adb.ask.how"), key="phone/" + request + "/how", tone=Primary) {
         how()
@@ -145,7 +145,7 @@ pub fn phone_outcome(
   // (elsewhere than on the phone: where it is paired, under the line's words where they start)
   if granted && link == "unpaired" && !paired_here {
     c.box(style=if inline { ask_ended_past } else { ask_ended_at }, fn() {
-      c.text(tr("android-misc.adb.ask.link.onPhone"), style=ask_note) |> ignore
+      c.text(tr("android-misc.adb.ask.link.onPhone"), style=@sf.ask_note) |> ignore
     })
     |> ignore
   }

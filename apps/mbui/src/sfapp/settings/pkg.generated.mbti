@@ -41,11 +41,7 @@ pub fn ask(String, String, String, String, (String) -> Unit, hint? : String, sec
 
 pub fn ask_action(String) -> Unit
 
-pub fn ask_buttons(@ui.Ctx, () -> Unit) -> Unit
-
 pub fn ask_outcome(@ui.Ctx, Bool, Array[@ui.Run], inline? : Bool) -> Unit
-
-pub fn ask_words(@ui.Ctx, String, String) -> Unit
 
 pub fn avatar(@ui.Ctx, Core, String, String, Double, picture? : String) -> Unit
 

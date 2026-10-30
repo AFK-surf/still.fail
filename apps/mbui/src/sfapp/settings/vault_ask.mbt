@@ -198,7 +198,7 @@ pub fn vault_ask(
     vault_asked(c, ask)
     for line in said {
       if line != "" {
-        c.text(line, style=ask_note) |> ignore
+        c.text(line, style=@sf.ask_note) |> ignore
       }
     }
     match answer {
@@ -292,7 +292,7 @@ pub fn vault_ask_words(c : @ui.Ctx, ask : Asked) -> Unit {
 fn vault_asked(c : @ui.Ctx, ask : Asked) -> Unit {
   let t = @sf.theme()
   let save = ask.save_kind != ""
-  c.box(style=ask_what, fn() {
+  c.box(style=@sf.ask_what, fn() {
     let named = fn(n) { @ui.span(n, weight=600, color=t.p.text) }
     let words = fn(w) { @ui.span(w, weight=400, color=t.p.text) }
     let runs = if save {
@@ -309,7 +309,7 @@ fn vault_asked(c : @ui.Ctx, ask : Asked) -> Unit {
     if save && sub != "" {
       runs.push(@ui.span("  " + sub, color=t.p.muted))
     }
-    c.rich(runs, style=ask_title) |> ignore
+    c.rich(runs, style=@sf.ask_title) |> ignore
     if !save && ask.command != "" {
       c.rich([@ui.span(ask.command, mono=true)], style=ask_command) |> ignore
     }
@@ -326,32 +326,10 @@ fn vault_asked(c : @ui.Ctx, ask : Asked) -> Unit {
       if elsewhere {
         runs.push(@ui.span(fill("android-settings.vault.ask.on", [("station", ask.station)])))
       }
-      c.rich(runs, style=ask_note) |> ignore
+      c.rich(runs, style=@sf.ask_note) |> ignore
     }
   })
   |> ignore
-}
-
-///|
-/// An agent's ask as a card says it where it is not a vault's (a station's 共享调试 asked for: @sfbase's
-/// adb_link_card), as vault_asked says one: its title the question, 14 on 20, and under it the one line the answer
-/// turns on ("" none), 12 and quiet.
-pub fn ask_words(c : @ui.Ctx, title : String, note : String) -> Unit {
-  let t = @sf.theme()
-  c.box(style=ask_what, fn() {
-    c.rich([@ui.span(title, weight=600, color=t.p.text)], style=ask_title) |> ignore
-    if note != "" {
-      c.text(note, style=ask_note) |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
-/// Its answer's buttons, as vault_foot lays them last on its card: a line of them, on to a second what has not the room
-/// on the first, out in the card's foot corners.
-pub fn ask_buttons(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=ask_foot.then(@sf.foot_reach(@sf.button_height())), flow=true, line_gap=ask_foot_lines(), body) |> ignore
 }
 
 ///|
@@ -437,7 +415,7 @@ pub fn vault_foot(
   extra? : (() -> Unit)? = None,
   foot? : Bool = false,
 ) -> Unit {
-  let note = fn(words : String) { c.text(words, style=ask_note) |> ignore }
+  let note = fn(words : String) { c.text(words, style=@sf.ask_note) |> ignore }
   let lasts = match answer {
     Elsewhere => {
       note(tr("android-settings.vault.approve.inApp"))
@@ -598,7 +576,7 @@ pub fn vault_foot(
     }
   }
   let acts = fn() {
-    c.box(style=ask_foot, id=acts_id, fn() {
+    c.box(style=@sf.ask_foot, id=acts_id, fn() {
       if answer is SetUp {
         // kept only in a vault that is on here: the way to turn it on first
         if @sf.button(c, tr("android-settings.vault.turnOn"), key="vault/" + request + "/on", tone=Primary) {
@@ -628,7 +606,7 @@ pub fn vault_foot(
     if over {
       c.box(style=if foot { ask_over.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_over }, pick) |> ignore
     }
-    c.box(style=if foot { ask_foot.then(@sf.foot_reach(@sf.button_height())) } else { ask_foot }, flow=true, line_gap=ask_foot_lines(), fn() {
+    c.box(style=if foot { @sf.ask_foot.then(@sf.foot_reach(@sf.button_height())) } else { @sf.ask_foot }, flow=true, line_gap=@sf.ask_foot_lines(), fn() {
       acts()
       if !over {
         pick()
@@ -650,24 +628,9 @@ fn vaults_of(core : Core, ws : String) -> Json? {
 }
 
 ///|
-/// What is asked, over the answer: its lines 2 apart (VaultAsk.css.ts what).
-// kept across runs: a value (no field of it changes)
-let ask_what : @ui.Style = @ui.css("w=Full gap=S0_5")
-
-///|
-/// Its title, 14 on 20 (the account after it quieter, its own run).
-// kept across runs: a value (no field of it changes)
-let ask_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, w=Full)
-
-///|
 /// The command, one line of it, 12 and quiet.
 // kept across runs: a value (no field of it changes)
 let ask_command : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4_75, color=Muted, wrap=false, max_lines=1, w=Full)
-
-///|
-/// A line of what is out of the ordinary, or where there is no answer to give here: 12 and quiet.
-// kept across runs: a value (no field of it changes)
-let ask_note : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4_75, color=Muted, w=Full)
 
 ///|
 /// What the person types in, over the answer: its fields 8 apart, the card's width (VaultAsk.css.ts typed).
@@ -684,12 +647,7 @@ let ask_file : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 let ask_file_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, wrap=false, w=Cut)
 
 ///|
-/// The answer's buttons, 10 apart (pages.css.ts cardFoot).
-// kept across runs: a value (no field of it changes)
-let ask_foot : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
-
-///|
-/// Between the answer's buttons (ask_foot's gap), to say whether how long has the room beside them.
+/// Between the answer's buttons (@sf.ask_foot's gap), to say whether how long has the room beside them.
 let ask_foot_gap : Double = 10.0
 
 ///|
@@ -701,15 +659,6 @@ let ask_room : @ui.Style = @ui.css("w=Full")
 /// How long, on a line of its own over the buttons where it has not the room beside them: the foot's lines apart.
 // kept across runs: a value (no field of it changes)
 let ask_over : @ui.Style = @ui.css("row mb=S2")
-
-
-///|
-/// Between the foot's lines, where its buttons go on to a second (8).
-/// (more where a press's room is taller than a button and the one under it: a finger's 44 round a button of 34)
-fn ask_foot_lines() -> Double {
-  let more = @ui.room_least() - @sf.button_height()
-  if more > 8.0 { more } else { 8.0 }
-}
 
 ///|
 /// How it ended: a dot and its words, a little under what is over it.
