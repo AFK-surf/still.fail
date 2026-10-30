@@ -296,7 +296,7 @@ pub fn composer(
   } else if composer_let_go(c, spec.draft) {
     // (let go by words sent from it: down on their flight's clock, with its room, composer_hold)
     // det-ok(motion-length): words sent's own, set with their flight (docs/motion.md kind 4)
-    @motion.tween(@sfbase.sent_down_ms, ease=Move)
+    @motion.tween(@sfbase.sent_down_of(spec.draft), ease=Move)
   } else if opening && !moved {
     // (opened from a capsule or let go to one: its field passes by its ＋ and send on their way, kept off them only on
     // this clock so far; on a faster one it cut into ＋, the user 2026-10-30: 「输入框盖住了加号和发送」)
@@ -1799,10 +1799,34 @@ fn composer_hold(draft : String, room : Double, box : Double, ms : Double) -> Un
   a.snap(1.0)
   // (down on the flight's clock of what was sent, as its ground does: composer_let_go)
   // det-ok(motion-length): words sent's own, set with their flight (docs/motion.md kind 4)
-  a.animate(0.0, @motion.tween(@sfbase.sent_down_ms, ease=Move, delay=ms))
+  a.animate(0.0, @motion.tween(@sfbase.sent_down_of(draft), ease=Move, delay=ms))
   let b = @motion.anim(c, "composer/held-box/" + draft, 0.0, global=true)
   b.snap(box)
   b.animate(0.0, @motion.Snap(ms))
+}
+
+///|
+/// The least room a chat's composer takes at its page's foot: as tall as it takes opened with one line where it is
+/// (its box that tall, what is round it as it is).
+fn composer_least(c : @ui.Ctx) -> Double {
+  let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c.width))
+  match @motion.measured(c, "composer/content") {
+    Some(box) => foot - box + composer_open_box()
+    None => composer_open_room(c.width)
+  }
+}
+
+///|
+/// The room under a chat's list for draft `draft`'s composer, `room` as its page has it (composer_room's): let go by
+/// words sent from it, where it comes to stand (opened with one line, emptied), the list's foot going there on the
+/// list's way as they leave it, one move with their row (sfbase's shown_rows, which says when: `let_go`); else as
+/// it is.
+pub fn composer_foot_room(c : @ui.Ctx, draft : String, room : Double, let_go~ : Bool) -> Double {
+  if let_go {
+    dmax(room - dmax(composer_room(c, draft) - composer_least(c), 0.0), 0.0)
+  } else {
+    room
+  }
 }
 
 ///|
@@ -1846,10 +1870,7 @@ pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false) -> Do
   // never less than it takes opened with one line where it is (its box that tall, what is round it as it is: the web's
   // --composer-room, max(the composer's height, an opened one-line composer's)): opened or let go, a capsule or a box,
   // the list keeps its words where they are; only a line more, a file, a quote, what is said over it move them
-  let least = match @motion.measured(c, "composer/content") {
-    Some(box) => foot - box + composer_open_box()
-    None => composer_open_room(c.width)
-  }
+  let least = composer_least(c)
   // (`settled`: as it comes to stand, not where its shape is on its way: a new chat become its chat, the composer
   // coming down from the middle of the pane to its foot, the chat's rows standing over its foot from the first, not over
   // the middle of the pane where the new chat's scene still is)

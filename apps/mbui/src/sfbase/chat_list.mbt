@@ -44,6 +44,9 @@ pub(all) struct Reading {
   /// what the room under its rows is kept for besides the composer (its end clear of the bell floating over it:
   /// ask_clears), the Foot row's version: its height goes to another as that changes (list_size.mbt)
   mut foot_sign : String
+  /// the last words sent from here that let go of the composer (their row's key): the composer's room under the rows
+  /// goes down where it comes to stand as they do, the Foot row's version with it
+  mut sent_foot : String
   /// the first message's entry and where it was in the list, the last frame
   mut head : String
   mut head_at : Int
@@ -208,6 +211,7 @@ pub fn reading_of(key : String) -> Reading {
     None => {
       let r = {
         foot_sign: "",
+        sent_foot: "",
         head: "",
         head_at: -1,
         placed: false,
@@ -1167,20 +1171,46 @@ fn shown_rows(
   watched : Bool,
   flight : SendFlight?,
 ) -> (Array[Entry], Array[String]) {
+  // words sent let go of the composer as they leave it, a share of their way on (flight_placed): their row opens
+  // from then, the composer's room closes from then (composer_hold), as long, so that what is over them goes one way;
+  // their row opening from the moment they were sent, the room after, on a curve of its own, had it go up, then down
+  // (set out this frame as their row is in the list, when not yet: flight_placed); what else changes the rows' heights
+  // from now till then (a card they answer closing) sets out with them, one way
+  let now = c.moment()
+  let mut told_foot = false
+  let leaving = match flight {
+    Some(f) if !f.carried => {
+      if f.placed && rd.sent_foot != "/" + f.key {
+        rd.sent_foot = "/" + f.key
+        told_foot = true
+      }
+      let set_out = if f.placed { f.set_out } else { now }
+      Some((f.key, set_out + flight_settle * f.ms, (1.0 - flight_settle) * f.ms))
+    }
+    _ => None
+  }
   rd.rows.rows(
     c,
-    keys,
+    // (given anew as the Foot row's version changes with them: the same arrays as the frame before are not looked over)
+    if told_foot { keys.copy() } else { keys },
     list,
     fn(e) {
       match e {
-        Foot => "foot" + rd.foot_sign
+        Foot => "foot" + rd.foot_sign + rd.sent_foot
         _ => shown_sign(e)
       }
     },
     watched~,
     ms=fn(k) {
-      match flight {
-        Some(f) if f.key == k => Some(flight_ms_of(f))
+      match (leaving, flight) {
+        (Some((key, _, ms)), _) if key == k || k == "foot" => Some(ms)
+        (_, Some(f)) if f.key == k => Some(flight_ms_of(f))
+        _ => None
+      }
+    },
+    from=fn(k) {
+      match leaving {
+        Some((_, at, _)) if at > now => Some(at)
         _ => None
       }
     },
@@ -1405,6 +1435,16 @@ pub fn tell_place(src : Source, r : ChatRef, v : ChatView, rd : Reading) -> Unit
   }
   rd.told_place = said
   (src.call)("chat.place", Json::object(place), fn(_) {  })
+}
+
+///|
+/// Whether the composer's room under chat list `rd`'s rows is let go by words sent (`flight`, the list's this frame) as
+/// its rows were given this frame: its Foot row told so (shown_rows), its room laid out where it comes to stand.
+pub fn sent_let_go(rd : Reading, flight : SendFlight?) -> Bool {
+  match flight {
+    Some(f) => f.placed && !f.carried && rd.sent_foot == "/" + f.key
+    None => false
+  }
 }
 
 ///|

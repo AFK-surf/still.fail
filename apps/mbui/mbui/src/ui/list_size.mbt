@@ -130,7 +130,8 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
     r.h = h
     r.v = v
     r.to = to
-    r.at = now
+    // (its own not set out yet: from then)
+    r.at = dmax(now, cause.at())
     r.start = c.start
     r.end = c.end
     r.cause = cause
@@ -266,7 +267,9 @@ pub fn[T] ListRows::new() -> ListRows[T] {
 /// since they were last given is said from now: a key new comes, one gone goes, another version changes. Not
 /// `watched` (the list not followed, its page another's, a page of it read anew): what changed is so at once.
 /// `ms`: how long a row's coming takes where it goes with another motion of its cause (words flying to it), a row's
-/// move otherwise. `comes`: whether a row new to the list comes now (false: it was there before, only brought now, as
+/// move otherwise; `from`: the moment such a row's change sets out where that motion has it later than now (words
+/// sent coming in as they leave the composer, the composer's room let go as they do), from which it is `ms` long, the
+/// row as it was till then. `comes`: whether a row new to the list comes now (false: it was there before, only brought now, as
 /// what was caught up on), there at once.
 pub fn[T] ListRows::rows(
   self : ListRows[T],
@@ -276,6 +279,7 @@ pub fn[T] ListRows::rows(
   version : (T) -> String,
   watched? : Bool = true,
   ms? : (String) -> Double? = fn(_) { None },
+  from? : (String) -> Double? = fn(_) { None },
   comes? : (T) -> Bool = fn(_) { true },
 ) -> (Array[T], Array[String]) {
   let now = c.moment()
@@ -313,7 +317,7 @@ pub fn[T] ListRows::rows(
       match self.was.get(k) {
         None =>
           if comes(items[i]) {
-            self.causes.by[k] = (Comes(now), ms(k).unwrap_or(row_size_ms))
+            self.causes.by[k] = (Comes(from(k).unwrap_or(now)), ms(k).unwrap_or(row_size_ms))
             began = true
           }
         // (changed as it comes: still coming, on to what it is now)
@@ -321,7 +325,7 @@ pub fn[T] ListRows::rows(
           match self.causes.by.get(k) {
             Some((Comes(_), _)) => ()
             _ => {
-              self.causes.by[k] = (Changed(now), row_size_ms)
+              self.causes.by[k] = (Changed(from(k).unwrap_or(now)), ms(k).unwrap_or(row_size_ms))
               began = true
             }
           }
@@ -337,7 +341,7 @@ pub fn[T] ListRows::rows(
       let (k, item) = r
       if !here.contains(k) && !self.going.contains(k) {
         self.going[k] = { item, at: now, after: prev }
-        self.causes.by[k] = (Goes(now), row_size_ms)
+        self.causes.by[k] = (Goes(from(k).unwrap_or(now)), ms(k).unwrap_or(row_size_ms))
         began = true
       }
       if here.contains(k) || self.going.contains(k) {
@@ -349,22 +353,34 @@ pub fn[T] ListRows::rows(
     self.causes.by.clear()
     moved = true
   }
-  // (coming as long as another motion of its cause, told anew how long: words sent, timed once they know their way)
-  let retimed : Array[(String, Double, Double)] = []
+  // (coming or changing with another motion of its cause, told anew when and how long: words sent, timed once they
+  // know their way)
+  let retimed : Array[(String, RowSize, Double)] = []
   self.causes.by.each(fn(k, cm) {
-    match (cm, ms(k)) {
-      ((Comes(at), was), Some(now_ms)) if now_ms != was => retimed.push((k, at, now_ms))
-      _ => ()
+    let (cause, was) = cm
+    // (when, only while it has not set out: one on its way goes on as it goes)
+    let at = if cause.at() >= now { from(k).unwrap_or(cause.at()) } else { cause.at() }
+    let now_ms = ms(k).unwrap_or(was)
+    if cause is Goes(_) || (at == cause.at() && now_ms == was) {
+      return
     }
+    retimed.push((k, match cause { Comes(_) => Comes(at); _ => Changed(at) }, now_ms))
   })
   for r in retimed {
-    self.causes.by[r.0] = (Comes(r.1), r.2)
+    self.causes.by[r.0] = (r.1, r.2)
     moved = true
+    // (the way setting out with it, later than said: a row whose content goes on it itself goes from then, row_way)
+    if r.1.at() > self.causes.start {
+      self.causes.start = r.1.at()
+    }
   }
   self.given = true
   // the rows' way: from the last cause's moment to the latest end any was given
   if began {
-    self.causes.start = now
+    // (from the latest moment one sets out: now, or later where one's cause has it so: `from`)
+    let mut start = now
+    self.causes.by.each(fn(_, cm) { start = dmax(start, cm.0.at()) })
+    self.causes.start = start
     moved = true
   }
   let mut end = -1.0
