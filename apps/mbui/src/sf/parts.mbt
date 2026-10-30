@@ -1318,6 +1318,10 @@ let menu_open : Ref[String] = Ref("")
 let menu_open_at : Ref[(Double, Double)] = Ref((0.0, 0.0))
 
 ///|
+/// The menus closed and still going out (their exit playing), by their keys: what opened one keeps it built till gone.
+let menu_going : Set[String] = Set::new()
+
+///|
 /// No menu open, no mark's words (the app begun again).
 pub fn parts_reset() -> Unit {
   submenu_hover.val = ""
@@ -1326,6 +1330,7 @@ pub fn parts_reset() -> Unit {
   menu_open.val = ""
   about_open.val = ""
   menu_open_at.val = (0.0, 0.0)
+  menu_going.clear()
 }
 
 ///|
@@ -1369,6 +1374,11 @@ fn menu_items(
   let m = dropdown(c, key, open, trigger, entries, icons, menu_w, submenu~, side~, along~, offset~, at?, danger~)
   if open && !m.open {
     menu_open.val = ""
+  }
+  if m.shown && !m.open {
+    menu_going.add(key)
+  } else {
+    menu_going.remove(key)
   }
   match m.chosen {
     Some(v) => {
@@ -1510,6 +1520,14 @@ pub fn menu_open_here(key : String, x : Double, y : Double) -> Unit {
 /// Whether the menu `key` is open now.
 pub fn menu_is_open(key : String) -> Bool {
   menu_open.val == key
+}
+
+///|
+/// Whether the menu `key` is drawn: open, or closed and still going out. What shows its ⋯ only under the pointer
+/// keeps it while this holds, so the menu goes out where it hung (not cut off, nor from the window's corner where
+/// the ⋯ is not drawn the frame it plays in).
+pub fn menu_shown(key : String) -> Bool {
+  menu_open.val == key || menu_going.contains(key)
 }
 
 ///|

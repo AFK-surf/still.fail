@@ -35,7 +35,7 @@ pub let share_offered : Ref[(Int, Double, Double, () -> Unit, String)?] = Ref(No
 
 ///|
 /// What a message offers of itself (its link, its turn's picture), at the end of its author's name and time, where a
-/// mouse is the native input: one ⋯ shown while the pointer rests on the message (or its menu is open), the same two a
+/// mouse is the native input: one ⋯ shown while the pointer rests on the message (or its menu shows), the same two a
 /// right click offers, each in its words: two bare marks there said neither what they did nor that they were the
 /// message's (a picture's mark reads as a picture's, not as sharing). A finger has no resting pointer: where it is the
 /// native input both are on the bar of what it holds picked instead (pick_layer), not on every message's head.
@@ -46,7 +46,7 @@ pub fn share_turn_tool(c : @ui.Ctx, key : String, row : Int, link : String, go :
   }
   let menu = key + "/message-menu"
   c.box(style=share_turn_room, fn() {
-    c.hand_shown(c.hovered(row) || @sf.menu_is_open(menu), fn() {
+    c.hand_shown(c.hovered(row) || @sf.menu_shown(menu), fn() {
       @sf.menu_of(c, menu, message_items(link, go), label=@sf.t("web-main.menu.more"), size=24.0) |> ignore
     })
   })

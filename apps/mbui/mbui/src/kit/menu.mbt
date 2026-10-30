@@ -76,6 +76,8 @@ pub fn menu_sub(label : String, entries : Array[Entry], disabled? : Bool = false
 pub(all) struct Menu {
   open : Bool
   chosen : String?
+  /// still drawn: open, or going out (its exit playing), so what opened it is kept where the menu hangs on it
+  shown : Bool
 }
 
 ///|
@@ -416,7 +418,10 @@ pub fn dropdown_menu(
         c,
         key,
         entries,
-        at.unwrap_or(c.rect_of(trigger).unwrap_or((0.0, 0.0, 0.0, 0.0))),
+        match at {
+          Some(r) => r
+          None => menu_anchor(c, pid, trigger, now)
+        },
         side,
         along,
         offset,
@@ -437,7 +442,23 @@ pub fn dropdown_menu(
       now = false
     }
   }
-  { open: now, chosen }
+  { open: now, chosen, shown: shown || dim > 0.0 }
+}
+
+///|
+/// Where a dropdown's panel `pid` hangs, by its trigger (popover.mbt anchor_of: where it was drawn last frame, else
+/// where the panel was put by it the frame before); going out (not `open`), where it was last put by it however long
+/// ago, so that it goes where it was rather than from the window's corner where its trigger is not drawn the frame its
+/// exit plays in (a trigger shown only under the pointer, back from under the menu). Nowhere known: the window's corner.
+fn menu_anchor(c : @ui.Ctx, pid : Int, trigger : Int, open : Bool) -> (Double, Double, Double, Double) {
+  match anchor_of(c, pid, trigger) {
+    Some(r) => r
+    None =>
+      match kit.val.anchors.get(pid) {
+        Some((r, _)) if !open => r
+        _ => (0.0, 0.0, 0.0, 0.0)
+      }
+  }
 }
 
 ///|
@@ -473,7 +494,8 @@ pub fn context_menu(
   }
   let (ax, ay) = kit.val.at.get(id).unwrap_or((0.0, 0.0))
   let mut chosen = None
-  if @motion.presence(c, "\u{2}pop/" + key, now, initial=true, enter=pop_in, exit=pop_out) is Some(shows) {
+  let moved = @motion.presence(c, "\u{2}pop/" + key, now, initial=true, enter=pop_in, exit=pop_out)
+  if moved is Some(shows) {
     let pid = c.id(key + "/panel")
     let o = c.overlay(key, modal=true, initial_focus=pid, inert=!now, fn() {
       let out = menu_panel(c, key, entries, (ax, ay, 0.0, 0.0), Bottom, Start, 2.0, shows, label, 0, false, min_w, look, item_look)
@@ -484,7 +506,7 @@ pub fn context_menu(
     }
   }
   kit.val.opens[id] = now
-  { open: now, chosen }
+  { open: now, chosen, shown: moved is Some(_) }
 }
 
 ///|
