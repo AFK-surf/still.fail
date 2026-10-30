@@ -471,7 +471,8 @@
     "box-loose": {
       "src/sf/files.mbt": 1,
       "src/sf/nav_bar.mbt": 1,
-      "src/sf/seg.mbt": 2
+      "src/sf/seg.mbt": 2,
+      "src/sfpages/model_triple.mbt": 1
     },
     "style-exact": {},
     "style-text": {},

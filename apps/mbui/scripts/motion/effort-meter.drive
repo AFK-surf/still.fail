@@ -1,0 +1,14 @@
+# How hard it thinks picked along its meter (MBUI_FIXTURE=newchat-model opens the model's panel): far, near, and
+# another picked on its way.
+timeout 20000
+until 默认
+wait 800
+tap 默认
+wait 900
+tap 中
+wait 900
+tap 高
+wait 250
+tap 低
+wait 1200
+exit

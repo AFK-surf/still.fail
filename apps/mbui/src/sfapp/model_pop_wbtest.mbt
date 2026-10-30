@@ -35,6 +35,44 @@ test "wide, short names: the model's panel as wide as what it holds, not as wide
 }
 
 ///|
+/// The thumbs drawn in how hard it thinks (lifted out of its track: the boxes there with a line round them) as they
+/// show, their left edges.
+fn meter_thumbs(t : @ui.Tester) -> Array[Double] raise {
+  let (x0, y0, _, h0) = t.get(Radio, label="默认").rect
+  let (x1, _, w1, _) = t.get(Radio, label="高").rect
+  t
+  .boxes()
+  .filter(fn(b) {
+    b.kind != "text" &&
+    b.border_w > 0.0 &&
+    b.opacity > 0.01 &&
+    b.x >= x0 - 1.0 &&
+    b.x + b.w <= x1 + w1 + 1.0 &&
+    b.y >= y0 - 1.0 &&
+    b.y + b.h <= y0 + h0 + 1.0
+  })
+  .map(fn(b) { b.x })
+}
+
+///|
+test "wide: another effort picked, its thumb slides there, one thumb all the way (2026-10-31 用户「思考深度的滑块动效有点拉鸡」)" {
+  let t = model_pop("newchat-model")
+  let from = t.get(Radio, label="高").rect.0
+  let to = t.get(Radio, label="默认").rect.0
+  assert_eq(meter_thumbs(t).length(), 1)
+  t.click(Radio, label="默认")
+  // (half its way: one thumb, between where it was and where it goes, not one fading out over another fading in)
+  t.run_for(@ui.move_ms(from - to) / 2.0)
+  let mid = meter_thumbs(t)
+  assert_eq(mid.length(), 1, msg="\{mid}")
+  assert_true(mid[0] > to + 1.0 && mid[0] < from - 1.0, msg="\{mid} \{to} \{from}")
+  t.run_for(@ui.move_ms(from - to))
+  let end = meter_thumbs(t)
+  assert_eq(end.length(), 1, msg="\{end}")
+  assert_true((end[0] - to).abs() < 1.0, msg="\{end} \{to}")
+}
+
+///|
 test "wide, many models and Codex's efforts and speeds: the models, how hard it thinks on a line of its own, the runtime and how fast a row each, in the panel" {
   let t = model_pop("newchat-tall-model")
   let (px, py, pw, ph) = t.get(@ui.Dialog).rect
