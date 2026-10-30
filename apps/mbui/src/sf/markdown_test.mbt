@@ -106,10 +106,9 @@ test "a table too wide for the message: its columns 14em, not squeezed; scrolled
   let (x1, y) = t.drawn_of("one a long").unwrap()
   let (x2, _) = t.drawn_of("two a long").unwrap()
   let (x3, _) = t.drawn_of("three a long").unwrap()
-  // at rest in line with the words (16 in), past the card's room before its cells (4: its words 16 in, as a list
-  // card's) and the cell's 12; each column 14em of its words (13) and its cell's 24 either side, though the three are
-  // wider than the message
-  assert_eq(x1, 16.0 + 4.0 + 12.0)
+  // at rest its first words in line with the message's (16 in: no card, no room before them); each column 14em of its
+  // words (13) and its cells' 12 between them, though the three are wider than the message
+  assert_eq(x1, 16.0)
   assert_eq(x2 - x1, column)
   assert_eq(x3 - x2, column)
   // dragged to its end: its key's room in line with the words' right edge (16 in from the right)
@@ -119,8 +118,8 @@ test "a table too wide for the message: its columns 14em, not squeezed; scrolled
   }
   t.frame()
   let (x3_end, _) = t.drawn_of("three a long").unwrap()
-  // (its copy key past it: 6, 32, 6)
-  assert_eq(x3_end - 12.0 + column + 4.0, 390.0 - 16.0 - 44.0)
+  // (its last words its end, nothing after them; its copy key past it: 6, 32, 6)
+  assert_eq(x3_end + column - 24.0, 390.0 - 16.0 - 44.0)
   // what went left shows out to the screen's edge, not cut at the words' margin
   let (shown, _, _, _) = t.shown_of("two a long").unwrap()
   assert_eq(shown, 0.0)

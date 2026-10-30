@@ -37,8 +37,8 @@ test "a table's copy key hangs past its right edge, in line with its head; its m
   t.draw()
   let (kx, ky, kw, kh) = table_key_of(t)
   let (lx, hy, lw, hh) = t.rect_of("缓存读").unwrap()
-  // past the head's last words, within the message's column; its middle on theirs
-  assert_true(kx > lx + lw + 12.0 && kx + kw <= 390.0 - 16.0, msg="\{(kx, kw, lx, lw)}")
+  // its gap past the head's last words (nothing after them), within the message's column; its middle on theirs
+  assert_true(kx >= lx + lw + table_key_gap && kx + kw <= 390.0 - 16.0, msg="\{(kx, kw, lx, lw)}")
   assert_true((ky + kh / 2.0 - (hy + hh / 2.0)).abs() <= 1.0, msg="\{(ky, kh, hy, hh)}")
   t.click(Button, label="web-main.prose.copyTable")
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
@@ -96,6 +96,35 @@ test "a table as wide as the message on a wide chat: its key out in the margin, 
   t.frame()
   let (lx2, _, _, _) = t.rect_of("three a long").unwrap()
   assert_eq(lx2, lx)
+}
+
+///|
+test "a table in the message, no card round it: its words in line with the message's, its rules from them to its last column's" {
+  let text = "| 人想按什么看 | 背后的事实 | 谁知道 |\n|---|---|---|\n| 项目（still.fail、mbui、家里网络…） | agent 改了哪个仓库、开了哪个 PR、用了哪个「项目记忆」 | station 已经知道（PR 链接本来就会抽出来放进「PR」那一栏） |\n| 要不要我管 | 等你 / 在干活 / 出错 / 没事 | 已经有了（状态点） |\n| 结果怎样 | PR 开着 / 已合 / 检查红了 | 同上 |\n"
+  for size in [(1080.0, 160.0), (800.0, 16.0), (390.0, 16.0)] {
+    let (w, margin) = size
+    let t = table_tester(0, w, 800.0, text~, margin~)
+    t.draw()
+    t.draw()
+    t.frame()
+    let rects = t.drawn_rects()
+    let rules = rects.filter(fn(r) { r.3 == 1.0 })
+    assert_eq(rules.length(), 3)
+    // the head's first words where the message's are (its column `margin` in, 16 at the least)
+    let (words, _) = t.drawn_of("人想按什么看").unwrap()
+    assert_eq(words, dmax(16.0, margin))
+    for rule in rules {
+      // from them, past the last column's words, on nothing drawn (no card)
+      assert_eq(rule.0, words)
+      match t.rect_of("同上") {
+        // (where it shows whole: not scrolled out of a phone's message)
+        Some((lx, _, lw, _)) if lx + lw < w => assert_true(rule.0 + rule.2 >= lx + lw, msg="\{(w, rule, lx, lw)}")
+        _ => ()
+      }
+      let under = rects.filter(fn(r) { r.2 < w && r.3 > 1.0 && r.0 <= rule.0 && r.0 + r.2 >= rule.0 + rule.2 && r.1 < rule.1 && r.1 + r.3 > rule.1 })
+      assert_eq(under.length(), 0, msg="\{(w, under)}")
+    }
+  }
 }
 
 ///|

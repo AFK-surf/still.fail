@@ -494,8 +494,8 @@ test "a table wider than the message on a phone: at rest in line with the words,
   let t = chat_tester("chat-md")
   let cell = "只排可见的行"
   let (x, y) = t.drawn_of(cell).unwrap()
-  // at rest in line with the words (the list's 16 in), past the card's room before its cells (4) and the cell's 12
-  assert_eq(x, 16.0 + 4.0 + 12.0)
+  // at rest in line with the words (the list's 16 in: no card, no room before its first column's words)
+  assert_eq(x, 16.0)
   // slid to its end, held still before it is let go (no fling)
   t.press_at(360.0, y)
   for step in 1..=8 {

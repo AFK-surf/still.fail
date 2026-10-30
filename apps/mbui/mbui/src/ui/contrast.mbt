@@ -204,24 +204,6 @@ pub fn contrast_ratio(a : Int64, b : Int64) -> Double {
 }
 
 ///|
-/// `ink` laid over `ground` (opaque, 0xRRGGBBAA) as faintly as it is still seen on it: the least opacity, in steps of
-/// 8 bits, at which it stands contrast_mark_least off, as an opaque colour. A mark that only parts what is around it (a
-/// table's rules between its rows) and needs to be no more than seen.
-pub fn faintest_mark(ink : Int64, ground : Int64) -> Int64 {
-  let under = rgb_of(ground)
-  let top = rgb_of(ink)
-  let byte = fn(v : Double) { (v * 255.0).round().to_int64() }
-  for step = 1; step <= 255; step = step + 1 {
-    let c = under.laid(top, step.to_double() / 255.0)
-    let v = (byte(c.r) << 24) | (byte(c.g) << 16) | (byte(c.b) << 8) | 0xFFL
-    if contrast_ratio(v, ground) >= contrast_mark_least {
-      return v
-    }
-  }
-  ink | 0xFFL
-}
-
-///|
 /// Of `inks`, the one that stands furthest off `ground` (opaque, 0xRRGGBBAA): what is said on a colour a person chose
 /// (an app's picture's ground) reads on whatever they chose.
 pub fn ink_on(ground : Int64, inks : Array[Int64]) -> Int64 {
