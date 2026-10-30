@@ -53,6 +53,10 @@ pub(all) struct Look {
   /// colour they are drawn in where it is not 0 (their own where it is): View::shapes, View::tint
   mut shapes : Array[@paint.Shape]
   mut tint : Int64
+  /// how round its corners are (its ground's, its glass's), and the glass it is drawn as under what it draws (None: none):
+  /// View::radius, View::glass
+  mut radius : Double
+  mut glass : @paint.Glass?
   mut alpha : Double
   mut dx : Double
   mut dy : Double
@@ -74,15 +78,17 @@ pub(all) struct Content {
   words : String
   shapes : Array[@paint.Shape]
   tint : Int64
+  radius : Double
+  glass : @paint.Glass?
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
 } derive(Eq, Debug)
 
 ///|
-/// Whether it draws anything of its own: a ground, words, shapes, or what hosts it (the one place that says what a node
-/// draws, for what asks whether it draws nothing: Tree::alone).
+/// Whether it draws anything of its own: a ground, words, shapes, glass, or what hosts it (the one place that says what
+/// a node draws, for what asks whether it draws nothing: Tree::alone).
 pub fn Content::draws(self : Content) -> Bool {
-  self.ground != 0L || self.words != "" || !self.shapes.is_empty() || self.hosted
+  self.ground != 0L || self.words != "" || !self.shapes.is_empty() || self.glass is Some(_) || self.hosted
 }
 
 ///|
@@ -100,6 +106,8 @@ pub(all) struct Drawn {
   words : String
   shapes : Array[@paint.Shape]
   tint : Int64
+  radius : Double
+  glass : @paint.Glass?
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
 } derive(Eq, Debug)
@@ -404,6 +412,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.words = ""
       n.look.shapes = []
       n.look.tint = 0L
+      n.look.radius = 0.0
+      n.look.glass = None
       n.look.alpha = 1.0
       n.look.dx = 0.0
       n.look.dy = 0.0
@@ -441,7 +451,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", shapes: [], tint: 0L, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0 },
+        look: { ground: 0L, ink: 0L, words: "", shapes: [], tint: 0L, radius: 0.0, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0 },
         parent,
         kids: [],
         owner: None,
@@ -1112,6 +1122,21 @@ pub fn View::shapes(self : View, shapes : Live[Array[@paint.Shape]]) -> View {
 /// their outlines worked out again.
 pub fn View::tint(self : View, ink : Live[Int64]) -> View {
   self.bind(14, ink, Paint, fn(k) { self.tree.nodes[self.at].look.tint = k })
+  self
+}
+
+///|
+/// How round its corners are (its ground's and its glass's; a linked corner's as worked out where it is said): paint's.
+pub fn View::radius(self : View, r : Live[Double]) -> View {
+  self.bind(15, r, Paint, fn(r) { self.tree.nodes[self.at].look.radius = r })
+  self
+}
+
+///|
+/// The glass it is drawn as, under its ground and what it draws (@paint.Glass: frosted or liquid; None: none): paint's.
+/// What it frosts is what the frame drew under it, wherever it is composed (its capture told as the frame is).
+pub fn View::glass(self : View, g : Live[@paint.Glass?]) -> View {
+  self.bind(16, g, Paint, fn(g) { self.tree.nodes[self.at].look.glass = g })
   self
 }
 
@@ -3030,6 +3055,8 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     words: n.look.words,
     shapes: n.look.shapes,
     tint: n.look.tint,
+    radius: n.look.radius,
+    glass: n.look.glass,
     hosted: n.hosted,
   })
   self.changed.push(id)
@@ -3121,6 +3148,8 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double) -> Drawn {
     words: c.words,
     shapes: c.shapes,
     tint: c.tint,
+    radius: c.radius,
+    glass: c.glass,
     hosted: c.hosted,
   }
 }

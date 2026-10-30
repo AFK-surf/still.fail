@@ -76,6 +76,8 @@ pub fn copy_shown() -> Bool
 
 pub fn corner_middle(Double, Double) -> Double
 
+pub fn corner_of(@paint.CornerOf) -> @view.Live[Double]
+
 pub fn corner_roots() -> @paint.CornerRoots
 
 pub let cover_slide_ms : Double

@@ -109,9 +109,16 @@ let view_blocks : Map[@view.NodeId, ViewBlock] = Map([])
 priv struct ViewBlock {
   inst : FixedArray[Double]
   cells : Array[(Double, Double)]
+  /// what each of its instances is checked as (inst_owners' `mark`: its shapes' pieces by the whole shape)
+  marks : Array[Int]
   /// its shapes' pieces (scene.mbt's kind 12): put after the frame's as it is composed, its bands (kind 11) told
   /// where they are then (their first piece counted from these)
   segs : Array[Double]
+  /// where its glass is among its instances (-1 none), whether it shares the last frosted capture, and whether glass was
+  /// drawn solid as it was made (made again as that changes: the system asking for less transparency)
+  glass_at : Int
+  shares : Bool
+  solid : Bool
 }
 
 ///|
@@ -253,6 +260,9 @@ fn view_frame(w : Double, h : Double, t : Double) -> Unit {
   // or ending taken ahead of an input still to come before `t`)
   @signals.untracked(fn() { tree.at(t) })
   view_window.val = (w, h)
+  // (what its linked corners are worked out from, as of now: corner_of; the ranges the theme for this width has, as
+  // this frame will pick it, not the one the last frame was built in)
+  tree_corner_roots.set({ window: window_corner(), fit: g().theme_for(w).corner_fit })
   // (the logic's moment for all of this frame: what the host has come to as it began; brought again in the frame, the
   // tree goes no further than that, whatever time its building takes)
   view_logic_at.val = h_now()
@@ -438,8 +448,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       return
     }
     let block = match view_blocks.get(c.id) {
-      Some(b) => b
-      None => {
+      // (made as glass was drawn then: solid or not)
+      Some(b) if c.glass is None || b.solid == glass_paint.solid => b
+      _ => {
         let b = self.view_made(c)
         view_blocks[c.id] = b
         b
@@ -473,8 +484,20 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
   inst_owners.painting = -1
   inst_owners.tree_painting = Some(c.id)
+  // (its glass under its ground, its capture told as it is composed (Ctx::view_blit); its solid ground where glass is
+  // drawn solid)
+  let solid = glass_paint.solid
+  let mut glass_at = -1
+  match c.glass {
+    Some(gl) if solid => self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, gl.solid, 0.0, 0L, 1.0)
+    Some(gl) => {
+      glass_at = self.ninst - start
+      self.glass_inst(0.0, 0.0, c.w, c.h, c.radius, gl, 1.0)
+    }
+    None => ()
+  }
   if c.ground != 0L {
-    self.emit_rect(0.0, 0.0, c.w, c.h, 0.0, c.ground, 0.0, 0L, 1.0)
+    self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, 0.0, 0L, 1.0)
   }
   if c.words != "" {
     let tl = layout_text(c.words, view_words_size, 400, c.w + 0.5, true, line=view_line_h)
@@ -482,6 +505,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   }
   // (its shapes, as bands worked out once for the outlines said (kept by them, whatever colour they are drawn in), in
   // its tint where it has one; their pieces its own, counted from 0)
+  let shape_marks : Array[(Int, Int, Int)] = []
   let seg_start = self.segs.length()
   if c.shapes.length() > 0 {
     let bands = match view_shape_bands.get(c.id) {
@@ -494,12 +518,16 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
     }
     let from = self.ninst
     for k, s in c.shapes {
+      let piece_from = self.ninst
       if s.fill != 0L {
         self.emit_bands(0.0, 0.0, bands.fills[k], 0.0, if c.tint != 0L { c.tint } else { s.fill }, 1.0)
       }
       if s.stroke != 0L && s.width > 0.0 {
         self.emit_bands(0.0, 0.0, bands.strokes[k], s.width / 2.0, if c.tint != 0L { c.tint } else { s.stroke }, 1.0)
       }
+      // (an icon or a line by the whole shape its pieces are of, not by a piece, nor by what else its node draws)
+      let (sw, sh) = shape_extent(s)
+      shape_marks.push((piece_from - start, self.ninst - start, if sw <= icon_most && sh <= icon_most { 1 } else { 2 }))
     }
     let base = (seg_start / 4).to_double()
     for i in from..<self.ninst {
@@ -521,9 +549,16 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
       cells.push(inst_cell_of(k))
     }
   }
+  // (made whatever is kept now: the block is composed again in frames that keep who drew what)
+  let marks : Array[Int] = Array::make(self.ninst - start, 0)
+  for m in shape_marks {
+    for i in m.0..<m.1 {
+      marks[i] = m.2
+    }
+  }
   inst_owners.tree_words[c.id] = c.words
   self.ninst = start
-  { inst, cells, segs }
+  { inst, cells, marks, segs, glass_at, shares: c.glass.map_or(false, fn(g) { g.shares_capture }), solid }
 }
 
 ///|
@@ -551,8 +586,9 @@ fn Ctx::view_blit(self : Ctx, id : @view.NodeId, made : ViewBlock, x : Double, y
     if kind == 11.0 {
       s[b + 12] = s[b + 12] + seg_base
     }
-    // (a box's, a shadow's, frosted glass's border colour: faded with it; a glyph's 12-15 are where it is in the atlas)
-    if kind == 0.0 || kind == 2.0 || kind == 5.0 {
+    // (a box's, a shadow's, frosted glass's border colour, liquid glass's opacity: faded with it; a glyph's 12-15 are
+    // where it is in the atlas)
+    if kind == 0.0 || kind == 2.0 || kind == 5.0 || kind == 6.0 {
       s[b + 15] = s[b + 15] * a
     }
     if s[b + 32] != 0.0 {
@@ -569,6 +605,10 @@ fn Ctx::view_blit(self : Ctx, id : @view.NodeId, made : ViewBlock, x : Double, y
       s[b + 40 + j] = clip_stack[k + 12 + j]
     }
   }
+  // (its glass's capture, as the frame is composed here: what was drawn under it before it, wherever that is now)
+  if made.glass_at >= 0 {
+    self.glass_capture(self.ninst + made.glass_at, s[at + made.glass_at * inst_size + 5] == 6.0, made.shares)
+  }
   // (who drew them, the node, each glyph's cell as made: kept with them wherever they are composed)
   if inst_owners_kept() {
     let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
@@ -578,6 +618,7 @@ fn Ctx::view_blit(self : Ctx, id : @view.NodeId, made : ViewBlock, x : Double, y
       let k = self.ninst + i
       inst_owned(k)
       inst_owners.cell[k] = if i < made.cells.length() { made.cells[i] } else { (0.0, 1.0) }
+      inst_owners.mark[k] = if i < made.marks.length() { made.marks[i] } else { 0 }
     }
     inst_owners.painting = was
     inst_owners.tree_painting = was_tree
@@ -1516,3 +1557,23 @@ fn Ctx::back_open(self : Ctx) -> Bool {
 /// the same; let go with the node.
 // kept across runs: let go as the nodes are, and with the tree (view_forget)
 let view_shape_bands : Map[@view.NodeId, ShapeBands] = Map([])
+
+///|
+/// How wide and high shape `s` is, by its outlines' points (its stroke's half width round them): what it is as a whole.
+fn shape_extent(s : Shape) -> (Double, Double) {
+  let (x0, y0, x1, y1) = (Ref(1.0e30), Ref(1.0e30), Ref(-1.0e30), Ref(-1.0e30))
+  for o in s.outlines {
+    let pts = o.0
+    for i in 0..<(pts.length() / 2) {
+      x0.val = dmin(x0.val, pts[2 * i])
+      x1.val = dmax(x1.val, pts[2 * i])
+      y0.val = dmin(y0.val, pts[2 * i + 1])
+      y1.val = dmax(y1.val, pts[2 * i + 1])
+    }
+  }
+  if x1.val < x0.val {
+    return (0.0, 0.0)
+  }
+  let half = if s.stroke != 0L { s.width / 2.0 } else { 0.0 }
+  (x1.val - x0.val + 2.0 * half, y1.val - y0.val + 2.0 * half)
+}

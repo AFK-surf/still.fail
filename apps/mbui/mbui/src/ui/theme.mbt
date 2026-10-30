@@ -513,11 +513,18 @@ pub fn Ctx::set_theme(self : Ctx, t : Theme, narrow? : Theme, narrow_below? : Do
 ///|
 /// The theme set (Ctx::set_theme) for this frame's width.
 fn Ctx::pick_theme(self : Ctx) -> Unit {
-  self.theme = match self.theme_narrow {
-    Some(n) if self.width < self.narrow_below => n
+  self.theme = self.theme_for(self.width)
+  self.narrow = self.theme_narrow is Some(_) && self.width < self.narrow_below
+}
+
+///|
+/// The theme set (Ctx::set_theme) for a window `w` wide: what a frame of that width is drawn in, known before it is
+/// built (what the window's tree works out of it as the frame begins: view_frame).
+fn Ctx::theme_for(self : Ctx, w : Double) -> Theme {
+  match self.theme_narrow {
+    Some(n) if w < self.narrow_below => n
     _ => self.theme_wide
   }
-  self.narrow = self.theme_narrow is Some(_) && self.width < self.narrow_below
 }
 
 ///|

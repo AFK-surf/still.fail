@@ -27,7 +27,7 @@ pub(all) struct Glass {
   // frosted: frosts what the glass before it frosts (its capture), not what
   // has been drawn since
   shares_capture : Bool
-}
+} derive(Eq, Show, Debug)
 
 ///|
 /// Frosted glass: what is under it blurred by `blur` (CSS px), `tint` over it.

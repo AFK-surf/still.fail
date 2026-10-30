@@ -129,13 +129,34 @@ fn rects_meet(a : Int, b : Int, inst : FixedArray[Double]) -> Bool {
 ///|
 /// The glass instance of node `n` (its frame), at `alpha`.
 fn Ctx::emit_glass(self : Ctx, n : Node, gl : Glass, alpha : Double) -> Unit {
+  self.glass_inst(n.x, n.y, n.fw, n.fh, n.radius, gl, alpha)
+  // (frosted: its corners each its own; liquid merges shapes of one corner each, the renderers' groups: its roundest)
+  if !gl.liquid {
+    self.corners_last(n)
+  }
+  self.glass_capture(self.ninst - 1, gl.liquid, gl.shares_capture)
+}
+
+///|
+/// A glass instance at (x, y), `w` by `h`, corners `radius` round, as `gl` says, at `alpha`: its capture not yet told
+/// (Ctx::glass_capture, as it goes into the frame).
+fn Ctx::glass_inst(
+  self : Ctx,
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  radius : Double,
+  gl : Glass,
+  alpha : Double,
+) -> Unit {
   let kind = if gl.liquid { 6.0 } else { 5.0 }
   self.push_inst(
-    n.x,
-    n.y,
-    n.fw,
-    n.fh,
-    n.radius,
+    x,
+    y,
+    w,
+    h,
+    radius,
     kind,
     gl.saturation,
     gl.blur,
@@ -146,17 +167,24 @@ fn Ctx::emit_glass(self : Ctx, n : Node, gl : Glass, alpha : Double) -> Unit {
     if gl.liquid { 0.0 } else { gl.rim_back },
     alpha,
   )
-  // (frosted: its corners each its own; liquid merges shapes of one corner each, the renderers' groups: its roundest)
-  if !gl.liquid {
-    self.corners_last(n)
-  }
-  let k = self.ninst - 1
-  let b = k * inst_size
+  let b = (self.ninst - 1) * inst_size
   let a = self.inst
   a[b + 21] = gl.refraction
   a[b + 22] = gl.chroma
   a[b + 23] = gl.merge
-  if gl.shares_capture && !gl.liquid && glass_paint.frost_run != 0 {
+}
+
+///|
+/// The capture glass instance `k` (just put into the frame, its kind and blur said) takes, as the frame is composed: the
+/// last frosted capture's where it `shares` one; else that of the glass just before it, where it may share it; else one
+/// of its own. Told of each glass as it goes into the frame, whoever made it (a node of the old view's as it is painted,
+/// a node of the window's tree's as its instances are composed: never kept with them).
+fn Ctx::glass_capture(self : Ctx, k : Int, liquid : Bool, shares : Bool) -> Unit {
+  let b = k * inst_size
+  let a = self.inst
+  let kind = a[b + 5]
+  let blur = a[b + 7]
+  if shares && !liquid && glass_paint.frost_run != 0 {
     // the last frosted capture's (liquid glass's is no frost, and only of what is under its shapes), the run as it was
     a[b + 20] = -glass_paint.frost_run.to_double()
     return
@@ -167,9 +195,9 @@ fn Ctx::emit_glass(self : Ctx, n : Node, gl : Glass, alpha : Double) -> Unit {
   let mut same = glass_paint.run != 0 &&
     prev == k &&
     a[(k - 1) * inst_size + 5] == kind &&
-    a[(k - 1) * inst_size + 7] == gl.blur &&
-    (!gl.liquid || glass_paint.run_len < 8)
-  if same && !gl.liquid {
+    a[(k - 1) * inst_size + 7] == blur &&
+    (!liquid || glass_paint.run_len < 8)
+  if same && !liquid {
     for j in glass_paint.run_start..<k {
       if rects_meet(j, k, a) {
         same = false
@@ -183,7 +211,7 @@ fn Ctx::emit_glass(self : Ctx, n : Node, gl : Glass, alpha : Double) -> Unit {
     glass_paint.run = glass_paint.run + 1
     glass_paint.run_start = k
     glass_paint.run_len = 1
-    if !gl.liquid {
+    if !liquid {
       glass_paint.frost_run = glass_paint.run
     }
   }
