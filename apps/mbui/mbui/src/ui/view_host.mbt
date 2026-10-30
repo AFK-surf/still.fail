@@ -547,7 +547,10 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       false
     }
     (1, Some(Dragging(id))) => {
-      tree.drag_at(id, Moved, x, y, at) |> ignore
+      // (the hold called off meanwhile (the node gone, leaving, taking no press): the rest of it nobody's)
+      if !tree.drag_at(id, Moved, x, y, at) {
+        view_held.val = Some(Nowhere)
+      }
       h_frame_owed()
       true
     }
@@ -582,6 +585,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       h_frame_owed()
       true
     }
+    (4 | 5 | 6, Some(Nowhere)) => true
     (2 | 3, Some(Dragging(id))) => {
       view_held.val = None
       tree.drag_at(id, if kind == 2 { Up } else { Off }, x, y, at) |> ignore
@@ -775,6 +779,16 @@ fn view_event(f : () -> Unit) -> Unit {
   match view_app.val {
     Some(t) => t.event(h_event_time(), f)
     None => f()
+  }
+}
+
+///|
+/// Whether a finger is held by the tree (on a node of its, or on nothing of the old views' after its hold was called
+/// off): all the pointer's events till it is let go are the tree's, a second finger's too, none an old view's.
+fn view_holds() -> Bool {
+  match view_held.val {
+    Some(Dragging(_)) | Some(Nowhere) => true
+    _ => false
   }
 }
 

@@ -753,7 +753,7 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
   }
   // (what the tree made once routes elsewhere than to the old view (a press on a node of its own, one outside the old
   // view's island) is no input of the old view's: taped alone, view_host.mbt)
-  if kind <= 3 && view_pointer(kind, x, y, button) {
+  if (kind <= 3 || view_holds()) && view_pointer(kind, x, y, button) {
     input_taped("pointer", h_event_time(), args)
     pointing_said_by_host(by)
     return

@@ -38,3 +38,40 @@ test "window tree: a finger held on a node over an old view: down, moved off it,
   assert_eq(seen, [(Down, 10.0, 10.0, t0 + 5.0), (Moved, 200.0, 300.0, t0 + 15.0), (Up, 210.0, 310.0, t0 + 25.0)])
   assert_eq(old_taps.val, 0)
 }
+
+///|
+test "window tree: a finger held on a node, a second one put down: the hold called off; the old view under it takes none of it" {
+  let seen : Array[@view.DragIs] = []
+  let old_seen = Ref(0)
+  let t = Tester::new(fn(_c) {  })
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    old(root, fn(c) {
+      let id = c.id("under")
+      match c.drag_of(id) {
+        Some(_) => old_seen.val = old_seen.val + 1
+        None => ()
+      }
+      c.drag_area(id, axis=Free, w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
+    })
+    .over(Is(true))
+    |> ignore
+    root.box(fn(b) {
+      b.over(Is(true)) |> ignore
+      b.box(fn(h) { h.width(Is(Some(100.0))).height(Is(Some(100.0))).on_drag(fn(d) { seen.push(d.kind) }) |> ignore })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  let before = old_seen.val
+  t.touch(0, 10.0, 10.0)
+  t.touch(4, 50.0, 50.0)
+  t.touch(5, 60.0, 60.0)
+  t.touch(1, 20.0, 20.0)
+  t.touch(6, 60.0, 60.0)
+  t.touch(2, 20.0, 20.0)
+  t.drawn_now()
+  assert_eq((seen, old_seen.val), ([Down, Off], before))
+}

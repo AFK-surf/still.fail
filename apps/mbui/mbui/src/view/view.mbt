@@ -209,6 +209,8 @@ pub struct Tree {
   order_holder : Array[Int]
   /// the node hosting the old view, if any (View::hosted)
   mut hosting : Int
+  /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
+  mut held : NodeId?
   /// what the last frame changed: the nodes whose content it made again, those placed or faded otherwise
   changed : Array[NodeId]
   composed : Array[NodeId]
@@ -279,6 +281,7 @@ pub fn Tree::new(
     order: [],
     order_holder: [],
     hosting: -1,
+    held: None,
     changed: [],
     composed: [],
     removed: [],
@@ -340,6 +343,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.parent = parent
       n.slot = false
       n.hosted = false
+      n.on_press = None
+      n.on_drag = None
       n.look_due = false
       n.place_due = false
       n.placed = false
@@ -1089,25 +1094,50 @@ pub fn View::on_drag(self : View, f : (Drag) -> Unit) -> View {
 }
 
 ///|
-/// Node `id` held: `kind` at (x, y) in the window at `at`, as one event of that moment (Tree::event: what had ended by
-/// then settled first), handed to its on_drag where it lives then, where it is in its own terms. Whether it took it.
+/// Node `id` held: `kind` at (x, y) in the window, at `at` (in an event already: that one's moment), as one event of that
+/// moment (Tree::event: what had ended by then settled first, where things are brought to then), handed to its on_drag
+/// where it is in its own terms then. A down takes the hold; anything else goes only to the node holding it. Where that
+/// one takes no press by then (leaving, or what holds it said to take none) the hold is called off, told so once (Off),
+/// and nothing more goes to it; let go (View::let_go), it is told nothing. Whether it took the event.
 pub fn Tree::drag_at(self : Tree, id : NodeId, kind : DragIs, x : Double, y : Double, at : Double) -> Bool {
+  // (one moment for all of it: an event's own, or the one it is told in)
+  let t = if self.cause_at >= 0.0 { self.cause_at } else { at }
+  if self.cause_at < 0.0 {
+    self.bring_to(t)
+  }
   let took = Ref(false)
-  self.event(at, fn() {
+  self.event(t, fn() {
+    let holding = match self.held {
+      Some(h) => h == id
+      None => false
+    }
+    if kind != Down && !holding {
+      return
+    }
     if id.at < 0 || id.at >= self.nodes.length() {
+      self.held = None
       return
     }
     let n = self.nodes[id.at]
     if !n.live || n.gen != id.gen {
+      self.held = None
       return
     }
     match n.on_drag {
+      None => self.held = None
       Some(f) => {
         let (nx, ny, _) = self.placed(id.at)
+        if self.pressless_at(id.at) {
+          if holding {
+            self.held = None
+            f({ kind: Off, x: x - nx, y: y - ny, at: t })
+          }
+          return
+        }
+        self.held = if kind == Up || kind == Off { None } else { Some(id) }
         took.val = true
-        f({ kind, x: x - nx, y: y - ny, at })
+        f({ kind, x: x - nx, y: y - ny, at: t })
       }
-      None => ()
     }
   })
   took.val
@@ -1148,6 +1178,12 @@ fn View::let_go(self : View) -> Unit {
     f()
   }
   n.on_press = None
+  n.on_drag = None
+  // (held: let go of with it, nothing more told it, nothing of it handed to what is made in its place)
+  match self.tree.held {
+    Some(h) if h.at == self.at && h.gen == self.gen => self.tree.held = None
+    _ => ()
+  }
   n.flex.measure = None
   n.flex.children.clear()
   n.parent = -1

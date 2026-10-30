@@ -53,3 +53,79 @@ test "held, then let go of as the finger moves: told nothing more" {
   assert_false(t.drag_at(id, Moved, 20.0, 20.0, 120.0))
   assert_eq(seen.length(), 1)
 }
+
+///|
+test "held node let go, another made in its place with nothing held on it: not held there, nothing of the one before called" {
+  let which = @signals.signal(0, same=fn(a, b) { a == b })
+  let seen : Array[Int] = []
+  let t = @view.Tree::new(
+    fn(root) {
+      root.show(fn() { which.get() == 0 }, fn(v) {
+        v.box(fn(b) { b.width(Is(Some(100.0))).height(Is(Some(100.0))).on_drag(fn(_) { seen.push(0) }) |> ignore })
+        |> ignore
+      })
+      root.show(fn() { which.get() == 1 }, fn(v) {
+        v.box(fn(b) { b.width(Is(Some(100.0))).height(Is(Some(100.0))) |> ignore }) |> ignore
+      })
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  which.set(1)
+  t.frame(390.0, 844.0) |> ignore
+  assert_true(t.target_at(10.0, 10.0) is Nothing)
+  assert_eq(seen, [])
+}
+
+///|
+test "held, then what holds it takes no press (or it leaves): the hold called off, told so once, nothing more" {
+  let seen : Array[@view.DragIs] = []
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(p) {
+        p.presses(By(fn() { on.get() })) |> ignore
+        p.box(fn(b) { b.width(Is(Some(100.0))).height(Is(Some(100.0))).on_drag(fn(d) { seen.push(d.kind) }) |> ignore })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let id = match t.target_at(10.0, 10.0) {
+    Dragged(id) => id
+    _ => abort("not held")
+  }
+  t.drag_at(id, Down, 10.0, 10.0, 10.0) |> ignore
+  on.set(false)
+  let more = t.drag_at(id, Moved, 20.0, 20.0, 20.0)
+  t.drag_at(id, Up, 20.0, 20.0, 30.0) |> ignore
+  assert_eq((seen, more), ([Down, Off], false))
+}
+
+///|
+test "held, its events told inside another event: at that one's moment; where it is drawn, as of then, no frame between" {
+  let seen : Array[@view.Drag] = []
+  let pad = @signals.signal(0.0, same=fn(a, b) { a == b })
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(p) {
+        p.pad(By(fn() { pad.get() })) |> ignore
+        p.box(fn(b) { b.width(Is(Some(100.0))).height(Is(Some(100.0))).on_drag(fn(d) { seen.push(d) }) |> ignore })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let id = match t.target_at(10.0, 10.0) {
+    Dragged(id) => id
+    _ => abort("not held")
+  }
+  t.event(50.0, fn() { t.drag_at(id, Down, 10.0, 10.0, 100.0) |> ignore })
+  pad.set(20.0)
+  t.drag_at(id, Moved, 30.0, 30.0, 60.0) |> ignore
+  assert_eq(seen.map(fn(d) { (d.kind, d.x, d.y, d.at) }), [(Down, 10.0, 10.0, 50.0), (Moved, 10.0, 10.0, 60.0)])
+}
