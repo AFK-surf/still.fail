@@ -124,6 +124,41 @@ test "a mouse pointing at a row: its time and 归档 at its top right; a finger'
 }
 
 ///|
+test "a row pinned, renamed or archived: no spinner while its station answers (the core has it so at once); failed, its red mark" {
+  for case in one_page_cases {
+    let (w, platform, _, _) = case
+    let at = "\{w} platform \{platform}"
+    let on : Json = { "station": "ws1/st2", "session": "s-c3" }
+    for stage in ["running", "rechecking", "failed"] {
+      reset()
+      let base = fixture("home")
+      let doing = Json::array(
+        ["chat.pin", "chat.rename", "chat.archive"].map(fn(call) {
+          { "call": call, "params": on, "since": 0, "stage": stage, "error": "station 拒绝了" }
+        }),
+      )
+      let src : Source = {
+        ..base,
+        topic: fn(name, params) {
+          let got = (base.topic)(name, params)
+          if name == "doing" {
+            { ..got, value: Some({ "doing": doing }) }
+          } else {
+            got
+          }
+        },
+      }
+      let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=900.0, platform~)
+      t.draw()
+      assert_true(t.find("夜里的构建又失败了") is Some(_), msg=at)
+      assert_eq(t.locate("=" + @sf.t("common.saving")).length(), 0, msg="\{at} \{stage}")
+      let failed = t.semantics().filter(fn(s) { s.label == "station 拒绝了" })
+      assert_eq(failed.length(), if stage == "failed" { 1 } else { 0 }, msg="\{at} \{stage}")
+    }
+  }
+}
+
+///|
 /// The chat in the page pane now, by its title ("" none).
 fn open_title() -> String {
   match app.nav.top() {

@@ -310,7 +310,8 @@ function ChatRowOf({ item, lead }: { item: ChatItem; lead: "agents" | "people" }
   const [editing, setEditing] = useState(false);
   // Pinned, renamed (its new name shown meanwhile) or brought back from the archive, until the station answers.
   const renamingTo = useRenaming(item.station, item.session);
-  // Failed: a red mark in the spinner's place a few seconds more, why on hover (the menu that asked has closed).
+  // Nothing while its station answers (the core's list has it so at once); failed, a red mark a few seconds, why on
+  // hover (the menu that asked has closed).
   const saving = useDoingState(["chat.pin", "chat.rename", "chat.archive"], { station: item.station, session: item.session });
   const going = useGoing(to);
   const where = useHere();
@@ -337,7 +338,7 @@ function ChatRowOf({ item, lead }: { item: ChatItem; lead: "agents" | "people" }
           {editing
             ? <TitleInput value={item.title} onDone={(title) => { setEditing(false); rename(item, title); }} />
             : <span className={nav.navSessionTitle}>{renamingTo ?? item.title}</span>}
-          {(saving.running || saving.error !== undefined) && !editing && <span className={nav.sessionKind}><DoingShown state={saving} inline label={t("common.saving")} /></span>}
+          {saving.error !== undefined && !editing && <span className={nav.sessionKind}><DoingShown state={{ running: false, error: saving.error }} inline /></span>}
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
           {/* Its station offline, or its link coming back: marked unplugged there (the core says which, row by row). A
               spinner on a row is only ever something its person did, under way. */}

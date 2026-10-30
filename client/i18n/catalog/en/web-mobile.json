@@ -269,7 +269,6 @@
   "web-mobile.home.archiveAsk": "Archive \"{title}\"?",
   "web-mobile.home.archiveFailed": "Couldn't archive: {error}",
   "web-mobile.home.archived": "Archived",
-  "web-mobile.home.busy": "Working",
   "web-mobile.home.decisions": {
     "one": "Decisions: 1 waiting",
     "other": "Decisions: {n} waiting"
