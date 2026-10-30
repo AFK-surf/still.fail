@@ -106,7 +106,7 @@ pub let left_pages : Array[Page] = []
 pub fn new_nav() -> @ui.Nav[Page] {
   // settings are to the left of the list, as the gear is at its top left: they come in from the left and go back
   // that way (App.kt transition, swipe)
-  // what its own back takes off kept for forward (shell.mbt went_back)
+  // what its own back comes to, back's in the history (app_history.mbt went_back)
   @ui.Nav::new(Home, from_left=fn(p) { p is Settings }, went_back~, on_leave=fn(p) {
     left_pages.push(p)
     match p {
@@ -175,6 +175,7 @@ pub fn open_chat(r : ChatRef) -> Unit {
 /// Page `p` opened, where the layout has it (Shell's `open`: the pane table, docs/architecture.md): what pages, links
 /// and the app's own doings call, never the stack themselves.
 pub fn open_page(p : Page) -> Unit {
+  history_push()
   (shell.val.open)(p)
 }
 
@@ -182,6 +183,7 @@ pub fn open_page(p : Page) -> Unit {
 /// Page `p` opened from the page in view (a chat's link in a message): over it, back coming to it again, where the
 /// layout has it (Shell's `open_over`).
 pub fn open_page_over(p : Page) -> Unit {
+  history_push()
   (shell.val.open_over)(p)
 }
 
@@ -209,9 +211,8 @@ pub(all) struct DriveAt {
 /// toast's count goes on, as before it was here).
 pub fn reset() -> Unit {
   app.nav = new_nav()
-  // what back took off it, for forward, and the chats shown before (shell.mbt)
-  forward_steps.clear()
-  chat_trail.clear()
+  // where it has been (app_history.mbt)
+  history_reset()
   app.picked = ""
   @ui.set_motion_chosen(None)
   app.filters.clear()

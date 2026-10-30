@@ -621,6 +621,7 @@ fn share_opened(
   share_in.raised.set(false)
   lower_sheet()
   @hostapi.log("share in: into \{key}, \{files.length()} files")
+  @sfbase.history_push()
   // over another app: the app opens at the chat (ShareActivity openApp: MainActivity's openItem, over Home)
   if share_over.val {
     home()

@@ -84,6 +84,7 @@ fn top_bar(
     // under the status bar (PlacePage.kt TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="home-settings", said=tr("android-chat.home.settings")) {
+        @sfbase.history_push()
         app.nav.push(Settings)
       }
       let wid = c.id("home-workspace")

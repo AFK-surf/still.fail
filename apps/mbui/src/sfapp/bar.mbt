@@ -1896,6 +1896,7 @@ fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
     // under the status bar (TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="place-settings", said=tr("android-chat.home.settings")) {
+        @sfbase.history_push()
         app.nav.push(Settings)
       }
       // (its words whole: what the page does at its end gives way where the bar has not the room, @sf.head_end)

@@ -161,6 +161,7 @@ let recent_row_here : @ui.Style = recent_row.then(@ui.css("bg=AccentBg"))
 /// `p` in the place of the page on top, or over Home when it is alone (AppState.open), the sheets and the menu put
 /// away.
 fn open_in_place(p : Page) -> Unit {
+  @sfbase.history_push()
   lower_sheet()
   app.menu = false
   if app.nav.depth() > 1 {

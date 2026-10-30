@@ -160,6 +160,7 @@ let zou_sample : Array[(Int, Int)] = [(16, 7), (11, 9), (22, 6), (14, 10), (9, 8
 ///|
 /// The 奏 page at the stack's root, as the rail's 奏 goes to it.
 fn go_zou() -> Unit {
+  @sfbase.history_push()
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
       break

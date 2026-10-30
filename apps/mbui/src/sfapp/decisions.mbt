@@ -14,6 +14,7 @@
 ///|
 /// The 奏 page over what is open.
 pub fn open_decisions() -> Unit {
+  @sfbase.history_push()
   app.nav.push(Decisions)
 }
 
@@ -222,6 +223,7 @@ fn decisions_idle(c : @ui.Ctx, view : Json?, top : Double) -> Unit {
 ///|
 /// A decision's chat opened over the page (by its session).
 fn open_decision_chat(v : Json?) -> Unit {
+  @sfbase.history_push()
   app.nav.push(
     Chat({
       station: text(v, "station"),

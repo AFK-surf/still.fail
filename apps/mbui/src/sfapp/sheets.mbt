@@ -701,6 +701,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
           allowance_line(c, field(account, "quota"))
         }) {
         close()
+        @sfbase.history_push()
         app.nav.push(Setting(@settings.Route::RunSettings(r.station, key)))
       }
       if agent_row(
@@ -714,6 +715,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
           fn() {  },
         ) {
         close()
+        @sfbase.history_push()
         app.nav.push(History(r, key, None))
       }
       // what can be done to its context, where no figure of it is known to be its tile (a station from before tells
@@ -1083,6 +1085,7 @@ fn job_groups(
             f(id)
           } else if tone == "up" || tone == "restart" {
             close()
+            @sfbase.history_push()
             app.nav.push(Service(r.station, id))
           } else {
             dui.job_tab = 1
@@ -1501,6 +1504,7 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
   let chat = field(job, "chat")
   let row = c.id("open-job/" + station + "/" + id)
   if chat is Some(Object(_)) && c.clicked(row) {
+    @sfbase.history_push()
     app.nav.push(Chat({ station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }))
     // a service: its page over its chat (OpenJobs.kt OpenRow)
     if flag(job, "service") {

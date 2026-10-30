@@ -730,6 +730,7 @@ fn profile_usage(c : @ui.Ctx, core : Core, here : Here, s : Json?, p : Json?, en
     },
     actions=fn() {
       if @sf.action(c, "profile-usage-all/" + address, @sf.t("web-pages.profiles.usageAll"), icon="chart") {
+        @sfbase.history_push()
         app.nav.push(Setting(Usage))
       }
     },

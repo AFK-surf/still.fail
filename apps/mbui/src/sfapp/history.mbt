@@ -255,6 +255,7 @@ fn history_details(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : Jso
       c.box(h=Px(6.0), fn() {  }) |> ignore
       // changing how it runs is a page of its own (RunSettingsScreen)
       if run_row(c, a) {
+        @sfbase.history_push()
         app.nav.push(Setting(@settings.Route::RunSettings(r.station, key)))
       }
       c.box(w=Fill(1.0), pt=12.0, pb=10.0, gap=8.0, fn() {

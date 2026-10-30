@@ -129,6 +129,7 @@ fn drive_go_back_to(station : String, root : String, path : String) -> Unit {
     }
   }
   if at >= 0 {
+    @sfbase.history_push()
     for _ in 0..<(pages.length() - 1 - at) {
       app.nav.pop() |> ignore
     }

@@ -1049,9 +1049,10 @@ pub fn frame(
 /// brought over; with the page in use, what was opened over it from there taken off (Nav::push_over), else the
 /// sidebar brought over (the page it chose: the chats' place's chat, a settings page); with the sidebar in use, the chats' from another place's (or the
 /// archive), as a phone's place goes back to them; nothing with the chats' in use (the system's: as from a phone's
-/// list). Laid out Large, the stack's top popped, but for the new chat beside the chats alone: the page there is never
-/// empty (land: popped, a new chat would come again), so nothing to go back to.
-pub fn wide_back() -> (() -> Unit)? {
+/// list). Laid out Large, the spot before this one in the app's history (sfbase's app_history.mbt: another chat, another
+/// workspace's, a page under it), else the stack's top popped, but for the new chat beside the chats alone: the page
+/// there is never empty (land: popped, a new chat would come again), so nothing to go back to.
+pub fn wide_back(src : Source) -> (() -> Unit)? {
   let over_all = app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_))
   if wide.tape && !over_all {
     match tape_back_to() {
@@ -1071,9 +1072,9 @@ pub fn wide_back() -> (() -> Unit)? {
           _ => Some(@sfbase.back_pop)
         }
     }
-  } else if app.nav.pages() is [Home, Chat(open)] && @sfbase.chat_back(open) is Some(_) {
-    // a chat alone beside the sidebar: the chat shown before it (the web's history), else what is under it
-    @sfbase.chat_back(open)
+  } else if @sfbase.history_back_step(src) is Some(f) {
+    // the spot before this one (the web's history: a chat chosen before, another workspace's, a page under it)
+    Some(f)
   } else if app.nav.depth() > 2 || (app.nav.depth() == 2 && !(app.nav.pages() == [Home, NewChat])) {
     Some(@sfbase.back_pop)
   } else {
@@ -1777,8 +1778,6 @@ fn land(src : Source, w : Workspace) -> Unit {
   }
   // come back to the chats (a chat closed, settings left): a new chat, as the web's empty place is
   if wide.landed == w.id {
-    // (come back by back: forward puts back what it took in the new chat's place)
-    @sfbase.forward_landed()
     app.nav.push(NewChat)
     return
   }

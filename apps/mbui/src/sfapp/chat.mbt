@@ -159,6 +159,7 @@ let rise_dy : Double = 14.0
 /// A chat opened over Home from the start at its message `seq`, as a notification opens it; `held`: its flash kept at
 /// its peak (screenshots of it).
 pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {
+  @sfbase.history_push()
   flash_held.val = held
   go_to(r, seq)
   app.nav.push(Chat(r))

@@ -35,12 +35,12 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   // ⌘[ / ⌘] back and forward (Switcher.tsx history.back, history.forward): back as the system's back is, whose it is
   // deciding (Ctx::back; the hosts' own Alt+← and a mouse's back button come so); forward what back took off put back
-  // (sfbase's back_pop, go_forward), also from a mouse's forward button and Alt+→ (the hosts' key_forward)
+  // (sfbase's app history: go_forward), also from a mouse's forward button and Alt+→ (the hosts' key_forward)
   if pressed("nav.back") {
     c.back() |> ignore
   }
   if pressed("nav.forward") || c.key_pressed(@ui.key_forward) {
-    @sfbase.go_forward() |> ignore
+    @sfbase.go_forward(src) |> ignore
   }
   // (奏's page steps its own decisions: DecisionDesk.tsx step, the one before or after the one it shows)
   let way = if @settings.action_pressed(c, prefs, "chat.prev", in_field=true) {

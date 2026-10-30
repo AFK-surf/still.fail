@@ -127,7 +127,7 @@ fn pages_shell(src : Source) -> Shell {
     open: fn(p) { open_where(src, p) },
     open_over: fn(p) { open_over_where(src, p) },
     detail: detail_where,
-    back: back_where,
+    back: fn() { back_where(src) },
     show: fn() {
       if @sfdesk.is_wide(@ui.current()) {
         @sfdesk.show_page()
@@ -141,10 +141,10 @@ fn pages_shell(src : Source) -> Shell {
 /// What back does where the layout has it (the tiers' table, docs/architecture.md): the wide frame's (sfdesk's
 /// wide_back); laid out Small, a page of the stack popped, a place's top page other than the chats back to the chats
 /// in place (from no side), none at the chats' (the system's: the app left).
-fn back_where() -> (() -> Unit)? {
+fn back_where(src : Source) -> (() -> Unit)? {
   let c = @ui.current()
   if @sfdesk.is_wide(c) {
-    return @sfdesk.wide_back()
+    return @sfdesk.wide_back(src)
   }
   if app.nav.depth() > 1 {
     Some(@sfbase.back_pop)
@@ -207,7 +207,6 @@ fn new_chat_beside() -> Unit {
   if app.nav.top() is NewChat {
     return
   }
-  chats_left()
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
       break
@@ -217,21 +216,6 @@ fn new_chat_beside() -> Unit {
     app.nav.replace(Home)
   }
   app.nav.push(NewChat)
-}
-
-///|
-/// The chats in the page pane given up for another chat or a new one there, kept for back beside the sidebar (sfbase's
-/// chat_left); on the tape back goes to the list, as a phone's does.
-fn chats_left() -> Unit {
-  if @sfdesk.wide.tape {
-    return
-  }
-  for p in app.nav.pages() {
-    match p {
-      Chat(open) => @sfbase.chat_left(open)
-      _ => ()
-    }
-  }
 }
 
 ///|
@@ -260,7 +244,6 @@ fn open_chat_beside(r : ChatRef) -> Unit {
       }
     }
   }
-  chats_left()
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
       break
@@ -481,6 +464,15 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
     Some(w) => {
       // (told once the frame's builds are over, as the last saw the app, the workspace and the page on top)
       c.after_build("attend", fn() { attend(src, w.id, app.nav.top() is NewChat) })
+      // where the app is, put in the history's entry now as the frame ends (sfbase's app_history.mbt: a person's act
+      // pushed an entry before it moved the stack); on the wide frame Home alone is passing (land)
+      c.after_build("history", fn() {
+        let ws = match workspace_in_view(src).0 {
+          Some(now) => now.id
+          None => ""
+        }
+        @sfbase.history_note(ws, @sfdesk.is_wide(c) && app.nav.pages() == [Home])
+      })
       // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off (once the
       // frame's builds are over: a build let go of follows no workspace)
       c.after_build("notices", fn() { notices_frame(src, w) })

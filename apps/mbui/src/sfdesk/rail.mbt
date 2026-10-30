@@ -232,6 +232,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
       if lit == "settings" && wide.crowded {
         wide.peeking.set(!wide.peeking.get())
       } else if lit == "settings" {
+        @sfbase.history_push()
         while app.nav.depth() > 1 {
           if !app.nav.pop() {
             break
@@ -651,6 +652,7 @@ pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
       }
     }
     "archive" => {
+      @sfbase.history_push()
       while app.nav.depth() > 1 {
         if !app.nav.pop() {
           break
@@ -875,6 +877,7 @@ pub fn open_settings_at(route : @settings.Route) -> Unit {
 /// Settings come to with `route`'s page beside their list (the gear's: the list in use on the tape, the page at its
 /// side).
 pub fn settings_beside(route : @settings.Route) -> Unit {
+  @sfbase.history_push()
   app.menu = false
   while app.nav.depth() > 1 {
     if !app.nav.pop() {

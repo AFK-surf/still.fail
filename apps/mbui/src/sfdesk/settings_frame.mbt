@@ -155,6 +155,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             @sf.icon(c, "arrow-left", size=settings_nav_icon, color=t.p.muted) |> ignore
             nav_words(c, @sf.t("web-pages.settings.nav.backToChats"))
           }) {
+          @sfbase.history_push()
           while app.nav.depth() > 1 {
             if !app.nav.pop() {
               break
@@ -170,6 +171,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
       // (a row's page in place of the one open; on the tape brought over to show it)
       @sfpages.settings_side_rows(c, core, here, lit, fn(r) {
+        @sfbase.history_push()
         while app.nav.depth() > 1 {
           if !app.nav.pop() {
             break
