@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { harness } from "./harness.ts";
-import { LIMITS } from "../src/limits.ts";
+import { TEST_CONNECTIONS } from "./relay-limit.ts";
 import { relayCounters } from "../src/relay-metrics.ts";
 import { relays } from "../src/relays.ts";
 
@@ -38,11 +38,11 @@ test("pending upgrades consume capacity before the backend replies", { timeout: 
     const relay = relays.get(relays.idFromName("primary"));
     // Every upgrade the limit lets through held at the relay, so none has its answer when the last one asks.
     await relay.hold();
-    const asked = Array.from({ length: LIMITS.connections + 1 }, () => h.fetch("/relay", { headers: upgrade }));
-    await relay.arrived(LIMITS.connections);
+    const asked = Array.from({ length: TEST_CONNECTIONS + 1 }, () => h.fetch("/relay", { headers: upgrade }));
+    await relay.arrived(TEST_CONNECTIONS);
     await relay.release();
     const responses = await Promise.all(asked);
-    assert.equal(responses.filter((r) => r.status === 101).length, LIMITS.connections);
+    assert.equal(responses.filter((r) => r.status === 101).length, TEST_CONNECTIONS);
     assert.equal(responses.filter((r) => r.status === 429).length, 1);
     for (const response of responses) {
       response.webSocket?.accept();
@@ -57,7 +57,7 @@ test("closed connections free capacity, counted by the relay process", { timeout
   const h = await harness({ noGoogle: true });
   try {
     const sockets: NonNullable<Awaited<ReturnType<typeof h.fetch>>["webSocket"]>[] = [];
-    for (let i = 0; i < LIMITS.connections; i++) {
+    for (let i = 0; i < TEST_CONNECTIONS; i++) {
       const response = await h.fetch("/relay", { headers: upgrade });
       assert.equal(response.status, 101);
       response.webSocket!.accept();

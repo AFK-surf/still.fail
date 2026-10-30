@@ -39,6 +39,8 @@ const DIAL_MS = 20_000;
  */
 export class RelayBudget extends DurableObject<Env> {
   protected quota: Quota | undefined;
+  /** Connections open at once at most (LIMITS.connections; the tests' fewer, not to open thousands). */
+  protected connections = LIMITS.connections;
   /** Connections admitted in the last DIAL_MS, with the relay's accept count then: those not yet accepted still count. */
   private pending: { at: number; accepts: number }[] = [];
 
@@ -97,7 +99,7 @@ export class RelayBudget extends DurableObject<Env> {
     const accepts = counters?.accepts ?? 0;
     const open = counters ? Math.max(0, counters.accepts - counters.disconnects) : 0;
     const dialing = this.pending.length ? Math.min(this.pending.length, Math.max(0, this.pending.length - (accepts - this.pending[0].accepts))) : 0;
-    const admitted = open + dialing < LIMITS.connections && q.connects < LIMITS.connectsPerMinute && !this.exhausted(q);
+    const admitted = open + dialing < this.connections && q.connects < LIMITS.connectsPerMinute && !this.exhausted(q);
     if (admitted) {
       q.connects++;
       this.pending.push({ at: now, accepts });
