@@ -210,3 +210,56 @@ test "a pan told at a moment between frames starts from where the glide has it t
   // (by then it had left where it set out)
   assert_true(ten.unwrap().2 > 100.0, msg="\{ten}")
 }
+
+///|
+/// A large picture zoomed in, flung across at `t0` between frames: the tester, the zoom and when the fling ends.
+fn flung() -> (@ui.Tester, @kit.Zoom, Double) {
+  let t = @ui.Tester::new(fn(_c) {  })
+  t.draw()
+  let z = @kit.Zoom::new()
+  z.natural(1000.0, 1000.0)
+  z.boxed(400.0, 400.0)
+  z.zoom_to(1.0, 200.0, 200.0, false)
+  z.fling(1.5, 0.0)
+  (t, z, z.fling_ends())
+}
+
+///|
+test "a press after a fling's end takes nothing, a frame drawn at its end (and stepped) or not; one before it, the fling" {
+  let after = fn(drawn : Bool) {
+    let (t, z, end) = flung()
+    if drawn {
+      t.frame_at(end)
+      z.step()
+    }
+    t.advance(end + 1.0 - t.time())
+    z.stop_fling()
+  }
+  // (one tester at a time: the one before let go as another is made)
+  let (t, z, end) = flung()
+  t.advance(end - 10.0 - t.time())
+  let before = z.stop_fling()
+  assert_eq((after(true), after(false), before), (false, false, true))
+}
+
+///|
+/// A fling, a frame drawn (and stepped) ahead past its end or none, then a pan told for a moment midway through it
+/// (50 ms in): where the pan leaves it.
+fn pan_before_end(ahead : Bool) -> (Double, Double, Double, Double)? {
+  let (t, z, end) = flung()
+  let t0 = t.time()
+  if ahead {
+    t.frame_at(end + 5.0)
+    z.step()
+  }
+  // (the pan's own moment, before the frame drawn ahead: said by who tells it, and as the host's clock has it)
+  t.advance(t0 + 50.0 - t.time())
+  z.pan(10.0, 0.0, at=t0 + 50.0)
+  z.rect()
+}
+
+///|
+test "a fling drawn ahead past its end, then told a pan at a moment before it: from where its way had it then, as drawn or not" {
+  let unread = pan_before_end(false)
+  assert_eq(pan_before_end(true), unread)
+}
