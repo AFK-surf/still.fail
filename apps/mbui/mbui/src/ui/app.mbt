@@ -99,8 +99,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // clock alone: frame_watch.mbt)
   // what is made once laid out, placed and drawn as its frame does; the old view in the room its node is given
   // (view_host.mbt)
-  let (iw, ih) = view_frame(w, h, t)
-  let t0 = frame_drawn(c, iw, ih, scale, t)
+  view_frame(w, h, t)
+  let t0 = frame_drawn(c, w, h, scale, t)
   in_frame.val = false
   // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`), built where
   // what is built took them (inputs_taken), else as what it read changed (frame_watch.mbt)
@@ -295,12 +295,12 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     layout_clock_at.val = ""
     layout_watch_of().read(fn() {
       // lists build their rows while laid out, and those see clicks too
-      c.layout(root, view_island.val.0, view_island.val.1, w, h) |> ignore
+      c.layout(root, 0.0, 0.0, w, h) |> ignore
       // a layer opened by what was built as it was laid out (a list's row: a hover card over what it holds) came
-      // after the page's layout: laid out over the old view's room now, as one opened before it is; one opened in it, after it
+      // after the page's layout: laid out over the window now, as one opened before it is; one opened in it, after it
       let mut late = built_layers
       while late < c.layers.length() {
-        c.layout(c.layers[late].node, view_island.val.0, view_island.val.1, w, h) |> ignore
+        c.layout(c.layers[late].node, 0.0, 0.0, w, h) |> ignore
         late = late + 1
       }
       // what floats over what scrolls, all of it made now (a list's rows as it was laid out: scroll_bar.mbt)
@@ -436,11 +436,9 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.next_scroll_rects.clear()
   c.next_bars.clear()
   c.across_seen.clear()
-  // (what is made once drawn under the old view: view_host.mbt; the old view in the room its node is given)
-  c.view_under()
-  view_island_clip(true)
   c.glass_frame()
-  c.paint(root, view_island_alpha())
+  // (the window's tree in its order, the old frame or its old views in their places in it: view_host.mbt)
+  c.view_paint(root)
   // what flies that no stratum over it took (strata.mbt), then what is over everything of the page wherever it was
   // painted (an editor's handles), after the rest of it (a layer's after the rest of the layer: Ctx::paint)
   c.land_flying()
@@ -454,9 +452,6 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()
   c.emit_segs()
-  view_island_clip(false)
-  // (what is made once drawn over it)
-  c.view_over()
   // what is drawn by the clock, as its cycle is now (cycle_look.mbt), what it is drawn over kept for a frame of it alone
   // (frame_watch.mbt)
   looks_keep(c)
