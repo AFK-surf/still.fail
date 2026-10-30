@@ -502,6 +502,7 @@ pub fn Ctx::list(
         causes: None,
         sizes: {},
         sizes_end: -1.0,
+        shown_h: {},
         sizes_mover: Mover::new(),
       }
       self.lists[id] = s
@@ -705,6 +706,7 @@ fn Ctx::place_list(
       h
     }
     st.set_height(k, h)
+    st.row_shown(k, h)
     (r, h)
   }
   let bottom_edge = iy + ih

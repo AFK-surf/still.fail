@@ -167,3 +167,32 @@ test "words sent at the chat's end under a card waiting: it closes as they come 
   assert_true(t.find("一起改") is None)
   assert_true(t.find("你 回复了") is Some(_))
 }
+
+///|
+test "words sent at the chat's end under a card waiting: nothing over them steps in one frame, through its agent at work" {
+  // (2026-10-30 the user: 「还是会有顿挫」: a card's rooms closing left their gaps till the last frame, then went at once;
+  // the words sent changed as the station had them from a height another row had had)
+  let calls : Array[Made] = []
+  let t = cards_core(calls, mode="chat-ask-end")
+  let over = "做完了：列表"
+  t.tap_text("发消息")
+  t.type_text("先把 app 的合了")
+  tap_send(t)
+  // from the words sent, through the station having them and its agent at work, to its answer
+  let from = t.time()
+  let ys : Array[Double] = [t.rect_of(over).unwrap().1]
+  let ts : Array[Double] = [from]
+  while t.time() < from + @sffixture.fix_deliver_ms + @ui.move_most_ms {
+    t.frame()
+    ys.push(t.rect_of(over).unwrap().1)
+    ts.push(t.time())
+  }
+  let step = fn(i : Int) { if i <= 0 || i >= ys.length() { 0.0 } else { (ys[i] - ys[i - 1]).abs() } }
+  for i in 1..<ys.length() {
+    let d = step(i)
+    let around = dmax(dmax(step(i - 1), step(i + 1)), 0.5)
+    if d > 6.0 && d > 3.0 * around {
+      fail("what is over the card stepped \{ys[i] - ys[i - 1]} at once at \{ts[i] - from} ms (\{step(i - 1)} and \{step(i + 1)} round it)")
+    }
+  }
+}

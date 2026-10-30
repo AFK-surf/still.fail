@@ -1489,7 +1489,7 @@ pub fn turns_of(String) -> Turns
 
 pub let under_ends : Map[String, @motion.Anim]
 
-pub fn under_post(@ui.Ctx, String, Bool, enter? : @motion.Trans, open? : @motion.Spec, exit~ : @motion.Trans, close? : @motion.Spec, start_at? : Double, () -> Unit) -> Unit
+pub fn under_post(@ui.Ctx, String, Bool, enter? : @motion.Trans, open? : @motion.Spec, exit~ : @motion.Trans, close? : @motion.Spec, start_at? : Double, lead? : Bool, () -> Unit) -> Unit
 
 pub fn under_reset() -> Unit
 

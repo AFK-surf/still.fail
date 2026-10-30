@@ -139,6 +139,8 @@ struct ListState {
   sizes : Map[String, RowSizing]
   /// where the last way its rows were laid out on ends: what moves till then, laid out again each frame
   mut sizes_end : Double
+  /// how tall each row was last laid out, by its key (list_size.mbt)
+  shown_h : Map[String, Double]
   sizes_mover : Mover
 }
 
