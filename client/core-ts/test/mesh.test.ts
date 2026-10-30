@@ -10,7 +10,7 @@ import { createSocket } from "node:dgram";
 import { suite, test as register, type TestOptions } from "node:test";
 import { Effect, Fiber, Queue } from "effect";
 import type { Credential } from "../src/cloud.ts";
-import { CoreError } from "../src/error.ts";
+import { CoreError, HostError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Iroh, IrohConnection } from "../src/iroh.ts";
@@ -1400,6 +1400,69 @@ sim("a_connect_port_nothing_listens_on_is_said_so_the_app_looks_again", async (s
   await s.until(() => offers.length === 2);
   assert.deepEqual([offers[0].connect, offers[1].connect], [5555, 5600]);
   assert.equal(adb.value().refusedPort, null);
+  await s.run(adb.run({ kind: "stop" }));
+  await s.run(mesh.close());
+  await s.settle(endpoint.close());
+});
+
+/// 2026-10-31 (user: 「每次 station 重启就出现一次 adb 通知，按理说不是应该 app 自己连接然后给 station 用吗」): a phone whose
+/// host holds its own adb session carries the station's tunnel on it, not on a socket of the station's own to adbd; not
+/// paired yet, it says so (`unpaired`) and is paired here, with the pairing port its app found, and the station is
+/// offered the phone again at once. The station is never told of the pairing port: it does not pair.
+sim("a_phone_with_its_own_adb_session_carries_the_station_on_it_and_pairs_itself", async (s) => {
+  const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });
+  const offers: J[] = [];
+  const answers: J[] = [];
+  let echoed = "";
+  void (async () => {
+    const conn = (await endpoint.accept())!;
+    const control = (await conn.acceptBi())!;
+    await Station.readLine(control, { bytes: Buffer.alloc(0) });
+    await control.write(Buffer.from(`${JSON.stringify({ ok: true, station: "测试" })}\n`));
+    for (;;) {
+      const offer = await conn.acceptBi();
+      if (offer === null) break;
+      offers.push(JSON.parse((await Station.readLine(offer, { bytes: Buffer.alloc(0) }))!).adb);
+      await offer.write(Buffer.from(`${JSON.stringify({ status: 200, headers: {} })}\n`));
+      await offer.write(Buffer.from(`${JSON.stringify({ serial: "127.0.0.1:37001", adb: "connecting", message: "" })}\n`));
+      const tunnel = await conn.openBi();
+      await tunnel.write(Buffer.from(`${JSON.stringify({ tunnel: "connect" })}\n`));
+      const c = { bytes: Buffer.alloc(0) };
+      answers.push(JSON.parse((await Station.readLine(tunnel, c))!));
+      if (answers.at(-1).ok !== true) continue;
+      await tunnel.write(Buffer.from("CNXN"));
+      let back = c.bytes;
+      while (back.length < 4) {
+        const chunk = await tunnel.read();
+        if (chunk === null) break;
+        back = Buffer.concat([back, chunk]);
+      }
+      echoed = back.toString();
+    }
+  })().catch(() => {});
+  // The shell's adb: unpaired until paired, then a session that says back what it hears.
+  const did: string[] = [];
+  let paired = false;
+  (s.host as J).adb = {
+    pair: (port: number, code: string) => Effect.sync(() => void did.push(`pair ${port} ${code}`)).pipe(Effect.tap(() => Effect.sync(() => (paired = true)))),
+    hold: (port: number) => Effect.suspend(() => (did.push(`hold ${port}`), paired ? Effect.void : Effect.fail(new HostError("unpaired")))),
+    open: () => echoTcp(0),
+  };
+  s.host.tcpConnect = () => Effect.die("adbd's port is not reached itself");
+  const mesh = await s.run(Mesh.make(env(s), []));
+  mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
+  const store = new Store(s.host, s.runner);
+  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  const station = `ws/${endpoint.id()}`;
+  await s.run(adb.run({ kind: "share", offer: { station, connect: 5555, pair: 37115, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
+  await s.until(() => answers.length === 1);
+  assert.deepEqual(answers[0], { error: "这台手机还没有配对：在共享调试页用配对码配对一次", unpaired: true });
+  assert.equal(offers[0].pair, false);
+  // Paired here, and offered again at once: this time carried on the held session.
+  assert.deepEqual(await s.run(adb.run({ kind: "pair", code: "123 456" })), { message: "已配对，以后连哪台 station 都不用再配" });
+  await s.until(() => echoed !== "");
+  assert.deepEqual([offers.length, answers[1], echoed], [2, { ok: true }, "CNXN"]);
+  assert.deepEqual(did, ["hold 5555", "pair 37115 123456", "hold 5555", "hold 5555"]);
   await s.run(adb.run({ kind: "stop" }));
   await s.run(mesh.close());
   await s.settle(endpoint.close());

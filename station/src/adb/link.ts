@@ -90,6 +90,9 @@ export class Share {
   onSet: ((state: AdbState) => void) | null = null;
   /// Why the phone last turned a tunnel down (its adbd not there, say): what adb not getting in is put down to.
   refused: string | null = null;
+  /// Whether it turned it down as not paired with its own adbd (a phone that holds its own adb session, docs/adb-share.md
+  /// 2026-10-31): it is paired on the phone, once, not by this station.
+  refusedUnpaired = false;
   private refusalWaiters: (() => void)[] = [];
   /// The `adb connect` under way, if one is; `again`: an offer came meanwhile, so it is done once more after.
   connecting: Promise<void> | null = null;
@@ -152,8 +155,9 @@ export class Share {
   }
 
   /// The phone turned a tunnel down, saying why.
-  refuse(why: string) {
+  refuse(why: string, unpaired = false) {
     this.refused = why;
+    this.refusedUnpaired = unpaired;
     for (const f of this.refusalWaiters.splice(0)) f();
   }
 
@@ -402,14 +406,14 @@ function listen(shares: Shares, share: Share) {
         }
         tunnel(conn, "connect", socket, signal).catch((error) => {
           log.info("adb", "adb tunnel ended", { error: (error as Error).message, offer: share.offer, ...about(conn) });
-          share.refuse((error as Error).message);
+          share.refuse((error as Error).message, error instanceof Unpaired);
         });
       });
       return;
     }
     tunnel(conn, "connect", socket, signal).catch((error) => {
       log.info("adb", "adb tunnel ended", { error: (error as Error).message, offer: share.offer, ...about(conn) });
-      share.refuse((error as Error).message);
+      share.refuse((error as Error).message, error instanceof Unpaired);
     });
   });
 }
@@ -451,6 +455,9 @@ function listenOn(port: number): Promise<net.Server> {
   });
 }
 
+/// A phone holding its own adb session turned a tunnel down as not paired with its adbd yet.
+class Unpaired extends Error {}
+
 /// A stream to the phone for `socket`: `{"tunnel": kind}`, the phone's answer once it reached adbd (or why not), then
 /// the bytes both ways until either side ends. `signal` ends it at once (the pairing done).
 export async function tunnel(conn: Connection, kind: string, socket: net.Socket, signal?: AbortSignal): Promise<void> {
@@ -468,7 +475,7 @@ export async function tunnel(conn: Connection, kind: string, socket: net.Socket,
     const reader = new Reader(stream);
     const answer = await wall.within(TUNNEL_OPEN, reader.line(), "the phone did not answer");
     if (answer === null) throw new Error("the phone closed the tunnel");
-    if (typeof answer.error === "string") throw new Error(`the phone did not reach adb: ${answer.error}`);
+    if (typeof answer.error === "string") throw answer.unpaired === true ? new Unpaired(answer.error) : new Error(`the phone did not reach adb: ${answer.error}`);
     const s = stream;
     const up = (async () => {
       try {
@@ -621,7 +628,9 @@ async function connectIn(shares: Shares, share: Share, server: string[]) {
     }),
   );
   const refused = share.refused;
+  const unpaired = share.refusedUnpaired;
   share.refused = null;
+  share.refusedUnpaired = false;
   if (now === "device") {
     keepLending(shares, share, server);
     share.set("connected");
@@ -629,7 +638,9 @@ async function connectIn(shares: Shares, share: Share, server: string[]) {
   else if (refused !== null) {
     // adb would go on dialling it a few times a second (260 refusals in 12 s): let go until the next offer.
     await run(adb, ["disconnect", serial], shares.limits.quick).catch(() => {});
-    share.set("failed", refused);
+    // (not paired on the phone: it offers again as it is, nothing to try here meanwhile)
+    if (unpaired) share.set("unpaired", refused);
+    else share.set("failed", refused);
   } else share.set("unpaired", tr(speaks, "station.adb.unpaired"));
 }
 

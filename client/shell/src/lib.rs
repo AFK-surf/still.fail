@@ -24,6 +24,8 @@ use tokio_tungstenite::Connector;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::{Error as WsError, Message};
 
+mod adb;
+
 const MDNS_SERVICE: &str = "stillfail";
 const FORMER_MDNS_SERVICE: &str = "ember";
 
@@ -277,7 +279,8 @@ type Accepted = Arc<tokio::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiv
 enum Handle {
     Response(Arc<tokio::sync::Mutex<reqwest::Response>>),
     Ws { incoming: Arc<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<Result<String, String>>>>, outgoing: tokio::sync::mpsc::UnboundedSender<String> },
-    Tcp { read: Arc<tokio::sync::Mutex<tokio::net::tcp::OwnedReadHalf>>, write: Arc<tokio::sync::Mutex<tokio::net::tcp::OwnedWriteHalf>> },
+    /// A socket to the device's own port, or a station's session on the phone's adb (`adb.open`).
+    Tcp { read: Arc<tokio::sync::Mutex<Box<dyn tokio::io::AsyncRead + Send + Unpin>>>, write: Arc<tokio::sync::Mutex<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>> },
     Endpoint(Endpoint, Accepted),
     Conn(Connection),
     /// A connection that closed, let go (its state, its streams), with what the core may still ask of it.
@@ -348,6 +351,7 @@ struct Inner {
     say: Mutex<Option<(Say, Ctx)>>,
     /// Where a tapped view's records are offered first (`sf_shell_set_media`): none, all are said.
     media: Mutex<Option<(Media, Ctx)>>,
+    adb: adb::Adb,
 }
 
 pub struct Shell {
@@ -756,7 +760,25 @@ impl Inner {
                 let port = a.get("port").and_then(Value::as_u64).ok_or("missing port")? as u16;
                 let stream = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.map_err(err)?;
                 let (read, write) = stream.into_split();
-                let id = self.keep(Handle::Tcp { read: Arc::new(tokio::sync::Mutex::new(read)), write: Arc::new(tokio::sync::Mutex::new(write)) });
+                let id = self.keep(Handle::Tcp { read: Arc::new(tokio::sync::Mutex::new(Box::new(read))), write: Arc::new(tokio::sync::Mutex::new(Box::new(write))) });
+                Ok(Answer::json(json!({ "id": id })))
+            }
+            // The phone's own adb (adb.rs): paired once, its session held, a station's session on it read and written as a
+            // socket is.
+            "adb.pair" => {
+                let port = a.get("port").and_then(Value::as_u64).ok_or("missing port")? as u16;
+                self.adb.pair(port, str_of(&a, "code")?).await?;
+                Ok(Answer::json(json!({})))
+            }
+            "adb.hold" => {
+                let port = a.get("port").and_then(Value::as_u64).ok_or("missing port")? as u16;
+                self.adb.hold(port).await?;
+                Ok(Answer::json(json!({})))
+            }
+            "adb.state" => Ok(Answer::json(json!({ "port": self.adb.state().await }))),
+            "adb.open" => {
+                let (read, write) = tokio::io::split(self.adb.open().await?);
+                let id = self.keep(Handle::Tcp { read: Arc::new(tokio::sync::Mutex::new(Box::new(read))), write: Arc::new(tokio::sync::Mutex::new(Box::new(write))) });
                 Ok(Answer::json(json!({ "id": id })))
             }
             "tcp.read" => {
@@ -1285,7 +1307,8 @@ impl Shell {
         let tls = Arc::new(tls_config());
         let http = Mutex::new(http_client(&tls));
         let db = Arc::new(Mutex::new(DbHandle { path: dir.join("core.db"), conn: None }));
-        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, fetches: Mutex::default(), handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default(), open_wait, say: Mutex::default(), media: Mutex::default() });
+        let adb = adb::Adb::new(dir.clone());
+        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, fetches: Mutex::default(), handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default(), open_wait, say: Mutex::default(), media: Mutex::default(), adb });
         STATS.lock().unwrap().shells.push(Arc::downgrade(&inner));
         Ok(Shell { runtime, inner })
     }
