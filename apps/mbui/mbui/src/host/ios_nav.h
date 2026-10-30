@@ -279,6 +279,8 @@ API_AVAILABLE(ios(18.0))
 @property(nonatomic, strong) NSMutableDictionary<NSString *, UIButton *> *floatingButtons;
 @property(nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *floatingKeys;
 @property(nonatomic) BOOL shown;
+@property(nonatomic) BOOL bare;
+@property(nonatomic) BOOL keyboardVisible;
 @property(nonatomic, strong) NSMutableDictionary<NSString *, UINavigationController *> *navs;
 // (a tab chosen by the app, not the person: not said back)
 @property(nonatomic) BOOL choosing;
@@ -388,6 +390,25 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   self.delegate = self;
   self.navs = [NSMutableDictionary dictionary];
   [self applyNone];
+  [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(keyboardChanged:)
+      name:UIKeyboardWillChangeFrameNotification object:nil];
+}
+- (void)dealloc { [NSNotificationCenter.defaultCenter removeObserver:self]; }
+- (void)updateTabVisibility {
+  BOOL hidden = !self.shown || self.bare;
+#ifdef __IPHONE_27_1
+  if (@available(iOS 27.1, *))
+    hidden |= self.keyboardVisible && self.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified;
+#endif
+  if (self.tabBarHidden != hidden)
+    [self setTabBarHidden:hidden animated:self.view.window != nil && !UIAccessibilityIsReduceMotionEnabled()];
+}
+- (void)keyboardChanged:(NSNotification *)note {
+  if (!self.isViewLoaded || !self.view.window) return;
+  CGRect frame = [self.view convertRect:[note.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue]
+      fromCoordinateSpace:self.view.window.screen.coordinateSpace];
+  self.keyboardVisible = !CGRectIsEmpty(CGRectIntersection(self.view.bounds, frame));
+  [self updateTabVisibility];
 }
 // Where the system put the action's tab (iOS 27's prominent one: an iPhone Duo's round one at its column's foot) in
 // the app's view, said as it moves (`nav_action`; w 0 where none shows), for what the app lines up with it (its
@@ -756,8 +777,9 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
           });
         }
       }
-  if (self.tabBarHidden != bare) [self setTabBarHidden:bare animated:YES];
+  self.bare = bare;
   self.shown = YES;
+  [self updateTabVisibility];
   if (bare) [buttons removeAllObjects];
   [buttons insertObjects:own atIndexes:[NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0, own.count)]];
   NSString *title = [b[@"title"] isKindOfClass:NSString.class] ? b[@"title"] : @"";
