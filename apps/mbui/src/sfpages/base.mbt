@@ -111,7 +111,6 @@ using @sfbase {
   go_to_words,
   go_tos,
   items,
-  linger_out_ms,
   list_after,
   list_frame,
   local_sent,

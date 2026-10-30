@@ -72,7 +72,6 @@ using @sfbase {
   floor_of,
   go_to_words,
   go_tos,
-  linger_out_ms,
   list_after,
   list_frame,
   local_sent,

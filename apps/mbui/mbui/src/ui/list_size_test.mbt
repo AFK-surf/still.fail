@@ -67,12 +67,17 @@ test "list: a row come at the end of a list held there opens its room from nothi
 }
 
 ///|
-test "list: a row going closes its room to nothing, the rows over it coming down" {
+test "list: a row going leaves its room whole as it leaves, then closes it to nothing, the rows over it coming down" {
   let goes = [false]
   let t = @ui.Tester::new(sized_rows(fn() { Array::makei(if goes[0] { 19 } else { 20 }, fn(i) { i }) }), w=300.0, h=400.0)
   let y18 = y_of(t, 18)
   goes[0] = true
   t.draw()
+  // (as it leaves, ListRows::left: its room as it was, nothing of it cut, nothing over it moving)
+  t.run_for(@ui.row_leave_ms - 20.0)
+  assert_eq(t.row(19).unwrap().3, 50.0)
+  assert_eq(y_of(t, 18), y18)
+  t.run_for(20.0)
   t.run_for(@ui.row_size_ms / 2.0)
   let h = t.row(19).unwrap().3
   assert_true(h > 1.0 && h < 49.0)

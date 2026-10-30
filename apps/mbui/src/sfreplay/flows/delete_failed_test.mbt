@@ -18,8 +18,6 @@ test "13-delete-failed" {
     f.see("未发送")
     f.tap("=删除")
     f.gone("这条没发出去就删掉 082947")
-    // its row fades where it was as its room closes: to its end, as it set out (sfpages chat_list's gone_alpha)
-    f.run_to(f.t.rest_of("gone/"))
     f.peer("thaw")
     f.end()
   })

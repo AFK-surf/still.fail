@@ -104,7 +104,7 @@ pub fn chat_list(
           Foot => c.box(style=@ui.style(h=Fixed(foot_room + foot + ask_clear)), fn() {  }) |> ignore
           Working(a) => {
             // coming in, it fades in and grows from its picture as its room opens (the list's rows' heights:
-            // Ctx::row_size); its turn over, it stays a moment and fades (Activity), then its room closes (going)
+            // Ctx::row_size); its turn over, it stays a moment (Activity), then leaves as any row (ListRows::leave)
             let open = @motion.anim(c, "open/" + mk, 1.0, global=true)
             if rd.fresh.contains(keys[i]) {
               rd.fresh.remove(keys[i])
@@ -118,13 +118,7 @@ pub fn chat_list(
                 None
               })
             }
-            let leaving = match rd.linger.get(a.key) {
-              Some(l) => l.leaving.get()
-              None => false
-            }
-            let fade = @motion.anim(c, "fade/" + mk, 1.0, global=true)
-            fade.follow(if leaving { 0.0 } else { 1.0 }, @motion.tween(linger_out_ms, ease=Leave))
-            let gone = gone_of(c, rd, mk, keys[i])
+            let leaving = rd.rows.went(keys[i]) is Some(_)
             let here = here_of(r, v, rk, turns, em, None, core, inline=narrow, gutter~)
             let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving) })
             @motion.keyed(c, ri, mk, by=makes_way(lf, keys[i]))
@@ -135,9 +129,9 @@ pub fn chat_list(
             let w = c.width
             c.look_by(ri, fn() {
               let p = open.get()
-              @ui.look(alpha=p * fade.get() * gone_now(gone), scale=0.5 + 0.5 * p, ox=face / w, oy=0.5)
+              @ui.look(alpha=p, scale=0.5 + 0.5 * p, ox=face / w, oy=0.5)
             })
-            @motion.leaving(c, ri, rd.rows.went(keys[i]) is None)
+            rd.rows.leave(c, ri, keys[i])
           }
           _ => {
             // the row words sent go to: its bubble flies there from the composer
@@ -176,9 +170,9 @@ pub fn chat_list(
               _ => ()
             }
             // where it is is where the rows before it end, as tall as each is now (Ctx::row_size): nothing of its own
-            // moves it; what leaves the list stays in it while its room closes (Reading's `rows`: ListRows::went), fading
+            // moves it; what leaves the list fades where it is, then its room closes (Reading's `rows`: ListRows::leave)
             @motion.keyed(c, ri, mk, by=cause)
-            @motion.leaving(c, ri, rd.rows.went(keys[i]) is None)
+            rd.rows.leave(c, ri, keys[i])
             // what is new to the list while it is followed eases in ([data-enter]: 220 ms from 6 under), not one out of
             // a picture
             let emitted = match e {
@@ -199,19 +193,15 @@ pub fn chat_list(
                 rd.rises[keys[i]] = a
               }
             }
-            // (each read as it is painted: its row not built again as it rises in or fades out; built again as it has
-            // risen, its rise forgotten)
-            let gone = gone_of(c, rd, mk, keys[i])
+            // (read as it is painted: its row not built again as it rises in; built again as it has risen, its rise
+            // forgotten)
             match rd.rises.get(keys[i]) {
               Some(a) if a.ends_at() >= 0.0 && c.moment() < a.ends_at() => {
                 c.shows_until(a.ends_at())
-                c.look_by(ri, fn() { @ui.look(alpha=a.get() * gone_now(gone)) })
+                c.look_by(ri, fn() { @ui.look(alpha=a.get()) })
               }
               Some(_) => rd.rises.remove(keys[i]) |> ignore
               None => ()
-            }
-            if !rd.rises.contains(keys[i]) && gone is Some(_) {
-              c.look_by(ri, fn() { @ui.look(alpha=gone_now(gone)) })
             }
             // where it stands: its room what it leaves as a floor when it goes, as an agent's line's (act_rooms)
             if e is State(_, _, _) {
@@ -897,31 +887,4 @@ fn makes_way(lf : @sfbase.ListFrame, k : String) -> String {
 /// it shows and the rows over the one that came go up for it, from where they showed.
 fn came_over(lf : @sfbase.ListFrame) -> String {
   "over " + lf.rd.over
-}
-
-
-///|
-/// How row `k` (its motion key `mk`) fades as it goes from the list (Reading's `rows`: ListRows::went): out on `Leave`
-/// as its room closes; None for one not going.
-fn gone_of(c : @ui.Ctx, rd : @sfbase.Reading, mk : String, k : String) -> @motion.Anim? {
-  match rd.rows.went(k) {
-    Some(at) => {
-      // (its own for this going: one that comes again, an agent's line its next turn, shows whole)
-      let a = @motion.anim(c, "gone/" + mk + "/" + at.to_string(), 1.0, global=true)
-      if a.target() != 0.0 {
-        a.animate(0.0, @motion.tween(@sf.leave_ms, ease=Leave), start_at=at)
-      }
-      Some(a)
-    }
-    None => None
-  }
-}
-
-///|
-/// How much of a row going shows now (gone_of; 1 for one not going), read as it is painted.
-fn gone_now(gone : @motion.Anim?) -> Double {
-  match gone {
-    Some(a) => a.get()
-    None => 1.0
-  }
 }
