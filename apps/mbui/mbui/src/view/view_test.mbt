@@ -58,7 +58,8 @@ test "made once: what it shows changed many times, its nodes are the same nodes"
   }
   assert_eq(p.made.val, 1)
   assert_eq(p.tree.work().made, made)
-  assert_true(physical_equal(p.title_view.val.unwrap(), t))
+  // (the title the root holds first is the node made at the start, alive: the same index, the same making)
+  assert_eq(p.tree.root().kids()[0].id(), t.id())
   assert_true(t.alive())
 }
 
@@ -74,10 +75,12 @@ test "its words changed: that binding alone runs, its node laid out again, nothi
   assert_eq(after.made - before.made, 0)
   assert_eq(after.structure - before.structure, 0)
   assert_eq(after.computes - before.computes, 1)
-  // (its look too: its words are drawn)
-  assert_eq(after.looks - before.looks, 1)
+  // its words measured again, its instance alone made again (its size the same: nothing else drawn elsewhere)
+  assert_true(after.measured - before.measured >= 1)
+  assert_eq(after.instances - before.instances, 1)
+  assert_eq(after.given - before.given, 1)
   let drawn = p.tree.frame(390.0, 844.0)
-  assert_true(drawn.iter().any(fn(d) { d.look.words == "明日待办" }))
+  assert_true(drawn.iter().any(fn(d) { d.words == "明日待办" }))
 }
 
 ///|
@@ -90,7 +93,8 @@ test "its ground changed: painted again alone, nothing laid out" {
   let after = p.tree.work()
   assert_eq(after.bound - before.bound, 1)
   assert_eq(after.computes - before.computes, 0)
-  assert_eq(after.looks - before.looks, 1)
+  assert_eq(after.measured - before.measured, 0)
+  assert_eq(after.instances - before.instances, 1)
 }
 
 ///|
@@ -106,17 +110,20 @@ test "the clock alone going on: what reads it painted again, nothing built, noth
   assert_eq(after.structure - before.structure, 0)
   assert_eq(after.computes - before.computes, 0)
   assert_eq(after.bound - before.bound, 1)
-  assert_eq(after.looks - before.looks, 1)
-  assert_true(drawn.iter().any(fn(d) { d.look.alpha == 0.5 }))
+  assert_eq(after.measured - before.measured, 0)
+  assert_eq(after.instances - before.instances, 1)
+  assert_true(drawn.iter().any(fn(d) { d.alpha == 0.5 }))
 }
 
 ///|
-test "nothing changed: a frame does nothing" {
+test "nothing changed: a frame does nothing, the host given nothing new" {
   let p = page()
-  p.tree.frame(390.0, 844.0) |> ignore
+  let first = p.tree.frame(390.0, 844.0)
   let before = p.tree.work()
-  p.tree.frame(390.0, 844.0) |> ignore
+  let again = p.tree.frame(390.0, 844.0)
   assert_eq(p.tree.work(), before)
+  // (no instance made, none measured, nothing laid out: the same instances, not made again)
+  assert_true(physical_equal(first, again))
 }
 
 ///|
@@ -128,7 +135,7 @@ test "pressed: its callback writes the state outside any tracking, what reads it
   assert_true(p.tree.press(x + 1.0, y + 1.0))
   let drawn = p.tree.frame(390.0, 844.0)
   assert_eq(p.count.get(), 1)
-  assert_true(drawn.iter().any(fn(d) { d.look.words == "共 1 项" }))
+  assert_true(drawn.iter().any(fn(d) { d.words == "共 1 项" }))
   // (the count's words alone: no node made, no structure run)
   let after = p.tree.work()
   assert_eq(after.bound - before.bound, 1)
@@ -175,7 +182,7 @@ test "rows by key: moved as the order changes, never made again" {
   assert_eq(rows_made.val, 3)
   assert_eq(row_ids(t), [ids[2], ids[0], ids[1]])
   // drawn in the new order, from the top
-  let words = drawn.filter(fn(d) { d.look.words != "" }).map(fn(d) { d.look.words })
+  let words = drawn.filter(fn(d) { d.words != "" }).map(fn(d) { d.words })
   assert_eq(words, ["丙", "甲", "乙"])
 }
 
@@ -192,7 +199,7 @@ test "a row's item changed: its words set again, the row not made again" {
   assert_eq(rows_made.val, 2)
   assert_eq(row_ids(t), ids)
   assert_eq(t.work().made - before.made, 0)
-  assert_true(drawn.iter().any(fn(d) { d.look.words == "甲改" }))
+  assert_true(drawn.iter().any(fn(d) { d.words == "甲改" }))
 }
 
 ///|
@@ -236,18 +243,19 @@ test "shown while it holds: made as it comes, let go as it goes, its holder's ot
   on.set(true)
   let drawn = t.frame(390.0, 844.0)
   assert_eq(made.val, 1)
-  assert_true(drawn.iter().any(fn(d) { d.look.words == "出现" }))
+  assert_true(drawn.iter().any(fn(d) { d.words == "出现" }))
   on.set(false)
   let drawn = t.frame(390.0, 844.0)
-  assert_true(!drawn.iter().any(fn(d) { d.look.words == "出现" }))
-  assert_true(physical_equal(t.root().kids()[0], first))
+  assert_true(!drawn.iter().any(fn(d) { d.words == "出现" }))
+  assert_eq(t.root().kids()[0].id(), first.id())
+  assert_true(first.alive())
   assert_eq(t.work().let_go, 1)
 }
 
 ///|
 /// What a frame draws, without who each node is: where, how big and how it looks.
 fn shown(d : Array[@view.Drawn]) -> Array[String] {
-  d.map(fn(x) { "\{x.x},\{x.y} \{x.w}x\{x.h} \{x.look.words} \{x.look.ground} \{x.look.alpha}" })
+  d.map(fn(x) { "\{x.x},\{x.y} \{x.w}x\{x.h} \{x.words} \{x.ground} \{x.alpha}" })
 }
 
 ///|
@@ -301,4 +309,120 @@ test "changed a little at a time, it draws what the same state made fresh draws"
     let fresh = rows_tree(@signals.signal(items.get()), @signals.signal(wide.get())).frame(w, 844.0)
     assert_eq(shown(kept), shown(fresh), msg="step \{step} w=\{w}\nkept  \{shown(kept)}\nfresh \{shown(fresh)}")
   }
+}
+
+///|
+test "what holds a button drawn off and faded: the button drawn and pressed where it is drawn, as faded" {
+  let off = @signals.signal((0.0, 0.0), same=fn(a, b) { a == b })
+  let pressed = Ref(0)
+  let button : Ref[@view.View?] = Ref(None)
+  let t = @view.Tree::new(fn(root) {
+    root.box(fn(card) {
+      card.pad(Is(10.0)).offset(By(fn() { off.get() })).alpha(Is(0.5)) |> ignore
+      button.val = Some(
+        card.box(fn(b) {
+          b.width(Is(Some(40.0))).height(Is(Some(20.0))).on_press(fn() { pressed.val = pressed.val + 1 }) |> ignore
+        }),
+      )
+    })
+    |> ignore
+  })
+  t.frame(390.0, 844.0) |> ignore
+  let b = button.val.unwrap()
+  let (x0, y0, _, _) = b.rect()
+  assert_eq((x0, y0), (10.0, 10.0))
+  let before = t.work()
+  off.set((100.0, 50.0))
+  let drawn = t.frame(390.0, 844.0)
+  // the card and its button made again (drawn elsewhere), nothing laid out
+  assert_eq(t.work().computes - before.computes, 0)
+  assert_eq(t.work().instances - before.instances, 2)
+  let (x, y, _, _) = b.rect()
+  assert_eq((x, y), (110.0, 60.0))
+  let d = drawn.iter().find_first(fn(d) { d.id == b.id() }).unwrap()
+  assert_eq((d.x, d.y, d.alpha), (110.0, 60.0, 0.5))
+  // pressed where it was laid out: not there; where it is drawn: there
+  assert_true(!t.press(x0 + 1.0, y0 + 1.0))
+  assert_true(t.press(x + 1.0, y + 1.0))
+  assert_eq(pressed.val, 1)
+}
+
+///|
+test "two rows, one changed: the other row's bindings run nothing, given its items again as they were" {
+  let items = @signals.signal([{ key: "a", words: "甲" }, { key: "b", words: "乙" }])
+  let runs : Map[String, Int] = {}
+  let t = @view.Tree::new(fn(root) {
+    root.each(fn() { items.get() }, fn(it) { it.key }, fn(row, item) {
+      let k = item.get().key
+      row.words(By(fn() {
+        runs[k] = runs.get(k).unwrap_or(0) + 1
+        item.get().words
+      }))
+      |> ignore
+    })
+  })
+  t.frame(390.0, 844.0) |> ignore
+  // the same rows in new objects: nothing runs
+  items.set([{ key: "a", words: "甲" }, { key: "b", words: "乙" }])
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(runs, { "a": 1, "b": 1 })
+  // one of them changed: its binding alone
+  let before = t.work()
+  items.set([{ key: "a", words: "甲改" }, { key: "b", words: "乙" }])
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(runs, { "a": 2, "b": 1 })
+  assert_eq(t.work().bound - before.bound, 1)
+}
+
+///|
+test "a property worked out to what it was: nothing set, nothing laid out, nothing drawn again" {
+  let n = @signals.signal(3, same=fn(a, b) { a == b })
+  let t = @view.Tree::new(fn(root) {
+    // (the words depend on whether it is more than 2: 3 and then 4 both say the same)
+    root.box(fn(b) { b.words(By(fn() { if n.get() > 2 { "多" } else { "少" } })) |> ignore }) |> ignore
+    root.box(fn(b) { b.ground(By(fn() { if n.get() > 2 { 1L } else { 2L } })) |> ignore }) |> ignore
+  })
+  let first = t.frame(390.0, 844.0)
+  let before = t.work()
+  n.set(4)
+  let again = t.frame(390.0, 844.0)
+  let after = t.work()
+  assert_eq(after.bound - before.bound, 2)
+  assert_eq(after.same - before.same, 2)
+  assert_eq(after.computes - before.computes, 0)
+  assert_eq(after.instances - before.instances, 0)
+  assert_true(physical_equal(first, again))
+}
+
+///|
+test "let go, a shown part holding rows, and then the whole tree: everything it read let go of, callbacks dropped" {
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let items = @signals.signal([{ key: "a", words: "甲" }, { key: "b", words: "乙" }])
+  let outside = @signals.signal(0)
+  let top = @signals.signal("顶", same=fn(a, b) { a == b })
+  let t = @view.Tree::new(fn(root) {
+    root.box(fn(b) { b.words(By(fn() { top.get() })) |> ignore }) |> ignore
+    root.show(fn() { on.get() }, fn(part) {
+      part.each(fn() { items.get() }, fn(it) { it.key }, fn(row, item) {
+        row.words(By(fn() { "\{item.get().words}\{outside.get()}" })).on_press(fn() { () }) |> ignore
+      })
+    })
+  })
+  t.frame(390.0, 844.0) |> ignore
+  let alive = t.alive()
+  assert_true(items.watched() && outside.watched())
+  // the shown part goes: its rows with it, what they and it read let go of
+  on.set(false)
+  t.frame(390.0, 844.0) |> ignore
+  assert_true(!items.watched())
+  assert_true(!outside.watched())
+  // (the part, its slot of rows, its two rows)
+  assert_eq(alive - t.alive(), 4)
+  assert_true(on.watched() && top.watched())
+  // the whole tree
+  t.dispose()
+  assert_eq(t.alive(), 0)
+  assert_true(!on.watched())
+  assert_true(!top.watched())
+  assert_true(!t.press(1.0, 1.0))
 }
