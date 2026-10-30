@@ -88,8 +88,8 @@ globalStyle(msgFiles, { display: "flex", flexWrap: "wrap", gap: "6px", minWidth:
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(fileCard, {
   display: "inline-flex", alignItems: "center", gap: "10px", width: "236px", maxWidth: "100%",
-  padding: `${FILE_CARD_PAD.y}px ${FILE_CARD_PAD.x}px`,
-  borderRadius: MESSAGE_FILE_CORNER, background: vars.neutralBg, color: vars.text, textAlign: "left",
+  padding: `${FILE_CARD_PAD.y}px ${FILE_CARD_PAD.end}px ${FILE_CARD_PAD.y}px ${FILE_CARD_PAD.start}px`,
+  borderRadius: "999px", background: vars.neutralBg, color: vars.text, textAlign: "left",
   cornerShape: vars.cornerShape,
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
@@ -104,7 +104,7 @@ globalStyle(msgAvatar, { width: "18px", height: "18px", flex: "none" });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(fileCardOpen, {
   display: "inline-flex", maxWidth: "100%", padding: "0", border: "0", background: "none", color: "inherit",
-  font: "inherit", textAlign: "left", cursor: "pointer", borderRadius: MESSAGE_FILE_CORNER,
+  font: "inherit", textAlign: "left", cursor: "pointer", borderRadius: "999px",
   cornerShape: vars.cornerShape,
 });
 /**

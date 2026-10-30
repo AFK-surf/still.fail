@@ -293,12 +293,12 @@ export const fileCardMeta = style({
 });
 export const fileCardText = style({ flex: "1", minWidth: "0", display: "grid" });
 /**
- * A file's card in a message (a screen's too): its sheet and words 16 in across and 12 down. What a message carries
- * (files' and screens' cards, pictures, videos, pasted text) is rounded alike: a row's corner, the app's ladder's 18
- * (a card's on a card a row high reads as a capsule).
+ * A file's card in a message (a screen's too): a row high, a capsule, its sheet 12 in and its words' end 14 from the
+ * other side, 8 down. What else a message carries (pictures, videos, pasted text, a screen's card with its picture)
+ * is rounded as a card is, every card in a chat alike.
  */
-export const FILE_CARD_PAD = { y: 12, x: 16 } as const;
-export const MESSAGE_FILE_CORNER = `calc(18px * ${vars.cornerScale})`; // own corner: the app's row step (sf row_corner), no web token for it yet
+export const FILE_CARD_PAD = { y: 8, start: 12, end: 14 } as const;
+export const MESSAGE_FILE_CORNER = vars.rCard;
 /** A file's kind at a glance (Chat.tsx FileTile): a sheet with its extension, in the text's colour; dashed when only its
  * path goes; filling with the accent as it goes up; its extension red when it failed. */
 export const fileTile = style({ flex: "none", fill: "none", stroke: vars.muted, strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round" });
@@ -723,7 +723,7 @@ export const msgVideoPlay = style({
   background: "rgba(0, 0, 0, 0.65)", pointerEvents: "none",
 });
 export const msgVideoName = style({
-  position: "absolute", bottom: "0", left: "0", right: "0", padding: `8px ${FILE_CARD_PAD.x}px`,
+  position: "absolute", bottom: "0", left: "0", right: "0", padding: "8px 16px",
   background: "rgba(0, 0, 0, 0.65)", fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 /** Under its words while the core downloads it (chatDownloads.ts): how far, 4 below them. */

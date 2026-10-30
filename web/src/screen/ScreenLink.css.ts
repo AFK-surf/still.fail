@@ -19,10 +19,12 @@ export const peekCard = style({
   selectors: {
     "&&": {
       display: "inline-flex", flexDirection: "column", alignItems: "stretch", gap: "0", width: "280px",
-      padding: `${PEEK_IN}px ${PEEK_IN}px 0`,
+      padding: `${PEEK_IN}px ${PEEK_IN}px 0`, borderRadius: MESSAGE_FILE_CORNER,
     },
   },
 });
+/** The link round it rounded as it is: a card's corner, not a file's capsule. */
+globalStyle(`${screenCard}:has(${peekCard})`, { borderRadius: MESSAGE_FILE_CORNER });
 export const peek = style({
   position: "relative", display: "block", width: "100%", background: vars.hover, overflow: "hidden",
   borderRadius: `calc(${MESSAGE_FILE_CORNER} - ${PEEK_IN}px)`, cornerShape: vars.cornerShape,

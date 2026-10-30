@@ -444,9 +444,10 @@ fn card_button(c : @ui.Ctx, id : Int, icon_name : String, label : String) -> Uni
 }
 
 ///|
-/// What a message carries is rounded (its files' cards, screens' and services' cards, pictures, videos, pasted text):
-/// one corner for them all, a row's (the ladder's 18): a card's 26 on a card a row high reads as a capsule.
-pub let message_file_corner : Double = row_corner
+/// What a message carries is rounded as every card in a chat is (a question's, a screen's with its picture, pictures,
+/// videos, pasted text): the ladder's card step (26). One a row high (a file's card, a screen's or a service's
+/// without a picture) is a capsule (card_box).
+pub let message_file_corner : Double = card_corner
 
 ///|
 pub let message_file_radius : @ui.Radius = rounded(message_file_corner)
@@ -466,13 +467,14 @@ let card_close_icon : Double = 12.0
 let card_box : @ui.Style = @ui.style(
   row=true,
   max_w=Fixed(file_card_w),
-  // (16 in across, 12 down, as a screen's card: @sfbase's link_card)
-  px=S4,
-  py=S3,
+  // (a row high, a capsule: its sheet's ink as far in as its words' end, 14, as a screen's card: @sfbase's link_card)
+  pl=S3,
+  pr=S3_5,
+  py=S2,
   gap=S2_5,
   bg=Neutral,
   // (in a corner of what holds it, a composer's box: as far in as from its edges, its corner concentric)
-  radius=InnerOr(message_file_radius),
+  radius=InnerOr(Full),
   align=ACenter,
 )
 
