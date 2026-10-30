@@ -293,15 +293,12 @@ export const fileCardMeta = style({
 });
 export const fileCardText = style({ flex: "1", minWidth: "0", display: "grid" });
 /**
- * A file's card in a message: its sheet (FileTile, 30 × 36, the sheet drawn 2.75 in from its sides and 1.75 from its
- * top and foot, its corners rounded 3.25) as far from the card's edges on every side, and the card rounded as the sheet
- * is less that distance (concentric). A message's pictures and pasted text take its corner too: one corner for what a
- * message carries.
+ * A file's card in a message: a card's corner, as every card a message carries has (a screen's, a question's), its
+ * sheet and words 16 in across and 12 down. A message's pictures and pasted text take its corner too: one corner for
+ * what a message carries.
  */
-const SHEET = { inX: 2.75, inY: 1.75, corner: 3.25 } as const;
-const SHEET_ROOM = 9.75;
-export const FILE_CARD_PAD = { y: SHEET_ROOM - SHEET.inY, x: SHEET_ROOM - SHEET.inX } as const;
-export const MESSAGE_FILE_CORNER = `calc(${SHEET_ROOM + SHEET.corner}px * ${vars.cornerScale})`;
+export const FILE_CARD_PAD = { y: 12, x: 16 } as const;
+export const MESSAGE_FILE_CORNER = vars.rCard;
 /** A file's kind at a glance (Chat.tsx FileTile): a sheet with its extension, in the text's colour; dashed when only its
  * path goes; filling with the accent as it goes up; its extension red when it failed. */
 export const fileTile = style({ flex: "none", fill: "none", stroke: vars.muted, strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round" });

@@ -1,28 +1,24 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
-/** A screen's card in a message: a file's (Chat.css.ts fileCard), over a message's own link colours (styles/conversation.css.ts);
- * rounded as its card is (a card's corner: tileCard, peekCard). */
+/** A screen's card in a message: a file's (Chat.css.ts fileCard), over a message's own link colours (styles/conversation.css.ts) */
 export const screenCard = style({
   selectors: {
-    "&&": { color: vars.text, textDecoration: "none", borderRadius: vars.rCard },
+    "&&": { color: vars.text, textDecoration: "none" },
   },
 });
 /** One its station no longer has: its words as quiet as its line. */
 globalStyle(`${screenCard}[data-gone] [data-card]`, { color: vars.muted });
-/** A screen's card without its picture: a card's corner as the one with it has, its mark and words 16 in across, 12 down
- * (mbui's link_card). */
-export const tileCard = style({ selectors: { "&&": { borderRadius: vars.rCard, padding: "12px 16px" } } });
 export const screenCardLine = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 
 /** A card with the screen live in it: the picture 4px in from its top and sides, its corners concentric with the
- * card's, a card's corner as other cards have (mbui's peek_card), the words under it where a card's are. */
+ * card's (mbui's peek_card), the words under it where a card's are. */
 const PEEK_IN = 4;
 export const peekCard = style({
   selectors: {
     "&&": {
       display: "inline-flex", flexDirection: "column", alignItems: "stretch", gap: "0", width: "280px",
-      padding: `${PEEK_IN}px ${PEEK_IN}px 0`, borderRadius: vars.rCard,
+      padding: `${PEEK_IN}px ${PEEK_IN}px 0`,
     },
   },
 });

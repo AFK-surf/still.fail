@@ -444,9 +444,9 @@ fn card_button(c : @ui.Ctx, id : Int, icon_name : String, label : String) -> Uni
 }
 
 ///|
-/// What a file's card, a message's pictures and its pasted text are rounded (MESSAGE_FILE_CORNER: the sheet's room 9.75
-/// and its corner 3.25).
-pub let message_file_corner : Double = 13.0
+/// What a file's card, a message's pictures and its pasted text are rounded: a card's corner, as every card a message
+/// carries has (a screen's, a question's: the ladder's 26).
+pub let message_file_corner : Double = card_corner
 
 ///|
 pub let message_file_radius : @ui.Radius = rounded(message_file_corner)
@@ -466,9 +466,9 @@ let card_close_icon : Double = 12.0
 let card_box : @ui.Style = @ui.style(
   row=true,
   max_w=Fixed(file_card_w),
-  pl=file_sheet_in,
-  pr=S2_5,
-  py=S2,
+  // (16 in across, 12 down, as a screen's card: @sfbase's link_card)
+  px=S4,
+  py=S3,
   gap=S2_5,
   bg=Neutral,
   // (in a corner of what holds it, a composer's box: as far in as from its edges, its corner concentric)
@@ -500,13 +500,12 @@ let composer_card_ground : @ui.Style = @ui.css("bg=Neutral dark{bg=Over(Raised, 
 
 ///|
 /// A file's card waiting in the composer: as tall as a picture's tile beside it (56), its words on its middle, and its
-/// sheet's ink as far from its side as from its top and foot, its words' end as far from the other side, as a
-/// message's card holds them (its 52: 9 every way round the ink, file_sheet_in 7 and the sheet's 2 at its side) and
-/// the web's composer card does (14 round its sheet in its 64). Its 56 leaves 11 over and under the sheet's ink (10 and
-/// the sheet's 1): 12 at its sides, the scale's nearest (10 and the sheet's 2; 12 at its end, rule 4's as far in from
-/// both). With file_sheet_in it stood 9 in, 2 short of over and under it (the user, 2026-10-30: 距离左边太近了).
+/// sheet's ink as far from its side as from its top and foot, its words' end as far from the other side, as the web's
+/// composer card does (14 round its sheet in its 64). Its 56 leaves 11 over and under the sheet's ink (10 and the
+/// sheet's 1): 12 at its sides, the scale's nearest (10 and the sheet's 2; 12 at its end, rule 4's as far in from
+/// both). At 7 in it stood 9 in, 2 short of over and under it (the user, 2026-10-30: 距离左边太近了); 8 over and under.
 // kept across runs: a value (no field of it changes)
-let card_waiting : @ui.Style = @ui.css("h=S14 pl=S2_5 pr=S3")
+let card_waiting : @ui.Style = @ui.css("h=S14 pl=S2_5 pr=S3 py=S2")
 
 ///|
 fn card_composer() -> @ui.Style {
