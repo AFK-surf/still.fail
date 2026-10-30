@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { DatabaseSync } from "node:sqlite";
-import { Effect } from "effect";
+import { Effect, Fiber } from "effect";
 import { FakeCloud } from "../harness/cloud.ts";
 import { apply } from "../src/delta.ts";
 import { Bridge, BridgeHost, bridgeIroh, startBridged } from "../src/hosts/bridge.ts";
@@ -34,6 +34,32 @@ function shell() {
   native.bridge = bridge;
   return { dir, native, bridge, host: new BridgeHost(bridge, "http://127.0.0.1:1", false) };
 }
+
+test("interrupting_a_fetch_cancels_that_native_request", async () => {
+  const { dir, native, bridge } = shell();
+  const pending: number[] = [];
+  const cancelled: number[] = [];
+  native.call = (id) => { pending.push(id); };
+  native.callSync = (op, json) => {
+    assert.equal(op, "fetch.cancel");
+    cancelled.push(JSON.parse(json).id);
+    return '{"value":true}';
+  };
+  try {
+    const first = Effect.runFork(bridge.call("fetch", {}));
+    const second = Effect.runFork(bridge.call("fetch", {}));
+    await run(Fiber.interrupt(first));
+    assert.deepEqual(cancelled, [pending[0]]);
+    // A late answer to the cancelled call is harmless; the other call still gets its own answer.
+    bridge.complete(pending[0]!, '{"status":200}', null, null);
+    bridge.complete(pending[1]!, '{"status":201}', null, null);
+    assert.deepEqual((await run(Fiber.join(second))).json, { status: 201 });
+    assert.deepEqual(cancelled, [pending[0]], "completed requests must not be cancelled");
+  } finally {
+    native.host.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test("storage_and_the_database_go_through_the_bridge", async () => {
   const { dir, host, native } = shell();

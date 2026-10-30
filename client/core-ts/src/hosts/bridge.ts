@@ -42,6 +42,7 @@
 // And at once (`callSync`, answering {value} or {error}): sql.open {name} → {id} (`:memory:` one in memory);
 //   sql.exec {id, sql}; sql.run {id, sql, params} → changes; sql.all {id, sql, params} → rows (arrays);
 //   sql.close {id}; sql.delete {name}; storage.path {key} → the file it is kept in, or null while none is;
+//   fetch.cancel {id} → whether the pending fetch call was cancelled (a call id, not a handle);
 //   iroh.endpointId {id}; iroh.addAddr {id, addr};
 //   iroh.relayStatus {id}; conn.remoteId {id};
 //   conn.closeReason {id}; conn.paths {id}; conn.stats {id}; release {id} (a handle let go); text.collate {names} →
@@ -89,13 +90,18 @@ export class Bridge {
     this.native = native;
   }
 
-  /// Operation `op`; interrupted, it is not waited for any more (the shell's answer is let go).
+  /// Operation `op`; interrupted, its answer is let go. A fetch is also cancelled in the shell: dropping only this
+  /// waiter would leave its HTTP exchange alive through every subsequent retry on a weak network.
   call(op: string, json: unknown, bytes: Uint8Array | null = null): Effect.Effect<Answer, HostError> {
     return Effect.callback<Answer, HostError>((resume) => {
       const id = this.#next++;
       this.#waiting.set(id, { resolve: (a) => resume(Effect.succeed(a)), reject: (e) => resume(Effect.fail(e)) });
       this.native.call(id, op, JSON.stringify(json ?? {}), bytes);
-      return Effect.sync(() => this.#waiting.delete(id));
+      return Effect.sync(() => {
+        if (!this.#waiting.delete(id) || op !== "fetch") return;
+        // A shell from before fetch.cancel says an error; it still completes the fetch on its own as before.
+        this.native.callSync("fetch.cancel", JSON.stringify({ id }));
+      });
     });
   }
 
