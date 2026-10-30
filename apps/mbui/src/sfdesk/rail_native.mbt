@@ -242,7 +242,7 @@ fn hex_of(k : Int64) -> String {
 /// The system's column down the window's trailing edge as the system says its bars take it now (none upright, nor
 /// without its bars).
 fn native_side_now() -> Unit {
-  @sf.native_bars.side.set(if @sf.native_bars.on.get() { dmax(0.0, @ui.system_bars().right) } else { 0.0 })
+  @sf.native_bars.side = if @sf.native_bars.on.get() { dmax(0.0, @ui.system_bars().right) } else { 0.0 }
 }
 
 ///|
@@ -326,7 +326,7 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
       @hostapi.nav_bar_none()
       nav_untaken.val = @sf.native_able()
       @sf.native_bars.on.set(false)
-      @sf.native_bars.side.set(0.0)
+      @sf.native_bars.side = 0.0
     }
   }
 }

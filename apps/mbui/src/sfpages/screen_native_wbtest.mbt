@@ -4,7 +4,7 @@ test "Duo remote screen fits clear of its system column with native controls; fu
   defer { @sf.native_bars_reset() }
   r.live()
   @sf.native_bars.on.set(true)
-  @sf.native_bars.side.set(84.0)
+  @sf.native_bars.side = 84.0
   @sf.native_over_clear()
   r.t.run_for(@ui.move_most_ms)
   assert_true(@sf.native_over.up)
@@ -56,7 +56,7 @@ test "Duo native screen control mode action still asks the core and close leaves
   defer { @sf.native_bars_reset() }
   r.live()
   @sf.native_bars.on.set(true)
-  @sf.native_bars.side.set(84.0)
+  @sf.native_bars.side = 84.0
   @sf.native_over_clear()
   r.t.draw()
   for a in @sf.native_over.acts.copy() {
@@ -82,7 +82,7 @@ test "a late system column refits the whole picture and its control panel opens 
   r.live()
   r.t.run_for(late_column_ms)
   @sf.native_bars.on.set(true)
-  @sf.native_bars.side.set(84.0)
+  @sf.native_bars.side = 84.0
   @sf.native_over_clear()
   r.t.run_for(late_column_ms)
   let u = r.ui()
@@ -94,6 +94,9 @@ test "a late system column refits the whole picture and its control panel opens 
   @hostapi.nav_tapped_at[1] = 480.0
   @hostapi.nav_tapped_at[2] = 48.0
   @hostapi.nav_tapped_at[3] = 48.0
+  // (each of the page's actions handed to the system once, however often what says them was built)
+  let ids = @sf.native_over.acts.map(fn(a) { a.0 })
+  assert_eq(ids.length(), Set::from_array(ids).length(), msg="\{ids}")
   for a in @sf.native_over.acts.copy() {
     if a.0 == "over/screen-center" { (a.3)() }
   }

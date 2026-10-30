@@ -10,9 +10,8 @@ pub(all) struct NativeBars {
   /// whether the system shows the app's tabs now (they were handed it and it took them), a signal: what is laid out by
   /// them (the window's sides beside the bars) follows it
   on : @signals.Signal[Bool]
-  /// how wide its column down the window's trailing edge is (0: across the top and foot upright, or none), a signal as
-  /// `on` is: what is laid out by it follows it
-  side : @signals.Signal[Double]
+  /// how wide its column down the window's trailing edge is (0: across the top and foot upright, or none)
+  mut side : Double
   /// the screen's corners where the cards along its edges follow them, each its own (top left, then round it: an
   /// iPhone Duo's outer screen 8 along its hinge, 59 on the other side; 0: the window's own, as elsewhere)
   corners : FixedArray[Double]
@@ -22,7 +21,7 @@ pub(all) struct NativeBars {
 // kept across runs: rail_native.mbt says it again each frame, native_bars_reset as the app begins anew
 pub let native_bars : NativeBars = {
   on: @signals.signal(false, same=fn(a, b) { a == b }),
-  side: @signals.signal(0.0, same=fn(a, b) { a == b }),
+  side: 0.0,
   corners: FixedArray::make(4, 0.0),
 }
 
@@ -30,7 +29,7 @@ pub let native_bars : NativeBars = {
 /// As at the start: none.
 pub fn native_bars_reset() -> Unit {
   native_bars.on.set(false)
-  native_bars.side.set(0.0)
+  native_bars.side = 0.0
   native_bars.corners.fill(0.0)
   native_foot_made.val = None
   native_over_clear()
@@ -53,14 +52,14 @@ pub fn native_on() -> Bool {
 /// Whether its bars run down the window's trailing edge (on its side, its outer screen): the app's actions in that
 /// column; upright they are across the top and foot.
 pub fn native_side() -> Bool {
-  native_bars.on.get() && native_bars.side.get() > 0.0
+  native_bars.on.get() && native_bars.side > 0.0
 }
 
 ///|
 /// How far in from the window's trailing edge what is pressed keeps clear of the column (0 where there is none).
 pub fn native_clear() -> Double {
   if native_bars.on.get() {
-    native_bars.side.get()
+    native_bars.side
   } else {
     0.0
   }
@@ -70,7 +69,7 @@ pub fn native_clear() -> Double {
 /// How much of the window's foot the system's tabs take across it (upright: the safe area's foot, the home indicator's
 /// line with them), what is over the window's whole keeps clear of (a toast); 0 where they are not there.
 pub fn native_foot() -> Double {
-  if native_bars.on.get() && native_bars.side.get() == 0.0 {
+  if native_bars.on.get() && native_bars.side == 0.0 {
     @ui.system_bars().bottom
   } else {
     0.0
@@ -189,21 +188,33 @@ pub fn native_over_clear() -> Unit {
 ///|
 /// Something is up over the whole window this frame, `title` its name: the system's tabs put away while it is. True
 /// where the system's bars are (native_on): it then hands them its actions (native_over_act) for what it would
-/// draw of its own; false elsewhere, nothing done.
+/// draw of its own; false elsewhere, nothing done. Its actions are one set, said whole as it is built: this begins
+/// it anew, in place of what was said before (by it built again within the frame, or by what was up before it), so
+/// an action it no longer says is gone; as the frame starts none is (native_over_clear), till what is up says its own.
 pub fn native_over_up(title : String) -> Bool {
   if !native_bars.on.get() {
     return false
   }
   native_over.up = true
   native_over.title = title
+  native_over.acts.clear()
+  native_over.active.clear()
   true
 }
 
 ///|
 /// One of its actions in the system's bars (`id`, its words, an icon's name; `lead`: at the bar's lead, where the
 /// system puts back and close), `act` what it does chosen. `active`: the panel it controls is open, shown in the accent.
+/// One action an id in the set: said twice, the one said last, in its place.
 pub fn native_over_act(id : String, title : String, icon : String, act : () -> Unit, lead? : Bool = false, active? : Bool = false) -> Unit {
   let key = (if lead { "lead/over/" } else { "over/" }) + id
-  native_over.acts.push((key, title, icon, act))
-  if active { native_over.active.push(key) }
+  let at = native_over.acts.search_by(fn(a) { a.0 == key })
+  match at {
+    Some(i) => native_over.acts[i] = (key, title, icon, act)
+    None => native_over.acts.push((key, title, icon, act))
+  }
+  native_over.active.retain(fn(k) { k != key })
+  if active {
+    native_over.active.push(key)
+  }
 }

@@ -133,6 +133,7 @@
       "src/sfapp/bar.mbt",
       "src/sfapp/bar_timing.mbt",
       "src/sfapp/bars.mbt",
+      "src/sfapp/narrow_shell.mbt",
       "src/sfapp/sheet.mbt",
       "src/sfapp/sides.mbt",
       "src/sfapp/tabletop.mbt",

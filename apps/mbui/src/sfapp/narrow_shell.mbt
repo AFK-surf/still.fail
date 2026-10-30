@@ -13,10 +13,11 @@
 // told of it), back (said by the islands as they are built, in the tree's order), the theme (each island built in it).
 
 ///|
-/// What the signed-in app is laid out as (app_tree): the narrow shell made of the window's tree's nodes, or the old view
-/// whole (a window of its own, the wide frame, no workspace in view yet, the window's width not known yet).
+/// What the signed-in app is laid out as (app_tree): the stack of pages laid out Small, the narrow shell made of the
+/// window's tree's nodes; or the old view whole (a window of its own, the wide frame, no workspace in view yet, the
+/// window's width not known yet).
 priv enum ShellIs {
-  Narrow
+  Stacked
   Whole
 } derive(Eq)
 
@@ -30,7 +31,7 @@ fn shell_is(src : Source, width : Double) -> ShellIs {
     return Whole
   }
   match workspace_in_view(src).0 {
-    Some(_) => Narrow
+    Some(_) => Stacked
     None => Whole
   }
 }
@@ -76,10 +77,10 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
       match workspace_in_view(src).0 {
         Some(w) => {
           let active = place_of(app.nav.top())
-          // (the width of the box it is laid out in, this node's: the window's less the system's bars beside it, told
-          // as either changes)
-          ignore((v.window(), sides_room()))
-          Some(bar_told(src, w, active, narrow_bar_shown(src, w), v.laid_size().0))
+          // (the width of the box it is laid out in, this node's: the window's less the system's bars beside it, as
+          // the root's sides say it, told as either changes)
+          let (left, right) = sides_room()
+          Some(bar_told(src, w, active, narrow_bar_shown(src, w), v.window().0 - left - right))
         }
         None => None
       }
@@ -141,7 +142,7 @@ fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Un
     })
     @motion.scope(c, whole, bottom=true)
   }
-  if @ui.pointing() is Finger {
+  if stack_by_finger() {
     built()
   } else {
     c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), built)
@@ -197,7 +198,7 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// trackpad scroll the lists and a drag picks words, as on the wide frame's page; a finger drags the lists and holds to
 /// pick (pick.mbt).
 fn narrow_lists(c : @ui.Ctx) -> Unit {
-  c.mouse_drags_lists(@ui.pointing() is Finger)
+  c.mouse_drags_lists(stack_by_finger())
 }
 
 ///|

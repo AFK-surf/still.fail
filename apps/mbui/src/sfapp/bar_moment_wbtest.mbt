@@ -12,7 +12,7 @@ fn bar_after_push(frames : Array[Double]) -> (Double, Double, Double, Double, Do
     t.run_for(rest - t.time())
   }
   let t0 = t.time()
-  t.advance(10.0)
+  t.advance(between_frames_ms)
   app.nav.push(Settings)
   for f in frames {
     t.frame_at(t0 + f)
@@ -28,14 +28,14 @@ test "bar: a page put on the stack between frames, the bar going from that momen
   let many = bar_after_push([11.0, 13.0, 16.0, 24.0, 33.0, 80.0])
   assert_eq((late, many), (one, one))
   // (going from the moment the page was put on: hidden by then, not there yet)
-  assert_true((one.0 - 10.0).abs() < 0.000001 && one.1 > 0.0 && one.1 < 1.0 && one.2 == 0.0, msg="\{one}")
+  assert_true((one.0 - between_frames_ms).abs() < 0.000001 && one.1 > 0.0 && one.1 < 1.0 && one.2 == 0.0, msg="\{one}")
 }
 
 ///|
 test "bar: told the same again, at another moment, by a build or as the state is read again: its ways as they were" {
   let t = tester("home")
   let t0 = t.time()
-  t.advance(10.0)
+  t.advance(between_frames_ms)
   app.nav.push(Settings)
   t.frame_at(t0 + 16.0)
   let ways = fn() {
@@ -49,7 +49,7 @@ test "bar: told the same again, at another moment, by a build or as the state is
   t.frame_at(t0 + 40.0)
   t.frame_at(t0 + 41.0)
   assert_eq((again, ways()), (first, first))
-  assert_eq(first.0, t0 + 10.0)
+  assert_eq(first.0, t0 + between_frames_ms)
 }
 
 ///|
@@ -100,7 +100,7 @@ fn bar_place_with(action : String) -> String {
 /// and the chats, the ball across.
 fn bar_after_place(place : String, frames : Array[Double]) -> (String, Double, Double, Double, Double, Double) {
   let (t, t0) = bar_at_rest()
-  t.advance(10.0)
+  t.advance(between_frames_ms)
   if !@sfbase.go_place(place) {
     abort("not gone to \{place}")
   }
@@ -131,7 +131,7 @@ fn bar_after_order(frames : Array[Double]) -> (Double, Double, Double) {
   let (sets, cur) = bars_in(src, ws.id)
   let turned = sets.copy()
   turned[cur] = sets[cur].rev()
-  t.advance(10.0)
+  t.advance(between_frames_ms)
   bars_picked.set(Some((turned, cur)))
   for f in frames {
     t.frame_at(t0 + f)
@@ -146,7 +146,7 @@ test "bar: its places put in another order between frames, the place shown the s
   let late = bar_after_order([40.0])
   let many = bar_after_order([11.0, 13.0, 16.0, 24.0, 33.0, 80.0])
   assert_eq((late, many), (one, one))
-  assert_true((one.2 - 10.0).abs() < 0.000001, msg="\{one}")
+  assert_true((one.2 - between_frames_ms).abs() < 0.000001, msg="\{one}")
 }
 
 ///|
@@ -243,8 +243,8 @@ fn bar_held_then(lost : Double?) -> (Bool, Bool) {
   let start = app.nav.top()
   let lens = Ref(false)
   t.app_state(true, true)
-  t.advance(10.0)
-  t.touch_at(0, xs[1], y, t0 + 10.0)
+  t.advance(between_frames_ms)
+  t.touch_at(0, xs[1], y, t0 + between_frames_ms)
   match lost {
     Some(at) => {
       t.advance(t0 + at - t.time())
@@ -322,8 +322,8 @@ fn bar_caught(frames : Array[Double], late : Double) -> (Bool, Double, Double, B
   let (xs, y) = bar_places_at()
   t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
   t.run_for(bar.o.end() - t.time())
-  let t1 = t.time() + 10.0
-  t.advance(10.0 + late)
+  let t1 = t.time() + between_frames_ms
+  t.advance(between_frames_ms + late)
   t.touch_at(0, 100.0, 200.0, t1)
   let shut = !bar.mode.get()
   for f in frames {
@@ -343,3 +343,45 @@ test "bar: the panel open, a finger down on the page above it: closed at the fin
   assert_eq((each, late), (none, none))
   assert_eq((none.0, none.2, none.3, none.4), (true, 0.0, false, 1))
 }
+
+///|
+/// The panel drawn up and let go on the other bar's row (that bar chosen, landing), then a finger down on the bar
+/// `early` before it lands, held, drawn up a step each frame's worth (`bar_step_ms`) for a second and let go on the row
+/// again: whether the bar chosen changed again (the finger the bar's once it has landed, from where it is then).
+fn bar_pressed_landing(early : Double) -> Bool {
+  let (t, _) = bar_at_rest()
+  let (xs, y) = bar_places_at()
+  t.drag(xs[0], y, xs[0], y - 64.0, steps=60)
+  let chosen = bars_picked.get()
+  let land = bar.o.end()
+  let down = land - early
+  t.advance(down - t.time())
+  t.touch_at(0, xs[0], y, down)
+  for i in 1..=bar_steps {
+    let at = down + bar_step_ms * i.to_double()
+    t.advance(at - t.time())
+    t.touch_at(1, xs[0], y - 64.0 * i.to_double() / bar_steps.to_double(), at)
+  }
+  t.advance(bar_step_ms)
+  t.touch_at(2, xs[0], y - 64.0, t.time())
+  t.run_for(bar.o.end() + 50.0 - t.time())
+  bars_picked.get() != chosen
+}
+
+///|
+/// A finger drawing the bar up as the runs do: a move each frame's worth of time, a second's worth of them.
+let bar_step_ms : Double = 1000.0 / 60.0
+
+///|
+let bar_steps : Int = 60
+
+///|
+test "bar: a bar chosen landing, a finger put down on it before it has landed and held: the bar's once it has, drawn up from there and let go on a row, that bar chosen" {
+  // (down before it has landed by a couple of frames, and after)
+  assert_true(bar_pressed_landing(2.0 * bar_step_ms))
+  assert_true(bar_pressed_landing(-2.0 * bar_step_ms))
+}
+
+///|
+/// A moment between two frames (one each 16⅔ ms): what is told there is so from then, not from a frame.
+let between_frames_ms : Double = 10.0

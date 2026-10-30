@@ -594,6 +594,7 @@ fn Glide::painted(self : Glide, c : @ui.Ctx) -> Double {
   if c.moment() >= self.end() {
     self.target
   } else {
+    // det-ok(app-clock): its way, said once as it set out (Glide::go_by), sampled at the moment painted
     self.at(c.now()).0
   }
 }
@@ -1173,14 +1174,17 @@ fn bar_action(src : Source, ws : Workspace, active : String?, place_add : ((@sf.
 
 ///|
 /// The notch's key as the bar last drew it: what its action opens is opened by it (a popover beside it).
+// kept across runs: said again each time the bar is drawn
 let bar_action_anchor : Ref[Int] = Ref(0)
 
 ///|
 /// The bar's glass and its notch's key as nodes of the window's tree (bar_glass_node), as last made: what the bar's
 /// places and its key, drawn by the old view, are pressed through (Ctx::presses_to_node).
+// kept across runs: said again as the nodes are made; one of a tree let go is no node's of the tree that is now
 let bar_glass_at : Ref[@view.NodeId?] = Ref(None)
 
 ///|
+// kept across runs: said again as the nodes are made; one of a tree let go is no node's of the tree that is now
 let bar_notch_at : Ref[@view.NodeId?] = Ref(None)
 
 ///|
@@ -1975,7 +1979,19 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
   }
   // a bar chosen landing lands on its own spring: a finger down meanwhile does not take the ball or the panel (Bar.kt
   // waits); a tap on one of its places is that place's at once, where it is then (src/motion's rule)
-  if m.swap_at(t) is Some(_) || m.waits {
+  // pressed: the panel open, opening or closing, the finger has it from here
+  let pressed = fn() {
+    m.y0 = py
+    m.o0 = o_at
+    // (opening: short of the rest its spring declared as it set out, toward open)
+    m.holds = l.multi && (m.o0 > 0.02 || (t < m.o.end() && m.o.to > 0.0))
+    m.from_open = m.holds
+    m.open = m.o.to > 0.5
+    if m.holds {
+      m.mode.set(true)
+    }
+  }
+  if m.swap_at(t) is Some(_) {
     match how {
       Pressed => m.waits = true
       Tapped => {
@@ -1988,19 +2004,21 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
     bar_retell(t)
     return
   }
-  match how {
-    Pressed => {
-      // pressed: the panel open, opening or closing, the finger has it from here
-      m.y0 = py
-      m.o0 = o_at
-      // (opening: short of the rest its spring declared as it set out, toward open)
-      m.holds = l.multi && (m.o0 > 0.02 || (t < m.o.end() && m.o.to > 0.0))
-      m.from_open = m.holds
-      m.open = m.o.to > 0.5
-      if m.holds {
-        m.mode.set(true)
+  // landed with the finger still down: the finger's from here, pressed where it is now (its stroke from there); let go
+  // after it landed, nothing
+  if m.waits {
+    m.waits = false
+    match how {
+      Held | Dragging => pressed()
+      Pressed => ()
+      Tapped | Ended => {
+        bar_retell(t)
+        return
       }
     }
+  }
+  match how {
+    Pressed => pressed()
     Dragging => {
       if l.multi {
         let raw = m.o0 + (m.y0 - py - (if m.from_open { 0.0 } else { 8.0 })) / l.reach

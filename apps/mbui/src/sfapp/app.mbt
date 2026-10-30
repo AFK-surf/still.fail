@@ -417,6 +417,19 @@ priv enum AppIs {
 } derive(Eq)
 
 ///|
+/// Whether the stack of pages laid out Small (narrow_shell.mbt) is in a finger's hand now: its lists dragged and words
+/// held to pick (pick.mbt); else a mouse's, the wheel scrolling them and a drag picking words, as the wide frame's.
+fn stack_by_finger() -> Bool {
+  @ui.pointing() is Finger
+}
+
+///|
+/// The window's whole, on its ground (the theme's), that the app's state is built in.
+fn app_ground_style() -> @ui.Style {
+  page_whole.then(@ui.style(bg=Data(@sf.theme().p.bg)))
+}
+
+///|
 /// The node the app's state is built in, this frame (app_ground): hidden while the first page waits (view_in).
 // kept across runs: written by each build
 let state_node : Ref[Int] = Ref(-1)
@@ -440,7 +453,7 @@ fn app_is(src : Source) -> AppIs {
 fn app_ground(c : @ui.Ctx, src : Source) -> @ui.Made {
   let picked = @ui.made_pick(fn() { app_is(src) }, fn(state) { @ui.made_old(fn(c) { app_state_island(c, src, state) }) })
   @ui.made_holding(
-    fn(c) { c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.theme().p.bg, fn() {  }) |> ignore },
+    fn(c) { c.box(style=app_ground_style(), fn() {  }) |> ignore },
     fn() { picked() },
   )
 }
@@ -476,7 +489,7 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
       v.grow(Is(1.0)) |> ignore
       let whole = fn(v : @view.View) {
         @ui.old(v, fn(c) {
-          c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.theme().p.bg, fn() { app_state_island(c, src, state) }) |> ignore
+          c.box(style=app_ground_style(), fn() { app_state_island(c, src, state) }) |> ignore
         })
         .grow(Is(1.0))
         |> ignore
@@ -487,7 +500,7 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
         v.pick(fn() { shell_is(src, v.window().0) }, fn(s, shell) {
           s.grow(Is(1.0)) |> ignore
           match shell {
-            Narrow => narrow_shell(s, src)
+            Stacked => narrow_shell(s, src)
             Whole => whole(s)
           }
         })
@@ -612,7 +625,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         // a page opened slides in once the core has given what it shows (App.kt Pages: LOCAL_MS at most)
         app.nav.comes_when(fn() { page_ready(src, w, app.nav.top()) }, page_local_ms)
         narrow_lists(c)
-        let finger = @ui.pointing() is Finger
+        let finger = stack_by_finger()
         let page_took = c.took_back(fn() {
           let pages = fn() {
             c.nav(app.nav, fn(page) { narrow_page(c, src, w, page) }, bg=t.p.bg) |> ignore
