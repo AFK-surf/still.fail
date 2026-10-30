@@ -123,7 +123,7 @@ export class OutflowGrants {
   }
 
   list(): GrantView[] {
-    return this.#grants.map(({ token, again, ...g }) => ({ ...g, reach: g.reach ?? "station", lastReadAt: g.reads.at(-1)?.at ?? null, taken: token !== "" || (again?.length ?? 0) > 0 }));
+    return this.#grants.map(({ token, again: _, ...g }) => ({ ...g, reach: g.reach ?? "station", lastReadAt: g.reads.at(-1)?.at ?? null, taken: token !== "" }));
   }
 
   /// The requests no admin has answered yet, the oldest first.
@@ -156,7 +156,8 @@ export class OutflowGrants {
   held(identity: Identity, scopes: Scope[], reach: Reach): { grant: GrantView; token: string } | null {
     const it = identityKey(identity);
     const grant = this.#grants
-      .filter((g) => identityKey(g.identity) === it && scopes.every((s) => g.scopes.includes(s)) && (reach === "station" || g.reach === "workspace"))
+      // One allowed but not taken yet is its program's to take through its request.
+      .filter((g) => g.token !== "" && identityKey(g.identity) === it && scopes.every((s) => g.scopes.includes(s)) && (reach === "station" || g.reach === "workspace"))
       .at(-1);
     if (!grant) return null;
     const token = TOKEN_PREFIX + randomBytes(32).toString("base64url");
