@@ -949,6 +949,10 @@ static void watch_keyboard(void);
 double mb_host_cpu_ms(void);
 double mb_host_mem_bytes(void);
 
+// What an unnamed thread is: a dispatch pool's worker at the time it was asked ("gcd": it works for a queue, whose
+// label is not read, a queue let go as it is read being a crash), else "?".
+static NSString *thread_queue(thread_identifier_info_data_t *id) { return id->dispatch_qaddr ? @"gcd" : @"?"; }
+
 // The threads that took most of a CPU since it was last asked (each thread's own time, by its name: the core's engine,
 // the decoder, the network, the UI's), as ` name=N% …` (the 8 busiest, those of half a percent at least): where the
 // process's share goes while nothing is drawn. Asked by heat_tick only (main thread).
@@ -975,7 +979,7 @@ static NSString *probe_threads(double span_ms) {
       char name[64] = "";
       pthread_t pt = pthread_from_mach_thread_np(threads[i]);
       if (pt) pthread_getname_np(pt, name, sizeof name);
-      NSString *label = name[0] ? @(name) : (pt == pthread_self() ? @"main" : @"?");
+      NSString *label = name[0] ? @(name) : (pt == pthread_self() ? @"main" : thread_queue(&id));
       by[label] = @(by[label].doubleValue + d);
     }
     mach_port_deallocate(mach_task_self(), threads[i]);

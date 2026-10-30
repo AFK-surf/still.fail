@@ -28,6 +28,8 @@ test "the frame probe's summary goes into the performance record every 5 s while
   let frames = lines.filter(fn(l) { l.has_prefix("frames: fps=") })
   assert_eq(frames.length(), 1)
   assert_true(frames[0].contains(" main_busy=") && frames[0].contains(" slow="))
+  // its seconds' busiest beside its average, its span, what its last frame was for
+  assert_true(frames[0].contains(" fps_peak=1 ") && frames[0].contains(" span=5") && frames[0].contains(" (last: "), msg=frames[0])
   // what they were for, the heaviest first, each its work and count
   let whys = lines.filter(fn(l) { l.has_prefix("frames why (the 5 heaviest, ms/frames): ") })
   assert_eq(whys.length(), 1)
@@ -50,4 +52,23 @@ test "where the device keeps no performance record, it is not turned on and noth
   @hostapi.set_perf(true)
   @hostapi.perf_line("app: screen shown")
   assert_eq(t.perf_said(), ([], []))
+}
+
+///|
+test "the performance record's frames: a pause between them is not slow, and a summary is of its own span's frames" {
+  let t = Tester::new(perf_scene)
+  t.set_perf(0)
+  @hostapi.set_perf(true)
+  t.draw()
+  // a burst of frames, then none for long: said as the first frame after it comes, its span the burst's and the pause's
+  t.frame(ms=first_frame_ms)
+  t.frame(ms=first_frame_ms)
+  t.frame(ms=3.0 * probe_record_ms)
+  let frames = t.perf_said().1.filter(fn(l) { l.has_prefix("frames: fps=") })
+  assert_eq(frames.length(), 1)
+  // (the burst's second at 3 frames, not averaged into the 15 s; the frame after the pause in the next summary)
+  assert_true(frames[0].contains(" fps_peak=3 ") && frames[0].contains(" span=15"), msg=frames[0])
+  // (no frame's own work was long: the pause before the last is no slow frame)
+  assert_true(frames[0].has_suffix(" slow=0"), msg=frames[0])
+  @hostapi.set_perf(false)
 }
