@@ -1,8 +1,9 @@
 // What a right click in the desktop's window offers, as the desktop app's own (ember apps/desktop/src/context-menu.mts:
 // Electron shows none of its own): a link's (在浏览器中打开链接 and 复制链接), an image's (复制图片), then the words: a
 // field's editing (剪切, 复制, 粘贴, 全选, each as it can be done now), elsewhere the words picked (复制); a line between
-// them; nothing where there is none of these (the page's ground). A message of a chat's list right clicked, 分享这一轮
-// at its end (its turn shared as a picture: sfbase's share_offered). The library's menu (@sf.dropdown) at the pointer.
+// them; nothing where there is none of these (the page's ground). A message of a chat's list right clicked, 复制消息链接
+// and 分享这一轮 at its end (its link, its turn shared as a picture: sfbase's share_offered, the same two its ⋯ offers).
+// The library's menu (@sf.dropdown) at the pointer.
 
 ///|
 /// The menu while it is open: where (the pointer), the link right clicked ("" none), the image (its source, "" none),
@@ -21,6 +22,7 @@ pub struct ContextMenu {
   mut frame : Int
   mut copying : String
   mut share : (() -> Unit)?
+  mut share_link : String
 }
 
 ///|
@@ -35,6 +37,7 @@ pub let context : ContextMenu = {
   frame: -1,
   copying: "",
   share: None,
+  share_link: "",
 }
 
 ///|
@@ -43,6 +46,7 @@ fn context_reset() -> Unit {
   context.frame = -1
   context.copying = ""
   context.share = None
+  context.share_link = ""
 }
 
 ///|
@@ -78,6 +82,7 @@ fn context_at(c : @ui.Ctx, x : Double, y : Double, link? : String = "", image? :
   context.words = c.selected_text()
   context.frame = c.frame_number()
   context.share = None
+  context.share_link = ""
 }
 
 ///|
@@ -106,6 +111,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
       context.words = ""
       context.frame = c.frame_number()
       context.share = None
+      context.share_link = ""
     }
     None => ()
   }
@@ -113,7 +119,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
   // the menu in the same frame), or alone. (A chat's list is built after the frame's overlays: an offer of the frame
   // before is taken as it comes.)
   match @sfbase.share_offered.val {
-    Some((at, x, y, go)) => {
+    Some((at, x, y, go, link)) => {
       @sfbase.share_offered.val = None
       // (not over a field right clicked)
       if (at == c.frame_number() || at == c.frame_number() - 1) && !(context.frame == at && context.field != 0) {
@@ -121,6 +127,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
           context_at(c, x, y)
         }
         context.share = Some(go)
+        context.share_link = link
       }
     }
     None => ()
@@ -161,6 +168,9 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
     }
     if context.share is Some(_) {
       group()
+      if context.share_link != "" {
+        entries.push(@kit.menu_item("copy-message-link", label=@sf.t("web-main.chat.copyMessageLink")))
+      }
       entries.push(@kit.menu_item("share-turn", label=@sf.t("web-main.chat.shareTurn")))
     }
   }
@@ -170,7 +180,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
     return
   }
   let at = (context.x, context.y, 0.0, 0.0)
-  let m = @sf.dropdown(c, "context-menu", true, 0, entries, {}, context_menu_w, offset=0.0, at~)
+  let m = @sf.dropdown(c, "context-menu", true, 0, entries, context_icons, context_menu_w, offset=0.0, at~)
   if !m.open {
     context.open = false
   }
@@ -181,6 +191,10 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
       c.tell("context-open", fn() { @ui.open_url(href) |> ignore })
     }
     Some("copy-link") => c.copy_text(context.link)
+    Some("copy-message-link") => {
+      c.copy_text(context.share_link)
+      @sfbase.say(c, @sf.t("common.link.copied"))
+    }
     Some("copy") => c.copy_text(context.words)
     Some("copy-image") => context.copying = context.image
     Some("share-turn") =>
@@ -213,6 +227,20 @@ fn context_pending(c : @ui.Ctx) -> Unit {
       @ui.PixelsComing => ()
     }
   }
+}
+
+///|
+/// Each item's mark, as the same item has it in a ⋯ (a message's: sfbase's message_items): what it does to a link, an
+/// image, words picked, a message. A field's editing has none (剪切 and 全选 have no mark of their own; the four go
+/// alone, in a field's menu).
+// kept across runs: a value (nothing is put in it or taken out)
+let context_icons : Map[String, String] = {
+  "open": "external",
+  "copy-link": "link",
+  "copy-image": "copy",
+  "copy": "copy",
+  "copy-message-link": "link",
+  "share-turn": "photo",
 }
 
 ///|

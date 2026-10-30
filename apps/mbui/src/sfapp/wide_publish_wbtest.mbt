@@ -95,6 +95,7 @@ test "wide: a message right clicked offers 分享这一轮, which shares its tur
   t.right_click(x + 24.0, y + 8.0)
   t.frame()
   t.frame()
+  assert_true(t.find("复制消息链接") is Some(_))
   t.tap_text("分享这一轮")
   t.frame()
   let asked = named(calls, "chat.publishPreview")
@@ -104,7 +105,7 @@ test "wide: a message right clicked offers 分享这一轮, which shares its tur
 }
 
 ///|
-test "wide: the message header offers its position link and its turn's picture separately" {
+test "wide: the message header's ⋯ offers 复制消息链接 and 分享这一轮, the two a right click offers" {
   reset()
   let calls : Array[Made] = []
   let base = fixture("chat")
@@ -120,23 +121,28 @@ test "wide: the message header offers its position link and its turn's picture s
   t.run_for(@ui.move_most_ms)
   let (x, y, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
   let before = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
+  // (nothing on the head until the pointer rests on the message)
+  assert_true(t.query(Button, label="更多操作") is None)
   t.move(x + 24.0, y + 8.0)
   t.frame()
   t.frame()
   assert_eq(t.rect_of("做完了：列表、跳到最新的按钮").unwrap(), before)
-  t.click(Button, label="复制链接")
+  // one ⋯ on the header line, no bare marks beside it
+  let more = t.get(Button, label="更多操作").rect
+  assert_true(more.1 + more.3 <= before.1)
+  assert_true(t.query(Button, label="分享图片") is None)
+  assert_true(t.query(Button, label="复制链接") is None)
+  t.click(Button, label="更多操作")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("复制消息链接")
+  t.frame()
   assert_eq(t.clipboard(), "https://app.still.fail/o/ws1/st1/s-c1?message=11")
   assert_eq(named(calls, "chat.publishPreview").length(), 0)
-  let button = t.get(Button, label="分享图片").rect
-  // Both actions stay on the header line, with the picture after the link.
-  assert_true(button.1 + button.3 <= before.1)
-  let link = t.get(Button, label="复制链接").rect
-  assert_true(link.0 + link.2 <= button.0)
-  assert_eq(link.1, button.1)
-  t.move(button.0 + button.2 / 2.0, button.1 + button.3 / 2.0)
+  t.move(x + 24.0, y + 8.0)
   t.frame()
-  assert_true(t.query(Button, label="分享图片") is Some(_))
-  t.click(Button, label="分享图片")
+  t.click(Button, label="更多操作")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("分享这一轮")
   t.frame()
   let asked = named(calls, "chat.publishPreview")
   assert_eq(asked.length(), 1)
