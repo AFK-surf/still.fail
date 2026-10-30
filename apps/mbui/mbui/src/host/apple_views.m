@@ -1228,11 +1228,12 @@ static void smooth_corner(CGMutablePathRef p, double r, double room, double cx, 
   }
 }
 
-// Its content's corners round, each its own (top left, then round it), as the hole the app paints for it, smooth as
-// mbui's are (a circle's arc cut the page short of the hole along each corner, its ground showing in between): a mask
-// of that shape on it, laid along the layer's y as it runs (a Mac's view not flipped: up).
-static void round_content(MBNative *v, double r0, double r1, double r2, double r3) {
-  CALayer *l = v.content.layer;
+// A view's corners round (a native view's content, as the hole the app paints for it; a frost, as its glass), each its
+// own (top left, then round it), smooth as mbui's are (a circle's arc cut the page short of the hole along each corner,
+// its ground showing in between): a mask of that shape on its layer, laid along the layer's y as it runs (a Mac's view
+// not flipped: up).
+static void round_layer(PView *c, double r0, double r1, double r2, double r3) {
+  CALayer *l = c.layer;
   l.cornerRadius = 0;
   l.masksToBounds = NO;
   if (r0 <= 0 && r1 <= 0 && r2 <= 0 && r3 <= 0) {
@@ -1244,7 +1245,6 @@ static void round_content(MBNative *v, double r0, double r1, double r2, double r
   // the corners at the layer's y 0 first (left, right), then those at its height (right, left)
   double a0 = r0, a1 = r1, a2 = r2, a3 = r3;
 #if TARGET_OS_OSX
-  NSView *c = v.content;
   NSPoint top = [c convertPointToLayer:NSMakePoint(0, c.isFlipped ? 0 : c.bounds.size.height)];
   if (top.y > h / 2) {
     a0 = r3; a1 = r2; a2 = r1; a3 = r0;
@@ -1300,7 +1300,7 @@ void mb_host_view_place(int32_t vid, double x, double y, double w, double h, dou
 #if TARGET_OS_OSX
     v.content.wantsLayer = YES;
 #endif
-    round_content(v, r0, r1, r2, r3);
+    round_layer(v.content, r0, r1, r2, r3);
   }
   v.r0 = r0; v.r1 = r1; v.r2 = r2; v.r3 = r3;
   [CATransaction commit];
@@ -1689,6 +1689,153 @@ int mb_views_take_moved(void) {
   int m = views_moved;
   views_moved = 0;
   return m;
+}
+
+// ---- frost: glass over the views (apple.h mb_views_frost, apple_render.m glass_through) ----
+// Each a box (clips: what of its glass shows) holding its content (at the glass's rect, its corners: round_layer),
+// whose backdrop, grown by the blur's reach and cut by the content's corners, blurs and saturates what the views under
+// it show: Core Animation's CABackdropLayer and its filters, which AppKit's and UIKit's own blur are made of (looked
+// up by name: where the system has none, there is no frost and the glass is as before). It takes no input. Put among
+// the views just over the one it frosts.
+
+#if TARGET_OS_OSX
+@interface MBFrostView : MBFlipView
+@end
+@implementation MBFrostView
+- (NSView *)hitTest:(NSPoint)p { return nil; }
+@end
+#endif
+
+@interface MBFrost : NSObject {
+ @public
+  double told[MB_FROST_N];  // as it was put (apple.h)
+}
+@property(nonatomic, strong) PView *box, *content;
+@property(nonatomic, strong) CALayer *backdrop;
+@end
+@implementation MBFrost
+@end
+
+static NSMutableArray<MBFrost *> *frosts;
+static Class backdrop_class, filter_class;
+static int frost_can = -1;
+
+static int frost_able(void) {
+  if (frost_can < 0) {
+    backdrop_class = NSClassFromString(@"CABackdropLayer");
+    filter_class = NSClassFromString(@"CAFilter");
+    frost_can = backdrop_class && filter_class &&
+                [filter_class respondsToSelector:NSSelectorFromString(@"filterWithType:")];
+  }
+  return frost_can;
+}
+
+static id frost_filter(NSString *type) {
+  return ((id (*)(id, SEL, id))objc_msgSend)(filter_class, NSSelectorFromString(@"filterWithType:"), type);
+}
+
+static MBFrost *new_frost(void) {
+  MBFrost *f = [MBFrost new];
+#if TARGET_OS_OSX
+  MBFrostView *b = [[MBFrostView alloc] initWithFrame:NSZeroRect];
+  b.wantsLayer = YES;
+  b.layer.masksToBounds = YES;
+  MBFrostView *c = [[MBFrostView alloc] initWithFrame:NSZeroRect];
+  c.wantsLayer = YES;
+#else
+  UIView *b = new_box();
+  b.userInteractionEnabled = NO;
+  UIView *c = [[UIView alloc] initWithFrame:CGRectZero];
+  c.userInteractionEnabled = NO;
+#endif
+  [b addSubview:c];
+  CALayer *l = [backdrop_class layer];
+  // (blurred at a quarter of its pixels, as the system's own: the blur is wide)
+  if ([l respondsToSelector:NSSelectorFromString(@"setScale:")]) [l setValue:@0.25 forKey:@"scale"];
+  [c.layer addSublayer:l];
+  f.box = b;
+  f.content = c;
+  f.backdrop = l;
+  for (int i = 0; i < MB_FROST_N; i++) f->told[i] = NAN;
+  return f;
+}
+
+// Frost f put as d says (apple.h), in the frame's transaction.
+static void put_frost(MBFrost *f, const double *d) {
+  f.box.frame = CGRectMake(d[0], d[1], fmax(0, d[2] - d[0]), fmax(0, d[3] - d[1]));
+  f.content.frame = CGRectMake(d[4] - d[0], d[5] - d[1], fmax(0, d[6]), fmax(0, d[7]));
+#if TARGET_OS_OSX
+  f.box.alphaValue = d[14];
+#else
+  f.box.alpha = d[14];
+#endif
+  round_layer(f.content, d[8], d[9], d[10], d[11]);
+  if (d[8] <= 0 && d[9] <= 0 && d[10] <= 0 && d[11] <= 0) f.content.layer.masksToBounds = YES;
+  // (what it blurs reaches past its edge, as the glass's copy does)
+  double reach = 3 * d[12];
+  f.backdrop.frame = CGRectInset(f.content.layer.bounds, -reach, -reach);
+  if (d[12] != f->told[12] || d[13] != f->told[13]) {
+    id blur = frost_filter(@"gaussianBlur");
+    [blur setValue:@(d[12]) forKey:@"inputRadius"];
+    [blur setValue:@YES forKey:@"inputNormalizeEdges"];
+    if (d[13] != 1) {
+      id sat = frost_filter(@"colorSaturate");
+      [sat setValue:@(d[13]) forKey:@"inputAmount"];
+      f.backdrop.filters = @[ blur, sat ];
+    } else {
+      f.backdrop.filters = @[ blur ];
+    }
+  }
+  memcpy(f->told, d, sizeof f->told);
+}
+
+int mb_views_frost(int n, const double *d) {
+  if (!frosts) frosts = [NSMutableArray new];
+  int can = frost_able() && views_root;
+  if (!can) n = 0;
+  if (!n && !frosts.count) return can;
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  PView *last = nil;
+  int32_t last_under = 0;
+  for (int i = 0; i < n; i++) {
+    const double *e = d + i * MB_FROST_N;
+    if (i >= (int)frosts.count) [frosts addObject:new_frost()];
+    MBFrost *f = frosts[i];
+    int32_t vid = (int32_t)e[15];
+    MBNative *under = views[@(vid)];
+    if (!under || under.box.superview != views_root) {
+      if (f.box.superview) views_moved = 1;
+      [f.box removeFromSuperview];
+      continue;
+    }
+    if (memcmp(f->told, e, sizeof f->told) != 0) {
+      put_frost(f, e);
+      views_moved = 1;
+    }
+    // just over the view it frosts, over the frosts of that view before it
+    PView *below = last && last_under == vid ? last : under.box;
+    NSArray<PView *> *sv = views_root.subviews;
+    NSUInteger k = [sv indexOfObjectIdenticalTo:f.box];
+    if (k == NSNotFound || k == 0 || sv[k - 1] != below) {
+#if TARGET_OS_OSX
+      [views_root addSubview:f.box positioned:NSWindowAbove relativeTo:below];
+#else
+      [views_root insertSubview:f.box aboveSubview:below];
+#endif
+      views_moved = 1;
+    }
+    last = f.box;
+    last_under = vid;
+  }
+  for (int i = n; i < (int)frosts.count; i++) {
+    MBFrost *f = frosts[i];
+    if (f.box.superview) views_moved = 1;
+    [f.box removeFromSuperview];
+  }
+  if ((int)frosts.count > n) [frosts removeObjectsInRange:NSMakeRange((NSUInteger)n, frosts.count - (NSUInteger)n)];
+  [CATransaction commit];
+  return can;
 }
 
 // Whether a page's picture for snapshots is being taken (apple.h).
