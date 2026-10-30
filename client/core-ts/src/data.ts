@@ -169,8 +169,8 @@ export type DataOptions = {
 /// How much room an account's database may take on the device: past it, the agents' transcripts least recently used go,
 /// down to KEPT_TO of it. A chat's messages, rows, threads, sessions, read positions and what was done here are small
 /// and always kept (messages let go to make room for what could not go left 33 of 1388 chats on a Mac, each opened
-/// waiting for the station); a transcript let go is read again once its history is opened. The database's file keeps
-/// the room it took (its free pages are used again).
+/// waiting for the station); a transcript let go is read again once its history is opened. The room it left in the
+/// database's file is given back to the device at the next open (schema.ts giveBackRoom).
 export const KEPT = 256 * 1024 * 1024;
 const KEPT_TO = 0.8;
 /// How often, at most, the room taken is looked at as logs are written.

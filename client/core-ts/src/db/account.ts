@@ -19,7 +19,7 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureFilesKept, ensureKept, ensureMdKept, ensureSaid, ensureSlackSaid, migrate, versionOf } from "./schema.ts";
+import { ensureFilesKept, ensureKept, ensureMdKept, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, versionOf } from "./schema.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -290,6 +290,11 @@ export class AccountDb {
         for (const r of sql.all("SELECT kind, station, id FROM log_use WHERE evicted = 1")) this.#evicted.add(K(String(r[0]), String(r[1]), String(r[2])));
       } catch {
         // No room to make it: nothing is let go this time.
+      }
+      try {
+        giveBackRoom(sql);
+      } catch {
+        // No room to rewrite it in: the file stays as large this time.
       }
       // Made as the first file is kept: a database that keeps none has no room taken for it.
       this.#filesKept = sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'file_kept'").length > 0;
