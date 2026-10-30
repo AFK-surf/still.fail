@@ -73,7 +73,7 @@
   "android-misc.adb.pairing": "Pairing",
   "android-misc.adb.phone": "This phone's settings",
   "android-misc.adb.reader.about": "Only during Debug sharing pairing, reads the 6-digit code from the “Pair device with pairing code” dialog in Settings › Wireless debugging and passes it to the station you share debugging with. It doesn't read other apps or anything else in Settings, and takes no action on screen.",
-  "android-misc.adb.reader.note": "Uses Accessibility to read the 6-digit code from the pairing dialog: only in Settings, only while pairing here, nothing else. If it can't be turned on (greyed out), first tap “Allow restricted settings” in the ⋮ menu on the app info page.",
+  "android-misc.adb.reader.note": "Turn on still.fail in the system's Accessibility settings (some phones list it under “Downloaded apps” or “Installed services”). It reads only the 6-digit code in the pairing dialog. If it's greyed out, first tap “Allow restricted settings” in the ⋮ menu of still.fail's App info.",
   "android-misc.adb.reader.title": "Auto-fill pairing code",
   "android-misc.adb.reader.turnOn": "Turn on",
   "android-misc.adb.shareFailed": "Couldn't share: {error}",
@@ -583,5 +583,6 @@
   "android-misc.adb.stations": "Stations",
   "android-misc.adb.stations.notLent": "Not shared yet",
   "android-misc.adb.ask.pair.title": "This station isn't paired with your phone yet",
-  "android-misc.adb.ask.pair.about": "Pair once on the phone, and it can reach this phone from then on."
+  "android-misc.adb.ask.pair.about": "Pair once on the phone, and it can reach this phone from then on.",
+  "android-misc.adb.manage": "Manage in Settings"
 }

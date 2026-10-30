@@ -362,6 +362,8 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
   let there = sharing && text(view, "station") == address
   // (lent with the app's switch from before grants, to one station: another's now)
   let elsewhere = !there && flag(all, "sharing") && text(all, "station") != address && adb_lends(all).is_empty()
+  // (lent there for chats' grants, not with this page's switch)
+  let granted = adb_lends(all).iter().any(fn(l) { text(Some(l), "station") == address })
   // (a device with no adb to lend, as the core says: so at once, not after asking its host)
   let card = (core.topic)("adbCard", { "station": str(address) }).value
   let cannot = card is Some(_) && !flag(card, "lendable") && !there
@@ -388,8 +390,18 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
       // how it stands, and why
       blocks.push(fn() {
         list_card(c, fn() {
-          // lent or not, as settings' switches are
-          if list_row(c, key="adb-switch", fn() {
+          // lent for chats' grants: not this page's to stop (its adb.stop ends only a lending its switch made, 2026-10-30:
+          // the switch did nothing), so no switch, and settings' 共享调试, where its switch and the grants are, a tap away
+          if granted {
+            if list_row(c, key="adb-manage", fn() {
+                row_title(c, tr("android-misc.adb.title"))
+                let adb = text(view, "adb")
+                doing_mark(c, text(view, "phase") != "offered" || adb == "" || adb == "connecting", None)
+                c.text(tr("android-misc.adb.manage"), style=adb_go) |> ignore
+              }) {
+              (core.push)(AdbShare(""))
+            }
+          } else if list_row(c, key="adb-switch", fn() {
               row_title(c, tr("android-misc.adb.title"))
               let adb = text(view, "adb")
               doing_mark(c, there && (text(view, "phase") != "offered" || adb == "" || adb == "connecting"), None)
@@ -507,9 +519,12 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
               |> ignore
             }
             if reader {
+              // (where it is in Accessibility, and why it may be grey: a phone's makers put an app's services
+              // apart, 2026-10-30: 「跳转的无障碍看不到自动填的选项」)
               if list_row(c, key="adb-reader", fn() {
-                  row_title(c, tr("android-misc.adb.reader.title"))
-                  c.text(tr("android-misc.adb.reader.turnOn"), style=adb_go) |> ignore
+                  row_lines(c, tr("android-misc.adb.reader.title"), tr("android-misc.adb.reader.note"), wrap_sub=true, end=fn() {
+                    c.text(tr("android-misc.adb.reader.turnOn"), style=adb_go) |> ignore
+                  })
                 }) {
                 adb_ask("adb.open", obj([("what", str("reader"))]))
               }

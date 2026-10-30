@@ -70,7 +70,7 @@
   "android-misc.adb.pairing": "正在配对",
   "android-misc.adb.phone": "本机设置",
   "android-misc.adb.reader.about": "仅在共享调试配对时，读取设置中无线调试「使用配对码配对设备」窗口的 6 位配对码，交给与你共享调试的 station 完成配对。不读取其他 app 或设置中的其他内容，不在屏幕上执行任何操作。",
-  "android-misc.adb.reader.note": "通过辅助功能读取配对窗口中的 6 位码：仅读取设置，仅在此处配对时读取，不读取其他内容。无法开启（显示为灰色）时，先在应用信息右上角 ⋮ 中点「允许受限设置」。",
+  "android-misc.adb.reader.note": "在系统「无障碍」里找到 still.fail 打开（有的手机放在「已下载的应用」或「已安装的服务」里）。只读取配对窗口里的 6 位码，不读其他内容。显示为灰色时，先在 still.fail 的应用信息右上角 ⋮ 中点「允许受限设置」。",
   "android-misc.adb.reader.title": "自动填配对码",
   "android-misc.adb.reader.turnOn": "前往开启",
   "android-misc.adb.shareFailed": "无法共享：{error}",
@@ -556,5 +556,6 @@
   "android-misc.adb.stations": "共享给的 station",
   "android-misc.adb.stations.notLent": "还没有共享过去",
   "android-misc.adb.ask.pair.title": "这台 station 还没和你的手机配对",
-  "android-misc.adb.ask.pair.about": "在手机上配对一次，以后它就能一直连上这台手机。"
+  "android-misc.adb.ask.pair.about": "在手机上配对一次，以后它就能一直连上这台手机。",
+  "android-misc.adb.manage": "在设置里管理"
 }
