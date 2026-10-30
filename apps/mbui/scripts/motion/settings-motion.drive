@@ -1,0 +1,4 @@
+# A settings page over the made-up workspace changing on its own (MBUI_FIXTURE=settings-workspace-motion,
+# settings-stations-motion): one comes at 2 s, one goes at 3.6 s.
+timeout 20000
+wait 5500

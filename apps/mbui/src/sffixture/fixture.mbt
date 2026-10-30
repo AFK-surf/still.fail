@@ -930,6 +930,11 @@ pub fn fixture(mode : String) -> Source {
       _ => ""
     },
   }
+  if f.mode == "settings-workspace-motion" || f.mode == "settings-stations-motion" {
+    // the workspace changing on its own: a person and a station come at 2 s, one of each goes at 3.6 s
+    fix_later(2000.0, fn() { @settings.fixture_motion(1) })
+    fix_later(3600.0, fn() { @settings.fixture_motion(2) })
+  }
   if f.mode == "home-motion" {
     // the list changing on its own, a step every 1.6 s from MBUI_MOTION_AT ms (2000) after it starts: rows moving,
     // coming, going (ListMotion.kt), for the recordings of the Home rows' motion

@@ -56,6 +56,9 @@ priv struct SettingsFixture {
   mut pair_ended : String
   /// MBA online too (settings-profiles-pick: Profile's ＋ asks which station)
   mut mba_online : Bool
+  /// how far the made-up workspace has changed on its own (settings-workspace-motion, settings-stations-motion): 1 a
+  /// person and a station come, 2 one of each goes (fixture_motion)
+  mut motion : Int
   /// the bytes of the drives' files kept (`cache.usage`'s `drive`), until let go (`drive.kept.clear`)
   mut drive_kept : Double
   /// the chats' files kept let go (`cache.file.clear`), by name
@@ -88,6 +91,7 @@ let fx : SettingsFixture = {
   pairing: false,
   pair_ended: "",
   mba_online: false,
+  motion: 0,
   drive_kept: fx_drive_kept,
   kept_cleared: [],
 }
@@ -168,12 +172,38 @@ fn fixture_reset() -> Unit {
   fx.pairing = false
   fx.pair_ended = ""
   fx.mba_online = false
+  fx.motion = 0
   fixture_open.sheet = ""
   fixture_open.list = ""
   fixture_open.block = 0
   fixture_open.frames = 0
   fixture_open.desk = ""
   fx_connect_step.val = "team"
+}
+
+///|
+/// The made-up workspace's people (settings-workspace-motion: 林 comes, then 周 goes).
+fn fx_members(me : Json) -> Json {
+  let all = [
+    me,
+    obj([("sub", str("u2")), ("email", str("ana@example.com")), ("name", str("Ana")), ("role", str("admin"))]),
+    obj([("sub", str("u3")), ("email", str("zhou@example.com")), ("name", str("周")), ("role", str("member"))]),
+  ]
+  if fx.motion >= 1 {
+    all.push(obj([("sub", str("u5")), ("email", str("lin2@example.com")), ("name", str("林")), ("role", str("member"))]))
+  }
+  if fx.motion >= 2 {
+    all.remove(2) |> ignore
+  }
+  Json::array(all)
+}
+
+///|
+/// The made-up workspace changed on its own as far as `step` (fx's `motion`), for the recordings of its pages' lists'
+/// motion: told to what follows the made-up core's topics.
+pub fn fixture_motion(step : Int) -> Unit {
+  fx.motion = step
+  fx_changed()
 }
 
 ///|
@@ -386,7 +416,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-fonts-coming" | "settings-fonts-code" => "fonts"
     "settings-prices" => "prices:7"
     "settings-run" | "settings-run-models" | "settings-run-accounts" => "run:ws1/st1#s-c1"
-    "settings-add-people" | "settings-workspace-mark" => "workspace"
+    "settings-add-people" | "settings-workspace-mark" | "settings-workspace-motion" => "workspace"
+    "settings-stations-motion" => "stations"
     "settings-local-fonts" => "fonts"
     "settings-security-confirm" | "settings-security-join" | "settings-security-off" => "security"
     "settings-notify-off" | "settings-lock-prompt" => "home"
@@ -1342,11 +1373,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("role", str("owner")),
           (
             "members",
-            [
-              me,
-              obj([("sub", str("u2")), ("email", str("ana@example.com")), ("name", str("Ana")), ("role", str("admin"))]),
-              obj([("sub", str("u3")), ("email", str("zhou@example.com")), ("name", str("周")), ("role", str("member"))]),
-            ],
+            fx_members(me),
           ),
           ("stations", [obj([("id", str("st1")), ("name", str("Studio"))]), obj([("id", str("st2")), ("name", str("MBA"))])]),
           ("invitations", [obj([("id", str("i1")), ("role", str("member")), ("email", str("qin@example.com")), ("time", obj([("expires_at", stamp_of("", until="6 天后"))]))])]),
@@ -1372,7 +1399,20 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("offLabel", str("已关闭 1 项")),
         ]),
       )
-    "stations" => if fx.none { Some([]) } else { Some([fx_station("ws1/st1"), fx_station("ws1/st2")]) }
+    "stations" =>
+      if fx.none {
+        Some([])
+      } else {
+        // (settings-stations-motion: 3 comes, then MBA goes)
+        let all = [fx_station("ws1/st1"), fx_station("ws1/st2")]
+        if fx.motion >= 1 {
+          all.push(fx_station("ws1/st3"))
+        }
+        if fx.motion >= 2 {
+          all.remove(1) |> ignore
+        }
+        Some(Json::array(all))
+      }
     // a new device asking with this one's code (lock_prompts.mbt)
     "lockPrompts" =>
       Some(

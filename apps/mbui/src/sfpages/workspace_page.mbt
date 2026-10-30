@@ -131,14 +131,18 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
       },
       fn() {
         @sf.group(c, fn() {
+          // each by who it is: one who joins or leaves comes and goes where they are (@sf.group_rows)
+          let rows : Array[(String, () -> Unit)] = []
           for m in members {
-            ws_member_row(c, core, here, v, m)
+            let mv = Some(m)
+            let who = if text(mv, "sub") != "" { text(mv, "sub") } else { text(mv, "email") }
+            rows.push(("m/" + who, fn() { ws_member_row(c, core, here, v, m) }))
           }
           if manager {
             for a in added {
               let email = text(Some(a), "email")
               let on = [("workspace", ws), ("email", email)]
-              ws_person(
+              rows.push(("a/" + email, fn() { ws_person(
                 c,
                 fn() { avatar(c, core, email, email, ws_avatar) },
                 email,
@@ -155,14 +159,14 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
                   }
                 },
               )
-              |> ignore
+              |> ignore }))
             }
             for i in invitations {
               let iv = Some(i)
               let id = text(iv, "id")
               let email = text(iv, "email")
               let on = [("workspace", ws), ("invitation", id)]
-              ws_person(
+              rows.push(("i/" + id, fn() { ws_person(
                 c,
                 fn() { avatar(c, core, if email != "" { email } else { id }, if email != "" { email } else { "?" }, ws_avatar) },
                 if email != "" { email } else { @sf.t("android-settings.members.anyone") },
@@ -179,9 +183,10 @@ fn workspace_blocks(c : @ui.Ctx, core : Core, here : Here, look : Look, v : Json
                   }
                 },
               )
-              |> ignore
+              |> ignore }))
             }
           }
+          @sf.group_rows(c, "ws-people/" + ws, rows)
         })
       },
     )
