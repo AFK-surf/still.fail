@@ -58,10 +58,7 @@ priv struct RowNodes {
   /// marked used this frame; the cycles and the moments it said come again (for what says why a frame is drawn)
   said : Array[&SaidAgain]
   marks : Array[Int]
-  /// what it showed of the boxes named to be moved (move_state.mbt), the names built, and what it read of how lists
-  /// stand (Ctx::list_info_as, read back)
-  moves_shown : Array[(String, FixedArray[Double])]
-  moves_seen : Array[String]
+  /// what it read of how lists stand (Ctx::list_info_as, read back)
   info : Array[(String, () -> Bool)]
   drawn : Array[Drawn]
   used : Array[() -> Unit]
@@ -376,8 +373,6 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     why: "",
     said: [],
     marks: [],
-    moves_shown: [],
-    moves_seen: [],
     info: [],
     drawn: [],
     used: [],
@@ -547,8 +542,6 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
   rn.used.clear()
   rn.again.clear()
   rn.laid.clear()
-  rn.moves_shown.clear()
-  rn.moves_seen.clear()
   {
     census,
     info: self.info_reads.length(),
@@ -770,12 +763,7 @@ fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
   for r in rn.info {
     self.info_reads.push(r)
   }
-  for s in rn.moves_shown {
-    self.shown_now[s.0] = { v: s.1 }
-  }
-  for name in rn.moves_seen {
-    self.move_seen[name] = self.move_seen.get(name).unwrap_or(0) + 1
-  }
+  self.moves_said_again(rn.base, rn.base + rn.n)
   self.fit_rows = self.fit_rows + rn.fit_rows
   for cy in rn.cycles {
     if !self.cycles.iter().any(fn(x) { x.1.to_string() == cy.1.to_string() }) {
@@ -1178,26 +1166,6 @@ fn Ctx::laid_said_again(self : Ctx, r : LaidRead) -> Unit {
         self.left_reads[id] = (v, loc)
       }
     }
-  }
-}
-
-///|
-/// What the row or part being built showed of a box named to be moved (Ctx::move_node, Ctx::moved): kept with it, said
-/// again each frame it is put back (what a move setting out later sets out from).
-fn row_said_shown(key : String, shown : FixedArray[Double]) -> Unit {
-  match nodes_run.building {
-    Some(rn) => rn.moves_shown.push((key, shown))
-    None => ()
-  }
-}
-
-///|
-/// A box named `name` to be moved built in the row or part being built (Ctx::move_node's `nth`): counted again each
-/// frame it is put back.
-fn row_said_seen(name : String) -> Unit {
-  match nodes_run.building {
-    Some(rn) => rn.moves_seen.push(name)
-    None => ()
   }
 }
 
