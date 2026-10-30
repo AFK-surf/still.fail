@@ -3,11 +3,11 @@ test "Duo remote screen fits clear of its system column with native controls; fu
   let r = screen_rig(w=951.0, h=669.0, platform=1)
   defer { @sf.native_bars_reset() }
   r.live()
-  @sf.native_bars.on = true
-  @sf.native_bars.side = 84.0
+  @sf.native_bars.on.set(true)
+  @sf.native_bars.side.set(84.0)
   @sf.native_over_clear()
   r.t.run_for(@ui.move_most_ms)
-  assert_true(@sf.native_over.up)
+  assert_true(@sf.native_over.up.get())
   let c = r.t.ctx()
   let stage = c.id("screen-stage/" + screen_key("ws-1/st-1", "browser:tab-1"))
   let (x, _, w, _) = c.rect_of(stage).unwrap()
@@ -23,9 +23,9 @@ test "Duo remote screen fits clear of its system column with native controls; fu
   }
   @sf.native_over_clear()
   r.t.run_for(@ui.move_most_ms)
-  assert_true(r.ui().full)
-  assert_true(@sf.native_over.up)
-  assert_eq(@sf.native_over.title, "")
+  assert_true(r.ui().full.get())
+  assert_true(@sf.native_over.up.get())
+  assert_eq(@sf.native_over.title.get(), "")
   assert_eq(@sf.native_over.acts.length(), 0)
   let (x, _, w, _) = c.rect_of(stage).unwrap()
   assert_true(x <= 0.1 && x + w >= 951.0 - 0.1, msg="stage \{x} + \{w}")
@@ -36,7 +36,7 @@ test "Duo remote screen fits clear of its system column with native controls; fu
   r.t.draw()
   let (mx, my) = r.labelled(tr("android-misc.screen.tools")).unwrap()
   assert_true((mx - (tx - 300.0)).abs() < 2.0 && (my - (ty + 200.0)).abs() < 2.0, msg="moved to \{mx}, \{my}")
-  assert_false(r.ui().tools_open)
+  assert_false(r.ui().tools_open.get())
   r.t.drag(mx, my, 2.0, 667.0)
   r.t.draw()
   let (lx, ly) = r.labelled(tr("android-misc.screen.tools")).unwrap()
@@ -46,7 +46,7 @@ test "Duo remote screen fits clear of its system column with native controls; fu
   r.tap_label(tr("android-misc.screen.unfull"))
   @sf.native_over_clear()
   r.t.run_for(@ui.move_most_ms)
-  assert_false(r.ui().full)
+  assert_false(r.ui().full.get())
   assert_true(@sf.native_over.acts.iter().any(fn(a) { a.0 == "lead/over/screen-close" }))
 }
 
@@ -55,8 +55,8 @@ test "Duo native screen control mode action still asks the core and close leaves
   let r = screen_rig(w=951.0, h=669.0, platform=1)
   defer { @sf.native_bars_reset() }
   r.live()
-  @sf.native_bars.on = true
-  @sf.native_bars.side = 84.0
+  @sf.native_bars.on.set(true)
+  @sf.native_bars.side.set(84.0)
   @sf.native_over_clear()
   r.t.draw()
   for a in @sf.native_over.acts.copy() {
@@ -81,15 +81,15 @@ test "a late system column refits the whole picture and its control panel opens 
   defer { @sf.native_bars_reset() }
   r.live()
   r.t.run_for(late_column_ms)
-  @sf.native_bars.on = true
-  @sf.native_bars.side = 84.0
+  @sf.native_bars.on.set(true)
+  @sf.native_bars.side.set(84.0)
   @sf.native_over_clear()
   r.t.run_for(late_column_ms)
   let u = r.ui()
   let shown = u.shown()
   assert_true(shown.x >= -0.1 && shown.y >= -0.1)
-  assert_true(shown.x + shown.w <= u.box_w + 0.1)
-  assert_true(shown.y + shown.h <= u.box_h + 0.1)
+  assert_true(shown.x + shown.w <= u.box_w.get() + 0.1)
+  assert_true(shown.y + shown.h <= u.box_h.get() + 0.1)
   @hostapi.nav_tapped_at[0] = 879.0
   @hostapi.nav_tapped_at[1] = 480.0
   @hostapi.nav_tapped_at[2] = 48.0
@@ -148,7 +148,7 @@ test "screen system audio negotiates only on a capable host, mutes immediately a
   r.say({ "audio": { "ts": 3 } }, bytes=packet)
   assert_eq(r.t.stream_fed(st.id()).last().unwrap(), "audio bytes=3840")
   s.pause(s.src)
-  assert_false(s.audio_ready)
+  assert_false(s.audio_ready.get())
   assert_eq(r.t.stream_fed(st.id()).last().unwrap(), "audio bytes=0")
 }
 

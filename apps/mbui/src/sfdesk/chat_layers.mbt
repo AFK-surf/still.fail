@@ -7,23 +7,23 @@
 ///|
 /// What the chat's pane keeps of its own: the composer to take the keyboard at its next drawing (回到输入框).
 priv struct LayersOwn {
-  mut focus : Bool
+  focus : @signals.Signal[Bool]
 }
 
 ///|
-let layers_own : LayersOwn = { focus: false }
+let layers_own : LayersOwn = { focus: @signals.signal(false , same=fn(a, b) { a == b })}
 
 ///|
 fn layers_reset() -> Unit {
-  layers_own.focus = false
+  layers_own.focus.set(false)
 }
 
 ///|
 /// Over chat `r`'s pane `pane` (its draft `draft`; `room`, what the composer keeps at its foot), after its composer:
 /// what is picked in its messages, what is carried over it.
 fn chat_layers(c : @ui.Ctx, src : Source, r : ChatRef, draft : String, pane : Int, room : Double) -> Unit {
-  if layers_own.focus {
-    layers_own.focus = false
+  if layers_own.focus.get() {
+    layers_own.focus.set(false)
     c.focus_editor(@sfpages.composer_field_key)
   }
   @sfbase.pick_layer(c, list_key(r), bar_foot, room, @sfbase.mouse_picks(), fn(author, words, ts, role) {
@@ -95,7 +95,7 @@ fn inside(r : (Double, Double, Double, Double)?, x : Double, y : Double) -> Bool
 ///|
 /// The composer to take the keyboard at the pane's next drawing (Space with no field focused: 回到输入框).
 fn composer_focus() -> Unit {
-  layers_own.focus = true
+  layers_own.focus.set(true)
 }
 
 ///|
@@ -106,7 +106,7 @@ fn chat_escape(c : @ui.Ctx, src : Source, escape : Bool) -> Bool {
   if find_chat() != "" {
     find_forget()
     c.blur()
-  } else if @sfbase.pk.ts != "" {
+  } else if @sfbase.pk.ts.get() != "" {
     @sfbase.pick_clear()
   } else if side_now(src, r).0.length() > 0 {
     c.tell("chat/panel-close", fn() { side_change(src, r, "clear", None) })

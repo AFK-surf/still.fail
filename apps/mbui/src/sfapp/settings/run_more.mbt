@@ -304,7 +304,7 @@ fn run_sample() -> Json {
 
 ///|
 /// The sessions a station's machine kept (by station), as `machineSessions.list` answered; asked once a page.
-let machine_sessions : Map[String, Array[Json]] = Map([])
+let machine_sessions : @sf.LiveMap[String, Array[Json]] = @sf.LiveMap::new()
 
 ///|
 /// The offer, where the station's machine kept sessions of its own Claude Code or Codex (MachineSessions.css.ts offer):
@@ -313,12 +313,12 @@ let machine_sessions : Map[String, Array[Json]] = Map([])
 pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name : String) -> Unit {
   let t = @sf.theme()
   if !machine_sessions.contains(station) {
-    machine_sessions[station] = []
+    machine_sessions.set(station, [])
     // (asked once the frame's builds are over: the build that first comes to it alone)
     c.tell("machineSessions.list/" + station, fn() {
       (core.call)("machineSessions.list", obj([("station", str(station))]), fn(r) {
         match r {
-          Ok(v) => machine_sessions[station] = items(Some(v), "sessions")
+          Ok(v) => machine_sessions.set(station, items(Some(v), "sessions"))
           Err(_) => ()
         }
       })
@@ -559,8 +559,8 @@ fn role_hint(role : String) -> String {
 /// before, from their first sign-in otherwise (`workspace.addMembers`). Typed or pasted, or picked from the people of
 /// the Slack workspaces the online stations are in (`slack.people`); their role; what came of it said.
 pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Anchor = Unanchored) -> Unit {
-  vault_serial.val += 1
-  let key = "add-people/" + vault_serial.val.to_string()
+  vault_serial.set(vault_serial.get() + 1)
+  let key = "add-people/" + vault_serial.get().to_string()
   let role : Ref[String] = Ref("member")
   let error : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
   let done : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
@@ -857,11 +857,11 @@ let account_note_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Mute
 ///|
 /// The pickers opened (their `pick.set {open}` sent once a page), and which list a run page shows ("" its first view).
 // kept across runs: said as a run's page opens; the settings' reset empties it
-let run_opened : Map[String, Bool] = Map([])
+let run_opened : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()
 
 ///|
 // kept across runs: said by a run's page; the settings' reset empties it
-let run_list : Map[String, String] = Map([])
+let run_list : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
 /// A property's label in what a run was and becomes (meta, muted, on one line).

@@ -37,7 +37,7 @@ pub(all) struct Shell {
 pub fn bare_shell() -> Shell {
   {
     home: nav_home,
-    close_overlays: fn() { app.menu = false },
+    close_overlays: fn() { app.menu.set(false) },
     open_invite: fn(_) {  },
     behind: fn(_) {  },
     open: stack_open,
@@ -186,7 +186,7 @@ pub fn go_place(place : String, way? : Int = 0) -> Bool {
   }
   history_push()
   (shell.val.close_overlays)()
-  app.switch_way = way
+  app.switch_way.set(way)
   nav_home()
   app.nav.replace(page)
   true

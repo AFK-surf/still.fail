@@ -12,20 +12,24 @@ let archive_page_size : Int = 60
 /// What the archive's page keeps while it is on the stack: the words looked for, how many it asks for, the last view
 /// read (shown while another is asked for).
 priv struct ArchiveState {
-  mut q : String
-  mut limit : Int
-  mut last : Json?
+  q : @signals.Signal[String]
+  limit : @signals.Signal[Int]
+  last : @signals.Signal[Json?]
 }
 
 ///|
-let archive_state : ArchiveState = { q: "", limit: archive_page_size, last: None }
+let archive_state : ArchiveState = {
+  q: @signals.signal("", same=fn(a, b) { a == b }),
+  limit: @signals.signal(archive_page_size, same=fn(a, b) { a == b }),
+  last: @signals.signal(None, same=fn(a, b) { a == b }),
+}
 
 ///|
 /// The archive as it was left: no words looked for, the first page (the page pushed again).
 fn archive_reset() -> Unit {
-  archive_state.q = ""
-  archive_state.limit = archive_page_size
-  archive_state.last = None
+  archive_state.q.set("")
+  archive_state.limit.set(archive_page_size)
+  archive_state.last.set(None)
 }
 
 ///|
@@ -43,16 +47,16 @@ priv enum ArchiveEntry {
 ///|
 fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let params : Map[String, Json] = { "scope": str(here.workspace) }
-  if archive_state.q != "" {
-    params["q"] = str(archive_state.q)
+  if archive_state.q.get() != "" {
+    params["q"] = str(archive_state.q.get())
   }
-  params["limit"] = Json::number(archive_state.limit.to_double())
+  params["limit"] = Json::number(archive_state.limit.get().to_double())
   let topic = (core.topic)("archive", params)
   match topic.value {
-    Some(_) => archive_state.last = topic.value
+    Some(_) => archive_state.last.set(topic.value)
     None => ()
   }
-  let view = archive_state.last
+  let view = archive_state.last.get()
   // under the app's top bar at the bar's top, from under it, scrolling under it (Archive.kt: contentPadding top)
   let top = top_room()
   let entries : Array[ArchiveEntry] = if top > 0.0 { [Room(top), Search] } else { [Search] }
@@ -76,7 +80,7 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       Some(n) => entries.push(Note(n))
       None => ()
     }
-    if days.length() == 0 && archive_state.q == "" {
+    if days.length() == 0 && archive_state.q.get() == "" {
       entries.push(Empty)
     }
     for d in days {
@@ -94,7 +98,7 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         info.last >= info.count - 12 &&
         topic.value is Some(_) &&
         info.count == entries.length() {
-        archive_state.limit += archive_page_size
+        archive_state.limit.set(archive_state.limit.get() + archive_page_size)
       }
     None => ()
   }
@@ -172,9 +176,9 @@ fn archive_search(c : @ui.Ctx) -> Unit {
           caret_color=t.p.accent,
         )
         let q = r.text.trim(chars=" \t\n").to_owned()
-        if q != archive_state.q {
-          archive_state.q = q
-          archive_state.limit = archive_page_size
+        if q != archive_state.q.get() {
+          archive_state.q.set(q)
+          archive_state.limit.set(archive_page_size)
         }
       },
     )

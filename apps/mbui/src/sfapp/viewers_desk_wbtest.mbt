@@ -61,7 +61,7 @@ test "desk: a chat's film says its size, length and rate in the bar as its messa
 ///|
 test "desk: a chat's film fitted clear of the bar and the controls, never under them; ⌘ and the wheel zoom it" {
   let t = desk_tester("chat-preview-video")
-  let key = viewer.get().unwrap().media.unwrap().key()
+  let key = viewer.get().unwrap().media.get().unwrap().key()
   let (top, foot) = @sf.player_room(1280.0)
   let (_, y, w, h) = @sf.player_picture_at(key).unwrap()
   // 1280 × 720 in 1280 × (800 less the bar and the controls): as tall as that leaves, under the bar, over the controls
@@ -183,10 +183,10 @@ test "desk: a drive's text over the whole window, back to its folder; 目录 doc
   // 目录, the first of its four tools
   t.tap(desk_tool_x(3), 22.0)
   let r = @sf.reading_for(reader_key({ station: "ws1/st1", root: Some(fix_docs), path: "长篇小说.txt" }))
-  assert_true(r.panel == @sf.ReaderPanel::Contents)
+  assert_true(r.panel.get() == @sf.ReaderPanel::Contents)
   assert_true(t.find("在全文中搜索") is Some(_))
   t.key(@ui.key_escape)
-  assert_true(r.panel == @sf.ReaderPanel::NoPanel)
+  assert_true(r.panel.get() == @sf.ReaderPanel::NoPanel)
   t.key(@ui.key_escape)
   assert_false(app.nav.top() is DriveRead(_))
 }

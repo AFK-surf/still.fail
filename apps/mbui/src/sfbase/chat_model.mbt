@@ -503,7 +503,7 @@ pub(all) struct Agent {
   started : Bool
   /// its last turn's id (its session's lastTurn), "" before it has had one
   last_turn : String
-}
+} derive(Eq)
 
 ///|
 pub fn agent_of(a : Json) -> Agent {

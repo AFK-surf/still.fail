@@ -333,7 +333,7 @@ fn accept_invite(src : Source, token : String, sub : String, name : String) -> U
 /// which would otherwise stay over the page that opened under them.
 fn close_overlays() -> Unit {
   lower_sheet()
-  app.menu = false
+  app.menu.set(false)
   @sf.close_all_presented()
   @sfbase.close_now()
   @sfpages.publish_close()

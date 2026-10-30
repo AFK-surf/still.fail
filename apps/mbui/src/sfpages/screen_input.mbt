@@ -185,19 +185,19 @@ fn cursor_of_shape(shape : String) -> @ui.Cursor {
 /// The modifiers tapped on the keys row (⌘ ⌃ ⌥ ⇧, which a phone's keyboard has not): held for the next key or
 /// character, then let go, as a phone's own shift is.
 priv struct HeldKeys {
-  mut mods : Int
+  mods : @signals.Signal[Int]
 }
 
 ///|
 fn HeldKeys::toggle(self : HeldKeys, bit : Int) -> Unit {
-  self.mods = self.mods ^ bit
+  self.mods.set(self.mods.get() ^ bit)
 }
 
 ///|
 /// What is held, for a key now: let go of after it.
 fn HeldKeys::take(self : HeldKeys) -> Int {
-  let m = self.mods
-  self.mods = 0
+  let m = self.mods.get()
+  self.mods.set(0)
   m
 }
 
@@ -280,13 +280,13 @@ fn ScreenUi::shown(self : ScreenUi) -> SRect {
 /// The part of the frame in sight while it is zoomed in (0..1 of it each way); None while it is not (all of it is).
 fn ScreenUi::in_sight(self : ScreenUi) -> Part? {
   let s = self.shown()
-  if !self.zoom.zoomed() || s.w <= 0.0 || s.h <= 0.0 || self.box_w <= 0.0 || self.box_h <= 0.0 {
+  if !self.zoom.zoomed() || s.w <= 0.0 || s.h <= 0.0 || self.box_w.get() <= 0.0 || self.box_h.get() <= 0.0 {
     return None
   }
   let x0 = dmax(0.0, -s.x / s.w)
   let y0 = dmax(0.0, -s.y / s.h)
-  let x1 = dmin(1.0, (self.box_w - s.x) / s.w)
-  let y1 = dmin(1.0, (self.box_h - s.y) / s.h)
+  let x1 = dmin(1.0, (self.box_w.get() - s.x) / s.w)
+  let y1 = dmin(1.0, (self.box_h.get() - s.y) / s.h)
   if x1 <= x0 || y1 <= y0 {
     None
   } else {
@@ -310,22 +310,22 @@ let pad_settle_ms : Double = 600.0
 /// Where the pointer is as the trackpad moves it (0..1 of the frame), ahead of the station saying so; where the
 /// station says it is once the finger has been still a moment (something else moved it, or the screen's edge held it).
 priv struct PadPointer {
-  mut x : Double
-  mut y : Double
+  x : @signals.Signal[Double]
+  y : @signals.Signal[Double]
   /// how many times the finger has moved it: the wait for the station's word starts again from each
-  mut moves : Int
+  moves : @signals.Signal[Int]
 }
 
 ///|
 fn PadPointer::at(self : PadPointer) -> (Double, Double) {
-  (self.x, self.y)
+  (self.x.get(), self.y.get())
 }
 
 ///|
 fn PadPointer::by(self : PadPointer, dx : Double, dy : Double) -> Unit {
-  self.x = clamp01(self.x + dx)
-  self.y = clamp01(self.y + dy)
-  self.moves += 1
+  self.x.set(clamp01(self.x.get() + dx))
+  self.y.set(clamp01(self.y.get() + dy))
+  self.moves.set(self.moves.get() + 1)
 }
 
 ///|
@@ -333,8 +333,8 @@ fn PadPointer::by(self : PadPointer, dx : Double, dy : Double) -> Unit {
 fn PadPointer::follow(self : PadPointer, cursor : (Double, Double)?) -> Unit {
   match cursor {
     Some((x, y)) => {
-      self.x = clamp01(x)
-      self.y = clamp01(y)
+      self.x.set(clamp01(x))
+      self.y.set(clamp01(y))
     }
     None => ()
   }

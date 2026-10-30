@@ -5,7 +5,7 @@
 
 ///|
 /// A count of the variables' sheets opened: each its own draft (`form`).
-let env_form : Ref[Int] = Ref(0)
+let env_form : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
 
 ///|
 /// What changes of the versions from here are on their way (Versions.kt's own state: the one updating, checking, the
@@ -55,17 +55,17 @@ pub fn short_date_time(ms : Double) -> String {
 /// native call asking it, and those taps made (adb.switch, adb.open, adb.start), while they are under way.
 priv struct AdbHost {
   phone : @signals.Signal[Json?]
-  mut asking : @ui.NativeCall?
+  asking : @signals.Signal[@ui.NativeCall?]
   doing : Array[@ui.NativeCall]
 }
 
 ///|
-let adb_host : AdbHost = { phone: @signals.signal(None), asking: None, doing: [] }
+let adb_host : AdbHost = { phone: @signals.signal(None), asking: @signals.signal(None), doing: [] }
 
 ///|
 fn adb_reset() -> Unit {
   adb_host.phone.set(None)
-  adb_host.asking = None
+  adb_host.asking.set(None)
   adb_host.doing.clear()
 }
 
@@ -80,17 +80,17 @@ pub fn adb_phone_said(json : String) -> Unit {
 /// The phone as its host last said it, asked once (as the page shows) and taken as it comes; what a tap asked of the
 /// host taken too (an answer that changed the phone: asked again).
 fn adb_phone(c : @ui.Ctx) -> Json? {
-  match adb_host.asking {
+  match adb_host.asking.get() {
     Some(k) =>
       match k.got() {
         Some(Ok(j)) => {
           adb_host.phone.set(Some(j))
-          adb_host.asking = None
+          adb_host.asking.set(None)
         }
         // a host without 共享调试: nothing it can lend
         Some(Err(_)) => {
           adb_host.phone.set(Some(obj([("supported", Json::boolean(false))])))
-          adb_host.asking = None
+          adb_host.asking.set(None)
         }
         None => ()
       }
@@ -108,8 +108,8 @@ fn adb_phone(c : @ui.Ctx) -> Json? {
   }
   adb_host.doing.clear()
   adb_host.doing.append(left)
-  if adb_host.phone.get() is None && adb_host.asking is None {
-    c.tell("adb-phone", fn() { adb_host.asking = Some(@ui.native_call("adb.phone", obj([]))) })
+  if adb_host.phone.get() is None && adb_host.asking.get() is None {
+    c.tell("adb-phone", fn() { adb_host.asking.set(Some(@ui.native_call("adb.phone", obj([])))) })
   }
   adb_host.phone.get()
 }

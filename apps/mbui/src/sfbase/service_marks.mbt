@@ -29,7 +29,7 @@ pub(all) struct PageMark {
   text : String
   rect : (Double, Double, Double, Double)
   component : String
-  mut comment : String
+  comment : @signals.Signal[String]
 }
 
 ///|
@@ -39,11 +39,11 @@ pub(all) struct PageMark {
 pub(all) struct Shooting {
   k : Int
   todo : Array[PageMark]
-  mut i : Int
-  mut y0 : Double
-  mut now : Bytes?
-  mut wait : ShotWait
-  mut place : (Double, Double, Double, Double, Double)
+  i : @signals.Signal[Int]
+  y0 : @signals.Signal[Double]
+  now : @signals.Signal[Bytes?]
+  wait : @signals.Signal[ShotWait]
+  place : @signals.Signal[(Double, Double, Double, Double, Double)]
   pictures : Array[(String, Bytes, (String, String, String))]
   stamp : String
 }
@@ -65,25 +65,38 @@ pub(all) enum ShotWait {
 /// page's viewport (as the page last said) and the viewport's size in CSS pixels, the one whose note is open, putting
 /// them into the chat, why that failed.
 pub(all) struct PageMarks {
-  mut marking : Bool
-  marks : Array[PageMark]
-  at : Map[Int, (Double, Double, Double, Double)]
-  mut css_w : Double
-  mut css_h : Double
-  mut editing : Int?
+  marking : @signals.Signal[Bool]
+  marks : @sf.LiveArray[PageMark]
+  at : @sf.LiveMap[Int, (Double, Double, Double, Double)]
+  css_w : @signals.Signal[Double]
+  css_h : @signals.Signal[Double]
+  editing : @signals.Signal[Int?]
   /// the open note's words (its field shows them)
   note : @ui.Field
-  mut error : String
-  mut shot : Shooting?
-  mut shots : Int
+  error : @signals.Signal[String]
+  shot : @signals.Signal[Shooting?]
+  shots : @signals.Signal[Int]
   /// scripts for the page not sent yet (page_say), how many times they were
   out : Array[String]
-  mut sent : Int
+  sent : @signals.Signal[Int]
 }
 
 ///|
 pub fn page_marks_new() -> PageMarks {
-  { marking: false, marks: [], at: {}, css_w: 0.0, css_h: 0.0, editing: None, note: @ui.Field::new(), error: "", shot: None, shots: 0, out: [], sent: 0 }
+  {
+    marking: @signals.signal(false, same=fn(a, b) { a == b }),
+    marks: @sf.LiveArray::new(),
+    at: @sf.LiveMap::new(),
+    css_w: @signals.signal(0.0, same=fn(a, b) { a == b }),
+    css_h: @signals.signal(0.0, same=fn(a, b) { a == b }),
+    editing: @signals.signal(None, same=fn(a, b) { a == b }),
+    note: @ui.Field::new(),
+    error: @signals.signal("", same=fn(a, b) { a == b }),
+    shot: @signals.signal(None),
+    shots: @signals.signal(0, same=fn(a, b) { a == b }),
+    out: [],
+    sent: @signals.signal(0, same=fn(a, b) { a == b }),
+  }
 }
 
 ///|
@@ -128,28 +141,28 @@ pub fn service_marked(p : ServicePage, said : Json) -> Unit {
             text: text(k, "text"),
             rect,
             component: text(k, "component"),
-            comment: "",
+            comment: @signals.signal("", same=fn(a, b) { a == b }),
           })
-          m.at[n] = rect
-          m.css_w = number(vp, "width")
-          m.css_h = number(vp, "height")
-          m.editing = Some(n)
-          m.error = ""
+          m.at.put(n, rect)
+          m.css_w.set(number(vp, "width"))
+          m.css_h.set(number(vp, "height"))
+          m.editing.set(Some(n))
+          m.error.set("")
         }
         _ => ()
       }
     }
     "focus" =>
       match field(s, "n") {
-        Some(Number(n, ..)) => m.editing = Some(n.to_int())
+        Some(Number(n, ..)) => m.editing.set(Some(n.to_int()))
         _ => ()
       }
     "at" => {
       if number(s, "width") > 0.0 {
-        m.css_w = number(s, "width")
+        m.css_w.set(number(s, "width"))
       }
       if number(s, "height") > 0.0 {
-        m.css_h = number(s, "height")
+        m.css_h.set(number(s, "height"))
       }
       let boxes : Map[Int, (Double, Double, Double, Double)] = {}
       for b in items(s, "at") {
@@ -160,7 +173,7 @@ pub fn service_marked(p : ServicePage, said : Json) -> Unit {
       }
       m.at.clear()
       for n, r in boxes {
-        m.at[n] = r
+        m.at.put(n, r)
       }
     }
     _ => ()
@@ -173,8 +186,8 @@ pub fn page_marks_new_page(p : ServicePage, site : @ui.NativeView) -> Unit {
   let m = p.marks
   m.marks.clear()
   m.at.clear()
-  m.editing = None
-  if m.marking {
+  m.editing.set(None)
+  if m.marking.get() {
     page_say(p, "window.__stillfailMarks&&__stillfailMarks.on(true)")
   }
 }
@@ -185,17 +198,17 @@ pub fn page_marks_leave(p : ServicePage, site : @ui.NativeView) -> Unit {
   let m = p.marks
   m.marks.clear()
   m.at.clear()
-  m.editing = None
-  m.error = ""
-  m.marking = false
+  m.editing.set(None)
+  m.error.set("")
+  m.marking.set(false)
   page_say(p, "window.__stillfailMarks&&(__stillfailMarks.clear(),__stillfailMarks.on(false))")
 }
 
 ///|
 /// The bar's edit key turned (Preview.kt BarIcon(Icons.Edit)): picking on or off.
 pub fn page_marks_toggle(p : ServicePage, site : @ui.NativeView) -> Unit {
-  p.marks.marking = !p.marks.marking
-  page_say(p, "window.__stillfailMarks&&__stillfailMarks.on(\{p.marks.marking})")
+  p.marks.marking.set(!p.marks.marking.get())
+  page_say(p, "window.__stillfailMarks&&__stillfailMarks.on(\{p.marks.marking.get()})")
 }
 
 ///|
@@ -207,7 +220,7 @@ pub fn page_marks_remove(p : ServicePage, site : @ui.NativeView, n : Int) -> Uni
     None => ()
   }
   m.at.remove(n)
-  m.editing = None
+  m.editing.set(None)
   page_say(p, "window.__stillfailMarks&&__stillfailMarks.remove(\{n})")
 }
 
@@ -229,68 +242,68 @@ pub fn shot_ask(k : Int, t : String, expr : String, drawn? : Bool = false) -> St
 /// The marks put into the chat's draft (Preview.kt putIntoChat): begun here, each step as the page answers.
 pub fn page_marks_put(p : ServicePage, site : @ui.NativeView, src : Source) -> Unit {
   let m = p.marks
-  if m.marks.length() == 0 || m.shot is Some(_) {
+  if m.marks.length() == 0 || m.shot.get() is Some(_) {
     return
   }
-  m.error = ""
-  m.editing = None
-  m.shots += 1
-  m.shot = Some({
-    k: m.shots,
+  m.error.set("")
+  m.editing.set(None)
+  m.shots.set(m.shots.get() + 1)
+  m.shot.set(Some({
+    k: m.shots.get(),
     todo: m.marks.copy(),
-    i: 0,
-    y0: 0.0,
-    now: None,
-    wait: Scroll,
-    place: (0.0, 0.0, 0.0, 0.0, 0.0),
+    i: @signals.signal(0, same=fn(a, b) { a == b }),
+    y0: @signals.signal(0.0, same=fn(a, b) { a == b }),
+    now: @signals.signal(None, same=fn(a, b) { a == b }),
+    wait: @signals.signal(Scroll),
+    place: @signals.signal((0.0, 0.0, 0.0, 0.0, 0.0), same=fn(a, b) { a == b }),
     pictures: [],
     // (the time of day the name carries, as the viewer's marked images have it)
     stamp: clock_stamp((src_now.val)()),
-  })
-  page_say(p, shot_ask(m.shots, "y0", "scrollY"))
+  }))
+  page_say(p, shot_ask(m.shots.get(), "y0", "scrollY"))
 }
 
 ///|
 /// Putting them failed: said in the bar, in red (Preview.kt state.error).
 pub fn shot_failed(p : ServicePage, words : String) -> Unit {
-  p.marks.shot = None
-  p.marks.error = svc("android-chat.preview.put.failed", args=[("error", words)])
+  p.marks.shot.set(None)
+  p.marks.error.set(svc("android-chat.preview.put.failed", args=[("error", words)]))
 }
 
 ///|
 /// The next mark's place asked, or all of them done.
 pub fn shot_next(p : ServicePage, site : @ui.NativeView) -> Unit {
-  let s = match p.marks.shot {
+  let s = match p.marks.shot.get() {
     Some(s) => s
     None => return
   }
-  if s.i >= s.todo.length() {
+  if s.i.get() >= s.todo.length() {
     shot_done(p, site, s)
     return
   }
-  s.wait = Place(false)
-  let n = s.todo[s.i].n
+  s.wait.set(Place(false))
+  let n = s.todo[s.i.get()].n
   page_say(p, shot_ask(s.k, "place", "__stillfailMarks.place(\{n},false)"))
 }
 
 ///|
 /// What the page answered while the marks are put (`p: "shot"`): its scroll, where a mark is.
 pub fn shot_said(p : ServicePage, site : @ui.NativeView, said : Json) -> Unit {
-  let s = match p.marks.shot {
+  let s = match p.marks.shot.get() {
     Some(s) if number(Some(said), "k").to_int() == s.k => s
     _ => return
   }
   let v = field(Some(said), "v")
-  match (text(Some(said), "t"), s.wait) {
+  match (text(Some(said), "t"), s.wait.get()) {
     ("y0", Scroll) => {
-      s.y0 = match v {
+      s.y0.set(match v {
         Some(Number(y, ..)) => y
         _ => 0.0
-      }
+      })
       shot_next(p, site)
     }
     ("place", Place(center)) => {
-      let n = s.todo[s.i].n
+      let n = s.todo[s.i.get()].n
       let place = match v {
         Some(String(j)) =>
           match (try Some(@json.parse(j)) catch { _ => None }) {
@@ -306,20 +319,20 @@ pub fn shot_said(p : ServicePage, site : @ui.NativeView, said : Json) -> Unit {
       match place {
         None => shot_failed(p, svc("android-chat.preview.mark.gone", args=[("n", n.to_string())]))
         Some(pl) => {
-          s.place = pl
+          s.place.set(pl)
           let (_, y, _, h, _) = pl
-          let in_sight = y + h > 0.0 && (p.marks.css_h <= 0.0 || y < p.marks.css_h)
+          let in_sight = y + h > 0.0 && (p.marks.css_h.get() <= 0.0 || y < p.marks.css_h.get())
           if center || in_sight {
-            match s.now {
+            match s.now.get() {
               Some(png) if !center => shot_draw(p, s, png)
               _ => {
-                s.wait = Grab(center)
+                s.wait.set(Grab(center))
                 site.grab_frame(0.0)
               }
             }
           } else {
             // out of sight: scrolled into the middle, and asked again once that is drawn
-            s.wait = Place(true)
+            s.wait.set(Place(true))
             page_say(p, shot_ask(s.k, "place", "__stillfailMarks.place(\{n},true)", drawn=true))
           }
         }
@@ -332,12 +345,12 @@ pub fn shot_said(p : ServicePage, site : @ui.NativeView, said : Json) -> Unit {
 ///|
 /// Each frame while the marks are put: the page's picture once it is here, the mark drawn on it once it is.
 pub fn page_marks_frame(p : ServicePage, site : @ui.NativeView) -> Unit {
-  let name = p.name
-  let s = match p.marks.shot {
+  let name = p.name.get()
+  let s = match p.marks.shot.get() {
     Some(s) => s
     None => return
   }
-  match s.wait {
+  match s.wait.get() {
     Grab(center) =>
       match site.grabbed() {
         Some(png) => {
@@ -346,9 +359,9 @@ pub fn page_marks_frame(p : ServicePage, site : @ui.NativeView) -> Unit {
             return
           }
           if center {
-            page_say(p, "__stillfailMarks.back(\{s.y0})")
+            page_say(p, "__stillfailMarks.back(\{s.y0.get()})")
           } else {
-            s.now = Some(png)
+            s.now.set(Some(png))
           }
           shot_draw(p, s, png)
         }
@@ -361,7 +374,7 @@ pub fn page_marks_frame(p : ServicePage, site : @ui.NativeView) -> Unit {
             shot_failed(p, svc("android-chat.preview.shot.failed"))
             return
           }
-          let mark = s.todo[s.i]
+          let mark = s.todo[s.i.get()]
           let file = svc("android-chat.preview.mark.file", args=[
             ("name", name),
             ("n", mark.n.to_string()),
@@ -373,10 +386,10 @@ pub fn page_marks_frame(p : ServicePage, site : @ui.NativeView) -> Unit {
             (
               svc("android-chat.preview.mark.quote", args=[("name", name), ("n", mark.n.to_string())]),
               mark_where(mark, file),
-              mark.comment.trim(chars=" \n\t").to_string(),
+              mark.comment.get().trim(chars=" \n\t").to_string(),
             ),
           ))
-          s.i += 1
+          s.i.set(s.i.get() + 1)
           shot_next(p, site)
         }
         None => ()
@@ -396,7 +409,7 @@ pub fn shot_draw(p : ServicePage, s : Shooting, png : Bytes) -> Unit {
       return
     }
   }
-  let (x, y, w, h, css_w) = s.place
+  let (x, y, w, h, css_w) = s.place.get()
   let ratio = pw.to_double() / css_w
   let mark = Json::object({
     "kind": Json::string("box"),
@@ -405,7 +418,7 @@ pub fn shot_draw(p : ServicePage, s : Shooting, png : Bytes) -> Unit {
     "w": Json::number(2.0 * ratio),
     "pts": Json::array([x * ratio, y * ratio, (x + w) * ratio, (y + h) * ratio].map(fn(v) { Json::number(v) })),
     "text": Json::string(""),
-    "n": Json::number(s.todo[s.i].n.to_double()),
+    "n": Json::number(s.todo[s.i.get()].n.to_double()),
   })
   let marks = Json::object({
     "w": Json::number(pw.to_double()),
@@ -413,7 +426,7 @@ pub fn shot_draw(p : ServicePage, s : Shooting, png : Bytes) -> Unit {
     "marks": Json::array([mark]),
   }).stringify()
   match @ui.draw_marks(png, marks) {
-    Some(job) => s.wait = Draw(job)
+    Some(job) => s.wait.set(Draw(job))
     None => shot_failed(p, svc("android-chat.preview.shot.failed"))
   }
 }
@@ -430,14 +443,14 @@ pub fn png_size(b : Bytes) -> (Int, Int)? {
 ///|
 /// All the marks drawn: their pictures and quotes into the chat's draft, said so, marking left.
 pub fn shot_done(p : ServicePage, site : @ui.NativeView, s : Shooting) -> Unit {
-  let key = p.station + ":" + p.session
+  let key = p.station + ":" + p.session.get()
   let list = marked_into.get(key).unwrap_or([])
   for x in s.pictures {
     list.push((x.0, x.1, [x.2], "page"))
   }
   marked_into[key] = list
   draft_given()
-  p.marks.shot = None
+  p.marks.shot.set(None)
   page_marks_leave(p, site)
   toast_later(svc("android-chat.preview.put.done"))
 }

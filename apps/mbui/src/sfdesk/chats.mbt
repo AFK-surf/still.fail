@@ -8,12 +8,12 @@
 fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   let (view, _) = chats_of(src, w.id, "all")
-  let band = c.box(style=side_full.then(@ui.style(bg=Data(@sf.mix(apart_ground(), wide.band, t.p.sidebar)))), fn() {
+  let band = c.box(style=side_full.then(@ui.style(bg=Data(@sf.mix(apart_ground(), wide.band.get(), t.p.sidebar)))), fn() {
     side_top(c)
     // in the closed bar, what stands in its top right corner (the filter) 6 from its top and side, the band ending 6
     // under it (Sidebar.css.ts navNew, closed)
-    let in_bar = wide.in_bar
-    c.box(style=if in_bar { band_new_bar() } else if wide.tape { band_new_tape() } else { nav_new() }, fn() {
+    let in_bar = wide.in_bar.get()
+    c.box(style=if in_bar { band_new_bar() } else if wide.tape.get() { band_new_tape() } else { nav_new() }, fn() {
       let is_new = app.nav.top() is NewChat
       c.box(style=side_full, fn() {
         // (on one line with the search's field under it: its ground's edge, its mark and its words the band's; in the

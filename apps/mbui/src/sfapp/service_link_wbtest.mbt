@@ -252,7 +252,7 @@ test "marking: the edit key picks, a mark picked is boxed and pinned, put into t
   let site = site_id(t)
   // (the bar's edit key: no words to tap it by)
   let p = service_pages.get(service_key("ws1/st1", "j-web")).unwrap()
-  page_marks_toggle(p, p.site.unwrap())
+  page_marks_toggle(p, p.site.get().unwrap())
   t.frame()
   t.frame()
   assert_true(t.find("点选页面上的元素") is Some(_))
@@ -351,7 +351,7 @@ test "a sized page on its canvas: the ground dragged moves it, 适应 (its sizes
   assert_eq(view_rect(t, site).unwrap().0, x0)
   // 移动 (its key has no words to tap it by): the page's touches all the canvas's
   let p = service_pages.get(service_key("ws1/st1", "j-web")).unwrap()
-  p.moving = true
+  p.moving.set(true)
   t.frame()
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("touch \{site} through") }))
 }

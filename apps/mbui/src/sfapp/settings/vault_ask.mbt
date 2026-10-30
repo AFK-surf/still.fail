@@ -56,7 +56,7 @@ fn Asked::typed_in(self : Asked) -> Typed? {
 
 ///|
 /// The request whose length-of-use menu is open (empty: none); put back by `reset`.
-let vault_menu : Ref[String] = Ref("")
+let vault_menu : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
 /// Whether what is asked is a file the person picks: its card fills its column, as wide before the file is picked as
@@ -67,7 +67,7 @@ fn Asked::picks_file(self : Asked) -> Bool {
 
 ///|
 /// The length of use picked for each request; put back by `reset`.
-let vault_picked : Map[String, String] = {}
+let vault_picked : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
 /// What was tapped on each request while the core has it (`true`: the yes, `false`: the no), till it answers
@@ -89,7 +89,7 @@ let vault_file_picks : Map[String, @ui.Pick] = {}
 
 ///|
 fn vault_ask_reset() -> Unit {
-  vault_menu.val = ""
+  vault_menu.set("")
   vault_picked.clear()
   vault_pending.clear()
   vault_typed.clear()
@@ -105,7 +105,7 @@ fn typed_field(request : String, part : String) -> @ui.Field {
     Some(f) => f
     None => {
       let f = @ui.Field::new()
-      vault_typed[key] = f
+      vault_typed.set(key, f)
       f
     }
   }
@@ -511,7 +511,7 @@ pub fn vault_foot(
           // the system's picker answered: the file it gave (one too big said so, and none kept)
           match vault_file_picks.get(request) {
             Some(p) =>
-              if take_picked_file(core, p, fn(content, name) { vault_files[request] = (content, name) }) {
+              if take_picked_file(core, p, fn(content, name) { vault_files.set(request, (content, name)) }) {
                 vault_file_picks.remove(request)
               }
             None => ()
@@ -582,16 +582,16 @@ pub fn vault_foot(
   let pick = fn() {
     if picks {
       let entries = scopes.map(fn(s) { @kit.menu_radio(s, s == scope, label=tr("android-settings.vault.scope." + s)) })
-      let m = @sf.chooser(c, "vault/" + request + "/scope", tr("android-settings.vault.scope." + scope), entries, vault_menu.val == request)
+      let m = @sf.chooser(c, "vault/" + request + "/scope", tr("android-settings.vault.scope." + scope), entries, vault_menu.get() == request)
       if m.open {
-        vault_menu.val = request
-      } else if vault_menu.val == request {
-        vault_menu.val = ""
+        vault_menu.set(request)
+      } else if vault_menu.get() == request {
+        vault_menu.set("")
       }
       match m.chosen {
         Some(s) => {
           vault_picked[request] = s
-          vault_menu.val = ""
+          vault_menu.set("")
         }
         None => ()
       }

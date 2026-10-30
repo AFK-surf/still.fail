@@ -466,6 +466,7 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
 /// words, the frame they were drawn in (one not drawn the frame before is the card opened again: none moves), how far
 /// apart they are, the copies of those gone, leaving.
 priv struct RanLines {
+  // (plain: what the build that shows these lines kept of them the frame before, read and written by it alone)
   mut keys : Array[String]
   words : Map[String, (String, Bool)]
   mut frame : Int

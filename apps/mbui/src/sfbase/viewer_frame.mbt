@@ -82,9 +82,9 @@ pub fn vf_meta(vw : Viewer, src : Source) -> String {
   if vw.shown_kind() == Some(KImage) {
     let (w, h) = if vw.file.width > 0.0 && vw.file.height > 0.0 {
       (vw.file.width, vw.file.height)
-    } else if vw.image != "" {
+    } else if vw.image.get() != "" {
       // (its whole picture's, not what stands in for it meanwhile)
-      @ui.image_natural(vw.image).unwrap_or((0.0, 0.0))
+      @ui.image_natural(vw.image.get()).unwrap_or((0.0, 0.0))
     } else {
       (0.0, 0.0)
     }
@@ -102,11 +102,11 @@ pub fn vf_meta(vw : Viewer, src : Source) -> String {
 pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   let v = vw
   let (_, py, _) = c.pointer()
-  v.near_bar = @sf.pointer_rests() && py >= 0.0 && py < @sf.viewer_bar_h
+  v.near_bar.set(@sf.pointer_rests() && py >= 0.0 && py < @sf.viewer_bar_h)
   // going, beside the system's bars (an iPhone Duo's): the page's tabs handed back to them as it goes, not once it is
   // gone, so that the system's change of them is under way as the picture flies back (the page's own bars coming back
   // over it the while: @sfbase.over_flight), not a column bare till it lands and filled at once after
-  if v.closing && @sf.native_on() {
+  if v.closing.get() && @sf.native_on() {
     return
   }
   // (beside the system's bars, an iPhone Duo's: its tabs put away while a file is looked at, the user 2026-10-27)
@@ -118,14 +118,14 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   let ink = @sf.page_viewer_ink()
   let kind = v.shown_kind()
   // Esc closes it (marking: leaves the marks first), ← and → step
-  if marking.on {
-    if !v.closing && c.key_pressed(@ui.key_escape) {
+  if marking.on.get() {
+    if !v.closing.get() && c.key_pressed(@ui.key_escape) {
       marks_back(c)
     }
   } else {
     v.shut_on_escape(c)
   }
-  if !v.closing && !marking.on && kind == Some(KImage) {
+  if !v.closing.get() && !marking.on.get() && kind == Some(KImage) {
     if c.key_pressed(@ui.key_code_left) {
       v.go(c, src, -1, 0.0)
     } else if c.key_pressed(@ui.key_code_right) {
@@ -134,13 +134,13 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
     @sf.viewer_zoom_keys(c, v.zoom)
   }
   // Pictures and HTML use the system bars on Duo; marking keeps its own tools.
-  if native && (kind == Some(KImage) || kind == Some(KHtml)) && !marking.on {
+  if native && (kind == Some(KImage) || kind == Some(KHtml)) && !marking.on.get() {
     vf_native(v, c, src)
     return
   }
   // a picture's bar goes as the pointer rests (not while it comes, nor marking); what is read stays
   let hidden = kind == Some(KImage) && !v.bars_shown()
-  let awake = v.bars_shown() || v.coming() || marking.on
+  let awake = v.bars_shown() || v.coming() || marking.on.get()
   let (closed, wide) = @sf.viewer_frame_bar(
     c,
     "preview",
@@ -149,7 +149,7 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
     vf_meta(v, src),
     hidden,
     awake,
-    v.head_w,
+    v.head_w.get(),
     shown,
     ink,
     fn() {
@@ -163,10 +163,10 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
     title=if v.file.path.has_prefix("draft:") { "" } else { v.file.path },
   )
   // (the floating bar, once open, only grows)
-  if wide > v.head_w {
-    v.head_w = wide
+  if wide > v.head_w.get() {
+    v.head_w.set(wide)
   }
-  if closed && !v.closing {
+  if closed && !v.closing.get() {
     v.shut(c)
   }
 }
@@ -176,23 +176,23 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
 /// (the user, 2026-10-27: as Slack's), gone with the rest as a tap hides them: close at their lead; fitted again or as
 /// it is (the zoom between by the fingers); marked, copied, downloaded as the bar's tools are (vf_tools).
 fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
-  if v.closing || !(v.bars_shown() || v.coming()) {
+  if v.closing.get() || !(v.bars_shown() || v.coming()) {
     return
   }
-  @sf.native_over_act("close", @sf.t("common.close"), "close", fn() { if !v.closing { v.shut(c) } }, lead=true)
+  @sf.native_over_act("close", @sf.t("common.close"), "close", fn() { if !v.closing.get() { v.shut(c) } }, lead=true)
   if v.coming() {
     return
   }
   if v.shown_kind() == Some(KHtml) {
     if v.bytes.get() is Some(_) {
-      @sf.native_over_act("source", @sf.t(if v.source { "web-main.preview.rendered" } else { "web-main.preview.source" }), "code", fn() {
-        v.source = !v.source
-        if v.source {
-          match v.page {
+      @sf.native_over_act("source", @sf.t(if v.source.get() { "web-main.preview.rendered" } else { "web-main.preview.source" }), "code", fn() {
+        v.source.set(!v.source.get())
+        if v.source.get() {
+          match v.page.get() {
             Some(p) => p.close()
             None => ()
           }
-          v.page = None
+          v.page.set(None)
         }
       })
       if !downloading(v.download(src)) {
@@ -214,13 +214,13 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
       @sf.native_over_act("mark", @sf.t("web-main.annotate.image"), "edit", fn() { marks_start() })
       @sf.native_over_act("copy", @sf.t("common.copy"), "copy", fn() {
         c.copy_image(b)
-        v.copied += 1
+        v.copied.set(v.copied.get() + 1)
       })
     }
     None => ()
   }
   let dl = v.download(src)
-  if (v.bytes.get() is Some(_) || (v.told_of() && !v.asked)) && !downloading(dl) {
+  if (v.bytes.get() is Some(_) || (v.told_of() && !v.asked.get())) && !downloading(dl) {
     // (a picture or a film on a phone: into its photo album, said so)
     let label = if keep_way_of(v.file.name) == Photos {
       @sf.t("web-main.stations.saveToPhotos")
@@ -237,7 +237,7 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
 pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Unit {
   let v = vw
   match v.shown_kind() {
-    Some(KImage) if marking.on =>
+    Some(KImage) if marking.on.get() =>
       marks_actions(c, v.draft_key() != "", fn(draft) { v.finish_marks(c, draft) }, ink=ink.muted)
     Some(KImage) if !v.coming() => {
       @sf.viewer_zoom(c, "preview", v.zoom, ink)
@@ -248,10 +248,10 @@ pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Un
       // 复制: the whole picture on the clipboard, a check a moment after (FilePreview.tsx CopyImage)
       match v.bytes.get() {
         Some(b) => {
-          let shown = v.copied > 0 && !@kit.after(c, "preview/copied/\{v.copied}", true, @sf.copied_ms)
+          let shown = v.copied.get() > 0 && !@kit.after(c, "preview/copied/\{v.copied.get()}", true, @sf.copied_ms)
           if @sf.viewer_tool(c, "preview/copy", if shown { "check" } else { "copy" }, @sf.t(if shown { "common.copied" } else { "common.copy" }), ink) {
             c.copy_image(b)
-            v.copied += 1
+            v.copied.set(v.copied.get() + 1)
           }
         }
         None => ()
@@ -262,28 +262,28 @@ pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Un
         c,
         "preview/tabs",
         [@sf.t("web-main.preview.rendered"), @sf.t("web-main.preview.source")],
-        if v.source { 1 } else { 0 },
+        if v.source.get() { 1 } else { 0 },
         item_w=vf_tabs_item,
       )
-      if (chosen == 1) != v.source {
-        v.source = chosen == 1
+      if (chosen == 1) != v.source.get() {
+        v.source.set(chosen == 1)
         // the page under the canvas goes while its source shows (and comes again)
-        if v.source {
-          match v.page {
+        if v.source.get() {
+          match v.page.get() {
             Some(p) => p.close()
             None => ()
           }
-          v.page = None
+          v.page.set(None)
         }
       }
     }
     _ => ()
   }
-  if !v.coming() && !marking.on {
+  if !v.coming() && !marking.on.get() {
     // what is here saved at once; one told of, or played as it comes, read whole first
     let streamed = v.shown_kind() == Some(KVideo) || v.shown_kind() == Some(KAudio)
     // (while the core downloads it, how far it has come in its place: once it is all here it is kept by itself)
-    let saving = v.bytes.get() is Some(_) || ((v.told_of() || streamed) && !v.asked)
+    let saving = v.bytes.get() is Some(_) || ((v.told_of() || streamed) && !v.asked.get())
     let coming = if downloading(dl) { Some(number(dl, "progress")) } else { None }
     if @sf.viewer_download(c, "preview/download", ink, disabled=!saving, coming?=coming) {
       v.ask_save(c)
@@ -294,7 +294,7 @@ pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Un
 ///|
 /// The ways to the image before and after (@sf.viewer_steps), while an image steps through others and is not marked.
 pub fn vf_steps(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
-  if vw.shown_kind() != Some(KImage) || marking.on {
+  if vw.shown_kind() != Some(KImage) || marking.on.get() {
     return
   }
   let (before, after) = vw.near(src)
@@ -320,7 +320,7 @@ pub fn vf_facts(vw : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
       pv("android-chat.file.tooBigToShow")
     },
   )
-  if v.asked && v.bytes.get() is None && v.error.get() is None {
+  if v.asked.get() && v.bytes.get() is None && v.error.get() is None {
     vf_coming(v, c)
     return
   }

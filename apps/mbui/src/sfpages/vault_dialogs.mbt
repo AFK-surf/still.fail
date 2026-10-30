@@ -65,22 +65,25 @@ pub fn vault_editor_dialog(
     Some(p) => text(Some(p), "kind")
     None => kind
   }
-  vault_serial.val += 1
+  vault_serial.set(vault_serial.get() + 1)
   let e : VaultEditing = {
-    kind: vault_kinds.search(start_kind).unwrap_or(0),
-    agent: flag(row, "listed"),
-    mode: match strings(row, "modes").iter().find_first(fn(m) { m == "proxy" || m == "env" }) {
-      Some(m) => m
-      None => "proxy"
-    },
-    lasts: vault_lasts.search(text(row, "lasts")).unwrap_or(0),
-    error: "",
-    saving: false,
-    reveal: {},
-    serial: vault_serial.val,
-    file_content: text(field(was, "fields"), "content"),
-    file_name: text(field(was, "fields"), "filename"),
-    file_pick: None,
+    kind: @signals.signal(vault_kinds.search(start_kind).unwrap_or(0), same=fn(a, b) { a == b }),
+    agent: @signals.signal(flag(row, "listed"), same=fn(a, b) { a == b }),
+    mode: @signals.signal(
+      match strings(row, "modes").iter().find_first(fn(m) { m == "proxy" || m == "env" }) {
+        Some(m) => m
+        None => "proxy"
+      },
+      same=fn(a, b) { a == b },
+    ),
+    lasts: @signals.signal(vault_lasts.search(text(row, "lasts")).unwrap_or(0), same=fn(a, b) { a == b }),
+    error: @signals.signal("", same=fn(a, b) { a == b }),
+    saving: @signals.signal(false, same=fn(a, b) { a == b }),
+    reveal: @sf.LiveMap::new(),
+    serial: vault_serial.get(),
+    file_content: @signals.signal(text(field(was, "fields"), "content"), same=fn(a, b) { a == b }),
+    file_name: @signals.signal(text(field(was, "fields"), "filename"), same=fn(a, b) { a == b }),
+    file_pick: @signals.signal(None),
   }
   let key = fn(part : String) { "vault-editor/" + e.serial.to_string() + "/" + part }
   let filled : Map[String, Bool] = {}
@@ -123,13 +126,13 @@ pub fn vault_editor_dialog(
   open_dialog(
     title,
     fn(c, _) {
-      let k = vault_kinds[e.kind]
+      let k = vault_kinds[e.kind.get()]
       if plain {
         c.text(@sf.t("web-pages.vault.risk.editor"), style=vt_warn_lines) |> ignore
       }
       if was is None && kinds {
         c.box(fn() {
-          e.kind = @sf.segmented(c, key("kind"), vault_kinds.map(fn(x) { @sf.t("web-pages.vault.kind." + x) }), e.kind)
+          e.kind.set(@sf.segmented(c, key("kind"), vault_kinds.map(fn(x) { @sf.t("web-pages.vault.kind." + x) }), e.kind.get()))
         })
         |> ignore
       }
@@ -142,13 +145,13 @@ pub fn vault_editor_dialog(
         }
         "file" => {
           // the system's picker answered: the file it gave (one too big said so, and none kept)
-          match e.file_pick {
+          match e.file_pick.get() {
             Some(p) =>
               if take_picked_file(core, p, fn(content, name) {
-                  e.file_content = content
-                  e.file_name = name
+                  e.file_content.set(content)
+                  e.file_name.set(name)
                 }) {
-                e.file_pick = None
+                e.file_pick.set(None)
               }
             None => ()
           }
@@ -156,19 +159,19 @@ pub fn vault_editor_dialog(
             // (the button the same before and after: what was picked fades in beside it, the row no higher)
             c.box(style=vd_file, fn() {
               if @sf.button(c, @sf.t("web-pages.vault.editor.pickFile"), key=key("file"), tone=Plain) {
-                e.file_pick = @ui.pick(Files)
+                e.file_pick.set(@ui.pick(Files))
               }
-              if e.file_content != "" {
-                let name = if e.file_name != "" { e.file_name } else { @sf.t("web-pages.vault.kind.file") }
+              if e.file_content.get() != "" {
+                let name = if e.file_name.get() != "" { e.file_name.get() } else { @sf.t("web-pages.vault.kind.file") }
                 let shown = @kit.presence(c, key("file/" + name), true).t
-                c.rich([@ui.span(name + " · " + file_size(e.file_content), color=@sf.alpha(@sf.theme().p.text, shown))], style=vd_file_name)
+                c.rich([@ui.span(name + " · " + file_size(e.file_content.get()), color=@sf.alpha(@sf.theme().p.text, shown))], style=vd_file_name)
                 |> ignore
               }
             })
             |> ignore
           })
-          words["content"] = e.file_content
-          words["filename"] = e.file_name
+          words["content"] = e.file_content.get()
+          words["filename"] = e.file_name.get()
         }
         _ => {
           input(c, "username", @sf.t("web-pages.vault.editor.username"), "name@example.com", false, false, "")
@@ -178,14 +181,14 @@ pub fn vault_editor_dialog(
       }
       // how agents may ask for it (agentBox)
       c.box(style=vd_agent, fn() {
-        e.agent = @sf.switch_row(c, key("agent"), @sf.t("web-pages.vault.editor.agent"), e.agent, note=@sf.t("web-pages.vault.editor.agentNote"))
-        if e.agent {
+        e.agent.set(@sf.switch_row(c, key("agent"), @sf.t("web-pages.vault.editor.agent"), e.agent.get(), note=@sf.t("web-pages.vault.editor.agentNote")))
+        if e.agent.get() {
           @sf.field(c, @sf.t("web-pages.vault.editor.how"), fn() {
             if k == "ssh_key" || k == "file" {
               c.text(mode_name(if k == "file" { "file" } else { "ssh" }), style=desk_words) |> ignore
             } else {
-              let i = @sf.segmented(c, key("mode"), [mode_name("proxy"), mode_name("env")], if e.mode == "env" { 1 } else { 0 })
-              e.mode = if i == 1 { "env" } else { "proxy" }
+              let i = @sf.segmented(c, key("mode"), [mode_name("proxy"), mode_name("env")], if e.mode.get() == "env" { 1 } else { 0 })
+              e.mode.set(if i == 1 { "env" } else { "proxy" })
             }
           })
           c.text(
@@ -194,7 +197,7 @@ pub fn vault_editor_dialog(
                 "web-pages.vault.editor.sshNote"
               } else if k == "file" {
                 "web-pages.vault.editor.fileNote"
-              } else if e.mode == "proxy" {
+              } else if e.mode.get() == "proxy" {
                 "web-pages.vault.editor.proxyNote"
               } else {
                 "web-pages.vault.editor.envNote"
@@ -203,7 +206,7 @@ pub fn vault_editor_dialog(
             style=desk_note,
           )
           |> ignore
-          if k != "ssh_key" && k != "file" && e.mode == "proxy" {
+          if k != "ssh_key" && k != "file" && e.mode.get() == "proxy" {
             let typed = words.get("hosts").unwrap_or("")
             input(c, "hosts", @sf.t("web-pages.vault.editor.hosts"), @sf.t("web-pages.vault.editor.hostsPlaceholder"), false, false, if typed != "" && vault_hosts(words).length() == 0 { @sf.t("web-pages.vault.editor.hostsNeeded") } else { "" })
           }
@@ -211,18 +214,18 @@ pub fn vault_editor_dialog(
             input(c, "env", @sf.t("web-pages.vault.editor.env"), @sf.t(if k == "file" { "web-pages.vault.editor.fileEnvPlaceholder" } else { "web-pages.vault.editor.envPlaceholder" }), false, false, "")
           }
           @sf.field(c, @sf.t("web-pages.vault.editor.lasts"), fn() {
-            e.lasts = @sf.segmented(c, key("lasts"), vault_lasts.map(lasts_choice), e.lasts)
+            e.lasts.set(@sf.segmented(c, key("lasts"), vault_lasts.map(lasts_choice), e.lasts.get()))
           })
           c.text(@sf.t("web-pages.vault.editor.lastsNote"), style=desk_note) |> ignore
         }
       })
       |> ignore
-      if e.error != "" {
-        c.text(e.error, style=desk_note_bad) |> ignore
+      if e.error.get() != "" {
+        c.text(e.error.get(), style=desk_note_bad) |> ignore
       }
     },
     fn(c, shut) {
-      let k = vault_kinds[e.kind]
+      let k = vault_kinds[e.kind.get()]
       match row {
         Some(r) => {
           let removing = is_doing(core, ["vault.deleteItem"], [("workspace", ws), ("vault", vault)])
@@ -250,29 +253,29 @@ pub fn vault_editor_dialog(
         c.blur()
         shut()
       }
-      let ready = vault_problem(k, words, e.agent, e.mode) == ""
-      if @sf.button(c, @sf.t("common.save"), key=key("save"), tone=Primary, busy=e.saving, disabled=!ready) {
-        e.saving = true
-        e.error = ""
+      let ready = vault_problem(k, words, e.agent.get(), e.mode.get()) == ""
+      if @sf.button(c, @sf.t("common.save"), key=key("save"), tone=Primary, busy=e.saving.get(), disabled=!ready) {
+        e.saving.set(true)
+        e.error.set("")
         c.blur()
         vault_act(
           core,
           ws,
           "putItem",
-          vault_put_params(vault, row, was, k, words, e.agent, e.mode, vault_lasts[e.lasts]),
+          vault_put_params(vault, row, was, k, words, e.agent.get(), e.mode.get(), vault_lasts[e.lasts.get()]),
           @sf.t("web-pages.vault.saveWhat"),
           done=@sf.t("web-pages.vault.saved"),
           then=fn(_) {
-            e.saving = false
+            e.saving.set(false)
             shut()
           },
           failed=fn(err) {
-            e.saving = false
+            e.saving.set(false)
             // written elsewhere first: the vault was read again; what is here was written over that, so it goes
             if text(Some(err), "code") == "vault_conflict" {
               shut()
             } else {
-              e.error = vault_said(err).unwrap_or("")
+              e.error.set(vault_said(err).unwrap_or(""))
             }
           },
         )
@@ -285,8 +288,8 @@ pub fn vault_editor_dialog(
 /// The recovery words typed in (Recover): this device keyed into the person's vaults again (`vault.recover`); how many
 /// typed of 24 at the foot.
 pub fn vault_recover_dialog(core : Core, ws : String) -> Unit {
-  vault_serial.val += 1
-  let key = "vault-recover/" + vault_serial.val.to_string()
+  vault_serial.set(vault_serial.get() + 1)
+  let key = "vault-recover/" + vault_serial.get().to_string()
   let state : @signals.Signal[(Bool, String)] = @signals.signal((false, ""))
   let words = Ref("")
   let count_of = fn() { words.val.replace_all(old="\n", new=" ").split(" ").filter(fn(w) { w != "" }).count() }

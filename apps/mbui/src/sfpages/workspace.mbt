@@ -14,12 +14,13 @@
 priv struct NewWorkspace {
   name : @ui.Field
   code : @ui.Field
-  mut owner : String
+  owner : @signals.Signal[String]
   asked : @signals.Signal[Bool]
   creating : @signals.Signal[Bool]
   error_code : @signals.Signal[String]
   error : @signals.Signal[String]
-  mut focus : Bool
+  focus : @signals.Signal[Bool]
+  // (plain: a closure, what to do, not a value shown)
   mut close : () -> Unit
   responding : @signals.Signal[String]
 }
@@ -29,12 +30,12 @@ priv struct NewWorkspace {
 let new_ws : NewWorkspace = {
   name: @ui.Field::new(),
   code: @ui.Field::new(),
-  owner: "",
+  owner: @signals.signal("", same=fn(a, b) { a == b }),
   asked: @signals.signal(false, same=fn(a, b) { a == b }),
   creating: @signals.signal(false, same=fn(a, b) { a == b }),
   error_code: @signals.signal("", same=fn(a, b) { a == b }),
   error: @signals.signal("", same=fn(a, b) { a == b }),
-  focus: false,
+  focus: @signals.signal(false, same=fn(a, b) { a == b }),
   close: fn() {  },
   responding: @signals.signal("", same=fn(a, b) { a == b }),
 }
@@ -51,12 +52,12 @@ fn workspace_reset() -> Unit {
 fn new_ws_cleared() -> Unit {
   new_ws.name.set("")
   new_ws.code.set("")
-  new_ws.owner = ""
+  new_ws.owner.set("")
   new_ws.asked.set(false)
   new_ws.creating.set(false)
   new_ws.error_code.set("")
   new_ws.error.set("")
-  new_ws.focus = false
+  new_ws.focus.set(false)
   new_ws.close = fn() {  }
 }
 
@@ -440,7 +441,7 @@ pub fn answer_invitation(src : Source, account : Json?, id : String, join : Bool
 /// with a finger).
 pub fn open_new_workspace(src : Source) -> Unit {
   new_ws_cleared()
-  new_ws.focus = true
+  new_ws.focus.set(true)
   @sf.panel(
     @sf.t("web-pages.workspace.create"),
     fn(c, close) { new_workspace_body(c, src, close) },
@@ -458,7 +459,7 @@ fn new_ws_owner(src : Source) -> (Array[Json], String) {
     Some(Array(a)) => a
     _ => []
   }
-  let owner = match accounts.iter().find_first(fn(a) { text(Some(a), "sub") == new_ws.owner }) {
+  let owner = match accounts.iter().find_first(fn(a) { text(Some(a), "sub") == new_ws.owner.get() }) {
     Some(a) => text(Some(a), "sub")
     None =>
       match accounts.get(0) {
@@ -491,9 +492,9 @@ fn new_workspace_body(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
   @sf.field(c, @sf.t("web-pages.settings.workspace.name"), fn() {
     let f = @sf.input(c, "new-ws/name", placeholder=@sf.t("web-pages.workspace.namePlaceholder"), field=new_ws.name)
     // (as it opens, till it has them)
-    if new_ws.focus {
+    if new_ws.focus.get() {
       if c.has_focus(c.id("new-ws/name")) {
-        new_ws.focus = false
+        new_ws.focus.set(false)
       } else {
         c.focus_editor("new-ws/name")
       }
@@ -509,7 +510,7 @@ fn new_workspace_body(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
         "new-ws/owner",
         owner,
         accounts.map(fn(a) { (text(Some(a), "sub"), text(Some(a), "email")) }),
-        fn(v) { new_ws.owner = v },
+        fn(v) { new_ws.owner.set(v) },
         label=@sf.t("web-pages.workspace.owner"),
       )
     })

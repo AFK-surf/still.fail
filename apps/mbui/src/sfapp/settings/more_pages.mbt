@@ -9,11 +9,11 @@
 
 ///|
 /// The drafts of the stations' rules open on the page (`decisionForm`), by station.
-let decision_forms : Map[String, String] = Map([])
+let decision_forms : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
 /// The drafts of the stations' archive policies open (`policyForm`), by station.
-pub let policy_forms : Map[String, String] = Map([])
+pub let policy_forms : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
 /// The drafts a decisions' page opened, dropped as it is left.
@@ -87,7 +87,7 @@ pub let bar_adding : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b
 ///|
 /// How far a place held on 下方栏's page is moved along its bar (BarCard's `dx`: the finger's way past the slop), by
 /// its bar and its name, while a finger has it.
-pub let bar_moves : Map[String, Double] = {}
+pub let bar_moves : @sf.LiveMap[String, Double] = @sf.LiveMap::new()
 
 // ---------------------------------------------------------------------------
 // 存储空间 (what this device keeps)
@@ -719,8 +719,8 @@ pub fn decision_form(c : @ui.Ctx, core : Core, station : String) -> String {
   match decision_forms.get(station) {
     Some(f) => f
     None => {
-      profile_forms.val += 1
-      let f = "mbui-decision-" + profile_forms.val.to_string()
+      profile_forms.set(profile_forms.get() + 1)
+      let f = "mbui-decision-" + profile_forms.get().to_string()
       decision_forms[station] = f
       // (opened once the frame's builds are over: the build that first comes to it alone)
       c.tell("decision-open/" + f, fn() {

@@ -320,8 +320,9 @@ fn fitted(
 /// A choice whose options do not fit side by side (choice_pick): the pick opened from it (as presented: 0, none yet),
 /// and what was picked in it, till its caller has it.
 priv struct ChoicePick {
+  // (plain: the next pick's number, read only as one opens)
   mut serial : Int
-  mut picked : Int?
+  picked : @signals.Signal[Int?]
 }
 
 ///|
@@ -349,22 +350,22 @@ fn choice_pick(
   let p = match choice_picks.get(key) {
     Some(p) => p
     None => {
-      let p = { serial: 0, picked: None }
+      let p = { serial: 0, picked: @signals.signal(None, same=fn(a, b) { a == b }) }
       choice_picks[key] = p
       p
     }
   }
-  let now = match p.picked {
+  let now = match p.picked.get() {
     Some(i) if i != chosen => i
     _ => {
-      p.picked = None
+      p.picked.set(None)
       chosen
     }
   }
   if c.clicked(id) {
     let choices = labels.mapi(fn(i, l) { choice(i.to_string(), l) })
     // (a segmented control's options, short words each: nothing to search them by)
-    pick("", choices, now.to_string(), fn(k) { p.picked = Some(labels_at(labels, k, now)) }, from=Of(id), search=false)
+    pick("", choices, now.to_string(), fn(k) { p.picked.set(Some(labels_at(labels, k, now))) }, from=Of(id), search=false)
     p.serial = last_presented()
   }
   let words = labels.get(now).unwrap_or("")

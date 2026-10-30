@@ -9,13 +9,13 @@
 /// What a profile's page keeps of its own while it is open: its models' list open, what is typed to name one more,
 /// a sign-in's code, the command shown, the account's key being replaced (what is typed), the variables' rows.
 priv struct ProfileEdit {
-  mut choosing : String
-  mut command : String
-  mut replacing : String
-  mut env_open : String
+  choosing : @signals.Signal[String]
+  command : @signals.Signal[String]
+  replacing : @signals.Signal[String]
+  env_open : @signals.Signal[String]
   env_rows : Array[EnvRow]
-  mut env_of : String
-  mut env_made : Int
+  env_of : @signals.Signal[String]
+  env_made : @signals.Signal[Int]
 }
 
 ///|
@@ -31,7 +31,7 @@ priv struct EnvRow {
 
 ///|
 // kept across runs: said by the page's presses; profile_page_reset puts it back
-let profile_edit : ProfileEdit = { choosing: "", command: "", replacing: "", env_open: "", env_rows: [], env_of: "", env_made: 0 }
+let profile_edit : ProfileEdit = { choosing: @signals.signal("", same=fn(a, b) { a == b }), command: @signals.signal("", same=fn(a, b) { a == b }), replacing: @signals.signal("", same=fn(a, b) { a == b }), env_open: @signals.signal("", same=fn(a, b) { a == b }), env_rows: [], env_of: @signals.signal("", same=fn(a, b) { a == b }), env_made: @signals.signal(0, same=fn(a, b) { a == b }) }
 
 ///|
 /// The fields of a profile's page, by their key (made as first drawn).
@@ -40,13 +40,13 @@ let profile_fields : Map[String, @ui.Field] = {}
 
 ///|
 fn profile_page_reset() -> Unit {
-  profile_edit.choosing = ""
-  profile_edit.command = ""
-  profile_edit.replacing = ""
-  profile_edit.env_open = ""
+  profile_edit.choosing.set("")
+  profile_edit.command.set("")
+  profile_edit.replacing.set("")
+  profile_edit.env_open.set("")
   profile_edit.env_rows.clear()
-  profile_edit.env_of = ""
-  profile_edit.env_made = 0
+  profile_edit.env_of.set("")
+  profile_edit.env_made.set(0)
   profile_fields.clear()
 }
 
@@ -357,7 +357,7 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, station_name : St
         bad=if state == "failed" { @sf.t("web-pages.profiles.lastFailed", args=[("error", text(job, "error"))]) } else { "" },
       )
       let command = text(p, "loginCommand")
-      if profile_edit.command == key && command != "" {
+      if profile_edit.command.get() == key && command != "" {
         @sf.copy_command(c, "profile-command/" + key, command, copy=@sf.t("common.copy"), copied=@sf.t("common.copied"))
       }
       @sf.card_foot(c, fn() {
@@ -377,7 +377,7 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, station_name : St
           @settings.act(core, @sf.t("web-pages.profiles.signIn"), "profile.login", obj([("station", str(address)), ("id", str(id))]))
         }
         if command != "" {
-          let shown = profile_edit.command == key
+          let shown = profile_edit.command.get() == key
           if @sf.button(
               c,
               // (the short words, the phone's: beside 登录 on a card's foot they fit a phone, the long ones ran past
@@ -386,7 +386,7 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, station_name : St
               key="profile-manual/" + key,
               tone=Ghost,
             ) {
-            profile_edit.command = if shown { "" } else { key }
+            profile_edit.command.set(if shown { "" } else { key })
           }
         }
       })
@@ -528,7 +528,7 @@ pub fn login_steps(
           c.box(style=pf_device_code, fn() { c.rich([@ui.span(code, mono=true)], style=pf_device_code_words) |> ignore })
           |> ignore
         }
-        let copied = profile_edit.command == "copied/" + key
+        let copied = profile_edit.command.get() == "copied/" + key
         c.box(style=pf_step_buttons, fn() {
           if @sf.button(
               c,
@@ -545,7 +545,7 @@ pub fn login_steps(
             ) {
             if !filled {
               @ui.clipboard_set(code)
-              profile_edit.command = "copied/" + key
+              profile_edit.command.set("copied/" + key)
             }
             (core.open_link)(url)
           }
@@ -609,7 +609,7 @@ fn profile_trouble(c : @ui.Ctx, core : Core, s : Json?, p : Json?) -> Unit {
       if @sf.button(c, text(issue, "label"), key="recover-go/" + station + "/" + id, tone=Primary, busy=checking || refreshing, disabled=!online) {
         match action {
           "key" => ask_key(core, station, p)
-          "env" => profile_edit.env_open = station + "/" + id
+          "env" => profile_edit.env_open.set(station + "/" + id)
           "quota" =>
             @settings.act(core, @sf.t("android-settings.quota.checkWhat"), "profile.quota", obj([("station", str(station)), ("id", str(id))]), done=@sf.t("android-settings.quota.updated"))
           _ => check()
@@ -822,7 +822,7 @@ fn profile_stations(c : @ui.Ctx, core : Core, here_station : String, entry : Jso
               }
             },
           ) {
-          place_pick[place_key(workspace_of(station), "profiles")] = Profile(station, pid)
+          place_pick.set(place_key(workspace_of(station), "profiles"), Profile(station, pid))
           (core.push)(Profile(station, pid))
         }
       }
@@ -862,7 +862,7 @@ fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit
   let all = strings(p, "available")
   let names = field(p, "names")
   let name = fn(m : String) { match text(names, m) { "" => m; n => n } }
-  let choosing = profile_edit.choosing == key || (profile_edit.choosing == "" && enabled.length() == 0)
+  let choosing = profile_edit.choosing.get() == key || (profile_edit.choosing.get() == "" && enabled.length() == 0)
   @sf.section(
     c,
     @sf.t("web-pages.profiles.models"),
@@ -878,7 +878,7 @@ fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit
             @sf.t("web-pages.profiles.chooseModels", args=[("on", enabled.length().to_string()), ("all", all.length().to_string())])
           },
         ) {
-        profile_edit.choosing = if choosing { "-" + key } else { key }
+        profile_edit.choosing.set(if choosing { "-" + key } else { key })
       }
     },
     fn() {
@@ -1369,7 +1369,7 @@ fn profile_env(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
   let key = address + "/" + id
   let env = items(p, "env")
   let busy = is_doing(core, ["profile.put"], [("station", address), ("id", id)])
-  let open = profile_edit.env_open == key
+  let open = profile_edit.env_open.get() == key
   @sf.section(c, @sf.t("web-pages.profiles.env"), note=@sf.t("web-pages.profiles.envLead", args=[("route", "{route}")]), fn() {
     @sf.group(c, fn() {
       for e in env {
@@ -1382,7 +1382,7 @@ fn profile_env(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
           chevron=false,
           tail=fn() { doing_mark(c, busy, failed_of(core, ["profile.put"], [("station", address), ("id", id)])) },
         ) {
-        profile_edit.env_open = if open { "" } else { key }
+        profile_edit.env_open.set(if open { "" } else { key })
       }
     })
     if open {
@@ -1397,12 +1397,12 @@ fn profile_env(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
 /// anew), deleted or added, saved as what changed (a name gone or renamed: null).
 fn env_editor(c : @ui.Ctx, core : Core, address : String, id : String, key : String, env : Array[Json], busy : Bool) -> Unit {
   // the rows as the profile has them, once its page shows them
-  if profile_edit.env_of != key {
-    profile_edit.env_of = key
+  if profile_edit.env_of.get() != key {
+    profile_edit.env_of.set(key)
     profile_edit.env_rows.clear()
     for e in env {
       let ev = Some(e)
-      profile_edit.env_made += 1
+      profile_edit.env_made.set(profile_edit.env_made.get() + 1)
       let kf = @ui.Field::new()
       kf.set(text(ev, "key"))
       let vf = @ui.Field::new()
@@ -1410,7 +1410,7 @@ fn env_editor(c : @ui.Ctx, core : Core, address : String, id : String, key : Str
       if !secret {
         vf.set(text(ev, "value"))
       }
-      profile_edit.env_rows.push({ row: profile_edit.env_made, key: kf, value: vf, original: text(ev, "key"), masked: if secret { text(ev, "value") } else { "" } })
+      profile_edit.env_rows.push({ row: profile_edit.env_made.get(), key: kf, value: vf, original: text(ev, "key"), masked: if secret { text(ev, "value") } else { "" } })
     }
   }
   c.box(style=pf_env_table, fn() {
@@ -1448,8 +1448,8 @@ fn env_editor(c : @ui.Ctx, core : Core, address : String, id : String, key : Str
       profile_edit.env_rows.append(keep)
     }
     if @sf.button(c, @sf.t("web-pages.profiles.envAdd"), key="profile-env-add/" + key, tone=Ghost, icon="plus") {
-      profile_edit.env_made += 1
-      profile_edit.env_rows.push({ row: profile_edit.env_made, key: @ui.Field::new(), value: @ui.Field::new(), original: "", masked: "" })
+      profile_edit.env_made.set(profile_edit.env_made.get() + 1)
+      profile_edit.env_rows.push({ row: profile_edit.env_made.get(), key: @ui.Field::new(), value: @ui.Field::new(), original: "", masked: "" })
     }
   })
   |> ignore

@@ -10,16 +10,16 @@
 /// What the history keeps of its own (the rest is the core's): 只看收发 (for every history, as the web keeps it), its
 /// details folded; where its runtime keeps each session's transcript (by station and session; "" none), asked once.
 priv struct HistoryOwn {
-  mut shut : Bool
+  shut : @signals.Signal[Bool]
   transcripts : Map[String, String]
 }
 
 ///|
-let history_own : HistoryOwn = { shut: false, transcripts: {} }
+let history_own : HistoryOwn = { shut: @signals.signal(false, same=fn(a, b) { a == b }), transcripts: {} }
 
 ///|
 fn history_reset() -> Unit {
-  history_own.shut = false
+  history_own.shut.set(false)
   history_own.transcripts.clear()
 }
 
@@ -73,12 +73,12 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
       @sf.tip(c, "history/only-io-tip", io, @sf.t("web-main.history.onlyIoTip"))
       let more = c.id("history/details")
       if c.clicked(more) {
-        history_own.shut = !history_own.shut
+        history_own.shut.set(!history_own.shut.get())
       }
       let hot = c.lit(more)
       let d = c.box(style=wh_toggle, id=more, fn() {
         c.text(@sf.t("web-main.history.details"), style=if hot { wh_toggle_hot } else { wh_toggle_words }) |> ignore
-        @sf.icon(c, if history_own.shut { "chevron-down" } else { "chevron-up" }, size=14.0, color=if hot {
+        @sf.icon(c, if history_own.shut.get() { "chevron-down" } else { "chevron-up" }, size=14.0, color=if hot {
           t.p.text
         } else {
           t.p.muted
@@ -90,7 +90,7 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
     |> ignore
   })
   |> ignore
-  if !history_own.shut {
+  if !history_own.shut.get() {
     wh_details(c, src, station, key, a)
     // (its details set apart from its steps by a line across the panel: kept, 2026-10-25 用户「这两个的分割线可以保留」)
     c.box(style=@sfpages.triple_rule_h, fn() {  }) |> ignore

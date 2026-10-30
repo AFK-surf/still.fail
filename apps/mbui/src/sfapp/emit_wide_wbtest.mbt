@@ -39,8 +39,8 @@ test "wide: the avatar an answer comes out of is drawn where it flies in the win
   let em = emits_of("ws1/st1\u{1}s-c1")
   // folded, then on its way: half way through its float
   t.run_for(Pose::Fold.ms() + Pose::Float.ms() / 2.0)
-  guard em.current is Some(turn) && turn.pose == Float else {
-    fail("not on its way: \{em.current.map(fn(c) { c.pose })}")
+  guard em.current.get() is Some(turn) && turn.pose == Float else {
+    fail("not on its way: \{em.current.get().map(fn(c) { c.pose })}")
   }
   let (x, y, _, _) = emit_flight(t.ctx(), "ws1/st1\u{1}s-c1", em, [turn.agent]).unwrap()
   // its 18 face's ground drawn there (scaled about its middle as it flies)

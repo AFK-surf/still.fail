@@ -26,17 +26,18 @@ fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
 ///|
 /// The sheet up (NoSheet: none), and the presenter it is (@sf.last_presented).
 priv struct SheetHost {
-  mut kind : SheetKind
-  mut serial : Int
+  kind : @signals.Signal[SheetKind]
+  serial : @signals.Signal[Int]
 }
 
 ///|
-let sheet_host : SheetHost = { kind: NoSheet, serial: 0 }
+let sheet_host : SheetHost = { kind: @signals.signal(NoSheet), serial: @signals.signal(0, same=fn(a, b) { a == b }) }
 
 ///|
 /// What each kind draws, as this frame has it (its source, its workspace): told by the frame before the library's
 /// host draws (sheet_contents).
 // kept across runs: told anew by each frame before it is read
+// (plain: a closure, what to do, not a value shown)
 let sheet_drawer : Ref[(SheetKind) -> Unit] = Ref(fn(_) {  })
 
 ///|
@@ -46,7 +47,7 @@ let sheet_drawer : Ref[(SheetKind) -> Unit] = Ref(fn(_) {  })
 fn raise_sheet(kind : SheetKind, from? : @sf.Anchor = Unanchored) -> Unit {
   lower_sheet()
   let s = sheet_host
-  s.kind = kind
+  s.kind.set(kind)
   let (share, draggable) = sheet_spec(kind)
   @sf.panel(
     // (each draws its own head: what is shared, an invitation)
@@ -56,27 +57,27 @@ fn raise_sheet(kind : SheetKind, from? : @sf.Anchor = Unanchored) -> Unit {
     tall=share,
     grows=draggable,
     gone=fn() {
-      if s.kind == kind {
-        s.kind = NoSheet
+      if s.kind.get() == kind {
+        s.kind.set(NoSheet)
       }
     },
   )
-  s.serial = @sf.last_presented()
+  s.serial.set(@sf.last_presented())
 }
 
 ///|
 /// Closes the sheet open: it sinks away.
 fn lower_sheet() -> Unit {
-  if sheet_host.kind != NoSheet {
-    sheet_host.kind = NoSheet
-    @sf.close_presented_of(sheet_host.serial)
+  if sheet_host.kind.get() != NoSheet {
+    sheet_host.kind.set(NoSheet)
+    @sf.close_presented_of(sheet_host.serial.get())
   }
 }
 
 ///|
 /// Whether a sheet is open.
 fn sheet_open() -> Bool {
-  sheet_host.kind != NoSheet
+  sheet_host.kind.get() != NoSheet
 }
 
 ///|

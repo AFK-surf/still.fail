@@ -7,7 +7,7 @@
 ///|
 /// In the chat drawn now: the message the search opened it at (its ts, "" none), the words, how far their strokes are
 /// drawn in (ms).
-let found_marking : Ref[(String, Array[String], Double)] = Ref(("", [], 0.0))
+let found_marking : @signals.Signal[(String, Array[String], Double)] = @signals.signal(("", [], 0.0), same=fn(a, b) { a == b })
 
 ///|
 /// How long the strokes are drawn in for (ChatMotion.kt drawFound: STROKE_MS + STROKE_GAP_MS × 12).
@@ -16,23 +16,23 @@ let found_draw_ms : Double = @sf.strokes_ms(12)
 ///|
 /// The strokes start being drawn in (the message gone to).
 fn found_start(rd : Reading) -> Unit {
-  rd.found_centre = true
+  rd.found_centre.set(true)
   rd.found_drawn.snap(0.0)
   rd.found_drawn.animate(found_draw_ms, @motion.tween(found_draw_ms, ease=Linear))
 }
 
 ///|
 /// In the chat drawn now, while ⌘F's bar is open in it (wide_find.mbt): what it found, marked in every message drawn.
-let find_marking : Ref[Array[String]] = Ref([])
+let find_marking : @signals.Signal[Array[String]] = @signals.signal([], same=fn(a, b) { a == b })
 
 ///|
 /// The words to mark in message `ts` in the chat drawn now (none for any other): the search's, or ⌘F's in all.
 fn found_words_of(ts : String) -> Array[String] {
-  let (at, words, _) = found_marking.val
+  let (at, words, _) = found_marking.get()
   if at != "" && at == ts {
     words
   } else {
-    find_marking.val
+    find_marking.get()
   }
 }
 
@@ -40,13 +40,13 @@ fn found_words_of(ts : String) -> Array[String] {
 /// Once the message gone to is laid out: its first word low in it (past 80% of the page) is what comes to the
 /// middle (Chat.kt rememberJump: `mid.y > pane.size.height * 0.8f`), once.
 fn found_centre(c : @ui.Ctx, rd : Reading, list : String) -> Unit {
-  if !rd.found_centre || rd.found_at == "" {
+  if !rd.found_centre.get() || rd.found_at.get() == "" {
     return
   }
-  match c.words_of("pick/" + rd.found_at) {
+  match c.words_of("pick/" + rd.found_at.get()) {
     Some(w) => {
-      rd.found_centre = false
-      let ranges = @sf.find_words(w.text, rd.found_words)
+      rd.found_centre.set(false)
+      let ranges = @sf.find_words(w.text, rd.found_words.get())
       // (⌘F's: the time the reader is at in it)
       let k = if @sfpages.find_chat() != "" { @sfpages.find_k() } else { 0 }
       match ranges.get(if k < ranges.length() { k } else { 0 }) {

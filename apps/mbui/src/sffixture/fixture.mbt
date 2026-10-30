@@ -1217,7 +1217,7 @@ pub fn fixture_update(version : String) -> Unit {
     "versionName": Json::string(version),
     "news": ["改进：对话列表滑到底时不再多停一下", "修复：图片预览关闭后偶尔留下一块空白", "新增：设置里可以给 station 起别名"],
   }))
-  if update.source is None {
+  if update.source.get() is None {
     fixture_updates()
   }
 }

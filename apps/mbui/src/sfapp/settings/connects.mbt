@@ -3,4 +3,4 @@
 
 ///|
 /// All the connects, or the viewer's (the list's filter), while the page is on the stack.
-pub let connects_mine : Ref[Bool] = Ref(false)
+pub let connects_mine : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })

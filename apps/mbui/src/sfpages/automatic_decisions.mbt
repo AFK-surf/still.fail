@@ -296,8 +296,8 @@ fn policy_form_name(station : String) -> String {
   match policy_forms.get(station) {
     Some(f) => f
     None => {
-      profile_forms.val += 1
-      let f = "mbui-policy-" + profile_forms.val.to_string()
+      profile_forms.set(profile_forms.get() + 1)
+      let f = "mbui-policy-" + profile_forms.get().to_string()
       policy_forms[station] = f
       f
     }

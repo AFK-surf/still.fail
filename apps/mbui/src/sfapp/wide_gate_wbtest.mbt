@@ -11,7 +11,7 @@ test "wide: a device waiting in the workspace's lock sees 等待批准此设备 
   assert_true(t.find("发送批准请求") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   // in the middle of what the rail leaves, 110 and the shield (40) and 14 down
   let mid = x + w / 2.0
-  let page_mid = (@sfdesk.wide.page_from + 1280.0) / 2.0
+  let page_mid = (@sfdesk.wide.page_from.get() + 1280.0) / 2.0
   assert_true((mid - page_mid).abs() <= 1.0, msg="\{mid} \{page_mid}")
   assert_true(y >= 110.0 + 40.0, msg=y.to_string())
 }

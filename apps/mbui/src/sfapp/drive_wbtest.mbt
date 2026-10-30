@@ -203,7 +203,7 @@ test "＋'s Station 文件: a file ticked in a folder lent goes into the chat's 
   assert_true(log.contains("EXIT 0"), msg="\{log}")
   // in the draft as the core keeps it, where it is on the station (sent, the core names it in the message)
   t.draw()
-  let files = @sfbase.writing(src, "ws1/st1:s-c1").files
+  let files = @sfbase.writing(src, "ws1/st1:s-c1").files.get()
   assert_eq(files.length(), 1)
   assert_eq(text(field(Some(files[0]), "ref"), "path"), "/Users/lin/文档/发布清单.md")
   assert_true(t.find("发布清单") is Some(_))
@@ -219,8 +219,8 @@ test "a text read where it was left goes there, then asks for no frame more" {
   nav_rested(t)
   t.run_for(@sf.reader_still_ms)
   let r = @sf.reading_for(reader_key({ station: "ws1/st1", root: Some(fix_docs), path: "长篇小说.txt" }))
-  assert_eq(r.jump_step, 0)
-  assert_eq(r.chunk, 2)
+  assert_eq(r.jump_step.get(), 0)
+  assert_eq(r.chunk.get(), 2)
   t.assert_idle()
 }
 
@@ -236,14 +236,14 @@ test "a Markdown file read as a chat's Markdown is drawn, its words searched whe
   assert_true(t.find("release.log") is Some(_))
   // searched: 每一项 is in bold in the text, found as drawn
   let r = @sf.reading_for(reader_key({ station: "ws1/st1", root: Some(fix_docs), path: "发布清单.md" }))
-  r.query = "每一项"
-  r.typed_n += 1
+  r.query.set("每一项")
+  r.typed_n.set(r.typed_n.get() + 1)
   t.draw()
   t.run_for(@sf.reader_search_ms)
   t.draw()
-  assert_eq(r.matches.length(), 1)
-  assert_eq(r.matches[0].chunk, 0)
-  assert_eq(fixture_markdown().view(start_offset=r.matches[0].start).has_prefix("每一项"), true)
+  assert_eq(r.matches.get().length(), 1)
+  assert_eq(r.matches.get()[0].chunk, 0)
+  assert_eq(fixture_markdown().view(start_offset=r.matches.get()[0].start).has_prefix("每一项"), true)
 }
 
 ///|

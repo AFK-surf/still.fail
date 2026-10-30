@@ -46,9 +46,9 @@ pub fn service_view(
 ) -> Unit {
   svc_keep.val = fn(patch) { (src.call)("prefs.set", patch, fn(_) {  }) }
   let p = service_page_for(station, job, prefs=(src.topic)("prefs", {}).value)
-  p.port = port
-  p.name = name
-  p.session = session
+  p.port.set(port)
+  p.name.set(name)
+  p.session.set(session)
   src_now.val = src.now
   let site = service_site(src, p, file, fn(url) {
     // a link elsewhere: one of still.fail's opened here as the core says, any other handed to the system
@@ -60,18 +60,18 @@ pub fn service_view(
     })
   })
   // up again after a restart: the page loads anew
-  if p.restarting && !restarting {
+  if p.restarting.get() && !restarting {
     // (once the frame's builds are over: by the job's restart as the core says it)
     c.tell("service-reload", fn() { site.reload() })
   }
-  p.restarting = restarting
+  p.restarting.set(restarting)
   page_marks_frame(p, site)
   // what marking has for the page, sent once the frame's builds are over
   if p.marks.out.length() > 0 {
     let out = p.marks.out.copy()
     p.marks.out.clear()
-    p.marks.sent += 1
-    c.tell("service/marks/\{p.marks.sent}", fn() {
+    p.marks.sent.set(p.marks.sent.get() + 1)
+    c.tell("service/marks/\{p.marks.sent.get()}", fn() {
       for js in out {
         site.script(js)
       }
@@ -163,8 +163,8 @@ fn bar_now(c : @ui.Ctx, p : ServicePage, site : @ui.NativeView, fixed : Bool) ->
   let field_key = "service/address/" + service_key(p.station, p.job)
   let editing = c.editor_focused(field_key)
   // (said on the log as the page moves: e2e/flows check where it went)
-  if at != p.logged_path {
-    p.logged_path = at
+  if at != p.logged_path.get() {
+    p.logged_path.set(at)
     @ui.log("service: at \{at}")
   }
   // a tap anywhere on the address types there (the I-beam over it)
@@ -225,9 +225,9 @@ fn service_page_bar(
     if c.left_out(size_slot) {
       gone.push(
         Some(
-          bar_line(size_said(p), if p.moving { "move" } else { "devices" }, disabled=false, on_press=fn() {
-            if p.moving {
-              p.moving = false
+          bar_line(size_said(p), if p.moving.get() { "move" } else { "devices" }, disabled=false, on_press=fn() {
+            if p.moving.get() {
+              p.moving.set(false)
             } else {
               service_sizes_panel(service_key(p.station, p.job), Of(more))
             }
@@ -296,7 +296,7 @@ fn service_foot_bar(
     back_forward(c, site, n)
     address_or_marking(c, src, p, site, name, fixed, n, end=Some(fn() { reload_key(c, site) }), part=load_part(load))
     mark_key_of(c, p, site)
-    if p.moving {
+    if p.moving.get() {
       size_key_of(c, p)
     } else {
       foot_more(c, src, p, station, port, load)
@@ -414,8 +414,8 @@ fn address_or_marking(
   part? : (Double, @ui.Color)? = None,
 ) -> Unit {
   let t = @sf.theme()
-  let markable = p.session != ""
-  if markable && (p.marks.marking || p.marks.marks.length() > 0) {
+  let markable = p.session.get() != ""
+  if markable && (p.marks.marking.get() || p.marks.marks.length() > 0) {
     c.box(style=mark_mode_place, keep=true, fn() { page_mark_mode(c, src, p, site) }) |> ignore
     return
   }
@@ -428,8 +428,8 @@ fn address_or_marking(
     }
     c.text(name, size=t.t.meta, weight=500, color=t.p.text, wrap=false) |> ignore
     // where it went is what the bar says, unless someone is typing there
-    if !n.editing && n.at != p.shown_path {
-      p.shown_path = n.at
+    if !n.editing && n.at != p.shown_path.get() {
+      p.shown_path.set(n.at)
       p.address.set(n.at)
     }
     let r = c.editor(
@@ -456,7 +456,7 @@ fn address_or_marking(
 ///|
 /// What the size key says: its size, or, while a finger moves the page, that a press stops it.
 fn size_said(p : ServicePage) -> String {
-  if p.moving {
+  if p.moving.get() {
     svc("android-chat.preview.moveOff")
   } else {
     svc("android-chat.preview.size.title")
@@ -471,19 +471,19 @@ fn size_key_of(c : @ui.Ctx, p : ServicePage) -> Unit {
   let t = @sf.theme()
   let sid = c.id("service/size")
   if c.clicked(sid) {
-    if p.moving {
-      p.moving = false
+    if p.moving.get() {
+      p.moving.set(false)
     } else {
       service_sizes_panel(service_key(p.station, p.job), Of(sid))
     }
   }
-  let sb = c.box(style=if p.moving { size_key_moving } else if p.viewport is Some(_) { size_key_sized } else { size_key }, id=sid, fn() {
-    @sf.icon(c, if p.moving { "move" } else { "devices" }, size=bar_icon_size, color=if p.moving { t.p.accent_text } else { t.p.text }) |> ignore
+  let sb = c.box(style=if p.moving.get() { size_key_moving } else if p.viewport.get() is Some(_) { size_key_sized } else { size_key }, id=sid, fn() {
+    @sf.icon(c, if p.moving.get() { "move" } else { "devices" }, size=bar_icon_size, color=if p.moving.get() { t.p.accent_text } else { t.p.text }) |> ignore
     // (its size in words, as its panel says it too: short of room they leave it, its icon staying)
-    match p.viewport {
+    match p.viewport.get() {
       Some(v) =>
         c.box(drop=bar_drop_size_words, fn() {
-          c.text(dims(v.width, v.height), style=if p.moving { size_key_words_moving } else { size_key_words }) |> ignore
+          c.text(dims(v.width, v.height), style=if p.moving.get() { size_key_words_moving } else { size_key_words }) |> ignore
         })
         |> ignore
       None => ()
@@ -496,7 +496,7 @@ fn size_key_of(c : @ui.Ctx, p : ServicePage) -> Unit {
 ///|
 /// Marking the page for the chat's agent (a page with no chat to put it in has none).
 fn mark_key_of(c : @ui.Ctx, p : ServicePage, site : @ui.NativeView) -> Unit {
-  if p.session != "" && page_mark_key(c, p.marks.marking) {
+  if p.session.get() != "" && page_mark_key(c, p.marks.marking.get()) {
     page_marks_toggle(p, site)
   }
 }
@@ -605,9 +605,9 @@ fn service_stage(
   c.cursor(stage, Arrow)
   // who takes a finger on the page: all its own fitted; a sized page's two fingers the canvas's, all of it while it is
   // moved by a finger
-  let touch = match p.viewport {
+  let touch = match p.viewport.get() {
     None => @ui.Touch::All
-    Some(_) if p.moving => @ui.Touch::Through
+    Some(_) if p.moving.get() => @ui.Touch::Through
     Some(_) => @ui.Touch::PinchOut
   }
   // (once the frame's builds are over, as the last of them has it; told the host only when it changes)
@@ -627,13 +627,13 @@ fn service_stage(
   }
   // (a page filling it, once drawn, on nothing of the stage's: a ground under it showed along its edges, where the
   // host's cut and the hole's meet within a pixel, a line round the page)
-  let under = match p.viewport {
+  let under = match p.viewport.get() {
     Some(_) => Some(ground)
     None => if site.shown() { None } else { Some(t.p.card) }
   }
   c.box(w=Fill(1.0), h=Fill(1.0), style?=round, bg?=under, clip=true, id=stage, fn() {
     // (the stage's place as this frame lays it out: read back, built again once it is)
-    let placed = match (p.viewport, c.laid_size(stage)) {
+    let placed = match (p.viewport.get(), c.laid_size(stage)) {
       (Some(v), Some((sw, sh))) => {
         let w = v.width.to_double()
         // a page of no height of its own: as high as the stage leaves it at the scale its width is fitted at
@@ -655,10 +655,10 @@ fn service_stage(
       }
       _ => None
     }
-    p.placed = placed
+    p.placed.set(placed)
     match placed {
       Some(pl) => {
-        let corner = corner_of(p.viewport.map(fn(v) { v.width }).unwrap_or(0), pl.scale)
+        let corner = corner_of(p.viewport.get().map(fn(v) { v.width }).unwrap_or(0), pl.scale)
         // (told once the frame's builds are over, as the last laid the stage out)
         c.after_build("scale", fn() { site.set_scale(pl.scale) })
         // its white, its shadow and its screen's corners under it; the page where they are
@@ -687,13 +687,13 @@ fn service_stage(
         |> ignore
       }
       None =>
-        if p.viewport is None {
+        if p.viewport.get() is None {
           c.after_build("scale", fn() { site.set_scale(1.0) })
           c.native(site, corners?=r) |> ignore
         }
     }
     // the marks over the page, where it is drawn
-    if p.session != "" && p.marks.marks.length() > 0 {
+    if p.session.get() != "" && p.marks.marks.length() > 0 {
       match (placed, c.laid_size(stage)) {
         (Some(pl), Some((sw, _))) => page_marks_over(c, p, site, pl.x, pl.y, pl.w, pl.scale, sw)
         (None, Some((sw, _))) => page_marks_over(c, p, site, 0.0, 0.0, sw, 1.0, sw)
@@ -726,10 +726,10 @@ fn placed_origin(c : @ui.Ctx, stage : Int) -> (Double, Double)? {
 /// the page, two anywhere zoom and move it, a double tap on the ground fits it again. What the canvas is given of a
 /// finger on the page (two fingers; all, moving it) is its to handle, as the ground's is.
 fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : Double) -> Unit {
-  let pl = match p.placed {
+  let pl = match p.placed.get() {
     Some(pl) => pl
     None => {
-      p.hold = None
+      p.hold.set(None)
       return
     }
   }
@@ -739,17 +739,17 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
       Some((x2, y2)) => [(px - sx, py - sy), (x2 - sx, y2 - sy)]
       None => [(px - sx, py - sy)]
     }
-    match p.hold {
+    match p.hold.get() {
       None => {
         let dx = c.press_x - sx
         let dy = c.press_y - sy
         let on_page = dx >= pl.x && dx <= pl.x + pl.w * pl.scale && dy >= pl.y && dy <= pl.y + pl.h * pl.scale
-        p.hold = Some({
-          was: if at.length() == 1 { [(dx, dy)] } else { at },
-          travelled: 0.0,
+        p.hold.set(Some({
+          was: @signals.signal(if at.length() == 1 { [(dx, dy)] } else { at }),
+          travelled: @signals.signal(0.0, same=fn(a, b) { a == b }),
           down_at: c.pointer_at(),
           on_page,
-        })
+        }))
         if at.length() == 1 && (at[0].0 != dx || at[0].1 != dy) {
           stage_moved(p, at)
         }
@@ -758,8 +758,8 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
     }
   } else {
     // let go (down and up between two frames: a tap the frames never saw held, taken all the same)
-    let (on_page, travelled, down_at) = match p.hold {
-      Some(h) => (h.on_page, h.travelled, h.down_at)
+    let (on_page, travelled, down_at) = match p.hold.get() {
+      Some(h) => (h.on_page, h.travelled.get(), h.down_at)
       None if c.clicked(stage) => {
         let dx = c.press_x - sx
         let dy = c.press_y - sy
@@ -767,15 +767,15 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
       }
       None => return
     }
-    p.hold = None
+    p.hold.set(None)
     // a double tap on the ground fits it again
     let now = c.pointer_at()
     if !on_page && travelled < stage_tap_slop && now - down_at < stage_tap_ms {
-      if now - p.tapped_at < stage_double_ms {
+      if now - p.tapped_at.get() < stage_double_ms {
         p.view.fit_now()
-        p.tapped_at = -1.0e9
+        p.tapped_at.set(-1.0e9)
       } else {
-        p.tapped_at = now
+        p.tapped_at.set(now)
       }
     }
   }
@@ -786,18 +786,18 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
 /// apart they went about the point between them, moving it as that point did (Preview.kt pinch); a finger come or gone,
 /// from there on.
 fn stage_moved(p : ServicePage, at : Array[(Double, Double)]) -> Unit {
-  let h = match p.hold {
+  let h = match p.hold.get() {
     Some(h) => h
     None => return
   }
-  if at.length() != h.was.length() {
-    h.was = at
+  if at.length() != h.was.get().length() {
+    h.was.set(at)
     return
   }
   if at.length() == 1 {
-    let (x0, y0) = h.was[0]
+    let (x0, y0) = h.was.get()[0]
     let (x1, y1) = at[0]
-    h.travelled = h.travelled + ((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)).sqrt()
+    h.travelled.set(h.travelled.get() + ((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)).sqrt())
     p.view.pan(x1 - x0, y1 - y0)
   } else {
     let mid = fn(ps : Array[(Double, Double)]) { ((ps[0].0 + ps[1].0) / 2.0, (ps[0].1 + ps[1].1) / 2.0) }
@@ -806,11 +806,11 @@ fn stage_moved(p : ServicePage, at : Array[(Double, Double)]) -> Unit {
       let dy = ps[0].1 - ps[1].1
       dmax(1.0, (dx * dx + dy * dy).sqrt())
     }
-    let (m0x, m0y) = mid(h.was)
+    let (m0x, m0y) = mid(h.was.get())
     let (m1x, m1y) = mid(at)
-    p.view.transform(m0x, m0y, apart(at) / apart(h.was), m1x - m0x, m1y - m0y)
+    p.view.transform(m0x, m0y, apart(at) / apart(h.was.get()), m1x - m0x, m1y - m0y)
   }
-  h.was = at
+  h.was.set(at)
 }
 
 ///|
@@ -878,7 +878,7 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
   let r = t.rows
   let p = service_pages.get(key)
   let current = match p {
-    Some(x) => x.viewport
+    Some(x) => x.viewport.get()
     None => None
   }
   let preset = preset_of(current)
@@ -889,9 +889,9 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
         match p {
           Some(x) => {
             // a size chosen is fitted anew; the page no longer moved by a finger
-            x.moving = false
+            x.moving.set(false)
             x.view.fit_now()
-            x.viewport = v
+            x.viewport.set(v)
             keep_size(key, v)
           }
           None => ()
@@ -928,17 +928,17 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
       Some(x) => {
         custom_size(c, x, key)
         // laid out at a size of its own: moved by a finger, fitted again (the toolbar's tools that were)
-        if x.viewport is Some(_) {
+        if x.viewport.get() is Some(_) {
           c.box(style=sizes_tools, fn() {
             let moving = @sf.switch_row(
               c,
               "service/move",
               svc("android-chat.preview.move"),
-              x.moving,
+              x.moving.get(),
               note=svc("android-chat.preview.move.note"),
             )
-            if moving != x.moving {
-              x.moving = moving
+            if moving != x.moving.get() {
+              x.moving.set(moving)
               // (on: what it changes is the page under the panel, so the panel goes)
               if moving {
                 close()
@@ -947,7 +947,7 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
             if !x.view.fitted &&
               @sf.button(c, svc("android-chat.preview.fitView"), key="service/fit-view", w=Fill(1.0)) {
               x.view.fit_now()
-              x.moving = false
+              x.moving.set(false)
               close()
             }
           })
@@ -1036,7 +1036,7 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
   let typing = c.editor_focused(wk) || c.editor_focused(hk)
   // what it is, unless someone is typing there
   if !typing {
-    let (w, h) = match p.viewport {
+    let (w, h) = match p.viewport.get() {
       Some(v) => (v.width.to_string(), v.height.map(fn(x) { x.to_string() }).unwrap_or(""))
       None => ("", "")
     }
@@ -1055,14 +1055,14 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
     match (width, height) {
       (Some(w), Some(h)) => {
         let v : Viewport = { width: clamp_size(w), height: h.map(clamp_size) }
-        let same = match p.viewport {
+        let same = match p.viewport.get() {
           Some(x) => x.width == w && x.height == h
           None => false
         }
         if !same {
-          p.moving = false
+          p.moving.set(false)
           p.view.fit_now()
-          p.viewport = Some(v)
+          p.viewport.set(Some(v))
           keep_size(key, Some(v))
         }
       }
@@ -1070,10 +1070,10 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
     }
   }
   // put once let go of (it was being typed in the frame before)
-  if p.custom_typing && !typing {
+  if p.custom_typing.get() && !typing {
     commit()
   }
-  p.custom_typing = typing
+  p.custom_typing.set(typing)
   c.box(style=custom_row.then(@ui.style(min_h=Fixed(@sf.theme().items.least))), fn() {
     // (its name where the sizes' names are: past a column as wide as their check)
     c.box(style=@ui.style(w=Fixed(r.check)), fn() {  }) |> ignore
@@ -1112,17 +1112,17 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
       field(hk, p.custom_h, svc("android-chat.preview.auto"))
     })
     |> ignore
-    let turnable = match p.viewport {
+    let turnable = match p.viewport.get() {
       Some(v) => v.height is Some(_)
       None => false
     }
     let turn = c.id("service/custom-turn")
     if turnable && c.clicked(turn) {
-      match p.viewport {
+      match p.viewport.get() {
         Some({ width, height: Some(h) }) => {
           let v : Viewport = { width: h, height: Some(width) }
           p.view.fit_now()
-          p.viewport = Some(v)
+          p.viewport.set(Some(v))
           keep_size(key, Some(v))
         }
         _ => ()

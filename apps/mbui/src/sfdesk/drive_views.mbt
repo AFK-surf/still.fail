@@ -389,17 +389,17 @@ fn clamp_column(px : Double) -> Double {
 /// A column being dragged wider or narrower (its place's key, the folder's path or None with ⌥ held: every one; the
 /// width), and every column's width as just dragged until the kept one comes back (what the prefs said then, and it).
 priv struct Cols {
-  mut drag : (String, String?, Double)?
-  mut every : (String, Double)?
+  drag : @signals.Signal[(String, String?, Double)?]
+  every : @signals.Signal[(String, Double)?]
 }
 
 ///|
-let cols : Cols = { drag: None, every: None }
+let cols : Cols = { drag: @signals.signal(None), every: @signals.signal(None , same=fn(a, b) { a == b })}
 
 ///|
 fn cols_reset() -> Unit {
-  cols.drag = None
-  cols.every = None
+  cols.drag.set(None)
+  cols.every.set(None)
 }
 
 ///|
@@ -407,9 +407,9 @@ fn cols_reset() -> Unit {
 /// comes back.
 fn every_column(src : Source) -> Double {
   let kept = text(field((src.topic)("prefs", {}).value, "driveViews"), "column")
-  match cols.every {
+  match cols.every.get() {
     Some((was, w)) if was == kept => return w
-    Some(_) => cols.every = None
+    Some(_) => cols.every.set(None)
     None => ()
   }
   match (@json.parse(kept) catch { _ => Json::null() }) {
@@ -446,7 +446,7 @@ pub fn columns_view(
     if halves {
       room / 2.0 - column_gap
     } else {
-      match cols.drag {
+      match cols.drag.get() {
         Some((k, whose, px)) if k == s.b.key && (whose is None || whose == Some(p)) => px
         _ => s.b.width_of(p).unwrap_or(every)
       }
@@ -561,18 +561,18 @@ fn column_edge(c : @ui.Ctx, src : Source, s : Shown, path : String, column : Int
   c.cursor(id, ResizeX)
   let every = (@ui.mods_held() & @ui.mod_alt) != 0
   match @sf.handle_drag(c, id, width, min=column_least, max=column_most) {
-    Dragging(w) => cols.drag = Some((s.b.key, if every { None } else { Some(path) }, w))
+    Dragging(w) => cols.drag.set(Some((s.b.key, if every { None } else { Some(path) }, w)))
     Dropped(w) => {
-      let was_every = match cols.drag {
+      let was_every = match cols.drag.get() {
         Some((_, whose, _)) => whose is None
         None => false
       }
-      cols.drag = None
+      cols.drag.set(None)
       if every || was_every {
         // every column as wide, kept on this device
         s.b.forget_widths(c, src)
         let kept = if w == column_w { Json::null() } else { Json::string(w.to_int().to_string()) }
-        cols.every = Some((match kept { String(k) => k; _ => "" }, w))
+        cols.every.set(Some((match kept { String(k) => k; _ => "" }, w)))
         (src.call)("prefs.set", { "driveViews": { "column": kept } }, fn(_) {  })
       } else {
         s.b.keep_width(c, src, path, w)
@@ -587,7 +587,7 @@ fn column_edge(c : @ui.Ctx, src : Source, s : Shown, path : String, column : Int
     Untouched | Pressed => ()
   }
   // in hand: this edge, or with ⌥ every one, while one is dragged
-  let dragged = match cols.drag {
+  let dragged = match cols.drag.get() {
     Some((k, whose, _)) => k == s.b.key && (whose == Some(path) || whose is None)
     None => false
   }

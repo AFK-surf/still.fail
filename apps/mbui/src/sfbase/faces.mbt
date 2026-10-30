@@ -172,7 +172,7 @@ pub fn faces(src : Source, wide : Bool) -> Unit {
           // instead, the app's own standing in until then
           if !read {
             @ui.face_clear(host_face)
-            faces_had[now] = Asking
+            faces_had.set(now, Asking)
             face_files(src, now, files, 0, [], false)
             faces_in[host_face] = ""
             continue
@@ -211,11 +211,11 @@ fn face_had(src : Source, id : String, files : Array[Json]) -> Array[(FaceFile, 
     Some(_) => None
     None if files.iter().all(fn(f) { text(Some(f), "path") != "" }) => {
       let at = files.map(fn(f) { (At(text(Some(f), "path")), number(Some(f), "weight").to_int()) })
-      faces_had[id] = Whole(at)
+      faces_had.set(id, Whole(at))
       Some(at)
     }
     None => {
-      faces_had[id] = Asking
+      faces_had.set(id, Asking)
       face_files(src, id, files, 0, [], false)
       // (all here at once where the core had them so)
       match faces_had.get(id) {
@@ -231,7 +231,7 @@ fn face_had(src : Source, id : String, files : Array[Json]) -> Array[(FaceFile, 
 /// core has one not, the face fetched first (once).
 fn face_files(src : Source, id : String, files : Array[Json], at : Int, got : Array[(FaceFile, Int)], fetched : Bool) -> Unit {
   if at >= files.length() {
-    faces_had[id] = Whole(got)
+    faces_had.set(id, Whole(got))
     return
   }
   let f = Some(files[at])
@@ -250,19 +250,19 @@ fn face_files(src : Source, id : String, files : Array[Json], at : Int, got : Ar
             got.push((Held(b), weight))
             face_files(src, id, files, at + 1, got, fetched)
           }
-          _ => faces_had[id] = NotHad(@sf.t("android-settings.fonts.damaged"))
+          _ => faces_had.set(id, NotHad(@sf.t("android-settings.fonts.damaged")))
         }
       }
       Err(e) if text(Some(e), "code") == "not_found" && !fetched => {
-        faces_had[id] = Fetching
+        faces_had.set(id, Fetching)
         (src.call)("fonts.fetch", Json::object({ "id": id.to_json() }), fn(r) {
           match r {
             Ok(_) => face_files(src, id, files, 0, [], true)
-            Err(e) => faces_had[id] = NotHad(text(Some(e), "message"))
+            Err(e) => faces_had.set(id, NotHad(text(Some(e), "message")))
           }
         })
       }
-      Err(e) => faces_had[id] = NotHad(text(Some(e), "message"))
+      Err(e) => faces_had.set(id, NotHad(text(Some(e), "message")))
     }
   })
 }

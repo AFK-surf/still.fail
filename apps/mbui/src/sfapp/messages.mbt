@@ -54,15 +54,15 @@ fn ink() -> Ink {
 
 ///|
 /// The flight of words sent whose row is being built (flight.mbt), for its bubble and what is under it.
-let flying : Ref[SendFlight?] = { val: None }
+let flying : @signals.Signal[SendFlight?] = @signals.signal(None)
 
 ///|
 /// System notices opened (all their words, and their time), by message.
-let opened_notices : Map[String, Bool] = {}
+let opened_notices : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()
 
 ///|
 /// The press an image of a message was last quoted by (file_item): a passage of its message is not picked by it too.
-let image_quoted_at : Ref[Int] = { val: -1 }
+let image_quoted_at : @signals.Signal[Int] = @signals.signal(-1, same=fn(a, b) { a == b })
 
 ///|
 /// The kind of a file by its name (FileKinds.kt kindOf): image, video, or anything else.
@@ -99,14 +99,14 @@ fn owner_of(here : Here, a : Attachment) -> String {
 /// (a passing 请求中 does not flicker by); the same thing's new words show at once. Per row: what shows (its key, its
 /// words), what showed before it, and when it came (the frames' clock).
 priv struct Steady {
-  mut key : String
-  mut words : String
-  mut was : String
-  mut at : Double
+  key : @signals.Signal[String]
+  words : @signals.Signal[String]
+  was : @signals.Signal[String]
+  at : @signals.Signal[Double]
 }
 
 ///|
-let steadies : Map[String, Steady] = {}
+let steadies : @sf.LiveMap[String, Steady] = @sf.LiveMap::new()
 
 ///|
 /// How far an activity's ring reaches round its avatar (Chat.kt: the messages' 18dp avatar, its ring 3dp round it).

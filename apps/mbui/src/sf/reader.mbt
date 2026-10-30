@@ -124,38 +124,38 @@ pub(all) enum ReaderPanel {
 pub(all) struct Reading {
   key : String
   /// the file as last given (where it was left is asked of it, and kept with it)
-  mut file : ViewerFile?
-  mut asked : Bool
-  mut got : Got?
+  file : @signals.Signal[ViewerFile?]
+  asked : @signals.Signal[Bool]
+  got : @signals.Signal[Got?]
   failed : @signals.Signal[String?]
   book : @signals.Signal[Book?]
   /// the book come anew: its wait for where it was left counted from here (reader_place_ms)
   ready_n : @signals.Signal[Int]
-  mut started : Bool
-  mut chunk : Int
-  mut within : Double
+  started : @signals.Signal[Bool]
+  chunk : @signals.Signal[Int]
+  within : @signals.Signal[Double]
   /// a phone's bars shown
-  mut chrome : Bool
-  mut panel : ReaderPanel
+  chrome : @signals.Signal[Bool]
+  panel : @signals.Signal[ReaderPanel]
   /// the contents just opened: put at the chapter read (once, as it is first laid out)
-  mut contents_put : Bool
-  mut closing : ReaderPanel
-  mut query : String
-  mut searched : String
+  contents_put : @signals.Signal[Bool]
+  closing : @signals.Signal[ReaderPanel]
+  query : @signals.Signal[String]
+  searched : @signals.Signal[String]
   /// each change typed into the search: the search waits reader_search_ms after the last
-  mut typed_n : Int
-  mut matches : Array[TextMatch]
-  mut hit : Int
+  typed_n : @signals.Signal[Int]
+  matches : @signals.Signal[Array[TextMatch]]
+  hit : @signals.Signal[Int]
   /// a jump: its block, the offset in it, whether a little before it shows too; its step (0 none, 1 the block put at
   /// the top, 2 slid to the offset once laid out)
-  mut jump : (Int, Int, Bool)
-  mut jump_step : Int
-  mut kept : Int
+  jump : @signals.Signal[(Int, Int, Bool)]
+  jump_step : @signals.Signal[Int]
+  kept : @signals.Signal[Int]
   /// the moves of the place (each a wait of its own till it is kept), the move last kept
-  mut moves : Int
-  mut kept_moves : Int
+  moves : @signals.Signal[Int]
+  kept_moves : @signals.Signal[Int]
   /// where along the whole a phone's hairline is dragged (-1: not)
-  mut draft : Double
+  draft : @signals.Signal[Double]
   /// a desktop's bar, gone as the text is read on down
   bar : BarOnScroll
   /// a desktop's sliders' values while one is dragged, by its key (kept as it is let go)
@@ -174,30 +174,30 @@ pub fn reading_for(key : String) -> Reading {
     None => {
       let r : Reading = {
         key,
-        file: None,
-        asked: false,
-        got: None,
+        file: @signals.signal(None),
+        asked: @signals.signal(false, same=fn(a, b) { a == b }),
+        got: @signals.signal(None),
         failed: @signals.signal(None),
         book: @signals.signal(None),
         ready_n: @signals.signal(0),
-        started: false,
-        chunk: 0,
-        within: 0.0,
-        chrome: false,
-        panel: NoPanel,
-        contents_put: false,
-        closing: NoPanel,
-        query: "",
-        searched: "",
-        typed_n: 0,
-        matches: [],
-        hit: -1,
-        jump: (0, 0, false),
-        jump_step: 0,
-        kept: -1,
-        moves: 0,
-        kept_moves: 0,
-        draft: -1.0,
+        started: @signals.signal(false, same=fn(a, b) { a == b }),
+        chunk: @signals.signal(0, same=fn(a, b) { a == b }),
+        within: @signals.signal(0.0, same=fn(a, b) { a == b }),
+        chrome: @signals.signal(false, same=fn(a, b) { a == b }),
+        panel: @signals.signal(NoPanel, same=fn(a, b) { a == b }),
+        contents_put: @signals.signal(false, same=fn(a, b) { a == b }),
+        closing: @signals.signal(NoPanel, same=fn(a, b) { a == b }),
+        query: @signals.signal("", same=fn(a, b) { a == b }),
+        searched: @signals.signal("", same=fn(a, b) { a == b }),
+        typed_n: @signals.signal(0, same=fn(a, b) { a == b }),
+        matches: @signals.signal([]),
+        hit: @signals.signal(-1, same=fn(a, b) { a == b }),
+        jump: @signals.signal((0, 0, false), same=fn(a, b) { a == b }),
+        jump_step: @signals.signal(0, same=fn(a, b) { a == b }),
+        kept: @signals.signal(-1, same=fn(a, b) { a == b }),
+        moves: @signals.signal(0, same=fn(a, b) { a == b }),
+        kept_moves: @signals.signal(0, same=fn(a, b) { a == b }),
+        draft: @signals.signal(-1.0, same=fn(a, b) { a == b }),
         bar: BarOnScroll::new(),
         drafts: Map([]),
       }
@@ -232,15 +232,15 @@ fn readings_reset() -> Unit {
 /// The file read, once (Reader.tsx loadBook): its bytes here already, or read whole (at most reader_most, how much
 /// has come told as it comes); decoded here, then read by the page's core as a reader shows it (read_book).
 pub fn reader_load(r : Reading, file : ViewerFile, markdown : Bool) -> Unit {
-  r.file = Some(file)
-  if r.asked {
+  r.file.set(Some(file))
+  if r.asked.get() {
     return
   }
-  r.asked = true
+  r.asked.set(true)
   match file.bytes {
     Some(b) => reader_build(r, file, b, markdown)
     None =>
-      (file.read)(reader_most, fn(got) { r.got = Some(got) }, fn(res) {
+      (file.read)(reader_most, fn(got) { r.got.set(Some(got)) }, fn(res) {
         match res {
           Ok(b) => reader_build(r, file, b, markdown)
           Err(e) => r.failed.set(Some(e))
@@ -277,46 +277,46 @@ pub fn reads_as_markdown(name : String) -> Bool {
 /// Opened where it was left on this device (its share, when the file has changed length since): asked of its file as
 /// the book is ready, waited on reader_place_ms at most (no wait for a station). True once it is opened.
 pub fn reader_open_at(c : @ui.Ctx, r : Reading, book : Book) -> Bool {
-  if r.started {
+  if r.started.get() {
     return true
   }
-  let place = match r.file {
+  let place = match r.file.get() {
     Some(f) => (f.place)()
     None => NeverLeft
   }
   match place {
     LeftAt(at, of) => {
-      r.started = true
+      r.started.set(true)
       let length = book.length.to_double()
       let goes = if of > 0.0 && of != length { at / of * length } else { at }
       let start = dmin(goes, length).to_int()
       if start > 0 {
         let (k, off) = book.at(start)
-        r.chunk = k
-        r.jump = (k, off, false)
-        r.jump_step = 1
+        r.chunk.set(k)
+        r.jump.set((k, off, false))
+        r.jump_step.set(1)
       }
     }
-    NeverLeft => r.started = true
+    NeverLeft => r.started.set(true)
     NotKnown =>
       if @kit.after(c, "reader-place/\{r.ready_n.get()}", true, reader_place_ms) {
-        r.started = true
+        r.started.set(true)
       }
   }
-  r.started
+  r.started.get()
 }
 
 ///|
 /// Where it was left, kept with its file (the offset of the text, of its length): as the reader holds still, and as it
 /// is left (`force`).
 fn reader_keep(r : Reading, book : Book, force : Bool) -> Unit {
-  let off = book.offset_of(r.chunk, r.within)
-  if !force && off == r.kept {
+  let off = book.offset_of(r.chunk.get(), r.within.get())
+  if !force && off == r.kept.get() {
     return
   }
-  r.kept = off
-  r.kept_moves = r.moves
-  match r.file {
+  r.kept.set(off)
+  r.kept_moves.set(r.moves.get())
+  match r.file.get() {
     Some(f) => (f.keep_place)(off.to_double(), book.length.to_double())
     None => ()
   }
@@ -329,21 +329,21 @@ pub fn reader_fraction(r : Reading, book : Book) -> Double {
   if n == 0 {
     return 0.0
   }
-  dmin(1.0, dmax(0.0, (r.chunk.to_double() + r.within) / n.to_double()))
+  dmin(1.0, dmax(0.0, (r.chunk.get().to_double() + r.within.get()) / n.to_double()))
 }
 
 ///|
 /// The chapter the top of the screen is in (-1 before the first).
 pub fn reader_chapter(r : Reading, book : Book) -> Int {
-  let off = if r.chunk < book.chunks.length() {
-    (book.chunks[r.chunk].length().to_double() * r.within).round().to_int()
+  let off = if r.chunk.get() < book.chunks.length() {
+    (book.chunks[r.chunk.get()].length().to_double() * r.within.get()).round().to_int()
   } else {
     0
   }
   let mut at = -1
   for i, ch in book.chapters {
     let (_, k, o) = ch
-    if k < r.chunk || (k == r.chunk && o <= off) {
+    if k < r.chunk.get() || (k == r.chunk.get() && o <= off) {
       at = i
     }
   }
@@ -353,8 +353,8 @@ pub fn reader_chapter(r : Reading, book : Book) -> Int {
 ///|
 /// The top of the screen to block `chunk`, `offset` into it (a little before it showing too).
 pub fn reader_jump(r : Reading, chunk : Int, offset : Int) -> Unit {
-  r.jump = (chunk, offset, true)
-  r.jump_step = 1
+  r.jump.set((chunk, offset, true))
+  r.jump_step.set(1)
 }
 
 ///|
@@ -395,28 +395,28 @@ pub fn reader_column(
   let list_key = reader_list_key(r)
   let n = book.chunks.length()
   // where the top of the screen is: the first block in view, and how far down it
-  if r.jump_step == 0 {
+  if r.jump_step.get() == 0 {
     match c.list_place(list_key) {
       Some((first, off, h)) if first >= 1 && first - 1 < n => {
         let within = if h > 0.0 { dmin(1.0, dmax(0.0, off / h)) } else { 0.0 }
-        if first - 1 != r.chunk || (within - r.within).abs() > 0.002 {
-          r.chunk = first - 1
-          r.within = within
-          r.moves = r.moves + 1
+        if first - 1 != r.chunk.get() || (within - r.within.get()).abs() > 0.002 {
+          r.chunk.set(first - 1)
+          r.within.set(within)
+          r.moves.set(r.moves.get() + 1)
         }
       }
       Some((0, _, _)) =>
-        if r.chunk != 0 || r.within != 0.0 {
-          r.chunk = 0
-          r.within = 0.0
-          r.moves = r.moves + 1
+        if r.chunk.get() != 0 || r.within.get() != 0.0 {
+          r.chunk.set(0)
+          r.within.set(0.0)
+          r.moves.set(r.moves.get() + 1)
         }
       _ => ()
     }
   }
   // kept as the reader stops (not on every pixel)
   // (each move a wait of its own; nothing shown waits for it)
-  if @kit.after(c, "reader-keep/" + r.key + "/\{r.moves}", r.moves > r.kept_moves, reader_still_ms, later=true) {
+  if @kit.after(c, "reader-keep/" + r.key + "/\{r.moves.get()}", r.moves.get() > r.kept_moves.get(), reader_still_ms, later=true) {
     // (once the frame's builds are over, where the last put it)
     c.after_build("reader-keep", fn() { reader_keep(r, book, false) })
   }
@@ -424,8 +424,8 @@ pub fn reader_column(
   // scrolls to where it is by what is laid out now (the block's row at the top; once its height is laid out, the
   // offset in it), the same scroll again as often as it is asked; there once the frame's last build scrolled with the
   // block's height known (after the builds, so a build read back again does not take a step of it)
-  if r.jump_step != 0 && c.list_place(list_key) is Some(_) {
-    let (k, off, lead) = r.jump
+  if r.jump_step.get() != 0 && c.list_place(list_key) is Some(_) {
+    let (k, off, lead) = r.jump.get()
     let y = match c.list_row_height(list_key, k + 1) {
       Some(h) if h > 0.0 => {
         let len = book.chunks[k].length()
@@ -447,24 +447,24 @@ pub fn reader_column(
       _ => c.list_scroll_to(list_key, k + 1)
     }
     c.after_build("reader-jump", fn() {
-      if y is Some(_) && r.jump_step != 0 {
-        r.jump_step = 0
-        r.chunk = k
-        r.within = 0.0
-        r.moves = r.moves + 1
+      if y is Some(_) && r.jump_step.get() != 0 {
+        r.jump_step.set(0)
+        r.chunk.set(k)
+        r.within.set(0.0)
+        r.moves.set(r.moves.get() + 1)
       }
     })
   }
   // the search, as it is typed (a quarter of a second after)
-  if r.query != r.searched {
-    if r.query.trim(chars=" ").to_owned() == "" {
-      r.searched = r.query
-      r.matches = []
-      r.hit = -1
-    } else if @kit.after(c, "reader-search/\{r.typed_n}", true, reader_search_ms) {
+  if r.query.get() != r.searched.get() {
+    if r.query.get().trim(chars=" ").to_owned() == "" {
+      r.searched.set(r.query.get())
+      r.matches.set([])
+      r.hit.set(-1)
+    } else if @kit.after(c, "reader-search/\{r.typed_n.get()}", true, reader_search_ms) {
       // the core finds it (`reader.search`: in a Markdown file, its words as drawn), each place where it is in the text
       // (asked once the frame's builds are over: what the last of them typed)
-      let query = r.query
+      let query = r.query.get()
       c.after_build("reader-search", fn() { reader_search(r, book, query) })
     }
   }
@@ -519,14 +519,14 @@ fn reader_list_key(r : Reading) -> String {
 ///|
 /// `query` looked for in the text (searchBook): the places it is, kept as long as it is still what was asked.
 fn reader_search(r : Reading, book : Book, query : String) -> Unit {
-  r.searched = query
-  r.hit = -1
+  r.searched.set(query)
+  r.hit.set(-1)
   (viewer_host().search_book)(book.id, query, fn(found) {
-    if r.searched == query {
-      r.matches = found.map(fn(at) {
+    if r.searched.get() == query {
+      r.matches.set(found.map(fn(at) {
         let (k, o) = book.at(at)
         { chunk: k, start: o, length: query.length() }
-      })
+      }))
     }
   })
 }
@@ -569,9 +569,9 @@ fn reader_chunk(
   mark_now : Int64,
   headings : Bool,
 ) -> Unit {
-  let mine = r.matches.filter(fn(m) { m.chunk == k })
-  let now = if r.hit >= 0 && r.hit < r.matches.length() && r.matches[r.hit].chunk == k {
-    Some(r.matches[r.hit])
+  let mine = r.matches.get().filter(fn(m) { m.chunk == k })
+  let now = if r.hit.get() >= 0 && r.hit.get() < r.matches.get().length() && r.matches.get()[r.hit.get()].chunk == k {
+    Some(r.matches.get()[r.hit.get()])
   } else {
     None
   }
@@ -625,7 +625,7 @@ fn reader_words(
       line=style.line,
       serif~,
       document=true,
-      found=if mine.length() > 0 { [r.searched] } else { [] },
+      found=if mine.length() > 0 { [r.searched.get()] } else { [] },
       on_link=viewer_host().on_link,
     )
   } else {
@@ -639,7 +639,7 @@ fn reader_words(
     }
     let runs = if serif { runs.map(fn(x) { { ..x, serif: true } }) } else { runs }
     // (the reader's own size and lines, as its layout picks them)
-    c.rich(runs, key="chunk/\{k}/\{mine.length()}/\{r.hit}", size~, color=p.ink, line~, w=reader_words_w) |> ignore
+    c.rich(runs, key="chunk/\{k}/\{mine.length()}/\{r.hit.get()}", size~, color=p.ink, line~, w=reader_words_w) |> ignore
   }
 }
 
@@ -769,8 +769,8 @@ pub fn reader_snippet(chunk : String, m : TextMatch, accent : Int64) -> Array[@u
 ///|
 /// A panel opened (the search's field taking the keys).
 pub fn reader_open_panel(c : @ui.Ctx, r : Reading, panel : ReaderPanel) -> Unit {
-  r.panel = panel
-  r.contents_put = panel == Contents
+  r.panel.set(panel)
+  r.contents_put.set(panel == Contents)
   if panel == Find {
     c.focus_editor("reader-search")
   }
@@ -779,8 +779,8 @@ pub fn reader_open_panel(c : @ui.Ctx, r : Reading, panel : ReaderPanel) -> Unit 
 ///|
 /// The panel closed (a phone's drawn sinking away until it has gone: `closing`).
 pub fn reader_close_panel(c : @ui.Ctx, r : Reading) -> Unit {
-  r.closing = r.panel
-  r.panel = NoPanel
+  r.closing.set(r.panel.get())
+  r.panel.set(NoPanel)
   c.blur()
 }
 
@@ -790,7 +790,7 @@ fn reader_toggle(c : @ui.Ctx, r : Reading) -> Unit {
   if c.press().moved {
     return
   }
-  r.chrome = !r.chrome
+  r.chrome.set(!r.chrome.get())
   // (the bars' way in or out drawn from the next frame: a block's tap is seen as its row is built, after this frame
   // has drawn its bars; a click handled asks for that frame)
 }
@@ -851,13 +851,13 @@ pub fn reader(
         })
       (None, None) =>
         desk_note(c, fn() {
-          let said = match r.got {
+          let said = match r.got.get() {
             Some(g) => t("web-pages.drive.reader.reading", args=[("got", file_size(g.loaded)), ("of", file_size(g.total))])
             None => t("common.opening")
           }
           c.text(said, style=desk_note_words.then(@ui.text_style(color=Data(p.muted)))) |> ignore
           c.box(style=desk_load_track, fn() {
-            progress(c, r.key, match r.got {
+            progress(c, r.key, match r.got.get() {
               Some(g) if g.total > 0.0 => Some(g.loaded / g.total)
               _ => None
             })
@@ -888,7 +888,7 @@ fn desk_note(c : @ui.Ctx, body : () -> Unit) -> Unit {
 /// The text's room either side on a desktop: one column 34 of its size wide and its margins at most, in the middle of
 /// what the panel leaves (Reader.css.ts column, scroller[data-panel]); the left, and the right with the panel's.
 fn desk_reader_sides(c : @ui.Ctx, r : Reading, style : ReaderStyle, panel? : Bool = true) -> (Double, Double) {
-  let panel = if !panel || r.panel == NoPanel { 0.0 } else { desk_panel_w }
+  let panel = if !panel || r.panel.get() == NoPanel { 0.0 } else { desk_panel_w }
   let margin = style.margin.to_double()
   let room = dmax(0.0, c.width - panel)
   let column = dmin(room, desk_column_ems * style.size.to_double() + 2.0 * margin)
@@ -942,10 +942,10 @@ fn desk_reader_chrome(
     _ => ()
   }
   if c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true) {
-    if r.panel != NoPanel {
+    if r.panel.get() != NoPanel {
       reader_close_panel(c, r)
-    } else if r.hit >= 0 {
-      r.hit = -1
+    } else if r.hit.get() >= 0 {
+      r.hit.set(-1)
     } else {
       on_back()
     }
@@ -970,14 +970,14 @@ fn desk_reader_chrome(
   }
   let ink = paper_viewer_ink(p)
   c.layer(fn() {
-    if viewer_bar(c, "reader/bar", back_label, file.name, meta, r.bar.hidden && r.panel == NoPanel, ink, title=file.title, fn() {
-        if viewer_tool(c, "reader/contents", "list", t("web-pages.drive.reader.contents"), ink, on=r.panel == Contents) {
+    if viewer_bar(c, "reader/bar", back_label, file.name, meta, r.bar.hidden.get() && r.panel.get() == NoPanel, ink, title=file.title, fn() {
+        if viewer_tool(c, "reader/contents", "list", t("web-pages.drive.reader.contents"), ink, on=r.panel.get() == Contents) {
           desk_toggle_panel(c, r, Contents)
         }
-        if viewer_tool(c, "reader/find", "search", t("web-pages.drive.reader.find"), ink, on=r.panel == Find) {
+        if viewer_tool(c, "reader/find", "search", t("web-pages.drive.reader.find"), ink, on=r.panel.get() == Find) {
           desk_toggle_panel(c, r, Find)
         }
-        if viewer_tool(c, "reader/layout", "text", t("web-pages.drive.reader.layout"), ink, on=r.panel == Layout) {
+        if viewer_tool(c, "reader/layout", "text", t("web-pages.drive.reader.layout"), ink, on=r.panel.get() == Layout) {
           desk_toggle_panel(c, r, Layout)
         }
         if viewer_download(c, "reader/download", ink) {
@@ -987,8 +987,8 @@ fn desk_reader_chrome(
       on_back()
     }
     // what was found, under the bar (10 below it) over the text's middle, clear of the panel
-    if r.hit >= 0 && r.matches.length() > 0 {
-      let panel = if r.panel == NoPanel { desk_none } else { desk_panel_w }
+    if r.hit.get() >= 0 && r.matches.get().length() > 0 {
+      let panel = if r.panel.get() == NoPanel { desk_none } else { desk_panel_w }
       c.box(style=desk_found_place, fn() {
         c.box(style=desk_found_top(), fn() {  }) |> ignore
         c.box(style=desk_found_row, fn() {
@@ -1016,7 +1016,7 @@ fn desk_reader_chrome(
     |> ignore
   })
   |> ignore
-  if r.panel != NoPanel {
+  if r.panel.get() != NoPanel {
     c.layer(fn() { desk_panel(c, r, book, style, p, chapter, has_chapters) }) |> ignore
   }
 }
@@ -1024,7 +1024,7 @@ fn desk_reader_chrome(
 ///|
 /// A tool's panel opened, or closed again by its own tool.
 fn desk_toggle_panel(c : @ui.Ctx, r : Reading, panel : ReaderPanel) -> Unit {
-  if r.panel == panel {
+  if r.panel.get() == panel {
     reader_close_panel(c, r)
   } else {
     reader_open_panel(c, r, panel)
@@ -1036,10 +1036,10 @@ fn desk_toggle_panel(c : @ui.Ctx, r : Reading, panel : ReaderPanel) -> Unit {
 /// after, and the search let go; a capsule of the paper's raised ground, frosted.
 fn desk_found(c : @ui.Ctx, r : Reading, p : ReaderPaper) -> Unit {
   let step = fn(d : Int) {
-    let n = r.matches.length()
+    let n = r.matches.get().length()
     if n > 0 {
-      r.hit = ((r.hit + d) % n + n) % n
-      let m = r.matches[r.hit]
+      r.hit.set(((r.hit.get() + d) % n + n) % n)
+      let m = r.matches.get()[r.hit.get()]
       reader_jump(r, m.chunk, m.start)
     }
   }
@@ -1051,18 +1051,18 @@ fn desk_found(c : @ui.Ctx, r : Reading, p : ReaderPaper) -> Unit {
   )
   c.box(style=desk_found_box, glass~, id=c.id("reader-found"), fn() {
     c.text(
-      t("web-pages.drive.reader.foundAt", args=[("query", r.query), ("at", "\{r.hit + 1}"), ("n", "\{r.matches.length()}")]),
+      t("web-pages.drive.reader.foundAt", args=[("query", r.query.get()), ("at", "\{r.hit.get() + 1}"), ("n", "\{r.matches.get().length()}")]),
       style=desk_found_words.then(@ui.text_style(color=Data(p.ink))),
     )
     |> ignore
-    if chip(c, "", key="reader/found-prev", icon="chevron-left", ink=p.ink, disabled=r.hit <= 0, said=t("android-misc.drive.reader.prevHit")) {
+    if chip(c, "", key="reader/found-prev", icon="chevron-left", ink=p.ink, disabled=r.hit.get() <= 0, said=t("android-misc.drive.reader.prevHit")) {
       step(-1)
     }
-    if chip(c, "", key="reader/found-next", icon="chevron-right", ink=p.ink, disabled=r.hit >= r.matches.length() - 1, said=t("android-misc.drive.reader.nextHit")) {
+    if chip(c, "", key="reader/found-next", icon="chevron-right", ink=p.ink, disabled=r.hit.get() >= r.matches.get().length() - 1, said=t("android-misc.drive.reader.nextHit")) {
       step(1)
     }
     if chip(c, "", key="reader/found-close", icon="close", ink=p.ink, said=t("common.close")) {
-      r.hit = -1
+      r.hit.set(-1)
     }
   })
   |> ignore
@@ -1090,7 +1090,7 @@ fn desk_panel(
       c.box(style=desk_panel_room, fn() {  }) |> ignore
       c.box(style=desk_panel_box.then(@ui.style(bg=Data(p.ground))), id=c.id("reader/panel"), fn() {
         c.box(style=desk_panel_head, fn() {
-          let title = match r.panel {
+          let title = match r.panel.get() {
             Contents => t("web-pages.drive.reader.contents")
             Find => t("web-pages.drive.reader.find")
             _ => t("web-pages.drive.reader.layout")
@@ -1098,7 +1098,7 @@ fn desk_panel(
           c.text(title, style=desk_panel_title.then(@ui.text_style(color=Data(p.ink)))) |> ignore
           c.box(style=desk_grow, fn() {  }) |> ignore
           match book {
-            Some(b) if r.panel == Contents && has_chapters =>
+            Some(b) if r.panel.get() == Contents && has_chapters =>
               c.text(
                 t("web-pages.drive.reader.contentsNote", args=[
                   ("n", "\{b.chapters.length()}"),
@@ -1114,7 +1114,7 @@ fn desk_panel(
           }
         })
         |> ignore
-        match r.panel {
+        match r.panel.get() {
           Contents => desk_contents(c, r, book, p, chapter, has_chapters)
           Find => desk_find(c, r, book, p)
           _ => desk_layout(c, r, style, p)
@@ -1165,8 +1165,8 @@ fn desk_contents(
   }
   let key = "reader/contents/" + r.key
   // opened at the chapter being read
-  if r.contents_put {
-    r.contents_put = false
+  if r.contents_put.get() {
+    r.contents_put.set(false)
     c.list_scroll_to(key, if chapter > desk_contents_lead { chapter - desk_contents_lead } else { 0 })
   }
   c.box(style=desk_panel_list, fn() {
@@ -1217,13 +1217,13 @@ fn desk_find(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper, done? : ()
         placeholder_color=p.muted,
         caret_color=p.accent,
       )
-      if res.text != r.query {
-        r.query = res.text
-        r.typed_n += 1
+      if res.text != r.query.get() {
+        r.query.set(res.text)
+        r.typed_n.set(r.typed_n.get() + 1)
       }
-      if res.submitted is Some(_) && r.matches.length() > 0 {
-        r.hit = 0
-        let m = r.matches[0]
+      if res.submitted is Some(_) && r.matches.get().length() > 0 {
+        r.hit.set(0)
+        let m = r.matches.get()[0]
         reader_jump(r, m.chunk, m.start)
         done()
       }
@@ -1235,13 +1235,13 @@ fn desk_find(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper, done? : ()
     Some(b) => b
     None => return
   }
-  if r.query.trim(chars=" ").to_owned() != "" && r.searched == r.query {
+  if r.query.get().trim(chars=" ").to_owned() != "" && r.searched.get() == r.query.get() {
     c.box(style=desk_panel_note_box, fn() {
       c.text(
-        if r.matches.length() == 0 {
+        if r.matches.get().length() == 0 {
           t("web-pages.drive.reader.notFound")
         } else {
-          t("web-pages.drive.reader.foundCount", args=[("n", "\{r.matches.length()}")])
+          t("web-pages.drive.reader.foundCount", args=[("n", "\{r.matches.get().length()}")])
         },
         style=desk_panel_note.then(@ui.text_style(color=Data(p.muted))),
       )
@@ -1249,13 +1249,13 @@ fn desk_find(c : @ui.Ctx, r : Reading, book : Book?, p : ReaderPaper, done? : ()
     })
     |> ignore
   }
-  let shown = if r.matches.length() > desk_hits_most { desk_hits_most } else { r.matches.length() }
+  let shown = if r.matches.get().length() > desk_hits_most { desk_hits_most } else { r.matches.get().length() }
   c.box(style=desk_panel_list, fn() {
     c.list("reader/hits/" + r.key, shown, desk_hit_h, fn(i) {
-      let m = r.matches[i]
+      let m = r.matches.get()[i]
       let id = c.id("reader/hit/\{i}")
       if c.clicked(id) {
-        r.hit = i
+        r.hit.set(i)
         reader_jump(r, m.chunk, m.start)
         done()
       }
@@ -1439,7 +1439,7 @@ fn desk_slider_row(
     c.box(style=desk_grow, fn() {
       let v = slider(c, key, now, min, max, step~, ink=p.ink, accent=p.accent, ground=p.ground)
       if down && c.pressed(c.id(key)) {
-        r.drafts[key] = v
+        r.drafts.set(key, v)
       } else {
         // let go (or stepped by the keys): kept, the draft let go with it once the frame's builds are over
         match draft {
@@ -1496,11 +1496,11 @@ fn narrow_reader_chrome(
   }
   let pct = "\{(share * 100.0).round().to_int()}%"
   // the bars coming (140 ms) or going (240 ms), eased out, a step up or down as they fade (Reader.css.ts fades)
-  let k = @motion.animate(c, "reader-bars", if r.chrome { 1.0 } else { 0.0 }, spec=@motion.tween(
-      if r.chrome { narrow_bars_in_ms } else { reader_bars_ms },
+  let k = @motion.animate(c, "reader-bars", if r.chrome.get() { 1.0 } else { 0.0 }, spec=@motion.tween(
+      if r.chrome.get() { narrow_bars_in_ms } else { reader_bars_ms },
       ease=Out,
     ))
-  let live = r.chrome
+  let live = r.chrome.get()
   let glass = narrow_glass(p)
   // the page's top bar (a phone's clock and icons) on the paper, not over the text read on up under it
   if room_top > 0.0 {
@@ -1561,16 +1561,16 @@ fn narrow_reader_chrome(
             c.box(style=narrow_top_end.then(@ui.style(justify=JEnd, gap=keys_gap(size=narrow_key_side))), fn() {
               let id = c.id("reader/find")
               if live && c.clicked(id) {
-                if r.panel == Find {
+                if r.panel.get() == Find {
                   reader_close_panel(c, r)
                 } else {
                   reader_open_panel(c, r, Find)
                 }
               }
-              let b = c.box(style=narrow_top_button, selected=r.panel == Find, id=if live { id } else { 0 }, fn() {
+              let b = c.box(style=narrow_top_button, selected=r.panel.get() == Find, id=if live { id } else { 0 }, fn() {
                 icon(c, "search", size=viewer_back_icon, color=p.ink) |> ignore
               })
-              c.semantics(b, Button, id~, label=t("web-pages.drive.reader.find"), pressed=r.panel == Find)
+              c.semantics(b, Button, id~, label=t("web-pages.drive.reader.find"), pressed=r.panel.get() == Find)
               // 下载, as every file opened has it (the desktop's bar's last)
               let did = c.id("reader/download")
               if live && c.clicked(did) {
@@ -1592,7 +1592,7 @@ fn narrow_reader_chrome(
     |> ignore
   }
   // what was found: under the top bar while it shows, at the top while it is away
-  if r.hit >= 0 && r.matches.length() > 0 {
+  if r.hit.get() >= 0 && r.matches.get().length() > 0 {
     c.layer(fn() {
       c.box(style=desk_found_place, fn() {
         c.box(style=@ui.style(h=Fixed(room_top + narrow_bar_off + narrow_found_down * k)), fn() {  }) |> ignore
@@ -1649,10 +1649,10 @@ fn narrow_reader_chrome(
             |> ignore
             c.box(style=narrow_tools, fn() {
               let third = (w - 2.0 * narrow_foot_in - 2.0 * narrow_tools_gap) / 3.0
-              if narrow_tool(c, "reader/contents", "list", t("web-pages.drive.reader.contents"), r.panel == Contents, p, live, third) {
+              if narrow_tool(c, "reader/contents", "list", t("web-pages.drive.reader.contents"), r.panel.get() == Contents, p, live, third) {
                 reader_open_panel(c, r, Contents)
               }
-              if narrow_tool(c, "reader/layout", "text", t("web-pages.drive.reader.layout"), r.panel == Layout, p, live, third) {
+              if narrow_tool(c, "reader/layout", "text", t("web-pages.drive.reader.layout"), r.panel.get() == Layout, p, live, third) {
                 reader_open_panel(c, r, Layout)
               }
             })
@@ -1687,13 +1687,13 @@ fn narrow_glass(p : ReaderPaper) -> @ui.Glass {
 fn narrow_track(c : @ui.Ctx, r : Reading, book : Book, p : ReaderPaper, live : Bool) -> Unit {
   let key = "reader/where"
   let (_, _, down) = c.pointer()
-  let shown = if r.draft >= 0.0 { r.draft } else { reader_fraction(r, book) }
+  let shown = if r.draft.get() >= 0.0 { r.draft.get() } else { reader_fraction(r, book) }
   let v = slider(c, key, shown, 0.0, 1.0, ink=p.ink, accent=p.accent, ground=p.raised)
   if live && down && c.pressed(c.id(key)) {
-    r.draft = v
-  } else if !down && r.draft >= 0.0 {
-    let to = r.draft
-    r.draft = -1.0
+    r.draft.set(v)
+  } else if !down && r.draft.get() >= 0.0 {
+    let to = r.draft.get()
+    r.draft.set(-1.0)
     let last = book.chunks.length() - 1
     reader_jump(r, (to * (if last < 0 { 0 } else { last }).to_double()).round().to_int(), 0)
   }
@@ -1724,8 +1724,8 @@ fn narrow_sheets(c : @ui.Ctx, r : Reading, book : Book?, style : ReaderStyle, ch
     Some(f) => f
     None => return
   }
-  let (panel, closing) = match r.panel {
-    NoPanel => if r.closing != NoPanel { (r.closing, true) } else { return }
+  let (panel, closing) = match r.panel.get() {
+    NoPanel => if r.closing.get() != NoPanel { (r.closing.get(), true) } else { return }
     x => (x, false)
   }
   let p = sheet_paper()
@@ -1757,7 +1757,7 @@ fn narrow_sheets(c : @ui.Ctx, r : Reading, book : Book?, style : ReaderStyle, ch
     draggable,
     closing,
     close,
-    gone: fn() { r.closing = NoPanel },
+    gone: fn() { r.closing.set(NoPanel) },
     body: fn() {
       match panel {
         Contents => desk_contents(c, r, book, p, chapter, has_chapters, done=close)

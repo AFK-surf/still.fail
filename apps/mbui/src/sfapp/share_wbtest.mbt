@@ -51,10 +51,10 @@ test "a shared link in a draft: a card with its site, sent as words after what i
     error: @signals.signal(None),
     loaded: @signals.signal(true),
     kept: @signals.signal(""),
-    changed_at: 0.0,
-    warm_n: 1,
-    focus: 0,
-    id: "",
+    changed_at: @signals.signal(0.0, same=fn(a, b) { a == b }),
+    warm_n: @signals.signal(1, same=fn(a, b) { a == b }),
+    focus: @signals.signal(0, same=fn(a, b) { a == b }),
+    id: @signals.signal("", same=fn(a, b) { a == b }),
   }
   fill_draft(d, {
     "text": "帮我下这个",

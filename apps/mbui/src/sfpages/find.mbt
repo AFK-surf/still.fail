@@ -22,31 +22,31 @@ pub(all) struct Found {
 /// was last asked of the core, what the core found (None nothing asked yet), the time the reader is at (which of its
 /// messages, which time in it), whether what is not on the device is being read.
 pub(all) struct Finding {
-  mut chat : String
+  chat : @signals.Signal[String]
   field : @ui.Field
-  mut query : String
+  query : @signals.Signal[String]
   asked : @signals.Signal[String]
   found : @signals.Signal[Found?]
   at : @signals.Signal[Int]
   k : @signals.Signal[Int]
   position : @signals.Signal[Int]
   total : @signals.Signal[Int]
-  mut moves : Int
+  moves : @signals.Signal[Int]
   bringing : @signals.Signal[Bool]
 }
 
 ///|
 pub let finding : Finding = {
-  chat: "",
+  chat: @signals.signal("", same=fn(a, b) { a == b }),
   field: @ui.Field::new(),
-  query: "",
+  query: @signals.signal("", same=fn(a, b) { a == b }),
   asked: @signals.signal("", same=fn(a, b) { a == b }),
   found: @signals.signal(None),
   at: @signals.signal(-1, same=fn(a, b) { a == b }),
   k: @signals.signal(0, same=fn(a, b) { a == b }),
   position: @signals.signal(0, same=fn(a, b) { a == b }),
   total: @signals.signal(0, same=fn(a, b) { a == b }),
-  moves: 0,
+  moves: @signals.signal(0, same=fn(a, b) { a == b }),
   bringing: @signals.signal(false, same=fn(a, b) { a == b }),
 }
 
@@ -68,15 +68,15 @@ pub fn chat_key(r : ChatRef) -> String {
 ///|
 /// The chat ⌘F's bar is open in ("" none).
 pub fn find_chat() -> String {
-  finding.chat
+  finding.chat.get()
 }
 
 ///|
 /// ⌘F's bar open in the chat `key` (opened again: its field takes the keyboard again).
 pub fn find_open(c : @ui.Ctx, key : String) -> Unit {
-  if finding.chat != key {
+  if finding.chat.get() != key {
     find_close()
-    finding.chat = key
+    finding.chat.set(key)
   }
   c.focus_editor(find_key)
 }
@@ -84,23 +84,23 @@ pub fn find_open(c : @ui.Ctx, key : String) -> Unit {
 ///|
 /// ⌘F's bar closed: what it looked for forgotten (what the list marked for it is the page's to let go: FindList).
 pub fn find_close() -> Unit {
-  finding.chat = ""
+  finding.chat.set("")
   finding.field.set("")
-  finding.query = ""
+  finding.query.set("")
   finding.asked.set("")
   finding.found.set(None)
   finding.at.set(-1)
   finding.k.set(0)
   finding.position.set(0)
   finding.total.set(0)
-  finding.moves = 0
+  finding.moves.set(0)
   finding.bringing.set(false)
 }
 
 ///|
 /// ⌘F's bar open in chat `key` with `words` typed (a screen's fixture).
 pub fn find_preset(key : String, words : String) -> Unit {
-  finding.chat = key
+  finding.chat.set(key)
   finding.field.set(words)
 }
 
@@ -108,7 +108,7 @@ pub fn find_preset(key : String, words : String) -> Unit {
 /// The words to mark in every message of chat `key` drawn now: what ⌘F found while its bar is open in it.
 pub fn find_words_in(key : String) -> Array[String] {
   match finding.found.get() {
-    Some(f) if finding.chat == key => f.words
+    Some(f) if finding.chat.get() == key => f.words
     _ => []
   }
 }
@@ -127,7 +127,7 @@ pub fn find_at() -> Int {
 
 ///|
 pub fn find_query() -> String {
-  finding.query
+  finding.query.get()
 }
 
 ///|
@@ -184,11 +184,11 @@ fn find_move(src : Source, key : String, list : FindList, by : Int) -> Unit {
     params["from"] = Json::number(from)
     params["to"] = Json::number(to)
   }
-  finding.moves += 1
-  let n = finding.moves
+  finding.moves.set(finding.moves.get() + 1)
+  let n = finding.moves.get()
   (src.call)("chat.find.go", Json::object(params), fn(res) {
     // (closed, typed on, or moved again since: an answer to what is no longer asked)
-    if finding.chat != key || finding.moves != n {
+    if finding.chat.get() != key || finding.moves.get() != n {
       return
     }
     match (res, finding.found.get()) {
@@ -250,7 +250,7 @@ fn find_ask(src : Source, station : String, thread : Double, key : String, list 
       },
       fn(res) {
         // (typed on since, or closed: an answer to what is no longer asked)
-        if finding.asked.get() != query || finding.chat != key {
+        if finding.asked.get() != query || finding.chat.get() != key {
           return
         }
         match res {
@@ -354,7 +354,7 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
       )
       // (⇧Enter put a new line in it: taken out)
       let typed = res.text.replace_all(old="\n", new="")
-      finding.query = typed
+      finding.query.set(typed)
       // looked for 120 ms after the last key; none typed, nothing found at once
       if typed != finding.asked.get() &&
         (typed.trim(chars=" ").is_empty() || @kit.after(c, "find/typing/" + typed, true, find_typing_ms)) {

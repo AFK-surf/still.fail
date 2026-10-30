@@ -3,7 +3,7 @@
 
 ///|
 /// The message flashing in the chat drawn now (its ts, "" none) and how lit it is.
-let flashing : Ref[(String, Double)] = Ref(("", 0.0))
+let flashing : @signals.Signal[(String, Double)] = @signals.signal(("", 0.0), same=fn(a, b) { a == b })
 
 ///|
 /// The accent's ground in a chat (ChatMotion.kt accentBg: web --accent-bg).

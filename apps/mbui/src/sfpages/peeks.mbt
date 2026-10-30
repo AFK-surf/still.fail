@@ -755,13 +755,13 @@ fn chat_named(src : Source, here : String, href : String) -> Named {
     Some(named) => return named
     None => ()
   }
-  chats_named[key] = Asking
+  chats_named.set(key, Asking)
   (src.call)("link.parse", { "url": Json::string(href) }, fn(r) {
     let t = match r {
       Ok(Object(_) as v) => Some(@sfbase.link_target(v))
       _ => None
     }
-    chats_named[key] = match t {
+    chats_named.set(key, match t {
       Some(t) if t.opens == "chat" && t.chat != "" => Chat(t.workspace + "/" + t.station, t.chat, t.history != "")
       Some(t) if t.opens == "item" && t.session != "" => Chat(t.workspace + "/" + t.station, t.session, t.history != "")
       // (`…/chats/<id>` alone: the chat's own station's)
@@ -786,7 +786,7 @@ fn chat_named(src : Source, here : String, href : String) -> Named {
           }
           None => NoChat
         }
-    }
+    })
   })
   Asking
 }

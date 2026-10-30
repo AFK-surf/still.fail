@@ -52,6 +52,7 @@ let told_dark : Ref[Bool?] = Ref(None)
 /// its new chat is the page shown; and where to tell it again when the system says the app left the front between
 /// frames.
 priv struct Attention {
+  // (plain: what the core was last told, compared before it is told again; nothing shown reads it)
   mut told : Bool
   mut visible : Bool
   mut focused : Bool

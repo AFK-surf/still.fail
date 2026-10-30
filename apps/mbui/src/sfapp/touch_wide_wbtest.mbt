@@ -68,8 +68,8 @@ fn touch_narrow_tester() -> @ui.Tester raise {
 test "touch wide, a small tablet held upright (600 wide, its system saying regular): by its width the tape, nothing folded for room" {
   let t = touch_narrow_tester()
   assert_true(@sfdesk.is_wide(t.ctx()))
-  assert_true(@sfdesk.wide.tape)
-  assert_false(@sfdesk.wide.crowded)
+  assert_true(@sfdesk.wide.tape.get())
+  assert_false(@sfdesk.wide.crowded.get())
 }
 
 ///|
@@ -77,7 +77,7 @@ test "touch wide: a message's words held, the passage's handles at its ends in t
   let t = touch_wide_tester()
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.draw()
-  assert_true(pk.ts != "")
+  assert_true(pk.ts.get() != "")
   let accent = @sf.theme().p.accent
   let ground = @sf.alpha(accent, 0.26)
   let passage = t.drawn_rects().filter(fn(r) { r.4 == ground })

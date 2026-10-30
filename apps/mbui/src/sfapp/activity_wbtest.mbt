@@ -73,10 +73,10 @@ test "its avatar is back in its activity once a message has come out of it, the 
   clock.val = clock.val + fix_answer_ms
   t.draw()
   t.run_for(emit_all_ms())
-  assert_true(em.watched)
-  assert_true(em.current is None)
+  assert_true(em.watched.get())
+  assert_true(em.current.get() is None)
   assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
   // (the copy that flew is gone: the activity's own avatar shows again)
-  assert_eq(em.copied, "")
+  assert_eq(em.copied.get(), "")
   emit_restore()
 }

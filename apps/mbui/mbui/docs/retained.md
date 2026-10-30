@@ -135,6 +135,31 @@ as it is built" (`Ctx::rect_of` in a build, the motion package's records found b
 place, read at the cause's moment; the motion package's per-frame records by key (`mo.recs`, measures) go with the
 frames that built everything again.
 
+## What a build reads is a signal
+
+What is kept is built again only when something it read says it changed; a plain field it read changes and says
+nothing, and the kept part goes on showing the old. So in the app (sfbase, sfapp, sfpages, sfdesk, sf) every field and
+global a build, a layout or a paint reads is a signal, written with `.set` and read with `.get` (`same=` an equality
+where the value has one, so the same value again tells nothing); a table or a list changed in place is an
+`@sf.LiveMap` / `LiveArray`, whose `m[k] = v` tells only a change (a value with no equality is put with `set`, always
+told). The compiler finds every place: a field made a signal, each read and write of it is an error until it says
+which it is.
+
+What stays plain says why on the field, one of:
+
+- a once-a-frame guard or a frame's or build's stamp (the bar's `told`, the composer's `opened` and `shaped`, a
+  reading's `played`): written by every build, a signal of it would build again every frame;
+- what is said to what is built inside a build and put back after (the settings rows' `on_card`, `block_at`, the top
+  bar's `top_label`): context, not a value of the page's;
+- a closure, what to do (a toolbar, a drawer, a toast's action): new each build, never equal;
+- the frame's own work (the drag's targets and queued drops), a cache of what was read through signals (a reading's
+  `rows_made`), a stream's or a bench's own counts, what the core was last told (compared before telling it again);
+- what is read through its own `said` on purpose: a screen's state, told for all but the pointer moving alone on a
+  layer.
+
+A value read back from layout (where a list stood as last laid out) is written after the frame's layout; a build
+reading it is built again the next frame, as anything else it read.
+
 ## Held by the tests
 
 The Tester keeps its one check, said another way: whatever a frame did by what was marked, the same state made into

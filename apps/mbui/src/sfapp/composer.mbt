@@ -77,7 +77,7 @@ let composer_files_row : @ui.Style = @ui.style(
 /// capsule's (Glass.kt InComposerFiles) where the row is the capsule's first (in its corner: `Inner`); under a quote
 /// or a notice, what Android gives Smooth there (Xl2 in @sf.radii), the row then in no corner.
 fn files_card() -> @ui.Style {
-  if files_cornered.val {
+  if files_cornered.get() {
     files_card_inner
   } else {
     files_card_set
@@ -94,7 +94,7 @@ let files_card_set : @ui.Style = @ui.css("radius=Xl2")
 
 ///|
 /// Whether the files' row (or the station files') is in the capsule's top left corner this frame (capsule_top).
-let files_cornered : Ref[Bool] = Ref::new(false)
+let files_cornered : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 /// How far down the capsule's room starts: its inset, less the reach of a remove button above a picture's tile when
@@ -102,7 +102,7 @@ let files_cornered : Ref[Bool] = Ref::new(false)
 /// its left (Composer.kt: the button reaches past the row there, Compose's horizontalScroll cutting only sideways;
 /// here the row cuts all round, so its room for the button comes off the capsule's).
 fn capsule_top(v : ChatView?, d : Draft) -> Double {
-  files_cornered.val = files_in_corner(v, d)
+  files_cornered.set(files_in_corner(v, d))
   capsule_top_of(v, d)
 }
 
@@ -197,7 +197,7 @@ priv struct Pending {
   id : Int
   name : String
   size : Int
-  mut image : String
+  image : @signals.Signal[String]
   width : Int
   height : Int
   pasted : (String, Json)?
@@ -210,12 +210,12 @@ priv struct Pending {
   error : @signals.Signal[String?]
   /// its id in the core, which sends it up (`composer.add`): a message sent before it is up names it (`uploads`); ""
   /// for one going up here (a station's file switched to one) and for any other
-  mut core_id : String
+  core_id : @signals.Signal[String]
   /// failed going up in the core: it can go again from what the core kept (`composer.retry`)
-  mut retry : Bool
+  retry : @signals.Signal[Bool]
   /// a video's bytes, read whole, that the host has no picture of (no address for it: @hostapi.Picked.src): its
   /// `image` its first frame, made from them (draft_stills), None once it is
-  mut unseen : Bytes?
+  unseen : @signals.Signal[Bytes?]
   /// asked to go again: the core's failure said before it is not taken again, until it says otherwise
   retrying : @signals.Signal[Bool]
   /// what it is, picked or pasted as a file (file_seed, held_seed): the same added again while it is in the draft is
@@ -250,19 +250,19 @@ priv struct Draft {
   loaded : @signals.Signal[Bool]
   /// what was last kept, and when it last changed
   kept : @signals.Signal[String]
-  mut changed_at : Double
+  changed_at : @signals.Signal[Double]
   /// how many times typing woke the agent's runtime (`session.warm`, once a minute: the next a minute of this
   /// composer shown after the last)
-  mut warm_n : Int
+  warm_n : @signals.Signal[Int]
   /// the quote whose comment line takes the focus next frame (0 none); -1: the words' field (ids count from 1)
-  mut focus : Int
+  focus : @signals.Signal[Int]
   /// its words and their selection, the field's (mbui's Field, Compose's TextFieldState): the composer's field shows
   /// them, typing writes them, the app (a core's answer included) writes them from anywhere
   field : @ui.Field
   /// the draft's own name, the core's (DraftView.id: `draft.get` gives it, `draft.put` answers it): another once it
   /// is sent or put back empty, so what goes up from it is another upload than the same in the message before, or in
   /// another new chat ("" until the core has said it)
-  mut id : String
+  id : @signals.Signal[String]
 }
 
 ///|
@@ -333,12 +333,12 @@ fn draft_by(c : @ui.Ctx, src : Source, key : String) -> Draft {
         error: @signals.signal(None),
         loaded: @signals.signal(false),
         kept: @signals.signal(""),
-        changed_at: 0.0,
-        warm_n: 0,
-        focus: 0,
-        id: "",
+        changed_at: @signals.signal(0.0, same=fn(a, b) { a == b }),
+        warm_n: @signals.signal(0, same=fn(a, b) { a == b }),
+        focus: @signals.signal(0, same=fn(a, b) { a == b }),
+        id: @signals.signal("", same=fn(a, b) { a == b }),
       }
-      drafts[key] = d
+      drafts.set(key, d)
       // (asked of the core once the frame's builds are over)
       c.tell("draft.get/" + key, fn() { (src.call)("draft.get", { "key": Json::string(key) }, fn(res) {
         match res {
@@ -391,7 +391,7 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       id,
       name: text(as_, "name"),
       size: number(as_, "size").to_int(),
-      image: "",
+      image: @signals.signal("", same=fn(a, b) { a == b }),
       width: number(as_, "width").to_int(),
       height: number(as_, "height").to_int(),
       pasted: None,
@@ -399,10 +399,10 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       done: @signals.signal(Some(a)),
       sent: @signals.signal(number(as_, "size").to_int()),
       error: @signals.signal(None),
-      core_id: "",
-      retry: false,
+      core_id: @signals.signal("", same=fn(a, b) { a == b }),
+      retry: @signals.signal(false, same=fn(a, b) { a == b }),
       retrying: @signals.signal(false),
-      unseen: None,
+      unseen: @signals.signal(None, same=fn(a, b) { a == b }),
       seed: "",
     })
   }
@@ -418,7 +418,7 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       id,
       name,
       size: 0,
-      image: "",
+      image: @signals.signal("", same=fn(a, b) { a == b }),
       width: 0,
       height: 0,
       pasted: None,
@@ -426,10 +426,10 @@ fn fill_draft(d : Draft, v : Json) -> Unit {
       done: @signals.signal(Some({ "link": l })),
       sent: @signals.signal(0),
       error: @signals.signal(None),
-      core_id: "",
-      retry: false,
+      core_id: @signals.signal("", same=fn(a, b) { a == b }),
+      retry: @signals.signal(false, same=fn(a, b) { a == b }),
       retrying: @signals.signal(false),
-      unseen: None,
+      unseen: @signals.signal(None, same=fn(a, b) { a == b }),
       seed: "",
     })
   }
@@ -502,7 +502,7 @@ fn sent_draft(d : Draft, files : Int) -> Unit {
   // (only one files went up from needs it: a draft with none named nothing)
   if files > 0 {
     d.kept.set("\u{0}sent")
-    d.id = ""
+    d.id.set("")
   }
 }
 
@@ -511,7 +511,7 @@ fn sent_draft(d : Draft, files : Int) -> Unit {
 fn draft_named(d : Draft, v : Json) -> Unit {
   match text(Some(v), "id") {
     "" => ()
-    id => d.id = id
+    id => d.id.set(id)
   }
 }
 
@@ -564,7 +564,7 @@ fn uploading(d : Draft) -> Bool {
 /// A file going up outside the core (a station's file switched to one, station_files.mbt): sending waits for it here
 /// (Composer.kt goingHere).
 fn going_here(d : Draft) -> Bool {
-  d.files.iter().any(fn(f) { f.done.get() is None && f.error.get() is None && f.core_id == "" }) || refs_uploading(d.key)
+  d.files.iter().any(fn(f) { f.done.get() is None && f.error.get() is None && f.core_id.get() == "" }) || refs_uploading(d.key)
 }
 
 ///|
@@ -573,7 +573,7 @@ fn going_here(d : Draft) -> Bool {
 fn draft_ready(d : Draft, locked : Bool) -> Bool {
   (
     d.text.get().trim(chars=" \n\t") != "" ||
-    d.files.iter().any(fn(f) { f.done.get() is Some(_) || f.core_id != "" }) ||
+    d.files.iter().any(fn(f) { f.done.get() is Some(_) || f.core_id.get() != "" }) ||
     d.quotes.length() > 0 ||
     refs_of(d.key).length() > 0
   ) &&
@@ -589,7 +589,7 @@ fn draft_quote(d : Draft, author : String, words : String, ts : String, role : S
   next_pending.val += 1
   d.quotes.push({ id, author, text: words, ts, role, file: "" })
   d.comments[id] = ""
-  d.focus = id
+  d.focus.set(id)
 }
 
 ///|
@@ -612,7 +612,7 @@ fn draft_quote_file(d : Draft, author : String, ts : String, role : String, a : 
       id: fid,
       name,
       size,
-      image: "",
+      image: @signals.signal("", same=fn(a, b) { a == b }),
       width: number(s, "width").to_int(),
       height: number(s, "height").to_int(),
       pasted: None,
@@ -620,14 +620,14 @@ fn draft_quote_file(d : Draft, author : String, ts : String, role : String, a : 
       done: @signals.signal(Some(a)),
       sent: @signals.signal(size),
       error: @signals.signal(None),
-      core_id: "",
-      retry: false,
+      core_id: @signals.signal("", same=fn(a, b) { a == b }),
+      retry: @signals.signal(false, same=fn(a, b) { a == b }),
       retrying: @signals.signal(false),
-      unseen: None,
+      unseen: @signals.signal(None, same=fn(a, b) { a == b }),
       seed: "",
     })
   }
-  d.focus = id
+  d.focus.set(id)
 }
 
 ///|
@@ -670,15 +670,15 @@ fn draft_unquote(src : Source, d : Draft, q : DraftQuote) -> Unit {
 /// (bytes_first_frame), each its tile's picture and its message's once made.
 fn draft_stills(c : @ui.Ctx, station : String, d : Draft) -> Unit {
   for f in d.files {
-    guard f.unseen is Some(bytes) else { continue }
+    guard f.unseen.get() is Some(bytes) else { continue }
     match @sfbase.bytes_first_frame(c, "draft/\{f.id}", f.name, bytes) {
       "" => ()
-      "!" => f.unseen = None
+      "!" => f.unseen.set(None)
       still => {
-        f.unseen = None
-        f.image = still
-        if f.core_id != "" {
-          sent_pictures["upload\u{1}" + f.core_id] = still
+        f.unseen.set(None)
+        f.image.set(still)
+        if f.core_id.get() != "" {
+          sent_pictures["upload\u{1}" + f.core_id.get()] = still
         }
         if f.done.get() is Some(a) {
           sent_pictures[sent_key(station, text(Some(a), "path"))] = still
@@ -706,7 +706,7 @@ fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked)
     id,
     name: f.name,
     size: f.size.to_int(),
-    image: @sfbase.host_picture(f.name, f.src),
+    image: @signals.signal(@sfbase.host_picture(f.name, f.src), same=fn(a, b) { a == b }),
     width: 0,
     height: 0,
     pasted: None,
@@ -714,10 +714,10 @@ fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked)
     done: @signals.signal(None),
     sent: @signals.signal(0),
     error: @signals.signal(None),
-    core_id: "",
-    retry: false,
+    core_id: @signals.signal("", same=fn(a, b) { a == b }),
+    retry: @signals.signal(false, same=fn(a, b) { a == b }),
     retrying: @signals.signal(false),
-    unseen: None,
+    unseen: @signals.signal(None, same=fn(a, b) { a == b }),
     seed,
   }
   d.files.push(p)
@@ -729,10 +729,10 @@ fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked)
     p.error.set(Some(read_only_words))
     return
   }
-  let cid = upload_id(d.key + "\u{1}" + d.id + "\u{1}held\u{1}" + station + "\u{1}" + f.name + "\u{1}\{size}", d.files.length() - 1)
-  p.core_id = cid
-  if p.image != "" {
-    sent_pictures["upload\u{1}" + cid] = p.image
+  let cid = upload_id(d.key + "\u{1}" + d.id.get() + "\u{1}held\u{1}" + station + "\u{1}" + f.name + "\u{1}\{size}", d.files.length() - 1)
+  p.core_id.set(cid)
+  if p.image.get() != "" {
+    sent_pictures["upload\u{1}" + cid] = p.image.get()
   }
   let one : Map[String, Json] = {
     "id": Json::string(cid),
@@ -803,7 +803,7 @@ fn add_file(
     id,
     name,
     size: bytes.length(),
-    image,
+    image: @signals.signal(image, same=fn(a, b) { a == b }),
     width: w,
     height: h,
     pasted,
@@ -811,10 +811,10 @@ fn add_file(
     done: @signals.signal(None),
     sent: @signals.signal(0),
     error: @signals.signal(None),
-    core_id: "",
-    retry: false,
+    core_id: @signals.signal("", same=fn(a, b) { a == b }),
+    retry: @signals.signal(false, same=fn(a, b) { a == b }),
     retrying: @signals.signal(false),
-    unseen: if image == "" && pasted is None && preview_kind(name).0 == Some(@sfbase.KVideo) { Some(bytes) } else { None },
+    unseen: @signals.signal(if image == "" && pasted is None && preview_kind(name).0 == Some(@sfbase.KVideo) { Some(bytes) } else { None }, same=fn(a, b) { a == b }),
     seed,
   }
   d.files.push(p)
@@ -827,8 +827,8 @@ fn add_file(
     return
   }
   // the core sends it up, from its bytes handed over beside the call; a message sent before it is up waits for it
-  let cid = upload_id(d.key + "\u{1}" + d.id + "\u{1}" + file_seed(station, name, bytes), d.files.length() - 1)
-  p.core_id = cid
+  let cid = upload_id(d.key + "\u{1}" + d.id.get() + "\u{1}" + file_seed(station, name, bytes), d.files.length() - 1)
+  p.core_id.set(cid)
   if image != "" {
     sent_pictures["upload\u{1}" + cid] = image
   }
@@ -885,14 +885,14 @@ fn upload_key(d : Draft) -> String {
 /// What the core says of the draft's files as they go up (its composer's topic), each frame one is going: how far,
 /// up (with a picture's size from here when the station gave none), or failed (to go again).
 fn follow_uploads(src : Source, d : Draft, station : String) -> Unit {
-  if !d.files.iter().any(fn(f) { f.core_id != "" && f.done.get() is None && f.error.get() is None }) {
+  if !d.files.iter().any(fn(f) { f.core_id.get() != "" && f.done.get() is None && f.error.get() is None }) {
     return
   }
   let v = (src.topic)("composer", { "key": Json::string(upload_key(d)) }).value
   for one in items(v, "files") {
     let id = text(Some(one), "id")
     for f in d.files {
-      if f.core_id != id || f.done.get() is Some(_) || f.error.get() is Some(_) {
+      if f.core_id.get() != id || f.done.get() is Some(_) || f.error.get() is Some(_) {
         continue
       }
       match field(Some(one), "sent") {
@@ -908,8 +908,8 @@ fn follow_uploads(src : Source, d : Draft, station : String) -> Unit {
           }
           f.sent.set(f.size)
           f.done.set(Some(Json::object(file)))
-          if f.image != "" {
-            sent_pictures[sent_key(station, text(f.done.get(), "path"))] = f.image
+          if f.image.get() != "" {
+            sent_pictures[sent_key(station, text(f.done.get(), "path"))] = f.image.get()
           }
         }
         _ =>
@@ -918,7 +918,7 @@ fn follow_uploads(src : Source, d : Draft, station : String) -> Unit {
             _ if f.retrying.get() => ()
             e => {
               f.error.set(Some(e))
-              f.retry = true
+              f.retry.set(true)
             }
           }
       }
@@ -929,14 +929,14 @@ fn follow_uploads(src : Source, d : Draft, station : String) -> Unit {
 ///|
 /// A file that failed going up in the core, sent again from what it kept (`composer.retry`).
 fn retry_upload(src : Source, d : Draft, f : Pending) -> Unit {
-  if !f.retry || f.core_id == "" {
+  if !f.retry.get() || f.core_id.get() == "" {
     return
   }
   f.error.set(None)
   f.sent.set(0)
-  f.retry = false
+  f.retry.set(false)
   f.retrying.set(true)
-  (src.call)("composer.retry", Json::object({ "key": Json::string(upload_key(d)), "id": Json::string(f.core_id) }), fn(res) {
+  (src.call)("composer.retry", Json::object({ "key": Json::string(upload_key(d)), "id": Json::string(f.core_id.get()) }), fn(res) {
     match res {
       Err(e) if f.done.get() is None => {
         f.retrying.set(false)
@@ -952,8 +952,8 @@ fn retry_upload(src : Source, d : Draft, f : Pending) -> Unit {
 /// A file taken out of the draft: one going up in the core stops (it lets go of it: `composer.remove`).
 fn take_out(src : Source, d : Draft, f : Pending) -> Unit {
   d.files.retain(fn(x) { x.id != f.id })
-  if f.core_id != "" && f.done.get() is None {
-    (src.call)("composer.remove", Json::object({ "key": Json::string(upload_key(d)), "id": Json::string(f.core_id) }), fn(_) {  })
+  if f.core_id.get() != "" && f.done.get() is None {
+    (src.call)("composer.remove", Json::object({ "key": Json::string(upload_key(d)), "id": Json::string(f.core_id.get()) }), fn(_) {  })
   }
 }
 
@@ -961,11 +961,11 @@ fn take_out(src : Source, d : Draft, f : Pending) -> Unit {
 /// The files still going up in the core as a message takes them (Taken.uploads): it waits for them in the outbox.
 fn up_uploads(d : Draft) -> Array[Json] {
   d.files.filter_map(fn(f) {
-    if f.core_id == "" || f.done.get() is Some(_) || f.error.get() is Some(_) {
+    if f.core_id.get() == "" || f.done.get() is Some(_) || f.error.get() is Some(_) {
       return None
     }
     let u : Map[String, Json] = {
-      "id": Json::string(f.core_id),
+      "id": Json::string(f.core_id.get()),
       "name": Json::string(f.name),
       "size": Json::number(f.size.to_double()),
     }
@@ -1067,7 +1067,7 @@ fn uploading_text(f : Pending) -> String {
 /// A long paste: the text file it goes as (`pasted-text-<id>.txt`, UTF-8, as the web names it; paste_name), with what
 /// the core says of the words (`paste.info`).
 fn paste_as_file(src : Source, d : Draft, station : String, words : String) -> Unit {
-  let name = paste_name(d.key + "\u{1}" + d.id, words, d.files.length())
+  let name = paste_name(d.key + "\u{1}" + d.id.get(), words, d.files.length())
   (src.call)("paste.info", { "text": Json::string(words) }, fn(r) {
     match r {
       Ok(v) =>
@@ -1105,41 +1105,41 @@ fn uuid(h : String) -> String {
 /// What the page keeps of its composer: ＋'s sheet (open), the system's picker under way, a finger down
 /// outside the composer (it lets go of the keyboard once lifted or moved: ui/Keyboard.kt letsGoOfKeyboard).
 priv struct ComposerUi {
-  mut attach : Bool
-  mut picking : @ui.Pick?
-  mut picking_for : String
+  attach : @signals.Signal[Bool]
+  picking : @signals.Signal[@ui.Pick?]
+  picking_for : @signals.Signal[String]
   /// a finger went down outside the composer (it lets go of the keyboard once lifted or moved: Ctx::press)
-  mut outside : Bool
+  outside : @signals.Signal[Bool]
   /// why restoring the chat failed (Composer.kt ArchiveNotice: said under it until it is tried again), by its draft
   restore_error : @sf.LiveMap[String, String]
   /// the draft the page's composer was last built for and the chat it was in (whose room the page's other parts ask:
   /// composer_room_of)
-  mut room_for : (String, ChatView?)
+  room_for : @signals.Signal[(String, ChatView?)]
   /// the ids of its capsule and the capsule's content where the composer is built (ids are by the scope they are
   /// asked in: the list's rows ask for the composer's room from scopes of their own)
-  mut cap_id : Int
-  mut content_id : Int
+  cap_id : @signals.Signal[Int]
+  content_id : @signals.Signal[Int]
   /// the outbox's entries being sent again or dropped (their buttons spin meanwhile)
   doing : @sf.LiveMap[String, Bool]
   /// the draft and the shape its field's hint was last shown on (composer_bar): changed, the hint waits till it is there
-  mut hint_shape : (String, String)
+  hint_shape : @signals.Signal[(String, String)]
   /// the draft whose hint waits for its bar to be there (its parts' move, as long as it is far: composer_bar), "" none
-  mut hint_after : String
+  hint_after : @signals.Signal[String]
 }
 
 ///|
 let cui : ComposerUi = {
-  attach: false,
-  picking: None,
-  picking_for: "",
-  outside: false,
+  attach: @signals.signal(false, same=fn(a, b) { a == b }),
+  picking: @signals.signal(None),
+  picking_for: @signals.signal("", same=fn(a, b) { a == b }),
+  outside: @signals.signal(false, same=fn(a, b) { a == b }),
   restore_error: @sf.LiveMap::new(),
-  room_for: ("", None),
-  cap_id: 0,
-  content_id: 0,
+  room_for: @signals.signal(("", None)),
+  cap_id: @signals.signal(0, same=fn(a, b) { a == b }),
+  content_id: @signals.signal(0, same=fn(a, b) { a == b }),
   doing: @sf.LiveMap::new(),
-  hint_shape: ("", ""),
-  hint_after: "",
+  hint_shape: @signals.signal(("", ""), same=fn(a, b) { a == b }),
+  hint_after: @signals.signal("", same=fn(a, b) { a == b }),
 }
 
 ///|
@@ -1161,7 +1161,7 @@ fn composer_content_id(c : @ui.Ctx) -> Int {
 ///|
 /// How tall the capsule's content is as this frame lays it out (read back: grown this frame, built again from it).
 fn composer_natural(c : @ui.Ctx) -> Double? {
-  match c.laid_size(cui.content_id) {
+  match c.laid_size(cui.content_id.get()) {
     Some((_, h)) => Some(h)
     None => None
   }
@@ -1202,7 +1202,7 @@ fn composer_room_for(c : @ui.Ctx, key : String, v : ChatView?) -> Double {
 ///|
 /// The room of the page's composer (composer_room_for the draft it was last built for).
 fn composer_room_of(c : @ui.Ctx) -> Double {
-  composer_room_for(c, cui.room_for.0, cui.room_for.1)
+  composer_room_for(c, cui.room_for.get().0, cui.room_for.get().1)
 }
 
 ///|
@@ -1234,7 +1234,7 @@ fn composer_room_with(c : @ui.Ctx, d : Draft, v : ChatView?) -> Double {
     // otherwise the room the capsule is drawn with (the list's rows going with it)
     (None, _, Some(h)) => h + top + k.inset + k.over + k.under
     _ =>
-      match c.laid_size(cui.cap_id) {
+      match c.laid_size(cui.cap_id.get()) {
         Some((_, h)) => h + k.over + k.under
         None => 0.0
       }
@@ -1252,9 +1252,9 @@ fn draft_flying(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Array[Flyi
   for f in d.files {
     // (an image or a video still going up: where its message draws it from its picture here: sent_local)
     let key = match f.done.get() {
-      Some(_) if f.core_id != "" => @sfbase.upload_path(f.core_id)
+      Some(_) if f.core_id.get() != "" => @sfbase.upload_path(f.core_id.get())
       Some(a) => text(Some(a), "path")
-      None if f.core_id != "" && f.error.get() is None && f.image != "" => @sfbase.upload_path(f.core_id)
+      None if f.core_id.get() != "" && f.error.get() is None && f.image.get() != "" => @sfbase.upload_path(f.core_id.get())
       None => ""
     }
     match @motion.measured_rect(c, "composer/tile/\{f.id}") {
@@ -1303,8 +1303,8 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   // up, each from where its tile is)
   let flying = draft_flying(c, src, r, d)
   for x in taken_refs {
-    match (x.up, @motion.measured_rect(c, "composer/tile/ref/\{x.order}")) {
-      (Some(up), Some(from)) if up.done.get() is Some(a) && x.mode == "file" && text(Some(a), "path") != "" =>
+    match (x.up.get(), @motion.measured_rect(c, "composer/tile/ref/\{x.order}")) {
+      (Some(up), Some(from)) if up.done.get() is Some(a) && x.mode.get() == "file" && text(Some(a), "path") != "" =>
         flying.push({ key: text(Some(a), "path"), from, picture: "", face: fn() { ref_card(c, d.key, x) }, ground: 0L })
       _ => ()
     }
@@ -1368,7 +1368,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
           for q in taken_quotes {
             d.quotes.push(q)
           }
-          draft_refs[d.key] = taken_refs
+          draft_refs.set(d.key, taken_refs)
           for k, w in taken_comments {
             d.comments[k] = w
           }
@@ -1421,9 +1421,9 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     }
     None => ()
   }
-  if d.focus == -1 {
+  if d.focus.get() == -1 {
     c.focus_editor(field_key)
-    d.focus = 0
+    d.focus.set(0)
   }
   // marked images of this chat's pictures (preview_marks.mbt), up as ＋'s files go, each with a quote per mark: taken
   // in before the capsule is laid out, so this frame draws them (taken once from where they wait: the pictures as they
@@ -1459,19 +1459,19 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
       followed_into.remove(d.key)
       d.text.set(if d.text.get().trim() == "" { words } else { d.text.get().trim_end().to_owned() + "\n" + words })
       d.put_text.set(Some(d.text.get()))
-      d.focus = -1
+      d.focus.set(-1)
     }
     None => ()
   }
   // what the system's picker answered, taken in before the capsule is laid out too (the host's word that it has
   // answered brings this frame)
   // (taken once from where it waits: what goes up is what was picked, whichever build takes it)
-  match cui.picking {
+  match cui.picking.get() {
     Some(p) =>
       match p.files() {
         Some(files) => {
-          cui.picking = None
-          if cui.picking_for == d.key {
+          cui.picking.set(None)
+          if cui.picking_for.get() == d.key {
             // (told once the frame's builds are over, as the host's answer is the build's that took it)
             let station = r.station
             c.tell("composer/picked", fn() {
@@ -1542,9 +1542,9 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   // parts drawn carried from where they were to their places on the same timeline. Only drawn: laid out as tall as its
   // content at once, all of it (＋, the field, send, a quote's line) tapped where it is from the first frame. At rest
   // as tall as its content
-  cui.room_for = (d.key, v)
-  cui.cap_id = cap
-  cui.content_id = composer_content_id(c)
+  cui.room_for.set((d.key, v))
+  cui.cap_id.set(cap)
+  cui.content_id.set(composer_content_id(c))
   let morph = composer_morph(c, d.key, composer_natural(c))
   let mut content = -1
   let top = capsule_top(v, d)
@@ -1613,19 +1613,19 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
       }
     }
     let off_capsule = !within(cap) && !within(ref_menu_id(c, d.key))
-    cui.outside = off_capsule && !cui.attach
+    cui.outside.set(off_capsule && !cui.attach.get())
   }
   // (lifted after a long press: not a tap, the keyboard stays: Keyboard.kt letsGoOfKeyboard)
-  if cui.outside && c.editor_focused(field_key) && (press.moved || (press.lifted && !press.long)) {
-    cui.outside = false
+  if cui.outside.get() && c.editor_focused(field_key) && (press.moved || (press.lifted && !press.long)) {
+    cui.outside.set(false)
     c.blur()
   }
   if press.lifted {
-    cui.outside = false
+    cui.outside.set(false)
   }
   // its station files switched to go as files: up (station_files.mbt)
   for x in refs_of(d.key) {
-    if x.mode == "file" && x.up is None {
+    if x.mode.get() == "file" && x.up.get() is None {
       ref_send_up(c, src, d, r.station, x)
     }
   }
@@ -1819,14 +1819,14 @@ fn composer_bar(
   }
   let expanded = expanded || tools is Some(_)
   // typing may warm the agent's runtime: the first time, then a minute after the last (asked each frame, so it counts)
-  let warm_due = d.warm_n == 0 ||
-    @kit.after(c, "warm/" + d.key + "/\{d.warm_n}", true, warm_every_ms, later=true)
+  let warm_due = d.warm_n.get() == 0 ||
+    @kit.after(c, "warm/" + d.key + "/\{d.warm_n.get()}", true, warm_every_ms, later=true)
   let ready = draft_ready(d, locked)
   let plus = c.id("composer/plus")
   let send = c.id("composer/send")
   // ＋: its sheet (the camera, the photos, the files)
   if !no_files && (v is Some(_) || fresh is Some(_)) && c.clicked(plus) {
-    cui.attach = true
+    cui.attach.set(true)
     c.blur()
     attach_open(plus)
   }
@@ -1856,8 +1856,8 @@ fn composer_bar(
   // (what the hint waits for: the same, its words aside; another chat's draft swapped in is no change of shape)
   let focused = c.editor_focused(field_key)
   let shape = "\{expanded}|\{d.files.length()}|\{d.quotes.length()}|\{d.error.get() is Some(_)}"
-  let reshaped = cui.hint_shape.0 == d.key && cui.hint_shape.1 != shape
-  cui.hint_shape = (d.key, shape)
+  let reshaped = cui.hint_shape.get().0 == d.key && cui.hint_shape.get().1 != shape
+  cui.hint_shape.set((d.key, shape))
   let part = fn(i : Int, name : String) {
     @motion.layout(c, i, "composer/part/" + d.key + "/" + name, spec=@motion.move(), by=holds)
   }
@@ -1951,14 +1951,14 @@ fn composer_bar(
           hint.snap(0.0)
         } else if reshaped {
           hint.snap(0.0)
-          cui.hint_after = d.key
-        } else if cui.hint_after == d.key {
+          cui.hint_after.set(d.key)
+        } else if cui.hint_after.get() == d.key {
           // (back once its words are where they go: the end their move declared, as long as it was far)
           let rest = @motion.layout_rest("composer/part/" + d.key + "/field")
           if rest > c.moment() {
             c.shows_until(rest)
           } else {
-            cui.hint_after = ""
+            cui.hint_after.set("")
             hint.animate(1.0, @motion.tween(@sf.hint_back_ms, ease=Out), start_at?=if rest >= 0.0 { Some(rest) } else { None })
           }
         } else {
@@ -2009,7 +2009,7 @@ fn composer_bar(
           match v {
             Some(view) if !locked && !view.offline && !src.read_only && view.agents.length() > 0 &&
               warm_due => {
-              d.warm_n += 1
+              d.warm_n.set(d.warm_n.get() + 1)
               (src.call)(
                 "session.warm",
                 {
@@ -2075,9 +2075,9 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
         }
         let key = "composer/quote/\{q.id}"
         let field = quote_field(d, q.id)
-        if d.focus == q.id {
+        if d.focus.get() == q.id {
           c.focus_editor(key)
-          d.focus = 0
+          d.focus.set(0)
         }
         // (a block of the ladder's: concentric with the capsule's in its corners, mbui working it out)
         c.box(w=Fill(1.0), radius=@sf.row_corner, bg=k.card, fn() {
@@ -2132,7 +2132,7 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
             d.comments[q.id] = res.text
             // its Enter goes on to the words
             if res.submitted is Some(_) {
-              d.focus = -1
+              d.focus.set(-1)
             }
           })
           |> ignore
@@ -2258,8 +2258,8 @@ let composer_files_all : @ui.Style = @ui.style(row=true, w=Full, gap=@sf.files_g
 /// as; an image of a message quoted) the station's, through the session keeping it (its `owner`, else the chat's)
 /// ("" while it comes or when it cannot be had); "" for a file that is no picture.
 fn draft_picture_key(src : Source, r : ChatRef, f : Pending) -> String {
-  if f.image != "" {
-    return f.image
+  if f.image.get() != "" {
+    return f.image.get()
   }
   match f.done.get() {
     Some(a) if kind_of(f.name) == "image" && f.pasted is None => {
@@ -2393,7 +2393,7 @@ fn picture_face(c : @ui.Ctx, f : Pending, picture : String, id : Int, again? : I
       }
       if f.done.get() is None {
         c.layer(fn() {
-          let can = f.error.get() is Some(_) && f.retry && again != 0
+          let can = f.error.get() is Some(_) && f.retry.get() && again != 0
           let shade = c.box(
             w=Fill(1.0),
             h=Fill(1.0),
@@ -2494,7 +2494,7 @@ fn pasted_card(
       let now = if d.text.get() == "" { words } else { d.text.get() + "\n" + words }
       d.text.set(now)
       d.put_text.set(Some(now))
-      d.focus = -1
+      d.focus.set(-1)
     }
   }
   c.box(
@@ -2613,7 +2613,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, again? : Int = 0) -> Int {
     })
     |> ignore
     // failed going up in the core: its retry key at its end (ChatFiles.kt FileCard onRetry)
-    if f.error.get() is Some(_) && f.retry && again != 0 {
+    if f.error.get() is Some(_) && f.retry.get() && again != 0 {
       card_close(c, again, icon="retry", label=tr("web-main.composer.retryUpload"))
     }
     },
@@ -2632,9 +2632,9 @@ fn up_files(d : Draft) -> Array[Json] {
 fn up_shown(d : Draft) -> Array[Json] {
   d.files.filter_map(fn(f) {
     match f.done.get() {
-      Some(Object(a)) if field(f.done.get(), "link") is None && f.core_id != "" => {
+      Some(Object(a)) if field(f.done.get(), "link") is None && f.core_id.get() != "" => {
         let shown = a.copy()
-        shown["upload"] = Json::string(f.core_id)
+        shown["upload"] = Json::string(f.core_id.get())
         Some(Json::object(shown))
       }
       Some(a) if field(Some(a), "link") is None => Some(a)
@@ -2674,12 +2674,12 @@ fn attach_sheet(
 ) -> Unit {
   let t = @sf.theme()
   let ask = fn(kind : @hostapi.PickKind) {
-    cui.attach = false
+    cui.attach.set(false)
     // (a big file, a video, held by the host and read a part at a time as it goes up: add_held_file)
     match @ui.pick(kind, hold=true) {
       Some(p) => {
-        cui.picking = Some(p)
-        cui.picking_for = d.key
+        cui.picking.set(Some(p))
+        cui.picking_for.set(d.key)
       }
       None =>
         say(
@@ -2693,15 +2693,15 @@ fn attach_sheet(
     if i == 0 {
       ask(Camera)
     } else if i > 0 {
-      cui.attach = false
+      cui.attach.set(false)
       let pick = match @sfpages.recent_photo(i - 1) {
         Some(photo) => @ui.pick_photos([photo.src])
         None => None
       }
       match pick {
         Some(p) => {
-          cui.picking = Some(p)
-          cui.picking_for = d.key
+          cui.picking.set(Some(p))
+          cui.picking_for.set(d.key)
         }
         None => ()
       }
@@ -2709,7 +2709,7 @@ fn attach_sheet(
       match @sfpages.recent_access() {
         // no gallery on this host: said so
         NoGallery => {
-          cui.attach = false
+          cui.attach.set(false)
           say(c, tr("android-chat.composer.noRecent"))
         }
         _ => @hostapi.gallery_ask()
@@ -2730,18 +2730,18 @@ fn attach_sheet(
       ask(Files)
     }
     if c.clicked(station) {
-      cui.attach = false
+      cui.attach.set(false)
       // (＋'s panel down first: the picker is not its, to go with it)
-      @sf.close_presented_of(attach_shown.val)
+      @sf.close_presented_of(attach_shown.get())
       @sfdesk.station_files_pick(src, d.key)
     }
     // the camera, the gallery's recent photos, the tile that asks for them (recent.mbt)
     @sfpages.recent_strip(c, tapped_tile)
     // photos chosen in the strip: 添加 n 个 where the tiles were
     let adding = @sfpages.recent_adding(c, fn(p) {
-      cui.attach = false
-      cui.picking = Some(p)
-      cui.picking_for = d.key
+      cui.attach.set(false)
+      cui.picking.set(Some(p))
+      cui.picking_for.set(d.key)
     })
     if adding {
       return
@@ -2777,11 +2777,11 @@ fn attach_sheet(
     |> ignore
   }
   // let go of (a tile picked, the chat left): down
-  if !cui.attach && attach_shown.val > 0 {
-    if @sf.presented_drawn_of(attach_shown.val) {
-      @sf.close_presented_of(attach_shown.val)
+  if !cui.attach.get() && attach_shown.get() > 0 {
+    if @sf.presented_drawn_of(attach_shown.get()) {
+      @sf.close_presented_of(attach_shown.get())
     } else {
-      attach_shown.val = 0
+      attach_shown.set(0)
     }
   }
 }
@@ -2789,16 +2789,17 @@ fn attach_sheet(
 ///|
 /// ＋'s sheet up (@sf.last_presented; 0 none), and what it shows as the composer's frame has it.
 // kept across runs: put back by attach_reset
-let attach_shown : Ref[Int] = Ref(0)
+let attach_shown : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
 
 ///|
 // kept across runs: told anew by each frame of the composer before it is read
+// (plain: a closure, what to do, not a value shown)
 let attach_drawer : Ref[(@ui.Ctx) -> Unit] = Ref(fn(_) {  })
 
 ///|
 /// No ＋ sheet (the app begun again).
 fn attach_reset() -> Unit {
-  attach_shown.val = 0
+  attach_shown.set(0)
 }
 
 ///|
@@ -2806,9 +2807,9 @@ fn attach_reset() -> Unit {
 /// recent photos, the three tiles), with a mouse beside ＋; closed by its scrim, back or a press outside.
 fn attach_open(plus : Int) -> Unit {
   @sf.panel("", fn(c, _) { (attach_drawer.val)(c) }, from=Of(plus), w=@sfpages.attach_w, gone=fn() {
-    cui.attach = false
+    cui.attach.set(false)
   })
-  attach_shown.val = @sf.last_presented()
+  attach_shown.set(@sf.last_presented())
   // the gallery's recent photos read again as it opens
   @sfpages.recent_opened()
 }
@@ -2818,12 +2819,12 @@ fn attach_open(plus : Int) -> Unit {
 fn composer_left(src : Source, r : ChatRef) -> Unit {
   match drafts.get(draft_key(r)) {
     Some(d) => {
-      d.changed_at = 0.0
+      d.changed_at.set(0.0)
       save_draft(src, d)
     }
     None => ()
   }
-  cui.attach = false
+  cui.attach.set(false)
   pick_clear()
 }
 

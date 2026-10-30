@@ -27,7 +27,7 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   assert_true(t.find("在 Studio 上登录 gh") is Some(_))
   assert_true(t.find("Studio 上 codex 的登录已失效") is Some(_))
   // no way to the newest at the newest
-  assert_true(!readings.get("ws1/st1\u{1}s-c1").unwrap().jump)
+  assert_true(!readings.get("ws1/st1\u{1}s-c1").unwrap().jump.get())
   t.assert_idle()
 }
 
@@ -37,7 +37,7 @@ test "scrolled up, the way to the newest shows; tapped, the list glides back to 
   t.move(195.0, 400.0)
   t.wheel(195.0, 400.0, -900.0)
   let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
-  assert_true(rd.jump)
+  assert_true(rd.jump.get())
   assert_true(t.find("做完了：列表、跳到最新的按钮") is None)
   // it comes up growing (its presence, "chat-jump"): tapped once it is there, as a person can only tap what shows
   t.run_for(t.rest_of("chat-jump") - t.time())
@@ -51,7 +51,7 @@ test "scrolled up, the way to the newest shows; tapped, the list glides back to 
     t.run_for(rest - t.time())
   }
   assert_true(t.find("做完了：列表、跳到最新的按钮") is Some(_))
-  assert_true(!rd.jump)
+  assert_true(!rd.jump.get())
   // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
   t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
@@ -239,12 +239,12 @@ test "what waits to be decided and is out of view: a bell over the way to the en
   t.draw()
   let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
   // both cards in view at the end: no bell
-  assert_true(!rd.ask)
+  assert_true(!rd.ask.get())
   // dragged down (a finger's: no easing to wait for), the cards below what shows
   t.drag(195.0, 150.0, 195.0, 750.0)
   t.drag(195.0, 150.0, 195.0, 750.0)
-  assert_true(rd.ask)
-  assert_true(rd.jump)
+  assert_true(rd.ask.get())
+  assert_true(rd.jump.get())
   // over the way to the end, once it has risen (the list, still flung, is stopped by a tap first: it takes that one)
   t.run_for(ask_lift_ms)
   let bell = @sf.t("web-main.chat.asks.go")
@@ -253,7 +253,7 @@ test "what waits to be decided and is out of view: a bell over the way to the en
   }
   assert_true(!t.list_moving())
   t.click(Button, label=bell)
-  assert_eq(rd.flash, "ts8")
+  assert_eq(rd.flash.get(), "ts8")
   // the next tap goes to the next one's
   assert_eq(@sfpages.ask_turns.get("ws1/st1\u{1}s-c1"), Some(1))
 }
@@ -413,9 +413,9 @@ test "left short of its end, a chat opens again where it was left, though the co
   t.wheel(195.0, 400.0, -900.0)
   t.run_for(@ui.move_most_ms)
   let k = "ws1/st1\u{1}s-c1"
-  let left_at = readings.get(k).unwrap().top_seq
-  let left_off = readings.get(k).unwrap().top_off
-  assert_true(left_at > 0.0 && !readings.get(k).unwrap().at_end)
+  let left_at = readings.get(k).unwrap().top_seq.get()
+  let left_off = readings.get(k).unwrap().top_off.get()
+  assert_true(left_at > 0.0 && !readings.get(k).unwrap().at_end.get())
   t.back()
   t.run_for(@ui.move_most_ms)
   // told where it was left
@@ -423,9 +423,9 @@ test "left short of its end, a chat opens again where it was left, though the co
   open_chat(r)
   t.run_for(@ui.move_most_ms)
   // opened there, not at its end where the core's view, kept a minute after the page left it, still opens it
-  assert_eq(readings.get(k).unwrap().top_seq, left_at)
-  assert_true((readings.get(k).unwrap().top_off - left_off).abs() < 0.5)
-  assert_true(!readings.get(k).unwrap().at_end)
+  assert_eq(readings.get(k).unwrap().top_seq.get(), left_at)
+  assert_true((readings.get(k).unwrap().top_off.get() - left_off).abs() < 0.5)
+  assert_true(!readings.get(k).unwrap().at_end.get())
 }
 
 ///|

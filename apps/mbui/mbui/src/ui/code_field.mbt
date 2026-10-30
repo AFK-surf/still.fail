@@ -12,6 +12,9 @@ priv struct CodeState {
   mut value : String
   /// the complete code last handed to the view (None since it was not complete)
   mut handed : String?
+  /// the frame it was handed in: each build of that frame hands it (a frame built again, or whole to compare, builds
+  /// as its first build did)
+  mut handed_in : Int
 }
 
 ///|
@@ -21,6 +24,11 @@ let code_fields : Map[Int, CodeState] = Map([])
 ///|
 /// The code fields to empty as they are next built, by key (asked from anywhere: Ctx::clear_code_field).
 let code_clears : Array[String] = []
+
+///|
+/// Told as a code field is asked to empty (Ctx::clear_code_field): what builds it built again for it.
+// kept across runs: it only counts on
+let code_clears_said : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// A code field (see the file's head): `length` boxes, `box_w` by `box_h`, `gap` apart, `group_gap` more between the
@@ -57,7 +65,7 @@ pub fn Ctx::code_field(
   let st = match code_fields.get(id) {
     Some(s) => s
     None => {
-      let s = { value: "", handed: None }
+      let s = { value: "", handed: None, handed_in: -1 }
       code_fields[id] = s
       self.own(id)
       if autofocus {
@@ -68,6 +76,8 @@ pub fn Ctx::code_field(
   }
   // emptied as asked (a code refused): the next try starts from nothing
   let mut cleared = false
+  // (asked to empty from anywhere: read so, built again as it is asked)
+  code_clears_said.get() |> ignore
   for k = code_clears.length() - 1; k >= 0; k = k - 1 {
     if code_clears[k] == key {
       code_clears.remove(k) |> ignore
@@ -108,6 +118,9 @@ pub fn Ctx::code_field(
       st.handed = None
     } else if st.handed != Some(d) {
       st.handed = Some(d)
+      st.handed_in = self.frame_no
+      out = Some(d)
+    } else if st.handed_in == self.frame_no {
       out = Some(d)
     }
   }
@@ -254,5 +267,6 @@ pub fn Ctx::clear_code_field(self : Ctx, key : String) -> Unit {
   if !code_clears.contains(key) {
     code_clears.push(key)
   }
+  code_clears_said.set(@signals.untracked(fn() { code_clears_said.get() }) + 1)
   self.read_changed("clear_code_field \"\{key}\"")
 }

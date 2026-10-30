@@ -9,26 +9,27 @@
 /// bottom of what it is under), the link it is for when it is a link's; the press it opened on (Ctx::press frame), so the
 /// same press picks no words.
 priv struct LinkMenu {
-  mut href : String
-  mut items : Array[(String, String)]
+  href : @signals.Signal[String]
+  items : @signals.Signal[Array[(String, String)]]
+  // (plain: a closure, what to do, not a value shown)
   mut pick : (@ui.Ctx, Int) -> Unit
-  mut x : Double
-  mut top : Double
-  mut bottom : Double
-  mut open : Bool
-  mut at : Int
+  x : @signals.Signal[Double]
+  top : @signals.Signal[Double]
+  bottom : @signals.Signal[Double]
+  open : @signals.Signal[Bool]
+  at : @signals.Signal[Int]
 }
 
 ///|
 let link_menu : LinkMenu = {
-  href: "",
-  items: [],
+  href: @signals.signal("", same=fn(a, b) { a == b }),
+  items: @signals.signal([], same=fn(a, b) { a == b }),
   pick: fn(_, _) {  },
-  x: 0.0,
-  top: 0.0,
-  bottom: 0.0,
-  open: false,
-  at: -1,
+  x: @signals.signal(0.0, same=fn(a, b) { a == b }),
+  top: @signals.signal(0.0, same=fn(a, b) { a == b }),
+  bottom: @signals.signal(0.0, same=fn(a, b) { a == b }),
+  open: @signals.signal(false, same=fn(a, b) { a == b }),
+  at: @signals.signal(-1, same=fn(a, b) { a == b }),
 }
 
 ///|
@@ -39,13 +40,13 @@ fn link_held(c : @ui.Ctx, href : String, line : (Double, Double, Double, Double)
   let press = c.press()
   let x = @sf.menu_along(c, line.0 + line.2 / 2.0)
   link_menu_at(href, x, line.1, line.1 + line.3)
-  link_menu.at = press.frame
+  link_menu.at.set(press.frame)
 }
 
 ///|
 /// The link's menu, open it or copy it, centred on `x` under (or over) the line from `top` to `bottom`.
 fn link_menu_at(href : String, x : Double, top : Double, bottom : Double) -> Unit {
-  link_menu.href = href
+  link_menu.href.set(href)
   menu_under([(tr("common.link.open"), "external"), (tr("common.link.copy"), "copy")], x, top, bottom, fn(c, i) {
     if i == 0 {
       // as a tap on it: a chat's link opens it here, any other in the browser
@@ -67,13 +68,13 @@ fn menu_under(
   bottom : Double,
   pick : (@ui.Ctx, Int) -> Unit,
 ) -> Unit {
-  link_menu.items = items
+  link_menu.items.set(items)
   link_menu.pick = pick
-  link_menu.x = x
-  link_menu.top = top
-  link_menu.bottom = bottom
-  link_menu.open = true
-  link_menu.at = -1
+  link_menu.x.set(x)
+  link_menu.top.set(top)
+  link_menu.bottom.set(bottom)
+  link_menu.open.set(true)
+  link_menu.at.set(-1)
 }
 
 ///|
@@ -81,19 +82,19 @@ fn menu_under(
 /// beside it, Esc or back close it) at the line held, in MenuHost's look.
 fn link_menu_layer(c : @ui.Ctx) -> Unit {
   // opened by a link held: felt as it opens (Links.kt)
-  if link_menu.open && link_menu.at == c.press().frame {
+  if link_menu.open.get() && link_menu.at.get() == c.press().frame {
     feel_hold(c, "link")
   }
   // 180 wide centred on the finger, 6 under the line held (over it when there is no room below), kept 12 in
-  let x = dmax(12.0, dmin(link_menu.x - 90.0, c.width - 12.0 - 180.0))
-  let entries = link_menu.items.mapi(fn(i, it) { @kit.menu_item(i.to_string(), label=it.0) })
+  let x = dmax(12.0, dmin(link_menu.x.get() - 90.0, c.width - 12.0 - 180.0))
+  let entries = link_menu.items.get().mapi(fn(i, it) { @kit.menu_item(i.to_string(), label=it.0) })
   let m = @kit.dropdown_menu(
     c,
     "link-menu",
-    link_menu.open,
+    link_menu.open.get(),
     0,
     entries,
-    at=(x, link_menu.top, 180.0, link_menu.bottom - link_menu.top),
+    at=(x, link_menu.top.get(), 180.0, link_menu.bottom.get() - link_menu.top.get()),
     along=Start,
     offset=6.0,
     scrim=0x00000047L,
@@ -102,12 +103,12 @@ fn link_menu_layer(c : @ui.Ctx) -> Unit {
     look=menu_panel_look,
     item_look=fn(c, s) { menu_row_look(c, s, link_icon(s.entry.value)) },
   )
-  if link_menu.open && !m.open {
-    link_menu.open = false
+  if link_menu.open.get() && !m.open {
+    link_menu.open.set(false)
   }
   match m.chosen {
     Some(v) =>
-      for i, _ in link_menu.items {
+      for i, _ in link_menu.items.get() {
         if i.to_string() == v {
           (link_menu.pick)(c, i)
         }
@@ -119,7 +120,7 @@ fn link_menu_layer(c : @ui.Ctx) -> Unit {
 ///|
 /// The icon of the open menu's item `value` (its index).
 fn link_icon(value : String) -> String {
-  for i, it in link_menu.items {
+  for i, it in link_menu.items.get() {
     if i.to_string() == value {
       return it.1
     }

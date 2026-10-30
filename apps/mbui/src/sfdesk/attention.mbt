@@ -11,16 +11,16 @@
 /// stations' trouble as looked at before it opened, as it shows it while open (None: closed).
 priv struct Attention {
   gone : Array[String]
-  mut trouble_seen : String?
+  trouble_seen : @signals.Signal[String?]
 }
 
 ///|
-let attention : Attention = { gone: [], trouble_seen: None }
+let attention : Attention = { gone: [], trouble_seen: @signals.signal(None , same=fn(a, b) { a == b })}
 
 ///|
 fn attention_reset() -> Unit {
   attention.gone.clear()
-  attention.trouble_seen = None
+  attention.trouble_seen.set(None)
 }
 
 ///|
@@ -44,8 +44,8 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // its stations all reached again: a trouble later in the same words is new (said once the frame is built)
   c.after_build("attention/forget", fn() { trouble_forget(src, w) })
   // looked at as it opens (kept at once), no longer listed once it closes: listed while it is first read
-  if wide.attention_open.get() && attention.trouble_seen is None {
-    attention.trouble_seen = Some(trouble_kept(src, w, "seen"))
+  if wide.attention_open.get() && attention.trouble_seen.get() is None {
+    attention.trouble_seen.set(Some(trouble_kept(src, w, "seen")))
     let now = station_trouble_words(src, w)
     if railed && now != "" {
       c.tell("attention/seen", fn() { trouble_keep(src, w, "seen", Json::string(now)) })
@@ -55,7 +55,7 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       c.tell("attention/jobs-seen", fn() { long_jobs_seen(src, w) })
     }
   } else if !wide.attention_open.get() {
-    attention.trouble_seen = None
+    attention.trouble_seen.set(None)
   }
   let p = @kit.popover(
     c,
@@ -133,7 +133,7 @@ fn trouble_forget(src : Source, w : Workspace) -> Unit {
 /// none.
 fn bell_trouble(src : Source, w : Workspace) -> String {
   let words = station_trouble_words(src, w)
-  let seen = match attention.trouble_seen {
+  let seen = match attention.trouble_seen.get() {
     Some(s) => s
     None => trouble_kept(src, w, "seen")
   }

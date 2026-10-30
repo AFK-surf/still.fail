@@ -7,31 +7,31 @@
 /// What the jobs keep of their own: the job open in the popover ("" none), the one picked in the 任务 tab ("" the
 /// first), whether the tab shows its output (else what it said).
 priv struct JobsOwn {
-  mut open : String
-  mut picked : String
-  mut output : Bool
+  open : @signals.Signal[String]
+  picked : @signals.Signal[String]
+  output : @signals.Signal[Bool]
 }
 
 ///|
-let jobs_own : JobsOwn = { open: "", picked: "", output: false }
+let jobs_own : JobsOwn = { open: @signals.signal("", same=fn(a, b) { a == b }), picked: @signals.signal("", same=fn(a, b) { a == b }), output: @signals.signal(false , same=fn(a, b) { a == b })}
 
 ///|
 fn jobs_reset() -> Unit {
-  jobs_own.open = ""
-  jobs_own.picked = ""
-  jobs_own.output = false
+  jobs_own.open.set("")
+  jobs_own.picked.set("")
+  jobs_own.output.set(false)
 }
 
 ///|
 /// The job picked in the 任务 tab (a row of the popover, a search's find).
 pub fn pick_job(id : String) -> Unit {
-  jobs_own.picked = id
+  jobs_own.picked.set(id)
 }
 
 ///|
 /// The job opened in the popover (a screen's fixture).
 pub fn open_job_pop(id : String) -> Unit {
-  jobs_own.open = id
+  jobs_own.open.set(id)
 }
 
 ///|
@@ -317,7 +317,7 @@ pub fn jobs_popover(
         for j in plain {
           let jv = Some(j)
           let id = text(jv, "id")
-          let open = jobs_own.open == id
+          let open = jobs_own.open.get() == id
           c.box(style=if open { jobs_fold_open } else { jobs_fold }, fn() {
             if job_row(
                 c,
@@ -328,7 +328,7 @@ pub fn jobs_popover(
                 inset=true,
                 grounded=open,
               ) {
-              jobs_own.open = if open { "" } else { id }
+              jobs_own.open.set(if open { "" } else { id })
             }
             if open {
               c.box(style=jobs_fold_body, fn() {
@@ -411,7 +411,7 @@ pub fn jobs_tab(c : @ui.Ctx, src : Source, station : String, chat : String, view
   }
   let services = all.filter(fn(j) { flag(Some(j), "service") })
   let plain = all.filter(fn(j) { !flag(Some(j), "service") })
-  let job = match plain.iter().find_first(fn(j) { text(Some(j), "id") == jobs_own.picked }) {
+  let job = match plain.iter().find_first(fn(j) { text(Some(j), "id") == jobs_own.picked.get() }) {
     Some(j) => Some(j)
     None => plain.get(0)
   }
@@ -451,7 +451,7 @@ pub fn jobs_tab(c : @ui.Ctx, src : Source, station : String, chat : String, view
                   None => false
                 }
                 if job_row(c, "jobs-tab/" + id, jv, selected=on) {
-                  jobs_own.picked = id
+                  jobs_own.picked.set(id)
                 }
               }
             })
@@ -490,8 +490,8 @@ fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit 
       // (kept as it is: the name and the state are what is cut short, as the web's segmented, flex: none)
       c.box(style=job_detail_choice, keep=true, fn() {
         let labels = [@sf.t("web-main.jobs.notices"), @sf.t("web-main.jobs.output")]
-        let picked = @sf.segmented(c, "jobs-tab/show", labels, if jobs_own.output { 1 } else { 0 })
-        jobs_own.output = picked == 1
+        let picked = @sf.segmented(c, "jobs-tab/show", labels, if jobs_own.output.get() { 1 } else { 0 })
+        jobs_own.output.set(picked == 1)
       })
       |> ignore
       if running {
@@ -526,7 +526,7 @@ fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit 
       |> ignore
       @sf.tip(c, "jobs-tab/command", cid, command)
     }
-    if jobs_own.output {
+    if jobs_own.output.get() {
       job_output(c, src, station, id)
     } else {
       c.box(style=job_detail_notices, fn() {

@@ -9,7 +9,7 @@
 ///|
 pub fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : PageFrame, only : String) -> Unit {
   let look = look_of(c)
-  let mine = connects_mine.val
+  let mine = connects_mine.get()
   let topic = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(mine) })
   let st = @settings.stations_of(core, here)
   let stations = match st.value {
@@ -67,7 +67,7 @@ pub fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame 
   } else {
     blocks.push(fn() {
       c.box(style=if look == Wide { cn_filter_room } else { cn_filter_room_narrow }, fn() {
-        mine_filter(c, "connects-filter", "connects", mine, fn(v) { connects_mine.val = v })
+        mine_filter(c, "connects-filter", "connects", mine, fn(v) { connects_mine.set(v) })
       })
       |> ignore
     })

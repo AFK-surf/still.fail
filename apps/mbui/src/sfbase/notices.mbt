@@ -55,6 +55,7 @@ pub let notice_host : Ref[NoticeHost] = Ref(host_notices())
 
 ///|
 pub(all) struct NoticeState {
+  // (plain: the system notices' bookkeeping, read as they are told; nothing shown reads it)
   /// the notices of `notify.show` taken already, by id
   taken : Map[String, Bool]
   /// the workspace whose `notify` is followed ("" none)

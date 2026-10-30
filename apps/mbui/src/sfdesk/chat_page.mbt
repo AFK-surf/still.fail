@@ -9,49 +9,51 @@
 /// What the chat's page keeps of its own (the rest is the core's): its info's popover open, its services' popover
 /// open, archiving it asked to confirm (its key, "" none: one keeping watch).
 priv struct ChatOwn {
-  mut info_open : Bool
-  mut jobs_open : Bool
-  mut archive_asking : String
+  info_open : @signals.Signal[Bool]
+  jobs_open : @signals.Signal[Bool]
+  archive_asking : @signals.Signal[String]
 }
 
 ///|
-let chat_own : ChatOwn = { info_open: false, jobs_open: false, archive_asking: "" }
+let chat_own : ChatOwn = { info_open: @signals.signal(false, same=fn(a, b) { a == b }), jobs_open: @signals.signal(false, same=fn(a, b) { a == b }), archive_asking: @signals.signal("" , same=fn(a, b) { a == b })}
 
 ///|
 fn chat_page_reset() -> Unit {
-  chat_own.info_open = false
-  chat_own.jobs_open = false
-  chat_own.archive_asking = ""
+  chat_own.info_open.set(false)
+  chat_own.jobs_open.set(false)
+  chat_own.archive_asking.set("")
 }
 
 ///|
 /// The chat's services' popover opened or closed (its keys, ⌘K's 服务和后台任务).
 pub fn toggle_jobs_pop() -> Unit {
-  chat_own.jobs_open = !chat_own.jobs_open
+  chat_own.jobs_open.set(!chat_own.jobs_open.get())
 }
 
 ///|
 pub fn open_jobs_pop() -> Unit {
-  chat_own.jobs_open = true
+  chat_own.jobs_open.set(true)
 }
 
 ///|
 /// Its info's popover open (a screen's fixture).
 pub fn open_info_pop() -> Unit {
-  chat_own.info_open = true
+  chat_own.info_open.set(true)
 }
 
 ///|
 /// ⌘F's bar opened in chat `r`: what opens under the bar closed.
 pub fn chat_find_open(c : @ui.Ctx, r : ChatRef) -> Unit {
-  chat_own.info_open = false
-  chat_own.jobs_open = false
+  chat_own.info_open.set(false)
+  chat_own.jobs_open.set(false)
   find_open(c, chat_key(r))
 }
 
 ///|
 /// The chat `r` in the pane (ChatPage.tsx ChatScreen).
 fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
+  // (on show while built here, whoever builds it: what plays in it goes on, linger_tick)
+  @sfbase.chat_page_lives(c, r)
   let chat = (src.topic)("chat", chat_params(r)).value
   let view = view_of_chat(src, r).0
   let key = chat_key(r)
@@ -166,7 +168,7 @@ fn stop_agents(src : Source, r : ChatRef, v : ChatView) -> Unit {
 /// Into the archive, asked first where the chat keeps watch (its watch runs on in the archive: the core's words).
 fn archive_asked(src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   if field(chat, "watch") is Some(Object(_)) {
-    chat_own.archive_asking = chat_key(r)
+    chat_own.archive_asking.set(chat_key(r))
   } else {
     archive(src, w, r, v)
   }
@@ -305,7 +307,7 @@ fn chat_bar(
             let archivable = view.archivable && !view.archived
             let archive = fn() { c.tell("chat/archive", fn() { archive_asked(src, w, r, view, chat) }) }
             // (a chat of a Slack or Feishu thread alone too: where it is and its agents, chat_info)
-            let info = fn() { chat_own.info_open = !chat_own.info_open }
+            let info = fn() { chat_own.info_open.set(!chat_own.info_open.get()) }
             // (each its own in the system's bars where it has them: rail_native.mbt bar_chat)
             let in_bars = bar_chat(src, r, view.agents, info, if archivable { Some(archive) } else { None })
             if !in_bars &&
@@ -343,21 +345,21 @@ fn chat_bar(
   let asked = @sf.confirm_dialog(
     c,
     "archive-confirm/" + chat_key(r),
-    chat_own.archive_asking == chat_key(r),
+    chat_own.archive_asking.get() == chat_key(r),
     @sf.t("web-pages.chat.archiveConfirm", args=[("title", match v { Some(view) => view.title; None => r.title })]),
     text(field(chat, "watch"), "ask"),
     @sf.t("web-pages.chat.archive"),
     cancel=@sf.t("common.cancel"),
   )
   if asked.confirmed {
-    chat_own.archive_asking = ""
+    chat_own.archive_asking.set("")
     match v {
       // (once the frame's builds are over)
       Some(view) => c.tell("chat/archive", fn() { archive(src, w, r, view) })
       None => ()
     }
-  } else if chat_own.archive_asking == chat_key(r) && !asked.open {
-    chat_own.archive_asking = ""
+  } else if chat_own.archive_asking.get() == chat_key(r) && !asked.open {
+    chat_own.archive_asking.set("")
   }
 }
 
@@ -599,7 +601,7 @@ fn jobs_trigger(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
     return
   }
   if @sf.icon_button(c, "web", key="chat-jobs", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.services"), shortcut="chat.jobs") {
-    chat_own.jobs_open = !chat_own.jobs_open
+    chat_own.jobs_open.set(!chat_own.jobs_open.get())
   }
   match text(view, "alarm") {
     "" => ()
@@ -647,15 +649,15 @@ let screen_driven_dot : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full bg=Warn b
 fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   // (the window turned beside the system's tabs: what they opened from is elsewhere, closed: rail_native.mbt)
   if native_turned(c, info_width) {
-    chat_own.info_open = false
-    chat_own.jobs_open = false
+    chat_own.info_open.set(false)
+    chat_own.jobs_open.set(false)
   }
   // (its ⋯ in the system's bars: from the mark where it was chosen, rail_native.mbt)
   let (info_at, info_side, info_along) = bar_anchor(c.id("chat-more"), Bottom, End)
   let info = @kit.popover(
     c,
     "chat-info-pop",
-    chat_own.info_open,
+    chat_own.info_open.get(),
     info_at,
     side=info_side,
     along=info_along,
@@ -663,18 +665,18 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
     fn() { chat_info(c, src, w, r, v, chat) },
   )
   // (closed by what was pressed in it, or as a popover closes: Escape, a press outside)
-  chat_own.info_open = chat_own.info_open && info.value
+  chat_own.info_open.set(chat_own.info_open.get() && info.value)
   let jobs = @kit.popover(
     c,
     "chat-jobs-pop",
-    chat_own.jobs_open,
+    chat_own.jobs_open.get(),
     c.id("chat-jobs"),
     side=Bottom,
     along=End,
     look=@sf.beside_look(@ui.Size::Px(jobs_pop_w)),
     fn() {
       let open = fn(id : String) {
-        chat_own.jobs_open = false
+        chat_own.jobs_open.set(false)
         if id != "" {
           pick_job(id)
         }
@@ -684,7 +686,7 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
       jobs_popover(c, src, r.station, (src.topic)("chatJobs", chat_params(r)).value, open, open)
     },
   )
-  chat_own.jobs_open = chat_own.jobs_open && jobs.value
+  chat_own.jobs_open.set(chat_own.jobs_open.get() && jobs.value)
 }
 
 ///|
@@ -859,24 +861,24 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
         }
         let pv = Some(p)
         if info_pull_row(c, src, r, "info-pop/pull/" + text(pv, "key"), pv) {
-          chat_own.info_open = false
+          chat_own.info_open.set(false)
           let url = text(pv, "url")
           c.tell("info-pop/pull", fn() { @sfbase.open_link_in(src, url) })
         }
       }
       if pulls.length() > info_pulls_most &&
         info_row(c, "info-pop/pulls", "list", @sf.t("web-main.things.pullsAll", args=[("n", pulls.length().to_string())]), "") {
-        chat_own.info_open = false
+        chat_own.info_open.set(false)
         @sfpages.things_choose(r, "pulls")
         side_change(src, r, "open", Some("things"))
       }
       // (sfpages things.mbt)
       if said > 0 && info_row(c, "info-pop/things", "photo", @sf.t("web-main.things.title"), said.to_string()) {
-        chat_own.info_open = false
+        chat_own.info_open.set(false)
         side_change(src, r, "open", Some("things"))
       }
       if files && info_row(c, "info-pop/files", "folder", @sf.t("web-pages.chat.files"), "") {
-        chat_own.info_open = false
+        chat_own.info_open.set(false)
         side_toggle(src, r, "files")
       }
       if v.letters > 0 &&
@@ -887,16 +889,16 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
           @sf.t("web-main.letters.title"),
           @sf.t("web-main.letters.count", args=[("n", v.letters.to_string())]),
         ) {
-        chat_own.info_open = false
+        chat_own.info_open.set(false)
         letters_to_list(r)
         side_toggle(src, r, "letters")
       }
       if slack != "" && info_row(c, "info-pop/slack", "external", @sf.t("web-pages.chat.openInSlack"), "") {
-        chat_own.info_open = false
+        chat_own.info_open.set(false)
         @sfbase.open_slack(text(chat, "slackApp"), slack) |> ignore
       }
       if feishu != "" && info_row(c, "info-pop/feishu", "external", @sf.t("web-pages.chat.openInFeishu"), "") {
-        chat_own.info_open = false
+        chat_own.info_open.set(false)
         @ui.open_url(feishu) |> ignore
       }
     })
@@ -906,20 +908,20 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   if outward {
     c.box(style=info_tools(true), fn() {
       if relayable && info_row(c, "info-pop/relay", "arrow-up-right", @sf.t("web-main.relay.action"), "") {
-        chat_own.info_open = false
+        chat_own.info_open.set(false)
         @sfpages.open_relay(src, r, id, from=Unanchored)
       }
       if share is Some(Object(_)) &&
         info_row(c, "info-pop/xshare", "users", @sf.t("web-pages.chat.xshare"), text(share, "text")) &&
         flag(share, "may") {
-        chat_own.info_open = false
+        chat_own.info_open.set(false)
         @sfpages.open_xshare(src, r, Some(id), from=Unanchored)
       }
       // (a picture going out: not the photo of 图片、文件和链接 above it)
       if publish is Some(_) &&
         info_row(c, "info-pop/publish", "image-upload", @sf.t("web-pages.chat.shareImage"), "") &&
         flag(publish, "may") {
-        chat_own.info_open = false
+        chat_own.info_open.set(false)
         @sfpages.open_publish(src, r, id)
       }
     })
@@ -974,7 +976,7 @@ fn info_pull_row(c : @ui.Ctx, src : Source, r : ChatRef, key : String, pull : Js
   // (at the info's left: under it, it would cover the info's rows after it; the user, 2026-10-29: 显示到左边)
   @sfpages.web_peek(c, src, r.station, url, title, id, side=Left)
   @sfpages.thing_menu(c, id, number(pull, "seq"), url, fn(seq) {
-    chat_own.info_open = false
+    chat_own.info_open.set(false)
     @sfbase.go_to(r, seq)
   })
   c.clicked(id)

@@ -118,7 +118,7 @@ pub fn vault_act(
 ///|
 /// The recovery words `vault.setup` gave, by workspace, until the person says they have written them down: in memory
 /// only, never kept (the core gives them only the once).
-pub let recovery_words : Map[String, Array[String]] = Map([])
+pub let recovery_words : @sf.LiveMap[String, Array[String]] = @sf.LiveMap::new()
 
 ///|
 /// What `vault.open` gave of the item on its page (by item), while the page is up; whether it is being opened.
@@ -149,7 +149,7 @@ pub fn open_item(core : Core, ws : String, item : String, then : (Json) -> Unit)
         match field(Some(v), "plain") {
           Some(Object(_) as p) => {
             opened.plain[item] = p
-            opened.fields[item] = items(Some(v), "shown")
+            opened.fields.set(item, items(Some(v), "shown"))
             then(p)
           }
           _ => ()
@@ -196,24 +196,24 @@ fn vault_item_left(item : String) -> Unit {
 ///|
 /// An item being written (Editor's state): its kind, whether agents may ask for it, how, the error said under it.
 pub(all) struct VaultEditing {
-  mut kind : Int
-  mut agent : Bool
-  mut mode : String
+  kind : @signals.Signal[Int]
+  agent : @signals.Signal[Bool]
+  mode : @signals.Signal[String]
   /// its longest grant (vault_lasts: 跟随默认 first)
-  mut lasts : Int
-  mut error : String
-  mut saving : Bool
+  lasts : @signals.Signal[Int]
+  error : @signals.Signal[String]
+  saving : @signals.Signal[Bool]
   /// the fields shown in the clear (by field)
-  reveal : Map[String, Bool]
+  reveal : @sf.LiveMap[String, Bool]
   serial : Int
   /// a file's: its bytes in base64 and its name, as picked (or as it was); the system's picker while it asks
-  mut file_content : String
-  mut file_name : String
-  mut file_pick : @ui.Pick?
+  file_content : @signals.Signal[String]
+  file_name : @signals.Signal[String]
+  file_pick : @signals.Signal[@ui.Pick?]
 }
 
 ///|
-pub let vault_serial : Ref[Int] = Ref(0)
+pub let vault_serial : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
 
 ///|
 /// What `vault.putItem` is given for an item (Vault.tsx putOf): the vault, the item's id where it is one already, what

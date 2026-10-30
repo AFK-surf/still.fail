@@ -136,7 +136,7 @@ fn file_pane(c : @ui.Ctx, src : Source, r : ChatRef, session : String, path : St
       let f = match service_files.get(key) {
         Some(f) => f
         None => {
-          let f : FilePage = { html, state, station: r.station, key: session, path }
+          let f : FilePage = { html, state: @signals.signal(state, same=fn(a, b) { a == b }), station: r.station, key: session, path }
           service_files[key] = f
           f
         }

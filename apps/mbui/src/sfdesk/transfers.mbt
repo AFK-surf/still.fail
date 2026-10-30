@@ -9,17 +9,17 @@
 /// Whether the bar's 传输 has its list open, and the list as presented (@sf.last_presented; 0 none).
 priv struct Transfers {
   open : @signals.Signal[Bool]
-  mut shown : Int
+  shown : @signals.Signal[Int]
 }
 
 ///|
 // kept across runs: the list's state (transfers_reset puts it back)
-let ftransfers : Transfers = { open: @signals.signal(false, same=fn(a, b) { a == b }), shown: 0 }
+let ftransfers : Transfers = { open: @signals.signal(false, same=fn(a, b) { a == b }), shown: @signals.signal(0 , same=fn(a, b) { a == b })}
 
 ///|
 fn transfers_reset() -> Unit {
   ftransfers.open.set(false)
-  ftransfers.shown = 0
+  ftransfers.shown.set(0)
 }
 
 ///|
@@ -100,7 +100,7 @@ fn transfers_list(
   if none {
     ftransfers.open.set(false)
   }
-  if ftransfers.open.get() && ftransfers.shown == 0 {
+  if ftransfers.open.get() && ftransfers.shown.get() == 0 {
     @sf.panel(
       @sf.t("web-pages.files.transfers"),
       fn(c, _) {
@@ -126,13 +126,13 @@ fn transfers_list(
       offset=if side is Right { rail_menu_off } else { @sf.panel_offset },
       gone=fn() {
         ftransfers.open.set(false)
-        ftransfers.shown = 0
+        ftransfers.shown.set(0)
       },
     )
-    ftransfers.shown = @sf.last_presented()
-  } else if !ftransfers.open.get() && ftransfers.shown > 0 {
-    @sf.close_presented_of(ftransfers.shown)
-    ftransfers.shown = 0
+    ftransfers.shown.set(@sf.last_presented())
+  } else if !ftransfers.open.get() && ftransfers.shown.get() > 0 {
+    @sf.close_presented_of(ftransfers.shown.get())
+    ftransfers.shown.set(0)
   }
 }
 

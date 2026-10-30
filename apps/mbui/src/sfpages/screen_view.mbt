@@ -22,68 +22,69 @@ priv struct ScreenUi {
   zoom : @kit.Zoom
   pad : PadPointer
   held : HeldKeys
-  mut full : Bool
+  full : @signals.Signal[Bool]
   /// the window made to fill the screen by its 全屏 (keyboard and mouse's), put back as it closes
-  mut fulled : Bool
+  fulled : @signals.Signal[Bool]
   /// shown as a tab beside its chat, whose tab closes it: no close of its own (the same thing twice)
-  mut in_tab : Bool
-  mut tools_open : Bool
+  in_tab : @signals.Signal[Bool]
+  tools_open : @signals.Signal[Bool]
   /// how far the folded tools were dragged from their corner (so they cover another part of the screen)
   tools_moved : Afloat
   /// how far the mouse's buttons were dragged from theirs
   mouse_moved : Afloat
   /// 鼠标左右键 as last chosen in 控制中心, before the prefs say so (none: as they say)
-  mut mouse_set : Bool?
+  mouse_set : @signals.Signal[Bool?]
   /// the display's scale last asked for (0 none): asked once, not again each frame its pick still shows it
-  mut scale_asked : Int
+  scale_asked : @signals.Signal[Int]
   /// the display's resolution last asked for (0 wide none): asked once, as the scale is
-  mut size_asked : (Int, Int)
-  mut saying : Bool
+  size_asked : @signals.Signal[(Int, Int)]
+  saying : @signals.Signal[Bool]
   /// how many times the rail's line was asked for: its 3 s start again from each
-  mut sayings : Int
+  sayings : @signals.Signal[Int]
   /// the stage's size when last built, and the frame's size it was fitted for
-  mut box_w : Double
-  mut box_h : Double
+  box_w : @signals.Signal[Double]
+  box_h : @signals.Signal[Double]
   /// where the stage was drawn last (its top left in the window)
-  mut stage_x : Double
-  mut stage_y : Double
-  mut fit_for : (Int, Int)?
-  mut over_seen : Bool
+  stage_x : @signals.Signal[Double]
+  stage_y : @signals.Signal[Double]
+  fit_for : @signals.Signal[(Int, Int)?]
+  over_seen : @signals.Signal[Bool]
   gesture : Gesture
   /// a mouse on the stage (screen_mouse)
   mouse : MouseDrive
   /// the picker asked for files, and where they go (as the state said when it was asked for)
-  mut picking : @ui.Pick?
-  mut drop_to : DropTo?
+  picking : @signals.Signal[@ui.Pick?]
+  drop_to : @signals.Signal[DropTo?]
   /// a read of the device's clipboard under way, for a paste
-  mut reading : @ui.ClipboardRead?
+  reading : @signals.Signal[@ui.ClipboardRead?]
   /// the modifiers held from the keys row as each key went down (by its code), for it to go up with them too
   down_with : Map[String, Int]
   /// the press (by the frame it went down in) a mouse button last buzzed for, so it buzzes once as it goes down
-  mut buzzed : Int
+  buzzed : @signals.Signal[Int]
   /// the copies made on the screen put on the device's clipboard
-  mut copies : Int
+  copies : @signals.Signal[Int]
   /// the device kept awake, the window sideways, a phone let turn as held: as last told to the host
-  mut awake : Bool
-  mut sideways_told : Bool
-  mut turnable : Bool
+  awake : @signals.Signal[Bool]
+  sideways_told : @signals.Signal[Bool]
+  turnable : @signals.Signal[Bool]
   /// the keys row turned to the keys its first face had not the room for (keys_row's ⋯), by their names; none: its
   /// first face
-  mut keys_turned : Array[String]
+  keys_turned : @signals.Signal[Array[String]]
   /// the second of the frames' clock (Ctx::every) it was first seen live in, -1 not yet; the second counted last, and
   /// the frames and bytes come by then; the frames and bits a second over the last second, once one was counted
+  // (first_tick, rate_*, diag_copies plain: the rate's counting, shown through fps and bps)
   mut first_tick : Int
   mut rate_tick : Int
   mut rate_frames : Int
   mut rate_bytes : Int
-  mut fps : Double?
-  mut bps : Double?
+  fps : @signals.Signal[Double?]
+  bps : @signals.Signal[Double?]
   /// how many times 复制诊断 was pressed (已复制 said a moment after each)
   mut diag_copies : Int
   /// 控制中心 ("center") or the view's figures ("net") to open from the bar as it is next built (a fixture's: as if
   /// pressed); "" none
-  mut asked_panel : String
-  mut native_panel : (String, Int)?
+  asked_panel : @signals.Signal[String]
+  native_panel : @signals.Signal[(String, Int)?]
 }
 
 ///|
@@ -96,46 +97,46 @@ fn screen_ui(key : String) -> ScreenUi {
     None => {
       let u : ScreenUi = {
         zoom: screen_zoom(),
-        pad: { x: 0.5, y: 0.5, moves: 0 },
-        held: { mods: 0 },
-        full: false,
-        fulled: false,
-        in_tab: false,
-        tools_open: false,
+        pad: { x: @signals.signal(0.5, same=fn(a, b) { a == b }), y: @signals.signal(0.5, same=fn(a, b) { a == b }), moves: @signals.signal(0, same=fn(a, b) { a == b }) },
+        held: { mods: @signals.signal(0, same=fn(a, b) { a == b }) },
+        full: @signals.signal(false, same=fn(a, b) { a == b }),
+        fulled: @signals.signal(false, same=fn(a, b) { a == b }),
+        in_tab: @signals.signal(false, same=fn(a, b) { a == b }),
+        tools_open: @signals.signal(false, same=fn(a, b) { a == b }),
         tools_moved: afloat_new(),
         mouse_moved: afloat_new(),
-        mouse_set: None,
-        scale_asked: 0,
-        size_asked: (0, 0),
-        saying: false,
-        sayings: 0,
-        box_w: 0.0,
-        box_h: 0.0,
-        stage_x: 0.0,
-        stage_y: 0.0,
-        fit_for: None,
-        over_seen: false,
+        mouse_set: @signals.signal(None, same=fn(a, b) { a == b }),
+        scale_asked: @signals.signal(0, same=fn(a, b) { a == b }),
+        size_asked: @signals.signal((0, 0), same=fn(a, b) { a == b }),
+        saying: @signals.signal(false, same=fn(a, b) { a == b }),
+        sayings: @signals.signal(0, same=fn(a, b) { a == b }),
+        box_w: @signals.signal(0.0, same=fn(a, b) { a == b }),
+        box_h: @signals.signal(0.0, same=fn(a, b) { a == b }),
+        stage_x: @signals.signal(0.0, same=fn(a, b) { a == b }),
+        stage_y: @signals.signal(0.0, same=fn(a, b) { a == b }),
+        fit_for: @signals.signal(None, same=fn(a, b) { a == b }),
+        over_seen: @signals.signal(false, same=fn(a, b) { a == b }),
         gesture: gesture_new(),
         mouse: mouse_drive_new(),
-        picking: None,
-        drop_to: None,
-        reading: None,
+        picking: @signals.signal(None),
+        drop_to: @signals.signal(None, same=fn(a, b) { a == b }),
+        reading: @signals.signal(None),
         down_with: {},
-        buzzed: -1,
-        copies: 0,
-        awake: false,
-        sideways_told: false,
-        turnable: false,
-        keys_turned: [],
+        buzzed: @signals.signal(-1, same=fn(a, b) { a == b }),
+        copies: @signals.signal(0, same=fn(a, b) { a == b }),
+        awake: @signals.signal(false, same=fn(a, b) { a == b }),
+        sideways_told: @signals.signal(false, same=fn(a, b) { a == b }),
+        turnable: @signals.signal(false, same=fn(a, b) { a == b }),
+        keys_turned: @signals.signal([], same=fn(a, b) { a == b }),
         first_tick: -1,
         rate_tick: -1,
         rate_frames: 0,
         rate_bytes: 0,
-        fps: None,
-        bps: None,
+        fps: @signals.signal(None, same=fn(a, b) { a == b }),
+        bps: @signals.signal(None, same=fn(a, b) { a == b }),
         diag_copies: 0,
-        asked_panel: "",
-        native_panel: None,
+        asked_panel: @signals.signal("", same=fn(a, b) { a == b }),
+        native_panel: @signals.signal(None, same=fn(a, b) { a == b }),
       }
       screen_uis[key] = u
       u
@@ -174,13 +175,13 @@ pub fn screen_page(
   // (built again for each state that changed what it reads: taken as they come, a pointer's move alone builds nothing)
   s.said.get() |> ignore
   let u = screen_ui(key)
-  u.in_tab = in_tab
+  u.in_tab.set(in_tab)
   // its 关闭: closed through the shell, the page it is; the window back as it was where its 全屏 filled the screen
   let close = fn() {
-    if u.fulled && @ui.full_screen() {
+    if u.fulled.get() && @ui.full_screen() {
       c.set_full_screen(false)
     }
-    u.fulled = false
+    u.fulled.set(false)
     match on_close {
       Some(f) => f()
       None => @sfbase.close_page(Screen(at)) |> ignore
@@ -192,12 +193,12 @@ pub fn screen_page(
     s.own_stream()
     // on a phone or a tablet, a page of the station's browser is laid out for the stage it is shown on, as this
     // device's own browser would lay it out (the station takes no notice of it for other screens)
-    if @sf.soft_keyboard() && u.box_w > 0.0 && u.box_h > 0.0 && s.fit is None {
-      s.fit = Some((u.box_w, u.box_h, c.scale))
+    if @sf.soft_keyboard() && u.box_w.get() > 0.0 && u.box_h.get() > 0.0 && s.fit.get() is None {
+      s.fit.set(Some((u.box_w.get(), u.box_h.get(), c.scale)))
     }
     // 自动 asks for a picture as large as the stage is in this device's pixels
-    if u.box_w > 0.0 && u.box_h > 0.0 {
-      s.stage_is((u.box_w * c.scale).round().to_int(), (u.box_h * c.scale).round().to_int())
+    if u.box_w.get() > 0.0 && u.box_h.get() > 0.0 {
+      s.stage_is((u.box_w.get() * c.scale).round().to_int(), (u.box_h.get() * c.scale).round().to_int())
     }
     if shown {
       // 画质 chosen otherwise: opened again with it; open again where it was let go, not where it is over (重新打开
@@ -210,14 +211,14 @@ pub fn screen_page(
       s.pause(src)
     }
     // while it is looked at, the device stays awake: a screen is watched more than touched
-    if u.awake != shown {
-      u.awake = shown
+    if u.awake.get() != shown {
+      u.awake.set(shown)
       @ui.keep_awake(shown)
     }
     // while it is looked at, a phone turns as it is held (ScreenViewer.kt: the activity's orientation unspecified),
     // the rotation lock honoured: with it on, the system offers its turn button
-    if u.turnable != shown {
-      u.turnable = shown
+    if u.turnable.get() != shown {
+      u.turnable.set(shown)
       @hostapi.set_turnable(shown)
     }
   })
@@ -227,19 +228,19 @@ pub fn screen_page(
   }
   // over (ended, gone…): out of 全屏, the bar's × and what happened in sight
   let over = !s.open_now()
-  if over && u.full {
-    u.full = false
+  if over && u.full.get() {
+    u.full.set(false)
   }
-  if u.full != u.sideways_told {
-    let on = u.full
+  if u.full.get() != u.sideways_told.get() {
+    let on = u.full.get()
     c.after_build("screen-sideways/" + key, fn() {
-      u.sideways_told = on
+      u.sideways_told.set(on)
       @hostapi.set_sideways(on)
     })
   }
   // back in 全屏 leaves it first
-  if u.full {
-    c.on_back(fn() { u.full = false })
+  if u.full.get() {
+    c.on_back(fn() { u.full.set(false) })
   }
   screen_count(c, s, u)
   screen_copies(c, s, u)
@@ -258,21 +259,21 @@ pub fn screen_page(
   let sideways = ww > wh
   // 全屏 there: the system's bars put away too (no title, no actions), the frame edge to edge with its tools folded as
   // anywhere else
-  let native = !in_tab && @sf.native_over_up(if u.full { "" } else { title }) && !u.full
+  let native = !in_tab && @sf.native_over_up(if u.full.get() { "" } else { title }) && !u.full.get()
   if native {
     screen_native(c, s, u, typing, catcher, close)
   }
   // inside the bars unless full (ScreenViewer.kt: windowInsetsPadding(safeDrawing); full, edge to edge)
   // (full, edge to edge: no room kept for what its frame keeps it from)
   let room = fn(h : Double) {
-    if h > 0.0 && (!u.full || native) {
+    if h > 0.0 && (!u.full.get() || native) {
       c.box(style=@ui.style(w=Full, h=Fixed(h)), fn() {  }) |> ignore
     }
   }
-  c.box(style=if u.full { screen_whole } else { screen_page_box }, fn() {
+  c.box(style=if u.full.get() { screen_whole } else { screen_page_box }, fn() {
   room(frame.top)
   let within = if native { screen_within.then(@ui.style(pr=@sf.room_of(@sf.native_clear()))) } else { screen_within }
-  c.box(style=within, fn() { c.box(style=if u.full { screen_page_full } else { screen_page_box }, fn() {
+  c.box(style=within, fn() { c.box(style=if u.full.get() { screen_page_full } else { screen_page_box }, fn() {
     if native {
       c.box(style=screen_fill, fn() {
         screen_stage(c, s, u, key)
@@ -283,7 +284,7 @@ pub fn screen_page(
           c.layer(fn() { c.box(style=screen_foot_center, fn() { keys_capsule(c, s, u) }) |> ignore }) |> ignore
         }
       }) |> ignore
-    } else if u.full {
+    } else if u.full.get() {
       c.box(style=screen_fill, fn() {
         screen_stage(c, s, u, key)
         if s.can_take_over() {
@@ -328,7 +329,7 @@ pub fn screen_page(
         })
         |> ignore
         // the rail's line, said beside it over its foot once the people on it are tapped
-        if u.saying && s.state is Some(_) {
+        if u.saying.get() && s.state is Some(_) {
           c.layer(fn() {
             c.box(style=rail_say_place, fn() {
               c.box(style=rail_say_box, fn() { c.text(text(s.state, "line"), style=rail_say_words) |> ignore })
@@ -362,18 +363,18 @@ pub fn screen_page(
 /// A standalone remote screen uses Duo's system actions, putting away the app's places. A screen in a chat tab
 /// keeps the pane's own controls. The picture is fitted clear of the system column in screen_page.
 fn screen_native_panel_on(u : ScreenUi, id : String) -> Bool {
-  u.native_panel is Some((key, serial)) && key == id && @sf.presented_open_of(serial)
+  u.native_panel.get() is Some((key, serial)) && key == id && @sf.presented_open_of(serial)
 }
 
 ///|
 fn screen_native_panel(u : ScreenUi, id : String, open : () -> Unit) -> Unit {
-  if u.native_panel is Some((key, serial)) && @sf.presented_open_of(serial) {
+  if u.native_panel.get() is Some((key, serial)) && @sf.presented_open_of(serial) {
     @sf.close_presented_of(serial)
-    u.native_panel = None
+    u.native_panel.set(None)
     if key == id { return }
   }
   open()
-  u.native_panel = Some((id, @sf.last_presented()))
+  u.native_panel.set(Some((id, @sf.last_presented())))
 }
 
 ///|
@@ -400,9 +401,9 @@ fn screen_native(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catch
   if s.pastes() {
     @sf.native_over_act("screen-paste", @sf.t("android-misc.screen.paste"), "paste", fn() { paste_asked(c, s, u) })
   }
-  if s.audio_ready {
-    @sf.native_over_act("screen-audio", @sf.t(if s.audio_muted { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }),
-      if s.audio_muted { "volume-x" } else { "volume" }, fn() {
+  if s.audio_ready.get() {
+    @sf.native_over_act("screen-audio", @sf.t(if s.audio_muted.get() { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }),
+      if s.audio_muted.get() { "volume-x" } else { "volume" }, fn() {
         s.toggle_audio()
       })
   }
@@ -416,7 +417,7 @@ fn screen_native(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catch
     @sf.native_over_act("screen-stats", @sf.t("web-pages.screen.stats"), "chart", fn() {
       net_panel_open(s, u, screen_native_anchor(c))
     }, active=screen_native_panel_on(u, "stats"))
-    @sf.native_over_act("screen-full", @sf.t("android-misc.screen.full"), "landscape", fn() { u.full = true })
+    @sf.native_over_act("screen-full", @sf.t("android-misc.screen.full"), "landscape", fn() { u.full.set(true) })
     let line = text(s.state, "line")
     if line != "" {
       @sf.native_over_act("screen-people", line, "users", fn() {
@@ -440,14 +441,14 @@ pub fn screen_left(src : Source, station : String, screen : String) -> Unit {
   }
   match screen_uis.get(key) {
     Some(u) => {
-      if u.fulled && @ui.full_screen() { @ui.current().set_full_screen(false) }
-      if u.sideways_told {
+      if u.fulled.get() && @ui.full_screen() { @ui.current().set_full_screen(false) }
+      if u.sideways_told.get() {
         @hostapi.set_sideways(false)
       }
-      if u.awake {
+      if u.awake.get() {
         @ui.keep_awake(false)
       }
-      if u.turnable {
+      if u.turnable.get() {
         @hostapi.set_turnable(false)
       }
     }
@@ -489,7 +490,7 @@ fn screen_copies(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   let types = s.clip_types()
   // (what came on the core's stream, put on the clipboard once: the copies are taken out above, in the build that saw
   // them)
-  c.tell("screen-copied/" + s.view + "/\{u.copies}", fn() {
+  c.tell("screen-copied/" + s.view + "/\{u.copies.get()}", fn() {
     for g in got {
       match g {
         CopiedText(t) => {
@@ -509,7 +510,7 @@ fn screen_copies(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
       }
     }
   })
-  u.copies += got.length()
+  u.copies.set(u.copies.get() + got.length())
 }
 
 ///|
@@ -517,15 +518,15 @@ fn screen_copies(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 /// pictures, else its text (ScreenViewer.kt paste; ScreenClips.kt pasteKind). Asked of the system as the button is
 /// tapped (paste_asked), taken here once it answers.
 fn screen_pasted(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
-  guard u.reading is Some(r) else { return }
+  guard u.reading.get() is Some(r) else { return }
   guard r.got() is Some(got) else { return }
-  u.reading = None
+  u.reading.set(None)
   let types = s.clip_types()
   let image = !(got.picture is NoPicture)
   let words = got.text
   let what = @sf.t("android-misc.screen.pasteWhat")
   let done = fn(r : Result[Json, Json]) {
-    s.pasting = false
+    s.pasting.set(false)
     (screen_act(c, what))(r)
   }
   let kind = if image && types.contains("png") {
@@ -544,25 +545,25 @@ fn screen_pasted(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
       match got.picture {
         Png(png) => c.tell("screen-paste/" + s.view, fn() { s.paste_png(s.src, png, done) })
         TooLarge => {
-          s.pasting = false
+          s.pasting.set(false)
           say(c, @sf.t("android-misc.screen.imageTooLarge"))
         }
         _ => {
-          s.pasting = false
+          s.pasting.set(false)
           say(c, @sf.t("android-misc.screen.imageUnread"))
         }
       }
     "text" => c.tell("screen-paste/" + s.view, fn() { s.paste(s.src, words, done) })
     "no-images" => {
-      s.pasting = false
+      s.pasting.set(false)
       say(c, @sf.t("android-misc.screen.noImages"))
     }
     "no-text" => {
-      s.pasting = false
+      s.pasting.set(false)
       say(c, @sf.t("android-misc.screen.noText"))
     }
     _ => {
-      s.pasting = false
+      s.pasting.set(false)
       say(c, @sf.t("android-misc.screen.clipboardEmpty"))
     }
   }
@@ -572,17 +573,17 @@ fn screen_pasted(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 /// 粘贴手机剪贴板 tapped (or ⌘V): the device's clipboard read (the system answers; screen_pasted takes it), asked once
 /// the frame's builds are over, as the last says it.
 fn paste_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
-  if s.pasting {
+  if s.pasting.get() {
     return
   }
   c.after_build("screen-paste/" + s.station + "/" + s.screen, fn() {
-    if s.pasting {
+    if s.pasting.get() {
       return
     }
     match @ui.clipboard_read() {
       Some(r) => {
-        s.pasting = true
-        u.reading = Some(r)
+        s.pasting.set(true)
+        u.reading.set(Some(r))
       }
       None => say(c, @sf.t("android-misc.screen.clipboardEmpty"))
     }
@@ -595,8 +596,8 @@ fn send_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   guard s.drops_to() is Some(to) else { return }
   match @ui.pick(Files) {
     Some(p) => {
-      u.picking = Some(p)
-      u.drop_to = Some(to)
+      u.picking.set(Some(p))
+      u.drop_to.set(Some(to))
     }
     None => say(c, @sf.t("android-chat.composer.noFiles"))
   }
@@ -605,10 +606,10 @@ fn send_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 ///|
 /// The files picked, once the system has answered: each going onto the machine, one after another.
 fn screen_picked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
-  guard u.picking is Some(p) else { return }
+  guard u.picking.get() is Some(p) else { return }
   guard p.files() is Some(files) else { return }
-  u.picking = None
-  match u.drop_to {
+  u.picking.set(None)
+  match u.drop_to.get() {
     Some(to) => {
       let n = s.drops_serial
       c.tell("screen-send/" + s.view + "/\{n}", fn() { s.send_files(files, to) })
@@ -629,7 +630,7 @@ fn pad_chosen(c : @ui.Ctx, s : ScreenSess, on : Bool) -> Unit {
 ///|
 /// 只看 or 控制, chosen.
 fn control_chosen(c : @ui.Ctx, s : ScreenSess, on : Bool) -> Unit {
-  s.wants_control = Some(on)
+  s.wants_control.set(Some(on))
   c.tell("screen-control/" + s.view, fn() { s.control(s.src, on) })
 }
 
@@ -699,7 +700,7 @@ fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : 
 /// there).
 fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, close : () -> Unit) -> Unit {
   c.box(style=screen_bar, fn() {
-    if !u.in_tab && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
+    if !u.in_tab.get() && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
       close()
     }
     let live = s.phase() == "live"
@@ -729,8 +730,8 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
     })
     if live {
       c.semantics(w, Button, id=words, label=@sf.t("web-pages.screen.stats"), actions=[Activate])
-      if c.clicked(words) || u.asked_panel == "net" {
-        u.asked_panel = ""
+      if c.clicked(words) || u.asked_panel.get() == "net" {
+        u.asked_panel.set("")
         net_panel_open(s, u, Of(words))
       }
     }
@@ -795,7 +796,7 @@ fn control_seg(c : @ui.Ctx, key : String, controlling : Bool) -> Bool {
 /// Pasting the device's clipboard (where the station carries text or pictures), while driving it.
 fn paste_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   if s.pastes() &&
-    round_button(c, "screen-paste", "paste", @sf.t("android-misc.screen.paste"), on=s.pasting) {
+    round_button(c, "screen-paste", "paste", @sf.t("android-misc.screen.paste"), on=s.pasting.get()) {
     paste_asked(c, s, u)
   }
 }
@@ -803,9 +804,9 @@ fn paste_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 ///|
 /// 全屏 (on) or not.
 fn full_button(c : @ui.Ctx, u : ScreenUi) -> Unit {
-  let label = @sf.t(if u.full { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
-  if round_button(c, "screen-full", "landscape", label, on=u.full) {
-    u.full = !u.full
+  let label = @sf.t(if u.full.get() { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
+  if round_button(c, "screen-full", "landscape", label, on=u.full.get()) {
+    u.full.set(!u.full.get())
   }
 }
 
@@ -853,20 +854,20 @@ fn full_tools(
   close : () -> Unit,
 ) -> Unit {
   let capsule = c.id("screen-tools-capsule")
-  let (laid_dx, laid_dy) = (u.tools_moved.dx, u.tools_moved.dy)
+  let (laid_dx, laid_dy) = (u.tools_moved.dx.get(), u.tools_moved.dy.get())
   // a round button 4 in from the capsule's edge: its corner 20 + 4
   c.box(style=full_tools_box, id=capsule, tx=laid_dx, ty=laid_dy, fn() {
-    let (icon, label) = if u.tools_open {
+    let (icon, label) = if u.tools_open.get() {
       ("close", @sf.t("android-misc.screen.toolsClose"))
     } else {
       ("more", @sf.t("android-misc.screen.tools"))
     }
     let id = c.id("screen-tools")
     afloat_dragged(c, u.tools_moved, id)
-    if round_button(c, "screen-tools", icon, label, on=u.tools_open) {
-      u.tools_open = !u.tools_open
+    if round_button(c, "screen-tools", icon, label, on=u.tools_open.get()) {
+      u.tools_open.set(!u.tools_open.get())
     }
-    if u.tools_open {
+    if u.tools_open.get() {
       if s.choosable() {
         mode_button(c, s)
       }
@@ -896,22 +897,22 @@ fn screen_rail(
   close : () -> Unit,
 ) -> Unit {
   // said for 3 s once asked for
-  if u.saying && @kit.after(c, "screen-saying/\{u.sayings}", true, rail_say_ms) {
-    u.saying = false
+  if u.saying.get() && @kit.after(c, "screen-saying/\{u.sayings.get()}", true, rail_say_ms) {
+    u.saying.set(false)
   }
   let line = text(s.state, "line")
   c.box(fn() {
     c.box(style=rail_box, fn() {
-      if !u.in_tab && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
+      if !u.in_tab.get() && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
         close()
       }
       c.spacer()
       if s.state is Some(_) && line != "" && s.open_now() {
         let others = items(s.state, "others").length()
         c.box(style=rail_people, fn() {
-          if round_button(c, "screen-people", "users", line, on=u.saying) {
-            u.saying = !u.saying
-            u.sayings += 1
+          if round_button(c, "screen-people", "users", line, on=u.saying.get()) {
+            u.saying.set(!u.saying.get())
+            u.sayings.set(u.sayings.get() + 1)
           }
           if others > 0 {
             c.layer(fn() {
@@ -1015,20 +1016,20 @@ fn screen_row_keys() -> Array[RowKey] {
 fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   let mouse = mouse_shown(s, u)
   let keys = screen_row_keys().filter(fn(k) { k.button == 0 || mouse })
-  let held = fn(k : RowKey) { k.mod_ != 0 && (u.held.mods & k.mod_) != 0 }
+  let held = fn(k : RowKey) { k.mod_ != 0 && (u.held.mods.get() & k.mod_) != 0 }
   let leaves = fn(k : RowKey) { if held(k) { 0 } else { k.drop } }
   let slot = fn(k : RowKey) { c.id("screen-key-slot/" + s.view + "/" + k.name) }
   let more = c.id("screen-keys-more/" + s.view)
   if c.clicked(more) {
     // (turned to those the first face left out as last laid out: read back, the frame built again where that
     // changes; or back)
-    u.keys_turned = if u.keys_turned.is_empty() {
+    u.keys_turned.set(if u.keys_turned.get().is_empty() {
       keys.filter(fn(k) { leaves(k) > 0 && c.left_out(slot(k)) }).map(fn(k) { k.name })
     } else {
       []
-    }
+    })
   }
-  let turned = !u.keys_turned.is_empty()
+  let turned = !u.keys_turned.get().is_empty()
   let key = fn(k : RowKey) {
     let on = held(k)
     let id = c.id("screen-key/" + k.name)
@@ -1064,7 +1065,7 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   c.box(style=keys_row_box, fn() {
     if turned {
       for k in keys {
-        if u.keys_turned.contains(k.name) {
+        if u.keys_turned.get().contains(k.name) {
           key(k)
         }
       }
@@ -1099,8 +1100,8 @@ fn button_felt(c : @ui.Ctx, u : ScreenUi, id : Int, button : Int, clicked : Bool
     return
   }
   let at = p.frame
-  if u.buzzed != at {
-    u.buzzed = at
+  if u.buzzed.get() != at {
+    u.buzzed.set(at)
     let kind : @ui.Haptic = if button == btn_secondary { ContextClick } else { KeyboardTap }
     c.after_build("screen-felt/\{at}", fn() { @ui.haptic(kind) })
   }
@@ -1111,7 +1112,7 @@ fn button_felt(c : @ui.Ctx, u : ScreenUi, id : Int, button : Int, clicked : Bool
 /// their floating pair in 全屏 and sideways.
 fn mouse_shown(s : ScreenSess, u : ScreenUi) -> Bool {
   s.driving() &&
-  (match u.mouse_set {
+  (match u.mouse_set.get() {
     Some(on) => on
     None => text((s.src.topic)("prefs", {}).value, "screenMouse") != "off"
   })
@@ -1123,7 +1124,7 @@ fn mouse_shown(s : ScreenSess, u : ScreenUi) -> Bool {
 /// are.
 fn mouse_float(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   let capsule = c.id("screen-mouse-capsule")
-  let (laid_dx, laid_dy) = (u.mouse_moved.dx, u.mouse_moved.dy)
+  let (laid_dx, laid_dy) = (u.mouse_moved.dx.get(), u.mouse_moved.dy.get())
   c.box(style=screen_corner_end(screen_foot_end), fn() {
     c.box(style=mouse_pair_box, id=capsule, tx=laid_dx, ty=laid_dy, fn() {
       afloat_dragged(c, u.mouse_moved, capsule)
@@ -1154,16 +1155,21 @@ fn mouse_float(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 /// How far a floating capsule (the folded tools, the mouse's buttons) was dragged from its corner, and from where a
 /// drag of it began.
 priv struct Afloat {
-  mut dx : Double
-  mut dy : Double
-  mut from : (Double, Double)?
+  dx : @signals.Signal[Double]
+  dy : @signals.Signal[Double]
+  from : @signals.Signal[(Double, Double)?]
   /// the window's size as it was last built: its layout before is of another window once it changes
-  mut win : (Double, Double)
+  win : @signals.Signal[(Double, Double)]
 }
 
 ///|
 fn afloat_new() -> Afloat {
-  { dx: 0.0, dy: 0.0, from: None, win: (0.0, 0.0) }
+  {
+    dx: @signals.signal(0.0, same=fn(a, b) { a == b }),
+    dy: @signals.signal(0.0, same=fn(a, b) { a == b }),
+    from: @signals.signal(None, same=fn(a, b) { a == b }),
+    win: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
+  }
 }
 
 ///|
@@ -1173,18 +1179,18 @@ fn afloat_dragged(c : @ui.Ctx, f : Afloat, id : Int) -> Unit {
   match c.drag_of(id) {
     Some(d) => {
       if d.moving {
-        let (fx, fy) = match f.from {
+        let (fx, fy) = match f.from.get() {
           Some(at) => at
           None => {
-            let at = (f.dx, f.dy)
-            f.from = Some(at)
+            let at = (f.dx.get(), f.dy.get())
+            f.from.set(Some(at))
             at
           }
         }
-        f.dx = fx + d.x - d.x0
-        f.dy = fy + d.y - d.y0
+        f.dx.set(fx + d.x - d.x0)
+        f.dy.set(fy + d.y - d.y0)
       } else {
-        f.from = None
+        f.from.set(None)
       }
       d.take_end() |> ignore
     }
@@ -1200,10 +1206,10 @@ fn afloat_kept(c : @ui.Ctx, f : Afloat, capsule : Int, laid_dx : Double, laid_dy
   // (the window turned or resized: back to its corner, where it is laid out in the window as it is now; what was
   // laid out before is of another window)
   let now = c.window_size()
-  if f.win != now {
-    f.win = now
-    f.dx = 0.0
-    f.dy = 0.0
+  if f.win.get() != now {
+    f.win.set(now)
+    f.dx.set(0.0)
+    f.dy.set(0.0)
     return
   }
   match c.laid_rect(capsule) {
@@ -1211,8 +1217,8 @@ fn afloat_kept(c : @ui.Ctx, f : Afloat, capsule : Int, laid_dx : Double, laid_dy
       let (ww, wh) = now
       let x0 = x - laid_dx
       let y0 = y - laid_dy
-      f.dx = dmax(-x0, dmin(ww - w - x0, f.dx))
-      f.dy = dmax(-y0, dmin(wh - h - y0, f.dy))
+      f.dx.set(dmax(-x0, dmin(ww - w - x0, f.dx.get())))
+      f.dy.set(dmax(-y0, dmin(wh - h - y0, f.dy.get())))
     }
     None => ()
   }

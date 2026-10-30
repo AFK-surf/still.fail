@@ -152,7 +152,7 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
   t.run_for(sent_at + Pose::Float.ms() - 200.0 + 60.0 - t.time())
   assert_true(not_seen(t, "收到：「看一下列表」"))
   let em = emits_of("ws1/st1\u{1}s-c1")
-  let agents = match em.current {
+  let agents = match em.current.get() {
     Some(turn) => {
       // not there before them, waiting: still on its way down, to come down as they land
       assert_true(turn.pose == Float)

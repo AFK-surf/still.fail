@@ -39,18 +39,18 @@ let fpane_text_part : Int = 64 * 1024
 /// What the preview has read of the file shown: by the file (its station, root, path and time), its picture's bytes or
 /// its text's start, or that it could not be read.
 priv struct FPane {
-  mut key : String
+  key : @signals.Signal[String]
   picture : @signals.Signal[String]
   text : @signals.Signal[String?]
   failed : @signals.Signal[Bool]
 }
 
 ///|
-let fpane : FPane = { key: "", picture: @signals.signal("", same=fn(a, b) { a == b }), text: @signals.signal(None), failed: @signals.signal(false, same=fn(a, b) { a == b })}
+let fpane : FPane = { key: @signals.signal("", same=fn(a, b) { a == b }), picture: @signals.signal("", same=fn(a, b) { a == b }), text: @signals.signal(None), failed: @signals.signal(false, same=fn(a, b) { a == b })}
 
 ///|
 fn pane_reset() -> Unit {
-  fpane.key = ""
+  fpane.key.set("")
   fpane.picture.set("")
   fpane.text.set(None)
   fpane.failed.set(false)
@@ -75,11 +75,11 @@ fn fpane_way(e : DvEntry) -> String {
 /// The file read as the preview shows it, once a file (and its time): a picture whole, a part at a time; a text's start.
 fn fpane_read(src : Source, station : String, root : String, path : String, e : DvEntry, way : String) -> Unit {
   let key = station + "\u{1}" + root + "\u{1}" + path + "\u{1}" + e.mtime.to_string()
-  if fpane.key == key {
+  if fpane.key.get() == key {
     return
   }
   pane_reset()
-  fpane.key = key
+  fpane.key.set(key)
   if way == "" {
     return
   }
@@ -100,7 +100,7 @@ fn fpane_read(src : Source, station : String, root : String, path : String, e : 
     drive_keep(p, "file", e.mtime, e.size)
     (src.read_bytes)("drive.read", Json::object(p), fn(r) {
       // (another file chosen since: what comes is let go)
-      if fpane.key != key {
+      if fpane.key.get() != key {
         return
       }
       match r {

@@ -132,15 +132,15 @@ fn page_mark_mode(c : @ui.Ctx, src : Source, p : ServicePage, site : @ui.NativeV
   let t = @sf.theme()
   let m = p.marks
   let n = m.marks.length()
-  let busy = m.shot is Some(_)
+  let busy = m.shot.get() is Some(_)
   c.box(style=mark_mode_bar, keep=true, fn() {
-    c.box(style=if m.marking { mark_dot_ring } else { mark_dot_box }, fn() {
-      c.box(style=if m.marking { mark_dot_on } else { mark_dot }, fn() {  }) |> ignore
+    c.box(style=if m.marking.get() { mark_dot_ring } else { mark_dot_box }, fn() {
+      c.box(style=if m.marking.get() { mark_dot_on } else { mark_dot }, fn() {  }) |> ignore
     })
     |> ignore
     c.box(style=mark_words_box, keep=true, fn() {
-      if m.error != "" {
-        c.text(m.error, style=mark_error_words) |> ignore
+      if m.error.get() != "" {
+        c.text(m.error.get(), style=mark_error_words) |> ignore
       } else {
         let said = if n > 0 {
           svc("android-chat.preview.marked", args=[("n", n.to_string())])
@@ -148,7 +148,7 @@ fn page_mark_mode(c : @ui.Ctx, src : Source, p : ServicePage, site : @ui.NativeV
           svc("android-chat.preview.pick")
         }
         c.text(said, style=mark_count_words) |> ignore
-        if m.marking && n > 0 {
+        if m.marking.get() && n > 0 {
           c.text(svc("android-chat.preview.pickMore"), style=mark_more_words) |> ignore
         }
       }
@@ -244,13 +244,13 @@ fn page_marks_over(
   let t = @sf.theme()
   let m = p.marks
   // CSS pixels to the stage's: the page's own ratio, then the stage's scale
-  let k = if m.css_w > 0.0 { view_w / m.css_w * scale } else { scale }
+  let k = if m.css_w.get() > 0.0 { view_w / m.css_w.get() * scale } else { scale }
   c.layer(fn() {
     for mark in m.marks {
       let (bx, by, bw, bh) = m.at.get(mark.n).unwrap_or(mark.rect)
       let x = ox + bx * k
       let y = oy + by * k
-      let open = m.editing == Some(mark.n)
+      let open = m.editing.get() == Some(mark.n)
       let size = @ui.style(w=Fixed(bw * k), h=Fixed(bh * k))
       if open {
         c.box(style=mark_box_open.then(size), tx=x, ty=y, fn() {  }) |> ignore
@@ -264,9 +264,9 @@ fn page_marks_over(
       let pin_y = dmax(pin_top, y)
       let pin = c.id("service/pin/\{mark.n}")
       if c.clicked(pin) {
-        m.editing = if open { None } else { Some(mark.n) }
+        m.editing.set(if open { None } else { Some(mark.n) })
         if !open {
-          m.note.set(mark.comment)
+          m.note.set(mark.comment.get())
           c.focus_editor("service/note")
         }
       }
@@ -276,14 +276,14 @@ fn page_marks_over(
       |> ignore
       if open {
         page_mark_note(c, p, site, mark, pin_x, pin_y, stage_w)
-      } else if mark.comment != "" {
+      } else if mark.comment.get() != "" {
         // beside the pin, on its left when the right has too little room
         let right = stage_w - pin_x - said_from >= dmin(said_room, pin_x - said_left)
         let max_w = dmax(said_least, if right { stage_w - pin_x - said_from } else { pin_x - said_left })
         let said = c.id("service/said/\{mark.n}")
         if c.clicked(said) {
-          m.editing = Some(mark.n)
-          m.note.set(mark.comment)
+          m.editing.set(Some(mark.n))
+          m.note.set(mark.comment.get())
           c.focus_editor("service/note")
         }
         let row = @ui.style(row=true, w=Fixed(if right { max_w } else { pin_x - said_beside }), justify=if right {
@@ -293,7 +293,7 @@ fn page_marks_over(
         })
         c.box(style=row, tx=if right { pin_x + pin_w + pin_edge * 2.0 } else { 0.0 }, ty=pin_y - pin_rise - 1.0, fn() {
           c.box(style=mark_said.then(@ui.style(max_w=Fixed(max_w))), id=said, fn() {
-            c.text(mark.comment, style=mark_said_words) |> ignore
+            c.text(mark.comment.get(), style=mark_said_words) |> ignore
           })
           |> ignore
         })
@@ -405,10 +405,10 @@ fn page_mark_note(
         placeholder_color=t.p.muted,
         field=p.marks.note,
       )
-      mark.comment = r.text
+      mark.comment.set(r.text)
       match r.submitted {
         Some(_) => {
-          p.marks.editing = None
+          p.marks.editing.set(None)
           c.blur()
         }
         None => ()

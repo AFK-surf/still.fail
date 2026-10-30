@@ -486,6 +486,7 @@ pub fn here_of(core : Core, id : String, name : String) -> Here {
 
 ///|
 /// The core the pages were last drawn with (what a page left lets go of: a draft of the core's).
+// (plain: said to what is built inside it, around that build and put back after; not a value of the page's)
 let left_core : Ref[Core?] = Ref(None)
 
 ///|
@@ -493,7 +494,7 @@ let left_core : Ref[Core?] = Ref(None)
 pub fn left(route : Route) -> Unit {
   match route {
     Archive => archive_reset()
-    Connects(_) => connects_mine.val = false
+    Connects(_) => connects_mine.set(false)
     Station(a) => station_parts.remove(a)
     NewProfile(a) =>
       match left_core.val {
@@ -528,7 +529,7 @@ pub fn reset() -> Unit {
   archive_reset()
   vault_ask_reset()
   keymap_reset()
-  login_marked.val = None
+  login_marked.set(None)
   station_parts.clear()
   station_network_open.clear()
   lock_prompts_reset()
@@ -536,7 +537,7 @@ pub fn reset() -> Unit {
   adb_reset()
   keyed_fields.clear()
   notify_switched.set(None)
-  connects_mine.val = false
+  connects_mine.set(false)
   chosen.clear()
   builtin_open.clear()
   panels_core.val = None
@@ -544,11 +545,11 @@ pub fn reset() -> Unit {
   at_root.val = false
   root_top.val = 0.0
   @sf.named_actions.val = None
-  wide.val = false
-  status_top.val = 0.0
-  nav_foot.val = 0.0
-  bar_room.val = 0.0
-  wide_deep.val = false
+  wide.set(false)
+  status_top.set(0.0)
+  nav_foot.set(0.0)
+  bar_room.set(0.0)
+  wide_deep.set(false)
   top_trailing.val = None
   top_on_back.val = None
   top_label.val = ""
@@ -558,7 +559,7 @@ pub fn reset() -> Unit {
   login_state.manual.clear()
   login_state.error.clear()
   login_state.seen.clear()
-  profile_forms.val = 0
+  profile_forms.set(0)
   machine_sessions.clear()
   adding.existing.set(false)
   adding.made.set(None)
@@ -568,20 +569,20 @@ pub fn reset() -> Unit {
   adding.order.clear()
   adding.picked.set("")
   adding.serial.set(0)
-  mark_pick.emojis = false
-  mark_pick.color = ""
+  mark_pick.emojis.set(false)
+  mark_pick.color.set("")
   mark_pick.serial = 0
-  mark_pick.asking = false
-  mark_pick.reading = ""
-  mark_pictures.val = 0
-  env_form.val = 0
+  mark_pick.asking.set(false)
+  mark_pick.reading.set("")
+  mark_pictures.set(0)
+  env_form.set(0)
   versions_state.updating.clear()
   versions_state.checking.clear()
   versions_state.switching.clear()
   versions_state.turning.clear()
   versions_state.failed.clear()
   recovery_words.clear()
-  vault_serial.val = 0
+  vault_serial.set(0)
   // the drafts each page opened of the core (a form a station, a new connect's, a profile's, a Slack app's): a run
   // opens its own
   decision_forms.clear()

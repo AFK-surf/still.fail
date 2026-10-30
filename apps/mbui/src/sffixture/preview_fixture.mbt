@@ -63,7 +63,7 @@ pub fn fixture_preview(mode : String) -> Unit {
       if viewer.get() is Some(v) {
         // the song paused at 0:31 of 1:35, the same on every run
         if which.has_suffix(".m4a") {
-          v.pinned = Some({
+          v.pinned.set(Some({
             state: 1,
             duration: 95000.0,
             position: 31000.0,
@@ -73,7 +73,7 @@ pub fn fixture_preview(mode : String) -> Unit {
             ended: false,
             width: 0.0,
             height: 0.0,
-          })
+          }))
         }
       }
     }

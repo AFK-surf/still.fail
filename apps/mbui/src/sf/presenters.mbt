@@ -121,18 +121,18 @@ priv struct Presented {
   serial : Int
   shows : Shows
   from : Anchor
-  mut open : Bool
+  open : @signals.Signal[Bool]
   line : @ui.Field
-  mut focused : Bool
+  focused : @signals.Signal[Bool]
   /// what is let go of as it closes unsaid (back, Escape, a press outside, its close button), and whether it closed
   /// so or was said
   gone : () -> Unit
-  mut ended : Bool
+  ended : @signals.Signal[Bool]
   /// as a sheet, found taller than a sheet's most: that tall from then on, what it holds scrolling in it
-  mut over : Bool
+  over : @signals.Signal[Bool]
   /// beside what opened it as wide as what it holds (`fits`): the widest it has been laid out, never narrower from then
   /// on
-  mut widest : Double
+  widest : @signals.Signal[Double]
 }
 
 ///|
@@ -196,13 +196,13 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     serial: presented_count.val,
     shows,
     from,
-    open: true,
+    open: @signals.signal(true, same=fn(a, b) { a == b }),
     line: @ui.Field::new(text=line),
-    focused: false,
+    focused: @signals.signal(false, same=fn(a, b) { a == b }),
     gone,
-    ended: false,
-    over: false,
-    widest: 0.0,
+    ended: @signals.signal(false, same=fn(a, b) { a == b }),
+    over: @signals.signal(false, same=fn(a, b) { a == b }),
+    widest: @signals.signal(0.0, same=fn(a, b) { a == b }),
   })
 }
 
@@ -710,7 +710,7 @@ pub fn presented_drawn() -> Bool {
 ///|
 /// Whether the one presented as `serial` is open (not going, nor gone).
 pub fn presented_open_of(serial : Int) -> Bool {
-  presented_now.iter().any(fn(p) { p.serial == serial && p.open })
+  presented_now.iter().any(fn(p) { p.serial == serial && p.open.get() })
 }
 
 ///|
@@ -781,7 +781,7 @@ pub fn ask_here(
 ///|
 /// Whether anything is presented now (the shell's own back waits while it is).
 pub fn presenting() -> Bool {
-  presented_now.iter().any(fn(p) { p.open })
+  presented_now.iter().any(fn(p) { p.open.get() })
 }
 
 ///|
@@ -800,7 +800,7 @@ pub fn close_all_presented() -> Unit {
 /// Closes the topmost presented, as back does.
 pub fn close_presented() -> Unit {
   for i = presented_now.length() - 1; i >= 0; i = i - 1 {
-    if presented_now[i].open {
+    if presented_now[i].open.get() {
       close_from(i)
       return
     }
@@ -812,7 +812,7 @@ pub fn close_presented() -> Unit {
 fn close_from(i : Int) -> Unit {
   presented_told()
   for k in i..<presented_now.length() {
-    presented_now[k].open = false
+    presented_now[k].open.set(false)
   }
 }
 
@@ -830,7 +830,7 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
   let sheet = layout(ww) is Small
   let gone : Array[Int] = []
   for i, p in presented_now.copy() {
-    let was = p.open
+    let was = p.open.get()
     let mut open = false
     let mut built = false
     c.scope(p.serial, fn() {
@@ -840,18 +840,18 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
     })
     // closed by the hand as it was drawn (back, Escape, a press outside, dragged down): it and what is over it go (one
     // closed by the app meanwhile, and what is over it then, went as it was closed: what was opened since stays)
-    if p.open && !open {
+    if p.open.get() && !open {
       close_from(i)
     }
     // closed unsaid: what it holds let go of, once
-    if !p.open && !p.ended {
-      p.ended = true
+    if !p.open.get() && !p.ended.get() {
+      p.ended.set(true)
       c.tell("sf-present/gone/\{p.serial}", p.gone)
     }
     if was && open {
       presented_how.push(how_of(p.shows, p.from, sheet))
     }
-    if !p.open && !built {
+    if !p.open.get() && !built {
       gone.push(p.serial)
     }
   }
@@ -907,7 +907,7 @@ fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
 ///|
 /// What chosen or said in `p` does, once the frame is built: `p` closes (and what is over it), then `f` goes on.
 fn done_with(c : @ui.Ctx, p : Presented, f : () -> Unit) -> Unit {
-  p.ended = true
+  p.ended.set(true)
   match presented_now.search_by(fn(q) { q.serial == p.serial }) {
     Some(i) => close_from(i)
     None => ()
@@ -1003,7 +1003,7 @@ fn menu_popover(
     _ => 6.0
   }
   // (it goes at once as the web's does, @kit.pop_out: gone as it closes)
-  let m = dropdown(c, key, p.open, trigger, entries, icons, menu_w, along~, offset~, at?, danger~)
+  let m = dropdown(c, key, p.open.get(), trigger, entries, icons, menu_w, along~, offset~, at?, danger~)
   match m.chosen {
     Some(v) => {
       let i = v.iter().fold(init=0, fn(n, ch) { n * 10 + (ch.to_int() - 48) })
@@ -1014,7 +1014,7 @@ fn menu_popover(
     }
     None => ()
   }
-  (m.open && m.chosen is None, p.open)
+  (m.open && m.chosen is None, p.open.get())
 }
 
 ///|
@@ -1070,7 +1070,7 @@ fn pick_popover(
       At(_, _, 0.0, 0.0) => 0.0
       _ => 6.0
     }
-    let m = dropdown(c, key, p.open, anchor, entries, icons, chooser_menu_w, along~, offset~, at?, marks~, notes~, row_end=fn(c, s) {
+    let m = dropdown(c, key, p.open.get(), anchor, entries, icons, chooser_menu_w, along~, offset~, at?, marks~, notes~, row_end=fn(c, s) {
       match values.get(s.entry.value) {
         Some(v) => c.text(v, style=pick_value) |> ignore
         None => ()
@@ -1080,12 +1080,12 @@ fn pick_popover(
       Some(k) => done_with(c, p, fn() { choose(k) })
       None => ()
     }
-    return (m.open && m.chosen is None, p.open)
+    return (m.open && m.chosen is None, p.open.get())
   }
   let r = @kit.popover(
     c,
     key,
-    p.open,
+    p.open.get(),
     anchor,
     along~,
     at?,
@@ -1126,7 +1126,7 @@ fn pick_popover(
       |> ignore
     },
   )
-  (r.value, p.open)
+  (r.value, p.open.get())
 }
 
 ///|
@@ -1141,7 +1141,7 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
   let r = @kit.popover(
     c,
     key,
-    p.open,
+    p.open.get(),
     anchor,
     side=x.side,
     along=x.along,
@@ -1159,9 +1159,9 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
         // (never narrower than it has been since it opened: what it holds changing as it is chosen in, a column of it
         // coming and going, it keeps its sides where they were)
         if c.laid_size(s.panel) is Some((w, _)) {
-          p.widest = dmax(p.widest, w)
+          p.widest.set(dmax(p.widest.get(), w))
         }
-        small_panel(c, min_w?=if p.widest > 0.0 { Some(p.widest) } else { None }, max_w=x.w, h~, inner) |> ignore
+        small_panel(c, min_w?=if p.widest.get() > 0.0 { Some(p.widest.get()) } else { None }, max_w=x.w, h~, inner) |> ignore
       } else {
         small_panel(c, w=Px(x.w), h~, inner) |> ignore
       }
@@ -1229,7 +1229,7 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
   let still = dialog(
     c,
     key,
-    p.open,
+    p.open.get(),
     title,
     fn() {
       // what it holds in a column on its words' line, as its title is (what is not a row: its fields, what it says, a
@@ -1281,7 +1281,7 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     column_in=card_pad - corner_inset,
   )
   words_in_now.val = words_were
-  (still && p.open, dialog_built(c, key, p.open))
+  (still && p.open.get(), dialog_built(c, key, p.open.get()))
 }
 
 ///|
@@ -1309,7 +1309,7 @@ fn stage_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
   let d = @kit.dialog(
     c,
     key,
-    p.open,
+    p.open.get(),
     title,
     w=room_w,
     close_label="",
@@ -1344,7 +1344,7 @@ fn stage_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
       |> ignore
     },
   )
-  (d.value && !closed && p.open, dialog_built(c, key, p.open))
+  (d.value && !closed && p.open.get(), dialog_built(c, key, p.open.get()))
 }
 
 ///|
@@ -1403,11 +1403,11 @@ fn confirm_centred(
   danger : Bool,
   run : () -> Unit,
 ) -> (Bool, Bool) {
-  let r = confirm_dialog(c, key, p.open, title, words, action, cancel=t("common.cancel"), danger~)
+  let r = confirm_dialog(c, key, p.open.get(), title, words, action, cancel=t("common.cancel"), danger~)
   if r.confirmed {
     done_with(c, p, run)
   }
-  (r.open && !r.confirmed, dialog_built(c, key, p.open))
+  (r.open && !r.confirmed, dialog_built(c, key, p.open.get()))
 }
 
 ///|
@@ -1431,7 +1431,7 @@ fn ask_centred(
   let still = dialog(
     c,
     key,
-    p.open,
+    p.open.get(),
     title,
     fn() {
       let f = input(c, key + "/line", placeholder~, secret~, field=p.line)
@@ -1457,7 +1457,7 @@ fn ask_centred(
     let line = words.val
     done_with(c, p, fn() { run(line) })
   }
-  (still && !said && p.open, dialog_built(c, key, p.open))
+  (still && !said && p.open.get(), dialog_built(c, key, p.open.get()))
 }
 
 ///|
@@ -1468,11 +1468,11 @@ fn focus_once(c : @ui.Ctx, p : Presented, key : String) -> Unit {
   if let_go(c, p, key) {
     return
   }
-  if p.focused {
+  if p.focused.get() {
     return
   }
   if c.has_focus(c.id(key)) {
-    p.focused = true
+    p.focused.set(true)
   } else {
     c.focus_editor(key)
   }
@@ -1481,7 +1481,7 @@ fn focus_once(c : @ui.Ctx, p : Presented, key : String) -> Unit {
 ///|
 /// `p` closed: its field (`key`'s editor) lets go of the keyboard's focus if it has it. Whether it is closed.
 fn let_go(c : @ui.Ctx, p : Presented, key : String) -> Bool {
-  if p.open {
+  if p.open.get() {
     return false
   }
   if c.has_focus(c.id(key)) {
@@ -1500,7 +1500,7 @@ fn dialog_built(c : @ui.Ctx, key : String, open : Bool) -> Bool {
 fn close_from_serial(serial : Int) -> Unit {
   match presented_now.search_by(fn(q) { q.serial == serial }) {
     // (one closed already, going: what was opened over it since is not its, as one opened as it went)
-    Some(i) if presented_now[i].open => close_from(i)
+    Some(i) if presented_now[i].open.get() => close_from(i)
     _ => ()
   }
 }
@@ -1553,7 +1553,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   // a panel taller than a sheet's most: the sheet that tall from then on, what it holds scrolling in it (as a dialog's
   // body does), its foot in reach
   if natural is Some(m) && m > wh * sheet_most {
-    p.over = true
+    p.over.set(true)
   }
   // a panel a share of the window caps (tall, not a form): that share, or as tall as what it holds where its lists say
   // so (measured_body), what the sheet takes besides its body as the last layout had it
@@ -1568,7 +1568,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
     (true, Some(w), Some((_, whole)), Some((_, body))) => Some(w + dmax(whole - body, 0.0))
     _ => None
   }
-  let over = p.over
+  let over = p.over.get()
   let share = match p.shows {
     Pick(_, choices, _, _, _, _) if choices.length() >= pick_search_from => Some(sheet_long_pick)
     Confirm(_, _, _, _, _) => Some(sheet_confirm)
@@ -1598,7 +1598,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
       Some(w) => w >= wh * sheet_cap(p.shows) - sheet_cap_slack
       None => true
     })
-  let r = @kit.sheet(c, key, p.open, h~, detents=if grows { sheet_grows_to } else { [] }, scrim=sheet_scrim, look~, fn() {
+  let r = @kit.sheet(c, key, p.open.get(), h~, detents=if grows { sheet_grows_to } else { [] }, scrim=sheet_scrim, look~, fn() {
     match share {
       Some(_) =>
         c.box(style=sheet_whole, id=whole_id, fn() {
@@ -1624,7 +1624,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
     Some(DraggedTo(f)) => @hostapi.log(if f > 0.72 { "SHEET dragged to 94%" } else { "SHEET dragged to 55%" })
     None => ()
   }
-  (r.open && p.open, r.shown)
+  (r.open && p.open.get(), r.shown)
 }
 
 ///|

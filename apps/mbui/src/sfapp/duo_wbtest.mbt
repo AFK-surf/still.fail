@@ -151,7 +151,7 @@ test "a picture looked at on an iPhone Duo: the system's tabs put away, its acti
 test "a picture looked at elsewhere: its own bar, as it was" {
   let t = native_chat(951.0, 669.0, false, mode="chat-preview-image")
   t.run_for(@ui.move_most_ms)
-  assert_false(@sf.native_over.up)
+  assert_false(@sf.native_over.up.get())
   assert_true(t.find("界面草图.png") is Some(_))
 }
 
@@ -566,10 +566,10 @@ test "Duo HTML preview exposes close source and download in native bars" {
   }
   t.post(@hostapi.system_channel, "{\"nav\":\"over/source\"}")
   t.draw()
-  assert_true(viewer.get().unwrap().source)
+  assert_true(viewer.get().unwrap().source.get())
   t.post(@hostapi.system_channel, "{\"nav\":\"over/source\"}")
   t.draw()
-  assert_false(viewer.get().unwrap().source)
+  assert_false(viewer.get().unwrap().source.get())
   t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/close\"}")
   t.run_for(@ui.move_most_ms)
   assert_true(viewer.get() is None)

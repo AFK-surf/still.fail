@@ -86,7 +86,7 @@ let words_tag_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, c
 ///|
 /// The presenter asking for each draft's sharing (@sf.last_presented), while it is drawn.
 // kept across runs: emptied as each goes (outside_sheet); reset by the app with the presenters (outside_reset)
-let outside_shown : Map[String, Int] = {}
+let outside_shown : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
 
 ///|
 /// No sheet asking (the app begun again).

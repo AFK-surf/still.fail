@@ -61,23 +61,25 @@ pub(all) struct ScreenAt {
 
 ///|
 pub(all) struct App {
+  // (plain: put new only by reset, between runs; its stack says its own changes: Nav's said)
   mut nav : @ui.Nav[Page]
   /// the workspace switched to here, before the core's prefs say it
   picked : @signals.Signal[String]
   /// the list's filter chosen here, by workspace, before the prefs say it
   filters : @sf.LiveMap[String, String]
   /// the filter's menu open
-  mut menu : Bool
+  menu : @signals.Signal[Bool]
   /// a place switched to on the bar: from which side (1 from the right, -1 the left, 0 from no side)
-  mut switch_way : Int
+  switch_way : @signals.Signal[Int]
   /// a row held: its id, and whether it has been held long (its time on @kit.after)
-  mut held : Int
-  mut held_long : Bool
+  held : @signals.Signal[Int]
+  held_long : @signals.Signal[Bool]
   /// what was said last of a write (a toast), and which saying it is (one said again is a new one)
   toast : @signals.Signal[String]
   toast_n : @signals.Signal[Int]
   /// what the toast offers to do (its button's words, "" none: an archive's 撤销), and what that does
-  mut toast_action : String
+  toast_action : @signals.Signal[String]
+  // (plain: a closure, what to do, not a value shown)
   mut toast_run : () -> Unit
 }
 
@@ -86,13 +88,13 @@ pub let app : App = {
   nav: new_nav(),
   picked: @signals.signal("", same=fn(a, b) { a == b }),
   filters: @sf.LiveMap::new(),
-  menu: false,
-  switch_way: 0,
-  held: 0,
-  held_long: false,
+  menu: @signals.signal(false, same=fn(a, b) { a == b }),
+  switch_way: @signals.signal(0, same=fn(a, b) { a == b }),
+  held: @signals.signal(0, same=fn(a, b) { a == b }),
+  held_long: @signals.signal(false, same=fn(a, b) { a == b }),
   toast: @signals.signal("", same=fn(a, b) { a == b }),
   toast_n: @signals.signal(0, same=fn(a, b) { a == b }),
-  toast_action: "",
+  toast_action: @signals.signal("", same=fn(a, b) { a == b }),
   toast_run: fn() {  },
 }
 
@@ -161,7 +163,7 @@ fn setting_way(r : @settings.Route) -> Array[@settings.Route] {
 ///|
 /// Back to Home (the stack's root), the filter's menu closed: a workspace left, from either frame.
 pub fn nav_home() -> Unit {
-  app.menu = false
+  app.menu.set(false)
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
       break
@@ -220,12 +222,12 @@ pub fn reset() -> Unit {
   app.picked.set("")
   @ui.set_motion_chosen(None)
   app.filters.clear()
-  app.menu = false
-  app.switch_way = 0
-  app.held = 0
-  app.held_long = false
+  app.menu.set(false)
+  app.switch_way.set(0)
+  app.held.set(0)
+  app.held_long.set(false)
   app.toast.set("")
-  app.toast_action = ""
+  app.toast_action.set("")
   app.toast_run = fn() {  }
   left_pages.clear()
   // the topics read for what has not ended yet (held.mbt)

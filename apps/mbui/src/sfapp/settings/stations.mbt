@@ -488,4 +488,4 @@ pub let station_parts : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 ///|
 /// Whose page has its 高级网络设置 opened, by station (opened by the person, or the fixture's
 /// settings-station-network); kept while the page is in the stack.
-pub let station_network_open : Map[String, Bool] = {}
+pub let station_network_open : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()

@@ -20,7 +20,7 @@ pub fn update_reset() -> Unit {
   update.asked = false
   update.checking.set(false)
   update.installing.set(false)
-  update.source = None
+  update.source.set(None)
   update.said.set(Unsaid)
   update.dialog = 0
   update_version.val = 0
@@ -52,10 +52,11 @@ pub(all) enum UpdateSaid {
 /// presenter's serial, 0 none yet).
 pub(all) struct Update {
   available : @signals.Signal[Json?]
+  // (asked, dialog plain: asked once at the start; the dialog's presenter serial, read only to close it)
   mut asked : Bool
   checking : @signals.Signal[Bool]
   installing : @signals.Signal[Bool]
-  mut source : UpdateSource?
+  source : @signals.Signal[UpdateSource?]
   said : @signals.Signal[UpdateSaid]
   mut dialog : Int
 }
@@ -67,7 +68,7 @@ pub let update : Update = {
   asked: false,
   checking: @signals.signal(false, same=fn(a, b) { a == b }),
   installing: @signals.signal(false, same=fn(a, b) { a == b }),
-  source: None,
+  source: @signals.signal(None),
   said: @signals.signal(Unsaid, same=fn(a, b) { a == b }),
   dialog: 0,
 }
@@ -79,7 +80,7 @@ pub let update_version : Ref[Int] = Ref(0)
 ///|
 /// The source newer builds are asked of (none: the app never asks).
 pub fn set_update_source(s : UpdateSource?) -> Unit {
-  update.source = s
+  update.source.set(s)
 }
 
 ///|
@@ -134,7 +135,7 @@ fn this_version() -> Int {
 ///|
 /// Whether newer builds are asked for here: a source given and a version code (none on iOS, nor run from the sources).
 pub fn update_asks() -> Bool {
-  update.source is Some(_) && this_version() > 0
+  update.source.get() is Some(_) && this_version() > 0
 }
 
 ///|
@@ -142,7 +143,7 @@ pub fn update_asks() -> Bool {
 /// "" otherwise. Asked now, what it answered is kept (`update.said`) for the dialog; where it cannot be asked, why.
 pub fn update_check(src : Source, now : Bool, done? : (String) -> Unit = fn(_) {  }) -> Unit {
   let version = this_version()
-  let source = match update.source {
+  let source = match update.source.get() {
     Some(s) if version > 0 && !src.read_only => s
     _ => {
       if now {
@@ -197,7 +198,7 @@ pub fn update_install(src : Source) -> Unit {
           None => file
         }
         @hostapi.log("update: \{file} asked for")
-        match update.source {
+        match update.source.get() {
           Some(source) =>
             @ui.update_install((source.url)(file), text(Some(v), "sha256"), number(Some(v), "size"), name)
           None => ()

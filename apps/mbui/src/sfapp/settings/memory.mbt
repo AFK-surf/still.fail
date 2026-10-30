@@ -57,4 +57,4 @@ pub let memory_chevron : Double = 14.0
 
 ///|
 /// Whether the built-in skills are folded open, by station.
-pub let builtin_open : Map[String, Bool] = Map::new()
+pub let builtin_open : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()

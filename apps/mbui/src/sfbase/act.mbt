@@ -7,12 +7,12 @@
 pub(all) struct Acting {
   doing : @sf.LiveMap[String, Bool]
   failed : @sf.LiveMap[String, Int]
-  mut failed_n : Int
+  failed_n : @signals.Signal[Int]
 }
 
 ///|
 // kept across runs: put back by acting_reset
-pub let acting : Acting = { doing: @sf.LiveMap::new(), failed: @sf.LiveMap::new(), failed_n: 0 }
+pub let acting : Acting = { doing: @sf.LiveMap::new(), failed: @sf.LiveMap::new(), failed_n: @signals.signal(0, same=fn(a, b) { a == b }) }
 
 ///|
 /// As at the start (the app's reset).
@@ -27,7 +27,7 @@ pub fn acting_reset() -> Unit {
 pub fn toast_later(words : String, action? : String = "", run? : () -> Unit = fn() {  }) -> Unit {
   app.toast.set(words)
   app.toast_n.set(app.toast_n.get() + 1)
-  app.toast_action = action
+  app.toast_action.set(action)
   app.toast_run = run
 }
 
@@ -67,8 +67,8 @@ pub fn act(
     }
     if key != "" && res is Err(_) {
       // its 6 s from the frame that first shows it (failed_lately)
-      acting.failed_n += 1
-      acting.failed[key] = acting.failed_n
+      acting.failed_n.set(acting.failed_n.get() + 1)
+      acting.failed[key] = acting.failed_n.get()
     }
     match res {
       Ok(v) => {

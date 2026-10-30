@@ -95,18 +95,18 @@ fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
     |> ignore
     history_actions(c, src, r, a)
     @sf.head_end(c, fn() {
-      dui.history_tab = @sf.segmented(
+      dui.history_tab.set(@sf.segmented(
         c,
         "history/tab",
         [tr("android-chat.history.tab.steps"), tr("android-chat.history.tab.details")],
-        dui.history_tab,
-      )
+        dui.history_tab.get(),
+      ))
     })
   })
   |> ignore
   history_summary(c, a)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    if dui.history_tab == 0 {
+    if dui.history_tab.get() == 0 {
       // its steps, as every pane draws them (sfpages' history_steps.mbt); opened at an entry, brought to it once
       let lkey = "history/" + r.station + "/" + key
       match entry {
@@ -214,12 +214,12 @@ fn history_summary(c : @ui.Ctx, a : Json?) -> Unit {
 ///|
 /// How a history's steps were put in place as it opened (History.kt Steps: `follow.placed`), by its list's key: at
 /// its newest, followed (true), or at an entry, not followed (false). Not there: not put in place yet.
-let history_placed : Map[String, Bool] = {}
+let history_placed : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()
 
 ///|
 /// The histories whose page before, asked for an entry before what was loaded, could not be had: put in place with
 /// what there is.
-let history_short : Map[String, Bool] = {}
+let history_short : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()
 
 ///|
 /// Its details (History.kt Details): where it stands and its figures as its card has them, how it runs in a line,

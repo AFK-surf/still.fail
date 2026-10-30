@@ -10,13 +10,13 @@ pub fn side_top(c : @ui.Ctx) -> Unit {
   if @ui.window_inset() && !side_folded() {
     c.window_drag(id)
   }
-  c.box(style=side_full.then(@ui.style(h=Fixed(wide.brand_h))), id~, fn() {  }) |> ignore
+  c.box(style=side_full.then(@ui.style(h=Fixed(wide.brand_h.get()))), id~, fn() {  }) |> ignore
 }
 
 ///|
 /// The band's first row's height (side_top).
 pub fn side_top_h() -> Double {
-  wide.brand_h
+  wide.brand_h.get()
 }
 
 ///|

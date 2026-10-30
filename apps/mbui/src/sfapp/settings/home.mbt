@@ -19,7 +19,7 @@ pub fn page(
   // title 14): the scale's body (Lg), secondary (Sm) and values (Base) taken down there, every page's words with them,
   // and Xl2 (Android's back, 17, which these pages never say) the web's body for a section's title (the desktop's own
   // pages, ported from the web's, are src/sfdesk's, in the library's sizes)
-  if wide.val {
+  if wide.get() {
     let t = c.theme()
     c.with_theme({ ..t, text: { ..t.text, lg: wide_body, sm: wide_small, base: wide_body, xl2: wide_heading } }, fn() {
       route_page(c, core, here, route)

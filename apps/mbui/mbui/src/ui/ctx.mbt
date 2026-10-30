@@ -2093,7 +2093,6 @@ pub fn Ctx::built_from_changed(self : Ctx, what : String, loc~ : SourceLoc) -> U
 /// between frames is.
 fn Ctx::owe_frame(self : Ctx) -> Unit {
   self.wants_frame = true
-  part_live()
   h_request_frame()
 }
 
@@ -2103,7 +2102,6 @@ fn Ctx::owe_frame(self : Ctx) -> Unit {
 /// (owe_start); building this one again would not take it.
 fn Ctx::owe_next(self : Ctx) -> Unit {
   self.wants_frame = true
-  part_live()
   h_request_frame()
 }
 
@@ -2111,7 +2109,6 @@ fn Ctx::owe_next(self : Ctx) -> Unit {
 #callsite(autofill(loc))
 pub fn Ctx::request_frame(self : Ctx, loc~ : SourceLoc) -> Unit {
   self.wants_frame = true
-  part_live()
   // asked between frames (a host's callback, a timer's): the frame's own asking (on_frame's end) is past, so the
   // host is told now, else nothing comes (the next frame's start clears wants_frame)
   if !in_frame.val {

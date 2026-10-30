@@ -22,7 +22,7 @@ priv struct ScreenDropItem {
   sent : @signals.Signal[Int]
   /// `waiting`, `going`, `done` or `failed` (why in `error`)
   state : @signals.Signal[String]
-  mut error : String
+  error : @signals.Signal[String]
   id : @signals.Signal[String]
 }
 
@@ -56,7 +56,7 @@ fn ScreenSess::send_files(self : ScreenSess, files : Array[@hostapi.Picked], to 
       tried: @sf.LiveArray::from([]),
       sent: @signals.signal(0),
       state: @signals.signal("waiting"),
-      error: "",
+      error: @signals.signal("", same=fn(a, b) { a == b }),
       id: @signals.signal(""),
     })
   }
@@ -81,7 +81,7 @@ fn ScreenSess::retry(self : ScreenSess, d : ScreenDropItem) -> Unit {
     return
   }
   d.state.set("waiting")
-  d.error = ""
+  d.error.set("")
   d.sent.set(0)
   self.pump()
 }
@@ -96,7 +96,7 @@ fn ScreenSess::pump(self : ScreenSess) -> Unit {
     Some(d) => {
       if self.src.read_only {
         d.state.set("failed")
-        d.error = read_only_words
+        d.error.set(read_only_words)
         self.pump()
         return
       }
@@ -205,7 +205,7 @@ fn ScreenSess::drop_part(self : ScreenSess, d : ScreenDropItem, have : Int, plan
 ///|
 fn ScreenSess::drop_failed(self : ScreenSess, d : ScreenDropItem, why : String) -> Unit {
   d.state.set("failed")
-  d.error = why
+  d.error.set(why)
   self.pumping = false
   self.pump()
 }

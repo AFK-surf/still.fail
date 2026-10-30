@@ -36,7 +36,7 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
   // the composer, over the cover a row carried over the pane puts up (@ui.Stratum's OverCover: what it is let go into)
   let composer = c.layer(fn() {
     c.spacer()
-    @sfpages.chat_composer(c, src, w, r, view, apart=wide.tape)
+    @sfpages.chat_composer(c, src, w, r, view, apart=wide.tape.get())
   })
   c.stratum(composer, OverCover)
   // (over the viewer's picture as it flies from the list or back into it)

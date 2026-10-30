@@ -11,9 +11,10 @@ priv struct MenuDoing {
   open : @signals.Signal[String]
   copy : @signals.Signal[String]
   image : @signals.Signal[String]
-  mut offered : String
+  offered : @signals.Signal[String]
   /// the file whose menu a finger held opened (its box's id, 0 none), and that menu (the presenters' serial)
-  mut held_for : Int
+  held_for : @signals.Signal[Int]
+  // (plain: the next hold's number, read only as one starts)
   mut held_serial : Int
 }
 
@@ -22,15 +23,15 @@ let menu_doing : MenuDoing = {
   open: @signals.signal("", same=fn(a, b) { a == b }),
   copy: @signals.signal("", same=fn(a, b) { a == b }),
   image: @signals.signal("", same=fn(a, b) { a == b }),
-  offered: "",
-  held_for: 0,
+  offered: @signals.signal("", same=fn(a, b) { a == b }),
+  held_for: @signals.signal(0, same=fn(a, b) { a == b }),
   held_serial: -1,
 }
 
 ///|
 /// The picture whose menu was last opened ("" none).
 pub fn offered_image() -> String {
-  menu_doing.offered
+  menu_doing.offered.get()
 }
 
 ///|
@@ -38,22 +39,22 @@ fn menus_reset() -> Unit {
   menu_doing.open.set("")
   menu_doing.copy.set("")
   menu_doing.image.set("")
-  menu_doing.offered = ""
-  menu_doing.held_for = 0
+  menu_doing.offered.set("")
+  menu_doing.held_for.set(0)
   menu_doing.held_serial = -1
 }
 
 ///|
 /// Whether a finger held file `id` (its box's id) for its menu and that menu is up (lifted meanwhile: @sf.lift_over).
 fn file_held_open(id : Int) -> Bool {
-  menu_doing.held_for == id && @sf.presented_drawn_of(menu_doing.held_serial)
+  menu_doing.held_for.get() == id && @sf.presented_drawn_of(menu_doing.held_serial)
 }
 
 ///|
 /// A link in a message held or right clicked: its menu at the pointer.
 fn link_held(c : @ui.Ctx, href : String) -> Unit {
   // (the press is the link's menu's, not a passage's pick)
-  pk.taken_at = c.press().frame
+  pk.taken_at.set(c.press().frame)
   let (x, y, _) = c.pointer()
   // held by a finger, felt as it opens
   @sf.menu_held(c, "link") |> ignore
@@ -78,12 +79,12 @@ fn file_menu(
 ) -> Unit {
   match c.menu_asked(id) {
     Some((x, y)) => {
-      menu_doing.offered = src
+      menu_doing.offered.set(src)
       // held with a finger: the press is the menu's (lifting it opens nothing), felt
       let held = @sf.menu_held(c, "file")
       if held {
         // (the press is the file's menu's, not a passage's pick)
-        pk.taken_at = c.press().frame
+        pk.taken_at.set(c.press().frame)
       }
       let items : Array[@sf.MenuItem?] = []
       match quote {
@@ -96,7 +97,7 @@ fn file_menu(
       }
       if items.length() > 0 {
         @sf.menu(items, from=@sf.at_point(x, y))
-        menu_doing.held_for = if held { id } else { 0 }
+        menu_doing.held_for.set(if held { id } else { 0 })
         menu_doing.held_serial = @sf.last_presented()
       }
     }

@@ -4168,7 +4168,7 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
       Some(r) => Some(r)
       None => {
         let r = sync_rest(c.moment())
-        sync_rests[key] = r
+        sync_rests.set(key, r)
         Some(r)
       }
     }

@@ -9,7 +9,7 @@ fn new_chat(c : @ui.Ctx) -> Unit {
   ignore(c)
   fresh_reset()
   lower_sheet()
-  app.menu = false
+  app.menu.set(false)
   open_page(NewChat)
 }
 

@@ -274,6 +274,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       nodes_run.fresh = true
       nodes_run.whole = true
     }
+    lives_pass_start()
     let kept0 = nodes_run.kept
     layout_coming.val = true
     c.read_back_moved = false
@@ -351,6 +352,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   }
   // the parts kept that this frame did not show let go (kept_part.mbt)
   parts_frame_end(c)
+  // what shows now and did not, and what no longer does, said so (lives.mbt)
+  lives_frame_end()
   // what was let go on the window from outside that no build took: files' paths into the field there, the drops
   // let go (drop.mbt)
   drops_frame_end(c)

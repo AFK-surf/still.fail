@@ -113,7 +113,7 @@ test "a picture sent from here flies out as its message shows it: the picture pi
   assert_true(at.length() > 0)
   t.tap(at[0].0, at[0].1)
   let v = viewer.get().unwrap()
-  assert_true(v.flies && !v.fly_back)
+  assert_true(v.flies.get() && !v.fly_back.get())
   assert_eq(pv_hidden.val, id)
   // halfway: the same picture (the message's hidden under it), on its way to its place on the stage
   t.run_for(@ui.move_most_ms / 2.0)
@@ -139,7 +139,7 @@ test "a picture's whole come once it is in takes its stand-in's place once decod
   t.tap(at[0].0, at[0].1)
   let v = viewer.get().unwrap()
   t.run_for(@ui.move_most_ms)
-  assert_true(!v.flies)
+  assert_true(!v.flies.get())
   let to = v.zoom.rect().unwrap()
   assert_true(drawn_at(t, to))
   // its whole comes: in the frame it is here and not yet decoded, what stood in for it is still drawn there
@@ -195,7 +195,7 @@ test "the chat's bars under the viewer's ground while the picture is grown, the 
   // on its way back, grown still: the bar the page's, drawn under the picture (and under the ground over the page)
   t.run_for(@ui.move_most_ms / 4.0)
   let v = pv_leaving.get().unwrap()
-  assert_true(v.flies && v.flying() > 0.0 && v.flying() < 1.0)
+  assert_true(v.flies.get() && v.flying() > 0.0 && v.flying() < 1.0)
   let order = t.drawn_order()
   let picture = order.search_by(fn(i) { i.0 == 4 && i.5 > 0.5 }).unwrap()
   let bar = order.search_by(fn(i) { i.0 == 0 && (i.4 - flight_bar_h).abs() < 0.5 && i.2 > 844.0 - flight_bar_h - 0.5 })
@@ -241,7 +241,7 @@ test "a picture under the composer goes out from under it at its own size first,
   let v = viewer.get().unwrap()
   // one move, on one curve: out from under the composer first (its own size, the composer whole over the list
   // meanwhile), then grown, nothing still between; the going out is the curve's first `lift` of its way
-  let lift = v.fly_lift
+  let lift = v.fly_lift.get()
   assert_true(lift > 0.0)
   let open_ms = fly_ms_of(t, v)
   let out = way_at(lift)
@@ -263,7 +263,7 @@ test "a picture under the composer goes out from under it at its own size first,
   // back: shrunk, then in under the composer to its thumbnail, one move of its own on the same curve
   t.back()
   let back = t.time()
-  let lift = v.fly_lift
+  let lift = v.fly_lift.get()
   let close_ms = fly_ms_of(t, v)
   t.run_for(way_at(1.0 - lift) * close_ms - near)
   assert_true(v.flying() > 0.0 && v.lifted() == 1.0)
@@ -290,7 +290,7 @@ test "a picture going back in under the composer keeps its corners round: what i
   // back, halfway in under the composer: its box moved half the way, its corners round as the thumbnail's
   t.back()
   let v = pv_leaving.get().unwrap()
-  let lift = v.fly_lift
+  let lift = v.fly_lift.get()
   t.run_for(way_at(1.0 - lift / 2.0) * fly_ms_of(t, v))
   assert_eq(v.flying(), 0.0)
   assert_true(v.lifted() > 0.2 && v.lifted() < 0.8, msg="\{v.lifted()}")
@@ -355,7 +355,7 @@ test "a picture cut by its card's foot: what shows of it said as where it shows,
   t.back()
   // (what showed of it, hidden while the picture is out, kept from before)
   t.run_for(@ui.move_most_ms / 2.0)
-  match pv_leaving.get().unwrap().fly_from {
+  match pv_leaving.get().unwrap().fly_from.get() {
     Some({ seen: Some((_, y, _, h)), .. }) => assert_true((y + h - 150.0).abs() < 0.5)
     other => fail("\{other.map(fn(f) { f.seen })}")
   }
@@ -402,7 +402,7 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   assert_true(th.y < flight_bar_h - 20.0 && th.y + th.h > flight_bar_h + 20.0, msg="\{th.y} \{th.h}")
   t.tap(th.x + th.w / 2.0, (flight_bar_h + th.y + th.h) / 2.0)
   let v = viewer.get().unwrap()
-  let lift = v.fly_lift
+  let lift = v.fly_lift.get()
   let open_ms = fly_ms_of(t, v)
   let start = t.time()
   // (a hair each side of where the going out ends: a fortieth of its time)
@@ -435,7 +435,7 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   t.back()
   let back = t.time()
   let v = pv_leaving.get().unwrap()
-  let lift = v.fly_lift
+  let lift = v.fly_lift.get()
   let close_ms = fly_ms_of(t, v)
   t.run_for(way_at(1.0 - lift / 2.0) * close_ms)
   assert_eq(v.flying(), 0.0)
@@ -478,7 +478,7 @@ test "a picture mostly under the chat's bar goes out from under it as quick as i
   let open_ms = fly_ms_of(t, v)
   // the picture's edges a step before where the going out ends and a step after: as quick each side
   let step = open_ms / 10.0
-  let joint = start + way_at(v.fly_lift) * open_ms
+  let joint = start + way_at(v.fly_lift.get()) * open_ms
   let edges = fn() raise {
     let i = t.drawn_images().filter(fn(i) { i[8] > 0.5 && i[2] > 0.0 })
     assert_eq(i.length(), 1)

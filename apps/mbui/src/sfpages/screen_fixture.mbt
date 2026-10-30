@@ -49,18 +49,18 @@ pub fn open_screen_fixture(mode : String) -> Unit {
   match m {
     "screen-trackpad" | "screen-trackpad-command" => {
       // a finger moved right, slowly (ScreenViewerTest: the pointer near 0.66 of the frame)
-      u.pad.x = 0.66
+      u.pad.x.set(0.66)
       if m == "screen-trackpad-command" {
-        u.held.mods = mod_meta
+        u.held.mods.set(mod_meta)
       }
     }
-    "screen-full" => u.full = true
+    "screen-full" => u.full.set(true)
     "screen-full-tools" => {
-      u.full = true
-      u.tools_open = true
+      u.full.set(true)
+      u.tools_open.set(true)
     }
-    "screen-center" => u.asked_panel = "center"
-    "screen-stats" => u.asked_panel = "net"
+    "screen-center" => u.asked_panel.set("center")
+    "screen-stats" => u.asked_panel.set("net")
     _ => ()
   }
 }
@@ -307,7 +307,7 @@ fn screen_fix_drops(done : Bool) -> Unit {
     tried: @sf.LiveArray::from(["季度报告.pdf"]),
     sent: @signals.signal(if done { report.length() } else { 256 * 1024 }),
     state: if done { @signals.signal("done") } else { @signals.signal("going") },
-    error: "",
+    error: @signals.signal("", same=fn(a, b) { a == b }),
     id: @signals.signal(""),
   })
   s.drops.push({
@@ -319,7 +319,7 @@ fn screen_fix_drops(done : Bool) -> Unit {
     tried: @sf.LiveArray::from([]),
     sent: if done { @signals.signal(notes.length()) } else { @signals.signal(0) },
     state: if done { @signals.signal("done") } else { @signals.signal("waiting") },
-    error: "",
+    error: @signals.signal("", same=fn(a, b) { a == b }),
     id: @signals.signal(""),
   })
   s.drops_serial = 2

@@ -205,6 +205,6 @@ test "touch: the message header has neither; the held bar copies its position li
   assert_true(t.query(Button, label="分享这一轮") is Some(_))
   t.click(Button, label="复制链接")
   assert_eq(t.clipboard(), "https://app.still.fail/o/ws1/st1/s-c1?message=11")
-  assert_eq(pk.ts, "")
+  assert_eq(pk.ts.get(), "")
   assert_eq(named(calls, "chat.publishPreview").length(), 0)
 }

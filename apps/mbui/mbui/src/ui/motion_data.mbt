@@ -119,8 +119,15 @@ fn Ctx::movers_sample(self : Ctx) -> Unit {
 }
 
 ///|
+/// What was last said to move (Ctx::moving_as's `what`): what told a row it reads anew, where a motion's mover did
+/// (Tester::assert_idle).
+// kept across runs: a word for a test's message, what was last said to move; read only to say why a frame was asked for
+let moving_told : Ref[String] = Ref("")
+
+///|
 /// The same as Ctx::moving, `what` saying all of what it is and who told it (what moves again by itself, as first told).
 pub fn Ctx::moving_as(self : Ctx, who : Mover, m : &Moving, what : String) -> Unit {
+  moving_told.val = what
   who.changed()
   for e in self.movers {
     if physical_equal(e.who, who) {

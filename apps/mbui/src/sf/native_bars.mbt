@@ -8,9 +8,9 @@
 /// The system's bars this frame.
 pub(all) struct NativeBars {
   /// whether the system shows the app's tabs now (they were handed it and it took them)
-  mut on : Bool
+  on : @signals.Signal[Bool]
   /// how wide its column down the window's trailing edge is (0: across the top and foot upright, or none)
-  mut side : Double
+  side : @signals.Signal[Double]
   /// the screen's corners where the cards along its edges follow them, each its own (top left, then round it: an
   /// iPhone Duo's outer screen 8 along its hinge, 59 on the other side; 0: the window's own, as elsewhere)
   corners : FixedArray[Double]
@@ -18,13 +18,13 @@ pub(all) struct NativeBars {
 
 ///|
 // kept across runs: rail_native.mbt says it again each frame, native_bars_reset as the app begins anew
-pub let native_bars : NativeBars = { on: false, side: 0.0, corners: FixedArray::make(4, 0.0) }
+pub let native_bars : NativeBars = { on: @signals.signal(false, same=fn(a, b) { a == b }), side: @signals.signal(0.0, same=fn(a, b) { a == b }), corners: FixedArray::make(4, 0.0) }
 
 ///|
 /// As at the start: none.
 pub fn native_bars_reset() -> Unit {
-  native_bars.on = false
-  native_bars.side = 0.0
+  native_bars.on.set(false)
+  native_bars.side.set(0.0)
   native_bars.corners.fill(0.0)
   native_foot_made.val = None
   native_over_clear()
@@ -40,21 +40,21 @@ pub fn native_able() -> Bool {
 ///|
 /// Whether the system shows the app's tabs this frame.
 pub fn native_on() -> Bool {
-  native_bars.on
+  native_bars.on.get()
 }
 
 ///|
 /// Whether its bars run down the window's trailing edge (on its side, its outer screen): the app's actions in that
 /// column; upright they are across the top and foot.
 pub fn native_side() -> Bool {
-  native_bars.on && native_bars.side > 0.0
+  native_bars.on.get() && native_bars.side.get() > 0.0
 }
 
 ///|
 /// How far in from the window's trailing edge what is pressed keeps clear of the column (0 where there is none).
 pub fn native_clear() -> Double {
-  if native_bars.on {
-    native_bars.side
+  if native_bars.on.get() {
+    native_bars.side.get()
   } else {
     0.0
   }
@@ -64,7 +64,7 @@ pub fn native_clear() -> Double {
 /// How much of the window's foot the system's tabs take across it (upright: the safe area's foot, the home indicator's
 /// line with them), what is over the window's whole keeps clear of (a toast); 0 where they are not there.
 pub fn native_foot() -> Double {
-  if native_bars.on && native_bars.side == 0.0 {
+  if native_bars.on.get() && native_bars.side.get() == 0.0 {
     @ui.system_bars().bottom
   } else {
     0.0
@@ -136,7 +136,7 @@ pub let native_in : Double = 4.0
 /// Duo's outer screen: along its hinge, its 8, the cards' 4); 0 where it says none.
 pub fn native_card_corner_at(k : Int) -> Double {
   let r = native_bars.corners[k]
-  if native_bars.on && r > 0.0 {
+  if native_bars.on.get() && r > 0.0 {
     @ui.concentric(r, native_in)
   } else {
     0.0
@@ -161,21 +161,21 @@ pub fn native_card_corner() -> Double {
 /// What is over the whole window this frame: whether it is up, its title, its actions (an id, words, an icon's name,
 /// what it does chosen) in their order.
 pub(all) struct NativeOver {
-  mut up : Bool
-  mut title : String
+  up : @signals.Signal[Bool]
+  title : @signals.Signal[String]
   acts : Array[(String, String, String, () -> Unit)]
   active : Array[String]
 }
 
 ///|
 // kept across runs: put back each frame (native_over_clear), native_bars_reset as the app begins anew
-pub let native_over : NativeOver = { up: false, title: "", acts: [], active: [] }
+pub let native_over : NativeOver = { up: @signals.signal(false, same=fn(a, b) { a == b }), title: @signals.signal("", same=fn(a, b) { a == b }), acts: [], active: [] }
 
 ///|
 /// None up, as a frame starts.
 pub fn native_over_clear() -> Unit {
-  native_over.up = false
-  native_over.title = ""
+  native_over.up.set(false)
+  native_over.title.set("")
   native_over.acts.clear()
   native_over.active.clear()
 }
@@ -185,11 +185,11 @@ pub fn native_over_clear() -> Unit {
 /// where the system's bars are (native_on): it then hands them its actions (native_over_act) for what it would
 /// draw of its own; false elsewhere, nothing done.
 pub fn native_over_up(title : String) -> Bool {
-  if !native_bars.on {
+  if !native_bars.on.get() {
     return false
   }
-  native_over.up = true
-  native_over.title = title
+  native_over.up.set(true)
+  native_over.title.set(title)
   true
 }
 

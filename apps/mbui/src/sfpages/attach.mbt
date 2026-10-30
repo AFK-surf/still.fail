@@ -19,7 +19,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
   let ask = fn(kind : @hostapi.PickKind) {
     close()
     match @ui.pick(kind, hold=true) {
-      Some(pick) => composing.picking = Some((key, pick))
+      Some(pick) => composing.picking.set(Some((key, pick)))
       None =>
         say(c, @sf.t(if kind == Camera { "android-chat.composer.noCamera" } else { "android-chat.composer.noFiles" }))
     }
@@ -32,7 +32,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
     } else if i > 0 {
       close()
       match recent_photo(i - 1).map(fn(photo) { @ui.pick_photos([photo.src]) }) {
-        Some(Some(pick)) => composing.picking = Some((key, pick))
+        Some(Some(pick)) => composing.picking.set(Some((key, pick)))
         _ => ()
       }
     } else {
@@ -63,7 +63,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
   // photos chosen in the strip: 添加 n 个 where the tiles were
   let adding = recent_adding(c, fn(pick) {
     close()
-    composing.picking = Some((key, pick))
+    composing.picking.set(Some((key, pick)))
   })
   if adding {
     return

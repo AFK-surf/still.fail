@@ -27,7 +27,7 @@ priv struct Publishing {
   busy : @signals.Signal[Bool]
   copied : @signals.Signal[Int]
   /// the chat's thread its page is drawn for: the one open, and once closed while it goes (publish_layer)
-  mut drawn : (ChatRef, Double)?
+  drawn : @signals.Signal[(ChatRef, Double)?]
 }
 
 ///|
@@ -39,12 +39,12 @@ let publishing : Publishing = {
   off: @sf.LiveMap::new(),
   busy: @signals.signal(false, same=fn(a, b) { a == b }),
   copied: @signals.signal(0, same=fn(a, b) { a == b }),
-  drawn: None,
+  drawn: @signals.signal(None),
 }
 
 ///|
 pub fn publish_reset() -> Unit {
-  publishing.drawn = None
+  publishing.drawn.set(None)
   publishing.of.set(None)
   publishing.read.set(0)
   publishing.preview.set(None)
@@ -148,12 +148,12 @@ fn publish_go(c : @ui.Ctx) -> Unit {
 pub fn publish_layer(c : @ui.Ctx, src : Source) -> Unit {
   let open = publishing.of.get()
   if open is Some(_) {
-    publishing.drawn = open
+    publishing.drawn.set(open)
   }
-  guard publishing.drawn is Some((r, thread)) else { return }
+  guard publishing.drawn.get() is Some((r, thread)) else { return }
   match @motion.presence(c, "publish", open is Some(_), initial=true, enter=@sf.window_page_in, exit=@kit.pop_out) {
     Some(look) => publish_page(c, src, r, thread, look, open is None)
-    None => publishing.drawn = None
+    None => publishing.drawn.set(None)
   }
 }
 

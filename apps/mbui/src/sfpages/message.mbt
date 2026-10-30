@@ -42,8 +42,8 @@ fn marked_of(here : MessageHere, ts : String) -> Array[String] {
   match here.list {
     Some(l) => {
       let rd = reading_of(l.rk)
-      if rd.found_at != "" && rd.found_at == ts {
-        rd.found_words
+      if rd.found_at.get() != "" && rd.found_at.get() == ts {
+        rd.found_words.get()
       } else {
         find_words_in(l.rk)
       }
