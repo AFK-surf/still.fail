@@ -57,7 +57,9 @@ pipe.on("data", (chunk) => {
   for (let at; (at = pending.indexOf("\n")) >= 0; ) {
     const message = JSON.parse(pending.slice(0, at));
     pending = pending.slice(at + 1);
-    log(`got ${message.op}`);
+    log(message.op === "carried" ? `got carried ${JSON.stringify(message.carried)}` : `got ${message.op}`);
+    // Handing over, what it holds in memory goes to the next one (as the station's vault grants do).
+    if (message.op === "handover" && args.includes("--launcher-carries")) say({ carry: { from: process.pid } });
     if (message.op === "handover" || message.op === "stop") quit(0);
     else if (message.op === "drain") say({ drained: "idle" });
   }

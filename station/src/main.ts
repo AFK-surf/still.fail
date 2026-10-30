@@ -184,8 +184,13 @@ function run() {
     Layer.provideMerge(AgentsSide.layer),
     Layer.provideMerge(parts),
   );
+  // What the parts hold only in memory (the vault's grants), carried over to the next process at a handover.
+  let carry = () => {};
   const main = Effect.gen(function* () {
     yield* SubscriptionRef.set(yield* Up, true);
+    const stationParts = yield* Parts;
+    control.carried((what) => stationParts.takeUp(what));
+    carry = () => control.carry(stationParts.carried());
     control.ready(version());
     log.info("station", "station up", { version: version(), data });
     // Where the memory goes, in MB: the main thread's (and resident), and each reader's heap. Every ten minutes, or
@@ -249,7 +254,10 @@ function run() {
     Effect.runFork(Fiber.interrupt(fiber)).addObserver(() => void Promise.all([reports.shutdown(), stationLog.shutdown()]).finally(() => process.exit(0)));
   };
   control.on("stop", () => stop("asked to stop"));
-  control.on("handover", () => stop("handed over to the next station process"));
+  control.on("handover", () => {
+    if (!stopping) carry();
+    stop("handed over to the next station process");
+  });
   fiber.addObserver((exit) => {
     if (!stopping) {
       log.error("station", "the station stopped by itself", { exit: String(exit) });

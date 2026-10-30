@@ -10,7 +10,7 @@ import { routes as requestRoutes } from "../api/routes/vault-requests.ts";
 import { wall } from "../ops/fibers.ts";
 import { Agents } from "../sessions/agents.ts";
 import { sender } from "../sessions/messages.ts";
-import { ControlPlane, Events, Parts, Paths, Store } from "../services.ts";
+import { ControlPlane, Events, Parts, Paths, Previous, Store } from "../services.ts";
 import { vaultTools } from "./tool.ts";
 import { plainStore } from "./plain.ts";
 import { Secrets } from "./secrets.ts";
@@ -27,6 +27,9 @@ export const VaultLive = Layer.effectDiscard(
     // A workspace's lock: the home workspace's is the station's own (null), another's by its id.
     const lock = (ws: string | null) => cloud.locked(ws === null || ws === cloud.home() ? null : ws)?.state ?? null;
     const vaults = vaultStore(store.db);
+    // What the process before held may come until it is gone (it gives it as it begins to hand over).
+    let coming = true;
+    void (yield* Previous).gone.then(() => (coming = false), () => (coming = false));
     // The vault's secrets, asked for by agents and granted from the members' apps.
     const secrets = new Secrets({
       db: store.db, vaults, plain: plainStore(store.db), hub, data, home: () => cloud.home(), lock, now: () => wall.now(),
@@ -39,6 +42,13 @@ export const VaultLive = Layer.effectDiscard(
       },
       ask: (station, request) => remote.ask(station, request),
       workOf: (ws, peer, session) => remote.work(ws, peer, session),
+      coming: () => coming,
+    });
+    // The grants, the boxes of requests waiting and the secrets to keep, only in memory: over to the next process at a
+    // handover (an update), so no agent asks again.
+    parts.carry("vault", () => secrets.carried(), (what) => {
+      secrets.carry(what);
+      coming = false;
     });
     remote.bus.on("vault.", (peer, request, workspace) => secrets.heard(peer, workspace ?? cloud.home() ?? "", request));
     secrets.listen((r) => {

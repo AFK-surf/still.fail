@@ -10,6 +10,7 @@ import type { Route, Tools } from "./api/admin.ts";
 import type { Connection, Stream } from "./mesh/native.ts";
 import type { Reader } from "./mesh/serve.ts";
 import type { Lang } from "./ops/i18n.ts";
+import { log } from "./ops/log.ts";
 import type { Viewer } from "./mesh/credential.ts";
 import type { Tool } from "./tools/mcp.ts";
 
@@ -37,6 +38,9 @@ export class StationParts {
   readonly #ended: ((session: string) => void)[] = [];
   readonly #streams = new Map<string, (ask: MemberAsk) => Promise<void>>();
   readonly #connected: (() => void)[] = [];
+  readonly #carries = new Map<string, { give: () => unknown; take: (what: any) => void }>();
+  /// What the process before carried over, for a part not made yet when it came.
+  readonly #came = new Map<string, unknown>();
   #doorUrl: string | null = null;
 
   /// A part's routes of the admin API (after the platform's own); made with what the admin API's routes are given
@@ -89,7 +93,47 @@ export class StationParts {
     this.#connected.push(connected);
   }
 
+  /// What a part holds only in memory and carries over to the next process at a handover (an update), never written
+  /// down: `give` it as this process hands over, `take` what the process before gave.
+  carry<T>(name: string, give: () => T, take: (what: T) => void): void {
+    if (this.#carries.has(name)) throw new Error(`${name} is carried over twice`);
+    this.#carries.set(name, { give, take });
+    if (this.#came.has(name)) {
+      const what = this.#came.get(name);
+      this.#came.delete(name);
+      take(what as T);
+    }
+  }
+
   // ── what is asked of them ──
+
+  /// What the parts carry over to the next process, by part.
+  carried(): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const [name, { give }] of this.#carries) {
+      try {
+        out[name] = give();
+      } catch (error) {
+        log.warn("station", "a part's memory is not carried over", { part: name, error: (error as Error).message });
+      }
+    }
+    return out;
+  }
+
+  /// What the process before carried over (`carried`), to its parts.
+  takeUp(what: Record<string, unknown>): void {
+    for (const [name, value] of Object.entries(what ?? {})) {
+      const part = this.#carries.get(name);
+      if (part === undefined) this.#came.set(name, value);
+      else {
+        try {
+          part.take(value);
+        } catch (error) {
+          log.warn("station", "what a part carried over is not taken up", { part: name, error: (error as Error).message });
+        }
+      }
+    }
+  }
 
   /// A member's device connected (mesh/serve.ts).
   connected(): void {

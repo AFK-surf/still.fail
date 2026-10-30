@@ -4,10 +4,12 @@
 //!
 //! Node is started as `node <app>/station/main.js run --app <app> --data <data> --launcher-fds 3,4,5`: fd 3 is the MCP
 //! endpoint's listening socket, fd 4 the loopback port's, fd 5 the control socket (both ways, one JSON object a line).
-//! Node says `{"ready":true,"version":…}` once it serves, and `{"drained":"idle"|"timeout"}` after a drain; the launcher
-//! says `{"op":"handover"|"stop"|"drain"|"hup"}`. Node runs in a process group of its own (a ^C at a terminal reaches
-//! the launcher only, which stops it); it ends when the control socket closes (the launcher gone). The listening
-//! sockets passing from Node to Node is what makes a handover (SIGUSR2) possible here.
+//! Node says `{"ready":true,"version":…}` once it serves, `{"drained":"idle"|"timeout"}` after a drain and, handing over,
+//! `{"carry":…}` (what it holds only in memory, `--launcher-carries`); the launcher says
+//! `{"op":"handover"|"stop"|"drain"|"hup"}`, and `{"op":"carried","carried":…}` to the Node taking over. Node runs in a
+//! process group of its own (a ^C at a terminal reaches the launcher only, which stops it); it ends when the control
+//! socket closes (the launcher gone). The listening sockets passing from Node to Node is what makes a handover
+//! (SIGUSR2) possible here.
 //!
 //! One thread: signals come in through a pipe (written by their handlers), and everything waits in one poll().
 
@@ -41,18 +43,29 @@ impl Process for Node {
         self.pid as u32
     }
 
-    fn tell(&self, op: &str) {
-        let line = format!("{{\"op\":\"{op}\"}}\n");
+    fn send(&self, line: &Value) {
+        let line = format!("{line}\n");
         let mut rest = line.as_bytes();
         while !rest.is_empty() {
             // SAFETY: a write from a live buffer to a descriptor this Node owns.
             let n = unsafe { libc::write(self.control.as_raw_fd(), rest.as_ptr().cast(), rest.len()) };
             if n < 0 {
                 let error = Error::last_os_error();
-                if error.kind() == std::io::ErrorKind::Interrupted {
-                    continue;
+                match error.kind() {
+                    std::io::ErrorKind::Interrupted => continue,
+                    // Non-blocking: a long line (what is carried over) waits for Node to read.
+                    std::io::ErrorKind::WouldBlock => {
+                        let mut fd = libc::pollfd { fd: self.control.as_raw_fd(), events: libc::POLLOUT, revents: 0 };
+                        // SAFETY: poll over one live pollfd.
+                        if unsafe { libc::poll(&mut fd, 1, 5_000) } <= 0 {
+                            log::warn(&format!("Node {} did not read what it was told", self.pid));
+                            return;
+                        }
+                        continue;
+                    }
+                    _ => {}
                 }
-                log::warn(&format!("could not tell Node {} {op}: {error}", self.pid));
+                log::warn(&format!("could not tell Node {}: {error}", self.pid));
                 return;
             }
             rest = &rest[n as usize..];
@@ -125,7 +138,7 @@ impl Os for System {
             .arg(app)
             .arg("--data")
             .arg(&self.options.data)
-            .args(["--launcher-fds", "3,4,5"])
+            .args(["--launcher-fds", "3,4,5", "--launcher-carries"])
             .stdin(Stdio::null())
             .process_group(0);
         let given = [self.mcp.as_raw_fd(), self.admin.as_raw_fd(), theirs.as_raw_fd()];
@@ -399,6 +412,10 @@ fn reap(station: &mut Lifecycle<System>) {
         let pid = unsafe { libc::waitpid(-1, &mut status, libc::WNOHANG) };
         if pid <= 0 {
             return;
+        }
+        // What it said before it ended (what it carried over at a handover) is the lifecycle's first.
+        if let Some(said) = station.processes_mut().into_iter().find(|(_, node)| node.pid == pid && node.open).map(|(_, node)| node.read()) {
+            station.heard(pid as u32, said);
         }
         station.ended(pid as u32, &describe(status));
     }

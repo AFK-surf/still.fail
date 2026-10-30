@@ -390,6 +390,61 @@ test("a request from secret_use to the grant: listed for the chat's starter, dec
   }
 });
 
+test("at a handover a vault's grants and the requests still waiting go over to the next process, never written down", async () => {
+  const w = world();
+  const db = new DatabaseSync(":memory:");
+  const vaults = new VaultStore(db);
+  vaults.putVault(w.vault);
+  vaults.putItem(w.item);
+  const hub = {
+    store: {
+      getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp" } : null),
+      participants: (k: string) => new Map([[k, ["bob@x.com"]]]),
+      latestThread: () => null,
+      withdrawCard: () => true,
+      subscribe: () => () => {},
+    },
+    notify: () => {},
+  };
+  const dir = mkdtempSync(join(tmpdir(), "vault-carry-"));
+  let coming = false;
+  const make = () => new Secrets({ db, vaults, plain: new PlainStore(db), home: () => w.state.ws, hub: hub as never, data: dir, lock: () => w.state, now: () => 1_000_000, coming: () => coming });
+  const alice = { sub: "alice", email: "alice@x.com" };
+  try {
+    const before = make();
+    const asked = before.ask("s1", { item: "github", reason: "rerun CI" });
+    await new Promise((r) => setImmediate(r));
+    const [first] = before.pending(w.state.ws, w.state, alice);
+    assert.equal(before.grant(w.state, "alice", grantOf(first!, w.alice, w.plain, { scope: "chat", exp: 1000 + 3600 })), null);
+    await asked;
+    // Asked again, not decided yet as the process hands over.
+    void before.ask("s1", { item: "github", reason: "and again" });
+    await new Promise((r) => setImmediate(r));
+    const [second] = before.pending(w.state.ws, w.state, alice);
+    const carried = JSON.stringify(before.carried());
+
+    // The next process, before what the one before held comes: the waiting request is not let go meanwhile.
+    coming = true;
+    const after = make();
+    assert.match(after.keeper.usable("s1", first!.id) as string, /no such grant/);
+    assert.deepEqual(after.pending(w.state.ws, w.state, alice).map((r) => r.id), [second!.id]);
+    after.carry(JSON.parse(carried));
+    coming = false;
+    const held = after.keeper.usable("s1", first!.id);
+    assert.ok(typeof held !== "string" && held.secret.fields.value === TOKEN, String(held));
+    assert.deepEqual(after.pending(w.state.ws, w.state, alice).map((r) => r.id), [second!.id]);
+    assert.equal(after.grant(w.state, "alice", grantOf(second!, w.alice, w.plain, { exp: 1000 + 600 })), null);
+    assert.deepEqual(after.held("s1").map((h) => h.request.id).sort(), [first!.id, second!.id].sort());
+
+    // Nothing of the value is in the database; a restart (nothing carried) forgets them, as ever.
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[];
+    for (const { name } of tables) assert.ok(!JSON.stringify(db.prepare(`SELECT * FROM ${name}`).all()).includes(TOKEN), name);
+    assert.deepEqual(make().held("s1"), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("the plain library (no security mode): listed for its owner's chats, decided by the owner alone, its uses kept; locked, nothing given", async () => {
   const db = new DatabaseSync(":memory:");
   const plain = new PlainStore(db);

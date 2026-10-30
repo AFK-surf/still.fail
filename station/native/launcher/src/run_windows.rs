@@ -83,10 +83,9 @@ impl Process for Node {
         self.child.id()
     }
 
-    fn tell(&self, op: &str) {
-        let line = format!("{{\"op\":\"{op}\"}}\n");
-        if let Err(error) = self.pipe.write_all(line.as_bytes()) {
-            log::warn(&format!("Node {} not told {op}: {error}", self.child.id()));
+    fn send(&self, line: &serde_json::Value) {
+        if let Err(error) = self.pipe.write_all(format!("{line}\n").as_bytes()) {
+            log::warn(&format!("Node {} not told: {error}", self.child.id()));
         }
     }
 }

@@ -59,7 +59,7 @@ runner → 客户端：
 `run` 时：
 1. 解析 `--data`（缺省同 Rust：`$STILLFAIL_DATA`，否则 `$EMBER_DATA`，否则 `~/.stillfail`）。`flock` 住 `<data>/run/station.lock`；拿不到就退出码 3（桌面 app 靠它）。
 2. 自己先 bind 两个 TCP 监听：MCP 端口（`config.json` 的端口或 4750，被占用时规则同 `mesh/app/src/ports.rs`）和本机回环口（`--port` 或 4760，规则同 `mesh/station/src/local.rs`），把它们作为继承的 fd 传给 Node（fd 3、4），这样新旧 Node 交接时端口不空档。MCP 端口记在 `<data>/run/mcp.json`，下次启动（stop 之后重启、崩溃后重启）先绑它：留着没重启的 agent 只认得这个地址；绑不上时，Node 打开工具入口后让拿着旧地址的 agent 进程重启并 resume。数据目录不是 `~/.stillfail` 的 station（测试、开发用）不占 4750/4760，没指定端口就用随机端口。
-3. 起 Node：`node <app>/station/main.js run --app … --data … --launcher-fds 3,4,5`，fd 5 是控制管道（双向，一行一个 JSON）。
+3. 起 Node：`node <app>/station/main.js run --app … --data … --launcher-fds 3,4,5 --launcher-carries`，fd 5 是控制管道（双向，一行一个 JSON）；`--launcher-carries` 说这个启动器会把交接时 Node 交出的内存转给新 Node（见下）。
 4. 写 `<data>/run/station.json`（一行、字段与 Rust 版相同：`{"pid":<启动器 pid>,"startedAt":<ms>,"version":…,"handoff":1,"drain":1,"channel":1}`；version 由 Node 在控制管道上告诉启动器；安装器用 sed 读，格式不能变）。
 5. 信号：
    - SIGUSR2（交接）：起一个新 Node（同样的 fd），等它在控制管道上说 `{"ready":true}`（超时 60 秒算失败：杀掉新的，写 `run/handoff-failed`，旧的照常）；然后告诉旧的 `{"op":"handover"}`，等它退出（最多 30 秒，超时 SIGKILL）；新的**接管之后**（见下）才更新 `station.json` 的 `startedAt`（pid 不变——安装器靠这个判断交接成功）。
@@ -71,6 +71,8 @@ runner → 客户端：
 8. 启动器 stderr 照常（launchd 会写日志）；Node 的 stdout/stderr 继承启动器的。
 
 控制管道上 Node → 启动器：`{"ready":true,"version":"0.1.x"}`、`{"serving":"admin"|"mcp","port":N}`（回环口听好了；接手会话、agent 的门开好了）、`{"failed":"…"}`（没能接管：agent 那边没起来）、`{"drained":"idle"|"timeout"}`（启动器照 Rust 版写 `run/drained`）。
+
+交接时旧 Node 收到 `{"op":"handover"}` 先说 `{"carry":{…}}`：各部分只放在内存里、要带到新进程的东西（密钥库的授权，`StationParts.carry`），启动器原样转给新 Node `{"op":"carried","carried":{…}}`，内存到内存，不写盘、不写日志。只有带 `--launcher-carries` 起的 Node 才说这一行：更新只换 Node，启动器是旧的就不认它，会把整行写进日志。进程结束时启动器先读完它管道里剩下的行再处理退出，交出的东西不会因为先看到退出而丢。Windows 的启动器暂不传这个参数：它读管道和等进程退出在两个线程，退出可能先到，最后一行就丢了，要先让等退出的线程等读管道的线程读完。
 
 **生命周期只有一份**（`src/lifecycle.rs`）：上面第 4–7 步（ready、退避重启、连续失败放弃、交接、drain、停止和超时强杀、跟随父进程）是一个与平台无关的状态机，它的测试在三个平台上都会跑。`run.rs`（Unix）和 `run_windows.rs` 只负责三件事：起进程、在控制通道上收发消息、把事件（某行消息、进程结束、停止）告诉状态机。改重启、取消或超时策略只改这一处。各平台不同的只有两点：端口怎么交给 Node（Unix 传 fd，Windows 由启动器转发，见下），判断父进程是否还在时 Unix 用 `getppid` 有没有变，Windows 等父进程的句柄。
 

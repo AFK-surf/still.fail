@@ -21,6 +21,13 @@ export type Control = {
   failed(why: string): void;
   drained(how: "idle" | "timeout"): void;
   on(op: "handover" | "stop" | "drain" | "hup", f: () => void): void;
+  /// Whether the launcher carries what this process gives it at a handover (`carry`) over to the next one (it says so
+  /// with `--launcher-carries`; one from before would write it to its log as a line it does not know).
+  carries: boolean;
+  /// What this process holds only in memory, given at a handover to the next process (StationParts `carried`).
+  carry(what: Record<string, unknown>): void;
+  /// What the process before carried over, as it comes.
+  carried(f: (what: Record<string, unknown>) => void): void;
 };
 
 export function launcher(args: string[]): Control {
@@ -30,11 +37,19 @@ export function launcher(args: string[]): Control {
   const pipe = flag(args, "--launcher-pipe");
   const handlers = new Map<string, (() => void)[]>();
   const on: Control["on"] = (op, f) => handlers.set(op, [...(handlers.get(op) ?? []), f]);
+  // What came before anyone took it.
+  let came: Record<string, unknown> | null = null;
+  let taker: ((what: Record<string, unknown>) => void) | null = null;
+  const carried: Control["carried"] = (f) => {
+    taker = f;
+    if (came !== null) f(came);
+    came = null;
+  };
   const handed = fds && fds.length >= 3 && !fds.some((n) => !Number.isInteger(n));
   if (!handed && pipe === undefined) {
     // On its own: SIGTERM and ^C stop it, as they would through a launcher.
     for (const signal of ["SIGTERM", "SIGINT"] as const) process.on(signal, () => handlers.get("stop")?.forEach((f) => f()));
-    return { ready() {}, serving() {}, failed() {}, drained() {}, on };
+    return { ready() {}, serving() {}, failed() {}, drained() {}, on, carries: false, carry() {}, carried };
   }
   const given = flag(args, "--launcher-ports")?.split(",").map(Number);
   const ports = given && given.length === 2 && given.every((n) => Number.isInteger(n) && n > 0) ? { mcp: given[0]!, admin: given[1]! } : undefined;
@@ -47,16 +62,21 @@ export function launcher(args: string[]): Control {
       const line = carry.slice(0, at);
       carry = carry.slice(at + 1);
       try {
-        const op = JSON.parse(line).op;
-        handlers.get(op)?.forEach((f) => f());
+        const said = JSON.parse(line);
+        if (said.op === "carried") {
+          if (taker !== null) taker(said.carried ?? {});
+          else came = said.carried ?? {};
+        } else handlers.get(said.op)?.forEach((f) => f());
       } catch {
-        log.warn("launcher", "unreadable line from the launcher", { line });
+        // Not the line itself: one carried over holds secrets.
+        log.warn("launcher", "unreadable line from the launcher", { length: line.length });
       }
     }
   });
   // The launcher gone: nothing will hand this process over or stop it, so it stops.
   channel.on("close", () => handlers.get("stop")?.forEach((f) => f()));
   const say = (value: unknown) => channel.write(JSON.stringify(value) + "\n");
+  const carries = args.includes("--launcher-carries");
   // Signals reach the launcher; this process hears of them on the channel.
   for (const signal of ["SIGTERM", "SIGINT", "SIGHUP", "SIGUSR1", "SIGUSR2"] as const) process.on(signal, () => {});
   return {
@@ -68,5 +88,8 @@ export function launcher(args: string[]): Control {
     failed: (why) => say({ failed: why }),
     drained: (how) => say({ drained: how }),
     on,
+    carries,
+    carry: (what) => void (carries && say({ carry: what })),
+    carried,
   };
 }

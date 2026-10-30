@@ -302,7 +302,7 @@ fn node_serves_the_launchers_ports_and_station_json_names_the_launcher() {
     let start = &station.log()[0].2;
     let app = station.app.display();
     let data = station.data.display();
-    assert_eq!(start, &format!("start run --app {app} --data {data} --launcher-fds 3,4,5"));
+    assert_eq!(start, &format!("start run --app {app} --data {data} --launcher-fds 3,4,5 --launcher-carries"));
     station.signal(libc::SIGTERM);
     assert!(station.wait().success());
     assert!(station.said(node, "got stop") && station.said(node, "exit"));
@@ -327,6 +327,8 @@ fn sigusr2_hands_over_to_a_new_node() {
     assert!(!alive(old));
     // The old one was told only once the new one was ready.
     assert!(station.said_at(new, "ready") < station.said_at(old, "got handover"));
+    // What the old one held in memory, given as it handed over, went to the new one.
+    until("what the old Node held carried over", || station.said(new, &format!(r#"got carried {{"from":{old}}}"#)).then_some(()));
     assert!(station.file("handoff-failed").is_none());
     station.signal(libc::SIGTERM);
     assert!(station.wait().success());
