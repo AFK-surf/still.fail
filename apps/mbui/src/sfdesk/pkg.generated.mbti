@@ -407,7 +407,7 @@ pub fn views_for(Double) -> Array[String]
 
 pub let wide : Wide
 
-pub fn wide_back() -> (() -> Unit)?
+pub fn wide_back(@sfbase.Source) -> (() -> Unit)?
 
 pub fn with_side(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, @sfbase.ChatView?, () -> Unit) -> Unit
 

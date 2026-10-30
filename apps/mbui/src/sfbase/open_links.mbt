@@ -278,6 +278,7 @@ pub fn pick_workspace(src : Source, ws : String) -> Unit {
   if ws == "" || ws == link_workspace.val {
     return
   }
+  history_push()
   app.picked = ws
   link_workspace.val = ws
   (src.call)("prefs.set", { "workspace": Json::string(ws) }, fn(_) {  })
@@ -294,6 +295,7 @@ pub fn open_item(
   service : String?,
   at : Double?,
 ) -> Unit {
+  history_push()
   pick_workspace(src, ws)
   (shell.val.home)()
   if app.nav.top() != Home {

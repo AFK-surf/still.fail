@@ -267,6 +267,7 @@ fn archive_open(it : Json) -> Unit {
     title: text(v, "title"),
     station_name: text(v, "place"),
   }
+  @sfbase.history_push()
   match app.nav.top() {
     Chat(open) if open.station == r.station && open.session == r.session => ()
     Chat(_) => app.nav.replace(Chat(r))

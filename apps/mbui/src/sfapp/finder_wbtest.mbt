@@ -375,3 +375,81 @@ test "wide, chats chosen one after another beside the sidebar: back goes to the 
   t.frame()
   assert_true(app.nav.top() == NewChat)
 }
+
+///|
+test "wide, another workspace switched to: back brings the first workspace again with its chat, forward the second" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.draw()
+  t.tap_text("整理发布清单")
+  t.frame()
+  let chat = app.nav.pages()
+  assert_true(app.nav.top() is Chat({ title: "整理发布清单", .. }))
+  // ⌃2: the second workspace, its own page beside its chats
+  t.key(@ui.key_of_char('2'), mods=@ui.mod_ctrl)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(app.picked, "ws2")
+  let second = app.nav.pages()
+  assert_false(second == chat)
+  // back: the first workspace in view again (the prefs told), the chat in its place
+  t.key(@ui.key_of_char('['), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(app.picked, "ws1")
+  assert_true(app.nav.pages() == chat)
+  assert_true(named(calls, "prefs.set").last().map(fn(m) { text(Some(m.params), "workspace") }) == Some("ws1"))
+  // forward: the second again, as it was
+  t.key(@ui.key_of_char(']'), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(app.picked, "ws2")
+  assert_true(app.nav.pages() == second)
+}
+
+///|
+test "wide, settings opened from a chat, then another chat: back goes through each place, forward again" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.draw()
+  t.tap_text("整理发布清单")
+  t.frame()
+  let first = app.nav.pages()
+  // 设置 (⌘,), then a chat chosen from the list again
+  t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  let settings = app.nav.pages()
+  assert_false(settings == first)
+  @sfbase.go_place("chats") |> ignore
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("夜里的构建又失败了")
+  t.run_for(@ui.move_most_ms)
+  assert_true(app.nav.top() is Chat({ title: "夜里的构建又失败了", .. }))
+  // back: the chats gone to (a new chat beside them), settings, then the first chat
+  t.key(@ui.key_of_char('['), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  assert_true(app.nav.pages() == [Home, NewChat])
+  t.key(@ui.key_of_char('['), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  assert_true(app.nav.pages() == settings)
+  t.key(@ui.key_of_char('['), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  assert_true(app.nav.pages() == first)
+  t.key(@ui.key_of_char(']'), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  assert_true(app.nav.pages() == settings)
+}
+
+///|
+test "wide, the chat shown chosen again: no entry of its own; what the frame lands on alone, none either" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.draw()
+  // (landed beside the chats as the app opens: no person's act, so nothing to go back to)
+  assert_false(@sfbase.back_step() is Some(_))
+  let landed = app.nav.pages()
+  t.tap_text("整理发布清单")
+  t.frame()
+  t.tap_text("整理发布清单")
+  t.frame()
+  t.key(@ui.key_of_char('['), mods=@ui.mod_cmd)
+  t.frame()
+  assert_true(app.nav.pages() == landed)
+}

@@ -109,8 +109,6 @@ pub fn bytes_first_frame(@ui.Ctx, String, String, Bytes) -> String
 
 pub let card_head : @ui.Style
 
-pub fn chat_back(ChatRef) -> (() -> Unit)?
-
 pub fn chat_item(Json) -> ChatItem
 
 pub let chat_jobs_asked : @ref.Ref[(@ui.Ctx, Source, ChatRef) -> Unit]
@@ -120,8 +118,6 @@ pub fn chat_keep(Map[String, Json], Double) -> Unit
 pub fn chat_kept(ChatRef) -> ChatView?
 
 pub fn chat_latest(@ui.Ctx, Source, ChatRef, ChatView, String) -> Unit
-
-pub fn chat_left(ChatRef) -> Unit
 
 pub fn chat_link(String, String) -> String
 
@@ -595,10 +591,6 @@ pub let followed_into : Map[String, String]
 
 pub fn follows(@ui.ListInfo?) -> Bool?
 
-pub fn forward_landed() -> Unit
-
-pub fn forward_step() -> (() -> Unit)?
-
 pub let fresh : FreshChat
 
 pub fn fresh_picked(Json?) -> Unit
@@ -609,7 +601,7 @@ pub let globe_mark : LinkMark
 
 pub fn go_back() -> Bool
 
-pub fn go_forward() -> Bool
+pub fn go_forward(Source) -> Bool
 
 pub fn go_place(String, way? : Int32) -> Bool
 
@@ -632,6 +624,14 @@ pub let held_pictures_waiting : @ref.Ref[Bool]
 pub fn held_seed(String, @hostapi.Picked) -> String
 
 pub let highlight_limit : Int32
+
+pub fn history_back_step(Source) -> (() -> Unit)?
+
+pub fn history_forward_step(Source) -> (() -> Unit)?
+
+pub fn history_note(String, Bool) -> Unit
+
+pub fn history_push() -> Unit
 
 pub fn history_scope(String, String) -> String
 

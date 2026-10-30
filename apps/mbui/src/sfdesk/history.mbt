@@ -177,6 +177,7 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
       },
       fn() {
         if wh_link(c, "history/profile", @sf.t("web-pages.chat.profileDetails")) {
+          @sfbase.history_push()
           app.nav.push(Setting(@settings.Route::Profile(station, text(s, "profile"))))
         }
       },

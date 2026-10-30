@@ -261,6 +261,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
               },
               more=j + 1 < offers.length(),
             ) {
+            @sfbase.history_push()
             app.nav.push(Setting(Route::NewProfile(station)))
             @sfbase.show_chosen()
           }

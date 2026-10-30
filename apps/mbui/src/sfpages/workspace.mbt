@@ -66,6 +66,7 @@ pub fn switch_workspace(src : Source, ws : String) -> Unit {
   if ws == "" {
     return
   }
+  @sfbase.history_push()
   app.picked = ws
   (src.call)("prefs.set", Json::object({ "workspace": Json::string(ws) }), fn(_) {  })
   @sfbase.nav_home()

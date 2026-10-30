@@ -13,6 +13,7 @@ pub fn files_go(at : DriveAt) -> Unit {
     tab_go(at)
     return
   }
+  @sfbase.history_push()
   if page_goes_on() {
     if !(app.nav.top() is Drive(here) && here == at) {
       app.nav.push_over(Drive(at))

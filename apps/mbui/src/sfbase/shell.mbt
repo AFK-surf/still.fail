@@ -60,154 +60,14 @@ fn stack_back() -> (() -> Unit)? {
 }
 
 ///|
-/// What back took off the stack, last on top, for forward to put back (⌘], a mouse's forward button; the web's
-/// history.forward): each the stack as back left it, the page taken off, how it was put there (over the one under it,
-/// risen from the foot), and whether the wide frame landed on a new chat since (frame.mbt land: the chats' place is
-/// never empty).
-let forward_steps : Array[ForwardStep] = []
-
-///|
-priv struct ForwardStep {
-  pages : Array[Page]
-  page : Page
-  over : Bool
-  risen : Bool
-  mut landed : Bool
-  // a chat back went from to the chat before it (chat_back): the chat put back in its place
-  swap : Bool
-}
-
-///|
-/// Page `p` taken off the stack by back (the shells' back_pop, the stack's own: new_nav's `went_back`), kept for forward.
-fn went_back(p : Page, over : Bool, risen : Bool, pages : Array[Page]) -> Unit {
-  forward_steps.push({ pages, page: p, over, risen, landed: false, swap: false })
-}
-
-///|
-/// Back's step off the stack (what the shells' back does to it): its top page popped, kept for forward.
+/// Back's step off the stack (what the shells' back does to it): its top page popped, as the stack's own back is
+/// (app_history.mbt: the spot it comes to is back's).
 pub fn back_pop() -> Unit {
   let top = app.nav.top()
   let over = app.nav.top_over()
   let risen = app.nav.risen()
   if app.nav.pop() {
     went_back(top, over, risen, app.nav.pages())
-  }
-}
-
-///|
-/// The wide frame's chats' place landed on a new chat over the stack back left at its root (frame.mbt land): forward
-/// still puts back what back took, in the new chat's place.
-pub fn forward_landed() -> Unit {
-  match forward_steps.last() {
-    Some(s) if s.pages == app.nav.pages() => s.landed = true
-    _ => ()
-  }
-}
-
-///|
-/// What forward does here: the page back last took off put back, while the stack is as that back left it; none when
-/// back took nothing or the stack changed since (a page opened, a place chosen: what it took is forgotten, as a
-/// browser's forward is after a link followed).
-pub fn forward_step() -> (() -> Unit)? {
-  guard forward_steps.last() is Some(s) else { return None }
-  let pages = app.nav.pages()
-  if pages == s.pages {
-    Some(fn() {
-      forward_steps.pop() |> ignore
-      if s.swap {
-        match app.nav.top() {
-          Chat(r) => chat_trail.push(r)
-          _ => ()
-        }
-        app.nav.replace(s.page)
-      } else if s.risen {
-        app.nav.rise(s.page)
-      } else if s.over {
-        app.nav.push_over(s.page)
-      } else {
-        app.nav.push(s.page)
-      }
-    })
-  } else if s.landed && pages == [..s.pages, NewChat] {
-    Some(fn() {
-      forward_steps.pop() |> ignore
-      app.nav.replace(s.page)
-    })
-  } else {
-    forward_steps.clear()
-    None
-  }
-}
-
-///|
-/// The chats shown before the one in the pane, the last on top, on the wide frame with the page beside the sidebar
-/// (the web's history of a chat chosen after another): another chat chosen there in its place leaves the one it took
-/// the place of here (chat_left), back goes to them one by one (chat_back), at most `chat_trail_most`.
-let chat_trail : Array[ChatRef] = []
-
-///|
-let chat_trail_most = 50
-
-///|
-/// Chat `r`, shown in the pane, given up for another chosen in its place (sfapp's open_chat_beside): kept for back.
-pub fn chat_left(r : ChatRef) -> Unit {
-  match chat_trail.last() {
-    Some(l) if same_chat(l, r) => return
-    _ => ()
-  }
-  chat_trail.push(r)
-  if chat_trail.length() > chat_trail_most {
-    chat_trail.remove(0) |> ignore
-  }
-}
-
-///|
-fn same_chat(a : ChatRef, b : ChatRef) -> Bool {
-  a.station == b.station && a.session == b.session
-}
-
-///|
-/// The workspace a chat is in: the first part of its station's key (`ws/station`).
-fn chat_workspace(r : ChatRef) -> String {
-  match r.station.split("/").next() {
-    Some(w) => w.to_string()
-    None => ""
-  }
-}
-
-///|
-/// Back to the chat shown before chat `open` (the wide frame's back with a chat alone beside the sidebar: wide_back), in
-/// its place, kept for forward; none when no chat of its workspace was shown before it (those of another workspace,
-/// and itself again, passed over and forgotten).
-pub fn chat_back(open : ChatRef) -> (() -> Unit)? {
-  while chat_trail.last() is Some(l) &&
-        (same_chat(l, open) || chat_workspace(l) != chat_workspace(open)) {
-    chat_trail.pop() |> ignore
-  }
-  guard chat_trail.last() is Some(prev) else { return None }
-  Some(fn() {
-    chat_trail.pop() |> ignore
-    app.nav.replace(Chat(prev))
-    forward_steps.push({
-      pages: app.nav.pages(),
-      page: Chat(open),
-      over: false,
-      risen: false,
-      landed: false,
-      swap: true,
-    })
-  })
-}
-
-///|
-/// Forward, where there is one to go to (forward_step). Whether it went.
-pub fn go_forward() -> Bool {
-  match forward_step() {
-    Some(f) => {
-      f()
-      true
-    }
-    None => false
   }
 }
 
@@ -251,6 +111,7 @@ pub fn close_page(p : Page) -> Bool {
       break
     }
   }
+  history_closed()
   true
 }
 
@@ -295,6 +156,7 @@ pub fn stack_open(p : Page) -> Unit {
 ///|
 /// Chat `r`'s detail `tab` opened, where the layout has it (Shell's `detail`).
 pub fn open_detail(src : Source, r : ChatRef, tab : String) -> Unit {
+  history_push()
   (shell.val.detail)(src, r, tab)
 }
 
@@ -323,6 +185,7 @@ pub fn go_place(place : String, way? : Int = 0) -> Bool {
   if app.nav.depth() == 1 && app.nav.top() == page {
     return false
   }
+  history_push()
   (shell.val.close_overlays)()
   app.switch_way = way
   nav_home()
