@@ -24,6 +24,9 @@ priv struct Run {
   mut notify_index : Int
   mut queued_length : Int
   mut active_sub : ReactiveNode?
+  /// what owns what is made now (an effect, a scope): what is reading where something is, else this (Solid's Owner
+  /// apart from its Listener: `untracked` stops following reads, never owning)
+  mut owner : ReactiveNode?
   queued : Array[ReactiveNode?]
 }
 
@@ -35,6 +38,7 @@ let run : Run = {
   notify_index: 0,
   queued_length: 0,
   active_sub: None,
+  owner: None,
   queued: [],
 }
 
@@ -182,6 +186,23 @@ pub fn set_active_sub(sub : ReactiveNode?) -> ReactiveNode? {
 }
 
 ///|
+/// What owns what is made now where nothing is reading (an effect or a scope made in `untracked`): set; the one before.
+pub fn set_owner(owner : ReactiveNode?) -> ReactiveNode? {
+  let prev = run.owner
+  run.owner = owner
+  prev
+}
+
+///|
+/// What is made now is owned by: what is reading, else the owner set (set_owner).
+fn owner_now() -> ReactiveNode? {
+  match run.active_sub {
+    Some(s) => Some(s)
+    None => run.owner
+  }
+}
+
+///|
 pub fn batch_depth() -> Int {
   run.batch_depth
 }
@@ -245,8 +266,10 @@ pub fn effect_cleanup(f : () -> (() -> Unit)) -> () -> Unit {
 ///|
 fn effect_of(f : () -> (() -> Unit)?) -> () -> Unit {
   let e = ReactiveNode::new(WATCHING | RECURSED_CHECK, EffectNode, own=coerce(f))
+  let parent = owner_now()
   let prev_sub = set_active_sub(Some(e))
-  match prev_sub {
+  let prev_owner = set_owner(Some(e))
+  match parent {
     Some(p) => {
       link(e, p, 0)
       p.flags = p.flags | HAS_CHILD_EFFECT
@@ -257,6 +280,7 @@ fn effect_of(f : () -> (() -> Unit)?) -> () -> Unit {
   e.cleanup = f()
   run.run_depth -= 1
   run.active_sub = prev_sub
+  run.owner = prev_owner
   e.flags = e.flags & RECURSED_CHECK.lnot()
   fn() { effect_oper(e) }
 }
@@ -265,8 +289,10 @@ fn effect_of(f : () -> (() -> Unit)?) -> () -> Unit {
 /// A scope: what `fn` makes (effects) stopped together by the function returned.
 pub fn effect_scope(f : () -> Unit) -> () -> Unit {
   let e = ReactiveNode::new(MUTABLE, ScopeNode)
+  let parent = owner_now()
   let prev_sub = set_active_sub(Some(e))
-  match prev_sub {
+  let prev_owner = set_owner(Some(e))
+  match parent {
     Some(p) => {
       link(e, p, 0)
       p.flags = p.flags | HAS_CHILD_EFFECT
@@ -275,6 +301,7 @@ pub fn effect_scope(f : () -> Unit) -> () -> Unit {
   }
   f()
   run.active_sub = prev_sub
+  run.owner = prev_owner
   fn() { effect_scope_oper(e) }
 }
 
@@ -396,6 +423,7 @@ fn run_effect(e : ReactiveNode) -> Unit {
     e.deps_tail = None
     e.flags = WATCHING | RECURSED_CHECK
     let prev_sub = set_active_sub(Some(e))
+    let prev_owner = set_owner(Some(e))
     run.cycle += 1
     run.run_depth += 1
     if e.kind is EffectNode {
@@ -404,6 +432,7 @@ fn run_effect(e : ReactiveNode) -> Unit {
     }
     run.run_depth -= 1
     run.active_sub = prev_sub
+    run.owner = prev_owner
     e.flags = e.flags & RECURSED_CHECK.lnot()
     purge_deps(e)
   } else if e.deps is Some(_) {

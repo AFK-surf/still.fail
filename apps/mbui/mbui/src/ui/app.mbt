@@ -126,6 +126,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   drive_frame(c)
   // a motion said, not at its end; a cycle shown (motion_data.mbt)
   c.motion_left = c.motion_owed()
+  // (what the window's tree has going: drawn as the clock goes; what ends at a moment, woken then: view_host.mbt)
+  view_frame_end(c)
   // (a layout read back that moved: what was placed from it, placed again)
   if c.read_back_moved {
     c.wants_frame = true
@@ -744,7 +746,7 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
   pointing_said_by_host(by)
   // (what the tree made once routes elsewhere than to the old view (a press on a node of its own, one outside the old
   // view's island) is no input of the old view's: taped alone, view_host.mbt)
-  if kind <= 2 && view_pointer(kind, x, y) {
+  if kind <= 3 && view_pointer(kind, x, y, button) {
     input_taped("pointer", h_event_time(), args)
     return
   }

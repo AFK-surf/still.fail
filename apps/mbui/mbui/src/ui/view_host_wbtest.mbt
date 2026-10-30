@@ -165,10 +165,14 @@ test "window tree: the bar's words changed: its instances alone made again, the 
   assert_eq(view_painted().made - painted.made, 1)
   let bar = tree.root().kids()[0]
   assert_eq(tree.drawn_of(bar.id()).unwrap().words, "second")
-  // (its words drawn in it, the old view's still in its island)
-  assert_true(w.t.drawn_glyphs().iter().any(fn(g) { g.1 < 40.0 }))
   assert_true(w.t.drawn_text().contains("old"))
   assert_true(drawn_index(w.t, (40.0, 140.0, 60.0, 30.0, island_red)) >= 0)
+  // its words drawn in it as a window made with them from the start draws them, nothing of the words before left
+  let bar_glyphs = fn(t : Tester) { t.drawn_glyphs().filter(fn(g) { g.1 < 40.0 }) }
+  let changed = bar_glyphs(w.t)
+  let fresh = island(@signals.signal("second"))
+  assert_eq(changed, bar_glyphs(fresh.t))
+  assert_true(changed.length() > 0)
 }
 
 ///|
@@ -201,4 +205,32 @@ test "window tree: the badge moved: drawn where it went, nothing of it made agai
   // (pressed where it went)
   tree_tap(w.t, 110.0, 150.0)
   assert_eq(w.badge_taps.val, 1)
+}
+
+///|
+test "window tree: a part leaving goes on as the host draws it, from when it was told, let go at its end, then at rest" {
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let t = Tester::new(fn(c) { c.text("old", size=12.0) |> ignore })
+  set_view_app(fn(root) {
+    root.show(
+      fn() { on.get() },
+      fn(v) {
+        v.height(Is(Some(20.0))).ground(Is(island_red)).alpha(By(fn() { 1.0 - v.going() })) |> ignore
+      },
+      leave=300.0,
+    )
+    root.hosted() |> ignore
+  })
+  t.draw()
+  let base = view_blocks.length()
+  on.set(false)
+  t.run_for(150.0)
+  // (half gone: drawn half as opaque)
+  let half = t.drawn_rects().filter(fn(r) { r.4 >> 8 == island_red >> 8 })
+  assert_true(half.length() == 1 && (half[0].4 & 0xFFL) >= 126L && (half[0].4 & 0xFFL) <= 129L, msg="\{half}")
+  assert_false(t.at_rest())
+  t.run_for(200.0)
+  assert_false(t.drawn_rects().iter().any(fn(r) { r.4 >> 8 == island_red >> 8 }), msg="\{t.drawn_rects()}")
+  assert_true(t.at_rest(), msg=t.rest_why())
+  assert_eq(view_blocks.length(), base - 1)
 }

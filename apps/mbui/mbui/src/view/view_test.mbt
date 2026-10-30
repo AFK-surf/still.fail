@@ -684,8 +684,14 @@ test "a property bound again: the binding before it let go, what it read no long
 
 ///|
 /// A card shown while `on` holds, leaving for 300 as it stops (faded out as it goes), pressed: `pressed`.
-fn leaving_tree(on : @signals.Signal[Bool], pressed : Ref[Int], card : Ref[@view.View?]) -> @view.Tree {
-  @view.Tree::new(fn(root) {
+fn leaving_tree(
+  on : @signals.Signal[Bool],
+  pressed : Ref[Int],
+  card : Ref[@view.View?],
+  time? : () -> Double,
+) -> @view.Tree {
+  @view.Tree::new(
+    fn(root) {
     root.box(fn(b) { b.height(Is(Some(30.0))).words(Is("上面")) |> ignore }) |> ignore
     root.show(
       fn() { on.get() },
@@ -700,7 +706,9 @@ fn leaving_tree(on : @signals.Signal[Bool], pressed : Ref[Int], card : Ref[@view
       },
       leave=300.0,
     )
-  })
+    },
+    time?,
+  )
 }
 
 ///|
@@ -731,29 +739,6 @@ test "shown no more: still drawn and faded as it leaves, pressed no more, let go
 }
 
 ///|
-test "leaving drawn the same at 60 Hz, at 120 Hz and in one jump to the moment" {
-  let at_moment = fn(step : Double) -> Array[String] {
-    let on = @signals.signal(true, same=fn(a, b) { a == b })
-    let t = leaving_tree(on, Ref(0), Ref(None))
-    t.frame(390.0, 844.0) |> ignore
-    on.set(false)
-    t.frame(390.0, 844.0) |> ignore
-    let mut now = 0.0
-    while now < 200.0 {
-      now = if now + step > 200.0 { 200.0 } else { now + step }
-      t.at(now)
-      t.frame(390.0, 844.0) |> ignore
-    }
-    let out = shown(t.drawn())
-    t.dispose()
-    out
-  }
-  let jump = at_moment(200.0)
-  assert_eq(at_moment(1000.0 / 60.0), jump)
-  assert_eq(at_moment(1000.0 / 120.0), jump)
-}
-
-///|
 test "a row gone from the list leaves where it was, the rows after it kept below it till it has left" {
   let items = @signals.signal([
     { key: "a", words: "甲" },
@@ -776,4 +761,118 @@ test "a row gone from the list leaves where it was, the rows after it kept below
   t.at(200.0)
   t.frame(390.0, 844.0) |> ignore
   assert_eq(words(), [("甲", 0.0), ("丙", 20.0)])
+}
+
+///|
+test "shown and let go again and again: each node let go said once, as the host takes it" {
+  let on = @signals.signal(false, same=fn(a, b) { a == b })
+  let t = @view.Tree::new(fn(root) { root.show(fn() { on.get() }, fn(v) { v.words(Is("出")) |> ignore }) })
+  t.frame(390.0, 844.0) |> ignore
+  t.take_removed() |> ignore
+  let made : Array[@view.NodeId] = []
+  for _ in 0..<5 {
+    on.set(true)
+    t.frame(390.0, 844.0) |> ignore
+    made.push(t.changed()[0])
+    on.set(false)
+    t.frame(390.0, 844.0) |> ignore
+  }
+  assert_eq(t.take_removed(), made)
+  assert_eq(t.take_removed(), [])
+}
+
+///|
+test "leaving starts at its cause's moment: its first frame at 8.3, 16.7 or 200, at 250 it is drawn the same" {
+  let at_moment = fn(first : Double) -> Array[String] {
+    let now = Ref(0.0)
+    let on = @signals.signal(true, same=fn(a, b) { a == b })
+    let t = leaving_tree(on, Ref(0), Ref(None), time=fn() { now.val })
+    t.frame(390.0, 844.0) |> ignore
+    // (told at 0: no frame takes it till `first`)
+    on.set(false)
+    now.val = first
+    t.at(first)
+    t.frame(390.0, 844.0) |> ignore
+    now.val = 250.0
+    t.at(250.0)
+    t.frame(390.0, 844.0) |> ignore
+    let out = shown(t.drawn())
+    t.dispose()
+    out
+  }
+  let jump = at_moment(200.0)
+  assert_eq(at_moment(1000.0 / 60.0), jump)
+  assert_eq(at_moment(1000.0 / 120.0), jump)
+  // (250 of its 300 gone)
+  assert_true(jump.iter().any(fn(s) { s.has_suffix(" " + (1.0 - 250.0 / 300.0).to_string()) }), msg="\{jump}")
+}
+
+///|
+test "shown again as it leaves: the same node comes back from as far as it went, none made, none let go after" {
+  let now = Ref(0.0)
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let pressed = Ref(0)
+  let card : Ref[@view.View?] = Ref(None)
+  let t = leaving_tree(on, pressed, card, time=fn() { now.val })
+  let step = fn(at : Double) {
+    now.val = at
+    t.at(at)
+    t.frame(390.0, 844.0) |> ignore
+  }
+  step(0.0)
+  let c = card.val.unwrap()
+  let alive = t.alive()
+  let made = t.work().made
+  on.set(false)
+  step(150.0)
+  now.val = 150.0
+  on.set(true)
+  step(150.0)
+  assert_eq(card.val.unwrap().id(), c.id())
+  assert_eq(t.work().made, made)
+  assert_false(c.leaving())
+  assert_eq(t.drawn_of(c.id()).unwrap().alpha, 0.5)
+  step(225.0)
+  assert_eq(t.drawn_of(c.id()).unwrap().alpha, 0.75)
+  step(300.0)
+  assert_eq(t.drawn_of(c.id()).unwrap().alpha, 1.0)
+  assert_eq(t.wake(), None)
+  // (where the leaving would have ended: nothing let go)
+  step(450.0)
+  assert_true(c.alive())
+  assert_eq(t.alive(), alive)
+  assert_true(t.press(10.0, 40.0))
+  assert_eq(pressed.val, 1)
+}
+
+///|
+test "a row's key back as it leaves: the same row, one of it drawn, kept after its leaving would have ended" {
+  let now = Ref(0.0)
+  let items = @signals.signal([{ key: "a", words: "甲" }, { key: "b", words: "乙" }])
+  let t = @view.Tree::new(
+    fn(root) {
+    root.each(
+      fn() { items.get() },
+      fn(it) { it.key },
+      fn(row, item) { row.height(Is(Some(20.0))).words(By(fn() { item.get().words })) |> ignore },
+      leave=200.0,
+    )
+    },
+    time=fn() { now.val },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let b = t.root().kids()[0].kids()[1]
+  items.set([{ key: "a", words: "甲" }])
+  now.val = 100.0
+  t.at(100.0)
+  t.frame(390.0, 844.0) |> ignore
+  items.set([{ key: "a", words: "甲" }, { key: "b", words: "乙改" }])
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(t.root().kids()[0].kids().map(fn(v) { v.id() }), [t.root().kids()[0].kids()[0].id(), b.id()])
+  now.val = 400.0
+  t.at(400.0)
+  t.frame(390.0, 844.0) |> ignore
+  assert_true(b.alive())
+  let words = t.drawn().filter(fn(d) { d.words != "" }).map(fn(d) { d.words })
+  assert_eq(words, ["甲", "乙改"])
 }

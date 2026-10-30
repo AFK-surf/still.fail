@@ -50,7 +50,8 @@ let view_blocks : Map[@view.NodeId, FixedArray[Double]] = Map([])
 
 ///|
 /// What drawing the tree did, counted from its making: nodes' instances made (paint generation), nodes' instances
-/// copied into a frame (the scene gone through), instances handed to the host in frames (what is uploaded).
+/// copied into a frame (the scene gone through), instances put into frames so (what the frame holds of the tree, not
+/// what is uploaded: the host is handed each frame whole, its renderers upload all of it).
 pub(all) struct ViewPaintWork {
   mut made : Int
   mut copied : Int
@@ -72,10 +73,15 @@ let view_line_h : Double = 22.0
 /// The window made once by `make` (its root given: put the old view in it with View::hosted), from this frame on.
 pub fn set_view_app(make : (@view.View) -> Unit) -> Unit {
   view_forget()
-  let t = @view.Tree::new(make, measure=view_words_measure)
+  // (a change told as it is made, at the host's now: what it sets going starts then, whatever frame takes it)
+  let t = @view.Tree::new(make, measure=view_words_measure, time=fn() { h_now() })
   t.on_due(fn() {
     view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
-    h_frame_owed()
+    // (between frames, a frame for it; in one, what it marked is done in it, and what goes on asks for the next as
+    // the frame ends: view_frame_end)
+    if !in_frame.val {
+      h_frame_owed()
+    }
   })
   view_app.val = Some(t)
   view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
@@ -133,6 +139,10 @@ fn view_frame(w : Double, h : Double, t : Double) -> (Double, Double) {
     tree.frame(w, h) |> ignore
   })
   for id in tree.changed() {
+    view_blocks.remove(id)
+  }
+  // (what was let go lets go of what it drew)
+  for id in tree.take_removed() {
     view_blocks.remove(id)
   }
   let island = match tree.hosting() {
@@ -283,11 +293,12 @@ fn Ctx::view_blit(self : Ctx, block : FixedArray[Double], x : Double, y : Double
 }
 
 ///|
-/// A pointer's event as the tree routes it: down on a node that does something when pressed, it is that node's (held
-/// till it is let go, and let go on it, pressed); down where the old view is, the old view's (held so); down elsewhere,
-/// nothing's. A move with nothing held goes to the old view where it is over it. True where the old view is to see none
-/// of it.
-fn view_pointer(kind : Int, x : Double, y : Double) -> Bool {
+/// A pointer's event (0 down, 1 moved, 2 up, 3 called off; `button` 2 the secondary) as the tree routes it: down on a
+/// node that does something when pressed, it is that node's (held till it is let go, and let go on it with the primary
+/// button, pressed; called off, nothing); down where the old view is, the old view's (held so, its own to call off);
+/// down elsewhere, nothing's. A move with nothing held goes to the old view where it is over it. True where the old
+/// view is to see none of it.
+fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   let tree = match view_app.val {
     Some(t) => t
     None => return false
@@ -295,8 +306,9 @@ fn view_pointer(kind : Int, x : Double, y : Double) -> Bool {
   match (kind, view_held.val) {
     (0, _) =>
       match tree.target_at(x, y) {
+        // (the secondary button presses nothing: no menu of a node's yet)
         Pressed(id) => {
-          view_held.val = Some(Node(id))
+          view_held.val = Some(if button == 2 { Nowhere } else { Node(id) })
           true
         }
         Hosted(_) => {
@@ -319,14 +331,33 @@ fn view_pointer(kind : Int, x : Double, y : Double) -> Bool {
       h_frame_owed()
       true
     }
-    (2, Some(Old)) => {
+    (2 | 3, Some(Old)) => {
       view_held.val = None
       false
     }
-    (2, _) => {
+    (2 | 3, Some(_)) => {
       view_held.val = None
       true
     }
     _ => false
+  }
+}
+
+///|
+/// As the frame ends: what the window's tree has going (a node leaving or coming back) keeps the frames coming as the
+/// clock goes, and the moment the soonest of it ends is woken for.
+fn view_frame_end(c : Ctx) -> Unit {
+  let tree = match view_app.val {
+    Some(t) => t
+    None => return
+  }
+  match tree.wake() {
+    Some(at) => {
+      c.motion_left = true
+      if c.wake_at <= 0.0 || at < c.wake_at {
+        c.wake_at = at
+      }
+    }
+    None => ()
   }
 }
