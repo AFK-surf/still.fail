@@ -773,7 +773,8 @@ pub fn watch(changed : () -> Unit) -> Watch {
 
 ///|
 /// What `f` makes, all it reads followed by the watch in place of what the last read read; not stale after it unless
-/// what it read changed as it ran (a value it read set later in it), and then `changed` is called at its end. What
+/// what it read changed as it ran (a value it read set later in it), and then `changed` is called at its end, or it
+/// was touched as it ran (Watch::touch), which it keeps. What
 /// was reading before it does not read what it reads.
 pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
   let e = self.node
@@ -784,6 +785,8 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
   self.set_by.clear()
   e.deps_tail = None
   e.flags = WATCHING | RECURSED_CHECK
+  // (fresh from here: made stale again as it reads (Watch::touch: what it holds told as it is built), it stays so)
+  self.stale.val = false
   let prev_sub = set_active_sub(Some(e))
   run.cycle += 1
   let v = f()
@@ -791,7 +794,6 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
   watch_reading.depth -= 1
   e.flags = e.flags & RECURSED_CHECK.lnot()
   purge_deps(e)
-  self.stale.val = false
   // (what it read set again as it ran, after it was read: told then as what reads it is, the run still going)
   if (e.flags & (DIRTY | PENDING)) != 0 {
     let dirty = (e.flags & DIRTY) != 0 ||

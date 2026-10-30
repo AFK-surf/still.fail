@@ -202,10 +202,19 @@ fn view_frame(w : Double, h : Double, t : Double) -> Unit {
   }
   // (drawn as at `t`, when the frame is to be shown; its logic advanced only to what the host has come to: no step
   // or ending taken ahead of an input still to come before `t`)
-  @signals.untracked(fn() {
-    tree.at(t)
-    tree.frame(w, h, now=h_now()) |> ignore
-  })
+  @signals.untracked(fn() { tree.at(t) })
+  view_window.val = (w, h)
+  view_brought(tree)
+}
+
+///|
+/// The tree brought as the frame goes (its logic to the host's now, drawn at the frame's moment), what it marked done:
+/// the instances it changed to be made again, where each old view is placed now. As the frame begins, and again where
+/// something told it as the frame went (a message the frame took), before the old views are built and before it is
+/// painted: what a frame takes it draws.
+fn view_brought(tree : @view.Tree) -> Unit {
+  let (w, h) = view_window.val
+  @signals.untracked(fn() { tree.frame(w, h, now=h_now()) |> ignore })
   for id in tree.take_changed() {
     view_blocks.remove(id)
   }
@@ -213,7 +222,6 @@ fn view_frame(w : Double, h : Double, t : Double) -> Unit {
   for id in tree.take_removed() {
     view_blocks.remove(id)
   }
-  view_window.val = (w, h)
   old_place(tree)
 }
 
@@ -233,9 +241,10 @@ fn old_place(tree : @view.Tree) -> Unit {
       old_placed.push((d.id, d.x, d.y, d.w, d.h, d.alpha))
     }
   }
+  // (and nothing else of the tree's to see or press: the old frame, its overlays with it, is all that is drawn)
   old_whole.val = old_placed.length() == 1 &&
     (match old_placed[0] {
-      (_, x, y, iw, ih, a) => x == 0.0 && y == 0.0 && iw == w && ih == h && a == 1.0
+      (id, x, y, iw, ih, a) => x == 0.0 && y == 0.0 && iw == w && ih == h && a == 1.0 && tree.alone(id)
     })
 }
 
@@ -252,14 +261,12 @@ fn view_island_said() -> String {
 fn old_frame(c : Ctx) -> Unit {
   // (what the stacks the tree holds say of a frame: nav_view.mbt)
   nav_views_framed(c)
-  // (the old views changed since the frame began (one made or let go by what the frame took: a core's answer as it
-  // was read): the tree brought to now and each placed as it is, so that the frame builds those there are)
+  // (told since the frame began (what the frame took as it went: a core's answer, the system's bars), or old views made
+  // or let go: the tree brought and each placed as it is, so that the frame builds those there are where they are)
   match view_app.val {
-    Some(tree) if old_islands.length() != old_placed.length() ||
-      old_islands.iter().any(fn(o) { !old_placed.iter().any(fn(p) { p.0 == o.id }) }) => {
-      @signals.untracked(fn() { tree.bring_to(h_now()) })
-      old_place(tree)
-    }
+    Some(tree) if tree.told_since() ||
+      old_islands.length() != old_placed.length() ||
+      old_islands.iter().any(fn(o) { !old_placed.iter().any(fn(p) { p.0 == o.id }) }) => view_brought(tree)
     _ => ()
   }
   if old_whole.val {
@@ -316,8 +323,12 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       return
     }
   }
-  // (read: told as the tree has something to do, this paint is done again)
+  // (read: told as the tree has something to do, this paint is done again; told as the frame was built, brought first:
+  // what the frame took is what it paints)
   view_due.get() |> ignore
+  if tree.told_since() {
+    view_brought(tree)
+  }
   let n0 = self.ninst
   old_hits.clear()
   tree.each_drawn(fn(c, x, y, a) {

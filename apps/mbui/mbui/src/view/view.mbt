@@ -2083,6 +2083,29 @@ pub fn View::hosted(self : View, make? : (View) -> Unit = fn(v) { v.grow(Is(1.0)
 }
 
 ///|
+/// Whether node `id` is all the tree draws or presses: every other node it draws (the window's aside) shows nothing and
+/// takes no press (boxes that only lay out what they hold).
+pub fn Tree::alone(self : Tree, id : NodeId) -> Bool {
+  let mut alone = true
+  self.each_drawn(fn(c, _, _, _) {
+    if c.id != id && c.id.at != 0 {
+      let n = self.nodes[c.id.at]
+      if c.ground != 0L || c.words != "" || c.hosted || n.on_press is Some(_) {
+        alone = false
+      }
+    }
+  })
+  alone
+}
+
+///|
+/// Whether something was told since it was last brought (a binding's read changed, a structure, a look): what hosts it
+/// brings it before it draws (Tree::frame), whatever told it as the frame went (a message taken in it).
+pub fn Tree::told_since(self : Tree) -> Bool {
+  self.due
+}
+
+///|
 /// The node hosting the old view, where there is one.
 pub fn Tree::hosting(self : Tree) -> NodeId? {
   if self.hosting < 0 {
