@@ -38,6 +38,10 @@ export const ALPN = utf8("stillfail/admin/1");
 export const FORMER_ALPN = utf8("ember/admin/1");
 export const RENEW_MS = 5 * 60_000;
 export const CONNECT_TIMEOUT_MS = 10_000;
+/// How long a dial waits for its endpoint to get onto a relay before its CONNECT_TIMEOUT_MS counts all the same
+/// (`onARelay`), and how often it looks.
+export const ONTO_MAX_MS = 30_000;
+const ONTO_RECHECK_MS = 250;
 export const PROBE_MS = 5_000;
 export const RETIRE_MS = 10_000;
 export const REBIND_MS = 5_000;
@@ -1947,6 +1951,21 @@ function relayStatus(endpoint: IrohEndpoint): string {
   return status.map((s) => `${s.url} ${s.connected ? "up" : "down"}`).join(", ");
 }
 
+/// Once the endpoint is on one of its relays (at once with none, or dialled at addresses too): what a dial's
+/// CONNECT_TIMEOUT_MS counts from. Getting onto a relay takes several round trips to it (TCP, TLS, the relay's own), a
+/// dozen seconds on a phone 2–4 s from every relay, back from the background (nomofu, 2026-10-30): counted in the dial's
+/// time, every dial ended as it was about to be answered, and the next bound the endpoint anew (`#stuck`), to get onto
+/// the relays from the start again. Not on one in ONTO_MAX_MS: counted from then.
+function onARelay(endpoint: IrohEndpoint, direct: boolean): Effect.Effect<void> {
+  const on = () => {
+    const status = endpoint.relayStatus();
+    return direct || status.length === 0 || status.some((s) => s.connected);
+  };
+  return Effect.gen(function* () {
+    for (let waited = 0; waited < ONTO_MAX_MS && !on(); waited += ONTO_RECHECK_MS) yield* Effect.sleep(ONTO_RECHECK_MS);
+  });
+}
+
 /// Connects, presents the first credential, and starts renewing it. The credential is asked for while the
 /// connection is being made; the link is handed out as soon as the credential is sent (the station reads it before any
 /// request stream). A refusal closes the connection; the requests on it fail, and the next `link` starts over.
@@ -1977,7 +1996,7 @@ function open(
     const connecting = Effect.raceFirst(
       Deferred.await(dialled),
       Effect.andThen(
-        Effect.sleep(CONNECT_TIMEOUT_MS),
+        Effect.andThen(onARelay(endpoint, ips.length > 0), Effect.sleep(CONNECT_TIMEOUT_MS)),
         Effect.suspend(() => {
           late = true;
           return Effect.fail(meshError(noAnswer()));

@@ -710,6 +710,23 @@ sim("a_station_whose_pings_come_back_late_keeps_its_one_link", async (s) => {
   await close(s, station, mesh);
 });
 
+/// 2026-10-30: a phone on a slow mobile network (nomofu's, round trips of 2–4 s to every relay), back from the
+/// background: getting onto the relays again and the handshake took past CONNECT_TIMEOUT_MS, and the connection that
+/// came a moment later was closed as too late and dialled anew, the station shown as coming back all the while. The
+/// first dial's connection is the link, however long it took to come.
+sim("a_device_slow_to_reach_its_relays_is_linked_by_its_first_dial", async (s) => {
+  const a = s.relay("https://a.relay.test/", { device: { ms: 1800 }, station: { ms: 100 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 1900 }, station: { ms: 100 } });
+  const { station, mesh, id } = await onRelays(s, [a, b]);
+  const started = s.time.now();
+  await reach(s, mesh, id);
+  // Onto the relay (4 legs), the handshake (a round trip) and the request (another): nothing dialled twice.
+  const once = 4 * 1800 + 2 * 2 * (1800 + 100);
+  assert.ok(s.time.now() - started < once + 2_000, `answered ${s.time.now() - started} ms after it was asked`);
+  assert.equal(s.net.tries.filter((t) => t.to === station.id()).length, 1, `${s.net.tries.length} dials`);
+  await close(s, station, mesh);
+});
+
 sim("a_device_whose_own_relay_loses_the_station_is_linked_through_the_others", async (s) => {
   // a: next to the device, the station 70 ms away losing 35% (Beijing); b: 30 ms each side (Hong Kong); c: the station
   // next to it, the device 150 ms away (Cloudflare, Tokyo).
