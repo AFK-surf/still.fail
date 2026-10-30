@@ -158,16 +158,19 @@ export async function receiveTraces(request: Request, env: Env, account: string 
   }
   if (spans > MAX_SPANS) return reply({ error: "too_large" }, 413);
   if (!env.AXIOM_TOKEN) return reply({ error: "telemetry_not_configured" }, 503);
+  return (await toAxiom(env, withNetwork(request, value.resourceSpans!, body, value))) ? reply({ ok: true }, 202) : reply({ error: "telemetry_unavailable" }, 502);
+}
+
+/** The batch with the network it came from (`networkOf`) on each of its resources, sent as JSON again; as it was if Cloudflare said nothing of where it came from. */
+function withNetwork(request: Request, resources: { resource?: { attributes?: unknown[] } }[], body: string, value: unknown): string {
   const network = networkOf((request as { cf?: unknown }).cf);
-  if (network.length > 0) {
-    for (const resource of value.resourceSpans!) {
-      resource.resource ??= {};
-      const kept = (Array.isArray(resource.resource.attributes) ? resource.resource.attributes : []).filter((a) => !NETWORK_KEYS.has((a as { key?: string })?.key ?? ""));
-      resource.resource.attributes = [...kept, ...network];
-    }
-    body = JSON.stringify(value);
+  if (network.length === 0) return body;
+  for (const resource of resources) {
+    resource.resource ??= {};
+    const kept = (Array.isArray(resource.resource.attributes) ? resource.resource.attributes : []).filter((a) => !NETWORK_KEYS.has((a as { key?: string })?.key ?? ""));
+    resource.resource.attributes = [...kept, ...network];
   }
-  return (await toAxiom(env, body)) ? reply({ ok: true }, 202) : reply({ error: "telemetry_unavailable" }, 502);
+  return JSON.stringify(value);
 }
 
 const NETWORK_KEYS = new Set(["stillfail.net.asn", "stillfail.net.org", "stillfail.net.country", "stillfail.net.region", "stillfail.net.city"]);
@@ -208,8 +211,9 @@ export async function receiveLogs(request: Request, env: Env): Promise<Response>
   if (!station) return reply({ error: "invalid_session" }, 401);
   if (!(await env.TELEMETRY_LIMITS.getByName(`station:${station}`).consume())) return reply({ error: "rate_limited" }, 429, { "retry-after": "60" });
   let records = 0;
+  let value: { resourceLogs?: { resource?: { attributes?: unknown[] }; scopeLogs?: { logRecords?: unknown[] }[] }[] };
   try {
-    const value = JSON.parse(body) as { resourceLogs?: { scopeLogs?: { logRecords?: unknown[] }[] }[] };
+    value = JSON.parse(body);
     if (!Array.isArray(value.resourceLogs)) throw new Error("shape");
     for (const resource of value.resourceLogs) for (const scope of resource.scopeLogs ?? []) records += scope.logRecords?.length ?? 0;
   } catch {
@@ -217,7 +221,8 @@ export async function receiveLogs(request: Request, env: Env): Promise<Response>
   }
   if (records > MAX_SPANS) return reply({ error: "too_large" }, 413);
   if (!env.AXIOM_TOKEN) return reply({ error: "telemetry_not_configured" }, 503);
-  return (await toAxiom(env, body, AXIOM_LOGS)) ? reply({ ok: true }, 202) : reply({ error: "telemetry_unavailable" }, 502);
+  // The station's network too: which carrier and province a station is reached through decides how its ways do.
+  return (await toAxiom(env, withNetwork(request, value.resourceLogs!, body, value), AXIOM_LOGS)) ? reply({ ok: true }, 202) : reply({ error: "telemetry_unavailable" }, 502);
 }
 
 /**

@@ -37,9 +37,9 @@ function fakeAxiom(status = 200) {
 }
 
 /** A batch as sent, without the network still.fail cloud puts on its resources (tracing.ts networkOf). */
-const sent = (body: any) => ({
+const sent = (body: any, key = "resourceSpans") => ({
   ...body,
-  resourceSpans: body.resourceSpans.map((r: any) => ({ ...r, resource: { ...r.resource, attributes: r.resource.attributes.filter((a: any) => !a.key.startsWith("stillfail.net.")) } })),
+  [key]: body[key].map((r: any) => ({ ...r, resource: { ...r.resource, attributes: r.resource.attributes.filter((a: any) => !a.key.startsWith("stillfail.net.")) } })),
 });
 
 /** The spans' trace ids, in the order Axiom got them. */
@@ -130,6 +130,31 @@ test("a client's spans carry the network they came from", async () => {
   }
 });
 
+// Which carrier and province a station is reached through decides how its ways do (2026-10-30: a few stations slow on
+// every relay pulled the devices' connects up): its log lines carry the network it sent them from, as spans do.
+test("a station's log carries the network it came from", async () => {
+  const axiom = fakeAxiom();
+  const h = await harness({ axiom: axiom.answer });
+  try {
+    const station = await enrolled(h);
+    const body = JSON.stringify({ resourceLogs: [{ resource: { attributes: [{ key: "service.name", value: { stringValue: "stillfail-station" } }] }, scopeLogs: [{ scope: { name: "stillfail-station" }, logRecords: [{ timeUnixNano: "1", severityText: "INFO", body: { stringValue: "client connected" } }] }] }] });
+    const response = await h.fetch("/v1/telemetry/logs", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(await signed(h, station, body)) },
+      body,
+      cf: { asn: 4134, asOrganization: "Chinanet", country: "CN", region: "Guangdong", city: "Shenzhen" },
+    } as RequestInit);
+    assert.equal(response.status, 202);
+    const attributes = Object.fromEntries(axiom.got[0]!.body.resourceLogs[0].resource.attributes.map((a: any) => [a.key, Object.values(a.value)[0]]));
+    assert.deepEqual(attributes, {
+      "service.name": "stillfail-station", "stillfail.net.asn": "4134", "stillfail.net.org": "Chinanet",
+      "stillfail.net.country": "CN", "stillfail.net.region": "Guangdong", "stillfail.net.city": "Shenzhen",
+    });
+  } finally {
+    await h.close();
+  }
+});
+
 test("a station's spans are signed with its key, over the body", async () => {
   const axiom = fakeAxiom();
   const h = await harness({ axiom: axiom.answer });
@@ -159,7 +184,7 @@ test("a station's log goes on to Axiom's logs, signed with its key; a member's a
     const logs = (b: string, headers: Record<string, string>) => h.fetch("/v1/telemetry/logs", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: b });
     assert.equal((await logs(body, await signed(h, station, body))).status, 202);
     assert.deepEqual(urls, ["https://api.axiom.co/v1/logs"]);
-    assert.deepEqual(axiom.got[0]!.body, JSON.parse(body));
+    assert.deepEqual(sent(axiom.got[0]!.body, "resourceLogs"), JSON.parse(body));
     // Spans are no log, a forged body is refused, and an account is no station.
     const spans = batch();
     assert.equal((await logs(spans, await signed(h, station, spans))).status, 400);
