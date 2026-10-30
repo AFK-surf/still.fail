@@ -365,8 +365,9 @@ pub let coming_in_ms : Double = 200.0
 let coming_ring : Double = 14.0
 
 ///|
-/// The pill's height: its ring 1 from its top, foot and start, concentric with its end, and its words' line.
-let coming_pill_h : Double = 16.0
+/// The pill's height: its ring 2 from its top, foot and start, concentric with its end, and its words' line; 18, so
+/// that it stands concentric in a picture's corner (a card's, 26) no further in than corner_fit lets it (16).
+let coming_pill_h : Double = 18.0
 
 ///|
 /// How far the ring is from the pill's top, foot and start: concentric with its end.

@@ -1962,6 +1962,11 @@ pub let button_38 : @ui.Len = Fixed(38.0)
 pub let link_card_w : @ui.Len = Fixed(236.0)
 
 ///|
+/// A file's card in a message and a screen's without its picture, a capsule a row high (two lines, 20 and 16 on a
+/// desktop): 52 whatever the screen's words, so that what stands in its round ends stands concentric with them.
+pub let file_capsule_h : @ui.Len = Fixed(52.0)
+
+///|
 pub let peek_card_px : Double = 280.0
 
 ///|

@@ -43,17 +43,16 @@ pub let globe_mark : LinkMark = { name: "web" }
 // ── the cards' looks (ScreenLinks.kt ScreenLinkCard, AdbLinks.kt AdbLinkCard) ──
 
 ///|
-/// A card: a row 236 wide, a capsule as a file's card (a row high, 48), on the chat's bubble ground; 6 down, its mark
-/// (24 in its room, 3 in from it) 8 in, its ink about as far from the capsule's end as from its top and foot, its words'
-/// end 10 from the other; its mark and its words 10 apart.
+/// A card: a row 236 wide, a capsule as a file's card (a row high, 52), on the chat's bubble ground: its mark, 24,
+/// concentric with its round end (14 from its end, its top and its foot), 8 from its words, their end 14 from the
+/// other end.
 // kept across runs: a value (no field of it changes)
 pub let link_card : @ui.Style = @ui.style(
   row=true,
   w=@sf.link_card_w,
-  pl=S2,
-  pr=S2_5,
-  py=S1_5,
-  gap=S2_5,
+  h=@sf.file_capsule_h,
+  px=S3_5,
+  gap=S2,
   align=ACenter,
   radius=Full,
   bg=Neutral,
@@ -83,9 +82,9 @@ pub let peek_card_words : @ui.Style = @ui.css("w=Full px=S4 pt=S3 pb=S4")
 pub let peek_frame : @ui.Style = @ui.css("w=Full align=ACenter justify=JCenter radius=Inner bg=Wash clip")
 
 ///|
-/// A mark's room: 30 by 36.
+/// A mark's box: its own, 24 (the gap to the words the card's).
 // kept across runs: a value (no field of it changes)
-pub let link_mark_box : @ui.Style = @ui.style(w=@sf.link_mark_w, h=S9, align=ACenter, justify=JCenter)
+pub let link_mark_box : @ui.Style = @ui.css("w=S6 h=S6 align=ACenter justify=JCenter")
 
 ///|
 /// The words beside the mark (or under the preview): what is left across.

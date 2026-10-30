@@ -11,7 +11,7 @@ import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { CacheColdNotice } from "./CacheColdNotice.tsx";
 import { ComposerNotice, ComposerNotices } from "./ComposerNotice.tsx";
 import { StationInWords, StationNamedAt } from "./StationNamed.tsx";
-import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, Folder, Info, Photo, PlayMark, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Unplug, Web } from "@stillfail/ui/icons.tsx";
+import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, File as FileIcon, FileAudio, FileCode, FilePdf, FileText, FileVideo, Folder, Info, Photo, PlayMark, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Unplug, Web } from "@stillfail/ui/icons.tsx";
 import { createContext, Fragment, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
@@ -1724,6 +1724,33 @@ export function FileTile({ name, dir = false, progress, error = false, land = fa
   );
 }
 
+/** A file's line icon by what it is, from its name (the app's sf file_mark). */
+function markOf(name: string) {
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+  if (/^(mp4|m4v|webm|mov|mkv|avi|ogv)$/.test(ext)) return FileVideo;
+  if (/^(mp3|m4a|wav|flac|ogg|aac|opus)$/.test(ext)) return FileAudio;
+  if (/^(png|jpe?g|gif|webp|svg|avif|bmp|heic)$/.test(ext)) return Photo;
+  if (ext === "pdf") return FilePdf;
+  if (/^(txt|md|markdown|log|rtf|srt|vtt|ass|ssa)$/.test(ext)) return FileText;
+  if (/^(js|ts|tsx|jsx|json|py|rs|go|mbt|c|h|cpp|java|kt|swift|sh|ya?ml|toml|html|css|csv|xml|sql|rb|php)$/.test(ext)) return FileCode;
+  return FileIcon;
+}
+
+/** A file's mark on its card, in a message (a capsule: in the middle of its round end) and in the composer alike: its
+ * line icon, 24, in the sheet's room (as a screen's card's mark: ScreenLink.tsx ScreenTile); a folder's, a folder.
+ * `land`: a card's in the composer, where a mark dropped on the chat lands (drive/flight.ts). */
+function FileMark({ name, dir = false, error = false, land = false }: { name: string; dir?: boolean; error?: boolean; land?: boolean }) {
+  const own = useRef<SVGSVGElement>(null);
+  useLanding(land ? own : NO_MARK);
+  const Mark = dir ? Folder : markOf(name);
+  return (
+    <svg ref={own} className={`${css.fileTile} ${error ? css.fileMarkFailed : ""}`} width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+      <Mark size={24} stroke="inherit" />
+    </svg>
+  );
+}
+
 /** `download`: the core's of it (chatDownloads.ts), how far in its size's place and filling its sheet as an upload does;
  * failed, why, as an upload's failure. `slot`: room at its end for a button of its own laid over it (a message's
  * ✕ or ↻, beside the button that opens it). */
@@ -1736,7 +1763,7 @@ export function FileCard({ file, onRemove, onRetry, pending, sent, error, downlo
   const failed = error ?? (download?.state === "failed" ? download.statusText : null);
   return (
     <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-card="" data-error={failed ? true : undefined}>
-      <FileTile name={file.name} progress={pending ? (sent ?? 0) / Math.max(1, file.size) : coming?.progress} error={!!failed} land={!!onRemove} />
+      <FileMark name={file.name} error={!!failed} land={!!onRemove} />
       <span className={css.fileCardText}>
         <FileName name={file.name} />
         <span className={css.fileCardMeta}>{failed ?? (pending ? going : coming ? coming.statusText : fileSize(file.size))}</span>
@@ -2267,7 +2294,7 @@ function RefCard({ file: f, draft, onRemove, onTap }: { file: Pending; draft: Dr
   const card = (
     <span className={css.fileCard} data-card="" data-error={asFile && f.error ? true : undefined} data-named={!asFile || undefined}
       {...(onTap ? { role: "button", tabIndex: 0, onClick: onTap, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onTap(); } } } : {})}>
-      <FileTile land name={asFile && ref.dir ? `${f.name}.zip` : f.name} dir={ref.dir && !asFile} progress={pending ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={asFile && !!f.error} />
+      <FileMark land name={asFile && ref.dir ? `${f.name}.zip` : f.name} dir={ref.dir && !asFile} error={asFile && !!f.error} />
       <span className={css.fileCardText}>
         <FileName name={asFile && ref.dir ? `${f.name}.zip` : f.name} />
         <span className={css.fileCardMeta}>{meta}</span>
@@ -2327,7 +2354,7 @@ function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending;
     // Cut short (a failure said at length), all of it on hover.
     const meta = f.error ?? (goingUp(f) ? t("common.uploading") : t("web-main.composer.pasteAttachment", { count: f.pasted.characters.toLocaleString("en-US") }));
     return <><span className={css.fileCard} data-card="" data-error={f.error ? true : undefined}>
-      <FileTile name={f.name} progress={goingUp(f) ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={!!f.error} />
+      <FileMark name={f.name} error={!!f.error} />
       <span className={css.fileCardText}>
         <button type="button" className={css.pasteCardTitle} onClick={(e) => { e.stopPropagation(); setOpen(true); }}>{f.pasted.preview || t("web-main.composer.pastedText")}</button>
         <Tip label={meta} cut><span className={`${css.fileCardMeta} ${css.pasteCardMeta}`}>{meta}</span></Tip>

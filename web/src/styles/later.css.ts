@@ -87,8 +87,8 @@ globalStyle(msgAvatar, {
 globalStyle(msgFiles, { display: "flex", flexWrap: "wrap", gap: "6px", minWidth: "0", maxWidth: "100%" });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(fileCard, {
-  display: "inline-flex", alignItems: "center", gap: "10px", width: "fit-content", maxWidth: "min(100%, 236px)",
-  padding: `${FILE_CARD_PAD.y}px ${FILE_CARD_PAD.end}px ${FILE_CARD_PAD.y}px ${FILE_CARD_PAD.start}px`,
+  display: "inline-flex", alignItems: "center", gap: "8px", width: "fit-content", maxWidth: "min(100%, 236px)",
+  boxSizing: "border-box", height: `${FILE_CARD_PAD.h}px`, padding: `0 ${FILE_CARD_PAD.end}px 0 ${FILE_CARD_PAD.start}px`,
   borderRadius: "999px", background: vars.neutralBg, color: vars.text, textAlign: "left",
   cornerShape: vars.cornerShape,
 });
