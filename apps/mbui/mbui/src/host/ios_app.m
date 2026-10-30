@@ -871,7 +871,10 @@ static MBController *the_controller;
 @end
 
 // Edge to edge, the soft keyboard's top where it is on the screen now: its mark's presentation (mid-motion, where the
-// system has drawn the keyboard in this frame), past the safe area's foot (which the bars' `bottom` pads).
+// system has drawn the keyboard in this frame), past the safe area's foot (which the bars' `bottom` pads). Down the
+// side (the system's vertical bar) past the window's foot itself: the cards go on under the home indicator's line to
+// it (sfdesk frame.mbt), so they end on the keyboard from its first point on, at its own pace; past the safe area's
+// foot, they waited the first 34 for it and then went twice as fast (a hitch in what is at the list's end).
 static double ime_over(void) {
   MBController *c = the_controller;
   UIView *root = c.view;
@@ -881,7 +884,12 @@ static double ime_over(void) {
     return over > 0 ? over : 0;
   }
   CALayer *mark = c.kbMark.layer.presentationLayer ?: c.kbMark.layer;
-  double over = root.bounds.size.height - mark.frame.origin.y - root.safeAreaInsets.bottom;
+  double foot = root.safeAreaInsets.bottom;
+#ifdef __IPHONE_27_1
+  if (@available(iOS 27.1, *))
+    if (c.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified) foot = 0;
+#endif
+  double over = root.bounds.size.height - mark.frame.origin.y - foot;
   return over > 0 ? over : 0;
 }
 

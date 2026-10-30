@@ -250,6 +250,10 @@ static UIImage *nav_letter(NSString *title, CGFloat size) {
 // A tab's page: the app's controller in it while its tab is chosen, the status bar, the home indicator and the turns
 // asked of it.
 @interface MBSlot : UIViewController
+@property(nonatomic, strong) NSDictionary<NSString *, UIBarButtonItem *> *barItems;
+@property(nonatomic, strong) NSDictionary<NSString *, NSDictionary *> *barSpecs;
+@property(nonatomic, strong) UIColor *barInk;
+@property(nonatomic, strong) UIColor *barAccent;
 @end
 
 @implementation MBSlot
@@ -432,7 +436,9 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   }
   for (NSString *k in self.navs) {
     UINavigationController *nav = self.navs[k];
-    UIViewController *slot = nav.viewControllers.firstObject;
+    MBSlot *slot = (MBSlot *)nav.viewControllers.firstObject;
+    NSMutableDictionary *keptItems = [NSMutableDictionary dictionary];
+    NSMutableDictionary *keptSpecs = [NSMutableDictionary dictionary];
     NSMutableArray<UIBarButtonItem *> *made = [NSMutableArray array];
     // (`lead/` the bar's leading items: the workspace's, where the system puts back and close, the column's top)
     NSMutableArray<UIBarButtonItem *> *lead = [NSMutableArray array];
@@ -440,85 +446,91 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
     NSMutableArray<UIBarButtonItem *> *foot = [NSMutableArray array];
     NSString *lastIdent = @"";
     for (NSDictionary *d in items) {
-      // (a picture the host loads: drawn in once it is here, on the item made, while it is shown)
-      __block __weak UIBarButtonItem *drawn = nil;
-      NSString *spec = d[@"icon"];
-      // (a workspace's mark a disc nearly the glass's own size, on the glass as it is: its picture once here, else its
-      // letter on its colour, an emoji alone with no colour round it: the user, 2026-10-28)
-      if ([spec hasPrefix:@"badge:"]) {
-        NSRange pic = [spec rangeOfString:@"\x1e"];
-        NSString *mark = pic.location == NSNotFound ? [spec substringFromIndex:6] : [spec substringWithRange:NSMakeRange(6, pic.location - 6)];
-        NSRange comma = [mark rangeOfString:@","];
-        if (comma.location != NSNotFound && comma.location + 1 < mark.length &&
-            ![NSCharacterSet.alphanumericCharacterSet characterIsMember:[mark characterAtIndex:comma.location + 1]])
-          mark = [@"00000000" stringByAppendingString:[mark substringFromIndex:comma.location]];
-        spec = pic.location == NSNotFound ? [@"avatars:" stringByAppendingString:mark]
-                                          : [NSString stringWithFormat:@"avatars:%@\x1f%@", mark, [spec substringFromIndex:pic.location + 1]];
-      }
-      UIImage *icon = [spec hasPrefix:@"avatars:"] ? nav_avatars(spec, nav_face, ^{
-                        drawn.image = nav_avatars(spec, nav_face, nil);
-                      })
-                      : [spec length] ? nav_any_then(spec, 24, ^{
-                          drawn.image = nav_any(spec, 24);
-                        })
-                                      : nav_letter(d[@"title"], 24);
-      BOOL prominent = [d[@"prominent"] boolValue];
       NSString *ident = d[@"id"];
-      // (said with where the item is in the app's view, for what opens from it: a popover at it)
-      __block __weak UIBarButtonItem *weak = nil;
-      UIBarButtonItem *b = [[UIBarButtonItem alloc]
-          initWithPrimaryAction:[UIAction actionWithTitle:d[@"title"]
-                                                    image:icon
-                                               identifier:nil
-                                                  handler:^(UIAction *a) {
-                                                    UIBarButtonItem *it = weak;
-                                                    UIView *v = the_view;
-                                                    if (it && v) {
-                                                      CGRect r = [it frameInView:v];
-                                                      say_system(@{@"nav" : ident, @"at" : @[ @(r.origin.x), @(r.origin.y), @(r.size.width), @(r.size.height) ]});
-                                                    } else {
-                                                      say_system(@{@"nav" : ident});
-                                                    }
-                                                  }]];
-      weak = b;
-      // (with a menu: its rows, the one checked so, each said as chosen)
-      NSArray *rows = d[@"menu"];
-      if (rows.count) {
-        UIMenu *menu = nav_menu(rows, ^(NSString *row) {
-          UIBarButtonItem *it = drawn;
-          UIView *v = the_view;
-          CGRect r = it && v ? [it frameInView:v] : CGRectZero;
-          say_system(@{@"nav" : row, @"at" : @[ @(r.origin.x), @(r.origin.y), @(r.size.width), @(r.size.height) ]});
-        });
-        b = [[UIBarButtonItem alloc] initWithImage:icon menu:menu];
-        b.title = d[@"title"];
+      UIBarButtonItem *b = slot.barItems[ident];
+      BOOL reuse = b && [slot.barSpecs[ident] isEqual:d] && [slot.barInk isEqual:ink] && [slot.barAccent isEqual:accent];
+      if (!reuse) {
+        // (a picture the host loads: drawn in once it is here, on the item made, while it is shown)
+        __block __weak UIBarButtonItem *drawn = nil;
+        NSString *spec = d[@"icon"];
+        // (a workspace's mark a disc nearly the glass's own size, on the glass as it is: its picture once here, else its
+        // letter on its colour, an emoji alone with no colour round it: the user, 2026-10-28)
+        if ([spec hasPrefix:@"badge:"]) {
+          NSRange pic = [spec rangeOfString:@"\x1e"];
+          NSString *mark = pic.location == NSNotFound ? [spec substringFromIndex:6] : [spec substringWithRange:NSMakeRange(6, pic.location - 6)];
+          NSRange comma = [mark rangeOfString:@","];
+          if (comma.location != NSNotFound && comma.location + 1 < mark.length &&
+              ![NSCharacterSet.alphanumericCharacterSet characterIsMember:[mark characterAtIndex:comma.location + 1]])
+            mark = [@"00000000" stringByAppendingString:[mark substringFromIndex:comma.location]];
+          spec = pic.location == NSNotFound ? [@"avatars:" stringByAppendingString:mark]
+                                            : [NSString stringWithFormat:@"avatars:%@\x1f%@", mark, [spec substringFromIndex:pic.location + 1]];
+        }
+        UIImage *icon = [spec hasPrefix:@"avatars:"] ? nav_avatars(spec, nav_face, ^{
+                          drawn.image = nav_avatars(spec, nav_face, nil);
+                        })
+                        : [spec length] ? nav_any_then(spec, 24, ^{
+                            drawn.image = nav_any(spec, 24);
+                          })
+                                        : nav_letter(d[@"title"], 24);
+        BOOL prominent = [d[@"prominent"] boolValue];
+        // (said with where the item is in the app's view, for what opens from it: a popover at it)
+        __block __weak UIBarButtonItem *weak = nil;
+        b = [[UIBarButtonItem alloc]
+            initWithPrimaryAction:[UIAction actionWithTitle:d[@"title"]
+                                                      image:icon
+                                                 identifier:nil
+                                                    handler:^(UIAction *a) {
+                                                      UIBarButtonItem *it = weak;
+                                                      UIView *v = the_view;
+                                                      if (it && v) {
+                                                        CGRect r = [it frameInView:v];
+                                                        say_system(@{@"nav" : ident, @"at" : @[ @(r.origin.x), @(r.origin.y), @(r.size.width), @(r.size.height) ]});
+                                                      } else {
+                                                        say_system(@{@"nav" : ident});
+                                                      }
+                                                    }]];
+        weak = b;
+        // (with a menu: its rows, the one checked so, each said as chosen)
+        NSArray *rows = d[@"menu"];
+        if (rows.count) {
+          UIMenu *menu = nav_menu(rows, ^(NSString *row) {
+            UIBarButtonItem *it = drawn;
+            UIView *v = the_view;
+            CGRect r = it && v ? [it frameInView:v] : CGRectZero;
+            say_system(@{@"nav" : row, @"at" : @[ @(r.origin.x), @(r.origin.y), @(r.size.width), @(r.size.height) ]});
+          });
+          b = [[UIBarButtonItem alloc] initWithImage:icon menu:menu];
+          b.title = d[@"title"];
+          drawn = b;
+        }
+#ifdef __IPHONE_26_0
+        if (@available(iOS 26.0, *)) {
+          // Match the same action across configurations so UIKit carries its glass through the transition.
+          b.identifier = ident;
+          if (prominent) {
+            b.style = UIBarButtonItemStyleProminent;
+            b.tintColor = accent;
+          } else {
+            b.tintColor = ink;
+          }
+          // (the app's own, 待处理's, on a glass of its own, apart from the card's: the user, 2026-10-27)
+          if ([ident hasPrefix:@"act/"] || [ident hasPrefix:@"lead/"]) b.sharesBackground = NO;
+#ifdef __IPHONE_27_0
+          // (short of room in the column, what goes first: never 待处理's bell, the user 2026-10-27, more wanted than the
+          // workspace's and than any page's action; a page's first)
+          if (@available(iOS 27.0, *)) {
+            // (the bell above all: on the outer screen's short column there is room for one of the app's own)
+            if ([ident hasSuffix:@"/attention"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
+            else if (![ident hasPrefix:@"act/"] && ![ident hasPrefix:@"lead/"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityLow;
+          }
+#endif
+          b.badge = [d[@"dot"] boolValue] ? [UIBarButtonItemBadge indicatorBadge] : nil;
+        }
+#endif
         drawn = b;
       }
-#ifdef __IPHONE_26_0
-      if (@available(iOS 26.0, *)) {
-        // Match the same action across configurations so UIKit carries its glass through the transition.
-        b.identifier = ident;
-        if (prominent) {
-          b.style = UIBarButtonItemStyleProminent;
-          b.tintColor = accent;
-        } else {
-          b.tintColor = ink;
-        }
-        // (the app's own, 待处理's, on a glass of its own, apart from the card's: the user, 2026-10-27)
-        if ([ident hasPrefix:@"act/"] || [ident hasPrefix:@"lead/"]) b.sharesBackground = NO;
-#ifdef __IPHONE_27_0
-        // (short of room in the column, what goes first: never 待处理's bell, the user 2026-10-27, more wanted than the
-        // workspace's and than any page's action; a page's first)
-        if (@available(iOS 27.0, *)) {
-          // (the bell above all: on the outer screen's short column there is room for one of the app's own)
-          if ([ident hasSuffix:@"/attention"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
-          else if (![ident hasPrefix:@"act/"] && ![ident hasPrefix:@"lead/"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityLow;
-        }
-#endif
-        b.badge = [d[@"dot"] boolValue] ? [UIBarButtonItemBadge indicatorBadge] : nil;
-      }
-#endif
-      drawn = b;
+      keptItems[ident] = b;
+      keptSpecs[ident] = d;
       if ([ident hasPrefix:@"lead/"]) [lead addObject:b];
       else if ([ident hasPrefix:@"act/"]) [foot addObject:b];
       else {
@@ -532,15 +544,23 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
         lastIdent = ident;
       }
     }
+    slot.barItems = keptItems;
+    slot.barSpecs = keptSpecs;
+    slot.barInk = ink;
+    slot.barAccent = accent;
     // Only the visible tab transitions; initial setup and the other tabs take their items at once.
     BOOL animate = nav == self.selectedViewController && nav.isViewLoaded && nav.view.window != nil &&
                    !UIAccessibilityIsReduceMotionEnabled();
     // (from the bar's end in: the action most wanted outermost)
-    [slot.navigationItem setRightBarButtonItems:made.reverseObjectEnumerator.allObjects animated:animate];
-    [slot.navigationItem setLeftBarButtonItems:lead animated:animate];
-    [slot setToolbarItems:foot animated:animate];
+    NSArray *right = made.reverseObjectEnumerator.allObjects;
+    if (![slot.navigationItem.rightBarButtonItems isEqualToArray:right])
+      [slot.navigationItem setRightBarButtonItems:right animated:animate];
+    if (![slot.navigationItem.leftBarButtonItems isEqualToArray:lead])
+      [slot.navigationItem setLeftBarButtonItems:lead animated:animate];
+    if (![slot.toolbarItems isEqualToArray:foot]) [slot setToolbarItems:foot animated:animate];
     // (the chosen tab's alone: shown on two, the column shows its items twice; didSelectTab)
-    [nav setToolbarHidden:(foot.count == 0 || nav != self.selectedViewController) animated:animate];
+    BOOL hidden = foot.count == 0 || nav != self.selectedViewController;
+    if (nav.toolbarHidden != hidden) [nav setToolbarHidden:hidden animated:animate];
     nav_title(slot.navigationItem, bare ? title : @"", ink);
     // (put away only when something is up over the whole window, its title alone: hidden with its items gone, the system's
     // column keeps showing the views of those it had, a page's actions on the next tab, the outer screen's workspace
@@ -808,6 +828,7 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   if (!self.choosing && tab.identifier.length) say_system(@{@"nav" : tab.identifier});
 }
 @end
+
 
 // No room the app keeps at the trailing edge for its own (the system's tab bar is in the safe area it says).
 static CGFloat nav_right(void) { return 0; }
