@@ -218,13 +218,11 @@ let foot_fills : Ref[Bool] = { val: false }
 let on_night : Ref[Bool] = { val: false }
 
 ///|
-/// A button's height by the native input: a finger's 38 (the phone's) with touch, else button_h.
+/// A button's height by the native input: as tall as everything pressed is (a row, a field, a search; the theme's
+/// rows' pick: 34 with keyboard and mouse, 44 with touch): one height, not a button's of its own (2026-10-30 用户「为啥
+/// 会有一会儿 34 一会儿 36……搞这么多标准干啥」).
 pub fn button_height() -> Double {
-  if theme().touch {
-    38.0
-  } else {
-    button_h
-  }
+  theme().rows.pick
 }
 
 ///|
@@ -384,7 +382,10 @@ let segmented_strip : @ui.Style = @ui.css("row gap=S0_5")
 /// size of words), else the chosen one alone in the track, the others in a pick (choice_pick). Always one line, each
 /// one's words whole: nothing wrapped, cut or scrolled. `icons`: each option its icon in place of its words (its
 /// label its tip and what a screen reader says), as wide as a press's room. `bar`: among a bar's buttons, as high as
-/// they are and round as they are, on every page. `said`: what a screen reader calls it. Returns the chosen index.
+/// they are and round as they are, on every page. `said`: what a screen reader calls it. `tips`: what each option says
+/// on hover besides its words ("" nothing; a model's speed what Fast costs). `fill`: as a narrow page's is, as wide as
+/// where it is, each option an equal share (choices one under another, their tracks' ends lined up). Returns the
+/// chosen index.
 pub fn segmented(
   c : @ui.Ctx,
   key : String,
@@ -396,12 +397,14 @@ pub fn segmented(
   icons? : Array[String] = [],
   bar? : Bool = false,
   said? : String = "",
+  tips? : Array[String] = [],
+  fill? : Bool = false,
 ) -> Int {
   // (a narrow page's: as wide as where it is, each option an equal share, Seg's look (seg.mbt), but at a head's end
   // (head_end), as wide as its options beside the title; a wide page's: the web's Segmented, as wide as its options,
   // its track round them alone; in a bar or of icons, the wide page's, round as a bar's buttons)
-  if look() is Narrow && !bar && icons.is_empty() {
-    if at_head_end() {
+  if (look() is Narrow || fill) && !bar && icons.is_empty() {
+    if at_head_end() && !fill {
       // (as wide as its options where its line has the room, as narrow as the chosen one with the chevron where it has
       // less: filling what that leaves it)
       let (whole, least) = seg_room(c, labels)
@@ -412,7 +415,9 @@ pub fn segmented(
       |> ignore
       return now
     }
-    return seg(c, key, labels, chosen, fill=true, height=segmented_narrow_h)
+    let now = seg(c, key, labels, chosen, fill=true, height=segmented_narrow_h)
+    segmented_tips(c, key, tips)
+    return now
   }
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
@@ -539,17 +544,23 @@ pub fn segmented(
       ground=fn(c, _, items) { track_box(false, fn() { c.box(style=segmented_strip, items) |> ignore }) |> ignore },
     ).value
   })
-  // (icons: each one's words its tip)
-  if !icons.is_empty() {
-    let group = c.id(key)
-    for i, l in labels {
-      tip(c, key + "/" + i.to_string(), @kit.part_id(group, i), l)
-    }
-  }
+  // (icons: each one's words its tip; else what `tips` gives one)
+  segmented_tips(c, key, if icons.is_empty() { tips } else { labels })
   // the chosen one tapped again stays chosen
   match now {
     [v] => items.search_by(fn(it) { it.value == v }).unwrap_or(chosen)
     _ => chosen
+  }
+}
+
+///|
+/// What each of segmented `key`'s options says on hover (`said`, by its place; "" nothing).
+fn segmented_tips(c : @ui.Ctx, key : String, said : Array[String]) -> Unit {
+  let group = c.id(key)
+  for i, words in said {
+    if words != "" {
+      tip(c, key + "/" + i.to_string(), @kit.part_id(group, i), words)
+    }
   }
 }
 
@@ -3008,16 +3019,41 @@ let confirm_foot : @ui.Style = @ui.css("row w=Full justify=JEnd align=ACenter ga
 
 ///|
 /// A small panel's head (PanelHead): its title (13, 600) and `note` under it (12, muted), in by a row's padding, as far
-/// under the panel's top as a menu's first item's words (menu_row_over), 4 over what follows.
-pub fn panel_head(c : @ui.Ctx, title : String, note? : String = "") -> Unit {
-  c.box(style=panel_head_box, fn() {
-    c.text(title, style=panel_title) |> ignore
-    if note != "" {
-      c.text(note, style=panel_note_words) |> ignore
+/// under the panel's top as a menu's first item's words (menu_row_over), 4 over what follows; `end` beside the title
+/// (panel's `head_end`).
+pub fn panel_head(c : @ui.Ctx, title : String, note? : String = "", end? : (@ui.Ctx) -> Unit) -> Unit {
+  match end {
+    // (what stands at its end beside its title, in the middle of their line, the rest of it: a search)
+    Some(f) => {
+      // (what stands at its end a row's capsule in the panel's top corner: out as far as makes it concentric with it,
+      // as a pick's search stands, menu_row_reach)
+      let r = menu_row_reach(theme().rows.pick)
+      c.box(style=panel_head_line.then(@ui.style(mt=room(-r), mr=room(-r))), fn() {
+        c.text(title, style=panel_title) |> ignore
+        c.box(style=panel_head_end, fn() { f(c) }) |> ignore
+      })
+      |> ignore
     }
-  })
-  |> ignore
+    None =>
+      c.box(style=panel_head_box, fn() {
+        c.text(title, style=panel_title) |> ignore
+        if note != "" {
+          c.text(note, style=panel_note_words) |> ignore
+        }
+      })
+      |> ignore
+  }
 }
+
+///|
+/// A small panel's head with what stands at its end: its title in by a row's padding, 12 before what follows it, which
+/// takes the rest of the line, 4 over what follows.
+// kept across runs: a value (no field of it changes)
+let panel_head_line : @ui.Style = @ui.css("row w=Full pl=S2_5 pb=S1 gap=S3 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_head_end : @ui.Style = @ui.style(w=grow)
 
 ///|
 /// A group of a small panel's rows (PanelGroup) under a small `label` (12, muted: in by a row's padding, as far under

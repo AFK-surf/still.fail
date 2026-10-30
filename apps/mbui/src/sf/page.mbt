@@ -1136,6 +1136,9 @@ pub fn link_row(
       None => ()
     }
   }
+  // (a face's row with a control at its end, lines under its first: its words cut short where the control leaves them
+  // less, the control by the whole row's side rather than its first line's)
+  let note_cut = note_cut || (face && control is Some(_) && (note != "" || trouble != "" || below is Some(_)))
   // (what is done here, at its end: on its first line where lines are under it, as high as that line)
   let control_at_end = fn(under : Bool) {
     match control {
@@ -1209,7 +1212,11 @@ pub fn link_row(
           if goes && (chevron || out) {
             icon(c, mark, size=pg_chevron, color=th.p.subtle) |> ignore
           }
-          control_at_end(under)
+          // (a face's row's control at the row's end in its middle, not on its first line: a control as tall as a
+          // press's room (button_height) on a first line reaches past the row over it)
+          if !(under && face) {
+            control_at_end(under)
+          }
         }
         if !under {
           c.text(title, style=titled, color?=ink) |> ignore
@@ -1229,7 +1236,7 @@ pub fn link_row(
                   })
                   |> ignore
                 } else {
-                  c.text(title, style=titled, color?=ink) |> ignore
+                  c.text(title, style=if note_cut { titled.then(cut_words) } else { titled }, color?=ink) |> ignore
                 }
               } else {
                 // its title and what it says in a line (what it says under the title where the line has not the
@@ -1260,6 +1267,9 @@ pub fn link_row(
             more()
           })
           |> ignore
+          if face {
+            control_at_end(false)
+          }
         }
         if goes {
           row_ripple(c, id)
@@ -1319,7 +1329,10 @@ pub fn link_row(
           if goes && (chevron || out) {
             icon(c, mark, size=desk_chevron, color=th.p.muted) |> ignore
           }
-          control_at_end(under)
+          // (a face's row's control at the row's end in its middle, as on a narrow page)
+          if !(under && face) {
+            control_at_end(under)
+          }
         }
         if !under {
           c.box(style=desk_list_text, title_words) |> ignore
@@ -1341,6 +1354,9 @@ pub fn link_row(
             more()
           })
           |> ignore
+          if face {
+            control_at_end(false)
+          }
         }
       })
   }
