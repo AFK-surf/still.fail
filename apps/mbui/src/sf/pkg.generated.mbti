@@ -56,6 +56,8 @@ pub fn ask(String, String, (String) -> Unit, value? : String, placeholder? : Str
 
 pub fn ask_buttons(@ui.Ctx, () -> Unit) -> Unit
 
+pub fn ask_buttons_across(@ui.Ctx, () -> Unit) -> Unit
+
 pub let ask_card_room : @ui.Style
 
 pub let ask_card_room_most : @ui.Style
@@ -82,7 +84,7 @@ pub let ask_title : @ui.TextStyle
 
 pub let ask_what : @ui.Style
 
-pub fn ask_words(@ui.Ctx, String, String) -> Unit
+pub fn ask_words(@ui.Ctx, String, String, centred? : Bool) -> Unit
 
 pub fn at_head_end() -> Bool
 

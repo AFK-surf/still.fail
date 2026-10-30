@@ -707,11 +707,12 @@ fn ended_card(c : @ui.Ctx, v : PlayerView, p : @kit.Media, f : @kit.MediaFrame, 
         " · " +
         t("web-pages.drive.player.nextIn", args=[("n", left.to_string())])
       player_ask(c, ink, t("android-misc.drive.player.ended"), note, fn() {
-        if button(c, t("android-misc.drive.player.next"), key=key + "/now", tone=Primary) {
-          go_now()
-        }
+        // (as a confirming dialog's: the way out first, what it does last)
         if button(c, t("common.cancel"), key=key + "/off", tone=Ghost) {
           v.ended_off = other
+        }
+        if button(c, t("android-misc.drive.player.next"), key=key + "/now", tone=Primary) {
+          go_now()
         }
       })
     })
@@ -722,15 +723,15 @@ fn ended_card(c : @ui.Ctx, v : PlayerView, p : @kit.Media, f : @kit.MediaFrame, 
 
 ///|
 /// What the player asks over its picture (that it cannot play, what comes next at its end): a card that asks (ask.mbt)
-/// in the stage's middle, as wide as it may be whatever it says (its seconds counting down move nothing), on the night
-/// over a picture.
+/// alone in the stage's middle (its words in its middle, its buttons across its foot), a confirming dialog's width
+/// whatever it says (its seconds counting down move nothing), on the night over a picture.
 fn player_ask(c : @ui.Ctx, ink : MediaInk, title : String, note : String, buttons : () -> Unit) -> Unit {
   let draw = fn() {
     c.box(style=player_ask_room, fn() {
-      c.box(style=ask_card_room_most, fn() {
+      c.box(style=player_ask_card, fn() {
         card(c, fill=true, ground=ink.ground, fn() {
-          ask_words(c, title, note)
-          ask_buttons(c, buttons)
+          ask_words(c, title, note, centred=true)
+          ask_buttons_across(c, buttons)
         })
         |> ignore
       })
@@ -2039,6 +2040,11 @@ let player_rate_widest : Array[String] = ["1023 B/s", "1024 KB/s", "999.9 MB/s"]
 /// Round what the player asks (player_ask): its card clear of the screen's sides as a page's cards are.
 // kept across runs: a value (no field of it changes)
 let player_ask_room : @ui.Style = @ui.css("w=Full px=S4 align=ACenter")
+
+///|
+/// The card itself: a confirming dialog's width (confirm_w), never wider than the room.
+// kept across runs: a value (no field of it changes)
+let player_ask_card : @ui.Style = @ui.style(w=Cut, min_w=Within(confirm_w), max_w=Fixed(confirm_w))
 
 ///|
 /// A phone's bar at the top: 8 and 6 in, 48 high, its corner 16; the name 15 in 600, which of how many 12.
