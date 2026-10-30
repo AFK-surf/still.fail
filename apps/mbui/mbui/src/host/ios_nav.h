@@ -809,48 +809,6 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
 }
 @end
 
-// Give the native vertical bars the space above the keyboard, so UIKit lays out all their buttons there.
-#ifdef __IPHONE_27_1
-API_AVAILABLE(ios(27.1))
-@interface MBBarContainer : UIViewController
-@property(nonatomic, strong) NSLayoutConstraint *keyboardBottom;
-@property(nonatomic, strong) NSLayoutConstraint *windowBottom;
-@end
-@implementation MBBarContainer
-- (UIViewController *)childViewControllerForPreferredVerticalBarBehavior { return the_root; }
-- (UIViewController *)childViewControllerForStatusBarStyle { return the_root; }
-- (UIViewController *)childViewControllerForStatusBarHidden { return the_root; }
-- (UIViewController *)childViewControllerForHomeIndicatorAutoHidden { return the_root; }
-- (UIInterfaceOrientationMask)supportedInterfaceOrientations { return the_root.supportedInterfaceOrientations; }
-- (void)viewDidLoad {
-  [super viewDidLoad];
-  self.view.backgroundColor = UIColor.systemBackgroundColor;
-  [self addChildViewController:the_root];
-  UIView *bars = the_root.view;
-  bars.translatesAutoresizingMaskIntoConstraints = NO;
-  [self.view addSubview:bars];
-  self.view.keyboardLayoutGuide.usesBottomSafeArea = NO;
-  self.keyboardBottom = [bars.bottomAnchor constraintEqualToAnchor:self.view.keyboardLayoutGuide.topAnchor];
-  self.windowBottom = [bars.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor];
-  [NSLayoutConstraint activateConstraints:@[
-    [bars.topAnchor constraintEqualToAnchor:self.view.topAnchor],
-    [bars.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-    [bars.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-    self.windowBottom
-  ]];
-  [the_root didMoveToParentViewController:self];
-}
-- (void)viewWillLayoutSubviews {
-  [super viewWillLayoutSubviews];
-  BOOL vertical = self.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified;
-  if (self.keyboardBottom.active == vertical) return;
-  self.windowBottom.active = NO;
-  self.keyboardBottom.active = vertical;
-  self.windowBottom.active = !vertical;
-}
-@end
-#endif
-
 // No room the app keeps at the trailing edge for its own (the system's tab bar is in the safe area it says).
 static CGFloat nav_right(void) { return 0; }
 
