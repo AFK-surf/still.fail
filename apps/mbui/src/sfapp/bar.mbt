@@ -145,11 +145,7 @@ impl @ui.Moving for BarClock with rest_at(self, now, frame) {
 ///|
 /// When the bar's springs are all at rest (the frames' clock, ms; before now: they are).
 fn bar_springs_end() -> Double {
-  let mut e = -1.0
-  for s in [bar.o, bar.k, bar.held, bar.ball_x, bar.ball_y] {
-    e = dmax(e, s.end())
-  }
-  e
+  bar.rest()
 }
 
 ///|
@@ -253,26 +249,33 @@ fn Spr::sample(self : Spr, now : Double) -> Unit {
 }
 
 ///|
-/// Sent to `to` now by `tension` and `friction`, from where it is, as fast as it goes; nothing new when it goes there
-/// so already.
-fn Spr::go(self : Spr, to : Double, tension : Double, friction : Double) -> Unit {
+/// Sent to `to` by `tension` and `friction` from the moment `at` (its cause's; none: now), from where it is then, as
+/// fast as it goes; nothing new when it goes there so already (told the same again, by any build, whenever).
+fn Spr::go(self : Spr, to : Double, tension : Double, friction : Double, at? : Double) -> Unit {
   let same = tension == self.tension && friction == self.friction
-  let now = bar_set_out()
   // riding: where it rides to by the ride's spring is nothing new; anything else sets out from where the ride has it
+  match self.ride {
+    Some(r) if same && r.to == to => return
+    _ => ()
+  }
+  match self.path {
+    Some(p) if self.ride is None && same && p.target() == to => return
+    _ => ()
+  }
+  let now = match at {
+    Some(a) => {
+      ignore(bar_set_out())
+      a
+    }
+    None => bar_set_out()
+  }
   let rode = match self.ride {
     Some(r) => {
-      if same && r.to == to {
-        return
-      }
       self.ride = None
       r.stop()
       Some(r.at(now))
     }
     None => None
-  }
-  match self.path {
-    Some(p) if rode is None && same && p.target() == to => return
-    _ => ()
   }
   let (x, v) = match (rode, self.path) {
     (Some(xv), _) => xv
@@ -293,6 +296,8 @@ fn Spr::go(self : Spr, to : Double, tension : Double, friction : Double) -> Unit
     }
   }
   p.go(now, to, v~, what=self.what)
+  // (where its new way has it then, as sample reads it again in any build at that moment: the same to the last bit)
+  let (x, v) = p.at(now)
   self.x = x
   self.v = v
   self.to = to
@@ -491,6 +496,8 @@ fn Spr::ride_on(self : Spr, tension : Double, anchor : (Double) -> Double, still
   let friction = ball_damping(tension)
   let r = Ride::new(x, v, now, tension, friction, self.rest, anchor, dmax(now, still), from)
   self.ride = Some(r)
+  // (where the ride has it then, as sample reads it again in any build at that moment)
+  let (x, v) = r.at(now)
   self.x = x
   self.v = v
   self.to = r.to
@@ -501,51 +508,96 @@ fn Spr::ride_on(self : Spr, tension : Double, anchor : (Double) -> Double, still
 }
 
 ///|
-/// One number gliding to where it is sent over a time on a curve (Bar.kt Glide): an @motion.Anim by `key`, `value` and
-/// `target` where it is and where to, as of this frame (sample).
+/// One number gliding to where it is sent over a time on a curve (Bar.kt Glide), its way said once as it sets out (where
+/// from, how fast, where to, by what, when): where it is at a moment a function of that moment alone (`value` and
+/// `target` as of the moment last sampled, BarModel::sample). `key`: what it is in the motion log.
 priv struct Glide {
   key : String
   mut value : Double
   mut target : Double
+  mut from : Double
+  mut v0 : Double
+  mut spec : @motion.Spec
+  /// when it set out, and how long it goes (the frames' clock, ms)
+  mut start : Double
+  mut dur : Double
 }
 
 ///|
 fn glide(key : String, start : Double) -> Glide {
-  { key, value: start, target: start }
+  { key, value: start, target: start, from: start, v0: 0.0, spec: @motion.Snap(0.0), start: 0.0, dur: 0.0 }
 }
 
 ///|
-fn Glide::anim(self : Glide) -> @motion.Anim {
-  @motion.anim(@ui.current(), "bar/" + self.key, self.value, global=true)
+/// Where it is at `t` and how fast (per second), by its way.
+fn Glide::at(self : Glide, t : Double) -> (Double, Double) {
+  if t >= self.start + self.dur {
+    (self.target, 0.0)
+  } else {
+    self.spec.value_at(t - self.start, self.dur, self.from, self.target, self.v0)
+  }
 }
 
 ///|
-/// Sent to `target` over `ms` on `ease`; nothing new when it is going there.
-fn Glide::go(self : Glide, target : Double, ms : Double, ease : @ui.Ease) -> Unit {
-  self.go_by(target, @motion.tween(ms, ease~))
+/// When it is there (the frames' clock, ms).
+fn Glide::end(self : Glide) -> Double {
+  self.start + self.dur
 }
 
 ///|
-/// Sent to `target` by `spec`; nothing new when it is going there.
-fn Glide::go_by(self : Glide, target : Double, spec : @motion.Spec) -> Unit {
-  self.anim().follow(target, spec)
+/// Sent to `target` over `ms` on `ease`, from the moment `at` (none: now); nothing new when it is going there.
+fn Glide::go(self : Glide, target : Double, ms : Double, ease : @ui.Ease, at? : Double) -> Unit {
+  self.go_by(target, @motion.tween(ms, ease~), at?)
+}
+
+///|
+/// Sent to `target` by `spec` from the moment `at` (its cause's; none: now), from where it is then and as fast; nothing
+/// new when it is going there already (a build told the same again, whenever).
+fn Glide::go_by(self : Glide, target : Double, spec : @motion.Spec, at? : Double) -> Unit {
+  if target == self.target {
+    return
+  }
+  // (said to move with the bar's springs: frames until it is there)
+  let at = match at {
+    Some(a) => {
+      ignore(bar_set_out())
+      a
+    }
+    None => bar_set_out()
+  }
+  let (x, v) = self.at(at)
+  self.from = x
+  self.v0 = v
   self.target = target
+  self.spec = spec
+  self.start = at
+  self.dur = spec.duration(x, target, v)
 }
 
 ///|
-/// Where it is this frame.
-fn Glide::sample(self : Glide) -> Unit {
-  let a = self.anim()
-  self.value = a.get()
-  self.target = a.target()
+/// Where it is at `now`.
+fn Glide::sample(self : Glide, now : Double) -> Unit {
+  self.value = self.at(now).0
+}
+
+///|
+/// Where it is as `c` paints: the clock read (painted again each frame) only while it goes.
+fn Glide::painted(self : Glide, c : @ui.Ctx) -> Double {
+  if c.moment() >= self.end() {
+    self.target
+  } else {
+    self.at(c.now()).0
+  }
 }
 
 ///|
 /// There at once, still.
 fn Glide::snap(self : Glide, v : Double) -> Unit {
-  self.anim().snap(v)
   self.value = v
   self.target = v
+  self.from = v
+  self.v0 = 0.0
+  self.dur = 0.0
 }
 
 ///|
@@ -645,10 +697,8 @@ priv struct BarModel {
   /// the notch's icon going as another swaps in ("" none), how far the swap is (0 to 1)
   mut icon_was : String
   icon_swap : Glide
-  /// the frame it was last told in (Ctx::frame_number): told once a frame, by the first of its builds in it; and what
-  /// it was told then (shown, notched): told again in the frame where a later build says otherwise
-  mut told : Int
-  mut told_as : (Bool, Bool)
+  /// what it was last told by the app's state (bar_tell, at its cause's moment): told the same again, nothing new
+  mut told : BarTold?
 }
 
 ///|
@@ -693,8 +743,7 @@ let bar : BarModel = {
   swap: None,
   waits: false,
   icon_was: "",
-  told: -1,
-  told_as: (false, false),
+  told: None,
   icon_swap: glide("icon-swap", 1.0),
 }
 
@@ -702,8 +751,8 @@ let bar : BarModel = {
 /// As at the start (tests).
 fn bar_reset() -> Unit {
   let back_glide = fn(g : Glide, to : Double) {
-    g.value = to
-    g.target = to
+    g.snap(to)
+    g.start = 0.0
   }
   bar.mode.set(false)
   bar.o.back(0.0, 260.0, 17.0)
@@ -735,17 +784,17 @@ fn bar_reset() -> Unit {
   back_glide(bar.icon_swap, 1.0)
   m_face.val = ""
   bar_clock.now = 0.0
-  bar.told = -1
-  bar.told_as = (false, false)
+  bar.told = None
 }
 
 ///|
-fn BarModel::open_panel(self : BarModel, open : Bool) -> Unit {
+/// The panel opened or closed from the moment `at` (its cause's; none: now).
+fn BarModel::open_panel(self : BarModel, open : Bool, at? : Double) -> Unit {
   self.mode.set(open)
   if open {
-    self.o.go(1.0, 260.0, 17.0)
+    self.o.go(1.0, 260.0, 17.0, at?)
   } else {
-    self.o.go(0.0, 320.0, 26.0)
+    self.o.go(0.0, 320.0, 26.0, at?)
   }
 }
 
@@ -763,10 +812,10 @@ fn BarModel::sample(self : BarModel) -> Unit {
     s.sample(now)
   }
   for g in [self.vis, self.ball_alpha, self.ball_scale, self.icon_swap] {
-    g.sample()
+    g.sample(now)
   }
   for _, g in self.tints {
-    g.sample()
+    g.sample(now)
   }
   // a bar chosen: landed (its panel's spring at the rest it declared as it set out, closed), the stack is where the
   // bar is, drawn as the bar will be; it goes in this same frame
@@ -790,7 +839,7 @@ fn BarModel::rest(self : BarModel) -> Double {
     gs.push(g)
   }
   for g in gs {
-    e = dmax(e, g.anim().ends_at())
+    e = dmax(e, g.end())
   }
   e
 }
@@ -1079,6 +1128,7 @@ fn tint_of(id : String, on : Bool) -> Double {
     }
   }
   g.go(if on { 1.0 } else { 0.0 }, tint_ms, Out)
+  g.sample(bar_clock.now)
   g.value
 }
 
@@ -1105,6 +1155,110 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
 }
 
 ///|
+/// The page's primary action in the notch (Places.kt PlaceBar) where it is the settings' (Station's ＋ adds a station,
+/// Profile's a profile, 连接's a connect: what the settings' page of the place says).
+fn bar_place_add(src : Source, ws : Workspace, active : String?) -> ((@sf.Beside) -> Unit)? {
+  match active {
+    Some("connects") => {
+      let core = settings_core(src, ws)
+      match @sfpages.connects_add(src, core, @settings.here_of(core, ws.id, ws.name)) {
+        Some(run) => Some(run)
+        None => None
+      }
+    }
+    Some(a) => @settings.place_action(settings_core(src, ws), @settings.here_of(settings_core(src, ws), ws.id, ws.name), a)
+    None => None
+  }
+}
+
+///|
+/// The notch's action's icon ("" none: the notch closed): 令 on the chats' pages, 文件's ＋ while it can lend a folder
+/// (Files.kt), the settings' ＋ where the place's page has one (`place_add`), none on the others yet.
+fn bar_action(src : Source, ws : Workspace, active : String?, place_add : ((@sf.Beside) -> Unit)?) -> String {
+  match active {
+    Some(a) if chat_family.contains(a) => "ling"
+    Some("files") if files_can_lend(src, ws) => "plus"
+    _ if place_add is Some(_) => "plus"
+    _ => ""
+  }
+}
+
+///|
+/// What the bar is told by the app's state: whether it shows, whether its notch is open, the place shown and the places
+/// of the bar shown. Compared whole: told the same again, nothing new.
+priv struct BarTold {
+  shown : Bool
+  notched : Bool
+  active : String?
+  items : Array[String]
+} derive(Eq)
+
+///|
+/// What the bar is told in workspace `ws` with `active` the place on top and `shown` whether it shows (narrow_over).
+fn bar_told(src : Source, ws : Workspace, active : String?, shown : Bool) -> BarTold {
+  let (sets, cur) = bars_in(src, ws.id)
+  let notched = bar_action(src, ws, active, bar_place_add(src, ws, active)) != ""
+  { shown, notched, active, items: sets[cur] }
+}
+
+///|
+/// The bar told `told` at the moment `at` of what changed it (a page put on the stack or taken off, a place come in,
+/// what the notch offers), whatever frames are drawn after: its ways set out from then, from where they are then; told
+/// the same again, nothing. A frame only reads where they are (BarModel::sample).
+fn bar_tell(told : BarTold, at : Double) -> Unit {
+  let m = bar
+  if m.told == Some(told) {
+    return
+  }
+  m.told = Some(told)
+  let shown = told.shown
+  // shown or not
+  m.vis.go_by(
+    if shown { 1.0 } else { 0.0 },
+    if shown {
+      @motion.move(points=bar_drop)
+    } else {
+      @motion.tween(bar_hide_ms, ease=Leave)
+    },
+    at~,
+  )
+  // going: the panel closed, a finger's slide let go
+  if !shown {
+    if m.mode.get() {
+      m.open_panel(false, at~)
+    }
+    m.drag = -1.0
+    m.drag_y = -1.0
+    m.holds = false
+  }
+  // the notch as the place has it
+  m.k.go(if told.notched { 1.0 } else { 0.0 }, 300.0, 30.0, at~)
+  // the ball to the place shown, from where it is then (not while a finger has it; laid out once at least)
+  let ai = match told.active {
+    Some(a) => told.items.search(a).unwrap_or(-1)
+    None => -1
+  }
+  let active_key = told.active.unwrap_or("")
+  if m.drag < 0.0 && m.width > 0.0 && m.swap is None && active_key != m.active_was {
+    m.active_was = active_key
+    let cs = bar_centres(m.width, if told.notched && !m.mode.get() { 1.0 } else { 0.0 }, told.items.length())
+    let goal_x = cs[if ai < 0 { 0 } else { ai }]
+    m.trip = dmax(8.0, (goal_x - m.ball_x.value_at(at)).abs())
+    let tension = dclamp(300.0 * slot_px / m.trip, 90.0, 700.0)
+    m.ball_x.go(goal_x, tension, ball_damping(tension), at~)
+  }
+  // the ball shown where a place of the bar is
+  let ball_shown = ai >= 0 ||
+    m.drag >= 0.0 ||
+    (match m.swap {
+      Some({ key: Some(_), .. }) => true
+      _ => false
+    })
+  m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, ball_fade_ms, Out, at~)
+  m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, ball_grow_ms, Out, at~)
+}
+
+///|
 /// The bar as it is this frame (bottom_bar's part).
 fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown : Bool) -> Unit {
   let t = @sf.theme()
@@ -1123,26 +1277,8 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   let bar_mid = row_top + bar_track / 2.0
   let w = c.width - 44.0
   let slot = (w - 2.0 * c0) / 3.0
-  // the page's primary action in the notch (Places.kt PlaceBar): 令 on the chats' pages, 文件's ＋ while it can lend
-  // a folder (Files.kt), none on the others yet
-  // (Station's ＋ adds a station, Profile's a profile, 连接's a connect: what the settings' page of the place says)
-  let place_add = match active {
-    Some("connects") => {
-      let core = settings_core(src, ws)
-      match @sfpages.connects_add(src, core, @settings.here_of(core, ws.id, ws.name)) {
-        Some(run) => Some(run)
-        None => None
-      }
-    }
-    Some(a) => @settings.place_action(settings_core(src, ws), @settings.here_of(settings_core(src, ws), ws.id, ws.name), a)
-    None => None
-  }
-  let action = match active {
-    Some(a) if chat_family.contains(a) => "ling"
-    Some("files") if files_can_lend(src, ws) => "plus"
-    _ if place_add is Some(_) => "plus"
-    _ => ""
-  }
+  let place_add = bar_place_add(src, ws, active)
+  let action = bar_action(src, ws, active, place_add)
   let notched = action != ""
   // the dots: a station in trouble (red)
   let chats = (src.topic)("chats", { "scope": Json::string(ws.id), "mine": Json::boolean(false) })
@@ -1156,43 +1292,16 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   bar_glyph.val = Some(glyph)
   bar_stations_said.val = said
   let m = bar
-  // told once a frame, by its first build in it: built again in the same frame (a frame's passes, or a check
-  // building it whole), it draws what that build told, a ride set out from where it is not set out again from there;
-  // unless what it is told is otherwise by then (a page pushed after its first build in the frame: hidden as of it,
-  // not as of the next frame that happens to build it)
-  let tell = m.told != c.frame_number() || m.told_as != (shown, notched)
-  m.told = c.frame_number()
-  m.told_as = (shown, notched)
-  // the frame's motion, by what the bar was told before this frame (Bar.kt: told as it is composed, it moves from
-  // there; a bar chosen is drawn as it was the frame it is chosen, and slides from the next)
-  if tell {
-    m.sample()
-  }
-  // told each frame: shown or not, the notch as the place has it
-  if tell {
-    m.vis.go_by(if shown { 1.0 } else { 0.0 }, if shown {
-      @motion.move(points=bar_drop)
-    } else {
-      @motion.tween(bar_hide_ms, ease=Leave)
-    })
-  }
-  if tell && !shown {
-    if m.mode.get() {
-      m.open_panel(false)
-    }
-    m.drag = -1.0
-    m.drag_y = -1.0
-    m.holds = false
-  }
-  if tell {
-    m.drag_drawn = m.drag
-    m.drag_y_drawn = m.drag_y
-  }
+  // what the app's state tells it, at that moment (narrow_shell's reaction: bar_tell); here only where it was not told
+  // it yet (its first build), the same told again nothing
+  bar_tell({ shown, notched, active, items }, c.moment())
+  // where it is at the frame's moment, by what it was told (Bar.kt: told as it is composed, it moves from there): read
+  // only, the same in every build at that moment
+  m.sample()
+  m.drag_drawn = m.drag
+  m.drag_y_drawn = m.drag_y
   let drag = m.drag_drawn
   let drag_y = m.drag_y_drawn
-  if tell {
-    m.k.go(if notched { 1.0 } else { 0.0 }, 300.0, 30.0)
-  }
   let ai = match active {
     Some(a) => items.search(a).unwrap_or(-1)
     None => -1
@@ -1223,7 +1332,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   }
   let sliding = drag >= 0.0
   let active_key = active.unwrap_or("")
-  if tell && !sliding && active_key != m.active_was {
+  if !sliding && active_key != m.active_was {
     m.active_was = active_key
     m.trip = dmax(8.0, (goal_x - m.ball_x.x).abs())
   }
@@ -1237,13 +1346,12 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
       }
     _ => None
   }
-  if tell && m.width != w {
+  if m.width != w {
     // a new width (turned): there at once
     m.width = w
     m.ball_x.put(goal_x)
   }
   match ride {
-    _ if !tell => ()
     Some((s, j)) => {
       // where its place is at a time, by the panel's and the notch's ways (as swap_at has it each frame): ridden
       // after on the ball's springs, worked out once as it sets out (Ride), again only when those ways change
@@ -1273,21 +1381,17 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
       m.ball_y.go(goal_y, ball_down, ball_damping(ball_down))
     }
   }
-  if tell {
-    m.held.go(if sliding { 1.0 } else { 0.0 }, 420.0, 16.0)
-  }
+  m.held.go(if sliding { 1.0 } else { 0.0 }, 420.0, 16.0)
   let ball_shown = ai >= 0 ||
     sliding ||
     (match m.swap {
       Some({ key: Some(_), .. }) => true
       _ => false
     })
-  if tell {
-    m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, ball_fade_ms, Out)
-    m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, ball_grow_ms, Out)
-  }
+  m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, ball_fade_ms, Out)
+  m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, ball_grow_ms, Out)
   // first drawn (or under reduced motion): everything where it goes, at once
-  if tell && (!m.placed || c.still()) {
+  if !m.placed || c.still() {
     m.placed = true
     m.jump()
   }
@@ -1583,9 +1687,9 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   // going down out of the way and back up: drawn so, laid out where it rests; going, it takes nothing
   // (worked out as each frame is painted, on its way: a frame of its looks alone draws it where it is then)
   if m.vis.value < 1.0 || m.vis.target < 1.0 {
-    let vis = m.vis.anim()
+    let vis = m.vis
     c.look_by(holder, fn() {
-      let v = vis.get()
+      let v = vis.painted(@ui.current())
       @ui.look(alpha=v, dy=(1.0 - v) * bar_drop)
     })
   }
@@ -1610,7 +1714,7 @@ fn show_icon(c : @ui.Ctx, next : String, out : Bool) -> Double {
       sw.go(1.0, icon_swap_ms, Linear)
     }
   }
-  sw.sample()
+  sw.sample(bar_clock.now)
   if sw.value != sw.target {
     @motion.log_frame(c, "bar/icon-swap", "value=\{sw.value} to=1")
   } else {

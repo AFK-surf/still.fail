@@ -66,6 +66,25 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
     },
   )
   |> ignore
+  // the bottom bar told what the app's state says of it as that changes, at the moment of what changed it (a page put
+  // on the stack, a place come in), whatever frames are drawn: the frames only read where it is then (bar_tell)
+  v.reacts(
+    fn() {
+      match workspace_in_view(src).0 {
+        Some(w) => {
+          let active = place_of(app.nav.top())
+          Some(bar_told(src, w, active, narrow_bar_shown(src, w)))
+        }
+        None => None
+      }
+    },
+    fn(told) {
+      match told {
+        Some(t) => bar_tell(t, v.now())
+        None => ()
+      }
+    },
+  )
   @ui.old(v, fn(c) {
     match workspace_in_view(src).0 {
       Some(w) => {
@@ -229,21 +248,22 @@ fn narrow_page(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Unit {
 fn narrow_over(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // the bottom bar: on a place's top page with nothing over it; none while this device waits to be confirmed in the
   // workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
-  let root = app.nav.top()
-  let waiting = root == Home && @settings.lock_waiting(settings_core(src, w), w.id)
-  bottom_bar(
-    c,
-    src,
-    w,
-    place_of(root),
-    app.nav.depth() == 1 && place_of(root) is Some(_) && !@sfpages.search_bar_away() && !waiting,
-  )
+  bottom_bar(c, src, w, place_of(app.nav.top()), narrow_bar_shown(src, w))
   // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
   preview(c, src)
   // the chat being made public (sfpages' publish.mbt)
   @sfpages.publish_layer(c, src)
   // a visualization over the whole screen (viz.mbt)
   viz_full_layer(c, src)
+}
+
+///|
+/// Whether the bottom bar shows: on a place's top page with nothing over it; not while this device waits to be
+/// confirmed in the workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar).
+fn narrow_bar_shown(src : Source, w : Workspace) -> Bool {
+  let root = app.nav.top()
+  let waiting = root == Home && @settings.lock_waiting(settings_core(src, w), w.id)
+  app.nav.depth() == 1 && place_of(root) is Some(_) && !@sfpages.search_bar_away() && !waiting
 }
 
 ///|
