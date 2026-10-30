@@ -231,10 +231,10 @@ fn answered_by(port: u16) -> i32 {
 }
 
 #[test]
-fn handoff_version_is_2() {
+fn handoff_version_is_3() {
     let out = output(Command::new(launcher()).arg("handoff-version"));
     assert!(out.status.success());
-    assert_eq!(String::from_utf8(out.stdout).unwrap(), "2\n");
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), "3\n");
 }
 
 #[test]
@@ -289,7 +289,7 @@ fn node_serves_the_launchers_ports_and_station_json_names_the_launcher() {
     assert!(text.starts_with(&format!("{{\"pid\":{},\"startedAt\":", station.pid())), "{text}");
     assert_eq!(said["pid"], station.pid());
     assert_eq!(said["version"], "0.1.0");
-    assert_eq!((said["handoff"].as_u64(), said["drain"].as_u64(), said["channel"].as_u64()), (Some(1), Some(1), Some(1)));
+    assert_eq!((said["handoff"].as_u64(), said["drain"].as_u64(), said["channel"].as_u64(), said["renew"].as_u64()), (Some(1), Some(1), Some(1), Some(1)));
     let started_at = said["startedAt"].as_u64().unwrap();
     assert!(before <= started_at && started_at <= after, "{before} <= {started_at} <= {after}");
     let (mcp, admin) = station.ports();
@@ -330,6 +330,66 @@ fn sigusr2_hands_over_to_a_new_node() {
     // What the old one held in memory, given as it handed over, went to the new one.
     until("what the old Node held carried over", || station.said(new, &format!(r#"got carried {{"from":{old}}}"#)).then_some(()));
     assert!(station.file("handoff-failed").is_none());
+    station.signal(libc::SIGTERM);
+    assert!(station.wait().success());
+}
+
+/// Puts a launcher into the release at `--app`, as an update does: `script` is a shell script's body, `$BUILT` the
+/// launcher built here.
+fn release_launcher(station: &Station, script: &str) {
+    let dir = station.app.join("mesh/target/release");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("stillfail-station");
+    std::fs::write(&path, format!("#!/bin/sh\nBUILT='{BUILT}'\n{script}")).unwrap();
+    std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+}
+
+#[test]
+fn a_handover_first_makes_the_launcher_the_one_the_release_has_now() {
+    let mut station = Station::new("renew");
+    station.start("");
+    station.up();
+    let pid = station.pid();
+    let old = answered_by(station.mcp());
+    // An update brought a launcher unlike the one running (here one that says where it ran `run`, then is this one).
+    let renewed = station.dir.join("renewed");
+    release_launcher(&station, &format!("[ \"$1\" = run ] && echo $$ >> '{}'\nexec \"$BUILT\" \"$@\"\n", renewed.display()));
+    station.conf("version=0.2.0\n");
+    station.signal(libc::SIGUSR2);
+    let after = until("station.json of the new version", || station.station_json().filter(|s| s["version"] == "0.2.0"));
+    // The same process (its pid, its lock, its ports) runs the release's launcher now, and handed over from there.
+    assert_eq!(std::fs::read_to_string(&renewed).unwrap(), format!("{pid}\n"));
+    assert_eq!(after["pid"], pid);
+    let new = *station.started().last().unwrap();
+    assert_ne!(new, old);
+    assert_eq!(station.started().len(), 2, "the Node serving was kept through it");
+    assert_eq!(answered_by(station.mcp()), new);
+    assert_eq!(answered_by(station.admin()), new);
+    assert!(station.said(old, "got handover") && !alive(old));
+    until("what the old Node held carried over", || station.said(new, &format!(r#"got carried {{"from":{old}}}"#)).then_some(()));
+    assert!(station.file("handoff-failed").is_none());
+    // The release's launcher it is now: the next handover does not make it that again.
+    station.conf("version=0.3.0\n");
+    station.signal(libc::SIGUSR2);
+    until("station.json of the next version", || station.station_json().filter(|s| s["version"] == "0.3.0"));
+    assert_eq!(std::fs::read_to_string(&renewed).unwrap(), format!("{pid}\n"));
+    station.signal(libc::SIGTERM);
+    assert!(station.wait().success());
+}
+
+#[test]
+fn a_launcher_in_the_release_that_cannot_take_a_running_one_over_is_not_run() {
+    let mut station = Station::new("norenew");
+    station.start("");
+    station.up();
+    // One from before this could be done (a release rolled back to): it would not find its lock its own.
+    let ran = station.dir.join("ran");
+    release_launcher(&station, &format!("[ \"$1\" = handoff-version ] && {{ echo 2; exit 0; }}\necho \"$@\" >> '{}'\nexit 1\n", ran.display()));
+    station.conf("version=0.2.0\n");
+    station.signal(libc::SIGUSR2);
+    let after = until("station.json of the new version", || station.station_json().filter(|s| s["version"] == "0.2.0"));
+    assert_eq!(after["pid"], station.pid());
+    assert!(!ran.exists());
     station.signal(libc::SIGTERM);
     assert!(station.wait().success());
 }

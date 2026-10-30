@@ -136,7 +136,12 @@ pub fn station_json(pid: u32, started_at: u64, version: &str) -> String {
 
 /// What the launcher takes: a handover, a drain, the channel asked again. On Unix as signals (SIGUSR2, SIGUSR1, SIGHUP);
 /// on Windows, which has none, as lines on its own pipe (run_windows.rs `control_pipe`).
+#[cfg(windows)]
 const FLAGS: &str = "\"handoff\":1,\"drain\":1,\"channel\":1";
+/// Unix's also says it becomes the release's launcher at a handover (`renew`, run.rs): an installer hands over to a new
+/// release only through one that does, else what is changed in the launcher never comes (cloud/src/install.ts).
+#[cfg(unix)]
+const FLAGS: &str = "\"handoff\":1,\"drain\":1,\"channel\":1,\"renew\":1";
 
 pub fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
@@ -236,6 +241,7 @@ mod tests {
 
     #[test]
     fn station_json_is_one_line_in_the_rust_stations_order() {
-        assert_eq!(station_json(7, 12, "0.1.\"x"), "{\"pid\":7,\"startedAt\":12,\"version\":\"0.1.\\\"x\",\"handoff\":1,\"drain\":1,\"channel\":1}\n");
+        let renew = if cfg!(unix) { ",\"renew\":1" } else { "" };
+        assert_eq!(station_json(7, 12, "0.1.\"x"), format!("{{\"pid\":7,\"startedAt\":12,\"version\":\"0.1.\\\"x\",\"handoff\":1,\"drain\":1,\"channel\":1{renew}}}\n"));
     }
 }

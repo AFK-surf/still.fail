@@ -414,9 +414,11 @@ move_data() {
   migrate=""
 }
 
-# Handed over without stopping: the new release goes where the old one was, and the running station execs it.
+# Handed over without stopping: the new release goes where the old one was, and the running station execs it. Only a
+# launcher that becomes the release's own as it hands over (\`renew\`, station/native/launcher/src/run.rs) is handed
+# over to: one from before would run on, never changed, until the machine's next start; it is restarted once instead.
 handed=""
-if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && same_service; then
+if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && [ -n "$(said renew)" ] && same_service; then
   started=$(said startedAt)
   swap_app
   rm -f "$data/run/handoff-failed"

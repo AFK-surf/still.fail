@@ -4,7 +4,8 @@
 //! `run` is the launcher's own: it holds the data directory's lock, the two listening ports and the pid that
 //! run/station.json names, and runs the station's Node process under it (run.rs), starting a new one beside it on
 //! SIGUSR2 and letting the old one go once the new one is ready. Every other command is Node's: exec'd with the same
-//! arguments. `handoff-version` says 2: a Rust station asked to hand over to this binary does not exec it.
+//! arguments. `handoff-version` says 3: a Rust station asked to hand over to this binary does not exec it (it does only
+//! for 1); a launcher before this one does, to take its place at a handover (from 3: run.rs `renew`).
 
 mod data;
 mod lifecycle;
@@ -30,8 +31,8 @@ const NODE_IN_APP: &str = "node/node.exe";
 const MAIN_IN_APP: &str = "station/main.js";
 /// Node to run instead of the release's (tests, development).
 const NODE_VAR: &str = "STILLFAIL_NODE";
-/// The handoff this binary reads: none of the Rust station's (which is 1).
-const HANDOFF_VERSION: u32 = 2;
+/// The handoff this binary reads: none of the Rust station's (which is 1); from 3, a running launcher's (`--resume`).
+const HANDOFF_VERSION: u32 = 3;
 /// `run`'s exit when another station runs the data directory (the desktop app reads it: apps/desktop/src/station.ts).
 const HELD: i32 = 3;
 
@@ -63,6 +64,7 @@ fn main() {
     let _ = take("--node");
     let port = take("--port");
     let handoff = take("--handoff");
+    let resume = take("--resume");
     let with_parent = args.iter().position(|a| a == "--with-parent").map(|i| args.remove(i)).is_some();
     match args.first().map(String::as_str) {
         Some("run") => {
@@ -81,7 +83,7 @@ fn main() {
                 let _ = std::fs::remove_file(file);
             }
             let data = data::data_dir(&data::home(), data.or_else(|| data::var("DATA")).map(PathBuf::from));
-            std::process::exit(run::run(run::Options { data, app: PathBuf::from(app), port, named, with_parent }));
+            std::process::exit(run::run(run::Options { data, app: PathBuf::from(app), port, named, with_parent, resume }));
         }
         Some("handoff-version") => println!("{HANDOFF_VERSION}"),
         Some("enroll" | "status" | "id" | "channel" | "lock") => {

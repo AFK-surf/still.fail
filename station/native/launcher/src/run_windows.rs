@@ -178,6 +178,10 @@ impl Os for System {
 }
 
 pub fn run(options: Options) -> i32 {
+    // Only Unix's launcher becomes the release's at a handover (run.rs `renew`): none hands on to this one.
+    if options.resume.is_some() {
+        log::warn("--resume is Unix's; starting afresh");
+    }
     let run = options.data.join("run");
     if let Err(error) = std::fs::create_dir_all(&run) {
         log::error(&format!("{}: {error}", run.display()));

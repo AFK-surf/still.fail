@@ -22,7 +22,7 @@ test("without a token the installer only updates a station already in a workspac
 
 test("an update hands over to the new release only when the running station says it can and its service is unchanged", () => {
   const script = installScript("https://ember.test");
-  assert.match(script, /if \[ -n "\$pid" \] && \[ -z "\$migrate" \] && \[ -n "\$\(said handoff\)" \] && same_service; then/);
+  assert.match(script, /if \[ -n "\$pid" \] && \[ -z "\$migrate" \] && \[ -n "\$\(said handoff\)" \] && \[ -n "\$\(said renew\)" \] && same_service; then/);
   // The caller's PATH is not a change: an update from another shell (an agent's, the station's own) still hands over.
   assert.match(script, /without_path\(\) \{ sed -e 's#<key>PATH<\/key><string>\[\^<\]\*<\/string>##' -e '\/\^Environment=PATH=\/d'/);
   assert.match(script, /kill -USR2 "\$pid"/);
@@ -301,7 +301,7 @@ test("a handover the new release cannot take leaves the station running on the o
     pid = Number(execFileSync("sh", ["-c", `"${fake}" </dev/null >/dev/null 2>&1 & echo $!`], { encoding: "utf8" }));
     while (!existsSync(join(m.root, "listening"))) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
     mkdirSync(join(data, "run"), { recursive: true });
-    const said = `{"pid": ${pid}, "startedAt": 1700000000000, "handoff": 1, "drain": 1}`;
+    const said = `{"pid": ${pid}, "startedAt": 1700000000000, "handoff": 1, "drain": 1, "renew": 1}`;
     writeFileSync(join(data, "run", "station.json"), said);
     writeFileSync(join(m.home, "said"), "");
 
@@ -314,6 +314,40 @@ test("a handover the new release cannot take leaves the station running on the o
     assert.ok(process.kill(pid, 0), "the station still runs");
     assert.doesNotMatch(update.said, /launchctl (bootout|bootstrap)/, "and is not restarted");
     assert.equal(readFileSync(join(data, "run", "station.json"), "utf8"), said);
+  } finally {
+    if (pid) process.kill(pid, "SIGKILL");
+    m.done();
+  }
+});
+
+test("a station whose launcher would not become the new release's own is restarted once, not handed over", () => {
+  const m = machine();
+  const data = join(m.home, ".stillfail");
+  let pid = 0;
+  try {
+    mkdirSync(join(data, "mesh"), { recursive: true });
+    writeFileSync(join(data, "mesh", "cloud.json"), '{"origin": "https://app.still.fail"}');
+    assert.equal(m.run().status, 0, "installed, with its service");
+    writeFileSync(join(data, "app", "VERSION"), "old\n");
+    // A launcher from before (its station.json says no renew): it hands over to new Nodes, itself never changed.
+    const fake = join(m.root, "stillfail-station");
+    writeFileSync(
+      fake,
+      `#!/bin/sh\ntrap 'echo handover >> "${m.root}/told"' USR2\ntrap 'echo drain >> "${m.root}/told"; echo idle > "${data}/run/drained"' USR1\ntouch "${m.root}/listening"\nwhile :; do sleep 0.2; done\n`,
+      { mode: 0o755 },
+    );
+    pid = Number(execFileSync("sh", ["-c", `"${fake}" </dev/null >/dev/null 2>&1 & echo $!`], { encoding: "utf8" }));
+    while (!existsSync(join(m.root, "listening"))) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    mkdirSync(join(data, "run"), { recursive: true });
+    writeFileSync(join(data, "run", "station.json"), `{"pid": ${pid}, "startedAt": 1700000000000, "handoff": 1, "drain": 1, "channel": 1}`);
+    writeFileSync(join(m.home, "said"), "");
+
+    const update = m.run();
+    assert.equal(update.status, 0, update.out);
+    assert.equal(readFileSync(join(m.root, "told"), "utf8"), "drain\n", "drained, never asked to hand over");
+    assert.match(update.said, /launchctl bootout/);
+    assert.match(update.said, /launchctl bootstrap/);
+    assert.equal(readFileSync(join(data, "app", "VERSION"), "utf8"), "new\n");
   } finally {
     if (pid) process.kill(pid, "SIGKILL");
     m.done();
