@@ -448,6 +448,46 @@ test "hover card: opened once the pointer rests on its trigger, kept while over 
 }
 
 ///|
+test "hover card and tooltip: not while a press elsewhere is dragged across the trigger; once let go there, after the wait" {
+  let card = Ref(false)
+  let tip = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(gap=40.0, pad=40.0, fn() {
+      let a = button(c, "@ada", key="ada", variant=Ghost)
+      card.val = hover_card(c, "card", a.id, fn() { c.text("Ada Lovelace, the first programmer") |> ignore })
+      let b = button(c, "Bold", key="bold")
+      tip.val = tooltip(c, "tip", b.id, "Bold (⌘B)")
+    })
+    |> ignore
+  })
+  let (ax, ay, aw, ah) = t.get(@ui.Button, label="@ada").rect
+  let (bx, by, bw, bh) = t.get(@ui.Button, label="Bold").rect
+  // pressed on the ground (an edge dragged), carried over each trigger and held there past its wait: neither opens
+  t.press_at(380.0, 800.0)
+  t.move(ax + aw / 2.0, ay + ah / 2.0)
+  t.run_for(hover_card_open_ms * 2.0)
+  assert_false(card.val)
+  t.move(bx + bw / 2.0, by + bh / 2.0)
+  t.run_for(tooltip_delay_ms * 2.0)
+  assert_false(tip.val)
+  // let go there: the tip once the pointer has rested its wait from then
+  let lifted = t.time()
+  t.release(bx + bw / 2.0, by + bh / 2.0)
+  t.move(bx + bw / 2.0, by + bh / 2.0)
+  t.run_for(lifted + tooltip_delay_ms - 1.0 - t.time())
+  assert_false(tip.val)
+  t.run_for(lifted + tooltip_delay_ms - t.time())
+  assert_true(tip.val)
+  // and the card so, the pointer come to it with no button down
+  let moved = t.time()
+  t.move(ax + aw / 2.0, ay + ah / 2.0)
+  t.run_for(moved + hover_card_open_ms - 1.0 - t.time())
+  assert_false(card.val)
+  t.run_for(moved + hover_card_open_ms - t.time())
+  assert_true(card.val)
+}
+
+///|
 test "toasts: each goes after its time, paused under the pointer; closed, acted on, swiped away" {
   let list : Ref[Array[Toast]] = Ref([])
   let acted : Ref[String?] = Ref(None)

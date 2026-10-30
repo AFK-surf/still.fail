@@ -119,7 +119,7 @@ pub let hover_card_close_ms : Double = 300.0
 
 ///|
 /// `key`'s hover card (see the file's head) for the trigger `trigger` (its id): opened once a mouse has rested on the
-/// trigger `open_delay` ms, closed `close_delay` ms after it has left both, and by Escape and a press outside. A finger
+/// trigger `open_delay` ms (its button up: one held, dragging something across it, rests on nothing), closed `close_delay` ms after it has left both, and by Escape and a press outside. A finger
 /// rests on nothing: it holds the trigger (long_press_ms) to open it, or with `tap` (a trigger that does nothing else
 /// when tapped) taps it, and it stays until a press outside or another tap on the trigger. `held`: kept open by the app
 /// while it is (what was pressed in it opened something beside it, which the pointer goes on to). Whether it is open.
@@ -153,7 +153,9 @@ pub fn hover_card(
       if was {
         !after(c, key + "/out", !(on_trigger || on_card), close_delay)
       } else {
-        after(c, key + "/in", on_trigger, open_delay)
+        // (a pointer carrying a press, a drag of something else across the trigger, rests on nothing: it opens once
+        // let go there)
+        after(c, key + "/in", on_trigger && !c.press().down, open_delay)
       }
     }
   }
@@ -250,7 +252,8 @@ pub fn tooltip(
   }
   let shut = kit.val.shut.contains(id)
   let soon = c.within(tip_closed, skip)
-  let rested = after(c, key + "/in", hovered, if soon { 0.0 } else { delay })
+  // (a pointer carrying a press, a drag across the trigger, rests on nothing: as for a hover card)
+  let rested = after(c, key + "/in", hovered && !c.press().down, if soon { 0.0 } else { delay })
   let mut open = shown || held || (!shut && (focused || rested || (was && hovered)))
   if @motion.presence(c, "\u{2}pop/" + key, open, initial=true, enter=tip_in, exit=pop_out) is Some(shows) {
     let o = c.overlay(key, anchor=trigger, outside=false, initial_focus=0, inert=!open, fn() {
