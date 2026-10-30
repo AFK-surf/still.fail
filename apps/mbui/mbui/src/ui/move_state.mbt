@@ -299,8 +299,38 @@ pub fn Ctx::moved(self : Ctx, name : String, target : Double) -> Double {
   }
   let shown = FixedArray::make(1, v)
   self.shown_now[name] = { v: shown }
-  row_said_shown(name, shown)
+  // (held by what is being built: a row kept says it again from its nodes, moves_said_again)
+  if self.cur >= 0 {
+    let n = self.nodes[self.cur]
+    match n.moved_vars {
+      Some(vs) => vs.push((name, shown))
+      None => n.moved_vars = Some([(name, shown)])
+    }
+  }
   v
+}
+
+///|
+/// What the nodes `from` until `to` showed as they were built (a list's row or a part kept as its nodes, put back
+/// unbuilt: kept_nodes.mbt), said again as their builds said it: the boxes named to be moved, in order, and the values
+/// of the view's own shown in them.
+fn Ctx::moves_said_again(self : Ctx, from : Int, to : Int) -> Unit {
+  for i in from..<to {
+    let n = self.nodes[i]
+    if n.moves != "" {
+      let nth = self.move_seen.get(n.moves).unwrap_or(0)
+      self.move_seen[n.moves] = nth + 1
+      let key = if n.id != 0 { n.moves + "\u{1}#\{n.id}" } else { n.moves + "\u{1}\{nth}" }
+      self.shown_now[key] = { v: node_shown(n) }
+    }
+    match n.moved_vars {
+      Some(vs) =>
+        for v in vs {
+          self.shown_now[v.0] = { v: v.1 }
+        }
+      None => ()
+    }
+  }
 }
 
 ///|
@@ -327,7 +357,6 @@ fn Ctx::move_node(self : Ctx, i : Int) -> Unit {
   let name = n.moves
   let nth = self.move_seen.get(name).unwrap_or(0)
   self.move_seen[name] = nth + 1
-  row_said_seen(name)
   // (a box with an id is itself whatever was built before it; others are the nth so named)
   let key = if n.id != 0 { name + "\u{1}#\{n.id}" } else { name + "\u{1}\{nth}" }
   let built = node_shown(n)
@@ -354,7 +383,6 @@ fn Ctx::move_node(self : Ctx, i : Int) -> Unit {
     node_show(n, shown)
   }
   self.shown_now[key] = { v: shown }
-  row_said_shown(key, shown)
 }
 
 ///|

@@ -99,6 +99,14 @@ struct Node {
   /// the words it holds may be picked, kept by a key once laid out (Ctx::words): found from the nodes once laid out
   /// (words_after_layout)
   mut words : WordsMark?
+  /// the values of the view's own shown as it was built in it (Ctx::moved: a name, what it showed), for a move setting
+  /// out later to go from (move_state.mbt); its own box's shown is its properties
+  mut moved_vars : Array[(String, FixedArray[Double])]?
+  /// how it is drawn over how it is laid out (draw.mbt: a look, a cut, a fade, what it is drawn into) as its build said
+  /// it (`drawn_built`), and as this frame draws it: that, taken anew from it once laid out (Ctx::drawn_found), and
+  /// what is said of it after (a motion's look worked out from the layout)
+  mut drawn_built : Drawn?
+  mut drawn : Drawn?
   mut parent : Int
   mut first : Int
   mut last : Int
@@ -363,6 +371,9 @@ fn Node::new() -> Node {
     scroller: 0,
     scroller_inner: false,
     words: None,
+    moved_vars: None,
+    drawn_built: None,
+    drawn: None,
     parent: -1,
     first: -1,
     last: -1,
@@ -530,6 +541,9 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.scroller = 0
   self.scroller_inner = false
   self.words = None
+  self.moved_vars = None
+  self.drawn_built = None
+  self.drawn = None
   self.first = -1
   self.last = -1
   self.next = -1

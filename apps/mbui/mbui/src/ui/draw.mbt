@@ -135,7 +135,7 @@ pub fn Drawing::is_empty(self : Drawing) -> Bool {
 /// A node of this frame drawn otherwise than plainly: its look, its order (1 over its siblings, 2 over everything),
 /// whether it is only drawn, and a Drawing to keep what it draws in.
 priv struct Drawn {
-  node : Int
+  mut node : Int
   mut look : Look
   mut z : Int
   mut only : Bool
@@ -189,13 +189,14 @@ priv struct Move {
 
 ///|
 priv struct DrawState {
+  /// the entries of the build so far (each held by its node: Node's `drawn`), and once laid out the frame's
+  /// (Ctx::drawn_found)
   entries : Array[Drawn]
-  /// by node: its entry this build (when `stamp` is this build's)
-  at : Array[Int]
-  stamp : Array[Int]
   /// the builds so far (a frame's each: frame_body builds it again while what it read changes)
   mut build : Int
   mut any : Bool
+  /// the frame's entries are taken from what the builds said (Ctx::drawn_found): what is said now is the frame's alone
+  mut framing : Bool
   /// the node being painted by its entry (painted plainly once)
   mut bypass : Int
   /// 0 drawn and tapped, 1 only its tap rects (as laid out), 2 only drawn (as it looks)
@@ -237,10 +238,9 @@ priv struct DrawState {
 ///|
 let dr : DrawState = {
   entries: [],
-  at: [],
-  stamp: [],
   build: 0,
   any: false,
+  framing: false,
   bypass: -1,
   mode: 0,
   overlaying: false,
@@ -315,8 +315,6 @@ pub fn on_reset(f : () -> Unit) -> Unit {
 ///|
 fn reset_drawing() -> Unit {
   dr.entries.clear()
-  dr.at.clear()
-  dr.stamp.clear()
   dr.build = 0
   dr.any = false
   dr.bypass = -1
@@ -347,6 +345,7 @@ fn drawing_begin() -> Unit {
   dr.build = dr.build + 1
   dr.entries.clear()
   dr.any = false
+  dr.framing = false
   dr.bypass = -1
   dr.mode = 0
   dr.overlay.clear()
@@ -361,6 +360,7 @@ fn drawing_begin() -> Unit {
 /// The frame is laid out: the hooks set their looks; what holds something drawn moved is marked, so that it is
 /// painted even where it is laid out outside what cuts it.
 fn Ctx::drawing_after_layout(self : Ctx) -> Unit {
+  self.drawn_found()
   for f in after_layout_hooks {
     f(self)
   }
@@ -388,12 +388,11 @@ fn Ctx::drawing_after_layout(self : Ctx) -> Unit {
 ///|
 /// The entry of node `i` this frame, made when it has none.
 fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
-  while dr.at.length() <= i {
-    dr.at.push(-1)
-    dr.stamp.push(-1)
-  }
-  if dr.stamp[i] == dr.build && dr.at[i] >= 0 {
-    return dr.entries[dr.at[i]]
+  let n = self.nodes[i]
+  let had = if dr.framing { n.drawn } else { n.drawn_built }
+  match had {
+    Some(e) => return e
+    None => ()
   }
   let e : Drawn = {
     node: i,
@@ -418,8 +417,13 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     cycle: None,
     look_by: None,
   }
-  dr.stamp[i] = dr.build
-  dr.at[i] = dr.entries.length()
+  // (held by the node: docs/retained.md, the way there's 1; in the build's entries too, for a row's build to know what
+  // it said a look of: Ctx::nodes_end)
+  if dr.framing {
+    n.drawn = Some(e)
+  } else {
+    n.drawn_built = Some(e)
+  }
   dr.entries.push(e)
   dr.any = true
   e
@@ -428,11 +432,46 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
 ///|
 /// Node `i`'s entry this frame, if it has one.
 fn Ctx::drawn_entry(self : Ctx, i : Int) -> Drawn? {
-  if dr.any && i >= 0 && i < dr.stamp.length() && dr.stamp[i] == dr.build && dr.at[i] >= 0 {
-    Some(dr.entries[dr.at[i]])
+  if dr.any && i >= 0 && i < self.count {
+    if dr.framing {
+      self.nodes[i].drawn
+    } else {
+      self.nodes[i].drawn_built
+    }
   } else {
     None
   }
+}
+
+///|
+/// The frame's entries, from the nodes once all of them are made and laid: each as its build said it (a list's row kept
+/// as its nodes, put back elsewhere among the frame's: what its entries name moved with it), taken anew for this
+/// frame; what is said of a node from here on is said of the frame's.
+fn Ctx::drawn_found(self : Ctx) -> Unit {
+  dr.entries.clear()
+  for i in 0..<self.count {
+    let n = self.nodes[i]
+    match n.drawn_built {
+      Some(b) => {
+        let by = i - b.node
+        if by != 0 {
+          b.node = i
+          if b.keep_rel >= 0 {
+            b.keep_rel = b.keep_rel + by
+          }
+          if b.fade_of >= 0 {
+            b.fade_of = b.fade_of + by
+          }
+        }
+        let e = { ..b }
+        n.drawn = Some(e)
+        dr.entries.push(e)
+      }
+      None => n.drawn = None
+    }
+  }
+  dr.any = dr.entries.length() > 0
+  dr.framing = true
 }
 
 ///|
