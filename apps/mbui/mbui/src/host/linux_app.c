@@ -550,37 +550,13 @@ static void scroll(GdkEvent *ev, double x, double y) {
 // called off, the id where a button goes), what they come to the app's to work out (touches.mbt: two of them its, the
 // first let go the second the first, one called off all of it).
 //
-// Each at its own time, as near as this clock can say it. GDK gives an event's time (gdk_event_get_time) as ms on a
-// clock of the display server's: 32 bits, wrapping; Wayland's and X's alike say nothing of its base, nor that it is
-// this process's monotonic clock (mb_now_ms), and an event without one says GDK_CURRENT_TIME (0). So one bridge for
-// the whole input source, never per touch: GDK's times taken on as one count (each step from the last as a signed
-// 32-bit difference, right across a wrap), and this clock's moment of it the least delivery delay seen so far (the
-// bridge set where an event came in soonest after its time, never one in the future of when it is handled): the
-// intervals between events exact, their moment late by that least delay at most, which nothing here can know. An
-// event with no time of its own is at the moment it is handled.
+// Its time not said: GDK gives an event's (gdk_event_get_time) as ms on the display server's clock, 32 bits, wrapping,
+// GDK_CURRENT_TIME (0) where it has none; neither GDK nor Wayland's or X's protocol says how that clock lines up with
+// this process's (mb_now_ms), and nothing here has checked a backend that does. So no time of its own is said for it
+// (mb_host_event_time -1): it is at the moment it is handled, as this host's other events are; what it did is kept on
+// the tape at that moment and given again so. (Saying its own would need a backend's clock known to be this one.)
 static GHashTable *touch_ids;          // a sequence's id, by its pointer
 static int32_t touch_next = 1;
-static int bridge_set = 0;             // whether the bridge is set (by the first event with a time)
-static guint32 bridge_last;            // GDK's time of the last such event
-static double bridge_count;            // GDK's times so far as one count (ms), from the first
-static double bridge_at = 0;           // this clock's ms minus the count: where the count is on it
-static double event_time = -1;         // the event being handled's time (mb_host_event_time), -1 none
-static double gdk_moment(guint32 g) {
-  double now = mb_now_ms();
-  if (g == GDK_CURRENT_TIME) return now;
-  if (!bridge_set) {
-    bridge_set = 1;
-    bridge_last = g;
-    bridge_count = 0;
-    bridge_at = now;
-  } else {
-    bridge_count += (double)(int32_t)(g - bridge_last);
-    bridge_last = g;
-  }
-  // (come sooner after its time than any before: the bridge set by it)
-  if (bridge_at + bridge_count > now) bridge_at = now - bridge_count;
-  return bridge_at + bridge_count;
-}
 static void touch(GdkEvent *ev, GdkEventType t, double x, double y) {
   GdkEventSequence *s = gdk_event_get_event_sequence(ev);
   int kind = t == GDK_TOUCH_BEGIN ? 10 : t == GDK_TOUCH_UPDATE ? 11 : t == GDK_TOUCH_END ? 12 : 13;
@@ -596,10 +572,8 @@ static void touch(GdkEvent *ev, GdkEventType t, double x, double y) {
     if (touch_next <= 0) touch_next = 1;
     g_hash_table_insert(touch_ids, s, GINT_TO_POINTER(id));
   }
-  event_time = gdk_moment(gdk_event_get_time(ev));
   if (kind == 10) gtk_widget_grab_focus(area);
   mb_cb.pointer(kind, x, y, id);
-  event_time = -1;
   if (kind == 12 || kind == 13) g_hash_table_remove(touch_ids, s);
 }
 
@@ -949,7 +923,7 @@ int32_t mb_host_utc_offset_min(double at_ms) {
   return (int32_t)(local.tm_gmtoff / 60);
 }
 
-double mb_host_event_time(void) { return event_time; }
+double mb_host_event_time(void) { return -1; }
 
 // What a pointer's event came from (@hostapi.event_finger): not said (GTK hands touches as the pointer's here).
 int32_t mb_host_event_finger(void) { return -1; }
