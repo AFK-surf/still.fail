@@ -545,6 +545,10 @@ jobs:
           [ -x "$d/node.exe" ] || exit 0
           cygpath -w "$d" >> "$GITHUB_PATH"
           echo "kept=true" >> "$GITHUB_OUTPUT"
+          # (the natives' keys made from here on, beside MSVC's and MoonBit's setup: Node's first start on the runner
+          # is ~5 s and the keys' first look at the tree ~2, before the build could start, 2026-10-30, 40979192948)
+          K=$RUNNER_TEMP/native-keys; mkdir -p "$K"
+          nohup bash -c 'PATH="$1:$PATH"; k="natives-win32-x64-$(node scripts/native.ts key shell win32-x64)-$(node scripts/native.ts key engine win32-x64)" && printf %s "$k" > "$0/key"; echo $? > "$0/status"' "$K" "$d" > /dev/null 2>&1 &
       - if: steps.node.outputs.kept != 'true'
         uses: actions/setup-node@v5
         with: { node-version-file: .node-version, package-manager-cache: false }
@@ -557,7 +561,11 @@ jobs:
       # to break off, 39431384793)
       - name: The Windows natives' keys
         id: native-keys
-        run: echo "key=natives-win32-x64-$(node scripts/native.ts key shell win32-x64)-$(node scripts/native.ts key engine win32-x64)" >> "$GITHUB_OUTPUT"
+        run: |
+          K=$RUNNER_TEMP/native-keys
+          if [ -d "$K" ]; then while [ ! -f "$K/status" ]; do sleep 0.2; done; fi
+          if [ "$(cat "$K/status" 2>/dev/null)" = 0 ]; then echo "key=$(cat "$K/key")" >> "$GITHUB_OUTPUT"
+          else echo "key=natives-win32-x64-$(node scripts/native.ts key shell win32-x64)-$(node scripts/native.ts key engine win32-x64)" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/cache@v4
         with:
           path: ~/AppData/Local/stillfail-native
