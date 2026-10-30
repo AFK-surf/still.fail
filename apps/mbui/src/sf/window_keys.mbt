@@ -1,11 +1,11 @@
-// The window's own buttons where they are the app's to draw (@ui.window_keys_own: Windows', a window with no title bar
-// of the system's, the app's top row its title bar), as still.fail's desktop app drew them in its page's top row (web
-// WindowControls.tsx, WindowControls.css.ts): after a rule, minimize, maximize or back as it was, close, as the bars'
-// keys are (icon_button: 32, round, their icons 16 quiet till pointed at, 2 apart), close red under the hand. Over all
-// the app shows, as a title bar is: on the line of the top row under them, each layout's (window_keys_at). What a
-// top row at the window's top right holds stands before them (window_end_in, window_clear_in, tape_bar_end). The
-// maximize one is the host's too (@ui.window_snap: Windows' Snap Layouts open from it as the pointer rests there),
-// lit as the host says the pointer stands on it, which the app does not see (@ui.window_snap_state).
+// The window's own buttons where they are the app's to draw (@ui.window_keys_own: Windows' and Linux's, a window with
+// no title bar of the system's, the app's top row its title bar), as still.fail's desktop app drew them in its page's
+// top row (web WindowControls.tsx, WindowControls.css.ts): after a rule, minimize, maximize or back as it was, close,
+// as the bars' keys are (icon_button: 32, round, their icons 16 quiet till pointed at, 2 apart), close red under the
+// hand. Over all the app shows, as a title bar is: on the line of the top row under them, each layout's
+// (window_keys_at). What a top row at the window's top right holds stands before them (window_end_in, window_clear_in,
+// tape_bar_end). The maximize one is the host's too (@ui.window_snap: Windows' Snap Layouts open from it as the pointer
+// rests there), lit as the host says the pointer stands on it, which the app does not see (@ui.window_snap_state).
 
 ///|
 /// The band laid out Small over the page where the window's buttons are the app's (the app's status_top): the bar
