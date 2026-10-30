@@ -233,6 +233,7 @@ fn context_pending(c : @ui.Ctx) -> Unit {
 /// Each item's mark, as the same item has it in a ⋯ (a message's: sfbase's message_items): what it does to a link, an
 /// image, words picked, a message. A field's editing has none (剪切 and 全选 have no mark of their own; the four go
 /// alone, in a field's menu).
+// kept across runs: a value (nothing is put in it or taken out)
 let context_icons : Map[String, String] = {
   "open": "external",
   "copy-link": "link",
