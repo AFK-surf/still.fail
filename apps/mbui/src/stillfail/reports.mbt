@@ -23,10 +23,12 @@ fn reports_start() -> Unit {
   @core.on_failed.val = Some(fn(reason) { host_tell("core_failed", reason, "", 0, 0) |> ignore })
   // the settings' 发送使用统计和错误报告 (-1: a build that sends nothing, no row)
   if host_tell("reporting", "", "", 0, 0) >= 0 {
-    @sfapp.reporting_host.val = Some({
-      get: fn() { host_tell("reporting", "", "", 0, 0) == 1 },
-      set: fn(on) { host_tell("set_reporting", "", "", if on { 1 } else { 0 }, 0) |> ignore },
-    })
+    @sfapp.reporting_host.set(
+      Some({
+        get: fn() { host_tell("reporting", "", "", 0, 0) == 1 },
+        set: fn(on) { host_tell("set_reporting", "", "", if on { 1 } else { 0 }, 0) |> ignore },
+      }),
+    )
   }
   @sfapp.bar_timing.val = Some({
     placed: fn(from, to) { host_tell("placed", from, to, 0, 0) |> ignore },

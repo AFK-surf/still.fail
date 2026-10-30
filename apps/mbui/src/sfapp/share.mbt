@@ -615,6 +615,7 @@ fn share_opened(
       list.push({ name: f.name, bytes: f.bytes, held: 0, size: f.bytes.length().to_double(), src: "" })
     }
     shared_into[key] = list
+    @sfbase.draft_given()
   }
   share_in.shared.set(None)
   share_in.files.set([])

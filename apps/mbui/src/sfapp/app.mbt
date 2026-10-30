@@ -549,8 +549,19 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
                   // bars' room, the keyboard's, the ground, where it stands in the stack and the way a place came in
                   let t = @sf.theme()
                   let key = "\{c.width} \{c.height} \{status_top()} \{nav_foot()} \{bar_room_now()} " +
-                    "\{t.p.bg} \{t.dark} \{app.nav.under() is None} \{app.switch_way}"
-                  c.kept_part(c.id("page/kept"), key, fn() { page_view(c, src, w, all, invited, page) }, read_out=true)
+                    "\{t.p.bg} \{t.dark} \{app.nav.under() is None} \{app.switch_way} \{w.id}"
+                  // (an island: built from its key and what it reads, the workspaces read in it, whatever else of the
+                  // frame is built anew; docs/retained.md, the way there's 3)
+                  c.kept_part(
+                    c.id("page/kept"),
+                    key,
+                    fn() {
+                      let (now, all, _, invited) = workspace_in_view(src)
+                      page_view(c, src, now.unwrap_or(w), all, invited, page)
+                    },
+                    read_out=true,
+                    own=true,
+                  )
                 })
                 @motion.scope(c, whole, bottom=true)
               },

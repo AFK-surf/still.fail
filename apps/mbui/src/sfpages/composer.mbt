@@ -455,6 +455,8 @@ fn keyboard_let_go(c : @ui.Ctx, cap : Int) -> Unit {
 /// web's paste takes the clipboard's files), the rows the 文件 tab's 添加到消息 put in (named by their path, or as files where this chat
 /// takes what is dragged in so).
 fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files : Bool) -> Unit {
+  // (what was put into the draft from elsewhere: built again as it is)
+  @sfbase.drafts_given_read()
   match composing.picking {
     Some((key, picker)) =>
       match picker.files() {

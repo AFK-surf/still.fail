@@ -798,6 +798,9 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   let events = @signals.untracked(fn() { hand.events.get() })
   let evented = events != events_seen.val
   events_seen.val = events
+  // (and what came from outside that is no signal: a part kept whatever else the frame built anew is built anew for it)
+  let outside = outside_events.val != outside_seen.val
+  outside_seen.val = outside_events.val
   let why = if said != "" {
     said
   } else if bench_whole.val && bench_measuring.val {
@@ -848,7 +851,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     layout_coming.val = true
     nodes_run.told = false
     nodes_run.fresh = why != "" || evented
-    nodes_run.evented = evented || test_step_came.val
+    nodes_run.evented = evented || outside || test_step_came.val
     test_step_came.val = false
     nodes_run.whole = bench_whole.val && bench_measuring.val
     return watch.read(fn() { frame_body(c, w, h, scale, t) })
@@ -903,6 +906,11 @@ let looks_rebuilt : Ref[Bool] = Ref(false)
 /// How many of the hand's discrete events the frame before had seen (hand.mbt's `events`).
 // kept across runs: only counts on with them
 let events_seen : Ref[Int] = Ref(0)
+
+///|
+/// How many events from outside the frame before had seen (kept_part.mbt's `outside_events`).
+// kept across runs: only counts on with them
+let outside_seen : Ref[Int] = Ref(0)
 
 ///|
 /// The frame painted alone or of the looks alone (`painted`; `alone`, `n` instances; its looks asking to be woken at

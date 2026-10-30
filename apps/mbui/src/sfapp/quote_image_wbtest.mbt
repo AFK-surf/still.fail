@@ -46,7 +46,7 @@ fn chat_draft() -> @sfbase.Writing {
 test "a person's image held: quoted (whose, the file named), its file once in the draft as the station has it, felt; not opened" {
   let (t, x, y) = image_in_chat("插画参考.png")
   hold_quote(t, x, y)
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   // into the chat's draft as the core keeps it (sfpages' composer took it: quote_file_into)
   let d = chat_draft()
@@ -105,7 +105,7 @@ test "an agent's video and file card right clicked: 引用 quotes each, its file
     t.frame()
     t.frame()
   }
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
   let d = chat_draft()
   assert_eq(d.quotes.map(fn(q) { text(field(Some(q), "own"), "name") }), ["演示录屏.mp4", "发布包.zip"])
   assert_eq(text(Some(d.quotes[0]), "role"), "agent")
@@ -144,7 +144,7 @@ test "an image right clicked: its one menu, again on that menu still the one; in
   t.draw()
   t.tap(x, y)
   t.run_for(@ui.move_most_ms)
-  assert_true(viewer.val is Some(_))
+  assert_true(viewer.get() is Some(_))
   // where the chat's image is under it: never that image's menu (its 引用 into the draft the preview covers)
   t.right_click(x, y)
   assert_eq(quotes(), 0)
@@ -153,7 +153,7 @@ test "an image right clicked: its one menu, again on that menu still the one; in
     t.key(@ui.key_escape)
     t.draw()
   }
-  assert_true(viewer.val is Some(_))
+  assert_true(viewer.get() is Some(_))
   // on its picture, in the middle: its own menu, 复制图片 (as its bar's 复制)
   t.right_click(640.0, 422.0)
   assert_true(t.reachable("复制图片").length() > 0)

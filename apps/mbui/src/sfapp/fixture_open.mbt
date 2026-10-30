@@ -236,7 +236,7 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   if mode == "settings-about" {
     @sffixture.fixture_update("0.1.5283")
     update.installing.set(true)
-    reporting_host.val = Some({ get: fn() { true }, set: fn(_) {  } })
+    reporting_host.set(Some({ get: fn() { true }, set: fn(_) {  } }))
   }
   // the search open over Home, words typed (search_fixture.mbt)
   @sfpages.open_search_mode(mode)

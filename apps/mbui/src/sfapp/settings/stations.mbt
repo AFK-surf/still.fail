@@ -483,7 +483,7 @@ let parts_room : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
 /// The page's part shown, by station, by its name (StationPage.tsx Part: overview 概览, processes 进程, settings 设置,
 /// machine 软件与设备); none, the overview. Kept while the page is in the stack; a login's link opens the settings
 /// (mark_login).
-pub let station_parts : Map[String, String] = {}
+pub let station_parts : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
 /// Whose page has its 高级网络设置 opened, by station (opened by the person, or the fixture's

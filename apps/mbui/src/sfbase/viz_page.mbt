@@ -441,6 +441,7 @@ pub fn viz_follow_up(station : String, session : String) -> (String) -> Bool {
       Some(w) => w + "\n" + words
       None => words
     }
+    draft_given()
     true
   }
 }

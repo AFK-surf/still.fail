@@ -52,7 +52,7 @@ pub(all) struct Reading {
   mut lined : Bool
   /// the first message when the page before was asked for (once per page)
   asked : @signals.Signal[Double]
-  mut asked_newer : Double
+  asked_newer : @signals.Signal[Double]
   /// the chat's latest page asked for in place of a window short of its end (chat_latest): the list goes to its end
   /// as it comes
   mut latest_asked : Bool
@@ -210,7 +210,7 @@ pub fn reading_of(key : String) -> Reading {
         put: false,
         lined: false,
         asked: @signals.signal(-1.0),
-        asked_newer: -1.0,
+        asked_newer: @signals.signal(-1.0, same=fn(a, b) { a == b }),
         latest_asked: false,
         end_asked: false,
         told: "",
@@ -1764,16 +1764,16 @@ pub fn list_after(
               None => -1.0
             }
         }
-        if rd.asked_newer != last {
+        if rd.asked_newer.get() != last {
           c.after_build("newer", fn() {
-            if rd.asked_newer == last {
+            if rd.asked_newer.get() == last {
               return
             }
-            rd.asked_newer = last
+            rd.asked_newer.set(last)
             (src.call)(
               "chat.newer",
               { "station": Json::string(r.station), "thread": Json::number(thread) },
-              fn(res) { if res is Err(_) { rd.asked_newer = -1.0 } },
+              fn(res) { if res is Err(_) { rd.asked_newer.set(-1.0) } },
             )
           })
         }

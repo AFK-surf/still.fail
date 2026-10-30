@@ -133,17 +133,17 @@ test "a picture looked at on an iPhone Duo: the system's tabs put away, its acti
       fail("\{s.label} under the system's column: \{s.rect}")
     }
   }
-  match viewer.val.unwrap().zoom.rect() {
+  match viewer.get().unwrap().zoom.rect() {
     Some((x, _, w, _)) => assert_true(x + w <= 951.0 - 84.0 + 0.5)
     None => fail("no picture laid out")
   }
   // closed from the system's bar: the tabs back as it goes, the picture still on its way
   t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/close\"}")
   t.run_for(pv_fade_ms / 4.0)
-  assert_true(pv_leaving.val is Some(_))
+  assert_true(pv_leaving.get() is Some(_))
   assert_true(t.nav_said().contains("\"bare\":false"), msg=t.nav_said())
   t.run_for(@ui.move_most_ms)
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
   assert_true(t.nav_said().contains("\"bare\":false"))
 }
 
@@ -566,13 +566,13 @@ test "Duo HTML preview exposes close source and download in native bars" {
   }
   t.post(@hostapi.system_channel, "{\"nav\":\"over/source\"}")
   t.draw()
-  assert_true(viewer.val.unwrap().source)
+  assert_true(viewer.get().unwrap().source)
   t.post(@hostapi.system_channel, "{\"nav\":\"over/source\"}")
   t.draw()
-  assert_false(viewer.val.unwrap().source)
+  assert_false(viewer.get().unwrap().source)
   t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/close\"}")
   t.run_for(@ui.move_most_ms)
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
 }
 
 ///|

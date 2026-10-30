@@ -2264,7 +2264,7 @@ test "wide: a file an agent names by its path opens itself in the preview as its
   let (x, y) = peek_words_at(t, "src/list/place.mbt:12")
   t.tap(x, y)
   t.run_for(@ui.move_most_ms)
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   assert_true(v.named)
   assert_eq(v.file.path, "src/list/place.mbt")
   assert_true(v.bytes.get() is Some(_), msg="read by its path, whole in its first part")

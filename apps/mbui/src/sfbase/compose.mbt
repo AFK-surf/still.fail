@@ -705,6 +705,7 @@ pub fn quote_file_into(draft : String, author : String, ts : String, role : Stri
   let list = quoted_into.get(draft).unwrap_or([])
   list.push((author, ts, role, file))
   quoted_into[draft] = list
+  draft_given()
 }
 
 ///|
@@ -712,11 +713,13 @@ pub fn quote_file_into(draft : String, author : String, ts : String, role : Stri
 /// the chat's key; taken by its composer as it is next drawn (files_taken).
 pub fn files_into(chat : String, d : Dragged) -> Unit {
   files_put.push((chat, d))
+  draft_given()
 }
 
 ///|
 /// What was put into the chat `chat`'s message since it was last asked, taken.
 pub fn files_taken(chat : String) -> Array[Dragged] {
+  drafts_given_read()
   let out = files_put.filter(fn(x) { x.0 == chat }).map(fn(x) { x.1 })
   files_put.retain(fn(x) { x.0 != chat })
   out
@@ -774,6 +777,24 @@ pub fn finder_dragged(src : Source, paths : Array[@ui.DroppedPath]) -> Array[Dra
 ///|
 // kept across runs: put back by writings_reset (sfbase's reset)
 let files_put : Array[(String, Dragged)] = []
+
+///|
+/// Told as anything is put into a draft from elsewhere (files_into, quote_file_into, shared_into, marked_into,
+/// followed_into): what takes it (a composer as it is built) built again for it.
+// kept across runs: only counts on
+let drafts_given : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// Something put into a draft from elsewhere: what takes it told.
+pub fn draft_given() -> Unit {
+  drafts_given.set(@signals.untracked(fn() { drafts_given.get() }) + 1)
+}
+
+///|
+/// What is put into drafts from elsewhere, read (a composer taking what was put into its draft).
+pub fn drafts_given_read() -> Unit {
+  drafts_given.get() |> ignore
+}
 
 ///|
 /// What a row dragged now carries, as the frame that drags it says (sfdesk's drag.mbt), for a composer it goes over.

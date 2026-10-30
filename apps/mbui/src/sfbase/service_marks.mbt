@@ -436,6 +436,7 @@ pub fn shot_done(p : ServicePage, site : @ui.NativeView, s : Shooting) -> Unit {
     list.push((x.0, x.1, [x.2], "page"))
   }
   marked_into[key] = list
+  draft_given()
   p.marks.shot = None
   page_marks_leave(p, site)
   toast_later(svc("android-chat.preview.put.done"))

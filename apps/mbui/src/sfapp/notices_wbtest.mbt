@@ -381,7 +381,7 @@ test "settings: usage statistics and error reports switched off on this device, 
   // Android's (Crashes.reporting, kept in the app's prefs): on until turned off
   let on = Ref(true)
   let told : Array[Bool] = []
-  reporting_host.val = Some({ get: fn() { on.val }, set: fn(v) { told.push(v); on.val = v } })
+  reporting_host.set(Some({ get: fn() { on.val }, set: fn(v) { told.push(v); on.val = v } }))
   t.draw()
   t.scroll_to_end()
   t.draw()
@@ -393,7 +393,7 @@ test "settings: usage statistics and error reports switched off on this device, 
   t.draw()
   t.click(Switch, label="发送使用统计和错误报告")
   assert_eq(told, [false, true])
-  reporting_host.val = None
+  reporting_host.set(None)
 }
 
 ///|

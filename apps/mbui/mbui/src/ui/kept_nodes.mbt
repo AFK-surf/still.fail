@@ -101,9 +101,10 @@ let spare_nodes : Array[Node] = []
 /// kept at all (`on`: a Tester's frame built whole after one that kept rows keeps none).
 priv struct NodesRun {
   mut fresh : Bool
-  /// the hand's discrete events came for this frame (a press, a key): what reads them reads them as it is built, and
-  /// not all of it reads them as signals yet; a part kept whatever else the frame built anew (`own`) is built anew for
-  /// them all the same
+  /// what is no signal yet came for this frame: the hand's discrete events (a press, a key), an event from outside (a
+  /// message, a host's answer, a test's draw: outside_came), a test's step; what reads them reads them as it is built,
+  /// and not all of it reads them as signals yet: a part kept whatever else the frame built anew (`own`) is built anew
+  /// for them all the same
   mut evented : Bool
   /// built keeping none at all (a run's start, a Tester's build to compare with): a list whose rows show only what
   /// they read builds them anew too
