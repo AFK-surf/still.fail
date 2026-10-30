@@ -63,6 +63,10 @@ jobs:
           mkdir -p out/webviews
           D=$(cygpath -w "$PWD/out/webviews")
           EXE=out/win/mod/_build/native/release/build/webdemo/webdemo.exe
+          # the runtime's first start on this machine, not looked at: on the 20261030 image (runtime 156) the first web
+          # views a fresh runner makes take ~35 s (5 s its environment, 30 s its views), every start after it ~0.5 s, with
+          # a user data folder of its own too (2026-10-30, the webview2-slow-diag runs); the image before it, ~2 s
+          MBUI_BENCH=-1 MBUI_SCRIPT=shot MBUI_SHOT_NAME=webviews-first MBUI_SHOT_DIR="$D" ./$EXE > out/webviews/webviews-first.log 2>&1 || true
           MBUI_SHOT_SCREEN=1 MBUI_BENCH=-1 MBUI_SCRIPT=shot MBUI_SHOT_NAME=webviews MBUI_SHOT_DIR="$D" ./$EXE 2>&1 | tee out/webviews/webviews.log
           # the runtime looked for where there is none (as on a machine without it): every view says it cannot be shown
           MBUI_WEBVIEW2_DIR='C:\no-webview2-here' MBUI_BENCH=-1 MBUI_SCRIPT=shot MBUI_SHOT_NAME=webviews-none \
