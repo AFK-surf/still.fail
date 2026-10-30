@@ -51,6 +51,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -112,11 +113,22 @@ def read_template(name: str = "wrangler.jsonc") -> dict:
     return json.loads(text)
 
 
+# Cloudflare's own failures, not the request's: asked again (what is asked of it here is the same done twice). A
+# deploy's assets session said 10013 now and then (the share page's, 2026-10-29), an R2 put 10500 "Internal
+# authentication error: internal server error" (main's 43854c7b, 2026-10-30).
+CLOUDFLARE_FAILED = re.compile(r"\[code: 10013\]|\[code: 10500\]|internal server error|API returned a 5\d\d", re.I)
+
+
 def wrangler(*args, env=None, capture=False):
     command = ["pnpm", "exec", "wrangler", *args]
     if capture:
         # Kept apart (deploys run side by side), and shown when it fails.
-        done = subprocess.run(command, cwd=ROOT, env=env, text=True, capture_output=True)
+        for tries in range(3):
+            done = subprocess.run(command, cwd=ROOT, env=env, text=True, capture_output=True)
+            if done.returncode == 0 or not CLOUDFLARE_FAILED.search(done.stdout + done.stderr) or tries == 2:
+                break
+            print(f"wrangler {' '.join(args)}: Cloudflare failed, asked again", file=sys.stderr, flush=True)
+            time.sleep(5 * (tries + 1))
         if done.returncode != 0:
             print(f"wrangler {' '.join(args)} failed:\n{done.stdout}{done.stderr}", file=sys.stderr, flush=True)
             raise subprocess.CalledProcessError(done.returncode, command, done.stdout, done.stderr)
