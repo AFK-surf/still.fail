@@ -22,6 +22,7 @@ pub fn fixture_reset() -> Unit {
   new_fix.made = 0
   new_fix.reading = 0
   new_fix.crowded = false
+  new_fix.tall = false
   fix_chats.clear()
   fix_timers.clear()
   fix_downloads.clear()

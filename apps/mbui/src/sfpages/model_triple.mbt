@@ -378,9 +378,25 @@ fn triple_body(c : @ui.Ctx, src : Source, station : String, of : String, v : Jso
   // runtime 和思考深度」), every name whole (「看不出是什么模型怎么办」)
   let rest = c.id("triple/rest")
   let under = has_rest && c.left_out(rest)
+  // the models as tall as the columns beside them where those are taller than the models' most (Codex's seven efforts
+  // and its speeds): the row is as tall as its tallest column, and the models scroll in all of it, not in 360 of it
+  // with the rest of their column empty under them (2026-10-30 用户「下面为啥这么大的遮挡」); each column as tall as
+  // what it holds, read back
+  let runs_id = c.id("triple/runs")
+  let efforts_id = c.id("triple/efforts")
+  let models_most = if under {
+    triple_list_h
+  } else {
+    [runs_id, efforts_id].fold(init=triple_list_h, fn(m, id) {
+      match c.laid_size(id) {
+        Some((_, h)) => dmax(m, h)
+        None => m
+      }
+    })
+  }
   c.box(style=triple_columns, fn() {
     c.box(style=triple_models, keep=true, fn() {
-      @sf.panel_column(c, "triple/models", triple_list_h, triple_rows, fn() {
+      @sf.panel_column(c, "triple/models", models_most, triple_rows, fn() {
         // (no head of its own: the panel's title says what they are)
         for s in series {
           if series.length() > 1 {
@@ -403,6 +419,7 @@ fn triple_body(c : @ui.Ctx, src : Source, station : String, of : String, v : Jso
         triple_line_before(c)
         if runs_on.length() > 0 {
           c.box(style=triple_column, fn() {
+            c.box(style=triple_column, id=runs_id, fn() {
             triple_column_head(c, @sf.t("web-main.model.runtime"))
             for o in runs_on {
               let (r, words) = o
@@ -414,6 +431,8 @@ fn triple_body(c : @ui.Ctx, src : Source, station : String, of : String, v : Jso
                 pick_runtime(r)
               }
             }
+            })
+            |> ignore
           })
           |> ignore
         }
@@ -422,6 +441,7 @@ fn triple_body(c : @ui.Ctx, src : Source, station : String, of : String, v : Jso
             if runs_on.length() > 0 {
               triple_line_before(c)
             }
+            c.box(style=triple_column, id=efforts_id, fn() {
             if all_efforts.length() > 0 {
               triple_column_head(c, @sf.t("web-main.model.effort"))
               for o in all_efforts {
@@ -444,6 +464,8 @@ fn triple_body(c : @ui.Ctx, src : Source, station : String, of : String, v : Jso
                 }
               }
             }
+            })
+            |> ignore
           })
           |> ignore
         }
