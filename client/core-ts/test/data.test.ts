@@ -5,6 +5,9 @@
 // the device kept before brought over once (the former records, the Rust core's chunks).
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Data, dbName, type RowChange } from "../src/data.ts";
 import { CHUNK, importFormer } from "../src/db/import.ts";
@@ -709,6 +712,54 @@ test("a_chats_messages_let_go_for_room_before_come_back_and_what_the_search_inde
   assert.equal(d.findSaid(["w/a"], ["第 29 遍 1 号"], 5).length, 1);
   assert.equal(d.findSaid(["w/a"], ["第 28 遍"], 5).length, 0);
   runner.shutdown();
+});
+
+test("the_room_a_database_file_holds_and_no_longer_uses_is_given_back_to_the_device_at_open", async () => {
+  // A file, as the app's: what the device counts is the database's file and its write-ahead log.
+  const dir = mkdtempSync(join(tmpdir(), "data-room-"));
+  const host = new FakeHost();
+  host.openDbHook = (name) => {
+    let sql = host.sqls.get(name) as NodeSql | undefined;
+    if (!sql) host.sqls.set(name, (sql = NodeSql.file(join(dir, `${name}.db`))));
+    return sql;
+  };
+  const runner = new Runner(host.time.clock);
+  const owner = () => "s1";
+  const data = new Data(host, runner, { owner });
+  await run(data.open(["s1"]));
+  const sql = host.sqls.get(dbName("s1")) as NodeSql;
+  const onDisk = () => [".db", ".db-wal"].reduce((n, end) => n + (existsSync(join(dir, dbName("s1") + end)) ? statSync(join(dir, dbName("s1") + end)).size : 0), 0);
+  const free = () => Number(sql.all("PRAGMA freelist_count")[0]?.[0]) * Number(sql.all("PRAGMA page_size")[0]?.[0]);
+  // As a phone's was: an earlier core's full-text index of what was said, taken away by the next (#2777), its pages left
+  // free in the file.
+  sql.exec(`
+    CREATE VIRTUAL TABLE said_index USING fts5(text, content = 'said', content_rowid = 'id', tokenize = 'trigram');
+    CREATE TRIGGER said_index_put AFTER INSERT ON said BEGIN INSERT INTO said_index (rowid, text) VALUES (new.id, new.text); END;
+  `);
+  for (let t = 1; t <= 40; t++) data.putItems("entry", "w/a", String(t), Array.from({ length: 50 }, (_, i) => [i + 1, { n: i + 1, kind: "message", text: `${t} 号对话第 ${i} 条 ${"排查登录很慢为什么".repeat(30)}`, at: 1 }]));
+  await run(data.written);
+  sql.exec("DROP TRIGGER said_index_put; DROP TABLE said_index");
+  sql.all("PRAGMA wal_checkpoint(TRUNCATE)");
+  const before = onDisk();
+  const freed = free();
+  assert.ok(freed > 256 * 1024, `${freed}`);
+  const d = await again();
+  // Opened again: the room the index took is the device's again; the messages stay.
+  assert.equal(free(), 0);
+  assert.ok(onDisk() <= before - freed, `${onDisk()} of ${before}, ${freed} free`);
+  assert.equal(d.findSaid(["w/a"], ["40 号对话第 49 条"], 5).length, 1);
+  // Opened yet again (nothing freed since): nothing to give back, nothing grows.
+  const now = onDisk();
+  await again();
+  assert.ok(onDisk() <= now, `${onDisk()} of ${now}`);
+  runner.shutdown();
+  rmSync(dir, { recursive: true, force: true });
+
+  async function again() {
+    const d = new Data(host, runner, { owner });
+    await run(d.open(["s1"]));
+    return d;
+  }
 });
 
 test("model_selection_survives_old_events_and_finishes_without_reverting", async () => {

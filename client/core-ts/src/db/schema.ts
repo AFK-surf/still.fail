@@ -227,6 +227,24 @@ function dropSaidIndex(sql: Sql): void {
   }
 }
 
+/// The room the database's file holds and no longer uses given back to the device, at every open: what is let go (an
+/// earlier core's search index, transcripts past KEPT) left its pages free in the file, which stayed as large as it
+/// ever was (a phone's at 150 MB once the index was gone). A database made before is rewritten once (VACUUM) to keep
+/// its free pages at the end (auto_vacuum INCREMENTAL); then only those free are cut off. The log the rewrite went
+/// through is emptied too, or the room would only have moved there.
+export function giveBackRoom(sql: Sql): void {
+  const one = (q: string) => Number(sql.all(q)[0]?.[0] ?? 0);
+  if (one("PRAGMA auto_vacuum") !== 2) {
+    sql.exec("PRAGMA auto_vacuum = INCREMENTAL");
+    sql.exec("VACUUM");
+  } else if (one("PRAGMA freelist_count") > 0) {
+    sql.exec("PRAGMA incremental_vacuum");
+  } else {
+    return;
+  }
+  sql.all("PRAGMA wal_checkpoint(TRUNCATE)");
+}
+
 /// The database's version.
 export function versionOf(sql: Sql): number {
   const v = sql.all("PRAGMA user_version")[0]?.[0];

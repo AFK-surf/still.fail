@@ -61,7 +61,10 @@ to make room for what could not go, and at open those it let go are the sync's a
 `FILES_KEPT`, 64 MB of base64, none over 1 MB): past it, the least lately shown go down to 80% of it (when one was
 shown is noted at most once a day, as noting it writes its row again); they count with their session's first chat in
 `cache.usage` and go with it in `cache.clear`. `md_kept` too (`MD_KEPT`, 32 M characters of JSON), with the chat or the
-agent it was read for. A tree kept is read only by the reading that made it (`MD_READING`, in its key): a core that reads
+agent it was read for. What is let go leaves its pages free in the file: at every open they are given back to the device
+(`giveBackRoom`: a database made before is rewritten once by VACUUM into `auto_vacuum = INCREMENTAL`, then
+`incremental_vacuum` cuts off the free pages, and the write-ahead log is emptied), so the file is as large as what it
+holds, not as it ever was. A tree kept is read only by the reading that made it (`MD_READING`, in its key): a core that reads
 Markdown otherwise reads afresh.
 
 Indexes: `chat (archived, pinned_at DESC, last_active DESC)` (a list's first screen across stations), by thread, by
