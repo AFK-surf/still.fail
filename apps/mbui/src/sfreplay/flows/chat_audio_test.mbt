@@ -32,6 +32,9 @@ test "46-chat-audio" {
     // (alice's other device sends the song: a live run's step beside the app)
     f.peer("peer createfiles 一段录音 104339 post:收到录音 104339 -- e2e-tune.m4a")
     f.see("一段录音 104339")
+    // (its chat to the top of the list as the recording comes, there where it goes: tapped once its room is open,
+    // where it shows, docs/list-motion.md)
+    f.run_for(@ui.row_size_ms)
     f.tap("一段录音 104339")
     f.run_to(@ui.nav_rest())
     f.see("e2e-tune")

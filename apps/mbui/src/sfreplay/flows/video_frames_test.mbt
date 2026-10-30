@@ -11,6 +11,8 @@ test "97-video-frames" {
     f.see("端到端测试")
     f.peer("peer createfiles 一段视频 201493 post:收到视频 201493 -- e2e-clip.mp4")
     f.see("一段视频 201493")
+    // (its chat to the top of the list as the video comes, there where it goes: tapped once its room is open)
+    f.run_for(@ui.row_size_ms)
     f.tap("一段视频 201493")
     f.run_for(@ui.move_most_ms)
     f.see("=studio")

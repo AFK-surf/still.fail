@@ -284,6 +284,8 @@ pub struct RowCauses {
   priv opened : Map[String, (Double, Double)]
   /// of those, the room over what each holds, at its top (its gap to the row before: ListRows::enter's `lead`)
   priv leads : Map[String, Double]
+  /// the frame its list was last laid out in (shown): one not shown the frame before is shown anew, as it is
+  priv mut laid : Int
 }
 
 ///|
@@ -328,7 +330,7 @@ pub struct ListRows[T] {
 
 ///|
 pub fn[T] ListRows::new() -> ListRows[T] {
-  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), opened: {}, leads: {} }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
+  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), opened: {}, leads: {}, laid: -10 }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
 }
 
 ///|
@@ -351,8 +353,11 @@ pub fn[T] ListRows::rows(
   ms? : (String) -> Double? = fn(_) { None },
   from? : (String) -> Double? = fn(_) { None },
   comes? : (T) -> Bool = fn(_) { true },
+  moves? : (T) -> Bool = fn(_) { false },
 ) -> (Array[T], Array[String]) {
   let now = c.moment()
+  // (its list not shown the frame before, its page come back to, its pane slid to: shown as it is, nothing coming)
+  let watched = watched && self.causes.laid >= c.frame_number() - 1
   // (the same arrays as last given: nothing of them changed, nothing to look over)
   let same = self.given &&
     physical_equal(keys, self.last_keys) &&
@@ -409,9 +414,45 @@ pub fn[T] ListRows::rows(
         moved = true
       }
     }
+    // the rows gone ahead of others (`moves`: a chat with news to its list's top): each leaves where it was, a copy of
+    // it as it was, and comes where it is, as a row gone and a row new do (2026-10-31 the user: 「原地缩下去再从目标点挤
+    // 出来更合理」, not across the rows between, which it would cover)
+    let ahead : Set[String] = Set::new()
+    {
+      let before : Map[String, Int] = {}
+      let mut j = 0
+      for r in self.order {
+        if here.contains(r.0) {
+          before[r.0] = j
+          j += 1
+        }
+      }
+      let mut kept = 0
+      for i, k in keys {
+        match before.get(k) {
+          Some(b) => {
+            if b > kept && moves(items[i]) {
+              ahead.add(k)
+              self.causes.by[k] = (Comes(from(k).unwrap_or(now)), ms(k).unwrap_or(row_size_ms))
+              began = true
+            }
+            kept += 1
+          }
+          None => ()
+        }
+      }
+    }
     let mut prev = ""
     for r in self.order {
       let (k, item) = r
+      if ahead.contains(k) {
+        let copy = k + row_moved_mark
+        let at = from(k).unwrap_or(now)
+        self.going[copy] = { item, at, after: prev }
+        self.causes.by[copy] = (Goes(at), ms(k).unwrap_or(row_size_ms))
+        prev = copy
+        continue
+      }
       if !here.contains(k) && !self.going.contains(k) {
         let at = from(k).unwrap_or(now)
         self.going[k] = { item, at, after: prev }
@@ -509,6 +550,10 @@ pub fn[T] ListRows::rows(
 }
 
 ///|
+/// What a row gone ahead of others leaves by where it was is keyed by: its key and this (ListRows::rows' `moves`).
+pub let row_moved_mark : String = "\u{2}was"
+
+///|
 /// What changed its rows' heights, for the list's layout (Ctx::list's `sized`).
 pub fn[T] ListRows::sized(self : ListRows[T]) -> RowCauses {
   self.causes
@@ -568,8 +613,9 @@ pub fn[T] ListRows::leave(
       let causes = self.causes
       c.look_by(i, fn() {
         causes.read()
+        // (as it was laid out last on the list's way; none once that is over, laid out again or not)
         match (causes.by.get(key), causes.opened.get(key)) {
-          (Some((Goes(_), _)), Some((shown, h))) => row_look(shown, h)
+          (Some((Goes(_), _)), Some((shown, h))) if c.moment() < causes.end - 0.001 => row_look(shown, h)
           _ => still_look
         }
       })
@@ -598,9 +644,10 @@ pub fn[T] ListRows::enter(
   c.look_by(i, fn() {
     causes.read()
     // (one going drawn as it goes, not as it came: ListRows::leave)
+    // (as it was laid out last on the list's way; none once that is over, laid out again or not)
     match (causes.by.get(key), causes.opened.get(key)) {
       (Some((Goes(_), _)), _) => still_look
-      (_, Some((shown, h))) => row_look(shown, h)
+      (_, Some((shown, h))) if c.moment() < causes.end - 0.001 => row_look(shown, h)
       _ => still_look
     }
   })

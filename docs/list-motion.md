@@ -20,7 +20,7 @@
 - **发出去的字离开输入框那一刻，消息行和输入框让出的位置一起动**（2026-10-30 用户看过改前改后同意）：字先在输入框里停一下（飞行的四分之一），输入框为它们留着高度；之前消息行一发出就长、输入框之后按自己的曲线收，上面的行先上去再掉回来。现在列表从字离开那一刻起（`ListRows::rows` 的 `from`）让消息行长出来、底部那段留白（Foot 行，`composer_foot_room`）收到输入框落定的高度，输入框的底和留白也在同一刻、同样长地收（`sent_down_of`）；这段等待里别的变化（卡片收起、一行离开）也从这一刻一起走。
 - **动的时候不重搭**：行的淡入淡出、活动行的长出在画的时候读（`Ctx::look_by`），行高在排版时读；飞行在搭的时候只读气泡里字的断行和大小（`Ctx::words_shape_of`），位置在画的时候读，所以气泡跟着列表挪不会让整帧重搭。
 
-mbui：框架 `ui/list_size.mbt`（`ListRows::rows` 从 key 和版本认出 `RowSize::Comes/Goes/Changed`，`Ctx::list(sized=)` 排版时按 key 查高度，`row_gone`），对话列表 `sfbase/chat_list.mbt` 只给 key 和版本（`shown_rows`、`shown_sign`），`sfpages/chat_list.mbt` 对每行调 `ListRows::enter` / `leave`（agent 干活那行进来、停留 600 ms 后离开也走这一条；自己发的消息飞进来、agent 的回复从头像吐出来的不走 `enter`）。网页（`listQueue.ts`、`settling.tsx`、`virtual/list.tsx`）还是下面的旧做法，下一步按同一套改。
+mbui：框架 `ui/list_size.mbt`（`ListRows::rows` 从 key 和版本认出 `RowSize::Comes/Goes/Changed`，`Ctx::list(sized=)` 排版时按 key 查高度，`row_gone`），对话列表 `sfbase/chat_list.mbt` 只给 key 和版本（`shown_rows`、`shown_sign`），`sfpages/chat_list.mbt` 对每行调 `ListRows::enter` / `leave`（agent 干活那行进来、停留 600 ms 后离开也走这一条；自己发的消息飞进来、agent 的回复从头像吐出来的不走 `enter`）。对话列表（首页、侧栏 `sfpages/sidebar.mbt`）2026-10-31 起也走这一套：一行（或一天的标题）进来、离开同上；一个对话被顶到前面（`ListRows::rows` 的 `moves`），在原处留一个副本收起、在新位置撑开，不从别的行上面滑过（用户试过滑过去：「移动会有遮盖问题」「原地缩下去再从目标点挤出来更合理」）；列表等待后第一次有行、或上一帧没画出来（回到首页、翻到这一页），照原样显示、不补播。网页（`listQueue.ts`、`settling.tsx`、`virtual/list.tsx`）还是下面的旧做法，下一步按同一套改。
 
 ## 检查：行不许顿挫（`ui/rows_steady.mbt`）
 
