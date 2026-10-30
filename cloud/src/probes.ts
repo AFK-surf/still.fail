@@ -20,8 +20,9 @@ export const LOCATIONS = [
   { country: "HK", limit: 2 },
 ];
 
-/** How long the probes are given to answer before their results are read (a ping of 16 packets takes a few seconds). */
-export const SETTLE_MS = 20_000;
+/** How long the probes are given to answer before their results are read: 16 handshakes take a few seconds, but to
+ * Cloudflare's from China over 20 (its round trips there are up to a second; 2026-10-30 two probes were still at it). */
+export const SETTLE_MS = 45_000;
 
 /** What a probe found of a relay, as its `relay probe` line says it. */
 export type ProbeLine = {
