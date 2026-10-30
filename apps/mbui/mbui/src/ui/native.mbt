@@ -1453,7 +1453,7 @@ fn on_second(kind : Int, x : Double, y : Double) -> Unit {
 pub fn Ctx::second_pointer(self : Ctx) -> (Double, Double)? {
   // (read so: a second finger's are the hand's events, hand.mbt)
   hand.down.get() |> ignore
-  hand_events_read()
+  hand_presses_read()
   if self.down && second_ptr[2] > 0.0 {
     Some((second_ptr[0], second_ptr[1]))
   } else {

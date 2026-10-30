@@ -49,7 +49,7 @@ pub fn Ctx::press(self : Ctx) -> Press {
   // (read so: what reads it is built again as the press goes down, goes past the slop while it is down, is let go, or a
   // tap comes: hand.mbt; not as it moves within it or past it)
   hand.down.get() |> ignore
-  hand_events_read()
+  hand_presses_read()
   hand.beyond.get() |> ignore
   if self.press_seen_frame == self.frame_no {
     return self.press_seen

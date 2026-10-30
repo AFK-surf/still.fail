@@ -206,7 +206,8 @@ pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
 ///|
 /// Whether `action` was asked of `id` for this frame.
 pub fn Ctx::action_asked(self : Ctx, id : Int, action : Action) -> Bool {
-  hand_events_read()
+  // (read by member: what nothing was asked of is not built again for what was asked of another)
+  hand.asked.has(id) |> ignore
   for a in self.actions {
     if a.0 == id && a.1 == action {
       return true
@@ -218,7 +219,7 @@ pub fn Ctx::action_asked(self : Ctx, id : Int, action : Action) -> Bool {
 ///|
 /// The words asked to be put in `id` this frame in place of what it holds (Action::SetText), the last asked.
 pub fn Ctx::text_asked(self : Ctx, id : Int) -> String? {
-  hand_events_read()
+  hand.asked.has(id) |> ignore
   let mut got = None
   for a in self.actions {
     if a.0 == id && a.1 is SetText(s) {

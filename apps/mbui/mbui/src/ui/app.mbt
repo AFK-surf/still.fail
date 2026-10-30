@@ -502,6 +502,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   let pa = c.passes
   c.passes = c.next_passes
   c.next_passes = pa
+  // (the old views' kept as painted, each where it is: view_host.mbt)
+  old_hits_framed(c)
   // (what said its presses are another's, under a Tester: that one takes them there)
   c.check_press_owners()
   let si = c.scroll_ids
@@ -761,7 +763,7 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
   // (a press down, up or called off, a second finger, the pointer gone: what reads what came is built again; a pointer
   // moved is the hand's place, read by what reads it: hand.mbt)
   if kind != 1 {
-    hand_event()
+    hand_pressed()
   }
   // (a move that changed nothing but where a list stands, said by its signal: no input taken by what is built,
   // inputrec.mbt)

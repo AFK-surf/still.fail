@@ -155,7 +155,7 @@ pub fn Ctx::has_focus(self : Ctx, id : Int) -> Bool {
 /// Whether `id` has the focus and it shows (it came by the keyboard): where a focus ring is drawn.
 pub fn Ctx::focus_shown(self : Ctx, id : Int) -> Bool {
   // (shown as the keys moved it: hand.mbt)
-  hand_events_read()
+  hand_presses_read()
   self.has_focus(id) && self.focus_visible
 }
 
@@ -197,7 +197,7 @@ pub fn Ctx::focused_id(self : Ctx) -> Int {
 /// head).
 fn Ctx::focus_frame_start(self : Ctx) -> Unit {
   // (the keys, what a reader asked and the focus, read so: hand.mbt)
-  hand_events_read()
+  hand_presses_read()
   hand.focus_id.get() |> ignore
   self.actions.clear()
   for a in self.asked_actions {

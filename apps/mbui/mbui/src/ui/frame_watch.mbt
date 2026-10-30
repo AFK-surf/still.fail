@@ -785,7 +785,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   clock_frame_start(t)
   // (the hand's discrete events since the frame before: what reads them takes them as it is built, and a frame that
   // takes one is built anew, its rows too: what took one changes as it is built what built before it read)
-  let events = @signals.untracked(fn() { hand.events.get() })
+  // (the pointer's presses among them: hand_pressed)
+  let events = @signals.untracked(fn() { hand.events.get() + hand.presses.get() })
   let evented = events != events_seen.val
   events_seen.val = events
   // (and what came from outside that is no signal: a part kept whatever else the frame built anew is built anew for it)

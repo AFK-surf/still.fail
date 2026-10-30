@@ -95,8 +95,8 @@ pub fn Flow::start(
   // (and its host's answers as the run's gave them, where it kept them: a word's bounds as the system splits words)
   // (on the system the run was on, its core told so: above)
   let t = match r.text() {
-    Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~, platform~, loc~)
-    None => @ui.Tester::new(app, w~, h~, env=r.env() + env, platform~, loc~)
+    Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~, platform~, tree=@sfapp.app_tree(the_source), loc~)
+    None => @ui.Tester::new(app, w~, h~, env=r.env() + env, platform~, tree=@sfapp.app_tree(the_source), loc~)
   }
   // (which station this machine is, as the run's host said)
   if r.local_station() != "" {

@@ -52,6 +52,9 @@ pub(all) struct Look {
   mut alpha : Double
   mut dx : Double
   mut dy : Double
+  /// and how far besides, in its own widths and heights as it is laid out (a page slid off by its width)
+  mut sx : Double
+  mut sy : Double
 } derive(Eq, Debug)
 
 ///|
@@ -106,6 +109,8 @@ pub(all) struct Work {
   mut changes : Int
   mut orders : Int
   mut structure : Int
+  /// bindings looked at as something asked at once (Tree::pull): those marked, each once
+  mut pulled : Int
 } derive(Eq, Debug)
 
 ///|
@@ -151,6 +156,8 @@ struct Node {
   mut back_at : Double
   mut back_from : Double
   mut going : @signals.Signal[Int]?
+  /// it, and what it holds, take no press (View::presses)
+  mut inert : Bool
 }
 
 ///|
@@ -181,12 +188,20 @@ pub struct Tree {
   /// earliest
   mut logic : Double
   /// the bindings whose reads changed, to run as the frame begins (Tree::queued)
-  bindings_due : Array[() -> Unit]
+  bindings_due : Array[Bound]
+  /// every binding's watch and what runs it, by a number of its own, while it lives (let go as it stops): what is asked
+  /// at once (View::laid_size, Tree::bring_to) pulls those whose reads changed by then, told or not
+  pulls : Map[Int, (@signals.Watch, Bound)]
+  mut pulls_made : Int
+  /// those marked as what they read changed, since they last ran (Tree::pull)
+  pulls_marked : Array[Int]
   mut layout_due : Bool
   mut order_due : Bool
   mut due : Bool
   mut last_w : Double
   mut last_h : Double
+  /// the window's size, as its frames give it: what is laid out by it (which frame a window's width calls for) follows it
+  room : @signals.Signal[(Double, Double)]
   /// the nodes drawn, in the order they are drawn (no slot), and where in it what holds each is (-1: the window)
   order : Array[Int]
   order_holder : Array[Int]
@@ -204,6 +219,16 @@ pub struct Tree {
   work : Work
   /// told as there is first something for a frame to do: what hosts it asks for a frame
   mut on_due : () -> Unit
+}
+
+///|
+/// A property's binding as it stands (Tree::queued): queued for a frame, marked as what it read changed, live, and what
+/// runs it.
+struct Bound {
+  mut queued : Bool
+  mut marked : Bool
+  mut live : Bool
+  mut run : () -> Unit
 }
 
 ///|
@@ -228,6 +253,7 @@ pub fn Tree::new(
   }
   let t : Tree = {
     clock: @signals.signal(start, same=fn(a, b) { a == b }),
+    room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
     time,
     cause_at: -1.0,
     measure,
@@ -236,6 +262,9 @@ pub fn Tree::new(
     looks_due: [],
     places_due: [],
     bindings_due: [],
+    pulls: {},
+    pulls_made: 0,
+    pulls_marked: [],
     timeline: [],
     told: 0,
     advancing: false,
@@ -268,6 +297,7 @@ pub fn Tree::new(
       changes: 0,
       orders: 0,
       structure: 0,
+      pulled: 0,
     },
   }
   let root = t.made(-1)
@@ -303,6 +333,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.alpha = 1.0
       n.look.dx = 0.0
       n.look.dy = 0.0
+      n.look.sx = 0.0
+      n.look.sy = 0.0
       n.parent = parent
       n.slot = false
       n.hosted = false
@@ -315,6 +347,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.back_at = -1.0
       n.back_from = 0.0
       n.going = None
+      n.inert = false
       i
     }
     None => {
@@ -322,7 +355,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", alpha: 1.0, dx: 0.0, dy: 0.0 },
+        look: { ground: 0L, ink: 0L, words: "", alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0 },
         parent,
         kids: [],
         owner: None,
@@ -346,6 +379,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         back_at: -1.0,
         back_from: 0.0,
         going: None,
+        inert: false,
       })
       self.nodes.length() - 1
     }
@@ -450,6 +484,8 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.looks_due.clear()
   self.places_due.clear()
   self.bindings_due.clear()
+  self.pulls.clear()
+  self.pulls_marked.clear()
   self.timeline.clear()
   self.order.clear()
   self.order_holder.clear()
@@ -532,8 +568,8 @@ fn Tree::placed(self : Tree, at : Int) -> (Double, Double, Double) {
   for k = chain.length() - 1; k >= 0; k = k - 1 {
     let n = self.nodes[chain[k]]
     if !n.slot {
-      x = x + n.flex.left + n.look.dx
-      y = y + n.flex.top + n.look.dy
+      x = x + n.flex.left + n.look.dx + n.look.sx * n.flex.width
+      y = y + n.flex.top + n.look.dy + n.look.sy * n.flex.height
       a = a * n.look.alpha
     }
   }
@@ -607,30 +643,35 @@ priv enum Phase {
 /// next frame (Tree::frame runs the queue first), however often it changed meanwhile; there it is read anew and its
 /// value handed to `then`. What stops it (it follows nothing, runs no more, and lets go of what it holds).
 fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
-  let queued = Ref(false)
-  // (stopped: queued or not, it runs no more, read nothing again)
-  let live = Ref(true)
-  // (what it runs, let go as it stops: the watch and what runs it hold each other)
-  let run : Ref[(() -> Unit)?] = Ref(None)
+  // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
+  // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
+  // done with all of them)
+  let b : Bound = { queued: false, marked: false, live: true, run: fn() {  } }
   // (when what it read was told changed: its cause's moment, whatever frame works it out)
   let told_at = Ref(-1.0)
+  let k = self.pulls_made
+  self.pulls_made = k + 1
   let w = @signals.watch(fn() {
-    match run.val {
-      Some(r) if !queued.val => {
-        queued.val = true
-        told_at.val = match self.time {
-          Some(f) => f()
-          None => self.logic
-        }
-        self.bindings_due.push(r)
-        self.marked()
+    if b.live && !b.queued {
+      b.queued = true
+      told_at.val = match self.time {
+        Some(f) => f()
+        None => self.logic
       }
-      _ => ()
+      self.bindings_due.push(b)
+      self.marked()
     }
   })
-  run.val = Some(fn() {
-    queued.val = false
-    if !live.val {
+  w.on_marked(fn() {
+    if b.live && !b.marked {
+      b.marked = true
+      self.pulls_marked.push(k)
+    }
+  })
+  b.run = fn() {
+    b.queued = false
+    b.marked = false
+    if !b.live {
       return
     }
     let v = w.read(read)
@@ -639,13 +680,46 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
     told_at.val = -1.0
     @signals.untracked(fn() { then(v) })
     self.cause_at = was
-  })
-  (run.val.unwrap())()
+  }
+  (b.run)()
+  self.pulls[k] = (w, b)
   fn() {
-    live.val = false
-    run.val = None
+    b.live = false
+    b.run = fn() {  }
+    self.pulls.remove(k)
     w.stop()
   }
+}
+
+///|
+/// The bindings marked since (what they read changed, told or not: a change under way, in its batch, tells them as it
+/// ends) worked out now, each once, where what they read did change (a computed read the same, not): what is asked at
+/// once (View::laid_size, Tree::bring_to). Nothing else run: what shows, which is picked and what effects do wait for
+/// the change's end; those not marked are not looked at.
+fn Tree::pull(self : Tree) -> Unit {
+  while self.pulls_marked.length() > 0 {
+    let marked = self.pulls_marked.copy()
+    self.pulls_marked.clear()
+    for k in marked {
+      match self.pulls.get(k) {
+        Some((w, b)) if b.marked => {
+          self.work.pulled = self.work.pulled + 1
+          if w.changed_now() {
+            (b.run)()
+          } else {
+            b.marked = false
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+}
+
+///|
+/// How many bindings the tree holds (each property bound By, while its node lives): for a test to see what is let go.
+pub fn Tree::bindings_held(self : Tree) -> Int {
+  self.pulls.length()
 }
 
 ///|
@@ -811,6 +885,58 @@ pub fn View::grow(self : View, g : Live[Double]) -> View {
 }
 
 ///|
+/// How big it is laid out as of the logic's moment (Tree::now): what was told before it laid out first (what an event
+/// changed before it asks, laid out as a frame would), as of the window's size its last frame gave (0 by 0 before the
+/// first). For what is said at a moment by how big a thing is then (how long a slide across it takes), never followed.
+pub fn View::laid_size(self : View) -> (Double, Double) {
+  guard self.live() is Some(n) else { return (0.0, 0.0) }
+  let tree = self.tree
+  if tree.last_w <= 0.0 {
+    return (n.flex.width, n.flex.height)
+  }
+  // (laid out as of the logic's moment, what follows the clock sampled there too, not at a frame's to be shown ahead
+  // of it; then the clock put back where it was drawn at: what follows it worked out there again as it is next brought,
+  // the frame's target kept)
+  let at = tree.now()
+  let shown = @signals.untracked(fn() { tree.clock.get() })
+  // (what the change under way set so far pulled into its properties, as a computed read in a batch is: nothing told,
+  // no structure or effect run before the change ends)
+  @signals.untracked(fn() {
+    tree.clock.set(at)
+    tree.pull()
+    tree.brought(at)
+  })
+  let size = (n.flex.width, n.flex.height)
+  if shown != at {
+    @signals.untracked(fn() { tree.clock.set(shown) })
+  }
+  size
+}
+
+///|
+/// The window's size, as its frames give it (0 by 0 before the first), followed: what is made by it (which frame its
+/// width calls for) made again as it changes.
+pub fn View::window(self : View) -> (Double, Double) {
+  self.tree.room.get()
+}
+
+///|
+/// Laid out over what holds it (true), filling all of its room whatever else it holds, or in its turn among them: what
+/// lies one over another (a stack's pages, what floats over them) said so, drawn in the order they are held.
+pub fn View::over(self : View, on : Live[Bool]) -> View {
+  self.bind(9, on, Layout, fn(on) {
+    let s = self.tree.nodes[self.at].flex.style
+    let inset : @flex.Dim = if on { Pt(0.0) } else { Auto }
+    s.position = if on { Absolute } else { Relative }
+    s.set_inset_left(inset)
+    s.set_inset_top(inset)
+    s.set_inset_right(inset)
+    s.set_inset_bottom(inset)
+  })
+  self
+}
+
+///|
 /// Its ground (0: none): paint's.
 pub fn View::ground(self : View, ink : Live[Int64]) -> View {
   self.bind(5, ink, Paint, fn(k) { self.tree.nodes[self.at].look.ground = k })
@@ -834,6 +960,36 @@ pub fn View::offset(self : View, d : Live[(Double, Double)]) -> View {
     n.look.dy = d.1
   })
   self
+}
+
+///|
+/// How far it is drawn off where it is laid out in its own widths and heights, what it holds with it: its place's, as
+/// big as it is laid out in the frame drawing it (a page slid off by its width moves with its room as that changes).
+pub fn View::shift(self : View, d : Live[(Double, Double)]) -> View {
+  self.bind(10, d, Place, fn(d) {
+    let n = self.tree.nodes[self.at]
+    n.look.sx = d.0
+    n.look.sy = d.1
+  })
+  self
+}
+
+///|
+/// Whether it, and what it holds, take presses (false: drawn only, as a page going back or one covered as another comes
+/// in): what the tree finds at a point passes over it, as of the moment of the press.
+pub fn View::presses(self : View, on : Live[Bool]) -> View {
+  self.bind(11, on, Place, fn(on) { self.tree.nodes[self.at].inert = !on })
+  self
+}
+
+///|
+/// Whether node `id` takes presses now: it lives, and neither it nor what holds it is leaving or said to take none.
+pub fn Tree::takes_presses(self : Tree, id : NodeId) -> Bool {
+  if id.at < 0 || id.at >= self.nodes.length() {
+    return false
+  }
+  let n = self.nodes[id.at]
+  n.live && n.gen == id.gen && !self.pressless_at(id.at)
 }
 
 ///|
@@ -1228,6 +1384,19 @@ pub fn View::leaving(self : View) -> Bool {
 }
 
 ///|
+/// Whether node `at` takes no press: it, or what holds it, leaving or said to take none (View::presses).
+fn Tree::pressless_at(self : Tree, at : Int) -> Bool {
+  let mut i = at
+  while i >= 0 {
+    if self.nodes[i].left_at >= 0.0 || self.nodes[i].inert {
+      return true
+    }
+    i = self.nodes[i].parent
+  }
+  false
+}
+
+///|
 fn Tree::leaving_at(self : Tree, at : Int) -> Bool {
   let mut i = at
   while i >= 0 {
@@ -1552,6 +1721,8 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
     s.set_width(Pt(w))
     s.set_height(Pt(h))
     self.layout_marked_at(0)
+    // (what follows it changed as of the frame's moment, before it is laid out)
+    self.room.set((w, h))
   }
   self.brought(upto)
   let drawn = self.drawn_due
@@ -1573,6 +1744,9 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   // drawn again as of now, for where a press finds things), then what it marked)
   self.advance(at)
   self.clock.set(at)
+  // (what the change under way set so far, and the clock, pulled into its properties: an input in a change's batch
+  // finds things where they are then, nothing else told before the change ends)
+  self.pull()
   if self.last_w >= 0.0 {
     self.brought(at)
   }
@@ -1592,10 +1766,23 @@ fn Tree::brought(self : Tree, upto : Double) -> Unit {
   // what they set again marks what it marks)
   let mut i = 0
   while i < self.bindings_due.length() {
-    (self.bindings_due[i])()
+    // (one run already, pulled as something asked at once: not again)
+    let b = self.bindings_due[i]
+    if b.queued {
+      (b.run)()
+    }
     i = i + 1
   }
   self.bindings_due.clear()
+  // (those marked that ran so, no longer to be pulled; one marked in a change not ended yet still is)
+  let still = self.pulls_marked.filter(fn(k) {
+    match self.pulls.get(k) {
+      Some((_, b)) => b.marked
+      None => false
+    }
+  })
+  self.pulls_marked.clear()
+  self.pulls_marked.append(still)
   if self.layout_due {
     self.layout_due = false
     self.work.computes = self.work.computes + 1
@@ -1670,8 +1857,8 @@ fn Tree::walk(self : Tree, at : Int, gen : Int, holder_laid : Bool) -> Unit {
 fn Tree::place(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
   n.place_due = false
-  let x = n.flex.left + n.look.dx
-  let y = n.flex.top + n.look.dy
+  let x = n.flex.left + n.look.dx + n.look.sx * n.flex.width
+  let y = n.flex.top + n.look.dy + n.look.sy * n.flex.height
   let a = n.look.alpha
   let w = n.flex.width
   let h = n.flex.height
@@ -1888,8 +2075,8 @@ pub(all) enum Target {
 pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
   let found : Array[(NodeId, Bool)] = []
   self.each_drawn(fn(c, cx, cy, _) {
-    // (what is leaving, or held by what is, pressed no more)
-    if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.leaving_at(c.id.at) {
+    // (what is leaving or said to take no press, or held by what is, pressed no more)
+    if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.pressless_at(c.id.at) {
       let n = self.nodes[c.id.at]
       if n.on_press is Some(_) {
         found.push((c.id, true))
@@ -1933,6 +2120,19 @@ pub fn Tree::run_press_at(self : Tree, id : NodeId, at : Double) -> Bool {
     }
   })
   pressed.val
+}
+
+///|
+/// `f` done with what `read` gives (as it is now, then as of each change of it: at its cause's moment, committed as a
+/// structure's change is), whatever frames are drawn: what is to be done as a state comes to hold, said so, never found
+/// by watching it frame by frame. The node's: done no more once it is let go.
+pub fn[T : Eq] View::reacts(self : View, read : () -> T, f : (T) -> Unit) -> Unit {
+  // (made, and done each time, owned by the node's scope: what it makes let go with the node, its watch none of what
+  // was running as it was said, whose running again would let it go)
+  self.owning(fn() {
+    let stop = self.tree.structured(read, fn(v) { self.owning(fn() { f(v) }) })
+    self.owns(stop) |> ignore
+  })
 }
 
 ///|

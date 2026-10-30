@@ -234,6 +234,25 @@ squeeze and contrast checks; film's images before and after where a step touches
    them an island. Then src/kit and src/sf's components, each given its made-once form beside its old one while pages
    still use the old; then each page made once, its island gone with it. Each step makes a page's island smaller; none
    leaves an app built two ways for longer than its PRs.
+
+   Where it stands (2026-10-30). Made once: the app's state (app_is: failed, signed out, starting, signed in) a node
+   picked by it; signed in, the shell a node picked by the window's width (View::window) and whether a workspace is in
+   view. Laid out Small with one, the narrow shell's nodes (still.fail's sfapp/narrow_shell.mbt): an island under all
+   of it (what the frame does in every tier before its pages: what is told as the frame ends, the icon's number, the
+   keys, whether the first page waits; the back of the stack's root), the stack, and an island over it (the bottom bar,
+   what opens over the pages, the presenters, the toasts). The stack is the tree's (src/ui/nav_view.mbt): each page on
+   it a node of its own, made as it is put on and let go as it leaves (what it made forgotten then, its `on_leave`
+   told), its page an island while it shows; which pages show and where they are drawn are bindings (View::shift, in
+   their own widths: the frame drawing them lays them out); a slide sets out at its cause's moment, its length by how
+   big the stack is laid out then (View::laid_size), its end a moment of the timeline where the page that went is let
+   go; a page pushed to show what the core has for it sets out at the moment that answer came, or once its wait is
+   over (View::reacts, View::at_moment). The slide no longer waits for how late its first frame was to the screen (the
+   old stack's `late_check`): a host's lateness is no event of the logic. Old view still: the wide frame (sfdesk's
+   frame, panes, tape and their stacks), a window of its own, the sign-in and the splash; the theme each island is built
+   in; back, said by the islands as they are built, in the tree's order (the top page first, then the stack's swipe);
+   which island takes a press where they lie one over another (where more than one is at a point, all of them are told
+   of the input); the window's sides beside the system's bars (beside_sides: the islands are placed in the window's
+   terms within it); the layers of the old frame (menus, sheets) painted over everything.
 5. **What goes**, as no island is left: the frame's watch, paint watch and layout watch (frame_watch.mbt), kept parts
    and rows (kept_part.mbt, kept_rows.mbt, kept_nodes.mbt), said.mbt's recorded lists, `frame_passes_most`'s passes
    for a build, `rows_check` and `looks_check` as they are, `outside_said`, `Mover`, src/damage's comparing of

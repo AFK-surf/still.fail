@@ -6,13 +6,14 @@
 // choose, Enter or a press opens; Esc (in one kind's list: back to all of them) or a press outside closes it.
 
 ///|
-/// Whether ⌘K is open (what it shows and finds is sfpages' finder: switcher.mbt).
+/// Whether ⌘K is open (what it shows and finds is sfpages' finder: switcher.mbt), a signal: what draws it built again as
+/// it opens or closes, wherever that was.
 // kept across runs: put back by switcher_reset (reset)
-let switching : Ref[Bool] = Ref(false)
+let switching : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 fn switcher_reset() -> Unit {
-  switching.val = false
+  switching.set(false)
 }
 
 ///|
@@ -24,16 +25,18 @@ fn switcher_closed() -> Unit {
 ///|
 /// Whether ⌘K is open.
 pub fn switcher_open() -> Bool {
-  switching.val
+  switching.get()
 }
 
 ///|
 /// ⌘K pressed (the keymap's chat.switch): open, empty; open already, closed.
 pub fn switcher_toggle(c : @ui.Ctx) -> Unit {
-  if switching.val {
+  // (what it was, as the key is taken: not followed by what takes it)
+  let was = @signals.untracked(fn() { switching.get() })
+  if was {
     c.blur()
   }
-  switching.val = !switching.val
+  switching.set(!was)
   switcher_closed()
 }
 
@@ -41,11 +44,11 @@ pub fn switcher_toggle(c : @ui.Ctx) -> Unit {
 /// Esc: in one kind's list, back to all of them; else closed (its field let go: the keyboard goes nowhere until another
 /// is pressed). Whether it took it (open).
 pub fn switcher_escape(c : @ui.Ctx) -> Bool {
-  if !switching.val {
+  if !@signals.untracked(fn() { switching.get() }) {
     return false
   }
   if !@sfpages.finder_back() {
-    switching.val = false
+    switching.set(false)
     switcher_closed()
     c.blur()
   }
@@ -55,7 +58,7 @@ pub fn switcher_escape(c : @ui.Ctx) -> Bool {
 ///|
 /// Opened with `words` typed (a made-up run's start).
 pub fn switcher_open_with(words : String) -> Unit {
-  switching.val = true
+  switching.set(true)
   @sfpages.finder_start(words)
 }
 
@@ -76,15 +79,15 @@ let gone_at_once : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.Snap(0.0
 /// its scrim faded in over 120 ms, the panel grown out of 97% from its top and faded in over 140 ms; it goes at once.
 pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // (asked closed too: opened again, it comes in again)
-  let shows = @motion.presence(c, "\u{2}switcher", switching.val, initial=true, enter=switcher_in, exit=gone_at_once)
-  let ground = @motion.presence(c, "\u{2}switcher-ground", switching.val, initial=true, enter=@kit.tip_in, exit=gone_at_once)
-  if !switching.val {
+  let shows = @motion.presence(c, "\u{2}switcher", switching.get(), initial=true, enter=switcher_in, exit=gone_at_once)
+  let ground = @motion.presence(c, "\u{2}switcher-ground", switching.get(), initial=true, enter=@kit.tip_in, exit=gone_at_once)
+  if !switching.get() {
     return
   }
   let offered = switcher_offered(c, src, w)
   let t = @sf.theme()
   let close = fn() {
-    switching.val = false
+    switching.set(false)
     switcher_closed()
     c.blur()
   }
@@ -132,7 +135,7 @@ pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           }
         })
         |> ignore
-        if switching.val {
+        if switching.get() {
           // (its lines as wide as the panel inside its edge: what they go by)
           c.sized(room - 2.0 * switcher_edge, c.height, fn() {
             @sfpages.finder_list(c, src, w, offered, close, idle_chats=true, most~)

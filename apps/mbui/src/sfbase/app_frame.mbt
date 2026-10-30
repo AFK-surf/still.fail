@@ -236,8 +236,10 @@ pub fn workspace_in_view(src : Source) -> (Workspace?, Array[Workspace], Bool, B
 }
 
 ///|
-/// The number last put on the app's icon (-1 none yet).
-let badge_told : Ref[Int] = Ref(-1)
+/// The number last put on the app's icon (-1 none yet), as a signal: what said to put it there, from what it read, is
+/// built again as it is put (else what is kept of it says it again, the number put already).
+// kept across runs: put back as a run begins (app_frame_reset)
+let badge_told : @signals.Signal[Int] = @signals.signal(-1, same=fn(a, b) { a == b })
 
 ///|
 /// Each frame signed in, `w` in view: the number on the app's icon (the desktop app's followBadge), the core's badge,
@@ -252,9 +254,9 @@ pub fn badge_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         _ => 0
       }
   }
-  if marks is Some(_) && badge != badge_told.val {
+  if marks is Some(_) && badge != badge_told.get() {
     c.after_build("badge", fn() {
-      badge_told.val = badge
+      badge_told.set(badge)
       @ui.set_badge(badge)
     })
   }
@@ -263,7 +265,7 @@ pub fn badge_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 ///|
 /// As at the start: nothing told the core, the host or the icon yet, nothing said by the system waiting.
 fn app_frame_reset() -> Unit {
-  badge_told.val = -1
+  badge_told.set(-1)
   told_bars.val = None
   told_dark.val = None
   attention.told = false

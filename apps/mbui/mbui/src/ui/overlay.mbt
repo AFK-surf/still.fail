@@ -271,7 +271,7 @@ fn Ctx::in_layer(self : Ctx, l : Layer, x : Double, y : Double) -> Bool {
 /// of, from the top down to the first it was in (or a modal one: what is under that never saw it).
 fn Ctx::layer_keys(self : Ctx) -> Unit {
   // (the keys and the focus, read so: hand.mbt)
-  hand_events_read()
+  hand_presses_read()
   hand.focus_id.get() |> ignore
   // a dismissal of a layer the last frame did not build (the view closed it its own way meanwhile) is let go: opened
   // again, the layer is not dismissed by it

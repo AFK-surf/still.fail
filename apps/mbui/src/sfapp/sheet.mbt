@@ -76,6 +76,8 @@ fn lower_sheet() -> Unit {
 ///|
 /// Whether a sheet is open.
 fn sheet_open() -> Bool {
+  // (its kind changes with the presenter it is, opened or let go in the same change: followed by what follows that)
+  @sf.presenting() |> ignore
   sheet_host.kind != NoSheet
 }
 

@@ -178,7 +178,7 @@ test "the whole window with the window's buttons in the app's top row (a Mac's):
   t.tap_text(tr("common.back"))
   t.frame()
   t.frame()
-  assert_true(@sfbase.viz_full.val is None)
+  assert_true(@sfbase.viz_full.get() is None)
 }
 
 ///|

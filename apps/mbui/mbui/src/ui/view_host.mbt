@@ -165,6 +165,10 @@ fn view_forget() -> Unit {
   view_input_to.val = -3
   old_islands.clear()
   old_placed.clear()
+  old_hits.clear()
+  old_hits_rects.clear()
+  old_hits_clips.clear()
+  nav_views.clear()
   old_boxes.clear()
   old_box_owners.clear()
   old_whole.val = true
@@ -220,10 +224,10 @@ let view_window : Ref[(Double, Double)] = Ref((0.0, 0.0))
 fn old_place(tree : @view.Tree) -> Unit {
   let (w, h) = view_window.val
   old_placed.clear()
-  for o in old_islands {
-    match tree.drawn_of(o.id) {
-      Some(d) => old_placed.push((o.id, d.x, d.y, d.w, d.h, d.alpha))
-      None => ()
+  // (in the tree's order: built so, what is over another built after it, its presses and its back taken first)
+  for d in tree.drawn() {
+    if d.hosted && old_islands.iter().any(fn(o) { o.id == d.id }) {
+      old_placed.push((d.id, d.x, d.y, d.w, d.h, d.alpha))
     }
   }
   old_whole.val = old_placed.length() == 1 &&
@@ -243,6 +247,8 @@ fn view_island_said() -> String {
 /// The old frame's build where the window is a tree: the one old view's own where it is the whole window; else each
 /// old view in a box of its own where it is placed, cut to it, its subtree made once there by its own watch.
 fn old_frame(c : Ctx) -> Unit {
+  // (what the stacks the tree holds say of a frame: nav_view.mbt)
+  nav_views_framed(c)
   // (the old views changed since the frame began (one made or let go by what the frame took: a core's answer as it
   // was read): the tree brought to now and each placed as it is, so that the frame builds those there are)
   match view_app.val {
@@ -270,11 +276,19 @@ fn old_frame(c : Ctx) -> Unit {
   for p in old_placed {
     match old_islands.iter().find_first(fn(o) { o.id == p.0 }) {
       Some(o) => {
-        let i = c.box(left=p.1, top=p.2, w=Px(p.3), h=Px(p.4), clip=true, fn() {
-          // (its part's id, as made_put names it here: what is let go with it, what an input to it builds)
-          o.part = c.id(o.key)
-          owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) })
-        })
+        // (on whole pixels: what it holds, laid out where it is, drawn so, its words not crawling as it moves)
+        let i = c.box(
+          left=on_pixels(p.1, c.scale),
+          top=on_pixels(p.2, c.scale),
+          w=Px(p.3),
+          h=Px(p.4),
+          clip=true,
+          fn() {
+            // (its part's id, as made_put names it here: what is let go with it, what an input to it builds)
+            o.part = c.id(o.key)
+            owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) })
+          },
+        )
         old_boxes[o.id] = i
         old_box_owners[i] = o.owner
       }
@@ -298,6 +312,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // (read: told as the tree has something to do, this paint is done again)
   view_due.get() |> ignore
   let n0 = self.ninst
+  old_hits.clear()
   tree.each_drawn(fn(c, x, y, a) {
     // (the root, the window, is drawn by nothing of its own)
     if c.id.at == 0 || a <= 0.002 {
@@ -305,10 +320,26 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     if c.hosted {
       if old_whole.val {
+        // (the one old view the whole window: the old frame's, all it takes presses at its own, at the window's origin)
+        let from = self.next_hit_ids.length()
         self.paint(root, 1.0)
+        old_hits.push({ id: c.id, from, to: self.next_hit_ids.length(), x: 0.0, y: 0.0 })
       } else {
         match old_boxes.get(c.id) {
-          Some(i) => self.paint(i, a)
+          Some(i) => {
+            // (what it takes presses at, its own: painted in no clip of the window's (island_clips), kept as painted
+            // where it was laid out; placed where the tree has it as an input comes before the next frame paints it,
+            // cut to the window there, none while it takes no presses: old_hits_place)
+            let from = self.next_hit_ids.length()
+            island_clips(fn() { self.paint(i, a) })
+            old_hits.push({
+              id: c.id,
+              from,
+              to: self.next_hit_ids.length(),
+              x: self.nodes[i].x,
+              y: self.nodes[i].y,
+            })
+          }
           None => ()
         }
       }
@@ -325,6 +356,20 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     self.view_blit(block, x, y, a)
     view_paint_work.copied = view_paint_work.copied + 1
   })
+  // what the old frame puts over all of it at its root (its layers: the overlays its views open, menus, sheets,
+  // dialogs, raised to the root's end; what is built around the old views over them, a splash), over the tree, in their
+  // order, as where it is the whole window (the way there: an old view's overlay not yet placed, cut and ordered as
+  // its island is)
+  if !old_whole.val {
+    let mut ch = self.nodes[root].first
+    while ch >= 0 {
+      let n = self.nodes[ch]
+      if (n.layer || n.portal) && !old_boxes.values().any(fn(i) { i == ch }) {
+        self.paint(ch, 1.0)
+      }
+      ch = n.next
+    }
+  }
   view_paint_work.handed = view_paint_work.handed + (self.ninst - n0)
 }
 
@@ -401,6 +446,8 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   // (the tree as of the event's moment, taken once as it began: what had ended by then settled, what is where then)
   let at = view_moment()
   tree.bring_to(at)
+  // (what the old views take presses at, where the tree has them as of then)
+  old_hits_place(g(), Some(tree))
   match (kind, view_held.val) {
     (0, _) =>
       match tree.target_at(x, y) {
@@ -409,8 +456,9 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           view_held.val = Some(if button == 2 { Nowhere } else { Node(id) })
           true
         }
-        Hosted(id) => {
-          let part = if old_whole.val { -1 } else { old_part_of(id) }
+        // (the old view's: the part whose hit target the old frame finds there, held so till let go)
+        Hosted(_) => {
+          let part = if old_whole.val { -1 } else { old_part_hit(g(), x, y) }
           view_held.val = Some(Old(part))
           view_input_went(part)
           false
@@ -435,8 +483,8 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     (1, Some(_)) => true
     (1, None) =>
       match tree.target_at(x, y) {
-        Hosted(id) => {
-          view_input_went(if old_whole.val { -1 } else { old_part_of(id) })
+        Hosted(_) => {
+          view_input_went(if old_whole.val { -1 } else { old_part_hit(g(), x, y) })
           false
         }
         Nothing => {
@@ -587,6 +635,22 @@ fn view_input_taken() -> Int {
 }
 
 ///|
+/// The part of the old view whose hit target the old frame finds at (x, y) as the tree has things now (old_hits_place):
+/// that target's old view's, whatever other old view's box lies over or under it there (one over another drawing
+/// nothing there passes it on); -1 (all of them) where none is found, or what is found is none's (what the old frame
+/// put over all of it at its root).
+fn old_part_hit(c : Ctx, x : Double, y : Double) -> Int {
+  let k = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y)
+  if k < 0 {
+    return -1
+  }
+  match old_hits.iter().find_first(fn(h) { k >= h.from && k < h.to }) {
+    Some(h) => old_part_of(h.id)
+    None => -1
+  }
+}
+
+///|
 /// The old view in node `id`'s part (-1: none known: all of them).
 fn old_part_of(id : @view.NodeId) -> Int {
   match old_islands.iter().find_first(fn(o) { o.id == id }) {
@@ -634,3 +698,126 @@ pub fn old_islands_around() -> Bool {
 ///|
 // kept across runs: put back as a run begins (view_forget)
 let old_around : Ref[Bool] = Ref(false)
+
+///|
+/// Each old view of the window's tree, where they are boxes of the old frame's (not the one that is the whole window),
+/// drawn with `look` this frame (as what is built around them says, after old_views_here): true where there are such.
+pub fn old_views_look(c : Ctx, look : Look) -> Bool {
+  if old_whole.val || old_boxes.is_empty() {
+    return false
+  }
+  for _, i in old_boxes {
+    c.look(i, look)
+  }
+  true
+}
+
+///|
+/// What an old view takes presses at, as the last frame painted it: its node, its hit targets among the frame's (from,
+/// to), and where its box was then.
+priv struct OldHits {
+  id : @view.NodeId
+  from : Int
+  to : Int
+  x : Double
+  y : Double
+}
+
+///|
+/// Each old view's hit targets as the last frame painted them (view_paint).
+// kept across runs: put back as a run begins (view_forget)
+let old_hits : Array[OldHits] = []
+
+///|
+/// What each old view takes presses at, as the last frame painted it in no clip of the window's: the frame's hit
+/// targets' rects and clips (Ctx::hit_rects, hit_clips) as painted, taken as the frame's are (old_hits_framed). Never
+/// changed but by a paint: where an old view is now is worked out from them each time.
+// kept across runs: put back as a run begins (view_forget)
+let old_hits_rects : Array[Double] = []
+
+///|
+// kept across runs: put back as a run begins (view_forget)
+let old_hits_clips : Array[Double] = []
+
+///|
+/// An old view painted with none of the window's clips over it (its own, and those within it, cut it): where it takes
+/// presses kept whole, the window's edges cutting it where it is placed (old_hits_place).
+fn island_clips(f : () -> Unit) -> Unit {
+  let stack = clip_stack.copy()
+  let window = clip_window.copy()
+  let apart = clip_apart.copy()
+  clip_stack.clear()
+  clip_window.clear()
+  clip_apart.clear()
+  clip_stack.push_iter([-1.0e9, -1.0e9, 1.0e9, 1.0e9].iter())
+  for _ in 4..<clip_n {
+    clip_stack.push(0.0)
+  }
+  clip_window.push(true)
+  clip_apart.push(false)
+  f()
+  clip_stack.clear()
+  clip_stack.push_iter(stack.iter())
+  clip_window.clear()
+  clip_window.push_iter(window.iter())
+  clip_apart.clear()
+  clip_apart.push_iter(apart.iter())
+}
+
+///|
+/// As a frame's hit targets are taken (frame_paint): the old views' kept as painted, and placed where they are.
+fn old_hits_framed(c : Ctx) -> Unit {
+  old_hits_rects.clear()
+  old_hits_rects.push_iter(c.hit_rects.iter())
+  old_hits_clips.clear()
+  old_hits_clips.push_iter(c.hit_clips.iter())
+  old_hits_place(c, view_app.val)
+}
+
+///|
+/// Each old view's hit targets where it is (`tree`: where the tree has it now, brought to an input's moment; none: where
+/// it was painted), from what was painted (old_hits_rects): moved with it, its own clips with it, cut to the window's
+/// edges where it is now; none while it takes no presses (a page going back, one covered as another comes in), kept to
+/// take them again as it does. What the old frame put over all of it at its root (overlays) stays where it was painted,
+/// in the window's terms.
+fn old_hits_place(c : Ctx, tree : @view.Tree?) -> Unit {
+  let rects = c.hit_rects
+  let clips = c.hit_clips
+  for h in old_hits {
+    let (dx, dy, on) = match tree {
+      None => (0.0, 0.0, true)
+      Some(t) =>
+        match t.drawn_of(h.id) {
+          Some(d) if t.takes_presses(h.id) => (on_pixels(d.x, c.scale) - h.x, on_pixels(d.y, c.scale) - h.y, true)
+          _ => (0.0, 0.0, false)
+        }
+    }
+    for k in h.from..<h.to {
+      let r = k * 4
+      if r + 3 >= rects.length() || r + 3 >= old_hits_rects.length() {
+        continue
+      }
+      if !on {
+        rects[r] = 1.0e9
+        rects[r + 1] = 1.0e9
+        rects[r + 2] = -1.0e9
+        rects[r + 3] = -1.0e9
+        continue
+      }
+      // (the window's edges: its base clip's, at 0)
+      rects[r] = dmax(old_hits_rects[r] + dx, 0.0)
+      rects[r + 1] = dmax(old_hits_rects[r + 1] + dy, 0.0)
+      rects[r + 2] = old_hits_rects[r + 2] + dx
+      rects[r + 3] = old_hits_rects[r + 3] + dy
+      let b = k * clip_n
+      if b + clip_n <= clips.length() && b + clip_n <= old_hits_clips.length() {
+        for o in [0, 12] {
+          clips[b + o] = old_hits_clips[b + o] + dx
+          clips[b + o + 1] = old_hits_clips[b + o + 1] + dy
+          clips[b + o + 2] = old_hits_clips[b + o + 2] + dx
+          clips[b + o + 3] = old_hits_clips[b + o + 3] + dy
+        }
+      }
+    }
+  }
+}

@@ -619,7 +619,7 @@ test "Duo inline HTML expanded uses the image viewer native bars and closes back
   t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/close\"}")
   t.frame()
   t.frame()
-  assert_true(@sfbase.viz_full.val is None)
+  assert_true(@sfbase.viz_full.get() is None)
   assert_true(t.nav_said().contains("\"bare\":false"))
 }
 

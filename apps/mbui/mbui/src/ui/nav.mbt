@@ -149,6 +149,10 @@ struct Nav[P] {
   // the pages at and under this index are not the stack's to slide or go back from (Ctx::nav's `floor`: a pane's stack
   // over a list kept elsewhere, Ctx::nav_flat's `stacks`); 0, all of them
   mut floor : Int
+  // where the window's tree holds it (nav_view.mbt): its moment, what it is told as a page sets out; and what shows of
+  // it (which pages, and how they move) as a signal, told as that changes
+  mut hosted : NavHosted?
+  shown : @signals.Signal[Int]
 }
 
 ///|
@@ -204,6 +208,8 @@ pub fn[P] Nav::new(
     flat_from: -1.0,
     built: None,
     floor: 0,
+    hosted: None,
+    shown: @signals.signal(0),
   }
 }
 
@@ -274,6 +280,11 @@ fn[P] Nav::go(
   v? : Double = 0.0,
 ) -> Unit {
   wake()
+  // (held by the window's tree: from where it is at its cause's moment, not where a frame last drew it)
+  match self.hosted {
+    Some(h) => self.p = self.p_at((h.now)())
+    None => ()
+  }
   self.mode = mode
   self.p0 = self.p
   self.p1 = p1
@@ -281,20 +292,34 @@ fn[P] Nav::go(
     Some(e) => e.rise
     None => self.pages[self.pages.length() - 1].rise
   }
-  let room = if rising { self.room_h } else { self.room_w }
+  // (held by the window's tree: how big its node is laid out as of the cause's moment)
+  let (room_w, room_h) = match self.hosted {
+    Some(h) => (h.room)()
+    None => (self.room_w, self.room_h)
+  }
+  let room = if rising { room_h } else { room_w }
   self.dur = move_ms((p1 - self.p).abs() * room)
   self.v0 = v
   // told in a frame, it starts there, at its time (its end known as it is told); told between frames, at the next
   // frame that builds it (Ctx::nav)
-  self.t0 = if in_frame.val { g().clock } else { -1.0 }
+  // (held by the window's tree: at its cause's moment, the tree's now)
+  self.t0 = match self.hosted {
+    Some(h) => (h.now)()
+    None => if in_frame.val { g().clock } else { -1.0 }
+  }
   self.wait_from = -1.0
   self.waited = false
   // (a page brought in: its start moved on by how late its first frame is to the screen)
-  self.waits_late = brings
+  // (not where the window's tree holds it: its slide a function of the time from its cause alone)
+  self.waits_late = brings && self.hosted is None
   self.late_at = -1.0
   // said once, as it sets out: frames until it is there
   self.asked = g().frame_no
-  g().moving(self.mover, self as &Moving, what="a stack's slide")
+  match self.hosted {
+    Some(h) => (h.went)()
+    None => g().moving(self.mover, self as &Moving, what="a stack's slide")
+  }
+  self.shown_told()
 }
 
 ///|
@@ -347,6 +372,7 @@ fn[P] Nav::settle(self : Nav[P]) -> Unit {
   self.leaving = None
   self.mode = 0
   self.p = 0.0
+  self.shown_told()
 }
 
 ///|
@@ -504,6 +530,8 @@ pub fn[P] Nav::become(self : Nav[P], page : P) -> Unit {
   let e = self.pages[self.pages.length() - 1]
   e.page = page
   e.rise = false
+  // (what reads which page is on top told: the same page, its widgets' state kept, now another)
+  self.told()
   wake()
 }
 
@@ -590,6 +618,7 @@ fn[P] Nav::gesture(
         self.mode = 3
         self.p = 0.0
         self.finger.set(0.0)
+        self.shown_told()
         self.x0 = x
         self.vel = 0.0
         self.track.reset()

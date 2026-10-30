@@ -28,6 +28,7 @@ priv struct Measured {
 /// `script` run over `view` and measured (the head of this file): the APPBENCH line said, whether the script passed.
 pub fn bench(
   view : (@ui.Ctx) -> Unit,
+  tree? : (@view.View) -> Unit,
   script~ : String,
   name~ : String,
   w? : Double = 390.0,
@@ -48,6 +49,7 @@ pub fn bench(
   @ui.set_work_clock(Some(now_ms))
   let t = @ui.Tester::new(
     view,
+    tree?,
     w~,
     h~,
     scale~,
@@ -326,7 +328,7 @@ fn total_ms(xs : Array[Double]) -> String {
 /// A bench run of the process's arguments (the head of this file says which), `view` the app's: the process ends with
 /// 0 when the script passed, 1 when not, 2 when it was not asked for rightly. MBUI_BENCH_LOG=<file>: a phone's run
 /// read from its log instead (bench_log), no Tester.
-pub fn run_bench(view : (@ui.Ctx) -> Unit) -> Unit {
+pub fn run_bench(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
   let drive = arg("MBUI_BENCH_DRIVE")
   let name = arg("MBUI_BENCH_NAME")
   let log = arg("MBUI_BENCH_LOG")
@@ -351,6 +353,7 @@ pub fn run_bench(view : (@ui.Ctx) -> Unit) -> Unit {
   }
   let ok = bench(
     view,
+    tree?,
     script~,
     name~,
     w~,

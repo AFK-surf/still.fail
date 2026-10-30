@@ -12,8 +12,9 @@ fn main {
   // (the app made as sffix makes it, at the Tester's first frame: the code face it carries given then, to the
   // Tester's text, which is this Mac's)
   let src : Ref[@sfapp.Source?] = Ref::new(None)
-  @film.run_bench(fn(c) {
-    let s = match src.val {
+  // (made once, as the window's tree is made in the Tester, after its text is set, or as its first frame begins)
+  let source = fn() {
+    match src.val {
       Some(s) => s
       None => {
         let s = @sfapp.fixture_app(mode)
@@ -25,6 +26,7 @@ fn main {
         s
       }
     }
-    @sfapp.view(c, s)
-  })
+  }
+  // (the window a tree made once, as src/stillfail's: its shell's nodes, the old views in them)
+  @film.run_bench(fn(c) { @sfapp.view(c, source()) }, tree=fn(root) { @sfapp.app_tree(source())(root) })
 }

@@ -781,12 +781,15 @@ pub fn ask_here(
 ///|
 /// Whether anything is presented now (the shell's own back waits while it is).
 pub fn presenting() -> Bool {
+  // (read: what asks is built again as one is presented or let go)
+  presented_said.get() |> ignore
   presented_now.iter().any(fn(p) { p.open })
 }
 
 ///|
 /// Whether a presenter still occupies the screen, including its declared exit transition.
 pub fn presenter_visible() -> Bool {
+  presented_said.get() |> ignore
   !presented_now.is_empty()
 }
 

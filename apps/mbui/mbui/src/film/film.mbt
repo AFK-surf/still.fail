@@ -36,6 +36,7 @@ pub let film_fps : Int = 60
 /// script passed, what went wrong said.
 pub fn film(
   view : (@ui.Ctx) -> Unit,
+  tree? : (@view.View) -> Unit,
   script~ : String,
   out~ : String,
   w? : Double = 390.0,
@@ -58,6 +59,7 @@ pub fn film(
   init_offscreen(w, h, scale)
   let t = @ui.Tester::new(
     view,
+    tree?,
     w~,
     h~,
     scale~,
@@ -195,7 +197,7 @@ fn host_frame(t : @ui.Tester, buf : Ref[FixedArray[Double]]) -> (Int, (Double, D
 ///|
 /// A film made of the process's arguments (the head of this file says which), `view` the app's: the process ends
 /// with 0 when it was made and the script passed, 1 when not, 2 when it was not asked for rightly.
-pub fn run(view : (@ui.Ctx) -> Unit) -> Unit {
+pub fn run(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
   // (a tool's arguments, from the process: not an app's reads of where it runs)
   let out = arg("MBUI_FILM")
   let drive = arg("MBUI_FILM_DRIVE")
@@ -222,6 +224,7 @@ pub fn run(view : (@ui.Ctx) -> Unit) -> Unit {
   let window_corner = number(arg("MBUI_FILM_WINDOW_CORNER")).unwrap_or(0.0)
   let ok = film(
     view,
+    tree?,
     script~,
     out~,
     w~,
