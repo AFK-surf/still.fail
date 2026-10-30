@@ -17,21 +17,37 @@ fn memory_doc_reset() -> Unit {
 
 ///|
 /// The page (MemoryDoc): `skill` "" the global memory, `at` the part first shown.
-pub fn memory_doc_page(c : @ui.Ctx, core : Core, frame : PageFrame, address : String, skill : String, at : Int) -> Unit {
+pub fn memory_doc_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String, skill : String, at : Int) -> Unit {
   let read = memory_of(core, address)
+  let names = station_names(
+    match @settings.stations_of(core, here).value {
+      Some(Array(a)) => a
+      _ => []
+    },
+  )
   let title = if skill == "" { @sf.t("web-main.memory.global") } else { skill }
   let m = read.value
   guard m is Some(_) else {
     // (read the first time: the page of a made-up memory, in its bones)
     let error = if read.error == "" { "" } else { @sf.t("web-main.memory.failed", args=[("error", read.error)]) }
-    @sf.page_waiting(c, title, error~, fn() { doc_page(c, core.quiet(), frame, "sample", skill, at, Some(doc_sample(skill))) })
+    @sf.page_waiting(c, title, error~, fn() { doc_page(c, core.quiet(), frame, "sample", skill, at, Some(doc_sample(skill)), names) })
   }
-  doc_page(c, core, frame, address, skill, at, m)
+  doc_page(c, core, frame, address, skill, at, m, names)
 }
 
 ///|
-/// A memory's page (`m`, as the core reads it): `skill` "" the global memory, `at` the part first shown.
-fn doc_page(c : @ui.Ctx, core : Core, frame : PageFrame, address : String, skill : String, at : Int, m : Json?) -> Unit {
+/// A memory's page (`m`, as the core reads it): `skill` "" the global memory, `at` the part first shown; `names` the
+/// stations' by their ids (who has a shared skill).
+fn doc_page(
+  c : @ui.Ctx,
+  core : Core,
+  frame : PageFrame,
+  address : String,
+  skill : String,
+  at : Int,
+  m : Json?,
+  names : Map[String, String],
+) -> Unit {
   let key = "memory-doc/" + address + "/" + skill
   let title = if skill == "" { @sf.t("web-main.memory.global") } else { skill }
   let kv = if skill == "" {
@@ -87,6 +103,31 @@ fn doc_page(c : @ui.Ctx, core : Core, frame : PageFrame, address : String, skill
                 "skill.share",
                 obj([("station", str(address)), ("name", str(skill)), ("on", Json::boolean(now))]),
               )
+            }
+            // who has it, who may and does not and why, why it is not being shared now (the core's words)
+            let name_of = fn(id : String) {
+              match names.get(id) {
+                Some(n) => n
+                None => if id.length() > 8 { id.unsafe_substring(start=0, end=8) } else { id }
+              }
+            }
+            let users = strings(share, "users").map(name_of)
+            if on && users.length() > 0 {
+              c.text(@sf.t("web-main.memory.share.users", args=[("stations", users.join(@sf.t("web-main.list.separator")))]), style=md_when)
+              |> ignore
+            }
+            if on {
+              for x in items(share, "missing") {
+                c.text(
+                  @sf.t("web-main.memory.share.missing", args=[("station", name_of(text(Some(x), "station"))), ("why", text(Some(x), "whyText"))]),
+                  style=md_conflict,
+                )
+                |> ignore
+              }
+              let unread = text(share, "unreadText")
+              if unread != "" {
+                c.text(unread, style=md_conflict) |> ignore
+              }
             }
             let conflicts = strings(share, "conflicts")
             if conflicts.length() > 0 {

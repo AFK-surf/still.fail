@@ -8,6 +8,8 @@ import { test } from "node:test";
 import { checkConfig } from "../src/accounts/check.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { Sharing } from "../src/share/index.ts";
+import { Refused } from "../src/mesh/bus.ts";
+import { memory } from "../src/read/memory.ts";
 import { Cloud } from "../src/cloud/state.ts";
 import { allowedIn } from "../src/sessions/config.ts";
 
@@ -422,6 +424,54 @@ test("a skill named in any script is shared; renamed, it is linked under its new
   for (const name of ["../x", "a:b", "CON"]) {
     await assert.rejects(b.sharing.handle(A, { method: "share.changed", id: "sh-0123456789abcdef0123", kind: "skill", name, version: 1 }), /bad skill name/);
   }
+});
+
+test("where a skill is shared, which stations have it and why one does not are said", async () => {
+  const cloud = new FakeCloud();
+  const all = new Map<string, Station>();
+  const a = station(cloud, A, () => all);
+  const b = station(cloud, B, () => all);
+  all.set(A, a).set(B, b);
+  const make = (s: Station, name: string, body = "first\n") => {
+    mkdirSync(join(s.data, "agent", "skills", name), { recursive: true });
+    writeFileSync(join(s.data, "agent", "skills", name, "SKILL.md"), `---\nname: ${name}\ndescription: ${name}\n---\n${body}`);
+  };
+  const shareOf = (name: string) => memory(a.data).skills.find((k: any) => k.name === name).share;
+  make(a, "ember");
+  // B has one of its own by this name: it keeps its own, and A hears so.
+  make(a, "mine");
+  make(b, "mine");
+  await a.sharing.shareSkill("ember", true, null);
+  await a.sharing.shareSkill("mine", true, null);
+  await settle(a, b);
+  assert.deepEqual(shareOf("ember").users, [B]);
+  assert.deepEqual(shareOf("ember").missing, []);
+  assert.deepEqual(shareOf("mine").users, []);
+  assert.deepEqual(shareOf("mine").missing, [{ station: B, why: "same-name" }]);
+  // B's own goes: the copy is linked, and A hears it is had.
+  rmSync(join(b.data, "agent", "skills", "mine"), { recursive: true });
+  await settle(a, b);
+  assert.ok(lstatSync(join(b.data, "agent", "skills", "mine")).isSymbolicLink());
+  assert.deepEqual(shareOf("mine").users, [B]);
+  assert.deepEqual(shareOf("mine").missing, []);
+  // Grown past what may be shared: said, the stations keeping the last of it.
+  writeFileSync(join(a.data, "agent", "skills", "ember", "big.bin"), Buffer.alloc(600 * 1024));
+  await settle(a, b);
+  assert.equal(shareOf("ember").unread, "too-large");
+  assert.match(readFileSync(join(b.data, "agent", "skills", "ember", "SKILL.md"), "utf8"), /first/);
+  rmSync(join(a.data, "agent", "skills", "ember", "big.bin"));
+  await settle(a, b);
+  assert.equal(shareOf("ember").unread, undefined);
+  // A station that refuses it (one from before, whose names were ASCII only): said why, asked again later.
+  const handle = b.sharing.handle.bind(b.sharing);
+  b.sharing.handle = async (peer, request, ws) => {
+    if (request.method === "share.changed" && request.kind === "skill") throw new Refused("bad skill name");
+    return handle(peer, request, ws);
+  };
+  make(a, "测试");
+  await a.sharing.shareSkill("测试", true, null);
+  await settle(a, b);
+  assert.deepEqual(shareOf("测试").missing, [{ station: B, why: "name" }]);
 });
 
 test("a station gone from the workspace: what it shared is taken away, what it used forgotten", async () => {

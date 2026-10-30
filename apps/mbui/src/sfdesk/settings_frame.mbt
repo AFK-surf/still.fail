@@ -85,7 +85,7 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Station(a) => @sfpages.station_page(c, core, here, frame, a)
     Profile(a, id) => @sfpages.profile_page(c, core, here, frame, a, id)
     LocalStation => @sfpages.local_station_page(c, core, frame)
-    MemoryDoc(a, skill, at) => @sfpages.memory_doc_page(c, core, frame, a, skill, at)
+    MemoryDoc(a, skill, at) => @sfpages.memory_doc_page(c, core, here, frame, a, skill, at)
     AutoCompletion => @sfpages.completion_page(c, core, here, frame)
     AutoPolicy(s) => @sfpages.policy_page(c, core, here, frame, s)
     _ => ()

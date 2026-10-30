@@ -744,6 +744,8 @@
   "web-main.memory.share.from": "From {station}",
   "web-main.memory.share.shared": "Shared",
   "web-main.memory.share.conflicts": "Changed on two stations at once; a conflicting edit is kept: {names}",
+  "web-main.memory.share.missing": "{station} isn't synced: {why}",
+  "web-main.memory.share.users": "In use on {stations}",
   "web-main.memory.global.when": "Read by every session",
   "web-main.memory.projects.when": "Read when relevant",
   "web-main.memory.skill": "Skill",

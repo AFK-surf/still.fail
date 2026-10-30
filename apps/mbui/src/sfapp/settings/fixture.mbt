@@ -1216,7 +1216,7 @@ fn fx_memory() -> Json {
           (
             "share",
             if fx.skills_shared.get("发布流程").unwrap_or(true) {
-              obj([("id", str("sh1")), ("role", str("host")), ("host", str("st1")), ("conflicts", ["SKILL.md"])])
+              obj([("id", str("sh1")), ("role", str("host")), ("host", str("st1")), ("conflicts", ["SKILL.md"]), ("users", ["st2"]), ("missing", [])])
             } else {
               obj([])
             },

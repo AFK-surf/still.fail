@@ -504,6 +504,11 @@
   "core-logic.memory.no_when": "（未注明使用时机）",
   "core-logic.memory.overview": "总览",
   "core-logic.memory.empty": "（空）",
+  "core-logic.memory.share.missing.name": "版本较旧，不支持此名称，升级后会自动同步",
+  "core-logic.memory.share.missing.same_name": "有同名的 skill，优先使用自己的",
+  "core-logic.memory.share.missing.refused": "拒绝接收，稍后会重试",
+  "core-logic.memory.share.too_large": "超过 512 KB 或 200 个文件，已暂停同步",
+  "core-logic.memory.share.unreadable": "无法读取，已暂停同步",
   "core-logic.memory.points": {
     "one": "{n} 条",
     "other": "{n} 条"

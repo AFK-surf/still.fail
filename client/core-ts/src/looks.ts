@@ -175,6 +175,16 @@ export function answer(method: string, path: string, value: J): void {
     skill.kindText = t(skill.group === "project" ? "core-logic.memory.kind.project" : skill.group === "builtin" ? "core-logic.memory.kind.builtin" : "core-logic.memory.kind.skill");
     skill.whenText = skill.about !== "" ? skill.about : t("core-logic.memory.no_when");
     skill.line = skill.brief !== "" ? skill.brief : t("core-logic.memory.no_when");
+    // Its sharing as its host has it: why a station does not have it, why it is not being shared now, in words.
+    const share = get(skill, "share");
+    if (share !== null && typeof share === "object") {
+      for (const m of arr(get(share, "missing"))) {
+        const why = strOf(m, "why");
+        m.whyText = t(why === "name" ? "core-logic.memory.share.missing.name" : why === "same-name" ? "core-logic.memory.share.missing.same_name" : "core-logic.memory.share.missing.refused");
+      }
+      const unread = strOf(share, "unread");
+      if (unread !== "") share.unreadText = t(unread === "too-large" ? "core-logic.memory.share.too_large" : "core-logic.memory.share.unreadable");
+    }
     skill.pages = [
       { key: "", label: t("core-logic.memory.overview"), text: skill.body !== "" ? skill.body : t("core-logic.memory.empty") },
       ...files.map((f) => ({ key: f.name, label: f.label, size: f.size, text: strOf(f, "text") !== "" ? strOf(f, "text") : t("core-logic.memory.empty") })),
