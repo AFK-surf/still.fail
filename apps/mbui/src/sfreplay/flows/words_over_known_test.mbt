@@ -36,7 +36,9 @@ fn init {
     ("src/sfreplay/flows/sheets_sinking_test.mbt", 2),
     ("src/sfreplay/flows/station_file_sent_test.mbt", 3),
     ("src/sfreplay/flows/station_files_test.mbt", 1),
-    ("src/sfreplay/flows/viewer_test.mbt", 6),
+    // (one more since an agent's line comes in opening its room, not there at once (2026-10-30, rows_steady.mbt):
+    // the failure notice's 「·」 and 「上报」 meet as it comes in under the cut, faint in its fade, as sheets_sinking's)
+    ("src/sfreplay/flows/viewer_test.mbt", 7),
     ("src/sfreplay/flows/wide_resize_test.mbt", 1),
   ])
 }
