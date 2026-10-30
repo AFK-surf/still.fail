@@ -111,7 +111,7 @@ pub fn chat_list(
               open.animate(1.0, @motion.tween(working_turn_ms, ease=Out), start_at?=if at >= 0.0 { Some(at) } else { None })
             }
             let leaving = match rd.linger.get(a.key) {
-              Some(l) => l.leaving
+              Some(l) => l.leaving.get()
               None => false
             }
             let fade = @motion.anim(c, "fade/" + mk, 1.0, global=true)

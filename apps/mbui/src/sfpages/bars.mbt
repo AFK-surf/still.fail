@@ -11,7 +11,7 @@
 pub fn bars_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   let (made, cur) = (core.bars)()
   let sets : Array[Array[String]] = made.copy()
-  if @settings.bar_adding.val {
+  if @settings.bar_adding.get() {
     sets.push([])
   }
   // a place picked for bar `i` (one past the made ones: the one just made, kept with its first place)
@@ -23,7 +23,7 @@ pub fn bars_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
     @sf.pick(@sf.t("android-misc.bar.pick.title", args=[("n", (i + 1).to_string())]), choices, "", fn(place) {
       let (now, ncur) = (core.bars)()
       if i >= now.length() {
-        @settings.bar_adding.val = false
+        @settings.bar_adding.set(false)
         @settings.save_bars(core, now + [[place]], ncur)
       } else {
         @settings.save_bars(core, now.mapi(fn(n, s) { if n == i && !s.contains(place) && s.length() < @settings.bar_size { s + [place] } else { s } }), ncur)
@@ -49,7 +49,7 @@ pub fn bars_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
           if sets.length() > 1 &&
             @sf.action(c, "bar-delete/" + i.to_string(), @sf.t("android-misc.bar.delete"), bad=true) {
             if !is_made {
-              @settings.bar_adding.val = false
+              @settings.bar_adding.set(false)
             } else {
               let left : Array[Array[String]] = []
               for k, x in made {
@@ -75,7 +75,7 @@ pub fn bars_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       if @sf.link_row(c, "bar-new", @sf.t("android-misc.bar.new"), chevron=false, lead=fn() {
           @sf.icon(c, "plus", size=bar_new_mark, color=@sf.link_ink()) |> ignore
         }) {
-        @settings.bar_adding.val = true
+        @settings.bar_adding.set(true)
         pick_for(made.length(), Of(id))
       }
     })

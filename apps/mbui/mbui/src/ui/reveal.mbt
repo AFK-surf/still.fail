@@ -115,6 +115,15 @@ pub fn Ctx::reveal_from(self : Ctx, x : Double, y : Double, dark? : () -> Bool) 
 /// the view built in a box over where the old frame is drawn again, drawn cut to the circle (a look: pressed as laid
 /// out, the whole window) once it is built and has said its theme.
 fn Ctx::revealed(self : Ctx, w : Double, h : Double, view : () -> Unit) -> Unit {
+  // (done, or waited for its theme too long: let go before it is built, so each build of the frame builds the same)
+  if reveal.on &&
+    (if reveal.start >= 0.0 {
+      self.now() - reveal.start >= reveal_ms
+    } else {
+      self.now() - reveal.asked > reveal_wait_most
+    }) {
+    reveal_drop()
+  }
   if !reveal.on {
     view()
     return
@@ -129,10 +138,7 @@ fn Ctx::revealed(self : Ctx, w : Double, h : Double, view : () -> Unit) -> Unit 
   }
   let p = if reveal.start < 0.0 { 1.0 } else { (self.now() - reveal.start) / reveal_ms }
   if p >= 1.0 {
-    // not set out (or done): the view as it is
-    if reveal.start >= 0.0 || self.now() - reveal.asked > reveal_wait_most {
-      reveal_drop()
-    }
+    // not set out: the view as it is
     return
   }
   let (insts, floats, segs) = (reveal.insts, reveal.floats, reveal.segs)

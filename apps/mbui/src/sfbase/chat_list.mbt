@@ -137,6 +137,8 @@ pub(all) struct Reading {
   linger : Map[String, Lingering]
   /// how many have lingered (Lingering.id)
   mut lingered : Int
+  /// told as one comes to linger or goes (what reads `linger` built again for it: it is said before any page is built)
+  linger_said : @signals.Signal[Int]
   /// the room agents' lines left as they went from the list (Chat.kt floor): the list never gets shorter under the
   /// reader. What comes in next takes it back (`floor_takers`: each row by key, as tall as the build last read it;
   /// `floor_laid`: as the frame before laid it out). Each agent's line's room (its row, the gap over it with it) as last
@@ -253,6 +255,7 @@ pub fn reading_of(key : String) -> Reading {
         sent_as: {},
         linger: {},
         lingered: 0,
+        linger_said: @signals.signal(0),
         floor: 0.0,
         floor_takers: {},
         floor_laid: {},
@@ -424,7 +427,8 @@ pub(all) struct Lingering {
   /// which of the chat's lingerings it is (Reading.lingered): its timers its own, never an earlier one's run out
   id : Int
   mut n : Int
-  mut leaving : Bool
+  /// past its 600 ms: read where its activity shows (a signal: what reads it built again as it changes)
+  leaving : @signals.Signal[Bool]
 }
 
 ///|
@@ -519,7 +523,8 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   for k, a in rd.running {
     if !running.contains(k) && !rd.linger.contains(k) {
       rd.lingered += 1
-      rd.linger[k] = { agent: a, id: rd.lingered, n: 0, leaving: false }
+      rd.linger[k] = { agent: a, id: rd.lingered, n: 0, leaving: @signals.signal(false, same=fn(x, y) { x == y }) }
+      linger_told(rd)
     }
   }
   // a turn begun and over between two ticks, its agent never seen running, stays a moment all the same: that a frame
@@ -533,7 +538,8 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
           !rd.running.contains(a.key) &&
           !rd.linger.contains(a.key) => {
           rd.lingered += 1
-          rd.linger[a.key] = { agent: a, id: rd.lingered, n: 0, leaving: false }
+          rd.linger[a.key] = { agent: a, id: rd.lingered, n: 0, leaving: @signals.signal(false, same=fn(x, y) { x == y }) }
+          linger_told(rd)
         }
         _ => ()
       }
@@ -561,7 +567,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     let held = keeps.contains(k)
     // (asked while held too: its count starts at the last build they were still coming)
     let faded = @kit.after(c, at + "/fade", true, linger_fade_ms)
-    l.leaving = !held && faded
+    l.leaving.set(!held && faded)
     if @kit.after(c, at + "/gone", true, linger_ms) && !held {
       over.push(k)
     }
@@ -569,11 +575,21 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   for k in over {
     rd.linger.remove(k)
   }
+  if !over.is_empty() {
+    linger_told(rd)
+  }
+}
+
+///|
+/// One came to linger or went: told to what reads which do (with_lingering).
+fn linger_told(rd : Reading) -> Unit {
+  rd.linger_said.set(@signals.untracked(fn() { rd.linger_said.get() }) + 1)
 }
 
 ///|
 /// The list with the activities of agents whose turn just ended, kept a moment (Chat.kt: 600 ms, then fading 220).
 pub fn with_lingering(rd : Reading, list : Array[Entry]) -> Array[Entry] {
+  rd.linger_said.get() |> ignore
   if rd.linger.is_empty() {
     return list
   }

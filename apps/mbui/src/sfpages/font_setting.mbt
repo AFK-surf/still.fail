@@ -29,7 +29,7 @@ fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
   let files_state = (core.topic)("fonts", Map::new()).value
   // the faces whose files this device keeps (chosen or not): no size said, choosing one fetches nothing
   let kept = items(files_state, "kept")
-  let place = @settings.font_places[@settings.fonts_at.val]
+  let place = @settings.font_places[@settings.fonts_at.get()]
   let chosen = chosen_of(place)
   // each face shown in itself: its host face (its preview's), by its place in the list
   let shown_in = fn(id : String) {
@@ -59,10 +59,10 @@ fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
         c,
         "fonts/place",
         @settings.font_places.map(fn(p) { @sf.t("web-pages.appearance.fonts." + p) }),
-        @settings.fonts_at.val,
+        @settings.fonts_at.get(),
       )
-      if picked != @settings.fonts_at.val {
-        @settings.fonts_at.val = picked
+      if picked != @settings.fonts_at.get() {
+        @settings.fonts_at.set(picked)
       }
     },
     fn() {

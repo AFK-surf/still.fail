@@ -569,14 +569,21 @@ pub fn keyed(c : @ui.Ctx, i : Int, key : String, exit? : Trans, by? : String = "
 
 ///|
 /// Node `i` keyed `key` comes in by `enter` the first frame it is built (not when its key was built the frame
-/// before): what is new as the app says (a message said while the chat shows).
-pub fn entering(c : @ui.Ctx, i : Int, key : String, enter : Trans) -> Unit {
+/// before): what is new as the app says (a message said while the chat shows). `at_once`: it is there at once this
+/// frame (what a page opened with), known as built for the frames after, as a frame kept unbuilt knows it.
+pub fn entering(
+  c : @ui.Ctx,
+  i : Int,
+  key : String,
+  enter : Trans,
+  at_once? : Bool = false,
+) -> Unit {
   let e = moving_of(c, i)
   e.name = key
   e.key = motion_key(key)
   // (seen where a part or a row drawn again that it is in shows it: built again, it is not new)
   kept_said(c, e.key, false)
-  e.enter = Some(enter)
+  e.enter = if at_once { None } else { Some(enter) }
   e.fresh = true
 }
 

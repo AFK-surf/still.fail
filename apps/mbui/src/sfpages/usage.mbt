@@ -9,24 +9,30 @@
 /// What the page picked: its days, the day clicked ("" the last) and the one pointed at ("" none), the list shown
 /// ("" the people's) and whether all of it.
 priv struct UsagePick {
-  mut days : Int
-  mut day : String
-  mut pointed : String
-  mut list : String
-  mut all : Bool
+  days : @signals.Signal[Int]
+  day : @signals.Signal[String]
+  pointed : @signals.Signal[String]
+  list : @signals.Signal[String]
+  all : @signals.Signal[Bool]
 }
 
 ///|
 // kept across runs: said by the page's picks; usage_reset puts it back
-let usage_pick : UsagePick = { days: 7, day: "", pointed: "", list: "", all: false }
+let usage_pick : UsagePick = {
+  days: @signals.signal(7, same=fn(a, b) { a == b }),
+  day: @signals.signal("", same=fn(a, b) { a == b }),
+  pointed: @signals.signal("", same=fn(a, b) { a == b }),
+  list: @signals.signal("", same=fn(a, b) { a == b }),
+  all: @signals.signal(false, same=fn(a, b) { a == b }),
+}
 
 ///|
 fn usage_reset() -> Unit {
-  usage_pick.days = 7
-  usage_pick.day = ""
-  usage_pick.pointed = ""
-  usage_pick.list = ""
-  usage_pick.all = false
+  usage_pick.days.set(7)
+  usage_pick.day.set("")
+  usage_pick.pointed.set("")
+  usage_pick.list.set("")
+  usage_pick.all.set(false)
 }
 
 ///|
@@ -39,7 +45,7 @@ let usage_days_choices : Array[Int] = [7, 30]
 /// something was spent; the view once read, a wait till then, what went wrong.
 pub fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
-  let days = usage_pick.days
+  let days = usage_pick.days.get()
   let topic = (core.topic)("usage", { "scope": str(here.workspace), "days": Json::number(days.to_double()) })
   let v = topic.value
   let body : Array[() -> Unit] = []
@@ -67,8 +73,8 @@ pub fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
       let labels = usage_days_choices.map(fn(n) { @sf.t("web-main.usage.days", args=[("n", n.to_string())]) })
       let picked = @sf.segmented(c, "usage-days", labels, at)
       if picked != at {
-        usage_pick.days = usage_days_choices[picked]
-        usage_pick.day = ""
+        usage_pick.days.set(usage_days_choices[picked])
+        usage_pick.day.set("")
       }
     },
     body,
@@ -188,7 +194,7 @@ fn usage_tile_pair(c : @ui.Ctx, core : Core, tiles : Array[Json], from : Int) ->
     let id = if prices { c.id("usage-prices") } else { 0 }
     if prices {
       if c.clicked(id) {
-        (core.push)(UsagePrices(usage_pick.days))
+        (core.push)(UsagePrices(usage_pick.days.get()))
       }
     }
     let b = c.box(style=if prices { ug_tile_link } else { ug_tile }, id~, fn() {
@@ -259,7 +265,7 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
         finger = under(d.x)
       }
       if (tapped || ended) && finger != "" {
-        usage_pick.day = finger
+        usage_pick.day.set(finger)
       }
     }
     None => ()
@@ -267,10 +273,10 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
   let day = match find(finger) {
     Some(d) => Some(d)
     None =>
-      match find(usage_pick.pointed) {
+      match find(usage_pick.pointed.get()) {
         Some(d) => Some(d)
         None =>
-          match find(usage_pick.day) {
+          match find(usage_pick.day.get()) {
             Some(d) => Some(d)
             None => daily.last()
           }
@@ -315,7 +321,7 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
             let key = text(dv, "day")
             let id = c.id("usage-day/" + key)
             if c.clicked(id) {
-              usage_pick.day = key
+              usage_pick.day.set(key)
             }
             if c.lit(id) {
               pointed = key
@@ -383,7 +389,7 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
     }
   })
   |> ignore
-  usage_pick.pointed = pointed
+  usage_pick.pointed.set(pointed)
   ignore(t)
 }
 
@@ -438,7 +444,7 @@ fn usage_rankings(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
   if lists.length() == 0 {
     return
   }
-  let want = if usage_pick.list == "" { "people" } else { usage_pick.list }
+  let want = if usage_pick.list.get() == "" { "people" } else { usage_pick.list.get() }
   let at = lists.search_by(fn(l) { text(Some(l), "key") == want }).unwrap_or(0)
   let list = Some(lists[at])
   let kind = text(list, "key")
@@ -448,24 +454,24 @@ fn usage_rankings(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
       // (narrow: as wide as the card, each an equal share; wide: each as wide as ug_list_pick_w at least)
       let picked = @sf.segmented(c, "usage-lists", titles, at, item_w=ug_list_pick_w)
       if picked != at {
-        usage_pick.list = text(Some(lists[picked]), "key")
-        usage_pick.all = false
+        usage_pick.list.set(text(Some(lists[picked]), "key"))
+        usage_pick.all.set(false)
       }
     })
     |> ignore
     let all_items = items(list, "items")
     c.box(style=ug_rows, fn() {
       for i, it in all_items {
-        if usage_pick.all || i < ug_first {
+        if usage_pick.all.get() || i < ug_first {
           usage_row(c, core, it, i + 1, kind)
         }
       }
       if all_items.length() > ug_first {
         let id = c.id("usage-all")
         if c.clicked(id) {
-          usage_pick.all = !usage_pick.all
+          usage_pick.all.set(!usage_pick.all.get())
         }
-        let words = if usage_pick.all {
+        let words = if usage_pick.all.get() {
           @sf.t("web-main.fold")
         } else {
           @sf.t("web-main.usage.showAll", args=[("n", all_items.length().to_string())])

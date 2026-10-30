@@ -54,17 +54,17 @@ pub fn short_date_time(ms : Double) -> String {
 /// "native:adb.phone" says again: supported, developer, wireless, wifi, canSwitch, reads); None until it has said. The
 /// native call asking it, and those taps made (adb.switch, adb.open, adb.start), while they are under way.
 priv struct AdbHost {
-  mut phone : Json?
+  phone : @signals.Signal[Json?]
   mut asking : @ui.NativeCall?
   doing : Array[@ui.NativeCall]
 }
 
 ///|
-let adb_host : AdbHost = { phone: None, asking: None, doing: [] }
+let adb_host : AdbHost = { phone: @signals.signal(None), asking: None, doing: [] }
 
 ///|
 fn adb_reset() -> Unit {
-  adb_host.phone = None
+  adb_host.phone.set(None)
   adb_host.asking = None
   adb_host.doing.clear()
 }
@@ -73,7 +73,7 @@ fn adb_reset() -> Unit {
 /// The host said what the phone has now (its message on "native:adb.phone": Wireless debugging switched, the app back
 /// from Settings): src/sfapp/app.mbt hands it here.
 pub fn adb_phone_said(json : String) -> Unit {
-  adb_host.phone = Some(@json.parse(json) catch { _ => return })
+  adb_host.phone.set(Some(@json.parse(json) catch { _ => return }))
 }
 
 ///|
@@ -84,12 +84,12 @@ fn adb_phone(c : @ui.Ctx) -> Json? {
     Some(k) =>
       match k.got() {
         Some(Ok(j)) => {
-          adb_host.phone = Some(j)
+          adb_host.phone.set(Some(j))
           adb_host.asking = None
         }
         // a host without 共享调试: nothing it can lend
         Some(Err(_)) => {
-          adb_host.phone = Some(obj([("supported", Json::boolean(false))]))
+          adb_host.phone.set(Some(obj([("supported", Json::boolean(false))])))
           adb_host.asking = None
         }
         None => ()
@@ -101,17 +101,17 @@ fn adb_phone(c : @ui.Ctx) -> Json? {
     match k.got() {
       Some(r) =>
         if r is Ok(Object(m)) && m.contains("on") {
-          adb_host.phone = None
+          adb_host.phone.set(None)
         }
       None => left.push(k)
     }
   }
   adb_host.doing.clear()
   adb_host.doing.append(left)
-  if adb_host.phone is None && adb_host.asking is None {
+  if adb_host.phone.get() is None && adb_host.asking is None {
     c.tell("adb-phone", fn() { adb_host.asking = Some(@ui.native_call("adb.phone", obj([]))) })
   }
-  adb_host.phone
+  adb_host.phone.get()
 }
 
 ///|
@@ -247,7 +247,7 @@ pub fn adb_lend(address : String, name : String) -> Unit {
 ///|
 /// Wireless debugging turned on by the app, where it is off and the app may (adb.grant let it).
 fn adb_switch_on() -> Unit {
-  let phone = adb_host.phone
+  let phone = adb_host.phone.get()
   if !flag(phone, "wireless") && flag(phone, "canSwitch") {
     adb_ask("adb.switch", obj([]))
   }
@@ -489,7 +489,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
                   "adb.grant",
                   obj([]),
                   done=tr("android-misc.adb.granted"),
-                  then=fn(_) { adb_host.phone = None },
+                  then=fn(_) { adb_host.phone.set(None) },
                 )
               }
             }

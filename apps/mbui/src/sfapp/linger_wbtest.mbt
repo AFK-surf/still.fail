@@ -62,7 +62,7 @@ test "its answer out of its avatar past its activity's whole stay: it stays its 
     if turn_over_at >= 0.0 && !emit_keeps(em).is_empty() {
       last_keep_at = t.time()
     }
-    if leaving_at < 0.0 && rd.linger.values().any(fn(l) { l.leaving }) {
+    if leaving_at < 0.0 && rd.linger.values().any(fn(l) { l.leaving.get() }) {
       leaving_at = t.time()
     }
     if turn_over_at >= 0.0 && rd.linger.length() == 0 && gone_at < 0.0 {

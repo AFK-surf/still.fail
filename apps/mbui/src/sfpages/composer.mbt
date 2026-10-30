@@ -919,11 +919,9 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
 /// What waits in it (a quote's card, a file's: node `i`, keyed `key`) put in while it shows comes in (`@sf.waiting_in`, the
 /// web's enterUp on composerQuote, fileCard and composerThumb), the first frame it is built; what a draft opened with,
 /// or the composer gone to another page with, is there at once (docs/motion.md: what is on a page does not move of its
-/// own as it comes).
+/// own as it comes), though said so as it is (built again the frame after, it was there before).
 fn held_coming(c : @ui.Ctx, i : Int, key : String) -> Unit {
-  if composing.same_draft {
-    @motion.entering(c, i, key + "/in", @sf.waiting_in)
-  }
+  @motion.entering(c, i, key + "/in", @sf.waiting_in, at_once=!composing.same_draft)
 }
 
 ///|
