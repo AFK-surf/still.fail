@@ -41,7 +41,7 @@ import { Fibers } from "../ops/fibers.ts";
 import { writePrivate } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
 import { linkSync } from "../ops/links.ts";
-import { joinPath, relativeParts } from "../ops/paths.ts";
+import { joinPath, portableName, relativeParts } from "../ops/paths.ts";
 import { profileFetch } from "../ops/agent-env.ts";
 import { workspaceAgentHome } from "../sessions/agent-home.ts";
 import { allowedIn } from "../sessions/config.ts";
@@ -120,9 +120,6 @@ type State = {
 const whoSaid = (e: unknown) => (e instanceof Refused ? "them" : "here");
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
 const hashOf = (v: unknown) => createHash("sha256").update(typeof v === "string" ? v : JSON.stringify(v)).digest("hex");
-/// A skill's name, which is its directory's in the agents' skills of every station that has it: any one path component
-/// (in any script) but a hidden one.
-export const skillNameOk = (name: string) => name !== "" && !/[/\\\0]/.test(name) && !name.startsWith(".") && Buffer.byteLength(name) <= 255;
 const newId = () => `sh-${randomBytes(10).toString("hex")}`;
 /// The files of a login in a profile's home, handed over with it when it moves: Claude's, Codex's, an OpenCode Console
 /// sign-in's (accounts/console.ts).
@@ -159,6 +156,14 @@ function readSkill(dir: string): Record<string, Buffer> {
   walk(dir);
   return files;
 }
+
+const isLink = (path: string) => {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch {
+    return false;
+  }
+};
 
 /// A directory's device and inode (`dev:ino`), which a rename keeps; null: no directory of its own there.
 function dirKey(dir: string): string | null {
@@ -373,7 +378,7 @@ export class Sharing {
       for (const [name, { id }] of gone) {
         const key = state.hosted[id]?.dir;
         const now = key === undefined ? undefined : free.get(key);
-        if (now !== undefined && skillNameOk(now)) {
+        if (now !== undefined && portableName(now)) {
           to[now] = to[name];
           log.info("share", "a shared skill renamed is shared under its new name", { id, from: name, to: now });
         } else log.info("share", "a shared skill deleted is no longer shared", { id, name });
@@ -640,15 +645,18 @@ export class Sharing {
       if (had.kind !== "skill") continue;
       const target = this.mirror(id);
       if (!existsSync(target)) continue;
-      const skills = this.skillsDir(this.askIn(had));
-      const link = join(skills, had.name);
       try {
-        const meta = lstatSync(link);
-        if (!meta.isSymbolicLink() || readlinkSync(link) !== target) continue;
-      } catch {
-        mkdirSync(skills, { recursive: true });
-        // Where links are refused, a junction will do: its target is the copy's own directory, which stays where it is.
-        linkSync(target, link, { junction: true });
+        const skills = this.skillsDir(this.askIn(had));
+        const link = join(skills, had.name);
+        if (!existsSync(link) && !isLink(link)) {
+          mkdirSync(skills, { recursive: true });
+          // Where links are refused, a junction will do: its target is the copy's own directory, which stays where it is.
+          linkSync(target, link, { junction: true });
+        } else if (!isLink(link) || readlinkSync(link) !== target) continue;
+      } catch (e) {
+        // This copy's alone: the others are linked all the same.
+        log.warn("share", "a shared skill could not be linked", { id, name: had.name, error: (e as Error).message });
+        continue;
       }
       this.watchBorrowed(id, target);
     }
@@ -792,7 +800,7 @@ export class Sharing {
     } else if (!had || had.version !== request.version) {
       const kind: ShareKind = request.kind === "skill" ? "skill" : "profile";
       const name = String(request.name ?? id);
-      if (kind === "skill" && !skillNameOk(name)) throw new Error("bad skill name");
+      if (kind === "skill" && !portableName(name)) throw new Error("bad skill name");
       // Renamed on its host: no longer linked under the name it had.
       if (had?.kind === "skill" && had.name !== name) this.unlinkSkill(id, had);
       // A skill of a joined workspace's station: linked into that workspace's skills.

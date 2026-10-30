@@ -212,6 +212,16 @@ test("a skill is shared with its home workspace's stations only, and linked into
     assert.equal(linked(s, "skills", "w2-lessons"), false);
   }
   assert.equal(linked(o, "skills", "w2-lessons"), false);
+  // A copy that cannot be linked is its own failure alone: H's W2 skills unmade, O's W1 skill is linked all the same.
+  rmSync(join(h.data, "agent", "workspaces", "W2"), { recursive: true });
+  writeFileSync(join(h.data, "agent", "workspaces", "W2"), "");
+  skill(o, "o-lessons");
+  await o.sharing.shareSkill("o-lessons", true, null);
+  await settle(...every);
+  assert.ok(linked(h, "skills", "o-lessons"));
+  rmSync(join(h.data, "agent", "workspaces", "W2"));
+  await settle(...every);
+  assert.ok(linked(h, "workspaces", "W2", "skills", "w2-lessons"));
   // R1 leaves W2: the copies of its skill go.
   cloud.rosters.W2 = cloud.rosters.W2!.filter((p) => p.id !== R1);
   await settle(h, r2);
@@ -408,8 +418,10 @@ test("a skill named in any script is shared; renamed, it is linked under its new
   await settle(a, b);
   assert.deepEqual(a.config.raw().sharedSkills, {});
   assert.equal(linked("测验"), false);
-  // A name that is not one directory's is refused by the station told of it.
-  await assert.rejects(b.sharing.handle(A, { method: "share.changed", id: "sh-0123456789abcdef0123", kind: "skill", name: "../x", version: 1 }), /bad skill name/);
+  // A name that is not one directory's on every machine is refused, by the station told of it as by the one sharing it.
+  for (const name of ["../x", "a:b", "CON"]) {
+    await assert.rejects(b.sharing.handle(A, { method: "share.changed", id: "sh-0123456789abcdef0123", kind: "skill", name, version: 1 }), /bad skill name/);
+  }
 });
 
 test("a station gone from the workspace: what it shared is taken away, what it used forgotten", async () => {

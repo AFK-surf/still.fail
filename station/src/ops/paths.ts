@@ -1,6 +1,7 @@
 // Paths as the station checks them (the Rust station's Path, files.rs `clean`): absolute, worked out without following
 // links, and compared component by component, as the machine has them (platform.paths: on Windows `\` and `/` both
 // separate, a drive or a share starts an absolute path, and case does not tell two paths apart).
+import { createHash } from "node:crypto";
 import { platform } from "../platform/index.ts";
 
 /// A path's components (empty ones kept: callers drop what they do not want).
@@ -44,6 +45,25 @@ export const anyBaseName = (path: string) => path.split(/[\\/]/).filter((p) => p
 
 /// Path::join as Rust has it: an absolute `given` replaces `base`; nothing is normalised.
 export const joinPath = (base: string, given: string): string => platform.paths.join(base, given);
+
+/// A name that is one file or directory on every machine a station runs on (Unix, macOS, Windows), in any script: no
+/// separator or character Windows refuses, not hidden (nor `.`, `..`), not ending in a dot or a space (Windows drops
+/// them), not one of Windows' device names, at most 255 bytes.
+export const portableName = (name: string): boolean =>
+  name !== "" &&
+  !/[\x00-\x1f<>:"/\\|?*]/.test(name) &&
+  !name.startsWith(".") &&
+  !/[. ]$/.test(name) &&
+  !/^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\.|$)/i.test(name) &&
+  Buffer.byteLength(name) <= 255;
+
+/// `name` as one portable path component: itself when it is one, else what it has that may stay, with a hash of it after
+/// (two names never come to the same one).
+export function portableComponent(name: string): string {
+  if (portableName(name)) return name;
+  const kept = name.replace(/[\x00-\x1f<>:"/\\|?*]/g, "_").replace(/^\./, "_").slice(0, 64);
+  return `${kept}-${createHash("sha256").update(name).digest("hex").slice(0, 12)}`;
+}
 
 /// A path given as relative, split into its components when it is one: not rooted (`/`, a drive, a share, a stream),
 /// none of its components `..`. `.` and empty components are the caller's to judge (they are kept).
