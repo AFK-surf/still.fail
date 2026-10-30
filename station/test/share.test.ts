@@ -375,6 +375,22 @@ test("a shared skill: copied and linked under its name, edits go back to the hos
   assert.equal(existsSync(link), false);
 });
 
+test("a skill named in any script is shared; one whose name is a path is refused", async () => {
+  const cloud = new FakeCloud();
+  const all = new Map<string, Station>();
+  const a = station(cloud, A, () => all);
+  const b = station(cloud, B, () => all);
+  all.set(A, a).set(B, b);
+  const dir = join(a.data, "agent", "skills", "信源");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "SKILL.md"), "---\nname: 信源\ndescription: 项目记忆：信源\n---\nfirst\n");
+  await a.sharing.shareSkill("信源", true, null);
+  await settle(a, b);
+  assert.match(readFileSync(join(b.data, "agent", "skills", "信源", "SKILL.md"), "utf8"), /first/);
+  for (const name of ["..", ".hidden", "a/b", "a\\b", ""])
+    await assert.rejects(async () => b.sharing.handle(A, { method: "share.changed", id: "sh-0123456789", kind: "skill", name, version: 1 }), /bad skill name/, name);
+});
+
 test("a station gone from the workspace: what it shared is taken away, what it used forgotten", async () => {
   const cloud = new FakeCloud();
   const all = new Map<string, Station>();

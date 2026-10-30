@@ -736,7 +736,8 @@ export class Sharing {
     } else if (!had || had.version !== request.version) {
       const kind: ShareKind = request.kind === "skill" ? "skill" : "profile";
       const name = String(request.name ?? id);
-      if (kind === "skill" && !/^[A-Za-z0-9._-]+$/.test(name)) throw new Error("bad skill name");
+      // Any script's letters (项目记忆 are often named in Chinese); never a path, nor `.` / `..`.
+      if (kind === "skill" && !/^[\p{L}\p{M}\p{N}_-][\p{L}\p{M}\p{N}._-]*$/u.test(name)) throw new Error("bad skill name");
       // A skill of a joined workspace's station: linked into that workspace's skills.
       const where = kind === "skill" && had === undefined && ws !== null && ws !== this.deps.cloud.home() ? { workspace: ws } : {};
       state.borrowed[id] = { ...(had ?? { version: -1, hash: "" }), ...where, kind, name, host: peer, allow: Array.isArray(request.allow) ? request.allow : null, stale: true };
