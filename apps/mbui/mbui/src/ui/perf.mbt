@@ -111,6 +111,14 @@ pub fn Tester::wanted_after(self : Tester) -> Double {
 }
 
 ///|
+/// How many times the app has asked its host for the next display frame for what goes on by the clock (a motion going,
+/// a cycle shown, a fiber stepping a frame at a time), as a host is asked (on_frame): what draws it on a device. A
+/// Tester draws none for it (its time goes by run_for).
+pub fn Tester::frames_on(self : Tester) -> Int {
+  self.fake.frames_on
+}
+
+///|
 /// Why the app asks for a frame (Tester::wanted_after), in words: the display's next frame's, else its wake's; "" when
 /// it asks for none.
 pub fn Tester::wanted_why(self : Tester) -> String {

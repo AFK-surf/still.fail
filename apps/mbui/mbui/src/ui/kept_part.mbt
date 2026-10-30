@@ -180,10 +180,13 @@ fn part_wake(now : Double, t : Double, later : Bool) -> Unit {
 /// again as it is told anew, wherever and whenever that is, and each frame while it goes (`going`); kept as it was drawn
 /// or not (a part's, a list's row's: kept_part.mbt's head).
 pub fn Ctx::shows_motion(self : Ctx, who : Mover, going : Bool) -> Unit {
-  ignore(self)
-  // (going, what reads it reads the clock: built again each frame, frame_watch.mbt)
+  // (going, what reads it reads the clock: built again each frame, frame_watch.mbt; and the next frame asked for as
+  // this one ends, to read it again: what goes is sampled each frame it is read in, whatever else is said to move)
   if going {
     clock_read_here()
+    if self.in_frame() {
+      self.motion_read = true
+    }
   }
   if !part_building() {
     return

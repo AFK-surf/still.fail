@@ -15,6 +15,9 @@ struct FakeHost {
   /// device pixels a point, as a host's window has them (2: a Retina screen; a recording host's, Tester::new(scale=))
   mut scale : Double
   mut wants : Bool
+  /// how many times the app asked for the host's next frame for what goes on by the clock (h_request_frame_on): owed
+  /// no frame at this moment, as a host draws one at its next display frame (Tester::frames_on)
+  mut frames_on : Int
   mut wake : Double
   mut instances : Int
   mut ime_active : Bool
@@ -491,7 +494,7 @@ fn h_frame_owed() -> Unit {
 /// no frame at this moment for it (its time goes by run_for).
 fn h_request_frame_on() -> Unit {
   match fake.val {
-    Some(_) => ()
+    Some(f) => f.frames_on = f.frames_on + 1
     None => @hostapi.request_frame()
   }
 }

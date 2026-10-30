@@ -77,3 +77,126 @@ test "a way set out a fraction into a ms: its time goes on the one clock's whole
   assert_eq(set_out_at_fraction(1000.0, 0.999), whole)
   assert_eq(whole, (1000.0, 1000.0 + way_ms, [0.25, 0.5, (way_ms - 1.0) / way_ms]))
 }
+
+///|
+/// A window drawn by `make`, which reads way `w` (or not); `w` set out from 0 to 1 over `way_ms` at a moment between
+/// frames, then a frame drawn at each of `at` (ms after it set out), `then` done before each: whether the app asked its
+/// host for the next display frame as that frame ended (Tester::frames_on: what draws a motion on a device), and
+/// whether it asks for one at all (Tester::wanted_after 0).
+fn asked_on(
+  make : (@motion.Way) -> @ui.Tester,
+  at : Array[Double],
+  then? : (Double) -> Unit = fn(_ms) {  },
+) -> Array[(Bool, Bool)] {
+  let w = @motion.Way::new(0.0)
+  let t = make(w)
+  t.draw()
+  let t0 = t.time()
+  w.go(1.0, @motion.tween(way_ms, ease=Linear), at=t0)
+  at.map(fn(ms) {
+    then(ms)
+    let before = t.frames_on()
+    t.frame_at(t0 + ms)
+    (t.frames_on() > before, t.wanted_after() == 0.0)
+  })
+}
+
+///|
+/// Asked for while it goes, none once it is at its end.
+let going_then_end : Array[Double] = [a_frame_ms, halfway_ms, way_ms + a_frame_ms]
+
+///|
+/// A display frame's length, and the way's middle.
+let a_frame_ms : Double = 16.0
+
+///|
+let halfway_ms : Double = 100.0
+
+///|
+let asked_going : Array[(Bool, Bool)] = [(true, true), (true, true), (false, false)]
+
+///|
+/// A box as wide as the way says, built from it.
+fn built_from(w : @motion.Way) -> @ui.Tester {
+  @ui.Tester::new(fn(c) { c.box(w=Px(10.0 + 100.0 * w.get()), h=Px(10.0), fn() {  }) |> ignore })
+}
+
+///|
+test "a way read as the view is built: each frame while it goes asks the host for the next, none once it is at its end" {
+  assert_eq(asked_on(built_from, going_then_end), asked_going)
+}
+
+///|
+test "a way read as the view is painted alone (a look worked out as it is painted): the same" {
+  let painted = fn(w : @motion.Way) {
+    @ui.Tester::new(fn(c) {
+      let i = c.box(w=Px(10.0), h=Px(10.0), bg=0x3366CCFFL, fn() {  })
+      c.look_by(i, fn() { @ui.look(dx=100.0 * w.get()) })
+    })
+  }
+  assert_eq(asked_on(painted, going_then_end), asked_going)
+}
+
+///|
+test "a way read by an old view kept in the window's tree, its parts kept as their nodes: the same" {
+  let island = fn(w : @motion.Way) {
+    let t = @ui.Tester::new(fn(_c) {  })
+    t.keep_parts(true)
+    @ui.set_view_app(fn(root) {
+      root.box(fn(v) {
+        @ui.old(v, fn(c) { c.box(w=Px(10.0 + 100.0 * w.get()), h=Px(10.0), fn() {  }) |> ignore }).grow(Is(1.0))
+        |> ignore
+      })
+      |> ignore
+    })
+    t
+  }
+  assert_eq(asked_on(island, going_then_end), asked_going)
+}
+
+///|
+test "a way read by a binding of the window's tree at the moment its frame is drawn: the same" {
+  let bound = fn(w : @motion.Way) {
+    let t = @ui.Tester::new(fn(_c) {  })
+    @ui.set_view_app(fn(root) {
+      root.box(fn(v) {
+        v
+        .width(Is(Some(10.0)))
+        .height(Is(Some(10.0)))
+        .ground(Is(0x3366CCFFL))
+        .alpha(
+          By(fn() {
+            w.said()
+            let now = v.logic_at()
+            w.value_at(if w.goes_at(now) { v.drawn_at() } else { @double.infinity })
+          }),
+        )
+        |> ignore
+      })
+      |> ignore
+    })
+    t
+  }
+  assert_eq(asked_on(bound, going_then_end), asked_going)
+}
+
+///|
+test "a way going read by nothing, or by what is let go as it goes: no frame asked for once nothing reads it" {
+  assert_eq(
+    asked_on(fn(_w) { @ui.Tester::new(fn(_c) {  }) }, [a_frame_ms, halfway_ms]),
+    [(false, false), (false, false)],
+  )
+  let shown = @signals.signal(true)
+  let let_go = asked_on(
+    fn(w) {
+      @ui.Tester::new(fn(c) {
+        if shown.get() {
+          c.box(w=Px(10.0 + 100.0 * w.get()), h=Px(10.0), fn() {  }) |> ignore
+        }
+      })
+    },
+    [a_frame_ms, halfway_ms, halfway_ms + a_frame_ms],
+    then=fn(ms) { if ms == halfway_ms { shown.set(false) } },
+  )
+  assert_eq(let_go, [(true, true), (false, false), (false, false)])
+}
