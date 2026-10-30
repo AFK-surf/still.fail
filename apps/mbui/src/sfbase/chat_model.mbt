@@ -582,6 +582,19 @@ pub(all) struct ChatView {
   /// its agents' Slack and Feishu threads, the one said in last first: what is sent from here is copied to those
   /// ticked (`cc`, `chat.cc`); empty when they are in none
   cc : Array[ChatCcTo]
+  /// the screens of the station it runs on (the core's `screens`), its own display first: its bar's way to them
+  screens : Array[ChatScreen]
+}
+
+///|
+/// One of the screens of a chat's station (the chat view's `screens`): its id, kind, title, what its station says of it,
+/// and whether an agent drives it now.
+pub(all) struct ChatScreen {
+  id : String
+  kind : String
+  title : String
+  line : String
+  agent : Bool
 }
 
 ///|
@@ -692,6 +705,10 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
     cc: items(s, "cc").map(fn(o) {
       let o = Some(o)
       { thread: number(o, "thread"), place: text(o, "place"), via: text(o, "via"), on: flag(o, "on") }
+    }),
+    screens: items(s, "screens").map(fn(o) {
+      let o = Some(o)
+      { id: text(o, "id"), kind: text(o, "kind"), title: text(o, "title"), line: text(o, "line"), agent: flag(o, "agent") }
     }),
   }
 }

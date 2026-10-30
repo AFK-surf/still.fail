@@ -347,6 +347,7 @@
   "web-main.keymap.chat.find": "在对话中查找",
   "web-main.keymap.chat.history": "执行历史",
   "web-main.keymap.chat.jobs": "服务和后台任务",
+  "web-main.keymap.chat.screen": "Station 屏幕",
   "web-main.keymap.chat.latest": "跳到最新",
   "web-main.keymap.chat.new": "新建对话",
   "web-main.keymap.chat.next": "下一个对话",

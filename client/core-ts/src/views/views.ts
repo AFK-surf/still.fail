@@ -755,7 +755,8 @@ export class Views implements Owner {
   #sources(view: Topic): Topic[] {
     const topics: Topic[] = [];
     const station = typeof view.station === "string" ? view.station : "";
-    if (view.topic === "chat") topics.push({ topic: "prefs" });
+    // (and its station's screens, for its bar's way to them)
+    if (view.topic === "chat") topics.push({ topic: "prefs" }, { topic: "screens", station });
     let scope: string;
     let perStation: (station: string) => Topic[];
     switch (view.topic) {
@@ -1108,6 +1109,10 @@ export class Views implements Owner {
     const dismissed = get(get(prefs, "stationUpdatesDismissed"), station);
     v.stationUpdate = looks.stationUpdate(overview, v, typeof dismissed === "string" ? dismissed : null, this.#updateNoticesOpen.has(station), manager, this.stationName(station));
     if (Array.isArray(v.outbox)) v.outbox = looks.outboxWaits(v.outbox, v.stationUpdate);
+    // The screens of the machine it runs on, a press away from its bar: its own display first (screens.ts screensView),
+    // each marked while an agent drives it.
+    const screens = arr(get(this.ok({ topic: "screens", station }), "screens")).map((s) => ({ id: s.id, kind: s.kind, title: s.title, line: s.line, ...(s.agent === true ? { agent: true } : {}) }));
+    if (screens.length > 0) v.screens = screens;
     if (v.offline === true) {
       v.offlineNote = looks.offlineNote(v.link, this.stationName(station));
       if (get(v.link, "cause") === "updating") v.updating = true;

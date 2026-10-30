@@ -2298,6 +2298,19 @@ export interface ChatPublish {
 	links: ChatPublished[];
 }
 
+/** One of the screens of a chat's station (`ChatView.screens`). */
+export interface ChatScreen {
+	/** The station's id of it (`desktop`, `browser:<targetId>`, `simulator:<udid>`). */
+	id: string;
+	/** `desktop`, `browser` or `simulator`. */
+	kind: string;
+	title: string;
+	/** What it is and who is on it, as its station's list says (`ScreenItem.line`). */
+	line: string;
+	/** An agent drives it now. */
+	agent?: boolean;
+}
+
 /** A message a search's words found (`ChatSearchView.messages`): its chat opens at it (thread, seq). */
 export interface FoundMessage {
 	station: string;
@@ -2742,6 +2755,11 @@ export interface ChatView {
 	connection?: LinkShown;
 	/** Station update availability or progress, including the local outbox while reconnecting. */
 	stationUpdate?: StationUpdateNotice;
+	/**
+	 * The screens of the station it runs on (the `screens` topic's), its own display first, for its bar's
+	 * way to them. Empty while it has none to show (offline, a station from before screens, a machine without a display).
+	 */
+	screens?: ChatScreen[];
 	/** The card it waits on, as its row has it. Absent when there is none. */
 	decision?: RowDecision;
 	/**
@@ -4263,7 +4281,7 @@ export interface KeptTabs {
 }
 
 /** An action keys do (keymap.ts ACTIONS). */
-export type KeyActionName = "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings" | "shortcuts" | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.latest" | "chat.find" | "chat.archive" | "panel.close" | "files.preview";
+export type KeyActionName = "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings" | "shortcuts" | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.screen" | "chat.latest" | "chat.find" | "chat.archive" | "panel.close" | "files.preview";
 
 /** Where an action works: anywhere in the app, in a chat, or in a folder of the files. */
 export type KeyGroupName = "global" | "chat" | "files";
@@ -6176,6 +6194,8 @@ export interface ScreenItem {
 	viewers?: string[];
 	/** Those of them whose input is taken. */
 	controlledBy?: string[];
+	/** An agent drives it now (one of `controlledBy` is an agent's view). */
+	agent?: boolean;
 	/** What is missing for it to be seen or driven (macOS's grants), when something is. */
 	access?: ScreenAccess;
 	/** The clipboard types a view that drives it carries both ways (`text`, `png`); none from a station before them. */

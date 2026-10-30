@@ -276,6 +276,9 @@ function names(v: unknown): string[] {
 /// The prefix an agent's view has among a screen's people (station/src/tools/computer.ts: `agent: <chat title>`).
 const AGENT = "agent: ";
 
+/// The station machine's own display among its screens (station/src/screens/desktop.ts, win-desktop.ts).
+const DESKTOP = "desktop";
+
 /// A name among a screen's people as the viewer reads it: an agent's by its chat.
 export function personShown(name: string): string {
   return name.startsWith(AGENT) ? t("core-views.screen.agent", { title: name.slice(AGENT.length).trim() }) : name;
@@ -342,8 +345,11 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
     const title = typeof get(s, "title") === "string" && get(s, "title") !== "" ? (get(s, "title") as string) : kindWords(kind);
     const by = get(s, "openedBy");
     const chat = typeof by === "string" && by !== "" ? chatOf(inner, station, by) : null;
+    const controlledBy = names(get(s, "controlledBy"));
     const item = {
-      id, kind, title, width, height, viewers: names(get(s, "viewers")), controlledBy: names(get(s, "controlledBy")), ...(get(s, "peek") === true ? { peek: true } : {}),
+      id, kind, title, width, height, viewers: names(get(s, "viewers")), controlledBy, ...(get(s, "peek") === true ? { peek: true } : {}),
+      // An agent drives it now (its view among the screen's people, AGENT).
+      ...(controlledBy.some((n) => n.startsWith(AGENT)) ? { agent: true } : {}),
       // Closed from here by a member who may drive it (a read-only one only looks).
       ...(get(s, "closable") === true && control ? { closable: true } : {}),
       ...(chat ? { chat } : {}),
@@ -353,6 +359,8 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
     const drop = dropOf(get(s, "drop"));
     return [{ ...item, ...(access ? { access } : {}), ...(clipboard.length ? { clipboard } : {}), ...(drop ? { drop } : {}), line: (access && lacking(access)) ?? itemLine(item), link: screenPath(station, id) }];
   });
+  // The machine's own display (`desktop`) first: what a chat's screen button opens, at the head of every list of them.
+  screens.sort((a, b) => Number(b.id === DESKTOP) - Number(a.id === DESKTOP));
   return { screens, outdated: false, control, known: true };
 }
 

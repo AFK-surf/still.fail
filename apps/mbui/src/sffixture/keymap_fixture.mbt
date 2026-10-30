@@ -19,6 +19,7 @@ pub let fx_key_actions : Array[(String, String, Array[String], Array[String], St
   ("chat.stop", "chat", ["Mod+."], [], "yes"),
   ("chat.history", "chat", ["Shift+Mod+H"], [], "yes"),
   ("chat.jobs", "chat", ["Shift+Mod+J"], [], "yes"),
+  ("chat.screen", "chat", ["Shift+Mod+D"], [], "yes"),
   ("chat.latest", "chat", ["Mod+Down"], [], "empty"),
   ("chat.find", "chat", ["Mod+F"], [], "yes"),
   ("chat.archive", "chat", ["Shift+Mod+E"], [], "yes"),

@@ -458,6 +458,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_working(rich_chat(f.older))
           } else if f.mode == "chat-update" {
             with_station_update(rich_chat(f.older))
+          } else if f.mode == "chat-station-screen" || f.mode == "chat-station-screens" || f.mode == "chat-agent-screens" {
+            with_chat_screens(rich_chat(f.older), f.mode != "chat-station-screen")
           } else if f.mode == "chat-cache-cold" {
             with_cache_cold(rich_chat(f.older))
           } else if f.mode == "chat-done" {
@@ -1830,6 +1832,28 @@ pub fn with_flag(v : Json, name : String) -> Json {
     Object(m) => {
       let o = m.copy()
       o[name] = Json::boolean(true)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// chat-station-screen(s), chat-agent-screens: the screens of the station it runs on (ChatView's `screens`): its
+/// display alone, or with a tab of its browser an agent drives.
+pub fn with_chat_screens(v : Json, more : Bool) -> Json {
+  let desktop : Json = { "id": "desktop", "kind": "desktop", "title": "Studio 的桌面", "line": "桌面 · 3024×1964" }
+  let tab : Json = {
+    "id": "browser:T1",
+    "kind": "browser",
+    "title": "登录 - GitHub",
+    "line": "浏览器标签页 · 1280×800 · 由「整理发布清单」打开",
+    "agent": true,
+  }
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      o["screens"] = if more { [desktop, tab] } else { [desktop] }
       Json::object(o)
     }
     _ => v

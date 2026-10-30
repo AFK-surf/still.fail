@@ -1,13 +1,13 @@
 // An agent of the chat in brief, on the phone: a sheet over the chat, opened from its name beside its messages or its
 // mark in the chat's bar (the wide screen's card over its avatar, ../AgentCard.tsx; the Android app's AgentSheet.kt).
 // What it runs and where it stands (with a stop while it works), its latest lines, the figures that say most (the
-// `agentCard` view, views/brief.ts), then where to go on: the station it runs on, its account (how it runs), its history,
+// `agentCard` view, views/brief.ts), then where to go on: the station it runs on, its screens, its account (how it runs), its history,
 // its jobs, and its context by hand (compacted, cleared). Only what
 // is worth a look is coloured. The same parts head its history's details (History.tsx).
 import { stationApi, useAgentCard, useChat, useStationCall, useStationLook, type ChatAgent } from "../api.ts";
-import type { AgentCardView } from "../core/shapes.ts";
+import type { AgentCardView, ChatScreen } from "../core/shapes.ts";
 import { Elapsed, Waited } from "../Chat.tsx";
-import { ChevronRight, Stop } from "@stillfail/ui/icons.tsx";
+import { ChevronRight, Monitor, Phone, Stop, Web } from "@stillfail/ui/icons.tsx";
 import { stationBase } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
@@ -28,8 +28,8 @@ export interface AgentGo { history(): void; jobs(): void; station?: () => void }
 const working = (agent: ChatAgent) => agent.status === "running" || agent.status === "queued";
 
 /** As tall as what it shows: its head, its lines, its figures and its rows (their room kept while they are read). */
-function tall(agent: ChatAgent, go: AgentGo): number {
-  const rows = 2 + (go.station ? 1 : 0) + (agent.jobs.length > 0 ? 1 : 0);
+function tall(agent: ChatAgent, go: AgentGo, screens: number): number {
+  const rows = 2 + (go.station ? 1 : 0) + (screens > 0 ? 1 : 0) + (agent.jobs.length > 0 ? 1 : 0);
   // What is wrong, a line each but a quota's (its account's windows say that).
   const notes = agent.attention.filter((a) => a.kind !== "quota").length;
   const px = 25 + 44 + (agent.turns.length > 0 ? 75 + 76 : 0) + (notes > 0 ? 10 + notes * 20 : 0) + 12 + rows * 41 + 28;
@@ -37,13 +37,22 @@ function tall(agent: ChatAgent, go: AgentGo): number {
 }
 
 /** Opens `at`'s card over its chat. */
-export function openAgent(app: MobileApp, at: AgentAt, agent: ChatAgent, go: AgentGo) {
-  app.sheet({ height: tall(agent, go), content: () => <AgentSheet at={at} go={go} /> });
+export function openAgent(app: MobileApp, at: AgentAt, agent: ChatAgent, go: AgentGo, screens = 0) {
+  app.sheet({ height: tall(agent, go, screens), content: () => <AgentSheet at={at} go={go} /> });
+}
+
+/** A screen's mark by its kind: a tab of the station's browser, a simulator, else its display. */
+function ScreenIcon({ kind }: { kind: string }) {
+  const Icon = kind === "browser" ? Web : kind === "simulator" ? Phone : Monitor;
+  return <Icon size={18} />;
 }
 
 function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
   const app = useApp();
-  const agent = useChat(at.station, { session: at.chat }).value?.agents.find((a) => a.session.key === at.key);
+  const chat = useChat(at.station, { session: at.chat }).value;
+  const agent = chat?.agents.find((a) => a.session.key === at.key);
+  // The screens of the station it runs on (the chat view's `screens`): its own display first.
+  const screens: ChatScreen[] = chat?.screens ?? [];
   const card = useAgentCard(at.station, at.key).value;
   // A sheet lies over the page, outside its station's context: the API by the station's address.
   const call = useStationCall(at.station);
@@ -85,6 +94,20 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
                 <span className={`${css.mAgentRowValue} ${css.mAgentStation}`}>
                   {(station.emoji || station.icon) && <StationMark emoji={station.emoji} icon={station.icon} size={14} />}<span>{station.name}</span>
                 </span>
+                <ChevronRight size={14} className={partsCss.mSubtle} />
+              </InfoRow>
+            )}
+            {screens.length > 0 && (
+              <InfoRow onClick={(e) => {
+                // The one alone opened, more a menu of them where the row was.
+                const open = (id: string) => app.push(`${stationBase(at.station)}/screen/${encodeURIComponent(id)}`);
+                const anchor = e.currentTarget.getBoundingClientRect();
+                app.sheet(null);
+                if (screens.length === 1) open(screens[0]!.id);
+                else app.menu({ anchor, items: screens.map((sc) => ({ label: sc.agent ? `${sc.title} · ${t("web-pages.chat.screenAgent")}` : sc.title, icon: <ScreenIcon kind={sc.kind} />, action: () => open(sc.id) })) });
+              }}>
+                <span className={css.mAgentRowLabel}>{t("android-chat.agent.screen")}</span>
+                <span className={css.mAgentRowValue}>{screens.some((sc) => sc.agent) ? t("web-pages.chat.screenAgent") : screens[0]!.title}</span>
                 <ChevronRight size={14} className={partsCss.mSubtle} />
               </InfoRow>
             )}

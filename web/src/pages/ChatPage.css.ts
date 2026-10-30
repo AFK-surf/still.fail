@@ -166,6 +166,8 @@ export const jobsTrigger = style({
     },
     "&[data-alarm=\"fail\"]::after": { background: vars.red },
     "&[data-alarm=\"restart\"]::after": { background: vars.amber },
+    // (the screens' button: an agent drives one of them, in the tone of an agent at work)
+    "&[data-alarm=\"agent\"]::after": { background: vars.amber },
   },
 });
 export const details = style({});

@@ -243,6 +243,9 @@ fn switcher_offered(c : @ui.Ctx, src : Source, w : Workspace) -> Array[@sfpages.
       offer(action_offered("chat.jobs", "web", fn() { open_jobs_pop() }))
       match view {
         Some(v) => {
+          if v.screens.length() > 0 {
+            offer(action_offered("chat.screen", "monitor", fn() { chat_screen_first(r, v.screens) }))
+          }
           let chat = (src.topic)("chat", chat_params(r)).value
           let open = !v.archived && !v.offline
           if open {

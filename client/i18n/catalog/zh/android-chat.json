@@ -302,6 +302,7 @@
   "android-chat.agent.account.auto": "{name} · 自动",
   "android-chat.agent.account.none": "自动分配",
   "android-chat.agent.station": "Station",
+  "android-chat.agent.screen": "屏幕",
   "android-chat.agent.history": "历史",
   "android-chat.agent.history.none": "尚未运行",
   "android-chat.agent.jobs": "后台",

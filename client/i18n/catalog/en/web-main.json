@@ -383,6 +383,7 @@
   "web-main.keymap.chat.find": "Find in chat",
   "web-main.keymap.chat.history": "Run history",
   "web-main.keymap.chat.jobs": "Services and jobs",
+  "web-main.keymap.chat.screen": "Station screen",
   "web-main.keymap.chat.latest": "Jump to latest",
   "web-main.keymap.chat.new": "New chat",
   "web-main.keymap.chat.next": "Next chat",

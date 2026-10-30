@@ -320,6 +320,44 @@ test("a_link_to_a_screen_of_a_station_not_reached_says_what_its_id_does", async 
   core.close();
 });
 
+test("the_machines_own_display_is_listed_first_and_a_screen_an_agent_drives_says_so", async () => {
+  const tab = { id: "browser:T1", kind: "browser", title: "登录 - GitHub", width: 1280, height: 800, viewers: ["Bob", "agent: 部署"], controlledBy: ["agent: 部署"] };
+  const desktop = { id: "desktop", kind: "desktop", title: "studio 的桌面", width: 3024, height: 1964, viewers: ["Bob"], controlledBy: ["Bob"] };
+  const { host, core, ui } = await viewing(1, { ...base(), "GET /screens": { screens: [tab, desktop] } });
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "screens", station: "ws/st" });
+  await host.settle();
+  apply(host, values);
+  const v = values.get(1) as J;
+  assert.deepEqual(v.screens.map((x: J) => [x.id, x.agent === true]), [["desktop", false], ["browser:T1", true]]);
+  core.close();
+});
+
+each("a_chat_says_the_screens_of_its_station_for_its_bar_and_which_an_agent_drives", async (seed) => {
+  const { host, core, ui, push } = await viewing(seed);
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7, session: null });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual((values.get(1) as J).screens.map((s: J) => [s.id, s.title, s.agent === true]), [
+    ["desktop", "studio 的桌面", false],
+    ["browser:T1", "登录 - GitHub", false],
+  ]);
+  // An agent takes the tab: said so as the station tells it; the station's screens gone, none.
+  push("screens", { screens: [SCREENS.screens[0], { ...SCREENS.screens[1], controlledBy: ["agent: 部署"] }] });
+  // (the screens' value, then the chat's built from it: a window each)
+  await host.settle();
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual((values.get(1) as J).screens.map((s: J) => s.agent === true), [false, true]);
+  push("screens", { screens: [] });
+  await host.settle();
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual((values.get(1) as J).screens ?? [], []);
+  core.close();
+});
+
 test("a_simulator_is_listed_and_linked_as_one_and_a_kind_not_known_as_a_display", async () => {
   const sim = { id: "simulator:5A25EA86-3568-43D6-9068-8B2CB5FADB26", kind: "simulator", title: "iPhone 17 · iOS 26.2", width: 1206, height: 2622, viewers: [], peek: true };
   const answers = { ...base(), "GET /screens": { screens: [sim, { id: "later:1", kind: "something-later", title: "", width: 0, height: 0, viewers: [] }] } };

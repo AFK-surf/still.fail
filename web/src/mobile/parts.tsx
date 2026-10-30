@@ -1,7 +1,7 @@
 // The narrow screen's small parts, as the Android app draws them (apps/android/…/ui/Parts.kt): model marks with their
 // state badge, people's avatars, rings, segmented choices, navigation bars and list cards. Sizes are Android's, a dp
 // or an sp a pixel here.
-import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import type { Badge as BadgeKind, Maker, Quota, RuntimeKind } from "../api.ts";
 import { Check, ChevronLeft, Filter, Plug, Plus, Settings, type IconProps } from "@stillfail/ui/icons.tsx";
 import { Mark as BrandMark, illustrationUrl } from "../brand.tsx";
@@ -346,7 +346,7 @@ export function InfoList({ children }: { children: ReactNode }) {
 }
 
 /** `busy`: what it asked is under way (a spinner at its end, not pressed again); `failed`: why it failed a moment ago (the failure mark there). */
-export function InfoRow({ onClick, busy = false, failed, children }: { onClick?: () => void; busy?: boolean; failed?: string | undefined; children: ReactNode }) {
+export function InfoRow({ onClick, busy = false, failed, children }: { onClick?: (e: MouseEvent<HTMLButtonElement>) => void; busy?: boolean; failed?: string | undefined; children: ReactNode }) {
   return onClick
     ? (
       <button type="button" className={listsCss.mInfoRow} disabled={busy} aria-busy={busy || undefined} onClick={onClick}>

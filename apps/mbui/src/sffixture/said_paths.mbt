@@ -202,6 +202,8 @@ pub let said_paths : Map[String, Array[String]] = {
     "connection.text",
     "connection.detail",
     "stationUpdate.detail",
+    "screens.*.title",
+    "screens.*.line",
     "decision.options.*.label",
     "decision.options.*.detail",
     "decision.card.assigneeText",

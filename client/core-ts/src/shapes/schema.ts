@@ -1745,6 +1745,7 @@ export const SHAPES: Record<string, Shape> = {
     ["height", "u32"],
     ["viewers", vec("String"), { said: true, default: true, doc: "Who is on it now, by name." }],
     ["controlledBy", vec("String"), { said: true, default: true, doc: "Those of them whose input is taken." }],
+    ["agent", "bool", { default: true, doc: "An agent drives it now (one of `controlledBy` is an agent's view)." }],
     ["access", opt("ScreenAccess"), { doc: "What is missing for it to be seen or driven (macOS's grants), when something is." }],
     ["clipboard", vec("String"), { default: true, doc: "The clipboard types a view that drives it carries both ways (`text`, `png`); none from a station before them." }],
     ["drop", opt("ScreenDrop"), { doc: "Where a file dropped into a view of it is put on the station's machine; none from a station before files." }],
@@ -1759,6 +1760,13 @@ export const SHAPES: Record<string, Shape> = {
     ["title", "String", { said: true, doc: "Its title, or words saying it has none." }],
     ["link", "String", { doc: "Its page in the app: `/w/<workspace>/s/<station>/chats/<id>`." }],
   ], { doc: "The chat whose agent opened a screen (a tab of the station's browser)." }),
+  ChatScreen: struct([
+    ["id", "String", { doc: "The station's id of it (`desktop`, `browser:<targetId>`, `simulator:<udid>`)." }],
+    ["kind", "String", { doc: "`desktop`, `browser` or `simulator`." }],
+    ["title", "String", { said: true }],
+    ["line", "String", { said: true, doc: "What it is and who is on it, as its station's list says (`ScreenItem.line`)." }],
+    ["agent", "bool", { default: true, doc: "An agent drives it now." }],
+  ], { doc: "One of the screens of a chat's station (`ChatView.screens`)." }),
   ScreensView: struct([
     ["screens", vec("ScreenItem")],
     ["outdated", "bool", { doc: "The station is from before screens: it has none to show until it is updated." }],
@@ -1901,7 +1909,7 @@ export const SHAPES: Record<string, Shape> = {
   ]),
   KeyGroupName: words(["global","chat","files"], { doc: "Where an action works: anywhere in the app, in a chat, or in a folder of the files." }),
   KeyTyping: words(["yes","no","empty"], { doc: "Whether an action works with the cursor in a text field: always (a binding with ⌘ or ⌥ does nothing there),\nnever (it is a key the field types), or when the field is empty (the key moves the cursor in text)." }),
-  KeyActionName: words(["chat.switch","chat.new","chat.prev","chat.next","sidebar.toggle","nav.back","nav.forward","settings","shortcuts","composer.focus","composer.file","chat.stop","chat.history","chat.jobs","chat.latest","chat.find","chat.archive","panel.close","files.preview"], { doc: "An action keys do (keymap.ts ACTIONS)." }),
+  KeyActionName: words(["chat.switch","chat.new","chat.prev","chat.next","sidebar.toggle","nav.back","nav.forward","settings","shortcuts","composer.focus","composer.file","chat.stop","chat.history","chat.jobs","chat.screen","chat.latest","chat.find","chat.archive","panel.close","files.preview"], { doc: "An action keys do (keymap.ts ACTIONS)." }),
   KeyAction: struct([
     ["action", "KeyActionName"],
     ["group", "KeyGroupName"],
@@ -3058,6 +3066,7 @@ export const SHAPES: Record<string, Shape> = {
     ["failed", opt("String"), { said: true, doc: "Why the station could not make it, the last time it was tried." }],
     ["connection", opt("LinkShown"), { doc: "Its link while it is down or coming back, in words; absent while it is up (and from a core before it)." }],
     ["stationUpdate", opt("StationUpdateNotice"), { doc: "Station update availability or progress, including the local outbox while reconnecting." }],
+    ["screens", vec("ChatScreen"), { default: true, doc: "The screens of the station it runs on (the `screens` topic's), its own display first, for its bar's\nway to them. Empty while it has none to show (offline, a station from before screens, a machine without a display)." }],
     ["decision", opt("RowDecision"), { doc: "The card it waits on, as its row has it. Absent when there is none." }],
     ["asks", vec("ChatAsk"), { default: true, doc: "What is asked in it that no one has decided and the viewer has not let go (a card, or an agent needing a\nperson), the oldest first, for the bar above the composer that leads to each. Empty when nothing is." }],
     ["stateText", opt("String"), { said: true, doc: "Where it stands, in words, as its row's second line (`ChatItem.stateText`) without a card waiting (the\ncard is in the chat): what an agent needs, why it stopped, what it waits on, done; drawn at the end of its messages.\nAbsent while it is at work, or with nothing to say." }],

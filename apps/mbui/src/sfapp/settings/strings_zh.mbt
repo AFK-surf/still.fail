@@ -965,6 +965,7 @@ let zh : Map[String, String] = {
   "web-main.keymap.chat.new": "新建对话",
   "web-main.keymap.chat.next": "下一个对话",
   "web-main.keymap.chat.prev": "上一个对话",
+  "web-main.keymap.chat.screen": "Station 屏幕",
   "web-main.keymap.chat.switch": "快速切换对话",
   "web-main.keymap.composer.focus": "回到输入框",
   "web-main.keymap.files.preview": "显示或隐藏预览",

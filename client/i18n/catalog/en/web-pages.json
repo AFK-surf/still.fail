@@ -345,6 +345,8 @@
   "web-pages.chat.serviceFailed": "“{name}” failed to start",
   "web-pages.chat.serviceStopped": "“{name}” stopped",
   "web-pages.chat.services": "Services and jobs",
+  "web-pages.chat.screen": "Station screen",
+  "web-pages.chat.screenAgent": "An agent is using it",
   "web-pages.chat.stop": "stop",
   "web-pages.chat.stopAsked": "Stop requested",
   "web-pages.chat.stopTurn": "Stop turn",

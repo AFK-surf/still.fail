@@ -502,6 +502,24 @@ the end of its words: a tab of the side panel (`screen:["<station>","<id>"]`, cl
 as the card is, its viewer's bar only 只看/控制 and its tools, and a way to the screen's own page. Its view is open
 while its tab is in front, so someone debugging an app sees and drives its simulator while the chat goes on.
 
+### A chat's screens
+
+A chat reaches the screens of the station it runs on in one press, without an agent posting a link to one. The core puts
+them in the chat's view (`ChatView.screens`, client/core-ts/src/views/views.ts: built from the `screens` topic it
+watches for the chat), each with `agent` while an agent drives it; the station's own display (`desktop`) comes first
+in every list of its screens. A station with none to show (offline, before screens, no display) gives none, and
+nothing shows. Clients:
+
+- The chat's bar (web: pages/ChatPage.tsx `ScreensButton`; the app's wide frame: sfdesk/chat_page.mbt
+  `screen_trigger`) has a screen button beside its services': the one screen alone opens beside the chat (its tab, as
+  a card's does), more a menu of them. A dot on it while an agent drives one.
+- An agent's card (web: mobile/AgentSheet.tsx; the app: sfapp/sheets.mbt), under its station, has a 屏幕 row: the
+  display's name, or that an agent drives one; it opens the same way (the screen's page over the chat on 小屏).
+- `chat.screen` (⌘⇧D, ⌘K, the Mac's menu bar) opens the first, its display.
+
+The display has no live picture there: a preview of it would wake the machine's display (`peek` is a tab's or a
+simulator's only, above).
+
 ### Agents on a screen (station/src/tools/computer.ts)
 
 The agents' `computer` tool operates a screen the way a person's view does, on the same contract: `screenshot`, then
