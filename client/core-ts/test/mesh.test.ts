@@ -292,10 +292,16 @@ sim("a_dial_tells_the_station_its_trace", async (s) => {
   const st = await s.station();
   const e = env(s);
   const traces: string[] = [];
+  const keys: string[] = [];
   e.tracer.setExport((body) =>
     Effect.sync(() => {
       for (const r of JSON.parse(Buffer.from(body).toString()).resourceSpans)
-        for (const sc of r.scopeSpans) for (const sp of sc.spans) if (sp.name === "mesh.connect") traces.push(sp.traceId);
+        for (const sc of r.scopeSpans)
+          for (const sp of sc.spans)
+            if (sp.name === "mesh.connect") {
+              traces.push(sp.traceId);
+              keys.push(...(sp.attributes as { key: string }[]).map((a) => a.key));
+            }
     }),
   );
   const mesh = await s.run(Mesh.make(e, []));
@@ -305,6 +311,8 @@ sim("a_dial_tells_the_station_its_trace", async (s) => {
   await s.until(() => (e.tracer.flush(), traces.length > 0));
   assert.equal(traces.length, 1);
   assert.match(st.hellos[0].traceparent, new RegExp(`^00-${traces[0]}-[0-9a-f]{16}-01$`));
+  // And where its time went.
+  for (const k of ["stillfail.onto_ms", "stillfail.dialled_ms", "stillfail.credential_ms", "stillfail.paths"]) assert.ok(keys.includes(k), k);
   await close(s, st, mesh);
 });
 

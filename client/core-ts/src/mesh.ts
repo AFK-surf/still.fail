@@ -419,6 +419,9 @@ export class Link {
   tailnet: string[] = [];
   /// Done once the station answered the first credential (refused or not).
   readonly answered = Deferred.makeUnsafe<void>();
+  /// How its opening went (`open`): ms from its start until the endpoint was on a relay, the connection was made, and
+  /// the credential was had; the first credential went as the later of the last two came.
+  opened: { onto: number; dialled: number; credential: number } | null = null;
 
   constructor(conn: IrohConnection, control: Control, credential: string, credentials: CredentialSource, pinned: string | null) {
     this.conn = conn;
@@ -1149,6 +1152,15 @@ export class Mesh {
           if (path !== null) span.set("stillfail.path", path);
           const via = link.success.via();
           if (via !== null) span.set("stillfail.via", relayHost(via));
+          // Where its time went: getting onto a relay, the handshake, the credential; and each way's round trip and
+          // packets sent and lost by then (a handshake many round trips long, or lost and sent again).
+          const opened = link.success.opened;
+          if (opened !== null) {
+            span.set("stillfail.onto_ms", opened.onto);
+            span.set("stillfail.dialled_ms", opened.dialled);
+            span.set("stillfail.credential_ms", opened.credential);
+          }
+          span.set("stillfail.paths", link.success.paths());
         } else {
           if (unanswered) self.#stuck = true;
           failedIn(span, link.failure);
@@ -2013,12 +2025,16 @@ function open(
   return Effect.gen(function* () {
     if (!/^[0-9a-f]{64}$/.test(stationId)) return yield* Effect.fail(CoreError.invalid(t("core-logic.mesh.bad_station_id", { id: stationId })));
     const device = endpoint.id();
+    const began = env.host.nowMs();
+    const opened = { onto: 0, dialled: 0, credential: 0 };
+    const since = () => Math.round(env.host.nowMs() - began);
     // Dialled on its own, so a connection made after CONNECT_TIMEOUT_MS is closed rather than left open, unused.
     const dialled = Deferred.makeUnsafe<IrohConnection, CoreError>();
     let late = false;
     env.runner.fork(
       Effect.gen(function* () {
         const r = yield* Effect.result(endpoint.connect(ips.length > 0 ? { id: stationId, relays, ips } : { id: stationId, relays }, ALPN, [FORMER_ALPN]));
+        opened.dialled = since();
         if (r._tag === "Success" && late) r.success.close(0, "too late");
         else Deferred.doneUnsafe(dialled, r._tag === "Success" ? Effect.succeed(r.success) : Effect.fail(unreached(r.failure)));
       }),
@@ -2026,14 +2042,26 @@ function open(
     const connecting = Effect.raceFirst(
       Deferred.await(dialled),
       Effect.andThen(
-        Effect.andThen(onARelay(endpoint, ips.length > 0), Effect.sleep(CONNECT_TIMEOUT_MS)),
+        Effect.andThen(
+          onARelay(endpoint, ips.length > 0),
+          Effect.suspend(() => {
+            opened.onto = since();
+            return Effect.sleep(CONNECT_TIMEOUT_MS);
+          }),
+        ),
         Effect.suspend(() => {
           late = true;
           return Effect.fail(meshError(noAnswer()));
         }),
       ),
     );
-    const [credential, conn] = yield* Effect.all([Effect.result(credentials(device, fresh)), connecting], { concurrency: "unbounded" });
+    const had = Effect.ensuring(
+      credentials(device, fresh),
+      Effect.sync(() => {
+        opened.credential = since();
+      }),
+    );
+    const [credential, conn] = yield* Effect.all([Effect.result(had), connecting], { concurrency: "unbounded" });
     if (credential._tag === "Failure") {
       conn.close(0, "no credential");
       return yield* Effect.fail(credential.failure);
@@ -2042,6 +2070,7 @@ function open(
     const control = new Control(stream);
     yield* control.send(credential.success.credential, credential.success.lock, ctx?.traceparent());
     const link = new Link(conn, control, credential.success.credential, credentials, pinned);
+    link.opened = opened;
     // The station's answer to the first credential, while requests already go: a refusal closes the link.
     env.runner.fork(
       Effect.gen(function* () {

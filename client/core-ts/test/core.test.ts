@@ -185,6 +185,12 @@ test("a_kept_credential_reaches_the_stations_without_ember_cloud", async () => {
   await assert.rejects(credential(false));
   host.store(`${CREDENTIAL_KEY}/s1/ws`, kept(old));
   up = true;
+  // A day old: served at once, the new one asked for beside it, not waited on.
+  const release = host.hold("/v1/workspaces/ws/credential");
+  assert.equal(await Promise.race([credential(false).then((c) => c.credential), host.settle().then(() => "waited on still.fail cloud")]), "old");
+  release();
+  await host.settle();
+  assert.equal(asked, 3);
   assert.equal((await credential(false)).credential, "c3");
   host.store(`${CREDENTIAL_KEY}/s1/ws`, kept(old, "other"));
   assert.equal((await credential(false)).credential, "c4");

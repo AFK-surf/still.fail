@@ -49,6 +49,8 @@ export class CloudSync {
   carry: ((workspace: string) => import("../lock.ts").Entry[] | null) | null = null;
   /// Whose operator lists are synced (as `admin.me` answered).
   readonly #admins = new Set<string>();
+  /// The kept credentials being renewed beside their use (`#credential`), by device and key.
+  readonly #renewing = new Set<string>();
 
   constructor(core: Inner) {
     this.#core = core;
@@ -385,8 +387,8 @@ export class CloudSync {
   }
 
   /// This device's member credential for a workspace, kept on the device: what gets it into the workspace's stations
-  /// with no still.fail cloud on the way. Kept, it serves for a day; then, or when a station refused it (`fresh`), a
-  /// new one is asked for — and if still.fail cloud cannot be reached, the kept one serves until it runs out. `main`:
+  /// with no still.fail cloud on the way. Kept, it serves until it runs out; a day old, a new one is asked for beside its
+  /// use, for the next; when none is kept or a station refused it (`fresh`), one is asked for and waited on. `main`:
   /// the mesh's device key, when the mesh is up (another key's are kept apart).
   /// `claim`: the device's base key's word that `device` is its own endpoint (lock.ts), told to the cloud with the ask
   /// (it lists the devices for a lock's owner to check) and to the station with the credential.
@@ -405,16 +407,13 @@ export class CloudSync {
       const other = main !== null && main !== device;
       const now = core.host.nowMs() / 1000;
       const read = (k: string) => Effect.map(Effect.orElseSucceed(core.host.storageGet(k), () => null), parseJson);
-      let others: KeptCredential[] = [];
-      if (other) {
-        const raw = yield* read(othersKey);
-        if (Array.isArray(raw)) {
-          const parsed = raw.map(readKept);
-          others = parsed.every((k) => k !== null) ? (parsed as KeptCredential[]) : [];
-        }
-      }
+      const readOthers = Effect.map(read(othersKey), (raw) => {
+        if (!Array.isArray(raw)) return [];
+        const parsed = raw.map(readKept);
+        return parsed.every((k) => k !== null) ? (parsed as KeptCredential[]) : [];
+      });
       let keptOne: KeptCredential | null;
-      if (other) keptOne = others.find((k) => k.device === device) ?? null;
+      if (other) keptOne = (yield* readOthers).find((k) => k.device === device) ?? null;
       else {
         const k = readKept(yield* read(key));
         keptOne = k && k.device === device ? k : null;
@@ -422,18 +421,27 @@ export class CloudSync {
       const kept: Credential | null = keptOne && keptOne.expires_at > now + 60 && !fresh ? strip(keptOne) : null;
       if (kept && now - kept.issued_at < CREDENTIAL_FOR_S) return kept;
       const said = claim === null ? undefined : { base: claim.device, proof: claim.proof, kind: core.host.appKeys ? "app" : "web", label: prefs.deviceName(core.data) ?? "" };
-      const asked = yield* Effect.result(core.provider.credential(sub, workspace, device, said));
-      if (asked._tag === "Failure") {
-        if (kept) return kept;
-        return yield* Effect.fail(asked.failure);
+      const ask = Effect.gen(function* () {
+        const c = yield* core.provider.credential(sub, workspace, device, said);
+        const k: KeptCredential = { device, ...c };
+        if (other) {
+          // (read again: another endpoint's may have been kept while this one's was asked)
+          const others = [k, ...(yield* readOthers).filter((o) => o.device !== device)].slice(0, CREDENTIAL_OTHERS_KEPT);
+          yield* Effect.ignore(core.host.storageSet(othersKey, toJsonBytes(others)), { log: "Unhandled", message: "credentials kept" });
+        } else yield* Effect.ignore(core.host.storageSet(key, toJsonBytes(k)), { log: "Unhandled", message: "credentials kept" });
+        return c;
+      });
+      // A day old and still good: it serves now, and the new one is asked for beside it, for the next. Asked first, every
+      // dial waited on still.fail cloud once a day, far from a phone in China (2026-10-30).
+      if (kept) {
+        const k = `${device}/${key}`;
+        if (!this.#renewing.has(k)) {
+          this.#renewing.add(k);
+          core.runner.fork(Effect.ensuring(Effect.ignore(ask, { log: "Unhandled", message: "credential renewed" }), Effect.sync(() => this.#renewing.delete(k))));
+        }
+        return kept;
       }
-      const c = asked.success;
-      const k: KeptCredential = { device, ...c };
-      if (other) {
-        others = [k, ...others.filter((o) => o.device !== device)].slice(0, CREDENTIAL_OTHERS_KEPT);
-        yield* Effect.ignore(core.host.storageSet(othersKey, toJsonBytes(others)), { log: "Unhandled", message: "credentials kept" });
-      } else yield* Effect.ignore(core.host.storageSet(key, toJsonBytes(k)), { log: "Unhandled", message: "credentials kept" });
-      return c;
+      return yield* ask;
     });
   }
 
