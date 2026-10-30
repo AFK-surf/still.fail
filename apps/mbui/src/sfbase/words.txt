@@ -774,6 +774,7 @@ web-main.chat.asks.dismiss
 web-main.chat.asks.go
 web-main.chat.copyFailed
 web-main.chat.copyLink
+web-main.chat.copyMessageLink
 web-main.chat.copyTranscript
 web-main.chat.deleteFailed
 web-main.chat.empty

@@ -28,46 +28,60 @@ pub(all) struct ChatPick {
 pub let pk : ChatPick = { ts: "", author: "", role: "", share: None, link: "", sel: @kit.Pick::new(), taken_at: -1 }
 
 ///|
-/// A message right clicked with a mouse, and what shares its turn: the frame, where, and the share, for the window's
-/// right click menu to offer as 分享这一轮 with what else it has there (sfdesk's context_menu.mbt). None once taken.
-pub let share_offered : Ref[(Int, Double, Double, () -> Unit)?] = Ref(None)
+/// A message right clicked with a mouse, and what shares its turn: the frame, where, the share and its link ("" none),
+/// for the window's right click menu to offer as 复制消息链接 and 分享这一轮 with what else it has there (sfdesk's
+/// context_menu.mbt). None once taken.
+pub let share_offered : Ref[(Int, Double, Double, () -> Unit, String)?] = Ref(None)
 
 ///|
-/// Links to this message and pictures of its turn, beside its author's name and time, where a mouse is the native
-/// input: shown while the pointer rests on the message. A finger has no resting pointer: where it is the native input
-/// both are on the bar of what it holds picked instead (pick_layer), not on every message's head.
+/// What a message offers of itself (its link, its turn's picture), at the end of its author's name and time, where a
+/// mouse is the native input: one ⋯ shown while the pointer rests on the message (or its menu is open), the same two a
+/// right click offers, each in its words: two bare marks there said neither what they did nor that they were the
+/// message's (a picture's mark reads as a picture's, not as sharing). A finger has no resting pointer: where it is the
+/// native input both are on the bar of what it holds picked instead (pick_layer), not on every message's head.
 pub fn share_turn_tool(c : @ui.Ctx, key : String, row : Int, link : String, go : () -> Unit) -> Unit {
   match c.menu_asked(row) {
-    Some((x, y)) => share_offered.val = Some((c.frame_number(), x, y, go))
+    Some((x, y)) => share_offered.val = Some((c.frame_number(), x, y, go, link))
     None => ()
   }
-  c.box(style=share_tools_mouse, fn() {
-    c.box(style=share_turn_room, fn() {
-      c.hand_shown(c.hovered(row), fn() {
-        if @sf.icon_button(c, "link", key=key + "/message-link", size=24.0, label=@sf.t("common.link.copy"), disabled=link == "") {
+  let menu = key + "/message-menu"
+  c.box(style=share_turn_room, fn() {
+    c.hand_shown(c.hovered(row) || @sf.menu_is_open(menu), fn() {
+      @sf.menu_of(c, menu, message_items(link, go), label=@sf.t("web-main.menu.more"), size=24.0) |> ignore
+    })
+  })
+  |> ignore
+}
+
+///|
+/// A message's own items (its ⋯, its right click's): 复制消息链接 (where it has one), 分享这一轮.
+fn message_items(link : String, go : () -> Unit) -> Array[@sf.MenuItem?] {
+  let items : Array[@sf.MenuItem?] = []
+  if link != "" {
+    items.push(
+      Some(
+        @sf.menu_item_of(@sf.t("web-main.chat.copyMessageLink"), icon="link", fn() {
+          let c = @ui.current()
           c.copy_text(link)
           say(c, @sf.t("common.link.copied"))
-        }
-      })
-    }) |> ignore
-    c.box(style=share_turn_room, fn() {
-      c.hand_shown(c.hovered(row), fn() {
-        if @sf.icon_button(c, "photo", key=key + "/share-turn", size=24.0, label=@sf.t("web-pages.chat.shareImage")) {
-          pick_clear()
-          go()
-        }
-      })
-    }) |> ignore
-  }) |> ignore
+        }),
+      ),
+    )
+  }
+  items.push(
+    Some(
+      @sf.menu_item_of(@sf.t("web-main.chat.shareTurn"), icon="photo", fn() {
+        pick_clear()
+        go()
+      }),
+    ),
+  )
+  items
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
 let share_turn_room : @ui.Style = @ui.css("w=S6 h=S6")
-
-///|
-// kept across runs: a value (no field of it changes)
-let share_tools_mouse : @ui.Style = @ui.css("row w=Hug gap=S3")
 
 ///|
 /// Let go of what is picked.
@@ -168,7 +182,7 @@ pub fn pickable(
     match share {
       Some(go) =>
         match c.menu_asked(id) {
-          Some((x, y)) => share_offered.val = Some((c.frame_number(), x, y, go))
+          Some((x, y)) => share_offered.val = Some((c.frame_number(), x, y, go, link))
           None => ()
         }
       None => ()

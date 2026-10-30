@@ -156,6 +156,7 @@
   "web-main.chat.asks.dismiss": "Dismiss",
   "web-main.chat.asks.go": "Go to the message awaiting a decision",
   "web-main.chat.copyLink": "Copy chat link",
+  "web-main.chat.copyMessageLink": "Copy message link",
   "web-main.chat.historyRefTitle": "History: {title}",
   "web-main.chat.linkCopied": "Copied: paste it into another chat and its agent can read this one",
   "web-main.chat.historyLinkCopied": "Copied: paste it into another chat and its agent can read what this chat's agent did",

@@ -782,6 +782,7 @@ let zh : Map[String, String] = {
   "web-main.chat.asks.go": "跳转到待决策的消息",
   "web-main.chat.copyFailed": "无法复制：{error}",
   "web-main.chat.copyLink": "复制会话链接",
+  "web-main.chat.copyMessageLink": "复制消息链接",
   "web-main.chat.copyTranscript": "复制 session 文件路径",
   "web-main.chat.deleteFailed": "无法删除：{error}",
   "web-main.chat.empty": "在此发送消息，此对话中的 agent 会在这里回复",

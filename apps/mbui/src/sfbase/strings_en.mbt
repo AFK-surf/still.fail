@@ -794,6 +794,7 @@ let en : Map[String, String] = {
   "web-main.chat.asks.go": "Go to the message awaiting a decision",
   "web-main.chat.copyFailed": "Couldn't copy: {error}",
   "web-main.chat.copyLink": "Copy chat link",
+  "web-main.chat.copyMessageLink": "Copy message link",
   "web-main.chat.copyTranscript": "Copy session file path",
   "web-main.chat.deleteFailed": "Couldn't delete: {error}",
   "web-main.chat.empty": "Send a message here; agents in this chat reply here",

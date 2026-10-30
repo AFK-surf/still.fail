@@ -138,6 +138,7 @@
   "web-main.chat.asks.dismiss": "忽略",
   "web-main.chat.asks.go": "跳转到待决策的消息",
   "web-main.chat.copyLink": "复制会话链接",
+  "web-main.chat.copyMessageLink": "复制消息链接",
   "web-main.chat.historyRefTitle": "执行记录：{title}",
   "web-main.chat.linkCopied": "已复制：粘贴到另一个会话后，该会话的 agent 即可读取此会话",
   "web-main.chat.historyLinkCopied": "已复制：粘贴到另一个会话后，该会话的 agent 即可读取此处 agent 的执行记录",
