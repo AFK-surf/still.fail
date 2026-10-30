@@ -374,7 +374,7 @@ test("a request from secret_use to the grant: listed for the chat's starter, dec
     assert.ok(request && request.status === "pending" && request.command === "gh run rerun 1" && request.hosts?.join() === "api.github.com,*.example.com");
     assert.deepEqual(secrets.pending(w.state.ws, w.state, { sub: "carol", email: "carol@x.com" }), [], "only the vault's members see it");
     assert.match(secrets.grant(w.state, "carol", grantOf(request, w.carol, w.plain, { exp: 1000 + 600 }))!, /members decide/);
-    assert.deepEqual(notified, []);
+    assert.equal(notified.length, 0);
     // Granted by alice: the agent is told in its session.
     assert.equal(secrets.grant(w.state, "alice", grantOf(request, w.alice, w.plain, { exp: 1000 + 600 })), null);
     assert.equal(notified.length, 1);
@@ -398,9 +398,9 @@ test("a request from secret_use to the grant: listed for the chat's starter, dec
     assert.match(secrets.grant(w.state, "alice", grantOf(lost, w.alice, w.plain, { exp: 1000 + 600 }))!, /does not open/);
     assert.equal(secrets.grant(w.state, "alice", grantOf(again, w.alice, w.plain, { exp: 1000 + 600 })), null);
     assert.deepEqual(secrets.held("s1").map((h) => h.request.id).sort(), [request.id, lost.id].sort());
-    // (Narrowed to none by the assertion above.)
-    const told: [string, string][] = notified;
-    assert.deepEqual(told.map(([k]) => k), ["s1"], "told in its session: its tool call ended with the old process");
+    // Told in its session, as every decision is.
+    assert.deepEqual(notified.map(([k]) => k), ["s1", "s1"]);
+    assert.match(notified[1]![1], /^Granted: 「GitHub」, grant r_01HZZZZZZZZZZZZZZZZZZZZLOST/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
