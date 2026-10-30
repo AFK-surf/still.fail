@@ -143,6 +143,10 @@ struct Node {
   mut lh : Double
   /// what it draws, as last made
   mut content : Content?
+  /// leaving (View::going): from when, till when (-1: not leaving); what reads how far it is gone told as it starts
+  mut left_at : Double
+  mut leave_until : Double
+  mut going : @signals.Signal[Double]?
 }
 
 ///|
@@ -158,6 +162,8 @@ pub struct Tree {
   /// whether the order is to be made again; whether any of it is (what hosts it told as it first is)
   looks_due : Array[Int]
   places_due : Array[Int]
+  /// the nodes leaving (by index and making: View::going), let go as their leaving ends
+  leaving : Array[NodeId]
   /// the bindings whose reads changed, to run as the frame begins (Tree::queued)
   bindings_due : Array[() -> Unit]
   mut layout_due : Bool
@@ -197,6 +203,7 @@ pub fn Tree::new(make : (View) -> Unit, measure? : (String, Double) -> (Double, 
     looks_due: [],
     places_due: [],
     bindings_due: [],
+    leaving: [],
     layout_due: true,
     order_due: true,
     due: true,
@@ -264,6 +271,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.place_due = false
       n.placed = false
       n.content = None
+      n.left_at = -1.0
+      n.leave_until = -1.0
+      n.going = None
       i
     }
     None => {
@@ -290,6 +300,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         lw: 0.0,
         lh: 0.0,
         content: None,
+        left_at: -1.0,
+        leave_until: -1.0,
+        going: None,
       })
       self.nodes.length() - 1
     }
@@ -816,7 +829,7 @@ fn View::drop(self : View, v : View) -> Unit {
 
 ///|
 /// `then`'s node while `when` holds, made as it comes to and let go as it stops (what it made with it too: its scope).
-pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit) -> Unit {
+pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? : Double = 0.0) -> Unit {
   let slot = self.slot()
   let had : Ref[View?] = Ref(None)
   let stop = slot.tree.queued(when, fn(on) {
@@ -828,7 +841,7 @@ pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit) -> Unit
       }
       (false, Some(v)) => {
         slot.tree.work.structure = slot.tree.work.structure + 1
-        slot.drop(v)
+        slot.leave(v, leave)
         had.val = None
       }
       _ => ()
@@ -869,6 +882,7 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
   items : () -> Array[T],
   key : (T) -> K,
   row : (View, @signals.Signal[T]) -> Unit,
+  leave? : Double = 0.0,
 ) -> Unit {
   let slot = self.slot()
   let rows : Map[K, (View, @signals.Signal[T])] = Map([])
@@ -899,11 +913,23 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
     for k, r in rows {
       if !seen.contains(k) {
         gone.push(k)
-        r.0.let_go()
+        slot.leave(r.0, leave)
       }
     }
     for k in gone {
       rows.remove(k)
+    }
+    // (what is leaving kept where it was, after what was before it)
+    let tree = slot.tree
+    for j, at in sn.kids {
+      let m = tree.nodes[at]
+      if m.live && m.leave_until >= 0.0 && m.parent == slot.at {
+        let before = if j == 0 { None } else { order.search(sn.kids[j - 1]) }
+        match before {
+          Some(i) => order.insert(i + 1, at)
+          None => order.insert(0, at)
+        }
+      }
     }
     let kids = sn.kids
     let moved = order.length() != kids.length() || order.mapi(fn(i, v) { kids[i] != v }).contains(true)
@@ -916,6 +942,124 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
     }
   })
   slot.owns(stop) |> ignore
+}
+
+///|
+/// Node `v` (one this holds) going: leaving for `ms` from the clock's now (still drawn and laid out, no longer pressed;
+/// what reads how far it is gone told: View::going), let go as that ends (Tree::frame); let go at once where `ms` is 0.
+fn View::leave(self : View, v : View, ms : Double) -> Unit {
+  if ms <= 0.0 {
+    self.drop(v)
+    return
+  }
+  guard v.live() is Some(n) else { return }
+  let now = @signals.untracked(fn() { self.tree.clock.get() })
+  n.left_at = now
+  n.leave_until = now + ms
+  match n.going {
+    Some(s) => s.set(now)
+    None => ()
+  }
+  self.tree.leaving.push(v.id())
+  self.tree.marked()
+}
+
+///|
+/// How far it is gone, from 0 (here: not leaving) to 1 (its leaving over): what reads it is told as it starts leaving,
+/// and goes with the clock while it leaves (a look fading it out, a place taking it away), from the moment its cause
+/// set it going, whatever frames come between.
+pub fn View::going(self : View) -> Double {
+  guard self.live() is Some(n) else { return 1.0 }
+  let s = match n.going {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(n.left_at, same=fn(a, b) { a == b })
+      n.going = Some(s)
+      s
+    }
+  }
+  let from = s.get()
+  if from < 0.0 {
+    return 0.0
+  }
+  let span = n.leave_until - from
+  if span <= 0.0 {
+    return 1.0
+  }
+  let f = (self.tree.clock.get() - from) / span
+  if f < 0.0 {
+    0.0
+  } else if f > 1.0 {
+    1.0
+  } else {
+    f
+  }
+}
+
+///|
+/// Whether it is leaving, or what holds it is: no longer pressed.
+pub fn View::leaving(self : View) -> Bool {
+  guard self.live() is Some(_) else { return true }
+  self.tree.leaving_at(self.at)
+}
+
+///|
+fn Tree::leaving_at(self : Tree, at : Int) -> Bool {
+  let mut i = at
+  while i >= 0 {
+    if self.nodes[i].leave_until >= 0.0 {
+      return true
+    }
+    i = self.nodes[i].parent
+  }
+  false
+}
+
+///|
+/// The soonest moment a node's leaving ends, if any is leaving: what hosts the tree has a frame drawn then.
+pub fn Tree::wake(self : Tree) -> Double? {
+  let mut soonest : Double? = None
+  for id in self.leaving {
+    let n = self.nodes[id.at]
+    if n.live && n.gen == id.gen {
+      soonest = match soonest {
+        Some(s) if s <= n.leave_until => Some(s)
+        _ => Some(n.leave_until)
+      }
+    }
+  }
+  soonest
+}
+
+///|
+/// The nodes whose leaving is over at the clock's now let go, taken out of what holds them.
+fn Tree::left(self : Tree) -> Unit {
+  if self.leaving.is_empty() {
+    return
+  }
+  let now = @signals.untracked(fn() { self.clock.get() })
+  let still : Array[NodeId] = []
+  let over : Array[NodeId] = []
+  for id in self.leaving {
+    let n = self.nodes[id.at]
+    if n.live && n.gen == id.gen {
+      if now >= n.leave_until {
+        over.push(id)
+      } else {
+        still.push(id)
+      }
+    }
+  }
+  self.leaving.clear()
+  for id in still {
+    self.leaving.push(id)
+  }
+  for id in over {
+    let n = self.nodes[id.at]
+    if n.live && n.gen == id.gen && n.parent >= 0 {
+      self.handle(n.parent).drop({ tree: self, at: id.at, gen: id.gen })
+    }
+  }
 }
 
 ///|
@@ -939,6 +1083,8 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double) -> Bool {
     s.set_height(Pt(h))
     self.layout_marked_at(0)
   }
+  // (what has left by now let go)
+  self.left()
   if !self.due {
     return false
   }
@@ -1218,7 +1364,8 @@ pub(all) enum Target {
 pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
   let found : Array[(NodeId, Bool)] = []
   self.each_drawn(fn(c, cx, cy, _) {
-    if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h {
+    // (what is leaving, or held by what is, pressed no more)
+    if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.leaving_at(c.id.at) {
       let n = self.nodes[c.id.at]
       if n.on_press is Some(_) {
         found.push((c.id, true))

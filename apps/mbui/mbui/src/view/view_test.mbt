@@ -681,3 +681,99 @@ test "a property bound again: the binding before it let go, what it read no long
   assert_eq(t.work().bound - before.bound, 0)
   assert_eq(t.drawn_of(node.val.unwrap().id()).unwrap().ground, 2L)
 }
+
+///|
+/// A card shown while `on` holds, leaving for 300 as it stops (faded out as it goes), pressed: `pressed`.
+fn leaving_tree(on : @signals.Signal[Bool], pressed : Ref[Int], card : Ref[@view.View?]) -> @view.Tree {
+  @view.Tree::new(fn(root) {
+    root.box(fn(b) { b.height(Is(Some(30.0))).words(Is("上面")) |> ignore }) |> ignore
+    root.show(
+      fn() { on.get() },
+      fn(v) {
+        card.val = Some(v)
+        v
+        .height(Is(Some(40.0)))
+        .ground(Is(0x336699FFL))
+        .alpha(By(fn() { 1.0 - v.going() }))
+        .on_press(fn() { pressed.val = pressed.val + 1 })
+        |> ignore
+      },
+      leave=300.0,
+    )
+  })
+}
+
+///|
+test "shown no more: still drawn and faded as it leaves, pressed no more, let go as its leaving ends" {
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let pressed = Ref(0)
+  let card : Ref[@view.View?] = Ref(None)
+  let t = leaving_tree(on, pressed, card)
+  t.frame(390.0, 844.0) |> ignore
+  let c = card.val.unwrap()
+  let alive = t.alive()
+  on.set(false)
+  t.frame(390.0, 844.0) |> ignore
+  assert_true(c.alive())
+  assert_true(c.leaving())
+  assert_eq(t.wake(), Some(300.0))
+  assert_false(t.press(10.0, 40.0))
+  assert_eq(pressed.val, 0)
+  t.at(150.0)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(t.drawn_of(c.id()).unwrap().alpha, 0.5)
+  t.at(300.0)
+  t.frame(390.0, 844.0) |> ignore
+  assert_false(c.alive())
+  assert_eq(t.alive(), alive - 1)
+  assert_eq(t.wake(), None)
+  assert_false(t.drawn().iter().any(fn(d) { d.ground == 0x336699FFL }))
+}
+
+///|
+test "leaving drawn the same at 60 Hz, at 120 Hz and in one jump to the moment" {
+  let at_moment = fn(step : Double) -> Array[String] {
+    let on = @signals.signal(true, same=fn(a, b) { a == b })
+    let t = leaving_tree(on, Ref(0), Ref(None))
+    t.frame(390.0, 844.0) |> ignore
+    on.set(false)
+    t.frame(390.0, 844.0) |> ignore
+    let mut now = 0.0
+    while now < 200.0 {
+      now = if now + step > 200.0 { 200.0 } else { now + step }
+      t.at(now)
+      t.frame(390.0, 844.0) |> ignore
+    }
+    let out = shown(t.drawn())
+    t.dispose()
+    out
+  }
+  let jump = at_moment(200.0)
+  assert_eq(at_moment(1000.0 / 60.0), jump)
+  assert_eq(at_moment(1000.0 / 120.0), jump)
+}
+
+///|
+test "a row gone from the list leaves where it was, the rows after it kept below it till it has left" {
+  let items = @signals.signal([
+    { key: "a", words: "甲" },
+    { key: "b", words: "乙" },
+    { key: "c", words: "丙" },
+  ])
+  let t = @view.Tree::new(fn(root) {
+    root.each(
+      fn() { items.get() },
+      fn(it) { it.key },
+      fn(row, item) { row.height(Is(Some(20.0))).words(By(fn() { item.get().words })) |> ignore },
+      leave=200.0,
+    )
+  })
+  t.frame(390.0, 844.0) |> ignore
+  items.set([{ key: "a", words: "甲" }, { key: "c", words: "丙" }])
+  t.frame(390.0, 844.0) |> ignore
+  let words = fn() { t.drawn().filter(fn(d) { d.words != "" }).map(fn(d) { (d.words, d.y) }) }
+  assert_eq(words(), [("甲", 0.0), ("乙", 20.0), ("丙", 40.0)])
+  t.at(200.0)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(words(), [("甲", 0.0), ("丙", 20.0)])
+}
