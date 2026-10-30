@@ -1244,6 +1244,16 @@ pub fn Tree::wake(self : Tree) -> Double? {
 }
 
 ///|
+/// The moment of the event being handled (Tree::event), if one is: what it does is of that moment, taken once.
+pub fn Tree::moment(self : Tree) -> Double? {
+  if self.cause_at >= 0.0 {
+    Some(self.cause_at)
+  } else {
+    None
+  }
+}
+
+///|
 /// The time now, as a change is told (the host's, else the clock's).
 fn Tree::time_now(self : Tree) -> Double {
   match self.time {
@@ -1291,10 +1301,10 @@ enum Due {
 /// (the moment of its cause); stopped (`live`), no more.
 struct Stepper {
   from : Double
-  every : Double
+  per_second : Int
   count : Int
   mut k : Int
-  step : (Int) -> Unit
+  step : (Int, Double) -> Unit
   live : Ref[Bool]
 }
 
@@ -1312,7 +1322,7 @@ fn Tree::due_at(self : Tree, d : Due) -> Double {
     }
     Steps(s, _) =>
       if s.live.val && s.k < s.count {
-        s.from + (s.k + 1).to_double() * s.every
+        stepped_at(s, s.k)
       } else {
         -1.0
       }
@@ -1385,7 +1395,7 @@ pub fn Tree::advance(self : Tree, upto : Double) -> Unit {
         let k = s.k
         s.k = s.k + 1
         @signals.start_batch()
-        @signals.untracked(fn() { (s.step)(k) })
+        @signals.untracked(fn() { (s.step)(k, next_at) })
         @signals.end_batch()
       }
     }
@@ -1394,17 +1404,23 @@ pub fn Tree::advance(self : Tree, upto : Double) -> Unit {
 }
 
 ///|
-/// What goes by steps, from its cause's moment: `step` run with each step's number (from 0), `every` apart (the
-/// first `every` after it), `count` of them: as the tree's logic advances (Tree::advance), each in its turn, whatever
-/// frames are drawn. For what moves by adding up step after step (what a value is worked out of the steps before
-/// it); a motion that is a function of the time needs none. The node's: stopped with it, or by what it returns.
-pub fn View::steps(self : View, every : Double, count : Int, step : (Int) -> Unit) -> () -> Unit {
-  guard self.live() is Some(n) && every > 0.0 && count > 0 else { return fn() {  } }
+/// When step `k` (from 0) of `s` is due: its start and the step's number alone (a second's `per_second` steps end at
+/// the second, exactly: no step's length added up).
+fn stepped_at(s : Stepper, k : Int) -> Double {
+  s.from + ((k + 1) * 1000).to_double() / s.per_second.to_double()
+}
+
+///|
+/// What goes by steps, from its cause's moment: `step` given each step's number (from 0) and its moment, `per_second`
+/// steps a second (the first a step after it), `count` of them: as the tree's logic advances (Tree::advance), each in
+/// its turn, whatever frames are drawn. For what moves by adding up step after step (what a value is worked out of the
+/// steps before it); a motion that is a function of the time needs none. The node's: stopped with it, or by what it
+/// returns.
+pub fn View::steps(self : View, per_second : Int, count : Int, step : (Int, Double) -> Unit) -> () -> Unit {
+  guard self.live() is Some(n) && per_second > 0 && count > 0 else { return fn() {  } }
   let live = Ref(true)
   let tree = self.tree
-  tree.timeline.push(
-    Steps({ from: tree.cause_now(), every, count, k: 0, step, live }, tree.told),
-  )
+  tree.timeline.push(Steps({ from: tree.cause_now(), per_second, count, k: 0, step, live }, tree.told))
   tree.told = tree.told + 1
   tree.marked()
   let stop = fn() { live.val = false }

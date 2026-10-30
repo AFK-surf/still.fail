@@ -361,8 +361,8 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     Some(t) => t
     None => return false
   }
-  // (the tree as of its moment: what had ended by then settled, what is where then)
-  let at = h_event_time()
+  // (the tree as of the event's moment, taken once as it began: what had ended by then settled, what is where then)
+  let at = view_moment()
   tree.bring_to(at)
   match (kind, view_held.val) {
     (0, _) =>
@@ -564,5 +564,18 @@ fn old_island_told() -> Unit {
   outside_counted()
   if !in_frame.val && !frame_running.val {
     h_frame_owed()
+  }
+}
+
+///|
+/// The moment of the event being handled (taken once, as it began: view_event), else the host's event time.
+fn view_moment() -> Double {
+  match view_app.val {
+    Some(t) =>
+      match t.moment() {
+        Some(m) => m
+        None => h_event_time()
+      }
+    None => h_event_time()
   }
 }

@@ -343,7 +343,7 @@ fn stepped(frames : Array[Double]) -> (Array[(Int, Double)], Array[String]) {
     fn(root) {
       root.box(fn(b) {
         b.height(Is(Some(10.0))).width(By(fn() { Some(v.get()) })) |> ignore
-        b.steps(1000.0 / 60.0, 60, fn(k) {
+        b.steps(60, 60, fn(k, _) {
           let next = v.get() + (target.get() - v.get()) * 0.1
           v.set(next)
           log.push((k, next))
@@ -388,4 +388,81 @@ test "more frames drawn than steps, the same moment drawn again: no step more" {
   let once = stepped([500.0, 2000.0])
   let again = stepped([500.0, 500.0, 500.0, 2000.0, 2000.0, 2500.0])
   assert_eq(again.0, once.0)
+}
+
+///|
+test "60 steps a second from 0: the 60th at 1000 exactly, each given its own moment" {
+  let now = Ref(0.0)
+  let at : Array[Double] = []
+  let t = @view.Tree::new(
+    fn(root) { root.box(fn(b) { b.steps(60, 60, fn(_, m) { at.push(m) }) |> ignore }) |> ignore },
+    time=fn() { now.val },
+  )
+  frame_at(t, now, 0.0)
+  frame_at(t, now, 999.0)
+  assert_eq(at.length(), 59)
+  frame_at(t, now, 1000.0)
+  assert_eq(at.length(), 60)
+  assert_eq(at[29], 500.0)
+  assert_eq(at[59], 1000.0)
+}
+
+///|
+test "an input at the moment a step is due: the step first, then the input; due together: in the order told" {
+  let (log, _) = stepped([2000.0])
+  // (step 29 is due at 500, the input's moment: it still rises toward 100, the step after falls toward 50)
+  assert_true(log[29].1 > log[28].1)
+  assert_true(log[30].1 < log[29].1)
+}
+
+///|
+test "steps said for a stretch: none before it or after it, 60 within it, none after they are stopped; endings between in their turn" {
+  let now = Ref(0.0)
+  let going = @signals.signal(false, same=fn(a, b) { a == b })
+  let card = @signals.signal(true, same=fn(a, b) { a == b })
+  let at : Array[Double] = []
+  let order : Array[String] = []
+  let stop : Ref[() -> Unit] = Ref(fn() {  })
+  let t = @view.Tree::new(
+    fn(root) {
+      root.show(fn() { going.get() }, fn(b) {
+        stop.val = b.steps(60, 60, fn(_, m) {
+          at.push(m)
+          order.push("step")
+        })
+      })
+      root.show(
+        fn() { card.get() },
+        fn(c) {
+          c.height(Is(Some(10.0))) |> ignore
+          c.owns(fn() { order.push("card gone") }) |> ignore
+        },
+        leave=100.0,
+      )
+    },
+    time=fn() { now.val },
+  )
+  frame_at(t, now, 0.0)
+  // (a long stretch with nothing said to go by steps: one jump, nothing stepped)
+  frame_at(t, now, 5000.0)
+  assert_eq(at.length(), 0)
+  // (said at 5000; a card hidden at 5005 ends at 5105, among the steps)
+  going.set(true)
+  now.val = 5005.0
+  card.set(false)
+  frame_at(t, now, 20000.0)
+  assert_eq(at.length(), 60)
+  assert_eq(at[0], 5000.0 + 1000.0 / 60.0)
+  assert_eq(at[59], 6000.0)
+  // (the card's end at 5105 came between the steps at 5100 and 5116.67)
+  assert_eq(order.search("card gone"), Some(6))
+  // (stopped steps go no further: said again, stopped after 10)
+  going.set(false)
+  frame_at(t, now, 20001.0)
+  going.set(true)
+  frame_at(t, now, 20001.0 + 10000.0 / 60.0)
+  (stop.val)()
+  frame_at(t, now, 40000.0)
+  assert_eq(at.length(), 70)
+  assert_true(!t.animating())
 }

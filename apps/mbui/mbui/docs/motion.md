@@ -46,6 +46,10 @@ target, curve) needs no step: its value at a moment is worked out where it is re
 every step is taken in its turn, an input coming among them handled between the steps before it and after it, none
 skipped and none run as one larger step, however few frames are drawn; drawing only looks at the state as it is.
 Nothing else goes by steps (a colour changed starts none), and what owns the steps stops them as it goes.
+A step's moment is its start and its number alone (60 a second end at the second exactly, no step's length added up);
+each step is given its moment. At one moment: what is due by it is done first (a step or an ending due then, before an
+input of that moment), and what is due together in the order it was told; an input's handlers all see the moment it
+came at, taken once. Drawing may look between steps; it never writes into them, and no step is dropped to catch up.
 
 
 ## Presence

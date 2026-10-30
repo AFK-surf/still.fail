@@ -30,6 +30,8 @@ let inputs_taken : Ref[Bool] = Ref::new(false)
 
 ///|
 fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -> Unit {
+  // (the event's own moment, taken once as it began: view_host.mbt)
+  let t = if view_app.val is Some(tr) && tr.moment() is Some(m) { m } else { t }
   input_came()
   // (a pointer moved, gone out of the window, a wheel turned: the hand on mbui's own, what it is over; else the app's
   // to take, an event from outside: kept_part.mbt)
@@ -60,6 +62,7 @@ fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -
 /// An input written on the tape being made (taping), nothing else: one the old view takes none of (a press on the tree
 /// made once, view_host.mbt) is replayed all the same.
 fn input_taped(kind : String, t : Double, args : Array[Double], text? : String) -> Unit {
+  let t = if view_app.val is Some(tr) && tr.moment() is Some(m) { m } else { t }
   if taping() {
     let m : Map[String, Json] = {
       "k": Json::string(kind),
