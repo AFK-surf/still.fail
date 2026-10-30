@@ -826,7 +826,9 @@ pub fn frame(
               let moved = c.box(style=page_aside, tx=aside, fn() {
                 // (the page drawn: one on its way out, a stack's move, hands no actions to the system's bars)
                 drawn_page.val = Some(page)
-                main_page(c, src, w, all, invited, page)
+                // (the workspaces as read here: what the page is built from, read by it, kept as an island on the tape)
+                let (now, all, _, invited) = @sfbase.workspace_in_view(src)
+                main_page(c, src, now.unwrap_or(w), all, invited, page)
                 drawn_page.val = None
               })
               @motion.scope(c, moved, bottom=true)
@@ -884,9 +886,16 @@ pub fn frame(
             // of what is in it, which ends where the column begins: beside_column)
             @sf.pane_round.val = Some(beside_column(page_corners, page_w - main_w))
             c.box(style=@ui.style(w=Fixed(main_w), h=Full), fn() {
-              tape_part(c, Page, "\{col} \{panel_top} \{main_w} \{panel_h} \{tape_x} \{wide.bar_pl} \{wide.bar_ml} \{wide.bar_mr}", fn() {
-                page_in(panel_h)
-              })
+              // (an island: built from its key and what it reads, the workspaces read in it, whatever else of the
+              // frame is built anew; docs/retained.md, the way there's 3)
+              tape_part(
+                c,
+                Page,
+                "\{col} \{panel_top} \{main_w} \{panel_h} \{tape_x} \{wide.bar_pl} \{wide.bar_ml} \{wide.bar_mr} " +
+                "\{gated} \{inset} \{finger} \{aside} \{w.id} \{wide.tape_at == Page}",
+                fn() { page_in(panel_h) },
+                own=true,
+              )
             })
             |> ignore
             @sf.pane_round.val = None
@@ -1418,10 +1427,16 @@ let tape_unknown : String = "?"
 /// stepping in one builds nothing. In use (and off the tape), read out and taking the hand (built while a finger is on
 /// it, and the frame after); behind the one in use, only drawn (a press there brings it over: tape_covers). `at`: where
 /// it is and how big, and what else of the frame's it is built from (its ground said with it).
-fn tape_part(c : @ui.Ctx, p : TapePane, at : String, body : () -> Unit) -> Unit {
+fn tape_part(
+  c : @ui.Ctx,
+  p : TapePane,
+  at : String,
+  body : () -> Unit,
+  own? : Bool = false,
+) -> Unit {
   let t = @sf.theme()
   let in_use = !wide.tape || wide.tape_at == p
-  c.kept_part(c.id("tape/kept/" + p.to_string()), "\{at} \{t.p.bg} \{t.dark}", body, read_out=in_use)
+  c.kept_part(c.id("tape/kept/" + p.to_string()), "\{at} \{t.p.bg} \{t.dark} \{in_use}", body, read_out=in_use, own~)
 }
 
 ///|

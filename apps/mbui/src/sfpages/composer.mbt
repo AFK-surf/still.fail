@@ -71,7 +71,7 @@ priv struct Composing {
   hint_shown : @signals.Signal[String]
   /// the cursor asked into it in this frame (it has it from the next): what it says while empty is
   /// what it says with the cursor in it already
-  mut taking : Bool
+  taking : @signals.Signal[Bool]
   /// its 抄送 menu open (cc_chooser)
   mut cc_open : Bool
   /// the shape its field's hint was last shown on (composer_hint): changed, the hint waits till it is there
@@ -119,7 +119,7 @@ let composing : Composing = {
   outside: false,
   menu_up: false,
   hint_shown: @signals.signal("", same=fn(a, b) { a == b }),
-  taking: false,
+  taking: @signals.signal(false, same=fn(a, b) { a == b }),
   cc_open: false,
   hint_shape: "",
   opened: (-1, "", ""),
@@ -157,7 +157,7 @@ fn composing_reset() -> Unit {
   composing.opened = (-1, "", "")
   composing.wanted = false
   composing.hint_shown.set("")
-  composing.taking = false
+  composing.taking.set(false)
 }
 
 ///|
@@ -193,7 +193,7 @@ pub fn composer(
     composing.roomy_before = composing.roomy
     composing.draft_before = composing.draft
     composing.toolbar_before = composing.toolbar
-    composing.taking = false
+    composing.taking.set(false)
   }
   composing.same_draft = whose == composing.draft_before
   if whose != composing.draft {
@@ -201,7 +201,9 @@ pub fn composer(
     // (where the keyboard is at hand, typed into at once; not raising the screen's keyboard over the chat)
     if !@sf.soft_keyboard() && !c.field_focused() {
       c.focus_editor(composer_field_key)
-      composing.taking = true
+      composing.taking.set(true)
+      // (this frame's alone: what reads it built again the frame after, as it has the cursor)
+      c.tell("composer/taking", fn() { composing.taking.set(false) })
     }
   }
   // asked for (a new chat: composer_take_focus), with touch too, its keyboard up
@@ -214,7 +216,9 @@ pub fn composer(
       // (the press that asked for it, lifted outside it, not taken for one letting go of the keyboard)
       composing.outside = false
       c.focus_editor(composer_field_key)
-      composing.taking = true
+      composing.taking.set(true)
+      // (this frame's alone: what reads it built again the frame after, as it has the cursor)
+      c.tell("composer/taking", fn() { composing.taking.set(false) })
     }
   }
   let focused = c.editor_focused(composer_field_key)
@@ -734,7 +738,7 @@ fn composer_hint(
 /// What the box says instead of its placeholder with keyboard and mouse and nothing that takes keys focused: that the composer's
 /// key puts the cursor there ("" otherwise).
 fn space_hint(c : @ui.Ctx, prefs : Json?, locked : Bool) -> String {
-  if locked || @sf.soft_keyboard() || c.field_focused() || composing.taking {
+  if locked || @sf.soft_keyboard() || c.field_focused() || composing.taking.get() {
     return ""
   }
   match @settings.key_label(prefs, "composer.focus") {
