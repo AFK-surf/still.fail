@@ -53,6 +53,12 @@ how many it took. A tick's moment is its number alone (60 a second end at the se
 up); each step is given its moment. One stopped stops nothing else, and moves no tick. At one moment: what is due by it is done first (a step or an ending due then, before an
 input of that moment), and what is due together in the order it was told; an input's handlers all see the moment it
 came at, taken once. Drawing may look between steps; it never writes into them, and no step is dropped to catch up.
+A host gives two moments of the one clock, for two uses: the moment it has come to (its now: the logic is advanced to
+it and no further, so nothing due later is done ahead of an input still to come before it) and the moment a frame is to
+be shown (a display link's target: what is drawn is sampled there, nothing of the logic committed by it). The tree's
+`frame(w, h, now=)` takes the first, `at` the second; an input's moment is its event time. Two readings, never one
+switching between them: `now()` is the logic's moment (what is done reads it, nothing follows it: what is to happen at a
+moment is said with `at_moment` or `steps`), `drawn_at()` the moment drawn at (only a look reads it, and follows it).
 
 
 ## Presence

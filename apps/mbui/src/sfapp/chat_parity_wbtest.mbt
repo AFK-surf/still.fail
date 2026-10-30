@@ -71,7 +71,7 @@ fn edited_core(
     },
   }
   open_fixture_over(mode, src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
   t.run_for(@ui.move_most_ms)
   t
 }

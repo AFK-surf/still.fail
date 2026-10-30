@@ -6,7 +6,7 @@ test "wide: the chat's \"…\" opens under its button; agent 往来 from it open
   reset()
   let src = fixture("chat-letters-info")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.is_wide(t.ctx()))
   assert_true(t.find("agent 往来") is None)
@@ -40,7 +40,7 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   // the bar's switch: its first agent's history beside it
   t.click(Button, label="打开侧栏")
@@ -101,7 +101,7 @@ test "wide: a quota running out beside an agent's history's control is whole how
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1600.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1600.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   t.click(Button, label="打开侧栏")
   t.run_for(@ui.move_most_ms)
@@ -132,7 +132,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   t.click(Button, label="对话信息")
   t.frame()
@@ -188,7 +188,7 @@ test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, clos
       (base.call)(name, params, done)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() == NewChat)
   // kept open for the workspace's new chat: its tab, the station's home in it
@@ -225,7 +225,7 @@ test "wide: the side panel's tabs are the core's (chat.tabs.*): an agent's histo
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   assert_eq(side_now(r), ([], ""))
   side_change(r, "open", Some("jobs"))
@@ -251,7 +251,7 @@ test "wide: the side panel slides in from the pane's right edge over 280 ms and 
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   t.click(Button, label="打开侧栏")
   t.frame()
@@ -284,7 +284,7 @@ test "wide: an agent's history asked as a page (a link's ?history=…&entry=…)
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   app.nav.push(History(r, "s-c1", Some(3)))
   t.frame()
@@ -321,7 +321,7 @@ test "wide: a chat of a Slack thread alone has its \"…\" too: where it is, its
   reset()
   let src = slack_only(fixture("chat"))
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   t.click(Button, label="对话信息")
   t.frame()

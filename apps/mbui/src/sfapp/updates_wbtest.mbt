@@ -27,7 +27,7 @@ fn updates_tester(r : Json, asked : Array[String]) -> @ui.Tester {
       url: fn(file) { "https://example.test/releases/" + file },
     }),
   )
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
 }
 
 ///|

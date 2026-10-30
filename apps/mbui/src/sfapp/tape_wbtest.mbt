@@ -43,7 +43,7 @@ fn tape_chat(platform : Int, w : Double, h : Double, width? : String = "", heigh
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
   if width != "" {
     say_room(t, width, height)
   }
@@ -359,7 +359,7 @@ test "on the tape a chat brought over while its view is on its way: the page com
   let src = round_trip(fixture("chat"), tape_core_late_ms)
   let read = fn(session : String) { readings.contains("ws1/st1\u{1}" + session) }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=720.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   // the workspace, its list and the chat, their topics one after another
   t.run_for(tape_core_late_ms * 6.0 + @ui.move_most_ms)
@@ -448,7 +448,7 @@ fn tape_flung(keep : Bool) -> Array[String] {
   reset()
   let src = fixture("long")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=690.0, h=840.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h=840.0, platform=2)
   say_room(t, "medium", "medium")
   t.run_for(@ui.move_most_ms)
   t.keep_parts(true)
@@ -645,7 +645,7 @@ test "a phone turned sideways for a film: the layout it had (the player the whol
   reset()
   let src = fixture("player-video")
   open_drive_fixture("player-video")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   nav_rested(t)
   tap_said(t, "全屏")
   // the host turns the phone for it (Host.setSideways: landscape), its window's classes said as they change
@@ -879,7 +879,7 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=690.0, h=840.0, platform=0, window_corner=16.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h=840.0, platform=0, window_corner=16.0)
   t.run_for(@ui.move_most_ms)
   // the window's 16, 6 in: 11.2
   let edge = @ui.concentric(16.0, 6.0)
@@ -1200,7 +1200,7 @@ fn tape_settings(w : Double, open : () -> Unit, first? : Bool = false) -> @ui.Te
   if first {
     open()
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=760.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=760.0, platform=0)
   t.draw()
   if !first {
     open()
@@ -1272,7 +1272,7 @@ test "on the tape, a chat's service opened from the chat in use: its side panel 
   reset()
   let src = fixture("chat-jobs")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=720.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.tape)
   // (the chat in use, the sidebar beside it)

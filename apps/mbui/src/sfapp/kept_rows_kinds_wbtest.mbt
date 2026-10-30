@@ -26,7 +26,7 @@ fn kept_rows_open(mode : String, w : Double, h : Double) -> @ui.Tester {
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let large = w >= 1000.0
   // (two ways of drawing compared: the corner rule is held where the chats' pictures are tested)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=if large { 0 } else { 2 }, corners_held=false)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=if large { 0 } else { 2 }, corners_held=false)
   let tape = w > 600.0 && !large
   if tape {
     say_room(t, "medium", "medium")

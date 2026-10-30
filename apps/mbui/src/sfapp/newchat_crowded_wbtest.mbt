@@ -7,7 +7,7 @@
 fn crowded(mode : String, w? : Double = crowded_w, h? : Double = crowded_h) -> @ui.Tester {
   reset()
   let src = fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=2)
   open_mode(mode)
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -168,7 +168,7 @@ test "narrow, few models: the same panel, its one runtime's select not to be pre
 ///|
 test "wide: the model's panel beside its control has room for all three columns: the models, the runtimes, how hard it thinks side by side" {
   let src = fixture_app("newchat-crowded-model")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(squeeze_opening)
   let model = t.get(Button, label="DeepSeek V4.1 Flash").rect
   let runtime = t.get(Button, label="DeepSeek Harness").rect

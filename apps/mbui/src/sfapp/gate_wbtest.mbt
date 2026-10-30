@@ -41,7 +41,7 @@ fn gate_tester(
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=844.0, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform~)
   if regular {
     let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\n")
     assert_true(log.contains("EXIT 0"), msg=log.join("\n"))

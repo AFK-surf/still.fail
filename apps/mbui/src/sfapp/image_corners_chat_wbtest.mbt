@@ -47,7 +47,7 @@ fn chat_corners(w : Double, h : Double, scale : Double) -> Int raise {
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=2, scale~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=2, scale~)
   t.run_for(@ui.move_most_ms)
   // over the chat's messages, wherever the screen puts the chat
   let (mx, my) = t.find("做完了：列表、跳到最新的按钮").unwrap_or((w / 2.0, h / 2.0))

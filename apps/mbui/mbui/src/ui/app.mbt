@@ -60,10 +60,14 @@ struct Bench {
 }
 
 ///|
-/// Opens the window and runs `view` for every frame until it closes.
-pub fn run(title : String, view : (Ctx) -> Unit) -> Unit {
-  // (the window a tree made once, the view built as it is built its one island: view_host.mbt)
-  set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
+/// Opens the window and runs `view` for every frame until it closes: the window a tree made once, `tree` (`view` the
+/// old frame around the old views it holds, put where `view` says: old_views_here), else `view` its one old view
+/// (view_host.mbt).
+pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
+  match tree {
+    Some(make) => set_view_app(make, around=view)
+    None => set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
+  }
   bench.host = @hostapi.bench_mode()
   // (the app's own bench, bench_app: the framework's does not run beside it)
   bench.mode = if bench.host == bench_app { 0 } else { bench.host }

@@ -27,7 +27,7 @@ fn settings_at_end(h : Double, locale? : String = "", newer? : String = "") -> @
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=690.0, h~, platform=2, env=[("MBUI_LOCALE", locale)])
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h~, platform=2, env=[("MBUI_LOCALE", locale)])
   say_room(t, "medium", "medium")
   t.run_for(@ui.move_most_ms)
   tap_said(t, @sf.t("web-pages.settings.title"))

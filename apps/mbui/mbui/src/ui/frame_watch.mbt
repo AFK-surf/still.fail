@@ -188,25 +188,12 @@ fn frame_watch_of() -> @signals.Watch {
     Some(w) => w
     None => {
       let w = @signals.watch(fn() {
-        if frame_running.val && !frame_built.val {
-          // (as the frame begins, before it is built: the frame itself sees it, frame_drawn)
-          watch_told_at()
-        } else if frame_running.val {
-          // (what it read set again as it was built: the next frame is built from it, said where: Tester::assert_idle)
-          g().wants_frame = true
-          let by = match frame_watch.val {
+        frame_read_told(fn() {
+          match frame_watch.val {
             Some(w) => w.set_as_read()
             None => []
           }
-          watch_said.val = if by.is_empty() {
-            "a value it read changed as the frame ended, set at \{@signals.last_set_at()}"
-          } else {
-            "a value it read set again as it was built, at " + by.join(", ")
-          }
-        } else {
-          watch_told_at()
-          h_frame_owed()
-        }
+        })
       })
       frame_watch.val = Some(w)
       w
@@ -1117,4 +1104,26 @@ fn moved_over(c : Ctx, i : Int) -> (Double, Double) {
     p = n.parent
   }
   (x, y)
+}
+
+///|
+/// What the frame's build read changed (the run's watch, or an old view's own: view_host.mbt), `set_as_read` saying
+/// where it was set as it was read: a frame owed (as the frame begins, before it is built: the frame itself sees it,
+/// frame_drawn; as it was built: the next frame, built from it, said where, Tester::assert_idle; between frames, the
+/// host asked now).
+fn frame_read_told(set_as_read : () -> Array[String]) -> Unit {
+  if frame_running.val && !frame_built.val {
+    watch_told_at()
+  } else if frame_running.val {
+    g().wants_frame = true
+    let by = set_as_read()
+    watch_said.val = if by.is_empty() {
+      "a value it read changed as the frame ended, set at \{@signals.last_set_at()}"
+    } else {
+      "a value it read set again as it was built, at " + by.join(", ")
+    }
+  } else {
+    watch_told_at()
+    h_frame_owed()
+  }
 }

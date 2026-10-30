@@ -14,7 +14,7 @@ fn settings_tester(
     @settings.fixture_page(shows) |> ignore
   }
   let src = fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
   open_setting(page)
   // the pages opened slide in from the frame that takes them
   t.draw()
@@ -90,7 +90,7 @@ test "settings: the vault's row there before the core has said how it stands, th
   // a phone's core: each topic's first value a while late (the lock's read on Home already, the vaults' first by
   // settings)
   let src = round_trip(fixture("settings"), core_late_ms)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=1600.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=1600.0)
   t.draw()
   // Home, its topics one after another (the accounts, the workspaces, the workspace's)
   t.run_for(core_late_ms * 5.0)
@@ -115,7 +115,7 @@ test "settings: 关于 says the build, as Android's versionName (0.1.<build>), i
   for case in [(4566, "0.1.4566"), (0, "0.1")] {
     reset()
     let src = fixture("settings")
-    let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=1600.0, app_version=case.0)
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=1600.0, app_version=case.0)
     open_setting("home")
     t.draw()
     t.run_for(@ui.move_most_ms)
@@ -477,7 +477,7 @@ fn stations_unread_net() -> @ui.Tester {
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
   open_setting("stations")
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -728,7 +728,7 @@ test "the run's 账号: what 自动分配 means, then 自动分配 and each acco
 fn profile_whole(page : String) -> @ui.Tester {
   reset()
   let src = fixture("settings")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=2400.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=2400.0)
   open_setting(page)
   t.draw()
   t.run_for(@ui.move_most_ms)

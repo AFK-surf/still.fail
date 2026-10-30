@@ -227,6 +227,7 @@ pub fn Tester::new(
   window_corners? : FixedArray[Double],
   words_over_held? : Bool = true,
   nav_able? : Bool = false,
+  tree? : (@view.View) -> Unit,
   loc~ : SourceLoc,
 ) -> Tester {
   let f = {
@@ -398,8 +399,12 @@ pub fn Tester::new(
     bench.mode = -1
   }
   fx_reset(seed)
-  // (the window a tree made once, the view under test its one island, as a host runs it: view_host.mbt)
-  set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
+  // (the window a tree made once: `tree`, the view under test the old frame around its old views; else the view its
+  // one old view: view_host.mbt)
+  match tree {
+    Some(make) => set_view_app(make, around=view)
+    None => set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
+  }
   let (period, between) = test_frame_period()
   let t = { fake: f, w, h, frames: 0, seed, origin: time, period, times: [], between, host_frames: false, each: None }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from

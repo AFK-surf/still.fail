@@ -51,7 +51,7 @@ test "the settings' list: the same rows in the same order on a small screen's pa
 test "the settings' list: no 下方栏 on a medium screen with a finger, its bar the small screen's alone" {
   reset()
   let src = fixture("settings")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=720.0, h=1200.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=1200.0, platform=2)
   t.draw()
   app.nav.push(Settings)
   t.draw()

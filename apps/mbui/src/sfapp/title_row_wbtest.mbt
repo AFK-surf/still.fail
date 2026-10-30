@@ -152,14 +152,14 @@ test "a window with its buttons in the app's top row: its top drags it before an
           }
         },
       }
-      let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=800.0, platform~, window_inset=true)
+      let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=800.0, platform~, window_inset=true)
       t.run_for(splash_label_ms + 100.0)
       assert_true(!frame_bare.val, msg="\{at}: the splash's mark shown")
       row_all_drags(t, "\{at}: the splash")
       // signed out: the sign-in page
       reset()
       let src = fixture("signin")
-      let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=800.0, platform~, window_inset=true)
+      let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=800.0, platform~, window_inset=true)
       t.frame()
       row_all_drags(t, "\{at}: signing in")
     }

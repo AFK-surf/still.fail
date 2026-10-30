@@ -434,11 +434,16 @@ fn main {
   // the faces the app carries (code's JetBrains Mono, as Android's): before its first frame
   @sf.give_faces()
   @sfapp.host_setup()
-  @ui.run("still.fail", fn(c) {
-    // (what the core said since the last frame is handed to @core.receive as the frame begins, before this: sfcore.start)
-    let accounts = @core.subscribe("accounts")
-    @sfcore.frame(accounts)
-    report_signed_in(c, accounts)
-    @sfapp.view(c, core_source)
-  })
+  @ui.run(
+    "still.fail",
+    fn(c) {
+      // (what the core said since the last frame is handed to @core.receive as the frame begins, before this:
+      // sfcore.start)
+      let accounts = @core.subscribe("accounts")
+      @sfcore.frame(accounts)
+      report_signed_in(c, accounts)
+      @sfapp.view(c, core_source)
+    },
+    tree=@sfapp.app_tree(core_source),
+  )
 }

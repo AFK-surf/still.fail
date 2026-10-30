@@ -9,7 +9,7 @@ fn image_in_chat(name : String, platform? : Int = 2, w? : Double = 390.0) -> (@u
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=844.0, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform~)
   nav_rested(t)
   let mut tries = 0
   while t.locate("img:" + name).length() == 0 && tries < 12 {
@@ -94,7 +94,7 @@ test "a video quoted: its still in its card in the composer; sent, it grows from
   // round it on its way up
   reset()
   let src : Source = { ..fixture("chat-download"), poster: fn(_, _, name) { fixture_file(name) } }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")
   t.run_for(@ui.move_most_ms)
   let w = t.words().filter(fn(w) { w.0.has_prefix("演示录屏") })[0]
@@ -128,7 +128,7 @@ test "a video quoted: its still in its card in the composer; sent, it grows from
 test "an agent's video and file card right clicked: 引用 quotes each, its file named, nothing played or opened" {
   reset()
   let src = fixture("chat-download")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")
   t.run_for(@ui.move_most_ms)
   for name in ["演示录屏", "发布包"] {

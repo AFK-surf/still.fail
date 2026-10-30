@@ -8,7 +8,7 @@ let left_alone_ms : Double = 10000.0
 fn preview_tester(what : String, w? : Double = 390.0, platform? : Int = 0) -> @ui.Tester {
   reset()
   let src = fixture("chat-preview-" + what)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=844.0, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform~)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   t.draw()
   // seen once it is in (grown from its thumbnail, or faded in)
@@ -498,7 +498,7 @@ test "an APK told of: 安装 first, handed to the system's installer once its by
 test "an APK asked for: downloaded by the core, how far it has come in its words over a bar (FileProgress) as it tells it" {
   reset()
   let src = fixture("chat-preview-apk")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -547,7 +547,7 @@ test "Markdown rendered; code as it is; a table" {
 fn named_tester(path : String) -> @ui.Tester {
   reset()
   let src = fixture("chat-preview-named")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   t.draw()
   open_preview("ws1/st1", "s-c1", attachment_of({ "name": Json::string(base_name(path)), "path": Json::string(path) }), named=true)
@@ -865,7 +865,7 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   reset()
   let src = fixture("chat-preview-named")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
   nav_rested(t)
   // the picture's message is above what shows first (the chat opens at its end): the list put a row up at a time
   // (not wheeled: a wheel shows the list's scroll bar, which goes after a while of its own)
@@ -988,7 +988,7 @@ test "marking: a box's pin up and right of its corner wherever the marks before 
 test "a desktop's video opened over its chat has the keys: Space plays it each time, the chat's composer under it never taking them" {
   reset()
   let src = fixture("chat-preview-video")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   t.draw()
   t.run_for(@ui.move_most_ms)

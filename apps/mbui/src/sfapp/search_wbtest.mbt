@@ -5,7 +5,7 @@
 fn search_tester() -> @ui.Tester {
   reset()
   let src = fixture("home")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.scroll_to(0)
   t.draw()
   t.tap_text("搜索全部内容")
@@ -273,7 +273,7 @@ test "a search's words: where they are, case aside; runs cut and bold there" {
 fn search_mode(mode : String) -> @ui.Tester {
   let src = fixture_app(mode)
   // (a phone's: a finger's search, in the lists)
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
 }
 
 ///|

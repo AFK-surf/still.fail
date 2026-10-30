@@ -5,7 +5,7 @@
 /// The fixture's `mode` in a desktop's window, its model's panel open beside its control.
 fn model_pop(mode : String) -> @ui.Tester {
   let src = fixture_app(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(squeeze_opening)
   t
 }

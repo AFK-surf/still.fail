@@ -6,7 +6,7 @@
 fn places_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
   reset()
   let src = fixture("home")
-  @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
+  @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
 }
 
 ///|
@@ -60,7 +60,7 @@ test "文件 at the phone's stack's root: a station's row opened shows its place
       (base.call)(name, params, done)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   app.nav.replace(Files)
   t.run_for(@ui.move_most_ms)
   t.click(Button, label="展开 Studio")

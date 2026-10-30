@@ -22,7 +22,7 @@ test "letters are not in the chat: from its sheet, the chats written with, one o
     },
   }
   open_fixture_over("chat-info", src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   // the chat's sheet open over it: a row for them, saying how many; none of them in the chat
   assert_true(t.find("agent 往来") is Some(_), msg="its row in the chat's sheet")

@@ -6,7 +6,7 @@ fn service_tester(mode : String) -> @ui.Tester {
   reset()
   let src = fixture(mode)
   open_drive_fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   // the page opened slid in
   t.run_for(@ui.move_most_ms)
   t

@@ -144,7 +144,7 @@ test "what reads the clock keeps the frames coming; a leaving nothing draws by o
   let on = @signals.signal(true, same=fn(a, b) { a == b })
   // (a look by the clock alone, nothing leaving)
   let ticking = @view.Tree::new(fn(root) {
-    root.box(fn(b) { b.height(Is(Some(10.0))).alpha(By(fn() { b.now() / 1000.0 })) |> ignore }) |> ignore
+    root.box(fn(b) { b.height(Is(Some(10.0))).alpha(By(fn() { b.drawn_at() / 1000.0 })) |> ignore }) |> ignore
   })
   ticking.frame(390.0, 844.0) |> ignore
   assert_true(ticking.animating())

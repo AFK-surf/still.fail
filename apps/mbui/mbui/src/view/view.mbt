@@ -156,7 +156,8 @@ struct Node {
 ///|
 /// The nodes made once of a window, its clock and what it did.
 pub struct Tree {
-  /// the frames' clock (ms): what reads it is told as it goes
+  /// the moment what is drawn is drawn at (a frame's, to be shown then), a signal a look follows (Tree::drawn_at); the
+  /// logic follows no clock (its moment `logic`, what is due on its timeline said once: Tree::advance)
   clock : @signals.Signal[Double]
   /// the time now, as a change is told (the host's: an event's moment, before a frame takes it); none: the clock's
   time : (() -> Double)?
@@ -176,6 +177,9 @@ pub struct Tree {
   mut told : Int
   /// what is due being done (Tree::advance)
   mut advancing : Bool
+  /// where its logic stands: what is due by then done (Tree::advance), what is said from then on said as of then at the
+  /// earliest
+  mut logic : Double
   /// the bindings whose reads changed, to run as the frame begins (Tree::queued)
   bindings_due : Array[() -> Unit]
   mut layout_due : Bool
@@ -217,8 +221,13 @@ pub fn Tree::new(
   measure? : (String, Double) -> (Double, Double) = words_measure,
   time? : () -> Double,
 ) -> Tree {
+  // (the moment it is made, taken once: its logic and what it draws start there, and what it is made with is of then)
+  let start = match time {
+    Some(f) => f()
+    None => 0.0
+  }
   let t : Tree = {
-    clock: @signals.signal(0.0, same=fn(a, b) { a == b }),
+    clock: @signals.signal(start, same=fn(a, b) { a == b }),
     time,
     cause_at: -1.0,
     measure,
@@ -230,6 +239,7 @@ pub fn Tree::new(
     timeline: [],
     told: 0,
     advancing: false,
+    logic: start,
     layout_due: true,
     order_due: true,
     due: true,
@@ -395,8 +405,21 @@ pub fn Tree::root(self : Tree) -> View {
 }
 
 ///|
-/// The clock now: what reads it (a look worked out from the time) is told as it goes.
+/// The moment the logic is at, for what is done (an event's, a step's, something due's while it is done; else the
+/// moment its logic has come to): followed by nothing; what is to happen at a moment is said once, on the timeline
+/// (View::at_moment, View::steps), never found by watching the clock. For a look, Tree::drawn_at.
 pub fn Tree::now(self : Tree) -> Double {
+  if self.cause_at >= 0.0 {
+    self.cause_at
+  } else {
+    self.logic
+  }
+}
+
+///|
+/// The moment what is drawn is drawn at (a frame's, to be shown then; an input's, as it is pressed), followed: for a
+/// look worked out from the time (a fade, a place by the time), worked out again as it goes. Never for what is done.
+pub fn Tree::drawn_at(self : Tree) -> Double {
   self.clock.get()
 }
 
@@ -476,6 +499,12 @@ pub fn View::id(self : View) -> NodeId {
 /// The clock now (Tree::now), for what a node works out from the time.
 pub fn View::now(self : View) -> Double {
   self.tree.now()
+}
+
+///|
+/// The moment what is drawn is drawn at (Tree::drawn_at), for a look worked out from the time.
+pub fn View::drawn_at(self : View) -> Double {
+  self.tree.drawn_at()
 }
 
 ///|
@@ -591,7 +620,7 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
         queued.val = true
         told_at.val = match self.time {
           Some(f) => f()
-          None => @signals.untracked(fn() { self.clock.get() })
+          None => self.logic
         }
         self.bindings_due.push(r)
         self.marked()
@@ -663,7 +692,7 @@ fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
   } else {
     match self.time {
       Some(now) => now()
-      None => @signals.untracked(fn() { self.clock.get() })
+      None => self.logic
     }
   }
   self.advance(at)
@@ -708,7 +737,9 @@ fn[T : Eq] View::bind(self : View, prop : Int, live : Live[T], phase : Phase, ap
     By(f) => {
       let last : Ref[T?] = Ref(None)
       let gen = self.gen
-      let stop = tree.queued(f, fn(v) {
+    let stop = tree.queued(
+      f,
+      fn(v) {
         let n = tree.nodes[at]
         if !n.live || n.gen != gen {
           return
@@ -1099,7 +1130,7 @@ fn Tree::cause_now(self : Tree) -> Double {
   if self.cause_at >= 0.0 {
     self.cause_at
   } else {
-    @signals.untracked(fn() { self.clock.get() })
+    self.logic
   }
 }
 
@@ -1186,7 +1217,7 @@ pub fn View::going(self : View) -> Double {
   if n.left_at < 0.0 && n.back_at < 0.0 {
     return 0.0
   }
-  gone_at(n, self.tree.clock.get())
+  gone_at(n, self.tree.drawn_at())
 }
 
 ///|
@@ -1262,7 +1293,7 @@ pub fn Tree::moment(self : Tree) -> Double? {
 fn Tree::time_now(self : Tree) -> Double {
   match self.time {
     Some(f) => f()
-    None => @signals.untracked(fn() { self.clock.get() })
+    None => self.logic
   }
 }
 
@@ -1298,14 +1329,24 @@ pub fn Tree::settle(self : Tree, at : Double) -> Unit {
 enum Due {
   Leaves(NodeId, Int)
   Steps(Stepper, Int)
+  Once(Once, Int)
 }
 
 ///|
-/// What goes by steps (View::steps): `step` run with each step's number, `every` apart, `count` of them, from `from`
-/// (the moment of its cause); stopped (`live`), no more.
+/// Something to be done once at a moment (View::at_moment): `f`, at `at`, if still `live`.
+struct Once {
+  at : Double
+  f : () -> Unit
+  live : Ref[Bool]
+}
+
+///|
+/// What goes by steps (View::steps): `step` run with each step's number and moment, at the one clock's ticks at
+/// `per_second` from tick `first`, `count` of them, `k` taken; stopped (`live`), no more.
 struct Stepper {
-  /// the tick of the one clock its first step is at (its rate's ticks from the clock's 0: the first after its start)
-  first : Int
+  /// the tick of the one clock its first step is at (its rate's ticks from the clock's 0, which a host's monotonic
+  /// clock puts hours back: Int64; the first after its cause)
+  first : Int64
   per_second : Int
   count : Int
   mut k : Int
@@ -1331,6 +1372,7 @@ fn Tree::due_at(self : Tree, d : Due) -> Double {
       } else {
         -1.0
       }
+    Once(o, _) => if o.live.val { o.at } else { -1.0 }
   }
 }
 
@@ -1362,6 +1404,14 @@ pub fn Tree::advance(self : Tree, upto : Double) -> Unit {
   self.advancing = true
   self.advance_loop(upto)
   self.advancing = false
+  // (where its logic now stands: what is said next is of this moment, not of the last frame; what is drawn is drawn
+  // at no moment before it)
+  if upto > self.logic {
+    self.logic = upto
+  }
+  if upto > @signals.untracked(fn() { self.clock.get() }) {
+    self.at(upto)
+  }
 }
 
 ///|
@@ -1381,6 +1431,7 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
       let seq = match d {
         Leaves(_, s) => s
         Steps(_, s) => s
+        Once(_, s) => s
       }
       if at <= upto && (next < 0 || at < next_at || (at == next_at && seq < next_seq)) {
         next = i
@@ -1408,6 +1459,13 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
           told_going(n)
         }
       }
+      Once(o, _) => {
+        self.timeline.remove(next) |> ignore
+        o.live.val = false
+        @signals.start_batch()
+        @signals.untracked(fn() { (o.f)() })
+        @signals.end_batch()
+      }
       Steps(s, _) => {
         let k = s.k
         s.k = s.k + 1
@@ -1425,13 +1483,27 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
 /// `per_second` ticks end at the second, exactly: no step's length added up; what steps at one rate steps at the same
 /// moments, whenever each began).
 fn stepped_at(s : Stepper, k : Int) -> Double {
-  ((s.first + k) * 1000).to_double() / s.per_second.to_double()
+  tick_at(s.first + k.to_int64(), s.per_second)
 }
 
 ///|
-/// The first tick at `per_second` after `at` on the one clock.
-fn tick_after(at : Double, per_second : Int) -> Int {
-  (at * per_second.to_double() / 1000.0).floor().to_int() + 1
+/// The moment of tick `n` at `per_second` a second on the one clock (its number alone: no step's length added up).
+fn tick_at(n : Int64, per_second : Int) -> Double {
+  (n * 1000L).to_double() / per_second.to_double()
+}
+
+///|
+/// The first tick at `per_second` after `at` on the one clock: the one whose moment (tick_at, as every step's is worked
+/// out) is later than `at`, none before it later too (a tick at `at` itself, worked out the same way, is not after it).
+fn tick_after(at : Double, per_second : Int) -> Int64 {
+  let mut n = (at * per_second.to_double() / 1000.0).floor().to_int64()
+  while tick_at(n, per_second) <= at {
+    n = n + 1L
+  }
+  while tick_at(n - 1L, per_second) > at {
+    n = n - 1L
+  }
+  n
 }
 
 ///|
@@ -1461,7 +1533,13 @@ pub fn View::steps(self : View, per_second : Int, count : Int, step : (Int, Doub
 /// made again only as what it draws changed (its look, its size: Tree::changed); one placed or faded otherwise is
 /// composed again, what it holds left as it is (Tree::composed); the order made again where what is drawn was made,
 /// let go or moved among its siblings. Whether anything drawn changed.
-pub fn Tree::frame(self : Tree, w : Double, h : Double) -> Bool {
+pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
+  // (its logic advanced to `now`, what the host has come to (the clock its drawing is sampled at may be a moment ahead:
+  // when the frame is to be shown, Tree::at); none given, the clock's)
+  let upto = match now {
+    Some(n) => n
+    None => @signals.untracked(fn() { self.clock.get() })
+  }
   self.changed.clear()
   self.composed.clear()
   if self.nodes.length() == 0 || !self.nodes[0].live {
@@ -1475,7 +1553,7 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double) -> Bool {
     s.set_height(Pt(h))
     self.layout_marked_at(0)
   }
-  self.brought()
+  self.brought(upto)
   let drawn = self.drawn_due
   self.drawn_due = false
   drawn
@@ -1491,31 +1569,25 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return
   }
-  if at > @signals.untracked(fn() { self.clock.get() }) {
-    self.at(at)
-  }
+  // (its logic first, to the moment, then what it draws drawn as of it (a frame to be shown later drawn ahead of it:
+  // drawn again as of now, for where a press finds things), then what it marked)
+  self.advance(at)
+  self.clock.set(at)
   if self.last_w >= 0.0 {
-    self.brought()
-  } else {
-    self.advance(at)
+    self.brought(at)
   }
 }
 
 ///|
 /// What was marked done, at the clock's now (Tree::frame, Tree::bring_to).
-fn Tree::brought(self : Tree) -> Unit {
+fn Tree::brought(self : Tree, upto : Double) -> Unit {
   let w = self.last_w
   let h = self.last_h
-  // (a leaving or coming back ended by now: something to do though nothing was told)
-  match self.wake() {
-    Some(end) if end <= @signals.untracked(fn() { self.clock.get() }) => self.due = true
-    _ => ()
-  }
+  // what is due by now done (and the logic at `upto`, nothing due or not: what is said next is of then)
+  self.advance(upto)
   if !self.due {
     return
   }
-  // what has left by now let go
-  self.advance(@signals.untracked(fn() { self.clock.get() }))
   // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own now,
   // what they set again marks what it marks)
   let mut i = 0
@@ -1861,4 +1933,20 @@ pub fn Tree::run_press_at(self : Tree, id : NodeId, at : Double) -> Bool {
     }
   })
   pressed.val
+}
+
+///|
+/// `f` done once at the moment `when` of the one clock (its timeline: in its turn among what is due, as of then;
+/// Tree::advance), whatever frames are drawn: what is to show, go or be done at a moment said so, never found by watching
+/// the clock. The node's: not done once it is let go, or once what it returns is called.
+pub fn View::at_moment(self : View, when : Double, f : () -> Unit) -> () -> Unit {
+  guard self.live() is Some(n) else { return fn() {  } }
+  let live = Ref(true)
+  let tree = self.tree
+  tree.timeline.push(Once({ at: when, f, live }, tree.told))
+  tree.told = tree.told + 1
+  tree.marked()
+  let stop = fn() { live.val = false }
+  n.drops.push(stop)
+  stop
 }

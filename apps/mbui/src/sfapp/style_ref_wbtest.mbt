@@ -28,7 +28,7 @@ fn screen_drawlist(mode : String, w : Double, h : Double, page? : String = "") -
   reset()
   @settings.reset()
   let src = fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=platform_of(w))
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=platform_of(w))
   if page != "" {
     open_setting(page)
   }

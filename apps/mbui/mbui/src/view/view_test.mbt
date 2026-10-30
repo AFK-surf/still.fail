@@ -38,7 +38,7 @@ fn page() -> Page {
     |> ignore
     // (its look by the clock: how opaque, from the time now)
     root.box(fn(l) {
-      l.height(Is(Some(2.0))).alpha(By(fn() { if l.now() >= 1000.0 { 1.0 } else { l.now() / 1000.0 } })) |> ignore
+      l.height(Is(Some(2.0))).alpha(By(fn() { if l.drawn_at() >= 1000.0 { 1.0 } else { l.drawn_at() / 1000.0 } })) |> ignore
     })
     |> ignore
   })

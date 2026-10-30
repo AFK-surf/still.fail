@@ -10,7 +10,7 @@ fn duo_chat(w : Double, h : Double, width : String, fold : String, bars? : Strin
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=1)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=1)
   t.post(@hostapi.system_channel, if bars != "" {
     bars
   } else {

@@ -6,7 +6,7 @@
 /// sent, the answer let come. Every frame's hash.
 fn the_same_steps() -> Array[Int64] {
   let src = fixture("home")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   let out = t.frames(40)
   t.tap_text("整理发布清单")
   out.append(t.frames(60))

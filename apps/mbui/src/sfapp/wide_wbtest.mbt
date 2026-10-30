@@ -23,7 +23,7 @@ fn wide_tester(
   if mode.has_prefix("chat") {
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~, window_corner~, window_inset~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, window_corner~, window_inset~)
   t
 }
 
@@ -468,7 +468,7 @@ test "wide: the machine's own sessions offered under the composer as its station
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.frame()
   t.frame()
   assert_true(app.nav.top() == NewChat)
@@ -564,7 +564,7 @@ fn new_chat_by_station(h? : Double = 800.0) -> @ui.Tester {
       }
     },
   }
-  @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h~, platform=0)
+  @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h~, platform=0)
 }
 
 ///|
@@ -1805,7 +1805,7 @@ test "wide: the workspace's page as on a phone: its name its title, who you are 
   reset()
   let page = @settings.fixture_page("settings-workspace")
   let src = fixture("settings")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=1000.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=1000.0, platform=0)
   open_setting(page)
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -1843,7 +1843,7 @@ test "wide: 字体's faces a row each under the places' choice, the chosen one c
     },
   }
   // (tall enough for the whole page: 拖入 chat 的文件 at its end in view)
-  let t = @ui.Tester::new(fn(c) { view(c, src2) }, w=1280.0, h=1600.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src2) }, tree=app_tree(src2), w=1280.0, h=1600.0, platform=0)
   open_setting("fonts")
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -2343,7 +2343,7 @@ test "wide: a working agent's card has its stop at the end of where it stands, u
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   let last = word("Claude").iter().fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
     match acc {
@@ -2391,7 +2391,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }) }
   let last = word("Claude").iter().fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
     match acc {
@@ -2630,7 +2630,7 @@ test "wide: a row pressed on its state line while the core says which message th
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.draw()
   let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
   // its title: the chat as it is

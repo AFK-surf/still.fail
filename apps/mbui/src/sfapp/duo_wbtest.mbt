@@ -7,7 +7,7 @@ test "Duo standalone screen replaces app navigation with its own controls and re
   reset()
   let src = fixture("screen-live")
   open_fixture_over("screen-live", src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=951.0, h=669.0, platform=1)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
   t.set_nav_able(true)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
   t.run_for(@ui.move_most_ms)
@@ -36,7 +36,7 @@ fn native_chat(
   reset()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~, window_corner=corner, window_corners?=corners, nav_able=able)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, window_corner=corner, window_corners?=corners, nav_able=able)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":\{side}}}")
   t.run_for(@ui.move_most_ms)
   t
@@ -471,7 +471,7 @@ test "an iPhone Duo: the workspace's button has a dot while another workspace ha
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let q = @ui.Tester::new(fn(c) { view(c, src) }, w=951.0, h=669.0, platform=1)
+  let q = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
   q.set_nav_able(true)
   q.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
   q.run_for(@ui.move_most_ms)
@@ -546,7 +546,7 @@ test "an iPhone Duo: switching workspace from an open chat never restores the ol
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=951.0, h=669.0, platform=1)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
   t.set_nav_able(true)
   t.keep_parts(true)
   t.run_for(@ui.move_most_ms)
@@ -580,7 +580,7 @@ test "Duo new chat with a long draft and attachment keeps send above the keyboar
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=951.0, h=669.0, platform=1)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
   t.set_nav_able(true)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
   t.run_for(@ui.move_most_ms)
@@ -783,7 +783,7 @@ test "Duo screen panels toggle through native events, switch without stacking an
   reset()
   let src = fixture("screen-live")
   open_fixture_over("screen-live", src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=951.0, h=669.0, platform=1)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
   t.set_nav_able(true)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
   t.run_for(@ui.move_most_ms)

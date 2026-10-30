@@ -8,6 +8,7 @@ import {
   "mbui/dmath",
   "mbui/ui",
   "mbui/signals",
+  "mbui/view",
   "mbui/kit",
   "mbui/motion",
   "stillfail/sf",

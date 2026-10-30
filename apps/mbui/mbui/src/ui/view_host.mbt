@@ -112,8 +112,21 @@ let view_line_h : Double = 22.0
 
 ///|
 /// The window made once by `make` (its root given: put the old view in it with View::hosted), from this frame on.
-pub fn set_view_app(make : (@view.View) -> Unit) -> Unit {
+pub fn set_view_app(make : (@view.View) -> Unit, around? : (Ctx) -> Unit) -> Unit {
   view_forget()
+  view_made_now(make)
+  // (the old frame: the old views in the tree, where they are placed; or what is built around them, which puts them
+  // where it says: old_views_here)
+  g_view.val = match around {
+    Some(f) => f
+    None => old_frame
+  }
+  old_around.val = around is Some(_)
+}
+
+///|
+/// The window's tree made by `make`, now.
+fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   // (a change told as it is made, at the host's now: what it sets going starts then, whatever frame takes it)
   let t = @view.Tree::new(make, measure=view_words_measure, time=fn() { h_event_time() })
   t.on_due(fn() {
@@ -125,8 +138,6 @@ pub fn set_view_app(make : (@view.View) -> Unit) -> Unit {
     }
   })
   view_app.val = Some(t)
-  // (the old frame: the old views in the tree, where they are placed)
-  g_view.val = old_frame
   view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
 }
 
@@ -157,6 +168,7 @@ fn view_forget() -> Unit {
   old_boxes.clear()
   old_box_owners.clear()
   old_whole.val = true
+  old_around.val = false
   view_blocks.clear()
   view_paint_work.made = 0
   view_paint_work.copied = 0
@@ -181,9 +193,11 @@ fn view_frame(w : Double, h : Double, t : Double) -> Unit {
       return
     }
   }
+  // (drawn as at `t`, when the frame is to be shown; its logic advanced only to what the host has come to: no step
+  // or ending taken ahead of an input still to come before `t`)
   @signals.untracked(fn() {
     tree.at(t)
-    tree.frame(w, h) |> ignore
+    tree.frame(w, h, now=h_now()) |> ignore
   })
   for id in tree.take_changed() {
     view_blocks.remove(id)
@@ -192,6 +206,19 @@ fn view_frame(w : Double, h : Double, t : Double) -> Unit {
   for id in tree.take_removed() {
     view_blocks.remove(id)
   }
+  view_window.val = (w, h)
+  old_place(tree)
+}
+
+///|
+/// The window's size as the frame began.
+// kept across runs: written as each frame begins
+let view_window : Ref[(Double, Double)] = Ref((0.0, 0.0))
+
+///|
+/// Where each old view of `tree` is placed now (as it was last laid out), and whether the one is the whole window.
+fn old_place(tree : @view.Tree) -> Unit {
+  let (w, h) = view_window.val
   old_placed.clear()
   for o in old_islands {
     match tree.drawn_of(o.id) {
@@ -216,6 +243,16 @@ fn view_island_said() -> String {
 /// The old frame's build where the window is a tree: the one old view's own where it is the whole window; else each
 /// old view in a box of its own where it is placed, cut to it, its subtree made once there by its own watch.
 fn old_frame(c : Ctx) -> Unit {
+  // (the old views changed since the frame began (one made or let go by what the frame took: a core's answer as it
+  // was read): the tree brought to now and each placed as it is, so that the frame builds those there are)
+  match view_app.val {
+    Some(tree) if old_islands.length() != old_placed.length() ||
+      old_islands.iter().any(fn(o) { !old_placed.iter().any(fn(p) { p.0 == o.id }) }) => {
+      @signals.untracked(fn() { tree.bring_to(h_now()) })
+      old_place(tree)
+    }
+    _ => ()
+  }
   if old_whole.val {
     match old_islands.iter().find_first(fn(o) { old_placed.iter().any(fn(p) { p.0 == o.id }) }) {
       Some(o) => {
@@ -469,7 +506,18 @@ pub fn old(v : @view.View, build : (Ctx) -> Unit) -> @view.View {
     let owner : Ref[@signals.ReactiveNode?] = Ref(None)
     @signals.effect_scope(fn() { owner.val = @signals.active_sub() }) |> ignore
     let watch : Ref[@signals.Watch?] = Ref(None)
-    owned_by(owner.val, fn() { watch.val = Some(@signals.watch(fn() { old_island_told() })) })
+    owned_by(owner.val, fn() {
+      watch.val = Some(
+        @signals.watch(fn() {
+          // (its build's reads are the old frame's, which builds it: told, that frame is built again (what came from
+          // outside its own, frame_watch.mbt); between frames, one asked for)
+          outside_counted()
+          if !frame_running.val {
+            h_frame_owed()
+          }
+        }),
+      )
+    })
     old_islands.push({
       id,
       key,
@@ -558,16 +606,6 @@ fn view_event(f : () -> Unit) -> Unit {
 }
 
 ///|
-/// What an old view's build read changed: the old frame, which builds it, is built again (between frames, a frame asked
-/// for).
-fn old_island_told() -> Unit {
-  outside_counted()
-  if !in_frame.val && !frame_running.val {
-    h_frame_owed()
-  }
-}
-
-///|
 /// The moment of the event being handled (taken once, as it began: view_event), else the host's event time.
 fn view_moment() -> Double {
   match view_app.val {
@@ -579,3 +617,20 @@ fn view_moment() -> Double {
     None => h_event_time()
   }
 }
+
+///|
+/// The old views of the window's tree, put here among the old frame's nodes (where what is built around them says, as
+/// set_view_app was given it): each in its place, or the one that is the whole window as the frame itself.
+pub fn old_views_here(c : Ctx) -> Unit {
+  old_frame(c)
+}
+
+///|
+/// Whether the window's tree holds old views put by what is built around them (set_view_app's `around`).
+pub fn old_islands_around() -> Bool {
+  old_around.val
+}
+
+///|
+// kept across runs: put back as a run begins (view_forget)
+let old_around : Ref[Bool] = Ref(false)

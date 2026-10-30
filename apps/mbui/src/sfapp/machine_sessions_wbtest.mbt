@@ -4,7 +4,7 @@
 ///|
 fn machine_dialog() -> @ui.Tester {
   let src = fixture_app("newchat-machine")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   t
 }

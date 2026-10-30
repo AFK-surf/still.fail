@@ -4,7 +4,7 @@ fn chat_tester(mode : String) -> @ui.Tester {
   reset()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -206,7 +206,7 @@ test "images take their own proportions before they load" {
 test "a file card in the chat opens its preview" {
   reset()
   let src = fixture("chat")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   // (the chat opened drawn at its moment, its push from there)
   t.draw()
@@ -261,7 +261,7 @@ test "what waits to be decided and is out of view: a bell over the way to the en
 ///|
 test "a chat opened with a card to decide in view: its first frame lays the card out as it rests, nothing read back of it" {
   let src = fixture("home")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   // (pressed and let go between frames, one frame drawn: the one the chat opens in)
   let (x, y) = t.find("整理发布清单").unwrap()
@@ -283,7 +283,7 @@ test "a chat opened with a card to decide in view: its first frame lays the card
 ///|
 test "a chat opened with what waits to be decided in view: no bell from its first frame on" {
   let src = fixture("home")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("整理发布清单")
   let bell = @sf.t("web-main.chat.asks.go")
@@ -375,7 +375,7 @@ test "a chat left lets go of all that holds its thread at the core: its view and
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   assert_eq(left, [])
   t.back()
@@ -405,7 +405,7 @@ test "left short of its end, a chat opens again where it was left, though the co
     },
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.draw()
   open_chat(r)
   t.run_for(@ui.move_most_ms)
@@ -514,7 +514,7 @@ test "a table on a wide list, slid sideways: out over the margin, not cut at the
   let src = fixture("chat-md")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   // (a window whose list is wide, its table wider than its words with its key past it)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=760.0, h=800.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=760.0, h=800.0, platform=2)
   t.run_for(@ui.move_most_ms)
   let cell = "只排可见的行"
   let (x, y) = t.drawn_of(cell).unwrap()
@@ -541,7 +541,7 @@ test "a message said just after the chat opened comes in with the list gliding a
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   // a moment on (well within the half second the list once waited), someone says something in it (said while it
   // shows: new to the list)
@@ -580,7 +580,7 @@ test "what was said while the app was away, brought after its chat opened at its
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   // a moment on, three come at once, more than a screen of them, said before it opened: caught up on, the unread line
   // over the first (the core's, attend.ts)

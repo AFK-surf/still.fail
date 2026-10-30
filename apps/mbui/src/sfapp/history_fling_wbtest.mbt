@@ -68,7 +68,7 @@ test "touch wide: an agent's history flung toward its start rests further that w
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=752.0, h=830.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=752.0, h=830.0, platform=2)
   // (the tape's sidebar in use at first, a strip of the chat beside it)
   let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\nuntil 新建对话\n")
   assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
@@ -149,7 +149,7 @@ test "touch wide: an agent's history as the agent writes builds again only the r
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=752.0, h=830.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=752.0, h=830.0, platform=2)
   let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\nuntil 新建对话\n")
   assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
   side_change(r, "open", Some("s-c1"))

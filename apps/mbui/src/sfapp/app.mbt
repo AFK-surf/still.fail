@@ -368,7 +368,13 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
   }
   // under it all, the app's ground, made once (mbui's made.mbt; docs/retained.md, the way there's 4): what it holds is
   // the state the app is in, built the old way
-  c.made("app-ground", fn() { app_ground(c, src) })
+  // (the state it is in, a node of the window's tree where the app runs as one (app_tree): its old view put here;
+  // else made once among the frame's)
+  if @ui.old_islands_around() {
+    @ui.old_views_here(c)
+  } else {
+    c.made("app-ground", fn() { app_ground(c, src) })
+  }
   // the first page built with what it shows, the pictures the device holds in it decoded as it drew them (a likeness
   // in a picture's place for the frame or two its decoding takes is not shown): shown from this frame
   if first_waiting.val &&
@@ -428,28 +434,53 @@ fn app_is(src : Source) -> AppIs {
 /// their own), saying afresh whether the frame draws the ground alone and whether the first page waits (frame_bare,
 /// first_waiting).
 fn app_ground(c : @ui.Ctx, src : Source) -> @ui.Made {
-  let picked = @ui.made_pick(fn() { app_is(src) }, fn(state) {
-    @ui.made_old(fn(c) {
-      // in a window with its buttons in the app's top row, its top drags it whatever is shown (the splash, signing in,
-      // a window of its own still starting): under all of it, so what a page puts there takes its own presses
-      if @ui.window_inset() {
-        let id = c.id("window-ground-band")
-        c.window_drag(id)
-        c.box(style=@ui.style(h=Fixed(window_band())), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
-      }
-      first_waiting.val = false
-      frame_bare.val = false
-      // (said by this build: image_item, video_item)
-      @sfbase.held_pictures_waiting.val = false
-      // (in a box of its own: what the frame says of it, its look while the first page waits, is said of what is built
-      // anew each frame, not of the ground made once)
-      state_node.val = c.box(style=page_whole, fn() { app_state(c, src, state) })
-    })
-  })
+  let picked = @ui.made_pick(fn() { app_is(src) }, fn(state) { @ui.made_old(fn(c) { app_state_island(c, src, state) }) })
   @ui.made_holding(
     fn(c) { c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.theme().p.bg, fn() {  }) |> ignore },
     fn() { picked() },
   )
+}
+
+///|
+/// The window as a tree made once (mbui's view_host.mbt; docs/retained.md, the way there's 4: from the outside in): the
+/// state the app is in (app_is) a node picked by it, made as it comes and let go as it goes, the app in that state an old
+/// view in it, built the old way on the window's ground (`view` the old frame around it: what every state shares, the
+/// theme, the window's sides, the layers over it).
+pub fn app_tree(src : Source) -> (@view.View) -> Unit {
+  fn(root) {
+    root.pick(
+      fn() { app_is(src) },
+      fn(v, state) {
+        v.grow(Is(1.0)) |> ignore
+        @ui.old(v, fn(c) {
+          c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.theme().p.bg, fn() { app_state_island(c, src, state) }) |> ignore
+        })
+        .grow(Is(1.0))
+        |> ignore
+      },
+    )
+  }
+}
+
+///|
+/// The app in state `state` as an old view (app_ground's, app_tree's): the window's top dragging it where the window's
+/// buttons are in the app's top row, and the state built the old way, saying afresh whether the frame draws the ground
+/// alone and whether the first page waits (frame_bare, first_waiting).
+fn app_state_island(c : @ui.Ctx, src : Source, state : AppIs) -> Unit {
+  // in a window with its buttons in the app's top row, its top drags it whatever is shown (the splash, signing in,
+  // a window of its own still starting): under all of it, so what a page puts there takes its own presses
+  if @ui.window_inset() {
+    let id = c.id("window-ground-band")
+    c.window_drag(id)
+    c.box(style=@ui.style(h=Fixed(window_band())), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
+  }
+  first_waiting.val = false
+  frame_bare.val = false
+  // (said by this build: image_item, video_item)
+  @sfbase.held_pictures_waiting.val = false
+  // (in a box of its own: what the frame says of it, its look while the first page waits, is said of what is built
+  // anew each frame, not of the ground made once)
+  state_node.val = c.box(style=page_whole, fn() { app_state(c, src, state) })
 }
 
 ///|

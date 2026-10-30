@@ -6,7 +6,7 @@ fn share_tester(mode : String) -> @ui.Tester {
   reset()
   let src = fixture(mode)
   open_drive_fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   // the fixture's pages in
   nav_rested(t)
   t
@@ -105,7 +105,7 @@ test "over another app signed out: to sign in in the app first, 打开 still.fai
   share_in.env_taken.set(true)
   raise_sheet(ShareSheet)
   share_in.raised.set(true)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.post(@hostapi.system_channel, "{\"over\":true}")
   t.frame()
   sheet_rested(t, "sf-present")

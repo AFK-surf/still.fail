@@ -34,7 +34,7 @@ fn news_home(calls : Array[String]) -> @ui.Tester {
       (base.call)(name, params, done)
     },
   }
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
 }
 
 ///|
