@@ -58,6 +58,35 @@ fn frames_between(t : Tester, from : Double, to : Double, frames : Bool) -> Unit
 }
 
 ///|
+test "window tree: back taken by the page on top while another old view alone is built again, its page's kept" {
+  let other = @signals.signal(0)
+  let nav = Nav::new("a")
+  let t = Tester::new(fn(_c) {  })
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    nav_view(root, nav, fn(c, p) { c.text(p, size=12.0) |> ignore }, bg=fn() { 0xFFFFFFFFL }) |> ignore
+    old(root, fn(c) {
+      // (at the foot, clear of the pages' words)
+      c.box(left=0.0, top=400.0, fn() { c.text("\{other.get()}", size=12.0) |> ignore }) |> ignore
+    })
+    .over(Is(true))
+    |> ignore
+  })
+  t.draw()
+  assert_false(t.takes_back())
+  told_at(t, t.time() + 10.0, fn() { nav.push("b") })
+  t.run_for(nav.rest() - t.time() + 16.0)
+  assert_true(t.takes_back())
+  // (what the other old view reads changed, from outside the hand: a frame built for it, the page on top kept)
+  other.set(1)
+  t.frames_owed()
+  assert_true(t.takes_back())
+  t.back()
+  t.run_for(nav.rest() - t.time() + 16.0)
+  assert_eq(nav.depth(), 1)
+}
+
+///|
 test "window tree: a page pushed between frames: where the pages are at a moment and when its slide ends, frames or none" {
   let run = fn(frames : Bool) {
     let (t, nav, _) = stacked()
