@@ -512,3 +512,25 @@ test "a list dragged again once the frames no longer say a drag is the pointer's
   t.frame()
   assert_true(t.list_offset() > 200.0)
 }
+
+///|
+test "a finger scrolling a list lets go of the keyboard, whichever field has it" {
+  let view = fn(c : Ctx) {
+    c.list("l", 100, 50.0, fn(i) {
+      if i == 0 {
+        c.editor("field", placeholder="code") |> ignore
+      } else {
+        // (a row that takes taps, as a message does: a press on it alone takes nothing's focus)
+        c.box(h=Px(50.0), id=c.id("row"), fn() { c.text("row \{i}") |> ignore }) |> ignore
+      }
+    })
+    |> ignore
+  }
+  let t = Tester::new(view, platform=2, pointing=Finger)
+  let (x, y) = t.find("code").unwrap()
+  t.tap(x, y)
+  assert_true(t.ctx().field_focused())
+  t.drag(200.0, 500.0, 200.0, 300.0)
+  assert_true(!t.ctx().field_focused())
+  assert_true(!t.ime().0)
+}

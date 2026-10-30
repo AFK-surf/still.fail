@@ -1036,6 +1036,9 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
           if moved.abs() > slop {
             c.dragging = true
             c.active = 0
+            if !pager {
+              c.scroll_lets_go(c.drag_scroll)
+            }
             // from where the slop ends, as Compose starts a drag: nothing
             // jumps, and what moved past the slop is not lost
             let past = if moved > 0.0 { moved - slop } else { moved + slop }

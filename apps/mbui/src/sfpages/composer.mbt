@@ -403,7 +403,7 @@ pub fn composer(
       @motion.layout(c, part.0, "composer/part/" + part.1, spec=shape, by=holds)
     }
   }
-  // with a finger: a press outside it lets go of the keyboard once lifted or moved on (reading on)
+  // with a finger: a tap outside it lets go of the keyboard (a scroll does wherever it is: mbui's list drag)
   if @ui.pointing() is Finger {
     keyboard_let_go(c, cap)
   }
@@ -436,15 +436,15 @@ fn with_composer(c : @ui.Ctx, i : Int, key : String) -> Unit {
 
 ///|
 /// A finger down outside the composer (`cap`), nothing over it presented (its `@` menu, a sheet), lets go of the
-/// keyboard once lifted or moved on; lifted after a long press (not a tap) the keyboard stays (still.fail's Android
-/// app's Keyboard.kt letsGoOfKeyboard).
+/// keyboard once lifted; lifted after a long press (not a tap) the keyboard stays (still.fail's Android app's
+/// Keyboard.kt letsGoOfKeyboard). A finger scrolling the messages lets go of it in mbui (a list's drag), for any field.
 fn keyboard_let_go(c : @ui.Ctx, cap : Int) -> Unit {
   let press = c.press()
   if press.fresh {
     // (on the composer or what is in it, as the press went down: the hand's, not where it was drawn)
     composing.outside = !c.press_within(cap) && !@sf.presenting() && !composing.menu_up
   }
-  if composing.outside && c.editor_focused(composer_field_key) && (press.moved || (press.lifted && !press.long)) {
+  if composing.outside && c.editor_focused(composer_field_key) && press.lifted && !press.long {
     composing.outside = false
     c.blur()
   }
