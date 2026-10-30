@@ -59,6 +59,8 @@ pub fn arrangement_of(Json?) -> Arrangement
 
 pub fn arrow_barbs(Double, Double, Double, Double, Double) -> (Double, Double, Double, Double)
 
+pub fn ask_clears(ChatView) -> Bool
+
 pub fn ask_rows_of(ChatView, Array[Entry]) -> Array[Int32]
 
 pub fn asks_in_view(Array[Int32], @ui.ListInfo?) -> Bool
@@ -2697,6 +2699,7 @@ pub(all) struct Quote {
 }
 
 pub(all) struct Reading {
+  mut foot_sign : String
   mut head : String
   mut head_at : Int32
   mut placed : Bool

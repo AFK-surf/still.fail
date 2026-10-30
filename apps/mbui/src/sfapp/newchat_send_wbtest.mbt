@@ -1,6 +1,6 @@
 // A new chat's first words (newchat.mbt send_first, flight.mbt carried): on screen where they were typed from the frame
 // they are sent, while the chat is made and its first view read, as a phone's core answers (a round trip later each);
-// then up into their bubble with the chat's list coming up out of the composer (480 ms after 90, Ease.Arrive), never
+// then into their bubble over the composer with the chat's list coming up out of it (480 ms after 90, Ease.Arrive), never
 // gone for a frame nor drawn twice apart.
 
 ///|
@@ -27,9 +27,10 @@ fn seen_once(t : @ui.Tester, s : String) -> (Double, Double) raise {
 }
 
 ///|
-fn assert_at(was : (Double, Double), now : (Double, Double)) -> Unit raise {
+#callsite(autofill(loc))
+fn assert_at(was : (Double, Double), now : (Double, Double), loc~ : SourceLoc) -> Unit raise {
   if (was.0 - now.0).abs() > 0.5 || (was.1 - now.1).abs() > 0.5 {
-    fail("moved from \{was} to \{now}")
+    fail("moved from \{was} to \{now} (\{loc})")
   }
 }
 
@@ -93,20 +94,27 @@ fn new_chat_sent(t : @ui.Tester, words : String) -> (Double, Double) raise {
 }
 
 ///|
-/// The frames from now till `until` (ms on the test's clock): each where words `s` are seen, and going up only (a
-/// frame's step at most `most`).
-fn up_till(t : @ui.Tester, s : String, until : Double, most : Double) -> (Double, Double) raise {
+/// The frames from now till `until` (ms on the test's clock): each where words `s` are seen, and going one way only,
+/// up or down as the first step goes (a frame's step at most `most`): from where they were typed into their bubble over
+/// the composer at the chat's foot, the chat's rows standing at its end (Ctx::list's `from_end`).
+fn one_way_till(t : @ui.Tester, s : String, until : Double, most : Double) -> (Double, Double) raise {
   let mut at = seen_once(t, s)
+  let mut way = 0.0
   while t.time() < until {
     t.frame()
     let now = seen_once(t, s)
-    if now.1 > at.1 + 0.5 || at.1 - now.1 > most {
+    let d = now.1 - at.1
+    if d.abs() > most || (way != 0.0 && d * way < 0.0 && d.abs() > 0.5) {
       fail("「\{s}」 from \{at} to \{now} in a frame at \{t.time()}")
+    }
+    if d.abs() > 0.5 {
+      way = d
     }
     at = now
   }
   at
 }
+
 
 ///|
 test "wide: a new chat's first words sent: its field's hint not drawn over them in the frame they go" {
@@ -140,7 +148,7 @@ test "wide: a new chat's first words sent: its field's hint not drawn over them 
 }
 
 ///|
-test "a new chat's first words stay where typed while the chat is made and read, then go up into their bubble" {
+test "a new chat's first words stay where typed while the chat is made and read, then go into their bubble over the composer" {
   let held : Map[String, () -> Unit] = {}
   let unread = Ref(true)
   let t = held_core(held, unread)
@@ -174,13 +182,15 @@ test "a new chat's first words stay where typed while the chat is made and read,
   t.run_for(flight_carry_after_ms - 20.0)
   assert_at(typed, seen_once(t, words))
   // up with the list, no frame where they are not, nor a jump
-  let landed = up_till(t, words, placed + flight_carry_after_ms + flight_carry_ms + 34.0, 120.0)
+  let landed = one_way_till(t, words, placed + flight_carry_after_ms + flight_carry_ms + 34.0, 120.0)
   assert_true(send_flight.get() is None)
-  // in their bubble, under the bar at the list's top
-  assert_true(landed.1 < 200.0)
+  // in their bubble, over the composer at the chat's foot (its rows at its end, the room over them)
+  assert_true(landed.1 < typed.1 && landed.1 > typed.1 - 200.0, msg="landed at \{landed} from \{typed}")
   assert_true((landed.0 - typed.0).abs() > 1.0)
+  // (in the list from then: up only as what comes under them opens its room, its agent's line)
   t.frame()
-  assert_at(landed, seen_once(t, words))
+  let after = seen_once(t, words)
+  assert_true(after.0 == landed.0 && after.1 <= landed.1 + 0.5 && landed.1 - after.1 < 12.0, msg="\{landed} then \{after}")
 }
 
 ///|
@@ -256,15 +266,15 @@ test "a new chat's first words hold its composer as tall as it was while they ar
 }
 
 ///|
-test "a new chat's first words with the core at once: never gone, up into their bubble with the list" {
+test "a new chat's first words with the core at once: never gone, into their bubble over the composer with the list" {
   let t = tester("home")
   let words = "把发布说明写一下"
   let typed = new_chat_sent(t, words)
   let sent = t.time()
-  let landed = up_till(t, words, sent + flight_carry_after_ms + flight_carry_ms + 100.0, 120.0)
+  let landed = one_way_till(t, words, sent + flight_carry_after_ms + flight_carry_ms + 100.0, 120.0)
   assert_true(send_flight.get() is None)
-  assert_true(landed.1 < 200.0)
-  assert_true(landed.1 < typed.1 - 300.0)
+  // over the composer at the chat's foot
+  assert_true(landed.1 < typed.1 && landed.1 > typed.1 - 200.0, msg="landed at \{landed} from \{typed}")
 }
 
 ///|

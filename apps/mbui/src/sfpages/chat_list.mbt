@@ -65,7 +65,7 @@ pub fn chat_list(
   // its last row as far over the bell as it is over the composer's room without it, not under it (the time, 正在发送
   // under the viewer's own message, at the column's end where the bell is); not for one at the end itself (the core's
   // `askClear`), which shows whenever the end does, no bell over it
-  let ask_clear = if asks_of(v).is_empty() || !v.ask_clear { 0.0 } else { float_lift + float_side }
+  let ask_clear = if @sfbase.ask_clears(v) { float_lift + float_side } else { 0.0 }
   let side = row_side(c)
   // the sides are only the page's margin either way: wide, the pictures out in it stand by their heads' line, not by
   // the words under it, so a table scrolls out over it to the pane's edges as it does narrow
@@ -216,6 +216,9 @@ pub fn chat_list(
       glide_on_growth=false,
       // (what came, went and changed: by its rows' keys, the list's own, docs/list-motion.md)
       sized=rd.rows.sized(),
+      // (short of the pane, its rows at its end by the composer: what comes pushes what is over it up from the first
+      // message, never down till the pane is full and up from then: rows_steady.mbt)
+      from_end=true,
     )
     |> ignore
     let la = list_after(

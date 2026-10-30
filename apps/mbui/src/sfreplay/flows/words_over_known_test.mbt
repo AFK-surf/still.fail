@@ -39,6 +39,10 @@ fn init {
     // (one more since an agent's line comes in opening its room, not there at once (2026-10-30, rows_steady.mbt):
     // the failure notice's 「·」 and 「上报」 meet as it comes in under the cut, faint in its fade, as sheets_sinking's)
     ("src/sfreplay/flows/viewer_test.mbt", 7),
+    // (a new chat left for a short chat, fading where it is over it: its rows at its end since 2026-10-30, short chats'
+    // as long ones', the new chat's lines over them as it fades (as over any long chat's): the leaving page's to mend)
+    ("src/sfreplay/flows/wide_newline_test.mbt", 1),
     ("src/sfreplay/flows/wide_resize_test.mbt", 1),
+    ("src/sfreplay/flows/wide_send_test.mbt", 1),
   ])
 }

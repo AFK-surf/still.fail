@@ -414,7 +414,9 @@ fn Ctx::list_key(self : Ctx, id : Int, code : Int) -> Bool {
 /// again builds its rows anew. A Tester holds it: each frame that kept a row is
 /// built again keeping none and must come out the same. `sized`: what changed
 /// its rows' heights, by their keys (ListRows::sized): each laid out as tall as
-/// its way to its new height has it now (list_size.mbt).
+/// its way to its new height has it now (list_size.mbt). `from_end`: rows short of
+/// its view stand at its end, the room left over them (a chat's: what comes pushes
+/// what is over it up from the first, as once it is full, never down then up).
 pub fn Ctx::list(
   self : Ctx,
   key : String,
@@ -428,6 +430,7 @@ pub fn Ctx::list(
   glide_on_growth? : Bool = false,
   rows_read? : Bool = false,
   sized? : RowCauses,
+  from_end? : Bool = false,
 ) -> Int {
   let id = self.id(key)
   let st = match self.lists.get(id) {
@@ -506,6 +509,7 @@ pub fn Ctx::list(
         causes: None,
         sizes: {},
         sizes_end: -1.0,
+        from_end: false,
         put_at: -1.0,
         shown_h: {},
         sizes_mover: Mover::new(),
@@ -525,6 +529,7 @@ pub fn Ctx::list(
   st.row = row
   // what changed its rows' heights, by their keys (list_size.mbt ListRows)
   st.causes = sized
+  st.from_end = from_end
   st.seed = self.id_seed
   st.bones = self.bones
   st.owner = self.owner
@@ -786,7 +791,12 @@ fn Ctx::place_list(
       top_rows.push(r)
       top = top - h
     }
-    if top > iy {
+    // (its last row's foot on the view's: laid from its end, or put there short of it)
+    if top > iy && st.from_end && (bottom - bottom_edge).abs() < 0.001 {
+      // short of its view, standing at its end: the room left over its rows
+      hit_top = true
+      break
+    } else if top > iy {
       // the start: no space before it
       let d = iy - top
       for r in rows {

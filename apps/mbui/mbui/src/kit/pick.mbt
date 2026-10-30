@@ -89,8 +89,8 @@ pub fn Pick::hold(self : Pick, c : @ui.Ctx, key : String, id : Int, may? : Bool 
 }
 
 ///|
-/// The finger that picked it: still down, the passage from the word first held to the word under it, by words;
-/// lifted, no longer widened.
+/// The finger that picked it: still down and slid past the slop, the passage from the word first held to the word under
+/// it, by words; lifted, no longer widened.
 pub fn Pick::slide(self : Pick, c : @ui.Ctx) -> Unit {
   if self.key == "" || !self.widening {
     return
@@ -98,6 +98,11 @@ pub fn Pick::slide(self : Pick, c : @ui.Ctx) -> Unit {
   let (x, y, down) = c.pointer()
   if !down {
     self.widening = false
+    return
+  }
+  // (widened as the finger slides on, not as the words move under a finger still where it went down: a row going
+  // under them, the list putting them elsewhere, is no slide)
+  if !c.press().moved {
     return
   }
   match c.words_of(self.key) {
