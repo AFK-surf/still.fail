@@ -1,0 +1,13 @@
+# Words sent, then the list scrolled up a very little (its end rows still in view) while the agent works: its answer and its line coming and going
+# under what is read, which stays where it shows (docs/list-motion.md: the row read from does not move).
+timeout 20000
+until 发消息
+wait 600
+tap 发消息
+wait 500
+type 看一下列表的高度
+wait 700
+tap icon:arrow-up
+wait 1200
+drag 195 300 0 60 400
+wait 4500

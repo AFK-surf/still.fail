@@ -144,6 +144,32 @@ test "with the reader scrolled up (not watched), an answer just appears" {
 }
 
 ///|
+test "read up a little, the answer coming in under what is read comes where it is, its room opening: not there at once" {
+  let clock = Ref::new(0.0)
+  let t = emit_core(clock)
+  t.wheel(195.0, 400.0, -120.0)
+  t.run_for(@ui.move_most_ms)
+  clock.val = clock.val + fix_answer_ms
+  t.draw()
+  t.frame()
+  let answer = fn() { t.words().filter(fn(w) { w.0.has_prefix("收到") }) }
+  // (in view, as it sets out: nothing of it shown yet)
+  guard answer() is [w, ..] else { fail("no answer in view") }
+  assert_true(w.5 < 1.0, msg="\{w}")
+  // in at last where the list has it: over nothing else (its words over no other's)
+  t.run_for(emit_all_ms())
+  guard answer() is [w, ..] else { fail("no answer in view") }
+  assert_eq(w.5, 1.0)
+  for o in t.words() {
+    if o.0 != w.0 && o.5 > 0.0 {
+      let apart = o.2 + o.4 <= w.2 + 0.5 || w.2 + w.4 <= o.2 + 0.5 || o.1 + o.3 <= w.1 + 0.5 || w.1 + w.3 <= o.1 + 0.5
+      assert_true(apart, msg="\{w} over \{o}")
+    }
+  }
+  emit_restore()
+}
+
+///|
 test "the answer coming in does not end its own motion: float, spit and return each played whole, the avatar drawn" {
   let clock = Ref::new(0.0)
   let t = emit_core(clock)

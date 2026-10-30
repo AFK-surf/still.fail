@@ -913,7 +913,7 @@ pub fn row_keys(
       m.rise_ms == rise_ms &&
       m.known == rd.known.length() &&
       sending.is_empty() &&
-      turns.waiting.is_empty() => return shown_rows(c, rd, m.list, m.keys, following && !v.newer, flight)
+      turns.waiting.is_empty() => return shown_rows(c, rd, m.list, m.keys, !v.newer, flight)
     _ => ()
   }
   let made_whole = sending.is_empty() && turns.waiting.is_empty()
@@ -1144,12 +1144,15 @@ pub fn row_keys(
   } else {
     None
   }
-  shown_rows(c, rd, list, keys, following && !v.newer, flight)
+  // (what changes comes, goes and changes on the list's way whether the list follows its end or is read up it: the
+  // row read from stays where it shows, what is over and under it moving away from it, docs/list-motion.md; nothing
+  // at once in view, 2026-10-31 the user: 「有一些是凭空出现的，有一些是凭空消失的」)
+  shown_rows(c, rd, list, keys, !v.newer, flight)
 }
 
 ///|
 /// A chat's rows as they show (`list`, `keys`): with what went from them in among them while its room closes, what
-/// came and changed said from now as the list follows its end (docs/list-motion.md); what words sent fly to opening its
+/// came and changed said from now while its newest are in it (docs/list-motion.md); what words sent fly to opening its
 /// room as long as their flight.
 fn shown_rows(
   c : @ui.Ctx,

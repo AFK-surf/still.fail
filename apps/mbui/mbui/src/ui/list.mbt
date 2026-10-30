@@ -702,14 +702,23 @@ fn Ctx::place_list(
     // (cut there too while what is in it goes to its height on the rows' way: what leaves it is not drawn past it)
     self.nodes[r].clip = sized || st.row_own_way(k, self.clock)
     // (one coming or going where it is: what its room cuts off it fading out to its edges, ListRows::enter, leave)
-    // what it holds laid out in the middle of its room, so drawn, tapped and found there
-    if sized && st.row_by_room(k) {
+    // what it holds laid out in the middle of its room, so drawn, tapped and found there; where its row lays it
+    // otherwise (put there from where its row lays it, not moved on from where it was: a row kept as its nodes keeps
+    // where they were put last)
+    let middle = sized && st.row_by_room(k)
+    if middle {
       dr.rows_soft.push((r, row_soft(shown, h)))
-      let mut ch = self.nodes[r].first
-      while ch >= 0 {
-        self.shift(ch, st.row_middle(k, shown, h))
-        ch = self.nodes[ch].next
+    }
+    let by = if middle { st.row_middle(k, shown, h) } else { 0.0 }
+    let rn = self.nodes[r]
+    let mut ch = rn.first
+    while ch >= 0 {
+      let n = self.nodes[ch]
+      let d = rn.y + n.fl.top + n.ty + n.moved_y + by - n.y
+      if d.abs() > 0.001 {
+        self.shift(ch, d)
       }
+      ch = n.next
     }
     let h = if sized {
       self.nodes[r].fh = shown
