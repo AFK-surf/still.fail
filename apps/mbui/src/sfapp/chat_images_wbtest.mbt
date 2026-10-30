@@ -172,6 +172,8 @@ test "a chat's picture slow to come: how far it has come at its foot once it has
   assert_true(t.find("35%") is None)
   t.run_for(@sfpages.coming_after_ms + @sfpages.coming_in_ms)
   assert_true(t.find("35%") is Some(_))
+  // (its pill in the picture's corner concentric with it: 8 in, its ends were rounder than the corner left room for)
+  assert_eq(t.corner_faults(), [])
   (heard.val)({ "loaded": 800.0, "total": 1000.0 })
   t.draw()
   assert_true(t.find("80%") is Some(_))
@@ -194,19 +196,24 @@ test "a chat's picture slow to come whose size is not known: the bytes here so f
 }
 
 ///|
-test "a chat's picture slow to come with nothing heard of it yet: the spinner alone in its middle, a round pill" {
+test "a chat's picture slow to come: the whole of what stands in for it breathing, no pill until it is heard of, still once it is here" {
   let images = @sfbase.ChatImages::new()
-  let t = image_tester_asking(images, fn(_, _) {  })
+  let answer : Ref[(Result[(Json, Bytes?), Json]) -> Unit] = Ref(fn(_) {  })
+  let t = image_tester_asking(images, fn(_, done) { answer.val = done })
   t.draw()
   t.run_for(@sfpages.coming_after_ms + @sfpages.coming_in_ms)
   let shade = match @sf.video_shade {
     Data(v) => v
     _ => abort("video_shade is a colour")
   }
-  let pills = t.drawn_rect_corners().filter(fn(r) { r.4 == shade })
-  assert_eq(pills.length(), 1)
-  let (_, _, w, h, _, _) = pills[0]
-  // (as much room before the spinner as after it and over and under it: 24 by 16, the room for words after it empty,
-  // looked like a switch)
-  assert_eq(w, h)
+  let breathing = fn() { t.cycles().filter(fn(s) { s.has_prefix("\{@sf.breath_ms.to_int()} ms") }).length() }
+  // (nothing heard of it: no spinner over it in a pill of its own, which looked like a switch; it breathes)
+  assert_eq(t.drawn_rect_corners().filter(fn(r) { r.4 == shade }).length(), 0)
+  assert_eq(breathing(), 1)
+  (answer.val)(Ok((Json::object({}), Some(png_head()))))
+  // (the frame it is here on, then back to whole over dur_ms)
+  t.draw()
+  t.run_for(@sf.dur_ms)
+  t.draw()
+  assert_eq(breathing(), 0)
 }

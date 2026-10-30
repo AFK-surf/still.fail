@@ -277,7 +277,12 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   } else {
     key
   }
-  let b = c.box(style=image_box_style(w, h, key != "" && key != "!" || letterbox), id=open, fn() {
+  // asked of its station and not here yet: the whole of what stands in for it (the neutral ground, its likeness)
+  // breathing gently, a page's bones' breath (the user, 2026-10-30: 整个 placeholder 的轻微加载动态), back to whole over
+  // dur_ms once it is here
+  let asked = key == "" && !going_up
+  let breath = @motion.animate(c, "msg-breath/" + thumb, if asked { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
+  let b = c.box(style=image_box_style(w, h, key != "!" || letterbox), id=open, fn() {
     if key == "!" {
       c.box(style=no_preview_box, fn() {
         @sf.icon(c, "read", size=no_preview_icon, color=@sf.theme().p.muted) |> ignore
@@ -285,14 +290,19 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
         |> ignore
       })
       |> ignore
-    } else if letterbox {
-      c.box(style=letterbox_room, fn() { c.box(style=@ui.style(w=Fixed(pw), h=Fixed(ph)), picture) |> ignore })
-      |> ignore
     } else {
-      picture()
+      let stand_in = c.box(style=if key != "" || letterbox { image_fill } else { image_fill_waiting }, fn() {
+        if letterbox {
+          c.box(style=letterbox_room, fn() { c.box(style=@ui.style(w=Fixed(pw), h=Fixed(ph)), picture) |> ignore })
+          |> ignore
+        } else {
+          picture()
+        }
+      })
+      @sf.breathe(c, stand_in, share=breath)
     }
-    // asked of its station and not here yet: how far it has come, at its foot's end
-    if key == "" && !going_up {
+    // how far it has come, at its foot's end
+    if asked {
       image_coming(c, "msg-coming/" + thumb, src.images.coming(id))
     }
   })
@@ -306,18 +316,18 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 
 ///|
 /// How far a message's picture coming from its station has come (pengxiao, 2026-10-27: one that was slow showed only
-/// its likeness, nothing telling it from one that was stuck): at its box's foot's end, 8 in, a pill on the video's
-/// shade with a ring of how much of it is here and that share in words (35%); its size not known, the spinner and the
-/// bytes here so far; nothing heard yet, the spinner alone. Shown only once it has waited 300 ms (fading in over
-/// 200), so one that comes at once never flashes it.
+/// its likeness, nothing telling it from one that was stuck): in its box's foot's end corner, concentric with it, a
+/// pill on the video's shade with a ring of how much of it is here and that share in words (35%); its size not known, the spinner and the
+/// bytes here so far; nothing heard yet, nothing (its stand-in breathing says it waits). Shown only once it has waited
+/// 300 ms (fading in over 200), so one that comes at once never flashes it.
 fn image_coming(c : @ui.Ctx, key : String, coming : (Double, Double?)?) -> Unit {
   let shown = @motion.animate(c, key, 1.0, spec=@motion.tween(coming_in_ms, ease=Linear, delay=coming_after_ms), from=0.0)
-  if shown <= 0.0 {
+  if shown <= 0.0 || coming is None {
     return
   }
   c.layer(fn() {
     c.box(style=coming_room, fn() {
-      let pill = c.box(style=if coming is None { coming_alone } else { coming_pill }, fn() {
+      let pill = c.box(style=coming_pill, fn() {
         match coming {
           Some((n, Some(total))) => {
             let part = dmin(1.0, n / total)
@@ -325,10 +335,10 @@ fn image_coming(c : @ui.Ctx, key : String, coming : (Double, Double?)?) -> Unit 
             c.text("\{(part * 100.0).floor().to_int()}%", style=coming_words) |> ignore
           }
           Some((n, None)) => {
-            @sf.spinner(c, size=coming_spinner, ring=coming_track, arc=@sf.white) |> ignore
+            @sf.spinner(c, size=coming_ring, ring=coming_track, arc=@sf.white) |> ignore
             c.text(@sf.file_size(n), style=coming_words) |> ignore
           }
-          None => @sf.spinner(c, size=coming_spinner, ring=coming_track, arc=@sf.white) |> ignore
+          None => ()
         }
       })
       c.look(pill, @ui.look(alpha=shown))
@@ -346,29 +356,53 @@ pub let coming_after_ms : Double = 300.0
 pub let coming_in_ms : Double = 200.0
 
 ///|
-/// The pill's ring (14 across), the spinner in its place (12, as in a line of small text) on white at 25%.
+/// The pill's ring (14 across), or the spinner in its place on white at 25%.
 let coming_ring : Double = 14.0
 
 ///|
-let coming_spinner : Double = 12.0
+/// The pill's height: its ring 1 from its top, foot and start, concentric with its end, and its words' line.
+let coming_pill_h : Double = 16.0
+
+///|
+/// How far the ring is from the pill's top, foot and start: concentric with its end.
+let coming_ring_in : Double = (coming_pill_h - coming_ring) / 2.0
+
+///|
+/// How far the pill is from the picture's sides and foot: concentric with its corner, the ladder's (8 in, its ends were
+/// rounder than that corner left room for, which the corners' check refused); where the corner is too square for it,
+/// 8 in.
+let coming_in : Double = @sf.capsule_fit(@sf.message_file_corner, coming_pill_h, coming_alone_in)
+
+///|
+/// How far the pill is from the picture's sides and foot where no corner leads it.
+let coming_alone_in : Double = 8.0
 
 ///|
 let coming_track : Int64 = 0xFFFFFF40L
 
 ///|
 // kept across runs: a value (no field of it changes)
-let coming_room : @ui.Style = @ui.css("w=Full h=Full p=S2 align=AEnd justify=JEnd")
+let coming_room : @ui.Style = @ui.style(
+  w=Full,
+  h=Full,
+  p=@sf.room_of(coming_in),
+  align=AEnd,
+  justify=JEnd,
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let coming_pill : @ui.Style = @ui.style(row=true, gap=S1, pl=S1, pr=S2, py=S0_5, radius=Full, bg=@sf.video_shade, align=ACenter)
+let coming_pill : @ui.Style = @ui.style(
+  row=true,
+  h=Fixed(coming_pill_h),
+  gap=S1,
+  pl=@sf.room_of(coming_ring_in),
+  pr=S2,
+  radius=Full,
+  bg=@sf.video_shade,
+  align=ACenter,
+)
 
-///|
-/// The pill round the spinner alone (nothing heard yet): as far from it on every side as the spinner is from the pill's
-/// start with words after it, a circle the spinner in its middle; coming_pill's room for words after it, left empty,
-/// set the spinner at one end of a pill that looked like a switch.
-// kept across runs: a value (no field of it changes)
-let coming_alone : @ui.Style = @ui.style(p=S1, radius=Full, bg=@sf.video_shade, align=ACenter, justify=JCenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -726,6 +760,16 @@ let image_frame : @ui.Style = @ui.style(radius=InnerOr(@sf.message_file_radius),
 ///|
 // kept across runs: a value (no field of it changes)
 let image_frame_waiting : @ui.Style = image_frame.then(@ui.css("bg=Neutral"))
+
+///|
+/// What stands in an image's box for it (image_item): the whole box, breathing while it is asked of its station; the
+/// neutral ground under it while it waits (image_fill_waiting).
+// kept across runs: a value (no field of it changes)
+let image_fill : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let image_fill_waiting : @ui.Style = image_fill.then(@ui.css("bg=Neutral"))
 
 ///|
 /// Where a letterboxed picture is (msgImage[data-letterbox]): in its box's middle.
