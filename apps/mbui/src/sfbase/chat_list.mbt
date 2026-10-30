@@ -417,26 +417,18 @@ fn message_key(m : Json) -> String {
 }
 
 ///|
-/// An activity whose agent's turn ended stays this long, then fades (`linger_out_ms`), then is gone.
-pub let linger_fade_ms : Double = 600.0
-
-///|
-pub let linger_out_ms : Double = 220.0
-
-///|
-/// An activity's whole stay once its agent's turn ended: there, then faded.
-pub let linger_ms : Double = linger_fade_ms + linger_out_ms
+/// An activity whose agent's turn ended stays this long, then is gone from the list, leaving it as any row does
+/// (ListRows::leave: fading where it is, then its room closing).
+pub let linger_ms : Double = 600.0
 
 ///|
 /// An agent whose turn ended, its activity still shown (with_lingering): its moment's count (anew each time its
-/// messages stop coming out of its avatar), past its 600 ms (fading).
+/// messages stop coming out of its avatar).
 pub(all) struct Lingering {
   agent : Agent
   /// which of the chat's lingerings it is (Reading.lingered): its timers its own, never an earlier one's run out
   id : Int
   mut n : Int
-  /// past its 600 ms: read where its activity shows (a signal: what reads it built again as it changes)
-  leaving : @signals.Signal[Bool]
 }
 
 ///|
@@ -531,7 +523,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   for k, a in rd.running {
     if !running.contains(k) && !rd.linger.contains(k) {
       rd.lingered += 1
-      rd.linger[k] = { agent: a, id: rd.lingered, n: 0, leaving: @signals.signal(false, same=fn(x, y) { x == y }) }
+      rd.linger[k] = { agent: a, id: rd.lingered, n: 0 }
       linger_told(rd)
     }
   }
@@ -546,7 +538,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
           !rd.running.contains(a.key) &&
           !rd.linger.contains(a.key) => {
           rd.lingered += 1
-          rd.linger[a.key] = { agent: a, id: rd.lingered, n: 0, leaving: @signals.signal(false, same=fn(x, y) { x == y }) }
+          rd.linger[a.key] = { agent: a, id: rd.lingered, n: 0 }
           linger_told(rd)
         }
         _ => ()
@@ -560,7 +552,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   }
   // while its messages still come out of its avatar it stays whole (ChatMotion.keeps): each build they are still coming
   // it takes a new count (`n`, its timers' keys), so the count it keeps, asked first in the last of those builds, runs
-  // from there (linger_wbtest: fading 600 ms, gone 820 after the last frame they came)
+  // from there (linger_wbtest: gone 600 ms after the last frame they came)
   let keeps = emit_keeps(em)
   let over : Array[String] = []
   for k, l in rd.linger {
@@ -574,8 +566,6 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     let at = "linger/" + rk + "/" + k + "/\{l.id}/\{l.n}"
     let held = keeps.contains(k)
     // (asked while held too: its count starts at the last build they were still coming)
-    let faded = @kit.after(c, at + "/fade", true, linger_fade_ms)
-    l.leaving.set(!held && faded)
     if @kit.after(c, at + "/gone", true, linger_ms) && !held {
       over.push(k)
     }

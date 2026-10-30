@@ -59,6 +59,16 @@ priv struct RowSizing {
 pub let row_size_ms : Double = 300.0
 
 ///|
+/// How long a row going takes to leave before its room closes (2026-10-30 the user: 「一行消失的动效感觉有点生硬，现在都是
+/// 裁剪」): it fades where it is, a little smaller to its middle (row_leave_scale), its room whole and nothing over or
+/// under it moving; its room closes after, with nothing left in it to cut (ListRows::leave).
+pub let row_leave_ms : Double = 150.0
+
+///|
+/// How small a row going is as it has left (ListRows::leave), to its middle.
+pub let row_leave_scale : Double = 0.96
+
+///|
 /// Row `k`, laid out `natural` tall, as tall as what changed it has it at `now` (its list's ListRows, by its key): off
 /// from it as it was as its cause came (from nothing, one coming; from the height it had, one changed), by less as the
 /// list's way goes.
@@ -340,8 +350,10 @@ pub fn[T] ListRows::rows(
     for r in self.order {
       let (k, item) = r
       if !here.contains(k) && !self.going.contains(k) {
-        self.going[k] = { item, at: now, after: prev }
-        self.causes.by[k] = (Goes(from(k).unwrap_or(now)), ms(k).unwrap_or(row_size_ms))
+        // (it leaves first, its room closing once it has: row_leave_ms)
+        let at = from(k).unwrap_or(now)
+        self.going[k] = { item, at, after: prev }
+        self.causes.by[k] = (Goes(at + row_leave_ms), ms(k).unwrap_or(row_size_ms))
         began = true
       }
       if here.contains(k) || self.going.contains(k) {
@@ -378,8 +390,15 @@ pub fn[T] ListRows::rows(
   // the rows' way: from the last cause's moment to the latest end any was given
   if began {
     // (from the latest moment one sets out: now, or later where one's cause has it so: `from`)
+    // (a row going sets out as it starts to leave: its room closing row_leave_ms on is its own, the list's way not
+    // put off for it)
     let mut start = now
-    self.causes.by.each(fn(_, cm) { start = dmax(start, cm.0.at()) })
+    self.causes.by.each(fn(_, cm) {
+      start = dmax(start, match cm.0 {
+        Goes(t) => t - row_leave_ms
+        t => t.at()
+      })
+    })
     self.causes.start = start
     moved = true
   }
@@ -448,12 +467,30 @@ pub fn[T] ListRows::came(self : ListRows[T], key : String) -> Double? {
 }
 
 ///|
-/// When row `key` went from the list, while its room closes (None: it is in it).
+/// When row `key` went from the list, as it leaves and its room closes after (None: it is in it): the moment it starts
+/// to leave (ListRows::leave), its room closing row_leave_ms on.
 pub fn[T] ListRows::went(self : ListRows[T], key : String) -> Double? {
   if !self.going_said.has(key) {
     return None
   }
   self.going.get(key).map(fn(g) { g.at })
+}
+
+///|
+/// Row `key`, built as node `i`, as it goes from the list (ListRows::went): it fades where it is on `Leave` over
+/// row_leave_ms, to row_leave_scale of its size to its middle, drawn only (nothing in it tapped); then gone from view
+/// as its room closes. Read as it is painted, its row not built again for it. Nothing for a row not going.
+pub fn[T] ListRows::leave(self : ListRows[T], c : Ctx, i : Int, key : String) -> Unit {
+  match self.went(key) {
+    Some(at) => {
+      c.draw_only(i)
+      c.look_by(i, fn() {
+        let p = Ease::Leave.at((c.moment() - at) / row_leave_ms)
+        look(alpha=1.0 - p, scale=1.0 - (1.0 - row_leave_scale) * p, ox=0.5, oy=0.5)
+      })
+    }
+    None => ()
+  }
 }
 
 ///|

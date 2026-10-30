@@ -10,10 +10,13 @@ fn init {
     // (short chats' rows at their end since 2026-10-30, as long ones': what sending does to the rows over the composer
     // shows in them too, the composer's room let go on a way of its own beside the message's coming in; the next to mend)
     ("src/sfreplay/flows/agent_reply_test.mbt", 1),
-    ("src/sfreplay/flows/answer_option_test.mbt", 4),
+    ("src/sfreplay/flows/answer_option_test.mbt", 5),
     ("src/sfreplay/flows/bar_archive_test.mbt", 2),
-    ("src/sfreplay/flows/card_motion_test.mbt", 9),
-    ("src/sfreplay/flows/dismiss_test.mbt", 1),
+    ("src/sfreplay/flows/card_motion_test.mbt", 8),
+    // (a row leaves before its room closes since 2026-10-30, docs/list-motion.md: the chat's state line gone as words
+    // are sent and back with the agent's answer some 200 ms on, its room just set out closing, opens again)
+    ("src/sfreplay/flows/close_option_test.mbt", 2),
+    ("src/sfreplay/flows/dismiss_test.mbt", 2),
     ("src/sfreplay/flows/drive_delete_test.mbt", 1),
     ("src/sfreplay/flows/drive_rename_test.mbt", 3),
     ("src/sfreplay/flows/drive_upload_test.mbt", 4),
