@@ -180,7 +180,7 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
     return
   }
   let at = (context.x, context.y, 0.0, 0.0)
-  let m = @sf.dropdown(c, "context-menu", true, 0, entries, {}, context_menu_w, offset=0.0, at~)
+  let m = @sf.dropdown(c, "context-menu", true, 0, entries, context_icons, context_menu_w, offset=0.0, at~)
   if !m.open {
     context.open = false
   }
@@ -227,6 +227,19 @@ fn context_pending(c : @ui.Ctx) -> Unit {
       @ui.PixelsComing => ()
     }
   }
+}
+
+///|
+/// Each item's mark, as the same item has it in a ⋯ (a message's: sfbase's message_items): what it does to a link, an
+/// image, words picked, a message. A field's editing has none (剪切 and 全选 have no mark of their own; the four go
+/// alone, in a field's menu).
+let context_icons : Map[String, String] = {
+  "open": "external",
+  "copy-link": "link",
+  "copy-image": "copy",
+  "copy": "copy",
+  "copy-message-link": "link",
+  "share-turn": "photo",
 }
 
 ///|
