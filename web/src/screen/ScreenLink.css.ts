@@ -1,10 +1,11 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
-/** A screen's card in a message: a file's (Chat.css.ts fileCard), over a message's own link colours (styles/conversation.css.ts). */
+/** A screen's card in a message: a file's (Chat.css.ts fileCard), over a message's own link colours (styles/conversation.css.ts);
+ * rounded as its card is (a card's corner: tileCard, peekCard). */
 export const screenCard = style({
   selectors: {
-    "&&": { color: vars.text, textDecoration: "none" },
+    "&&": { color: vars.text, textDecoration: "none", borderRadius: vars.rCard },
   },
 });
 /** One its station no longer has: its words as quiet as its line. */
