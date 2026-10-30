@@ -739,3 +739,44 @@ test "a page covered for a while and back: its nodes known again as they were, n
   assert_true(commit_counts[0] - placed < 12, msg="laid anew: \{commit_counts[0] - placed}")
   assert_true(t.find("box 3") is Some(_))
 }
+
+///|
+/// The rows' card under a ground made once (made.mbt): what holds the list put back unbuilt each frame, the list built
+/// the old way in it.
+fn TestRows::made_view(self : TestRows) -> (Ctx) -> Unit {
+  let old = self.view()
+  fn(c) {
+    c.made("ground", fn() {
+      made_holding(fn(c) { c.box(w=Fill(1.0), h=Fill(1.0), bg=0xFFFFFFFFL, fn() {  }) |> ignore }, fn() {
+        [made_old(old)]
+      })
+    })
+  }
+}
+
+///|
+test "a list's rows under a ground made once: kept as they are under one built each frame" {
+  let run = fn(replay : Bool) {
+    let k = TestRows::new()
+    let t = Tester::new(k.made_view(), w=320.0, h=420.0, platform=2)
+    t.keep_parts(true)
+    nodes_run.on = replay
+    let frames = []
+    let kept = Ref(0)
+    frame_hook.val = Some(fn() {
+      frames.push(rows_frame())
+      kept.val = kept.val + t.rows_kept()
+    })
+    t.draw()
+    rows_strokes(t, k)
+    k.mark.set(5)
+    t.run_for(rows_fling_ms)
+    frame_hook.val = None
+    nodes_run.on = true
+    { frames, kept: kept.val, clicks: k.clicks }
+  }
+  let kept = run(true)
+  let built = run(false)
+  assert_true(kept.kept > 200, msg="rows drawn again: \{kept.kept}")
+  rows_same(kept, built)
+}

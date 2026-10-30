@@ -58,6 +58,8 @@ pub struct Client {
   mut version : Int
   /// The core's reason, once it has failed (`{fatal}`); cleared by `restarted`.
   mut fatal : String?
+  /// Set as `fatal` is: what reads it follows it (fatal)
+  fatal_said : @signals.Signal[Int]
   /// Who keeps what is awaited of the core (Client::track: mbui's effect.mb outside): a ticket for each call until
   /// its answer, each subscription until its first value (or error)
   priv mut start_wait : (String) -> Int
@@ -98,6 +100,7 @@ pub fn Client::new(
     beside: None,
     version: 0,
     fatal: None,
+    fatal_said: @signals.signal(0),
     start_wait: fn(_) { 0 },
     end_wait: fn(_) {  },
     focus: None,
@@ -461,6 +464,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
           r => r.stringify()
         },
       )
+      self.fatal_said.set(@signals.untracked(fn() { self.fatal_said.get() }) + 1)
       // What was asked of this core is not answered by the next one.
       let calls = self.calls.to_array()
       self.calls.clear()
@@ -565,6 +569,7 @@ fn Client::answer(self : Client, id : Int, r : Result[Json, Json]) -> Unit {
 /// values stay until the new core's first value replaces them.
 pub fn Client::restarted(self : Client) -> Unit {
   self.fatal = None
+  self.fatal_said.set(@signals.untracked(fn() { self.fatal_said.get() }) + 1)
   let subs = self.subs.values().to_array()
   subs.sort_by_key(fn(s) { s.id })
   for s in subs {

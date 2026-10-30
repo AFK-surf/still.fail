@@ -37,7 +37,7 @@ fn init {
     pictures_made.clear()
     tiles_made.clear()
     copied_at.clear()
-    dark_set.val = None
+    dark_set.set(None)
     current.val = {
       dark: false,
       touch: false,

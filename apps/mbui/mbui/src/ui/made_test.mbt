@@ -196,3 +196,66 @@ test "made: an island built the old way is built again only as what it read chan
   assert_true(t.find("second b2") is Some(_))
   assert_true(t.find("first") is Some(_))
 }
+
+///|
+test "made: the case picked is made as it comes, kept while it stays, let go as another comes" {
+  let which = @signals.signal(0)
+  let word = @signals.signal("a")
+  let made = Ref(0)
+  let t = Tester::new(
+    fn(c) {
+      c.made("pick", fn() {
+        made_holding(
+          fn(c) { c.box(gap=4.0, fn() {  }) |> ignore },
+          made_pick(fn() { which.get() }, fn(k) {
+            made.val = made.val + 1
+            made_box(fn(c) { c.text("case \{k} \{word.get()}") |> ignore })
+          }),
+        )
+      })
+    },
+    w=300.0,
+    h=200.0,
+  )
+  t.draw()
+  assert_true(t.find("case 0 a") is Some(_))
+  assert_eq(made.val, 1)
+  word.set("b")
+  t.draw()
+  assert_true(t.find("case 0 b") is Some(_))
+  assert_eq(made.val, 1)
+  which.set(1)
+  t.draw()
+  assert_true(t.find("case 1 b") is Some(_))
+  assert_true(t.find("case 0 b") is None)
+  assert_eq(made.val, 2)
+}
+
+///|
+test "made: what is built the old way in what is made once is built with the frame, as what it read changes" {
+  let word = @signals.signal("one")
+  let grounds = Ref(0)
+  let t = Tester::new(
+    fn(c) {
+      c.made("ground", fn() {
+        made_box(
+          fn(c) {
+            grounds.val = grounds.val + 1
+            c.box(pad=8.0, fn() {  }) |> ignore
+          },
+          kids=[made_old(fn(c) { c.text("old \{word.get()}") |> ignore })],
+        )
+      })
+    },
+    w=300.0,
+    h=200.0,
+  )
+  t.draw()
+  assert_true(t.find("old one") is Some(_))
+  let g = grounds.val
+  word.set("two")
+  t.draw()
+  assert_true(t.find("old two") is Some(_))
+  assert_true(t.find("old one") is None)
+  assert_eq(grounds.val, g)
+}
