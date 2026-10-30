@@ -318,9 +318,9 @@ test("back_on_screen_is_said_with_how_long_it_was_away", async () => {
   const spans: { name: string; at: Record<string, unknown> }[] = [];
   core.inner.tracer.setExport((body) =>
     Effect.sync(() => {
-      for (const r of parseJson(body).resourceSpans)
+      for (const r of (JSON.parse(new TextDecoder().decode(body)) as { resourceSpans: { scopeSpans: { spans: { name: string; attributes: { key: string; value: Record<string, unknown> }[] }[] }[] }[] }).resourceSpans)
         for (const sc of r.scopeSpans)
-          for (const sp of sc.spans) spans.push({ name: sp.name, at: Object.fromEntries(sp.attributes.map((a: { key: string; value: Record<string, unknown> }) => [a.key, Object.values(a.value)[0]])) });
+          for (const sp of sc.spans) spans.push({ name: sp.name, at: Object.fromEntries(sp.attributes.map((a) => [a.key, Object.values(a.value)[0]])) });
     }),
   );
   const ui = core.connect();

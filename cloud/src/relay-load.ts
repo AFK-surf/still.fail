@@ -32,6 +32,14 @@ export class RelayLoad extends DurableObject<Env> {
     return relayMinute(before ? { at: before.at, load: JSON.parse(before.load) as Load } : null, { at: now, load });
   }
 
+  /** What a relay has carried since midnight UTC, as its budget counts (relay.ts): from its samples since then. */
+  today(relay: string): { bytes: number; frames: number } {
+    const now = nowSeconds();
+    const midnight = Math.floor(now / 86_400) * 86_400;
+    const rows = this.ctx.storage.sql.exec<{ at: number; load: string }>("SELECT at, load FROM samples WHERE relay = ? AND at >= ? ORDER BY at", relay, midnight - GAP).toArray();
+    return relayLoadView(relay, rows.map((r) => ({ at: r.at, load: JSON.parse(r.load) as Load })), now).today;
+  }
+
   /** The relays' views, in the order given. */
   view(relays: string[]): RelayLoadView[] {
     const now = nowSeconds();
@@ -64,14 +72,40 @@ export async function receiveLoad(request: Request, env: Env): Promise<Response>
   return reply({ ok: true });
 }
 
-/** still.fail's own relay's counters (the cron's, a minute apart): none while its process is not running. */
+/**
+ * still.fail's own relay's counters (the cron's, a minute apart): none while its process is not running. Its minute in
+ * Axiom says how near it is to each of its budget's limits (relay.ts admit: LIMITS), and which it has reached
+ * (`full`): 2026-10-30 it answered every new connection 429 from 12:22 in Beijing, and nothing said whether the day's
+ * bytes or the connections held had run out. Said while the process is not running too (the budget run out stops it).
+ */
 export async function sampleOwnRelay(env: Env): Promise<void> {
   if (!env.RELAY || env.RELAY_URL) return;
   const text = await env.RELAY.getByName("primary").metrics().catch(() => null);
-  if (text === null) return;
   const url = relayUrls(env)[0]!;
-  const minute = await env.RELAY_LOAD.getByName("primary").record(url, relayLoad(text));
-  if (minute !== null) await relayToAxiom(env, url, minute);
+  const loads = env.RELAY_LOAD.getByName("primary");
+  const load = text === null ? null : relayLoad(text);
+  const minute = load === null ? null : await loads.record(url, load);
+  const today = await loads.today(url);
+  const open = load === null ? 0 : Math.max(0, load.accepts - load.disconnects);
+  const connects = minute === null ? null : Math.round((minute.accepts * 60) / minute.secs);
+  const full = [
+    ...(today.bytes >= LIMITS.bytesPerDay ? ["bytes"] : []),
+    ...(today.frames >= LIMITS.framesPerDay ? ["frames"] : []),
+    ...(open >= LIMITS.connections ? ["connections"] : []),
+    ...(connects !== null && connects >= LIMITS.connectsPerMinute ? ["connects"] : []),
+  ];
+  await relayToAxiom(env, url, {
+    ...(minute ?? {}),
+    running: text !== null,
+    open,
+    today_bytes: today.bytes,
+    today_frames: today.frames,
+    limit_bytes: LIMITS.bytesPerDay,
+    limit_frames: LIMITS.framesPerDay,
+    limit_connections: LIMITS.connections,
+    limit_connects: LIMITS.connectsPerMinute,
+    full: full.join(",") || "none",
+  });
 }
 
 /** The console's 中继 page: every relay, named, still.fail's own with the budget it is held to (relay.ts). */

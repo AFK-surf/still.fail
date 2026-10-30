@@ -140,8 +140,9 @@ test("what a relay did between two of its samples goes to Axiom as a log line", 
   }
 });
 
-test("the cron reads still.fail's own relay's counters", async () => {
-  const h = await harness();
+test("the cron reads still.fail's own relay's counters, and says in Axiom how near its budget's limits it is", async () => {
+  const got: any[] = [];
+  const h = await harness({ axiom: async (request) => (got.push(JSON.parse(await request.text())), new Response("{}")) });
   try {
     const api = (await h.mf.getWorker("api")) as unknown as { scheduled(options: { cron: string }): Promise<{ outcome: string }> };
     assert.equal((await api.scheduled({ cron: "* * * * *" })).outcome, "ok");
@@ -149,6 +150,14 @@ test("the cron reads still.fail's own relay's counters", async () => {
     const answer = await (await admin("GET", "/v1/admin/relays")).json() as { relays: { at: number | null; open: number | null }[] };
     assert.equal(answer.relays[0]!.at, h.now());
     assert.equal(answer.relays[0]!.open, 0);
+    // Its first sample: no minute yet, but the budget's standing.
+    const lines = got.flatMap((b) => b.resourceLogs ?? []).flatMap((r: any) => r.scopeLogs[0].logRecords).filter((l: any) => l.body.stringValue === "relay minute");
+    assert.equal(lines.length, 1);
+    const at = Object.fromEntries(lines[0].attributes.map((a: any) => [a.key, a.value.intValue ?? a.value.boolValue ?? a.value.stringValue]));
+    assert.deepEqual(
+      [at["log.running"], at["log.open"], at["log.today_bytes"], at["log.limit_bytes"], at["log.limit_connections"], at["log.full"], at["log.secs"]],
+      [true, "0", "0", String(LIMITS.bytesPerDay), String(LIMITS.connections), "none", undefined],
+    );
   } finally {
     await h.close();
   }

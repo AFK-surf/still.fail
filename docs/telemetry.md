@@ -54,7 +54,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 ### 中继
 
-北京、香港两台每分钟由 `cloud/relay-load.sh` 把计数发给 still.fail cloud，Cloudflare 那台由 cloud 的 cron 每分钟读（`cloud/src/relay-load.ts`）。cloud 存一份给后台的中继页，同时把这一分钟（跟上一次相比）做了什么作为一行日志发到 Axiom：`service.name` 是 `stillfail-relay`，资源属性 `stillfail.relay` 是中继的 host，`body` 是 `relay minute`，字段 `log.secs`（离上一次多少秒）、`log.open`（这时连着几个）、`log.accepts`、`log.disconnects`、`log.sent`/`log.recv`（字节）、`log.packets`（转出去的包）、`log.dropped`（丢掉的包：对方不在、队列满，或在队列里等了超过 200 ms，zzj3720/iroh#1）、`log.load1`（机器负载，Cloudflare 那台没有）。两次隔太久（超过 10 分钟）或中继刚开始报的第一次不写。每台中继每个连接排队多久不在里面（iroh-relay 不数）。
+北京、香港两台每分钟由 `cloud/relay-load.sh` 把计数发给 still.fail cloud，Cloudflare 那台由 cloud 的 cron 每分钟读（`cloud/src/relay-load.ts`）。cloud 存一份给后台的中继页，同时把这一分钟（跟上一次相比）做了什么作为一行日志发到 Axiom：`service.name` 是 `stillfail-relay`，资源属性 `stillfail.relay` 是中继的 host，`body` 是 `relay minute`，字段 `log.secs`（离上一次多少秒）、`log.open`（这时连着几个）、`log.accepts`、`log.disconnects`、`log.sent`/`log.recv`（字节）、`log.packets`（转出去的包）、`log.dropped`（丢掉的包：对方不在、队列满，或在队列里等了超过 200 ms，zzj3720/iroh#1）、`log.load1`（机器负载，Cloudflare 那台没有）。两次隔太久（超过 10 分钟）或中继刚开始报的第一次不写。Cloudflare 那台每分钟都写一行（进程没在跑时也写，预算用完它就被停掉），另带它的预算（`cloud/src/relay.ts`、`limits.ts`）离各上限多远：`log.running`（进程在不在跑）、`log.today_bytes`/`log.today_frames`（UTC 零点起转过的，按样本算，和预算的算法一样）、`log.open`、`log.limit_bytes`/`log.limit_frames`/`log.limit_connections`/`log.limit_connects`，`log.full` 是已经撞上的那几项（`bytes`、`frames`、`connections`、`connects`，没有是 `none`）：撞上任何一项，新连接都回 429。每台中继每个连接排队多久不在里面（iroh-relay 不数）。
 
 ## 安卓
 

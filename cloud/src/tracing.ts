@@ -195,7 +195,7 @@ export async function receiveLogs(request: Request, env: Env): Promise<Response>
  */
 export async function relayToAxiom(env: Env, url: string, minute: object): Promise<void> {
   if (!env.AXIOM_TOKEN) return;
-  const attribute = (key: string, value: unknown) => ({ key, value: typeof value === "number" && Number.isSafeInteger(value) ? { intValue: String(value) } : typeof value === "number" ? { doubleValue: value } : { stringValue: String(value) } });
+  const attribute = (key: string, value: unknown) => ({ key, value: typeof value === "number" && Number.isSafeInteger(value) ? { intValue: String(value) } : typeof value === "number" ? { doubleValue: value } : typeof value === "boolean" ? { boolValue: value } : { stringValue: String(value) } });
   const host = new URL(url).host;
   const record = {
     timeUnixNano: (BigInt(clock.now()) * 1_000_000n).toString(),
