@@ -267,10 +267,13 @@ final class AdbShare {
         });
         resume(c, System.currentTimeMillis() + 30_000);
         if (supported()) {
-            // lent for chats' grants when the process went (the phone started again, the app updated, Android ended it):
-            // the core started for them now, whatever started the process, not once the app is next opened; the
-            // notification's words as the app gave them last
-            if (kept(c).getLong(GRANTS_UNTIL, 0) > System.currentTimeMillis()) {
+            // 共享调试 on when the process went (the phone started again, the app updated, Android ended it): the core
+            // started for it now, whatever started the process, not once the app is next opened; the notification's
+            // words as the app gave them last. (Nothing kept of the switch, an app from before it: on where it lent
+            // for a grant, as the core takes it.)
+            android.content.SharedPreferences was = kept(c);
+            boolean on = was.contains(ON) ? was.getBoolean(ON, false) : was.getLong(GRANTS_UNTIL, 0) > System.currentTimeMillis();
+            if (on) {
                 try {
                     JSONObject words = new JSONObject(kept(c).getString(GRANT_TEXTS, "{}"));
                     synchronized (texts) {
@@ -283,7 +286,7 @@ final class AdbShare {
                 }
                 StillfailApp.startAhead(c);
             }
-            followGrants(c, System.currentTimeMillis() + 60_000);
+            followSwitch(c, System.currentTimeMillis() + 60_000);
         }
         if (!supported()) return;
         // Wireless debugging switched (by the app, by the person, or by Android as the Wi-Fi goes)
@@ -332,20 +335,22 @@ final class AdbShare {
     /** When the last of the chats' grants the phone is lent for ends (ms; none: lent for none), and the notification's
      *  words as the app last gave them: kept for the process that starts while one is live (AdbShareService). */
     static final String GRANTS_UNTIL = "grantsUntil";
+    /** The 共享调试 switch as the core last said it (`adbShare` `on`): whether a process starting starts the core for it. */
+    static final String ON = "on";
     private static final String GRANT_TEXTS = "grantTexts";
 
-    /** Whether the service was started for chats' grants and not yet seen to end (it ended: AdbShareService). */
+    /** Whether the service was started for the switch and not yet seen to end (it ended: AdbShareService). */
     static boolean granting;
-    /** Whether the core last said a grant wants the phone lent (`adbShare` `wanted`). */
-    private static boolean grantsWant;
+    /** Whether the core last said the 共享调试 switch is on (`adbShare` `on`). */
+    private static boolean switchedOn;
 
     /**
-     * The service for the grants ended while they still want the phone lent (its offer refused, say): started again,
-     * not left ended until the core next says something of them, or the process goes.
+     * The service for the switch ended while it is on (its offer refused, say): started again, not left ended until
+     * the core next says something of it, or the process goes.
      */
     static void grantsEnded(Context c) {
         granting = false;
-        if (!grantsWant) return;
+        if (!switchedOn) return;
         granting = true;
         try {
             c.startForegroundService(new Intent(c, AdbShareService.class).setAction(START).putExtra(STATION, GRANTS).putExtra(NAME, ""));
@@ -356,17 +361,28 @@ final class AdbShare {
     }
 
     /**
-     * The service started while a chat's grant wants the phone lent (`adbShare` `wanted`), once the core runs (asked
-     * again each second till then, up to `by`); the service follows it from then, and ends as none does.
+     * The service started while the 共享调试 switch is on (`adbShare` `on`), once the core runs (asked again each second
+     * till then, up to `by`): held up from then, the phone lent for each chat's grant as the core has them; ended as the
+     * switch is turned off. The switch kept for a process to come (ON).
      */
-    private static void followGrants(Context c, long by) {
+    /** Whether the switch is followed now (once per process: the core goes with it). */
+    private static boolean following;
+
+    /** The switch followed once the core started (StillfailApp.startAhead), if not yet: whatever started the process. */
+    static void coreStarted(Context c) {
+        if (supported() && !following) followSwitch(c, System.currentTimeMillis() + 60_000);
+    }
+
+    private static void followSwitch(Context c, long by) {
+        if (following) return;
         long id = AdbCore.follow("adbShare", value -> {
             if (!(value instanceof JSONObject)) return;
-            // (the grants kept on the device not read yet: none wanted is not none granted)
+            // (the switch kept on the device not read yet: off there says nothing of it)
             if (!((JSONObject) value).optBoolean("known", true)) return;
-            org.json.JSONArray wanted = ((JSONObject) value).optJSONArray("wanted");
-            boolean want = wanted != null && wanted.length() > 0;
-            grantsWant = want;
+            boolean want = ((JSONObject) value).optBoolean("on", false);
+            switchedOn = want;
+            android.content.SharedPreferences k = kept(c);
+            if (!k.contains(ON) || k.getBoolean(ON, false) != want) k.edit().putBoolean(ON, want).apply();
             if (want && !granting) {
                 granting = true;
                 try {
@@ -377,7 +393,8 @@ final class AdbShare {
                 }
             } else if (!want) granting = false;
         });
-        if (id < 0 && System.currentTimeMillis() < by) new Handler(Looper.getMainLooper()).postDelayed(() -> followGrants(c, by), 1000);
+        if (id >= 0) following = true;
+        else if (System.currentTimeMillis() < by) new Handler(Looper.getMainLooper()).postDelayed(() -> followSwitch(c, by), 1000);
     }
 
     static android.content.SharedPreferences kept(Context c) {
@@ -471,6 +488,11 @@ final class AdbShare {
 
     /** The share's notification titled `title` (for chats' grants: how many chats it is lent to). */
     static Notification notificationTitled(Context c, JSONObject view, String title, String said) {
+        return notificationTitled(c, view, title, said, t("android-misc.adb.stop"));
+    }
+
+    /** As notificationTitled, its one action named `stop` (the switch's: 关闭共享调试). */
+    static Notification notificationTitled(Context c, JSONObject view, String title, String said, String stopLabel) {
         NotificationManager manager = c.getSystemService(NotificationManager.class);
         manager.createNotificationChannel(new NotificationChannel(CHANNEL, t("android-misc.adb.title"), NotificationManager.IMPORTANCE_LOW));
         PendingIntent open = PendingIntent.getActivity(c, 0, new Intent(c, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
@@ -485,7 +507,7 @@ final class AdbShare {
                 .setContentIntent(open)
                 .setOngoing(true)
                 .setCategory(Notification.CATEGORY_SERVICE)
-                .addAction(new Notification.Action.Builder(null, t("android-misc.adb.stop"), stop).build())
+                .addAction(new Notification.Action.Builder(null, stopLabel, stop).build())
                 .build();
     }
 

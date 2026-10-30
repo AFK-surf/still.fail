@@ -69,10 +69,13 @@ android-misc.adb.missing
 android-misc.adb.next
 android-misc.adb.notPaired
 android-misc.adb.notify.chats
+android-misc.adb.notify.idle
+android-misc.adb.notify.on
 android-misc.adb.notify.title
 android-misc.adb.off
 android-misc.adb.offValue
 android-misc.adb.on
+android-misc.adb.on.note
 android-misc.adb.pair.action
 android-misc.adb.pair.ask
 android-misc.adb.pair.auto
@@ -97,6 +100,7 @@ android-misc.adb.shareFailed
 android-misc.adb.sharing
 android-misc.adb.step.developer
 android-misc.adb.step.install
+android-misc.adb.step.on
 android-misc.adb.step.pairHow
 android-misc.adb.step.reading
 android-misc.adb.step.wifi
@@ -114,6 +118,7 @@ android-misc.adb.wifi.on
 android-misc.adb.wireless
 android-misc.adb.wireless.settings
 android-misc.adb.wireless.turnOn
+android-misc.adb.turnOff
 android-misc.archive.deleteNamed
 android-misc.archive.deleteText
 android-misc.archive.deleteTitle

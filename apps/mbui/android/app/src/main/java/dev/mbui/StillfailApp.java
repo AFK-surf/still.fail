@@ -83,6 +83,8 @@ public final class StillfailApp extends Application {
             Host.log("core ahead: " + (on ? "started" : "not started") + " in "
                     + (android.os.SystemClock.uptimeMillis() - t) + " ms, "
                     + (t - android.os.Process.getStartUptimeMillis()) + " ms after the process started");
+            // (共享调试's switch followed from now, the process started by whatever it was)
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> AdbShare.coreStarted(c.getApplicationContext()));
         }, "core-ahead").start();
     }
 }

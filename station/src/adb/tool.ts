@@ -50,8 +50,8 @@ export const PHONE_USE = {
 /// `gone`: when the phone was last offered no longer and why, if it was since the station started.
 export function reached(serials: { serial: string; adb: string; device: string }[], port: number | null, gone?: { at: number; ended: string } | null): string {
   if (serials.length === 0 || port === null) {
-    const since = gone ? ` It stopped being offered ${new Date(gone.at).toISOString()} (${gone.ended === "stopped" ? "its app ended the share" : `its link went: ${gone.ended}`}).` : "";
-    return `Granted, but the phone is not lent to this station right now.${since} Its app lends it by itself while a grant is live (started again with the phone, kept up in the background); call phone_use again in a minute. Ask its person to open the still.fail app only if it stays away, saying what this says.`;
+    const since = gone ? ` It stopped being offered ${new Date(gone.at).toISOString()} (${gone.ended === "stopped" ? "its app ended the share: its 共享调试 switch turned off, say" : `its link went: ${gone.ended}`}).` : "";
+    return `Granted, but the phone is not lent to this station right now.${since} Its app lends it by itself while a grant is live and its 共享调试 switch is on (started again with the phone, kept up in the background); call phone_use again in a minute. Only if it stays away, ask its person to turn on 共享调试 in the app's settings on the phone (设置 › 共享调试), saying what this says.`;
   }
   const lines = serials.map((p) => `- ${p.device || "phone"}: adb -P ${port} -s ${p.serial} … (adb ${p.adb})`);
   return [

@@ -49,6 +49,10 @@ public final class AdbShareService extends Service {
     private String offered;
     /** The connect port the core said nothing listens on, once looked for again for it. */
     private int refused = -1;
+    /** For the switch: no chat's grant lends the phone now (the notification says so in place of how it stands). */
+    private boolean idle;
+    /** For the switch: Wi-Fi coming, Wireless debugging turned on again (Android turns it off as the Wi-Fi goes). */
+    private android.net.ConnectivityManager.NetworkCallback wifi;
     /** 还剩 N 分钟, as the minutes go. */
     private final Runnable minute = new Runnable() {
         @Override
@@ -73,21 +77,26 @@ public final class AdbShareService extends Service {
             if (name == null) name = "station";
             // already lending for the grants: nothing to begin again
             if (AdbShare.GRANTS.equals(s) && AdbShare.GRANTS.equals(station) && ports != null) return START_NOT_STICKY;
-            android.app.Notification shown = AdbShare.notification(this, null, name, null);
+            android.app.Notification shown = AdbShare.GRANTS.equals(s)
+                    ? AdbShare.notificationTitled(this, null, AdbShare.t("android-misc.adb.notify.on"), AdbShare.t("android-misc.adb.connecting"), AdbShare.t("android-misc.adb.turnOff"))
+                    : AdbShare.notification(this, null, name, null);
             if (Build.VERSION.SDK_INT >= 34) startForeground(AdbShare.ID, shown, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
             else startForeground(AdbShare.ID, shown);
             begin(s);
         } else if (AdbShare.STOP.equals(action) && AdbShare.GRANTS.equals(station)) {
-            // 停止, lent for chats' grants: each taken back (the service ends as none wants it lent)
-            org.json.JSONArray grants = view == null ? null : view.optJSONArray("grants");
-            if (grants == null || grants.length() == 0) stopSelf();
-            else for (int i = 0; i < grants.length(); i++) {
-                JSONObject g = grants.optJSONObject(i);
-                if (g == null || !"granted".equals(g.optString("status"))) continue;
-                try {
-                    AdbCore.call("adb.revoke", new JSONObject().put("station", g.optString("station")).put("request", g.optString("id")), null);
-                } catch (Exception ignored) {
-                }
+            // 关闭共享调试: the switch turned off (the service ends as the core says so; the grants stay, lent to none)
+            try {
+                AdbCore.call("adb.on", new JSONObject().put("on", false), new AdbCore.Answer() {
+                    @Override
+                    public void ok(Object value) {}
+
+                    @Override
+                    public void error(String why) {
+                        stopSelf();
+                    }
+                });
+            } catch (Exception e) {
+                stopSelf();
             }
         } else if (AdbShare.STOP.equals(action)) {
             AdbCore.call("adb.stop", null, new AdbCore.Answer() {
@@ -146,7 +155,7 @@ public final class AdbShareService extends Service {
     private void say() {
         NotificationManager manager = getSystemService(NotificationManager.class);
         manager.notify(AdbShare.ID, AdbShare.GRANTS.equals(station)
-                ? AdbShare.notificationTitled(this, view, name, note)
+                ? AdbShare.notificationTitled(this, view, name, note != null ? note : idle ? AdbShare.t("android-misc.adb.notify.idle") : null, AdbShare.t("android-misc.adb.turnOff"))
                 : AdbShare.notification(this, view, name, note));
         boolean pairing = AdbShare.pairing(view);
         int port = view == null ? -1 : view.optInt("pairPort", -1);
@@ -171,8 +180,24 @@ public final class AdbShareService extends Service {
         lent = false;
         offered = null;
         refused = -1;
-        // granted before (`adb.grant`): on by itself, as Android allows only on Wi-Fi
-        if (!AdbShare.wirelessOn(this) && AdbShare.onWifi(this)) AdbShare.switchOn(this);
+        // granted before (`adb.grant`): on by itself, as Android allows only on Wi-Fi; for the switch, on again each time it
+        // goes (the phone started again, the Wi-Fi changed: 2026-10-30, 「开启后永远开启」)
+        keepWireless();
+        if (AdbShare.GRANTS.equals(to)) {
+            android.net.ConnectivityManager cm = getSystemService(android.net.ConnectivityManager.class);
+            wifi = new android.net.ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onCapabilitiesChanged(android.net.Network network, android.net.NetworkCapabilities caps) {
+                    main.post(AdbShareService.this::keepWireless);
+                }
+            };
+            try {
+                cm.registerDefaultNetworkCallback(wifi);
+            } catch (Exception e) {
+                Host.log("adb share: Wi-Fi not followed: " + e);
+                wifi = null;
+            }
+        }
         ports = new AdbPorts(this, this::offer);
         ports.start();
         // ports as DNS-SD last said them, but none while Wireless debugging is off: its announcement can outlive it
@@ -180,6 +205,7 @@ public final class AdbShareService extends Service {
         observer = new ContentObserver(main) {
             @Override
             public void onChange(boolean selfChange) {
+                if (AdbShare.GRANTS.equals(station)) keepWireless();
                 offer();
             }
         };
@@ -207,8 +233,9 @@ public final class AdbShareService extends Service {
                 say();
                 return;
             }
+            // (for the switch: held up while it is on, lent as the grants are)
             boolean here = AdbShare.GRANTS.equals(station)
-                    ? v.optJSONArray("wanted") != null && v.optJSONArray("wanted").length() > 0
+                    ? v.optBoolean("on", false)
                     : v.optBoolean("sharing") && station.equals(v.optString("station"));
             if (AdbShare.GRANTS.equals(station)) {
                 org.json.JSONArray grants = v.optJSONArray("grants");
@@ -220,7 +247,8 @@ public final class AdbShareService extends Service {
                     chats++;
                     until = Math.max(until, g.optLong("exp", 0) * 1000);
                 }
-                name = AdbShare.t("android-misc.adb.notify.chats", "n", String.valueOf(chats));
+                name = chats == 0 ? AdbShare.t("android-misc.adb.notify.on") : AdbShare.t("android-misc.adb.notify.chats", "n", String.valueOf(chats));
+                idle = chats == 0;
                 // (kept: the process that starts while one is live lends for them at once, AdbShare.install)
                 android.content.SharedPreferences k = AdbShare.kept(this);
                 if (chats == 0) k.edit().remove(AdbShare.GRANTS_UNTIL).apply();
@@ -269,8 +297,20 @@ public final class AdbShareService extends Service {
         });
     }
 
+    /** Wireless debugging on, where it is off, the phone on Wi-Fi and the app may turn it on. */
+    private void keepWireless() {
+        if (!AdbShare.wirelessOn(this) && AdbShare.onWifi(this)) AdbShare.switchOn(this);
+    }
+
     private void end() {
         main.removeCallbacks(minute);
+        if (wifi != null) {
+            try {
+                getSystemService(android.net.ConnectivityManager.class).unregisterNetworkCallback(wifi);
+            } catch (Exception ignored) {
+            }
+        }
+        wifi = null;
         if (follow >= 0) AdbCore.unfollow(follow);
         follow = -1;
         if (ports != null) ports.stop();

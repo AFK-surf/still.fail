@@ -1704,6 +1704,7 @@ export const SHAPES: Record<string, Shape> = {
     ["connectPort", opt("u32")],
     ["pairPort", opt("u32")],
     ["refusedPort", opt("u32"), { doc: "`connectPort`, when a tunnel to it found nothing listening there: the app looks for adbd's ports anew." }],
+    ["on", "bool", { default: true, doc: "This phone's 共享调试 switch (`adb.on`, kept on the device; off at first): it lends to no chat while off." }],
     ["grants", vec("AdbGrant"), { default: true, doc: "This person's chats' grants of their phone live now, and their requests waiting, every station's (docs/adb-share.md)." }],
     ["wanted", vec("String"), { default: true, doc: "The stations a live grant lends this phone to now." }],
     ["known", "bool", { default: true, doc: "Whether the grants kept on the device were read: before, `wanted` empty says nothing of them (a core just started)." }],

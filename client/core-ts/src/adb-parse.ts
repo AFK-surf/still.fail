@@ -19,7 +19,9 @@ export type AdbCall =
   | { kind: "decide"; station: string; request: string; scope: "hour" | "chat" | null }
   | { kind: "revoke"; station: string; request: string }
   /// The person's 默认最长授权: the longest a chat's grant of their phone may last (every station told).
-  | { kind: "lasts"; lasts: "hour" | "chat" };
+  | { kind: "lasts"; lasts: "hour" | "chat" }
+  /// This phone's 共享调试 switch: off, lent to no chat; on, until turned off (kept on the device).
+  | { kind: "on"; on: boolean };
 
 export function parseAdb(name: string, params: unknown): AdbCall | null {
   const text = (field: string) => {
@@ -52,6 +54,11 @@ export function parseAdb(name: string, params: unknown): AdbCall | null {
       const l = get(params, "lasts");
       if (l !== "hour" && l !== "chat") throw CoreError.invalid(t("core-misc.params.missing", { field: "lasts" }));
       return { kind: "lasts", lasts: l };
+    }
+    case "adb.on": {
+      const on = get(params, "on");
+      if (typeof on !== "boolean") throw CoreError.invalid(t("core-misc.params.missing", { field: "on" }));
+      return { kind: "on", on };
     }
     case "adb.ports":
       return { kind: "ports", ports: { connect: port("connect"), pair: port("pair"), device: text("device"), android: text("android"), package: text("package") } };
