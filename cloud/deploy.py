@@ -52,6 +52,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -236,8 +237,20 @@ def beta_ready(account: str) -> bool:
         else:
             headers["authorization"] = f"Bearer {auth['token']}"
         url = f"https://api.cloudflare.com/client/v4/zones?name={zone}&account.id={account}"
-        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as response:
-            lookup = json.loads(response.read())
+        # (a connection broken off asked again: Mini1's to the API ended mid-handshake, SSL's UNEXPECTED_EOF, and
+        # stopped main's deploy, 441b768f, 2026-10-30)
+        for tries in range(3):
+            try:
+                with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as response:
+                    lookup = json.loads(response.read())
+                break
+            except urllib.error.HTTPError:
+                raise
+            except OSError as error:
+                if tries == 2:
+                    raise
+                print(f"zone lookup: {error}, asked again", file=sys.stderr, flush=True)
+                time.sleep(5 * (tries + 1))
         if not isinstance(lookup, dict) or lookup.get("success") is not True or not isinstance(lookup.get("result"), list):
             raise ValueError("Cloudflare did not return a successful zone lookup")
         zones = lookup["result"]
