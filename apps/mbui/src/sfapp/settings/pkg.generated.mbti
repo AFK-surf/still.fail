@@ -102,6 +102,8 @@ pub fn fixture_elevation(Json?) -> Unit
 
 pub fn fixture_followed() -> Unit
 
+pub fn fixture_machine_sessions(Core) -> Unit
+
 pub fn fixture_outflow(Bool) -> Unit
 
 pub fn fixture_outflow_answer() -> Json?
@@ -206,7 +208,7 @@ pub fn open_add_people(Core, Here, Json?, from? : @sf.Anchor) -> Unit
 
 pub fn open_item(Core, String, String, (Json) -> Unit) -> Unit
 
-pub fn open_machine_sessions(Core, String, String, from? : @sf.Anchor) -> Unit
+pub fn open_machine_sessions(Core, String, String) -> Unit
 
 pub fn open_mark_pick(Core, String, String, String, String, (String, String, (Result[Json, Json]) -> Unit) -> Unit) -> Unit
 

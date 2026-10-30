@@ -330,7 +330,7 @@ pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name :
   }
   let id = c.id("machine-offer/" + station)
   if hit(c, id) {
-    open_machine_sessions(core, station, name, from=Of(id))
+    open_machine_sessions(core, station, name)
   }
   let lit = c.lit(id)
   let words = fill("android-chat.new.machine.offer", [
@@ -363,50 +363,229 @@ let machine_offer_words_lit : @ui.TextStyle = machine_offer_words.then(@ui.text_
 let machine_offer_mark : Double = 14.0
 
 ///|
-/// The machine's sessions (openMachineSessions), each a look at it before going on with it: the library's panel opened
-/// `from` what was pressed, most of the window tall, what it holds at its own sides.
-pub fn open_machine_sessions(core : Core, station : String, name : String, from? : @sf.Anchor = Unanchored) -> Unit {
+/// The machine's sessions (openMachineSessions), each a look at it before going on with it: a dialog of its own in the
+/// window's middle (a sheet on a small screen), as the web's is, not a panel hanging off the offer's line of words.
+/// Found by what they are (pengxiao, 2026-10-30: 「没有时间、没有 Provider 之类的过滤」): over the list, kept in view
+/// as it scrolls, a search of their titles and folders, which runtime (where more than one ran: each with how many),
+/// and which folder (the projects they ran in, most used first; still.fail's own sessions, under its directory, one of
+/// them, not in the rest). The list under its days' headings (the core's `day`), each row the runtime's mark, its
+/// title, when at its line's end (the core's `when`), where it ran under them.
+pub fn open_machine_sessions(core : Core, station : String, name : String) -> Unit {
   let shown = if name == "" { tr("android-chat.new.machine.here") } else { name }
-  @sf.panel(fill("android-chat.new.machine.title", [("station", shown)]), from~, tall=0.7, fn(c, close) {
-    let t = @sf.theme()
-    c.box(style=@sf.panel_words_in(), w=Fill(1.0), pb=8.0, fn() {
-      c.text(tr("android-chat.new.machine.text"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
-    })
-    |> ignore
-    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-      scroll_page(c, "machine-sessions/" + station, [
-        fn() {
-          for s in machine_sessions.get(station).unwrap_or([]) {
+  let runtime : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
+  // (the folder chosen: "" all of them but still.fail's own, machine_own those alone)
+  let folder : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
+  let search_key = "machine-search/" + station
+  @sf.panel(
+    fill("android-chat.new.machine.title", [("station", shown)]),
+    description=tr("android-chat.new.machine.text"),
+    from=Unanchored,
+    wide=true,
+    tall=0.75,
+    fn(c, close) {
+      let all = machine_sessions.get(station).unwrap_or([])
+      // whether one is in the folder chosen
+      let in_folder = fn(sv : Json?) {
+        match folder.get() {
+          "" => !flag(sv, "own")
+          f if f == machine_own => flag(sv, "own")
+          f => !flag(sv, "own") && text(sv, "folder") == f
+        }
+      }
+      // what is chosen among: the folders of all of them (still.fail's own apart), the runtimes of those in the folder
+      let runtimes : Array[(String, Int)] = []
+      let folders : Array[(String, Int)] = []
+      let mut own = 0
+      let mut shown_n = 0
+      for s in all {
+        let sv = Some(s)
+        if in_folder(sv) {
+          shown_n += 1
+          let rt = text(sv, "runtime")
+          match runtimes.search_by(fn(r) { r.0 == rt }) {
+            Some(i) => runtimes[i] = (rt, runtimes[i].1 + 1)
+            None => runtimes.push((rt, 1))
+          }
+        }
+        if flag(sv, "own") {
+          own += 1
+        } else {
+          let f = text(sv, "folder")
+          match folders.search_by(fn(r) { r.0 == f }) {
+            Some(i) => folders[i] = (f, folders[i].1 + 1)
+            None => folders.push((f, 1))
+          }
+        }
+      }
+      // the runtime chosen, while the folder has more than one and that among them (else all of them: nothing hidden by
+      // a choice no longer shown)
+      let rt_now = if runtimes.length() > 1 && runtimes.iter().any(fn(r) { r.0 == runtime.get() }) {
+        runtime.get()
+      } else {
+        ""
+      }
+      folders.sort_by(fn(a, b) { if a.1 != b.1 { b.1 - a.1 } else { a.0.compare(b.0) } })
+      // the filters, in view over the list
+      let mut words = ""
+      c.box(style=@sf.panel_words_in().then(machine_filters), fn() {
+        c.box(style=machine_filters_line, fn() {
+          c.box(style=machine_search, fn() {
+            words = @sf.input(c, search_key, placeholder=tr("android-chat.new.machine.search"), small=true).text.trim().to_owned()
+          })
+          |> ignore
+          let chip = "machine-folder/" + station
+          let label = match folder.get() {
+            "" => tr("android-chat.new.machine.allFolders")
+            f if f == machine_own => tr("android-chat.new.machine.own")
+            f => f
+          }
+          if @sf.chip(c, label, key=chip, icon="folder") {
+            let choices = [@sf.choice("", tr("android-chat.new.machine.allFolders"), value=(all.length() - own).to_string())]
+            for f in folders {
+              choices.push(@sf.choice(f.0, f.0, value=f.1.to_string()))
+            }
+            if own > 0 {
+              choices.push(@sf.choice(machine_own, tr("android-chat.new.machine.own"), value=own.to_string()))
+            }
+            @sf.pick(tr("android-chat.new.machine.folder"), choices, folder.get(), fn(k) { folder.set(k) }, from=Of(c.id(chip)))
+          }
+        })
+        |> ignore
+        if runtimes.length() > 1 {
+          let labels = [tr("android-chat.new.machine.all") + " " + shown_n.to_string()]
+          for r in runtimes {
+            labels.push(runtime_label(r.0) + " " + r.1.to_string())
+          }
+          let now = match runtimes.search_by(fn(r) { r.0 == rt_now }) {
+            Some(i) => i + 1
+            None => 0
+          }
+          let picked = @sf.segmented(c, "machine-runtime/" + station, labels, now)
+          runtime.set(if picked == 0 { "" } else { runtimes[picked - 1].0 })
+        }
+      })
+      |> ignore
+      // those the filters leave, under their days' headings
+      let lower = words.to_lower()
+      let rows : Array[MachineRow] = []
+      let mut day = ""
+      for s in all {
+        let sv = Some(s)
+        if rt_now != "" && text(sv, "runtime") != rt_now {
+          continue
+        }
+        if !in_folder(sv) {
+          continue
+        }
+        if lower != "" &&
+          !first_text(sv, ["title", "first"], "").to_lower().contains(lower) &&
+          !text(sv, "where").to_lower().contains(lower) {
+          continue
+        }
+        if text(sv, "day") != day {
+          day = text(sv, "day")
+          rows.push(Day(day))
+        }
+        rows.push(Session(s))
+      }
+      if rows.is_empty() {
+        c.box(style=@sf.panel_words_in().then(machine_none), fn() {
+          c.text(tr("android-chat.new.machine.none"), style=machine_none_words) |> ignore
+        })
+        |> ignore
+        return
+      }
+      @sf.panel_list(c, "machine-sessions/" + station, rows.length(), 60.0, fn(i) {
+        match rows[i] {
+          Day(d) =>
+            c.box(style=@sf.panel_words_in().then(if i == 0 { machine_day_first } else { machine_day }), fn() {
+              c.text(d, style=machine_day_words) |> ignore
+            })
+            |> ignore
+          Session(s) => {
             let sv = Some(s)
-            let id = c.id("machine-session/" + text(sv, "id"))
-            if hit(c, id) {
+            let key = "machine-session/" + text(sv, "id")
+            let pressed = @sf.choice_row(
+              c,
+              key,
+              false,
+              first_text(sv, ["title", "first"], ""),
+              note=first_text(sv, ["where", "meta"], ""),
+              lead=fn() { @sf.maker_mark(c, "", text(sv, "runtime"), 18.0) |> ignore },
+              tag=fn() {
+                if has(sv, "session") {
+                  @sf.pill(c, fill("android-chat.new.machine.inApp", [("app", "still.fail")]))
+                }
+              },
+              trail=fn() {
+                c.text(text(sv, "when"), style=machine_when) |> ignore
+              },
+            )
+            if pressed {
               // (the look in its place)
               close()
               look_at_machine_session(core, station, name, s)
             }
-            c.box(style=@sf.panel_words_in(), dir=Row, w=Fill(1.0), pady=10.0, gap=12.0, align=ACenter, id~, fn() {
-              @sf.maker_mark(c, "", text(sv, "runtime"), 18.0) |> ignore
-              c.box(w=Fill(1.0), fn() {
-                c.text(first_text(sv, ["title", "first"], ""), size=t.t.ui, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0) |> ignore
-                c.text(text(sv, "meta"), size=t.t.caption, color=t.p.muted, wrap=false, w=Fill(1.0), line=17.0) |> ignore
-              })
-              |> ignore
-              if has(sv, "session") {
-                c.text(fill("android-chat.new.machine.inApp", [("app", "still.fail")]), size=t.t.caption, color=t.p.muted, wrap=false) |> ignore
-              }
-              @motion.ripple(c, id, 0.0)
-            })
-            |> ignore
             // its first words whole while it is pointed at (MachineSessions.tsx's tip: its title cut short is often them)
-            @sf.tip(c, "machine-session/" + text(sv, "id") + "/tip", id, text(sv, "first"))
+            @sf.tip(c, key + "/tip", c.id(key), text(sv, "first"))
           }
-          gap(c, 24.0)
-        },
-      ])
-    })
-    |> ignore
-  })
+        }
+      })
+      |> ignore
+    },
+  )
 }
+
+///|
+/// The filters over the machine's sessions (their search and folder's line, the runtimes under it), 10 apart.
+// kept across runs: a value (no field of it changes)
+let machine_filters : @ui.Style = @ui.css("w=Full gap=S2_5 pt=S1 pb=S2_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let machine_filters_line : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let machine_search : @ui.Style = @ui.css("w=Full")
+
+///|
+/// Where none is left by the filters: its words in the middle, room over and under them.
+// kept across runs: a value (no field of it changes)
+let machine_none : @ui.Style = @ui.css("w=Full pt=S8 pb=S10 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let machine_none_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, center=true, w=Full)
+
+///|
+/// A day's heading among them (the first close under the filters, the rest a gap over them).
+// kept across runs: a value (no field of it changes)
+let machine_day : @ui.Style = @ui.css("w=Full pt=S3_5 pb=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let machine_day_first : @ui.Style = @ui.css("w=Full pt=S1 pb=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let machine_day_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=Muted, wrap=false)
+
+///|
+/// When at a row's end (the core's `when`).
+// kept across runs: a value (no field of it changes)
+let machine_when : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
+
+///|
+/// A line of the machine's sessions' list: a day's heading, or one of them.
+priv enum MachineRow {
+  Day(String)
+  Session(Json)
+}
+
+///|
+/// The folder chosen for still.fail's own sessions alone (no folder's name: a path's part never has a NUL).
+let machine_own : String = "\u{0}own"
 
 ///|
 /// One of them looked at before going on with it (lookAtMachineSession): what was said in it, the latest at the bottom
@@ -424,12 +603,9 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
       Err(e) => error.set(error_text(e))
     }
   })
-  @sf.panel(first_text(sv, ["title", "first"], ""), from=Unanchored, tall=0.85, fn(c, close) {
+  // (as wide as the list it was opened from, in its place; where it ran and how long ago under its title)
+  @sf.panel(first_text(sv, ["title", "first"], ""), description=text(sv, "meta"), from=Unanchored, wide=true, tall=0.85, fn(c, close) {
     let t = @sf.theme()
-    c.box(style=@sf.panel_words_in(), w=Fill(1.0), pb=8.0, fn() {
-      c.text(text(sv, "meta"), size=t.t.caption, color=t.p.muted, wrap=false, w=Fill(1.0), line=17.0) |> ignore
-    })
-    |> ignore
     c.box(style=@sf.panel_words_in(), w=Fill(1.0), h=Fill(1.0), fn() {
       match said.get() {
         None =>

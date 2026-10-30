@@ -1,9 +1,15 @@
+android-chat.new.machine.all
+android-chat.new.machine.allFolders
 android-chat.new.machine.continue
+android-chat.new.machine.folder
 android-chat.new.machine.here
 android-chat.new.machine.inApp
 android-chat.new.machine.more
+android-chat.new.machine.none
 android-chat.new.machine.offer
 android-chat.new.machine.open
+android-chat.new.machine.own
+android-chat.new.machine.search
 android-chat.new.machine.text
 android-chat.new.machine.title
 android-chat.pick.default

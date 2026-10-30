@@ -524,6 +524,9 @@ fn new_chat_by_station(h? : Double = 800.0) -> @ui.Tester {
     "runtime": Json::string("claude"),
     "title": Json::string("整理构建脚本"),
     "meta": Json::string("Claude Code · 3 小时前"),
+    "where": Json::string("~/Documents/GitHub/still.fail"),
+    "day": Json::string("今天"),
+    "when": Json::string("3 小时前"),
   })
   let src : Source = {
     ..base,
@@ -593,6 +596,28 @@ test "wide: a new chat's composer stays where it is as another station is picked
   assert_true(t.find(offer) is Some(_))
   assert_true(t.query(Button, label="Opus 5.5 · 高") is Some(_))
   assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
+}
+
+///|
+test "wide: the machine's sessions open in a dialog in the window's middle, not hanging off the offer over the composer; each its title, how long ago, where it ran" {
+  let t = new_chat_by_station()
+  t.frame()
+  t.frame()
+  t.click(Button, label="继续 Studio 终端中的会话")
+  t.run_for(@ui.move_most_ms)
+  let (tx, ty) = match t.find("继续 Studio 上的会话") {
+    Some(at) => at
+    None => fail("no dialog")
+  }
+  assert_true(t.find("整理构建脚本") is Some(_), msg="its session listed")
+  assert_true(t.find("3 小时前") is Some(_), msg="how long ago, at its line's end")
+  // over them, found by: a search, the folder they ran in
+  assert_true(t.find("搜索标题或目录") is Some(_), msg="the search over the list")
+  assert_true(t.find("所有目录") is Some(_), msg="the folder's choice")
+  // the dialog's title well up from the composer and toward the window's middle, not at the offer's start
+  let (_, by, _, _) = composer_glass(t)
+  assert_true(ty < by - 100.0, msg="the dialog's title at \{ty}, near the composer at \{by}")
+  assert_true(tx > 1280.0 / 2.0 - 400.0 && tx < 1280.0 / 2.0, msg="the title at \{tx}, not the middle's")
 }
 
 ///|

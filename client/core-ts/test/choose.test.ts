@@ -100,6 +100,12 @@ test("the_runtimes_a_chat_starts_on_are_offered_claude_codex_then_deepseek_harne
   const ds = list.find((m: J) => m.model === "deepseek-v4");
   assert.deepEqual([ds.runtimes, ds.efforts.dsh], [["dsh"], ["low", "medium", "high", "max"]]);
   assert.equal(machineMeta({ runtime: "dsh", cwd: "/tmp/x" }, 0).meta, "DeepSeek Harness · /tmp/x");
+  // its parts apart: today's how long ago, an earlier day's its clock under that day's heading; still.fail's own
+  const day = 86_400_000;
+  const kept = machineMeta({ runtime: "codex", cwd: "/Users/me/Documents/GitHub/still.fail", updatedAt: 10 * day + 3_600_000 }, 10 * day + 4 * 3_600_000);
+  assert.deepEqual([kept.where, kept.folder, kept.day, kept.when, kept.own], ["~/Documents/GitHub/still.fail", "still.fail", "今天", "3 小时前", false]);
+  const old = machineMeta({ runtime: "codex", cwd: "/Users/me/.stillfail/sessions/ember/c-1/workspace", updatedAt: 9 * day + 13 * 3_600_000 + 5 * 60_000 }, 10 * day + 3_600_000);
+  assert.deepEqual([old.folder, old.day, old.when, old.own], ["workspace", "昨天", "13:05", true]);
 });
 
 test("grok_build_is_offered_after_deepseek_harness_with_its_own_efforts_and_no_fast_mode", () => {

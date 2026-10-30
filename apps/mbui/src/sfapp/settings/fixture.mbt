@@ -2715,3 +2715,40 @@ fn fx_adb_share() -> Json {
     _ => obj([("sharing", Json::boolean(false)), ("phase", str("idle")), ("tunnels", Json::number(0.0))])
   }
 }
+
+///|
+/// MBUI_FIXTURE=newchat-machine: the sessions Studio's machine kept (as the core gives them: the parts of each line
+/// apart too), their list open over the new chat: two runtimes, a few folders, still.fail's own among them, one of them
+/// already going on in a chat.
+pub fn fixture_machine_sessions(core : Core) -> Unit {
+  let s = fn(id : String, runtime : String, title : String, where_ : String, day : String, when : String, session : String) {
+    let label = if runtime == "claude" { "Claude Code" } else { "Codex" }
+    let parts = where_.split("/").to_array()
+    obj([
+      ("id", str(id)),
+      ("runtime", str(runtime)),
+      ("title", str(title)),
+      ("first", str(title)),
+      ("where", str(where_)),
+      ("folder", str(parts[parts.length() - 1].to_owned())),
+      ("day", str(day)),
+      ("when", str(when)),
+      ("own", Json::boolean(where_.has_prefix("~/.stillfail/"))),
+      ("meta", str(label + " · " + where_)),
+      ("session", if session == "" { Json::null() } else { str(session) }),
+    ])
+  }
+  let own = "~/.stillfail/sessions/ember/c-41f2/workspace"
+  machine_sessions["ws1/st1"] = [
+    s("m1", "codex", "检查线程并操作应用内浏览器", "~/Documents/GitHub/still.fail", "今天", "3 分钟前", ""),
+    s("m2", "codex", "Use your image generation tool to make the app icon", own, "今天", "20 分钟前", ""),
+    s("m3", "codex", "[财务] 建立全自动记账系统", "~/Documents/Codex/ledger", "今天", "1 小时前", "s-c2"),
+    s("m4", "claude", "整理构建脚本，把 Windows 的打包也接进 CI", "~/Documents/GitHub/still.fail", "今天", "3 小时前", ""),
+    s("m5", "codex", "Create PR for airbuild integration with the release workflow", "~/Documents/GitHub/still.fail", "昨天", "22:41", ""),
+    s("m6", "claude", "确认沉星之序大地图解密知识锁", "~/Documents/Codex/game", "昨天", "15:02", ""),
+    s("m7", "codex", "Use your image generation tool to draw the empty state", own, "昨天", "11:20", ""),
+    s("m8", "claude", "Review the onboarding copy", "~/Documents/GitHub/still.fail", "星期二", "18:09", ""),
+    s("m9", "codex", "把发票 PDF 按月份归档", "~/Documents/Codex/ledger", "10月20日", "09:31", ""),
+  ]
+  open_machine_sessions(core, "ws1/st1", "Studio")
+}

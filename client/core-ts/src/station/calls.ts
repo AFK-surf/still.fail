@@ -166,9 +166,10 @@ export function install(): void {
         // The machine's own sessions, each in a line (choose.rs `machine_meta`).
         if (op.method === "GET" && op.path.startsWith("/machine-sessions") && answer !== null && typeof answer === "object") {
           const now = inner.host.nowMs();
+          const offset = inner.host.utcOffsetMin(now);
           const a = answer as { sessions?: unknown; session?: unknown };
-          if (Array.isArray(a.sessions)) a.sessions = a.sessions.map((s) => machineMeta(s, now));
-          if (a.session !== undefined) a.session = machineMeta(a.session, now);
+          if (Array.isArray(a.sessions)) a.sessions = a.sessions.map((s) => machineMeta(s, now, offset));
+          if (a.session !== undefined) a.session = machineMeta(a.session, now, offset);
         }
         // What the clients show of it, put in here.
         looks.answer(op.method, op.path, answer);

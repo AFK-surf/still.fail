@@ -252,7 +252,10 @@ export function quotaLine(quota: J): J {
 }
 
 /// A session the station's machine kept, in a line: its runtime, where it ran (the home directory as ~), how long ago.
-export function machineMeta(session: J, now: number): J {
+/// And its parts apart, for a list that groups and filters them (the app's): `where` (that path), `folder` (its last
+/// part: the project), `day` (the heading of its day, local: 今天, 昨天, 星期三, 9月20日), `when` (how long ago today, its
+/// clock time before), `own` (run by still.fail itself: under its own directory, not a terminal's).
+export function machineMeta(session: J, now: number, offsetMin = 0): J {
   if (session === null || typeof session !== "object" || Array.isArray(session)) return session;
   const runtime = format.runtimeLabel(str(session.runtime) ?? "");
   const cwd = str(session.cwd) ?? "";
@@ -268,7 +271,18 @@ export function machineMeta(session: J, now: number): J {
     const secs = Math.max(format.round((now - session.updatedAt) / 1000), 0);
     ago = secs < 5 ? t("core-logic.jobs.ago.now") : secs >= 86_400 && secs < 2 * 86_400 ? t("core-logic.jobs.ago.yesterday") : t("core-logic.jobs.ago", { span: jobs.span(secs * 1000) });
   }
-  return { ...session, meta: [runtime, short, ago].filter((x) => x !== null).join(" · ") };
+  const at = typeof session.updatedAt === "number" ? session.updatedAt : null;
+  const today = at !== null && format.localDay(at, offsetMin) === format.localDay(now, offsetMin);
+  const parts = cwd.split("/").filter((x) => x !== "");
+  return {
+    ...session,
+    meta: [runtime, short, ago].filter((x) => x !== null).join(" · "),
+    where: short,
+    folder: short === "~" ? "~" : (parts[parts.length - 1] ?? short),
+    day: at === null ? "" : format.dayLabel(at, now, offsetMin),
+    when: at === null ? "" : today ? (ago ?? "") : format.clock(at, offsetMin),
+    own: cwd.includes("/.stillfail/"),
+  };
 }
 
 // ── the workspace's models on a station (docs/station-share.md 借用) ──
