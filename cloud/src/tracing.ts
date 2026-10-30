@@ -148,8 +148,9 @@ export async function receiveTraces(request: Request, env: Env, account: string 
   if (!sender) return reply({ error: "invalid_session" }, 401);
   if (!(await env.TELEMETRY_LIMITS.getByName(sender).consume())) return reply({ error: "rate_limited" }, 429, { "retry-after": "60" });
   let spans = 0;
+  let value: { resourceSpans?: { resource?: { attributes?: unknown[] }; scopeSpans?: { spans?: unknown[] }[] }[] };
   try {
-    const value = JSON.parse(body) as { resourceSpans?: { scopeSpans?: { spans?: unknown[] }[] }[] };
+    value = JSON.parse(body);
     if (!Array.isArray(value.resourceSpans)) throw new Error("shape");
     for (const resource of value.resourceSpans) for (const scope of resource.scopeSpans ?? []) spans += scope.spans?.length ?? 0;
   } catch {
@@ -157,7 +158,38 @@ export async function receiveTraces(request: Request, env: Env, account: string 
   }
   if (spans > MAX_SPANS) return reply({ error: "too_large" }, 413);
   if (!env.AXIOM_TOKEN) return reply({ error: "telemetry_not_configured" }, 503);
+  const network = networkOf((request as { cf?: unknown }).cf);
+  if (network.length > 0) {
+    for (const resource of value.resourceSpans!) {
+      resource.resource ??= {};
+      const kept = (Array.isArray(resource.resource.attributes) ? resource.resource.attributes : []).filter((a) => !NETWORK_KEYS.has((a as { key?: string })?.key ?? ""));
+      resource.resource.attributes = [...kept, ...network];
+    }
+    body = JSON.stringify(value);
+  }
   return (await toAxiom(env, body)) ? reply({ ok: true }, 202) : reply({ error: "telemetry_unavailable" }, 502);
+}
+
+const NETWORK_KEYS = new Set(["stillfail.net.asn", "stillfail.net.org", "stillfail.net.country", "stillfail.net.region", "stillfail.net.city"]);
+
+/**
+ * The network a batch was sent from, as Cloudflare saw it (its `cf`): the carrier (its AS number and name) and where,
+ * to the province and city, never the address. Put on every resource of a batch of spans, so a device's ways through
+ * the relays (`mesh.speed`, `mesh.connect`, `mesh.route`) are compared network by network: 湖南移动 through Shenzhen and
+ * through Hong Kong (docs/telemetry.md). What the sender said of these itself is not kept. A device behind a VPN shows
+ * the VPN's network: its spans say the network its telemetry left by, which its ways to stations need not have taken.
+ */
+export function networkOf(cf: unknown): { key: string; value: { stringValue: string } | { intValue: string } }[] {
+  if (!cf || typeof cf !== "object") return [];
+  const c = cf as Record<string, unknown>;
+  const text = (key: string, v: unknown) => (typeof v === "string" && v.length > 0 ? [{ key, value: { stringValue: v.slice(0, 120) } }] : []);
+  return [
+    ...(Number.isSafeInteger(c.asn) ? [{ key: "stillfail.net.asn", value: { intValue: String(c.asn) } }] : []),
+    ...text("stillfail.net.org", c.asOrganization),
+    ...text("stillfail.net.country", c.country),
+    ...text("stillfail.net.region", c.region),
+    ...text("stillfail.net.city", c.city),
+  ];
 }
 
 /**
@@ -193,18 +225,22 @@ export async function receiveLogs(request: Request, env: Env): Promise<Response>
  * station's lines' are: so a device's slow way through a relay is seen beside the relay's own count of that minute (how
  * many it held, what it passed on and dropped). Dropped if that fails, as spans are.
  */
-export async function relayToAxiom(env: Env, url: string, minute: object): Promise<void> {
-  if (!env.AXIOM_TOKEN) return;
+export async function relayToAxiom(env: Env, url: string, minute: object | null, lines: { what: string; fields: object }[] = []): Promise<void> {
+  if (!env.AXIOM_TOKEN || (minute === null && lines.length === 0)) return;
   const attribute = (key: string, value: unknown) => ({ key, value: typeof value === "number" && Number.isSafeInteger(value) ? { intValue: String(value) } : typeof value === "number" ? { doubleValue: value } : typeof value === "boolean" ? { boolValue: value } : { stringValue: String(value) } });
   const host = new URL(url).host;
-  const record = {
-    timeUnixNano: (BigInt(clock.now()) * 1_000_000n).toString(),
+  const at = (BigInt(clock.now()) * 1_000_000n).toString();
+  const record = (what: string, fields: object) => ({
+    timeUnixNano: at,
     severityNumber: 9,
     severityText: "info",
-    body: { stringValue: "relay minute" },
-    attributes: [attribute("log.target", "relay"), ...Object.entries(minute).map(([k, v]) => attribute(`log.${k}`, v))],
-  };
-  const body = JSON.stringify({ resourceLogs: [{ resource: { attributes: [attribute("service.name", "stillfail-relay"), attribute("stillfail.relay", host)] }, scopeLogs: [{ scope: { name: "stillfail-cloud" }, logRecords: [record] }] }] });
+    body: { stringValue: what },
+    attributes: [attribute("log.target", "relay"), ...Object.entries(fields).map(([k, v]) => attribute(`log.${k}`, v))],
+  });
+  // Lines beside the minute: each client connection that sent in it (`relay conn`, relay-metrics.ts relayConns), what
+  // probes in China's networks found of it (`relay probe`, probes.ts).
+  const records = [...(minute !== null ? [record("relay minute", minute)] : []), ...lines.map((l) => record(l.what, l.fields))];
+  const body = JSON.stringify({ resourceLogs: [{ resource: { attributes: [attribute("service.name", "stillfail-relay"), attribute("stillfail.relay", host)] }, scopeLogs: [{ scope: { name: "stillfail-cloud" }, logRecords: records }] }] });
   await toAxiom(env, body, AXIOM_LOGS).catch(() => false);
 }
 

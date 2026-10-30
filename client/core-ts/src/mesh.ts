@@ -116,6 +116,10 @@ export const SPEED_KEPT_MS = 6 * 3600_000;
 /// the way, or as the station read slowly); past it, a slower reply says how fast the way is now: it got slower (a
 /// line more crowded, a hop further), and is no longer taken to be as fast as it once was.
 export const SPEED_FRESH_MS = 10 * 60_000;
+/// How often a way's speed is told to telemetry (`mesh.speed`) at most, for each station and relay: how fast each
+/// relay brings replies to devices, beside the network the device is on (the cloud adds it, docs/telemetry.md), is how
+/// the relays are compared; one a minute is enough for that, and a video's every part would be far too many.
+export const SPEED_SAID_MS = 60_000;
 /// A reply head is a line of JSON; anything longer is not a station talking.
 const MAX_HEAD = 64 * 1024;
 /// How many links in a row a read is asked again on when each is found gone under it.
@@ -704,6 +708,8 @@ export class Mesh {
   readonly #speeds: Record<string, Record<string, Speed>>;
   /// By station id and relay: what replies brought that way in this run (`timed`).
   readonly #came = new Map<string, number>();
+  /// When each station's way through each relay last had its speed told (`mesh.speed`), by `#came`'s keys.
+  readonly #speedSaid = new Map<string, number>();
 
   private constructor(env: MeshEnv, relays: string[], entries: string[], endpoint: IrohEndpoint, secret: Uint8Array, days: Record<string, Day>, speeds: Record<string, Record<string, Speed>>, said: Record<string, Said>) {
     this.#env = env;
@@ -822,6 +828,7 @@ export class Mesh {
     if (bytes < SPEED_MIN_BYTES || ms <= 0) return;
     const bps = (bytes / ms) * 1000;
     const now = this.#env.host.nowMs();
+    this.#saySpeed(addr, relay, bytes, ms, now);
     const of = (this.#speeds[stationId(addr)] ??= {});
     const key = relayKey(relay);
     const was = of[key];
@@ -835,6 +842,27 @@ export class Mesh {
     this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SPEED_KEY, toJsonBytes(this.#speeds)), { log: "Unhandled", message: "speeds kept" }));
     const via = this.current(addr)?.via() ?? null;
     if (slower && via !== null && relayKey(via) === key) this.#choose(addr, "slow");
+  }
+
+  /// A reply's speed through a relay, told to telemetry (`mesh.speed`, docs/telemetry.md), at most once every
+  /// SPEED_SAID_MS for each station and relay: every one seen, slower ones too, not only the fastest that `noteSpeed`
+  /// keeps, so the relays' speeds are seen as devices get them, network by network.
+  #saySpeed(addr: string, relay: string, bytes: number, ms: number, now: number): void {
+    const said = `${stationId(addr)} ${relayKey(relay)}`;
+    if (now - (this.#speedSaid.get(said) ?? -Infinity) < SPEED_SAID_MS) return;
+    this.#speedSaid.set(said, now);
+    const way = this.#live(addr).find((w) => w.key() === relayKey(relay));
+    const span = this.#env.tracer.span("mesh.speed", Kind.Internal);
+    span.set("stillfail.station", stationId(addr));
+    span.set("stillfail.via", relayHost(relay));
+    span.set("stillfail.bytes", bytes);
+    span.set("stillfail.ms", Math.round(ms));
+    span.set("stillfail.bps", Math.round((bytes / ms) * 1000));
+    if (way !== undefined) {
+      span.set("stillfail.current", way.link === this.current(addr));
+      span.set("stillfail.paths", way.link.paths());
+    }
+    span.end();
   }
 
   /// The speeds seen on every way let go (the device on another network now).

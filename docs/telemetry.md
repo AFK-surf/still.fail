@@ -54,7 +54,19 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 ### 中继
 
-北京、香港两台每分钟由 `cloud/relay-load.sh` 把计数发给 still.fail cloud，Cloudflare 那台由 cloud 的 cron 每分钟读（`cloud/src/relay-load.ts`）。cloud 存一份给后台的中继页，同时把这一分钟（跟上一次相比）做了什么作为一行日志发到 Axiom：`service.name` 是 `stillfail-relay`，资源属性 `stillfail.relay` 是中继的 host，`body` 是 `relay minute`，字段 `log.secs`（离上一次多少秒）、`log.open`（这时连着几个）、`log.accepts`、`log.disconnects`、`log.sent`/`log.recv`（字节）、`log.packets`（转出去的包）、`log.dropped`（丢掉的包：对方不在、队列满，或在队列里等了超过 200 ms，zzj3720/iroh#1）、`log.load1`（机器负载，Cloudflare 那台没有）。两次隔太久（超过 10 分钟）或中继刚开始报的第一次不写。Cloudflare 那台每分钟都写一行（进程没在跑时也写，预算用完它就被停掉），另带它的预算（`cloud/src/relay.ts`、`limits.ts`）离各上限多远：`log.running`（进程在不在跑）、`log.today_bytes`/`log.today_frames`（UTC 零点起转过的，按样本算，和预算的算法一样）、`log.open`、`log.limit_bytes`/`log.limit_frames`/`log.limit_connections`/`log.limit_connects`，`log.full` 是已经撞上的那几项（`bytes`、`frames`、`connections`、`connects`，没有是 `none`）：撞上任何一项，新连接都回 429。每台中继每个连接排队多久不在里面（iroh-relay 不数）。
+北京、香港、深圳三台每分钟由 `cloud/relay-load.sh` 把计数发给 still.fail cloud，Cloudflare 那台由 cloud 的 cron 每分钟读（`cloud/src/relay-load.ts`）。cloud 存一份给后台的中继页，同时把这一分钟（跟上一次相比）做了什么作为一行日志发到 Axiom：`service.name` 是 `stillfail-relay`，资源属性 `stillfail.relay` 是中继的 host，`body` 是 `relay minute`，字段 `log.secs`（离上一次多少秒）、`log.open`（这时连着几个）、`log.accepts`、`log.disconnects`、`log.sent`/`log.recv`（字节）、`log.packets`（转出去的包）、`log.dropped`（丢掉的包：对方不在、队列满，或在队列里等了超过 200 ms，zzj3720/iroh#1）、`log.load1`（机器负载，Cloudflare 那台没有）。两次隔太久（超过 10 分钟）或中继刚开始报的第一次不写。Cloudflare 那台每分钟都写一行（进程没在跑时也写，预算用完它就被停掉），另带它的预算（`cloud/src/relay.ts`、`limits.ts`）离各上限多远：`log.running`（进程在不在跑）、`log.today_bytes`/`log.today_frames`（UTC 零点起转过的，按样本算，和预算的算法一样）、`log.open`、`log.limit_bytes`/`log.limit_frames`/`log.limit_connections`/`log.limit_connects`，`log.full` 是已经撞上的那几项（`bytes`、`frames`、`connections`、`connects`，没有是 `none`）：撞上任何一项，新连接都回 429。每台中继每个连接排队多久不在里面（iroh-relay 不数）。
+
+三台自己机器上的中继还把每个客户端连接在内核里的样子一起报上来（`relay-load.sh` 的 `node_conn` 行，`ss -ti`）：一分钟里发过东西的每条连接一行 `relay conn`，跟这一分钟的 `relay minute` 同一批，字段 `log.peer`（对方地址只留到 /24，IPv6 到 /48）、`log.port`、`log.rtt`/`log.minrtt`（毫秒）、`log.sent`（这条连接开起来以后发出的字节）、`log.again`（其中重发的）、`log.rate`（最近的实际送出速度，bit/s）、`log.limited`（那会儿中继没有更多要发的：速度是没东西可发，不是线路慢）。中继自己的计数看不到最后一段：2026-10-30 衡阳移动的手机经北京只有 8–19 KB/s，北京的计数一切正常，`ss` 上才看得出那段 TCP 的来回和重发。
+
+每台中继（still.fail 的四台）每半小时还从国内各运营商的探针各测一遍（`cloud/src/probes.ts`，Globalping 的免费探针：移动、电信、联通各 5 个，国内机房 3 个，香港 2 个；后几台用第一台那次挑中的同一批探针，好比较）：对中继 443 的 TCP 握手 16 次，每个探针一行 `relay probe`，字段 `log.probe_country`/`log.probe_region`/`log.probe_city`/`log.probe_asn`/`log.probe_network`（探针在哪、哪家运营商）、`log.rtt_avg`/`log.rtt_min`/`log.rtt_max`（毫秒）、`log.loss`（没回的占比，%）、`log.status`。只测来回和丢包，不测能跑多快（那个看设备的 `mesh.speed`）。只在 `RELAY_PROBES` 是 `globalping` 时测（wrangler.jsonc）。各中继在各运营商的来回：
+
+```kusto
+['ember']
+| where _time > ago(1d) and ['service.name'] == "stillfail-relay" and body == "relay probe"
+| summarize rtt = percentile(toreal(['attributes.log.rtt_avg']), 50), loss = avg(toreal(['attributes.log.loss'])), probes = count()
+    by relay = ['resource.stillfail.relay'], network = tostring(['attributes.log.probe_network']), city = tostring(['attributes.log.probe_city'])
+| order by network asc, city asc, rtt asc
+```
 
 ## 安卓
 
@@ -148,6 +160,19 @@ Inside a trace:
   `stillfail.way` (its key now), `stillfail.current` (whether the requests go
   on it), `stillfail.paths` and `stillfail.before.paths` as the tick before saw
   them (the same form as `mesh.route`'s), docs/mesh-lan.md.
+- **core, on its own**: `mesh.speed` when a reply of `SPEED_MIN_BYTES` or more
+  told how fast a relay brings a station's replies (mesh.ts `timed`): at most
+  once a minute for each station and relay. `stillfail.via` (the relay's host),
+  `stillfail.bytes`, `stillfail.ms`, `stillfail.bps`, `stillfail.current`
+  (whether the requests go on that way), `stillfail.paths` (as `mesh.route`'s).
+  Every one seen, the slower too, not only the fastest the device keeps for
+  choosing its way: how the relays bring replies to devices, network by network.
+- **still.fail cloud, on every client's and station's spans**: the network the
+  batch came from, as Cloudflare saw it, as resource attributes
+  `stillfail.net.asn`, `stillfail.net.org` (the carrier: China Mobile, Chinanet…),
+  `stillfail.net.country`, `stillfail.net.region` (the province), `stillfail.net.city`;
+  never the address (tracing.ts `networkOf`). A device behind a VPN shows the
+  VPN's.
 - **still.fail cloud**: a span of each `/v1/*` call that carries a recorded
   `traceparent`.
 - **ember-mesh**: a span per request stream, from the stream accepted to the
@@ -241,6 +266,39 @@ Read it as: `open_ms` is what the user waited; `link_ms` opening the link to
 the station (credential plus iroh connection); `mesh_ms` a request's time on the
 station (the admin API's included); what a core request span
 took beyond its mesh span was the network (the relay, or the direct path).
+How each relay does for each network over the last day: how fast replies came (`mesh.speed`), how long a link took and
+how many failed (`mesh.connect`), by relay, carrier and province:
+
+```kusto
+['ember']
+| where _time > ago(1d) and name in ("mesh.speed", "mesh.connect")
+| extend relay = tostring(['attributes.custom']['stillfail.via']), carrier = ['resource.stillfail.net.org'], province = ['resource.stillfail.net.region']
+| summarize
+    speeds = countif(name == "mesh.speed"),
+    kbps_p50 = percentileif(toreal(['attributes.custom']['stillfail.bps']) / 1024, 50, name == "mesh.speed"),
+    kbps_p10 = percentileif(toreal(['attributes.custom']['stillfail.bps']) / 1024, 10, name == "mesh.speed"),
+    connects = countif(name == "mesh.connect"),
+    connect_ms_p50 = percentileif(duration / 1ms, 50, name == "mesh.connect" and error != true),
+    failed = countif(name == "mesh.connect" and error == true)
+    by relay, carrier, province
+| order by carrier asc, province asc, kbps_p50 desc
+```
+
+(A failed `mesh.connect` has no `stillfail.via`: its row is the one with no relay.) The last stretch from each relay to
+its clients, the worst first (`relay conn`, above): the share sent again and the delivery rate, by the client's /24:
+
+```kusto
+['ember']
+| where _time > ago(1h) and ['service.name'] == "stillfail-relay" and body == "relay conn"
+| extend relay = ['resource.stillfail.relay'], peer = tostring(['attributes.log.peer'])
+| summarize sent = max(toreal(['attributes.log.sent'])), again = max(toreal(['attributes.log.again'])),
+    rtt = avg(toreal(['attributes.log.rtt'])), kbps = percentile(toreal(['attributes.log.rate']) / 8192, 50)
+    by relay, peer, port = tostring(['attributes.log.port'])
+| summarize sent = sum(sent), again_pct = 100 * sum(again) / sum(sent), rtt = avg(rtt), kbps = avg(kbps) by relay, peer
+| where sent > 1000000
+| order by again_pct desc
+```
+
 One trace in order:
 
 ```kusto

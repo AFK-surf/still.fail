@@ -14,13 +14,15 @@ import { passwordSignIn } from "./password";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
 import { adminApi, api, blockAccount, socketToken } from "./api";
-import { noted, parseTraceparent, recordCall, takeNotes, unverifiedNotes } from "./tracing";
+import { noted, parseTraceparent, recordCall, relayToAxiom, takeNotes, unverifiedNotes } from "./tracing";
 export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
 export { Directory } from "./directory";
 export { LoginAttempt, LoginLimiter } from "./login";
 export { RelayLoad } from "./relay-load";
 import { sampleOwnRelay } from "./relay-load";
+import { PROBE_EVERY_MIN, probeRelays } from "./probes";
+import { relayUrls } from "./relays";
 
 // The admin's console has a host of its own, ADMIN_ORIGIN: its /v1/ calls come here too — the calls its client core
 // makes to sign in and stay signed in (the core talks to the page's origin), and the console's API; nothing else. A
@@ -60,9 +62,11 @@ export default {
     if (parent?.sampled) ctx.waitUntil(recordCall(env, parent, request, response, started, Date.now(), notes));
     return response;
   },
-  // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts).
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts); every
+  // PROBE_EVERY_MIN, the relays probed from China's networks (probes.ts), where RELAY_PROBES says so.
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(sampleOwnRelay(env));
+    if (env.RELAY_PROBES === "globalping" && Math.floor(controller.scheduledTime / 60_000) % PROBE_EVERY_MIN === 0) ctx.waitUntil(probeAndSay(env));
   },
 } satisfies ExportedHandler<Env>;
 
@@ -223,3 +227,9 @@ const ASSET_LINKS = ["fail.still.android", "dev.ember.android"].map((package_nam
     sha256_cert_fingerprints: ["A0:1A:48:B5:E1:A6:D2:AB:FB:EA:34:57:B6:C7:1D:12:57:BC:42:97:93:BD:8B:3E:BE:F6:BE:8E:E1:55:B5:6A"],
   },
 }));
+
+/** The relays probed (probes.ts), each probe's result a `relay probe` line of that relay in Axiom. */
+async function probeAndSay(env: Env): Promise<void> {
+  const found = await probeRelays(relayUrls(env), (input, init) => fetch(input, init), (ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  for (const [relay, lines] of found) await relayToAxiom(env, relay, null, lines.map((fields) => ({ what: "relay probe", fields })));
+}

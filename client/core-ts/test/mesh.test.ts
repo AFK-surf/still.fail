@@ -14,7 +14,7 @@ import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Iroh } from "../src/iroh.ts";
-import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, MIN_STAY_MS, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, TAILNET, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, MIN_STAY_MS, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, SPEED_SAID_MS, TAILNET, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -836,6 +836,37 @@ sim("replies_side_by_side_tell_how_fast_their_way_is_together", async (s) => {
   await s.run(Effect.all([big, big], { concurrency: "unbounded" }));
   const seen = mesh.speed(id, b);
   assert.ok(seen !== null && seen > 0.75 * 256 * 1024, `b at ${seen} B/s, its line 256 KiB/s`);
+  await close(s, station, mesh);
+});
+
+/// Every relay's speed as devices get it is told (`mesh.speed`), with the relay and its paths: the relays are compared
+/// network by network from these (docs/telemetry.md), where before a way's speed was only kept on the device and told
+/// nowhere. Once a minute at most for a station and relay: a video's every part would be far too many.
+sim("a_ways_speed_is_told_once_a_minute", async (s) => {
+  const b = s.relay("https://b.relay.test/", { device: { ms: 20, bps: 256 * 1024 } });
+  const station = await s.stationOn(b, []);
+  const e = env(s);
+  const mesh = await s.run(Mesh.make(e, [b]));
+  const id = `w/${station.id()}`;
+  const spans = spansOf(e.tracer);
+  await reach(s, mesh, id);
+  const wire = wireOf(s, mesh);
+  const big = Effect.scoped(Effect.flatMap(wire.request(StationAddr.parse(id), { method: "GET", path: "/admin/api/big", headers: [] }, new Uint8Array()), (r) => readAll(r.body)));
+  await s.run(big);
+  await s.run(big);
+  e.tracer.flush();
+  await s.until(() => spans.some((x) => x.name === "mesh.speed"));
+  const told = spans.filter((x) => x.name === "mesh.speed");
+  assert.equal(told.length, 1, JSON.stringify(told));
+  const at = told[0]!.at;
+  assert.equal(at["stillfail.via"], "b.relay.test");
+  assert.ok(Number(at["stillfail.bytes"]) >= SPEED_MIN_BYTES, JSON.stringify(at));
+  assert.ok(Number(at["stillfail.bps"]) > 0.75 * 256 * 1024 && Number(at["stillfail.bps"]) < 1.25 * 256 * 1024, JSON.stringify(at));
+  assert.equal(at["stillfail.current"], true);
+  await s.time.pass(SPEED_SAID_MS);
+  await s.run(big);
+  e.tracer.flush();
+  await s.until(() => spans.filter((x) => x.name === "mesh.speed").length === 2);
   await close(s, station, mesh);
 });
 

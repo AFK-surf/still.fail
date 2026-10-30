@@ -8,7 +8,7 @@ import { DurableObject } from "cloudflare:workers";
 import { nowSeconds, reply } from "./auth";
 import type { Env } from "./env";
 import { LIMITS } from "./limits";
-import { relayLoad, type Load } from "./relay-metrics";
+import { relayConns, relayLoad, type Load } from "./relay-metrics";
 import { GAP, relayLoadView, relayMinute, type RelayLoadView, type RelayMinute } from "./relay-load-view";
 import { relayToAxiom } from "./tracing";
 import { relayUrls, sameUrl } from "./relays";
@@ -68,7 +68,7 @@ export async function receiveLoad(request: Request, env: Env): Promise<Response>
   const text = await request.text();
   if (text.length > MAX_METRICS) return reply({ error: "too_large" }, 413);
   const minute = await env.RELAY_LOAD.getByName("primary").record(url, relayLoad(text));
-  if (minute !== null) await relayToAxiom(env, url, minute);
+  await relayToAxiom(env, url, minute, relayConns(text).map((fields) => ({ what: "relay conn", fields })));
   return reply({ ok: true });
 }
 

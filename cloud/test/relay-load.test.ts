@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { harness } from "./harness.ts";
 import { LIMITS } from "../src/limits.ts";
-import { relayLoad, type Load } from "../src/relay-metrics.ts";
+import { relayConns, relayLoad, type Load } from "../src/relay-metrics.ts";
 import { relayLoadView, type Sample } from "../src/relay-load-view.ts";
 
 const METRICS = [
@@ -134,6 +134,36 @@ test("what a relay did between two of its samples goes to Axiom as a log line", 
     assert.deepEqual(attrs(line.attributes), {
       "log.target": "relay", "log.secs": "60", "log.open": "7", "log.accepts": "2", "log.disconnects": "0",
       "log.sent": "60000", "log.recv": "0", "log.packets": "0", "log.dropped": "30", "log.load1": 0.5,
+    });
+  } finally {
+    await h.close();
+  }
+});
+
+// The last stretch to each client, which the relay's counters do not see (relay-load.sh `node_conn`): 2026-10-30 a phone
+// on 衡阳移动 got 8-19 KB/s through Beijing while the relay counted nothing wrong. Each connection that sent in the
+// minute goes to Axiom as a `relay conn` line beside the minute's, whatever the minute says; lines that do not read are
+// left out.
+test("each client connection a relay's kernel saw goes to Axiom beside its minute", async () => {
+  const conn = "node_conn 58.216.63.0 39879 25.878 25.228 3646482 126655 2816728 1322 1";
+  assert.deepEqual(relayConns(`${METRICS}\n${conn}\nnode_conn 1.2.3.0 x\nnode_conn <b> 1 1 1 1 1 1 1 0\nnode_conn 2409:8a1e:6c20:: 5555 40 30 900 0 8000 10 0\n`), [
+    { peer: "58.216.63.0", port: 39879, rtt: 25.878, minrtt: 25.228, sent: 3646482, again: 126655, rate: 2816728, limited: true },
+    { peer: "2409:8a1e:6c20::", port: 5555, rtt: 40, minrtt: 30, sent: 900, again: 0, rate: 8000, limited: false },
+  ]);
+  const relay = "https://203.0.113.7";
+  const got: any[] = [];
+  const h = await harness({ relayUrls: relay, axiom: async (request) => (got.push(JSON.parse(await request.text())), new Response("{}")) });
+  try {
+    // The first sample has no minute before it: its connections are said all the same.
+    const r = await h.fetch("/v1/relays/load", { method: "POST", headers: { "x-stillfail-relay": relay, "cf-connecting-ip": "203.0.113.7" }, body: `${METRICS}\nnode_time ${h.now()}\n${conn}\n` });
+    assert.equal(r.status, 200);
+    assert.equal(got.length, 1);
+    const lines = got[0].resourceLogs[0].scopeLogs[0].logRecords;
+    assert.deepEqual(lines.map((l: any) => l.body.stringValue), ["relay conn"]);
+    const attrs = Object.fromEntries(lines[0].attributes.map((a: any) => [a.key, a.value.intValue ?? a.value.doubleValue ?? a.value.stringValue ?? a.value.boolValue]));
+    assert.deepEqual(attrs, {
+      "log.target": "relay", "log.peer": "58.216.63.0", "log.port": "39879", "log.rtt": 25.878, "log.minrtt": 25.228,
+      "log.sent": "3646482", "log.again": "126655", "log.rate": "2816728", "log.limited": true,
     });
   } finally {
     await h.close();
