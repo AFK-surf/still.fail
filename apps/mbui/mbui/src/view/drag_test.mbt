@@ -129,3 +129,88 @@ test "held, its events told inside another event: at that one's moment; where it
   t.drag_at(id, Moved, 30.0, 30.0, 60.0) |> ignore
   assert_eq(seen.map(fn(d) { (d.kind, d.x, d.y, d.at) }), [(Down, 10.0, 10.0, 50.0), (Moved, 10.0, 10.0, 60.0)])
 }
+
+///|
+/// A tree with a box (100 by 100 at the window's top left) whose finger comes to taps, holds (500 ms) and drags, each
+/// said in `said`.
+fn gesture_tree(said : Array[String]) -> @view.Tree {
+  @view.Tree::new(
+    fn(root) {
+      root.box(fn(b) {
+        b
+        .width(Is(Some(100.0)))
+        .height(Is(Some(100.0)))
+        .gesture(
+          6.0,
+          tap=fn() { said.push("tap") },
+          hold=(500.0, fn(d) { said.push("hold \{d.x},\{d.y} at \{d.at}") }),
+          drag=fn(d) { said.push("drag \{d.kind} \{d.x},\{d.y} at \{d.at}") },
+        )
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+}
+
+///|
+fn gesture_id(t : @view.Tree) -> @view.NodeId {
+  match t.target_at(10.0, 10.0) {
+    Dragged(id) => id
+    _ => abort("not held")
+  }
+}
+
+///|
+test "a finger let go where it went down: a tap; moved within the slop, still a tap" {
+  let said = []
+  let t = gesture_tree(said)
+  t.frame(390.0, 844.0) |> ignore
+  let id = gesture_id(t)
+  t.drag_at(id, Down, 10.0, 10.0, 10.0) |> ignore
+  t.drag_at(id, Moved, 13.0, 12.0, 20.0) |> ignore
+  t.drag_at(id, Up, 13.0, 12.0, 30.0) |> ignore
+  assert_eq(said, ["tap"])
+}
+
+///|
+test "a finger moved past the slop: a drag from where it went down, its moves, its end; no tap" {
+  let said = []
+  let t = gesture_tree(said)
+  t.frame(390.0, 844.0) |> ignore
+  let id = gesture_id(t)
+  t.drag_at(id, Down, 10.0, 10.0, 10.0) |> ignore
+  t.drag_at(id, Moved, 30.0, 10.0, 20.0) |> ignore
+  t.drag_at(id, Up, 40.0, 10.0, 30.0) |> ignore
+  assert_eq(said, ["drag Down 10,10 at 20", "drag Moved 30,10 at 20", "drag Up 40,10 at 30"])
+}
+
+///|
+/// A finger down at 100 and let go at 800, frames drawn at each of `frames` between (and moved at `moved` if given):
+/// what it came to.
+fn held_for(frames : Array[Double], moved? : Double) -> Array[String] {
+  let said = []
+  let t = gesture_tree(said)
+  t.frame(390.0, 844.0) |> ignore
+  let id = gesture_id(t)
+  t.drag_at(id, Down, 10.0, 10.0, 100.0) |> ignore
+  for f in frames {
+    t.at(f)
+    t.frame(390.0, 844.0) |> ignore
+  }
+  match moved {
+    Some(m) => t.drag_at(id, Moved, 40.0, 10.0, m) |> ignore
+    None => ()
+  }
+  t.drag_at(id, Up, 10.0, 10.0, 800.0) |> ignore
+  said
+}
+
+///|
+test "held still: a hold at its moment, whatever frames came; let go after, no tap; moved first, none" {
+  let each = held_for([200.0, 300.0, 600.0, 700.0])
+  let none = held_for([])
+  assert_eq((each, none), (["hold 10,10 at 600"], ["hold 10,10 at 600"]))
+  assert_eq(held_for([300.0], moved=400.0), ["drag Down 10,10 at 400", "drag Moved 40,10 at 400", "drag Up 10,10 at 800"])
+}

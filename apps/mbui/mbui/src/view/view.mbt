@@ -1144,6 +1144,90 @@ pub fn Tree::drag_at(self : Tree, id : NodeId, kind : DragIs, x : Double, y : Do
 }
 
 ///|
+/// What a finger held on a node comes to (View::gesture), worked out of its raw events (View::on_drag) alone, each at
+/// its own moment: a tap (let go where it went down, not held long), a hold (still where it went down for so long: at
+/// that moment, on the tree's timeline, whatever frames come), or a drag (moved past the slop: from there on its moves,
+/// from where it went down).
+pub fn View::gesture(
+  self : View,
+  slop : Double,
+  tap? : () -> Unit,
+  hold? : (Double, (Drag) -> Unit),
+  drag? : (Drag) -> Unit,
+) -> View {
+  // (what this finger has come to so far: where it went down, whether it moved past the slop, whether held)
+  let down : Ref[Drag?] = Ref(None)
+  let moved = Ref(false)
+  let held = Ref(false)
+  let cancel_hold : Ref[() -> Unit] = Ref(fn() {  })
+  let over = fn() {
+    (cancel_hold.val)()
+    cancel_hold.val = fn() {  }
+    down.val = None
+  }
+  self.on_drag(fn(d) {
+    match d.kind {
+      Down => {
+        over()
+        down.val = Some(d)
+        moved.val = false
+        held.val = false
+        match hold {
+          Some((ms, f)) =>
+            cancel_hold.val = self.at_moment(d.at + ms, fn() {
+              if down.val is Some(o) && !moved.val {
+                held.val = true
+                f({ ..o, at: d.at + ms })
+              }
+            })
+          None => ()
+        }
+      }
+      Moved =>
+        match down.val {
+          Some(o) => {
+            if !moved.val && ((d.x - o.x).abs() > slop || (d.y - o.y).abs() > slop) {
+              moved.val = true
+              (cancel_hold.val)()
+              cancel_hold.val = fn() {  }
+              match drag {
+                Some(f) => f({ ..o, at: d.at })
+                None => ()
+              }
+            }
+            if moved.val {
+              match drag {
+                Some(f) => f(d)
+                None => ()
+              }
+            }
+          }
+          None => ()
+        }
+      Up | Off => {
+        let was = down.val
+        let went = moved.val
+        let was_held = held.val
+        over()
+        match was {
+          Some(_) if went =>
+            match drag {
+              Some(f) => f(d)
+              None => ()
+            }
+          Some(_) if d.kind == Up && !was_held =>
+            match tap {
+              Some(f) => f()
+              None => ()
+            }
+          _ => ()
+        }
+      }
+    }
+  })
+}
+
+///|
 /// `f` run once as it is let go (what it holds that is no effect: a computed to dispose, a resource to close).
 pub fn View::owns(self : View, f : () -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
