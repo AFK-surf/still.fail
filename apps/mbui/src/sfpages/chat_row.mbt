@@ -256,13 +256,24 @@ pub fn chat_row(
         0L
       }
     } else {
-      @sf.nav_ground(c, "row/" + key, hover || pressed, on)
+      0L
     }
+    // (with a mouse, its ground easing as the pointer comes and goes worked out as it is painted, not built again each
+    // frame it eases: @sf.nav_ground_by, @ui.Ctx::bg_by)
+    let eased = if finger { None } else { Some(@sf.nav_ground_by(c, "row/" + key, hover || pressed, on)) }
     // (lifted, its card is its ground: the row's own drawn by the card round it, not square inside it)
     let lifted_ink = dmin(1.0, dmax(0.0, lift))
     let ground = if lifted_ink > 0.0 { 0L } else { ground }
+    let ground_by : (() -> Int64)? = match eased {
+      Some(f) if lifted_ink <= 0.0 => Some(f)
+      _ => None
+    }
     // (what shows of it over the list's: what its faces' rings are cut in)
     let face_ground = @sf.over(list_ground, if lifted_ink > 0.0 { t.p.raised } else { ground })
+    let face_ground_by : (() -> Int64)? = match ground_by {
+      Some(f) => Some(fn() { @sf.over(list_ground, f()) })
+      None => None
+    }
     // (in a side column who is in it stands in the row's foot's end corner, placed there by the corner rule; across
     // the whole screen at its second line's end; the row pointed at says when instead)
     let cornered = at == Side && !shows_time && row_aside_shows(item, lead)
@@ -277,10 +288,15 @@ pub fn chat_row(
         id,
         at,
         ground,
+        ground_by?=ground_by,
         high=true,
         // (归档 over its first line's end: Sidebar.css.ts rowArchive, 24)
         end_room=if archive_key { @sf.row_keys_room(1) } else { 0.0 },
-        corner?=if cornered { Some(fn() { row_aside(c, src, item, lead, face_ground) }) } else { None },
+        corner?=if cornered {
+          Some(fn() { row_aside(c, src, item, lead, face_ground, ground_by?=face_ground_by) })
+        } else {
+          None
+        },
         corner_w=if cornered { row_aside_w(c, item, lead) } else { 0.0 },
         // (swiped in its slot: the slot's corners its)
         slotted=swipes,
@@ -378,7 +394,7 @@ pub fn chat_row(
               c.box(id=time, taps=false, points=true, fn() { c.text(item.ago, style=row_time) |> ignore }) |> ignore
               @sf.tip(c, "row/time-tip/" + key, time, item.full)
             } else if at == Whole {
-              row_aside(c, src, item, lead, face_ground)
+              row_aside(c, src, item, lead, face_ground, ground_by?=face_ground_by)
             }
           })
           |> ignore

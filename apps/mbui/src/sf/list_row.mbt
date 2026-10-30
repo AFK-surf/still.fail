@@ -35,6 +35,7 @@ pub fn list_row(
   slotted? : Bool = false,
   end_slot? : Double = 0.0,
   corner_end? : Double = 0.0,
+  ground_by? : () -> Int64,
 ) -> Int {
   let l = theme().chat_list
   let line = @ui.style(h=Fixed(l.head_h))
@@ -48,9 +49,13 @@ pub fn list_row(
     }
     lines_drawn.val = was
   }
-  let ground = @ui.style(bg=Data(ground))
+  // (its ground worked out as it is painted where it is given so: @ui.Ctx::bg_by)
+  let ground = match ground_by {
+    Some(_) => @ui.style()
+    None => @ui.style(bg=Data(ground))
+  }
   let ground = if slotted { ground.then(list_row_square) } else { ground }
-  c.box(style=(if high { l.row } else { l.item }).then(list_row_in(at)).then(ground), id~, fn() {
+  let row = c.box(style=(if high { l.row } else { l.item }).then(list_row_in(at)).then(ground), id~, fn() {
     match mark {
       Some(m) => c.box(style=list_row_mark.then(line), m) |> ignore
       None => ()
@@ -87,6 +92,11 @@ pub fn list_row(
     }
     after()
   })
+  match ground_by {
+    Some(f) => c.bg_by(row, f)
+    None => ()
+  }
+  row
 }
 
 ///|

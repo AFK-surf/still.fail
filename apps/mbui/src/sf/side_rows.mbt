@@ -21,16 +21,23 @@ pub fn nav_ground(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : Int
 
 ///|
 /// Node `i`'s ground as nav_ground has it, worked out as it is painted (@ui.Ctx::bg_by): its easing to the pointer's
-/// ground and to the selected one read as it is drawn, so the row is not built again each frame it eases (docs/retained.md,
-/// motion in what is made once).
+/// ground and to the selected one read as it is drawn, so the row is not built again each frame it eases
+/// (docs/retained.md, motion in what is made once).
 pub fn nav_ground_on(c : @ui.Ctx, i : Int, key : String, hover : Bool, on : Bool, lit? : Int64) -> Unit {
+  c.bg_by(i, nav_ground_by(c, key, hover, on, lit?))
+}
+
+///|
+/// nav_ground worked out where it is read (as what reads it is painted: @ui.Ctx::bg_by), its easing told as it is built
+/// without reading the clock (@motion.told).
+pub fn nav_ground_by(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : Int64) -> () -> Int64 {
   let t = theme()
   let lit = lit.unwrap_or(t.p.selected)
   let hover_ink = t.p.hover
   // (the same numbers animate kept them as: @kit.animate's keys)
   let h = @motion.told(c, "\u{2}animate/" + key + "/hover", if hover { 1.0 } else { 0.0 }, spec=nav_fade)
   let o = @motion.told(c, "\u{2}animate/" + key + "/on", if on { 1.0 } else { 0.0 }, spec=nav_fade)
-  c.bg_by(i, fn() {
+  fn() {
     let h = h.get()
     let o = o.get()
     if h <= 0.0 && o <= 0.0 {
@@ -38,7 +45,7 @@ pub fn nav_ground_on(c : @ui.Ctx, i : Int, key : String, hover : Bool, on : Bool
     } else {
       over(alpha(hover_ink, h * (1.0 - o)), alpha(lit, o))
     }
-  })
+  }
 }
 
 ///|
