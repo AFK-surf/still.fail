@@ -930,7 +930,7 @@ pub fn fixture(mode : String) -> Source {
       _ => ""
     },
   }
-  if f.mode == "settings-workspace-motion" || f.mode == "settings-stations-motion" {
+  if f.mode == "settings-workspace-motion" || f.mode == "settings-stations-motion" || f.mode == "settings-connects-motion" || f.mode == "settings-vault-motion" {
     // the workspace changing on its own: a person and a station come at 2 s, one of each goes at 3.6 s
     fix_later(2000.0, fn() { @settings.fixture_motion(1) })
     fix_later(3600.0, fn() { @settings.fixture_motion(2) })

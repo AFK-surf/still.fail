@@ -199,6 +199,27 @@ fn fx_members(me : Json) -> Json {
 }
 
 ///|
+/// `v`'s items as the made-up workspace has changed on its own (fx's `motion`): `add` come at 1, the one `gone` names
+/// gone at 2 (settings-*-motion).
+fn fx_moved(v : Json, add : Json, gone : (Json) -> Bool) -> Json {
+  match v {
+    Object(m) =>
+      match m.get("items") {
+        Some(Array(a)) => {
+          let b = a.copy()
+          if fx.motion >= 1 {
+            b.push(add)
+          }
+          m["items"] = Json::array(if fx.motion >= 2 { b.filter(fn(x) { !gone(x) }) } else { b })
+        }
+        _ => ()
+      }
+    _ => ()
+  }
+  v
+}
+
+///|
 /// The made-up workspace changed on its own as far as `step` (fx's `motion`), for the recordings of its pages' lists'
 /// motion: told to what follows the made-up core's topics.
 pub fn fixture_motion(step : Int) -> Unit {
@@ -418,6 +439,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-run" | "settings-run-models" | "settings-run-accounts" => "run:ws1/st1#s-c1"
     "settings-add-people" | "settings-workspace-mark" | "settings-workspace-motion" => "workspace"
     "settings-stations-motion" => "stations"
+    "settings-connects-motion" => "connects"
+    "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
     "settings-security-confirm" | "settings-security-join" | "settings-security-off" => "security"
     "settings-notify-off" | "settings-lock-prompt" => "home"
@@ -1643,7 +1666,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       )
     "connects" =>
       Some(
-        obj([
+        fx_moved(obj([
           ("me", obj([("email", str("lin@example.com"))])),
           (
             "items",
@@ -1675,7 +1698,15 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             ],
           ),
           ("wait", obj([("reading", Json::boolean(false)), ("failing", []), ("empty", Json::boolean(false))])),
-        ]),
+        ]), obj([
+          ("station", str("ws1/st1")),
+          ("stationName", str("Studio")),
+          ("connect", fx_connect("k9", "发布助手", "online", "在线", "multi-session")),
+          ("sessions", []),
+          ("candidates", []),
+          ("running", Json::number(0.0)),
+          ("changes", Json::array([])),
+        ]), fn(x) { text(field(Some(x), "connect"), "id") == "k2" }),
       )
     "lock" =>
       Some(
@@ -1842,7 +1873,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       )
     "vaultItems" =>
       Some(
-        obj([
+        fx_moved(obj([
           ("vault", str("v1")),
           ("name", str("林的库")),
           ("open", Json::boolean(false)),
@@ -1854,7 +1885,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
               obj([("id", str("it3")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("kind", str("login")), ("listed", Json::boolean(false)), ("modes", []), ("hosts", []), ("kindText", str("登录")), ("shut", [obj([("key", str("username")), ("label", str("用户名")), ("value", str("••••••••••")), ("secret", Json::boolean(false)), ("mono", Json::boolean(false))]), obj([("key", str("password")), ("label", str("密码")), ("value", str("••••••••••••")), ("secret", Json::boolean(true)), ("mono", Json::boolean(true))])]), ("agentText", str("仅自己可见")), ("lineText", str("仅自己可见")), ("howText", str("")), ("lastsText", str("跟随默认 · 直到对话归档"))]),
             ],
           ),
-        ]),
+        ]), obj([("id", str("it4")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("name", str("OpenAI key")), ("kind", str("token")), ("listed", Json::boolean(true)), ("modes", ["proxy"]), ("hosts", ["api.openai.com"]), ("kindText", str("Token")), ("shut", []), ("agentText", str("允许 agent 申请 · 代理 · api.openai.com")), ("lineText", str("代理 · api.openai.com")), ("howText", str("代理 · 限 api.openai.com")), ("lastsText", str("跟随默认 · 直到对话归档"))]), fn(x) { text(Some(x), "id") == "it1" }),
       )
     "profiles" => {
       let list = fx_profiles().map(fn(p) {
