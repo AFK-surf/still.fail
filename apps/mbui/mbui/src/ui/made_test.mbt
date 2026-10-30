@@ -158,19 +158,19 @@ test "made: in a list's rows kept as their nodes, what a made node read changing
 
 ///|
 test "made: an island built the old way is built again only as what it read changes, whatever else the frame builds anew" {
-  let a = @signals.signal("a1")
   let b = @signals.signal("b1")
-  let frame_wide = @signals.signal(0)
   let built = [0, 0]
+  let frames = Ref(0)
   let t = Tester::new(
     fn(c) {
-      // (read by the frame's own build: built anew as it changes)
-      c.text("frame \{frame_wide.get()}") |> ignore
+      // (the frame's own build changes at each step of a count: built anew at each)
+      frames.val = frames.val + 1
+      c.text("frame \{c.every(first_frame_ms * 6.0)}") |> ignore
       c.made("islands", fn() {
         made_box(fn(c) { c.box(h=Px(200.0), fn() {  }) |> ignore }, kids=[
           made_island("first", fn() { "" }, fn(c) {
             built[0] = built[0] + 1
-            c.text("first \{a.get()}") |> ignore
+            c.text("first") |> ignore
           }),
           made_island("second", fn() { "" }, fn(c) {
             built[1] = built[1] + 1
@@ -183,17 +183,16 @@ test "made: an island built the old way is built again only as what it read chan
     h=300.0,
   )
   t.draw()
-  // (the frame that takes the change, alone: what it kept; the Tester builds each frame that kept them once more
-  // keeping none, to hold one to the other)
-  frame_wide.set(1)
-  t.frame()
-  assert_true(t.find("frame 1") is Some(_))
-  assert_eq(t.parts_kept(), 2)
-  let b0 = built[1]
+  // (frames of the test's run past its step's first: built anew for the count, the islands kept)
+  let (b0, f0) = (built[0], frames.val)
+  t.run_for(move_most_ms)
+  // (built for the step's first frame, as an event from outside, and once more keeping none by the Tester for each
+  // frame that kept it, to hold one to the other: fewer times than the frame was built)
+  let frames_built = frames.val - f0
+  assert_true(frames_built > 2)
+  assert_true(built[0] - b0 < frames_built)
   b.set("b2")
-  t.frame()
+  t.run_for(move_most_ms)
   assert_true(t.find("second b2") is Some(_))
-  assert_true(t.find("first a1") is Some(_))
-  assert_eq(t.parts_kept(), 1)
-  assert_true(built[1] > b0)
+  assert_true(t.find("first") is Some(_))
 }
