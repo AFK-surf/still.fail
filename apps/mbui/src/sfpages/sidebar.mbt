@@ -150,20 +150,20 @@ let placed : Map[String, Bool] = {}
 fn sidebar_reset() -> Unit {
   placed.clear()
   rows_laid.clear()
+  list_rows.clear()
+  lists_had.clear()
   filter_menu_serial.val = -1
 }
 
 ///|
 /// A list's days as lines (a heading and its rows each), made once for the days shown (the very array: a view's, read
 /// once a version, or the order held while a finger is on it), not every frame: as many as the list has rows, of
-/// which a frame builds only those in view. Their keys among the list's lines, the chats in them, and the names they
-/// move by (the list's key and a line's).
+/// which a frame builds only those in view. Their keys among the list's lines and the chats in them.
 priv struct DayLines {
   days : Array[ChatDay]
   lines : Array[Line]
   keys : Array[String]
   shown : Array[ChatItem]
-  moving : Array[String]
 }
 
 ///|
@@ -187,7 +187,7 @@ fn day_lines(key : String, days : Array[ChatDay]) -> DayLines {
         }
       }
       let keys = lines.map(line_key)
-      let l = { days, lines, keys, shown, moving: keys.map(fn(k) { key + "\u{1}" + k }) }
+      let l = { days, lines, keys, shown }
       rows_laid[key] = l
       l
     }
@@ -240,28 +240,38 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
       rows = Some(day_lines(key, days))
     }
   }
-  let head = lines.length()
-  let (day, day_keys, moving) = match rows {
-    Some(r) => (r.lines, r.keys, r.moving)
-    None => ([], [], [])
+  let (day, day_keys) = match rows {
+    Some(r) => (r.lines, r.keys)
+    None => ([], [])
   }
-  let count = head + day.length() + 1
-  let line_at = fn(i : Int) -> Line {
-    if i < head {
-      lines[i]
-    } else if i - head < day.length() {
-      day[i - head]
-    } else {
-      Foot
-    }
-  }
-  let key_at = fn(i : Int) -> String {
-    if i >= head && i - head < day_keys.length() {
-      day_keys[i - head]
-    } else {
-      line_key(line_at(i))
-    }
-  }
+  // its lines and their keys: what came, went, changed its place among them worked out by the list (ListRows): a row
+  // or a day new to it comes where it is, one gone leaves where it was, a row gone ahead of others both
+  // (docs/list-motion.md); while it showed the frame before (back to it, its pane slid to: as it is)
+  let all_lines = lines.copy()
+  let all_keys = lines.map(line_key)
+  all_lines.append(day)
+  all_keys.append(day_keys)
+  all_lines.push(Foot)
+  all_keys.push(line_key(Foot))
+  let lr = list_rows_of(key)
+  // (the first rows, after the list waited or had none, there at once as it shows them: only what changes in a list
+  // that had rows moves, listMotion.ts)
+  let had_rows = lists_had.get(key).unwrap_or(false)
+  lists_had[key] = !day.is_empty()
+  // (nor what showed while it waited: gone at once as they come)
+  let watched = had_rows || day.is_empty()
+  let (shown_lines, shown_keys) = lr.rows(
+    c,
+    all_keys,
+    all_lines,
+    fn(_) { "" },
+    watched~,
+    comes=fn(l) { l is (Row(_) | Heading(_)) },
+    moves=fn(l) { l is Row(_) },
+  )
+  let count = shown_lines.length()
+  let line_at = fn(i : Int) -> Line { shown_lines[i] }
+  let key_at = fn(i : Int) -> String { shown_keys[i] }
   if current {
     listed.val = match rows {
       Some(r) => r.shown
@@ -273,9 +283,6 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
     None => "agents"
   }
   let open = open_chat()
-  // the rows and days move as the list changes (listMotion.ts useListMotion: by their keys); only they count: the
-  // first rows, after the list waited, come as they are
-  let lid = @motion.list_keys(c, key, moving, liftable=fn(k) { !k.contains("\u{1}h/") })
   let l = @sf.theme().chat_list
   c.box(style=lists_fill, id=pane, fn() {
     c.list(key, count, l.row_h, fn(i) {
@@ -288,7 +295,6 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
           Empty(v) => list_empty(c, v, filter)
           Heading(label) => @sf.list_heading(c, label, frame.at)
           Row(item) => {
-            let name = key + "\u{1}" + key_at(i)
             let on = match open {
               Some(r) => @sfbase.row_is(item, r)
               None => false
@@ -302,18 +308,22 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
               list_ground=frame.ground,
               at=frame.at,
               more=i + 1 < count && line_at(i + 1) is Row(_),
-              lifted=@motion.lifted(c, lid, name),
-              unghost=fn(off) { @motion.list_unghost(c, lid, name, off~) },
+              unghost=fn(_) {  },
             )
             |> ignore
           }
         }
       })
       match line_at(i) {
-        Heading(_) | Row(_) => row_moving(c, lid, key, key_at(i), n)
+        Heading(_) | Row(_) => {
+          lr.enter(c, n, key_at(i))
+          lr.leave(c, n, key_at(i))
+        }
         _ => ()
       }
-    })
+    },
+    sized=lr.sized(),
+    )
     |> ignore
   })
   |> ignore
@@ -390,22 +400,24 @@ fn pin_moved(key : String, days : Array[ChatDay]) -> Bool {
 }
 
 ///|
-/// How a row or a day's heading moves as the list changes (listMotion.ts useListMotion; ListMotion.kt Moving): from
-/// where it was to where it is (a mouse's on motion.ts MOVE, a finger's on the phone's row spring), carrying on from
-/// wherever it had got to; growing in where it is when new (240 ms after 100, from 90% and nothing); one gone drawn
-/// where it was as it shrinks to 90% and fades (200 ms, ease-out), the rows after it closing over it; one going up
-/// past others both: gone from where it was, grown in where it is (motion's list_keys), never across them.
-pub fn row_moving(c : @ui.Ctx, lid : Int, list : String, key : String, i : Int) -> Unit {
-  @motion.layout(
-    c,
-    i,
-    list + "\u{1}" + key,
-    spec=@sf.theme().chat_list.move,
-    enter=@sf.row_grown_in,
-    exit=@sf.leave,
-  )
-  if @motion.lifted(c, lid, list + "\u{1}" + key) >= 0.0 {
-    c.put_over(i)
+/// Each list's rows as given and as the list made of them (ListRows: what came, went, went ahead), by the list's key.
+// kept across runs: put back by sidebar_reset (reset)
+let list_rows : Map[String, @ui.ListRows[Line]] = {}
+
+///|
+/// Whether each list had rows of days the last time it was built.
+// kept across runs: put back by sidebar_reset (reset)
+let lists_had : Map[String, Bool] = {}
+
+///|
+fn list_rows_of(key : String) -> @ui.ListRows[Line] {
+  match list_rows.get(key) {
+    Some(l) => l
+    None => {
+      let l = @ui.ListRows::new()
+      list_rows[key] = l
+      l
+    }
   }
 }
 

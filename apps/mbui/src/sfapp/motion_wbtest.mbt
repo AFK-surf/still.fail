@@ -2,7 +2,7 @@
 // changes, words sent flying into their bubble, the way to the newest coming and going.
 
 ///|
-test "Home: a chat with news goes to the top, from where it was and coming in there, never across the rows it passes" {
+test "Home: a chat with news goes to the top: it closes where it was and opens there, never across the rows it passes" {
   // (the clock set after reset, which puts the fixture's own back)
   reset()
   let clock = Ref::new(0.0)
@@ -13,17 +13,22 @@ test "Home: a chat with news goes to the top, from where it was and coming in th
   // its news comes (the fixture's first step)
   clock.val = 2001.0
   t.frame()
-  // half way: the first row, pushed down a row, on its way there on the rows' spring; it at the top (once it shows),
-  // not on its way across the others
-  t.run_for(@motion.row_spring.duration(66.0, 0.0, 0.0) / 2.0)
+  // half way: the first row, pushed down a row as the room at the top opens, on its way there; the chat with news
+  // coming there where it is (as far shown as its room is open), and leaving where it was (2026-10-31 the user:
+  // 「原地缩下去再从目标点挤出来更合理」)
+  t.run_for(@ui.row_size_ms / 2.0)
   let (_, f1) = t.drawn_of("整理发布清单").unwrap()
   assert_true(f1 > y_top && f1 < y_top + 66.0, msg="\{f1} \{y_top}")
-  let (_, y0) = t.drawn_of("盯着 CI，绿了告诉我").unwrap()
-  assert_true((y0 - y_top).abs() < 0.5, msg="\{y0} \{y_top}")
-  // the rows' spring at rest
-  t.run_for(@motion.row_spring.duration(66.0, 0.0, 0.0))
-  let (_, y2) = t.drawn_of("盯着 CI，绿了告诉我").unwrap()
-  assert_true((y2 - y_top).abs() < 0.5)
+  let ci = t.words().filter(fn(w) { w.0 == "盯着 CI，绿了告诉我" })
+  assert_eq(ci.length(), 2)
+  for w in ci {
+    assert_true(w.5 < 1.0, msg="\{w}")
+  }
+  // its room open, the copy where it was gone
+  t.run_for(@ui.row_size_ms)
+  let ci = t.words().filter(fn(w) { w.0 == "盯着 CI，绿了告诉我" })
+  assert_eq(ci.length(), 1)
+  assert_true((ci[0].2 - y_top).abs() < 0.5, msg="\{ci[0]} \{y_top}")
   let (_, f2) = t.drawn_of("整理发布清单").unwrap()
   assert_true((f2 - y_top - 66.0).abs() < 0.5)
   fix_clock.val = None

@@ -1,0 +1,5 @@
+# Home over the made-up chats whose list changes (MBUI_FIXTURE=home-motion): a chat with news goes to the top, a new
+# chat comes, one is archived.
+timeout 20000
+until 整理发布清单
+wait 6000

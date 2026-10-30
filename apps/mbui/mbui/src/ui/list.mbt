@@ -644,6 +644,11 @@ fn Ctx::place_list(
     None => return
   }
   st.vp_h = ih
+  // (shown this frame: what its rows came, went and changed for, said from the next, ListRows::rows)
+  match st.causes {
+    Some(c) => c.laid = self.frame_no
+    None => ()
+  }
   // where its own motions have it at the frame's time (a wheel's ease, a fling, a glide to its end, an overscroll going
   // back), stepped at its first layout in a frame, and what the hand did to it between frames: read as it is laid out,
   // so that what is laid out again as they go is its layout, nothing built for them (frame_watch.mbt's layout watch)
@@ -715,7 +720,7 @@ fn Ctx::place_list(
     while ch >= 0 {
       let n = self.nodes[ch]
       let d = rn.y + n.fl.top + n.ty + n.moved_y + by - n.y
-      if d.abs() > 0.001 {
+      if d != 0.0 {
         self.shift(ch, d)
       }
       ch = n.next
