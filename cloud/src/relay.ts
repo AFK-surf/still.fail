@@ -25,10 +25,11 @@ export type Quota = {
   counting?: number;
 };
 
-/** 3: reads answered out of order counted traffic again (2026-10-30, `read`): that day's count starts over too.
+/** 4: a count begun anew added all a relay up for days had counted (2026-10-30, `readOnce`); 3 was that, begun anew.
+ * 3: reads answered out of order counted traffic again (2026-10-30, `read`): that day's count starts over too.
  * Before 2 (2026-10-25) a failed read forgot `seen`, and the next read added all the process had counted since it
  * started once more: the day's budget ran out hours early. A day counted that way may hold traffic twice and starts over. */
-const COUNTING = 3;
+const COUNTING = 4;
 
 /** How often traffic is read from the relay process while connections are open; the daily budget may overshoot by what flows in this time. */
 const POLL_MS = 60_000;
@@ -98,8 +99,10 @@ export class RelayBudget extends DurableObject<Env> {
     // A read that fails keeps `seen`: the process may well go on (busy, not answering in time), and what it counted
     // until then is in today's traffic already.
     if (counters) {
-      // A restarted process counts from zero again.
-      const seen = q.seen && counters.bytes >= q.seen.bytes && counters.frames >= q.seen.frames ? q.seen : { bytes: 0, frames: 0 };
+      // A restarted process counts from zero again. Nothing seen yet (the first read, a day counted anew): what the
+      // process counted until now is not known to be today's, and is not counted. 2026-10-30, up for days, it had
+      // counted 14.8 GB and 78.5M frames in all, every connect refused for the day once a count begun anew added them.
+      const seen = !q.seen ? counters : counters.bytes >= q.seen.bytes && counters.frames >= q.seen.frames ? q.seen : { bytes: 0, frames: 0 };
       q.bytes += counters.bytes - seen.bytes;
       q.frames = (q.frames ?? 0) + counters.frames - seen.frames;
       q.seen = counters;

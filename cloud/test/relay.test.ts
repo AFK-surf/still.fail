@@ -105,6 +105,7 @@ test("a read of the relay's counters that fails does not count its traffic twice
     const relay = relays.get(relays.idFromName("primary"));
     const budget = budgets.get(budgets.idFromName("primary"));
     const gib = 1024 ** 3;
+    await budget.poll();
     await relay.carried(gib);
     await budget.poll();
     await relay.failReads();
@@ -129,6 +130,7 @@ test("a read of the relay's counters answered after a later one counts nothing t
     const relay = relays.get(relays.idFromName("primary"));
     const budget = budgets.get(budgets.idFromName("primary"));
     const mib = 1024 ** 2;
+    await budget.poll();
     await relay.carried(100 * mib);
     await budget.poll();
     await relay.carried(10 * mib);
@@ -144,6 +146,29 @@ test("a read of the relay's counters answered after a later one counts nothing t
     // Counted once, all of it by the next read.
     await budget.poll();
     assert.equal((await budget.statistics()).bytes, 120 * mib);
+  } finally {
+    await h.close();
+  }
+});
+
+/// 2026-10-30: the relay's process, up for days, had counted 14.8 GB and 78.5M frames in all; a day's count begun with
+/// nothing seen yet (its counting changed, or a read taken for a process started again) added all of it, and every
+/// connect was refused for the day. What the process counted before the budget first read it is not today's.
+test("a budget that never read a relay up for days counts none of what it carried before", { timeout: 10000 }, async () => {
+  const h = await harness({ noGoogle: true });
+  try {
+    const relays: any = await h.mf.getDurableObjectNamespace("RELAY", "relay");
+    const budgets: any = await h.mf.getDurableObjectNamespace("RELAY_BUDGET", "relay");
+    const relay = relays.get(relays.idFromName("primary"));
+    const budget = budgets.get(budgets.idFromName("primary"));
+    await relay.carried(20 * 1024 ** 3);
+    const response = await h.fetch("/relay", { headers: upgrade });
+    assert.equal(response.status, 101);
+    response.webSocket!.accept();
+    response.webSocket!.close();
+    await relay.carried(1024 ** 2);
+    await budget.poll();
+    assert.equal((await budget.statistics()).bytes, 1024 ** 2);
   } finally {
     await h.close();
   }
