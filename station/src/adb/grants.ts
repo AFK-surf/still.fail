@@ -5,8 +5,7 @@
 // decisions and ends are told in the chat; the owner's devices hear of the grants (`adb-grants`), and their phone lends
 // itself to the station while one is live.
 import type { DatabaseSync } from "node:sqlite";
-import { threadAddress } from "../agents/instructions.ts";
-import { wall } from "../ops/fibers.ts";
+import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 
 export type Scope = "hour" | "chat";
@@ -17,8 +16,6 @@ const SCOPE_WORDS: Record<Scope, { label: string; detail: string }> = {
   hour: { label: "本对话 1 小时内", detail: "1 小时内这个对话的 agent 可以用这台手机" },
   chat: { label: "本对话直到归档", detail: "这个对话归档或删除前都能用，最长 30 天" },
 };
-/// How long phone_use waits for the decision: within the minute an agent's MCP client waits for one tool call.
-export const DECISION_MS = 45_000;
 
 export type Status = "pending" | "granted" | "denied" | "ended";
 export type PhoneRequest = {
@@ -68,7 +65,6 @@ export class Refused extends Error {}
 
 export class PhoneGrants {
   readonly #d: GrantsDeps;
-  readonly #waiting = new Map<string, Set<(r: PhoneRequest) => void>>();
 
   constructor(d: GrantsDeps) {
     this.#d = d;
@@ -149,8 +145,9 @@ export class PhoneGrants {
     return first === undefined ? null : first.toLowerCase();
   }
 
-  /// phone_use: a grant of this session's already live, or a new request asked in its chat; waits `ms` for its decision.
-  async ask(session: string, reason: string, ms = DECISION_MS): Promise<PhoneRequest> {
+  /// phone_use: a grant of this session's already live, or a request asked in its chat: not waited for (the agent's turn
+  /// goes on with the chat), its decision told to the session (#settle).
+  async ask(session: string, reason: string): Promise<PhoneRequest> {
     const held = this.held(session)[0];
     if (held !== undefined) return held;
     if (reason.trim() === "") throw new Refused("say why you need the phone (reason)");
@@ -173,25 +170,7 @@ export class PhoneGrants {
       }
       this.#d.told?.(r);
     }
-    return (await this.#decision(r.id, ms)) ?? r;
-  }
-
-  #decision(id: string, ms: number): Promise<PhoneRequest | null> {
-    return new Promise((resolve) => {
-      const set = this.#waiting.get(id) ?? new Set();
-      this.#waiting.set(id, set);
-      const done = (r: PhoneRequest | null) => {
-        stop();
-        set.delete(take);
-        if (set.size === 0) this.#waiting.delete(id);
-        resolve(r);
-      };
-      const take = (r: PhoneRequest) => {
-        if (r.status !== "pending") done(r);
-      };
-      set.add(take);
-      const stop = wall.after(ms, () => done(null));
-    });
+    return r;
   }
 
   async #post(session: string, thread: SessionThread, r: PhoneRequest): Promise<string | null> {
@@ -258,9 +237,7 @@ export class PhoneGrants {
       const outcome = { status, ...(r.scope ? { scope: r.scope } : {}), ...(r.why ? { why: r.why } : {}) };
       this.#d.hub.store.restateCard(r.session, r.thread, r.cardTs, (card) => ({ ...card, adb: { ...card?.adb, outcome } }));
     }
-    const waiting = this.#waiting.get(r.id);
-    for (const f of [...(waiting ?? [])]) f(r);
-    if ((waiting?.size ?? 0) === 0 && status !== "pending") {
+    if (status !== "pending") {
       try {
         this.#d.hub.notify(r.session, said(r));
       } catch {
@@ -281,6 +258,6 @@ export function said(r: PhoneRequest): string {
     case "ended":
       return `Your grant ${r.id} of ${r.owner}'s phone ended (${r.why ?? "ended"}): adb no longer reaches it.`;
     default:
-      return `Your request ${r.id} to debug ${r.owner}'s phone waits for them to approve it on the card in your chat. End your turn need_human about the card; you are told when it is decided.`;
+      return `Your request ${r.id} to debug ${r.owner}'s phone waits for them to approve it on the card in your chat. ${UNDECIDED}`;
   }
 }

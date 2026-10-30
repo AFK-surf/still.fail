@@ -89,6 +89,14 @@ function harness(lock: () => ReturnType<typeof world>["state"] | null, starter =
   return { db, vaults, plain, notified, cards, dir, make, secrets: make() };
 }
 
+/// What the agent was told of request `asked` once decided: secret_save answers at once that it waits, and the decision
+/// comes to the session as a notice.
+const decided = async (h: { notified: [string, string][] }, asked: Promise<string>) => {
+  assert.match(await decided(h, asked), /You are told in this session when it is decided/);
+  const [session, text] = h.notified.at(-1)!;
+  assert.equal(session, "s1");
+  return text;
+};
 const pendingOf = (secrets: Secrets, lock: ReturnType<typeof world>["state"] | null, email: string, sub = email.split("@")[0]!) => secrets.pending(WS, lock, { sub, email });
 const opened = (r: Request, p: Person) => JSON.parse(Buffer.from(openSeal(p.box.priv, r.sealed!.find((s) => s.box === p.box.pub)!.secret, saveContext(WS, r.id))).toString());
 
@@ -132,7 +140,7 @@ test("a secret to keep in a vault: sealed to its owner's devices, decided by the
       TAG.grant, w.alice.signer,
     );
     assert.equal(h.secrets.saved(w.state, "alice", { request: r.id, vault: VAULT, grant }), null);
-    assert.match(await asked, /Kept: 「UniFi UX7」 is in alice@x.com's vault now \(item i_\w+\)\. This chat may use it now: secret_run \{grant: "r_/);
+    assert.match(await decided(h, asked), /Kept: 「UniFi UX7」 is in alice@x.com's vault now \(item i_\w+\)\. This chat may use it now: secret_run \{grant: "r_/);
     assert.deepEqual(h.secrets.held("s1").map((x) => [x.request.id, x.grant.scope, x.secret.fields.password]), [[r.id, "chat", PASSWORD]]);
     // Now one agents may ask for; the save is no use of it.
     assert.deepEqual(h.secrets.listings("s1").map((l) => l.listing.name), ["UniFi UX7"]);
@@ -147,7 +155,7 @@ test("a secret to keep in a vault: sealed to its owner's devices, decided by the
     assert.match(h.secrets.deny(w.state, "bob", deny(w.bob))!, /only the person it is kept for/);
     assert.match(h.secrets.deny(w.state, "alice", deny(w.bob))!, /one of their devices/);
     assert.equal(h.secrets.deny(w.state, "alice", deny(w.alice)), null);
-    assert.match(await again, /chose not to keep 「Other」/);
+    assert.match(await decided(h, again), /chose not to keep 「Other」/);
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }
@@ -178,7 +186,7 @@ test("a secret to keep while the vault is not turned on: it waits, sealed to the
     h.vaults.putVault(w.vault);
     h.vaults.putItem(written(r!, w.alice, { password: PASSWORD }));
     assert.equal(h.secrets.saved(w.state, "alice", { request: r!.id, vault: VAULT }), null);
-    assert.match(await asked, /Kept: 「UniFi UX7」.*When you need it, ask with secret_use/);
+    assert.match(await decided(h, asked), /Kept: 「UniFi UX7」.*When you need it, ask with secret_use/);
 
     // One sealed to no device is gone with a restart; one sealed to a device stays.
     void h.secrets.save("s1", { name: "Lost", kind: "token", reason: "z", value: "tok", cwd: h.dir });
@@ -229,7 +237,7 @@ test("a secret to keep without security mode: written into the owner's plain lib
     const kept = h.secrets.savedPlain(WS, null, "bob@x.com", { request: r.id });
     assert.ok(typeof kept !== "string");
     assert.deepEqual([kept.id, kept.owner, kept.fields, kept.listing], [r.item, "bob@x.com", { value: "xoxb-1" }, { name: "Slack", kind: "token", modes: ["proxy"], hosts: ["slack.com"] }]);
-    assert.match(await asked, /Kept: 「Slack」.*This chat may use it now/);
+    assert.match(await decided(h, asked), /Kept: 「Slack」.*This chat may use it now/);
     assert.deepEqual(h.secrets.listings("s1").map((l) => l.listing.name), ["Slack"]);
     assert.deepEqual(h.secrets.held("s1").map((x) => [x.request.id, x.grant.scope, x.grant.hosts]), [[r.id, "chat", ["slack.com"]]]);
 
@@ -264,7 +272,7 @@ test("a secret its owner types in: nothing of it held or sealed here, the card a
     // Her app writes what she typed into her vault, as for any secret to keep.
     h.vaults.putItem(written(r, w.alice, { value: PASSWORD }));
     assert.equal(h.secrets.saved(w.state, "alice", { request: r.id, vault: VAULT }), null);
-    assert.match(await asked, /Kept: 「OpenCode Go」/);
+    assert.match(await decided(h, asked), /Kept: 「OpenCode Go」/);
     assert.deepEqual(h.secrets.listings("s1").map((l) => [l.listing.name, l.listing.hosts]), [["OpenCode Go", ["opencode.ai"]]]);
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
@@ -286,7 +294,7 @@ test("a secret its owner types in without security mode: written into their plai
     const kept = h.secrets.savedPlain(WS, null, "bob@x.com", { request: r.id, fields: { username: "admin", password: PASSWORD } });
     assert.ok(typeof kept !== "string");
     assert.deepEqual([kept.id, kept.fields], [r.item, { username: "admin", password: PASSWORD }]);
-    assert.match(await asked, /Kept: 「Router」.*This chat may use it now.* The login's account is "admin", in STILLFAIL_USERNAME too\./);
+    assert.match(await decided(h, asked), /Kept: 「Router」.*This chat may use it now.* The login's account is "admin", in STILLFAIL_USERNAME too\./);
     assert.deepEqual(h.secrets.held("s1").map((x) => x.secret.fields.password), [PASSWORD]);
     // The account it was typed in with goes to each command beside the password, not hidden: it is not secret.
     const [grant] = h.secrets.held("s1");
@@ -310,7 +318,7 @@ test("a file to keep: read from its path as its bytes, kept as base64 under its 
     const kept = h.secrets.savedPlain(WS, null, "bob@x.com", { request: r.id });
     assert.ok(typeof kept !== "string");
     assert.deepEqual(kept.fields, { content: bytes.toString("base64"), filename: "kube config" });
-    assert.match(await asked, /Kept: 「集群」.*as a file/);
+    assert.match(await decided(h, asked), /Kept: 「集群」.*as a file/);
 
     const ran = await h.secrets.run("s1", { grant: r.id, command: 'test "$KUBECONFIG" = "$STILLFAIL_SECRET" && ls -l "$KUBECONFIG" | cut -c1-10 && basename "$KUBECONFIG" && head -2 "$KUBECONFIG" && echo "$KUBECONFIG" > where', cwd: h.dir });
     assert.match(ran, /^exit code 0\n-rw-------\nkube config\napiVersion: v1\ntoken: /);
@@ -351,7 +359,7 @@ test("a file its owner picks without security mode: kept with the fields their a
     const kept = h.secrets.savedPlain(WS, null, "bob@x.com", { request: r!.id, fields: { content, filename: "a.p12" } });
     assert.ok(typeof kept !== "string");
     assert.deepEqual(kept.fields, { content, filename: "a.p12" });
-    assert.match(await asked, /Kept: 「证书」/);
+    assert.match(await decided(h, asked), /Kept: 「证书」/);
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }

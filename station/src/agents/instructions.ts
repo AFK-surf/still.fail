@@ -124,6 +124,11 @@ ${instructions}
 </stillfail-instructions>`;
 
 /// A conversation address as the agent sees and names it.
+/// What an agent is told of a card it asked a person to decide in its chat (secret_use, secret_save, phone_use): the tool
+/// call does not wait for the decision, which comes later as a notice; a call held would hold the agent's turn, and
+/// with it everything else said in the chat meanwhile.
+export const UNDECIDED = "You are told in this session when it is decided: meanwhile go on with what does not need it (answer the chat, other work); with nothing else left, end your turn need_human (about the card).";
+
 export const threadAddress = (channel: string, threadTs: string) => `${channel}/${threadTs}`;
 
 export function parseThreadAddress(value: string): [string, string] | null {

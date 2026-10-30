@@ -365,20 +365,26 @@ test("a request from secret_use to the grant: listed for the chat's starter, dec
     starter = "bob@x.com";
     await assert.rejects(secrets.ask("s1", { item: "GitHub", reason: "x", mode: "ssh" }), /only by proxy, env/);
 
-    // Asked, then granted by alice while the tool waits.
+    // Asked: the tool answers at once, not holding the agent's turn (and with it the chat) until someone decides
+    // (2026-10-30: 「密钥存储申请不是异步的，没法在 agent 申请的时候询问其它事项」).
     const asked = secrets.ask("s1", { item: "github", reason: "rerun CI", command: "gh run rerun 1" });
-    await new Promise((r) => setImmediate(r));
+    const first = await Promise.race([asked, new Promise((r) => setImmediate(r)).then(() => "still held")]);
+    assert.match(first, /^Asked for 「GitHub」 .*You are told in this session when it is decided: meanwhile go on with what does not need it/);
     const [request] = secrets.pending(w.state.ws, w.state, { sub: "alice", email: "alice@x.com" });
     assert.ok(request && request.status === "pending" && request.command === "gh run rerun 1" && request.hosts?.join() === "api.github.com,*.example.com");
     assert.deepEqual(secrets.pending(w.state.ws, w.state, { sub: "carol", email: "carol@x.com" }), [], "only the vault's members see it");
     assert.match(secrets.grant(w.state, "carol", grantOf(request, w.carol, w.plain, { exp: 1000 + 600 }))!, /members decide/);
+    assert.deepEqual(notified, []);
+    // Granted by alice: the agent is told in its session.
     assert.equal(secrets.grant(w.state, "alice", grantOf(request, w.alice, w.plain, { exp: 1000 + 600 })), null);
-    assert.match(await asked, /Granted: 「GitHub」, grant r_/);
+    assert.equal(notified.length, 1);
+    assert.equal(notified[0]![0], "s1");
+    assert.match(notified[0]![1], /^Granted: 「GitHub」, grant r_/);
     assert.deepEqual(secrets.held("s1").map((h) => h.request.id), [request.id]);
     assert.deepEqual(seen.map((r) => r.status), ["pending", "granted"]);
     assert.deepEqual(secrets.pending(w.state.ws, w.state, { sub: "alice", email: "alice@x.com" }), []);
     assert.match(secrets.grant(w.state, "alice", grantOf(request, w.alice, w.plain, { exp: 1000 + 600 }))!, /granted/);
-    assert.deepEqual(notified, [], "told in the tool's answer");
+    assert.equal(notified.length, 1, "told once");
 
     // Still waiting when the station restarted: its box went with the old process, so it gets a new one, told to the
     // vault's members; the app's grant sealed to the old one does not open, one sealed to the new one is taken.
@@ -491,7 +497,8 @@ test("the plain library (no security mode): listed for its owner's chats, decide
     assert.deepEqual(secrets.pending(ws, null, { sub: "carol", email: "carol@x.com" }), [], "only its owner sees it");
     assert.match(secrets.grantPlain(ws, null, "carol@x.com", { request: request.id, scope: "once" })!, /owner decides/);
     assert.equal(secrets.grantPlain(ws, null, bob.email, { request: request.id, scope: "once" }), null);
-    assert.match(await asked, /Granted: 「GitHub」, grant r_/);
+    await asked;
+    assert.match(notified.at(-1)![1], /^Granted: 「GitHub」, grant r_/);
     const held = secrets.held("s1")[0]!;
     assert.equal(held.grant.mode, "proxy");
     assert.deepEqual(held.grant.hosts, ["api.github.com"]);
@@ -501,7 +508,8 @@ test("the plain library (no security mode): listed for its owner's chats, decide
     await new Promise((r) => setImmediate(r));
     const [second] = secrets.pending(ws, null, bob);
     assert.equal(secrets.denyPlain(ws, bob.email, { request: second!.id }), null);
-    assert.match(await again, /refused/);
+    await again;
+    assert.match(notified.at(-1)![1], /refused/);
     const uses = secrets.uses(ws, null, PLAIN, bob);
     // Both asked in the same second: in either order.
     assert.deepEqual(uses.map((u) => [u.item, u.denied, u.chatTitle, u.command]).sort((x, y) => Number(x[1]) - Number(y[1])), [[item.id, false, "修 CI", "gh run rerun 1"], [item.id, true, "修 CI", null]]);

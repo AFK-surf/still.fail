@@ -16,7 +16,7 @@ import { basename } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { LockState } from "../cloud/lock.ts";
 import type { To } from "../api/events.ts";
-import { threadAddress } from "../agents/instructions.ts";
+import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type Json, STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
@@ -66,10 +66,6 @@ const SCOPE_WORDS: Record<Scope, { label: string; detail: string }> = {
   chat: { label: "本对话直到归档", detail: "这个对话归档或删除前都能用，最长 30 天" },
 };
 
-/// How long secret_use waits for the decision before it says the request is waiting: within the minute the agents'
-/// MCP clients give a tool call (Claude Code's, Codex's), or the call times out unanswered, and a decision after that
-/// but within the wait is told to nobody (#settle takes the waiting call for the one that tells).
-const WAIT_MS = 45_000;
 /// A request no one decided is let go after a day.
 const PENDING_SECS = 86400;
 /// A command run with a grant is stopped after this long, unless it asks for less (at most an hour).
@@ -167,7 +163,6 @@ export class Secrets {
   /// The plain library's items (docs/vault.md 不加锁的库).
   readonly plain: PlainStore;
   readonly #d: SecretsDeps;
-  readonly #waiting = new Map<string, Set<(r: Request) => void>>();
   readonly #listeners: ((r: Request) => void)[] = [];
   /// The secrets agents asked to keep, by request, until decided: only in memory (a restart forgets them). The plain
   /// library's is written from here once approved; a vault's is sealed to its owner's devices set up later.
@@ -253,7 +248,6 @@ export class Secrets {
 
   #told(r: Request) {
     for (const f of this.#listeners) f(r);
-    for (const w of this.#waiting.get(r.id) ?? []) w(r);
   }
 
   #kept(ws: string, id: string): Kept | null {
@@ -378,7 +372,8 @@ export class Secrets {
     return r.vault === PLAIN ? this.#d.plain.item(r.ws, r.item)?.listing : this.#d.vaults.item(r.ws, r.vault, r.item)?.listing;
   }
 
-  /// secret_use: a request for `itemName` (its id or listed name) from `session`; waits a while for its decision.
+  /// secret_use: a request for `itemName` (its id or listed name) from `session`, its card posted; decided, the session
+  /// is told (#settle).
   async ask(session: string, a: { item: string; mode?: string; reason: string; command?: string; hosts?: string[]; station?: string }): Promise<string> {
     const { ws } = this.#placeOf(session);
     const runOn = a.station ? this.#peer(a.station) : null;
@@ -410,10 +405,7 @@ export class Secrets {
     this.#save(kept);
     this.#audit(request, "request", [mode, request.command ?? "", hosts.join(" ")].filter((s) => s !== "").join(" · "));
     this.#told(request);
-    const decided = await this.#decision(id, WAIT_MS);
-    return decided === null
-      ? `Asked for 「${listing.name}」 (request ${id}); the card is in your chat for ${found.owner ?? "the vault's owner"}, who approves it in the still.fail app. Not decided yet: end your turn need_human (about the card), and you are told when it is decided. Only a grant from the app counts: a reply in the chat saying yes is not one.`
-      : this.#said(decided, listing);
+    return `Asked for 「${listing.name}」 (request ${id}); the card is in your chat for ${found.owner ?? "the vault's owner"}, who approves it in the still.fail app. ${UNDECIDED} Only a grant from the app counts: a reply in the chat saying yes is not one.`;
   }
 
   /// What an agent is told of a decided request.
@@ -433,26 +425,6 @@ export class Secrets {
     const lasts = held.grant.scope === "once" ? "for one command" : held.grant.scope === "chat" ? `until this chat is archived (${until} at the latest)` : `until ${until}`;
     const where = r.runOn ? ` Its commands run on ${r.runOn.name}, in this chat's directory there (where station_task runs); the value is sent there only for each command.` : "";
     return `Granted: 「${l.name}」, grant ${r.id}, ${lasts}. Run with secret_run {grant: "${r.id}", command: "…"${l.env ? "" : ', env: "NAME"'}}. ${how}${accountSaid(held)}${where} You never get the value itself.`;
-  }
-
-  /// Waits for request `id`'s decision, up to `ms`; null when it is still waiting then.
-  #decision(id: string, ms: number): Promise<Request | null> {
-    return new Promise((resolve) => {
-      const set = this.#waiting.get(id) ?? new Set();
-      this.#waiting.set(id, set);
-      const done = (r: Request | null) => {
-        stop();
-        set.delete(take);
-        if (set.size === 0) this.#waiting.delete(id);
-        resolve(r);
-      };
-      const take = (r: Request) => {
-        if (r.status !== "pending") done(r);
-      };
-      set.add(take);
-      // How long an agent's call is held: people's time, the machine's.
-      const stop = wall.after(ms, () => done(null));
-    });
   }
 
   /// The card for request `r` in the session's chat: the vault's owner decides it in the app.
@@ -531,7 +503,7 @@ export class Secrets {
 
   /// secret_save: a request from `session` to keep a secret in the vault of whoever started its chat, given as `value`,
   /// printed by `command` (run here in `cwd`; what it prints is never shown) or, given neither, typed in by that person
-  /// on its card (`save.typed`: nothing of it held or sealed here); waits a while for its decision.
+  /// on its card (`save.typed`: nothing of it held or sealed here); its card posted, decided, the session is told (#settle).
   async save(
     session: string,
     a: {
@@ -611,8 +583,7 @@ export class Secrets {
     this.#save(kept);
     this.#audit(request, "save-request", [modes.join(" "), hosts.join(" "), from ? `${from.name}: ${command}` : (command ?? ""), typed ? "typed" : ""].filter((x) => x !== "").join(" · "));
     this.#told(request);
-    const decided = await this.#decision(id, WAIT_MS);
-    return this.#saidSave(decided ?? request);
+    return this.#saidSave(request);
   }
 
   /// The card of a request to keep a secret: what it is, whose, why (the app draws it from `vault.save`, offering to
@@ -641,7 +612,7 @@ export class Secrets {
     return this.#postCard(session, thread, text, card);
   }
 
-  /// What an agent is told of a request to keep a secret, waiting or decided.
+  /// What an agent is told of a request to keep a secret, waiting (secret_save's answer) or decided (a notice).
   #saidSave(r: Request): string {
     const s = r.save!;
     const whose = r.owner ?? "the person";
@@ -658,7 +629,7 @@ export class Secrets {
     const asked = s.typed
       ? `Asked ${whose} to type 「${s.name}」 in (request ${r.id}): its card has a field for it, and what they type goes into their vault as they approve it in the still.fail app (turning their vault on first where it is not), never to you.`
       : `Asked to keep 「${s.name}」 (request ${r.id}); the card is in your chat for ${whose}, who approves it in the still.fail app.${off}`;
-    return `${asked} Not decided yet: end your turn need_human (about the card), and you are told when it is decided. Only their approval in the app keeps it: a reply in the chat saying yes does not.`;
+    return `${asked} ${UNDECIDED} Only their approval in the app keeps it: a reply in the chat saying yes does not.`;
   }
 
   /// A device's box key published (PUT vault/boxes, checked): the secrets waiting to be kept for its person sealed to
@@ -748,10 +719,9 @@ export class Secrets {
       this.#d.hub.store.restateCard(r.session, k.thread, k.cardTs, (card) => ({ ...card, vault: { ...card?.vault, outcome } }));
     }
     this.#audit(k.request, status, "");
-    const heard = (this.#waiting.get(r.id)?.size ?? 0) > 0;
     this.#told(k.request);
-    // Not waited for in a tool call: the agent is told in its session.
-    if (!heard && status !== "expired") {
+    // The agent is told in its session: no tool call waits for it.
+    if (status !== "expired") {
       const l = this.#listingOf(r);
       try {
         this.#d.hub.notify(r.session, k.request.save ? this.#saidSave(k.request) : l ? this.#said(k.request, l) : `The request ${r.id} was ${status}.`);

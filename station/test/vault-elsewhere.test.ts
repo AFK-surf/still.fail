@@ -22,6 +22,7 @@ const tick = () => new Promise((r) => setImmediate(r));
 function stations() {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "vault-elsewhere-")));
   const cards: { text: string; card: any }[] = [];
+  const told: string[] = [];
   const hub = {
     store: {
       getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: join(dir, "here"), archivedAt: null } : null),
@@ -34,7 +35,7 @@ function stations() {
     },
     chat: () => ({ post: async () => "1.0" }),
     shared: () => {},
-    notify: () => {},
+    notify: (_k: string, text: string) => void told.push(text),
   };
   const rooms: string[] = [];
   const made = (name: string, peer: (given: string) => { id: string; name: string } | null, ask: (station: string, request: Json) => Promise<Json>) => {
@@ -60,7 +61,7 @@ function stations() {
       return there.heard("st-ccvm", WS, request);
     },
   );
-  return { dir, cards, rooms, here, there };
+  return { dir, cards, told, rooms, here, there };
 }
 
 test("a grant asked for another station: its commands run there, in the chat's directory, the value hidden; nowhere else", async () => {
@@ -81,7 +82,8 @@ test("a grant asked for another station: its commands run there, in the chat's d
     assert.match(s.cards.at(-1)!.text, /运行在：Studio/);
     assert.equal(s.cards.at(-1)!.card.vault.station, "Studio");
     assert.equal(s.here.grantPlain(WS, null, "bob@x.com", { request: r!.id, scope: "chat" }), null);
-    assert.match(await asked, /Its commands run on Studio/);
+    await asked;
+    assert.match(s.told.at(-1)!, /Its commands run on Studio/);
 
     // Run there: in the chat's directory on Studio, the value in its variable, hidden in what comes back.
     const out = await s.here.run("s1", { grant: r!.id, command: 'pwd; echo "token=$ROUTER_TOKEN"', cwd: join(s.dir, "here"), timeoutMs: 60_000 });

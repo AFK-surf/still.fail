@@ -288,7 +288,7 @@ agent → station（MCP 工具，在 `stillfail` 服务器里）：
 | 工具 | 做什么 |
 |---|---|
 | `secret_list` | 有 `listing` 的条目：id、名字、方式、域名，加上这个 session 手上还能用的授权 |
-| `secret_use {item, mode, reason, command?, hosts?}` | 建申请，往这个 chat 发一张申请卡片（库 owner 是 assignee），推送。等最多 45 秒（agent 的 MCP 客户端一次工具调用只等 1 分钟）：批准了回授权号和用法，没批准回「等批准」，之后批准或拒绝时往 session 里发一条消息 |
+| `secret_use {item, mode, reason, command?, hosts?}` | 建申请，往这个 chat 发一张申请卡片（库 owner 是 assignee），推送。不等决定，当场回「等批准」（2026-10-30 用户：「密钥存储申请不是异步的，没法在 agent 申请的时候询问其它事项」：工具调用挂着，agent 这一轮就停在那，chat 里别的话都得等它），批准或拒绝时往 session 里发一条消息（正在跑的轮次里直接收到），批准的带授权号和用法；`secret_save`、`phone_use` 同样 |
 | `secret_run {grant, command, env?, cwd?, timeout_seconds?}` | station 在 session 的工作目录里 `sh -c` 跑这个命令，按授权的方式给它密钥，返回退出码和遮过的输出（太长时留头 4KB、尾 28KB）。默认 10 分钟超时 |
 
 先不做命令行（`stillfail-secret run`）：要往 agent 的 PATH 里放东西、还要让 Codex 的进程也能证明自己是哪个 session，MCP 工具这两件都现成。以后需要在管道里用再加。
