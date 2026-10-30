@@ -19,6 +19,8 @@ pub struct Made {
   priv mut node : Node?
   priv watch : @signals.Watch
   priv mut on_press : (() -> Unit)?
+  /// the list's row or the part kept as its nodes it was last put in, if it was (kept_nodes.mbt): told with it
+  priv held : Ref[RowNodes?]
 }
 
 ///|
@@ -38,9 +40,14 @@ priv struct MadeChanging {
 
 ///|
 /// A watch of what a made node's fill, or what makes what it holds, read: told, the frame is built again for it (as
-/// for a list's row kept as its nodes: kept_nodes.mbt), between frames one owed.
-fn made_watch() -> @signals.Watch {
+/// for a list's row kept as its nodes: kept_nodes.mbt), between frames one owed; and the row or part kept as its nodes
+/// it is in (`held`), built again with it, as though it read it itself.
+fn made_watch(held : Ref[RowNodes?]) -> @signals.Watch {
   @signals.watch(fn() {
+    match held.val {
+      Some(rn) => rn.watch.touch()
+      None => ()
+    }
     nodes_run.told = true
     if !frame_running.val {
       h_frame_owed()
@@ -52,18 +59,21 @@ fn made_watch() -> @signals.Watch {
 /// A node made by `fill` (a call of Ctx::box with a body that makes nothing, or of Ctx::text: what it reads followed,
 /// filled anew in its place as any of it changes), holding `kids`.
 pub fn made_box(fill : (Ctx) -> Unit, kids? : Array[Made] = []) -> Made {
-  { fill, kids: Kept(kids), node: None, watch: made_watch(), on_press: None }
+  let held = Ref(None)
+  { fill, kids: Kept(kids), node: None, watch: made_watch(held), on_press: None, held }
 }
 
 ///|
 /// A node made by `fill`, holding what `kids` makes (made_each, made_show), made anew as what it read changes.
 pub fn made_holding(fill : (Ctx) -> Unit, kids : () -> Array[Made]) -> Made {
+  let held = Ref(None)
   {
     fill,
-    kids: Made({ make: kids, watch: made_watch(), now: [] }),
+    kids: Made({ make: kids, watch: made_watch(held), now: [] }),
     node: None,
-    watch: made_watch(),
+    watch: made_watch(held),
     on_press: None,
+    held,
   }
 }
 
@@ -147,6 +157,10 @@ pub fn made_show(when : () -> Bool, then : () -> Made) -> () -> Array[Made] {
 /// Let go: it and what it holds follow nothing more.
 fn Made::let_go(self : Made) -> Unit {
   self.watch.stop()
+  match self.node {
+    Some(n) if n.id != 0 && self.on_press is Some(_) => made_presses.remove(n.id)
+    _ => ()
+  }
   self.node = None
   match self.kids {
     Kept(ks) =>
@@ -173,8 +187,9 @@ let made_roots : Map[Int, Made] = {}
 let made_placed : Array[(Int, Node)] = []
 
 ///|
-/// What a press on each node made does, by its id, as the last build put them among the frame's (Made::on_press).
-// kept across runs: written as each build puts what is made among the frame's nodes
+/// What a press on each node made does, by its id, as it was last put among the frame's (Made::on_press), till it is
+/// let go: one kept in a list's row put back unbuilt with it does as it did.
+// kept across runs: written as what is made is put among the frame's nodes, let go with it
 let made_presses : Map[Int, () -> Unit] = {}
 
 ///|
@@ -202,7 +217,6 @@ fn Ctx::made_detach(self : Ctx) -> Unit {
     }
   }
   made_placed.clear()
-  made_presses.clear()
 }
 
 ///|
@@ -225,10 +239,14 @@ pub fn Ctx::made(self : Ctx, key : String, make : () -> Made) -> Unit {
 /// Node `m` put here among the frame's, then what it holds in it.
 fn Ctx::made_put(self : Ctx, m : Made) -> Unit {
   let slot = self.count
+  // (in a list's row or a part kept as its nodes: its nodes are the row's, kept with it, never put back by it too (one
+  // node in two places), filled as the row is built; what makes it changed builds the row again: made_watch)
+  m.held.val = nodes_run.building
+  let in_row = nodes_run.building is Some(_)
   // (a frame built whole fills every node anew: what is kept held to what filling it makes)
   let whole = nodes_run.whole
   match m.node {
-    Some(n) if !m.watch.is_stale() && !whole => self.made_put_back(n, slot)
+    Some(n) if !m.watch.is_stale() && !whole && !in_row => self.made_put_back(n, slot)
     _ => {
       m.watch.read(fn() { (m.fill)(self) })
       if self.count != slot + 1 {
@@ -238,7 +256,9 @@ fn Ctx::made_put(self : Ctx, m : Made) -> Unit {
     }
   }
   let n = self.nodes[slot]
-  made_placed.push((slot, n))
+  if !in_row {
+    made_placed.push((slot, n))
+  }
   match m.on_press {
     Some(f) if n.id != 0 => made_presses[n.id] = f
     _ => ()
@@ -293,6 +313,7 @@ fn Ctx::made_put_back(self : Ctx, n : Node, slot : Int) -> Unit {
     self.id_built(slot)
   }
   self.moves_said_again(slot, slot + 1)
+  self.ticks_said_again(slot, slot + 1)
 }
 
 ///|

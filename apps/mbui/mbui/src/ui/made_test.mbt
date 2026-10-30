@@ -117,3 +117,41 @@ test "made: what shows while a condition holds comes and goes with it" {
   t.draw()
   assert_true(t.find("now you see it") is None)
 }
+
+///|
+test "made: in a list's rows kept as their nodes, what a made node read changing fills it anew, its press kept" {
+  let words = @signals.signal("before")
+  let pressed = @signals.signal(0)
+  let t = Tester::new(
+    fn(c) {
+      c.list("rows", 30, 40.0, h=Px(200.0), fn(i) {
+        c.made("row \{i}", fn() {
+          made_box(fn(c) {
+            let id = c.id("row box")
+            c.box(id~, h=Px(40.0), fn() {  }) |> ignore
+          }, kids=[
+            made_box(fn(c) {
+              c.text(if i == 1 { "\{words.get()} \{pressed.get()}" } else { "row \{i}" }) |> ignore
+            }),
+          ]).on_press(fn() { if i == 1 { pressed.set(pressed.get() + 1) } })
+        })
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=200.0,
+  )
+  t.draw()
+  assert_true(t.find("before 0") is Some(_))
+  // (frames with nothing changed: the rows kept as their nodes)
+  t.frame()
+  t.frame()
+  words.set("after")
+  t.draw()
+  assert_true(t.find("after 0") is Some(_))
+  t.frame()
+  t.tap_text("after 0")
+  t.draw()
+  assert_eq(pressed.get(), 1)
+  assert_true(t.find("after 1") is Some(_))
+}
