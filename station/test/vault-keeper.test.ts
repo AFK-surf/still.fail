@@ -380,11 +380,21 @@ test("a request from secret_use to the grant: listed for the chat's starter, dec
     assert.match(secrets.grant(w.state, "alice", grantOf(request, w.alice, w.plain, { exp: 1000 + 600 }))!, /granted/);
     assert.deepEqual(notified, [], "told in the tool's answer");
 
-    // Still waiting when the station restarted: its box is gone with the old process, so it is let go, not offered.
+    // Still waiting when the station restarted: its box went with the old process, so it gets a new one, told to the
+    // vault's members; the app's grant sealed to the old one does not open, one sealed to the new one is taken.
     const lost = requestOf("r_01HZZZZZZZZZZZZZZZZZZZZLOST", newBoxPair().pub, { session: "s1" });
     db.prepare("INSERT INTO vault_requests (ws, id, session, status, body, thread, card_ts) VALUES (?, ?, ?, ?, ?, NULL, NULL)").run(lost.ws, lost.id, lost.session, lost.status, JSON.stringify(lost));
-    assert.deepEqual(secrets.pending(w.state.ws, w.state, { sub: "alice", email: "alice@x.com" }), []);
-    assert.match(secrets.grant(w.state, "alice", grantOf(lost, w.alice, w.plain, { exp: 1000 + 600 }))!, /the request is expired/);
+    seen.length = 0;
+    secrets.reboxed();
+    const [again] = secrets.pending(w.state.ws, w.state, { sub: "alice", email: "alice@x.com" });
+    assert.ok(again && again.id === lost.id && again.box !== "" && again.box !== lost.box, JSON.stringify(again));
+    assert.deepEqual(seen.map((r) => [r.id, r.box]), [[lost.id, again.box]]);
+    assert.match(secrets.grant(w.state, "alice", grantOf(lost, w.alice, w.plain, { exp: 1000 + 600 }))!, /does not open/);
+    assert.equal(secrets.grant(w.state, "alice", grantOf(again, w.alice, w.plain, { exp: 1000 + 600 })), null);
+    assert.deepEqual(secrets.held("s1").map((h) => h.request.id).sort(), [request.id, lost.id].sort());
+    // (Narrowed to none by the assertion above.)
+    const told: [string, string][] = notified;
+    assert.deepEqual(told.map(([k]) => k), ["s1"], "told in its session: its tool call ended with the old process");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -232,6 +232,20 @@ export class Secrets {
     for (const [id, fields] of c.unsaved ?? []) if (!this.#unsaved.has(id)) this.#unsaved.set(id, fields);
   }
 
+  /// Nothing more comes from the process before (it handed over, or there was none: a restart): each request still
+  /// waiting whose box is not here gets a new one, told to its deciders, so that it may still be granted (the box holds
+  /// no secret: only what is sealed to it once granted).
+  reboxed() {
+    const rows = this.#d.db.prepare("SELECT ws, id FROM vault_requests WHERE status = 'pending'").all() as { ws: string; id: string }[];
+    for (const { ws, id } of rows) {
+      const k = this.#kept(ws, id)!;
+      if (k.request.box === "" || this.keeper.waiting(id)) continue;
+      k.request.box = this.keeper.open(id);
+      this.#save(k);
+      this.#told(k.request);
+    }
+  }
+
   /// Tells `f` of each request made or decided (the members' event streams).
   listen(f: (r: Request) => void) {
     this.#listeners.push(f);
@@ -322,10 +336,9 @@ export class Secrets {
     return rows
       .map((r) => JSON.parse(r.body) as Request)
       .filter((r) => {
-        // A vault's request whose box this station no longer holds (it restarted) can never be granted: let go. So is a
-        // secret to keep that is gone with a restart (the plain library's) and sealed to no device; one the person types
-        // in is held nowhere until then.
-        const live = this.#d.coming?.() === true || (r.save ? r.save.typed === true || this.#unsaved.has(r.id) || (r.vault !== PLAIN && (r.sealed?.length ?? 0) > 0) : r.vault === PLAIN || this.keeper.waiting(r.id));
+        // A secret to keep that is gone with a restart (the plain library's) and sealed to no device can never be kept:
+        // let go; one the person types in is held nowhere until then. A request to use one lives on (`reboxed`).
+        const live = this.#d.coming?.() === true || !r.save || r.save.typed === true || this.#unsaved.has(r.id) || (r.vault !== PLAIN && (r.sealed?.length ?? 0) > 0);
         if (r.at + PENDING_SECS > now && live) return true;
         this.#settle(r, "expired");
         return false;
