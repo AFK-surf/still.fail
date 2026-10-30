@@ -51,7 +51,11 @@ export default {
       if (request.method !== "GET") return reply({ error: "method_not_allowed" }, 405);
       if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") return reply({ error: "websocket_required" }, 426);
       // Cloud account state does not govern transport; only the shared budget does.
-      if (!(await env.RELAY_BUDGET.getByName("primary").admit())) return limited();
+      const refused = await env.RELAY_BUDGET.getByName("primary").admit();
+      if (refused) {
+        console.log(JSON.stringify({ relay_refused: refused }));
+        return limited();
+      }
       const headers = new Headers({ upgrade: "websocket" });
       const protocol = request.headers.get("sec-websocket-protocol");
       if (protocol) headers.set("sec-websocket-protocol", protocol);
