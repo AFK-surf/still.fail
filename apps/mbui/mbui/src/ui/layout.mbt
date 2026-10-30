@@ -1117,6 +1117,18 @@ fn Ctx::replace(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
 /// moved or changed size), is put where it now goes instead: every slot in
 /// use is placed every frame, so what it holds was placed as it is.
 fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit {
+  // (an old view's box: what its rows make as they are laid out is that old view's own, let go with it: view_host.mbt)
+  if !old_box_owners.is_empty() && old_box_owners.get(i) is Some(o) {
+    let was = @signals.set_owner(o)
+    self.commit_at(i, px, py, gen)
+    @signals.set_owner(was) |> ignore
+  } else {
+    self.commit_at(i, px, py, gen)
+  }
+}
+
+///|
+fn Ctx::commit_at(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit {
   let n = self.nodes[i]
   let f = n.fl
   if n.same && f.laid_out_at() != gen {

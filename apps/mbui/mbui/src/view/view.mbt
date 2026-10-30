@@ -189,6 +189,10 @@ pub struct Tree {
   composed : Array[NodeId]
   /// the nodes let go since the host last took them (Tree::take_removed): what it keeps for them to let go too
   removed : Array[NodeId]
+  /// the nodes whose content was made again since the host last took them (Tree::take_changed), and whether anything
+  /// drawn changed since the last frame
+  pending : Array[NodeId]
+  mut drawn_due : Bool
   work : Work
   /// told as there is first something for a frame to do: what hosts it asks for a frame
   mut on_due : () -> Unit
@@ -231,6 +235,8 @@ pub fn Tree::new(
     changed: [],
     composed: [],
     removed: [],
+    pending: [],
+    drawn_due: false,
     on_due: fn() {  },
     work: {
       made: 0,
@@ -1236,6 +1242,28 @@ pub fn Tree::wake(self : Tree) -> Double? {
 }
 
 ///|
+/// The time now, as a change is told (the host's, else the clock's).
+fn Tree::time_now(self : Tree) -> Double {
+  match self.time {
+    Some(f) => f()
+    None => @signals.untracked(fn() { self.clock.get() })
+  }
+}
+
+///|
+/// An event from outside handled at `at` (its own time) by `f`: what had ended by then settled first, `f` run outside
+/// any tracking as one change with `at` as its cause's moment (what it shows or lets go, it does as of then).
+pub fn Tree::event(self : Tree, at : Double, f : () -> Unit) -> Unit {
+  self.settle(at)
+  let was = self.cause_at
+  self.cause_at = at
+  @signals.start_batch()
+  @signals.untracked(f)
+  @signals.end_batch()
+  self.cause_at = was
+}
+
+///|
 /// An event from outside about to be handled at `at` (its own time): what had ended by then settled first (a node
 /// whose leaving was over let go, what it followed no more; one back, here), whatever frame comes after.
 pub fn Tree::settle(self : Tree, at : Double) -> Unit {
@@ -1298,13 +1326,44 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double) -> Bool {
     s.set_height(Pt(h))
     self.layout_marked_at(0)
   }
+  self.brought()
+  let drawn = self.drawn_due
+  self.drawn_due = false
+  drawn
+}
+
+///|
+/// The tree brought to `at` (an event's moment, before it is handled: what is pressed, where things are, is the
+/// tree's as of then, whatever frame came before): the clock set there, what ended by then settled, the bindings told
+/// worked out, what is marked laid out, placed and looked at, the order made, as a frame does all of it (what it
+/// changed for the host to draw taken by the next frame's host as its own: Tree::take_changed). Nothing laid out before
+/// the tree has a size (its first frame).
+pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
+  if self.nodes.length() == 0 || !self.nodes[0].live {
+    return
+  }
+  if at > @signals.untracked(fn() { self.clock.get() }) {
+    self.at(at)
+  }
+  if self.last_w >= 0.0 {
+    self.brought()
+  } else {
+    self.left(at)
+  }
+}
+
+///|
+/// What was marked done, at the clock's now (Tree::frame, Tree::bring_to).
+fn Tree::brought(self : Tree) -> Unit {
+  let w = self.last_w
+  let h = self.last_h
   // (a leaving or coming back ended by now: something to do though nothing was told)
   match self.wake() {
     Some(end) if end <= @signals.untracked(fn() { self.clock.get() }) => self.due = true
     _ => ()
   }
   if !self.due {
-    return false
+    return
   }
   // what has left by now let go
   self.left(@signals.untracked(fn() { self.clock.get() }))
@@ -1351,7 +1410,9 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double) -> Bool {
   }
   self.work.changes = self.work.changes + self.changed.length() + self.composed.length()
   self.due = false
-  ordered || self.changed.length() > 0 || self.composed.length() > 0
+  if ordered || self.changed.length() > 0 || self.composed.length() > 0 {
+    self.drawn_due = true
+  }
 }
 
 ///|
@@ -1427,6 +1488,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     hosted: n.hosted,
   })
   self.changed.push(id)
+  self.pending.push(id)
 }
 
 ///|
@@ -1452,6 +1514,15 @@ fn Tree::ordered(self : Tree, at : Int, holder : Int) -> Unit {
 /// What the last frame made again: the nodes whose content changed.
 pub fn Tree::changed(self : Tree) -> Array[NodeId] {
   self.changed
+}
+
+///|
+/// The nodes whose content was made again since this was last asked (by frames, by an event bringing the tree to its
+/// moment): what the host keeps of each made again. Taken: asked again, only those since.
+pub fn Tree::take_changed(self : Tree) -> Array[NodeId] {
+  let out = self.pending.copy()
+  self.pending.clear()
+  out
 }
 
 ///|
@@ -1543,6 +1614,8 @@ pub fn Tree::drawn_of(self : Tree, id : NodeId) -> Drawn? {
 /// A press at (x, y): the topmost node drawn there that does something when pressed does it, outside any tracking, as
 /// one change. True if one did. Found where it is drawn (its holders' offsets with its own: View::rect).
 pub fn Tree::press(self : Tree, x : Double, y : Double) -> Bool {
+  // (as of its moment: what is where then, whatever frame came before)
+  self.bring_to(self.time_now())
   match self.target_at(x, y) {
     Pressed(id) => self.run_press(id)
     _ => false
@@ -1622,9 +1695,7 @@ pub fn Tree::run_press(self : Tree, id : NodeId) -> Bool {
   }
   match n.on_press {
     Some(f) => {
-      @signals.start_batch()
-      @signals.untracked(fn() { f() })
-      @signals.end_batch()
+      self.event(self.time_now(), f)
       true
     }
     None => false

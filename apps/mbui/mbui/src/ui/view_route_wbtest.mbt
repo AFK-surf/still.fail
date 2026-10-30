@@ -98,3 +98,29 @@ test "window tree: a part whose leaving ended at 300, a press at 350 with no fra
   assert_eq(run(false), (1, 0))
   assert_eq(run(true), (1, 0))
 }
+
+///|
+test "window tree: a part whose leaving ended at 300, a message at 350 setting what it followed: it runs nothing for it" {
+  let run = fn(frame_at_300 : Bool) {
+    let on = @signals.signal(true, same=fn(a, b) { a == b })
+    let s = @signals.signal(0)
+    let runs = Ref(0)
+    on_message_said("settle-test", fn(_, _) {
+      s.set(s.get() + 1)
+      true
+    })
+    let t = settling(on, s, runs)
+    let t0 = t.fake.time
+    on.set(false)
+    if frame_at_300 {
+      t.frame_at(t0 + 300.0)
+    }
+    let before = runs.val
+    t.post("settle-test", "{}")
+    // (taken by the frame at 350, the first after it came)
+    t.frame_at(t0 + 350.0)
+    (s.get(), runs.val - before)
+  }
+  assert_eq(run(false), (1, 0))
+  assert_eq(run(true), (1, 0))
+}

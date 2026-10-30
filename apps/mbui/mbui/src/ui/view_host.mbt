@@ -31,6 +31,9 @@ priv struct OldIsland {
   key : String
   build : (Ctx) -> Unit
   made : Made
+  /// what owns all it makes as it is built and laid out (its parts, its lists' rows, what they follow): a scope of
+  /// its node's, stopped with it
+  owner : @signals.ReactiveNode?
   /// its part among the old frame's kept parts (Ctx::part_nodes: what it read, its nodes as last built), by id, once
   /// built (-1: not yet)
   mut part : Int
@@ -150,6 +153,7 @@ fn view_forget() -> Unit {
   old_islands.clear()
   old_placed.clear()
   old_boxes.clear()
+  old_box_owners.clear()
   old_whole.val = true
   view_blocks.clear()
   view_paint_work.made = 0
@@ -179,7 +183,7 @@ fn view_frame(w : Double, h : Double, t : Double) -> Unit {
     tree.at(t)
     tree.frame(w, h) |> ignore
   })
-  for id in tree.changed() {
+  for id in tree.take_changed() {
     view_blocks.remove(id)
   }
   // (what was let go lets go of what it drew)
@@ -212,11 +216,17 @@ fn view_island_said() -> String {
 fn old_frame(c : Ctx) -> Unit {
   if old_whole.val {
     match old_islands.iter().find_first(fn(o) { old_placed.iter().any(fn(p) { p.0 == o.id }) }) {
-      Some(o) => (o.build)(c)
+      Some(o) => {
+        // (the old frame's own node holding it: laid out as this old view's, under its owner)
+        old_box_owners.clear()
+        old_box_owners[c.cur] = o.owner
+        owned_by(o.owner, fn() { (o.build)(c) })
+      }
       None => ()
     }
     return
   }
+  old_box_owners.clear()
   old_boxes.clear()
   for p in old_placed {
     match old_islands.iter().find_first(fn(o) { o.id == p.0 }) {
@@ -224,9 +234,10 @@ fn old_frame(c : Ctx) -> Unit {
         let i = c.box(left=p.1, top=p.2, w=Px(p.3), h=Px(p.4), clip=true, fn() {
           // (its part's id, as made_put names it here: what is let go with it, what an input to it builds)
           o.part = c.id(o.key)
-          c.made(o.key, fn() { o.made })
+          owned_by(o.owner, fn() { c.made(o.key, fn() { o.made }) })
         })
         old_boxes[o.id] = i
+        old_box_owners[i] = o.owner
       }
       None => ()
     }
@@ -349,7 +360,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     None => return false
   }
   // (what had ended by its moment settled first: before any press of the tree's is run)
-  tree.settle(h_event_time())
+  tree.bring_to(h_event_time())
   match (kind, view_held.val) {
     (0, _) =>
       match tree.target_at(x, y) {
@@ -424,6 +435,12 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
 /// As the frame ends: what reads the window's tree's clock keeps the frames coming as the clock goes (a look by the
 /// time, a node fading as it leaves); what only ends at a moment (a leaving nothing draws by) is woken for then.
 fn view_frame_end(c : Ctx) -> Unit {
+  if old_frame_dropped.val {
+    old_frame_dropped.val = false
+    frame_running.val = false
+    old_frame_let_go()
+    frame_running.val = true
+  }
   let tree = match view_app.val {
     Some(t) => t
     None => return
@@ -451,26 +468,27 @@ pub fn old(v : @view.View, build : (Ctx) -> Unit) -> @view.View {
     let key = "old island \{old_made.val}"
     old_made.val = old_made.val + 1
     let id = n.id()
-    old_islands.push({ id, key, build, made: made_island(key, fn() { "" }, build), part: -1 })
+    // (a scope of the node's: all it makes as it is built and laid out is owned by it, stopped as the node goes)
+    let owner : Ref[@signals.ReactiveNode?] = Ref(None)
+    @signals.effect_scope(fn() { owner.val = @signals.active_sub() }) |> ignore
+    old_islands.push({ id, key, build, made: made_island(key, fn() { "" }, build), owner: owner.val, part: -1 })
     n.owns(fn() {
       match old_islands.search_by(fn(o) { o.id == id }) {
         Some(i) => {
           let o = old_islands.remove(i)
-          // (made once among the old frame's: let go there too; what its kept nodes read is let go as the next build
-          // does not put them, kept_nodes.mbt rows_nodes_end)
+          // (what is made once of it among the old frame's let go; what it made, followed and kept went with its
+          // scope, as its node did)
           let keys = made_roots.iter().filter(fn(e) { physical_equal(e.1, o.made) }).map(fn(e) { e.0 }).collect()
           for k in keys {
             made_roots.remove(k)
           }
           o.made.let_go()
-          // (its part kept among the old frame's let go now, what it read followed no more: not left for a build to
-          // find it gone)
           if o.part >= 0 {
-            match kept_nodes.get((o.part, -1)) {
-              Some(rn) => rn.watch.stop()
-              None => ()
-            }
             kept_nodes.remove((o.part, -1))
+          }
+          // (the one old view the whole window: what the old frame read is what it read, let go with it)
+          if o.part < 0 {
+            old_frame_let_go()
           }
         }
         None => ()
@@ -478,6 +496,19 @@ pub fn old(v : @view.View, build : (Ctx) -> Unit) -> @view.View {
     })
     |> ignore
   })
+}
+
+///|
+/// What the old views made as they were built and laid out, by the old frame's box holding each: owned by that one.
+// kept across runs: put back as a run begins (view_forget)
+let old_box_owners : Map[Int, @signals.ReactiveNode?] = Map([])
+
+///|
+/// `f` run with what it makes owned by `owner` (the reading going on followed as it was).
+fn owned_by(owner : @signals.ReactiveNode?, f : () -> Unit) -> Unit {
+  let was = @signals.set_owner(owner)
+  f()
+  @signals.set_owner(was) |> ignore
 }
 
 ///|
@@ -522,3 +553,22 @@ fn view_settle(at : Double) -> Unit {
     None => ()
   }
 }
+
+///|
+/// The old frame's watches let go of what they followed (its build's, its layout's, its paint's): what the one old view
+/// that was the whole window read, let go with it; the next frame builds whatever is there anew.
+fn old_frame_let_go() -> Unit {
+  // (while the frame is being built, laid out or painted under them: as it ends)
+  if frame_running.val {
+    old_frame_dropped.val = true
+    return
+  }
+  frame_watch_of().stop()
+  layout_watch_of().stop()
+  paint_watch_of().stop()
+}
+
+///|
+/// The old frame's watches to be let go as the frame under way ends (old_frame_let_go).
+// kept across runs: put back as a frame ends (view_frame_end)
+let old_frame_dropped : Ref[Bool] = Ref(false)

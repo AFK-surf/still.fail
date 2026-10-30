@@ -200,3 +200,66 @@ test "a part shown at 10 holding a card hidden at 150, the first frame at 200: t
   assert_eq(jumped, run([10.0, 100.0, 200.0]))
   assert_eq(jumped.0.filter(fn(s) { s.contains("0.8333") }).length(), 1, msg="\{jumped.0}")
 }
+
+///|
+test "a button moved at 10, pressed at 20 where it went: pressed, with a frame at 15 or none" {
+  let run = fn(frame_at_15 : Bool) {
+    let now = Ref(0.0)
+    let off = @signals.signal((0.0, 0.0), same=fn(a, b) { a == b })
+    let pressed = Ref(0)
+    let t = @view.Tree::new(
+      fn(root) {
+        root.box(fn(b) {
+          b
+          .width(Is(Some(40.0)))
+          .height(Is(Some(20.0)))
+          .offset(By(fn() { off.get() }))
+          .on_press(fn() { pressed.val = pressed.val + 1 })
+          |> ignore
+        })
+        |> ignore
+      },
+      time=fn() { now.val },
+    )
+    frame_at(t, now, 0.0)
+    now.val = 10.0
+    off.set((100.0, 0.0))
+    if frame_at_15 {
+      frame_at(t, now, 15.0)
+    }
+    now.val = 20.0
+    t.press(110.0, 10.0) |> ignore
+    t.press(10.0, 10.0) |> ignore
+    pressed.val
+  }
+  assert_eq(run(true), 1)
+  assert_eq(run(false), 1)
+}
+
+///|
+test "a button shown at 10, pressed at 20: pressed, with a frame between or none" {
+  let run = fn(frame_between : Bool) {
+    let now = Ref(0.0)
+    let on = @signals.signal(false, same=fn(a, b) { a == b })
+    let pressed = Ref(0)
+    let t = @view.Tree::new(
+      fn(root) {
+        root.show(fn() { on.get() }, fn(b) {
+          b.width(Is(Some(40.0))).height(Is(Some(20.0))).on_press(fn() { pressed.val = pressed.val + 1 }) |> ignore
+        })
+      },
+      time=fn() { now.val },
+    )
+    frame_at(t, now, 0.0)
+    now.val = 10.0
+    on.set(true)
+    if frame_between {
+      frame_at(t, now, 15.0)
+    }
+    now.val = 20.0
+    t.press(10.0, 10.0) |> ignore
+    pressed.val
+  }
+  assert_eq(run(true), 1)
+  assert_eq(run(false), 1)
+}

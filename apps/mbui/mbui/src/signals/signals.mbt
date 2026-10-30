@@ -740,7 +740,17 @@ pub fn watch(changed : () -> Unit) -> Watch {
     }
   }
   // (told, it runs nothing of what it read: what it read stays followed till it reads anew, run_effect)
-  { node: ReactiveNode::new(NONE, WatchNode, own=coerce(told)), stale, set_by: [] }
+  let node = ReactiveNode::new(NONE, WatchNode, own=coerce(told))
+  // (made where an owner is set (set_owner: a scope that is not reading, an old view's): that owner's, let go with it;
+  // not what is reading's, whose reading anew would let it go)
+  match run.owner {
+    Some(p) => {
+      link(node, p, 0)
+      p.flags = p.flags | HAS_CHILD_EFFECT
+    }
+    None => ()
+  }
+  { node, stale, set_by: [] }
 }
 
 ///|

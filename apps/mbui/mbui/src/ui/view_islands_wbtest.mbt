@@ -121,3 +121,59 @@ test "window tree: one old view let go: what it read no longer followed, the oth
   assert_true(red.length() == 1 && red[0].0 == 0.0, msg="\{red}")
   assert_true(w.b.watched())
 }
+
+///|
+/// Old view A (in the left half while `on_a` holds) whose words are in a kept part of their own and in a list's row,
+/// both reading `s`; old view B reading `s2`; parts kept as their nodes. `whole`: A alone, the whole window.
+fn owning(on_a : @signals.Signal[Bool], s : @signals.Signal[Int], s2 : @signals.Signal[Int], whole : Bool) -> Tester {
+  let view_a = fn(c : Ctx) {
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      c.kept_part(c.id("part"), "part", fn() { c.text("part \{s.get()}", size=12.0) |> ignore })
+      c.list("rows", 1, 20.0, fn(_) { c.text("row \{s.get()}", size=12.0) |> ignore }) |> ignore
+    })
+    |> ignore
+  }
+  let view_b = fn(c : Ctx) { c.text("b \{s2.get()}", size=12.0) |> ignore }
+  let t = Tester::new(fn(_c) {  })
+  t.keep_parts(true)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.row(Is(true)) |> ignore
+    root.show(fn() { on_a.get() }, fn(v) {
+      v.grow(Is(1.0)) |> ignore
+      old(v, view_a).grow(Is(1.0)) |> ignore
+    })
+    if !whole {
+      root.box(fn(v) {
+        v.grow(Is(1.0)) |> ignore
+        old(v, view_b).grow(Is(1.0)) |> ignore
+      })
+      |> ignore
+    }
+  })
+  t.draw()
+  t.drawn_now()
+  t
+}
+
+///|
+test "window tree: an old view let go: what its parts and rows followed let go with it at once, the other's not" {
+  let on_a = @signals.signal(true, same=fn(a, b) { a == b })
+  let s = @signals.signal(0)
+  let s2 = @signals.signal(0)
+  owning(on_a, s, s2, false) |> ignore
+  assert_true(s.watched() && s2.watched())
+  on_a.set(false)
+  assert_false(s.watched())
+  assert_true(s2.watched())
+}
+
+///|
+test "window tree: the one old view, the whole window, let go: what it followed let go at once" {
+  let on_a = @signals.signal(true, same=fn(a, b) { a == b })
+  let s = @signals.signal(0)
+  owning(on_a, s, @signals.signal(0), true) |> ignore
+  assert_true(s.watched())
+  on_a.set(false)
+  assert_false(s.watched())
+}
