@@ -43,6 +43,8 @@ export class RelayBudget extends DurableObject<Env> {
   protected connections = LIMITS.connections;
   /** Connections admitted in the last DIAL_MS, with the relay's accept count then: those not yet accepted still count. */
   private pending: { at: number; accepts: number }[] = [];
+  /** The minute it last said why it refused a connect. */
+  private toldMinute = -1;
 
   protected load(): Quota {
     const now = nowSeconds();
@@ -103,6 +105,12 @@ export class RelayBudget extends DurableObject<Env> {
     if (admitted) {
       q.connects++;
       this.pending.push({ at: now, accepts });
+    }
+    // Why it refused, once a minute while it does (the Worker's log, `wrangler tail`): 2026-10-30 it refused every connect
+    // from 12:20 in Beijing, the relay's own counters far from every limit, and nothing said which it was held to.
+    if (!admitted && this.toldMinute !== q.minute) {
+      this.toldMinute = q.minute;
+      console.log(JSON.stringify({ refused: true, open, dialing, connects: q.connects, bytes: q.bytes, frames: q.frames ?? 0, running: counters !== null, day: q.day }));
     }
     this.ctx.storage.kv.put("quota", q);
     if (admitted && (await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + POLL_MS);
