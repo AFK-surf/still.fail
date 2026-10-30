@@ -1675,6 +1675,10 @@ fn app_state_taken(s : Int) -> Unit {
     return
   }
   app_state.val = s
+  // (no longer in front: a finger held on the window's tree let go of now)
+  if (s & 2) == 0 {
+    view_hold_lost()
+  }
   match app_change.val {
     Some(f) => f((s & 1) != 0, (s & 2) != 0)
     None => ()

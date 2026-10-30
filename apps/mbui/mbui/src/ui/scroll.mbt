@@ -38,7 +38,7 @@ fn scroll_kind() -> Int {
 ///|
 /// How far a finger moves before it drags (logical pixels): Android's
 /// ViewConfiguration touch slop, 8 dp; 6 elsewhere.
-fn touch_slop() -> Double {
+pub fn touch_slop() -> Double {
   if scroll_kind() == 2 {
     8.0
   } else {

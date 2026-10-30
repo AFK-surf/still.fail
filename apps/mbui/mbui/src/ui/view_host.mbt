@@ -783,6 +783,19 @@ fn view_event(f : () -> Unit) -> Unit {
 }
 
 ///|
+/// The window no longer in front (app_state_taken): a finger held on a node of the tree's called off at that moment, the
+/// rest of what it does nobody's.
+fn view_hold_lost() -> Unit {
+  match (view_app.val, view_held.val) {
+    (Some(tree), Some(Dragging(_))) => {
+      view_held.val = Some(Nowhere)
+      tree.event(view_moment(), fn() { tree.hold_lost_in(0) })
+    }
+    _ => ()
+  }
+}
+
+///|
 /// Whether a finger is held by the tree (on a node of its, or on nothing of the old views' after its hold was called
 /// off): all the pointer's events till it is let go are the tree's, a second finger's too, none an old view's.
 fn view_holds() -> Bool {

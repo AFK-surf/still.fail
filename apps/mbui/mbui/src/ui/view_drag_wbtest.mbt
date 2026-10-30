@@ -75,3 +75,32 @@ test "window tree: a finger held on a node, a second one put down: the hold call
   t.drawn_now()
   assert_eq((seen, old_seen.val), ([Down, Off], before))
 }
+
+///|
+test "window tree: a finger held on a node, the window no longer in front: called off then, its hold never come" {
+  let said : Array[String] = []
+  let t = Tester::new(fn(_c) {  })
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.over(Is(true)) |> ignore
+      b.box(fn(h) {
+        h
+        .width(Is(Some(100.0)))
+        .height(Is(Some(100.0)))
+        .gesture(6.0, hold=(300.0, fn(_) { said.push("hold") }), drag=fn(d) { said.push("\{d.kind}") })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  app_state_taken(3)
+  t.touch(0, 10.0, 10.0)
+  t.advance(50.0)
+  app_state_taken(1)
+  t.run_for(500.0)
+  assert_eq(said, ["Off"])
+}
