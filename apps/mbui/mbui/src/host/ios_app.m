@@ -511,19 +511,27 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
 // scripted run's paste): what the field's menu offers (cut and copy over words picked, paste, select all), done as
 // Android's floating menu does them (MBView.textMenu): cut, copy and select all as the field's own keys, the
 // clipboard's words pasted (text kind 8: put in as typed, a step of its own to undo; a long paste is the app's to take:
-// the editor's paste_limit). Nothing else of the system's (look up, translate, share…), which Android's menu has none
-// of either.
+// the editor's paste_limit). A picture on it (a screenshot copied) is the app's ⌘V (1000 + v) as the Mac's paste_now
+// sends it, read there and then (@hostapi.clip_read, within the paste the person chose: no "allow paste" asked) and
+// put in as a file where the field takes files. Nothing else of the system's (look up, translate, share…), which
+// Android's menu has none of either.
 static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2 copy, 4 paste, 8 select all)
 - (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
   if (!self.imeActive || key_catching) return NO;
-  if (action == @selector(paste:)) return UIPasteboard.generalPasteboard.hasStrings;
+  if (action == @selector(paste:)) return UIPasteboard.generalPasteboard.hasStrings || UIPasteboard.generalPasteboard.hasImages;
   if (action == @selector(cut:)) return (menu_can & 1) != 0;
   if (action == @selector(copy:)) return (menu_can & 2) != 0;
   if (action == @selector(selectAll:)) return (menu_can & 8) != 0;
   return NO;
 }
 - (void)paste:(id)sender {
-  NSString *s = UIPasteboard.generalPasteboard.string;
+  UIPasteboard *pb = UIPasteboard.generalPasteboard;
+  if (pb.hasImages) {
+    mb_cb.key(1000 + 'v', 8);
+    [self requestFrame];
+    return;
+  }
+  NSString *s = pb.string;
   if (s.length) send_text(8, s, 0, 0);
 }
 - (void)cut:(id)sender { mb_cb.key(14, 0); [self requestFrame]; }
