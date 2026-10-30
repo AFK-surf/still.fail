@@ -277,7 +277,7 @@ how many failed (`mesh.connect`), by relay, carrier and province:
 ```kusto
 ['ember']
 | where _time > ago(1d) and name in ("mesh.speed", "mesh.connect")
-| extend relay = tostring(['attributes.custom']['stillfail.via']), carrier = ['resource.stillfail.net.org'], province = ['resource.stillfail.net.region']
+| extend relay = tostring(['attributes.custom']['stillfail.via']), carrier = tostring(['resource.custom']['stillfail.net.org']), province = tostring(['resource.custom']['stillfail.net.region'])
 | summarize
     speeds = countif(name == "mesh.speed"),
     kbps_p50 = percentileif(toreal(['attributes.custom']['stillfail.bps']) / 1024, 50, name == "mesh.speed"),
