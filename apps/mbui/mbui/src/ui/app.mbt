@@ -573,6 +573,8 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.nodes_known()
   // (the rows kept as their nodes out of the frame's, for this build to make its own: kept_nodes.mbt)
   c.rows_detach()
+  // (what is made once out of the frame's nodes likewise: made.mbt)
+  c.made_detach()
   c.moves_build_start()
   c.corner_ladder = c.theme.corner_ladder
   c.corner_fit = c.theme.corner_fit
@@ -1085,6 +1087,8 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
     if c.active != 0 && target == c.active && !c.dragging {
       c.clicked.push(c.active)
+      // (what a made node said a press on it does, done as it is let go: made.mbt)
+      made_pressed(c.active)
       c.click_at = Some((x, y))
       // the second of two (Ctx::double_clicked): on the same, soon enough and near enough; then none is first
       let (was, at, ax, ay) = c.last_click

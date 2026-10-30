@@ -104,7 +104,12 @@ squeeze and contrast checks; film's images before and after where a step touches
    was used (kept_nodes.mbt's RowNodes: thirty kinds a kept row records and says again). Each becomes what a node
    holds, asked of the tree as it is laid out and painted. Then a subtree kept is its nodes and nothing besides, made
    once or built: the ground both the old frame and the new one stand on, one list a PR, nothing shown changed.
-2. **The runtime** (src/ui, beside what is there): nodes made once, `Live` bindings by phase, `show`/`pick`/`each`
+2. **The runtime** (src/ui, beside what is there; begun in made.mbt: a node made once is filled by a call of
+   Ctx::box or Ctx::text that makes it alone, followed by a watch of its own and filled anew in its place as what it
+   read changes, put back unbuilt each frame otherwise; what it holds comes and goes by made_each and made_show; a
+   press is a callback, Made::on_press; a frame built whole fills every node anew, so what was kept is held to it.
+   Put among a frame's nodes where the old view says, Ctx::made: the island the other way round, the new inside the
+   old, for the parts made once to grow from the leaves while the old frame holds them): nodes made once, `Live` bindings by phase, `show`/`pick`/`each`
    with owners, handlers, the tree's hit tests, layout of the marked nodes, paint kept by node, the frame of step 8,
    and the Tester's check of a tree made from nothing. Its own tests: random trees changed a little at a time against
    one made fresh, as flex's reuse_test does.
