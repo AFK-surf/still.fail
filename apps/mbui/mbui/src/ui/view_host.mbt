@@ -39,6 +39,9 @@ priv struct OldIsland {
   /// its part among the old frame's kept parts (Ctx::part_nodes: what it read, its nodes as last built), by id, once
   /// built (-1: not yet)
   mut part : Int
+  /// how big its node is placed, as the old frame builds it: its room (Ctx::width, height, what it is built for) and
+  /// part of its key (built again for another)
+  room : Ref[(Double, Double)]
 }
 
 ///|
@@ -286,7 +289,11 @@ fn old_frame(c : Ctx) -> Unit {
           fn() {
             // (its part's id, as made_put names it here: what is let go with it, what an input to it builds)
             o.part = c.id(o.key)
-            owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) })
+            // (built for its own room: what it reads of the window's size is its node's)
+            o.room.val = (p.3, p.4)
+            c.sized(p.3, p.4, fn() {
+              owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) })
+            })
           },
         )
         old_boxes[o.id] = i
@@ -448,7 +455,20 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   tree.bring_to(at)
   // (what the old views take presses at, where the tree has them as of then)
   old_hits_place(g(), Some(tree))
+  // (what the old frame put over all of it at its root (its overlays) is painted over the tree, whatever it draws:
+  // what it takes there, a press or a pointer's move with none held, is its own before anything of the tree's under it)
+  let over = !old_whole.val && (kind == 0 || (kind == 1 && view_held.val is None)) &&
+    old_root_hit(g(), x, y, pressed=kind == 0)
   match (kind, view_held.val) {
+    (0, _) if over => {
+      view_held.val = Some(Old(-1))
+      view_input_went(-1)
+      false
+    }
+    (1, None) if over => {
+      view_input_went(-1)
+      false
+    }
     (0, _) =>
       match tree.target_at(x, y) {
         // (the secondary button presses nothing: no menu of a node's yet)
@@ -458,7 +478,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
         }
         // (the old view's: the part whose hit target the old frame finds there, held so till let go)
         Hosted(_) => {
-          let part = if old_whole.val { -1 } else { old_part_hit(g(), x, y) }
+          let part = if old_whole.val { -1 } else { old_part_hit(g(), x, y, pressed=true) }
           view_held.val = Some(Old(part))
           view_input_went(part)
           false
@@ -544,11 +564,14 @@ fn view_frame_end(c : Ctx) -> Unit {
 /// `v` leaves it) whose subtree is `build`, built as the old view is built, in its room, place, cut and opacity, painted
 /// in its place in the tree's order and pressed through the tree. Made with the node: its subtree made once among the
 /// old frame's (made_island: built again only as what it read changes, whatever another old view does); let go with
-/// it, its build run no more. Any number a window: one the whole window's is the old frame itself.
-pub fn old(v : @view.View, build : (Ctx) -> Unit) -> @view.View {
+/// it, its build run no more. Any number a window: one the whole window's is the old frame itself. `key`: what it is laid
+/// out by besides what it reads (a part's key, Ctx::kept_part's: what is no signal it reads of the window, the host),
+/// built again as that changes.
+pub fn old(v : @view.View, build : (Ctx) -> Unit, key? : () -> String = fn() { "" }) -> @view.View {
   v.hosted(make=fn(n) {
-    let key = "old island \{old_made.val}"
+    let name = "old island \{old_made.val}"
     old_made.val = old_made.val + 1
+    let room : Ref[(Double, Double)] = Ref((0.0, 0.0))
     let id = n.id()
     // (a scope of the node's: all it makes as it is built and laid out is owned by it, stopped as the node goes)
     let owner : Ref[@signals.ReactiveNode?] = Ref(None)
@@ -568,12 +591,13 @@ pub fn old(v : @view.View, build : (Ctx) -> Unit) -> @view.View {
     })
     old_islands.push({
       id,
-      key,
+      key: name,
       build,
-      made: made_island(key, fn() { "" }, build),
+      made: made_island(name, fn() { "\{room.val.0}x\{room.val.1} " + key() }, build),
       owner: owner.val,
       watch: watch.val.unwrap(),
       part: -1,
+      room,
     })
     n.owns(fn() {
       match old_islands.search_by(fn(o) { o.id == id }) {
@@ -635,12 +659,32 @@ fn view_input_taken() -> Int {
 }
 
 ///|
+/// Whether a press at (x, y) (`pressed`; else the pointer there) is on a hit target of the old frame's that is no old
+/// view's (what it put over all of it at its root: its overlays, a modal's ground among them), as a press finds one.
+fn old_root_hit(c : Ctx, x : Double, y : Double, pressed? : Bool = true) -> Bool {
+  let k = if pressed {
+    let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
+    press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y)
+  } else {
+    hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y)
+  }
+  k >= 0 && !old_hits.iter().any(fn(h) { k >= h.from && k < h.to })
+}
+
+///|
 /// The part of the old view whose hit target the old frame finds at (x, y) as the tree has things now (old_hits_place):
 /// that target's old view's, whatever other old view's box lies over or under it there (one over another drawing
 /// nothing there passes it on); -1 (all of them) where none is found, or what is found is none's (what the old frame
 /// put over all of it at its root).
-fn old_part_hit(c : Ctx, x : Double, y : Double) -> Int {
-  let k = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y)
+fn old_part_hit(c : Ctx, x : Double, y : Double, pressed? : Bool = false) -> Int {
+  // (going down: the target a press there is the old frame's (what only points passed over, a small one reached as
+  // the press does: Ctx's pointer going down); else what is pointed at)
+  let k = if pressed {
+    let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
+    press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y)
+  } else {
+    hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y)
+  }
   if k < 0 {
     return -1
   }

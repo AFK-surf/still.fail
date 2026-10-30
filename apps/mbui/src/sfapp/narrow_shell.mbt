@@ -57,6 +57,13 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
       }
     },
     most=page_local_ms,
+    // (each page's island built again as what it is laid out by besides what it reads changes: narrow_page_key)
+    page_key=fn(_page) {
+      match workspace_in_view(src).0 {
+        Some(w) => narrow_page_key(@ui.current(), w)
+        None => ""
+      }
+    },
   )
   |> ignore
   @ui.old(v, fn(c) {
@@ -98,10 +105,18 @@ fn narrow_under(c : @ui.Ctx, src : Source) -> Unit {
 /// pick.mbt), the pictures it waits for said afresh (image_item, video_item).
 fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Unit {
   @sfbase.held_pictures_waiting.val = false
+  // (the page is its island, kept as its nodes by what it reads and its key (narrow_page_key): no part of its own)
+  let built = fn() {
+    let whole = c.box(style=page_whole, fn() {
+      let (now, all, _, invited) = workspace_in_view(src)
+      page_view(c, src, now.unwrap_or(w), all, invited, page)
+    })
+    @motion.scope(c, whole, bottom=true)
+  }
   if @ui.pointing() is Finger {
-    narrow_page(c, src, w, page)
+    built()
   } else {
-    c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), fn() { narrow_page(c, src, w, page) })
+    c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), built)
   }
   // what is the page's own and takes back before it (said with it, in its island: what it reads is what the page
   // writes): the player sideways turned upright first; words picked in a chat, a link's menu, let go first (pick.mbt)
@@ -171,6 +186,16 @@ fn narrow_root_back(c : @ui.Ctx) -> Unit {
 }
 
 ///|
+/// What a page laid out Small is laid out by besides what it reads: the window, the bars' room, the keyboard's, the
+/// ground, where it stands in the stack and the way a place came in, the workspace (its key as a part kept as its
+/// nodes: a page's island's, narrow_shell; its kept part's, narrow_page).
+fn narrow_page_key(c : @ui.Ctx, w : Workspace) -> String {
+  let t = @sf.theme()
+  "\{c.width} \{c.height} \{status_top()} \{nav_foot()} \{bar_room_now()} " +
+  "\{t.p.bg} \{t.dark} \{app.nav.under() is None} \{app.switch_way} \{w.id}"
+}
+
+///|
 /// Page `page` of the stack laid out Small, in workspace `w`.
 fn narrow_page(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Unit {
   // what moves in the page of its own (the composer) takes its place from the page's foot, as the wide frame's pane
@@ -181,9 +206,7 @@ fn narrow_page(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Unit {
     // frame's panes are (sfdesk's tape_part): a mark stepping in it, a list of another page scrolled builds none of it.
     // Its key what it is laid out by besides what it reads: the window, the bars' room, the keyboard's, the ground,
     // where it stands in the stack and the way a place came in
-    let t = @sf.theme()
-    let key = "\{c.width} \{c.height} \{status_top()} \{nav_foot()} \{bar_room_now()} " +
-      "\{t.p.bg} \{t.dark} \{app.nav.under() is None} \{app.switch_way} \{w.id}"
+    let key = narrow_page_key(c, w)
     // (an island: built from its key and what it reads, the workspaces read in it, whatever else of the frame is
     // built anew; docs/retained.md, the way there's 3)
     c.kept_part(

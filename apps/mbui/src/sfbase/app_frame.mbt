@@ -139,7 +139,7 @@ fn system_said(json : String) -> Unit {
       // a link the system opened the app with (links.mbt): opened once the app can (signed in, its workspace known)
       Link(url) => link_later.push(app_link(url))
       // shown over another app, or in its own window again (share.mbt)
-      Over(over) => share_over.val = over
+      Over(over) => share_over.set(over)
       // a tab or an item of the system's own bars chosen (sfdesk's rail_native.mbt takes it as it draws)
       NavTapped(id) => nav_tapped.push(id)
       // (how far the bars reach in over the view: mbui keeps it, @ui.system_bars, bars.mbt)
@@ -204,7 +204,7 @@ pub fn app_link(url : String) -> String {
 
 ///|
 /// Shown over another app (the host's say, @hostapi.system_channel `over`): only the share sheet is drawn.
-pub let share_over : Ref[Bool] = Ref(false)
+pub let share_over : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 /// The workspace in view (the one switched to here, else the one last open, else the first once every account has
@@ -274,7 +274,7 @@ fn app_frame_reset() -> Unit {
   attention.workspace = ""
   attention.new_chat = false
   attention.src = None
-  share_over.val = false
+  share_over.set(false)
 }
 
 ///|

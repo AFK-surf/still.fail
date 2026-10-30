@@ -864,20 +864,29 @@ pub fn last_set_at() -> String {
 /// Whether what the watch's last read read has changed by now, told or not yet (in a batch, before it ends): what is
 /// worked out of it is pulled (a computed it read worked out again where what that read changed), nothing told, nothing
 /// run but that. For what must read the latest at once (a size asked mid-change), not what waits for the change's end.
+/// Found the same, it is watching again: a change after it marks it again (Watch::on_marked), in the same batch too.
 pub fn Watch::changed_now(self : Watch) -> Bool {
   if self.stale.val {
     return true
   }
   let e = self.node
   let flags = e.flags
-  (flags & DIRTY) != 0 ||
-  (
-    (flags & PENDING) != 0 &&
-    (match e.deps {
-      Some(d) => check_dirty(d, e)
-      None => false
-    })
-  )
+  if (flags & DIRTY) != 0 {
+    return true
+  }
+  if (flags & PENDING) == 0 {
+    return false
+  }
+  let dirty = match e.deps {
+    Some(d) => check_dirty(d, e)
+    None => false
+  }
+  // (looked at and found the same: watching again, as a watch told is as it runs (run_effect), so that what changes
+  // next in the same batch marks it again; its place in the queue, if it has one, runs to nothing)
+  if !dirty {
+    e.flags = WATCHING
+  }
+  dirty
 }
 
 ///|

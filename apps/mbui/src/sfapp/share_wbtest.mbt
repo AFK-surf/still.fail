@@ -73,7 +73,7 @@ test "over another app (ShareActivity): only the sheet; a chat tapped opens the 
   let t = share_tester("share-in")
   t.post(@hostapi.system_channel, "{\"over\":true}")
   t.frame()
-  assert_true(share_over.val)
+  assert_true(share_over.get())
   assert_true(t.find("发到") is Some(_))
   t.tap_text("收集视频")
   assert_eq(t.overs_done(), [true])

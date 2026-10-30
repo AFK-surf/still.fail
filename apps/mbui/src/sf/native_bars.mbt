@@ -7,8 +7,9 @@
 ///|
 /// The system's bars this frame.
 pub(all) struct NativeBars {
-  /// whether the system shows the app's tabs now (they were handed it and it took them)
-  mut on : Bool
+  /// whether the system shows the app's tabs now (they were handed it and it took them), a signal: what is laid out by
+  /// them (the window's sides beside the bars) follows it
+  on : @signals.Signal[Bool]
   /// how wide its column down the window's trailing edge is (0: across the top and foot upright, or none)
   mut side : Double
   /// the screen's corners where the cards along its edges follow them, each its own (top left, then round it: an
@@ -18,12 +19,16 @@ pub(all) struct NativeBars {
 
 ///|
 // kept across runs: rail_native.mbt says it again each frame, native_bars_reset as the app begins anew
-pub let native_bars : NativeBars = { on: false, side: 0.0, corners: FixedArray::make(4, 0.0) }
+pub let native_bars : NativeBars = {
+  on: @signals.signal(false, same=fn(a, b) { a == b }),
+  side: 0.0,
+  corners: FixedArray::make(4, 0.0),
+}
 
 ///|
 /// As at the start: none.
 pub fn native_bars_reset() -> Unit {
-  native_bars.on = false
+  native_bars.on.set(false)
   native_bars.side = 0.0
   native_bars.corners.fill(0.0)
   native_foot_made.val = None
@@ -40,20 +45,20 @@ pub fn native_able() -> Bool {
 ///|
 /// Whether the system shows the app's tabs this frame.
 pub fn native_on() -> Bool {
-  native_bars.on
+  native_bars.on.get()
 }
 
 ///|
 /// Whether its bars run down the window's trailing edge (on its side, its outer screen): the app's actions in that
 /// column; upright they are across the top and foot.
 pub fn native_side() -> Bool {
-  native_bars.on && native_bars.side > 0.0
+  native_bars.on.get() && native_bars.side > 0.0
 }
 
 ///|
 /// How far in from the window's trailing edge what is pressed keeps clear of the column (0 where there is none).
 pub fn native_clear() -> Double {
-  if native_bars.on {
+  if native_bars.on.get() {
     native_bars.side
   } else {
     0.0
@@ -64,7 +69,7 @@ pub fn native_clear() -> Double {
 /// How much of the window's foot the system's tabs take across it (upright: the safe area's foot, the home indicator's
 /// line with them), what is over the window's whole keeps clear of (a toast); 0 where they are not there.
 pub fn native_foot() -> Double {
-  if native_bars.on && native_bars.side == 0.0 {
+  if native_bars.on.get() && native_bars.side == 0.0 {
     @ui.system_bars().bottom
   } else {
     0.0
@@ -136,7 +141,7 @@ pub let native_in : Double = 4.0
 /// Duo's outer screen: along its hinge, its 8, the cards' 4); 0 where it says none.
 pub fn native_card_corner_at(k : Int) -> Double {
   let r = native_bars.corners[k]
-  if native_bars.on && r > 0.0 {
+  if native_bars.on.get() && r > 0.0 {
     @ui.concentric(r, native_in)
   } else {
     0.0
@@ -185,7 +190,7 @@ pub fn native_over_clear() -> Unit {
 /// where the system's bars are (native_on): it then hands them its actions (native_over_act) for what it would
 /// draw of its own; false elsewhere, nothing done.
 pub fn native_over_up(title : String) -> Bool {
-  if !native_bars.on {
+  if !native_bars.on.get() {
     return false
   }
   native_over.up = true

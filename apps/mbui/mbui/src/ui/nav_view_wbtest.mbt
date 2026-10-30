@@ -352,3 +352,27 @@ test "window tree: the top page become another: what follows the top told, the p
   assert_eq(after, before)
   assert_true(t.find("c") is Some(_))
 }
+
+///|
+test "window tree: a page pushed before the tree held the stack slides in from the tree's first moment, and ends" {
+  let nav = Nav::new("a")
+  nav.push("b")
+  let t = Tester::new(fn(_c) {  })
+  t.check_looks(false)
+  set_view_app(fn(root) { nav_view(root, nav, fn(c, p) { c.text(p, size=12.0) |> ignore }) |> ignore })
+  t.draw()
+  let end = nav.rest()
+  assert_true(end > t.time() && end < t.time() + 1000.0, msg="\{end} \{t.time()}")
+  t.frame_at(end)
+  assert_eq((nav.moving(), pages_drawn()), (false, [(0.0, 390.0)]))
+}
+
+///|
+test "window tree: the top page replaced in place, between frames: the one it was let go, the new one shown" {
+  let (t, nav, left) = stacked()
+  let t0 = t.time()
+  told_at(t, t0 + 10.0, fn() { nav.replace("b") })
+  t.frame_at(t0 + 20.0)
+  assert_eq((left, nav.pages(), pages_drawn()), (["a"], ["b"], [(0.0, 390.0)]))
+  assert_true(t.find("b") is Some(_))
+}

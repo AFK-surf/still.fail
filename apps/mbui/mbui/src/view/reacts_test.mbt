@@ -244,3 +244,80 @@ test "pulled at once: only the bindings marked looked at, however many the tree 
   })
   assert_eq(tree.work().pulled - p0, 1)
 }
+
+///|
+test "laid_size twice in a change: a binding found the same the first time is marked again by what changes after" {
+  let s = @signals.signal(0, same=fn(a, b) { a == b })
+  let memo = @signals.computed(fn(_) { s.get() % 2 }, same=fn(a, b) { a == b })
+  let seen : Array[Int] = []
+  let node : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    node.val = Some(root.box(fn(v) { v.width(By(fn() { Some(10.0 + 10.0 * memo.get().to_double()) })) |> ignore }))
+  })
+  @signals.effect(fn() { seen.push(s.get()) }) |> ignore
+  tree.frame(400.0, 800.0, now=0.0) |> ignore
+  let sizes : Array[Double] = []
+  tree.event(10.0, fn() {
+    s.set(2)
+    sizes.push(node.val.unwrap().laid_size().0)
+    s.set(3)
+    sizes.push(node.val.unwrap().laid_size().0)
+  })
+  assert_eq(sizes, [10.0, 20.0])
+  // (what follows s, an effect, sees it as the change ends: once)
+  assert_eq(seen, [0, 3])
+}
+
+///|
+/// A node whose padding the test binds (`bind`), holding one box: where that box is laid out in it (left, top).
+fn padded(bind : (@view.View) -> Unit) -> (@view.Tree, () -> (Double, Double)) {
+  let kid : Ref[@view.View?] = Ref(None)
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(v) {
+      bind(v)
+      kid.val = Some(v.box(fn(k) { k.height(Is(Some(10.0))) |> ignore }))
+    })
+    |> ignore
+  })
+  let at = fn() {
+    let (x, y, _, _) = kid.val.unwrap().rect()
+    (x, y)
+  }
+  (tree, at)
+}
+
+///|
+test "padding: pad bound By, then sides said: the sides' alone, what pad read changing sets nothing" {
+  let p = @signals.signal(4.0, same=fn(a, b) { a == b })
+  let node : Ref[@view.View?] = Ref(None)
+  let (tree, at) = padded(fn(v) {
+    node.val = Some(v)
+    v.pad(By(fn() { p.get() })) |> ignore
+  })
+  tree.frame(400.0, 800.0, now=0.0) |> ignore
+  assert_eq(at(), (4.0, 4.0))
+  // (pad's read changed and queued, then sides said before the frame: pad's binding runs no more)
+  p.set(7.0)
+  node.val.unwrap().sides(Is((10.0, 20.0))) |> ignore
+  tree.frame(400.0, 800.0, now=10.0) |> ignore
+  assert_eq(at(), (10.0, 0.0))
+  p.set(5.0)
+  tree.frame(400.0, 800.0, now=20.0) |> ignore
+  assert_eq(at(), (10.0, 0.0))
+}
+
+///|
+test "padding: sides bound By, then pad said: pad's alone, what sides read changing sets nothing" {
+  let q = @signals.signal((8.0, 9.0), same=fn(a, b) { a == b })
+  let node : Ref[@view.View?] = Ref(None)
+  let (tree, at) = padded(fn(v) {
+    node.val = Some(v)
+    v.sides(By(fn() { q.get() })) |> ignore
+  })
+  tree.frame(400.0, 800.0, now=0.0) |> ignore
+  assert_eq(at(), (8.0, 0.0))
+  node.val.unwrap().pad(Is(3.0)) |> ignore
+  q.set((30.0, 40.0))
+  tree.frame(400.0, 800.0, now=10.0) |> ignore
+  assert_eq(at(), (3.0, 3.0))
+}

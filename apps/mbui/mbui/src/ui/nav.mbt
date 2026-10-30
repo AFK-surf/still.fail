@@ -564,8 +564,8 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
 /// The top page replaced by `page`, in place (nothing slides).
 pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
   self.settle()
+  // (told once, as the new one is on top: never with no page)
   let was = self.pages.pop()
-  self.told()
   match was {
     Some(e) => self.gone.push(e)
     None => ()

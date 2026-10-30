@@ -242,7 +242,7 @@ fn hex_of(k : Int64) -> String {
 /// The system's column down the window's trailing edge as the system says its bars take it now (none upright, nor
 /// without its bars).
 fn native_side_now() -> Unit {
-  @sf.native_bars.side = if @sf.native_bars.on { dmax(0.0, @ui.system_bars().right) } else { 0.0 }
+  @sf.native_bars.side = if @sf.native_bars.on.get() { dmax(0.0, @ui.system_bars().right) } else { 0.0 }
 }
 
 ///|
@@ -269,8 +269,8 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
   // without them (the cards on the tape with no room for its column, the page past the window's edge) and the next
   // with them; what came of it said as the frame ends, as it hands them. Not counted on after a frame that left it
   // without them: one it refused, or one that handed none)
-  if !@sf.native_bars.on && @sf.native_able() && !nav_untaken.val {
-    @sf.native_bars.on = true
+  if !@signals.untracked(fn() { @sf.native_bars.on.get() }) && @sf.native_able() && !nav_untaken.val {
+    @sf.native_bars.on.set(true)
   }
   floating_bar.val = None
   @sf.native_over_clear()
@@ -316,15 +316,16 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
       } else {
         rail_nav(src, w, all, card)
       }
-      @sf.native_bars.on = @hostapi.nav_bar(bar)
-      nav_untaken.val = @sf.native_able() && !@sf.native_bars.on
+      let on = @hostapi.nav_bar(bar)
+      @sf.native_bars.on.set(on)
+      nav_untaken.val = @sf.native_able() && !on
       floating_bar.val = Some(bar)
       native_side_now()
     }
     None => {
       @hostapi.nav_bar_none()
       nav_untaken.val = @sf.native_able()
-      @sf.native_bars.on = false
+      @sf.native_bars.on.set(false)
       @sf.native_bars.side = 0.0
     }
   }

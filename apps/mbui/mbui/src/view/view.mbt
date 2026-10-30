@@ -858,16 +858,48 @@ pub fn View::height(self : View, h : Live[Double?]) -> View {
 }
 
 ///|
-/// Room inside it, the same on every side.
-pub fn View::pad(self : View, p : Live[Double]) -> View {
+/// Room inside it, at its left, top, right and bottom: one property (pad and sides say it too, the last said its one
+/// binding).
+pub fn View::padding(self : View, p : Live[(Double, Double, Double, Double)]) -> View {
   self.bind(2, p, Layout, fn(p) {
     let s = self.tree.nodes[self.at].flex.style
-    s.set_padding_left(Pt(p))
-    s.set_padding_top(Pt(p))
-    s.set_padding_right(Pt(p))
-    s.set_padding_bottom(Pt(p))
+    s.set_padding_left(Pt(p.0))
+    s.set_padding_top(Pt(p.1))
+    s.set_padding_right(Pt(p.2))
+    s.set_padding_bottom(Pt(p.3))
   })
   self
+}
+
+///|
+/// Room inside it, the same on every side (its padding).
+pub fn View::pad(self : View, p : Live[Double]) -> View {
+  self.padding(
+    match p {
+      Is(v) => Is((v, v, v, v))
+      By(f) =>
+        By(fn() {
+          let v = f()
+          (v, v, v, v)
+        })
+    },
+  )
+}
+
+///|
+/// Room inside it at its left and its right, none at its top and bottom (its padding: what it holds laid out between,
+/// the window's sides beside the system's bars).
+pub fn View::sides(self : View, lr : Live[(Double, Double)]) -> View {
+  self.padding(
+    match lr {
+      Is(v) => Is((v.0, 0.0, v.1, 0.0))
+      By(f) =>
+        By(fn() {
+          let v = f()
+          (v.0, 0.0, v.1, 0.0)
+        })
+    },
+  )
 }
 
 ///|

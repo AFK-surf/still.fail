@@ -143,8 +143,9 @@ fn nav_views_framed(c : Ctx) -> Unit {
 
 ///|
 /// Stack `nav` as a node of `v`'s, filling the room it is given (nav_view.mbt above): each page built by `page` (its
-/// old view), on a ground of `bg`; back taken within `edge` of its left side. A page pushed slides in once `ready`
-/// says it has what it shows, `most` ms after it was pushed at the latest (none: at once).
+/// old view, built again as `page_key` of it changes besides what it reads), on a ground of `bg`; back taken within
+/// `edge` of its left side. A page pushed slides in once `ready` says it has what it shows, `most` ms after it was
+/// pushed at the latest (none: at once).
 pub fn[P] nav_view(
   v : @view.View,
   nav : Nav[P],
@@ -153,6 +154,7 @@ pub fn[P] nav_view(
   edge? : Double = 20.0,
   ready? : (P) -> Bool,
   most? : Double = 0.0,
+  page_key? : (P) -> String = fn(_) { "" },
 ) -> @view.View {
   v.box(fn(s) {
     s.grow(Is(1.0)) |> ignore
@@ -184,6 +186,11 @@ pub fn[P] nav_view(
       went: fn() {
         (due.val)()
         due.val = fn() {  }
+        // (no frame has given the window yet: how far it goes and so how long, not known; set out once it is)
+        if @signals.untracked(fn() { s.window() }).0 <= 0.0 {
+          nav.t0 = -1.0
+          return
+        }
         match ready {
           Some(r) if nav.mode == 1 && nav.p0 == 1.0 => {
             nav.wait_from = nav.t0
@@ -201,6 +208,24 @@ pub fn[P] nav_view(
           sets_out()
         }
       },
+    })
+    // a page told to come or go before the tree held the stack (pushed as the app began, before any frame; or as the old
+    // view held it, the window laid out otherwise): its slide set out now, at this moment, where it had not; one under
+    // way goes on to its end, said on the timeline
+    if nav.mode == 1 || nav.mode == 2 || nav.mode == 4 {
+      if nav.t0 == -1.0 {
+        nav.go(nav.mode, nav.p1, v=nav.v0)
+      } else if nav.t0 >= 0.0 {
+        sets_out()
+      } else if nav.t0 == nav_held {
+        due.val = s.at_moment(nav.wait_from + nav.held_most, goes)
+      }
+    }
+    // (one told before the window was known sets out as the first frame gives it, at that moment)
+    s.reacts(fn() { s.window().0 > 0.0 }, fn(laid) {
+      if laid && nav.t0 == -1.0 && (nav.mode == 1 || nav.mode == 2 || nav.mode == 4) {
+        nav.go(nav.mode, nav.p1, v=nav.v0)
+      }
     })
     // (waiting: it goes as what it shows comes, at that answer's moment)
     match ready {
@@ -275,7 +300,18 @@ pub fn[P] nav_view(
         |> ignore
         pv.show(fn() { nav.shows(k) }, fn(b) {
           b.grow(Is(1.0)) |> ignore
-          old(b, fn(c) { nav.page_built(c, k, page, bg(), edge) }).grow(Is(1.0)) |> ignore
+          let key = fn() {
+            match nav.entry(k) {
+              // (as the page is built: what it asks of where it stands, Nav::under, its own)
+              Some(e) => {
+                let said = Ref("")
+                nav.built_by(e, fn() { said.val = page_key(e.page) })
+                said.val
+              }
+              None => ""
+            }
+          }
+          old(b, fn(c) { nav.page_built(c, k, page, bg(), edge) }, key~).grow(Is(1.0)) |> ignore
         })
       },
     )

@@ -361,8 +361,9 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
 
 ///|
 fn view_in(c : @ui.Ctx, src : Source) -> Unit {
-  // over another app (a share sheet over the app it came from: share.mbt share_over): nothing but the sheet
-  if share_over.val {
+  // over another app (a share sheet over the app it came from: share.mbt share_over): nothing but the sheet (where the
+  // window is a tree, a node of it picked by that: app_tree)
+  if !@ui.old_islands_around() && share_over.get() {
     over_view(c, src)
     return
   }
@@ -451,33 +452,50 @@ fn app_ground(c : @ui.Ctx, src : Source) -> @ui.Made {
 /// theme, the window's sides, the layers over it).
 pub fn app_tree(src : Source) -> (@view.View) -> Unit {
   fn(root) {
-    root.pick(
-      fn() { app_is(src) },
-      fn(v, state) {
-        v.grow(Is(1.0)) |> ignore
-        let whole = fn(v : @view.View) {
-          @ui.old(v, fn(c) {
-            c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.theme().p.bg, fn() { app_state_island(c, src, state) }) |> ignore
-          })
-          .grow(Is(1.0))
-          |> ignore
-        }
-        if state == SignedIn {
-          // signed in, the shell it is laid out in a node picked by the window's width and what is in view
-          // (narrow_shell.mbt): laid out Small with a workspace, the narrow shell's nodes; else the old view whole
-          v.pick(fn() { shell_is(src, v.window().0) }, fn(s, shell) {
-            s.grow(Is(1.0)) |> ignore
-            match shell {
-              Narrow => narrow_shell(s, src)
-              Whole => whole(s)
-            }
-          })
-        } else {
-          whole(v)
-        }
-      },
-    )
+    // (the window's sides beside the system's bars kept, all of it between: sides.mbt)
+    root.sides(By(fn() { sides_room() })) |> ignore
+    // over another app (a share sheet over the app it came from: share.mbt): nothing but the sheet, an old view of its
+    // own; the app's state's nodes let go meanwhile, made again as it opens
+    root.pick(fn() { share_over.get() }, fn(o, over) {
+      o.grow(Is(1.0)) |> ignore
+      if over {
+        @ui.old(o, fn(c) { over_view(c, src) }).grow(Is(1.0)) |> ignore
+      } else {
+        app_state_tree(o, src)
+      }
+    })
   }
+}
+
+///|
+/// The app in the state it is in (app_is), a node picked by it (app_tree's, not over another app).
+fn app_state_tree(root : @view.View, src : Source) -> Unit {
+  root.pick(
+    fn() { app_is(src) },
+    fn(v, state) {
+      v.grow(Is(1.0)) |> ignore
+      let whole = fn(v : @view.View) {
+        @ui.old(v, fn(c) {
+          c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.theme().p.bg, fn() { app_state_island(c, src, state) }) |> ignore
+        })
+        .grow(Is(1.0))
+        |> ignore
+      }
+      if state == SignedIn {
+        // signed in, the shell it is laid out in a node picked by the window's width and what is in view
+        // (narrow_shell.mbt): laid out Small with a workspace, the narrow shell's nodes; else the old view whole
+        v.pick(fn() { shell_is(src, v.window().0) }, fn(s, shell) {
+          s.grow(Is(1.0)) |> ignore
+          match shell {
+            Narrow => narrow_shell(s, src)
+            Whole => whole(s)
+          }
+        })
+      } else {
+        whole(v)
+      }
+    },
+  )
 }
 
 ///|
