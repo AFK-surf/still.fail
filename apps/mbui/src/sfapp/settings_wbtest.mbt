@@ -740,8 +740,8 @@ test "a profile's page: who it is and whether it works, then its allowance, what
   let t = profile_whole("profile:ws1/st1#cc")
   let y = fn(words : String) { t.find(words).unwrap().1 }
   // its head is its title: its name, what it is, its last check and when (no title over it)
-  assert_true(y("订阅账号 · 只在 Studio") > y("Claude 主账号"))
-  assert_true(y("订阅有效") > y("订阅账号 · 只在 Studio"))
+  assert_true(y("订阅账号 · Studio 可用") > y("Claude 主账号"))
+  assert_true(y("订阅有效") > y("订阅账号 · Studio 可用"))
   assert_true(t.find("5 分钟前检查") is Some(_))
   // then its parts by what it is come to for: how much is left and what it spent, who uses it, how it runs, whom it is
   // shared with, the account itself

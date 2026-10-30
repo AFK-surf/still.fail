@@ -15,14 +15,16 @@ pub fn has_quota(q : Json?) -> Bool {
 ///|
 /// An allowance's windows (components.tsx QuotaBars compact, QuotaChip each, ProfilesNav.tsx Windows): a chip per
 /// window, what is left in it, filled as far as that, its mark before it where `marked` (the web's default; a chat's
-/// agents only with more than one); `small`, a lower line; `gap` apart; nothing while the core cannot say (`state` not
-/// ok) or there is no window. Each says over it while it is pointed at what is left of it and when it fills again;
-/// `key` names them where the same allowance shows more than once in a place (a list's rows: each its profile's).
+/// agents only with more than one), or `worded`, what is left said in words (每周剩余 78%: a profile's row, which has the
+/// room); `small`, a lower line; `gap` apart; nothing while the core cannot say (`state` not ok) or there is no window.
+/// Each says over it while it is pointed at what is left of it and when it fills again; `key` names them where the same
+/// allowance shows more than once in a place (a list's rows: each its profile's).
 pub fn quota_chips(
   c : @ui.Ctx,
   q : Json?,
   small? : Bool = false,
   marked? : Bool = true,
+  worded? : Bool = false,
   gap? : Double = 8.0,
   key? : String = "quota",
 ) -> Unit {
@@ -33,7 +35,7 @@ pub fn quota_chips(
   }
   c.box(style=quota_chips_row.then(@ui.style(gap=room(gap))), fn() {
     for w in windows {
-      quota_chip(c, Some(w), small~, marked~, key~)
+      quota_chip(c, Some(w), small~, marked~, worded~, key~)
     }
   })
   |> ignore
@@ -41,13 +43,14 @@ pub fn quota_chips(
 
 ///|
 /// One window of an allowance (components.tsx QuotaChip), or the one an agent is short of: what is left in it, filled
-/// as far as that, its mark before it where `marked`; over it while it is pointed at, `said` (what is left of it and
-/// when it fills again: quota_said), the chip `key`'s.
+/// as far as that, its mark before it where `marked`, or with its name in words where `worded`; over it while it is
+/// pointed at, `said` (what is left of it and when it fills again: quota_said), the chip `key`'s.
 pub fn quota_chip(
   c : @ui.Ctx,
   w : Json?,
   small? : Bool = false,
   marked? : Bool = true,
+  worded? : Bool = false,
   key? : String = "quota",
   said? : String,
 ) -> Unit {
@@ -56,8 +59,8 @@ pub fn quota_chip(
     c,
     left,
     chip_str(w, "level"),
-    if marked { chip_str(w, "mark") } else { "" },
-    left.to_string() + "%",
+    if marked && !worded { chip_str(w, "mark") } else { "" },
+    if worded { quota_left(w) } else { left.to_string() + "%" },
     small~,
     key=key + "/" + chip_str(w, "mark"),
     said=said.unwrap_or(quota_said(w)),
@@ -68,16 +71,22 @@ pub fn quota_chip(
 /// What is left of an allowance's window, in words (components.tsx quotaLeft: with its name where it has one), and
 /// when it fills again on a line of its own (QuotaBars' tip).
 pub fn quota_said(w : Json?) -> String {
-  let label = chip_str(w, "label")
-  let left = chip_left(w).to_string()
-  let said = if label != "" {
-    t("web-main.quota.left", args=[("label", label), ("left", left)])
-  } else {
-    t("web-main.quota.leftAlone", args=[("left", left)])
-  }
+  let said = quota_left(w)
   match chip_str(w, "refills") {
     "" => said
     refills => said + "\n" + refills
+  }
+}
+
+///|
+/// What is left of an allowance's window, in words: 每周剩余 78% (剩余 78% where it has no name).
+fn quota_left(w : Json?) -> String {
+  let label = chip_str(w, "label")
+  let left = chip_left(w).to_string()
+  if label != "" {
+    t("web-main.quota.left", args=[("label", label), ("left", left)])
+  } else {
+    t("web-main.quota.leftAlone", args=[("left", left)])
   }
 }
 

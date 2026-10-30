@@ -156,8 +156,8 @@ function WorkspaceGroups({ items }: { items: WorkspaceProfile[] }) {
         {g.map((e: WorkspaceProfile) => (
           <ListRow key={e.key} onClick={() => app.push(app.at(hosts(e).length > 1 ? `/settings/profiles/account/${encodeURIComponent(e.key)}` : `/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`} style={e.usable ? undefined : { opacity: 0.55 }}>
-              {/* How it is as the core says it (its dot in its tone, green where it says nothing); what needs a look said in its line. */}
-              <span className={listsCss.mRowTitle}><Presence state={toneDot(e.state?.tone ?? "green")} /> {e.profile.name}</span>
+              {/* How it is where that is not simply fine, as the core says it (a dot in its tone; none while fine); what needs a look said in its line. */}
+              <span className={listsCss.mRowTitle}>{e.state && <><Presence state={toneDot(e.state.tone)} /> </>}{e.title}</span>
               <span className={listsCss.mRowNote}>{e.look ? e.state?.text : e.where || `${e.profile.checkText} · ${e.profile.usesText || accessLabel(e.profile)}`}</span>
               {/* Its allowance a line of its own, so the name and where it is keep the row's width. */}
               {e.usable && e.profile.quota?.state === "ok" && e.profile.quota.windows.length > 0 && <span className={css.mRowQuota}><QuotaRings quota={e.profile.quota} /></span>}

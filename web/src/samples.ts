@@ -121,7 +121,7 @@ export function sampleProfile(n: number, i = 0): Profile {
 /** The workspace's profiles made up, a kind of account's run of them, each on two stations. */
 export function sampleWorkspaceProfiles(): WorkspaceProfile[] {
   return [6, 8, 5].map((n, i) => ({
-    key: `sample-${i}`, group: "", groupTitle: sampleWords(4), station: "sample/0", stationId: "sample-0", stationName: sampleWords(5), profile: sampleProfile(n, i),
+    key: `sample-${i}`, group: "", groupTitle: sampleWords(4), station: "sample/0", stationId: "sample-0", stationName: sampleWords(5), profile: sampleProfile(n, i), title: sampleWords(n),
     shared: false, host: "", hostName: "", hostOnline: true, usable: true, look: false, where: sampleWords(5), stations: [], editable: false, canShare: false,
     members: [5, 3].map((m, j) => ({ station: `sample/${j}`, stationId: `sample-${j}`, stationName: sampleWords(m), title: sampleWords(m), online: true, profileId: `sample-${i}`, profileName: sampleWords(m), role: "host", about: sampleWords(m + 6), usable: true, checkText: "", checkTone: "green", usedBy: 0 })),
   }));

@@ -218,7 +218,7 @@ function All({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view: Va
   const many = view.vaults.length > 1;
   const q = find.trim().toLowerCase();
   const shows = (...words: (string | null | undefined)[]) => q === "" || words.some((w) => (w ?? "").toLowerCase().includes(q));
-  const accounts = (profiles?.items ?? []).filter((e) => shows(e.profile.name, e.groupTitle, e.where));
+  const accounts = (profiles?.items ?? []).filter((e) => shows(e.title, e.groupTitle, e.where));
   const secrets = view.vaults.flatMap((v, i) => (lists[i]?.items ?? []).filter((row) => row.name && shows(row.name, row.kindText, row.lineText, row.howText)).map((row) => ({ v, row })));
   const unnamed = view.vaults.flatMap((v, i) => {
     const hidden = (lists[i]?.items ?? []).filter((row) => !row.name);
@@ -242,7 +242,7 @@ function All({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view: Va
               <span className={css.rowIcon} />
               <span className={pagesCss.listRowText}>
                 <span className={pagesCss.listRowTitle}>{t("web-pages.vault.accounts")}</span>
-                {!open && <span className={css.rowMeta}>{accounts.map((e) => e.profile.name).join("、")}</span>}
+                {!open && <span className={css.rowMeta}>{accounts.map((e) => e.title).join("、")}</span>}
               </span>
               {open ? <ChevronUp size={14} className={css.chevron} /> : <ChevronDown size={14} className={css.chevron} />}
             </button>
@@ -252,7 +252,7 @@ function All({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view: Va
               <Link className={`${pagesCss.listRow} ${css.rowButton}`} to={profilePath(e)}>
                 <span className={css.rowIcon}><ProviderLogo runtime={e.profile.runtime} kind={e.profile.access.kind} mark={e.profile.providerMark} size={16} /></span>
                 <span className={pagesCss.listRowText}>
-                  <span className={pagesCss.listRowTitle}>{e.profile.name}</span>
+                  <span className={pagesCss.listRowTitle}>{e.title}</span>
                   <span className={css.rowMeta}>{said(e.groupTitle, e.where)}</span>
                   {e.profile.checkTone === "red" && <span className={css.bad}>{e.profile.checkText}</span>}
                 </span>

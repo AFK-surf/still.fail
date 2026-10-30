@@ -1838,6 +1838,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("stationId", str("st1")),
           ("stationName", str("Studio")),
           ("profile", p),
+          ("title", str(if text(Some(p), "email") == "" { text(Some(p), "name") } else { text(Some(p), "email") })),
           ("shared", Json::boolean(false)),
           ("host", str("st1")),
           ("hostName", str("Studio")),
@@ -1845,7 +1846,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("usable", Json::boolean(true)),
           ("state", state),
           ("look", Json::boolean(look)),
-          ("where", str("只在 Studio")),
+          ("where", str("Studio 可用")),
           (
             "stations",
             [

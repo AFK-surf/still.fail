@@ -5863,6 +5863,8 @@ export interface WorkspaceProfile {
 	stationId: string;
 	stationName: string;
 	profile: Profile;
+	/** What its row is called: a subscription by the account signed in (its email), a key by its profile's name. */
+	title: string;
 	shared: boolean;
 	/** The station that has it (its id). */
 	host: string;
@@ -5877,7 +5879,7 @@ export interface WorkspaceProfile {
 	 * entered (`attention`), first in its kind, its state in colour.
 	 */
 	look: boolean;
-	/** Where it is, in words: 只在 studio / 登录在 studio · 只给 a、b. */
+	/** Where it can be used, in words: every station that has it, signed in or borrowing: studio、mini 可用. */
 	where: string;
 	/** The stations that may use a shared one; absent: every one. */
 	allow?: string[];

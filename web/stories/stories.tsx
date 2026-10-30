@@ -139,6 +139,8 @@ const addModel: DemoExtension = {
     return { ...o, profiles: o.profiles.map((p) => ({ ...p, canAddModel: true })) };
   },
 };
+/** A profile list entry's profile and its title as the core makes it (views/profiles.ts: a subscription by its email). */
+const titled = (profile: Record<string, unknown>) => ({ profile, title: String(profile.email ?? profile.name ?? "") });
 /** Hermes' ACP catalog on an environment profile, before any model is enabled. */
 const hermesModels: DemoExtension = {
   then: (t, value) => {
@@ -159,7 +161,7 @@ const hermesModels: DemoExtension = {
     }
     if (t.topic === "profiles") {
       const o = value as {items: Record<string,unknown>[]};
-      return {...o, items: o.items.map(e => ({...e, group: "key", groupTitle: "其他", profile: shown(e.profile as Record<string,unknown>)}))};
+      return {...o, items: o.items.map(e => ({...e, group: "key", groupTitle: "其他", title: "Hermes Agent", profile: shown(e.profile as Record<string,unknown>)}))};
     }
     return undefined;
   },
@@ -275,7 +277,7 @@ const superGrok = (signingIn: boolean): DemoExtension => {
       }
       if (t.topic === "profiles") {
         const v = value as { items: Record<string, unknown>[] };
-        return { ...v, items: v.items.map((e) => ({ ...e, group: "grok", groupTitle: "SuperGrok 订阅", profile: grok(e.profile as Record<string, unknown>) })) };
+        return { ...v, items: v.items.map((e) => ({ ...e, group: "grok", groupTitle: "SuperGrok 订阅", ...titled(grok(e.profile as Record<string, unknown>)) })) };
       }
       return undefined;
     },
@@ -305,7 +307,7 @@ const cursorAccount = (signingIn: boolean): DemoExtension => {
       }
       if (t.topic === "profiles") {
         const v = value as { items: Record<string, unknown>[] };
-        return { ...v, items: v.items.map((e) => ({ ...e, group: "cursor", groupTitle: "Cursor 订阅", profile: cursor(e.profile as Record<string, unknown>) })) };
+        return { ...v, items: v.items.map((e) => ({ ...e, group: "cursor", groupTitle: "Cursor 订阅", ...titled(cursor(e.profile as Record<string, unknown>)) })) };
       }
       return undefined;
     },
@@ -335,7 +337,7 @@ const devinAccount = (signingIn: boolean): DemoExtension => {
       }
       if (t.topic === "profiles") {
         const v = value as { items: Record<string, unknown>[] };
-        return { ...v, items: v.items.map((e) => ({ ...e, group: "devin", groupTitle: "Devin 订阅", profile: devin(e.profile as Record<string, unknown>) })) };
+        return { ...v, items: v.items.map((e) => ({ ...e, group: "devin", groupTitle: "Devin 订阅", ...titled(devin(e.profile as Record<string, unknown>)) })) };
       }
       return undefined;
     },

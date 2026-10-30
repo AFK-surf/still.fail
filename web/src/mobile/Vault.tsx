@@ -200,7 +200,7 @@ function All({ view }: { view: VaultsView }) {
   const many = view.vaults.length > 1;
   const q = find.trim().toLowerCase();
   const shows = (...words: (string | null | undefined)[]) => q === "" || words.some((w) => (w ?? "").toLowerCase().includes(q));
-  const accounts = (profiles?.items ?? []).filter((e) => shows(e.profile.name, e.groupTitle, e.where));
+  const accounts = (profiles?.items ?? []).filter((e) => shows(e.title, e.groupTitle, e.where));
   const secrets = view.vaults.flatMap((v, i) => (lists[i]?.items ?? []).filter((row) => row.name && shows(row.name, row.kindText, row.lineText, row.howText)).map((row) => ({ v, row })));
   const unnamed = view.vaults.flatMap((v, i) => {
     const hidden = (lists[i]?.items ?? []).filter((row) => !row.name);
@@ -227,7 +227,7 @@ function All({ view }: { view: VaultsView }) {
             <span className={css.mMark} />
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
               <span className={listsCss.mRowTitle}>{t("web-pages.vault.accounts")}</span>
-              {!open && <span className={css.mLine}>{accounts.map((e) => e.profile.name).join("、")}</span>}
+              {!open && <span className={css.mLine}>{accounts.map((e) => e.title).join("、")}</span>}
             </span>
             {open ? <ChevronUp size={14} className={partsCss.mSubtle} /> : <ChevronDown size={14} className={partsCss.mSubtle} />}
           </ListRow>
@@ -235,7 +235,7 @@ function All({ view }: { view: VaultsView }) {
             <ListRow key={e.key} onClick={() => app.push(app.at(hosts(e).length > 1 ? `/settings/profiles/account/${encodeURIComponent(e.key)}` : `/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>
               <span className={css.mMark}><ProviderLogo runtime={e.profile.runtime} kind={e.profile.access.kind} mark={e.profile.providerMark} size={16} /></span>
               <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                <span className={listsCss.mRowTitle}>{e.profile.name}</span>
+                <span className={listsCss.mRowTitle}>{e.title}</span>
                 <span className={css.mLine}>{said(e.groupTitle, e.where)}</span>
                 {e.profile.checkTone === "red" && <span className={css.mBad}>{e.profile.checkText}</span>}
               </span>

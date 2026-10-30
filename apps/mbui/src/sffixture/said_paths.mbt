@@ -1059,6 +1059,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "items.*.profile.trouble.next",
     "items.*.profile.decisionText",
     "items.*.profile.checkLine",
+    "items.*.title",
     "items.*.hostName",
     "items.*.state.text",
     "items.*.where",
