@@ -39,6 +39,9 @@ struct FakeHost {
   // what the person points with (Tester::new's `pointing`: by default its system's; as the host says its events came,
   // where it does: Tester::host_says_finger)
   mut pointing : Pointing
+  /// when the input event being handled happened, where the host says it so apart from its clock (a test's event
+  /// taken late: Tester::touch_at); -1: as the clock has it
+  mut event_at : Double
   // what the host says the pointer's events come from (@hostapi.event_finger: 1 a finger, 0 a mouse, -1 not said)
   mut event_finger : Int
   // what the app was started to be used with (Tester::new's `native`: by default its system's)
@@ -402,7 +405,7 @@ fn h_event_finger() -> Int {
 /// When the input event being handled happened (the host's, else now).
 fn h_event_time() -> Double {
   match fake.val {
-    Some(f) => f.time
+    Some(f) => if f.event_at >= 0.0 { f.event_at } else { f.time }
     None => {
       let t = @hostapi.event_time()
       if t >= 0.0 {

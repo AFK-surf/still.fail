@@ -259,13 +259,19 @@ pub fn Zoom::zoomed(self : Zoom) -> Bool {
 }
 
 ///|
-/// The moment a command is told at: `at` where who tells it says (an event's own), else what the frame or the host has
-/// as it is told (Ctx::moment: a frame's, as it is built; the host's clock, between frames). Taken once, as the command
-/// begins, and handed on to all it does: where it starts from, where its way sets out.
+/// The moment a command is told at: `at` where who tells it says (an event's own); else, told as the window's tree does
+/// something (an event, a step, something due), that one's moment (@ui.tree_cause); else what the frame or the host has
+/// as it is told (Ctx::moment: a frame's, as it is built; the host's clock, between frames: the old views' input, read
+/// as they are built, the way there). Taken once, as the command begins, and handed on to all it does: where it starts
+/// from, where its way sets out.
 fn cause(at : Double?) -> Double {
   match at {
     Some(a) => a
-    None => @ui.current().moment()
+    None =>
+      match @ui.tree_cause() {
+        Some(m) => m
+        None => @ui.current().moment()
+      }
   }
 }
 

@@ -263,3 +263,76 @@ test "a fling drawn ahead past its end, then told a pan at a moment before it: f
   let unread = pan_before_end(false)
   assert_eq(pan_before_end(true), unread)
 }
+
+///|
+/// A picture the window's tree sets gliding at 1050 (a moment it said, done as a frame comes at or past it), frames
+/// drawn at each of `frames` and at 1200: where it is then.
+fn glide_told_by_tree(frames : Array[Double]) -> (Double, Double, Double, Double)? {
+  let z = @kit.Zoom::new()
+  z.natural(100.0, 100.0)
+  z.boxed(400.0, 400.0)
+  let t = @ui.Tester::new(fn(_c) {  }, time=1000.0, tree=fn(root : @view.View) {
+    root.at_moment(1050.0, fn() { z.zoom_to(3.0, 150.0, 170.0, true) }) |> ignore
+  })
+  t.draw()
+  for f in frames {
+    t.frame_at(f)
+  }
+  t.frame_at(1200.0)
+  z.rect()
+}
+
+///|
+test "a glide the window's tree tells at a moment sets out from that moment, the frame that does it whenever it comes" {
+  let each = glide_told_by_tree([1050.0, 1100.0])
+  let one = glide_told_by_tree([])
+  assert_eq(one, each)
+  // (on its way by then, from 1050)
+  assert_true(one.unwrap().2 > 100.0, msg="\{one}")
+}
+
+///|
+/// A picture a press on the window's tree sets gliding, the press at 1050 handed on at 1080 between frames, frames drawn
+/// at each of `frames` and at 1200: where it is then.
+fn glide_pressed_on_tree(frames : Array[Double]) -> (Double, Double, Double, Double)? {
+  let z = @kit.Zoom::new()
+  z.natural(100.0, 100.0)
+  z.boxed(400.0, 400.0)
+  let t = @ui.Tester::new(fn(_c) {  }, time=1000.0, tree=fn(root : @view.View) {
+    root.box(fn(b) {
+      b
+      .width(Is(Some(100.0)))
+      .height(Is(Some(100.0)))
+      .on_press(fn() { z.zoom_to(3.0, 150.0, 170.0, true) })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  // (handed on at 1080, as a host may: it happened at 1050, said so)
+  t.advance(1080.0 - t.time())
+  t.touch_at(0, 50.0, 50.0, 1050.0)
+  t.touch_at(2, 50.0, 50.0, 1050.0)
+  for f in frames {
+    t.frame_at(f)
+  }
+  t.frame_at(1200.0)
+  z.rect()
+}
+
+///|
+test "a glide a press on the window's tree tells sets out from the press's moment, the frame that takes it whenever it comes" {
+  let each = glide_pressed_on_tree([1090.0, 1100.0])
+  let one = glide_pressed_on_tree([])
+  assert_eq(one, each)
+  // (as one told to set out at 1050, read at 1200)
+  let t = @ui.Tester::new(fn(_c) {  }, time=1000.0)
+  t.draw()
+  let z = @kit.Zoom::new()
+  z.natural(100.0, 100.0)
+  z.boxed(400.0, 400.0)
+  t.advance(1050.0 - t.time())
+  z.zoom_to(3.0, 150.0, 170.0, true, at=1050.0)
+  t.frame_at(1200.0)
+  assert_eq(one, z.rect())
+}

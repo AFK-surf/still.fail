@@ -264,6 +264,7 @@ pub fn Tester::new(
       None => platform_pointing(platform)
     },
     event_finger: -1,
+    event_at: -1.0,
     native: native.unwrap_or(platform_pointing(platform)),
     keyboard: keyboard.unwrap_or(platform_keyboard(platform)),
     reduce_transparency: false,
@@ -1367,6 +1368,15 @@ pub fn Tester::back_gesture(
 pub fn Tester::touch(self : Tester, kind : Int, x : Double, y : Double) -> Unit {
   ignore(self)
   finger(kind, x, y)
+}
+
+///|
+/// A finger's event (Tester::touch's) that happened at `at`, taken now, later (the host's clock past it): as a host hands
+/// on an event it got a while before, its own time said with it (@hostapi.event_time).
+pub fn Tester::touch_at(self : Tester, kind : Int, x : Double, y : Double, at : Double) -> Unit {
+  self.fake.event_at = at
+  finger(kind, x, y)
+  self.fake.event_at = -1.0
 }
 
 ///|

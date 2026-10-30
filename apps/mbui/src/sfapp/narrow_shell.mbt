@@ -38,6 +38,8 @@ fn shell_is(src : Source, width : Double) -> ShellIs {
 ///|
 /// The narrow shell (above), in node `v`.
 fn narrow_shell(v : @view.View, src : Source) -> Unit {
+  // (on the window's ground, as the old view whole is (app_state_tree's): what no page covers, a page sliding, shows it)
+  v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
   @ui.old(v, fn(c) { narrow_under(c, src) }).over(Is(true)) |> ignore
   @ui.nav_view(
     v,

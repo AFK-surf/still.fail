@@ -747,6 +747,16 @@ fn view_event(f : () -> Unit) -> Unit {
 }
 
 ///|
+/// The moment of what the window's tree is doing now (an event's, a step's, something due's: Tree::moment), none where
+/// it does nothing: where what such a thing tells sets out from, whenever a frame is drawn (a motion said as it is done).
+pub fn tree_cause() -> Double? {
+  match view_app.val {
+    Some(t) => t.moment()
+    None => None
+  }
+}
+
+///|
 /// The moment of the event being handled (taken once, as it began: view_event), else the host's event time.
 fn view_moment() -> Double {
   match view_app.val {
