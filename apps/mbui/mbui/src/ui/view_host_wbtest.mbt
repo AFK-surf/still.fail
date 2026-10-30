@@ -26,7 +26,11 @@ priv struct Island {
 /// The old view (a green box filling its room, pressed: `old_taps`, its words "old"); with `tree`, the window made once
 /// around it: a bar 40 high (its words `label`), under it the island 200 by 300 drawn off (30, 20), after it a badge 60
 /// by 30 drawn off (40, -200), over the island.
-fn island(label : @signals.Signal[String], tree? : Bool = true) -> Island {
+fn island(
+  label : @signals.Signal[String],
+  tree? : Bool = true,
+  badge_off? : @signals.Signal[(Double, Double)] = @signals.signal((40.0, -200.0)),
+) -> Island {
   let builds = Ref(0)
   let old_taps = Ref(0)
   let bar_taps = Ref(0)
@@ -66,7 +70,7 @@ fn island(label : @signals.Signal[String], tree? : Bool = true) -> Island {
         b
         .width(Is(Some(60.0)))
         .height(Is(Some(30.0)))
-        .offset(Is((40.0, -200.0)))
+        .offset(By(fn() { badge_off.get() }))
         .ground(Is(island_red))
         .on_press(fn() { badge_taps.val = badge_taps.val + 1 })
         |> ignore
@@ -175,4 +179,26 @@ test "window tree: a run begun anew: the window's tree let go, its signals read 
   Tester::new(fn(c) { c.text("next", size=12.0) |> ignore }) |> ignore
   assert_true(view_tree() is None)
   assert_false(label.watched())
+}
+
+///|
+test "window tree: the badge moved: drawn where it went, nothing of it made again, the old view not built" {
+  let off = @signals.signal((40.0, -200.0), same=fn(a, b) { a == b })
+  let w = island(@signals.signal("bar"), badge_off=off)
+  w.t.check_looks(false)
+  let tree = view_tree().unwrap()
+  let was = w.builds.val
+  let work = tree.work()
+  let painted = view_painted()
+  off.set((100.0, -200.0))
+  w.t.drawn_now()
+  assert_eq(w.builds.val, was, msg=w.t.built_why())
+  assert_eq(tree.work().computes - work.computes, 0)
+  assert_eq(tree.work().instances - work.instances, 0)
+  assert_eq(tree.work().composed - work.composed, 1)
+  assert_eq(view_painted().made - painted.made, 0)
+  assert_true(drawn_index(w.t, (100.0, 140.0, 60.0, 30.0, island_red)) >= 0, msg="\{w.t.drawn_rects()}")
+  // (pressed where it went)
+  tree_tap(w.t, 110.0, 150.0)
+  assert_eq(w.badge_taps.val, 1)
 }

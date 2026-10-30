@@ -6,12 +6,13 @@
 // point: a node's own press, the old view where the island is, nothing else outside it.
 //
 // The old view is built as its own watches say (frame_watch.mbt): what changes of the tree alone builds nothing of it.
-// What the tree changed is drawn again node by node: each node's instances made as its instance changes (Tree::changed)
-// and kept by the node, the others copied as they were.
+// What the tree changed is drawn again node by node: each node's instances made, where it is its own, only as what it
+// draws changes (Tree::changed), kept by the node, and composed where the scene draws it as it is gone through (moved,
+// faded, cut: Ctx::view_blit); a node moved or faded makes nothing of it or what it holds again.
 //
 // Not yet (the way there, 3): the island moved by its look (offset) moves the old view by laying it out again; the old
-// view's layers are painted as opaque as they were; a node's instances are kept where they are drawn in the window
-// (moved with what holds it, made again), not where they are in what holds them with its move apart.
+// view's layers are painted as opaque as they were; the host is handed the frame whole (its renderers upload all of
+// it: an adapter, not what changed alone); one island a window.
 
 ///|
 /// The window's tree, where the app made it once (None: the old view alone, the whole window).
@@ -43,7 +44,7 @@ let view_held : Ref[ViewHeld?] = Ref(None)
 let view_due : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
-/// Each node's instances as last made (in the window), by node: copied into each frame painted as they are.
+/// Each node's instances as last made (where it is its own), by node: composed into each frame painted.
 // kept across runs: put back as a run begins (view_forget)
 let view_blocks : Map[@view.NodeId, FixedArray[Double]] = Map([])
 
@@ -199,53 +200,86 @@ fn Ctx::view_draw(self : Ctx, under : Bool) -> Unit {
   let island = tree.hosting()
   let mut before = true
   let n0 = self.ninst
-  tree.each_drawn(fn(d) {
-    if Some(d.id) == island {
+  tree.each_drawn(fn(c, x, y, a) {
+    if Some(c.id) == island {
       before = false
       return
     }
     // (the root, the window, is drawn by nothing of its own)
-    if d.id.at == 0 || before != under {
+    if c.id.at == 0 || before != under || a <= 0.002 {
       return
     }
-    let block = match view_blocks.get(d.id) {
+    let block = match view_blocks.get(c.id) {
       Some(b) => b
       None => {
-        let b = self.view_made(d)
-        view_blocks[d.id] = b
+        let b = self.view_made(c)
+        view_blocks[c.id] = b
         b
       }
     }
-    let n = block.length() / inst_size
-    while (self.ninst + n) * inst_size > self.inst.length() {
-      self.grow()
-    }
-    block.blit_to(self.inst, len=block.length(), dst_offset=self.ninst * inst_size)
-    self.ninst = self.ninst + n
+    self.view_blit(block, x, y, a)
     view_paint_work.copied = view_paint_work.copied + 1
   })
   view_paint_work.handed = view_paint_work.handed + (self.ninst - n0)
 }
 
 ///|
-/// Node instance `d`'s instances made (its ground, its words), out of the frame's: what is kept for it.
-fn Ctx::view_made(self : Ctx, d : @view.Drawn) -> FixedArray[Double] {
+/// Content `c`'s instances made (its ground, its words) where it is its own (its top left at 0, 0, wholly opaque), out
+/// of the frame's: what is kept for it, composed wherever it is drawn (Ctx::view_blit).
+fn Ctx::view_made(self : Ctx, c : @view.Content) -> FixedArray[Double] {
   view_paint_work.made = view_paint_work.made + 1
   let start = self.ninst
-  if d.alpha > 0.002 {
-    if d.ground != 0L {
-      self.emit_rect(d.x, d.y, d.w, d.h, 0.0, d.ground, 0.0, 0L, d.alpha)
-    }
-    if d.words != "" {
-      let tl = layout_text(d.words, view_words_size, 400, d.w + 0.5, true, line=view_line_h)
-      self.emit_text(tl, d.x, d.y, d.ink, d.alpha)
-    }
+  if c.ground != 0L {
+    self.emit_rect(0.0, 0.0, c.w, c.h, 0.0, c.ground, 0.0, 0L, 1.0)
+  }
+  if c.words != "" {
+    let tl = layout_text(c.words, view_words_size, 400, c.w + 0.5, true, line=view_line_h)
+    self.emit_text(tl, 0.0, 0.0, c.ink, 1.0)
   }
   let len = (self.ninst - start) * inst_size
   let block = FixedArray::make(len, 0.0)
   self.inst.blit_to(block, len~, src_offset=start * inst_size)
   self.ninst = start
   block
+}
+
+///|
+/// A content's instances (`block`, where it is its own) into the frame, composed where the scene draws it: moved to
+/// (x, y), as opaque as `a` (each instance: as the old view fades what it paints), cut by the clip painted in now.
+fn Ctx::view_blit(self : Ctx, block : FixedArray[Double], x : Double, y : Double, a : Double) -> Unit {
+  let n = block.length() / inst_size
+  while (self.ninst + n) * inst_size > self.inst.length() {
+    self.grow()
+  }
+  let at = self.ninst * inst_size
+  block.blit_to(self.inst, len=block.length(), dst_offset=at)
+  let s = self.inst
+  let k = clip_top()
+  for i in 0..<n {
+    let b = at + i * inst_size
+    s[b] = s[b] + x
+    s[b + 1] = s[b + 1] + y
+    s[b + 11] = s[b + 11] * a
+    let kind = s[b + 5]
+    // (a box's, a shadow's, frosted glass's border colour: faded with it; a glyph's 12-15 are where it is in the atlas)
+    if kind == 0.0 || kind == 2.0 || kind == 5.0 {
+      s[b + 15] = s[b + 15] * a
+    }
+    if s[b + 32] != 0.0 {
+      s[b + 33] = s[b + 33] + x
+      s[b + 34] = s[b + 34] + y
+    }
+    for j in 0..<4 {
+      s[b + 16 + j] = clip_stack[k + j]
+    }
+    for j in 0..<8 {
+      s[b + 24 + j] = clip_stack[k + 4 + j]
+    }
+    for j in 0..<12 {
+      s[b + 40 + j] = clip_stack[k + 12 + j]
+    }
+  }
+  self.ninst = self.ninst + n
 }
 
 ///|

@@ -111,7 +111,9 @@ test "the clock alone going on: what reads it painted again, nothing built, noth
   assert_eq(after.computes - before.computes, 0)
   assert_eq(after.bound - before.bound, 1)
   assert_eq(after.measured - before.measured, 0)
-  assert_eq(after.instances - before.instances, 1)
+  // (faded: composed again, nothing it draws made again)
+  assert_eq(after.instances - before.instances, 0)
+  assert_eq(after.composed - before.composed, 1)
   assert_true(drawn.iter().any(fn(d) { d.alpha == 0.5 }))
 }
 
@@ -344,11 +346,12 @@ test "what holds a button drawn off and faded: the button drawn and pressed wher
   off.set((100.0, 50.0))
   t.frame(390.0, 844.0) |> ignore
   let drawn = t.drawn()
-  // the card and its button made again (drawn elsewhere), nothing laid out
+  // the card composed again where it is drawn, nothing laid out, nothing of it or its button made again, the button
+  // not visited (where it is in the card is the same)
   assert_eq(t.work().computes - before.computes, 0)
-  assert_eq(t.work().instances - before.instances, 2)
-  // (visited: the card and its button, nothing else)
-  assert_eq(t.work().visited - before.visited, 2)
+  assert_eq(t.work().instances - before.instances, 0)
+  assert_eq(t.work().composed - before.composed, 1)
+  assert_eq(t.work().visited - before.visited, 1)
   let (x, y, _, _) = b.rect()
   assert_eq((x, y), (110.0, 60.0))
   let d = drawn.iter().find_first(fn(d) { d.id == b.id() }).unwrap()
@@ -503,17 +506,21 @@ test "one line's ground changed: that node alone visited and made again, the oth
 }
 
 ///|
-test "a column drawn off: it and its lines visited and made again, the other column not visited" {
+test "a column drawn off: it alone composed again, its lines and the other column neither visited nor made again" {
   let c = columns(20)
   c.tree.frame(390.0, 844.0) |> ignore
   let before = c.tree.work()
   c.off.set((0.0, 30.0))
   c.tree.frame(390.0, 844.0) |> ignore
   let after = c.tree.work()
-  assert_eq(after.visited - before.visited, 21)
-  assert_eq(after.instances - before.instances, 21)
+  assert_eq(after.visited - before.visited, 1)
+  assert_eq(after.instances - before.instances, 0)
+  assert_eq(after.composed - before.composed, 1)
   assert_eq(after.computes - before.computes, 0)
-  assert_false(any_of(c.tree.changed(), c.right.val.unwrap()))
+  assert_eq(c.tree.composed(), [c.left.val.unwrap().id()])
+  // (its lines drawn 30 lower all the same: composed as the scene is gone through)
+  let line = c.tree.drawn_of(c.left.val.unwrap().kids()[0].id()).unwrap()
+  assert_eq(line.y, 30.0)
 }
 
 ///|

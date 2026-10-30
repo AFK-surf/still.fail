@@ -18,11 +18,12 @@
 // what it holds as indexes, and a `View` is a handle (the tree, the index, the node's making there). A handle on a node
 // let go does nothing (View::live, where every handle's use begins): its index made again since is another node.
 //
-// A frame (Tree::frame) does what was marked and nothing else: lays out the nodes marked (flex's reuse) and visits the
-// nodes it laid out again and what it moved, the nodes whose place changed and what they hold, the nodes whose look
-// changed alone; it makes again the instance of each of them that came out otherwise, kept by its node, and orders the
-// instances again only as what is made, let go or moved among its siblings changed. What it changed is the frame's
-// (Tree::changed), for the host to take.
+// A frame (Tree::frame) does what was marked and nothing else: runs the bindings told, lays out the nodes marked
+// (flex's reuse) and visits the nodes it laid out again and what they hold, a node whose place or look changed alone.
+// What a node draws (Content) is kept where it is its own and made again only as its look or size changes; where it is
+// in what holds it and how opaque are its composition, set again alone as it moves or fades, what it holds left as it
+// is; the window's places are worked out as the scene is gone through (Tree::each_drawn), for drawing and hitting
+// alike. What a frame changed (Tree::changed, Tree::composed) is for the host to take.
 //
 // What this package is not yet (the way there's 3): its words are measured by a function given to it, its instances
 // are `Drawn` records the host turns into its own.
@@ -54,8 +55,23 @@ pub(all) struct Look {
 } derive(Eq, Debug)
 
 ///|
-/// A node's instance as a frame draws it: which node, where in the window (what holds it drawn off with it), how big,
-/// how opaque (as opaque as what holds it is, with its own), its ground, its words.
+/// What a node draws, where it is its own (its origin its top left, as opaque as itself): which node, how big, its
+/// ground, its words. Made again only as one of these changes; where it is and how opaque it is drawn are its place's
+/// and its holders' (composed as the scene is gone through: Tree::each_drawn).
+pub(all) struct Content {
+  id : NodeId
+  w : Double
+  h : Double
+  ground : Int64
+  ink : Int64
+  words : String
+  /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
+  hosted : Bool
+} derive(Eq, Debug)
+
+///|
+/// A node's content unfolded where the window draws it (what holds it drawn off and faded with it): for a test, or a
+/// host that takes the window whole.
 pub(all) struct Drawn {
   id : NodeId
   x : Double
@@ -86,6 +102,7 @@ pub(all) struct Work {
   mut visited : Int
   mut measured : Int
   mut instances : Int
+  mut composed : Int
   mut changes : Int
   mut orders : Int
   mut structure : Int
@@ -116,15 +133,16 @@ struct Node {
   /// its instance to be made again (its look changed); its place (and what it holds) to be worked out again
   mut look_due : Bool
   mut place_due : Bool
-  /// where it was last drawn (in the window), how opaque, how big: worked out once it is placed
+  /// where it is in what holds it (its layout's place and its own offset), how opaque of itself, how big: worked out
+  /// once it is placed
   mut placed : Bool
-  mut ax : Double
-  mut ay : Double
-  mut aa : Double
-  mut aw : Double
-  mut ah : Double
-  /// its instance as last made
-  mut drawn : Drawn?
+  mut lx : Double
+  mut ly : Double
+  mut la : Double
+  mut lw : Double
+  mut lh : Double
+  /// what it draws, as last made
+  mut content : Content?
 }
 
 ///|
@@ -147,12 +165,14 @@ pub struct Tree {
   mut due : Bool
   mut last_w : Double
   mut last_h : Double
-  /// the nodes drawn, in the order they are drawn (no slot)
+  /// the nodes drawn, in the order they are drawn (no slot), and where in it what holds each is (-1: the window)
   order : Array[Int]
+  order_holder : Array[Int]
   /// the node hosting the old view, if any (View::hosted)
   mut hosting : Int
-  /// what the last frame changed: the nodes whose instance it made again
+  /// what the last frame changed: the nodes whose content it made again, those placed or faded otherwise
   changed : Array[NodeId]
+  composed : Array[NodeId]
   work : Work
   /// told as there is first something for a frame to do: what hosts it asks for a frame
   mut on_due : () -> Unit
@@ -183,8 +203,10 @@ pub fn Tree::new(make : (View) -> Unit, measure? : (String, Double) -> (Double, 
     last_w: -1.0,
     last_h: -1.0,
     order: [],
+    order_holder: [],
     hosting: -1,
     changed: [],
+    composed: [],
     on_due: fn() {  },
     work: {
       made: 0,
@@ -196,6 +218,7 @@ pub fn Tree::new(make : (View) -> Unit, measure? : (String, Double) -> (Double, 
       visited: 0,
       measured: 0,
       instances: 0,
+      composed: 0,
       changes: 0,
       orders: 0,
       structure: 0,
@@ -240,7 +263,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look_due = false
       n.place_due = false
       n.placed = false
-      n.drawn = None
+      n.content = None
       i
     }
     None => {
@@ -261,12 +284,12 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         look_due: false,
         place_due: false,
         placed: false,
-        ax: 0.0,
-        ay: 0.0,
-        aa: 1.0,
-        aw: 0.0,
-        ah: 0.0,
-        drawn: None,
+        lx: 0.0,
+        ly: 0.0,
+        la: 1.0,
+        lw: 0.0,
+        lh: 0.0,
+        content: None,
       })
       self.nodes.length() - 1
     }
@@ -726,7 +749,7 @@ fn View::let_go(self : View) -> Unit {
   n.flex.measure = None
   n.flex.children.clear()
   n.parent = -1
-  n.drawn = None
+  n.content = None
   if self.tree.hosting == self.at {
     self.tree.hosting = -1
   }
@@ -896,12 +919,15 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
 }
 
 ///|
-/// A frame of `w` by `h` at the clock's time, doing what was marked: the nodes marked laid out, and visited of them
-/// only those laid out again and what moved with them; the nodes whose place changed, what they hold with them; the
-/// nodes whose look changed alone. Each instance that came out otherwise made again (Tree::changed); the order made
-/// again where what is drawn was made, let go or moved among its siblings. Whether anything drawn changed.
+/// A frame of `w` by `h` at the clock's time, doing what was marked: the bindings whose reads changed worked out; the
+/// nodes marked laid out, and visited of them only those laid out again and what they hold (placed anew by them); the
+/// nodes whose place changed (offset, opacity), each alone; the nodes whose look changed, each alone. A node's content
+/// made again only as what it draws changed (its look, its size: Tree::changed); one placed or faded otherwise is
+/// composed again, what it holds left as it is (Tree::composed); the order made again where what is drawn was made,
+/// let go or moved among its siblings. Whether anything drawn changed.
 pub fn Tree::frame(self : Tree, w : Double, h : Double) -> Bool {
   self.changed.clear()
+  self.composed.clear()
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return false
   }
@@ -929,23 +955,18 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double) -> Bool {
     self.work.computes = self.work.computes + 1
     let gen = @flex.computes() + 1
     @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
-    self.walk(0, 0.0, 0.0, 1.0, gen, false, true)
+    self.walk(0, gen, true)
   }
-  // (what moved by its own place, what it holds with it: from where what holds it is now)
+  // (placed or faded by its own: it alone composed again)
   for at in self.places_due {
     let n = self.nodes[at]
     if n.live && n.place_due {
-      let (ox, oy, oa) = self.holder_place(at)
       self.work.visited = self.work.visited + 1
-      if self.place(at, ox, oy, oa) {
-        for k in n.kids {
-          self.walk(k, n.ax, n.ay, n.aa, -1, true, false)
-        }
-      }
+      self.place(at)
     }
   }
   self.places_due.clear()
-  // (what changed of its look alone: its instance, nothing else)
+  // (what changed of its look alone: its content, nothing else)
   for at in self.looks_due {
     let n = self.nodes[at]
     if n.live && n.look_due {
@@ -958,34 +979,26 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double) -> Bool {
   if ordered {
     self.order_due = false
     self.order.clear()
-    self.ordered(0)
+    self.order_holder.clear()
+    self.ordered(0, -1)
     self.work.orders = self.work.orders + 1
   }
-  self.work.changes = self.work.changes + self.changed.length()
+  self.work.changes = self.work.changes + self.changed.length() + self.composed.length()
   self.due = false
-  ordered || self.changed.length() > 0
+  ordered || self.changed.length() > 0 || self.composed.length() > 0
 }
 
 ///|
-/// Node `at` after a compute numbered `gen` (or what moved it: `moved`), what holds it drawn at (ox, oy) as opaque as
-/// `oa`: placed again, and what it holds where it was laid out again (what it holds placed anew by it, each looked at)
-/// or moved (all of it with it); below what was neither laid out again nor moved, nothing is visited.
-fn Tree::walk(
-  self : Tree,
-  at : Int,
-  ox : Double,
-  oy : Double,
-  oa : Double,
-  gen : Int,
-  moved : Bool,
-  holder_laid : Bool,
-) -> Unit {
+/// Node `at` after a compute numbered `gen`: placed again, and what it holds where it was laid out again (each placed
+/// anew by it, looked at); below what was not laid out again, nothing is visited (what holds a node moved, its place in
+/// it is the same).
+fn Tree::walk(self : Tree, at : Int, gen : Int, holder_laid : Bool) -> Unit {
   let n = self.nodes[at]
   self.work.visited = self.work.visited + 1
   if n.slot {
-    for k in n.kids {
-      if moved || holder_laid {
-        self.walk(k, ox, oy, oa, gen, moved, holder_laid)
+    if holder_laid {
+      for k in n.kids {
+        self.walk(k, gen, holder_laid)
       }
     }
     return
@@ -994,68 +1007,54 @@ fn Tree::walk(
   if laid {
     self.work.laid = self.work.laid + 1
   }
-  let went = self.place(at, ox, oy, oa)
-  for k in n.kids {
-    if went || laid {
-      self.walk(k, n.ax, n.ay, n.aa, gen, went, laid)
+  self.place(at)
+  if laid {
+    for k in n.kids {
+      self.walk(k, gen, laid)
     }
   }
 }
 
 ///|
-/// Where what holds node `at` (the first not a slot) is drawn and how opaque: the window's for the root's.
-fn Tree::holder_place(self : Tree, at : Int) -> (Double, Double, Double) {
-  let mut p = self.nodes[at].parent
-  while p >= 0 && self.nodes[p].slot {
-    p = self.nodes[p].parent
-  }
-  if p < 0 {
-    (0.0, 0.0, 1.0)
-  } else {
-    let h = self.nodes[p]
-    (h.ax, h.ay, h.aa)
-  }
-}
-
-///|
-/// Node `at` placed, what holds it at (ox, oy) as opaque as `oa`: its instance made again if it is drawn otherwise (or
-/// its look changed). Whether what it holds is drawn elsewhere with it (it moved, or it is drawn otherwise opaque).
-fn Tree::place(self : Tree, at : Int, ox : Double, oy : Double, oa : Double) -> Bool {
+/// Node `at` placed where it is in what holds it (its layout's place, its offset), as opaque as itself, as big as it is
+/// laid out: composed again where it is placed or faded otherwise, its content made again where its size (or its look)
+/// changed.
+fn Tree::place(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
   n.place_due = false
-  let x = ox + n.flex.left + n.look.dx
-  let y = oy + n.flex.top + n.look.dy
-  let a = oa * n.look.alpha
+  let x = n.flex.left + n.look.dx
+  let y = n.flex.top + n.look.dy
+  let a = n.look.alpha
   let w = n.flex.width
   let h = n.flex.height
-  let went = !n.placed || x != n.ax || y != n.ay || a != n.aa
-  let sized = !n.placed || w != n.aw || h != n.ah
+  let went = !n.placed || x != n.lx || y != n.ly || a != n.la
+  let sized = !n.placed || w != n.lw || h != n.lh
   n.placed = true
-  n.ax = x
-  n.ay = y
-  n.aa = a
-  n.aw = w
-  n.ah = h
-  if went || sized || n.look_due {
+  n.lx = x
+  n.ly = y
+  n.la = a
+  n.lw = w
+  n.lh = h
+  if went {
+    self.work.composed = self.work.composed + 1
+    self.composed.push({ at, gen: n.gen })
+  }
+  if sized || n.look_due {
     self.made_again(at)
   }
-  went
 }
 
 ///|
-/// Node `at`'s instance made again, as it is placed and looks now: one of the frame's changes.
+/// Node `at`'s content made again, as it looks now and as big as it is: one of the frame's changes.
 fn Tree::made_again(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
   n.look_due = false
   let id = { at, gen: n.gen }
   self.work.instances = self.work.instances + 1
-  n.drawn = Some({
+  n.content = Some({
     id,
-    x: n.ax,
-    y: n.ay,
-    w: n.aw,
-    h: n.ah,
-    alpha: n.aa,
+    w: n.lw,
+    h: n.lh,
     ground: n.look.ground,
     ink: n.look.ink,
     words: n.look.words,
@@ -1065,54 +1064,104 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
 }
 
 ///|
-/// The order the nodes are drawn in from node `at` down (no slot: what it holds in its place).
-fn Tree::ordered(self : Tree, at : Int) -> Unit {
+/// The order the nodes are drawn in from node `at` down (no slot: what it holds in its place), what holds it at
+/// `holder` in it.
+fn Tree::ordered(self : Tree, at : Int, holder : Int) -> Unit {
   let n = self.nodes[at]
-  if !n.slot {
-    self.order.push(at)
+  if n.slot {
+    for k in n.kids {
+      self.ordered(k, holder)
+    }
+    return
   }
+  self.order.push(at)
+  self.order_holder.push(holder)
+  let me = self.order.length() - 1
   for k in n.kids {
-    self.ordered(k)
+    self.ordered(k, me)
   }
 }
 
 ///|
-/// What the last frame made again: the nodes whose instance changed.
+/// What the last frame made again: the nodes whose content changed.
 pub fn Tree::changed(self : Tree) -> Array[NodeId] {
   self.changed
 }
 
 ///|
-/// The nodes drawn, in order: `f` given each one's instance as last made (none for a node not yet placed).
-pub fn Tree::each_drawn(self : Tree, f : (Drawn) -> Unit) -> Unit {
-  for at in self.order {
-    match self.nodes[at].drawn {
-      Some(d) => f(d)
+/// What the last frame composed again: the nodes placed or faded otherwise (what they hold left as it was).
+pub fn Tree::composed(self : Tree) -> Array[NodeId] {
+  self.composed
+}
+
+///|
+/// The scene gone through in the order it is drawn: `f` given each node's content (where it is its own) and where the
+/// window draws it and how opaque, composed as it goes from what holds it (none for a node not yet placed).
+pub fn Tree::each_drawn(self : Tree, f : (Content, Double, Double, Double) -> Unit) -> Unit {
+  let wx : Array[Double] = Array::make(self.order.length(), 0.0)
+  let wy : Array[Double] = Array::make(self.order.length(), 0.0)
+  let wa : Array[Double] = Array::make(self.order.length(), 1.0)
+  for i, at in self.order {
+    let n = self.nodes[at]
+    let h = self.order_holder[i]
+    let (bx, by, ba) = if h < 0 { (0.0, 0.0, 1.0) } else { (wx[h], wy[h], wa[h]) }
+    wx[i] = bx + n.lx
+    wy[i] = by + n.ly
+    wa[i] = ba * n.la
+    match n.content {
+      Some(c) => f(c, wx[i], wy[i], wa[i])
       None => ()
     }
   }
 }
 
 ///|
-/// The instances drawn, in order (a new array: for a test, or a host taking them all).
+/// A node's content unfolded where the window draws it.
+fn unfolded(c : Content, x : Double, y : Double, a : Double) -> Drawn {
+  {
+    id: c.id,
+    x,
+    y,
+    w: c.w,
+    h: c.h,
+    alpha: a,
+    ground: c.ground,
+    ink: c.ink,
+    words: c.words,
+    hosted: c.hosted,
+  }
+}
+
+///|
+/// The scene unfolded, in order (a new array: for a test, or a host taking the window whole).
 pub fn Tree::drawn(self : Tree) -> Array[Drawn] {
   let out = []
-  self.each_drawn(fn(d) { out.push(d) })
+  self.each_drawn(fn(c, x, y, a) { out.push(unfolded(c, x, y, a)) })
   out
 }
 
 ///|
-/// Node `id`'s instance as last made, where it lives.
+/// Node `id` unfolded where the window draws it, where it lives and has been placed.
 pub fn Tree::drawn_of(self : Tree, id : NodeId) -> Drawn? {
   if id.at < 0 || id.at >= self.nodes.length() {
     return None
   }
   let n = self.nodes[id.at]
-  if n.live && n.gen == id.gen {
-    n.drawn
-  } else {
-    None
+  guard n.live && n.gen == id.gen && n.content is Some(c) else { return None }
+  let mut x = 0.0
+  let mut y = 0.0
+  let mut a = 1.0
+  let mut i = id.at
+  while i >= 0 {
+    let m = self.nodes[i]
+    if !m.slot {
+      x = x + m.lx
+      y = y + m.ly
+      a = a * m.la
+    }
+    i = m.parent
   }
+  Some(unfolded(c, x, y, a))
 }
 
 ///|
@@ -1164,22 +1213,25 @@ pub(all) enum Target {
 } derive(Eq, Debug)
 
 ///|
-/// What a press at (x, y) is for: the topmost node drawn there (by the order drawn, where it was last drawn) that does
-/// something when pressed or hosts the old view.
+/// What a press at (x, y) is for: the topmost node drawn there (by the order drawn, where the scene composed draws it:
+/// the same places as what is drawn) that does something when pressed or hosts the old view.
 pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
-  for i = self.order.length() - 1; i >= 0; i = i - 1 {
-    let n = self.nodes[self.order[i]]
-    guard n.live && n.drawn is Some(d) else { continue }
-    if x >= d.x && y >= d.y && x < d.x + d.w && y < d.y + d.h {
+  let found : Array[(NodeId, Bool)] = []
+  self.each_drawn(fn(c, cx, cy, _) {
+    if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h {
+      let n = self.nodes[c.id.at]
       if n.on_press is Some(_) {
-        return Pressed(d.id)
-      }
-      if n.hosted {
-        return Hosted(d.id)
+        found.push((c.id, true))
+      } else if n.hosted {
+        found.push((c.id, false))
       }
     }
+  })
+  match found.last() {
+    Some((id, true)) => Pressed(id)
+    Some((id, false)) => Hosted(id)
+    None => Nothing
   }
-  Nothing
 }
 
 ///|
