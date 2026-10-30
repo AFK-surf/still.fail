@@ -778,7 +778,7 @@ fn player_waits(c : @ui.Ctx, p : @kit.Media, f : @kit.MediaFrame, ink : MediaInk
         Failed =>
           // (on the card its end offers the next one on: the words and the button over its picture read alike)
           c.box(style=player_next_box.then(@ui.style(bg=Data(ink.ground))), fn() {
-            c.text(t("android-chat.video.failed"), style=player_pill_words.then(@ui.text_style(color=Data(ink.text))))
+            c.text(t("android-chat.video.failed"), style=player_next_note.then(@ui.text_style(color=Data(ink.muted))))
             |> ignore
             let id = c.id(p.key() + "/retry")
             if c.clicked(id) {
