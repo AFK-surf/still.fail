@@ -119,6 +119,8 @@ test "a folder opened in the columns while its station has not said what it hold
   app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
   t.run_for(@ui.move_most_ms)
   assert_true(t.query(Radio, label="分栏") is Some(_))
+  // (a row of the first column that no crumb names)
+  let was = rightmost(t, "会议记录")
   let (x, y) = rightmost(t, "设计稿")
   t.tap(x, y)
   t.tap(x, y)
@@ -127,7 +129,7 @@ test "a folder opened in the columns while its station has not said what it hold
     Drive(d) => assert_eq(d.path, "设计稿")
     _ => fail("no folder open")
   }
-  assert_eq(rightmost(t, "设计稿").1, y)
+  assert_eq(rightmost(t, "会议记录"), was)
 }
 
 ///|
