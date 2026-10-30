@@ -140,7 +140,7 @@ fn ZPath::shown(self : ZPath) -> Double {
   let c = @ui.current()
   let going = self.on && c.moment() < self.end()
   c.shows_motion(self.mover, going)
-  self.at(if going { c.now() } else { c.moment() })
+  self.at(c.moment())
 }
 
 ///|

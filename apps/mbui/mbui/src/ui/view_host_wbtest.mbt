@@ -215,20 +215,24 @@ test "window tree: a part leaving goes on as the host draws it, from when it was
       fn(v) {
         v.height(Is(Some(20.0))).ground(Is(island_red)).alpha(By(fn() { 1.0 - v.going() })) |> ignore
       },
-      leave=300.0,
+      leave=part_leave_ms,
     )
     old(root, view).grow(Is(1.0)) |> ignore
   })
   t.draw()
   let base = view_blocks.length()
   on.set(false)
-  t.run_for(150.0)
+  t.run_for(part_leave_ms / 2.0)
   // (half gone: drawn half as opaque)
   let half = t.drawn_rects().filter(fn(r) { r.4 >> 8 == island_red >> 8 })
   assert_true(half.length() == 1 && (half[0].4 & 0xFFL) >= 126L && (half[0].4 & 0xFFL) <= 129L, msg="\{half}")
   assert_false(t.at_rest())
-  t.run_for(200.0)
+  t.run_for(part_leave_ms / 2.0 + part_leave_ms / 6.0)
   assert_false(t.drawn_rects().iter().any(fn(r) { r.4 >> 8 == island_red >> 8 }), msg="\{t.drawn_rects()}")
   assert_true(t.at_rest(), msg=t.rest_why())
   assert_eq(view_blocks.length(), base - 1)
 }
+
+///|
+/// How long a part takes to leave, here.
+let part_leave_ms : Double = 300.0

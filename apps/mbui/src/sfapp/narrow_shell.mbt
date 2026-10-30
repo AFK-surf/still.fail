@@ -87,7 +87,7 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
     },
     fn(told) {
       match told {
-        Some(t) => bar_tell(t, v.now())
+        Some(t) => bar_tell(t, v.cause_at())
         None => ()
       }
     },

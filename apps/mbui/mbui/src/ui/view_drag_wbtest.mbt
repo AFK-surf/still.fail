@@ -30,7 +30,7 @@ test "window tree: a finger held on a node over an old view: down, moved off it,
   t.drawn_now()
   let t0 = t.time()
   // (taken late, each said with its own moment)
-  t.advance(30.0)
+  t.advance(handed_late_ms)
   t.touch_at(0, 10.0, 10.0, t0 + 5.0)
   t.touch_at(1, 200.0, 300.0, t0 + 15.0)
   t.touch_at(2, 210.0, 310.0, t0 + 25.0)
@@ -88,7 +88,7 @@ test "window tree: a finger held on a node, the window no longer in front: calle
         h
         .width(Is(Some(100.0)))
         .height(Is(Some(100.0)))
-        .gesture(6.0, hold=(300.0, fn(_) { said.push("hold") }), drag=fn(d) { said.push("\{d.kind}") })
+        .gesture(6.0, hold=(held_hold_ms, fn(_) { said.push("hold") }), drag=fn(d) { said.push("\{d.kind}") })
         |> ignore
       })
       |> ignore
@@ -99,9 +99,9 @@ test "window tree: a finger held on a node, the window no longer in front: calle
   t.drawn_now()
   app_state_taken(3)
   t.touch(0, 10.0, 10.0)
-  t.advance(50.0)
+  t.advance(held_hold_ms / 6.0)
   app_state_taken(1)
-  t.run_for(500.0)
+  t.run_for(past_hold_ms)
   assert_eq(said, ["Off"])
 }
 
@@ -211,3 +211,15 @@ test "window tree: two fingers on a node that takes two: each by its own id, the
     (["Down 0 10,10", "Down 1 50,50", "Up 1 50,50", "Down 2 90,90", "Off 0 10,10", "Off 2 10,10"], false),
   )
 }
+
+///|
+/// How late a test's host hands its events on (each said with its own moment).
+let handed_late_ms : Double = 30.0
+
+///|
+/// How long a finger is held still for a hold, here.
+let held_hold_ms : Double = 300.0
+
+///|
+/// Run on well past the hold's moment.
+let past_hold_ms : Double = 500.0

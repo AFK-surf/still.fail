@@ -138,7 +138,7 @@ fn glide_cut(sampled : Bool, then : (@kit.Zoom) -> Unit) -> (Double, Double, Dou
   z.boxed(400.0, 400.0)
   z.zoom_to(3.0, 150.0, 170.0, true)
   // (frames on, as a host draws them: none of them steps it)
-  t.run_for(100.0)
+  t.run_for(some_frames_ms)
   if sampled {
     z.step()
   }
@@ -179,7 +179,7 @@ test "a zoom told a command tells what reads it once, as the command leaves it: 
   assert_eq(seen, [(true, false)])
   seen.clear()
   z.zoom_to(3.0, 150.0, 150.0, true)
-  t.run_for(100.0)
+  t.run_for(some_frames_ms)
   seen.clear()
   z.pan(10.0, 0.0)
   assert_eq(seen.length(), 1)
@@ -309,9 +309,9 @@ fn glide_pressed_on_tree(frames : Array[Double]) -> (Double, Double, Double, Dou
     |> ignore
   })
   t.draw()
-  // (handed on at 1080, as a host may: it happened at 1050, said so)
-  t.advance(1080.0 - t.time())
-  t.touch_at(0, 50.0, 50.0, 1050.0)
+  // (handed on later than it happened, as a host may, said so)
+  t.advance(handed_on_at - t.time())
+  t.touch_at(0, 50.0, 50.0, happened_at)
   t.touch_at(2, 50.0, 50.0, 1050.0)
   for f in frames {
     t.frame_at(f)
@@ -331,8 +331,19 @@ test "a glide a press on the window's tree tells sets out from the press's momen
   let z = @kit.Zoom::new()
   z.natural(100.0, 100.0)
   z.boxed(400.0, 400.0)
-  t.advance(1050.0 - t.time())
-  z.zoom_to(3.0, 150.0, 170.0, true, at=1050.0)
+  t.advance(happened_at - t.time())
+  z.zoom_to(3.0, 150.0, 170.0, true, at=happened_at)
   t.frame_at(1200.0)
   assert_eq(one, z.rect())
 }
+
+///|
+/// A while of frames as a host draws them (some of a glide's way, not all of it).
+let some_frames_ms : Double = 100.0
+
+///|
+/// When a finger's event happened, and when a host handed it on (later, as a host may).
+let happened_at : Double = 1050.0
+
+///|
+let handed_on_at : Double = 1080.0

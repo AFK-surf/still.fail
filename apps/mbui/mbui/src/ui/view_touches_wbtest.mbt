@@ -149,7 +149,7 @@ test "touches kept on the tape as the app took them (the first let go as such, e
     t1.touch_raw(phase, id, x, y, t0 + at)
   }
   t1.frame_at(t0 + 24.0)
-  t1.advance(4.0)
+  t1.advance(t0 + 28.0 - t1.time())
   t1.touch_raw(2, 9, 61.0, 71.0, t0 + 28.0)
   t1.frame_at(t0 + 36.0)
   let tape = t1.tape()

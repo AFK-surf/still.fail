@@ -134,6 +134,7 @@ pub(all) struct Style {
   mut fits : Bool
   mut fit_need : Double
   mut soft_min : Double
+  mut stretch_past_max : Bool
   // private fields
 }
 pub fn Style::basis_kind(Self) -> Int32

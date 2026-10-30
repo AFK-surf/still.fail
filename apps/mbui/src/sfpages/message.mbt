@@ -731,7 +731,7 @@ fn notice_action(c : @ui.Ctx, key : String, action : String, ink : @ui.Color, bu
       c.tell(key, run)
     }
   }
-  c.box(style=notice_end, fn() {
+  c.box(style=notice_end, keep=true, fn() {
     c.box(style=notice_dot_room, fn() {
       c.text("·", style=if ink == Danger { notice_dot_failed } else { notice_dot }) |> ignore
     })
@@ -1173,7 +1173,8 @@ let notice_pill_failed : @ui.Style = notice_pill.then(@ui.css("bg=DangerBg"))
 let notice_pill_failed_open : @ui.Style = notice_pill_open.then(@ui.css("bg=DangerBg"))
 
 ///|
-/// Its words and what is done at their end (msgSystemLine, msgSystemEnd): the words cut short before it.
+/// Its words and what is done at their end (msgSystemLine, msgSystemEnd): the words cut short before it, which keeps
+/// its room whole (notice_action: kept, as a row's end).
 // kept across runs: a value (no field of it changes)
 let notice_line : @ui.Style = @ui.css("row align=AEnd")
 

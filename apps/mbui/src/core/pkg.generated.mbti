@@ -25,6 +25,8 @@ pub let on_failed : @ref.Ref[((String) -> Unit)?]
 
 pub fn own_clock(ClockRuntime) -> Unit
 
+pub fn perf_said(Double) -> String
+
 pub fn query_of(String) -> String
 
 pub fn quiet(String, (Json) -> Bool) -> Unit
@@ -73,6 +75,7 @@ pub fn wall_ms() -> Double
 pub struct Client {
   mut version : Int32
   mut fatal : String?
+  fatal_said : @signals.Signal[Int32]
   // private fields
 }
 pub fn Client::call(Self, String, params? : Json, bytes? : Bytes?, on_done? : (Result[Json, Json]) -> Unit) -> Int32
@@ -80,6 +83,8 @@ pub fn Client::call_bytes(Self, String, params? : Json, on_done~ : (Result[(Json
 pub fn Client::call_said(Self, Map[String, Json]) -> Bool
 pub fn Client::cancel(Self, Int32) -> Unit
 pub fn Client::new((String) -> Unit, send_bytes? : (String, Bytes) -> Unit) -> Self
+pub fn Client::perf_forget(Self) -> Unit
+pub fn Client::perf_name(Self, Json) -> String
 pub fn Client::quiet(Self, String, (Json) -> Bool) -> Unit
 pub fn Client::receive(Self, String) -> Bool
 pub fn Client::receive_json(Self, Json, bytes? : Bytes?) -> Unit

@@ -562,7 +562,7 @@ test "a node that stays: its gestures pressed and let go again and again, its ti
   let base = v.owned_count()
   let id = gesture_id(t)
   let mut at = 10.0
-  for _ in 0..<5 {
+  for _ in 0..<rounds {
     // (let go before its hold: the hold's moment called off)
     t.drag_at(id, Down, 10.0, 10.0, at) |> ignore
     t.drag_at(id, Up, 10.0, 10.0, at + 10.0) |> ignore
@@ -582,7 +582,7 @@ test "a node that stays: its gestures pressed and let go again and again, its ti
     stop()
     at = at + 300.0
   }
-  assert_eq((v.owned_count(), said.length(), said.contains("never")), (base, 15, false))
+  assert_eq((v.owned_count(), said.length(), said.contains("never")), (base, 3 * rounds, false))
 }
 
 ///|
@@ -695,3 +695,8 @@ test "timed work called off again and again with no frame, the clock never moved
   }
   assert_eq((t.due_count(), v.owned_count()), (due, owned))
 }
+
+///|
+/// How many times a test does the same over again (a press and a hold, timed work come and called off) to see that
+/// nothing of each is left behind.
+let rounds : Int = 5

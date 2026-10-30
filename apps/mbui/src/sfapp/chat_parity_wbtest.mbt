@@ -405,3 +405,43 @@ fn dump_number(s : String) -> Double {
   }
   (if neg { -n } else { n }).to_double()
 }
+
+///|
+/// A failure the viewer may report, its words `words`: how wide its 上报 and the dot before it are drawn.
+fn report_drawn(words : String) -> (Double, Double) {
+  let calls : Array[Made] = []
+  let t = edited_core(calls, "chat", fn(name, v) {
+    if name == "chat" {
+      with_chat_message(v, 9.0, [
+        ("text", Json::string("⚠️ " + words)),
+        ("notice", { "failed": true, "words": Json::string(words) }),
+        ("reportable", true),
+      ])
+    } else {
+      v
+    }
+  })
+  for _ in 0..<6 {
+    if t.find("上报") is Some(_) {
+      break
+    }
+    t.wheel(195.0, 400.0, -300.0)
+  }
+  let w = fn(s : String) -> Double {
+    let found = t.words().filter(fn(x) { x.0 == s })
+    if found.length() > 0 {
+      found[0].3
+    } else {
+      -1.0
+    }
+  }
+  (w("上报"), w("·"))
+}
+
+///|
+test "a failure the viewer may report, its words too long for the line: they are cut short before 上报, which is whole" {
+  let short = report_drawn("这一轮没跑完")
+  let long = report_drawn("本轮 agent 未在对话中回复，以下是它最后输出的文字，由 station 代为转发（并非它发出的消息），请留意")
+  assert_true(short.0 > 0.0 && short.1 > 0.0, msg="\{short}")
+  assert_eq(long, short)
+}

@@ -6,7 +6,7 @@
 // holds it) to be laid out, a paint property the node's instance to be made again, a place property (how far it is
 // drawn off, how opaque) its instance and those of what it holds. What comes and goes is a node of its own (`show`,
 // `pick`, `each`), whose nodes it makes, keeps and lets go. Acting is a callback run outside any tracking. Time is a
-// signal (Tree::now), read where it is used.
+// signal (Tree::drawn_at: what is drawn by the clock samples it), read where it is used.
 //
 // Each node owns what it is made with: its making runs in a scope of its own (a node's, owned by nothing else), so what
 // it makes there (its bindings, any effect, effect_cleanup or effect of its own, what it says to let go with it:
@@ -470,7 +470,7 @@ pub fn Tree::root(self : Tree) -> View {
 /// The moment the logic is at, for what is done (an event's, a step's, something due's while it is done; else the
 /// moment its logic has come to): followed by nothing; what is to happen at a moment is said once, on the timeline
 /// (View::at_moment, View::steps), never found by watching the clock. For a look, Tree::drawn_at.
-pub fn Tree::now(self : Tree) -> Double {
+pub fn Tree::logic_at(self : Tree) -> Double {
   if self.cause_at >= 0.0 {
     self.cause_at
   } else {
@@ -560,9 +560,16 @@ pub fn View::id(self : View) -> NodeId {
 }
 
 ///|
-/// The clock now (Tree::now), for what a node works out from the time.
-pub fn View::now(self : View) -> Double {
-  self.tree.now()
+/// The moment of the change being made (an event's, a due thing's: Tree::cause_now; none, the logic's): where what it
+/// tells starts, the same whatever frame takes it.
+pub fn View::cause_at(self : View) -> Double {
+  self.tree.cause_now()
+}
+
+///|
+/// The moment the logic is at (Tree::logic_at), for what a node works out from the time.
+pub fn View::logic_at(self : View) -> Double {
+  self.tree.logic_at()
 }
 
 ///|
@@ -945,7 +952,7 @@ pub fn View::grow(self : View, g : Live[Double]) -> View {
 }
 
 ///|
-/// How big it is laid out as of the logic's moment (Tree::now): what was told before it laid out first (what an event
+/// How big it is laid out as of the logic's moment (Tree::logic_at): what was told before it laid out first (what an event
 /// changed before it asks, laid out as a frame would), as of the window's size its last frame gave (0 by 0 before the
 /// first). For what is said at a moment by how big a thing is then (how long a slide across it takes), never followed.
 pub fn View::laid_size(self : View) -> (Double, Double) {
@@ -1223,14 +1230,14 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
 }
 
 ///|
-/// Laid out as of the logic's moment (Tree::now), what the change under way set so far pulled into its properties (as a
+/// Laid out as of the logic's moment (Tree::logic_at), what the change under way set so far pulled into its properties (as a
 /// computed read in a batch is: nothing told, no structure or effect run before the change ends), the clock put back
 /// where it was drawn at: for where things are as an event finds them (View::laid_size, Tree::drag_at).
 fn Tree::laid_now(self : Tree) -> Unit {
   if self.last_w <= 0.0 {
     return
   }
-  let at = self.now()
+  let at = self.logic_at()
   let shown = @signals.untracked(fn() { self.clock.get() })
   @signals.untracked(fn() {
     self.clock.set(at)
@@ -1937,7 +1944,7 @@ fn leave_ends(n : Node) -> Double {
 /// Whether anything reads the clock (a look by the time, a node leaving whose look reads how far it is gone): each
 /// frame draws something new as the clock goes, so what hosts the tree draws them one after another; else nothing
 /// moves, and at most a moment is waited for (Tree::wake).
-pub fn Tree::animating(self : Tree) -> Bool {
+pub fn Tree::clock_read(self : Tree) -> Bool {
   // (what goes by steps asks for no frames of its own: its next step is a moment woken for, Tree::wake; what it
   // changes that shows asks as any change does)
   self.clock.watched()
@@ -2653,7 +2660,7 @@ pub(all) enum Target {
 /// the same places as what is drawn) that is held (View::on_drag), does something when pressed or hosts the old view.
 pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
   // (the logic's moment, what is where taken as of then: View::takes)
-  let at = self.now()
+  let at = self.logic_at()
   let found : Array[Target] = []
   self.each_drawn(fn(c, cx, cy, _) {
     // (what is leaving or said to take no press, or held by what is, pressed no more)

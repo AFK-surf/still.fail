@@ -87,7 +87,7 @@ pub fn bare_shell() -> Shell
 
 pub fn bars_in(Source, String) -> (Array[Array[String]], Int32)
 
-pub let bars_picked : @ref.Ref[(Array[Array[String]], Int32)?]
+pub let bars_picked : @signals.Signal[(Array[Array[String]], Int32)?]
 
 pub fn bars_shown(@ui.Ctx) -> Bool
 
@@ -130,6 +130,16 @@ pub fn chat_ref(String, String) -> ChatRef
 pub fn chat_ref_of(ChatItem) -> ChatRef
 
 pub fn chat_scope(String, String) -> String
+
+pub fn chat_screen_first(ChatRef, Array[ChatScreen]) -> Unit
+
+pub fn chat_screen_icon(ChatScreen) -> String
+
+pub fn chat_screen_label(ChatScreen) -> String
+
+pub fn chat_screens_driven(Array[ChatScreen]) -> Bool
+
+pub fn chat_screens_open(ChatRef, Array[ChatScreen], from~ : @sf.Beside) -> Unit
 
 pub fn chat_tick(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 
@@ -262,6 +272,10 @@ pub fn downloading(Json?) -> Bool
 pub fn downloads_frame(@ui.Ctx, Source) -> Unit
 
 pub fn downloads_reset() -> Unit
+
+pub fn draft_given() -> Unit
+
+pub fn drafts_given_read() -> Unit
 
 pub let drag_carried : @ref.Ref[() -> Dragged?]
 
@@ -679,17 +693,15 @@ pub fn leaving_done() -> Unit
 
 pub let left_pages : Array[Page]
 
+pub let left_said : @signals.Signal[Int32]
+
 pub fn let_go(Source, String) -> Unit
 
 pub fn let_go_all(Source, String) -> Unit
 
 pub fn lift_of(Thumb) -> Double
 
-pub let linger_fade_ms : Double
-
 pub let linger_ms : Double
-
-pub let linger_out_ms : Double
 
 pub fn linger_tick(@ui.Ctx, Source, in_front~ : Bool) -> Unit
 
@@ -1013,6 +1025,8 @@ pub let page_js_path : String
 
 pub let page_js_tag : String
 
+pub fn page_kind(Page) -> String
+
 pub fn page_link_drop(Source, PageLink) -> Unit
 
 pub fn page_link_new() -> PageLink
@@ -1125,7 +1139,7 @@ pub fn place_key(String, String) -> String
 
 pub fn place_page(String) -> Page
 
-pub let place_pick : Map[String, @settings.Route]
+pub let place_pick : @sf.LiveMap[String, @settings.Route]
 
 pub let plain_small_foot : Double
 
@@ -1165,7 +1179,7 @@ pub let pv_frames_n : @ref.Ref[Int32]
 
 pub let pv_hidden : @ref.Ref[String]
 
-pub let pv_leaving : @ref.Ref[Viewer?]
+pub let pv_leaving : @signals.Signal[Viewer?]
 
 pub let pv_read : Array[(String, Bytes)]
 
@@ -1243,7 +1257,7 @@ pub fn relay_view(@ui.Ctx, Source) -> Json?
 
 pub let relaying : Relaying
 
-pub let reporting_host : @ref.Ref[ReportingHost?]
+pub let reporting_host : @signals.Signal[ReportingHost?]
 
 pub fn reset() -> Unit
 
@@ -1361,7 +1375,7 @@ pub let share_card_of : @ref.Ref[(Source, Workspace) -> Unit]
 
 pub let share_offered : @ref.Ref[(Int32, Double, Double, () -> Unit, String)?]
 
-pub let share_over : @ref.Ref[Bool]
+pub let share_over : @signals.Signal[Bool]
 
 pub fn share_turn_tool(@ui.Ctx, String, Int32, String, () -> Unit) -> Unit
 
@@ -1581,7 +1595,7 @@ pub fn video_still(@ui.Ctx, Source, String, String, Attachment, String) -> Strin
 
 pub fn view_of_chat(Source, ChatRef) -> (ChatView?, Array[Entry], Json?)
 
-pub let viewer : @ref.Ref[Viewer?]
+pub let viewer : @signals.Signal[Viewer?]
 
 pub fn viewer_folder_label(Source, String, String, String) -> String
 
@@ -1629,7 +1643,7 @@ pub fn viz_frame(@ui.Ctx, String, String, Json?, VizHears, fill? : Bool, ground?
 
 pub let viz_frames : Map[String, VizFrame]
 
-pub let viz_full : @ref.Ref[VizFull?]
+pub let viz_full : @signals.Signal[VizFull?]
 
 pub fn viz_full_layer(@ui.Ctx, Source) -> Unit
 
@@ -1811,8 +1825,8 @@ pub(all) struct Agent {
 
 pub(all) struct App {
   mut nav : @ui.Nav[Page]
-  mut picked : String
-  filters : Map[String, String]
+  picked : @signals.Signal[String]
+  filters : @sf.LiveMap[String, String]
   mut menu : Bool
   mut switch_way : Int32
   mut held : Int32
@@ -1958,6 +1972,14 @@ pub(all) struct ChatRef {
   station_name : String
 } derive(Eq)
 
+pub(all) struct ChatScreen {
+  id : String
+  kind : String
+  title : String
+  line : String
+  agent : Bool
+}
+
 pub(all) struct ChatTabs {
   open : Array[String]
   shown : String?
@@ -1998,6 +2020,7 @@ pub(all) struct ChatView {
   me : String
   tabs : ChatTabs
   cc : Array[ChatCcTo]
+  screens : Array[ChatScreen]
 }
 
 pub(all) struct ChatsView {
@@ -2341,7 +2364,6 @@ pub(all) struct Lingering {
   agent : Agent
   id : Int32
   mut n : Int32
-  mut leaving : Bool
 }
 
 pub(all) struct LinkMark {
@@ -2642,7 +2664,6 @@ pub(all) struct Peek {
   mut got : Int32
   pictures : Array[String]
   mut target : Int32
-  mut held_by : (Int32, Int32)
 }
 
 pub(all) enum PeekRun {
@@ -2666,6 +2687,7 @@ pub(all) struct PhoneAsk {
   status : String
   scope : String
   why : String
+  link : String
   lasts : String
 }
 
@@ -2711,7 +2733,7 @@ pub(all) struct Reading {
   mut put : Bool
   mut lined : Bool
   asked : @signals.Signal[Double]
-  mut asked_newer : Double
+  asked_newer : @signals.Signal[Double]
   mut latest_asked : Bool
   mut end_asked : Bool
   mut told : String
@@ -2756,6 +2778,7 @@ pub(all) struct Reading {
   sent_as : Map[String, String]
   linger : Map[String, Lingering]
   mut lingered : Int32
+  linger_said : @signals.Signal[Int32]
   mut floor : Double
   floor_takers : Map[String, Double]
   floor_laid : Map[String, Double]

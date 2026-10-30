@@ -175,13 +175,13 @@ pub fn[P] nav_view(
     let goes = fn() {
       if nav.t0 == nav_held {
         nav.waited = true
-        nav.t0 = s.now()
+        nav.t0 = s.logic_at()
         sets_out()
         nav.shown_told()
       }
     }
     nav.hosted = Some({
-      now: fn() { s.now() },
+      now: fn() { s.logic_at() },
       room: fn() { s.laid_size() },
       went: fn() {
         (due.val)()
@@ -344,7 +344,7 @@ fn[P] Nav::page_built(
   let before = c.back_next
   let before_node = c.back_node_next
   let before_edge = c.back_edge_next
-  let i = c.box(w=Fill(1.0), h=Fill(1.0), bg~, fn() {
+  let i = c.box(style=nav_page_whole.then(style(bg=Data(bg))), fn() {
     let stack_back = fn() {
       c.back_next = Some(fn(kind, x, w, t, progress) { self.gesture(kind, x, w, t, progress~) })
       c.back_node_next = c.cur
@@ -372,3 +372,8 @@ fn[P] Nav::page_built(
     c.back_edge_next = before_edge
   }
 }
+
+///|
+/// A page of the stack: the whole of its room, on its ground.
+// kept across runs: a value (no field of it changes)
+let nav_page_whole : Style = css("w=Full h=Full")

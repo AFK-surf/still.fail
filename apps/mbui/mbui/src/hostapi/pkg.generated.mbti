@@ -112,6 +112,8 @@ pub fn font_metrics(Double, Int32, Int32, FixedArray[Double]) -> Unit
 
 pub fn font_scale() -> Double
 
+pub fn forget_dropped(Int32) -> Unit
+
 pub fn frame_awaiting(Int32, String) -> Unit
 
 pub fn frame_late() -> Double
@@ -254,6 +256,18 @@ pub fn pdf_page_size(Int32, Int32, FixedArray[Double]) -> Unit
 
 pub fn pdf_pages(Int32) -> Int32
 
+pub fn perf_line(String) -> Unit
+
+pub fn perf_read() -> Bytes
+
+pub fn perf_recording() -> Bool
+
+pub fn perf_size() -> Double
+
+pub fn perf_state() -> Int32
+
+pub fn perf_where() -> String
+
 pub fn pick(PickKind, hold? : Bool) -> Pick?
 
 pub fn pick_photo(String) -> Pick?
@@ -310,6 +324,8 @@ pub fn set_ime(Bool, Double, Double, Double, Double, String, Int32, Int32) -> Un
 
 pub fn set_outside(FuncRef[(Int32, Int32, Int32) -> Unit]) -> Bool
 
+pub fn set_perf(Bool) -> Unit
+
 pub fn set_sideways(Bool) -> Unit
 
 pub fn set_turnable(Bool) -> Unit
@@ -345,6 +361,8 @@ pub fn stream_hevc(Int32, Bytes, Int32, Int32) -> Unit
 pub fn stream_jpeg(Int32, Bytes, Double) -> Unit
 
 pub fn stream_layers() -> Bool
+
+pub fn stream_layers_tagged() -> Bool
 
 pub fn stream_next(Int32) -> String
 
@@ -725,6 +743,12 @@ pub(open) trait Host {
   fn set_sideways(Self, Bool) -> Unit = _
   fn set_turnable(Self, Bool) -> Bool = _
   fn share(Self, String, String, String, Bytes) -> Bool = _
+  fn perf_state(Self) -> Int32 = _
+  fn set_perf(Self, Bool) -> Unit = _
+  fn perf_line(Self, String) -> Unit = _
+  fn perf_where(Self) -> String = _
+  fn perf_size(Self) -> Double = _
+  fn perf_read(Self) -> Bytes = _
   fn shared_in(Self) -> String = _
   fn shared_in_file(Self, Int32) -> Bytes = _
   fn app_version(Self) -> Int32 = _

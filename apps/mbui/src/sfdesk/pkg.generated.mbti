@@ -565,19 +565,19 @@ pub(all) enum TapePane {
 } derive(Eq, Show, @debug.Debug)
 
 pub(all) struct Wide {
-  mut side_w : Double
-  mut folded : Bool
-  mut edge_held : Bool
+  side_w : @signals.Signal[Double]
+  folded : @signals.Signal[Bool]
+  edge_held : @signals.Signal[Bool]
   peeking : @signals.Signal[Bool]
   mut crowded : Bool
-  mut peek_next : Bool
-  mut peek_top : @sfbase.Page?
+  peek_next : @signals.Signal[Bool]
+  peek_top : @signals.Signal[@sfbase.Page?]
   mut side_place : String
   mut side_key : String
-  mut kept_w : Double
-  mut kept_folded : Bool
+  kept_w : @signals.Signal[Double]
+  kept_folded : @signals.Signal[Bool]
   mut in_bar : Bool
-  mut closed : Bool
+  closed : @signals.Signal[Bool]
   mut moved_as : (Bool, Bool, Bool, String, Bool)?
   mut brand_h : Double
   mut band : Double
@@ -587,28 +587,28 @@ pub(all) struct Wide {
   mut bar_mr : Double
   mut peek_shift : Double
   mut page_from : Double
-  mut landed : String
-  mut rail_menu : (String, Double, Double)?
-  mut rail_drag : (String, Double, Double)?
-  mut editing : Bool
-  mut attention_open : Bool
-  mut jobs_open : Bool
-  mut keys_open : Bool
+  landed : @signals.Signal[String]
+  rail_menu : @signals.Signal[(String, Double, Double)?]
+  rail_drag : @signals.Signal[(String, Double, Double)?]
+  editing : @signals.Signal[Bool]
+  attention_open : @signals.Signal[Bool]
+  jobs_open : @signals.Signal[Bool]
+  keys_open : @signals.Signal[Bool]
   mut tape : Bool
-  mut tape_at : TapePane
-  mut tape_ask : TapePane?
-  mut tape_chat : String
-  mut tape_panel : String
+  tape_at : @signals.Signal[TapePane]
+  tape_ask : @signals.Signal[TapePane?]
+  tape_chat : @signals.Signal[String]
+  tape_panel : @signals.Signal[String]
   mut tape_built : (String, Int32)
   mut tape_last_side : SideOf?
-  mut tape_pull : TapePane?
-  mut tape_drag : Double
+  tape_pull : @signals.Signal[TapePane?]
+  tape_drag : @signals.Signal[Double]
   mut tape_backing : Bool
   mut tape_back_x0 : Double
   mut tape_back_last : (Double, Double)
   mut tape_back_v : Double
   mut tape_back_end : @ui.BackStep?
-  mut tape_pick : String
+  tape_pick : @signals.Signal[String]
 }
 
 // Type aliases

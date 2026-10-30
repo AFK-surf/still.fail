@@ -3,18 +3,19 @@ package "mbui/film"
 
 import {
   "mbui/ui",
+  "mbui/view",
 }
 
 // Values
 pub fn arg(String) -> String
 
-pub fn bench((@ui.Ctx) -> Unit, script~ : String, name~ : String, w? : Double, h? : Double, scale? : Double, platform? : Int32, pointing? : @ui.Pointing, fps? : Double, frames_out? : String) -> Bool
+pub fn bench((@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit, script~ : String, name~ : String, w? : Double, h? : Double, scale? : Double, platform? : Int32, pointing? : @ui.Pointing, fps? : Double, frames_out? : String) -> Bool
 
 pub fn bench_log(String, String) -> Bool
 
 pub fn exit(Int32) -> Unit
 
-pub fn film((@ui.Ctx) -> Unit, script~ : String, out~ : String, w? : Double, h? : Double, scale? : Double, platform? : Int32, dark? : Bool, inset? : Bool, window_corner? : Double, max? : Int32, last? : String, copied? : String) -> Bool
+pub fn film((@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit, script~ : String, out~ : String, w? : Double, h? : Double, scale? : Double, platform? : Int32, dark? : Bool, inset? : Bool, window_corner? : Double, max? : Int32, last? : String, copied? : String) -> Bool
 
 pub let film_fps : Int32
 
@@ -22,9 +23,9 @@ pub fn live() -> @ui.Live
 
 pub fn read_text(String) -> String
 
-pub fn run((@ui.Ctx) -> Unit) -> Unit
+pub fn run((@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit
 
-pub fn run_bench((@ui.Ctx) -> Unit) -> Unit
+pub fn run_bench((@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit
 
 pub fn say(String) -> Unit
 

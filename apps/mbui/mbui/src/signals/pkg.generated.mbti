@@ -36,6 +36,10 @@ pub fn last_set_at() -> String
 
 pub fn set_active_sub(ReactiveNode?) -> ReactiveNode?
 
+pub fn set_owner(ReactiveNode?) -> ReactiveNode?
+
+pub fn setting_at() -> SourceLoc?
+
 pub fn[T] signal(T, same? : (T, T) -> Bool) -> Signal[T]
 
 pub fn start_batch() -> Unit
@@ -83,7 +87,10 @@ pub struct Watch {
   // private fields
 }
 pub fn Watch::changed_as_read(Self) -> Bool
+pub fn Watch::changed_now(Self) -> Bool
+pub fn Watch::gone(Self) -> Bool
 pub fn Watch::is_stale(Self) -> Bool
+pub fn Watch::on_marked(Self, () -> Unit) -> Unit
 pub fn[T] Watch::read(Self, () -> T) -> T
 pub fn Watch::set_as_read(Self) -> Array[String]
 pub fn Watch::stop(Self) -> Unit

@@ -87,7 +87,7 @@ pub fn ease_out(Double) -> Double
 
 pub fn easing_named(String) -> ((Double) -> Double)?
 
-pub fn entering(@ui.Ctx, Int32, String, Trans) -> Unit
+pub fn entering(@ui.Ctx, Int32, String, Trans, at_once? : Bool) -> Unit
 
 pub fn fill_offset(Array[Double], Int32) -> Unit
 
@@ -222,6 +222,9 @@ pub fn spring_visual(visual_duration? : Double, bounce? : Double) -> Generator
 pub async fn stagger(Int32, Int32, from? : StaggerFrom, async (Int32) -> Unit) -> Unit
 
 pub fn steps(Int32, direction? : StepsAt) -> (Double) -> Double
+
+#callsite(autofill(loc))
+pub fn told(@ui.Ctx, String, Double, spec? : Spec, loc~ : SourceLoc) -> Anim
 
 pub fn trans(fade? : Double, scale? : Double, ox? : Double, oy? : Double, dx? : Double, dy? : Double, spec? : Spec, fade_spec? : Spec, ground_first? : Bool) -> Trans
 

@@ -589,13 +589,15 @@ fn Glide::sample(self : Glide, now : Double) -> Unit {
 }
 
 ///|
-/// Where it is as `c` paints: the clock read (painted again each frame) only while it goes.
+/// Where it is as `c` paints: said to move while it goes (painted again each frame till its end, as a motion's value
+/// is: Anim::get), its way read at the frame's moment.
 fn Glide::painted(self : Glide, c : @ui.Ctx) -> Double {
-  if c.moment() >= self.end() {
-    self.target
+  let going = c.moment() < self.end()
+  c.shows_motion(bar_clock.mover, going)
+  if going {
+    self.at(c.moment()).0
   } else {
-    // det-ok(app-clock): its way, said once as it set out (Glide::go_by), sampled at the moment painted
-    self.at(c.now()).0
+    self.target
   }
 }
 

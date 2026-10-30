@@ -324,8 +324,6 @@ pub fn message_files(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Attachm
 
 pub fn message_row(@ui.Ctx, @sfbase.Source, MessageHere, @sfbase.Message) -> Unit
 
-pub fn mine_to(MessageHere, String) -> Bool
-
 pub fn model_triple(@ui.Ctx, @sfbase.Source, String, String, up? : Bool, page? : Json?, small? : Bool, floating? : Bool, saved? : String) -> Unit
 
 pub let msg_name : @ui.TextStyle
@@ -478,7 +476,7 @@ pub let reveal_ms : Double
 
 pub fn role_words(String) -> String
 
-pub fn row_aside(@ui.Ctx, @sfbase.Source, @sfbase.ChatItem, String, Int64) -> Unit
+pub fn row_aside(@ui.Ctx, @sfbase.Source, @sfbase.ChatItem, String, Int64, ground_by? : () -> Int64) -> Unit
 
 pub fn row_aside_end_w(@sfbase.ChatItem, String) -> Double
 
@@ -507,6 +505,8 @@ pub fn screen_page(@ui.Ctx, @sfbase.Source, @sfbase.ScreenAt, @sf.PageFrame, on_
 pub fn screen_unread_calls() -> Array[String]
 
 pub fn screen_value_quiet(Json) -> Bool
+
+pub fn screens_perf(Double) -> String
 
 pub fn search_away(@ui.Ctx) -> Double
 
@@ -569,6 +569,8 @@ pub fn station_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, Stri
 pub fn station_state(@ui.Ctx, Json?) -> Unit
 
 pub fn station_waiting(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit
+
+pub fn step_card(@ui.Ctx, String, String, String, () -> Unit) -> Unit
 
 pub let steps_marked_ms : Double
 

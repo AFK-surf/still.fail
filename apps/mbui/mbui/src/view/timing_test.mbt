@@ -147,7 +147,7 @@ test "what reads the clock keeps the frames coming; a leaving nothing draws by o
     root.box(fn(b) { b.height(Is(Some(10.0))).alpha(By(fn() { b.drawn_at() / 1000.0 })) |> ignore }) |> ignore
   })
   ticking.frame(390.0, 844.0) |> ignore
-  assert_true(ticking.animating())
+  assert_true(ticking.clock_read())
   assert_eq(ticking.wake(), None)
   // (a card leaving with no look by how far it is gone)
   let plain = @view.Tree::new(
@@ -157,7 +157,7 @@ test "what reads the clock keeps the frames coming; a leaving nothing draws by o
   frame_at(plain, now, 0.0)
   on.set(false)
   frame_at(plain, now, 16.0)
-  assert_false(plain.animating())
+  assert_false(plain.clock_read())
   assert_eq(plain.wake(), Some(300.0))
 }
 
@@ -464,7 +464,7 @@ test "steps said for a stretch: none before it or after it, 60 within it, none a
   (stop.val)()
   frame_at(t, now, 40000.0)
   assert_eq(at.length(), 70)
-  assert_true(!t.animating())
+  assert_true(!t.clock_read())
 }
 
 ///|
@@ -504,7 +504,7 @@ test "steps that change nothing shown ask for no frames: only their next moment 
     time=fn() { now.val },
   )
   frame_at(t, now, 0.0)
-  assert_false(t.animating())
+  assert_false(t.clock_read())
   assert_eq(t.wake(), Some(1000.0))
   frame_at(t, now, 1500.0)
   assert_eq(count.get(), 1)

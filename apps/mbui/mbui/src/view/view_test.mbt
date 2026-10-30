@@ -51,7 +51,7 @@ test "made once: what it shows changed many times, its nodes are the same nodes"
   p.tree.frame(390.0, 844.0) |> ignore
   let made = p.tree.work().made
   let t = p.title_view.val.unwrap()
-  for i in 0..<5 {
+  for i in 0..<rounds {
     p.title.set("第 \{i} 天")
     p.count.set(i)
     p.tree.frame(390.0, 844.0) |> ignore
@@ -290,7 +290,7 @@ test "changed a little at a time, it draws what the same state made fresh draws"
   let wide = @signals.signal(false, same=fn(a, b) { a == b })
   let t = rows_tree(items, wide)
   let mut n = 1
-  for step in 0..<200 {
+  for step in 0..<fuzz_steps {
     let now = items.get().copy()
     match next(5) {
       0 => {
@@ -768,7 +768,7 @@ test "shown and let go again and again: each node let go said once, as the host 
   t.frame(390.0, 844.0) |> ignore
   t.take_removed() |> ignore
   let made : Array[@view.NodeId] = []
-  for _ in 0..<5 {
+  for _ in 0..<rounds {
     on.set(true)
     t.frame(390.0, 844.0) |> ignore
     made.push(t.changed()[0])
@@ -874,3 +874,7 @@ test "a row's key back as it leaves: the same row, one of it drawn, kept after i
   let words = t.drawn().filter(fn(d) { d.words != "" }).map(fn(d) { d.words })
   assert_eq(words, ["甲", "乙改"])
 }
+
+///|
+/// How many changes the made-up sequence of changes makes (from its seed: the same each run).
+let fuzz_steps : Int = 200

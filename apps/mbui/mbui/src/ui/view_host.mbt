@@ -321,18 +321,17 @@ fn old_frame(c : Ctx) -> Unit {
     match old_islands.iter().find_first(fn(o) { o.id == p.0 }) {
       Some(o) => {
         // (on whole pixels: what it holds, laid out where it is, drawn so, its words not crawling as it moves)
+        let (_, x, y, w, h, _) = p
         let i = c.box(
-          left=on_pixels(p.1, c.scale),
-          top=on_pixels(p.2, c.scale),
-          w=Px(p.3),
-          h=Px(p.4),
-          clip=true,
+          style=style(w=Fixed(w), h=Fixed(h), clip=true),
+          left=on_pixels(x, c.scale),
+          top=on_pixels(y, c.scale),
           fn() {
             // (its part's id, as made_put names it here: what is let go with it, what an input to it builds)
             o.part = c.id(o.key)
             // (built for its own room: what it reads of the window's size is its node's)
-            o.room.val = (p.3, p.4)
-            c.sized(p.3, p.4, fn() {
+            o.room.val = (w, h)
+            c.sized(w, h, fn() {
               owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) })
             })
           },
@@ -667,7 +666,7 @@ fn view_frame_end(c : Ctx) -> Unit {
     Some(t) => t
     None => return
   }
-  if tree.animating() {
+  if tree.clock_read() {
     c.motion_left = true
   }
   match tree.wake() {

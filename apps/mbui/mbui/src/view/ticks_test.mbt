@@ -65,7 +65,7 @@ test "what a step reads as now is its own moment, frames drawn at each step or o
     let seen : Array[(Double, Double)] = []
     let t = @view.Tree::new(
       fn(root) {
-        root.box(fn(v) { v.steps(60, 5, fn(_, m) { seen.push((m, v.now())) }) |> ignore }) |> ignore
+        root.box(fn(v) { v.steps(60, 5, fn(_, m) { seen.push((m, v.logic_at())) }) |> ignore }) |> ignore
       },
       time=fn() { now.val },
     )
@@ -88,10 +88,11 @@ test "the tree's logic advanced to 5000 with nothing due, then steps said: from 
   let at : Array[Double] = []
   let t = @view.Tree::new(fn(root) { root.show(fn() { on.get() }, fn(b) { b.steps(60, 1, fn(_, m) { at.push(m) }) |> ignore }) })
   t.frame(390.0, 844.0) |> ignore
-  t.advance(5000.0)
+  t.advance(nothing_due_till)
   on.set(true)
-  t.advance(6000.0)
-  assert_eq(at, [301000.0 / 60.0])
+  t.advance(nothing_due_till + 1000.0)
+  // (the tick at 60 a second after it: 5000 is tick 300's, so 301's)
+  assert_eq(at, [(nothing_due_till * 60.0 / 1000.0 + 1.0) * 1000.0 / 60.0])
 }
 
 ///|
@@ -145,10 +146,10 @@ test "a look by the time made by an event at 10: it goes on with the clock, and 
     t.frame(390.0, 844.0, now=at) |> ignore
     assert_eq(t.drawn_of(card.val.unwrap().id()).unwrap().alpha, at / 100.0)
   }
-  assert_true(t.animating())
+  assert_true(t.clock_read())
   now.val = 40.0
   t.event(40.0, fn() { on.set(false) })
-  assert_false(t.animating())
+  assert_false(t.clock_read())
 }
 
 ///|
@@ -219,3 +220,7 @@ test "what is said to show at 100, stepping as it shows: the same at frames 100,
   assert_eq(shown_at_100([500.0], true), each)
   assert_eq(each, ([200.0], 1))
 }
+
+///|
+/// How far the tree's logic is advanced with nothing due, before steps are said.
+let nothing_due_till : Double = 5000.0
