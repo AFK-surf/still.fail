@@ -99,7 +99,7 @@ let panel_max : Double = 960.0
 /// How wide the panel is (ChatSide.tsx panelWidth: the width dragged, else 38% of the page and at least 360), the
 /// chat keeping 360 at least.
 pub fn side_width(pane : Double) -> Double {
-  let wanted = match panel_own.width {
+  let wanted = match panel_own.width.get() {
     Some(w) => w
     None => dmax(360.0, (pane * 0.38).floor())
   }
@@ -261,21 +261,26 @@ pub let side_pane : @ui.Style = @ui.css("w=Full h=Full clip")
 /// (open or not), whether a change asked of the core here opens or closes it (`asked`: it slides then), and while it
 /// slides out, what it showed (its tabs and the one in front).
 priv struct PanelOwn {
-  mut width : Double?
-  mut was : (String, Bool)?
-  mut asked : String
-  mut leaving : (String, Array[String], String)?
+  width : @signals.Signal[Double?]
+  was : @signals.Signal[(String, Bool)?]
+  asked : @signals.Signal[String]
+  leaving : @signals.Signal[(String, Array[String], String)?]
 }
 
 ///|
-let panel_own : PanelOwn = { width: None, was: None, asked: "", leaving: None }
+let panel_own : PanelOwn = {
+  width: @signals.signal(None, same=fn(a, b) { a == b }),
+  was: @signals.signal(None, same=fn(a, b) { a == b }),
+  asked: @signals.signal("", same=fn(a, b) { a == b }),
+  leaving: @signals.signal(None, same=fn(a, b) { a == b }),
+}
 
 ///|
 pub fn side_slide_reset() -> Unit {
-  panel_own.width = None
-  panel_own.was = None
-  panel_own.asked = ""
-  panel_own.leaving = None
+  panel_own.width.set(None)
+  panel_own.was.set(None)
+  panel_own.asked.set("")
+  panel_own.leaving.set(None)
 }
 
 ///|
@@ -284,22 +289,22 @@ pub fn side_slide_reset() -> Unit {
 pub fn side_changing(key : String, tabs : Array[String], front : String, any : Bool) -> Unit {
   let open = tabs.length() > 0
   if any {
-    panel_own.leaving = None
+    panel_own.leaving.set(None)
   }
   if open != any {
-    panel_own.asked = key
+    panel_own.asked.set(key)
     if !any {
-      panel_own.leaving = Some((key, tabs, front))
+      panel_own.leaving.set(Some((key, tabs, front)))
     }
   } else {
-    panel_own.asked = ""
+    panel_own.asked.set("")
   }
 }
 
 ///|
 /// What page `key`'s panel shows while it slides out, its last tab closed: the tabs it had, the one in front.
 fn side_leaving(key : String) -> (Array[String], String)? {
-  match panel_own.leaving {
+  match panel_own.leaving.get() {
     Some((k, tabs, front)) if k == key => Some((tabs, front))
     _ => None
   }
@@ -309,7 +314,7 @@ fn side_leaving(key : String) -> (Array[String], String)? {
 /// Page `key`'s panel gone, as it was sliding out (its tabs shown no more).
 fn side_left(key : String) -> Unit {
   if side_leaving(key) is Some(_) {
-    panel_own.leaving = None
+    panel_own.leaving.set(None)
   }
 }
 
@@ -328,20 +333,20 @@ pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page 
   side_over.val = over
   let whole = if over { dmin(side_over_w, c.width) } else { whole }
   let name = "--side-panel/" + key
-  match panel_own.was {
-    Some((k, was)) if k == key && was != open && panel_own.asked == key => {
-      panel_own.asked = ""
+  match panel_own.was.get() {
+    Some((k, was)) if k == key && was != open && panel_own.asked.get() == key => {
+      panel_own.asked.set("")
       // (in and out on a Move as long as it is wide)
       c.move_state([("side-panel", [name])])
     }
     _ => ()
   }
-  panel_own.was = Some((key, open))
+  panel_own.was.set(Some((key, open)))
   // its column (the panel) as wide as it has got
   let col = c.moved(name, if open { whole } else { 0.0 })
   if col <= 0.0 {
     if !open && side_leaving(key) is Some(_) {
-      panel_own.leaving = None
+      panel_own.leaving.set(None)
     }
     page()
     return
@@ -562,9 +567,9 @@ fn side_panel(
         edge=Left,
         press=@sf.t("web-pages.chat.closePanel"),
       ) {
-      Dragging(x) | Dropped(x) => panel_own.width = Some(x)
+      Dragging(x) | Dropped(x) => panel_own.width.set(Some(x))
       Pressed => side_change(src, r, "clear", None)
-      Twice => panel_own.width = None
+      Twice => panel_own.width.set(None)
       Untouched => ()
     }
   })
