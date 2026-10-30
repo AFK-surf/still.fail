@@ -174,6 +174,8 @@ pub struct Tree {
   /// step of what goes by steps (View::steps); and how many were ever told (each one's place among those due together)
   timeline : Array[Due]
   mut told : Int
+  /// what is due being done (Tree::advance)
+  mut advancing : Bool
   /// the bindings whose reads changed, to run as the frame begins (Tree::queued)
   bindings_due : Array[() -> Unit]
   mut layout_due : Bool
@@ -227,6 +229,7 @@ pub fn Tree::new(
     bindings_due: [],
     timeline: [],
     told: 0,
+    advancing: false,
     layout_due: true,
     order_due: true,
     due: true,
@@ -1222,8 +1225,9 @@ fn leave_ends(n : Node) -> Double {
 /// frame draws something new as the clock goes, so what hosts the tree draws them one after another; else nothing
 /// moves, and at most a moment is waited for (Tree::wake).
 pub fn Tree::animating(self : Tree) -> Bool {
-  // (and what goes by steps: each frame shows the steps taken by then)
-  self.clock.watched() || self.timeline.iter().any(fn(d) { d is Steps(_, _) && self.due_at(d) >= 0.0 })
+  // (what goes by steps asks for no frames of its own: its next step is a moment woken for, Tree::wake; what it
+  // changes that shows asks as any change does)
+  self.clock.watched()
 }
 
 ///|
@@ -1349,6 +1353,18 @@ fn Tree::due_leaving(self : Tree, id : NodeId) -> Unit {
 /// its turn. Frames, inputs and the host's calls each advance it to their moment and no further: how often they come
 /// changes nothing of what it does.
 pub fn Tree::advance(self : Tree, upto : Double) -> Unit {
+  // (one thing due at a time, all it does committed before the next is chosen: asked again while one is being done (a
+  // structure it changed committing), the loop doing it goes on from where it is once that one is done)
+  if self.advancing {
+    return
+  }
+  self.advancing = true
+  self.advance_loop(upto)
+  self.advancing = false
+}
+
+///|
+fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
   while true {
     let mut next = -1
     let mut next_at = 0.0

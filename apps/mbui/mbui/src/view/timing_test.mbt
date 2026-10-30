@@ -466,3 +466,50 @@ test "steps said for a stretch: none before it or after it, 60 within it, none a
   assert_eq(at.length(), 70)
   assert_true(!t.animating())
 }
+
+///|
+test "two steppers due together, the first one's step letting the second go: the second steps no more, then or after" {
+  let now = Ref(0.0)
+  let on_b = @signals.signal(true, same=fn(a, b) { a == b })
+  let log : Array[(String, Int)] = []
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(a) {
+        a.steps(10, 5, fn(k, _) {
+          log.push(("A", k))
+          on_b.set(false)
+        })
+        |> ignore
+      })
+      |> ignore
+      root.show(fn() { on_b.get() }, fn(b) { b.steps(10, 5, fn(k, _) { log.push(("B", k)) }) |> ignore })
+    },
+    time=fn() { now.val },
+  )
+  frame_at(t, now, 0.0)
+  frame_at(t, now, 1000.0)
+  assert_eq(log.filter(fn(e) { e.0 == "B" }), [])
+  assert_eq(log.length(), 5)
+}
+
+///|
+test "steps that change nothing shown ask for no frames: only their next moment is woken for" {
+  let now = Ref(0.0)
+  let count = @signals.signal(0)
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(b) { b.height(Is(Some(10.0))).steps(1, 3, fn(_, _) { count.set(count.get() + 1) }) |> ignore })
+      |> ignore
+    },
+    time=fn() { now.val },
+  )
+  frame_at(t, now, 0.0)
+  assert_false(t.animating())
+  assert_eq(t.wake(), Some(1000.0))
+  frame_at(t, now, 1500.0)
+  assert_eq(count.get(), 1)
+  assert_eq(t.wake(), Some(2000.0))
+  frame_at(t, now, 9000.0)
+  assert_eq(count.get(), 3)
+  assert_eq(t.wake(), None)
+}
