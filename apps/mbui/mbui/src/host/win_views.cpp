@@ -33,6 +33,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <algorithm>
 #include <deque>
 #include <map>
@@ -63,7 +64,8 @@ static const wchar_t kPlayer[] = L"https://player.stillfail.invalid"; // a playe
 
 // A player's page (kind 1): the browser's own <video>, its picture stretched to the view (as the other hosts' are),
 // nothing of its own controls; mbuiPlayer what the host tells it (view_control), how it stands said to the host as it
-// changes ({"t":"s",...}: view_info's), a frame at a time grabbed by a second <video> of the same file, so the one
+// changes ({"t":"s",...}: view_info's; each frame of its picture as it plays, its clock's where it has none), a frame
+// at a time grabbed by a second <video> of the same file, so the one
 // playing is left as it is ({"t":"g","png":...}); the frame it shows drawn off the one playing (shown: grab_shown's).
 static const char kPlayerPage[] = R"(<!doctype html><meta charset=utf-8><style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
@@ -71,7 +73,7 @@ video{width:100%;height:100%;object-fit:fill;display:block;background:#000}
 </style><video id=v preload=auto playsinline disablepictureinpicture disableremoteplayback></video><script>
 const v=document.getElementById('v');let want=false;
 const post=o=>window.chrome.webview.postMessage(JSON.stringify(o));
-const say=()=>{const b=v.buffered,t=v.currentTime;let ahead=0;
+const say=at=>{const b=v.buffered,t=typeof at==='number'?at:v.currentTime;let ahead=0;
 for(let i=0;i<b.length;i++)if(b.start(i)<=t+0.05&&b.end(i)>ahead)ahead=b.end(i);
 post({t:'s',d:isFinite(v.duration)?v.duration*1000:-1,p:t*1000,r:v.playbackRate,
 playing:!v.paused&&!v.ended?1:0,w:v.videoWidth,h:v.videoHeight,drawn:v.readyState>=2?1:0,
@@ -80,6 +82,9 @@ ready:v.readyState>=1?1:0,err:v.error?1:0});};
 for(const e of['loadedmetadata','loadeddata','durationchange','timeupdate','play','playing','pause','waiting',
 'canplay','canplaythrough','seeking','seeked','progress','ended','error','ratechange','stalled','suspend'])
 v.addEventListener(e,say);
+let going=false;const frame=(now,m)=>{say(m?m.mediaTime:undefined);if(!v.paused&&!v.ended)go();else going=false};
+const go=()=>{if(v.videoWidth&&v.requestVideoFrameCallback)v.requestVideoFrameCallback(frame);else requestAnimationFrame(frame)};
+v.addEventListener('playing',()=>{if(!going){going=true;go()}});
 window.mbuiPlayer={
 play(){want=true;v.play().catch(()=>{});say()},
 pause(){want=false;v.pause();say()},
@@ -266,15 +271,18 @@ struct View {
   int still_state = 0;
   // a player's (kind 1): its file's type; the ranges its page asked of it, by id, and those not handed to the app yet,
   // in order; its file's size (the app's, -1 not known yet) and how much of it the app has given; how it stands as its
-  // page last said, and when (its place moved on from there as it plays, view_info)
+  // page last said (each frame of its picture as it plays, its clock's where it has none)
   std::wstring mime;
   std::map<int, MediaRead *> reads;
   std::deque<int> unread;
   int next_read = 0;
   double total = -1, given = 0;
   double dur = -1, pos = 0, rate = 1, ahead = 0;
-  ULONGLONG said_at = 0;
   int playing = 0, vw = 0, vh = 0, drawn = 0, buffering = 0, ended = 0, ready = 0;
+  // how it stands (mb_host_view_info) as the app was last told (stood)
+  double stood_said[10] = {0};
+  int stood_state = 0;
+  bool stood_told = false;
 };
 
 static HWND hwnd_main;
@@ -286,6 +294,7 @@ static int env_state;  // 0 not asked, 1 being made, 2 here, -1 failed
 static int runtime;    // 0 not looked for, 1 installed, -1 not
 static std::deque<std::pair<int, int>> told;  // (id, state) for the app (mb_views_tell)
 static std::deque<std::pair<int, int>> grabs;  // (id, state) of pages grabbed, for the app (mb_views_tell)
+static std::deque<int> stoods;  // the views whose standing changed, for the app (mb_views_tell)
 static int captured;   // the view a button went down on, until it is up
 static int hovered;    // the view the pointer was last in
 
@@ -302,10 +311,29 @@ static void outside(View *v, int state) {
   mb_host_request_frame();
 }
 
+extern "C" int32_t mb_host_view_info(int32_t vid, double *out);
+
+// How it stands (mb_host_view_info) may have changed: the app told where it did, between frames (mb_views_tell: kind 13,
+// src/ui/hostcall.mbt's outside_stood), which reads it then, not each frame. Asked as anything changes (what its
+// player's page says, its bytes, a page loaded): told only where something did.
+static void stood(View *v) {
+  if (v->closed) return;
+  double now[10];
+  int st = mb_host_view_info(v->vid, now);
+  if (v->stood_told && st == v->stood_state && !memcmp(now, v->stood_said, sizeof now)) return;
+  bool waiting = v->stood_told && std::find(stoods.begin(), stoods.end(), v->vid) != stoods.end();
+  v->stood_told = true;
+  v->stood_state = st;
+  memcpy(v->stood_said, now, sizeof now);
+  if (!waiting) stoods.push_back(v->vid);
+  mb_host_request_frame();
+}
+
 static void tell(View *v, int state) {
   if (v->told && state > 0) return;
   v->told = state > 0;
   outside(v, state);
+  stood(v);
 }
 
 static void fail(View *v, const char *why, HRESULT hr) {
@@ -708,6 +736,7 @@ static void on_nav_done(View *v, ICoreWebView2NavigationCompletedEventArgs *a) {
     if (v->loaded) return;
     v->loaded = true;
     vlog("view %d: %s loaded", v->vid, v->kind == 3 ? "site page" : "page");
+    stood(v);
     if (v->kind == 2) tell_drawn(v);
     else tell(v, 1);
     refresh_snap(v);
@@ -757,7 +786,6 @@ static void player_said(View *v, const wchar_t *t) {
   v->buffering = (int)jnum(t, L"buf", 0);
   v->ahead = jnum(t, L"ahead", 0);
   v->ended = (int)jnum(t, L"ended", 0);
-  v->said_at = GetTickCount64();
   if (jnum(t, L"err", 0) > 0) {
     fail(v, "the player cannot play it", E_FAIL);
   } else if (!v->ready && jnum(t, L"ready", 0) > 0) {
@@ -765,7 +793,7 @@ static void player_said(View *v, const wchar_t *t) {
     vlog("view %d: player ready (%.0f ms, %dx%d)", v->vid, v->dur, v->vw, v->vh);
     tell(v, 1);
   }
-  mb_host_request_frame();
+  stood(v);
 }
 
 static void made(View *v, ICoreWebView2CompositionController *cc) {
@@ -1200,12 +1228,9 @@ extern "C" int32_t mb_host_view_info(int32_t vid, double *out) {
   View *v = find(vid);
   if (!v) return -1;
   if (v->kind == 1) {
-    // where it is: where its page last said, moved on since as it plays (its page says so a few times a second)
-    double at = v->pos;
-    if (v->playing && !v->buffering) at += (double)(GetTickCount64() - v->said_at) * v->rate;
-    if (v->dur >= 0 && at > v->dur) at = v->dur;
+    // where it is: where its page last said (each frame of its picture as it plays: player_said)
     out[0] = v->dur;
-    out[1] = at;
+    out[1] = v->pos;
     out[2] = v->playing;
     out[3] = v->vw;
     out[4] = v->vh;
@@ -1247,6 +1272,7 @@ extern "C" void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes
   m->data.insert(m->data.end(), data, data + n);
   v->given += n;
   if (total > 0) v->total = total;
+  stood(v);
   if (more) return;
   v->reads.erase(it);
   player_answer(v, m);
@@ -1522,6 +1548,11 @@ extern "C" void mb_views_tell(mb_outside_fn f) {
     std::pair<int, int> t = grabs.front();
     grabs.pop_front();
     if (f) f(MB_OUTSIDE_GRAB, t.first, t.second);
+  }
+  while (!stoods.empty()) {
+    int id = stoods.front();
+    stoods.pop_front();
+    if (f) f(MB_OUTSIDE_STOOD, id, 0);
   }
 }
 

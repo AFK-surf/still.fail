@@ -138,7 +138,7 @@
   // moment (shot_at) keeps its clock still while any is.
   // its kinds, named as src/ui/hostcall.mbt's outside_* (this host has no picker, gallery, marks or update; a frame
   // grab asked of a video fails at once, told so)
-  const OUTSIDE_IMAGE = 1, OUTSIDE_VIEW = 2, OUTSIDE_GRAB = 6, OUTSIDE_CLIP = 9;
+  const OUTSIDE_IMAGE = 1, OUTSIDE_VIEW = 2, OUTSIDE_GRAB = 6, OUTSIDE_CLIP = 9, OUTSIDE_STOOD = 13;
   let outside = null, awaiting = 0, why = '';
   const told = new Set();
   H.setOutside = (f) => { outside = f; return true; };
@@ -1066,14 +1066,24 @@
         v.info[0] = el.duration * 1000;
         v.info[3] = el.videoWidth;
         v.info[4] = el.videoHeight;
-        H.requestFrame();
+        stood(id);
       });
       // its first frame can be shown: ready for the app
-      el.addEventListener('loadeddata', () => { v.info[6] = 1; ready(id, v, 1); H.requestFrame(); });
-      el.addEventListener('error', () => { v.state = -1; ready(id, v, -1); H.requestFrame(); });
-      // the app asks for frames only while it plays and is not waiting for what it needs (info 7): a frame as that
-      // changes
-      for (const e of ['play', 'playing', 'waiting', 'pause', 'stalled', 'canplay', 'ended']) el.addEventListener(e, H.requestFrame);
+      el.addEventListener('loadeddata', () => { v.info[6] = 1; ready(id, v, 1); stood(id); });
+      el.addEventListener('error', () => { v.state = -1; ready(id, v, -1); stood(id); });
+      // how it stands told as it changes: as it plays, waits, stops, jumps, has more; and each frame of its picture
+      // shown as it plays (a sound's: each of the page's frames)
+      for (const e of ['play', 'playing', 'waiting', 'pause', 'stalled', 'canplay', 'ended', 'seeking', 'seeked',
+        'progress', 'durationchange', 'ratechange']) el.addEventListener(e, () => stood(id));
+      let going = false;
+      const frame = () => {
+        stood(id);
+        if (!el.paused && !el.ended && views.has(id)) go();
+        else going = false;
+      };
+      const go = () => (el.videoWidth && el.requestVideoFrameCallback ? el.requestVideoFrameCallback(frame)
+        : requestAnimationFrame(frame));
+      el.addEventListener('playing', () => { if (!going) { going = true; go(); } });
       v.el = el;
       v.type = arg;
       // the whole file read through the app, a part at a time, then played
@@ -1091,8 +1101,8 @@
       el.setAttribute('sandbox', 'allow-scripts');
       el.style.cssText = 'position:absolute;border:0;background:#fff';
       // loaded: what a screenshot shows of it is the page itself (in the page's own picture)
-      el.addEventListener('load', () => { v.state = 1; v.info[6] = 1; ready(id, v, 1); v.there = true; runScripts(v); H.requestFrame(); });
-      el.addEventListener('error', () => { v.state = -1; ready(id, v, -1); H.requestFrame(); });
+      el.addEventListener('load', () => { v.state = 1; v.info[6] = 1; ready(id, v, 1); v.there = true; runScripts(v); stood(id); });
+      el.addEventListener('error', () => { v.state = -1; ready(id, v, -1); stood(id); });
       // its way to the app (mbuiHost.post, as the other hosts' pages have it) and the app's scripts run in it: messages
       // between this window and the frame's own, each side taking only the other's
       v.said = [];
@@ -1177,6 +1187,18 @@
     for (let i = 0; i < 10; i++) out[i] = v.info[i] || 0;
     return v.state;
   };
+  // How view `id` stands (viewInfo) may have changed: the app told where it did (OUTSIDE_STOOD, src/ui/hostcall.mbt's
+  // outside_stood), which reads it then, not each frame. Told only where something did.
+  const stoodNow = new Float64Array(10);
+  function stood(id) {
+    const v = views.get(id);
+    if (!v) return;
+    const st = H.viewInfo(id, stoodNow);
+    if (v.stoodSaid && st === v.stoodState && v.stoodSaid.every((x, i) => x === stoodNow[i])) return;
+    v.stoodState = st;
+    v.stoodSaid = Array.from(stoodNow);
+    tell(OUTSIDE_STOOD, id, 0);
+  }
   H.viewReadNext = (id, out) => {
     const v = views.get(id);
     const r = v && v.reads.shift();
@@ -1191,12 +1213,13 @@
     const r = v && v.waiting.get(req);
     if (!r) return;
     if (!more || total === -2) v.waiting.delete(req);
-    if (total === -2) { v.state = -1; ready(id, v, -1); H.requestFrame(); return; }
+    if (total === -2) { v.state = -1; ready(id, v, -1); stood(id); return; }
     const part = new Uint8Array(data);
     v.parts.push(part);
     v.have += part.length;
     r.got = (r.got || 0) + part.length;
     v.info[5] = v.have;
+    stood(id);
     if (total >= 0) v.total = total;
     if (more) return;
     if (r.got > 0 && (v.total < 0 || v.have < v.total)) return v.ask(v.have);

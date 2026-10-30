@@ -38,7 +38,7 @@ final class Native {
     // The kinds of what the host does for the app (src/ui/hostcall.mbt's outside_*, named as there).
     static final int OUTSIDE_IMAGE = 1, OUTSIDE_VIEW = 2, OUTSIDE_PICK = 3, OUTSIDE_GALLERY = 4, OUTSIDE_MARKS = 5,
             OUTSIDE_GRAB = 6, OUTSIDE_UPDATE = 7, OUTSIDE_CLIP = 9, OUTSIDE_NATIVE = 10, OUTSIDE_POSTED = 11,
-            OUTSIDE_STREAMED = 12;
+            OUTSIDE_STREAMED = 12, OUTSIDE_STOOD = 13;
 
     /** Something posted since (Host.posted, on the GL thread): the app told, or a frame asked for (android_host.c). */
     static native void posted();

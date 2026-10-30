@@ -225,6 +225,10 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic, strong) PImage *snap;
 @property(nonatomic) BOOL snapping;  // a picture of it being taken (refreshSnap)
 @property(nonatomic) BOOL told;      // its readiness told to the app (mb_host_outside)
+// how it stands (mb_host_view_info) as the app was last told (stood); a player's clock's observer (stood as it plays)
+@property(nonatomic) BOOL stoodTold;
+@property(nonatomic) int32_t stoodState;
+@property(nonatomic, strong) id ticks;
 // a site's
 @property(nonatomic, strong) MBSiteHandler *handler;
 @property(nonatomic, strong) NSMutableArray<NSString *> *said;
@@ -254,7 +258,10 @@ id mb_views_root(CGRect frame) {
 - (BOOL)hasAt:(double)ms;
 - (void)playWhatCame;
 - (CGImageRef)copyFrame;
+- (void)stood;
 @end
+
+int32_t mb_host_view_info(int32_t vid, double *out);
 
 static NSMutableDictionary<NSNumber *, MBNative *> *views;
 // a site's own scheme: nothing else answers it
@@ -315,7 +322,24 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
 
 @end
 
-@implementation MBNative
+@implementation MBNative {
+  double _stoodSaid[10];  // mb_host_view_info's numbers as the app was last told (stood)
+}
+
+// How it stands (mb_host_view_info) may have changed: the app told where it did (apple.h's mb_host_outside: kind 13,
+// src/ui/hostcall.mbt's outside_stood), which reads it then, not each frame. Asked as anything changes (its player's
+// state, its clock as it plays, a seek, its bytes, a page loaded): told only where something did.
+- (void)stood {
+  if (self.closed) return;
+  double now[10];
+  int32_t st = mb_host_view_info(self.vid, now);
+  if (self.stoodTold && st == self.stoodState && !memcmp(now, _stoodSaid, sizeof now)) return;
+  self.stoodTold = YES;
+  self.stoodState = st;
+  memcpy(_stoodSaid, now, sizeof now);
+  mb_host_outside(MB_OUTSIDE_STOOD, self.vid, 0);
+}
+
 // To `ms`, exactly (or `near`: about there, the player's own choice of where it gets to at once), one seek at a time
 // (Apple's QA1820, chasing the time): asked again while one is on its way, the last asked goes once it is done and
 // those between are skipped, so a finger along the timeline sees each frame it gets to (AVPlayer gives up a seek on
@@ -331,11 +355,13 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
     self.chasing = YES;
     self.chaseMs = ms;
     self.chaseNear = near;
+    [self stood];
     return;
   }
   self.seeking = YES;
   self.chasing = NO;
   self.seekMs = ms;
+  [self stood];
   int gen = ++self.seekGen;
   __weak MBNative *wv = self;
   // (to the µs: a frame's start, said with its fraction of a ms, is that frame's, not the one before)
@@ -353,6 +379,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
               [v seekTo:v.chaseMs near:v.chaseNear];
             }
             [v playWhatCame];
+            [v stood];
             mb_host_request_frame();
           });
         }];
@@ -554,6 +581,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   [self.pending addObject:r];
   // the player waits on the app's bytes now: not the host's work until they come (apple.h's mb_host_outside, 0)
   mb_host_outside(MB_OUTSIDE_VIEW, self.vid, 0);
+  [self stood];
   mb_host_request_frame();
 }
 
@@ -613,6 +641,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   long long at = r.off + r.got;  // where these bytes are in the file
   r.got += n;
   self.answered += n;
+  [self stood];
   if (n > 0) {
     self.nanswers++;
     if (self.nanswers <= 4 || self.answered >= self.logNext) {
@@ -686,6 +715,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
     if (self.playerLayer.readyForDisplay || (can && ps.width == 0 && ps.height == 0)) [self tell:1];
     else if (self.failed) [self tell:-1];
     [self playWhatCame];
+    [self stood];
     mb_host_request_frame();
   });
 }
@@ -719,6 +749,8 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   [self.item removeObserver:self forKeyPath:@"loadedTimeRanges" context:kStatus];
   [self.playerLayer removeObserver:self forKeyPath:@"readyForDisplay" context:kReady];
   [self.player removeObserver:self forKeyPath:@"timeControlStatus" context:kStatus];
+  if (self.ticks) [self.player removeTimeObserver:self.ticks];
+  self.ticks = nil;
 }
 
 // The frame showing now, for snapshots (the last one copied when no new one came); retained, or NULL.
@@ -838,6 +870,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   if (self.closed || self.loaded) return;
   self.loaded = YES;
   vlog(@"view %d: page loaded", self.vid);
+  [self stood];
   // ready for the app once it is drawn (its picture for snapshots is the host's own business: mb_views_snap_all, at a
   // snapshot)
   [self tellDrawn];
@@ -871,6 +904,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   if (self.told && state > 0) return;
   self.told = state > 0;
   mb_host_outside(MB_OUTSIDE_VIEW, self.vid, state);
+  [self stood];
 }
 
 - (void)pageFailed:(NSError *)e {
@@ -979,6 +1013,14 @@ static MBNative *open_video(int32_t vid, NSString *mime) {
   // playing, waiting for what it needs, paused: a frame as that changes (the app draws a playing one's time; one that
   // waits moves on its own no more until this says so)
   [v.player addObserver:v forKeyPath:@"timeControlStatus" options:0 context:kStatus];
+  // where it is as it plays, on its own clock (60 a second, and as it jumps): the app told (stood), which shows it
+  __weak MBNative *wt = v;
+  v.ticks = [v.player addPeriodicTimeObserverForInterval:CMTimeMake(1, 60)
+                                                   queue:dispatch_get_main_queue()
+                                              usingBlock:^(CMTime t) {
+                                                (void)t;
+                                                [wt stood];
+                                              }];
   v.observing = YES;
   vlog(@"view %d: open video (%@, %@)", vid, mime, v.uti);
   return v;
@@ -1383,9 +1425,13 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
       if (dur > 0 && CMTIME_IS_NUMERIC(t) && CMTimeGetSeconds(t) * 1000.0 >= dur - 50) [v.player seekToTime:kCMTimeZero];
       [v.player play];
       if (v.speed != 1) v.player.rate = (float)v.speed;
+      [v stood];
       break;
     }
-    case 2: [v.player pause]; break;
+    case 2:
+      [v.player pause];
+      [v stood];
+      break;
     case 3: [v seekTo:value]; break;
     case 11: [v seekTo:value near:YES]; break;
     case 4:

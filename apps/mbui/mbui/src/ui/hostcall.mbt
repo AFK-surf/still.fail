@@ -66,6 +66,8 @@ struct FakeHost {
   mut view_ids : Int
   /// the views' readiness as the host's event told it (1 ready, -1 failed); not here: not yet
   view_ready : Map[Int, Int]
+  /// how many times the app read how a view stands (view_info): only as the host said it changed (outside_stood)
+  mut view_reads : Int
   /// what the host does for the app is done by itself at the next frame (Tester::new's `finish`); else the test says
   /// when (Tester::finish, finish_all)
   auto_finish : Bool
@@ -1048,6 +1050,12 @@ let outside_posted = 11
 let outside_streamed = 12
 
 ///|
+/// How a native view stands (view_info) changed (its view's id): told by the host as it does, each change (a player's
+/// frame shown, its clock's tick where it shows none, its size known, ready, buffering, ended…) its own event; the app
+/// reads it as the next frame begins (native.mbt's views_arrive) into the view's signals, not each frame.
+let outside_stood = 13
+
+///|
 /// Every kind above, by its name: each its own number (outside_kinds_wbtest.mbt), the hosts' named the same
 /// (Native.java's OUTSIDE_*, apple.h's, win.h's and android_host.c's MB_OUTSIDE_*, web/host.js's OUTSIDE_*), every
 /// `outside_*` here in it: scripts/chk outside-kinds, host_contract.sh HOST kinds
@@ -1065,6 +1073,7 @@ fn outside_kinds() -> Array[(String, Int)] {
     ("native", outside_native),
     ("posted", outside_posted),
     ("streamed", outside_streamed),
+    ("stood", outside_stood),
   ]
 }
 
@@ -1164,6 +1173,10 @@ fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
   }
   if kind == outside_streamed {
     streams_said(id)
+    return
+  }
+  if kind == outside_stood {
+    view_stood(id)
     return
   }
   outside_came()
@@ -1538,6 +1551,10 @@ fn h_view_info(id : Int, out : FixedArray[Double]) -> Int {
 
 ///|
 fn h_view_info_of(id : Int, out : FixedArray[Double]) -> Int {
+  match fake.val {
+    Some(f) => f.view_reads += 1
+    None => ()
+  }
   match fake.val {
     // as the run recorded the host's saying it (Tester::view_said)
     Some(f) if f.view_infos.get(id) is Some((state, at)) => {

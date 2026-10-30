@@ -154,7 +154,8 @@ pub fn Tester::set_player(
   if ended is Some(b) {
     p[9] = on(b)
   }
-  self.fake.wants = true
+  // (as a host tells it: how it stands changed, a frame asked for by the app as it hears it)
+  on_outside(outside_stood, view, 0)
 }
 
 ///|
@@ -454,7 +455,8 @@ fn fake_view_said(f : FakeHost, line : String) -> Bool {
             }
           }
           f.view_infos[id] = (state, at)
-          f.wants = true
+          // (as the host told it: how it stands changed, a frame asked for by the app as it hears it)
+          on_outside(outside_stood, id, 0)
           true
         }
         _ => false
