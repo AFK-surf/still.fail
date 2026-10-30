@@ -557,7 +557,12 @@ jobs:
       # to break off, 39431384793)
       - name: The Windows natives' keys
         id: native-keys
-        run: echo "key=natives-win32-x64-$(node scripts/native.ts key shell win32-x64)-$(node scripts/native.ts key engine win32-x64)" >> "$GITHUB_OUTPUT"
+        run: |
+          export GIT_TRACE_PERFORMANCE=1
+          time node -e 0
+          time node scripts/native.ts key shell win32-x64
+          time node scripts/native.ts key engine win32-x64
+          echo "key=natives-win32-x64-$(node scripts/native.ts key shell win32-x64)-$(node scripts/native.ts key engine win32-x64)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
           path: ~/AppData/Local/stillfail-native
