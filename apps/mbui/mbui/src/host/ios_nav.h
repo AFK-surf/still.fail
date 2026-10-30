@@ -496,6 +496,8 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
       }
 #ifdef __IPHONE_26_0
       if (@available(iOS 26.0, *)) {
+        // Match the same action across configurations so UIKit carries its glass through the transition.
+        b.identifier = ident;
         if (prominent) {
           b.style = UIBarButtonItemStyleProminent;
           b.tintColor = accent;
@@ -530,12 +532,15 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
         lastIdent = ident;
       }
     }
+    // Only the visible tab transitions; initial setup and the other tabs take their items at once.
+    BOOL animate = nav == self.selectedViewController && nav.isViewLoaded && nav.view.window != nil &&
+                   !UIAccessibilityIsReduceMotionEnabled();
     // (from the bar's end in: the action most wanted outermost)
-    slot.navigationItem.rightBarButtonItems = made.reverseObjectEnumerator.allObjects;
-    slot.navigationItem.leftBarButtonItems = lead;
-    slot.toolbarItems = foot;
+    [slot.navigationItem setRightBarButtonItems:made.reverseObjectEnumerator.allObjects animated:animate];
+    [slot.navigationItem setLeftBarButtonItems:lead animated:animate];
+    [slot setToolbarItems:foot animated:animate];
     // (the chosen tab's alone: shown on two, the column shows its items twice; didSelectTab)
-    [nav setToolbarHidden:(foot.count == 0 || nav != self.selectedViewController) animated:NO];
+    [nav setToolbarHidden:(foot.count == 0 || nav != self.selectedViewController) animated:animate];
     nav_title(slot.navigationItem, bare ? title : @"", ink);
     // (put away only when something is up over the whole window, its title alone: hidden with its items gone, the system's
     // column keeps showing the views of those it had, a page's actions on the next tab, the outer screen's workspace
@@ -803,6 +808,48 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   if (!self.choosing && tab.identifier.length) say_system(@{@"nav" : tab.identifier});
 }
 @end
+
+// Give the native vertical bars the space above the keyboard, so UIKit lays out all their buttons there.
+#ifdef __IPHONE_27_1
+API_AVAILABLE(ios(27.1))
+@interface MBBarContainer : UIViewController
+@property(nonatomic, strong) NSLayoutConstraint *keyboardBottom;
+@property(nonatomic, strong) NSLayoutConstraint *windowBottom;
+@end
+@implementation MBBarContainer
+- (UIViewController *)childViewControllerForPreferredVerticalBarBehavior { return the_root; }
+- (UIViewController *)childViewControllerForStatusBarStyle { return the_root; }
+- (UIViewController *)childViewControllerForStatusBarHidden { return the_root; }
+- (UIViewController *)childViewControllerForHomeIndicatorAutoHidden { return the_root; }
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations { return the_root.supportedInterfaceOrientations; }
+- (void)viewDidLoad {
+  [super viewDidLoad];
+  self.view.backgroundColor = UIColor.systemBackgroundColor;
+  [self addChildViewController:the_root];
+  UIView *bars = the_root.view;
+  bars.translatesAutoresizingMaskIntoConstraints = NO;
+  [self.view addSubview:bars];
+  self.view.keyboardLayoutGuide.usesBottomSafeArea = NO;
+  self.keyboardBottom = [bars.bottomAnchor constraintEqualToAnchor:self.view.keyboardLayoutGuide.topAnchor];
+  self.windowBottom = [bars.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor];
+  [NSLayoutConstraint activateConstraints:@[
+    [bars.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+    [bars.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+    [bars.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+    self.windowBottom
+  ]];
+  [the_root didMoveToParentViewController:self];
+}
+- (void)viewWillLayoutSubviews {
+  [super viewWillLayoutSubviews];
+  BOOL vertical = self.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified;
+  if (self.keyboardBottom.active == vertical) return;
+  self.windowBottom.active = NO;
+  self.keyboardBottom.active = vertical;
+  self.windowBottom.active = !vertical;
+}
+@end
+#endif
 
 // No room the app keeps at the trailing edge for its own (the system's tab bar is in the safe area it says).
 static CGFloat nav_right(void) { return 0; }

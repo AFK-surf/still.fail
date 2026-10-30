@@ -157,7 +157,7 @@ fn bar_chat(src : Source, r : ChatRef, agents : Array[Agent], info : () -> Unit,
     return false
   }
   bar_chat_of.val = Some((src, r))
-  bar_action("chat/info", @sf.t("web-pages.chat.info"), "more", info) |> ignore
+  bar_action("chat/info", @sf.t("web-pages.chat.info"), "info", info) |> ignore
   let (tabs, _) = side_now(src, r)
   let icon = if tabs.length() > 0 { "panel-close" } else { "panel-open" }
   let title = @sf.t(if tabs.length() > 0 { "web-pages.chat.closePanel" } else { "web-pages.chat.openPanel" })

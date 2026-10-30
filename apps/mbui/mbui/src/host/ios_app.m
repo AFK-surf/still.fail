@@ -919,7 +919,11 @@ static void say_activity(NSUserActivity *a) {
   } else {
     the_root = the_controller;
   }
-  self.window.rootViewController = the_root;
+  UIViewController *windowRoot = the_root;
+#ifdef __IPHONE_27_1
+  if (@available(iOS 27.1, *)) windowRoot = [MBBarContainer new];
+#endif
+  self.window.rootViewController = windowRoot;
   [self.window makeKeyAndVisible];
   [the_view requestFrame];
   for (UIOpenURLContext *u in opts.URLContexts) say_link(u.URL);
