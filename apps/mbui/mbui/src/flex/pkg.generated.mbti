@@ -132,6 +132,7 @@ pub(all) struct Style {
   mut overflow : Overflow
   mut drop : Int32
   mut fits : Bool
+  mut one_of : Bool
   mut fit_need : Double
   mut soft_min : Double
   mut stretch_past_max : Bool

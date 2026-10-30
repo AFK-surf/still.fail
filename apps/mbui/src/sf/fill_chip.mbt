@@ -89,19 +89,9 @@ pub fn fill_chip(
 }
 
 ///|
-/// How far its mark is from its figure (5, chip_words): none where they read as one phrase in Chinese, the mark ending
-/// in a Han character and the figure beginning with one (内存剩 12.3 G, 每周剩 95%), as Chinese sets no space between
-/// its characters; 5 where either side is a letter or a figure (CPU 空闲 72%, 5H 62%, 每周 95%), the space Chinese
-/// leaves beside Latin.
-pub fn chip_apart(c : @ui.Ctx, mark : String, words : String) -> Double {
-  if mark == "" || chip_joined(mark, words) {
-    0.0
-  } else {
-    c.space(S1_25)
-  }
-}
-
-///|
+/// Whether its mark and figure read as one phrase in Chinese, the mark ending in a Han character and the figure
+/// beginning with one (内存剩 12.3 G, 每周剩 95%): none of chip_words' 5 between them, as Chinese sets no space between
+/// its characters; that only beside Latin and figures (CPU 空闲 72%, 5H 62%, 每周 95%), the space Chinese leaves there.
 fn chip_joined(mark : String, words : String) -> Bool {
   mark != "" && words != "" && han(mark.unsafe_charcode_at(mark.length() - 1)) && han(words.unsafe_charcode_at(0))
 }

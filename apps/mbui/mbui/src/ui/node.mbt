@@ -281,6 +281,9 @@ struct Node {
   // left out of its row when the row has not the room (Ctx::box `drop`): k > 0 the k-th to go, -1 the row's ⋯ (there
   // only while something of it is left out), 0 always there
   mut drop : Int
+  // a row of ways of saying one thing, each shorter than the one before, only the first that fits shown (Ctx::box
+  // `one_of`)
+  mut one_of : Bool
   // the least it is laid out across in a row, as worked out from what it holds (Ctx::flex_tree): narrower, what it
   // holds would lie over what is beside it
   mut least : Double
@@ -489,6 +492,7 @@ fn Node::new() -> Node {
     past_most: false,
     keep: false,
     drop: 0,
+    one_of: false,
     least: 0.0,
     fit_least: 0.0,
     soft_least: 0.0,
@@ -605,6 +609,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.past_most = false
   self.keep = false
   self.drop = 0
+  self.one_of = false
   self.flow = false
   self.line_gap = -1.0
   self.label = ""

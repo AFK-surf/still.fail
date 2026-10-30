@@ -32,21 +32,23 @@ fn worded_tester(room : Double) -> @ui.Tester {
 ///|
 test "an allowance's windows in words: one way for them all, the longest that fits, each chip whole" {
   // (a phone's row: 326 was what cut all three to 5 小时剩…, 每周剩余…, 每月剩余…, 2026-10-31)
+  let ways = [
+    ["5 小时", "剩 62%", "每周", "剩 95%", "每月", "剩 97%"],
+    ["5 小时", "62%", "每周", "95%", "每月", "97%"],
+    ["5H", "62%", "W", "95%", "M", "97%"],
+  ]
   let said = []
   for room in [600.0, 326.0, 240.0, 170.0] {
     let t = worded_tester(room)
-    let full = t.find("剩 62%") is Some(_)
-    let named = t.find("5 小时") is Some(_)
-    let figures = if full { ["剩 62%", "剩 95%", "剩 97%"] } else { ["62%", "95%", "97%"] }
-    let names = if named { ["5 小时", "每周", "每月"] } else { ["5H", "W", "M"] }
-    for words in figures.iter().concat(names.iter()) {
-      assert_eq(t.lines_of(words), [words], msg="\{room}: \{words}")
-    }
+    // (the words drawn: the way the line says it, the others laid out nowhere)
+    let shown = t.words().filter(fn(w) { w.5 > 0.5 }).map(fn(w) { w.0 })
+    let way = ways.search(shown)
+    assert_true(way is Some(_), msg="\{room}: \{shown}")
     assert_eq(t.squeeze_faults(), [], msg=room.to_string())
-    said.push((full, named))
+    said.push(way.unwrap())
   }
   // as much as fits: wide, every word of it; narrow, the marks
-  assert_eq(said[0], (true, true))
-  assert_eq(said[3], (false, false))
+  assert_eq(said[0], 0)
+  assert_eq(said[3], 2)
   set_words(fn(key, _) { key })
 }

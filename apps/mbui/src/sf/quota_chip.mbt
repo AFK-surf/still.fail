@@ -18,7 +18,7 @@ pub fn has_quota(q : Json?) -> Bool {
 /// agents only with more than one), or `worded`, its name and what is left in words, as a machine's chips say theirs
 /// (每周剩 78%, as 内存剩 12.3 G: a profile's row, where a touch has no tip to say what W is); `small`, a lower line;
 /// `gap` apart; nothing while the core cannot say (`state` not ok) or there is no window.
-/// Worded, the line said one way for all its chips, the longest that fits the room it is given whole (quota_form): a
+/// Worded, the line said one way for all its chips, the longest that fits the room it is given whole (Ctx::box one_of): a
 /// phone's row has not the room for 5 小时剩 62%, 每周剩 95% and 每月剩 97%, so they say 5 小时 62%, 每周 95%…, then
 /// 5H 62%, W 95%…, never one chip a way of its own nor one cut short.
 /// Each says over it while it is pointed at what is left of it and when it fills again; `key` names them where the same
@@ -46,16 +46,25 @@ pub fn quota_chips(
     |> ignore
     return
   }
-  // (as wide as what holds it, read back for the room the line has: Ctx::laid_size)
-  let id = c.id("quota-line/" + key)
-  let form = match c.laid_size(id) {
-    Some((room, _)) => quota_form(c, windows, gap, room)
-    None => 0
-  }
-  c.box(style=quota_chips_line.then(@ui.style(gap=room(gap))), id~, fn() {
-    for w in windows {
-      let (mark, words) = quota_worded(Some(w), form)
-      fill_chip(c, chip_left(Some(w)), chip_str(Some(w), "level"), mark, words, small~, key=key + "/" + chip_str(Some(w), "mark"), said=quota_said(Some(w)))
+  // (its ways, each shorter than the one before, the first that fits the line's room shown: Ctx::box one_of)
+  c.box(style=quota_chips_line, one_of=true, fn() {
+    for form in 0..<3 {
+      c.box(style=quota_chips_row.then(@ui.style(gap=room(gap))), fn() {
+        for w in windows {
+          let (mark, words) = quota_worded(Some(w), form)
+          fill_chip(
+            c,
+            chip_left(Some(w)),
+            chip_str(Some(w), "level"),
+            mark,
+            words,
+            small~,
+            key=key + "/" + chip_str(Some(w), "mark") + "/" + form.to_string(),
+            said=quota_said(Some(w)),
+          )
+        }
+      })
+      |> ignore
     }
   })
   |> ignore
@@ -75,24 +84,6 @@ fn quota_worded(w : Json?, form : Int) -> (String, String) {
     1 => (name, left + "%")
     _ => (chip_str(w, "mark"), left + "%")
   }
-}
-
-///|
-/// The longest way (quota_worded) all of `windows` fit `room` in, `gap` apart, each a chip (fill_chip: 8 in, its mark
-/// chip_apart from its figure); the shortest where none does.
-fn quota_form(c : @ui.Ctx, windows : Array[Json], gap : Double, room : Double) -> Int {
-  let pad = c.space(S2) * 2.0
-  for form in 0..<2 {
-    let mut need = gap * (windows.length() - 1).to_double()
-    for w in windows {
-      let (mark, words) = quota_worded(Some(w), form)
-      need += pad + c.words_across(words, chip_text) + (if mark == "" { 0.0 } else { chip_apart(c, mark, words) + c.words_across(mark, chip_text) })
-    }
-    if need <= room {
-      return form
-    }
-  }
-  2
 }
 
 ///|
@@ -246,6 +237,6 @@ fn chip_left(v : Json?) -> Int {
 let quota_chips_row : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
-/// A worded line of them: as wide as what holds it, for the room it has (quota_form).
+/// A worded line of them: as wide as what holds it, the room its ways are fitted to (Ctx::box one_of).
 // kept across runs: a value (no field of it changes)
 let quota_chips_line : @ui.Style = @ui.css("row w=Full align=ACenter")

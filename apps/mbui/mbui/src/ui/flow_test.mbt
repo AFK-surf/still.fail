@@ -29,6 +29,44 @@ test "a flow: what does not fit the line goes on the next, each as wide as it is
 }
 
 ///|
+test "one of: ways of saying one thing, the first that fits the room whole shown, the last where none does, the rest drawn nowhere" {
+  let room = Ref(200.0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(dir=Row, w=Px(room.val), one_of=true, fn() {
+        for way in [("long", 120.0), ("mid", 70.0), ("short", 30.0)] {
+          c.box(dir=Row, w=Px(way.1), h=Px(20.0), fn() { c.text(way.0, wrap=false) |> ignore }) |> ignore
+        }
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=100.0,
+  )
+  let shown = fn() {
+    t.words().filter(fn(w) { w.5 > 0.5 }).map(fn(w) { w.0 })
+  }
+  t.draw()
+  assert_eq(shown(), ["long"])
+  room.val = 100.0
+  t.frame()
+  assert_eq(shown(), ["mid"])
+  room.val = 50.0
+  t.frame()
+  assert_eq(shown(), ["short"])
+  // (none fits: the last, the shortest)
+  room.val = 10.0
+  t.frame()
+  assert_eq(shown(), ["short"])
+  // (what it shows where it would be, at its start)
+  room.val = 100.0
+  t.frame()
+  let (x, _, w, _) = t.rect_of("mid").unwrap()
+  assert_eq(x, 0.0)
+  assert_true(w <= 70.0)
+}
+
+///|
 test "kept: a box in a row short of room keeps its width, its sibling cut short" {
   let t = @ui.Tester::new(
     fn(c) {
