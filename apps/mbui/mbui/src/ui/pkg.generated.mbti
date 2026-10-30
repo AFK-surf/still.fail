@@ -1076,6 +1076,7 @@ pub fn Ctx::has_focus(Self, Int32) -> Bool
 #callsite(autofill(loc))
 pub fn Ctx::held(Self, String, Bool, Double, keep? : Bool, later? : Bool, loc~ : SourceLoc) -> Bool
 pub fn Ctx::held_due(Self, String) -> Double
+pub fn Ctx::held_down(Self, Int32) -> Bool
 pub fn Ctx::held_long(Self, Int32) -> Bool
 pub fn Ctx::hidden_from_semantics(Self, () -> Unit) -> Unit
 pub fn Ctx::holds_through(Self, Int32) -> Unit
