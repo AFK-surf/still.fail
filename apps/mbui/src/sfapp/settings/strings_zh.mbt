@@ -64,7 +64,6 @@ let zh : Map[String, String] = {
   "android-misc.adb.ask.link.onPhone": "在手机的 still.fail 里打开这条消息配对",
   "android-misc.adb.ask.link.unauthorized": "等手机上允许 USB 调试",
   "android-misc.adb.ask.link.unpaired": "还差一步：这台手机还没和 station 配对",
-  "android-misc.adb.ask.pair": "去配对",
   "android-misc.adb.ask.pair.about": "在手机上配对一次，以后它就能一直连上这台手机。",
   "android-misc.adb.ask.pair.title": "这台 station 还没和你的手机配对",
   "android-misc.adb.chats.about": "agent 在对话里申请，你允许后只有那个对话能用。",

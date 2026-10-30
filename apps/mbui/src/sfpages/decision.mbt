@@ -287,15 +287,22 @@ fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
   // (granted: how its station holds the phone, and on the phone, its pairing a tap away)
   let ended = fn() {
     let mine = mine_to(here, card.assignee)
+    let link = @settings.phone_link(here.core, here.station, ask.link)
     @settings.phone_outcome(
       c,
       ask.status,
       ask.scope,
       ask.why,
       inline=here.inline,
-      link=@settings.phone_link(here.core, here.station, ask.link),
-      pair=if mine && @settings.phone_lends(c) { Some(fn() { open_page(Setting(@settings.Route::AdbShare(here.station))) }) } else { None },
+      link~,
+      paired_here=mine && @settings.phone_lends(c),
     )
+    // (on the phone, its pairing a tap away, as a login's card is under its message)
+    if link == "unpaired" && ask.status == "granted" && mine && @settings.phone_lends(c) {
+      step_card(c, "phone-pair/" + m.ts, @sf.t("android-misc.adb.ask.pair.title"), @sf.t("android-misc.adb.ask.pair.about"), fn() {
+        open_page(Setting(@settings.Route::AdbShare(here.station)))
+      })
+    }
   }
   match here.list {
     Some(l) => {

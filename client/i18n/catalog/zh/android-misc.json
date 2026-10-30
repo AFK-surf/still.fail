@@ -553,7 +553,6 @@
   "android-misc.adb.ask.link.failed": "adb 连接失败",
   "android-misc.adb.ask.link.missing": "station 上没有 adb",
   "android-misc.adb.ask.link.onPhone": "在手机的 still.fail 里打开这条消息配对",
-  "android-misc.adb.ask.pair": "去配对",
   "android-misc.adb.stations": "共享给的 station",
   "android-misc.adb.stations.notLent": "还没有共享过去",
   "android-misc.adb.ask.pair.title": "这台 station 还没和你的手机配对",

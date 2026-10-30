@@ -112,7 +112,7 @@ test("a granted card says how its station's adb holds the phone, and its agent i
   w.grants.linked("Pat@Example.com", { adb: "unpaired", message: "not paired" });
   assert.deepEqual(w.cards[0]!.card.adb.outcome, { status: "granted", scope: "chat", link: "unpaired" });
   assert.equal(w.told.length, told + 1);
-  assert.match(w.told.at(-1)!, /not paired with it yet.*去配对/);
+  assert.match(w.told.at(-1)!, /not paired with it yet.*这台 station 还没和你的手机配对/);
   // Tried again and again while unpaired: said once.
   w.grants.linked("pat@example.com", { adb: "connecting" });
   w.grants.linked("pat@example.com", { adb: "unpaired" });

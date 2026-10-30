@@ -48,7 +48,7 @@
 >     outcome carries it (`adb.outcome.link`: connected, unpaired, off, unauthorized, missing, failed, gone), its dot
 >     green only once connected, and the agent is told in its session as it comes to need pairing and as it connects
 >     (phone_use's answer says to leave pairing to the card).
->   - Unpaired, the card says so with 去配对 on the phone (the station's own 共享调试 page, where it is paired), and on a
+>   - Unpaired, the card says so, with a card under it on the phone (a login card's look, the whole card the way to the station's own 共享调试 page, where it is paired), and on a
 >     computer that it is paired in the app on the phone. Its 查看步骤 opens that station's page too (settings' page
 >     while the switch is off: it is turned on there).
 >   - A phone lent to several stations: the core's `adbShare` says at its top the lending a person has something to do
