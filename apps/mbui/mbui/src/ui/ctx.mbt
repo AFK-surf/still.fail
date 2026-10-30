@@ -463,8 +463,6 @@ pub struct Ctx {
   /// are left out; what the last layout showed across in each
   shown_watch : Map[Int, (Int, String)]
   shown_spans : Map[Int, (Double, Double)]
-  /// the boxes whose presses another takes (Ctx::presses_to), by node: that one's id and where it was said
-  press_owners : Map[Int, (Int, SourceLoc)]
   mut nav_rest : Double
   /// what is under everything the frame draws (0-1: what the host clears to as it presents it; Ctx::set_clear)
   mut clear : (Double, Double, Double)
@@ -738,7 +736,6 @@ fn Ctx::new() -> Ctx {
     laid_rects: Map::new(),
     shown_watch: Map::new(),
     shown_spans: Map::new(),
-    press_owners: Map::new(),
     nav_rest: -1.0,
     clear: (0.961, 0.961, 0.969),
     host_rec: HostRec::new(),
@@ -2518,11 +2515,12 @@ fn Ctx::wake_at_time(self : Ctx, t : Double, later? : Bool = false, loc~ : Sourc
 /// clips: for following a finger and hitting, not for sizing what is built (that is Ctx::laid_rect, this frame's
 /// layout, read back). A link in words, drawn in pieces one after another (its runs, its lines), is the box round
 /// them all, as a page's inline element is (what hangs by it lines up with its start).
-pub fn Ctx::rect_of(self : Ctx, id : Int) -> (Double, Double, Double, Double)? {
+#callsite(autofill(loc))
+pub fn Ctx::rect_of(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double, Double, Double)? {
   // (read as a list's row is built: where the last frame drew it, read back by nothing; the row built every frame,
   // kept_nodes.mbt)
   if nodes_run.building is Some(_) {
-    built_aside()
+    built_aside(why="where the last frame drew a target, read at \{loc}")
   }
   let mut k = self.hit_ids.length() - 1
   while k >= 0 && self.hit_ids[k] != id {
