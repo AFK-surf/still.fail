@@ -52,12 +52,31 @@ export class Relay extends DurableObject<{ TEST_RELAY?: Fetcher }> {
     this.disconnects += this.sockets.size;
     this.sockets.clear();
   }
-  metrics() {
+  async metrics() {
     if (this.failing > 0) {
       this.failing--;
       throw new Error("the relay process did not answer");
     }
-    return `relayserver_bytes_sent_total ${this.bytes}\nrelayserver_accepts_total ${this.accepts}\nrelayserver_disconnects_total ${this.disconnects}\n`;
+    const text = `relayserver_bytes_sent_total ${this.bytes}\nrelayserver_accepts_total ${this.accepts}\nrelayserver_disconnects_total ${this.disconnects}\n`;
+    // Read now, answered only once the test lets it go (slowRead): what it says is what was counted when it was asked.
+    if (this.slow > 0) {
+      this.slow--;
+      await new Promise<void>((go) => this.slowed.push(go));
+    }
+    return text;
+  }
+  private slow = 0;
+  private slowed: (() => void)[] = [];
+  /** The next read of its counters is answered late (releaseRead), after reads asked later. */
+  slowRead() {
+    this.slow = 1;
+  }
+  releaseRead() {
+    for (const go of this.slowed.splice(0)) go();
+  }
+  /** Reads asked and not yet answered (slowRead). */
+  slowedReads() {
+    return this.slowed.length;
   }
   /** Traffic through it, as the process counts it. */
   carried(bytes: number) {
