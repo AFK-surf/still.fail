@@ -253,6 +253,18 @@ squeeze and contrast checks; film's images before and after where a step touches
    which island takes a press where they lie one over another (where more than one is at a point, all of them are told
    of the input); the window's sides beside the system's bars (beside_sides: the islands are placed in the window's
    terms within it); the layers of the old frame (menus, sheets) painted over everything.
+
+   What the narrow shell's old views do as they are told is set out at its cause's moment, not at the frame that next
+   builds them, and drawing only reads it at the frame's: the bottom bar is told what the app's state says of it
+   (shown, the notch's action, the places, the bars, the width of the box it is laid out in) by a reaction of the
+   shell's node (View::reacts) at the moment that changes, its ways set out from then, a frame building it reading
+   where they are; a zoom's commands take one moment as they begin (an event's said with it, else what the window's
+   tree is doing: ui's `tree_cause`, else the frame's or the host's clock) and its glide and fling are ways of its own
+   from it. Still the old way there: a finger on the bar or on a zoomed picture is read as the island is built
+   (bar_gesture, the viewers' drags), told at that frame's moment; the zoom's `step` copies where it is into its
+   fields for what reads them. A row or a part kept as its nodes follows what it read by a watch owned where it is
+   built: the old view that made it going, the watch goes with it (stale and gone: Watch::gone), and one built again
+   under another with the same key follows anew there, never put back as though it still followed.
 5. **What goes**, as no island is left: the frame's watch, paint watch and layout watch (frame_watch.mbt), kept parts
    and rows (kept_part.mbt, kept_rows.mbt, kept_nodes.mbt), said.mbt's recorded lists, `frame_passes_most`'s passes
    for a build, `rows_check` and `looks_check` as they are, `outside_said`, `Mover`, src/damage's comparing of
