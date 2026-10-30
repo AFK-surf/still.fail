@@ -85,8 +85,12 @@ impl Times {
 /// One Node process as the platform has it: its pid, and the control channel the launcher tells it on.
 pub trait Process {
     fn pid(&self) -> u32;
+    /// A line on the control channel; what it says is not logged (it may carry secrets).
+    fn send(&self, line: &Value);
     /// `{"op":<op>}` on the control channel.
-    fn tell(&self, op: &str);
+    fn tell(&self, op: &str) {
+        self.send(&serde_json::json!({ "op": op }));
+    }
 }
 
 /// What the launcher does to processes, and its clock: the system's, or a test's.
@@ -379,6 +383,17 @@ impl<O: Os> Lifecycle<O> {
             } else {
                 log::warn(&format!("Node failed: {why}"));
             }
+        } else if message.get("carry").is_some() {
+            // What the Node handing over holds only in memory (the vault's grants), to the one taking over: from memory
+            // to memory, never logged or written down.
+            let from = self.node_mut(slot).map_or(0, |n| n.process.pid());
+            match (slot, &self.current) {
+                (Slot::Retiring, Some(to)) => {
+                    to.process.send(&serde_json::json!({ "op": "carried", "carried": message["carry"] }));
+                    log::info(&format!("what Node {from} held in memory is carried over to Node {}", to.process.pid()));
+                }
+                _ => log::warn(&format!("Node {from} gave what it held with no Node to carry it to")),
+            }
         } else if let Some(said) = message["drained"].as_str().filter(|_| slot == Slot::Current) {
             log::info(&format!("drained ({said})"));
             let _ = write_whole(&self.run.join("drained"), &format!("{said}\n"));
@@ -607,8 +622,10 @@ mod tests {
         fn pid(&self) -> u32 {
             self.pid
         }
-        fn tell(&self, op: &str) {
-            self.told.borrow_mut().push(op.to_string());
+        fn send(&self, line: &Value) {
+            let op = line["op"].as_str().unwrap_or_default();
+            let told = if op == "carried" { format!("carried {}", line["carried"]) } else { op.to_string() };
+            self.told.borrow_mut().push(told);
         }
     }
 
@@ -760,6 +777,24 @@ mod tests {
         station.pass(s(3600));
         assert_eq!(station.os.killed, [old]);
         assert_eq!(station.serving(), new);
+    }
+
+    #[test]
+    fn what_the_old_node_holds_in_memory_goes_to_the_new_one() {
+        let mut station = station("carry", false);
+        let old = station.last();
+        station.up(Slot::Current, "0.1.0", 5000);
+        // Not handing over: given to nobody.
+        station.said(Slot::Current, json!({"carry": {"vault": 1}}));
+        assert!(station.told(old).is_empty());
+        station.start_next();
+        let new = station.last();
+        station.said(Slot::Next, ready("0.2.0"));
+        assert_eq!(station.told(old), ["handover"]);
+        // Told to hand over, the old one gives what it holds, and it ends: the new one has it.
+        station.heard(old, vec![json!({"carry": {"vault": {"held": [1]}}})]);
+        station.ended(old, EXITED_0);
+        assert_eq!(station.told(new), [r#"carried {"vault":{"held":[1]}}"#]);
     }
 
     #[test]

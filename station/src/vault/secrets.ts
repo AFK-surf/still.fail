@@ -7,8 +7,8 @@
 // by them, written by their app as it is approved (`save.typed`). A grant may be for commands on another
 // station of the workspace (`runOn`): the secret is sent there over the station transport for each command, run in the
 // session's directory there, and only the outcome comes back. The requests and what was done with them are kept
-// in the station's database (`vault_requests`, `vault_audit`), never a secret; the vaults' grants only in memory, the
-// plain library's written down without their value (`vault_grants`) and taken up again after a restart. A grant ends
+// in the station's database (`vault_requests`, `vault_audit`), never a secret; the vaults' grants only in memory (carried
+// over to the next process at a handover, `carried`), the plain library's written down without their value (`vault_grants`) and taken up again after a restart. A grant ends
 // with its chat: archived or deleted, its session's grants are dropped.
 import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
@@ -23,7 +23,7 @@ import { type Json, STILLFAIL_SURFACE, type SessionThread } from "../store/store
 import type { Hub } from "../sessions/hub.ts";
 import { hold } from "../updates/holds.ts";
 import { type BoxCert, type Deny, type Grant, type Kind, type Listing, type Mode, type Request, type Save, type Scope, SCOPES, TAG, allows, certOk, saveContext, seal, signedOk, signerOf } from "./crypto.ts";
-import { type Held, Keeper, accountOf, hostAllowed, valueOf } from "./keeper.ts";
+import { type Carried, type Held, Keeper, accountOf, hostAllowed, valueOf } from "./keeper.ts";
 import { FILE_MOST, KINDS, MODES, PLAIN, type PlainItem, type PlainStore, plainOk } from "./plain.ts";
 import { Proxy, placeholder } from "./proxy.ts";
 import { ACCOUNT_VAR, type Captured, type Ran, SECRET_VAR, capture, runWith } from "./run.ts";
@@ -137,7 +137,14 @@ export type SecretsDeps = {
   ask?(station: string, request: Json): Promise<Json>;
   /// The directory a source session's tasks share here (jobs/remote.ts `work`), made and noted as used.
   workOf?(workspace: string, peer: string, session: string): string;
+  /// Whether what the process before this one held may still come (a handover under way, `carry`): until then a
+  /// request whose box is not here yet is not let go.
+  coming?(): boolean;
 };
+
+/// What goes over to the next station process at a handover, from memory to memory (never written down): the keeper's
+/// boxes and grants, and the secrets agents asked to keep, until decided.
+export type SecretsCarried = { keeper: Carried; unsaved: [string, Record<string, string>][] };
 
 /// A command sent to another station to run, or one it sent here, waiting for how it ended.
 type Away = { station: string; done(result: Json): void };
@@ -212,6 +219,17 @@ export class Secrets {
       if (still) this.keeper.restore({ request, grant: { ...grant, secret: "" } as Grant, secret: secret!, uses });
       else this.#d.db.prepare("DELETE FROM vault_grants WHERE ws = ? AND id = ?").run(row.ws, row.id);
     }
+  }
+
+  /// What this process holds only in memory, for the next one (a handover).
+  carried(): SecretsCarried {
+    return { keeper: this.keeper.carried(), unsaved: [...this.#unsaved] };
+  }
+
+  /// What the process before this one held (`carried`), held here too.
+  carry(c: SecretsCarried) {
+    this.keeper.carry(c.keeper);
+    for (const [id, fields] of c.unsaved ?? []) if (!this.#unsaved.has(id)) this.#unsaved.set(id, fields);
   }
 
   /// Tells `f` of each request made or decided (the members' event streams).
@@ -307,7 +325,7 @@ export class Secrets {
         // A vault's request whose box this station no longer holds (it restarted) can never be granted: let go. So is a
         // secret to keep that is gone with a restart (the plain library's) and sealed to no device; one the person types
         // in is held nowhere until then.
-        const live = r.save ? r.save.typed === true || this.#unsaved.has(r.id) || (r.vault !== PLAIN && (r.sealed?.length ?? 0) > 0) : r.vault === PLAIN || this.keeper.waiting(r.id);
+        const live = this.#d.coming?.() === true || (r.save ? r.save.typed === true || this.#unsaved.has(r.id) || (r.vault !== PLAIN && (r.sealed?.length ?? 0) > 0) : r.vault === PLAIN || this.keeper.waiting(r.id));
         if (r.at + PENDING_SECS > now && live) return true;
         this.#settle(r, "expired");
         return false;

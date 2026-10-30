@@ -1,7 +1,8 @@
 // What the station holds of the secrets agents use (docs/vault.md, keeper): for each request still waiting, the private
 // half of the box its secret is to be sealed to; for each grant, the opened secret, until it is used up, runs out or
 // its chat is archived. Only in memory: no secret is written to disk or logged, and a restart forgets the vaults'
-// grants (the agent asks again). The plain library's grants are told to `kept` (secrets.ts writes down all but the
+// grants (the agent asks again); a handover to the next process (an update) carries them over, from memory to memory
+// (`carried`, `carry`). The plain library's grants are told to `kept` (secrets.ts writes down all but the
 // value, which the station's store holds anyway, and gives them back after a restart).
 // Whether a grant may be taken is decided here, from the grant itself: who signed it (a member of the vault, by a
 // device in the lock), that it answers the request as asked, and that it stays within what the item allows.
@@ -17,6 +18,10 @@ const SLACK = 60;
 export type Secret = { kind: string; name: string; fields: Record<string, string> };
 
 export type Held = { request: Request; grant: Grant; secret: Secret; uses: number };
+
+/// What a keeper holds, as it goes over to the next station process at a handover: the boxes of the requests still
+/// waiting (their private halves, base64) and the grants held.
+export type Carried = { boxes: [string, string][]; held: Held[] };
 
 /// What a keeper is told of: whether a session's chat is over (archived or gone), and where its grants are kept
 /// across restarts (`save` each grant taken or used, `forget` each one gone).
@@ -124,6 +129,17 @@ export class Keeper {
   /// A grant kept from before a restart, given back.
   restore(h: Held) {
     this.#held.set(h.request.id, h);
+  }
+
+  /// All it holds, for the next process (a handover).
+  carried(): Carried {
+    return { boxes: [...this.#boxes].map(([id, priv]) => [id, Buffer.from(priv).toString("base64")]), held: [...this.#held.values()] };
+  }
+
+  /// What the process before held (`carried`), held here too: what runs out or ends with its chat goes as ever.
+  carry(c: Carried) {
+    for (const [id, priv] of c.boxes ?? []) if (!this.#boxes.has(id)) this.#boxes.set(id, new Uint8Array(Buffer.from(priv, "base64")));
+    for (const h of c.held ?? []) if (!this.#held.has(h.request.id)) this.restore(h);
   }
 
   /// The grant `id` as `session` may use it now; else why not.

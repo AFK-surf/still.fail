@@ -103,7 +103,7 @@ sequenceDiagram
   A->>S: secret_run(授权号, 命令)：走代理 / ssh-agent / 环境变量
 ```
 
-- **keeper**：station 里管授权、做代理、做 ssh-agent 的那一块（`station/src/vault/`）。值只在 station 进程的内存里，不写盘，不进日志；加锁库的授权 station 重启就忘（agent 重新申请）。不加锁库的授权把除值以外的部分写进 `vault_grants` 表，重启后从明文库重新读值、照旧可用（值本来就在 station 盘上，多写的只是哪个 chat、哪个条目、什么时候到期）。chat 归档或删除时，它的授权一起作废。没有拆成单独的进程：agent 和 station 是同一个系统用户，拆出去的进程和 station 进程对 agent 来说一样读不到（都要调试权限），多一个进程只多一份打包和交接的麻烦。
+- **keeper**：station 里管授权、做代理、做 ssh-agent 的那一块（`station/src/vault/`）。值只在 station 进程的内存里，不写盘，不进日志；加锁库的授权 station 重启就忘（agent 重新申请）；更新时的交接（launcher 在旧进程旁起新进程）不算重启：旧进程把 keeper 手上的授权、还在等批准的申请的临时私钥、等存入的值经 launcher 的控制管道交给新进程（`StationParts.carry`，内存到内存，不写盘、不进日志），agent 不用重新申请。旧 launcher（更新只换 Node，launcher 要等机器或服务重启才换）不认这一行、会把它写进日志，所以只有带 `--launcher-carries` 起的 Node 才交。不加锁库的授权把除值以外的部分写进 `vault_grants` 表，重启后从明文库重新读值、照旧可用（值本来就在 station 盘上，多写的只是哪个 chat、哪个条目、什么时候到期）。chat 归档或删除时，它的授权一起作废。没有拆成单独的进程：agent 和 station 是同一个系统用户，拆出去的进程和 station 进程对 agent 来说一样读不到（都要调试权限），多一个进程只多一份打包和交接的麻烦。
 - **工具**：`secret_list`（agent 能看到的条目名和允许的方式，不含值）和 `secret_use`。申请卡片用现有的卡片和待处理，申请发给条目所在库的成员；`card.assignee` 是库的 owner，或者是这个 chat 的发起人，只要他是库成员。
 - **批准的范围**：「仅本次」「本对话 1 小时内」「本对话直到归档」三档（`once`/`hour`/`chat`）。每个人在「密钥」页设一个「默认最长授权」（加锁库是库本身的 `lasts`，owner 签名、随库复制到各 station；明文库是 station 上每人一条，`PUT vault/plain/lasts {lasts, at}` 发给每个存着明文库的 station，以最晚的 `at` 为准），默认 `chat`；条目可以「跟随默认」（listing 不带 `lasts`，新条目都是这样）或设自己的一档（listing 的 `lasts`）。卡片只列到生效的那一档，推荐其中最长的一档；station 和 core 都拒绝超出的批准。（2026-10-22 pengxiao 定：一小时不够用，chat EMBER/1792660346.250000。）
 

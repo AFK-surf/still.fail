@@ -64,3 +64,20 @@ test("the agents' side, made after the admin API: asked for as a request comes, 
   parts.routes(agentsRoutes(side, {}));
   assert.deepEqual(await ask(admin, member, "GET", "/overview"), [200, { viewer: "u" }]);
 });
+
+test("what a part holds in memory goes over to the next process: given as it hands over, taken up as it comes", () => {
+  const before = new StationParts();
+  before.carry("shelf", () => ({ books: [1, 2] }), () => assert.fail("nothing came before it"));
+  const carried = JSON.parse(JSON.stringify(before.carried()));
+  assert.deepEqual(carried, { shelf: { books: [1, 2] } });
+
+  // The next process: what came for a part not made yet waits for it; a part none carried for is left alone.
+  const after = new StationParts();
+  const took: unknown[] = [];
+  after.carry("other", () => null, (what) => took.push(["other", what]));
+  after.takeUp(carried);
+  assert.equal(took.length, 0);
+  after.carry("shelf", () => null, (what) => took.push(what));
+  assert.deepEqual(took, [{ books: [1, 2] }]);
+  assert.throws(() => after.carry("shelf", () => null, () => {}), /twice/);
+});
