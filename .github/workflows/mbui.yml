@@ -530,6 +530,13 @@ jobs:
       MSYS: winsymlinks:nativestrict
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
     steps:
+      # Defender's real-time scan kept off what the job writes and runs: each new file and each program's first start was
+      # scanned, MoonBit's 114 MB (206 MB of programs) put in in 12-25 s against 2 s for as much of the build's, 2026-10-30
+      - shell: pwsh
+        run: |
+          $t = Get-Date
+          Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE, $env:RUNNER_TEMP, $env:RUNNER_TOOL_CACHE, $env:LOCALAPPDATA, "$env:USERPROFILE\.cargo", "$env:USERPROFILE\.rustup"
+          "Defender kept off them in $([int]((Get-Date) - $t).TotalMilliseconds) ms"
       # the natives' keys are git's blobs: the checkout as git has it
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
