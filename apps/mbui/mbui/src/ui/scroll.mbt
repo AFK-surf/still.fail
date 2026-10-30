@@ -377,6 +377,8 @@ fn ListState::moving(self : ListState) -> Bool {
 /// fling): what of it undoes an overscroll does that first (Compose's
 /// applyToScroll, relaxing a stretch four times as fast in a fling).
 fn Ctx::feed(self : Ctx, st : ListState, d : Double, source : Int) -> Unit {
+  // (moved by the hand: what it shows moves for no row's cause, rows_steady.mbt)
+  st.put_at = self.clock
   let mut d = d
   // an overscroll at the top is undone by scrolling down, at the bottom up
   let undoes = st.over > 0.0 &&

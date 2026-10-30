@@ -92,7 +92,8 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
       Some(st) => st
       None => continue
     }
-    // (scrolled by the hand or eased by a wheel, or put elsewhere by the app this frame: what moves it is no row's;
+    // (scrolled by the hand or eased by a wheel, or put elsewhere by the app or the hand this frame or the one before (put
+    // as it is laid out next): what moves it is no row's;
     // nor in its first frames shown, its rows laid out at the heights they are guessed at, then at their own)
     let shown_since = match rows_steady.lists.get(ln.id) {
       Some(t) if now - t <= 2.5 * period + rows_first_ms => t
@@ -104,7 +105,7 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
     }
     rows_steady.lists[ln.id] = if shown_since < 0.0 { -1.0e9 } else { shown_since }
     let settled = shown_since < 0.0 || now - shown_since > rows_first_ms
-    let free = settled && !(st.held || st.moving() || st.easing() || st.put_at == now)
+    let free = settled && !(st.held || st.moving() || st.easing() || now - st.put_at <= 1.5 * period)
     let view = st.vp_h
     let keys = match st.causes {
       Some(c) => c.keys
