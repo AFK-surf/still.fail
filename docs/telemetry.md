@@ -50,6 +50,11 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 - 脱敏：家目录下的路径换成 `~`；邮箱和用邮箱拼成的 profile id（`zzj3720-gmail-com`）换成 `<email>`；JWT、常见前缀的 API key/token、AWS access key 换成 `<secret>`；引号括起来的内容换成 `"…"`；可能是人写的字段（`text`、`name`、`title`、`command`、`args`、`prompt`、`body`、`question`、`content`）整个换成 `…`；`workspace` 字段不是 workspace id（是名字）时也换成 `…`；每个值最多 2000 字。
 - 发不出去（还没登记、mesh 还没起来）的先攒着，最多 5000 行，再多就丢最老的、下一批里说丢了几行；一批发失败就丢掉，不重发；失败每 10 分钟在 stderr 说一次。Comma 不收（`telemetry: null`）。
 - 查：Axiom 里 `['ember'] | where ['service.name'] == "stillfail-station" and ['resource.stillfail.station'] startswith "<station id 前几位>"`，按 `_time` 看 `body` 和 `attributes.log.*`。
+- 设备的连接（`mesh` 那几行，src/mesh/serve.ts）：`client connected` 在凭据通过时写，`a device's connection ended` 在连接断开时写。两行都带 `device`（设备这个端点 id 的前 12 位）和 `trace`（设备拨号那次 `mesh.connect` 的 trace id，客户端随凭据那行发来的 `traceparent`；后台重拨的没有）；前一行带 `via`（握手走的中继，或 `direct`）和 `ways`，后一行带 `why`（断开的原因，iroh 的原话）、`lasted`（连了多少毫秒）、`ways`（断开时的各条路，没了就用最后一次收到请求时的）、`rx`/`tx`（字节）。`ways` 的写法和慢回复行一样：`*` 是选定的那条，中继或地址、来回、发出/丢掉的包数。把设备那边和 station 这边对起来：`attributes.log.trace == <mesh.connect 的 trace_id>`。
+
+### 中继
+
+北京、香港两台每分钟由 `cloud/relay-load.sh` 把计数发给 still.fail cloud，Cloudflare 那台由 cloud 的 cron 每分钟读（`cloud/src/relay-load.ts`）。cloud 存一份给后台的中继页，同时把这一分钟（跟上一次相比）做了什么作为一行日志发到 Axiom：`service.name` 是 `stillfail-relay`，资源属性 `stillfail.relay` 是中继的 host，`body` 是 `relay minute`，字段 `log.secs`（离上一次多少秒）、`log.open`（这时连着几个）、`log.accepts`、`log.disconnects`、`log.sent`/`log.recv`（字节）、`log.packets`（转出去的包）、`log.dropped`（丢掉的包：对方不在、队列满，或在队列里等了超过 200 ms，zzj3720/iroh#1）、`log.load1`（机器负载，Cloudflare 那台没有）。两次隔太久（超过 10 分钟）或中继刚开始报的第一次不写。每台中继每个连接排队多久不在里面（iroh-relay 不数）。
 
 ## 安卓
 
@@ -106,6 +111,7 @@ user-facing operation:
 | `chat.open`, `chats.open`, `stations.open`, `connects.open` | a view's first subscriber, until its first value goes out (the requests that make it are read inside it; a chat's agents too, when the value that names them is computed while it is still opening) |
 | the call's name: `chat.send`, `chat.older`, `chat.read`, `job.stop`, `workspace.rename`, … | every call, until it answers; one that asked nothing of the network and answered well within 100 ms is not recorded (`QUIET_MS`: a scroll position kept, the focus moving, a draft saved were 41% of a phone's spans) |
 | `station.connect`, `station.reconnect` | a station's events stream opening (when a view asked for it, `station.connect` is part of that view's trace), and opening again after it was down, until everything it may have missed is read again. `stillfail.resumed`: the station told what came since the last event heard (nothing is read again); a reconnect says how the stream before it went: `stillfail.previous.end` (why it ended), `stillfail.previous.lasted_ms`, and what came on it, `stillfail.previous.bytes` (over the link, compressed), `stillfail.previous.read_bytes` (as read) and `stillfail.previous.events` |
+| `client.wake` | every time the UI says it is back on screen or the network changed (`client.wake`), always recorded: `stillfail.away_ms` how long it was off screen, `stillfail.network` / `stillfail.retry` when that is why, `stillfail.reset` whether the connections under the core were taken for gone. Several stations' links ending in the same second just before one says the app was frozen off screen |
 | `ignored` | a failure the core let go of on purpose, which nothing waited on (`Effect.ignore(…, { log: "Unhandled", message })`: a file kept in the background, a read nobody asked for, a native handle closed): `stillfail.ignored` the `message` (what was let go of: `speeds kept`, `me read`, `socket closed`), `error.type` and `stillfail.cause` as any failed span's. A failure someone does wait on (a `Deferred` another fiber answers) is said where it is waited on, not here |
 
 Inside a trace:
@@ -119,7 +125,10 @@ Inside a trace:
   failed says what it was given and had beside it: `stillfail.ips` (the addresses
   the station said it is reached straight at, given to the dial) and
   `stillfail.beside` (this device's other open links to the same station, in
-  another workspace: each one's workspace and paths, as `mesh.route`'s). The
+  another workspace: each one's workspace and paths, as `mesh.route`'s). Its
+  `traceparent` goes to the station with the credential, which says its trace
+  on its log lines of the connection (`client connected`, `a device's
+  connection ended`, above). The
   station says a connection whose handshake failed on its log (`mesh: a
   connection's handshake failed from …`: a relay's or an address, and how long
   it took); none said means none came. still.fail

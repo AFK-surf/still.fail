@@ -188,6 +188,26 @@ export async function receiveLogs(request: Request, env: Env): Promise<Response>
   return (await toAxiom(env, body, AXIOM_LOGS)) ? reply({ ok: true }, 202) : reply({ error: "telemetry_unavailable" }, 502);
 }
 
+/**
+ * What a relay did in a minute (relay-load.ts), as a log line of `stillfail-relay` in Axiom, its fields `log.<name>` as a
+ * station's lines' are: so a device's slow way through a relay is seen beside the relay's own count of that minute (how
+ * many it held, what it passed on and dropped). Dropped if that fails, as spans are.
+ */
+export async function relayToAxiom(env: Env, url: string, minute: object): Promise<void> {
+  if (!env.AXIOM_TOKEN) return;
+  const attribute = (key: string, value: unknown) => ({ key, value: typeof value === "number" && Number.isSafeInteger(value) ? { intValue: String(value) } : typeof value === "number" ? { doubleValue: value } : { stringValue: String(value) } });
+  const host = new URL(url).host;
+  const record = {
+    timeUnixNano: (BigInt(clock.now()) * 1_000_000n).toString(),
+    severityNumber: 9,
+    severityText: "info",
+    body: { stringValue: "relay minute" },
+    attributes: [attribute("log.target", "relay"), ...Object.entries(minute).map(([k, v]) => attribute(`log.${k}`, v))],
+  };
+  const body = JSON.stringify({ resourceLogs: [{ resource: { attributes: [attribute("service.name", "stillfail-relay"), attribute("stillfail.relay", host)] }, scopeLogs: [{ scope: { name: "stillfail-cloud" }, logRecords: [record] }] }] });
+  await toAxiom(env, body, AXIOM_LOGS).catch(() => false);
+}
+
 /** The span of a /v1/* call made in a recorded trace, sent to Axiom (dropped if that fails). */
 export async function recordCall(env: Env, parent: TraceParent, request: Request, response: Response, startMs: number, endMs: number, notes: SpanNotes = {}): Promise<void> {
   if (!env.AXIOM_TOKEN) return;

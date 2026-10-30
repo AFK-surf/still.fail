@@ -57,6 +57,14 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         // What is asked again as the wake fails what was under way goes on new connections.
         if (wake.suspectsConnections()) inner.host.resetConnections();
         inner.wakes.wake(wake);
+        // Said always (a call this quick is not otherwise): 2026-10-30 a phone's links to its four stations all went in
+        // the same second, every few minutes, which was taken for the app frozen while off screen; nothing said it was.
+        const span = inner.tracer.always("client.wake", Kind.Internal);
+        span.set("stillfail.away_ms", Math.round(wake.away));
+        if (wake.network) span.set("stillfail.network", true);
+        if (wake.retry) span.set("stillfail.retry", true);
+        span.set("stillfail.reset", wake.suspectsConnections());
+        span.end();
         return Effect.succeed({});
       }
       case "clientError": {

@@ -18,6 +18,8 @@ export class Station {
   grants: string[] = [];
   /// Each connection's first credential, in the order they came.
   firsts: string[] = [];
+  /// Each connection's first line, whole (its credential, protocol, lock, the dial's traceparent).
+  hellos: J[] = [];
   conns: J[] = [];
   /// Connections before this one answer nothing more.
   deadBelow = 0;
@@ -122,6 +124,7 @@ export class Station {
     const first = await Station.readLine(control, carry);
     if (first === null) return;
     this.firsts.push(JSON.parse(first).credential);
+    this.hellos.push(JSON.parse(first));
     const reply = this.#answer(first);
     await control.write(Buffer.from(`${JSON.stringify(reply)}\n`));
     if (reply.error) {

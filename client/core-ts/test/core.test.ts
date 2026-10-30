@@ -2,6 +2,7 @@
 // still.fail cloud's events socket, prefs and drafts.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { Effect } from "effect";
 import { STORAGE_KEY } from "../src/accounts.ts";
 import { answer, Core, CREDENTIAL_KEY, relaysOf } from "../src/core.ts";
 import { SOCKET_IDLE_MS, SOCKET_RETRY_MS } from "../src/sync/cloud.ts";
@@ -307,6 +308,31 @@ test("back_after_being_away_a_socket_waiting_to_retry_tries_at_once", async () =
   await host.time.pass(0);
   assert.equal(host.openSockets("/v1/events"), 1);
   assert.ok(host.takeEmitted().some(([, m]) => JSON.stringify(m) === JSON.stringify({ id: 9, ok: {} })));
+  core.close();
+});
+
+/// 2026-10-30: a phone's links all went at once every few minutes, taken for the app frozen off screen with nothing to
+/// say so. Every return is said, with how long it was away.
+test("back_on_screen_is_said_with_how_long_it_was_away", async () => {
+  const { host, core } = await cloudCore();
+  const spans: { name: string; at: Record<string, unknown> }[] = [];
+  core.inner.tracer.setExport((body) =>
+    Effect.sync(() => {
+      for (const r of parseJson(body).resourceSpans)
+        for (const sc of r.scopeSpans)
+          for (const sp of sc.spans) spans.push({ name: sp.name, at: Object.fromEntries(sp.attributes.map((a: { key: string; value: Record<string, unknown> }) => [a.key, Object.values(a.value)[0]])) });
+    }),
+  );
+  const ui = core.connect();
+  call(core, ui, 9, "client.wake", { away: 60_000 });
+  call(core, ui, 10, "client.wake", { away: 0, network: true });
+  await host.time.pass(0);
+  core.inner.tracer.flush();
+  await host.time.pass(0);
+  assert.deepEqual(spans.filter((s) => s.name === "client.wake").map((s) => s.at), [
+    { "stillfail.away_ms": "60000", "stillfail.reset": true },
+    { "stillfail.away_ms": "0", "stillfail.network": true, "stillfail.reset": true },
+  ]);
   core.close();
 });
 

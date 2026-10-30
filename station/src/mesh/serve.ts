@@ -297,8 +297,26 @@ export async function serve(m: Members, conn: Connection) {
   const lan = m.lan?.() ?? [];
   const tailnet = m.tailnet?.() ?? [];
   await writeLine(first, { ok: true, station: m.cloud.membership(current.viewer.workspace)?.name ?? state().name, expires_at: current.exp, ...(head ? { lock: head } : {}), ...(lan.length > 0 ? { lan } : {}), ...(tailnet.length > 0 ? { tailnet } : {}) });
-  log.info("mesh", "client connected", { email: current.viewer.email, device: device.slice(0, 12) });
+  // The dial's trace (the device's `mesh.connect`), said on both lines of the connection so the device's record of it
+  // and the station's are found together; and the way it came, then the ways it had when it ended (2026-10-30: a
+  // phone's handshake with dev-prod went through and nothing came after, and nothing here said what the station saw).
+  const trace = parseParent(typeof hello?.traceparent === "string" ? hello.traceparent : undefined)?.trace;
+  const opened = wall.now();
+  log.info("mesh", "client connected", { email: current.viewer.email, device: device.slice(0, 12), trace, via: conn.via() ?? "direct", ways: waysOf(conn) });
   m.connected?.();
+  let lastWays = waysOf(conn);
+  void conn.closed().then((why) => {
+    const ways = waysOf(conn);
+    const traffic = conn.stats?.();
+    log.info("mesh", "a device's connection ended", {
+      device: device.slice(0, 12),
+      trace,
+      why,
+      lasted: wall.now() - opened,
+      ways: ways === "" ? lastWays : ways,
+      ...(traffic ? { rx: traffic.rxBytes, tx: traffic.txBytes } : {}),
+    });
+  }, () => {});
 
   // The connection ends when its credential runs out or is revoked, or the station leaves its workspace: checked on
   // every change of the cloud's state, and when the credential runs out.
@@ -344,6 +362,7 @@ export async function serve(m: Members, conn: Connection) {
   try {
     for (let stream = await conn.acceptBi(); stream; stream = await conn.acceptBi()) {
       if (gone()) return;
+      lastWays = waysOf(conn);
       const viewer = { ...current.viewer, home: m.cloud.home() === current.viewer.workspace };
       request(m, stream, viewer, conn).catch((e) => log.info("mesh", "request failed", { error: (e as Error).message }));
     }
@@ -528,6 +547,12 @@ function slowly(stream: Stream, conn: Connection, method: string, path: string, 
       ways: ways.join(", "),
     });
   }, () => {});
+}
+
+/// Every way a connection has now, as a reply that went slowly says them: `*` the chosen one, its relay or address, round
+/// trip, packets sent and lost.
+function waysOf(conn: Connection): string {
+  return (conn.paths?.() ?? []).map((p) => `${p.selected ? "*" : ""}${p.relay ?? p.ip ?? "?"} ${Math.round(p.rttMs)}ms ${p.txPackets}/${p.lostPackets}`).join(", ");
 }
 
 /// The packets sent so far on each of a connection's ways, by a key unique among them (its relay or address, `#n` for
