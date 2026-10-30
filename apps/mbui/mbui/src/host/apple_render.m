@@ -27,9 +27,9 @@ static int32_t last_count;
 static size_t last_cap;
 static double last_bg[3];
 // glass (src/ui/glass.mbt): the passes that blur what is under it (into the copy, 8 bits a channel, and into the rest,
-// 10), the copies they work in (level j is 1/2^j of the largest capture yet, the glass and the blur's margin round it,
-// not of the target: a composer's strip, not the window; tmp for a Gaussian's first half), the GPU's time of the last
-// frame done
+// half floats), the copies they work in (level j is 1/2^j of the largest capture yet, the glass and the blur's margin
+// round it, not of the target: a composer's strip, not the window; tmp for a Gaussian's first half), the GPU's time of
+// the last frame done
 static id<MTLRenderPipelineState> ppipe, ppipe_deep;
 static id<MTLTexture> lv[4], ltmp;
 static int lv_w, lv_h;
@@ -47,7 +47,8 @@ static NSString *shader_src = @
 "struct Inst { float4 rect; float4 p; float4 color; float4 c2; float4 clip; float4 pad; float4 rc; float4 rs; float4 rot; float4 rr; float4 oclip; float4 orc; float4 ors; float4 fade; float4 fadex; };\n"
 "struct U { float2 vp; float scale; float pad; };\n"
 "// glass: where a point's backdrop is in the blurred copy (uv = p * map.xy + map.zw, kept in uvc), a liquid group's\n"
-"// bounds, shapes and corners, how many\n"
+"// bounds, shapes and corners, how many (misc.x); misc.y 1 where what it copied of a native view's hole is let through\n"
+"// (glass_through)\n"
 "struct G { float4 map; float4 uvc; float4 gb; float4 shape[8]; float4 rad[2]; float4 misc; };\n"
 "struct VOut { float4 pos [[position]]; float2 p; float2 cp; uint iid [[flat]]; };\n"
 "vertex VOut vmain(uint vid [[vertex_id]], uint iid [[instance_id]],\n"
@@ -98,11 +99,12 @@ MB_CORNER_SL
 "  }\n"
 "  return d;\n"
 "}\n"
-"static float3 backdrop(texture2d<float> bd, constant G& g, float2 p) {\n"
+"static float4 backdrop4(texture2d<float> bd, constant G& g, float2 p) {\n"
 "  constexpr sampler s(filter::linear, address::clamp_to_edge);\n"
 "  float2 uv = clamp(p * g.map.xy + g.map.zw, g.uvc.xy, g.uvc.zw);\n"
-"  return bd.sample(s, uv).rgb;\n"
+"  return bd.sample(s, uv);\n"
 "}\n"
+"static float3 backdrop(texture2d<float> bd, constant G& g, float2 p) { return backdrop4(bd, g, p).rgb; }\n"
 "static float luma(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }\n"
 "// how much of the pixel at p its rounded clip keeps (r: the corners' radii, top left, then clockwise; s: how smooth\n"
 "// each is), its edge covered as a box's own (0.5 - d * scale), so what it cuts meets the ground of the box that cuts it\n"
@@ -239,21 +241,25 @@ MB_CORNER_SL
 "  float a = clamp(0.5 - d * u.scale, 0.0, 1.0);\n"
 "  if (kind == 5) {\n"
 "    // frosted: the blurred copy, saturated, the tint over it; the rim (a hairline inside the edge, the top left lit,\n"
-"    // the foot and right less), 0.5 wide\n"
-"    float3 g3 = backdrop(bd, g, p);\n"
-"    g3 = max(mix(float3(luma(g3)), g3, I.p.z), 0.0);\n"
+"    // the foot and right less), 0.5 wide. Through (misc.y): as much of it as was a native view's hole left out (its\n"
+"    // alpha), for the view's own frost under the canvas to show there\n"
+"    float4 b4 = backdrop4(bd, g, p);\n"
+"    float3 g3 = max(mix(float3(luma(b4.rgb)), b4.rgb, I.p.z), 0.0);\n"
+"    float ga = g.misc.y > 0.5 ? b4.a : 1.0;\n"
 "    g3 = g3 * (1.0 - col.a) + col.rgb * col.a;\n"
+"    ga = ga * (1.0 - col.a) + col.a;\n"
 "    if (I.c2.x + I.c2.y + I.c2.z > 0.0) {\n"
 "      float edge = clamp(0.5 + (d + 0.5) * u.scale, 0.0, 1.0);\n"
 "      float lit = clamp(0.5 + notch_cut(sd_rr(p - 0.5, I.rect, I.rr), p - 0.5, I.rect, I.pad) * u.scale, 0.0, 1.0);\n"
 "      float back = clamp(0.5 + notch_cut(sd_rr(p + 0.5, I.rect, I.rr), p + 0.5, I.rect, I.pad) * u.scale, 0.0, 1.0);\n"
-"      g3 = mix(g3, float3(1.0), I.c2.x * edge);\n"
-"      g3 = mix(g3, float3(1.0), I.c2.y * lit);\n"
-"      g3 = mix(g3, float3(1.0), I.c2.z * back);\n"
+"      float4 w4 = mix(float4(g3, ga), float4(1.0), I.c2.x * edge);\n"
+"      w4 = mix(w4, float4(1.0), I.c2.y * lit);\n"
+"      w4 = mix(w4, float4(1.0), I.c2.z * back);\n"
+"      g3 = w4.rgb; ga = w4.a;\n"
 "    }\n"
 "    // dithered as it is written to 8 bits, so its slopes do not band (corner.sl mb_dither)\n"
 "    g3 += mb_dither(p * u.scale) / 255.0;\n"
-"    return (float4(g3, 1.0) * (a * I.c2.w)) * cover;\n"
+"    return (float4(g3, ga) * (a * I.c2.w)) * cover;\n"
 "  }\n"
 "  float4 fill = float4(col.rgb, 1.0) * col.a;\n"
 "  float bw = I.p.z;\n"
@@ -350,7 +356,7 @@ static void prepare_gpu(void) {
   pd.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
   ppipe = [dev newRenderPipelineStateWithDescriptor:pd error:&err];
   if (!ppipe) NSLog(@"post pipeline: %@", err);
-  pd.colorAttachments[0].pixelFormat = MTLPixelFormatRGB10A2Unorm;
+  pd.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA16Float;
   ppipe_deep = [dev newRenderPipelineStateWithDescriptor:pd error:&err];
   if (!ppipe_deep) NSLog(@"post pipeline: %@", err);
   atlas = atlas_texture(0, MB_ATLAS_SIDE);
@@ -396,10 +402,10 @@ void mb_atlas_upload(int color, int x, int y, int w, int h, const void *px) {
 // Glass: when the instances reach a run of glass (slot 20 negative: the capture it shares), what is drawn so far
 // under it (its rects with room for the blur round them) is copied out, halved down to where the blur is a few texels
 // wide (dual Kawase's downsample, at most 1/8), blurred there by a Gaussian of what deviation is left, and drawn
-// through. Level 0, the copy, has 8 bits a channel as the target has; what the passes write keeps 10 (RGB10A2, in as
-// many bytes): at 8 each pass rounds the frost's slow slopes into flat steps, a texel of the last level 8 pixels wide
-// on the screen (a blur under 4 pixels, too narrow to halve, is written back into the copy: it leaves no slope that
-// wide).
+// through. Level 0, the copy, has 8 bits a channel as the target has; what the passes write keeps more (half floats,
+// its alpha too: how much of it was a native view's hole, glass_through): at 8 each pass rounds the frost's slow
+// slopes into flat steps, a texel of the last level 8 pixels wide on the screen (a blur under 4 pixels, too narrow to
+// halve, is written back into the copy: it leaves no slope that wide).
 
 typedef struct { float map[4]; float uvc[4]; float gb[4]; float shape[8][4]; float rad[2][4]; float misc[4]; } GU;
 static GU gu;
@@ -422,9 +428,9 @@ static void ensure_levels(int w, int h) {
   lv_w = w > lv_w ? w : lv_w;
   lv_h = h > lv_h ? h : lv_h;
   for (int j = 0; j < 4; j++)
-    lv[j] = level_tex(j == 0 ? MTLPixelFormatBGRA8Unorm : MTLPixelFormatRGB10A2Unorm, (lv_w + (1 << j) - 1) >> j,
+    lv[j] = level_tex(j == 0 ? MTLPixelFormatBGRA8Unorm : MTLPixelFormatRGBA16Float, (lv_w + (1 << j) - 1) >> j,
                       (lv_h + (1 << j) - 1) >> j);
-  ltmp = level_tex(MTLPixelFormatRGB10A2Unorm, lv_w, lv_h);
+  ltmp = level_tex(MTLPixelFormatRGBA16Float, lv_w, lv_h);
   kept_ok = 0;
 }
 
@@ -436,7 +442,7 @@ static void post_pass(id<MTLCommandBuffer> cb, id<MTLTexture> src, int sw, int s
   rp.colorAttachments[0].loadAction = MTLLoadActionDontCare;
   rp.colorAttachments[0].storeAction = MTLStoreActionStore;
   id<MTLRenderCommandEncoder> e = [cb renderCommandEncoderWithDescriptor:rp];
-  [e setRenderPipelineState:dst.pixelFormat == MTLPixelFormatRGB10A2Unorm ? ppipe_deep : ppipe];
+  [e setRenderPipelineState:dst.pixelFormat == MTLPixelFormatRGBA16Float ? ppipe_deep : ppipe];
   [e setViewport:(MTLViewport){0, 0, (double)w, (double)h, 0, 1}];
   [e setScissorRect:(MTLScissorRect){0, 0, (NSUInteger)w, (NSUInteger)h}];
   float tw = 1.0f / (float)src.width, th = 1.0f / (float)src.height;
@@ -445,6 +451,78 @@ static void post_pass(id<MTLCommandBuffer> cb, id<MTLTexture> src, int sw, int s
   [e setFragmentTexture:src atIndex:0];
   [e drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
   [e endEncoding];
+}
+
+// Glass over a native view (a page, a video: under the canvas, seen through its hole) frosts what the view shows too.
+// The canvas holds none of it (a hole is nothing in it), so that part of the frost is Core Animation's: a backdrop
+// over the views, under the canvas (apple_views.m mb_views_frost), each the shape of a glass instance, blurred and
+// saturated as the glass is; the canvas's glass leaves out as much of its frost as was the hole (its copy's alpha,
+// gu.misc.y), for that to show there. The captures that do (their slot 20, through_tid), found as a frame is
+// presented; none in a frame drawn otherwise (offscreen, read back, a snapshot: no views under it).
+#define MB_THROUGH 16
+#define MB_HOLES 32
+static int through_n;
+static float through_tid[MB_THROUGH];
+
+static int is_through(float tid) {
+  for (int i = 0; i < through_n; i++)
+    if (through_tid[i] == tid) return 1;
+  return 0;
+}
+
+// what of instance b shows: its rect cut by its clip's (x0 y0 x1 y1); 0 when nothing does
+static int shows_of(const double *b, float r[4]) {
+  r[0] = (float)fmax(b[0], b[16]); r[1] = (float)fmax(b[1], b[17]);
+  r[2] = (float)fmin(b[0] + b[2], b[18]); r[3] = (float)fmin(b[1] + b[3], b[19]);
+  return r[2] > r[0] && r[3] > r[1];
+}
+
+// The frame's frosted glass over holes (kind 9) painted before it: its captures through, and every instance of them
+// a backdrop over the views whose holes were painted before it (the last of them: `under`), at that view's place
+// among them. Told to the views (which say whether they can frost: else none is through, the glass as before).
+static void glass_through(const double *f, int32_t count) {
+  float holes[MB_HOLES][4];
+  int nh = 0;
+  through_n = 0;
+  for (int32_t i = 0; i < count; i++) {
+    const double *b = f + i * MB_INST;
+    int kind = (int)(b[5] + 0.5);
+    float r[4];
+    if (kind == 9) {
+      if (nh < MB_HOLES && shows_of(b, r)) memcpy(holes[nh++], r, sizeof r);
+      continue;
+    }
+    if (kind != 5 || b[20] >= 0 || !nh || through_n >= MB_THROUGH || is_through((float)b[20]) || !shows_of(b, r))
+      continue;
+    // (its blur reaches a hole near it too)
+    float m = 3.0f * (float)b[7];
+    for (int h = 0; h < nh; h++)
+      if (holes[h][0] < r[2] + m && r[0] - m < holes[h][2] && holes[h][1] < r[3] + m && r[1] - m < holes[h][3]) {
+        through_tid[through_n++] = (float)b[20];
+        break;
+      }
+  }
+  double frosts[MB_FROSTS * MB_FROST_N];
+  int n = 0;
+  int32_t under = 0;
+  for (int32_t i = 0; i < count && through_n; i++) {
+    const double *b = f + i * MB_INST;
+    int kind = (int)(b[5] + 0.5);
+    if (kind == 9) under = (int32_t)(b[20] + 0.5) - MB_VIEW_TEX;
+    float r[4];
+    if (kind != 5 || !is_through((float)b[20]) || under <= 0 || n >= MB_FROSTS || !shows_of(b, r)) continue;
+    double *e = frosts + n++ * MB_FROST_N;
+    for (int k = 0; k < 4; k++) {
+      e[k] = r[k];
+      e[4 + k] = b[k];
+      e[8 + k] = b[36 + k];
+    }
+    e[12] = b[7];
+    e[13] = b[6];
+    e[14] = b[15];
+    e[15] = under;
+  }
+  if (!mb_views_frost(n, frosts)) through_n = 0;
 }
 
 // What a capture of glass is of, worked out before any of the GPU's work: its rectangle in the target's pixels, how
@@ -486,6 +564,7 @@ static int grab_of(Grab *m, const float *f, int32_t start, int32_t end, int32_t 
     }
   }
   m->g.misc[0] = (float)n;
+  m->g.misc[1] = is_through(a[20]) ? 1.0f : 0.0f;
   m->g.gb[0] = x0 - 2; m->g.gb[1] = y0 - 2; m->g.gb[2] = x1 + 2; m->g.gb[3] = y1 + 2;
   float sc = (float)vscale;
   int px0 = (int)floorf((x0 - margin) * sc), py0 = (int)floorf((y0 - margin) * sc);
@@ -940,6 +1019,8 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
   // shows through change on the same refresh. Presented by itself the drawable is shown once the GPU has drawn it,
   // apart from the view's move, which the frame's transaction takes to the screen: a refresh or two apart, the page
   // out of step with its hole as the list moved
+  // (the views' frost of glass over them put where it shows now, with them: glass_through)
+  glass_through(inst, count);
   int with_views = mb_views_take_moved() && !mlayer.presentsWithTransaction;
   if (same_as_shown(inst, count, r, g, b)) {
     // (what was said of it, nothing changed, not left for the next)
@@ -1000,6 +1081,7 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
     [cb commit];
   }
   if (with_views) mlayer.presentsWithTransaction = NO;
+  through_n = 0;
   present_probe(p1 - p0, p2 - p1, p3 - p2, CACurrentMediaTime() - p3);
   if (checked > 0) check_part(cb, checked);
 }

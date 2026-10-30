@@ -117,3 +117,12 @@ void mb_views_draw_under(CGContextRef ctx, double scale);
 // whether a view was put elsewhere on the screen (moved, shown, hidden, closed) since this was last asked: the frame
 // presented now shows its hole there, so it is presented in the same Core Animation transaction (apple_render.m)
 int mb_views_take_moved(void);
+// the image of a native view's hole (kind 9: this + the view's id; src/hostapi/host.mbt view_tex_base)
+#define MB_VIEW_TEX 8388608
+// The frosts of glass over native views (apple_render.m glass_through), as a frame is presented: n of them, each
+// MB_FROST_N numbers (what of it shows x0 y0 x1 y1, its rect x y w h, its corners (top left, then round it), its blur,
+// saturation, opacity, and the view over which it goes: the last whose hole was painted before it), the others gone.
+// Whether it can (else glass over a view frosts it as before: none of the view).
+#define MB_FROSTS 16
+#define MB_FROST_N 16
+int mb_views_frost(int n, const double *frosts);
