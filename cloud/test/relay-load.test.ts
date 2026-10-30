@@ -113,8 +113,36 @@ test("relays send their load from their own address; the console shows each rela
   }
 });
 
-test("the cron reads still.fail's own relay's counters", async () => {
-  const h = await harness();
+test("what a relay did between two of its samples goes to Axiom as a log line", async () => {
+  const relay = "https://203.0.113.7";
+  const got: any[] = [];
+  const h = await harness({ relayUrls: relay, axiom: async (request) => (got.push({ url: request.url, body: JSON.parse(await request.text()) }), new Response("{}")) });
+  try {
+    const push = (body: string) => h.fetch("/v1/relays/load", { method: "POST", headers: { "x-stillfail-relay": relay, "cf-connecting-ip": "203.0.113.7" }, body });
+    // The first sample has none before it: nothing said.
+    assert.equal((await push(`${METRICS}\nnode_time ${h.now() - 60}\n`)).status, 200);
+    assert.equal(got.length, 0);
+    const later = METRICS.replace("bytes_sent_total 1000", "bytes_sent_total 61000").replace("dropped_total 10", "dropped_total 40").replace("accepts_total 7", "accepts_total 9");
+    assert.equal((await push(`${later}\nnode_load1 0.5\nnode_time ${h.now()}\n`)).status, 200);
+    assert.equal(got.length, 1);
+    assert.equal(got[0].url, "https://api.axiom.co/v1/logs");
+    const [resource] = got[0].body.resourceLogs;
+    const attrs = (list: any[]) => Object.fromEntries(list.map((a: any) => [a.key, a.value.intValue ?? a.value.doubleValue ?? a.value.stringValue]));
+    assert.deepEqual(attrs(resource.resource.attributes), { "service.name": "stillfail-relay", "stillfail.relay": "203.0.113.7" });
+    const [line] = resource.scopeLogs[0].logRecords;
+    assert.equal(line.body.stringValue, "relay minute");
+    assert.deepEqual(attrs(line.attributes), {
+      "log.target": "relay", "log.secs": "60", "log.open": "7", "log.accepts": "2", "log.disconnects": "0",
+      "log.sent": "60000", "log.recv": "0", "log.packets": "0", "log.dropped": "30", "log.load1": 0.5,
+    });
+  } finally {
+    await h.close();
+  }
+});
+
+test("the cron reads still.fail's own relay's counters, and says in Axiom how near its budget's limits it is", async () => {
+  const got: any[] = [];
+  const h = await harness({ axiom: async (request) => (got.push(JSON.parse(await request.text())), new Response("{}")) });
   try {
     const api = (await h.mf.getWorker("api")) as unknown as { scheduled(options: { cron: string }): Promise<{ outcome: string }> };
     assert.equal((await api.scheduled({ cron: "* * * * *" })).outcome, "ok");
@@ -122,6 +150,14 @@ test("the cron reads still.fail's own relay's counters", async () => {
     const answer = await (await admin("GET", "/v1/admin/relays")).json() as { relays: { at: number | null; open: number | null }[] };
     assert.equal(answer.relays[0]!.at, h.now());
     assert.equal(answer.relays[0]!.open, 0);
+    // Its first sample: no minute yet, but the budget's standing.
+    const lines = got.flatMap((b) => b.resourceLogs ?? []).flatMap((r: any) => r.scopeLogs[0].logRecords).filter((l: any) => l.body.stringValue === "relay minute");
+    assert.equal(lines.length, 1);
+    const at = Object.fromEntries(lines[0].attributes.map((a: any) => [a.key, a.value.intValue ?? a.value.boolValue ?? a.value.stringValue]));
+    assert.deepEqual(
+      [at["log.running"], at["log.open"], at["log.today_bytes"], at["log.limit_bytes"], at["log.limit_connections"], at["log.full"], at["log.secs"]],
+      [true, "0", "0", String(LIMITS.bytesPerDay), String(LIMITS.connections), "none", undefined],
+    );
   } finally {
     await h.close();
   }

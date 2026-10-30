@@ -23,7 +23,7 @@ import { StationAddr, stationId } from "./station/addr.ts";
 import { IDEMPOTENCY_KEY, IDEMPOTENT, READS } from "./station/requests.ts";
 import type { LinkNet, RequestHead, ScreenAsk, SocketOut, StationWire, WireReply, WireSocket } from "./station/wire.ts";
 import { RELAY } from "./status.ts";
-import { Kind, type Tracer } from "./trace.ts";
+import { Kind, type SpanContext, type Tracer } from "./trace.ts";
 import { fromUtf8, hex, parseJson, sha256, toJsonBytes, utf8 } from "./util.ts";
 import { type LockClaim, lockClaim } from "./lock.ts";
 import { PAIR_ALPN } from "./pair.ts";
@@ -333,8 +333,10 @@ class Control {
   }
 
   /// `lock`: the device's claim for this endpoint (lock.ts), said in the first line, for a station with a workspace lock.
-  send(credential: string, lock?: LockClaim): Effect.Effect<void, CoreError> {
-    const line = utf8(`${JSON.stringify(lock ? { credential, protocol: 2, lock } : { credential, protocol: 2 })}\n`);
+  /// `traceparent`: the dial's (`mesh.connect`), which the station says with the connection on its log, so the two
+  /// records of one connection are found together.
+  send(credential: string, lock?: LockClaim, traceparent?: string): Effect.Effect<void, CoreError> {
+    const line = utf8(`${JSON.stringify({ credential, protocol: 2, ...(lock ? { lock } : {}), ...(traceparent ? { traceparent } : {}) })}\n`);
     return Effect.mapError(this.stream.write(line), cut);
   }
 
@@ -1221,7 +1223,7 @@ export class Mesh {
   /// endpoint through that relay alone. The first through is the link; the others, as they come through, are ways to it
   /// as well (`#adopt`). Fails once all have, as the main endpoint's dial failed. A phone whose own relay could not
   /// reach the station (Beijing's, bft in Tokyo, 2026-10-08) waited out CONNECT_TIMEOUT_MS on it time after time.
-  #dialAll(addr: string, endpoint: IrohEndpoint, credentials: CredentialSource, fresh: boolean, ctx: unknown): Effect.Effect<Link, CoreError> {
+  #dialAll(addr: string, endpoint: IrohEndpoint, credentials: CredentialSource, fresh: boolean, ctx: SpanContext | undefined): Effect.Effect<Link, CoreError> {
     return Effect.suspend(() => {
       this.#exploredAt.set(addr, this.now());
       const relays = this.relaysFor(addr);
@@ -1285,7 +1287,7 @@ export class Mesh {
   }
 
   /// A link through `relay` alone, on that relay's own endpoint (`#pinnedEndpoint`).
-  #dialPinned(addr: string, relay: string, credentials: CredentialSource, fresh: boolean, ctx: unknown): Effect.Effect<Link, CoreError> {
+  #dialPinned(addr: string, relay: string, credentials: CredentialSource, fresh: boolean, ctx: SpanContext | undefined): Effect.Effect<Link, CoreError> {
     return Effect.suspend(() => {
       this.#dialing++;
       return Effect.flatMap(this.#pinnedEndpoint(relay), (endpoint) =>
@@ -1977,7 +1979,7 @@ function open(
   credentials: CredentialSource,
   fresh: boolean,
   pinned: string | null,
-  _ctx: unknown,
+  ctx: SpanContext | undefined,
   ips: string[] = [],
 ): Effect.Effect<Link, CoreError> {
   return Effect.gen(function* () {
@@ -2010,7 +2012,7 @@ function open(
     }
     const stream = yield* Effect.mapError(conn.openBi(), unreached);
     const control = new Control(stream);
-    yield* control.send(credential.success.credential, credential.success.lock);
+    yield* control.send(credential.success.credential, credential.success.lock, ctx?.traceparent());
     const link = new Link(conn, control, credential.success.credential, credentials, pinned);
     // The station's answer to the first credential, while requests already go: a refusal closes the link.
     env.runner.fork(

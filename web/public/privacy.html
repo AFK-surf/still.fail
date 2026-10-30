@@ -46,7 +46,7 @@
 <li><strong>推送令牌</strong>：你的设备或浏览器为接收通知而登记的令牌或推送地址，以及这台设备的通知设置（语言、接收哪几类通知、是否显示内容）；</li>
 <li><strong>问题反馈</strong>：见第 3 节；</li>
 <li><strong>网络和日志信息</strong>：访问本服务时的 IP 地址、请求路径、时间和浏览器信息（User-Agent），记在 Cloudflare 的请求日志中；中继服务器能看到连接的 IP 地址、节点公钥和流量大小。为防止滥用，我们用加盐哈希后的 IP 地址和邮箱来限制登录频率；</li>
-<li><strong>使用统计和错误信息</strong>：网页版和 Android 应用会向 PostHog 发送操作事件、次数、耗时、程序错误和调用栈，网页版还会录制会话回放（页面上所有文字、输入内容和图片在录制时就被遮盖）。这些数据只以你的账号 ID 标识，不附带邮箱和名字。<strong>你可以在应用的设置中关闭“发送使用统计和错误报告”</strong>，关闭后这台设备不再向 PostHog 发送任何数据。客户端、station 和服务器还会向 Axiom 发送请求链路追踪，包括账号 ID、会话 ID、请求路径和耗时。<strong>这些统计和追踪不包含聊天文字、文件名、提示词、agent 输出和对话标题。</strong>链路追踪用于排查故障和性能问题，不受这个开关影响。station 默认还会向 Axiom 发送运行日志（station 做了什么、什么时候做的：它和 still.fail、和其他 station 的连接，错误，版本），发送前去掉家目录路径、邮箱、像密钥或令牌的字符串、引号里的文字和可能是人写的字段，不包含聊天文字和文件内容；workspace 的管理员可以在应用里 station 设置的「诊断」中关闭「发送运行日志给 still.fail」，也可以在 station 的 <code>config.json</code> 里关闭（<code>"telemetry": { "logs": false }</code>）。发往 PostHog 的 station 错误报告只有在 station 的使用者开启后才会发送，默认关闭。</li>
+<li><strong>使用统计和错误信息</strong>：网页版和 Android 应用会向 PostHog 发送操作事件、次数、耗时、程序错误和调用栈，网页版还会录制会话回放（页面上所有文字、输入内容和图片在录制时就被遮盖）。这些数据只以你的账号 ID 标识，不附带邮箱和名字。<strong>你可以在应用的设置中关闭“发送使用统计和错误报告”</strong>，关闭后这台设备不再向 PostHog 发送任何数据。客户端、station 和服务器还会向 Axiom 发送请求链路追踪，包括账号 ID、会话 ID、请求路径和耗时，以及连接走的线路、来回时间和 app 回到屏幕上之前离开了多久。<strong>这些统计和追踪不包含聊天文字、文件名、提示词、agent 输出和对话标题。</strong>链路追踪用于排查故障和性能问题，不受这个开关影响。station 默认还会向 Axiom 发送运行日志（station 做了什么、什么时候做的：它和 still.fail、和其他 station 的连接，错误，版本），发送前去掉家目录路径、邮箱、像密钥或令牌的字符串、引号里的文字和可能是人写的字段，不包含聊天文字和文件内容；workspace 的管理员可以在应用里 station 设置的「诊断」中关闭「发送运行日志给 still.fail」，也可以在 station 的 <code>config.json</code> 里关闭（<code>"telemetry": { "logs": false }</code>）。发往 PostHog 的 station 错误报告只有在 station 的使用者开启后才会发送，默认关闭。</li>
 </ul>
 <p>still.fail 官网（still.fail）本身不使用统计工具。</p>
 

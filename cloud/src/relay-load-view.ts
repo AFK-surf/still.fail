@@ -75,6 +75,40 @@ const readAt = (s: Sample): Sample => {
   return time !== undefined && time <= s.at && time > s.at - GAP ? { at: time, load: s.load } : s;
 };
 
+/** What a relay did between two of its samples (about a minute), for Axiom (relay-load.ts): what each counter grew by,
+ * the connections it held at the end, its machine's load. None when they are a gap apart or there was none before. */
+export type RelayMinute = {
+  secs: number;
+  open: number;
+  accepts: number;
+  disconnects: number;
+  sent: number;
+  recv: number;
+  packets: number;
+  /** Packets dropped: the destination gone, its queue full, or one that waited there over 200 ms (zzj3720/iroh#1). */
+  dropped: number;
+  load1?: number;
+};
+
+export function relayMinute(before: Sample | null, after: Sample): RelayMinute | null {
+  if (before === null) return null;
+  const [a, b] = [readAt(before), readAt(after)];
+  const secs = b.at - a.at;
+  if (secs <= 0 || secs > GAP) return null;
+  const by = (key: "accepts" | "disconnects" | "sent" | "recv" | "packets" | "dropped") => grew(a.load[key], b.load[key]);
+  return {
+    secs,
+    open: openOf(b.load),
+    accepts: by("accepts"),
+    disconnects: by("disconnects"),
+    sent: by("sent"),
+    recv: by("recv"),
+    packets: by("packets"),
+    dropped: by("dropped"),
+    ...(b.load.load1 !== undefined ? { load1: b.load.load1 } : {}),
+  };
+}
+
 /** A relay's view from its samples (oldest first) at `now` (seconds). */
 export function relayLoadView(url: string, received: Sample[], now: number): RelayLoadView {
   const samples = received.map(readAt).sort((a, b) => a.at - b.at);

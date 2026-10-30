@@ -285,6 +285,29 @@ sim("reopens_a_closed_link_with_a_new_credential", async (s) => {
   await close(s, station, mesh);
 });
 
+/// 2026-10-30: a phone's handshake with a station went through and nothing came after; the phone's `mesh.connect` and the
+/// station's log of the connection had nothing in common to be found together by. The dial's trace goes with the
+/// credential, and the station says it on the connection's lines.
+sim("a_dial_tells_the_station_its_trace", async (s) => {
+  const st = await s.station();
+  const e = env(s);
+  const traces: string[] = [];
+  e.tracer.setExport((body) =>
+    Effect.sync(() => {
+      for (const r of JSON.parse(Buffer.from(body).toString()).resourceSpans)
+        for (const sc of r.scopeSpans) for (const sp of sc.spans) if (sp.name === "mesh.connect") traces.push(sp.traceId);
+    }),
+  );
+  const mesh = await s.run(Mesh.make(e, []));
+  mesh.addAddr(st.addr());
+  await s.run(mesh.link(st.id(), grants("ok", { n: 0 })));
+  await s.until(() => st.hellos.length === 1);
+  await s.until(() => (e.tracer.flush(), traces.length > 0));
+  assert.equal(traces.length, 1);
+  assert.match(st.hellos[0].traceparent, new RegExp(`^00-${traces[0]}-[0-9a-f]{16}-01$`));
+  await close(s, st, mesh);
+});
+
 /// docs/multi-workspace.md: a station in two workspaces is reached in each on a link of its own (one station id, two
 /// addresses), opened and renewed with that workspace's credential; one dropped leaves the other.
 sim("a_station_in_two_workspaces_has_a_link_in_each_with_its_own_credential", async (s) => {
