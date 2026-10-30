@@ -496,6 +496,8 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
       }
 #ifdef __IPHONE_26_0
       if (@available(iOS 26.0, *)) {
+        // Match the same action across configurations so UIKit carries its glass through the transition.
+        b.identifier = ident;
         if (prominent) {
           b.style = UIBarButtonItemStyleProminent;
           b.tintColor = accent;
@@ -530,12 +532,15 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
         lastIdent = ident;
       }
     }
+    // Only the visible tab transitions; initial setup and the other tabs take their items at once.
+    BOOL animate = nav == self.selectedViewController && nav.isViewLoaded && nav.view.window != nil &&
+                   !UIAccessibilityIsReduceMotionEnabled();
     // (from the bar's end in: the action most wanted outermost)
-    slot.navigationItem.rightBarButtonItems = made.reverseObjectEnumerator.allObjects;
-    slot.navigationItem.leftBarButtonItems = lead;
-    slot.toolbarItems = foot;
+    [slot.navigationItem setRightBarButtonItems:made.reverseObjectEnumerator.allObjects animated:animate];
+    [slot.navigationItem setLeftBarButtonItems:lead animated:animate];
+    [slot setToolbarItems:foot animated:animate];
     // (the chosen tab's alone: shown on two, the column shows its items twice; didSelectTab)
-    [nav setToolbarHidden:(foot.count == 0 || nav != self.selectedViewController) animated:NO];
+    [nav setToolbarHidden:(foot.count == 0 || nav != self.selectedViewController) animated:animate];
     nav_title(slot.navigationItem, bare ? title : @"", ink);
     // (put away only when something is up over the whole window, its title alone: hidden with its items gone, the system's
     // column keeps showing the views of those it had, a page's actions on the next tab, the outer screen's workspace
