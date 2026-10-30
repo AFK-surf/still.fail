@@ -206,3 +206,47 @@ test "list: a row closing on the rows' way as one comes under it: it goes down e
 test "list: a row closing on the rows' way under one coming for longer (words flying to it): the rows over go one way" {
   closing_under_coming(comes_ms=520.0)
 }
+
+///|
+test "list: a row coming as another still comes on its way: the rows over them go on as fast as they went, not from rest" {
+  // (a cause coming on the rows' way sets them on from where they are as fast as they go: set out from rest, they
+  // stopped and went again, rows_steady.mbt's jolt, which this Tester holds every frame to; 2026-10-30, words sent
+  // flying (their row coming as long as they fly) and an agent's line coming as they went)
+  let n = [6]
+  let rows : @ui.ListRows[Int] = @ui.ListRows::new()
+  let t = @ui.Tester::new(
+    fn(c) {
+      let now = Array::makei(n[0], fn(i) { i })
+      let (items, _) = rows.rows(c, now.map(fn(i) { "r" + i.to_string() }), now, fn(_) { "" }, ms=fn(k) {
+        if k == "r6" { Some(900.0) } else { None }
+      })
+      c.list(
+        "list",
+        items.length(),
+        120.0,
+        fn(k) { c.box(h=Px(120.0), fn() { c.text("Row \{items[k]}", wrap=false) |> ignore }) |> ignore },
+        stick_end=true,
+        sized=rows.sized(),
+      )
+      |> ignore
+    },
+    w=300.0,
+    h=400.0,
+  )
+  // (each frame drawn, as a host draws them: what rows_steady.mbt holds them to is how each goes from the last)
+  let frames = fn(ms : Double) {
+    let from = t.time()
+    while t.time() < from + ms {
+      t.frame()
+    }
+  }
+  n[0] = 7
+  t.draw()
+  // (at its fastest)
+  frames(120.0)
+  n[0] = 8
+  t.draw()
+  frames(900.0)
+  assert_eq(t.row(7).unwrap().3, 120.0)
+  assert_eq(bottom_of(t, 7), 400.0)
+}

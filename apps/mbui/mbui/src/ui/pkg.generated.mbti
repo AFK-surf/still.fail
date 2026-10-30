@@ -384,6 +384,8 @@ pub fn row_gone(Double, Double) -> Bool
 
 pub let row_size_ms : Double
 
+pub fn rows_steady_known(Array[(String, Int32)]) -> Unit
+
 pub fn rows_unkept() -> Array[(String, Int32)]
 
 pub fn run(String, (Ctx) -> Unit) -> Unit

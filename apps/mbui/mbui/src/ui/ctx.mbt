@@ -139,6 +139,8 @@ struct ListState {
   sizes : Map[String, RowSizing]
   /// where the last way its rows were laid out on ends: what moves till then, laid out again each frame
   mut sizes_end : Double
+  /// when the app last put it elsewhere at once (scrolled to a row, to its end): no row's motion (rows_steady.mbt)
+  mut put_at : Double
   /// how tall each row was last laid out, by its key (list_size.mbt)
   shown_h : Map[String, Double]
   sizes_mover : Mover
