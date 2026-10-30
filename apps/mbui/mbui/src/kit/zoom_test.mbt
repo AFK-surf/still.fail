@@ -70,3 +70,56 @@ test "a page on a canvas: free, dragged anywhere; its fitted scale by thousandth
   z.fit_now()
   assert_true(z.fitted && (z.scale - 0.279).abs() < 0.0000001)
 }
+
+///|
+test "what reads where a zoom shows is told as that changes, by any way it changes: resized keeping a point in place" {
+  let z = @kit.Zoom::new()
+  z.natural(100.0, 100.0)
+  z.boxed(200.0, 200.0)
+  let shown = @signals.computed(fn(_) { z.rect() })
+  assert_true(near_rect(shown.get(), 50.0, 50.0, 100.0, 100.0))
+  // (the stage larger, the picture's middle where it was, then kept centred: nothing to bring in sight)
+  z.resize_keeping(300.0, 300.0, Some((0.5, 0.5)), 0.0)
+  assert_true(near_rect(z.rect(), 100.0, 100.0, 100.0, 100.0), msg="\{z.rect()}")
+  assert_eq(shown.get(), z.rect())
+}
+
+///|
+test "what reads where a zoom shows is not told where nothing it shows changed, nor of another zoom" {
+  let a = @kit.Zoom::new(free=true)
+  a.natural(100.0, 100.0)
+  a.boxed(400.0, 400.0)
+  let b = @kit.Zoom::new()
+  b.natural(100.0, 100.0)
+  b.boxed(400.0, 400.0)
+  let reads = Ref(0)
+  let shown = @signals.computed(fn(_) {
+    reads.val = reads.val + 1
+    a.rect()
+  })
+  shown.get() |> ignore
+  let first = reads.val
+  // (moved nowhere; another one moved)
+  a.pan(0.0, 0.0)
+  b.pan(30.0, 0.0)
+  shown.get() |> ignore
+  assert_eq(reads.val, first)
+  // (a small one kept centred in its stage, pushed against its edges, pinched by nothing: as it was, told nothing)
+  let c = @kit.Zoom::new()
+  c.natural(100.0, 100.0)
+  c.boxed(400.0, 400.0)
+  let c_reads = Ref(0)
+  let c_shown = @signals.computed(fn(_) {
+    c_reads.val = c_reads.val + 1
+    c.rect()
+  })
+  c_shown.get() |> ignore
+  c.pan(60.0, -20.0)
+  c.transform(200.0, 200.0, 1.0, 0.0, 0.0)
+  c_shown.get() |> ignore
+  assert_eq(c_reads.val, 1)
+  // (and moved: told)
+  a.pan(30.0, 0.0)
+  shown.get() |> ignore
+  assert_eq(reads.val, first + 1)
+}

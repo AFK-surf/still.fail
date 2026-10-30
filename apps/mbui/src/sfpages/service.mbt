@@ -646,10 +646,11 @@ fn service_stage(
         }
         p.view.boxed(sw, sh)
         p.view.natural(w, h)
+        // (its scale as it shows, a glide's or a fling's way too: what its place says, Zoom::rect)
         match p.view.rect() {
           // (fitted: on whole points, as Preview.kt centres it)
-          Some((x, y, _, _)) if p.view.fitted => Some(({ x: x.round(), y: y.round(), scale: p.view.scale, w, h } : Placed))
-          Some((x, y, _, _)) => Some(({ x, y, scale: p.view.scale, w, h } : Placed))
+          Some((x, y, rw, _)) if p.view.fitted => Some(({ x: x.round(), y: y.round(), scale: rw / w, w, h } : Placed))
+          Some((x, y, rw, _)) => Some(({ x, y, scale: rw / w, w, h } : Placed))
           None => None
         }
       }

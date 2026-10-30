@@ -315,8 +315,8 @@ test "the bar chosen in the panel slides down into the bar's place, its places l
 }
 
 ///|
-/// The bar's panel drawn up and the other bar's row tapped (its first place), run on to where that bar has landed: a
-/// frame drawn at the moment it lands (`at_landing`), or none till after it.
+/// The bar's panel drawn up and the other bar's row tapped (its first place), on to 50 ms after that bar has landed: a
+/// frame drawn at the moment it lands (`at_landing`), or none between the tap's and that one.
 fn bar_chosen_landed(t : @ui.Tester, at_landing : Bool) -> Unit {
   let (xs, y) = bar_places_at()
   t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
@@ -324,11 +324,12 @@ fn bar_chosen_landed(t : @ui.Tester, at_landing : Bool) -> Unit {
     t.run_for(bar.o.end() - t.time())
     t.tap_once(xs[0], 844.0 - 22.0 - 132.0 + 20.0 + 28.0)
   }
+  // (each frame said: run_for would draw one at the landing by itself, its springs saying they rest then)
   let lands = bar.o.end()
   if at_landing {
-    t.run_for(lands - t.time())
+    t.frame_at(lands)
   }
-  t.run_for(lands + 50.0 - t.time())
+  t.frame_at(lands + 50.0)
 }
 
 ///|
