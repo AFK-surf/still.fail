@@ -247,6 +247,8 @@
   "station.notice.file": "（文件）",
   "station.notice.noResult": "本轮未产出结果即停止，回复即可继续",
   "station.notice.noResultSaid": "本轮 agent 未在对话中回复，以下是它最后输出的文字，由 station 代为转发（并非它发布的消息）；回复即可继续：",
+  "station.notice.overloaded": "模型暂时满载，与账号额度无关；稍后自动重试，点停止可取消。",
+  "station.wait.overloaded": "模型恢复可用",
   "station.notice.rateLimit": "已达到额度或速率限制，且没有其他可用账号；额度恢复后自动继续，也可回复重试：{error}",
   "station.notice.refused": "请求被 Anthropic 拒绝，通常是网络问题而非登录问题：station 的出口地区不受支持，或未经过代理（Claude Code 只读取 HTTPS_PROXY / HTTP_PROXY，可在 Profile 的环境变量中设置）：{error}",
   "station.notice.runtimeMissing": "无法启动 agent：此 station 尚未安装 {name}",

@@ -13,7 +13,7 @@ export const runtimeKind = (v: unknown): RuntimeKind | undefined => (RUNTIME_KIN
 /// How a runtime is named to people.
 export const runtimeLabel = (r: RuntimeKind) => (r === "claude" ? "Claude Code" : r === "codex" ? "Codex" : r === "dsh" ? "DeepSeek Harness" : r === "grok" ? "Grok Build" : r === "cursor" ? "Cursor" : r === "hermes" ? "Hermes Agent" : "Devin");
 
-export type FailureReason = "auth" | "refused" | "rate_limit" | "model" | "exited" | "other";
+export type FailureReason = "auth" | "refused" | "rate_limit" | "overloaded" | "model" | "exited" | "other";
 
 export type TurnOutcome = { kind: "completed" } | { kind: "aborted" } | { kind: "failed"; reason: FailureReason; message: string };
 
@@ -129,10 +129,12 @@ export type FailureWords = { authCodes?: string[]; auth?: string[]; limitCodes?:
 /// What its messages (any runtime's) say when it is the account: signed out, a key refused, not allowed.
 const AUTH = ["unauthorized", "authenticat", "not logged in", "sign in", "log in", "api key", "permission_denied", "invalid credential"];
 /// What they say when it is a limit: of rate, quota or usage.
-const LIMIT = ["rate limit", "rate_limit", "quota", "usage limit", "limit reached", "resource_exhausted", "overloaded", "too many requests"];
+const LIMIT = ["rate limit", "rate_limit", "quota", "usage limit", "limit reached", "resource_exhausted", "too many requests"];
+/// What they say when it is the provider: the model has no room for anyone just now (whatever account asks).
+export const OVERLOADED = ["overloaded", "at capacity"];
 
 /// What failed a turn, from what the runtime said of it (its error's code first, where it gives one): the account, a
-/// limit, or else the model.
+/// limit, the provider out of room, or else the model.
 export function failureOf(text: string, extra: FailureWords = {}): FailureReason {
   const lower = text.toLowerCase();
   const words = lower.split(/[^\p{L}\p{N}_]+/u);
@@ -141,8 +143,10 @@ export function failureOf(text: string, extra: FailureWords = {}): FailureReason
   // A code decides before any phrase: a limit's message may well mention the account ("upgrade your subscription").
   if (["401", "403", ...(extra.authCodes ?? [])].some(word)) return "auth";
   if (["429", ...(extra.limitCodes ?? [])].some(word)) return "rate_limit";
+  if (word("529")) return "overloaded";
   if ([...AUTH, ...(extra.auth ?? [])].some(says)) return "auth";
   if ([...LIMIT, ...(extra.limit ?? [])].some(says)) return "rate_limit";
+  if (OVERLOADED.some(says)) return "overloaded";
   return "model";
 }
 

@@ -8,7 +8,7 @@
 import { join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { CONNECTION_LOST } from "../agents/sandbox.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
@@ -39,6 +39,15 @@ const settled = (d: DeclaredState) => d.kind !== "waiting";
 /// it ended.
 const endedIn = (declared: DeclaredState | null, outcome: TurnOutcome["kind"]): DeclaredState | null =>
   declared?.kind === "waiting" && outcome !== "completed" ? null : declared;
+
+/// A turn the provider had no room for (its model at capacity), recorded waiting to be tried again: the one wait a turn
+/// that did not complete ends in.
+const retrying = (turn: { outcome: string | null; declared: string | null; detail: string | null }) =>
+  turn.outcome === "failed" && turn.declared === "waiting" && (turn.detail ?? "").startsWith("overloaded");
+
+/// How long it waits before trying again a turn the provider had no room for, the `n`th in a row (from 0): twice as long
+/// each time, ten minutes at most.
+export const retryAfter = (n: number) => Math.min(30 * 2 ** n, 600);
 
 export type TurnFor = { profile: string | null; person: string | null; thread: number | null };
 const nobody: TurnFor = { profile: null, person: null, thread: null };
@@ -235,6 +244,8 @@ export class SessionActor {
   private phase: Phase = "idle";
   private turn: Turn | null = null;
   private nudges = 0;
+  /// Its turns the provider had no room for, in a row: each is tried again after longer (`retryAfter`).
+  private overloads = 0;
   /// Its process lost the station's tools during the running turn (why): at the turn's end it starts again.
   private toolsLost: string | null = null;
   /// Times it was started again for that since it last ended a turn in a state (or was given something new).
@@ -440,13 +451,15 @@ export class SessionActor {
     });
   }
 
-  /// Its last turn stopped at its account's allowance and it was changed since: it goes on where it stopped.
+  /// Its last turn stopped at its account's allowance, or waits to be tried again after the provider had no room for it,
+  /// and it was changed since: it goes on where it stopped.
   goOn(): Promise<void> {
     return this.enqueue(async () => {
       if (this.deps.held(this.key) || this.archived() || this.turn || this.agent?.session.busy()) return;
       this.refill = null;
       if (this.deps.store.pendingMessages(this.key).length > 0) return this.pump();
-      await this.startTurn("resume", GO_ON_AFTER_SPENT);
+      const last = this.deps.store.lastTurn(this.key);
+      await this.startTurn("resume", last && retrying(last) ? GO_ON_AFTER_OVERLOADED : GO_ON_AFTER_SPENT);
     });
   }
 
@@ -472,7 +485,7 @@ export class SessionActor {
       const store = this.deps.store;
       const last = store.lastTurn(this.key);
       if (!last || last.endedAt === null || last.declared !== "waiting") return;
-      if (last.outcome !== "completed") return store.forgetWait(this.key);
+      if (last.outcome !== "completed" && !retrying(last)) return store.forgetWait(this.key);
       const seconds = last.waitSeconds ?? 0;
       log.info("session", "taking up a wait on record", { session: this.key, seconds });
       this.waitMs(seconds, last.endedAt + seconds * 1000 - this.now());
@@ -1153,10 +1166,16 @@ export class SessionActor {
     const stopRequested = this.stopRequested;
     this.stopRequested = false;
     store.setRunning(this.key, false);
-    const ends = turn ? endedIn(turn.declared, outcome.kind) : null;
+    // The provider had no room for it (not its account's doing: another would fare no better): it waits, as on work of
+    // its own, and is tried again after a while, longer each time; stopped meanwhile, it is not.
+    const overloaded = turn !== null && outcome.kind === "failed" && outcome.reason === "overloaded" && !stopRequested;
+    const retry: DeclaredState | null = overloaded ? { kind: "waiting", seconds: retryAfter(this.overloads++) } : null;
+    if (!overloaded) this.overloads = 0;
+    const ends = retry ?? (turn ? endedIn(turn.declared, outcome.kind) : null);
     if (turn) {
       const detail = outcome.kind === "failed" ? `${outcome.reason}: ${outcome.message}` : null;
       store.endTurn(turn.id, outcome.kind, detail, ends?.kind ?? null, ends?.kind === "waiting" ? ends.seconds : null);
+      if (retry) store.setWaitFor(turn.id, t("station.wait.overloaded"), false);
     }
     // Its process could not reach the station's tools: what it said through them reached nobody, and its next turn
     // would fare no better. It ends; the next one (resuming) is given the station's tools as they are now.
@@ -1216,6 +1235,10 @@ export class SessionActor {
       // Said once: what wakes it meanwhile (a job's notice, a wait over) would only run into it again.
       if (!this.saidLast((said) => said.startsWith(SPENT_NOTICE()))) await this.notice(failureNotice(outcome), this.profile);
       this.awaitRefill(this.deps.refillsAt?.(this.key) ?? this.now() + REFILL_FALLBACK_MS);
+    } else if (overloaded) {
+      this.nudges = 0;
+      // Said once: tried again and turned away again, nothing new to tell.
+      if (!this.saidLast(OVERLOADED_NOTICE())) await this.notice(OVERLOADED_NOTICE());
     } else if (outcome.kind === "failed") {
       this.nudges = 0;
       // A sign-in that failed is its profile's, as is a refused request (its environment is where a proxy goes): the
@@ -1231,7 +1254,7 @@ export class SessionActor {
 
     // Told to whoever opened its chat: how the turn ended, when it ended in a state or did not get there.
     if (turn) {
-      const ended = turn.declared?.kind === "all_done" ? "all_done" : turn.declared?.kind === "need_help" ? "need_human" : outcome.kind === "failed" ? "failed" : outcome.kind === "aborted" && stopRequested ? "stopped" : null;
+      const ended = turn.declared?.kind === "all_done" ? "all_done" : turn.declared?.kind === "need_help" ? "need_human" : retry ? null : outcome.kind === "failed" ? "failed" : outcome.kind === "aborted" && stopRequested ? "stopped" : null;
       const words = ended === "failed" ? (outcome.kind === "failed" ? outcome.message : null) : (store.lastTurn(this.key)?.need ?? null);
       // Where it stands, said in its threads under their last message as its chat says it at its end: done, or what it
       // needs (failed and stopped have their notice there already; waiting says nothing)
@@ -1308,7 +1331,9 @@ export class SessionActor {
     const recorded = last && last.endedAt !== null && last.declared === "waiting";
     if (!waited && !recorded) return;
     log.info("session", "stopped while waiting", { session: this.key });
-    await this.deps.stopJobs(this.key);
+    // A turn waiting to be tried again waits on no work of its own: its jobs go on. Asked again, it starts over.
+    if (last && retrying(last)) this.overloads = 0;
+    else await this.deps.stopJobs(this.key);
     this.nudges = 0;
     const agent = this.agent;
     this.agent = null;
@@ -1377,7 +1402,12 @@ export class SessionActor {
               this.phase = "idle";
               // Waiting on its watch: the watch brings it back (its notices, its end), not the clock; it waits on. A wait
               // for something else runs out as any, a watch running or not (one said before `watch`: taken as its watch).
-              if (this.deps.store.lastTurn(this.key)?.waitWatch !== false && this.deps.store.listJobs(this.key).some((j) => j.watch && j.state === "running")) return this.wait(seconds);
+              const last = this.deps.store.lastTurn(this.key);
+              if (last && retrying(last)) {
+                log.info("session", "trying again a turn the provider had no room for", { session: this.key, seconds });
+                return this.startTurn("resume", GO_ON_AFTER_OVERLOADED);
+              }
+              if (last?.waitWatch !== false && this.deps.store.listJobs(this.key).some((j) => j.watch && j.state === "running")) return this.wait(seconds);
               log.info("session", "the wait is over without word; asking again", { session: this.key, seconds });
               await this.startTurn("nudge", waitOver(seconds));
             }),
@@ -1462,6 +1492,9 @@ const REFILL_FALLBACK_MS = 60 * 60 * 1000;
 
 /// The start of the notice that its account is spent, whatever the runtime said.
 const SPENT_NOTICE = () => `⚠️ ${t("station.notice.rateLimit", { error: "" })}`;
+
+/// That the provider had no room for it: its words, about no account, are of no use to people.
+const OVERLOADED_NOTICE = () => `⚠️ ${t("station.notice.overloaded")}`;
 
 function failureNotice(outcome: TurnOutcome): string {
   if (outcome.kind !== "failed") return "";

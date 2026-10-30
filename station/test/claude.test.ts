@@ -249,6 +249,7 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.equal(classifyResult("session limit configuration is invalid"), "model");
     assert.equal(classifyResult('API Error: 403 {"error":{"type":"forbidden","message":"Request not allowed"}}'), "refused");
     assert.equal(classifyResult("API Error: 403 OAuth token does not meet scope requirement"), "auth");
+    assert.equal(classifyResult('API Error: 529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}'), "overloaded");
     await session.dispose();
   });
 

@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
 import { latest } from "../src/agents/migrations.ts";
 import { classifyResult } from "../src/agents/claude.ts";
 import { claudeProject, homesFirst, transcriptPaths } from "../src/read/transcript.ts";
@@ -2179,6 +2179,79 @@ test("an account spent with none to move to is said once; what wakes it waits fo
   agent.complete();
   await settle();
   assert.ok(matches(agent.prompts[4]!, ["a job ended", "another job ended"]), agent.prompts[4]);
+  await r.close();
+});
+
+test("a model at capacity is no account's limit: said once, tried again after longer each time, and stop cancels it", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  r.edit((raw) => raw.profiles.push({ ...raw.profiles[0], id: "cc2", name: "second" }));
+  const text = "Selected model is at capacity. Please try a different model.";
+  const full = { kind: "failed" as const, reason: classifyResult(text), message: text };
+  const said = () => r.chat.texts().filter((t) => t.includes("模型暂时满载"));
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const agent = r.claude.last();
+  const key = agent.options.route;
+  const on = r.session(key).profile;
+  agent.end(full);
+  await settle();
+  // Not moved off its account, nor told it is spent; told once, without the provider's words.
+  assert.equal(r.claude.count(), 1);
+  assert.equal(r.session(key).profile, on);
+  assert.ok(r.chat.texts().every((t) => !t.includes("额度或速率限制") && !t.includes("Selected model")), r.chat.texts().join("\n"));
+  assert.equal(said().length, 1);
+  const last = r.store.lastTurn(key)!;
+  assert.deepEqual([last.declared, last.waitSeconds, last.waitFor], ["waiting", 30, "模型恢复可用"]);
+  // Tried again after 30 s, then after 60 s, saying nothing more.
+  await time.adjust(29_000);
+  await settle();
+  assert.equal(agent.prompts.length, 1);
+  await time.adjust(1_000);
+  await settle();
+  assert.deepEqual(agent.prompts.slice(1), [GO_ON_AFTER_OVERLOADED]);
+  agent.end(full);
+  await settle();
+  assert.equal(r.store.lastTurn(key)!.waitSeconds, 60);
+  await time.adjust(60_000);
+  await settle();
+  assert.equal(agent.prompts.length, 3);
+  assert.equal(said().length, 1);
+  // Stopped while it waits to try again: it tries no more, and its jobs go on.
+  r.store.insertJob({ ...watchJob(key), id: "build", token: "tbuild", port: null, watch: false });
+  agent.end(full);
+  await settle();
+  await r.hub.stop(key);
+  await settle();
+  assert.equal(r.chat.lastText(), "已停止当前任务");
+  assert.equal(r.store.getJob("build")!.state, "running");
+  await time.adjust(3_600_000);
+  await settle();
+  assert.equal(agent.prompts.length, 3);
+  // Asked again by a person after it was stopped, it starts over at 30 s; so after a turn that gets through.
+  await r.accept(reply(m, "9999.3", "<@UBOT> 继续", { addressed: true }));
+  await settle();
+  const again = r.claude.last();
+  assert.notEqual(again, agent, "its process ended with the stop");
+  again.end(full);
+  await settle();
+  assert.equal(r.store.lastTurn(key)!.waitSeconds, 30);
+  await time.adjust(30_000);
+  await settle();
+  again.end(full);
+  await settle();
+  assert.equal(r.store.lastTurn(key)!.waitSeconds, 60);
+  await time.adjust(60_000);
+  await settle();
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  again.complete();
+  await settle();
+  await r.accept(reply(m, "9999.4", "<@UBOT> 再来", { addressed: true }));
+  await settle();
+  again.end(full);
+  await settle();
+  assert.equal(r.store.lastTurn(key)!.waitSeconds, 30);
   await r.close();
 });
 

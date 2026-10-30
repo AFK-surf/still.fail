@@ -286,6 +286,7 @@
   "core-logic.format.failure.model": "Model error",
   "core-logic.format.failure.other": "Error",
   "core-logic.format.failure.refused": "Request refused",
+  "core-logic.format.failure.overloaded": "Model busy",
   "core-logic.format.failure.rate_limit": "Out of quota",
   "core-logic.format.maker.zhipu": "Zhipu",
   "core-logic.format.mode.multi": "Multi-session",

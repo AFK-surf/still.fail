@@ -24,7 +24,7 @@ import { fileCredentials, takeBack } from "./no-keychain.ts";
 import { type Events, OwnProcessDriver, OwnProcessSession, parseLine } from "./own-process.ts";
 import { bothNames, expandRoute, isMachine, keyFile, profileEnv, profileModel } from "./profiles.ts";
 import type { RunnerInfo } from "./runner.ts";
-import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type BackgroundTask, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import { OVERLOADED, TOOL_SERVERS, cleanEnv, unreachable, uuid, type BackgroundTask, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { wall } from "../ops/fibers.ts";
 import { peerHttpBase } from "../tools/http.ts";
 
@@ -111,13 +111,14 @@ export function classifyResult(text: string): FailureReason {
   if (word("401") || word("403") || lower.includes("authenticat") || lower.includes("api key")) return "auth";
   if (
     word("429") ||
-    ["rate limit", "rate-limit", "rate_limit", "ratelimit", "usage limit", "overloaded"].some((s) => lower.includes(s)) ||
+    ["rate limit", "rate-limit", "rate_limit", "ratelimit", "usage limit"].some((s) => lower.includes(s)) ||
     ["session", "weekly", "daily"].some((window) => lower.includes(`hit your ${window} limit`)) ||
     /\bhit your \d+[- ]hour limit\b/.test(lower) ||
     lower.includes("you've hit your limit")
   ) {
     return "rate_limit";
   }
+  if (word("529") || OVERLOADED.some((s) => lower.includes(s))) return "overloaded";
   return "model";
 }
 
