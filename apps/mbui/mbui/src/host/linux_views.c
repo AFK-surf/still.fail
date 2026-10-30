@@ -337,6 +337,9 @@ typedef struct View {
   int shown, placed;
   double band_x, band_y, zoom;  // where its widget's part of a page too big for one begins (device pixels); its zoom
   int loaded, failed, told, loading, there, load_broke;
+  // how it stands (mb_host_view_info) as the app was last told, and whether it ever was (mb_views_tell)
+  double stood[10];
+  int stood_state, stood_told;
   char *html;  // a page's
   int html_len;
   char *start;  // a site's first path
@@ -1225,8 +1228,18 @@ void mb_views_rescale(void) {
 
 // What the app awaits of the views, told as it came (f: host_native.mbt's set_outside; NULL: dropped).
 void mb_views_tell(mb_outside_fn f) {
-  // (each player looked at: what happened since, a frame asked for by it, may have changed how it stands)
+  // (each view looked at: what happened since, a frame asked for by it, may have changed how it stands; a page's
+  // told here, a player's as player_stood looked at it)
   for (Player *p = players; p; p = p->next) player_stood(p);
+  for (View *v = views; v; v = v->next) {
+    double now[10];
+    int st = mb_host_view_info(v->vid, now);
+    if (v->stood_told && st == v->stood_state && !memcmp(now, v->stood, sizeof now)) continue;
+    v->stood_told = 1;
+    v->stood_state = st;
+    memcpy(v->stood, now, sizeof now);
+    if (f) f(MB_OUTSIDE_STOOD, v->vid, 0);
+  }
   while (!g_queue_is_empty(&stoods)) {
     int id = GPOINTER_TO_INT(g_queue_pop_head(&stoods));
     if (f) f(MB_OUTSIDE_STOOD, id, 0);
