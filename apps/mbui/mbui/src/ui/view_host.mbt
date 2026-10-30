@@ -1408,35 +1408,14 @@ fn view_key(code : Int, mods : Int) -> Bool {
 }
 
 ///|
-/// What takes back now (a gesture's start, a back with no gesture, a back button): where what the old views said takes
-/// it was said in no old view (a layer of the old frame's own over all of it: a sheet, a menu, a dialog), that first;
-/// else the topmost node of the window's tree that takes back and may take input
-/// (Tree::back_taker: what it does as back is done, its own node its owner); else what the old views said takes it
-/// (Ctx's `back`: where its stack was laid out, the old view it was said in). None where nothing does.
+/// What takes back now (a gesture's start, a back with no gesture, a back button): what the old views said takes it
+/// where it was said in a layer of the old frame's own over all of it (a sheet, a menu, a dialog), first; else, of the
+/// topmost node of the window's tree that takes back and may take input (Tree::back_taker: done as back is, as an event
+/// of the tree's at back's moment, its own node its owner) and what an old view said takes it (Ctx's `back`: where its
+/// stack was laid out, the old view it was said in its owner), the one drawn over the other (Tree::drawn_later). None
+/// where nothing does.
 fn Ctx::back_taker(self : Ctx) -> BackHeld? {
-  // (said by a layer over all of it: before anything of the tree's under it)
-  let over = self.back is Some(_) && self.back_owner() is None
-  if !over {
-    match view_app.val {
-      Some(tree) =>
-        match tree.back_taker() {
-          Some((id, f)) =>
-            return Some({
-              f: fn(kind, _x, _w, _t, _p) {
-                if kind == 2 || kind == 4 {
-                  f()
-                }
-              },
-              left: 0.0,
-              w: self.width,
-              owner: Some(id),
-            })
-          None => ()
-        }
-      None => ()
-    }
-  }
-  match self.back {
+  let old : BackHeld? = match self.back {
     Some(f) => {
       let (left, w) = if self.back_node >= 0 && self.back_node < self.count {
         let n = self.nodes[self.back_node]
@@ -1444,9 +1423,40 @@ fn Ctx::back_taker(self : Ctx) -> BackHeld? {
       } else {
         (0.0, self.width)
       }
-      Some({ f, left, w, owner: self.back_owner() })
+      Some({ f, left, w, owner: self.back_owner(), tree: false })
     }
     None => None
+  }
+  let tree = match view_app.val {
+    Some(t) => t
+    None => return old
+  }
+  let node : BackHeld? = match tree.back_taker() {
+    Some((id, f)) =>
+      Some({
+        f: fn(kind, _x, _w, t, _p) {
+          if kind == 2 || kind == 4 {
+            tree.event(t, f)
+          }
+        },
+        left: 0.0,
+        w: self.width,
+        owner: Some(id),
+        tree: true,
+      })
+    None => None
+  }
+  match (old, node) {
+    // (said by a layer of the old frame's over all of it: before anything of the tree's under it)
+    (Some(o), _) if o.owner is None => old
+    // (of those that may take it now, the one drawn over the other)
+    (Some(o), Some(n)) =>
+      match (o.owner, n.owner) {
+        (Some(island), Some(id)) if old_owner_open(o.owner) && tree.drawn_later(island, id) => old
+        _ => node
+      }
+    (None, Some(_)) => node
+    _ => old
   }
 }
 

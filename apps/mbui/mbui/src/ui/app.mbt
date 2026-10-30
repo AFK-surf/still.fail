@@ -1391,6 +1391,8 @@ struct BackHeld {
   left : Double
   w : Double
   owner : @view.NodeId?
+  /// whether it is a node of the window's tree's (what back does there is no input of the old views')
+  tree : Bool
 }
 
 ///|
@@ -1434,11 +1436,30 @@ fn on_back(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
 
 ///|
 fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
-  took_input("back", h_now(), [kind.to_double(), x, progress, edge.to_double()])
-  if kind != 1 {
-    hand_event()
-  }
   let c = g()
+  // (what takes it as it goes (held from its start), or what will as it begins: a node of the window's tree's, or the
+  // rest of one called off, nobody's: no input of the old views', taped alone; else theirs)
+  let theirs = match (kind, c.back_held) {
+    (0, _) | (_, None) =>
+      if kind != 0 && c.back_off {
+        false
+      } else {
+        match c.back_taker() {
+          Some(h) => !h.tree
+          None => true
+        }
+      }
+    (_, Some(h)) => !h.tree
+  }
+  let args = [kind.to_double(), x, progress, edge.to_double()]
+  if theirs {
+    took_input("back", h_now(), args)
+    if kind != 1 {
+      hand_event()
+    }
+  } else {
+    input_taped("back", h_now(), args)
+  }
   // (the event's own moment, taken once as it began: view_host.mbt)
   let t = view_moment()
   // from the right edge, the finger's way is mirrored
@@ -1462,9 +1483,10 @@ fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
     2 => c.back_gesture(4, 0.0, t) |> ignore
     _ => c.back_gesture(3, 0.0, t) |> ignore
   }
-  // (a step on: a frame owed, where the finger has it read by what reads it, as a pointer moved is; else what began,
-  // ended or was called off, come from outside what is a signal yet)
-  if kind == 1 {
+  // (a step on: a frame owed, where the finger has it read by what reads it, as a pointer moved is; one a node of the
+  // tree's took: a frame owed, what it changed told by its signals; else what began, ended or was called off, come from
+  // outside what is a signal yet)
+  if kind == 1 || !theirs {
     h_frame_owed()
   } else {
     h_request_frame()

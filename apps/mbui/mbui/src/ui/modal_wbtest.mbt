@@ -1290,3 +1290,110 @@ test "keys: a widget of an old view's with the focus takes its own (an arrow alo
   assert_eq(told.copy(), [key_down, key_escape, key_of_char('+'), key_right])
   assert_eq(t.focused().map(fn(s) { s.label }), Some("b"))
 }
+
+///|
+/// A window of an old view (taking back as a stack would: Ctx::take_back, telling "old") and a node of the tree's
+/// taking back (telling "node"), the node drawn over the old view where `node_over`, else under it; what took back.
+fn back_by_order(node_over : Bool, by_button : Bool, old_off? : Bool = false) -> Array[String] {
+  let told : Array[String] = []
+  let t = Tester::new(fn(_c) {  }, platform=2)
+  let island = fn(root : @view.View) {
+    old(root, fn(c) {
+      part_live()
+      c.take_back(fn() { told.push("old") })
+      if by_button && c.frame_no > 2 && told.is_empty() {
+        c.back() |> ignore
+      }
+    })
+    .over(Is(true))
+    // (said to take no press, still there)
+    .presses(Is(!old_off))
+    |> ignore
+  }
+  let node = fn(root : @view.View) {
+    root.box(fn(n) { n.over(Is(true)).takes_back(fn() { told.push("node") }) |> ignore }) |> ignore
+  }
+  set_view_app(fn(root) {
+    if node_over {
+      island(root)
+      node(root)
+    } else {
+      node(root)
+      island(root)
+    }
+  })
+  t.draw()
+  t.draw()
+  if !by_button {
+    on_back(2, 0.0, 1.0, 0)
+  }
+  t.frame_at(t.time() + frame_period_default)
+  t.frame_at(t.time() + frame_period_default)
+  told
+}
+
+///|
+test "back: of a node of the tree's and what an old view said takes it, the one drawn over the other's, by the system's back or a back button" {
+  for by_button in [false, true] {
+    let msg = "by a button: \{by_button}"
+    assert_eq(back_by_order(true, by_button), ["node"], msg~)
+    assert_eq(back_by_order(false, by_button), ["old"], msg~)
+    // (the old view over it said to take no press: the node's)
+    assert_eq(back_by_order(false, by_button, old_off=true), ["node"], msg~)
+  }
+}
+
+///|
+test "back: taken by a node of the tree's (a signal set): no old view built again for it" {
+  let builds = [0, 0]
+  let gone = @signals.signal(false, same=fn(x, y) { x == y })
+  let t = Tester::new(fn(_c) {  }, platform=2)
+  // (parts kept as they are, built again only as what they read changes)
+  t.keep_parts(true)
+  // (no frame built whole beside each to compare with: what is counted is what the frames build)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    for k in 0..<2 {
+      old(root, fn(c) {
+        builds[k] = builds[k] + 1
+        c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
+      })
+      .height(Is(Some(100.0)))
+      |> ignore
+    }
+    root.box(fn(n) { n.takes_back(fn() { gone.set(true) }) |> ignore }) |> ignore
+  })
+  t.draw()
+  t.draw()
+  // (a frame with nothing told: none built again)
+  let still = builds.copy()
+  t.frame_at(t.time() + frame_period_default)
+  assert_eq(builds.copy(), still)
+  let before = builds.copy()
+  on_back(0, 0.0, 0.0, 0)
+  on_back(1, 100.0, 0.3, 0)
+  on_back(2, 0.0, 1.0, 0)
+  t.frame_at(t.time() + frame_period_default)
+  assert_true(gone.get())
+  assert_eq(builds.copy(), before)
+}
+
+///|
+test "back: a node taking back let go at a moment of the tree's own (its show ending at 50), back asked at 100 with no frame between: not its" {
+  let told : Array[String] = []
+  let on = @signals.signal(true, same=fn(x, y) { x == y })
+  let root_v : Ref[@view.View?] = Ref(None)
+  let t = Tester::new(fn(_c) {  }, platform=2)
+  set_view_app(fn(root) {
+    root_v.val = Some(root)
+    root.show(fn() { on.get() }, fn(n) { n.over(Is(true)).takes_back(fn() { told.push("node") }) |> ignore })
+  })
+  t.draw()
+  let t0 = t.time()
+  root_v.val.unwrap().at_moment(t0 + 50.0, fn() { on.set(false) }) |> ignore
+  // by a back button at 100 (Ctx::back), by the system's back at 100
+  t.fake.time = t0 + 100.0
+  assert_eq(g().back(), false)
+  on_back(2, 0.0, 1.0, 0)
+  assert_eq(told.copy(), [])
+}

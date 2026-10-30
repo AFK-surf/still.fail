@@ -967,15 +967,24 @@ fn Ctx::forget(self : Ctx, serial : Int) -> Unit {
 /// Back, as a back button asks: the stack drawn last (the innermost that
 /// can) goes back a page. False when nothing could.
 pub fn Ctx::back(self : Ctx) -> Bool {
-  // (what takes back now, where it may take input: a node of the window's tree's, else the old views', view_host.mbt)
-  match self.back_taker() {
-    Some(h) if old_owner_open(h.owner) => {
-      (h.f)(4, 0.0, 1.0, self.clock, -1.0)
-      self.read_changed("gone back")
-      true
+  // (what takes back now, where it may take input: a node of the window's tree's, else the old views', view_host.mbt;
+  // found and done as one event of the window's tree at this moment, what was due by then done first)
+  let went = Ref(false)
+  let go = fn() {
+    match self.back_taker() {
+      Some(h) if old_owner_open(h.owner) => {
+        (h.f)(4, 0.0, 1.0, view_moment(), -1.0)
+        self.read_changed("gone back")
+        went.val = true
+      }
+      _ => ()
     }
-    _ => false
   }
+  match view_app.val {
+    Some(tree) => tree.event(view_moment(), go)
+    None => go()
+  }
+  went.val
 }
 
 ///|

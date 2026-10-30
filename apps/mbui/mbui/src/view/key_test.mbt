@@ -72,3 +72,38 @@ test "keys: a node let go holds nothing of what it said; the tree let go asks no
   assert_eq(t.key_at(7, 0, 30.0), false)
   assert_eq(told.copy(), [5])
 }
+
+///|
+test "keys: what a node under said a key does said anew by the one over it as this key goes (the same function): the key not asked of it as said anew; the next key, asked" {
+  let told : Array[String] = []
+  let b_view : Ref[@view.View?] = Ref(None)
+  let b_key = fn(_k : @view.Key) {
+    told.push("B")
+    false
+  }
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(b) {
+        b_view.val = Some(b)
+        b.on_key(b_key) |> ignore
+      })
+      |> ignore
+      root.box(fn(a) {
+        a.on_key(fn(_k) {
+          told.push("A")
+          match b_view.val {
+            Some(b) => b.on_key(b_key) |> ignore
+            None => ()
+          }
+          false
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(t.key_at(1, 0, 10.0), false)
+  assert_eq(told.copy(), ["A"])
+}

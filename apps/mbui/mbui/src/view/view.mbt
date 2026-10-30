@@ -139,6 +139,9 @@ struct Node {
   mut on_wheel : ((Wheel) -> Unit)?
   /// what a key does to it (View::on_key): true where it took the key
   mut on_key : ((Key) -> Bool)?
+  /// how many times what a key does to it was said (View::on_key): a key asked of it as it was said then, asked only
+  /// while it still is so (Tree::key_at)
+  mut key_said : Int
   /// what back does to it (View::takes_back)
   mut on_back : (() -> Unit)?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
@@ -239,6 +242,10 @@ pub struct Tree {
   mut modals_due : Bool
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
+  /// the node a finger or the pointer is held on, and the one the pointer is over (of those that take a press), each
+  /// read by itself (View::pressed, View::pointed): told only as it comes or goes
+  pressing : @signals.Keyed[NodeId]
+  pointed : @signals.Keyed[NodeId]
   /// the fingers down on it (each by its id: Drag's `finger`), in the order they went down
   downs : Array[Int]
   /// what the last frame changed: the nodes whose content it made again, those placed or faded otherwise
@@ -319,6 +326,8 @@ pub fn Tree::new(
     committing: 0,
     modals_due: false,
     held: None,
+    pressing: @signals.keyed(),
+    pointed: @signals.keyed(),
     downs: [],
     changed: [],
     composed: [],
@@ -387,6 +396,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.on_wheel = None
       n.on_key = None
       n.on_back = None
+      n.key_said = 0
       n.on_drag = None
       n.takes = None
       n.drag_end = None
@@ -420,6 +430,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         on_menu: None,
         on_wheel: None,
         on_key: None,
+        key_said: 0,
         on_back: None,
         on_drag: None,
         fingers: 1,
@@ -1427,6 +1438,7 @@ pub(all) struct Key {
 pub fn View::on_key(self : View, f : (Key) -> Bool) -> View {
   guard self.live() is Some(n) else { return self }
   n.on_key = Some(f)
+  n.key_said = n.key_said + 1
   self
 }
 
@@ -1452,15 +1464,15 @@ pub fn Tree::key_at(self : Tree, code : Int, mods : Int, at : Double) -> Bool {
     let asked = found.filter_map(fn(i) {
       let n = self.nodes[i]
       match n.on_key {
-        Some(f) => Some(({ at: i, gen: n.gen }, f))
+        Some(f) => Some(({ at: i, gen: n.gen }, n.key_said, f))
         None => None
       }
     })
     for e in asked {
-      let (id, f) = e
+      let (id, said, f) = e
       guard self.nodes[0].live else { break }
       let n = self.nodes[id.at]
-      guard n.live && n.gen == id.gen && n.on_key is Some(g) && physical_equal(g, f) && !self.pressless_at(id.at) else {
+      guard n.live && n.gen == id.gen && n.key_said == said && !self.pressless_at(id.at) else {
         continue
       }
       if @signals.untracked(fn() { f({ code, mods, at: t }) }) {
@@ -1615,7 +1627,7 @@ pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1) -> Vie
   self.drag_ended()
   // (said anew: a finger held on it now is the one before's, ended)
   match self.tree.held {
-    Some(h) if h.at == self.at && h.gen == self.gen => self.tree.held = None
+    Some(h) if h.at == self.at && h.gen == self.gen => self.tree.held_to(None)
     _ => ()
   }
   n.on_drag = Some(f)
@@ -1649,7 +1661,7 @@ fn View::drag_ended(self : View) -> Unit {
 /// A finger put down on node `id` to press it (Tree::target_at's Pressed): the hold its till let go (Tree::press_held:
 /// whether it still is), called off as any hold is (Tree::hold_lost_in), never handed to another.
 pub fn Tree::hold_press(self : Tree, id : NodeId) -> Unit {
-  self.held = Some(id)
+  self.held_to(Some(id))
 }
 
 ///|
@@ -1660,7 +1672,7 @@ pub fn Tree::press_held(self : Tree, id : NodeId) -> Bool {
     None => false
   }
   if still {
-    self.held = None
+    self.held_to(None)
   }
   still
 }
@@ -1683,7 +1695,7 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
   if !under {
     return
   }
-  self.held = None
+  self.held_to(None)
   let n = self.nodes[h.at]
   if !n.live || n.gen != h.gen {
     return
@@ -1762,16 +1774,16 @@ pub fn Tree::drag_at(
       return
     }
     if id.at < 0 || id.at >= self.nodes.length() {
-      self.held = None
+      self.held_to(None)
       return
     }
     let n = self.nodes[id.at]
     if !n.live || n.gen != id.gen {
-      self.held = None
+      self.held_to(None)
       return
     }
     match n.on_drag {
-      None => self.held = None
+      None => self.held_to(None)
       Some(f) => {
         let (nx, ny, _) = self.placed(id.at)
         let told = fn(kind : DragIs, finger : Int) {
@@ -1781,7 +1793,7 @@ pub fn Tree::drag_at(
         // and this on_drag are still its: what one told let go of hears no more)
         let said = n.drag_said
         let off = fn() {
-          self.held = None
+          self.held_to(None)
           let fingers = self.fingers_off()
           for g in fingers {
             guard bound_still(n, id, said) else { break }
@@ -1808,7 +1820,7 @@ pub fn Tree::drag_at(
               off()
             }
           Down => {
-            self.held = Some(id)
+            self.held_to(Some(id))
             self.downs.clear()
             self.downs.push(finger)
             took.val = true
@@ -1821,7 +1833,7 @@ pub fn Tree::drag_at(
           Up => {
             self.downs.retain(fn(g) { g != finger })
             if self.downs.is_empty() {
-              self.held = None
+              self.held_to(None)
             }
             took.val = true
             told(Up, finger)
@@ -2058,7 +2070,7 @@ fn View::let_go(self : View) -> Unit {
   n.takes = None
   // (held: let go of with it, nothing more told it, nothing of it handed to what is made in its place)
   match self.tree.held {
-    Some(h) if h.at == self.at && h.gen == self.gen => self.tree.held = None
+    Some(h) if h.at == self.at && h.gen == self.gen => self.tree.held_to(None)
     _ => ()
   }
   n.flex.measure = None
@@ -3301,4 +3313,65 @@ pub fn View::at_moment(self : View, when : Double, f : () -> Unit) -> () -> Unit
   tree.told = tree.told + 1
   tree.marked()
   stop
+}
+
+///|
+/// The node held now (`h`, none), as each that reads whether it is held is told (View::pressed): what holds the finger or
+/// the pointer, said where it changes.
+fn Tree::held_to(self : Tree, h : NodeId?) -> Unit {
+  self.held = h
+  self.pressing.set(
+    match h {
+      Some(id) => [id]
+      None => []
+    },
+  )
+}
+
+///|
+/// Whether a finger or the pointer is held on it now (from its down till it is let go or called off): what reads it
+/// told only as that comes or goes.
+pub fn View::pressed(self : View) -> Bool {
+  guard self.live() is Some(_) else { return false }
+  self.tree.pressing.has(self.id())
+}
+
+///|
+/// Whether the pointer is over it now, of what takes a press there the topmost (Tree::point_at): what reads it told only
+/// as the pointer comes over it or leaves it.
+pub fn View::pointed(self : View) -> Bool {
+  guard self.live() is Some(_) else { return false }
+  self.tree.pointed.has(self.id())
+}
+
+///|
+/// The pointer at (x, y) in the window (a mouse's: a finger points at nothing), as of now: what takes a press there, the
+/// topmost, is pointed at (View::pointed), nothing else; none where (x, y) is none (the pointer gone).
+pub fn Tree::point_at(self : Tree, x : Double, y : Double) -> Unit {
+  let at : Array[NodeId] = if x < 0.0 || y < 0.0 {
+    []
+  } else {
+    match self.target_at(x, y) {
+      Pressed(id) | Dragged(id) => [id]
+      _ => []
+    }
+  }
+  self.pointed.set(at)
+}
+
+///|
+/// Whether node `a` is drawn after node `b` as the tree is now (after what holds it, after what is before it among what
+/// holds them both: Tree::path_of): what is over what, of two that take the same input. False where either is held by
+/// nothing the root holds.
+pub fn Tree::drawn_later(self : Tree, a : NodeId, b : NodeId) -> Bool {
+  guard self.alive_id(a) && self.alive_id(b) else { return false }
+  match (self.path_of(a.at), self.path_of(b.at)) {
+    (Some(pa), Some(pb)) => drawn_after(pa, pb)
+    _ => false
+  }
+}
+
+///|
+fn Tree::alive_id(self : Tree, id : NodeId) -> Bool {
+  id.at >= 0 && id.at < self.nodes.length() && self.nodes[id.at].live && self.nodes[id.at].gen == id.gen
 }
