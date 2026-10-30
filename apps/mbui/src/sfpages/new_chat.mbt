@@ -103,8 +103,9 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, frame : NewChatFr
 ///|
 /// The new chat of view `v` as it is left (madeChat.ts toMadeChat, data-made-leave): as it was but for its composer
 /// (the chat's now, its place kept), its scene `up` of the way faded where it is, what is under the composer `fade` of
-/// the way faded where it is. The frame draws it over the chat it became (its scene leaving: 140 ms, what is
-/// under the composer 80 ms: @sfbase.new_chat_leaving_of), or over the chat it was left for, in a layer drawn only.
+/// the way faded where it is. The frame draws it over the chat it became (its scene leaving: 140 ms from its first
+/// words sent, what is under the composer 80 ms: @sfbase.new_chat_leaving_of), or over the chat it was left for, in a
+/// layer drawn only.
 pub fn new_chat_left(
   c : @ui.Ctx,
   src : Source,
@@ -197,6 +198,8 @@ fn new_narrow(
     _ => (0.0, 0.0)
   }
   let going = state is Going(_, _)
+  // its first words sent, the chat not made yet: its scene and choices leaving as they will on over it
+  let (sending_up, sending_fade) = if going { (0.0, 0.0) } else { @sfbase.new_sending(c) }
   // the scene in all the page, its end clear of the foot over it (mNewBody's --m-new-foot: as tall as the foot was
   // last laid out)
   let clear = @motion.measured(c, "new/foot").unwrap_or(0.0)
@@ -204,9 +207,10 @@ fn new_narrow(
     c.list("new/scene", 1, new_scene_guess, fn(_) {
       c.box(style=new_scene_column, fn() {
         let scene = c.box(style=new_scene_narrow, fn() { new_scene_narrow_body(c, src, w, frame, v, station, state) })
-        // fading where it is (madeChat.ts)
-        if going {
-          c.look(scene, @ui.look(alpha=1.0 - up))
+        // fading where it is (madeChat.ts), from its first words sent
+        let gone = if going { up } else { sending_up }
+        if gone > 0.0 {
+          c.look(scene, @ui.look(alpha=1.0 - gone))
         }
         list_space(c, clear)
       })
@@ -245,6 +249,9 @@ fn new_narrow(
       // as the composer changes shape (a line more or less, opened or let go), what is over it and the band's top go
       // with its ground, on its curve, not to where they are laid out at once
       with_composer(c, over, "new/over")
+      if sending_fade > 0.0 {
+        c.look(over, @ui.look(alpha=1.0 - sending_fade))
+      }
       match composer_shape(c) {
         Some((by, spec)) => @motion.reshape(c, ground, "new/band", by~, spec~)
         None => ()
@@ -585,7 +592,15 @@ fn new_part(c : @ui.Ctx, i : Int, state : NewState, up : Bool) -> Unit {
   match state {
     Going(u, _) if up => c.look(i, @ui.look(alpha=1.0 - u))
     Going(_, f) => c.look(i, @ui.look(alpha=1.0 - f))
-    _ => ()
+    Here => {
+      // its first words sent, the chat not made yet: leaving as it will on over it
+      let (u, f) = @sfbase.new_sending(c)
+      let gone = if up { u } else { f }
+      if gone > 0.0 {
+        c.look(i, @ui.look(alpha=1.0 - gone))
+      }
+    }
+    Held(_) => ()
   }
 }
 
@@ -907,10 +922,15 @@ fn new_send(
     marks~,
   )
   fresh.starting.set(true)
+  // the scene and the choices leave from now, as the words are taken off the composer, not once the chat is made and
+  // has them (the page becomes the chat then, they going on as they went); back as they were if it is not
+  fresh.sending.set(true)
+  @sfbase.became_starts(wide=!frame.in_place)
   @sfbase.writing_starting(src, d, true)
   let sig = @sfbase.picked_sig(v)
   let give_back = fn(e : Json) {
     fresh.starting.set(false)
+    @sfbase.leaving_back()
     @sfbase.flight_carry_gone(d.key)
     @sfbase.writing_starting(src, d, false)
     writing_restore(src, d, text(Some(e), "message"))
@@ -918,6 +938,7 @@ fn new_send(
   writing_take(src, d, station~, fn(taken) {
     guard taken is Some(_) else {
       fresh.starting.set(false)
+      @sfbase.leaving_back()
       @sfbase.flight_carry_gone(d.key)
       @sfbase.writing_starting(src, d, false)
       return
@@ -957,8 +978,6 @@ fn new_send(
             fresh.scene.set(v)
             fresh.became.set(Some(r))
             fresh.room.set(@motion.measured(c, "new/composer").unwrap_or(0.0))
-            // (its choices fade as where the chat opens has them: in this page's place, Android's)
-            @sfbase.became_starts(wide=!frame.in_place)
             new_chat_reset()
             (frame.sent)(r)
             app.nav.become(Chat(r))

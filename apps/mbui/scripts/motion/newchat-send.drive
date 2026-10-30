@@ -1,0 +1,11 @@
+# A new chat's first words sent on a phone (MBUI_FIXTURE=newchat; MBUI_CORE_MS as late as a phone's core): its scene
+# fading from the send, the words going up into their bubble with the chat's list coming up out of the composer
+# (sfpages new_chat.mbt, sfbase flight.mbt).
+timeout 20000
+wait 1200
+tap 做任何事
+wait 500
+type 把发布说明写一下
+wait 700
+tap icon:arrow-up
+wait 2000
