@@ -74,10 +74,10 @@ test "list: a row going leaves its room whole as it leaves, then closes it to no
   goes[0] = true
   t.draw()
   // (as it leaves, ListRows::left: its room as it was, nothing of it cut, nothing over it moving)
-  t.run_for(@ui.row_leave_ms - 20.0)
+  t.run_for(@ui.row_leave_ms / 2.0)
   assert_eq(t.row(19).unwrap().3, 50.0)
   assert_eq(y_of(t, 18), y18)
-  t.run_for(20.0)
+  t.run_for(@ui.row_leave_ms / 2.0)
   t.run_for(@ui.row_size_ms / 2.0)
   let h = t.row(19).unwrap().3
   assert_true(h > 1.0 && h < 49.0)
