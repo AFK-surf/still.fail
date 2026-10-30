@@ -513,3 +513,57 @@ test "steps that change nothing shown ask for no frames: only their next moment 
   assert_eq(count.get(), 3)
   assert_eq(t.wake(), None)
 }
+
+///|
+/// What steps at 60 a second over a stretch adds up, at the moments it stepped: A from 0 for 120 steps (stopped at
+/// `stop_a`, if so), B said at 505 for 60.
+fn overlapping(with_a : Bool, stop_a : Double?) -> (Array[Double], Array[Double], Double) {
+  let now = Ref(0.0)
+  let on_b = @signals.signal(false, same=fn(a, b) { a == b })
+  let on_a = @signals.signal(with_a, same=fn(a, b) { a == b })
+  let at_a : Array[Double] = []
+  let at_b : Array[Double] = []
+  let sum_b = Ref(0.0)
+  let t = @view.Tree::new(
+    fn(root) {
+      root.show(fn() { on_a.get() }, fn(a) { a.steps(60, 120, fn(_, m) { at_a.push(m) }) |> ignore })
+      root.show(fn() { on_b.get() }, fn(b) {
+        b.steps(60, 60, fn(k, m) {
+          at_b.push(m)
+          sum_b.val = sum_b.val + k.to_double()
+        })
+        |> ignore
+      })
+    },
+    time=fn() { now.val },
+  )
+  frame_at(t, now, 0.0)
+  now.val = 505.0
+  on_b.set(true)
+  match stop_a {
+    Some(s) => {
+      frame_at(t, now, s)
+      on_a.set(false)
+    }
+    None => ()
+  }
+  frame_at(t, now, 5000.0)
+  t.dispose()
+  (at_a, at_b, sum_b.val)
+}
+
+///|
+test "two that add up step by step, said apart and overlapping: one clock, its ticks shared, each its own sum; one stopped changes nothing of the other" {
+  let (at_a, at_b, sum_b) = overlapping(true, None)
+  assert_eq(at_a.length(), 120)
+  assert_eq(at_b.length(), 60)
+  // (B said between ticks steps at the clock's next tick, as A does: the same moments where they overlap)
+  assert_eq(at_b[0], 31000.0 / 60.0)
+  assert_true(at_b.iter().all(fn(m) { at_a.contains(m) || m > 2000.0 }))
+  // (A stopped at 1000, or never there: B the same, step for step)
+  let (_, b_stopped, sum_stopped) = overlapping(true, Some(1000.0))
+  let (_, b_alone, sum_alone) = overlapping(false, None)
+  assert_eq(b_stopped, at_b)
+  assert_eq(b_alone, at_b)
+  assert_eq((sum_stopped, sum_alone), (sum_b, sum_b))
+}

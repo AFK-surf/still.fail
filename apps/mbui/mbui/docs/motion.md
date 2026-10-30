@@ -46,8 +46,11 @@ target, curve) needs no step: its value at a moment is worked out where it is re
 every step is taken in its turn, an input coming among them handled between the steps before it and after it, none
 skipped and none run as one larger step, however few frames are drawn; drawing only looks at the state as it is.
 Nothing else goes by steps (a colour changed starts none), and what owns the steps stops them as it goes.
-A step's moment is its start and its number alone (60 a second end at the second exactly, no step's length added up);
-each step is given its moment. At one moment: what is due by it is done first (a step or an ending due then, before an
+There is one clock (the user, 2026-10-30: 「时钟还是统一的，只是各自累积」): saying steps starts no clock of its own;
+it asks the one clock to stop at its ticks for the stretch said (its rate's ticks from the clock's 0, the first after
+its cause: what steps at one rate steps at the same moments, whenever each began), and keeps only what it adds up and
+how many it took. A tick's moment is its number alone (60 a second end at the second exactly, no step's length added
+up); each step is given its moment. One stopped stops nothing else, and moves no tick. At one moment: what is due by it is done first (a step or an ending due then, before an
 input of that moment), and what is due together in the order it was told; an input's handlers all see the moment it
 came at, taken once. Drawing may look between steps; it never writes into them, and no step is dropped to catch up.
 
