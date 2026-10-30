@@ -100,7 +100,8 @@ export type SharingDeps = {
   codexTokenUrl?: string;
 };
 
-type Hosted = { version: number; hash: string; kind: ShareKind; name: string; allow: string[] | null; told: Record<string, number> };
+/// `dir`: of a skill, its directory's device and inode (`dev:ino`), by which it is found again once renamed.
+type Hosted = { version: number; hash: string; kind: ShareKind; name: string; allow: string[] | null; told: Record<string, number>; dir?: string };
 /// `workspace`: of a skill, the workspace it was had in, whose agents' skills it is linked into (absent: the home one's,
 /// as files of before have it).
 type Borrowed = { version: number; hash: string; kind: ShareKind; name: string; host: string; allow: string[] | null; workspace?: string; pending?: boolean; stale?: boolean };
@@ -119,6 +120,9 @@ type State = {
 const whoSaid = (e: unknown) => (e instanceof Refused ? "them" : "here");
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
 const hashOf = (v: unknown) => createHash("sha256").update(typeof v === "string" ? v : JSON.stringify(v)).digest("hex");
+/// A skill's name, which is its directory's in the agents' skills of every station that has it: any one path component
+/// (in any script) but a hidden one.
+export const skillNameOk = (name: string) => name !== "" && !/[/\\\0]/.test(name) && !name.startsWith(".") && Buffer.byteLength(name) <= 255;
 const newId = () => `sh-${randomBytes(10).toString("hex")}`;
 /// The files of a login in a profile's home, handed over with it when it moves: Claude's, Codex's, an OpenCode Console
 /// sign-in's (accounts/console.ts).
@@ -154,6 +158,16 @@ function readSkill(dir: string): Record<string, Buffer> {
   };
   walk(dir);
   return files;
+}
+
+/// A directory's device and inode (`dev:ino`), which a rename keeps; null: no directory of its own there.
+function dirKey(dir: string): string | null {
+  try {
+    const meta = lstatSync(dir);
+    return meta.isDirectory() ? `${meta.dev}:${meta.ino}` : null;
+  } catch {
+    return null;
+  }
 }
 
 const skillHash = (files: Record<string, Buffer>) =>
@@ -336,6 +350,40 @@ export class Sharing {
     return out;
   }
 
+  /// Shared skills whose directory is gone: shared under the name it was renamed to (the same directory), or no longer
+  /// once it is deleted. Not while there are no skills to look in (an agents' home moved).
+  private followSkills(state: State) {
+    const skills = this.skillsDir();
+    let names: string[];
+    try {
+      names = readdirSync(skills);
+    } catch {
+      return;
+    }
+    const shared = this.sharedSkills();
+    const gone = Object.entries(shared).filter(([name]) => !existsSync(join(skills, name)));
+    if (gone.length === 0) return;
+    const free = new Map<string, string>();
+    for (const name of names) {
+      const key = name in shared ? null : dirKey(join(skills, name));
+      if (key !== null) free.set(key, name);
+    }
+    this.deps.config.update((raw) => {
+      const to: Json = isObject(raw.sharedSkills) ? raw.sharedSkills : {};
+      for (const [name, { id }] of gone) {
+        const key = state.hosted[id]?.dir;
+        const now = key === undefined ? undefined : free.get(key);
+        if (now !== undefined && skillNameOk(now)) {
+          to[now] = to[name];
+          log.info("share", "a shared skill renamed is shared under its new name", { id, from: name, to: now });
+        } else log.info("share", "a shared skill deleted is no longer shared", { id, name });
+        delete to[name];
+        this.stopWatch(`hosted:${name}`);
+      }
+      raw.sharedSkills = to;
+    });
+  }
+
   /// What this station shares now, by id: what it is, who may use it, its content's hash (null: unreadable now).
   private ownShares(): Map<string, { kind: ShareKind; name: string; allow: string[] | null; hash: string | null; profile?: Json; skill?: string }> {
     const out = new Map<string, { kind: ShareKind; name: string; allow: string[] | null; hash: string | null; profile?: Json; skill?: string }>();
@@ -395,6 +443,7 @@ export class Sharing {
     if (me === null || this.deps.cloud.removed()) return;
     const rosters = this.rosters();
     const state = this.readState();
+    this.followSkills(state);
     let pending = false;
     const silent = new Set(this.unreachable.keys());
     const tell = async (peer: string, ws: string | null, request: Json): Promise<boolean> => {
@@ -417,10 +466,12 @@ export class Sharing {
       if (now.hash === null) continue;
       const was = state.hosted[id];
       const hosted: Hosted = was ?? { version: 0, hash: "", kind: now.kind, name: now.name, allow: now.allow, told: {} };
-      if (hosted.hash !== now.hash) {
+      // Its name is part of what it is: a skill renamed is linked under its new name where it is copied.
+      if (hosted.hash !== now.hash || hosted.name !== now.name) {
         hosted.version += 1;
         hosted.hash = now.hash;
       }
+      if (now.kind === "skill") hosted.dir = dirKey(join(this.skillsDir(), now.skill!)) ?? hosted.dir;
       hosted.allow = now.allow;
       hosted.name = now.name;
       state.hosted[id] = hosted;
@@ -570,11 +621,16 @@ export class Sharing {
       return;
     }
     this.stopWatch(`borrowed:${id}`);
+    this.unlinkSkill(id, had);
+    rmSync(join(this.root, id), { recursive: true, force: true });
+  }
+
+  /// A copied skill's link under its name, if it is this copy's.
+  private unlinkSkill(id: string, had: Borrowed) {
     const link = join(this.skillsDir(this.askIn(had)), had.name);
     try {
       if (lstatSync(link).isSymbolicLink() && readlinkSync(link) === this.mirror(id)) unlinkSync(link);
     } catch {}
-    rmSync(join(this.root, id), { recursive: true, force: true });
   }
 
   /// Each copied skill linked under its name into the agents' skills of the workspace it was had in, unless one of that
@@ -736,7 +792,9 @@ export class Sharing {
     } else if (!had || had.version !== request.version) {
       const kind: ShareKind = request.kind === "skill" ? "skill" : "profile";
       const name = String(request.name ?? id);
-      if (kind === "skill" && !/^[A-Za-z0-9._-]+$/.test(name)) throw new Error("bad skill name");
+      if (kind === "skill" && !skillNameOk(name)) throw new Error("bad skill name");
+      // Renamed on its host: no longer linked under the name it had.
+      if (had?.kind === "skill" && had.name !== name) this.unlinkSkill(id, had);
       // A skill of a joined workspace's station: linked into that workspace's skills.
       const where = kind === "skill" && had === undefined && ws !== null && ws !== this.deps.cloud.home() ? { workspace: ws } : {};
       state.borrowed[id] = { ...(had ?? { version: -1, hash: "" }), ...where, kind, name, host: peer, allow: Array.isArray(request.allow) ? request.allow : null, stale: true };

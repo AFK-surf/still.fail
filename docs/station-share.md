@@ -115,6 +115,8 @@ agent 和 hub 的代码继续读 `config.json`。分享来的东西写成一条�
 - 使用方把分享来的内容镜像在 `<data>/share/<id>/`，`agent-home.ts` 把这些 skill 目录链接进 agent home 的 `skills/`。分享来的 `MEMORY.md` 作为单独的「来自 X 的记忆」文件链接进去，跟本台的 `MEMORY.md` 并排。
 - 写入：使用方的 station 盯着这些文件，agent 改了就立刻用 `share.put {base}` 发给 host。host 按顺序接收，加版本号，推给所有人。发的时候 host 不在线，就把这次修改留着，重连时再交；base 对不上就按冲突处理。
 - 冲突：host 不覆盖，而是把后到的那份存成 `SKILL.conflict-<station>.md`，通过 `session.message` 告诉写的那个 session 的 agent，让它去合并。
+- skill 的名字就是它在每台 station 上的目录名：任何文字都行（中文也行），只要是一层目录、不以 `.` 开头；两头用同一条规则（`skillNameOk`）。
+- 在 host 上改名（同一个目录挪了名字，按设备号和 inode 认）后分享跟着新名字走，使用方换成新名字链接；目录删了就不再分享，使用方的副本跟着撤掉。
 - 内置 skills（`stillfail-*`）由各台 station 自己写，不参与分享。
 - 在 `agents/migrations.ts` 加一条：agent 的 skills 和记忆可能是别的 station 分享来的，写了会同步过去。
 
