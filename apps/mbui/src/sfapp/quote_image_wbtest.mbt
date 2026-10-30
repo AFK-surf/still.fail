@@ -89,6 +89,42 @@ test "an image quoted: its picture in its card in the composer; sent, it grows f
 }
 
 ///|
+test "a video quoted: its still in its card in the composer; sent, it grows from there to its box in the message, never there at once" {
+  // what was seen: its box in the message drawn whole as it set out from the composer, its card's ground still growing
+  // round it on its way up
+  reset()
+  let src : Source = { ..fixture("chat-download"), poster: fn(_, _, name) { fixture_file(name) } }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  open_fixture_mode("chat-download")
+  t.run_for(@ui.move_most_ms)
+  let w = t.words().filter(fn(w) { w.0.has_prefix("演示录屏") })[0]
+  t.right_click(w.1 + 4.0, w.2 + 4.0)
+  t.draw()
+  t.tap_text("引用")
+  t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
+  t.draw()
+  // its still in its card (as a picture waiting is: 56 square)
+  let tile = match t.drawn_images().iter().find_first(fn(i) { (i[2] - 56.0).abs() < 0.5 && (i[3] - 56.0).abs() < 0.5 }) {
+    Some(i) => i
+    None => fail("no still in the quote's card: \{t.drawn_images()}")
+  }
+  tap_send(t)
+  // as it sets out: where its tile was
+  assert_true(
+    t.drawn_images().iter().any(fn(i) { (i[0] - tile[0]).abs() < 0.5 && (i[1] - tile[1]).abs() < 0.5 && (i[2] - 56.0).abs() < 0.5 }),
+    msg="\{t.drawn_images()}",
+  )
+  // on its way: between its tile's size and its box's, drawn at no size it has at rest
+  t.run_for(@sfbase.flight_len(true) * 0.4)
+  let mid = t.drawn_images().map(fn(i) { i[2] })
+  t.run_for(@sfbase.flight_len(true) + @sf.hint_back_ms)
+  assert_true(send_flight.get() is None)
+  let rest = t.drawn_images().map(fn(i) { i[2] })
+  let between = mid.filter(fn(w) { w > 56.5 && rest.iter().all(fn(r) { (r - w).abs() > 0.5 }) })
+  assert_true(between.length() > 0, msg="drawn \{mid} on its way, at rest \{rest}")
+}
+
+///|
 test "an agent's video and file card right clicked: 引用 quotes each, its file named, nothing played or opened" {
   reset()
   let src = fixture("chat-download")
