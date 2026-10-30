@@ -254,6 +254,13 @@ test("a_chat_opening_is_one_trace_its_requests_carry_and_ember_cloud_gets", asyn
   assert.equal(threads.parentSpanId, read.spanId);
   assert.ok(parents.some((p) => p.slice(36, 52) === threads.spanId), "the request carries its own span");
   assert.equal(named("GET /admin/api/sessions").parentSpanId, read.spanId);
+  // The chat's page waiting for it: a trace of its own, saying how much of its wait was the core making it.
+  const open = named("chat.open");
+  assert.equal(open.parentSpanId, undefined);
+  const attrs = Object.fromEntries(open.attributes.map((a: J) => [a.key, Object.values(a.value)[0]]));
+  assert.equal(attrs["stillfail.anew"], true);
+  assert.ok(Number(attrs["stillfail.work_ms"]) >= 0 && Number(attrs["stillfail.computes"]) >= 1, JSON.stringify(attrs));
+  assert.equal(open.status.code, 1);
   const text = JSON.stringify(spans);
   assert.ok(!text.includes("a@x.com") && !text.includes('"tok"'), text);
   // Nothing new: nothing more is sent.

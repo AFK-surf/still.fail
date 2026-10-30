@@ -16,11 +16,18 @@ import { t } from "./i18n.ts";
 import * as present from "./present.ts";
 import { topicDebug, topicKey, type ClientId, type CoreMessage, type RequestId, type Topic } from "./protocol.ts";
 import { laterSleep, type Runner } from "./runtime.ts";
+import { Kind, type Span, type Tracer } from "./trace.ts";
 import { equal, sharedValue } from "./util.ts";
 import { holds } from "./data.ts";
 
 export const COALESCE_MS = 50;
 export const EVICT_AFTER_MS = 60_000;
+/// The topics a page opens with, each first subscriber's wait for its first value a trace of its own (`<topic>.open`,
+/// docs/telemetry.md): how long a chat took to show, and how much of that the core spent making it.
+const OPENED = new Set(["chat"]);
+/// A round of emissions that held the core this long is a trace of its own (`core.flush`): what made the core busy as
+/// a page waited for it.
+const FLUSH_HELD_MS = 50;
 
 /// A value or the error a topic shows.
 export type Value = { ok: unknown } | { err: CoreError };
@@ -74,6 +81,8 @@ type Entry = {
   idle: number | null;
   /// How its value goes out (output.ts).
   output?: Output;
+  /// A page's first subscriber waiting for its first value (OPENED): its trace, and what the core spent making it.
+  opening?: { span: Span; workMs: number; computes: number };
 };
 
 type Out = { value: unknown } | { delta: AnyOp[] } | { error: CoreError };
@@ -105,9 +114,12 @@ export class Store {
   #clockOn = false;
   #shaped = false;
 
-  constructor(host: Host, runner: Runner) {
+  readonly #tracer: Tracer | null;
+
+  constructor(host: Host, runner: Runner, tracer: Tracer | null = null) {
     this.host = host;
     this.runner = runner;
+    this.#tracer = tracer;
   }
 
   setSource(source: Source): void {
@@ -155,6 +167,12 @@ export class Store {
     entry.idle = null;
     const cached = entry.sent;
     if (cached !== undefined) this.host.emit(client, to(whole(cached), id));
+    else if (entry.opening === undefined && this.#tracer !== null && OPENED.has(topic.topic)) {
+      const span = this.#tracer.root(`${topic.topic}.open`, Kind.Internal);
+      // (made anew, or kept from a page shown a moment ago and let go: its view made again either way)
+      span.set("stillfail.anew", started);
+      entry.opening = { span, workMs: 0, computes: 0 };
+    }
     if (started) this.#start(topic);
     else {
       if (resumed) this.#source?.resume?.(topic);
@@ -204,6 +222,10 @@ export class Store {
     const entry = this.#topics.get(topicKey(topic));
     if (!entry) return;
     entry.subscribers = entry.subscribers.filter(([c, i]) => !(c === client && i === id));
+    if (entry.subscribers.length === 0 && entry.opening) {
+      entry.opening.span.cancel();
+      entry.opening = undefined;
+    }
     this.#release(topic);
   }
 
@@ -341,7 +363,27 @@ export class Store {
     this.#soon = false;
     const pending = this.#pending;
     this.#pending = [];
-    for (const topic of pending) this.#flush(topic);
+    const t0 = this.host.monotonicMs();
+    let slowest = "";
+    let slowestMs = 0;
+    for (const topic of pending) {
+      const t = this.host.monotonicMs();
+      this.#flush(topic);
+      const ms = this.host.monotonicMs() - t;
+      if (ms > slowestMs) {
+        slowestMs = ms;
+        slowest = topic.topic;
+      }
+    }
+    const held = this.host.monotonicMs() - t0;
+    if (held >= FLUSH_HELD_MS && this.#tracer !== null) {
+      const span = this.#tracer.root("core.flush", Kind.Internal);
+      span.set("stillfail.held_ms", Math.round(held));
+      span.set("stillfail.topics", pending.length);
+      span.set("stillfail.slowest", slowest);
+      span.set("stillfail.slowest_ms", Math.round(slowestMs));
+      span.end();
+    }
   }
 
   /// What the source makes of a topic now, kept shared (frozen when that is checked). A source that throws making it
@@ -367,6 +409,7 @@ export class Store {
     entry.stale = false;
     const isHeld = this.#held !== null && holds(topic);
     let computed: Value | undefined;
+    const workFrom = entry.opening ? this.host.monotonicMs() : 0;
     if (stale) {
       if (isHeld && entry.subscribers.length === 0) {
         // Only watched: who watches it reads what is held (and heard of its changes as they were made); what is read
@@ -390,7 +433,13 @@ export class Store {
       now.value = computed;
       if (news) changed = now.watchers.map(([, w]) => w);
     }
-    if (now.value === undefined) return;
+    if (now.value === undefined) {
+      if (now.opening) {
+        now.opening.workMs += this.host.monotonicMs() - workFrom;
+        now.opening.computes++;
+      }
+      return;
+    }
     const c: present.Clock = { now: this.host.nowMs(), offsetMin: this.host.utcOffsetMin(this.host.nowMs()) };
     let value: Value = now.value;
     if ("ok" in value) {
@@ -416,6 +465,17 @@ export class Store {
     } else if (sent !== undefined && sameValue(sent, value)) out = keyedOut = null;
     else out = keyedOut = whole(value);
     now.sent = value;
+    if (now.opening) {
+      // Its first value going out: how long it took, and how much of it was the core making it (the rest it waited:
+      // for what it is made from, or for the core busy with something else)
+      const { span } = now.opening;
+      const work = now.opening.workMs + this.host.monotonicMs() - workFrom;
+      span.set("stillfail.work_ms", Math.round(work));
+      span.set("stillfail.computes", now.opening.computes + 1);
+      if ("err" in value) span.fail();
+      span.end();
+      now.opening = undefined;
+    }
     for (const w of changed) w();
     for (const [client, id, keyed] of subscribers) {
       const o = keyed ? keyedOut : out;
