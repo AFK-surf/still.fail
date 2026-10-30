@@ -172,8 +172,9 @@ Inside a trace:
   (whether the requests go on that way), `stillfail.paths` (as `mesh.route`'s).
   Every one seen, the slower too, not only the fastest the device keeps for
   choosing its way: how the relays bring replies to devices, network by network.
-- **still.fail cloud, on every client's and station's spans**: the network the
-  batch came from, as Cloudflare saw it, as resource attributes
+- **still.fail cloud, on every client's and station's spans and on stations' log
+  lines**: the network the batch came from, as Cloudflare saw it, as resource
+  attributes (in Axiom under `['resource.custom']` on spans)
   `stillfail.net.asn`, `stillfail.net.org` (the carrier: China Mobile, Chinanet…),
   `stillfail.net.country`, `stillfail.net.region` (the province), `stillfail.net.city`;
   never the address (tracing.ts `networkOf`). A device behind a VPN shows the
