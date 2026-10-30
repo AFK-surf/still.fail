@@ -305,16 +305,18 @@ fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Un
     for e in g.1 {
       let ev = Some(e)
       let p = field(ev, "profile")
+      // (a subscription by its account, a key by its name: the core's)
+      let title = if text(ev, "title") == "" { text(p, "name") } else { text(ev, "title") }
       kept_accounts += 1
-      if !shows([text(p, "name"), g.0, text(ev, "where")]) {
+      if !shows([title, g.0, text(ev, "where")]) {
         continue
       }
-      account_names.push(text(p, "name"))
+      account_names.push(title)
       accounts.push(fn() {
         if @sf.link_row(
             c,
             "vault-profile/" + text(ev, "key"),
-            text(p, "name"),
+            title,
             note=said([g.0, text(ev, "where")]),
             trouble=if text(p, "checkTone") == "red" { text(p, "checkText") } else { "" },
             lead=fn() { @settings.group_mark(c, text(p, "group")) },

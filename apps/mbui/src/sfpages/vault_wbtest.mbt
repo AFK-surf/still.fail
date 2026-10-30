@@ -57,12 +57,12 @@ test "全部密钥, at each width and with either hand: every secret a row of on
       assert_true(t.find(words) is Some(_), msg="\{at}: \{words}")
     }
     // the accounts folded till their row (naming them) is pressed: no row of theirs
-    assert_true(t.find("Claude 订阅 · 只在 Studio") is None, msg=at)
+    assert_true(t.find("Claude 订阅 · Studio 可用") is None, msg=at)
     scrolled_to(t, w, "订阅和 API Key")
     tap_words(t, "订阅和 API Key")
     t.frame()
-    scrolled_to(t, w, "Claude 订阅 · 只在 Studio")
-    for words in ["Claude 主账号", "Claude 订阅 · 只在 Studio"] {
+    scrolled_to(t, w, "Claude 订阅 · Studio 可用")
+    for words in ["Claude 主账号", "Claude 订阅 · Studio 可用"] {
       assert_true(t.find(words) is Some(_), msg="\{at}: \{words}")
     }
     // found: 部署机 by its way, nothing else
