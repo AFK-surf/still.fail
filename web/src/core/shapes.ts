@@ -5345,6 +5345,16 @@ export interface Overview {
 	 * then shows nothing).
 	 */
 	elevation?: StationElevation;
+	/**
+	 * How many programs of its machine hold or ask for a grant of its data (docs/data-outflow.md): its page reads
+	 * them (`outflowGrants`) only when there are some. None from a station older than them.
+	 */
+	outflowGrants?: number;
+	/**
+	 * The viewer answers those asking (an owner or admin of its home workspace); none from a station older than
+	 * that.
+	 */
+	outflowAnswers?: boolean;
 }
 
 /** How a connection to a station goes: straight there, through a relay, or still being chosen. */

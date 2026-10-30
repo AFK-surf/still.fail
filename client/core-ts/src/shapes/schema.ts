@@ -860,6 +860,8 @@ export const SHAPES: Record<string, Shape> = {
     ["diagnostics", opt("StationDiagnostics"), { doc: "Whether it sends its log to still.fail. None from a station older than it, which then does not offer it." }],
     ["permissions", opt("StationPermissions"), { doc: "What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then\nshows nothing)." }],
     ["elevation", opt("StationElevation"), { doc: "Whether it runs as the machine's administrator (a Windows station only; none from one older than it, which\nthen shows nothing)." }],
+    ["outflowGrants", opt("i64"), { client: opt("I54"), doc: "How many programs of its machine hold or ask for a grant of its data (docs/data-outflow.md): its page reads\nthem (`outflowGrants`) only when there are some. None from a station older than them." }],
+    ["outflowAnswers", opt("bool"), { doc: "The viewer answers those asking (an owner or admin of its home workspace); none from a station older than\nthat." }],
   ], { doc: "A station's overview, with what the clients show of its connects and profiles." }),
   StationElevation: struct([
     ["on", "bool", { doc: "Where its switch stands: the setting, or what a change under way goes to (`elevation.set`)." }],

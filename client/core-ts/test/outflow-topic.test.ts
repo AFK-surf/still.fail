@@ -93,3 +93,17 @@ test("a_request_waiting_for_an_admin_is_shown_with_what_it_asks_and_answering_it
   assert.match(g.grantedText, /boss@x/);
   core.close();
 });
+
+test("the_overview_gives_the_clients_how_many_grants_and_requests_there_are_and_whether_the_viewer_answers_them", async () => {
+  const { overview } = await import("./station-fixture.ts");
+  const { host, core } = await started({ ...base(), "GET /overview": { ...overview, outflowGrants: 1, outflowAnswers: true } });
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "overview", station: S });
+  await host.time.pass(500, 10);
+  apply(host, values);
+  const shown = v(values, 1);
+  assert.equal(shown.outflowGrants, 1, "a page asks for the grants only when the overview says there are some");
+  assert.equal(shown.outflowAnswers, true);
+  core.close();
+});
