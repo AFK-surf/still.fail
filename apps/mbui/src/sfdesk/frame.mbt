@@ -1418,9 +1418,9 @@ fn tape_frame(c : @ui.Ctx, panel : SideOf?, at : (Double, Double, Double), known
   wide.tape_chat.set(chat)
   wide.tape_panel.set(if known { open } else { tape_unknown })
   match wide.tape_ask.get() {
-    // the page brought over for what was put on it once it shows it (the core's answer waited for, LOCAL_MS at most:
-    // Nav::shows_when), as a phone's page slides in once it has what it shows: not sliding over with the page before
-    // on it, swapped mid-way and built for the first time as it moves; asked still till then
+    // the page brought over for what was put on it once it shows it (the core's answer waited for, sfapp's
+    // page_local_ms at most: Nav::shows_when), as a phone's page slides in once it has what it shows: not sliding over
+    // with the page before on it, swapped mid-way and built for the first time as it moves; asked still till then
     Some(Page) if wide.tape_at.get() != Page && !app.nav.top_shows() => ()
     // the side panel brought over once a frame before this has built it where it waits past the window's edge, as the
     // page is once it shows what is put on it: what it holds made then (a service's page, its native view made as it is

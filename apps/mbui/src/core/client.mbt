@@ -17,6 +17,9 @@ pub struct Sub {
   mut value : Json?
   mut error : Json?
   mut version : Int
+  /// told by the core, while it has no value, that its value waits on a station: none of what it shows is on the device
+  /// (core-ts store.ts `waits`), not the core still reading it
+  mut waiting : Bool
   priv key : String
   changes : @signals.Signal[Int]
 }
@@ -219,7 +222,7 @@ pub fn Client::subscribe(
     None => {
       let id = self.next_id
       self.next_id += 1
-      let s = { id, topic: t, value: None, error: None, version: 0, key, changes: @signals.signal(0) }
+      let s = { id, topic: t, value: None, error: None, version: 0, waiting: false, key, changes: @signals.signal(0) }
       self.subs[id] = s
       self.by_key[key] = s
       self.ask(s)
@@ -397,7 +400,7 @@ pub fn Client::topic_said(self : Client, m : Map[String, Json]) -> Bool {
   match self.subs.get(id) {
     Some(s) =>
       !self.echo_waits.values().any(fn(w) { w.0 == id }) &&
-      (m.contains("value") || m.contains("delta") || m.contains("error"))
+      (m.contains("value") || m.contains("delta") || m.contains("error") || m.contains("waiting"))
     None => false
   }
 }
@@ -507,6 +510,13 @@ fn Client::take(self : Client, msg : Json) -> Unit {
   }
   match self.subs.get(id) {
     Some(s) => {
+      if m.get("waiting") is Some(True) && s.value is None && s.error is None {
+        // (no value of it yet: what shows it shows what is to come, the core's wait for it going on)
+        s.waiting = true
+        self.version += 1
+        s.changes.set(-2)
+        return
+      }
       match (m.get("value"), m.get("delta"), m.get("error")) {
         (_, _, Some(e)) => {
           // The topic could not be read: the next message is a whole value, not a delta.
@@ -524,6 +534,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
           }
         _ => return
       }
+      s.waiting = false
       match self.timing {
         Some(f) if s.version == 0 => f(id, topic_name(s.topic), s.value, true)
         _ => ()
@@ -553,7 +564,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
 }
 
 ///|
-/// What a message of the core's is, for the performance record: `topic <name> value|delta|error` (a subscription's),
+/// What a message of the core's is, for the performance record: `topic <name> value|delta|error|waiting` (a subscription's),
 /// `answer <call>` (a call's answer), `progress <call>` (a value before it), `?` else.
 pub fn Client::perf_name(self : Client, msg : Json) -> String {
   guard msg is Object(m) else { return "?" }
@@ -567,6 +578,8 @@ pub fn Client::perf_name(self : Client, msg : Json) -> String {
         "error"
       } else if m.contains("value") {
         "value"
+      } else if m.contains("waiting") {
+        "waiting"
       } else {
         "delta"
       }

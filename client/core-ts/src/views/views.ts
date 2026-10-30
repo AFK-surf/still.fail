@@ -451,6 +451,9 @@ export type ViewsEnv = {
   /// How a workspace's members' devices reach its stations (views/ways.ts), from `/v1/me`; undefined while no account's
   /// is held.
   ways?: (workspace: string) => WaysView | undefined;
+  /// Whether a station's topic with no value yet waits on the station for what it shows (station/topics.ts `waits`);
+  /// none does where not given.
+  waits?: (topic: Topic) => boolean;
 };
 
 /// An agent's request about a vault item a card names (`card.vault`), and whether it is one to keep a secret.
@@ -471,6 +474,7 @@ export function envOf(core: Inner): ViewsEnv {
     runner: core.runner,
     store: core.store,
     data: core.data,
+    waits: (topic) => core.stationTopics.waits(topic),
     emailOf: (workspace) => {
       const sub = owner(workspace);
       return sub === null ? null : (core.accounts.list().find((a) => a.sub === sub)?.email ?? null);
@@ -1094,6 +1098,21 @@ export class Views implements Owner {
   }
 
   // ── computing ──
+
+  /// Whether a view with no value yet waits on a station for what it shows (store.ts `waits`): a chat whose messages it
+  /// opens with are not on the device. Not what it is built from but not computed yet this turn (that comes as soon as
+  /// it is): the device is asked, not the thread's topic.
+  waits(view: Topic): boolean {
+    if (view.topic !== "chat" || typeof view.station !== "string") return false;
+    const station = view.station;
+    let thread: number | null = typeof view.thread === "number" ? view.thread : null;
+    const session = typeof view.session === "string" ? view.session : null;
+    if (thread === null && session !== null) {
+      const pending = session.startsWith(PENDING_PREFIX) ? this.local.pendingThread(station, session) : this.boundThread(station, session);
+      thread = typeof pending === "number" ? pending : null;
+    }
+    return thread !== null && this.#core.waits?.({ topic: "thread", station, thread }) === true;
+  }
 
   compute(view: Topic): Value | undefined {
     if (!this.#views.has(topicKey(view))) return undefined;

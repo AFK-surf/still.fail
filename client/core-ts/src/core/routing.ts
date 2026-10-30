@@ -17,6 +17,7 @@ export interface Owner {
   resume?(topic: Topic): void;
   stop?(topic: Topic): void;
   compute?(topic: Topic): Value | undefined;
+  waits?(topic: Topic): boolean;
 }
 
 export class Router implements Source {
@@ -42,6 +43,10 @@ export class Router implements Source {
 
   stop(topic: Topic): void {
     this.owners.find((o) => o.owns(topic))?.stop?.(topic);
+  }
+
+  waits(topic: Topic): boolean {
+    return this.owners.find((o) => o.owns(topic))?.waits?.(topic) === true;
   }
 
   compute(topic: Topic): Value | undefined {

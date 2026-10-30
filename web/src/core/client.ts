@@ -226,6 +226,8 @@ interface Subscription {
   topic: Topic;
   onValue: (value: unknown) => void;
   onError: (error: CoreError) => void;
+  /** Told, before its first value, that it waits on a station: none of what it shows is on the device (store.ts `waits`). */
+  onWaiting?: (() => void) | undefined;
   /** The whole current value, which deltas apply to; unset until the first value and after an error. */
   value?: unknown;
 }
@@ -337,9 +339,9 @@ export class CoreClient {
   }
 
   /** Values arrive on `onValue` (the whole current value each time, deltas already applied); returns the unsubscribe. */
-  subscribe(topic: Topic, onValue: (value: unknown) => void, onError: (error: CoreError) => void): () => void {
+  subscribe(topic: Topic, onValue: (value: unknown) => void, onError: (error: CoreError) => void, onWaiting?: () => void): () => void {
     const id = this.#nextId++;
-    this.#subs.set(id, { topic, onValue, onError });
+    this.#subs.set(id, { topic, onValue, onError, onWaiting });
     // While the worker is being replaced, #connect subscribes everything anew.
     if (this.#channel) this.#post({ id, subscribe: topic, keyed: true });
     return () => {
@@ -515,7 +517,7 @@ export class CoreClient {
   #receive(data: unknown): void {
     if (typeof data !== "object" || data === null) return;
     this.#heard++;
-    const message = data as { id?: number; ok?: unknown; value?: unknown; bytes?: Uint8Array; delta?: DeltaOp[]; error?: ErrorBody; fatal?: string; fault?: WorkerFault; retired?: boolean; rejoin?: boolean };
+    const message = data as { id?: number; ok?: unknown; value?: unknown; bytes?: Uint8Array; delta?: DeltaOp[]; waiting?: boolean; error?: ErrorBody; fatal?: string; fault?: WorkerFault; retired?: boolean; rejoin?: boolean };
     // A newer build's core took over: this page is of the older build, so it loads the newer one.
     if (message.retired) {
       reload("retired");
@@ -562,6 +564,8 @@ export class CoreClient {
     } else if (message.delta && "value" in sub) {
       sub.value = applyDelta(sub.value, message.delta);
       sub.onValue(sub.value);
+    } else if (message.waiting === true && !("value" in sub)) {
+      sub.onWaiting?.();
     }
   }
 }

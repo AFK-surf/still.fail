@@ -192,9 +192,9 @@ test "the list while it is read: no rows, the shapes" {
   // its shapes swapped for its rows a frame later)
   let drawn = fn(s : String) { t.words().iter().any(fn(w) { w.0.contains(s) && w.5 > 0.0 }) }
   assert_true(!drawn("星火工作室"))
-  t.run_for(page_local_ms)
-  assert_true(!drawn("星火工作室"), msg="a page opening's wait is not the first page's")
-  t.run_for(first_page_ms - page_local_ms)
+  t.run_for(@sf.local_ms)
+  assert_true(!drawn("星火工作室"), msg="the first page's wait is not LOCAL_MS")
+  t.run_for(first_page_ms - @sf.local_ms)
   assert_true(drawn("星火工作室"))
   assert_true(t.find("整理发布清单") is None)
   assert_true(t.find("星火工作室") is Some(_))
@@ -641,7 +641,7 @@ test "the wide frame's first page: shown once its pane has landed on what the co
   let drawn = fn(s : String) { t.words().iter().any(fn(w) { w.0.contains(s) && w.5 > 0.0 }) }
   t.frame()
   assert_true(t.find("整理发布清单") is Some(_), msg="the list built")
-  t.run_for(page_local_ms)
+  t.run_for(@sf.local_ms)
   assert_true(!drawn("整理发布清单"), msg="not shown with nothing beside it")
   slow.val = false
   t.frame()

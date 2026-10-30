@@ -174,7 +174,13 @@ core → UI:
 { "id": 8, "value": { … } }         // a subscription's whole current value: its first message, and the first after an error
 { "id": 8, "delta": [ … ] }         // what changed since the previous value
 { "id": 8, "error": { … } }         // the topic could not be read (the subscription stays; a later value clears it)
+{ "id": 8, "waiting": true }        // no value yet, and it waits on a station: none of what it shows is on the device
 ```
+
+`waiting` (store.ts `Source.waits`) is said once, before a first value, of a topic whose value is not on the device:
+a chat none of whose messages it opens with are held (station/topics.ts `#opening`). A topic without a value and
+without it is the core still reading what the device holds: a page opening waits for it rather than showing what is
+to come a moment before what is here (mbui sfapp `page_ready`).
 
 A subscription gets its topic's whole value first, then only what changed:
 
