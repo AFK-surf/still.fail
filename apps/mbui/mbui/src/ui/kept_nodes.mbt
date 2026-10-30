@@ -688,9 +688,10 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
 
 ///|
 /// Why the `n` nodes from `r` (a row or a part just built) may not be kept: one held elsewhere, or of a kind built each
-/// frame (a list of a row's own: a part lays its lists out each frame; a native view, a pager's page, a layer, a shot,
-/// what is placed by the clock); "" none. (A field is kept as the rest: what changes what it holds is an event, which
-/// builds the frame anew, and one with the focus is built each frame: Ctx::editor.)
+/// frame (a list of a row's own: a part lays its lists out each frame; a native view, a pager's page, a layer, a
+/// shot); "" none. (What is placed by the clock (Ctx::moved_by: a page sliding) is kept with what moves it, its node's
+/// own, placed again as each frame is laid out and painted. A field is kept as the rest: what changes what it holds is
+/// an event, which builds the frame anew, and one with the focus is built each frame: Ctx::editor.)
 fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int, part~ : Bool) -> String {
   for j in 0..<n {
     let nd = self.nodes[r + j]
@@ -711,9 +712,6 @@ fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int, part~ : Bool) -> String {
     }
     if nd.portal || nd.shot {
       return "a layer"
-    }
-    if nd.moved_by is Some(_) {
-      return "what is placed by the clock"
     }
   }
   ""
