@@ -1166,8 +1166,12 @@ let views_told : Map[Int, Bool] = Map::new()
 /// The host's event: what it did for the app is done (`state`: 1 done, -1 failed), or (a view, 0) it waits on the
 /// app now: the bytes a player reads, a site's answer. Until the app answers, the host does nothing for it.
 fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
-  // (what had ended by its moment settled before it is handled: view_host.mbt)
-  view_settle(h_event_time())
+  // (one event, at its own moment: view_host.mbt)
+  view_event(fn() { on_outside_now(kind, id, state) })
+}
+
+///|
+fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
   // (not an answer: what came taken as it is, a frame only where something is left for one)
   if kind == outside_posted {
     messages_between()

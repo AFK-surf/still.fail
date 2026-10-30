@@ -735,6 +735,12 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
 /// A pointer's event, with the keys held as it went down (0 for an event other than a press), and what it came from
 /// where the host says (`by`: 1 a finger, 0 a mouse or a pen; the hand of the moment from it on: pointing).
 fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? : Int = -1) -> Unit {
+  // (one event, at its own moment: view_host.mbt)
+  view_event(fn() { pointer_in_now(kind, x, y, button, mods, by~) })
+}
+
+///|
+fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? : Int = -1) -> Unit {
   let args = [kind.to_double(), x, y, button.to_double(), mods.to_double()]
   if by >= 0 {
     args.push(by.to_double())
@@ -1343,6 +1349,12 @@ fn Ctx::edge_move(self : Ctx, x : Double, y : Double, t : Double) -> Bool {
 /// with no gesture. Its steps are the hand's events but where it is as it goes: that is where what follows it reads it
 /// (Nav's `finger`), as a pointer moved is (inputrec.mbt).
 fn on_back(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
+  // (one event, at its own moment: view_host.mbt)
+  view_event(fn() { on_back_now(kind, x, progress, edge) })
+}
+
+///|
+fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
   took_input("back", h_now(), [kind.to_double(), x, progress, edge.to_double()])
   if kind != 1 {
     hand_event()
@@ -1368,6 +1380,12 @@ fn on_back(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
 
 ///|
 fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
+  // (one event, at its own moment: view_host.mbt)
+  view_event(fn() { on_wheel_now(x, y, dx, dy, phase) })
+}
+
+///|
+fn on_wheel_now(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
   took_input("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
   // what was held with it, above its phase (wheel_mod_*: ⇧ ⌃ ⌥ ⌘, and a trackpad's pinch as a wheel with ⌃ held)
   let mods = phase / 16
@@ -1426,6 +1444,12 @@ fn wheel_taken() -> Unit {
 
 ///|
 fn on_key(code : Int, mods : Int) -> Unit {
+  // (one event, at its own moment: view_host.mbt)
+  view_event(fn() { on_key_now(code, mods) })
+}
+
+///|
+fn on_key_now(code : Int, mods : Int) -> Unit {
   took_input("key", h_now(), [code.to_double(), mods.to_double()])
   hand_event()
   key_in(code, mods)
@@ -1488,6 +1512,12 @@ fn key_in(code : Int, mods : Int) -> Unit {
 
 ///|
 fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
+  // (one event, at its own moment: view_host.mbt)
+  view_event(fn() { on_text_now(kind, s, a, b) })
+}
+
+///|
+fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
   took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s)
   hand_event()
   let c = g()
@@ -1605,6 +1635,12 @@ let app_change : Ref[((Bool, Bool) -> Unit)?] = Ref::new(None)
 
 ///|
 fn on_app_state(s : Int) -> Unit {
+  // (one event, at its own moment: view_host.mbt)
+  view_event(fn() { on_app_state_now(s) })
+}
+
+///|
+fn on_app_state_now(s : Int) -> Unit {
   took_input("app", h_now(), [s.to_double()])
   // (what the host says of the app: come from outside, frame_watch.mbt)
   outside_counted()

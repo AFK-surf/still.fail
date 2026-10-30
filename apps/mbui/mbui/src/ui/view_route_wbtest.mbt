@@ -124,3 +124,22 @@ test "window tree: a part whose leaving ended at 300, a message at 350 setting w
   assert_eq(run(false), (1, 0))
   assert_eq(run(true), (1, 0))
 }
+
+///|
+test "window tree: a part whose leaving ended at 300, a message taken at 350 between frames: it runs nothing for it" {
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let s = @signals.signal(0)
+  let runs = Ref(0)
+  on_message_said("settle-between", fn(_, _) {
+    s.set(s.get() + 1)
+    true
+  })
+  let t = settling(on, s, runs)
+  let t0 = t.fake.time
+  on.set(false)
+  t.fake.time = t0 + 350.0
+  let before = runs.val
+  // (as a host's message is taken between frames: no frame)
+  messages_take([("settle-between", "{}", None)])
+  assert_eq((s.get(), runs.val - before), (1, 0))
+}

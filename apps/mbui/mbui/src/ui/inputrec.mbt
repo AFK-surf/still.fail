@@ -30,8 +30,6 @@ let inputs_taken : Ref[Bool] = Ref::new(false)
 
 ///|
 fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -> Unit {
-  // (what had ended by its moment settled first, view_host.mbt)
-  view_settle(t)
   input_came()
   // (a pointer moved, gone out of the window, a wheel turned: the hand on mbui's own, what it is over; else the app's
   // to take, an event from outside: kept_part.mbt)

@@ -263,3 +263,70 @@ test "a button shown at 10, pressed at 20: pressed, with a frame between or none
   assert_eq(run(true), 1)
   assert_eq(run(false), 1)
 }
+
+///|
+/// Cards A (leaving 500) and B (leaving 50), and C (leaving 100) hidden as A goes; each as it is let go says so in
+/// `result` and `gone`.
+fn ends(
+  now : Ref[Double],
+  a : @signals.Signal[Bool],
+  b : @signals.Signal[Bool],
+  c : @signals.Signal[Bool],
+  result : Ref[String],
+  gone : Array[String],
+) -> @view.Tree {
+  let card = fn(name : String, on : @signals.Signal[Bool], leave : Double, also : () -> Unit) {
+    fn(root : @view.View) {
+      root.show(
+        fn() { on.get() },
+        fn(v) {
+          v.height(Is(Some(10.0))).words(Is(name)) |> ignore
+          v.owns(fn() {
+            result.val = name
+            gone.push(name)
+            also()
+          })
+          |> ignore
+        },
+        leave~,
+      )
+    }
+  }
+  @view.Tree::new(
+    fn(root) {
+      card("A", a, 500.0, fn() { c.set(false) })(root)
+      card("B", b, 50.0, fn() {  })(root)
+      card("C", c, 100.0, fn() {  })(root)
+    },
+    time=fn() { now.val },
+  )
+}
+
+///|
+test "two leavings ended between frames: let go in the order they ended, as frames at each end would" {
+  let run = fn(frames : Array[Double]) {
+    let now = Ref(0.0)
+    let (a, b, c) = (
+      @signals.signal(true, same=fn(x, y) { x == y }),
+      @signals.signal(true, same=fn(x, y) { x == y }),
+      @signals.signal(true, same=fn(x, y) { x == y }),
+    )
+    let result = Ref("")
+    let gone : Array[String] = []
+    let t = ends(now, a, b, c, result, gone)
+    frame_at(t, now, 0.0)
+    a.set(false)
+    now.val = 100.0
+    b.set(false)
+    for at in frames {
+      frame_at(t, now, at)
+    }
+    let out = (gone.copy(), state(t))
+    t.dispose()
+    out
+  }
+  let jumped = run([1000.0])
+  assert_eq(jumped, run([150.0, 500.0, 600.0, 1000.0]))
+  // (B at 150, A at 500, C (hidden as A went, leaving 100) at 600)
+  assert_eq(jumped.0, ["B", "A", "C"])
+}

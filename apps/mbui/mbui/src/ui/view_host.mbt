@@ -34,6 +34,8 @@ priv struct OldIsland {
   /// what owns all it makes as it is built and laid out (its parts, its lists' rows, what they follow): a scope of
   /// its node's, stopped with it
   owner : @signals.ReactiveNode?
+  /// what its build reads, followed (its owner's, as all it makes): told, the old frame is built again
+  watch : @signals.Watch
   /// its part among the old frame's kept parts (Ctx::part_nodes: what it read, its nodes as last built), by id, once
   /// built (-1: not yet)
   mut part : Int
@@ -220,7 +222,7 @@ fn old_frame(c : Ctx) -> Unit {
         // (the old frame's own node holding it: laid out as this old view's, under its owner)
         old_box_owners.clear()
         old_box_owners[c.cur] = o.owner
-        owned_by(o.owner, fn() { (o.build)(c) })
+        owned_by(o.owner, fn() { o.watch.read(fn() { (o.build)(c) }) })
       }
       None => ()
     }
@@ -234,7 +236,7 @@ fn old_frame(c : Ctx) -> Unit {
         let i = c.box(left=p.1, top=p.2, w=Px(p.3), h=Px(p.4), clip=true, fn() {
           // (its part's id, as made_put names it here: what is let go with it, what an input to it builds)
           o.part = c.id(o.key)
-          owned_by(o.owner, fn() { c.made(o.key, fn() { o.made }) })
+          owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) })
         })
         old_boxes[o.id] = i
         old_box_owners[i] = o.owner
@@ -359,8 +361,9 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     Some(t) => t
     None => return false
   }
-  // (what had ended by its moment settled first: before any press of the tree's is run)
-  tree.bring_to(h_event_time())
+  // (the tree as of its moment: what had ended by then settled, what is where then)
+  let at = h_event_time()
+  tree.bring_to(at)
   match (kind, view_held.val) {
     (0, _) =>
       match tree.target_at(x, y) {
@@ -410,7 +413,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     (2, Some(Node(id))) => {
       view_held.val = None
       if tree.target_at(x, y) == Pressed(id) {
-        tree.run_press(id) |> ignore
+        tree.run_press_at(id, at) |> ignore
       }
       h_frame_owed()
       true
@@ -435,12 +438,6 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
 /// As the frame ends: what reads the window's tree's clock keeps the frames coming as the clock goes (a look by the
 /// time, a node fading as it leaves); what only ends at a moment (a leaving nothing draws by) is woken for then.
 fn view_frame_end(c : Ctx) -> Unit {
-  if old_frame_dropped.val {
-    old_frame_dropped.val = false
-    frame_running.val = false
-    old_frame_let_go()
-    frame_running.val = true
-  }
   let tree = match view_app.val {
     Some(t) => t
     None => return
@@ -471,7 +468,17 @@ pub fn old(v : @view.View, build : (Ctx) -> Unit) -> @view.View {
     // (a scope of the node's: all it makes as it is built and laid out is owned by it, stopped as the node goes)
     let owner : Ref[@signals.ReactiveNode?] = Ref(None)
     @signals.effect_scope(fn() { owner.val = @signals.active_sub() }) |> ignore
-    old_islands.push({ id, key, build, made: made_island(key, fn() { "" }, build), owner: owner.val, part: -1 })
+    let watch : Ref[@signals.Watch?] = Ref(None)
+    owned_by(owner.val, fn() { watch.val = Some(@signals.watch(fn() { old_island_told() })) })
+    old_islands.push({
+      id,
+      key,
+      build,
+      made: made_island(key, fn() { "" }, build),
+      owner: owner.val,
+      watch: watch.val.unwrap(),
+      part: -1,
+    })
     n.owns(fn() {
       match old_islands.search_by(fn(o) { o.id == id }) {
         Some(i) => {
@@ -485,10 +492,6 @@ pub fn old(v : @view.View, build : (Ctx) -> Unit) -> @view.View {
           o.made.let_go()
           if o.part >= 0 {
             kept_nodes.remove((o.part, -1))
-          }
-          // (the one old view the whole window: what the old frame read is what it read, let go with it)
-          if o.part < 0 {
-            old_frame_let_go()
           }
         }
         None => ()
@@ -545,30 +548,21 @@ fn old_part_of(id : @view.NodeId) -> Int {
 }
 
 ///|
-/// An event from outside about to be handled, at `at` (its own time): what of the tree had ended by then settled first
-/// (a node whose leaving was over let go, what it followed no more), whatever frame comes after.
-fn view_settle(at : Double) -> Unit {
+/// An event from outside handled by `f` at its own moment (the host's event time, taken once): the window's tree
+/// settled to it first, `f` run as one change with it as its cause's moment; an event in one, at that one's (Tree::event).
+fn view_event(f : () -> Unit) -> Unit {
   match view_app.val {
-    Some(t) => t.settle(at)
-    None => ()
+    Some(t) => t.event(h_event_time(), f)
+    None => f()
   }
 }
 
 ///|
-/// The old frame's watches let go of what they followed (its build's, its layout's, its paint's): what the one old view
-/// that was the whole window read, let go with it; the next frame builds whatever is there anew.
-fn old_frame_let_go() -> Unit {
-  // (while the frame is being built, laid out or painted under them: as it ends)
-  if frame_running.val {
-    old_frame_dropped.val = true
-    return
+/// What an old view's build read changed: the old frame, which builds it, is built again (between frames, a frame asked
+/// for).
+fn old_island_told() -> Unit {
+  outside_counted()
+  if !in_frame.val && !frame_running.val {
+    h_frame_owed()
   }
-  frame_watch_of().stop()
-  layout_watch_of().stop()
-  paint_watch_of().stop()
 }
-
-///|
-/// The old frame's watches to be let go as the frame under way ends (old_frame_let_go).
-// kept across runs: put back as a frame ends (view_frame_end)
-let old_frame_dropped : Ref[Bool] = Ref(false)

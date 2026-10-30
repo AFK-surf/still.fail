@@ -177,3 +177,50 @@ test "window tree: the one old view, the whole window, let go: what it followed 
   on_a.set(false)
   assert_false(s.watched())
 }
+
+///|
+test "window tree: two old views, then one the whole window, then none: what each read let go as it goes" {
+  let on_a = @signals.signal(true, same=fn(a, b) { a == b })
+  let on_b = @signals.signal(true, same=fn(a, b) { a == b })
+  let s = @signals.signal(0)
+  let s2 = @signals.signal(0)
+  let t = Tester::new(fn(_c) {  })
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.row(Is(true)) |> ignore
+    root.show(fn() { on_a.get() }, fn(v) {
+      v.grow(Is(1.0)) |> ignore
+      old(v, fn(c) { c.text("a \{s.get()}", size=12.0) |> ignore }).grow(Is(1.0)) |> ignore
+    })
+    root.show(fn() { on_b.get() }, fn(v) {
+      v.grow(Is(1.0)) |> ignore
+      old(v, fn(c) { c.text("b \{s2.get()}", size=12.0) |> ignore }).grow(Is(1.0)) |> ignore
+    })
+  })
+  t.draw()
+  assert_true(s.watched() && s2.watched())
+  on_a.set(false)
+  t.drawn_now()
+  // (B the whole window now)
+  assert_false(s.watched())
+  assert_true(s2.watched())
+  on_b.set(false)
+  assert_false(s2.watched())
+}
+
+///|
+test "window tree: an old view made and let go before any frame lets go of nothing of another's" {
+  let on_c = @signals.signal(false, same=fn(a, b) { a == b })
+  let s = @signals.signal(0)
+  let t = Tester::new(fn(_c) {  })
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    old(root, fn(c) { c.text("a \{s.get()}", size=12.0) |> ignore }).grow(Is(1.0)) |> ignore
+    root.show(fn() { on_c.get() }, fn(v) { old(v, fn(c) { c.text("c", size=12.0) |> ignore }) |> ignore })
+  })
+  t.draw()
+  assert_true(s.watched())
+  on_c.set(true)
+  on_c.set(false)
+  assert_true(s.watched())
+}

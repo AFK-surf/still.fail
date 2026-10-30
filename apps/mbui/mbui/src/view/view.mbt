@@ -1254,6 +1254,13 @@ fn Tree::time_now(self : Tree) -> Double {
 /// An event from outside handled at `at` (its own time) by `f`: what had ended by then settled first, `f` run outside
 /// any tracking as one change with `at` as its cause's moment (what it shows or lets go, it does as of then).
 pub fn Tree::event(self : Tree, at : Double, f : () -> Unit) -> Unit {
+  // (in an event already: its moment, settled as it began)
+  if self.cause_at >= 0.0 {
+    @signals.start_batch()
+    @signals.untracked(f)
+    @signals.end_batch()
+    return
+  }
   self.settle(at)
   let was = self.cause_at
   self.cause_at = at
@@ -1273,35 +1280,43 @@ pub fn Tree::settle(self : Tree, at : Double) -> Unit {
 ///|
 /// By `now`: the nodes whose leaving is over let go, taken out of what holds them; those back, here.
 fn Tree::left(self : Tree, now : Double) -> Unit {
-  if self.leaving.is_empty() {
-    return
-  }
-  let still : Array[NodeId] = []
-  let over : Array[NodeId] = []
-  for id in self.leaving {
-    let n = self.nodes[id.at]
-    let end = leave_ends(n)
-    if !n.live || n.gen != id.gen || end < 0.0 {
-      continue
+  // (one at a time, the soonest end first (the first told of those that end together), each as of its end: what its
+  // ending does, a cleanup setting another leaving, ends in its turn by `now` too)
+  while true {
+    let mut next = -1
+    let mut next_end = 0.0
+    let mut i = 0
+    while i < self.leaving.length() {
+      let id = self.leaving[i]
+      let n = self.nodes[id.at]
+      let end = leave_ends(n)
+      if !n.live || n.gen != id.gen || end < 0.0 {
+        // (let go, or neither leaving nor coming back: nothing to wait for)
+        self.leaving.remove(i) |> ignore
+        continue
+      }
+      if end <= now && (next < 0 || end < next_end) {
+        next = i
+        next_end = end
+      }
+      i = i + 1
     }
-    if now < end {
-      still.push(id)
-    } else if n.left_at >= 0.0 {
-      over.push(id)
+    if next < 0 {
+      return
+    }
+    let id = self.leaving.remove(next)
+    let n = self.nodes[id.at]
+    let was = self.cause_at
+    self.cause_at = next_end
+    if n.left_at >= 0.0 {
+      if n.parent >= 0 {
+        @signals.untracked(fn() { self.handle(n.parent).drop({ tree: self, at: id.at, gen: id.gen }) })
+      }
     } else {
       n.back_at = -1.0
       told_going(n)
     }
-  }
-  self.leaving.clear()
-  for id in still {
-    self.leaving.push(id)
-  }
-  for id in over {
-    let n = self.nodes[id.at]
-    if n.live && n.gen == id.gen && n.parent >= 0 {
-      self.handle(n.parent).drop({ tree: self, at: id.at, gen: id.gen })
-    }
+    self.cause_at = was
   }
 }
 
@@ -1614,10 +1629,11 @@ pub fn Tree::drawn_of(self : Tree, id : NodeId) -> Drawn? {
 /// A press at (x, y): the topmost node drawn there that does something when pressed does it, outside any tracking, as
 /// one change. True if one did. Found where it is drawn (its holders' offsets with its own: View::rect).
 pub fn Tree::press(self : Tree, x : Double, y : Double) -> Bool {
-  // (as of its moment: what is where then, whatever frame came before)
-  self.bring_to(self.time_now())
+  // (one moment for all of it: what is where then, whatever frame came before)
+  let at = self.time_now()
+  self.bring_to(at)
   match self.target_at(x, y) {
-    Pressed(id) => self.run_press(id)
+    Pressed(id) => self.run_press_at(id, at)
     _ => false
   }
 }
@@ -1686,18 +1702,29 @@ pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
 ///|
 /// Node `id` pressed (Tree::target_at's): its callback run outside any tracking, as one change, if it lives.
 pub fn Tree::run_press(self : Tree, id : NodeId) -> Bool {
-  if id.at < 0 || id.at >= self.nodes.length() {
-    return false
-  }
-  let n = self.nodes[id.at]
-  if !n.live || n.gen != id.gen {
-    return false
-  }
-  match n.on_press {
-    Some(f) => {
-      self.event(self.time_now(), f)
-      true
+  self.run_press_at(id, self.time_now())
+}
+
+///|
+/// Node `id` pressed at `at`: as one event of that moment (Tree::event), what had ended by then settled first, and only
+/// then is it looked for (one let go by then presses nothing) and its callback run.
+pub fn Tree::run_press_at(self : Tree, id : NodeId, at : Double) -> Bool {
+  let pressed = Ref(false)
+  self.event(at, fn() {
+    if id.at < 0 || id.at >= self.nodes.length() {
+      return
     }
-    None => false
-  }
+    let n = self.nodes[id.at]
+    if !n.live || n.gen != id.gen || self.leaving_at(id.at) {
+      return
+    }
+    match n.on_press {
+      Some(f) => {
+        pressed.val = true
+        f()
+      }
+      None => ()
+    }
+  })
+  pressed.val
 }

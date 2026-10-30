@@ -178,8 +178,12 @@ fn messages_between() -> Unit {
 /// What came, in the order it came: while nothing is left for a handler, what changes only signals taken now
 /// (`on_message_said`); from the first that is not, it and all after it left for the frame (messages_in).
 fn messages_take(came : Array[(String, String, Bytes?)]) -> Unit {
-  // (what had ended by their moment settled before any handler runs: view_host.mbt)
-  view_settle(h_event_time())
+  // (one event, at its own moment: what had ended by then settled before any handler runs, view_host.mbt)
+  view_event(fn() { messages_take_now(came) })
+}
+
+///|
+fn messages_take_now(came : Array[(String, String, Bytes?)]) -> Unit {
   // (what changes only signals taken now, in the order they came, till one is left for its handler: messages_in)
   for m in came {
     if messages_in.is_empty() {
