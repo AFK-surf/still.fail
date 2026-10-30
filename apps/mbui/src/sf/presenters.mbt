@@ -160,6 +160,11 @@ let presented_count : Ref[Int] = Ref(0)
 let presented_said : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
+/// Which are drawn (open, or going), by their serials: told each as it comes or is gone (presented_drawn_of).
+// kept across runs: put back by presenters_reset
+let presented_drawn_said : @signals.Keyed[Int] = @signals.keyed()
+
+///|
 fn presented_told() -> Unit {
   presented_said.set(@signals.untracked(fn() { presented_said.get() }) + 1)
 }
@@ -184,6 +189,7 @@ let presented_how : Array[How] = []
 /// Nothing presented (the app begun again).
 pub fn presenters_reset() -> Unit {
   presented_now.clear()
+  presented_drawn_said.set([])
   lists_of.clear()
   presented_count.val = 0
   presented_alone.val = false
@@ -206,6 +212,7 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     over: false,
     widest: 0.0,
   })
+  presented_drawn_said.set(presented_now.map(fn(p) { p.serial }))
 }
 
 ///|
@@ -745,6 +752,8 @@ pub fn presented_open_of(serial : Int) -> Bool {
 ///|
 /// Whether the one presented as `serial` is still drawn (open, or going).
 pub fn presented_drawn_of(serial : Int) -> Bool {
+  // (read so: what reads it built again as it is presented or gone, not as others are)
+  presented_drawn_said.has(serial) |> ignore
   presented_now.iter().any(fn(p) { p.serial == serial })
 }
 
@@ -891,6 +900,8 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
     let left = presented_now.filter(fn(p) { !gone.contains(p.serial) })
     presented_now.clear()
     presented_now.append(left)
+    // (what read whether one of them is drawn told: a row marked while its menu is, built again unmarked)
+    presented_drawn_said.set(presented_now.map(fn(p) { p.serial }))
   }
 }
 

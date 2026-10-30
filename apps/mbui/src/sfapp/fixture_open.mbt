@@ -101,7 +101,7 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       app.nav.push(Files)
       app.nav.push(Drive({ ..docs, root: None }))
     }
-    "drive" | "drive-loading" | "drive-upload" | "drive-download" => {
+    "drive" | "drive-loading" | "drive-upload" | "drive-download" | "drive-motion" => {
       app.nav.push(Files)
       app.nav.push(Drive(docs))
       // a file being downloaded, a folder being zipped for it (the core's downloads, downloads_fixture.mbt): their rows'

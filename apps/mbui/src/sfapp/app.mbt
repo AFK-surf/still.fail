@@ -95,6 +95,7 @@ fn reset() -> Unit {
   decide_reset()
   @settings.reset()
   @sf.group_rows_reset()
+  @sfdesk.drive_rows_reset()
   found_marking.val = ("", [], 0.0)
   find_marking.val = []
   ask_turns.clear()

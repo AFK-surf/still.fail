@@ -179,6 +179,9 @@ struct Node {
   mut moved_by : ((Double, Double) -> (Double, Double))?
   mut moved_x : Double
   mut moved_y : Double
+  /// what a list's row holds that comes and goes in its room (ListRows::enter, leave): placed in its middle and faded
+  /// to its edges, not what the row is drawn on (a group's ground round it)
+  mut room_held : Bool
   mut opacity : Double
   // its ground made of what is under it (glass.mbt), and whether the liquid
   // glass inside it is one group (drawn first, merging)
@@ -436,6 +439,7 @@ fn Node::new() -> Node {
     moved_by: None,
     moved_x: 0.0,
     moved_y: 0.0,
+    room_held: false,
     opacity: 1.0,
     glass: None,
     glass_group: false,
@@ -573,6 +577,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.moved_by = None
   self.moved_x = 0.0
   self.moved_y = 0.0
+  self.room_held = false
   self.fit = FitCover
   self.fade = true
   self.still = false

@@ -274,6 +274,44 @@ pub fn rows_view(
     }
   }
   let extra = if head is Some(_) { 1 } else { 0 }
+  let empty_n = if lines.is_empty() && empty is Some(_) { 1 } else { 0 }
+  // the list's rows by what each is (a file by its folder and name; its head, an empty folder's words and its foot
+  // too): one made, taken out or moved comes and goes where it is, as a chat's rows do (ListRows, docs/list-motion.md);
+  // a folder's rows all others now (another folder, its first read) as they are
+  let lr = drive_rows_of(key)
+  let all : Array[ListLine] = []
+  if extra == 1 {
+    all.push(Head)
+  }
+  for l in lines {
+    all.push(At(l))
+  }
+  if empty_n == 1 {
+    all.push(Empty)
+  }
+  all.push(Foot)
+  let all_keys = all.mapi(fn(i, l) {
+    match l {
+      Head => "head"
+      At(Row(a, e, _, _)) => "r/" + row_key(a.path, e.name)
+      At(Note(w, _, d)) => "n/" + d.to_string() + "/" + w
+      At(Reading(d)) => "w/" + d.to_string() + "/" + i.to_string()
+      Empty => "empty"
+      Foot => "foot"
+    }
+  })
+  let was = drive_keys.get(key).unwrap_or([])
+  drive_keys[key] = all_keys
+  let (all, shown_keys) = lr.rows(c, all_keys, all, fn(_) { "" }, comes=fn(l) { l is At(_) }, watched=all_keys.iter().any(fn(k) { k.has_prefix("r/") && was.contains(k) }))
+  // (the lines among them, with those going: where each is, its first and last of the group's)
+  let line_of : Array[Int] = []
+  let mut lines_n = 0
+  for l in all {
+    line_of.push(if l is At(_) { lines_n } else { -1 })
+    if l is At(_) {
+      lines_n += 1
+    }
+  }
   // a row asked into view (a key moved to it), or the one being named: as near as it needs to come
   let want = match s.b.take_show() {
     Some(w) => Some(w)
@@ -281,15 +319,15 @@ pub fn rows_view(
   }
   match want {
     Some(want) =>
-      for i, l in lines {
+      for i, l in all {
         match l {
-          Row(a, e, _, _) if row_key(a.path, e.name) == want => {
+          At(Row(a, e, _, _)) if row_key(a.path, e.name) == want => {
             // (read back by the rows in view alone)
             match c.list_info_as(key, fn(i) { i.map(fn(i) { (i.first, i.last) }) }) {
-              Some(info) if i + extra >= info.first && i + extra < info.last => ()
-              Some(info) if i + extra >= info.last =>
-                c.list_scroll_to(key, dmax_int(0, i + extra - (info.last - info.first) + 2))
-              _ => c.list_scroll_to(key, i + extra)
+              Some(info) if i >= info.first && i < info.last => ()
+              Some(info) if i >= info.last =>
+                c.list_scroll_to(key, dmax_int(0, i - (info.last - info.first) + 2))
+              _ => c.list_scroll_to(key, i)
             }
           }
           _ => ()
@@ -297,54 +335,94 @@ pub fn rows_view(
       }
     None => ()
   }
-  let empty_n = if lines.is_empty() && empty is Some(_) { 1 } else { 0 }
-  let n = lines.length() + extra + empty_n
-  @sf.rows_list(c, key, n + 1, if compact { row_compact_est } else { row_est }, fn(i) {
-    if i == n {
-      c.box(style=@ui.style(w=Full, h=Fixed(rows_foot + foot)), fn() {  }) |> ignore
-      return
+  // a line as drawn (an entry, a note about a folder, one being read) on its ground (the group's), what it holds coming
+  // and going where it is by its key: its room opening and closing, the ground not faded nor moved with what it holds
+  let line_at = fn(i : Int, line : Line) {
+    let first = line_of[i] == 0
+    let last = line_of[i] == lines_n - 1
+    let held = fn(body : () -> Unit) {
+      let b = c.box(style=@sf.full_width, body)
+      lr.enter(c, b, shown_keys[i])
+      lr.leave(c, b, shown_keys[i])
     }
-    if i < extra {
-      match head {
-        Some(h) => h()
-        None => ()
-      }
-      return
-    }
-    let at_line = i - extra
-    let first = at_line == 0
-    let last = at_line == lines.length() - 1
-    match lines.get(at_line) {
-      Some(Row(a, e, depth, open)) =>
-        @sf.group_row(c, first, last, fn() {
-          drive_row(c, src, a, e, (s.row_of)(a, e), s, compact~, depth?=if tree { Some(depth) } else { None }, expanded?=open, on_toggle=fn() {
-            s.b.toggle(c, src, dv_join(a.path, e.name))
-          })
-        })
-      Some(Note(words, error, depth)) =>
-        @sf.group_row(c, first, last, fn() {
-          c.box(style=tree_note, fn() {
-            c.box(style=@ui.style(w=Fixed(tree_note_in + tree_step * depth.to_double())), fn() {  }) |> ignore
-            c.text(words, style=if error { tree_error } else { tree_words }) |> ignore
-          })
-          |> ignore
-        })
-      Some(Reading(depth)) =>
-        @sf.group_row(c, first, last, fn() {
-          c.box(style=tree_note, fn() {
-            c.box(style=@ui.style(w=Fixed(tree_note_in + tree_step * depth.to_double())), fn() {  }) |> ignore
-            @sf.wait_line(c, "")
-          })
-          |> ignore
-        })
-      None =>
+    @sf.group_row(c, first, last, fn() {
+      held(fn() {
+        match line {
+          Row(a, e, depth, open) =>
+            drive_row(c, src, a, e, (s.row_of)(a, e), s, compact~, depth?=if tree { Some(depth) } else { None }, expanded?=open, on_toggle=fn() {
+              s.b.toggle(c, src, dv_join(a.path, e.name))
+            })
+          Note(words, error, depth) =>
+            c.box(style=tree_note, fn() {
+              c.box(style=@ui.style(w=Fixed(tree_note_in + tree_step * depth.to_double())), fn() {  }) |> ignore
+              c.text(words, style=if error { tree_error } else { tree_words }) |> ignore
+            })
+            |> ignore
+          Reading(depth) =>
+            c.box(style=tree_note, fn() {
+              c.box(style=@ui.style(w=Fixed(tree_note_in + tree_step * depth.to_double())), fn() {  }) |> ignore
+              @sf.wait_line(c, "")
+            })
+            |> ignore
+        }
+      })
+    })
+  }
+  @sf.rows_list(c, key, all.length(), if compact { row_compact_est } else { row_est }, sized=lr.sized(), fn(i) {
+    match all[i] {
+      Head =>
+        match head {
+          Some(h) => h()
+          None => ()
+        }
+      At(l) => line_at(i, l)
+      Empty =>
         match empty {
           Some(f) => f()
           None => ()
         }
+      Foot => c.box(style=@ui.style(w=Full, h=Fixed(rows_foot + foot)), fn() {  }) |> ignore
     }
   })
   |> ignore
+}
+
+///|
+/// A row of a folder's list (rows_view): its head, a line, an empty folder's words, the room under the last.
+priv enum ListLine {
+  Head
+  At(Line)
+  Empty
+  Foot
+}
+
+///|
+/// Each list's lines as given and as its list made of them (rows_view), by the list's key.
+// kept across runs: forgot by drive_rows_reset (the app's reset)
+let drive_rows : Map[String, @ui.ListRows[ListLine]] = {}
+
+///|
+/// Each list's lines' keys as last given.
+// kept across runs: forgot by drive_rows_reset (the app's reset)
+let drive_keys : Map[String, Array[String]] = {}
+
+///|
+fn drive_rows_of(key : String) -> @ui.ListRows[ListLine] {
+  match drive_rows.get(key) {
+    Some(l) => l
+    None => {
+      let l = @ui.ListRows::new()
+      drive_rows[key] = l
+      l
+    }
+  }
+}
+
+///|
+/// What each list's lines were forgets (a run anew).
+pub fn drive_rows_reset() -> Unit {
+  drive_rows.clear()
+  drive_keys.clear()
 }
 
 ///|
