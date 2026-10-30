@@ -48,6 +48,19 @@ test("the_grants_are_read_as_shown_and_revoking_one_reads_them_again", async () 
   core.close();
 });
 
+test("a_grant_its_program_has_not_come_for_yet_says_so", async () => {
+  const first = await started({ ...base(), "GET /outflow/grants": { grants: [{ ...grant(["usage"]), taken: false }] } });
+  const ui = first.core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(first.core, ui, 1, { topic: "outflowGrants", station: S });
+  await first.host.time.pass(500, 10);
+  apply(first.host, values);
+  const [g] = v(values, 1).grants;
+  assert.equal(g.taken, false);
+  assert.match(g.lastReadText, /program|程序/);
+  first.core.close();
+});
+
 test("an_unsigned_program_is_shown_as_unsigned", async () => {
   const unsigned = { ...grant(["usage"]), identity: { path: "/tmp/x/node", valid: true, teamId: null, identifier: "node", signer: null, app: null, sha256: "ab" } };
   const first = await started({ ...base(), "GET /outflow/grants": { grants: [unsigned] } });
@@ -91,6 +104,7 @@ test("a_request_waiting_for_an_admin_is_shown_with_what_it_asks_and_answering_it
   const [g] = v(values, 1).grants;
   assert.equal(g.reach, "station");
   assert.match(g.grantedText, /boss@x/);
+  assert.equal(g.taken, true, "a grant from a station before taken was known counts as taken");
   core.close();
 });
 

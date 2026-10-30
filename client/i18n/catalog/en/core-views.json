@@ -651,5 +651,6 @@
   "core-views.outflow.reach.station": "This station",
   "core-views.outflow.reach.workspace": "Every station of the workspace",
   "core-views.outflow.askedAt": "Asked {when}",
-  "core-views.outflow.allowedBy": "Allowed by {who} {when}"
+  "core-views.outflow.allowedBy": "Allowed by {who} {when}",
+  "core-views.outflow.notTaken": "Allowed, waiting for the program to come for it"
 }
