@@ -178,10 +178,10 @@ pub fn button(
         // 太贴边了.)
         let over = @motion.animate(c, "sf-btn-over/\{id}", if busy { 1.0 } else { 0.0 }, spec=button_reshape)
         let room = button_icon + gap
-        c.box(dir=Row, align=ACenter, fn() {
+        c.box(style=button_spun, fn() {
           if busy || over > 0.0 {
-            c.box(w=Px(room * over), h=Px(button_icon), dir=Row, fn() {
-              let s = c.box(w=Px(button_icon), h=Px(button_icon), fn() { turn() })
+            c.box(style=@ui.style(row=true, w=Fixed(room * over), h=Fixed(button_icon)), fn() {
+              let s = c.box(style=button_spin, fn() { turn() })
               c.look(s, @ui.look(alpha=turning, scale=over, ox=0.0))
             })
             |> ignore
@@ -230,6 +230,14 @@ let button_icon : Double = 16.0
 /// Where a button with no icon turns while busy: over its words, in the middle (button).
 // kept across runs: a value (no field of it changes)
 let button_turning : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
+
+///|
+/// A button's spinner and its words, with no icon (button): in a row, the spinner's room opening before the words.
+let button_spun : @ui.Style = @ui.css("row align=ACenter")
+
+///|
+/// Where a button's spinner turns (button): an icon's square.
+let button_spin : @ui.Style = @ui.style(w=Fixed(button_icon), h=Fixed(button_icon))
 
 ///|
 /// Whether a button laid out now is at a sheet's foot (the presenters' sheet_body says so while it draws one): each
