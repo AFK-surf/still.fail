@@ -23,6 +23,8 @@ pub struct Made {
   priv held : Ref[RowNodes?]
   /// what it is where it is built the old way (made_island): its name, what it is built from besides what it reads
   priv island : (String, () -> String, Bool)?
+  /// built the old way each time it is put, kept as nothing (made_old)
+  priv old : Bool
 }
 
 ///|
@@ -62,7 +64,7 @@ fn made_watch(held : Ref[RowNodes?]) -> @signals.Watch {
 /// filled anew in its place as any of it changes), holding `kids`.
 pub fn made_box(fill : (Ctx) -> Unit, kids? : Array[Made] = []) -> Made {
   let held = Ref(None)
-  { fill, kids: Kept(kids), node: None, watch: made_watch(held), on_press: None, held, island: None }
+  { fill, kids: Kept(kids), node: None, watch: made_watch(held), on_press: None, held, island: None, old: false }
 }
 
 ///|
@@ -82,6 +84,25 @@ pub fn made_island(name : String, key : () -> String, body : (Ctx) -> Unit, read
     on_press: None,
     held,
     island: Some((name, key, read_out)),
+    old: false,
+  }
+}
+
+///|
+/// What `body` builds the old way (Ctx::box and the rest), built each time it is put, kept as nothing: the frame's
+/// watch follows what it reads, as it follows the rest of the frame built the old way (docs/retained.md, the way
+/// there's 3: the old view in what is made once, its islands kept as they are where it is the frame's).
+pub fn made_old(body : (Ctx) -> Unit) -> Made {
+  let held = Ref(None)
+  {
+    fill: body,
+    kids: Kept([]),
+    node: None,
+    watch: made_watch(held),
+    on_press: None,
+    held,
+    island: None,
+    old: true,
   }
 }
 
@@ -97,6 +118,7 @@ pub fn made_holding(fill : (Ctx) -> Unit, kids : () -> Array[Made]) -> Made {
     on_press: None,
     held,
     island: None,
+    old: false,
   }
 }
 
@@ -172,6 +194,28 @@ pub fn made_show(when : () -> Bool, then : () -> Made) -> () -> Array[Made] {
         None => ()
       }
       []
+    }
+  }
+}
+
+///|
+/// What `make` makes of which of its cases `which` says holds (Solid's Switch): made once as that case comes, let go as
+/// another does, kept while it stays.
+pub fn[K : Eq] made_pick(which : () -> K, make : (K) -> Made) -> () -> Array[Made] {
+  let shown : Ref[(K, Made)?] = Ref(None)
+  fn() {
+    let k = which()
+    match shown.val {
+      Some((was, m)) if was == k => [m]
+      was => {
+        match was {
+          Some((_, m)) => m.let_go()
+          None => ()
+        }
+        let m = @signals.untracked(fn() { make(k) })
+        shown.val = Some((k, m))
+        [m]
+      }
     }
   }
 }
@@ -261,6 +305,10 @@ pub fn Ctx::made(self : Ctx, key : String, make : () -> Made) -> Unit {
 ///|
 /// Node `m` put here among the frame's, then what it holds in it.
 fn Ctx::made_put(self : Ctx, m : Made) -> Unit {
+  if m.old {
+    (m.fill)(self)
+    return
+  }
   match m.island {
     Some((name, key, read_out)) => {
       let k = @signals.untracked(key)
@@ -331,6 +379,15 @@ fn Ctx::made_put_back(self : Ctx, n : Node, slot : Int) -> Unit {
   n.first = -1
   n.last = -1
   n.next = -1
+  // (who it is, as the build would make it here (Ctx::node_known): made in this pass, what it holds counted from none,
+  // and counted among what holds it, so that what is made in and after it is who it was)
+  n.kids = 0
+  n.made_pass = known_pass.val
+  known_nodes.set(n.ident, n)
+  if n.keyless && self.cur >= 0 {
+    let p = self.nodes[self.cur]
+    p.kids = p.kids + 1
+  }
   if self.cur >= 0 {
     let p = self.nodes[self.cur]
     if p.last >= 0 {

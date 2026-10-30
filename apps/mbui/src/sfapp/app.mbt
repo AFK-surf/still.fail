@@ -356,54 +356,19 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // styles' roles (@sf styles.mbt, the pages' own) its ink, its sizes, its corners; the one place it is put
   // beside what the system has at the window's sides (sides.mbt)
   c.after_build("station-tabs-left", fn() { @sfdesk.station_tabs_sweep(c, src) })
-  c.with_theme(@sf.ui_theme(), fn() { beside_sides(c, fn() { view_in(c, src, t) }) })
+  c.with_theme(@sf.ui_theme(), fn() { beside_sides(c, fn() { view_in(c, src) }) })
 }
 
 ///|
-fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
+fn view_in(c : @ui.Ctx, src : Source) -> Unit {
   // over another app (a share sheet over the app it came from: share.mbt share_over): nothing but the sheet
   if share_over.val {
     over_view(c, src)
     return
   }
-  first_waiting.val = false
-  frame_bare.val = false
-  // (said by this frame's build: image_item, video_item)
-  @sfbase.held_pictures_waiting.val = false
-  let ground = c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
-    // in a window with its buttons in the app's top row, its top drags it whatever is shown (the splash, signing in,
-    // a window of its own still starting): under all of it, so what a page puts there takes its own presses
-    if @ui.window_inset() {
-      let id = c.id("window-ground-band")
-      c.window_drag(id)
-      c.box(style=@ui.style(h=Fixed(window_band())), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
-    }
-    let accounts = (src.topic)("accounts", {})
-    match (accounts.value, (src.fatal)()) {
-      (_, Some(why)) => splash(c, Some(why), true)
-      (Some(Array(list)), _) if list.length() == 0 => {
-        // the sign-in page inside the bars (SignIn.kt: windowInsetsPadding(systemBars)) (sfpages' gate.mbt)
-        within_bars(c, fn() { @sfpages.sign_in_page(c, src) })
-        // an invitation's link opened signed out: its sheet over the page, saying to sign in first (links.mbt)
-        if !link_later.is_empty() {
-          c.tell("links", fn() { signed_out_links(src) })
-        }
-        sheet_contents(fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
-        // the library's menus, sheets and dialogs (src/sf presenters.mbt), over the page
-        @sf.presented(c)
-      }
-      (Some(Array(_)), _) => signed_in(c, src)
-      (_, _) =>
-        splash(
-          c,
-          match accounts.error {
-            Some(e) => Some(text(Some(e), "message"))
-            None => None
-          },
-          accounts.error is Some(_),
-        )
-    }
-  })
+  // under it all, the app's ground, made once (mbui's made.mbt; docs/retained.md, the way there's 4): what it holds is
+  // the state the app is in, built the old way
+  c.made("app-ground", fn() { app_ground(c, src) })
   // the first page built with what it shows, the pictures the device holds in it decoded as it drew them (a likeness
   // in a picture's place for the frame or two its decoding takes is not shown): shown from this frame
   if first_waiting.val &&
@@ -414,7 +379,7 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
   // the first page built, waiting for what it shows (signed_in): not shown yet, the splash over the window's ground
   // (what the host clears to, the ground's colour) in its place, its words as while the workspaces are read
   if first_waiting.val {
-    c.look(ground, { ..@ui.still_look, alpha: 0.0 })
+    c.look(state_node.val, { ..@ui.still_look, alpha: 0.0 })
     c.layer(fn() { splash(c, Some(t_reading_workspaces(src)), false) }) |> ignore
   }
   // the window held (host_setup) shown with the first frame that draws more than the ground (the host shows it once
@@ -426,6 +391,95 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
   // the window's own buttons where they are the app's (Windows'), over all of it as a title bar's are
   if @ui.window_keys_own() {
     c.layer(fn() { @sf.window_keys(c) }) |> ignore
+  }
+}
+
+///|
+/// What the app shows under all of it (view_in).
+priv enum AppIs {
+  /// the core failed
+  Failed
+  /// signed out: the sign-in page
+  SignedOut
+  SignedIn
+  /// the accounts not read yet, or failing to be
+  Starting
+} derive(Eq)
+
+///|
+/// The node the app's state is built in, this frame (app_ground): hidden while the first page waits (view_in).
+// kept across runs: written by each build
+let state_node : Ref[Int] = Ref(-1)
+
+///|
+/// Which of the app's states it is in, as the core's accounts and its failure say.
+fn app_is(src : Source) -> AppIs {
+  match ((src.topic)("accounts", {}).value, (src.fatal)()) {
+    (_, Some(_)) => Failed
+    (Some(Array(list)), _) if list.length() == 0 => SignedOut
+    (Some(Array(_)), _) => SignedIn
+    _ => Starting
+  }
+}
+
+///|
+/// The app's ground, made once: the window's ground, its top dragging it where the window's buttons are in the app's
+/// top row, and the state the app is in (app_is), made as it comes and built the old way in it (its pages islands of
+/// their own), saying afresh whether the frame draws the ground alone and whether the first page waits (frame_bare,
+/// first_waiting).
+fn app_ground(c : @ui.Ctx, src : Source) -> @ui.Made {
+  let picked = @ui.made_pick(fn() { app_is(src) }, fn(state) {
+    @ui.made_old(fn(c) {
+      // in a window with its buttons in the app's top row, its top drags it whatever is shown (the splash, signing in,
+      // a window of its own still starting): under all of it, so what a page puts there takes its own presses
+      if @ui.window_inset() {
+        let id = c.id("window-ground-band")
+        c.window_drag(id)
+        c.box(style=@ui.style(h=Fixed(window_band())), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
+      }
+      first_waiting.val = false
+      frame_bare.val = false
+      // (said by this build: image_item, video_item)
+      @sfbase.held_pictures_waiting.val = false
+      // (in a box of its own: what the frame says of it, its look while the first page waits, is said of what is built
+      // anew each frame, not of the ground made once)
+      state_node.val = c.box(style=page_whole, fn() { app_state(c, src, state) })
+    })
+  })
+  @ui.made_holding(
+    fn(c) { c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.theme().p.bg, fn() {  }) |> ignore },
+    fn() { picked() },
+  )
+}
+
+///|
+/// The app in state `state` (app_ground's island).
+fn app_state(c : @ui.Ctx, src : Source, state : AppIs) -> Unit {
+  match state {
+    Failed => splash(c, (src.fatal)(), true)
+    SignedOut => {
+      // the sign-in page inside the bars (SignIn.kt: windowInsetsPadding(systemBars)) (sfpages' gate.mbt)
+      within_bars(c, fn() { @sfpages.sign_in_page(c, src) })
+      // an invitation's link opened signed out: its sheet over the page, saying to sign in first (links.mbt)
+      if !link_later.is_empty() {
+        c.tell("links", fn() { signed_out_links(src) })
+      }
+      sheet_contents(fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
+      // the library's menus, sheets and dialogs (src/sf presenters.mbt), over the page
+      @sf.presented(c)
+    }
+    SignedIn => signed_in(c, src)
+    Starting => {
+      let accounts = (src.topic)("accounts", {})
+      splash(
+        c,
+        match accounts.error {
+          Some(e) => Some(text(Some(e), "message"))
+          None => None
+        },
+        accounts.error is Some(_),
+      )
+    }
   }
 }
 

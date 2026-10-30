@@ -1134,7 +1134,9 @@ let narrow_rows : Rows = {
 }
 
 ///|
-let dark_set : Ref[Bool?] = { val: None }
+/// Light or dark as set (set_dark): a signal, so what is made once of the theme's colours follows it (theme)
+// kept across runs: put back as a Tester starts (icons.mbt)
+let dark_set : @signals.Signal[Bool?] = @signals.signal(None, same=fn(a, b) { a == b })
 
 ///|
 let current : Ref[Theme] = {
@@ -1156,7 +1158,7 @@ let current : Ref[Theme] = {
 /// Light or dark from now on (None: as the system, which hosts don't tell
 /// yet: light).
 pub fn set_dark(dark : Bool?) -> Unit {
-  dark_set.val = dark
+  dark_set.set(dark)
 }
 
 ///|
@@ -1235,7 +1237,7 @@ fn screen_layout(width : Double) -> Layout {
 /// too), keyboard and mouse's on a computer, its window narrow or not; its colours one palette on every screen, light
 /// or dark as set: call at the top of a view.
 pub fn begin(_c : @ui.Ctx) -> Theme {
-  let dark = dark_set.val.unwrap_or(false)
+  let dark = @signals.untracked(fn() { dark_set.get() }).unwrap_or(false)
   let touch = native_input() is Finger
   current.val = {
     dark,
@@ -1290,6 +1292,8 @@ let behind_dark : Int64 = 0x00000059L
 ///|
 /// The theme `begin` picked.
 pub fn theme() -> Theme {
+  // (read as a signal: what is made once of it filled anew as light or dark is set)
+  dark_set.get() |> ignore
   current.val
 }
 

@@ -196,6 +196,7 @@ pub fn unsubscribe(s : Sub) -> Unit {
 ///|
 /// The core's reason when it has failed and was not started again.
 pub fn fatal() -> String? {
+  client.fatal_said.get() |> ignore
   client.fatal
 }
 
