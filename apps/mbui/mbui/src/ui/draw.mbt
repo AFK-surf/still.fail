@@ -227,6 +227,9 @@ priv struct DrawState {
   carry : Array[Int]
   /// the node whose look by the clock is being painted (its instances tagged once it is: cycle_look.mbt)
   mut cycling : Int
+  /// the rows of lists cut by their rooms as they come and go, as the frame was laid out: each row's node, and how far
+  /// before its room's edges what it holds fades out (Ctx::rows_soft_after_layout)
+  rows_soft : Array[(Int, Double)]
 }
 
 ///|
@@ -251,6 +254,7 @@ let dr : DrawState = {
   over_all: false,
   carry: [],
   cycling: -1,
+  rows_soft: [],
 }
 
 ///|
@@ -341,6 +345,7 @@ fn drawing_begin() -> Unit {
 /// painted even where it is laid out outside what cuts it.
 fn Ctx::drawing_after_layout(self : Ctx) -> Unit {
   self.drawn_found()
+  self.rows_soft_after_layout()
   for f in after_layout_hooks {
     f(self)
   }

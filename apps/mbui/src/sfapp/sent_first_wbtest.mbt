@@ -107,7 +107,6 @@ test "the core's row goes on from what was sent: the words fly on to it, it does
     Some(f) => {
       assert_true(f.key == "o:local:1")
       assert_true(rd.known.contains(f.key))
-      assert_false(rd.rises.contains(f.key))
     }
     None => fail("nothing flies")
   }

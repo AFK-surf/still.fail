@@ -103,35 +103,15 @@ pub fn chat_list(
           Top => c.box(style=@ui.style(h=Fixed(list_top)), fn() {  }) |> ignore
           Foot => c.box(style=@ui.style(h=Fixed(foot_room + foot + ask_clear)), fn() {  }) |> ignore
           Working(a) => {
-            // coming in, it fades in and grows from its picture as its room opens (the list's rows' heights:
-            // Ctx::row_size); its turn over, it stays a moment (Activity), then leaves as any row (ListRows::leave)
-            let open = @motion.anim(c, "open/" + mk, 1.0, global=true)
-            if rd.fresh.contains(keys[i]) {
-              rd.fresh.remove(keys[i])
-              open.snap(0.0)
-              // (from when it came, or comes: its room opening later, as words sent leave the composer)
-              let at = rd.rows.came(keys[i]).unwrap_or(-1.0)
-              let later = dmax(at - c.moment(), 0.0)
-              open.animate(1.0, @motion.tween(working_turn_ms, ease=Out, delay=later), start_at?=if at >= 0.0 && later == 0.0 {
-                Some(at)
-              } else {
-                None
-              })
-            }
+            // coming in, it comes where it is as its room opens, and leaves where it is, as any row
+            // (ListRows::enter, leave); its turn over, it stays a moment (Activity) first
+            rd.fresh.remove(keys[i]) |> ignore
             let leaving = rd.rows.went(keys[i]) is Some(_)
             let here = here_of(r, v, rk, turns, em, None, core, inline=narrow, gutter~)
             let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving) })
             @motion.keyed(c, ri, mk, by=makes_way(lf, keys[i]))
-            // (growing from its picture's middle: where the messages' pictures are, at the row's start narrow, out
-            // in the margin before the words wider)
-            let face = side + (if narrow { 0.0 } else { -@sf.columns.avatar }) + avatar_side / 2.0
-            // (read as it is painted: its row not built again as it fades and grows)
-            let w = c.width
-            c.look_by(ri, fn() {
-              let p = open.get()
-              @ui.look(alpha=p, scale=0.5 + 0.5 * p, ox=face / w, oy=0.5)
-            })
-            rd.rows.leave(c, ri, keys[i])
+            rd.rows.enter(c, ri, keys[i], lead=top)
+            rd.rows.leave(c, ri, keys[i], lead=top)
           }
           _ => {
             // the row words sent go to: its bubble flies there from the composer
@@ -170,38 +150,18 @@ pub fn chat_list(
               _ => ()
             }
             // where it is is where the rows before it end, as tall as each is now (Ctx::row_size): nothing of its own
-            // moves it; what leaves the list fades where it is, then its room closes (Reading's `rows`: ListRows::leave)
+            // moves it; what leaves the list goes in the middle of its room as it closes (Reading's `rows`: ListRows::leave)
             @motion.keyed(c, ri, mk, by=cause)
-            rd.rows.leave(c, ri, keys[i])
-            // what is new to the list while it is followed eases in ([data-enter]: 220 ms from 6 under), not one out of
-            // a picture
+            rd.rows.leave(c, ri, keys[i], lead=top)
+            // what comes into the list with no flight to bring it (words sent, a message out of a picture) comes where
+            // it is as its room opens (ListRows::enter)
             let emitted = match e {
               Said(m) => emit_goes(em, m.seq)
               _ => false
             }
-            if rd.fresh.contains(keys[i]) {
-              rd.fresh.remove(keys[i])
-              if !emitted {
-                let a = @motion.Anim::new(0.0)
-                let at = rd.rows.came(keys[i]).unwrap_or(-1.0)
-                let later = dmax(at - c.moment(), 0.0)
-                a.animate(1.0, @motion.tween(@sf.enter_ms, ease=@sf.ease_out, delay=later), start_at?=if at >= 0.0 && later == 0.0 {
-                  Some(at)
-                } else {
-                  None
-                })
-                rd.rises[keys[i]] = a
-              }
-            }
-            // (read as it is painted: its row not built again as it rises in; built again as it has risen, its rise
-            // forgotten)
-            match rd.rises.get(keys[i]) {
-              Some(a) if a.ends_at() >= 0.0 && c.moment() < a.ends_at() => {
-                c.shows_until(a.ends_at())
-                c.look_by(ri, fn() { @ui.look(alpha=a.get()) })
-              }
-              Some(_) => rd.rises.remove(keys[i]) |> ignore
-              None => ()
+            rd.fresh.remove(keys[i]) |> ignore
+            if !flies && !emitted {
+              rd.rows.enter(c, ri, keys[i], lead=top)
             }
             // where it stands: its room what it leaves as a floor when it goes, as an agent's line's (act_rooms)
             if e is State(_, _, _) {

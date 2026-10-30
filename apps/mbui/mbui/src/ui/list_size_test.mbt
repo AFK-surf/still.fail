@@ -9,6 +9,7 @@ fn sized_rows(
   stick_end? : Bool = true,
   tall? : Int = -1,
   changed? : () -> Bool = fn() { false },
+  in_place? : Bool = false,
 ) -> (@ui.Ctx) -> Unit {
   let rows : @ui.ListRows[Int] = @ui.ListRows::new()
   fn(c) {
@@ -22,9 +23,12 @@ fn sized_rows(
       50.0,
       fn(k) {
         let i = items[k]
-        ignore(keys)
         let h = if i == tall && changed() { 120.0 } else { 50.0 }
-        c.box(h=Px(h), fn() { c.text("Row \{i}", wrap=false) |> ignore }) |> ignore
+        let b = c.box(h=Px(h), fn() { c.text("Row \{i}", wrap=false) |> ignore })
+        if in_place {
+          rows.enter(c, b, keys[k])
+          rows.leave(c, b, keys[k])
+        }
       },
       stick_end~,
       sized=rows.sized(),
@@ -67,20 +71,50 @@ test "list: a row come at the end of a list held there opens its room from nothi
 }
 
 ///|
-test "list: a row going leaves its room whole as it leaves, then closes it to nothing, the rows over it coming down" {
+test "list: a row coming where it is opens its room at once, what it holds in its middle, faded in as it opens" {
+  let n = [20]
+  let t = @ui.Tester::new(sized_rows(fn() { Array::makei(n[0], fn(i) { i }) }, in_place=true), w=300.0, h=400.0)
+  n[0] = 21
+  t.draw()
+  let words = fn() {
+    t.words().filter(fn(w) { w.0 == "Row 20" })[0]
+  }
+  let mut between = 0
+  let end = t.time() + @ui.row_size_ms
+  while t.time() < end {
+    let (_, y, _, h) = t.row(20).unwrap()
+    let w = words()
+    if h > 1.0 && h < 49.0 {
+      between += 1
+      // (as far shown as it is open, in its room's middle)
+      assert_true((w.5 - h / 50.0).abs() < 0.03, msg="\{w} \{h}")
+      assert_true((w.2 - (y + (h - 50.0) / 2.0)).abs() < 1.5)
+    }
+    t.frame()
+  }
+  assert_true(between > 2)
+  t.run_for(@ui.row_size_ms)
+  assert_eq(words().5, 1.0)
+  assert_eq(t.row(20).unwrap().3, 50.0)
+}
+
+///|
+test "list: a row going closes its room at once, what it holds in its middle, faded out as it closes, the rows over it coming down" {
   let goes = [false]
-  let t = @ui.Tester::new(sized_rows(fn() { Array::makei(if goes[0] { 19 } else { 20 }, fn(i) { i }) }), w=300.0, h=400.0)
+  let t = @ui.Tester::new(
+    sized_rows(fn() { Array::makei(if goes[0] { 19 } else { 20 }, fn(i) { i }) }, in_place=true),
+    w=300.0,
+    h=400.0,
+  )
   let y18 = y_of(t, 18)
   goes[0] = true
   t.draw()
-  // (as it leaves, ListRows::left: its room as it was, nothing of it cut, nothing over it moving)
-  t.run_for(@ui.row_leave_ms / 2.0)
-  assert_eq(t.row(19).unwrap().3, 50.0)
-  assert_eq(y_of(t, 18), y18)
-  t.run_for(@ui.row_leave_ms / 2.0)
   t.run_for(@ui.row_size_ms / 2.0)
-  let h = t.row(19).unwrap().3
+  let (_, y, _, h) = t.row(19).unwrap()
   assert_true(h > 1.0 && h < 49.0)
+  let w = t.words().filter(fn(w) { w.0 == "Row 19" })[0]
+  assert_true((w.5 - h / 50.0).abs() < 0.03, msg="\{w} \{h}")
+  assert_true((w.2 - (y + (h - 50.0) / 2.0)).abs() < 1.5)
   assert_true((y_of(t, 18) - (y18 + 50.0 - h)).abs() < 0.001)
   assert_eq(bottom_of(t, 19), 400.0)
   rows_end_to_end(t, 12, 20)

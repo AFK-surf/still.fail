@@ -1139,14 +1139,17 @@ pub fn reveal_height(key : String) -> Double {
 ///|
 /// What `body` builds, as tall as `share` (0 → 1) of its own height (expandVertically / shrinkVertically, from its top
 /// or with its foot kept), cut there when `clip`; all of it at 1. `align` places what it builds across, as its parent
-/// would. Its own height is the one it was last laid out with (none the first frame, when it is nothing tall). The one
-/// helper here that lays out: a height the app animates (what is in it is tapped where it is laid out, as anything).
+/// would. `middle`: what it builds kept in the middle of its room and cut by it at both ends, what is cut fading out
+/// to them (2026-10-31 the user: 「你要不两头裁呢？再加上淡化的边缘」, as a list's row coming and going is). Its own
+/// height is the one it was last laid out with (none the first frame, when it is nothing tall). The one helper here
+/// that lays out: a height the app animates (what is in it is tapped where it is laid out, as anything).
 pub fn reveal(
   c : @ui.Ctx,
   key : String,
   share : Double,
   from_top? : Bool = true,
   clip? : Bool = false,
+  middle? : Bool = false,
   align? : @ui.Align = AStretch,
   body : () -> Unit,
 ) -> Unit {
@@ -1156,19 +1159,24 @@ pub fn reveal(
     None => 0.0
   }
   let whole = share >= 1.0
+  let shown = natural * dmax(share, 0.0)
+  let mut inner = -1
   let outer = c.box(
     w=Fill(1.0),
-    h=if whole { Auto } else { Px(natural * dmax(share, 0.0)) },
-    clip=clip && !whole,
+    h=if whole { Auto } else { Px(shown) },
+    clip=(clip || middle) && !whole,
     align~,
-    justify=if from_top { JStart } else { JEnd },
+    justify=if middle { JCenter } else if from_top { JStart } else { JEnd },
     fn() {
-      let inner = c.box(w=Fill(1.0), align~, body)
+      inner = c.box(w=Fill(1.0), align~, body)
       let e = moving_of(c, inner)
       e.kept = k
     },
   )
-  ignore(outer)
+  if middle && !whole {
+    let soft = @ui.cut_soft((natural - shown) / 2.0, shown / 2.0)
+    c.fade_to(inner, outer, top=soft, foot=soft)
+  }
 }
 
 // ── after layout ────────────────────────────────────────────────────────

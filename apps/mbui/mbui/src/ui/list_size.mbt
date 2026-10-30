@@ -59,13 +59,8 @@ priv struct RowSizing {
 pub let row_size_ms : Double = 300.0
 
 ///|
-/// How long a row going takes to leave before its room closes (2026-10-30 the user: 「一行消失的动效感觉有点生硬，现在都是
-/// 裁剪」): it fades where it is, a little smaller to its middle (row_leave_scale), its room whole and nothing over or
-/// under it moving; its room closes after, with nothing left in it to cut (ListRows::leave).
-pub let row_leave_ms : Double = 150.0
-
-///|
-/// How small a row going is as it has left (ListRows::leave), to its middle.
+/// How small what a row holds is as its room has closed to nothing (a row coming, from it; one going, to it), to its
+/// middle (ListRows::enter, leave).
 pub let row_leave_scale : Double = 0.96
 
 ///|
@@ -90,6 +85,7 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
   // (its way over before it was laid out on it, or as it is: as tall as it is; a hair short of its end, a sum of ms
   // rounded off, at it, as ListRows::rows has it over there, laid out again or built anew)
   if now >= c.end - 0.001 {
+    c.opened.remove(key)
     return to
   }
   // (its rows laid out on the way till its end, as it was declared: what is dropped of it a hair before is the list's)
@@ -146,7 +142,65 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
     r.end = c.end
     r.cause = cause
   }
-  at_t(now, to).0
+  let shown = at_t(now, to).0
+  // (one coming or going where it is, how far open: what it holds is drawn by it as it is painted, ListRows::enter,
+  // leave)
+  if !(cause is Changed(_)) && c.by_room.contains(key) {
+    c.opened[key] = (shown, natural)
+  }
+  shown
+}
+
+///|
+/// Whether row `k` comes or goes where it is (ListRows::enter, leave), its room opening or closing now: what it holds
+/// drawn in the middle of it, what it cuts off fading out to its edges (row_soft).
+fn ListState::row_by_room(self : ListState, k : Int) -> Bool {
+  match self.causes {
+    Some(c) if k < c.keys.length() => c.opened.contains(c.keys[k])
+    _ => false
+  }
+}
+
+///|
+/// How far down what row `k` holds is placed as its room is `shown` tall of the `h` it is laid out, coming or going
+/// where it is (row_by_room): what it holds under its lead (the room over it at its top, ListRows::enter) in the middle
+/// of what is open, the lead opening and closing with it, so that it is cut alike at both ends however far down in its
+/// row it is; none once it is open.
+fn ListState::row_middle(self : ListState, k : Int, shown : Double, h : Double) -> Double {
+  let lead = match self.causes {
+    Some(c) if k < c.keys.length() => c.leads.get(c.keys[k]).unwrap_or(0.0)
+    _ => 0.0
+  }
+  if h <= 0.0 {
+    0.0
+  } else {
+    (shown - h) / 2.0 * (h + lead) / h
+  }
+}
+
+///|
+/// How far before the edges of its room, `shown` tall of the `h` it is laid out, what a row coming or going holds fades
+/// out (ListRows::enter, leave): as far as is cut off it at each end, at most cut_soft_most, and no more than half of
+/// what shows, so that a line of words half cut shows half faded, never a hard edge across it.
+fn row_soft(shown : Double, h : Double) -> Double {
+  cut_soft((h - shown) / 2.0, shown / 2.0)
+}
+
+///|
+/// The rows of lists cut by their rooms as they come and go, as this frame was laid out: what each holds fading out to
+/// its room's edges (Drawn's `fades`), from where they are laid out now, for this frame alone.
+fn Ctx::rows_soft_after_layout(self : Ctx) -> Unit {
+  for rs in dr.rows_soft {
+    let (r, soft) = rs
+    if r < self.count {
+      let mut ch = self.nodes[r].first
+      while ch >= 0 {
+        self.fade_to(ch, r, top=soft, foot=soft)
+        ch = self.nodes[ch].next
+      }
+    }
+  }
+  dr.rows_soft.clear()
 }
 
 ///|
@@ -224,6 +278,12 @@ pub struct RowCauses {
   /// the rows whose content goes on the way itself (Ctx::row_way), by their keys: the list closes only what was off
   /// as their cause came
   priv own : Set[String]
+  /// the rows that come and go where they are (ListRows::enter, leave), by their keys, and of those coming or going,
+  /// how tall each is laid out now and how tall it is (by its layout, read as it is painted)
+  priv by_room : Set[String]
+  priv opened : Map[String, (Double, Double)]
+  /// of those, the room over what each holds, at its top (its gap to the row before: ListRows::enter's `lead`)
+  priv leads : Map[String, Double]
 }
 
 ///|
@@ -268,7 +328,7 @@ pub struct ListRows[T] {
 
 ///|
 pub fn[T] ListRows::new() -> ListRows[T] {
-  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new() }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
+  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), opened: {}, leads: {} }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
 }
 
 ///|
@@ -316,6 +376,9 @@ pub fn[T] ListRows::rows(
     self.causes.start = -1.0
     self.causes.end = -1.0
     self.causes.own.clear()
+    self.causes.by_room.clear()
+    self.causes.opened.clear()
+    self.causes.leads.clear()
   }
   // (whether a row sets out now: the rows' way sets out again from here)
   let mut began = false
@@ -350,10 +413,9 @@ pub fn[T] ListRows::rows(
     for r in self.order {
       let (k, item) = r
       if !here.contains(k) && !self.going.contains(k) {
-        // (it leaves first, its room closing once it has: row_leave_ms)
         let at = from(k).unwrap_or(now)
         self.going[k] = { item, at, after: prev }
-        self.causes.by[k] = (Goes(at + row_leave_ms), ms(k).unwrap_or(row_size_ms))
+        self.causes.by[k] = (Goes(at), ms(k).unwrap_or(row_size_ms))
         began = true
       }
       if here.contains(k) || self.going.contains(k) {
@@ -390,15 +452,8 @@ pub fn[T] ListRows::rows(
   // the rows' way: from the last cause's moment to the latest end any was given
   if began {
     // (from the latest moment one sets out: now, or later where one's cause has it so: `from`)
-    // (a row going sets out as it starts to leave: its room closing row_leave_ms on is its own, the list's way not
-    // put off for it)
     let mut start = now
-    self.causes.by.each(fn(_, cm) {
-      start = dmax(start, match cm.0 {
-        Goes(t) => t - row_leave_ms
-        t => t.at()
-      })
-    })
+    self.causes.by.each(fn(_, cm) { start = dmax(start, cm.0.at()) })
     self.causes.start = start
     moved = true
   }
@@ -407,6 +462,9 @@ pub fn[T] ListRows::rows(
   if self.causes.by.is_empty() {
     self.causes.start = -1.0
     self.causes.own.clear()
+    self.causes.by_room.clear()
+    self.causes.opened.clear()
+    self.causes.leads.clear()
   }
   self.causes.end = end
   // (built again at its end: what goes out of the list then)
@@ -467,8 +525,8 @@ pub fn[T] ListRows::came(self : ListRows[T], key : String) -> Double? {
 }
 
 ///|
-/// When row `key` went from the list, as it leaves and its room closes after (None: it is in it): the moment it starts
-/// to leave (ListRows::leave), its room closing row_leave_ms on.
+/// When row `key` went from the list, as its room closes (None: it is in it): the moment its room sets out closing
+/// (ListRows::leave).
 pub fn[T] ListRows::went(self : ListRows[T], key : String) -> Double? {
   if !self.going_said.has(key) {
     return None
@@ -477,20 +535,75 @@ pub fn[T] ListRows::went(self : ListRows[T], key : String) -> Double? {
 }
 
 ///|
-/// Row `key`, built as node `i`, as it goes from the list (ListRows::went): it fades where it is on `Leave` over
-/// row_leave_ms, to row_leave_scale of its size to its middle, drawn only (nothing in it tapped); then gone from view
-/// as its room closes. Read as it is painted, its row not built again for it. Nothing for a row not going.
-pub fn[T] ListRows::leave(self : ListRows[T], c : Ctx, i : Int, key : String) -> Unit {
+/// What a row coming or going where it is holds, as it is drawn: its room `shown` tall of the `h` it is laid out,
+/// grown to its size from row_leave_scale and faded in as far as it is open, what its room cuts off it fading out to its
+/// edges (Ctx::list's row_soft); laid out in the middle of it by its list (so drawn, tapped and found there).
+fn row_look(shown : Double, h : Double) -> Look {
+  let p = dmax(dmin(if h > 0.0 { shown / h } else { 1.0 }, 1.0), 0.0)
+  if p >= 1.0 {
+    still_look
+  } else {
+    look(alpha=p, scale=row_leave_scale + (1.0 - row_leave_scale) * p)
+  }
+}
+
+///|
+/// Row `key`, built as node `i`, as it goes from the list (ListRows::went): its room closes at once on the list's way,
+/// what it holds in the middle of it, faded out and shrunk to row_leave_scale as it closes, cut by it at both ends,
+/// what is cut fading out to them (2026-10-31 the user: 「这样会影响速度吧，你要不两头裁呢？再加上淡化的边缘」), drawn only
+/// (nothing in it tapped). A row coming (ListRows::enter) played back. By how far it is open as the list lays it out,
+/// read as it is painted, its row not built again for it. Nothing for a row not going.
+pub fn[T] ListRows::leave(
+  self : ListRows[T],
+  c : Ctx,
+  i : Int,
+  key : String,
+  lead? : Double = 0.0,
+) -> Unit {
   match self.went(key) {
-    Some(at) => {
+    Some(_) => {
+      self.causes.by_room.add(key)
+      self.causes.leads[key] = lead
       c.draw_only(i)
+      let causes = self.causes
       c.look_by(i, fn() {
-        let p = Ease::Leave.at((c.moment() - at) / row_leave_ms)
-        look(alpha=1.0 - p, scale=1.0 - (1.0 - row_leave_scale) * p, ox=0.5, oy=0.5)
+        causes.read()
+        match (causes.by.get(key), causes.opened.get(key)) {
+          (Some((Goes(_), _)), Some((shown, h))) => row_look(shown, h)
+          _ => still_look
+        }
       })
     }
     None => ()
   }
+}
+
+///|
+/// Row `key`, built as node `i`, as it comes into the list where it is (no flight brings it; `lead`: the room over what
+/// it holds at its top, its gap to the row before, opening with it): its room opens on the
+/// list's way at once, what it holds in the middle of it, faded in and grown from
+/// row_leave_scale as it opens, cut by it at both ends, what is cut fading out to them: a row going (ListRows::leave)
+/// played back. By how far it is open as the list lays it out, read as it is painted, its row not built again for it.
+/// Nothing once it is open, nor for a row there already.
+pub fn[T] ListRows::enter(
+  self : ListRows[T],
+  c : Ctx,
+  i : Int,
+  key : String,
+  lead? : Double = 0.0,
+) -> Unit {
+  self.causes.by_room.add(key)
+  self.causes.leads[key] = lead
+  let causes = self.causes
+  c.look_by(i, fn() {
+    causes.read()
+    // (one going drawn as it goes, not as it came: ListRows::leave)
+    match (causes.by.get(key), causes.opened.get(key)) {
+      (Some((Goes(_), _)), _) => still_look
+      (_, Some((shown, h))) => row_look(shown, h)
+      _ => still_look
+    }
+  })
 }
 
 ///|
