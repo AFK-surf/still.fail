@@ -1,5 +1,5 @@
 // A station's name in a line of words, its mark (./StationMark.tsx) before it when its workspace gave it one, as the
-// chats' rows and the decisions name it.
+// chats' rows name it.
 import { useMemo, type ReactNode } from "react";
 import { Words, type WordsDrawn } from "@stillfail/ui/words.tsx";
 import { useStationLook } from "./api.ts";

@@ -51,9 +51,7 @@ export type Call =
   | { kind: "chatSendTo"; station: string; session: string; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown; client: string | null }
   | { kind: "decisionAnswer"; station: string; thread: number; seq: number; option: string }
   | { kind: "decisionReply"; station: string; thread: number; seq: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown }
-  | { kind: "decisionDefer"; station: string; thread: number; seq: number }
   | { kind: "decisionDismiss"; op: ops.Request; station: string; thread: number; seq: number }
-  | { kind: "decisionShow"; workspace: string; station: string; thread: number; seq: number }
   /// A chat's side-panel tabs changed (chat-tabs.ts): by the key they are kept under, the tab.
   | { kind: "chatTabs"; chat: string; action: "open" | "close" | "front" | "clear"; tab: string | null; auto: boolean }
   | { kind: "chatRetryIn"; station: string; session: string; id: string }
@@ -524,15 +522,6 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       }
       return { kind: "stationUpdateNotice", station: p.station as string, action, version };
     }
-    case "decision.show": {
-      const p = read(params, [
-        ["workspace", S, "req"],
-        ["station", S, "req"],
-        ["thread", "u64", "req"],
-        ["seq", "u64", "req"],
-      ]);
-      return { kind: "decisionShow", workspace: p.workspace as string, station: p.station as string, thread: p.thread as number, seq: p.seq as number };
-    }
     case "chat.tabs.open":
     case "chat.tabs.close":
     case "chat.tabs.front":
@@ -546,14 +535,6 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       if (p.chat === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "chat" }));
       if (action !== "clear" && p.tab === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "tab" }));
       return { kind: "chatTabs", chat: p.chat as string, action, tab: action === "clear" ? null : (p.tab as string), auto: p.auto !== false };
-    }
-    case "decision.defer": {
-      const p = read(params, [
-        ["station", S, "req"],
-        ["thread", "u64", "req"],
-        ["seq", "u64", "req"],
-      ]);
-      return { kind: "decisionDefer", station: p.station as string, thread: p.thread as number, seq: p.seq as number };
     }
     case "chat.retry":
     case "chat.discard": {

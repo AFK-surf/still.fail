@@ -70,7 +70,7 @@ createRoot(root).render(<DemoApp phone />);
     let backs = 0;
     for (let i = 0; i < N; i++) {
       const away = await page.locator('[data-bar=host][data-away]').count();
-      // A page pushed over the place (令 opened a new chat, a tap let through to the page: a chat from 用量's or 奏's
+      // A page pushed over the place (令 opened a new chat, a tap let through to the page: a chat from 用量's
       // rows): back from it, not a gesture of the count. Its back is the top bar's button furthest up and left (返回, 取消,
       // or the name of the page under it); a chat's bar has its agent's activity before it in the page.
       if (away) {

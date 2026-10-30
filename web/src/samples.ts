@@ -1,7 +1,7 @@
 // Made-up data for what a page shows while it is read the first time, drawn in its bones by the parts that draw the
 // real one (@stillfail/ui waiting.tsx Bones; docs/ui-panels.md 等待): only how long its words are is seen, as a bar.
 import { sampleWords } from "@stillfail/ui/waiting.tsx";
-import type { ArchiveItem, ArchivePolicyView, ArchivingView, ChangelogDay, ChatItem, ChatMessage, Connect, ConnectItem, DecisionItem, DriveEntry, DriveRoot, HistoryItem, Host, LockDraftView, LockView, PickView, Profile, ProviderGroup, Quota, ResourcesView, ResourceUse, RowAgent, SkillFile, Stamp, StationMemory, StationView, UsageView, VaultItemRow, VaultsView, VaultUse, WorkspaceProfile } from "./core/shapes.ts";
+import type { ArchiveItem, ArchivePolicyView, ArchivingView, ChangelogDay, ChatItem, ChatMessage, Connect, ConnectItem, DriveEntry, DriveRoot, HistoryItem, Host, LockDraftView, LockView, PickView, Profile, ProviderGroup, Quota, ResourcesView, ResourceUse, RowAgent, SkillFile, Stamp, StationMemory, StationView, UsageView, VaultItemRow, VaultsView, VaultUse, WorkspaceProfile } from "./core/shapes.ts";
 
 export { sampleWords };
 
@@ -182,15 +182,6 @@ export function sampleConnect(n: number, i = 0): Connect {
 export const sampleConnects = (): ConnectItem[] => [7, 5, 9].map((n, i) => ({
   station: `sample/${i}`, stationName: sampleWords(4), connect: sampleConnect(n, i), sessions: [], candidates: [], running: 0, changes: [],
 }));
-
-/** Decisions waiting for the viewer made up: each its question, its chat and station, its post and three options. */
-export function sampleDecisions(): DecisionItem[] {
-  const [, post] = sampleMessages();
-  return [16, 12, 18].map((n, i) => ({
-    station: `sample/${i}`, stationName: sampleWords(4), session: `sample-${i}`, thread: i, title: sampleWords(n - 6), seq: i, before: [],
-    message: { ...post!, seq: i }, options: [5, 7, 4].map((m) => ({ label: sampleWords(m), detail: sampleWords(m + 9) })), text: "", question: sampleWords(n),
-  }));
-}
 
 /** A station's archive policy made up: its words, two options to archive by and two to keep by. */
 export const sampleArchivePolicy = (): ArchivePolicyView => ({

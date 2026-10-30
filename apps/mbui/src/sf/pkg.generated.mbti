@@ -142,7 +142,7 @@ pub fn box_fit(Double, Double, Double) -> (Double, Double)
 
 pub let breath_ms : Double
 
-pub fn breathe(@ui.Ctx, Int32, failed? : Bool, low? : Double, resident? : Bool) -> Unit
+pub fn breathe(@ui.Ctx, Int32, failed? : Bool, low? : Double, resident? : Bool, share? : Double) -> Unit
 
 pub let bubble_raised : Raised
 
@@ -476,8 +476,6 @@ pub let edge_tip_gap : Double
 
 pub let edge_tip_ms : Double
 
-pub let elsewhere_h : @ui.Len
-
 pub fn empty(@ui.Ctx, () -> Unit) -> Unit
 
 pub let empty_in : @ui.Space
@@ -551,6 +549,8 @@ pub let fill_chip_corner : Double
 pub let fill_chip_h : Double
 
 pub let fill_chip_small_h : Double
+
+pub fn find_passage(String, String) -> (Int32, Int32)?
 
 pub fn find_words(String, Array[String]) -> Array[(Int32, Int32)]
 
@@ -707,8 +707,6 @@ pub fn icon_parts(@ui.Ctx, String, Array[Int32], size? : Double, color? : Int64)
 pub fn icon_path(String) -> String
 
 pub let identity_mark : Double
-
-pub let idle_column_w : @ui.Len
 
 pub fn in_line(Double) -> @ui.Style
 
@@ -998,7 +996,7 @@ pub fn menu_held(@ui.Ctx, String) -> Bool
 
 pub fn menu_is_open(String) -> Bool
 
-pub fn menu_item(@ui.Ctx, String, key? : String, icon? : String, mark? : (@ui.Ctx, Double) -> Unit, danger? : Bool, on? : Bool, note? : String, under? : String, panel? : Bool, word? : String, end? : String, at_top? : Bool, at_foot? : Bool) -> Bool
+pub fn menu_item(@ui.Ctx, String, key? : String, icon? : String, mark? : (@ui.Ctx, Double) -> Unit, danger? : Bool, on? : Bool, note? : String, under? : String, panel? : Bool, end? : String, at_top? : Bool, at_foot? : Bool) -> Bool
 
 pub fn menu_item_of(String, () -> Unit, icon? : String, danger? : Bool, disabled? : Bool, chosen? : Bool, heading? : Bool) -> MenuItem
 
@@ -2398,8 +2396,10 @@ pub struct LiveArray[T] {
 }
 pub fn[T] LiveArray::all(Self[T], (T) -> Bool) -> Bool
 pub fn[T] LiveArray::any(Self[T], (T) -> Bool) -> Bool
-pub fn[T] LiveArray::append(Self[T], Array[T]) -> Unit
-pub fn[T] LiveArray::clear(Self[T]) -> Unit
+#callsite(autofill(loc))
+pub fn[T] LiveArray::append(Self[T], Array[T], loc~ : SourceLoc) -> Unit
+#callsite(autofill(loc))
+pub fn[T] LiveArray::clear(Self[T], loc~ : SourceLoc) -> Unit
 pub fn[T : Eq] LiveArray::contains(Self[T], T) -> Bool
 pub fn[T] LiveArray::copy(Self[T]) -> Array[T]
 pub fn[T] LiveArray::each(Self[T], (T) -> Unit) -> Unit
@@ -2409,7 +2409,8 @@ pub fn[T, U] LiveArray::filter_map(Self[T], (T) -> U?) -> Array[U]
 pub fn[T, A] LiveArray::fold(Self[T], init~ : A, (A, T) -> A) -> A
 pub fn[T] LiveArray::from(Array[T]) -> Self[T]
 pub fn[T] LiveArray::get(Self[T], Int32) -> T?
-pub fn[T] LiveArray::insert(Self[T], Int32, T) -> Unit
+#callsite(autofill(loc))
+pub fn[T] LiveArray::insert(Self[T], Int32, T, loc~ : SourceLoc) -> Unit
 pub fn[T] LiveArray::is_empty(Self[T]) -> Bool
 pub fn[T] LiveArray::iter(Self[T]) -> Iter[T]
 pub fn[T] LiveArray::iter2(Self[T]) -> Iter2[Int32, T]
@@ -2420,21 +2421,29 @@ pub fn[T, U] LiveArray::mapi(Self[T], (Int32, T) -> U) -> Array[U]
 pub fn[T] LiveArray::new() -> Self[T]
 pub fn[T] LiveArray::op_get(Self[T], Int32) -> T
 pub fn[T] LiveArray::op_set(Self[T], Int32, T) -> Unit
-pub fn[T] LiveArray::pop(Self[T]) -> T?
-pub fn[T] LiveArray::push(Self[T], T) -> Unit
-pub fn[T] LiveArray::push_iter(Self[T], Iter[T]) -> Unit
-pub fn[T] LiveArray::remove(Self[T], Int32) -> T
-pub fn[T] LiveArray::replace(Self[T], Array[T]) -> Unit
-pub fn[T] LiveArray::retain(Self[T], (T) -> Bool) -> Unit
+#callsite(autofill(loc))
+pub fn[T] LiveArray::pop(Self[T], loc~ : SourceLoc) -> T?
+#callsite(autofill(loc))
+pub fn[T] LiveArray::push(Self[T], T, loc~ : SourceLoc) -> Unit
+#callsite(autofill(loc))
+pub fn[T] LiveArray::push_iter(Self[T], Iter[T], loc~ : SourceLoc) -> Unit
+#callsite(autofill(loc))
+pub fn[T] LiveArray::remove(Self[T], Int32, loc~ : SourceLoc) -> T
+#callsite(autofill(loc))
+pub fn[T] LiveArray::replace(Self[T], Array[T], loc~ : SourceLoc) -> Unit
+#callsite(autofill(loc))
+pub fn[T] LiveArray::retain(Self[T], (T) -> Bool, loc~ : SourceLoc) -> Unit
 pub fn[T] LiveArray::rev_iter(Self[T]) -> Iter[T]
 pub fn[T : Eq] LiveArray::search(Self[T], T) -> Int32?
 pub fn[T] LiveArray::search_by(Self[T], (T) -> Bool) -> Int32?
-pub fn[T] LiveArray::touched(Self[T]) -> Unit
+#callsite(autofill(loc))
+pub fn[T] LiveArray::touched(Self[T], loc~ : SourceLoc) -> Unit
 
 pub struct LiveMap[K, V] {
   // private fields
 }
-pub fn[K, V] LiveMap::clear(Self[K, V]) -> Unit
+#callsite(autofill(loc))
+pub fn[K, V] LiveMap::clear(Self[K, V], loc~ : SourceLoc) -> Unit
 pub fn[K : Hash + Eq, V] LiveMap::contains(Self[K, V], K) -> Bool
 pub fn[K, V] LiveMap::copy(Self[K, V]) -> Map[K, V]
 pub fn[K, V] LiveMap::from(Map[K, V]) -> Self[K, V]
@@ -2447,10 +2456,14 @@ pub fn[K, V] LiveMap::length(Self[K, V]) -> Int32
 pub fn[K : Hash + Eq, V] LiveMap::new() -> Self[K, V]
 pub fn[K : Hash + Eq, V] LiveMap::op_get(Self[K, V], K) -> V
 pub fn[K : Hash + Eq, V] LiveMap::op_set(Self[K, V], K, V) -> Unit
-pub fn[K : Hash + Eq, V] LiveMap::remove(Self[K, V], K) -> Unit
-pub fn[K : Hash + Eq, V] LiveMap::retain(Self[K, V], (K, V) -> Bool) -> Unit
-pub fn[K : Hash + Eq, V] LiveMap::set(Self[K, V], K, V) -> Unit
-pub fn[K, V] LiveMap::touched(Self[K, V]) -> Unit
+#callsite(autofill(loc))
+pub fn[K : Hash + Eq, V] LiveMap::remove(Self[K, V], K, loc~ : SourceLoc) -> Unit
+#callsite(autofill(loc))
+pub fn[K : Hash + Eq, V] LiveMap::retain(Self[K, V], (K, V) -> Bool, loc~ : SourceLoc) -> Unit
+#callsite(autofill(loc))
+pub fn[K : Hash + Eq, V] LiveMap::set(Self[K, V], K, V, loc~ : SourceLoc) -> Unit
+#callsite(autofill(loc))
+pub fn[K, V] LiveMap::touched(Self[K, V], loc~ : SourceLoc) -> Unit
 pub fn[K, V] LiveMap::values(Self[K, V]) -> Iter[V]
 
 pub(all) enum Look {

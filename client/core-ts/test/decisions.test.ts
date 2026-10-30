@@ -89,19 +89,6 @@ test("options_show_the_recommended_one_last", () => {
   for (const o of closing) shape("DecisionOption", o);
 });
 
-test("the_list_asks_with_the_agents_need_else_the_whole_first_line", () => {
-  const long = `**${"字".repeat(50)}**\n细节`;
-  const agent = (need: string, about: number | null) => ({
-    lastTurn: { declared: "block", ending: "need_help", outcome: "completed", need, about: about === null ? null : { thread: 3, seq: about } },
-  });
-  const row = (agents: J[]) => ({ thread: 3, agents });
-  assert.equal(d.asks(row([agent("选统计口径", 7)]), 7, long), "选统计口径");
-  assert.equal(d.asks(row([agent("选统计口径", null)]), 7, long), "选统计口径");
-  assert.equal(d.asks(row([agent("选统计口径", 5)]), 7, long), "字".repeat(50), "a need about another post");
-  assert.equal(d.asks(row([agent("  ", 7)]), 7, long), "字".repeat(50));
-  assert.equal(d.asks(row([]), 7, ""), "奏");
-});
-
 test("a_cards_line_is_its_whole_first_line", () => {
   assert.equal(d.line("**「共」改成按今天累计吗？**\n细节"), "奏 · 「共」改成按今天累计吗？");
   assert.equal(d.line("\n\n## 选哪个"), "奏 · 选哪个");
@@ -247,15 +234,6 @@ test("a_picked_option_or_a_written_answer_quotes_the_post", () => {
   assert.equal(d.answer(tc, "sk"), null, "a text card has no options");
 });
 
-test("the_page_puts_those_set_aside_last", () => {
-  let items: [string, number, number | null][] = [["c", 3, 20], ["a", 5, null], ["d", 1, 10], ["b", 2, null]];
-  items = d.order(items);
-  assert.deepEqual(items.map((i) => i[0]), ["b", "a", "d", "c"]);
-  const prefs = { decisionsDeferred: { [d.deferralKey("w/s", 7, 4)]: 12 } };
-  assert.equal(d.deferredAt(prefs, "w/s", 7, 4), 12);
-  assert.equal(d.deferredAt(prefs, "w/s", 7, 5), null);
-});
-
 test("what_waits_in_a_chat_says_the_agents_need_else_its_posts_first_line", () => {
   const me = { id: "u1", email: "me@x.com" };
   const need = { seq: 9, message: { text: "测试版发好了\n你滑一下看看" } };
@@ -270,23 +248,4 @@ test("what_waits_in_a_chat_says_the_agents_need_else_its_posts_first_line", () =
   // None once the viewer let it go, or with nothing asked.
   assert.deepEqual(d.undecided({ creator: me, card: { ...card, dismissed: true } }), []);
   assert.deepEqual(d.undecided({ creator: me }), []);
-});
-
-test("the_wide_decisions_page_shows_the_one_picked_while_it_is_there_else_the_one_now_in_its_place", () => {
-  const none: d.Shown = { key: null, at: 0 };
-  // Nothing picked: the first, whichever it is.
-  assert.deepEqual(d.shownIn(none, ["a", "b", "c"]), { at: 0, next: { key: null, at: 0 } });
-  // Picked: it, wherever it goes in the list.
-  const b = d.picked(none, "b");
-  assert.deepEqual(d.shownIn(b, ["a", "b", "c"]), { at: 1, next: { key: "b", at: 1 } });
-  assert.deepEqual(d.shownIn({ key: "b", at: 1 }, ["b", "a", "c"]), { at: 0, next: { key: "b", at: 0 } });
-  // Gone: the one now in its place, shown from then on; the last when the list got shorter.
-  assert.deepEqual(d.shownIn({ key: "b", at: 1 }, ["a", "c"]), { at: 1, next: { key: "c", at: 1 } });
-  assert.deepEqual(d.shownIn({ key: "c", at: 2 }, ["a", "b"]), { at: 1, next: { key: "b", at: 1 } });
-  // Set aside while shown: the one in its place; another set aside leaves the one shown as it is.
-  assert.deepEqual(d.setAside({ key: "b", at: 1 }, "b"), { key: "", at: 1 });
-  assert.deepEqual(d.setAside({ key: "b", at: 1 }, "a"), { key: "b", at: 1 });
-  assert.deepEqual(d.shownIn({ key: "", at: 1 }, ["a", "c", "b"]), { at: 1, next: { key: "c", at: 1 } });
-  // None left: none.
-  assert.deepEqual(d.shownIn({ key: "b", at: 0 }, []), { at: null, next: { key: "b", at: 0 } });
 });

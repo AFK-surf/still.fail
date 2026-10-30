@@ -66,7 +66,7 @@ are old news (shown by nobody). From a row's changes, `notices` adds one when a
 row that is `mine`:
 
 - is `block` asking something that waits for the person and was not told yet
-  (its `need`, the message 奏 shows: an agent woken by a job that ends blocked
+  (its `need`, the message 待处理 shows: an agent woken by a job that ends blocked
   on the same ask again, or blocked on one a person has answered since, is not
   noticed as `block`);
 - gets a new last message from the station starting with `⚠️` (`failed`);

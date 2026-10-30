@@ -25,8 +25,6 @@ pub(all) enum Page {
   /// a visualization as a page of its own (Preview.kt PreviewFileScreen): its station, the session that keeps it, its
   /// path and its name
   PreviewFile(String, String, String, String)
-  /// the decisions waiting for the viewer, one at a time (奏: decisions.mbt); the bar's 奏 place
-  Decisions
   /// an agent's execution history (history.mbt): its chat, its session, the transcript entry it opens at (a link's
   /// `entry`; None: its newest)
   History(ChatRef, String, Int?)
@@ -34,7 +32,7 @@ pub(all) enum Page {
   Words(String, String)
   /// a new chat (newchat.mbt), rising from the bottom; it becomes the chat it makes, in place
   NewChat
-  /// a place of the bottom bar's other than the chats, 奏 and 文件 (stations, profiles, connects, usage, archive):
+  /// a place of the bottom bar's other than the chats and 文件 (stations, profiles, connects, usage, archive):
   /// its page at the stack's root
   Place(String)
   /// a page under settings (src/sfapp/settings: me, appearance, stations, the workspace…)

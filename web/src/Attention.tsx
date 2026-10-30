@@ -1,7 +1,7 @@
 // What wants the viewer (the core's `workspaceMarks` items), in the sidebar's foot: 待处理, with how many, and pressed,
-// which chats: the cards and needs waiting for them (奏) not read since they came, and the chats of theirs that went
-// wrong until they run again, every workspace's, each leading to its chat. A card read is no longer here (its row and
-// 奏 still say it); one let go here neither (忽略: a card's `decision.dismiss`, a failure's `prefs.failsGone` until it
+// which chats: the cards and needs waiting for them not read since they came, and the chats of theirs that went
+// wrong until they run again, every workspace's, each leading to its chat. A card read is no longer here (its row
+// still says it); one let go here neither (忽略: a card's `decision.dismiss`, a failure's `prefs.failsGone` until it
 // fails again). A station's trouble is the same:
 // listed until the bell has shown it, then the stations' marks say it, until the trouble changes (kept on this device).
 import { useEffect, useState } from "react";
@@ -160,7 +160,6 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
             </div>
           ))}
           <div className={css.foot}>
-            <NavLink className={css.link} to={`/w/${scope}/decisions`} onClick={() => setOpen(false)}>{t("web-main.attention.desk")}</NavLink>
             <NavLink className={css.link} to={`/w/${scope}/settings/notifications`} onClick={() => setOpen(false)}>{t("web-main.attention.settings")}</NavLink>
           </div>
         </Popover.Content>

@@ -685,8 +685,7 @@ pub fn within_room(c : @ui.Ctx, s : @kit.PopState, body : () -> Unit, inner? : @
 ///|
 /// A row of a small panel (menuItem): at its padding, words text_in in, its
 /// ground under the pointer, concentric with the panel. `panel`: a panel's
-/// row (parts.tsx PanelRow): its icon 18 in a column 20 wide (`word` in its
-/// place, a word for an icon: 奏), 10 from its words, `end` an icon at its
+/// row (parts.tsx PanelRow): its icon 18 in a column 20 wide, 10 from its words, `end` an icon at its
 /// end, quiet. `note`: what it is at now (a word or two) at its end; `under`: what it is, a line under its words.
 pub fn menu_item(
   c : @ui.Ctx,
@@ -699,7 +698,6 @@ pub fn menu_item(
   note? : String = "",
   under? : String = "",
   panel? : Bool = false,
-  word? : String = "",
   end? : String = "",
   at_top? : Bool = false,
   at_foot? : Bool = false,
@@ -725,18 +723,13 @@ pub fn menu_item(
     radius=small_panel_inner(r_menu),
     id~,
     fn() {
-      let paneled = panel && (icon != "" || word != "" || mark is Some(_))
+      let paneled = panel && (icon != "" || mark is Some(_))
       let leads = fn() {
         if paneled {
           c.box(style=panel_row_icon, fn() {
             match mark {
               Some(m) => m(c, panel_icon)
-              None =>
-                if word != "" {
-                  c.text(word, style=panel_row_word) |> ignore
-                } else {
-                  draw_icon(c, icon, panel_icon, t.p.muted)
-                }
+              None => draw_icon(c, icon, panel_icon, t.p.muted)
             }
           })
           |> ignore
@@ -804,11 +797,6 @@ let panel_icon_col : Double = 20.0
 /// A panel row's icon's column (parts.css.ts panelRowIcon): 20 wide, the icon in its middle.
 // kept across runs: a value (no field of it changes)
 let panel_row_icon : @ui.Style = @ui.css("w=S5 align=ACenter")
-
-///|
-/// A word for an icon in a panel's row (Rail.css.ts zouSmall: 14 on 18, 600).
-// kept across runs: a value (no field of it changes)
-let panel_row_word : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, leading=L5, wrap=false)
 
 // ---------------------------------------------------------------------------
 // Pages (styles/pages.css.ts)
@@ -1063,9 +1051,6 @@ pub fn menu_row(
               if checked {
                 icon(c, "check", size=14.0, color=t.p.text) |> ignore
               }
-            } else if icon_name == "zou" {
-              // 奏 its word (Rail.css.ts zouSmall)
-              c.text("奏", style=menu_zou) |> ignore
             } else if icon_name != "" {
               icon(c, icon_name, size=14.0, color=if danger { if off { t.p.subtle } else { t.p.red } } else { t.p.muted })
               |> ignore
@@ -1195,11 +1180,6 @@ let menu_heading : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S1")
 ///|
 // kept across runs: a value (no field of it changes)
 let menu_heading_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L4_75, wrap=false)
-
-///|
-/// 奏 as an icon in a menu or a panel's row: 14 on 18, 600 (Rail.css.ts zouSmall).
-// kept across runs: a value (no field of it changes)
-let menu_zou : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, leading=L5, wrap=false)
 
 ///|
 /// A menu (parts.tsx Menu: mbui's dropdown menu, in the web's look): `entries` with their icons (by value), as wide as

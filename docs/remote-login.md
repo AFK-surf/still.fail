@@ -270,14 +270,14 @@ login {id, cancel: true}            // 结束它
 - 用法（写进 instructions 和工具说明）：命令失败、输出说没登录（not logged in、401、token 过期），或者人在 chat 里要登录时，用工具自己的登录命令调 `login`（有浏览器或设备码选项的带上）。命令问问题就自己答（工具的默认，或任务需要的），实在定不了在 chat 里问人。从不叫人去跑命令。
 - 卡片只在有浏览器那一步（设备码或要打开的网页）之后发：`chat_post` 带 `card: {"type": "login", "login": "<id>"}`，正文一句话说要谁在哪台登录什么、为什么，加登录链接，`kind: "need_human"` 结束这一轮。工具回的话会说「人那一步好了，现在发卡片」。
 - 密码：不问、不输；不回显的提示 station 拒绝输入，工具回的话会说换浏览器或设备码方式，或者告诉人不能这样登录。
-- 登录结束（完成、失败、超时、取消）时，station 给发起它和发过它卡片的会话各一条通知，卡片自动算答了（从奏里撤掉）。人那一步之后命令又问问题（az 选订阅这类）时，也给发起它的会话一条通知，agent 接着答；agent 正在用 `login` 等它停下时不发，那次调用的回答里已经有了。
+- 登录结束（完成、失败、超时、取消）时，station 给发起它和发过它卡片的会话各一条通知，卡片自动算答了（从待处理里撤掉）。人那一步之后命令又问问题（az 选订阅这类）时，也给发起它的会话一条通知，agent 接着答；agent 正在用 `login` 等它停下时不发，那次调用的回答里已经有了。
 - 同一条命令已有进行中的登录，回那一个，不起第二个。
 - 改了工具和规则，按惯例在 `station/src/agents/migrations.ts` 的 `NOTES` 末尾加一条（38）。
 
 ### `login` 卡片
 
 - 新卡片类型 `{"type": "login", "login": "<id>", "station"?: "<id>", "assignee"?}`（`station/src/sessions/args.ts` 的 `cardArg` 加一种；`station` 是登录在别的 station 上时）。登录结束时 station 把带这个 id 的卡片记进 `closed_cards`（像 agent 自己撤回，不算谁答了，也不叫醒谁：叫醒它的是那条 station 通知）。
-- 卡片里只有登录的 id。网址、设备码由客户端打开卡片时经 mesh 向 station 要，所以消息、推送、奏都不会带它们走 still.fail cloud 或 Slack。
+- 卡片里只有登录的 id。网址、设备码由客户端打开卡片时经 mesh 向 station 要，所以消息、推送、待处理都不会带它们走 still.fail cloud 或 Slack。
 - 推送通知只说「需要在 studio 上登录 gh」这类话（agent 写的正文）。
 - Slack 里的 chat 没有卡片：agent 只贴登录链接，链接在客户端里打开。
 
@@ -292,7 +292,7 @@ login {id, cancel: true}            // 结束它
 
 ### 登录卡片（用户定：卡片就是全部界面，点开不再有弹窗）
 
-chat 里 agent 的消息下面、奏里、station 页「登录」区里进行中的，都是同一张卡片；点卡片本身什么也不打开，没有卡片、没有底部弹层。卡片里依次是：
+chat 里 agent 的消息下面、station 页「登录」区里进行中的，都是同一张卡片；点卡片本身什么也不打开，没有卡片、没有底部弹层。卡片里依次是：
 - 标题「在 studio 上登录 gh」（命令的程序名：跳过 `env` 和它的选项、`VAR=value`，以及 sudo、npx、uvx、`pnpm dlx` 这类只是用来跑它的命令，取文件名、去掉包的版本；`env HOME=… /x/bin/devin auth login` 是 devin）。
 - 现在要人做的：
   - 设备码：「打开 github.com，输入」+ 大字的码，一个按钮 [复制并打开]（用户定：不要两个按钮）：先把码写进剪贴板，再打开验证网址（网址里已经带码的就用那个）；剪贴板写不进去照样打开，码一直显示在卡片上。码本身也能点（用户后来加的）：点了只复制、不打开什么，底部 toast「验证码已复制」（复制不了就说为什么）；它是个按钮（键盘 Enter/空格也行，读屏念「复制验证码 <码>」），手指形光标，没有底色，悬停也没有。
@@ -302,11 +302,11 @@ chat 里 agent 的消息下面、奏里、station 页「登录」区里进行中
 - 结束了：卡片收成一行（用户定：结束的大灰卡片太丑），和 chat 里答过的决策那行一样（`settledLine`：小字、淡色、没有底色和框）：「已在 studio 上登录 gh」；「张三 取消了在 studio 上登录 gh」（不知道谁就「已取消在 studio 上登录 gh」）；「在 studio 上登录 gh 失败：<错误里说原因的那行>」用红色；「在 studio 上登录 gh 超时了」。没有「重试」：要再来让 agent 再起一次。
 - 进行中时按钮在一排（用户定：不要两排）：先是这一步自己的按钮（[复制并打开] / [在浏览器里登录]），旁边是 [取消]：主按钮是强调色实底的药丸，[取消] 是不带底色的普通面板按钮（指针放上去才有底色）。按钮的底色贴着卡片的内边距（离左边和底边 8，和卡片圆角同心），按钮里的字再进 10，和标题对齐（docs/ui-panels.md 的规则）。还没到人的那一步时这一排只有 [取消]。手机宽度也是一排。
 - 不显示命令输出（agent 用 `login` 工具看）；不显示多台的切换（之后几台一起登录时再加）。
-- 在奏里和别的卡片一样排；登录结束后从奏里消失（station 关掉了它的卡片）。
+- 在待处理里和别的卡片一样排；登录结束后从待处理里消失（station 关掉了它的卡片）。
 
 ### 安卓
 
-安卓 app（`apps/mbui`）的卡片是 `apps/mbui/src/sfpages/login_card.mbt`（每种屏幕同一张，测试 `sfapp/login_card_wbtest.mbt`、`login_link_wbtest.mbt`），和网页同一套状态、同一套文字（`web-main.logins.*`），用在 chat 里 agent 消息下面、奏、station 页「登录」区；agent 贴的登录链接（`/w/<ws>/s/<station>/login/<id>`，core `link.parse` 的 `login`）打开 station 页并把那张卡片滚到眼前、浅色底标出来。
+安卓 app（`apps/mbui`）的卡片是 `apps/mbui/src/sfpages/login_card.mbt`（每种屏幕同一张，测试 `sfapp/login_card_wbtest.mbt`、`login_link_wbtest.mbt`），和网页同一套状态、同一套文字（`web-main.logins.*`），用在 chat 里 agent 消息下面、station 页「登录」区；agent 贴的登录链接（`/w/<ws>/s/<station>/login/<id>`，core `link.parse` 的 `login`）打开 station 页并把那张卡片滚到眼前、浅色底标出来。
 
 - 网页都在 Chrome Custom Tab 里打开（`BrowserLogin.java`；没有支持 Custom Tab 的浏览器就交给系统浏览器）。设备码「复制并打开」、点码只复制（toast「验证码已复制」）、只要打开网址，和网页一样。
 - 回环：core 的 `Host.listen` 在安卓上是 app 的（bridge 的 `listen.open/next/respond/close`，引擎把 `listen.*` 和 `secure.*` 一样交给宿主的 Java：`Loopback.java`，`ServerSocket` 只绑 127.0.0.1 / ::1），所以 `canRelay` 为真，核对 Host、路径、state、只转一次、10 秒后关，全是 core 里桌面那一套（`Relays`）。没有改 Rust shell。
@@ -330,7 +330,7 @@ chat 里 agent 的消息下面、奏里、station 页「登录」区里进行中
 - **谁能起登录、转回调、往终端里打字**：能操作这台 station 的人，即能在上面让东西跑起来的人（能开 chat、让 agent 跑命令），主 workspace 和加入的 workspace（multi-workspace.md）一样（用户定）。登录命令本身就是任意命令，所以不另设更低的门槛，也不需要更高：这些人的 agent 本来就能跑 `gh auth login`。只读成员（`viewer`）只能看状态。登录是机器级的，谁登的账号，这台 station 上所有 workspace 的 agent 都会用；登录列表里记下是谁、从哪个 workspace 登的。
 - **agent 起登录**：等同于 agent 跑命令，不另要权限；完成它的人要满足上一条。
 - **workspace 锁**：这些接口都在 member link 上，开了锁的 station 只放锁里的设备，角色取锁和凭证里较低的。cloud 起不了登录、也转不了回调。
-- **不经 cloud**：登录网址、设备码、回调（里面有授权码）、终端内容只走 iroh（member link 和 station 之间的 transport，端到端加密，relay 只看到密文）。消息、卡片、推送、奏只带登录 id。station 日志只记服务名、谁、结果，不记网址的查询串和终端内容。
+- **不经 cloud**：登录网址、设备码、回调（里面有授权码）、终端内容只走 iroh（member link 和 station 之间的 transport，端到端加密，relay 只看到密文）。消息、卡片、推送、待处理只带登录 id。station 日志只记服务名、谁、结果，不记网址的查询串和终端内容。
 - **转发的范围**：客户端只听回环、只在这次登录点了「打开」之后、只接路径和 state 对得上的第一条；station 只转给这次登录的端口，并核对端口确实是这个命令在听；每次登录只转一次。
 - **打开什么网址**：客户端只打开 `https://` 的网址，打开前在卡片上显示域名。一个被人操纵的 agent 可以起一个「登录」把人引到钓鱼页，显示域名、要人点一下才打开，是能做到的最多的。
 - **终端里的密码**：不进 core 的数据库、不进 station 日志，回显关着时客户端不显示。

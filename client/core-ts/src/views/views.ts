@@ -63,21 +63,15 @@ const DAY_MS = 86_400_000;
 /// stations hold more (2026-10-29: on a phone's Hermes, 300 rows made at once kept the first page 150 ms; 80, 60).
 export const HEAD = 80;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "chatThings", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
-/// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
+/// (workspace marks), whether it asks something of them.
 export const chatDerive: Derive = {
   tone: marks.rowTone,
   asks: (row) => {
     const d = decisions.asked(row);
     return d !== null && !decisions.dismissed(d);
-  },
-  desk: (row) => {
-    const d = decisions.asked(row);
-    if (d !== null && !decisions.dismissed(d)) return true;
-    if (arr(get(row, "answered")).length > 0) return true;
-    return u64(get(row, "thread")) !== null && get(row, "mine") === true && present.workingLine(row) !== null;
   },
 };
 
@@ -680,7 +674,7 @@ export class Views implements Owner {
         for (const view of this.chatViews(change.station, change.thread)) this.#core.store.invalidate(view);
         if (change.chat) return;
         // A card answered from here waits no more; a message that did not go marks its chat's row.
-        this.#invalidate((v) => v.topic === "decisions" || v.topic === "workspaceMarks" || v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search");
+        this.#invalidate((v) => v.topic === "workspaceMarks" || v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search");
         return;
       case "pending":
         this.#invalidate((v) => (v.topic === "chat" && v.thread === null && v.session === change.key) || v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search");
@@ -689,20 +683,19 @@ export class Views implements Owner {
         this.#invalidate((v) => v.topic === "chat" && v.station === change.station && v.thread === null && v.session === change.key);
         return;
       case "archiving":
-        this.#invalidate((v) => v.topic === "chats" || v.topic === "workspaceMarks" || v.topic === "decisions");
+        this.#invalidate((v) => v.topic === "chats" || v.topic === "workspaceMarks");
         return;
       case "letGo":
         // (the chat says it let go at once: its end's line, the asks)
         for (const view of this.chatViews(change.station, change.thread)) this.#core.store.invalidate(view);
-        this.#invalidate((v) => v.topic === "decisions");
         return;
       case "vault": {
         const showing = [...this.#vaultShown.values()].filter((s) => s.asks.some((a) => a.ask.request === change.request)).map((s) => topicKey(s.topic));
-        this.#invalidate((v) => v.topic === "decisions" || showing.includes(topicKey(v)));
+        this.#invalidate((v) => showing.includes(topicKey(v)));
         return;
       }
       case "changing":
-        this.#invalidate((v) => ["chats", "chatSearch", "search", "archive", "workspaceMarks", "decisions"].includes(v.topic) || (v.topic === "chat" && v.station === change.station));
+        this.#invalidate((v) => ["chats", "chatSearch", "search", "archive", "workspaceMarks"].includes(v.topic) || (v.topic === "chat" && v.station === change.station));
         return;
     }
   }
@@ -768,7 +761,6 @@ export class Views implements Owner {
     switch (view.topic) {
       case "chats":
       case "chatSearch":
-      case "decisions":
         scope = (view.scope ?? view.workspace) as string;
         perStation = (s) => [{ topic: "chatRows", station: s }, { topic: "overview", station: s }, { topic: "link", station: s }];
         break;
@@ -930,7 +922,7 @@ export class Views implements Owner {
         if (view.topic.startsWith("admin")) return adminSources(view);
         return topics;
     }
-    if (view.topic === "chats" || view.topic === "decisions" || view.topic === "longJobs") topics.push({ topic: "prefs" });
+    if (view.topic === "chats" || view.topic === "longJobs") topics.push({ topic: "prefs" });
     topics.push({ topic: "workspace", workspace: scope });
     if (view.topic === "stations") topics.push({ topic: "workspaces" });
     for (const s of this.stations(scope) ?? []) {
@@ -1226,11 +1218,6 @@ export class Views implements Owner {
         return archive(this, this.local, view.scope as string, this.#core.host, typeof view.q === "string" ? view.q : "", typeof view.limit === "number" ? view.limit : 0);
       case "workspaceMarks":
         return marks.marks(this, this.local, typeof view.workspace === "string" ? view.workspace : null);
-      case "decisions": {
-        const out = this.#decisions(view.workspace as string);
-        this.#vaultSeen(view, out !== undefined && "ok" in out ? arr(get(out.ok, "items")).map((i): [string, J] => [ofAddress(str(i.station) ?? ""), i.card]) : []);
-        return out;
-      }
       case "chatJobs": {
         const chat = this.value({ topic: "chat", station: view.station, thread: view.thread ?? null, session: view.session ?? null });
         if (chat === undefined || !("ok" in chat)) return chat;
@@ -2411,124 +2398,6 @@ export class Views implements Owner {
         ...(md !== undefined ? { md } : {}),
       }),
     };
-  }
-
-  // ── the 奏 page ──
-
-  /// The decision the wide 奏 page shows, by workspace (`decision.show`, decisions.ts Shown).
-  readonly #decisionShown = new Map<string, decisions.Shown>();
-
-  /// The one shown from now on (`decision.show`).
-  showDecision(workspace: string, station: string, thread: number, seq: number): void {
-    this.#decisionShown.set(workspace, decisions.picked(this.#decisionShown.get(workspace) ?? { key: null, at: 0 }, decisions.deferralKey(station, thread, seq)));
-    this.#invalidate((v) => v.topic === "decisions" && v.workspace === workspace);
-  }
-
-  /// Set aside (`decision.defer`): if it is the one shown, the one now in its place shows (itself if it is the only one).
-  decisionDeferred(station: string, thread: number, seq: number): void {
-    const key = decisions.deferralKey(station, thread, seq);
-    for (const [workspace, shown] of this.#decisionShown) this.#decisionShown.set(workspace, decisions.setAside(shown, key));
-  }
-
-  /// Where the one shown is in `items` (decisions.ts shownIn), kept for the next view; null for none.
-  #shownDecision(workspace: string, items: J[]): number | null {
-    const keys = items.map((d) => decisions.deferralKey(d.station, d.thread, d.seq));
-    const { at, next } = decisions.shownIn(this.#decisionShown.get(workspace) ?? { key: null, at: 0 }, keys);
-    this.#decisionShown.set(workspace, next);
-    return at;
-  }
-
-  #decisions(scope: string): Value | undefined {
-    const stations = this.#stationsOr(scope);
-    if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
-    const me = this.me(scope);
-    const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
-    const prefs = this.ok({ topic: "prefs" }) ?? null;
-    const waiting: string[] = [];
-    const failing: { station: string; name: string; message: string }[] = [];
-    const items: [J, number, number | null][] = [];
-    const answered: J[] = [];
-    const working: J[] = [];
-    // Only the rows the 奏 page lists (found by their column, not loaded whole: db/account.ts).
-    const data = this.#core.data;
-    const desk = new Map<string, J[]>();
-    for (const [station, row] of data.desk(stations.map((s) => s.address))) desk.set(station, [...(desk.get(station) ?? []), row]);
-    for (const s of stations) {
-      if (!data.listed(s.address, "chats")) {
-        const v = this.value({ topic: "chatRows", station: s.address });
-        if (v === undefined && s.online) {
-          waiting.push(s.name);
-        } else if (v !== undefined && "err" in v) failing.push({ station: s.address, name: s.name, message: v.err.message });
-        continue;
-      }
-      this.local.settle(s.address, data.rowsRev(s.address));
-      const slackUsers = arr(get(this.ok({ topic: "overview", station: s.address }), "slackUsers")).filter((u): u is string => typeof u === "string");
-      for (const raw of desk.get(s.address) ?? []) {
-        if (this.local.beingArchived(s.address, raw)) continue;
-        const row = this.local.asChanging(s.address, raw);
-        const place = () => ({ station: s.address, stationName: s.name, ...(s.emoji ? { stationEmoji: s.emoji } : {}), ...(s.icon ? { stationIcon: s.icon } : {}), session: row.id ?? null, thread: row.thread ?? null, title: row.title ?? "" });
-        for (const a of arr(row.answered)) {
-          const seq = u64(get(a, "seq"));
-          const at = get(a, "answeredAt");
-          if (seq === null || typeof at !== "number") continue;
-          answered.push({ ...place(), seq, text: decisions.question(str(get(a, "text")) ?? ""), answer: decisions.answerText(a), answeredAt: at, askedAt: get(a, "askedAt") ?? at });
-        }
-        if (u64(row.thread) !== null && row.mine === true && !decisions.waits(row)) {
-          const line = present.workingLine(row);
-          if (line !== null) working.push({ ...place(), line, lastActiveAt: row.lastActiveAt ?? null });
-        }
-        const d = decisions.forViewer(row, me);
-        if (d === null) continue;
-        const thread = u64(row.thread);
-        const seq = u64(d.seq);
-        if (thread === null || seq === null) continue;
-        // Answered, let go or its vault request decided from here: gone at once (back if that could not be done).
-        if (this.local.answered(s.address, thread, seq) || this.local.lettingGo(s.address, thread, seq)) continue;
-        const shownCard = decisions.labelAssignee(decisions.cardShown(d.card), me, members_, row.creator);
-        if (typeof shownCard.vault === "string" && this.local.decidedVault(shownCard.vault)) continue;
-        const card = this.#vaultCard(shownCard, ofAddress(s.address));
-        const agents = arr(row.agents).map((a) => ({ session: present.session(a) }));
-        const shown = (m: J): J => ({ ...shownMessage(m, agents, me, slackUsers, members_, [], row.creator), waiting: false });
-        const options = card.options ?? [];
-        const message = shown(d.message);
-        if (decisions.kind(d.card) === "options") message.options = structuredClone(options);
-        else delete message.options;
-        message.card = structuredClone(card);
-        message.decision = { resolved: false };
-        const before = arr(d.before).map(shown);
-        const deferred = decisions.deferredAt(prefs, s.address, thread, seq);
-        const asked = typeof message.createdAt === "number" ? message.createdAt : 0;
-        const text = str(get(d.message, "text")) ?? "";
-        items.push([
-          {
-            station: s.address,
-            stationName: s.name,
-            ...(s.emoji ? { stationEmoji: s.emoji } : {}),
-            ...(s.icon ? { stationIcon: s.icon } : {}),
-            session: row.id ?? null,
-            thread,
-            title: row.title ?? "",
-            seq,
-            message,
-            before,
-            options,
-            card,
-            deferred: deferred !== null ? true : null,
-            text: decisions.line(text),
-            question: decisions.asks(row, seq, text),
-          },
-          asked,
-          deferred,
-        ]);
-      }
-    }
-    const ordered = decisions.order(items);
-    const at = (v: J, k: string) => (typeof v[k] === "number" ? v[k] : 0);
-    answered.sort((a, b) => at(b, "answeredAt") - at(a, "answeredAt"));
-    working.sort((a, b) => at(b, "lastActiveAt") - at(a, "lastActiveAt"));
-    const list = ordered.map((i) => i[0]);
-    const shown = this.#shownDecision(scope, list);
-    return { ok: { items: list, count: ordered.length, ...(shown !== null ? { shown } : {}), wait: looks.waitNote(waiting, failing, ordered.length === 0), answered, working } };
   }
 
   // ── workspace marks ──

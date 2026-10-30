@@ -49,5 +49,4 @@ pub fn reset() -> Unit {
   places_reset()
   chat_page_reset()
   layers_reset()
-  zou_page_reset()
 }

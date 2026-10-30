@@ -18,20 +18,20 @@ import { tx } from "./cloud/words.tsx";
 /**
  * A filter: 全部 or only the viewer's (我参与的 for chats, 我创建的 for connects), from a menu; for chats (`watching`)
  * also the watching ones (监控中). `compact`: a filter button alone, never marked for what it shows; else the filter's name
- * beside it. `decisions` (奏) and `archive` (已归档, the archive's page, under a line): lists the sidebar shows in place
- * of the chats, each with a page of its own; another list picked there goes back to the chats. Its words are the chats'
- * with `watching`, else the connects' (`label` and `mine`, which named them, are no longer read).
+ * beside it. `archive` (已归档, the archive's page, under a line): the list the sidebar shows in place of the chats, with
+ * a page of its own; another list picked there goes back to the chats (`chats`). Its words are the chats' with
+ * `watching`, else the connects' (`label` and `mine`, which named them, are no longer read).
  */
-export function MineFilter({ compact, archive, watching, decisions }: { label?: string; mine?: string; compact?: boolean; archive?: string | undefined; watching?: boolean; decisions?: { to: string; chats: string } }) {
+export function MineFilter({ compact, archive, watching, chats }: { label?: string; mine?: string; compact?: boolean; archive?: string | undefined; watching?: boolean; chats?: string }) {
   const [onlyMine, setOnlyMine] = useOnlyMine();
   const [mode, setMode] = useSidebarMode();
-  // Chats: one of three (the core keeps 我参与的 and 监控中 apart), or 奏 or the archive in their place; connects: all or mine.
-  const shown = (mode === "decisions" && !decisions) || (mode === "archive" && !archive) ? "all" : mode;
+  // Chats: one of three (the core keeps 我参与的 and 监控中 apart), or the archive in their place; connects: all or mine.
+  const shown = mode === "archive" && !archive ? "all" : mode;
   const filter: SidebarMode = watching ? shown : onlyMine ? "mine" : "all";
   const setFilter = (value: SidebarMode) => watching ? setMode(value) : setOnlyMine(value === "mine");
   const of = watching ? "chats" : "connects";
   const mine = t(`web-main.filter.${of}.mine`);
-  const named = filter === "decisions" ? t("web-main.decisions.title") : filter === "archive" ? t("web-main.filter.archived")
+  const named = filter === "archive" ? t("web-main.filter.archived")
     : filter === "mine" ? mine : filter === "watching" ? t("web-main.filter.watching") : t("web-main.filter.all");
   const navigate = useNavigate();
   const path = useLocation().pathname;
@@ -40,8 +40,7 @@ export function MineFilter({ compact, archive, watching, decisions }: { label?: 
   const item = (value: SidebarMode, text: string) => (
     <DropdownMenu.Item className={`${controlsCss.menuItem} ${controlsCss.chooserItem}`} onSelect={() => {
       setFilter(value);
-      const to = value === "decisions" ? decisions?.to : value === "archive" ? archive
-        : path === decisions?.to || path === archive ? decisions?.chats : undefined;
+      const to = value === "archive" ? archive : path === archive ? chats : undefined;
       if (to && to !== path) { leaving.current = true; navigate(to); }
     }}>
       <span className={controlsCss.chooserCheck}>{filter === value && <Check size={14} />}</span>{text}
@@ -58,7 +57,6 @@ export function MineFilter({ compact, archive, watching, decisions }: { label?: 
           {item("all", t(`web-main.filter.${of}.all`))}
           {item("mine", mine)}
           {watching && item("watching", t("web-main.filter.watching"))}
-          {decisions && item("decisions", t("web-main.decisions.title"))}
           {archive && <>
             <DropdownMenu.Separator className={controlsCss.menuSep} />
             {item("archive", t("web-main.filter.archived"))}

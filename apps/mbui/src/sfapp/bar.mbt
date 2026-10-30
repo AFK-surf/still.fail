@@ -77,7 +77,7 @@ let bar_room : Double = 56.0 + 22.0 + 16.0 + 32.0
 ///|
 /// The chats' family of places, whose pages have 令 in the notch.
 // kept across runs: a table, never written
-let chat_family : Array[String] = ["chats", "decisions", "archive"]
+let chat_family : Array[String] = ["chats", "archive"]
 
 ///|
 /// The places' middles on a bar `w` wide holding `n` with the notch `k` open (Bar.kt barCentres).
@@ -626,6 +626,10 @@ priv struct BarModel {
   /// a finger: where it has the ball (-1 none), its height once the panel is its own
   mut drag : Double
   mut drag_y : Double
+  /// those as this frame's first build found them: what it draws by in every build of the frame (a press handled in
+  /// it is drawn from the next)
+  mut drag_drawn : Double
+  mut drag_y_drawn : Double
   mut holds : Bool
   mut from_open : Bool
   mut open : Bool
@@ -674,6 +678,8 @@ let bar : BarModel = {
   active_was: "",
   drag: -1.0,
   drag_y: -1.0,
+  drag_drawn: -1.0,
+  drag_y_drawn: -1.0,
   holds: false,
   from_open: false,
   open: false,
@@ -710,6 +716,8 @@ fn bar_reset() -> Unit {
   bar.active_was = ""
   bar.drag = -1.0
   bar.drag_y = -1.0
+  bar.drag_drawn = -1.0
+  bar.drag_y_drawn = -1.0
   bar.holds = false
   bar.from_open = false
   bar.open = false
@@ -843,7 +851,6 @@ fn place_of(page : Page) -> String? {
   match page {
     Home => Some("chats")
     Files => Some("files")
-    Decisions => Some("decisions")
     Place(p) => Some(p)
     _ => None
   }
@@ -1133,14 +1140,9 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     _ => ""
   }
   let notched = action != ""
-  // the dots: 奏 waiting (the accent), a station in trouble (red)
-  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(ws.id) })
-  let decisions = count(field(field(marks.value, "workspaces"), ws.id), "decisions")
+  // the dots: a station in trouble (red)
   let chats = (src.topic)("chats", { "scope": Json::string(ws.id), "mine": Json::boolean(false) })
   let dots : Map[String, Int64] = Map([])
-  if decisions > 0 {
-    dots["decisions"] = t.p.accent
-  }
   match field(chats.value, "trouble") {
     Some(Object(_)) => dots["stations"] = t.p.red
     _ => ()
@@ -1176,6 +1178,12 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     m.holds = false
   }
   if tell {
+    m.drag_drawn = m.drag
+    m.drag_y_drawn = m.drag_y
+  }
+  let drag = m.drag_drawn
+  let drag_y = m.drag_y_drawn
+  if tell {
     m.k.go(if notched { 1.0 } else { 0.0 }, 300.0, 30.0)
   }
   let ai = match active {
@@ -1184,10 +1192,10 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   }
   let final_cs = bar_centres(w, if notched && !m.mode.get() { 1.0 } else { 0.0 }, items.length())
   // the finger's place, and the place a let-go would choose: the ball keeps to it, leaning toward the finger
-  let cand : (Double, Double, Int, String)? = if m.drag >= 0.0 {
-    let x = m.drag
-    if m.drag_y >= 0.0 && m.drag_y < row_top - 4.0 && others.length() > 0 {
-      let n = dclamp(((m.drag_y - over) / bar_row).floor(), 0.0, (others.length() - 1).to_double()).to_int()
+  let cand : (Double, Double, Int, String)? = if drag >= 0.0 {
+    let x = drag
+    if drag_y >= 0.0 && drag_y < row_top - 4.0 && others.length() > 0 {
+      let n = dclamp(((drag_y - over) / bar_row).floor(), 0.0, (others.length() - 1).to_double()).to_int()
       let set = sets[others[n]]
       let cs = bar_centres(w, 0.0, set.length())
       let j = nearest(cs, set.length(), x)
@@ -1203,10 +1211,10 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   }
   let (goal_x, goal_y) = match cand {
     Some((cx, cy, _, _)) =>
-      (cx + (m.drag - cx) * lean, cy + ((if m.drag_y >= 0.0 { m.drag_y } else { bar_mid }) - cy) * lean)
+      (cx + (drag - cx) * lean, cy + ((if drag_y >= 0.0 { drag_y } else { bar_mid }) - cy) * lean)
     None => (final_cs[if ai < 0 { 0 } else { ai }], bar_mid)
   }
-  let sliding = m.drag >= 0.0
+  let sliding = drag >= 0.0
   let active_key = active.unwrap_or("")
   if tell && !sliding && active_key != m.active_was {
     m.active_was = active_key

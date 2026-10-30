@@ -6,7 +6,7 @@
 /// The screens counted: the fixtures' modes (scripts/shots.sh's) and the settings' pages.
 let census_modes : Array[String] = [
   "home", "chat", "chat-compose", "chat-attach", "chat-quote", "chat-cards", "chat-md", "files", "drive", "drive-sub",
-  "reader", "decisions", "history", "chat-info", "chat-jobs", "video", "service", "share-in", "lock-code", "lock-wrong",
+  "reader", "history", "chat-info", "chat-jobs", "video", "service", "share-in", "lock-code", "lock-wrong",
   "lock-waiting",
 ]
 

@@ -1,5 +1,5 @@
-// The answer to an agent's request about a vault item (docs/vault.md), at the foot of its card (VaultAsk.tsx), on the
-// decisions page (奏) and on the vault's page: the answer most give as the one solid button (允许 / 存入), the other as
+// The answer to an agent's request about a vault item (docs/vault.md), at the foot of its card (VaultAsk.tsx) and on
+// the vault's page: the answer most give as the one solid button (允许 / 存入), the other as
 // words beside it (拒绝 / 不存); how long a use is allowed, a choice beside them that starts at the longest the item is
 // given for. A tap asks the core (`vault.approve`, which has the system ask the person; `vault.deny`); once decided the
 // station restates the card. Only the viewer's own request (the `vaults` topic's requests) is answered, and only in an
@@ -24,9 +24,8 @@ const scopeName = (s: Scope): string => t(`web-pages.vault.scope.${s}`);
 
 /**
  * The answer to request `id` in `workspace`. `who`: whose it is to decide, said where it is not the viewer's.
- * `onDecided` once it went through (the decisions page sends the card on its way).
  */
-export function VaultActions({ workspace, id, who, onDecided, extra }: { workspace: string; id: string; who?: string | undefined; onDecided?: (() => void) | undefined; extra?: ReactNode }) {
+export function VaultActions({ workspace, id, who, extra }: { workspace: string; id: string; who?: string | undefined; extra?: ReactNode }) {
   const { view, request } = useVaultRequest(workspace, id);
   const run = useVaultCall();
   const go = useGo();
@@ -64,7 +63,6 @@ export function VaultActions({ workspace, id, who, onDecided, extra }: { workspa
       setPending(null);
       if (v === undefined) return;
       setSecret("");
-      onDecided?.();
     });
   };
   const enter = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -114,6 +112,6 @@ export function VaultActions({ workspace, id, who, onDecided, extra }: { workspa
 }
 
 /** The answer under a card that names a vault request (`card.vault`), at a station's `address`. */
-export function VaultCard({ address, id, who, onDecided }: { address: string; id: string; who?: string | undefined; onDecided?: (() => void) | undefined }) {
-  return <VaultActions workspace={scopeOf(address)} id={id} who={who} onDecided={onDecided} />;
+export function VaultCard({ address, id, who }: { address: string; id: string; who?: string | undefined }) {
+  return <VaultActions workspace={scopeOf(address)} id={id} who={who} />;
 }

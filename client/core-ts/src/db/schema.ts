@@ -29,6 +29,7 @@ export const MIGRATIONS: string[] = [
   CREATE TABLE IF NOT EXISTS list (station TEXT NOT NULL, list TEXT NOT NULL, confirmed INTEGER, rev INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (station, list));
 
   -- The chats the viewer's sidebar lists (archived = 0) and the archived ones (1), as GET /chats gives them.
+  -- (desk: what the 奏 page listed; no longer written, left so that an older core reading the database still can.)
   CREATE TABLE IF NOT EXISTS chat (
     station TEXT NOT NULL, id TEXT NOT NULL, archived INTEGER NOT NULL, ord REAL NOT NULL,
     thread INTEGER, session TEXT, client_key TEXT,

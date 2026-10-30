@@ -125,7 +125,7 @@ Rust core 有不少地方不符合设计，TS core 不以「和 Rust 一样」�
 没声明 `keyed` 的订阅收到同一变化的老式表达（按下标 diff，比整值大就发整值），和 Rust 一样。
 
 集合（`src/collections.ts` 的 `SPECS`）：`chats`（days 按 `daysAgo`，每天的 items 按 `station`+`id`）、`chatSearch`、`chat`
-（messages 按 `seq`+`outgoing`，outbox 按 `id`）、`decisions`（items 按 `station`+`session`+`seq`）、`archive`、`chatRows`、
+（messages 按 `seq`+`outgoing`，outbox 按 `id`）、`archive`、`chatRows`、
 `archivedRows`、`threads`、`sessions`（`key`）、`jobs`。
 
 应用器：web `web/src/core/delta.ts`（页面和桌面主进程共用）、安卓 `apps/android/core/.../Delta.kt`；两边只复制路径上的
@@ -414,7 +414,7 @@ SharedWorker 时多个 core 一起写、各账号共用一个库（已读、未�
   这一轮，`status` 说出来）；桌面同一进程里 core 因 fatal 重启前先关库。
 - 读就是查询：列表在被读时一条索引查询载入、之后写者逐行维护、topic 走了就放掉；只被 view 盯着的列表不读；chat 列表
   行多（> 500）时首屏 80 行一条查询先出（`chat_recent` 索引），再逐台载入；workspace 标记只读 `tone`/`asks` 选出的行，
-  奏页只读 `desk` 行，同步只读 `running` 行；chat 页按区间读 entries；通知听写者给的行变化。启动时不整表载入。
+  同步只读 `running` 行；chat 页按区间读 entries；通知听写者给的行变化。启动时不整表载入。
 - 旧数据一次导入（`src/db/import.ts`）：旧记录库（`core.db` 的 `records`、IndexedDB `records`）和 Rust 的 kept 分块，
   按当时的 owner 分给各账号，原样留着（可以退回），不设上限；entries/transcript 首屏之后后台导。
 

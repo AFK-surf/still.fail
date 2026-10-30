@@ -140,12 +140,6 @@ pub let dark_muted : Int64
 
 pub let dark_text : Int64
 
-pub fn decision_key(Json) -> String
-
-pub fn decision_show(@sfbase.Source, @sfbase.Workspace, Json) -> Unit
-
-pub fn deck_rest() -> Double
-
 pub let desktop_face : String
 
 pub let dismiss_turn_ms : Double
@@ -436,7 +430,7 @@ pub fn fresh_picked(Json?) -> Unit
 
 pub fn fresh_reset() -> Unit
 
-pub fn go_to(@sfbase.ChatRef, Double) -> Unit
+pub fn go_to(@sfbase.ChatRef, Double, passage? : String) -> Unit
 
 pub let go_to_words : Map[String, Array[String]]
 
@@ -587,8 +581,6 @@ pub fn open_chat(@sfbase.ChatRef) -> Unit
 pub fn open_chat_at(@sfbase.ChatRef, Double, held? : Bool) -> Unit
 
 pub fn open_chat_found(@sfbase.ChatRef, Double, Array[String]) -> Unit
-
-pub fn open_decisions() -> Unit
 
 pub fn open_detail(@sfbase.Source, @sfbase.ChatRef, String) -> Unit
 

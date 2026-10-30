@@ -127,9 +127,9 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
 }
 
 /** The composer: a floating capsule at the page's foot, with the files and quotes going with the message, as the wide screen's composer shows them. */
-export function MobileComposer({ shown, draftKey, latest, draft, now, root, inline = false }: {
+export function MobileComposer({ shown, draftKey, latest, draft, now, root }: {
   shown: Shown; draftKey: string | undefined; latest: RefObject<HostComposer | null>; draft: Draft; now: RefObject<Draft>;
-  root: RefObject<HTMLDivElement | null>; inline?: boolean;
+  root: RefObject<HTMLDivElement | null>;
 }) {
   const app = useApp();
   const upload = draft.add;
@@ -185,7 +185,7 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, inli
   // (morph.ts): after the text box has taken its height (useComposerBar), so that it is read with it.
   useMorph(frame, `${expanded}|${draft.text}|${draft.files.length}|${draft.quotes.length}|${draft.error}|${shown.offline}|${shown.archived}`);
   return (
-    <div className={`${inline ? css.mInlineComposer : `${css.mComposer} ${css.mHostComposer}`} ${rootCss.wide}`} ref={capsule}>
+    <div className={`${css.mComposer} ${css.mHostComposer} ${rootCss.wide}`} ref={capsule}>
       {menu}
       {(shown.archived || shown.cacheCold || shown.offline) && <ComposerNotices>
         {shown.archived && <ArchiveNotice offline={shown.offline} restore={() => latest.current?.restore?.() ?? Promise.resolve()} />}

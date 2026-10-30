@@ -270,10 +270,10 @@ pub fn bring_page() -> Unit {
 
 ///|
 /// Whether page `p`, opened, is shown in the page pane (show_page): not a place's own page, whose list is the
-/// sidebar's (the chats', the settings', 文件's, 奏's, the archive's, a rail's place's), nor what is over the whole
+/// sidebar's (the chats', the settings', 文件's, the archive's, a rail's place's), nor what is over the whole
 /// window (a screen, a file read or played).
 pub fn shown_in_page(p : Page) -> Bool {
-  !(p is (Home | Settings | Place(_) | Files | Decisions | Archived | Screen(_) | DriveRead(_) | DrivePlay(_)))
+  !(p is (Home | Settings | Place(_) | Files | Archived | Screen(_) | DriveRead(_) | DrivePlay(_)))
 }
 
 ///|
@@ -799,7 +799,7 @@ pub fn frame(
   }
   // the page in its pane, `ph` high
   // (its top row, a bar's height, the window's title bar under the page, whether the page has a bar there or not: a
-  // new chat, settings, 奏: title_row)
+  // new chat, settings: title_row)
   let page_in = fn(ph : Double) {
     if inset {
       title_row(c, "page-title-row", @sf.wide_bar_h + (if wide.tape { @sf.tape_bar_over() } else { 0.0 }))
@@ -1566,7 +1566,7 @@ fn tape_back_to() -> TapePane? {
 fn page_back_pops() -> Bool {
   let pages = app.nav.pages()
   let n = pages.length()
-  app.nav.top_over() || (n >= 2 && !(pages[n - 2] is (Home | Settings | Place(_) | Files | Decisions | Archived)))
+  app.nav.top_over() || (n >= 2 && !(pages[n - 2] is (Home | Settings | Place(_) | Files | Archived)))
 }
 
 ///|
@@ -1595,7 +1595,7 @@ pub fn laid_beside(p : Page) -> Bool {
 
 ///|
 /// How much of the way a panel pulled over must have come to be brought over when let go, and how fast a finger
-/// leaving it (px/s) flings it over or back whatever the way it came (the 奏 deck's swipe's fling, decisions.mbt).
+/// leaving it (px/s) flings it over or back whatever the way it came.
 let tape_pull_over : Double = 0.3
 
 ///|
@@ -1853,8 +1853,6 @@ fn main_page(
     Screen(_) | DriveRead(_) | DrivePlay(_) => ()
     // 已归档, none of its chats open beside the list: what it is
     Archived => archive_main(c)
-    // 奏: the decision picked in the sidebar's 奏 (decision_page.mbt)
-    Decisions => decision_page(c, src, w)
     // a web service, a visualization opened aside: its chat with it beside it (service_tab.mbt)
     Service(station, job) => service_beside(c, src, w, station, job)
     PreviewFile(station, key, path, name) => tab_beside(c, src, w, station, key, file_tab(key, path, name))
@@ -1874,7 +1872,7 @@ fn side_group(src : Source, ws : String) -> String {
     "files" => "files"
     "profiles" if railed.contains("profiles") => "profiles"
     "stations" if railed.contains("stations") => "stations"
-    "chats" | "decisions" | "archive" => "chats"
+    "chats" | "archive" => "chats"
     p if railed.contains(p) => "chats"
     _ => "settings"
   }

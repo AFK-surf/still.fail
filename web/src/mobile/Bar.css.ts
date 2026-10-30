@@ -59,10 +59,10 @@ export const mBarPlace = style({
   selectors: { "&[data-on]": { color: "var(--m-ink)" } },
 });
 globalStyle(`${mBarPlace} > svg`, { width: "28px", height: "28px" });
-/** What waits there: a dot at the icon's top right (奏 in the accent, stations in trouble in red). */
+/** What waits there: a dot at the icon's top right (stations in trouble, in red). */
 export const mBarDot = style({
   position: "absolute", top: "calc(50% - 16px)", left: "calc(50% + 10px)", width: "7px", height: "7px", borderRadius: "50%",
-  background: "var(--m-red)", selectors: { "&[data-tone=\"accent\"]": { background: "var(--m-accent)" } },
+  background: "var(--m-red)",
 });
 
 /** The other bars, one row each above the bar, in the panel. */

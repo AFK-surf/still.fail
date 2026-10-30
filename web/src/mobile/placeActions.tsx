@@ -20,7 +20,7 @@ export function usePlaceActions(): Partial<Record<BarPlace, PlaceAction>> {
   const online = list?.filter((s) => s.online) ?? [];
   const actions: Partial<Record<BarPlace, PlaceAction>> = {};
   const ling: PlaceAction = { key: "ling", label: t("web-mobile.home.newChat"), run: () => app.open(app.at("/new")) };
-  actions.chats = actions.decisions = actions.archive = ling;
+  actions.chats = actions.archive = ling;
   if (manager && list) {
     actions.stations = {
       key: "station", label: t("web-mobile.stations.add"),

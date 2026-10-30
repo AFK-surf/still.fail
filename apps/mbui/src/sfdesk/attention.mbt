@@ -1,7 +1,7 @@
 // What wants the viewer and they have not looked at yet, beside the rail's bell or under 待处理 (ember
 // web/src/Attention.tsx, Attention.css.ts): the stations' trouble and the services left up long (with the bell), then
 // each workspace's chats that came to want the viewer and were not read since (the core's `workspaceMarks` items),
-// each leading to its chat: a card until read (then its row and 奏 still say it), a failure until the chat runs again;
+// each leading to its chat: a card until read (then its row still says it), a failure until the chat runs again;
 // one let go here neither (忽略: a card's `decision.dismiss`, a failure's `prefs.failsGone` until it fails again). A
 // station's trouble is the same: listed until the panel has shown it, then the Station's place
 // says it, until the trouble changes (kept on this device).
@@ -32,7 +32,7 @@ let attention_size : FixedArray[Double] = [0.0]
 /// 新建对话, 6 under it), 300 wide. With the bell, the stations' trouble not looked at yet (looked at as it opens:
 /// listed while open, then no longer, until the trouble changes, kept on this device) and the services left up long
 /// first; then each workspace's chats that want the viewer, not read since (the one in view's first), 忽略 on the row
-/// pointed at (`decision.dismiss`); pressed, its chat; 全部决定 (奏) and 通知设置 at its foot.
+/// pointed at (`decision.dismiss`); pressed, its chat; 通知设置 at its foot.
 fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let close = fn() { wide.attention_open = false }
   // (the window turned beside the system's tabs: what it opened from is elsewhere, closed: rail_native.mbt)
@@ -299,12 +299,8 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
       }
     })
   }
-  // 全部决定 and 通知设置: small words, quiet (Attention.css.ts foot, link)
+  // 通知设置: small words, quiet (Attention.css.ts foot, link)
   c.box(style=att_foot, fn() {
-    if attention_link(c, "attention/desk", @sf.t("web-main.attention.desk")) {
-      close()
-      @sfbase.go_place("decisions") |> ignore
-    }
     if attention_link(c, "attention/settings", @sf.t("web-main.attention.settings")) {
       close()
       open_settings_at(@settings.Route::Notifications)

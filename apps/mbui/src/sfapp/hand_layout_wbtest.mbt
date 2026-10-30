@@ -14,10 +14,10 @@ let hand_windows : Array[(String, Double, Double, Int)] = [
 ]
 
 ///|
-/// The pages looked at: the chats' list, a chat, a new chat, the files and a folder, 奏, a history, search, the
+/// The pages looked at: the chats' list, a chat, a new chat, the files and a folder, a history, search, the
 /// settings and their places, a device waiting in the lock.
 let hand_modes : Array[String] = [
-  "home", "chat", "newchat", "files", "drive", "decisions", "history", "search", "settings-home", "settings-appearance",
+  "home", "chat", "newchat", "files", "drive", "history", "search", "settings-home", "settings-appearance",
   "place-stations", "place-profiles", "lock-waiting",
 ]
 

@@ -79,7 +79,6 @@ pub fn lit_place() -> String {
   while k >= 0 {
     match pages[k] {
       Files | Drive(_) | DriveRead(_) | DrivePlay(_) => return "files"
-      Decisions => return "decisions"
       Place(p) => return p
       // 已归档: one of the chats' lists
       Home | Chat(_) | NewChat | Archived => return "chats"
@@ -108,11 +107,10 @@ pub fn side_place() -> String {
 
 ///|
 /// Which of the lists is shown (the sidebar's mode, station.tsx useSidebarMode): 全部 0, 我参与的 1, 监控中 2 (the
-/// filter), 奏 3, 已归档 4.
+/// filter), 已归档 3.
 pub fn list_mode(src : Source, w : Workspace) -> Int {
   match side_place() {
-    "archive" => 4
-    "decisions" => 3
+    "archive" => 3
     _ =>
       match filter_of(src, w.id) {
         "mine" => 1
@@ -128,8 +126,7 @@ fn list_place(mode : Int) -> String {
   match mode {
     1 => "mine"
     2 => "watching"
-    3 => "decisions"
-    4 => "archive"
+    3 => "archive"
     _ => "chats"
   }
 }
@@ -196,7 +193,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
       // a list's place lit while its list is the one shown (Rail.tsx `on`): 我参与的, 监控中 by the filter when they
       // are in the rail, else 对话; 已归档 while the archive is open (shownList)
       let list = list_place(list_mode(src, w))
-      let listy = lit == "chats" || lit == "decisions"
+      let listy = lit == "chats"
       // a place left out of the rail but in view: at the foot of its places, lit, while it is
       let in_view = rail_in_view(src, w)
       let shown = places.copy()
@@ -207,7 +204,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
       c.box(style=rail_places_col, fn() {
         for place in shown {
           let on = match place {
-            "chats" | "mine" | "watching" | "decisions" | "archive" => listy && shown_list == place
+            "chats" | "mine" | "watching" | "archive" => listy && shown_list == place
             _ => lit == place
           }
           rail_place(c, src, w, place, on, places)
@@ -330,7 +327,7 @@ let rail_top_inset : Double = 41.0
 let rail_top_web : Double = 5.0
 
 ///|
-/// A place's icon (20), the rail's words' (奏).
+/// A place's icon (20).
 let rail_icon_size : Double = 20.0
 
 ///|
@@ -489,12 +486,7 @@ pub fn closed_ground() -> Int64 {
 let rail_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Danger")
 
 ///|
-/// 奏, the word, its size the icons' (Rail.css.ts zou: textTitle, 20 high, 600).
-// kept across runs: a value (no field of it changes)
-let rail_zou : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, leading=L6, wrap=false)
-
-///|
-/// One place of the rail: its icon (奏 its word), what waits on it a dot at its corner; pressed, its page.
+/// One place of the rail: its icon, what waits on it a dot at its corner; pressed, its page.
 fn rail_place(
   c : @ui.Ctx,
   src : Source,
@@ -563,13 +555,10 @@ fn rail_place(
   let here = field(field(marks.value, "workspaces"), w.id)
   let dot = match place {
     "attention" => bell_lit(src, w)
-    "decisions" => count(here, "decisions") > 0
     _ => false
   }
   let label = match place {
     "stations" => "Station：" + rail_stations_label(src, w.id)
-    "decisions" if count(here, "decisions") > 0 =>
-      @sf.t("web-main.decisions.entry", args=[("n", count(here, "decisions").to_string())])
     _ => rail_label(src, place)
   }
   // what wants the person in a list, as its rows' marks: while the sidebar is folded (open, the rows show it;
@@ -582,9 +571,7 @@ fn rail_place(
   }
   rail_edit_frame(c, src, w, place, moved, fn() {
     rail_ground(c, id, on || (place == "attention" && wide.attention_open), fn(color) {
-      if place == "decisions" {
-        c.text("奏", style=rail_zou.then(@ui.text_style(color=Data(color)))) |> ignore
-      } else if place == "stations" {
+      if place == "stations" {
         // the stations at a glance (Sidebar.tsx RailStations: StationGlyph, 20)
         @sf.station_glyph(c, stations_at_glance(src, w.id).0, rail_icon_size, color, t.p.red) |> ignore
       } else {
@@ -676,11 +663,11 @@ fn rail_keep(src : Source, ws : String, items : Array[String]) -> Unit {
 }
 
 ///|
-/// The place in view that is left out of the rail, if one is: a list shown (我参与的, 监控中, 奏, the archive; the chats'
+/// The place in view that is left out of the rail, if one is: a list shown (我参与的, 监控中, the archive; the chats'
 /// when 对话 is out), the files, a place picked from the rail's menu (Rail.tsx inView, setExtra); "" none.
 fn rail_in_view(src : Source, w : Workspace) -> String {
   let lit = lit_place()
-  let in_view = if lit == "chats" || lit == "decisions" {
+  let in_view = if lit == "chats" {
     list_place(list_mode(src, w))
   } else if rail_places(src).contains(lit) {
     lit
@@ -731,7 +718,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     entries.push(@kit.menu_label(@sf.t("web-main.rail.away")))
     for i in away {
       entries.push(@kit.menu_item("go:" + i, label=rail_label(src, i)))
-      icons["go:" + i] = if i == "decisions" { "zou" } else { rail_icon(i) }
+      icons["go:" + i] = rail_icon(i)
     }
     entries.push(@kit.menu_separator())
   }
@@ -980,7 +967,7 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// A place that can be put in the rail, in the adder (parts.tsx PanelRow): its icon (奏 its word), its ＋ at its end.
+/// A place that can be put in the rail, in the adder (parts.tsx PanelRow): its icon, its ＋ at its end.
 /// True on the frame after it was pressed.
 fn adder_row(c : @ui.Ctx, place : String, label : String) -> Bool {
   @sf.menu_item(
@@ -989,7 +976,6 @@ fn adder_row(c : @ui.Ctx, place : String, label : String) -> Bool {
     key="rail/add/" + place,
     panel=true,
     icon=rail_icon(place),
-    word=if place == "decisions" { "奏" } else { "" },
     end="plus",
   )
 }

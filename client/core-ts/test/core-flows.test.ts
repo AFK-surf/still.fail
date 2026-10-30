@@ -17,7 +17,7 @@ const STATION = (station: string) => ({ station });
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { account, apply, call, nowS, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
-import { Status, base, entry, overview, session, started, stationHost, stationLater, stationReplies, threadView } from "./station-fixture.ts";
+import { base, entry, overview, session, started, stationHost, stationLater, stationReplies, threadView } from "./station-fixture.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
@@ -26,7 +26,6 @@ import * as present from "../src/present.ts";
 import { PUSH_KEY } from "../src/attention.ts";
 import { dbName, SOON_MS } from "../src/data.ts";
 import { PENDING_PREFIX } from "../src/views/local.ts";
-import { deferralKey } from "../src/decisions.ts";
 import { encode } from "../src/ops.ts";
 import { EXPORT_MS } from "../src/trace.ts";
 
@@ -400,26 +399,19 @@ const posted = (host: FakeHost, path = "/threads/7/messages") =>
   host.requests.filter((r) => r.method === "POST" && r.url.endsWith(path)).map((r) => JSON.parse(new TextDecoder().decode(r.body!)));
 const errors = (host: FakeHost, ids: number[]) => host.takeEmitted().filter(([, m]) => ids.includes((m as J).id) && "error" in (m as J)).length;
 
-test("a_decision_is_answered_in_its_chat_set_aside_on_the_device_and_dismissed_on_the_station", async () => {
+test("a_decision_is_answered_in_its_chat_and_dismissed_on_the_station", async () => {
   let n = 3;
   const { host, core } = await started({ ...base(), "PUT /threads/7/dismissed": {} });
   stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/threads/7/messages") ? { n: ++n } : undefined));
   const ui = core.connect();
   const decision = { seq: 4, options: [{ label: "合", recommended: true }, { label: "先不改" }], message: { seq: 4, ts: "9.000004", text: "合吗？", authorName: "Claude" }, before: [] };
   core.inner.data.set({ topic: "chatRows", station: "ws/st" }, [{ id: "k1", session: "k1", thread: 7, decision }]);
-  // Set aside: kept on the device; nothing is sent.
-  call(core, ui, 2, "decision.defer", { station: "ws/st", thread: 7, seq: 4 });
-  await host.settle();
-  const at = deferralKey("ws/st", 7, 4);
-  assert.equal(typeof (core.inner.data.get({ topic: "prefs" }) as J).decisionsDeferred[at], "number");
-  assert.deepEqual(posted(host), []);
-  // Answered: the option's label, quoting the post that asked; no longer set aside.
+  // Answered: the option's label, quoting the post that asked.
   call(core, ui, 3, "decision.answer", { station: "ws/st", thread: 7, seq: 4, option: "先不改" });
   await host.settle();
   let sent = posted(host);
   assert.equal(sent[0].text, "先不改");
   assert.deepEqual(sent[0].quotes, [{ author: "Claude", text: "合吗？", comment: "", role: "agent", ts: "9.000004" }]);
-  assert.deepEqual((core.inner.data.get({ topic: "prefs" }) as J).decisionsDeferred, {});
   // Dismissed: the station keeps it for the viewer.
   call(core, ui, 7, "decision.dismiss", { station: "ws/st", thread: 7, seq: 4 });
   await host.settle();
@@ -460,51 +452,6 @@ test("a_decision_is_answered_in_its_chat_set_aside_on_the_device_and_dismissed_o
   assert.equal(sent.length, 4);
   assert.equal(sent[3].text, "sk_test_1");
   assert.deepEqual(sent[3].quotes, [{ author: "Claude", text: "key？", comment: "", role: "agent", ts: "9.000006" }]);
-  core.close();
-});
-
-test("a_decision_dismissed_is_off_the_page_at_once_and_back_when_its_station_refuses_and_the_wide_page_shows_the_one_picked", async () => {
-  const card = (thread: number, seq: number, at: number) => {
-    const options = [{ label: "合", recommended: true }, { label: "先不改" }];
-    return { id: `k${thread}`, session: `k${thread}`, thread, title: `t${thread}`, agents: [], lastActiveAt: at, decision: { seq, options, card: { type: "options", options, assignee: "a@x.com" }, message: { seq, thread, ts: `9.00000${seq}`, authorKind: "agent", author: `k${thread}`, authorName: "Claude", text: "合吗？", attachments: [], quotes: [], declared: null, createdAt: at, editedAt: null }, before: [] } };
-  };
-  let refuse = true;
-  const { host, core } = await started({ ...base(), "GET /chats": [card(7, 4, 1000), card(8, 6, 2000), card(9, 2, 3000)] });
-  stationReplies(host, (req) => (req.method === "PUT" && req.url.endsWith("/threads/7/dismissed") ? (refuse ? new Status(403, { error: "不行" }) : {}) : undefined));
-  const ui = core.connect();
-  const values = new Map<number, J>();
-  const answers = new Map<number, J>();
-  const said: J[] = [];
-  const read = async () => {
-    await host.time.pass(1000);
-    for (const [, message] of host.takeEmitted()) {
-      const m = message as J;
-      if (m.id === 1) said.push(m);
-      if ("ok" in m || "error" in m) answers.set(m.id, m);
-      else if ("value" in m) values.set(m.id, m.value);
-      else if ("delta" in m) values.set(m.id, applyOps(values.get(m.id), m.delta));
-    }
-    const d = values.get(1);
-    assert.ok(d?.items, JSON.stringify(said).slice(0, 2000));
-    return { order: d.items.map((i: J) => i.thread), shown: d.shown === undefined ? null : d.items[d.shown].thread };
-  };
-  subscribe(core, ui, 1, { topic: "decisions", workspace: "ws" });
-  assert.deepEqual(await read(), { order: [7, 8, 9], shown: 7 });
-  // Picked on the wide page: shown while it is there.
-  call(core, ui, 2, "decision.show", { workspace: "ws", station: "ws/st", thread: 8, seq: 6 });
-  assert.deepEqual(await read(), { order: [7, 8, 9], shown: 8 });
-  // Set aside, last; the one now in its place shows.
-  call(core, ui, 3, "decision.defer", { station: "ws/st", thread: 8, seq: 6 });
-  assert.deepEqual(await read(), { order: [7, 9, 8], shown: 9 });
-  // Dismissed and refused: back where it was.
-  call(core, ui, 4, "decision.dismiss", { station: "ws/st", thread: 7, seq: 4 });
-  assert.deepEqual((await read()).order, [7, 9, 8]);
-  assert.ok("error" in answers.get(4));
-  // Taken: off; the one shown stays.
-  refuse = false;
-  call(core, ui, 5, "decision.dismiss", { station: "ws/st", thread: 7, seq: 4 });
-  assert.deepEqual(await read(), { order: [9, 8], shown: 9 });
-  assert.ok("ok" in answers.get(5));
   core.close();
 });
 

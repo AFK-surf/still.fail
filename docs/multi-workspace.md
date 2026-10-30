@@ -12,7 +12,7 @@
 
 - **主 workspace**：station 第一个加入的 workspace（`cloud.json` 顶层那个）。之后加入的叫**加入的 workspace**。主 workspace 被移走时，加入最早的那个接任。
 - **各 workspace 在 station 里同权**（2026-10-18 用户定，之前 station 级的东西只归主 workspace 管）：账号（profiles、订阅登录、API key）、更新和通道、`tools.access`、加入和退出 workspace、自动决策、station 分享（share）、继续本机的 Claude Code/Codex 会话（chat 开在发起人所在的 workspace），任何一个 workspace 的 owner/admin 都能管，成员能看到的也一样。主 workspace 只决定顶层 `cloud.json` 这类机器内部的事。
-- **按 workspace 分开的**：chat（会话、thread、奏、归档和归档策略）、Slack connect、agent 的记忆和 skills（`agent/`）、文件根目录（`drive.roots`）、chat 分享（xshare）、station 之间的调用（session_send、chat_list、station_list、任务）都只在同一个 workspace 的 station 之间。
+- **按 workspace 分开的**：chat（会话、thread、卡片、归档和归档策略）、Slack connect、agent 的记忆和 skills（`agent/`）、文件根目录（`drive.roots`）、chat 分享（xshare）、station 之间的调用（session_send、chat_list、station_list、任务）都只在同一个 workspace 的 station 之间。
 - **账号共用**：每个 profile 默认给 station 所在的所有 workspace 用（2026-10-18 用户定，之前是默认只给主 workspace）；任一 workspace 的管理员可以对某个加入的 workspace 关掉（`profiles[].withheld`）。加入的 workspace 一个能用的 profile 都没有时，那里的 chat 开不了轮次，界面说明原因。
 - **station 分享（share）跟着 profile 走**（2026-10-26，之前只发给主 workspace 的 station，加入的 workspace 里的收不到）：分享出去的 profile 发给它服务的每个 workspace 里的 station（withheld 的 workspace 除外），`allow` 再从中挑；收方认自己所在任一 workspace 里的分享方，分享方不在任何一个共同的 workspace 里了才删副本。副本只给分享方分享它的那些 workspace 用（分享方随副本告诉 `share.workspaces`，`allowedIn` 照它），收方所在的别的 workspace（包括收方的主 workspace）用不了：账号只给分享方那几个 workspace 的人用。overview 的 profile 带 `serves`，说看的人所在的 workspace 能不能用它，core 新建对话、选模型都按它筛。skill 按 workspace 分开：station 分享的是主 workspace 的 skills，只发给主 workspace 的 station；收到的 skill 链进它来的那个 workspace 的 skills（加入的 workspace 是 `agent/workspaces/<ws>/skills/`）。
 - **软隔离**：所有 agent 用同一个系统用户跑，A 的 agent 想读 B 的会话目录，物理上拦不住。这里隔离的是数据、列表和 agent 的工具，不是沙盒。界面上加入 workspace 时写明这一点。
@@ -97,7 +97,7 @@
 ### 数据按 workspace 分开
 
 - `sessions` 加 `ws TEXT` 列（`NULL` = 主 workspace，旧行不动）。新会话的 `ws`：网页 chat 取发起人的 `viewer.workspace`；Slack 会话取它那个 connect 的 workspace；`chat_create` 开的取开它的会话的 workspace；station 内部会话取主 workspace。
-- 所有列会话、thread、奏、归档、通知、执行历史的路由和事件流都按 `viewer.workspace` 过滤；按 key 读写单个会话时，会话不在 viewer 的 workspace 就当它不存在（404）。
+- 所有列会话、thread、卡片、归档、通知、执行历史的路由和事件流都按 `viewer.workspace` 过滤；按 key 读写单个会话时，会话不在 viewer 的 workspace 就当它不存在（404）。
 - `archive_policy` 加 `ws` 列，一个 workspace 一份策略。
 - Slack connect：config 的 connect 多一个可选的 `workspace`（缺省主 workspace）。在哪个 workspace 里加的就归哪个，列表只给那个 workspace 的人看。
 - 文件：各 workspace pin 自己的文件夹列表：主 workspace 仍是 `drive.roots`，加入的 workspace 是 `drive.workspaces[<ws>]`。能写的成员不论哪个 workspace 都能浏览整台机器（能用 agent 就能让它读，拦文件浏览没有意义，2026-10-17 用户定），只读成员只看自己 workspace pin 的。

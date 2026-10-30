@@ -1,7 +1,6 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { mScroll } from "./styles/pages.css.ts";
-import { deck as decisionDeck } from "../Decisions.css.ts";
 import { mFromLeftKeyframes, mFromRightKeyframes, mRiseInKeyframes, mRiseOutKeyframes, mToLeftKeyframes, mToRightKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 
 // Another place on the bottom bar: its page comes in from 30 toward the way the ball goes (a place further right, from
@@ -149,6 +148,3 @@ globalStyle(`${mMenu} button`, {
 // A place's top page has the bottom bar over its foot (Bar.tsx): what scrolls on it clears the bar (56 + 22) and its
 // primary action in the notch (令, a ＋), which stands 32 over it, with 16 to spare.
 globalStyle(`${mPage}[data-root] ${mScroll}`, { paddingBottom: "calc(var(--m-foot) + 126px)" });
-// The decision deck has its own scroller and floating reply/hint: keep the whole deck above the bar.
-// Its footer already includes the safe area, so only the bar's room is added here.
-globalStyle(`${mPage}[data-root] ${decisionDeck}`, { marginBottom: "126px" });

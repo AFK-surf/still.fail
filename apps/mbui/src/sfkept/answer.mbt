@@ -2,8 +2,7 @@
 // src/sfapp with its screens), the screenshots' app (src/sffix), the design system's (src/sfkit), and the replays of tapes
 // older than a call (src/sfreplay). `markdown` (a text's tree), `code.ink` (what each piece of a code is), `reader.book`,
 // `reader.text` and `reader.search` (a text as the drive's reader shows it), `commands.find` (what ⌘K lists of what is
-// offered), `chat.tabs` and `decisions.queue` (a chat's side panel's tabs and the 奏 page's queue, for a run's made-up
-// core: chat-tabs.ts, decisions.ts), `chat.find.go` (where a chat's find goes: chat-find.ts), `chat.relayView` (what a chat's relay picker shows:
+// offered), `chat.tabs` (a chat's side panel's tabs, for a run's made-up core: chat-tabs.ts), `chat.find.go` (where a chat's find goes: chat-find.ts), `chat.relayView` (what a chat's relay picker shows:
 // relay-pick.ts) answer the same for the same words, so the
 // TypeScript core's answers are kept here (kept.mbt, made by client/core-ts/scripts/kept-answers.ts) and nothing in the
 // app reads Markdown or code itself. An answer asked and not kept is said on the run's output (`kept-answers-ask {…}`):
@@ -104,7 +103,7 @@ pub fn has(name : String, params : Json) -> Bool {
     "drive.check" => true
     // answered here once kept, by what is asked as said (answer): never the run's core's to give then, so never
     // waited for in its tape either (⌘K's `commands.find` is the tape's: src/sfreplay source.mbt asks it of the run)
-    "railView" | "chat.tabs" | "history.tool" | "chat.find.go" | "chat.relayView" | "decisions.queue" =>
+    "railView" | "chat.tabs" | "history.tool" | "chat.find.go" | "chat.relayView" =>
       kept(name).contains(params.stringify())
     _ => false
   }
@@ -228,15 +227,6 @@ pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Byt
       match kept("chat.relayView").get(key) {
         Some(v) => Some(Ok((v, None)))
         None => not_kept({ "call": "chat.relayView", "key": Json::string(key) })
-      }
-    }
-    // the 奏 page's queue (decisions.ts) for a made-up core that keeps one: its items in order and the one shown, or
-    // what is kept after a pick or a setting aside, as asked
-    "decisions.queue" => {
-      let key = params.stringify()
-      match kept("decisions.queue").get(key) {
-        Some(v) => Some(Ok((v, None)))
-        None => not_kept({ "call": "decisions.queue", "key": Json::string(key) })
       }
     }
     "reader.text" =>

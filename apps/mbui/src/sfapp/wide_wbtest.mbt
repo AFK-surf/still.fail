@@ -246,65 +246,6 @@ test "wide: ⌘K finds 检查更新 by its name or \"check update\", where the a
 }
 
 ///|
-test "wide: the 奏 page shows the decision the core shows: a row pressed (decision.show), ⌥↓ and ⌥↑ through its list" {
-  let calls : Array[Made] = []
-  let t = wide_tester(calls, mode="decisions")
-  open_decisions()
-  t.run_for(@ui.move_most_ms)
-  // nothing picked yet: the first (its post on the page, as its chat draws it; its options under it)
-  assert_true(t.find("量过一次就记住") is Some(_))
-  assert_true(t.find("一起换") is Some(_))
-  // ⌥↓: the next one shown (the core keeps which), ⌥↑ back
-  t.key(@ui.key_code_down, mods=@ui.mod_alt)
-  t.frame()
-  assert_eq(named(calls, "decision.show").length(), 1)
-  t.run_for(@sfdesk.zou_rise_ms)
-  t.frame()
-  assert_true(t.find("我不会把它写进仓库") is Some(_))
-  t.key(@ui.key_code_down, mods=@ui.mod_alt)
-  t.frame()
-  assert_eq(named(calls, "decision.show").length(), 1, msg="none past the last")
-  t.key(@ui.key_code_up, mods=@ui.mod_alt)
-  t.frame()
-  t.run_for(@sfdesk.zou_rise_ms)
-  t.frame()
-  assert_true(t.find("量过一次就记住") is Some(_))
-}
-
-///|
-test "wide: the 奏 page's decision answered by an option (decision.answer), set aside (待定: decision.defer), let go (不再提醒: decision.dismiss), replied to in words (decision.reply)" {
-  let calls : Array[Made] = []
-  let t = wide_tester(calls, mode="decisions")
-  open_decisions()
-  t.run_for(@ui.move_most_ms)
-  t.tap_text("一起换")
-  t.frame()
-  let answered = named(calls, "decision.answer")
-  assert_eq(answered.length(), 1)
-  assert_eq(text(Some(answered[0].params), "option"), "一起换")
-  t.run_for(@sfdesk.zou_rise_ms)
-  t.tap_text("待定")
-  t.frame()
-  assert_eq(named(calls, "decision.defer").length(), 1)
-  t.run_for(@sfdesk.zou_rise_ms)
-  t.tap_text("不再提醒")
-  t.frame()
-  assert_eq(named(calls, "decision.dismiss").length(), 1)
-  // a text card's reply in the composer at the foot
-  let t2 = wide_tester(calls, mode="decisions-text")
-  open_decisions()
-  t2.run_for(@ui.move_most_ms)
-  t2.tap_text("sk_test_…")
-  t2.type_text("sk_test_123")
-  t2.enter()
-  t2.frame()
-  t2.frame()
-  let replied = named(calls, "decision.reply")
-  assert_eq(replied.length(), 1)
-  assert_eq(text(Some(replied[0].params), "text"), "sk_test_123")
-}
-
-///|
 test "wide: settings from the rail's gear, its list in the sidebar, its first row's page (the account's) beside it; back to the chats" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

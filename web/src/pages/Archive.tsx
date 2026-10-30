@@ -3,7 +3,7 @@
 // its session deleted for good. Anything new said in a chat the station archived brings it back by itself; one archived
 // by hand takes no messages until shown again.
 //
-// On the wide screen it is one of the sidebar's lists (ArchiveRows, as 奏 is), its chat open beside it as any chat's
+// On the wide screen it is one of the sidebar's lists (ArchiveRows), its chat open beside it as any chat's
 // is (its page says it is archived, ArchiveNotice.tsx); its own page opens the newest of them. The phone's is
 // ../mobile/Archive.tsx.
 import { memo, useCallback, useEffect, useRef, useState } from "react";

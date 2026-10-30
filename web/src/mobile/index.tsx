@@ -8,7 +8,6 @@ import { useStations } from "../api.ts";
 import { StationContext, useStationList, type Station } from "../station.tsx";
 import { MobileShell, useApp, type Entry } from "./app.tsx";
 import { ArchiveScreen } from "./Archive.tsx";
-import { DecisionsScreen } from "./Decisions.tsx";
 import { ChatHost } from "./ChatHost.tsx";
 import { ConnectRunScreen, ConnectScreen, ConnectsScreen, NewConnectScreen } from "./Connects.tsx";
 import { HistoryScreen, RunSettingsScreen } from "./History.tsx";
@@ -50,7 +49,6 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       {/* A new chat and a chat are one page (ChatHost.tsx): as one becomes the other, its composer stays. */}
       <Route path="new" element={<ChatHost stations={stations} />} />
       <Route path="archive" element={<ArchiveScreen />} />
-      <Route path="decisions" element={<DecisionsScreen />} />
       {/* 文件 as a place (the bottom bar's): every station's folders in one list. */}
       <Route path="files" element={<FilesScreen />} />
       {/* Settings: one page from the gear on Home, and a page for each of its rows, at the desktop's addresses. */}

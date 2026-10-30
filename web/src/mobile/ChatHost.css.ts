@@ -31,13 +31,6 @@ export const mComposer = style({
     },
   },
 });
-/** The same composer, in the decisions page's footer rather than over a chat (wider, clear of the latest chats' button too). */
-export const mInlineComposer = style({
-  position: "relative", padding: "8px 0 0",
-  "@media": {
-    "(min-width: 680px)": { paddingLeft: "62px" },
-  },
-});
 export const mHostComposer = style({
   selectors: {
     [`${mComposer}&`]: { zIndex: "6" },

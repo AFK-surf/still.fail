@@ -727,7 +727,7 @@ pub fn Flow::open_page(self : Flow, page : @sfapp.Page) -> Unit {
   @sfapp.open_page(page)
   self.t.draw()
   self.core()
-  // (a page pushed over Home slides in, to its end; one the app shows in Home's place from the start, 奏's, does not)
+  // (a page pushed over Home slides in, to its end)
   if @ui.nav_rest() >= 0.0 {
     self.run_to(@ui.nav_rest())
   }

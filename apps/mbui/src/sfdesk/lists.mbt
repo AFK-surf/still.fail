@@ -1,13 +1,13 @@
 // The chats' sidebar as the web's lists (ember web/src/Sidebar.tsx ChatList, Sidebar.css.ts navSlider, navTrack;
 // pages/Archive.tsx ArchiveRows, ArchivePage; Archive.css.ts): under the band (新建对话 and the filter), one track of
-// the lists side by side, 全部, 我参与的, 监控中, 奏 and 已归档, slid from one to another as the list shown changes
+// the lists side by side, 全部, 我参与的, 监控中 and 已归档, slid from one to another as the list shown changes
 // (240 ms, ease out); only those in view are drawn. 已归档 is a list of the sidebar's like the others: a field to look
 // for one, its days, each archived chat a row (put back or deleted while pointed at), pressed its chat beside the
 // list; opened, the newest of them is open beside it, or with none what the archive is.
 
 ///|
 /// The sidebar `width` wide (its 8 at the left over the rail's empty side), the one the block holds (side_place): the
-/// chats' lists (奏 and 已归档 among them) for the chats' places; the files' (files_nav.mbt); a place's own (the app's:
+/// chats' lists (已归档 among them) for the chats' places; the files' (files_nav.mbt); a place's own (the app's:
 /// the settings', the stations', the profiles').
 fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
   match side_place() {
@@ -20,12 +20,12 @@ fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
 }
 
 ///|
-/// The chats' sidebar `width` wide: the band over the lists (sfpages' chats_lists: 全部, 我参与的, 监控中, then 奏 and
+/// The chats' sidebar `width` wide: the band over the lists (sfpages' chats_lists: 全部, 我参与的, 监控中, then
 /// 已归档 on its track).
 fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
   ignore(width)
   let mode = list_mode(src, w)
-  if mode != 4 {
+  if mode != 3 {
     archive_side.landed = false
   }
   // (read now: the rows are made as the list is laid out, after the closed bar's drawing is over)
@@ -33,7 +33,7 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
   let t = @sf.theme()
   let frame : @sfpages.ListsFrame = {
     ..@sfpages.bare_lists(band, 0.0, side_top_h(), if side_folded() || wide.tape { apart_ground() } else { t.p.sidebar }, mode, Side),
-    others: [fn() { decisions_pane(c, src, w) }, fn() { archive_pane(c, src, w) }],
+    others: [fn() { archive_pane(c, src, w) }],
   }
   // under a finger's search (sfpages' search.mbt): the band and the foot away with the lists, the search over them
   let away = @sfpages.search_away(c)

@@ -65,10 +65,11 @@ agent it was read for. A tree kept is read only by the reading that made it (`MD
 Markdown otherwise reads afresh.
 
 Indexes: `chat (archived, pinned_at DESC, last_active DESC)` (a list's first screen across stations), by thread, by
-session, the rows at work (`running`), those that ask something or are unread (`tone`/`asks`), those the 奏 page
-lists (`desk`); `session (station, listed, ord)`; `thread (station, listed, sort_at DESC, created_at DESC, id DESC)`
-and by first member (the chat bound to an agent); `job (station, open, ord)`. `tone`, `asks` and `desk` are what only
-the core can say of a row (marks.rowTone, decisions.asked, present.workingLine), computed as the row is written.
+session, the rows at work (`running`), those that ask something or are unread (`tone`/`asks`); `session (station,
+listed, ord)`; `thread (station, listed, sort_at DESC, created_at DESC, id DESC)` and by first member (the chat bound to
+an agent); `job (station, open, ord)`. `tone` and `asks` are what only the core can say of a row (marks.rowTone,
+decisions.asked), computed as the row is written. (`desk`, what the 奏 page listed, is no longer written: left in the
+table so that an older core can still read the database.)
 
 A session's detail keeps its turns and jobs as read; its threads are the thread rows it takes part in (and those its
 detail named), so a thread changing changes one row, not every detail that lists it. A thread's `last`, `read`,
@@ -155,8 +156,8 @@ Topics read what they show by query, when they go out; nothing is loaded at star
 - The chat list (`chats`): while its stations' rows are not loaded and they are more than it shows on top, those are
   read by one query over the `chat_recent` index (80: pinned, then the latest active), and go out at once;
   the stations' rows are loaded after, a station at a time, and the whole list follows (as one op).
-- The workspace marks read only the rows that ask something or are unread (`tone`/`asks`); the 奏 page only the rows
-  it lists (`desk`); the station sync the rows at work (`running`).
+- The workspace marks read only the rows that ask something or are unread (`tone`/`asks`); the station sync the rows
+  at work (`running`).
 - A chat's page reads its window of entries by range (`entry` between two `n`), a transcript its latest page; a gap is
   found from the numbers held. Hot logs keep a sorted in-memory number index (`db/log-index.ts`), updated as records
   are written: appends add only the new numbers, backfills merge, rewrites truncate. Span/count reads use that index,

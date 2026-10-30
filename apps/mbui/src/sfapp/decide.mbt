@@ -22,21 +22,6 @@ priv struct Decide {
   mut history_tab : Int
   /// groups and steps of a history opened, by their key
   opened : Map[String, Bool]
-  /// the 奏 page's front decision: its key, how far across it is dragged, whether a finger has it (its moves and speed the
-  /// framework's drag's: decisions.mbt)
-  mut front : String
-  mut drag : Double
-  mut held : Bool
-  mut swiping : Bool
-  /// the front one let go short of going: going back where it rests (3, decisions.mbt card_back), else 0; from
-  /// where across
-  mut going : Int
-  mut going_from : Double
-  /// the one that went (out of the deck at once), only drawn as it flies off: it, which way (1 right 不再提醒, -1
-  /// left 待定, 2 up answered; decisions.mbt card_out), from where across
-  mut out : Json?
-  mut out_dir : Int
-  mut out_from : Double
 }
 
 ///|
@@ -48,21 +33,11 @@ let dui : Decide = {
   job_tab: 0,
   history_tab: 0,
   opened: {},
-  front: "",
-  drag: 0.0,
-  held: false,
-  swiping: false,
-  going: 0,
-  going_from: 0.0,
-  out: None,
-  out_dir: 0,
-  out_from: 0.0,
 }
 
 ///|
 /// As at the start (tests).
 fn decide_reset() -> Unit {
-  deck_anims.clear()
   dui.gone.clear()
   dui.jobs_all = false
   dui.letters_open = ""
@@ -72,46 +47,6 @@ fn decide_reset() -> Unit {
   dui.opened.clear()
   history_placed.clear()
   history_short.clear()
-  dui.front = ""
-  dui.drag = 0.0
-  dui.held = false
-  dui.swiping = false
-  dui.going = 0
-  dui.going_from = 0.0
-  dui.out = None
-  dui.out_dir = 0
-  dui.out_from = 0.0
-}
-
-// ── what comes and goes under a post ────────────────────────────────────
-
-///|
-/// An option picked (Decisions.kt DecisionUnder → answerDecision): the core sends it as the viewer's message quoting
-/// the post (or, for an option the agent made to close, closes the card without one); the option's spinner meanwhile.
-fn answer_option(src : Source, station : String, thread : Double, seq : Double, option : String) -> Unit {
-  act(
-    src,
-    tr("android-misc.decisions.answerWhat"),
-    "answer/" + seq_key(station, thread, seq) + "/" + option,
-    "decision.answer",
-    {
-      "station": Json::string(station),
-      "thread": Json::number(thread),
-      "seq": Json::number(seq),
-      "option": Json::string(option),
-    },
-  )
-}
-
-///|
-/// The option of a card being answered, if one is.
-fn answering(station : String, m : Message, options : Array[Choice]) -> String? {
-  for o in options {
-    if doing("answer/" + seq_key(station, m.thread, m.seq) + "/" + o.label) {
-      return Some(o.label)
-    }
-  }
-  None
 }
 
 ///|

@@ -722,7 +722,7 @@ pub(all) struct MessageHere {
   station : String
   session : String
   view : @sfbase.ChatView
-  go : ((Double) -> Unit)?
+  go : ((Double, String) -> Unit)?
   inline : Bool
   gutter : Double
   list : ListMotion?

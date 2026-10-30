@@ -14,9 +14,8 @@ fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false, pointin
     ..base,
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
-      // the 奏 page's taken by the made-up core (its queue as the core keeps it); a chat's answered, nothing more
-      // (and a call's parts as the core makes them, kept: history.tool)
-      if mode.has_prefix("decisions") || name == "history.tool" {
+      // a chat's answered, nothing more (and a call's parts as the core makes them, kept: history.tool)
+      if name == "history.tool" {
         (base.call)(name, params, done)
       } else {
         done(Ok(Json::object({})))
@@ -180,70 +179,6 @@ test "the desk's history beside a chat: a group opens to its steps, a step to it
   // a step closed again
   t.tap_text("跑一遍列表的测试")
   assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is None)
-}
-
-///|
-test "the 奏 page: an option answers the card in front, the next comes in" {
-  let calls : Array[Made] = []
-  let t = decide_core(calls, "decisions")
-  assert_true(t.find("1 / 2") is Some(_))
-  assert_true(t.find("整理发布清单") is Some(_))
-  t.tap_text("把首页和聊天页的截图都更新")
-  // answered at once, out of the deck: the text card in front now (the answered one only drawn going up)
-  let made = named(calls, "decision.answer")
-  assert_eq(made.length(), 1)
-  assert_eq(text(Some(made[0].params), "option"), "一起换")
-  assert_true(t.find("1 / 1") is Some(_))
-  assert_true(t.find("第 4 个：支付的测试") is Some(_))
-  t.run_for(card_up_ms)
-  // the last tap's ripple shown whole, its way in and out
-  t.run_for(@motion.ripple_tap_ms)
-  t.assert_idle()
-}
-
-///|
-test "the 奏 page: swiped right, a decision is dismissed; none left, the day so far" {
-  let calls : Array[Made] = []
-  let t = decide_core(calls, "decisions-idle")
-  assert_true(t.find("奏折已全部批完") is Some(_))
-  assert_true(t.find("选择了「一起换」") is Some(_) || t.find("整理发布清单 · 选择了「一起换」") is Some(_))
-  let calls2 : Array[Made] = []
-  let t2 = decide_core(calls2, "decisions")
-  t2.drag(100.0, 400.0, 360.0, 400.0)
-  // let go: dismissed at once, the next in front
-  t2.draw()
-  assert_eq(named(calls2, "decision.dismiss").length(), 1)
-  assert_eq(named(calls2, "decision.answer").length(), 0)
-  assert_true(t2.find("1 / 1") is Some(_))
-  t2.run_for(@ui.move_most_ms)
-  t2.assert_idle()
-}
-
-///|
-test "the 奏 page: the card turns as it is moved across, 4° a width about its top's middle, and on as it flies off" {
-  let calls : Array[Made] = []
-  let t = decide_core(calls, "decisions")
-  // (the deck as wide as the window)
-  let width = 390.0
-  assert_eq(t.turn_of("把首页和聊天页的截图都更新"), Some(0.0))
-  t.press_at(100.0, 400.0)
-  t.move(130.0, 400.0)
-  t.move(200.0, 400.0)
-  // held across: turned as far as it is moved (Decisions.kt rotationZ = drag / width * 4)
-  assert_true(dui.drag > 0.0)
-  let held = t.turn_of("把首页和聊天页的截图都更新").unwrap()
-  assert_true((held - dui.drag / width * card_tilt).abs() < 1.0e-9, msg="\{held} at \{dui.drag}")
-  // let go far across: it flies off turning on, the next one in front not turned
-  t.move(360.0, 400.0)
-  t.release(360.0, 400.0)
-  t.run_for(@ui.move_most_ms / 2.0)
-  assert_true(t.turn_of("把首页和聊天页的截图都更新").unwrap() > held)
-  t.run_for(@ui.move_most_ms)
-  assert_eq(t.turn_of("把首页和聊天页的截图都更新"), None)
-  assert_true(t.find("1 / 1") is Some(_))
-  // the last tap's ripple shown whole, its way in and out
-  t.run_for(@motion.ripple_tap_ms)
-  t.assert_idle()
 }
 
 ///|

@@ -1061,9 +1061,6 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
       if (agents) value = { ...v, agents: agents.map((a) => (Array.isArray(get(a, "jobs")) ? { ...a, jobs: a.jobs.map((j: J) => jobsMod.shown(j, c)) } : a)) };
       break;
     }
-    case "decisions":
-      value = decisions.today(v, c);
-      break;
     case "job":
       value = jobsMod.shown(v, c);
       break;

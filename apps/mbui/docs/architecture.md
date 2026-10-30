@@ -180,7 +180,7 @@ settings' pages still draw some pieces of one arrangement themselves, `narrow_*`
 
 ### Pages
 
-One implementation per function: the chats' list, a chat, a new chat, a history, 奏, the files and a folder, each
+One implementation per function: the chats' list, a chat, a new chat, a history, the files and a folder, each
 settings page, each place, sign-in, the landing. There is no phone copy and desk copy.
 
 - **Its box:** it draws into the box it is given. `c.width` and `c.height` are its pane's; it never subtracts a rail
@@ -233,7 +233,6 @@ settings page, each place, sign-in, the landing. There is no phone copy and desk
 - **Decisions that stay:** the touch idioms the user decided:
   - swipe back, and long-press menus;
   - a row swiped to archive;
-  - the 奏 deck's swipes (left 待定, right 不再提醒);
   - the bottom bar;
   - the viewer's message first on screen;
   - the round-knob switches.
@@ -243,7 +242,7 @@ settings page, each place, sign-in, the landing. There is no phone copy and desk
 One shell. It arranges the same panes in every tier:
 
 - **The panes:**
-  - List: the place's list (the chats, 奏, the files' places, the settings, the stations, the profiles).
+  - List: the place's list (the chats, the files' places, the settings, the stations, the profiles).
   - Page.
   - Detail: the chat's side panel and its tabs.
   - Over all of them: the full-window layers (a screen, the viewer) and the overlays (the presenters' host, toasts,

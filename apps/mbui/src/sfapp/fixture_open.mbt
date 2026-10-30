@@ -32,7 +32,6 @@ pub fn open_cards_fixture(mode : String) -> Unit {
 pub fn open_fixture(mode : String) -> Unit {
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   match mode {
-    "decisions" | "decisions-text" | "decisions-idle" => app.nav.push(Decisions)
     "history" | "history-reading" | "history-details" => {
       app.nav.push(Chat(r))
       app.nav.push(History(r, "s-c1", None))
@@ -183,7 +182,7 @@ pub fn open_drive_fixture(mode : String) -> Unit {
 ///|
 /// What a fixture mode opens over Home before the first frame, as src/sffix (the screenshots' app) opens it: the
 /// first row's chat (opened at a message from a notification for chat-flash…), its cards' states; the drive's pages;
-/// the 奏 page, a history, a chat's sheets; a new chat, the bar's panel, a place; a page of the settings.
+/// a history, a chat's sheets; a new chat, the bar's panel, a place; a page of the settings.
 pub fn open_fixture_mode(mode : String) -> Unit {
   let rich : ChatRef = {
     station: "ws1/st1",
@@ -216,7 +215,7 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   }
   // the drive's pages (src/sfapp/drive_fixture.mbt): files, drive…, reader…
   open_drive_fixture(mode)
-  // slice 8's (src/sfapp/decide_fixture.mbt): the 奏 page, a history, a chat's sheets
+  // slice 8's (src/sfapp/decide_fixture.mbt): a history, a chat's sheets
   open_fixture(mode)
   // a new chat (with its sheets), the bar's panel, a place: newchat_fixture.mbt
   open_mode(mode)

@@ -121,7 +121,7 @@ const IDS: Record<string, string> = { w: ":workspace", s: ":station", chats: ":t
  *  a skill's a customer's name), sent as `:id`. */
 const WORDS = new Set([
   "about", "account", "accounts", "adb", "add", "admin", "agents", "all", "appearance", "archive", "auth", "automatic-decisions",
-  "bar", "bots", "callback", "changelog", "chats", "codes", "completion", "connects", "decisions", "feedback", "files",
+  "bar", "bots", "callback", "changelog", "chats", "codes", "completion", "connects", "feedback", "files",
   "fonts", "footprint", "general", "global", "history", "installed", "invite", "language", "leave", "local-station",
   "login", "members", "memory", "messages", "models", "new", "notifications", "o", "open", "overview", "permissions",
   "play", "prices", "profiles", "read", "relays", "resources", "run", "s", "screen", "security", "services", "sessions", "settings",

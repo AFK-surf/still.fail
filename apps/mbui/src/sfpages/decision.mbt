@@ -200,8 +200,8 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
 /// at its foot as the core said it with the message (`ask.answer`: the vault it holds; VaultApproval.tsx VaultCard), so
 /// the card is whole as it comes; once decided, one line saying how it ended. In a chat's list, decided on screen, the
 /// card stays as it is, the answer given marked and none pressed any more, and is that line once out of sight, as a
-/// post's answered options are (message_decision, Turns::in_turn). Where nothing is answered (no core: a letter's, the
-/// 奏 page's, which answers it under the post), the card without its answer.
+/// post's answered options are (message_decision, Turns::in_turn). Where nothing is answered (no core: a letter's), the
+/// card without its answer.
 fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask : VaultAsk) -> Unit {
   let asked : Asked = {
     name: ask.name,
@@ -319,7 +319,7 @@ fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
 
 ///|
 /// Whether what is asked of `assignee` is the viewer's to answer (anyone's where it names no one).
-pub fn mine_to(here : MessageHere, assignee : String) -> Bool {
+fn mine_to(here : MessageHere, assignee : String) -> Bool {
   let me = here.view.me
   assignee == "" || me == "" || assignee.to_lower() == me.to_lower()
 }
@@ -376,7 +376,6 @@ pub fn decision_options(
       ) {
       Some(i) if !resolved => {
         let label = options[i].label
-        // (the 奏 page sends the decision on its way first: DecisionOptions' onPick)
         on_pick(i)
         c.tell("options/" + m.ts, fn() {
           act(src, @sf.t("web-main.decisions.answerWhat", args=[("option", label)]), "", "decision.answer", {

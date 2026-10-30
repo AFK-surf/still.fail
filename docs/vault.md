@@ -94,7 +94,7 @@ sequenceDiagram
   participant P as 手机 app
   A->>S: secret_use(条目名, 理由, 方式, 命令或域名)
   S->>S: 生成这次申请的临时箱钥匙
-  S->>P: 申请卡片进奏列表，并推送
+  S->>P: 申请卡片进待处理，并推送
   P->>P: 显示 chat、理由、命令或域名；用户过生物识别
   P->>P: 解开条目，用临时公钥封好，用 sign_key 签名
   P->>S: 授权（密文、签名、有效期、使用次数）
@@ -104,7 +104,7 @@ sequenceDiagram
 ```
 
 - **keeper**：station 里管授权、做代理、做 ssh-agent 的那一块（`station/src/vault/`）。值只在 station 进程的内存里，不写盘，不进日志；加锁库的授权 station 重启就忘（agent 重新申请）。不加锁库的授权把除值以外的部分写进 `vault_grants` 表，重启后从明文库重新读值、照旧可用（值本来就在 station 盘上，多写的只是哪个 chat、哪个条目、什么时候到期）。chat 归档或删除时，它的授权一起作废。没有拆成单独的进程：agent 和 station 是同一个系统用户，拆出去的进程和 station 进程对 agent 来说一样读不到（都要调试权限），多一个进程只多一份打包和交接的麻烦。
-- **工具**：`secret_list`（agent 能看到的条目名和允许的方式，不含值）和 `secret_use`。申请卡片用现有的卡片和奏列表，申请发给条目所在库的成员；`card.assignee` 是库的 owner，或者是这个 chat 的发起人，只要他是库成员。
+- **工具**：`secret_list`（agent 能看到的条目名和允许的方式，不含值）和 `secret_use`。申请卡片用现有的卡片和待处理，申请发给条目所在库的成员；`card.assignee` 是库的 owner，或者是这个 chat 的发起人，只要他是库成员。
 - **批准的范围**：「仅本次」「本对话 1 小时内」「本对话直到归档」三档（`once`/`hour`/`chat`）。每个人在「密钥」页设一个「默认最长授权」（加锁库是库本身的 `lasts`，owner 签名、随库复制到各 station；明文库是 station 上每人一条，`PUT vault/plain/lasts {lasts, at}` 发给每个存着明文库的 station，以最晚的 `at` 为准），默认 `chat`；条目可以「跟随默认」（listing 不带 `lasts`，新条目都是这样）或设自己的一档（listing 的 `lasts`）。卡片只列到生效的那一档，推荐其中最长的一档；station 和 core 都拒绝超出的批准。（2026-10-22 pengxiao 定：一小时不够用，chat EMBER/1792660346.250000。）
 
 ### 三种用法

@@ -63,7 +63,7 @@ let said_modes : Array[String] = [
   "chat-find", "chat-model-pop", "chat-login", "chat-update", "chat-working", "chat-station-files", "chat-preview-image",
   "chat-preview-code", "newchat", "newchat-station", "newchat-model", "newchat-profiles", "place", "files",
   "files-columns", "files-list", "files-preview", "files-transfers", "files-tree", "drive", "drive-roots", "drive-sub",
-  "drive-upload", "drive-empty", "reader", "decisions", "decisions-text", "history", "history-details",
+  "drive-upload", "drive-empty", "reader", "history", "history-details",
   "switcher", "keys-dialog", "search", "search-results", "home-jobs", "service", "settings-home", "settings-appearance", "settings-me",
   "settings-workspace", "settings-security", "settings-vault", "settings-vault-items", "settings-vault-item", "settings-stations",
   "settings-station", "settings-station-env", "settings-station-processes", "settings-profiles", "settings-profile", "settings-profile-models",

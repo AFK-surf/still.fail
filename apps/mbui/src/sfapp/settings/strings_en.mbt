@@ -153,7 +153,6 @@ let en : Map[String, String] = {
   "android-misc.bar.place.archive": "Archived",
   "android-misc.bar.place.chats": "Chats",
   "android-misc.bar.place.connects": "Connects",
-  "android-misc.bar.place.decisions": "Decisions",
   "android-misc.bar.place.files": "Files",
   "android-misc.bar.place.profiles": "Profiles",
   "android-misc.bar.place.stations": "Stations",

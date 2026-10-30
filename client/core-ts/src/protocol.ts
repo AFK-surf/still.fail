@@ -132,7 +132,6 @@ export const TOPICS: Record<string, Spec> = {
   fonts: {},
   workspaceMarks: { workspace: ["string", "skip"] },
   workspaceWays: { workspace: S },
-  decisions: { workspace: S },
   lock: { workspace: S },
   joinable: { workspace: S },
   memberships: { station: S },

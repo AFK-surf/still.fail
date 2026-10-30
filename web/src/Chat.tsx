@@ -68,7 +68,6 @@ import { clock } from "@stillfail/ui/viewer/playing.ts";
 import { MessageDecision } from "./Decisions.tsx";
 import { Settles } from "./settling.tsx";
 import { AgentHover, ChatAgentKeys, ChatAgents } from "./AgentCard.tsx";
-import * as decisionsCss from "./Decisions.css.ts";
 import { useDoing } from "./doing.ts";
 import { useChatFind } from "./ChatFind.tsx";
 import { placeStrokes, strokeLayer } from "@stillfail/ui/strokes.ts";
@@ -299,7 +298,7 @@ export function useAsksShown(virtual: VirtualList, chat: ChatView): ChatAsk[] {
   return asks.length > 0 && shown ? NO_ASKS : asks;
 }
 
-/** The session that keeps a file shown out of its chat (the decisions page), where the core does not say (`owner`). */
+/** The session that keeps a file shown out of its chat (StaticMessage), where the core does not say (`owner`). */
 export const FileKeeper = createContext<string | null>(null);
 
 /** The session whose workspace keeps a file, which its preview goes through: the core's word, else FileKeeper's. */
@@ -1069,7 +1068,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   message: ChatMessage; enter: true | undefined; emitted: "held" | "emitting" | null; caught: true | undefined;
   /** Its chat's thread, where a decision's options answer (Decisions.tsx); null while nothing can be sent there. */
   thread: number | null;
-  /** A decision's options under it (the decisions page has them at its foot instead). */
+  /** A decision's options under it (none out of its chat: StaticMessage). */
   options?: boolean;
 }) {
   const chat = useContext(DraftKey);
@@ -1156,7 +1155,7 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
   );
 }, (a, b) => JSON.stringify(a.sent) === JSON.stringify(b.sent));
 
-/** A message as a chat draws it, out of its chat (the decisions page): still, its name plain, no options under it. */
+/** A message as a chat draws it, out of its chat (a shared picture, letters): still, its name plain, no options under it. */
 export function StaticMessage({ message, keeper }: { message: ChatMessage; /** The session that keeps its files. */ keeper: string }) {
   return (
     <FileKeeper.Provider value={keeper}>

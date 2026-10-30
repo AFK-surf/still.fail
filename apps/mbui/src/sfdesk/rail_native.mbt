@@ -405,7 +405,7 @@ fn rail_nav(src : Source, w : Workspace, _all : Array[Workspace], card : Array[@
   let item = fn(id : String, title : String, icon : String) -> @hostapi.NavItem {
     { id, title, icon: @sf.icon_path(icon), dot: false, prominent: false, menu: [] }
   }
-  // 对话, 文件, Station, 待处理 (the chats that want the viewer: 奏), 我的 (the settings, the other places' pages in them)
+  // 对话, 文件, Station, 待处理 (the chats that want the viewer), 我的 (the settings, the other places' pages in them)
   let tabs : Array[@hostapi.NavItem] = [item("place/chats", rail_label(src, "chats"), rail_icon("chats"))]
   if places.contains("files") {
     tabs.push(item("place/files", rail_label(src, "files"), rail_icon("files")))
@@ -450,7 +450,7 @@ fn rail_nav(src : Source, w : Workspace, _all : Array[Workspace], card : Array[@
 /// The tab the place shown is in (rail_nav's `selected`).
 fn tab_of_place(lit : String) -> String {
   match lit {
-    "chats" | "mine" | "watching" | "archive" | "decisions" => "place/chats"
+    "chats" | "mine" | "watching" | "archive" => "place/chats"
     "files" => "place/files"
     "stations" => "place/stations"
     // (the settings, opened from the workspace's button: no tab of theirs)
@@ -535,7 +535,6 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       switcher_toggle(c)
     } else if id.has_prefix("sidebar/filter/") {
       match id.substring(start=15) {
-        "decisions" => @sfbase.go_place("decisions") |> ignore
         "all" => rail_go(c, src, w, "chats")
         f => rail_go(c, src, w, f)
       }

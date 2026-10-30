@@ -151,7 +151,6 @@ let zh : Map[String, String] = {
   "android-misc.bar.place.archive": "已归档",
   "android-misc.bar.place.chats": "对话",
   "android-misc.bar.place.connects": "连接",
-  "android-misc.bar.place.decisions": "奏",
   "android-misc.bar.place.files": "文件",
   "android-misc.bar.place.profiles": "Profile",
   "android-misc.bar.place.stations": "Station",

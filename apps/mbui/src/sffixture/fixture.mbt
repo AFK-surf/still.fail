@@ -33,117 +33,12 @@ pub(all) struct Fixture {
   /// those its view shows after the last change, as the core said with it
   chat_tabs : Map[String, Json]
   tabs_shown : Map[String, Json]
-  /// the 奏 page's queue: the decisions answered or let go here (gone, as their station takes them), those set aside
-  /// (by when: the how-many-th), the one shown as the core keeps it between views (decisions.ts Shown)
-  queue_gone : Map[String, Bool]
-  queue_set_aside : Map[String, Int]
-  mut queue_was : Json
   /// each sidebar's width and folding as kept on this device (the prefs' `sidebars`, by `<workspace>\n<group>`), as
   /// the core's prefs.ts keeps a map: by key, null letting one go
   sidebars : Map[String, Json]
   /// the look the card to share is drawn in (the prefs' `shareLook`; "" none kept): share-card-poster, -receipt and
   /// -terminal open it in theirs
   mut share_look : String
-}
-
-///|
-/// The 奏 page's queue as the core makes it of the made-up stations' decisions (the view's `items`, `count`, `shown`):
-/// those answered or let go here gone, as their station takes them; their order and the one shown the core's
-/// (decisions.ts order and shownIn, its answers kept), what it keeps of the one shown kept here for the next view.
-pub fn fixture_queue(f : Fixture, value : Json?) -> Json? {
-  match value {
-    Some(Object(m)) => {
-      let all = items(value, "items").filter(fn(i) { !f.queue_gone.contains(decision_key(i)) })
-      // (asked in the order the made-up stations list them: each mode puts the card it is about first)
-      let asked = all.mapi(fn(at, i) {
-        let k = decision_key(i)
-        let aside = match f.queue_set_aside.get(k) {
-          Some(n) => Json::number(n.to_double())
-          None => Json::null()
-        }
-        Json::array([Json::string(k), Json::number(at.to_double()), aside])
-      })
-      match fixture_kept("decisions.queue", { "items": Json::array(asked), "was": f.queue_was }, None) {
-        Some(Ok((r, _))) => {
-          let by : Map[String, Json] = {}
-          for i in all {
-            by[decision_key(i)] = i
-          }
-          let ordered = items(Some(r), "order").filter_map(fn(k) {
-            match k {
-              String(k) => by.get(k)
-              _ => None
-            }
-          })
-          let m = m.copy()
-          m["items"] = Json::array(ordered)
-          m["count"] = Json::number(ordered.length().to_double())
-          match field(Some(r), "shown") {
-            None | Some(Null) => m.remove("shown")
-            Some(at) => m["shown"] = at
-          }
-          match field(Some(r), "was") {
-            Some(w) => f.queue_was = w
-            None => ()
-          }
-          Some(Json::object(m))
-        }
-        _ => value
-      }
-    }
-    _ => value
-  }
-}
-
-///|
-/// What a call answered (`done`) does to the 奏 page's queue, once its station takes it: an answer, a reply, a letting
-/// go take the decision out of it; set aside, it goes last, and if it was shown the one then in its place is (the
-/// core's decisions.ts setAside, kept); picked (`decision.show`), it is the one shown.
-pub fn fixture_queue_done(
-  f : Fixture,
-  name : String,
-  params : Json,
-  done : (Result[Json, Json]) -> Unit,
-) -> (Result[Json, Json]) -> Unit {
-  let p = Some(params)
-  let key = seq_key(text(p, "station"), number(p, "thread"), number(p, "seq"))
-  let kept_was = fn(ask : Map[String, Json]) {
-    ask["was"] = f.queue_was
-    match fixture_kept("decisions.queue", Json::object(ask), None) {
-      Some(Ok((r, _))) =>
-        match field(Some(r), "was") {
-          Some(w) => f.queue_was = w
-          None => ()
-        }
-      _ => ()
-    }
-  }
-  match name {
-    "decision.answer" | "decision.reply" | "decision.dismiss" =>
-      fn(r) {
-        if r is Ok(_) {
-          f.queue_gone[key] = true
-          f.changed()
-        }
-        done(r)
-      }
-    "decision.defer" =>
-      fn(r) {
-        if r is Ok(_) {
-          f.queue_set_aside[key] = f.queue_set_aside.length() + 1
-          kept_was({ "setAside": Json::string(key) })
-          f.changed()
-        }
-        done(r)
-      }
-    "decision.show" =>
-      fn(r) {
-        kept_was({ "picked": Json::string(key) })
-        f.changed()
-        done(r)
-      }
-    _ => done
-  }
 }
 
 ///|
@@ -700,7 +595,6 @@ fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], versio
       fix_browse_with_drive(f, fixture_stations_way(value), text(Some(Json::object(params)), "here"))
     "stations" => fixture_stations_way(value)
     "chat" => fixture_with_tabs(f, params, value)
-    "decisions" => fixture_queue(f, value)
     "stationNet" => {
       let address = text(Some(Json::object(params)), "station")
       let ws = match address.find("/") {
@@ -877,7 +771,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
     "workspaceMarks" =>
       Some({
         "workspaces": {
-          "ws1": { "alert": 1, "unread": 2, "wait": 1, "decisions": 2, "tone": "alert" },
+          "ws1": { "alert": 1, "unread": 2, "wait": 1, "tone": "alert" },
           "ws2": { "alert": 0, "unread": 2, "tone": "done" },
         },
         "others": if f.workspace == "ws1" { "done" } else { "alert" },
@@ -1025,9 +919,6 @@ pub fn fixture(mode : String) -> Source {
     step: 0,
     chat_tabs: fixture_chat_tabs(mode),
     tabs_shown: fixture_tabs_shown(mode),
-    queue_gone: {},
-    queue_set_aside: {},
-    queue_was: { "key": Json::null(), "at": 0 },
     sidebars: {},
     share_look: match mode {
       "share-card-poster" => "poster"
@@ -1113,8 +1004,6 @@ pub fn fixture(mode : String) -> Source {
         @ui.came_from_outside()
         done(r)
       }
-      // (what it does to the 奏 page's queue once taken)
-      let done = fixture_queue_done(f, name, params, done)
       match fixture_kept(name, params, None) {
         Some(r) => {
           done(r.map(fn(a) { a.0 }))

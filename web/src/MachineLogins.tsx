@@ -1,6 +1,6 @@
 // Logging a station in to the command-line tools its agents use (docs/remote-login.md): an agent starts the login and
 // answers the command's questions; the person only does the step that needs them, in their own browser. The login card
-// is all of it (no panel, no second layer): in the chat under the agent's message, on 奏, and on the station page's 登录
+// is all of it (no panel, no second layer): in the chat under the agent's message and on the station page's 登录
 // while it is under way. What it shows is the core's (`machineLogins`, `machineLogin`); what is done goes through its
 // calls, under way on its button (doing.ts), a failure said by a toast (useAct).
 //
@@ -73,7 +73,7 @@ function useRelay(station: string, login: MachineLoginShown): { open(): void; bu
 // ── the card ──
 
 /**
- * A login, as a card (in a chat under the agent's message, on 奏, on the station page while under way): its title, then
+ * A login, as a card (in a chat under the agent's message, on the station page while under way): its title, then
  * what the person does now (a code with 复制并打开; 在浏览器里登录; a step this client cannot do, said), or how it stands
  * (its agent answering the command), and 取消. Ended, it is a line saying how (done, failed and why, cancelled and by whom). Pressing it elsewhere does
  * nothing. A login the core does not know (ended long ago) draws nothing: the message's words say it. `marked`: the one
