@@ -901,6 +901,9 @@ priv struct RowsCheck {
   /// build says whether they part because rows were kept or because what was built changed as it was built
   mut whole : Array[String]?
   mut at : Int
+  /// what the pass that kept rows said to tell outside (Ctx::after_build): the frame's, told as it was said; a build
+  /// to compare with tells nothing (what is told once, felt as a hold opened its menu, it does not tell again)
+  tells : Array[(Int, () -> Unit)]
 }
 
 ///|
@@ -928,7 +931,7 @@ fn Ctx::rows_check_begin(self : Ctx, kept0 : Int) -> Bool {
       rows.push((key.0, key.1, rn.base, rn.n, rn.built_at))
     }
   }
-  rows_checking.val = Some({ lines: self.frame_said_lines(), rows, whole: None, at: -1 })
+  rows_checking.val = Some({ lines: self.frame_said_lines(), rows, whole: None, at: -1, tells: self.tells.copy() })
   nodes_run.fresh = true
   nodes_run.whole = true
   // (one pass of the frame, as a host builds it: not counted, FramePerf's `passes`)
@@ -950,6 +953,8 @@ fn Ctx::rows_check_end(self : Ctx) -> Bool {
       let at = lines_apart(was.lines, now)
       if at < 0 {
         rows_checking.val = None
+        self.tells.clear()
+        self.tells.append(was.tells)
         return false
       }
       // (apart: built once more keeping none, to know whether what parts them is the rows kept)
@@ -963,6 +968,8 @@ fn Ctx::rows_check_end(self : Ctx) -> Bool {
       // (built again keeping none, it built otherwise again: what it built changed as it was built, from what it
       // read that no signal says, kept rows or not; the next frame builds it so)
       if lines_apart(whole, now) >= 0 {
+        self.tells.clear()
+        self.tells.append(was.tells)
         return false
       }
     }

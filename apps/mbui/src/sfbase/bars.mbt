@@ -53,12 +53,12 @@ pub fn bars_shown(c : @ui.Ctx) -> Bool {
 
 ///|
 /// The bars as switched here, before the prefs say it.
-pub let bars_picked : Ref[(Array[Array[String]], Int)?] = { val: None }
+pub let bars_picked : @signals.Signal[(Array[Array[String]], Int)?] = @signals.signal(None)
 
 ///|
 /// The bars of workspace `ws`: switched here, else its own as the prefs keep them (`barsBy`), else everyone's (`bars`).
 pub fn bars_in(src : Source, ws : String) -> (Array[Array[String]], Int) {
-  match bars_picked.val {
+  match bars_picked.get() {
     Some(b) => b
     None => {
       let prefs = (src.topic)("prefs", {}).value
@@ -77,7 +77,7 @@ pub fn bars_in(src : Source, ws : String) -> (Array[Array[String]], Int) {
 ///|
 /// Another bar in view (AppState.setBars): shown at once, kept whole as the workspace's (`prefs.set {barsBy}`).
 pub fn set_bars(src : Source, ws : String, sets : Array[Array[String]], cur : Int) -> Unit {
-  bars_picked.val = Some((sets, cur))
+  bars_picked.set(Some((sets, cur)))
   let whole = Json::object({
     "sets": Json::array(sets.map(fn(s) { Json::array(s.map(fn(p) { Json::string(p) })) })),
     "current": Json::number(cur.to_double()),

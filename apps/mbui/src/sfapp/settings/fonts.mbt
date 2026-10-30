@@ -8,7 +8,7 @@ pub let font_places : Array[String] = ["ui", "text", "code"]
 
 ///|
 /// The place in view on the fonts page (its switch).
-pub let fonts_at : Ref[Int] = Ref(0)
+pub let fonts_at : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
 
 ///|
 /// A place's face chosen (None: back to the app's own), kept as the device's.

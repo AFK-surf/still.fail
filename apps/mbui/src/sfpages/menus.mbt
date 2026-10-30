@@ -7,9 +7,10 @@
 ///|
 /// What a menu's choice left to do: a link to open, words to copy, a picture to copy.
 priv struct MenuDoing {
-  mut open : String
-  mut copy : String
-  mut image : String
+  /// (told: the list that offered it built again to do it)
+  open : @signals.Signal[String]
+  copy : @signals.Signal[String]
+  image : @signals.Signal[String]
   mut offered : String
   /// the file whose menu a finger held opened (its box's id, 0 none), and that menu (the presenters' serial)
   mut held_for : Int
@@ -17,7 +18,14 @@ priv struct MenuDoing {
 }
 
 ///|
-let menu_doing : MenuDoing = { open: "", copy: "", image: "", offered: "", held_for: 0, held_serial: -1 }
+let menu_doing : MenuDoing = {
+  open: @signals.signal("", same=fn(a, b) { a == b }),
+  copy: @signals.signal("", same=fn(a, b) { a == b }),
+  image: @signals.signal("", same=fn(a, b) { a == b }),
+  offered: "",
+  held_for: 0,
+  held_serial: -1,
+}
 
 ///|
 /// The picture whose menu was last opened ("" none).
@@ -27,9 +35,9 @@ pub fn offered_image() -> String {
 
 ///|
 fn menus_reset() -> Unit {
-  menu_doing.open = ""
-  menu_doing.copy = ""
-  menu_doing.image = ""
+  menu_doing.open.set("")
+  menu_doing.copy.set("")
+  menu_doing.image.set("")
   menu_doing.offered = ""
   menu_doing.held_for = 0
   menu_doing.held_serial = -1
@@ -52,8 +60,8 @@ fn link_held(c : @ui.Ctx, href : String) -> Unit {
   @sf.link_menu(
     href,
     from=@sf.at_point(x, y),
-    fn() { menu_doing.open = href },
-    fn() { menu_doing.copy = href },
+    fn() { menu_doing.open.set(href) },
+    fn() { menu_doing.copy.set(href) },
   )
 }
 
@@ -84,7 +92,7 @@ fn file_menu(
       }
       items.append(more)
       if src != "" && src != "!" {
-        items.push(Some(@sf.menu_item_of(@sf.t("desktop.contextMenu.copyImage"), fn() { menu_doing.image = src }, icon="copy")))
+        items.push(Some(@sf.menu_item_of(@sf.t("desktop.contextMenu.copyImage"), fn() { menu_doing.image.set(src) }, icon="copy")))
       }
       if items.length() > 0 {
         @sf.menu(items, from=@sf.at_point(x, y))
@@ -102,26 +110,26 @@ fn file_menu(
 fn menus_frame(c : @ui.Ctx) -> Unit {
   // (taken when it is opened, not while the frame is built: a frame built again lets go of what its earlier builds
   // said, Ctx::after_build)
-  if menu_doing.open != "" {
-    let href = menu_doing.open
+  if menu_doing.open.get() != "" {
+    let href = menu_doing.open.get()
     c.after_build("menu-open", fn() {
-      menu_doing.open = ""
+      menu_doing.open.set("")
       @ui.open_url(href) |> ignore
     })
   }
-  if menu_doing.copy != "" {
-    c.copy_text(menu_doing.copy)
-    menu_doing.copy = ""
+  if menu_doing.copy.get() != "" {
+    c.copy_text(menu_doing.copy.get())
+    menu_doing.copy.set("")
     say(c, @sf.t("common.link.copied"))
   }
-  if menu_doing.image != "" {
-    match c.image_pixels(menu_doing.image, image_copy_px) {
+  if menu_doing.image.get() != "" {
+    match c.image_pixels(menu_doing.image.get(), image_copy_px) {
       @ui.PixelsRead(w, h, rgba) =>
         c.after_build("menu-copy-image", fn() {
-          menu_doing.image = ""
+          menu_doing.image.set("")
           @ui.clipboard_set_png(@pixels.png(w, h, unpremultiplied(rgba)))
         })
-      @ui.PixelsFailed => menu_doing.image = ""
+      @ui.PixelsFailed => menu_doing.image.set("")
       @ui.PixelsComing => ()
     }
   }

@@ -513,7 +513,7 @@ pub fn left(route : Route) -> Unit {
       kept.asked.set(kept.asked.get() + 1)
       kept_all.set(false)
     }
-    BarSettings => bar_adding.val = false
+    BarSettings => bar_adding.set(false)
     RunSettings(_, key) => {
       run_opened.remove("session:" + key)
       run_list.remove("session:" + key)
@@ -532,7 +532,7 @@ pub fn reset() -> Unit {
   station_parts.clear()
   station_network_open.clear()
   lock_prompts_reset()
-  fonts_at.val = 0
+  fonts_at.set(0)
   adb_reset()
   keyed_fields.clear()
   notify_switched.set(None)
@@ -596,7 +596,7 @@ pub fn reset() -> Unit {
   run_opened.clear()
   run_list.clear()
   new_profiles.clear()
-  bar_adding.val = false
+  bar_adding.set(false)
   bar_moves.clear()
   opened.plain.clear()
   opened.opening.clear()

@@ -253,7 +253,7 @@ pub fn fixture_page(mode : String) -> String {
   fx_adb.val = ""
   if m.has_prefix("settings-adb-") {
     fx_adb.val = m.unsafe_substring(start=13, end=m.length())
-    adb_host.phone = Some(
+    adb_host.phone.set(Some(
       obj([
         ("supported", Json::boolean(true)),
         ("developer", Json::boolean(true)),
@@ -262,7 +262,7 @@ pub fn fixture_page(mode : String) -> String {
         ("canSwitch", Json::boolean(false)),
         ("reads", Json::boolean(false)),
       ]),
-    )
+    ))
   }
   match m {
     "settings-station-mark" => up("mark", "", 0)
@@ -345,7 +345,7 @@ pub fn fixture_page(mode : String) -> String {
     // the run's accounts listed (run_more.mbt account_list)
     "settings-run-accounts" => run_list["session:s-c1"] = "account"
     // the fonts page at code's faces
-    "settings-fonts-code" => fonts_at.val = 2
+    "settings-fonts-code" => fonts_at.set(2)
     "settings-new-connect-platform" => fx_connect_step.val = "platform"
     "settings-new-connect-scan" => fx_connect_step.val = "feishuScan"
     // a new Slack app's step: its name, its look

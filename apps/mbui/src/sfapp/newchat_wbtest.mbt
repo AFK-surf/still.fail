@@ -93,13 +93,13 @@ test "the bar: drawn up, the panel of the other bar; let go on its first place, 
   t.run_for(bar.o.end() - t.time())
   // let go over the rows before the panel was all the way open: it stays open
   if app.nav.top() == Home {
-    assert_true(bar.mode)
+    assert_true(bar.mode.get())
     // the row of the other bar: its first place
     t.tap(xs[0], 844.0 - 22.0 - 132.0 + 20.0 + 28.0)
   }
   assert_true(app.nav.top() == Decisions)
   assert_true(t.find("奏") is Some(_))
-  match bars_picked.val {
+  match bars_picked.get() {
     Some((_, cur)) => assert_eq(cur, 1)
     None => fail("no bar picked")
   }
@@ -316,7 +316,7 @@ test "the bar chosen in the panel slides down into the bar's place, its places l
   }
   assert_true(seen)
   assert_true(bar.swap is None)
-  match bars_picked.val {
+  match bars_picked.get() {
     Some((_, cur)) => assert_eq(cur, 1)
     None => fail("no bar picked")
   }

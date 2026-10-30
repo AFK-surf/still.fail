@@ -287,7 +287,7 @@ pub fn reset() -> Unit {
   reporting_host.val = None
   notices_reset()
   faces_reset()
-  bars_picked.val = None
+  bars_picked.set(None)
   // what the app does whichever frame draws it (app_frame.mbt, open_links.mbt, menu_bar.mbt, shell.mbt)
   app_frame_reset()
   links_reset()

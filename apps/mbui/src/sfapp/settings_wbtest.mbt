@@ -322,14 +322,14 @@ test "profiles, connects, the vault: their lists" {
 ///|
 test "下方栏: a place's \"−\" takes it off its bar (the bars kept as the workspace's)" {
   let t = settings_tester("bars")
-  bars_picked.val = None
+  bars_picked.set(None)
   assert_true(t.find("第 1 栏") is Some(_))
   // under the title, what the bars are of (BarSettings.kt LargeTitle's small words)
   assert_true(t.find("此设备") is Some(_))
   // Station's "−", at its icon's top right over the first bar's last slot, said as what it takes off
   let (x, y, w, h) = t.query(Button, label="从此栏移除Station").unwrap().rect
   t.tap(x + w / 2.0, y + h / 2.0)
-  match bars_picked.val {
+  match bars_picked.get() {
     Some((sets, _)) => {
       assert_eq(sets[0].length(), 3)
       assert_false(sets[0].contains("stations"))
@@ -341,14 +341,14 @@ test "下方栏: a place's \"−\" takes it off its bar (the bars kept as the wo
 ///|
 test "下方栏: a place held and slid sideways goes where it is let go, by the slots it went; a tap moves nothing" {
   let t = settings_tester("bars")
-  bars_picked.val = None
+  bars_picked.set(None)
   let (x, y, w, h) = t.query(@ui.Group, label="对话").unwrap().rect
   // a tap: nothing (BarSettings.kt: a place has no tap, only its drag)
   t.tap(x + w / 2.0, y + h / 2.0)
-  assert_true(bars_picked.val is None)
+  assert_true(bars_picked.get() is None)
   // held and slid a slot and a third to the right: after 文件
   t.drag(x + w / 2.0, y + h / 2.0, x + w * 1.8, y + h / 2.0)
-  match bars_picked.val {
+  match bars_picked.get() {
     Some((sets, _)) => assert_eq(sets[0], ["files", "chats", "profiles", "stations"])
     None => fail("the bars were not changed")
   }
@@ -357,10 +357,10 @@ test "下方栏: a place held and slid sideways goes where it is let go, by the 
 ///|
 test "下方栏: a screen reader moves a place one slot along" {
   let t = settings_tester("bars")
-  bars_picked.val = None
+  bars_picked.set(None)
   t.act(@ui.Group, @ui.Increment, label="文件")
   t.draw()
-  match bars_picked.val {
+  match bars_picked.get() {
     Some((sets, _)) => assert_eq(sets[0], ["chats", "profiles", "files", "stations"])
     None => fail("the bars were not changed")
   }

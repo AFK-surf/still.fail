@@ -606,7 +606,7 @@ fn swap_at(s : Swap, o : Double, w : Double, k_now : Double, row_top : Double) -
 /// What the bar keeps between frames (Bar.kt BarModel, BallMotion).
 priv struct BarModel {
   /// the panel of the other bars open (or opening, or the finger's)
-  mut mode : Bool
+  mode : @signals.Signal[Bool]
   /// how open the panel is (0 the bar, 1 the panel); the notch (1 open); the ball held
   o : Spr
   k : Spr
@@ -660,7 +660,7 @@ let ball_rest_within : Double = 0.01
 
 ///|
 let bar : BarModel = {
-  mode: false,
+  mode: @signals.signal(false, same=fn(a, b) { a == b }),
   o: spr(0.0, 260.0, 17.0, "bar/o"),
   k: spr(1.0, 300.0, 30.0, "bar/k"),
   held: spr(0.0, 420.0, 16.0, "bar/held"),
@@ -696,7 +696,7 @@ fn bar_reset() -> Unit {
     g.value = to
     g.target = to
   }
-  bar.mode = false
+  bar.mode.set(false)
   bar.o.back(0.0, 260.0, 17.0)
   bar.k.back(1.0, 300.0, 30.0)
   bar.held.back(0.0, 420.0, 16.0)
@@ -729,7 +729,7 @@ fn bar_reset() -> Unit {
 
 ///|
 fn BarModel::open_panel(self : BarModel, open : Bool) -> Unit {
-  self.mode = open
+  self.mode.set(open)
   if open {
     self.o.go(1.0, 260.0, 17.0)
   } else {
@@ -1168,7 +1168,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     })
   }
   if tell && !shown {
-    if m.mode {
+    if m.mode.get() {
       m.open_panel(false)
     }
     m.drag = -1.0
@@ -1182,7 +1182,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     Some(a) => items.search(a).unwrap_or(-1)
     None => -1
   }
-  let final_cs = bar_centres(w, if notched && !m.mode { 1.0 } else { 0.0 }, items.length())
+  let final_cs = bar_centres(w, if notched && !m.mode.get() { 1.0 } else { 0.0 }, items.length())
   // the finger's place, and the place a let-go would choose: the ball keeps to it, leaning toward the finger
   let cand : (Double, Double, Int, String)? = if m.drag >= 0.0 {
     let x = m.drag
@@ -1303,7 +1303,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   let fx = 22.0
   let fy = c.height - foot - panel
   // the panel open: a press anywhere else closes it (and does nothing else)
-  if shown && m.mode {
+  if shown && m.mode.get() {
     let catcher = c.id("bar/catch")
     match c.drag_of(catcher) {
       Some(d) => if d.down || d.take_tap() { m.open_panel(false) }
@@ -1447,7 +1447,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
       match m.swap {
         None => {
           // the other bars, above this one, as the panel opens
-          if m.mode || m.o.x > 0.001 {
+          if m.mode.get() || m.o.x > 0.001 {
             let alpha = rows_alpha(m.o.x)
             let shift = rows_shift(m.o.x, reach)
             for n, i in others {
@@ -1701,7 +1701,7 @@ fn bar_gesture(
       drop: rows_shift(m.o.x, reach),
       lit,
     })
-    m.mode = false
+    m.mode.set(false)
     m.o.go(0.0, 200.0, 28.0)
     // its first frame, drawn as the panel was (the motion log)
     @motion.log_frame(c, "bar/swap", "value=\{m.o.x} to=0")
@@ -1751,7 +1751,7 @@ fn bar_gesture(
     m.from_open = m.holds
     m.open = m.o.to > 0.5
     if m.holds {
-      m.mode = true
+      m.mode.set(true)
     }
   }
   if d.down && d.moving {
@@ -1759,7 +1759,7 @@ fn bar_gesture(
       let raw = m.o0 + (m.y0 - py - (if m.from_open { 0.0 } else { 8.0 })) / reach
       if !m.holds && raw > 0.0 {
         m.holds = true
-        m.mode = true
+        m.mode.set(true)
       }
       if m.holds {
         let over_bar = row_top - py
@@ -1817,7 +1817,7 @@ fn bar_gesture(
       }
     } else if items.length() > 0 {
       let j = imin(items.length() - 1, nearest(final_cs, 4, px))
-      if m.mode {
+      if m.mode.get() {
         m.open_panel(false)
       }
       on_tab(items[j])
@@ -1829,7 +1829,7 @@ fn bar_gesture(
     m.drag = -1.0
     m.drag_y = -1.0
     // a tap: a place on the bar; with the panel open, a row (that bar) or a place in it
-    if m.mode && py < row_top {
+    if m.mode.get() && py < row_top {
       if m.o.x > 0.6 && others.length() > 0 {
         let shift = (1.0 - dmin(1.0, m.o.x)) * 14.0 - dmax(0.0, m.o.x - 1.0) * reach
         let n = ((py - over - shift) / bar_row).floor().to_int()
@@ -1846,7 +1846,7 @@ fn bar_gesture(
       let j = nearest(now, items.length(), px)
       let slot = (w - 2.0 * c0) / 3.0
       if (now[j] - px).abs() <= slot / 2.0 {
-        if m.mode {
+        if m.mode.get() {
           m.open_panel(false)
         }
         on_tab(items[j])
