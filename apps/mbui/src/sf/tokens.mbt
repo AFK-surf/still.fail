@@ -748,8 +748,9 @@ pub let card_pad : Double = 20.0
 pub let command_box_corner : Double = row_corner
 
 ///|
-/// A button's height (36): a capsule, capsule_in(card_corner, 36) in from a card's corner where it stands in one.
-pub let button_h : Double = 36.0
+/// A button's height with keyboard and mouse (34, as everything pressed is: a row, a field; button_height): a capsule,
+/// capsule_in(card_corner, 34) in from a card's corner where it stands in one.
+pub let button_h : Double = menu_row_min
 
 ///|
 /// A card of pressable rows (a list card, a card of options): the rows this far in, as a menu's are in its panel
@@ -1035,8 +1036,9 @@ let wide_type : Type = {
 }
 
 ///|
-/// A control's height (Theme::control_h): the web's (controls.css.ts input, select: 36), a finger's (44).
-let wide_control_h : Double = 36.0
+/// A control's height (Theme::control_h): with keyboard and mouse 34, as a row and a button are (2026-10-30, one
+/// height: in place of the web's 36), a finger's (44).
+let wide_control_h : Double = menu_row_min
 
 ///|
 let narrow_control_h : Double = 44.0
@@ -2607,11 +2609,12 @@ pub fn composer_round_in() -> Double {
 pub let composer_pad_room : @ui.Space = room(composer_pad)
 
 ///|
-/// Where a dialog's buttons stand in its foot corner (the theme's button: a capsule): as far from its foot and its side
-/// as makes the last concentric with its corner (dialog_r), the row reaching past its sides' room `pad` to there.
+/// Where a dialog's buttons stand in its foot corners (the theme's button: a capsule): as far from its foot and its sides
+/// as makes the last, and what stands at the foot's start (a 删除), concentric with its corners (dialog_r), the row
+/// reaching past its sides' room `pad` to there at both ends.
 pub fn dialog_corner_foot(pad : Double) -> @ui.Style {
   let at = capsule_in(dialog_r, button_height())
-  @ui.style(pb=room(at), mr=room(at - pad))
+  @ui.style(pb=room(at), ml=room(at - pad), mr=room(at - pad))
 }
 
 ///|
