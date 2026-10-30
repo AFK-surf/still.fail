@@ -364,6 +364,20 @@ let coming_ring : Double = 14.0
 let coming_pill_h : Double = 16.0
 
 ///|
+/// How far the ring is from the pill's top, foot and start: concentric with its end.
+let coming_ring_in : Double = (coming_pill_h - coming_ring) / 2.0
+
+///|
+/// How far the pill is from the picture's sides and foot: concentric with its corner, the ladder's (8 in, its ends were
+/// rounder than that corner left room for, which the corners' check refused); where the corner is too square for it,
+/// 8 in.
+let coming_in : Double = @sf.capsule_fit(@sf.message_file_corner, coming_pill_h, coming_alone_in)
+
+///|
+/// How far the pill is from the picture's sides and foot where no corner leads it.
+let coming_alone_in : Double = 8.0
+
+///|
 let coming_track : Int64 = 0xFFFFFF40L
 
 ///|
@@ -371,9 +385,7 @@ let coming_track : Int64 = 0xFFFFFF40L
 let coming_room : @ui.Style = @ui.style(
   w=Full,
   h=Full,
-  // (concentric with the picture's corner, the ladder's: 8 in, the pill's ends were rounder than that corner left room
-  // for, which the corners' check refused)
-  p=@sf.capsule_fit_room(@sf.message_file_corner, coming_pill_h, 8.0),
+  p=@sf.room_of(coming_in),
   align=AEnd,
   justify=JEnd,
 )
@@ -384,7 +396,7 @@ let coming_pill : @ui.Style = @ui.style(
   row=true,
   h=Fixed(coming_pill_h),
   gap=S1,
-  pl=@sf.room_of((coming_pill_h - coming_ring) / 2.0),
+  pl=@sf.room_of(coming_ring_in),
   pr=S2,
   radius=Full,
   bg=@sf.video_shade,
