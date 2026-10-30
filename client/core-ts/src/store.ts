@@ -27,9 +27,11 @@ export const EVICT_AFTER_MS = 60_000;
 /// The topics a page opens with, each first subscriber's wait for its first value a trace of its own (`<topic>.open`,
 /// docs/telemetry.md): how long a chat took to show, and how much of that the core spent making it.
 const OPENED = new Set(["chat"]);
-/// A round of emissions that held the core this long is a trace of its own (`core.flush`): what made the core busy as
-/// a page waited for it.
+/// Rounds of emissions that held the core this long are told (`core.flush`): what made the core busy as a page waited
+/// for it. At most one a minute, saying how many there were and the worst of them: one a round was 1375 spans a phone
+/// sent in two hours, more than anything else it sent (2026-10-31).
 const FLUSH_HELD_MS = 50;
+const FLUSH_TOLD_EVERY_MS = 60_000;
 
 /// A value or the error a topic shows.
 export type Value = { ok: unknown } | { err: CoreError };
@@ -120,6 +122,8 @@ export class Store {
   #clock = false;
   #clockOn = false;
   #shaped = false;
+  /// The rounds that held the core since `core.flush` last went out: how many, for how long, and the worst.
+  #heldRounds: { from: number; rounds: number; ms: number; worst: { ms: number; topics: number; slowest: string; slowestMs: number; parts: [string, number][] } | null } | null = null;
 
   readonly #tracer: Tracer | null;
 
@@ -386,16 +390,27 @@ export class Store {
         slowest = topic.topic;
       }
     }
-    const held = this.host.monotonicMs() - t0;
-    if (held >= FLUSH_HELD_MS && this.#tracer !== null) {
-      const span = this.#tracer.root("core.flush", Kind.Internal);
-      span.set("stillfail.held_ms", Math.round(held));
-      span.set("stillfail.topics", pending.length);
-      span.set("stillfail.slowest", slowest);
-      span.set("stillfail.slowest_ms", Math.round(slowestMs));
-      for (const [part, ms] of spentFrom ? spentSince(spentFrom) : []) span.set(`stillfail.ms.${part}`, Math.round(ms));
-      span.end();
-    }
+    const now = this.host.monotonicMs();
+    const held = now - t0;
+    if (held < FLUSH_HELD_MS || this.#tracer === null) return;
+    // (the first told at once; then each a minute after the one before)
+    const first = this.#heldRounds === null;
+    const h = (this.#heldRounds ??= { from: now, rounds: 0, ms: 0, worst: null });
+    h.rounds++;
+    h.ms += held;
+    if (h.worst === null || held > h.worst.ms) h.worst = { ms: held, topics: pending.length, slowest, slowestMs, parts: spentFrom ? spentSince(spentFrom) : [] };
+    if (!first && now - h.from < FLUSH_TOLD_EVERY_MS) return;
+    const span = this.#tracer.root("core.flush", Kind.Internal);
+    span.set("stillfail.rounds", h.rounds);
+    span.set("stillfail.rounds_ms", Math.round(h.ms));
+    const w = h.worst!;
+    span.set("stillfail.held_ms", Math.round(w.ms));
+    span.set("stillfail.topics", w.topics);
+    span.set("stillfail.slowest", w.slowest);
+    span.set("stillfail.slowest_ms", Math.round(w.slowestMs));
+    for (const [part, ms] of w.parts) span.set(`stillfail.ms.${part}`, Math.round(ms));
+    span.end();
+    this.#heldRounds = { from: now, rounds: 0, ms: 0, worst: null };
   }
 
   /// What the source makes of a topic now, kept shared (frozen when that is checked). A source that throws making it
