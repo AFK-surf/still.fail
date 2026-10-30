@@ -4,7 +4,7 @@
 import { type Request, type Answer, error, json, percentDecode } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { type Accounts, Refusal } from "../../accounts/index.ts";
-import type { Sharing } from "../../share/index.ts";
+import { type Sharing, skillNameOk } from "../../share/index.ts";
 import { type Viewer, managesStation } from "../../mesh/credential.ts";
 import { tr, type Lang } from "../../ops/i18n.ts";
 import { savePolicy } from "../../sessions/archive-policy.ts";
@@ -217,7 +217,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
         manager(r.viewer, r.lang);
         const body = input(r);
         const skill = segment(name!);
-        if (skill.includes("/") || skill.startsWith(".")) throw new Refusal(400, "bad skill name");
+        if (!skillNameOk(skill)) throw new Refusal(400, "bad skill name");
         try {
           await sharing.shareSkill(skill, body.on !== false, stations(body.allow));
         } catch (e) {

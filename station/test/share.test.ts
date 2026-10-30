@@ -1,7 +1,7 @@
 // Stations sharing profiles and skills (src/share/index.ts, docs/station-share.md): two stations, a cloud that only
 // lists who hosts what (as cloud/src/directory.ts `stationShare` keeps it), and the station transport as a direct call.
 import assert from "node:assert/strict";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -373,6 +373,43 @@ test("a shared skill: copied and linked under its name, edits go back to the hos
   await a.sharing.shareSkill("ember", false, null);
   await settle(a, b);
   assert.equal(existsSync(link), false);
+});
+
+test("a skill named in any script is shared; renamed, it is linked under its new name; deleted, it is no longer shared", async () => {
+  const cloud = new FakeCloud();
+  const all = new Map<string, Station>();
+  const a = station(cloud, A, () => all);
+  const b = station(cloud, B, () => all);
+  all.set(A, a).set(B, b);
+  const skills = (s: Station) => join(s.data, "agent", "skills");
+  const linked = (name: string) => {
+    try {
+      return lstatSync(join(skills(b), name)).isSymbolicLink();
+    } catch {
+      return false;
+    }
+  };
+  mkdirSync(join(skills(a), "测试"));
+  writeFileSync(join(skills(a), "测试", "SKILL.md"), "---\nname: 测试\ndescription: 项目记忆：测试\n---\nfirst\n");
+  await a.sharing.shareSkill("测试", true, null);
+  await settle(a, b);
+  assert.ok(linked("测试"), "copied and linked under its name");
+  assert.match(readFileSync(join(skills(b), "测试", "SKILL.md"), "utf8"), /first/);
+  const id = a.config.raw().sharedSkills["测试"].id;
+  // Renamed on its host: shared on under the new name, the copy linked under it only.
+  renameSync(join(skills(a), "测试"), join(skills(a), "测验"));
+  await settle(a, b);
+  assert.deepEqual(Object.keys(a.config.raw().sharedSkills), ["测验"]);
+  assert.equal(a.config.raw().sharedSkills["测验"].id, id);
+  assert.ok(linked("测验"));
+  assert.equal(linked("测试"), false);
+  // Deleted on its host: no longer shared, the copy taken away.
+  rmSync(join(skills(a), "测验"), { recursive: true });
+  await settle(a, b);
+  assert.deepEqual(a.config.raw().sharedSkills, {});
+  assert.equal(linked("测验"), false);
+  // A name that is not one directory's is refused by the station told of it.
+  await assert.rejects(b.sharing.handle(A, { method: "share.changed", id: "sh-0123456789abcdef0123", kind: "skill", name: "../x", version: 1 }), /bad skill name/);
 });
 
 test("a station gone from the workspace: what it shared is taken away, what it used forgotten", async () => {
