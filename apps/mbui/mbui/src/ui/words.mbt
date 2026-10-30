@@ -35,10 +35,6 @@ priv struct WordsMark {
 }
 
 ///|
-/// The boxes marked this frame.
-let words_marks : Array[WordsMark] = []
-
-///|
 /// What each key's box held when last laid out.
 let words_kept : Map[String, Words] = {}
 
@@ -60,8 +56,9 @@ pub fn Ctx::words(
   color? : Int64 = 0L,
   round? : Double = 0.0,
 ) -> Unit {
-  ignore(self)
-  words_marks.push({ node: i, key, a, b, color, round })
+  if i >= 0 && i < self.count {
+    self.nodes[i].words = Some({ node: i, key, a, b, color, round })
+  }
 }
 
 ///|
@@ -99,6 +96,14 @@ fn Ctx::words_after_layout(self : Ctx) -> Unit {
   let seen : Map[String, Bool] = {}
   // what the list rows drawn again marked as they were built, where they are now (kept_rows.mbt)
   self.rows_words_again(seen)
+  // (the boxes marked, from the nodes: Node's `words`)
+  let words_marks : Array[WordsMark] = []
+  for i in 0..<self.count {
+    match self.nodes[i].words {
+      Some(m) => words_marks.push({ ..m, node: i })
+      None => ()
+    }
+  }
   if words_marks.is_empty() && seen.is_empty() {
     words_kept.clear()
     return
@@ -153,7 +158,6 @@ fn Ctx::words_after_layout(self : Ctx) -> Unit {
       None => ()
     }
   }
-  words_marks.clear()
   let gone : Array[String] = []
   words_kept.each(fn(k, _) { if !seen.contains(k) { gone.push(k) } })
   for k in gone {

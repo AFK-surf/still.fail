@@ -96,6 +96,9 @@ struct Node {
   /// first child's (`scroller_inner`: a field's words are its own); found from the nodes once laid out (sideways_found)
   mut scroller : Int
   mut scroller_inner : Bool
+  /// the words it holds may be picked, kept by a key once laid out (Ctx::words): found from the nodes once laid out
+  /// (words_after_layout)
+  mut words : WordsMark?
   mut parent : Int
   mut first : Int
   mut last : Int
@@ -356,6 +359,7 @@ fn Node::new() -> Node {
     floats: false,
     scroller: 0,
     scroller_inner: false,
+    words: None,
     parent: -1,
     first: -1,
     last: -1,
@@ -520,6 +524,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.floats = false
   self.scroller = 0
   self.scroller_inner = false
+  self.words = None
   self.first = -1
   self.last = -1
   self.next = -1
