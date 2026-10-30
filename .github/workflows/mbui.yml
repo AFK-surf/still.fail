@@ -688,6 +688,7 @@ jobs:
       - name: The core's bytecode (Hermes)
         run: |
           bash apps/mbui/scripts/win.sh core
+          [ ! -d .ci/hbc ] || echo "HBC_CACHE: $(ls .ci/hbc | wc -l) files, $(du -sm .ci/hbc | cut -f1) MB"
           [ ! -d .ci/hbc ] || echo "HBC_KEY=mbui-win-hbc-$(ls .ci/hbc | sha256sum | cut -c1-16)" >> "$GITHUB_ENV"
       - name: Build (APP=stillfail)
         run: |
