@@ -247,7 +247,12 @@ fn Ctx::list_shown(self : Ctx, id : Int) -> Bool {
 ///|
 /// List `id` (`st`) moved by the app (Ctx::list_scroll_to, list_to_end, a row come at the end it follows): scrolled,
 /// where it showed.
-fn Ctx::app_scrolled(self : Ctx, id : Int, st : ListState) -> Unit {
+fn Ctx::app_scrolled(self : Ctx, id : Int, st : ListState, put? : Bool = true) -> Unit {
+  // (put elsewhere at once: what it shows moves for no row's cause, rows_steady.mbt; held at its end as rows come,
+  // what is in view stays where its rows have it)
+  if put {
+    st.put_at = self.clock
+  }
   if self.list_shown(id) {
     self.scrolled(st)
   }
@@ -501,6 +506,7 @@ pub fn Ctx::list(
         causes: None,
         sizes: {},
         sizes_end: -1.0,
+        put_at: -1.0,
         shown_h: {},
         sizes_mover: Mover::new(),
       }
@@ -546,7 +552,7 @@ pub fn Ctx::list(
       st.at_end = false
       self.glide_to_end(id, st)
     } else {
-      self.app_scrolled(id, st)
+      self.app_scrolled(id, st, put=false)
     }
   }
   let i = self.alloc_part(kind_list, true, false)

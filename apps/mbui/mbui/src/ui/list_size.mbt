@@ -35,11 +35,13 @@ fn RowSize::at(self : RowSize) -> Double {
 ///|
 /// A row on the list's way, as it stood the last time what it goes by changed (the way set out again or given another
 /// end, what it is laid out at stepping, another cause): `h` tall at `at`, laid out `to` tall then, on the way from
-/// `start` to `end`. Where it is at any moment after is worked out from that alone, whatever frames came between (what
-/// was off of it then closing as the way goes from then).
+/// `start` to `end`, going `v` (points a ms) then. Where it is at any moment after is worked out from that alone,
+/// whatever frames came between: what was off of it then closing by the end, on a Move's way from that speed
+/// (@ui.move_path), so a cause coming on its way neither stops it nor steps it.
 priv struct RowSizing {
   mut cause : RowSize
   mut h : Double
+  mut v : Double
   mut to : Double
   mut at : Double
   mut start : Double
@@ -47,7 +49,7 @@ priv struct RowSizing {
   /// the frame it was last laid out in, and how it stood as that frame found it (a frame laid out twice, built again
   /// from what it read, lays it out the same: from there each time)
   mut frame : Int
-  mut was : (RowSize, Double, Double, Double, Double, Double)
+  mut was : (RowSize, Double, Double, Double, Double, Double, Double)
 }
 
 ///|
@@ -55,15 +57,6 @@ priv struct RowSizing {
 /// way is far, as every other move is: a row's height is worked out by its key as the list is laid out (ListRows),
 /// its way's length to come with that.
 pub let row_size_ms : Double = 300.0
-
-///|
-/// Where the list's way is at `t` (0 → 1): Move's, from its start to its end.
-fn RowCauses::way_at(self : RowCauses, t : Double) -> Double {
-  if self.end <= self.start {
-    return 1.0
-  }
-  Ease::Move.at((t - self.start) / (self.end - self.start))
-}
 
 ///|
 /// Row `k`, laid out `natural` tall, as tall as what changed it has it at `now` (its list's ListRows, by its key): off
@@ -103,53 +96,46 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
       }
       // (off as its cause came, from its moment: laid out first a while on, it is where the way has it by then)
       let at = cause.at()
-      let r = { cause, h: from, to, at, start: c.start, end: c.end, frame: -1, was: (cause, from, to, at, c.start, c.end) }
+      let r = { cause, h: from, v: 0.0, to, at, start: c.start, end: c.end, frame: -1, was: (cause, from, 0.0, to, at, c.start, c.end) }
       self.sizes[key] = r
       r
     }
   }
   if r.frame == frame {
-    let (was_cause, h, was_to, at, start, end) = r.was
+    let (was_cause, h, v, was_to, at, start, end) = r.was
     r.cause = was_cause
     r.h = h
+    r.v = v
     r.to = was_to
     r.at = at
     r.start = start
     r.end = end
   } else {
     r.frame = frame
-    r.was = (r.cause, r.h, r.to, r.at, r.start, r.end)
+    r.was = (r.cause, r.h, r.v, r.to, r.at, r.start, r.end)
   }
-  // where it is at `t` as it stood (laid out `now_to` tall then): what was off of it closing as its way goes; one
-  // whose content goes on the way itself, only what was off of it as it changed, what it does itself its own
-  let at_t = fn(t : Double, now_to : Double) {
-    let q = fn(u : Double) {
-      if r.end <= r.start {
-        1.0
-      } else {
-        Ease::Move.at((u - r.start) / (r.end - r.start))
-      }
-    }
-    let q0 = q(r.at)
+  // where it is at `t` as it stood (laid out `now_to` tall then), and how fast it goes: what was off of it closing by
+  // the way's end from the speed it had; one whose content goes on the way itself, only what was off of it as it
+  // changed, what it does itself its own
+  let at_t = fn(t : Double, now_to : Double) -> (Double, Double) {
     let off = if own { r.h - r.to } else { r.h - now_to }
-    if q0 >= 1.0 {
-      now_to
-    } else {
-      now_to + off * (1.0 - q(t)) / (1.0 - q0)
-    }
+    let (x, v) = move_path(off, r.v, t - r.at, r.end - r.at)
+    (now_to + x, v)
   }
   // what it goes by changed (another cause, the way set out again or given another end, what it is laid out at
-  // stepping: a picture come to its size, the core's row joined to the one before): on from where it is now, as it
-  // stood, so it neither steps nor stops
+  // stepping: a picture come to its size, the core's row joined to the one before): on from where it is now, as fast
+  // as it goes, so it neither steps nor stops
   if r.cause != cause || r.start != c.start || r.end != c.end || (!own && (to - r.to).abs() > 0.5) {
-    r.h = at_t(now, if own { to } else { r.to })
+    let (h, v) = at_t(now, if own { to } else { r.to })
+    r.h = h
+    r.v = v
     r.to = to
     r.at = now
     r.start = c.start
     r.end = c.end
     r.cause = cause
   }
-  at_t(now, to)
+  at_t(now, to).0
 }
 
 ///|
