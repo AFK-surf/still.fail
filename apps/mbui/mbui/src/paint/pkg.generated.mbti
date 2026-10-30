@@ -1,0 +1,49 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mbui/paint"
+
+import {
+  "mbui/pixels",
+}
+
+// Values
+pub fn dashed_outlines(Double, Double, Double, Double) -> Array[(Array[Double], Bool)]
+
+pub fn shape_of(Array[(Array[Double], Bool)], fill? : Int64, even_odd? : Bool, stroke? : Int64, width? : Double) -> Shape
+
+pub fn vector_shapes(@pixels.Vector, Double, Double, tint? : Int64) -> Array[Shape]
+
+// Errors
+
+// Types and methods
+pub(all) struct Glass {
+  blur : Double
+  tint : Int64
+  saturation : Double
+  solid : Int64
+  rim_edge : Double
+  rim_lit : Double
+  rim_back : Double
+  liquid : Bool
+  rim : Double
+  bezel : Double
+  refraction : Double
+  chroma : Double
+  merge : Double
+  adaptive : Bool
+  shares_capture : Bool
+}
+pub fn Glass::frosted(blur~ : Double, tint~ : Int64, solid~ : Int64, saturation? : Double, rim_edge? : Double, rim_lit? : Double, rim_back? : Double, shares_capture? : Bool) -> Self
+pub fn Glass::liquid(blur? : Double, tint? : Int64, solid? : Int64, saturation? : Double, rim? : Double, bezel? : Double, refraction? : Double, chroma? : Double, merge? : Double, adaptive? : Bool) -> Self
+pub fn Glass::sharing(Self) -> Self
+
+pub(all) struct Shape {
+  outlines : Array[(Array[Double], Bool)]
+  fill : Int64
+  even_odd : Bool
+  stroke : Int64
+  width : Double
+} derive(Eq, Show)
+
+// Type aliases
+
+// Traits

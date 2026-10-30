@@ -1296,18 +1296,21 @@ test "keys: a widget of an old view's with the focus takes its own (an arrow alo
 /// taking back (telling "node"), the node drawn over the old view where `node_over`, else under it; what took back.
 fn back_by_order(node_over : Bool, by_button : Bool, old_off? : Bool = false) -> Array[String] {
   let told : Array[String] = []
+  let off = @signals.signal(false, same=fn(x, y) { x == y })
+  // (the back button pressed as the old view is next built, once it is said)
+  let button = @signals.signal(false, same=fn(x, y) { x == y })
   let t = Tester::new(fn(_c) {  }, platform=2)
   let island = fn(root : @view.View) {
     old(root, fn(c) {
       part_live()
       c.take_back(fn() { told.push("old") })
-      if by_button && c.frame_no > 2 && told.is_empty() {
+      if button.get() && told.is_empty() {
         c.back() |> ignore
       }
     })
     .over(Is(true))
-    // (said to take no press, still there)
-    .presses(Is(!old_off))
+    // (said to take no press, still there, as `old_off` says once it is drawn)
+    .presses(By(fn() { !off.get() }))
     |> ignore
   }
   let node = fn(root : @view.View) {
@@ -1324,6 +1327,9 @@ fn back_by_order(node_over : Bool, by_button : Bool, old_off? : Bool = false) ->
   })
   t.draw()
   t.draw()
+  // (between frames: none drawn after it)
+  off.set(old_off)
+  button.set(by_button)
   if !by_button {
     on_back(2, 0.0, 1.0, 0)
   }

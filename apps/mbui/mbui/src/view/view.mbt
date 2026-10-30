@@ -144,6 +144,10 @@ struct Node {
   mut key_said : Int
   /// what back does to it (View::takes_back)
   mut on_back : (() -> Unit)?
+  /// whether it is held, and pointed at, as what reads it reads it (View::pressed, View::pointed): made as first read,
+  /// let go with it
+  mut pressed_cell : @signals.Signal[Bool]?
+  mut pointed_cell : @signals.Signal[Bool]?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
   /// how many fingers held on it at once it takes (View::on_drag's `fingers`): one more calls the hold off
@@ -242,10 +246,10 @@ pub struct Tree {
   mut modals_due : Bool
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
-  /// the node a finger or the pointer is held on, and the one the pointer is over (of those that take a press), each
-  /// read by itself (View::pressed, View::pointed): told only as it comes or goes
-  pressing : @signals.Keyed[NodeId]
-  pointed : @signals.Keyed[NodeId]
+  /// the node a finger or the pointer is held on, and the one the pointer is over (of those that take a press): each
+  /// node's own cell told as it comes or goes (View::pressed, View::pointed)
+  mut pressing : NodeId?
+  mut pointed : NodeId?
   /// the fingers down on it (each by its id: Drag's `finger`), in the order they went down
   downs : Array[Int]
   /// what the last frame changed: the nodes whose content it made again, those placed or faded otherwise
@@ -326,8 +330,8 @@ pub fn Tree::new(
     committing: 0,
     modals_due: false,
     held: None,
-    pressing: @signals.keyed(),
-    pointed: @signals.keyed(),
+    pressing: None,
+    pointed: None,
     downs: [],
     changed: [],
     composed: [],
@@ -396,6 +400,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.on_wheel = None
       n.on_key = None
       n.on_back = None
+      n.pressed_cell = None
+      n.pointed_cell = None
       n.key_said = 0
       n.on_drag = None
       n.takes = None
@@ -432,6 +438,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         on_key: None,
         key_said: 0,
         on_back: None,
+        pressed_cell: None,
+        pointed_cell: None,
         on_drag: None,
         fingers: 1,
         drag_said: 0,
@@ -2064,6 +2072,8 @@ fn View::let_go(self : View) -> Unit {
   n.on_wheel = None
   n.on_key = None
   n.on_back = None
+  n.pressed_cell = None
+  n.pointed_cell = None
   self.drag_ended()
   n.on_drag = None
   n.drag_said = n.drag_said + 1
@@ -3316,47 +3326,79 @@ pub fn View::at_moment(self : View, when : Double, f : () -> Unit) -> () -> Unit
 }
 
 ///|
-/// The node held now (`h`, none), as each that reads whether it is held is told (View::pressed): what holds the finger or
-/// the pointer, said where it changes.
+/// The node held now (`h`, none): the one it was on and the one it is on now told, each by its own cell (View::pressed),
+/// nothing else.
 fn Tree::held_to(self : Tree, h : NodeId?) -> Unit {
+  let was = self.held
   self.held = h
-  self.pressing.set(
-    match h {
-      Some(id) => [id]
-      None => []
-    },
-  )
+  if was != h {
+    self.pressing = h
+    self.hand_told(was, fn(n) { n.pressed_cell }, false)
+    self.hand_told(h, fn(n) { n.pressed_cell }, true)
+  }
+}
+
+///|
+/// Node `id`'s cell (`cell` of it, where one was made: something reads it) told `on`, where it lives.
+fn Tree::hand_told(self : Tree, id : NodeId?, cell : (Node) -> @signals.Signal[Bool]?, on : Bool) -> Unit {
+  guard id is Some(i) && self.alive_id(i) else { return }
+  match cell(self.nodes[i.at]) {
+    Some(s) => s.set(on)
+    None => ()
+  }
 }
 
 ///|
 /// Whether a finger or the pointer is held on it now (from its down till it is let go or called off): what reads it
-/// told only as that comes or goes.
+/// told only as that comes or goes. Its cell made as first read, let go with it.
 pub fn View::pressed(self : View) -> Bool {
-  guard self.live() is Some(_) else { return false }
-  self.tree.pressing.has(self.id())
+  guard self.live() is Some(n) else { return false }
+  let s = match n.pressed_cell {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(self.tree.pressing == Some(self.id()), same=fn(a, b) { a == b })
+      n.pressed_cell = Some(s)
+      s
+    }
+  }
+  s.get()
 }
 
 ///|
 /// Whether the pointer is over it now, of what takes a press there the topmost (Tree::point_at): what reads it told only
-/// as the pointer comes over it or leaves it.
+/// as the pointer comes over it or leaves it. Its cell made as first read, let go with it.
 pub fn View::pointed(self : View) -> Bool {
-  guard self.live() is Some(_) else { return false }
-  self.tree.pointed.has(self.id())
+  guard self.live() is Some(n) else { return false }
+  let s = match n.pointed_cell {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(self.tree.pointed == Some(self.id()), same=fn(a, b) { a == b })
+      n.pointed_cell = Some(s)
+      s
+    }
+  }
+  s.get()
 }
 
 ///|
 /// The pointer at (x, y) in the window (a mouse's: a finger points at nothing), as of now: what takes a press there, the
-/// topmost, is pointed at (View::pointed), nothing else; none where (x, y) is none (the pointer gone).
+/// topmost, is pointed at (View::pointed), nothing else; none where (x, y) is none (the pointer gone). The one it was
+/// over and the one it is over now told, nothing else.
 pub fn Tree::point_at(self : Tree, x : Double, y : Double) -> Unit {
-  let at : Array[NodeId] = if x < 0.0 || y < 0.0 {
-    []
+  let now : NodeId? = if x < 0.0 || y < 0.0 {
+    None
   } else {
     match self.target_at(x, y) {
-      Pressed(id) | Dragged(id) => [id]
-      _ => []
+      Pressed(id) | Dragged(id) => Some(id)
+      _ => None
     }
   }
-  self.pointed.set(at)
+  let was = self.pointed
+  if was != now {
+    self.pointed = now
+    self.hand_told(was, fn(n) { n.pointed_cell }, false)
+    self.hand_told(now, fn(n) { n.pointed_cell }, true)
+  }
 }
 
 ///|

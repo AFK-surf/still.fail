@@ -74,7 +74,7 @@ test "keys: a node let go holds nothing of what it said; the tree let go asks no
 }
 
 ///|
-test "keys: what a node under said a key does said anew by the one over it as this key goes (the same function): the key not asked of it as said anew; the next key, asked" {
+test "keys: what a node under said a key does said anew by the one over it as this key goes (the same function): the key not asked of it as said anew" {
   let told : Array[String] = []
   let b_view : Ref[@view.View?] = Ref(None)
   let b_key = fn(_k : @view.Key) {

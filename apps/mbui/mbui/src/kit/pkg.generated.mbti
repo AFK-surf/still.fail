@@ -4,6 +4,7 @@ package "mbui/kit"
 import {
   "mbui/codec",
   "mbui/motion",
+  "mbui/paint",
   "mbui/ui",
   "moonbitlang/core/debug",
 }
@@ -128,7 +129,7 @@ pub fn list_card() -> @ui.Style
 pub fn list_row(density? : Density) -> @ui.Style
 
 #callsite(autofill(loc))
-pub fn loupe(@ui.Ctx, String, (Double, Double)?, glass? : @ui.Glass, loc~ : SourceLoc) -> Unit
+pub fn loupe(@ui.Ctx, String, (Double, Double)?, glass? : @paint.Glass, loc~ : SourceLoc) -> Unit
 
 pub let loupe_h : Double
 
@@ -273,7 +274,7 @@ pub fn switch_knob(@ui.Ctx, String, Bool) -> Double
 
 pub fn switch_look(@ui.Ctx, SwitchState) -> Unit
 
-pub fn switch_look_of(w? : Double, h? : Double, inset? : Double, on_color? : Int64, off_color? : Int64, knob? : Int64, shadow? : Bool, lens? : @ui.Glass, lens_w? : Double, lens_grow? : Double) -> (@ui.Ctx, SwitchState) -> Unit
+pub fn switch_look_of(w? : Double, h? : Double, inset? : Double, on_color? : Int64, off_color? : Int64, knob? : Int64, shadow? : Bool, lens? : @paint.Glass, lens_w? : Double, lens_grow? : Double) -> (@ui.Ctx, SwitchState) -> Unit
 
 pub let switch_ms : Double
 
@@ -301,7 +302,7 @@ pub fn toaster(@ui.Ctx, String, Array[Toast], duration? : Double, w? : Double, b
 
 pub fn toggle(@ui.Ctx, String, Bool, key? : String, disabled? : Bool, look? : (@ui.Ctx, ToggleState) -> Unit) -> @ui.Changed[Bool]
 
-pub fn toggle_group(@ui.Ctx, String, Array[Item], Array[String], multiple? : Bool, orientation? : @ui.Orientation, wrap? : Bool, disabled? : Bool, label? : String, slide? : Bool, grow? : Bool, widths? : Array[(Double, Double)], look? : (@ui.Ctx, ToggleState) -> Unit, thumb? : (@ui.Ctx, Double, Double) -> Unit, ground? : (@ui.Ctx, GroupState, () -> Unit) -> Unit, lens? : @ui.Glass, lens_grow? : Double) -> @ui.Changed[Array[String]]
+pub fn toggle_group(@ui.Ctx, String, Array[Item], Array[String], multiple? : Bool, orientation? : @ui.Orientation, wrap? : Bool, disabled? : Bool, label? : String, slide? : Bool, grow? : Bool, widths? : Array[(Double, Double)], look? : (@ui.Ctx, ToggleState) -> Unit, thumb? : (@ui.Ctx, Double, Double) -> Unit, ground? : (@ui.Ctx, GroupState, () -> Unit) -> Unit, lens? : @paint.Glass, lens_grow? : Double) -> @ui.Changed[Array[String]]
 
 pub fn toggle_look(@ui.Ctx, ToggleState) -> Unit
 

@@ -4,6 +4,7 @@ package "mbui/ui"
 import {
   "mbui/effect",
   "mbui/hostapi",
+  "mbui/paint",
   "mbui/pixels",
   "mbui/signals",
   "mbui/view",
@@ -411,8 +412,6 @@ pub fn round_like(Double, room? : Double) -> Double
 
 pub fn round_like_out(Double, room? : Double) -> Double
 
-pub let row_leave_ms : Double
-
 pub let row_leave_scale : Double
 
 pub let row_size_ms : Double
@@ -467,7 +466,7 @@ pub fn set_web_lines(Bool) -> Unit
 
 pub fn set_work_clock((() -> Double)?) -> Unit
 
-pub fn shape_of(Array[(Array[Double], Bool)], fill? : Int64, even_odd? : Bool, stroke? : Int64, width? : Double) -> Shape
+pub fn shape_of(Array[(Array[Double], Bool)], fill? : Int64, even_odd? : Bool, stroke? : Int64, width? : Double) -> @paint.Shape
 
 pub fn share(String, String, String, Bytes) -> Bool
 
@@ -555,7 +554,7 @@ pub fn update_state() -> String
 
 pub fn utc_offset_min(Double) -> Int32
 
-pub fn vector_shapes(@pixels.Vector, Double, Double, tint? : Int64) -> Array[Shape]
+pub fn vector_shapes(@pixels.Vector, Double, Double, tint? : Int64) -> Array[@paint.Shape]
 
 pub fn view_painted() -> ViewPaintWork
 
@@ -998,7 +997,7 @@ pub fn Ctx::bg_by(Self, Int32, () -> Int64) -> Unit
 pub fn Ctx::blur(Self) -> Unit
 pub fn Ctx::bone_whole(Self, Int32) -> Unit
 pub fn Ctx::bones(Self, Int64, () -> Unit) -> Unit
-pub fn Ctx::box(Self, style? : Style, selected? : Bool, disabled? : Bool, dir? : Dir, w? : Size, h? : Size, pad? : Double, padx? : Double, pady? : Double, pl? : Double, pr? : Double, pt? : Double, pb? : Double, m? : Double, mx? : Double, my? : Double, ml? : Double, mr? : Double, mt? : Double, mb? : Double, left? : Double, top? : Double, right? : Double, bottom? : Double, moves? : String, gap? : Double, align? : Align, justify? : Justify, bg? : Int64, radius? : Double, border? : Double, border_color? : Int64, shadow? : Double, shadow_color? : Int64, shadow_y? : Double, min_w? : Double, max_w? : Double, min_h? : Double, max_h? : Double, clip? : Bool, tx? : Double, ty? : Double, opacity? : Double, glass? : Glass, glass_group? : Bool, notch_y? : Double, notch_r? : Double, notch_fillet? : Double, aspect? : Double, keep? : Bool, drop? : Int32, more? : Bool, shadow_out? : Bool, flow? : Bool, line_gap? : Double, gone_empty? : Bool, label? : String, name? : String, id? : Int32, taps? : Bool, points? : Bool, () -> Unit) -> Int32
+pub fn Ctx::box(Self, style? : Style, selected? : Bool, disabled? : Bool, dir? : Dir, w? : Size, h? : Size, pad? : Double, padx? : Double, pady? : Double, pl? : Double, pr? : Double, pt? : Double, pb? : Double, m? : Double, mx? : Double, my? : Double, ml? : Double, mr? : Double, mt? : Double, mb? : Double, left? : Double, top? : Double, right? : Double, bottom? : Double, moves? : String, gap? : Double, align? : Align, justify? : Justify, bg? : Int64, radius? : Double, border? : Double, border_color? : Int64, shadow? : Double, shadow_color? : Int64, shadow_y? : Double, min_w? : Double, max_w? : Double, min_h? : Double, max_h? : Double, clip? : Bool, tx? : Double, ty? : Double, opacity? : Double, glass? : @paint.Glass, glass_group? : Bool, notch_y? : Double, notch_r? : Double, notch_fillet? : Double, aspect? : Double, keep? : Bool, drop? : Int32, more? : Bool, shadow_out? : Bool, flow? : Bool, line_gap? : Double, gone_empty? : Bool, label? : String, name? : String, id? : Int32, taps? : Bool, points? : Bool, () -> Unit) -> Int32
 pub fn Ctx::build_number(Self) -> Int32
 pub fn Ctx::building(Self) -> Int32
 #callsite(autofill(loc))
@@ -1225,7 +1224,7 @@ pub fn Ctx::set_look(Self, Int32, Look) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::set_out(Self, Mover, &Moving, what? : String, loc~ : SourceLoc) -> Double
 pub fn Ctx::set_theme(Self, Theme, narrow? : Theme, narrow_below? : Double) -> Unit
-pub fn Ctx::shapes(Self, Array[Shape], w~ : Size, h~ : Size, name? : String, by_ink? : Bool) -> Int32
+pub fn Ctx::shapes(Self, Array[@paint.Shape], w~ : Size, h~ : Size, name? : String, by_ink? : Bool) -> Int32
 pub fn Ctx::shortcut(Self, Char, shift? : Bool) -> Bool
 pub fn Ctx::shot(Self, String, Double, () -> Unit) -> Unit
 pub fn Ctx::show(Self, Int32) -> Unit
@@ -1436,27 +1435,6 @@ pub(all) struct GifFrames {
   delays : Array[Double]
 }
 
-pub(all) struct Glass {
-  blur : Double
-  tint : Int64
-  saturation : Double
-  solid : Int64
-  rim_edge : Double
-  rim_lit : Double
-  rim_back : Double
-  liquid : Bool
-  rim : Double
-  bezel : Double
-  refraction : Double
-  chroma : Double
-  merge : Double
-  adaptive : Bool
-  shares_capture : Bool
-}
-pub fn Glass::frosted(blur~ : Double, tint~ : Int64, solid~ : Int64, saturation? : Double, rim_edge? : Double, rim_lit? : Double, rim_back? : Double, shares_capture? : Bool) -> Self
-pub fn Glass::liquid(blur? : Double, tint? : Int64, solid? : Int64, saturation? : Double, rim? : Double, bezel? : Double, refraction? : Double, chroma? : Double, merge? : Double, adaptive? : Bool) -> Self
-pub fn Glass::sharing(Self) -> Self
-
 type Glyph
 
 pub(all) struct Ground {
@@ -1657,7 +1635,8 @@ pub struct ListRows[T] {
   // private fields
 }
 pub fn[T] ListRows::came(Self[T], String) -> Double?
-pub fn[T] ListRows::leave(Self[T], Ctx, Int32, String) -> Unit
+pub fn[T] ListRows::enter(Self[T], Ctx, Int32, String, lead? : Double) -> Unit
+pub fn[T] ListRows::leave(Self[T], Ctx, Int32, String, lead? : Double) -> Unit
 pub fn[T] ListRows::new() -> Self[T]
 pub fn[T] ListRows::opening(Self[T], Ctx) -> Bool
 pub fn[T] ListRows::rows(Self[T], Ctx, Array[String], Array[T], (T) -> String, watched? : Bool, ms? : (String) -> Double?, from? : (String) -> Double?, comes? : (T) -> Bool) -> (Array[T], Array[String])
@@ -2127,14 +2106,6 @@ pub(all) enum Shadow {
   Cast(Double, Double, Int64)
 } derive(Eq, Show, @debug.Debug)
 
-pub(all) struct Shape {
-  outlines : Array[(Array[Double], Bool)]
-  fill : Int64
-  even_odd : Bool
-  stroke : Int64
-  width : Double
-} derive(Eq, Show)
-
 type Shaped
 
 type Shot
@@ -2447,6 +2418,7 @@ pub fn Tester::kept_ways(Self) -> Array[(String, @hostapi.KeepWay)]
 pub fn Tester::key(Self, Int32, mods? : Int32) -> Unit
 pub fn Tester::key_catching(Self) -> Bool
 pub fn Tester::key_named(Self, String) -> Bool
+pub fn Tester::key_told(Self, Int32, Int32, Double) -> Unit
 pub fn Tester::keyboard_gone(Self) -> Unit
 pub fn Tester::leave(Self) -> Unit
 pub fn Tester::lines_of(Self, String) -> Array[String]
@@ -2826,6 +2798,9 @@ pub struct WordsPiece {
 }
 
 // Type aliases
+pub using @paint {type Glass}
+
+pub using @paint {type Shape}
 
 // Traits
 trait ClipNumbers
