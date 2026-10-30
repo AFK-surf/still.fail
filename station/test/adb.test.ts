@@ -118,6 +118,43 @@ class Memory {
 const nowhere = { remoteId: () => "ef".repeat(32), closed: () => new Promise<string>(() => {}), openBi: async () => Promise.reject(new Error("no streams here")) } as unknown as Connection;
 const asking = (adb: any, headers: Record<string, string> = {}) => ({ method: "POST", path: "/admin/api/adb", headers, adb });
 
+test("station handover closes a phone's live TCP tunnels without waiting for adb to disconnect", async () => {
+  const shares = new Shares({ adb: () => null });
+  const mesh = await link(shares);
+  let socket: net.Socket | undefined;
+  let accepted: net.Socket | undefined;
+  let closing: Promise<void> | undefined;
+  try {
+    const offer = await mesh.ask({ op: "share", phone: PHONE });
+    await offer.reader.line();
+    const share = [...shares.byKey.values()][0]!;
+    const arrived = new Promise<void>((resolve) => share.server.once("connection", (s) => {
+      accepted = s;
+      resolve();
+    }));
+    socket = net.connect({ host: "127.0.0.1", port: share.port });
+    socket.on("error", () => {});
+    await arrived;
+    await until(() => mesh.tunnels.length === 1);
+    const listenerClosing = Promise.withResolvers<void>();
+    const close = share.server.close.bind(share.server);
+    share.server.close = (callback) => {
+      listenerClosing.resolve();
+      return close(callback);
+    };
+    closing = shares.close();
+    await listenerClosing.promise;
+    assert.equal(accepted!.destroyed, true, "handover releases the sockets owned by the phone's listener");
+    await closing;
+    assert.equal(shares.list().length, 0);
+  } finally {
+    accepted?.destroy();
+    socket?.destroy();
+    await (closing ?? shares.close());
+    await mesh.close();
+  }
+});
+
 test("takes only plain package names", () => {
   assert.ok(isPackage("fail.still.android.beta"));
   assert.ok(!isPackage("fail.still.android; rm -rf /"));

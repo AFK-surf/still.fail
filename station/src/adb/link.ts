@@ -94,6 +94,8 @@ export class Share {
   /// How many of its offers' streams are open: tried again only while one is (not in GRACE).
   streams = 0;
   readonly server: net.Server;
+  private sockets = new Map<net.Socket, AbortController>();
+  private closing = false;
   private waiters: (() => void)[] = [];
 
   constructor(server: net.Server, owner: Viewer, info: Share["info"], conn: Connection, lang: Lang, offer: number) {
@@ -109,6 +111,30 @@ export class Share {
 
   serial(): string {
     return `127.0.0.1:${this.port}`;
+  }
+
+  /// Every accepted socket belongs to this offer, including one still being checked for a grant.
+  take(socket: net.Socket): AbortSignal {
+    const stop = new AbortController();
+    if (this.closing) {
+      socket.destroy();
+      stop.abort();
+    } else {
+      this.sockets.set(socket, stop);
+      socket.once("close", () => this.sockets.delete(socket));
+    }
+    return stop.signal;
+  }
+
+  /// Closing a listener alone waits for its clients forever. End its tunnels before waiting for it to close.
+  close(): Promise<void> {
+    this.closing = true;
+    const closed = new Promise<void>((resolve) => this.server.close(() => resolve()));
+    for (const [socket, stop] of this.sockets) {
+      stop.abort();
+      socket.destroy();
+    }
+    return closed;
   }
 
   set(adb: string, message = "") {
@@ -186,9 +212,9 @@ export class Shares {
     this.stopping = true;
     for (const f of this.stopWaiters.splice(0)) f();
     await Effect.runPromise(Scope.close(this.scope, Exit.void));
-    const servers = [...this.byKey.values()].map((s) => s.server);
+    const shares = [...this.byKey.values()];
     this.byKey.clear();
-    await Promise.all(servers.map((s) => new Promise<void>((resolve) => s.close(() => resolve()))));
+    await Promise.all(shares.map((s) => s.close()));
   }
 
   /// Resolves "stopping" once `close` is called.
@@ -342,7 +368,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
   if (ended !== "removed") await shares.run(Effect.sleep(GRACE)).catch(() => {});
   if (!shares.isStopping && share.offer === number && shares.byKey.get(device) === share) {
     shares.byKey.delete(device);
-    share.server.close();
+    void share.close();
     log.info("adb", "phone no longer offered for adb", { email: viewer.email, port: share.port, ended });
     shares.gone.set(viewer.email.toLowerCase(), { at: wall.now(), ended: String(ended) });
     const adb = shares.adb();
@@ -354,23 +380,26 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
 /// Each TCP connection to the phone's port, a tunnel on its offer's connection.
 function listen(shares: Shares, share: Share) {
   share.server.on("connection", (socket) => {
+    const signal = share.take(socket);
+    if (signal.aborted) return;
     const conn = share.conn;
     const ids = shares.options.granted?.(share.owner.email) ?? [];
     if (ids.length > 0 && shares.options.servers) {
       // Granted to chats: only their adb servers are let in (another chat's agent, knowing the port, is not).
       void shares.options.servers.allowed(socket, ids).then((ok) => {
+        if (signal.aborted) return;
         if (!ok) {
           log.info("adb", "a connection to a granted phone's port from no grant's adb server turned away", { port: share.port });
           return void socket.destroy();
         }
-        tunnel(conn, "connect", socket).catch((error) => {
+        tunnel(conn, "connect", socket, signal).catch((error) => {
           log.info("adb", "adb tunnel ended", { error: (error as Error).message, offer: share.offer, ...about(conn) });
           share.refuse((error as Error).message);
         });
       });
       return;
     }
-    tunnel(conn, "connect", socket).catch((error) => {
+    tunnel(conn, "connect", socket, signal).catch((error) => {
       log.info("adb", "adb tunnel ended", { error: (error as Error).message, offer: share.offer, ...about(conn) });
       share.refuse((error as Error).message);
     });
