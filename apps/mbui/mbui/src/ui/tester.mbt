@@ -369,7 +369,6 @@ pub fn Tester::new(
   corners_hold.val = corners_held
   // (every frame built whole: what a test reads of a frame's nodes reads all of it; a test of the parts kept says so,
   // Tester::keep_parts)
-  drawn_again_on.val = true
   rows_grid_test.val = false
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
@@ -771,12 +770,6 @@ pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
       n.text.contains(s) {
       return Some((n.x + n.fw / 2.0, n.y + n.fh / 2.0))
     }
-    // (a part kept, drawn again: the words its build drew, kept_part.mbt)
-    for w in c.kept_words_at(i) {
-      if w.text.contains(s) {
-        return Some((w.x + w.w / 2.0, w.y + w.h / 2.0))
-      }
-    }
   }
   None
 }
@@ -799,11 +792,6 @@ pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
     if n.bones == 0L && (n.kind == kind_text || n.kind == kind_editor || n.kind == kind_rich) &&
       n.text.contains(s) {
       found.val = Some((n.x + n.fw / 2.0, n.y + n.fh / 2.0))
-    }
-    for w in c.kept_words_at(i) {
-      if w.text.contains(s) {
-        found.val = Some((w.x + w.w / 2.0, w.y + w.h / 2.0))
-      }
     }
     let mut k = n.first
     while k >= 0 {
@@ -1128,9 +1116,6 @@ pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Do
       }
       out.push((n.text, x, y, n.fw, n.fh, alpha))
     }
-    for w in c.kept_words_at(i) {
-      out.push((w.text, w.drawn_x, w.drawn_y, w.w, w.h, w.alpha))
-    }
   }
   out
 }
@@ -1144,11 +1129,6 @@ pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Do
     if n.bones == 0L && (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) &&
       n.text.contains(s) {
       return Some((n.x, n.y, n.fw, n.fh))
-    }
-    for w in c.kept_words_at(i) {
-      if w.text.contains(s) {
-        return Some((w.x, w.y, w.w, w.h))
-      }
     }
   }
   None

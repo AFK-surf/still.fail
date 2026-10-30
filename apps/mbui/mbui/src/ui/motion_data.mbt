@@ -97,32 +97,14 @@ pub fn Ctx::set_out(self : Ctx, who : Mover, m : &Moving, what? : String = "", l
 }
 
 ///|
-/// What `f` reads (where a motion is now, a value's signal) read for node `node`, laid out this frame: by the list's row
-/// or the part kept that it is drawn in (the innermost; kept_part.mbt, kept_rows.mbt), as though its build had read it,
-/// so that it is built again as that changes, and each frame while a motion it reads goes; read as it is where none
-/// holds it (or `node` is -1). For what reads, once the frame is laid out, what moves what was laid out (the motion
-/// package's moves and reshapes): what a drawing depends on is followed where it is read, whoever told it, wherever
-/// and whenever (signals' rule: a dependence is said by the read, not by the write).
+/// What `f` reads (where a motion is now, a value's signal) read for node `node`, laid out this frame: as the layout
+/// reads it (its watch: frame_watch.mbt), so that what is drawn is laid out again as that changes. For what reads, once
+/// the frame is laid out, what moves what was laid out (the motion package's moves and reshapes): what a drawing
+/// depends on is followed where it is read, whoever told it, wherever and whenever (signals' rule: a dependence is said
+/// by the read, not by the write).
 pub fn Ctx::reads_for(self : Ctx, node : Int, f : () -> Unit) -> Unit {
-  let mut row = 0
-  let mut part = 0
-  let mut p = node
-  while p >= 0 && p < self.nodes.length() {
-    match self.drawn_entry(p) {
-      Some(e) => {
-        if row == 0 && e.said_row != 0 {
-          row = e.said_row
-        }
-        if e.part != 0 {
-          part = e.part
-          break
-        }
-      }
-      None => ()
-    }
-    p = self.nodes[p].parent
-  }
-  read_for(part, row, f)
+  ignore((self, node))
+  f()
 }
 
 ///|

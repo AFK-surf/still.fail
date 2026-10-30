@@ -297,14 +297,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
         c.layout(c.layers[late].node, 0.0, 0.0, w, h) |> ignore
         late = late + 1
       }
-      // what floats over what scrolls, all of it made now (a list's rows as it was laid out), for the parts drawn again
-      // to read where they are (scroll_bar.mbt)
+      // what floats over what scrolls, all of it made now (a list's rows as it was laid out: scroll_bar.mbt)
       c.floating_found()
       c.sideways_found()
-      // what the rows of the parts drawn again said, where their boxes were not laid out anew; each drawn again where
-      // its box is, or built there where it cannot be (kept_part.mbt)
-      c.parts_rows_left()
-      c.parts_placed()
       // what the nodes hold of the frame, all of them made now (a list's rows as it was laid out): what Tab goes among
       // (focus.mbt), the corners worked out once laid out (corners.mbt)
       c.focusables_found()
@@ -589,7 +584,6 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   }
   // (what an earlier build of this frame said to tell outside is let go: this one says it again, or not)
   c.tells.clear()
-  parts_build_start()
   drawing_begin()
   desk_build_start()
   c.built_ids.clear()

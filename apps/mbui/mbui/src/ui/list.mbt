@@ -498,7 +498,6 @@ pub fn Ctx::list(
         theme: self.theme,
         direction: self.direction,
         layer: self.layer_cur,
-        part: 0,
         causes: None,
         sizes: {},
         sizes_end: -1.0,
@@ -529,7 +528,6 @@ pub fn Ctx::list(
   st.theme = self.theme
   st.direction = self.direction
   st.layer = self.layer_cur
-  st.part = part_now.part
   // (rows that show only what they read are kept however what builds them was built: their own watches say when
   // they change; only a build keeping none builds them anew)
   st.rows_read = rows_read
@@ -550,13 +548,6 @@ pub fn Ctx::list(
     } else {
       self.app_scrolled(id, st)
     }
-  }
-  // (where its own motions have it and the heights its rows came out at as they were laid out, what its bar and its
-  // rows' places are drawn from, read by a part kept as drawn that builds it: kept_part.mbt; a part kept as its nodes
-  // lays its lists out each frame, kept_nodes.mbt)
-  if part_now.part != 0 || part_now.row != 0 {
-    self.shows_motion(st.ease_mover, st.rest_at(self.clock, self.frame_no) > self.clock)
-    st.heights_learned.get() |> ignore
   }
   let i = self.alloc_part(kind_list, true, false)
   let n = self.nodes[i]
@@ -599,8 +590,7 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   // (what its content reads of its rows' way: Ctx::row_way)
   let laid_by = rows_laid_by.val
   rows_laid_by.val = st.causes.map(fn(c) { (c, k) })
-  // (in a part kept: what the row asks of time is the part's, kept_part.mbt)
-  part_rows(st.part, fn() { self.with_parent(r, fn() { self.scope(k, fn() { row(k) }) }) })
+  self.with_parent(r, fn() { self.scope(k, fn() { row(k) }) })
   rows_laid_by.val = laid_by
   self.id_seed = saved_seed
   self.cur = saved_cur
@@ -974,7 +964,7 @@ fn Ctx::row_slot(self : Ctx, r : Int, h : Double) -> Double {
 /// has its lines set apart, one moved a pixel and the next not as the list moves it, its words crawling: so it is as
 /// the list stands at its end and what is under its rows grows (words sent flying in, an agent's line coming), the
 /// keyboard comes, an end stops it, it is said from another row. On the pixels, all of a row moves as one, by whole
-/// pixels, and a row kept is moved as its laying out there would move it (kept_nodes.mbt, kept_rows.mbt).
+/// pixels, and a row kept is moved as its laying out there would move it (kept_nodes.mbt).
 fn Ctx::rows_on_pixels(self : Ctx, order : Array[Int]) -> Unit {
   if !self.rows_on_grid() || order.length() == 0 {
     return
@@ -1041,15 +1031,12 @@ fn Ctx::stick_in(self : Ctx, li : Int, rows : Array[Int], top : Double) -> Unit 
     let p = self.nodes[n.parent]
     // where its parent lays it (a subtree placed as before keeps where it was held last frame)
     self.replace(s, p.x, p.y)
-    let laid = n.y
     let held = top + n.stick - n.y
     let room = p.y + p.fh - p.pad_b - n.fh - n.y
     let dy = dmin(held, room)
     if dy > 0.0 {
       self.shift(s, dy)
     }
-    // (a row being built: drawn again, it is built again once what it holds is held: kept_rows.mbt)
-    self.row_stuck(s, laid, n.stick, room)
   }
 }
 

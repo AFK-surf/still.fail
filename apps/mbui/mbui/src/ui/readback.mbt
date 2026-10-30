@@ -18,7 +18,6 @@ pub fn Ctx::laid_rect(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double
   let v = self.laid_rects.get(id)
   if building.val {
     self.laid_watch[id] = self.frame_no
-    kept_read_laid(id)
     if !self.laid_reads.contains(id) {
       self.laid_reads[id] = (v, loc)
     }
@@ -39,7 +38,6 @@ pub fn Ctx::laid_size(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double
   }
   if building.val {
     self.laid_watch[id] = self.frame_no
-    kept_read_laid(id)
     if !self.size_reads.contains(id) {
       self.size_reads[id] = (v, loc)
     }
@@ -56,7 +54,6 @@ pub fn Ctx::laid_size(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double
 pub fn Ctx::left_out(self : Ctx, id : Int, loc~ : SourceLoc) -> Bool {
   let v = self.left_ids.contains(id)
   if building.val {
-    kept_read_left(id)
     if !self.left_reads.contains(id) {
       self.left_reads[id] = (v, loc)
     }
@@ -81,7 +78,6 @@ fn Ctx::left_out_after_layout(self : Ctx) -> Unit {
       }
     }
   }
-  self.kept_left()
   let moved : Array[String] = []
   self.left_reads.each(fn(id, r) {
     if self.left_ids.contains(id) != r.0 {
@@ -105,7 +101,6 @@ fn Ctx::left_out_after_layout(self : Ctx) -> Unit {
 pub fn Ctx::shown_across(self : Ctx, id : Int, but? : String = "") -> (Double, Double)? {
   if building.val {
     self.shown_watch[id] = (self.frame_no, but)
-    kept_read_shown(id, but)
   }
   self.shown_spans.get(id)
 }
@@ -168,7 +163,6 @@ fn Ctx::shown_span(self : Ctx, i : Int, left : Double, right : Double, but : Str
 /// Once laid out: the rects of the boxes read kept (those a frame before this did not read, let go), and what was read
 /// looked at again; what is not as it was read is a layout read back that moved, said as what it is.
 fn Ctx::reads_after_layout(self : Ctx) -> Unit {
-  self.kept_reads_again()
   if !self.laid_watch.is_empty() {
     let gone = []
     self.laid_watch.each(fn(id, at) { if at < self.frame_no { gone.push(id) } })
@@ -203,7 +197,6 @@ fn Ctx::reads_after_layout(self : Ctx) -> Unit {
       }
     }
   }
-  self.kept_reads_taken()
   let moved : Array[String] = []
   self.laid_reads.each(fn(id, r) {
     if self.laid_rects.get(id) != r.0 {

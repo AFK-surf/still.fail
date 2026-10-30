@@ -376,7 +376,6 @@ fn install() -> Unit {
   // fx.mbt's layout animations (after the layer's looks)
   @ui.on_after_layout(layouts_after)
   @ui.on_list_underlay(draw_ghosts)
-  @ui.on_drawn_again(kept_drawn_again)
   @ui.on_reset(reset)
 }
 
@@ -391,7 +390,6 @@ fn reset() -> Unit {
   mo.recs.clear()
   mo.lists.clear()
   mo.ghosts.clear()
-  kept_recs.clear()
   anims.clear()
   ripples.clear()
   reset_fx()
@@ -534,7 +532,6 @@ pub fn layout(
   let e = moving_of(c, i)
   e.name = key
   e.key = motion_key(key)
-  kept_said(c, e.key, false)
   e.flip = true
   e.screen = screen
   e.spec = spec
@@ -558,7 +555,6 @@ pub fn keyed(c : @ui.Ctx, i : Int, key : String, exit? : Trans, by? : String = "
   let e = moving_of(c, i)
   e.name = key
   e.key = motion_key(key)
-  kept_said(c, e.key, false)
   if exit is Some(_) {
     e.exit = exit
   }
@@ -582,7 +578,6 @@ pub fn entering(
   e.name = key
   e.key = motion_key(key)
   // (seen where a part or a row drawn again that it is in shows it: built again, it is not new)
-  kept_said(c, e.key, false)
   e.enter = if at_once { None } else { Some(enter) }
   e.fresh = true
 }
@@ -610,7 +605,6 @@ pub fn reshape(
   e.name = key
   e.key = motion_key(key)
   // (seen where a part or a row drawn again that it is in shows it: built again, it reshapes from there)
-  kept_said(c, e.key, false)
   e.reshape = true
   e.carry = carry
   e.spec = spec
@@ -666,95 +660,6 @@ pub fn placed(c : @ui.Ctx, i : Int, at : () -> @ui.Look) -> Unit {
 pub fn measure(c : @ui.Ctx, i : Int, key : String) -> Unit {
   let e = moving_of(c, i)
   e.kept = motion_key("measure\u{1}" + key)
-  kept_said(c, e.kept, true)
-}
-
-///|
-/// What a part's or a list's row's build (one kept as it was built: @ui.kept_building) said is kept of its nodes, a
-/// layout motion's record or a measure's, and where that build laid them out: while it is drawn again, its build not
-/// run nor its nodes laid out, they are seen where it is drawn (kept_drawn_again), so that built again, what moves it
-/// moves from where it showed, and what reads a measure reads it, as were it built every frame.
-priv struct KeptRecs {
-  mut frame : Int
-  /// each record's key, whether its place is the window's (a measure's) or its list's (a layout motion's), and where
-  /// its build laid it out (x, y, and y in its list's view)
-  recs : Array[(Int, Bool, Double, Double, Double)]
-}
-
-///|
-// kept across runs: forgotten as a Tester starts anew (reset), each row's or part's let go as it is built again
-let kept_recs : Map[(Int, Int), KeptRecs] = {}
-
-///|
-/// Record `key` said by what is built now; `window`: its place the window's (a measure's).
-fn kept_said(c : @ui.Ctx, key : Int, window : Bool) -> Unit {
-  let which = @ui.kept_building()
-  if which.1 == 0 {
-    return
-  }
-  let frame = c.frame_number()
-  let k = match kept_recs.get(which) {
-    Some(k) => k
-    None => {
-      let k = { frame, recs: [] }
-      kept_recs[which] = k
-      k
-    }
-  }
-  // (built again: what its build says now, none of before)
-  if k.frame != frame {
-    k.frame = frame
-    k.recs.clear()
-  }
-  if !k.recs.iter().any(fn(r) { r.0 == key }) {
-    k.recs.push((key, window, 0.0, 0.0, 0.0))
-  }
-}
-
-///|
-/// Once laid out: where the builds of this frame laid out what they said is kept, taken for them.
-fn kept_recs_taken(c : @ui.Ctx) -> Unit {
-  let frame = c.frame_number()
-  for _, k in kept_recs {
-    if k.frame != frame {
-      continue
-    }
-    for j in 0..<k.recs.length() {
-      let (key, window, _, _, _) = k.recs[j]
-      match mo.recs.get(key) {
-        Some(r) => k.recs[j] = (key, window, r.x, r.y, r.vy)
-        None => ()
-      }
-    }
-  }
-}
-
-///|
-/// A part or a row drawn again (@ui.on_drawn_again), `dx` across and `dy` down the window from where its build laid it
-/// out, `rel` down its list's rows: what its build said is kept, seen there.
-fn kept_drawn_again(c : @ui.Ctx, which : (Int, Int), dx : Double, dy : Double, rel : Double) -> Unit {
-  match kept_recs.get(which) {
-    Some(k) => {
-      let frame = c.frame_number()
-      for t in k.recs {
-        let (key, window, x, y, vy) = t
-        match mo.recs.get(key) {
-          Some(r) => {
-            r.seen = frame
-            r.x = x + dx
-            if window {
-              r.y = y + dy
-            } else {
-              r.y = y + rel
-              r.vy = vy + dy
-            }
-          }
-          None => ()
-        }
-      }
-    }
-    None => ()
-  }
 }
 
 ///|
@@ -1297,7 +1202,6 @@ fn after_layout(c : @ui.Ctx) -> Unit {
     }
   }
   makes_room(c)
-  kept_recs_taken(c)
   forget_recs(c)
 }
 
@@ -1950,16 +1854,6 @@ fn forget_recs(c : @ui.Ctx) -> Unit {
     mo.recs.remove(k)
     // (a measure forgotten: none from now on, what read it told)
     measure_changed(measure_size, k)
-  }
-  // (the rows and parts none of whose records is kept any more: gone)
-  let gone : Array[(Int, Int)] = []
-  kept_recs.each(fn(which, k) {
-    if k.recs.iter().all(fn(t) { !mo.recs.contains(t.0) }) {
-      gone.push(which)
-    }
-  })
-  for which in gone {
-    kept_recs.remove(which)
   }
   let lists : Array[Int] = []
   mo.lists.each(fn(k, l) { if frame - l.seen > 600 { lists.push(k) } })

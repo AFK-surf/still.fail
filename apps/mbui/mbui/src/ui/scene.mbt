@@ -1314,3 +1314,10 @@ fn inst_fade_moved_across(a : FixedArray[Double], b : Int, ox : Double, sx : Dou
     a[b + 59] = a[b + 59] * sx
   }
 }
+
+///|
+/// `id`, the target said last (Ctx::push_hit), is only pointed at (Ctx::box `points`), said as it is painted.
+fn Ctx::point_said(self : Ctx, id : Int) -> Unit {
+  self.next_points[id] = true
+  self.next_point_hits.push(self.next_hit_ids.length() - 1)
+}

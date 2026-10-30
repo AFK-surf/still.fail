@@ -129,4 +129,6 @@ squeeze and contrast checks; film's images before and after where a step touches
 5. **What goes**, as no island is left: the frame's watch, paint watch and layout watch (frame_watch.mbt), kept parts
    and rows (kept_part.mbt, kept_rows.mbt, kept_nodes.mbt), said.mbt's recorded lists, `frame_passes_most`'s passes
    for a build, `rows_check` and `looks_check` as they are, `outside_said`, `Mover`, src/damage's comparing of
-   instances, the `old` island itself.
+   instances, the `old` island itself. Gone first, as nothing used it once islands were kept as their nodes: the
+   replay of a part or a row from what its build and paint recorded (KeptPart, RowKept, their bands, on_drawn_again,
+   off since #2325).

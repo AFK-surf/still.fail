@@ -160,14 +160,6 @@ priv struct Drawn {
   mut ground : (Double, Double, Double, Double, (Double, Double, Double, Double))?
   /// the colour of its ground there, when not its own (a card on its way from one place's ground to another's)
   mut ground_bg : Int64?
-  /// a part kept (Ctx::kept_part): built this frame, what it draws taken as it is painted (its id, 0 none); else drawn again
-  /// as its last build drew it, in place of what it holds; a list's row kept so (kept_rows.mbt: its id among the rows')
-  part : Int
-  mut again : KeptPart?
-  mut row : Int
-  /// a list's row: the row whose build said what it said of the frame (its id among the rows', 0 none), said where its
-  /// list's rows say theirs (kept_rows.mbt's row_build_said)
-  mut said_row : Int
   /// a look by the clock (Ctx::cycle_look): what it draws tagged with it as it is painted
   mut cycle : CycleLook?
   /// a look worked out as it is painted (Ctx::look_by), after `look`
@@ -287,20 +279,6 @@ pub fn on_after_layout(f : (Ctx) -> Unit) -> Unit {
 }
 
 ///|
-/// `f` told of each part and list's row kept that a frame draws again, its build not run (kept_part.mbt,
-/// kept_rows.mbt), once the frame is laid out: which (Ctx::kept_building's), how far across and down the window from
-/// where its build laid it out it is drawn, and how far down its list's rows (what came above it grown or shrunk); a
-/// part's, the rows its drawing holds too. What a package keeps of the nodes a build laid out keeps them for it so, as it
-/// would were it built.
-pub fn on_drawn_again(f : (Ctx, (Int, Int), Double, Double, Double) -> Unit) -> Unit {
-  drawn_again_hooks.push(f)
-}
-
-///|
-// kept across runs: the packages over ui install theirs once in the process
-let drawn_again_hooks : Array[(Ctx, (Int, Int), Double, Double, Double) -> Unit] = []
-
-///|
 /// `f` runs as each list is painted, before its rows, with the list's node: what it draws is under them.
 pub fn on_list_underlay(f : (Ctx, Int) -> Unit) -> Unit {
   underlay_hooks.push(f)
@@ -410,10 +388,6 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     cut_soft: 0.0,
     ground: None,
     ground_bg: None,
-    part: 0,
-    again: None,
-    row: 0,
-    said_row: 0,
     cycle: None,
     look_by: None,
   }
@@ -764,7 +738,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   // a look by the clock: what it draws painted as it would be without it, then tagged (cycle_look.mbt; not a part's or
   // a row's box, whose recording is taken as it is painted)
   match e.cycle {
-    Some(cy) if dr.cycling != i && dr.mode != mode_hits && e.part == 0 && e.row == 0 => {
+    Some(cy) if dr.cycling != i && dr.mode != mode_hits => {
       let i0 = self.ninst
       let was = dr.cycling
       dr.cycling = i
@@ -779,34 +753,11 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     }
     _ => ()
   }
-  // a part kept or a list's row, drawn again as its build drew it where it is now, what its build's paint said of the
-  // frame said again there (kept_part.mbt, kept_rows.mbt, said.mbt), as its build's paint says it here: its drawing not
-  // where only targets are taken
-  match e.again {
-    Some({ row: Some(_), .. } as st) => {
-      self.row_paint_again(i, st)
-      return true
-    }
-    Some(st) => {
-      self.part_paint_again(i, st)
-      return true
-    }
-    None => ()
-  }
   if dr.mode == mode_hits {
     // only where it is tapped: as laid out; drawn only, nowhere
     return e.only
   }
   let look = e.look_now()
-  // a list's row built: what it draws taken as it is painted, in the band past its list's clip (kept_rows.mbt)
-  if e.row != 0 && dr.mode == 0 && look.is_still() && e.z == 0 && !e.only {
-    if e.row > 0 {
-      self.row_paint_record(i, e.row, alpha)
-    } else {
-      self.row_paint_plain(i, alpha)
-    }
-    return true
-  }
   // (over a scrim, or the page's cover, where one is up; else in its place)
   if (e.z == z_over_scrim && dr.scrims.is_empty()) || (e.z == z_over_cover && dr.covers.is_empty()) {
     e.z = 0
@@ -816,7 +767,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     (e.top >= 0.0 && e.top < self.nodes[i].fh) ||
     (e.right >= 0.0 && e.right < self.nodes[i].fw) ||
     (e.left >= 0.0 && e.left < self.nodes[i].fw)
-  if look.is_still() && e.z < z_flying && !keep && !e.only && !cutting && e.fade_of < 0 && e.part == 0 && e.row == 0 {
+  if look.is_still() && e.z < z_flying && !keep && !e.only && !cutting && e.fade_of < 0 {
     return false
   }
   // (drawn otherwise than it is tapped: moved, or over everything, or cut)
@@ -922,8 +873,6 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   if apart || e.only {
     dr.mode = mode_draw
   }
-  // (a part kept: what its build draws taken, with the glyphs' plots it draws from: kept_part.mbt)
-  let painting = if e.part != 0 { Some(self.part_paint_begin(e.part, i)) } else { None }
   if moved {
     dr.moves.push({ ox, oy, sx: look.sx, sy: look.sy, dx, dy, rot: look.rot })
   }
@@ -935,10 +884,6 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   words_alpha.val = words_was
   dr.mode = was
-  match painting {
-    Some(p) => self.part_paint_end(e.part, i, i0, p)
-    None => ()
-  }
   if cutting {
     pop_clip()
   }

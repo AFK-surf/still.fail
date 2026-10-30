@@ -1,4 +1,4 @@
-// A list's rows kept as they were drawn (kept_rows.mbt): drawn again where they are as the list scrolls, as their build
+// A list's rows kept as they were drawn (kept_nodes.mbt): drawn again where they are as the list scrolls, as their build
 // would draw them there, and still pressed, pointed at and read as built rows are; built again by what changes them.
 // Each scene runs twice, its rows drawn again and its rows built every frame (Tester::drawn_again), and every frame of the two
 // is the same.

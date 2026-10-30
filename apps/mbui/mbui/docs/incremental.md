@@ -82,10 +82,10 @@ building more (a part forgotten, a row built each frame, "built again while it m
 `outside_events`, a part's `held`, `pointed` and `came_built`, the frame built once more after an event;
 `shows_motion`, `kept_clock`'s frame for motions, `Mover` and its `said`/`told`, `movers` and asking each `rest_at`
 every frame, `moving`/`set_out`; the motion package's moves and reshapes told after layout; building each frame what
-holds a native view or the field with the keys (where they are is worked out in paint); the replay of kept_part.mbt and
-kept_rows.mbt (bands, `Moved`, `rows_said`, `parts_placed`) and said.mbt's recorded lists; comparing instances for
-damage (src/damage). A kept part's `same` comes down to: its computed is not stale, and its key, the layout's epoch
-and the scale are as they were.
+holds a native view or the field with the keys (where they are is worked out in paint); said.mbt's recorded lists
+(the replay of kept_part.mbt and kept_rows.mbt, its bands, `rows_said` and `parts_placed`, gone already: retained.md,
+the way there's 5); comparing instances for damage (src/damage). A kept part's `same` comes down to: its computed is
+not stale, and its key, the layout's epoch and the scale are as they were.
 
 ## Held by the tests
 

@@ -94,8 +94,6 @@ pub fn Ctx::words_shape_of(self : Ctx, key : String) -> Words? {
 fn Ctx::words_after_layout(self : Ctx) -> Unit {
   words_sel.clear()
   let seen : Map[String, Bool] = {}
-  // what the list rows drawn again marked as they were built, where they are now (kept_rows.mbt)
-  self.rows_words_again(seen)
   // (the boxes marked, from the nodes: Node's `words`)
   let words_marks : Array[WordsMark] = []
   for i in 0..<self.count {
@@ -152,11 +150,6 @@ fn Ctx::words_after_layout(self : Ctx) -> Unit {
     let words = { text: sb.to_string(), pieces }
     words_kept[m.key] = words
     seen[m.key] = true
-    // (a list's row being built: said again as it is drawn again)
-    match self.row_holding(m.node) {
-      Some(rk) => rk.words.push((m.key, words))
-      None => ()
-    }
   }
   let gone : Array[String] = []
   words_kept.each(fn(k, _) { if !seen.contains(k) { gone.push(k) } })

@@ -420,10 +420,8 @@ pub(all) struct Peek {
   mut got : Int
   /// its pictures by their keys, oldest first: the one shown (the newest decoded) and any newer one decoding
   pictures : Array[String]
-  /// its card's target (0: none): where it shows, the card is on the screen (peeks_settle); the part or list's row kept
-  /// its card was built in (@ui.kept_building): drawn again, it holds the card as built
+  /// its card's target (0: none): where it shows, the card is on the screen (peeks_settle)
   mut target : Int
-  mut held_by : (Int, Int)
 }
 
 ///|
@@ -431,25 +429,8 @@ pub(all) struct Peek {
 pub let peeks : Map[String, Peek] = {}
 
 ///|
-/// The cards with a preview built in this pass of the frame, or held by a part or a row drawn again as it was built
-/// (peeks_drawn_again).
+/// The cards with a preview built in this pass of the frame, or held by a list's row kept as its nodes (@ui.built_used).
 pub let peeks_built : Map[String, Bool] = {}
-
-///|
-/// Whether peeks_drawn_again is told of what is drawn again (@ui.on_drawn_again).
-// kept across runs: mbui's hooks are
-let peeks_hooked : Ref[Bool] = Ref(false)
-
-///|
-/// A part or a list's row drawn again as it was built (@ui.on_drawn_again): the cards it holds held, as built.
-fn peeks_drawn_again(c : @ui.Ctx, which : (Int, Int), dx : Double, dy : Double, rel : Double) -> Unit {
-  ignore((c, dx, dy, rel))
-  for key, p in peeks {
-    if p.held_by == which {
-      peeks_built[key] = true
-    }
-  }
-}
 
 ///|
 /// Previews asked for so far: each view's name its own.
@@ -478,7 +459,6 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
         got: 0,
         pictures: [],
         target: 0,
-        held_by: (0, 0),
       }
       peeks[key] = p
       p
@@ -501,7 +481,6 @@ pub fn screen_peek(
 ) -> Unit {
   let p = peek_for(key, station, screen)
   p.target = target
-  p.held_by = @ui.kept_building()
   peeks_built[key] = true
   // (and each frame its row or part is put back as built, kept as its nodes: mbui's kept_nodes.mbt)
   @ui.built_used(fn() { peeks_built[key] = true })
@@ -638,10 +617,6 @@ pub fn peeks_stop_all(src : Source) -> Unit {
 /// each frame waiting is acknowledged peek_ms after the one before (the first at once); the previews started and
 /// stopped once the frame's builds are over (peeks_settle).
 pub fn peeks_frame(c : @ui.Ctx, src : Source) -> Unit {
-  if !peeks_hooked.val {
-    peeks_hooked.val = true
-    @ui.on_drawn_again(peeks_drawn_again)
-  }
   peeks_built.clear()
   for key, p in peeks {
     if p.run != PeekOn {

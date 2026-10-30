@@ -1154,20 +1154,17 @@ fn Ctx::laid_said_again(self : Ctx, r : LaidRead) -> Unit {
   match r {
     Rect(id, v, loc) => {
       self.laid_watch[id] = self.frame_no
-      kept_read_laid(id)
       if !self.laid_reads.contains(id) {
         self.laid_reads[id] = (v, loc)
       }
     }
     Size(id, v, loc) => {
       self.laid_watch[id] = self.frame_no
-      kept_read_laid(id)
       if !self.size_reads.contains(id) {
         self.size_reads[id] = (v, loc)
       }
     }
     Left(id, v, loc) => {
-      kept_read_left(id)
       if !self.left_reads.contains(id) {
         self.left_reads[id] = (v, loc)
       }
