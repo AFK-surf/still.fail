@@ -58,16 +58,19 @@ pub fn button(
   let id = c.id(if key == "" { "sf-btn/" + label } else { key })
   let live = !disabled && !busy
   let h = ease_to(c, "sf-btn-h/\{id}", live && (c.lit(id) || c.pressed(id)))
-  // (turning and greyed as a control answers: over dur_ms, never at once; turning, its size the same: the spinner in
-  // its icon's place, or over its words as they fade)
+  // (turning and greyed as a control answers: over dur_ms, never at once; turning, its size the same. With an icon, the
+  // spinner in its place, the icon fading out under it as it fades in; with none, the spinner before its words, the
+  // two moved over within its width as one (the words keep their place in it, a little nearer its ends: they are
+  // what it does, said on as it does it), on the curve a thing moved is, as the spinner fades in. At work is not
+  // greyed: it is the button pressed, at full strength, its spinner what to look at (2026-10-31 the user:
+  // 从不带 loading 到带 loading……感觉有点不对, 能不能不换掉字, 在宽度不变的情况下，加个 loading 并且字挤开一点; it
+  // faded to 0.7 as the web's aria-busy does, its icon swapped at once, its words faded out under the spinner).)
   let turning = ease_to(c, "sf-btn-busy/\{id}", busy)
   let seen = @motion.animate(
     c,
     "sf-btn-seen/\{id}",
     if disabled {
       0.45
-    } else if busy {
-      0.7
     } else {
       1.0
     },
@@ -141,31 +144,58 @@ pub fn button(
         )
         |> ignore
       }
+      let gap = if t.touch { 8.0 } else { 6.0 }
       if icon != "" {
-        if busy {
-          turn()
-        } else {
+        c.box(fn() {
           // (by its ink: as far in from the end as the words are from the other, the grid's room round its strokes
           // taking none, so the two ends look alike)
-          draw_icon(c, icon, button_icon, ink, by_ink=true)
-        }
-      }
-      let words = c.text(
-        label,
-        size=t.t.ui,
-        weight=if t.touch { 600 } else { 500 },
-        color=ink,
-        wrap=false,
-        line=t.t.ui_line,
-      )
-      words_at = words
-      if icon == "" && turning > 0.0 {
-        c.look(words, @ui.look(alpha=1.0 - turning))
-        c.layer(fn() {
-          let s = c.box(style=button_turning, turn)
-          c.look(s, @ui.look(alpha=turning))
+          let drawn = c.box(fn() { draw_icon(c, icon, button_icon, ink, by_ink=true) })
+          // (the spinner over it, in its place and its size: the icon's room kept, nothing beside it moved)
+          if turning > 0.0 {
+            c.look(drawn, @ui.look(alpha=1.0 - turning))
+            c.layer(fn() {
+              let s = c.box(style=button_turning, turn)
+              c.look(s, @ui.look(alpha=turning))
+            })
+            |> ignore
+          }
         })
         |> ignore
+      }
+      let words_in = fn() {
+        let words = c.text(
+          label,
+          size=t.t.ui,
+          weight=if t.touch { 600 } else { 500 },
+          color=ink,
+          wrap=false,
+          line=t.t.ui_line,
+        )
+        words_at = words
+      }
+      if icon == "" {
+        // (its words moved over by half the spinner's room, laid out as the words alone, so the button's width and all
+        // beside it stay; the spinner where it will stand from the first, growing from its middle as they make room for
+        // it: never out of the ground, never over the words)
+        let over = @motion.animate(c, "sf-btn-over/\{id}", if busy { 1.0 } else { 0.0 }, spec=button_reshape)
+        let room = button_icon + gap
+        let both = c.box(dir=Row, align=ACenter, fn() {
+          if busy || over > 0.0 {
+            // (none of the row's width: the spinner hangs before the words, its gap after it)
+            c.box(w=Px(0.0), h=Px(button_icon), dir=Row, justify=JEnd, fn() {
+              let s = c.box(w=Px(room), h=Px(button_icon), dir=Row, fn() { turn() })
+              c.look(
+                s,
+                @ui.look(alpha=turning, dx=room / 2.0 * (1.0 - over), scale=over, ox=button_icon / 2.0 / room),
+              )
+            })
+            |> ignore
+          }
+          words_in()
+        })
+        c.look(both, @ui.look(dx=room / 2.0 * over))
+      } else {
+        words_in()
       }
     },
   )
