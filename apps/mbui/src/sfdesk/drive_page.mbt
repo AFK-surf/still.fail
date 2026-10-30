@@ -90,7 +90,9 @@ fn folder_head(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit, t
           c.text(count, style=@sf.theme().rows.note) |> ignore
         }
       }
-      (None, None) => ()
+      // what it holds while it is read, in its bones: the line's room kept, as the columns under it stay
+      (None, None) =>
+        @sf.bones(c, fn() { c.text(@sf.sample_words(8), style=@sf.theme().rows.note) |> ignore })
     }
   })
   |> ignore
