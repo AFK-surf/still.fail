@@ -953,7 +953,12 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
   for (int i = 0; i < 10; i++) out[i] = 0;
   out[0] = -1;
   Player *pl = player_of(vid);
-  if (pl) return player_info(pl, out);
+  if (pl) {
+    // (as it was last looked at: what the app was told of, player_stood)
+    if (!pl->stood_told) player_stood(pl);
+    memcpy(out, pl->stood, sizeof pl->stood);
+    return pl->stood_state;
+  }
   View *v = find(vid);
   if (!v) return -1;
   if (v->kind == 2) out[5] = v->html_len;
@@ -1220,6 +1225,12 @@ void mb_views_rescale(void) {
 
 // What the app awaits of the views, told as it came (f: host_native.mbt's set_outside; NULL: dropped).
 void mb_views_tell(mb_outside_fn f) {
+  // (each player looked at: what happened since, a frame asked for by it, may have changed how it stands)
+  for (Player *p = players; p; p = p->next) player_stood(p);
+  while (!g_queue_is_empty(&stoods)) {
+    int id = GPOINTER_TO_INT(g_queue_pop_head(&stoods));
+    if (f) f(MB_OUTSIDE_STOOD, id, 0);
+  }
   while (!g_queue_is_empty(&told)) {
     int id = GPOINTER_TO_INT(g_queue_pop_head(&told)), state = GPOINTER_TO_INT(g_queue_pop_head(&told));
     if (f) f(MB_OUTSIDE_VIEW, id, state);

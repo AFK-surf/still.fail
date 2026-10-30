@@ -274,6 +274,7 @@ pub fn Tester::new(
     views: [],
     view_ids: 0,
     view_ready: {},
+    view_reads: 0,
     auto_finish: finish,
     finished: [],
     site: [],
@@ -457,6 +458,10 @@ pub fn Tester::finish(self : Tester, kind : Int, id : Int, ok? : Bool = true) ->
   self.fake.wants = true
   self.fake.finished.push((kind, id))
   on_outside(kind, id, state)
+  // (a view's: how it stands changed with it, as a host tells it)
+  if kind == 2 {
+    on_outside(outside_stood, id, 0)
+  }
 }
 
 ///|

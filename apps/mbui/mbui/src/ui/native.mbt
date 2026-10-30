@@ -14,6 +14,11 @@
 // (the player goes on with the first of them while the rest is on its way), and stops reading one the player let go
 // of (it went elsewhere) or the view's that closes.
 //
+// How a view stands (`view_info`: its length, where it is, whether it plays, its size, …) is the host's to say as it
+// changes, not the app's to ask each frame: the host tells as it does (hostcall.mbt's outside_stood), each change its
+// own event (a player playing: each frame of its video shown, or its clock's tick where it shows no picture); the app
+// reads it then into the view's signals, and what reads them (a time shown, a timeline) is told.
+//
 // Hosts: Android (NativeViews.java: Media3's ExoPlayer on a TextureView, a WebView), macOS and iOS (apple_views.m:
 // AVPlayerLayer, WKWebView), the browser (web/host.js: <video>, a sandboxed <iframe>), Windows (win_views.cpp: WebView2,
 // its players a page of its own with a <video>; no view where WebView2's runtime is not installed: `here` is false, the
@@ -30,8 +35,9 @@ pub struct NativeView {
   priv read : ((Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit)?
   /// its reads under way, by the host's number for each: how each is let go of
   priv reading : Map[Int, () -> Unit]
-  priv info : FixedArray[Double]
-  priv mut state : Int
+  /// how it stands, as its host last said (view_info's numbers, its state: `stood`), each a signal of its own
+  priv info : FixedArray[@signals.Signal[Double]]
+  priv state : @signals.Signal[Int]
   /// the frame it was last painted in, and where: content x y w h, clip x0 y0 x1 y1, its corners (top left, then round it)
   priv mut painted : Int
   /// where in that frame's paint it was (how many instances were before it): the views are stacked so
@@ -215,8 +221,8 @@ fn NativeView::make(
     loading: kind == 3,
     title: "",
     scale: 1.0,
-    info: FixedArray::make(10, 0.0),
-    state: 0,
+    info: FixedArray::makei(10, fn(_) { @signals.signal(0.0, same=fn(a, b) { a == b }) }),
+    state: @signals.signal(0, same=fn(a, b) { a == b }),
     painted: -1,
     seq: 0,
     at: FixedArray::make(12, 0.0),
@@ -227,9 +233,11 @@ fn NativeView::make(
     frames_asked: false,
   }
   if v.id == 0 {
-    v.state = -1
+    v.state.set(-1)
   } else {
     open_views.push(v)
+    // (how it stands as it opens; from now on, as its host says it changes)
+    v.stood()
     // a site's host told how long a request waits for its head and how much of an answer may wait to be read
     if kind == 3 {
       h_view_tell(
@@ -518,7 +526,7 @@ pub fn NativeView::pause(self : NativeView) -> Unit {
 pub fn NativeView::seek(self : NativeView, ms : Double) -> Unit {
   if self.id != 0 && !self.closed {
     h_view_control(self.id, 3, ms)
-    self.info[1] = ms
+    self.info[1].set(ms)
   }
 }
 
@@ -529,7 +537,7 @@ pub fn NativeView::seek(self : NativeView, ms : Double) -> Unit {
 pub fn NativeView::seek_near(self : NativeView, ms : Double) -> Unit {
   if self.id != 0 && !self.closed {
     h_view_control(self.id, 11, ms)
-    self.info[1] = ms
+    self.info[1].set(ms)
   }
 }
 
@@ -563,7 +571,7 @@ pub fn NativeView::rate(self : NativeView, rate : Double) -> Unit {
 ///|
 /// -1 failed (cannot be played, or loaded; or no such view here), 0 opening, 1 ready.
 pub fn NativeView::state(self : NativeView) -> Int {
-  self.state
+  self.state.get()
 }
 
 ///|
@@ -576,36 +584,36 @@ pub fn NativeView::id(self : NativeView) -> Int {
 ///|
 /// Its length in ms (-1 not known yet).
 pub fn NativeView::duration(self : NativeView) -> Double {
-  self.info[0]
+  self.info[0].get()
 }
 
 ///|
 /// Where it is, in ms.
 pub fn NativeView::position(self : NativeView) -> Double {
-  self.info[1]
+  self.info[1].get()
 }
 
 ///|
 pub fn NativeView::playing(self : NativeView) -> Bool {
-  self.info[2] > 0.0
+  self.info[2].get() > 0.0
 }
 
 ///|
 /// The picture's own size in pixels ((0, 0) until known).
 pub fn NativeView::natural(self : NativeView) -> (Double, Double) {
-  (self.info[3], self.info[4])
+  (self.info[3].get(), self.info[4].get())
 }
 
 ///|
 /// The bytes it has been given.
 pub fn NativeView::bytes(self : NativeView) -> Double {
-  self.info[5]
+  self.info[5].get()
 }
 
 ///|
 /// Whether a frame has been drawn (a page: it has loaded).
 pub fn NativeView::shown(self : NativeView) -> Bool {
-  self.info[6] > 0.0
+  self.info[6].get() > 0.0
 }
 
 ///|
@@ -618,23 +626,24 @@ pub fn NativeView::host_done(self : NativeView) -> Bool {
 
 ///|
 pub fn NativeView::buffering(self : NativeView) -> Bool {
-  self.info[7] > 0.0
+  self.info[7].get() > 0.0
 }
 
 ///|
 /// How far on it has what it needs to play, in ms (its position when the host does not say).
 pub fn NativeView::buffered(self : NativeView) -> Double {
-  if self.info[8] > 0.0 {
-    self.info[8]
+  let ahead = self.info[8].get()
+  if ahead > 0.0 {
+    ahead
   } else {
-    self.info[1]
+    self.info[1].get()
   }
 }
 
 ///|
 /// Whether it has played to its end (and stopped there).
 pub fn NativeView::ended(self : NativeView) -> Bool {
-  self.info[9] > 0.0
+  self.info[9].get() > 0.0
 }
 
 ///|
@@ -771,33 +780,61 @@ fn device_px(v : Double, scale : Double) -> Double {
 }
 
 ///|
-/// As a frame begins, before it is decided what it does again (frame_watch.mbt): how each native view stands, read of
-/// the host; where one stands otherwise than it did, said come from outside (the frame is built and reads it).
-fn views_arrive() -> Unit {
-  let mut came = false
-  for v in open_views {
-    if !v.closed && v.id != 0 {
-      let was = v.info.copy()
-      let state = h_view_info(v.id, v.info)
-      if state != v.state {
-        came = true
-      }
-      for k in 0..<v.info.length() {
-        if v.info[k] != was[k] {
-          came = true
-        }
-      }
-      v.state = state
-    }
+/// The views whose host said how they stand changed (outside_stood), not read yet: read as the next frame begins.
+let views_stirred : Array[Int] = []
+
+///|
+// kept across runs: scratch the host writes into before each read, read at once: nothing is carried in it
+let info_out : FixedArray[Double] = FixedArray::make(10, 0.0)
+
+///|
+/// How it stands, read of its host now into its signals: what reads them told where it changed.
+fn NativeView::stood(self : NativeView) -> Unit {
+  if self.closed || self.id == 0 {
+    return
   }
-  if came {
-    outside_counted()
+  let state = h_view_info(self.id, info_out)
+  @signals.start_batch()
+  for k in 0..<self.info.length() {
+    self.info[k].set(info_out[k])
+  }
+  self.state.set(state)
+  @signals.end_batch()
+}
+
+///|
+/// Its host said how view `id` stands changed (hostcall.mbt's outside_stood): a frame, which reads it as it begins.
+fn view_stood(id : Int) -> Unit {
+  if !views_stirred.contains(id) {
+    views_stirred.push(id)
+  }
+  h_frame_owed()
+}
+
+///|
+/// As a frame begins, before it is decided what it does again (frame_watch.mbt): each view whose host said how it
+/// stands changed read of it (its signals set: what reads them is built again).
+fn views_arrive() -> Unit {
+  // (a Tester's fake pages run what was sent to them once they are there, as a frame begins)
+  match fake.val {
+    Some(f) => for v in open_views { fake_scripts_flush(f, v.id) }
+    None => ()
+  }
+  if views_stirred.is_empty() {
+    return
+  }
+  let ids = views_stirred.copy()
+  views_stirred.clear()
+  for v in open_views {
+    if ids.contains(v.id) {
+      v.stood()
+    }
   }
 }
 
 ///|
-/// After a frame is painted: each open view placed where it was painted (hidden where it was not), told how it
-/// stands, and the reads its player waits on handed to its `read`.
+/// After a frame is painted: each open view placed where it was painted (hidden where it was not), and the reads its
+/// player waits on handed to its `read`.
 fn Ctx::sync_views(self : Ctx) -> Unit {
   if open_views.length() == 0 {
     return
@@ -852,17 +889,6 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
         v.at[11],
         shown,
       )
-    }
-    let before = v.state
-    v.state = h_view_info(v.id, v.info)
-    if v.state != before {
-      // how it stands changed as the frame was painted (the host's): the next frame shows it
-      self.read_changed("view \{v.id}'s state")
-    }
-    if v.playing() && !v.buffering() {
-      // a player playing moves on its own as the clock goes: its time shown as it plays, a cycle while it does (not
-      // while it waits for what it needs: the host's event comes as it goes on)
-      ignore(self.cycle(0.0))
     }
     if v.serve is Some(_) || v.said is Some(_) {
       v.take_site()

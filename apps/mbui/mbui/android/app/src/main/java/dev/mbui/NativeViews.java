@@ -64,6 +64,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -143,7 +144,7 @@ final class NativeViews {
                     if (pace.player && !counted) {
                         counted = true;
                         v.bytesWaited.incrementAndGet();
-                        Host.requestFrame();
+                        v.stood();
                     }
                     wait(250);
                 }
@@ -152,7 +153,7 @@ final class NativeViews {
             } finally {
                 if (counted) {
                     v.bytesWaited.decrementAndGet();
-                    Host.requestFrame();
+                    v.stood();
                 }
             }
             if (got > at) {
@@ -217,6 +218,32 @@ final class NativeViews {
             Host.main.post(() -> {
                 doneOnce = true;
                 drawnWhenBoth();
+            });
+            stood();
+        }
+
+        /** (GL thread) How it stands (info's numbers and its state) as the app was last told, and as it is now. */
+        private final double[] stoodSaid = new double[10], stoodNow = new double[10];
+        private int stoodState = Integer.MIN_VALUE;
+        /** Whether a look at how it stands is on its way to the GL thread. */
+        private final AtomicBoolean stoodAsked = new AtomicBoolean();
+
+        /**
+         * How it stands may have changed (any thread here): looked at on the GL thread, between frames, and the app told
+         * where it did (android_host.c's mb_host_set_outside: kind 13, src/ui/hostcall.mbt's outside_stood), which reads
+         * it then, not each frame. Asked as often as anything changes: told only where something did.
+         */
+        void stood() {
+            MBView mv = Host.view;
+            if (closed || mv == null || !stoodAsked.compareAndSet(false, true)) return;
+            mv.toGL(() -> {
+                stoodAsked.set(false);
+                if (closed) return;
+                int st = info(id, stoodNow);
+                if (st == stoodState && java.util.Arrays.equals(stoodNow, stoodSaid)) return;
+                stoodState = st;
+                System.arraycopy(stoodNow, 0, stoodSaid, 0, stoodNow.length);
+                Native.outside(Native.OUTSIDE_STOOD, id, 0);
             });
         }
 
@@ -1236,6 +1263,7 @@ final class NativeViews {
         if (k > 0) {
             double before = vid.bytes;
             vid.bytes += k;
+            vid.stood();
             // the first pieces, then one line every 4 MB
             if (vid.pieces++ < 4 || Math.floor(before / (4 << 20)) != Math.floor(vid.bytes / (4 << 20))) {
                 Host.log("view " + id + ": read @" + r.offset + ": " + r.got + " of " + r.length + " bytes through the app"
@@ -1321,15 +1349,32 @@ final class NativeViews {
         long waitSince = -1;
         double waitBytes;
         ExoPlayer player;
+        /**
+         * (main thread) Where it is, how far on it has what it needs, how long it is: read of the player, the app told
+         * where that changed (stood). As each frame of its picture is shown (its frames' listener), and on its own
+         * clock (`tick`).
+         */
+        final Runnable sample = () -> {
+            sampleAsked.set(false);
+            if (closed || player == null) return;
+            position = Math.max(0, player.getCurrentPosition());
+            buffered = Math.max(0, player.getBufferedPosition());
+            long dur = player.getDuration();
+            if (dur != C.TIME_UNSET) duration = dur;
+            stood();
+        };
+        final AtomicBoolean sampleAsked = new AtomicBoolean();
+        /**
+         * Its clock's tick: a sound playing has no frames shown to say where it is as it goes, so it is read 30 times a
+         * second; a picture playing says so itself, each frame (and what it has on hand grows paused too: 4 a second).
+         */
         final Runnable tick = new Runnable() {
             @Override
             public void run() {
                 if (closed || player == null) return;
-                position = Math.max(0, player.getCurrentPosition());
-                buffered = Math.max(0, player.getBufferedPosition());
-                long dur = player.getDuration();
-                if (dur != C.TIME_UNSET) duration = dur;
-                Host.main.postDelayed(this, playing > 0 ? 33 : 250);
+                sample.run();
+                boolean sound = !player.getCurrentTracks().containsType(C.TRACK_TYPE_VIDEO);
+                Host.main.postDelayed(this, playing > 0 && sound ? 33 : 250);
             }
         };
 
@@ -1822,6 +1867,10 @@ final class NativeViews {
             player.setSeekParameters(SeekParameters.EXACT);
             // its frames onto its picture, which the canvas draws where the app puts the video
             player.setVideoSurface(picture.surface);
+            // each frame as it is shown: where it is then, the app told (on the main thread, the player's own)
+            player.setVideoFrameMetadataListener((presentationUs, releaseNs, format, mediaFormat) -> {
+                if (sampleAsked.compareAndSet(false, true)) Host.main.post(sample);
+            });
             player.addListener(new Player.Listener() {
                 @Override
                 public void onPlaybackStateChanged(int s) {
@@ -1848,13 +1897,13 @@ final class NativeViews {
                     }
                     ended = s == Player.STATE_ENDED ? 1 : 0;
                     if (s == Player.STATE_ENDED) playing = 0;
-                    Host.requestFrame();
+                    stood();
                 }
 
                 @Override
                 public void onPlayWhenReadyChanged(boolean will, int reason) {
                     playWhenReady = will;
-                    Host.requestFrame();
+                    stood();
                 }
 
                 @Override
@@ -1864,7 +1913,7 @@ final class NativeViews {
                         Host.main.removeCallbacks(tick);
                         Host.main.post(tick);
                     }
-                    Host.requestFrame();
+                    stood();
                 }
 
                 @Override
@@ -1875,7 +1924,7 @@ final class NativeViews {
                         // (its picture as large as its frames, drawn at the video's proportions where the app puts it)
                         picture.w = s.width;
                         picture.h = s.height;
-                        Host.requestFrame();
+                        stood();
                     }
                 }
 
@@ -1884,7 +1933,7 @@ final class NativeViews {
                     if (framed == 0) Host.log("view " + id + ": first frame shown");
                     framed = 1;
                     tell(1);  // ready for the app: its first frame shows
-                    Host.requestFrame();
+                    stood();
                 }
 
                 @Override
@@ -1893,7 +1942,7 @@ final class NativeViews {
                     playing = 0;
                     Host.log("view " + id + ": cannot play: " + e.getErrorCodeName() + " " + e.getMessage());
                     tell(-1);
-                    Host.requestFrame();
+                    stood();
                 }
             });
             ProgressiveMediaSource source = new ProgressiveMediaSource.Factory(() -> new ViewSource(this, true))
@@ -1923,12 +1972,14 @@ final class NativeViews {
                     player.setSeekParameters(SeekParameters.EXACT);
                     player.seekTo((long) Math.floor(value));
                     position = value;
+                    stood();
                     break;
                 // about there, at once: the key frame nearest it (nothing before the frame asked decoded first)
                 case 11:
                     player.setSeekParameters(SeekParameters.CLOSEST_SYNC);
                     player.seekTo((long) Math.floor(value));
                     position = value;
+                    stood();
                     break;
                 case 4: player.setPlaybackParameters(new PlaybackParameters((float) value)); break;
                 // a finger along its timeline: its seeks one after another, each shown (Media3's scrubbing mode)
@@ -2170,6 +2221,7 @@ final class NativeViews {
                         framed = 1;
                         Host.log("view " + id + ": page loaded (" + bytes + " bytes of HTML)");
                     }
+                    stood();
                     pageReady(view);
                     Host.requestFrame();
                 }
@@ -2458,6 +2510,7 @@ final class NativeViews {
                         framed = 1;
                         Host.log("view " + id + ": site page loaded (" + path + ")");
                     }
+                    stood();
                     pageReady(view);
                     moved(view, false);
                 }

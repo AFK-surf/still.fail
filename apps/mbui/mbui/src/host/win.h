@@ -25,6 +25,7 @@ enum {
   MB_OUTSIDE_CLIP = 9,
   MB_OUTSIDE_POSTED = 11,
   MB_OUTSIDE_STREAMED = 12,
+  MB_OUTSIDE_STOOD = 13,
 };
 
 typedef struct {

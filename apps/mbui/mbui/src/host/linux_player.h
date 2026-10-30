@@ -83,8 +83,11 @@ typedef struct Player {
   // the main thread's
   int state;  // -1 failed, 0 opening, 1 ready
   int playing, ended, scrubbing;
-  gint64 last_t;  // its position as the app last asked (buffering: info)
-  int waiting;    // buffering, as the app was last told
+  gint64 last_t;  // its position as it was last looked at (buffering: info)
+  int waiting;    // buffering, as it was last looked at
+  // how it stands (player_info) as it was last looked at, and whether that was ever (player_stood)
+  double stood[10];
+  int stood_state, stood_told;
   double volume, rate;
   GLuint tex;
   int tex_w, tex_h;
@@ -611,13 +614,22 @@ static void player_control(Player *p, int op, double value) {
       if (p->ended) player_seek(p, 0, GSEEK_ACCURATE, p->rate);
       p->playing = 1;
       gs.gst_element_set_state(p->bin, GSTATE_PLAYING);
+      players_ticking();
+      player_stood(p);
       break;
     case 2:
       p->playing = 0;
       gs.gst_element_set_state(p->bin, GSTATE_PAUSED);
+      player_stood(p);
       break;
-    case 3: player_seek(p, value, GSEEK_ACCURATE, p->rate); break;
-    case 11: player_seek(p, value, GSEEK_KEY_UNIT, p->rate); break;
+    case 3:
+      player_seek(p, value, GSEEK_ACCURATE, p->rate);
+      player_stood(p);
+      break;
+    case 11:
+      player_seek(p, value, GSEEK_KEY_UNIT, p->rate);
+      player_stood(p);
+      break;
     case 4:
       if (value > 0) p->rate = value, player_seek(p, -1, GSEEK_ACCURATE, value);
       break;
@@ -659,6 +671,42 @@ static int player_info(Player *p, double *out) {
   out[8] = 0;
   out[9] = p->ended;
   return p->state;
+}
+
+static GQueue stoods;        // the players whose standing changed, for the app (mb_views_tell)
+static guint stood_ticking;  // the tick that looks at the players playing, while one is (players_tick)
+
+// How it stands (player_info) looked at: the app told where it changed, between frames (mb_views_tell: kind 13,
+// src/ui/hostcall.mbt's outside_stood), and reads what was looked at then (mb_host_view_info), not each frame. Looked
+// at as anything happens (its bus's word, a frame of its picture, a read answered: mb_app_wake's frame), and each frame
+// of the display while it plays (players_tick).
+static void player_stood(Player *p) {
+  double now[10];
+  int st = player_info(p, now);
+  if (p->stood_told && st == p->stood_state && !memcmp(now, p->stood, sizeof now)) return;
+  int queued = p->stood_told && g_queue_find(&stoods, GINT_TO_POINTER(p->vid));
+  p->stood_told = 1;
+  p->stood_state = st;
+  memcpy(p->stood, now, sizeof now);
+  if (!queued) g_queue_push_tail(&stoods, GINT_TO_POINTER(p->vid));
+  mb_app_wake();
+}
+
+// Each frame of the display while a player plays (GTK's frame clock): where it is looked at (a sound has no pictures
+// to say so as it goes); stopped once none plays.
+static gboolean players_tick(GtkWidget *w, GdkFrameClock *c, gpointer data) {
+  (void)w, (void)c, (void)data;
+  int any = 0;
+  for (Player *p = players; p; p = p->next)
+    if (p->playing && !p->ended) any = 1, player_stood(p);
+  if (any) return G_SOURCE_CONTINUE;
+  stood_ticking = 0;
+  return G_SOURCE_REMOVE;
+}
+
+static void players_ticking(void) {
+  if (!stood_ticking && mb_app_under())
+    stood_ticking = gtk_widget_add_tick_callback(GTK_WIDGET(mb_app_under()), players_tick, NULL, NULL);
 }
 
 // (under lock) the source whose read the app has not been given yet, or whose read is `rid` (when it is not 0)
