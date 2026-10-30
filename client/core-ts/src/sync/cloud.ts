@@ -3,6 +3,7 @@
 // reaches), each workspace it reaches, its signed-in devices, and an operator's lists. The topics that show them only
 // read the records (data.ts). Every time a socket opens, the account is read again (nothing is replayed); its events
 // say what changed. A write to still.fail cloud answers once what it changed is read again.
+import { record, said } from "../record.ts";
 import { Effect, Exit, Fiber, Scope } from "effect";
 import type { AccountView } from "../accounts.ts";
 import { NOT_BETA, notBetaText, readCredential, type Credential } from "../cloud.ts";
@@ -569,12 +570,15 @@ export class CloudSync {
       Effect.scoped(
         Effect.gen(function* () {
           const scope = yield* Effect.scope;
+          const tryAt = core.host.nowMs();
           const waiting = core.status.begin(CLOUD, t("core-misc.status.connect"), true);
           const opened = yield* Effect.result(openIn(scope).pipe(Effect.ensuring(Effect.sync(() => waiting.end()))));
           if (opened._tag === "Failure") {
             down = true;
+            record(core.host, "cloud socket", () => `${sub.slice(0, 8)} open failed after ${Math.round(core.host.nowMs() - tryAt)}ms: ${said(opened.failure.message)}`);
             return { failed: opened.failure } as Ended;
           }
+          record(core.host, "cloud socket", () => `${sub.slice(0, 8)} open after ${Math.round(core.host.nowMs() - tryAt)}ms${down ? " (after a failed open: stations not reached tried now)" : ""}`);
           if (down) core.stations?.networkBack();
           down = false;
           let socket = opened.success;
@@ -629,6 +633,7 @@ export class CloudSync {
             }
           }
           if (woke || idle || core.host.nowMs() - openedAt >= 60_000) wait.ms = SOCKET_RETRY_MS;
+          record(core.host, "cloud socket", () => `${sub.slice(0, 8)} ended after ${Math.round((core.host.nowMs() - openedAt) / 1000)}s: ${idle ? "silent" : "dropped"}${woke ? " (a wake suspected it)" : ""}`);
           return { ended: idle ? t("core-misc.socket.silent") : t("core-misc.socket.dropped"), again: woke || idle } as Ended;
         }),
       );

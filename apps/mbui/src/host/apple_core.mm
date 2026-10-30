@@ -63,6 +63,8 @@ int32_t sf_utc_offset_min(double at_ms);
 // Whether the device's performance record is kept (ios_app.m's, the person's 性能记录): the core's thread then times
 // each of its tasks by what it was (perf_task). None kept where the host has none (these defaults: a Mac, a test).
 extern "C" __attribute__((weak)) int mb_perf_on(void) { return 0; }
+// A line into the performance record (ios_app.m), where the host keeps one.
+extern "C" __attribute__((weak)) void mb_perf_note(const char *text) { (void)text; }
 
 #if TARGET_OS_IPHONE
 static const char *const kOS = "ios";
@@ -793,6 +795,14 @@ static void install(jsi::Runtime &rt) {
   fn("clearTimer", 1, [](jsi::Runtime &, const jsi::Value &, const jsi::Value *a, size_t) -> jsi::Value {
     std::lock_guard<std::mutex> lock(C.mutex);
     C.timers.erase(uint64_t(a[0].asNumber()));
+    return jsi::Value::undefined();
+  });
+  // the performance record (the core's record.ts): whether it is kept now, and a line into it
+  fn("recording", 0, [](jsi::Runtime &, const jsi::Value &, const jsi::Value *, size_t) -> jsi::Value {
+    return jsi::Value(mb_perf_on() != 0);
+  });
+  fn("record", 1, [](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *a, size_t) -> jsi::Value {
+    if (mb_perf_on()) mb_perf_note(a[0].asString(rt).utf8(rt).c_str());
     return jsi::Value::undefined();
   });
   fn("log", 2, [](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *a, size_t) -> jsi::Value {

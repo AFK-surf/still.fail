@@ -37,6 +37,33 @@ drawn or not. Off, nothing runs: no timer, no file touched, a flag read each fra
 | `present avg: ring wait, upload, drawable wait, encode` | apple_render.m | every 240 presents, where a present's time went |
 | `app: foreground / background`, `app: screen shown / hidden / closed <key>`, `thermal: N`, `lowpower: on/off`, `power: battery=…` | ios_app.m, screen_view.mbt | what changed: line the heat up against these |
 
+## Connections
+
+What the core does to reach the stations and still.fail cloud, written by the core (client/core-ts record.ts) into the
+same record while it is on; off, nothing is formatted (each place asks first, one call to the host). Nothing in them
+changes what the core does. Rare things a line each; what goes on all the time (each way's packets) a line per station
+per 5 s tick of its ways.
+
+| line | from | says |
+| --- | --- | --- |
+| `conn dial: #N <ws>/<station> via=main\|main+addresses\|relay:<host>\|lan\|tailnet onto= credential= dialled= openBi= sent= total= -> ok\|no-answer\|interrupted\|error: …` | mesh.ts open | each dial, numbered: through which endpoint (the main one, at the addresses the station said, a relay's own, the LAN's, the tailnet's), each stage's time from its start (`onto`: on a relay; `credential`: the station's credential had; `dialled`: the QUIC connection made; `openBi`: its stream; `sent`: the credential sent; `-` not reached), how it ended (`no-answer`: nothing in CONNECT_TIMEOUT_MS) |
+| `conn rebind: a dial unanswered, nothing open -> bound \| relays retold -> … \| skipped: Nms since the last (REBIND_MS)` | mesh.ts #rebind | the main endpoint bound anew, and why |
+| `conn stuck: <station> not rebound: N link(s) open` | mesh.ts link | a dial left unanswered before, the endpoint not bound anew as links are open on it |
+| `conn network-change: told the main endpoint (the network changed \| retry \| the UI back after Ns), N link(s) open, N relay endpoint(s) not told` | mesh.ts #watch | a wake (the system's network change, 重试, the app back) told to iroh |
+| `conn ways: <station> <way> in=+B out=+B missed=N [*<relay or address> <rtt> +sent/lost; …] \| …` | mesh.ts #steer | each 5 s tick of a station's ways (where it has more than one to choose between): bytes in and out of each link since the last, its pings missed in a row, each path's packets sent and lost since (`*` the one in use) |
+| `link miss: <station> misses=N/12 cloud=up\|down -> reconnecting\|offline\|error: <why>` | station/link.ts | a try at the station's event stream that did not open; `cloud`: still.fail cloud's socket as it was (any account's) |
+| `link wait: <station> Ns (backoff \| answered \| brief streams \| tried seldom: LONG_MISSES \| tried seldom: the cloud says offline) misses=N why=…` | station/link.ts | how long until the next try, and why that long |
+| `link woke: <station> by its time \| a wake (UI back, network, retry) \| the cloud or its pings (back) after Ns` | station/link.ts | what ended the wait |
+| `cloud socket: <account> open after Nms [(after a failed open: stations not reached tried now)] \| open failed after Nms: … \| ended after Ns: silent\|dropped` | sync/cloud.ts | still.fail cloud's events socket; the first open after a failed one wakes every station not reached (`networkBack`) |
+| `net: path satisfied\|unsatisfied\|satisfiable ifaces=pdp_ip0/cell,en0/wifi,… expensive= constrained= ipv4= ipv6= -> said: the network changed \| not said (the first interface the same) \| the first seen` | ios_app.m | every update of the system's network path as it comes, whether the app took it for a change (only the first interface is compared: a handover on the same interface says nothing to the core) |
+
+Reading a stuck reconnect: find the station's `link miss` lines; each is followed by `link wait` (how long and why)
+and later `link woke` (by what). A wait of 600s (`tried seldom`) with no `link woke` before it ends means nothing woke
+it: look for `cloud socket … open` (it would) and `net: path … said` (it would). The `conn dial` lines of the same
+minutes say where each try stopped: `onto=-` (no relay reached), `dialled=-` with `no-answer` (no QUIC connection in
+time: the station or the way), `openBi`/`sent` missing (the connection made, then lost). `conn stuck` with links open
+means the endpoint was not bound anew for them.
+
 ## From a warm phone to the culprit
 
 1. Find when it got warm: `thermal:` lines, or `ios: … thermal=2`. Look at the `ios: cpu=` lines before it. Under

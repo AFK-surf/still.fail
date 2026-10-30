@@ -5,6 +5,7 @@
 // something else. What comes on it and what is read as it opens is the sync's (sync.ts), told here as `Told`: a stream
 // opens either afresh (nothing says what the device missed: the station is read again) or going on from where the
 // device was in the station's log of events (cursor.ts: what changed meanwhile is told first).
+import { record, said, stationTag } from "../record.ts";
 import { Deferred, Effect, type Fiber } from "effect";
 import type { Inner } from "../core.ts";
 import { CoreError, asCoreError } from "../error.ts";
@@ -568,6 +569,7 @@ export class Links {
               // down for this device, and why (DownCause `lock`).
               const lock = lockRefusal(error);
               const state = lock ? "offline" : error.status !== undefined ? "error" : reached && misses < MISSES ? "reconnecting" : "offline";
+              record(core.host, "link miss", () => `${stationTag(address)} misses=${misses}/${LONG_MISSES} cloud=${core.status.cloudDown() ? "down" : "up"} -> ${state}: ${said(error.message)}`);
               self.setLink(address, state === "offline" ? { state, message: error.message, cause: lock ? "lock" : self.#cause(address) } : { state, message: error.message });
               return { failed: `open failed: ${error.message}` } as const;
             }
@@ -713,7 +715,10 @@ export class Links {
         const change = self.#requests.wire.healthChange?.bind(self.#requests.wire);
         const pinged = change ? Effect.flatMap(change(link.addr, true), () => change(link.addr, false)) : Effect.never;
         const back = costly > 1 ? Effect.never : Effect.raceFirst(Deferred.await(self.#backOf(address)), Effect.asVoid(pinged));
+        const waitFrom = core.host.nowMs();
+        record(core.host, "link wait", () => `${stationTag(address)} ${Math.round(wait / 1000)}s (${offline ? (misses >= LONG_MISSES ? "tried seldom: LONG_MISSES" : "tried seldom: the cloud says offline") : answered ? "answered" : held > backoff(misses) ? "brief streams" : "backoff"}) misses=${misses} why=${said(previous?.why ?? "")}`);
         const woken = yield* Effect.raceFirst(Effect.sleep(wait).pipe(Effect.as(null)), Effect.raceFirst(core.wakes.next.pipe(Effect.as("wake" as const)), back.pipe(Effect.as("back" as const))));
+        record(core.host, "link woke", () => `${stationTag(address)} by ${woken === null ? "its time" : woken === "wake" ? "a wake (UI back, network, retry)" : "the cloud or its pings (back)"} after ${Math.round((core.host.nowMs() - waitFrom) / 1000)}s`);
         if (woken === "wake") brief = costly = 0;
         if (woken !== null) self.#retrying(address);
       }

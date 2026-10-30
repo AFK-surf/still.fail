@@ -693,6 +693,30 @@ sim("a_try_not_answered_makes_the_next_go_on_an_endpoint_bound_anew", async (s) 
   await close(s, station, mesh);
 });
 
+/// While the app keeps its record (record.ts), each dial is a line as it ends: how far each stage got, how it ended; a
+/// dial left unanswered and the next, on an endpoint bound anew, said so.
+sim("each_dial_is_a_line_of_the_record_while_it_is_kept", async (s) => {
+  const lines: string[] = [];
+  s.host.recorder = { on: () => true, line: (l) => lines.push(l) };
+  try {
+    const { mesh, station } = await setup(s);
+    station.unanswered(1);
+    await s.run(mesh.link(station.id(), grants("ok", { n: 0 }))).then(
+      () => null,
+      () => null,
+    );
+    await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+    const dials = lines.filter((l) => l.startsWith("conn dial: "));
+    assert.equal(dials.length, 2, lines.join("\n"));
+    assert.match(dials[0]!, /^conn dial: #\d+ [0-9a-f]{8} via=main onto=\d+ms credential=\d+ms dialled=- openBi=- sent=- total=\d+ms -> no-answer$/);
+    assert.match(dials[1]!, /^conn dial: #\d+ [0-9a-f]{8} via=main onto=\d+ms credential=\d+ms dialled=\d+ms openBi=\d+ms sent=\d+ms total=\d+ms -> ok$/);
+    assert.ok(lines.some((l) => /^conn rebind: a dial unanswered, nothing open -> bound$/.test(l)), lines.join("\n"));
+    await close(s, station, mesh);
+  } finally {
+    s.host.recorder = undefined;
+  }
+});
+
 sim("a_wake_while_a_try_goes_unanswered_opens_one_beside_it", async (s) => {
   const { mesh, station } = await setup(s);
   station.unanswered(1);
@@ -1095,6 +1119,24 @@ sim("ways_a_workspace_turned_off_are_not_gone", async (s) => {
   assert.equal((await request(s, await ask([b]), head("/admin/api/overview"))).status, 200);
   await s.until(() => mesh.current(id)?.pinned === TAILNET, MIN_STAY_MS + 2 * 60_000);
   await close(s, station, mesh);
+});
+
+/// While the app keeps its record, each tick of a station's ways (more than one to choose between) is a line: what went
+/// over each since the last, in and out, and each path's packets sent and lost.
+sim("each_tick_of_a_stations_ways_is_a_line_of_the_record_while_it_is_kept", async (s) => {
+  const lines: string[] = [];
+  s.host.recorder = { on: () => true, line: (l) => lines.push(l) };
+  try {
+    const a = s.relay("https://a.relay.test/", { device: { ms: 10 }, station: { ms: 10 } });
+    const b = s.relay("https://b.relay.test/", { device: { ms: 20 }, station: { ms: 20 } });
+    const { station, mesh, id } = await onRelays(s, [a, b]);
+    await reach(s, mesh, id);
+    const ways = /^conn ways: [0-9a-f]{8} \S+ in=\+\d+B out=\+\d+B missed=\d+ \[\*?\S+ (\d+ms|\?) \+\d+\/\d+/;
+    await s.until(() => lines.some((l) => ways.test(l)), 3 * TICK_MS);
+    await close(s, station, mesh);
+  } finally {
+    s.host.recorder = undefined;
+  }
 });
 
 /// A workspace's own relay (cloud directory.ts setRelays): its station is on that relay alone, the device's endpoint on

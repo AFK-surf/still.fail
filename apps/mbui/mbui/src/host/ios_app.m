@@ -1092,7 +1092,8 @@ void mb_perf_note(const char *text) {
   char at[40], day[16];
   strftime(at, sizeof at, "%Y-%m-%d %H:%M:%S", &tm);
   strftime(day, sizeof day, "%Y%m%d", &tm);
-  NSString *line = [NSString stringWithFormat:@"%s.%03d %s\n", at, (int)(tv.tv_usec / 1000), text];
+  // (the text as UTF-8, as every line is made: %s would read it in the system's encoding, the core's Chinese garbled)
+  NSString *line = [NSString stringWithFormat:@"%s.%03d %@\n", at, (int)(tv.tv_usec / 1000), [NSString stringWithUTF8String:text] ?: @"?"];
   NSString *today = @(day);
   dispatch_async(perf_queue(), ^{
     NSString *name = perf_file.lastPathComponent;
@@ -1660,6 +1661,24 @@ static void network_start(void) {
       });
     }
     BOOL changed = was && ![was isEqualToString:now] && now.length > 0;
+    // (the record's: each update as the system says it, said on as a change or not, while the record is kept)
+    if (mb_perf_on()) {
+      NSMutableArray<NSString *> *all = [NSMutableArray array];
+      nw_path_enumerate_interfaces(path, ^bool(nw_interface_t i) {
+        static const char *kinds[] = {"other", "wifi", "cell", "wired", "loopback"};
+        int k = (int)nw_interface_get_type(i);
+        [all addObject:[NSString stringWithFormat:@"%s/%s", nw_interface_get_name(i), k >= 0 && k <= 4 ? kinds[k] : "?"]];
+        return true;
+      });
+      static const char *states[] = {"invalid", "satisfied", "unsatisfied", "satisfiable"};
+      int st = (int)nw_path_get_status(path);
+      mb_perf_note([NSString stringWithFormat:@"net: path %s ifaces=%@ expensive=%d constrained=%d ipv4=%d ipv6=%d -> %@",
+                                              st >= 0 && st <= 3 ? states[st] : "?", [all componentsJoinedByString:@","],
+                                              nw_path_is_expensive(path), nw_path_is_constrained(path),
+                                              nw_path_has_ipv4(path), nw_path_has_ipv6(path),
+                                              changed ? @"said: the network changed" : was ? @"not said (the first interface the same)" : @"the first seen"]
+                       .UTF8String);
+    }
     was = now;
     if (changed) {
       say([NSString stringWithFormat:@"ios: network now %@", now]);
