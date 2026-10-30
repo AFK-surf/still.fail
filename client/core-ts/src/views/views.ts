@@ -23,6 +23,7 @@ import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import * as refs from "../refs.ts";
 import { chatsLinked } from "../refLinks.ts";
+import { timed } from "../spent.ts";
 import type { Value, Watch } from "../store.ts";
 import { arr as arrU, deepFreeze, get as getU, isObject, shaped, sharedValue } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
@@ -1116,8 +1117,8 @@ export class Views implements Owner {
 
   compute(view: Topic): Value | undefined {
     if (!this.#views.has(topicKey(view))) return undefined;
-    this.#sync(view);
-    const out = this.#compute(view);
+    timed(`${view.topic}.sources`, () => this.#sync(view));
+    const out = timed(`${view.topic}.make`, () => this.#compute(view));
     if (view.topic !== "chat" || out === undefined || !("ok" in out)) return out;
     const v = out.ok as J;
     const station = view.station as string;
@@ -1213,7 +1214,8 @@ export class Views implements Owner {
           const thread = out !== undefined && "ok" in out ? u64(get(get(out.ok, "thread"), "id")) : null;
           const of = thread !== null ? `t:${thread}` : typeof view.thread === "number" ? `t:${view.thread}` : `s:${String(view.session ?? "")}`;
           const held = (session: string, name: string) => this.#core.data.hasKeptFile(station, session, name, "thumb") || this.#core.data.hasKeptFile(station, session, name, "poster");
-          return this.#vaultCards(view, drawn(out, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, of), (text) => this.#linkedChats(station, text), held));
+          const shown = timed("chat.draw", () => drawn(out, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, of), (text) => timed("chat.links", () => this.#linkedChats(station, text)), held));
+          return timed("chat.vault", () => this.#vaultCards(view, shown));
         };
         if (typeof view.thread === "number") return draw(this.#chat(station, view.thread));
         const session = typeof view.session === "string" ? view.session : null;
@@ -1846,7 +1848,7 @@ export class Views implements Owner {
       if (!isObject(page.thread)) return undefined;
       thread = structuredClone(page.thread);
     }
-    const agents = this.#agentsOf(station, thread);
+    const agents = timed("chat.agents", () => this.#agentsOf(station, thread));
     // What two chats' agents wrote each other is not said in it: it has a page of its own (`chatLetters`).
     const keys = new Set(members(thread));
     const all: J[] = merge(arr(page.entries));
@@ -1857,7 +1859,7 @@ export class Views implements Owner {
     const peopleSeqs = said.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [m.seq as number] : []));
     const waits = peopleSeqs.slice(Math.max(peopleSeqs.length - waiting, 0));
     const written = said.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [[m.seq as number, str(m.text) ?? ""] as [number, string]] : []));
-    let messages = this.#shown(station, thread, agents, said, waits);
+    let messages = timed("chat.shown", () => this.#shown(station, thread, agents, said, waits));
     // A sent message leaves the outbox as its own entry (or anything later) arrives; before the station answered
     // with its seq, it is the viewer's first message since it was sent with the same words.
     const newest = u64(page.last);
@@ -1918,7 +1920,7 @@ export class Views implements Owner {
       pendingCard = d !== null && open(d) ? [u64(d.seq) ?? 0, decisions.dismissed(d)] : null;
     }
     messages.splice(0, messages.length, ...decisions.inMessages(messages, pendingCard, outbox.filter((m) => m.state !== "failed")));
-    const elsewhere = this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false, { members: members_, bots });
+    const elsewhere = timed("chat.elsewhere", () => this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false, { members: members_, bots }));
     const title = row !== undefined && row.title !== undefined ? row.title : typeof page.title === "string" ? page.title : chatTitle(thread);
     const view: J = {
       me: this.me(scope),
