@@ -38,6 +38,9 @@ pub struct Zoom {
   mut flinging : Bool
   fling_x : @motion.Value
   fling_y : @motion.Value
+  /// told each time where it shows is changed (Zoom::moved), read where that is read (Zoom::rect): what was built by
+  /// where it was is built again, whoever changed it, as it was built or between frames
+  priv place : @signals.Signal[Int]
 }
 
 ///|
@@ -82,6 +85,7 @@ pub fn Zoom::new(
     flinging: false,
     fling_x: @motion.Value::new(0.0),
     fling_y: @motion.Value::new(0.0),
+    place: @signals.signal(0),
   }
 }
 
@@ -161,6 +165,7 @@ pub fn Zoom::natural(self : Zoom, w : Double, h : Double) -> Unit {
   } else {
     self.clamp()
   }
+  self.moved()
 }
 
 ///|
@@ -178,6 +183,7 @@ pub fn Zoom::boxed(self : Zoom, w : Double, h : Double) -> Unit {
   } else {
     self.clamp()
   }
+  self.moved()
 }
 
 ///|
@@ -197,8 +203,16 @@ fn Zoom::clamp(self : Zoom) -> Unit {
 }
 
 ///|
-/// The picture's place on the stage (x, y, w, h), once its size is known.
+/// Where it shows changed: what read it told.
+fn Zoom::moved(self : Zoom) -> Unit {
+  self.place.set(@signals.untracked(fn() { self.place.get() }) + 1)
+}
+
+///|
+/// The picture's place on the stage (x, y, w, h), once its size is known: followed (what reads it is built again as it
+/// is moved, Zoom::moved).
 pub fn Zoom::rect(self : Zoom) -> (Double, Double, Double, Double)? {
+  self.place.get() |> ignore
   if self.nw <= 0.0 || self.nh <= 0.0 {
     return None
   }
@@ -215,6 +229,7 @@ pub fn Zoom::pan(self : Zoom, dx : Double, dy : Double) -> Unit {
   self.x = self.x + dx
   self.y = self.y + dy
   self.clamp()
+  self.moved()
 }
 
 ///|
@@ -231,6 +246,7 @@ pub fn Zoom::transform(self : Zoom, ax : Double, ay : Double, zoom : Double, dx 
   self.x = px - (px - self.x) * f + dx
   self.y = py - (py - self.y) * f + dy
   self.clamp()
+  self.moved()
 }
 
 ///|
@@ -288,6 +304,7 @@ pub fn Zoom::stop_fling(self : Zoom) -> Bool {
   self.x = self.fling_x.get()
   self.y = self.fling_y.get()
   self.clamp()
+  self.moved()
   true
 }
 
@@ -330,6 +347,7 @@ fn Zoom::glide_to(self : Zoom, s : Double, x : Double, y : Double, glide : Bool)
     self.scale = s
     self.x = x
     self.y = y
+    self.moved()
     return
   }
   self.g_from[0] = self.scale
@@ -345,6 +363,7 @@ fn Zoom::glide_to(self : Zoom, s : Double, x : Double, y : Double, glide : Bool)
   let far = zmax(zabs(x - self.g_from[1]), zabs(y - self.g_from[2])) +
     zmax(self.nw, self.nh) * zabs(s - self.g_from[0])
   ignore(self.glide.start(1.0, @motion.move(over=far)))
+  self.moved()
 }
 
 ///|
