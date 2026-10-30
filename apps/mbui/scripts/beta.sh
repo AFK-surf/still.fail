@@ -309,18 +309,25 @@ linux() {
 # fetched back and the same bytes as made: from R2 itself through Cloudflare's API when there is a token (R2 reads what
 # was written, at once: no waiting for it to show), else from the public URL; a request the line from mini1 drops
 # tried again by curl itself (--retry: its network errors, not a wait for the object)
+# (into a file, and its bytes read only once curl said it got them all: piped to shasum, a fetch cut off by --max-time
+# was hashed as it stood, and the retries' bytes after it, linux x64's 36 MB taking 74 s from GitHub's runner on main
+# 57dd8b8e, said "not as made" of what was put whole. A fetch that stalls gives up by its speed, not a fixed time)
 check_put() {
-  local name=$1 file=$2 want got account
+  local name=$1 file=$2 want got= account back
   want=$(shasum -a 256 "$file" | cut -d' ' -f1)
+  back=$(mktemp)
   if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
     account=${CLOUDFLARE_ACCOUNT_ID:-$(curl -fsS --retry 4 --retry-all-errors -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts | grep -o '"id":"[0-9a-f]\{32\}"' | head -1 | cut -d'"' -f4)}
-    got=$(curl -fsS --retry 4 --retry-all-errors --max-time 60 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-      "https://api.cloudflare.com/client/v4/accounts/$account/r2/buckets/stillfail-releases/objects/$name" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+    curl -fsS --retry 4 --retry-all-errors --speed-limit 1024 --speed-time 30 -o "$back" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+      "https://api.cloudflare.com/client/v4/accounts/$account/r2/buckets/stillfail-releases/objects/$name" 2>/dev/null \
+      && got=$(shasum -a 256 "$back" | cut -d' ' -f1)
   else
-    got=$(curl -fsS --retry 4 --retry-all-errors --max-time 60 "$ORIGIN/releases/$name" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+    curl -fsS --retry 4 --retry-all-errors --speed-limit 1024 --speed-time 30 -o "$back" "$ORIGIN/releases/$name" 2>/dev/null \
+      && got=$(shasum -a 256 "$back" | cut -d' ' -f1)
   fi
+  rm -f "$back"
   [ "$got" = "$want" ] && return 0
-  echo "beta: $name is not as made in the bucket (sha256 $got, made $want)" >&2
+  echo "beta: $name is not as made in the bucket (sha256 ${got:-not fetched}, made $want)" >&2
   return 1
 }
 
