@@ -1017,7 +1017,12 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   } else {
     match self.ground_bg_of(i) {
       Some(b) if ground is Some(_) => b
-      _ => n.bg
+      // (worked out as it is painted: Ctx::bg_by)
+      _ =>
+        match self.drawn_entry(i) {
+          Some({ bg_by: Some(f), .. }) => f()
+          _ => n.bg
+        }
     }
   }
   // (in a page's bones, a ground or an edge that says something by its colour in theirs: bones.mbt)

@@ -20,6 +20,28 @@ pub fn nav_ground(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : Int
 }
 
 ///|
+/// Node `i`'s ground as nav_ground has it, worked out as it is painted (@ui.Ctx::bg_by): its easing to the pointer's
+/// ground and to the selected one read as it is drawn, so the row is not built again each frame it eases (docs/retained.md,
+/// motion in what is made once).
+pub fn nav_ground_on(c : @ui.Ctx, i : Int, key : String, hover : Bool, on : Bool, lit? : Int64) -> Unit {
+  let t = theme()
+  let lit = lit.unwrap_or(t.p.selected)
+  let hover_ink = t.p.hover
+  // (the same numbers animate kept them as: @kit.animate's keys)
+  let h = @motion.told(c, "\u{2}animate/" + key + "/hover", if hover { 1.0 } else { 0.0 }, spec=nav_fade)
+  let o = @motion.told(c, "\u{2}animate/" + key + "/on", if on { 1.0 } else { 0.0 }, spec=nav_fade)
+  c.bg_by(i, fn() {
+    let h = h.get()
+    let o = o.get()
+    if h <= 0.0 && o <= 0.0 {
+      0L
+    } else {
+      over(alpha(hover_ink, h * (1.0 - o)), alpha(lit, o))
+    }
+  })
+}
+
+///|
 /// What a state's ground changes over (vars.dur: 140 ms, ease out).
 // kept across runs: a value (no field of it changes)
 pub let nav_fade : @motion.Spec = @motion.tween(dur_ms, ease=Out)
@@ -39,9 +61,10 @@ pub fn nav_row(
   let l = theme().chat_list
   let id = c.id(key)
   let look = l.side_row.then(@ui.style(align~))
-  let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
+  let hover = c.lit(id) || c.pressed(id)
   nav_apart(c, more, fn() {
-    c.box(style=look.then(row_least_h()).then(@ui.style(bg=Data(ground))), id~, body) |> ignore
+    let i = c.box(style=look.then(row_least_h()), id~, body)
+    nav_ground_on(c, i, key, hover, on)
   })
   c.clicked(id)
 }
@@ -68,9 +91,10 @@ pub fn nav_apart(c : @ui.Ctx, more : Bool, row : () -> Unit) -> Unit {
 pub fn band_row(c : @ui.Ctx, key : String, on : Bool, body : () -> Unit) -> Bool {
   let l = theme().chat_list
   let id = c.id(key)
-  let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
-  let look = band_row_look.then(@ui.style(min_h=Fixed(l.band_h), px=room_of(l.band_pad), bg=Data(ground)))
-  c.box(style=look, id~, body) |> ignore
+  let hover = c.lit(id) || c.pressed(id)
+  let look = band_row_look.then(@ui.style(min_h=Fixed(l.band_h), px=room_of(l.band_pad)))
+  let i = c.box(style=look, id~, body)
+  nav_ground_on(c, i, key, hover, on)
   c.clicked(id)
 }
 

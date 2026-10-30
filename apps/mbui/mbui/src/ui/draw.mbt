@@ -164,6 +164,8 @@ priv struct Drawn {
   mut cycle : CycleLook?
   /// a look worked out as it is painted (Ctx::look_by), after `look`
   mut look_by : (() -> Look)?
+  /// its ground's colour worked out as it is painted (Ctx::bg_by), in place of its own
+  mut bg_by : (() -> Int64)?
 }
 
 ///|
@@ -390,6 +392,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     ground_bg: None,
     cycle: None,
     look_by: None,
+    bg_by: None,
   }
   // (held by the node: docs/retained.md, the way there's 1; in the build's entries too, for a row's build to know what
   // it said a look of: Ctx::nodes_end)
@@ -456,6 +459,15 @@ pub fn Ctx::look(self : Ctx, i : Int, look : Look) -> Unit {
   }
   let e = self.drawn_of(i)
   e.look = e.look.then(look)
+}
+
+///|
+/// Node `i`'s ground drawn in the colour `f` gives as it is painted (RRGGBBAA), in place of its own: read as it is
+/// drawn, not as it is built (a control's ground easing as the pointer comes and goes: docs/retained.md, motion in what
+/// is made once). What `f` reads (where a motion is, read by the clock; a signal) paints the frame again as it changes,
+/// nothing built or laid out (frame_watch.mbt). `f` works out the same for the same state and time.
+pub fn Ctx::bg_by(self : Ctx, i : Int, f : () -> Int64) -> Unit {
+  self.drawn_of(i).bg_by = Some(f)
 }
 
 ///|
