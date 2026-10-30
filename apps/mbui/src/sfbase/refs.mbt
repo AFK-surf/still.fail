@@ -51,12 +51,12 @@ fn ref_field(key : String) -> RefField {
         text: "",
         anchor: 0,
         caret: 0,
-        at_of: @signals.signal(""),
+        at_of: @signals.signal("", same=fn(a, b) { a == b }),
         at: @signals.signal(None),
         closed: @signals.signal(-1),
         active: @signals.signal(0),
         marks: @sf.LiveArray::from([]),
-        marks_of: @signals.signal(""),
+        marks_of: @signals.signal("", same=fn(a, b) { a == b }),
         marks_asked: "",
         found: None,
       }
@@ -174,7 +174,10 @@ pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, he
 fn refs_ask_marks(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit {
   let f = ref_field(key)
   if !now.contains("@[") {
-    f.marks.replace([])
+    // (said only as it changes: said each build, what read it would be built again each frame)
+    if !@signals.untracked(fn() { f.marks.is_empty() }) {
+      f.marks.replace([])
+    }
     f.marks_of.set(now)
     return
   }
