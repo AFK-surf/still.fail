@@ -869,7 +869,7 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
           remove=true,
           // its own picture (an image of a message quoted, a mark's screenshot) in its card as a picture waiting is,
           // where it flies from to its place in the message (flying_quotes)
-          picture?=quote_picture(src, spec.station, v).map(fn(own) {
+          picture?=quote_picture(c, src, spec.station, v).map(fn(own) {
             fn() {
               let (picture, f) = own
               let tile = picture_tile(c, picture, going_now(f), gone_up(f), text(f, "error"))
@@ -1601,17 +1601,27 @@ fn quote_picture_key(id : String) -> String {
 }
 
 ///|
-/// A quote's own picture, if it is an image (Chat.tsx QuotedThumb, PendingFile), and its file: the picture from here
-/// while it is this device's (a mark's screenshot), else the station's (an image of a message quoted).
-fn quote_picture(src : Source, station : String, q : Json?) -> (String, Json?)? {
+/// A quote's own picture, if it is an image or a video (Chat.tsx QuotedThumb, PendingFile), and its file: the picture
+/// from here while it is this device's (a mark's screenshot), else the station's (an image of a message quoted; a
+/// video's still, as its message draws it: what grows from here to its box there as it is sent, flight.mbt).
+fn quote_picture(c : @ui.Ctx, src : Source, station : String, q : Json?) -> (String, Json?)? {
   let own = field(q, "own")
-  guard own is Some(_) && file_kind(text(own, "name")) == "image" else { return None }
+  let kind = file_kind(text(own, "name"))
+  guard own is Some(_) && (kind == "image" || kind == "video") else { return None }
   match writing_pictures.get(text(own, "id")) {
     Some(picture) => Some((picture, own))
     None => {
       let done = field(own, "done")
-      guard text(done, "owner") != "" else { return None }
-      Some(((src.file)(station, text(done, "owner"), stored_name(text(done, "path"))), own))
+      let owner = text(done, "owner")
+      guard owner != "" else { return None }
+      if kind == "image" {
+        return Some(((src.file)(station, owner, stored_name(text(done, "path"))), own))
+      }
+      let a = attachment_of(done.unwrap())
+      match video_still(c, src, station, owner, a, station + "/" + owner + "/" + a.path) {
+        "" | "!" => None
+        still => Some((still, own))
+      }
     }
   }
 }

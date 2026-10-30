@@ -473,6 +473,18 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   // (downloading, else opened and let go, being brought after everything else: fill.ts)
   let kept = if flag(dl, "active") { None } else { keeping_of(src, here.station, owner, stored_name(a.path)) }
   let dl = if kept is Some(_) { kept } else { dl }
+  // sent from here (its still flying to it from the composer, sfbase's flight.mbt, which draws the still alone): its
+  // play mark and its name come in once it is here, not there at once as it lands
+  let landing = match flight_here(here) {
+    Some(f) =>
+      match @sfbase.flight_file_of(f, @sfbase.file_key(a)) {
+        Some(ff) => ff.picture != ""
+        None => false
+      }
+    None => false
+  }
+  let target = if landing { 0.0 } else { 1.0 }
+  let marks = @motion.animate(c, "video-marks/" + @sfbase.file_key(a), target, spec=@motion.tween(@sf.dur_ms, ease=Out), from=target)
   let b = c.box(style=video_frame.then(@ui.style(w=Fixed(w), h=Fixed(h))), id=open, fn() {
     if still != "" && still != "!" {
       c.layer(fn() {
@@ -481,12 +493,12 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
       })
       |> ignore
     }
-    c.box(style=video_middle, fn() {
+    let middle = c.box(style=video_middle, fn() {
       @sf.play_mark(c, video_play_side, @sf.video_shade) |> ignore
     })
-    |> ignore
+    c.look(middle, @ui.look(alpha=marks))
     c.layer(fn() {
-      c.box(style=video_foot_room, fn() {
+      let foot = c.box(style=video_foot_room, fn() {
         c.box(style=video_name_band, fn() {
           let coming = flag(dl, "active") || kept is Some(_)
           if coming {
@@ -505,7 +517,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
         })
         |> ignore
       })
-      |> ignore
+      c.look(foot, @ui.look(alpha=marks))
     })
     |> ignore
   })

@@ -1,0 +1,13 @@
+# The wide frame: an agent's video right clicked and quoted (MBUI_FIXTURE=chat-download), sent with no words: its still
+# grows from its tile in the quote's card in the composer to its box in the message's card (sfpages composer.mbt
+# flying_quotes, sfbase flight.mbt). MBUI_WIN=1280x800 MBUI_FILM_PLATFORM=0.
+timeout 20000
+until 演示录屏.mp4
+wait 600
+rightclick 演示录屏.mp4
+wait 400
+tap 引用
+wait 900
+tap icon:arrow-up
+wait 1500
+exit
