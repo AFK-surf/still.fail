@@ -1968,6 +1968,15 @@ pub let peek_card_px : Double = 280.0
 pub let peek_card_w : @ui.Len = Fixed(peek_card_px)
 
 ///|
+/// How far in from the card's top and sides its preview lies (its corners concentric with the card's).
+/// (S1 in its style: screen_links.mbt peek_card)
+pub let peek_card_in_px : Double = 4.0
+
+///|
+/// The preview's width: the card's less its room on both sides.
+pub let peek_frame_px : Double = peek_card_px - 2.0 * peek_card_in_px
+
+///|
 /// A link's card's mark, 30 wide (36 high: S9), as the web's.
 pub let link_mark_w : @ui.Len = Fixed(30.0)
 

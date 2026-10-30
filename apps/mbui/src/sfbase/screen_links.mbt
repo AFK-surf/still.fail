@@ -43,33 +43,42 @@ pub let globe_mark : LinkMark = { name: "web" }
 // ── the cards' looks (ScreenLinks.kt ScreenLinkCard, AdbLinks.kt AdbLinkCard) ──
 
 ///|
-/// A card: a row 236 wide, 8 round, on the chat's bubble ground; 10 in across, 8 down; its mark and its words 10 apart.
+/// A card: a row 236 wide, a card's corner (the ladder's 26: @sf.card's), on the chat's bubble ground; 16 in across
+/// (its mark's 24 in its room 3 in from it, about a card's words' 20), 12 down; its mark and its words 10 apart.
 // kept across runs: a value (no field of it changes)
 pub let link_card : @ui.Style = @ui.style(
   row=true,
   w=@sf.link_card_w,
-  px=S2_5,
-  py=S2,
+  px=S4,
+  py=S3,
   gap=S2_5,
   align=ACenter,
-  radius=Lg,
+  radius=Xl3,
   bg=Neutral,
 )
 
 ///|
-/// A screen's card with its preview: a column 280 wide, the preview across its top, clipped to its corners.
+/// A screen's card with its preview: a column 280 wide, a card's corner (the ladder's 26: @sf.card's), the preview 4 in
+/// from its top and sides.
 // kept across runs: a value (no field of it changes)
-pub let peek_card : @ui.Style = @ui.style(w=@sf.peek_card_w, radius=Lg, bg=Neutral, clip=true)
+pub let peek_card : @ui.Style = @ui.style(
+  w=@sf.peek_card_w,
+  pt=S1,
+  px=S1,
+  radius=Xl3,
+  bg=Neutral,
+)
 
 ///|
-/// The words under a preview: 10 in across, 8 down.
+/// The words under a preview: a card's words' 20 in from its sides (the card's 4 and 16 of their own), 12 under the
+/// preview, 16 over the card's foot.
 // kept across runs: a value (no field of it changes)
-pub let peek_card_words : @ui.Style = @ui.css("w=Full px=S2_5 py=S2")
+pub let peek_card_words : @ui.Style = @ui.css("w=Full px=S4 pt=S3 pb=S4")
 
 ///|
-/// The preview: on its ground, its mark in its middle until a picture comes.
+/// The preview: on its ground, its corners concentric with the card's, its mark in its middle until a picture comes.
 // kept across runs: a value (no field of it changes)
-pub let peek_frame : @ui.Style = @ui.css("w=Full align=ACenter justify=JCenter bg=Wash clip")
+pub let peek_frame : @ui.Style = @ui.css("w=Full align=ACenter justify=JCenter radius=Inner bg=Wash clip")
 
 ///|
 /// A mark's room: 30 by 36.
@@ -523,7 +532,7 @@ pub fn screen_peek(
 /// taller than the preview, else as high, its middle across.
 pub fn peek_picture(c : @ui.Ctx, key : String, shape : Double, ratio : Double) -> Unit {
   if shape > 0.0 && shape < ratio {
-    c.image(key, w=Fill(1.0), h=Px(@sf.peek_card_px / shape), fit=FitFill, bg=0L, fade=false)
+    c.image(key, w=Fill(1.0), h=Px(@sf.peek_frame_px / shape), fit=FitFill, bg=0L, fade=false)
     |> ignore
   } else {
     c.image(key, w=Fill(1.0), h=Fill(1.0), fit=FitCover, bg=0L, fade=false) |> ignore

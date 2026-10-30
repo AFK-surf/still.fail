@@ -148,7 +148,7 @@ export function ScreenCard({ href, words }: { href: string; words: ReactNode | n
           <span className={css.peekText}>{text}</span>
         </span>
       ) : (
-        <span className={chatCss.fileCard} data-card="">
+        <span className={`${chatCss.fileCard} ${css.tileCard}`} data-card="">
           <ScreenTile kind={card?.kind} />
           {text}
         </span>
