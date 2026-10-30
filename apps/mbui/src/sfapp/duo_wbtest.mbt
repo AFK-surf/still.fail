@@ -323,16 +323,16 @@ test "an iPhone Duo on its side or upright, whatever the sidebar's width: the si
     for own in [@sfdesk.side_min, 240.0, @sfdesk.tape_side_max] {
       let at = "\{w}x\{h} \{own}"
       let t = native_chat(w, h, true, side~)
-      @sfdesk.wide.side_w = own
+      @sfdesk.wide.side_w.set(own)
       t.frame()
       // the sidebar in use, what shows of the page beside it a press to bring it over
-      assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side, msg=at)
+      assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side, msg=at)
       assert_true(t.nav_said().contains("workspace-switch"), msg=at)
       guard covered(t, "收起侧边栏") is Some((px, _)) else { fail("\{at}: the page beside the sidebar not to be brought over") }
       // pressed: the page in use, the sidebar a strip at the window's left
       t.tap(px + 20.0, 400.0)
       t.run_for(@ui.move_most_ms)
-      assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page, msg=at)
+      assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page, msg=at)
       assert_false(t.nav_said().contains("workspace-switch"), msg=at)
       assert_true(near_at(covered(t, "展开侧边栏").map(fn(e) { e.1 }), @sfdesk.tape_shows), msg=at)
     }
@@ -501,7 +501,7 @@ test "an iPhone Duo on its side: details come over without taking another strip 
   let to = composer_w(t)
   assert_true((to - from).abs() < 0.5, msg="chat keeps its width: \{from} to \{to}")
   assert_true((first - from).abs() < 0.5, msg="no intermediate squeeze: \{from} to \{first}")
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel)
 }
 
 ///|
@@ -512,17 +512,17 @@ test "an iPhone Duo on its side: the side panel closed while in use slides off a
   open_link_in(src, "https://still.fail/o/ws1/st1/s-c1?service=j-web")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel)
   let (x0, _, _, _) = t.holes()[0]
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
   side_change(r, "clear", None)
   t.run_for(@ui.move_most_ms / 2.0)
   // on its way: the page coming back, the panel's page still drawn, further right
   let holes = t.holes()
-  assert_eq(holes.length(), 1, msg="the panel's page as it goes (\{@sfdesk.wide.tape_at})")
+  assert_eq(holes.length(), 1, msg="the panel's page as it goes (\{@sfdesk.wide.tape_at.get()})")
   assert_true(holes[0].0 > x0 + 100.0 && holes[0].0 < w, msg="from \{x0}, on its way at \{holes[0].0}")
   t.run_for(@ui.move_most_ms * 2.0)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   // there: gone
   assert_eq(t.holes().length(), 0)
   assert_eq(t.corner_faults(), [])
@@ -738,7 +738,7 @@ test "non-native workspace panels retain their existing tall layout" {
 ///|
 test "Duo narrow chat reminder puts dismiss below its words" {
   let t = native_chat(469.0, 681.0, true, side=84.0, mode="chat-need")
-  @sfdesk.wide.tape_ask = Some(@sfdesk.TapePane::Page)
+  @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Page))
   t.frame()
   t.run_for(@ui.move_most_ms)
   let (_, y) = t.find_last("忽略").unwrap()
@@ -749,7 +749,7 @@ test "Duo narrow chat reminder puts dismiss below its words" {
 ///|
 test "Duo short system column keeps the complete chat menu reachable" {
   let t = native_chat(469.0, 681.0, true, side=84.0)
-  @sfdesk.wide.tape_ask = Some(@sfdesk.TapePane::Page)
+  @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Page))
   t.frame()
   t.run_for(@ui.move_most_ms)
   assert_eq(nav_icon_of(t, "page/chat/info"), Some(@sf.icon_path("more")))

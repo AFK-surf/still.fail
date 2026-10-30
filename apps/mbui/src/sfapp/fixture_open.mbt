@@ -247,7 +247,7 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   }
   // ⌘/'s shortcuts at a glance (wide_keys.mbt keys_dialog)
   if mode == "keys-dialog" {
-    @sfdesk.wide.keys_open = true
+    @sfdesk.wide.keys_open.set(true)
   }
 }
 

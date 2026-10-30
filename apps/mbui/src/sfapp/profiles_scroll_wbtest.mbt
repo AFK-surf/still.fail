@@ -11,7 +11,7 @@ test "profiles: the sidebar thumb is outside its rows, dragging it scrolls witho
   app.nav.replace(Place("profiles"))
   t.draw()
   let row = t.boxes().iter().find_first(fn(b) { b.x == 56.0 && b.w == 232.0 && b.h == 54.0 }).unwrap()
-  let width = @sfdesk.wide.side_w
+  let width = @sfdesk.wide.side_w.get()
   let edge = @sfdesk.rail_w + width
   t.wheel(260.0, 200.0, 100.0)
   t.run_for(@ui.scrollbar_fade_ms)
@@ -25,8 +25,8 @@ test "profiles: the sidebar thumb is outside its rows, dragging it scrolls witho
   t.move(x, y)
   t.drag(x, y, x, y - 80.0)
   assert_true(profiles_side_bar(t).1 < bar.1)
-  assert_eq(@sfdesk.wide.side_w, width)
-  assert_false(@sfdesk.wide.folded)
+  assert_eq(@sfdesk.wide.side_w.get(), width)
+  assert_false(@sfdesk.wide.folded.get())
   t.drag(edge + 2.0, 200.0, edge + 62.0, 200.0)
-  assert_eq(@sfdesk.wide.side_w, width + 60.0)
+  assert_eq(@sfdesk.wide.side_w.get(), width + 60.0)
 }

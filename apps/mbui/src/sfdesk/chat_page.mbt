@@ -185,7 +185,7 @@ fn archive(src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   }
   if here() {
     @sfbase.close_page(Chat(r)) |> ignore
-    wide.landed = ""
+    wide.landed.set("")
   }
   let p : Map[String, Json] = {
     "station": Json::string(r.station),

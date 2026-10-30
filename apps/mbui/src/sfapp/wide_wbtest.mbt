@@ -1143,13 +1143,13 @@ test "wide: to 连接 or 用量 the block closes holding the sidebar it had, as 
   app.nav.replace(Place("stations"))
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("添加 station") is Some(_))
-  let s = @sfdesk.wide.side_w
+  let s = @sfdesk.wide.side_w.get()
   t.click(Button, label="用量")
   // halfway closed: the stations' list as it was
   t.run_for(@ui.move_most_ms / 2.0)
   assert_true(t.find("添加 station") is Some(_), msg="the stations' list as it closes")
   assert_true(t.find("新建对话") is None, msg="not the chats' list")
-  assert_eq(@sfdesk.wide.side_w, s)
+  assert_eq(@sfdesk.wide.side_w.get(), s)
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("添加 station") is None && t.find("新建对话") is None)
   // on to 连接: closed, nothing in it drawn
@@ -1185,7 +1185,7 @@ test "wide: 文件 as the web's Finder: 个人收藏, each station, 团队共享
   t.frame()
   assert_eq(named(calls, "drive.folders").length(), 1)
   // a shared folder opens in the pane, in columns (the sidebar's 文档, not the pane's)
-  let (dx, dy) = t.locate("文档").filter(fn(p) { p.0 < @sfdesk.rail_w + @sfdesk.wide.side_w })[0]
+  let (dx, dy) = t.locate("文档").filter(fn(p) { p.0 < @sfdesk.rail_w + @sfdesk.wide.side_w.get() })[0]
   t.tap(dx, dy)
   t.run_for(@ui.move_most_ms)
   match app.nav.top() {

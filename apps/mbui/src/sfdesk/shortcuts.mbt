@@ -19,7 +19,7 @@ pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
   let d = @sf.dialog(
     c,
     "keys-dialog",
-    wide.keys_open,
+    wide.keys_open.get(),
     @sf.t("web-main.shortcuts.title"),
     close_label=@sf.t("common.close"),
     footer?,
@@ -42,7 +42,7 @@ pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
       |> ignore
     },
   )
-  wide.keys_open = d && !change.val
+  wide.keys_open.set(d && !change.val)
   if change.val {
     open_settings_at(@settings.Route::Shortcuts)
   }

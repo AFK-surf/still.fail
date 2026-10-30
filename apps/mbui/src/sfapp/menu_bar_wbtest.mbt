@@ -39,11 +39,11 @@ test "the menu bar: the system's menus, the pages' actions with their keys here,
 test "the menu bar's items are their keys: 收起/展开侧边栏 chosen folds the sidebar, as ⌘\\ does" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  let before = @sfdesk.wide.folded
+  let before = @sfdesk.wide.folded.get()
   t.post(@hostapi.system_channel, "{\"menu\":\"sidebar.toggle\"}")
   t.frame()
-  assert_eq(@sfdesk.wide.folded, !before)
+  assert_eq(@sfdesk.wide.folded.get(), !before)
   // done once: the frame after does nothing more
   t.frame()
-  assert_eq(@sfdesk.wide.folded, !before)
+  assert_eq(@sfdesk.wide.folded.get(), !before)
 }

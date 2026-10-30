@@ -267,7 +267,7 @@ test "small with a mouse, the app's keys: ⌘N a new chat; ⌘, settings; ⌘/ t
   let t = small_mouse(calls)
   t.key(@ui.key_of_char('/'), mods=@ui.mod_cmd)
   t.frame()
-  assert_true(@sfdesk.wide.keys_open)
+  assert_true(@sfdesk.wide.keys_open.get())
 }
 
 ///|

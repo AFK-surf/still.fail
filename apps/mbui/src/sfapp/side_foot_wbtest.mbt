@@ -40,7 +40,7 @@ fn settings_at_end(h : Double, locale? : String = "", newer? : String = "") -> @
   t.run_for(@ui.move_most_ms * 2.0)
   assert_true(app.nav.top() == Setting(@settings.Route::About))
   // (its page beside the sidebar, the sidebar still in use)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   // (said once 关于 has asked still.fail cloud: what it answered, none newer, said over)
   if newer != "" {
     update.available.set(Some({ "versionName": Json::string(newer) }))

@@ -127,14 +127,14 @@ test "on the tape with the window's buttons in the app's top row (a Mac's) what 
     assert_eq(left - (buttons_in + buttons_w), buttons_in, msg=at)
     // the page in use: the sidebar's strip at the left holds them, the page past it
     page_over(t, w)
-    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page, msg=at)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page, msg=at)
     assert_true(near_at(covered(t, "展开侧边栏").map(fn(e) { e.1 }), left), msg=at)
     // its side panel in use: the page's strip at the left holds them; at the right as before
     tap_said(t, "打开侧栏")
     // (the pointer gone: no tip shown under it as the panel comes, which back would close first)
     t.leave()
     t.run_for(@ui.move_most_ms)
-    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel, msg=at)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel, msg=at)
     assert_true(near_at(covered(t, "收起侧边栏").map(fn(e) { e.1 }), left), msg=at)
     t.back()
     t.run_for(@ui.move_most_ms)
@@ -153,25 +153,25 @@ test "on the tape the page or the side panel in use has the window but a strip o
     let room = if platform == 2 { "medium" } else { "" }
     let t = tape_chat(platform, w, 840.0, width=room, height=room)
     // the sidebar in use: its own width (the person's, 240 at first), the page beside it the rest of the window
-    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side, msg=at)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side, msg=at)
     guard covered(t, "收起侧边栏") is Some((px, _)) else { fail("\{at}: no page beside the sidebar") }
     assert_true(px > @sfdesk.rail_w + 240.0 && px < @sfdesk.rail_w + 240.0 + 4.0 * apart, msg="\{at}: the page from \{px}")
     let (rx, _, rw, _) = t.rect_of("首页的列表改成按天分组").unwrap()
     assert_true(rx > inside && rx + rw < px - apart, msg="\{at}: the row's words at \{rx}, \{rw}")
     // the page in use: the sidebar a strip at the left, the page to 6 from the window's right
     page_over(t, w)
-    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page, msg=at)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page, msg=at)
     assert_true(near_at(covered(t, "展开侧边栏").map(fn(e) { e.1 }), shows), msg=at)
     // its side panel open: a strip at the right too, the page between the two; the panel in use, the page a strip
     tap_said(t, "打开侧栏")
     // (the pointer gone: no tip shown under it as the panel comes, which back would close first)
     t.leave()
     t.run_for(@ui.move_most_ms)
-    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel, msg=at)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel, msg=at)
     assert_true(near_at(covered(t, "收起侧边栏").map(fn(e) { e.1 }), shows), msg=at)
     t.back()
     t.run_for(@ui.move_most_ms)
-    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page, msg=at)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page, msg=at)
     assert_true(near_at(covered(t, "展开侧边栏").map(fn(e) { e.1 }), shows), msg=at)
     assert_true(near_at(covered(t, "打开侧栏").map(fn(e) { e.0 }), w - shows), msg=at)
   }
@@ -185,20 +185,20 @@ test "on the tape the sidebar left wide on a larger screen opens at the tape's m
     let at = "platform \{platform}"
     let t = tape_chat(platform, 840.0 - 1.0, 840.0, width=room, height=room)
     // the person's width the wide frame's most (dragged so on a larger screen): the page beside the tape's most
-    @sfdesk.wide.side_w = @sfdesk.side_max
+    @sfdesk.wide.side_w.set(@sfdesk.side_max)
     t.frame()
     let most = @sfdesk.rail_w + @sfdesk.tape_side_max
     let page_at = fn() raise { said_at(t, "收起侧边栏").unwrap().0 }
     assert_true(page_at() > most && page_at() < most + 4.0 * apart, msg="\{at}: the page from \{page_at()}")
-    assert_eq(@sfdesk.wide.side_w, @sfdesk.side_max, msg=at)
+    assert_eq(@sfdesk.wide.side_w.get(), @sfdesk.side_max, msg=at)
     // dragged wider from there: no further than the tape's most; narrower, from where it shows
     let (ex, ey) = edge_middle(t, "调整侧边栏宽度")
     drag_slowly(t, ex, ey, 60.0, hold=true)
     t.frame()
-    assert_eq(@sfdesk.wide.side_w, @sfdesk.tape_side_max, msg=at)
+    assert_eq(@sfdesk.wide.side_w.get(), @sfdesk.tape_side_max, msg=at)
     drag_slowly(t, ex, ey, -40.0, hold=true)
     t.frame()
-    assert_eq(@sfdesk.wide.side_w, @sfdesk.tape_side_max - 40.0, msg=at)
+    assert_eq(@sfdesk.wide.side_w.get(), @sfdesk.tape_side_max - 40.0, msg=at)
   }
 }
 
@@ -226,14 +226,14 @@ test "on the tape the edge beside the page, the sidebar's or the side panel's in
       t.move(ex + 10.0 * i.to_double(), ey)
       t.run_for(slow_drag_ms)
     }
-    assert_eq(@sfdesk.wide.side_w, 300.0, msg=at)
+    assert_eq(@sfdesk.wide.side_w.get(), 300.0, msg=at)
     assert_true((page_at() - (before + 60.0)).abs() < 1.0e-9, msg=at)
     assert_true(t.find("调整侧边栏宽度") is None, msg=at)
     t.release(ex + 60.0, ey)
     t.frame()
-    assert_eq(@sfdesk.wide.side_w, 300.0, msg=at)
+    assert_eq(@sfdesk.wide.side_w.get(), 300.0, msg=at)
     assert_true((page_at() - (before + 60.0)).abs() < 1.0e-9, msg=at)
-    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side, msg=at)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side, msg=at)
     // the page in use: no edge (the page as wide as the window leaves past the strips)
     page_over(t, 720.0)
     assert_true(said_at(t, "调整侧边栏宽度") is None, msg=at)
@@ -243,7 +243,7 @@ test "on the tape the edge beside the page, the sidebar's or the side panel's in
     // (the pointer gone: no tip shown under it as the panel comes, which back would close first)
     t.leave()
     t.run_for(@ui.move_most_ms)
-    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel, msg=at)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel, msg=at)
     let page_end = fn() raise { covered(t, "收起侧边栏").unwrap().1 }
     let shown = page_end()
     let (px, py) = edge_middle(t, "调整侧栏宽度")
@@ -252,7 +252,7 @@ test "on the tape the edge beside the page, the sidebar's or the side panel's in
     t.release(px + 200.0, py)
     t.frame()
     assert_true((page_end() - (shown + 200.0)).abs() < 1.0e-9, msg=at)
-    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel, msg=at)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel, msg=at)
   }
 }
 
@@ -262,10 +262,10 @@ test "on the tape a finger swiped across the edge at once, not held first, leave
   let (ex, ey) = edge_middle(t, "调整侧边栏宽度")
   drag_slowly(t, ex, ey, 60.0)
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.side_w, 240.0)
+  assert_eq(@sfdesk.wide.side_w.get(), 240.0)
   drag_slowly(t, ex, ey, 60.0, hold=true)
   t.frame()
-  assert_eq(@sfdesk.wide.side_w, 300.0)
+  assert_eq(@sfdesk.wide.side_w.get(), 300.0)
 }
 
 ///|
@@ -278,20 +278,20 @@ test "on the tape the edge beside the page pressed where it lies over the page: 
     let (ex, ey) = edge_middle(t, "调整侧边栏宽度")
     drag_slowly(t, ex, ey, 60.0, hold=true)
     t.frame()
-    assert_eq(@sfdesk.wide.side_w, 300.0, msg=at)
+    assert_eq(@sfdesk.wide.side_w.get(), 300.0, msg=at)
     // in the gap before the page: pressed once, nothing; twice, its own width, the sidebar still in use
     let gap = page_from() - 4.0
     t.tap(gap, ey)
     t.frame()
-    assert_eq(@sfdesk.wide.side_w, 300.0, msg=at)
+    assert_eq(@sfdesk.wide.side_w.get(), 300.0, msg=at)
     t.tap(gap, ey)
     t.frame()
-    assert_eq(@sfdesk.wide.side_w, 240.0, msg=at)
-    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side, msg=at)
+    assert_eq(@sfdesk.wide.side_w.get(), 240.0, msg=at)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side, msg=at)
     // just past the gap, on what shows of the page (the edge there as well): the page comes over
     t.tap(page_from() + 1.0, ey)
     t.run_for(@ui.move_most_ms)
-    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page, msg=at)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page, msg=at)
   }
 }
 
@@ -299,10 +299,10 @@ test "on the tape the edge beside the page pressed where it lies over the page: 
 test "on the tape the sidebar at first, the page showing beside it: a click there brings it over, nothing under it pressed" {
   let t = tape_chat(0, 720.0, 800.0)
   assert_true(@sfdesk.wide.tape)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   // what shows of the page clicked: it comes over, what was under the click not pressed
   page_over(t, 720.0)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   assert_true(on_first_chat())
   // the page past what shows of the sidebar, the row past the window's left edge
   let shows = @sfdesk.tape_shows
@@ -312,7 +312,7 @@ test "on the tape the sidebar at first, the page showing beside it: a click ther
   assert_true(rx < shows, msg="the row's words at \{rx}")
   // clicked where the sidebar shows: it comes over, the row's chat not opened
   t.tap(shows / 2.0, ry)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   assert_true(on_first_chat())
 }
 
@@ -325,26 +325,26 @@ test "on the tape a chat chosen in the sidebar shows beside it, the sidebar stil
     _ => fail("no chat open")
   }
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   // another chosen: shown in its place, the sidebar where it is
   t.tap_text("整理发布清单")
   t.run_for(@ui.move_most_ms)
   assert_true(app.nav.top() is Chat({ session: "s-c1", .. }))
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   // what shows of the page pressed: it comes over
   page_over(t, 720.0)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   assert_true(app.nav.top() is Chat({ session: "s-c1", .. }))
   // the sidebar's toggle (⌘\, its place pressed again, ⌘K's command): nothing folds, nothing moves
   @sfdesk.sidebar_toggle()
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   assert_false(@sfdesk.side_folded())
   t.back()
   t.run_for(@ui.move_most_ms)
   @sfdesk.sidebar_toggle()
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   assert_false(@sfdesk.side_folded())
 }
 
@@ -363,7 +363,7 @@ test "on the tape a chat brought over while its view is on its way: the page com
   t.draw()
   // the workspace, its list and the chat, their topics one after another
   t.run_for(tape_core_late_ms * 6.0 + @ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   assert_true(read("s-c1"))
   // (where the tape is: the sidebar's first row)
   let (nx, _) = t.find("新建对话").unwrap()
@@ -374,11 +374,11 @@ test "on the tape a chat brought over while its view is on its way: the page com
   t.run_for(tape_core_late_ms / 2.0)
   assert_true(app.nav.top() is Chat({ session: "s-c2", .. }), msg="the stack has it")
   assert_true(read("s-c1") && !read("s-c2"), msg="the chat before stays")
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   assert_eq(t.find("新建对话").unwrap().0, nx)
   // its view come: the page shows it, and comes over
   t.run_for(tape_core_late_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   assert_true(read("s-c2") && !read("s-c1"), msg="the chat chosen shown, the one before left")
   t.run_for(@ui.move_most_ms)
   let (x, _) = t.find("新建对话").unwrap()
@@ -417,7 +417,7 @@ test "on the tape the sidebar's list scrolled with a finger: the page beside dra
   t.keep_parts(true)
   // (drawn as parts and rows are drawn when kept, built: what drawing them again is held to)
   t.draw()
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   let left = match covered(t, @sf.t("web-main.sidebar.close")) {
     Some((l, _)) => l
     None => fail("no page beside the sidebar")
@@ -482,7 +482,7 @@ test "on the tape a chat's side panel is a panel of its own after the page's: op
   // (the pointer gone: no tip shown under it as the panel comes, which back would close first)
   t.leave()
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel)
   // the panel whole at the window's right, the page's edge showing at its left
   match said_at(t, "收起侧栏") {
     Some((x, _, w, _)) => assert_true(x + w <= 720.0 && x + w > 600.0, msg="its switch at \{x} \{w}")
@@ -491,15 +491,15 @@ test "on the tape a chat's side panel is a panel of its own after the page's: op
   // back: the page comes over, the panel's edge showing at its right
   t.back()
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   // what shows of the panel tapped: it comes over again, nothing in it pressed
   t.tap(720.0 - @sfdesk.tape_shows / 2.0, 400.0)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel)
   t.run_for(@ui.move_most_ms)
   // closed with its switch: the page comes over
   tap_said(t, "收起侧栏")
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   assert_true(said_at(t, "收起侧栏") is None)
 }
 
@@ -509,13 +509,13 @@ test "on the tape back brings the sidebar over from the chat, and with the chats
   let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
   assert_true(@sfdesk.wide.tape)
   page_over(t, 690.0)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   t.back()
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   assert_true(on_first_chat())
   t.run_for(@ui.move_most_ms)
   t.back()
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   assert_true(on_first_chat())
 }
 
@@ -550,14 +550,14 @@ test "on the tape the system's back gesture brings the sidebar over as it goes, 
   t.back_gesture(200.0, false)
   let (x, _, _, _) = t.rect_of(words).unwrap()
   assert_true(x > page_x + 150.0, msg="called off at \{x}, the page at rest at \{page_x}")
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   t.run_for(@ui.move_most_ms)
   assert_eq(t.rect_of(words).unwrap().0, page_x)
   // gone through 200 along: on from there, the sidebar over
   t.back_gesture(200.0, true)
   let (x, _, _, _) = t.rect_of(words).unwrap()
   assert_true(x > page_x + 150.0, msg="gone through at \{x}, the page at rest at \{page_x}")
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   t.run_for(@ui.move_most_ms)
   // (the page beside the sidebar, past its own width)
   assert_true(t.rect_of(words).unwrap().0 > @sfdesk.rail_w + 240.0)
@@ -572,12 +572,12 @@ test "on the tape back from another place's sidebar goes to the chats', as a pho
   @sfdesk.open_settings()
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.lit_place(), "settings")
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   assert_true(t.takes_back())
   t.back()
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.lit_place(), "chats")
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   assert_false(t.takes_back())
 }
 
@@ -591,7 +591,7 @@ test "on the tape a chat opened from the page in use goes over it, as on a phone
   t.run_for(page_local_ms + @ui.move_most_ms)
   assert_eq(app.nav.depth(), 3)
   assert_true(app.nav.top_over())
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   let (rest_x, _, _, _) = t.rect_of("好的，我来处理。").unwrap()
   // the system's back gesture called off: it went with the finger, and comes back
   t.back_gesture(200.0, false)
@@ -604,28 +604,28 @@ test "on the tape a chat opened from the page in use goes over it, as on a phone
   // (the pointer gone: no tip shown under it as the panel comes, which back would close first)
   t.leave()
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel)
   t.back()
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   assert_eq(app.nav.depth(), 3)
   // back: the chat it was opened from, the page still in use
   t.back()
   t.run_for(@ui.move_most_ms)
   assert_eq(app.nav.depth(), 2)
   assert_true(on_first_chat())
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   // back again: the sidebar, the chat chosen there kept
   t.back()
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   assert_true(on_first_chat())
   // chosen in the sidebar: in its place, nothing over it, beside the sidebar still in use
   t.tap_text("首页的列表改成按天分组")
   t.run_for(@ui.move_most_ms)
   assert_eq(app.nav.depth(), 2)
   assert_false(app.nav.top_over())
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
 }
 
 ///|
@@ -635,7 +635,7 @@ test "on the tape a finger dragging across the one in use moves no tape: the tap
   let (mx, my) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   t.drag(mx, my, mx + 300.0, my)
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   let (again, _) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   assert_eq(again, mx)
 }
@@ -711,17 +711,17 @@ test "on the tape what shows of the page dragged across comes with the finger; l
   let (page_x, _) = t.find(words).unwrap()
   t.back()
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   assert_eq(t.find(words).unwrap().0, side_x)
   // half the way across, held: the page with the finger, between where it rests either way, the sidebar still in use
   let way = side_x - page_x
   drag_slowly(t, 650.0, 400.0, -way / 2.0, up=false)
   let (held_x, _) = t.find(words).unwrap()
   assert_true(held_x < side_x - way / 4.0 && held_x > page_x, msg="held at \{held_x}: \{page_x}..\{side_x}")
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   // let go: the page comes over, nothing in it pressed
   t.release(650.0 - way / 2.0, 400.0)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   t.run_for(@ui.move_most_ms)
   assert_eq(t.find(words).unwrap().0, page_x)
   assert_true(on_first_chat())
@@ -733,14 +733,14 @@ test "on the tape what shows of the page dragged a little and let go: the tape b
   let words = "做完了：列表、跳到最新的按钮"
   let (side_x, _) = t.find(words).unwrap()
   drag_slowly(t, 650.0, 400.0, -40.0)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   t.run_for(@ui.move_most_ms)
   assert_eq(t.find(words).unwrap().0, side_x)
   // the page in use: what shows of the sidebar dragged right past a third of the way brings it over
   page_over(t, 690.0)
   let (page_x, _) = t.find(words).unwrap()
   drag_slowly(t, 40.0, 400.0, (side_x - page_x) * 0.6)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
 }
 
 ///|
@@ -998,18 +998,18 @@ test "on the tape a page's head is a chat's bar: its title where a chat's stands
 test "on the tape 新建对话 in the sidebar brings its page over, as ⌘N does" {
   // an opened fold's inner screen upright, a finger
   let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   t.tap_text("新建对话")
   assert_true(app.nav.top() is NewChat)
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   // back: the sidebar again
   t.back()
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   @sfdesk.new_chat()
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
 }
 
 ///|
@@ -1037,11 +1037,11 @@ test "on the tape a passage held in the page beside the sidebar brings the page 
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
   // (the page beside kept as it was drawn while nothing changes it, as on a device: held, built)
   t.keep_parts(true)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.draw()
   assert_true(pk.ts != "")
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   t.run_for(@ui.move_most_ms)
   // still picked, its bar over it where the page is now
   assert_true(pk.ts != "")
@@ -1049,7 +1049,7 @@ test "on the tape a passage held in the page beside the sidebar brings the page 
   t.draw()
   assert_true(pk.ts == "")
   assert_true(t.find("添加说明（可选）") is Some(_))
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
 }
 
 ///|
@@ -1179,16 +1179,16 @@ test "on the tape a passage left picked keeps nothing from coming over: the side
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.draw()
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   t.run_for(@ui.move_most_ms)
   assert_true(pk.ts != "")
   // what shows of the sidebar pulled across, the passage still picked: the sidebar comes over, and stays
   t.drag(30.0, 400.0, 500.0, 400.0)
   assert_true(pk.ts != "")
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
 }
 
 ///|
@@ -1214,7 +1214,7 @@ fn tape_settings(w : Double, open : () -> Unit, first? : Bool = false) -> @ui.Te
 /// of the sidebar at its left, and their end in the window.
 fn settings_page_whole(t : @ui.Tester, words : String, w : Double) -> Bool {
   match t.rect_of(words) {
-    Some((x, _, tw, _)) => x >= @sfdesk.tape_shows && x + tw <= w && @sfdesk.wide.tape_at == @sfdesk.TapePane::Page
+    Some((x, _, tw, _)) => x >= @sfdesk.tape_shows && x + tw <= w && @sfdesk.wide.tape_at.get() == @sfdesk.TapePane::Page
     None => false
   }
 }
@@ -1223,23 +1223,23 @@ fn settings_page_whole(t : @ui.Tester, words : String, w : Double) -> Bool {
 test "on the tape a settings page opened at one of its own (⌘K's, the bell's 通知设置, 快捷键 from its dialog) shows beside their list, pressed whole in the window" {
   let t = tape_settings(600.0, fn() { @sfdesk.open_settings_at(@settings.Route::LocalStation) })
   assert_true(@sfdesk.wide.tape)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   page_over(t, 600.0)
-  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{@sfdesk.wide.tape_at} \{t.rect_of(local_none)}")
+  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of(local_none)}")
 }
 
 ///|
 test "on the tape a settings page a fixture opens as the app begins (a scripted run's, a picture's) is the one in use, as a row of their list opens it: whole in the window" {
   let t = tape_settings(600.0, fn() { open_fixture_mode("settings-local-station") }, first=true)
   assert_true(@sfdesk.wide.tape)
-  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{@sfdesk.wide.tape_at} \{t.rect_of(local_none)}")
+  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of(local_none)}")
 }
 
 ///|
 test "on the tape the gear's settings: their list in use, its first row's page showing beside it" {
   let t = tape_settings(600.0, fn() { open_page(Settings) })
   assert_true(@sfdesk.wide.tape)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
 }
 
 ///|
@@ -1249,22 +1249,22 @@ let local_none : String = "本机没有单独安装的 station"
 ///|
 test "on the tape a settings page chosen in their list shows beside it, pressed is the one in use; from a page of theirs a level further in, it stays in use: whole in the window" {
   let t = tape_settings(600.0, fn() { open_page(Settings) })
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   // a row of their list: 记忆, beside it; what shows of it pressed, over
   t.click(Link, label="记忆")
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   page_over(t, 600.0)
-  assert_true(settings_page_whole(t, "全局记忆 · 项目记忆", 600.0), msg="\{@sfdesk.wide.tape_at} \{t.rect_of("全局记忆 · 项目记忆")}")
+  assert_true(settings_page_whole(t, "全局记忆 · 项目记忆", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of("全局记忆 · 项目记忆")}")
   // a level further in from the page in use: a station's memory, then one of its pages
   t.tap_text("Studio")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_true(settings_page_whole(t, "发布流程", 600.0), msg="\{@sfdesk.wide.tape_at} \{t.rect_of("发布流程")}")
+  assert_true(settings_page_whole(t, "发布流程", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of("发布流程")}")
   t.tap_text("发布流程")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_true(settings_page_whole(t, "checklist", 600.0), msg="\{@sfdesk.wide.tape_at} \{t.rect_of("checklist")}")
+  assert_true(settings_page_whole(t, "checklist", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of("checklist")}")
 }
 
 ///|
@@ -1278,12 +1278,12 @@ test "on the tape, a chat's service opened from the chat in use: its side panel 
   // (the chat in use, the sidebar beside it)
   @sfdesk.bring_page()
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   // (as its link in a message opens it: a page, which the frame lays beside its chat)
   open_page(Service("ws1/st1", "j-web"))
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
   assert_eq(@sfdesk.side_now(src, r).1, "service:j-web")
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel)
 }

@@ -16,7 +16,7 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   if pressed("chat.switch") {
     if framed {
       switcher_toggle(c)
-      wide.attention_open = false
+      wide.attention_open.set(false)
     } else {
       @sfpages.search_summon(c, switcher_offered(c, src, w), app.nav.top() != Home)
     }
@@ -31,7 +31,7 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     open_settings()
   }
   if pressed("shortcuts") {
-    wide.keys_open = !wide.keys_open
+    wide.keys_open.set(!wide.keys_open.get())
   }
   // ⌘[ / ⌘] back and forward (Switcher.tsx history.back, history.forward): back as the system's back is, whose it is
   // deciding (Ctx::back; the hosts' own Alt+← and a mouse's back button come so); forward what back took off put back
@@ -64,14 +64,14 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// Esc to what the frame opened, the one on top first: the rail changed, ⌘K (one kind's list back to all of them,
 /// else closed), ⌘/, 待处理's panel, a row's title renamed (what is presented over the frame has Escape before it: overlay.mbt). Whether it took it.
 fn frame_escape(c : @ui.Ctx) -> Bool {
-  if wide.editing {
-    wide.editing = false
+  if wide.editing.get() {
+    wide.editing.set(false)
   } else if switcher_escape(c) {
     ()
-  } else if wide.keys_open {
-    wide.keys_open = false
-  } else if wide.attention_open {
-    wide.attention_open = false
+  } else if wide.keys_open.get() {
+    wide.keys_open.set(false)
+  } else if wide.attention_open.get() {
+    wide.attention_open.set(false)
   } else if @sfpages.rename_escape(c) {
     ()
   } else {

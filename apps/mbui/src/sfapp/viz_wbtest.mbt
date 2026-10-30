@@ -293,7 +293,7 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
   t.frame()
   t.frame()
   // the sidebar in use at first, a strip of the page showing beside it
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   let (x, y, w, h) = view_rect(t, page).unwrap()
   let edge = 690.0 - @sfdesk.tape_shows
   assert_true(x + w > edge + 20.0, msg="the page \{x} \{w}, the strip from \{edge}")
@@ -301,7 +301,7 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
   let (px, py) = (dmax(x, edge) + 10.0, (dmax(y, 0.0) + dmin(y + h, 840.0)) / 2.0)
   // tapped: the cover's (the chat's page comes over), the page told nothing of it
   t.tap(px, py)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   assert_false(t.views().iter().any(fn(l) { l.has_prefix("finger \{page} ") }))
   // over and in use: the page takes a finger there again
   t.run_for(@ui.move_most_ms)

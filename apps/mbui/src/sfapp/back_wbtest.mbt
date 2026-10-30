@@ -37,10 +37,10 @@ test "back on the tape, a computer's and a tablet's: from the chat in use the si
     let t = tape_chat(platform, w, h, width~, height~)
     assert_true(@sfdesk.wide.tape, msg=at)
     page_over(t, w)
-    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page, msg=at)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page, msg=at)
     t.back()
     t.run_for(@ui.move_most_ms)
-    assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side, msg=at)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side, msg=at)
     assert_true(on_first_chat(), msg=at)
     assert_false(@sfbase.back_step() is Some(_), msg=at)
   }
