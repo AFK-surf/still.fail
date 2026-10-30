@@ -5,8 +5,9 @@
 // (what built its list read nothing that changed: the frame was not built anew for it, nodes_run's `fresh`) and its
 // list gives it the same room: its nodes are put back into the frame's where its build would make them, moved to where
 // it is laid now, and what it said of the frame that its nodes do not hold is said again there (said.mbt's build
-// lists, its looks, what it marked used this frame, what it read of the layout, read back as it read it; what takes the
-// focus, what is read out, its corners, what scrolls and its words are its nodes': docs/retained.md, the way there's 1).
+// lists, what it marked used this frame, what it read of the layout, read back as it read it; what takes the focus,
+// what is read out, its corners, what scrolls, its words, its looks and what it showed of what moves are its nodes':
+// docs/retained.md, the way there's 1).
 // Its layout is kept with it; what lays out its list places it, and it is painted as what is built is.
 //
 // What is said of the frame in no way that is said again here (a layer it opened over the page, how a list stands, a
@@ -54,13 +55,12 @@ priv struct RowNodes {
   mut theme : Theme?
   mut ok : Bool
   mut why : String
-  /// what its build said of the frame: said.mbt's build lists; its looks (draw.mbt's entries, as built); what it
-  /// marked used this frame; the cycles and the moments it said come again (for what says why a frame is drawn)
+  /// what its build said of the frame: said.mbt's build lists; what it marked used this frame; the cycles and the
+  /// moments it said come again (for what says why a frame is drawn)
   said : Array[&SaidAgain]
   marks : Array[Int]
   /// what it read of how lists stand (Ctx::list_info_as, read back)
   info : Array[(String, () -> Bool)]
-  drawn : Array[Drawn]
   used : Array[() -> Unit]
   again : Array[(Int) -> Unit]
   cycles : Array[(Double, SourceLoc)]
@@ -374,7 +374,6 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     said: [],
     marks: [],
     info: [],
-    drawn: [],
     used: [],
     again: [],
     cycles: [],
@@ -577,10 +576,6 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   for j in b.info..<self.info_reads.length() {
     rn.info.push(self.info_reads[j])
   }
-  rn.drawn.clear()
-  for j in b.drawn..<dr.entries.length() {
-    rn.drawn.push({ ..dr.entries[j] })
-  }
   rn.cycles.clear()
   for j in b.cycles..<self.cycles.length() {
     rn.cycles.push(self.cycles[j])
@@ -601,7 +596,8 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
     rn.why = self.row_nodes_why(r, rn.n, part~)
   }
   // (an entry of draw.mbt's of a node not its own: what holds it drawn otherwise for it)
-  for e in rn.drawn {
+  for j in b.drawn..<dr.entries.length() {
+    let e = dr.entries[j]
     if rn.why == "" && (e.node < r || e.node >= r + rn.n || (e.keep_rel >= 0 && e.keep_rel < r)) {
       rn.why = "a look of what holds it"
     }
@@ -729,17 +725,6 @@ fn Ctx::nodes_put_back(self : Ctx, rn : RowNodes, parent : Int) -> Int {
 fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
   let by = rn.base - rn.said_base
   self.say_again(rn.said, { ..unmoved, by: by })
-  for e in rn.drawn {
-    let i = e.node + by
-    while dr.at.length() <= i {
-      dr.at.push(-1)
-      dr.stamp.push(-1)
-    }
-    dr.stamp[i] = dr.build
-    dr.at[i] = dr.entries.length()
-    dr.entries.push({ ..e, node: i, keep_rel: if e.keep_rel >= 0 { e.keep_rel + by } else { -1 } })
-    dr.any = true
-  }
   for f in rn.used {
     f()
   }
