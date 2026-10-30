@@ -13,7 +13,7 @@ import type { Credential } from "../src/cloud.ts";
 import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import type { Iroh } from "../src/iroh.ts";
+import type { Iroh, IrohConnection } from "../src/iroh.ts";
 import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, MIN_STAY_MS, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, SPEED_SAID_MS, TAILNET, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
@@ -137,6 +137,63 @@ function wireOf(s: Sim, mesh: Mesh) {
 }
 
 const network = (host: FakeHost) => new Wake(host.nowMs(), 0, true, false);
+
+// A handshake alone is not an opened link: getting its credential, opening the control stream and writing the
+// credential must all end. None may leave every later caller joining the same opening forever.
+for (const held of ["credential", "stream", "write"] as const) {
+  sim(`an_opening_stalled_at_${held}_ends_and_lets_the_next_send_through`, async (s) => {
+    const bind = s.iroh.bind.bind(s.iroh);
+    let binds = 0;
+    const connections: IrohConnection[] = [];
+    let released = false;
+    const stalled = Effect.ensuring(Effect.never, Effect.sync(() => { released = true; }));
+    s.iroh = {
+      bind: (options) => {
+        binds++;
+        return Effect.map(bind(options), (endpoint) => {
+          const connect = endpoint.connect.bind(endpoint);
+          endpoint.connect = (...args) => Effect.map(connect(...args), (conn) => {
+            connections.push(conn);
+            if (connections.length === 1) {
+              const openBi = conn.openBi.bind(conn);
+              conn.openBi = () => held === "stream" ? stalled : Effect.map(openBi(), (stream) => {
+                if (held === "write") stream.write = () => stalled;
+                return stream;
+              });
+            }
+            return conn;
+          });
+          return endpoint;
+        });
+      },
+    };
+    const { mesh, station } = await setup(s);
+    let asks = 0;
+    const credentials: CredentialSource = (device, fresh) => Effect.suspend(() =>
+      ++asks === 1 && held === "credential" ? stalled : grants("ok", { n: 0 })(device, fresh));
+    const result = { tag: "pending" };
+    void s.runner.run(Effect.result(mesh.link(station.id(), credentials))).then((r) => { result.tag = r._tag; });
+    await s.time.pass(60_000);
+    assert.equal(result.tag, "Failure", "the shared opening must finish, including its credential and first write");
+    assert.equal(released, true, "the stalled operation must be interrupted");
+    assert.notEqual(connections[0]?.closeReason(), null, "the half-open connection must be closed");
+    const link = await s.run(mesh.link(station.id(), credentials));
+    assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+    assert.equal(binds, 1, "a stalled credential or stream must not rebind the endpoint that already connected");
+    await close(s, station, mesh);
+  });
+}
+
+sim("a_failed_credential_releases_a_connection_that_arrives_later", async (s) => {
+  const { mesh, station } = await setup(s);
+  const failure = CoreError.invalid("no credential");
+  const result = await s.run(Effect.result(mesh.link(station.id(), () => Effect.fail(failure))));
+  assert.equal(result._tag, "Failure");
+  await s.time.pass(1_000);
+  assert.equal(station.conns.length, 1);
+  assert.notEqual(station.conns[0].closeReason(), null);
+  await close(s, station, mesh);
+});
 
 async function close(s: Sim, station: Station, mesh: Mesh) {
   await s.settle(station.close());

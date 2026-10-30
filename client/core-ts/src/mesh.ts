@@ -129,6 +129,15 @@ export const RECHECK_MS = 5 * 60 * 1000;
 
 const noAnswer = () => t("core-logic.mesh.no_answer");
 const meshError = (message: string) => new CoreError("mesh", message);
+/// The opening's budget ran out. Only an unanswered handshake is evidence that the endpoint may be stuck; a
+/// credential or stream stalled after it connected must not rebuild all of that endpoint's relay connections.
+class OpeningTimeout extends CoreError {
+  readonly connected: boolean;
+  constructor(connected: boolean) {
+    super("mesh", noAnswer());
+    this.connected = connected;
+  }
+}
 /// A connection that failed under the transport (refused, reset, lost on the way): said to people as where it failed
 /// (`unreached` dialling, `cut` once it was up), what the transport said kept as its `cause` for telemetry, not shown.
 const transportError = (key: "core-logic.mesh.unreached" | "core-logic.mesh.cut") => (e: { message: string }) => {
@@ -1148,7 +1157,8 @@ export class Mesh {
         } else link = yield* Effect.result(first);
         if (self.#hedges.get(addr)?.serial === serial) self.#hedges.delete(addr);
         // (asked before `failedIn` says it with the time it failed at)
-        const unanswered = link._tag === "Failure" && link.failure.message === noAnswer();
+        const timeout = link._tag === "Failure" && link.failure instanceof OpeningTimeout ? link.failure : null;
+        const unanswered = timeout !== null;
         if (link._tag === "Success") {
           self.#stuck = false;
           const path = link.success.path();
@@ -1165,7 +1175,7 @@ export class Mesh {
           }
           span.set("stillfail.paths", link.success.paths());
         } else {
-          if (unanswered) self.#stuck = true;
+          if (timeout !== null && !timeout.connected) self.#stuck = true;
           failedIn(span, link.failure);
           span.set("stillfail.relay", relayStatus(endpoint));
           // What a dial that failed was given and had beside it: the addresses it was told the station is reached straight
@@ -2025,73 +2035,77 @@ function open(
   ctx: SpanContext | undefined,
   ips: string[] = [],
 ): Effect.Effect<Link, CoreError> {
-  return Effect.gen(function* () {
-    if (!/^[0-9a-f]{64}$/.test(stationId)) return yield* Effect.fail(CoreError.invalid(t("core-logic.mesh.bad_station_id", { id: stationId })));
-    const device = endpoint.id();
+  return Effect.suspend(() => {
     const began = env.host.nowMs();
     const opened = { onto: 0, dialled: 0, credential: 0 };
     const since = () => Math.round(env.host.nowMs() - began);
-    // Dialled on its own, so a connection made after CONNECT_TIMEOUT_MS is closed rather than left open, unused.
-    const dialled = Deferred.makeUnsafe<IrohConnection, CoreError>();
-    let late = false;
-    env.runner.fork(
-      Effect.gen(function* () {
-        const r = yield* Effect.result(endpoint.connect(ips.length > 0 ? { id: stationId, relays, ips } : { id: stationId, relays }, ALPN, [FORMER_ALPN]));
-        opened.dialled = since();
-        if (r._tag === "Success" && late) r.success.close(0, "too late");
-        else Deferred.doneUnsafe(dialled, r._tag === "Success" ? Effect.succeed(r.success) : Effect.fail(unreached(r.failure)));
-      }),
-    );
-    const connecting = Effect.raceFirst(
-      Deferred.await(dialled),
-      Effect.andThen(
-        Effect.andThen(
-          onARelay(endpoint, ips.length > 0),
-          Effect.suspend(() => {
-            opened.onto = since();
-            return Effect.sleep(CONNECT_TIMEOUT_MS);
-          }),
-        ),
-        Effect.suspend(() => {
-          late = true;
-          return Effect.fail(meshError(noAnswer()));
+    let abandoned = false;
+    let connection: IrohConnection | null = null;
+    const establish = Effect.gen(function* () {
+      if (!/^[0-9a-f]{64}$/.test(stationId)) return yield* Effect.fail(CoreError.invalid(t("core-logic.mesh.bad_station_id", { id: stationId })));
+      const device = endpoint.id();
+      // A host may finish its native handshake after its caller is interrupted. Keep taking that answer, and close
+      // it if this opening has ended. Until the Link is handed out, this opening owns the connection.
+      const dialled = Deferred.makeUnsafe<IrohConnection, CoreError>();
+      env.runner.fork(
+        Effect.gen(function* () {
+          const r = yield* Effect.result(endpoint.connect(ips.length > 0 ? { id: stationId, relays, ips } : { id: stationId, relays }, ALPN, [FORMER_ALPN]));
+          opened.dialled = since();
+          if (r._tag === "Success") {
+            if (abandoned) {
+              r.success.close(0, "opening ended");
+              return;
+            }
+            connection = r.success;
+          }
+          Deferred.doneUnsafe(dialled, r._tag === "Success" ? Effect.succeed(r.success) : Effect.fail(unreached(r.failure)));
         }),
-      ),
-    );
-    const had = Effect.ensuring(
-      credentials(device, fresh),
-      Effect.sync(() => {
-        opened.credential = since();
-      }),
-    );
-    const [credential, conn] = yield* Effect.all([Effect.result(had), connecting], { concurrency: "unbounded" });
-    if (credential._tag === "Failure") {
-      conn.close(0, "no credential");
-      return yield* Effect.fail(credential.failure);
-    }
-    const stream = yield* Effect.mapError(conn.openBi(), unreached);
-    const control = new Control(stream);
-    yield* control.send(credential.success.credential, credential.success.lock, ctx?.traceparent());
-    const link = new Link(conn, control, credential.success.credential, credentials, pinned);
-    link.opened = opened;
-    // The station's answer to the first credential, while requests already go: a refusal closes the link.
-    env.runner.fork(
-      Effect.gen(function* () {
-        const answer = yield* Effect.result(link.controlled((c) => c.answer()));
-        if (answer._tag === "Failure") {
-          link.renewalFailed = true;
-          link.refused = answer.failure;
-          conn.close(0, "credential refused");
-        } else {
-          const addrs = (said: J) => (Array.isArray(said) ? said.filter((a): a is string => typeof a === "string" && /^\d{1,3}(\.\d{1,3}){3}:\d{1,5}$/.test(a)).slice(0, 8) : []);
-          link.lan = addrs((answer.success as J)?.lan);
-          link.tailnet = addrs((answer.success as J)?.tailnet);
-        }
-        Deferred.doneUnsafe(link.answered, Effect.void);
-      }),
-    );
-    env.runner.fork(renew(link, credentials, device));
-    return link;
+      );
+      const had = Effect.ensuring(
+        credentials(device, fresh),
+        Effect.sync(() => {
+          opened.credential = since();
+        }),
+      );
+      const [credential, conn] = yield* Effect.all([had, Deferred.await(dialled)], { concurrency: "unbounded" });
+      const stream = yield* Effect.mapError(conn.openBi(), unreached);
+      const control = new Control(stream);
+      yield* control.send(credential.credential, credential.lock, ctx?.traceparent());
+      const link = new Link(conn, control, credential.credential, credentials, pinned);
+      link.opened = opened;
+      // The station's answer to the first credential, while requests already go: a refusal closes the link.
+      env.runner.fork(
+        Effect.gen(function* () {
+          const answer = yield* Effect.result(link.controlled((c) => c.answer()));
+          if (answer._tag === "Failure") {
+            link.renewalFailed = true;
+            link.refused = answer.failure;
+            conn.close(0, "credential refused");
+          } else {
+            const addrs = (said: J) => (Array.isArray(said) ? said.filter((a): a is string => typeof a === "string" && /^\d{1,3}(\.\d{1,3}){3}:\d{1,5}$/.test(a)).slice(0, 8) : []);
+            link.lan = addrs((answer.success as J)?.lan);
+            link.tailnet = addrs((answer.success as J)?.tailnet);
+          }
+          Deferred.doneUnsafe(link.answered, Effect.void);
+        }),
+      );
+      env.runner.fork(renew(link, credentials, device));
+      return link;
+    });
+    // The same budget as a dial had, still counted after getting onto a relay. It covers the whole opening, even
+    // when the handshake succeeds but the old credential request or the first stream/write never answers.
+    const deadline = Effect.gen(function* () {
+      yield* onARelay(endpoint, ips.length > 0);
+      opened.onto = since();
+      yield* Effect.sleep(CONNECT_TIMEOUT_MS);
+      return yield* Effect.fail(new OpeningTimeout(connection !== null));
+    });
+    return Effect.raceFirst(establish, deadline).pipe(Effect.onExit((exit) => Effect.sync(() => {
+      if (exit._tag === "Failure") {
+        abandoned = true;
+        connection?.close(0, "opening ended");
+      }
+    })));
   });
 }
 

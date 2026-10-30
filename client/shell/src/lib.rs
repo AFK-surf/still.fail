@@ -335,6 +335,9 @@ struct Inner {
     db: Arc<Mutex<DbHandle>>,
     tls: Arc<rustls::ClientConfig>,
     http: Mutex<reqwest::Client>,
+    /// Fetch calls still owned by the core. Their exchange is dropped when its caller stops waiting, even between
+    /// response headers and the body. Registered before spawning, so an immediate cancellation cannot miss it.
+    fetches: Mutex<HashMap<u64, tokio::sync::oneshot::Sender<()>>>,
     handles: Mutex<HashMap<u64, Handle>>,
     next: AtomicU64,
     /// The accounts' databases open, by id, with their files.
@@ -1189,6 +1192,10 @@ impl Inner {
     }
 
     fn run_sync(&self, op: &str, a: &Value) -> Result<Value, String> {
+        if op == "fetch.cancel" {
+            let pending = self.fetches.lock().unwrap().remove(&id_of(a)?);
+            return Ok(json!(pending.is_some_and(|cancel| cancel.send(()).is_ok())));
+        }
         // The file a key's value is kept in, for what reads it there itself (a face's file: client/core-ts
         // font-files.ts); null while none is kept.
         if op == "storage.path" {
@@ -1278,7 +1285,7 @@ impl Shell {
         let tls = Arc::new(tls_config());
         let http = Mutex::new(http_client(&tls));
         let db = Arc::new(Mutex::new(DbHandle { path: dir.join("core.db"), conn: None }));
-        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default(), open_wait, say: Mutex::default(), media: Mutex::default() });
+        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, fetches: Mutex::default(), handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default(), open_wait, say: Mutex::default(), media: Mutex::default() });
         STATS.lock().unwrap().shells.push(Arc::downgrade(&inner));
         Ok(Shell { runtime, inner })
     }
@@ -1286,9 +1293,26 @@ impl Shell {
     pub fn call(&self, id: u64, op: String, json: &[u8], bytes: Option<Vec<u8>>) {
         let inner = self.inner.clone();
         let args: Value = serde_json::from_slice(json).unwrap_or(Value::Null);
+        let cancelled = if op == "fetch" {
+            let (cancel, cancelled) = tokio::sync::oneshot::channel();
+            inner.fetches.lock().unwrap().insert(id, cancel);
+            Some(cancelled)
+        } else {
+            None
+        };
         counted(&op, true);
         self.runtime.spawn(async move {
-            let done = inner.run(&op, args, bytes).await;
+            let done = if let Some(cancelled) = cancelled {
+                let done = tokio::select! {
+                    biased;
+                    _ = cancelled => Err("cancelled".into()),
+                    done = inner.run(&op, args, bytes) => done,
+                };
+                inner.fetches.lock().unwrap().remove(&id);
+                done
+            } else {
+                inner.run(&op, args, bytes).await
+            };
             counted(&op, false);
             let (json, error, bytes) = match done {
                 Ok(answer) => (serde_json::to_vec(&answer.json).unwrap_or_default(), Vec::new(), answer.bytes),
@@ -1623,6 +1647,40 @@ mod tests {
                 return (j, e, b);
             }
             answers = ANSWERED.wait(answers).unwrap();
+        }
+    }
+
+    #[test]
+    fn cancelling_a_fetch_closes_the_socket_while_headers_or_body_are_stalled() {
+        for (id, body) in [(93_001, false), (93_002, true)] {
+            let dir = TempDir::new();
+            let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+            let (listener, addr) = shell.runtime.block_on(async {
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let addr = listener.local_addr().unwrap();
+                (listener, addr)
+            });
+            let (ready, arrived) = tokio::sync::oneshot::channel();
+            let closed = shell.runtime.spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                while !request.ends_with(b"\r\n\r\n") {
+                    request.push(socket.read_u8().await.unwrap());
+                }
+                if body {
+                    socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\na").await.unwrap();
+                }
+                ready.send(()).unwrap();
+                // No more response bytes arrive. Cancelling the fetch must drop the actual HTTP exchange.
+                socket.read_u8().await
+            });
+            shell.call(id, "fetch".into(), serde_json::to_vec(&json!({ "url": format!("http://{addr}/credential"), "method": "GET", "headers": [] })).unwrap().as_slice(), None);
+            shell.runtime.block_on(arrived).unwrap();
+            let cancel = || serde_json::from_slice::<Value>(&shell.call_sync("fetch.cancel", serde_json::to_vec(&json!({ "id": id })).unwrap().as_slice())).unwrap();
+            assert_eq!(cancel(), json!({ "value": true }));
+            assert_eq!(answer(id).1, "cancelled");
+            assert!(shell.runtime.block_on(closed).unwrap().is_err());
+            assert_eq!(cancel(), json!({ "value": false }));
         }
     }
 

@@ -1,5 +1,5 @@
 // The Rust core's accounts.rs tests, ported.
-import { Effect } from "effect";
+import { Deferred, Effect, Fiber } from "effect";
 import { run } from "./run.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -12,7 +12,8 @@ import { FakeHost, flush, jsonResponse } from "../src/testing.ts";
 import { Status } from "../src/status.ts";
 import { Tracer } from "../src/trace.ts";
 import { parseJson } from "../src/util.ts";
-import type { HttpRequest } from "../src/host.ts";
+import type { HttpRequest, HttpResponse } from "../src/host.ts";
+import { SimTime } from "./sim-iroh.ts";
 
 holdLanguage();
 
@@ -204,6 +205,63 @@ test("refresh_is_single_flight", async () => {
   assert.deepEqual([list[0].refresh, list[0].name], ["new-refresh", "旧名"]);
   assert.equal(await run(accounts.accessToken("s")), "new-access");
   assert.equal(refreshes, 1);
+});
+
+test("an_unanswered_refresh_ends_without_forgetting_the_account_and_the_next_one_recovers", async () => {
+  const time = new SimTime();
+  const host = new FakeHost(time);
+  const runner = new Runner(time.clock);
+  const runHere = <A, E>(effect: Effect.Effect<A, E>) => time.settle(runner.run(effect));
+  let asks = 0;
+  let cancelled = false;
+  host.fetch = (request) => Effect.suspend(() => {
+    assert.ok(request.url.endsWith("/v1/auth/refresh"));
+    assert.equal(header(request, "authorization"), "Bearer old-refresh");
+    if (++asks === 1) return Effect.ensuring(Effect.never, Effect.sync(() => { cancelled = true; }));
+    return Effect.succeed(jsonResponse(200, tokens("new-access", "new-refresh", now(host) + 3600)));
+  });
+  host.store(STORAGE_KEY, [account("sub1", now(host))]);
+  const accounts = await runHere(Accounts.load(host));
+  const states = { first: "pending", joined: "pending" };
+  try {
+    void runner.run(Effect.result(accounts.accessToken("sub1"))).then((r) => { states.first = r._tag; });
+    void runner.run(Effect.result(accounts.accessToken("sub1"))).then((r) => { states.joined = r._tag; });
+    await time.pass(5 * 60_000);
+    assert.deepEqual(states, { first: "Failure", joined: "Failure" });
+    assert.equal(cancelled, true);
+    assert.equal(accounts.refreshing(), 0);
+    assert.equal(accounts.list().length, 1, "a silent network must not sign the person out");
+    assert.equal(await runHere(accounts.accessToken("sub1")), "new-access");
+    assert.equal(asks, 2);
+  } finally {
+    runner.shutdown();
+  }
+});
+
+test("a_refresh_keeps_rotated_tokens_after_its_caller_is_interrupted", async () => {
+  const time = new SimTime();
+  const host = new FakeHost(time);
+  const runner = new Runner(time.clock);
+  const response = Deferred.makeUnsafe<HttpResponse>();
+  let asks = 0;
+  host.fetch = () => Effect.suspend(() => {
+    asks++;
+    return Deferred.await(response);
+  });
+  host.store(STORAGE_KEY, [account("sub1", now(host))]);
+  const accounts = await time.settle(runner.run(Accounts.load(host)));
+  try {
+    const caller = runner.fork(accounts.accessToken("sub1"));
+    await time.until(() => asks === 1);
+    await time.settle(runner.run(Fiber.interrupt(caller)));
+    Deferred.doneUnsafe(response, Effect.succeed(jsonResponse(200, tokens("new-access", "new-refresh", now(host) + 3600))));
+    await time.until(() => accounts.refreshing() === 0);
+    assert.equal(await time.settle(runner.run(accounts.accessToken("sub1"))), "new-access");
+    assert.equal((stored(host, STORAGE_KEY) as StoredAccount[])[0]!.refresh, "new-refresh");
+    assert.equal(asks, 1);
+  } finally {
+    runner.shutdown();
+  }
 });
 
 test("another_core_on_the_same_storage_refreshed_first_so_its_credentials_are_taken", async () => {
