@@ -293,15 +293,12 @@ export const fileCardMeta = style({
 });
 export const fileCardText = style({ flex: "1", minWidth: "0", display: "grid" });
 /**
- * A file's card in a message: its sheet (FileTile, 30 × 36, the sheet drawn 2.75 in from its sides and 1.75 from its
- * top and foot, its corners rounded 3.25) as far from the card's edges on every side, and the card rounded as the sheet
- * is less that distance (concentric). A message's pictures and pasted text take its corner too: one corner for what a
- * message carries.
+ * A file's card in a message (a screen's too): its sheet and words 16 in across and 12 down. What a message carries
+ * (files' and screens' cards, pictures, videos, pasted text) is rounded alike: a row's corner, the app's ladder's 18
+ * (a card's on a card a row high reads as a capsule).
  */
-const SHEET = { inX: 2.75, inY: 1.75, corner: 3.25 } as const;
-const SHEET_ROOM = 9.75;
-export const FILE_CARD_PAD = { y: SHEET_ROOM - SHEET.inY, x: SHEET_ROOM - SHEET.inX } as const;
-export const MESSAGE_FILE_CORNER = `calc(${SHEET_ROOM + SHEET.corner}px * ${vars.cornerScale})`;
+export const FILE_CARD_PAD = { y: 12, x: 16 } as const;
+export const MESSAGE_FILE_CORNER = `calc(18px * ${vars.cornerScale})`; // own corner: the app's row step (sf row_corner), no web token for it yet
 /** A file's kind at a glance (Chat.tsx FileTile): a sheet with its extension, in the text's colour; dashed when only its
  * path goes; filling with the accent as it goes up; its extension red when it failed. */
 export const fileTile = style({ flex: "none", fill: "none", stroke: vars.muted, strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round" });
@@ -726,7 +723,7 @@ export const msgVideoPlay = style({
   background: "rgba(0, 0, 0, 0.65)", pointerEvents: "none",
 });
 export const msgVideoName = style({
-  position: "absolute", bottom: "0", left: "0", right: "0", padding: "6px 8px",
+  position: "absolute", bottom: "0", left: "0", right: "0", padding: `8px ${FILE_CARD_PAD.x}px`,
   background: "rgba(0, 0, 0, 0.65)", fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 /** Under its words while the core downloads it (chatDownloads.ts): how far, 4 below them. */

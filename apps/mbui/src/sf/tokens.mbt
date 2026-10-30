@@ -2044,12 +2044,6 @@ pub let ask_card_room_most : @ui.Style = @ui.css("w=Cut min_w=Within(560) max_w=
 pub let login_card_corner : @ui.Radius = rounded(card_corner)
 
 ///|
-/// A file's card in a message on a desktop's width (the web's Chat.css.ts fileCard): its sheet (30 by 36) 7 in from its
-/// side, as the sheet's own 9.75 less the 2.75 it is drawn in (FILE_CARD_PAD); its corner the sheet's room and its own
-/// 3.25 (MESSAGE_FILE_CORNER, 13), a message's pictures' too.
-pub let file_sheet_in : @ui.Space = files_row_end
-
-///|
 pub let file_sheet_w : @ui.Len = Fixed(30.0)
 
 ///|

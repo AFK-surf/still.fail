@@ -43,7 +43,8 @@ pub let globe_mark : LinkMark = { name: "web" }
 // ── the cards' looks (ScreenLinks.kt ScreenLinkCard, AdbLinks.kt AdbLinkCard) ──
 
 ///|
-/// A card: a row 236 wide, a card's corner (the ladder's 26: @sf.card's), on the chat's bubble ground; 16 in across
+/// A card: a row 236 wide, rounded as what a message carries is (@sf.message_file_radius: a file's card's), on the
+/// chat's bubble ground; 16 in across
 /// (its mark's 24 in its room 3 in from it, about a card's words' 20), 12 down; its mark and its words 10 apart.
 // kept across runs: a value (no field of it changes)
 pub let link_card : @ui.Style = @ui.style(
@@ -53,19 +54,19 @@ pub let link_card : @ui.Style = @ui.style(
   py=S3,
   gap=S2_5,
   align=ACenter,
-  radius=Xl3,
+  radius=@sf.message_file_radius,
   bg=Neutral,
 )
 
 ///|
-/// A screen's card with its preview: a column 280 wide, a card's corner (the ladder's 26: @sf.card's), the preview 4 in
-/// from its top and sides.
+/// A screen's card with its preview: a column 280 wide, rounded as what a message carries is (@sf.message_file_radius),
+/// the preview 4 in from its top and sides.
 // kept across runs: a value (no field of it changes)
 pub let peek_card : @ui.Style = @ui.style(
   w=@sf.peek_card_w,
   pt=S1,
   px=S1,
-  radius=Xl3,
+  radius=@sf.message_file_radius,
   bg=Neutral,
 )
 

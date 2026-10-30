@@ -29,7 +29,7 @@ function PhoneTile({ sharing }: { sharing: boolean }) {
 export function AdbCard({ href, words }: { href: string; words: ReactNode | null }) {
   const card = useCard(href);
   const inner = (
-    <span className={`${chatCss.fileCard} ${css.tileCard}`} data-card="">
+    <span className={chatCss.fileCard} data-card="">
       <PhoneTile sharing={card?.sharing === true} />
       <span className={chatCss.fileCardText}>
         <span className={chatCss.fileCardName}><span className={chatCss.fileCardStem}>{words ?? card?.title ?? " "}</span></span>

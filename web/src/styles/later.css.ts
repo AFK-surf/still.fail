@@ -88,7 +88,7 @@ globalStyle(msgFiles, { display: "flex", flexWrap: "wrap", gap: "6px", minWidth:
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(fileCard, {
   display: "inline-flex", alignItems: "center", gap: "10px", width: "236px", maxWidth: "100%",
-  padding: `${FILE_CARD_PAD.y}px 10px ${FILE_CARD_PAD.y}px ${FILE_CARD_PAD.x}px`,
+  padding: `${FILE_CARD_PAD.y}px ${FILE_CARD_PAD.x}px`,
   borderRadius: MESSAGE_FILE_CORNER, background: vars.neutralBg, color: vars.text, textAlign: "left",
   cornerShape: vars.cornerShape,
 });
