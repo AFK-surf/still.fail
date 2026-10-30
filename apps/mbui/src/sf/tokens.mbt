@@ -1962,10 +1962,24 @@ pub let button_38 : @ui.Len = Fixed(38.0)
 pub let link_card_w : @ui.Len = Fixed(236.0)
 
 ///|
+/// A file's card in a message and a screen's without its picture, a capsule a row high (two lines, 20 and 16 on a
+/// desktop): 52 whatever the screen's words, so that what stands in its round ends stands concentric with them.
+pub let file_capsule_h : @ui.Len = Fixed(52.0)
+
+///|
 pub let peek_card_px : Double = 280.0
 
 ///|
 pub let peek_card_w : @ui.Len = Fixed(peek_card_px)
+
+///|
+/// How far in from the card's top and sides its preview lies (its corners concentric with the card's).
+/// (S1 in its style: screen_links.mbt peek_card)
+pub let peek_card_in_px : Double = 4.0
+
+///|
+/// The preview's width: the card's less its room on both sides.
+pub let peek_frame_px : Double = peek_card_px - 2.0 * peek_card_in_px
 
 ///|
 /// A link's card's mark, 30 wide (36 high: S9), as the web's.
@@ -2033,12 +2047,6 @@ pub let ask_card_room_most : @ui.Style = @ui.css("w=Cut min_w=Within(560) max_w=
 
 ///|
 pub let login_card_corner : @ui.Radius = rounded(card_corner)
-
-///|
-/// A file's card in a message on a desktop's width (the web's Chat.css.ts fileCard): its sheet (30 by 36) 7 in from its
-/// side, as the sheet's own 9.75 less the 2.75 it is drawn in (FILE_CARD_PAD); its corner the sheet's room and its own
-/// 3.25 (MESSAGE_FILE_CORNER, 13), a message's pictures' too.
-pub let file_sheet_in : @ui.Space = files_row_end
 
 ///|
 pub let file_sheet_w : @ui.Len = Fixed(30.0)

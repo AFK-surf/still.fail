@@ -50,10 +50,10 @@ function useCard(href: string): Card | null {
 /** A screen's kind at a glance, as a file's sheet is drawn (Chat.tsx FileTile): a display, the globe for a browser tab, a phone for a simulator. */
 function ScreenTile({ kind }: { kind: string | undefined }) {
   return (
-    <svg className={chatCss.fileTile} width="30" height="36" viewBox="0 0 30 36" aria-hidden="true">
-      {kind === "browser" ? <Web x={3} y={6} size={24} stroke="inherit" />
-        : kind === "desktop" ? <Monitor x={3} y={6} size={24} stroke="inherit" />
-        : kind === "simulator" ? <Phone x={3} y={6} size={24} stroke="inherit" /> : null}
+    <svg className={chatCss.fileTile} width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+      {kind === "browser" ? <Web size={24} stroke="inherit" />
+        : kind === "desktop" ? <Monitor size={24} stroke="inherit" />
+        : kind === "simulator" ? <Phone size={24} stroke="inherit" /> : null}
     </svg>
   );
 }

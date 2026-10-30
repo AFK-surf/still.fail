@@ -43,38 +43,48 @@ pub let globe_mark : LinkMark = { name: "web" }
 // ── the cards' looks (ScreenLinks.kt ScreenLinkCard, AdbLinks.kt AdbLinkCard) ──
 
 ///|
-/// A card: a row 236 wide, 8 round, on the chat's bubble ground; 10 in across, 8 down; its mark and its words 10 apart.
+/// A card: a row 236 wide, a capsule as a file's card (a row high, 52), on the chat's bubble ground: its mark, 24,
+/// concentric with its round end (14 from its end, its top and its foot), 8 from its words, their end 14 from the
+/// other end.
 // kept across runs: a value (no field of it changes)
 pub let link_card : @ui.Style = @ui.style(
   row=true,
   w=@sf.link_card_w,
-  px=S2_5,
-  py=S2,
-  gap=S2_5,
+  h=@sf.file_capsule_h,
+  px=S3_5,
+  gap=S2,
   align=ACenter,
-  radius=Lg,
+  radius=Full,
   bg=Neutral,
 )
 
 ///|
-/// A screen's card with its preview: a column 280 wide, the preview across its top, clipped to its corners.
+/// A screen's card with its preview: a column 280 wide, rounded as what a message carries is (@sf.message_file_radius),
+/// the preview 4 in from its top and sides.
 // kept across runs: a value (no field of it changes)
-pub let peek_card : @ui.Style = @ui.style(w=@sf.peek_card_w, radius=Lg, bg=Neutral, clip=true)
+pub let peek_card : @ui.Style = @ui.style(
+  w=@sf.peek_card_w,
+  pt=S1,
+  px=S1,
+  radius=@sf.message_file_radius,
+  bg=Neutral,
+)
 
 ///|
-/// The words under a preview: 10 in across, 8 down.
+/// The words under a preview: a card's words' 20 in from its sides (the card's 4 and 16 of their own), 12 under the
+/// preview, 16 over the card's foot.
 // kept across runs: a value (no field of it changes)
-pub let peek_card_words : @ui.Style = @ui.css("w=Full px=S2_5 py=S2")
+pub let peek_card_words : @ui.Style = @ui.css("w=Full px=S4 pt=S3 pb=S4")
 
 ///|
-/// The preview: on its ground, its mark in its middle until a picture comes.
+/// The preview: on its ground, its corners concentric with the card's, its mark in its middle until a picture comes.
 // kept across runs: a value (no field of it changes)
-pub let peek_frame : @ui.Style = @ui.css("w=Full align=ACenter justify=JCenter bg=Wash clip")
+pub let peek_frame : @ui.Style = @ui.css("w=Full align=ACenter justify=JCenter radius=Inner bg=Wash clip")
 
 ///|
-/// A mark's room: 30 by 36.
+/// A mark's box: its own, 24 (the gap to the words the card's).
 // kept across runs: a value (no field of it changes)
-pub let link_mark_box : @ui.Style = @ui.style(w=@sf.link_mark_w, h=S9, align=ACenter, justify=JCenter)
+pub let link_mark_box : @ui.Style = @ui.css("w=S6 h=S6 align=ACenter justify=JCenter")
 
 ///|
 /// The words beside the mark (or under the preview): what is left across.
@@ -523,7 +533,7 @@ pub fn screen_peek(
 /// taller than the preview, else as high, its middle across.
 pub fn peek_picture(c : @ui.Ctx, key : String, shape : Double, ratio : Double) -> Unit {
   if shape > 0.0 && shape < ratio {
-    c.image(key, w=Fill(1.0), h=Px(@sf.peek_card_px / shape), fit=FitFill, bg=0L, fade=false)
+    c.image(key, w=Fill(1.0), h=Px(@sf.peek_frame_px / shape), fit=FitFill, bg=0L, fade=false)
     |> ignore
   } else {
     c.image(key, w=Fill(1.0), h=Fill(1.0), fit=FitCover, bg=0L, fade=false) |> ignore

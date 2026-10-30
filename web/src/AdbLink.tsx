@@ -19,8 +19,8 @@ function useCard(href: string): Card | null {
 /** A phone, drawn as a file's sheet is (Chat.tsx FileTile); in the accent while this phone is lent to that station. */
 function PhoneTile({ sharing }: { sharing: boolean }) {
   return (
-    <svg className={`${chatCss.fileTile} ${css.adbTile}`} data-sharing={sharing || undefined} width="30" height="36" viewBox="0 0 30 36" aria-hidden="true">
-      <Phone x={3} y={6} size={24} stroke="inherit" />
+    <svg className={`${chatCss.fileTile} ${css.adbTile}`} data-sharing={sharing || undefined} width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+      <Phone size={24} stroke="inherit" />
     </svg>
   );
 }

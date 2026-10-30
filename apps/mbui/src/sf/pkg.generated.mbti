@@ -516,9 +516,13 @@ pub fn figures(@ui.Ctx, Array[(String, String, String)]) -> Unit
 
 pub fn file_card(@ui.Ctx, String, String, Double, path? : String, dir? : Bool, named? : Bool, pending? : Bool, sent? : Double?, error? : String, download? : (Double, String)?, remove? : Bool, retry? : Bool, slot? : Bool, open? : Bool, title? : String, meta? : String, restore? : Bool, remove_label? : String, retry_label? : String, composer? : Bool) -> FileCardDone
 
+pub fn file_card_across(@ui.Ctx, String, Double) -> Double
+
 pub let file_card_button : @ui.Len
 
 pub let file_card_w : Double
+
+pub fn file_mark(String) -> String
 
 pub fn file_name(@ui.Ctx, String) -> Unit
 
@@ -527,8 +531,6 @@ pub fn file_name_of(String) -> String
 pub let file_progress_w : @ui.Len
 
 pub let file_sheet_h : @ui.Len
-
-pub let file_sheet_in : @ui.Space
 
 pub let file_sheet_w : @ui.Len
 

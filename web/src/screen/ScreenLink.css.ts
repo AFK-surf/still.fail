@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { FILE_CARD_PAD } from "../Chat.css.ts";
+import { MESSAGE_FILE_CORNER } from "../Chat.css.ts";
 
 /** A screen's card in a message: a file's (Chat.css.ts fileCard), over a message's own link colours (styles/conversation.css.ts). */
 export const screenCard = style({
@@ -12,20 +12,30 @@ export const screenCard = style({
 globalStyle(`${screenCard}[data-gone] [data-card]`, { color: vars.muted });
 export const screenCardLine = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 
-/** A card with the screen live in it: the picture across its top, edge to edge (the card's corners its), the words under it. */
+/** A card with the screen live in it: the picture 4px in from its top and sides, its corners concentric with the
+ * card's (mbui's peek_card), the words under it where a card's are. */
+const PEEK_IN = 4;
 export const peekCard = style({
   selectors: {
-    "&&": { display: "inline-flex", flexDirection: "column", alignItems: "stretch", gap: "0", width: "280px", padding: "0", overflow: "hidden" },
+    "&&": {
+      display: "inline-flex", flexDirection: "column", alignItems: "stretch", gap: "0", width: "280px",
+      padding: `${PEEK_IN}px ${PEEK_IN}px 0`, borderRadius: MESSAGE_FILE_CORNER,
+    },
   },
 });
-export const peek = style({ position: "relative", display: "block", width: "100%", background: vars.hover, overflow: "hidden" });
+/** The link round it rounded as it is: a card's corner, not a file's capsule. */
+globalStyle(`${screenCard}:has(${peekCard})`, { borderRadius: MESSAGE_FILE_CORNER });
+export const peek = style({
+  position: "relative", display: "block", width: "100%", background: vars.hover, overflow: "hidden",
+  borderRadius: `calc(${MESSAGE_FILE_CORNER} - ${PEEK_IN}px)`, cornerShape: vars.cornerShape,
+});
 export const peekPicture = style({
   position: "absolute", inset: "0", width: "100%", height: "100%", objectFit: "cover", objectPosition: "top", opacity: "0",
   selectors: { "&[data-drawn]": { opacity: "1" } },
 });
 /** Its mark in the middle until a picture comes. */
 export const peekMark = style({ position: "absolute", inset: "0", display: "grid", placeItems: "center" });
-export const peekText = style({ display: "flex", minWidth: "0", padding: `${FILE_CARD_PAD.y}px 10px ${FILE_CARD_PAD.y}px ${FILE_CARD_PAD.x + 3}px` });
+export const peekText = style({ display: "flex", minWidth: "0", padding: `12px ${20 - PEEK_IN}px 16px` });
 
 /** A station's 共享调试 card (AdbLink.tsx) while this phone is lent there: its phone in the accent. */
 export const adbTile = style({ selectors: { "&[data-sharing]": { stroke: vars.accent } } });

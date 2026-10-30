@@ -29,7 +29,7 @@ pub fn message_files(
     match file_kind(a.name) {
       "image" => dmin(image_box(a, image_least).0, room)
       "video" => dmin(image_box(a, video_least).0, room)
-      _ => dmin(@sf.file_card_w, room)
+      _ => dmin(@sf.file_card_across(c, a.name, a.size), room)
     }
   })
   // (in a picture of the chat being shared, each with the room its ✕ hangs in past its top and right: publish.mbt)
@@ -46,7 +46,12 @@ pub fn message_files(
     }
   }
   let column = if mine { files_column_end } else { files_column }
-  let column = if hung > 0.0 { column.then(@ui.style(pt=@sf.room_of(hung), gap=@sf.room_of(files_gap + hung))) } else { column }
+  // (the gap between rows the room the ✕ hangs in past the next's top on top of their own, out to the scale's next step)
+  let column = if hung > 0.0 {
+    column.then(@ui.style(pt=@sf.room_of(hung), gap=@sf.room_of(scale_up(files_gap + hung))))
+  } else {
+    column
+  }
   c.box(style=column, id=at, fn() {
     for r in rows {
       c.box(style=files_row, fn() {
@@ -360,8 +365,9 @@ pub let coming_in_ms : Double = 200.0
 let coming_ring : Double = 14.0
 
 ///|
-/// The pill's height: its ring 1 from its top, foot and start, concentric with its end, and its words' line.
-let coming_pill_h : Double = 16.0
+/// The pill's height: its ring 2 from its top, foot and start, concentric with its end, and its words' line; 18, so
+/// that it stands concentric in a picture's corner (a card's, 26) no further in than corner_fit lets it (16).
+let coming_pill_h : Double = 18.0
 
 ///|
 /// How far the ring is from the pill's top, foot and start: concentric with its end.
@@ -564,6 +570,17 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ 
   } else if done.opened {
     open_file(here, a)
   }
+}
+
+///|
+/// The spacing scale's first step `d` or more (gaps.mbt rule 6: a gap is a step of it).
+fn scale_up(d : Double) -> Double {
+  for s in @ui.space_scale() {
+    if s.px() >= d - 0.01 {
+      return s.px()
+    }
+  }
+  d
 }
 
 ///|
@@ -812,8 +829,9 @@ let video_middle : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCen
 let video_foot_room : @ui.Style = @ui.css("w=Full h=Full justify=JEnd")
 
 ///|
+/// The band over a video's foot: its words as far in as a file card's (16 across: clear of its card's corner), 8 down.
 // kept across runs: a value (no field of it changes)
-let video_name_band : @ui.Style = @ui.style(w=Full, px=S2, py=S1_5, bg=@sf.video_shade)
+let video_name_band : @ui.Style = @ui.style(w=Full, px=S4, py=S2, bg=@sf.video_shade)
 
 ///|
 // kept across runs: a value (no field of it changes)

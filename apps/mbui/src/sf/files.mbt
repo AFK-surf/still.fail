@@ -110,6 +110,30 @@ pub fn file_tile_fill(scale : Double, part : Double, color : Int64) -> @ui.Shape
 }
 
 ///|
+/// A file's line icon by what it is, from its name (drive.mbt dv_kind_icon's): a video's, a sound's, a picture's, a
+/// PDF's, words', code's, else a file's.
+pub fn file_mark(name : String) -> String {
+  match extension_of(name) {
+    "mp4" | "m4v" | "webm" | "mov" | "mkv" | "avi" | "ogv" => "file-video"
+    "mp3" | "m4a" | "wav" | "flac" | "ogg" | "aac" | "opus" => "file-audio"
+    "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "avif" | "bmp" | "heic" => "photo"
+    "pdf" => "file-pdf"
+    "txt" | "md" | "markdown" | "log" | "rtf" | "srt" | "vtt" | "ass" | "ssa" => "file-text"
+    "js" | "ts" | "tsx" | "jsx" | "json" | "py" | "rs" | "go" | "mbt" | "c" | "h" | "cpp" | "java" | "kt" | "swift"
+    | "sh" | "yml" | "yaml" | "toml" | "html" | "css" | "csv" | "xml" | "sql" | "rb" | "php" => "file-code"
+    _ => "file"
+  }
+}
+
+///|
+/// A file's mark on its card: its line icon, 24, its box its own (no room round it: the gap to its words the card's).
+// kept across runs: a value (no field of it changes)
+let card_mark : @ui.Style = @ui.css("w=S6 h=S6 align=ACenter justify=JCenter")
+
+///|
+let card_mark_size : Double = 24.0
+
+///|
 /// The sheet's outline, its fold, its two lines (where it has no extension), a folder's shape (FileTile's paths), and
 /// what it is drawn with.
 let tile_outline : String = "M6 1.75H19L26.25 9V31Q26.25 34.25 23 34.25H6Q2.75 34.25 2.75 31V5Q2.75 1.75 6 1.75Z"
@@ -285,9 +309,21 @@ pub fn file_card(
       if pending && sent is None {
         c.box(style=tile_going, fn() { spinner(c, size=tile_going_spinner) |> ignore }) |> ignore
       } else {
-        file_tile(c, name, dir~, progress~, error=error != "")
+        // (a line icon, in a message's capsule concentric with its round end, as a screen's card's mark; in the
+        // composer's card as there; a sheet, tall and square, has no room in a round end, and one mark for a file)
+        ignore(progress)
+        c.box(style=card_mark, fn() {
+          icon(c, if dir { "folder" } else { file_mark(name) }, size=card_mark_size, color=if error != "" {
+            theme().p.red
+          } else {
+            theme().p.muted
+          })
+          |> ignore
+        })
+        |> ignore
       }
-      c.box(style=card_words, fn() {
+      // (in a message as wide as what it says; waiting in the composer as wide as its room, its words taking the rest)
+      c.box(style=if composer { card_words } else { card_words_hug }, fn() {
         if title != "" {
           c.box(style=name_row, fn() { c.box(style=name_stem, fn() { c.text(title, style=card_name) |> ignore }) |> ignore })
           |> ignore
@@ -299,18 +335,20 @@ pub fn file_card(
       |> ignore
       if retry {
         let label = if retry_label != "" { retry_label } else { t("web-main.composer.retryUpload") }
-        card_button(c, again, "refresh", label)
+        card_end(c, !composer, fn() { card_button(c, again, "refresh", label) })
         tip(c, key + "/retry-tip", again, label)
       }
       if restore {
-        card_button(c, back, "edit", t("web-main.composer.expandPaste"))
+        card_end(c, !composer, fn() { card_button(c, back, "edit", t("web-main.composer.expandPaste")) })
         tip(c, key + "/restore-tip", back, t("web-main.composer.expandPaste"))
       }
       if remove {
-        card_button(c, x, "close", if remove_label != "" {
-          remove_label
-        } else {
-          t("web-main.file.remove", args=[("name", name)])
+        card_end(c, !composer, fn() {
+          card_button(c, x, "close", if remove_label != "" {
+            remove_label
+          } else {
+            t("web-main.file.remove", args=[("name", name)])
+          })
         })
         // (calling a download off says so on hover, as ↻ does: MessageFileCard's Tip)
         if remove_label != "" {
@@ -429,6 +467,21 @@ let corner_remove_box : @ui.Style = @ui.style(
 ///|
 /// A card's own button at its end (fileCardRemove): 22 round, nothing under it but under the pointer (the hover
 /// ground), its icon in the muted ink (the text's under the pointer); named.
+/// A button at a message's file card's end, in the middle of a room 24: so that the last stands in its round end
+/// concentric with it (15 in: the card's 14 and 1, its 22 in the capsule's 52); in the composer's card, as it is.
+fn card_end(c : @ui.Ctx, capsule : Bool, body : () -> Unit) -> Unit {
+  if capsule {
+    c.box(style=card_end_room, body) |> ignore
+  } else {
+    body()
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let card_end_room : @ui.Style = @ui.css("w=S6 h=S6 align=ACenter justify=JCenter")
+
+///|
 fn card_button(c : @ui.Ctx, id : Int, icon_name : String, label : String) -> Unit {
   let p = theme().p
   let hot = c.lit(id)
@@ -444,9 +497,10 @@ fn card_button(c : @ui.Ctx, id : Int, icon_name : String, label : String) -> Uni
 }
 
 ///|
-/// What a file's card, a message's pictures and its pasted text are rounded (MESSAGE_FILE_CORNER: the sheet's room 9.75
-/// and its corner 3.25).
-pub let message_file_corner : Double = 13.0
+/// What a message carries is rounded as every card in a chat is (a question's, a screen's with its picture, pictures,
+/// videos, pasted text): the ladder's card step (26). One a row high (a file's card, a screen's or a service's
+/// without a picture) is a capsule (card_box).
+pub let message_file_corner : Double = card_corner
 
 ///|
 pub let message_file_radius : @ui.Radius = rounded(message_file_corner)
@@ -454,6 +508,18 @@ pub let message_file_radius : @ui.Radius = rounded(message_file_corner)
 ///|
 /// A file's card at its widest (fileCard: 236).
 pub let file_card_w : Double = 236.0
+
+///|
+/// A file's card's width in a message (card_box: as wide as what it says): its sheet and its name or its size, the
+/// wider, with its room round them; file_card_w at most.
+pub fn file_card_across(c : @ui.Ctx, name : String, size : Double) -> Double {
+  let words = dmax(
+    @ui.text_advance(name, size=c.text_size(Ui).0),
+    @ui.text_advance(file_size(size), size=c.text_size(Caption).0),
+  )
+  let room = @ui.Space::px(S3_5) + card_mark_size + @ui.Space::px(S2) + @ui.Space::px(S3_5)
+  dmin(file_card_w, room + words)
+}
 
 ///|
 let card_button_icon : Double = 13.0
@@ -466,13 +532,16 @@ let card_close_icon : Double = 12.0
 let card_box : @ui.Style = @ui.style(
   row=true,
   max_w=Fixed(file_card_w),
-  pl=file_sheet_in,
-  pr=S2_5,
-  py=S2,
-  gap=S2_5,
+  // (a row high, a capsule, 52 (file_capsule_h): its mark, 24, concentric with its round end (14 from its
+  // end, its top and its foot), 8 from its words, their end 14 from the other end: file_card_across; as a screen's
+  // card, @sfbase's link_card. In the composer: card_waiting)
+  h=file_capsule_h,
+  pl=S3_5,
+  pr=S3_5,
+  gap=S2,
   bg=Neutral,
   // (in a corner of what holds it, a composer's box: as far in as from its edges, its corner concentric)
-  radius=InnerOr(message_file_radius),
+  radius=InnerOr(Full),
   align=ACenter,
 )
 
@@ -499,14 +568,10 @@ pub fn composer_card() -> @ui.Style {
 let composer_card_ground : @ui.Style = @ui.css("bg=Neutral dark{bg=Over(Raised, A(Fg, O10))}")
 
 ///|
-/// A file's card waiting in the composer: as tall as a picture's tile beside it (56), its words on its middle, and its
-/// sheet's ink as far from its side as from its top and foot, its words' end as far from the other side, as a
-/// message's card holds them (its 52: 9 every way round the ink, file_sheet_in 7 and the sheet's 2 at its side) and
-/// the web's composer card does (14 round its sheet in its 64). Its 56 leaves 11 over and under the sheet's ink (10 and
-/// the sheet's 1): 12 at its sides, the scale's nearest (10 and the sheet's 2; 12 at its end, rule 4's as far in from
-/// both). With file_sheet_in it stood 9 in, 2 short of over and under it (the user, 2026-10-30: 距离左边太近了).
+/// A file's card waiting in the composer: as tall as a picture's tile beside it (56), its words on its middle, its mark
+/// (24) as far from its side as from its top and foot (16), its words' end as far from the other side.
 // kept across runs: a value (no field of it changes)
-let card_waiting : @ui.Style = @ui.css("h=S14 pl=S2_5 pr=S3")
+let card_waiting : @ui.Style = @ui.css("h=S14 px=S4 py=S2")
 
 ///|
 fn card_composer() -> @ui.Style {
@@ -534,6 +599,10 @@ let tile_going_spinner : Double = 16.0
 ///|
 // kept across runs: a value (no field of it changes)
 let card_words : @ui.Style = @ui.style(w=grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let card_words_hug : @ui.Style = @ui.css("w=Cut")
 
 ///|
 // kept across runs: a value (no field of it changes)
