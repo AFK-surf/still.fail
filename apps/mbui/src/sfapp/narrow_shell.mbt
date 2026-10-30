@@ -104,6 +104,9 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
   })
   .over(Is(true))
   |> ignore
+  // the bottom bar's glass, where the bar is laid out: a finger on it the bar's at each event's moment (drawn by the old
+  // view over the pages; what the old frame puts over all of it at its root, its notch's key, menus and sheets, first)
+  bar_glass_node(v, src, fn() { workspace_in_view(src).0 })
 }
 
 ///|

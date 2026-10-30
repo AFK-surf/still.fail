@@ -197,3 +197,75 @@ test "bar: told the width of the box it is laid out in, the system's bar down th
   // (and laid out so: where the ball is, the place shown's, by that width)
   assert_eq(bar.width, none)
 }
+
+///|
+/// The bar's panel drawn up by a finger from its first place, each event of the host's at its own time from `t0` (down
+/// at 10, moving up 64 by 160, let go at 170), frames drawn at each of `frames` (none at all between some) and at 400:
+/// where the panel is and whether it is open, the ball, and what the bars are.
+fn bar_drawn_up(frames : Array[Double]) -> (Double, Double, Bool, Double, Double) {
+  let (t, t0) = bar_at_rest()
+  let (xs, y) = bar_places_at()
+  let events = [(0, 10.0, 0.0)]
+  for i in 1..=15 {
+    events.push((1, 10.0 + i.to_double() * 10.0, -64.0 * i.to_double() / 15.0))
+  }
+  events.push((2, 170.0, -64.0))
+  let mut f = 0
+  for e in events {
+    let (kind, at, dy) = e
+    while f < frames.length() && frames[f] <= at {
+      t.frame_at(t0 + frames[f])
+      f = f + 1
+    }
+    t.advance(t0 + at - t.time())
+    t.touch_at(kind, xs[0], y + dy, t0 + at)
+  }
+  t.frame_at(t0 + 400.0)
+  (bar.o.value_at(t0 + 400.0), bar.o.to, bar.mode.get(), bar.ball_x.x, bar.ball_y.x)
+}
+
+///|
+test "bar: drawn up by a finger, each event at its own moment: the same at a moment whichever frames came between, or none" {
+  let none = bar_drawn_up([])
+  let each = bar_drawn_up([15.0, 35.0, 55.0, 75.0, 95.0, 115.0, 135.0, 155.0, 175.0, 250.0])
+  let few = bar_drawn_up([100.0])
+  assert_eq((each, few), (none, none))
+  // (drawn up: open)
+  assert_true(none.2, msg="\{none}")
+}
+
+///|
+/// A finger down on the bar's first place at 10, the window let go of in front at `lost` (or not), let go at 600 with no
+/// move: whether the place under it was gone to (a tap) and the lens (held still) ever shown.
+fn bar_held_then(lost : Double?) -> (Bool, Bool) {
+  let (t, t0) = bar_at_rest()
+  let (xs, y) = bar_places_at()
+  let start = app.nav.top()
+  let lens = Ref(false)
+  t.app_state(true, true)
+  t.advance(10.0)
+  t.touch_at(0, xs[1], y, t0 + 10.0)
+  match lost {
+    Some(at) => {
+      t.advance(t0 + at - t.time())
+      t.app_state(true, false)
+    }
+    None => ()
+  }
+  for at in [200.0, 300.0, 500.0] {
+    t.frame_at(t0 + at)
+    if bar.drag >= 0.0 {
+      lens.val = true
+    }
+  }
+  t.advance(t0 + 600.0 - t.time())
+  t.touch_at(2, xs[1], y, t0 + 600.0)
+  t.frame_at(t0 + 700.0)
+  (app.nav.top() != start, lens.val)
+}
+
+///|
+test "bar: held still on a place, let go without moving: the lens while held, then that place as a tap; called off first, nothing" {
+  assert_eq(bar_held_then(None), (true, true))
+  assert_eq(bar_held_then(Some(50.0)), (false, false))
+}

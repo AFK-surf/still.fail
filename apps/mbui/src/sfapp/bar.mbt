@@ -787,6 +787,7 @@ fn bar_reset() -> Unit {
   m_face.val = ""
   bar_clock.now = 0.0
   bar.told = None
+  bar_told_now.set(None)
 }
 
 ///|
@@ -1171,6 +1172,38 @@ fn bar_action(src : Source, ws : Workspace, active : String?, place_add : ((@sf.
 }
 
 ///|
+/// The notch's key as the bar last drew it: what its action opens is opened by it (a popover beside it).
+let bar_action_anchor : Ref[Int] = Ref(0)
+
+///|
+/// The notch's action, pressed at `t` (its key a node of the window's tree's: bar_glass_node): 令 a new chat, ＋ what
+/// the place's page adds (the files lent where it is 文件's); only with the notch open by then.
+fn bar_action_run(src : Source, ws : Workspace, t : Double) -> Unit {
+  let told = match bar.told {
+    Some(told) => told
+    None => return
+  }
+  if !told.shown || bar.k_at(t) <= 0.9 {
+    return
+  }
+  let c = @ui.current()
+  match told.action {
+    "ling" => new_chat(c)
+    "plus" =>
+      match bar_place_add(src, ws, told.active) {
+        Some(run) => run(Of(bar_action_anchor.val))
+        None => files_lend(c, src, ws)
+      }
+    _ => ()
+  }
+}
+
+///|
+/// What the bar was last told (bar_tell's), followed: where its glass is laid out and whether it takes a finger
+/// (bar_glass_node's bindings) as that changes.
+let bar_told_now : @signals.Signal[BarTold?] = @signals.signal(None, same=fn(a, b) { a == b })
+
+///|
 /// What the bar is told by the app's state and the window: whether it shows, the notch's action ("" none: closed), the
 /// place shown, the bars (`cur` the one shown, the others the panel's rows), how wide it is laid out (0: not known
 /// yet). Compared whole: told the same again, nothing new.
@@ -1209,13 +1242,14 @@ fn bar_row_top(bars : Int) -> Double {
 /// The bar told `told` at the moment `at` of what changed it (a page put on the stack or taken off, a place come in,
 /// what the notch offers, the bars' order, the window), whatever frames are drawn after: its ways set out from then,
 /// from where they are then; told the same again, nothing. A frame only reads where they are (BarModel::sample).
-/// (The finger on it is still read as the bar is built, the old frame's way: bar_gesture and what it sends.)
+/// (What a finger does on it is told so too, at each event's moment: bar_finger_at.)
 fn bar_tell(told : BarTold, at : Double) -> Unit {
   let m = bar
   if m.told == Some(told) {
     return
   }
   m.told = Some(told)
+  bar_told_now.set(Some(told))
   let shown = told.shown
   let notched = told.action != ""
   // shown or not
@@ -1336,7 +1370,7 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
 }
 
 ///|
-/// The bar told again what it was told last, at the moment `at` of what the finger did on it (bar_gesture: the old
+/// The bar told again what it was told last, at the moment `at` of what the finger did on it (bar_finger_at; the old
 /// frame's way, read as the bar is built), what goes by where the finger has it set out from then.
 fn bar_retell(at : Double) -> Unit {
   match bar.told {
@@ -1512,33 +1546,13 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
       bar_retell(@ui.current().moment())
     })
   }
-  // the gestures on the glass
-  let glass_id = c.id("bar/glass")
-  // (what the places say takes their presses: the glass, while it takes them, as its gestures are read)
-  let presses = if shown { glass_id } else { 0 }
-  if shown {
-    match c.drag_of(glass_id) {
-      Some(d) => {
-        bar_gesture(c, src, ws, d, sets, cur, others, active, fx, fy, w, panel, final_cs)
-        // (what the finger did told now, the frame's moment: the old frame's way of reading it)
-        bar_retell(c.moment())
-      }
-      None => ()
-    }
-  }
+  // (a finger on the glass is the window's tree's: its node over the bar, bar_glass, each event at its moment; the
+  // places take no press of their own here)
+  let presses = 0
   let action_id = c.id("bar/action")
-  if c.clicked(action_id) && shown && k_now > 0.9 {
-    match action {
-      "ling" => new_chat(c)
-      "plus" =>
-        match place_add {
-          // (what it puts up opened by the notch)
-          Some(run) => run(Of(action_id))
-          None => files_lend(c, src, ws)
-        }
-      _ => ()
-    }
-  }
+  // (pressed through the window's tree's key over it: bar_glass_node; what it opens opened by the notch drawn here)
+  bar_action_anchor.val = action_id
+  ignore(place_add)
   // the notch's icon: another one swaps in as the notch stays open (a short scale and fade); closed, at once
   let swap_icon = show_icon(c)
   let mut holder = -1
@@ -1563,11 +1577,6 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
         }
       }
       bar_glass(c, w, clip_top, panel, notch_y, notch_r)
-      // the glass takes the gestures (its places' taps are read where they land)
-      at(c, 0.0, clip_top, w, panel - clip_top, body=fn() {
-        c.drag_area(glass_id, axis=Free, w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
-      })
-      |> ignore
       // 令 in the notch: accent glass, growing out of the bar as the notch opens about its middle, which comes up to
       // the bar's edge (laid out as it is open, drawn so); closing, it keeps the last action's icon as it shrinks
       if k_now > 0.001 {
@@ -1833,219 +1842,361 @@ fn place_at(
 }
 
 ///|
-/// What a finger does on the glass (Bar.kt BarModel down, move, up, letGo, tap): a stroke any way takes the ball; up,
-/// with more than one bar, the panel; a tap picks a place (on the bar), or a bar and its place (in the open panel).
-fn bar_gesture(
-  c : @ui.Ctx,
-  src : Source,
-  ws : Workspace,
-  d : @ui.Drag,
-  sets : Array[Array[String]],
-  cur : Int,
-  others : Array[Int],
-  active : String?,
-  fx : Double,
-  fy : Double,
-  w : Double,
-  panel : Double,
-  final_cs : Array[Double],
-) -> Unit {
+/// The bar's geometry as `told` has it (bar_tell's): the bars, the one shown and the others (the panel's rows), how
+/// wide, the panel's height and its track's top, how far a finger draws the panel up.
+priv struct BarLaid {
+  sets : Array[Array[String]]
+  cur : Int
+  items : Array[String]
+  others : Array[Int]
+  multi : Bool
+  w : Double
+  panel : Double
+  row_top : Double
+  reach : Double
+}
+
+///|
+fn bar_laid(told : BarTold) -> BarLaid {
+  let sets = told.sets
+  let others : Array[Int] = []
+  for i in 0..<sets.length() {
+    if i != told.cur {
+      others.push(i)
+    }
+  }
+  let row_top = bar_row_top(sets.length())
+  {
+    sets,
+    cur: told.cur,
+    items: sets[told.cur],
+    others,
+    multi: sets.length() > 1,
+    w: told.width,
+    panel: row_top + bar_track,
+    row_top,
+    reach: row_top - over,
+  }
+}
+
+///|
+/// The notch as it is at `t`: as its place has it, closed as far as the panel is up (fully by half open).
+fn BarModel::k_at(self : BarModel, t : Double) -> Double {
+  self.k.value_at(t) * (1.0 - dclamp(2.0 * self.o.value_at(t), 0.0, 1.0))
+}
+
+///|
+/// The bar's glass held by a finger, as the window's tree hands it on (narrow_shell's node over the bar: View::gesture):
+/// each event at its own moment (`d.at`), where the panel, the notch and the ball are then by their ways (never where a
+/// frame last drew them), what it does told then (bar_retell). `src`, `ws`: the workspace in view. Where the bar is
+/// laid out is what it was told (bar_tell: BarLaid), the same the bar is drawn by.
+fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs) -> Unit {
   let m = bar
-  let items = sets[cur]
-  let multi = sets.length() > 1
-  let row_top = panel - bar_track
-  let reach = row_top - over
-  let px = d.x - fx
-  let py = d.y - fy
+  let told = match m.told {
+    Some(t) => t
+    None => return
+  }
+  let l = bar_laid(told)
+  let t = d.at
+  let px = d.x
+  let py = d.y
+  let o_at = m.o.value_at(t)
+  let c = @ui.current()
   let on_tab = fn(place : String) {
-    if Some(place) != active {
-      go_place(c, place, sets, cur)
+    if Some(place) != told.active {
+      go_place(c, place, l.sets, l.cur)
     }
   }
   // another bar chosen (and a place in it, when one was tapped): it is the bar, and the place opens, now; the panel
   // closes like a window over a stack of bars, the chosen one sliding down into the bar's place (Bar.kt pick)
   let pick = fn(i : Int, key : String?) {
-    if m.swap_at(bar_clock.now) is Some(_) {
+    if m.swap_at(t) is Some(_) {
       return
     }
-    let n = match others.search(i) {
+    let n = match l.others.search(i) {
       Some(n) => n
       None => return
     }
     let lit : Map[String, Double] = Map([])
     for id, g in m.tints {
-      lit[id] = g.value
+      lit[id] = g.at(t).0
     }
-    let o = m.o.x
     m.mode.set(false)
-    m.o.go(0.0, 200.0, 28.0)
-    // (it lands as the panel closes under it, as that was said now: the moment it is over its own, whatever is told
-    // the panel after)
+    m.o.go(0.0, 200.0, 28.0, at=t)
     m.swap = Some({
       i,
       n,
-      from: dmax(0.2, o),
+      from: dmax(0.2, o_at),
       key,
-      sets,
-      cur,
-      alpha: rows_alpha(o),
-      drop: rows_shift(o, reach),
+      sets: l.sets,
+      cur: l.cur,
+      alpha: rows_alpha(o_at),
+      drop: rows_shift(o_at, l.reach),
       lit,
       ends: m.o.end(),
     })
-    // its first frame, drawn as the panel was (the motion log)
-    @motion.log_frame(c, "bar/swap", "value=\{m.o.x} to=0")
-    set_bars(src, ws.id, sets, i)
+    set_bars(src, ws.id, l.sets, i)
     match key {
-      Some(k) => go_place(c, k, sets, i)
+      Some(k) => go_place(c, k, l.sets, i)
       None => ()
     }
   }
-  // a bar chosen landing: it lands on its own spring, untouched; a finger down meanwhile is the finger's once it has
-  // (its stroke from there), lifted before, nothing
-  if m.swap_at(bar_clock.now) is Some(_) {
-    // a bar chosen landing lands on its own spring: a finger down meanwhile does not take the ball or the panel
-    // (Bar.kt waits); a tap on one of its places is that place's at once, where it is laid out (src/motion's rule)
-    if d.down {
-      m.waits = true
-    }
-    ignore(d.take_end())
-    if d.take_tap() {
-      m.waits = false
-      if items.length() > 0 && py >= row_top - 4.0 {
-        let now = bar_centres(w, m.k_now(), items.length())
-        let j = nearest(now, items.length(), px)
-        if (now[j] - px).abs() <= (w - 2.0 * c0) / 6.0 {
-          on_tab(items[j])
-        }
-      }
-    }
-    return
-  }
-  if m.waits {
-    ignore(d.take_end())
-    ignore(d.take_tap())
-    m.waits = false
-    m.was_down = false
-    if !d.down {
-      return
-    }
-  }
-  if d.down && !m.was_down {
-    // pressed: the panel open, opening or closing, the finger has it from here
-    m.was_down = true
-    m.y0 = py
-    m.o0 = m.o.x
-    // (opening: short of the rest its spring declared as it set out, toward open)
-    m.holds = multi && (m.o0 > 0.02 || (bar_clock.now < m.o.end() && m.o.to > 0.0))
-    m.from_open = m.holds
-    m.open = m.o.to > 0.5
-    if m.holds {
-      m.mode.set(true)
-    }
-  }
-  if d.down && d.moving {
-    if multi {
-      let raw = m.o0 + (m.y0 - py - (if m.from_open { 0.0 } else { 8.0 })) / reach
-      if !m.holds && raw > 0.0 {
-        m.holds = true
-        m.mode.set(true)
-      }
-      if m.holds {
-        let over_bar = row_top - py
-        if !m.open && over_bar > opens {
-          m.open = true
-        } else if m.open && over_bar < closes {
-          m.open = false
-        }
-        let snap = if m.open { 1.0 } else { 0.0 }
-        let goal = dclamp(snap + lean * (raw - snap), 0.0, 1.1)
-        if m.open {
-          m.o.go(goal, 260.0, 17.0)
-        } else {
-          m.o.go(goal, 320.0, 26.0)
-        }
-      }
-    }
-    m.drag = px
-    m.drag_y = if multi && m.holds && m.open {
-      dclamp(py, over + bar_row / 2.0, row_top + bar_track / 2.0)
-    } else {
-      -1.0
-    }
-  }
-  // held where it went down a moment (not moved past the slop), on the bar's row: the ball the finger's there, the
-  // lens over it as while it slides (iOS's tab bar), going nowhere till the finger moves; let go, a tap as any
-  let held_still = d.down && !d.moving && !m.holds && py >= row_top - 4.0
-  if c.held("bar/held-still", held_still, bar_hold_ms) {
-    m.drag = px
-    m.drag_y = -1.0
-  }
-  if d.take_end() {
-    m.was_down = false
-    let had = m.holds
+  let ended = fn() {
     m.holds = false
     m.drag = -1.0
     m.drag_y = -1.0
-    if had {
-      // let go on a row (the panel open): that bar and that place; else as the finger left it
-      let in_rows = py < row_top - 4.0 && others.length() > 0
-      if in_rows && m.o.x >= 0.85 {
-        let n = dclamp(((py - over) / bar_row).floor(), 0.0, (others.length() - 1).to_double()).to_int()
-        let set = sets[others[n]]
-        pick(others[n], Some(set[nearest(bar_centres(w, 0.0, set.length()), set.length(), px)]))
-      } else {
-        let j = if py >= row_top - 4.0 && items.length() > 0 {
-          imin(items.length() - 1, nearest(final_cs, 4, px))
-        } else {
-          -1
-        }
-        m.open_panel(m.open)
-        if !m.open && j >= 0 {
-          on_tab(items[j])
-        }
-      }
-    } else if items.length() > 0 {
-      let j = imin(items.length() - 1, nearest(final_cs, 4, px))
-      if m.mode.get() {
-        m.open_panel(false)
-      }
-      on_tab(items[j])
-    }
   }
-  if d.take_tap() {
-    m.was_down = false
-    m.holds = false
-    m.drag = -1.0
-    m.drag_y = -1.0
-    // a tap: a place on the bar; with the panel open, a row (that bar) or a place in it
-    if m.mode.get() && py < row_top {
-      if m.o.x > 0.6 && others.length() > 0 {
-        let shift = (1.0 - dmin(1.0, m.o.x)) * 14.0 - dmax(0.0, m.o.x - 1.0) * reach
-        let n = ((py - over - shift) / bar_row).floor().to_int()
-        if n >= 0 && n < others.length() {
-          let set = sets[others[n]]
-          let cs = bar_centres(w, 0.0, set.length())
-          let j = nearest(cs, set.length(), px)
-          let slot = (w - 2.0 * c0) / 3.0
-          pick(others[n], if (cs[j] - px).abs() <= slot / 2.0 { Some(set[j]) } else { None })
-        }
-      }
-    } else if items.length() > 0 && py >= row_top - 4.0 {
-      let now = bar_centres(w, m.k_now(), items.length())
-      let j = nearest(now, items.length(), px)
-      let slot = (w - 2.0 * c0) / 3.0
+  // a tap on the bar's places where they are at `t` (the notch open as far as it is then)
+  let tap_bar = fn() {
+    if l.items.length() > 0 && py >= l.row_top - 4.0 {
+      let now = bar_centres(l.w, m.k_at(t), l.items.length())
+      let j = nearest(now, l.items.length(), px)
+      let slot = (l.w - 2.0 * c0) / 3.0
       if (now[j] - px).abs() <= slot / 2.0 {
         if m.mode.get() {
-          m.open_panel(false)
+          m.open_panel(false, at=t)
         }
-        on_tab(items[j])
+        on_tab(l.items[j])
       }
     }
   }
-  if !d.down {
-    m.was_down = false
+  // a bar chosen landing lands on its own spring: a finger down meanwhile does not take the ball or the panel (Bar.kt
+  // waits); a tap on one of its places is that place's at once, where it is then (src/motion's rule)
+  if m.swap_at(t) is Some(_) || m.waits {
+    match how {
+      Pressed => m.waits = true
+      Tapped => {
+        m.waits = false
+        tap_bar()
+      }
+      Held | Dragging => ()
+      Ended => m.waits = false
+    }
+    bar_retell(t)
+    return
   }
+  match how {
+    Pressed => {
+      // pressed: the panel open, opening or closing, the finger has it from here
+      m.y0 = py
+      m.o0 = o_at
+      // (opening: short of the rest its spring declared as it set out, toward open)
+      m.holds = l.multi && (m.o0 > 0.02 || (t < m.o.end() && m.o.to > 0.0))
+      m.from_open = m.holds
+      m.open = m.o.to > 0.5
+      if m.holds {
+        m.mode.set(true)
+      }
+    }
+    Dragging => {
+      if l.multi {
+        let raw = m.o0 + (m.y0 - py - (if m.from_open { 0.0 } else { 8.0 })) / l.reach
+        if !m.holds && raw > 0.0 {
+          m.holds = true
+          m.mode.set(true)
+        }
+        if m.holds {
+          let over_bar = l.row_top - py
+          if !m.open && over_bar > opens {
+            m.open = true
+          } else if m.open && over_bar < closes {
+            m.open = false
+          }
+          let snap = if m.open { 1.0 } else { 0.0 }
+          let goal = dclamp(snap + lean * (raw - snap), 0.0, 1.1)
+          if m.open {
+            m.o.go(goal, 260.0, 17.0, at=t)
+          } else {
+            m.o.go(goal, 320.0, 26.0, at=t)
+          }
+        }
+      }
+      m.drag = px
+      m.drag_y = if l.multi && m.holds && m.open {
+        dclamp(py, over + bar_row / 2.0, l.row_top + bar_track / 2.0)
+      } else {
+        -1.0
+      }
+    }
+    // held still where it went down, on the bar's row: the ball the finger's there, the lens over it as while it
+    // slides (iOS's tab bar), going nowhere till the finger moves; let go, as a drag ends
+    Held =>
+      if !m.holds && py >= l.row_top - 4.0 {
+        m.drag = px
+        m.drag_y = -1.0
+      }
+    Ended => {
+      let had = m.holds
+      let final_cs = bar_centres(l.w, if told.action != "" && !m.mode.get() { 1.0 } else { 0.0 }, l.items.length())
+      ended()
+      if d.kind == Off {
+        // called off: the panel where the finger left it, nothing chosen
+        if had {
+          m.open_panel(m.open, at=t)
+        }
+      } else if had {
+        // let go on a row (the panel open): that bar and that place; else as the finger left it
+        let in_rows = py < l.row_top - 4.0 && l.others.length() > 0
+        if in_rows && m.o.value_at(t) >= 0.85 {
+          let n = dclamp(((py - over) / bar_row).floor(), 0.0, (l.others.length() - 1).to_double()).to_int()
+          let set = l.sets[l.others[n]]
+          pick(l.others[n], Some(set[nearest(bar_centres(l.w, 0.0, set.length()), set.length(), px)]))
+        } else {
+          let j = if py >= l.row_top - 4.0 && l.items.length() > 0 {
+            imin(l.items.length() - 1, nearest(final_cs, 4, px))
+          } else {
+            -1
+          }
+          m.open_panel(m.open, at=t)
+          if !m.open && j >= 0 {
+            on_tab(l.items[j])
+          }
+        }
+      } else if l.items.length() > 0 {
+        let j = imin(l.items.length() - 1, nearest(final_cs, 4, px))
+        if m.mode.get() {
+          m.open_panel(false, at=t)
+        }
+        on_tab(l.items[j])
+      }
+    }
+    Tapped => {
+      ended()
+      // a tap: a place on the bar; with the panel open, a row (that bar) or a place in it
+      if m.mode.get() && py < l.row_top {
+        if o_at > 0.6 && l.others.length() > 0 {
+          let shift = (1.0 - dmin(1.0, o_at)) * 14.0 - dmax(0.0, o_at - 1.0) * l.reach
+          let n = ((py - over - shift) / bar_row).floor().to_int()
+          if n >= 0 && n < l.others.length() {
+            let set = l.sets[l.others[n]]
+            let cs = bar_centres(l.w, 0.0, set.length())
+            let j = nearest(cs, set.length(), px)
+            let slot = (l.w - 2.0 * c0) / 3.0
+            pick(l.others[n], if (cs[j] - px).abs() <= slot / 2.0 { Some(set[j]) } else { None })
+          }
+        }
+      } else {
+        tap_bar()
+      }
+    }
+  }
+  // (what the finger did told at its moment: the ball, the lens, the places lit set out from then)
+  bar_retell(t)
+}
+
+///|
+/// What a finger on the bar's glass came to (View::gesture's): put down, moved past the slop (and on), held still, let
+/// go (or called off) after either, let go where it went down.
+priv enum BarFingerIs {
+  Pressed
+  Dragging
+  Held
+  Ended
+  Tapped
+}
+
+///|
+/// The bar's glass, a node of the window's tree over the bar (narrow_shell's): where the bar is laid out as it was told
+/// (BarLaid: as wide as told, as high as its panel, over the system's navigation bar), pressed while it shows, a finger
+/// on it handed to the bar at each event's moment (bar_finger_at). Held still and let go without moving, as a tap: the
+/// place under it (the bar's way before: held, the lens; let go, a place as any tap).
+fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
+  let told = fn() { bar_told_now.get() }
+  // (whether this finger moved past the slop: let go after a hold without, a tap)
+  let dragged = Ref(false)
+  let finger = fn(how : BarFingerIs) {
+    fn(d : @view.Drag) {
+      match ws() {
+        Some(w) => bar_finger_at(src, w, d, how)
+        None => ()
+      }
+    }
+  }
+  v.box(fn(b) {
+    b
+    .over(Is(true))
+    .padding(By(fn() { (22.0, 0.0, 22.0, 22.0 + nav_foot()) }))
+    .presses(By(fn() {
+      match told() {
+        Some(t) => t.shown
+        None => false
+      }
+    }))
+    |> ignore
+    b.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
+    b.box(fn(g) {
+      g
+      .height(By(fn() {
+        match told() {
+          Some(t) => Some(bar_laid(t).panel)
+          None => Some(0.0)
+        }
+      }))
+      .gesture(
+        @ui.touch_slop(),
+        press=fn(d) {
+          dragged.val = false
+          (finger(Pressed))(d)
+        },
+        tap=finger(Tapped),
+        hold=(bar_hold_ms, finger(Held)),
+        drag=fn(d) {
+          match d.kind {
+            Down | Moved => {
+              dragged.val = true
+              (finger(Dragging))(d)
+            }
+            // (held still and let go without moving: a tap, as before)
+            Up if !dragged.val => (finger(Tapped))(d)
+            _ => (finger(Ended))(d)
+          }
+        },
+      )
+      |> ignore
+      // the notch's key, over the glass where the notch is (in the middle of the bar, risen over its edge), pressed
+      // while the place has an action
+      g.box(fn(o) {
+        o
+        .over(Is(true))
+        .padding(By(fn() {
+          match told() {
+            Some(t) => {
+              let l = bar_laid(t)
+              (l.w / 2.0 - drop / 2.0, l.row_top - lift - drop / 2.0, 0.0, 0.0)
+            }
+            None => (0.0, 0.0, 0.0, 0.0)
+          }
+        }))
+        |> ignore
+        o.box(fn(k) {
+          k
+          .width(Is(Some(drop)))
+          .height(Is(Some(drop)))
+          .presses(By(fn() {
+            match told() {
+              Some(t) => t.shown && t.action != ""
+              None => false
+            }
+          }))
+          .on_press(fn() {
+            match ws() {
+              Some(w) =>
+                bar_action_run(src, w, match @ui.tree_cause() {
+                  Some(at) => at
+                  None => @ui.current().moment()
+                })
+              None => ()
+            }
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
 }
 
 ///|
