@@ -431,6 +431,9 @@ pub struct Ctx {
   /// what comes again every so often while shown this frame (Ctx::every): its period, who reads it
   periodic : Array[(Double, SourceLoc)]
   mut motion_left : Bool
+  /// whether this frame read a motion going (Ctx::shows_motion): its next frame asked for as this one ends, as for what
+  /// is said to move
+  mut motion_read : Bool
   /// a fiber of the window's runtime waits for the next frame (@effect.next_frame): it comes as the clock goes, not at
   /// this moment, as a motion going on
   mut fiber_frame : Bool
@@ -727,6 +730,7 @@ fn Ctx::new() -> Ctx {
     cycles: [],
     periodic: [],
     motion_left: false,
+    motion_read: false,
     fiber_frame: false,
     motion_unstarted: false,
     took_input: false,

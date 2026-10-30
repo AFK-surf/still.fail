@@ -2412,6 +2412,7 @@ pub fn Tester::frame_perf(Self) -> FramePerf
 pub fn Tester::frame_period(Self) -> Double
 pub fn Tester::frame_shown_at(Self, Double, Double) -> Unit
 pub fn Tester::frames(Self, Int32, ms? : Double) -> Array[Int64]
+pub fn Tester::frames_on(Self) -> Int32
 pub fn Tester::frames_owed(Self) -> Unit
 pub fn Tester::gallery(Self, Array[@hostapi.GalleryPhoto]) -> Unit
 pub fn Tester::gap_faults(Self) -> Array[String]

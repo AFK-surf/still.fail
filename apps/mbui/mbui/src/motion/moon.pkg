@@ -6,3 +6,7 @@ import {
   "mbui/dmath",
   "moonbitlang/core/double",
 }
+
+import {
+  "mbui/view",
+} for "test"
