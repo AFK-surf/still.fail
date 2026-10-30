@@ -365,6 +365,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-adb" | "settings-adb-off" | "settings-adb-unpaired" | "settings-adb-pairing" | "settings-adb-connected" | "settings-adb-failed" =>
       "adb:ws1/st1"
     "settings-adb-chats" | "settings-adb-idle" => "adb:"
+    // the second station a phone is lent to, its first paired already
+    "settings-adb-second" => "adb:ws1/st2"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-login" | "settings-profile-login-station" =>
       "profile:ws1/st1#cc"
     "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
@@ -2696,13 +2698,36 @@ fn fx_adb_share() -> Json {
       ])
     // settings' 共享调试, its switch off: nothing granted
     "idle" => obj([("sharing", Json::boolean(false)), ("phase", str("off")), ("on", Json::boolean(false)), ("tunnels", Json::number(0.0))])
-    // settings' 共享调试, its switch on: two chats granted it, one asking
+    // lent for chats' grants to two stations: Studio's adb holds the phone, the other's waits to be paired with it (as
+    // a core from before it said the one it names at its top: the first)
+    "second" =>
+      lent("connected", [
+        ("pairPort", Json::number(37115.0)),
+        (
+          "lends",
+          Json::array([
+            obj([("station", str("ws1/st1")), ("phase", str("offered")), ("adb", str("connected")), ("serial", str("127.0.0.1:37762")), ("tunnels", Json::number(1.0))]),
+            obj([("station", str("ws1/st2")), ("phase", str("offered")), ("adb", str("unpaired")), ("serial", str("127.0.0.1:37715")), ("tunnels", Json::number(0.0))]),
+          ]),
+        ),
+      ])
+    // settings' 共享调试, its switch on: two chats granted it, one asking; lent to both their stations, Studio's adb
+    // holding the phone and the other's waiting to be paired
     "chats" =>
       obj([
-        ("sharing", Json::boolean(false)),
-        ("phase", str("off")),
+        ("sharing", Json::boolean(true)),
+        ("station", str("ws1/st2")),
+        ("phase", str("offered")),
+        ("adb", str("unpaired")),
         ("on", Json::boolean(true)),
         ("tunnels", Json::number(0.0)),
+        (
+          "lends",
+          Json::array([
+            obj([("station", str("ws1/st1")), ("phase", str("offered")), ("adb", str("connected")), ("tunnels", Json::number(1.0))]),
+            obj([("station", str("ws1/st2")), ("phase", str("offered")), ("adb", str("unpaired")), ("tunnels", Json::number(0.0))]),
+          ]),
+        ),
         (
           "grants",
           Json::array([

@@ -37,6 +37,8 @@ pub fn fixture_reset() -> Unit {
   fix_decided.clear()
   fix_replied.clear()
   fix_vault.val = ""
+  fix_phone.val = ""
+  fix_phone_link.val = ""
   fix_working_now.val = ("call:1", working_step)
   kept_chats.clear()
   fixture_pictures.clear()

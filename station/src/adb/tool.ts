@@ -24,7 +24,7 @@ export function listed(phones: Json[]): string {
   if (phones.length === 0) return `No phone is shared with this station now. ${ask}`;
   let text = `${JSON.stringify(phones, null, 2)}\n\n`;
   text +=
-    'Use a phone with `adb -s <serial> …` (adb is this machine\'s). adb "connected" is ready; "unpaired" means its person still has to pair it in the app (Wireless debugging › 使用配对码配对设备); after `adb kill-server` run `adb connect <serial>` again. A phone is its owner\'s: use it for what they asked, and it goes when they stop sharing it. ';
+    'Use a phone with `adb -s <serial> …` (adb is this machine\'s). adb "connected" is ready; "unpaired" means its person still has to pair it with this station, on its 共享调试 page in the still.fail app on the phone (where a link to it opens); after `adb kill-server` run `adb connect <serial>` again. A phone is its owner\'s: use it for what they asked, and it goes when they stop sharing it. ';
   text += ask;
   return text;
 }
@@ -57,7 +57,7 @@ export function reached(serials: { serial: string; adb: string; device: string }
   return [
     "Granted. Use this chat's adb server, with -P on every adb command (the station's own adb, 5037, does not have the phone; another server is turned away):",
     ...lines,
-    'adb "connected" is ready; "unpaired": its person still has to pair it in the app (Wireless debugging › 使用配对码配对设备). Never adb kill-server on it. A phone is its owner\'s: use it for what they asked.',
+    'adb "connected" is ready; "unpaired": this station\'s adb is not paired with the phone yet, and its card in your chat shows its person how (去配对, in the still.fail app on the phone): leave it to the card, do not send them to the phone\'s settings, and you are told in this session when it connects. Never adb kill-server on it. A phone is its owner\'s: use it for what they asked.',
   ].join("\n");
 }
 

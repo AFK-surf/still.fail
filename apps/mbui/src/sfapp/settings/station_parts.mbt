@@ -157,6 +157,43 @@ priv struct AdbStep {
 }
 
 ///|
+/// The lendings chats' grants made (`adbShare`'s `lends`: each station's, how its adb holds the phone).
+pub fn adb_lends(all : Json?) -> Array[Json] {
+  match field(all, "lends") {
+    Some(Array(a)) => a
+    _ => []
+  }
+}
+
+///|
+/// The phone's lending to the station at `address`, as `adbShare` says the one it names at its top: that one, or the
+/// station's among its `lends` (a phone granted to chats on two stations is lent to both; what the topic's top says is
+/// only the one a person has something to do for), with the ports the app found for adbd (the phone's, the same for
+/// each). Not lent there: the topic as it is.
+pub fn adb_lend_view(all : Json?, address : String) -> Json? {
+  if flag(all, "sharing") && text(all, "station") == address {
+    return all
+  }
+  match adb_lends(all).iter().find_first(fn(l) { text(Some(l), "station") == address }) {
+    Some(Object(l)) => {
+      let out : Map[String, Json] = {}
+      for k, v in l {
+        out[k] = v
+      }
+      out["sharing"] = Json::boolean(true)
+      for key in ["connectPort", "pairPort", "refusedPort"] {
+        match field(all, key) {
+          Some(v) => out[key] = v
+          None => ()
+        }
+      }
+      Some(Json::object(out))
+    }
+    _ => all
+  }
+}
+
+///|
 /// A step for adb_next to say.
 fn adb_step(title : String, sub? : String = "", go? : String = "", doing? : String = "", act? : String = "") -> AdbStep? {
   Some({ title, sub, go, doing, act })
@@ -200,7 +237,7 @@ fn adb_next(view : Json?, phone : Json?, there : Bool) -> AdbStep? {
 ///|
 /// A step's tap (AdbStep `act`): Wireless debugging turned on by the app (`switch`) or in Settings (`wireless`), the
 /// pairing dialog opened beside the app (`pairing`), the code asked for and paired with (`code`).
-fn adb_do(core : Core, what : String) -> Unit {
+fn adb_do(core : Core, what : String, station? : String = "") -> Unit {
   match what {
     "switch" => adb_ask("adb.switch", obj([]))
     "wireless" => adb_ask("adb.open", obj([("what", str("wireless"))]))
@@ -223,7 +260,7 @@ fn adb_do(core : Core, what : String) -> Unit {
             core,
             tr("android-misc.adb.pair.action"),
             "adb.pair",
-            obj([("code", str(digits.to_string()))]),
+            obj([("code", str(digits.to_string())), ("station", str(station))]),
             done=tr("android-misc.adb.paired"),
           )
         },
@@ -319,10 +356,12 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
     Some(s) => text(Some(s), "name")
     None => station_name(address)
   }
-  let view = (core.topic)("adbShare", Map([])).value
+  let all = (core.topic)("adbShare", Map([])).value
+  let view = adb_lend_view(all, address)
   let sharing = flag(view, "sharing")
   let there = sharing && text(view, "station") == address
-  let elsewhere = sharing && text(view, "station") != address
+  // (lent with the app's switch from before grants, to one station: another's now)
+  let elsewhere = !there && flag(all, "sharing") && text(all, "station") != address && adb_lends(all).is_empty()
   // (a device with no adb to lend, as the core says: so at once, not after asking its host)
   let card = (core.topic)("adbCard", { "station": str(address) }).value
   let cannot = card is Some(_) && !flag(card, "lendable") && !there
@@ -423,7 +462,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
                     }
                   })
                 }) {
-                adb_do(core, step.act)
+                adb_do(core, step.act, station=address)
               }
             })
           })
@@ -625,6 +664,37 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         }
       })
     })
+    // the stations its grants lend it to, each with how its adb holds the phone, and its own page (pairing, what is
+    // next) a tap away (2026-10-30: a phone granted to chats on two stations, one of them not paired with it, and
+    // nothing here said which, nor led to where it is paired)
+    let stations : Array[String] = []
+    for g in live {
+      let st = text(Some(g), "station")
+      if st != "" && !stations.contains(st) {
+        stations.push(st)
+      }
+    }
+    for l in adb_lends(view) {
+      let st = text(Some(l), "station")
+      if st != "" && !stations.contains(st) {
+        stations.push(st)
+      }
+    }
+    if !stations.is_empty() {
+      blocks.push(fn() { section_header(c, tr("android-misc.adb.stations"), start=S6) })
+      blocks.push(fn() {
+        list_card(c, fn() {
+          for st in stations {
+            let lent = adb_lend_view(view, st)
+            let there = flag(lent, "sharing") && text(lent, "station") == st
+            let state = if there { adb_state(c, lent, (core.now)()) } else { tr("android-misc.adb.stations.notLent") }
+            if @sf.link_row(c, "adb-station/" + st, named(st), note=state) {
+              (core.push)(AdbShare(st))
+            }
+          }
+        })
+      })
+    }
     // the chats it is lent to now, each taken back here
     blocks.push(fn() { section_header(c, tr("android-misc.adb.chats.live"), start=S6) })
     blocks.push(fn() {

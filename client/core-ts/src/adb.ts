@@ -501,7 +501,7 @@ export class Adb {
         });
       case "pair":
       case "grant": {
-        const lend = this.#legacy.value().sharing ? this.#legacy : (call.station !== undefined ? this.#lends.get(call.station) : [...this.#lends.values()][0]);
+        const lend = this.#legacy.value().sharing ? this.#legacy : (call.station !== undefined ? this.#lends.get(call.station) : this.#focus());
         return lend === undefined ? Effect.fail(CoreError.invalid(t("core-misc.adb.not_sharing"))) : lend.run(call);
       }
       case "decide":
@@ -584,9 +584,22 @@ export class Adb {
     this.#env.store.invalidate({ topic: "adbShare" });
   }
 
-  /// The `adbShare` topic: the lending as the app's switch made it, or the first a grant made, and every grant.
+  /// The lending a person has something to do for, of those grants made: one whose station's adb waits to be paired
+  /// with this phone, else the first. What the topic's own fields say, the pairing dialog's code goes to (its
+  /// notification, AdbCodeReader: they name no station) and an ask naming none is of (2026-10-30: a phone lent to a
+  /// second station was paired with the first, already paired, and the second never).
+  #focus(): Lend | undefined {
+    const lends = [...this.#lends.values()];
+    return lends.find((l) => {
+      const v = l.value();
+      return v.phase === "offered" && v.adb === "unpaired";
+    }) ?? lends[0];
+  }
+
+  /// The `adbShare` topic: the lending as the app's switch made it, or the one a grant made a person has something to do
+  /// for (#focus), and every grant and lending.
   value(): J {
-    const first = this.#legacy.value().sharing ? this.#legacy : ([...this.#lends.values()][0] ?? this.#legacy);
+    const first = this.#legacy.value().sharing ? this.#legacy : (this.#focus() ?? this.#legacy);
     const lends = [...this.#lends.entries()].map(([station, l]) => {
       const v = l.value();
       return { station, phase: v.phase, adb: v.adb, serial: v.serial, message: v.message, tunnels: v.tunnels };

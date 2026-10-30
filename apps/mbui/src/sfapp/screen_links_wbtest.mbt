@@ -101,14 +101,20 @@ test "a link alone in a paragraph is its card, a bare one in a sentence reads as
   // the title in the sentence opens the link, the card too, as a tap on the link would
   t.tap_run("共享调试")
   assert_eq(t.opened(), ["https://still.fail/w/ws1/s/st1/adb"])
+  // the card's 详情: the page it shows, here, whatever host its link was written with (2026-10-30: one under another
+  // host than the cloud's went to the browser)
   guard adb_button_at(t, "详情") is Some((x, y)) else { fail("the card's 详情") }
   t.tap(x, y)
-  assert_eq(t.opened(), ["https://still.fail/w/ws1/s/st1/adb", "https://still.fail/w/ws1/s/st1/adb"])
+  t.draw()
+  assert_eq(t.opened(), ["https://still.fail/w/ws1/s/st1/adb"])
+  assert_true(app.nav.top() == Setting(AdbShare("ws1/st1")))
+  t.back()
+  t.run_for(@ui.move_most_ms)
   scroll_to_words(t, "Ana 正在查看")
   t.tap_text("Ana 正在查看")
   t.frame()
   // a screen's: its viewer here, nothing opened outside
-  assert_eq(t.opened().length(), 2)
+  assert_eq(t.opened().length(), 1)
   guard app.nav.top() is Screen(at) else { fail("no viewer on top") }
   assert_eq(at.screen, "desktop")
 }
@@ -202,7 +208,11 @@ test "共享调试's card: lent from the chat where the phone has all it takes; 
   assert_true(adb_button_at(t, "共享") is None)
   guard adb_button_at(t, "查看步骤") is Some((x, y)) else { fail("the card's 查看步骤") }
   t.tap(x, y)
-  assert_eq(t.opened(), ["https://still.fail/w/ws1/s/st1/adb"])
+  t.draw()
+  assert_eq(t.opened(), [])
+  assert_true(app.nav.top() == Setting(AdbShare("ws1/st1")))
+  t.back()
+  t.run_for(@ui.move_most_ms)
   // Wireless debugging off, which the app may turn on itself: 共享 again, turning it on as it lends
   t.post("native:adb.phone", adb_phone_of(can_switch=true).stringify())
   t.draw()

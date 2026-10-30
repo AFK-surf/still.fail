@@ -42,6 +42,10 @@ test("still_fail_links_open_in_the_app_and_others_do_not", () => {
   assert.equal(linkTarget("http://app.still.fail/o/ws1/st1/k", cloud), null);
   assert.equal(linkTarget("https://app.still.fail/o/ws1/st1", cloud), null);
   assert.equal(linkTarget("mailto:a@b.c", cloud), null);
+  // A path alone is the cloud's own, as the cards for such links take it.
+  assert.deepEqual(linkTarget("/w/ws1/s/st1/adb", cloud), { opens: "adbShare", workspace: "ws1", station: "st1" });
+  assert.deepEqual(linkTarget("/o/ws1/st1/k", cloud), { opens: "item", workspace: "ws1", station: "st1", session: "k", service: null });
+  assert.equal(linkTarget("//example.com/o/ws1/st1/k", cloud), null);
   const dev = "http://10.0.2.2:8877";
   assert.equal(linkTarget("http://10.0.2.2:8877/o/w/s/k", dev).opens, "item");
   assert.equal(linkTarget("https://app.still.fail/o/w/s/k", dev), null);

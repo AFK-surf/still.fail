@@ -29,10 +29,21 @@ export const AdbLive = Layer.effectDiscard(
         events.tell("adb-grant", r, `adb-grant\0${r.id}`, { workspace, email: r.owner });
         if (r.status === "denied" || r.status === "ended") void servers.stop(r.id);
         shares?.regrant(r.owner);
+        // (granted while the phone is offered here already: its card says at once how it is held)
+        const held = r.status === "granted" ? [...(shares?.byKey.values() ?? [])].find((s) => s.owner.email.toLowerCase() === r.owner) : undefined;
+        if (held !== undefined) grants.linked(r.owner, held.state);
       },
     });
     shares = yield* Effect.acquireRelease(
-      Effect.sync(() => new Shares({ cloud: plane.state, servers, granted: (email) => grants.ofOwner(email).filter((r) => r.status === "granted").map((r) => r.id) })),
+      Effect.sync(
+        () =>
+          new Shares({
+            cloud: plane.state,
+            servers,
+            granted: (email) => grants.ofOwner(email).filter((r) => r.status === "granted").map((r) => r.id),
+            stated: (email, state) => grants.linked(email, state),
+          }),
+      ),
       (s) => Effect.promise(() => s.close()),
     );
     const lent = shares;

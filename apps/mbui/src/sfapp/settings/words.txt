@@ -49,6 +49,17 @@ android-misc.adb.ask.ended
 android-misc.adb.ask.first
 android-misc.adb.ask.granted
 android-misc.adb.ask.how
+android-misc.adb.ask.link.connected
+android-misc.adb.ask.link.failed
+android-misc.adb.ask.link.gone
+android-misc.adb.ask.link.missing
+android-misc.adb.ask.link.off
+android-misc.adb.ask.link.onPhone
+android-misc.adb.ask.link.unauthorized
+android-misc.adb.ask.link.unpaired
+android-misc.adb.ask.pair
+android-misc.adb.ask.pair.about
+android-misc.adb.ask.pair.title
 android-misc.adb.chats.about
 android-misc.adb.chats.count
 android-misc.adb.chats.live
@@ -104,6 +115,8 @@ android-misc.adb.reader.title
 android-misc.adb.reader.turnOn
 android-misc.adb.shareFailed
 android-misc.adb.sharing
+android-misc.adb.stations
+android-misc.adb.stations.notLent
 android-misc.adb.step.developer
 android-misc.adb.step.install
 android-misc.adb.step.on
