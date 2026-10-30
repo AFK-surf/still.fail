@@ -289,6 +289,10 @@ pub fn open_fixture_src(mode : String, src : Source) -> Unit {
   if mode == "chat-station-files" {
     fixture_station_files(src)
   }
+  // the sessions Studio's machine kept, their list open over the new chat
+  if mode == "newchat-machine" {
+    @settings.fixture_machine_sessions(settings_core(src, { id: "ws1", name: "星火工作室", emoji: "", icon: "", email: "lin@example.com" }))
+  }
   if mode == "chat-station-sheet" {
     @sfpages.ref_panel_put(src, "ws1/st1:s-c1", "ws1/st1", "ref-发布清单.md", "发布清单.md")
   }

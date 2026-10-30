@@ -5,14 +5,20 @@
 /// This package's words in English (`.one`: a count's when it is one), as `tr` says them.
 // kept across runs: a table, never written
 let en : Map[String, String] = {
+  "android-chat.new.machine.all": "All",
+  "android-chat.new.machine.allFolders": "All folders",
   "android-chat.new.machine.continue": "Continue session",
+  "android-chat.new.machine.folder": "Filter by folder",
   "android-chat.new.machine.here": "this machine",
   "android-chat.new.machine.inApp": "Already in {app}",
   "android-chat.new.machine.more": "{n} earlier not shown",
   "android-chat.new.machine.more.one": "1 earlier not shown",
+  "android-chat.new.machine.none": "No sessions match",
   "android-chat.new.machine.offer": "Continue a terminal session on {station}",
   "android-chat.new.machine.open": "Open its chat",
-  "android-chat.new.machine.text": "Claude Code and Codex sessions that ran in a terminal on this machine. Tap one to preview it, then decide whether to continue it in its original folder. The terminal session isn't affected.",
+  "android-chat.new.machine.own": "Run by still.fail",
+  "android-chat.new.machine.search": "Search titles or folders",
+  "android-chat.new.machine.text": "Claude Code and Codex sessions run in a terminal. Preview one, then continue it in its original folder; the terminal session is left as it was.",
   "android-chat.new.machine.title": "Continue a session on {station}",
   "android-chat.pick.default": "Default",
   "android-chat.pick.effort.default": "Default effort",
