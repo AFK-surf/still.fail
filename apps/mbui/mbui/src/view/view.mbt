@@ -2557,6 +2557,25 @@ pub fn Tree::drawn(self : Tree) -> Array[Drawn] {
 }
 
 ///|
+/// Whether node `inner` is `outer` or held by it (both alive as they are named): what it draws drawn in it.
+pub fn Tree::holds(self : Tree, outer : NodeId, inner : NodeId) -> Bool {
+  let alive = fn(id : NodeId) {
+    id.at >= 0 && id.at < self.nodes.length() && self.nodes[id.at].live && self.nodes[id.at].gen == id.gen
+  }
+  if !alive(outer) || !alive(inner) {
+    return false
+  }
+  let mut q = inner.at
+  while q >= 0 {
+    if q == outer.at {
+      return true
+    }
+    q = self.nodes[q].parent
+  }
+  false
+}
+
+///|
 /// Node `id` unfolded where the window draws it, where it lives and has been placed.
 pub fn Tree::drawn_of(self : Tree, id : NodeId) -> Drawn? {
   if id.at < 0 || id.at >= self.nodes.length() {

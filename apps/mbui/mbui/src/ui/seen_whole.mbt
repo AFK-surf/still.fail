@@ -50,8 +50,8 @@ fn Ctx::seen_whole_faults(self : Ctx, words : String) -> (String, Double, Double
     if (kind != 1.0 && kind != 3.0 && kind != 7.0) || a[b + 11] < words_over_seen_least {
       continue
     }
-    let o = inst_owner(k)
-    if o < 0 || self.nodes[o].text != words {
+    let o = inst_by(k)
+    if o == Nobody || self.by_text(o) != words {
       continue
     }
     // (the glyph's middle, where it is not cut away)
@@ -61,8 +61,14 @@ fn Ctx::seen_whole_faults(self : Ctx, words : String) -> (String, Double, Double
       continue
     }
     for j in (k + 1)..<self.ninst {
-      let oj = inst_owner(j)
-      if oj >= 0 && (self.node_in(oj, o) || self.seen_whole_over(oj)) {
+      let oj = inst_by(j)
+      // (what is in the words' own node; an old view's over the page by its stratum: the tree has no strata yet,
+      // nothing of its over them by one)
+      let over = match oj {
+        Old(i) => self.seen_whole_over(i)
+        _ => false
+      }
+      if self.by_in(oj, o) || over {
         continue
       }
       let bj = j * inst_size
@@ -71,8 +77,7 @@ fn Ctx::seen_whole_faults(self : Ctx, words : String) -> (String, Double, Double
         a[bj + 11] >= words_over_seen_least &&
         in_inst(a, bj, px, py)
       if glyph || words_over_hides(a, j, px, py) {
-        let by = if oj >= 0 { self.words_over_words(oj) } else { "?" }
-        return Some((by, px, py))
+        return Some((self.by_said(oj), px, py))
       }
     }
   }

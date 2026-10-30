@@ -96,6 +96,72 @@ fn inst_owned(k : Int) -> Unit {
 }
 
 ///|
+/// Who drew an instance (contrast.mbt's inst_owners): a node of the old view's (its index in the frame's nodes), a node
+/// of the window's tree's, or nothing known. What reads who drew what asks this, whichever drew it.
+priv enum InstBy {
+  Nobody
+  Old(Int)
+  Node(@view.NodeId)
+} derive(Eq)
+
+///|
+/// Who drew instance `k`.
+fn inst_by(k : Int) -> InstBy {
+  match inst_tree_owner(k) {
+    Some(id) => Node(id)
+    None => {
+      let o = inst_owner(k)
+      if o < 0 {
+        Nobody
+      } else {
+        Old(o)
+      }
+    }
+  }
+}
+
+///|
+/// Whether what `by` names is `own`'s or in it: an old view's node in one of its, a node of the tree's held by one of its.
+fn Ctx::by_in(self : Ctx, by : InstBy, own : InstBy) -> Bool {
+  match (by, own) {
+    (Old(i), Old(o)) => i < self.count && o < self.count && self.node_in(i, o)
+    (Node(i), Node(o)) =>
+      match view_app.val {
+        Some(t) => t.holds(o, i)
+        None => i == o
+      }
+    _ => false
+  }
+}
+
+///|
+/// The words `by` draws (its whole text: what a test names words by), "" none known.
+fn Ctx::by_text(self : Ctx, by : InstBy) -> String {
+  match by {
+    Old(o) if o < self.count => self.nodes[o].text
+    Node(id) => inst_owners.tree_words.get(id).unwrap_or("")
+    _ => ""
+  }
+}
+
+///|
+/// The words `by` draws, or the first of what it holds, cut short to be said ("?" none known).
+fn Ctx::by_said(self : Ctx, by : InstBy) -> String {
+  match by {
+    Old(o) if o < self.count => self.words_over_words(o)
+    Node(_) => {
+      let t = self.by_text(by).replace_all(old="\n", new=" ")
+      if t.length() > 40 {
+        t.unsafe_substring(start=0, end=40) + "…"
+      } else {
+        t
+      }
+    }
+    _ => "?"
+  }
+}
+
+///|
 /// The node of the window's tree that drew instance `k`, None not one of its.
 fn inst_tree_owner(k : Int) -> @view.NodeId? {
   if k < inst_owners.tree.length() {
@@ -439,11 +505,11 @@ fn Ctx::node_in(self : Ctx, i : Int, own : Int) -> Bool {
 ///|
 /// Whether something drawn after instance `k`, not by `own` nor what is in it, lies over (`px`, `py`): what `k`
 /// draws there is covered (a dialog's scrim over the page, a bar's glass over a list).
-fn Ctx::covered_after(self : Ctx, k : Int, px : Double, py : Double, own : Int) -> Bool {
+fn Ctx::covered_after(self : Ctx, k : Int, px : Double, py : Double, own : InstBy) -> Bool {
   let a = self.inst
   for j in (k + 1)..<self.ninst {
     let (kind, _) = ground_kind(a, j, px, py)
-    if kind != 0 && !self.node_in(inst_owner(j), own) {
+    if kind != 0 && !self.by_in(inst_by(j), own) {
       return true
     }
   }
@@ -584,13 +650,56 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
       out.push(s)
     }
   }
+  // (the words a node of the window's tree draws: each at its faintest letter, as an old view's are; its words its
+  // block's, their size and weight the tree's words', view_host.mbt)
+  let tree_lines : Map[@view.NodeId, (Double, String)] = Map::new()
+  let tree_order : Array[@view.NodeId] = []
   for k in 0..<self.ninst {
+    let b = k * inst_size
+    match inst_by(k) {
+      Node(id) => {
+        if a[b + 5] != 1.0 {
+          continue
+        }
+        let px = a[b] + a[b + 2] / 2.0
+        let py = a[b + 1] + a[b + 3] / 2.0
+        if px < 0.0 || py < 0.0 || px > self.window_w || py > self.window_h || !in_inst_clip(a, b, px, py) {
+          continue
+        }
+        let (ground, _) = match self.ground_under(k, px, py) {
+          Some(g) => g
+          None => continue
+        }
+        if self.covered_after(k, px, py, Node(id)) {
+          continue
+        }
+        let shown = Rgb::laid(ground, inst_rgb(a, b), a[b + 11])
+        let r = contrast_of(shown, ground)
+        let least = contrast_words_least(view_words_size, 400)
+        let text = self.by_said(Node(id))
+        let said = if r < least - 0.005 {
+          "words \"\{text}\" \{view_words_size}/400 (a node of the window's tree's) at \{a[b].round()},\{a[b + 1].round()}: " +
+          "\{shown.hex()} on \{ground.hex()} \{ratio_said(r)}:1, under \{least}"
+        } else {
+          ""
+        }
+        match tree_lines.get(id) {
+          Some((had, _)) if had <= r => ()
+          Some(_) => tree_lines[id] = (r, said)
+          None => {
+            tree_lines[id] = (r, said)
+            tree_order.push(id)
+          }
+        }
+        continue
+      }
+      _ => ()
+    }
     let o = inst_owner(k)
     if o < 0 || o >= self.count {
       continue
     }
     let n = self.nodes[o]
-    let b = k * inst_size
     let kind = a[b + 5]
     let is_words = kind == 1.0 &&
       (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor)
@@ -621,7 +730,7 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
         Some(g) => g
         None => continue
       }
-      if self.covered_after(k, px, py, o) {
+      if self.covered_after(k, px, py, Old(o)) {
         continue
       }
       let ink = inst_rgb(a, b)
@@ -669,7 +778,7 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
     let mut seen : (Double, String)? = None
     let look = fn(what : String, x : Double, ink : Rgb, o2 : Double) {
       match self.ground_under(k, x, py) {
-        Some((ground, beneath)) if !self.covered_after(k, x, py, o) => {
+        Some((ground, beneath)) if !self.covered_after(k, x, py, Old(o)) => {
           let shown = Rgb::laid(ground, ink, o2)
           let cut = o2 >= 0.999 && beneath.iter().any(fn(u) { same_rgb(u, ink) })
           if !cut && !same_rgb(shown, ground) {
@@ -700,6 +809,12 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
   }
   for o in order {
     match lines.get(o) {
+      Some((_, said)) if said != "" => say(said)
+      _ => ()
+    }
+  }
+  for id in tree_order {
+    match tree_lines.get(id) {
       Some((_, said)) if said != "" => say(said)
       _ => ()
     }

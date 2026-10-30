@@ -110,32 +110,34 @@ fn Ctx::words_over_faults(self : Ctx) -> Array[(String, String, Double, Double)]
   let ks : Array[Int] = []
   let rs : Array[(Double, Double, Double, Double)] = []
   let os : Array[Int] = []
-  // (a node of the window's tree drew it: known here by a number of its own below the old view's nodes', its words its
-  // block's, contrast.mbt's inst_owners)
+  // (who drew it, contrast.mbt's inst_by: each known here by a number of its own, an old view's node by its index, a
+  // node of the window's tree's by one below them)
   let tree_nodes : Map[@view.NodeId, Int] = Map([])
-  let tree_said : Map[Int, String] = Map([])
+  let who : Map[Int, InstBy] = Map([])
   for k in 0..<self.ninst {
     let b = k * inst_size
     let kind = a[b + 5]
     if (kind != 1.0 && kind != 3.0 && kind != 7.0) || a[b + 11] < words_over_seen_least {
       continue
     }
-    let o = match inst_tree_owner(k) {
-      Some(id) =>
+    let by = inst_by(k)
+    if by == Nobody {
+      continue
+    }
+    let o = match by {
+      Nobody => -1
+      Old(i) => i
+      Node(id) =>
         match tree_nodes.get(id) {
           Some(o) => o
           None => {
             let o = -2 - tree_nodes.length()
             tree_nodes[id] = o
-            tree_said[o] = inst_owners.tree_words.get(id).unwrap_or("")
             o
           }
         }
-      None => inst_owner(k)
     }
-    if o == -1 {
-      continue
-    }
+    who[o] = by
     // its ink, a little inside its picture and within its own cell across (a picture is made with room round its
     // ink: a full stop's spills well past its advance), cut by its clip
     let (l, r) = inst_cell_of(k)
@@ -194,7 +196,7 @@ fn Ctx::words_over_faults(self : Ctx) -> Array[(String, String, Double, Double)]
             continue
           }
           pairs.add(os[p] * 65536 + os[q])
-          let said = fn(o : Int) { if o < -1 { tree_said.get(o).unwrap_or("") } else { self.words_over_words(o) } }
+          let said = fn(o : Int) { self.by_said(who.get(o).unwrap_or(Nobody)) }
           out.push((said(os[p]), said(os[q]), px, py))
         }
         here.push(q)
