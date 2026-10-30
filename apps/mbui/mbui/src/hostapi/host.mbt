@@ -1229,8 +1229,8 @@ let current : Ref[&Host] = { val: NoHost::{  } }
 /// Who answers from now on: the platform's (mbui/host's init, as the program starts), a Tester's fake.
 pub fn set_host(h : &Host) -> Unit {
   current.val = h
-  sideways_now.val = false
-  turnable_now.val = false
+  sideways_now.set(false)
+  turnable_now.set(false)
   // (a new host has been handed nothing)
   nav_said.val = None
 }
@@ -1860,7 +1860,7 @@ pub fn set_dark(dark : Bool) -> Unit {
 /// Android does it (the activity's requested orientation, its window's insets controller), and iOS (the scene's
 /// orientations, the status bar and the home indicator hidden); elsewhere nothing turns.
 pub fn set_sideways(on : Bool) -> Unit {
-  sideways_now.val = on
+  sideways_now.set(on)
   current.val.set_sideways(on)
 }
 
@@ -1870,7 +1870,7 @@ pub fn set_sideways(on : Bool) -> Unit {
 /// turned (a fixed portrait gets none); `false`, upright only again. Set_sideways still turns it while it asks. Android
 /// and iOS do it where the app is held upright (a phone; a tablet turns anyway); elsewhere nothing changes.
 pub fn set_turnable(on : Bool) -> Unit {
-  turnable_now.val = current.val.set_turnable(on) && on
+  turnable_now.set(current.val.set_turnable(on) && on)
 }
 
 ///|
@@ -1879,23 +1879,23 @@ pub fn set_turnable(on : Bool) -> Unit {
 /// all of it, not because the screen is another kind (what a layout goes by is not this turn: still.fail's @sf.layout
 /// keeps the one it had).
 pub fn sideways() -> Bool {
-  sideways_now.val || turnable_now.val
+  sideways_now.get() || turnable_now.get()
 }
 
 ///|
 /// Whether the app has turned the device sideways itself (set_sideways on): a film or a screen over all of the window,
 /// to its edges, under what the system has at its sides (@ui.system_bars `left` and `right`, a phone's cutout) too.
 pub fn turned_sideways() -> Bool {
-  sideways_now.val
+  sideways_now.get()
 }
 
 ///|
 // kept across runs: put back as a host is set
-let sideways_now : Ref[Bool] = { val: false }
+let sideways_now : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 // kept across runs: put back as a host is set
-let turnable_now : Ref[Bool] = { val: false }
+let turnable_now : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 /// Whether this device can keep a performance record, and keeps one (-1 it cannot, 0 off, 1 on): the host remembers it

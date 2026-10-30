@@ -10,7 +10,7 @@ fn duo_chat(w : Double, h : Double, width : String, fold : String, bars? : Strin
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=1)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=1)
   t.post(@hostapi.system_channel, if bars != "" {
     bars
   } else {
@@ -133,4 +133,41 @@ test "its outer screen (compact, the status bar down its right side): the phone'
   }
   let (_, y) = t.find("发消息").unwrap()
   assert_true(y > 678.0 - 110.0, msg="the composer's words at \{y}")
+}
+
+///|
+/// The old views of the window's tree as it draws them: where across and how wide.
+fn islands_across() -> Array[(Double, Double)] {
+  match @ui.view_tree() {
+    Some(tree) => tree.drawn().filter(fn(d) { d.hosted }).map(fn(d) { (d.x, d.w) })
+    None => []
+  }
+}
+
+///|
+test "the fold half open then, the window the same size: the shell it calls for, as if it had begun so" {
+  let opened = duo_chat(626.0, 890.0, "regular", across("open"))
+  let open_shell = islands_across()
+  let wide_open = @sfdesk.is_wide(opened.ctx())
+  opened.post(@hostapi.system_channel, across("half"))
+  opened.run_for(@ui.move_most_ms)
+  let then_half = (islands_across(), @sfdesk.is_wide(opened.ctx()))
+  let begun = duo_chat(626.0, 890.0, "regular", across("half"))
+  let begun_half = (islands_across(), @sfdesk.is_wide(begun.ctx()))
+  assert_eq(then_half, begun_half)
+  assert_true(then_half != (open_shell, wide_open), msg="\{open_shell} \{wide_open}")
+}
+
+///|
+test "turned sideways for a film, the bars the same: the window's sides given back; upright again, kept again" {
+  let t = duo_chat(466.0, 678.0, "compact", "", bars="{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
+  let upright = islands_across()
+  @hostapi.set_sideways(true)
+  t.draw()
+  let sideways = islands_across()
+  @hostapi.set_sideways(false)
+  t.draw()
+  assert_true(upright.length() > 0 && upright.iter().all(fn(i) { i.1 == 382.0 }), msg="\{upright}")
+  assert_true(sideways.length() > 0 && sideways.iter().all(fn(i) { i.1 == 466.0 }), msg="\{sideways}")
+  assert_eq(islands_across(), upright)
 }

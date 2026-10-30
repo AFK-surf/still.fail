@@ -330,6 +330,11 @@ pub fn SpringPath::at(self : SpringPath, now : Double) -> (Double, Double) {
   if now >= self.end {
     return (self.to, 0.0)
   }
+  // (at the moment it sets out, where it set out from, to the last bit: `to` and the way back to it summed would put it
+  // a bit off, so that what reads it then (one build of a frame, another) sees another place than what was told)
+  if now <= self.t0 {
+    return (self.x0, self.v0)
+  }
   if self.moves {
     let (d, v) = move_path(self.x0 - self.to, self.v0 / 1000.0, dmax(0.0, now - self.t0), self.dur)
     return (self.to + d, v * 1000.0)

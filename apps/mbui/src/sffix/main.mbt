@@ -70,5 +70,5 @@ fn main {
       }
     }
     @sfapp.view(c, src)
-  })
+  }, tree=@sfapp.app_tree(src))
 }

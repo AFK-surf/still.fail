@@ -422,6 +422,14 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_pointer(JNIEnv *env, jclass c, jint 
   event_time = -1;
 }
 
+// A touch screen's finger (kinds 10-13, touches.mbt), by its pointer id (where a press's button goes), at its time.
+JNIEXPORT void JNICALL Java_dev_mbui_Native_touch(JNIEnv *env, jclass c, jint kind, jint id, jfloat x, jfloat y,
+                                                 jdouble t) {
+  event_time = t;
+  if (cb.pointer) cb.pointer(kind, x, y, id);
+  event_time = -1;
+}
+
 double mb_host_event_time(void) { return event_time; }
 
 // What a pointer's event came from (@hostapi.event_finger): a finger, as this system's are; not said.

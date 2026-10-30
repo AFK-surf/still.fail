@@ -514,6 +514,8 @@ pub fn figure_words(@ui.Ctx, () -> Unit, () -> Unit) -> Unit
 
 pub fn figures(@ui.Ctx, Array[(String, String, String)]) -> Unit
 
+pub let file_capsule_h : @ui.Len
+
 pub fn file_card(@ui.Ctx, String, String, Double, path? : String, dir? : Bool, named? : Bool, pending? : Bool, sent? : Double?, error? : String, download? : (Double, String)?, remove? : Bool, retry? : Bool, slot? : Bool, open? : Bool, title? : String, meta? : String, restore? : Bool, remove_label? : String, retry_label? : String, composer? : Bool) -> FileCardDone
 
 pub fn file_card_across(@ui.Ctx, String, Double) -> Double
@@ -852,7 +854,7 @@ pub let list_pad : Double
 
 pub let list_room : @ui.Space
 
-pub fn list_row(@ui.Ctx, Int32, ListAt, Int64, () -> Unit, () -> Unit, mark? : () -> Unit, high? : Bool, end_room? : Double, corner? : () -> Unit, corner_w? : Double, lines? : Int32, after? : () -> Unit, slotted? : Bool, end_slot? : Double, corner_end? : Double) -> Int32
+pub fn list_row(@ui.Ctx, Int32, ListAt, Int64, () -> Unit, () -> Unit, mark? : () -> Unit, high? : Bool, end_room? : Double, corner? : () -> Unit, corner_w? : Double, lines? : Int32, after? : () -> Unit, slotted? : Bool, end_slot? : Double, corner_end? : Double, ground_by? : () -> Int64) -> Int32
 
 pub fn list_row_in(ListAt) -> @ui.Style
 
@@ -1118,6 +1120,10 @@ pub let nav_fade : @motion.Spec
 
 pub fn nav_ground(@ui.Ctx, String, Bool, Bool, lit? : Int64) -> Int64
 
+pub fn nav_ground_by(@ui.Ctx, String, Bool, Bool, lit? : Int64) -> () -> Int64
+
+pub fn nav_ground_on(@ui.Ctx, Int32, String, Bool, Bool, lit? : Int64) -> Unit
+
 pub fn nav_item(@ui.Ctx, String, Bool, () -> Unit, () -> Unit, end? : () -> Unit, lines? : () -> Unit, keep_lines? : Int32, more? : Bool) -> Bool
 
 pub let nav_mark_side : Double
@@ -1238,7 +1244,7 @@ pub let pane_round : @ref.Ref[FixedArray[@ui.CornerOf]?]
 
 pub fn pane_top_right() -> Double?
 
-pub fn panel(String, (@ui.Ctx, () -> Unit) -> Unit, from~ : Anchor, w? : Double, fits? : Bool, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, grows? : Bool, focus? : Bool, ruled? : Bool, lists? : Bool, form? : Bool, field? : String, stage? : Bool, above? : (@ui.Ctx) -> Unit, side? : @ui.Side, along? : @ui.Along, offset? : Double) -> Unit
+pub fn panel(String, (@ui.Ctx, () -> Unit) -> Unit, from~ : Anchor, w? : Double, fits? : Bool, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, grows? : Bool, focus? : Bool, ruled? : Bool, lists? : Bool, form? : Bool, field? : String, stage? : Bool, above? : (@ui.Ctx) -> Unit, head_end? : (@ui.Ctx) -> Unit, side? : @ui.Side, along? : @ui.Along, offset? : Double) -> Unit
 
 pub fn panel_bleed() -> @ui.Style
 
@@ -1258,7 +1264,7 @@ pub fn panel_ground() -> Int64
 
 pub fn panel_group(@ui.Ctx, () -> Unit, label? : String, lead? : (@ui.Ctx) -> Unit) -> Unit
 
-pub fn panel_head(@ui.Ctx, String, note? : String) -> Unit
+pub fn panel_head(@ui.Ctx, String, note? : String, end? : (@ui.Ctx) -> Unit) -> Unit
 
 pub fn panel_held() -> Bool
 
@@ -1308,9 +1314,13 @@ pub fn path_link(String, Int32?) -> String
 
 pub fn path_of_link(String) -> (String, Int32?)?
 
+pub let peek_card_in_px : Double
+
 pub let peek_card_px : Double
 
 pub let peek_card_w : @ui.Len
+
+pub let peek_frame_px : Double
 
 pub let person_ringed : @ui.Len
 
@@ -1435,6 +1445,8 @@ pub let pointer_tip : Double
 pub fn popover_arrow(@ui.Ctx, Int64) -> Int32
 
 pub fn presented(@ui.Ctx, alone? : Bool) -> Unit
+
+pub fn presented_changed() -> Unit
 
 pub fn presented_drawn() -> Bool
 
@@ -1636,7 +1648,7 @@ pub let seg_card_radius : @ui.Radius
 
 pub let seg_pill_min : @ui.Len
 
-pub fn segmented(@ui.Ctx, String, Array[String], Int32, item_w? : Double, ink? : Int64, thumb? : Int64, icons? : Array[String], bar? : Bool, said? : String) -> Int32
+pub fn segmented(@ui.Ctx, String, Array[String], Int32, item_w? : Double, ink? : Int64, thumb? : Int64, icons? : Array[String], bar? : Bool, said? : String, tips? : Array[String], fill? : Bool) -> Int32
 
 pub fn segmented_height() -> Double
 
@@ -2491,7 +2503,7 @@ pub(all) struct MenuItem {
 }
 
 pub(all) struct NativeBars {
-  mut on : Bool
+  on : @signals.Signal[Bool]
   mut side : Double
   corners : FixedArray[Double]
 }

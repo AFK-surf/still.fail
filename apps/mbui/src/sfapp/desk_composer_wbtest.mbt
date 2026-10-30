@@ -772,7 +772,7 @@ test "a chat's composer growing a line as it is typed in keeps its send whole on
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=400.0, h=800.0, platform=2, pointing=Finger)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=400.0, h=800.0, platform=2, pointing=Finger)
   t.run_for(@ui.move_most_ms)
   let (px, py) = t.locate("icon:plus")[0]
   t.tap(px + 120.0, py)
@@ -955,7 +955,7 @@ test "desk composer: where 抄送 copies to is said just before send in either s
   let src = fixture("chat-cc")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0, pointing=Mouse)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0, pointing=Mouse)
   t.run_for(@ui.move_most_ms)
   let (send_x, _) = t.locate("icon:arrow-up")[0]
   let xs : Array[Double] = []

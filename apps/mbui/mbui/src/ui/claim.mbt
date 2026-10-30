@@ -23,7 +23,9 @@ fn claim_chain(c : Ctx, x : Double, y : Double) -> Array[Int] {
       y >= rects[r + 1] &&
       y < rects[r + 3] &&
       !out.contains(ids[k]) &&
-      claim_in_shape(c, ids[k], x, y) {
+      claim_in_shape(c, ids[k], x, y) &&
+      // (of an old view the window's tree lets take presses now: view_host.mbt)
+      old_owner_open(c.island_of_id(ids[k])) {
       out.push(ids[k])
       // what the press lands on stops it (a modal's ground, a popover's panel: Ctx::stop_wheel): what lies under it is
       // not pressed, as the wheel does not reach it (2026-10-29 用户: 控制中心 点画质，点击落到了下面的远程桌面上)

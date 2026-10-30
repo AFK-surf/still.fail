@@ -15,7 +15,7 @@ let viz_opening_box : @ui.Style = @ui.css("pt=S1_5 pb=S1_5")
 ///|
 /// Under the words whose link opened a visualization, while it is fetched (VizFiles.kt VizOpen: 正在打开).
 fn viz_opening(c : @ui.Ctx, src : Source, here : Here) -> Unit {
-  match viz_full.val {
+  match viz_full.get() {
     Some(v) if v.linked && v.station == here.station && v.session == here.session =>
       if viz_load(c, src, v.station, v.key, v.path) is None {
         c.box(style=viz_opening_box, fn() { @sf.wait_line(c, viz_tr("common.opening"), key="viz-open") }) |> ignore

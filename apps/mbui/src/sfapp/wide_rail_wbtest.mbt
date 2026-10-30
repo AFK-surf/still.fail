@@ -294,7 +294,7 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
       (base.call)(name, params, done)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.frame()
   app.nav.push(Archived)
   t.frame()
@@ -398,7 +398,7 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
       (base.call)(name, params, done)
     },
   }
-  @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
 }
 
 ///|
@@ -829,7 +829,7 @@ test "wide: Station's page picked in one workspace: in another, that one's first
       (base.call)(name, params, done)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
   @sfbase.go_place("stations") |> ignore
   t.run_for(@ui.move_most_ms)
   t.tap_text("MBA")

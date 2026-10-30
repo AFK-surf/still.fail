@@ -110,16 +110,34 @@ fn Ctx::words_over_faults(self : Ctx) -> Array[(String, String, Double, Double)]
   let ks : Array[Int] = []
   let rs : Array[(Double, Double, Double, Double)] = []
   let os : Array[Int] = []
+  // (who drew it, contrast.mbt's inst_by: each known here by a number of its own, an old view's node by its index, a
+  // node of the window's tree's by one below them)
+  let tree_nodes : Map[@view.NodeId, Int] = Map([])
+  let who : Map[Int, InstBy] = Map([])
   for k in 0..<self.ninst {
     let b = k * inst_size
     let kind = a[b + 5]
     if (kind != 1.0 && kind != 3.0 && kind != 7.0) || a[b + 11] < words_over_seen_least {
       continue
     }
-    let o = inst_owner(k)
-    if o < 0 {
+    let by = inst_by(k)
+    if by == Nobody {
       continue
     }
+    let o = match by {
+      Nobody => -1
+      Old(i) => i
+      Node(id) =>
+        match tree_nodes.get(id) {
+          Some(o) => o
+          None => {
+            let o = -2 - tree_nodes.length()
+            tree_nodes[id] = o
+            o
+          }
+        }
+    }
+    who[o] = by
     // its ink, a little inside its picture and within its own cell across (a picture is made with room round its
     // ink: a full stop's spills well past its advance), cut by its clip
     let (l, r) = inst_cell_of(k)
@@ -178,7 +196,8 @@ fn Ctx::words_over_faults(self : Ctx) -> Array[(String, String, Double, Double)]
             continue
           }
           pairs.add(os[p] * 65536 + os[q])
-          out.push((self.words_over_words(os[p]), self.words_over_words(os[q]), px, py))
+          let said = fn(o : Int) { self.by_said(who.get(o).unwrap_or(Nobody)) }
+          out.push((said(os[p]), said(os[q]), px, py))
         }
         here.push(q)
       }

@@ -18,7 +18,7 @@ fn look_tester(route : @settings.Route, calls : Array[Made], mode? : String = "s
       (base.call)(name, params, done)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.add_pixels("https://app.still.fail/avatars/backend.webp", 2, 2, FixedArray::make(16, b'\xFF'))
   t.draw()
   app.nav.push(Settings)

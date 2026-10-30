@@ -108,7 +108,7 @@ test "a face kept here: given by where its files are the frame the prefs come, t
       (base.read_bytes)(name, params, done)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.draw()
   assert_true(t.find("整理发布清单") is Some(_))
   assert_true(face_here("noto-sans-sc"))

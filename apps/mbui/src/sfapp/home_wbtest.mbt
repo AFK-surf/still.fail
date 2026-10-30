@@ -3,7 +3,7 @@
 fn tester(mode : String) -> @ui.Tester {
   reset()
   let src = fixture(mode)
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
 }
 
 ///|
@@ -20,7 +20,7 @@ test "signed out in a desktop's window: 登录或注册 alone, no wider than the
   reset()
   let pressed = Ref::new(0)
   let src : Source = { ..fixture("signin"), sign_in: fn() { pressed.val += 1 } }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   // no words but its own
   assert_true(t.find("让 agent 持续工作") is None)
   assert_true(t.find("可同时登录多个账号，随时切换 workspace。") is None)
@@ -35,7 +35,7 @@ test "signed out in a desktop's window: 登录或注册 alone, no wider than the
   assert_eq(pressed.val, 1)
   // a phone's: as wide as the page less its sides
   reset()
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   let (x, y, w, h) = t.rect_of("登录或注册").unwrap()
   t.tap(x + w / 2.0 + 160.0, y + h / 2.0)
   assert_eq(pressed.val, 2)
@@ -95,7 +95,7 @@ fn rows_lit(t : @ui.Tester, y? : Double = -1.0) -> Int {
 fn android_home() -> @ui.Tester {
   reset()
   let src = fixture("home")
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
 }
 
 ///|
@@ -392,7 +392,7 @@ test "the filter's other lists read once its menu opens; one picked slides in ov
       (base.topic)(name, params)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.draw()
   let mine = fn() { read.iter().any(fn(k) { k.contains("\"mine\":true") }) }
   assert_false(mine())
@@ -548,7 +548,7 @@ test "a chat archived from its row: said at once by its title, its station not a
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   hold_row(t, "夜里的构建又失败了")
   let (lx, ly) = t.find_last("归档").unwrap()
   t.tap(lx, ly)
@@ -640,7 +640,7 @@ test "the wide frame's first page: shown once its pane has landed on what the co
       (base.topic)(name, params)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   let drawn = fn(s : String) { t.words().iter().any(fn(w) { w.0.contains(s) && w.5 > 0.0 }) }
   t.frame()
   assert_true(t.find("整理发布清单") is Some(_), msg="the list built")

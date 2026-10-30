@@ -32,6 +32,14 @@ fn init {
 }
 
 ///|
+/// A run begun before its Tester is made (the made-up core given what it opens first, then the Tester): the run
+/// before let go of first (its window's tree follows nothing this one says), then the app as at the start (reset).
+fn new_run() -> Unit {
+  @ui.run_let_go()
+  reset()
+}
+
+///|
 /// As at the start: Home alone, nothing chosen here yet (tests; every Tester as it starts: init above). Each global
 /// of this package is put back here (or in what this calls) as its `let` has it, or says why it is kept across runs
 /// (scripts/check.sh checks).
@@ -361,14 +369,21 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
 
 ///|
 fn view_in(c : @ui.Ctx, src : Source) -> Unit {
-  // over another app (a share sheet over the app it came from: share.mbt share_over): nothing but the sheet
-  if share_over.val {
+  // over another app (a share sheet over the app it came from: share.mbt share_over): nothing but the sheet (where the
+  // window is a tree, a node of it picked by that: app_tree)
+  if !@ui.old_islands_around() && share_over.get() {
     over_view(c, src)
     return
   }
   // under it all, the app's ground, made once (mbui's made.mbt; docs/retained.md, the way there's 4): what it holds is
   // the state the app is in, built the old way
-  c.made("app-ground", fn() { app_ground(c, src) })
+  // (the state it is in, a node of the window's tree where the app runs as one (app_tree): its old view put here;
+  // else made once among the frame's)
+  if @ui.old_islands_around() {
+    @ui.old_views_here(c)
+  } else {
+    c.made("app-ground", fn() { app_ground(c, src) })
+  }
   // the first page built with what it shows, the pictures the device holds in it decoded as it drew them (a likeness
   // in a picture's place for the frame or two its decoding takes is not shown): shown from this frame
   if first_waiting.val &&
@@ -379,7 +394,10 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
   // the first page built, waiting for what it shows (signed_in): not shown yet, the splash over the window's ground
   // (what the host clears to, the ground's colour) in its place, its words as while the workspaces are read
   if first_waiting.val {
-    c.look(state_node.val, { ..@ui.still_look, alpha: 0.0 })
+    // (the state's old view, or each of the shell's: narrow_shell.mbt)
+    if !@ui.old_views_look(c, { ..@ui.still_look, alpha: 0.0 }) {
+      c.look(state_node.val, { ..@ui.still_look, alpha: 0.0 })
+    }
     c.layer(fn() { splash(c, Some(t_reading_workspaces(src)), false) }) |> ignore
   }
   // the window held (host_setup) shown with the first frame that draws more than the ground (the host shows it once
@@ -407,6 +425,19 @@ priv enum AppIs {
 } derive(Eq)
 
 ///|
+/// Whether the stack of pages laid out Small (narrow_shell.mbt) is in a finger's hand now: its lists dragged and words
+/// held to pick (pick.mbt); else a mouse's, the wheel scrolling them and a drag picking words, as the wide frame's.
+fn stack_by_finger() -> Bool {
+  @ui.pointing() is Finger
+}
+
+///|
+/// The window's whole, on its ground (the theme's), that the app's state is built in.
+fn app_ground_style() -> @ui.Style {
+  page_whole.then(@ui.style(bg=Data(@sf.theme().p.bg)))
+}
+
+///|
 /// The node the app's state is built in, this frame (app_ground): hidden while the first page waits (view_in).
 // kept across runs: written by each build
 let state_node : Ref[Int] = Ref(-1)
@@ -428,28 +459,85 @@ fn app_is(src : Source) -> AppIs {
 /// their own), saying afresh whether the frame draws the ground alone and whether the first page waits (frame_bare,
 /// first_waiting).
 fn app_ground(c : @ui.Ctx, src : Source) -> @ui.Made {
-  let picked = @ui.made_pick(fn() { app_is(src) }, fn(state) {
-    @ui.made_old(fn(c) {
-      // in a window with its buttons in the app's top row, its top drags it whatever is shown (the splash, signing in,
-      // a window of its own still starting): under all of it, so what a page puts there takes its own presses
-      if @ui.window_inset() {
-        let id = c.id("window-ground-band")
-        c.window_drag(id)
-        c.box(style=@ui.style(h=Fixed(window_band())), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
-      }
-      first_waiting.val = false
-      frame_bare.val = false
-      // (said by this build: image_item, video_item)
-      @sfbase.held_pictures_waiting.val = false
-      // (in a box of its own: what the frame says of it, its look while the first page waits, is said of what is built
-      // anew each frame, not of the ground made once)
-      state_node.val = c.box(style=page_whole, fn() { app_state(c, src, state) })
-    })
-  })
+  let picked = @ui.made_pick(fn() { app_is(src) }, fn(state) { @ui.made_old(fn(c) { app_state_island(c, src, state) }) })
   @ui.made_holding(
-    fn(c) { c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.theme().p.bg, fn() {  }) |> ignore },
+    fn(c) { c.box(style=app_ground_style(), fn() {  }) |> ignore },
     fn() { picked() },
   )
+}
+
+///|
+/// The window as a tree made once (mbui's view_host.mbt; docs/retained.md, the way there's 4: from the outside in): the
+/// state the app is in (app_is) a node picked by it, made as it comes and let go as it goes, the app in that state an old
+/// view in it, built the old way on the window's ground (`view` the old frame around it: what every state shares, the
+/// theme, the window's sides, the layers over it).
+pub fn app_tree(src : Source) -> (@view.View) -> Unit {
+  fn(root) {
+    // (the window's sides beside the system's bars kept, all of it between: sides.mbt)
+    root.sides(By(fn() { sides_room() })) |> ignore
+    // over another app (a share sheet over the app it came from: share.mbt): nothing but the sheet, an old view of its
+    // own; the app's state's nodes let go meanwhile, made again as it opens
+    root.pick(fn() { share_over.get() }, fn(o, over) {
+      o.grow(Is(1.0)) |> ignore
+      if over {
+        @ui.old(o, fn(c) { over_view(c, src) }).grow(Is(1.0)) |> ignore
+      } else {
+        app_state_tree(o, src)
+      }
+    })
+  }
+}
+
+///|
+/// The app in the state it is in (app_is), a node picked by it (app_tree's, not over another app).
+fn app_state_tree(root : @view.View, src : Source) -> Unit {
+  root.pick(
+    fn() { app_is(src) },
+    fn(v, state) {
+      v.grow(Is(1.0)) |> ignore
+      let whole = fn(v : @view.View) {
+        @ui.old(v, fn(c) {
+          c.box(style=app_ground_style(), fn() { app_state_island(c, src, state) }) |> ignore
+        })
+        .grow(Is(1.0))
+        |> ignore
+      }
+      if state == SignedIn {
+        // signed in, the shell it is laid out in a node picked by the window's width and what is in view
+        // (narrow_shell.mbt): laid out Small with a workspace, the narrow shell's nodes; else the old view whole
+        v.pick(fn() { shell_is(src, v.window().0) }, fn(s, shell) {
+          s.grow(Is(1.0)) |> ignore
+          match shell {
+            Stacked => narrow_shell(s, src)
+            Whole => whole(s)
+          }
+        })
+      } else {
+        whole(v)
+      }
+    },
+  )
+}
+
+///|
+/// The app in state `state` as an old view (app_ground's, app_tree's): the window's top dragging it where the window's
+/// buttons are in the app's top row, and the state built the old way, saying afresh whether the frame draws the ground
+/// alone and whether the first page waits (frame_bare, first_waiting).
+fn app_state_island(c : @ui.Ctx, src : Source, state : AppIs) -> Unit {
+  // in a window with its buttons in the app's top row, its top drags it whatever is shown (the splash, signing in,
+  // a window of its own still starting): under all of it, so what a page puts there takes its own presses
+  if @ui.window_inset() {
+    let id = c.id("window-ground-band")
+    c.window_drag(id)
+    c.box(style=@ui.style(h=Fixed(window_band())), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
+  }
+  first_waiting.val = false
+  frame_bare.val = false
+  // (said by this build: image_item, video_item)
+  @sfbase.held_pictures_waiting.val = false
+  // (in a box of its own: what the frame says of it, its look while the first page waits, is said of what is built
+  // anew each frame, not of the ground made once)
+  state_node.val = c.box(style=page_whole, fn() { app_state(c, src, state) })
 }
 
 ///|
@@ -517,40 +605,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
   let (current, all, answered, invited) = workspace_in_view(src)
   match current {
     Some(w) => {
-      // (told once the frame's builds are over, as the last saw the app, the workspace and the page on top)
-      c.after_build("attend", fn() { attend(src, w.id, app.nav.top() is NewChat) })
-      // where the app is, put in the history's entry now as the frame ends (sfbase's app_history.mbt: a person's act
-      // pushed an entry before it moved the stack); on the wide frame Home alone is passing (land)
-      c.after_build("history", fn() {
-        let ws = match workspace_in_view(src).0 {
-          Some(now) => now.id
-          None => ""
-        }
-        @sfbase.history_note(ws, @sfdesk.is_wide(c) && app.nav.pages() == [Home])
-      })
-      // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off (once the
-      // frame's builds are over: a build let go of follows no workspace)
-      c.after_build("notices", fn() { notices_frame(src, w) })
-      // the core and the workspace links are opened against, as the frame ends (links.mbt)
-      c.after_build("links", fn() { links_frame(src, w) })
-      // the number on the app's icon (app_frame.mbt)
-      badge_frame(c, src, w)
-      // a link the system opened the app with, told once: what the core says of it shown by the frame after (Ctx::tell)
-      if !link_later.is_empty() {
-        c.tell("links-given", fn() { links_given(src) })
-      }
-      // a newer build of the app asked for once (updates.mbt)
-      // (asked once, with the app's version: nothing a build changes)
-      update_first(src)
-      // what another app shared in (share.mbt)
-      share_in_frame(c)
-      // files being kept on the device, said once kept (keep.mbt)
-      keeps_frame(c)
-      // the app's keys, in every tier (sfdesk's keys.mbt): what is the wide frame's alone does nothing laid out Small
-      @sfdesk.keys(c, src, w)
-      // the first page built as it opens, asking for all it shows, and shown once it has it (first_page_ms at most), as a
-      // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
-      first_waiting.val = !first_page_shown(c, src, w)
+      signed_in_frame(c, src, w)
       if @sfdesk.is_wide(c) {
         // a page opened in the pane shows once the core has given what it shows, the one before staying till then
         // (LOCAL_MS at most), as a page pushed on a phone slides in then
@@ -577,44 +632,11 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       } else {
         // a page opened slides in once the core has given what it shows (App.kt Pages: LOCAL_MS at most)
         app.nav.comes_when(fn() { page_ready(src, w, app.nav.top()) }, page_local_ms)
-        // pointed at with a mouse (a desktop's narrow window): the wheel and the trackpad scroll the lists and a drag
-        // picks words, as on the wide frame's page; a finger drags the lists and holds to pick (pick.mbt)
-        let finger = @ui.pointing() is Finger
-        c.mouse_drags_lists(finger)
+        narrow_lists(c)
+        let finger = stack_by_finger()
         let page_took = c.took_back(fn() {
           let pages = fn() {
-            c.nav(
-              app.nav,
-              fn(page) {
-                // what moves in the page of its own (the composer) takes its place from the page's foot, as the wide
-                // frame's pane says (sfdesk's frame.mbt): the page sliding in or out, a keyboard making it shorter,
-                // move none of it (it goes with the page, at once)
-                let whole = c.box(style=page_whole, fn() {
-                  // kept as it was drawn while nothing it shows can have changed (mbui's Ctx::kept_part), read out, as
-                  // the wide frame's panes are (sfdesk's tape_part): a mark stepping in it, a list of another page
-                  // scrolled builds none of it. Its key what it is laid out by besides what it reads: the window, the
-                  // bars' room, the keyboard's, the ground, where it stands in the stack and the way a place came in
-                  let t = @sf.theme()
-                  let key = "\{c.width} \{c.height} \{status_top()} \{nav_foot()} \{bar_room_now()} " +
-                    "\{t.p.bg} \{t.dark} \{app.nav.under() is None} \{app.switch_way} \{w.id}"
-                  // (an island: built from its key and what it reads, the workspaces read in it, whatever else of the
-                  // frame is built anew; docs/retained.md, the way there's 3)
-                  c.kept_part(
-                    c.id("page/kept"),
-                    key,
-                    fn() {
-                      let (now, all, _, invited) = workspace_in_view(src)
-                      page_view(c, src, now.unwrap_or(w), all, invited, page)
-                    },
-                    read_out=true,
-                    own=true,
-                  )
-                })
-                @motion.scope(c, whole, bottom=true)
-              },
-              bg=t.p.bg,
-            )
-            |> ignore
+            c.nav(app.nav, fn(page) { narrow_page(c, src, w, page) }, bg=t.p.bg) |> ignore
             // ⌘K's search over a page other than the lists (sfdesk's keys.mbt, sfpages' search.mbt), under the bars
             @sfpages.search_over(c, src, w, status_top())
           }
@@ -624,57 +646,16 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
             c.selectable(color=@sf.alpha(t.p.blue, 0.28), pages)
           }
         })
-        // at the stack's root, with nothing over it or in it taking back: the shell's back (back_where: a place's
-        // top page other than the chats back to the chats, in place); above it the stack's own (Ctx::nav: swiped from
-        // the edge, the back key), which pops as back_where does
-        let root = app.nav.top()
-        if app.nav.depth() == 1 && !page_took && !app.menu && !sheet_open() && !@sf.presenting() {
-          match @sfbase.back_step() {
-            Some(f) => c.on_back(f)
-            None => ()
-          }
+        if !page_took {
+          narrow_root_back(c)
         }
-        // the player sideways: back turns it upright first
+        // the player sideways: back turns it upright first; words picked in a chat, a link's menu: back lets go of
+        // them first (pick.mbt)
         play_back(c)
-        // words picked in a chat, a link's menu: back lets go of them first (pick.mbt)
         pick_back(c)
-        // the bottom bar: on a place's top page with nothing over it; none while this device waits to be confirmed in
-        // the workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
-        let waiting = root == Home && @settings.lock_waiting(settings_core(src, w), w.id)
-        bottom_bar(
-          c,
-          src,
-          w,
-          place_of(root),
-          app.nav.depth() == 1 && place_of(root) is Some(_) && !@sfpages.search_bar_away() && !waiting,
-        )
-        // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
-        preview(c, src)
-        // the chat being made public (sfpages' publish.mbt)
-        @sfpages.publish_layer(c, src)
-        // a visualization over the whole screen (viz.mbt)
-        viz_full_layer(c, src)
+        narrow_over(c, src, w)
       }
-      sheet_contents(fn(kind) {
-        match kind {
-          ShareSheet => share_in_sheet(c, src, w)
-          InviteLink => invite_sheet(c, src)
-          NoSheet => ()
-        }
-      })
-      // a new device waiting on this one's code, in any workspace of the person's, over whichever page is open
-      // (App.kt LockPrompts): put up when no other sheet is
-      @settings.lock_prompts(settings_core(src, w), !sheet_open())
-      // (the core what the settings put up over a page draws with, put up by what has none at hand)
-      @settings.panels_frame(settings_core(src, w))
-      // ⌘K's panel and ⌘/'s shortcuts, in every tier over the pages, under the presenters (sfdesk's switcher.mbt,
-      // shortcuts.mbt)
-      @sfdesk.switcher(c, src, w)
-      @sfdesk.keys_dialog(c, src)
-      // the library's menus, picks, panels, confirms and questions (src/sf presenters.mbt), over all of those
-      @sf.presented(c)
-      toast(c)
-      finger_loupe(c)
+      signed_in_over(c, src, w)
     }
     None =>
       // (none in view while the prefs are read too: workspace_in_view)

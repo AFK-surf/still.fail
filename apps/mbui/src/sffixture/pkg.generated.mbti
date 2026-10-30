@@ -15,6 +15,8 @@ pub fn ago(String, String) -> Json
 
 pub let ana : Json
 
+pub fn ask_end_post() -> Json
+
 pub fn by_agent(String, String, String) -> Json
 
 pub fn by_person(String) -> Json
@@ -183,6 +185,8 @@ pub fn fix_own(Array[Json]) -> Array[Json]
 
 pub let fix_phone : @ref.Ref[String]
 
+pub let fix_phone_link : @ref.Ref[String]
+
 pub fn fix_pick() -> Json
 
 pub let fix_places : Map[String, Json]
@@ -216,6 +220,8 @@ pub let fix_srt : String
 pub fn fix_station(String) -> Json
 
 pub let fix_stream_ids : @ref.Ref[Int32]
+
+pub let fix_tall_models : Array[String]
 
 pub let fix_threads : Map[Int32, String]
 
@@ -507,6 +513,8 @@ pub fn with_cards(Fixture, Json, String) -> Json
 
 pub fn with_cc(Json) -> Json
 
+pub fn with_chat_screens(Json, Bool) -> Json
+
 pub fn with_download_message(Json) -> Json
 
 pub fn with_file_links(Json) -> Json
@@ -621,6 +629,7 @@ pub(all) struct NewFix {
   mut made : Int32
   mut reading : Int32
   mut crowded : Bool
+  mut tall : Bool
 }
 
 // Type aliases

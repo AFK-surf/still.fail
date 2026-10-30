@@ -220,11 +220,11 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
     share_in.shared.set(None)
     share_in.files.set([])
     share_in.raised.set(false)
-    if share_over.val {
+    if share_over.get() {
       share_closing.val = true
     }
   }
-  if share_closing.val && share_over.val && !@sf.presented_drawn() {
+  if share_closing.val && share_over.get() && !@sf.presented_drawn() {
     share_closing.val = false
     @ui.over_done(open_app=false)
   }
@@ -624,7 +624,7 @@ fn share_opened(
   @hostapi.log("share in: into \{key}, \{files.length()} files")
   @sfbase.history_push()
   // over another app: the app opens at the chat (ShareActivity openApp: MainActivity's openItem, over Home)
-  if share_over.val {
+  if share_over.get() {
     home()
     @ui.over_done(open_app=true)
   }

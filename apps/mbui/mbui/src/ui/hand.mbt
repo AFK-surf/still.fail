@@ -30,9 +30,14 @@ priv struct Hand {
   /// whether a finger or a button held down is past the slop of where the press was seen going down (Ctx::press's
   /// `moved`): what reads the press is built again as it goes past, not as it moves
   beyond : @signals.Signal[Bool]
-  /// the hand's discrete events so far, counted (hand_event): what reads what came (a key, a menu asked for, a reader's
-  /// action, a tap) is built again as one comes
+  /// the hand's discrete events so far, counted (hand_event): what reads what came (a key, a menu asked for, words
+  /// dropped) is built again as one comes
   events : @signals.Signal[Int]
+  /// the pointer's presses going down or up so far, counted (hand_pressed): what reads how a press goes (Ctx::press, an
+  /// editor's caret, a second finger) is built again as one does, nothing else
+  presses : @signals.Signal[Int]
+  /// what a reader asked something of (Ctx::ask_action), by member (Ctx::action_asked): what asked of none, not built
+  asked : @signals.Keyed[Int]
 }
 
 ///|
@@ -51,6 +56,8 @@ let hand : Hand = {
   pointing: @signals.signal(Finger),
   beyond: @signals.signal(false),
   events: @signals.signal(0),
+  presses: @signals.signal(0),
+  asked: @signals.keyed(),
 }
 
 ///|
@@ -75,6 +82,7 @@ fn hand_arrive(c : Ctx) -> Unit {
   let p = c.press_seen
   hand.beyond.set(c.down && ((c.px - p.x).abs() > press_slop || (c.py - p.y).abs() > press_slop))
   hand.pointing.set(pointing())
+  hand.asked.set(c.asked_actions.map(fn(a) { a.0 }))
   @signals.end_batch()
 }
 
@@ -89,6 +97,21 @@ fn hand_event() -> Unit {
 /// What the hand's discrete events are, read (Ctx::keys and the rest of what reads what came): followed.
 fn hand_events_read() -> Unit {
   hand.events.get() |> ignore
+}
+
+///|
+/// A press of the pointer went down or up (or was called off, or a second finger came): what reads how a press goes
+/// built again (hand_presses_read), what reads the clicks by its own (Ctx::clicked: hand's `clicked`) as it is one.
+fn hand_pressed() -> Unit {
+  hand.presses.set(@signals.untracked(fn() { hand.presses.get() }) + 1)
+}
+
+///|
+/// How the pointer's presses go, read (Ctx::press and what follows a press as it goes): followed, with the discrete
+/// events.
+fn hand_presses_read() -> Unit {
+  hand.events.get() |> ignore
+  hand.presses.get() |> ignore
 }
 
 ///|

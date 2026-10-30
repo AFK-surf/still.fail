@@ -30,6 +30,8 @@ struct Focusable {
   node : Int
   keys : Int
   on_press : Bool
+  /// the old view it was built in (view_host.mbt's island_allows), none in a layer of its own
+  island : @view.NodeId?
 }
 
 ///|
@@ -68,7 +70,10 @@ pub fn Ctx::focusable(self : Ctx, id : Int, node? : Int = -1, keys? : Int = 3, o
   if id == 0 {
     return
   }
-  let f = { id, group: self.group_cur, layer: self.layer_cur, node, keys, on_press }
+  // (the old view it is in, built in no layer of its own: what a modal layer of the window's tree asks of it, as it is
+  // used: island_allows)
+  let island = if self.layer_cur == 0 { island_building.val } else { None }
+  let f = { id, group: self.group_cur, layer: self.layer_cur, node, keys, on_press, island }
   // (held by its node, docs/retained.md the way there's 1: by `node`, else by the id's, made or to be: Ctx::id_built)
   let i = if node >= 0 {
     node
@@ -155,7 +160,7 @@ pub fn Ctx::has_focus(self : Ctx, id : Int) -> Bool {
 /// Whether `id` has the focus and it shows (it came by the keyboard): where a focus ring is drawn.
 pub fn Ctx::focus_shown(self : Ctx, id : Int) -> Bool {
   // (shown as the keys moved it: hand.mbt)
-  hand_events_read()
+  hand_presses_read()
   self.has_focus(id) && self.focus_visible
 }
 
@@ -197,7 +202,7 @@ pub fn Ctx::focused_id(self : Ctx) -> Int {
 /// head).
 fn Ctx::focus_frame_start(self : Ctx) -> Unit {
   // (the keys, what a reader asked and the focus, read so: hand.mbt)
-  hand_events_read()
+  hand_presses_read()
   hand.focus_id.get() |> ignore
   self.actions.clear()
   for a in self.asked_actions {
@@ -209,9 +214,12 @@ fn Ctx::focus_frame_start(self : Ctx) -> Unit {
   self.asked_actions.clear()
   // a layer's own keys first (Escape: overlay.mbt)
   self.layer_keys()
-  let field = self.editors.contains(self.focus)
+  // (the focus where a modal layer of the window's tree lets it take input; else, for these keys, none's:
+  // Ctx::focus_allowed)
+  let focus = self.focus_allowed()
+  let field = self.editors.contains(focus)
   // (the keys a field focused leaves to the app: Tab there picks from what it offers, the focus stays)
-  let left = match self.editors.get(self.focus) {
+  let left = match self.editors.get(focus) {
     Some(st) => st.leaves
     None => []
   }
@@ -257,7 +265,7 @@ fn Ctx::tab_stops(self : Ctx) -> Array[Focusable] {
     if trap != 0 && !self.layer_within(f.layer, trap) {
       continue
     }
-    if self.layer_inert(f.layer) {
+    if self.layer_inert(f.layer) || !island_allows(f.island) {
       continue
     }
     if f.group == 0 {
@@ -293,7 +301,7 @@ fn Ctx::group_stop(self : Ctx, gid : Int) -> Focusable {
 ///|
 /// Group `gid`'s items as the last frame built them.
 fn Ctx::group_items(self : Ctx, gid : Int) -> Array[Focusable] {
-  self.last_focusables.filter(fn(f) { f.group == gid })
+  self.last_focusables.filter(fn(f) { f.group == gid && island_allows(f.island) })
 }
 
 ///|
@@ -353,6 +361,10 @@ fn Ctx::move_focus(self : Ctx, id : Int, roved? : Bool = false) -> Unit {
 ///|
 /// An arrow, Home or End with the focus in a roving group: the focus along it. False when it is not the group's.
 fn Ctx::rove(self : Ctx, code : Int) -> Bool {
+  // (none where a modal layer of the window's tree keeps the focus from input: Ctx::focus_allowed)
+  if self.focus_allowed() == 0 {
+    return false
+  }
   let mut gid = 0
   for f in self.last_focusables {
     if f.id == self.focus && f.group != 0 {
@@ -418,7 +430,7 @@ fn Ctx::press_focused(self : Ctx, key : Int) -> Bool {
     return false
   }
   for f in self.last_focusables {
-    if f.id == self.focus && (f.keys & key) != 0 && !self.layer_inert(f.layer) {
+    if f.id == self.focus && (f.keys & key) != 0 && !self.layer_inert(f.layer) && island_allows(f.island) {
       self.clicked.push(f.id)
       made_pressed(f.id)
       self.focus_visible = true
@@ -446,7 +458,11 @@ fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
       return
     }
   }
-  if self.focus != target && !self.editors.contains(self.focus) && !self.dev.catchers.contains(self.focus) {
+  // (one a modal layer of the window's tree keeps from input kept as it is: no input of its takes it away, view_host.mbt)
+  if self.focus != target &&
+    self.focus_allowed() != 0 &&
+    !self.editors.contains(self.focus) &&
+    !self.dev.catchers.contains(self.focus) {
     self.focus = 0
   }
 }
@@ -475,7 +491,7 @@ fn Ctx::focus_frame_end(self : Ctx) -> Unit {
 /// Whether key `code` is the focused widget's (an arrow in a roving group, Enter or Space it is pressed by): it goes
 /// to it as the next frame starts, and scrolls nothing.
 fn Ctx::focus_takes(self : Ctx, code : Int) -> Bool {
-  if self.focus == 0 {
+  if self.focus_allowed() == 0 {
     return false
   }
   for f in self.last_focusables {

@@ -482,6 +482,9 @@ final class NativeViews {
         float[] covers = new float[0];
         float slop;
         float downX, downY;
+        // the finger that went down: its pointer id and when (what the canvas is given as its down, the same finger)
+        int downId;
+        long downAt;
         boolean taken;
         /** The finger went sideways past the slop first (vertical): the page's to the end of the touch. */
         boolean sideways;
@@ -560,6 +563,8 @@ final class NativeViews {
                 case MotionEvent.ACTION_DOWN:
                     downX = e.getX();
                     downY = e.getY();
+                    downId = e.getPointerId(0);
+                    downAt = e.getEventTime();
                     taken = false;
                     sideways = false;
                     return false;
@@ -592,17 +597,33 @@ final class NativeViews {
         /** The touch the canvas's from now on: it is given it from where it went down (then as it is now). */
         private boolean take(MotionEvent e) {
             taken = true;
-            MotionEvent down = MotionEvent.obtain(e.getDownTime(), e.getDownTime(), MotionEvent.ACTION_DOWN, downX, downY, e.getMetaState());
+            // (the first finger by its own id, where and when it went down: the same finger the rest of the touch is)
+            MotionEvent down = first(e, MotionEvent.ACTION_DOWN, downAt, downX, downY);
             toCanvas(down);
             down.recycle();
-            if (e.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN) {
+            int i = e.findPointerIndex(downId);
+            if (e.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN && i >= 0) {
                 // the first finger where it is now, then the second's coming down
-                MotionEvent at = MotionEvent.obtain(e.getDownTime(), e.getEventTime(), MotionEvent.ACTION_MOVE, e.getX(0), e.getY(0), e.getMetaState());
+                MotionEvent at = first(e, MotionEvent.ACTION_MOVE, e.getEventTime(), e.getX(i), e.getY(i));
                 toCanvas(at);
                 at.recycle();
             }
             toCanvas(e);
             return true;
+        }
+
+        /** An event of the first finger alone, by its own pointer id, `action` at `time` where (x, y) are. */
+        private MotionEvent first(MotionEvent like, int action, long time, float x, float y) {
+            MotionEvent.PointerProperties[] p = { new MotionEvent.PointerProperties() };
+            p[0].id = downId;
+            p[0].toolType = MotionEvent.TOOL_TYPE_FINGER;
+            MotionEvent.PointerCoords[] c = { new MotionEvent.PointerCoords() };
+            c[0].x = x;
+            c[0].y = y;
+            c[0].pressure = 1f;
+            c[0].size = 1f;
+            return MotionEvent.obtain(downAt, time, action, 1, p, c, like.getMetaState(), like.getButtonState(), 1f, 1f,
+                    like.getDeviceId(), 0, like.getSource(), 0);
         }
 
         @Override

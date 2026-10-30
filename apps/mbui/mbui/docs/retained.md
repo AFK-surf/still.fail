@@ -51,12 +51,14 @@ changes, laid out or painted again alone, a move or a fade only painted (a trans
    own: read by a paint property (a place, a look: `moved_by`, `look_by`) it paints again each frame it goes and
    nothing else; read by a layout property (a height going), it lays out its node again each frame it goes. A moment
    (a "3 minutes ago", an exit's end) wakes then. Nothing that is not shown reads it; nothing is told to start.
-8. **A frame does what was marked.** As a frame begins: what came is written (the hand, the core's messages, the
-   host's settings, the clock), the bindings it made stale run (`show`, `each` and `pick` make and let go nodes), the
-   nodes marked are laid out (@flex.compute's reuse: only the dirty ones), what was laid out that a binding reads (a
-   list's window, `laid_size`) runs those bindings, laid out again while it changes (`frame_passes_most`), then the
-   nodes marked to paint are painted, their instances kept by node, and only the instances that changed go to the
-   host. A frame where nothing was marked is no frame.
+8. **What comes and goes, at its cause; the rest, at the frame.** A change from outside (an input, a message, a
+   host's answer, a press of the tree's) is handled at its own moment: what had ended by then settled first, then its
+   handlers, as one change with that moment as its cause's. `show`, `each` and `pick` make and let go nodes as the
+   change that caused them is committed, at its moment (what they make reads the state as it is then). What a press
+   finds, or anything that asks where things are, is the tree brought to that moment (the bindings told worked out,
+   what was marked laid out). A frame settles what ended by its moment, works out the bindings told, lays out the
+   nodes marked (.compute's reuse: only the dirty ones), places and looks at what changed, and paints the
+   instances that changed, kept by node. A frame where nothing was marked is no frame.
 
 ## What it is in mbui
 
@@ -135,6 +137,64 @@ as it is built" (`Ctx::rect_of` in a build, the motion package's records found b
 place, read at the cause's moment; the motion package's per-frame records by key (`mo.recs`, measures) go with the
 frames that built everything again.
 
+## What it must be, and how that is shown
+
+What the others do, read for this (2026-10-30, the review of src/view: Solid's owners, Vue's effect scopes and Vapor's
+render effects, Slint's pure properties, Compose's phases and AnimatedVisibility, Flutter's layout and layer updates,
+Qt Quick's renderer), and what it comes to here: fine-grained bindings of properties, a lifetime owned apart from what
+is tracked, and layout, paint and composition kept by node. Neither another engine nor another signals.
+
+1. **What is tracked and what is owned are two things.** A node's making runs in a scope of its own (Solid's Owner apart
+   from its Listener: `untrack` stops following reads, never owning): every effect, computed, timer and native
+   resource made there is let go with the node, its cleanups run once. A handle on a node let go, a callback come late,
+   does nothing (its making is checked where every use of a handle begins). The signals' algorithm stays as it is; what
+   is added is the owning.
+2. **A binding works its value out and nothing else.** Written in a batch by one event, marked stale, its value worked
+   out as the frame takes it (Vapor's render effects queued, Slint's lazy pure properties); a value set twice is set
+   once; a property given once (`Is`) makes no effect. A property has one binding at a time (another lets the one before
+   go); its phase is the property's (width, words, ground, a transform), not the caller's. No `set` does layout,
+   shaping or the host's work where it is set.
+3. **What is done again is what the change is.** Structure, measure and place, what is drawn, how it is composed (a
+   transform, an opacity, a cut), what is read out: each its own. A colour lays nothing out; a move measures no words; a
+   node moved keeps what it holds where they are in it. Layout goes up to the first box that does not read what it
+   holds (a size given is not that by itself: a holder may read its intrinsic size or baseline). What is laid out tells
+   only what reads it (a popover's place, a list's window), never a whole page made again.
+4. **The scene is kept, not the frame.** Each node's drawing kept where it is in what holds it, in order; what composes
+   it (transform, opacity, cut) kept on the node that does; the host given the records and composition that changed.
+   A host taking the whole frame each time (gles_render.h's glBufferData of all of it, apple_render.m's upload) is
+   given it by an adapter said to be one: it is no "only what changed", and no step is done because of it. A test may
+   unfold the scene into whole `Drawn` records; nothing inside works on that unfolding.
+5. **Composed is not a texture each.** Overlap, rounded cuts, glass and opacity mean what they mean now: an opacity on
+   a group composed and then faded is not each of its parts faded, and is not swapped for it. Drawing and hit testing
+   share one transform and cut; a holder moved does not write its subtree's places in the window again (they are worked
+   out as they are visited).
+6. **Coming, there, going, gone.** `show`, `each` and the stacks own a node while it leaves: still drawn, no longer
+   pressed nor read out, let go when the exits started by its cause end (Compose's AnimatedVisibility). Time is read by
+   what moves and by what waits for a moment, each from its cause's start, target, curve and the frame's time, never by
+   how many frames went by.
+7. **The old view is a node.** Made, updated and let go at a node's edges (Compose's AndroidView: factory, update,
+   release), given a size, a place, a cut and a place in the order, and pressed through the tree. The first island may
+   be the whole app; the API takes one a page, so the old goes from the outside in, never an app beside the tree.
+
+8. **One logical timeline.** Everything that happens at a moment of its own (an input, a message, a leaving ending, a
+   step of what goes by steps: docs/motion.md, the logical clock) is on one timeline the host only wakes and gives the
+   time to, done in the order of its moments (those together in the order told), each as of its moment; frames and
+   events advance it to their moment (Tree::advance) and only observe and draw it.
+9. **The same events, the same picture.** From the same state, the same events with their moments and the same
+   settings, any moment looked at shows the same picture, presses the same things and has made, kept, let go and set
+   leaving the same nodes, whether frames came at 60 Hz, at 120 Hz or once at that moment: frames only change how much
+   work is done. So what comes and goes is committed with the change that caused it, at that change's moment (an
+   input's its event time; the time is the host's, given to the tree, never read where it is worked out), what had
+   ended by then settled first; what a component made then reads the state as it was then. A frame settles what ends
+   by its own moment and draws; layout, words and paint wait for it and are merged. Nothing is made right by one frame
+   more, by reading the time where a value is worked out, or by waiting for things to settle.
+
+Shown by counting, on the real path, apart: bindings worked out, nodes made and let go, measures, drawing made, what is
+composed again, the scene gone through, and what is handed to the host. A colour changed touches no other component; a
+page moved makes nothing again; a list's rows reused and let go as they should be; a node let go leaves no subscription,
+timer or native resource; frames at 60 Hz, 120 Hz and a jump to the moment come out the same. A renderer may go through
+the records kept to draw them; nothing finds what changed by working the tree out whole or comparing it.
+
 ## Held by the tests
 
 The Tester keeps its one check, said another way: whatever a frame did by what was marked, the same state made into
@@ -155,28 +215,78 @@ squeeze and contrast checks; film's images before and after where a step touches
    was used (kept_nodes.mbt's RowNodes: thirty kinds a kept row records and says again). Each becomes what a node
    holds, asked of the tree as it is laid out and painted. Then a subtree kept is its nodes and nothing besides, made
    once or built: the ground both the old frame and the new one stand on, one list a PR, nothing shown changed.
-2. **The runtime** (src/ui, beside what is there; begun in made.mbt: a node made once is filled by a call of
-   Ctx::box or Ctx::text that makes it alone, followed by a watch of its own and filled anew in its place as what it
-   read changes, put back unbuilt each frame otherwise; what it holds comes and goes by made_each and made_show; a
-   press is a callback, Made::on_press; a frame built whole fills every node anew, so what was kept is held to it.
-   Put among a frame's nodes where the old view says, Ctx::made: the island the other way round, the new inside the
-   old, for the parts made once to grow from the leaves while the old frame holds them): nodes made once, `Live` bindings by phase, `show`/`pick`/`each`
-   with owners, handlers, the tree's hit tests, layout of the marked nodes, paint kept by node, the frame of step 8,
-   and the Tester's check of a tree made from nothing. Its own tests: random trees changed a little at a time against
-   one made fresh, as flex's reuse_test does.
-3. **The old view as an island.** `old(fn(c : Ctx) { ... })` is a node whose subtree is built the old way, every node
-   under it made again when anything it read changed (its build tracked as a whole, as frame_watch does the frame's).
-   The whole app first runs as one island on the new runtime, and looks and does just as it did.
-   An island is kept only where nothing it read changed, so what it reads must say when it changes: the pages' own
-   state is signals, and what is put into one from elsewhere (a draft's files, a menu's choice) tells it. What comes
-   that is no signal yet (the hand's events, a message, a host's answer, a test's draw) builds every island anew;
-   the frames kept are those of the clock alone (a page sliding in or out). Each build of a frame builds the same
-   (what a build changes of its own state, the next build of the frame starts from the frame before), and the Tester
-   holds every island kept to it built anew.
+2. **The runtime**, src/view (2026-10-30): nodes made once, each its own scope (what it makes owned by it) and a
+   checked handle; one binding a property, worked out as the frame or an event takes it; `show`/`pick`/`each`
+   committed at their cause, leaving and coming back; a frame visiting only what was marked, what a node draws kept
+   where it is its own and its place composed apart; the tree's hit tests; events at their moment (Tree::event,
+   Tree::bring_to). Its own tests: random trees changed a little at a time against one made fresh, timing at any frame
+   rate the same, ownership and release.
+3. **The old view as an island.** `old(node, fn(c : Ctx) { ... })` (src/ui/view_host.mbt) puts the old view, built the
+   old way, in a node of the window's tree: built for the node's room, placed, cut and faded as it is, painted in its
+   place in the tree's order, pressed through the tree. Every window (ui.run's, a Tester's) is such a tree; the app is
+   first one island, the whole window, and looks and does just as it did. Any number of islands a window: each a
+   subtree of the old frame kept as its nodes, built again only as what it read changes or an input goes to it, and
+   owning (a scope of its node's) all it makes as it is built and laid out, its parts and rows and what they follow,
+   let go at once with its node. The old frame's work area (its Ctx, its frame) is shared by the islands for now, a
+   way there: what each owns is its own. What comes that is no signal yet (a message, a host's answer, a test's draw)
+   builds every island anew; an input builds the one it went to.
 4. **From the outside in.** The window and its shell (frame, panes, tape, stacks, presenters) made once; each page in
    them an island. Then src/kit and src/sf's components, each given its made-once form beside its old one while pages
    still use the old; then each page made once, its island gone with it. Each step makes a page's island smaller; none
    leaves an app built two ways for longer than its PRs.
+
+   Where it stands (2026-10-31). Made once: the app's state (app_is: failed, signed out, starting, signed in) a node
+   picked by it; signed in, the shell a node picked by the window's width (View::window) and whether a workspace is in
+   view. Laid out Small with one, the narrow shell's nodes (still.fail's sfapp/narrow_shell.mbt): an island under all
+   of it (what the frame does in every tier before its pages: what is told as the frame ends, the icon's number, the
+   keys, whether the first page waits; the back of the stack's root), the stack, and an island over it (the bottom bar,
+   what opens over the pages, the presenters, the toasts). The stack is the tree's (src/ui/nav_view.mbt): each page on
+   it a node of its own, made as it is put on and let go as it leaves (what it made forgotten then, its `on_leave`
+   told), its page an island while it shows; which pages show and where they are drawn are bindings (View::shift, in
+   their own widths: the frame drawing them lays them out); a slide sets out at its cause's moment, its length by how
+   big the stack is laid out then (View::laid_size), its end a moment of the timeline where the page that went is let
+   go; a page pushed to show what the core has for it sets out at the moment that answer came, or once its wait is
+   over (View::reacts, View::at_moment). The slide no longer waits for how late its first frame was to the screen (the
+   old stack's `late_check`): a host's lateness is no event of the logic. Old view still: the wide frame (sfdesk's
+   frame, panes, tape and their stacks), a window of its own, the sign-in and the splash; the theme each island is built
+   in; back, said by the islands as they are built, in the tree's order (the top page first, then the stack's swipe);
+   which island takes a press where they lie one over another (where more than one is at a point, all of them are told
+   of the input); the window's sides beside the system's bars (beside_sides: the islands are placed in the window's
+   terms within it); the layers of the old frame (menus, sheets) painted over everything.
+
+   What the narrow shell's old views do as they are told is set out at its cause's moment, not at the frame that next
+   builds them, and drawing only reads it at the frame's: the bottom bar is told what the app's state says of it
+   (shown, the notch's action, the places, the bars, the width of the box it is laid out in) by a reaction of the
+   shell's node (View::reacts) at the moment that changes, its ways set out from then, a frame building it reading
+   where they are; a zoom's commands take one moment as they begin (an event's said with it, else what the window's
+   tree is doing: ui's `tree_cause`, else the frame's or the host's clock) and its glide and fling are ways of its own
+   from it. A finger on the bar's glass is a node's (still.fail's bar_glass_node), each event at its own moment. An image
+   opened over the pages is nodes of the tree's (still.fail's sfbase/viewer_tree.mbt): its layer, its ground (bound to
+   its ways, the clock read only while one goes), its canvas taking up to two fingers, the secondary button and the
+   wheel (View::on_drag, on_menu, on_wheel), each event decided at its moment by the zoom's and the strip's ways read
+   there (Zoom::rect_at, scale_at; @motion.Way); it is set out as it is made, done at its ways' declared ends, reads
+   ahead what is beside it as that is said, and stops taking presses as it closes. Its drawing and its bars are
+   islands in it (the drawing taking a press only on what it has to press: a mark's pin, the words written). Still the
+   old way there: the bars' own presses, back and Esc (a press on one is taken as the bars' island builds, so what
+   draws the picture follows it at the next frame); the flight in and out (where it flies from, recorded as it is
+   drawn, and the thumbnail's place read of the old layout); the wide frame's viewer, whose zoom's `step` copies where
+   it is into its fields each frame. A row or a part kept as its nodes follows what it read by a watch owned where it is
+   built: the old view that made it going, the watch goes with it (stale and gone: Watch::gone), and one built again
+   under another with the same key follows anew there, never put back as though it still followed.
+
+   A modal layer is the tree's (View::modal): the topmost on, by where each is among what holds it as the tree is now
+   (Tree::modal_top), takes all input; what it does not hold takes none, from the moment a change saying so is
+   committed whole (Tree::at_cause, an event, a moment of the timeline, a structure's first making: what a change does
+   in between is never seen half done). The old views ask it where they use input, each by the island it was built in
+   (Node's and a focus stop's `island`, set as it is built and as its lists' rows are laid out): the frame's hit
+   targets (an old view's found only while the tree lets it take presses: old_hit_open), the keys, Tab, the focus's
+   words, a key catcher, the wheel, what is read out. A press held on an old view is held by the one it is on (the old
+   frame's hit target's, an empty one over another passing it on: old_press_owner), and called off once at the cause
+   of a modal layer coming over it, as the host calling it off is (Ctx::press_called_off, at that cause's moment).
+   Still frame-bound there: what a press called off sets going in an old view's list (the spring back of a pull, a
+   fling: Ctx::release's `spring_back(…, -1.0)` and `fling_t0 = -1.0`) starts at the next frame, not at the moment it
+   was called off (a pull called off at 50 by a modal layer and at 50 by the host, the host's next frame at 100 or at
+   50: two ways back), to be set out at its cause as old input moves to the tree.
 5. **What goes**, as no island is left: the frame's watch, paint watch and layout watch (frame_watch.mbt), kept parts
    and rows (kept_part.mbt, kept_rows.mbt, kept_nodes.mbt), said.mbt's recorded lists, `frame_passes_most`'s passes
    for a build, `rows_check` and `looks_check` as they are, `outside_said`, `Mover`, src/damage's comparing of

@@ -189,7 +189,7 @@ test "station tabs show their page beside the chat, preserve folders and release
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   @sfbase.open_page(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
   t.run_for(@ui.move_most_ms)
@@ -232,7 +232,7 @@ test "a screen beside a chat goes to a window of its own from the panel's bar (a
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   @sfbase.open_page(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
   t.run_for(@ui.move_most_ms)
@@ -266,7 +266,7 @@ test "共享调试 opened from a wide chat: beside it in a tab, the chats' sideb
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.native_answers("adb.phone", fn(_) { adb_phone_of(wireless=true) })
   t.run_for(@ui.move_most_ms)
   @sfbase.open_page(Setting(@settings.Route::AdbShare("ws1/st1")))
@@ -298,7 +298,7 @@ test "a login screen opened beside a chat closes its tab when the login browser 
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   // The same settings callback used by the chat's login card.
   let core = @sfbase.settings_core(src, { id: "ws1", name: "", emoji: "", icon: "", email: "" })

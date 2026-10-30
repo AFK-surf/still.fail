@@ -545,30 +545,36 @@ static void scroll(GdkEvent *ev, double x, double y) {
   if (dx != 0 || dy != 0) mb_cb.wheel(x, y, dx, dy, phase | (mods << 4));
 }
 
-// The touches: the first as the pointer, the second as the second finger (4 down, 5 moved, 6 up), any more none.
-static GdkEventSequence *touch1, *touch2;
-
+// The touches, each by its sequence (the same from its begin to its end), given an id of its own while it lasts (its
+// whole pointer kept, never cut to an int): handed on as they come (pointer kinds 10 begun, 11 moved, 12 ended, 13
+// called off, the id where a button goes), what they come to the app's to work out (touches.mbt: two of them its, the
+// first let go the second the first, one called off all of it).
+//
+// Its time not said: GDK gives an event's (gdk_event_get_time) as ms on the display server's clock, 32 bits, wrapping,
+// GDK_CURRENT_TIME (0) where it has none; neither GDK nor Wayland's or X's protocol says how that clock lines up with
+// this process's (mb_now_ms), and nothing here has checked a backend that does. So no time of its own is said for it
+// (mb_host_event_time -1): it is at the moment it is handled, as this host's other events are; what it did is kept on
+// the tape at that moment and given again so. (Saying its own would need a backend's clock known to be this one.)
+static GHashTable *touch_ids;          // a sequence's id, by its pointer
+static int32_t touch_next = 1;
 static void touch(GdkEvent *ev, GdkEventType t, double x, double y) {
   GdkEventSequence *s = gdk_event_get_event_sequence(ev);
-  int end = t == GDK_TOUCH_END || t == GDK_TOUCH_CANCEL;
-  if (t == GDK_TOUCH_BEGIN) {
-    if (!touch1) {
-      touch1 = s;
-      gtk_widget_grab_focus(area);
-      mb_cb.pointer(0, x, y, 0);
-    } else if (!touch2) {
-      touch2 = s;
-      mb_cb.pointer(4, x, y, 0);
-    }
-    return;
+  int kind = t == GDK_TOUCH_BEGIN ? 10 : t == GDK_TOUCH_UPDATE ? 11 : t == GDK_TOUCH_END ? 12 : 13;
+  if (!touch_ids) touch_ids = g_hash_table_new(g_direct_hash, g_direct_equal);
+  gpointer got = g_hash_table_lookup(touch_ids, s);
+  int32_t id;
+  if (got) {
+    id = GPOINTER_TO_INT(got);
+  } else {
+    // (a sequence not begun here, its begin not seen: none of the app's)
+    if (kind != 10) return;
+    id = touch_next++;
+    if (touch_next <= 0) touch_next = 1;
+    g_hash_table_insert(touch_ids, s, GINT_TO_POINTER(id));
   }
-  if (s == touch1) {
-    mb_cb.pointer(end ? 2 : 1, x, y, 0);
-    if (end) touch1 = NULL;
-  } else if (s == touch2) {
-    mb_cb.pointer(end ? 6 : 5, x, y, 0);
-    if (end) touch2 = NULL;
-  }
+  if (kind == 10) gtk_widget_grab_focus(area);
+  mb_cb.pointer(kind, x, y, id);
+  if (kind == 12 || kind == 13) g_hash_table_remove(touch_ids, s);
 }
 
 void mb_app_scroll(void *event) {

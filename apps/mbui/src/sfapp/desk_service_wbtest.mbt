@@ -11,7 +11,7 @@ test "desk: a web service asked as a page is its chat with the service beside it
   open_chat(r)
   // (a window whose side panel holds the whole of its bar, a press's room round each key: a 1280's leaves its size and
   // how far it came to its ⋯)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1440.0, h=900.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1440.0, h=900.0, platform=0)
   t.run_for(@ui.move_most_ms)
   app.nav.push(Service("ws1/st1", "j-web"))
   t.frame()
@@ -62,7 +62,7 @@ test "desk: a visualization opened aside is a tab beside its chat, served from h
   let src = fixture("chat-viz")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   app.nav.push(PreviewFile("ws1/st1", "s-c1", "work/s-c1/release.html", "release.html"))
   t.frame()
@@ -85,7 +85,7 @@ test "desk: a service up pressed in 任务 beside the chat opens its own tab in 
   let src = fixture("chat-jobs-side")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   assert_eq(side_now(r), (["jobs"], "jobs"))
@@ -105,7 +105,7 @@ test "desk: wherever the pointer shows the side panel's edge's ↔, a drag from 
   let src = fixture("chat-info")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1440.0, h=900.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1440.0, h=900.0, platform=0)
   t.run_for(@ui.move_most_ms)
   side_change(r, "open", Some("s-c1"))
   t.run_for(@ui.move_most_ms)

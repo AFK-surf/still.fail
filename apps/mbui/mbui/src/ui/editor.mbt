@@ -745,7 +745,7 @@ pub fn Ctx::editor(
   let id = self.id(key)
   // (what the hand does to it, read so: the keys and words typed, a press on it, the pointer while a press on it drags
   // its caret, what is picked in it or a handle of it: hand.mbt; not a press elsewhere)
-  hand_events_read()
+  hand_presses_read()
   hand.down.get() |> ignore
   if self.down && (self.active == id || self.word_drag == id || self.handle_drag == id) {
     hand.pointer.get() |> ignore

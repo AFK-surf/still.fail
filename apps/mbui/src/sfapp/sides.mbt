@@ -10,20 +10,28 @@
 /// there is nothing there.
 fn beside_sides(c : @ui.Ctx, body : () -> Unit) -> Unit {
   // (the system's own bars as this frame wants them: the wide frame's tabs, else none: sfdesk's rail_native.mbt)
-  @sfdesk.nav_frame(fn() { beside_bars(c, body) })
+  // (where the window is a tree holding the old views, its root keeps the room beside the bars: app_tree)
+  @sfdesk.nav_frame(fn() { if @ui.old_islands_around() { body() } else { beside_bars(c, body) } })
+}
+
+///|
+/// The room kept at the window's left and right beside the system's bars there (none beside the system's tab bar, the
+/// frame from side to side under it: what is pressed at a page's top and foot keeps clear of it, @sf.native_clear; none
+/// on a phone turned on its side for a film).
+fn sides_room() -> (Double, Double) {
+  let b = @ui.system_bars()
+  let (left, right) = (dmax(0.0, b.left), dmax(0.0, b.right))
+  if (@sf.native_on() && left == 0.0) || (left == 0.0 && right == 0.0) || @hostapi.turned_sideways() {
+    (0.0, 0.0)
+  } else {
+    (left, right)
+  }
 }
 
 ///|
 fn beside_bars(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  let b = @ui.system_bars()
-  let (left, right) = (dmax(0.0, b.left), dmax(0.0, b.right))
-  // (beside the system's tab bar, the frame from side to side under it, no ground of its own there: what is pressed at
-  // a page's top and foot keeps clear of it, @sf.native_clear)
-  if @sf.native_on() && left == 0.0 {
-    body()
-    return
-  }
-  if (left == 0.0 && right == 0.0) || @hostapi.turned_sideways() {
+  let (left, right) = sides_room()
+  if left == 0.0 && right == 0.0 {
     body()
     return
   }

@@ -7,6 +7,7 @@ import {
   "mbui/motion",
   "mbui/signals",
   "mbui/ui",
+  "mbui/view",
   "moonbitlang/core/buffer",
   "moonbitlang/core/debug",
   "moonbitlang/core/ref",
@@ -87,7 +88,7 @@ pub fn bare_shell() -> Shell
 
 pub fn bars_in(Source, String) -> (Array[Array[String]], Int32)
 
-pub let bars_picked : @ref.Ref[(Array[Array[String]], Int32)?]
+pub let bars_picked : @signals.Signal[(Array[Array[String]], Int32)?]
 
 pub fn bars_shown(@ui.Ctx) -> Bool
 
@@ -130,6 +131,16 @@ pub fn chat_ref(String, String) -> ChatRef
 pub fn chat_ref_of(ChatItem) -> ChatRef
 
 pub fn chat_scope(String, String) -> String
+
+pub fn chat_screen_first(ChatRef, Array[ChatScreen]) -> Unit
+
+pub fn chat_screen_icon(ChatScreen) -> String
+
+pub fn chat_screen_label(ChatScreen) -> String
+
+pub fn chat_screens_driven(Array[ChatScreen]) -> Bool
+
+pub fn chat_screens_open(ChatRef, Array[ChatScreen], from~ : @sf.Beside) -> Unit
 
 pub fn chat_tick(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 
@@ -262,6 +273,10 @@ pub fn downloading(Json?) -> Bool
 pub fn downloads_frame(@ui.Ctx, Source) -> Unit
 
 pub fn downloads_reset() -> Unit
+
+pub fn draft_given() -> Unit
+
+pub fn drafts_given_read() -> Unit
 
 pub let drag_carried : @ref.Ref[() -> Dragged?]
 
@@ -679,17 +694,15 @@ pub fn leaving_done() -> Unit
 
 pub let left_pages : Array[Page]
 
+pub let left_said : @signals.Signal[Int32]
+
 pub fn let_go(Source, String) -> Unit
 
 pub fn let_go_all(Source, String) -> Unit
 
 pub fn lift_of(Thumb) -> Double
 
-pub let linger_fade_ms : Double
-
 pub let linger_ms : Double
-
-pub let linger_out_ms : Double
 
 pub fn linger_tick(@ui.Ctx, Source, in_front~ : Bool) -> Unit
 
@@ -807,6 +820,8 @@ pub fn marks_any() -> Bool
 
 pub fn marks_back(@ui.Ctx) -> Unit
 
+pub fn marks_changed() -> Unit
+
 pub fn marks_commit(Array[Mark], before? : Array[Mark]) -> Unit
 
 pub fn marks_draw(@ui.Ctx, (Double, Double, Double, Double), Double, Double) -> Unit
@@ -814,6 +829,8 @@ pub fn marks_draw(@ui.Ctx, (Double, Double, Double, Double), Double, Double) -> 
 pub fn marks_drawn() -> Array[Mark]
 
 pub fn marks_finger(@ui.Ctx, Int32, Double, Double, (Double, Double, Double, Double), Double) -> Unit
+
+pub fn marks_finger_off() -> Unit
 
 pub fn marks_foot(@ui.Ctx) -> Unit
 
@@ -841,6 +858,8 @@ pub fn marks_redo() -> Unit
 
 pub fn marks_remove(Int32) -> Unit
 
+pub fn marks_said() -> Unit
+
 pub fn marks_shown_color() -> Int64
 
 pub fn marks_start() -> Unit
@@ -848,6 +867,8 @@ pub fn marks_start() -> Unit
 pub fn marks_undo() -> Unit
 
 pub fn marks_writing_bottom(@kit.Zoom) -> Double?
+
+pub fn marks_writing_bottom_in(@kit.Zoom, (Double, Double, Double, Double)?) -> Double?
 
 pub fn menu_bar(@ui.Ctx, Source) -> Unit
 
@@ -1013,6 +1034,8 @@ pub let page_js_path : String
 
 pub let page_js_tag : String
 
+pub fn page_kind(Page) -> String
+
 pub fn page_link_drop(Source, PageLink) -> Unit
 
 pub fn page_link_new() -> PageLink
@@ -1125,7 +1148,7 @@ pub fn place_key(String, String) -> String
 
 pub fn place_page(String) -> Page
 
-pub let place_pick : Map[String, @settings.Route]
+pub let place_pick : @sf.LiveMap[String, @settings.Route]
 
 pub let plain_small_foot : Double
 
@@ -1165,7 +1188,7 @@ pub let pv_frames_n : @ref.Ref[Int32]
 
 pub let pv_hidden : @ref.Ref[String]
 
-pub let pv_leaving : @ref.Ref[Viewer?]
+pub let pv_leaving : @signals.Signal[Viewer?]
 
 pub let pv_read : Array[(String, Bytes)]
 
@@ -1243,7 +1266,7 @@ pub fn relay_view(@ui.Ctx, Source) -> Json?
 
 pub let relaying : Relaying
 
-pub let reporting_host : @ref.Ref[ReportingHost?]
+pub let reporting_host : @signals.Signal[ReportingHost?]
 
 pub fn reset() -> Unit
 
@@ -1361,7 +1384,7 @@ pub let share_card_of : @ref.Ref[(Source, Workspace) -> Unit]
 
 pub let share_offered : @ref.Ref[(Int32, Double, Double, () -> Unit, String)?]
 
-pub let share_over : @ref.Ref[Bool]
+pub let share_over : @signals.Signal[Bool]
 
 pub fn share_turn_tool(@ui.Ctx, String, Int32, String, () -> Unit) -> Unit
 
@@ -1581,11 +1604,15 @@ pub fn video_still(@ui.Ctx, Source, String, String, Attachment, String) -> Strin
 
 pub fn view_of_chat(Source, ChatRef) -> (ChatView?, Array[Entry], Json?)
 
-pub let viewer : @ref.Ref[Viewer?]
+pub let viewer : @signals.Signal[Viewer?]
+
+pub let viewer_built : ViewerBuilt
 
 pub fn viewer_folder_label(Source, String, String, String) -> String
 
 pub fn viewer_layer(@ui.Ctx, Source) -> Unit
+
+pub fn viewer_node(@view.View, Source, () -> (Double, Double)) -> Unit
 
 pub fn viewer_place(Viewer, Source) -> (Int32, Int32)
 
@@ -1629,7 +1656,7 @@ pub fn viz_frame(@ui.Ctx, String, String, Json?, VizHears, fill? : Bool, ground?
 
 pub let viz_frames : Map[String, VizFrame]
 
-pub let viz_full : @ref.Ref[VizFull?]
+pub let viz_full : @signals.Signal[VizFull?]
 
 pub fn viz_full_layer(@ui.Ctx, Source) -> Unit
 
@@ -1811,8 +1838,8 @@ pub(all) struct Agent {
 
 pub(all) struct App {
   mut nav : @ui.Nav[Page]
-  mut picked : String
-  filters : Map[String, String]
+  picked : @signals.Signal[String]
+  filters : @sf.LiveMap[String, String]
   mut menu : Bool
   mut switch_way : Int32
   mut held : Int32
@@ -1958,6 +1985,14 @@ pub(all) struct ChatRef {
   station_name : String
 } derive(Eq)
 
+pub(all) struct ChatScreen {
+  id : String
+  kind : String
+  title : String
+  line : String
+  agent : Bool
+}
+
 pub(all) struct ChatTabs {
   open : Array[String]
   shown : String?
@@ -1998,6 +2033,7 @@ pub(all) struct ChatView {
   me : String
   tabs : ChatTabs
   cc : Array[ChatCcTo]
+  screens : Array[ChatScreen]
 }
 
 pub(all) struct ChatsView {
@@ -2341,7 +2377,6 @@ pub(all) struct Lingering {
   agent : Agent
   id : Int32
   mut n : Int32
-  mut leaving : Bool
 }
 
 pub(all) struct LinkMark {
@@ -2642,7 +2677,6 @@ pub(all) struct Peek {
   mut got : Int32
   pictures : Array[String]
   mut target : Int32
-  mut held_by : (Int32, Int32)
 }
 
 pub(all) enum PeekRun {
@@ -2666,6 +2700,7 @@ pub(all) struct PhoneAsk {
   status : String
   scope : String
   why : String
+  link : String
   lasts : String
 }
 
@@ -2711,7 +2746,7 @@ pub(all) struct Reading {
   mut put : Bool
   mut lined : Bool
   asked : @signals.Signal[Double]
-  mut asked_newer : Double
+  asked_newer : @signals.Signal[Double]
   mut latest_asked : Bool
   mut end_asked : Bool
   mut told : String
@@ -2756,6 +2791,7 @@ pub(all) struct Reading {
   sent_as : Map[String, String]
   linger : Map[String, Lingering]
   mut lingered : Int32
+  linger_said : @signals.Signal[Int32]
   mut floor : Double
   floor_takers : Map[String, Double]
   floor_laid : Map[String, Double]
@@ -3001,6 +3037,7 @@ pub(all) enum Stepping {
 }
 
 pub(all) struct Strip {
+  way : @motion.Way
   mut leaving : Leaving?
   mut pinned : Double?
   near : Map[String, Viewer]
@@ -3151,6 +3188,7 @@ pub(all) struct Viewer {
   mut download_asked : Bool
   mut install_after : Bool
   mut awake : Bool
+  awake_told : @signals.Signal[Int32]
   mut near_bar : Bool
   zoom : @kit.Zoom
   vzoom : @kit.Zoom
@@ -3164,7 +3202,7 @@ pub(all) struct Viewer {
   mut image : String
   mut started : Bool
   mut closing : Bool
-  fade : @motion.Value
+  fade : @motion.Way
   mut held : Bool
   mut last_x : Double
   mut last_y : Double
@@ -3182,12 +3220,14 @@ pub(all) struct Viewer {
   mut swiping : Bool
   mut down_x : Double
   mut down_y : Double
+  mut down_lx : Double
+  mut down_ly : Double
   mut at_left : Bool
   mut at_right : Bool
   mut caught : Bool
   mut strip_down : Double
   mut flies : Bool
-  fly : @motion.Value
+  fly : @motion.Way
   mut fly_back : Bool
   mut fly_from : Thumb?
   mut fly_lift : Double
@@ -3199,6 +3239,12 @@ pub(all) struct Viewer {
   mut media : @kit.Media?
   mut copied : Int32
   mut head_w : Double
+  serial : Int32
+  mut in_tree : Bool
+  fingers : Map[Int32, (Double, Double)]
+  speed : @ui.Velocity
+  mut hold_off : () -> Unit
+  lift : @motion.Way
 }
 pub fn Viewer::ask_install(Self, @ui.Ctx) -> Unit
 pub fn Viewer::ask_save(Self, @ui.Ctx) -> Unit
@@ -3211,7 +3257,7 @@ pub fn Viewer::dark(Self) -> Bool
 pub fn Viewer::desk_back(Self, Source) -> String
 pub fn Viewer::download(Self, Source) -> Json?
 pub fn Viewer::draft_key(Self) -> String
-pub fn Viewer::drag_zoomed(Self, @kit.Zoom, @motion.Anim, Double, Double, Bool, Bool) -> Unit
+pub fn Viewer::drag_zoomed(Self, @kit.Zoom, @motion.Way, Double, Double, Bool, Bool, Double) -> Unit
 pub fn Viewer::draw_flight(Self, @ui.Ctx, String, (Double, Double, Double, Double), Double, ground? : Int64) -> Unit
 pub fn Viewer::fetch(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::finish_marks(Self, @ui.Ctx, Bool) -> Unit
@@ -3225,6 +3271,7 @@ pub fn Viewer::gestures(Self, @ui.Ctx, Source, Int32, @kit.Zoom, Bool, Bool) -> 
 pub fn Viewer::go(Self, @ui.Ctx, Source, Int32, Double) -> Unit
 pub fn Viewer::id(Self) -> String
 pub fn Viewer::image_stage(Self, @ui.Ctx, Source, Int32) -> Unit
+pub fn Viewer::image_view(Self, @ui.Ctx, Source, Int32, Bool) -> Unit
 pub fn Viewer::kept_whole(Self) -> Bool
 pub fn Viewer::left_with_frame(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::let_go(Self) -> Unit
@@ -3232,8 +3279,10 @@ pub fn Viewer::lifted(Self) -> Double
 pub fn Viewer::lines_stage(Self, @ui.Ctx, PKind, Int32, (Int32) -> String, (Int32) -> Array[@ui.Run]?, String?, markdown? : String?) -> Bool
 pub fn Viewer::listed_size(Self) -> Double
 pub fn Viewer::marks_frame(Self, @ui.Ctx) -> Unit
+pub fn Viewer::marks_rect(Self, Double) -> (Double, Double, Double, Double)?
 pub fn Viewer::natural_size(Self, Source) -> (Double, Double)
 pub fn Viewer::near(Self, Source) -> (Self?, Self?)
+pub fn Viewer::near_ids(Self, Source) -> (String?, String?)
 pub fn Viewer::note(Self, @ui.Ctx, () -> Unit) -> Unit
 pub fn Viewer::opened_from(Self) -> Json
 pub fn Viewer::part_call(Self) -> String
@@ -3245,6 +3294,7 @@ pub fn Viewer::read_near(Self, Source, Self?, Self?) -> Unit
 pub fn Viewer::read_on(Self, Source) -> Unit
 pub fn Viewer::read_part(Self, Source, Double, Int32, String, (Result[(Json, Bytes), Json]) -> Unit) -> Unit
 pub fn Viewer::read_whole(Self, Source, (Result[Bytes, Json]) -> Unit) -> Unit
+pub fn Viewer::set_out(Self, @ui.Ctx, Source, Double) -> Unit
 pub fn Viewer::shown_kind(Self) -> PKind?
 pub fn Viewer::shown_picture(Self, @ui.Ctx, Source, (Double, Double, Double, Double)) -> String
 pub fn Viewer::shut(Self, @ui.Ctx) -> Unit
@@ -3255,6 +3305,13 @@ pub fn Viewer::toggle(Self) -> Unit
 pub fn Viewer::told_of(Self) -> Bool
 pub fn Viewer::view(Self) -> @ui.NativeView?
 pub fn Viewer::wake(Self) -> Unit
+pub fn Viewer::wheel(Self, @ui.Ctx, Int32, @kit.Zoom) -> Unit
+pub fn Viewer::wheeled(Self, @kit.Zoom, Double, Double, Double, Double, Int32, Double) -> Unit
+
+pub(all) struct ViewerBuilt {
+  mut drawing : Int32
+  mut bars : Int32
+}
 
 pub(all) struct Viewport {
   width : Int32

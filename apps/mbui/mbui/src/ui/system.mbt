@@ -17,14 +17,19 @@ pub(all) struct SystemBars {
 } derive(Eq, Show)
 
 ///|
-/// The bars as the host last said them (none: all 0). Put back by each Tester (messages_reset).
-let system_bars_now : Ref[SystemBars] = Ref::new({ top: 0.0, bottom: 0.0, left: 0.0, right: 0.0 })
+/// The bars as the host last said them (none: all 0), a signal: what is laid out by them (the window's tree's sides)
+/// follows them. Put back by each Tester (messages_reset).
+// kept across runs: put back as a run begins (messages_reset)
+let system_bars_now : @signals.Signal[SystemBars] = @signals.signal(
+  { top: 0.0, bottom: 0.0, left: 0.0, right: 0.0 },
+  same=fn(a, b) { a == b },
+)
 
 ///|
 /// How far the system bars reach in over the view now (`top`: the status bar's, `bottom`: the navigation bar's, or
 /// the keyboard's top under it), as the host last said them.
 pub fn system_bars() -> SystemBars {
-  system_bars_now.val
+  system_bars_now.get()
 }
 
 ///|
@@ -32,9 +37,9 @@ pub fn system_bars() -> SystemBars {
 fn system_took(json : String) -> Unit {
   for said in @hostapi.system_said(json) {
     match said {
-      Bars(top~, bottom~, left~, right~) => system_bars_now.val = { top, bottom, left, right }
+      Bars(top~, bottom~, left~, right~) => system_bars_now.set({ top, bottom, left, right })
       SizeClasses(width~, height~) => system_size_class_now.val = Some({ width, height })
-      Fold(hinge~, divisions~) => system_fold_now.val = { hinge, divisions }
+      Fold(hinge~, divisions~) => system_fold_now.set({ hinge, divisions })
       NavAction(x~, y~, w~, h~) => system_nav_action_now.val = if w > 0.0 && h > 0.0 { Some((x, y, w, h)) } else { None }
       _ => ()
     }
@@ -82,12 +87,17 @@ pub(all) struct SystemFold {
 
 ///|
 /// The hinge as the host last said it (none yet: no hinge). Put back by each Tester (messages_reset).
-let system_fold_now : Ref[SystemFold] = Ref::new({ hinge: NoHinge, divisions: [] })
+// kept across runs: put back as a run begins (messages_reset); a signal: what is laid out by the pose (which frame a
+// half-open fold calls for) follows it
+let system_fold_now : @signals.Signal[SystemFold] = @signals.signal(
+  { hinge: NoHinge, divisions: [] },
+  same=fn(a, b) { a == b },
+)
 
 ///|
 /// The device's hinge and where its fold divides the view, as the host last said them.
 pub fn system_fold() -> SystemFold {
-  system_fold_now.val
+  system_fold_now.get()
 }
 
 ///|
@@ -95,7 +105,7 @@ pub fn system_fold() -> SystemFold {
 /// partly open, a division wider than it is tall: its top and its foot, in the view's points. None otherwise (open
 /// flat, closed, the fold upright between two halves side by side, no hinge).
 pub fn system_tabletop() -> (Double, Double)? {
-  let f = system_fold_now.val
+  let f = system_fold_now.get()
   guard f.hinge is Half else { return None }
   for d in f.divisions {
     let (_, y, w, h) = d

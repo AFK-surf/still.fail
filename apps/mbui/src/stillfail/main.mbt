@@ -439,11 +439,16 @@ fn main {
   @ui.perf_also("core", @core.perf_said)
   @ui.perf_also("page", fn(_) { @sfbase.page_kind(@sfbase.app.nav.top()) })
   @ui.perf_also("screens", @sfpages.screens_perf)
-  @ui.run("still.fail", fn(c) {
-    // (what the core said since the last frame is handed to @core.receive as the frame begins, before this: sfcore.start)
-    let accounts = @core.subscribe("accounts")
-    @sfcore.frame(accounts)
-    report_signed_in(c, accounts)
-    @sfapp.view(c, core_source)
-  })
+  @ui.run(
+    "still.fail",
+    fn(c) {
+      // (what the core said since the last frame is handed to @core.receive as the frame begins, before this:
+      // sfcore.start)
+      let accounts = @core.subscribe("accounts")
+      @sfcore.frame(accounts)
+      report_signed_in(c, accounts)
+      @sfapp.view(c, core_source)
+    },
+    tree=@sfapp.app_tree(core_source),
+  )
 }

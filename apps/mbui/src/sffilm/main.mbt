@@ -19,8 +19,9 @@ fn main {
   let src : Ref[@sfapp.Source?] = Ref::new(None)
   // no core here: the real core's answers kept (src/sfkept), as sffix has them
   @sf.kept_call.val = Some(@sfkept.answer)
-  @film.run(fn(c) {
-    let s = match src.val {
+  // (made once, as the window's tree is made in the Tester, after its text is set, or as its first frame begins)
+  let source = fn() {
+    match src.val {
       Some(s) => s
       None => {
         let s = @sfapp.fixture_app(mode)
@@ -46,8 +47,9 @@ fn main {
         s
       }
     }
-    @sfapp.view(c, s)
-  })
+  }
+  // (the window a tree made once, as src/stillfail's: its shell's nodes, the old views in them)
+  @film.run(fn(c) { @sfapp.view(c, source()) }, tree=fn(root) { @sfapp.app_tree(source())(root) })
 }
 
 ///|

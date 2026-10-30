@@ -36,8 +36,8 @@ fn main {
   let src : Ref[@sfapp.Source?] = Ref::new(None)
   // (the app made at the Tester's first frame, as sffilm makes it: the faces it carries given to the Tester's text,
   // which is this Mac's)
-  let view = fn(c : @ui.Ctx) {
-    let s = match src.val {
+  let source = fn() {
+    match src.val {
       Some(s) => s
       None => {
         let s = app_over(tape)
@@ -46,11 +46,20 @@ fn main {
         s
       }
     }
-    @sfapp.view(c, s)
   }
+  let view = fn(c : @ui.Ctx) { @sfapp.view(c, source()) }
   @sf.kept_call.val = Some(@sfkept.answer)
   // (a measure of where things are laid out: words over words while something moves are the tests' to hold, words_over.mbt)
-  let t = @ui.Tester::new(view, w~, h~, platform=0, live=@film.live(), words_over_held=false)
+  // (the window a tree made once, as src/stillfail's: its shell's nodes, the old views in them)
+  let t = @ui.Tester::new(
+    view,
+    w~,
+    h~,
+    platform=0,
+    live=@film.live(),
+    words_over_held=false,
+    tree=fn(root) { @sfapp.app_tree(source())(root) },
+  )
   // what the story shares into the app as it opens (stories.tsx `share`: the page's offerShare), shared into mbui's as
   // another app's share comes
   match field(web, "share") {

@@ -8,7 +8,7 @@ fn place_tester(place : String) -> @ui.Tester {
   reset()
   let src = fixture("home")
   app.nav.replace(Place(place))
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=520.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=520.0, platform=2)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":24,\"bottom\":48,\"left\":0,\"right\":0}}")
   t.frame()
   t
@@ -58,7 +58,7 @@ test "a page's name kept whole: 用量's share and days as wide as they are afte
         app.nav.replace(Place("usage"))
         s
       }
-      let t = @ui.Tester::new(fn(c) { view(c, src) }, w=360.0, h=640.0, env=[("MBUI_LOCALE", "en-US")], platform=2)
+      let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=360.0, h=640.0, env=[("MBUI_LOCALE", "en-US")], platform=2)
       t.set_font_scale(fs)
       t.post(@hostapi.system_channel, "{\"bars\":{\"top\":24,\"bottom\":48,\"left\":0,\"right\":0}}")
       t.run_for(@ui.move_most_ms)

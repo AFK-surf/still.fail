@@ -271,7 +271,7 @@ fn Ctx::in_layer(self : Ctx, l : Layer, x : Double, y : Double) -> Bool {
 /// of, from the top down to the first it was in (or a modal one: what is under that never saw it).
 fn Ctx::layer_keys(self : Ctx) -> Unit {
   // (the keys and the focus, read so: hand.mbt)
-  hand_events_read()
+  hand_presses_read()
   hand.focus_id.get() |> ignore
   // a dismissal of a layer the last frame did not build (the view closed it its own way meanwhile) is let go: opened
   // again, the layer is not dismissed by it
@@ -395,6 +395,11 @@ pub fn Ctx::pointer_in_overlay(self : Ctx, id : Int) -> Bool {
 /// Whether what is being built now reads the keys: it is in the layer they go to (or one built in it), or none takes
 /// them.
 fn Ctx::keys_here(self : Ctx) -> Bool {
+  // (an old view under the window's tree's topmost modal layer, not in it: none (view_host.mbt's island_allows); what
+  // it opens over everything (a menu, a sheet: its layers) over that layer too, and theirs)
+  if self.layer_cur == 0 && !island_allows(island_building.val) {
+    return false
+  }
   if self.keys_layer == 0 {
     return true
   }

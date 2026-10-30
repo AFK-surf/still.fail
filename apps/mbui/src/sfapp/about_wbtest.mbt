@@ -15,7 +15,7 @@ fn one_page_tester(
 ) -> @ui.Tester raise {
   reset()
   let src = over(fixture(mode))
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=900.0, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=900.0, platform~)
   if regular {
     let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\n")
     assert_true(log.contains("EXIT 0"), msg=log.join("\n"))

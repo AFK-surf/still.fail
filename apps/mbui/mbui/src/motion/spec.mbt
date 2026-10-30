@@ -34,6 +34,12 @@ pub fn spring(
 }
 
 ///|
+/// What @motion.animate goes by unless it is told another (spring()'s own): for a way said of the same thing at its
+/// cause (a Way) that animate followed before.
+// kept across runs: a value, never written
+pub let animate_spring : Spec = spring()
+
+///|
 /// Compose's tween(durationMillis, delayMillis, easing), its curve said:
 /// what the motion is (@ui.Ease: one curve for each).
 pub fn tween(ms : Double, ease~ : @ui.Ease, delay? : Double = 0.0) -> Spec {

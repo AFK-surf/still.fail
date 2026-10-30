@@ -16,7 +16,7 @@ fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2)
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   open_cards_fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
   // the chat pushed in over Home
   t.run_for(@ui.move_most_ms)
   t

@@ -20,7 +20,7 @@ fn past_edge(t : @ui.Tester, step : String, right : Double) -> Array[(String, Do
 ///|
 test "activity: rolling from one long step to the next, its line no wider than at rest" {
   let src = fixture_app("chat-working")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=360.0, h=740.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=360.0, h=740.0, platform=2)
   t.run_for(squeeze_opening)
   assert_eq(past_edge(t, @sffixture.working_step, 360.0), [])
   @sffixture.fix_later(1.0, fn() { @sffixture.fix_working_now.val = ("call:2", next_step) })

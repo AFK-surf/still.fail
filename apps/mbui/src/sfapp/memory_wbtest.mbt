@@ -4,7 +4,7 @@
 test "记忆 as a place of the bottom bar: the top bar names it, no title of its own" {
   reset()
   let src = fixture("settings")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=900.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=900.0, platform=2)
   t.draw()
   app.nav.replace(Place("memories"))
   t.draw()

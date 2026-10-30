@@ -99,3 +99,22 @@ test "a watch stopped follows nothing" {
   assert_eq(told.val, 0)
   assert_true(w.is_stale())
 }
+
+///|
+test "a watch touched as it reads stays stale after the read: what it holds told as it is built is not lost" {
+  let s = signal(0)
+  let told = Ref(0)
+  let w = watch(fn() { told.val = told.val + 1 })
+  // (an inner part told as the outer one builds: the outer touched during its own read)
+  w.read(fn() {
+    s.get() |> ignore
+    w.touch()
+  })
+  assert_true(w.is_stale())
+  // (read again with nothing touching it: fresh)
+  w.read(fn() { s.get() |> ignore })
+  assert_false(w.is_stale())
+  // (what it read changing still tells it)
+  s.set(1)
+  assert_eq((w.is_stale(), told.val), (true, 1))
+}

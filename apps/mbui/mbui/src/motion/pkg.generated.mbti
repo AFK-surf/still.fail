@@ -17,6 +17,8 @@ pub fn animate_layout(@ui.Ctx, Int32, String, spec? : Spec, by? : String) -> Uni
 
 pub fn animate_presence(@ui.Ctx, String, Bool, enter? : async () -> Unit, exit? : async () -> Unit, () -> Unit) -> Bool
 
+pub let animate_spring : Spec
+
 pub fn anticipate(Double) -> Double
 
 pub fn apply_axis_delta(Axis, Double, Double, Double, box_scale? : Double) -> Unit
@@ -87,7 +89,7 @@ pub fn ease_out(Double) -> Double
 
 pub fn easing_named(String) -> ((Double) -> Double)?
 
-pub fn entering(@ui.Ctx, Int32, String, Trans) -> Unit
+pub fn entering(@ui.Ctx, Int32, String, Trans, at_once? : Bool) -> Unit
 
 pub fn fill_offset(Array[Double], Int32) -> Unit
 
@@ -222,6 +224,9 @@ pub fn spring_visual(visual_duration? : Double, bounce? : Double) -> Generator
 pub async fn stagger(Int32, Int32, from? : StaggerFrom, async (Int32) -> Unit) -> Unit
 
 pub fn steps(Int32, direction? : StepsAt) -> (Double) -> Double
+
+#callsite(autofill(loc))
+pub fn told(@ui.Ctx, String, Double, spec? : Spec, loc~ : SourceLoc) -> Anim
 
 pub fn trans(fade? : Double, scale? : Double, ox? : Double, oy? : Double, dx? : Double, dy? : Double, spec? : Spec, fade_spec? : Spec, ground_first? : Bool) -> Trans
 
@@ -388,6 +393,22 @@ pub fn Value::start(Self, Double, Spec, velocity? : Double) -> @effect.Fiber[Boo
 pub fn Value::stop(Self) -> Unit
 pub fn Value::target(Self) -> Double
 pub fn Value::velocity(Self) -> Double
+
+pub struct Way {
+  // private fields
+}
+pub fn Way::at(Self, Double) -> (Double, Double)
+pub fn Way::end(Self) -> Double
+pub fn Way::ends_at(Self) -> Double
+pub fn Way::get(Self) -> Double
+pub fn Way::go(Self, Double, Spec, at~ : Double, velocity? : Double) -> Unit
+pub fn Way::goes_at(Self, Double) -> Bool
+pub fn Way::new(Double) -> Self
+pub fn Way::put(Self, Double) -> Unit
+pub fn Way::said(Self) -> Unit
+pub fn Way::starts_at(Self) -> Double
+pub fn Way::target(Self) -> Double
+pub fn Way::value_at(Self, Double) -> Double
 
 // Type aliases
 

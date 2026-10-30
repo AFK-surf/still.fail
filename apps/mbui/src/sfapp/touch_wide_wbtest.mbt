@@ -6,7 +6,7 @@ fn touch_wide_tester() -> @ui.Tester raise {
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=860.0, h=950.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=860.0, h=950.0, platform=2)
   let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\nuntil 发消息\n")
   assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
   t
@@ -56,7 +56,7 @@ fn touch_narrow_tester() -> @ui.Tester raise {
   reset()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=600.0, h=900.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=600.0, h=900.0, platform=2)
   // (the tape's sidebar in use at first, a strip of the chat beside it)
   let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\nuntil 新建对话\n")
   assert_true(log.contains("EXIT 0"), msg=log.join("\n"))

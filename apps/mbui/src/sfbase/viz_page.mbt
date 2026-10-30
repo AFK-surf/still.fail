@@ -572,33 +572,38 @@ pub(all) struct VizFull {
 }
 
 ///|
-pub let viz_full : Ref[VizFull?] = Ref(None)
+/// The visualization open over the whole window, if one is: a signal, what draws it built again as one is opened or
+/// closed, wherever that was.
+// kept across runs: put back as a run begins (viz_pages_reset)
+pub let viz_full : @signals.Signal[VizFull?] = @signals.signal(None)
 
 ///|
 pub fn viz_open_full(name : String, station : String, key : String, path : String, session : String, linked? : Bool = false) -> Unit {
   viz_close("full/")
-  viz_full.val = Some({ name, station, key, path, session, linked, mermaid: None })
+  viz_full.set(Some({ name, station, key, path, session, linked, mermaid: None }))
 }
 
 ///|
 /// A mermaid chart over the whole screen (Viz.kt Mermaid: VizFull("Mermaid", …)).
 pub fn viz_open_mermaid(code : String) -> Unit {
   viz_close("full/")
-  viz_full.val = Some({
-    name: "Mermaid",
-    station: "",
-    key: "",
-    path: "",
-    session: "",
-    linked: false,
-    mermaid: Some(code),
-  })
+  viz_full.set(
+    Some({
+      name: "Mermaid",
+      station: "",
+      key: "",
+      path: "",
+      session: "",
+      linked: false,
+      mermaid: Some(code),
+    }),
+  )
 }
 
 ///|
 pub fn viz_close_full() -> Unit {
   viz_close("full/")
-  viz_full.val = None
+  viz_full.set(None)
 }
 
 ///|
@@ -607,7 +612,7 @@ pub fn viz_close_full() -> Unit {
 /// clear of the window's own buttons, its way back by name; laid out Small, floating with its ×), the page under it as
 /// tall as the rest; back (Esc) closes it. One that cannot be read is said so and closes.
 pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
-  let v = match viz_full.val {
+  let v = match viz_full.get() {
     Some(v) => v
     None => return
   }
@@ -882,7 +887,7 @@ pub fn viz_pages_reset() -> Unit {
   viz_frames.clear()
   viz_left_chats.clear()
   viz_heights.clear()
-  viz_full.val = None
+  viz_full.set(None)
   viz_unmade.clear()
   followed_into.clear()
 }

@@ -300,15 +300,17 @@ pub fn viewer_zoom_keys(c : @ui.Ctx, z : @kit.Zoom) -> Unit {
   let key = fn(ch : Char) {
     c.key_pressed(@ui.key_of_char(ch)) || c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key)
   }
+  // (a key taken at the frame's moment: on from how big it shows then)
+  let at = c.moment()
   if z.nw > 0.0 {
     if key('+') || key('=') {
-      z.zoom_to(z.scale * viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
+      z.zoom_to(z.scale_at(at) * viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true, at~)
     } else if key('-') || key('_') {
-      z.zoom_to(z.scale / viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
+      z.zoom_to(z.scale_at(at) / viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true, at~)
     } else if key('0') {
-      z.reset()
+      z.reset(at~)
     } else if key('1') {
-      z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true)
+      z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true, at~)
     }
   }
 }

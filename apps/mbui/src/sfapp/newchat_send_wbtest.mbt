@@ -70,7 +70,7 @@ fn held_core(
       })
     },
   }
-  @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
+  @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
 }
 
 ///|
@@ -120,7 +120,7 @@ fn one_way_till(t : @ui.Tester, s : String, until : Double, most : Double) -> (D
 test "wide: a new chat's first words sent: its field's hint not drawn over them in the frame they go" {
   // (frame by frame as a host draws them, one build each: the core a round trip late, as a phone's)
   let src = @sffixture.round_trip(fixture_app("chat"), 60.0)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   let carried = Ref(0)
   let hinted : Array[Double] = []
   let look = fn(t : @ui.Tester) {
@@ -300,7 +300,7 @@ test "a new chat's first words not sent (the chat not made): they leave the scre
     },
   }
   ignore(unread)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   let words = "把发布说明写一下"
   new_chat_sent(t, words) |> ignore
   // (its scene gone meanwhile)
@@ -355,7 +355,7 @@ fn reading_core(reading : Ref[Bool], made : Ref[Int]) -> @ui.Tester {
       }
     },
   }
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
 }
 
 ///|

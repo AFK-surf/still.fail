@@ -20,6 +20,14 @@ pub fn Tester::draw(self : Tester) -> Unit {
 }
 
 ///|
+/// The frames the app has asked for drawn, each at the display's next frame, as a host draws them (nothing said
+/// changed: none of Tester::draw's telling): after an input handed on, the frame that takes it and any it asks for
+/// after.
+pub fn Tester::frames_owed(self : Tester) -> Unit {
+  self.draw_owed(0)
+}
+
+///|
 /// The frames owed now (Tester::draw's) after what is the hand's on mbui's own (a pointer moved, a wheel turned): not
 /// a change of the test's.
 fn Tester::drawn_now(self : Tester) -> Unit {

@@ -8,7 +8,7 @@
 fn files_page_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
   reset()
   let src = fixture("home")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
   app.nav.replace(Files)
   app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
   t.run_for(@ui.move_most_ms)
@@ -114,7 +114,7 @@ test "a folder opened in the columns while its station has not said what it hold
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, held) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, held) }, tree=app_tree(held), w=1280.0, h=800.0, platform=0)
   app.nav.replace(Files)
   app.nav.push(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
   t.run_for(@ui.move_most_ms)
@@ -189,7 +189,7 @@ test "Pin 文件夹 on a phone: which station, then the picker in a sheet from t
       (base.call)(name, params, done)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   app.nav.replace(Files)
   t.run_for(@ui.move_most_ms)
   @sfdesk.add_folder(src, "ws1", @sfdesk.pin_stations(src, "ws1"))

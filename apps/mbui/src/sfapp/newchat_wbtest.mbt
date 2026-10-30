@@ -253,35 +253,27 @@ test "the bar is glass of one capture: the bar with its notch, 令 and the ball 
 
 ///|
 test "the notch's icon swaps with a short scale and fade while it stays open; closed, at once" {
-  bar_reset()
-  let face = Ref::new("ling")
-  let out = Ref::new(true)
-  let p = Ref::new(1.0)
-  // as the bar has it: where it is by what it was told before this frame, then told
-  let t = @ui.Tester::new(
-    fn(c) { p.val = show_icon(c, face.val, out.val) },
-    w=390.0,
-    h=844.0,
-    platform=2,
-  )
-  t.draw()
+  let plus = bar_place_with("plus")
+  let none = bar_place_with("")
+  let (t, _) = bar_at_rest()
   assert_eq(m_face.val, "ling")
-  face.val = "plus"
+  // to a place whose action is another, the notch open throughout: the icon swaps
+  ignore(@sfbase.go_place(plus))
   t.frame()
   t.frame()
   t.frame()
-  assert_eq(m_face.val, "plus")
-  assert_eq(bar.icon_was, "ling")
-  assert_true(p.val > 0.0 && p.val < 1.0, msg="\{p.val}")
+  assert_eq((m_face.val, bar.icon_was), ("plus", "ling"))
+  let p = bar.icon_swap.value
+  assert_true(p > 0.0 && p < 1.0, msg="\{p}")
   t.run_for(icon_swap_ms)
-  assert_eq(bar.icon_was, "")
-  assert_true(p.val == 1.0)
-  // the notch closed: nothing to see, at once
-  out.val = false
-  face.val = "ling"
+  assert_true(bar.icon_swap.value == 1.0)
+  // the notch closed (a place with no action), then another action: nothing to see, at once
+  ignore(@sfbase.go_place(none))
+  t.run_for(bar_rest() - t.time())
+  ignore(@sfbase.go_place("chats"))
   t.frame()
-  assert_eq(m_face.val, "ling")
-  assert_eq(bar.icon_was, "")
+  assert_eq((m_face.val, bar.icon_swap.value), ("ling", 1.0))
+  t.run_for(bar_rest() - t.time())
   t.assert_idle()
 }
 
@@ -291,7 +283,7 @@ test "the bar chosen in the panel slides down into the bar's place, its places l
   let (xs, y) = bar_places_at()
   t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
   // let go over the rows before the panel was all the way open, it stays open: its row tapped
-  if bar.swap is None {
+  if bar.swap_at(t.time()) is None {
     t.run_for(bar.o.end() - t.time())
     t.tap_once(xs[0], 844.0 - 22.0 - 132.0 + 20.0 + 28.0)
   }
@@ -302,7 +294,7 @@ test "the bar chosen in the panel slides down into the bar's place, its places l
   let lands = bar.o.end()
   while t.time() < lands {
     t.frame()
-    match bar.swap {
+    match bar.swap_at(t.time()) {
       Some(s) => {
         let k = s.t(bar.o.x)
         assert_true(k >= last)
@@ -315,9 +307,48 @@ test "the bar chosen in the panel slides down into the bar's place, its places l
     }
   }
   assert_true(seen)
-  assert_true(bar.swap is None)
+  assert_true(bar.swap_at(t.time()) is None)
   match bars_picked.get() {
     Some((_, cur)) => assert_eq(cur, 1)
     None => fail("no bar picked")
   }
+}
+
+///|
+/// The bar's panel drawn up and the other bar's row tapped (its first place), on to 50 ms after that bar has landed: a
+/// frame drawn at the moment it lands (`at_landing`), or none between the tap's and that one.
+fn bar_chosen_landed(t : @ui.Tester, at_landing : Bool) -> Unit {
+  let (xs, y) = bar_places_at()
+  t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
+  if bar.swap_at(t.time()) is None {
+    t.run_for(bar.o.end() - t.time())
+    t.tap_once(xs[0], 844.0 - 22.0 - 132.0 + 20.0 + 28.0)
+  }
+  // (each frame said: run_for would draw one at the landing by itself, its springs saying they rest then)
+  let lands = bar.o.end()
+  if at_landing {
+    t.frame_at(lands)
+  }
+  t.frame_at(lands + 50.0)
+}
+
+///|
+test "the bar chosen and landed, the panel drawn up again: no bar landing then; the other chosen lands as the first did, a frame at its landing or none" {
+  let seen = fn(at_landing : Bool) {
+    let t = tester("home")
+    bar_chosen_landed(t, at_landing)
+    let first = (app.nav.top() == Place("usage"), bar.swap_at(t.time()) is None)
+    // drawn up again: the panel the finger's, nothing landing, the ball riding nothing
+    let (xs, y) = bar_places_at()
+    t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
+    let again = (bar.swap_at(t.time()) is None, bar.ball_x.ride is None, bar.mode.get())
+    // the other bar's row tapped on its first place (four of them across, no notch in a row): it lands
+    t.run_for(bar.o.end() - t.time())
+    t.tap_once(bar_centres(390.0 - 44.0, 0.0, 4)[0] + 22.0, 844.0 - 22.0 - 132.0 + 20.0 + 28.0)
+    t.run_for(bar.o.end() + 50.0 - t.time())
+    let second = (place_of(app.nav.top()) == Some("chats"), bar.swap_at(t.time()) is None, bars_picked.get().map(fn(b) { b.1 }))
+    (first, again, second)
+  }
+  let want = ((true, true), (true, true, true), (true, true, Some(0)))
+  assert_eq((seen(true), seen(false)), (want, want))
 }

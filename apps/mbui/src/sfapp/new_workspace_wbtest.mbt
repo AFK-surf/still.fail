@@ -37,7 +37,7 @@ fn ws_sheet_core(calls : Array[(String, Json)], invited? : Bool = false) -> @ui.
   }
   // the workspaces, as the fixture's home-sheet opens them: from Home's top as it first draws
   home_sheet_at_start.val = true
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.frame()
   t
 }

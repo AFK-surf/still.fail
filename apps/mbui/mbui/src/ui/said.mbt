@@ -574,7 +574,7 @@ impl SaidAgain for SelsTaken with said_again(self, c, m) {
     if !m.shows(x0, y0, x1, y1) {
       continue
     }
-    selectable_painted(t.base, t.layer, t.at, t.lay, t.text, t.ox + m.dx, t.oy + m.dy, x0, y0, x1, y1)
+    selectable_painted(t.base, t.layer, t.island, t.at, t.lay, t.text, t.ox + m.dx, t.oy + m.dy, x0, y0, x1, y1)
   }
 }
 

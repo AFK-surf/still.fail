@@ -39,6 +39,9 @@ struct FakeHost {
   // what the person points with (Tester::new's `pointing`: by default its system's; as the host says its events came,
   // where it does: Tester::host_says_finger)
   mut pointing : Pointing
+  /// when the input event being handled happened, where the host says it so apart from its clock (a test's event
+  /// taken late: Tester::touch_at); -1: as the clock has it
+  mut event_at : Double
   // what the host says the pointer's events come from (@hostapi.event_finger: 1 a finger, 0 a mouse, -1 not said)
   mut event_finger : Int
   // what the app was started to be used with (Tester::new's `native`: by default its system's)
@@ -409,7 +412,7 @@ fn h_event_finger() -> Int {
 /// When the input event being handled happened (the host's, else now).
 fn h_event_time() -> Double {
   match fake.val {
-    Some(f) => f.time
+    Some(f) => if f.event_at >= 0.0 { f.event_at } else { f.time }
     None => {
       let t = @hostapi.event_time()
       if t >= 0.0 {
@@ -1173,6 +1176,12 @@ let views_told : Map[Int, Bool] = Map::new()
 /// The host's event: what it did for the app is done (`state`: 1 done, -1 failed), or (a view, 0) it waits on the
 /// app now: the bytes a player reads, a site's answer. Until the app answers, the host does nothing for it.
 fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
+  // (one event, at its own moment: view_host.mbt)
+  view_event(fn() { on_outside_now(kind, id, state) })
+}
+
+///|
+fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
   // (not an answer: what came taken as it is, a frame only where something is left for one)
   if kind == outside_posted {
     messages_between()
@@ -1184,6 +1193,25 @@ fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
   }
   if kind == outside_stood {
     view_stood(id)
+    return
+  }
+  // (a picture decoded, or not to be: ready at this word's moment, what reads how big that picture is following it,
+  // image.mbt's image_decoded)
+  // what reads that picture told alone, by what is said of it: nothing else of the frame is built again for it (no
+  // event from outside of the frame's whole)
+  if kind == outside_image {
+    if state != 0 {
+      let at = view_moment()
+      image_decoded(id, if at >= 0.0 { at } else { g().clock })
+    }
+    // (its sizes recorded now (hostrec.mbt), drawn or not: one never drawn is still asked of a Tester)
+    if state == 1 && fake.val is None && text_recording() {
+      let out = FixedArray::make(4, 0.0)
+      if @hostapi.image_info(id, out) == 1 {
+        rec_image_ready(id, out)
+      }
+    }
+    outside_end(kind, id)
     return
   }
   outside_came()
@@ -1204,13 +1232,6 @@ fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
   }
   if kind == outside_view && state != 0 {
     views_told[id] = true
-  }
-  // a picture decoded: its sizes recorded now (hostrec.mbt), drawn or not (one never drawn is still asked of a Tester)
-  if kind == outside_image && state == 1 && fake.val is None && text_recording() {
-    let out = FixedArray::make(4, 0.0)
-    if @hostapi.image_info(id, out) == 1 {
-      rec_image_ready(id, out)
-    }
   }
   outside_end(kind, id)
   // an answer brought (what was picked, read, drawn, grabbed: told, followed by what waits on it; a view the host is

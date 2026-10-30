@@ -107,7 +107,7 @@ pub fn chats_lists(c : @ui.Ctx, src : Source, w : Workspace, frame : ListsFrame)
 /// lists do (`at`).
 pub fn chats_search(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @sf.ListAt) -> Unit {
   // (opened from the field at a list's top, or by ⌘K laid out Small; over another page, the shell's: search_over)
-  if !search.over {
+  if !search_read().over {
     search_page(c, src, w, inset, at)
   }
 }

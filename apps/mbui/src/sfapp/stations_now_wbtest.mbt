@@ -33,10 +33,10 @@ test "the card to share is one picture, in a dialog as on a phone: what leads th
   // (windows with the room for all of it: @sf.whole_fitted draws it its own size; each its own app, the card opened
   // as it starts)
   let desk_src = fixture_app("share-card")
-  let desk = @ui.Tester::new(fn(c) { view(c, desk_src) }, w=1440.0, h=1000.0, platform=0)
+  let desk = @ui.Tester::new(fn(c) { view(c, desk_src) }, tree=app_tree(desk_src), w=1440.0, h=1000.0, platform=0)
   share_card_laid(desk)
   let phone_src = fixture_app("share-card")
-  let phone = @ui.Tester::new(fn(c) { view(c, phone_src) }, w=430.0, h=932.0, platform=2)
+  let phone = @ui.Tester::new(fn(c) { view(c, phone_src) }, tree=app_tree(phone_src), w=430.0, h=932.0, platform=2)
   share_card_laid(phone)
   // 「分享图片不应该分电脑和手机」: each part as far from what leads the share in either
   let (at_desk, at_phone) = (picture_parts(desk), picture_parts(phone))
@@ -48,7 +48,7 @@ test "the card to share is one picture, in a dialog as on a phone: what leads th
 test "the card to share in a short window, in a 360 phone's sheet: all of it seen, drawn smaller; what is copied or kept the same picture, as large, wherever it is shared from" {
   let shared = fn(w : Double, h : Double, platform : Int) -> (Int, Int) raise {
     let src = fixture_app("share-card")
-    let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
     t.run_for(@kit.presence_in_ms)
     assert_eq(t.squeeze_faults(), [])
     let png = if platform == 2 {
@@ -75,7 +75,7 @@ test "the card to share in a short window, in a 360 phone's sheet: all of it see
 test "the card to share's looks: each chosen under it draws the picture in it at once, all of it, nothing cut short, and is what is handed out; the choice kept the device's" {
   for at in [(1440.0, 1000.0, 0), (390.0, 844.0, 2)] {
     let src = fixture_app("share-card")
-    let t = @ui.Tester::new(fn(c) { view(c, src) }, w=at.0, h=at.1, platform=at.2)
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=at.0, h=at.1, platform=at.2)
     t.run_for(@kit.presence_in_ms)
     // the night's, none kept: its rings' lead
     assert_true(t.find("用 6 个 Claude 订阅账号消耗了") is Some(_))
@@ -144,7 +144,7 @@ fn picture_parts(t : @ui.Tester) -> Array[(String, Int, Int)] {
 ///|
 test "the card to share on a phone: the picture as wide as its sheet lets it, nothing cut short; 保存到相册 keeps the picture in the photo album" {
   let src = fixture_app("share-card")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   share_card_laid(t)
   // a phone keeps pictures in its photo album: the picture kept there, a PNG three pixels a point, said once it is
   assert_true(t.query(Button, label="复制图片") is None)

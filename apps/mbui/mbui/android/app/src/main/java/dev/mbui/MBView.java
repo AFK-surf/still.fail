@@ -634,56 +634,73 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     @Override
     public boolean onTouchEvent(MotionEvent e) {
-        int kind;
-        switch (e.getActionMasked()) {
+        // each finger by its pointer id (an index is only its place in this event): handed on as it comes, down, moved,
+        // up or called off (pointer kinds 10-13, the id where a button goes), what they come to the app's to work out
+        // (touches.mbt: two of them its, the first let go the second the first, one called off all of it)
+        final int a = e.getActionMasked();
+        final double t = e.getEventTime();
+        switch (a) {
             case MotionEvent.ACTION_DOWN:
-                kind = 0;
                 // (the display's highest from a finger going down: what it moves moves at it from its first frame)
                 touching = true;
                 queueEvent(() -> sayRate(true));
+                requestFocus();
                 break;
-            case MotionEvent.ACTION_MOVE: kind = 1; break;
-            case MotionEvent.ACTION_UP: kind = 2; Host.lifts++; touching = false; break;
-            case MotionEvent.ACTION_CANCEL: kind = 3; touching = false; break;
+            case MotionEvent.ACTION_UP: Host.lifts++; touching = false; break;
+            case MotionEvent.ACTION_CANCEL: touching = false; break;
+            default: break;
+        }
+        switch (a) {
+            case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
+            case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_POINTER_UP: {
-                // a second finger (a pinch): 4 down, 6 up, at its own place; a finger beyond the second is not told
-                int i = e.getActionIndex();
-                if (i > 1) return true;
-                boolean down = e.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN;
-                // the first lifted: the one left becomes the first (its moves come as the first's), the pinch ends
-                int at = down ? i : (i == 0 ? 0 : 1);
-                final float sx = e.getX(at) / density, sy = e.getY(at) / density;
-                final double st = e.getEventTime();
-                final int sk = down ? 4 : 6;
-                toGL(() -> Native.pointer(sk, sx, sy, st));
+                final int i = e.getActionIndex();
+                final int id = e.getPointerId(i);
+                final float x = e.getX(i) / density, y = e.getY(i) / density;
+                final int phase = a == MotionEvent.ACTION_DOWN || a == MotionEvent.ACTION_POINTER_DOWN ? 10 : 12;
+                toGL(() -> Native.touch(phase, id, x, y, t));
+                return true;
+            }
+            case MotionEvent.ACTION_CANCEL: {
+                // (called off: each finger it had, all of it)
+                final int n = e.getPointerCount();
+                final int[] ids = new int[n];
+                final float[] xs = new float[n], ys = new float[n];
+                for (int p = 0; p < n; p++) {
+                    ids[p] = e.getPointerId(p);
+                    xs[p] = e.getX(p) / density;
+                    ys[p] = e.getY(p) / density;
+                }
+                toGL(() -> { for (int p = 0; p < n; p++) Native.touch(13, ids[p], xs[p], ys[p], t); });
+                return true;
+            }
+            case MotionEvent.ACTION_MOVE: {
+                // each finger's samples batched into the move (MotionEvent's history) and the event itself, each at its
+                // own time (uptime ms, as Compose's PointerInputChange has them)
+                final int n = e.getPointerCount(), h = e.getHistorySize();
+                final int[] ids = new int[n];
+                final float[] xs = new float[n * (h + 1)], ys = new float[n * (h + 1)];
+                final double[] ts = new double[h + 1];
+                for (int k = 0; k < h; k++) ts[k] = e.getHistoricalEventTime(k);
+                ts[h] = t;
+                for (int p = 0; p < n; p++) {
+                    ids[p] = e.getPointerId(p);
+                    for (int k = 0; k < h; k++) {
+                        xs[p * (h + 1) + k] = e.getHistoricalX(p, k) / density;
+                        ys[p * (h + 1) + k] = e.getHistoricalY(p, k) / density;
+                    }
+                    xs[p * (h + 1) + h] = e.getX(p) / density;
+                    ys[p * (h + 1) + h] = e.getY(p) / density;
+                }
+                toGL(() -> {
+                    for (int k = 0; k <= h; k++)
+                        for (int p = 0; p < n; p++) Native.touch(11, ids[p], xs[p * (h + 1) + k], ys[p * (h + 1) + k], ts[k]);
+                });
                 return true;
             }
             default: return true;
         }
-        // the samples batched into a move (MotionEvent's history) and the event itself, each at its own time
-        // (uptime ms, as Compose's PointerInputChange has them)
-        final int n = e.getHistorySize();
-        final float[] xs = new float[n + 1], ys = new float[n + 1];
-        final double[] ts = new double[n + 1];
-        for (int i = 0; i < n; i++) {
-            xs[i] = e.getHistoricalX(i) / density;
-            ys[i] = e.getHistoricalY(i) / density;
-            ts[i] = e.getHistoricalEventTime(i);
-        }
-        xs[n] = e.getX() / density;
-        ys[n] = e.getY() / density;
-        ts[n] = e.getEventTime();
-        final int k = kind;
-        if (kind == 0) requestFocus();
-        // the second finger's place too, while there is one (a pinch)
-        final boolean two = kind == 1 && e.getPointerCount() > 1;
-        final float x2 = two ? e.getX(1) / density : 0, y2 = two ? e.getY(1) / density : 0;
-        toGL(() -> {
-            for (int i = 0; i <= n; i++) Native.pointer(i < n ? 1 : k, xs[i], ys[i], ts[i]);
-            if (two) Native.pointer(5, x2, y2, ts[n]);
-        });
-        return true;
     }
 
     /** What the clipboard holds, as words, into the focused field (a paste: KEYCODE_PASTE, the keyboard's menu). */

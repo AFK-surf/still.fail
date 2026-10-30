@@ -6,7 +6,7 @@
 fn reads_tester(platform? : Int = 0, window_inset? : Bool = false) -> @ui.Tester {
   reset()
   let src = fixture("home")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform~, window_inset~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform~, window_inset~)
   t.draw()
   t
 }

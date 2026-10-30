@@ -7,6 +7,7 @@ import {
   "mbui/motion",
   "mbui/signals",
   "mbui/ui",
+  "mbui/view",
   "moonbitlang/core/ref",
   "stillfail/sf",
   "stillfail/sfapp/settings",
@@ -31,6 +32,8 @@ pub let app : @sfbase.App
 pub fn app_in_front() -> Bool
 
 pub fn app_link(String) -> String
+
+pub fn app_tree(@sfbase.Source) -> (@view.View) -> Unit
 
 pub fn appearance(@sfbase.Source, Bool?) -> Unit
 
@@ -70,7 +73,7 @@ pub let bar_timing : @ref.Ref[BarTiming?]
 
 pub fn bars_in(@sfbase.Source, String) -> (Array[Array[String]], Int32)
 
-pub let bars_picked : @ref.Ref[(Array[Array[String]], Int32)?]
+pub let bars_picked : @signals.Signal[(Array[Array[String]], Int32)?]
 
 pub fn base_name(String) -> String
 
@@ -99,6 +102,10 @@ pub fn chat_params(@sfbase.ChatRef) -> Map[String, Json]
 pub fn chat_ref(String, String) -> @sfbase.ChatRef
 
 pub fn chat_ref_of(@sfbase.ChatItem) -> @sfbase.ChatRef
+
+pub fn chat_screens_driven(Array[@sfbase.ChatScreen]) -> Bool
+
+pub fn chat_screens_open(@sfbase.ChatRef, Array[@sfbase.ChatScreen], from~ : @sf.Beside) -> Unit
 
 pub fn chat_tick(@ui.Ctx, String, @sfbase.Reading, @sfbase.ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 
@@ -466,11 +473,7 @@ pub let kept_places : Map[String, @sfbase.KeptPlace]
 
 pub let left_pages : Array[@sfbase.Page]
 
-pub let linger_fade_ms : Double
-
 pub let linger_ms : Double
-
-pub let linger_out_ms : Double
 
 pub fn linger_tick(@ui.Ctx, @sfbase.Source, in_front~ : Bool) -> Unit
 
@@ -624,12 +627,6 @@ pub fn opt_number(Json?, String) -> Double?
 
 pub fn opt_text(Json?, String) -> String?
 
-pub let options_ease : @ui.Ease
-
-pub let options_out_ms : Double
-
-pub let options_scale : Double
-
 pub fn over_flight(@ui.Ctx, Int32) -> Unit
 
 pub let own_code_face : Int32
@@ -722,7 +719,7 @@ pub let pv_frames : Map[String, (String, Double)]
 
 pub let pv_hidden : @ref.Ref[String]
 
-pub let pv_leaving : @ref.Ref[@sfbase.Viewer?]
+pub let pv_leaving : @signals.Signal[@sfbase.Viewer?]
 
 pub let pv_strip : @sfbase.Strip
 
@@ -758,7 +755,7 @@ pub fn relay_view(@ui.Ctx, @sfbase.Source) -> Json?
 
 pub let relaying : @sfbase.Relaying
 
-pub let reporting_host : @ref.Ref[@sfbase.ReportingHost?]
+pub let reporting_host : @signals.Signal[@sfbase.ReportingHost?]
 
 pub fn row_agent_groups(@sfbase.ChatItem) -> Array[@sfbase.RowAgent]
 
@@ -838,7 +835,7 @@ pub fn set_update_source(@sfbase.UpdateSource?) -> Unit
 
 pub fn settings_core(@sfbase.Source, @sfbase.Workspace) -> @settings.Core
 
-pub let share_over : @ref.Ref[Bool]
+pub let share_over : @signals.Signal[Bool]
 
 pub let shared_into : Map[String, Array[@hostapi.Picked]]
 
@@ -952,8 +949,6 @@ pub let turns_by : Map[String, @sfbase.Turns]
 
 pub fn turns_of(String) -> @sfbase.Turns
 
-pub fn under_post(@ui.Ctx, String, Bool, enter? : @motion.Trans, open? : @motion.Spec, exit~ : @motion.Trans, close? : @motion.Spec, start_at? : Double, () -> Unit) -> Unit
-
 pub fn under_rest() -> Double
 
 pub fn under_turn(String) -> Double
@@ -1014,7 +1009,9 @@ pub fn view(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn view_of_chat(@sfbase.Source, @sfbase.ChatRef) -> (@sfbase.ChatView?, Array[@sfbase.Entry], Json?)
 
-pub let viewer : @ref.Ref[@sfbase.Viewer?]
+pub let viewer : @signals.Signal[@sfbase.Viewer?]
+
+pub let viewer_built : @sfbase.ViewerBuilt
 
 pub fn viewer_folder_label(@sfbase.Source, String, String, String) -> String
 
@@ -1048,7 +1045,7 @@ pub fn viz_frame(@ui.Ctx, String, String, Json?, @sfbase.VizHears, fill? : Bool,
 
 pub let viz_frames : Map[String, @sfbase.VizFrame]
 
-pub let viz_full : @ref.Ref[@sfbase.VizFull?]
+pub let viz_full : @signals.Signal[@sfbase.VizFull?]
 
 pub fn viz_full_layer(@ui.Ctx, @sfbase.Source) -> Unit
 
@@ -1130,6 +1127,8 @@ pub using @sfbase {type ChatItem}
 pub using @sfbase {type ChatPick}
 
 pub using @sfbase {type ChatRef}
+
+pub using @sfbase {type ChatScreen}
 
 pub using @sfbase {type ChatView}
 

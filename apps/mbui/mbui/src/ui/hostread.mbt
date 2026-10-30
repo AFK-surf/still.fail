@@ -109,6 +109,12 @@ fn pointing_said_by_host(by : Int) -> Unit {
     Some(f) => f.pointing = p
     None => host_pointing.val = Some(p)
   }
+  // (told now, as the event it came with is taken: what reads the hand of the moment (pointing) follows it from this
+  // event on, not from the next frame's)
+  let now = @signals.untracked(fn() { pointing() })
+  if @signals.untracked(fn() { hand.pointing.get() }) != now {
+    hand.pointing.set(now)
+  }
 }
 
 ///|

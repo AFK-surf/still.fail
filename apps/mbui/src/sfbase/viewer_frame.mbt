@@ -101,8 +101,13 @@ pub fn vf_meta(vw : Viewer, src : Source) -> String {
 /// pointer along the top, where it is, shows it while it is there.
 pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   let v = vw
-  let (_, py, _) = c.pointer()
-  v.near_bar = @sf.pointer_rests() && py >= 0.0 && py < @sf.viewer_bar_h
+  // (a pointer resting along the top where the bar is: where none rests (a finger's), where one is read not at all)
+  v.near_bar = if @sf.pointer_rests() {
+    let (_, py, _) = c.pointer()
+    py >= 0.0 && py < @sf.viewer_bar_h
+  } else {
+    false
+  }
   // going, beside the system's bars (an iPhone Duo's): the page's tabs handed back to them as it goes, not once it is
   // gone, so that the system's change of them is under way as the picture flies back (the page's own bars coming back
   // over it the while: @sfbase.over_flight), not a column bare till it lands and filled at once after

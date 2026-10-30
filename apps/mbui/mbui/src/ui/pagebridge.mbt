@@ -87,8 +87,8 @@ fn fake_covered(f : FakeHost, id : Int, x : Double, y : Double) -> Bool {
 }
 
 ///|
-/// A test's finger (kinds as on_pointer's: 0 down, 1 moved, 2 up, 3 called off; 4, 5, 6 a second finger), taken as a
-/// host takes it where a page's view is.
+/// A test's finger (kinds as on_pointer's: 0 down, 1 moved, 2 up, 3 called off; 4, 5, 6 a second finger; 8 the first
+/// let go, the second the first from here), taken as a host takes it where a page's view is.
 fn finger(kind : Int, x : Double, y : Double) -> Unit {
   let f = match fake.val {
     Some(f) => f

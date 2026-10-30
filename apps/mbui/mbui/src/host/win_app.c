@@ -409,12 +409,13 @@ static void pointer_button(int kind, LPARAM lp, int button) {
   pointer_by(0, kind, GET_X_LPARAM(lp) / scale, GET_Y_LPARAM(lp) / scale, button);
 }
 
-// A touch screen's fingers (WM_POINTER*), as the app's fingers: the first down the pointer's (0 down, 1 moved, 2 up,
-// 3 called off), a second the pinch's (4 down, 5 moved, 6 one of the two lifted, the one left the first's from then
-// on), others taken but not told; not a mouse the system makes of them (its press and hold a right click, its drag a
-// selection). A finger that goes down on a web view is left to the system, its mouse the page's (mb_views_input).
+// A touch screen's fingers (WM_POINTER*), each by its pointer id, handed on as they come (pointer kinds 10 down, 11
+// moved, 12 up, 13 called off: cancelled, the capture taken; the id where a button goes), what they come to the app's
+// to work out (touches.mbt: two of them its, the first let go the second the first, one called off all of it); not a
+// mouse the system makes of them (its press and hold a right click, its drag a selection). A finger that goes down on
+// a web view with none down is left to the system, its mouse the page's (mb_views_input).
 static UINT32 touch_taken[10];  // the fingers down that this window takes (0: a free place)
-static UINT32 touch_first, touch_second;
+static UINT32 touch_first;      // the first of them down, while it is (what may move the window)
 // the first finger's place on the screen (pixels); a finger moving the window from the app's top row
 // (mb_host_window_drag in its press): where it and the window were then, the window following it till it lifts
 // (Windows' own move goes by the mouse)
@@ -442,39 +443,38 @@ static int touch(HWND h, UINT msg, WPARAM wp) {
   }
   ScreenToClient(h, &p);
   double x = p.x / scale, y = p.y / scale;
-  int at = touch_at(id), kind = -1;
+  int at = touch_at(id), kind;
   if (msg == WM_POINTERDOWN) {
     if (at < 0) {
-      if (!touch_first && mb_views_pass_through(x, y)) return 0;
+      int none = 1;
+      for (int i = 0; i < 10; i++)
+        if (touch_taken[i]) none = 0;
+      if (none && mb_views_pass_through(x, y)) return 0;
       int free = touch_at(0);
       if (free < 0) return 0;
       touch_taken[free] = id;
     }
     if (!touch_first) {
-      touch_first = id, kind = 0;
+      touch_first = id;
       SetFocus(h);
-    } else if (!touch_second && id != touch_first) {
-      touch_second = id, kind = 4;
     }
+    kind = 10;
   } else {
     if (at < 0) return 0;
     if (msg == WM_POINTERUPDATE) {
-      kind = id == touch_first ? 1 : id == touch_second ? 5 : -1;
+      kind = 11;
     } else {  // WM_POINTERUP, WM_POINTERCAPTURECHANGED
       touch_taken[at] = 0;
-      if (id == touch_second) touch_second = 0, kind = 6;
-      else if (id == touch_first && touch_second) touch_first = touch_second, touch_second = 0, kind = 6;
-      else if (id == touch_first) {
-      touch_first = 0;
-      kind = msg == WM_POINTERUP && !IS_POINTER_CANCELED_WPARAM(wp) && !touch_moving ? 2 : 3;
-      touch_moving = 0;
-    }
+      int moved = touch_moving && id == touch_first;
+      if (id == touch_first) touch_first = 0, touch_moving = 0;
+      // (let go: up; cancelled, the capture taken from it, or it moved the window (the press the app's no more):
+      // called off)
+      kind = msg == WM_POINTERUP && !IS_POINTER_CANCELED_WPARAM(wp) && !moved ? 12 : 13;
     }
   }
-  if (kind < 0) return 1;
   // a move's samples merged since the last (the oldest first, each at its own place and time: a fling's speed is
   // theirs), then the move itself at its own time, as Android's host hands a MotionEvent's history
-  if (kind == 1 || kind == 5) {
+  if (kind == 11) {
     UINT32 n = info.historyCount;
     if (n > 1) {
       POINTER_INFO past[64];
@@ -484,13 +484,13 @@ static int touch(HWND h, UINT msg, WPARAM wp) {
           POINT q = past[i].ptPixelLocation;
           ScreenToClient(h, &q);
           event_t = past[i].PerformanceCount ? qpc_ms((LONGLONG)past[i].PerformanceCount) : -1;
-          pointer_by(1, kind, q.x / scale, q.y / scale, 0);
+          pointer_by(1, kind, q.x / scale, q.y / scale, (int)id);
         }
       }
     }
   }
   event_t = info.PerformanceCount ? qpc_ms((LONGLONG)info.PerformanceCount) : -1;
-  pointer_by(1, kind, x, y, 0);
+  pointer_by(1, kind, x, y, (int)id);
   event_t = -1;
   return 1;
 }

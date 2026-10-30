@@ -31,12 +31,22 @@ pub struct Tester {
 pub let frame_period_default : Double = 1000.0 / 60.0
 
 ///|
+/// The run before let go of, before the next one's inputs are said: the window's tree disposed (what it made, what its
+/// bindings followed, what was due on its timeline), what is made once forgotten. Said where a run is begun before
+/// its Tester is made (what the app is given before it, its made-up core opening a page, then reaches no tree of the
+/// run before), and as a Tester starts.
+pub fn run_let_go() -> Unit {
+  made_forget()
+  view_forget()
+}
+
+///|
 /// What a test leaves behind forgotten before the next starts: the window's context made anew (every field of it as a
 /// window's first frame has it, by construction), and the state kept outside it (the package's own tables, those of
 /// the packages over it: on_reset) emptied; then checked (leaked_state), so that what is added later and not
 /// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
-  made_forget()
+  run_let_go()
   the_ctx.val = Ctx::new()
   looks_reset()
   hand_reset()
@@ -73,6 +83,7 @@ fn reset_globals() -> Unit {
   messages_reset()
   drop_reset()
   image_cache.clear()
+  images_said.clear()
   views_told_text.clear()
   views_told_info.clear()
   sites_told_state.clear()
@@ -226,6 +237,7 @@ pub fn Tester::new(
   window_corners? : FixedArray[Double],
   words_over_held? : Bool = true,
   nav_able? : Bool = false,
+  tree? : (@view.View) -> Unit,
   loc~ : SourceLoc,
 ) -> Tester {
   let f = {
@@ -262,6 +274,7 @@ pub fn Tester::new(
       None => platform_pointing(platform)
     },
     event_finger: -1,
+    event_at: -1.0,
     native: native.unwrap_or(platform_pointing(platform)),
     keyboard: keyboard.unwrap_or(platform_keyboard(platform)),
     reduce_transparency: false,
@@ -401,7 +414,12 @@ pub fn Tester::new(
     bench.mode = -1
   }
   fx_reset(seed)
-  g_view.val = view
+  // (the window a tree made once: `tree`, the view under test the old frame around its old views; else the view its
+  // one old view: view_host.mbt)
+  match tree {
+    Some(make) => set_view_app(make, around=view)
+    None => set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
+  }
   let (period, between) = test_frame_period()
   let t = { fake: f, w, h, frames: 0, seed, origin: time, period, times: [], between, host_frames: false, each: None }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
@@ -637,6 +655,15 @@ pub fn Tester::set_frame_times(self : Tester, times : Array[Double]) -> Unit {
 ///|
 /// Draws one frame at `at` on the clock, whatever the display's frames (a host's run replayed: where it drew).
 pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
+  self.frame_shown_at(at, at)
+}
+
+///|
+/// Draws one frame the host times for when it is shown, ahead of where it is: the host at `now` (the logic brought
+/// there, nothing later: no step or end taken past it), what is drawn sampled at `shown` (a moment later, as a host's
+/// frame is drawn for its vsync). The next events may come at any moment from `now`.
+pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Unit {
+  let at = now
   self.fake.time = at
   // decodes started last frame are done, the views opened are ready: the host's events for them (unless the test
   // says when: Tester::finish)
@@ -655,7 +682,7 @@ pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
     }
     None => ()
   }
-  on_frame(self.w, self.h, self.fake.scale, self.fake.time)
+  on_frame(self.w, self.h, self.fake.scale, if shown > at { shown } else { at })
   self.frames = self.frames + 1
   self.hold_words_over()
   self.hold_rows_steady()
@@ -674,6 +701,14 @@ pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
 /// drawn_order and the like read): what holds of every frame, those an input's draw goes through on its way too.
 pub fn Tester::each_frame(self : Tester, f : (() -> Unit)?) -> Unit {
   self.each = f
+}
+
+///|
+/// The window `w` by `h` from the next frame on, as a host lays the app out anew (above its keyboard as it comes up,
+/// Tester::set_ime_inset): no frame drawn for it here.
+pub fn Tester::resize_next(self : Tester, w : Double, h : Double) -> Unit {
+  tester_size.val = Some((w, h))
+  self.fake.wants = true
 }
 
 ///|
@@ -1367,6 +1402,24 @@ pub fn Tester::touch(self : Tester, kind : Int, x : Double, y : Double) -> Unit 
 }
 
 ///|
+/// A touch screen's finger as a host hands it on (touches.mbt): `phase` 0 down, 1 moved, 2 up, 3 called off, `id` the
+/// system's for that finger, at `at` (its own time, said with it: @hostapi.event_time).
+pub fn Tester::touch_raw(self : Tester, phase : Int, id : Int, x : Double, y : Double, at : Double) -> Unit {
+  self.fake.event_at = at
+  on_pointer(10 + phase, x, y, id)
+  self.fake.event_at = -1.0
+}
+
+///|
+/// A finger's event (Tester::touch's) that happened at `at`, taken now, later (the host's clock past it): as a host hands
+/// on an event it got a while before, its own time said with it (@hostapi.event_time).
+pub fn Tester::touch_at(self : Tester, kind : Int, x : Double, y : Double, at : Double) -> Unit {
+  self.fake.event_at = at
+  finger(kind, x, y)
+  self.fake.event_at = -1.0
+}
+
+///|
 /// The URLs the app handed to the system (Ctx::open_url), oldest first.
 pub fn Tester::opened(self : Tester) -> Array[String] {
   self.fake.opened
@@ -2041,6 +2094,23 @@ pub fn Tester::wheel_phase(self : Tester, x : Double, y : Double, dy : Double, p
 pub fn Tester::wheel_with(self : Tester, x : Double, y : Double, dx : Double, dy : Double, mods : Int) -> Unit {
   finger_wheel(x, y, dx, dy, mods * 16)
   self.drawn_now()
+}
+
+///|
+/// The wheel turned (Tester::wheel_with's) at `at`, told now, later (the host's clock past it): as a host hands on an
+/// event it got a while before, its own time said with it (@hostapi.event_time). No frame drawn.
+pub fn Tester::wheel_told(
+  self : Tester,
+  x : Double,
+  y : Double,
+  dx : Double,
+  dy : Double,
+  mods : Int,
+  at : Double,
+) -> Unit {
+  self.fake.event_at = at
+  finger_wheel(x, y, dx, dy, mods * 16)
+  self.fake.event_at = -1.0
 }
 
 ///|

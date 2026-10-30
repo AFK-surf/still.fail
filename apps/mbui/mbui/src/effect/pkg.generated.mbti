@@ -141,7 +141,7 @@ pub fn Runtime::next_timer(Self) -> Int64?
 pub fn Runtime::now(Self) -> Int64
 pub fn Runtime::on_defect(Self, (Error) -> Unit) -> Unit
 pub fn Runtime::on_wake(Self, () -> Unit) -> Unit
-pub fn Runtime::outside_end(Self, Int32) -> Unit
+pub fn Runtime::outside_end(Self, Int32, wake? : Bool) -> Unit
 pub fn Runtime::outside_ended(Self) -> Int32
 pub fn Runtime::outside_ended_since(Self, Int32) -> Array[String]
 pub fn Runtime::outside_start(Self, String) -> Int32

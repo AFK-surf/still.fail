@@ -148,7 +148,7 @@ test "a row pinned, renamed or archived: no spinner while its station answers (t
           }
         },
       }
-      let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h=900.0, platform~)
+      let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=900.0, platform~)
       t.draw()
       assert_true(t.find("夜里的构建又失败了") is Some(_), msg=at)
       assert_eq(t.locate("=" + @sf.t("common.saving")).length(), 0, msg="\{at} \{stage}")

@@ -104,6 +104,8 @@ fn ImageEntry::poll(self : ImageEntry, now : Double) -> Unit {
 /// smallest ready one at least that big, else the biggest ready one while
 /// a big enough one decodes (started here if none is).
 fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
+  // (followed: which of its decodes is ready changes as the host says one is, or failed)
+  image_decodes_read(src)
   // bytes still on their way: nothing to load yet
   if src.has_prefix("mem:") && !image_data.contains(src) {
     return None
@@ -121,8 +123,9 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
   let mut fallback : ImageEntry? = None
   let mut pending = false
   let mut failed = false
+  // (a decode is ready, or failed, as the host's word that it is says, at that word's moment: image_decoded; never as a
+  // frame happens to look)
   for e in list {
-    e.poll(self.clock)
     if e.state == -1 {
       failed = true
       continue
@@ -163,13 +166,15 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
       mover: Mover::new(),
       fade_told: false,
     }
-    e.poll(self.clock)
     // smallest first
     let mut k = 0
     while k < list.length() && list[k].px < want {
       k = k + 1
     }
     list.insert(k, e)
+    // (done at once, as the host decoded it, or failed, while asked: so at the moment it was asked, this build's, said
+    // as a word of the host's that it is done is, image_decoded)
+    image_done(src, e, self.clock)
     if e.state == 1 {
       good = Some(e)
     }
@@ -189,6 +194,7 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
 /// Whether the image at `src` is still coming at `px` on its long side (its bytes on their way, or a decode of it that
 /// large not ready yet and not failed): a shot waits for it (shot.mbt).
 fn image_awaited(src : String, px : Double) -> Bool {
+  image_decodes_read(src)
   if src.has_prefix("mem:") && !image_data.contains(src) {
     return true
   }
@@ -213,18 +219,9 @@ fn image_awaited(src : String, px : Double) -> Bool {
 ///|
 /// The original's size in pixels, once any decode of it is ready.
 fn image_size(src : String) -> (Double, Double)? {
-  match image_cache.get(src) {
-    Some(list) => {
-      for e in list {
-        e.poll(g().clock)
-        if e.state == 1 {
-          return Some((e.ow, e.oh))
-        }
-      }
-      None
-    }
-    None => None
-  }
+  // (followed, by this picture alone: what reads its size worked out again as it is first known or changes, read
+  // only: image_decoded)
+  image_said(src).size.get()
 }
 
 ///|
@@ -244,6 +241,7 @@ fn Ctx::image_px(self : Ctx, src : String, bw : Double, bh : Double, fit : Fit) 
 /// Drops images not drawn this frame, least recently drawn first, until
 /// what is kept fits the budget.
 fn Ctx::trim_images(self : Ctx) -> Unit {
+  images_said_trim()
   let mut total = 0.0
   for _, list in image_cache {
     for e in list {
@@ -274,6 +272,7 @@ fn Ctx::trim_images(self : Ctx) -> Unit {
         list.retain(fn(x) { x.id != e.id })
         if list.length() == 0 {
           image_cache.remove(src)
+          image_forget(src)
         }
       }
       None => ()
@@ -511,4 +510,97 @@ fn Ctx::draw_image(
     dv,
   )
   self.inst[(self.ninst - 1) * inst_size + 20] = e.id.to_double()
+}
+
+///|
+/// What is said of a picture (by its source) as the host's words about its decodes come (image_decoded): its size once
+/// one is ready (told where it is new: what lays it out follows it), and its decodes' states (told as one is ready or
+/// fails: what draws it, waits for it or asks whether it is ready follows it). That picture's alone.
+priv struct ImageSaid {
+  size : @signals.Signal[(Double, Double)?]
+  decodes : @signals.Signal[Int]
+}
+
+///|
+// kept across runs: what is said of the pictures kept, gone with them (image_forget, Tester's reset)
+let images_said : Map[String, ImageSaid] = {}
+
+///|
+fn image_said(src : String) -> ImageSaid {
+  match images_said.get(src) {
+    Some(s) => s
+    None => {
+      let s = { size: @signals.signal(None, same=fn(a, b) { a == b }), decodes: @signals.signal(0) }
+      images_said[src] = s
+      s
+    }
+  }
+}
+
+///|
+/// Whether something follows what is said of a picture.
+fn ImageSaid::watched(self : ImageSaid) -> Bool {
+  self.size.watched() || self.decodes.watched()
+}
+
+///|
+/// Read where what is built follows the states of `src`'s decodes (one ready, or failed).
+fn image_decodes_read(src : String) -> Unit {
+  image_said(src).decodes.get() |> ignore
+}
+
+///|
+/// What is said of the picture `src`, let go with its decodes: unless something follows it still (its signal, the one it
+/// reads, kept for it).
+fn image_forget(src : String) -> Unit {
+  match images_said.get(src) {
+    Some(s) if !s.watched() && !image_cache.contains(src) => images_said.remove(src)
+    _ => ()
+  }
+}
+
+///|
+/// What is said of the pictures no longer kept and followed by nothing (one read of a picture never decoded, say).
+fn images_said_trim() -> Unit {
+  let gone = []
+  for src, s in images_said {
+    if !s.watched() && !image_cache.contains(src) {
+      gone.push(src)
+    }
+  }
+  for src in gone {
+    images_said.remove(src)
+  }
+}
+
+///|
+/// Decode `e` of `src` (in its cache already) as the host has it at `at`: where it is done (ready, or failed), so as of
+/// then, and said: that picture's size where it is ready (told where it is new), its decodes' state told.
+fn image_done(src : String, e : ImageEntry, at : Double) -> Unit {
+  e.poll(at)
+  if e.state == 0 {
+    return
+  }
+  // (its size and its decodes' state told as one: what reads both sees both, never one)
+  let said = image_said(src)
+  @signals.start_batch()
+  if e.state == 1 {
+    said.size.set(Some((e.ow, e.oh)))
+  }
+  said.decodes.set(@signals.untracked(fn() { said.decodes.get() }) + 1)
+  @signals.end_batch()
+}
+
+///|
+/// The host said decode `id` is done (or could not be), at `at` (its word's moment): it is ready then (its fade from
+/// then, or on from the one it follows), and its picture's size told, that picture's alone, where it is new.
+fn image_decoded(id : Int, at : Double) -> Unit {
+  for src, list in image_cache {
+    for e in list {
+      if e.id == id {
+        image_done(src, e, at)
+        return
+      }
+    }
+  }
 }

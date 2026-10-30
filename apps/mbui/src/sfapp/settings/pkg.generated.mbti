@@ -19,6 +19,10 @@ pub fn adb_asking() -> Bool
 
 pub fn adb_lend(String, String) -> Unit
 
+pub fn adb_lend_view(Json?, String) -> Json?
+
+pub fn adb_lends(Json?) -> Array[Json]
+
 pub fn adb_phone_said(String) -> Unit
 
 pub fn adb_ready(@ui.Ctx) -> AdbReady
@@ -228,9 +232,15 @@ pub fn pending_login(Core, String, String) -> Json?
 
 pub fn phone_card(@ui.Ctx, Core?, String, String, String, Bool, lasts? : String, who? : String?, ended? : (String, String, String)?, how? : () -> Unit) -> Unit
 
-pub fn phone_outcome(@ui.Ctx, String, String, String, inline? : Bool) -> Unit
+pub fn phone_lends(@ui.Ctx) -> Bool
+
+pub fn phone_link(Core?, String, String) -> String
+
+pub fn phone_outcome(@ui.Ctx, String, String, String, inline? : Bool, link? : String, paired_here? : Bool) -> Unit
 
 pub fn phone_outcome_words(String, String, String) -> String
+
+pub fn phone_steps(Core?, String) -> Route
 
 pub fn place_action(Core, Here, String) -> ((@sf.Beside) -> Unit)?
 

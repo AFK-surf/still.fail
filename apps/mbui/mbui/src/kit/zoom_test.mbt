@@ -70,3 +70,280 @@ test "a page on a canvas: free, dragged anywhere; its fitted scale by thousandth
   z.fit_now()
   assert_true(z.fitted && (z.scale - 0.279).abs() < 0.0000001)
 }
+
+///|
+test "what reads where a zoom shows is told as that changes, by any way it changes: resized keeping a point in place" {
+  let z = @kit.Zoom::new()
+  z.natural(100.0, 100.0)
+  z.boxed(200.0, 200.0)
+  let shown = @signals.computed(fn(_) { z.rect() })
+  assert_true(near_rect(shown.get(), 50.0, 50.0, 100.0, 100.0))
+  // (the stage larger, the picture's middle where it was, then kept centred: nothing to bring in sight)
+  z.resize_keeping(300.0, 300.0, Some((0.5, 0.5)), 0.0)
+  assert_true(near_rect(z.rect(), 100.0, 100.0, 100.0, 100.0), msg="\{z.rect()}")
+  assert_eq(shown.get(), z.rect())
+}
+
+///|
+test "what reads where a zoom shows is not told where nothing it shows changed, nor of another zoom" {
+  let a = @kit.Zoom::new(free=true)
+  a.natural(100.0, 100.0)
+  a.boxed(400.0, 400.0)
+  let b = @kit.Zoom::new(free=true)
+  b.natural(100.0, 100.0)
+  b.boxed(400.0, 400.0)
+  let b_was = b.rect()
+  let reads = Ref(0)
+  let shown = @signals.computed(fn(_) {
+    reads.val = reads.val + 1
+    a.rect()
+  })
+  shown.get() |> ignore
+  let first = reads.val
+  // (moved nowhere; another one moved, and it did)
+  a.pan(0.0, 0.0)
+  b.pan(30.0, 0.0)
+  b.transform(200.0, 200.0, 1.5, 0.0, 0.0)
+  shown.get() |> ignore
+  assert_eq(reads.val, first)
+  assert_true(b.rect() != b_was, msg="\{b.rect()}")
+  // (a small one kept centred in its stage, pushed against its edges, pinched by nothing: as it was, told nothing)
+  let c = @kit.Zoom::new()
+  c.natural(100.0, 100.0)
+  c.boxed(400.0, 400.0)
+  let c_reads = Ref(0)
+  let c_shown = @signals.computed(fn(_) {
+    c_reads.val = c_reads.val + 1
+    c.rect()
+  })
+  c_shown.get() |> ignore
+  c.pan(60.0, -20.0)
+  c.transform(200.0, 200.0, 1.0, 0.0, 0.0)
+  c_shown.get() |> ignore
+  assert_eq(c_reads.val, 1)
+  // (and moved: told)
+  a.pan(30.0, 0.0)
+  shown.get() |> ignore
+  assert_eq(reads.val, first + 1)
+}
+
+///|
+/// A picture gliding in from fitted (3 times, round a point off the stage's middle), frames drawn 100 ms on (its step
+/// sampling it then, or not), then told `then`: where it is.
+fn glide_cut(sampled : Bool, then : (@kit.Zoom) -> Unit) -> (Double, Double, Double, Double)? {
+  let t = @ui.Tester::new(fn(_c) {  })
+  t.draw()
+  let z = @kit.Zoom::new()
+  z.natural(100.0, 100.0)
+  z.boxed(400.0, 400.0)
+  z.zoom_to(3.0, 150.0, 170.0, true)
+  // (frames on, as a host draws them: none of them steps it)
+  t.run_for(some_frames_ms)
+  if sampled {
+    z.step()
+  }
+  then(z)
+  z.rect()
+}
+
+///|
+test "a glide cut short at a moment goes on from where it was then, a frame sampled it or not: panned, or sent elsewhere" {
+  let pan = fn(z : @kit.Zoom) { z.pan(10.0, 0.0) }
+  let other = fn(z : @kit.Zoom) { z.zoom_to(1.5, 100.0, 100.0, false) }
+  let tapped = fn(z : @kit.Zoom) { z.double_tap(200.0, 200.0) }
+  assert_eq(glide_cut(false, pan), glide_cut(true, pan))
+  assert_eq(glide_cut(false, other), glide_cut(true, other))
+  // (a double tap midway: zoomed in by then, sampled or not: back to fitted, gliding there)
+  assert_eq(glide_cut(false, tapped), glide_cut(true, tapped))
+  // (cut short midway: neither where it set out nor where it went)
+  let mid = glide_cut(false, fn(_z) {  }).unwrap()
+  assert_true(mid.2 > 100.0 && mid.2 < 300.0, msg="\{mid}")
+}
+
+///|
+test "a zoom told a command tells what reads it once, as the command leaves it: fitted again, a glide cut short by a pan" {
+  let t = @ui.Tester::new(fn(_c) {  })
+  t.draw()
+  let z = @kit.Zoom::new()
+  z.natural(100.0, 100.0)
+  z.boxed(400.0, 400.0)
+  z.zoom_to(2.0, 150.0, 150.0, false)
+  // (what reads it, run as it is told: what it reads then)
+  let seen : Array[(Bool, Bool)] = []
+  let stop = @signals.effect(fn() {
+    z.rect() |> ignore
+    seen.push((z.fitted, z.zoomed()))
+  })
+  seen.clear()
+  z.fit_now()
+  assert_eq(seen, [(true, false)])
+  seen.clear()
+  z.zoom_to(3.0, 150.0, 150.0, true)
+  t.run_for(some_frames_ms)
+  seen.clear()
+  z.pan(10.0, 0.0)
+  assert_eq(seen.length(), 1)
+  stop()
+}
+
+///|
+/// A picture set gliding in at `t0` between frames, the last frame before a pan at `t0 + 20` drawn at `t0 + last`:
+/// where the pan leaves it.
+fn pan_after_frame(last : Double) -> (Double, Double, Double, Double)? {
+  let t = @ui.Tester::new(fn(_c) {  })
+  t.draw()
+  let t0 = t.time()
+  let z = @kit.Zoom::new()
+  z.natural(100.0, 100.0)
+  z.boxed(400.0, 400.0)
+  z.zoom_to(3.0, 150.0, 170.0, true)
+  t.frame_at(t0 + last)
+  t.advance(t0 + 20.0 - t.time())
+  z.pan(10.0, 0.0)
+  z.rect()
+}
+
+///|
+test "a pan told at a moment between frames starts from where the glide has it then, whenever the frame before it was drawn" {
+  let ten = pan_after_frame(10.0)
+  assert_eq(pan_after_frame(15.0), ten)
+  // (by then it had left where it set out)
+  assert_true(ten.unwrap().2 > 100.0, msg="\{ten}")
+}
+
+///|
+/// A large picture zoomed in, flung across at `t0` between frames: the tester, the zoom and when the fling ends.
+fn flung() -> (@ui.Tester, @kit.Zoom, Double) {
+  let t = @ui.Tester::new(fn(_c) {  })
+  t.draw()
+  let z = @kit.Zoom::new()
+  z.natural(1000.0, 1000.0)
+  z.boxed(400.0, 400.0)
+  z.zoom_to(1.0, 200.0, 200.0, false)
+  z.fling(1.5, 0.0)
+  (t, z, z.fling_ends())
+}
+
+///|
+test "a press after a fling's end takes nothing, a frame drawn at its end (and stepped) or not; one before it, the fling" {
+  let after = fn(drawn : Bool) {
+    let (t, z, end) = flung()
+    if drawn {
+      t.frame_at(end)
+      z.step()
+    }
+    t.advance(end + 1.0 - t.time())
+    z.stop_fling()
+  }
+  // (one tester at a time: the one before let go as another is made)
+  let (t, z, end) = flung()
+  t.advance(end - 10.0 - t.time())
+  let before = z.stop_fling()
+  assert_eq((after(true), after(false), before), (false, false, true))
+}
+
+///|
+/// A fling, a frame drawn (and stepped) ahead past its end or none, then a pan told for a moment midway through it
+/// (50 ms in): where the pan leaves it.
+fn pan_before_end(ahead : Bool) -> (Double, Double, Double, Double)? {
+  let (t, z, end) = flung()
+  let t0 = t.time()
+  if ahead {
+    t.frame_at(end + 5.0)
+    z.step()
+  }
+  // (the pan's own moment, before the frame drawn ahead: said by who tells it, and as the host's clock has it)
+  t.advance(t0 + 50.0 - t.time())
+  z.pan(10.0, 0.0, at=t0 + 50.0)
+  z.rect()
+}
+
+///|
+test "a fling drawn ahead past its end, then told a pan at a moment before it: from where its way had it then, as drawn or not" {
+  let unread = pan_before_end(false)
+  assert_eq(pan_before_end(true), unread)
+}
+
+///|
+/// A picture the window's tree sets gliding at 1050 (a moment it said, done as a frame comes at or past it), frames
+/// drawn at each of `frames` and at 1200: where it is then.
+fn glide_told_by_tree(frames : Array[Double]) -> (Double, Double, Double, Double)? {
+  let z = @kit.Zoom::new()
+  z.natural(100.0, 100.0)
+  z.boxed(400.0, 400.0)
+  let t = @ui.Tester::new(fn(_c) {  }, time=1000.0, tree=fn(root : @view.View) {
+    root.at_moment(1050.0, fn() { z.zoom_to(3.0, 150.0, 170.0, true) }) |> ignore
+  })
+  t.draw()
+  for f in frames {
+    t.frame_at(f)
+  }
+  t.frame_at(1200.0)
+  z.rect()
+}
+
+///|
+test "a glide the window's tree tells at a moment sets out from that moment, the frame that does it whenever it comes" {
+  let each = glide_told_by_tree([1050.0, 1100.0])
+  let one = glide_told_by_tree([])
+  assert_eq(one, each)
+  // (on its way by then, from 1050)
+  assert_true(one.unwrap().2 > 100.0, msg="\{one}")
+}
+
+///|
+/// A picture a press on the window's tree sets gliding, the press at 1050 handed on at 1080 between frames, frames drawn
+/// at each of `frames` and at 1200: where it is then.
+fn glide_pressed_on_tree(frames : Array[Double]) -> (Double, Double, Double, Double)? {
+  let z = @kit.Zoom::new()
+  z.natural(100.0, 100.0)
+  z.boxed(400.0, 400.0)
+  let t = @ui.Tester::new(fn(_c) {  }, time=1000.0, tree=fn(root : @view.View) {
+    root.box(fn(b) {
+      b
+      .width(Is(Some(100.0)))
+      .height(Is(Some(100.0)))
+      .on_press(fn() { z.zoom_to(3.0, 150.0, 170.0, true) })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  // (handed on later than it happened, as a host may, said so)
+  t.advance(handed_on_at - t.time())
+  t.touch_at(0, 50.0, 50.0, happened_at)
+  t.touch_at(2, 50.0, 50.0, 1050.0)
+  for f in frames {
+    t.frame_at(f)
+  }
+  t.frame_at(1200.0)
+  z.rect()
+}
+
+///|
+test "a glide a press on the window's tree tells sets out from the press's moment, the frame that takes it whenever it comes" {
+  let each = glide_pressed_on_tree([1090.0, 1100.0])
+  let one = glide_pressed_on_tree([])
+  assert_eq(one, each)
+  // (as one told to set out at 1050, read at 1200)
+  let t = @ui.Tester::new(fn(_c) {  }, time=1000.0)
+  t.draw()
+  let z = @kit.Zoom::new()
+  z.natural(100.0, 100.0)
+  z.boxed(400.0, 400.0)
+  t.advance(happened_at - t.time())
+  z.zoom_to(3.0, 150.0, 170.0, true, at=happened_at)
+  t.frame_at(1200.0)
+  assert_eq(one, z.rect())
+}
+
+///|
+/// A while of frames as a host draws them (some of a glide's way, not all of it).
+let some_frames_ms : Double = 100.0
+
+///|
+/// When a finger's event happened, and when a host handed it on (later, as a host may).
+let happened_at : Double = 1050.0
+
+///|
+let handed_on_at : Double = 1080.0

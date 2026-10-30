@@ -26,9 +26,9 @@ fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false, pointin
   // (opened as sffix opens it: fixture.mbt)
   open_fixture_over(mode, src)
   let t = if wide {
-    @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0, pointing?)
+    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0, pointing?)
   } else {
-    @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   }
   // the pages opened slid in
   t.run_for(@ui.move_most_ms)
@@ -283,7 +283,7 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
     },
   }
   open_fixture_over("chat-info", src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("接力到频道…")
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)

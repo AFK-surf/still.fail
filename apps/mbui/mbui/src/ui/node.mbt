@@ -90,6 +90,8 @@ struct Node {
   /// tree (Ctx::hidden_from_semantics)
   mut sem : Sem?
   mut sem_hid : Bool
+  /// the old view it was built in (view_host.mbt's island_allows), none in a layer of its own (a menu, a sheet)
+  mut island : @view.NodeId?
   /// it floats over what scrolls under it (Ctx::floats_over): the frame's `floating` are found from the nodes
   mut floats : Bool
   /// it scrolls what it holds, as the scrolling box `scroller` is (sideways.mbt: its id, 0 none), what it holds its
@@ -102,6 +104,9 @@ struct Node {
   /// what takes the presses landing on it, which takes none itself (Ctx::presses_to: a target's id), and where that
   /// was said; held by it (docs/retained.md, the way there's 1)
   mut press_owner : (Int, SourceLoc)?
+  /// the node of the window's tree that takes the presses landing on it (Ctx::presses_to_node: drawn here, pressed
+  /// there), if any
+  mut press_node : @view.NodeId?
   /// the values of the view's own shown as it was built in it (Ctx::moved: a name, what it showed), for a move setting
   /// out later to go from (move_state.mbt); its own box's shown is its properties
   mut moved_vars : Array[(String, FixedArray[Double])]?
@@ -376,11 +381,13 @@ fn Node::new() -> Node {
     corner_by: 0,
     sem: None,
     sem_hid: false,
+    island: None,
     floats: false,
     scroller: 0,
     scroller_inner: false,
     words: None,
     press_owner: None,
+    press_node: None,
     moved_vars: None,
     drawn_built: None,
     ticks: None,
@@ -549,11 +556,13 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.corner_by = 0
   self.sem = None
   self.sem_hid = false
+  self.island = None
   self.floats = false
   self.scroller = 0
   self.scroller_inner = false
   self.words = None
   self.press_owner = None
+  self.press_node = None
   self.moved_vars = None
   self.drawn_built = None
   self.ticks = None

@@ -80,7 +80,7 @@ fn fake_core(
   }
   made.val = Some(src)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
   // the chat pushed in over Home
   t.run_for(@ui.move_most_ms)
   t
@@ -313,7 +313,7 @@ test "a message going up says how far it has gone" {
   reset()
   let src = fixture("chat-uploading")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("第二屏的截图，帮我看看") is Some(_))
   t.run_for(@sfpages.sending_shows_ms)
@@ -328,7 +328,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   // the chat pushed in over Home
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
@@ -582,7 +582,7 @@ test "at its end, a row that comes at it: the core told the end is not in view w
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   assert_eq(ends, [true])
   // someone says something: it comes at the end, the list gliding to it (list_to_end, the frame it comes)
@@ -697,7 +697,7 @@ test "words sent fly to their own row though an older page with the viewer's mes
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
   t.type_text("刚发的这一句")

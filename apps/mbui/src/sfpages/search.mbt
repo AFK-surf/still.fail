@@ -19,6 +19,9 @@ priv struct Search {
   mut summoned : Bool
   mut over : Bool
   mut offered : Array[Offered]
+  /// told as it opens, goes back or closes (search_told): what reads it, the shell's bar and what is over another
+  /// page among it, built again wherever that was
+  said : @signals.Signal[Int]
 }
 
 ///|
@@ -31,6 +34,20 @@ let search : Search = {
   summoned: false,
   over: false,
   offered: [],
+  said: @signals.signal(0),
+}
+
+///|
+/// The search opened, gone back or closed: what reads it told.
+fn search_told() -> Unit {
+  search.said.set(@signals.untracked(fn() { search.said.get() }) + 1)
+}
+
+///|
+/// The search as it stands, read: what reads it built again as it changes (search_told).
+fn search_read() -> Search {
+  search.said.get() |> ignore
+  search
 }
 
 ///|
@@ -55,6 +72,7 @@ pub fn search_start(c : @ui.Ctx) -> Unit {
     Some((q, k)) => {
       search_at_start.val = None
       search.open = true
+      search_told()
       finder_start(q, kind=k)
       search_up(c).snap(1.0)
     }
@@ -73,6 +91,7 @@ fn search_reset() -> Unit {
   search.summoned = false
   search.over = false
   search.offered = []
+  search_told()
 }
 
 ///|
@@ -84,12 +103,14 @@ pub let search_list_rise : Double = 56.0
 /// The search's way up: 0 its field in the list, 1 at the top (Search.kt `up`, Home.kt `away`: the same times). Let go
 /// while not drawn (a chat opened from it over Home a while), it is where the search rests: up while open.
 fn search_up(c : @ui.Ctx) -> @motion.Anim {
+  search_read() |> ignore
   @motion.anim(c, "search/up", if search.open && !search.leaving { 1.0 } else { 0.0 }, global=true)
 }
 
 ///|
 /// How far Home is away under the search (0 none).
 pub fn search_away(c : @ui.Ctx) -> Double {
+  search_read() |> ignore
   if search.open && !search.over {
     search_up(c).get()
   } else {
@@ -100,6 +121,7 @@ pub fn search_away(c : @ui.Ctx) -> Double {
 ///|
 /// The bottom bar out of the search's way while it is open (Home.kt app.barAway): from the tap until it starts back.
 pub fn search_bar_away() -> Bool {
+  search_read() |> ignore
   search.open && !search.leaving && !search.over
 }
 
@@ -114,6 +136,7 @@ fn search_open(c : @ui.Ctx, from : Double, wide : Double) -> Unit {
   search.from = from
   search.wide = wide
   search.focus = true
+  search_told()
   let up = search_up(c)
   up.snap(0.0)
   up.animate(1.0, search_way())
@@ -137,6 +160,7 @@ pub fn search_summon(c : @ui.Ctx, offered : Array[Offered], over : Bool) -> Unit
   search.summoned = true
   search.over = over
   search.offered = offered
+  search_told()
   search_up(c).snap(1.0)
 }
 
@@ -153,6 +177,7 @@ fn search_close(c : @ui.Ctx) -> Unit {
     return
   }
   search.leaving = true
+  search_told()
   search_up(c).animate(0.0, search_way())
 }
 
@@ -172,12 +197,14 @@ fn search_gone() -> Unit {
   search.over = false
   search.offered = []
   finder_cleared()
+  search_told()
 }
 
 ///|
 /// The search over another page than the lists (⌘K laid out Small in a chat: search_summon), in the box the shell
 /// gives it over that page, `inset` from its top; nothing while there is none.
 pub fn search_over(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit {
+  search_read() |> ignore
   if search.over {
     search_page(c, src, w, inset, Whole)
   }
@@ -266,6 +293,7 @@ fn search_field_shorter() -> Array[String] {
 /// while the search's field is it (one field at a time, flying from and back to here). It stands on the list's line
 /// (`at`: where the list stands, @sf.list_line).
 fn search_field(c : @ui.Ctx, at : @sf.ListAt) -> Unit {
+  search_read() |> ignore
   let t = @sf.theme()
   let id = c.id("home-search")
   // (a field to look at: the I-beam over it)
@@ -306,6 +334,7 @@ fn search_field(c : @ui.Ctx, at : @sf.ListAt) -> Unit {
 ///|
 /// The search over Home (Search.kt SearchPage), while it is open, over lists that stand `at` (its lines stand so).
 fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @sf.ListAt) -> Unit {
+  search_read() |> ignore
   if !search.open {
     return
   }
@@ -432,10 +461,12 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
 ///|
 /// Whether the search is open over the lists (and whether it is going back to its field).
 pub fn search_opened() -> Bool {
+  search_read() |> ignore
   search.open
 }
 
 ///|
 pub fn search_leaving() -> Bool {
+  search_read() |> ignore
   search.leaving
 }

@@ -22,7 +22,9 @@ priv struct RowNodes {
   /// its list's id, its item
   list : Int
   item : Int
-  watch : @signals.Watch
+  /// what its build read, followed: owned where it is built (an old view's scope, …), made anew there where what owned
+  /// it went (row_nodes_owned)
+  mut watch : @signals.Watch
   /// the pass of a frame's build it was last laid in (NodesRun's `pass`)
   laid_pass : Ref[Int]
   /// its nodes, out of the frame's from as each frame is built till they are put back (`in_pool`: in the frame's, from
@@ -115,6 +117,9 @@ priv struct NodesRun {
   /// and not all of it reads them as signals yet: a part kept whatever else the frame built anew (`own`) is built anew
   /// for them all the same
   mut evented : Bool
+  /// where what came is the hand's alone and went to one old view (view_host.mbt), that one's part (its id): a part kept
+  /// for another is no part it came to (-1: it came to all)
+  mut evented_only : Int
   /// built keeping none at all (a run's start, a Tester's build to compare with): a list whose rows show only what
   /// they read builds them anew too
   mut whole : Bool
@@ -145,6 +150,7 @@ priv struct NodesRun {
 let nodes_run : NodesRun = {
   fresh: true,
   evented: false,
+  evented_only: -1,
   whole: true,
   part_fresh: false,
   told: false,
@@ -224,7 +230,7 @@ fn Ctx::rows_detach(self : Ctx) -> Unit {
     // it in the frame: left where they were, a node more or less built before them (a bar's in a motion) put another
     // node in each of their places, all of them laid out anew; a part's left there, for it to make again in its place.
     // But a row that shows only what it read, unless none is kept at all)
-    if nodes_run.whole || (nodes_run.fresh && !rn.reads_all && (!rn.own || nodes_run.evented)) {
+    if nodes_run.whole || (nodes_run.fresh && !rn.reads_all && (!rn.own || evented_for(rn.list))) {
       if rn.item >= 0 {
         self.row_nodes_out(rn)
       }
@@ -397,12 +403,10 @@ fn rows_frame_start() -> Unit {
 }
 
 ///|
-/// A row of list `list`, item `item`, not built yet.
-fn row_nodes_new(list : Int, item : Int) -> RowNodes {
-  // (the pass it was last laid in: told in a pass before it is laid in it, it reads anew as it is)
-  let laid_pass = Ref(-1)
-  let holder : Ref[RowNodes?] = Ref(None)
-  let watch = @signals.watch(fn() {
+/// What a row's or a part's build read, followed (made where it is built: owned by what owns that): told, the row or the
+/// part is built again; among another's nodes (`holder`), that one with it.
+fn row_watch(list : Int, item : Int, laid_pass : Ref[Int], holder : Ref[RowNodes?]) -> @signals.Watch {
+  @signals.watch(fn() {
     // (among another's nodes: that one built again for it, it with it)
     match holder.val {
       Some(o) => o.watch.touch()
@@ -419,6 +423,25 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
       h_frame_owed()
     }
   })
+}
+
+///|
+/// Row or part `rn`, its watch made anew where what owned it stopped it (an old view gone, its island built by another
+/// with the same key): stale, its build owned here, never put back as though it still followed what it read.
+fn row_nodes_owned(rn : RowNodes) -> RowNodes {
+  if rn.watch.gone() {
+    rn.watch = row_watch(rn.list, rn.item, rn.laid_pass, rn.holder)
+  }
+  rn
+}
+
+///|
+/// A row of list `list`, item `item`, not built yet.
+fn row_nodes_new(list : Int, item : Int) -> RowNodes {
+  // (the pass it was last laid in: told in a pass before it is laid in it, it reads anew as it is)
+  let laid_pass = Ref(-1)
+  let holder : Ref[RowNodes?] = Ref(None)
+  let watch = row_watch(list, item, laid_pass, holder)
   {
     list,
     item,
@@ -494,7 +517,6 @@ fn Ctx::kept_census(self : Ctx, into : Array[Int]) -> Unit {
   into.push(self.covers.length())
   into.push(self.springs.length())
   into.push(native_nodes.length())
-  into.push(picture_at.length())
   into.push(stream_nodes.length())
   into.push(dr.overlay.length())
   into.push(dr.raised.length())
@@ -512,7 +534,7 @@ let kept_census_names : Array[String] = [
   "words' shape read back", "what shows across read back",
   "a move", "an action asked", "what it tells outside", "a shot", "what dismisses",
   "where the focus returns", "a list of its own", "a field of its own", "what it owns", "a focus group", "a cover",
-  "a spring", "a native view", "a picture at a rect", "a stream", "what is drawn over", "what is raised", "a scrim",
+  "a spring", "a native view", "a stream", "what is drawn over", "what is raised", "a scrim",
   "words to pick", "what a package keeps of it",
 ]
 
@@ -537,7 +559,7 @@ fn Ctx::row_laid(
   }
   let key = (self.nodes[li].id, k)
   let rn = match kept_nodes.get(key) {
-    Some(rn) => rn
+    Some(rn) => row_nodes_owned(rn)
     None => {
       let rn = row_nodes_new(key.0, key.1)
       kept_nodes[key] = rn
@@ -858,7 +880,7 @@ fn Ctx::part_nodes(
   // (RowNodes' `holder`), and put back with them)
   let outer = nodes_run.building
   let rn = match kept_nodes.get((id, -1)) {
-    Some(rn) => rn
+    Some(rn) => row_nodes_owned(rn)
     None => {
       let rn = row_nodes_new(id, -1)
       kept_nodes[(id, -1)] = rn
@@ -872,7 +894,7 @@ fn Ctx::part_nodes(
   // (`own`: what puts it here is made once (made.mbt's made_island), so what it is built from is its key and what it
   // read alone, whatever else the frame built anew)
   let may_keep = if own {
-    nodes_run.on && !nodes_run.whole && !nodes_run.evented && !inst_owners.on && !self.lit_every
+    nodes_run.on && !nodes_run.whole && !evented_for(id) && !inst_owners.on && !self.lit_every
   } else {
     self.nodes_keep()
   }
@@ -904,7 +926,7 @@ fn Ctx::part_nodes(
   }
   // (built for what it read, or as it is new or built elsewhere: what it builds its lists from may be otherwise, their
   // rows built anew; built only as it may not be kept, nothing it read changed: its lists' rows kept)
-  let fresh = (nodes_run.fresh && (!own || nodes_run.evented)) ||
+  let fresh = (nodes_run.fresh && (!own || evented_for(id))) ||
     rn.n == 0 ||
     rn.watch.is_stale() ||
     rn.key != key ||
@@ -1283,3 +1305,10 @@ fn Ctx::laid_said_again(self : Ctx, r : LaidRead) -> Unit {
   }
 }
 
+
+///|
+/// Whether what came for this frame came to the part kept by `id` (Ctx::part_nodes): all of it does, but where it was
+/// the hand's alone and went to one old view's part (NodesRun's evented_only), only that one.
+fn evented_for(id : Int) -> Bool {
+  nodes_run.evented && (nodes_run.evented_only < 0 || nodes_run.evented_only == id)
+}

@@ -53,7 +53,7 @@ test "styles: how many values of each kind the app's screens use" {
         reset()
         @settings.reset()
         let src = fixture(s.0 + dark)
-        let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=platform_of(w))
+        let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=platform_of(w))
         if s.1 != "" {
           open_setting(s.1)
         }

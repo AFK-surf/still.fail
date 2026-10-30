@@ -10,6 +10,7 @@ import {
   "mbui/pixels",
   "mbui/dmath",
   "mbui/signals",
+  "mbui/view",
   "stillfail/sf",
   "stillfail/gallery",
   "stillfail/sfapp/settings",

@@ -188,25 +188,12 @@ fn frame_watch_of() -> @signals.Watch {
     Some(w) => w
     None => {
       let w = @signals.watch(fn() {
-        if frame_running.val && !frame_built.val {
-          // (as the frame begins, before it is built: the frame itself sees it, frame_drawn)
-          watch_told_at()
-        } else if frame_running.val {
-          // (what it read set again as it was built: the next frame is built from it, said where: Tester::assert_idle)
-          g().wants_frame = true
-          let by = match frame_watch.val {
+        frame_read_told(fn() {
+          match frame_watch.val {
             Some(w) => w.set_as_read()
             None => []
           }
-          watch_said.val = if by.is_empty() {
-            "a value it read changed as the frame ended, set at \{@signals.last_set_at()}"
-          } else {
-            "a value it read set again as it was built, at " + by.join(", ")
-          }
-        } else {
-          watch_told_at()
-          h_frame_owed()
-        }
+        })
       })
       frame_watch.val = Some(w)
       w
@@ -500,7 +487,7 @@ fn looks_apply(c : Ctx) -> Unit {
 /// What of the host the frame is drawn by and its build reads (the window, its scale, the system's settings as
 /// envrec.mbt records them, the faces' atlas, whether something reads the widgets out, the layout's epoch), as one line.
 fn looks_env(c : Ctx, w : Double, h : Double, scale : Double) -> String {
-  "\{w} \{h} \{scale} \{whole_px_layout()} \{font_scale()} \{h_atlas_generation()} \{h_a11y_on()} \{reduced_motion()} \{h_reduce_transparency()} \{system_dark()} \{window_inset()} \{h_h264_here()} \{h_stream_feeds()} \{h_stream_layers()} \{copy_shown()} \{layout_reuse.val} \{c.epoch}"
+  "\{w} \{h} \{scale} \{whole_px_layout()} \{font_scale()} \{h_atlas_generation()} \{h_a11y_on()} \{reduced_motion()} \{h_reduce_transparency()} \{system_dark()} \{window_inset()} \{h_h264_here()} \{h_stream_feeds()} \{h_stream_layers()} \{copy_shown()} \{layout_reuse.val} \{c.epoch} \{view_island_said()}"
 }
 
 ///|
@@ -774,6 +761,8 @@ fn paint_frame(c : Ctx, t : Double) -> Double {
 /// says, one painted alone or of the looks alone is built whole after it as well and the two compared, the test failing
 /// where they differ. When it began.
 fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
+  // (where the hand's inputs since the frame before went, among the old views: view_host.mbt)
+  let went_to = view_input_taken()
   let watch = frame_watch_of()
   let paint = paint_watch_of()
   let said = watch_said.val
@@ -789,6 +778,9 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   views_arrive()
   // (the hand as the frame sees it: what read what changed of it told, hand.mbt)
   hand_arrive(c)
+  // (what came as the frame began told the window's tree: brought before what it does again is decided, where the old
+  // views are placed part of that: view_host.mbt)
+  view_arrived()
   // (what reads the clock and the host's settings read so: what read them is stale where they changed; what a part or
   // a list's row kept read of the frame and of a moment, told: kept_part.mbt's KeptClock)
   frame_clock.set(t)
@@ -796,7 +788,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   clock_frame_start(t)
   // (the hand's discrete events since the frame before: what reads them takes them as it is built, and a frame that
   // takes one is built anew, its rows too: what took one changes as it is built what built before it read)
-  let events = @signals.untracked(fn() { hand.events.get() })
+  // (the pointer's presses among them: hand_pressed)
+  let events = @signals.untracked(fn() { hand.events.get() + hand.presses.get() })
   let evented = events != events_seen.val
   events_seen.val = events
   // (and what came from outside that is no signal: a part kept whatever else the frame built anew is built anew for it)
@@ -857,6 +850,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     nodes_run.told = false
     nodes_run.fresh = why != "" || evented
     nodes_run.evented = evented || outside || test_step_came.val
+    // (the hand's alone, gone to one old view: that one's part alone built for it, view_host.mbt)
+    nodes_run.evented_only = if outside || test_step_came.val { -1 } else { went_to }
     test_step_came.val = false
     nodes_run.whole = bench_whole.val && bench_measuring.val
     return watch.read(fn() { frame_body(c, w, h, scale, t) })
@@ -1117,4 +1112,26 @@ fn moved_over(c : Ctx, i : Int) -> (Double, Double) {
     p = n.parent
   }
   (x, y)
+}
+
+///|
+/// What the frame's build read changed (the run's watch, or an old view's own: view_host.mbt), `set_as_read` saying
+/// where it was set as it was read: a frame owed (as the frame begins, before it is built: the frame itself sees it,
+/// frame_drawn; as it was built: the next frame, built from it, said where, Tester::assert_idle; between frames, the
+/// host asked now).
+fn frame_read_told(set_as_read : () -> Array[String]) -> Unit {
+  if frame_running.val && !frame_built.val {
+    watch_told_at()
+  } else if frame_running.val {
+    g().wants_frame = true
+    let by = set_as_read()
+    watch_said.val = if by.is_empty() {
+      "a value it read changed as the frame ended, set at \{@signals.last_set_at()}"
+    } else {
+      "a value it read set again as it was built, at " + by.join(", ")
+    }
+  } else {
+    watch_told_at()
+    h_frame_owed()
+  }
 }

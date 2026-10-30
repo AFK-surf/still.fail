@@ -491,6 +491,12 @@ pub struct Ctx {
   mut back_next : ((Int, Double, Double, Double, Double) -> Unit)?
   mut back_node_next : Int
   mut back_edge_next : Double
+  /// the old view what takes back was said in by Ctx::on_back (its back_node none), none in a layer of its own
+  mut back_island : @view.NodeId?
+  mut back_island_next : @view.NodeId?
+  /// a back gesture held from its start (Ctx::back_gesture), and whether the rest of one called off is nobody's
+  mut back_held : BackHeld?
+  mut back_off : Bool
   mut back_told : Bool
   mut edge : Int
   // the theme and the direction in force where the view builds (theme.mbt); the themes set, wide and narrow, the
@@ -751,6 +757,10 @@ fn Ctx::new() -> Ctx {
     back_node: -1,
     back_edge: 20.0,
     back_next: None,
+    back_island: None,
+    back_island_next: None,
+    back_held: None,
+    back_off: false,
     back_node_next: -1,
     back_edge_next: 20.0,
     back_told: false,
@@ -940,6 +950,7 @@ fn Ctx::alloc_part(self : Ctx, kind : Int, look : Bool, words : Bool, key? : Int
   n.kind = kind
   n.in_sideways = self.sideways_depth > 0
   n.sem_hid = self.sem_hide > 0
+  n.island = if self.layer_cur == 0 { island_building.val } else { None }
   n.bones = self.bones
   n.parent = self.cur
   if self.cur >= 0 {
@@ -2204,6 +2215,8 @@ fn hit_at(
 ) -> Int {
   let points = g().points
   let passes = g().passes
+  // (the frame's targets: an old view's only where the window's tree lets it take input now, view_host.mbt)
+  let hits = physical_equal(ids, g().hit_ids)
   let mut k = ids.length() - 1
   while k >= 0 {
     let r = k * 4
@@ -2213,7 +2226,8 @@ fn hit_at(
       x < rects[r + 2] &&
       y >= rects[r + 1] &&
       y < rects[r + 3] &&
-      in_round_clip(clips, k, x, y) {
+      in_round_clip(clips, k, x, y) &&
+      (!hits || old_hit_open(k)) {
       break
     }
     k = k - 1
@@ -2230,7 +2244,8 @@ fn hit_at(
         y >= rects[r + 1] &&
         y < rects[r + 3] &&
         bars.iter().any(fn(b) { b.thumb == ids[j] }) &&
-        in_round_clip(clips, j, x, y) {
+        in_round_clip(clips, j, x, y) &&
+        (!hits || old_hit_open(j)) {
         return j
       }
       j = j - 1
@@ -2343,6 +2358,7 @@ fn press_reach(
   let points = g().points
   let (ww, wh) = (g().width, g().height)
   let least = room_least()
+  let hits = physical_equal(ids, g().hit_ids)
   let mut best = top
   let mut best_d = 1.0e18
   for k in (top + 1)..<ids.length() {
@@ -2352,6 +2368,7 @@ fn press_reach(
     if points.contains(ids[k]) ||
       g().passes.contains(ids[k]) ||
       as_drawn(ids[k]) ||
+      (hits && !old_hit_open(k)) ||
       w <= 0.0 ||
       h <= 0.0 ||
       (w >= least && h >= least) {

@@ -51,7 +51,7 @@ test "an agent's card over its name, as over its picture: its background work an
   reset()
   let src = work_source("chat-agent-card")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   assert_eq(word(work_line).length(), 0)
   // the pointer on the agent's name over its last message (not its picture)
@@ -87,7 +87,7 @@ test "the history's details: its turns' line says its work after it, none withou
   let src = work_source("chat-history-side", on~)
   decide_src.val = Some(src)
   open_fixture_over("chat-history-side", src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   let forms = fn() { word("后台 4 · 2/6") + word("4 · 2/6") + word("4") }
@@ -144,7 +144,7 @@ test "on a phone, its details' turns say its work after them, its head as it was
   let src = work_source("history-details")
   decide_src.val = Some(src)
   open_fixture_over("history-details", src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   let turns = word("8 轮 · 共干了 1 小时 12 分")

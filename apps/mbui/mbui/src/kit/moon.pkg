@@ -1,8 +1,13 @@
 import {
   "mbui/ui",
   "mbui/motion",
+  "mbui/signals",
   "mbui/codec",
   "mbui/hostapi",
   "moonbitlang/core/math",
   "mbui/dmath",
 }
+
+import {
+  "mbui/view",
+} for "test"

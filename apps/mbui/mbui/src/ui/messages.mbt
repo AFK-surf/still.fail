@@ -71,9 +71,9 @@ fn messages_reset() -> Unit {
   tape.val = None
   between_frames.val = None
   outside_due.val = None
-  system_bars_now.val = { top: 0.0, bottom: 0.0, left: 0.0, right: 0.0 }
+  system_bars_now.set({ top: 0.0, bottom: 0.0, left: 0.0, right: 0.0 })
   system_size_class_now.val = None
-  system_fold_now.val = { hinge: NoHinge, divisions: [] }
+  system_fold_now.set({ hinge: NoHinge, divisions: [] })
   system_nav_action_now.val = None
 }
 
@@ -178,6 +178,12 @@ fn messages_between() -> Unit {
 /// What came, in the order it came: while nothing is left for a handler, what changes only signals taken now
 /// (`on_message_said`); from the first that is not, it and all after it left for the frame (messages_in).
 fn messages_take(came : Array[(String, String, Bytes?)]) -> Unit {
+  // (one event, at its own moment: what had ended by then settled before any handler runs, view_host.mbt)
+  view_event(fn() { messages_take_now(came) })
+}
+
+///|
+fn messages_take_now(came : Array[(String, String, Bytes?)]) -> Unit {
   // (what changes only signals taken now, in the order they came, till one is left for its handler: messages_in)
   for m in came {
     probe_message(m.0, m.1, m.2)
