@@ -16,7 +16,7 @@ export type CloseReason = { kind: "application" | "local" | "timeout" | "other";
 /// and the packets sent and lost on it alone since it opened (`id` tells one way's counts from another's). The
 /// connection's own counts take in every way it tried, those dropped with packets still out counted lost. `ip`: a direct
 /// way's address at the other end (`ip:port`; null through a relay, or from a host before it said it).
-export type IrohPath = { id: string; selected: boolean; relay: string | null; ip?: string | null; rttMs: number; txPackets: number; lostPackets: number };
+export type IrohPath = { id: string; selected: boolean; relay: string | null; ip?: string | null; rttMs: number | null; txPackets: number; lostPackets: number };
 
 /// What went over a connection since it opened.
 export type IrohStats = { rxBytes: number; txBytes: number };

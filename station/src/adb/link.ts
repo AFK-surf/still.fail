@@ -410,7 +410,7 @@ function listen(shares: Shares, share: Share) {
 /// Never fails: what is not known is left out.
 function about(conn: Connection): Record<string, string> {
   try {
-    const ways = (conn.paths?.() ?? []).map((p) => `${p.selected ? "*" : ""}${p.relay ?? p.ip ?? "?"} ${Math.round(p.rttMs)}ms ${p.txPackets}/${p.lostPackets}`);
+    const ways = (conn.paths?.() ?? []).map((p) => `${p.selected ? "*" : ""}${p.relay ?? p.ip ?? "?"} ${p.rttMs == null ? "?" : `${Math.round(p.rttMs)}ms`} ${p.txPackets}/${p.lostPackets}`);
     return { device: conn.remoteId().slice(0, 12), via: conn.via?.() ?? "none", ways: ways.join("; ") };
   } catch {
     return {};
@@ -762,5 +762,4 @@ export function text(value: unknown, max: number): string {
 export function isPackage(name: string): boolean {
   return name.length > 0 && name.length <= 200 && /^[A-Za-z0-9._]+$/.test(name);
 }
-
 

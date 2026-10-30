@@ -929,6 +929,18 @@ function spansOf(tracer: Tracer): { name: string; at: Record<string, unknown> }[
 
 const direct = (mesh: Mesh, id: string) => mesh.current(id)?.path() === "direct";
 
+sim("an_unmeasured_path_has_no_reported_round_trip", async (s) => {
+  const relay = s.relay("https://a.relay.test/", { station: { ms: 10 } });
+  const { station, mesh, id } = await onRelays(s, [relay]);
+  await reach(s, mesh, id);
+  const link = mesh.current(id)!;
+  const paths = link.conn.paths.bind(link.conn);
+  link.conn.paths = () => paths().map((p) => ({ ...p, rttMs: null }));
+  assert.equal(link.net().rttMs, null);
+  assert.match(link.paths(), /\? \d+\/\d+/);
+  await close(s, station, mesh);
+});
+
 /// 2026-10-17: a phone on its station's LAN went on through a relay most of the time. Its link came through first on a
 /// relay's own endpoint, and the main endpoint's, gone direct beside it, waited BETTER_TICKS and MIN_STAY_MS to be
 /// taken, minutes on a phone opened for a while; gone quiet as the phone slept, it waited EXPLORE_MS to be dialled
