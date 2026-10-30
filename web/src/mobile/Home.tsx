@@ -17,7 +17,7 @@ import { useCopyChatLink } from "../ChatRef.tsx";
 import { setSidebarMode, stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp, useOpenPage } from "./app.tsx";
 import { FailedMark, FilterMenu, Illustration, SectionHeader, SlackMark, ticked } from "./parts.tsx";
-import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
+import { Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { ChatMark, chatTone, jumpFromLine, rowLead, stateLine, WaitingText } from "../ChatMark.tsx";
 import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
@@ -462,8 +462,8 @@ function Empty({ view, filter }: { view: ChatsView; filter: ChatFilter }) {
 const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
   const app = useApp();
   const [held, setHeld] = useState(false);
-  // Pinned, renamed or archived from its menu (closed by then): the row says it is under way until it answers, and a
-  // few seconds that it failed (the toast said why too).
+  // Pinned, renamed or archived from its menu (closed by then): nothing while its station answers (the core's list has
+  // it so at once), a few seconds that it failed (the toast said why too).
   const pinning = useDoing("chat.pin", { station: item.station, session: item.session });
   const changing = useDoing(["chat.rename", "chat.archive"], { station: item.station, session: item.session, thread: item.thread });
   const busy = pinning || changing;
@@ -515,8 +515,7 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
         {/* The station it runs on, by its icon (the core gives one only with several stations). */}
         {(item.stationEmoji || item.stationIcon) && <span className={css.mChatStation} aria-label={item.stationName}><StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={12} /></span>}
         {/* Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. */}
-        {busy ? <span className={css.mChatMark} aria-label={t("web-mobile.home.busy")}><Spinner inline /></span>
-          : failed !== undefined ? <span className={css.mChatMark}><FailedMark error={failed} size={12} /></span>
+        {failed !== undefined ? <span className={css.mChatMark}><FailedMark error={failed} size={12} /></span>
           // Its station offline, or its link coming back: unplugged (a spinner is only something its person did).
           : item.offline || item.reconnecting ? <Tip label={item.offline ?? item.reconnecting}><span className={css.mChatMark} aria-label={item.offline ?? item.reconnecting}><Unplug size={14} /></span></Tip>
           : <span className={css.mChatMark}>{item.connect && <Tip label={item.originText ?? "Slack"}><span><SlackMark kind={item.originKind} size={14} /></span></Tip>}</span>}

@@ -292,23 +292,18 @@ pub fn chat_row(
               let title = if item.unread { look.title_unread } else { look.title }
               @sf.name_words(c, item.title, if offline || item.settled { title.then(title_dim) } else { title }) |> ignore
             }
-            // pinned, renamed or archived, until the station answers: turning; failed, a red mark a few seconds more,
-            // why on it (the menu that asked has closed)
-            if busy {
-              c.box(style=kind_slot, label=@sf.t("common.saving"), fn() { @sf.spinner(c, size=kind_mark) |> ignore })
-              |> ignore
-            } else {
-              match failed {
-                Some(why) =>
-                  c.box(style=kind_slot, fn() {
-                    let mark = c.id("row/failed/" + key)
-                    let b = c.box(id=mark, fn() { chat_mark(c, "alert") |> ignore })
-                    c.semantics(b, Image, id=mark, label=why)
-                    @sf.tip(c, "row/failed-tip/" + key, mark, why)
-                  })
-                  |> ignore
-                None => ()
-              }
+            // pinned, renamed or archived: nothing while its station answers (the core's list has it so at once);
+            // failed, a red mark a few seconds, why on it (the menu that asked has closed, the core put it back)
+            match failed {
+              Some(why) =>
+                c.box(style=kind_slot, fn() {
+                  let mark = c.id("row/failed/" + key)
+                  let b = c.box(id=mark, fn() { chat_mark(c, "alert") |> ignore })
+                  c.semantics(b, Image, id=mark, label=why)
+                  @sf.tip(c, "row/failed-tip/" + key, mark, why)
+                })
+                |> ignore
+              None => ()
             }
             // its station offline, or its link coming back: unplugged (the core says which, row by row); one that came
             // from elsewhere (Slack) says so
