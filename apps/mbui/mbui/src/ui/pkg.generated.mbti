@@ -115,7 +115,6 @@ pub fn face_clear(Int32) -> Unit
 
 pub fn face_given(Int32) -> Bool
 
-pub fn faintest_mark(Int64, Int64) -> Int64
 
 pub fn feel_as(Int32) -> Unit
 
