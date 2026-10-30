@@ -334,7 +334,7 @@ pub struct PathState {
     pub relay: Option<String>,
     /// A direct way's address at the other end (`ip:port`).
     pub ip: Option<String>,
-    pub rtt_ms: f64,
+    pub rtt_ms: Option<f64>,
     pub tx_packets: f64,
     pub lost_packets: f64,
     /// How much its sender may have unacknowledged on it now (bytes), and how many times it was cut for loss.
@@ -461,7 +461,7 @@ impl Connection {
                     iroh::TransportAddr::Ip(addr) => Some(addr.to_string()),
                     _ => None,
                 },
-                rtt_ms: stats.rtt.as_secs_f64() * 1000.0,
+                rtt_ms: stats.same_path_rtt.map(|rtt| rtt.as_secs_f64() * 1000.0),
                 tx_packets: stats.udp_tx.datagrams as f64,
                 lost_packets: stats.lost_packets as f64,
                 cwnd: stats.cwnd as f64,

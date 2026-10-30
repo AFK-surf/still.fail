@@ -1226,7 +1226,7 @@ impl Inner {
                         };
                         // Packets sent and lost on this way alone: the connection's counts take in every way it tried.
                         let stats = p.stats();
-                        json!({ "id": p.id().to_string(), "selected": p.is_selected(), "relay": relay, "ip": ip, "rttMs": stats.rtt.as_secs_f64() * 1000.0, "txPackets": stats.udp_tx.datagrams, "lostPackets": stats.lost_packets })
+                        json!({ "id": p.id().to_string(), "selected": p.is_selected(), "relay": relay, "ip": ip, "rttMs": stats.same_path_rtt.map(|rtt| rtt.as_secs_f64() * 1000.0), "txPackets": stats.udp_tx.datagrams, "lostPackets": stats.lost_packets })
                     })
                     .collect(),
             )),

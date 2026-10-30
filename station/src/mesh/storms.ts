@@ -70,7 +70,7 @@ export class Storms {
       w.seconds += seconds;
       if (w.since === null) {
         w.since = at;
-        const paths = (w.conn.paths?.() ?? []).map((p) => `${p.selected ? "*" : ""}${p.ip ?? p.relay ?? "?"} ${Math.round(p.rttMs)}ms`).join("; ");
+        const paths = (w.conn.paths?.() ?? []).map((p) => `${p.selected ? "*" : ""}${p.ip ?? p.relay ?? "?"} ${p.rttMs == null ? "?" : `${Math.round(p.rttMs)}ms`}`).join("; ");
         log.warn("mesh", "a connection is storming: packets that carry nothing, thousands a second", { device, ...rate, paths });
       }
       if (w.seconds >= STORM_SECONDS) {

@@ -529,7 +529,7 @@ function slowly(stream: Stream, conn: Connection, method: string, path: string, 
     const ways = paths.map((p, i) => {
       const [key, sent] = after[i]!;
       const was = before.find(([k]) => k === key)?.[1] ?? 0;
-      return `${p.selected ? "*" : ""}${key} ${Math.round(p.rttMs)}ms +${sent - was}/${p.lostPackets} cwnd=${p.cwnd ?? "?"}`;
+      return `${p.selected ? "*" : ""}${key} ${p.rttMs == null ? "?" : `${Math.round(p.rttMs)}ms`} +${sent - was}/${p.lostPackets} cwnd=${p.cwnd ?? "?"}`;
     });
     log.info("mesh", "a reply went slowly", {
       route: `${method} ${route(path.split("?")[0] ?? path)}`,
@@ -539,7 +539,7 @@ function slowly(stream: Stream, conn: Connection, method: string, path: string, 
       bytesPerSecond: Math.round((bytes / ms) * 1000),
       device: conn.remoteId(),
       way: way ? (way.relay ?? way.ip ?? "?") : "?",
-      rtt: way ? Math.round(way.rttMs) : null,
+      rtt: way?.rttMs != null ? Math.round(way.rttMs) : null,
       sent: way?.txPackets ?? null,
       lost: way?.lostPackets ?? null,
       cwnd: way?.cwnd ?? null,
@@ -552,7 +552,7 @@ function slowly(stream: Stream, conn: Connection, method: string, path: string, 
 /// Every way a connection has now, as a reply that went slowly says them: `*` the chosen one, its relay or address, round
 /// trip, packets sent and lost.
 function waysOf(conn: Connection): string {
-  return (conn.paths?.() ?? []).map((p) => `${p.selected ? "*" : ""}${p.relay ?? p.ip ?? "?"} ${Math.round(p.rttMs)}ms ${p.txPackets}/${p.lostPackets}`).join(", ");
+  return (conn.paths?.() ?? []).map((p) => `${p.selected ? "*" : ""}${p.relay ?? p.ip ?? "?"} ${p.rttMs == null ? "?" : `${Math.round(p.rttMs)}ms`} ${p.txPackets}/${p.lostPackets}`).join(", ");
 }
 
 /// The packets sent so far on each of a connection's ways, by a key unique among them (its relay or address, `#n` for

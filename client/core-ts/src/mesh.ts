@@ -582,7 +582,7 @@ export class Link {
   paths(): string {
     return this.conn
       .paths()
-      .map((p) => `${p.selected ? "*" : ""}${p.relay !== null ? relayHost(p.relay) : (p.ip ?? "direct")} ${Math.round(p.rttMs)}ms ${p.txPackets}/${p.lostPackets}`)
+      .map((p) => `${p.selected ? "*" : ""}${p.relay !== null ? relayHost(p.relay) : (p.ip ?? "direct")} ${p.rttMs === null ? "?" : `${Math.round(p.rttMs)}ms`} ${p.txPackets}/${p.lostPackets}`)
       .join("; ");
   }
 
@@ -2397,4 +2397,3 @@ export function meshWire(inner: Inner): StationWire {
     lockWaiting: (workspace, station) => hooks.lockWaiting?.(inner, workspace, station) ?? null,
   });
 }
-

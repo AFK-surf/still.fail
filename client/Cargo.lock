@@ -1394,7 +1394,7 @@ dependencies = [
 [[package]]
 name = "iroh"
 version = "1.0.3"
-source = "git+https://github.com/zzj3720/iroh?rev=7f9a2c7b460b117e87ab45c86a2a9495ae665f1b#7f9a2c7b460b117e87ab45c86a2a9495ae665f1b"
+source = "git+https://github.com/zzj3720/iroh?rev=cdc559a187b66a4277f9a38d41a696d1d6370318#cdc559a187b66a4277f9a38d41a696d1d6370318"
 dependencies = [
  "backon",
  "blake3",
@@ -1549,7 +1549,7 @@ dependencies = [
 [[package]]
 name = "iroh-relay"
 version = "1.3.0"
-source = "git+https://github.com/zzj3720/iroh?rev=7f9a2c7b460b117e87ab45c86a2a9495ae665f1b#7f9a2c7b460b117e87ab45c86a2a9495ae665f1b"
+source = "git+https://github.com/zzj3720/iroh?rev=cdc559a187b66a4277f9a38d41a696d1d6370318#cdc559a187b66a4277f9a38d41a696d1d6370318"
 dependencies = [
  "blake3",
  "bytes",
@@ -2111,8 +2111,7 @@ dependencies = [
 [[package]]
 name = "noq-proto"
 version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c1e5b6fe668491eca022f745a0a9402585626c73a7b839b3424ace15d6a9c8f"
+source = "git+https://github.com/zzj3720/noq?rev=d578f818ad7580c49691f26d5ccf8cc3afcc026a#d578f818ad7580c49691f26d5ccf8cc3afcc026a"
 dependencies = [
  "aes-gcm",
  "bytes",

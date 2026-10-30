@@ -35,7 +35,7 @@ export type Connection = {
   alpn(): Buffer;
   via(): string | null;
   /// Every way it can go now (the native connection's; a test's may have none).
-  paths?(): { selected: boolean; relay?: string | null; ip?: string | null; rttMs: number; txPackets: number; lostPackets: number; cwnd?: number; congestionEvents?: number }[];
+  paths?(): { selected: boolean; relay?: string | null; ip?: string | null; rttMs?: number | null; txPackets: number; lostPackets: number; cwnd?: number; congestionEvents?: number }[];
   acceptBi(): Promise<Stream | null>;
   openBi(): Promise<Stream>;
   /// Whether the other end is still there: true once anything is heard from it within `withinMs` (superseded.ts).
