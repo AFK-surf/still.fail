@@ -41,6 +41,10 @@ fn init {
     ("src/sfreplay/flows/share_new_chat_test.mbt", 1),
     ("src/sfreplay/flows/share_test.mbt", 1),
     ("src/sfreplay/flows/station_rename_test.mbt", 1),
+    // (an agent's message come in where it is as the composer's room still closes after words sent, 2026-10-31: the
+    // room going on as fast as it went, the message's from rest, the rows over them a little down, then up, between
+    // frames 40 ms apart in this run)
+    ("src/sfreplay/flows/viewer_test.mbt", 1),
     ("src/sfreplay/flows/wide_switcher_test.mbt", 1),
   ])
 }

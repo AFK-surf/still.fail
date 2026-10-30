@@ -91,7 +91,8 @@ pub fn under_post(
   if share != h.target() {
     @motion.log_frame(c, "under/" + key, "open=\{share} alpha=\{look.alpha} scale=\{look.sx}")
   }
-  @motion.reveal(c, "under/" + key, share, fn() {
+  // (in the middle of its room as it opens and closes, cut at both ends, fading out to them)
+  @motion.reveal(c, "under/" + key, share, middle=true, fn() {
     let i = c.box(style=if lead { under_room_lead } else { under_room }, body)
     c.look(i, look)
     @motion.leaving(c, i, shown)

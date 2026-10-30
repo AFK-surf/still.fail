@@ -31,6 +31,10 @@ test "73-pick-words" {
       copied != "" && said.contains(copied) && copied.length() < said.length() / 2,
       "复制 put \"\{copied}\" on the clipboard, not a word of the post",
     )
+    // (held again once the agent's line under the post has gone and its room closed, as the person held it: the words
+    // not moving under the finger as it holds, the list coming down as the line's room closes)
+    f.gone("处理中")
+    f.run_for(@ui.row_size_ms)
     f.hold("可以单独选中的词语", @ui.long_press_ms)
     f.see("=引用")
     f.tap("=引用")

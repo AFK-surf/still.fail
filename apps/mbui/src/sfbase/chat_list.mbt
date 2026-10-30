@@ -123,9 +123,8 @@ pub(all) struct Reading {
   /// the rows over it go up for it: sfpages chat_list), and the frame it came in ("" and -10: none yet)
   mut over : String
   mut over_frame : Int
-  /// rows asked a turn to come in (turns.mbt: Chat.kt admitted); each row's rise in, by key, while it rises
+  /// rows asked a turn to come in (turns.mbt: Chat.kt admitted)
   admitted : Map[String, Bool]
-  rises : Map[String, @motion.Anim]
   /// its list, read as it was last laid out (its glide after what came set out there): a turn waits for that glide's
   /// end (ListInfo's `glide_rest`), not for the reader's hand (listQueue.ts listStill: following, and there)
   mut list_read : @ui.ListReader?
@@ -254,7 +253,6 @@ pub fn reading_of(key : String) -> Reading {
         over: "",
         over_frame: -10,
         admitted: {},
-        rises: {},
         list_read: None,
         newest: "",
         following_row: false,
