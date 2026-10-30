@@ -115,6 +115,8 @@ function fakeStation() {
   const requests: Request[] = [];
   const grants: unknown[] = [];
   const denials: unknown[] = [];
+  // The keeper's box for a request, where the test gives one: a grant sealed to another is refused, as the keeper does.
+  const keepers = new Map<string, Uint8Array>();
   const locked = { on: true };
   // The plain library (no security mode): items as they are, the owner's decisions, the uses said.
   const plain = new Map<string, any>();
@@ -194,10 +196,19 @@ function fakeStation() {
         return { box: body };
       case "GET /vault/requests":
         return { requests };
-      case "POST /vault/grants":
+      case "POST /vault/grants": {
+        const box = keepers.get(body.request);
+        if (box) {
+          try {
+            openSeal(box, body.secret, grantContext("ws", body.request));
+          } catch {
+            return status(409, { error: "the grant's secret does not open", code: "vault_refused" });
+          }
+        }
         grants.push(body);
         for (const q of requests) if (q.id === body.request) q.status = "granted";
         return { ok: true };
+      }
       case "POST /vault/denials":
         denials.push(body);
         for (const q of requests) if (q.id === body.request) q.status = "denied";
@@ -213,7 +224,7 @@ function fakeStation() {
     }
     return status(404, { error: `no route ${key}` });
   };
-  return { vaults, items, boxes, requests, grants, denials, locked, plain, plainGrants, plainLasts, uses, plainLock, saves, plainSaves, reply };
+  return { vaults, items, boxes, requests, grants, denials, keepers, locked, plain, plainGrants, plainLasts, uses, plainLock, saves, plainSaves, reply };
 }
 
 /// A core on an app's host (keys kept, secure storage), reaching `ws/st` (the fake station); its lock put in place.
@@ -470,6 +481,21 @@ test("vault calls: an agent's request approved (sealed to its keeper, signed) or
   assert.deepEqual(vaults().requests.map((q: any) => [q.id, q.lasts]), [["r_4", "hour"], ["r_5", "once"]], "an item's own goes first");
   await fails(r.ask("vault.approve", { request: "r_5", scope: "hour" }), "vault_scope");
   await fails(r.ask("vault.setLasts", { vault: id, lasts: "week" }), "invalid_params");
+
+  // The station restarted after the request came: it waits on with a new box, not heard of here yet. The grant sealed
+  // to the old one is refused; the request is read again and sealed to the new one, the person asked once.
+  r.st.requests.push(request("r_6"));
+  r.push("vault-request", request("r_6"));
+  await r.host.time.pass(500);
+  r.take();
+  const restarted = fill(6);
+  r.st.keepers.set("r_6", restarted);
+  r.st.requests.find((q) => q.id === "r_6")!.box = boxPublic(restarted);
+  const before = [r.host.secureAsked.length, r.st.grants.length];
+  await r.ask("vault.approve", { request: "r_6", scope: "once" });
+  assert.deepEqual([r.host.secureAsked.length, r.st.grants.length], [before[0]! + 1, before[1]! + 1]);
+  const again = r.st.grants.at(-1) as any;
+  assert.equal(JSON.parse(new TextDecoder().decode(openSeal(restarted, again.secret, grantContext("ws", "r_6")))).fields.value, "ghp_x");
   r.core.close();
 });
 

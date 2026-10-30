@@ -1218,15 +1218,28 @@ class Vaults {
       if (!allows(item.listing?.lasts ?? v.lasts, scope)) return yield* fail("vault_scope", t("core-misc.vault.scopeTooLong"));
       const key = yield* self.#key(v, who, true, t("core-misc.vault.reason.approve", { name: item.listing?.name ?? v.name }));
       const bytes = yield* self.#plain(lock, v, item, key);
-      const eph = new Uint8Array(32);
-      inner.host.randomBytes(eph);
-      const now = nowS(inner);
-      const grant: Grant = sign(
-        { v: 1 as const, ws: self.ws, request: r.id, vault: v.id, item: item.id, mode: r.mode, hosts: r.hosts ?? item.listing?.hosts ?? [], scope, exp: now + GRANT_SECS[scope], secret: sealWith(r.box, bytes, grantContext(self.ws, r.id), eph), at: now },
-        TAG.grant,
-        signer,
-      );
-      yield* self.#station(station, "POST", "/vault/grants", grant);
+      const grantTo = (box: string): Grant => {
+        const eph = new Uint8Array(32);
+        inner.host.randomBytes(eph);
+        const now = nowS(inner);
+        return sign(
+          { v: 1 as const, ws: self.ws, request: r.id, vault: v.id, item: item.id, mode: r.mode, hosts: r.hosts ?? item.listing?.hosts ?? [], scope, exp: now + GRANT_SECS[scope], secret: sealWith(box, bytes, grantContext(self.ws, r.id), eph), at: now },
+          TAG.grant,
+          signer,
+        );
+      };
+      let grant = grantTo(r.box);
+      // The station restarted since this request was read: it waits on with a new box (told, maybe not heard yet), so
+      // it is read again and sealed to that one.
+      const sent = yield* Effect.result(self.#station(station, "POST", "/vault/grants", grant));
+      if (sent._tag === "Failure") {
+        if (sent.failure.code !== "vault_refused") return yield* Effect.fail(sent.failure);
+        yield* Effect.ignore(readStation(inner, `${self.ws}/${station}`), { log: "Unhandled", message: "vault station read" });
+        const again = held(inner, self.ws).requests[r.id];
+        if (again?.status !== "pending" || !again.box || again.box === r.box) return yield* Effect.fail(sent.failure);
+        grant = grantTo(again.box);
+        yield* self.#station(station, "POST", "/vault/grants", grant);
+      }
       self.#settled(r.id, { status: "granted", scope });
       return { request: r.id, scope, exp: grant.exp };
     });

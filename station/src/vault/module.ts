@@ -29,7 +29,7 @@ export const VaultLive = Layer.effectDiscard(
     const vaults = vaultStore(store.db);
     // What the process before held may come until it is gone (it gives it as it begins to hand over).
     let coming = true;
-    void (yield* Previous).gone.then(() => (coming = false), () => (coming = false));
+    const previous = yield* Previous;
     // The vault's secrets, asked for by agents and granted from the members' apps.
     const secrets = new Secrets({
       db: store.db, vaults, plain: plainStore(store.db), hub, data, home: () => cloud.home(), lock, now: () => wall.now(),
@@ -48,7 +48,7 @@ export const VaultLive = Layer.effectDiscard(
     // handover (an update), so no agent asks again.
     parts.carry("vault", () => secrets.carried(), (what) => {
       secrets.carry(what);
-      coming = false;
+      came();
     });
     remote.bus.on("vault.", (peer, request, workspace) => secrets.heard(peer, workspace ?? cloud.home() ?? "", request));
     secrets.listen((r) => {
@@ -56,6 +56,13 @@ export const VaultLive = Layer.effectDiscard(
       if (to !== null) events.tell("vault-request", r, `vault-request\0${r.id}`, to);
     });
     events.follow({ inVault: (viewer, vault) => secrets.inVault(viewer, vault) });
+    // Once nothing more comes, the requests still waiting whose boxes did not come (a restart) get new ones.
+    function came() {
+      if (!coming) return;
+      coming = false;
+      secrets.reboxed();
+    }
+    void previous.gone.then(came, came);
     parts.routes([
       ...vaultRoutes({ vaults, lock: (ws) => lock(ws), events, boxed: (l, cert) => secrets.boxed(l, cert) }),
       ...requestRoutes({ secrets, plain: secrets.plain, lock: (ws) => lock(ws), events }),
