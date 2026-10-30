@@ -855,6 +855,52 @@ test "viewer on the tree: a wheel over the picture is the picture's, never the c
   let t = preview_tester("image", platform=0)
   let z = viewer.get().unwrap().zoom
   let before = z.scale_at(t.time())
+  let chat_at = (t.visible(), t.list_offset())
+  // (a plain wheel, which would scroll the chat: over the picture, fitted, it moves nothing)
+  t.wheel_with(195.0, 422.0, 0.0, wheel_notch, 0)
+  assert_eq((t.visible(), t.list_offset()), chat_at)
   t.wheel_with(195.0, 422.0, 0.0, -wheel_notch, @ui.wheel_mod_cmd)
   assert_true(z.scale_at(t.time()) > before)
+  assert_eq((t.visible(), t.list_offset()), chat_at)
+}
+
+///|
+test "viewer on the tree: its picture's menu open over it, a wheel over the menu: not the picture's; the chat under it never scrolled" {
+  let t = preview_tester("image", platform=0)
+  let z = viewer.get().unwrap().zoom
+  let (x, y, w, h) = z.rect().unwrap()
+  let chat_at = (t.visible(), t.list_offset())
+  // a wheel over the picture: the picture's, nothing of the chat's moved
+  let before = z.scale_at(t.time())
+  t.wheel_with(x + w / 2.0, y + h / 2.0, 0.0, -wheel_notch, @ui.wheel_mod_cmd)
+  assert_true(z.scale_at(t.time()) > before)
+  assert_eq((t.visible(), t.list_offset()), chat_at)
+  // its menu opened over it, where its way in ends: a wheel over the menu the menu's, the picture as it was
+  t.right_click(x + w / 2.0, y + h / 2.0)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  let (mx, my) = t.find("复制图片").unwrap()
+  let shown = z.scale_at(t.time())
+  t.wheel_with(mx, my, 0.0, -wheel_notch, @ui.wheel_mod_cmd)
+  assert_eq(z.scale_at(t.time()), shown)
+  assert_eq((t.visible(), t.list_offset()), chat_at)
+}
+
+///|
+test "viewer on the tree, over the pages as a modal layer: a wheel over its bar's buttons scrolls nothing under it" {
+  let t = preview_tester("image", platform=0)
+  let chat_at = (t.visible(), t.list_offset())
+  let (x, y, w, h) = t.get(Button, label=@sf.t("common.copy")).rect
+  t.wheel_with(x + w / 2.0, y + h / 2.0, 0.0, wheel_notch, 0)
+  t.wheel_with(x + w / 2.0, y + h / 2.0, 0.0, -wheel_notch, 0)
+  assert_eq((t.visible(), t.list_offset()), chat_at)
+}
+
+///|
+test "viewer on the tree, over the pages as a modal layer: the app's keys under it (⌘N a new chat) do nothing while it shows" {
+  let t = preview_tester("image", platform=0)
+  let depth = app.nav.depth()
+  t.key(@ui.key_of_char('n'), mods=@ui.mod_cmd)
+  t.draw()
+  assert_eq(app.nav.depth(), depth)
+  assert_true(viewer.get() is Some(_))
 }

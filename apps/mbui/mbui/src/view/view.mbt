@@ -174,6 +174,8 @@ struct Node {
   mut going : @signals.Signal[Int]?
   /// it, and what it holds, take no press (View::presses)
   mut inert : Bool
+  /// it is a modal layer while this holds (View::modal): what it does not hold takes no input
+  mut modal : Bool
 }
 
 ///|
@@ -223,6 +225,14 @@ pub struct Tree {
   order_holder : Array[Int]
   /// the node hosting the old view, if any (View::hosted)
   mut hosting : Int
+  /// the nodes said to be modal layers (View::modal, on), living: which is topmost asked of where each is among what
+  /// holds it (Tree::modal_top)
+  modals : Array[Int]
+  /// how deep in a change being committed (Tree::at_cause, an event) it is now, and whether what a modal layer said is to
+  /// be told as all of it is committed (Tree::modals_told): what a change does in between (a row put after the rest,
+  /// then put in its place) never seen half done
+  mut committing : Int
+  mut modals_due : Bool
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
   /// the fingers down on it (each by its id: Drag's `finger`), in the order they went down
@@ -239,6 +249,10 @@ pub struct Tree {
   work : Work
   /// told as there is first something for a frame to do: what hosts it asks for a frame
   mut on_due : () -> Unit
+  /// what hosts the tree told as what may take input changes (a modal layer said on, what is drawn over what, a node
+  /// let go, leaving, said to take no press): what it holds of its own, an old view's press, to ask whether that may
+  /// still take input (Tree::takes_presses)
+  mut on_modals : () -> Unit
 }
 
 ///|
@@ -297,6 +311,9 @@ pub fn Tree::new(
     order: [],
     order_holder: [],
     hosting: -1,
+    modals: [],
+    committing: 0,
+    modals_due: false,
     held: None,
     downs: [],
     changed: [],
@@ -305,6 +322,7 @@ pub fn Tree::new(
     pending: [],
     drawn_due: false,
     on_due: fn() {  },
+    on_modals: fn() {  },
     work: {
       made: 0,
       let_go: 0,
@@ -376,6 +394,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.back_from = 0.0
       n.going = None
       n.inert = false
+      n.modal = false
       i
     }
     None => {
@@ -416,6 +435,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         back_from: 0.0,
         going: None,
         inert: false,
+        modal: false,
       })
       self.nodes.length() - 1
     }
@@ -528,6 +548,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.changed.clear()
   self.composed.clear()
   self.hosting = -1
+  self.modals.clear()
 }
 
 ///|
@@ -799,9 +820,12 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
   let v = w.read(read)
   last.val = Some(v)
   // (one change, as each after it is: Tree::at_cause)
+  self.committing += 1
   @signals.start_batch()
   @signals.untracked(fn() { then(v) })
   @signals.end_batch()
+  self.committing -= 1
+  self.modals_settled()
   fn() {
     live.val = false
     watch.val = None
@@ -836,11 +860,14 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   self.advance(at)
   let was = self.cause_at
   self.cause_at = at
+  self.committing += 1
   // (one change, as an event is: what it writes told once all of it is written, never what follows it running
   // between two of its writes and seeing half of it)
   @signals.start_batch()
   let changed = f()
   @signals.end_batch()
+  self.committing -= 1
+  self.modals_settled()
   self.cause_at = was
   if changed {
     self.marked()
@@ -1078,6 +1105,8 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
     if !on {
       self.tree.hold_lost_in(self.at)
     }
+    // (what hosts it holds in it told, at this cause, once the change is committed whole: Tree::on_modals)
+    self.tree.modals_told()
   }
   match on {
     Is(v) => set(v)
@@ -1088,6 +1117,179 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
       })
   }
   self
+}
+
+///|
+/// A modal layer while `on` holds (said at the moment it changes, as whether it takes presses is: View::presses): the
+/// topmost such of the tree's (by the order it is drawn in) takes all input; what it does not hold, drawn under it,
+/// takes none (no press, no finger, no menu, no wheel: Tree::allows, and what a host asks of it: an old view's keys,
+/// its stops for Tab, what of it is read out). Its turning off is at once, as it is said (a viewer closing gives the
+/// pages their input back as it begins to go, whatever is still drawn of it).
+pub fn View::modal(self : View, on : Live[Bool]) -> View {
+  guard self.live() is Some(n) else { return self }
+  match n.props.get(12) {
+    Some(stop) => {
+      n.props.remove(12)
+      stop()
+    }
+    None => ()
+  }
+  let set = fn(on : Bool) {
+    guard self.live() is Some(n) else { return }
+    n.modal = on
+    match self.tree.modals.search(self.at) {
+      Some(i) if !on => self.tree.modals.remove(i) |> ignore
+      None if on => self.tree.modals.push(self.at)
+      _ => ()
+    }
+    self.tree.modals_told()
+  }
+  match on {
+    Is(v) => set(v)
+    By(f) =>
+      self.owning(fn() {
+        let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
+        n.props[12] = stop
+      })
+  }
+  self
+}
+
+///|
+/// A modal layer said on or off, or where what is drawn is among what holds it changed (one made, let go, moved, back
+/// from leaving): a finger held on what the topmost no longer lets take input called off, and what hosts the tree told
+/// (Tree::on_modals), once the change doing it is committed whole, at that change's moment (Tree::modals_settled).
+fn Tree::modals_told(self : Tree) -> Unit {
+  if self.committing > 0 {
+    self.modals_due = true
+    return
+  }
+  self.modals_now()
+}
+
+///|
+/// A change committed whole (the outermost Tree::at_cause or event ending, its moment still the cause's): what a modal
+/// layer said in it told now.
+fn Tree::modals_settled(self : Tree) -> Unit {
+  if self.committing == 0 && self.modals_due {
+    self.modals_due = false
+    self.modals_now()
+  }
+}
+
+///|
+fn Tree::modals_now(self : Tree) -> Unit {
+  if !self.modals.is_empty() {
+    match self.held {
+      Some(h) if !self.allows(h) => self.hold_lost_in(0)
+      _ => ()
+    }
+  }
+  // (what hosts it holds of its own, asked whether it may still take input, whatever changed it: a modal layer, a node
+  // let go, leaving, said to take no press)
+  (self.on_modals)()
+}
+
+///|
+/// The topmost modal layer now (View::modal: on, living, not leaving), if one is: of those, the one drawn last, by
+/// where each is among what holds it as the tree is now (as Tree::ordered makes the order the next frame draws in),
+/// whether a frame made that order since or not.
+pub fn Tree::modal_top(self : Tree) -> NodeId? {
+  let mut top = -1
+  let mut top_path : Array[Int] = []
+  for at in self.modals {
+    let n = self.nodes[at]
+    if !n.live || !n.modal || self.leaving_at(at) {
+      continue
+    }
+    guard self.path_of(at) is Some(path) else { continue }
+    if top < 0 || drawn_after(path, top_path) {
+      top = at
+      top_path = path
+    }
+  }
+  if top < 0 {
+    None
+  } else {
+    Some({ at: top, gen: self.nodes[top].gen })
+  }
+}
+
+///|
+/// Where node `at` is in the tree: each node's index among what holds it, from the root's down to it; none where it is
+/// held by nothing the root holds (made, not yet put in what holds it).
+fn Tree::path_of(self : Tree, at : Int) -> Array[Int]? {
+  let path : Array[Int] = []
+  let mut i = at
+  while self.nodes[i].parent >= 0 {
+    let p = self.nodes[i].parent
+    guard self.nodes[p].kids.search(i) is Some(k) else { return None }
+    path.push(k)
+    i = p
+  }
+  if i != 0 {
+    return None
+  }
+  path.rev_in_place()
+  Some(path)
+}
+
+///|
+/// Whether the node at `a` (a path: Tree::path_of) is drawn after the one at `b`: after what it is held by, after what
+/// is before it among what holds them both.
+fn drawn_after(a : Array[Int], b : Array[Int]) -> Bool {
+  for i in 0..<a.length() {
+    if i >= b.length() {
+      return true
+    }
+    if a[i] != b[i] {
+      return a[i] > b[i]
+    }
+  }
+  false
+}
+
+///|
+/// Whether node `id` may take input now: it lives, and no modal layer is on, or the topmost holds it (or is it). One
+/// let go (its index free or made another's since) takes none.
+pub fn Tree::allows(self : Tree, id : NodeId) -> Bool {
+  if id.at < 0 || id.at >= self.nodes.length() {
+    return false
+  }
+  let n = self.nodes[id.at]
+  if !n.live || n.gen != id.gen {
+    return false
+  }
+  self.allows_at(id.at)
+}
+
+///|
+fn Tree::allows_at(self : Tree, at : Int) -> Bool {
+  match self.modal_top() {
+    None => true
+    Some(m) => {
+      let mut i = at
+      while i >= 0 {
+        if i == m.at {
+          return true
+        }
+        i = self.nodes[i].parent
+      }
+      false
+    }
+  }
+}
+
+///|
+/// Whether node `id` is where presses are taken, a modal layer over it or not: it lives, and neither it nor what holds
+/// it is leaving or said to take none (where an old view's hits are placed: whether a modal layer lets them take the
+/// input is asked as it comes, Tree::allows).
+pub fn Tree::presses_here(self : Tree, id : NodeId) -> Bool {
+  if id.at < 0 || id.at >= self.nodes.length() {
+    return false
+  }
+  let n = self.nodes[id.at]
+  n.live && n.gen == id.gen && !self.pressless_own_at(id.at)
 }
 
 ///|
@@ -1713,6 +1915,10 @@ fn View::let_go(self : View) -> Unit {
   }
   n.kids.clear()
   n.live = false
+  match self.tree.modals.search(self.at) {
+    Some(i) => self.tree.modals.remove(i) |> ignore
+    None => ()
+  }
   match n.stop {
     Some(stop) => stop()
     None => ()
@@ -1796,6 +2002,8 @@ fn View::boxes_again(self : View) -> Unit {
   }
   self.tree.layout_marked_at(at)
   self.tree.order_marked()
+  // (what is drawn over what, among what holds it, changed: whether a modal layer is over what is held)
+  self.tree.modals_told()
 }
 
 ///|
@@ -2022,6 +2230,7 @@ fn View::leave(self : View, v : View, ms : Double) -> Unit {
   told_going(n)
   // (leaving, it takes no input: a finger held on it or in it let go of now)
   self.tree.hold_lost_in(v.at)
+  self.tree.modals_told()
   self.tree.due_leaving(v.id())
   self.tree.marked()
 }
@@ -2036,6 +2245,8 @@ fn View::come_back(self : View, v : View) -> Unit {
   n.back_at = now
   n.left_at = -1.0
   told_going(n)
+  // (a modal layer back: over what is held again)
+  self.tree.modals_told()
   self.tree.marked()
 }
 
@@ -2070,6 +2281,13 @@ pub fn View::leaving(self : View) -> Bool {
 ///|
 /// Whether node `at` takes no press: it, or what holds it, leaving or said to take none (View::presses).
 fn Tree::pressless_at(self : Tree, at : Int) -> Bool {
+  // (under the topmost modal layer, not in it: none)
+  !self.allows_at(at) || self.pressless_own_at(at)
+}
+
+///|
+/// Whether node `at` or what holds it is leaving or said to take no press (whatever a modal layer says of it).
+fn Tree::pressless_own_at(self : Tree, at : Int) -> Bool {
   let mut i = at
   while i >= 0 {
     if self.nodes[i].left_at >= 0.0 || self.nodes[i].inert {
@@ -2174,6 +2392,7 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
   self.settle(at)
   let was = self.cause_at
   self.cause_at = at
+  self.committing += 1
   // (its facts told before it is taken: what is bound to them so as it is found)
   @signals.start_batch()
   @signals.untracked(said)
@@ -2181,6 +2400,8 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
   @signals.start_batch()
   @signals.untracked(f)
   @signals.end_batch()
+  self.committing -= 1
+  self.modals_settled()
   self.cause_at = was
 }
 
@@ -2332,6 +2553,8 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
     let d = self.timeline[next]
     let was = self.cause_at
     self.cause_at = next_at
+    // (one change, committed whole at its moment before what it said of modal layers is told: Tree::modals_settled)
+    self.committing += 1
     match d {
       Leaves(id, _) => {
         self.timeline.remove(next) |> ignore
@@ -2360,6 +2583,8 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
         @signals.end_batch()
       }
     }
+    self.committing -= 1
+    self.modals_settled()
     self.cause_at = was
   }
 }
@@ -2794,6 +3019,14 @@ pub fn Tree::press(self : Tree, x : Double, y : Double) -> Bool {
 /// What hosts the tree told as there is first something for a frame to do (it asks for a frame).
 pub fn Tree::on_due(self : Tree, f : () -> Unit) -> Unit {
   self.on_due = f
+}
+
+///|
+/// What hosts the tree told as what may take input changes (a modal layer said on, what is drawn over what, a node let
+/// go, leaving, said to take no press), once the change doing it is committed whole: what it holds of its own (a press
+/// held on an old view, a back gesture) asks whether it may still take input (Tree::takes_presses), at that cause.
+pub fn Tree::on_modals(self : Tree, f : () -> Unit) -> Unit {
+  self.on_modals = f
 }
 
 ///|

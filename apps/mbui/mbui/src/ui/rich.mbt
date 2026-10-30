@@ -1110,7 +1110,7 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
   keep_rich_runs(lay, ox, oy, cy0, cy1)
   // its words picked with the pointer: where it is for the next press, what of it is picked under its words
   if r.select {
-    selectable_painted(r.base, self.layer_of(i), self.page_order(i), lay, n.text, ox, oy, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
+    selectable_painted(r.base, self.layer_of(i), n.island, self.page_order(i), lay, n.text, ox, oy, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
     for rect in selected_rects(r.base, lay) {
       self.emit_rect(ox + rect.0, oy + rect.1, rect.2, rect.3, 0.0, desk.sel_color, 0.0, 0L, alpha)
     }

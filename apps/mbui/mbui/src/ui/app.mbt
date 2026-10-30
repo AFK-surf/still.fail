@@ -472,6 +472,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   // back goes where the stack drawn now says (Ctx::nav, while building)
   c.back = c.back_next
   c.back_node = c.back_node_next
+  c.back_island = c.back_island_next
   c.back_edge = c.back_edge_next
   let takes = match c.back {
     Some(_) => true
@@ -616,6 +617,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.cur = -1
   c.back_next = None
   c.back_node_next = -1
+  c.back_island_next = None
   let root = c.alloc(kind_box)
   c.nodes[root].w = Px(w)
   c.nodes[root].h = Px(h)
@@ -748,7 +750,9 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
 fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? : Int = -1) -> Unit {
   // (one event, at its own moment, the hand it came by so as of then: what was due before it sees the one before, what
   // takes it (the tree's nodes, what they take presses by bound to it, or the old view) this one: view_host.mbt)
-  view_event_said(fn() { pointing_said_by_host(by) }, fn() { pointer_in_now(kind, x, y, button, mods, by~) })
+  view_event_said(fn() { pointing_said_by_host(by) }, fn() {
+    pointer_in_now(kind, x, y, button, mods, by~)
+  })
 }
 
 ///|
@@ -848,7 +852,7 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
     // in the window, as in a browser, and it is what ⌘C copies
     if !c.editors.contains(target) && !keeps_selection_on(target) {
       c.select_press(x, y, c.clicks)
-      match c.editors.get(c.focus) {
+      match c.editors.get(c.focus_allowed()) {
         Some(st) if picked.from.base != 0 => st.anchor = st.caret
         _ => ()
       }
@@ -885,7 +889,7 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
     c.handle_drag = 0
     c.word_drag = 0
     // a selection's handle under the finger (Android's): the finger moves that end, the menu away meanwhile
-    match c.editors.get(c.focus) {
+    match c.editors.get(c.focus_allowed()) {
       Some(st) if st.on_sel_handle(x, y) != 0 => {
         c.handle_which = st.on_sel_handle(x, y)
         c.handle_drag = c.focus
@@ -903,7 +907,7 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
       _ => ()
     }
     // the caret's handle under the finger (Android's): the finger moves the caret, nothing under it pressed or scrolled
-    match c.editors.get(c.focus) {
+    match c.editors.get(c.focus_allowed()) {
       Some(st) if st.on_handle(x, y) => {
         c.handle_which = 1
         c.handle_drag = c.focus
@@ -991,7 +995,9 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
           }
         }
       }
-      None => if target == 0 { c.focus = 0 }
+      // (on nothing: the focus let go, where it may take input now; one a modal layer of the window's tree keeps from
+      // input, kept as it is, view_host.mbt)
+      None => if target == 0 && c.focus_allowed() != 0 { c.focus = 0 }
     }
   } else if kind == 1 {
     // a bar's thumb held: what it is for follows the pointer, nothing else sees it move
@@ -1094,14 +1100,9 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
       c.last_x = x
       c.last_t = t
     }
-  } else if kind == 2 || c.bar_drag != 0 {
-    // a bar's thumb let go (or the press cancelled): its bar shows a while more
-    if c.bar_drag != 0 {
-      c.bar_let_go()
-      c.down = false
-      c.dragging = false
-      c.active = 0
-      h_request_frame()
+  } else if kind == 2 {
+    // a bar's thumb let go: its bar shows a while more
+    if c.bar_press_off() {
       return
     }
     if c.down {
@@ -1109,7 +1110,7 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
       track_y.add(t, y)
     }
     if c.edge == 2 {
-      c.back_gesture(2, x, t)
+      c.back_gesture(2, x, t) |> ignore
     }
     c.edge = 0
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
@@ -1232,34 +1233,7 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
     select_edge_stop()
     second_ptr[2] = 0.0
   } else {
-    // (the touch cancelled: no tap, no handle dragged)
-    c.editor_tap = 0
-    c.handle_drag = 0
-    c.word_drag = 0
-    if c.edge == 2 {
-      c.back_gesture(3, x, t)
-    }
-    c.edge = 0
-    for id in c.press_chain {
-      drag_cancel(id)
-    }
-    if drags.contains(c.drag_scroll) {
-      drag_up(c.drag_scroll, x, y, 0.0, 0.0, true)
-    }
-    if c.dragging {
-      match c.lists.get(c.drag_scroll) {
-        Some(st) => c.release(st, 0.0, t)
-        None => ()
-      }
-      sideways_up(c, c.drag_scroll, 0.0, 0.0)
-      if pagers.contains(c.drag_scroll) {
-        c.pager_release(c.drag_scroll, 0.0)
-      }
-    }
-    c.down = false
-    c.dragging = false
-    c.active = 0
-    second_ptr[2] = 0.0
+    c.press_called_off(x, y, t)
   }
   // (moved, nothing held down, or but a list moved by it: a frame owed, what it changed of the hand read by what reads
   // it, hand.mbt, and of the list by what lays it out; else what the press did, come from outside what is a signal yet)
@@ -1270,6 +1244,62 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
     inputs_taken.val = true
     h_request_frame()
   }
+}
+
+///|
+/// A bar's thumb held by the press let go (as the press ends or is called off), nothing else of the press's done: false
+/// where it held none.
+fn Ctx::bar_press_off(self : Ctx) -> Bool {
+  if self.bar_drag == 0 {
+    return false
+  }
+  self.bar_let_go()
+  self.down = false
+  self.dragging = false
+  self.active = 0
+  h_request_frame()
+  true
+}
+
+///|
+/// The press held called off at (x, y) at `t` (the host's word, or a modal layer of the window's tree come over the old
+/// view it was on: view_host.mbt): no tap, no handle dragged, what it dragged let go where it is.
+fn Ctx::press_called_off(self : Ctx, x : Double, y : Double, t : Double) -> Unit {
+  let c = self
+  // (a bar's thumb held: let go, its bar shows a while more)
+  if c.bar_press_off() {
+    return
+  }
+  c.editor_tap = 0
+  c.handle_drag = 0
+  c.word_drag = 0
+  if c.edge == 2 {
+    c.back_gesture(3, x, t) |> ignore
+  }
+  c.edge = 0
+  for id in c.press_chain {
+    drag_cancel(id)
+  }
+  if drags.contains(c.drag_scroll) {
+    drag_up(c.drag_scroll, x, y, 0.0, 0.0, true)
+  }
+  if c.dragging {
+    match c.lists.get(c.drag_scroll) {
+      Some(st) => c.release(st, 0.0, t)
+      None => ()
+    }
+    sideways_up(c, c.drag_scroll, 0.0, 0.0)
+    if pagers.contains(c.drag_scroll) {
+      c.pager_release(c.drag_scroll, 0.0)
+    }
+  }
+  // (words being picked by it: picked as far as they are, no more, nothing scrolled on at an edge for it)
+  picked.dragging = false
+  select_edge_stop()
+  c.down = false
+  c.dragging = false
+  c.active = 0
+  second_ptr[2] = 0.0
 }
 
 ///|
@@ -1297,6 +1327,10 @@ fn Ctx::on_edge(self : Ctx, x : Double, y : Double) -> Bool {
   if h_platform() == 2 {
     return false
   }
+  // (whose back it is may take presses now: no modal layer of the window's tree over it, view_host.mbt)
+  if !old_owner_open(self.back_owner()) {
+    return false
+  }
   match self.back {
     Some(_) if self.back_node >= 0 && self.back_node < self.count => {
       let n = self.nodes[self.back_node]
@@ -1307,22 +1341,61 @@ fn Ctx::on_edge(self : Ctx, x : Double, y : Double) -> Bool {
 }
 
 ///|
-/// The back gesture's step to the stack that takes back: x in its own
-/// terms (from its left), its width; the system's progress where it is the
-/// system's (on_back).
-fn Ctx::back_gesture(self : Ctx, kind : Int, x : Double, t : Double, progress? : Double = -1.0) -> Unit {
-  match self.back {
-    Some(f) => {
+/// The back gesture's step to the stack that takes back: x in its own terms (from its left), its width; the system's
+/// progress where it is the system's (on_back). A gesture is held from its start (0) by what takes back then, where it
+/// was then and the old view it is of (BackHeld): each step after goes to that one alone, whatever takes back by then; as
+/// that old view may take input no more (gone, a modal layer of the window's tree over it), it is called off for it once
+/// and the rest of the gesture is nobody's (false). Done (2, 4) or called off (3), let go. A step with none held (a back
+/// said with no gesture) goes to what takes back now.
+fn Ctx::back_gesture(self : Ctx, kind : Int, x : Double, t : Double, progress? : Double = -1.0) -> Bool {
+  match (kind, self.back_held) {
+    (0, _) | (_, None) => {
+      if kind != 0 && self.back_off {
+        // (the rest of one called off: nobody's)
+        if kind >= 2 {
+          self.back_off = false
+        }
+        return false
+      }
+      guard self.back is Some(f) else { return false }
       let (left, w) = if self.back_node >= 0 && self.back_node < self.count {
         let n = self.nodes[self.back_node]
         (n.x, n.fw)
       } else {
         (0.0, self.width)
       }
+      if kind == 0 {
+        self.back_off = false
+        self.back_held = Some({ f, left, w, owner: self.back_owner() })
+      }
       f(kind, x - left, w, t, progress)
+      true
     }
-    None => ()
+    (_, Some(h)) => {
+      if kind >= 2 {
+        self.back_held = None
+      }
+      if kind != 3 && !old_owner_open(h.owner) {
+        // (its old view taking input no more: called off for it, once, the rest of the gesture nobody's)
+        self.back_held = None
+        self.back_off = kind < 2
+        (h.f)(3, x - h.left, h.w, t, -1.0)
+        return false
+      }
+      (h.f)(kind, x - h.left, h.w, t, progress)
+      true
+    }
   }
+}
+
+///|
+/// A back gesture held from its start (Ctx::back_gesture): what takes it, where that was then (its left, its width), and
+/// the old view it is of (none: what the old frame put over all of it at its root).
+struct BackHeld {
+  f : (Int, Double, Double, Double, Double) -> Unit
+  left : Double
+  w : Double
+  owner : @view.NodeId?
 }
 
 ///|
@@ -1339,13 +1412,13 @@ fn Ctx::edge_move(self : Ctx, x : Double, y : Double, t : Double) -> Bool {
       self.dragging = true
       self.drag_scroll = 0
       self.editor_drag = false
-      self.back_gesture(0, self.press_x, self.last_t)
+      self.back_gesture(0, self.press_x, self.last_t) |> ignore
     } else if dy.abs() > 6.0 || dx < -6.0 {
       self.edge = 0
     }
   }
   if self.edge == 2 {
-    self.back_gesture(1, x, t)
+    self.back_gesture(1, x, t) |> ignore
     self.last_x = x
     self.last_y = y
     self.last_t = t
@@ -1371,14 +1444,28 @@ fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
     hand_event()
   }
   let c = g()
-  let t = h_now()
+  // (the event's own moment, taken once as it began: view_host.mbt)
+  let t = view_moment()
   // from the right edge, the finger's way is mirrored
   let from_left = if edge == 1 { c.width - x } else { x }
   match kind {
-    0 => c.back_gesture(0, from_left, t, progress~)
-    1 => c.back_gesture(1, from_left, t, progress~)
-    2 => c.back_gesture(4, 0.0, t)
-    _ => c.back_gesture(3, 0.0, t)
+    // (begun where what takes back may take input now (view_host.mbt's old_owner_open): held by it from here,
+    // Ctx::back_gesture; else the whole of it nobody's)
+    0 =>
+      if old_owner_open(c.back_owner()) {
+        c.back_gesture(0, from_left, t, progress~) |> ignore
+      } else {
+        c.back_held = None
+        c.back_off = true
+      }
+    1 => c.back_gesture(1, from_left, t, progress~) |> ignore
+    // (back said with no gesture: what takes back now, where it may take input)
+    2 if c.back_held is None && !c.back_off =>
+      if old_owner_open(c.back_owner()) {
+        c.back_gesture(4, 0.0, t) |> ignore
+      }
+    2 => c.back_gesture(4, 0.0, t) |> ignore
+    _ => c.back_gesture(3, 0.0, t) |> ignore
   }
   // (a step on: a frame owed, where the finger has it read by what reads it, as a pointer moved is; else what began,
   // ended or was called off, come from outside what is a signal yet)
@@ -1401,17 +1488,20 @@ fn on_wheel_now(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -
   let mods = phase / 16
   // (over a node of the window's tree's that takes the wheel: its, at the wheel's own moment, where it is then; no input
   // of the old view's: taped alone)
-  match view_app.val {
-    Some(tree) if tree.wheel_at(x, y, dx, dy, mods, view_moment()) => {
-      input_taped("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
-      return
-    }
-    _ => ()
+  if view_wheel(x, y, dx, dy, mods) {
+    input_taped("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
+    return
   }
   took_input("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
   let phase = phase % 16
   let c = g()
   let mut target = hit_in(c.scroll_ids, c.scroll_rects, x, y)
+  // (what scrolls there in an old view a modal layer of the window's tree keeps from input: nothing scrolls, the wheel
+  // taken: island_allows)
+  if target != 0 && !island_allows(c.island_of_id(target)) {
+    wheel_taken()
+    return
+  }
   // over what scrolls sideways: its sideways part moves it, the rest goes to the list it lies in
   if sideways.contains(target) {
     if sideways_wheel(target, dx, dy) {
@@ -1479,19 +1569,21 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
 /// A key, taken as it came (on_key) or as the input method's deleting stands for it (on_text).
 fn key_in(code : Int, mods : Int) -> Unit {
   let c = g()
+  // (the focus where a modal layer of the window's tree lets it take input; else none's, for this key: island_allows)
+  let focus = c.focus_allowed()
   // a key catcher's while it has the focus: all of it (device.mbt)
   if catcher_key(c, code, mods) {
     return
   }
   // ⌘Z, ⇧⌘Z (Ctrl+Z, Ctrl+Y elsewhere) with a field focused: its edits undone and done again (editor_undo.mbt)
-  let step = if c.editors.contains(c.focus) { step_of(code, mods, h_platform()) } else { None }
+  let step = if c.editors.contains(focus) { step_of(code, mods, h_platform()) } else { None }
   // every key the app may read (Ctx::key_pressed), and whether the focused field takes it (the editor's own keys)
-  desk_key(code, mods, c.editors.contains(c.focus) && (field_key(code) || step is Some(_)))
+  desk_key(code, mods, c.editors.contains(focus) && (field_key(code) || step is Some(_)))
   // ⌘V (Ctrl+V) as the app's key: the host saw files or a picture on the clipboard (mac_app.m, win_app.c), read for
   // the field focused (Ctx::editor: them where it takes files, its words where it does not)
-  if code == key_of_char('v') && (mods & (mod_cmd | mod_ctrl)) != 0 && c.editors.contains(c.focus) {
+  if code == key_of_char('v') && (mods & (mod_cmd | mod_ctrl)) != 0 && c.editors.contains(focus) {
     match clipboard_read() {
-      Some(r) => desk.pasting = Some((c.focus, r))
+      Some(r) => desk.pasting = Some((focus, r))
       None => ()
     }
   }
@@ -1501,7 +1593,7 @@ fn key_in(code : Int, mods : Int) -> Unit {
     h_clipboard_set(selected_words())
     return
   }
-  match (c.editors.get(c.focus), step) {
+  match (c.editors.get(focus), step) {
     (Some(st), Some(s)) => {
       st.step(s, h_now())
       h_request_frame()
@@ -1513,15 +1605,17 @@ fn key_in(code : Int, mods : Int) -> Unit {
     h_request_frame()
     return
   }
-  match c.editors.get(c.focus) {
+  match c.editors.get(focus) {
     Some(st) => {
       st.key(code, mods, h_now())
       h_request_frame()
     }
     None => {
       let target = hit_in(c.scroll_ids, c.scroll_rects, c.px, c.py)
-      // a key the focused widget takes (focus.mbt) scrolls nothing under the pointer
+      // a key the focused widget takes (focus.mbt) scrolls nothing under the pointer; nor one in an old view a modal
+      // layer of the window's tree keeps from input (island_allows)
       if target != 0 &&
+        island_allows(c.island_of_id(target)) &&
         !c.focus_takes(code) &&
         (c.list_key(target, code) || c.pager_key(target, code)) {
         h_request_frame()
@@ -1541,6 +1635,10 @@ fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
   took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s)
   hand_event()
   let c = g()
+  // (words for a focus a modal layer of the window's tree keeps from input: none's, island_allows)
+  if c.focus != 0 && c.focus_allowed() == 0 {
+    return
+  }
   // the keyboard put away by the person: what has the focus lets go of it (what is composed stays, as words)
   if kind == text_keyboard_gone {
     match c.editors.get(c.focus) {
@@ -1694,6 +1792,8 @@ fn app_state_taken(s : Int) -> Unit {
   if (s & 2) == 0 {
     touches_off()
     view_hold_lost()
+    // (and what the old views hold of their own that is no finger: a back gesture, a press of the pointer's)
+    view_captures_off(view_moment(), fn(_) { true })
   }
   match app_change.val {
     Some(f) => f((s & 1) != 0, (s & 2) != 0)

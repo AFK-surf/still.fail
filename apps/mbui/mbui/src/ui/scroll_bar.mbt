@@ -505,7 +505,9 @@ fn Ctx::paint_bar(self : Ctx, b : BarAt, alpha : Double) -> Unit {
   if shown <= 0.002 {
     return
   }
-  let lit = bar.held || self.hover == b.thumb
+  // (lit while held or pointed at: what the pointer is over read as the hand says it as the frame begins, followed, so
+  // that it is drawn again as the pointer comes over it or leaves it, whatever moved it there: hand.mbt)
+  let lit = bar.held || hand.over.has(b.thumb)
   self.emit_rect(
     b.tx,
     b.ty,

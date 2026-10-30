@@ -344,11 +344,13 @@ fn[P] Nav::page_built(
   let before = c.back_next
   let before_node = c.back_node_next
   let before_edge = c.back_edge_next
+  let before_island = c.back_island_next
   let i = c.box(style=nav_page_whole.then(style(bg=Data(bg))), fn() {
     let stack_back = fn() {
       c.back_next = Some(fn(kind, x, w, t, progress) { self.gesture(kind, x, w, t, progress~) })
       c.back_node_next = c.cur
       c.back_edge_next = edge
+      c.back_island_next = c.island_said()
     }
     // (the page's own back first, then the stack's: a page going back off it takes none of its own)
     if takes && self.leaving is None {
@@ -370,6 +372,7 @@ fn[P] Nav::page_built(
     c.back_next = before
     c.back_node_next = before_node
     c.back_edge_next = before_edge
+    c.back_island_next = before_island
   }
 }
 

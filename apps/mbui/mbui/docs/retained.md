@@ -273,6 +273,20 @@ squeeze and contrast checks; film's images before and after where a step touches
    it is into its fields each frame. A row or a part kept as its nodes follows what it read by a watch owned where it is
    built: the old view that made it going, the watch goes with it (stale and gone: Watch::gone), and one built again
    under another with the same key follows anew there, never put back as though it still followed.
+
+   A modal layer is the tree's (View::modal): the topmost on, by where each is among what holds it as the tree is now
+   (Tree::modal_top), takes all input; what it does not hold takes none, from the moment a change saying so is
+   committed whole (Tree::at_cause, an event, a moment of the timeline, a structure's first making: what a change does
+   in between is never seen half done). The old views ask it where they use input, each by the island it was built in
+   (Node's and a focus stop's `island`, set as it is built and as its lists' rows are laid out): the frame's hit
+   targets (an old view's found only while the tree lets it take presses: old_hit_open), the keys, Tab, the focus's
+   words, a key catcher, the wheel, what is read out. A press held on an old view is held by the one it is on (the old
+   frame's hit target's, an empty one over another passing it on: old_press_owner), and called off once at the cause
+   of a modal layer coming over it, as the host calling it off is (Ctx::press_called_off, at that cause's moment).
+   Still frame-bound there: what a press called off sets going in an old view's list (the spring back of a pull, a
+   fling: Ctx::release's `spring_back(…, -1.0)` and `fling_t0 = -1.0`) starts at the next frame, not at the moment it
+   was called off (a pull called off at 50 by a modal layer and at 50 by the host, the host's next frame at 100 or at
+   50: two ways back), to be set out at its cause as old input moves to the tree.
 5. **What goes**, as no island is left: the frame's watch, paint watch and layout watch (frame_watch.mbt), kept parts
    and rows (kept_part.mbt, kept_rows.mbt, kept_nodes.mbt), said.mbt's recorded lists, `frame_passes_most`'s passes
    for a build, `rows_check` and `looks_check` as they are, `outside_said`, `Mover`, src/damage's comparing of

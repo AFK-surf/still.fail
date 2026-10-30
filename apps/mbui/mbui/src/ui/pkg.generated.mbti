@@ -638,6 +638,8 @@ pub(all) enum Along {
   End
 } derive(Eq, Show, @debug.Debug)
 
+type BackHeld
+
 pub(all) enum BackStep {
   Began(Double, Double)
   Moved(Double, Double)
@@ -917,6 +919,10 @@ pub struct Ctx {
   mut back_next : ((Int32, Double, Double, Double, Double) -> Unit)?
   mut back_node_next : Int32
   mut back_edge_next : Double
+  mut back_island : @view.NodeId?
+  mut back_island_next : @view.NodeId?
+  mut back_held : BackHeld?
+  mut back_off : Bool
   mut back_told : Bool
   mut edge : Int32
   mut theme : Theme
@@ -2590,6 +2596,7 @@ pub fn Tester::wanted_after(Self) -> Double
 pub fn Tester::wanted_why(Self) -> String
 pub fn Tester::wheel(Self, Double, Double, Double) -> Unit
 pub fn Tester::wheel_phase(Self, Double, Double, Double, Int32) -> Unit
+pub fn Tester::wheel_told(Self, Double, Double, Double, Double, Int32, Double) -> Unit
 pub fn Tester::wheel_with(Self, Double, Double, Double, Double, Int32) -> Unit
 pub fn Tester::window_acts(Self) -> Array[Int32]
 pub fn Tester::window_drags(Self) -> Int32

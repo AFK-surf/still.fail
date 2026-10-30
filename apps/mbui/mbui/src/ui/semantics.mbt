@@ -289,7 +289,9 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
     if k >= 0 {
       let s = self.sems[k]
       let label = if s.label == "" { self.words_in(i) } else { s.label }
-      let hidden = parent_hid || s.hidden || !in_modal[i]
+      // (and what an old view a modal layer of the window's tree keeps from input built: not read out either,
+      // view_host.mbt's island_allows)
+      let hidden = parent_hid || s.hidden || !in_modal[i] || !island_allows(n.island)
       let depth = if parent_out >= 0 { out[parent_out].depth + 1 } else { 0 }
       out.push({
         id: s.id,

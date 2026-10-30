@@ -774,6 +774,7 @@ pub fn[P] Ctx::nav(
   let before = self.back_next
   let before_node = self.back_node_next
   let before_edge = self.back_edge_next
+  let before_island = self.back_island_next
   let leaving = nav.leaving is Some(_)
   let i = self.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
     // (pushed: the page it covers takes nothing from the moment it is pushed)
@@ -785,6 +786,7 @@ pub fn[P] Ctx::nav(
     // does, as Android's BackHandler in a page is asked before the pages' own; the page under it, one leaving, take none
     self.back_next = None
     self.back_node_next = -1
+    self.back_island_next = None
     // (going back: the page leaving takes nothing)
     self.nav_layer(nav, top, false, rising, way, bg, page, inert=leaving)
   })
@@ -794,10 +796,12 @@ pub fn[P] Ctx::nav(
     self.back_next = Some(fn(kind, x, w, t, progress) { nav.gesture(kind, x, w, t, progress~) })
     self.back_node_next = i
     self.back_edge_next = edge
+    self.back_island_next = self.island_said()
   } else {
     self.back_next = before
     self.back_node_next = before_node
     self.back_edge_next = before_edge
+    self.back_island_next = before_island
   }
   i
 }
@@ -810,8 +814,10 @@ pub fn Ctx::took_back(self : Ctx, body : () -> Unit) -> Bool {
   let before = self.back_next
   let before_node = self.back_node_next
   let before_edge = self.back_edge_next
+  let before_island = self.back_island_next
   self.back_next = None
   self.back_node_next = -1
+  self.back_island_next = None
   body()
   if self.back_next is Some(_) {
     true
@@ -819,6 +825,7 @@ pub fn Ctx::took_back(self : Ctx, body : () -> Unit) -> Bool {
     self.back_next = before
     self.back_node_next = before_node
     self.back_edge_next = before_edge
+    self.back_island_next = before_island
     false
   }
 }
@@ -960,6 +967,10 @@ fn Ctx::forget(self : Ctx, serial : Int) -> Unit {
 /// Back, as a back button asks: the stack drawn last (the innermost that
 /// can) goes back a page. False when nothing could.
 pub fn Ctx::back(self : Ctx) -> Bool {
+  // (none where whose back it is may take input no more: a modal layer of the window's tree over it, view_host.mbt)
+  if !old_owner_open(self.back_owner()) {
+    return false
+  }
   match self.back {
     Some(f) => {
       f(4, 0.0, 1.0, self.clock, -1.0)
@@ -980,6 +991,7 @@ pub fn Ctx::take_back(self : Ctx, f : () -> Unit) -> Unit {
     }
   })
   self.back_node_next = -1
+  self.back_island_next = self.island_said()
 }
 
 ///|
@@ -1011,6 +1023,7 @@ pub fn Ctx::follow_back(self : Ctx, f : (BackStep) -> Unit) -> Unit {
     }
   })
   self.back_node_next = -1
+  self.back_island_next = self.island_said()
 }
 
 ///|

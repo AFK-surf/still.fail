@@ -564,6 +564,9 @@ struct Catcher {
   came : Array[KeyIn]
   mut keys : Array[KeyIn]
   mut frame : Int
+  /// the old view it was last built in (view_host.mbt's island_allows), none in a layer of its own: whether its focus
+  /// may take input now (Ctx::focus_allowed)
+  mut island : @view.NodeId?
 }
 
 ///|
@@ -571,7 +574,7 @@ fn Ctx::catcher_of(self : Ctx, id : Int) -> Catcher {
   match self.dev.catchers.get(id) {
     Some(st) => st
     None => {
-      let st = { composing: "", came: [], keys: [], frame: -1 }
+      let st = { composing: "", came: [], keys: [], frame: -1, island: None }
       self.dev.catchers[id] = st
       st
     }
@@ -585,6 +588,7 @@ fn Ctx::catcher_of(self : Ctx, id : Int) -> Catcher {
 pub fn Ctx::key_catcher(self : Ctx, key : String) -> KeyCatch {
   let id = self.id(key)
   let st = self.catcher_of(id)
+  st.island = if self.layer_cur == 0 { island_building.val } else { None }
   if st.frame != self.frame_no {
     st.frame = self.frame_no
     st.keys = st.came.copy()
@@ -725,9 +729,9 @@ fn Catcher::type_words(self : Catcher, s : String) -> Unit {
 
 ///|
 /// A key with the focus a key catcher's: the catcher's (and seen by Ctx::key_pressed's `in_field` only). False when
-/// the focus is not one's.
+/// the focus is not one's, or is where a modal layer of the window's tree keeps it from input (Ctx::focus_allowed).
 fn catcher_key(c : Ctx, code : Int, mods : Int) -> Bool {
-  guard c.dev.catchers.get(c.focus) is Some(st) else { return false }
+  guard c.dev.catchers.get(c.focus_allowed()) is Some(st) else { return false }
   desk_key(code, mods, true)
   let m = key_in_mods(mods)
   match named_key(code) {
@@ -753,9 +757,10 @@ fn catcher_key(c : Ctx, code : Int, mods : Int) -> Bool {
 }
 
 ///|
-/// The input method's text with the focus a key catcher's (see the file's head). False when the focus is not one's.
+/// The input method's text with the focus a key catcher's (see the file's head). False when the focus is not one's
+/// (or is kept from input: Ctx::focus_allowed).
 fn catcher_text(c : Ctx, kind : Int, s : String, a : Int, b : Int) -> Bool {
-  guard c.dev.catchers.get(c.focus) is Some(st) else { return false }
+  guard c.dev.catchers.get(c.focus_allowed()) is Some(st) else { return false }
   match kind {
     0 => {
       st.composing = ""

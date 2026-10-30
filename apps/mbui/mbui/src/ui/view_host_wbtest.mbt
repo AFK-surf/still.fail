@@ -321,3 +321,89 @@ let up_at_ms : Double = 60.0
 
 ///|
 let told_at_ms : Double = 80.0
+
+///|
+/// A window of a canvas (300 by 300, its wheel recorded) with an old view's button over it (60 by 60 at `off`, taking
+/// only where its button is): the wheels the canvas was told (where in it, whether at their own moment), for wheels turned at
+/// (100, 100) and at (200, 100) after the button is moved from (80, 80) to (180, 80), a frame drawn between or not.
+fn wheels_round_a_button(frame_between : Bool) -> Array[(Double, Double, Bool)] raise {
+  let off = @signals.signal((80.0, 80.0), same=fn(a, b) { a == b })
+  let seen : Array[(Double, Double, Double)] = []
+  let button_wheels = Ref(0)
+  let t = Tester::new(fn(_c) {  }, platform=0)
+  let button : Ref[@view.View?] = Ref(None)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b
+      .width(Is(Some(300.0)))
+      .height(Is(Some(300.0)))
+      .on_drag(fn(_) {  })
+      .on_wheel(fn(w) { seen.push((w.x, w.y, w.at)) })
+      |> ignore
+    })
+    |> ignore
+    // (over the canvas, not after it in the column: drawn off from the window's top left)
+    button.val = Some(
+      old(root, fn(c) {
+        let id = c.id("button")
+        if c.clicked(id) {
+          button_wheels.val = button_wheels.val + 1
+        }
+        c.box(w=Px(60.0), h=Px(60.0), bg=0x445566FFL, id~, fn() {  }) |> ignore
+      })
+      .over(Is(true))
+      .width(Is(Some(60.0)))
+      .height(Is(Some(60.0)))
+      .offset(By(fn() { off.get() }))
+      |> old_takes_own,
+    )
+  })
+  t.draw()
+  t.drawn_now()
+  let tree = view_tree().unwrap()
+  // (the button over the canvas where it was put, a press there the button's)
+  assert_eq(button.val.unwrap().rect(), (80.0, 80.0, 60.0, 60.0))
+  assert_true(tree.target_at(100.0, 100.0) is Hosted(_))
+  let t0 = t.time()
+  off.set((180.0, 80.0))
+  if frame_between {
+    t.frame_at(t0 + frame_period_default)
+  }
+  t.advance(t0 + 2.0 * frame_period_default - t.time())
+  // (where the button was: the canvas's; where it is now: the button's)
+  t.wheel_told(100.0, 100.0, 0.0, 10.0, 0, t0 + 2.0 * frame_period_default)
+  t.wheel_told(200.0, 100.0, 0.0, 10.0, 0, t0 + 2.0 * frame_period_default)
+  t.frame_at(t0 + 3.0 * frame_period_default)
+  ignore(button_wheels)
+  seen.map(fn(s) { (s.0, s.1, s.2 == t0 + 2.0 * frame_period_default) })
+}
+
+///|
+test "a wheel turned where an old view's button was moved from and to, no frame between: by where it is then, the canvas's or the button's, the same with a frame" {
+  let none = wheels_round_a_button(false)
+  assert_eq(wheels_round_a_button(true), none)
+  assert_eq(none, [(100.0, 100.0, true)])
+}
+
+///|
+test "a wheel told late, over a node moved off the window's corner: in the node's terms, at the wheel's own moment" {
+  let seen : Array[(Double, Double, Double)] = []
+  let t = Tester::new(fn(_c) {  }, platform=0)
+  set_view_app(fn(root) {
+    root.box(fn(p) {
+      p.pad(Is(20.0)) |> ignore
+      p.box(fn(b) {
+        b.width(Is(Some(100.0))).height(Is(Some(100.0))).on_wheel(fn(w) { seen.push((w.x, w.y, w.at)) }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  let t0 = t.time()
+  // (the host on to 80 from t0, the wheel turned at 50)
+  t.advance(told_at_ms)
+  t.wheel_told(50.0, 60.0, 0.0, 10.0, 0, t0 + down_at_ms)
+  assert_eq(seen, [(30.0, 40.0, t0 + down_at_ms)])
+}

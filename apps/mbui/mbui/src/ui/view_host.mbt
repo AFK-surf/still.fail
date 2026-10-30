@@ -72,8 +72,9 @@ let old_boxes : Map[@view.NodeId, Int] = Map([])
 /// Where a press held went down: a node's, the old view's, or nothing's.
 priv enum ViewHeld {
   Node(@view.NodeId)
-  /// the old view's (its part, -1: the old frame's whole)
-  Old(Int)
+  /// the old view's (its part, -1: the old frame's whole; the old view's node it is on, none where on what the old frame
+  /// put over all of it: whether a modal layer still lets it take input, view_modals_told)
+  Old(Int, @view.NodeId?)
   /// a node of the tree's held (View::on_drag): what the finger does till it is let go is its
   Dragging(@view.NodeId)
   Nowhere
@@ -134,7 +135,16 @@ let view_line_h : Double = 22.0
 ///|
 /// The window made once by `make` (its root given: put the old view in it with View::hosted), from this frame on.
 pub fn set_view_app(make : (@view.View) -> Unit, around? : (Ctx) -> Unit) -> Unit {
+  // (the same window's tree made anew: what the old views held of the one before called off at once, as it goes, the
+  // rest of each nobody's (a press's till it is let go, a back gesture's till it ends), all else of it let go)
+  view_captures_off(view_moment(), fn(_) { true })
+  let holding = view_held.val is Some(_)
+  let back_off = g().back_off
   view_forget()
+  if holding {
+    view_held.val = Some(Nowhere)
+  }
+  g().back_off = back_off
   view_made_now(make)
   // (the old frame: the old views in the tree, where they are placed; or what is built around them, which puts them
   // where it says: old_views_here)
@@ -150,6 +160,8 @@ pub fn set_view_app(make : (@view.View) -> Unit, around? : (Ctx) -> Unit) -> Uni
 fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   // (a change told as it is made, at the host's now: what it sets going starts then, whatever frame takes it)
   let t = @view.Tree::new(make, measure=view_words_measure, time=fn() { h_event_time() })
+  // (a press held on an old view a modal layer now keeps from input: called off then)
+  t.on_modals(view_modals_told)
   t.on_due(fn() {
     view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
     // (between frames, a frame for it; in one, what it marked is done in it, and what goes on asks for the next as
@@ -175,8 +187,18 @@ pub fn view_painted() -> ViewPaintWork {
 }
 
 ///|
-/// As a run begins: no tree, its nodes let go.
+/// As a run begins: no tree, its nodes let go. What took back by the old views no more held (what calls it and what it
+/// was said in): none takes back till a frame of the next says what does; nothing held of them.
 fn view_forget() -> Unit {
+  let c = g()
+  c.back = None
+  c.back_node = -1
+  c.back_island = None
+  c.back_next = None
+  c.back_node_next = -1
+  c.back_island_next = None
+  c.back_held = None
+  c.back_off = false
   match view_app.val {
     Some(t) => t.dispose()
     None => ()
@@ -319,7 +341,7 @@ fn old_frame(c : Ctx) -> Unit {
         // (the old frame's own node holding it: laid out as this old view's, under its owner; no box of its own)
         old_box_owners.clear()
         old_boxes.clear()
-        old_box_owners[c.cur] = o.owner
+        old_box_owners[c.cur] = (o.owner, o.id)
         owned_by(o.owner, fn() { o.watch.read(fn() { (o.build)(c) }) })
       }
       None => ()
@@ -348,7 +370,7 @@ fn old_frame(c : Ctx) -> Unit {
           },
         )
         old_boxes[o.id] = i
-        old_box_owners[i] = o.owner
+        old_box_owners[i] = (o.owner, o.id)
       }
       None => ()
     }
@@ -523,6 +545,75 @@ fn Ctx::view_blit(self : Ctx, id : @view.NodeId, made : ViewBlock, x : Double, y
 }
 
 ///|
+/// The old view being built now (an island's node: old's), as what it builds is marked with it (Node's `island`, a
+/// focus stop's), for what takes input to ask the tree whether it may (island_allows); none outside any.
+// kept across runs: set and put back within an island's build
+let island_building : Ref[@view.NodeId?] = Ref(None)
+
+///|
+/// Whether what the old view in node `island` builds may take input now (keys, a stop of Tab, the focus's words, a
+/// wheel, what is read out): no modal layer of the window's tree is on, or the topmost holds it (Tree::allows). None
+/// (built in no island, or in a layer it opened over everything: a menu, a sheet), always.
+fn island_allows(island : @view.NodeId?) -> Bool {
+  match (island, view_app.val) {
+    (Some(id), Some(tree)) => tree.allows(id)
+    _ => true
+  }
+}
+
+///|
+/// The old view node `id` (a hit target's, a field's) was built in, as the last frame had it (Node's `island`).
+fn Ctx::island_of_id(self : Ctx, id : Int) -> @view.NodeId? {
+  if id == 0 {
+    return None
+  }
+  for i in 0..<self.count {
+    if self.nodes[i].id == id {
+      return self.nodes[i].island
+    }
+  }
+  None
+}
+
+///|
+/// What has the focus where it may take input now (island_allows: the old view it was built in, a key catcher's as
+/// last asked for, a node's as the last frame had it), else none (0).
+fn Ctx::focus_allowed(self : Ctx) -> Int {
+  if self.focus == 0 {
+    return 0
+  }
+  let island = match self.dev.catchers.get(self.focus) {
+    Some(st) => st.island
+    None => self.island_of_id(self.focus)
+  }
+  if island_allows(island) {
+    self.focus
+  } else {
+    0
+  }
+}
+
+///|
+/// A wheel turned at (x, y) (`dx`, `dy`, `mods` held) as the tree routes it, by the order things are drawn in as a
+/// press is (view_pointer): the tree as of the event's moment, what the old views take there placed where the tree has
+/// them then; over what the old frame put over all of it at its root (a menu, a sheet, a scrim), the old view's (what
+/// scrolls there scrolls, what is under it gets none); else a node's of the tree's that takes the wheel, at that moment.
+/// True where a node took it.
+fn view_wheel(x : Double, y : Double, dx : Double, dy : Double, mods : Int) -> Bool {
+  let tree = match view_app.val {
+    Some(t) => t
+    None => return false
+  }
+  let at = view_moment()
+  tree.bring_to(at)
+  old_hits_place(g(), Some(tree))
+  if old_root_hit(g(), x, y, pressed=false) {
+    return false
+  }
+  tree.wheel_at(x, y, dx, dy, mods, at)
+}
+
+///|
 /// A pointer's event (0 down, 1 moved, 2 up, 3 called off; `button` 2 the secondary) as the tree routes it: down on a
 /// node that does something when pressed, it is that node's (held till it is let go, and let go on it with the primary
 /// button, pressed; called off, nothing); down where the old view is, the old view's (held so, its own to call off);
@@ -544,7 +635,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     old_root_hit(g(), x, y, pressed=kind == 0)
   match (kind, view_held.val) {
     (0, _) if over => {
-      view_held.val = Some(Old(-1))
+      view_held.val = Some(Old(-1, None))
       view_input_went(-1)
       false
     }
@@ -584,18 +675,23 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           }
           true
         }
-        // (the old view's: the part whose hit target the old frame finds there, held so till let go)
-        Hosted(_) => {
-          let part = if old_whole.val { -1 } else { old_part_hit(g(), x, y, pressed=true) }
-          view_held.val = Some(Old(part))
+        // (the old views': held so till let go by the one it is on (old_press_owner: what the old frame finds there, an
+        // empty one over another passing it on), its part what an input to it builds)
+        Hosted(island) => {
+          let owner = old_press_owner(g(), x, y, island)
+          let part = match owner {
+            Some(o) if !old_whole.val => old_part_of(o)
+            _ => -1
+          }
+          view_held.val = Some(Old(part, owner))
           view_input_went(part)
           false
         }
         // (nothing of the tree's there: where the one old view is the whole window, its own (the old root's, as it was
         // before the tree: what it draws past the window, a list scrolled on below it, is its own: a way there, no rule
         // of the tree's); else nobody's)
-        Nothing if old_whole.val => {
-          view_held.val = Some(Old(-1))
+        Nothing if old_whole.val && island_allows(old_whole_island()) => {
+          view_held.val = Some(Old(-1, old_whole_island()))
           view_input_went(-1)
           false
         }
@@ -604,7 +700,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           true
         }
       }
-    (1, Some(Old(part))) => {
+    (1, Some(Old(part, _))) => {
       view_input_went(part)
       false
     }
@@ -681,7 +777,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       h_frame_owed()
       true
     }
-    (2 | 3, Some(Old(part))) => {
+    (2 | 3, Some(Old(part, _))) => {
       view_held.val = None
       view_input_went(part)
       false
@@ -753,11 +849,18 @@ pub fn old(v : @view.View, build : (Ctx) -> Unit, key? : () -> String = fn() { "
         }),
       )
     })
+    // (what it builds marked with it, for what takes input to ask whether it may: island_allows)
+    let held_build = fn(c : Ctx) {
+      let was = island_building.val
+      island_building.val = Some(id)
+      build(c)
+      island_building.val = was
+    }
     old_islands.push({
       id,
       key: name,
-      build,
-      made: made_island(name, fn() { "\{room.val.0}x\{room.val.1} " + key() }, build),
+      build: held_build,
+      made: made_island(name, fn() { "\{room.val.0}x\{room.val.1} " + key() }, held_build),
       owner: owner.val,
       watch: watch.val.unwrap(),
       part: -1,
@@ -786,9 +889,10 @@ pub fn old(v : @view.View, build : (Ctx) -> Unit, key? : () -> String = fn() { "
 }
 
 ///|
-/// What the old views made as they were built and laid out, by the old frame's box holding each: owned by that one.
+/// What the old views made as they were built and laid out, by the old frame's box holding each: owned by that one,
+/// and marked as built in it (island_building), as what its rows build as they are laid out is.
 // kept across runs: put back as a run begins (view_forget)
-let old_box_owners : Map[Int, @signals.ReactiveNode?] = Map([])
+let old_box_owners : Map[Int, (@signals.ReactiveNode?, @view.NodeId)] = Map([])
 
 ///|
 /// `f` run with what it makes owned by `owner` (the reading going on followed as it was).
@@ -832,7 +936,7 @@ fn old_root_hit(c : Ctx, x : Double, y : Double, pressed? : Bool = true) -> Bool
   } else {
     hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y)
   }
-  k >= 0 && !old_hits.iter().any(fn(h) { k >= h.from && k < h.to })
+  k >= 0 && old_hit_owner(k) is None
 }
 
 ///|
@@ -852,8 +956,8 @@ fn old_part_hit(c : Ctx, x : Double, y : Double, pressed? : Bool = false) -> Int
   if k < 0 {
     return -1
   }
-  match old_hits.iter().find_first(fn(h) { k >= h.from && k < h.to }) {
-    Some(h) => old_part_of(h.id)
+  match old_hit_owner(k) {
+    Some(id) => old_part_of(id)
     None => -1
   }
 }
@@ -1039,7 +1143,9 @@ fn old_hits_place(c : Ctx, tree : @view.Tree?) -> Unit {
       None => (0.0, 0.0, true)
       Some(t) =>
         match t.drawn_of(h.id) {
-          Some(d) if t.takes_presses(h.id) => (on_pixels(d.x, c.scale) - h.x, on_pixels(d.y, c.scale) - h.y, true)
+          // (where they are, whatever a modal layer over them lets them take: that asked as the input comes,
+          // Tree::target_at; what reads them for where things are, a thumbnail's place, reads them so)
+          Some(d) if t.presses_here(h.id) => (on_pixels(d.x, c.scale) - h.x, on_pixels(d.y, c.scale) - h.y, true)
           _ => (0.0, 0.0, false)
         }
     }
@@ -1104,7 +1210,7 @@ pub fn old_takes_own(v : @view.View) -> @view.View {
     let c = g()
     let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
     let k = press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y)
-    k >= 0 && old_hits.iter().any(fn(h) { h.id == id && k >= h.from && k < h.to })
+    k >= 0 && old_hit_owner(k) == Some(id)
   })
 }
 
@@ -1112,4 +1218,167 @@ pub fn old_takes_own(v : @view.View) -> @view.View {
 /// Old view `v` taking no finger at all: what it draws is drawn, what is under it in the tree takes every press there.
 pub fn old_takes_none(v : @view.View) -> @view.View {
   v.takes(fn(_, _, _) { false })
+}
+
+///|
+/// The old view that is the whole window (old_whole), where it is placed.
+fn old_whole_island() -> @view.NodeId? {
+  old_islands
+  .iter()
+  .find_first(fn(o) { old_placed.iter().any(fn(p) { p.0 == o.id }) })
+  .map(fn(o) { o.id })
+}
+
+///|
+/// What may take input changed in the window's tree (Tree::on_modals: a modal layer, a node let go, leaving, said to
+/// take no press): what an old view that may take input no more holds let go of then, at that cause (view_captures_off).
+fn view_modals_told() -> Unit {
+  view_captures_off(view_moment(), fn(owner) { !old_owner_open(owner) })
+}
+
+///|
+/// What the old views hold (a press, a back gesture), held by one `gone` says may take input no more (its old view,
+/// none: what the old frame put over all of it at its root), called off for what holds it, once, at `at`, as the host
+/// calling it off would; the rest of each nobody's (no move, no let go of it the old view's, no step of the gesture).
+/// As what may take input changes (view_modals_told), the window leaves the front (app_state_taken), the window's tree
+/// is made anew (set_view_app): one place, whatever let them go. (A run let go of holds nothing of them: view_forget.)
+fn view_captures_off(at : Double, gone : (@view.NodeId?) -> Bool) -> Unit {
+  let c = g()
+  let mut said = false
+  match c.back_held {
+    // (a swipe from the edge: called off with its press, below)
+    Some(h) if c.edge != 2 && gone(h.owner) => {
+      c.back_held = None
+      c.back_off = true
+      (h.f)(3, 0.0, h.w, at, -1.0)
+      said = true
+    }
+    _ => ()
+  }
+  match view_held.val {
+    Some(Old(part, island)) if gone(island) => {
+      view_held.val = Some(Nowhere)
+      c.press_called_off(c.px, c.py, at)
+      // (as the host calling it off is taken: the hand's, built again where it went, inputrec.mbt's took_input)
+      hand_pressed()
+      inputs_taken.val = true
+      view_input_went(part)
+      said = true
+    }
+    _ => ()
+  }
+  if said {
+    outside_counted()
+    // (between frames, a frame for it; in one, what it changed is built in it)
+    if !in_frame.val {
+      h_frame_owed()
+    }
+  }
+}
+
+///|
+/// Whether the old frame's hit target `k` (its index among the frame's) may be what an input is on: what the old frame
+/// put over all of it at its root (its overlays), always; else as the window's tree has the old view it is of now
+/// (Tree::takes_presses: living, not leaving, not said to take none, no modal layer over it holding it not), whatever
+/// the old frame's own order puts it at (a modal layer's old view not built yet, nothing of its own there: the one
+/// under it found none the less).
+fn old_hit_open(k : Int) -> Bool {
+  old_owner_open(old_hit_owner(k))
+}
+
+///|
+/// Whether what an old view built (in node `owner`'s; none: what the old frame put over all of it at its root) may be
+/// what an input is on now: a hit target, words picked, a list dragged (old_hit_open, Ctx::sel_at, claim_chain), as the
+/// window's tree has that old view (Tree::takes_presses).
+fn old_owner_open(owner : @view.NodeId?) -> Bool {
+  match (view_app.val, owner) {
+    (Some(tree), Some(o)) => tree.takes_presses(o)
+    _ => true
+  }
+}
+
+///|
+/// An input from outside at its own moment that finds what is at a place among the old frame's hit targets (words or
+/// files let go there): the window's tree brought to that moment first, and what the old views take placed where it
+/// has them then, as a pointer's event is (view_pointer).
+fn old_input_brought() -> Unit {
+  match view_app.val {
+    Some(tree) => {
+      tree.bring_to(view_moment())
+      old_hits_place(g(), Some(tree))
+    }
+    None => ()
+  }
+}
+
+///|
+/// The old view the old frame's hit target `k` (its index among the frame's) is of: the one whose paint pushed it, or,
+/// for a list's bar (drawn over all of it as the frame ends), the one its list is in; none for what the old frame put
+/// over all of it at its root (its overlays).
+fn old_hit_owner(k : Int) -> @view.NodeId? {
+  match old_hits.iter().find_first(fn(h) { k >= h.from && k < h.to }) {
+    Some(h) => Some(h.id)
+    None => {
+      let c = g()
+      let id = c.hit_ids[k]
+      match c.bars.iter().find_first(fn(b) { b.thumb == id }) {
+        Some(b) => c.island_of_id(b.id)
+        None => None
+      }
+    }
+  }
+}
+
+///|
+/// The old view a press at (x, y) is on, the tree having taken it to the one in node `chosen`: the one whose target the
+/// old frame's input takes it to, as it does (each of an old view the tree lets take presses: old_owner_open; one over
+/// another drawing nothing there passes it on): the hit target there (old_hit_owner), else the words it starts picking
+/// (Ctx::sel_at), else what it drags (claim_chain's innermost); with none of them, nothing of any old view's takes it
+/// but its being somewhere (Ctx::tapped_anywhere, the focus let go): the chosen one's.
+fn old_press_owner(c : Ctx, x : Double, y : Double, chosen : @view.NodeId) -> @view.NodeId? {
+  let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
+  // (a handle of the focused field's selection or caret, before what is under it: that field's)
+  match c.editors.get(c.focus_allowed()) {
+    Some(st) if st.on_sel_handle(x, y) != 0 || st.on_handle(x, y) => return c.island_of_id(c.focus)
+    _ => ()
+  }
+  let k = press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y)
+  if k >= 0 {
+    return old_hit_owner(k)
+  }
+  // (the window's left edge, a swipe back from it: whose back it is)
+  if c.on_edge(x, y) {
+    return c.back_owner()
+  }
+  match c.sel_at(x, y) {
+    Some(s) => return s.island
+    None => ()
+  }
+  match claim_chain(c, x, y) {
+    [id, ..] => c.island_of_id(id)
+    [] => Some(chosen)
+  }
+}
+
+///|
+/// The old view whose back is taken now (Ctx's `back`): the one it was said in (Ctx::island_said, with it wherever it
+/// is said, put over or put back: Ctx::on_back, nav, take_back, follow_back, nav_view's); none where it is what the old
+/// frame put over all of it at its root (a layer of its own), or none is.
+fn Ctx::back_owner(self : Ctx) -> @view.NodeId? {
+  if self.back is Some(_) {
+    self.back_island
+  } else {
+    None
+  }
+}
+
+///|
+/// The old view what is being built now is said in (island_building), none in a layer of its own (a menu, a sheet): what
+/// it says takes input as that old view may (Node's `island`, a focus stop's, a key catcher's, back's).
+fn Ctx::island_said(self : Ctx) -> @view.NodeId? {
+  if self.layer_cur == 0 {
+    island_building.val
+  } else {
+    None
+  }
 }

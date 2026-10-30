@@ -91,6 +91,8 @@ fn drop_within(c : Ctx, x : Double, y : Double) -> Array[Int] {
 /// a paste's are (a step of their own to undo; as many as its paste_limit or more handed to the app as a paste's are,
 /// EditorResult::pasted), the field taking the focus; elsewhere left for this frame's build (Ctx::words_into).
 fn words_let_go(x : Double, y : Double, words : String) -> Unit {
+  // (the window's tree as of when they are let go: what is there then, view_host.mbt)
+  old_input_brought()
   let c = g()
   dropping.words = None
   let target = hit_in(c.hit_ids, c.hit_rects, x, y)
@@ -113,6 +115,7 @@ fn words_let_go(x : Double, y : Double, words : String) -> Unit {
 /// their paths (Ctx::paths_into) or as words for its field (Ctx::words_into), or a view as files (take_drop); taken by
 /// none, the field they were let go on puts their paths in as it ends (drops_frame_end).
 fn paths_let_go(x : Double, y : Double, paths : Array[DroppedPath], pick : Int) -> Unit {
+  old_input_brought()
   let c = g()
   let target = hit_in(c.hit_ids, c.hit_rects, x, y)
   dropping.paths = Some({ within: drop_within(c, x, y), target, x, y, paths, frame: c.frame_no, pick })

@@ -2097,6 +2097,23 @@ pub fn Tester::wheel_with(self : Tester, x : Double, y : Double, dx : Double, dy
 }
 
 ///|
+/// The wheel turned (Tester::wheel_with's) at `at`, told now, later (the host's clock past it): as a host hands on an
+/// event it got a while before, its own time said with it (@hostapi.event_time). No frame drawn.
+pub fn Tester::wheel_told(
+  self : Tester,
+  x : Double,
+  y : Double,
+  dx : Double,
+  dy : Double,
+  mods : Int,
+  at : Double,
+) -> Unit {
+  self.fake.event_at = at
+  finger_wheel(x, y, dx, dy, mods * 16)
+  self.fake.event_at = -1.0
+}
+
+///|
 /// The pointer's shape the host was last told (desktop.mbt Cursor).
 pub fn Tester::cursor(self : Tester) -> Cursor {
   match self.fake.cursor {

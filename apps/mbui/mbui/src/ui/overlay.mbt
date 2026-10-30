@@ -395,6 +395,11 @@ pub fn Ctx::pointer_in_overlay(self : Ctx, id : Int) -> Bool {
 /// Whether what is being built now reads the keys: it is in the layer they go to (or one built in it), or none takes
 /// them.
 fn Ctx::keys_here(self : Ctx) -> Bool {
+  // (an old view under the window's tree's topmost modal layer, not in it: none (view_host.mbt's island_allows); what
+  // it opens over everything (a menu, a sheet: its layers) over that layer too, and theirs)
+  if self.layer_cur == 0 && !island_allows(island_building.val) {
+    return false
+  }
   if self.keys_layer == 0 {
     return true
   }

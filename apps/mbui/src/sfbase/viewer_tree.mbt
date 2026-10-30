@@ -1,22 +1,25 @@
 // The image viewer as nodes of the window's tree (the narrow shell's: sfapp's narrow_shell.mbt; docs/retained.md), made
 // as it opens and let go as it has gone, over the pages:
 //
-//   - its layer: the whole window, taking every finger that comes to it (what is under it, the pages, takes none);
+//   - its layer: the whole window, a modal layer while it is the one open (View::modal: what is under it, the pages
+//     and what the shell draws round them, takes no press, key, wheel or stop of Tab, and is read out none, as the old
+//     frame's modal overlay made it; closing, theirs again as it begins to go);
 //   - its ground: the canvas's colour, as far in as the viewer has come (its flight, its fade), sampled as each frame
-//     draws it;
+//     draws it while either goes;
 //   - its canvas: what a finger does on the picture is this node's, each event at its own moment (one finger drags,
-//     two pinch, a tap shows or hides the bars, two zoom, a hold opens the picture's menu, marking draws), the zoom
-//     told the stage's size and the picture's as either changes, at that moment;
-//   - in it, what draws the picture (an old view taking no finger: the picture where its zoom has it as the frame
-//     draws it, its flight, the pictures beside it), and over it the bars (an old view taking a finger only where they
-//     have something to press).
+//     two pinch, a tap shows or hides the bars, two zoom, a hold opens the picture's menu, marking draws), and so the
+//     secondary button (the picture's menu) and the wheel; the zoom told the stage's size and the picture's as either
+//     changes, at that moment; what is beside it read ahead as that is said;
+//   - in it, what draws the picture (an old view taking a press only on what it has to press: a mark's pin, the words
+//     written; the picture where its zoom has it as the frame draws it, its flight, the pictures beside it), and over
+//     it the bars (an old view taking a press only where they have something to press).
 //
-// It sets out as the node is made (that moment its cause's: the thumbnail tapped), and is done at its way's declared
-// end (a moment on the node's timeline): landed, the thumbnail shows again; gone, it is let go.
+// It sets out as the node is made (that moment its cause's: the thumbnail tapped), and is done at its ways' declared
+// ends (moments on the node's timeline): landed, the thumbnail shows again; gone, it is let go.
 //
-// Still the old view's here (the way there): what the bars do (their own presses, Esc and back), the wheel (the tree
-// has none of its own yet: the drawing view's stage takes it), the strip of pictures beside it (an old view's motion,
-// read at the frame's moment), the lift over the keyboard while marking.
+// Still the old view's here (the way there): what the bars do (their own presses, Esc and back: a press on one taken
+// as the bars' view builds, so what draws the picture follows it at the next frame), the flight in and out (where it
+// flies from, recorded as it is drawn; the thumbnail's place read of the old layout).
 
 ///|
 /// How many times what draws the picture and the bars over it have been built, each (what a change built again).
@@ -72,7 +75,19 @@ pub fn viewer_node(v : @view.View, src : Source, stage : () -> (Double, Double))
 ///|
 /// Viewer `vw`'s layer, node `n` (viewer_node's).
 fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double, Double)) -> Unit {
-  n.over(Is(true)) |> ignore
+  // (over the pages, a modal layer: what is under it (the pages, the bar, what the shell draws round them) takes no key,
+  // no wheel, no stop of Tab, and is read out none, as the old frame's modal overlay made it; what opens over all of it,
+  // a menu, a sheet, its own)
+  n
+  .over(Is(true))
+  // (while it is the one open: closing, the pages' input theirs again as it begins to go, whatever is still drawn)
+  .modal(By(fn() {
+    match viewer.get() {
+      Some(v) => physical_equal(v, vw)
+      None => false
+    }
+  }))
+  |> ignore
   vw.in_tree = true
   n.owns(fn() {
     vw.in_tree = false

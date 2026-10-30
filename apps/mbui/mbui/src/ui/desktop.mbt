@@ -211,6 +211,8 @@ priv struct Desk {
 priv struct SelTarget {
   base : Int
   layer : Int
+  /// the old view it was built in (Node's `island`): whether a press may pick it now, view_host.mbt's old_owner_open
+  island : @view.NodeId?
   at : Array[Int]
   lay : RichLayout
   text : String
@@ -882,6 +884,7 @@ fn Ctx::sel_walk(
             out.push({
               base: r.base,
               layer,
+              island: n.island,
               at: at.copy(),
               lay,
               text: n.text,
@@ -937,7 +940,7 @@ fn spot_cmp(p : SelSpot, q : SelSpot) -> Int {
 ///|
 /// Whether the focused field has words of its own picked (copied before those picked with the pointer).
 fn field_picks(c : Ctx) -> Bool {
-  match c.editors.get(c.focus) {
+  match c.editors.get(c.focus_allowed()) {
     Some(st) => {
       let (a, b) = st.sel()
       a != b
@@ -951,6 +954,7 @@ fn field_picks(c : Ctx) -> Bool {
 fn selectable_painted(
   base : Int,
   layer : Int,
+  island : @view.NodeId?,
   at : Array[Int],
   lay : RichLayout,
   text : String,
@@ -961,7 +965,7 @@ fn selectable_painted(
   x1 : Double,
   y1 : Double,
 ) -> Unit {
-  desk.next_sels.push({ base, layer, at, lay, text, ox, oy, x0, y0, x1, y1 })
+  desk.next_sels.push({ base, layer, island, at, lay, text, ox, oy, x0, y0, x1, y1 })
 }
 
 ///|
@@ -1151,7 +1155,7 @@ fn Ctx::sel_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
   let mut k = desk.sels.length() - 1
   while k >= 0 {
     let t = desk.sels[k]
-    if t.layer == layer && x >= t.x0 && x < t.x1 && y >= t.y0 && y < t.y1 {
+    if t.layer == layer && x >= t.x0 && x < t.x1 && y >= t.y0 && y < t.y1 && old_owner_open(t.island) {
       return Some(t)
     }
     k = k - 1

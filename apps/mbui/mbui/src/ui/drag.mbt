@@ -298,4 +298,5 @@ pub fn Ctx::frame_dt(self : Ctx) -> Double {
 pub fn Ctx::on_back(self : Ctx, f : () -> Unit) -> Unit {
   self.back_next = Some(fn(kind, _, _, _, _) { if kind == 4 { f() } })
   self.back_node_next = -1
+  self.back_island_next = self.island_said()
 }
