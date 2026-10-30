@@ -1195,6 +1195,11 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
     view_stood(id)
     return
   }
+  // (a ready view's player asking more of the app: nothing waited on ends, nothing built again for it)
+  if kind == outside_view && state == 0 && views_told.contains(id) {
+    view_asks(id)
+    return
+  }
   // (a picture decoded, or not to be: ready at this word's moment, what reads how big that picture is following it,
   // image.mbt's image_decoded)
   // what reads that picture told alone, by what is said of it: nothing else of the frame is built again for it (no
@@ -1234,6 +1239,9 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
     views_told[id] = true
   }
   outside_end(kind, id)
+  if kind == outside_view && state == 0 {
+    view_asks(id)
+  }
   // an answer brought (what was picked, read, drawn, grabbed: told, followed by what waits on it; a view the host is
   // done opening): read as the next frame builds
   let answer = kind == outside_pick ||
@@ -1248,6 +1256,17 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
   }
   if answer || (kind == outside_view && state != 0) {
     h_request_frame()
+  }
+}
+
+///|
+/// View `id` waits on the app for its player's bytes: its reads taken now, not at a frame (none comes while the app's
+/// window is off the screen, and a read left untaken there failed the player: native.mbt's take_reads).
+fn view_asks(id : Int) -> Unit {
+  for v in open_views.copy() {
+    if v.id == id {
+      v.take_reads()
+    }
   }
 }
 
