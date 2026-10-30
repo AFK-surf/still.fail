@@ -48,6 +48,9 @@ export type Grant = {
   id: string;
   /// SHA-256 of its token, hex; empty while its program has not come for it yet (allowed, the token not made).
   token: string;
+  /// SHA-256 of the tokens it was given again since (its program asking for what it already holds), the newest last
+  /// (at most TOKENS_KEPT); absent while it has none.
+  again?: string[];
   identity: Identity;
   /// What the program said of itself when it asked (shown as its own words).
   said: { name: string; purpose: string };
@@ -64,7 +67,7 @@ export type Grant = {
 };
 
 /// A grant as the pages are given it: without its token.
-export type GrantView = Omit<Grant, "token" | "reach"> & { reach: Reach; lastReadAt: number | null; taken: boolean };
+export type GrantView = Omit<Grant, "token" | "again" | "reach"> & { reach: Reach; lastReadAt: number | null; taken: boolean };
 
 /// A program's request, until its program takes what was answered: asking while no admin answered; then allowed
 /// (with what the admin left of it) or refused.
@@ -84,6 +87,8 @@ export type Request = {
 export type Taken = { grant: GrantView; token: string } | "refused";
 
 const READS_KEPT = 100;
+/// Tokens a grant was given again, kept at most: the program's copies still running keep reading with theirs.
+const TOKENS_KEPT = 8;
 /// A request is kept this long after it was asked or answered, unless its program takes the answer before: one no
 /// admin answers in a week goes, as does an allowed one its program never came back for.
 export const REQUEST_KEPT_MS = 7 * 24 * 60 * 60_000;
@@ -118,7 +123,7 @@ export class OutflowGrants {
   }
 
   list(): GrantView[] {
-    return this.#grants.map(({ token, ...g }) => ({ ...g, reach: g.reach ?? "station", lastReadAt: g.reads.at(-1)?.at ?? null, taken: token !== "" }));
+    return this.#grants.map(({ token, again, ...g }) => ({ ...g, reach: g.reach ?? "station", lastReadAt: g.reads.at(-1)?.at ?? null, taken: token !== "" || (again?.length ?? 0) > 0 }));
   }
 
   /// The requests no admin has answered yet, the oldest first.
@@ -144,6 +149,20 @@ export class OutflowGrants {
     this.#requests = [...this.#requests.filter((r) => whose(r.identity, r.key) !== it), request];
     this.#save();
     return request;
+  }
+
+  /// A program asking for what one of its grants already gives it (those kinds, as far or less, under any key of its):
+  /// that grant again, with a token of its own, at once, no admin asked. Null when none gives it all.
+  held(identity: Identity, scopes: Scope[], reach: Reach): { grant: GrantView; token: string } | null {
+    const it = identityKey(identity);
+    const grant = this.#grants
+      .filter((g) => identityKey(g.identity) === it && scopes.every((s) => g.scopes.includes(s)) && (reach === "station" || g.reach === "workspace"))
+      .at(-1);
+    if (!grant) return null;
+    const token = TOKEN_PREFIX + randomBytes(32).toString("base64url");
+    grant.again = [...(grant.again ?? []), digest(token)].slice(-TOKENS_KEPT);
+    this.#save();
+    return { grant: this.list().find((g) => g.id === grant.id)!, token };
   }
 
   /// An admin's answer to request `id` (`by`: their email): allowed with the kinds and reach they left of it (no more
@@ -194,7 +213,7 @@ export class OutflowGrants {
   byToken(token: string): Grant | null {
     if (!token.startsWith(TOKEN_PREFIX)) return null;
     const hash = digest(token);
-    return this.#grants.find((g) => g.token === hash) ?? null;
+    return this.#grants.find((g) => g.token === hash || g.again?.includes(hash)) ?? null;
   }
 
   /// Revokes grant `id` (one its program has not come for yet too); whether there was one.

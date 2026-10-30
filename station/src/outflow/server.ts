@@ -10,6 +10,7 @@ import { basename, dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import type { Socket } from "node:net";
 import { log } from "../ops/log.ts";
+import { wall } from "../ops/fibers.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { type Identity, type OutflowGrants, type Reach, SCOPES, type Scope, type Taken } from "./grants.ts";
 
@@ -37,7 +38,13 @@ export type OutflowOptions = {
   identify: Identify;
   workspace: Workspace;
   lang: () => Lang;
+  /// How long another station is given to answer a read (ms); PEER_WAIT_MS unless said.
+  peerWaitMs?: number;
 };
+
+/// How long another station of the workspace is given to answer a read: one that does not is a 504, not a request
+/// left hanging.
+const PEER_WAIT_MS = 60_000;
 
 /// A span of usage read at once, at most.
 const SPAN_MAX_MS = 31 * 24 * 60 * 60_000;
@@ -45,6 +52,8 @@ const BODY_MAX = 16 * 1024;
 /// Messages read at once: by default and at most.
 const MESSAGES_PAGE = 100;
 const MESSAGES_PAGE_MAX = 500;
+/// Chats read at once, at most, when asked a page at a time.
+const CHATS_PAGE_MAX = 1000;
 const SAID_MAX = 200;
 
 class Refused extends Error {
@@ -209,6 +218,9 @@ export class OutflowServer {
     if (asked.length === 0 || !asked.every((s): s is Scope => SCOPES.includes(s as Scope))) throw new Refused(400, `scopes are some of ${SCOPES.join(", ")}`);
     const reach: Reach = given?.workspace === true ? "workspace" : "station";
     const caller = await this.#caller(req);
+    // What it already holds is given at once: a program asks once, not for each read.
+    const held = this.#o.grants.held(caller, asked, reach);
+    if (held !== null) return send(res, 200, { token: held.token, grant: held.grant.id, scopes: held.grant.scopes, reach: held.grant.reach });
     const self = { name: said(given?.name), purpose: said(given?.purpose) };
     const request = this.#o.grants.ask(caller, self, asked, reach, said(given?.key));
     // Gone while it waits: nothing is taken, and the request stays for when it asks again.
@@ -270,10 +282,13 @@ export class OutflowServer {
     const lang = this.#o.lang();
     const reads = async (op: string, args: unknown) => {
       if (station === null) return this.#o.reads(op, args, lang);
+      const wait = this.#o.peerWaitMs ?? PEER_WAIT_MS;
+      const late = `that station did not answer within ${wait} ms`;
       try {
-        return await this.#o.workspace.read(station, op, args);
+        return await wall.within(wait, this.#o.workspace.read(station, op, args), late);
       } catch (e) {
-        throw new Refused(502, `that station did not answer: ${(e as Error).message}`);
+        const message = (e as Error).message;
+        throw message === late ? new Refused(504, late) : new Refused(502, `that station did not answer: ${message}`);
       }
     };
     let text: string;
@@ -286,14 +301,22 @@ export class OutflowServer {
       if (Math.abs(tz) > 1440) throw new Refused(400, "tz is minutes east of UTC, at most 1440");
       text = await reads("outflowUsage", { from, to, tz, lang });
     } else if (scope === "messages") {
+      // The chat by its thread, a session of it (as usage rows name both), or a chat app's channel and thread ts.
       const thread = int(url, "thread");
-      if (thread === null) throw new Refused(400, "thread is the chat's, as /v1/chats names it");
+      const session = url.searchParams.get("session") ?? "";
+      const channel = url.searchParams.get("channel") ?? "";
+      const ts = url.searchParams.get("ts") ?? "";
+      const which = thread !== null ? { thread } : session !== "" ? { session } : channel !== "" && ts !== "" ? { channel, ts } : null;
+      if (which === null) throw new Refused(400, "name the chat by thread, session, or channel and ts");
       const after = Math.max(0, int(url, "after") ?? 0);
       const limit = Math.min(Math.max(int(url, "limit") ?? MESSAGES_PAGE, 1), MESSAGES_PAGE_MAX);
-      text = await reads("outflowMessages", { thread, after, limit });
+      text = await reads("outflowMessages", { ...which, after, limit });
       if (text === "null") throw new Refused(404, "no such chat");
     } else {
-      text = await reads("outflowChats", { since: int(url, "since") ?? 0 });
+      // A page at a time with `limit` (and `before`, the page before's `next`); all at once without.
+      const limit = int(url, "limit");
+      const before = url.searchParams.get("before");
+      text = await reads("outflowChats", { since: int(url, "since") ?? 0, ...(limit === null ? {} : { limit: Math.min(Math.max(limit, 1), CHATS_PAGE_MAX), ...(before ? { before } : {}) }) });
     }
     const read = JSON.parse(text);
     this.#o.grants.read(grant.id, scope, (scope === "usage" ? read.rows : scope === "messages" ? read.messages : read.chats)?.length ?? 0, station ?? undefined);
