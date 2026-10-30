@@ -608,6 +608,9 @@ static void player_grab(Player *p, double side) {
   player_grabbed(p, still);
 }
 
+static void player_stood(Player *p);
+static void players_ticking(void);
+
 static void player_control(Player *p, int op, double value) {
   switch (op) {
     case 1:

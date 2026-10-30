@@ -88,6 +88,7 @@ fn reset_globals() -> Unit {
   pixels_read.clear()
   open_views.clear()
   stacked_views.clear()
+  views_stirred.clear()
   streams_reset()
   native_nodes.clear()
   picture_at.clear()

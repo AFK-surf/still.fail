@@ -1349,6 +1349,8 @@ final class NativeViews {
         long waitSince = -1;
         double waitBytes;
         ExoPlayer player;
+        /** Whether `sample` is on its way to the main thread. */
+        final AtomicBoolean sampleAsked = new AtomicBoolean();
         /**
          * (main thread) Where it is, how far on it has what it needs, how long it is: read of the player, the app told
          * where that changed (stood). As each frame of its picture is shown (its frames' listener), and on its own
@@ -1363,7 +1365,6 @@ final class NativeViews {
             if (dur != C.TIME_UNSET) duration = dur;
             stood();
         };
-        final AtomicBoolean sampleAsked = new AtomicBoolean();
         /**
          * Its clock's tick: a sound playing has no frames shown to say where it is as it goes, so it is read 30 times a
          * second; a picture playing says so itself, each frame (and what it has on hand grows paused too: 4 a second).
