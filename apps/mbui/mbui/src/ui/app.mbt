@@ -601,7 +601,6 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.group_cur = 0
   c.count = 0
   c.cur = -1
-  c.press_owners.clear()
   c.back_next = None
   c.back_node_next = -1
   let root = c.alloc(kind_box)

@@ -99,6 +99,9 @@ struct Node {
   /// the words it holds may be picked, kept by a key once laid out (Ctx::words): found from the nodes once laid out
   /// (words_after_layout)
   mut words : WordsMark?
+  /// what takes the presses landing on it, which takes none itself (Ctx::presses_to: a target's id), and where that
+  /// was said; held by it (docs/retained.md, the way there's 1)
+  mut press_owner : (Int, SourceLoc)?
   /// the values of the view's own shown as it was built in it (Ctx::moved: a name, what it showed), for a move setting
   /// out later to go from (move_state.mbt); its own box's shown is its properties
   mut moved_vars : Array[(String, FixedArray[Double])]?
@@ -374,6 +377,7 @@ fn Node::new() -> Node {
     scroller: 0,
     scroller_inner: false,
     words: None,
+    press_owner: None,
     moved_vars: None,
     drawn_built: None,
     ticks: None,
@@ -545,6 +549,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.scroller = 0
   self.scroller_inner = false
   self.words = None
+  self.press_owner = None
   self.moved_vars = None
   self.drawn_built = None
   self.ticks = None

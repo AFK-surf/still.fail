@@ -172,9 +172,16 @@ fn Ctx::nodes_keep_in(self : Ctx, st : ListState) -> Bool {
 ///|
 /// What is built now said something of itself that a package keeps outside ui's frame, by what is built (the motion
 /// package's entries, by node): a list's row being built is built every frame (kept_nodes.mbt's head).
-pub fn built_aside() -> Unit {
+pub fn built_aside(why? : String = "") -> Unit {
   nodes_run.aside = nodes_run.aside + 1
+  aside_why.val = why
 }
+
+///|
+/// What was said last of what is built now that a package keeps outside ui's frame (built_aside), where it said: why
+/// a row or a part is built every frame, said by rows_unkept.
+// kept across runs: written as it is said
+let aside_why : Ref[String] = Ref("")
 
 ///|
 /// What the build marked used this frame (`f` marks it so again: a picture, a timer held, what asks to be lit, a
@@ -463,7 +470,6 @@ fn Ctx::kept_census(self : Ctx, into : Array[Int]) -> Unit {
   into.clear()
   into.push(self.layers.length())
   into.push(self.layers_opened.length())
-  into.push(self.press_owners.length())
   into.push(self.cover_asks.length())
   into.push(self.place_reads.length())
   into.push(self.row_reads.length())
@@ -496,7 +502,7 @@ fn Ctx::kept_census(self : Ctx, into : Array[Int]) -> Unit {
 /// What kept_census counts, by name, in its order.
 // kept across runs: a table, never written
 let kept_census_names : Array[String] = [
-  "a layer opened", "a layer opened as laid out", "what takes its presses",
+  "a layer opened", "a layer opened as laid out",
   "a cover", "a list's place read back", "a row read back", "words read back",
   "words' shape read back", "what shows across read back",
   "a move", "an action asked", "what it tells outside", "a shot", "what dismisses",
@@ -644,7 +650,11 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   rn.why = ""
   for j in 0..<census_after.length() {
     if rn.why == "" && census_after[j] != b.census[j] && !(part && kept_census_names[j] == "a list of its own") {
-      rn.why = kept_census_names[j]
+      rn.why = if kept_census_names[j] == "what a package keeps of it" && aside_why.val != "" {
+        aside_why.val
+      } else {
+        kept_census_names[j]
+      }
     }
   }
   if rn.why == "" {

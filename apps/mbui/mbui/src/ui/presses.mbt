@@ -10,7 +10,7 @@
 #callsite(autofill(loc))
 pub fn Ctx::presses_to(self : Ctx, area : Int, loc~ : SourceLoc) -> Unit {
   if self.cur >= 0 {
-    self.press_owners[self.cur] = (area, loc)
+    self.nodes[self.cur].press_owner = Some((area, loc))
   }
 }
 
@@ -18,15 +18,12 @@ pub fn Ctx::presses_to(self : Ctx, area : Int, loc~ : SourceLoc) -> Unit {
 /// Once a frame is painted, under a Tester: each box's presses said to be another's are that one's to take, where the
 /// box is (Ctx::presses_to): the area drawn as a hit target over some of the box.
 fn Ctx::check_press_owners(self : Ctx) -> Unit {
-  if fake.val is None || self.press_owners.is_empty() {
+  if fake.val is None {
     return
   }
-  self.press_owners.each(fn(i, o) {
-    let (area, loc) = o
-    if i < 0 || i >= self.count {
-      return
-    }
+  for i in 0..<self.count {
     let n = self.nodes[i]
+    guard n.press_owner is Some((area, loc)) else { continue }
     let mut over = false
     let mut k = self.hit_ids.length() - 1
     while k >= 0 && !over {
@@ -44,5 +41,5 @@ fn Ctx::check_press_owners(self : Ctx) -> Unit {
       println(s)
       abort(s)
     }
-  })
+  }
 }

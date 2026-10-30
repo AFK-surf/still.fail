@@ -381,7 +381,7 @@ fn under_another(c : Ctx, i : Int, x : Double, y : Double) -> Bool {
   let mut up = 0
   while j >= 0 && j < c.count && up < c.count {
     // (it, what holds it, or what takes the presses on either: Ctx::presses_to)
-    if c.nodes[j].id == top || (c.press_owners.get(j) is Some((a, _)) && a == top) {
+    if c.nodes[j].id == top || (c.nodes[j].press_owner is Some((a, _)) && a == top) {
       return false
     }
     j = c.nodes[j].parent
