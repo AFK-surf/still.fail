@@ -144,7 +144,7 @@ The last one lays out a station release in `/tmp/station/stillfail` (the layout 
 
 ## Isolated local development
 
-Install an `iroh-relay` compatible with the project's iroh version. The hosted relay image currently uses 1.1.0 (see `cloud/Dockerfile`); prebuilt binaries are available in the [upstream release](https://github.com/n0-computer/iroh/releases/tag/v1.1.0). Run it locally in its own terminal:
+Install an `iroh-relay` compatible with the project's iroh version. The hosted relays run still.fail's branch of it (see `cloud/Dockerfile`), which speaks the same protocol as upstream 1.1.0; prebuilt binaries are available in the [upstream release](https://github.com/n0-computer/iroh/releases/tag/v1.1.0). Run it locally in its own terminal:
 
 ```sh
 iroh-relay --dev
