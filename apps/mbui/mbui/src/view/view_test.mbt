@@ -564,6 +564,9 @@ test "what a node is made with is its own: an effect made there stopped, its cle
   outside.set(1)
   assert_eq((runs.val, cleanups.val), (2, 1))
   on.set(false)
+  // (nothing let go as it is set: as the frame takes it)
+  assert_eq(cleanups.val, 1)
+  t.frame(390.0, 844.0) |> ignore
   assert_eq(cleanups.val, 2)
   outside.set(2)
   // the one gone runs no more; the sibling still does
@@ -596,6 +599,7 @@ test "the structure's binding running again leaves what it shows be: its effects
   })
   t.frame(390.0, 844.0) |> ignore
   other.set(1)
+  t.frame(390.0, 844.0) |> ignore
   outside.set(1)
   assert_eq(runs.val, 2)
   t.dispose()
@@ -631,4 +635,42 @@ test "a handle on a row let go, its index made again for another: what it sets, 
   assert_false(t.press(x + 1.0, y + 1.0))
   assert_eq(pressed.val, 0)
   assert_false(old.kids().length() > 0)
+}
+
+///|
+test "a binding's reads changed many times between frames: nothing worked out as they are set, once as the frame takes it" {
+  let p = page()
+  p.tree.frame(390.0, 844.0) |> ignore
+  let before = p.tree.work()
+  for i in 0..<10 {
+    p.title.set("第 \{i} 稿")
+  }
+  // (set, nothing run: no binding, no layout)
+  assert_eq(p.tree.work(), before)
+  p.tree.frame(390.0, 844.0) |> ignore
+  let after = p.tree.work()
+  assert_eq(after.bound - before.bound, 1)
+  assert_eq(after.computes - before.computes, 1)
+  assert_true(p.tree.drawn().iter().any(fn(d) { d.words == "第 9 稿" }))
+}
+
+///|
+test "a property bound again: the binding before it let go, what it read no longer followed" {
+  let a = @signals.signal(1L, same=fn(x, y) { x == y })
+  let b = @signals.signal(2L, same=fn(x, y) { x == y })
+  let node : Ref[@view.View?] = Ref(None)
+  let t = @view.Tree::new(fn(root) {
+    node.val = Some(root.box(fn(v) { v.ground(By(fn() { a.get() })) |> ignore }))
+  })
+  t.frame(390.0, 844.0) |> ignore
+  assert_true(a.watched())
+  node.val.unwrap().ground(By(fn() { b.get() })) |> ignore
+  assert_false(a.watched())
+  assert_true(b.watched())
+  t.frame(390.0, 844.0) |> ignore
+  let before = t.work()
+  a.set(5L)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(t.work().bound - before.bound, 0)
+  assert_eq(t.drawn_of(node.val.unwrap().id()).unwrap().ground, 2L)
 }

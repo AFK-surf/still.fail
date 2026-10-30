@@ -1,6 +1,8 @@
 // A view made once (docs/retained.md, the model; the way there's 2). Each node is made when it first shows and stays
-// until what holds it lets it go; what of it changes is a binding of one property, run as what it read changes, and
-// that property alone is set again, and only if it came out otherwise: a layout property marks the node (and what
+// until what holds it lets it go; what of it changes is a binding of one property (one a property: bound again, the
+// one before is let go), marked as what it read changes and worked out again as the next frame begins (Tree::queued:
+// however often it changed meanwhile, once; nothing is laid out or drawn as a value is set), and that property alone
+// is set again, and only if it came out otherwise: a layout property marks the node (and what
 // holds it) to be laid out, a paint property the node's instance to be made again, a place property (how far it is
 // drawn off, how opaque) its instance and those of what it holds. What comes and goes is a node of its own (`show`,
 // `pick`, `each`), whose nodes it makes, keeps and lets go. Acting is a callback run outside any tracking. Time is a
@@ -102,8 +104,10 @@ struct Node {
   /// its scope (what it was made with, and what is set on it, owned), and what stops it
   mut owner : @signals.ReactiveNode?
   mut stop : (() -> Unit)?
-  /// what else goes with it (View::owns), run once as it is let go
+  /// what else goes with it (View::owns, its structure's binding), run once as it is let go
   drops : Array[() -> Unit]
+  /// its properties' bindings, by property: what stops each
+  props : Map[Int, () -> Unit]
   mut on_press : (() -> Unit)?
   /// a slot (show, pick, each): no box of its own, what it holds laid out as its holder's own
   mut slot : Bool
@@ -136,6 +140,8 @@ pub struct Tree {
   /// whether the order is to be made again; whether any of it is (what hosts it told as it first is)
   looks_due : Array[Int]
   places_due : Array[Int]
+  /// the bindings whose reads changed, to run as the frame begins (Tree::queued)
+  bindings_due : Array[() -> Unit]
   mut layout_due : Bool
   mut order_due : Bool
   mut due : Bool
@@ -170,6 +176,7 @@ pub fn Tree::new(make : (View) -> Unit, measure? : (String, Double) -> (Double, 
     free: [],
     looks_due: [],
     places_due: [],
+    bindings_due: [],
     layout_due: true,
     order_due: true,
     due: true,
@@ -247,6 +254,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         owner: None,
         stop: None,
         drops: [],
+        props: {},
         on_press: None,
         slot: false,
         hosted: false,
@@ -479,20 +487,50 @@ fn Tree::order_marked(self : Tree) -> Unit {
 
 ///|
 /// What a property is: what of the node it sets (as its own: a layout property, a paint property, a place property, or
-/// words: layout's and paint's).
-pub(all) enum Phase {
+/// words: layout's and paint's). Each property's own (View::width, View::ground...), not its caller's.
+priv enum Phase {
   Layout
   Paint
   Place
   Both
-} derive(Eq, Debug)
+}
 
 ///|
-/// Property `live` of the node, set by `apply`: once, or as what it reads changes, by a binding of its own, in the
-/// node's scope (tracked as it works the value out, not as it is set); set again only if it came out otherwise than it
-/// last did, marking what its phase does again.
-pub fn[T : Eq] View::bind(self : View, live : Live[T], phase : Phase, apply : (T) -> Unit) -> Unit {
-  guard self.live() is Some(_) else { return }
+/// A binding's work out of `read`, followed: run now, and as what it read changes, marked stale and queued for the
+/// next frame (Tree::frame runs the queue first), however often it changed meanwhile; there it is read anew and its
+/// value handed to `then`. What stops it (it follows nothing, runs no more, and lets go of what it holds).
+fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
+  let queued = Ref(false)
+  // (what it runs, let go as it stops: the watch and what runs it hold each other)
+  let run : Ref[(() -> Unit)?] = Ref(None)
+  let w = @signals.watch(fn() {
+    match run.val {
+      Some(r) if !queued.val => {
+        queued.val = true
+        self.bindings_due.push(r)
+        self.marked()
+      }
+      _ => ()
+    }
+  })
+  run.val = Some(fn() {
+    queued.val = false
+    let v = w.read(read)
+    @signals.untracked(fn() { then(v) })
+  })
+  (run.val.unwrap())()
+  fn() {
+    run.val = None
+    w.stop()
+  }
+}
+
+///|
+/// Property `prop` of the node (its one binding: one bound before is let go), set by `apply`: once, or as what it
+/// reads changes (Tree::queued: as the frame takes it), set again only if it came out otherwise than it last did,
+/// marking what its phase does again.
+fn[T : Eq] View::bind(self : View, prop : Int, live : Live[T], phase : Phase, apply : (T) -> Unit) -> Unit {
+  guard self.live() is Some(n) else { return }
   let tree = self.tree
   let at = self.at
   let marked = fn() {
@@ -506,37 +544,45 @@ pub fn[T : Eq] View::bind(self : View, live : Live[T], phase : Phase, apply : (T
       }
     }
   }
+  match n.props.get(prop) {
+    Some(stop) => {
+      n.props.remove(prop)
+      stop()
+    }
+    None => ()
+  }
   match live {
     Is(v) => {
       apply(v)
       marked()
     }
-    By(f) =>
-      self.owning(fn() {
-        let last : Ref[T?] = Ref(None)
-        @signals.effect(fn() {
-          let v = f()
-          @signals.untracked(fn() {
-            let work = tree.work
-            work.bound = work.bound + 1
-            if last.val == Some(v) {
-              work.same = work.same + 1
-              return
-            }
-            last.val = Some(v)
-            apply(v)
-            marked()
-          })
-        })
-        |> ignore
+    By(f) => {
+      let last : Ref[T?] = Ref(None)
+      let gen = self.gen
+      let stop = tree.queued(f, fn(v) {
+        let n = tree.nodes[at]
+        if !n.live || n.gen != gen {
+          return
+        }
+        let work = tree.work
+        work.bound = work.bound + 1
+        if last.val == Some(v) {
+          work.same = work.same + 1
+          return
+        }
+        last.val = Some(v)
+        apply(v)
+        marked()
       })
+      n.props[prop] = stop
+    }
   }
 }
 
 ///|
 /// Its width (points; None: as its content and its holder make it).
 pub fn View::width(self : View, w : Live[Double?]) -> View {
-  self.bind(w, Layout, fn(w) {
+  self.bind(0, w, Layout, fn(w) {
     self.tree.nodes[self.at].flex.style.set_width(match w {
       Some(w) => Pt(w)
       None => Auto
@@ -548,7 +594,7 @@ pub fn View::width(self : View, w : Live[Double?]) -> View {
 ///|
 /// Its height (points; None: as its content and its holder make it).
 pub fn View::height(self : View, h : Live[Double?]) -> View {
-  self.bind(h, Layout, fn(h) {
+  self.bind(1, h, Layout, fn(h) {
     self.tree.nodes[self.at].flex.style.set_height(match h {
       Some(h) => Pt(h)
       None => Auto
@@ -560,7 +606,7 @@ pub fn View::height(self : View, h : Live[Double?]) -> View {
 ///|
 /// Room inside it, the same on every side.
 pub fn View::pad(self : View, p : Live[Double]) -> View {
-  self.bind(p, Layout, fn(p) {
+  self.bind(2, p, Layout, fn(p) {
     let s = self.tree.nodes[self.at].flex.style
     s.set_padding_left(Pt(p))
     s.set_padding_top(Pt(p))
@@ -573,28 +619,28 @@ pub fn View::pad(self : View, p : Live[Double]) -> View {
 ///|
 /// What it holds laid out across (true) or down.
 pub fn View::row(self : View, across : Live[Bool]) -> View {
-  self.bind(across, Layout, fn(a) { self.tree.nodes[self.at].flex.style.direction = if a { Row } else { Column } })
+  self.bind(3, across, Layout, fn(a) { self.tree.nodes[self.at].flex.style.direction = if a { Row } else { Column } })
   self
 }
 
 ///|
 /// How much of the room left it takes.
 pub fn View::grow(self : View, g : Live[Double]) -> View {
-  self.bind(g, Layout, fn(g) { self.tree.nodes[self.at].flex.style.grow = g })
+  self.bind(4, g, Layout, fn(g) { self.tree.nodes[self.at].flex.style.grow = g })
   self
 }
 
 ///|
 /// Its ground (0: none): paint's.
 pub fn View::ground(self : View, ink : Live[Int64]) -> View {
-  self.bind(ink, Paint, fn(k) { self.tree.nodes[self.at].look.ground = k })
+  self.bind(5, ink, Paint, fn(k) { self.tree.nodes[self.at].look.ground = k })
   self
 }
 
 ///|
 /// How opaque it is drawn, what it holds with it: its place's.
 pub fn View::alpha(self : View, a : Live[Double]) -> View {
-  self.bind(a, Place, fn(a) { self.tree.nodes[self.at].look.alpha = a })
+  self.bind(6, a, Place, fn(a) { self.tree.nodes[self.at].look.alpha = a })
   self
 }
 
@@ -602,7 +648,7 @@ pub fn View::alpha(self : View, a : Live[Double]) -> View {
 /// How far it is drawn off where it is laid out, what it holds with it: its place's (a move on the compositor: never
 /// laid out again).
 pub fn View::offset(self : View, d : Live[(Double, Double)]) -> View {
-  self.bind(d, Place, fn(d) {
+  self.bind(7, d, Place, fn(d) {
     let n = self.tree.nodes[self.at]
     n.look.dx = d.0
     n.look.dy = d.1
@@ -630,7 +676,7 @@ pub fn View::words(self : View, words : Live[String], ink? : Int64 = 0x000000FFL
       _ => (mw, mh)
     }
   })
-  self.bind(words, Both, fn(s) { tree.nodes[at].look.words = s })
+  self.bind(8, words, Both, fn(s) { tree.nodes[at].look.words = s })
   self
 }
 
@@ -666,6 +712,11 @@ fn View::let_go(self : View) -> Unit {
   }
   n.stop = None
   n.owner = None
+  let props = n.props.values().collect()
+  n.props.clear()
+  for stop in props {
+    stop()
+  }
   let drops = n.drops.copy()
   n.drops.clear()
   for f in drops {
@@ -745,26 +796,22 @@ fn View::drop(self : View, v : View) -> Unit {
 pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit) -> Unit {
   let slot = self.slot()
   let had : Ref[View?] = Ref(None)
-  slot.owning(fn() {
-    @signals.effect(fn() {
-      let on = when()
-      @signals.untracked(fn() {
-        match (on, had.val) {
-          (true, None) => {
-            slot.tree.work.structure = slot.tree.work.structure + 1
-            had.val = Some(slot.box(then))
-          }
-          (false, Some(v)) => {
-            slot.tree.work.structure = slot.tree.work.structure + 1
-            slot.drop(v)
-            had.val = None
-          }
-          _ => ()
-        }
-      })
-    })
-    |> ignore
+  let stop = slot.tree.queued(when, fn(on) {
+    guard slot.alive() else { return }
+    match (on, had.val) {
+      (true, None) => {
+        slot.tree.work.structure = slot.tree.work.structure + 1
+        had.val = Some(slot.box(then))
+      }
+      (false, Some(v)) => {
+        slot.tree.work.structure = slot.tree.work.structure + 1
+        slot.drop(v)
+        had.val = None
+      }
+      _ => ()
+    }
   })
+  slot.owns(stop) |> ignore
 }
 
 ///|
@@ -772,26 +819,22 @@ pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit) -> Unit
 pub fn[K : Eq] View::pick(self : View, which : () -> K, make : (View, K) -> Unit) -> Unit {
   let slot = self.slot()
   let had : Ref[(K, View)?] = Ref(None)
-  slot.owning(fn() {
-    @signals.effect(fn() {
-      let k = which()
-      @signals.untracked(fn() {
+  let stop = slot.tree.queued(which, fn(k) {
+    guard slot.alive() else { return }
+    match had.val {
+      Some((was, _)) if was == k => ()
+      _ => {
+        slot.tree.work.structure = slot.tree.work.structure + 1
         match had.val {
-          Some((was, _)) if was == k => ()
-          _ => {
-            slot.tree.work.structure = slot.tree.work.structure + 1
-            match had.val {
-              Some((_, v)) => slot.drop(v)
-              None => ()
-            }
-            let v = slot.box(fn(v) { make(v, k) })
-            had.val = Some((k, v))
-          }
+          Some((_, v)) => slot.drop(v)
+          None => ()
         }
-      })
-    })
-    |> ignore
+        let v = slot.box(fn(v) { make(v, k) })
+        had.val = Some((k, v))
+      }
+    }
   })
+  slot.owns(stop) |> ignore
 }
 
 ///|
@@ -806,55 +849,50 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
 ) -> Unit {
   let slot = self.slot()
   let rows : Map[K, (View, @signals.Signal[T])] = Map([])
-  slot.owning(fn() {
-    @signals.effect(fn() {
-      let all = items()
-      @signals.untracked(fn() {
-        guard slot.live() is Some(sn) else { return }
-        slot.tree.work.structure = slot.tree.work.structure + 1
-        let seen : Map[K, Bool] = Map([])
-        let order : Array[Int] = []
-        @signals.start_batch()
-        for it in all {
-          let k = key(it)
-          seen[k] = true
-          match rows.get(k) {
-            Some((v, item)) => {
-              item.set(it)
-              order.push(v.at)
-            }
-            None => {
-              let item = @signals.signal(it, same=fn(a, b) { a == b })
-              let v = slot.box(fn(v) { row(v, item) })
-              rows[k] = (v, item)
-              order.push(v.at)
-            }
-          }
+  let stop = slot.tree.queued(items, fn(all) {
+    guard slot.live() is Some(sn) else { return }
+    slot.tree.work.structure = slot.tree.work.structure + 1
+    let seen : Map[K, Bool] = Map([])
+    let order : Array[Int] = []
+    @signals.start_batch()
+    for it in all {
+      let k = key(it)
+      seen[k] = true
+      match rows.get(k) {
+        Some((v, item)) => {
+          item.set(it)
+          order.push(v.at)
         }
-        @signals.end_batch()
-        let gone : Array[K] = []
-        for k, r in rows {
-          if !seen.contains(k) {
-            gone.push(k)
-            r.0.let_go()
-          }
+        None => {
+          let item = @signals.signal(it, same=fn(a, b) { a == b })
+          let v = slot.box(fn(v) { row(v, item) })
+          rows[k] = (v, item)
+          order.push(v.at)
         }
-        for k in gone {
-          rows.remove(k)
-        }
-        let kids = sn.kids
-        let moved = order.length() != kids.length() || order.mapi(fn(i, v) { kids[i] != v }).contains(true)
-        if moved {
-          kids.clear()
-          for v in order {
-            kids.push(v)
-          }
-          slot.boxes_again()
-        }
-      })
-    })
-    |> ignore
+      }
+    }
+    @signals.end_batch()
+    let gone : Array[K] = []
+    for k, r in rows {
+      if !seen.contains(k) {
+        gone.push(k)
+        r.0.let_go()
+      }
+    }
+    for k in gone {
+      rows.remove(k)
+    }
+    let kids = sn.kids
+    let moved = order.length() != kids.length() || order.mapi(fn(i, v) { kids[i] != v }).contains(true)
+    if moved {
+      kids.clear()
+      for v in order {
+        kids.push(v)
+      }
+      slot.boxes_again()
+    }
   })
+  slot.owns(stop) |> ignore
 }
 
 ///|
@@ -878,7 +916,14 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double) -> Bool {
   if !self.due {
     return false
   }
-  self.due = false
+  // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own now,
+  // what they set again marks what it marks)
+  let mut i = 0
+  while i < self.bindings_due.length() {
+    (self.bindings_due[i])()
+    i = i + 1
+  }
+  self.bindings_due.clear()
   if self.layout_due {
     self.layout_due = false
     self.work.computes = self.work.computes + 1
@@ -917,6 +962,7 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double) -> Bool {
     self.work.orders = self.work.orders + 1
   }
   self.work.changes = self.work.changes + self.changed.length()
+  self.due = false
   ordered || self.changed.length() > 0
 }
 
