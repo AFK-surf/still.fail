@@ -177,6 +177,8 @@ struct FakeHost {
   mut perf : Int
   perf_sets : Array[Bool]
   perf_lines : Array[String]
+  /// the record's files' bytes (@hostapi.perf_size; Tester::set_perf_size)
+  mut perf_bytes : Double
   /// what a real host said of its views as a run recorded it (Tester::view_said): a video's frames' times, by (view,
   /// what) (view_text), and the frames grabbed, by view, oldest first (view_still)
   view_texts : Map[(Int, Int), String]

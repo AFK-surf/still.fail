@@ -216,3 +216,28 @@ test "更新日志 on a phone: a change's kind on a label before its words, whic
   // the words' second line starts where the label does
   assert_true(labels.any(fn(l) { (rs[1].0 - l.0).abs() < 0.001 }))
 }
+
+///|
+test "关于's 性能记录 turned on stays on: its first line written (the 分享记录 row under it), a while on, the host told once" {
+  for case in page_cases {
+    let (w, platform) = case
+    let t = setting_tester(About, w, platform~)
+    let at = "\{w} platform \{platform}"
+    t.set_perf(0)
+    t.draw()
+    t.scroll_to_end()
+    t.draw()
+    let (x, y, sw, sh) = t.get(Switch, label="性能记录").rect
+    t.touch(0, x + sw / 2.0, y + sh / 2.0)
+    t.draw()
+    t.touch(2, x + sw / 2.0, y + sh / 2.0)
+    t.draw()
+    assert_eq(t.perf_said().0, [true], msg=at)
+    t.set_perf_size(666.0)
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("分享记录") is Some(_), msg=at)
+    assert_true(t.get(Switch, label="性能记录").check is Some(On), msg=at)
+    assert_eq(t.perf_said().0, [true], msg=at)
+    assert_eq(@hostapi.perf_state(), 1, msg=at)
+  }
+}
