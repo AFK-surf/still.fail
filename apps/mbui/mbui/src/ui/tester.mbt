@@ -330,6 +330,7 @@ pub fn Tester::new(
     perf: -1,
     perf_sets: [],
     perf_lines: [],
+    perf_bytes: 0.0,
     view_texts: {},
     view_stills: {},
     view_infos: {},
@@ -1458,6 +1459,12 @@ pub fn Tester::set_keyboard(self : Tester, on : Bool) -> Unit {
 /// kept but off, 1 on.
 pub fn Tester::set_perf(self : Tester, state : Int) -> Unit {
   self.fake.perf = state
+}
+
+///|
+/// How many bytes the performance record's files have from now on (@hostapi.perf_size).
+pub fn Tester::set_perf_size(self : Tester, bytes : Double) -> Unit {
+  self.fake.perf_bytes = bytes
 }
 
 ///|

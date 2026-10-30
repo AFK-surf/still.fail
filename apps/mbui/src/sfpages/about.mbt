@@ -56,12 +56,17 @@ pub fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
     })
   })
   // this device's performance record, last and out of the way (where the device keeps one: iOS)
-  let perf = @hostapi.perf_state()
-  if perf >= 0 {
+  if @hostapi.perf_state() >= 0 {
     blocks.push(fn() {
       @sf.section(c, heads=false, @sf.t("web-pages.about.diagnostics"), fn() {
-        @sf.group(c, card=true, fn() {
-          let on = perf == 1
+        // (a list's group, as 版本's: its 分享记录 a row of it, its ground round within the group's corners; a card's
+        // held a row's ground round as a list's in its 20 of room, 2026-10-30)
+        @sf.group(c, fn() {
+          // (read as the row is built, not as the page was: the row is built again alone, its switch's knob sliding,
+          // and one that read the page's said off again while on, 2026-10-30 「开关又被推回去」; perf_turned, no signal
+          // of the host's, builds it again as it is turned, its 分享记录 shown)
+          perf_turned.get() |> ignore
+          let on = @hostapi.perf_state() == 1
           let now = @sf.switch_row(c, "about/perf",
             @sf.t("web-pages.about.perf.title"),
             on,
@@ -69,6 +74,7 @@ pub fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
           )
           if now != on {
             @hostapi.set_perf(now)
+            perf_turned.set(perf_turned.get() + 1)
           }
           // (handed on through the system's share sheet: a release build's files are nowhere a person can take them from,
           // the Files app shows none of the app's and only a build signed for development can be copied off with Xcode)
@@ -82,6 +88,12 @@ pub fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   }
   @sf.page(c, on_back=core.pop, frame~, "about", @sf.t("web-pages.settings.nav.about"), blocks)
 }
+
+///|
+/// How many times 性能记录 was turned here: what its row reads, so it is built again as it is (the host's state is no
+/// signal).
+// kept across runs: only counts on
+let perf_turned : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// This build and the way to a newer one, a row each on every screen. Its name and version, words of a length known,
