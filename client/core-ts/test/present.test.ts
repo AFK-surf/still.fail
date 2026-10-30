@@ -158,6 +158,13 @@ test("a_session_stands_where_its_process_and_last_turn_say", () => {
   let watching: J = { process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5, waitSeconds: 600 }, watch: { names: ["盯 CI"], since: 1, at: 5 } };
   watching = p.session(watching);
   assert.deepEqual([watching.statusText, watching.mark], ["监控中", null]);
+  // Waiting on something else while a watch runs: what it waits on, at work, not the watch over it.
+  let other: J = { process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5, waitSeconds: 600, waitFor: "读中继的日志", waitWatch: false }, watch: { names: ["盯 CI"], since: 1, at: 5 } };
+  other = p.session(other);
+  assert.deepEqual([other.statusText, other.statusLead, other.mark], ["等待：读中继的日志", "wait", "run"]);
+  let saidWatch: J = { process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5, waitSeconds: 600, waitFor: "盯 CI", waitWatch: true }, watch: { names: ["盯 CI"], since: 1, at: 5 } };
+  saidWatch = p.session(saidWatch);
+  assert.deepEqual([saidWatch.statusText, saidWatch.statusLead, saidWatch.mark], ["监控中", "watch", null]);
   let plain: J = structuredClone(waits);
   plain = p.session(plain);
   assert.equal(plain.statusText, "等待中");
