@@ -794,7 +794,7 @@ export const pasteCardActions = style({ display: "flex", gap: "2px", flex: "none
 globalStyle(`${composerFiles} :is(${composerThumb}, ${fileCard})`, {
   borderRadius: COMPOSER_INNER, cornerShape: vars.cornerShape,
 });
-globalStyle(`${composerFiles} ${fileCard}`, { boxSizing: "border-box", width: "236px", height: "64px", alignItems: "center", padding: "0 20px" });
+globalStyle(`${composerFiles} ${fileCard}`, { boxSizing: "border-box", width: "236px", height: "64px", alignItems: "center", padding: "0 14px 0 20px" });
 // Off the composer's frosted ground: a file to send stands on the page's own (a step up in the dark); one named by its
 // path, which stays where it is, is only outlined, dashed.
 // A quote (a mark, a note) waiting there stands on the same ground.
