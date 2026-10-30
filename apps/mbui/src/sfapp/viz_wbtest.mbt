@@ -71,13 +71,12 @@ test "a placed HTML file is drawn in its message, 120 high, covered until it has
   // what it says of its height: taken, however tall (a long post's last part not cut off), and the page shown (heard
   // as a frame is painted: the next one has it)
   t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":231.4}")
-  t.frame()
-  t.frame()
+  // (there on a move from the height it had, as what is over and under it goes with it: rows_steady.mbt)
+  t.run_for(@ui.move_most_ms)
   let (_, _, _, h2) = view_rect(t, page).unwrap()
   assert_eq(h2, 232.0)
   t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")
-  t.frame()
-  t.frame()
+  t.run_for(@ui.move_most_ms)
   assert_eq(view_rect(t, page).unwrap().3, 5000.0)
   // what is not a message of the bridge's is let go
   t.view_says(page, "not json")
@@ -95,16 +94,14 @@ test "a page that grows a little with each height it is given (100vh) is held wh
   for i in 1..=100 {
     t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":\{300 + i * 10}}")
   }
-  t.frame()
-  t.frame()
+  t.run_for(@ui.move_most_ms)
   // 60 times running it followed, then held
   assert_eq(view_rect(t, page).unwrap().3, 900.0)
   t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":2000}")
   t.frame()
   assert_eq(view_rect(t, page).unwrap().3, 900.0)
   t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":400}")
-  t.frame()
-  t.frame()
+  t.run_for(@ui.move_most_ms)
   assert_eq(view_rect(t, page).unwrap().3, 400.0)
 }
 
@@ -369,8 +366,7 @@ test "a page that said its height stays covered till its host has drawn it (its 
   assert_true(view_covered(t, page))
   // its height said (its page loaded): still covered, the host not done drawing it
   t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":231.4}")
-  t.frame()
-  t.frame()
+  t.run_for(@ui.move_most_ms)
   assert_eq(view_rect(t, page).unwrap().3, 232.0)
   assert_true(view_covered(t, page))
   // drawn: brought in, as an image is (viz_reveal), then shown as it is
