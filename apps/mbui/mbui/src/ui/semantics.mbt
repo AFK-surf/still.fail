@@ -266,26 +266,10 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
       }
     }
   }
-  // a list's rows kept (kept_rows.mbt): what one built this frame says is taken for it (its node, its RowKept, the
-  // depth what holds it is at), what one drawn again said is said again where it is now; by node, the row built it is
-  // in (an index of `rows`, -1 none), and by what is said, the row it was said in
-  let rows : Array[(Int, RowKept, Int)] = []
-  let in_row = Array::make(count, -1)
-  let out_row : Array[Int] = []
-  // the parts kept and read out (kept_part.mbt's `read_out`, a panel in use) the same way: what one built this frame
-  // says is taken for it, what one drawn again said is said again; by node, the part built it is in (an index of
-  // `parts`), by what is said the same, and of each part the part built it is in
-  let parts : Array[(Int, KeptPart, Int)] = []
-  let part_up : Array[Int] = []
-  let in_part = Array::make(count, -1)
-  let out_part : Array[Int] = []
   for i in self.tree_order() {
     let n = self.nodes[i]
     let p = n.parent
     let parent_out = if p >= 0 { up[p] } else { -1 }
-    in_row[i] = if p >= 0 { in_row[p] } else { -1 }
-    in_part[i] = if p >= 0 { in_part[p] } else { -1 }
-    let said_before = out.length()
     // (a part its row left out, Ctx::box `drop`: laid out nowhere, not read out either)
     let left = p >= 0 && n.fl.left_out() && self.nodes[p].fl.style.fits
     // (and what a page's bones are made of, wherever it was built: bones.mbt)
@@ -415,113 +399,8 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
         depth,
       })
     }
-    if out.length() > said_before {
-      out_row.push(in_row[i])
-    }
-    if n.item >= 0 {
-      self.row_read_out(i, out, out_row, rows, in_row, up[i], hid[i] || !in_modal[i])
-    } else {
-      self.part_read_out(i, out, out_row, parts, part_up, in_part, up[i], hid[i] || !in_modal[i])
-    }
-    while out_part.length() < out.length() {
-      out_part.push(in_part[i])
-    }
   }
-  rows_read_out_taken(self, out, out_row, rows)
-  parts_read_out_taken(self, out, out_part, parts, part_up)
   out
-}
-
-///|
-/// Node `i`, a part's box read out (kept_part.mbt's `read_out`): one built this frame starts taking what it says
-/// (`parts`, `in_part`; the part it is in, `part_up`); one drawn again says again what it said as it was built, where it
-/// is now, under `outer`, hidden where it is now (`hidden`) or was. One whose build was not read out says nothing again:
-/// it is built anew while anything reads them (Ctx::kept_part).
-fn Ctx::part_read_out(
-  self : Ctx,
-  i : Int,
-  out : Array[SemNode],
-  out_row : Array[Int],
-  parts : Array[(Int, KeptPart, Int)],
-  part_up : Array[Int],
-  in_part : Array[Int],
-  outer : Int,
-  hidden : Bool,
-) -> Unit {
-  guard self.drawn_entry(i) is Some(e) else { return }
-  let depth = if outer >= 0 { out[outer].depth } else { -1 }
-  match e.again {
-    Some({ row: None, .. } as st) if st.read && st.read_out => {
-      let n = self.nodes[i]
-      let base = out.length()
-      for s in st.sems {
-        let (x, y, w, h) = s.rect
-        out.push({
-          ..s,
-          rect: (n.x + x, n.y + y, w, h),
-          focused: s.id != 0 && s.id == self.focus,
-          hidden: s.hidden || hidden,
-          parent: if s.parent < 0 { outer } else { base + s.parent },
-          depth: depth + 1 + s.depth,
-        })
-        out_row.push(-1)
-      }
-    }
-    None if e.part != 0 =>
-      match kept_parts.get(e.part) {
-        Some(st) if st.read => {
-          part_up.push(in_part[i])
-          parts.push((i, st, depth))
-          in_part[i] = parts.length() - 1
-        }
-        _ => ()
-      }
-    _ => ()
-  }
-}
-
-///|
-/// What each part read out built this frame said (`parts`), taken for it, as a row's is (rows_read_out_taken): what was
-/// said in it, or in a part built in it, where from its node, under what among its own (-1: what holds it), how deep
-/// below what holds it.
-fn parts_read_out_taken(
-  c : Ctx,
-  out : Array[SemNode],
-  out_part : Array[Int],
-  parts : Array[(Int, KeptPart, Int)],
-  part_up : Array[Int],
-) -> Unit {
-  if parts.is_empty() {
-    return
-  }
-  let own = Array::make(out.length(), -1)
-  for r, part in parts {
-    let (node, st, depth) = part
-    let n = c.nodes[node]
-    let within = fn(o : Int) {
-      let mut q = out_part[o]
-      while q >= 0 && q != r {
-        q = part_up[q]
-      }
-      q == r
-    }
-    st.sems.clear()
-    for o in 0..<out.length() {
-      if !within(o) {
-        continue
-      }
-      let s = out[o]
-      let (x, y, w, h) = s.rect
-      own[o] = st.sems.length()
-      st.sems.push({
-        ..s,
-        rect: (x - n.x, y - n.y, w, h),
-        parent: if s.parent >= 0 && within(s.parent) { own[s.parent] } else { -1 },
-        depth: s.depth - depth - 1,
-      })
-    }
-    st.read_out = true
-  }
 }
 
 ///|
@@ -550,128 +429,6 @@ fn Ctx::tree_order(self : Ctx) -> Array[Int] {
     }
   }
   order
-}
-
-///|
-/// Node `i`, a list's row: one built this frame, kept, starts taking what it says (`rows`, `in_row`); one drawn again
-/// says again what it said as it was built, where it is now, under `outer` (what holds it in `out`), hidden where it is
-/// now (`hidden`) or was. One whose build was not read out (nothing read the widgets then) says nothing again: it is
-/// built anew while anything reads them (kept_rows.mbt's row_of).
-fn Ctx::row_read_out(
-  self : Ctx,
-  i : Int,
-  out : Array[SemNode],
-  out_row : Array[Int],
-  rows : Array[(Int, RowKept, Int)],
-  in_row : Array[Int],
-  outer : Int,
-  hidden : Bool,
-) -> Unit {
-  guard self.drawn_entry(i) is Some(e) else { return }
-  let depth = if outer >= 0 { out[outer].depth } else { -1 }
-  match e.again {
-    Some(kp) =>
-      match kp.row {
-        Some(rk) if rk.read_out => {
-          let n = self.nodes[i]
-          let base = out.length()
-          for s in rk.sems {
-            let (x, y, w, h) = s.rect
-            out.push({
-              ..s,
-              rect: (n.x + x, n.y + y, w, h),
-              focused: s.id != 0 && s.id == self.focus,
-              hidden: s.hidden || hidden,
-              parent: if s.parent < 0 { outer } else { base + s.parent },
-              depth: depth + 1 + s.depth,
-            })
-            out_row.push(-1)
-          }
-        }
-        _ => ()
-      }
-    None =>
-      if e.row > 0 {
-        match kept_rows.get(e.row) {
-          Some(kp) =>
-            match kp.row {
-              Some(rk) => {
-                rows.push((i, rk, depth))
-                in_row[i] = rows.length() - 1
-              }
-              _ => ()
-            }
-          None => ()
-        }
-      }
-  }
-}
-
-///|
-/// Node `i`, a list's row drawn again whose build was read out: what it keeps of that (RowKept's `sems`, `read_words`,
-/// `read_own`).
-fn Ctx::row_said(self : Ctx, i : Int) -> RowKept? {
-  if self.nodes[i].item < 0 {
-    return None
-  }
-  match self.drawn_entry(i) {
-    Some({ again: Some(kp), .. }) =>
-      match kp.row {
-        Some(rk) if rk.read_out => Some(rk)
-        _ => None
-      }
-    _ => None
-  }
-}
-
-///|
-/// `words` after what `sb` holds, a space between.
-fn words_after(sb : StringBuilder, words : String) -> Unit {
-  if words == "" {
-    return
-  }
-  if sb.to_string().length() > 0 {
-    sb.write_char(' ')
-  }
-  sb.write_string(words)
-}
-
-///|
-/// What each row built this frame said (`rows`), taken for it: where, from its node; under what, among its own (-1:
-/// what holds it); how deep, below what holds it.
-fn rows_read_out_taken(
-  c : Ctx,
-  out : Array[SemNode],
-  out_row : Array[Int],
-  rows : Array[(Int, RowKept, Int)],
-) -> Unit {
-  if rows.is_empty() {
-    return
-  }
-  // (by what is said: its index among its row's own)
-  let own = Array::make(out.length(), -1)
-  for r, row in rows {
-    let (node, rk, depth) = row
-    let n = c.nodes[node]
-    rk.read_words = c.words_in(node)
-    rk.read_own = c.own_words(node)
-    rk.sems.clear()
-    for o in 0..<out.length() {
-      if out_row[o] != r {
-        continue
-      }
-      let s = out[o]
-      let (x, y, w, h) = s.rect
-      own[o] = rk.sems.length()
-      rk.sems.push({
-        ..s,
-        rect: (x - n.x, y - n.y, w, h),
-        parent: if s.parent >= 0 && out_row[s.parent] == r { own[s.parent] } else { -1 },
-        depth: s.depth - depth - 1,
-      })
-    }
-    rk.read_out = true
-  }
 }
 
 ///|
@@ -708,14 +465,6 @@ fn Ctx::collect_own_words(self : Ctx, i : Int, sb : StringBuilder) -> Unit {
       sb.write_char(' ')
     }
     sb.write_string(n.text)
-  }
-  // (a list's row drawn again: what its build held, as it was taken)
-  match self.row_said(i) {
-    Some(rk) => {
-      words_after(sb, rk.read_own)
-      return
-    }
-    None => ()
   }
   let mut ch = n.first
   while ch >= 0 {
@@ -765,14 +514,6 @@ fn Ctx::collect_words(self : Ctx, i : Int, sb : StringBuilder) -> Unit {
       sb.write_char(' ')
     }
     sb.write_string(n.text)
-  }
-  // (a list's row drawn again: what its build held, as it was taken)
-  match self.row_said(i) {
-    Some(rk) => {
-      words_after(sb, rk.read_words)
-      return
-    }
-    None => ()
   }
   let mut ch = n.first
   while ch >= 0 {

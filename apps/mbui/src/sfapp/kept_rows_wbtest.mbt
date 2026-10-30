@@ -1,4 +1,4 @@
-// A chat's messages kept as they were drawn as they scroll (mbui's kept_rows.mbt): what is drawn at each moment is
+// A chat's messages kept as they were drawn as they scroll (mbui's kept_nodes.mbt): what is drawn at each moment is
 // what building every row draws, on 小屏 and on 中屏's tape.
 
 ///|

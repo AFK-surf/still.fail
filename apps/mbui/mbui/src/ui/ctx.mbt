@@ -130,9 +130,6 @@ struct ListState {
   // the layer it was built in (Ctx::overlay, 0 the page): its rows, built as it is laid out, are of it as what is built
   // beside the list is (the keys they read, the focus they take)
   mut layer : Int
-  // the part kept it was built in (Ctx::kept_part, 0 none): what its rows, built as it is laid out, ask of time is
-  // the part's
-  mut part : Int
   /// what changed its rows' heights (Ctx::row_size): what each row built said last, by the row's place, and each
   /// row's way from the height it had to the one it is laid out at, by the row's key (list_size.mbt)
   mut causes : RowCauses?

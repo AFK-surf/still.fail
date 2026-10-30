@@ -1112,11 +1112,6 @@ fn Ctx::replace(self : Ctx, i : Int, px : Double, py : Double) -> Unit {
 /// moved or changed size), is put where it now goes instead: every slot in
 /// use is placed every frame, so what it holds was placed as it is.
 fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit {
-  // (a part drawn again: what the rows of its lists said, said where it is laid out, laid out again or not:
-  // kept_part.mbt)
-  if !parts_laid_again.is_empty() {
-    self.parts_rows_laid(i)
-  }
   let n = self.nodes[i]
   let f = n.fl
   if n.same && f.laid_out_at() != gen {

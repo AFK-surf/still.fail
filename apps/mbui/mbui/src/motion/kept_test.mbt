@@ -1,5 +1,5 @@
 // A list's rows moving on their springs as its rows change (layout, list_keys), kept as they were drawn while nothing
-// changes (mbui's kept_rows.mbt): what a row's build said is seen while it is drawn again, so a row put above them
+// changes (mbui's kept_nodes.mbt): what a row's build said is seen while it is drawn again, so a row put above them
 // moves them from where they were drawn, as when every row is built every frame.
 
 ///|

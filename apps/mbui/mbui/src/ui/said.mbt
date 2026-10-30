@@ -6,23 +6,20 @@
 // does besides, whether it asks for a menu: Node's `marks`, carried by its targets, hit_marks; how it takes the
 // focus: Node's `focus`).
 //
-// A part kept or a list's row kept (kept_part.mbt, kept_rows.mbt) takes from each list what its build and its paint
-// added, from where the list stood as they began, and says it again, moved to where it is drawn now, each frame it is
-// drawn again: all of what it said by one rule, none of it kept list by list by hand. A list the frame's builds or its
-// paint add to is said again with the rest by being one of `build_lists` or `paint_lists`, and only so. A list's rows
-// say what their builds said in their order, built or drawn again (Ctx::rows_placed), and a part drawn again what the
-// rows it holds said, where they said it (as its box is laid out). What a row's paint said is put in its list's clip by
-// the same rule as it is said (Moved), recorded or said again alike: what a row drawn again says is what its build says
-// there. (Zed's GPUI keeps a frame's hitboxes, listeners, focus and the rest in its Frame, and a cached view's range of
-// each given again: `reuse_prepaint`, `reuse_paint`.)
+// A list's row kept as its nodes (kept_nodes.mbt) takes from each list what its build and its paint added, from
+// where the list stood as they began, and says it again, moved to where it is put back, each frame it is kept: all of
+// what it said by one rule, none of it kept list by list by hand. A list the frame's builds or its paint add to is said
+// again with the rest by being one of `build_lists` or `paint_lists`, and only so. What a row's paint said is put in
+// its list's clip by the same rule as it is said (Moved). (Zed's GPUI keeps a frame's hitboxes, listeners, focus and
+// the rest in its Frame, and a cached view's range of each given again: `reuse_prepaint`, `reuse_paint`.)
 
 ///|
 /// Where what a part's or a row's paint said is said again: `dx` across and `dy` down the window from where it was said,
 /// put in the clip it is drawn in (`cut`, its place in clip_stack: a row's list's, a part's), what of a clip was its
-/// recording's band (its own clip as recorded, band_l to band_r across and band_t to band_b down: kept_rows.mbt,
-/// kept_part.mbt) left as far off as nothing cuts. `cut` -1: as it was said. What its build said of a node, said of
-/// `node` (its box's now: what it built is not built; -1, as it was said), or of the node `by` on from it (a list's row
-/// kept as its nodes, put back elsewhere among the frame's: kept_nodes.mbt).
+/// recording's band (its own clip as recorded, band_l to band_r across and band_t to band_b down) left as far off as
+/// nothing cuts. `cut` -1: as it was said. What its build said of a node, said of `node` (its box's now: what it built
+/// is not built; -1, as it was said), or of the node `by` on from it (a list's row kept as its nodes, put back
+/// elsewhere among the frame's: kept_nodes.mbt).
 priv struct Moved {
   dx : Double
   dy : Double

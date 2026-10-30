@@ -1,4 +1,4 @@
-// Every kind of message the fixtures hold, with its rows kept (mbui's kept_rows.mbt): left still, what goes on in them
+// Every kind of message the fixtures hold, with its rows kept (mbui's kept_nodes.mbt): left still, what goes on in them
 // as time goes (a ring stepping round an agent at work, a spinner under a message waiting, a clock's seconds, words
 // coming after a moment), and scrolled, what comes into view and what reads the layout (a table's width, a picture's,
 // the list's end for the way to the newest), drawn at each moment as building every row draws it.

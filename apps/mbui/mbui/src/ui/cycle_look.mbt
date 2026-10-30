@@ -7,12 +7,11 @@
 // its whole sidebar, 10 ms each.)
 //
 // What its node draws is tagged as it is painted (instance slot 20, the picture's: none for what it tags, rects,
-// glyphs, shadows, lines and shapes), and the tag goes wherever the instances go: into a part's or a row's recording,
-// drawn again, moved, put in a clip, put over everything. As the frame's paint ends, each tagged instance takes the
-// look its cycle gives now, its tag let go: its opacity times the look's, scaled and turned about the middle of what
-// the node drew (all its instances' rects together, as it is drawn there), moved by the look's offset. A recording
-// keeps the cycles of the tags it holds (KeptPart's `cycles`), so a look drawn again goes on from the cycle its build
-// said. Pictures, glass and native views in it are drawn as they are.
+// glyphs, shadows, lines and shapes), and the tag goes wherever the instances go: moved, put in a clip, put over
+// everything. As the frame's paint ends, each tagged instance takes the look its cycle gives now, its tag let go: its
+// opacity times the look's, scaled and turned about the middle of what the node drew (all its instances' rects
+// together, as it is drawn there), moved by the look's offset. Pictures, glass and native views in it are drawn as
+// they are.
 // A frame where nothing but these looks changed is of them alone: the last frame's instances, each look applied at its
 // time, nothing built, laid out or painted (frame_watch.mbt).
 

@@ -224,54 +224,13 @@ fn Ctx::floating_found(self : Ctx) -> Unit {
 ///|
 /// How much of the top and of the foot of what scrolls, `n`, in (x0 y0 x1 y1) what floats over it takes
 /// (Ctx::floats_over; not what it holds itself, which scrolls with it), with scroll_bar_clear more each, and the
-/// system's bars over the window's edges (the status bar, the navigation bar): 0 where nothing does. In a part kept
-/// being painted, what of it comes from outside the part (the system's bars, what floats from elsewhere: where the
-/// part shows among them) is read so, for the part, and read again where it is drawn again (Ctx::parts_placed).
+/// system's bars over the window's edges (the status bar, the navigation bar): 0 where nothing does.
 fn Ctx::floated(self : Ctx, n : Node, x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> (Double, Double) {
-  let part = part_now.painting_node
-  let (out_top, out_foot) = self.floats_round(x0, y0, x1, y1, part, Some(n))
-  let mut top = out_top
-  let mut foot = out_foot
-  if part >= 0 {
-    // (what floats over it within the part, which moves with it)
-    for i in self.floating {
-      if self.under(i, part) {
-        let (t, f) = self.float_takes(i, x0, y0, x1, y1, Some(n))
-        top = dmax(top, t)
-        foot = dmax(foot, f)
-      }
-    }
-    match kept_parts.get(part_now.painting) {
-      Some(st) => {
-        let b = self.nodes[part]
-        st.floats_read.push((x0 - b.x, y0 - b.y, x1 - b.x, y1 - b.y, out_top, out_foot))
-      }
-      None => ()
-    }
-  }
-  (top, foot)
-}
-
-///|
-/// Of what floats over (x0 y0 x1 y1) (Ctx::floated): what the system's bars take, and what floats from outside node
-/// `part` (-1: all of it) takes, at the top and at the foot.
-fn Ctx::floats_round(
-  self : Ctx,
-  x0 : Double,
-  y0 : Double,
-  x1 : Double,
-  y1 : Double,
-  part : Int,
-  n : Node?,
-) -> (Double, Double) {
   let bars = system_bars()
   let mut top = dmax(0.0, bars.top - y0)
   let mut foot = dmax(0.0, y1 - (self.height - bars.bottom))
   for i in self.floating {
-    if part >= 0 && self.under(i, part) {
-      continue
-    }
-    let (t, f) = self.float_takes(i, x0, y0, x1, y1, n)
+    let (t, f) = self.float_takes(i, x0, y0, x1, y1, Some(n))
     top = dmax(top, t)
     foot = dmax(foot, f)
   }
