@@ -106,7 +106,7 @@ function NewChatOn({ choice, view, stations, pick, create }: {
     // Its words stay where they were in the composer until the chat's page takes them (../madeChat.ts).
     const host = scene.current?.closest<HTMLElement>(`.${hostCss.mChatHost}`);
     const field = host?.querySelector<HTMLElement>(`[data-made-composer] textarea:not([aria-hidden])`);
-    if (host && field) sendingFirst(field, draft.text, host, "7");
+    if (host && field) sendingFirst(field, draft.text, host, "7", host);
     void sendDraft(draft, null, ensureChat).then((to) => {
       if (to === null || opened.current) { notSent(); return; }
       opened.current = true;

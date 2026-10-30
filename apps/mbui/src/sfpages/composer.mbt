@@ -349,7 +349,14 @@ pub fn composer(
         c.box(style=tools_row(), fn() {
           plus = attach(c, src, spec, w, no_files)
           match (spec.toolbar, composing.toolbar_leaving) {
-            (Some(f), _) => chosen = c.box(style=choices, f)
+            (Some(f), _) => {
+              chosen = c.box(style=choices, f)
+              // a new chat's, its first words sent: fading as its other parts by the composer do
+              let (_, gone) = @sfbase.new_sending(c)
+              if gone > 0.0 {
+                c.look(chosen, @ui.look(alpha=1.0 - gone))
+              }
+            }
             (None, Some(f)) => {
               chosen = c.box(style=choices, fn() { c.hidden_from_semantics(f) })
               c.look(chosen, @ui.look(alpha=1.0 - fade.get()))

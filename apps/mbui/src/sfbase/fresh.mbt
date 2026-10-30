@@ -11,6 +11,8 @@ pub(all) struct FreshChat {
   sent : @signals.Signal[Bool]
   /// a message on its way (the create and the send)
   starting : @signals.Signal[Bool]
+  /// its first words sent from the page (its scene leaving from then: new_sending; back again if they were not taken)
+  sending : @signals.Signal[Bool]
   /// the chat it became (its scene leaving over it: new_leave)
   became : @signals.Signal[ChatRef?]
   /// the scene's look as it left: the view it showed; in the wide frame, how tall its composer's place was (what the
@@ -25,6 +27,7 @@ pub let fresh : FreshChat = {
   made_sig: @signals.signal("", same=fn(a, b) { a == b }),
   sent: @signals.signal(false, same=fn(a, b) { a == b }),
   starting: @signals.signal(false, same=fn(a, b) { a == b }),
+  sending: @signals.signal(false, same=fn(a, b) { a == b }),
   became: @signals.signal(None),
   scene: @signals.signal(None),
   room: @signals.signal(0.0, same=fn(a, b) { a == b }),
@@ -37,6 +40,7 @@ pub fn fresh_reset() -> Unit {
   fresh.made_sig.set("")
   fresh.sent.set(false)
   fresh.starting.set(false)
+  fresh.sending.set(false)
   fresh.became.set(None)
   fresh.scene.set(None)
   fresh.room.set(0.0)
@@ -61,8 +65,9 @@ pub fn new_fade(c : @ui.Ctx) -> @motion.Anim {
 }
 
 ///|
-/// The new chat became the chat: its scene leaves, from now (the web's both on its EASE, madeChat.ts toMadeChat; on a
-/// phone its choices fade as Android's LeaveFade).
+/// The new chat's first words sent, or the new chat left for a chat: its scene leaves, from now, and its choices fade
+/// (on a phone as Android's LeaveFade): as the words are taken off its composer, not once the core has made the chat
+/// and taken them in, which the page then becomes, going on as they went (new_chat_leaving_of).
 pub fn became_starts(wide~ : Bool) -> Unit {
   let c = @ui.current()
   let leave = new_leave(c)
@@ -71,6 +76,26 @@ pub fn became_starts(wide~ : Bool) -> Unit {
   let fade = new_fade(c)
   fade.snap(0.0)
   fade.animate(1.0, @motion.tween(new_fade_ms, ease=Leave))
+}
+
+///|
+/// The new chat's first words not sent after all (the chat not made, or the message refused): its scene and choices
+/// back as they were, from where they had gone.
+pub fn leaving_back() -> Unit {
+  let c = @ui.current()
+  new_leave(c).animate(0.0, @motion.tween(new_leave_ms, ease=Out))
+  new_fade(c).animate(0.0, @motion.tween(new_fade_ms, ease=Out))
+}
+
+///|
+/// How far the new chat's scene and its choices have gone (0 … 1 each) while it is still the new chat: from its first
+/// words sent, before the chat is made (none once it has become the chat: the frame draws it leaving over the chat).
+pub fn new_sending(c : @ui.Ctx) -> (Double, Double) {
+  if fresh.sending.get() && fresh.became.get() is None {
+    (new_leave(c).get(), new_fade(c).get())
+  } else {
+    (0.0, 0.0)
+  }
 }
 
 ///|

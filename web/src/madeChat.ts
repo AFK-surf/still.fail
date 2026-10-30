@@ -41,15 +41,16 @@ interface Picture {
   ground?: string;
 }
 /** A first message on its way: the words sent, where they were, until the chat's page takes them. */
-interface Sending { field: HTMLElement; from: Typed; top: number; stand: HTMLElement | null; pictures: Picture[]; release?: (() => void) | undefined }
+interface Sending { field: HTMLElement; from: Typed; top: number; stand: HTMLElement | null; pictures: Picture[]; leaves: Map<HTMLElement, Animation>; release?: (() => void) | undefined }
 let sending: Sending | null = null;
 
 /**
  * The first message of a new chat is sent from `field` (a composer's text box, still showing `text`), which lies over
  * `layer` (where a stand-in for the words is drawn, at `z`): its words stay where they were, and its hint is gone,
- * until the chat's page takes them (`toMadeChat`) or the chat could not be made (`notSent`).
+ * until the chat's page takes them (`toMadeChat`) or the chat could not be made (`notSent`). What `scope` marks
+ * `data-made-leave` leaves from now, not once the chat is made (`toMadeChat` goes on with it; `notSent` brings it back).
  */
-export function sendingFirst(field: HTMLElement, text: string, layer: HTMLElement, z: string): void {
+export function sendingFirst(field: HTMLElement, text: string, layer: HTMLElement, z: string, scope: ParentNode = document): void {
   notSent();
   // The PC dock holds its geometry while clearing the draft and waiting for the destination page.
   const hold = new CustomEvent<{ release?: () => void }>("hold-first-composer", { bubbles: true, detail: {} });
@@ -58,7 +59,9 @@ export function sendingFirst(field: HTMLElement, text: string, layer: HTMLElemen
   // What follows the message comes out of the composer's top edge, as it was when sent.
   const composer = field.closest("[data-made-composer]") ?? field;
   const pictures = picturesIn(composer, layer, z);
-  sending = { field, from: textAt(field), top: composer.getBoundingClientRect().top, stand, pictures, release: hold.detail.release };
+  const leaves = new Map<HTMLElement, Animation>();
+  for (const el of scope.querySelectorAll<HTMLElement>("[data-made-leave]")) leaves.set(el, leave(el));
+  sending = { field, from: textAt(field), top: composer.getBoundingClientRect().top, stand, pictures, leaves, release: hold.detail.release };
   field.dataset.madeField = "";
   field.dataset.madeHint = "hidden";
 }
@@ -129,9 +132,18 @@ function standIn(field: HTMLElement, text: string, layer: HTMLElement, z: string
   return stand;
 }
 
-/** The first message did not go (no chat could be made): the composer is as it was. */
+/** What leaves as the new chat becomes its chat (`data-made-leave`), fading where it is: "up", the scene, 140 ms; "fade", what is by the composer, 80 ms. */
+function leave(el: HTMLElement): Animation {
+  return play(el, [{ opacity: 1 }, { opacity: 0 }], { duration: el.dataset.madeLeave === "up" ? 140 : 80, easing: EASE, fill: "forwards" });
+}
+
+/** The first message did not go (no chat could be made): the composer is as it was, and what had begun to leave is back. */
 export function notSent(): void {
   if (!sending) return;
+  for (const a of sending.leaves.values()) {
+    a.reverse();
+    void a.finished.then(() => a.cancel(), () => {});
+  }
   sending.release?.();
   sending.stand?.remove();
   for (const picture of sending.pictures) picture.stand.remove();
@@ -142,7 +154,7 @@ export function notSent(): void {
 
 /**
  * The new chat becomes its chat (`go`, rendered at once). What leaves is what `scope` marks `data-made-leave`, fading
- * where it is ("up": the scene, 140 ms; "fade": what is by the composer, 80 ms). The chat's page is waited for (a little) until it shows its first message
+ * where it is (`leave`), on from where it had gone since the words were sent. The chat's page is waited for (a little) until it shows its first message
  * of its own; then the words sent (`sendingFirst`) go there, drawn in `layer` at `z` (over the composer), and the rest
  * of its `list` comes up after them, `wait` ms after what leaves has begun to (a composer that stays put, with the
  * choices by it: they are gone first; one that moves away takes the words with it at once).
@@ -155,7 +167,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
   const root = document.documentElement;
   // Keep only the departing scene. Capturing the whole document with startViewTransition freezes painting
   // while the chat mounts, and turns its layout work into a visible pause before any of the flight can move.
-  const leaving: { el: HTMLElement; original: HTMLElement; visibility: string; up: boolean }[] = [];
+  const leaving: { el: HTMLElement; original: HTMLElement; visibility: string; gone: Animation | undefined }[] = [];
   const scene = layer();
   if (scene) {
     const base = scene.getBoundingClientRect();
@@ -171,7 +183,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
         font: style.font, color: style.color, textAlign: style.textAlign,
       });
       scene.append(copy);
-      leaving.push({ el: copy, original: el, visibility: el.style.visibility, up: el.dataset.madeLeave === "up" });
+      leaving.push({ el: copy, original: el, visibility: el.style.visibility, gone: now?.leaves.get(el) });
       // React can keep the old page while its next topic is loading; do not draw it twice.
       el.style.visibility = "hidden";
     }
@@ -181,11 +193,16 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
   let ghost: HTMLElement | null = null;
   let list: HTMLElement | null = null;
   let following: MutationObserver | null = null;
-  // The departing scene responds now, while the first row becomes ready behind it.
-  for (const { el, up } of leaving) moves.push(play(el, [
-    { opacity: 1 },
-    { opacity: 0 },
-  ], { duration: up ? 140 : 80, easing: EASE, fill: "forwards" }).finished);
+  // The departing scene goes on leaving, while the first row becomes ready behind it: its copy from where the words
+  // sent had taken it (the original, hidden, as it was).
+  for (const { el, gone } of leaving) {
+    const a = leave(el);
+    if (gone) {
+      a.currentTime = gone.currentTime;
+      gone.cancel();
+    }
+    moves.push(a.finished);
+  }
   // The new page, before its first paint: what arrives set where it comes from.
   pageChanging()?.settle.push(() => {
     list = findList();
