@@ -379,6 +379,23 @@ pub fn animate(
 }
 
 ///|
+/// The number kept as `key` (anim), told as it is built that it goes to `target` by `spec` (animate's way: at the
+/// target the first time, then on to each new target from where it is): read where it is shown (Anim::get as it is
+/// painted: Ctx::bg_by, Ctx::look_by), not as it is built, so what builds it is not built again each frame it goes
+/// (docs/retained.md, motion in what is made once). Telling it reads no clock.
+#callsite(autofill(loc))
+pub fn told(c : @ui.Ctx, key : String, target : Double, spec? : Spec = spring(), loc~ : SourceLoc) -> Anim {
+  @signals.untracked(fn() {
+    let first = !anims.contains(c.id(key))
+    let a = anim(c, key, target)
+    if !first {
+      a.follow(target, spec, loc~)
+    }
+    a
+  })
+}
+
+///|
 /// Forgets what has not been used for a while and does not move (a page gone, a row scrolled away: made anew at rest
 /// when it comes back).
 fn sweep_anims(c : @ui.Ctx) -> Unit {

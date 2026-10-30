@@ -567,6 +567,7 @@ fn tree_sig(c : Ctx) -> Int64 {
     h = hash_mix(h, e.z.to_int64())
     h = hash_mix(h, (if e.only { 1 } else { 0 }).to_int64())
     h = hash_mix(h, (if e.look_by is Some(_) { 1 } else { 0 }).to_int64())
+    h = hash_mix(h, (if e.bg_by is Some(_) { 1 } else { 0 }).to_int64())
     h = hash_mix(h, (if e.cycle is Some(_) { 1 } else { 0 }).to_int64())
     h = hash_mix(h, (if e.keep is Some(_) { 1 } else { 0 }).to_int64())
     h = sig_num(h, e.bottom)
