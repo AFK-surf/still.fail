@@ -1018,3 +1018,21 @@ fn old_hits_place(c : Ctx, tree : @view.Tree?) -> Unit {
     }
   }
 }
+
+///|
+/// The node of the window's tree a press at (x, y) goes to, as the tree has things now, when it is one of its own (one
+/// pressed or held; not the old views', not nothing's), what the old frame put over all of it at its root first.
+fn view_presses_at(x : Double, y : Double) -> @view.NodeId? {
+  let tree = match view_app.val {
+    Some(t) => t
+    None => return None
+  }
+  if old_root_hit(g(), x, y, pressed=true) {
+    return None
+  }
+  old_hits_place(g(), Some(tree))
+  match tree.target_at(x, y) {
+    Dragged(id) | Pressed(id) => Some(id)
+    _ => None
+  }
+}

@@ -137,6 +137,8 @@ struct Node {
   mut on_drag : ((Drag) -> Unit)?
   /// how many fingers held on it at once it takes (View::on_drag's `fingers`): one more calls the hold off
   mut fingers : Int
+  /// which saying of its on_drag it is (each said anew, or let go, another): what was told by one is that one's alone
+  mut drag_said : Int
   /// where in it a finger is taken at a moment (View::takes; none: all of it)
   mut takes : ((Double, Double, Double) -> Bool)?
   /// what ends what its on_drag set going (a gesture's: its hold's moment, its dispatch), as it is said anew or let go
@@ -386,6 +388,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         on_press: None,
         on_drag: None,
         fingers: 1,
+        drag_said: 0,
         takes: None,
         drag_end: None,
         slot: false,
@@ -1125,6 +1128,7 @@ pub(all) struct Drag {
 pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1) -> View {
   guard self.live() is Some(n) else { return self }
   n.fingers = if fingers < 1 { 1 } else { fingers }
+  n.drag_said = n.drag_said + 1
   self.drag_ended()
   // (said anew: a finger held on it now is the one before's, ended)
   match self.tree.held {
@@ -1205,10 +1209,11 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
     Some(f) => {
       let t = self.cause_now()
       let fingers = self.fingers_off()
+      let said = n.drag_said
       @signals.untracked(fn() {
         for g in fingers {
           // (each told only while the node and this on_drag are still its: what one told let go of hears no more)
-          guard bound_still(n, h, f) else { break }
+          guard bound_still(n, h, said) else { break }
           f({ kind: Off, x: 0.0, y: 0.0, at: t, wx: 0.0, wy: 0.0, ox: 0.0, oy: 0.0, finger: g })
         }
       })
@@ -1291,11 +1296,12 @@ pub fn Tree::drag_at(
         }
         // (called off, all of it: the hold and the fingers let go of first, then each finger down told so while the node
         // and this on_drag are still its: what one told let go of hears no more)
+        let said = n.drag_said
         let off = fn() {
           self.held = None
           let fingers = self.fingers_off()
           for g in fingers {
-            guard bound_still(n, id, f) else { break }
+            guard bound_still(n, id, said) else { break }
             told(Off, g)
           }
         }
@@ -1346,14 +1352,10 @@ pub fn Tree::drag_at(
 }
 
 ///|
-/// Whether node `n` is still `id` and its on_drag still `f` (not let go, not said anew).
-fn bound_still(n : Node, id : NodeId, f : (Drag) -> Unit) -> Bool {
-  n.live &&
-  n.gen == id.gen &&
-  (match n.on_drag {
-    Some(g) => physical_equal(g, f)
-    None => false
-  })
+/// Whether node `n` is still `id` and its on_drag still the saying `said` (not let go, not said anew: even with the same
+/// function, a saying of its own).
+fn bound_still(n : Node, id : NodeId, said : Int) -> Bool {
+  n.live && n.gen == id.gen && n.on_drag is Some(_) && n.drag_said == said
 }
 
 ///|
@@ -1561,6 +1563,7 @@ fn View::let_go(self : View) -> Unit {
   n.on_press = None
   self.drag_ended()
   n.on_drag = None
+  n.drag_said = n.drag_said + 1
   n.takes = None
   // (held: let go of with it, nothing more told it, nothing of it handed to what is made in its place)
   match self.tree.held {

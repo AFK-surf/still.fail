@@ -102,6 +102,9 @@ struct Node {
   /// what takes the presses landing on it, which takes none itself (Ctx::presses_to: a target's id), and where that
   /// was said; held by it (docs/retained.md, the way there's 1)
   mut press_owner : (Int, SourceLoc)?
+  /// the node of the window's tree that takes the presses landing on it (Ctx::presses_to_node: drawn here, pressed
+  /// there), if any
+  mut press_node : @view.NodeId?
   /// the values of the view's own shown as it was built in it (Ctx::moved: a name, what it showed), for a move setting
   /// out later to go from (move_state.mbt); its own box's shown is its properties
   mut moved_vars : Array[(String, FixedArray[Double])]?
@@ -381,6 +384,7 @@ fn Node::new() -> Node {
     scroller_inner: false,
     words: None,
     press_owner: None,
+    press_node: None,
     moved_vars: None,
     drawn_built: None,
     ticks: None,
@@ -554,6 +558,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.scroller_inner = false
   self.words = None
   self.press_owner = None
+  self.press_node = None
   self.moved_vars = None
   self.drawn_built = None
   self.ticks = None

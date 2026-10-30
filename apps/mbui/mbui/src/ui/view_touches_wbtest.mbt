@@ -128,21 +128,30 @@ test "touches kept on the tape as the app took them (the first let go as such, e
   let t1 = Tester::new(fn(_c) {  })
   t1.check_looks(false)
   touches_app(seen1, at=at1)
-  t1.draw()
-  t1.run_for(16.0)
+  // (the tree laid out where it starts, on the tape)
   t1.start_tape()
-  let events = [(0, 7, 10.0, 10.0), (0, 9, 50.0, 50.0), (0, 11, 80.0, 80.0), (2, 7, 12.0, 12.0), (1, 9, 60.0, 70.0)]
-  for i, e in events {
-    t1.advance(3.0)
-    t1.touch_raw(e.0, e.1, e.2, e.3, t1.time())
-    if i == 2 {
-      t1.run_for(16.0)
+  t1.draw()
+  let t0 = t1.time()
+  // (each at its moment from t0; the one let go told 7 ms late, the host's clock past it; frames at 12 and 24)
+  let events = [
+    (0, 7, 10.0, 10.0, 3.0, 3.0),
+    (0, 9, 50.0, 50.0, 6.0, 6.0),
+    (0, 11, 80.0, 80.0, 9.0, 9.0),
+    (2, 7, 12.0, 12.0, 15.0, 22.0),
+    (1, 9, 60.0, 70.0, 23.0, 23.0),
+  ]
+  for e in events {
+    let (phase, id, x, y, at, told) = e
+    if t1.time() < t0 + 12.0 && t0 + told >= t0 + 12.0 {
+      t1.frame_at(t0 + 12.0)
     }
+    t1.advance(t0 + told - t1.time())
+    t1.touch_raw(phase, id, x, y, t0 + at)
   }
-  t1.run_for(16.0)
-  t1.advance(3.0)
-  t1.touch_raw(2, 9, 61.0, 71.0, t1.time())
-  t1.run_for(16.0)
+  t1.frame_at(t0 + 24.0)
+  t1.advance(4.0)
+  t1.touch_raw(2, 9, 61.0, 71.0, t0 + 28.0)
+  t1.frame_at(t0 + 36.0)
   let tape = t1.tape()
   let lines = tape.split("\n").map(l => l.to_owned()).to_array()
   // (the app's kinds kept, the first let go as 8, never the host's own)
@@ -167,12 +176,69 @@ test "touches kept on the tape as the app took them (the first let go as such, e
   let t2 = Tester::new(fn(_c) {  })
   t2.check_looks(false)
   touches_app(seen2, at=at2)
+  // (laid out where it starts, as the run was: the tape's first frame)
   t2.draw()
-  t2.run_for(16.0)
   let frames = t2.replay_frames(tape)
+  let drawn = lines.filter(l => l.has_prefix("DRAWHASH ")).length()
+  assert_true(drawn > 0)
+  assert_eq(frames.length(), drawn)
   for f in frames {
     assert_eq(f.2, f.1)
   }
   assert_eq((seen2, at2), (seen1, at1))
   assert_eq(seen1, ["Down 0 10,10", "Down 1 50,50", "Up 0 12,12", "Moved 1 60,70", "Up 1 61,71"])
+}
+
+///|
+/// A node taking two fingers, a moment due on it at 5 that takes the window out of front and back (what calls the
+/// fingers down off), the host's first finger down at 10, moved at 20, let go at 30, frames drawn at each of `frames`
+/// in between (none: the events alone bring the clock on): what the node was told.
+fn due_before_down(frames : Array[Double]) -> Array[String] {
+  let seen : Array[String] = []
+  let start = Ref(0.0)
+  let node : Ref[@view.View?] = Ref(None)
+  let t = Tester::new(fn(_c) {  })
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.over(Is(true)) |> ignore
+      node.val = Some(
+        b.box(fn(h) {
+          h
+          .width(Is(Some(200.0)))
+          .height(Is(Some(200.0)))
+          .on_drag(fn(d) { seen.push("\{d.kind} \{d.finger} \{(d.at - start.val + 0.5).floor().to_int()}") }, fingers=2)
+          |> ignore
+        }),
+      )
+    })
+    |> ignore
+  })
+  t.app_state(true, true)
+  t.drawn_now()
+  let t0 = t.time()
+  start.val = t0
+  node.val.unwrap().at_moment(t0 + 5.0, fn() {
+    on_app_state(1)
+    on_app_state(3)
+  })
+  |> ignore
+  let mut f = 0
+  for e in [(0, 10.0, 10.0), (1, 20.0, 20.0), (2, 30.0, 30.0)] {
+    while f < frames.length() && frames[f] < e.1 {
+      t.frame_at(t0 + frames[f])
+      f = f + 1
+    }
+    t.advance(t0 + e.1 - t.time())
+    t.touch_raw(e.0, 7, e.2, e.2, t0 + e.1)
+  }
+  seen
+}
+
+///|
+test "touches: something due before a finger's down that calls the fingers off is done first, the finger then the app's: the same whichever frames came" {
+  let none = due_before_down([])
+  assert_eq(due_before_down([7.0]), none)
+  assert_eq(due_before_down([3.0, 7.0, 15.0, 25.0]), none)
+  assert_eq(none, ["Down 0 10", "Moved 0 20", "Up 0 30"])
 }

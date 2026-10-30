@@ -87,14 +87,19 @@ let last_touch_x : Ref[Double] = Ref(0.0)
 let last_touch_y : Ref[Double] = Ref(0.0)
 
 ///|
-/// A finger's event from the host (above), at the event's moment: what it comes to taken as the app's pointer's.
+/// A finger's event from the host (above), as one event at its own moment (view_host.mbt): what was due before it done
+/// first, then what it comes to worked out and taken as the app's pointer's, in the same event (what was due never
+/// sees a finger not down yet, nor misses one that is).
 fn touch_in(phase : Int, id : Int, x : Double, y : Double) -> Unit {
-  let kind = touch_kind(phase, id)
-  if kind >= 0 && kind <= 3 {
-    last_touch_x.val = x
-    last_touch_y.val = y
-  }
-  if kind >= 0 {
-    pointer_in(kind, x, y, 0, if kind == 0 { mods_held() } else { 0 }, by=1)
-  }
+  view_event(fn() {
+    let kind = touch_kind(phase, id)
+    if kind >= 0 && kind <= 3 {
+      last_touch_x.val = x
+      last_touch_y.val = y
+    }
+    if kind >= 0 {
+      // (in this event: at its moment)
+      pointer_in(kind, x, y, 0, if kind == 0 { mods_held() } else { 0 }, by=1)
+    }
+  })
 }

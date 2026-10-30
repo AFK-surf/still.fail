@@ -636,33 +636,29 @@ test "held by as many fingers as it takes, each told by its own; one more: each 
 
 ///|
 /// Two fingers held on a box taking two, then called off, the first Off told doing `what` ("dispose": the tree let
-/// go of; "anew": another on_drag said): what each on_drag was told after the fingers went down.
+/// go of; "anew": another on_drag said; "same": the same function said again): what each on_drag was told after the
+/// fingers went down.
 fn off_mid(what : String) -> (Array[String], Array[String]) {
   let first : Array[String] = []
   let after : Array[String] = []
   let node : Ref[@view.View?] = Ref(None)
   let tree : Ref[@view.Tree?] = Ref(None)
+  let told : Ref[(@view.Drag) -> Unit] = Ref(fn(_) {  })
+  told.val = fn(d) {
+    first.push("\{d.kind} \{d.finger}")
+    if d.kind == Off {
+      match what {
+        "dispose" => tree.val.unwrap().dispose()
+        "same" => node.val.unwrap().on_drag(told.val, fingers=2) |> ignore
+        _ => node.val.unwrap().on_drag(fn(d) { after.push("\{d.kind} \{d.finger}") }) |> ignore
+      }
+    }
+  }
   let t = @view.Tree::new(
     fn(root) {
       node.val = Some(
         root.box(fn(b) {
-          b
-          .width(Is(Some(100.0)))
-          .height(Is(Some(100.0)))
-          .on_drag(
-            fn(d) {
-              first.push("\{d.kind} \{d.finger}")
-              if d.kind == Off {
-                if what == "dispose" {
-                  tree.val.unwrap().dispose()
-                } else {
-                  node.val.unwrap().on_drag(fn(d) { after.push("\{d.kind} \{d.finger}") }) |> ignore
-                }
-              }
-            },
-            fingers=2,
-          )
-          |> ignore
+          b.width(Is(Some(100.0))).height(Is(Some(100.0))).on_drag(told.val, fingers=2) |> ignore
         }),
       )
     },
@@ -678,9 +674,10 @@ fn off_mid(what : String) -> (Array[String], Array[String]) {
 }
 
 ///|
-test "called off with two fingers down, what the first Off told lets the node go or says another on_drag: nothing more told to what it let go of, nothing to the new one" {
+test "called off with two fingers down, what the first Off told lets the node go or says its on_drag again (another, or the same function): nothing more told to what it let go of, nothing to the new saying" {
   assert_eq(off_mid("dispose"), (["Down 0", "Down 1", "Off 0"], []))
   assert_eq(off_mid("anew"), (["Down 0", "Down 1", "Off 0"], []))
+  assert_eq(off_mid("same"), (["Down 0", "Down 1", "Off 0"], []))
 }
 
 ///|

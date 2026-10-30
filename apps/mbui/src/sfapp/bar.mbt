@@ -1176,6 +1176,14 @@ fn bar_action(src : Source, ws : Workspace, active : String?, place_add : ((@sf.
 let bar_action_anchor : Ref[Int] = Ref(0)
 
 ///|
+/// The bar's glass and its notch's key as nodes of the window's tree (bar_glass_node), as last made: what the bar's
+/// places and its key, drawn by the old view, are pressed through (Ctx::presses_to_node).
+let bar_glass_at : Ref[@view.NodeId?] = Ref(None)
+
+///|
+let bar_notch_at : Ref[@view.NodeId?] = Ref(None)
+
+///|
 /// The notch's action, pressed at `t` (its key a node of the window's tree's: bar_glass_node): 令 a new chat, ＋ what
 /// the place's page adds (the files lent where it is 文件's); only with the notch open by then.
 fn bar_action_run(src : Source, ws : Workspace, t : Double) -> Unit {
@@ -1538,9 +1546,9 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
       bar_retell(@ui.current().moment())
     })
   }
-  // (a finger on the glass is the window's tree's: its node over the bar, bar_glass, each event at its moment; the
-  // places take no press of their own here)
-  let presses = 0
+  // (a finger on the glass is the window's tree's: its node over the bar, bar_glass_node, each event at its moment;
+  // the places drawn here pressed through it, while it takes them)
+  let presses = if shown { bar_glass_at.val } else { None }
   let action_id = c.id("bar/action")
   // (pressed through the window's tree's key over it: bar_glass_node; what it opens opened by the notch drawn here)
   bar_action_anchor.val = action_id
@@ -1583,6 +1591,11 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
           glass=@sf.glass_action().sharing(),
           id=if k_now > 0.9 { action_id } else { 0 },
           body=fn() {
+            // (pressed through the notch's key over it, a node of the window's tree: bar_glass_node)
+            match bar_notch_at.val {
+              Some(n) if k_now > 0.9 => c.presses_to_node(n)
+              _ => ()
+            }
             // from one action to another with another icon (令 and a ＋): the icon swaps, the circle stays
             let v = swap_icon
             let css : @ui.Ease = Out
@@ -1664,7 +1677,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
                 let tint = tint_of("row:" + key, on)
                 let row_y = over + n.to_double() * bar_row + bar_row / 2.0
                 // (a row the glass is not under yet, the panel coming up: pressed through nothing)
-                let row_presses = if row_y + 24.0 > clip_top { presses } else { 0 }
+                let row_presses = if row_y + 24.0 > clip_top { presses } else { None }
                 let row = place_at(c, key, cs[j], row_y, slot, idle, lit, tint, dots, row_presses)
                 c.look(row, @ui.look(alpha~, dy=shift))
               }
@@ -1818,12 +1831,13 @@ fn place_at(
   lit : Int64,
   tint : Double,
   dots : Map[String, Int64],
-  glass : Int,
+  glass : @view.NodeId?,
 ) -> Int {
   at(c, x - slot / 2.0, y - 24.0, slot, 48.0, body=fn() {
-    // pressed through the glass over it, which reads where a press lands (bar_gesture): while it takes them
-    if glass != 0 {
-      c.presses_to(glass)
+    // pressed through the glass over it, which reads where a press lands (bar_glass_node): while it takes them
+    match glass {
+      Some(n) => c.presses_to_node(n)
+      None => ()
     }
     let face = c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
       place_face(c, key, idle, lit, tint, dots.get(key).unwrap_or(0L))
@@ -2144,6 +2158,7 @@ fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
     |> ignore
     b.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
     b.box(fn(g) {
+      bar_glass_at.val = Some(g.id())
       g
       .height(By(fn() {
         match told() {
@@ -2199,6 +2214,7 @@ fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
         }))
         |> ignore
         o.box(fn(k) {
+          bar_notch_at.val = Some(k.id())
           k
           .width(Is(Some(drop)))
           .height(Is(Some(drop)))

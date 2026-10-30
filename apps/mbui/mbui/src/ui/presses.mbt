@@ -15,6 +15,16 @@ pub fn Ctx::presses_to(self : Ctx, area : Int, loc~ : SourceLoc) -> Unit {
 }
 
 ///|
+/// What the box being built shows is pressed through node `node` of the window's tree over it (drawn here, a finger on
+/// it that node's: the bottom bar's places, its glass's): where a press there reaches is the tree's to say (drive.mbt
+/// reach_point).
+pub fn Ctx::presses_to_node(self : Ctx, node : @view.NodeId) -> Unit {
+  if self.cur >= 0 {
+    self.nodes[self.cur].press_node = Some(node)
+  }
+}
+
+///|
 /// Once a frame is painted, under a Tester: each box's presses said to be another's are that one's to take, where the
 /// box is (Ctx::presses_to): the area drawn as a hit target over some of the box.
 fn Ctx::check_press_owners(self : Ctx) -> Unit {

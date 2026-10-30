@@ -366,6 +366,23 @@ let reach_step : Double = 4.0
 /// Whether (x, y), where node `i` is, is another's to press: the hit target there neither the node (a paragraph's
 /// links its own) nor what holds it.
 fn under_another(c : Ctx, i : Int, x : Double, y : Double) -> Bool {
+  // (a press there taken by a node of the window's tree: it, or what it is pressed through, is that node's; else what
+  // the tree takes there lies over it)
+  match view_presses_at(x, y) {
+    Some(n) => {
+      let mut j = i
+      let mut up = 0
+      while j >= 0 && j < c.count && up < c.count {
+        if c.nodes[j].press_node is Some(m) && m == n {
+          return false
+        }
+        j = c.nodes[j].parent
+        up += 1
+      }
+      return true
+    }
+    None => ()
+  }
   let top = hit_in(c.hit_ids, c.hit_rects, x, y)
   if top == 0 {
     return false
