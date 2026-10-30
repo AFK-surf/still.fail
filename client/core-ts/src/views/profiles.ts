@@ -82,16 +82,9 @@ export function workspaceProfiles(stations: J[]): J {
     const signedIn = stationsOf(members.filter(owns));
     const allow: string[] | null = share && Array.isArray(share.allow) ? share.allow : null;
     const host = share ? String(share.host) : String(s.id);
-    // Where the account can be used, said of the account (the row) and not of one copy's share: where it is signed in,
-    // then the stations that use it only by borrowing (who may borrow is the profile page's).
-    const joined = (names: string[]) => names.join(t("core-views.list_separator"));
-    const parts: string[] = [];
-    if (members.length === 1 && !share) parts.push(t("core-views.profiles.only", { station: String(s.name) }));
-    else if (subscription) {
-      parts.push(t("core-views.profiles.signedIn", { station: joined(signedIn) }));
-      const borrowers = stationsOf(members.filter((m) => !owns(m))).filter((x) => !signedIn.includes(x));
-      if (borrowers.length > 0) parts.push(signedIn.length > 1 ? t("core-views.profiles.lentBy", { station: name(host), stations: joined(borrowers) }) : t("core-views.profiles.lent", { stations: joined(borrowers) }));
-    } else parts.push(t("core-views.profiles.on", { stations: joined(stationsOf(members)) }));
+    // Where it can be used: every station that has it, signed in or borrowing (how each has it is the account's page's,
+    // who may borrow its sharing's).
+    const where = t("core-views.profiles.usableOn", { stations: stationsOf(members).join(t("core-views.list_separator")) });
     const kind = group(p);
     const usable = members.some((m) => m.usable);
     items.push({
@@ -102,6 +95,9 @@ export function workspaceProfiles(stations: J[]): J {
       stationId: String(s.id),
       stationName: String(s.name),
       profile: p,
+      // What it is called: a subscription by the account signed in (what makes it one row: each station's copy may be
+      // named otherwise), a key by its profile's name.
+      title: subscription && typeof p.email === "string" && p.email !== "" ? p.email : String(p.name ?? ""),
       shared: share !== null,
       host,
       hostName: name(host),
@@ -109,7 +105,7 @@ export function workspaceProfiles(stations: J[]): J {
       // Usable where any of its copies is.
       usable,
       ...stateOf(usable, name(host), p, signedIn.length > 1 ? troubleOn(list, members) : null),
-      where: parts.join(" · "),
+      where,
       allow,
       stations: stations.map(
         (x): ShareStation => ({ id: String(x.id), station: String(x.station), name: String(x.name), online: x.online === true, allowed: allow === null || allow.includes(String(x.id)) || String(x.id) === host }),
@@ -121,7 +117,7 @@ export function workspaceProfiles(stations: J[]): J {
   }
   // By kind of account; in each, what needs a look first, then by name.
   // Not localeCompare: Hermes on Android asks Java for it, which the app does not carry (it aborts the app).
-  const byName = (a: J, b: J) => (String(a.profile.name) < String(b.profile.name) ? -1 : String(a.profile.name) > String(b.profile.name) ? 1 : 0);
+  const byName = (a: J, b: J) => (a.title < b.title ? -1 : a.title > b.title ? 1 : 0);
   items.sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || Number(b.look) - Number(a.look) || byName(a, b));
   return { items, attention: items.filter((e) => e.look).length, wait: waitNote(waiting, [], items.length === 0) };
 }

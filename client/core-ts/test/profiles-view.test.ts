@@ -26,11 +26,11 @@ test("a shared profile is listed once, from its host, with where it is signed in
   assert.deepEqual(shared.members.map((m: any) => [m.stationName, m.role]), [["studio", "host"], ["mini", "user"]]);
   assert.equal(shared.station, `w/${A}`, "its page is on its host");
   assert.equal(shared.profile.id, "max");
-  assert.equal(shared.where, "已在 studio 登录 · 借给 mini");
+  assert.equal(shared.where, "studio、mini 可用");
   assert.equal(shared.usable, true);
   assert.deepEqual(shared.stations.map((s: any) => [s.name, s.allowed]), [["studio", true], ["mini", true]]);
   const local = view.items.find((e: any) => !e.shared);
-  assert.equal(local.where, "仅在 studio");
+  assert.equal(local.where, "studio 可用");
   assert.equal(local.canShare, true);
 });
 
@@ -81,7 +81,8 @@ test("the same account signed in on two stations each is one row, each station a
   ]);
   assert.equal(view.items.length, 1);
   const row = view.items[0];
-  assert.equal(row.where, "已在 studio、mini 登录");
+  assert.equal(row.where, "studio、mini 可用");
+  assert.equal(row.title, "Z@x.test", "a subscription called by its account");
   assert.equal(row.profile.id, "max", "the row shows the first one that is up and has its login");
   assert.deepEqual(row.members.map((m: any) => [m.stationName, m.role, m.about]), [["studio", "own", "在此 station 单独登录"], ["mini", "own", "在此 station 单独登录"]]);
   // Two different accounts stay two rows.
@@ -92,23 +93,19 @@ test("the same account signed in on two stations each is one row, each station a
   assert.equal(two.items.length, 2);
 });
 
-test("an account signed in on every station it is lent to: the row says where it is signed in, and no limit that reads as the whole account's", () => {
+test("an account is called by what it is signed in to, and said usable where any station has it: no one copy's share limit or name", () => {
   const C = "c".repeat(64);
   const share = { id: "sh-1", host: A, allow: [C] };
   const view = workspaceProfiles([
     station(A, "Studio", true, [profile("codex-3720", { email: "z@x.test", runtime: "codex", share: { ...share, role: "host", users: [C] } })]),
     station(B, "Mini1", true, [profile("codex", { email: "z@x.test", runtime: "codex" })]),
-    station(C, "ccvm", true, [profile("own", { email: "z@x.test", runtime: "codex" }), profile("sh-1", { email: "z@x.test", runtime: "codex", share: { ...share, role: "user", reachable: true } })]),
-  ]);
-  assert.equal(view.items.length, 1);
-  assert.equal(view.items[0].where, "已在 Studio、Mini1、ccvm 登录");
-  // Borrowed by one not signed in itself: the lender named, as two others are signed in too.
-  const lent = workspaceProfiles([
-    station(A, "Studio", true, [profile("codex-3720", { email: "z@x.test", runtime: "codex", share: { ...share, role: "host", users: [C] } })]),
-    station(B, "Mini1", true, [profile("codex", { email: "z@x.test", runtime: "codex" })]),
     station(C, "ccvm", true, [profile("sh-1", { email: "z@x.test", runtime: "codex", share: { ...share, role: "user", reachable: true } })]),
   ]);
-  assert.equal(lent.items[0].where, "已在 Studio、Mini1 登录 · Studio 借给 ccvm");
+  assert.equal(view.items.length, 1);
+  assert.deepEqual([view.items[0].title, view.items[0].where], ["z@x.test", "Studio、Mini1、ccvm 可用"]);
+  // A key: by its profile's name.
+  const key = workspaceProfiles([station(A, "Studio", true, [profile("备用 key", { access: { kind: "anthropic-api", key: "sk-1…2345" } })])]);
+  assert.deepEqual([key.items[0].title, key.items[0].where], ["备用 key", "Studio 可用"]);
 });
 
 test("a station with two profiles signed in to the same account: its rows named by their profiles too", () => {
@@ -169,7 +166,7 @@ test("two profiles of one station signed in to the same account: the station sai
   ]);
   assert.equal(view.items.length, 1);
   assert.equal(view.items[0].members.length, 3, "each profile still a member");
-  assert.equal(view.items[0].where, "已在 studio、mini 登录");
+  assert.equal(view.items[0].where, "studio、mini 可用");
 });
 
 test("Hermes profiles can name models and expose a selected model to new chats", () => {

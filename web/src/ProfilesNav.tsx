@@ -108,7 +108,7 @@ function ProfileRow({ entry, scope }: { entry: WorkspaceProfile; scope: string }
   const windows = Windows({ quota: p.quota });
   return (
     <NavItem to={profilePath(entry)} current={isHere(entry, path, scope)} away={!entry.usable} tip={windows ? facts || undefined : several ? entry.where : undefined}
-      mark={<ProviderLogo runtime={p.runtime} kind={p.access.kind} mark={p.providerMark} size={16} />} title={p.name}>
+      mark={<ProviderLogo runtime={p.runtime} kind={p.access.kind} mark={p.providerMark} size={16} />} title={entry.title}>
       <NavLine>
         {trouble && <span className={css.trouble} data-tone={entry.state?.tone}>{trouble}</span>}
         {windows ?? <>{trouble && facts && <span aria-hidden="true">·</span>}<span className={navFill}>{facts}</span></>}

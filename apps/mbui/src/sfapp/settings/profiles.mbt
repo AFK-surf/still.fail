@@ -222,14 +222,21 @@ fn profile_list_blocks(c : @ui.Ctx, core : Core, list : Array[Json]) -> Array[()
             let ev = Some(e)
             let p = field(ev, "profile")
             let usable = flag(ev, "usable")
-            // how it is as the core says it (its dot in its tone, green where it says nothing); what needs a look said
-            // in its line
+            // how it is where that is not simply fine, as the core says it (a dot in its tone; none while fine): what
+            // needs a look said in its line
             let state = field(ev, "state")
             if list_row(c, key="ws-profile/" + text(ev, "key"), fn() {
                 c.box(w=Fill(1.0), opacity=if usable { 1.0 } else { 0.55 }, fn() {
                   c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
-                    presence_dot(c, tone_dot(if state is Some(Object(_)) { text(state, "tone") } else { "green" }))
-                    c.text(text(p, "name"), size=t.t.ui, color=t.p.text, wrap=false, w=@sf.line_left, line=21.0) |> ignore
+                    if state is Some(Object(_)) {
+                      presence_dot(c, tone_dot(text(state, "tone")))
+                    }
+                    // (a subscription by its account, a key by its name: the core's)
+                    let title = match text(ev, "title") {
+                      "" => text(p, "name")
+                      x => x
+                    }
+                    c.text(title, size=t.t.ui, color=t.p.text, wrap=false, w=@sf.line_left, line=21.0) |> ignore
                   })
                   |> ignore
                   let line = if flag(ev, "look") {
@@ -252,7 +259,10 @@ fn profile_list_blocks(c : @ui.Ctx, core : Core, list : Array[Json]) -> Array[()
                   // its allowance a line of its own, so the name and where it is keep the row's width (Profiles.kt)
                   if usable && text(field(p, "quota"), "state") == "ok" && items(field(p, "quota"), "windows").length() > 0 {
                     // (in its row's corner, 12 in: the row's corner concentric round its own, @sf.fill_chip_corner)
-                    c.box(style=quota_line, fn() { @sf.quota_chips(c, field(p, "quota"), key="ws-profile/" + text(ev, "key")) })
+                    // (each window in words, 每周剩余 78%: a row has the room, and a touch has no tip to say what W is)
+                    c.box(style=quota_line, fn() {
+                      @sf.quota_chips(c, field(p, "quota"), worded=true, key="ws-profile/" + text(ev, "key"))
+                    })
                     |> ignore
                   }
                 })

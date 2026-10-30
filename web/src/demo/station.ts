@@ -234,7 +234,7 @@ export function profiles() {
     items: [{
       key: `${STATION}/${p.id}`, group: "claude", groupTitle: "Claude 订阅", station: STATION, stationId: "local", stationName: "Studio",
       // (stopped by its provider: in its check's words, needing a look)
-      profile: p, shared: false, host: "local", hostName: "Studio", hostOnline: true, usable: true, state: { text: p.checkText, tone: p.checkTone }, look: true, where: "仅在 Studio",
+      profile: p, title: p.email ?? p.name, shared: false, host: "local", hostName: "Studio", hostOnline: true, usable: true, state: { text: p.checkText, tone: p.checkTone }, look: true, where: "Studio 可用",
       stations: [], editable: true, canShare: true,
       members: [{ station: STATION, stationId: "local", stationName: "Studio", title: "Studio", online: true, profileId: p.id, profileName: p.name, role: "own", about: "自己登录", usable: true, checkText: p.checkText, checkTone: p.checkTone, usedBy: 1 }],
     }],
