@@ -28,7 +28,15 @@
 >   and each time the station's adb comes to hold the phone it lets the app turn Wireless debugging on itself
 >   (`pm grant … WRITE_SECURE_SETTINGS`) and keeps Android's idling off its connection (`deviceidle whitelist`), no one
 >   asked. phone_use says when and why a granted phone was last offered no longer.
-> - **Settings, 共享调试** (one page, not a station's): 默认最长授权, the phone's settings (本机设置: what it lacks, the
+> - **The phone's switch** (2026-10-30, user: 「还是要有一个全局的 adb 开关，默认关闭，开启后永远开启，不会因为更新或者重启关掉」):
+>   共享调试 on the phone itself (`adb.on`, the core's `adbShare` `on`, kept on the device: the core's `adb-on`, the
+>   app's `adb-share` `on`). Off at first: the phone is lent to no chat, whatever is granted, and a request's card
+>   answered on it says 打开共享调试 first. On, until turned off there or with the notification's 关闭共享调试: the
+>   app's service is up whether or not a grant is live (its notification 共享调试已开启 · 暂无对话在使用, or how many chats
+>   use it), started with the phone and the app updated (`AdbBoot`), and turns Wireless debugging on again each time it
+>   goes (the phone started again, the Wi-Fi changed) where the app may. Which chats reach it is still their grants'.
+>   A device from before the switch takes it on where a grant lent the phone then.
+> - **Settings, 共享调试** (one page, not a station's): on a phone its switch first, 默认最长授权, the phone's settings (本机设置: what it lacks, the
 >   switches it can turn on), the stations it is paired with, and the grants live now (each with 收回).
 > - **Recorded** in the chat as a system message each: asked, approved, refused, taken back, ended.
 A person can lend their Android phone to the agents of one station: the phone's

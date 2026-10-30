@@ -2057,7 +2057,7 @@ test("lends_the_phone_s_adb_through_its_calls_and_topic", async () => {
   await host.settle();
   apply(host, values);
   // Off again, every field of the offer gone (the clients' shape takes their absence).
-  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [] });
+  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [] });
   core.close();
 });
 
@@ -2071,11 +2071,49 @@ test("a_phone_s_ports_are_taken_before_its_app_says_it_is_a_phone_and_lent_once_
   assert.equal(ported, null);
   subscribe(core, ui, 2, { topic: "adbShare" });
   await ask(host, core, ui, 3, "client.device", { app: "android", build: "1" });
+  await ask(host, core, ui, 4, "adb.on", { on: true });
   await host.settle();
   const values = new Map();
   apply(host, values);
   assert.deepEqual(v(values, 2).lends.map((l: J) => l.station), ["ws1/st1"]);
   core.close();
+});
+
+test("a_phone_lends_for_its_chats_grants_only_while_its_switch_is_on_and_the_switch_outlives_its_core", async () => {
+  // (2026-10-30, user: 「全局的 adb 开关，默认关闭，开启后永远开启，不会因为更新或者重启关掉」)
+  const { host, core } = await started();
+  const exp = Math.floor(host.nowMs() / 1000) + 3600;
+  const ui = core.connect();
+  await ask(host, core, ui, 1, "client.device", { app: "android", build: "1" });
+  await ask(host, core, ui, 2, "adb.ports", { connect: 41234, device: "Pixel" });
+  subscribe(core, ui, 3, { topic: "adbShare" });
+  core.inner.adb.heard("ws1/st1", { id: "g1", session: "ember:c1", chat: "c1", reason: "调试", status: "granted", scope: "chat", exp, at: 1 });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  // off at first: granted, and lent to none
+  assert.deepEqual([v(values, 3).on, v(values, 3).wanted, v(values, 3).lends], [false, ["ws1/st1"], []]);
+  await ask(host, core, ui, 4, "adb.on", { on: true });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual([v(values, 3).on, v(values, 3).lends.map((l: J) => l.station)], [true, ["ws1/st1"]]);
+  await host.settle();
+  host.takeEmitted();
+  core.close();
+  // the app's process gone and back (updated, the phone started again): on as it was
+  const again = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  const ui2 = again.connect();
+  subscribe(again, ui2, 1, { topic: "adbShare" });
+  await host.time.pass(500);
+  await host.settle();
+  const after = new Map(host.takeEmitted().map(([, m]) => m as J).filter((m) => "value" in m).map((m) => [m.id, m.value]));
+  assert.equal(v(after, 1).on, true);
+  await ask(host, again, ui2, 2, "client.device", { app: "android", build: "1" });
+  await ask(host, again, ui2, 3, "adb.on", { on: false });
+  await host.settle();
+  apply(host, after);
+  assert.deepEqual([v(after, 1).on, v(after, 1).lends], [false, []]);
+  again.close();
 });
 
 test("a_phone_s_grants_kept_on_the_device_lend_it_from_a_core_started_anew", async () => {

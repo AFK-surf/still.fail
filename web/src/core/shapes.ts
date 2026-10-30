@@ -101,6 +101,8 @@ export interface AdbShareView {
 	pairPort?: number;
 	/** `connectPort`, when a tunnel to it found nothing listening there: the app looks for adbd's ports anew. */
 	refusedPort?: number;
+	/** This phone's 共享调试 switch (`adb.on`, kept on the device; off at first): it lends to no chat while off. */
+	on?: boolean;
 	/** This person's chats' grants of their phone live now, and their requests waiting, every station's (docs/adb-share.md). */
 	grants?: AdbGrant[];
 	/** The stations a live grant lends this phone to now. */

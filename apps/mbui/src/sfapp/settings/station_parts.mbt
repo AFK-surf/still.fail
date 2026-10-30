@@ -135,7 +135,7 @@ fn adb_ask(name : String, params : Json) -> Unit {
 pub fn adb_texts() -> Json {
   let m : Map[String, Json] = {}
   for k in [
-      "title", "notify.title", "notify.chats", "stop", "pair.channel", "code", "pair.ask", "pair.auto", "typeCode", "enterCode", "connecting",
+      "title", "notify.title", "notify.chats", "notify.on", "notify.idle", "stop", "turnOff", "pair.channel", "code", "pair.ask", "pair.auto", "typeCode", "enterCode", "connecting",
       "connected", "connected.left", "notPaired", "pair.popped", "off", "attaching", "pairing", "paired", "pairFailed",
       "shareFailed",
     ] {
@@ -547,9 +547,10 @@ pub fn station_of(core : Core, here : Here, address : String) -> Json? {
 }
 
 ///|
-/// Settings' 共享调试 (docs/adb-share.md, 2026-10-29: as the vault's page): no switch, a chat's agent asks for the phone
-/// and its person grants it on the card in the chat. Here: the chats it is granted to now, each taken back with 收回;
-/// the requests waiting; and what the phone lacks for it (本机设置), with the switch it can turn on.
+/// Settings' 共享调试 (docs/adb-share.md, 2026-10-29: as the vault's page): a chat's agent asks for the phone and its
+/// person grants it on the card in the chat. Here: on a phone, its switch (2026-10-30: off at first, on until turned
+/// off, `adb.on`), lent to no chat while off; the chats it is granted to now, each taken back with 收回; the requests
+/// waiting; and what the phone lacks for it (本机设置).
 ///|
 /// Settings' 共享调试 as a whole, the page's room.
 // kept across runs: a value (no field of it changes)
@@ -580,6 +581,29 @@ fn adb_settings(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     // (what it is, in the title's ⓘ: not a card of words over the page)
     nav_bar(c, core, tr("android-settings.title"), tr("android-misc.adb.title"), about=tr("android-misc.adb.chats.about"))
     let blocks : Array[() -> Unit] = [fn() { gap(c, 12.0) }]
+    // the phone's switch: only a phone lends
+    if flag(phone, "supported") {
+      blocks.push(fn() {
+        list_card(c, fn() {
+          let on = flag(view, "on")
+          // (the switch in the row's middle, off its corners, as settings' switches are)
+          if list_row(c, key="adb-on", fn() {
+              c.box(style=fill_words, fn() { row_lines(c, tr("android-misc.adb.title"), tr("android-misc.adb.on.note"), wrap_sub=true) })
+              |> ignore
+              switch(c, "adb-on-switch", on)
+            }) {
+            // (turned on: the notification it shows allowed, and Wireless debugging on where the app may)
+            if !on {
+              if @ui.notice_permission() != "granted" {
+                @ui.notice_ask() |> ignore
+              }
+              adb_switch_on()
+            }
+            act(core, tr(if on { "android-misc.adb.turnOff" } else { "android-misc.adb.step.on" }), "adb.on", obj([("on", Json::boolean(!on))]))
+          }
+        })
+      })
+    }
     // 默认最长授权: the longest a chat's grant of the phone may last (as the vault's: pressed, the library's choices)
     blocks.push(fn() {
       list_card(c, fn() {

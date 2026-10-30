@@ -364,7 +364,7 @@ pub fn fixture_page(mode : String) -> String {
       "stations"
     "settings-adb" | "settings-adb-off" | "settings-adb-unpaired" | "settings-adb-pairing" | "settings-adb-connected" | "settings-adb-failed" =>
       "adb:ws1/st1"
-    "settings-adb-chats" => "adb:"
+    "settings-adb-chats" | "settings-adb-idle" => "adb:"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-login" | "settings-profile-login-station" =>
       "profile:ws1/st1#cc"
     "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
@@ -2665,7 +2665,8 @@ fn fx_resources() -> Json {
 }
 
 ///|
-/// 共享调试 as a fixture's mode has it (MBUI_FIXTURE=settings-adb-<off|unpaired|pairing|connected|failed>; "" not lent).
+/// 共享调试 as a fixture's mode has it (MBUI_FIXTURE=settings-adb-<off|unpaired|pairing|connected|failed|chats|idle>; ""
+/// not lent).
 let fx_adb : Ref[String] = Ref("")
 
 ///|
@@ -2693,11 +2694,14 @@ fn fx_adb_share() -> Json {
         ("message", str("the phone did not reach adb: 无法连接手机上的 adb：Connection refused (os error 111)")),
         ("refusedPort", Json::number(41239.0)),
       ])
-    // settings' 共享调试: two chats granted it, one asking
+    // settings' 共享调试, its switch off: nothing granted
+    "idle" => obj([("sharing", Json::boolean(false)), ("phase", str("off")), ("on", Json::boolean(false)), ("tunnels", Json::number(0.0))])
+    // settings' 共享调试, its switch on: two chats granted it, one asking
     "chats" =>
       obj([
         ("sharing", Json::boolean(false)),
         ("phase", str("off")),
+        ("on", Json::boolean(true)),
         ("tunnels", Json::number(0.0)),
         (
           "grants",

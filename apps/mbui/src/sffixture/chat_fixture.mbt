@@ -1352,7 +1352,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
   let ask_end = f.mode == "chat-ask-end"
   let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file"
-  let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks"
+  let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off"
   // (chat-phone-granted: its request approved already; chat-phone-lacks: waiting, on a phone without Developer options)
   if f.mode == "chat-phone-granted" && fix_phone.val == "" {
     fix_phone.val = "granted"

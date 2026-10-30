@@ -4,7 +4,8 @@
 // viewer's own request is answered; elsewhere a line says whose it is. Decided, a line says how it went. What it
 // keeps between frames (its menu, the length picked, the answer under way) is the vault card's, keyed `phone/<id>`.
 // Answered on the phone itself while it lacks something to be lent (Developer options, Wi-Fi, Wireless debugging the
-// app cannot turn on), it says what first and 查看步骤 takes the place of 允许: allowed then, nothing could reach it.
+// app cannot turn on, its 共享调试 switch off), it says what first and 查看步骤 takes the place of 允许: allowed then,
+// nothing could reach it.
 
 ///|
 /// The request's card while it waits: its words, and its answer where it is the viewer's (`mine`) and a core is there.
@@ -47,6 +48,8 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
   // (a device with no adb of its own, a computer's: the grant is for the person's phone, lent as it is ready)
   let lacks = match adb_ready(c) {
     AdbLacks(step) => Some(step)
+    // (a phone whose 共享调试 is off lends to no chat: turned on first, on its page)
+    AdbLends if !flag((core.topic)("adbShare", Map([])).value, "on") => Some(tr("android-misc.adb.step.on"))
     _ => None
   }
   // (up to its owner's 默认最长授权, starting at the longest)

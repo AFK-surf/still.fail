@@ -682,6 +682,9 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
       }
     // a chat's files downloaded (downloads_fixture.mbt)
     "downloads" => Some(fixture_downloads_topic())
+    // the phone's 共享调试 as a request's card for it goes by: its switch on (chat-phone-off: off)
+    "adbShare" if f.mode.has_prefix("chat-phone") =>
+      Some({ "sharing": false, "phase": "off", "tunnels": 0, "on": f.mode != "chat-phone-off" })
     // what a web link in a message is, as the link's station says it (the core's `linkPreview`: peeks.mbt)
     "linkPreview" => Some(fixture_link_preview(text(Some(Json::object(params)), "url")))
     // what a file a message names is, as the station reads it under its agent's working directory (peeks.mbt)

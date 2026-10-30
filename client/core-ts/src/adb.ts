@@ -25,6 +25,10 @@ const RETRY_MS = 1_000;
 /// started anew (the app's process gone and back, the phone started again) lends it to them at once, not only once
 /// each station is reached again.
 export const GRANTS_KEY = "adb-grants";
+/// Where this phone's 共享调试 switch is kept (2026-10-30, user: 「全局的 adb 开关，默认关闭，开启后永远开启，不会因为更新或者重启关掉」):
+/// off, it lends to no chat whatever is granted; on, until turned off here. None kept (a core from before it): on where a
+/// grant was live, as it lent then.
+export const ON_KEY = "adb-on";
 const RETRY_MAX_MS = 30_000;
 
 type Ended = { changed: true } | { expired: true } | { refused: string } | { lost: string | null; pause: boolean };
@@ -415,7 +419,7 @@ class Lend {
   }
 }
 
-/// This phone's adb (docs/adb-share.md): lent to each station a chat's grant of it is live on (`wanted`), with the ports
+/// This phone's adb (docs/adb-share.md): while its switch is on (`adb.on`), lent to each station a chat's grant of it is live on (`wanted`), with the ports
 /// its app found (`adb.ports`); and, from an app before grants, to the one station its switch lent it to (`adb.share`).
 /// The grants, every station's, as each says them; decided and taken back here (`adb.decide`, `adb.revoke`).
 export class Adb {
@@ -429,18 +433,30 @@ export class Adb {
   #lasts: "hour" | "chat" = "chat";
   /// Whether the grants kept on the device were read (`adbShare` `known`): before, none known is not none granted.
   #known = false;
+  /// This phone's 共享调试 switch (ON_KEY): it lends only while on.
+  #on = false;
+  #switched = false;
 
   constructor(env: AdbEnv) {
     this.#env = env;
     this.#legacy = new Lend(env);
     env.runner.fork(
       Effect.ensuring(
-        Effect.map(Effect.orElseSucceed(env.host.storageGet(GRANTS_KEY), () => null), (bytes) => {
+        Effect.map(Effect.all([Effect.orElseSucceed(env.host.storageGet(GRANTS_KEY), () => null), Effect.orElseSucceed(env.host.storageGet(ON_KEY), () => null)]), ([bytes, on]) => {
           const kept = bytes === null ? null : (parseJson(bytes) as J);
-          if (kept === null || typeof kept !== "object") return;
-          // (what a station said since it started, read whole or heard, wins over what was kept)
-          for (const [station, list] of Object.entries(kept))
-            if (!this.#grants.has(station) && Array.isArray(list)) this.#grants.set(station, new Map((list as J[]).filter((g) => typeof g?.id === "string").map((g) => [g.id as string, g])));
+          if (kept !== null && typeof kept === "object")
+            // (what a station said since it started, read whole or heard, wins over what was kept)
+            for (const [station, list] of Object.entries(kept))
+              if (!this.#grants.has(station) && Array.isArray(list)) this.#grants.set(station, new Map((list as J[]).filter((g) => typeof g?.id === "string").map((g) => [g.id as string, g])));
+          const said = on === null ? null : parseJson(on);
+          // (switched before it was read: as switched)
+          if (this.#switched) return;
+          if (typeof said === "boolean") this.#on = said;
+          else {
+            // (a core from before the switch: on where a grant lent the phone, so an update does not end its lending)
+            this.#on = this.wanted().length > 0;
+            this.#keepOn();
+          }
         }),
         Effect.sync(() => {
           this.#known = true;
@@ -457,11 +473,24 @@ export class Adb {
     this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(GRANTS_KEY, utf8(JSON.stringify(out))), { log: "Unhandled", message: "debugging grants kept" }));
   }
 
+  #keepOn(): void {
+    this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(ON_KEY, utf8(JSON.stringify(this.#on))), { log: "Unhandled", message: "debugging switch kept" }));
+  }
+
   run(call: AdbCall): Effect.Effect<unknown, CoreError> {
     switch (call.kind) {
       case "share":
       case "stop":
         return this.#legacy.run(call);
+      case "on":
+        if (call.on && !this.#env.lends()) return Effect.fail(new CoreError("unsupported", t("core-misc.adb.unsupported")));
+        return Effect.sync(() => {
+          this.#on = call.on;
+          this.#switched = true;
+          this.#keepOn();
+          this.#sync();
+          return null;
+        });
       case "ports":
         // (taken whatever the app said it is so far: what lends waits for it to say it is a phone, `#sync`, `deviceTold`;
         // refused, a service started for kept grants before the app said so stopped and was not started again)
@@ -537,7 +566,7 @@ export class Adb {
 
   /// Each wanted station lent to (with the ports the app found), each no longer wanted let go.
   #sync(): void {
-    const wanted = this.#ports === null || !this.#env.lends() ? [] : this.wanted();
+    const wanted = this.#ports === null || !this.#on || !this.#env.lends() ? [] : this.wanted();
     for (const [station, lend] of this.#lends)
       if (!wanted.includes(station)) {
         this.#env.runner.fork(Effect.ignore(lend.run({ kind: "stop" }), { log: "Unhandled", message: "debugging lend stopped" }));
@@ -562,7 +591,7 @@ export class Adb {
       const v = l.value();
       return { station, phase: v.phase, adb: v.adb, serial: v.serial, message: v.message, tunnels: v.tunnels };
     });
-    return { ...first.value(), grants: this.grants(), wanted: this.wanted(), known: this.#known, lends, lasts: this.#lasts };
+    return { ...first.value(), on: this.#on, grants: this.grants(), wanted: this.wanted(), known: this.#known, lends, lasts: this.#lasts };
   }
 
   card(station: string): J {
