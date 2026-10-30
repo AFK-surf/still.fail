@@ -39,8 +39,10 @@ jobs:
         shell: bash
         run: |
           base=https://cli.moonbitlang.com
-          tag=$( { curl -fsSI --retry 3 --max-time 20 $base/binaries/latest/${{ matrix.bin }}
-                   curl -fsSI --retry 3 --max-time 20 $base/cores/${{ matrix.core }}; } \
+          # (--retry-all-errors: --retry alone does not ask again after a connection broken off, Mini1's
+          # SSL_ERROR_SYSCALL failing the hour's run at once, 40997517041)
+          tag=$( { curl -fsSI --retry 3 --retry-all-errors --max-time 20 $base/binaries/latest/${{ matrix.bin }}
+                   curl -fsSI --retry 3 --retry-all-errors --max-time 20 $base/cores/${{ matrix.core }}; } \
             | tr -d '\r' | awk -F': ' 'tolower($1) == "etag" { print $2 }' | tr -d '\n')
           [ "$(printf '%s' "$tag" | tr -cd '"' | wc -c | tr -d ' ')" = 4 ] || { echo "::error::no ETags from $base: $tag"; exit 1; }
           echo "key=moonbit-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-$(printf '%s' "$tag" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
@@ -60,7 +62,7 @@ jobs:
           if [ "${{ runner.os }}" = Windows ]; then
             MOON_HOME=$(cygpath -w "$MOON_HOME") powershell -NoProfile -Command "irm https://cli.moonbitlang.com/install/powershell.ps1 | iex"
           else
-            curl -fsSL --retry 3 https://cli.moonbitlang.com/install/unix.sh | bash
+            curl -fsSL --retry 3 --retry-all-errors https://cli.moonbitlang.com/install/unix.sh | bash
           fi
           ls "$MOON_HOME/bin"
           PATH="$MOON_HOME/bin:$PATH" moon version --all
