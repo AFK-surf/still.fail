@@ -507,6 +507,7 @@
     "built-by-hand": {},
     "layout-read-back": {},
     "motion-length": {
+      "src/sfbase/under_post.mbt": 1,
       "src/sfpages/composer.mbt": 3
     }
   }
