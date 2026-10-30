@@ -106,6 +106,9 @@ struct Node {
   /// it (`drawn_built`), and as this frame draws it: that, taken anew from it once laid out (Ctx::drawn_found), and
   /// what is said of it after (a motion's look worked out from the layout)
   mut drawn_built : Drawn?
+  /// what its build said comes again while it shows (Ctx::cycle, cycle_look: `true`; Ctx::every: `false`), how often
+  /// and where it was said: the frame's cycles and periodic (Tester::cycles), said again of a row kept as its nodes
+  mut ticks : Array[(Bool, Double, SourceLoc)]?
   mut drawn : Drawn?
   mut parent : Int
   mut first : Int
@@ -373,6 +376,7 @@ fn Node::new() -> Node {
     words: None,
     moved_vars: None,
     drawn_built: None,
+    ticks: None,
     drawn: None,
     parent: -1,
     first: -1,
@@ -543,6 +547,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.words = None
   self.moved_vars = None
   self.drawn_built = None
+  self.ticks = None
   self.drawn = None
   self.first = -1
   self.last = -1

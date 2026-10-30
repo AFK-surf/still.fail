@@ -805,9 +805,6 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     ch = true
   }
   let fits = fits && n.dir == Row && !n.flow
-  if fits {
-    self.fit_rows = self.fit_rows + 1
-  }
   if s.fits != fits {
     s.fits = fits
     ch = true
