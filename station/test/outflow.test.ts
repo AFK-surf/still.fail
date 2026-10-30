@@ -205,21 +205,21 @@ test("a request waits as long as no admin answers; asked again, it is the same o
   const granted = await ask(r, ["usage", "chats", "messages"], { workspace: true });
   assert.deepEqual([granted.status, granted.body.scopes, granted.body.reach], [200, ["usage", "chats"], "workspace"]);
 
-  // Asking again replaces the program's grant, once answered.
-  const third = (await asked(r, ["chats"])).answer;
-  assert.equal(await m.answer(r.grants.asking()[0]!.id, { allow: true, scopes: ["chats"] }), 200);
+  // Asking for more replaces the program's grant, once answered.
+  const third = (await asked(r, ["chats", "messages"])).answer;
+  assert.equal(await m.answer(r.grants.asking()[0]!.id, { allow: true, scopes: ["chats", "messages"] }), 200);
   const second = await third;
-  assert.deepEqual(r.grants.list().map((g) => g.scopes), [["chats"]], "the same program holds one grant");
+  assert.deepEqual(r.grants.list().map((g) => g.scopes), [["chats", "messages"]], "the same program holds one grant");
   assert.equal((await call(r, "GET", "/v1/chats", undefined, granted.body.token)).status, 401);
   assert.equal((await call(r, "GET", "/v1/chats?since=5", undefined, second.body.token)).status, 200);
   assert.deepEqual(r.reads.at(-1), ["outflowChats", { since: 5 }]);
 
   // Refused: told so once, then asking is anew.
-  const fourth = (await asked(r)).answer;
+  const fourth = (await asked(r, ["usage"])).answer;
   const id = r.grants.asking()[0]!.id;
   assert.equal(await m.answer(id, { allow: false }), 200);
   assert.deepEqual(await fourth, { status: 403, body: { error: "refused" } });
-  const fifth = (await asked(r)).answer;
+  const fifth = (await asked(r, ["usage"])).answer;
   assert.notEqual(r.grants.asking()[0]!.id, id);
   // Allowed with nothing left of it is refused.
   assert.equal(await m.answer(r.grants.asking()[0]!.id, { allow: true, scopes: [] }), 200);
@@ -327,7 +327,7 @@ test("a program asking for what it already holds gets it at once, no admin asked
   assert.deepEqual([r.grants.list().length, r.grants.asking().length], [1, 0]);
   // Another program holds nothing of it.
   r.caller.now = OTHER;
-  await asked(r, ["usage"]);
+  await askAndLeave(r, ["usage"]);
   assert.equal(r.grants.asking().length, 1);
 });
 
