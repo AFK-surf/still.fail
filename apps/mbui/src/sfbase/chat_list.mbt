@@ -41,6 +41,9 @@ pub fn Entry::id(self : Entry) -> String {
 ///|
 /// What the page keeps of a chat while it is open.
 pub(all) struct Reading {
+  /// what the room under its rows is kept for besides the composer (its end clear of the bell floating over it:
+  /// ask_clears), the Foot row's version: its height goes to another as that changes (list_size.mbt)
+  mut foot_sign : String
   /// the first message's entry and where it was in the list, the last frame
   mut head : String
   mut head_at : Int
@@ -204,6 +207,7 @@ pub fn reading_of(key : String) -> Reading {
     Some(r) => r
     None => {
       let r = {
+        foot_sign: "",
         head: "",
         head_at: -1,
         placed: false,
@@ -905,6 +909,7 @@ pub fn row_keys(
     None => false
   }
   rd.list_read = Some(c.list_reader(key))
+  rd.foot_sign = if ask_clears(v) { "+ask" } else { "" }
   // the same entries of the same view as the last frame's, the list following as it did, nothing sent from here
   // waiting for its row and no row for its turn (then and now): what it made then, its rows not gone over again
   let sending = sending_of(rk)
@@ -1166,7 +1171,12 @@ fn shown_rows(
     c,
     keys,
     list,
-    shown_sign,
+    fn(e) {
+      match e {
+        Foot => "foot" + rd.foot_sign
+        _ => shown_sign(e)
+      }
+    },
     watched~,
     ms=fn(k) {
       match flight {
@@ -1848,3 +1858,10 @@ fn shown_sign(e : Entry) -> String {
   }
 }
 
+
+///|
+/// Whether the end of chat `v`'s list keeps clear of the bell floating over it (what waits to be decided there, its
+/// end not one: the core's `askClear`): the room under its rows the taller.
+pub fn ask_clears(v : ChatView) -> Bool {
+  !(v.archived || v.thread is None) && !v.asks.is_empty() && v.ask_clear
+}

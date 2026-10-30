@@ -22,7 +22,10 @@ fn chat_foot_room(c : @ui.Ctx, r : ChatRef, v : ChatView?) -> Double {
   ignore(v)
   // (never less than an opened composer with one line: a touch on the list lets go of the field, the composer closes
   // to its capsule, and the list's words stay where they were: the page does not jump)
-  dmax(dmax(@sfpages.composer_open_room(c.width), @sfpages.composer_room(c, draft_key(r))), tabletop_clear(c))
+  dmax(
+    dmax(@sfpages.composer_open_room(c.width), @sfpages.composer_room(c, draft_key(r), settled=@sfbase.new_chat_made(c, r))),
+    tabletop_clear(c),
+  )
 }
 
 ///|

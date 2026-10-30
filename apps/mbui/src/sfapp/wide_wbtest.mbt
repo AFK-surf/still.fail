@@ -670,7 +670,7 @@ test "wide: a line more or less in the composer, the chat's last row goes with i
 }
 
 ///|
-test "wide: a new chat becomes its chat as the web's: its scene fading where it is, the composer down to the chat's foot, the words up into their bubble" {
+test "wide: a new chat becomes its chat as the web's: its scene fading where it is, the composer down to the chat's foot, the words into their bubble over it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   t.frame()
@@ -719,11 +719,11 @@ test "wide: a new chat becomes its chat as the web's: its scene fading where it 
   assert_true(ew > bw)
   t.frame()
   assert_at((ex, ey), { let (x, y, _, _) = composer_glass(t); (x, y) })
-  // the words in their bubble under the chat's bar, gone across to its right
+  // the words in their bubble over the composer at the chat's foot (its rows at its end), gone across to its right
   t.run_for(sent + flight_carry_ms + 34.0 - t.time())
   assert_true(send_flight.get() is None)
   let landed = seen_once(t, words)
-  assert_true(landed.1 < typed.1 - 200.0 && landed.0 > typed.0 + 100.0, msg="landed at \{landed} from \{typed}")
+  assert_true(landed.1 < ey && landed.1 > ey - 200.0 && landed.0 > typed.0 + 100.0, msg="landed at \{landed} from \{typed}")
 }
 
 ///|
@@ -755,7 +755,7 @@ fn hint_drawn(t : @ui.Tester) -> Bool raise {
 }
 
 ///|
-test "wide: a new chat's first words stay where they were typed while the chat is made and read, the hint gone under them, then up into their bubble" {
+test "wide: a new chat's first words stay where they were typed while the chat is made and read, the hint gone under them, then into their bubble over the composer" {
   let held : Map[String, () -> Unit] = {}
   let unread = Ref(true)
   let t = held_core(held, unread, w=1280.0, h=800.0, platform=0)
@@ -794,13 +794,15 @@ test "wide: a new chat's first words stay where they were typed while the chat i
   t.run_for(read_late_ms - new_fade_ms - 1.0)
   assert_at(typed, seen_once(t, words))
   assert_false(hint_drawn(t), msg="the hint under the words sent, the composer gone to the chat's foot")
-  // read: their row laid out, and they go at once, up with the list, no frame where they are not, nor a jump
+  // read: their row laid out, and they go at once, with the list, no frame where they are not, nor a jump
   unread.val = false
   t.draw()
   let placed = t.time()
-  let landed = up_till(t, words, placed + flight_carry_ms + 34.0, 120.0)
+  let landed = one_way_till(t, words, placed + flight_carry_ms + 34.0, 120.0)
   assert_true(send_flight.get() is None)
-  assert_true(landed.1 < typed.1 - 200.0, msg="landed at \{landed} from \{typed}")
+  // over the composer at the chat's foot (the chat's rows at its end), down with it from where they were typed
+  let (_, foot_y, _, _) = composer_glass(t)
+  assert_true(landed.1 > typed.1 && landed.1 < foot_y, msg="landed at \{landed} from \{typed}")
   // out of the composer: its hint still away while its field has the cursor, back once it is let go of
   t.run_for(@sf.hint_back_ms)
   assert_false(hint_drawn(t), msg="the hint over the field with the cursor")

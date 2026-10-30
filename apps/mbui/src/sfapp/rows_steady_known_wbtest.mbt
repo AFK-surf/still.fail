@@ -14,7 +14,7 @@ fn init {
     ("src/sfapp/image_corners_chat_wbtest.mbt", 3),
     ("src/sfapp/quote_image_wbtest.mbt", 2),
     ("src/sfapp/settings_wbtest.mbt", 1),
-    ("src/sfapp/tape.mbt", 12),
+    ("src/sfapp/tape.mbt", 8),
     ("src/sfapp/viz_wbtest.mbt", 2),
     ("src/sfapp/wide_panel_wbtest.mbt", 2),
     ("src/sfapp/wide_wbtest.mbt", 2),

@@ -10,7 +10,7 @@
 pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : Int, over : () -> Unit) -> Unit {
   let (view, read, error) = view_of_chat(src, r)
   let draft = r.station + ":" + r.session
-  let room = @sfpages.composer_room(c, draft)
+  let room = @sfpages.composer_room(c, draft, settled=@sfbase.new_chat_made(c, r))
   match view {
     Some(v) => {
       latest_key(c, src, r, v)

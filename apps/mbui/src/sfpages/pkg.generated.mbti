@@ -104,7 +104,7 @@ pub fn composer_open_room(Double) -> Double
 
 pub fn composer_place(Double) -> ComposerPlace
 
-pub fn composer_room(@ui.Ctx, String) -> Double
+pub fn composer_room(@ui.Ctx, String, settled? : Bool) -> Double
 
 pub fn composer_side() -> Double
 
