@@ -645,8 +645,10 @@ priv struct BarModel {
   /// the notch's icon going as another swaps in ("" none), how far the swap is (0 to 1)
   mut icon_was : String
   icon_swap : Glide
-  /// the frame it was last told in (Ctx::frame_number): told once a frame, by the first of its builds in it
+  /// the frame it was last told in (Ctx::frame_number): told once a frame, by the first of its builds in it; and what
+  /// it was told then (shown, notched): told again in the frame where a later build says otherwise
   mut told : Int
+  mut told_as : (Bool, Bool)
 }
 
 ///|
@@ -692,6 +694,7 @@ let bar : BarModel = {
   waits: false,
   icon_was: "",
   told: -1,
+  told_as: (false, false),
   icon_swap: glide("icon-swap", 1.0),
 }
 
@@ -733,6 +736,7 @@ fn bar_reset() -> Unit {
   m_face.val = ""
   bar_clock.now = 0.0
   bar.told = -1
+  bar.told_as = (false, false)
 }
 
 ///|
@@ -1153,9 +1157,12 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   bar_stations_said.val = said
   let m = bar
   // told once a frame, by its first build in it: built again in the same frame (a frame's passes, or a check
-  // building it whole), it draws what that build told, a ride set out from where it is not set out again from there
-  let tell = m.told != c.frame_number()
+  // building it whole), it draws what that build told, a ride set out from where it is not set out again from there;
+  // unless what it is told is otherwise by then (a page pushed after its first build in the frame: hidden as of it,
+  // not as of the next frame that happens to build it)
+  let tell = m.told != c.frame_number() || m.told_as != (shown, notched)
   m.told = c.frame_number()
+  m.told_as = (shown, notched)
   // the frame's motion, by what the bar was told before this frame (Bar.kt: told as it is composed, it moves from
   // there; a bar chosen is drawn as it was the frame it is chosen, and slides from the next)
   if tell {

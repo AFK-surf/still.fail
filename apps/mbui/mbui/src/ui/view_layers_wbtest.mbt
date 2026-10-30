@@ -172,6 +172,7 @@ fn under_overlay(
   open : @signals.Signal[Bool],
   ground : Bool,
   blank? : @signals.Signal[Bool] = @signals.signal(true),
+  node? : @signals.Signal[Bool] = @signals.signal(true),
 ) -> (Tester, Ref[Int], Ref[Int]) {
   let node_taps = Ref(0)
   let over_taps = Ref(0)
@@ -197,11 +198,10 @@ fn under_overlay(
     })
     .over(Is(true))
     |> ignore
-    root.box(fn(b) {
+    root.show(fn() { node.get() }, fn(b) {
       b.over(Is(true)).width(Is(Some(100.0))).height(Is(Some(100.0))).on_press(fn() { node_taps.val = node_taps.val + 1 })
       |> ignore
     })
-    |> ignore
   })
   t.draw()
   t.drawn_now()
@@ -299,10 +299,11 @@ test "window tree: a node's words set by a message the frame takes: drawn so by 
     said.set("after")
     true
   })
+  let ink = 0x112233FFL
   let t = Tester::new(fn(_c) {  })
   t.check_looks(false)
   set_view_app(fn(root) {
-    root.box(fn(b) { b.height(Is(Some(30.0))).words(By(fn() { said.get() })) |> ignore }) |> ignore
+    root.box(fn(b) { b.height(Is(Some(30.0))).words(By(fn() { said.get() }), ink~) |> ignore }) |> ignore
     old(root, fn(_c) {  }).grow(Is(1.0)) |> ignore
   })
   t.draw()
@@ -312,5 +313,104 @@ test "window tree: a node's words set by a message the frame takes: drawn so by 
   t.frame_at(t0 + 16.0)
   let tree = view_tree().unwrap()
   let words = tree.drawn().filter(fn(d) { d.words != "" }).map(fn(d) { d.words })
-  assert_eq((words, tree.told_since()), (["after"], false))
+  // (and painted so: the glyphs of its ink the new words')
+  let glyphs = t.drawn_glyphs().filter(fn(g) { g.2 == ink }).length()
+  assert_eq((words, tree.told_since(), glyphs), (["after"], false, 5))
+}
+
+///|
+test "window tree: a message the frame takes makes a node over an old view taller: the old view laid out below it, that frame" {
+  let tall = @signals.signal(30.0, same=fn(a, b) { a == b })
+  on_message_said("tree-tall", fn(_, _) {
+    tall.set(100.0)
+    true
+  })
+  let rooms : Array[(Double, Double)] = []
+  let taps = Ref(0)
+  let t = Tester::new(fn(_c) {  })
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(b) { b.height(By(fn() { Some(tall.get()) })).ground(Is(0x445566FFL)) |> ignore }) |> ignore
+    old(root, fn(c) {
+      rooms.push((c.width, c.height))
+      let id = c.id("page button")
+      if c.clicked(id) {
+        taps.val = taps.val + 1
+      }
+      c.box(w=Px(100.0), h=Px(40.0), bg=0x3366CCFFL, id~, fn() { c.text("page", size=12.0) |> ignore }) |> ignore
+    })
+    .grow(Is(1.0))
+    |> ignore
+  })
+  t.draw()
+  let t0 = t.time()
+  t.post("tree-tall", "{}")
+  t.frame_at(t0 + 16.0)
+  // (that frame: the old view built for its room under the taller node, its words drawn there)
+  let words_y = t.words().filter(fn(w) { w.0 == "page" }).map(fn(w) { w.2 })
+  assert_eq(rooms.last(), Some((390.0, 744.0)))
+  assert_true(words_y.length() == 1 && words_y[0] >= 100.0, msg="\{words_y}")
+  // (and pressed there)
+  tree_tap(t, 50.0, 120.0)
+  assert_eq(taps.val, 1)
+}
+
+///|
+test "window tree: one old view the window's, a node over it shown and let go: the old view drawn and pressed throughout" {
+  let ground = @signals.signal(0L, same=fn(a, b) { a == b })
+  let taps = Ref(0)
+  let t = Tester::new(fn(_c) {  })
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    old(root, fn(c) {
+      let id = c.id("page button")
+      if c.clicked(id) {
+        taps.val = taps.val + 1
+      }
+      c.box(w=Px(100.0), h=Px(40.0), bg=0x3366CCFFL, id~, fn() { c.text("page", size=12.0) |> ignore }) |> ignore
+    })
+    .over(Is(true))
+    |> ignore
+    // (a strip low in the window, nothing to see while its ground is none)
+    root.box(fn(b) {
+      b.over(Is(true)) |> ignore
+      b.box(fn(s) { s.height(Is(Some(700.0))) |> ignore }) |> ignore
+      b.box(fn(s) { s.height(Is(Some(40.0))).ground(By(fn() { ground.get() })) |> ignore }) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let seen = fn() { (t.words().filter(fn(w) { w.0 == "page" }).length(), taps.val) }
+  tree_tap(t, 50.0, 20.0)
+  let alone = seen()
+  ground.set(0x445566FFL)
+  t.drawn_now()
+  tree_tap(t, 50.0, 20.0)
+  let beside = seen()
+  ground.set(0L)
+  t.drawn_now()
+  tree_tap(t, 50.0, 20.0)
+  assert_eq((alone, beside, seen()), ((1, 1), (1, 2), (1, 3)))
+}
+
+///|
+test "window tree: one old view the window's, its modal overlay up, a node's button shown between frames: the overlay stops the press, a frame between or none" {
+  let run = fn(frame : Bool) {
+    let open = @signals.signal(true, same=fn(a, b) { a == b })
+    let node = @signals.signal(false, same=fn(a, b) { a == b })
+    let (t, node_taps, over_taps) = under_overlay(open, true, blank=@signals.signal(false), node~)
+    let t0 = t.time()
+    t.fake.time = t0 + 10.0
+    node.set(true)
+    if frame {
+      t.frame_at(t0 + 16.0)
+    }
+    // (on the overlay's ground, over the node's button)
+    finger(0, 80.0, 80.0)
+    finger(2, 80.0, 80.0)
+    t.frame_at(t0 + 32.0)
+    (node_taps.val, over_taps.val)
+  }
+  assert_eq(run(false), (0, 0))
+  assert_eq(run(true), (0, 0))
 }

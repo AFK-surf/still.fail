@@ -204,7 +204,25 @@ fn view_frame(w : Double, h : Double, t : Double) -> Unit {
   // or ending taken ahead of an input still to come before `t`)
   @signals.untracked(fn() { tree.at(t) })
   view_window.val = (w, h)
+  // (the logic's moment for all of this frame: what the host has come to as it began; brought again in the frame, the
+  // tree goes no further than that, whatever time its building takes)
+  view_logic_at.val = h_now()
   view_brought(tree)
+}
+
+///|
+/// The moment the logic is brought to by this frame (view_frame): what it took as it went is of then, nothing later.
+// kept across runs: written as each frame begins
+let view_logic_at : Ref[Double] = Ref(0.0)
+
+///|
+/// What the frame took as it began (messages, the host's answers, the hand) told the window's tree: brought, before the
+/// frame decides what of the old views it builds again (where they are placed is part of that: view_island_said).
+fn view_arrived() -> Unit {
+  match view_app.val {
+    Some(tree) if tree.told_since() => view_brought(tree)
+    _ => ()
+  }
 }
 
 ///|
@@ -214,7 +232,7 @@ fn view_frame(w : Double, h : Double, t : Double) -> Unit {
 /// painted: what a frame takes it draws.
 fn view_brought(tree : @view.Tree) -> Unit {
   let (w, h) = view_window.val
-  @signals.untracked(fn() { tree.frame(w, h, now=h_now()) |> ignore })
+  @signals.untracked(fn() { tree.frame(w, h, now=view_logic_at.val) |> ignore })
   for id in tree.take_changed() {
     view_blocks.remove(id)
   }
@@ -252,6 +270,8 @@ fn old_place(tree : @view.Tree) -> Unit {
 /// Where the old views are, said as the frame's settings are (frame_watch.mbt looks_env): one moved, resized or faded,
 /// the old frame is built again.
 fn view_island_said() -> String {
+  // (and whether the one is the frame whole, the rest of the tree showing nothing: built so or in a box of its own)
+  "\{old_whole.val} " +
   old_placed.map(fn(p) { "\{p.0.at}.\{p.0.gen}:\{p.1},\{p.2},\{p.3},\{p.4},\{p.5}" }).join(" ")
 }
 
@@ -272,8 +292,9 @@ fn old_frame(c : Ctx) -> Unit {
   if old_whole.val {
     match old_islands.iter().find_first(fn(o) { old_placed.iter().any(fn(p) { p.0 == o.id }) }) {
       Some(o) => {
-        // (the old frame's own node holding it: laid out as this old view's, under its owner)
+        // (the old frame's own node holding it: laid out as this old view's, under its owner; no box of its own)
         old_box_owners.clear()
+        old_boxes.clear()
         old_box_owners[c.cur] = o.owner
         owned_by(o.owner, fn() { o.watch.read(fn() { (o.build)(c) }) })
       }
@@ -338,9 +359,17 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     if c.hosted {
       if old_whole.val {
-        // (the one old view the whole window: the old frame's, all it takes presses at its own, at the window's origin)
+        // (the one old view the whole window: the old frame's, what it takes presses at its own, at the window's
+        // origin; what it put over all of it at its root (its overlays) after the tree, as where it is in a box: theirs)
         let from = self.next_hit_ids.length()
-        self.paint(root, 1.0)
+        let mut ch = self.nodes[root].first
+        while ch >= 0 {
+          let n = self.nodes[ch]
+          if !(n.layer || n.portal) {
+            self.paint(ch, 1.0)
+          }
+          ch = n.next
+        }
         old_hits.push({ id: c.id, from, to: self.next_hit_ids.length(), x: 0.0, y: 0.0 })
       } else {
         match old_boxes.get(c.id) {
@@ -376,17 +405,15 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   })
   // what the old frame puts over all of it at its root (its layers: the overlays its views open, menus, sheets,
   // dialogs, raised to the root's end; what is built around the old views over them, a splash), over the tree, in their
-  // order, as where it is the whole window (the way there: an old view's overlay not yet placed, cut and ordered as
-  // its island is)
-  if !old_whole.val {
-    let mut ch = self.nodes[root].first
-    while ch >= 0 {
-      let n = self.nodes[ch]
-      if (n.layer || n.portal) && !old_boxes.values().any(fn(i) { i == ch }) {
-        self.paint(ch, 1.0)
-      }
-      ch = n.next
+  // order, the one old view the whole window or not (the way there: an old view's overlay not yet placed, cut and
+  // ordered as its island is)
+  let mut ch = self.nodes[root].first
+  while ch >= 0 {
+    let n = self.nodes[ch]
+    if (n.layer || n.portal) && !old_boxes.values().any(fn(i) { i == ch }) {
+      self.paint(ch, 1.0)
     }
+    ch = n.next
   }
   view_paint_work.handed = view_paint_work.handed + (self.ninst - n0)
 }
@@ -468,7 +495,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   old_hits_place(g(), Some(tree))
   // (what the old frame put over all of it at its root (its overlays) is painted over the tree, whatever it draws:
   // what it takes there, a press or a pointer's move with none held, is its own before anything of the tree's under it)
-  let over = !old_whole.val && (kind == 0 || (kind == 1 && view_held.val is None)) &&
+  let over = (kind == 0 || (kind == 1 && view_held.val is None)) &&
     old_root_hit(g(), x, y, pressed=kind == 0)
   match (kind, view_held.val) {
     (0, _) if over => {
