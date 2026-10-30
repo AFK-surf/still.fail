@@ -237,3 +237,15 @@ test "settings' 共享调试: the stations its grants lend it to, each as its ad
   // (MBA's page: settings' page gone from view)
   assert_true(t.find("默认最长授权") is None)
 }
+
+///|
+test "共享调试 of a station a grant lends the phone to: no switch that cannot stop it, settings' page a tap away" {
+  let t = settings_tester("adb:ws1/st2", shows="settings-adb-second")
+  assert_true(t.find("在设置里管理") is Some(_))
+  t.tap_text("在设置里管理")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("默认最长授权") is Some(_))
+  // the code reader's row says where Accessibility keeps it
+  let t = settings_tester("adb:ws1/st2", shows="settings-adb-second")
+  assert_true(t.find("自动填配对码") is Some(_))
+}

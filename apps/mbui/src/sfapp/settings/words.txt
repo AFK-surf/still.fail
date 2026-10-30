@@ -81,6 +81,7 @@ android-misc.adb.grantWhat
 android-misc.adb.granted
 android-misc.adb.hour
 android-misc.adb.lasts
+android-misc.adb.manage
 android-misc.adb.missing
 android-misc.adb.next
 android-misc.adb.notPaired
@@ -110,6 +111,7 @@ android-misc.adb.port.none
 android-misc.adb.port.pair
 android-misc.adb.port.refused
 android-misc.adb.reader.about
+android-misc.adb.reader.note
 android-misc.adb.reader.title
 android-misc.adb.reader.turnOn
 android-misc.adb.shareFailed
