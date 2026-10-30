@@ -2708,25 +2708,47 @@ pub fn Viewer::gestures(
 /// pointer; a phone's zooms. (Taken by the old view still where the stage is a node of the window's tree: the tree has
 /// no wheel of its own yet.)
 pub fn Viewer::wheel(self : Viewer, c : @ui.Ctx, stage : Int, z : @kit.Zoom) -> Unit {
-  let desk = @sf.pointer_rests()
   let (px, py, _) = c.pointer()
-  // the wheel: a desktop's pans (⇧ sideways), with ⌃ or ⌘ held (or a trackpad's pinch) zooms round the pointer
-  // (FilePreview.tsx useZoom onWheel: a pinch's small steps finer than a wheel's notches); a phone's zooms
   let (wx, wy, mods) = @ui.wheel_of(c, stage)
+  self.wheeled(z, px, py, wx, wy, mods, c.moment())
+}
+
+///|
+/// The wheel turned (`wx`, `wy`, with `mods` held) at (`px`, `py`) on the stage at `at` (its moment: how big the picture
+/// shows then, whether zoomed then, and what it is told from there, by its glide or fling as they have it then, never
+/// by what a frame last copied): a desktop's pans (⇧ sideways), with ⌃ or ⌘ held (or a trackpad's pinch) zooms round
+/// the pointer (FilePreview.tsx useZoom onWheel: a pinch's small steps finer than a wheel's notches); a phone's zooms.
+pub fn Viewer::wheeled(
+  self : Viewer,
+  z : @kit.Zoom,
+  px : Double,
+  py : Double,
+  wx : Double,
+  wy : Double,
+  mods : Int,
+  at : Double,
+) -> Unit {
+  let desk = @sf.pointer_rests()
   if desk && z.nw > 0.0 && (wx != 0.0 || wy != 0.0) {
     if (mods & (@ui.wheel_mod_ctrl | @ui.wheel_mod_cmd)) != 0 {
       let fine = (mods & @ui.wheel_mod_ctrl) != 0 && wy.abs() < desk_pinch_step
-      z.zoom_to(z.scale * @dmath.exp(-wy * (if fine { desk_pinch_rate } else { desk_wheel_rate })), px, py, false)
-    } else if !z.zoomed() {
+      z.zoom_to(
+        z.scale_at(at) * @dmath.exp(-wy * (if fine { desk_pinch_rate } else { desk_wheel_rate })),
+        px,
+        py,
+        false,
+        at~,
+      )
+    } else if !z.zoomed_at(at) {
       // (fitted, it is all in view: nothing to pan, and it stays fitted as the window changes)
       ()
     } else if (mods & @ui.wheel_mod_shift) != 0 && wx == 0.0 {
-      z.pan(-wy, 0.0)
+      z.pan(-wy, 0.0, at~)
     } else {
-      z.pan(-wx, -wy)
+      z.pan(-wx, -wy, at~)
     }
   } else if !desk && wy != 0.0 && z.nw > 0.0 {
-    z.zoom_to(z.scale * @dmath.pow(1.0015, -wy), px, py, false)
+    z.zoom_to(z.scale_at(at) * @dmath.pow(1.0015, -wy), px, py, false, at~)
   }
 }
 

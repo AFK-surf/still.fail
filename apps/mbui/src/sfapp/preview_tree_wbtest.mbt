@@ -809,3 +809,52 @@ test "a run begun before its Tester: the window's tree of the run before follows
   assert_eq(before.val, 0)
   assert_true(now.val > 0 && opened.started && opened.in_tree, msg="\{now.val}")
 }
+
+///|
+/// The image zoomed in by a double tap (its glide set off at g0), frames drawn by `frames` (none, every 8 ms, or one
+/// drawn ahead of the logic) till `at` from g0, then ⌘ and the wheel turned once at the moment `at` is: how big it is
+/// shown then and after the wheel, and how big the wheel took it to be.
+fn wheeled_after_glide(at : Double, frames : Int) -> (Double, Double) {
+  let t = preview_tester("image", platform=0)
+  let z = viewer.get().unwrap().zoom
+  t.tap(195.0, 422.0)
+  t.advance(double_tap_ms / 2.0)
+  t.tap(195.0, 422.0)
+  let g0 = t.time()
+  match frames {
+    1 =>
+      for i in 1..=(at / 8.0).to_int() {
+        t.frame_at(g0 + 8.0 * i.to_double())
+      }
+    2 => t.frame_shown_at(g0 + at / 2.0, g0 + at + 40.0)
+    _ => ()
+  }
+  t.advance(g0 + at - t.time())
+  let before = z.scale_at(t.time())
+  t.wheel_with(195.0, 422.0, 0.0, -wheel_notch, @ui.wheel_mod_cmd)
+  (before, z.scale_at(t.time()) / before)
+}
+
+///|
+/// One notch of a wheel (its delta as a mouse's says it).
+let wheel_notch : Double = 100.0
+
+///|
+test "viewer on the tree: zoomed in by a double tap, ⌘ and the wheel as it glides or after: on from how big it is shown then, whatever frames came" {
+  for at in [@ui.move_most_ms / 2.0, @ui.move_most_ms + 50.0] {
+    let none = wheeled_after_glide(at, 0)
+    assert_eq(wheeled_after_glide(at, 1), none)
+    assert_eq(wheeled_after_glide(at, 2), none)
+    // (the wheel's step on from what shows: as many times bigger as a notch makes it, from fitted or from zoomed)
+    assert_true((none.1 - @dmath.exp(wheel_notch * @sfbase.desk_wheel_rate)).abs() < 0.000001, msg="\{at}: \{none}")
+  }
+}
+
+///|
+test "viewer on the tree: a wheel over the picture is the picture's, never the chat's under it" {
+  let t = preview_tester("image", platform=0)
+  let z = viewer.get().unwrap().zoom
+  let before = z.scale_at(t.time())
+  t.wheel_with(195.0, 422.0, 0.0, -wheel_notch, @ui.wheel_mod_cmd)
+  assert_true(z.scale_at(t.time()) > before)
+}

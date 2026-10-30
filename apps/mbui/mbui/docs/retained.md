@@ -235,7 +235,7 @@ squeeze and contrast checks; film's images before and after where a step touches
    still use the old; then each page made once, its island gone with it. Each step makes a page's island smaller; none
    leaves an app built two ways for longer than its PRs.
 
-   Where it stands (2026-10-30). Made once: the app's state (app_is: failed, signed out, starting, signed in) a node
+   Where it stands (2026-10-31). Made once: the app's state (app_is: failed, signed out, starting, signed in) a node
    picked by it; signed in, the shell a node picked by the window's width (View::window) and whether a workspace is in
    view. Laid out Small with one, the narrow shell's nodes (still.fail's sfapp/narrow_shell.mbt): an island under all
    of it (what the frame does in every tier before its pages: what is told as the frame ends, the icon's number, the
@@ -260,9 +260,17 @@ squeeze and contrast checks; film's images before and after where a step touches
    shell's node (View::reacts) at the moment that changes, its ways set out from then, a frame building it reading
    where they are; a zoom's commands take one moment as they begin (an event's said with it, else what the window's
    tree is doing: ui's `tree_cause`, else the frame's or the host's clock) and its glide and fling are ways of its own
-   from it. Still the old way there: a finger on the bar or on a zoomed picture is read as the island is built
-   (bar_gesture, the viewers' drags), told at that frame's moment; the zoom's `step` copies where it is into its
-   fields for what reads them. A row or a part kept as its nodes follows what it read by a watch owned where it is
+   from it. A finger on the bar's glass is a node's (still.fail's bar_glass_node), each event at its own moment. An image
+   opened over the pages is nodes of the tree's (still.fail's sfbase/viewer_tree.mbt): its layer, its ground (bound to
+   its ways, the clock read only while one goes), its canvas taking up to two fingers, the secondary button and the
+   wheel (View::on_drag, on_menu, on_wheel), each event decided at its moment by the zoom's and the strip's ways read
+   there (Zoom::rect_at, scale_at; @motion.Way); it is set out as it is made, done at its ways' declared ends, reads
+   ahead what is beside it as that is said, and stops taking presses as it closes. Its drawing and its bars are
+   islands in it (the drawing taking a press only on what it has to press: a mark's pin, the words written). Still the
+   old way there: the bars' own presses, back and Esc (a press on one is taken as the bars' island builds, so what
+   draws the picture follows it at the next frame); the flight in and out (where it flies from, recorded as it is
+   drawn, and the thumbnail's place read of the old layout); the wide frame's viewer, whose zoom's `step` copies where
+   it is into its fields each frame. A row or a part kept as its nodes follows what it read by a watch owned where it is
    built: the old view that made it going, the watch goes with it (stale and gone: Watch::gone), and one built again
    under another with the same key follows anew there, never put back as though it still followed.
 5. **What goes**, as no island is left: the frame's watch, paint watch and layout watch (frame_watch.mbt), kept parts

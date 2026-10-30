@@ -1397,9 +1397,18 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
 
 ///|
 fn on_wheel_now(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
-  took_input("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
   // what was held with it, above its phase (wheel_mod_*: ⇧ ⌃ ⌥ ⌘, and a trackpad's pinch as a wheel with ⌃ held)
   let mods = phase / 16
+  // (over a node of the window's tree's that takes the wheel: its, at the wheel's own moment, where it is then; no input
+  // of the old view's: taped alone)
+  match view_app.val {
+    Some(tree) if tree.wheel_at(x, y, dx, dy, mods, view_moment()) => {
+      input_taped("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
+      return
+    }
+    _ => ()
+  }
+  took_input("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
   let phase = phase % 16
   let c = g()
   let mut target = hit_in(c.scroll_ids, c.scroll_rects, x, y)

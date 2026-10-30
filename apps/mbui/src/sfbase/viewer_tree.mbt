@@ -163,17 +163,17 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     .on_drag(fn(d) { vw.finger_on(canvas, src, d) }, fingers=2)
     // (the pointer's secondary button on the picture: its menu, as a finger held still on it opens it)
     .on_menu(fn(m) { vw.menu_on(m) })
+    // (a wheel over it, at its moment, where it is on the stage then)
+    .on_wheel(fn(w) { vw.wheeled(vw.zoom, w.x, w.y, w.dx, w.dy, w.mods, w.at) })
     |> ignore
     // (what it draws takes a finger only where it has something of its own to press: a mark's pin, the words being
-    // written; the stage under it only pointed at, for the wheel)
+    // written)
     @ui.old(canvas, fn(c) {
       viewer_built.drawing += 1
       // (whether it marks, and what: what it draws decided by it, followed here where that is decided)
       marks_said()
       let stage = c.id("preview/stage")
-      c.box(style=viewer_under, id=stage, taps=false, points=true, fn() { vw.image_view(c, src, stage, false) })
-      |> ignore
-      vw.wheel(c, stage, vw.zoom)
+      c.box(style=viewer_under, fn() { vw.image_view(c, src, stage, false) }) |> ignore
     })
     .over(Is(true))
     |> @ui.old_takes_own

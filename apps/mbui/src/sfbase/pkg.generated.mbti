@@ -3306,6 +3306,7 @@ pub fn Viewer::told_of(Self) -> Bool
 pub fn Viewer::view(Self) -> @ui.NativeView?
 pub fn Viewer::wake(Self) -> Unit
 pub fn Viewer::wheel(Self, @ui.Ctx, Int32, @kit.Zoom) -> Unit
+pub fn Viewer::wheeled(Self, @kit.Zoom, Double, Double, Double, Double, Int32, Double) -> Unit
 
 pub(all) struct ViewerBuilt {
   mut drawing : Int32

@@ -135,6 +135,8 @@ struct Node {
   mut on_press : (() -> Unit)?
   /// what the pointer's secondary button pressed on it asks for (View::on_menu)
   mut on_menu : ((Menu) -> Unit)?
+  /// what a wheel turned over it does (View::on_wheel)
+  mut on_wheel : ((Wheel) -> Unit)?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
   /// how many fingers held on it at once it takes (View::on_drag's `fingers`): one more calls the hold off
@@ -360,6 +362,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.hosted = false
       n.on_press = None
       n.on_menu = None
+      n.on_wheel = None
       n.on_drag = None
       n.takes = None
       n.drag_end = None
@@ -390,6 +393,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         props: {},
         on_press: None,
         on_menu: None,
+        on_wheel: None,
         on_drag: None,
         fingers: 1,
         drag_said: 0,
@@ -1145,8 +1149,71 @@ pub fn View::on_menu(self : View, f : (Menu) -> Unit) -> View {
 /// a press asks for a menu (View::on_menu), its menu asked for, as one event of that moment; true then. None asks where
 /// the topmost is one that does not (or hosts the old view, or nothing is there).
 pub fn Tree::menu_at(self : Tree, x : Double, y : Double, at : Double) -> Bool {
-  // (one moment for all of it, as a drag's (Tree::drag_at): an event's own, or the one it is told in; the tree brought
-  // there first only where it is not in one already)
+  self.asked_at(x, y, at, fn(n) { n.on_menu is Some(_) }, fn(n, lx, ly, t) {
+    match n.on_menu {
+      Some(f) => f({ x: lx, y: ly, wx: x, wy: y, at: t })
+      None => ()
+    }
+  })
+}
+
+///|
+/// A wheel turned over a node at (x, y): how far across and down (`dx`, `dy`, as the host says it), what was held
+/// with it (`mods`, the host's wheel_mod_*), in the node's own terms as it is drawn then, in the window's, and when.
+pub(all) struct Wheel {
+  x : Double
+  y : Double
+  wx : Double
+  wy : Double
+  dx : Double
+  dy : Double
+  mods : Int
+  at : Double
+} derive(Eq, Show, Debug)
+
+///|
+/// What a wheel turned over it does (its own, at the wheel's moment, as one change outside any tracking): what is
+/// under it sees none of it.
+pub fn View::on_wheel(self : View, f : (Wheel) -> Unit) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.on_wheel = Some(f)
+  self
+}
+
+///|
+/// A wheel turned at (x, y) in the window at `at` (`dx`, `dy`, `mods` as the host says them): where the topmost node
+/// drawn there that takes a press takes the wheel (View::on_wheel), it is that node's, as one event of that moment;
+/// true then. None where the topmost is one that does not (or hosts the old view, or nothing is there).
+pub fn Tree::wheel_at(
+  self : Tree,
+  x : Double,
+  y : Double,
+  dx : Double,
+  dy : Double,
+  mods : Int,
+  at : Double,
+) -> Bool {
+  self.asked_at(x, y, at, fn(n) { n.on_wheel is Some(_) }, fn(n, lx, ly, t) {
+    match n.on_wheel {
+      Some(f) => f({ x: lx, y: ly, wx: x, wy: y, dx, dy, mods, at: t })
+      None => ()
+    }
+  })
+}
+
+///|
+/// What the pointer does at (x, y) at `at` (a secondary press, a wheel), asked of the topmost node drawn there that takes
+/// a press: where it is one that `takes` it, `then` with it, where in it and when, as one event of that moment (the
+/// moment of the event it is in, the tree brought there first where it is in none; where things are as of then, as a
+/// drag's: Tree::drag_at); true then.
+fn Tree::asked_at(
+  self : Tree,
+  x : Double,
+  y : Double,
+  at : Double,
+  takes : (Node) -> Bool,
+  then : (Node, Double, Double, Double) -> Unit,
+) -> Bool {
   let t = if self.cause_at >= 0.0 { self.cause_at } else { at }
   if self.cause_at < 0.0 {
     self.bring_to(t)
@@ -1164,21 +1231,20 @@ pub fn Tree::menu_at(self : Tree, x : Double, y : Double, at : Double) -> Bool {
           Some(f) => @signals.untracked(fn() { f(x - cx, y - cy, now) })
           None => true
         }
-        if here && (n.on_menu is Some(_) || n.on_drag is Some(_) || n.on_press is Some(_) || n.hosted) {
+        if here && (takes(n) || n.on_drag is Some(_) || n.on_press is Some(_) || n.hosted) {
           found.val = Some(c.id)
         }
       }
     })
     match found.val {
-      Some(id) =>
-        match self.nodes[id.at].on_menu {
-          Some(f) => {
-            asked.val = true
-            let (nx, ny, _) = self.placed(id.at)
-            f({ x: x - nx, y: y - ny, wx: x, wy: y, at: t })
-          }
-          None => ()
+      Some(id) => {
+        let n = self.nodes[id.at]
+        if takes(n) {
+          asked.val = true
+          let (nx, ny, _) = self.placed(id.at)
+          then(n, x - nx, y - ny, t)
         }
+      }
       None => ()
     }
   })
@@ -1665,6 +1731,7 @@ fn View::let_go(self : View) -> Unit {
   }
   n.on_press = None
   n.on_menu = None
+  n.on_wheel = None
   self.drag_ended()
   n.on_drag = None
   n.drag_said = n.drag_said + 1
