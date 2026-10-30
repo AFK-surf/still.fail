@@ -664,46 +664,47 @@ let triple_pick_chevron : Double = 12.0
 /// How hard it thinks as a level (`efforts`: the model's own first, "" its value, then its levels from the least to
 /// the most; `now` the one picked): one capsule of the stops' names side by side, each an equal share, its track
 /// filled from its start up to the one picked, the picked one lifted out of it (a segmented choice's thumb), the names
-/// up to it in the ink, past it muted. What changes fades as it is picked. `pick` given the value pressed.
+/// up to it in the ink, past it muted. All of it is one place along the stops, moving there as one thing as another is
+/// picked: the thumb slides there, the fill's end under it, each name inked as the thumb reaches it.
+/// `pick` given the value pressed.
 fn triple_meter(c : @ui.Ctx, efforts : Array[(String, String)], now : String, pick : (String) -> Unit) -> Unit {
+  let t = @sf.theme()
   let at = efforts.search_by(fn(o) { o.0 == now }).unwrap_or(0)
   // (each stop as wide as the widest name and its sides at least: where the panel may be as wide as that, it is, no
   // name cut short)
   let n = efforts.length().to_double()
-  let stop_least = efforts.fold(init=0.0, fn(m, o) { dmax(m, c.words_across(o.1, triple_meter_words_on)) }).ceil() +
+  let stop_least = efforts.fold(init=0.0, fn(m, o) { dmax(m, c.words_across(o.1, triple_meter_words)) }).ceil() +
     2.0 * @ui.Space::px(S2_5)
   // (as tall as a panel's rows and its search: a small panel's 34)
   let high = @sf.menu_row_min
+  // where along the stops it is (0 the first's place, 1 the next's …): going to the picked one's as a thing moved (a
+  // stop's way a stop wide: the further the longer), on from where it was as fast as it went when another is picked
+  let pos = @motion.animate(c, "triple/effort-at", at.to_double(), spec=@motion.move(points=stop_least))
+  // (each as a share of the stops' width: the fill to the thumb's far end, the room before the thumb, a stop's)
+  let fill_to = (pos + 1.0) / n * 100.0
+  let before = pos / n * 100.0
+  let share = 100.0 / n
   c.box(style=triple_meter_box.then(@ui.style(min_w=Within(stop_least * n), h=Fixed(high))), fn() {
-    // (the track filled from its start to the picked one's middle, under it: one round, its far end under the picked
-    // one's lift, moving there as another is picked; none for the model's own)
-    let to = if at > 0 { (at.to_double() + 0.5) / n } else { 0.0 }
-    let frac = @motion.animate(c, "triple/effort-fill", to, spec=@motion.tween(@sf.dur_ms, ease=Out))
-    let fill_w = frac * 100.0
-    let fill = c.box(
-      style=triple_meter_fill.then(@ui.style(w=Pct(fill_w))),
-      left=triple_meter_in,
-      top=triple_meter_in,
-      bottom=triple_meter_in,
-      taps=false,
-      fn() {  },
-    )
-    c.look(fill, @ui.look(alpha=@sf.ease_to(c, "triple/effort-filled", at > 0)))
+    // (behind the stops, in from the capsule as they are: the track filled from its start to the thumb's far end, its
+    // end under the thumb, all of it under the thumb at the model's own; then the thumb, a stop's share wide, that far
+    // along)
+    c.box(style=triple_meter_under, left=triple_meter_in, top=triple_meter_in, right=triple_meter_in, bottom=triple_meter_in, taps=false, fn() {
+      c.box(style=triple_meter_fill.then(@ui.style(w=Pct(fill_to))), fn() {  }) |> ignore
+    })
+    |> ignore
+    c.box(style=triple_meter_under, left=triple_meter_in, top=triple_meter_in, right=triple_meter_in, bottom=triple_meter_in, taps=false, fn() {
+      c.box(style=triple_meter_before.then(@ui.style(w=Pct(before))), fn() {  }) |> ignore
+      c.box(style=triple_meter_thumb.then(@ui.style(w=Pct(share))), fn() {  }) |> ignore
+    })
+    |> ignore
     for i, o in efforts {
       let (e, words) = o
       let id = c.id("triple/effort/" + e)
       let b = c.box(style=triple_meter_column, id~, fn() {
-        // (the picked one lifted out of the track)
-        let thumb = c.box(style=triple_meter_thumb, left=0.0, top=0.0, right=0.0, bottom=0.0, taps=false, fn() {  })
-        c.look(thumb, @ui.look(alpha=@sf.ease_to(c, "triple/effort-thumb/\{i}", i == at)))
-        c.text(words, style=if i == at {
-          triple_meter_words_on
-        } else if i < at {
-          triple_meter_words_in
-        } else {
-          triple_meter_words
-        })
-        |> ignore
+        // (in the ink once the thumb is on it or past it, muted ahead of it: the way between as it nears)
+        let inked = @motion.clamp(0.0, 1.0, pos - i.to_double() + 1.0)
+        // det-ok(box-loose): its ink between the theme's muted and its ink as far as the thumb has come, no style's
+        c.text(words, style=triple_meter_words, color=@sf.mix(t.p.text, inked, t.p.muted)) |> ignore
       })
       c.semantics(b, Radio, id~, label=words, check=if i == at { On } else { Off })
       if c.clicked(id) {
@@ -1067,31 +1068,34 @@ let triple_meter_column : @ui.Style = @ui.css("h=Full align=ACenter justify=JCen
   .then(@ui.style(w=@sf.grow))
 
 ///|
-/// The track filled: the words' stronger tint, its corner the capsule's in from its 2 (as far in as that).
+/// The track filled: the words' stronger tint, a capsule as the track is (concentric in it, 2 in), wherever it ends.
 // kept across runs: a value (no field of it changes)
-let triple_meter_fill : @ui.Style = @ui.css("radius=Inner bg=TintStrong")
+let triple_meter_fill : @ui.Style = @ui.css("h=Full radius=Full bg=TintStrong")
 
 ///|
 let triple_meter_in : Double = 2.0
 
 ///|
-/// The picked stop: lifted out of the track (the theme's raised, a hairline round it, a shadow), its corner the
-/// capsule's in from its 2.
+/// What is behind the stops (the fill, the thumb): a row as far in as they are.
 // kept across runs: a value (no field of it changes)
-let triple_meter_thumb : @ui.Style = @ui.css("radius=Inner bg=Raised border=B0_5 border_color=Line shadow=Sm")
+let triple_meter_under : @ui.Style = @ui.css("row")
 
 ///|
-/// A stop's name: muted past the one picked, in the ink up to it, the picked one's heavier.
+/// The room before the thumb: the stops it is past.
 // kept across runs: a value (no field of it changes)
-let triple_meter_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+let triple_meter_before : @ui.Style = @ui.css("h=Full")
 
 ///|
+/// The picked stop: lifted out of the track (the theme's raised, a hairline round it, a shadow), a capsule as the track
+/// is (concentric in it at either end, 2 in), wherever it is on its way.
 // kept across runs: a value (no field of it changes)
-let triple_meter_words_in : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
+let triple_meter_thumb : @ui.Style = @ui.css("h=Full radius=Full bg=Raised border=B0_5 border_color=Line shadow=Sm")
 
 ///|
+/// A stop's name (its ink as far as the thumb has come to it: triple_meter), one weight whatever is picked: the thumb
+/// says which.
 // kept across runs: a value (no field of it changes)
-let triple_meter_words_on : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, wrap=false)
+let triple_meter_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
 
 ///|
 /// A select's share of their line: its name over it.
