@@ -84,6 +84,57 @@ changes, laid out or painted again alone, a move or a fade only painted (a trans
 - **What is read out** (a11y.mbt, semantics.mbt) is the tree's, each node's semantics bindings of its own; what
   changed of it is told to the host as it changes.
 
+## Motion in what is made once
+
+How the others put motion on a tree made once, and what of it is ours (2026-10-30, the user:
+「研究一下这个框架跟动效怎么最合理地结合」「看看同类产品都是怎么做的」). They agree on five things:
+
+- **What moves is a property of the node, its target state.** Core Animation keeps a layer's model value (what was
+  set) apart from its presentation value (what shows now, worked out from the animations on it each frame), and what
+  acts reads the model. Compose reads an animated value in a `graphicsLayer { }` lambda, as it is drawn, so a motion
+  composes nothing again. Ours: a property bound to `animated(target, spec)` (rule 7 above); its target is state, its
+  value now is worked out only where it is read; logic reads the target alone (docs/motion.md rule 3).
+- **The phase that reads it is the phase that is done again.** Compose's three phases (composition, layout, drawing): a
+  state read in one does that one again and those after. Ours: a place, a scale, an opacity, a cut, a look are paint's
+  (painted again each frame it goes, nothing laid out); a size is layout's (its node laid out again, up to a relayout
+  boundary); none is the build's. What is made is never made again for a motion.
+- **A motion is set off by its cause, never by a value changing.** QML has both: `Behavior on x` (any change of `x`
+  eases, whatever changed it) and States with Transitions (what eases is said with the change of state that causes it).
+  Slint's `animate x`, Flutter's implicit widgets and Compose's `animate*AsState` are the first kind. Ours is the
+  second alone (docs/motion.md rules 1 and 2): a binding moves where its cause says so (`by`), a window made wider
+  changes a width at once. The only place "its value changed, so it eases" holds is a control's own state (kind 7).
+- **Coming and going is the structure's.** Vue's `<Transition>` (Vapor's own `VaporTransition`), Solid's
+  transition-group, Compose's `AnimatedVisibility`, Svelte's `transition:`: what decides that a node shows keeps it,
+  gone, as long as its exit says. Ours: `show` and `each` (Leaving, above).
+- **A place that follows the layout is moved from where the node is.** Framer Motion and Svelte's `animate:flip` measure
+  before and after a change and move the difference away (FLIP); Compose's `animateItem` knows which item moved by the
+  lazy list's keys, and `animateBounds` / `SharedTransitionLayout` work out the target layout first (lookahead) and
+  move what shows towards it; SwiftUI's `matchedGeometryEffect` and Flutter's `Hero` fly a pair matched by id in an
+  overlay. Ours: the node made once is still there at its cause's moment, so where it is drawn then is the "from"; the
+  layout of the frame of the cause is the "to"; a paint offset from one to the other, let go by its curve. Only the
+  cause (an `each` that moved a row, a stack that pushed a page, a sidebar folded) says so; nothing compares frames.
+  What flies between two places (kind 4) flies in an overlay, the pair matched by its key.
+
+The nine kinds (docs/motion.md) in it:
+
+| Kind | Made once as | Read in |
+|---|---|---|
+| 1. In the hand | the gesture writes a signal of where it is; let go, `animated` from there at its speed | paint (a place), layout where it resizes (a sheet's height) |
+| 2. Coming and going | `show` / `each` keep the node while its exit runs; enter from what it hangs on | paint |
+| 3. Moved or reshaped | the cause starts a FLIP from the node's place or ground at that moment to the new layout | paint (place, ground); layout only for a size the design moves |
+| 4. Flying | an overlay node keyed by the pair, from the source's place to the arrival's | paint |
+| 5. Another page | the stack's page nodes, each a place offset bound to the stack's way (pushed, popped, risen), told by the navigation | paint |
+| 6. Scrolled to | the list's offset `animated` by its glide | layout of the list's window (which rows show), paint of the rest |
+| 7. A control answering | the control's state signals eased (lit, pressed, its value) | paint |
+| 8. Waiting | a look by the clock (`cycle_look`) | paint |
+| 9. Emphasis | `animated` told at its cause | paint |
+
+What this takes away: "what is placed by the clock" (a page's slide as a closure the build put on its node,
+`Ctx::moved_by`) becomes the page node's own paint offset, kept with it; "where the last frame drew a target, read
+as it is built" (`Ctx::rect_of` in a build, the motion package's records found by key after layout) is the node's own
+place, read at the cause's moment; the motion package's per-frame records by key (`mo.recs`, measures) go with the
+frames that built everything again.
+
 ## Held by the tests
 
 The Tester keeps its one check, said another way: whatever a frame did by what was marked, the same state made into
