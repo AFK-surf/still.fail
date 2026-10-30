@@ -82,6 +82,15 @@ priv struct RowNodes {
   mut built_at : Double
   /// the frame it was last laid in
   mut shown : Int
+  /// the row or part whose build put it among its own nodes (an island in an island), if one did: told as it is, as
+  /// though it had read what it read itself
+  holder : Ref[RowNodes?]
+  /// the parts kept as their nodes among its own, where among them (from its first): their nodes theirs, out of its
+  /// own as it is taken out of the frame's and put back with them as it is put back; and those put among them by the
+  /// build going on, and where it began
+  mut inner : Array[(RowNodes, Int)]
+  inner_now : Array[RowNodes]
+  mut building_at : Int
 }
 
 ///|
@@ -239,6 +248,52 @@ fn Ctx::row_nodes_out(self : Ctx, rn : RowNodes) -> Unit {
     self.nodes[i].slot = i
     o.slot = -1
   }
+  inner_out(rn)
+}
+
+///|
+/// The parts kept among row or part `rn`'s nodes (an island in an island), out of its own (`store`) into theirs, spares
+/// in their places: each one's own, never two's.
+fn inner_out(rn : RowNodes) -> Unit {
+  for p in rn.inner {
+    let (i, off) = p
+    for j in 0..<i.n {
+      if j >= i.store.length() {
+        i.store.push(
+          match spare_nodes.pop() {
+            Some(s) => s
+            None => Node::new()
+          },
+        )
+      }
+      let o = rn.store[off + j]
+      rn.store[off + j] = i.store[j]
+      i.store[j] = o
+    }
+    inner_out(i)
+  }
+}
+
+///|
+/// The parts kept among the nodes of row or part `rn`, put back from `at` among the frame's: theirs in their places,
+/// where they are now, laid this frame.
+fn Ctx::inner_in(self : Ctx, rn : RowNodes, at : Int) -> Unit {
+  for p in rn.inner {
+    let (i, off) = p
+    for j in 0..<i.n {
+      let k = at + off + j
+      let o = self.nodes[k]
+      self.nodes[k] = i.store[j]
+      i.store[j] = o
+      self.nodes[k].slot = k
+      o.slot = -1
+    }
+    i.base = at + off
+    i.in_pool = false
+    i.shown = self.frame_no
+    i.laid_pass.val = nodes_run.pass
+    self.inner_in(i, at + off)
+  }
 }
 
 ///|
@@ -335,7 +390,13 @@ fn rows_frame_start() -> Unit {
 fn row_nodes_new(list : Int, item : Int) -> RowNodes {
   // (the pass it was last laid in: told in a pass before it is laid in it, it reads anew as it is)
   let laid_pass = Ref(-1)
+  let holder : Ref[RowNodes?] = Ref(None)
   let watch = @signals.watch(fn() {
+    // (among another's nodes: that one built again for it, it with it)
+    match holder.val {
+      Some(o) => o.watch.touch()
+      None => ()
+    }
     if frame_running.val && frame_built.val && laid_pass.val != nodes_run.pass {
       return
     }
@@ -388,6 +449,10 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     built_frame: -1,
     built_at: -1.0,
     shown: -1,
+    holder,
+    inner: [],
+    inner_now: [],
+    building_at: 0,
   }
 }
 
@@ -538,6 +603,8 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
   rn.used.clear()
   rn.again.clear()
   rn.laid.clear()
+  rn.inner_now.clear()
+  rn.building_at = self.count
   {
     census,
     info: self.info_reads.length(),
@@ -560,6 +627,9 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   rn.said_base = r
   rn.n = self.count - r
   rn.in_pool = true
+  // (the parts kept among its nodes, where among them)
+  rn.inner = rn.inner_now.map(fn(i) { (i, i.base - r) })
+  rn.inner_now.clear()
   rn.epoch = self.epoch
   rn.scale = self.scale
   rn.reads_out = self.reads_out
@@ -674,6 +744,7 @@ fn Ctx::nodes_put_back(self : Ctx, rn : RowNodes, parent : Int) -> Int {
     self.nodes[c0 + j].slot = c0 + j
     o.slot = -1
   }
+  self.inner_in(rn, c0)
   let at = fn(k : Int) { if k >= 0 { c0 + k } else { -1 } }
   for j in 0..<n {
     let nd = self.nodes[c0 + j]
@@ -770,11 +841,9 @@ fn Ctx::part_nodes(
     })
     |> ignore
   }
-  // (a part in a row's or a part's build: what holds it is built every frame)
-  if nodes_run.building is Some(_) {
-    build()
-    return
-  }
+  // (a part in a row's or a part's build: kept as its nodes among that one's, which is built again as it is told
+  // (RowNodes' `holder`), and put back with them)
+  let outer = nodes_run.building
   let rn = match kept_nodes.get((id, -1)) {
     Some(rn) => rn
     None => {
@@ -786,6 +855,7 @@ fn Ctx::part_nodes(
   rn.shown = self.frame_no
   rn.laid_pass.val = nodes_run.pass
   rn.own = own
+  rn.holder.val = outer
   // (`own`: what puts it here is made once (made.mbt's made_island), so what it is built from is its key and what it
   // read alone, whatever else the frame built anew)
   let may_keep = if own {
@@ -816,6 +886,7 @@ fn Ctx::part_nodes(
       self.nodes_put_back(rn, self.cur) |> ignore
       self.nodes_said_again(rn)
     })
+    self.held_by(outer, rn)
     return
   }
   // (built for what it read, or as it is new or built elsewhere: what it builds its lists from may be otherwise, their
@@ -844,7 +915,7 @@ fn Ctx::part_nodes(
   nodes_run.part_fresh = fresh
   rn.watch.read(build)
   nodes_run.part_fresh = was
-  nodes_run.building = None
+  nodes_run.building = outer
   rn.key = key
   rn.read = read_out
   rn.seed = self.id_seed
@@ -854,6 +925,33 @@ fn Ctx::part_nodes(
   rn.layer = self.layer_cur
   rn.direction = self.direction
   self.nodes_end(rn, r, b, part=true)
+  self.held_by(outer, rn)
+}
+
+///|
+/// Part `rn`, just put among the frame's nodes, put among those of the row or part being built (`outer`) if one is:
+/// its nodes theirs till they are taken out of the frame's, what it said again besides them said again with them.
+fn Ctx::held_by(self : Ctx, outer : RowNodes?, rn : RowNodes) -> Unit {
+  ignore(self)
+  match outer {
+    Some(o) => {
+      rn.in_pool = false
+      o.inner_now.push(rn)
+      for f in rn.used {
+        o.used.push(f)
+      }
+      for l in rn.laid {
+        o.laid.push(l)
+      }
+      // (what it says again where its nodes are moved to, from where they are among the frame's now: moved as that
+      // one's are)
+      let d = rn.base - rn.said_base
+      for f in rn.again {
+        o.again.push(fn(by) { f(by + d) })
+      }
+    }
+    None => ()
+  }
 }
 
 ///|
