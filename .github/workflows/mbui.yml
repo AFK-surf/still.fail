@@ -345,7 +345,11 @@ jobs:
         with:
           path: apps/mbui/out/core-target*/native/shell-apple
           key: shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
-          restore-keys: shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-
+          # (or from a Cargo.lock before it: cargo builds again only the crates it changed, the rest as they were.
+          # Keyed by the lock alone, a lock's change built all from nothing, 331 s of the macOS app's, bef99112's iroh)
+          restore-keys: |
+            shell-apple-target-darwin-arm64-${{ hashFiles('client/Cargo.lock') }}-
+            shell-apple-target-darwin-arm64-
       - name: The macOS app, built (and signed with still.fail's identity, on main)
         if: github.ref == 'refs/heads/main'
         env:
@@ -473,7 +477,11 @@ jobs:
         with:
           path: apps/mbui/out/core-target*/native/shell-apple
           key: shell-apple-target-ios-arm64-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
-          restore-keys: shell-apple-target-ios-arm64-${{ hashFiles('client/Cargo.lock') }}-
+          # (or from a Cargo.lock before it: cargo builds again only the crates it changed, the rest as they were.
+          # Keyed by the lock alone, a lock's change built all from nothing, 331 s of the macOS app's, bef99112's iroh)
+          restore-keys: |
+            shell-apple-target-ios-arm64-${{ hashFiles('client/Cargo.lock') }}-
+            shell-apple-target-ios-arm64-
       - name: The iOS app for a device, as an .ipa
         run: |
           APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui EMBER=$PWD bash apps/mbui/scripts/ios.sh build
