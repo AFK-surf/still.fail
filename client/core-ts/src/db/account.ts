@@ -764,6 +764,17 @@ export class AccountDb {
     return r ? this.#chatRow(station, 0, id, r[0], r[1]) : undefined;
   }
 
+  /// The row of a chat a link names (its row's id, or its agent's session), listed or archived, and whether archived: a
+  /// row or two read, not the station's lists.
+  chatNamed(station: string, id: string): { row: J; archived: boolean } | undefined {
+    for (const archived of [0, 1]) {
+      const r = this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = ? AND id = ?", [station, archived, id])[0]
+        ?? this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = ? AND session = ? ORDER BY ord LIMIT 1", [station, archived, id])[0];
+      if (r) return { row: this.#chatRow(station, archived, String(r[0]), r[1], r[2]), archived: archived === 1 };
+    }
+    return undefined;
+  }
+
   /// The sidebar row of a thread.
   chatOfThread(station: string, thread: number): J {
     const r = this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND thread = ? ORDER BY ord LIMIT 1", [station, thread])[0];

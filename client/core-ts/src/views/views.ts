@@ -1007,15 +1007,15 @@ export class Views implements Owner {
 
   /// The chats `text`, said in a chat on `station`, links to, as their stations' lists have them: each found its link,
   /// its title as its row says it, and whether it is archived (archivedRows), said so. One no list has is left out.
+  /// Each its row alone, read where it is kept: a station's whole lists, its archive's thousands of rows, read for a
+  /// link were most of what opening a chat that has one took (0.65-0.83 s on a phone, 2026-10-31).
   #linkedChats(station: string, text: string): J[] {
     if (!text.includes("/chats/") && !text.includes("/o/")) return [];
     return chatsLinked(text, station).flatMap((c) => {
-      const named = (row: J) => str(get(row, "id")) === c.id || str(get(row, "session")) === c.id;
-      const live = arr(this.ok({ topic: "chatRows", station: c.station })).find(named);
-      const gone = live === undefined ? arr(this.ok({ topic: "archivedRows", station: c.station })).find((r) => named(r) && isObject(get(r, "archived"))) : undefined;
-      const row = live ?? gone;
-      if (row === undefined) return [];
-      return [{ href: c.href, title: str(get(row, "title")) || t("core-views.new_chat"), ...(gone !== undefined ? { archived: true, note: t("core-views.search.archived") } : {}) }];
+      const found = this.#core.data.chatNamed(c.station, c.id);
+      if (found === undefined || (found.archived && !isObject(get(found.row, "archived")))) return [];
+      const row = found.row as J;
+      return [{ href: c.href, title: str(get(row, "title")) || t("core-views.new_chat"), ...(found.archived ? { archived: true, note: t("core-views.search.archived") } : {}) }];
     });
   }
 

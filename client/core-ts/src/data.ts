@@ -918,6 +918,10 @@ export class Data {
     return this.of(station)?.chat(station, id);
   }
 
+  chatNamed(station: string, id: string): { row: unknown; archived: boolean } | undefined {
+    return this.of(station)?.chatNamed(station, id);
+  }
+
   chatOfThread(station: string, thread: number): unknown {
     if (!Number.isInteger(thread)) return undefined;
     return this.of(station)?.chatOfThread(station, thread);

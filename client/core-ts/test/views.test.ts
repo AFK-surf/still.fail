@@ -1146,6 +1146,30 @@ test("a_message_says_the_chats_it_links_to_their_titles_and_which_are_archived",
   assert.deepEqual(u.value.messages.map((m: J) => m.chats), [[{ href: old, title: "旧的", archived: true, note: "已归档" }, { href: live, title: "c-live 的标题" }], undefined]);
 });
 
+test("a_chat_that_links_others_reads_their_rows_alone_not_their_stations_lists", async () => {
+  // A station's archive is thousands of rows: read whole to find a linked chat's title, it was most of what opening a
+  // chat with a link in it took (0.65-0.83 s on a phone, 2026-10-31).
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  t.set({ topic: "archivedRows", station: "ws/a" }, [{ ...row("c-old", now), title: "旧的", archived: { at: now, by: "auto" } }]);
+  t.set(rows("ws/a"), [row("c-live", now)]);
+  t.set(pageOf("ws/a", 7), page(1, ["看 https://app.still.fail/o/ws/a/c-live 和 https://app.still.fail/o/ws/a/c-old"], null));
+  t.set(overview("ws/a"), overviewOf([], []));
+  await t.read(u, 1);
+  // (as the app opens again: nothing of the lists read, the chat made anew)
+  t.data.release({ topic: "archivedRows", station: "ws/a" });
+  t.data.release(rows("ws/a"));
+  t.store.invalidate(chatTopic("ws/a", 7));
+  await t.read(u, 1);
+  assert.deepEqual(u.value.messages[0].chats.map((c: J) => [c.title, c.archived ?? false]), [["c-live 的标题", false], ["旧的", true]]);
+  assert.equal(t.data.loaded({ topic: "archivedRows", station: "ws/a" }), false, "the archive not read");
+  assert.equal(t.data.loaded(rows("ws/a")), false, "nor the list");
+});
+
 test("a_card_answered_from_here_stays_answered_once_its_message_leaves_the_outbox", () => {
   const t = setup();
   const views = t.views;
