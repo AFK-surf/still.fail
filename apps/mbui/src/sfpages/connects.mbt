@@ -182,10 +182,17 @@ fn connects_list(
             @sf.heading(c, if sv is None || flag(sv, "online") { name } else { @sf.t("android-settings.connects.offline", args=[("name", name)]) },
             )
           }
+          // (each connect by its id: one made or taken out comes and goes where it is, @sf.group_rows)
           @sf.group(c, fn() {
-            for x in here_list {
-              cn_row(c, core, look, address, name, sv, field(Some(x), "connect"))
-            }
+            @sf.group_rows(
+              c,
+              "connects/" + address,
+              here_list.mapi(fn(i, x) {
+                let cn = field(Some(x), "connect")
+                let id = if text(cn, "id") != "" { text(cn, "id") } else { "#" + i.to_string() }
+                (id, fn() { cn_row(c, core, look, address, name, sv, cn) })
+              }),
+            )
           })
         })
       }
