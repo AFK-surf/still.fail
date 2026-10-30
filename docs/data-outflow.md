@@ -48,6 +48,8 @@ still.fail 这边没有任何为某个使用者写的东西：谁来申请都走
     程序来取之前就被取消的，它再来时得到 `403`。
   - 一份申请，没人答过一周，或答了允许、程序一周没来取，就作废。
   - 同一个申请方在同一个键下已有一份授权：照常申请，批准后旧的那份作废。
+  - 申请的东西这个程序已经有了（它的某一份授权，不论在哪个键下，已经给了这几类、范围也够）：不再问管理员，立刻 `200`，还是那份授权，
+    另给一个 token；它以前拿到的 token 照样能用（每份授权最多再记 8 个）。只有要的比已有的多，才是一份等管理员答的新申请。
 - 申请方核实（station 一侧）：
   - 对端进程：macOS 用 `LOCAL_PEERTOKEN` 取审计令牌（防 PID 复用），Linux 用 `SO_PEERCRED`（mesh 插件 `peerProcess(fd)`）；
   - macOS：still.fail Helper 按审计令牌取 `SecCode`，查签名有效，取 Team ID、签名标识、可执行文件路径；没签名或签名无效的程序
@@ -75,22 +77,31 @@ still.fail 这边没有任何为某个使用者写的东西：谁来申请都走
 - `GET /v1/stations`：能读的 station，`{ stations: [{ id, name, here }] }`，这台在最前（`here: true`）。授权只到这台 station 的，就只有
   这一台。
 - 下面三个都可以带 `station=<id>`：读 workspace 里另一台 station 的（要授权到整个 workspace，否则 `403`；不在 workspace 里 `404`；
-  那台连不上 `502`；workspace 的 station 名单此刻不可知 `503`）。不带就是这台。另一台的数据由这台 station 经站间通道
+  那台连不上 `502`；那台 60 秒内没回答 `504`，请求不会一直挂着；workspace 的 station 名单此刻不可知 `503`）。不带就是这台。另一台的数据由这台 station 经站间通道
   （`outflow.read`，docs/station-peers.md）向它要，回答的格式和这台的一样；`thread` 是那台 station 自己的编号，和 `station` 一起才
   唯一。
 
 - `GET /v1/usage?from&to&tz`（`usage`）：和用量页同一份明细，按天、chat、人、账号、模型相加：`calls`、`input`、`cacheRead`、
   `cacheWrite`、`output`、`cost`（按价目的美元，没价目为 null），以及各行的 `thread`；`people` 是各人的 email（知道的话）。
-  一次最多 31 天。
-- `GET /v1/chats?since`（`chats`）：在 `since` 之后有动静的 chat：`thread`、标题、状态（`all_done` / `need_human` /
-  `waiting` / 进行中）、创建人、创建时间、最后活动时间、runtime 和模型。用 `thread` 和用量对上。
-- `GET /v1/messages?thread&after&limit`（`messages`）：一个 chat 在第 `after` 条之后的消息，按顺序，一次最多 `limit` 条（默认 100，
+  一次最多 31 天。`person` 是那一轮由谁的消息开始的：多人在同一个 chat 里说话，这个 chat 就有每人一行，chat 的总量是它所有行相加。
+- `GET /v1/chats?since&limit&before`（`chats`）：在 `since` 之后有动静的 chat，最近活动的在前：`thread`、标题、状态（`all_done` /
+  `need_human` / `waiting` / 进行中）、创建人、创建时间、最后活动时间、runtime 和模型。用 `thread` 和用量对上。不带 `limit` 一次给全部；
+  带 `limit`（最多 1000）就分页：`more` 说后面还有，下一页带上这页的 `next` 作 `before`。只为 `since` 之后有动静的 chat 汇总，
+  `since` 越近越省。
+- `GET /v1/messages?thread&after&limit`（`messages`）：chat 用 `thread` 指定，也可以用 `session`（用量行里的会话 key）或 `channel` 加
+  `ts`（Slack 频道和线程首条消息的 ts）指定；一个 chat 在第 `after` 条之后的消息，按顺序，一次最多 `limit` 条（默认 100，
   最多 500）：每条的 `n`、`kind`（`message`，或 `edit`：对第 `target` 条的改写）、`authorKind`（`person` / `agent`）、`author`、
   `text`、`at`；`last` 是这个 chat 最新的一条，`more` 说后面还有。`thread` 不是 home workspace 的 chat：`404`。
   消息不加工：chat 是干什么的（标签、摘要），由使用者自己从消息里算，still.fail 不为此多花 token。
 - 授权取消或换过：`401 { error: "revoked" }`。
 
 授权覆盖这台 station（或 workspace 的每台 station）上这个 workspace 的全部 chat，不按 chat、不按人分（station 不做按 chat、按人的权限：同一 workspace 里所有 chat 本来就对所有成员和 agent 可见；workspace 之间的软隔离照 docs/multi-workspace.md）。
+
+## 怎么传
+
+不是文件：每个读取是本机 socket 上的一次 HTTP 请求，回答是一个完整的 JSON。读另一台 station 时，这台经站间通道向它要，收齐它的
+回答（最多 64 MiB，再多就是 `502`）、解析好了才回给程序，程序拿不到半份数据：途中断了是 `502`，那台不回答是 `504`。大的东西分页拿：
+`messages` 每页最多 500 条，`chats` 带 `limit` 分页，`usage` 每次最多 31 天。程序自己断开了就再读一次，消息从 `after` 接着读。
 
 ## 收回和记录
 

@@ -202,6 +202,28 @@ export function threadsOfSessions(s: Store, keys: string[]): number[] {
   return all(s, `SELECT DISTINCT thread FROM thread_sessions WHERE session IN (${keys.map(() => "?").join(", ")})`, ...keys).map((r) => r.thread as number);
 }
 
+/// Of `threads`, those with something new since `since` (ms): made, or a message said, then. An archived one's
+/// messages are in its archive: it stays among them, for its summary to tell.
+export function threadsActiveSince(s: Store, threads: number[], since: number): number[] {
+  if (threads.length === 0 || since <= 0) return threads;
+  return all(
+    s,
+    `SELECT t.id FROM threads t LEFT JOIN thread_state st ON st.thread = t.id LEFT JOIN entries e ON e.thread = t.id AND e.n = st.said_n
+     WHERE t.id IN (${threads.map(() => "?").join(", ")}) AND (t.archived_at IS NOT NULL OR t.created_at >= ? OR e.at >= ?)`,
+    ...threads, since, since,
+  ).map((r) => r.id as number);
+}
+
+/// The chat a session is in: the thread it first joined, or null.
+export function threadOfSession(s: Store, key: string): number | null {
+  return one(s, "SELECT thread FROM thread_sessions WHERE session = ? ORDER BY joined_at, rowid LIMIT 1", key)?.thread ?? null;
+}
+
+/// The thread at a chat app's address (`channel`, `ts`: a Slack channel and its thread's first message), or null.
+export function threadAt(s: Store, channel: string, ts: string): number | null {
+  return one(s, "SELECT id FROM threads WHERE channel = ? AND thread_ts = ? ORDER BY id LIMIT 1", channel, ts)?.id ?? null;
+}
+
 /// The threads the sidebar is made of (views.ts `chats`): those of the sessions in lists, and every thread of a session
 /// in one of those (the Slack threads their agents came from among them). The archive's others, most of a station's
 /// threads, are none of it.

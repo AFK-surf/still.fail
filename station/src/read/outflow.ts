@@ -47,14 +47,21 @@ function state(turn: Json | null): string | null {
   return said === "need_help" ? "need_human" : said;
 }
 
-/// v1 `chats`: the chats with something new since `since` (ms): each one's thread (what `usage` rows name), where it
-/// is (`stillfail`, `slack`, `feishu`), title, how it stands, who started it, when, its latest activity, whether it is
-/// archived, and its agents' runtimes and models.
-export function outflowChats(s: Store, since: number, of: Of = HOME): Json {
+/// A page of chats: at most `limit`, those after `before` (the `next` of the page before).
+export type ChatsPage = { limit: number; before: string | null };
+
+/// v1 `chats`: the chats with something new since `since` (ms), the latest active first: each one's thread (what
+/// `usage` rows name), where it is (`stillfail`, `slack`, `feishu`), title, how it stands, who started it, when, its
+/// latest activity, whether it is archived, and its agents' runtimes and models. With `page`, at most its `limit`,
+/// `more` when there are more and `next` to ask for them with; without, all of them.
+export function outflowChats(s: Store, since: number, of: Of = HOME, page: ChatsPage | null = null): Json {
   const sessions = new Map(store.listSessions(s).filter((x) => sees(of, x.ws ?? null)).map((x) => [x.key, x]));
-  const stats = store.sessionStats(s, [...sessions.keys()]);
+  // Only the workspace's threads with something new are summed up: the others cost nothing.
+  const threads = store.threadsActiveSince(s, store.threadsOfSessions(s, [...sessions.keys()]), since);
+  const listed = store.listThreads(s, "", null, threads);
+  const stats = store.sessionStats(s, [...new Set(listed.flatMap((t) => t.sessions.map((m) => m.session)).filter((k) => sessions.has(k)))]);
   const chats: Json[] = [];
-  for (const t of store.listThreads(s, "", null, null)) {
+  for (const t of listed) {
     const members = t.sessions.filter((m) => sessions.has(m.session));
     if (members.length === 0) continue;
     const lastActiveAt = Math.max(t.thread.createdAt, t.lastMessage?.createdAt ?? 0);
@@ -74,8 +81,25 @@ export function outflowChats(s: Store, since: number, of: Of = HOME): Json {
       agents: members.map((m) => ({ runtime: sessions.get(m.session)!.runtime, model: sessions.get(m.session)!.model })),
     });
   }
-  chats.sort((a, b) => b.lastActiveAt - a.lastActiveAt);
-  return { since, chats };
+  chats.sort((a, b) => b.lastActiveAt - a.lastActiveAt || b.thread - a.thread);
+  if (page === null) return { since, chats };
+  const [at, thread] = (page.before ?? "").split(".").map(Number);
+  const rest = page.before === null || !Number.isFinite(at) || !Number.isFinite(thread)
+    ? chats
+    : chats.filter((c) => c.lastActiveAt < at! || (c.lastActiveAt === at && c.thread < thread!));
+  const shown = rest.slice(0, page.limit);
+  const last = shown.at(-1);
+  const more = rest.length > shown.length;
+  return { since, chats: shown, more, next: more && last ? `${last.lastActiveAt}.${last.thread}` : null };
+}
+
+/// Which chat a program names for its messages: its `thread` (as `chats` and `usage` say it), a `session` of it (as
+/// `usage` rows name it), or a chat app's address (`channel` and `ts`). Null when none of them is a chat here.
+export function outflowThread(s: Store, by: { thread?: number | null; session?: string | null; channel?: string | null; ts?: string | null }): number | null {
+  if (typeof by.thread === "number" && Number.isSafeInteger(by.thread)) return by.thread;
+  if (typeof by.session === "string" && by.session !== "") return store.threadOfSession(s, by.session);
+  if (typeof by.channel === "string" && by.channel !== "" && typeof by.ts === "string" && by.ts !== "") return store.threadAt(s, by.channel, by.ts);
+  return null;
 }
 
 /// v1 `messages`: a chat's messages after its message `after` (its `n`), at most `limit`, oldest first: each one's
