@@ -857,12 +857,15 @@ fn span_color(spans : Array[(Int, Int, Int64)], off : Int, color : Int64) -> Int
 }
 
 ///|
-/// What node `n` holds, painted in turn (what goes over its siblings after them).
-fn Ctx::paint_held(self : Ctx, n : Node, alpha : Double) -> Unit {
+/// What node `n` holds, painted in turn (what goes over its siblings after them); but what `but` says is painted
+/// apart (the old frame's root, the one old view the window's: its layers, over the window's tree: view_paint).
+fn Ctx::paint_held(self : Ctx, n : Node, alpha : Double, but? : (Int) -> Bool = fn(_) { false }) -> Unit {
   let mut c = n.first
   let mut over = false
   while c >= 0 {
-    if dr.any && self.drawn_z(c) == 1 {
+    if but(c) {
+      ()
+    } else if dr.any && self.drawn_z(c) == 1 {
       over = true
     } else {
       self.paint(c, alpha)
@@ -873,7 +876,7 @@ fn Ctx::paint_held(self : Ctx, n : Node, alpha : Double) -> Unit {
     // what goes over its siblings, after them
     c = n.first
     while c >= 0 {
-      if self.drawn_z(c) == 1 {
+      if !but(c) && self.drawn_z(c) == 1 {
         self.paint(c, alpha)
       }
       c = self.nodes[c].next

@@ -361,15 +361,10 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       if old_whole.val {
         // (the one old view the whole window: the old frame's, what it takes presses at its own, at the window's
         // origin; what it put over all of it at its root (its overlays) after the tree, as where it is in a box: theirs)
+        // (in the order the old frame's root holds them in, as painting it would: what goes over its siblings after
+        // them)
         let from = self.next_hit_ids.length()
-        let mut ch = self.nodes[root].first
-        while ch >= 0 {
-          let n = self.nodes[ch]
-          if !(n.layer || n.portal) {
-            self.paint(ch, 1.0)
-          }
-          ch = n.next
-        }
+        self.paint_held(self.nodes[root], 1.0, but=fn(ch) { self.nodes[ch].layer || self.nodes[ch].portal })
         old_hits.push({ id: c.id, from, to: self.next_hit_ids.length(), x: 0.0, y: 0.0 })
       } else {
         match old_boxes.get(c.id) {
