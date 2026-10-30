@@ -438,7 +438,7 @@ fn station_card_on(c : @ui.Ctx, key : String, station : String, trigger : Int) -
 
 ///|
 /// How a station is reached, as a dot (StationLink.css.ts dot): straight there green, through a relay amber, away red,
-/// else a grey ring.
+/// else (coming back, a way still chosen) grey.
 fn via_dot(c : @ui.Ctx, via : String) -> Unit {
   c.box(
     style=match via {
@@ -1071,7 +1071,7 @@ let chat_station_words_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg,
 let chat_station_mark : Double = 12.0
 
 ///|
-/// How a station is reached, a dot 7 across (StationLink.css.ts dot): green, amber, red, a grey ring.
+/// How a station is reached, a dot 7 across (StationLink.css.ts dot): green, amber, red, grey.
 // kept across runs: a value (no field of it changes)
 let via_direct : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Positive")
 
@@ -1085,7 +1085,7 @@ let via_offline : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Danger")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let via_waiting : @ui.Style = @ui.css("w=S2 h=S2 radius=Full border=B1 border_color=Muted")
+let via_waiting : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Muted")
 
 ///|
 /// The same on a tile's corner (cornerDot): 10 across, ringed 2 in the page's ground, 3 past its edges.

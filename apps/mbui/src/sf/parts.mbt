@@ -1982,14 +1982,16 @@ let pill_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Me
 
 ///|
 /// How something stands, at a glance (parts.tsx StatusDot, parts.css.ts statusDot): a dot 7 round, online the online
-/// green, busy amber, error red, else (offline) a ring 1.5 in the muted ink. `state`: "online", "busy", "error", or
-/// anything else for offline (the web's Presence).
+/// green, busy amber, error red, waiting (coming back) the muted ink, else (offline) a ring 1.5 in it. `state`:
+/// "online", "busy", "error", "waiting", or anything else for offline (the web's Presence).
 pub fn status_dot(c : @ui.Ctx, state : String) -> Unit {
   let p = theme().p
   let (ground, ring) = match state {
     "online" => (p.online, no_ground)
     "busy" => (p.warn_ink, no_ground)
     "error" => (p.red, no_ground)
+    // coming back: a grey dot, filled (a ring is away)
+    "waiting" => (p.muted, no_ground)
     _ => (no_ground, p.muted)
   }
   c.box(style=status_dot_box, bg=ground, border=if ring == no_ground { no_ring } else { status_ring }, border_color=ring, fn() {  })

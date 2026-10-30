@@ -32,7 +32,15 @@ pub fn station_peek_card(c : @ui.Ctx, address : String) -> Unit {
   c.box(style=peek_card, fn() {
     c.box(style=peek_card_words, fn() {
       c.box(style=peek_card_head, fn() {
-        @sf.status_dot(c, if flag(s, "online") { "online" } else { "offline" })
+        // the same dot as on its tile in the chat's bar: how this device reaches it, not only whether it is up
+        @sf.status_dot(c, match station_via(s) {
+          "direct" => "online"
+          "relay" => "busy"
+          "offline" => "error"
+          "waiting" => "waiting"
+          // up, how it is reached not read yet
+          _ => "online"
+        })
         if @sf.has_station_mark(text(s, "emoji"), text(s, "icon")) {
           @sf.station_mark(c, text(s, "emoji"), text(s, "icon"), peek_card_mark, t.p.muted)
         }
@@ -364,4 +372,23 @@ fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// How this device reaches a station of the workspace's `stations` (StationLink.tsx useStationLink): `direct`,
+/// `relay`, `waiting` (coming back, or a way still being chosen), `offline`, or "" while there is no reading of it.
+/// One answer wherever a station's dot says it: its tile in a chat's bar, its card.
+pub fn station_via(s : Json?) -> String {
+  if !flag(s, "online") {
+    "offline"
+  } else if flag(s, "reconnecting") {
+    "waiting"
+  } else {
+    match text(field(s, "way"), "via") {
+      "direct" => "direct"
+      "relay" => "relay"
+      "choosing" => "waiting"
+      _ => ""
+    }
+  }
 }

@@ -11,6 +11,7 @@ import * as css from "./StationCards.css.ts";
 import { MarkPick } from "./MarkPick.tsx";
 import { same, type Mark } from "../stationPick.ts";
 import { StationMark } from "../StationMark.tsx";
+import { StationDot, useStationLink } from "../StationLink.tsx";
 import { stationBase } from "../station.tsx";
 import { Link } from "react-router";
 import { ChevronRight } from "@stillfail/ui/icons.tsx";
@@ -55,12 +56,14 @@ export function Uses({ use, net, to, flush = false }: { use: ResourceUse; net: b
  */
 export function StationPeek({ s, settings, footer, panel = false }: { s: StationView; settings?: string; footer?: ReactNode; panel?: boolean }) {
   const net = useStationNet(s.online ? s.station : null);
+  const link = useStationLink(s.station);
   // In a small panel (a hover card): the card's whole room, its words in by a row's padding, its rows at the card's
   // padding (docs/ui-panels.md).
   return (
     <div className={panel ? `${css.peek} ${controlsCss.panelCard} ${controlsCss.panelEdge}` : css.peek}>
       <div className={css.peekHead}>
-        <StatusDot state={s.online ? "online" : "offline"} label={s.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />
+        {/* The same dot as on its tile in the chat's bar: how this device reaches it, not only whether it is up. */}
+        {link ? <StationDot link={link} /> : <StatusDot state={s.online ? "online" : "offline"} label={s.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />}
         {(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={16} />}
         <span className={css.peekName}>{s.name}</span>
         <span className={css.state}>{state(s)}</span>
