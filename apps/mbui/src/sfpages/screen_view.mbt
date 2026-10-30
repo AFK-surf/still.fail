@@ -213,6 +213,8 @@ pub fn screen_page(
     if u.awake != shown {
       u.awake = shown
       @ui.keep_awake(shown)
+      // (into the device's performance record while it is kept: what warms a phone is mostly a screen looked at)
+      @hostapi.perf_line("app: screen " + (if shown { "shown " } else { "hidden " }) + key)
     }
     // while it is looked at, a phone turns as it is held (ScreenViewer.kt: the activity's orientation unspecified),
     // the rotation lock honoured: with it on, the system offers its turn button
@@ -446,6 +448,7 @@ pub fn screen_left(src : Source, station : String, screen : String) -> Unit {
       }
       if u.awake {
         @ui.keep_awake(false)
+        @hostapi.perf_line("app: screen closed " + key)
       }
       if u.turnable {
         @hostapi.set_turnable(false)
@@ -1265,3 +1268,36 @@ fn take_over(c : @ui.Ctx, s : ScreenSess, in_bar? : Bool = false) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// The screens open as the device's performance record says them (@ui.perf_also "screens"): each its codec and size,
+/// the 帧率 and 画质 asked, the frames and bytes that came since last asked (as 控制中心's 连接 counts them: ScreenSess::came),
+/// over `span` ms; "" where none is open.
+pub fn screens_perf(span : Double) -> String {
+  let line = StringBuilder::new()
+  for key, s in screens_open {
+    let (frames, bytes) = s.came()
+    let (f0, b0) = screens_perf_was.get(key).unwrap_or((frames, bytes))
+    screens_perf_was[key] = (frames, bytes)
+    let secs = (if span > 1.0 { span } else { 1.0 }) / 1000.0
+    let size = match s.size {
+      Some((w, h)) => "\{w}x\{h}"
+      None => "-"
+    }
+    line.write_string(
+      (if line.is_empty() { "" } else { " | " }) +
+      "\{s.codec.unwrap_or("-")} \{size} asked=\{s.asked}/\{s.asked_fps}fps fps=\{((frames - f0).to_double() / secs).round()} kbps=\{((bytes - b0).to_double() * 8.0 / 1000.0 / secs).round()} phase=\{s.phase()}",
+    )
+  }
+  for key in screens_perf_was.keys().collect() {
+    if !screens_open.contains(key) {
+      screens_perf_was.remove(key)
+    }
+  }
+  line.to_string()
+}
+
+///|
+/// Each open screen's frames and bytes as screens_perf last said them, by its key.
+// kept across runs: the record's counts, put back as a screen closes (screens_perf)
+let screens_perf_was : Map[String, (Int, Int)] = {}

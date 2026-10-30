@@ -959,6 +959,13 @@ pub fn fixture(mode : String) -> Source {
       "{\"supported\":true,\"developer\":true,\"wireless\":true,\"wifi\":true,\"canSwitch\":false,\"reads\":false}",
     )
   }
+  // (chat-phone-linked-…: a phone with all it takes, its approved request's pairing card opening its station's page; -desk: a
+  // computer, no adb of its own)
+  if f.mode.has_prefix("chat-phone-linked-") && !f.mode.has_suffix("-desk") {
+    @settings.adb_phone_said(
+      "{\"supported\":true,\"developer\":true,\"wireless\":true,\"wifi\":true,\"canSwitch\":false,\"reads\":false}",
+    )
+  }
   // (chat-phone-lacks: a phone without Developer options yet, its request's card saying so)
   if f.mode == "chat-phone-lacks" {
     @settings.adb_phone_said(

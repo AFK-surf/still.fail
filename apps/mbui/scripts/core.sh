@@ -121,6 +121,9 @@ PY
 # buddies asks.ts imports) as committed, none of them changed in the checkout (else no key: made, not kept); this
 # module's core/; this script; the entry; hermesc itself (the bytecode is its Hermes's: Windows' is the engine's own).
 SHA=$(command -v sha256sum > /dev/null && echo sha256sum || echo "shasum -a 256")
+# (as bash's paths: Windows' runner says D:\a\..., and a glob over it, the newest 8's keep below, matched nothing, so
+# none went: the Windows job's HBC_CACHE grew to 566 MB, its restore 40 s, 2026-10-30)
+[ -z "${HBC_CACHE:-}" ] || ! command -v cygpath > /dev/null || HBC_CACHE=$(cygpath -u "$HBC_CACHE")
 hbc_key() {
   [ -n "${HBC_CACHE:-}" ] || return 1
   local trees

@@ -330,6 +330,10 @@ pub fn Tester::new(
     marks_out: [],
     marks_next: None,
     shares: [],
+    perf: -1,
+    perf_sets: [],
+    perf_lines: [],
+    perf_bytes: 0.0,
     view_texts: {},
     view_stills: {},
     view_infos: {},
@@ -1474,6 +1478,26 @@ pub fn Tester::press_at(self : Tester, x : Double, y : Double) -> Unit {
 /// A keyboard plugged in from now on, or taken away (@ui.keyboard).
 pub fn Tester::set_keyboard(self : Tester, on : Bool) -> Unit {
   self.fake.keyboard = on
+}
+
+///|
+/// The device's performance record from now on (@hostapi.perf_state): -1 none kept here (as a Tester starts), 0 one
+/// kept but off, 1 on.
+pub fn Tester::set_perf(self : Tester, state : Int) -> Unit {
+  self.fake.perf = state
+}
+
+///|
+/// How many bytes the performance record's files have from now on (@hostapi.perf_size).
+pub fn Tester::set_perf_size(self : Tester, bytes : Double) -> Unit {
+  self.fake.perf_bytes = bytes
+}
+
+///|
+/// What the app said of the device's performance record: each @hostapi.set_perf (on or off), oldest first; and the
+/// lines it wrote into it while it was on (@hostapi.perf_line).
+pub fn Tester::perf_said(self : Tester) -> (Array[Bool], Array[String]) {
+  (self.fake.perf_sets, self.fake.perf_lines)
 }
 
 ///|

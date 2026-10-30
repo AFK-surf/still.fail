@@ -144,6 +144,51 @@ impl @hostapi.Host for FakeHost with cpu_ms(_) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with perf_state(_) {
+  match fake.val {
+    Some(f) => f.perf
+    None => -1
+  }
+}
+
+///|
+impl @hostapi.Host for FakeHost with set_perf(_, on) {
+  match fake.val {
+    Some(f) =>
+      if f.perf >= 0 {
+        f.perf_sets.push(on)
+        f.perf = if on { 1 } else { 0 }
+      }
+    None => ()
+  }
+}
+
+///|
+impl @hostapi.Host for FakeHost with perf_line(_, line) {
+  match fake.val {
+    Some(f) => if f.perf == 1 { f.perf_lines.push(line) }
+    None => ()
+  }
+}
+
+///|
+impl @hostapi.Host for FakeHost with perf_where(_) {
+  match fake.val {
+    Some(f) if f.perf >= 0 => "Documents/perf"
+    _ => ""
+  }
+}
+
+///|
+impl @hostapi.Host for FakeHost with perf_size(_) {
+  // (what the lines weigh is the real host's, whose times are not a test's: as the test says, Tester::set_perf_size)
+  match fake.val {
+    Some(f) => f.perf_bytes
+    None => 0.0
+  }
+}
+
+///|
 impl @hostapi.Host for FakeHost with set_ime(_, a0, a1, a2, a3, a4, a5, a6, a7) {
   h_set_ime(a0, a1, a2, a3, a4, a5, a6, a7)
 }

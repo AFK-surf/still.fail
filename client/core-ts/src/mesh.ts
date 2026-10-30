@@ -9,7 +9,8 @@
 // All of it runs as fibers (rule 1): an opening is a Deferred everyone asking for the same address meanwhile waits on, a
 // link's renewal and its first answer are fibers in the core's scope, a race and a hedge are fibers started as the UI
 // comes back, measuring and the day's tally are fibers on the clock.
-import { Clock, Deferred, Effect, Fiber, type Result, Semaphore } from "effect";
+import { dialLine, record, recording, said, stationTag } from "./record.ts";
+import { Cause, Clock, Deferred, Effect, Exit, Fiber, type Result, Semaphore } from "effect";
 import type { Credential } from "./cloud.ts";
 import type { Inner } from "./core.ts";
 import { CoreError, asCoreError, failedIn } from "./error.ts";
@@ -668,6 +669,8 @@ export class Mesh {
   #changed: Deferred.Deferred<void>[] = [];
   readonly #racing = new Set<string>();
   #stuck = false;
+  /// What each link had sent and taken as the record last said it (#recordWays).
+  readonly #recorded = new WeakMap<Link, { rx: number; tx: number; paths: Map<string, [number, number]> }>();
   #reboundAt = -Infinity;
   readonly #known: import("./iroh.ts").IrohAddr[] = [];
   readonly #hedges = new Map<string, Hedge>();
@@ -996,9 +999,13 @@ export class Mesh {
   #rebind(always = false): Effect.Effect<IrohEndpoint> {
     return Effect.gen({ self: this }, function* () {
       const now = this.#env.host.nowMs();
-      if (!always && now - this.#reboundAt < REBIND_MS) return this.#endpoint;
+      if (!always && now - this.#reboundAt < REBIND_MS) {
+        record(this.#env.host, "conn rebind", () => `skipped: ${Math.round(now - this.#reboundAt)}ms since the last (REBIND_MS)`);
+        return this.#endpoint;
+      }
       this.#reboundAt = now;
       const bound = yield* Effect.result(Mesh.#bind(this.#env.iroh, this.#secret, this.relays, false, this.#env.takes));
+      record(this.#env.host, "conn rebind", () => `${always ? "relays retold" : "a dial unanswered, nothing open"} -> ${bound._tag === "Failure" ? `failed: ${said(bound.failure.message)}` : "bound"}`);
       if (bound._tag === "Failure") return this.#endpoint;
       const endpoint = bound.success;
       this.#env.runner.fork(this.#accepting(endpoint));
@@ -1122,7 +1129,7 @@ export class Mesh {
       if (this.#stuck && !this.#anyOpen()) {
         span.set("stillfail.rebound", true);
         endpoint = yield* this.#rebind();
-      }
+      } else if (this.#stuck) record(this.#env.host, "conn stuck", () => `${stationTag(addr)} not rebound: ${this.#openLinks().length} link(s) open`);
       span.set("stillfail.relay", relayStatus(endpoint));
       const serial = ++this.#serials;
       const hedged = Deferred.makeUnsafe<Link, CoreError>();
@@ -1728,6 +1735,26 @@ export class Mesh {
     });
   }
 
+  /// What went over each way to the station since the last tick, a line each tick while lines are kept (record.ts): the
+  /// bytes in and out of each link, and of each of its paths the packets sent and lost since, its round trip.
+  #recordWays(addr: string): void {
+    const parts: string[] = [];
+    for (const w of this.#live(addr)) {
+      const stats = w.link.conn.stats();
+      const was = this.#recorded.get(w.link) ?? { rx: 0, tx: 0, paths: new Map<string, [number, number]>() };
+      const paths = w.link.conn.paths().map((p) => {
+        const [tx0, lost0] = was.paths.get(p.id) ?? [0, 0];
+        was.paths.set(p.id, [p.txPackets, p.lostPackets]);
+        return `${p.selected ? "*" : ""}${p.relay !== null ? relayHost(p.relay) : (p.ip ?? "direct")} ${p.rttMs === null ? "?" : `${Math.round(p.rttMs)}ms`} +${p.txPackets - tx0}/${p.lostPackets - lost0}`;
+      });
+      parts.push(`${w.link.pinned ?? "main"} in=+${stats.rxBytes - was.rx}B out=+${stats.txBytes - was.tx}B missed=${w.missed} [${paths.join("; ")}]`);
+      was.rx = stats.rxBytes;
+      was.tx = stats.txBytes;
+      this.#recorded.set(w.link, was);
+    }
+    if (parts.length > 0) record(this.#env.host, "conn ways", () => `${stationTag(addr)} ${parts.join(" | ")}`);
+  }
+
   /// While the station has a way open: every TICK_MS each pinged, the requests moved to the best (`#choose`), the
   /// ways not worth keeping let go (`#prune`), and every EXPLORE_MS the others dialled again (`#explore`); the main
   /// endpoint's link, gone from a station reached direct within DIRECT_RECALL_MS, every REDIAL_MAIN_MS.
@@ -1741,6 +1768,7 @@ export class Mesh {
         yield* this.#sample(addr);
         this.#tellHealth(addr);
         for (const w of this.#live(addr)) this.#watchPaths(addr, w);
+        if (recording(this.#env.host)) this.#recordWays(addr);
         this.#choose(addr, null);
         this.#prune(addr);
         // The way direct requests moved to stayed: one lost after this is not lost soon after.
@@ -1891,6 +1919,7 @@ export class Mesh {
         const wake = yield* this.#env.wakes.next;
         if (!wake.suspectsConnections()) continue;
         this.#env.runner.fork(this.#endpoint.networkChange());
+        record(this.#env.host, "conn network-change", () => `told the main endpoint (${wake.network ? "the network changed" : wake.retry ? "retry" : `the UI back after ${Math.round(wake.away / 1000)}s`}), ${this.#openLinks().length} link(s) open, ${this.#pinned.size} relay endpoint(s) not told`);
         // On another network, the speeds seen on the last say nothing of how fast each way is from here (a laptop taken
         // from home would keep the relay it was fast through there, however slowly it brings replies now): found anew.
         if (wake.network) this.#forgetSpeeds();
@@ -2035,7 +2064,11 @@ function open(
   ctx: SpanContext | undefined,
   ips: string[] = [],
 ): Effect.Effect<Link, CoreError> {
-  return Effect.suspend(() => {
+  // (the record's: each dial a line as it ends, where lines are kept: record.ts)
+  const n = ++dials;
+  const stages = { onto: -1, credential: -1, dialled: -1, openBi: -1, sent: -1 };
+  const startedAt = env.host.nowMs();
+  const dial = Effect.suspend(() => {
     const began = env.host.nowMs();
     const opened = { onto: 0, dialled: 0, credential: 0 };
     const since = () => Math.round(env.host.nowMs() - began);
@@ -2051,6 +2084,7 @@ function open(
         Effect.gen(function* () {
           const r = yield* Effect.result(endpoint.connect(ips.length > 0 ? { id: stationId, relays, ips } : { id: stationId, relays }, ALPN, [FORMER_ALPN]));
           opened.dialled = since();
+          stages.dialled = opened.dialled;
           if (r._tag === "Success") {
             if (abandoned) {
               r.success.close(0, "opening ended");
@@ -2065,12 +2099,15 @@ function open(
         credentials(device, fresh),
         Effect.sync(() => {
           opened.credential = since();
+          stages.credential = opened.credential;
         }),
       );
       const [credential, conn] = yield* Effect.all([had, Deferred.await(dialled)], { concurrency: "unbounded" });
       const stream = yield* Effect.mapError(conn.openBi(), unreached);
+      stages.openBi = since();
       const control = new Control(stream);
       yield* control.send(credential.credential, credential.lock, ctx?.traceparent());
+      stages.sent = since();
       const link = new Link(conn, control, credential.credential, credentials, pinned);
       link.opened = opened;
       // The station's answer to the first credential, while requests already go: a refusal closes the link.
@@ -2097,6 +2134,7 @@ function open(
     const deadline = Effect.gen(function* () {
       yield* onARelay(endpoint, ips.length > 0);
       opened.onto = since();
+      stages.onto = opened.onto;
       yield* Effect.sleep(CONNECT_TIMEOUT_MS);
       return yield* Effect.fail(new OpeningTimeout(connection !== null));
     });
@@ -2107,7 +2145,30 @@ function open(
       }
     })));
   });
+  if (!recording(env.host)) return dial;
+  const via = pinned === null ? (ips.length > 0 ? "main+addresses" : "main") : pinned === LAN ? "lan" : pinned === TAILNET ? "tailnet" : `relay:${relayHost(pinned)}`;
+  return Effect.onExit(dial, (exit) =>
+    Effect.sync(() =>
+      record(env.host, "conn dial", () =>
+        dialLine({
+          n,
+          station: stationId,
+          via,
+          ...stages,
+          total: env.host.nowMs() - startedAt,
+          outcome: Exit.isSuccess(exit) ? "ok" : Exit.hasInterrupts(exit) ? "interrupted" : (() => {
+            const e = Cause.squash(exit.cause) as { message?: string };
+            const m = String(e?.message ?? e);
+            return m === noAnswer() ? "no-answer" : `error: ${said(m)}`;
+          })(),
+        }),
+      ),
+    ),
+  );
 }
+
+/// The dials made so far (the record's numbers for them).
+let dials = 0;
 
 /// Presents a fresh credential every RENEW_MS until the link closes; one not had or refused leaves the link to run
 /// out, and the next `link` opens another.

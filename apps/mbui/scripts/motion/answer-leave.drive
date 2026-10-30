@@ -1,0 +1,11 @@
+# Words sent in the made-up chat; the agent works, answers, its turn ends: its activity stays a moment, then leaves
+# the list (docs/list-motion.md), the rows over it coming down as its room closes.
+timeout 20000
+until 发消息
+wait 600
+tap 发消息
+wait 500
+type 看一下列表的高度
+wait 700
+tap icon:arrow-up
+wait 9000

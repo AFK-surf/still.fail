@@ -360,7 +360,7 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) 
         @settings.ask_words(c, @sf.t("android-misc.adb.ask.sharing", args=[("name", name)]), text(card, "line"))
         @settings.ask_buttons(c, fn() {
           if @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Primary) {
-            open_link(href)
+            open_adb(src, station)
           }
           if @sf.button(c, @sf.t("android-misc.adb.ask.stop"), key=key + "/stop", tone=Ghost, busy=acting.doing.contains(stopping)) {
             act(src, @sf.t("android-misc.adb.stopWhat"), stopping, "adb.stop", Json::object({}))
@@ -375,7 +375,7 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) 
           @settings.ask_words(c, title, @sf.t("android-misc.adb.ask.first", args=[("step", step)]))
           @settings.ask_buttons(c, fn() {
             if @sf.button(c, @sf.t("android-misc.adb.ask.how"), key=key + "/how", tone=Primary) {
-              open_link(href)
+              open_adb(src, station)
             }
           })
         }
@@ -389,7 +389,7 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) 
               @settings.adb_lend(station, name)
             }
             if @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Ghost) {
-              open_link(href)
+              open_adb(src, station)
             }
           })
         }
@@ -400,6 +400,20 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, words : String?) 
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// The 共享调试 of the station (`<workspace>/<station>`) a link's card names, opened as its link opens it (open_target),
+/// whatever host the link was written with: the card is drawn for any (adb_of_link), and its 详情 opens what it shows
+/// (2026-10-30: a link under another host than the cloud's was drawn as the card, and 详情 handed it to the browser).
+fn open_adb(src : Source, station : String) -> Unit {
+  guard station.find("/") is Some(i) else { return }
+  let target = link_target({
+    "opens": "adbShare",
+    "workspace": Json::string(station.view(end_offset=i).to_owned()),
+    "station": Json::string(station.view(start_offset=i + 1).to_owned()),
+  })
+  open_target(src, target, false, None) |> ignore
 }
 
 // ── a screen live in its card ──

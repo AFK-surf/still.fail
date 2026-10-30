@@ -67,6 +67,30 @@ pub fn login_card(c : @ui.Ctx, core : Core, station : String, id : String, marke
 }
 
 ///|
+/// A step left of something under an agent's message, as a login's card looks (its ground, its title, a line under it),
+/// the whole card the way to it (`go`), a › in its corner where a login's × is: an approved phone's pairing with its
+/// station (decision.mbt phone_ask_card). Quiet as the cards beside it are, no button of its own (2026-10-30, user: a
+/// card with a solid button was 「明显有点过大了，而且好像不是很搭风格」).
+pub fn step_card(c : @ui.Ctx, key : String, title : String, line : String, go : () -> Unit) -> Unit {
+  let x = c.id(key)
+  if c.clicked(x) {
+    go()
+  }
+  c.box(style=lc_room, fn() {
+    let b = c.box(style=lc_card_step, id=x, fn() {
+      c.box(style=lc_head, fn() {
+        c.box(style=lc_title_room, fn() { c.text(title, style=lc_title) |> ignore }) |> ignore
+        c.box(style=lc_cancel, fn() { @sf.icon(c, "chevron-right", size=lc_icon, color=@sf.theme().p.muted) |> ignore }) |> ignore
+      })
+      |> ignore
+      login_said(c, line, last=true)
+    })
+    c.semantics(b, Button, id=x, label=title)
+  })
+  |> ignore
+}
+
+///|
 /// 取消, as the card's × (CancelLogin: a small panel's icon button, in its corner, concentric with it).
 fn login_cancel(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit {
   let busy = @settings.is_doing(core, ["machineLogin.cancel"], [("station", station), ("id", id)])
@@ -443,6 +467,11 @@ let lc_card : @ui.Style = @ui.style(
 /// Where it is: all of the column's width, 8 under what is above it (the card in it as wide as it says).
 // kept across runs: a value (no field of it changes)
 let lc_room : @ui.Style = @ui.css("w=Full pt=S2 align=AStart")
+
+///|
+/// A step's card (step_card): pressed as a whole, lit under a pointer.
+// kept across runs: a value (no field of it changes)
+let lc_card_step : @ui.Style = lc_card.then(@ui.css("hovered{bg=Hover}"))
 
 ///|
 // kept across runs: a value (no field of it changes)

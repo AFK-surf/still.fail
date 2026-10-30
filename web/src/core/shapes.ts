@@ -1708,6 +1708,11 @@ export interface PhoneAsk {
 	scope?: string;
 	/** Ended or refused by itself: why (已收回, 对话已归档, 授权已到期). */
 	why?: string;
+	/**
+	 * Granted: how its station's adb holds the phone (connected | unpaired | off | unauthorized | missing | failed |
+	 * gone: not offered there now). Absent until the station has heard.
+	 */
+	link?: string;
 	/** The longest it may be granted for, as its owner allows: `hour` or `chat`. */
 	lasts?: string;
 }

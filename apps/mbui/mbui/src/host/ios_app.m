@@ -16,6 +16,8 @@
 #import "apple.h"
 #include <pthread.h>
 #include <sys/resource.h>
+#include <sys/time.h>
+#include <sys/utsname.h>
 #include "post.h"
 
 mb_callbacks mb_cb;
@@ -975,18 +977,23 @@ static void watch_shown(void);
 static void watch_keyboard(void);
 
 double mb_host_cpu_ms(void);
+double mb_host_mem_bytes(void);
 
-// With MBUI_PROBE=1, the threads that took most of a CPU since it was last asked (each thread's own time, by its name:
-// the core's engine, the decoder, the network, the UI's), as `PROBE ios threads: name=N% …`: where the process's share
-// goes while nothing is drawn.
-static void probe_threads(double span_ms) {
+// What an unnamed thread is: a dispatch pool's worker at the time it was asked ("gcd": it works for a queue, whose
+// label is not read, a queue let go as it is read being a crash), else "?".
+static NSString *thread_queue(thread_identifier_info_data_t *id) { return id->dispatch_qaddr ? @"gcd" : @"?"; }
+
+// The threads that took most of a CPU since it was last asked (each thread's own time, by its name: the core's engine,
+// the decoder, the network, the UI's), as ` name=N% …` (the 8 busiest, those of half a percent at least): where the
+// process's share goes while nothing is drawn. Asked by heat_tick only (main thread).
+static NSString *probe_threads(double span_ms) {
   static NSMutableDictionary<NSNumber *, NSNumber *> *was;
   if (!was) was = [NSMutableDictionary dictionary];
   NSMutableDictionary<NSNumber *, NSNumber *> *now = [NSMutableDictionary dictionary];
   NSMutableDictionary<NSString *, NSNumber *> *by = [NSMutableDictionary dictionary];
   thread_act_array_t threads;
   mach_msg_type_number_t n = 0;
-  if (task_threads(mach_task_self(), &threads, &n) != KERN_SUCCESS) return;
+  if (task_threads(mach_task_self(), &threads, &n) != KERN_SUCCESS) return @"";
   for (mach_msg_type_number_t i = 0; i < n; i++) {
     thread_identifier_info_data_t id;
     mach_msg_type_number_t idn = THREAD_IDENTIFIER_INFO_COUNT;
@@ -1002,7 +1009,7 @@ static void probe_threads(double span_ms) {
       char name[64] = "";
       pthread_t pt = pthread_from_mach_thread_np(threads[i]);
       if (pt) pthread_getname_np(pt, name, sizeof name);
-      NSString *label = name[0] ? @(name) : (pt == pthread_self() ? @"main" : @"?");
+      NSString *label = name[0] ? @(name) : (pt == pthread_self() ? @"main" : thread_queue(&id));
       by[label] = @(by[label].doubleValue + d);
     }
     mach_port_deallocate(mach_task_self(), threads[i]);
@@ -1010,38 +1017,304 @@ static void probe_threads(double span_ms) {
   vm_deallocate(mach_task_self(), (vm_address_t)threads, n * sizeof(thread_act_t));
   was = now;
   NSArray<NSString *> *top = [by keysSortedByValueUsingComparator:^(NSNumber *a, NSNumber *b) { return [b compare:a]; }];
-  NSMutableString *line = [NSMutableString stringWithString:@"PROBE ios threads:"];
+  NSMutableString *line = [NSMutableString string];
   for (NSUInteger i = 0; i < MIN(top.count, (NSUInteger)8); i++) {
     double pct = by[top[i]].doubleValue * 100.0 / MAX(1, span_ms);
     if (pct < 0.5) break;
     [line appendFormat:@" %@=%.0f%%", [top[i] stringByReplacingOccurrencesOfString:@" " withString:@"_"], pct];
   }
-  fprintf(stderr, "%s\n", line.UTF8String);
+  return line;
+}
+
+// ── the performance record (@hostapi.perf_state) ──────────────────────────────────────────────────────────────────
+// Kept while the person has it on (Settings › 关于 › 性能记录; remembered in the app's defaults, this device's alone):
+// every 5 s a line each of the process's share of a CPU with the thermal state and memory, its busiest threads, what
+// the core's shell did of remote screens (mb_core_tap_line); the app's frames' summary as it draws (app.mbt's probe,
+// @hostapi.perf_line), the present's (apple_render.m); the app going to the back and coming to the front, the thermal
+// state changing, a station's screen looked at or not (screen_view.mbt). Each line led by the wall time, appended to
+// Documents/perf/perf-YYYYMMDD.log (a day's file; past 5 MB, perf-YYYYMMDD-2.log, …), the 3 newest files kept. Nothing
+// leaves the device. Off, nothing runs: no timer, no file touched.
+
+static NSString *const perf_key = @"MBUIPerfRecord";
+static const unsigned long long perf_file_most = 5ull << 20;
+static const NSUInteger perf_files_kept = 3;
+// on (1) or off: written on the main thread, read on any
+static volatile int perf_on_now;
+// the file written, its bytes, and every file's (-1 not counted yet): perf_q's
+static dispatch_queue_t perf_q;
+static NSString *perf_file;
+static unsigned long long perf_file_bytes;
+static volatile double perf_total = -1;
+
+static NSString *perf_dir(void) {
+  NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+  return [docs stringByAppendingPathComponent:@"perf"];
+}
+
+static dispatch_queue_t perf_queue(void) {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{ perf_q = dispatch_queue_create("still.fail perf", DISPATCH_QUEUE_SERIAL); });
+  return perf_q;
+}
+
+// The record's files, newest first (perf_q).
+static NSArray<NSURL *> *perf_files(void) {
+  NSArray<NSURL *> *all = [NSFileManager.defaultManager contentsOfDirectoryAtURL:[NSURL fileURLWithPath:perf_dir()]
+                                                  includingPropertiesForKeys:@[ NSURLContentModificationDateKey, NSURLFileSizeKey ]
+                                                                     options:NSDirectoryEnumerationSkipsHiddenFiles
+                                                                       error:nil];
+  NSMutableArray<NSURL *> *logs = [NSMutableArray array];
+  for (NSURL *u in all)
+    if ([u.lastPathComponent hasPrefix:@"perf-"] && [u.pathExtension isEqualToString:@"log"]) [logs addObject:u];
+  [logs sortUsingComparator:^NSComparisonResult(NSURL *x, NSURL *y) {
+    NSDate *dx = nil, *dy = nil;
+    [x getResourceValue:&dx forKey:NSURLContentModificationDateKey error:nil];
+    [y getResourceValue:&dy forKey:NSURLContentModificationDateKey error:nil];
+    return [dy ?: NSDate.distantPast compare:dx ?: NSDate.distantPast];
+  }];
+  return logs;
+}
+
+// Every file's bytes counted again (perf_q).
+static void perf_count(void) {
+  double total = 0;
+  for (NSURL *u in perf_files()) {
+    NSNumber *size = nil;
+    [u getResourceValue:&size forKey:NSURLFileSizeKey error:nil];
+    total += size.doubleValue;
+  }
+  perf_total = total;
+}
+
+// The file today's lines go to: today's, or past its 5 MB the next of the day; the files beyond the newest 3 removed
+// as another is begun (perf_q).
+static void perf_pick(const char *day) {
+  NSString *dir = perf_dir();
+  NSFileManager *fm = NSFileManager.defaultManager;
+  [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+  NSString *path = nil;
+  unsigned long long bytes = 0;
+  for (int k = 1; k < 1000; k++) {
+    path = [dir stringByAppendingPathComponent:k == 1 ? [NSString stringWithFormat:@"perf-%s.log", day]
+                                                      : [NSString stringWithFormat:@"perf-%s-%d.log", day, k]];
+    bytes = [[fm attributesOfItemAtPath:path error:nil] fileSize];
+    if (bytes < perf_file_most) break;
+  }
+  BOOL fresh = ![fm fileExistsAtPath:path];
+  perf_file = path;
+  perf_file_bytes = bytes;
+  if (fresh) {
+    [fm createFileAtPath:path contents:nil attributes:nil];
+    NSArray<NSURL *> *files = perf_files();
+    for (NSUInteger i = perf_files_kept; i < files.count; i++)
+      if (![files[i].path isEqualToString:path]) [fm removeItemAtURL:files[i] error:nil];
+  }
+  perf_count();
+}
+
+// A line into the record while it is kept, the wall time before it (any thread; written on perf_q).
+void mb_perf_note(const char *text) {
+  if (!perf_on_now || !text) return;
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  struct tm tm;
+  localtime_r(&tv.tv_sec, &tm);
+  char at[40], day[16];
+  strftime(at, sizeof at, "%Y-%m-%d %H:%M:%S", &tm);
+  strftime(day, sizeof day, "%Y%m%d", &tm);
+  // (the text as UTF-8, as every line is made: %s would read it in the system's encoding, the core's Chinese garbled)
+  NSString *line = [NSString stringWithFormat:@"%s.%03d %@\n", at, (int)(tv.tv_usec / 1000), [NSString stringWithUTF8String:text] ?: @"?"];
+  NSString *today = @(day);
+  dispatch_async(perf_queue(), ^{
+    NSString *name = perf_file.lastPathComponent;
+    if (!perf_file || ![name hasPrefix:[NSString stringWithFormat:@"perf-%@", today]] || perf_file_bytes >= perf_file_most)
+      perf_pick(today.UTF8String);
+    const char *bytes = line.UTF8String;
+    FILE *f = fopen(perf_file.fileSystemRepresentation, "a");
+    if (!f) return;
+    size_t n = strlen(bytes);
+    fwrite(bytes, 1, n, f);
+    fclose(f);
+    perf_file_bytes += n;
+    perf_total = (perf_total < 0 ? 0 : perf_total) + n;
+  });
+}
+
+int mb_perf_on(void) { return perf_on_now; }
+
+// What the core's shell did of remote screens (apple_core.mm's, where the app has the core; none in an app without).
+__attribute__((weak)) int mb_core_tap_line(int who, char *out, size_t n) {
+  (void)who, (void)out, (void)n;
+  return 0;
+}
+
+// What the core's thread spent its time on (apple_core.mm's, where the app has the core).
+__attribute__((weak)) int mb_core_perf_line(double span_ms, char *out, size_t n) {
+  (void)span_ms, (void)out, (void)n;
+  return 0;
+}
+
+// The battery as the record says it: charging, full, unplugged (its level) or unknown.
+static NSString *battery_said(void) {
+  UIDevice *d = UIDevice.currentDevice;
+  const char *state = "unknown";
+  switch (d.batteryState) {
+    case UIDeviceBatteryStateCharging: state = "charging"; break;
+    case UIDeviceBatteryStateFull: state = "full"; break;
+    case UIDeviceBatteryStateUnplugged: state = "unplugged"; break;
+    default: break;
+  }
+  return [NSString stringWithFormat:@"battery=%s/%.0f%%", state, d.batteryLevel < 0 ? -1.0 : d.batteryLevel * 100.0];
+}
+
+// Every 5 s while MBUI_PROBE=1 (on the log) or the record is kept (into it), frames or none (the app's probe says
+// its only as it draws: what the core does while nothing is drawn shows here).
+static NSTimer *heat_timer;
+static BOOL heat_probe;
+static double heat_cpu, heat_at;
+
+static void heat_tick(void) {
+  double cpu = mb_host_cpu_ms(), at = mb_now_ms(), span = MAX(1, at - heat_at);
+  double share = (cpu - heat_cpu) * 100.0 / span;
+  long thermal = (long)NSProcessInfo.processInfo.thermalState;
+  NSString *threads = probe_threads(span);
+  heat_cpu = cpu;
+  heat_at = at;
+  if (heat_probe) {
+    fprintf(stderr, "PROBE ios: cpu=%.0f%% thermal=%ld\n", share, thermal);
+    fprintf(stderr, "PROBE ios threads:%s\n", threads.UTF8String);
+  }
+  if (perf_on_now) {
+    char line[1024];
+    snprintf(line, sizeof line, "ios: cpu=%.0f%% thermal=%ld mem=%.0fMB %s lowpower=%d", share, thermal,
+             mb_host_mem_bytes() / 1048576.0, battery_said().UTF8String, NSProcessInfo.processInfo.lowPowerModeEnabled ? 1 : 0);
+    mb_perf_note(line);
+    mb_perf_note([@"threads:" stringByAppendingString:threads].UTF8String);
+    char core[900];
+    if (mb_core_perf_line(span, core, sizeof core) > 0) {
+      snprintf(line, sizeof line, "core js: %s", core);
+      mb_perf_note(line);
+    }
+    if (mb_core_tap_line(1, core, sizeof core) > 0) {
+      snprintf(line, sizeof line, "shell: %s", core);
+      mb_perf_note(line);
+    }
+  }
+}
+
+// The 5 s ticks running while either asks for them, and not otherwise (main thread).
+static void heat_timer_set(void) {
+  BOOL want = heat_probe || perf_on_now;
+  if (want && !heat_timer) {
+    heat_cpu = mb_host_cpu_ms();
+    heat_at = mb_now_ms();
+    probe_threads(1);
+    if (perf_on_now) {
+      char core[900];
+      mb_core_tap_line(1, core, sizeof core);
+      mb_core_perf_line(1, core, sizeof core);
+    }
+    heat_timer = [NSTimer scheduledTimerWithTimeInterval:5 repeats:YES block:^(NSTimer *t) { heat_tick(); }];
+  } else if (!want && heat_timer) {
+    [heat_timer invalidate];
+    heat_timer = nil;
+  }
+}
+
+// The record kept from now on (as the app starts with it on, or as it is turned on): its first line says what device,
+// system and build.
+static void perf_begin(NSString *why) {
+  perf_on_now = 1;
+  UIDevice *d = UIDevice.currentDevice;
+  d.batteryMonitoringEnabled = YES;
+  struct utsname u;
+  uname(&u);
+  NSDictionary *info = NSBundle.mainBundle.infoDictionary;
+  mb_perf_note([NSString stringWithFormat:@"perf: on (%@) device=%s %@ %@ app=%@ (%@) thermal=%ld lowpower=%d %@", why,
+                                          u.machine, d.systemName, d.systemVersion, info[@"CFBundleShortVersionString"],
+                                          info[@"CFBundleVersion"], (long)NSProcessInfo.processInfo.thermalState,
+                                          NSProcessInfo.processInfo.lowPowerModeEnabled ? 1 : 0, battery_said()]
+                   .UTF8String);
+  heat_timer_set();
+}
+
+// Whether the record is kept (@hostapi.perf_state): 1 on, 0 off.
+int32_t mb_host_perf_state(void) { return perf_on_now ? 1 : 0; }
+
+// The record kept from now on, or no longer (@hostapi.set_perf), remembered for the next launch.
+void mb_host_set_perf(int32_t on) {
+  if ((on != 0) == (perf_on_now != 0)) return;
+  [NSUserDefaults.standardUserDefaults setBool:on != 0 forKey:perf_key];
+  if (on) {
+    perf_begin(@"turned on");
+  } else {
+    mb_perf_note("perf: off");
+    perf_on_now = 0;
+    UIDevice.currentDevice.batteryMonitoringEnabled = NO;
+    heat_timer_set();
+  }
+}
+
+// A line of the app's into the record (@hostapi.perf_line).
+void mb_host_perf_line(moonbit_string_t line) {
+  if (perf_on_now) mb_perf_note(mb_ns_from_string(line).UTF8String);
+}
+
+// Where the record's files are, as the Files app and Xcode show the app's container (@hostapi.perf_where).
+moonbit_string_t mb_host_perf_where(void) { return mb_string_from_ns(@"Documents/perf"); }
+
+// The record's files' bytes (@hostapi.perf_size): counted once, then as lines are written.
+double mb_host_perf_size(void) {
+  if (perf_total < 0) dispatch_sync(perf_queue(), ^{
+      if (perf_total < 0) perf_count();
+    });
+  return perf_total;
+}
+
+// The record's files as one, the oldest first (@hostapi.perf_read): read on its queue, between its writes.
+moonbit_bytes_t mb_host_perf_read(void) {
+  NSMutableData *all = [NSMutableData data];
+  dispatch_sync(perf_queue(), ^{
+    for (NSURL *u in perf_files().reverseObjectEnumerator) {
+      NSData *d = [NSData dataWithContentsOfURL:u];
+      if (d) [all appendData:d];
+    }
+  });
+  moonbit_bytes_t out = moonbit_make_bytes((int32_t)all.length, 0);
+  memcpy(out, all.bytes, all.length);
+  return out;
 }
 
 // How warm the device is said to be (ProcessInfo's thermal state: 0 nominal, 1 fair, 2 serious, 3 critical), on the
-// log as it changes; with MBUI_PROBE=1 also the process's share of a CPU every 5 s, frames or none (the app's probe
-// says it only as it draws: what the core does while nothing is drawn shows here).
+// log (and into the record) as it changes; with MBUI_PROBE=1 also the process's share of a CPU every 5 s (heat_tick).
+// The record started if it was on as the app last ran.
 static void watch_heat(void) {
   say([NSString stringWithFormat:@"ios: thermal state %ld", (long)NSProcessInfo.processInfo.thermalState]);
   [NSNotificationCenter.defaultCenter addObserverForName:NSProcessInfoThermalStateDidChangeNotification object:nil
                                                    queue:NSOperationQueue.mainQueue
                                               usingBlock:^(NSNotification *n) {
-                                                say([NSString stringWithFormat:@"ios: thermal state %ld",
-                                                                               (long)NSProcessInfo.processInfo.thermalState]);
+                                                long t = (long)NSProcessInfo.processInfo.thermalState;
+                                                say([NSString stringWithFormat:@"ios: thermal state %ld", t]);
+                                                char line[64];
+                                                snprintf(line, sizeof line, "thermal: %ld", t);
+                                                mb_perf_note(line);
+                                              }];
+  [NSNotificationCenter.defaultCenter addObserverForName:NSProcessInfoPowerStateDidChangeNotification object:nil
+                                                   queue:NSOperationQueue.mainQueue
+                                              usingBlock:^(NSNotification *n) {
+                                                mb_perf_note(NSProcessInfo.processInfo.lowPowerModeEnabled ? "lowpower: on" : "lowpower: off");
+                                              }];
+  [NSNotificationCenter.defaultCenter addObserverForName:UIDeviceBatteryStateDidChangeNotification object:nil
+                                                   queue:NSOperationQueue.mainQueue
+                                              usingBlock:^(NSNotification *n) {
+                                                if (perf_on_now) mb_perf_note([@"power: " stringByAppendingString:battery_said()].UTF8String);
                                               }];
   const char *probe = getenv("MBUI_PROBE");
-  if (!probe || probe[0] != '1') return;
-  __block double was_cpu = mb_host_cpu_ms(), was_at = mb_now_ms();
-  probe_threads(1);
-  [NSTimer scheduledTimerWithTimeInterval:5 repeats:YES block:^(NSTimer *t) {
-    double cpu = mb_host_cpu_ms(), at = mb_now_ms();
-    fprintf(stderr, "PROBE ios: cpu=%.0f%% thermal=%ld\n", (cpu - was_cpu) * 100.0 / MAX(1, at - was_at),
-            (long)NSProcessInfo.processInfo.thermalState);
-    probe_threads(at - was_at);
-    was_cpu = cpu;
-    was_at = at;
-  }];
+  heat_probe = probe && probe[0] == '1';
+  if ([NSUserDefaults.standardUserDefaults boolForKey:perf_key])
+    perf_begin(@"launch");
+  else
+    heat_timer_set();
 }
 
 @implementation MBAppDelegate
@@ -1371,12 +1644,14 @@ static void watch_shown(void) {
   [nc addObserverForName:UIApplicationDidEnterBackgroundNotification object:nil queue:NSOperationQueue.mainQueue
               usingBlock:^(NSNotification *n) {
     if (!hidden_at) hidden_at = clock_gettime_nsec_np(CLOCK_MONOTONIC);
+    mb_perf_note("app: background");
   }];
   [nc addObserverForName:UIApplicationWillEnterForegroundNotification object:nil queue:NSOperationQueue.mainQueue
               usingBlock:^(NSNotification *n) {
     // (what was shared meanwhile: the inbox looked into again, shared_in)
     share_look = YES;
     [the_view requestFrame];
+    mb_perf_note("app: foreground");
     if (!hidden_at) return;
     double away = (clock_gettime_nsec_np(CLOCK_MONOTONIC) - hidden_at) / 1e6;
     hidden_at = 0;
@@ -1416,6 +1691,24 @@ static void network_start(void) {
       });
     }
     BOOL changed = was && ![was isEqualToString:now] && now.length > 0;
+    // (the record's: each update as the system says it, said on as a change or not, while the record is kept)
+    if (mb_perf_on()) {
+      NSMutableArray<NSString *> *all = [NSMutableArray array];
+      nw_path_enumerate_interfaces(path, ^bool(nw_interface_t i) {
+        static const char *kinds[] = {"other", "wifi", "cell", "wired", "loopback"};
+        int k = (int)nw_interface_get_type(i);
+        [all addObject:[NSString stringWithFormat:@"%s/%s", nw_interface_get_name(i), k >= 0 && k <= 4 ? kinds[k] : "?"]];
+        return true;
+      });
+      static const char *states[] = {"invalid", "satisfied", "unsatisfied", "satisfiable"};
+      int st = (int)nw_path_get_status(path);
+      mb_perf_note([NSString stringWithFormat:@"net: path %s ifaces=%@ expensive=%d constrained=%d ipv4=%d ipv6=%d -> %@",
+                                              st >= 0 && st <= 3 ? states[st] : "?", [all componentsJoinedByString:@","],
+                                              nw_path_is_expensive(path), nw_path_is_constrained(path),
+                                              nw_path_has_ipv4(path), nw_path_has_ipv6(path),
+                                              changed ? @"said: the network changed" : was ? @"not said (the first interface the same)" : @"the first seen"]
+                       .UTF8String);
+    }
     was = now;
     if (changed) {
       say([NSString stringWithFormat:@"ios: network now %@", now]);

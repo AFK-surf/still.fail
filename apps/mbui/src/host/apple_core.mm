@@ -34,6 +34,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <hermes/hermes.h>
 #include <jsi/jsi.h>
@@ -59,6 +60,12 @@ uint8_t *sf_shell_stats(size_t *out_len);
 int32_t sf_utc_offset_min(double at_ms);
 }
 
+// Whether the device's performance record is kept (ios_app.m's, the person's 性能记录): the core's thread then times
+// each of its tasks by what it was (perf_task). None kept where the host has none (these defaults: a Mac, a test).
+extern "C" __attribute__((weak)) int mb_perf_on(void) { return 0; }
+// A line into the performance record (ios_app.m), where the host keeps one.
+extern "C" __attribute__((weak)) void mb_perf_note(const char *text) { (void)text; }
+
 #if TARGET_OS_IPHONE
 static const char *const kOS = "ios";
 #else
@@ -75,6 +82,42 @@ double clock_ms(clockid_t c) {
 
 /// The timers' clock: on Darwin CLOCK_MONOTONIC counts the time asleep too.
 double timer_ms() { return clock_ms(CLOCK_MONOTONIC); }
+
+/// While the performance record is kept: what the core's thread spent its time on, by what each task was (`app:<call>`
+/// or `app:sub <topic>`, asked by the app; `shell:<op>`, the shell's answer to what the core asked of it; `timer`; `say`,
+/// what the shell said itself; `task` else), each its count and ms, since mb_core_tap_line last took them. The task
+/// running's what is set as it starts (core thread); the shell's ops by the id they were asked with, until answered.
+struct PerfTasks {
+  std::mutex mutex;
+  std::unordered_map<std::string, std::pair<long, double>> by;
+};
+PerfTasks perf_tasks;
+std::string perf_task = "task";
+std::unordered_map<uint64_t, std::string> perf_ops;
+
+void perf_tally(const std::string &what, double ms) {
+  std::lock_guard<std::mutex> lock(perf_tasks.mutex);
+  auto &e = perf_tasks.by[what];
+  e.first += 1;
+  e.second += ms;
+}
+
+/// The name of what the app asks in `json` (`{"id":…,"call":"name",…}` or `{"id":…,"subscribe":{"topic":"name",…}}`),
+/// looked for as text: not parsed, the core does that.
+std::string perf_asked(const std::string &json) {
+  auto at = [&](const char *key) -> std::string {
+    size_t k = json.find(key);
+    if (k == std::string::npos) return "";
+    k += strlen(key);
+    size_t e = json.find('"', k);
+    return e == std::string::npos ? "" : json.substr(k, std::min<size_t>(e - k, 60));
+  };
+  std::string call = at("\"call\":\"");
+  if (!call.empty()) return "app:" + call;
+  std::string topic = at("\"topic\":\"");
+  if (!topic.empty()) return "app:sub " + topic;
+  return json.find("\"unsubscribe\"") != std::string::npos ? "app:unsubscribe" : "app:?";
+}
 
 /// A JSON string literal of `s` (for `{"fatal": …}`).
 std::string quote(const std::string &s) {
@@ -185,6 +228,13 @@ void completed(uint64_t id, std::string json, std::string error, std::string byt
             error.empty() ? json.substr(0, 120).c_str() : ("error " + error).c_str(),
             has_bytes ? (" +" + std::to_string(bytes.size()) + " bytes").c_str() : "");
   post([id, json = std::move(json), error = std::move(error), bytes = std::move(bytes), has_bytes](jsi::Runtime &rt) {
+    if (!perf_ops.empty()) {
+      auto op = perf_ops.find(id);
+      if (op != perf_ops.end()) {
+        perf_task = "shell:" + op->second;
+        perf_ops.erase(op);
+      }
+    }
     jsi::Value j = error.empty() ? jsi::Value(jsi::String::createFromUtf8(rt, json)) : jsi::Value::null();
     jsi::Value e = error.empty() ? jsi::Value::null() : jsi::Value(jsi::String::createFromUtf8(rt, error));
     jsi::Value b = has_bytes ? jsi::Value(array_buffer(rt, bytes.data(), bytes.size())) : jsi::Value::undefined();
@@ -683,6 +733,7 @@ static void install(jsi::Runtime &rt) {
       }
       return jsi::Value::undefined();
     }
+    if (mb_perf_on()) perf_ops[id] = op;
     sf_shell_call(C.shell, id, op.c_str(), reinterpret_cast<const uint8_t *>(json.data()), json.size(), p, len, has ? 1 : 0);
     return jsi::Value::undefined();
   });
@@ -744,6 +795,14 @@ static void install(jsi::Runtime &rt) {
   fn("clearTimer", 1, [](jsi::Runtime &, const jsi::Value &, const jsi::Value *a, size_t) -> jsi::Value {
     std::lock_guard<std::mutex> lock(C.mutex);
     C.timers.erase(uint64_t(a[0].asNumber()));
+    return jsi::Value::undefined();
+  });
+  // the performance record (the core's record.ts): whether it is kept now, and a line into it
+  fn("recording", 0, [](jsi::Runtime &, const jsi::Value &, const jsi::Value *, size_t) -> jsi::Value {
+    return jsi::Value(mb_perf_on() != 0);
+  });
+  fn("record", 1, [](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *a, size_t) -> jsi::Value {
+    if (mb_perf_on()) mb_perf_note(a[0].asString(rt).utf8(rt).c_str());
     return jsi::Value::undefined();
   });
   fn("log", 2, [](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *a, size_t) -> jsi::Value {
@@ -839,6 +898,10 @@ static void run(void) {
       if (C.stopping) break;
     }
     if (C.dead || !rt) continue;
+    // (the record kept: this task timed, by what it was)
+    bool perf = mb_perf_on() != 0;
+    double perf_t0 = perf ? clock_ms(CLOCK_MONOTONIC) : 0;
+    perf_task = task ? "task" : "timer";
     @autoreleasepool {
       try {
         if (task) task(*rt);
@@ -848,6 +911,8 @@ static void run(void) {
         fatal(e.what());
       }
     }
+    if (perf) perf_tally(perf_task, clock_ms(CLOCK_MONOTONIC) - perf_t0);
+    else if (!perf_ops.empty()) perf_ops.clear();
   }
 
   @autoreleasepool {
@@ -903,7 +968,9 @@ void mb_core_send(const char *json, size_t len, const uint8_t *bytes, size_t ble
   std::string j(json, len);
   bool has = bytes != nullptr;
   std::string b = has ? std::string(reinterpret_cast<const char *>(bytes), blen) : std::string();
-  post([j = std::move(j), b = std::move(b), has](jsi::Runtime &rt) {
+  std::string what = mb_perf_on() ? perf_asked(j) : std::string();
+  post([j = std::move(j), b = std::move(b), has, what = std::move(what)](jsi::Runtime &rt) {
+    if (!what.empty()) perf_task = what;
     jsi::Object sf = stillfail(rt);
     if (has)
       sf.getPropertyAsFunction(rt, "receiveBytes").callWithThis(rt, sf, jsi::Value(C.client), jsi::String::createFromUtf8(rt, j), array_buffer(rt, b.data(), b.size()));
@@ -918,32 +985,79 @@ int mb_core_screen_ack(double call, double ts) {
   return sf_shell_screen_ack(shell, (uint64_t)call, ts);
 }
 
-// MBUI_PROBE=1: what the shell did of remote screens every 5 s (`PROBE core: tap views=… video=… direct.video=… audio=…
-// direct.audio=… acks=…`, those read, those of them the app's host took itself rather than the app's queue, and the
-// acks it sent itself, and how many reads of streams the core asked meanwhile): whether the views are tapped
-// (client/shell istream.tap) and their frames go straight to the decoder (mb_core_route_media).
+// What the shell did of remote screens since its caller last asked (`tap.views=… tap.video=… tap.direct.video=…
+// tap.audio=… tap.direct.audio=… tap.acks=… istream.read=… istream.write=…`: those read, those of them the app's host
+// took itself rather than the app's queue, and the acks it sent itself, and how many reads of streams the core asked
+// meanwhile): whether the views are tapped (client/shell istream.tap) and their frames go straight to the decoder
+// (mb_core_route_media). Each caller (`who`: 0 MBUI_PROBE's timer below, 1 the iOS host's performance record,
+// ios_app.m) keeps its own counts; called from one thread each. Into `out` (n bytes, ended), its length (0: none).
+extern "C" int mb_core_tap_line(int who, char *out, size_t n) {
+  static NSDictionary *was[2];
+  if (who < 0 || who > 1 || n == 0 || !C.running) return 0;
+  out[0] = 0;
+  size_t len = 0;
+  uint8_t *got = sf_shell_stats(&len);
+  if (!got) return 0;
+  NSDictionary *calls = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:got length:len] options:0 error:nil][@"calls"];
+  sf_free(got, len);
+  if (![calls isKindOfClass:NSDictionary.class]) return 0;
+  auto count = [&](NSDictionary *d, NSString *k) -> long long {
+    NSArray *a = [d[k] isKindOfClass:NSArray.class] ? d[k] : nil;
+    return a.count ? [a[0] longLongValue] : 0;
+  };
+  NSArray<NSString *> *taps = @[ @"tap.views", @"tap.video", @"tap.direct.video", @"tap.audio", @"tap.direct.audio", @"tap.acks", @"istream.read", @"istream.write" ];
+  NSMutableString *line = [NSMutableString string];
+  for (NSString *k in taps)
+    [line appendFormat:@"%@%@=%lld", line.length ? @" " : @"", k, count(calls, k) - count(was[who], k)];
+  // (the record's: the shell's other operations asked most since, the 6 most, as `ops: name=N …`)
+  if (who == 1) {
+    NSMutableDictionary<NSString *, NSNumber *> *more = [NSMutableDictionary dictionary];
+    for (NSString *k in calls) {
+      long long d = count(calls, k) - count(was[who], k);
+      if (d > 0 && ![taps containsObject:k]) more[k] = @(d);
+    }
+    NSArray<NSString *> *top = [more keysSortedByValueUsingComparator:^(NSNumber *a, NSNumber *b) { return [b compare:a]; }];
+    if (top.count) [line appendString:@" ops:"];
+    for (NSUInteger i = 0; i < MIN(top.count, (NSUInteger)6); i++) [line appendFormat:@" %@=%@", top[i], more[top[i]]];
+  }
+  was[who] = calls;
+  return snprintf(out, n, "%s", line.UTF8String);
+}
+
+// What the core's thread spent its time on since last asked (the record's, perf_tally), the 6 longest, as
+// `busy=N% tasks=N 120ms/30 shell:fetch | 80ms/2 app:chat.send | …` over `span_ms`; taken (counted anew from here). Its length (0: nothing ran).
+extern "C" int mb_core_perf_line(double span_ms, char *out, size_t n) {
+  std::vector<std::pair<std::string, std::pair<long, double>>> all;
+  {
+    std::lock_guard<std::mutex> lock(perf_tasks.mutex);
+    all.assign(perf_tasks.by.begin(), perf_tasks.by.end());
+    perf_tasks.by.clear();
+  }
+  if (n == 0) return 0;
+  out[0] = 0;
+  if (all.empty()) return 0;
+  std::sort(all.begin(), all.end(), [](auto &a, auto &b) { return a.second.second > b.second.second; });
+  double ms = 0;
+  long tasks = 0;
+  for (auto &e : all) {
+    ms += e.second.second;
+    tasks += e.second.first;
+  }
+  int at = snprintf(out, n, "busy=%.0f%% tasks=%ld", ms * 100.0 / std::max(1.0, span_ms), tasks);
+  for (size_t i = 0; i < std::min<size_t>(all.size(), 6) && at > 0 && (size_t)at < n; i++)
+    at += snprintf(out + at, n - at, "%s%.0fms/%ld %s", i ? " | " : " ", all[i].second.second, all[i].second.first, all[i].first.c_str());
+  return at;
+}
+
+// MBUI_PROBE=1: what the shell did of remote screens every 5 s, on the log (`PROBE core: tap.views=…`: mb_core_tap_line).
 static void probe_taps(void) {
   static dispatch_source_t timer;
   if (timer || !getenv("MBUI_PROBE")) return;
   timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0));
   dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), 5 * NSEC_PER_SEC, NSEC_PER_SEC);
-  static NSDictionary *was;
   dispatch_source_set_event_handler(timer, ^{
-    size_t n = 0;
-    uint8_t *out = sf_shell_stats(&n);
-    if (!out) return;
-    NSDictionary *calls = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:out length:n] options:0 error:nil][@"calls"];
-    sf_free(out, n);
-    if (![calls isKindOfClass:NSDictionary.class]) return;
-    auto count = [&](NSDictionary *d, NSString *k) -> long long {
-      NSArray *a = [d[k] isKindOfClass:NSArray.class] ? d[k] : nil;
-      return a.count ? [a[0] longLongValue] : 0;
-    };
-    NSMutableString *line = [NSMutableString stringWithString:@"PROBE core:"];
-    for (NSString *k in @[ @"tap.views", @"tap.video", @"tap.direct.video", @"tap.audio", @"tap.direct.audio", @"tap.acks", @"istream.read", @"istream.write" ])
-      [line appendFormat:@" %@=%lld", k, count(calls, k) - count(was, k)];
-    was = calls;
-    fprintf(stderr, "%s\n", line.UTF8String);
+    char line[512];
+    if (mb_core_tap_line(0, line, sizeof line) > 0) fprintf(stderr, "PROBE core: %s\n", line);
   });
   dispatch_resume(timer);
 }

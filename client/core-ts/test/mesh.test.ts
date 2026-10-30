@@ -693,6 +693,30 @@ sim("a_try_not_answered_makes_the_next_go_on_an_endpoint_bound_anew", async (s) 
   await close(s, station, mesh);
 });
 
+/// While the app keeps its record (record.ts), each dial is a line as it ends: how far each stage got, how it ended; a
+/// dial left unanswered and the next, on an endpoint bound anew, said so.
+sim("each_dial_is_a_line_of_the_record_while_it_is_kept", async (s) => {
+  const lines: string[] = [];
+  s.host.recorder = { on: () => true, line: (l) => lines.push(l) };
+  try {
+    const { mesh, station } = await setup(s);
+    station.unanswered(1);
+    await s.run(mesh.link(station.id(), grants("ok", { n: 0 }))).then(
+      () => null,
+      () => null,
+    );
+    await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+    const dials = lines.filter((l) => l.startsWith("conn dial: "));
+    assert.equal(dials.length, 2, lines.join("\n"));
+    assert.match(dials[0]!, /^conn dial: #\d+ [0-9a-f]{8} via=main onto=\d+ms credential=\d+ms dialled=- openBi=- sent=- total=\d+ms -> no-answer$/);
+    assert.match(dials[1]!, /^conn dial: #\d+ [0-9a-f]{8} via=main onto=\d+ms credential=\d+ms dialled=\d+ms openBi=\d+ms sent=\d+ms total=\d+ms -> ok$/);
+    assert.ok(lines.some((l) => /^conn rebind: a dial unanswered, nothing open -> bound$/.test(l)), lines.join("\n"));
+    await close(s, station, mesh);
+  } finally {
+    s.host.recorder = undefined;
+  }
+});
+
 sim("a_wake_while_a_try_goes_unanswered_opens_one_beside_it", async (s) => {
   const { mesh, station } = await setup(s);
   station.unanswered(1);
@@ -1097,6 +1121,24 @@ sim("ways_a_workspace_turned_off_are_not_gone", async (s) => {
   await close(s, station, mesh);
 });
 
+/// While the app keeps its record, each tick of a station's ways (more than one to choose between) is a line: what went
+/// over each since the last, in and out, and each path's packets sent and lost.
+sim("each_tick_of_a_stations_ways_is_a_line_of_the_record_while_it_is_kept", async (s) => {
+  const lines: string[] = [];
+  s.host.recorder = { on: () => true, line: (l) => lines.push(l) };
+  try {
+    const a = s.relay("https://a.relay.test/", { device: { ms: 10 }, station: { ms: 10 } });
+    const b = s.relay("https://b.relay.test/", { device: { ms: 20 }, station: { ms: 20 } });
+    const { station, mesh, id } = await onRelays(s, [a, b]);
+    await reach(s, mesh, id);
+    const ways = /^conn ways: [0-9a-f]{8} \S+ in=\+\d+B out=\+\d+B missed=\d+ \[\*?\S+ (\d+ms|\?) \+\d+\/\d+/;
+    await s.until(() => lines.some((l) => ways.test(l)), 3 * TICK_MS);
+    await close(s, station, mesh);
+  } finally {
+    s.host.recorder = undefined;
+  }
+});
+
 /// A workspace's own relay (cloud directory.ts setRelays): its station is on that relay alone, the device's endpoint on
 /// still.fail's; told the workspace's relays, the device reaches the station through it.
 sim("reaches_a_station_through_its_workspaces_own_relay", async (s) => {
@@ -1176,6 +1218,47 @@ sim("a_grant_heard_lends_the_phone_to_its_station_and_its_end_lets_it_go", async
   assert.deepEqual([adb.wanted(), adb.value().lends], [[], []]);
   await s.run(mesh.close());
   await s.settle(endpoint.close());
+});
+
+/// 2026-10-30: a phone granted to chats on two stations, the first paired with it and the second not: what the topic
+/// says (the pairing dialog's notification and its code reader go by it, naming no station) is the second's, the one
+/// waiting to be paired, not the first's.
+sim("a_phone_lent_to_two_stations_says_the_one_waiting_to_be_paired", async (s) => {
+  const stationSaying = (adb: string) => {
+    const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });
+    void (async () => {
+      const conn = (await endpoint.accept())!;
+      const control = (await conn.acceptBi())!;
+      await Station.readLine(control, { bytes: Buffer.alloc(0) });
+      await control.write(Buffer.from(`${JSON.stringify({ ok: true, station: "测试" })}\n`));
+      const offer = (await conn.acceptBi())!;
+      await Station.readLine(offer, { bytes: Buffer.alloc(0) });
+      await offer.write(Buffer.from(`${JSON.stringify({ status: 200, headers: {} })}\n`));
+      await offer.write(Buffer.from(`${JSON.stringify({ serial: "127.0.0.1:37001", adb, message: "" })}\n`));
+      await offer.stopped();
+    })().catch(() => {});
+    return endpoint;
+  };
+  const paired = stationSaying("connected");
+  const waiting = stationSaying("unpaired");
+  const mesh = await s.run(Mesh.make(env(s), []));
+  for (const e of [paired, waiting]) mesh.addAddr({ id: e.id(), ips: e.sockets() });
+  const store = new Store(s.host, s.runner);
+  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  await s.run(adb.run({ kind: "ports", ports: { connect: 5555, pair: 37115, device: "Pixel 8", android: "14", package: "fail.still.android" } }));
+  await s.run(adb.run({ kind: "on", on: true }));
+  const exp = Math.floor(s.time.now() / 1000) + 3600;
+  const first = `ws/${paired.id()}`;
+  const second = `ws/${waiting.id()}`;
+  adb.heard(first, { id: "p1", session: "k1", chat: "EMBER/1.0", reason: "看首屏", status: "granted", scope: "hour", exp, at: 1 });
+  adb.heard(second, { id: "p2", session: "k2", chat: "EMBER/2.0", reason: "装 mod", status: "granted", scope: "hour", exp, at: 2 });
+  await s.until(() => adb.value().lends?.length === 2 && adb.value().lends.every((l: J) => l.adb !== null));
+  assert.deepEqual(adb.value().lends.map((l: J) => [l.station, l.adb]), [[first, "connected"], [second, "unpaired"]]);
+  const value = adb.value();
+  assert.deepEqual([value.station, value.adb, value.pairPort], [second, "unpaired", 37115]);
+  await s.run(mesh.close());
+  await s.settle(paired.close());
+  await s.settle(waiting.close());
 });
 
 sim("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", async (s) => {

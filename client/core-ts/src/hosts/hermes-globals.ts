@@ -19,6 +19,9 @@ export interface HermesNative {
   setTimer(id: number, ms: number): void;
   clearTimer(id: number): void;
   log(level: number, message: string): void;
+  /// Whether the app keeps its performance record now, and a line into it (record.ts); absent where the host keeps none.
+  recording?(): boolean;
+  record?(line: string): void;
 }
 
 import { lowerCase, upperCase } from "./hermes-case.ts";

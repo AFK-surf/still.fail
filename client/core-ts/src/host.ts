@@ -4,6 +4,7 @@
 //
 // What streams (a response's body, a WebSocket's frames) is a pull handle: `take` gives the next piece, null once it
 // ended, failing when it broke. It lives in the Scope it was opened in: closing that scope closes it.
+import type { Recorder } from "./record.ts";
 import type { Effect, Scope } from "effect";
 import { HostError } from "./error.ts";
 import type { CoreMessage, ClientId } from "./protocol.ts";
@@ -162,6 +163,9 @@ export interface Host {
   /// is, so an older core still finds it.
   legacyRead?(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError>;
 
+  /// The app's performance record, where the host keeps one: what the connections do written into it while it is on
+  /// (record.ts).
+  readonly recorder?: Recorder | undefined;
   /// Milliseconds since the Unix epoch.
   nowMs(): number;
   /// Milliseconds on a clock that only moves forward, for timing spans.

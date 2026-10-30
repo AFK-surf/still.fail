@@ -76,6 +76,9 @@ pub struct Client {
   /// where the app's attention is, as told last (`client.focus`): told again to a core started anew
   /// (StillFailCore.kt `focus`), which would else take the app for out of view
   priv mut focus : Json?
+  /// While the device's performance record is kept (@hostapi.perf_recording): each call's name by its id until it is
+  /// answered, so what the core says of it is put to its name (Client::perf_name)
+  priv perf_calls : Map[Int, String]
 }
 
 ///|
@@ -108,6 +111,7 @@ pub fn Client::new(
     sub_waits: {},
     echo_waits: {},
     timing: None,
+    perf_calls: {},
   }
 }
 
@@ -232,6 +236,7 @@ pub fn Client::subscribe(
 fn Client::ask(self : Client, s : Sub) -> Unit {
   self.end_sub_wait(s.id)
   self.sub_waits[s.id] = (self.start_wait)("core: \{s.key}")
+  perf_out("sub " + topic_name(s.topic))
   // keyed: lists the core keys (threads, chats…) change item by item rather than as whole lists (delta.mbt applies both)
   let m : Map[String, Json] = {
     "id": Json::number(s.id.to_double()),
@@ -275,6 +280,10 @@ pub fn Client::call(
   let id = self.next_id
   self.next_id += 1
   self.calls[id] = on_done
+  if @hostapi.perf_recording() {
+    self.perf_calls[id] = name
+    perf_out(name)
+  }
   // (one whose answer nobody reads is awaited by nothing: its answer, taken as it comes, asks for no frame)
   if self.unread_names.contains(name) {
     self.unread_calls[id] = true
@@ -364,6 +373,7 @@ pub fn Client::cancel(self : Client, id : Int) -> Unit {
     self.progress.remove(id)
     self.quiet_calls.remove(id)
     self.calls.remove(id)
+    self.perf_calls.remove(id)
     self.end_call_wait(id)
     let m : Map[String, Json] = { "id": Json::number(id.to_double()), "cancel": Json::boolean(true) }
     (self.send)(Json::object(m).stringify())
@@ -540,6 +550,44 @@ fn Client::take(self : Client, msg : Json) -> Unit {
         _ => ()
       }
   }
+}
+
+///|
+/// What a message of the core's is, for the performance record: `topic <name> value|delta|error` (a subscription's),
+/// `answer <call>` (a call's answer), `progress <call>` (a value before it), `?` else.
+pub fn Client::perf_name(self : Client, msg : Json) -> String {
+  guard msg is Object(m) else { return "?" }
+  let id = match m.get("id") {
+    Some(Number(d, ..)) => d.to_int()
+    _ => return if m.contains("fatal") { "fatal" } else { "?" }
+  }
+  match self.subs.get(id) {
+    Some(s) => {
+      let how = if m.contains("error") {
+        "error"
+      } else if m.contains("value") {
+        "value"
+      } else {
+        "delta"
+      }
+      "topic \{topic_name(s.topic)} \{how}"
+    }
+    None => {
+      let name = self.perf_calls.get(id).unwrap_or("?")
+      if m.contains("ok") || m.contains("error") {
+        self.perf_calls.remove(id)
+        "answer " + name
+      } else {
+        "progress " + name
+      }
+    }
+  }
+}
+
+///|
+/// No call's name kept any more (the record turned off).
+pub fn Client::perf_forget(self : Client) -> Unit {
+  self.perf_calls.clear()
 }
 
 ///|

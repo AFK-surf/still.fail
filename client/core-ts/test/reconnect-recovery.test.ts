@@ -297,6 +297,29 @@ test("a_station_tried_seldom_after_long_down_is_tried_as_still_fail_cloud_is_rea
   }
 });
 
+test("while_the_app_keeps_its_record_a_station_not_reached_says_each_miss_each_wait_and_what_ended_it", async () => {
+  const s = await started();
+  const lines: string[] = [];
+  s.host.recorder = { on: () => true, line: (l) => lines.push(l) };
+  let down = true;
+  stationLater(s.host, (req) => (down && req.url.includes("/admin/api") ? Promise.reject(new HostError("连不上")) : undefined));
+  try {
+    s.gate.stream = "fail";
+    s.end();
+    await s.host.time.pass(20_000, 1000);
+    assert.ok(lines.some((l) => /^link miss: \S+ misses=\d+\/12 cloud=(up|down) -> \w+: /.test(l)), lines.join("\n"));
+    assert.ok(lines.some((l) => /^link wait: \S+ \d+s \(backoff\) misses=\d+ why=/.test(l)), lines.join("\n"));
+    assert.ok(lines.some((l) => /^link woke: \S+ by its time after \d+s$/.test(l)), lines.join("\n"));
+    // the station back: no more misses said after it is reached
+    down = false;
+    s.gate.stream = "open";
+    await reopens(s, 120_000);
+  } finally {
+    s.host.recorder = undefined;
+    s.core.close();
+  }
+});
+
 test("a_station_refusing_this_device_for_a_security_mode_is_down_for_that_and_says_why_whatever_still_fail_cloud_says", async () => {
   const s = await started();
   try {

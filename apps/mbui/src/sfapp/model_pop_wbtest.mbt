@@ -11,46 +11,45 @@ fn model_pop(mode : String) -> @ui.Tester {
 }
 
 ///|
-/// The words `name` as drawn last in the panel: how wide they are, the room they have, their weight.
+/// The words `name` as drawn last in the panel (over what the page has under it there): how wide they are, the room
+/// they have, their weight.
 fn pop_words(t : @ui.Tester, name : String) -> @ui.Laid? raise {
   let (px, py, pw, ph) = t.get(@ui.Dialog).rect
   t
   .boxes()
+  .rev()
   .iter()
   .find_first(fn(b) { b.kind == "text" && b.text == name && b.x >= px && b.x < px + pw && b.y >= py && b.y < py + ph })
 }
 
 ///|
-test "wide, short names: the model's panel ends where its last column does, its models' column no wider than its least" {
+test "wide, short names: the model's panel as wide as what it holds, not as wide as it may be" {
   let t = model_pop("newchat-model")
   let (px, _, pw, _) = t.get(@ui.Dialog).rect
-  let effort = t.get(Button, label="高").rect
+  let effort = t.get(Radio, label="高").rect
+  // (what it holds narrow, its foot the widest of it: far narrower than the most it may be)
+  assert_true(pw < 2.0 * @sfpages.triple_models_least, msg="\{t.get(@ui.Dialog).rect}")
+  assert_true(effort.0 + effort.2 <= px + pw - @sf.panel_pad, msg="\{t.get(@ui.Dialog).rect} \{effort}")
   let model = t.get(Button, label="Opus 5.5").rect
-  // (the panel's padding and its line past its last column, no room more)
-  assert_true(px + pw - (effort.0 + effort.2) <= @sf.panel_pad + 1.5, msg="\{t.get(@ui.Dialog).rect} \{effort}")
-  // (its names short: as wide as its least, not what a fixed panel left it)
-  assert_true(model.2 <= @sfpages.triple_models_least + 0.5, msg="\{model}")
+  assert_true(model.0 + model.2 <= px + pw)
 }
 
 ///|
-test "wide, how hard it thinks and how fast taller than the models' most: the models scroll in all of the row, none cut off over room left empty" {
+test "wide, many models and Codex's efforts and speeds: the models, how hard it thinks on a line of its own, the runtime and how fast a row each, in the panel" {
   let t = model_pop("newchat-tall-model")
-  let fast = t.get(Button, label="Fast").rect
-  let foot = fast.1 + fast.3
-  let names = ["Opus 5.5", "Sonnet 5", "GPT-6 Astra", "DeepSeek V4.1 Flash", "Grok 4.7 Build Fast", "Kimi For Coding", "SWE-2", "GPT-6.1 Sol",
-    "GPT-6.1 Terra",
-  ]
   let (px, py, pw, ph) = t.get(@ui.Dialog).rect
-  let rows = t
-    .boxes()
-    .filter(fn(b) { b.kind == "text" && names.contains(b.text) && b.x >= px && b.x < px + pw && b.y >= py && b.y < py + ph })
-  assert_true(rows.length() > 0)
-  // (each model laid out higher than the foot of the column beside it shows: none cut off over the room under them)
-  for b in rows {
-    if b.y < foot - 1.0 {
-      assert_true(b.cut.3 > 0.0, msg="\{b.text} at \{b.y} cut off, the column beside the models down to \{foot}")
-    }
+  let last = t.get(Button, label="GPT-6.1 Terra").rect
+  // how hard it thinks, its levels on one line under the models
+  let levels = ["默认", "最低", "低", "中", "高", "很高", "最高", "Ultra"].map(fn(l) { t.get(Radio, label=l).rect })
+  for r in levels {
+    assert_true(r.1 == levels[0].1 && r.1 >= last.1 + last.3, msg="\{levels}, under \{last}")
+    assert_true(r.0 >= px && r.0 + r.2 <= px + pw, msg="\{r} past the panel")
   }
+  // the runtime, then how fast, each a row of the panel's under them, in the panel
+  let runtime = t.get(Button, label="DeepSeek Harness").rect
+  let speed = t.get(Button, label="跟随订阅").rect
+  assert_true(runtime.1 >= levels[0].1 + levels[0].3 && speed.1 >= runtime.1 + runtime.3, msg="\{runtime} \{speed}")
+  assert_true(speed.0 >= px && speed.0 + speed.2 <= px + pw && speed.1 + speed.3 <= py + ph, msg="\{speed}")
 }
 
 ///|
@@ -68,6 +67,8 @@ test "wide: another model picked, its runtimes fewer, the panel as wide as it op
       }
       None => fail("\{name} not drawn")
     }
-    assert_true(t.get(@ui.Dialog).rect == opened, msg="\{name} picked: \{t.get(@ui.Dialog).rect}, opened \{opened}")
+    // (as wide, its sides where they were; as tall as what it holds now)
+    let now = t.get(@ui.Dialog).rect
+    assert_true(now.0 == opened.0 && now.2 == opened.2, msg="\{name} picked: \{now}, opened \{opened}")
   }
 }

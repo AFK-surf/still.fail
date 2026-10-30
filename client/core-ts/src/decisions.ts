@@ -102,7 +102,7 @@ function phoneAsk(v: J): J | null {
   const request = trimmed(get(v, "request"));
   if (request === null) return null;
   const out: J = { request, reason: str(get(v, "reason")) ?? "" };
-  for (const field of ["status", "scope", "why", "lasts"]) {
+  for (const field of ["status", "scope", "why", "link", "lasts"]) {
     const said = trimmed(field === "lasts" ? get(v, field) : get(get(v, "outcome"), field));
     if (said !== null) out[field] = said;
   }

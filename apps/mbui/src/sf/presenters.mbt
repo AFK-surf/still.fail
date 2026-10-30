@@ -108,6 +108,8 @@ priv struct PanelOf {
   stage : Bool
   /// on a stage, what is chosen of the picture between it and its buttons (panel's `above`)
   above : ((@ui.Ctx) -> Unit)?
+  /// beside what opened it, what stands at its head's end, beside its title (panel's `head_end`)
+  head_end : ((@ui.Ctx) -> Unit)?
   /// beside what opened it: on which side of it, along it where, how far from it (panel's `side`, `along`, `offset`)
   side : @ui.Side
   along : @ui.Along
@@ -277,7 +279,8 @@ pub fn pick(
 /// a press beside it, Escape and the back close it too; `above`, over those buttons, what is chosen of the picture (the
 /// card to share's looks). `side`, `along`, `offset`: where it stands beside what opened it (under it by default, its
 /// start at the start of it); what opens from a bar down the window's side (the rail) stands beside the bar, out of
-/// it, as everything opened from there does.
+/// it, as everything opened from there does. `head_end`: beside what opened it, what stands at the end of its head's
+/// line, beside its title (the model panel's search: a sheet, its head the sheet's own, leaves it to what it holds).
 pub fn panel(
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
@@ -298,12 +301,35 @@ pub fn panel(
   field? : String = "",
   stage? : Bool = false,
   above? : (@ui.Ctx) -> Unit,
+  head_end? : (@ui.Ctx) -> Unit,
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Start,
   offset? : Double = panel_offset,
 ) -> Unit {
   present(
-    Panel({ title, description, body, foot, w, fits, wide, live, tall, grows, focus, ruled, lists, form, field, stage, above, side, along, offset }),
+    Panel({
+      title,
+      description,
+      body,
+      foot,
+      w,
+      fits,
+      wide,
+      live,
+      tall,
+      grows,
+      focus,
+      ruled,
+      lists,
+      form,
+      field,
+      stage,
+      above,
+      head_end,
+      side,
+      along,
+      offset,
+    }),
     from,
     gone~,
   )
@@ -1176,7 +1202,7 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
         None => x.title
       }
       if title != "" {
-        panel_head(c, title)
+        panel_head(c, title, end?=x.head_end)
       }
       // (small_panel's pad round it: what reaches its sides on purpose goes out past that, panel_bleed; its rows stand
       // at it)

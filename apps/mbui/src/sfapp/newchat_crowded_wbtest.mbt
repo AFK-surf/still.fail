@@ -22,7 +22,7 @@ let crowded_h : Double = 780.0
 
 ///|
 /// A phone's window too short for all of the crowded model's panel.
-let crowded_short : Double = 600.0
+let crowded_short : Double = 540.0
 
 ///|
 /// The narrowest phones (320 across: as narrow as a 349 one with its words 15% bigger, the person's of 2026-10-26).
@@ -122,7 +122,7 @@ fn words_whole(t : @ui.Tester, name : String, sheet : (Double, Double, Double, D
 }
 
 ///|
-test "narrow: the model's panel has the models across it, every name whole, the runtime and how hard it thinks as selects under them in view as they scroll" {
+test "narrow: the model's panel has the models across it, every name whole, how hard it thinks and the runtime under them, in view as they scroll" {
   // (a window too short for all of it)
   let t = crowded("newchat-crowded-model", h=crowded_short)
   run_to_sheet_rest(t)
@@ -134,47 +134,66 @@ test "narrow: the model's panel has the models across it, every name whole, the 
   for name in ["Opus 5.5", "GPT-6 Astra", "DeepSeek V4.1 Flash", "Grok 4.7 Build Fast"] {
     assert_true(words_whole(t, name, sheet) is Some(_), msg="\{name} not whole in the sheet")
   }
-  // the runtime and how hard it thinks: selects side by side under the models, their words whole, in the sheet
-  let runtime = t.get(Button, label="运行时: DeepSeek Harness").rect
-  let effort = t.get(Button, label="思考深度: 高").rect
+  // how hard it thinks, its levels on one line under the models; the runtime a pill under them, saying the one picked,
+  // the others a pick away; their words whole, in the sheet
+  let runtime = t.get(Button, label="DeepSeek Harness").rect
+  let effort = t.get(Radio, label="高").rect
   let model = t.get(Button, label="Opus 5.5").rect
-  assert_true(runtime.1 > model.1 && (runtime.1 - effort.1).abs() < 0.5 && effort.0 > runtime.0 + runtime.2)
-  assert_true(runtime.1 + runtime.3 <= sheet.1 + sh && effort.0 + effort.2 <= sheet.0 + sheet.2)
-  assert_true(words_whole(t, "DeepSeek Harness", sheet) is Some(_), msg="DeepSeek Harness not whole")
-  // the models scrolled: the selects where they were
+  assert_true(effort.1 > model.1 && runtime.1 > effort.1 + effort.3, msg="\{model} \{effort} \{runtime}")
+  assert_true(t.query(Radio, label="Claude Code") is None, msg="the runtimes not picked laid out")
+  assert_true(t.get(Radio, label="默认").rect.1 == effort.1, msg="how hard it thinks not on one line")
+  assert_true(runtime.1 + runtime.3 <= sheet.1 + sh && runtime.0 + runtime.2 <= sheet.0 + sheet.2)
+  for name in ["DeepSeek Harness", "高", "最高"] {
+    assert_true(words_whole(t, name, sheet) is Some(_), msg="\{name} not whole")
+  }
+  // the models scrolled: the choices where they were
   let mx = model.0 + model.2 / 2.0
-  t.drag(mx, runtime.1 - 40.0, mx, model.1 + 40.0)
+  t.drag(mx, model.1 + 3.0 * model.3, mx, model.1 + model.3 / 2.0)
   t.run_for(@kit.presence_in_ms)
-  assert_true(t.get(Button, label="运行时: DeepSeek Harness").rect == runtime, msg="the runtime moved with the models")
-  assert_true(t.get(Button, label="思考深度: 高").rect == effort, msg="how hard it thinks moved with the models")
+  assert_true(t.get(Button, label="DeepSeek Harness").rect == runtime, msg="the runtime moved with the models")
+  assert_true(t.get(Radio, label="高").rect == effort, msg="how hard it thinks moved with the models")
   assert_true(t.get(Button, label="Opus 5.5").rect.1 < model.1, msg="the models did not scroll")
 }
 
 ///|
-test "narrow, few models: the same panel, its one runtime's select not to be pressed" {
+test "narrow, few models: the same panel; one runtime, nothing to choose of it" {
   let t = crowded("newchat-model")
   run_to_sheet_rest(t)
   let sheet = t.get(@ui.Dialog).rect
   let model = t.get(Button, label="GPT-6").rect
-  let runtime = t.get(Button, label="运行时: Claude Code")
-  assert_true(runtime.disabled)
-  assert_true(runtime.rect.1 > model.1)
-  assert_true(t.get(Button, label="思考深度: 高").rect.1 > model.1)
-  for name in ["Opus 5.5", "Sonnet 5", "GPT-6", "Claude Code", "高"] {
+  assert_true(t.query(Button, label="Claude Code") is None)
+  assert_true(t.get(Radio, label="高").rect.1 > model.1)
+  for name in ["Opus 5.5", "Sonnet 5", "GPT-6", "默认", "高"] {
     assert_true(words_whole(t, name, sheet) is Some(_), msg="\{name} not whole in the sheet")
   }
 }
 
 ///|
-test "wide: the model's panel beside its control has room for all three columns: the models, the runtimes, how hard it thinks side by side" {
+test "wide: the model's panel beside its control has the models, how hard it thinks under them, the runtime under that" {
   let src = fixture_app("newchat-crowded-model")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(squeeze_opening)
-  let model = t.get(Button, label="DeepSeek V4.1 Flash").rect
+  let model = t.get(Button, label="SWE-2").rect
   let runtime = t.get(Button, label="DeepSeek Harness").rect
-  let effort = t.get(Button, label="高").rect
-  assert_true(runtime.0 > model.0 + model.2, msg="\{model} \{runtime}")
-  assert_true(effort.0 > runtime.0 + runtime.2, msg="\{runtime} \{effort}")
-  // (no selects for them: they are not said twice)
-  assert_true(t.query(Button, label="运行时: DeepSeek Harness") is None)
+  let effort = t.get(Radio, label="高").rect
+  assert_true(effort.1 >= model.1 + model.3, msg="\{model} \{effort}")
+  assert_true(runtime.1 >= effort.1 + effort.3, msg="\{effort} \{runtime}")
+  // pressed, the runtimes in a pick
+  t.click(Button, label="DeepSeek Harness")
+  t.run_for(squeeze_opening)
+  assert_true(t.boxes().iter().any(fn(b) { b.kind == "text" && b.text == "Claude Code" }), msg="no pick of the runtimes")
+}
+
+///|
+test "wide: how hard it thinks along its line, from the model's own to the most" {
+  let src = fixture_app("newchat-crowded-model")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.run_for(squeeze_opening)
+  // (in their order along their line: from the model's own to the most)
+  let order = ["默认", "低", "中", "高", "最高"].map(fn(l) { t.get(Radio, label=l).rect })
+  for i in 1..<order.length() {
+    assert_true(order[i].1 == order[0].1 && order[i].0 > order[i - 1].0, msg="\{order}")
+  }
+  let (px, _, pw, _) = t.get(@ui.Dialog).rect
+  assert_true(order[order.length() - 1].0 + order[order.length() - 1].2 <= px + pw, msg="past the panel")
 }

@@ -532,10 +532,13 @@ pub fn[T] Signal::set(self : Signal[T], value : T, loc~ : SourceLoc) -> Unit {
     node.flags = MUTABLE | DIRTY
     match node.subs {
       Some(subs) => {
+        let was = setting.val
+        setting.val = Some(loc)
         propagate(subs, run.run_depth != 0)
         if run.batch_depth == 0 {
           flush()
         }
+        setting.val = was
       }
       None => ()
     }
@@ -870,6 +873,19 @@ pub fn Watch::stop(self : Watch) -> Unit {
 /// it (frame_watch.mbt's layout watch).
 // kept across runs: written by each set
 let set_at : Ref[SourceLoc?] = Ref(None)
+
+///|
+/// The set telling what follows it now (Signal::set, as it propagates and flushes): None while what is told comes of
+/// anything else (a trigger, a computed found changed, a batch's end).
+// kept across runs: set and put back within each set
+let setting : Ref[SourceLoc?] = Ref(None)
+
+///|
+/// Where the signal being set now was set, while what follows it is told (a watch told as it is set: the place that
+/// told it); None when what is told comes of anything else, so it is not the place of some earlier set.
+pub fn setting_at() -> SourceLoc? {
+  setting.val
+}
 
 ///|
 /// Where a signal was last set to another value, as words ("" none).

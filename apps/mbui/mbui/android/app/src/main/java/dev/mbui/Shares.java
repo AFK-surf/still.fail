@@ -41,6 +41,9 @@ final class Shares {
     static volatile byte[][] sharedFiles = new byte[0][];
     /** The cache's directory of the pictures put on the clipboard (Device.clipSet), read through Files too. */
     static final String CLIPS = "screen-clips";
+    /** The cache's directory of a photo the camera writes whole for the composer (Picks: ACTION_IMAGE_CAPTURE's
+     * EXTRA_OUTPUT), written and read through Files: <authority>/camera/<name>. */
+    static final String CAMERA = "camera";
     /** A file shared in is read whole, at most this much (the composer takes up to 1 GB). */
     private static final long MAX = 1L << 30;
 
@@ -202,7 +205,8 @@ final class Shares {
     }
 
     /** The files handed to another app: read only, only what is in the cache's shared/ (one file at a time), and the
-     * pictures put on the clipboard (the cache's screen-clips/). */
+     * pictures put on the clipboard (the cache's screen-clips/); the camera writes a photo taken for the composer into
+     * the cache's camera/. */
     public static final class Files extends ContentProvider {
         @Override
         public boolean onCreate() {
@@ -215,16 +219,21 @@ final class Shares {
             if (c == null || name == null || name.contains("/") || name.startsWith(".")) throw new FileNotFoundException();
             // a picture put on the clipboard (Device.clipSet): <authority>/screen-clips/<name>
             List<String> path = uri.getPathSegments();
-            boolean clip = path.size() == 2 && CLIPS.equals(path.get(0));
-            if (!clip && path.size() != 1) throw new FileNotFoundException();
-            File f = new File(new File(c.getCacheDir(), clip ? CLIPS : "shared"), name);
+            String dir = path.size() == 2 && (CLIPS.equals(path.get(0)) || CAMERA.equals(path.get(0))) ? path.get(0) : null;
+            if (dir == null && path.size() != 1) throw new FileNotFoundException();
+            File f = new File(new File(c.getCacheDir(), dir != null ? dir : "shared"), name);
             if (!f.isFile()) throw new FileNotFoundException(name);
             return f;
         }
 
         @Override
         public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
-            if (!"r".equals(mode)) throw new SecurityException("read only");
+            if (!"r".equals(mode)) {
+                // (only the camera's photo is written, into the empty file Picks made for it)
+                List<String> path = uri.getPathSegments();
+                if (path.size() != 2 || !CAMERA.equals(path.get(0))) throw new SecurityException("read only");
+                return ParcelFileDescriptor.open(fileOf(uri), ParcelFileDescriptor.parseMode(mode));
+            }
             return ParcelFileDescriptor.open(fileOf(uri), ParcelFileDescriptor.MODE_READ_ONLY);
         }
 

@@ -49,6 +49,7 @@
 //   each one's place in the order people read them (the system's collation; a shell without it: an error, and the
 //   core orders them by hand); ed25519.sign {seed, message} (hex) → {publicKey, signature} (hex; a shell without it:
 //   an error, and the core signs in JS: Host.ed25519Sign).
+import type { Recorder } from "../record.ts";
 import { Effect, type Scope } from "effect";
 import { Core } from "../core.ts";
 import { FileSource } from "../file-source.ts";
@@ -75,6 +76,9 @@ export interface Native {
   monotonic(): number;
   utcOffset(atMs: number): number;
   random(buf: Uint8Array): void;
+  /// The app's performance record, where it keeps one (record.ts): whether it is kept now, a line into it.
+  recording?(): boolean;
+  record?(line: string): void;
 }
 
 type Answer = { json: unknown; bytes: Uint8Array | null };
@@ -144,6 +148,12 @@ function pullBytes(bridge: Bridge, op: string, id: number): Pull<Uint8Array> {
 }
 
 export class BridgeHost implements Host {
+  /// The app's performance record, where the engine keeps one (record.ts).
+  get recorder(): Recorder | undefined {
+    const n = this.#bridge.native;
+    if (n.recording === undefined || n.record === undefined) return undefined;
+    return { on: () => n.recording!(), line: (text) => n.record!(text) };
+  }
   readonly #bridge: Bridge;
   readonly #origin: string;
   readonly #beta: boolean;

@@ -305,6 +305,8 @@ let zh : Map[String, String] = {
   "android-misc.adb.ask.first": "需要先{step}",
   "android-misc.adb.ask.how": "查看步骤",
   "android-misc.adb.ask.more": "详情",
+  "android-misc.adb.ask.pair.about": "在手机上配对一次，以后它就能一直连上这台手机。",
+  "android-misc.adb.ask.pair.title": "这台 station 还没和你的手机配对",
   "android-misc.adb.ask.share": "共享",
   "android-misc.adb.ask.sharing": "正在共享调试给 {name}",
   "android-misc.adb.ask.stop": "停止共享",

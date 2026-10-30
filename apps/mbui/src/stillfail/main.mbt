@@ -434,6 +434,11 @@ fn main {
   // the faces the app carries (code's JetBrains Mono, as Android's): before its first frame
   @sf.give_faces()
   @sfapp.host_setup()
+  // (said with each summary of the frames into the device's performance record while it is kept: the core's
+  // messages, the page shown, the screens open; @ui.perf_also)
+  @ui.perf_also("core", @core.perf_said)
+  @ui.perf_also("page", fn(_) { @sfbase.page_kind(@sfbase.app.nav.top()) })
+  @ui.perf_also("screens", @sfpages.screens_perf)
   @ui.run(
     "still.fail",
     fn(c) {

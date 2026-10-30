@@ -186,6 +186,7 @@ fn messages_take(came : Array[(String, String, Bytes?)]) -> Unit {
 fn messages_take_now(came : Array[(String, String, Bytes?)]) -> Unit {
   // (what changes only signals taken now, in the order they came, till one is left for its handler: messages_in)
   for m in came {
+    probe_message(m.0, m.1, m.2)
     if messages_in.is_empty() {
       match message_said.get(m.0) {
         Some(said) => {

@@ -105,6 +105,35 @@ test "wide: a message right clicked offers 分享这一轮, which shares its tur
 }
 
 ///|
+test "wide: a link in a message right clicked opens its own menu alone, not the message's 分享这一轮 under it" {
+  reset()
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, fixture("chat")) }, w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  // (Ana's message, up the list: scrolled to till it is in the list's middle)
+  let link = "https://example.com/review/42"
+  for _ in 0..<20 {
+    match t.run_rects(link) {
+      [(_, y, _, h), ..] if y + h / 2.0 > 160.0 && y + h / 2.0 < 600.0 => break
+      [(_, y, _, h), ..] if y + h / 2.0 >= 600.0 => t.wheel(800.0, 400.0, 200.0)
+      _ => t.wheel(800.0, 400.0, -300.0)
+    }
+  }
+  t.run_for(@ui.move_most_ms)
+  let (x, y, w, h) = t.run_rects(link)[0]
+  t.right_click(x + w / 2.0, y + h / 2.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("复制链接") is Some(_))
+  assert_true(t.find("分享这一轮") is None)
+  assert_true(t.find("复制消息链接") is None)
+  // chosen, nothing comes after it
+  t.tap_text("复制链接")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.clipboard(), link)
+  assert_true(t.find("分享这一轮") is None)
+}
+
+///|
 test "wide: the message header's ⋯ offers 复制消息链接 and 分享这一轮, the two a right click offers" {
   reset()
   let calls : Array[Made] = []

@@ -280,11 +280,30 @@ fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
   let decided = ask.status != ""
   let asking = fn() {
     c.box(style=@sf.ask_card_room.then(ask_card_under_head), fn() {
-      @settings.phone_card(c, here.core, here.station, ask.request, ask.reason, mine_to(here, card.assignee), lasts=ask.lasts, who=card.assignee_text, ended=if decided { Some((ask.status, ask.scope, ask.why)) } else { None }, how=fn() { open_page(Setting(@settings.Route::AdbShare(""))) })
+      @settings.phone_card(c, here.core, here.station, ask.request, ask.reason, mine_to(here, card.assignee), lasts=ask.lasts, who=card.assignee_text, ended=if decided { Some((ask.status, ask.scope, ask.why)) } else { None }, how=fn() { open_page(Setting(@settings.phone_steps(here.core, here.station))) })
     })
     |> ignore
   }
-  let ended = fn() { @settings.phone_outcome(c, ask.status, ask.scope, ask.why, inline=here.inline) }
+  // (granted: how its station holds the phone, and on the phone, its pairing a tap away)
+  let ended = fn() {
+    let mine = mine_to(here, card.assignee)
+    let link = @settings.phone_link(here.core, here.station, ask.link)
+    @settings.phone_outcome(
+      c,
+      ask.status,
+      ask.scope,
+      ask.why,
+      inline=here.inline,
+      link~,
+      paired_here=mine && @settings.phone_lends(c),
+    )
+    // (on the phone, its pairing a tap away, as a login's card is under its message)
+    if link == "unpaired" && ask.status == "granted" && mine && @settings.phone_lends(c) {
+      step_card(c, "phone-pair/" + m.ts, @sf.t("android-misc.adb.ask.pair.title"), @sf.t("android-misc.adb.ask.pair.about"), fn() {
+        open_page(Setting(@settings.Route::AdbShare(here.station)))
+      })
+    }
+  }
   match here.list {
     Some(l) => {
       let key = here.station + "/" + m.ts

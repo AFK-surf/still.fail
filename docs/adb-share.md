@@ -41,6 +41,22 @@
 > - **Settings, 共享调试** (one page, not a station's): on a phone its switch first, 默认最长授权, the phone's settings (本机设置: what it lacks, the
 >   switches it can turn on), the stations it is paired with, and the grants live now (each with 收回).
 > - **Recorded** in the chat as a system message each: asked, approved, refused, taken back, ended.
+> - **Approved is not reached** (2026-10-30, user: 「Station 以为跟当前设备已经连了，但其实还没有，而且还没有什么入口」): a
+>   phone is paired once with each station, and one granted to a chat on a station it was never paired with was lent
+>   there, its station's adb `unpaired`, while the card said 已允许 and nothing showed where to pair. Now:
+>   - The station tells a grant how its adb holds the phone (link.ts `Shares` `stated` → grants.ts `linked`): the card's
+>     outcome carries it (`adb.outcome.link`: connected, unpaired, off, unauthorized, missing, failed, gone), its dot
+>     green only once connected, and the agent is told in its session as it comes to need pairing and as it connects
+>     (phone_use's answer says to leave pairing to the card).
+>   - Unpaired, the card says so, with a card under it on the phone (a login card's look, the whole card the way to the station's own 共享调试 page, where it is paired), and on a
+>     computer that it is paired in the app on the phone. Its 查看步骤 opens that station's page too (settings' page
+>     while the switch is off: it is turned on there).
+>   - A phone lent to several stations: the core's `adbShare` says at its top the lending a person has something to do
+>     for (one waiting to be paired, else the first), so the pairing dialog's notification and its code reader (which
+>     name no station) pair that one; a station's page reads its own lending from `lends`, and its pairing names it.
+>   - Settings' 共享调试 lists the stations the grants lend it to, each as its adb holds the phone, its page a tap away.
+>   - A link to a station's 共享调试 opens the page it shows as a card whatever host it was written with, a path alone
+>     included (`linkTarget` takes `/w/…` as the cloud's own).
 A person can lend their Android phone to the agents of one station: the phone's
 own adbd (Wireless debugging, Android 11 and later) is reached from the station
 at `127.0.0.1:<port>`, so an agent there runs `adb -s 127.0.0.1:<port> …` as if

@@ -128,6 +128,9 @@ priv struct NodesRun {
   mut told : Bool
   /// (the row told last, list and item: what says why a frame is asked for, Tester::assert_idle)
   mut told_by : (Int, Int)
+  /// (where what that row read was set as it told it: Signal::set's place, None when what told it was no set; said, as
+  /// words, with why a frame was built)
+  mut told_at : SourceLoc?
   /// the passes of frames' builds so far, and the frames' starts (rows_frame_start, Ctx::rows_detach): a row told in
   /// one before it is laid in it reads anew as it is
   mut pass : Int
@@ -152,6 +155,7 @@ let nodes_run : NodesRun = {
   part_fresh: false,
   told: false,
   told_by: (0, 0),
+  told_at: None,
   pass: 0,
   building: None,
   aside: 0,
@@ -413,6 +417,7 @@ fn row_watch(list : Int, item : Int, laid_pass : Ref[Int], holder : Ref[RowNodes
     }
     nodes_run.told = true
     nodes_run.told_by = (list, item)
+    nodes_run.told_at = @signals.setting_at()
     // (between frames: one owed; in one, the next asked for as it ends: on_frame)
     if !frame_running.val {
       h_frame_owed()

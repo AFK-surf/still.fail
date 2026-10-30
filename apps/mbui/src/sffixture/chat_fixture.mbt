@@ -1312,6 +1312,10 @@ pub fn vault_post(typed : Bool, file? : Bool = false) -> Json {
 pub let fix_phone : Ref[String] = Ref("")
 
 ///|
+/// Granted, how its station's adb holds the phone, as the station says it on the card ("": not said).
+pub let fix_phone_link : Ref[String] = Ref("")
+
+///|
 /// chat-phone's last post: an agent asking to debug the person's phone (docs/adb-share.md), its card as the core says
 /// it, answered here; decided, how it went.
 pub fn phone_post() -> Json {
@@ -1320,6 +1324,9 @@ pub fn phone_post() -> Json {
     ask["status"] = Json::string(fix_phone.val)
     if fix_phone.val == "granted" {
       ask["scope"] = Json::string("chat")
+      if fix_phone_link.val != "" {
+        ask["link"] = Json::string(fix_phone_link.val)
+      }
     }
   }
   msg(61, "agent", by_agent("Anthropic", "claude", "s-c1"), "申请调试你的手机：装上刚编好的测试包，看首屏在折叠屏展开时排得对不对", "刚刚", {
@@ -1354,10 +1361,20 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
   let ask_end = f.mode == "chat-ask-end"
   let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file"
-  let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off"
-  // (chat-phone-granted: its request approved already; chat-phone-lacks: waiting, on a phone without Developer options)
-  if f.mode == "chat-phone-granted" && fix_phone.val == "" {
+  let linked = f.mode.has_prefix("chat-phone-linked-")
+  let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off" || linked
+  // (chat-phone-granted: its request approved already; chat-phone-lacks: waiting, on a phone without Developer options;
+  // chat-phone-linked-<link>[-desk]: approved, its station holding the phone as <link> says, on the phone or (-desk)
+  // on a computer)
+  if (f.mode == "chat-phone-granted" || linked) && fix_phone.val == "" {
     fix_phone.val = "granted"
+  }
+  if linked && fix_phone_link.val == "" {
+    let rest = f.mode.unsafe_substring(start="chat-phone-linked-".length(), end=f.mode.length())
+    fix_phone_link.val = match rest.find("-") {
+      Some(i) => rest.unsafe_substring(start=0, end=i)
+      None => rest
+    }
   }
   if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault && !phone && !ask_end) {
     return v

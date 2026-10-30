@@ -1,9 +1,10 @@
 // 关于 and 更新日志, one page each in every frame (ember web/src/pages/About.tsx, Changelog.tsx, Changelog.css.ts; the
 // narrow app's mobile/Settings.tsx AboutScreen, mobile/Changelog.tsx). 关于: this build, the way to a newer one,
 // what changed; whether this device sends usage statistics and error reports (not where nothing is sent); still.fail's
-// terms and privacy policy on its site. 更新日志: the core's `changelog`, a tab a part, by day, each change's lines
-// with their kind before them, its version, what is not out yet; opened, what the last update brought is read
-// (`changelog.seen`). Laid out by the page's width (page_look.mbt).
+// terms and privacy policy on its site; last, where the device keeps one, its performance record (性能记录: what
+// warms it, kept on the device alone, @hostapi.perf_state). 更新日志: the core's `changelog`, a tab a part, by day,
+// each change's lines with their kind before them, its version, what is not out yet; opened, what the last update
+// brought is read (`changelog.seen`). Laid out by the page's width (page_look.mbt).
 
 ///|
 /// 关于 (AboutPage; the narrow app's AboutScreen, Android's SettingsHome.kt AboutScreen): this build and the way to a
@@ -54,8 +55,45 @@ pub fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       })
     })
   })
+  // this device's performance record, last and out of the way (where the device keeps one: iOS)
+  if @hostapi.perf_state() >= 0 {
+    blocks.push(fn() {
+      @sf.section(c, heads=false, @sf.t("web-pages.about.diagnostics"), fn() {
+        // (a list's group, as 版本's: its 分享记录 a row of it, its ground round within the group's corners; a card's
+        // held a row's ground round as a list's in its 20 of room, 2026-10-30)
+        @sf.group(c, fn() {
+          // (read as the row is built, not as the page was: the row is built again alone, its switch's knob sliding,
+          // and one that read the page's said off again while on, 2026-10-30 「开关又被推回去」; perf_turned, no signal
+          // of the host's, builds it again as it is turned, its 分享记录 shown)
+          perf_turned.get() |> ignore
+          let on = @hostapi.perf_state() == 1
+          let now = @sf.switch_row(c, "about/perf",
+            @sf.t("web-pages.about.perf.title"),
+            on,
+            note=@sf.t("web-pages.about.perf.note", args=[("where", @hostapi.perf_where()), ("size", @sf.file_size(@hostapi.perf_size()))]),
+          )
+          if now != on {
+            @hostapi.set_perf(now)
+            perf_turned.set(perf_turned.get() + 1)
+          }
+          // (handed on through the system's share sheet: a release build's files are nowhere a person can take them from,
+          // the Files app shows none of the app's and only a build signed for development can be copied off with Xcode)
+          if @hostapi.perf_size() > 0.0 &&
+            @sf.link_row(c, "about/perf/share", @sf.t("web-pages.about.perf.share"), acts=true) {
+            @hostapi.share("", "still.fail-perf.log", "text/plain", @hostapi.perf_read()) |> ignore
+          }
+        })
+      })
+    })
+  }
   @sf.page(c, on_back=core.pop, frame~, "about", @sf.t("web-pages.settings.nav.about"), blocks)
 }
+
+///|
+/// How many times 性能记录 was turned here: what its row reads, so it is built again as it is (the host's state is no
+/// signal).
+// kept across runs: only counts on
+let perf_turned : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// This build and the way to a newer one, a row each on every screen. Its name and version, words of a length known,
