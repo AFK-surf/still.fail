@@ -554,6 +554,11 @@ jobs:
         with: { node-version-file: .node-version, package-manager-cache: false }
       - uses: ./.github/actions/msvc
       - uses: ./.github/actions/mbui-moonbit
+      - name: probe
+        run: |
+          m=$(cygpath -u "$MOON_HOME"); find "$m" -type f | wc -l; du -sm "$m"/* | sort -rn | head
+          for d in "$m"/lib/core/_build/*/ "$m"/lib/core/_build/*/*/; do echo "$(find "$d" -type f | wc -l) $(du -sm "$d" | cut -f1)MB $d"; done
+          ls "$m/bin" | head -40
       - name: Tools (MSVC's link.exe for cargo, which Git Bash's /usr/bin/link shadows)
         run: |
           echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$(cygpath -m "$(dirname "$(which cl)")/link.exe")" >> "$GITHUB_ENV"
