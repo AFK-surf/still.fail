@@ -66,14 +66,18 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
     },
   )
   |> ignore
-  // the bottom bar told what the app's state says of it as that changes, at the moment of what changed it (a page put
-  // on the stack, a place come in), whatever frames are drawn: the frames only read where it is then (bar_tell)
+  // the bottom bar told what the app's state and the window say of it as that changes, at the moment of what changed it
+  // (a page put on the stack, a place come in, the bars' order, the window's width), whatever frames are drawn: the
+  // frames only read where it is then (bar_tell)
   v.reacts(
     fn() {
       match workspace_in_view(src).0 {
         Some(w) => {
           let active = place_of(app.nav.top())
-          Some(bar_told(src, w, active, narrow_bar_shown(src, w)))
+          // (the width of the box it is laid out in, this node's: the window's less the system's bars beside it, told
+          // as either changes)
+          ignore((v.window(), sides_room()))
+          Some(bar_told(src, w, active, narrow_bar_shown(src, w), v.laid_size().0))
         }
         None => None
       }
