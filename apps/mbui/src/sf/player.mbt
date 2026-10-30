@@ -776,8 +776,9 @@ fn player_waits(c : @ui.Ctx, p : @kit.Media, f : @kit.MediaFrame, ink : MediaInk
             |> ignore
           }
         Failed =>
-          c.box(style=player_failed_box, fn() {
-            c.text(t("web-pages.drive.player.failed", args=[("error", "")]), style=player_pill_words.then(@ui.text_style(color=Data(ink.text))))
+          // (on the card its end offers the next one on: the words and the button over its picture read alike)
+          c.box(style=player_next_box.then(@ui.style(bg=Data(ink.ground))), fn() {
+            c.text(t("android-chat.video.failed"), style=player_pill_words.then(@ui.text_style(color=Data(ink.text))))
             |> ignore
             let id = c.id(p.key() + "/retry")
             if c.clicked(id) {
@@ -2022,10 +2023,6 @@ let player_pill : @ui.Style = @ui.css("row px=S3 py=S1_5 gap=S2 radius=Xl1_5 ali
 ///|
 // kept across runs: a value (no field of it changes)
 let player_pill_words : @ui.TextStyle = @ui.text_style(size=Ui, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let player_failed_box : @ui.Style = @ui.css("p=S8 gap=S3 align=ACenter")
 
 ///|
 /// The next one's card: 280 wide, 20 and 16 in, 12 between; its button 40 high.
