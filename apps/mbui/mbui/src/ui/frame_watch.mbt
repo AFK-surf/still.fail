@@ -617,22 +617,36 @@ fn looks_keep(c : Ctx) -> Unit {
 /// drawn the same (the tags of the looks by the clock, slot 20 below 0, all one: a tag each paint gives anew,
 /// cycle_look.mbt; every NaN one).
 fn insts_said(a : FixedArray[Double], n : Int) -> Int64 {
-  let mut h = -3750763034362895579L
-  for q in 0..<n {
-    let o = q * inst_size
-    for j in 0..<inst_size {
-      let x = a[o + j]
-      let bits = if j == 20 && x < 0.0 {
-        -1L
-      } else if x.is_nan() {
-        -2L
-      } else {
-        x.reinterpret_as_int64()
-      }
-      h = (h ^ bits) * 1099511628211L
-    }
+  // (four lanes, each folding every fourth number: one lane's multiply need not wait for the last, the lanes folded
+  // into one at the end)
+  let mut h0 = -3750763034362895579L
+  let mut h1 = h0
+  let mut h2 = h0
+  let mut h3 = h0
+  let end = n * inst_size
+  let mut k = 0
+  while k < end {
+    let j = k % inst_size
+    h0 = (h0 ^ inst_bits(a[k], j)) * 1099511628211L
+    h1 = (h1 ^ inst_bits(a[k + 1], j + 1)) * 1099511628211L
+    h2 = (h2 ^ inst_bits(a[k + 2], j + 2)) * 1099511628211L
+    h3 = (h3 ^ inst_bits(a[k + 3], j + 3)) * 1099511628211L
+    k = k + 4
   }
-  h
+  (((h0 * 31L) ^ h1) * 31L ^ h2) * 31L ^ h3
+}
+
+///|
+/// An instance's number `x` in its slot `j` as insts_said folds it: its bits; a tag of a look by the clock (slot 20
+/// below 0) all one; every NaN one.
+fn inst_bits(x : Double, j : Int) -> Int64 {
+  if x != x {
+    -2L
+  } else if j == 20 && x < 0.0 {
+    -1L
+  } else {
+    x.reinterpret_as_int64()
+  }
 }
 
 ///|
