@@ -100,6 +100,36 @@ test("a grant until the chat is archived ends with it, and its owner takes one b
   assert.deepEqual(w.heard.map((r) => `${r.id} ${r.status}`), ["p1 pending", "p1 granted", "p2 pending", "p2 granted", "p1 ended", "p2 ended"]);
 });
 
+test("a granted card says how its station's adb holds the phone, and its agent is told as it is reached", async () => {
+  const w = world();
+  await w.grants.ask("s1", "install the mod");
+  assert.equal(w.grants.decide("pat@example.com", "p1", "chat"), null);
+  assert.deepEqual(w.cards[0]!.card.adb.outcome, { status: "granted", scope: "chat" });
+  const told = w.told.length;
+  // Lent here, this station's adb not paired with it: the card says so, the agent is told to leave it to the card.
+  w.grants.linked("Pat@Example.com", { adb: "connecting" });
+  assert.equal(w.grants.get("p1")!.link, undefined);
+  w.grants.linked("Pat@Example.com", { adb: "unpaired", message: "not paired" });
+  assert.deepEqual(w.cards[0]!.card.adb.outcome, { status: "granted", scope: "chat", link: "unpaired" });
+  assert.equal(w.told.length, told + 1);
+  assert.match(w.told.at(-1)!, /not paired with it yet.*去配对/);
+  // Tried again and again while unpaired: said once.
+  w.grants.linked("pat@example.com", { adb: "connecting" });
+  w.grants.linked("pat@example.com", { adb: "unpaired" });
+  assert.equal(w.told.length, told + 1);
+  // Paired: connected, said on the card and told.
+  w.grants.linked("pat@example.com", { adb: "connected" });
+  assert.deepEqual(w.cards[0]!.card.adb.outcome, { status: "granted", scope: "chat", link: "connected" });
+  assert.match(w.told.at(-1)!, /is connected to this station's adb now/);
+  // Offered no longer: the card says so, the agent is not woken for it.
+  w.grants.linked("pat@example.com", null);
+  assert.equal(w.cards[0]!.card.adb.outcome.link, "gone");
+  assert.equal(w.told.length, told + 2);
+  // Ended, the card's outcome says no more of it.
+  assert.equal(w.grants.revoke("pat@example.com", "p1"), null);
+  assert.deepEqual(w.cards[0]!.card.adb.outcome, { status: "ended", scope: "chat", why: "已收回" });
+});
+
 test("its owner's 默认最长授权: the card offers no longer, and a longer grant is refused", async () => {
   const w = world();
   assert.equal(w.grants.lastsOf("pat@example.com"), "chat");

@@ -379,7 +379,10 @@ export function linkTarget(url: string, origin: string): J {
     const h = historyOf(url.slice(1).split("#")[0]!);
     return h.history === undefined ? null : { opens: "history", ...h };
   }
-  const u = splitUrl(url);
+  // A path with no host of its own (`/w/…/adb`, as a message may write one) is the cloud's own, as the cards the
+  // library draws for such links read it (refLinks.ts: `adbOfLink`, `screenOfLink`), so that one shown is one opened
+  // (2026-10-30: a 共享调试 link's card was drawn, and its 详情 opened nothing).
+  const u = splitUrl(url.startsWith("/") && !url.startsWith("//") ? `${origin.replace(/\/+$/, "")}${url}` : url);
   const o = splitUrl(origin);
   if (u === null || o === null) return null;
   const same = u.scheme === o.scheme && u.host === o.host && u.port === o.port;

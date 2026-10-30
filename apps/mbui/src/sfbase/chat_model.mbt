@@ -146,6 +146,9 @@ pub(all) struct PhoneAsk {
   status : String
   scope : String
   why : String
+  /// granted, how its station's adb holds the phone, as the station said: connected, unpaired, off, unauthorized,
+  /// missing, failed, gone ("": not said)
+  link : String
   /// the longest its owner lets it be granted for: hour, chat
   lasts : String
 }
@@ -408,6 +411,7 @@ pub fn message_of(m : Json) -> Message {
                 status: text(a, "status"),
                 scope: text(a, "scope"),
                 why: text(a, "why"),
+                link: text(a, "link"),
                 lasts: text(a, "lasts"),
               })
             _ => None

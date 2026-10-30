@@ -571,5 +571,18 @@
   "android-misc.permissions.requestWhat": "request {name}",
   "android-misc.permissions.requestLabel": "Request {name}",
   "android-misc.permissions.missing": "Not allowed",
-  "android-misc.localStation.lead": "The station installed or started on this Mac is managed here: start, stop or restart it, open its log and its data. Which workspace it joins is set in each workspace’s Station settings."
+  "android-misc.localStation.lead": "The station installed or started on this Mac is managed here: start, stop or restart it, open its log and its data. Which workspace it joins is set in each workspace’s Station settings.",
+  "android-misc.adb.ask.link.connected": "connected",
+  "android-misc.adb.ask.link.unpaired": "one step left: this phone isn't paired with the station yet",
+  "android-misc.adb.ask.link.gone": "the phone isn't shared with this station now",
+  "android-misc.adb.ask.link.off": "Wireless debugging is off on the phone",
+  "android-misc.adb.ask.link.unauthorized": "waiting for USB debugging to be allowed on the phone",
+  "android-misc.adb.ask.link.failed": "adb couldn't connect",
+  "android-misc.adb.ask.link.missing": "the station has no adb",
+  "android-misc.adb.ask.link.onPhone": "Open this message in still.fail on the phone to pair",
+  "android-misc.adb.ask.pair": "Pair",
+  "android-misc.adb.stations": "Stations",
+  "android-misc.adb.stations.notLent": "Not shared yet",
+  "android-misc.adb.ask.pair.title": "This station isn't paired with your phone yet",
+  "android-misc.adb.ask.pair.about": "Pair once on the phone, and it can reach this phone from then on."
 }

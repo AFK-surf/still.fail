@@ -124,9 +124,95 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
 
 ///|
 /// How a request ended, in a line: a dot (green while granted) and 已允许调试手机 · 本对话内, 已拒绝调试手机, or why it
-/// ended (已收回, 对话已归档, 授权已到期); laid as vault_outcome's (`inline`: by the message's picture).
-pub fn phone_outcome(c : @ui.Ctx, status : String, scope : String, why : String, inline? : Bool = true) -> Unit {
-  ask_outcome(c, status == "granted", [@ui.span(phone_outcome_words(status, scope, why))], inline~)
+/// ended (已收回, 对话已归档, 授权已到期); laid as vault_outcome's (`inline`: by the message's picture). Granted, how
+/// its station's adb holds the phone (`link`, phone_link's; "": not said, as from a station before it did): green only
+/// once it is connected, and while the station waits to be paired with it, 去配对 (`pair`: on the phone, its station's
+/// 共享调试) or, elsewhere, that it is paired on the phone (2026-10-30: approved, its station not paired, the card said
+/// 已允许 and nothing more, and its page could not be found).
+pub fn phone_outcome(
+  c : @ui.Ctx,
+  status : String,
+  scope : String,
+  why : String,
+  inline? : Bool = true,
+  link? : String = "",
+  pair? : (() -> Unit)? = None,
+) -> Unit {
+  let granted = status == "granted"
+  let words = phone_outcome_words(status, scope, why)
+  let linked = if granted && link != "" { words + " · " + phone_link_words(link) } else { words }
+  ask_outcome(c, granted && (link == "" || link == "connected"), [@ui.span(linked)], inline~)
+  if granted && link == "unpaired" {
+    match pair {
+      // (what is left, a card of its own as the request's was: what, why once, and 去配对)
+      Some(go) =>
+        c.box(style=@sf.ask_card_room, fn() {
+          @sf.card(c, fn() {
+            ask_words(c, tr("android-misc.adb.ask.pair.title"), tr("android-misc.adb.ask.pair.about"))
+            ask_buttons(c, fn() {
+              if @sf.button(c, tr("android-misc.adb.ask.pair"), key="phone-pair", tone=Primary) {
+                go()
+              }
+            })
+          })
+          |> ignore
+        })
+        |> ignore
+      // (under the line's words, where they start)
+      None =>
+        c.box(style=if inline { ask_ended_past } else { ask_ended_at }, fn() {
+          c.text(tr("android-misc.adb.ask.link.onPhone"), style=ask_note) |> ignore
+        })
+        |> ignore
+    }
+  }
+}
+
+///|
+/// How a granted phone is held by its station's adb, in words (phone_outcome's).
+fn phone_link_words(link : String) -> String {
+  match link {
+    "connected" | "unpaired" | "gone" | "off" | "unauthorized" | "failed" | "missing" => tr("android-misc.adb.ask.link." + link)
+    _ => tr("android-misc.adb.attaching")
+  }
+}
+
+///|
+/// How the station at `station` holds this phone for a granted request: as this phone's own lending to it says
+/// (`adbShare`'s `lends`, as it changes) where it is lent there, else as the station said on the card (`said`).
+pub fn phone_link(core : Core?, station : String, said : String) -> String {
+  match core {
+    Some(core) => {
+      let view = adb_lend_view((core.topic)("adbShare", Map([])).value, station)
+      if flag(view, "sharing") && text(view, "station") == station && text(view, "phase") == "offered" && text(view, "adb") != "" {
+        text(view, "adb")
+      } else {
+        said
+      }
+    }
+    None => said
+  }
+}
+
+///|
+/// Where a request's 查看步骤 takes the person: settings' 共享调试 while the phone's switch is off (it is turned on
+/// there), else the 共享调试 of the chat's station (`station`), which says what is next for it, pairing with it too
+/// (2026-10-30: it opened settings' page, which has nothing of any station, its pairing nowhere to be found).
+pub fn phone_steps(core : Core?, station : String) -> Route {
+  match core {
+    Some(core) if flag((core.topic)("adbShare", Map([])).value, "on") => AdbShare(station)
+    _ => AdbShare("")
+  }
+}
+
+///|
+/// Whether this device lends its own adb (a phone that has what it takes, or will once a step is done): where a
+/// request's 去配对 opens its station's 共享调试.
+pub fn phone_lends(c : @ui.Ctx) -> Bool {
+  match adb_ready(c) {
+    AdbLends | AdbLacks(_) => true
+    _ => false
+  }
 }
 
 ///|

@@ -279,6 +279,7 @@ export const SHAPES: Record<string, Shape> = {
     ["status", opt("String"), { doc: "Decided: granted | denied | ended. Absent while it waits." }],
     ["scope", opt("String"), { doc: "Granted: hour | chat." }],
     ["why", opt("String"), { said: true, doc: "Ended or refused by itself: why (已收回, 对话已归档, 授权已到期)." }],
+    ["link", opt("String"), { doc: "Granted: how its station's adb holds the phone (connected | unpaired | off | unauthorized | missing | failed |\ngone: not offered there now). Absent until the station has heard." }],
     ["lasts", opt("String"), { doc: "The longest it may be granted for, as its owner allows: `hour` or `chat`." }],
   ], { doc: "An agent's request to debug its person's phone, as its card in the chat says it." }),
   VaultAsk: struct([

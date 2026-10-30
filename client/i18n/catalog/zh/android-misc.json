@@ -544,5 +544,18 @@
   "android-misc.permissions.requestWhat": "申请「{name}」",
   "android-misc.permissions.requestLabel": "申请「{name}」",
   "android-misc.permissions.missing": "未允许",
-  "android-misc.localStation.lead": "这台 Mac 上单独安装或手动启动的 station 在这里管理：启动、停止、重启，打开日志和数据。加入哪个 workspace 在各 workspace 的 Station 设置中设定。"
+  "android-misc.localStation.lead": "这台 Mac 上单独安装或手动启动的 station 在这里管理：启动、停止、重启，打开日志和数据。加入哪个 workspace 在各 workspace 的 Station 设置中设定。",
+  "android-misc.adb.ask.link.connected": "已连上",
+  "android-misc.adb.ask.link.unpaired": "还差一步：这台手机还没和 station 配对",
+  "android-misc.adb.ask.link.gone": "手机现在没有共享给这台 station",
+  "android-misc.adb.ask.link.off": "手机上的无线调试未开启",
+  "android-misc.adb.ask.link.unauthorized": "等手机上允许 USB 调试",
+  "android-misc.adb.ask.link.failed": "adb 连接失败",
+  "android-misc.adb.ask.link.missing": "station 上没有 adb",
+  "android-misc.adb.ask.link.onPhone": "在手机的 still.fail 里打开这条消息配对",
+  "android-misc.adb.ask.pair": "去配对",
+  "android-misc.adb.stations": "共享给的 station",
+  "android-misc.adb.stations.notLent": "还没有共享过去",
+  "android-misc.adb.ask.pair.title": "这台 station 还没和你的手机配对",
+  "android-misc.adb.ask.pair.about": "在手机上配对一次，以后它就能一直连上这台手机。"
 }

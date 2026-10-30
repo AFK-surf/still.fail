@@ -21,7 +21,15 @@ export type Status = "pending" | "granted" | "denied" | "ended";
 export type PhoneRequest = {
   id: string; session: string; chat: string; owner: string; reason: string; at: number; status: Status;
   scope?: Scope; exp?: number; thread?: number; cardTs?: string; why?: string;
+  /// Granted, how this station's adb holds the phone (link.ts `AdbState.adb`: `connected`, `unpaired`, `off`,
+  /// `unauthorized`, `missing`, `failed`; `gone`: not offered here now; none yet: not heard since it was granted), and
+  /// the last of them the agent was told of (`linked`).
+  link?: string; toldLink?: string;
 };
+
+/// The ways the station's adb holds a phone that are said on its card and told to the agent; `connecting` is not (it
+/// is tried again and again while unpaired, and says nothing new).
+const LINKS = new Set(["connected", "unpaired", "off", "unauthorized", "missing", "failed", "gone"]);
 
 const SCHEMA = `CREATE TABLE IF NOT EXISTS adb_requests (
   id TEXT PRIMARY KEY,
@@ -195,6 +203,37 @@ export class PhoneGrants {
     return card !== null ? posted : null;
   }
 
+  /// How the station's adb holds `owner`'s phone changed (null: offered here no longer): said on the cards of their
+  /// grants (`adb.outcome.link`), so a granted card says whether its station reaches the phone yet and what is left to
+  /// do (2026-10-30: approved, its station not paired with the phone, the card said 已允许 and nothing more), and told to
+  /// their agents as it comes to be reached or to wait on its person.
+  linked(owner: string, state: { adb: string; message?: string } | null) {
+    const link = state === null ? "gone" : state.adb;
+    if (!LINKS.has(link)) return;
+    for (const r of this.ofOwner(owner)) {
+      if (r.status !== "granted" || r.link === link) continue;
+      r.link = link;
+      const tell = (link === "connected" || link === "unpaired") && r.toldLink !== link;
+      if (tell) r.toldLink = link;
+      this.#save(r);
+      this.#restate(r);
+      if (tell) {
+        try {
+          this.#d.hub.notify(r.session, linkSaid(r));
+        } catch {
+          // The session is gone: nobody to tell.
+        }
+      }
+    }
+  }
+
+  /// The request's card as it stands now: its outcome (and, granted, how its phone is reached) beside its words.
+  #restate(r: PhoneRequest) {
+    if (r.thread === undefined || r.cardTs === undefined) return;
+    const outcome = { status: r.status, ...(r.scope ? { scope: r.scope } : {}), ...(r.why ? { why: r.why } : {}), ...(r.status === "granted" && r.link ? { link: r.link } : {}) };
+    this.#d.hub.store.restateCard(r.session, r.thread, r.cardTs, (card) => ({ ...card, adb: { ...card?.adb, outcome } }));
+  }
+
   /// The owner (`email`) decides request `id`: `scope` grants it, null refuses it. Why it is refused, or null.
   decide(email: string, id: string, scope: Scope | null): string | null {
     const r = this.get(id);
@@ -234,8 +273,7 @@ export class PhoneGrants {
     this.#save(r);
     if (r.thread !== undefined && r.cardTs !== undefined) {
       this.#d.hub.store.withdrawCard(r.session, r.thread, r.cardTs);
-      const outcome = { status, ...(r.scope ? { scope: r.scope } : {}), ...(r.why ? { why: r.why } : {}) };
-      this.#d.hub.store.restateCard(r.session, r.thread, r.cardTs, (card) => ({ ...card, adb: { ...card?.adb, outcome } }));
+      this.#restate(r);
     }
     if (status !== "pending") {
       try {
@@ -248,11 +286,25 @@ export class PhoneGrants {
   }
 }
 
+/// What the agent is told of how its granted phone is reached (`r.link`).
+export function linkSaid(r: PhoneRequest): string {
+  switch (r.link) {
+    case "connected":
+      return `${r.owner}'s phone (your grant ${r.id}) is connected to this station's adb now: call phone_use for its adb server and serial.`;
+    case "unpaired":
+      return `${r.owner}'s phone (your grant ${r.id}) is lent to this station, but this station's adb is not paired with it yet. Its card in your chat shows its person how to pair it (去配对, in the still.fail app on the phone); you are told here when it connects. Do not send them to the phone's settings yourself.`;
+    case "gone":
+      return `${r.owner}'s phone (your grant ${r.id}) is not offered to this station now; it offers itself again while its 共享调试 switch is on.`;
+    default:
+      return `${r.owner}'s phone (your grant ${r.id}): this station's adb holds it as ${r.link ?? "not yet heard"}.`;
+  }
+}
+
 /// What the agent is told of its request.
 export function said(r: PhoneRequest): string {
   switch (r.status) {
     case "granted":
-      return `Your request ${r.id} to debug ${r.owner}'s phone was granted (${r.scope === "hour" ? "for an hour" : "until this chat is archived"}). Call phone_use again for how to reach it.`;
+      return `Your request ${r.id} to debug ${r.owner}'s phone was granted (${r.scope === "hour" ? "for an hour" : "until this chat is archived"}). Call phone_use again for how to reach it.${r.link === undefined || r.link === "connected" ? "" : ` ${linkSaid(r)}`}`;
     case "denied":
       return `Your request ${r.id} to debug ${r.owner}'s phone was refused${r.why ? ` (${r.why})` : ""}.`;
     case "ended":

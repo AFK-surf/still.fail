@@ -1220,6 +1220,47 @@ sim("a_grant_heard_lends_the_phone_to_its_station_and_its_end_lets_it_go", async
   await s.settle(endpoint.close());
 });
 
+/// 2026-10-30: a phone granted to chats on two stations, the first paired with it and the second not: what the topic
+/// says (the pairing dialog's notification and its code reader go by it, naming no station) is the second's, the one
+/// waiting to be paired, not the first's.
+sim("a_phone_lent_to_two_stations_says_the_one_waiting_to_be_paired", async (s) => {
+  const stationSaying = (adb: string) => {
+    const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });
+    void (async () => {
+      const conn = (await endpoint.accept())!;
+      const control = (await conn.acceptBi())!;
+      await Station.readLine(control, { bytes: Buffer.alloc(0) });
+      await control.write(Buffer.from(`${JSON.stringify({ ok: true, station: "测试" })}\n`));
+      const offer = (await conn.acceptBi())!;
+      await Station.readLine(offer, { bytes: Buffer.alloc(0) });
+      await offer.write(Buffer.from(`${JSON.stringify({ status: 200, headers: {} })}\n`));
+      await offer.write(Buffer.from(`${JSON.stringify({ serial: "127.0.0.1:37001", adb, message: "" })}\n`));
+      await offer.stopped();
+    })().catch(() => {});
+    return endpoint;
+  };
+  const paired = stationSaying("connected");
+  const waiting = stationSaying("unpaired");
+  const mesh = await s.run(Mesh.make(env(s), []));
+  for (const e of [paired, waiting]) mesh.addAddr({ id: e.id(), ips: e.sockets() });
+  const store = new Store(s.host, s.runner);
+  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  await s.run(adb.run({ kind: "ports", ports: { connect: 5555, pair: 37115, device: "Pixel 8", android: "14", package: "fail.still.android" } }));
+  await s.run(adb.run({ kind: "on", on: true }));
+  const exp = Math.floor(s.time.now() / 1000) + 3600;
+  const first = `ws/${paired.id()}`;
+  const second = `ws/${waiting.id()}`;
+  adb.heard(first, { id: "p1", session: "k1", chat: "EMBER/1.0", reason: "看首屏", status: "granted", scope: "hour", exp, at: 1 });
+  adb.heard(second, { id: "p2", session: "k2", chat: "EMBER/2.0", reason: "装 mod", status: "granted", scope: "hour", exp, at: 2 });
+  await s.until(() => adb.value().lends?.length === 2 && adb.value().lends.every((l: J) => l.adb !== null));
+  assert.deepEqual(adb.value().lends.map((l: J) => [l.station, l.adb]), [[first, "connected"], [second, "unpaired"]]);
+  const value = adb.value();
+  assert.deepEqual([value.station, value.adb, value.pairPort], [second, "unpaired", 37115]);
+  await s.run(mesh.close());
+  await s.settle(paired.close());
+  await s.settle(waiting.close());
+});
+
 sim("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", async (s) => {
   // A station that takes a credential, then an offer: answers it, opens a tunnel and says "hello" through it.
   const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });

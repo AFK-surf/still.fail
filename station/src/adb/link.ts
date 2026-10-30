@@ -63,6 +63,9 @@ export type SharesOptions = {
   /// from before grants, lending with its switch) is connected in the station's own server, as before.
   granted?: (email: string) => string[];
   servers?: GrantServers;
+  /// How the station's adb holds a person's phone changed (its `AdbState`), or the phone is offered no longer (null):
+  /// told to their chats' grants (adb/grants.ts `linked`), so that a granted card says whether it is reached yet.
+  stated?: (email: string, state: AdbState | null) => void;
 };
 
 let nextOffer = 1;
@@ -83,6 +86,8 @@ export class Share {
   /// How the station's adb holds the phone, as the offer's stream is told; `version` counts its changes.
   state: AdbState;
   version = 0;
+  /// Told each time `state` is set (Shares' `stated`).
+  onSet: ((state: AdbState) => void) | null = null;
   /// Why the phone last turned a tunnel down (its adbd not there, say): what adb not getting in is put down to.
   refused: string | null = null;
   private refusalWaiters: (() => void)[] = [];
@@ -140,6 +145,7 @@ export class Share {
   set(adb: string, message = "") {
     this.state = { serial: this.serial(), adb, message: message.trim() };
     this.version++;
+    this.onSet?.(this.state);
     const waiters = this.waiters;
     this.waiters = [];
     for (const f of waiters) f();
@@ -300,6 +306,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
   } else {
     const server = await bind(device);
     share = new Share(server, viewer, info, conn, asked, number);
+    share.onSet = (state) => shares.options.stated?.(viewer.email, state);
     // Another offer of the same phone may have come while this one bound its port: the first in keeps it.
     const raced = shares.byKey.get(device);
     if (raced || shares.isStopping) {
@@ -371,6 +378,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     void share.close();
     log.info("adb", "phone no longer offered for adb", { email: viewer.email, port: share.port, ended });
     shares.gone.set(viewer.email.toLowerCase(), { at: wall.now(), ended: String(ended) });
+    shares.options.stated?.(viewer.email, null);
     const adb = shares.adb();
     if (adb) for (const server of (await serversOf(shares, share)) ?? [[]]) await run(adb, [...server, "disconnect", share.serial()], shares.limits.quick).catch(() => {});
   }
