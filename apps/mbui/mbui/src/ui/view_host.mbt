@@ -74,6 +74,8 @@ priv enum ViewHeld {
   Node(@view.NodeId)
   /// the old view's (its part, -1: the old frame's whole)
   Old(Int)
+  /// a node of the tree's held (View::on_drag): what the finger does till it is let go is its
+  Dragging(@view.NodeId)
   Nowhere
 }
 
@@ -504,6 +506,17 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     }
     (0, _) =>
       match tree.target_at(x, y) {
+        // (held by a node of the tree's: the finger its, each event at its moment)
+        Dragged(id) if button != 2 => {
+          view_held.val = Some(Dragging(id))
+          tree.drag_at(id, Down, x, y, at) |> ignore
+          h_frame_owed()
+          true
+        }
+        Dragged(_) => {
+          view_held.val = Some(Nowhere)
+          true
+        }
         // (the secondary button presses nothing: no menu of a node's yet)
         Pressed(id) => {
           view_held.val = Some(if button == 2 { Nowhere } else { Node(id) })
@@ -533,6 +546,11 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       view_input_went(part)
       false
     }
+    (1, Some(Dragging(id))) => {
+      tree.drag_at(id, Moved, x, y, at) |> ignore
+      h_frame_owed()
+      true
+    }
     (1, Some(_)) => true
     (1, None) =>
       match tree.target_at(x, y) {
@@ -546,13 +564,27 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           }
           !old_whole.val
         }
-        Pressed(_) => true
+        Pressed(_) | Dragged(_) => true
       }
     (2, Some(Node(id))) => {
       view_held.val = None
       if tree.target_at(x, y) == Pressed(id) {
         tree.run_press_at(id, at) |> ignore
       }
+      h_frame_owed()
+      true
+    }
+    // (a second finger while one held on a node of the tree's: no gesture of two fingers there yet, the hold called off
+    // and the rest of it taken by nothing)
+    (4 | 5 | 6, Some(Dragging(id))) => {
+      view_held.val = Some(Nowhere)
+      tree.drag_at(id, Off, x, y, at) |> ignore
+      h_frame_owed()
+      true
+    }
+    (2 | 3, Some(Dragging(id))) => {
+      view_held.val = None
+      tree.drag_at(id, if kind == 2 { Up } else { Off }, x, y, at) |> ignore
       h_frame_owed()
       true
     }

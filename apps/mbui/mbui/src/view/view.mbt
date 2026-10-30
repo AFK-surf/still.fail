@@ -131,6 +131,8 @@ struct Node {
   /// its properties' bindings, by property: what stops each
   props : Map[Int, () -> Unit]
   mut on_press : (() -> Unit)?
+  /// what a finger or the pointer held on it does as it goes (View::on_drag)
+  mut on_drag : ((Drag) -> Unit)?
   /// a slot (show, pick, each): no box of its own, what it holds laid out as its holder's own
   mut slot : Bool
   /// drawn by what hosts the tree (View::hosted)
@@ -363,6 +365,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         drops: [],
         props: {},
         on_press: None,
+        on_drag: None,
         slot: false,
         hosted: false,
         look_due: false,
@@ -1054,6 +1057,60 @@ pub fn View::on_press(self : View, f : () -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
   n.on_press = Some(f)
   self
+}
+
+///|
+/// A finger or the pointer held on a node (View::on_drag): put down, moved, let go or called off (the host took it:
+/// a gesture of the system's), where (in the node's own terms: from its top left as it is drawn then) and when (the
+/// event's own moment).
+pub(all) enum DragIs {
+  Down
+  Moved
+  Up
+  Off
+} derive(Eq, Show, Debug)
+
+///|
+pub(all) struct Drag {
+  kind : DragIs
+  x : Double
+  y : Double
+  at : Double
+} derive(Eq, Show, Debug)
+
+///|
+/// What a finger or the pointer held on it does as it goes: put down on it, it is the node's till it is let go or
+/// called off (moved anywhere meanwhile), each event handled at its own moment as one change (Tree::event), outside
+/// any tracking. One let go meanwhile is told nothing more.
+pub fn View::on_drag(self : View, f : (Drag) -> Unit) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.on_drag = Some(f)
+  self
+}
+
+///|
+/// Node `id` held: `kind` at (x, y) in the window at `at`, as one event of that moment (Tree::event: what had ended by
+/// then settled first), handed to its on_drag where it lives then, where it is in its own terms. Whether it took it.
+pub fn Tree::drag_at(self : Tree, id : NodeId, kind : DragIs, x : Double, y : Double, at : Double) -> Bool {
+  let took = Ref(false)
+  self.event(at, fn() {
+    if id.at < 0 || id.at >= self.nodes.length() {
+      return
+    }
+    let n = self.nodes[id.at]
+    if !n.live || n.gen != id.gen {
+      return
+    }
+    match n.on_drag {
+      Some(f) => {
+        let (nx, ny, _) = self.placed(id.at)
+        took.val = true
+        f({ kind, x: x - nx, y: y - ny, at })
+      }
+      None => ()
+    }
+  })
+  took.val
 }
 
 ///|
@@ -2090,7 +2147,7 @@ pub fn Tree::alone(self : Tree, id : NodeId) -> Bool {
   self.each_drawn(fn(c, _, _, _) {
     if c.id != id && c.id.at != 0 {
       let n = self.nodes[c.id.at]
-      if c.ground != 0L || c.words != "" || c.hosted || n.on_press is Some(_) {
+      if c.ground != 0L || c.words != "" || c.hosted || n.on_press is Some(_) || n.on_drag is Some(_) {
         alone = false
       }
     }
@@ -2120,29 +2177,31 @@ pub fn Tree::hosting(self : Tree) -> NodeId? {
 /// nothing of the tree's.
 pub(all) enum Target {
   Pressed(NodeId)
+  Dragged(NodeId)
   Hosted(NodeId)
   Nothing
 } derive(Eq, Debug)
 
 ///|
 /// What a press at (x, y) is for: the topmost node drawn there (by the order drawn, where the scene composed draws it:
-/// the same places as what is drawn) that does something when pressed or hosts the old view.
+/// the same places as what is drawn) that is held (View::on_drag), does something when pressed or hosts the old view.
 pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
-  let found : Array[(NodeId, Bool)] = []
+  let found : Array[Target] = []
   self.each_drawn(fn(c, cx, cy, _) {
     // (what is leaving or said to take no press, or held by what is, pressed no more)
     if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.pressless_at(c.id.at) {
       let n = self.nodes[c.id.at]
-      if n.on_press is Some(_) {
-        found.push((c.id, true))
+      if n.on_drag is Some(_) {
+        found.push(Dragged(c.id))
+      } else if n.on_press is Some(_) {
+        found.push(Pressed(c.id))
       } else if n.hosted {
-        found.push((c.id, false))
+        found.push(Hosted(c.id))
       }
     }
   })
   match found.last() {
-    Some((id, true)) => Pressed(id)
-    Some((id, false)) => Hosted(id)
+    Some(t) => t
     None => Nothing
   }
 }
