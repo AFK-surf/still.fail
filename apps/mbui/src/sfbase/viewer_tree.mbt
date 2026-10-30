@@ -87,6 +87,8 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       None => false
     }
   }))
+  // (its keys, at their moment, where nothing over it (a menu, a field being written in) takes them first)
+  .on_key(fn(k) { vw.key_on(src, k) })
   |> ignore
   vw.in_tree = true
   n.owns(fn() {
@@ -300,7 +302,8 @@ fn image_bars(c : @ui.Ctx, src : Source, v : Viewer) -> Unit {
       })
       |> ignore
     }
-    c.layer(fn() { vf_bar(v, c, src, shown) }) |> ignore
+    // (its keys its node's: Viewer::key_on)
+    c.layer(fn() { vf_bar(v, c, src, shown, keys=false) }) |> ignore
   })
   |> ignore
   if v.download_asked {
@@ -622,4 +625,32 @@ fn Viewer::image_let_go(
       v.toggle()
     }
   }
+}
+
+///|
+/// A key to viewer `vw` (its layer's: View::on_key), at its moment: Escape leaves marking (the marks it was making) or
+/// else closes it; ← and → step to the picture before and after; the zoom's keys zoom (viewer_zoom_key). True where it
+/// took the key; closing, it takes none.
+fn Viewer::key_on(self : Viewer, src : Source, k : @view.Key) -> Bool {
+  let v = self
+  if v.closing {
+    return false
+  }
+  let c = @ui.current()
+  if k.code == @ui.key_escape && k.mods == 0 {
+    if marking.on {
+      marks_back(c)
+    } else {
+      v.shut(c)
+    }
+    return true
+  }
+  if marking.on || v.shown_kind() != Some(KImage) || (k.mods & (@ui.mod_cmd | @ui.mod_ctrl | @ui.mod_alt)) != 0 {
+    return false
+  }
+  if k.code == @ui.key_code_left || k.code == @ui.key_code_right {
+    v.go(c, src, if k.code == @ui.key_code_left { -1 } else { 1 }, 0.0)
+    return true
+  }
+  @sf.viewer_zoom_key(v.zoom, k.code, k.mods, k.at)
 }

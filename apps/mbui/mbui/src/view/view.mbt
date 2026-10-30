@@ -137,6 +137,8 @@ struct Node {
   mut on_menu : ((Menu) -> Unit)?
   /// what a wheel turned over it does (View::on_wheel)
   mut on_wheel : ((Wheel) -> Unit)?
+  /// what a key does to it (View::on_key): true where it took the key
+  mut on_key : ((Key) -> Bool)?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
   /// how many fingers held on it at once it takes (View::on_drag's `fingers`): one more calls the hold off
@@ -381,6 +383,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.on_press = None
       n.on_menu = None
       n.on_wheel = None
+      n.on_key = None
       n.on_drag = None
       n.takes = None
       n.drag_end = None
@@ -413,6 +416,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         on_press: None,
         on_menu: None,
         on_wheel: None,
+        on_key: None,
         on_drag: None,
         fingers: 1,
         drag_said: 0,
@@ -1401,6 +1405,68 @@ pub fn Tree::wheel_at(
       None => ()
     }
   })
+}
+
+///|
+/// A key, as a node is told it (View::on_key): its code and the modifiers held (the host's, as an old view reads them:
+/// ui's key codes), at its moment.
+pub(all) struct Key {
+  code : Int
+  mods : Int
+  at : Double
+} derive(Eq, Show, Debug)
+
+///|
+/// What a key does to it, while it takes input (living, not leaving nor said to take none, no modal layer over it that
+/// does not hold it): run at the key's moment, as one change outside any tracking; true where it took the key, which
+/// nothing else is told of then. Asked topmost first (Tree::key_at).
+pub fn View::on_key(self : View, f : (Key) -> Bool) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.on_key = Some(f)
+  self
+}
+
+///|
+/// A key (`code`, `mods` held) at `at`: asked of the nodes that take keys (View::on_key) that may take input now, the
+/// one drawn last first (after what holds it, after what is before it among what holds them both), each in turn till one
+/// takes it, as one event of that moment (the tree brought there first where it is in none). True where one took it.
+pub fn Tree::key_at(self : Tree, code : Int, mods : Int, at : Double) -> Bool {
+  if self.nodes.length() == 0 || !self.nodes[0].live {
+    return false
+  }
+  let t = if self.cause_at >= 0.0 { self.cause_at } else { at }
+  if self.cause_at < 0.0 {
+    self.bring_to(t)
+  }
+  let took = Ref(false)
+  self.event(t, fn() {
+    // (the topmost first: what a node holds after it, its later kids before its earlier)
+    let asked : Array[Int] = []
+    self.keyed_from(0, asked)
+    for i in asked {
+      let n = self.nodes[i]
+      guard n.live && !self.pressless_at(i) && n.on_key is Some(f) else { continue }
+      if @signals.untracked(fn() { f({ code, mods, at: t }) }) {
+        took.val = true
+        break
+      }
+    }
+  })
+  took.val
+}
+
+///|
+/// The nodes from `at` down that take keys, the one drawn last first (Tree::key_at).
+fn Tree::keyed_from(self : Tree, at : Int, out : Array[Int]) -> Unit {
+  let n = self.nodes[at]
+  let mut k = n.kids.length() - 1
+  while k >= 0 {
+    self.keyed_from(n.kids[k], out)
+    k = k - 1
+  }
+  if n.on_key is Some(_) {
+    out.push(at)
+  }
 }
 
 ///|

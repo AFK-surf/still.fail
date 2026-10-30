@@ -1560,6 +1560,11 @@ fn on_key(code : Int, mods : Int) -> Unit {
 
 ///|
 fn on_key_now(code : Int, mods : Int) -> Unit {
+  // (taken by a node of the window's tree, at its moment: no input of the old views', taped alone: view_host.mbt)
+  if view_key(code, mods) {
+    input_taped("key", h_now(), [code.to_double(), mods.to_double()])
+    return
+  }
   took_input("key", h_now(), [code.to_double(), mods.to_double()])
   hand_event()
   key_in(code, mods)

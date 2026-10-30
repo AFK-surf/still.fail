@@ -297,22 +297,37 @@ pub fn viewer_zoom(c : @ui.Ctx, key : String, z : @kit.Zoom, ink : ViewerInk) ->
 ///|
 /// An image's zoom by the keys (useZoom's): + in, − out, 0 fitted, 1 as it is (+ is ⇧= on most keyboards).
 pub fn viewer_zoom_keys(c : @ui.Ctx, z : @kit.Zoom) -> Unit {
-  let key = fn(ch : Char) {
-    c.key_pressed(@ui.key_of_char(ch)) || c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key)
-  }
   // (a key taken at the frame's moment: on from how big it shows then)
   let at = c.moment()
-  if z.nw > 0.0 {
-    if key('+') || key('=') {
-      z.zoom_to(z.scale_at(at) * viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true, at~)
-    } else if key('-') || key('_') {
-      z.zoom_to(z.scale_at(at) / viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true, at~)
-    } else if key('0') {
-      z.reset(at~)
-    } else if key('1') {
-      z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true, at~)
+  for ch in ['+', '=', '-', '_', '0', '1'] {
+    for mods in [0, @ui.mod_shift_key] {
+      if c.key_pressed(@ui.key_of_char(ch), mods~) && viewer_zoom_key(z, @ui.key_of_char(ch), mods, at) {
+        return
+      }
     }
   }
+}
+
+///|
+/// Key `code` (`mods` held) as an image's zoom takes it at `at` (viewer_zoom_keys'): + (⇧=, =) in, − (_) out, 0 fitted,
+/// 1 as it is, on from how big it shows then; true where it is one of them (and the image has a size to zoom).
+pub fn viewer_zoom_key(z : @kit.Zoom, code : Int, mods : Int, at : Double) -> Bool {
+  if z.nw <= 0.0 || (mods & (@ui.mod_cmd | @ui.mod_ctrl | @ui.mod_alt)) != 0 {
+    return false
+  }
+  let key = fn(ch : Char) { code == @ui.key_of_char(ch) }
+  if key('+') || key('=') {
+    z.zoom_to(z.scale_at(at) * viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true, at~)
+  } else if key('-') || key('_') {
+    z.zoom_to(z.scale_at(at) / viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true, at~)
+  } else if key('0') {
+    z.reset(at~)
+  } else if key('1') {
+    z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true, at~)
+  } else {
+    return false
+  }
+  true
 }
 
 ///|

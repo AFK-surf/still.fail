@@ -1382,3 +1382,26 @@ fn Ctx::island_said(self : Ctx) -> @view.NodeId? {
     None
   }
 }
+
+///|
+/// A key (`code`, `mods` held) as the window's tree routes it: where the old views have what takes it first (the focus
+/// in a field or a key catcher of one that may take input; a layer of the old frame's open over all of it that takes the
+/// keys: a modal one, a menu, a dialog, one the focus is in, one Escape dismisses), theirs; else asked of the tree's
+/// nodes that take keys, at its moment (Tree::key_at). True where one of those took it.
+fn view_key(code : Int, mods : Int) -> Bool {
+  let tree = match view_app.val {
+    Some(t) => t
+    None => return false
+  }
+  let c = g()
+  let focus = c.focus_allowed()
+  if c.editors.contains(focus) || c.dev.catchers.contains(focus) {
+    return false
+  }
+  if c.last_layers
+    .iter()
+    .any(fn(l) { !l.inert && (l.modal || c.focus_in_layer(l.id) || (code == key_escape && l.escape)) }) {
+    return false
+  }
+  tree.key_at(code, mods, view_moment())
+}

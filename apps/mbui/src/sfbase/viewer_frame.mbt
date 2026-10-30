@@ -98,8 +98,9 @@ pub fn vf_meta(vw : Viewer, src : Source) -> String {
 ///|
 /// The bar across the window's top, in its place in the preview's layer: gone with the rest of the preview as it
 /// fades (`shown`), and hidden by a tap (a click) on the stage till another; its tools by what it shows. A mouse's
-/// pointer along the top, where it is, shows it while it is there.
-pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
+/// pointer along the top, where it is, shows it while it is there. `keys`: Esc, ← and → and the zoom's read here (an
+/// old view's: the wide frame's viewer); the window's tree's viewer takes them as its node (Viewer::key_on).
+pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bool = true) -> Unit {
   let v = vw
   // (a pointer resting along the top where the bar is: where none rests (a finger's), where one is read not at all)
   v.near_bar = if @sf.pointer_rests() {
@@ -123,14 +124,14 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   let ink = @sf.page_viewer_ink()
   let kind = v.shown_kind()
   // Esc closes it (marking: leaves the marks first), ← and → step
-  if marking.on {
+  if keys && marking.on {
     if !v.closing && c.key_pressed(@ui.key_escape) {
       marks_back(c)
     }
-  } else {
+  } else if keys {
     v.shut_on_escape(c)
   }
-  if !v.closing && !marking.on && kind == Some(KImage) {
+  if keys && !v.closing && !marking.on && kind == Some(KImage) {
     if c.key_pressed(@ui.key_code_left) {
       v.go(c, src, -1, 0.0)
     } else if c.key_pressed(@ui.key_code_right) {

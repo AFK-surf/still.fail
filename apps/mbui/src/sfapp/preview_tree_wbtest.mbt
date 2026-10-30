@@ -904,3 +904,38 @@ test "viewer on the tree, over the pages as a modal layer: the app's keys under 
   assert_eq(app.nav.depth(), depth)
   assert_true(viewer.get() is Some(_))
 }
+
+///|
+/// The picture open, a key told at 20 ms past now (`code`), a frame drawn at 10 between where `frame_first`: whether it
+/// is closing, when its way out ends (from now), and how far the zoom is from fitted at 60.
+fn keyed(code : Int, frame_first : Bool) -> (Bool, Double, Double) {
+  let t = preview_tester("image", platform=0)
+  let v = viewer.get().unwrap()
+  let t0 = t.time()
+  if frame_first {
+    t.frame_at(t0 + 10.0)
+  }
+  t.key_told(code, 0, t0 + 20.0)
+  let ends = if v.flies { v.fly.ends_at() } else { v.fade.ends_at() }
+  (v.closing, ends - t0, v.zoom.scale_at(t0 + 60.0))
+}
+
+///|
+test "viewer on the tree: Esc closes it and + zooms it at the key's own moment, a frame between or none, the same; a menu over it, Esc closes the menu, not it" {
+  for code in [@ui.key_escape, @ui.key_of_char('+')] {
+    assert_eq(keyed(code, false), keyed(code, true), msg="\{code}")
+  }
+  assert_true(keyed(@ui.key_escape, false).0)
+  // (+ zoomed in from how it showed then; a key it takes not, nothing)
+  assert_true(keyed(@ui.key_of_char('+'), false).2 > keyed(@ui.key_of_char('q'), false).2)
+  assert_true(!keyed(@ui.key_of_char('q'), false).0)
+  // its picture's menu open over it: Esc the menu's
+  let t = preview_tester("image", platform=0)
+  let (x, y, w, h) = viewer.get().unwrap().zoom.rect().unwrap()
+  t.right_click(x + w / 2.0, y + h / 2.0)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(@sf.presenting())
+  t.key(@ui.key_escape)
+  t.draw()
+  assert_true(!viewer.get().unwrap().closing)
+}
