@@ -20,7 +20,7 @@ import {
 import { link, mkdir, open, readFile, readdir, rename, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
-import { relativeParts } from "../ops/paths.ts";
+import { portableComponent, relativeParts } from "../ops/paths.ts";
 import { PlaceRefused, Places } from "../ops/places.ts";
 import { platform } from "../platform/index.ts";
 import { isDeepStrictEqual } from "node:util";
@@ -1629,7 +1629,7 @@ export class Remote {
       });
     const row = this.store.getSession(text(entry, "session"));
     if (!row) return { error: "the session is gone" };
-    const dest = join(row.workspace, "station-back", key.replace(/[^\w.-]/g, "_").replace(/^\./, "_"));
+    const dest = join(row.workspace, "station-back", portableComponent(key));
     const out: Json = {};
     const back: string[] = Array.isArray(entry.back) ? entry.back : [];
     if (back.length > 0) {

@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
+import { portableComponent, portableName } from "../src/ops/paths.ts";
 import { unix } from "../src/platform/unix.ts";
 import { cmdPath, drives, readShim, windows } from "../src/platform/windows.ts";
 
@@ -81,6 +82,15 @@ test("a path given as relative is rooted when it starts somewhere of its own", (
   // A drive, a drive-relative path, a share, a stream.
   for (const p of ["C:\\x", "C:x", "\\\\server\\share\\x", "file:stream"]) assert.ok(windows.paths.rooted(p), p);
   assert.ok(!windows.paths.rooted("a\\b"));
+});
+
+test("a portable name is one on every machine, in any script; anything else made one without two coming to the same", () => {
+  for (const name of ["测试", "ember", "a b", "v1.2", "con-notes"]) assert.ok(portableName(name), name);
+  for (const name of ["", ".hidden", "..", "a/b", "a\\b", "a:b", "what?", "trailing.", "trailing ", "CON", "nul.txt", "com1", "x".repeat(256)]) assert.equal(portableName(name), false, name);
+  assert.equal(portableComponent("构建"), "构建");
+  const [x, y] = [portableComponent("a:b"), portableComponent("a?b")];
+  assert.ok(portableName(x) && portableName(y));
+  assert.notEqual(x, y);
 });
 
 test("a path inside a root is told by whole components, as each machine compares them", () => {
