@@ -72,6 +72,7 @@ export function markdown(text: string, store?: MdStore): Md {
     }
   }
   const fresh = md === null;
+  if (fresh) readAfresh.chars += text.length;
   md ??= parse(text);
   const json = fresh || store === undefined ? JSON.stringify(md) : stored!;
   if (fresh && store) store.put(key, json);
@@ -82,6 +83,10 @@ export function markdown(text: string, store?: MdStore): Md {
   remember(text, md, text.length + json.length);
   return md;
 }
+
+/// How many characters of Markdown were read afresh this run (not kept here or on the device): what a page waited for
+/// that had to be read as it opened (store.ts `chat.open`).
+export const readAfresh = { chars: 0 };
 
 /// Whether `text`'s tree is read and kept here this run.
 export function markdownHere(text: string): boolean {

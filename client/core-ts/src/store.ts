@@ -17,6 +17,7 @@ import * as present from "./present.ts";
 import { topicDebug, topicKey, type ClientId, type CoreMessage, type RequestId, type Topic } from "./protocol.ts";
 import { laterSleep, type Runner } from "./runtime.ts";
 import { Kind, type Span, type Tracer } from "./trace.ts";
+import { readAfresh } from "./markdown.ts";
 import { equal, sharedValue } from "./util.ts";
 import { holds } from "./data.ts";
 
@@ -82,7 +83,7 @@ type Entry = {
   /// How its value goes out (output.ts).
   output?: Output;
   /// A page's first subscriber waiting for its first value (OPENED): its trace, and what the core spent making it.
-  opening?: { span: Span; workMs: number; computes: number };
+  opening?: { span: Span; workMs: number; computes: number; mdFrom: number };
 };
 
 type Out = { value: unknown } | { delta: AnyOp[] } | { error: CoreError };
@@ -171,7 +172,7 @@ export class Store {
       const span = this.#tracer.root(`${topic.topic}.open`, Kind.Internal);
       // (made anew, or kept from a page shown a moment ago and let go: its view made again either way)
       span.set("stillfail.anew", started);
-      entry.opening = { span, workMs: 0, computes: 0 };
+      entry.opening = { span, workMs: 0, computes: 0, mdFrom: readAfresh.chars };
     }
     if (started) this.#start(topic);
     else {
@@ -472,6 +473,8 @@ export class Store {
       const work = now.opening.workMs + this.host.monotonicMs() - workFrom;
       span.set("stillfail.work_ms", Math.round(work));
       span.set("stillfail.computes", now.opening.computes + 1);
+      // (Markdown read afresh meanwhile, by it or by whatever else the core did: words not kept here nor on the device)
+      span.set("stillfail.md_chars", readAfresh.chars - now.opening.mdFrom);
       if ("err" in value) span.fail();
       span.end();
       now.opening = undefined;
