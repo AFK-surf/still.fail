@@ -1300,6 +1300,40 @@ test "a box reshaped for its cause: each of its ground's corners goes its own wa
 }
 
 ///|
+test "a box at its page's foot opened from its foot (foot) as a keyboard lifts it in the same frame: its foot there at once, only its growing up on its way" {
+  let lines = Ref::new(1)
+  // (how far a keyboard has lifted what is at the page's foot: 0 down)
+  let lift = Ref::new(0.0)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      c.box(w=Px(100.0), h=Px(200.0 - lift.val - 20.0 * lines.val.to_double()), fn() {  }) |> ignore
+      let b = c.box(w=Px(100.0), h=Px(20.0 * lines.val.to_double()), bg=0xFF0000FFL, fn() {
+        let n = c.box(w=Px(10.0), h=Px(10.0), bg=0x00FF00FFL, fn() {  })
+        @motion.layout(c, n, "box/part", spec=@motion.tween(reshape_ms, ease=Linear), by="\{lines.val} lines")
+      })
+      @motion.reshape(c, b, "box", by="\{lines.val} lines", spec=@motion.tween(reshape_ms, ease=Linear), foot=true)
+    })
+    |> ignore
+  })
+  assert_eq(drawn_box(t, 0xFF0000FFL), (0.0, 180.0, 100.0, 20.0))
+  // opened (two lines) and lifted 50 in the same frame: its foot at 150 at once, its ground as high as it was
+  lines.val = 2
+  lift.val = 50.0
+  t.frame()
+  assert_eq(drawn_box(t, 0xFF0000FFL), (0.0, 130.0, 100.0, 20.0))
+  // what moves with it as far off its place as it was before the lift, not 50 under it
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 130.0, 10.0, 10.0))
+  // midway: grown up from that foot, its foot where it is laid out
+  t.run_for(reshape_midway_ms)
+  let (_, y, _, h) = drawn_box(t, 0xFF0000FFL)
+  assert_true(h > 20.0 && h < 40.0, msg="\{h}")
+  assert_eq(y + h, 150.0)
+  t.run_for(@motion.layout_rest("box") - t.time())
+  assert_eq(drawn_box(t, 0xFF0000FFL), (0.0, 110.0, 100.0, 40.0))
+  t.assert_idle()
+}
+
+///|
 test "a box resized by what holds it, its cause the same, has its ground its new shape at once" {
   let w = Ref::new(100.0)
   let t = @ui.Tester::new(fn(c) {

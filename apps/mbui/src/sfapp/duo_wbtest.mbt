@@ -161,16 +161,34 @@ test "an iPhone Duo on its side, the soft keyboard up: the composer whole over i
   // (the home indicator's room as the Duo's outer screen has it on its side: 34)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":34,\"left\":0,\"right\":84}}")
   t.tap_text("发消息")
-  // the keyboard up: the window laid out above it plus the bars' foot, as the host lays it out (ios_app.m ime_over)
-  let kb = 280.0
+  // the keyboard up: said from the window's foot down the side, the window laid out above it, as the host lays it out
+  // (ios_app.m ime_over)
+  let kb = 314.0
   t.set_ime_inset(kb)
   t.resize(951.0, 669.0 - kb)
   t.run_for(@ui.move_most_ms)
-  let keyboard_top = 669.0 - kb - 34.0
+  let keyboard_top = 669.0 - kb
   let send = t.semantics().filter(fn(s) { s.label == @sf.t("web-main.composer.send") })
   assert_eq(send.length(), 1)
   let (_, y, _, h) = send[0].rect
   assert_true(y + h <= keyboard_top + 0.5, msg="send at \{y}..\{y + h}, keyboard at \{keyboard_top}")
+}
+
+///|
+test "an iPhone Duo on its side, the soft keyboard rising: the cards end on it from its first point on, at its own pace" {
+  let t = native_chat(951.0, 669.0, true, side=84.0)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":34,\"left\":0,\"right\":84}}")
+  t.tap_text("发消息")
+  t.run_for(@ui.move_most_ms)
+  // (the keyboard a little up, then past the home indicator's line: the page's card ending on it each time, not
+  // waiting for it to pass the line and then catching up)
+  for kb in [10.0, 30.0, 60.0, 120.0] {
+    t.set_ime_inset(kb)
+    t.resize(951.0, 669.0 - kb)
+    t.run_for(@ui.move_most_ms)
+    guard composer_and_page(t) is Some((_, p)) else { fail("no composer in a page") }
+    assert_true((p.y + p.h - (669.0 - kb - @sf.native_in)).abs() < 0.05, msg="the page's foot at \{p.y + p.h} over a keyboard \{kb} up")
+  }
 }
 
 ///|
@@ -590,8 +608,9 @@ test "Duo new chat with a long draft and attachment keeps send above the keyboar
   let draft = @sfbase.writing(src, "new:ws1")
   @sfbase.writing_add(src, draft, "ws1/st1", "照片.png", png_head())
   t.type_text("这是一段很长的输入，需要在键盘弹出时仍能看到发送按钮。\n".repeat(20))
-  t.set_ime_inset(280.0)
-  t.resize(951.0, 389.0)
+  // (said from the window's foot down the side, ios_app.m ime_over: its top at 369)
+  t.set_ime_inset(300.0)
+  t.resize(951.0, 369.0)
   t.run_for(@ui.move_most_ms + @ui.move_most_ms)
   let send = t.semantics().filter(fn(s) { s.label == @sf.t("web-main.composer.send") })
   assert_eq(send.length(), 1)

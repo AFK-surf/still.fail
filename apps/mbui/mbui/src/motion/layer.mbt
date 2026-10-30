@@ -129,6 +129,8 @@ priv struct Moving {
   /// reshape: it goes from where it was with what it holds (laid out for another place: the web's morph), what is new
   /// in it carried on its ground
   mut carry : Bool
+  /// reshape: it changes shape from its foot (reshape's `foot`)
+  mut foot : Bool
   /// how it is drawn, worked out once this frame is laid out (placed)
   mut placed : (() -> @ui.Look)?
 }
@@ -472,6 +474,7 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     fly: None,
     reshape: false,
     carry: false,
+    foot: false,
     placed: None,
   }
   mo.stamp[i] = build
@@ -594,7 +597,11 @@ pub fn entering(
 /// it while its ground is on its way (not built the frame before: a part the other place has and this did not) is
 /// carried on that ground, as far from its nearer edges as it is laid out, until the ground is there. Moved or resized
 /// by nothing it changes for (a window, a keyboard), its ground is where it is laid out at once, a change of its own
-/// going on from there. Only drawn so: tapped where it is laid out.
+/// going on from there. Only drawn so: tapped where it is laid out. With `foot`, it changes shape from its foot: as it
+/// sets off, what moved its foot in that same frame for nothing it changes for (a keyboard coming as it opens) is
+/// where it is laid out at once, its ground and what moves with it (`layout` with the same `by`) setting off from
+/// their shape and places carried there, only their growing up from the foot on its way (a composer opened at its
+/// foot: the user, 2026-10-30 「以底部为 origin」).
 pub fn reshape(
   c : @ui.Ctx,
   i : Int,
@@ -602,6 +609,7 @@ pub fn reshape(
   by~ : String,
   spec~ : Spec,
   carry? : Bool = false,
+  foot? : Bool = false,
 ) -> Unit {
   let e = moving_of(c, i)
   e.name = key
@@ -609,6 +617,7 @@ pub fn reshape(
   // (seen where a part or a row drawn again that it is in shows it: built again, it reshapes from there)
   e.reshape = true
   e.carry = carry
+  e.foot = foot
   e.spec = spec
   if by != "" {
     e.by = by
@@ -1215,6 +1224,23 @@ fn after_layout(c : @ui.Ctx) -> Unit {
 let together : Map[String, (Double, Array[(Anim, Double, Spec)])] = {}
 
 ///|
+/// For each cause (`by`) a shape set off for from its foot (reshape's `foot`): the frame it did, and how far its foot
+/// moved in that frame for nothing it changes for, which what moves with it takes at once. Kept for the frame, not for
+/// one build of it: a build again of that frame (its rows kept or not) reads what the first did.
+// kept across runs: read for the frame it was set in only
+let foot_moved : Map[String, (Int, Double)] = {}
+
+///|
+/// How far the foot of the shape set off for cause `by` from its foot in frame `frame` moved for nothing it changes for
+/// (0: none).
+fn foot_moved_in(by : String, frame : Int) -> Double {
+  match foot_moved.get(by) {
+    Some((f, d)) if by != "" && f == frame => d
+    _ => 0.0
+  }
+}
+
+///|
 /// `a` off to `to` by `spec` (said to go `far`), for cause `by` ("" none: on its own).
 fn moves_with(by : String, far : Double, a : Anim, to : Double, spec : Spec) -> Unit {
   a.animate(to, spec)
@@ -1544,10 +1570,13 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           r.was_vy - vy
         } else {
           r.was_y - ry - pinned
-        })
+        }) +
+          foot_moved_in(e.by, frame)
         let p0 = r.was_gp
         let gx = r.was_gx + (r.was_x - r.was_gx) * p0
-        let gy = r.was_gy + (r.was_y - r.was_gy) * p0
+        // (from its foot: as its ground sets off, below)
+        let gy = r.was_gy + (r.was_y - r.was_gy) * p0 +
+          (if e.reshape && e.foot && !e.carry { ry + nh - (r.was_y + r.was_h) } else { 0.0 })
         let gw = r.was_gw + (r.was_w - r.was_gw) * p0
         let gh = r.was_gh + (r.was_h - r.was_gh) * p0
         let ground = if e.reshape {
@@ -1584,6 +1613,9 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
                 None => false
               }
             })
+          // (with a shape set off from its foot for the same cause: what moved that foot for nothing it changes for
+          // taken at once, as the shape's ground takes it: reshape's `foot`)
+          let dy = if changed { dy + foot_moved_in(e.by, frame) } else { dy }
           // what is left of the progress driving it now, and where it is drawn off its place as the frame begins: on
           // the drive it was on (the same progress, gone on to now) or its spring; a move carries on from there
           let left = if e.drive >= 0.0 { 1.0 - dclamp(e.drive, 0.0, 1.0) } else { 0.0 }
@@ -1703,6 +1735,12 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           r.gy = r.was_gy + (r.was_y - r.was_gy) * p0
           r.gw = r.was_gw + (r.was_w - r.was_gw) * p0
           r.gh = r.was_gh + (r.was_h - r.was_gh) * p0
+          // (from its foot: its foot moved this frame by what holds it there at once, its ground set off from there)
+          if e.foot && !e.carry {
+            let moved = ry + nh - (r.was_y + r.was_h)
+            r.gy = r.gy + moved
+            foot_moved[e.by] = (frame, moved)
+          }
           r.gr = corners_mix(r.was_gr, wr, p0)
           r.gp.snap(0.0)
           moves_with(group, far, r.gp, 1.0, spec)

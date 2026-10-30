@@ -396,7 +396,10 @@ pub fn composer(
     "\{spec.roomy}|\{multiline}|\{sent_box > 0.0}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}|" +
     w.field.text()
   }
-  @motion.reshape(c, box, "composer/box", by=holds, spec=shape, carry=moved)
+  // (at a page's foot down the system's column, not roomy in a new chat's middle: opened from its foot, a keyboard
+  // coming in the same frame taken at once, the user 2026-10-30 「以底部为 origin」; there the keyboard lifts it from its
+  // first point on, ios_app.m ime_over)
+  @motion.reshape(c, box, "composer/box", by=holds, spec=shape, carry=moved, foot=!spec.roomy && @sf.native_side())
   composing.shaped = Some((c.build_number(), holds, shape))
   for part in [(plus, "plus"), (words, "words"), (send_i, "send"), (chosen, "choices"), (said, "note")] {
     if part.0 >= 0 {
