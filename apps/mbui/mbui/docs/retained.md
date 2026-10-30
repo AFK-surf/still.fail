@@ -176,7 +176,11 @@ is tracked, and layout, paint and composition kept by node. Neither another engi
    release), given a size, a place, a cut and a place in the order, and pressed through the tree. The first island may
    be the whole app; the API takes one a page, so the old goes from the outside in, never an app beside the tree.
 
-8. **The same events, the same picture.** From the same state, the same events with their moments and the same
+8. **One logical timeline.** Everything that happens at a moment of its own (an input, a message, a leaving ending, a
+   step of what goes by steps: docs/motion.md, the logical clock) is on one timeline the host only wakes and gives the
+   time to, done in the order of its moments (those together in the order told), each as of its moment; frames and
+   events advance it to their moment (Tree::advance) and only observe and draw it.
+9. **The same events, the same picture.** From the same state, the same events with their moments and the same
    settings, any moment looked at shows the same picture, presses the same things and has made, kept, let go and set
    leaving the same nodes, whether frames came at 60 Hz, at 120 Hz or once at that moment: frames only change how much
    work is done. So what comes and goes is committed with the change that caused it, at that change's moment (an

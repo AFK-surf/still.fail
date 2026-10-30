@@ -330,3 +330,62 @@ test "two leavings ended between frames: let go in the order they ended, as fram
   // (B at 150, A at 500, C (hidden as A went, leaving 100) at 600)
   assert_eq(jumped.0, ["B", "A", "C"])
 }
+
+///|
+/// A box whose width adds up step by step towards `target` (a tenth of the way each step), 60 steps a 60th of a second
+/// apart from its making, each step said in a log; the target set to 50 by an input at 500; frames at `frames`.
+fn stepped(frames : Array[Double]) -> (Array[(Int, Double)], Array[String]) {
+  let now = Ref(0.0)
+  let target = @signals.signal(100.0)
+  let v = @signals.signal(0.0)
+  let log : Array[(Int, Double)] = []
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(b) {
+        b.height(Is(Some(10.0))).width(By(fn() { Some(v.get()) })) |> ignore
+        b.steps(1000.0 / 60.0, 60, fn(k) {
+          let next = v.get() + (target.get() - v.get()) * 0.1
+          v.set(next)
+          log.push((k, next))
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { now.val },
+  )
+  frame_at(t, now, 0.0)
+  let mut told = false
+  for at in frames {
+    if !told && at > 500.0 {
+      told = true
+      now.val = 500.0
+      t.event(500.0, fn() { target.set(50.0) })
+    }
+    frame_at(t, now, at)
+  }
+  let out = (log.copy(), shown(t.drawn()))
+  t.dispose()
+  out
+}
+
+///|
+test "60 steps adding up, an input among them: the same steps and the same end at 60 Hz, at 120 Hz, or after no frame for long" {
+  let at_hz = fn(hz : Double) { Array::makei((2000.0 * hz / 1000.0).to_int(), fn(i) { (i + 1).to_double() * 1000.0 / hz }) }
+  let late = stepped([2000.0])
+  assert_eq(late.0.length(), 60)
+  assert_eq(stepped(at_hz(60.0)), late)
+  assert_eq(stepped(at_hz(120.0)), late)
+  // (a frame at 100, none till long after the input: the steps between taken in their turn, the input among them)
+  assert_eq(stepped([100.0, 2000.0]), late)
+  // (the input in the middle of them: rising toward 100 before it, falling toward 50 after it)
+  assert_true(late.0[29].1 > late.0[10].1)
+  assert_true(late.0[59].1 < late.0[29].1 && late.0[59].1 > 50.0)
+}
+
+///|
+test "more frames drawn than steps, the same moment drawn again: no step more" {
+  let once = stepped([500.0, 2000.0])
+  let again = stepped([500.0, 500.0, 500.0, 2000.0, 2000.0, 2500.0])
+  assert_eq(again.0, once.0)
+}

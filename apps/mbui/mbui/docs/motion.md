@@ -35,6 +35,19 @@ So the value the view reads in frame *n* after the start is exactly the generato
 
 Once the value arrives, the fiber ends and the window stops asking for frames.
 
+### The logical clock (what is made once: src/view)
+
+What a view does is advanced by its logical time, never by how many frames are drawn (the user, 2026-10-30: 「按逻辑时钟来」).
+The host only wakes the tree and gives it the time; inputs, messages and frames each advance it to their own moment
+(Tree::advance) and no further. On that one timeline, in the order of their moments (those due together in the order
+told): a node's leaving ending, a step of what goes by steps, an input. A motion that is a function of the time (start,
+target, curve) needs no step: its value at a moment is worked out where it is read. One that adds up step after step
+(each value from the one before) says so once, with its step and how many (View::steps: a 60th of a second, 60 steps):
+every step is taken in its turn, an input coming among them handled between the steps before it and after it, none
+skipped and none run as one larger step, however few frames are drawn; drawing only looks at the state as it is.
+Nothing else goes by steps (a colour changed starts none), and what owns the steps stops them as it goes.
+
+
 ## Presence
 
 Each time the content is shown, it gets its own scope, and `enter` runs as a fiber of that scope. When `shown` turns false:

@@ -170,8 +170,10 @@ pub struct Tree {
   /// whether the order is to be made again; whether any of it is (what hosts it told as it first is)
   looks_due : Array[Int]
   places_due : Array[Int]
-  /// the nodes leaving (by index and making: View::going), let go as their leaving ends
-  leaving : Array[NodeId]
+  /// what is due at a moment of its own, in the order told (Tree::advance): a node leaving or coming back ending, a
+  /// step of what goes by steps (View::steps); and how many were ever told (each one's place among those due together)
+  timeline : Array[Due]
+  mut told : Int
   /// the bindings whose reads changed, to run as the frame begins (Tree::queued)
   bindings_due : Array[() -> Unit]
   mut layout_due : Bool
@@ -223,7 +225,8 @@ pub fn Tree::new(
     looks_due: [],
     places_due: [],
     bindings_due: [],
-    leaving: [],
+    timeline: [],
+    told: 0,
     layout_due: true,
     order_due: true,
     due: true,
@@ -421,7 +424,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.looks_due.clear()
   self.places_due.clear()
   self.bindings_due.clear()
-  self.leaving.clear()
+  self.timeline.clear()
   self.order.clear()
   self.order_holder.clear()
   self.changed.clear()
@@ -660,7 +663,7 @@ fn Tree::committed(self : Tree, f : () -> Unit) -> Unit {
       None => @signals.untracked(fn() { self.clock.get() })
     }
   }
-  self.left(at)
+  self.advance(at)
   let was = self.cause_at
   self.cause_at = at
   @signals.untracked(f)
@@ -1145,9 +1148,7 @@ fn View::leave(self : View, v : View, ms : Double) -> Unit {
   n.left_at = now - p * ms
   n.back_at = -1.0
   told_going(n)
-  if !self.tree.leaving.contains(v.id()) {
-    self.tree.leaving.push(v.id())
-  }
+  self.tree.due_leaving(v.id())
   self.tree.marked()
 }
 
@@ -1221,20 +1222,21 @@ fn leave_ends(n : Node) -> Double {
 /// frame draws something new as the clock goes, so what hosts the tree draws them one after another; else nothing
 /// moves, and at most a moment is waited for (Tree::wake).
 pub fn Tree::animating(self : Tree) -> Bool {
-  self.clock.watched()
+  // (and what goes by steps: each frame shows the steps taken by then)
+  self.clock.watched() || self.timeline.iter().any(fn(d) { d is Steps(_, _) && self.due_at(d) >= 0.0 })
 }
 
 ///|
-/// The soonest moment a node's leaving or coming back ends, if any does: what hosts the tree has a frame drawn then.
+/// The soonest moment anything is due (a leaving or coming back ending, a step), if anything is: what hosts the tree
+/// has a frame drawn then.
 pub fn Tree::wake(self : Tree) -> Double? {
   let mut soonest : Double? = None
-  for id in self.leaving {
-    let n = self.nodes[id.at]
-    let end = leave_ends(n)
-    if n.live && n.gen == id.gen && end >= 0.0 {
+  for d in self.timeline {
+    let at = self.due_at(d)
+    if at >= 0.0 {
       soonest = match soonest {
-        Some(s) if s <= end => Some(s)
-        _ => Some(end)
+        Some(s) if s <= at => Some(s)
+        _ => Some(at)
       }
     }
   }
@@ -1271,53 +1273,143 @@ pub fn Tree::event(self : Tree, at : Double, f : () -> Unit) -> Unit {
 }
 
 ///|
-/// An event from outside about to be handled at `at` (its own time): what had ended by then settled first (a node
-/// whose leaving was over let go, what it followed no more; one back, here), whatever frame comes after.
+/// An event from outside about to be handled at `at` (its own time): the tree advanced to it first (Tree::advance).
 pub fn Tree::settle(self : Tree, at : Double) -> Unit {
-  self.left(at)
+  self.advance(at)
 }
 
 ///|
-/// By `now`: the nodes whose leaving is over let go, taken out of what holds them; those back, here.
-fn Tree::left(self : Tree, now : Double) -> Unit {
-  // (one at a time, the soonest end first (the first told of those that end together), each as of its end: what its
-  // ending does, a cleanup setting another leaving, ends in its turn by `now` too)
+/// What is due at a moment of its own (Tree::advance): a node's leaving or coming back ending; a step of what goes by
+/// steps. Each with its place in the order told.
+enum Due {
+  Leaves(NodeId, Int)
+  Steps(Stepper, Int)
+}
+
+///|
+/// What goes by steps (View::steps): `step` run with each step's number, `every` apart, `count` of them, from `from`
+/// (the moment of its cause); stopped (`live`), no more.
+struct Stepper {
+  from : Double
+  every : Double
+  count : Int
+  mut k : Int
+  step : (Int) -> Unit
+  live : Ref[Bool]
+}
+
+///|
+/// When `d` is due (-1: no more: let go, stopped, done).
+fn Tree::due_at(self : Tree, d : Due) -> Double {
+  match d {
+    Leaves(id, _) => {
+      let n = self.nodes[id.at]
+      if n.live && n.gen == id.gen {
+        leave_ends(n)
+      } else {
+        -1.0
+      }
+    }
+    Steps(s, _) =>
+      if s.live.val && s.k < s.count {
+        s.from + (s.k + 1).to_double() * s.every
+      } else {
+        -1.0
+      }
+  }
+}
+
+///|
+/// Node `id`'s leaving or coming back ending, due in its turn (once).
+fn Tree::due_leaving(self : Tree, id : NodeId) -> Unit {
+  for d in self.timeline {
+    if d is Leaves(i, _) && i == id {
+      return
+    }
+  }
+  self.timeline.push(Leaves(id, self.told))
+  self.told = self.told + 1
+}
+
+///|
+/// The tree's logic advanced to `upto`: what is due by then done one at a time, in the order of the moments it is due
+/// at (of those due together, the first told first), each as of its moment (its cause's, for what it does): a leaving
+/// over let go, a coming back done, a step of what goes by steps taken (each of them, none skipped, none run as a
+/// larger one). What one does that is due by `upto` too (a cleanup setting another leaving, a step's count) is done in
+/// its turn. Frames, inputs and the host's calls each advance it to their moment and no further: how often they come
+/// changes nothing of what it does.
+pub fn Tree::advance(self : Tree, upto : Double) -> Unit {
   while true {
     let mut next = -1
-    let mut next_end = 0.0
+    let mut next_at = 0.0
+    let mut next_seq = 0
     let mut i = 0
-    while i < self.leaving.length() {
-      let id = self.leaving[i]
-      let n = self.nodes[id.at]
-      let end = leave_ends(n)
-      if !n.live || n.gen != id.gen || end < 0.0 {
-        // (let go, or neither leaving nor coming back: nothing to wait for)
-        self.leaving.remove(i) |> ignore
+    while i < self.timeline.length() {
+      let d = self.timeline[i]
+      let at = self.due_at(d)
+      if at < 0.0 {
+        self.timeline.remove(i) |> ignore
         continue
       }
-      if end <= now && (next < 0 || end < next_end) {
+      let seq = match d {
+        Leaves(_, s) => s
+        Steps(_, s) => s
+      }
+      if at <= upto && (next < 0 || at < next_at || (at == next_at && seq < next_seq)) {
         next = i
-        next_end = end
+        next_at = at
+        next_seq = seq
       }
       i = i + 1
     }
     if next < 0 {
       return
     }
-    let id = self.leaving.remove(next)
-    let n = self.nodes[id.at]
+    let d = self.timeline[next]
     let was = self.cause_at
-    self.cause_at = next_end
-    if n.left_at >= 0.0 {
-      if n.parent >= 0 {
-        @signals.untracked(fn() { self.handle(n.parent).drop({ tree: self, at: id.at, gen: id.gen }) })
+    self.cause_at = next_at
+    match d {
+      Leaves(id, _) => {
+        self.timeline.remove(next) |> ignore
+        let n = self.nodes[id.at]
+        if n.left_at >= 0.0 {
+          if n.parent >= 0 {
+            @signals.untracked(fn() { self.handle(n.parent).drop({ tree: self, at: id.at, gen: id.gen }) })
+          }
+        } else {
+          n.back_at = -1.0
+          told_going(n)
+        }
       }
-    } else {
-      n.back_at = -1.0
-      told_going(n)
+      Steps(s, _) => {
+        let k = s.k
+        s.k = s.k + 1
+        @signals.start_batch()
+        @signals.untracked(fn() { (s.step)(k) })
+        @signals.end_batch()
+      }
     }
     self.cause_at = was
   }
+}
+
+///|
+/// What goes by steps, from its cause's moment: `step` run with each step's number (from 0), `every` apart (the
+/// first `every` after it), `count` of them: as the tree's logic advances (Tree::advance), each in its turn, whatever
+/// frames are drawn. For what moves by adding up step after step (what a value is worked out of the steps before
+/// it); a motion that is a function of the time needs none. The node's: stopped with it, or by what it returns.
+pub fn View::steps(self : View, every : Double, count : Int, step : (Int) -> Unit) -> () -> Unit {
+  guard self.live() is Some(n) && every > 0.0 && count > 0 else { return fn() {  } }
+  let live = Ref(true)
+  let tree = self.tree
+  tree.timeline.push(
+    Steps({ from: tree.cause_now(), every, count, k: 0, step, live }, tree.told),
+  )
+  tree.told = tree.told + 1
+  tree.marked()
+  let stop = fn() { live.val = false }
+  n.drops.push(stop)
+  stop
 }
 
 ///|
@@ -1363,7 +1455,7 @@ pub fn Tree::bring_to(self : Tree, at : Double) -> Unit {
   if self.last_w >= 0.0 {
     self.brought()
   } else {
-    self.left(at)
+    self.advance(at)
   }
 }
 
@@ -1381,7 +1473,7 @@ fn Tree::brought(self : Tree) -> Unit {
     return
   }
   // what has left by now let go
-  self.left(@signals.untracked(fn() { self.clock.get() }))
+  self.advance(@signals.untracked(fn() { self.clock.get() }))
   // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own now,
   // what they set again marks what it marks)
   let mut i = 0
