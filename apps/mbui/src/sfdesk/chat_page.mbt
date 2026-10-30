@@ -100,12 +100,15 @@ let chat_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 ///|
 /// The chat's own keys (keymap.ts, ChatPage.tsx useShortcut): ⌘⇧E into the archive while nothing is left in it, ⌘⇧H
 /// its first agent's history beside it (one in front: the panel closed), ⌘. its agents at work stopped, its services
-/// and jobs (chat.jobs); ⌘U the system's file picker for its draft (composer.file); Space with no field focused, the
-/// composer (composer.focus).
+/// and jobs (chat.jobs), its station's own display (chat.screen); ⌘U the system's file picker for its draft
+/// (composer.file); Space with no field focused, the composer (composer.focus).
 fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
   if @settings.action_pressed(c, prefs, "chat.jobs") {
     toggle_jobs_pop()
+  }
+  if @settings.action_pressed(c, prefs, "chat.screen", in_field=true) {
+    chat_screen_first(r, v.screens)
   }
   if !c.field_focused() && @settings.action_pressed(c, prefs, "composer.focus") && !switcher_open() {
     composer_focus()
@@ -311,6 +314,7 @@ fn chat_bar(
               archive()
             }
             jobs_trigger(c, src, r)
+            screen_trigger(c, r, view)
             if !in_bars &&
               @sf.icon_button(c, "more", key="chat-more", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.info")) {
               info()
@@ -609,6 +613,34 @@ fn jobs_trigger(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       |> ignore
   }
 }
+
+///|
+/// The way to the screens of the station the chat runs on (chat_screens.mbt), beside its services': while it has any;
+/// the one alone opened, more a menu of them beside it. Marked while an agent drives one, as it is seen working.
+fn screen_trigger(c : @ui.Ctx, r : ChatRef, v : ChatView) -> Unit {
+  if v.screens.length() == 0 {
+    return
+  }
+  // (the button and its dot in a box of their own: the dot's layer over the button, not the row)
+  c.box(fn() {
+    if @sf.icon_button(c, "monitor", key="chat-screen", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.screen"), shortcut="chat.screen") {
+      chat_screens_open(r, v.screens, from=Of(c.id("chat-screen")))
+    }
+    if chat_screens_driven(v.screens) {
+      c.layer(fn() {
+        c.box(style=jobs_alarm_room, fn() { c.box(style=screen_driven_dot, fn() {  }) |> ignore }) |> ignore
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The screens' button's dot while an agent drives one: as the services' (jobs_alarm_room), in the tone of an agent at
+/// work.
+// kept across runs: a value (no field of it changes)
+let screen_driven_dot : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full bg=Warn border=B2 border_color=Bg")
 
 ///|
 /// What opens under the chat's bar: its info's popover (ChatInfo) and its services' (JobsPanel), each by its button.

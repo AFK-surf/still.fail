@@ -317,6 +317,7 @@
   "android-chat.agent.account.auto": "{name} · auto",
   "android-chat.agent.account.none": "Picked automatically",
   "android-chat.agent.station": "Station",
+  "android-chat.agent.screen": "Screen",
   "android-chat.agent.history": "History",
   "android-chat.agent.history.none": "No turns yet",
   "android-chat.agent.jobs": "Jobs",

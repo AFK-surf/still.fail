@@ -33,6 +33,8 @@ export const ACTIONS: Record<string, Spec> = {
   "chat.stop": { group: "chat", keys: ["Mod+."], typing: "yes" },
   "chat.history": { group: "chat", keys: ["Mod+Shift+H"], typing: "yes" },
   "chat.jobs": { group: "chat", keys: ["Mod+Shift+J"], typing: "yes" },
+  // the station the chat runs on: its own display (else its first screen), beside it
+  "chat.screen": { group: "chat", keys: ["Mod+Shift+D"], typing: "yes" },
   "chat.latest": { group: "chat", keys: ["Mod+Down"], typing: "empty" },
   "chat.find": { group: "chat", keys: ["Mod+F"], typing: "yes" },
   "chat.archive": { group: "chat", keys: ["Mod+Shift+E"], typing: "yes" },

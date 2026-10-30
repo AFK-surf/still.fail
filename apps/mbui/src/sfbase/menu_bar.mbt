@@ -86,6 +86,7 @@ pub fn menu_bar_json(prefs : Json?, in_chat : Bool) -> String {
       sep,
       act("chat.history", in_chat),
       act("chat.jobs", in_chat),
+      act("chat.screen", in_chat),
     ]),
     menu("desktop.menu.go", "actions", [
       act("chat.prev", true),

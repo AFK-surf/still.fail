@@ -20,7 +20,7 @@ import { PENDING } from "../lastChat.ts";
 import { ownOrigin } from "../stillfailLink.ts";
 import { changeTabs } from "../chatTabs.ts";
 import { usePrefs } from "../prefs.ts";
-import type { ChatJobsView, ChatPublish, ChatShare, Host, StationView } from "../core/shapes.ts";
+import type { ChatJobsView, ChatPublish, ChatScreen, ChatShare, Host, StationView } from "../core/shapes.ts";
 import { archiveSaid, stationApi, useAction, useApi, useStatus, useChat, useChatJobs, useListedChat, useHistory, useHost, useStationCall, useStationLook, useAgentCard, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { StationMark } from "../StationMark.tsx";
@@ -274,6 +274,9 @@ function ChatScreen({ session: chatSession }: { session: string }) {
     if (shown && isAgent(shown)) closePanel(); else openTab(open.find(isAgent) ?? agents[0]!.session.key);
   } : null);
   useShortcut("chat.jobs", () => (shown === JOBS ? closeTab(JOBS) : openJobs()));
+  // The station's own display (else its first screen) beside the chat (ScreensButton).
+  const firstScreen = chatView.value?.screens?.[0];
+  useShortcut("chat.screen", firstScreen ? () => openScreen(station.address, firstScreen.id) : null);
   // The stations' files beside the chat (DriveTab.tsx), where they have them: pressed again while in front, closed.
   const drive = useStationDrive(station.address);
   // Files dragged anywhere over the chat go into its message (useChatDrop).
@@ -355,6 +358,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
           {/* Nothing left in it (the core's `archivable`): archived with one press. */}
           {chat.archivable && keeper && <IconButton label={t("web-pages.chat.archive")} icon={Archive} shortcut="chat.archive" onClick={archiveAsked} />}
           <JobsPanel station={station.address} session={chatSession} chat={chatKey} />
+          <ScreensButton screens={chat.screens ?? []} onOpen={(id) => openScreen(station.address, id)} />
           {/* The rest of what is done with the chat, in one place: its own panel (its files, what its agents and other
               chats' wrote each other, relaying it, where it is in Slack, sharing and publishing it). */}
           {/* A chat of a Slack or Feishu thread alone too: where it is, its agents and the way there. */}
@@ -653,6 +657,30 @@ const fileOf = (key: string) => fileSourceOf(key);
 /** A web service's tab: its job, from its key (`service:<job>`); null for an agent's history tab. */
 function serviceOf(key: string): string | null {
   return key.startsWith("service:") ? key.slice("service:".length) : null;
+}
+
+/** A screen's mark by its kind: a tab of the station's browser, a simulator, else its display. */
+const screenIcon = (kind: string) => (kind === "browser" ? Web : kind === "simulator" ? Phone : Monitor);
+
+/**
+ * The screens of the station the chat runs on (the chat view's `screens`), from the title bar: the one alone opened
+ * beside the chat, more a menu of them (its own display first); marked while an agent drives one, as it is seen working.
+ */
+function ScreensButton({ screens, onOpen }: { screens: ChatScreen[]; onOpen(id: string): void }) {
+  if (screens.length === 0) return null;
+  const label = t("web-pages.chat.screen");
+  const driven = screens.some((s) => s.agent) ? "agent" : undefined;
+  if (screens.length === 1) {
+    return (
+      <Tip label={label} shortcut="chat.screen">
+        <button type="button" className={`${pageCss.iconBtn} ${css.jobsTrigger}`} aria-label={label} data-alarm={driven} onClick={() => onOpen(screens[0]!.id)}><Monitor {...ICON} /></button>
+      </Tip>
+    );
+  }
+  return (
+    <Menu label={label} items={screens.map((s) => ({ label: s.title, icon: screenIcon(s.kind), ...(s.agent ? { note: t("web-pages.chat.screenAgent") } : {}), onSelect: () => onOpen(s.id) }))}
+      trigger={<button type="button" className={`${pageCss.iconBtn} ${css.jobsTrigger}`} aria-label={label} title={label} data-alarm={driven}><Monitor {...ICON} /></button>} />
+  );
 }
 
 /** The chat's web services and background jobs, from the title bar: what matters now, the rest in the 任务 tab. */

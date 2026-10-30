@@ -330,6 +330,8 @@
   "web-pages.chat.serviceFailed": "「{name}」启动失败",
   "web-pages.chat.serviceStopped": "「{name}」已停止",
   "web-pages.chat.services": "服务和后台任务",
+  "web-pages.chat.screen": "Station 屏幕",
+  "web-pages.chat.screenAgent": "agent 正在操作",
   "web-pages.chat.stop": "停止",
   "web-pages.chat.stopAsked": "已请求停止",
   "web-pages.chat.stopTurn": "停止当前任务",

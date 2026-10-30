@@ -8,6 +8,7 @@ android-chat.agent.history
 android-chat.agent.history.none
 android-chat.agent.jobs
 android-chat.agent.jobs.idle
+android-chat.agent.screen
 android-chat.agent.station
 android-chat.agent.stop
 android-chat.agent.turns
@@ -674,6 +675,7 @@ desktop.menu.chat.latest
 desktop.menu.chat.new
 desktop.menu.chat.next
 desktop.menu.chat.prev
+desktop.menu.chat.screen
 desktop.menu.chat.stop
 desktop.menu.chat.switch
 desktop.menu.checkUpdates
@@ -899,6 +901,7 @@ web-main.keymap.chat.latest
 web-main.keymap.chat.new
 web-main.keymap.chat.next
 web-main.keymap.chat.prev
+web-main.keymap.chat.screen
 web-main.keymap.chat.stop
 web-main.keymap.chat.switch
 web-main.keymap.composer.file
@@ -1279,6 +1282,8 @@ web-pages.chat.resizePanel
 web-pages.chat.serviceFailed
 web-pages.chat.serviceStopped
 web-pages.chat.services
+web-pages.chat.screen
+web-pages.chat.screenAgent
 web-pages.chat.shareImage
 web-pages.chat.stop
 web-pages.chat.stopAsked

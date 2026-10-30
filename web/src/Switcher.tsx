@@ -13,7 +13,7 @@ import { jumpTo } from "./jumpTo.ts";
 import { Mark } from "./brand.tsx";
 import { commands, useCommands, type Command } from "./commands.ts";
 import { webUpdates } from "./core/webUpdates.ts";
-import { Archive, ArrowDown, ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Close, Command as CommandIcon, Compose, Edit, File, Folder, Keyboard, More, PanelOpen, Refresh, Search, Server, Settings, Stop, Thread, User, Web, type IconProps } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowDown, ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Close, Command as CommandIcon, Compose, Edit, File, Folder, Keyboard, Monitor, More, PanelOpen, Refresh, Search, Server, Settings, Stop, Thread, User, Web, type IconProps } from "@stillfail/ui/icons.tsx";
 import { availableActions, runAction, shortcutOf, useShortcut, type Action } from "./keymap.ts";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
 import { RelayHost } from "./Relay.tsx";
@@ -96,7 +96,7 @@ type Listed = { id: string; group: string; heading: string; label: string; icon:
 const ACTION_ICON: Partial<Record<Action, ComponentType<IconProps>>> = {
   "chat.new": Compose, "settings": Settings, "shortcuts": Keyboard, "sidebar.toggle": PanelOpen,
   "chat.prev": ChevronUp, "chat.next": ChevronDown, "nav.back": ArrowLeft, "nav.forward": ArrowRight,
-  "composer.focus": Edit, "composer.file": File, "chat.stop": Stop, "chat.history": Thread, "chat.jobs": Web,
+  "composer.focus": Edit, "composer.file": File, "chat.stop": Stop, "chat.history": Thread, "chat.jobs": Web, "chat.screen": Monitor,
   "chat.latest": ArrowDown, "chat.find": Search, "chat.archive": Archive, "panel.close": Close,
 };
 

@@ -627,8 +627,8 @@ fn open_rename(src : Source, r : ChatRef, thread : Double?, was : String, from~ 
 
 ///|
 /// An agent of the chat in brief (AgentSheet.kt openAgent): what it runs and where it stands (with a stop while it
-/// works), its latest lines, the figures that say most, then where to go on: the station it runs on, its account, its
-/// history, its jobs; and its context by hand (context.mbt).
+/// works), its latest lines, the figures that say most, then where to go on: the station it runs on, its screens, its
+/// account, its history, its jobs; and its context by hand (context.mbt).
 fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -> Unit) -> Unit {
   let t = @sf.theme()
   let chat = (src.topic)("chat", chat_params(r)).value
@@ -683,6 +683,23 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
             @settings.open_station_peek(r.station, from=Unanchored)
           }
         None => ()
+      }
+      // the screens of that station a tap away (chat_screens.mbt): its own display named, or that an agent drives one;
+      // the one alone opened, more a menu of them, this card gone first
+      let screens = match view_of_chat(src, r).0 {
+        Some(v) => v.screens
+        None => []
+      }
+      if screens.length() > 0 {
+        let value = if chat_screens_driven(screens) {
+          tr("web-pages.chat.screenAgent")
+        } else {
+          screens[0].title
+        }
+        if agent_row(c, "agent/screen", tr("android-chat.agent.screen"), value, fn() {  }) {
+          close()
+          chat_screens_open(r, screens, from=Of(c.id("agent/screen")))
+        }
       }
       let account = match field(a, "account") {
         Some(Object(_)) as acc => acc

@@ -989,6 +989,7 @@ let en : Map[String, String] = {
   "web-main.keymap.chat.new": "New chat",
   "web-main.keymap.chat.next": "Next chat",
   "web-main.keymap.chat.prev": "Previous chat",
+  "web-main.keymap.chat.screen": "Station screen",
   "web-main.keymap.chat.switch": "Switch chat",
   "web-main.keymap.composer.focus": "Focus composer",
   "web-main.keymap.files.preview": "Show or hide the preview",

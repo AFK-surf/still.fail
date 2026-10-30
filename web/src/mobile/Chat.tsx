@@ -603,7 +603,7 @@ function agentCard(app: MobileApp, here: Here, key: string) {
     history: () => openHistory(app, here.station, here.key, key),
     jobs: () => openJobs(app, here),
     station: () => openStationSheet(app, here.station),
-  });
+  }, here.view.screens?.length ?? 0);
 }
 
 /** What matters now of the chat's services and jobs, as the desktop's title bar popover has it; the rest a tap away. */

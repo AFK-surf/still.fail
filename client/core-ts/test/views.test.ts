@@ -1336,8 +1336,8 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   const u = ui();
   t.subscribe(1, chatTopic("ws/a", 7));
   await t.read(u, 1);
-  // The viewer's workspaces too: its sharing names the others (views/xshare.ts).
-  sameTopics(t.started(), [threads("ws/a"), sessions("ws/a"), pageOf("ws/a", 7), rows("ws/a"), overview("ws/a"), link("ws/a"), workspace(), prefs(), { topic: "workspaces" }]);
+  // The viewer's workspaces too: its sharing names the others (views/xshare.ts); its station's screens, its bar's way to them.
+  sameTopics(t.started(), [threads("ws/a"), sessions("ws/a"), pageOf("ws/a", 7), rows("ws/a"), overview("ws/a"), link("ws/a"), workspace(), prefs(), { topic: "workspaces" }, { topic: "screens", station: "ws/a" }]);
   assert.equal(u.value === undefined, true);
   const now = t.host.nowMs();
   const chat = { ...thread(7, ["k", "j"], now), title: "排查", people: [{ id: "local", name: "本机管理页", email: null, via: "local" }] };
@@ -1440,7 +1440,7 @@ test("an_agent_without_a_chat_is_its_page_with_no_messages", async () => {
   const u = ui();
   t.subscribe(1, agentPage("ws/a", "k"));
   await t.read(u, 1);
-  sameTopics(t.started(), [sessionOf("ws/a", "k"), rows("ws/a"), sessions("ws/a"), threads("ws/a"), overview("ws/a"), link("ws/a"), workspace(), prefs()]);
+  sameTopics(t.started(), [sessionOf("ws/a", "k"), rows("ws/a"), sessions("ws/a"), threads("ws/a"), overview("ws/a"), link("ws/a"), workspace(), prefs(), { topic: "screens", station: "ws/a" }]);
   t.set(sessionOf("ws/a", "k"), { session: fullSession("k"), threads: [slackThread(3)], turns: [turn("t1")] });
   await t.read(u, 1);
   assert.equal(u.value === undefined, true, "its title is the station's: it waits for the items");

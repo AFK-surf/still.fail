@@ -958,6 +958,7 @@ web-main.keymap.chat.jobs
 web-main.keymap.chat.new
 web-main.keymap.chat.next
 web-main.keymap.chat.prev
+web-main.keymap.chat.screen
 web-main.keymap.chat.switch
 web-main.keymap.composer.focus
 web-main.keymap.files.preview
