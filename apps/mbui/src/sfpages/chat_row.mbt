@@ -157,7 +157,13 @@ pub fn chat_row(
   // held by a finger a while: its time shows (mobile/Home.tsx `held`)
   let held = finger && !found && @kit.after(c, "row-hold/" + key, pressed && row_held.val.0 == id, hold_ms)
   let menu_on = row_menu_open(item)
-  if c.clicked(id) && !renaming {
+  // pressed and let go: its chat opened then, before the next frame is built (Ctx::on_press: a frame that built the
+  // page it left and then the chat, all of it twice, 2026-10-30)
+  c.on_press(id, fn() {
+    // (being renamed: a press is the field's)
+    if renaming {
+      return
+    }
     let long = row_held.val.0 == id && row_held.val.1
     row_held.val = (0, false)
     if long {
@@ -168,8 +174,8 @@ pub fn chat_row(
       match opened {
         Some(f) => f(r)
         None => {
-          // pressed on its state line while the core says which message that is about, nothing in it unread: its chat
-          // goes there as it opens (ChatMark.tsx jumpFromLine)
+          // pressed on its state line while the core says which message that is about, nothing in it unread: its
+          // chat goes there as it opens (ChatMark.tsx jumpFromLine)
           match item.state_about {
             Some(seq) if c.clicked_on(id, line) && !item.unread && item.thread is Some(_) =>
               @sfbase.go_to(r, seq)
@@ -179,7 +185,8 @@ pub fn chat_row(
         }
       }
     }
-  } else if !pressed && row_held.val.0 == id && !menu_on {
+  })
+  if !pressed && row_held.val.0 == id && !menu_on && !c.clicked(id) {
     row_held.val = (0, false)
     if finger {
       unprime(src, r)
