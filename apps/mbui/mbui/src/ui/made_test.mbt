@@ -155,3 +155,45 @@ test "made: in a list's rows kept as their nodes, what a made node read changing
   assert_eq(pressed.get(), 1)
   assert_true(t.find("after 1") is Some(_))
 }
+
+///|
+test "made: an island built the old way is built again only as what it read changes, whatever else the frame builds anew" {
+  let a = @signals.signal("a1")
+  let b = @signals.signal("b1")
+  let frame_wide = @signals.signal(0)
+  let built = [0, 0]
+  let t = Tester::new(
+    fn(c) {
+      // (read by the frame's own build: built anew as it changes)
+      c.text("frame \{frame_wide.get()}") |> ignore
+      c.made("islands", fn() {
+        made_box(fn(c) { c.box(h=Px(200.0), fn() {  }) |> ignore }, kids=[
+          made_island("first", fn() { "" }, fn(c) {
+            built[0] = built[0] + 1
+            c.text("first \{a.get()}") |> ignore
+          }),
+          made_island("second", fn() { "" }, fn(c) {
+            built[1] = built[1] + 1
+            c.text("second \{b.get()}") |> ignore
+          }),
+        ])
+      })
+    },
+    w=300.0,
+    h=300.0,
+  )
+  t.draw()
+  // (the frame that takes the change, alone: what it kept; the Tester builds each frame that kept them once more
+  // keeping none, to hold one to the other)
+  frame_wide.set(1)
+  t.frame()
+  assert_true(t.find("frame 1") is Some(_))
+  assert_eq(t.parts_kept(), 2)
+  let b0 = built[1]
+  b.set("b2")
+  t.frame()
+  assert_true(t.find("second b2") is Some(_))
+  assert_true(t.find("first a1") is Some(_))
+  assert_eq(t.parts_kept(), 1)
+  assert_true(built[1] > b0)
+}

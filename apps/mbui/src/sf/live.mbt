@@ -17,8 +17,10 @@ pub fn[K : Hash + Eq, V] LiveMap::new() -> LiveMap[K, V] {
 }
 
 ///|
-fn live_changed(changes : @signals.Signal[Int]) -> Unit {
-  changes.set(@signals.untracked(fn() { changes.get() }) + 1)
+#callsite(autofill(loc))
+fn live_changed(changes : @signals.Signal[Int], loc~ : SourceLoc) -> Unit {
+  // (where it was changed, its caller's: what a watch says changed what it read, Watch::set_as_read)
+  changes.set(@signals.untracked(fn() { changes.get() }) + 1, loc~)
 }
 
 ///|
@@ -85,29 +87,34 @@ pub fn[K : Hash + Eq, V] LiveMap::op_set(self : LiveMap[K, V], key : K, value : 
 }
 
 ///|
-pub fn[K : Hash + Eq, V] LiveMap::set(self : LiveMap[K, V], key : K, value : V) -> Unit {
-  self[key] = value
+#callsite(autofill(loc))
+pub fn[K : Hash + Eq, V] LiveMap::set(self : LiveMap[K, V], key : K, value : V, loc~ : SourceLoc) -> Unit {
+  self.data[key] = value
+  live_changed(self.changes, loc~)
 }
 
 ///|
-pub fn[K : Hash + Eq, V] LiveMap::remove(self : LiveMap[K, V], key : K) -> Unit {
+#callsite(autofill(loc))
+pub fn[K : Hash + Eq, V] LiveMap::remove(self : LiveMap[K, V], key : K, loc~ : SourceLoc) -> Unit {
   if self.data.contains(key) {
     self.data.remove(key)
-    live_changed(self.changes)
+    live_changed(self.changes, loc~)
   }
 }
 
 ///|
-pub fn[K, V] LiveMap::clear(self : LiveMap[K, V]) -> Unit {
+#callsite(autofill(loc))
+pub fn[K, V] LiveMap::clear(self : LiveMap[K, V], loc~ : SourceLoc) -> Unit {
   if !self.data.is_empty() {
     self.data.clear()
-    live_changed(self.changes)
+    live_changed(self.changes, loc~)
   }
 }
 
 ///|
 /// What holds `keep` kept, the rest let go.
-pub fn[K : Hash + Eq, V] LiveMap::retain(self : LiveMap[K, V], keep : (K, V) -> Bool) -> Unit {
+#callsite(autofill(loc))
+pub fn[K : Hash + Eq, V] LiveMap::retain(self : LiveMap[K, V], keep : (K, V) -> Bool, loc~ : SourceLoc) -> Unit {
   let gone = []
   for k, v in self.data {
     if !keep(k, v) {
@@ -118,7 +125,7 @@ pub fn[K : Hash + Eq, V] LiveMap::retain(self : LiveMap[K, V], keep : (K, V) -> 
     for k in gone {
       self.data.remove(k)
     }
-    live_changed(self.changes)
+    live_changed(self.changes, loc~)
   }
 }
 
@@ -193,41 +200,46 @@ pub fn[T] LiveArray::op_set(self : LiveArray[T], i : Int, x : T) -> Unit {
 }
 
 ///|
-pub fn[T] LiveArray::push(self : LiveArray[T], x : T) -> Unit {
+#callsite(autofill(loc))
+pub fn[T] LiveArray::push(self : LiveArray[T], x : T, loc~ : SourceLoc) -> Unit {
   self.data.push(x)
-  live_changed(self.changes)
+  live_changed(self.changes, loc~)
 }
 
 ///|
-pub fn[T] LiveArray::remove(self : LiveArray[T], i : Int) -> T {
+#callsite(autofill(loc))
+pub fn[T] LiveArray::remove(self : LiveArray[T], i : Int, loc~ : SourceLoc) -> T {
   let x = self.data.remove(i)
-  live_changed(self.changes)
+  live_changed(self.changes, loc~)
   x
 }
 
 ///|
-pub fn[T] LiveArray::clear(self : LiveArray[T]) -> Unit {
+#callsite(autofill(loc))
+pub fn[T] LiveArray::clear(self : LiveArray[T], loc~ : SourceLoc) -> Unit {
   if !self.data.is_empty() {
     self.data.clear()
-    live_changed(self.changes)
+    live_changed(self.changes, loc~)
   }
 }
 
 ///|
-pub fn[T] LiveArray::retain(self : LiveArray[T], keep : (T) -> Bool) -> Unit {
+#callsite(autofill(loc))
+pub fn[T] LiveArray::retain(self : LiveArray[T], keep : (T) -> Bool, loc~ : SourceLoc) -> Unit {
   let n = self.data.length()
   self.data.retain(keep)
   if self.data.length() != n {
-    live_changed(self.changes)
+    live_changed(self.changes, loc~)
   }
 }
 
 ///|
 /// What it holds from now on: `all`, in place of what it held.
-pub fn[T] LiveArray::replace(self : LiveArray[T], all : Array[T]) -> Unit {
+#callsite(autofill(loc))
+pub fn[T] LiveArray::replace(self : LiveArray[T], all : Array[T], loc~ : SourceLoc) -> Unit {
   self.data.clear()
   self.data.append(all)
-  live_changed(self.changes)
+  live_changed(self.changes, loc~)
 }
 
 ///|
@@ -281,47 +293,53 @@ pub fn[T] LiveArray::rev_iter(self : LiveArray[T]) -> Iter[T] {
 }
 
 ///|
-pub fn[T] LiveArray::push_iter(self : LiveArray[T], xs : Iter[T]) -> Unit {
+#callsite(autofill(loc))
+pub fn[T] LiveArray::push_iter(self : LiveArray[T], xs : Iter[T], loc~ : SourceLoc) -> Unit {
   let n = self.data.length()
   self.data.push_iter(xs)
   if self.data.length() != n {
-    live_changed(self.changes)
+    live_changed(self.changes, loc~)
   }
 }
 
 ///|
-pub fn[T] LiveArray::append(self : LiveArray[T], xs : Array[T]) -> Unit {
+#callsite(autofill(loc))
+pub fn[T] LiveArray::append(self : LiveArray[T], xs : Array[T], loc~ : SourceLoc) -> Unit {
   if xs.length() > 0 {
     self.data.append(xs)
-    live_changed(self.changes)
+    live_changed(self.changes, loc~)
   }
 }
 
 ///|
-pub fn[T] LiveArray::insert(self : LiveArray[T], i : Int, x : T) -> Unit {
+#callsite(autofill(loc))
+pub fn[T] LiveArray::insert(self : LiveArray[T], i : Int, x : T, loc~ : SourceLoc) -> Unit {
   self.data.insert(i, x)
-  live_changed(self.changes)
+  live_changed(self.changes, loc~)
 }
 
 ///|
-pub fn[T] LiveArray::pop(self : LiveArray[T]) -> T? {
+#callsite(autofill(loc))
+pub fn[T] LiveArray::pop(self : LiveArray[T], loc~ : SourceLoc) -> T? {
   let x = self.data.pop()
   if x is Some(_) {
-    live_changed(self.changes)
+    live_changed(self.changes, loc~)
   }
   x
 }
 
 ///|
 /// Something in it changed in place (a field of one of its items): what reads it follows that too.
-pub fn[T] LiveArray::touched(self : LiveArray[T]) -> Unit {
-  live_changed(self.changes)
+#callsite(autofill(loc))
+pub fn[T] LiveArray::touched(self : LiveArray[T], loc~ : SourceLoc) -> Unit {
+  live_changed(self.changes, loc~)
 }
 
 ///|
 /// Something in it changed in place (a field of one of its values): what reads it follows that too.
-pub fn[K, V] LiveMap::touched(self : LiveMap[K, V]) -> Unit {
-  live_changed(self.changes)
+#callsite(autofill(loc))
+pub fn[K, V] LiveMap::touched(self : LiveMap[K, V], loc~ : SourceLoc) -> Unit {
+  live_changed(self.changes, loc~)
 }
 
 ///|

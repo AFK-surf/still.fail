@@ -52,6 +52,8 @@ priv struct RowNodes {
   /// whether it was built in a list whose rows show only what they read (Ctx::list's `rows_read`), and the theme it
   /// was built in there (its colours and sizes, what it may have taken of them as it was built)
   mut reads_all : Bool
+  /// a part put where it is by what is made once (made_island): what the frame built anew does not build it
+  mut own : Bool
   mut theme : Theme?
   mut ok : Bool
   mut why : String
@@ -196,7 +198,7 @@ fn Ctx::rows_detach(self : Ctx) -> Unit {
     // it in the frame: left where they were, a node more or less built before them (a bar's in a motion) put another
     // node in each of their places, all of them laid out anew; a part's left there, for it to make again in its place.
     // But a row that shows only what it read, unless none is kept at all)
-    if nodes_run.whole || (nodes_run.fresh && !rn.reads_all) {
+    if nodes_run.whole || (nodes_run.fresh && !rn.reads_all && !rn.own) {
       if rn.item >= 0 {
         self.row_nodes_out(rn)
       }
@@ -362,6 +364,7 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     reads_out: false,
     lit_all: false,
     reads_all: false,
+    own: false,
     theme: None,
     ok: false,
     why: "",
@@ -743,7 +746,14 @@ pub fn Ctx::kept_as_nodes(self : Ctx, id : Int, key : String, body : () -> Unit,
 /// its nodes (kept_nodes.mbt's head): built again where something it read changed, or what builds it may build it
 /// otherwise (the frame built anew), or it is built elsewhere (`key`, its id's scope, its owner, its layer, ...); else
 /// its nodes put back as its build made them and what it said of the frame said again there, laid out with the rest.
-fn Ctx::part_nodes(self : Ctx, id : Int, key : String, body : () -> Unit, read_out : Bool) -> Unit {
+fn Ctx::part_nodes(
+  self : Ctx,
+  id : Int,
+  key : String,
+  body : () -> Unit,
+  read_out : Bool,
+  own? : Bool = false,
+) -> Unit {
   let build = fn() {
     self.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
       if read_out {
@@ -769,7 +779,15 @@ fn Ctx::part_nodes(self : Ctx, id : Int, key : String, body : () -> Unit, read_o
   }
   rn.shown = self.frame_no
   rn.laid_pass.val = nodes_run.pass
-  if self.nodes_keep() &&
+  rn.own = own
+  // (`own`: what puts it here is made once (made.mbt's made_island), so what it is built from is its key and what it
+  // read alone, whatever else the frame built anew)
+  let may_keep = if own {
+    nodes_run.on && !nodes_run.whole && !inst_owners.on && !self.lit_every
+  } else {
+    self.nodes_keep()
+  }
+  if may_keep &&
     rn.ok &&
     !rn.in_pool &&
     rn.n > 0 &&
@@ -796,7 +814,7 @@ fn Ctx::part_nodes(self : Ctx, id : Int, key : String, body : () -> Unit, read_o
   }
   // (built for what it read, or as it is new or built elsewhere: what it builds its lists from may be otherwise, their
   // rows built anew; built only as it may not be kept, nothing it read changed: its lists' rows kept)
-  let fresh = nodes_run.fresh ||
+  let fresh = (nodes_run.fresh && !own) ||
     rn.n == 0 ||
     rn.watch.is_stale() ||
     rn.key != key ||

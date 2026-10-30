@@ -90,7 +90,7 @@ let finder : Finder = {
   field: @ui.Field::new(),
   query: "",
   kept: @signals.signal(None),
-  kept_of: @signals.signal((-1, "", "")),
+  kept_of: @signals.signal((-1, "", ""), same=fn(a, b) { a == b }),
   failed: @signals.signal(false, same=fn(a, b) { a == b }),
   asked: @signals.signal("", same=fn(a, b) { a == b }),
   listed: @sf.LiveArray::new(),
@@ -126,11 +126,20 @@ pub fn finder_cleared() -> Unit {
   finder.chosen = 0
   finder.query = ""
   finder.field.set("")
-  finder.kept.set(None)
+  // (as it is, nothing set: what is cleared as a page is built changes nothing it reads where it was clear)
+  @signals.untracked(fn() {
+    if finder.kept.get() is Some(_) {
+      finder.kept.set(None)
+    }
+    if finder.lines.get().length() > 0 {
+      finder.lines.set([])
+    }
+    if finder.picks.get().length() > 0 {
+      finder.picks.set([])
+    }
+  })
   finder.kept_of.set((-1, "", ""))
   finder.failed.set(false)
-  finder.lines.set([])
-  finder.picks.set([])
   finder.to_top = false
 }
 
