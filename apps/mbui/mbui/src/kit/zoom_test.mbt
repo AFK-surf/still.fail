@@ -89,9 +89,10 @@ test "what reads where a zoom shows is not told where nothing it shows changed, 
   let a = @kit.Zoom::new(free=true)
   a.natural(100.0, 100.0)
   a.boxed(400.0, 400.0)
-  let b = @kit.Zoom::new()
+  let b = @kit.Zoom::new(free=true)
   b.natural(100.0, 100.0)
   b.boxed(400.0, 400.0)
+  let b_was = b.rect()
   let reads = Ref(0)
   let shown = @signals.computed(fn(_) {
     reads.val = reads.val + 1
@@ -99,11 +100,13 @@ test "what reads where a zoom shows is not told where nothing it shows changed, 
   })
   shown.get() |> ignore
   let first = reads.val
-  // (moved nowhere; another one moved)
+  // (moved nowhere; another one moved, and it did)
   a.pan(0.0, 0.0)
   b.pan(30.0, 0.0)
+  b.transform(200.0, 200.0, 1.5, 0.0, 0.0)
   shown.get() |> ignore
   assert_eq(reads.val, first)
+  assert_true(b.rect() != b_was, msg="\{b.rect()}")
   // (a small one kept centred in its stage, pushed against its edges, pinched by nothing: as it was, told nothing)
   let c = @kit.Zoom::new()
   c.natural(100.0, 100.0)
@@ -122,4 +125,88 @@ test "what reads where a zoom shows is not told where nothing it shows changed, 
   a.pan(30.0, 0.0)
   shown.get() |> ignore
   assert_eq(reads.val, first + 1)
+}
+
+///|
+/// A picture gliding in from fitted (3 times, round a point off the stage's middle), frames drawn 100 ms on (its step
+/// sampling it then, or not), then told `then`: where it is.
+fn glide_cut(sampled : Bool, then : (@kit.Zoom) -> Unit) -> (Double, Double, Double, Double)? {
+  let t = @ui.Tester::new(fn(_c) {  })
+  t.draw()
+  let z = @kit.Zoom::new()
+  z.natural(100.0, 100.0)
+  z.boxed(400.0, 400.0)
+  z.zoom_to(3.0, 150.0, 170.0, true)
+  // (frames on, as a host draws them: none of them steps it)
+  t.run_for(100.0)
+  if sampled {
+    z.step()
+  }
+  then(z)
+  z.rect()
+}
+
+///|
+test "a glide cut short at a moment goes on from where it was then, a frame sampled it or not: panned, or sent elsewhere" {
+  let pan = fn(z : @kit.Zoom) { z.pan(10.0, 0.0) }
+  let other = fn(z : @kit.Zoom) { z.zoom_to(1.5, 100.0, 100.0, false) }
+  let tapped = fn(z : @kit.Zoom) { z.double_tap(200.0, 200.0) }
+  assert_eq(glide_cut(false, pan), glide_cut(true, pan))
+  assert_eq(glide_cut(false, other), glide_cut(true, other))
+  // (a double tap midway: zoomed in by then, sampled or not: back to fitted, gliding there)
+  assert_eq(glide_cut(false, tapped), glide_cut(true, tapped))
+  // (cut short midway: neither where it set out nor where it went)
+  let mid = glide_cut(false, fn(_z) {  }).unwrap()
+  assert_true(mid.2 > 100.0 && mid.2 < 300.0, msg="\{mid}")
+}
+
+///|
+test "a zoom told a command tells what reads it once, as the command leaves it: fitted again, a glide cut short by a pan" {
+  let t = @ui.Tester::new(fn(_c) {  })
+  t.draw()
+  let z = @kit.Zoom::new()
+  z.natural(100.0, 100.0)
+  z.boxed(400.0, 400.0)
+  z.zoom_to(2.0, 150.0, 150.0, false)
+  // (what reads it, run as it is told: what it reads then)
+  let seen : Array[(Bool, Bool)] = []
+  let stop = @signals.effect(fn() {
+    z.rect() |> ignore
+    seen.push((z.fitted, z.zoomed()))
+  })
+  seen.clear()
+  z.fit_now()
+  assert_eq(seen, [(true, false)])
+  seen.clear()
+  z.zoom_to(3.0, 150.0, 150.0, true)
+  t.run_for(100.0)
+  seen.clear()
+  z.pan(10.0, 0.0)
+  assert_eq(seen.length(), 1)
+  stop()
+}
+
+///|
+/// A picture set gliding in at `t0` between frames, the last frame before a pan at `t0 + 20` drawn at `t0 + last`:
+/// where the pan leaves it.
+fn pan_after_frame(last : Double) -> (Double, Double, Double, Double)? {
+  let t = @ui.Tester::new(fn(_c) {  })
+  t.draw()
+  let t0 = t.time()
+  let z = @kit.Zoom::new()
+  z.natural(100.0, 100.0)
+  z.boxed(400.0, 400.0)
+  z.zoom_to(3.0, 150.0, 170.0, true)
+  t.frame_at(t0 + last)
+  t.advance(t0 + 20.0 - t.time())
+  z.pan(10.0, 0.0)
+  z.rect()
+}
+
+///|
+test "a pan told at a moment between frames starts from where the glide has it then, whenever the frame before it was drawn" {
+  let ten = pan_after_frame(10.0)
+  assert_eq(pan_after_frame(15.0), ten)
+  // (by then it had left where it set out)
+  assert_true(ten.unwrap().2 > 100.0, msg="\{ten}")
 }

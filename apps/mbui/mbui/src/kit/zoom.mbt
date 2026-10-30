@@ -2,9 +2,13 @@
 // shared ui/Zoom.kt ZoomState, the web's FilePreview.tsx useZoom): fitted to the stage (a margin round it, enlarged
 // or not), zoomed around a point (two fingers' pinch, a double tap, the wheel, a button), panned, and kept within the
 // stage: smaller than it, centred; larger, no gap at its edges (or, free, anywhere: a page on a canvas, dragged about
-// it). A zoom said with a glide goes there on a Move as long as its way is far, a motion said once as it sets out (Zoom::step reads where it has got to); one let go by a
-// finger moving goes on at its speed, slowing, to its edges (fling). What the fingers do is the view's: it says what
-// they came to (transform, pan, fling, zoom_to, double_tap).
+// it). A zoom said with a glide goes there on a Move as long as its way is far; one let go by a finger moving goes on at
+// its speed, slowing, to its edges (fling): each a way said once as it sets out, at the moment of what told it (an
+// input's, a frame's), where it is at a moment a function of that way and the moment (ZPath). What the fingers do is
+// the view's: it says what they came to (transform, pan, fling, zoom_to, double_tap). Each command starts from where
+// the picture is at its moment, by what it was told and the way it is on, whatever frames were drawn (Zoom::settle),
+// and tells what reads it once, as it leaves it (Zoom::moved). (Zoom::step still copies where it is into its fields for
+// what reads them: the old way, read by nothing of its own.)
 
 ///|
 /// Where a picture shows in its stage: `scale` is stage points per picture pixel, `x` and `y` move its centre from the
@@ -29,15 +33,15 @@ pub struct Zoom {
   free : Bool
   /// the fitted scale a whole number of these (0: as it comes)
   fit_step : Double
-  // a glide: whether one goes on, how far (0 … 1, a motion), from, to (scale, x, y)
+  // a glide: whether one goes on, how far (0 … 1, its way), from, to (scale, x, y)
   mut gliding : Bool
-  glide : @motion.Value
+  priv glide : ZPath
   g_from : FixedArray[Double]
   g_to : FixedArray[Double]
-  // a fling: whether one goes on, where it has x and where y (each a motion: Motion's inertia, stopped at the edges)
+  // a fling: whether one goes on, the ways of x and of y (Motion's inertia, stopped at the edges)
   mut flinging : Bool
-  fling_x : @motion.Value
-  fling_y : @motion.Value
+  priv fling_x : ZPath
+  priv fling_y : ZPath
   /// what it was told to show, as each change of it leaves it (Zoom::said: its sizes, where it is or the way it goes):
   /// read where where it shows is read (Zoom::rect), so that what was built by it is built again as that changes, by
   /// whatever way, whoever changed it, as it was built or between frames; told the same, none
@@ -61,6 +65,83 @@ priv struct ZoomSaid {
   to : (Double, Double, Double)
   flinging : Bool
 } derive(Eq)
+
+///|
+/// One number's way, said once as it sets out (from where, how fast, to where, by what, from when): where it is at a
+/// moment worked out from that alone, whatever frames were drawn; said to move till it ends (the frames come).
+priv struct ZPath {
+  mut from : Double
+  mut v0 : Double
+  mut to : Double
+  mut spec : @motion.Spec
+  mut start : Double
+  mut dur : Double
+  mut on : Bool
+  mover : @ui.Mover
+}
+
+///|
+fn ZPath::new() -> ZPath {
+  { from: 0.0, v0: 0.0, to: 0.0, spec: @motion.Snap(0.0), start: 0.0, dur: 0.0, on: false, mover: @ui.Mover::new() }
+}
+
+///|
+impl @ui.Moving for ZPath with rest_at(self, now, frame) {
+  ignore(now)
+  ignore(frame)
+  if self.on {
+    self.end()
+  } else {
+    -1.0
+  }
+}
+
+///|
+/// When it is there: its time goes in whole ms (Spec::value_at), so at the first whole ms its length is out.
+fn ZPath::end(self : ZPath) -> Double {
+  self.start + self.dur.ceil()
+}
+
+///|
+/// Off from `from` (as fast as `v0`, per second) to `to` by `spec`, from the moment `at` (its cause's).
+fn ZPath::go(self : ZPath, from : Double, to : Double, spec : @motion.Spec, v0 : Double, at : Double) -> Unit {
+  self.from = from
+  self.v0 = v0
+  self.to = to
+  self.spec = spec
+  self.start = at
+  self.dur = spec.duration(from, to, v0)
+  self.on = true
+  // (said to move till it ends: frames come; told between frames, one owed)
+  ignore(@ui.current().set_out(self.mover, self as &@ui.Moving, what="a zoom's way"))
+}
+
+///|
+/// Stopped at `t`, where it is then: there from here on, as what was told of it before says (read anywhere after).
+fn ZPath::halt(self : ZPath, t : Double) -> Unit {
+  let v = self.at(t)
+  self.on = false
+  self.from = v
+  self.to = v
+}
+
+///|
+/// Where it is at `t`.
+fn ZPath::at(self : ZPath, t : Double) -> Double {
+  if !self.on {
+    return self.to
+  }
+  self.spec.value_at(zmax(0.0, t - self.start), self.dur, self.from, self.to, self.v0).0
+}
+
+///|
+/// Where it is as what is built or drawn now reads it (the frame's moment): built again each frame while it goes.
+fn ZPath::shown(self : ZPath) -> Double {
+  let c = @ui.current()
+  let going = self.on && c.moment() < self.end()
+  c.shows_motion(self.mover, going)
+  self.at(if going { c.now() } else { c.moment() })
+}
 
 ///|
 /// How a picture let go slows: as e^(−t / this) (ms), Motion's inertia's own time constant (about the desktop's coasting,
@@ -98,12 +179,12 @@ pub fn Zoom::new(
     free,
     fit_step,
     gliding: false,
-    glide: @motion.Value::new(1.0),
+    glide: ZPath::new(),
     g_from: FixedArray::make(3, 0.0),
     g_to: FixedArray::make(3, 0.0),
     flinging: false,
-    fling_x: @motion.Value::new(0.0),
-    fling_y: @motion.Value::new(0.0),
+    fling_x: ZPath::new(),
+    fling_y: ZPath::new(),
     place: @signals.signal(
       { nw: 0.0, nh: 0.0, bw: 0.0, bh: 0.0, scale: 1.0, x: 0.0, y: 0.0, fitted: true, gliding: false, to: (0.0, 0.0, 0.0), flinging: false },
       same=fn(a, b) { a == b },
@@ -169,7 +250,12 @@ pub fn Zoom::max_scale(self : Zoom) -> Double {
 ///|
 /// Larger than fitted.
 pub fn Zoom::zoomed(self : Zoom) -> Bool {
-  self.scale > self.fit() * 1.01
+  // (as it shows: what reads it followed as Zoom::rect is)
+  let scale = match self.rect() {
+    Some((_, _, w, _)) if self.nw > 0.0 => w / self.nw
+    _ => self.scale
+  }
+  scale > self.fit() * 1.01
 }
 
 ///|
@@ -178,6 +264,8 @@ pub fn Zoom::natural(self : Zoom, w : Double, h : Double) -> Unit {
   if w == self.nw && h == self.nh {
     return
   }
+  // (what it was on settled where it is: the picture fitted again or kept within from there)
+  self.settle() |> ignore
   self.nw = w
   self.nh = h
   if self.fitted {
@@ -196,6 +284,7 @@ pub fn Zoom::boxed(self : Zoom, w : Double, h : Double) -> Unit {
   if w == self.bw && h == self.bh {
     return
   }
+  self.settle() |> ignore
   self.bw = w
   self.bh = h
   if self.fitted {
@@ -259,9 +348,9 @@ pub fn Zoom::rect(self : Zoom) -> (Double, Double, Double, Double)? {
     return None
   }
   let (scale, x, y) = if d.flinging {
-    self.kept_within(d.scale, self.fling_x.get(), self.fling_y.get())
+    self.kept_within(d.scale, self.fling_x.shown(), self.fling_y.shown())
   } else if d.gliding {
-    let e = self.glide.get()
+    let e = self.glide.shown()
     (
       self.g_from[0] + (d.to.0 - self.g_from[0]) * e,
       self.g_from[1] + (d.to.1 - self.g_from[1]) * e,
@@ -287,9 +376,49 @@ fn Zoom::kept_within(self : Zoom, scale : Double, x : Double, y : Double) -> (Do
 }
 
 ///|
-/// Moved by a finger (dx, dy), a glide called off.
-pub fn Zoom::pan(self : Zoom, dx : Double, dy : Double) -> Unit {
-  self.stop_glide()
+/// Where it shows at the moment a command is told (Ctx::moment: an input's, between frames; a frame's, in one), by what
+/// it was told and the ways it is on (Zoom::rect's), read of nothing followed: where that command starts from.
+fn Zoom::shown_now(self : Zoom) -> (Double, Double, Double) {
+  let t = @ui.current().moment()
+  if self.flinging {
+    self.kept_within(self.scale, self.fling_x.at(t), self.fling_y.at(t))
+  } else if self.gliding {
+    let e = self.glide.at(t)
+    (
+      self.g_from[0] + (self.g_to[0] - self.g_from[0]) * e,
+      self.g_from[1] + (self.g_to[1] - self.g_from[1]) * e,
+      self.g_from[2] + (self.g_to[2] - self.g_from[2]) * e,
+    )
+  } else {
+    (self.scale, self.x, self.y)
+  }
+}
+
+///|
+/// A glide or a fling it is on called off where it has it now (shown_now: what was told and the motions, whether a
+/// frame sampled them or not), the place it is at said so; nothing told yet (Zoom::moved, once its command is done).
+/// Whether one went on.
+fn Zoom::settle(self : Zoom) -> Bool {
+  if !self.gliding && !self.flinging {
+    return false
+  }
+  let (s, x, y) = self.shown_now()
+  let t = @ui.current().moment()
+  self.gliding = false
+  self.glide.halt(t)
+  self.flinging = false
+  self.fling_x.halt(t)
+  self.fling_y.halt(t)
+  self.scale = s
+  self.x = x
+  self.y = y
+  true
+}
+
+///|
+/// Moved by (dx, dy) and kept within the stage, from where it shows now; told nothing yet.
+fn Zoom::pan_by(self : Zoom, dx : Double, dy : Double) -> Unit {
+  self.settle() |> ignore
   let (x0, y0) = (self.x, self.y)
   self.x = self.x + dx
   self.y = self.y + dy
@@ -298,6 +427,13 @@ pub fn Zoom::pan(self : Zoom, dx : Double, dy : Double) -> Unit {
   if self.x != x0 || self.y != y0 {
     self.fitted = false
   }
+}
+
+///|
+/// Moved by a finger (dx, dy), a glide called off where it had it. (Each command below: what it was told before
+/// settled at its moment first, then its whole change, then told once, as it is left: Zoom::moved.)
+pub fn Zoom::pan(self : Zoom, dx : Double, dy : Double) -> Unit {
+  self.pan_by(dx, dy)
   self.moved()
 }
 
@@ -305,7 +441,7 @@ pub fn Zoom::pan(self : Zoom, dx : Double, dy : Double) -> Unit {
 /// By `zoom` around (ax, ay) on the stage, and moved by (dx, dy): two fingers pinching (Zoom.kt transform), the point
 /// under them staying under them.
 pub fn Zoom::transform(self : Zoom, ax : Double, ay : Double, zoom : Double, dx : Double, dy : Double) -> Unit {
-  self.stop_glide()
+  self.settle() |> ignore
   let next = zmax(self.min_scale(), zmin(self.max_scale(), self.scale * zoom))
   let f = next / self.scale
   let px = ax - self.bw / 2.0
@@ -325,6 +461,7 @@ pub fn Zoom::transform(self : Zoom, ax : Double, ay : Double, zoom : Double, dx 
 ///|
 /// To `target` (at once, or gliding), the picture's point under (ax, ay) on the stage staying put.
 pub fn Zoom::zoom_to(self : Zoom, target : Double, ax : Double, ay : Double, glide : Bool) -> Unit {
+  self.settle() |> ignore
   let next = zmax(self.min_scale(), zmin(self.max_scale(), target))
   let px = ax - self.bw / 2.0
   let py = ay - self.bh / 2.0
@@ -339,45 +476,42 @@ pub fn Zoom::zoom_to(self : Zoom, target : Double, ax : Double, ay : Double, gli
   }
   self.fitted = false
   self.glide_to(next, tx, ty, glide)
+  self.moved()
 }
 
 ///|
 /// Back to fitted, gliding.
 pub fn Zoom::reset(self : Zoom) -> Unit {
+  self.settle() |> ignore
   self.glide_to(self.fit(), 0.0, 0.0, true)
   self.fitted = true
+  self.moved()
 }
 
 ///|
 /// Back to fitted at once.
 pub fn Zoom::fit_now(self : Zoom) -> Unit {
+  self.settle() |> ignore
   self.glide_to(self.fit(), 0.0, 0.0, false)
   self.fitted = true
+  self.moved()
 }
 
 ///|
 /// A glide or a fling called off where it is (a finger took it).
 pub fn Zoom::stop_glide(self : Zoom) -> Unit {
-  if self.gliding {
-    self.gliding = false
-    self.glide.set(1.0)
-  }
-  self.stop_fling() |> ignore
+  self.settle() |> ignore
   self.moved()
 }
 
 ///|
-/// A fling called off where it has got to (a finger came down on it): whether one went on.
+/// A fling called off where it has got to (a finger came down on it): whether one went on (none: nothing done).
 pub fn Zoom::stop_fling(self : Zoom) -> Bool {
   if !self.flinging {
     return false
   }
-  self.flinging = false
-  self.fling_x.stop()
-  self.fling_y.stop()
-  self.x = self.fling_x.get()
-  self.y = self.fling_y.get()
-  self.clamp()
+  // (a fling and a glide are never both on: a fling sets out from where a glide was settled)
+  self.settle() |> ignore
   self.moved()
   true
 }
@@ -386,14 +520,17 @@ pub fn Zoom::stop_fling(self : Zoom) -> Bool {
 /// Let go by a finger moving (vx, vy) (stage points per ms): on at that speed, slowing (zoom_fling_ms), to a stop or, kept
 /// within the stage, to its edge.
 pub fn Zoom::fling(self : Zoom, vx : Double, vy : Double) -> Unit {
-  self.stop_glide()
+  self.settle() |> ignore
   if self.nw <= 0.0 {
+    self.moved()
     return
   }
   let sx = zmax(0.0, (self.nw * self.scale - self.bw) / 2.0)
   let sy = zmax(0.0, (self.nh * self.scale - self.bh) / 2.0)
-  let go = fn(v : @motion.Value, from : Double, speed : Double, room : Double) {
-    v.set(from)
+  let at = @ui.current().moment()
+  let go = fn(v : ZPath, from : Double, speed : Double, room : Double) {
+    v.on = false
+    v.to = from
     if speed != 0.0 && (self.free || room > 0.0) {
       let (min, max) = if self.free { (None, None) } else { (Some(-room), Some(room)) }
       // at an edge it stops there (Motion's drag with no give past its ends)
@@ -405,24 +542,23 @@ pub fn Zoom::fling(self : Zoom, vx : Double, vy : Double) -> Unit {
         min?=min,
         max?=max,
       )
-      ignore(v.start(from, spec, velocity=speed * 1000.0))
+      v.go(from, from, spec, speed * 1000.0, at)
     }
   }
   go(self.fling_x, self.x, vx, sx)
   go(self.fling_y, self.y, vy, sy)
   self.fitted = false
-  self.flinging = self.fling_x.is_animating() || self.fling_y.is_animating()
+  self.flinging = self.fling_x.on || self.fling_y.on
   self.moved()
 }
 
 ///|
+/// To `s` at (`x`, `y`), at once or gliding from where it is (settled by the command first); told nothing yet.
 fn Zoom::glide_to(self : Zoom, s : Double, x : Double, y : Double, glide : Bool) -> Unit {
   if !glide {
-    self.stop_glide()
     self.scale = s
     self.x = x
     self.y = y
-    self.moved()
     return
   }
   self.g_from[0] = self.scale
@@ -433,40 +569,53 @@ fn Zoom::glide_to(self : Zoom, s : Double, x : Double, y : Double, glide : Bool)
   self.g_to[2] = y
   // said once as it sets out: the motion asks the frames until it is there
   self.gliding = true
-  self.glide.set(0.0)
-  // (as long as the furthest of its corners goes)
+  // (as long as the furthest of its corners goes; from the moment it is told)
   let far = zmax(zabs(x - self.g_from[1]), zabs(y - self.g_from[2])) +
     zmax(self.nw, self.nh) * zabs(s - self.g_from[0])
-  ignore(self.glide.start(1.0, @motion.move(over=far)))
-  self.moved()
+  self.glide.go(0.0, 1.0, @motion.move(over=far), 0.0, @ui.current().moment())
 }
 
 ///|
 /// Where a glide or a fling has got to this frame (a view showing the picture reads it each frame before drawing it).
 pub fn Zoom::step(self : Zoom) -> Unit {
+  // (the old way: where it is, as drawn now, copied into its fields for what reads them; nothing of its own reads them
+  // for where it shows or where a command starts from)
+  let c = @ui.current()
   if self.flinging {
-    self.x = self.fling_x.get()
-    self.y = self.fling_y.get()
+    self.x = self.fling_x.shown()
+    self.y = self.fling_y.shown()
     self.clamp()
-    if !self.fling_x.is_animating() && !self.fling_y.is_animating() {
-      self.flinging = false
+    if c.moment() >= zmax(self.fling_x.end(), self.fling_y.end()) {
+      self.settle() |> ignore
     }
   }
   if !self.gliding {
     return
   }
-  let e = self.glide.get()
+  let e = self.glide.shown()
   self.scale = self.g_from[0] + (self.g_to[0] - self.g_from[0]) * e
   self.x = self.g_from[1] + (self.g_to[1] - self.g_from[1]) * e
   self.y = self.g_from[2] + (self.g_to[2] - self.g_from[2]) * e
-  if !self.glide.is_animating() {
-    self.gliding = false
+  if c.moment() >= self.glide.end() {
+    self.settle() |> ignore
   }
+}
+
+///|
+/// When a fling has it where it rests (the frames' clock, ms; -1 none going).
+pub fn Zoom::fling_ends(self : Zoom) -> Double {
+  if !self.flinging {
+    return -1.0
+  }
+  let end = fn(p : ZPath) { if p.on { p.end() } else { -1.0 } }
+  zmax(end(self.fling_x), end(self.fling_y))
 }
 
 ///|
 /// A double tap: fitted, in to 2.5× the fitted size (at least 100%) around it; zoomed, back to fitted.
 pub fn Zoom::double_tap(self : Zoom, ax : Double, ay : Double) -> Unit {
+  // (zoomed or not as it is at the tap's moment, a glide's way read there)
+  self.settle() |> ignore
   if self.zoomed() {
     self.reset()
   } else {
@@ -475,10 +624,21 @@ pub fn Zoom::double_tap(self : Zoom, ax : Double, ay : Double) -> Unit {
 }
 
 ///|
-/// The picture's point `at` (0 … 1 of its width and height) brought `margin` within the stage's edges, the picture
-/// moved as little as it takes (a pointer kept in sight while zoomed in).
-pub fn Zoom::keep(self : Zoom, at : (Double, Double), margin : Double) -> Unit {
-  let (x, y, w, h) = match self.rect() {
+/// Where the picture is on the stage now (x, y, w, h), as Zoom::rect has it, read of nothing followed.
+fn Zoom::rect_now(self : Zoom) -> (Double, Double, Double, Double)? {
+  if self.nw <= 0.0 || self.nh <= 0.0 {
+    return None
+  }
+  let (scale, x, y) = self.shown_now()
+  let w = self.nw * scale
+  let h = self.nh * scale
+  Some((self.bw / 2.0 + x - w / 2.0, self.bh / 2.0 + y - h / 2.0, w, h))
+}
+
+///|
+/// The picture's point `at` brought `margin` within the stage's edges, as little as it takes; told nothing yet.
+fn Zoom::keep_in(self : Zoom, at : (Double, Double), margin : Double) -> Unit {
+  let (x, y, w, h) = match self.rect_now() {
     Some(r) => r
     None => return
   }
@@ -498,8 +658,16 @@ pub fn Zoom::keep(self : Zoom, at : (Double, Double), margin : Double) -> Unit {
   let dx = off(px, self.bw)
   let dy = off(py, self.bh)
   if dx != 0.0 || dy != 0.0 {
-    self.pan(dx, dy)
+    self.pan_by(dx, dy)
   }
+}
+
+///|
+/// The picture's point `at` (0 … 1 of its width and height) brought `margin` within the stage's edges, the picture
+/// moved as little as it takes (a pointer kept in sight while zoomed in).
+pub fn Zoom::keep(self : Zoom, at : (Double, Double), margin : Double) -> Unit {
+  self.keep_in(at, margin)
+  self.moved()
 }
 
 ///|
@@ -513,12 +681,15 @@ pub fn Zoom::resize_keeping(
   at : (Double, Double)?,
   margin : Double,
 ) -> Unit {
-  let was = match self.rect() {
+  let was = match self.rect_now() {
     Some(r) => r
     None => {
+      self.settle() |> ignore
       self.bw = w
       self.bh = h
-      self.fit_now()
+      self.glide_to(self.fit(), 0.0, 0.0, false)
+      self.fitted = true
+      self.moved()
       return
     }
   }
@@ -530,7 +701,7 @@ pub fn Zoom::resize_keeping(
   // where that point was on the stage, its new place's centre offset making it stay there
   let px = wx + u.0 * ww
   let py = wy + u.1 * wh
-  self.stop_glide()
+  self.settle() |> ignore
   self.bw = w
   self.bh = h
   self.fitted = false
@@ -540,6 +711,6 @@ pub fn Zoom::resize_keeping(
   self.x = px - u.0 * nw + nw / 2.0 - w / 2.0
   self.y = py - u.1 * nh + nh / 2.0 - h / 2.0
   self.clamp()
+  self.keep_in(u, margin)
   self.moved()
-  self.keep(u, margin)
 }

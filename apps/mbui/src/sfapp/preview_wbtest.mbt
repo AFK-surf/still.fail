@@ -797,7 +797,7 @@ test "zoomed in, let go moving it goes on that way, slowing, to its edge; a fing
   assert_eq(v.awake, awake)
   // flung harder: it stops at its edge (its right edge at the stage's), when its way said it ends
   t.drag(250.0, 422.0, 130.0, 422.0, steps=3)
-  t.run_for(z.fling_x.ends_at() - t.time())
+  t.run_for(z.fling_ends() - t.time())
   let (x, _, w, _) = z.rect().unwrap()
   assert_true((x + w - 390.0).abs() < 0.001)
   t.run_for(@kit.zoom_fling_ms)
