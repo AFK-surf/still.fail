@@ -454,6 +454,11 @@ fn perf_size() -> Double {
 }
 
 ///|
+fn perf_read() -> Bytes {
+  b""
+}
+
+///|
 /// The page's query parameter `name` ("" when there is none).
 fn env(name : String) -> String {
   js_env(name)

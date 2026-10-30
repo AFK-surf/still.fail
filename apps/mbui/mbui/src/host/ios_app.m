@@ -1240,6 +1240,20 @@ double mb_host_perf_size(void) {
   return perf_total;
 }
 
+// The record's files as one, the oldest first (@hostapi.perf_read): read on its queue, between its writes.
+moonbit_bytes_t mb_host_perf_read(void) {
+  NSMutableData *all = [NSMutableData data];
+  dispatch_sync(perf_queue(), ^{
+    for (NSURL *u in perf_files().reverseObjectEnumerator) {
+      NSData *d = [NSData dataWithContentsOfURL:u];
+      if (d) [all appendData:d];
+    }
+  });
+  moonbit_bytes_t out = moonbit_make_bytes((int32_t)all.length, 0);
+  memcpy(out, all.bytes, all.length);
+  return out;
+}
+
 // How warm the device is said to be (ProcessInfo's thermal state: 0 nominal, 1 fair, 2 serious, 3 critical), on the
 // log (and into the record) as it changes; with MBUI_PROBE=1 also the process's share of a CPU every 5 s (heat_tick).
 // The record started if it was on as the app last ran.

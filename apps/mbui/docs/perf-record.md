@@ -8,12 +8,11 @@ file, with what it takes to find the culprit, not only the totals.
 ## Where it is
 
 `Documents/perf/perf-YYYYMMDD.log` in the app's container (past 5 MB, `perf-YYYYMMDD-2.log`, …; the 3 newest files
-kept). Off the phone:
-
-```sh
-xcrun devicectl device copy from --device <id> --domain-type appDataContainer \
-  --domain-identifier fail.still.mbui.devpx --source Documents/perf --destination perf
-```
+kept). Off the phone: **分享记录** under the switch (shown once anything is written) hands the files on as one,
+oldest first (`still.fail-perf.log`, @hostapi.perf_read) through the system's share sheet: AirDrop to a Mac, Mail, a
+chat. That is the way for a release build: the Files app shows nothing of the app's (no `UIFileSharingEnabled`), and
+`devicectl device copy from --domain-type appDataContainer` reads only an app signed for development (with that build's
+bundle id as `--domain-identifier`).
 
 Each line is `<local time> <what>: …`. The app's lines come as it draws (every 5 s of frames); the host's every 5 s,
 drawn or not. Off, nothing runs: no timer, no file touched, a flag read each frame.

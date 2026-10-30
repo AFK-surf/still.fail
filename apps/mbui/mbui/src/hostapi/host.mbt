@@ -93,6 +93,7 @@ pub(open) trait Host {
   perf_line(Self, String) -> Unit = _
   perf_where(Self) -> String = _
   perf_size(Self) -> Double = _
+  perf_read(Self) -> Bytes = _
   shared_in(Self) -> String = _
   shared_in_file(Self, Int) -> Bytes = _
   app_version(Self) -> Int = _
@@ -627,6 +628,11 @@ impl Host with perf_where(_) {
 ///|
 impl Host with perf_size(_) {
   0.0
+}
+
+///|
+impl Host with perf_read(_) {
+  b""
 }
 
 ///|
@@ -1939,6 +1945,14 @@ pub fn perf_where() -> String {
 /// How many bytes the performance record's files have on the device now (the last few files, each at most a few MB).
 pub fn perf_size() -> Double {
   current.val.perf_size()
+}
+
+///|
+/// The performance record's files as one, the oldest first (what is written meanwhile in it too), to hand on through
+/// the system's share sheet (@hostapi.share): a release build's files are nowhere a person can take them from. Empty
+/// where none is kept.
+pub fn perf_read() -> Bytes {
+  current.val.perf_read()
 }
 
 ///|

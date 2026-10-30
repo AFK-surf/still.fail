@@ -45,7 +45,7 @@ pub fn ask_words(@ui.Ctx, String, String) -> Unit
 
 pub fn avatar(@ui.Ctx, Core, String, String, Double, picture? : String) -> Unit
 
-pub let bar_adding : @ref.Ref[Bool]
+pub let bar_adding : @signals.Signal[Bool]
 
 pub let bar_moves : Map[String, Double]
 
@@ -120,7 +120,7 @@ pub fn fixture_version() -> Int32
 
 pub let font_places : Array[String]
 
-pub let fonts_at : @ref.Ref[Int32]
+pub let fonts_at : @signals.Signal[Int32]
 
 pub let foot_across : @ui.Style
 
@@ -280,7 +280,7 @@ pub let station_network_open : Map[String, Bool]
 
 pub fn station_of(Core, Here, String) -> Json?
 
-pub let station_parts : Map[String, String]
+pub let station_parts : @sf.LiveMap[String, String]
 
 pub fn station_peek_card(@ui.Ctx, String) -> Unit
 

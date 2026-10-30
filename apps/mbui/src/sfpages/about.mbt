@@ -70,6 +70,12 @@ pub fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
           if now != on {
             @hostapi.set_perf(now)
           }
+          // (handed on through the system's share sheet: a release build's files are nowhere a person can take them from,
+          // the Files app shows none of the app's and only a build signed for development can be copied off with Xcode)
+          if @hostapi.perf_size() > 0.0 &&
+            @sf.link_row(c, "about/perf/share", @sf.t("web-pages.about.perf.share"), acts=true) {
+            @hostapi.share("", "still.fail-perf.log", "text/plain", @hostapi.perf_read()) |> ignore
+          }
         })
       })
     })

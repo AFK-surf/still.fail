@@ -133,6 +133,7 @@
   "web-pages.admin.ws.versionUnknown": "Unknown",
   "web-pages.about.legal": "Terms and policies",
   "web-pages.about.diagnostics": "Diagnostics",
+  "web-pages.about.perf.share": "Share recording",
   "web-pages.about.perf.note": "Every 5 s, writes CPU use, busiest threads, thermal state and frame rate to {where} on this device ({size} so far). Never uploaded.",
   "web-pages.about.perf.title": "Performance recording",
   "web-pages.about.privacy": "Privacy",

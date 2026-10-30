@@ -158,6 +158,8 @@ extern "C" fn ffi_perf_where() -> String = "mb_host_perf_where"
 
 extern "C" fn ffi_perf_size() -> Double = "mb_host_perf_size"
 
+extern "C" fn ffi_perf_read() -> Bytes = "mb_host_perf_read"
+
 extern "C" fn ffi_set_back(
   back : FuncRef[(Int, Double, Double, Int) -> Unit],
 ) -> Unit = "mb_host_set_back"
@@ -774,6 +776,11 @@ fn perf_where() -> String {
 ///|
 fn perf_size() -> Double {
   ffi_perf_size()
+}
+
+///|
+fn perf_read() -> Bytes {
+  ffi_perf_read()
 }
 
 ///|
