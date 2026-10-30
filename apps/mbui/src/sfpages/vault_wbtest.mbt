@@ -72,7 +72,8 @@ test "全部密钥, at each width and with either hand: every secret a row of on
     t.tap(fx + 4.0, fy + 4.0)
     t.frame()
     t.type_text("ssh")
-    t.frame()
+    // (what is not found closing where it was, the rest coming up as it does: @sf.group_rows)
+    t.run_for(@ui.move_most_ms)
     assert_true(t.find("部署机") is Some(_), msg=at)
     for gone in ["GitHub token", "Claude", "订阅和 API Key"] {
       assert_true(t.find(gone) is None, msg="\{at}: \{gone}")
