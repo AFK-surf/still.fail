@@ -1174,11 +1174,12 @@ fn shown_rows(
         _ => None
       }
     },
-    // (what was said before it was shown, caught up on, and an agent not at work yet: there at once)
+    // (what was said before it was shown, caught up on: there at once; an agent's line comes as it shows, at work or
+    // not yet, its room opening: there at once, it put every row over it up by its height in one frame, rows_steady.mbt)
     comes=fn(e) {
       match e {
         Said(m) => m.said
-        Working(a) => a.started
+        Working(_) => true
         Top | Foot => false
         _ => true
       }
