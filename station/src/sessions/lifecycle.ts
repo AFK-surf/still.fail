@@ -185,9 +185,11 @@ export async function configure(hub: Hub, key: string, change: SessionChange, la
   else if (profile === null) hub.accounts.runOn(key);
   await hub.changed(key);
   log.info("hub", "session changed", { session: key, profile: hub.store.getSession(key)?.profile ?? "", model, effort });
-  // Its last turn stopped at the allowance: changed, it goes on by itself.
+  // Its last turn stopped at the allowance, or waits to be tried again on a model at capacity: changed, it goes on by
+  // itself (at once).
   const last = hub.store.lastTurn(key);
-  if (last?.outcome === "failed" && (last.detail ?? "").startsWith("rate_limit")) void hub.actor(row).goOn();
+  const detail = last?.outcome === "failed" ? (last.detail ?? "") : "";
+  if (detail.startsWith("rate_limit") || (detail.startsWith("overloaded") && last?.declared === "waiting")) void hub.actor(row).goOn();
 }
 
 /// Where an archived session's transcript copy is.

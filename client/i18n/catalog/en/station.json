@@ -247,6 +247,8 @@
   "station.notice.file": "(File)",
   "station.notice.noResult": "This turn stopped without a result; reply to continue",
   "station.notice.noResultSaid": "The agent didn't reply in the chat this turn. Below is its last output, forwarded by the station as a fallback (not a message it posted). Reply to continue:",
+  "station.notice.overloaded": "The model is at capacity right now; this is not your account's limit. Retrying automatically after a while. Stop to cancel.",
+  "station.wait.overloaded": "the model to free up",
   "station.notice.rateLimit": "Hit a usage or rate limit and no other account is available. Continues when the allowance refills, or reply to retry: {error}",
   "station.notice.refused": "Anthropic refused the request. This is usually a network issue, not a sign-in issue: the station's outbound region isn't supported, or traffic isn't going through a proxy (Claude Code only reads HTTPS_PROXY / HTTP_PROXY; set them in the Profile's environment variables): {error}",
   "station.notice.runtimeMissing": "Couldn't start the agent: {name} isn't installed on this station",

@@ -196,7 +196,8 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.deepEqual(outcome(events, 1), { kind: "failed", reason: "rate_limit", message: "usage limit reached" });
     assert.deepEqual(outcome(events, 2), { kind: "failed", reason: "model", message: "model not supported" });
     assert.equal(classifyCodexError(null), "model");
-    assert.equal(classifyCodexError({ serverOverloaded: null }), "rate_limit");
+    assert.equal(classifyCodexError({ serverOverloaded: null }), "overloaded");
+    assert.equal(classifyCodexError({ usageLimitExceeded: null }), "rate_limit");
   });
 
   test("abort interrupts the running turn by its id; steer adds to it, and is refused with nothing running", async () => {

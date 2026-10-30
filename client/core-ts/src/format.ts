@@ -472,6 +472,8 @@ export function failureText(detail: string): string {
   switch (detail.split(":")[0]!.trim()) {
     case "rate_limit":
       return said("core-logic.format.failure.rate_limit");
+    case "overloaded":
+      return said("core-logic.format.failure.overloaded");
     case "auth":
       return said("core-logic.format.failure.auth");
     case "refused":

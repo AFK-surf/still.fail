@@ -88,7 +88,8 @@ export function hostSkillsOff(root: string): { path: string; enabled: false }[] 
 export function classifyCodexError(info: unknown): FailureReason {
   const code = typeof info === "string" ? info : info && typeof info === "object" && !Array.isArray(info) ? Object.keys(info)[0] : undefined;
   if (code === "unauthorized") return "auth";
-  if (code === "usageLimitExceeded" || code === "rateLimitExceeded" || code === "serverOverloaded") return "rate_limit";
+  if (code === "usageLimitExceeded" || code === "rateLimitExceeded") return "rate_limit";
+  if (code === "serverOverloaded") return "overloaded";
   return "model";
 }
 
