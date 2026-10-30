@@ -98,3 +98,15 @@ fn hand_reset() -> Unit {
     k.set([])
   }
 }
+
+///|
+/// The focus as a pass of the frame's build left it (the layers' focus moved in, a field asked for it): said at once,
+/// what read it told, so a build again of the frame sees it as this one left it.
+fn hand_focus_said(c : Ctx) -> Unit {
+  if @signals.untracked(fn() { hand.focus_id.get() }) != c.focus {
+    @signals.start_batch()
+    hand.focus.set(if c.focus != 0 { [c.focus] } else { [] })
+    hand.focus_id.set(c.focus)
+    @signals.end_batch()
+  }
+}

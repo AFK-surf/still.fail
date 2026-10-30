@@ -1023,8 +1023,8 @@ pub fn frame(
               tape_one_beside(tw, tape_shows_left()),
               Left,
             ) {
-            Dragging(x) | Dropped(x) => panel_own.width = Some(x)
-            Twice => panel_own.width = None
+            Dragging(x) | Dropped(x) => panel_own.width.set(Some(x))
+            Twice => panel_own.width.set(None)
             Pressed | Untouched => ()
           }
         }
@@ -1191,7 +1191,7 @@ fn tape_at(width : Double, d : Double, page_w : Double, panel_w : Double) -> (Do
 /// the window leaves past a strip of the page (tape_one_beside). From panel_min to that.
 fn tape_panel_w(width : Double) -> Double {
   let most = tape_one_beside(width, tape_shows_left())
-  match panel_own.width {
+  match panel_own.width.get() {
     Some(w) => dmax(dmin(panel_min, most), dmin(w, most))
     None => most
   }

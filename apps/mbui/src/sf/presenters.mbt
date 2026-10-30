@@ -163,6 +163,12 @@ fn presented_told() -> Unit {
 }
 
 ///|
+/// What one presented shows changed where it is kept (a menu's items given anew as they are now): the host told.
+pub fn presented_changed() -> Unit {
+  presented_told()
+}
+
+///|
 /// Whether the host draws over nothing of the app's this frame (presented's `alone`).
 // kept across runs: said by the host each frame; put back by presenters_reset (parts_reset)
 let presented_alone : Ref[Bool] = Ref(false)
