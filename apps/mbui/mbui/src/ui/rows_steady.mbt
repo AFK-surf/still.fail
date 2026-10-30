@@ -234,7 +234,7 @@ fn Tester::hold_rows_steady(self : Tester) -> Unit {
     rows_steady.found.add(row)
     let bar = rows_steady_bars.get(rows_steady.file).unwrap_or(0)
     if rows_steady_counting {
-      println("ROWS-STEADY \{rows_steady.file}: \{f}")
+      println("ROWS-STEADY \{rows_steady.file}: \{f} (the Tester made at \{looks_made_at.val})")
       continue
     }
     if rows_steady.found.length() > bar {

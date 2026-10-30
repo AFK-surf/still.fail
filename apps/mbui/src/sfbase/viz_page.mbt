@@ -230,11 +230,22 @@ pub fn viz_frame(
     })
     |> ignore
   } else {
-    let h = if f.height > 0 { f.height } else { viz_first_height }
+    let said = (if f.height > 0 { f.height } else { viz_first_height }).to_double()
+    // as tall as it said, from the height it had as it says another: a move for its cause, so what is over and under
+    // it in a list goes there with it, not in one frame (rows_steady.mbt); on the list's way where it has one (a row's
+    // own content, as under_post's)
+    let tall = @motion.anim(c, "viz-h/" + key, said, global=true)
+    if tall.target() != said {
+      match c.row_way() {
+        Some(way) => on_row_way(c, tall, said, way)
+        None => tall.animate(said, @motion.move(over=(said - tall.get()).abs()))
+      }
+    }
+    let h = tall.get()
     // till it has drawn itself, its place as while its file came (the line's grey, breathing, its corners the
     // placeholder's, the view's hole cut to them): not an empty gap (the user, 2026-10-29)
     let waiting = !f.shown || !f.view.host_done()
-    let frame = @ui.style(w=Full, h=Fixed(h.to_double()))
+    let frame = @ui.style(w=Full, h=Fixed(h))
     let box = c.id("viz/box/" + key)
     let w = match c.laid_size(box) {
       Some((w, _)) => w
@@ -244,7 +255,7 @@ pub fn viz_frame(
       // (its corners the placeholder's till what it waited on has gone from over it)
       let rounded = waiting || f.reveal is Some(_)
       c.native(f.view, radius=if rounded { c.theme().corner(Xl) } else { 0.0 }) |> ignore
-      viz_reveal(c, f, w, h.to_double(), fn(w, h) {
+      viz_reveal(c, f, w, h, fn(w, h) {
         c.box(style=viz_wait_ground.then(@ui.style(w=Fixed(w), h=Fixed(h))), fn() {
           c.box(style=viz_wait_fill, fn() {  }) |> ignore
         })

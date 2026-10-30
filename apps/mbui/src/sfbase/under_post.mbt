@@ -77,12 +77,7 @@ pub fn under_post(
   // (in a row of a list as what it shows changes: on the way its rows go then, from its start and as long, so that
   // what is over and under it moves one way with it: @ui.Ctx::row_way)
   match (c.row_way(), start_at) {
-    (Some((at, ms)), _) if h.target() != to => {
-      // (set out later than now where the list's way does: words sent leaving the composer)
-      let later = dmax(at - c.moment(), 0.0)
-      // det-ok(motion-length): the list's rows' way, timed by the list for all of them at once (docs/list-motion.md)
-      h.animate(to, @motion.tween(ms, ease=Move, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
-    }
+    (Some(way), _) if h.target() != to => on_row_way(c, h, to, way)
     (_, Some(at)) if h.target() != to => h.animate(to, spec, start_at=at)
     _ => h.follow(to, spec)
   }
@@ -101,6 +96,17 @@ pub fn under_post(
     c.look(i, look)
     @motion.leaving(c, i, shown)
   })
+}
+
+///|
+/// What in a row of a list changes its height itself (`a`, to `to`), on the way its list's rows go (`way`: Ctx::row_way,
+/// its start and how long), so that what is over and under it moves one way with it; set out later than now where the
+/// way does (words sent leaving the composer).
+fn on_row_way(c : @ui.Ctx, a : @motion.Anim, to : Double, way : (Double, Double)) -> Unit {
+  let (at, ms) = way
+  let later = dmax(at - c.moment(), 0.0)
+  // det-ok(motion-length): the list's rows' way, timed by the list for all of them at once (docs/list-motion.md)
+  a.animate(to, @motion.tween(ms, ease=Move, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
 }
 
 // ── the cards in a chat ─────────────────────────────────────────────────
