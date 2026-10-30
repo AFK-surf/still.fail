@@ -79,7 +79,7 @@ export function SkillShare({ skill, station }: { skill: SkillFile; station: stri
       <SwitchRow title={t("web-main.memory.share.switch")} checked={host} busy={sharing} disabled={sharing}
         onChange={(on) => act(stationApi(call).shareSkill(skill.name, on, null), t("web-main.memory.share.switch"))} />
       {users.length > 0 && <p className={css.memoryUsers}>{t("web-main.memory.share.users", { stations: users.join(t("web-main.list.separator")) })}</p>}
-      {host && (share?.missing ?? []).map((m) => <p key={m.station} className={css.memoryConflict}>{t("web-main.memory.share.missing", { station: nameOf(m.station), why: m.whyText })}</p>)}
+      {host && (share?.missing ?? []).map((m) => <p key={m.station} className={css.memoryConflict}>{t("web-main.memory.share.missing", { station: nameOf(m.station), why: m.whyText ?? "" })}</p>)}
       {host && share?.unreadText && <p className={css.memoryConflict}>{share.unreadText}</p>}
       {(share?.conflicts?.length ?? 0) > 0 && <p className={css.memoryConflict}>{t("web-main.memory.share.conflicts", { names: share!.conflicts!.join(t("web-main.list.separator")) })}</p>}
     </>
