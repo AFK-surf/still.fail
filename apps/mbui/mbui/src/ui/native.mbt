@@ -893,47 +893,59 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
     if v.serve is Some(_) || v.said is Some(_) {
       v.take_site()
     }
-    match v.read {
-      Some(read) =>
-        for _ in 0..<64 {
-          let req = h_view_read_next(v.id, read_out)
-          if req == 0 {
-            break
-          }
-          // one the player let go of: stopped, its answers taken no more
-          if req < 0 {
-            match v.reading.get(-req) {
-              Some(stop) => {
-                v.reading.remove(-req)
-                stop()
-              }
-              None => ()
-            }
-            continue
-          }
-          let id = v.id
-          // (answered to its end, or let go of: nothing more of it handed on)
-          let ended = Ref(false)
-          let gone = Ref(false)
-          let stop = read(read_out[0], read_out[1].to_int(), fn(data, total, more) {
-            if ended.val || gone.val || v.closed {
-              return
-            }
-            if !more {
-              ended.val = true
-              v.reading.remove(req)
-            }
-            h_view_read_answer(id, req, data, total, more)
-          })
-          if !ended.val {
-            v.reading[req] = fn() {
-              gone.val = true
+    v.take_reads()
+  }
+}
+
+///|
+/// The reads its player waits on handed to its `read` (and those it let go of stopped): after a frame is painted, and
+/// as its host says it waits on the app (hostcall.mbt's outside_view, 0), which it does with no frame coming too (the
+/// app's window off the screen: a player still reading ahead, or playing a song, is not left waiting until it shows).
+fn NativeView::take_reads(self : NativeView) -> Unit {
+  let v = self
+  if v.closed {
+    return
+  }
+  match v.read {
+    Some(read) =>
+      for _ in 0..<64 {
+        let req = h_view_read_next(v.id, read_out)
+        if req == 0 {
+          break
+        }
+        // one the player let go of: stopped, its answers taken no more
+        if req < 0 {
+          match v.reading.get(-req) {
+            Some(stop) => {
+              v.reading.remove(-req)
               stop()
             }
+            None => ()
+          }
+          continue
+        }
+        let id = v.id
+        // (answered to its end, or let go of: nothing more of it handed on)
+        let ended = Ref(false)
+        let gone = Ref(false)
+        let stop = read(read_out[0], read_out[1].to_int(), fn(data, total, more) {
+          if ended.val || gone.val || v.closed {
+            return
+          }
+          if !more {
+            ended.val = true
+            v.reading.remove(req)
+          }
+          h_view_read_answer(id, req, data, total, more)
+        })
+        if !ended.val {
+          v.reading[req] = fn() {
+            gone.val = true
+            stop()
           }
         }
-      None => ()
-    }
+      }
+    None => ()
   }
 }
 
