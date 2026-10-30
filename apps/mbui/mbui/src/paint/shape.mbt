@@ -12,7 +12,7 @@ pub(all) struct Shape {
   even_odd : Bool
   stroke : Int64
   width : Double
-} derive(Eq, Show)
+} derive(Eq, Show, Debug)
 
 ///|
 /// A shape (see `Shape`).

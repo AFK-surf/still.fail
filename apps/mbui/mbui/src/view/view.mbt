@@ -49,6 +49,10 @@ pub(all) struct Look {
   mut ground : Int64
   mut ink : Int64
   mut words : String
+  /// the shapes it draws over its ground (their outlines, as said: what they come to drawn kept by them), and the one
+  /// colour they are drawn in where it is not 0 (their own where it is): View::shapes, View::tint
+  mut shapes : Array[@paint.Shape]
+  mut tint : Int64
   mut alpha : Double
   mut dx : Double
   mut dy : Double
@@ -68,6 +72,8 @@ pub(all) struct Content {
   ground : Int64
   ink : Int64
   words : String
+  shapes : Array[@paint.Shape]
+  tint : Int64
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
 } derive(Eq, Debug)
@@ -85,6 +91,8 @@ pub(all) struct Drawn {
   ground : Int64
   ink : Int64
   words : String
+  shapes : Array[@paint.Shape]
+  tint : Int64
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
 } derive(Eq, Debug)
@@ -387,6 +395,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.ground = 0L
       n.look.ink = 0L
       n.look.words = ""
+      n.look.shapes = []
+      n.look.tint = 0L
       n.look.alpha = 1.0
       n.look.dx = 0.0
       n.look.dy = 0.0
@@ -424,7 +434,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0 },
+        look: { ground: 0L, ink: 0L, words: "", shapes: [], tint: 0L, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0 },
         parent,
         kids: [],
         owner: None,
@@ -1078,6 +1088,23 @@ pub fn View::over(self : View, on : Live[Bool]) -> View {
 /// Its ground (0: none): paint's.
 pub fn View::ground(self : View, ink : Live[Int64]) -> View {
   self.bind(5, ink, Paint, fn(k) { self.tree.nodes[self.at].look.ground = k })
+  self
+}
+
+///|
+/// The shapes it draws over its ground, in its own terms from its top left (@paint.Shape: outlines filled and stroked):
+/// paint's. What they come to as they are drawn is worked out once for the shapes said (their outlines), whatever colour
+/// they are drawn in (View::tint).
+pub fn View::shapes(self : View, shapes : Live[Array[@paint.Shape]]) -> View {
+  self.bind(13, shapes, Paint, fn(s) { self.tree.nodes[self.at].look.shapes = s })
+  self
+}
+
+///|
+/// The one colour its shapes are drawn in (0: each its own): paint's; a change of it draws them again in it, nothing of
+/// their outlines worked out again.
+pub fn View::tint(self : View, ink : Live[Int64]) -> View {
+  self.bind(14, ink, Paint, fn(k) { self.tree.nodes[self.at].look.tint = k })
   self
 }
 
@@ -2994,6 +3021,8 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     ground: n.look.ground,
     ink: n.look.ink,
     words: n.look.words,
+    shapes: n.look.shapes,
+    tint: n.look.tint,
     hosted: n.hosted,
   })
   self.changed.push(id)
@@ -3083,6 +3112,8 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double) -> Drawn {
     ground: c.ground,
     ink: c.ink,
     words: c.words,
+    shapes: c.shapes,
+    tint: c.tint,
     hosted: c.hosted,
   }
 }

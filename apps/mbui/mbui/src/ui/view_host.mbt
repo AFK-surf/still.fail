@@ -109,6 +109,9 @@ let view_blocks : Map[@view.NodeId, ViewBlock] = Map([])
 priv struct ViewBlock {
   inst : FixedArray[Double]
   cells : Array[(Double, Double)]
+  /// its shapes' pieces (scene.mbt's kind 12): put after the frame's as it is composed, its bands (kind 11) told
+  /// where they are then (their first piece counted from these)
+  segs : Array[Double]
 }
 
 ///|
@@ -221,6 +224,7 @@ fn view_forget() -> Unit {
   old_whole.val = true
   old_around.val = false
   view_blocks.clear()
+  view_shape_bands.clear()
   inst_owners.tree_words.clear()
   view_paint_work.made = 0
   view_paint_work.copied = 0
@@ -284,6 +288,7 @@ fn view_brought(tree : @view.Tree) -> Unit {
   // (what was let go lets go of what it drew)
   for id in tree.take_removed() {
     view_blocks.remove(id)
+    view_shape_bands.remove(id)
     inst_owners.tree_words.remove(id)
   }
   old_place(tree)
@@ -475,6 +480,36 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
     let tl = layout_text(c.words, view_words_size, 400, c.w + 0.5, true, line=view_line_h)
     self.emit_text(tl, 0.0, 0.0, c.ink, 1.0)
   }
+  // (its shapes, as bands worked out once for the outlines said (kept by them, whatever colour they are drawn in), in
+  // its tint where it has one; their pieces its own, counted from 0)
+  let seg_start = self.segs.length()
+  if c.shapes.length() > 0 {
+    let bands = match view_shape_bands.get(c.id) {
+      Some(b) if physical_equal(b.of, c.shapes) => b
+      _ => {
+        let b = shape_bands(c.shapes)
+        view_shape_bands[c.id] = b
+        b
+      }
+    }
+    let from = self.ninst
+    for k, s in c.shapes {
+      if s.fill != 0L {
+        self.emit_bands(0.0, 0.0, bands.fills[k], 0.0, if c.tint != 0L { c.tint } else { s.fill }, 1.0)
+      }
+      if s.stroke != 0L && s.width > 0.0 {
+        self.emit_bands(0.0, 0.0, bands.strokes[k], s.width / 2.0, if c.tint != 0L { c.tint } else { s.stroke }, 1.0)
+      }
+    }
+    let base = (seg_start / 4).to_double()
+    for i in from..<self.ninst {
+      if self.inst[i * inst_size + 5] == 11.0 {
+        self.inst[i * inst_size + 12] = self.inst[i * inst_size + 12] - base
+      }
+    }
+  }
+  let segs = self.segs[seg_start:].to_array()
+  self.segs.truncate(seg_start)
   inst_owners.painting = was
   inst_owners.tree_painting = was_tree
   let len = (self.ninst - start) * inst_size
@@ -488,7 +523,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   }
   inst_owners.tree_words[c.id] = c.words
   self.ninst = start
-  { inst, cells }
+  { inst, cells, segs }
 }
 
 ///|
@@ -497,6 +532,9 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
 fn Ctx::view_blit(self : Ctx, id : @view.NodeId, made : ViewBlock, x : Double, y : Double, a : Double) -> Unit {
   let block = made.inst
   let n = block.length() / inst_size
+  // (its shapes' pieces after the frame's: its bands told where they are now)
+  let seg_base = (self.segs.length() / 4).to_double()
+  self.segs.append(made.segs)
   while (self.ninst + n) * inst_size > self.inst.length() {
     self.grow()
   }
@@ -510,6 +548,9 @@ fn Ctx::view_blit(self : Ctx, id : @view.NodeId, made : ViewBlock, x : Double, y
     s[b + 1] = s[b + 1] + y
     s[b + 11] = s[b + 11] * a
     let kind = s[b + 5]
+    if kind == 11.0 {
+      s[b + 12] = s[b + 12] + seg_base
+    }
     // (a box's, a shadow's, frosted glass's border colour: faded with it; a glyph's 12-15 are where it is in the atlas)
     if kind == 0.0 || kind == 2.0 || kind == 5.0 {
       s[b + 15] = s[b + 15] * a
@@ -1469,3 +1510,9 @@ fn Ctx::back_open(self : Ctx) -> Bool {
   }
 }
 
+
+///|
+/// The bands each node's shapes came to (shape_bands), by node, for the shapes they are of: drawn again in another tint,
+/// the same; let go with the node.
+// kept across runs: let go as the nodes are, and with the tree (view_forget)
+let view_shape_bands : Map[@view.NodeId, ShapeBands] = Map([])
