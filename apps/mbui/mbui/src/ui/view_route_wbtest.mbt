@@ -48,3 +48,53 @@ test "window tree: shown and let go again and again: what each drew let go with 
   assert_false(seen.iter().any(fn(id) { view_blocks.contains(id) && view_tree().unwrap().drawn_of(id) is None }))
 }
 
+
+///|
+/// A part leaving for 300 as `on` stops, its own effect counting the runs of what reads `s`; a node pressed (at the
+/// top, 40 high) that sets `s`; the old view beneath.
+fn settling(on : @signals.Signal[Bool], s : @signals.Signal[Int], runs : Ref[Int]) -> Tester {
+  let view = fn(c : Ctx) { c.text("old", size=12.0) |> ignore }
+  let t = Tester::new(view)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(b) { b.height(Is(Some(40.0))).ground(Is(0x336699FFL)).on_press(fn() { s.set(s.get() + 1) }) |> ignore })
+    |> ignore
+    root.show(
+      fn() { on.get() },
+      fn(v) {
+        v.height(Is(Some(40.0))) |> ignore
+        @signals.effect(fn() {
+          s.get() |> ignore
+          runs.val = runs.val + 1
+        })
+        |> ignore
+      },
+      leave=300.0,
+    )
+    old(root, view).grow(Is(1.0)) |> ignore
+  })
+  t.draw()
+  t
+}
+
+///|
+test "window tree: a part whose leaving ended at 300, a press at 350 with no frame between: it runs nothing for it" {
+  let run = fn(frame_at_300 : Bool) {
+    let on = @signals.signal(true, same=fn(a, b) { a == b })
+    let s = @signals.signal(0)
+    let runs = Ref(0)
+    let t = settling(on, s, runs)
+    let t0 = t.fake.time
+    on.set(false)
+    if frame_at_300 {
+      t.frame_at(t0 + 300.0)
+    }
+    t.fake.time = t0 + 350.0
+    let before = runs.val
+    on_pointer(0, 100.0, 20.0, 0)
+    on_pointer(2, 100.0, 20.0, 0)
+    (s.get(), runs.val - before)
+  }
+  assert_eq(run(false), (1, 0))
+  assert_eq(run(true), (1, 0))
+}

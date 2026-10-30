@@ -94,10 +94,14 @@ test "window tree: one old view's words changed: it alone built again, the other
 }
 
 ///|
-test "window tree: a press on the second old view is its own" {
+test "window tree: a press on the second old view is its own, the first not built for it" {
   let w = islands()
+  let (a0, b0) = (w.builds_a.val, w.builds_b.val)
   tree_tap(w.t, 300.0, 400.0)
   assert_eq(w.taps_b.val, 1)
+  // (the press built the one it went to, the other kept as it was)
+  assert_true(w.builds_b.val > b0)
+  assert_eq(w.builds_a.val, a0)
 }
 
 ///|
@@ -105,9 +109,9 @@ test "window tree: one old view let go: what it read no longer followed, the oth
   let w = islands()
   assert_true(w.a.watched())
   w.on_a.set(false)
-  w.t.drawn_now()
-  w.t.drawn_now()
+  // (let go with the change that let its node go: no frame needed)
   assert_false(w.a.watched())
+  w.t.drawn_now()
   let built = w.builds_a.val
   w.a.set("甲三")
   w.t.drawn_now()

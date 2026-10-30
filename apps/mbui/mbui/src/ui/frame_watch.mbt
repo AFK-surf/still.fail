@@ -774,6 +774,8 @@ fn paint_frame(c : Ctx, t : Double) -> Double {
 /// says, one painted alone or of the looks alone is built whole after it as well and the two compared, the test failing
 /// where they differ. When it began.
 fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
+  // (where the hand's inputs since the frame before went, among the old views: view_host.mbt)
+  let went_to = view_input_taken()
   let watch = frame_watch_of()
   let paint = paint_watch_of()
   let said = watch_said.val
@@ -853,6 +855,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     nodes_run.told = false
     nodes_run.fresh = why != "" || evented
     nodes_run.evented = evented || outside || test_step_came.val
+    // (the hand's alone, gone to one old view: that one's part alone built for it, view_host.mbt)
+    nodes_run.evented_only = if outside || test_step_came.val { -1 } else { went_to }
     test_step_came.val = false
     nodes_run.whole = bench_whole.val && bench_measuring.val
     return watch.read(fn() { frame_body(c, w, h, scale, t) })

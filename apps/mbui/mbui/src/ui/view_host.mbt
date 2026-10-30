@@ -31,6 +31,9 @@ priv struct OldIsland {
   key : String
   build : (Ctx) -> Unit
   made : Made
+  /// its part among the old frame's kept parts (Ctx::part_nodes: what it read, its nodes as last built), by id, once
+  /// built (-1: not yet)
+  mut part : Int
 }
 
 ///|
@@ -61,7 +64,8 @@ let old_boxes : Map[@view.NodeId, Int] = Map([])
 /// Where a press held went down: a node's, the old view's, or nothing's.
 priv enum ViewHeld {
   Node(@view.NodeId)
-  Old
+  /// the old view's (its part, -1: the old frame's whole)
+  Old(Int)
   Nowhere
 }
 
@@ -142,6 +146,7 @@ fn view_forget() -> Unit {
   }
   view_app.val = None
   view_held.val = None
+  view_input_to.val = -3
   old_islands.clear()
   old_placed.clear()
   old_boxes.clear()
@@ -216,7 +221,11 @@ fn old_frame(c : Ctx) -> Unit {
   for p in old_placed {
     match old_islands.iter().find_first(fn(o) { o.id == p.0 }) {
       Some(o) => {
-        let i = c.box(left=p.1, top=p.2, w=Px(p.3), h=Px(p.4), clip=true, fn() { c.made(o.key, fn() { o.made }) })
+        let i = c.box(left=p.1, top=p.2, w=Px(p.3), h=Px(p.4), clip=true, fn() {
+          // (its part's id, as made_put names it here: what is let go with it, what an input to it builds)
+          o.part = c.id(o.key)
+          c.made(o.key, fn() { o.made })
+        })
         old_boxes[o.id] = i
       }
       None => ()
@@ -339,6 +348,8 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     Some(t) => t
     None => return false
   }
+  // (what had ended by its moment settled first: before any press of the tree's is run)
+  tree.settle(h_event_time())
   match (kind, view_held.val) {
     (0, _) =>
       match tree.target_at(x, y) {
@@ -347,14 +358,18 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           view_held.val = Some(if button == 2 { Nowhere } else { Node(id) })
           true
         }
-        Hosted(_) => {
-          view_held.val = Some(Old)
+        Hosted(id) => {
+          let part = if old_whole.val { -1 } else { old_part_of(id) }
+          view_held.val = Some(Old(part))
+          view_input_went(part)
           false
         }
-        // (nothing of the tree's there: the old view's where it is the whole window's (what it draws past the window, a
-        // list scrolled on below it, is its own), else nobody's)
+        // (nothing of the tree's there: where the one old view is the whole window, its own (the old root's, as it was
+        // before the tree: what it draws past the window, a list scrolled on below it, is its own: a way there, no rule
+        // of the tree's); else nobody's)
         Nothing if old_whole.val => {
-          view_held.val = Some(Old)
+          view_held.val = Some(Old(-1))
+          view_input_went(-1)
           false
         }
         Nothing => {
@@ -362,12 +377,23 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           true
         }
       }
-    (1, Some(Old)) => false
+    (1, Some(Old(part))) => {
+      view_input_went(part)
+      false
+    }
     (1, Some(_)) => true
     (1, None) =>
       match tree.target_at(x, y) {
-        Hosted(_) => false
-        Nothing => !old_whole.val
+        Hosted(id) => {
+          view_input_went(if old_whole.val { -1 } else { old_part_of(id) })
+          false
+        }
+        Nothing => {
+          if old_whole.val {
+            view_input_went(-1)
+          }
+          !old_whole.val
+        }
         Pressed(_) => true
       }
     (2, Some(Node(id))) => {
@@ -378,15 +404,19 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       h_frame_owed()
       true
     }
-    (2 | 3, Some(Old)) => {
+    (2 | 3, Some(Old(part))) => {
       view_held.val = None
+      view_input_went(part)
       false
     }
     (2 | 3, Some(_)) => {
       view_held.val = None
       true
     }
-    _ => false
+    _ => {
+      view_input_went(-1)
+      false
+    }
   }
 }
 
@@ -421,7 +451,7 @@ pub fn old(v : @view.View, build : (Ctx) -> Unit) -> @view.View {
     let key = "old island \{old_made.val}"
     old_made.val = old_made.val + 1
     let id = n.id()
-    old_islands.push({ id, key, build, made: made_island(key, fn() { "" }, build) })
+    old_islands.push({ id, key, build, made: made_island(key, fn() { "" }, build), part: -1 })
     n.owns(fn() {
       match old_islands.search_by(fn(o) { o.id == id }) {
         Some(i) => {
@@ -433,10 +463,62 @@ pub fn old(v : @view.View, build : (Ctx) -> Unit) -> @view.View {
             made_roots.remove(k)
           }
           o.made.let_go()
+          // (its part kept among the old frame's let go now, what it read followed no more: not left for a build to
+          // find it gone)
+          if o.part >= 0 {
+            match kept_nodes.get((o.part, -1)) {
+              Some(rn) => rn.watch.stop()
+              None => ()
+            }
+            kept_nodes.remove((o.part, -1))
+          }
         }
         None => ()
       }
     })
     |> ignore
   })
+}
+
+///|
+/// Where the hand's inputs since the frame before went among the old views: none yet (-3), one old view's part (its
+/// id), or more than one, or to what is not one's (-1).
+// kept across runs: put back as a run begins (view_forget)
+let view_input_to : Ref[Int] = Ref(-3)
+
+///|
+/// An input went to the old view whose part is `part` (-1: to all of them, or to what is not one's).
+fn view_input_went(part : Int) -> Unit {
+  view_input_to.val = if view_input_to.val == -3 || view_input_to.val == part { part } else { -1 }
+}
+
+///|
+/// Where the inputs since the frame before went (NodesRun's evented_only): -1 where they went to all, or none came.
+fn view_input_taken() -> Int {
+  let v = view_input_to.val
+  view_input_to.val = -3
+  if v == -3 {
+    -1
+  } else {
+    v
+  }
+}
+
+///|
+/// The old view in node `id`'s part (-1: none known: all of them).
+fn old_part_of(id : @view.NodeId) -> Int {
+  match old_islands.iter().find_first(fn(o) { o.id == id }) {
+    Some(o) => o.part
+    None => -1
+  }
+}
+
+///|
+/// An event from outside about to be handled, at `at` (its own time): what of the tree had ended by then settled first
+/// (a node whose leaving was over let go, what it followed no more), whatever frame comes after.
+fn view_settle(at : Double) -> Unit {
+  match view_app.val {
+    Some(t) => t.settle(at)
+    None => ()
+  }
 }

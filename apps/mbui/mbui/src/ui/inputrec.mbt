@@ -30,6 +30,8 @@ let inputs_taken : Ref[Bool] = Ref::new(false)
 
 ///|
 fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -> Unit {
+  // (what had ended by its moment settled first, view_host.mbt)
+  view_settle(t)
   input_came()
   // (a pointer moved, gone out of the window, a wheel turned: the hand on mbui's own, what it is over; else the app's
   // to take, an event from outside: kept_part.mbt)
@@ -41,7 +43,17 @@ fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -
     inputs_taken.val = true
   }
   if !(moved || wheel) {
-    outside_came()
+    // (a press is the hand's: what it changes is built again, and what is kept is built for it where it went (the hand's
+    // events, frame_watch.mbt; an old view's alone where it went to one: view_host.mbt), not as from outside)
+    if kind == "pointer" {
+      outside_counted()
+    } else {
+      outside_came()
+    }
+  }
+  // (what is no pointer's goes to whatever old view takes it: all of them, view_host.mbt)
+  if kind != "pointer" {
+    view_input_went(-1)
   }
   input_taped(kind, t, args, text?)
 }

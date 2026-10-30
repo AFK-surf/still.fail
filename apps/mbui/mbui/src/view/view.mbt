@@ -1236,6 +1236,13 @@ pub fn Tree::wake(self : Tree) -> Double? {
 }
 
 ///|
+/// An event from outside about to be handled at `at` (its own time): what had ended by then settled first (a node
+/// whose leaving was over let go, what it followed no more; one back, here), whatever frame comes after.
+pub fn Tree::settle(self : Tree, at : Double) -> Unit {
+  self.left(at)
+}
+
+///|
 /// By `now`: the nodes whose leaving is over let go, taken out of what holds them; those back, here.
 fn Tree::left(self : Tree, now : Double) -> Unit {
   if self.leaving.is_empty() {
