@@ -2,6 +2,7 @@ package dev.mbui;
 
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
 import android.content.ContentResolver;
 import android.content.Intent;
 import android.database.Cursor;
@@ -22,8 +23,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Files picked through the system's own pickers (src/hostapi/pick.mbt, as still.fail's Android app's Attach.kt has
  * them): the photo picker on photos and videos (ACTION_PICK_IMAGES where there is one, else the documents UI on
  * images and videos), the documents UI on any file (ACTION_OPEN_DOCUMENT), a photo taken now (ACTION_IMAGE_CAPTURE's
- * picture, as TakePicturePreview). Read off the main thread once picked; MoonBit asks after them each frame
- * (android_host.c). One bigger than WHOLE (a video) is not read whole but held by its address (Held): the app's core
+ * photo whole, written into the cache's camera/; its small preview where a camera answers only that). Read off the
+ * main thread once picked; MoonBit asks after them each frame (android_host.c). One bigger than WHOLE (a video) is not read whole but held by its address (Held): the app's core
  * reads it a part at a time as it goes up ({@link #read}, {@link #hash}, {@link #release}: CoreHost's picked.*, as
  * still.fail's Android app's PickedFiles.kt).
  */
@@ -39,6 +40,8 @@ final class Picks {
         final List<String> infos = new ArrayList<>();
         /** a file bigger than WHOLE may be held (the asker sends it up through the core), else each is read whole */
         boolean hold;
+        /** a photo taken now: where the camera writes it whole (the cache's camera/), else only its small preview */
+        java.io.File photo;
     }
 
     /** A file held by its address, too big to be read whole: its size, read a part at a time. */
@@ -118,12 +121,37 @@ final class Picks {
             i = documents("*/*");
         } else {
             i = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            // the photo whole, written where we give it (without EXTRA_OUTPUT the camera answers a preview of some
+            // 200 pixels across)
+            Ask k = asks.get(id);
+            Uri out = k != null ? photoFile(a, k) : null;
+            if (out != null) {
+                i.putExtra(MediaStore.EXTRA_OUTPUT, out);
+                i.setClipData(ClipData.newRawUri("", out));
+                i.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }
         }
         try {
             a.startActivityForResult(i, REQUEST + id);
         } catch (ActivityNotFoundException | NullPointerException e) {
             Host.log("pick: no picker for " + i.getAction() + ": " + e);
             done(id, -1);
+        }
+    }
+
+    /** An empty file of the cache's camera/ for the camera to write a photo into, by its address (Shares.Files). */
+    private static Uri photoFile(Activity a, Ask k) {
+        try {
+            java.io.File dir = new java.io.File(a.getCacheDir(), Shares.CAMERA);
+            if (!dir.isDirectory() && !dir.mkdirs()) return null;
+            java.io.File f = new java.io.File(dir, "photo-" + System.currentTimeMillis() + ".jpg");
+            if (!f.exists() && !f.createNewFile()) return null;
+            k.photo = f;
+            return new Uri.Builder().scheme("content").authority(a.getPackageName() + ".shared")
+                    .appendPath(Shares.CAMERA).appendPath(f.getName()).build();
+        } catch (java.io.IOException e) {
+            Host.log("pick: " + e);
+            return null;
         }
     }
 
@@ -146,13 +174,36 @@ final class Picks {
         int id = request - REQUEST;
         Ask k = asks.get(id);
         if (k == null) return false;
-        if (result != Activity.RESULT_OK || data == null) {
+        java.io.File taken = k.photo;
+        k.photo = null;
+        if (result != Activity.RESULT_OK || (data == null && taken == null)) {
+            if (taken != null) taken.delete();
             done(id, -1);
             return true;
         }
         ContentResolver cr = Host.activity.getContentResolver();
         new Thread(() -> {
             List<Uri> uris = new ArrayList<>();
+            if (taken != null && taken.length() > 0) {
+                // the camera wrote the photo whole where we asked (with EXTRA_OUTPUT it answers no data)
+                try (InputStream in = new java.io.FileInputStream(taken)) {
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    byte[] buf = new byte[1 << 16];
+                    for (int r; (r = in.read(buf)) > 0; ) out.write(buf, 0, r);
+                    synchronized (k) {
+                        k.names.add(taken.getName());
+                        k.bytes.add(out.toByteArray());
+                        k.infos.add("");
+                    }
+                } catch (Exception e) {
+                    Host.log("pick: " + taken + ": " + e);
+                }
+            }
+            if (taken != null) taken.delete();
+            if (!k.names.isEmpty() || data == null) {
+                done(id, k.names.isEmpty() ? -1 : 1);
+                return;
+            }
             if (data.getClipData() != null) {
                 for (int n = 0; n < data.getClipData().getItemCount(); n++) uris.add(data.getClipData().getItemAt(n).getUri());
             } else if (data.getData() != null) {
