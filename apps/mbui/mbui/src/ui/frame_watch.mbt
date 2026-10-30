@@ -848,6 +848,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     layout_coming.val = true
     nodes_run.told = false
     nodes_run.fresh = why != "" || evented
+    nodes_run.evented = evented || test_step_came.val
+    test_step_came.val = false
     nodes_run.whole = bench_whole.val && bench_measuring.val
     return watch.read(fn() { frame_body(c, w, h, scale, t) })
   }
@@ -1071,7 +1073,15 @@ pub fn Tester::painted_why(self : Tester) -> String {
 /// shows at the next frame, which is built whole; no frame is asked for by it, what changed it draws its own.
 fn test_stepped() -> Unit {
   frame_watch_of().touch()
+  test_step_came.val = true
 }
+
+///|
+/// A step of the test's came since the frame before (test_stepped): what the test changed of what is no signal (a
+/// made-up core's state, a page opened by hand) is taken as an event from outside is, parts kept whatever else the frame
+/// built anew built anew for it too (NodesRun's `evented`).
+// kept across runs: set by each step of a test's, taken as the frame decides what it does
+let test_step_came : Ref[Bool] = Ref(false)
 
 ///|
 /// Whether two numbers of an instance draw the same: equal, both none (NaN), or apart by no more than the rounding of

@@ -101,6 +101,10 @@ let spare_nodes : Array[Node] = []
 /// kept at all (`on`: a Tester's frame built whole after one that kept rows keeps none).
 priv struct NodesRun {
   mut fresh : Bool
+  /// the hand's discrete events came for this frame (a press, a key): what reads them reads them as it is built, and
+  /// not all of it reads them as signals yet; a part kept whatever else the frame built anew (`own`) is built anew for
+  /// them all the same
+  mut evented : Bool
   /// built keeping none at all (a run's start, a Tester's build to compare with): a list whose rows show only what
   /// they read builds them anew too
   mut whole : Bool
@@ -127,6 +131,7 @@ priv struct NodesRun {
 // kept across runs: put back as a run begins (nodes_forget), its counts as each frame does
 let nodes_run : NodesRun = {
   fresh: true,
+  evented: false,
   whole: true,
   part_fresh: false,
   told: false,
@@ -198,7 +203,7 @@ fn Ctx::rows_detach(self : Ctx) -> Unit {
     // it in the frame: left where they were, a node more or less built before them (a bar's in a motion) put another
     // node in each of their places, all of them laid out anew; a part's left there, for it to make again in its place.
     // But a row that shows only what it read, unless none is kept at all)
-    if nodes_run.whole || (nodes_run.fresh && !rn.reads_all && !rn.own) {
+    if nodes_run.whole || (nodes_run.fresh && !rn.reads_all && (!rn.own || nodes_run.evented)) {
       if rn.item >= 0 {
         self.row_nodes_out(rn)
       }
@@ -783,7 +788,7 @@ fn Ctx::part_nodes(
   // (`own`: what puts it here is made once (made.mbt's made_island), so what it is built from is its key and what it
   // read alone, whatever else the frame built anew)
   let may_keep = if own {
-    nodes_run.on && !nodes_run.whole && !inst_owners.on && !self.lit_every
+    nodes_run.on && !nodes_run.whole && !nodes_run.evented && !inst_owners.on && !self.lit_every
   } else {
     self.nodes_keep()
   }
@@ -814,7 +819,7 @@ fn Ctx::part_nodes(
   }
   // (built for what it read, or as it is new or built elsewhere: what it builds its lists from may be otherwise, their
   // rows built anew; built only as it may not be kept, nothing it read changed: its lists' rows kept)
-  let fresh = (nodes_run.fresh && !own) ||
+  let fresh = (nodes_run.fresh && (!own || nodes_run.evented)) ||
     rn.n == 0 ||
     rn.watch.is_stale() ||
     rn.key != key ||
@@ -987,8 +992,20 @@ fn Ctx::rows_check_end(self : Ctx) -> Bool {
       }
     }
   }
+  // (every line the two part at, the first 40, each way: what was kept that building anew did not make)
+  let parted = StringBuilder()
+  let mut shown = 0
+  for j in 0..<imax(was.lines.length(), now.length()) {
+    let a = line(was.lines, j)
+    let b = line(now, j)
+    if a != b && shown < 40 {
+      shown += 1
+      parted.write_string("\nPARTED kept  " + a)
+      parted.write_string("\nPARTED built " + b)
+    }
+  }
   looks_fail(
-    "the frame at \{self.clock.to_int()} ms, built keeping \{was.rows.length()} rows, (\{built_why.val}), parts from it built keeping none at line \{at} (\{holder}): kept \{line(was.lines, at)} / \{line(was.lines, at + 1)}; built \{line(now, at)} / \{line(now, at + 1)}",
+    "the frame at \{self.clock.to_int()} ms, built keeping \{was.rows.length()} rows, (\{built_why.val}), parts from it built keeping none at line \{at} (\{holder}): kept \{line(was.lines, at)} / \{line(was.lines, at + 1)}; built \{line(now, at)} / \{line(now, at + 1)}" + parted.to_string(),
   )
   false
 }
@@ -1015,7 +1032,15 @@ fn lines_apart(a : Array[String], b : Array[String]) -> Int {
 /// and hidden from that, the corners worked out once laid out, the words kept, what asks to be lit).
 fn Ctx::frame_said_lines(self : Ctx) -> Array[String] {
   let out = []
-  for i in 0..<self.count {
+  // (in the tree's order, each node by where it is in it: what a frame is is its tree, not where in the frame's nodes
+  // each was made, which a part kept as its nodes and the same built anew may make in another order)
+  let order = self.tree_order()
+  let at = Array::make(self.count, -1)
+  for k, i in order {
+    at[i] = k
+  }
+  let pos = fn(i : Int) { if i >= 0 && i < at.length() { at[i] } else { i } }
+  for i in order {
     let nd = self.nodes[i]
     let drawn = match self.drawn_entry(i) {
       Some(e) =>
@@ -1040,7 +1065,7 @@ fn Ctx::frame_said_lines(self : Ctx) -> Array[String] {
       })
     }
     out.push(
-      "\{i} kind \{nd.kind} id \{nd.id} parent \{nd.parent} first \{nd.first} next \{nd.next} item \{nd.item} at \{said_at(nd.x)},\{said_at(nd.y)} \{said_at(nd.fw)}×\{said_at(nd.fh)} tx \{nd.tx},\{nd.ty} moved \{nd.moved_x},\{nd.moved_y} bg \{nd.bg} alpha \{nd.opacity} radius \{nd.radius} \{nd.radii} border \{nd.border_w} \{nd.border_c} shadow \{nd.shadow} \{nd.shadow_c} clip \{nd.clip} hit \{nd.hit} points \{nd.points} layer \{nd.layer} \{nd.portal} \{nd.portal_id} size \{size_said(nd.w)} \{size_said(nd.h)} placed \{nd.at_l},\{nd.at_t},\{nd.at_r},\{nd.at_b}" +
+      "\{pos(i)} kind \{nd.kind} id \{nd.id} parent \{pos(nd.parent)} first \{pos(nd.first)} next \{pos(nd.next)} item \{nd.item} at \{said_at(nd.x)},\{said_at(nd.y)} \{said_at(nd.fw)}×\{said_at(nd.fh)} tx \{nd.tx},\{nd.ty} moved \{nd.moved_x},\{nd.moved_y} bg \{nd.bg} alpha \{nd.opacity} radius \{nd.radius} \{nd.radii} border \{nd.border_w} \{nd.border_c} shadow \{nd.shadow} \{nd.shadow_c} clip \{nd.clip} hit \{nd.hit} points \{nd.points} layer \{nd.layer} \{nd.portal} \{nd.portal_id} size \{size_said(nd.w)} \{size_said(nd.h)} placed \{nd.at_l},\{nd.at_t},\{nd.at_r},\{nd.at_b}" +
       words +
       drawn,
     )
@@ -1052,11 +1077,15 @@ fn Ctx::frame_said_lines(self : Ctx) -> Array[String] {
   for l in sb.to_string().split("\n") {
     out.push(l.to_string())
   }
-  out.push(
-    "sems " +
-    self.sems.map(fn(s) { "\{s.node} \{s.id} \{s.label} \{s.value} \{s.hidden}" }).join("; "),
-  )
-  out.push("inners \{self.inners} \{self.inners_or} \{self.arounds}")
+  let sems = self.sems.map(fn(s) { (pos(s.node), "\{s.id} \{s.label} \{s.value} \{s.hidden}") })
+  sems.sort_by(fn(a, b) { a.0.compare(b.0) })
+  out.push("sems " + sems.map(fn(s) { "\{s.0} \{s.1}" }).join("; "))
+  let corners = fn(a : Array[Int]) {
+    let t = a.map(pos)
+    t.sort()
+    t
+  }
+  out.push("inners \{corners(self.inners)} \{corners(self.inners_or)} \{corners(self.arounds)}")
   let words = []
   words_kept.each(fn(k, w) { words.push("\{k}: \{w.text} \{w.pieces.map(fn(p) { (p.x, p.y, p.w, p.h) })}") })
   words.sort()
