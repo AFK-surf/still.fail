@@ -10,7 +10,6 @@ fn init {
     ("src/sfapp/decide_wbtest.mbt", 1),
     ("src/sfapp/desk_service_wbtest.mbt", 1),
     ("src/sfapp/drive_wbtest.mbt", 1),
-    ("src/sfapp/image_corners_chat_wbtest.mbt", 3),
     ("src/sfapp/quote_image_wbtest.mbt", 1),
     ("src/sfapp/settings_wbtest.mbt", 1),
     ("src/sfapp/tape.mbt", 8),

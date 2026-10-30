@@ -138,7 +138,8 @@ struct ListState {
   mut sizes_end : Double
   /// rows short of its view stand at its end (Ctx::list's `from_end`)
   mut from_end : Bool
-  /// when the app last put it elsewhere at once (scrolled to a row, to its end): no row's motion (rows_steady.mbt)
+  /// when the app or the hand last put it elsewhere at once (scrolled to a row, to its end, by a trackpad or a key):
+  /// no row's motion (rows_steady.mbt)
   mut put_at : Double
   /// how tall each row was last laid out, by its key (list_size.mbt)
   shown_h : Map[String, Double]

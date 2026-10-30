@@ -109,6 +109,8 @@ fn Ctx::scroll_list(self : Ctx, id : Int, d : Double) -> Unit {
   match self.lists.get(id) {
     Some(st) => {
       st.pending = st.pending + d
+      // (scrolled at once by the hand: a trackpad's, a key's page; rows_steady's)
+      st.put_at = self.clock
       self.scrolled(st)
       st.glide = false
       st.follow_item = -1
