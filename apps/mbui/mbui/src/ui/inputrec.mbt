@@ -43,6 +43,13 @@ fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -
   if !(moved || wheel) {
     outside_came()
   }
+  input_taped(kind, t, args, text?)
+}
+
+///|
+/// An input written on the tape being made (taping), nothing else: one the old view takes none of (a press on the tree
+/// made once, view_host.mbt) is replayed all the same.
+fn input_taped(kind : String, t : Double, args : Array[Double], text? : String) -> Unit {
   if taping() {
     let m : Map[String, Json] = {
       "k": Json::string(kind),

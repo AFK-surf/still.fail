@@ -1,0 +1,178 @@
+// The window as a tree made once (view_host.mbt): a bar before the old view's island (drawn under it), the island given
+// a box of its own drawn off where it is laid out, a badge after it drawn over the island. The old view is built for
+// the island's room and laid out, painted and pressed where the island is; what changes in the tree is drawn by its
+// binding, the old view built no more for it; a press is for what the tree finds at its point.
+
+///|
+let island_blue : Int64 = 0x3366CCFFL
+
+///|
+let island_red : Int64 = 0xCC3333FFL
+
+///|
+let island_green : Int64 = 0x33AA55FFL
+
+///|
+/// What the window's parts counted: the old view's builds and presses, the bar's and the badge's presses.
+priv struct Island {
+  t : Tester
+  builds : Ref[Int]
+  old_taps : Ref[Int]
+  bar_taps : Ref[Int]
+  badge_taps : Ref[Int]
+}
+
+///|
+/// The old view (a green box filling its room, pressed: `old_taps`, its words "old"); with `tree`, the window made once
+/// around it: a bar 40 high (its words `label`), under it the island 200 by 300 drawn off (30, 20), after it a badge 60
+/// by 30 drawn off (40, -200), over the island.
+fn island(label : @signals.Signal[String], tree? : Bool = true) -> Island {
+  let builds = Ref(0)
+  let old_taps = Ref(0)
+  let bar_taps = Ref(0)
+  let badge_taps = Ref(0)
+  let t = Tester::new(fn(c) {
+    builds.val = builds.val + 1
+    let id = c.id("old")
+    if c.clicked(id) {
+      old_taps.val = old_taps.val + 1
+    }
+    c.box(w=Fill(1.0), h=Fill(1.0), bg=island_green, id~, fn() {
+      // (the old way: the bar's words read as the old view is built)
+      if !tree {
+        c.text(label.get(), size=15.0) |> ignore
+      }
+      c.text("old", size=12.0) |> ignore
+    })
+    |> ignore
+  })
+  if tree {
+    set_view_app(fn(root) {
+      root
+      .box(fn(b) {
+        b
+        .height(Is(Some(40.0)))
+        .ground(Is(island_blue))
+        .words(By(fn() { label.get() }))
+        .on_press(fn() { bar_taps.val = bar_taps.val + 1 })
+        |> ignore
+      })
+      |> ignore
+      root.hosted(make=fn(v) {
+        v.width(Is(Some(200.0))).height(Is(Some(300.0))).offset(Is((30.0, 20.0))) |> ignore
+      })
+      |> ignore
+      root.box(fn(b) {
+        b
+        .width(Is(Some(60.0)))
+        .height(Is(Some(30.0)))
+        .offset(Is((40.0, -200.0)))
+        .ground(Is(island_red))
+        .on_press(fn() { badge_taps.val = badge_taps.val + 1 })
+        |> ignore
+      })
+      |> ignore
+    })
+  }
+  t.draw()
+  // (a frame more: the old view built once more where the build before laid it out otherwise (its room given by
+  // the tree from the second frame), frame_watch.mbt: settled)
+  t.drawn_now()
+  { t, builds, old_taps, bar_taps, badge_taps }
+}
+
+///|
+/// A tap at (x, y), drawn as a host draws what it asks (not Tester::tap's draw, which counts as a change of the
+/// test's: every old view built again for it).
+fn tree_tap(t : Tester, x : Double, y : Double) -> Unit {
+  finger(0, x, y)
+  finger(2, x, y)
+  t.drawn_now()
+}
+
+///|
+/// Where in the frame's instances the rectangle `r` is drawn (-1: not drawn).
+fn drawn_index(t : Tester, r : (Double, Double, Double, Double, Int64)) -> Int {
+  match t.drawn_rects().search(r) {
+    Some(i) => i
+    None => -1
+  }
+}
+
+///|
+test "window tree: words of the old view changed: the whole old view built again (what the tree made once does without)" {
+  let label = @signals.signal("first")
+  let w = island(label, tree=false)
+  w.t.check_looks(false)
+  let was = w.builds.val
+  label.set("second")
+  w.t.drawn_now()
+  assert_eq(w.builds.val, was + 1)
+  assert_true(w.t.drawn_text().contains("second"))
+}
+
+///|
+test "window tree: the old view in its island: laid out and cut there, the bar drawn under it and the badge over it" {
+  let w = island(@signals.signal("bar"))
+  let bar = drawn_index(w.t, (0.0, 0.0, 390.0, 40.0, island_blue))
+  let old = drawn_index(w.t, (30.0, 60.0, 200.0, 300.0, island_green))
+  let badge = drawn_index(w.t, (40.0, 140.0, 60.0, 30.0, island_red))
+  assert_true(bar >= 0 && old >= 0 && badge >= 0, msg="\{w.t.drawn_rects()}")
+  assert_true(bar < old && old < badge, msg="\{(bar, old, badge)}")
+  let (x, y, _, _) = w.t.rect_of("old").unwrap()
+  assert_true(x >= 30.0 && y >= 60.0 && x < 230.0 && y < 360.0, msg="\{(x, y)}")
+}
+
+///|
+test "window tree: a press goes where the tree finds it: the badge over the island, the old view in it, nothing outside it" {
+  let w = island(@signals.signal("bar"))
+  // (each frame not built drawn as it is, not built whole once more to compare: what is built counted)
+  w.t.check_looks(false)
+  tree_tap(w.t, 100.0, 300.0)
+  assert_eq((w.old_taps.val, w.bar_taps.val, w.badge_taps.val), (1, 0, 0))
+  let built = w.builds.val
+  tree_tap(w.t, 50.0, 150.0)
+  assert_eq((w.old_taps.val, w.bar_taps.val, w.badge_taps.val), (1, 0, 1))
+  tree_tap(w.t, 100.0, 20.0)
+  assert_eq((w.old_taps.val, w.bar_taps.val, w.badge_taps.val), (1, 1, 1))
+  // (right of the island, under nothing that is pressed: nobody's)
+  tree_tap(w.t, 300.0, 300.0)
+  assert_eq((w.old_taps.val, w.bar_taps.val, w.badge_taps.val), (1, 1, 1))
+  // the old view saw none of them: never built for them
+  assert_eq(w.builds.val, built, msg=w.t.built_why())
+}
+
+///|
+test "window tree: the bar's words changed: its instances alone made again, the old view not built" {
+  let label = @signals.signal("first")
+  let w = island(label)
+  let tree = view_tree().unwrap()
+  w.t.check_looks(false)
+  let was = w.builds.val
+  let work = tree.work()
+  let painted = view_painted()
+  label.set("second")
+  w.t.drawn_now()
+  assert_eq(w.builds.val, was, msg=w.t.built_why())
+  assert_eq(tree.work().bound - work.bound, 1)
+  // (laid out again: its size given both ways, its words not measured for it)
+  assert_eq(tree.work().computes - work.computes, 1)
+  // (the bar's instances made, the badge's copied as kept)
+  assert_eq(view_painted().made - painted.made, 1)
+  let bar = tree.root().kids()[0]
+  assert_eq(tree.drawn_of(bar.id()).unwrap().words, "second")
+  // (its words drawn in it, the old view's still in its island)
+  assert_true(w.t.drawn_glyphs().iter().any(fn(g) { g.1 < 40.0 }))
+  assert_true(w.t.drawn_text().contains("old"))
+  assert_true(drawn_index(w.t, (40.0, 140.0, 60.0, 30.0, island_red)) >= 0)
+}
+
+///|
+test "window tree: a run begun anew: the window's tree let go, its signals read by nothing" {
+  let label = @signals.signal("bar")
+  island(label) |> ignore
+  assert_true(label.watched())
+  Tester::new(fn(c) { c.text("next", size=12.0) |> ignore }) |> ignore
+  assert_true(view_tree() is None)
+  assert_false(label.watched())
+}

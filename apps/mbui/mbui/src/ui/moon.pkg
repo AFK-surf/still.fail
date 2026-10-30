@@ -6,6 +6,7 @@ import {
   "mbui/flex",
   "mbui/effect",
   "mbui/signals",
+  "mbui/view",
   "moonbitlang/core/math",
   "mbui/dmath",
   "mbui/damage",

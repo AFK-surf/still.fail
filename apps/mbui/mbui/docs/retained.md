@@ -135,6 +135,51 @@ as it is built" (`Ctx::rect_of` in a build, the motion package's records found b
 place, read at the cause's moment; the motion package's per-frame records by key (`mo.recs`, measures) go with the
 frames that built everything again.
 
+## What it must be, and how that is shown
+
+What the others do, read for this (2026-10-30, the review of src/view: Solid's owners, Vue's effect scopes and Vapor's
+render effects, Slint's pure properties, Compose's phases and AnimatedVisibility, Flutter's layout and layer updates,
+Qt Quick's renderer), and what it comes to here: fine-grained bindings of properties, a lifetime owned apart from what
+is tracked, and layout, paint and composition kept by node. Neither another engine nor another signals.
+
+1. **What is tracked and what is owned are two things.** A node's making runs in a scope of its own (Solid's Owner apart
+   from its Listener: `untrack` stops following reads, never owning): every effect, computed, timer and native
+   resource made there is let go with the node, its cleanups run once. A handle on a node let go, a callback come late,
+   does nothing (its making is checked where every use of a handle begins). The signals' algorithm stays as it is; what
+   is added is the owning.
+2. **A binding works its value out and nothing else.** Written in a batch by one event, marked stale, its value worked
+   out as the frame takes it (Vapor's render effects queued, Slint's lazy pure properties); a value set twice is set
+   once; a property given once (`Is`) makes no effect. A property has one binding at a time (another lets the one before
+   go); its phase is the property's (width, words, ground, a transform), not the caller's. No `set` does layout,
+   shaping or the host's work where it is set.
+3. **What is done again is what the change is.** Structure, measure and place, what is drawn, how it is composed (a
+   transform, an opacity, a cut), what is read out: each its own. A colour lays nothing out; a move measures no words; a
+   node moved keeps what it holds where they are in it. Layout goes up to the first box that does not read what it
+   holds (a size given is not that by itself: a holder may read its intrinsic size or baseline). What is laid out tells
+   only what reads it (a popover's place, a list's window), never a whole page made again.
+4. **The scene is kept, not the frame.** Each node's drawing kept where it is in what holds it, in order; what composes
+   it (transform, opacity, cut) kept on the node that does; the host given the records and composition that changed.
+   A host taking the whole frame each time (gles_render.h's glBufferData of all of it, apple_render.m's upload) is
+   given it by an adapter said to be one: it is no "only what changed", and no step is done because of it. A test may
+   unfold the scene into whole `Drawn` records; nothing inside works on that unfolding.
+5. **Composed is not a texture each.** Overlap, rounded cuts, glass and opacity mean what they mean now: an opacity on
+   a group composed and then faded is not each of its parts faded, and is not swapped for it. Drawing and hit testing
+   share one transform and cut; a holder moved does not write its subtree's places in the window again (they are worked
+   out as they are visited).
+6. **Coming, there, going, gone.** `show`, `each` and the stacks own a node while it leaves: still drawn, no longer
+   pressed nor read out, let go when the exits started by its cause end (Compose's AnimatedVisibility). Time is read by
+   what moves and by what waits for a moment, each from its cause's start, target, curve and the frame's time, never by
+   how many frames went by.
+7. **The old view is a node.** Made, updated and let go at a node's edges (Compose's AndroidView: factory, update,
+   release), given a size, a place, a cut and a place in the order, and pressed through the tree. The first island may
+   be the whole app; the API takes one a page, so the old goes from the outside in, never an app beside the tree.
+
+Shown by counting, on the real path, apart: bindings worked out, nodes made and let go, measures, drawing made, what is
+composed again, the scene gone through, and what is handed to the host. A colour changed touches no other component; a
+page moved makes nothing again; a list's rows reused and let go as they should be; a node let go leaves no subscription,
+timer or native resource; frames at 60 Hz, 120 Hz and a jump to the moment come out the same. A renderer may go through
+the records kept to draw them; nothing finds what changed by working the tree out whole or comparing it.
+
 ## Held by the tests
 
 The Tester keeps its one check, said another way: whatever a frame did by what was marked, the same state made into
@@ -163,10 +208,15 @@ squeeze and contrast checks; film's images before and after where a step touches
    old, for the parts made once to grow from the leaves while the old frame holds them): nodes made once, `Live` bindings by phase, `show`/`pick`/`each`
    with owners, handlers, the tree's hit tests, layout of the marked nodes, paint kept by node, the frame of step 8,
    and the Tester's check of a tree made from nothing. Its own tests: random trees changed a little at a time against
-   one made fresh, as flex's reuse_test does.
+   one made fresh, as flex's reuse_test does. Begun as src/view (2026-10-30): nodes, owners and checked handles,
+   bindings by phase, show/pick/each, a frame visiting only what was marked; not yet the queued bindings (rule 2 of
+   what it must be), a node's drawing kept where it is in what holds it (4, 5), leaving (6).
 3. **The old view as an island.** `old(fn(c : Ctx) { ... })` is a node whose subtree is built the old way, every node
    under it made again when anything it read changed (its build tracked as a whole, as frame_watch does the frame's).
-   The whole app first runs as one island on the new runtime, and looks and does just as it did.
+   The whole app first runs as one island on the new runtime, and looks and does just as it did. Begun in
+   src/ui/view_host.mbt (2026-10-30): an app's window a tree (`set_view_app`), the old view built for its island's
+   room, laid out where it is placed, cut to it, drawn between what is before and after it, pressed through the tree;
+   one island a window yet, its place a global the old layout reads.
    An island is kept only where nothing it read changed, so what it reads must say when it changes: the pages' own
    state is signals, and what is put into one from elsewhere (a draft's files, a menu's choice) tells it. What comes
    that is no signal yet (the hand's events, a message, a host's answer, a test's draw) builds every island anew;

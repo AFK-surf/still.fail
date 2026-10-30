@@ -37,6 +37,7 @@ pub let frame_period_default : Double = 1000.0 / 60.0
 /// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
   made_forget()
+  view_forget()
   the_ctx.val = Ctx::new()
   looks_reset()
   hand_reset()
