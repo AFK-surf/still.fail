@@ -300,3 +300,15 @@ test "bar: the panel drawn up and open, a tap where the notch's key is closed is
   t.run_for(bar.o.end() + 50.0 - t.time())
   assert_true(bars_picked.get().map(fn(b) { b.1 }) != before)
 }
+
+///|
+test "bar: the panel drawn up and open, a finger down on the page above it: the panel closed then, the page taking nothing" {
+  let (t, _) = bar_at_rest()
+  let (xs, y) = bar_places_at()
+  t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
+  t.run_for(bar.o.end() - t.time())
+  assert_true(bar.mode.get())
+  t.tap(100.0, 200.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq((bar.mode.get(), app.nav.depth()), (false, 1))
+}

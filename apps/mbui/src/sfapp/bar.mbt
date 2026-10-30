@@ -1458,24 +1458,29 @@ fn BarModel::swap_at(self : BarModel, now : Double) -> Swap? {
 /// The bar as it is this frame (bottom_bar's part).
 fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown : Bool) -> Unit {
   let t = @sf.theme()
-  let (sets, cur) = bars_in(src, ws.id)
-  let items = sets[cur]
-  let others : Array[Int] = []
-  for i in 0..<sets.length() {
-    if i != cur {
-      others.push(i)
-    }
-  }
-  let rows = if others.length() > 1 { others.length() } else { 1 }
-  let panel = bar_track + rows.to_double() * bar_row + over
-  let row_top = panel - bar_track
-  let reach = row_top - over
-  let bar_mid = row_top + bar_track / 2.0
-  let w = c.width - 44.0
-  let slot = (w - 2.0 * c0) / 3.0
+  // (laid out as what it is told says: BarLaid, the same its glass takes a finger by, bar_glass_node)
   let place_add = bar_place_add(src, ws, active)
   let action = bar_action(src, ws, active, place_add)
   let notched = action != ""
+  let told_here : BarTold = {
+    shown,
+    action,
+    active,
+    sets: bars_in(src, ws.id).0,
+    cur: bars_in(src, ws.id).1,
+    width: c.width - 44.0,
+  }
+  let l = bar_laid(told_here)
+  let sets = l.sets
+  let cur = l.cur
+  let items = l.items
+  let others = l.others
+  let panel = l.panel
+  let row_top = l.row_top
+  let reach = l.reach
+  let bar_mid = row_top + bar_track / 2.0
+  let w = l.w
+  let slot = (w - 2.0 * c0) / 3.0
   // the dots: a station in trouble (red)
   let chats = (src.topic)("chats", { "scope": Json::string(ws.id), "mine": Json::boolean(false) })
   let dots : Map[String, Int64] = Map([])
@@ -1497,8 +1502,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   let drag_y = m.drag_y
   let final_cs = bar_centres(w, if notched && !m.mode.get() { 1.0 } else { 0.0 }, items.length())
   // the finger's place, and the place a let-go would choose (what is lit under it)
-  let told_now : BarTold = { shown, action, active, sets, cur, width: w }
-  let cand = bar_finger(told_now, final_cs, drag, drag_y)
+  let cand = bar_finger(told_here, final_cs, drag, drag_y)
   let active_key = active.unwrap_or("")
   // for the motion log (scripts/motionplot.py): the bar going and coming, the panel (a bar chosen landing)
   if m.vis.value != m.vis.target {
@@ -1526,21 +1530,9 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   let foot = 22.0 + nav_foot()
   let fx = 22.0
   let fy = c.height - foot - panel
-  // the panel open: a press anywhere else closes it (and does nothing else)
+  // the panel open: a press anywhere else closes it (and does nothing else: the window's tree's, bar_glass_node); back
+  // closes it too (back still said by the old views as they are built, at the moment it is taken)
   if shown && m.mode.get() {
-    let catcher = c.id("bar/catch")
-    match c.drag_of(catcher) {
-      Some(d) =>
-        if d.down || d.take_tap() {
-          m.open_panel(false)
-          bar_retell(c.moment())
-        }
-      None => ()
-    }
-    c.layer(fn() {
-      c.drag_area(catcher, axis=Hold, w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
-    })
-    |> ignore
     c.on_back(fn() {
       m.open_panel(false)
       bar_retell(@ui.current().moment())
@@ -2119,6 +2111,25 @@ fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
       }
     }
   }
+  // the panel open: a finger down anywhere else closes it at that moment, and does nothing else
+  v.show(
+    fn() {
+      bar.mode.get() &&
+      (match told() {
+        Some(t) => t.shown
+        None => false
+      })
+    },
+    fn(m) {
+      m
+      .over(Is(true))
+      .gesture(@ui.touch_slop(), press=fn(d) {
+        bar.open_panel(false, at=d.at)
+        bar_retell(d.at)
+      })
+      |> ignore
+    },
+  )
   v.box(fn(b) {
     b
     .over(Is(true))
