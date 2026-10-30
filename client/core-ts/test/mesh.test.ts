@@ -292,7 +292,7 @@ sim("a_dial_tells_the_station_its_trace", async (s) => {
   const st = await s.station();
   const e = env(s);
   const traces: string[] = [];
-  const keys: string[] = [];
+  const said = new Map<string, unknown>();
   e.tracer.setExport((body) =>
     Effect.sync(() => {
       for (const r of JSON.parse(Buffer.from(body).toString()).resourceSpans)
@@ -300,19 +300,22 @@ sim("a_dial_tells_the_station_its_trace", async (s) => {
           for (const sp of sc.spans)
             if (sp.name === "mesh.connect") {
               traces.push(sp.traceId);
-              keys.push(...(sp.attributes as { key: string }[]).map((a) => a.key));
+              for (const a of sp.attributes as { key: string; value: Record<string, unknown> }[]) said.set(a.key, Object.values(a.value)[0]);
             }
     }),
   );
   const mesh = await s.run(Mesh.make(e, []));
   mesh.addAddr(st.addr());
-  await s.run(mesh.link(st.id(), grants("ok", { n: 0 })));
+  // Opened for a request: the dial says which (its route, no ids).
+  const get: RequestHead = { method: "GET", path: "/admin/api/threads/7f3a9c2e41/messages?after=3", headers: [] };
+  await s.run(Effect.scoped(Effect.flatMap(wireOf(s, mesh).request(new StationAddr("w", st.id()), get, new Uint8Array()), (r) => readAll(r.body))));
   await s.until(() => st.hellos.length === 1);
   await s.until(() => (e.tracer.flush(), traces.length > 0));
   assert.equal(traces.length, 1);
   assert.match(st.hellos[0].traceparent, new RegExp(`^00-${traces[0]}-[0-9a-f]{16}-01$`));
   // And where its time went.
-  for (const k of ["stillfail.onto_ms", "stillfail.dialled_ms", "stillfail.credential_ms", "stillfail.paths"]) assert.ok(keys.includes(k), k);
+  for (const k of ["stillfail.onto_ms", "stillfail.dialled_ms", "stillfail.credential_ms", "stillfail.paths"]) assert.ok(said.has(k), k);
+  assert.equal(said.get("stillfail.asker"), "GET /admin/api/threads/:id/messages");
   await close(s, st, mesh);
 });
 

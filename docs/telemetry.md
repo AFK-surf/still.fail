@@ -138,7 +138,9 @@ Inside a trace:
   on a relay; 0 at once, or not before the connection was made),
   `stillfail.dialled_ms` (the connection made), `stillfail.credential_ms` (the
   credential had: about 0 kept on the device); and `stillfail.paths`, each way's
-  round trip and packets sent/lost as it ended (as `mesh.route`'s). One that
+  round trip and packets sent/lost as it ended (as `mesh.route`'s);
+  `stillfail.asker`, what first waited on it (a request's method and route,
+  `screen`, or `again`: the mesh opening it anew itself, nobody waiting). One that
   failed says what it was given and had beside it: `stillfail.ips` (the addresses
   the station said it is reached straight at, given to the dial) and
   `stillfail.beside` (this device's other open links to the same station, in
