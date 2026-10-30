@@ -39,6 +39,31 @@ moved() {
     { print }' "$1"
 }
 
+# Whether this puts back, as it was before main's commit $1, a file it changed with no line of text to tell by (no
+# text: binary; its mode alone; an empty one added or deleted), there or not, its mode and its contents; or a file's
+# mode it changed, whatever its lines: where the base has that commit's still (main changed it since: not this one's).
+objects_back() {
+  git diff --numstat --no-renames "$1^" "$1" -- $files > "$work/num"
+  back=0
+  while IFS='	' read -r plus minus f; do
+    to=$f
+    if [ -s "$work/moved" ]; then
+      to=$(awk -v f="$f" '$1 == f { print $2; exit }' "$work/moved")
+      [ -n "$to" ] || to=$f
+    fi
+    was=$(git ls-tree "$1^" -- "$f" | awk '{ print $1, $3 }')
+    then_=$(git ls-tree "$1" -- "$f" | awk '{ print $1, $3 }')
+    in_base=$(git ls-tree "$base" -- "$f" | awk '{ print $1, $3 }')
+    now=$(git ls-tree "$tree" -- "$to" | awk '{ print $1, $3 }')
+    if [ "$plus" = - ] || { [ "$plus" = 0 ] && [ "$minus" = 0 ]; }; then
+      [ "$in_base" = "$then_" ] && [ "$was" = "$now" ] && back=1
+    fi
+    if [ -n "$was" ] && [ -n "$then_" ] && [ -n "$now" ] && [ "${was%% *}" != "${then_%% *}" ] &&
+       [ "${in_base%% *}" = "${then_%% *}" ] && [ "${was%% *}" = "${now%% *}" ]; then back=1; fi
+  done < "$work/num"
+  echo $back
+}
+
 undone=""
 # A branch lives hours, a day or two: what main took in before that is not this one's to undo.
 since=$(( $(git log -1 --format=%ct "$base") - 2 * 86400 ))
@@ -48,6 +73,13 @@ for m in $(git rev-list --no-merges --since="$since" -n 120 "$base" -- $files); 
   if printf '%s\n' "$messages" | grep -qiE "(reverts|undoes) ${short}"; then continue; fi
   git diff --binary --no-renames "$m^" "$m" -- $files > "$work/patch" 2>/dev/null || continue
   [ -s "$work/patch" ] || continue
+  if [ "$(objects_back "$m")" = 1 ]; then
+    touched=$(git diff --name-only --no-renames "$m^" "$m" -- $files | tr '\n' ' ')
+    undone="$undone
+  $short $(git log -1 --format=%s "$m")
+      $touched"
+    continue
+  fi
   # Main may already have removed or superseded this old patch. Only reject
   # a loss introduced by this branch; don't blame it for the base tree's state.
   if ! GIT_INDEX_FILE="$work/base-index" git apply --cached --check -R "$work/patch" 2>/dev/null &&
@@ -60,8 +92,8 @@ for m in $(git rev-list --no-merges --since="$since" -n 120 "$base" -- $files); 
   # lines round it come twice (a test it added ending as the one before it does), whatever became of what it added.
   # Undone is this change's own taking back: a text hunk of it whose every line it added this one takes away, or whose
   # every line it took away this one puts back (the lines as they are, in that file: a file it added this one deletes
-  # takes them all away); a file it changed that is no text (binary) as it was before it. One whose lines this
-  # changed some of is changed since, not undone.
+  # takes them all away; one with no line to tell by is objects_back's). One whose lines this changed some of is
+  # changed since, not undone.
   git diff --no-renames "$base" "$tree" -- $files > "$work/mine" 2>/dev/null || true
   [ -s "$work/moved" ] && { moved "$work/mine" > "$work/mine2"; mv "$work/mine2" "$work/mine"; }
   taken=$(awk -v mine="$work/mine" '
@@ -86,14 +118,6 @@ for m in $(git rev-list --no-merges --since="$since" -n 120 "$base" -- $files); 
     /^\+/ { x = substr($0, 2); if (x ~ /^[ \t]*$/) next; na++; if (gone[f SUBSEP x] > 0) { ga++; gone[f SUBSEP x]-- } next }
     /^-/ { x = substr($0, 2); if (x ~ /^[ \t]*$/) next; nr++; if (back[f SUBSEP x] > 0) { br++; back[f SUBSEP x]-- } next }
     END { hunk_end(); print undone ? 1 : 0 }' "$work/here")
-  # (a file it changed that is no text: undone where it is as before it, or gone where it added it)
-  for f in $(git diff --numstat --no-renames "$m^" "$m" -- $files | awk '$1 == "-" { print $3 }'); do
-    to=$f
-    [ -s "$work/moved" ] && to=$(awk -v f="$f" '$1 == f { print $2; exit } END { }' "$work/moved") && [ -n "$to" ] || to=$f
-    was=$(git rev-parse -q --verify "$m^:$f" 2>/dev/null || echo none)
-    now=$(git rev-parse -q --verify "$tree:$to" 2>/dev/null || echo none)
-    [ "$was" = "$now" ] && taken=1
-  done
   [ "$taken" = 1 ] || continue
   touched=$(git diff --name-only --no-renames "$m^" "$m" -- $files | tr '\n' ' ')
   undone="$undone

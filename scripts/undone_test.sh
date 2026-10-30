@@ -2,7 +2,8 @@
 # scripts/undone.sh's cases, in a repository of its own made here: what main added changed a line of since (not
 # undone), its implementation taken back with its test left (undone), both taken back (undone), and a test it added
 # whose last lines are the ones before it (its hunk applies forwards again there: still not undone once changed); a
-# file it added deleted (undone), a picture it changed put back as it was (undone), or changed again (not).
+# file it added deleted (undone), a picture it changed put back as it was (undone), or changed again (not); a script
+# it made runnable made not again (undone), an empty file it added deleted (undone).
 #   sh scripts/undone_test.sh [the script to check, scripts/undone.sh by default]
 set -eu
 if [ -n "${1:-}" ]; then script=$(cd "$(dirname "$1")" && pwd)/$(basename "$1"); else script="$(cd "$(dirname "$0")" && pwd)/undone.sh"; fi
@@ -42,10 +43,13 @@ case_of "nothing of it touched" 0 "$impl_b" "$test_both"
 # a file main added, and a picture it changed
 git checkout -q "$base"
 printf '\001\002\003\000old' > pic.bin
-git add pic.bin && git commit -qm "start: a picture"
+printf 'echo run\n' > run.sh
+git add pic.bin run.sh && git commit -qm "start: a picture, a script"
 printf 'fn c() {\n  four\n}\n' > new.txt
 printf '\001\002\003\000new' > pic.bin
-git add . && git commit -qm "main: a file and the picture"
+chmod +x run.sh
+: > empty.txt
+git add . && git commit -qm "main: a file, the picture, the script runnable, an empty file"
 base2=$(git rev-parse HEAD)
 other() {  # name, expected, what the branch does
   name=$1; want=$2
@@ -58,4 +62,6 @@ other() {  # name, expected, what the branch does
 other "a file main added deleted" 1 "rm new.txt"
 other "a picture main changed put back" 1 "printf '\\001\\002\\003\\000old' > pic.bin"
 other "a picture main changed changed again" 0 "printf '\\001\\002\\003\\000newer' > pic.bin"
+other "a script main made runnable made not again" 1 "chmod -x run.sh"
+other "an empty file main added deleted" 1 "rm empty.txt"
 exit $fails
