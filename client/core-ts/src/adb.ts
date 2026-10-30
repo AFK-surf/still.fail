@@ -435,6 +435,7 @@ export class Adb {
   #known = false;
   /// This phone's 共享调试 switch (ON_KEY): it lends only while on.
   #on = false;
+  #switched = false;
 
   constructor(env: AdbEnv) {
     this.#env = env;
@@ -448,6 +449,8 @@ export class Adb {
             for (const [station, list] of Object.entries(kept))
               if (!this.#grants.has(station) && Array.isArray(list)) this.#grants.set(station, new Map((list as J[]).filter((g) => typeof g?.id === "string").map((g) => [g.id as string, g])));
           const said = on === null ? null : parseJson(on);
+          // (switched before it was read: as switched)
+          if (this.#switched) return;
           if (typeof said === "boolean") this.#on = said;
           else {
             // (a core from before the switch: on where a grant lent the phone, so an update does not end its lending)
@@ -483,6 +486,7 @@ export class Adb {
         if (call.on && !this.#env.lends()) return Effect.fail(new CoreError("unsupported", t("core-misc.adb.unsupported")));
         return Effect.sync(() => {
           this.#on = call.on;
+          this.#switched = true;
           this.#keepOn();
           this.#sync();
           return null;

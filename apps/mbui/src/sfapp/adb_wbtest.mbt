@@ -116,6 +116,21 @@ test "an agent's request for this phone while it lacks something to be lent: wha
   t.tap(allow.1 + allow.3 / 2.0, allow.2 + allow.4 / 2.0)
   t.draw()
   assert_eq(asked_native(t, "adb.switch").length(), 1)
+  // all it takes, but its 共享调试 switch off (2026-10-30: off at first): turned on first, on its page
+  let t = chat_tester("chat-phone-off")
+  for c in t.native_calls() {
+    if c.1 == "adb.phone" {
+      t.answer_native(c.0, adb_phone_of(wireless=true))
+    }
+  }
+  t.draw()
+  assert_true(t.find("需要先打开共享调试") is Some(_))
+  let only = fn(w : String) { t.words().filter(fn(x) { x.0 == w }).length() }
+  assert_eq(only("允许"), 0)
+  t.tap_text("查看步骤")
+  t.run_for(@ui.move_most_ms)
+  // (its page: the switch first)
+  assert_true(t.find("默认最长授权") is Some(_))
 }
 
 ///|

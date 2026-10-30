@@ -1007,6 +1007,8 @@ sim("a_grant_heard_lends_the_phone_to_its_station_and_its_end_lets_it_go", async
   const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
   const station = `ws/${endpoint.id()}`;
   await s.run(adb.run({ kind: "ports", ports: { connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android" } }));
+  // (its 共享调试 switch on: lent for the grants)
+  await s.run(adb.run({ kind: "on", on: true }));
   // Asked, not yet granted: nothing lent.
   const exp = Math.floor(s.time.now() / 1000) + 3600;
   adb.heard(station, { id: "p1", session: "k", chat: "EMBER/1.0", reason: "看首屏", status: "pending", at: 1 });
