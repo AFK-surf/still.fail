@@ -20,7 +20,7 @@ fn play_back(c : @ui.Ctx) -> Unit {
 /// Whether what is on top is dark or light whatever the theme (the system bars' icons follow it): the player and the
 /// viewer over a picture or a video dark; a reader as its paper. None: as the theme.
 fn page_dark(src : Source) -> Bool? {
-  match viewer.val {
+  match viewer.get() {
     Some(v) if !v.closing && v.dark() => return Some(true)
     _ => ()
   }

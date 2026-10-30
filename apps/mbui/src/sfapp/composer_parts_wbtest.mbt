@@ -35,7 +35,7 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
     None => fail("the tile is not kept for the viewer to fly from")
   }
   t.tap(tile.x + tile.w / 2.0, tile.y + tile.h / 2.0)
-  match viewer.val {
+  match viewer.get() {
     Some(v) => {
       assert_eq(v.file.path, "draft:" + id)
       assert_eq(v.id(), seen)
@@ -51,7 +51,7 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
   assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").files.length(), 1)
   t.back()
   t.run_for(preview_rest() - t.time())
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
 }
 
 ///|

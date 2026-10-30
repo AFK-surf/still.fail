@@ -136,7 +136,7 @@ test "a picture goes to the preview, read by drive.read" {
   assert_true(log.contains("EXIT 0"))
   // (the run ends at its tap: the preview grows in from its row, and reads it as it does)
   t.run_for(@ui.move_most_ms)
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   assert_eq(v.file.name, "首页截图.png")
   assert_true(v.drive is Some(_))
   assert_true(v.bytes.get() is Some(_))

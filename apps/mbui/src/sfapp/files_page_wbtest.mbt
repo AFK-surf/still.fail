@@ -115,7 +115,7 @@ test "a narrow folder's row held with a finger: what can be done to it in a shee
     assert_true(t.find(words) is Some(_), msg=words)
   }
   // (held, it does not open)
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
   let m = files_page_tester(720.0, 900.0, 0)
   // (laid out Medium, the sidebar in use: a right click on what shows of the page beside it brings it over, as a
   // press does, and asks nothing of what it holds)

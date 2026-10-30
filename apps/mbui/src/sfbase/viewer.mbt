@@ -466,9 +466,9 @@ pub fn thumb_shows(id : String) -> Double {
 /// the page has it there (over the viewer's layer: @ui.Stratum's OverLayers); once it grows, the page's again, under the
 /// viewer's ground as the rest of the page is, gone as it darkens (not drawn over the ground, standing out of it).
 pub fn over_flight(c : @ui.Ctx, i : Int) -> Unit {
-  let v = match viewer.val {
+  let v = match viewer.get() {
     Some(v) => Some(v)
-    None => pv_leaving.val
+    None => pv_leaving.get()
   }
   match v {
     Some(v) if v.flies && v.flying() <= 0.0 => c.stratum(i, OverLayers)
@@ -567,19 +567,19 @@ pub(all) enum Stepping {
 }
 
 ///|
-pub let viewer : Ref[Viewer?] = { val: None }
+pub let viewer : @signals.Signal[Viewer?] = @signals.signal(None)
 
 ///|
 /// The viewer closed and still drawn going (its fade or its flight back), no longer the one open: closing takes it
 /// out of `viewer` at once, and what is under it is the page's again.
-pub let pv_leaving : Ref[Viewer?] = { val: None }
+pub let pv_leaving : @signals.Signal[Viewer?] = @signals.signal(None)
 
 ///|
 /// When the preview's way in or out is over (the frames' clock): the latest end told its fade and its flight, the one
 /// open's or the one leaving's; -1 when neither moves. What a test runs to after it opens or closes one.
 pub fn preview_rest() -> Double {
   let mut at = -1.0
-  for v in [viewer.val, pv_leaving.val] {
+  for v in [viewer.get(), pv_leaving.get()] {
     match v {
       Some(v) => {
         if v.fade.ends_at() > at {
@@ -608,7 +608,7 @@ pub fn open_preview(
 ) -> Unit {
   close_now()
   pv_strip.leaving = None
-  viewer.val = Some(new_viewer(station, key, a, drive, steps, named~))
+  viewer.set(Some(new_viewer(station, key, a, drive, steps, named~)))
 }
 
 ///|
@@ -795,22 +795,22 @@ pub fn near_left(src : Source, station : String) -> Unit {
 /// PDF closed).
 pub fn close_now() -> Unit {
   marks_leave()
-  match viewer.val {
+  match viewer.get() {
     Some(v) => v.let_go()
     None => ()
   }
-  viewer.val = None
+  viewer.set(None)
   leaving_done()
 }
 
 ///|
 /// The viewer that was going, gone.
 pub fn leaving_done() -> Unit {
-  match pv_leaving.val {
+  match pv_leaving.get() {
     Some(v) => v.let_go()
     None => ()
   }
-  pv_leaving.val = None
+  pv_leaving.set(None)
 }
 
 ///|
@@ -838,7 +838,7 @@ pub fn Viewer::let_go(self : Viewer) -> Unit {
 ///|
 /// Whether a viewer is open (the page under it takes no keys).
 pub fn preview_open() -> Bool {
-  viewer.val is Some(_)
+  viewer.get() is Some(_)
 }
 
 ///|
@@ -1281,10 +1281,10 @@ pub fn upper(s : String) -> String {
 /// 2026-10-30: the picture over the chat's bar its first frame, 「它在挪出来前就盖在了顶栏上面」). Called first in each
 /// frame's build, and again by the viewer's layer (a viewer opened as the pages were built).
 pub fn viewer_set_out(c : @ui.Ctx, src : Source) -> Unit {
-  let v = match viewer.val {
+  let v = match viewer.get() {
     Some(v) => v
     None =>
-      match pv_leaving.val {
+      match pv_leaving.get() {
         Some(v) => v
         None => return
       }
@@ -1330,10 +1330,10 @@ pub fn viewer_set_out(c : @ui.Ctx, src : Source) -> Unit {
 ///|
 /// The viewer over the pages, if one is open, in its frame (viewer_frame.mbt): call after the pages are drawn.
 pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
-  let v = match viewer.val {
+  let v = match viewer.get() {
     Some(v) => v
     None =>
-      match pv_leaving.val {
+      match pv_leaving.get() {
         Some(v) => v
         None => return
       }
@@ -1467,8 +1467,8 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
     // closed at once: the one going is only drawn (what was going before it, gone)
     marks_leave()
     leaving_done()
-    viewer.val = None
-    pv_leaving.val = Some(self)
+    viewer.set(None)
+    pv_leaving.set(Some(self))
     // an image shrinks back into its thumbnail when the chat shows it (from where a flight in has got to), else
     // it fades out
     match (thumb_of(c, self.id()), self.shown_kind(), self.zoom.rect()) {
@@ -1652,6 +1652,7 @@ pub fn Viewer::marks_frame(self : Viewer, c : @ui.Ctx) -> Unit {
             let list = marked_into.get(key).unwrap_or([])
             list.push((marking.job_name, png, quotes, "image"))
             marked_into[key] = list
+            draft_given()
             marks_leave()
             // (closed back to the chat, where the picture and its quotes show in the composer: nothing said of it)
             self.shut(c)
@@ -2396,7 +2397,7 @@ pub fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity 
       n.started = true
       n.fade.set(1.0)
       n.awake = self.awake
-      viewer.val = Some(n)
+      viewer.set(Some(n))
       pv_strip.near.remove(n.id())
       strip.snap(from + dir.to_double() * width)
       strip.animate(0.0, @motion.sheet_spring, velocity~)

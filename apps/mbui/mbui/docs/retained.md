@@ -116,6 +116,12 @@ squeeze and contrast checks; film's images before and after where a step touches
 3. **The old view as an island.** `old(fn(c : Ctx) { ... })` is a node whose subtree is built the old way, every node
    under it made again when anything it read changed (its build tracked as a whole, as frame_watch does the frame's).
    The whole app first runs as one island on the new runtime, and looks and does just as it did.
+   An island is kept only where nothing it read changed, so what it reads must say when it changes: the pages' own
+   state is signals, and what is put into one from elsewhere (a draft's files, a menu's choice) tells it. What comes
+   that is no signal yet (the hand's events, a message, a host's answer, a test's draw) builds every island anew;
+   the frames kept are those of the clock alone (a page sliding in or out). Each build of a frame builds the same
+   (what a build changes of its own state, the next build of the frame starts from the frame before), and the Tester
+   holds every island kept to it built anew.
 4. **From the outside in.** The window and its shell (frame, panes, tape, stacks, presenters) made once; each page in
    them an island. Then src/kit and src/sf's components, each given its made-once form beside its old one while pages
    still use the old; then each page made once, its island gone with it. Each step makes a page's island smaller; none

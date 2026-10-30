@@ -34,7 +34,7 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   let t = preview_tester("image")
   assert_true(t.find("界面草图.png") is Some(_))
   assert_true(t.find("100%") is None)
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   // a picture read whole, held in memory only (FilePreview.kt: FileData.fetch), not kept on the device
   assert_true(fix_fetches.iter().all(fn(f) { !flag(Some(f.1), "keep") }))
   // 600 × 400 in 390 × 844 with 12 round it: (390 - 24) / 600
@@ -55,7 +55,7 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   assert_true((v.zoom.scale - 366.0 / 600.0).abs() < 0.001)
   // back closes it at once (only drawn going, back into its thumbnail or fading out), the chat under it again
   t.back()
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
   // to where its way out said it ends (@ui.move_most_ms or pv_fade_ms from when it set out)
   t.run_for(if v.flies { @ui.move_most_ms } else { pv_fade_ms })
   assert_true(t.find("界面草图.png") is None)
@@ -66,7 +66,7 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
 test "the picture held by a finger, Small or Medium: its one menu, 保存到相册 (a phone pastes nowhere), not one more for each time the frame it opens in is built" {
   for w in [390.0, 720.0] {
     let t = preview_tester("image", w~, platform=2)
-    assert_true(viewer.val is Some(_), msg="\{w} wide")
+    assert_true(viewer.get() is Some(_), msg="\{w} wide")
     let before = @sf.last_presented()
     t.press_at(w / 2.0, 422.0)
     t.run_for(@ui.long_press_ms + 20.0)
@@ -83,7 +83,7 @@ test "the picture held by a finger, Small or Medium: its one menu, 保存到相�
 ///|
 test "held by a finger round the picture, over the chat's words under the viewer: none of them picked" {
   let t = preview_tester("image", platform=2)
-  assert_true(viewer.val is Some(_))
+  assert_true(viewer.get() is Some(_))
   for y in [120.0, 200.0, 660.0, 740.0] {
     for x in [60.0, 195.0, 330.0] {
       t.press_at(x, y)
@@ -112,9 +112,9 @@ test "a video plays in the one player (@sf.player_view), its bytes read through 
   assert_true(t.view_said("{\"view\":{\"view\":1,\"what\":1,\"text\":\"0,33.333,66.667\"}}"))
   t.draw()
   assert_true(t.find(" / 3 帧") is Some(_))
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   t.back()
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
   // faded out (pv_fade_ms from when it set out), its view closed
   t.run_for(pv_fade_ms)
   assert_true(t.views().contains("close 1"))
@@ -338,7 +338,7 @@ fn hex_bytes(b : Bytes) -> String {
 test "a video flies from its thumbnail in the chat, its still flying; the player's picture once it is in" {
   let t = video_in_chat()
   t.tap_text("演示录屏.mp4")
-  assert_true(viewer.val is Some(_))
+  assert_true(viewer.get() is Some(_))
   // halfway: its still flies (the thumbnail hidden meanwhile), the player's picture not yet
   t.run_for(@ui.move_most_ms / 2.0)
   assert_eq(t.holes().length(), 0)
@@ -376,7 +376,7 @@ test "a video closed: the frame it shows grabbed, flown back with and kept by it
   assert_eq(pv_hidden.val, id)
   // landed: the viewer gone, its player closed, the thumbnail shown again (with the frame kept)
   t.run_for(@ui.move_most_ms)
-  assert_true(viewer.val is None && pv_leaving.val is None)
+  assert_true(viewer.get() is None && pv_leaving.get() is None)
   assert_true(t.views().contains("close 1"))
   assert_eq(pv_hidden.val, "")
   // opened again: on from where it was left, played once its player says how long it is (not left at its end); the
@@ -399,7 +399,7 @@ test "a video closed before its first frame shows: back into its thumbnail with 
   t.back()
   assert_true(!t.views().iter().any(fn(l) { l.has_prefix("control 1 22 ") }))
   t.run_for(@ui.move_most_ms)
-  assert_true(pv_leaving.val is None)
+  assert_true(pv_leaving.get() is None)
   assert_true(pv_frames.is_empty())
 }
 
@@ -454,7 +454,7 @@ test "a big video the station made no poster of: the black alone, nothing read f
 test "a PDF's pages, drawn by the host" {
   let t = preview_tester("pdf")
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("pdf ") }))
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   assert_eq(v.pdf.unwrap().pages, 3)
   // kept on the device with its chat, by its size, as Android keeps a PDF it opens (FilePreview.kt OnDisk)
   let asked = fix_fetches.filter(fn(f) { f.0 == "station.file" && text(Some(f.1), "name") == "设计说明.pdf" })
@@ -601,14 +601,14 @@ test "a text shown as it comes: its lines whole however its parts cut them, a ch
 ///|
 test "a file a message names that comes whole in its first part: shown as any file read whole, its code coloured" {
   let t = named_tester("src/list/place.mbt")
-  assert_true(viewer.val.unwrap().bytes.get() is Some(_))
+  assert_true(viewer.get().unwrap().bytes.get() is Some(_))
   assert_true(t.find("self.anchor = self.anchor + n") is Some(_) || t.locate("self.anchor = self.anchor + n").length() > 0)
 }
 
 ///|
 test "two fingers pinch an image round the point between them; no tap comes of it" {
   let t = preview_tester("image")
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   let fit = v.zoom.scale
   let awake = v.awake
   t.touch(0, 150.0, 422.0)
@@ -631,11 +631,11 @@ test "stepping through the chat's images: the way to the next (imageNear), a tap
   let t = preview_tester("step")
   assert_true(t.find("界面草图.png") is Some(_))
   // fitted 600 × 400 in 366 wide: the way to the one after on the right
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   let (_, after) = v.near(fixture("chat-preview-step"))
   assert_true(after is Some(_))
   t.tap(390.0 - 8.0 - 18.0, 422.0)
-  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+  assert_eq(viewer.get().unwrap().file.name, "第二版.png")
   assert_true(t.find("第二版.png") is Some(_))
 }
 
@@ -643,15 +643,15 @@ test "stepping through the chat's images: the way to the next (imageNear), a tap
 test "a swipe past a fifth of the stage goes to the next; a short one comes back" {
   let t = preview_tester("step")
   t.drag(300.0, 422.0, 260.0, 422.0)
-  assert_eq(viewer.val.unwrap().file.name, "界面草图.png")
+  assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
   t.drag(300.0, 422.0, 100.0, 422.0)
-  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+  assert_eq(viewer.get().unwrap().file.name, "第二版.png")
 }
 
 ///|
 test "a swipe carries the picture under the finger from where it went down; a second finger takes it back, not left between two" {
   let t = preview_tester("step")
-  let (x, y, w, h) = viewer.val.unwrap().zoom.rect().unwrap()
+  let (x, y, w, h) = viewer.get().unwrap().zoom.rect().unwrap()
   let at = fn(dx : Double) {
     drawn_pictures(t).any(fn(d) {
       (d.0 - (x + dx)).abs() < 0.001 && (d.1 - y).abs() < 0.001 && (d.2 - w).abs() < 0.001 && (d.3 - h).abs() < 0.001
@@ -666,7 +666,7 @@ test "a swipe carries the picture under the finger from where it went down; a se
   t.draw()
   t.release(250.0, 422.0)
   t.run_for(t.rest_of("preview/strip") - t.time())
-  assert_eq(viewer.val.unwrap().file.name, "界面草图.png")
+  assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
   assert_true(at(0.0))
 }
 
@@ -675,16 +675,16 @@ test "a step keeps the bars as they were: hidden by a tap, the next comes withou
   let t = preview_tester("step")
   t.tap(195.0, 422.0)
   t.run_for(double_tap_ms)
-  assert_true(!viewer.val.unwrap().awake)
+  assert_true(!viewer.get().unwrap().awake)
   t.drag(300.0, 422.0, 100.0, 422.0)
-  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
-  assert_true(!viewer.val.unwrap().awake)
+  assert_eq(viewer.get().unwrap().file.name, "第二版.png")
+  assert_true(!viewer.get().unwrap().awake)
 }
 
 ///|
 test "pinched smaller than fitted and let go: back to fitted" {
   let t = preview_tester("image")
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   let fit = v.zoom.scale
   t.touch(0, 150.0, 422.0)
   t.draw()
@@ -705,22 +705,22 @@ test "pinched smaller than fitted and let go: back to fitted" {
 test "a swipe back as the step to the next still slides: a finger catches it there, and a quick short move back goes back" {
   let t = preview_tester("step")
   t.drag(300.0, 422.0, 100.0, 422.0)
-  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+  assert_eq(viewer.get().unwrap().file.name, "第二版.png")
   // at once, the next mostly in: a quick 60 to the right, the way back
   t.drag(100.0, 422.0, 160.0, 422.0, steps=3)
   t.run_for(t.rest_of("preview/strip") - t.time())
-  assert_eq(viewer.val.unwrap().file.name, "界面草图.png")
+  assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
   // and a finger down on a slide and up again: it stays at the one nearest, no tap of it
   t.drag(300.0, 422.0, 100.0, 422.0)
   t.run_for(@ui.input_step_ms)
-  let awake = viewer.val.unwrap().awake
+  let awake = viewer.get().unwrap().awake
   t.touch(0, 195.0, 422.0)
   t.draw()
   t.touch(2, 195.0, 422.0)
   t.draw()
   t.run_for(t.rest_of("preview/strip") - t.time())
-  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
-  assert_eq(viewer.val.unwrap().awake, awake)
+  assert_eq(viewer.get().unwrap().file.name, "第二版.png")
+  assert_eq(viewer.get().unwrap().awake, awake)
 }
 
 ///|
@@ -740,12 +740,12 @@ test "the frame a swipe is let go in shows both pictures where the finger left t
       t.drag(300.0, 422.0, 100.0, 422.0)
       t.run_for(t.rest_of("preview/strip") - t.time())
     }
-    let from = viewer.val.unwrap().file.name
+    let from = viewer.get().unwrap().file.name
     t.hold_drag(way.0, 422.0, way.1, 422.0)
     let held = drawn_pictures(t)
     t.touch(2, way.1, 422.0)
     t.frame()
-    assert_true(viewer.val.unwrap().file.name != from)
+    assert_true(viewer.get().unwrap().file.name != from)
     let drawn = drawn_pictures(t)
     assert_eq(drawn.length(), held.length())
     for i, d in drawn {
@@ -769,7 +769,7 @@ fn zoom_in_middle(t : @ui.Tester) -> @kit.Zoom raise {
   t.tap(195.0, 422.0)
   t.run_for(@ui.move_most_ms)
   t.run_for(double_tap_ms)
-  let z = viewer.val.unwrap().zoom
+  let z = viewer.get().unwrap().zoom
   assert_true(z.zoomed())
   z
 }
@@ -777,7 +777,7 @@ fn zoom_in_middle(t : @ui.Tester) -> @kit.Zoom raise {
 ///|
 test "zoomed in, let go moving it goes on that way, slowing, to its edge; a finger on it stops it and taps nothing" {
   let t = preview_tester("image")
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   let z = zoom_in_middle(t)
   // a quick move left (60 in 50 ms), let go: on after the finger, three of its moves' time later well on
   t.drag(250.0, 422.0, 190.0, 422.0, steps=3)
@@ -811,12 +811,12 @@ test "zoomed in, dragged on past its edge the next comes in; a quick move that c
   // quick (95 a move), from its middle: to its edge and 22.5 past, let go there: back, and it stays at its edge
   t.drag(385.0, 422.0, 5.0, 422.0, steps=4)
   t.run_for(t.rest_of("preview/strip") - t.time())
-  assert_eq(viewer.val.unwrap().file.name, "界面草图.png")
+  assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
   let (x, _, w, _) = z.rect().unwrap()
   assert_true((x + w - 390.0).abs() < 0.001)
   // from its edge, a short quick move on: the next
   t.drag(300.0, 422.0, 260.0, 422.0, steps=2)
-  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+  assert_eq(viewer.get().unwrap().file.name, "第二版.png")
 }
 
 ///|
@@ -825,11 +825,11 @@ test "zoomed in, dragged slowly far past its edge it stops there, nothing beside
   let z = zoom_in_middle(t)
   t.drag(385.0, 422.0, 5.0, 422.0, steps=20)
   t.run_for(t.rest_of("preview/strip") - t.time())
-  assert_eq(viewer.val.unwrap().file.name, "界面草图.png")
+  assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
   let (x, _, w, _) = z.rect().unwrap()
   assert_true((x + w - 390.0).abs() < 0.001)
   t.drag(385.0, 422.0, 5.0, 422.0, steps=20)
-  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+  assert_eq(viewer.get().unwrap().file.name, "第二版.png")
 }
 
 ///|
@@ -837,7 +837,7 @@ test "marking: a box drawn on the picture is numbered, its note kept, its quote 
   let t = preview_tester("image")
   marks_start()
   t.draw()
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   let (x, y, w, _) = v.zoom.rect().unwrap()
   let k = w / v.zoom.nw
   // from (100, 100) to (300, 200) in the picture's pixels
@@ -880,7 +880,7 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   assert_true(at.length() > 0)
   let (x, y) = at[0]
   t.tap(x, y)
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   assert_eq(v.file.name, "compare.png")
   assert_true(v.flies && !v.fly_back)
   // grown in: @ui.move_most_ms from the tap
@@ -891,8 +891,8 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   let tc = (th.x + th.w / 2.0, th.y + th.h / 2.0)
   t.back()
   // closed as back is taken: only drawn, flying back into its thumbnail
-  assert_true(viewer.val is None)
-  assert_true(pv_leaving.val is Some(_))
+  assert_true(viewer.get() is None)
+  assert_true(pv_leaving.get() is Some(_))
   assert_true(v.flies && v.fly_back)
   let to = v.zoom.rect().unwrap()
   // each frame of the way back the picture is drawn where its flight is, nearer the thumbnail than the frame before,
@@ -918,7 +918,7 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   }
   assert_true(frames > 3)
   assert_true(last < 0.5)
-  assert_true(pv_leaving.val is None)
+  assert_true(pv_leaving.get() is None)
   assert_eq(pv_hidden.val, "")
   // (the chat's other pictures brushed in once decoded: sfpages message_files.mbt)
   t.run_for(@sfpages.reveal_ms)
@@ -953,7 +953,7 @@ test "marking: a box's pin up and right of its corner wherever the marks before 
   let t = preview_tester("step")
   marks_start()
   t.draw()
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   let (x, y, w, _) = v.zoom.rect().unwrap()
   let k = w / v.zoom.nw
   // a line drawn by hand first, then a box from (100, 100) to (300, 200) in the picture's pixels
@@ -992,7 +992,7 @@ test "a desktop's video opened over its chat has the keys: Space plays it each t
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   t.draw()
   t.run_for(@ui.move_most_ms)
-  assert_true(viewer.val is Some(_))
+  assert_true(viewer.get() is Some(_))
   let played = fn() { t.views().filter(fn(l) { l == "control 1 1 0" }).length() }
   let before = played()
   // (the chat's own Space, with no field focused, puts the cursor in its composer: not under the film)
@@ -1032,7 +1032,7 @@ test "marking: a note written and done, the picture put in the chat: its quote t
   t.run_for(@ui.move_most_ms)
   marks_start()
   t.draw()
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   let (x, y, w, _) = v.zoom.rect().unwrap()
   let k = w / v.zoom.nw
   t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
@@ -1045,7 +1045,7 @@ test "marking: a note written and done, the picture put in the chat: its quote t
   t.tap(px + pw / 2.0, py + ph / 2.0)
   // the viewer closed back to the chat, the quote of the mark in its composer with what its note said
   t.run_for(@ui.move_most_ms)
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
   assert_true(t.semantics().iter().any(fn(s) { s.value == "这里对齐" }))
   assert_false(t.ctx().field_focused())
 }

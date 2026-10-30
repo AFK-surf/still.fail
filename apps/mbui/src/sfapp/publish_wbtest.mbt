@@ -89,7 +89,7 @@ test "分享图片: the page shows the picture as it would be, 取消 and 保存
   t.tap_text(".log")
   t.tap_text(".tar")
   assert_true(@sfpages.publish_left_out("f1") && @sfpages.publish_left_out("f2"))
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
   // nothing is published
   assert_true(t.query(Button, label="复制图片") is None)
   t.click(Button, label="保存到相册")

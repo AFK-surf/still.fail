@@ -41,7 +41,7 @@ fn picture_under_bar_faults(top : Double, platform : Int, w : Double) -> Array[S
   let set_out = Ref(false)
   t.each_frame(
     Some(fn() {
-      match viewer.val {
+      match viewer.get() {
         Some(v) if v.flies => {
           set_out.val = true
           match thumb_of(t.ctx(), v.id()) {

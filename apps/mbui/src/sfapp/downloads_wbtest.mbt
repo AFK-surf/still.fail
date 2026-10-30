@@ -96,7 +96,7 @@ test "downloads: a message's video right clicked, 加载: the core brings it ont
   assert_eq(text(p, "key"), "s-c1")
   assert_eq(text(p, "name"), "演示录屏.mp4")
   // nothing opened over the chat
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
   // coming (only kept): its menu calls it off instead
   let going = listed("演示录屏.mp4", "going", 1048576.0, 5242880.0, "正在加载 20% · 5 MB")
   match going {
@@ -182,7 +182,7 @@ test "downloads: a file's card says how far the core has downloaded it in its si
   t.frame()
   assert_eq(calls.filter(fn(m) { m.0 == "download.cancel" }).map(fn(m) { text(Some(m.1), "id") }), ["ws1/st1|s-c1|发布包.zip"])
   // nothing opened by it
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
   // the desk's: failed, why, in its size's place; ↻ asks it again
   reset()
   let failed = listed("发布包.zip", "failed", 0.0, 52428800.0, "下载失败：无法连接 station")

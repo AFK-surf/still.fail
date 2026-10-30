@@ -43,11 +43,11 @@ test "desk: an image on the canvas under the bar, back to its chat by name, whic
   assert_true(t.find_last("整理发布清单") is Some(_))
   // → the one after
   t.key(@ui.key_code_right)
-  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+  assert_eq(viewer.get().unwrap().file.name, "第二版.png")
   assert_true(t.find("2 / 2 · 21 KB · 图片 · 400×560") is Some(_))
   // Esc: gone at once, only drawn fading out
   t.key(@ui.key_escape)
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
   t.run_for(pv_fade_ms)
   assert_true(t.find("第二版.png") is None)
 }
@@ -61,7 +61,7 @@ test "desk: a chat's film says its size, length and rate in the bar as its messa
 ///|
 test "desk: a chat's film fitted clear of the bar and the controls, never under them; ⌘ and the wheel zoom it" {
   let t = desk_tester("chat-preview-video")
-  let key = viewer.val.unwrap().media.unwrap().key()
+  let key = viewer.get().unwrap().media.unwrap().key()
   let (top, foot) = @sf.player_room(1280.0)
   let (_, y, w, h) = @sf.player_picture_at(key).unwrap()
   // 1280 × 720 in 1280 × (800 less the bar and the controls): as tall as that leaves, under the bar, over the controls
@@ -82,34 +82,34 @@ test "desk: Esc closes a chat's film as it flies in, before its player is up" {
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   t.draw()
   t.run_for(@ui.move_most_ms / 4.0)
-  assert_true(viewer.val is Some(_))
+  assert_true(viewer.get() is Some(_))
   t.key(@ui.key_escape)
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
 }
 
 ///|
 test "desk: a click on the image hides the bar, another brings it back; one round it closes the preview" {
   let t = desk_tester("chat-preview-image")
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   // left alone, the bar stays
   t.run_for(left_alone_ms)
   assert_true(v.bars_shown())
   // 600 × 400 in 1280 × 800, fitted 32 in: in the middle as it is
   t.tap(640.0, 400.0)
   t.run_for(double_tap_ms)
-  assert_true(viewer.val is Some(_))
+  assert_true(viewer.get() is Some(_))
   assert_true(!v.bars_shown())
   t.tap(640.0, 400.0)
   t.run_for(double_tap_ms)
   assert_true(v.bars_shown())
   t.tap(150.0, 700.0)
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
 }
 
 ///|
 test "desk: the bar hidden by a click shows while the pointer is along the top, where it is, and hides again past it" {
   let t = desk_tester("chat-preview-image")
-  let v = viewer.val.unwrap()
+  let v = viewer.get().unwrap()
   t.tap(640.0, 400.0)
   t.run_for(double_tap_ms)
   assert_true(!v.bars_shown())
@@ -124,7 +124,7 @@ test "desk: the bar hidden by a click shows while the pointer is along the top, 
 ///|
 test "desk: ⌘ and the wheel (or a pinch) zoom round the pointer, the wheel alone pans; + − 0 1 as the web's keys" {
   let t = desk_tester("chat-preview-image")
-  let z = viewer.val.unwrap().zoom
+  let z = viewer.get().unwrap().zoom
   // 600 × 400 fitted in 1280 × 800: as it is
   assert_true((z.scale - 1.0).abs() < 0.001)
   // fitted, the wheel alone moves nothing
@@ -168,7 +168,7 @@ test "desk: a chat's Markdown reads in the reader on its paper, the preview's ow
   assert_true(t.find("说明.md") is Some(_))
   assert_true(t.find("源码") is None)
   t.key(@ui.key_escape)
-  assert_true(viewer.val is None)
+  assert_true(viewer.get() is None)
 }
 
 ///|

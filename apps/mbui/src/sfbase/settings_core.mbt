@@ -126,10 +126,16 @@ fn settings_core_of(
         @sf.icon(c, place_icon(place), size=28.0, color~) |> ignore
       }
     },
-    reporting: fn() { reporting_host.val.map(fn(h) { (h.get)() }) },
+    reporting: fn() {
+      reporting_said.get() |> ignore
+      reporting_host.get().map(fn(h) { (h.get)() })
+    },
     set_reporting: fn(on) {
-      match reporting_host.val {
-        Some(h) => (h.set)(on)
+      match reporting_host.get() {
+        Some(h) => {
+          (h.set)(on)
+          reporting_said.set(@signals.untracked(fn() { reporting_said.get() }) + 1)
+        }
         None => ()
       }
     },
@@ -158,4 +164,9 @@ pub(all) struct ReportingHost {
 
 ///|
 /// The host's, set once as the app starts (src/stillfail main); None under a Tester (reset), unless its test sets one.
-pub let reporting_host : Ref[ReportingHost?] = Ref(None)
+pub let reporting_host : @signals.Signal[ReportingHost?] = @signals.signal(None)
+
+///|
+/// Told as this device is set to send them or not (what reads it reads the host again).
+// kept across runs: only counts on
+let reporting_said : @signals.Signal[Int] = @signals.signal(0)
