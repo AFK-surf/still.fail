@@ -503,6 +503,8 @@ export class SimEndpoint {
   readonly #known = new Map<string, IrohAddr>();
   /// When it is on each relay (its home ones from its binding, others once it first went there).
   readonly #on = new Map<string, Promise<void>>();
+  /// The relays it is on by now (getting onto one takes a while: `#goOnto`).
+  readonly #onto = new Set<string>();
   readonly #keeps: string[] = [];
   readonly #incoming: SimConnection[] = [];
   #accepting: ((c: SimConnection | null) => void) | null = null;
@@ -543,7 +545,9 @@ export class SimEndpoint {
     if (!on) {
       this.net.onto(this, relay);
       const leg = this.net.leg(relay, this.side);
-      on = this.net.sleep(4 * leg.ms);
+      on = this.net.sleep(4 * leg.ms).then(() => {
+        this.#onto.add(relay);
+      });
       this.#on.set(relay, on);
     }
     return on;
@@ -654,7 +658,7 @@ export class SimEndpoint {
   }
   async networkChange(): Promise<void> {}
   relayStatus(): { url: string; connected: boolean }[] {
-    return this.relays.map((url) => ({ url, connected: true }));
+    return this.relays.map((url) => ({ url, connected: this.#onto.has(url) }));
   }
   async close(): Promise<void> {
     if (this.#closed) return;
