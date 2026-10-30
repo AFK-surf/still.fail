@@ -1270,7 +1270,7 @@ pub let panel_icon_size : Double
 
 pub let panel_in : @ui.Radius
 
-pub fn panel_list(@ui.Ctx, String, Int32, Double, (Int32) -> Unit, stick_end? : Bool) -> Int32
+pub fn panel_list(@ui.Ctx, String, Int32, Double, (Int32) -> Unit, stick_end? : Bool, fills? : Bool) -> Int32
 
 pub fn panel_note(@ui.Ctx, String) -> Unit
 

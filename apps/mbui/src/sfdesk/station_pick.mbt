@@ -98,7 +98,8 @@ fn station_pick_add(c : @ui.Ctx, key : String) -> Bool {
 
 ///|
 /// The picker, a panel's body: the way, then the places or a folder, their rows the panel's (on its ground, their
-/// words on its words' line, scrolling in its list: panel_list), not a page's cards on a page's ground of its own.
+/// words on its words' line, scrolling in its list: panel_list), not a page's cards on a page's ground of its own; the
+/// sheet its share wherever it is (`fills`), not taller and shorter from folder to folder.
 fn station_pick(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   station_pick_way(c)
   match spick.at {
@@ -156,7 +157,10 @@ fn station_pick_places(c : @ui.Ctx, src : Source, ws : String) -> Unit {
       rows.push((s, r.path, r.name, false))
     }
   }
-  @sf.panel_list(c, "station-pick/places", rows.length(), pick_row_est, fn(i) { place_line(c, rows, i) }) |> ignore
+  @sf.panel_list(c, "station-pick/places", rows.length(), pick_row_est, fills=true, fn(i) {
+    place_line(c, rows, i)
+  })
+  |> ignore
 }
 
 ///|
@@ -244,7 +248,7 @@ fn station_pick_folder(c : @ui.Ctx, src : Source, at : PickAt) -> Unit {
           })
       }
     Some(_) =>
-      @sf.panel_list(c, "station-pick/folder/" + at.station + "|" + at.root + "|" + at.path, shown.length() + 1, pick_row_est, fn(
+      @sf.panel_list(c, "station-pick/folder/" + at.station + "|" + at.root + "|" + at.path, shown.length() + 1, pick_row_est, fills=true, fn(
         i,
       ) {
         if i == 0 {
