@@ -100,6 +100,8 @@ pub let composer_field_key : String
 
 pub fn composer_foot_in(Double) -> Double
 
+pub fn composer_foot_room(@ui.Ctx, String, Double, let_go~ : Bool) -> Double
+
 pub fn composer_open_room(Double) -> Double
 
 pub fn composer_place(Double) -> ComposerPlace

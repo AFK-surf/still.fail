@@ -440,6 +440,17 @@ pub let flight_desk_ms : Double = 520.0
 pub let sent_down_ms : Double = 300.0
 
 ///|
+/// How long the composer of draft `draft` takes to come down as words sent let go of it: as long as what is left of
+/// their way as they leave it, their row opening on the list's way as long from then (shown_rows), so that the
+/// composer's ground, its room and the row go as one; sent_down_ms for a new chat's first words (their page's change).
+pub fn sent_down_of(draft : String) -> Double {
+  match flight_of(draft) {
+    Some(f) if f.placed && !f.carried => (1.0 - flight_settle) * f.ms
+    _ => sent_down_ms
+  }
+}
+
+///|
 pub fn fly_share(desk : Bool) -> Double {
   if desk {
     1.0

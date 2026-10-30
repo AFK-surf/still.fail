@@ -1295,7 +1295,11 @@ pub fn sending_of(String) -> Array[LocalSent]
 
 pub let sent_down_ms : Double
 
+pub fn sent_down_of(String) -> Double
+
 pub fn sent_key(String, String) -> String
+
+pub fn sent_let_go(Reading, SendFlight?) -> Bool
 
 pub fn sent_local(String, ChatView?, String, Array[Json], going? : Array[Json], quotes? : Array[Json], marks? : Array[(Int32, Int32)]) -> String
 
@@ -2700,6 +2704,7 @@ pub(all) struct Quote {
 
 pub(all) struct Reading {
   mut foot_sign : String
+  mut sent_foot : String
   mut head : String
   mut head_at : Int32
   mut placed : Bool

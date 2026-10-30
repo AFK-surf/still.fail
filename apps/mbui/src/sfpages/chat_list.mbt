@@ -66,6 +66,8 @@ pub fn chat_list(
   // under the viewer's own message, at the column's end where the bell is); not for one at the end itself (the core's
   // `askClear`), which shows whenever the end does, no bell over it
   let ask_clear = if @sfbase.ask_clears(v) { float_lift + float_side } else { 0.0 }
+  // (the composer's room as it comes to stand once words sent let go of it: the list takes it there on its way)
+  let foot_room = composer_foot_room(c, draft, room, let_go=@sfbase.sent_let_go(rd, flight))
   let side = row_side(c)
   // the sides are only the page's margin either way: wide, the pictures out in it stand by their heads' line, not by
   // the words under it, so a table scrolls out over it to the pane's edges as it does narrow
@@ -99,7 +101,7 @@ pub fn chat_list(
         let mk = key + "\u{1}" + keys[i]
         match e {
           Top => c.box(style=@ui.style(h=Fixed(list_top)), fn() {  }) |> ignore
-          Foot => c.box(style=@ui.style(h=Fixed(room + foot + ask_clear)), fn() {  }) |> ignore
+          Foot => c.box(style=@ui.style(h=Fixed(foot_room + foot + ask_clear)), fn() {  }) |> ignore
           Working(a) => {
             // coming in, it fades in and grows from its picture as its room opens (the list's rows' heights:
             // Ctx::row_size); its turn over, it stays a moment and fades (Activity), then its room closes (going)
@@ -107,8 +109,14 @@ pub fn chat_list(
             if rd.fresh.contains(keys[i]) {
               rd.fresh.remove(keys[i])
               open.snap(0.0)
+              // (from when it came, or comes: its room opening later, as words sent leave the composer)
               let at = rd.rows.came(keys[i]).unwrap_or(-1.0)
-              open.animate(1.0, @motion.tween(working_turn_ms, ease=Out), start_at?=if at >= 0.0 { Some(at) } else { None })
+              let later = dmax(at - c.moment(), 0.0)
+              open.animate(1.0, @motion.tween(working_turn_ms, ease=Out, delay=later), start_at?=if at >= 0.0 && later == 0.0 {
+                Some(at)
+              } else {
+                None
+              })
             }
             let leaving = match rd.linger.get(a.key) {
               Some(l) => l.leaving.get()
@@ -182,7 +190,12 @@ pub fn chat_list(
               if !emitted {
                 let a = @motion.Anim::new(0.0)
                 let at = rd.rows.came(keys[i]).unwrap_or(-1.0)
-                a.animate(1.0, @motion.tween(@sf.enter_ms, ease=@sf.ease_out), start_at?=if at >= 0.0 { Some(at) } else { None })
+                let later = dmax(at - c.moment(), 0.0)
+                a.animate(1.0, @motion.tween(@sf.enter_ms, ease=@sf.ease_out, delay=later), start_at?=if at >= 0.0 && later == 0.0 {
+                  Some(at)
+                } else {
+                  None
+                })
                 rd.rises[keys[i]] = a
               }
             }
