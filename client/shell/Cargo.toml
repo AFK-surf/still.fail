@@ -30,4 +30,7 @@ noq-proto = { version = "1", default-features = false }
 # A station's replies taken apart here, not in the core's JS (`zstd.*`): Hermes has no JIT, and fzstd in it made some
 # 10 MB a second of what it decompresses on an M2 Max (client/core-ts/bench/zstd-read.ts). libzstd, built as SQLite is.
 zstd = { version = "0.13", default-features = false }
+# The phone's own adb session (src/adb.rs): pairing with its adbd and the TLS it speaks, on rustls with ring as here.
+libadb = { version = "=0.7.0", default-features = false, features = ["tokio", "pairing", "host-keys"] }
+embedded-io-async = "0.6"
 

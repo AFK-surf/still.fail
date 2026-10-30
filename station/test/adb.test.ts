@@ -445,7 +445,7 @@ async function link(shares: Shares) {
   const tunnels: string[] = [];
   /// `heard`: each line the phone's adbd read; `hold`: what a pairing tunnel waits on after its first answer before it
   /// reads on (a phone far away, its reads late).
-  const phoneSide = { refuse: null as string | null, heard: [] as string[], hold: null as Promise<void> | null };
+  const phoneSide = { refuse: null as string | null, unpaired: false, heard: [] as string[], hold: null as Promise<void> | null };
   void (async () => {
     for (let s = await toStation.acceptBi(); s; s = await toStation.acceptBi()) {
       const stream = s;
@@ -454,7 +454,7 @@ async function link(shares: Shares) {
         const head = await reader.line();
         tunnels.push(head.tunnel);
         if (phoneSide.refuse !== null) {
-          await writeLine(stream, { error: phoneSide.refuse });
+          await writeLine(stream, phoneSide.unpaired ? { error: phoneSide.refuse, unpaired: true } : { error: phoneSide.refuse });
           return stream.finish();
         }
         await writeLine(stream, { ok: true });
@@ -615,6 +615,30 @@ test("over the mesh: a phone adb is not paired with, or whose adbd turned the tu
     while (state.adb === "connecting");
     assert.deepEqual(state, { serial: state.serial, adb: "failed", message: "the phone did not reach adb: connection refused" });
     await again.stream.reset(0);
+  } finally {
+    await shares.close();
+    await mesh.close();
+    await time.close();
+  }
+});
+
+/// 2026-10-31: a phone that holds its own adb session and is not paired with its adbd yet says so; it is paired on the
+/// phone, so the station says unpaired in the phone's words and does not try again until the phone offers again.
+test("over the mesh: a phone pairing itself says it is not paired yet, in its own words", async () => {
+  const adb = fakeAdb({ "on-connect": "offline" });
+  const time = testClock();
+  const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock });
+  const mesh = await link(shares);
+  try {
+    mesh.phoneSide.refuse = "这台手机还没有配对：在共享调试页用配对码配对一次";
+    mesh.phoneSide.unpaired = true;
+    const own = await mesh.ask({ op: "share", phone: PHONE });
+    await own.reader.line();
+    let state;
+    do state = await own.reader.line();
+    while (state.adb === "connecting");
+    assert.deepEqual(state, { serial: state.serial, adb: "unpaired", message: "这台手机还没有配对：在共享调试页用配对码配对一次" });
+    await own.stream.reset(0);
   } finally {
     await shares.close();
     await mesh.close();

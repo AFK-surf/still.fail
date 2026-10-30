@@ -187,6 +187,15 @@ export interface Host {
   /// native host has one.
   tcp?(port: number): Effect.Effect<TcpConnection, HostError, Scope.Scope>;
 
+  /// This device's own adb (the shell's adb.rs, docs/adb-share.md): paired once with adbd's pairing port, one session
+  /// held to adbd's port, and a station's session carried on it, read and written as a socket is (`open`, failing while
+  /// none is held). `hold` fails with `unpaired` while adbd does not take this device's key. Only a native host has it.
+  adb?: {
+    pair(port: number, code: string): Effect.Effect<void, HostError>;
+    hold(port: number): Effect.Effect<void, HostError>;
+    open(): Effect.Effect<TcpConnection, HostError, Scope.Scope>;
+  };
+
   /// An HTTP listener on this machine's loopback `host` (127.0.0.1 or ::1, nothing else) at `port`, open while the scope
   /// is: what comes to it, a request at a time (a login's browser coming back, docs/remote-login.md). Fails when the port
   /// is taken there. Only a native host has one (a web page cannot listen).

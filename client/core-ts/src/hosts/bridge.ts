@@ -19,6 +19,8 @@
 //     shell (docs/vault.md, "设备上的钥匙")
 //   db.read {table, from, to} → {keys, sizes} + the values one after another (the former records store, read once)
 //   tcp.open {port} → {id}; tcp.read {id} → bytes or {end}; tcp.write {id} + bytes; tcp.end {id}; tcp.close {id}
+//   adb.pair {port, code}; adb.hold {port} (fails `unpaired` while adbd does not take the key); adb.state {} → {port};
+//     adb.open {} → {id}, read and written as a tcp one: this device's own adb session (the shell's adb.rs)
 //   listen.open {port, host} → {id} (fails when the port is taken there); listen.next {id} → {request, method, path,
 //     headers: [[name, value]]} + the body, or {end}; listen.respond {id, request, status, headers} + body;
 //     listen.close {id} — a login's loopback listener (docs/remote-login.md), answered by the app (Kotlin:
@@ -147,6 +149,19 @@ function pullBytes(bridge: Bridge, op: string, id: number): Pull<Uint8Array> {
   return { take: Effect.map(bridge.call(op, { id }), (a) => ((a.json as J)?.end === true ? null : (a.bytes ?? new Uint8Array(0)))) };
 }
 
+/// A socket the shell opened with `op` (a port of this machine's, a station's session on its adb), closed with the scope.
+function socketOf(bridge: Bridge, op: string, args: J): Effect.Effect<TcpConnection, HostError, Scope.Scope> {
+  return Effect.gen(function* () {
+    const opened = yield* Effect.acquireRelease(bridge.call(op, args), (a) => Effect.ignore(bridge.call("tcp.close", { id: (a.json as J).id }), { log: "Unhandled", message: "tcp closed" }));
+    const id = (opened.json as J).id as number;
+    return {
+      read: pullBytes(bridge, "tcp.read", id),
+      write: (bytes: Uint8Array) => Effect.asVoid(bridge.call("tcp.write", { id }, bytes)),
+      end: () => void Effect.runFork(Effect.ignore(bridge.call("tcp.end", { id }))),
+    };
+  });
+}
+
 export class BridgeHost implements Host {
   /// The app's performance record, where the engine keeps one (record.ts).
   get recorder(): Recorder | undefined {
@@ -249,16 +264,16 @@ export class BridgeHost implements Host {
   }
 
   tcp(port: number): Effect.Effect<TcpConnection, HostError, Scope.Scope> {
+    return socketOf(this.#bridge, "tcp.open", { port });
+  }
+
+  get adb(): NonNullable<Host["adb"]> {
     const bridge = this.#bridge;
-    return Effect.gen(function* () {
-      const opened = yield* Effect.acquireRelease(bridge.call("tcp.open", { port }), (a) => Effect.ignore(bridge.call("tcp.close", { id: (a.json as J).id }), { log: "Unhandled", message: "tcp closed" }));
-      const id = (opened.json as J).id as number;
-      return {
-        read: pullBytes(bridge, "tcp.read", id),
-        write: (bytes: Uint8Array) => Effect.asVoid(bridge.call("tcp.write", { id }, bytes)),
-        end: () => void Effect.runFork(Effect.ignore(bridge.call("tcp.end", { id }))),
-      };
-    });
+    return {
+      pair: (port, code) => Effect.asVoid(bridge.call("adb.pair", { port, code })),
+      hold: (port) => Effect.asVoid(bridge.call("adb.hold", { port })),
+      open: () => socketOf(bridge, "adb.open", {}),
+    };
   }
 
   /// A loopback listener (a login's browser coming back, docs/remote-login.md), the app's: a request at a time, each

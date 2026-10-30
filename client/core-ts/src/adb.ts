@@ -209,6 +209,22 @@ class Lend {
     this.#keeper = this.#env.runner.fork(this.#keep(run)) as Fiber.Fiber<unknown, unknown>;
   }
 
+  /// Offered again at once (this phone paired with its own adbd): the station connects anew now, not as its retry comes.
+  again(): void {
+    if (this.#offer === null) return;
+    const run = ++this.#run;
+    this.#problem = null;
+    this.#phase = "connecting";
+    this.#tellChanged();
+    this.#shown();
+    this.#keeper = this.#env.runner.fork(this.#keep(run)) as Fiber.Fiber<unknown, unknown>;
+  }
+
+  /// The ports of what it offers now (null: it offers nothing).
+  ports(): Offer | null {
+    return this.#offer;
+  }
+
   #stop(why: string | null): void {
     this.#offer = null;
     this.#run++;
@@ -263,7 +279,7 @@ class Lend {
       if (opened._tag === "Failure") return { lost: opened.failure.message, pause: true } as Ended;
       const [mesh, link] = opened.success;
       // `connect`: the station connects anew as adbd's port changes (adbd turned off and on, its port with it).
-      const ask = { op: "share", phone: mesh.deviceId(), device: offer.device, android: offer.android, package: offer.package, adbd: offer.connect !== null, pair: offer.pair !== null, connect: offer.connect };
+      const ask = { op: "share", phone: mesh.deviceId(), device: offer.device, android: offer.android, package: offer.package, adbd: offer.connect !== null, pair: offer.pair !== null && this.#env.host.adb === undefined, connect: offer.connect };
       const replied = yield* Effect.result(link.adb(head(), ask));
       if (replied._tag === "Failure") return { lost: replied.failure.message, pause: true } as Ended;
       const reply = replied.success;
@@ -349,8 +365,14 @@ class Lend {
       if (offer === null) return yield* refuse("已停止共享");
       const port = kind === "connect" ? offer.connect : kind === "pair" ? offer.pair : null;
       if (port === null) return yield* refuse(kind === "connect" ? "手机未开启无线调试" : kind === "pair" ? "手机未打开配对窗口" : "无法识别的通道");
-      const tcp = yield* Effect.result(this.#env.host.tcp!(port));
+      // This device's own adb session where its host has one (the shell's adb.rs): the station's adb carried on the one
+      // session the phone holds to adbd, under the phone's own key, so a station is never paired and a station restarted
+      // leaves adbd's session be. Elsewhere, adbd's port itself.
+      const own = kind === "connect" ? this.#env.host.adb : undefined;
+      const tcp = yield* Effect.result(own !== undefined ? Effect.andThen(own.hold(port), own.open()) : this.#env.host.tcp!(port));
       if (tcp._tag === "Failure") {
+        if (own !== undefined && tcp.failure.message === "unpaired")
+          return yield* Effect.ignore(Effect.andThen(stream.write(utf8(`${JSON.stringify({ error: t("core-misc.adb.unpaired"), unpaired: true })}\n`)), stream.finish()), { log: "Unhandled", message: "debugging refused" });
         // Nothing at the port the app found (adbd gone from it): said, so that it looks for the port again.
         if (kind === "connect" && this.#offer === offer && this.#refused !== port) {
           this.#refused = port;
@@ -499,7 +521,12 @@ export class Adb {
           this.#sync();
           return null;
         });
-      case "pair":
+      case "pair": {
+        const own = this.#env.host.adb;
+        if (own !== undefined && this.#env.lends()) return this.#pairHere(own, call.code);
+        const lend = this.#legacy.value().sharing ? this.#legacy : (call.station !== undefined ? this.#lends.get(call.station) : this.#focus());
+        return lend === undefined ? Effect.fail(CoreError.invalid(t("core-misc.adb.not_sharing"))) : lend.run(call);
+      }
       case "grant": {
         const lend = this.#legacy.value().sharing ? this.#legacy : (call.station !== undefined ? this.#lends.get(call.station) : this.#focus());
         return lend === undefined ? Effect.fail(CoreError.invalid(t("core-misc.adb.not_sharing"))) : lend.run(call);
@@ -525,6 +552,24 @@ export class Adb {
         );
       }
     }
+  }
+
+  /// This phone paired with its own adbd (docs/adb-share.md, 2026-10-31): once, whichever station's page or card asked,
+  /// and every station it lends to offered again, so that each connects at once.
+  #pairHere(own: NonNullable<AdbEnv["host"]["adb"]>, typed: string): Effect.Effect<unknown, CoreError> {
+    const code = [...typed].filter((c) => c >= "0" && c <= "9").join("");
+    if (code.length !== 6) return Effect.fail(CoreError.invalid(t("core-misc.adb.pair_code")));
+    const lends = [this.#legacy, ...this.#lends.values()];
+    const offered = lends.map((l) => l.ports()).find((o) => o !== null);
+    const ports = this.#ports ?? offered ?? null;
+    if (ports === null || ports.pair === null) return Effect.fail(CoreError.invalid(t("core-misc.adb.pairing_closed")));
+    const pairing = ports.pair;
+    return Effect.gen(function* () {
+      yield* Effect.mapError(own.pair(pairing, code), (e) => CoreError.invalid(e.message === "wrong code" ? t("core-misc.adb.wrong_code") : t("core-misc.adb.pair_failed", { error: e.message })));
+      if (ports.connect !== null) yield* Effect.ignore(own.hold(ports.connect), { log: "Unhandled", message: "debugging held" });
+      for (const l of lends) l.again();
+      return { message: t("core-misc.adb.paired") };
+    });
   }
 
   /// A station said how a grant or request of this person's stands (its `adb-grant` event, or a decision's answer).

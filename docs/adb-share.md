@@ -68,6 +68,31 @@ link only carries its bytes.
 agent ─ adb ─ 127.0.0.1:<port> on the station ─ stream on the phone's link ─ the phone's core ─ 127.0.0.1:<adbd>
 ```
 
+## The phone's own adb session (2026-10-31)
+
+User: 「每次 station 重启就出现一次 adb 通知，按理说不是应该 app 自己连接然后给 station 用吗」. Before, each station's adb
+held a session of its own to adbd under the station's key: every station was paired once, and a station restarted (or
+its grant's adb server, or the link) ended its session, so Android said 「已连接到无线调试」 again each time. Now the
+app's shell (`client/shell/src/adb.rs`, on `libadb`) holds the phone's adb:
+
+- **One key, the phone's**, kept in the app's data directory (`adb/adbkey`). It is paired **once**, here: the
+  pairing code (read off the dialog, or typed) goes to the shell's `adb.pair` with the pairing port the app found,
+  not to a station. Whichever station's page or card asked, every station the phone lends to is offered it again
+  then, and each connects at once.
+- **One session to adbd** (`adb.hold`: CNXN, STLS, TLS 1.3 under that key), held as long as the app's process
+  lives, taken up again on adbd's new port when it moves.
+- **A station's session is carried on it** (`adb.open`, the station's `{"tunnel":"connect"}`): the station's adb
+  says CNXN and is answered at once with the phone's banner (no AUTH, no STLS: the station is let in by the chat's
+  grant before its bytes reach the phone, and the link is end-to-end encrypted), and its streams go on the held
+  session with ids of the shell's own, so that several stations' (and several grants' adb servers') never meet.
+  A stream adbd opens back (`adb reverse`) goes to the station session that last asked for `reverse:`. A station
+  session ending closes its streams on adbd and nothing else. `delayed_ack` is not asked for (its window is a
+  session's, and one session here carries many); the stations are told only the features the held session has.
+- **Not paired yet**, a tunnel is answered `{"error":"…","unpaired":true}` and the station says `unpaired` with the
+  phone's words; it does not try again until the phone offers again (as it does once paired).
+- The station is told `"pair": false` always: it never pairs such a phone, and opens no `pair` tunnels to it.
+  A phone whose host has no own adb (an app from before) is served as below, unchanged.
+
 ## On the phone
 
 - **Wireless debugging** has to be on, the first time by the person (Developer
