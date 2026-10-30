@@ -154,6 +154,11 @@ pub(all) struct Style {
   // for all it holds at their min-widths once what may give way has: words on one line that say not how they give, and
   // what holds them. What may come down so, the widest first (layout.mbt last_resort).
   mut soft_min : Double
+  // Not CSS's: its max-sizes bound only the size it comes to from what it holds, the size it asks of its line; given a
+  // size (its line stretching it, its container sizing it), it takes that. A column that scrolls past its most beside
+  // a taller one runs as far down as that one, not stopping at its most with the room under it empty (CSS's max-height
+  // caps the stretch too).
+  mut stretch_past_max : Bool
   // bumped by every change to what the box comes from (its lengths and box
   // sizing): a node's box stands while it is the same (Node's box_ver)
   priv mut ver : Int
@@ -229,6 +234,7 @@ pub fn Style::new() -> Style {
     fits: false,
     fit_need: 0.0 / 0.0,
     soft_min: 0.0 / 0.0,
+    stretch_past_max: false,
     ver: 0,
     basis_v: 0.0,
     basis_k: LEN_AUTO,
@@ -303,6 +309,7 @@ pub fn Style::reset(self : Style) -> Unit {
   self.fits = false
   self.fit_need = 0.0 / 0.0
   self.soft_min = 0.0 / 0.0
+  self.stretch_past_max = false
   self.ver = self.ver + 1
   self.basis_v = 0.0
   self.basis_k = LEN_AUTO

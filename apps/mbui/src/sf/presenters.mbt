@@ -547,20 +547,31 @@ let rule_over_now : Ref[Double] = { val: 0.0 }
 
 ///|
 /// A column of a panel's body in a column of `style`, its rows `body`, scrolling by itself: beside what opened it past
-/// `most` (the web's run picker's models, 360 high at most); in a sheet past the room the sheet gives it (as tall as
-/// all of it while the sheet has the room for that, the sheet as tall as what it holds; the sheet at its most, the
-/// room left in it: a panel of `lists`), what is beside it staying in view; all of it where the panel scrolls as one
-/// (a small panel held short of what it holds: panel_held), never one scroll in another.
+/// `most` (the web's run picker's models, 360 high at most), and as tall as the row it stands in where that is taller
+/// (a column beside it taller: what it holds runs as far down as that one, not stopping at `most` over empty room); in
+/// a sheet past the room the sheet gives it (as tall as all of it while the sheet has the room for that, the sheet as
+/// tall as what it holds; the sheet at its most, the room left in it: a panel of `lists`), what is beside it staying
+/// in view; all of it where the panel scrolls as one (a small panel held short of what it holds: panel_held), never
+/// one scroll in another.
 pub fn panel_column(c : @ui.Ctx, key : String, most : Double, style : @ui.Style, body : () -> Unit) -> Unit {
   if panel_held_now.val {
     c.box(style~, body) |> ignore
+  } else if small_panel_now.val {
+    // (asking its row for `most` at most, stretched by it past that: Ctx::capped `past_most`, in a row of its own that
+    // takes all of the column it stands in)
+    c.box(style=column_past_most, fn() { c.capped(key, most, past_most=true, fn() { c.box(style~, body) |> ignore }) |> ignore })
+    |> ignore
   } else {
     // (in a sheet as tall as all of it while the sheet has the room, scrolling by itself in what the sheet gives it once
     // it is held to its most: a panel of `lists`)
-    let most = if small_panel_now.val { most } else { wh_of(c) }
-    c.capped(key, most, shrinks=true, fn() { c.box(style~, body) |> ignore }) |> ignore
+    c.capped(key, wh_of(c), shrinks=true, fn() { c.box(style~, body) |> ignore }) |> ignore
   }
 }
+
+///|
+/// panel_column's row beside what opened it: across its column and down all of it.
+// kept across runs: a value (no field of it changes)
+let column_past_most : @ui.Style = @ui.style(row=true, w=Full, h=grow)
 
 ///|
 /// A sheet's column of its own (a sheet a page lays out itself: the settings' adding people, joining a station): what

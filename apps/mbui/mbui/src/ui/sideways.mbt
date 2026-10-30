@@ -305,7 +305,9 @@ pub fn Ctx::capped_id(self : Ctx, key : String) -> Int {
 ///|
 /// A box at most `max_h` tall whose content, when taller, scrolls up and down inside it (see the file's head); `key`
 /// keeps where it is scrolled to. `shrinks`: in a column, shorter still when the column has less room left (CSS's
-/// flex-shrink on what scrolls: a dialog's body when the dialog would be taller than its maximum). `mx`: its sides that
+/// flex-shrink on what scrolls: a dialog's body when the dialog would be taller than its maximum). `past_most`: in a
+/// row, `max_h` bounds only how tall it asks the row to be; the row taller (a column beside it taller), it is stretched
+/// to the row's height, what it holds scrolling in all of it. `mx`: its sides that
 /// far out from where they would be (out across a panel's padding, negative: what it holds scrolls to the panel's
 /// sides, `padx` in from them). Its id.
 pub fn Ctx::capped(
@@ -318,6 +320,7 @@ pub fn Ctx::capped(
   padx? : Double = 0.0,
   pady? : Double = 0.0,
   shrinks? : Bool = false,
+  past_most? : Bool = false,
   mx? : Double = 0.0,
   body : () -> Unit,
 ) -> Int {
@@ -333,6 +336,7 @@ pub fn Ctx::capped(
   self.fade_to(inner, b, top=cut_soft(st.x, st.x), foot=cut_soft(st.max - st.x, st.max - st.x))
   self.nodes[b].sideways = true
   self.nodes[b].shrinks = shrinks
+  self.nodes[b].past_most = past_most
   self.nodes[b].hit = false
   self.nodes[b].scroller = id
   self.nodes[b].scroller_inner = true

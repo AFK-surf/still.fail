@@ -561,6 +561,11 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     s.shrink = shrink
     ch = true
   }
+  // (stretched past its most by its row: Ctx::capped `past_most`)
+  if s.stretch_past_max != n.past_most {
+    s.stretch_past_max = n.past_most
+    ch = true
+  }
   let flow : @flex.Overflow = if n.sideways { Scroll } else { Visible }
   if s.overflow != flow {
     s.overflow = flow
