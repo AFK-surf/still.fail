@@ -384,6 +384,8 @@ fn reset() -> Unit {
   mo.entries.clear()
   measure_at.clear()
   measure_size.clear()
+  measure_names.clear()
+  measure_told.clear()
   mo.at.clear()
   mo.stamp.clear()
   mo.build = -1
@@ -666,7 +668,7 @@ pub fn measure(c : @ui.Ctx, i : Int, key : String) -> Unit {
 /// How tall the node kept as `key` was when last laid out (measure).
 pub fn measured(c : @ui.Ctx, key : String) -> Double? {
   ignore(c)
-  measure_read(measure_size, motion_key("measure\u{1}" + key))
+  measure_read(measure_size, motion_key("measure\u{1}" + key), name=key)
   match mo.recs.get(motion_key("measure\u{1}" + key)) {
     Some(r) => Some(r.h)
     None => None
@@ -696,8 +698,8 @@ pub fn reshaped_over(c : @ui.Ctx, key : String) -> Double {
 /// Where the node kept as `key` (measure) was last laid out, in the window: x, y, w, h (None before it was, or once it
 /// has not been for a frame).
 pub fn measured_rect(c : @ui.Ctx, key : String) -> (Double, Double, Double, Double)? {
-  measure_read(measure_at, motion_key("measure\u{1}" + key))
-  measure_read(measure_size, motion_key("measure\u{1}" + key))
+  measure_read(measure_at, motion_key("measure\u{1}" + key), name=key)
+  measure_read(measure_size, motion_key("measure\u{1}" + key), name=key)
   match mo.recs.get(motion_key("measure\u{1}" + key)) {
     Some(r) if r.seen >= c.frame_number() - 1 => Some((r.x, r.y, r.w, r.h))
     _ => None
@@ -708,7 +710,7 @@ pub fn measured_rect(c : @ui.Ctx, key : String) -> (Double, Double, Double, Doub
 /// How big the node kept as `key` (measure) was when last laid out: w, h (None before it was, or once it has not been
 /// for a frame); what reads it is not told as it moves (a page it is on sliding in), as measured_rect's is.
 pub fn measured_size(c : @ui.Ctx, key : String) -> (Double, Double)? {
-  measure_read(measure_size, motion_key("measure\u{1}" + key))
+  measure_read(measure_size, motion_key("measure\u{1}" + key), name=key)
   match mo.recs.get(motion_key("measure\u{1}" + key)) {
     Some(r) if r.seen >= c.frame_number() - 1 => Some((r.w, r.h))
     _ => None
@@ -1393,10 +1395,16 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       // (what reads it told as what it reads of it changes: how big it is or whether it is laid out, measured, measured_size;
       // where it lies, measured_rect)
       if made || r.w != nw || r.h != nh || r.seen < frame - 1 {
-        measure_changed(measure_size, e.kept)
+        measure_changed(measure_size, e.kept, if made {
+          "first"
+        } else if r.seen < frame - 1 {
+          "laid out again"
+        } else {
+          "\{r.w}x\{r.h} to \{nw}x\{nh}"
+        })
       }
       if r.x != nx || r.y != ny {
-        measure_changed(measure_at, e.kept)
+        measure_changed(measure_at, e.kept, "moved")
       }
       r.x = nx
       r.y = ny
@@ -1853,7 +1861,7 @@ fn forget_recs(c : @ui.Ctx) -> Unit {
   for k in old {
     mo.recs.remove(k)
     // (a measure forgotten: none from now on, what read it told)
-    measure_changed(measure_size, k)
+    measure_changed(measure_size, k, "forgotten")
   }
   let lists : Array[Int] = []
   mo.lists.each(fn(k, l) { if frame - l.seen > 600 { lists.push(k) } })
@@ -1909,7 +1917,10 @@ let measure_size : Map[Int, @signals.Signal[Int]] = {}
 
 ///|
 /// Measure `key` read of `said` as what is built is built: built again as what it reads of it changes.
-fn measure_read(said : Map[Int, @signals.Signal[Int]], key : Int) -> Unit {
+fn measure_read(said : Map[Int, @signals.Signal[Int]], key : Int, name~ : String) -> Unit {
+  if @ui.perf_counting() && !measure_names.contains(key) {
+    measure_names[key] = name
+  }
   let s = match said.get(key) {
     Some(s) => s
     None => {
@@ -1923,11 +1934,61 @@ fn measure_read(said : Map[Int, @signals.Signal[Int]], key : Int) -> Unit {
 
 ///|
 /// Measure `key` laid out other than `said`'s readers read it (or for the first time, or no longer): they are told.
-fn measure_changed(said : Map[Int, @signals.Signal[Int]], key : Int) -> Unit {
+fn measure_changed(said : Map[Int, @signals.Signal[Int]], key : Int, why : String) -> Unit {
   match said.get(key) {
-    Some(s) => s.set(@signals.untracked(fn() { s.get() }) + 1)
+    Some(s) => {
+      if @ui.perf_counting() && s.watched() {
+        measure_count(key, why)
+      }
+      s.set(@signals.untracked(fn() { s.get() }) + 1)
+    }
     None => ()
   }
+}
+
+///|
+/// The keys of the measures read while the frame probe counts (@ui.perf_counting), by their hash.
+// kept across runs: the performance record's, read by nothing else
+let measure_names : Map[Int, String] = {}
+
+///|
+/// How often each measure read told what read it since the record last asked, by its key and why.
+// kept across runs: the performance record's, read by nothing else
+let measure_told : Map[String, Int] = {}
+
+///|
+/// Measure `key` telling what reads it, for `why`: counted for the performance record ("measures:", the most told
+/// first), what is built again for it found by its key, not only by where it was told.
+fn measure_count(key : Int, why : String) -> Unit {
+  if measure_told.is_empty() {
+    @ui.perf_also("measures", measures_said)
+  }
+  let name = match measure_names.get(key) {
+    Some(n) => n
+    None => "#\{key}"
+  }
+  let k = name + " " + why
+  measure_told[k] = measure_told.get(k).unwrap_or(0) + 1
+}
+
+///|
+/// The measures told since last asked, the 6 most told first (`<count> <key> <why>`), and forgotten.
+fn measures_said(span : Double) -> String {
+  ignore(span)
+  let all = measure_told.to_array()
+  measure_told.clear()
+  all.sort_by(fn(a, b) {
+    let c = b.1.compare(a.1)
+    if c != 0 { c } else { a.0.compare(b.0) }
+  })
+  let out = StringBuilder::new()
+  for i, e in all {
+    if i >= 6 {
+      break
+    }
+    out.write_string((if i == 0 { " " } else { " | " }) + "\{e.1} \{e.0}")
+  }
+  out.to_string()
 }
 
 ///|
@@ -1948,7 +2009,12 @@ fn measures_lapsed(frame : Int) -> Unit {
       gone.push(k)
     } else {
       match mo.recs.get(k) {
-        Some(r) if r.seen == frame - 1 => s.set(@signals.untracked(fn() { s.get() }) + 1)
+        Some(r) if r.seen == frame - 1 => {
+          if @ui.perf_counting() {
+            measure_count(k, "not laid out")
+          }
+          s.set(@signals.untracked(fn() { s.get() }) + 1)
+        }
         _ => ()
       }
     }

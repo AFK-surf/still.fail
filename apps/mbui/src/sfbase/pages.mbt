@@ -60,6 +60,30 @@ pub(all) struct ScreenAt {
 } derive(Eq)
 
 ///|
+/// What page `p` is, by its kind alone (no chat's, station's or file's name: the device's performance record says it,
+/// @ui.perf_also "page").
+pub fn page_kind(p : Page) -> String {
+  match p {
+    Home => "Home"
+    Chat(_) => "Chat"
+    Archived => "Archived"
+    Settings => "Settings"
+    Files => "Files"
+    Drive(_) => "Drive"
+    DriveRead(_) => "DriveRead"
+    DrivePlay(_) => "DrivePlay"
+    Service(_, _) => "Service"
+    PreviewFile(_, _, _, _) => "PreviewFile"
+    History(_, _, _) => "History"
+    Words(_, _) => "Words"
+    NewChat => "NewChat"
+    Place(place) => "Place " + place
+    Setting(_) => "Setting"
+    Screen(_) => "Screen"
+  }
+}
+
+///|
 pub(all) struct App {
   mut nav : @ui.Nav[Page]
   /// the workspace switched to here, before the core's prefs say it

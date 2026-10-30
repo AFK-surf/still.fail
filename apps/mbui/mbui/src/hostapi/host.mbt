@@ -88,6 +88,12 @@ pub(open) trait Host {
   set_sideways(Self, Bool) -> Unit = _
   set_turnable(Self, Bool) -> Bool = _
   share(Self, String, String, String, Bytes) -> Bool = _
+  perf_state(Self) -> Int = _
+  set_perf(Self, Bool) -> Unit = _
+  perf_line(Self, String) -> Unit = _
+  perf_where(Self) -> String = _
+  perf_size(Self) -> Double = _
+  perf_read(Self) -> Bytes = _
   shared_in(Self) -> String = _
   shared_in_file(Self, Int) -> Bytes = _
   app_version(Self) -> Int = _
@@ -597,6 +603,36 @@ impl Host with set_turnable(_, _) {
 ///|
 impl Host with share(_, _, _, _, _) {
   false
+}
+
+///|
+impl Host with perf_state(_) {
+  -1
+}
+
+///|
+impl Host with set_perf(_, _) {
+  ()
+}
+
+///|
+impl Host with perf_line(_, _) {
+  ()
+}
+
+///|
+impl Host with perf_where(_) {
+  ""
+}
+
+///|
+impl Host with perf_size(_) {
+  0.0
+}
+
+///|
+impl Host with perf_read(_) {
+  b""
 }
 
 ///|
@@ -1860,6 +1896,64 @@ let sideways_now : Ref[Bool] = { val: false }
 ///|
 // kept across runs: put back as a host is set
 let turnable_now : Ref[Bool] = { val: false }
+
+///|
+/// Whether this device can keep a performance record, and keeps one (-1 it cannot, 0 off, 1 on): the host remembers it
+/// across launches (a setting of this device's, not synced) and starts recording as the app starts when it is on. Every
+/// 5 s while on, the host writes a line of what the process takes (its share of a CPU, by thread, the device's thermal
+/// state, …) to a file of the app's own, and the app's frames their summary (perf_line): nothing leaves the device.
+/// iOS keeps one; elsewhere -1.
+pub fn perf_state() -> Int {
+  current.val.perf_state()
+}
+
+///|
+/// Whether a performance record is being kept now (perf_state 1): asked each frame by the frame probe (a flag the host
+/// reads, nothing more).
+pub fn perf_recording() -> Bool {
+  perf_state() == 1
+}
+
+///|
+/// The performance record kept from now on, or no longer (perf_state), at once and from the next launch on; nothing
+/// where the device keeps none.
+pub fn set_perf(on : Bool) -> Unit {
+  if perf_state() < 0 {
+    return
+  }
+  current.val.set_perf(on)
+}
+
+///|
+/// A line of the app's into the performance record while it is kept (the host puts the wall time before it): the
+/// frame probe's summary, what the app is doing that warms a device (a station's screen looked at). Nothing while it
+/// is not kept.
+pub fn perf_line(line : String) -> Unit {
+  if perf_recording() {
+    current.val.perf_line(line)
+  }
+}
+
+///|
+/// Where the performance record's files are, as the device's files show the app's ("Documents/perf"): "" where none is
+/// kept.
+pub fn perf_where() -> String {
+  current.val.perf_where()
+}
+
+///|
+/// How many bytes the performance record's files have on the device now (the last few files, each at most a few MB).
+pub fn perf_size() -> Double {
+  current.val.perf_size()
+}
+
+///|
+/// The performance record's files as one, the oldest first (what is written meanwhile in it too), to hand on through
+/// the system's share sheet (@hostapi.share): a release build's files are nowhere a person can take them from. Empty
+/// where none is kept.
+pub fn perf_read() -> Bytes {
+  current.val.perf_read()
+}
 
 ///|
 /// Words (`text`), or a file of `data` named `name` (`mime`), handed to another app through the system's share sheet

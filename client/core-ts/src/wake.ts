@@ -148,6 +148,10 @@ export class WakingHost implements Host {
   readonly inner: Host;
   readonly wakes: Wakes;
 
+  /// The inner host's record, as it is now (a test sets its own after the core starts).
+  get recorder(): Host["recorder"] {
+    return this.inner.recorder;
+  }
   readonly tcp?: Host["tcp"];
   readonly appKeys?: boolean;
   readonly openDb?: Host["openDb"];

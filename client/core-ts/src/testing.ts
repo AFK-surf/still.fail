@@ -1,5 +1,6 @@
 // A host for tests (testing.rs): in-memory storage and database, HTTP answered by a function you set, emissions
 // collected, WebSockets fed by the test, time on a TestClock the test moves (`pass`), random bytes from a fixed seed.
+import type { Recorder } from "./record.ts";
 import { Deferred, Duration, Effect, Queue, Scope, type Clock } from "effect";
 import { TestClock } from "effect/testing";
 import { COALESCE_MS } from "./store.ts";
@@ -113,6 +114,8 @@ export class FakeSocket implements Pull<string> {
 }
 
 export class FakeHost implements Host {
+  /// The record's lines, where a test keeps them (record.ts).
+  recorder: Recorder | undefined = undefined;
   origin = "https://stillfail.test";
   isBeta = false;
   onTestChannel = false;

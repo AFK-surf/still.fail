@@ -207,8 +207,82 @@ pub fn fatal() -> String? {
 /// frame sees depends on frames, not on when the core's thread answered. A kept conversation given again (replay.mbt)
 /// comes this way too.
 pub fn receive(text : String, bytes : Bytes?) -> Unit {
+  let t0 = if @hostapi.perf_recording() { ffi_now() } else { -1.0 }
   let msg = @json.parse(text) catch { _ => return }
+  let what = if t0 >= 0.0 { client.perf_name(msg) } else { "" }
   take(msg, bytes)
+  if t0 >= 0.0 {
+    perf_in(what, text, bytes, ffi_now() - t0)
+  }
+}
+
+///|
+/// While the device's performance record is kept: what the core said to the app, by what it was (Client::perf_name),
+/// each its count, bytes and the app's time taking it (ms: parsed, a topic's delta applied, a call's answer handed
+/// on); and what the app asked of the core, by name, each its count. Said and begun again with each summary of the
+/// frames (perf_said).
+// kept across runs: the record's counts, taken by perf_said
+let perf_ins : Map[String, (Int, Int, Double)] = {}
+
+///|
+// kept across runs: the record's counts, taken by perf_said
+let perf_outs : Map[String, Int] = {}
+
+///|
+fn perf_in(what : String, text : String, bytes : Bytes?, ms : Double) -> Unit {
+  let n = text.length() +
+    (match bytes {
+      Some(b) => b.length()
+      None => 0
+    })
+  let (k, b, t) = perf_ins.get(what).unwrap_or((0, 0, 0.0))
+  perf_ins[what] = (k + 1, b + n, t + ms)
+}
+
+///|
+/// What the app asked of the core (a call's name, `sub <topic>`), counted while the record is kept (Client::call,
+/// Client::ask).
+fn perf_out(what : String) -> Unit {
+  if @hostapi.perf_recording() {
+    perf_outs[what] = perf_outs.get(what).unwrap_or(0) + 1
+  }
+}
+
+///|
+/// The record's line of the core's messages since it was last asked (@ui.perf_also "core"), the heaviest first:
+/// `in (ms/count/KB, the 6 longest): 3.2ms/12/40.1KB topic chats delta | … || out (count, the 6 most): 4 chat.read |
+/// …`; "" where none came or went. Begun again.
+pub fn perf_said(span : Double) -> String {
+  ignore(span)
+  if !@hostapi.perf_recording() {
+    client.perf_forget()
+  }
+  if perf_ins.is_empty() && perf_outs.is_empty() {
+    return ""
+  }
+  let ins = perf_ins.to_array()
+  ins.sort_by(fn(a, b) { b.1.2.compare(a.1.2) })
+  let outs = perf_outs.to_array()
+  outs.sort_by(fn(a, b) { b.1.compare(a.1) })
+  let line = StringBuilder::new()
+  line.write_string("in (ms/count/KB, the 6 longest):")
+  for i, e in ins {
+    if i >= 6 {
+      break
+    }
+    let (k, b, t) = e.1
+    line.write_string((if i == 0 { " " } else { " | " }) + "\{(t * 10.0).round() / 10.0}ms/\{k}/\{(b.to_double() / 102.4).round() / 10.0}KB \{e.0}")
+  }
+  line.write_string(" || out (count, the 6 most):")
+  for i, e in outs {
+    if i >= 6 {
+      break
+    }
+    line.write_string((if i == 0 { " " } else { " | " }) + "\{e.1} \{e.0}")
+  }
+  perf_ins.clear()
+  perf_outs.clear()
+  line.to_string()
 }
 
 ///|
@@ -217,12 +291,17 @@ pub fn receive(text : String, bytes : Bytes?) -> Unit {
 /// answer nobody reads), before the frame decides what it does: what read the topic is built again, nothing else
 /// (@ui.on_message_said, "core"). Whether it was; else it is left for `receive`, as the frame is built.
 pub fn receive_said(text : String, bytes : Bytes?) -> Bool {
+  let t0 = if @hostapi.perf_recording() { ffi_now() } else { -1.0 }
   let msg = @json.parse(text) catch { _ => return false }
   match msg {
     Object(m) if !m.contains("mbui_auth") &&
       !m.contains("clocked") &&
       (client.topic_said(m) || client.call_said(m)) => {
+      let what = if t0 >= 0.0 { client.perf_name(msg) } else { "" }
       take(msg, bytes)
+      if t0 >= 0.0 {
+        perf_in(what, text, bytes, ffi_now() - t0)
+      }
       true
     }
     _ => false

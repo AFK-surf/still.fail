@@ -966,23 +966,30 @@ static void check_part(id<MTLCommandBuffer> cb, int parts) {
 
 // MBUI_PROBE=1 (src/ui/app.mbt's probe): where a present's time goes, said every 240 of them: waiting for a buffer of
 // the ring (the GPU three frames behind), the instances into it, waiting for a drawable (the display's), and the
-// drawing encoded and committed (ms, on average).
+// drawing encoded and committed (ms, on average). On the log, and into the performance record while it is kept
+// (ios_app.m's mb_perf_note: none on a Mac, these defaults).
 static int present_probing = -1, present_n;
 static double present_ms[4];
+
+__attribute__((weak)) int mb_perf_on(void) { return 0; }
+__attribute__((weak)) void mb_perf_note(const char *line) { (void)line; }
 
 static void present_probe(double ring, double upload_s, double drawable, double encode_s) {
   if (present_probing < 0) {
     const char *v = getenv("MBUI_PROBE");
     present_probing = v && v[0] == '1';
   }
-  if (!present_probing) return;
+  if (!present_probing && !mb_perf_on()) return;
   present_ms[0] += ring * 1000.0;
   present_ms[1] += upload_s * 1000.0;
   present_ms[2] += drawable * 1000.0;
   present_ms[3] += encode_s * 1000.0;
   if (++present_n < 240) return;
-  fprintf(stderr, "PROBE present avg: ring wait %.2f, upload %.2f, drawable wait %.2f, encode %.2f ms\n",
-          present_ms[0] / present_n, present_ms[1] / present_n, present_ms[2] / present_n, present_ms[3] / present_n);
+  char line[160];
+  snprintf(line, sizeof line, "present avg: ring wait %.2f, upload %.2f, drawable wait %.2f, encode %.2f ms",
+           present_ms[0] / present_n, present_ms[1] / present_n, present_ms[2] / present_n, present_ms[3] / present_n);
+  if (present_probing) fprintf(stderr, "PROBE %s\n", line);
+  mb_perf_note(line);
   present_n = 0;
   memset(present_ms, 0, sizeof present_ms);
 }

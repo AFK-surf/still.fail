@@ -25,6 +25,10 @@ export function startEngine(modules: readonly CoreModule[], os: string): void {
     monotonic: () => native.monotonic(),
     utcOffset: (at) => native.utcOffset(at),
     random: (buf) => buf.set(new Uint8Array(native.random(buf.length))),
+    // the app's performance record, where the engine keeps one (record.ts)
+    ...(typeof native.recording === "function" && typeof native.record === "function"
+      ? { recording: () => native.recording!(), record: (line: string) => native.record!(line) }
+      : {}),
   };
 
   let core: ReturnType<typeof startBridged> | null = null;
