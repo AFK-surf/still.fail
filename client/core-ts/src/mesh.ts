@@ -23,7 +23,7 @@ import { StationAddr, stationId } from "./station/addr.ts";
 import { IDEMPOTENCY_KEY, IDEMPOTENT, READS } from "./station/requests.ts";
 import type { LinkNet, RequestHead, ScreenAsk, SocketOut, StationWire, WireReply, WireSocket } from "./station/wire.ts";
 import { RELAY } from "./status.ts";
-import { Kind, type SpanContext, type Tracer } from "./trace.ts";
+import { Kind, route, type SpanContext, type Tracer } from "./trace.ts";
 import { fromUtf8, hex, parseJson, sha256, toJsonBytes, utf8 } from "./util.ts";
 import { type LockClaim, lockClaim } from "./lock.ts";
 import { PAIR_ALPN } from "./pair.ts";
@@ -1070,7 +1070,9 @@ export class Mesh {
   /// The link to a station at `addr`, opening it (or opening again a closed one) with a credential from `credentials`,
   /// its workspace's; `theirs`: the relays its workspace has of its own; `off`: the ways it turned off (relays, kinds of
   /// way), none gone that way. The same station at another address (in another workspace) has a link of its own.
-  link(addr: string, credentials: CredentialSource, theirs?: readonly string[], off?: readonly string[]): Effect.Effect<Link, CoreError> {
+  /// `asker`: what waits on it (a request's method and route, `events`, `screen`; `again` when the mesh opens it
+  /// itself), said on the dial's span: whether someone was waiting on a slow dial, or it came about in the background.
+  link(addr: string, credentials: CredentialSource, theirs?: readonly string[], off?: readonly string[], asker?: string): Effect.Effect<Link, CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (theirs !== undefined) this.#theirs.set(addr, [...theirs]);
       if (off !== undefined) this.#turnOff(addr, off);
@@ -1088,7 +1090,7 @@ export class Mesh {
           const ended = existing.result as Opening["result"];
           const unanswered = ended !== null && "err" in ended && ended.unanswered;
           if (!unanswered || this.now() - asked >= CONNECT_TIMEOUT_MS) return yield* Effect.fail(joined.failure);
-          return yield* this.link(addr, credentials, theirs, off);
+          return yield* this.link(addr, credentials, theirs, off, asker);
         }
         if ("ok" in existing.result) {
           if (existing.result.ok.usable()) return existing.result.ok;
@@ -1106,6 +1108,7 @@ export class Mesh {
       }
       const span = this.#env.tracer.span("mesh.connect", Kind.Internal);
       span.set("stillfail.station", stationId(addr));
+      if (asker !== undefined) span.set("stillfail.asker", asker);
       let endpoint = this.#endpoint;
       if (this.#stuck && !this.#anyOpen()) {
         span.set("stillfail.rebound", true);
@@ -1568,7 +1571,7 @@ export class Mesh {
         // its paths, so this is the station, not the way): let go, and the station dialled anew.
         const credentials = cur.credentials;
         this.dropLink(addr);
-        this.#env.runner.fork(Effect.ignore(this.link(addr, credentials), { log: "Unhandled", message: "link opened" }));
+        this.#env.runner.fork(Effect.ignore(this.link(addr, credentials, undefined, undefined, "again"), { log: "Unhandled", message: "link opened" }));
       }
       return;
     }
@@ -2175,8 +2178,9 @@ export class MeshWire implements StationWire {
       const credentials = env.credentials(workspace);
       const theirs = env.relays(workspace);
       const off = env.off?.(workspace);
+      const asker = `${head.method.toUpperCase()} ${route(head.path)}`;
       const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
-      const link = yield* waiting(status, address, t("station.core.connecting"), mesh.link(key, credentials, theirs, off));
+      const link = yield* waiting(status, address, t("station.core.connecting"), mesh.link(key, credentials, theirs, off, asker));
       const repeats = mayRepeat(head, idempotent.has(key));
       const write = !["GET", "HEAD"].includes(head.method.toUpperCase()) && !onlyReads(head);
       // Asked on more than one way (or again), the body is told of as far as the furthest has gone.
@@ -2210,7 +2214,7 @@ export class MeshWire implements StationWire {
             let pause = 1_000;
             answered = yield* Effect.gen(function* () {
               for (;;) {
-                const again = yield* Effect.result(Effect.flatMap(mesh.link(key, credentials, theirs, off), ask));
+                const again = yield* Effect.result(Effect.flatMap(mesh.link(key, credentials, theirs, off, asker), ask));
                 if (again._tag === "Success") return again.success;
                 if (again.failure.code !== "mesh") return yield* Effect.fail(again.failure);
                 if (mesh.now() - started >= RECHECK_MS) return yield* Effect.fail(unconfirmed(again.failure));
@@ -2224,7 +2228,7 @@ export class MeshWire implements StationWire {
             // seed 143365259, 2026-10-17), a few times.
             answered = yield* Effect.gen(function* () {
               for (let tries = 1; ; tries++) {
-                const l = yield* waiting(status, address, t("station.core.connecting"), mesh.link(key, credentials, theirs, off));
+                const l = yield* waiting(status, address, t("station.core.connecting"), mesh.link(key, credentials, theirs, off, asker));
                 const again = yield* Effect.result(ask(l));
                 if (again._tag === "Success") return again.success;
                 if (again.failure.code !== "mesh" || l.closed() === null || tries >= LOST_TRIES) return yield* Effect.fail(again.failure);
@@ -2233,7 +2237,7 @@ export class MeshWire implements StationWire {
           } else return yield* Effect.fail(r.failure);
         } else if ("replaced" in first) {
           // Replaced while under way: asked again on the new one at once, the first answer taken.
-          const again = Effect.flatMap(mesh.link(key, credentials, theirs, off), ask);
+          const again = Effect.flatMap(mesh.link(key, credentials, theirs, off, asker), ask);
           answered = yield* firstAnswer(asked, again, late);
         } else {
           // Slow on its way: asked on the next best as well. Answered there first, its way is told how long it kept it.
@@ -2298,7 +2302,7 @@ export class MeshWire implements StationWire {
     return Effect.gen(function* () {
       const status = env.status(station.workspace);
       const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
-      const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.toString(), env.credentials(station.workspace), env.relays(station.workspace), env.off?.(station.workspace)));
+      const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.toString(), env.credentials(station.workspace), env.relays(station.workspace), env.off?.(station.workspace), `${head.method.toUpperCase()} ${route(head.path)}`));
       const [reply, send] = yield* link.socket(head);
       yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
       return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send };
@@ -2310,7 +2314,7 @@ export class MeshWire implements StationWire {
     return Effect.gen(function* () {
       const status = env.status(station.workspace);
       const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
-      const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.toString(), env.credentials(station.workspace), env.relays(station.workspace), env.off?.(station.workspace)));
+      const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.toString(), env.credentials(station.workspace), env.relays(station.workspace), env.off?.(station.workspace), "screen"));
       const [reply, send] = yield* link.screen(head, screen);
       yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
       return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send, tap: reply.tap };
