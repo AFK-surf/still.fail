@@ -425,7 +425,9 @@ fn capped_want(c : @ui.Ctx, serial : Int, id : Int) -> Double? {
 /// has what it holds (its sides, its words' line, its rows' reach): they are drawn after the panel's body has said it.
 /// The list spans the room the panel leaves its rows to reach across (rows_out: a list clips what it holds to itself),
 /// its rows' words that much further in from its edge, so a row's ground reaches the panel's sides as it does outside
-/// a list. `stick_end`: it starts at its end and stays there as rows come (Ctx::list's).
+/// a list. `stick_end`: it starts at its end and stays there as rows come (Ctx::list's). `fills`: in a panel a share of
+/// the window caps, it says not what it holds, the panel its share whatever it holds (one gone about in, a folder after
+/// another, each holding more or less: not a sheet growing and shrinking at each step).
 pub fn panel_list(
   c : @ui.Ctx,
   key : String,
@@ -433,6 +435,7 @@ pub fn panel_list(
   est : Double,
   row : (Int) -> Unit,
   stick_end? : Bool = false,
+  fills? : Bool = false,
 ) -> Int {
   let (sides, out, words, body, small) = (
     panel_sides_in.val,
@@ -446,7 +449,7 @@ pub fn panel_list(
   // the rest at `est`: none laid out to be measured), for the panel to be as tall as that up to its share
   // (measured_body); it fills the room it is given
   let room_id = c.id(key + "/room")
-  if lists_said_now.val {
+  if lists_said_now.val && !fills {
     let holds = match c.list_info_as(key, fn(i) { i.map(fn(x) { x.content }) }) {
       Some(i) => i.content
       None => est * count.to_double()

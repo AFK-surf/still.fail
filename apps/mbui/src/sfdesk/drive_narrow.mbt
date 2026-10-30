@@ -230,9 +230,6 @@ let narrow_empty_icon : Double = 40.0
 
 
 
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_page : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 
 
