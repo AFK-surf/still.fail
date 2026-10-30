@@ -86,8 +86,8 @@ test "list: a row coming where it is opens its room at once, what it holds in it
     let w = words()
     if h > 1.0 && h < 49.0 {
       between += 1
-      // (as far shown as it is open, in its room's middle)
-      assert_true((w.5 - h / 50.0).abs() < 0.03, msg="\{w} \{h}")
+      // (as big as it is open, seen from half open, in its room's middle)
+      assert_true((w.5 - @ui.row_held_look(h / 50.0).alpha).abs() < 0.03, msg="\{w} \{h}")
       assert_true((w.2 - (y + (h - 50.0) / 2.0)).abs() < 1.5)
     }
     t.frame()
@@ -113,7 +113,7 @@ test "list: a row going closes its room at once, what it holds in its middle, fa
   let (_, y, _, h) = t.row(19).unwrap()
   assert_true(h > 1.0 && h < 49.0)
   let w = t.words().filter(fn(w) { w.0 == "Row 19" })[0]
-  assert_true((w.5 - h / 50.0).abs() < 0.03, msg="\{w} \{h}")
+  assert_true((w.5 - @ui.row_held_look(h / 50.0).alpha).abs() < 0.03, msg="\{w} \{h}")
   assert_true((w.2 - (y + (h - 50.0) / 2.0)).abs() < 1.5)
   assert_true((y_of(t, 18) - (y18 + 50.0 - h)).abs() < 0.001)
   assert_eq(bottom_of(t, 19), 400.0)

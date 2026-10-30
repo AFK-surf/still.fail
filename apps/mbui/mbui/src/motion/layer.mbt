@@ -1139,8 +1139,8 @@ pub fn reveal_height(key : String) -> Double {
 ///|
 /// What `body` builds, as tall as `share` (0 → 1) of its own height (expandVertically / shrinkVertically, from its top
 /// or with its foot kept), cut there when `clip`; all of it at 1. `align` places what it builds across, as its parent
-/// would. `middle`: what it builds kept in the middle of its room and cut by it at both ends, what is cut fading out
-/// to them (2026-10-31 the user: 「你要不两头裁呢？再加上淡化的边缘」, as a list's row coming and going is). Its own
+/// would. `middle`: what it builds kept in the middle of its room, as big as it is open and faded out by half,
+/// about the middle of what it draws (@ui.Ctx::held_look), cut by it at both ends, what is cut fading out to them (2026-10-31 the user: 「你要不两头裁呢？再加上淡化的边缘」, as a list's row coming and going is). Its own
 /// height is the one it was last laid out with (none the first frame, when it is nothing tall). The one helper here
 /// that lays out: a height the app animates (what is in it is tapped where it is laid out, as anything).
 pub fn reveal(
@@ -1174,6 +1174,10 @@ pub fn reveal(
     },
   )
   if middle && !whole {
+    // (as big as its room is open and gone by half, as a list's row coming and going where it is: what a card under a
+    // post holds not cut by its room as it closes, 2026-10-31 the user: 「特殊情况下消息列表还是会出现比较明显的裁剪」
+    // 「比如选择决策」)
+    c.look_by(inner, fn() { c.held_look(inner, share) })
     let soft = @ui.cut_soft((natural - shown) / 2.0, shown / 2.0)
     c.fade_to(inner, outer, top=soft, foot=soft)
   }

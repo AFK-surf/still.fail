@@ -1,6 +1,6 @@
 // A group's rows by their keys (a workspace's people, a station's connects): what comes into it opens its room where it
-// is, what goes from it closes where it was, in the middle of its room, cut at both ends with faded edges, faded and
-// grown from 96% as far as it is open, as a chat's rows come and go (mbui's ListRows, docs/list-motion.md; 2026-10-31
+// is, what goes from it closes where it was, in the middle of its room, cut at both ends with faded edges, grown as far as it is open and
+// faded in from half open, as a chat's rows come and go (mbui's ListRows, docs/list-motion.md; 2026-10-31
 // the user: 「有一些是凭空出现的，有一些是凭空消失的」). The first time a group is drawn its rows are as they are.
 
 ///|
@@ -72,10 +72,8 @@ pub fn group_rows(c : @ui.Ctx, key : String, rows : Array[(String, () -> Unit)])
     }
     kept.push(r)
     @motion.reveal(c, name, share, middle=true, fn() {
+      // (as big as its room is open, faded in from half: reveal's middle)
       let i = c.box(style=full_width, draw)
-      if share < 1.0 {
-        c.look(i, @ui.look(alpha=share, scale=@ui.row_leave_scale + (1.0 - @ui.row_leave_scale) * share))
-      }
       @motion.leaving(c, i, shown)
     })
   }
