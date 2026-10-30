@@ -72,7 +72,9 @@ export function grantShown(g: J, now: number, offsetMin: number): J {
     grantedAt,
     grantedText: allowedBy === null ? t("core-views.outflow.grantedAt", { when: dayClock(grantedAt, now, offsetMin) }) : t("core-views.outflow.allowedBy", { when: dayClock(grantedAt, now, offsetMin), who: allowedBy }),
     lastReadAt,
-    lastReadText: lastReadAt === null ? t("core-views.outflow.neverRead") : t("core-views.outflow.lastRead", { when: dayClock(lastReadAt, now, offsetMin) }),
+    // Allowed, its program not come for the token yet (a station from before has none such: taken).
+    taken: get(g, "taken") !== false,
+    lastReadText: get(g, "taken") === false ? t("core-views.outflow.notTaken") : lastReadAt === null ? t("core-views.outflow.neverRead") : t("core-views.outflow.lastRead", { when: dayClock(lastReadAt, now, offsetMin) }),
     // The newest first.
     reads: reads.reverse(),
   };

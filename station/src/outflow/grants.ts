@@ -46,7 +46,7 @@ export type Read = { at: number; scope: Scope; rows: number; station?: string };
 
 export type Grant = {
   id: string;
-  /// SHA-256 of its token, hex.
+  /// SHA-256 of its token, hex; empty while its program has not come for it yet (allowed, the token not made).
   token: string;
   identity: Identity;
   /// What the program said of itself when it asked (shown as its own words).
@@ -64,7 +64,7 @@ export type Grant = {
 };
 
 /// A grant as the pages are given it: without its token.
-export type GrantView = Omit<Grant, "token" | "reach"> & { reach: Reach; lastReadAt: number | null };
+export type GrantView = Omit<Grant, "token" | "reach"> & { reach: Reach; lastReadAt: number | null; taken: boolean };
 
 /// A program's request, until its program takes what was answered: asking while no admin answered; then allowed
 /// (with what the admin left of it) or refused.
@@ -76,7 +76,8 @@ export type Request = {
   scopes: Scope[];
   reach: Reach;
   askedAt: number;
-  answer: null | { at: number; by: string; allow: false } | { at: number; by: string; allow: true; scopes: Scope[]; reach: Reach };
+  /// Allowed: the grant made of it at once (shown and revocable), its token given when the program comes for it.
+  answer: null | { at: number; by: string; allow: false } | { at: number; by: string; allow: true; grant: string };
 };
 
 /// What a program asking is answered, once there is an answer: its grant and token, or refused.
@@ -103,10 +104,21 @@ export class OutflowGrants {
     const kept = this.#load();
     this.#grants = kept.grants;
     this.#requests = kept.requests;
+    // Allowed before a grant was made at once (it waited for its program): made now, so it shows and can be revoked.
+    let made = false;
+    for (const request of this.#requests) {
+      const answer = request.answer as { allow?: boolean; grant?: string; scopes?: Scope[]; reach?: Reach; by: string; at: number } | null;
+      if (answer?.allow !== true || answer.grant !== undefined) continue;
+      const grant: Grant = { id: randomBytes(8).toString("hex"), token: "", identity: request.identity, said: request.said, ...(request.key ? { key: request.key } : {}), scopes: answer.scopes ?? [], reach: answer.reach ?? "station", allowedBy: answer.by, grantedAt: answer.at, reads: [] };
+      this.#grants.push(grant);
+      request.answer = { at: answer.at, by: answer.by, allow: true, grant: grant.id };
+      made = true;
+    }
+    if (made) this.#save();
   }
 
   list(): GrantView[] {
-    return this.#grants.map(({ token: _, ...g }) => ({ ...g, reach: g.reach ?? "station", lastReadAt: g.reads.at(-1)?.at ?? null }));
+    return this.#grants.map(({ token, ...g }) => ({ ...g, reach: g.reach ?? "station", lastReadAt: g.reads.at(-1)?.at ?? null, taken: token !== "" }));
   }
 
   /// The requests no admin has answered yet, the oldest first.
@@ -145,15 +157,19 @@ export class OutflowGrants {
       const scopes = request.scopes.filter((s) => answer.scopes.includes(s));
       if (scopes.length === 0) return this.answer(id, by, { allow: false });
       const reach: Reach = request.reach === "workspace" && answer.reach === "workspace" ? "workspace" : "station";
-      request.answer = { at, by, allow: true, scopes, reach };
+      // The grant stands from now on: in the list, revocable; another of the same program under the same key goes.
+      const it = whose(request.identity, request.key);
+      const grant: Grant = { id: randomBytes(8).toString("hex"), token: "", identity: request.identity, said: request.said, ...(request.key === "" ? {} : { key: request.key }), scopes, reach, allowedBy: by, grantedAt: at, reads: [] };
+      this.#grants = [...this.#grants.filter((g) => whose(g.identity, g.key) !== it), grant];
+      request.answer = { at, by, allow: true, grant: grant.id };
     } else request.answer = { at, by, allow: false };
     this.#save();
     return true;
   }
 
   /// What request `id`'s program is given, once answered (null while asking, or when there is no such request): the
-  /// grant made of it and its token (said once, never kept), or refused. Either way the request goes. Another grant
-  /// of the same program under the same key goes: what it asked for now is what it has.
+  /// grant made of it and its token (made now, said once, never kept), or refused (also when the grant was revoked
+  /// before its program came for it). Either way the request goes.
   take(id: string): Taken | null {
     this.#expire();
     const request = this.#requests.find((r) => r.id === id);
@@ -163,11 +179,13 @@ export class OutflowGrants {
       this.#save();
       return "refused";
     }
+    const grant = this.#grants.find((g) => g.id === (request.answer as { grant: string }).grant);
+    if (!grant) {
+      this.#save();
+      return "refused";
+    }
     const token = TOKEN_PREFIX + randomBytes(32).toString("base64url");
-    const it = whose(request.identity, request.key);
-    const { scopes, reach, by, at } = request.answer;
-    const grant: Grant = { id: randomBytes(8).toString("hex"), token: digest(token), identity: request.identity, said: request.said, ...(request.key === "" ? {} : { key: request.key }), scopes, reach, allowedBy: by, grantedAt: at, reads: [] };
-    this.#grants = [...this.#grants.filter((g) => whose(g.identity, g.key) !== it), grant];
+    grant.token = digest(token);
     this.#save();
     return { grant: this.list().find((g) => g.id === grant.id)!, token };
   }
@@ -179,11 +197,12 @@ export class OutflowGrants {
     return this.#grants.find((g) => g.token === hash) ?? null;
   }
 
-  /// Revokes grant `id`; whether there was one.
+  /// Revokes grant `id` (one its program has not come for yet too); whether there was one.
   revoke(id: string): boolean {
     const before = this.#grants.length;
     this.#grants = this.#grants.filter((g) => g.id !== id);
     if (this.#grants.length === before) return false;
+    this.#requests = this.#requests.filter((r) => !(r.answer?.allow === true && r.answer.grant === id));
     this.#save();
     return true;
   }

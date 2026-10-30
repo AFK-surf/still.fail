@@ -225,21 +225,47 @@ test("a request waits as long as no admin answers; asked again, it is the same o
   assert.deepEqual(new OutflowGrants(r.data, () => 0).list().map((g) => g.id), r.grants.list().map((g) => g.id));
 });
 
-test("a program that left before it was answered takes nothing; its request waits for it, and goes after a week", async () => {
+test("a program that left before it was answered: its grant stands at once, revocable, its token given when it comes back", async () => {
   const r = await rig();
   const m = members(r);
   await askAndLeave(r, ["usage"]);
   const id = r.grants.asking()[0]!.id;
   assert.equal(await m.answer(id, { allow: true, scopes: ["usage"] }), 200);
-  assert.equal(r.grants.list().length, 0, "nothing taken while nobody asks");
-  assert.equal((await ask(r, ["usage"])).status, 200);
-  assert.equal(r.grants.list().length, 1);
+  // Listed as allowed and not taken yet, with who allowed it: the members see it and can revoke it.
+  const listed = (await m.list()).grants;
+  assert.deepEqual(listed.map((g: any) => [g.scopes, g.taken, g.allowedBy]), [[["usage"], false, "boss@x"]]);
+  assert.deepEqual((await m.list()).requests, [], "no longer asking");
+  const got = await ask(r, ["usage"]);
+  assert.equal(got.status, 200);
+  assert.deepEqual(r.grants.list().map((g) => [g.id, g.taken]), [[listed[0].id, true]], "the same grant, its token given now");
+  assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1", undefined, got.body.token)).status, 200);
 
-  // No admin answers in a week: the request goes.
+  // Revoked before its program came back: gone with its request; asked again, it is a new request for an admin.
+  await askAndLeave(r, ["chats"], { key: "other" });
+  assert.equal(await m.answer(r.grants.asking()[0]!.id, { allow: true, scopes: ["chats"] }), 200);
+  const waiting = r.grants.list().find((g) => !g.taken)!;
+  assert.equal(await m.revoke(waiting.id), 200);
+  assert.equal(r.grants.list().some((g) => g.id === waiting.id), false);
+  await askAndLeave(r, ["chats"], { key: "other" });
+  assert.deepEqual(r.grants.asking().map((q) => q.key), ["other"]);
+
+  // No admin answers in a week: the requests go.
   await askAndLeave(r, ["chats"]);
-  assert.equal(r.grants.asking().length, 1);
+  assert.equal(r.grants.asking().length, 2);
   r.clock.now += REQUEST_KEPT_MS + 1;
   assert.deepEqual((await m.list()).requests, []);
+});
+
+test("a request allowed before grants were made at once is one now, listed and revocable", async () => {
+  const data = tempdir();
+  const { writeFileSync } = await import("node:fs");
+  const request = { id: "q1", identity: COMMA, said: { name: "Comma", purpose: "" }, key: "st-1", scopes: ["usage"], reach: "workspace", askedAt: 1, answer: { at: 2, by: "boss@x", allow: true, scopes: ["usage"], reach: "workspace" } };
+  writeFileSync(join(data, "outflow.json"), JSON.stringify({ grants: [], requests: [request] }));
+  const grants = new OutflowGrants(data, () => 3);
+  assert.deepEqual(grants.list().map((g) => [g.key, g.scopes, g.reach, g.allowedBy, g.taken]), [["st-1", ["usage"], "workspace", "boss@x", false]]);
+  const taken = grants.take("q1");
+  assert.ok(taken !== null && taken !== "refused" && taken.token.startsWith("sfo_"));
+  assert.equal(new OutflowGrants(data, () => 4).list()[0]!.taken, true, "kept");
 });
 
 test("granted the workspace: the program lists its stations and reads each, the others' asked over the station transport", async () => {

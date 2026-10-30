@@ -570,5 +570,6 @@
   "core-views.outflow.reach.station": "这台 station",
   "core-views.outflow.reach.workspace": "整个 workspace 的所有 station",
   "core-views.outflow.askedAt": "{when} 申请",
-  "core-views.outflow.allowedBy": "{who} {when} 批准"
+  "core-views.outflow.allowedBy": "{who} {when} 批准",
+  "core-views.outflow.notTaken": "已允许，等程序来取"
 }
