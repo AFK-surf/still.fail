@@ -21,6 +21,9 @@ pub struct Tester {
   /// a host's frames as its run had them (set_frame_times, set_frame_period): every frame on them, as the host drew
   /// it (an input's, a draw's, run_for's), not at the moments the test says
   mut host_frames : Bool
+  /// what the test looks at after each frame it draws, as it is drawn (Tester::each_frame): a frame an input's draw
+  /// passes over on its way (the one that takes it, before the ones after) seen too
+  mut each : (() -> Unit)?
 }
 
 ///|
@@ -394,7 +397,7 @@ pub fn Tester::new(
   fx_reset(seed)
   g_view.val = view
   let (period, between) = test_frame_period()
-  let t = { fake: f, w, h, frames: 0, seed, origin: time, period, times: [], between, host_frames: false }
+  let t = { fake: f, w, h, frames: 0, seed, origin: time, period, times: [], between, host_frames: false, each: None }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
   match run.bind(run_first_frame) {
@@ -647,8 +650,19 @@ pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
   self.hold_words_over()
   self.hold_seen_whole_now()
   self.hold_corners()
+  match self.each {
+    Some(f) => f()
+    None => ()
+  }
   // what the outside the test stands for has said meanwhile, posted for the next frame (messages.mbt)
   frame_ended_outside()
+}
+
+///|
+/// `f` run after each frame the Tester draws from now on (None: no more), the frame just drawn its draw list (what
+/// drawn_order and the like read): what holds of every frame, those an input's draw goes through on its way too.
+pub fn Tester::each_frame(self : Tester, f : (() -> Unit)?) -> Unit {
+  self.each = f
 }
 
 ///|

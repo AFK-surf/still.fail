@@ -1589,6 +1589,8 @@ pub fn viewer_layer(@ui.Ctx, Source) -> Unit
 
 pub fn viewer_place(Viewer, Source) -> (Int32, Int32)
 
+pub fn viewer_set_out(@ui.Ctx, Source) -> Unit
+
 pub fn viz_base_name(String) -> String
 
 pub let viz_bridge : String
