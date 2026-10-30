@@ -97,6 +97,7 @@ export const NOTES: [number, string][] = [
   [90, "奏, the page that listed every card waiting for a person, is gone from still.fail: a card is answered under its message in the chat, and reaches the person who decides it in their 待处理 until they look at it. Cards and card.assignee work as before."],
   [91, "A phone lends itself only while its person's 共享调试 switch is on, on the phone itself (Settings › 共享调试; off at first, on until they turn it off, through restarts and updates). When phone_use says a granted phone is not lent and calling it again a minute later does not change that, ask its person to turn that switch on, rather than to open the app."],
   [92, "secret_use, secret_save and phone_use no longer wait for the person's decision: they answer at once, the card posted, and the decision comes to your session as a notice (into the turn you are in, if any). Meanwhile go on with what does not need it (answer the chat, other work); with nothing else left, end your turn need_human about the card. A granted phone: call phone_use again for how to reach it."],
+  [93, "chat_state waiting takes `watch: true` when what you wait on is only your watch keeping on (job_start with watch: a schedule, a monitor): people see the chat as watching and the clock does not ask you again. Without it a wait is what you say it is for, a watch running or not, and its seconds ask you again as for any wait: give it on every wait that is only the watch."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

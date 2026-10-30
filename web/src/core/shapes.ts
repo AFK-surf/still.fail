@@ -962,6 +962,11 @@ export interface TurnSummary {
 	/** For waiting: what it waits for, in the agent's words (a station yet to update says nothing). */
 	waitFor?: string;
 	/**
+	 * For waiting: whether what it waits on is only its session's watch keeping on (the agent's `watch`). A station
+	 * before it says nothing: taken as its watch while one runs.
+	 */
+	waitWatch?: boolean;
+	/**
 	 * How the agent ended it in today's words: all_done, need_help or waiting (`declared` keeps the words from before:
 	 * final, block; a station before cards may say need_decision, which the core reads as need_help). A station yet to
 	 * update says nothing.

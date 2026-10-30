@@ -204,11 +204,15 @@ export const CHAT_STATE = {
         "type": "integer",
         "minimum": 10,
         "maximum": 3600,
-        "description": "For waiting: how long until the work brings you back; if nothing has by then, you are asked again (not while a watch of yours runs: job_start with watch). A fallback only: something must watch the work. When it truly cannot be watched, give the shortest it could take, not the longest."
+        "description": "For waiting: how long until the work brings you back; if nothing has by then, you are asked again (not while you wait on a watch of yours: watch true). A fallback only: something must watch the work. When it truly cannot be watched, give the shortest it could take, not the longest."
       },
       "for": {
         "type": "string",
         "description": "For waiting (required): what you wait for, in a few words people read under your name, in the language they use there (e.g. 安卓滑动测试在模拟器上跑完)."
+      },
+      "watch": {
+        "type": "boolean",
+        "description": "For waiting: true when what you wait on is only your watch keeping on (job_start with watch: a schedule, a monitor); people then see the chat as watching, and the clock does not ask you again. Leave it out when you wait on anything else, even with a watch running: they see what you wait for."
       }
     },
     "required": [

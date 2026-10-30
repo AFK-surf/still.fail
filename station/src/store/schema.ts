@@ -170,7 +170,8 @@ CREATE TABLE IF NOT EXISTS turns (
   need TEXT,
   about_thread INTEGER,
   about_n INTEGER,
-  about_ts TEXT
+  about_ts TEXT,
+  wait_watch INTEGER
 );
 -- A session's turns, by when they started: every list of chats and sessions counts each session's turns and takes its
 -- latest (sessionStats); without it each scanned every turn of every session (some 160 ms a list on a busy station).
@@ -538,6 +539,12 @@ export function addWatchColumn(db: DatabaseSync): void {
 export function addQueueColumns(db: DatabaseSync): void {
   if (!has(db, "jobs", "queued")) db.exec("ALTER TABLE jobs ADD COLUMN queued INTEGER");
   if (!has(db, "jobs", "screen")) db.exec("ALTER TABLE jobs ADD COLUMN screen INTEGER");
+}
+
+/// The column saying a wait is its session's watch came with (turns.wait_watch, chat_state waiting `watch`): 1 it is, 0
+/// something else; NULL said before it (taken as its watch while one runs).
+export function addWaitWatchColumn(db: DatabaseSync): void {
+  if (!has(db, "turns", "wait_watch")) db.exec("ALTER TABLE turns ADD COLUMN wait_watch INTEGER");
 }
 
 /// The column a job's sandbox size came with (jobs.size, agents/sandbox.ts).

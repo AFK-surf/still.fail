@@ -72,8 +72,8 @@ zone may differ). Name it in the confirmation so they can correct it.
   stops its jobs, and the schedule with them).
 - Post once in the chat: what runs, the schedule with its time zone, when the next run is, and that telling you in
   this chat changes or stops it. Give the post a title naming the schedule (e.g. `定时 · 每天 9:00 日报`). End the
-  turn `waiting` (for: the schedule): with the watch running, only its notify, its end or a message wakes you.
-- On each run: do the work, post the result in the chat it is for, and end `waiting` again. A failed run: say so
+  turn `waiting` (for: the schedule, `watch: true`): only its notify, its end or a message wakes you.
+- On each run: do the work, post the result in the chat it is for, and end `waiting` again (`watch: true`). A failed run: say so
   there, fix the script if it is the cause, and restart the job.
 
 ## Changing, stopping, several
