@@ -920,9 +920,17 @@ pub fn frame(
               fn() {
                 @sf.pane_round.val = Some(beside_column(tape_pane_corners(Panel, true), under))
                 c.box(style=@ui.style(w=Fixed(panel_w), h=Full), fn() {
-                  tape_part(c, Panel, "\{col} \{main_w} \{panel_top} \{panel_w} \{panel_h} \{tape_x} \{side.key()}", fn() {
-                    c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, side, leaving=leaving is Some(_)) })
-                  })
+                  // (an island, as the page and the sidebar are: docs/retained.md, the way there's 3)
+                  tape_part(
+                    c,
+                    Panel,
+                    "\{col} \{main_w} \{panel_top} \{panel_w} \{panel_h} \{tape_x} \{side.key()} \{leaving is Some(_)} \{w.id}",
+                    fn() {
+                      let (now, _, _, _) = @sfbase.workspace_in_view(src)
+                      c.sized(panel_w, panel_h, fn() { tape_side(c, src, now.unwrap_or(w), side, leaving=leaving is Some(_)) })
+                    },
+                    own=true,
+                  )
                 })
                 |> ignore
                 // (the frame it was first built in, kept while it stays open)
