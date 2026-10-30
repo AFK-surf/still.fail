@@ -33,6 +33,7 @@ pub let frame_period_default : Double = 1000.0 / 60.0
 /// the packages over it: on_reset) emptied; then checked (leaked_state), so that what is added later and not
 /// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
+  made_forget()
   the_ctx.val = Ctx::new()
   looks_reset()
   hand_reset()

@@ -420,6 +420,7 @@ fn Ctx::press_focused(self : Ctx, key : Int) -> Bool {
   for f in self.last_focusables {
     if f.id == self.focus && (f.keys & key) != 0 && !self.layer_inert(f.layer) {
       self.clicked.push(f.id)
+      made_pressed(f.id)
       self.focus_visible = true
       return true
     }
