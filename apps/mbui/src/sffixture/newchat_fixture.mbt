@@ -22,6 +22,9 @@ pub(all) struct NewFix {
   mut reading : Int
   /// MBUI_FIXTURE=newchat-crowded: the models, runtimes and combinations of fix_crowded
   mut crowded : Bool
+  /// MBUI_FIXTURE=newchat-tall-model: as crowded, how hard it thinks and how fast as Codex offers them (2026-10-30: the
+  /// column beside the models taller than they are at most)
+  mut tall : Bool
 }
 
 ///|
@@ -37,6 +40,7 @@ pub let new_fix : NewFix = {
   made: 0,
   reading: 0,
   crowded: false,
+  tall: false,
 }
 
 ///|
@@ -109,6 +113,11 @@ pub let fix_crowded_models : Array[String] = [
 ]
 
 ///|
+/// The models newchat-tall-model has besides newchat-crowded's: more of them than the models' column shows at most.
+// kept across runs: a table, never written
+pub let fix_tall_models : Array[String] = ["gpt-6-1-sol", "gpt-6-1-terra"]
+
+///|
 /// A model of newchat-crowded's (the ones not the plain fixture's), as the core's `pick` lists it.
 pub fn fix_crowded_model(model : String, name : String, family : String, maker : String, runtimes : Array[String]) -> Json {
   {
@@ -132,6 +141,8 @@ pub fn fix_model(model : String) -> Json {
     "grok-4-7-build-fast" => fix_crowded_model(model, "Grok 4.7 Build Fast", "Grok", "xai", ["grok"])
     "kimi-for-coding" => fix_crowded_model(model, "Kimi For Coding", "Kimi", "kimi", ["claude"])
     "swe-2" => fix_crowded_model(model, "SWE-2", "SWE", "devin", ["devin"])
+    "gpt-6-1-sol" => fix_crowded_model(model, "GPT-6.1 Sol", "Sol", "openai", ["codex"])
+    "gpt-6-1-terra" => fix_crowded_model(model, "GPT-6.1 Terra", "GPT", "openai", ["codex"])
     "claude-sonnet-5" =>
       {
         "model": "claude-sonnet-5",
@@ -197,7 +208,9 @@ pub fn fix_pick() -> Json {
     Json::object(o)
   }
   {
-    "options": if n.crowded {
+    "options": if n.tall {
+      Json::array(fix_crowded_models.map(fix_model) + fix_tall_models.map(fix_model))
+    } else if n.crowded {
       Json::array(fix_crowded_models.map(fix_model))
     } else {
       [fix_model("claude-opus-5-5"), fix_model("claude-sonnet-5"), fix_model("gpt-6")]
@@ -213,7 +226,14 @@ pub fn fix_pick() -> Json {
     } else {
       [Json::string(n.d_runtime)]
     },
-    "efforts": if n.crowded { ["low", "medium", "high", "max"] } else { ["low", "medium", "high"] },
+    "efforts": if n.tall {
+      ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
+    } else if n.crowded {
+      ["low", "medium", "high", "max"]
+    } else {
+      ["low", "medium", "high"]
+    },
+    "fastAvailable": n.tall,
     "accounts": [
       {
         "id": "p1",

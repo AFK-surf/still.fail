@@ -268,6 +268,9 @@ struct Node {
   // kept to what is left of its column's room when that is short (Ctx::capped `shrinks`: CSS's flex-shrink with
   // overflow: auto, a dialog's body under its maximum height), else as tall as what it holds
   mut shrinks : Bool
+  // at most its max-height as tall as it asks its row to be, as tall as its row then stretches it past that (Ctx::capped
+  // `past_most`: a column scrolling past its most beside a taller one, as far down as that one)
+  mut past_most : Bool
   // as wide as its content in a row, not squeezed where the row is short (Ctx::box `keep`): only its siblings shrink
   mut keep : Bool
   // left out of its row when the row has not the room (Ctx::box `drop`): k > 0 the k-th to go, -1 the row's ⋯ (there
@@ -476,6 +479,7 @@ fn Node::new() -> Node {
     bones: 0L,
     bone_whole: false,
     shrinks: false,
+    past_most: false,
     keep: false,
     drop: 0,
     least: 0.0,
@@ -589,6 +593,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.bones = 0L
   self.bone_whole = false
   self.shrinks = false
+  self.past_most = false
   self.keep = false
   self.drop = 0
   self.flow = false

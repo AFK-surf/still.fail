@@ -33,6 +33,27 @@ test "wide, short names: the model's panel ends where its last column does, its 
 }
 
 ///|
+test "wide, how hard it thinks and how fast taller than the models' most: the models scroll in all of the row, none cut off over room left empty" {
+  let t = model_pop("newchat-tall-model")
+  let fast = t.get(Button, label="Fast").rect
+  let foot = fast.1 + fast.3
+  let names = ["Opus 5.5", "Sonnet 5", "GPT-6 Astra", "DeepSeek V4.1 Flash", "Grok 4.7 Build Fast", "Kimi For Coding", "SWE-2", "GPT-6.1 Sol",
+    "GPT-6.1 Terra",
+  ]
+  let (px, py, pw, ph) = t.get(@ui.Dialog).rect
+  let rows = t
+    .boxes()
+    .filter(fn(b) { b.kind == "text" && names.contains(b.text) && b.x >= px && b.x < px + pw && b.y >= py && b.y < py + ph })
+  assert_true(rows.length() > 0)
+  // (each model laid out higher than the foot of the column beside it shows: none cut off over the room under them)
+  for b in rows {
+    if b.y < foot - 1.0 {
+      assert_true(b.cut.3 > 0.0, msg="\{b.text} at \{b.y} cut off, the column beside the models down to \{foot}")
+    }
+  }
+}
+
+///|
 test "wide: another model picked, its runtimes fewer, the panel as wide as it opened; every name whole on its line" {
   let t = model_pop("newchat-crowded-model")
   let opened = t.get(@ui.Dialog).rect

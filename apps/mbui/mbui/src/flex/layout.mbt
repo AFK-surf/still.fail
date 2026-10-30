@@ -616,6 +616,12 @@ fn size_uncached(
 ) -> Double {
   let s = node.style
   let b = box_for(node, cb_w, cb_h)
+  // (its max-sizes only what it asks: given a size, it takes it; Style's stretch_past_max)
+  let b = if s.stretch_past_max && ((known(kw) && known(b.max_w)) || (known(kh) && known(b.max_h))) {
+    { ..b, max_w: if known(kw) { undef } else { b.max_w }, max_h: if known(kh) { undef } else { b.max_h } }
+  } else {
+    b
+  }
   let mut w = if known(kw) { kw } else { b.w }
   let mut h = if known(kh) { kh } else { b.h }
   // a min equal to the max is a size (Chrome resolves percentages of it)
@@ -834,6 +840,10 @@ const INSET : Int = 64
 /// what it holds (its basis its content's): measured again in what the rest of its line leaves it, where that line
 /// has not the room for all of them (layout_flex).
 const FITS : Int = 128
+
+///|
+/// and whether its line stretches it past its cross max-size (Style's `stretch_past_max`).
+const PAST_MAX : Int = 256
 
 ///|
 priv struct Line {
@@ -1150,6 +1160,9 @@ fn layout_flex(
       if stretch {
         fl = fl | STRETCH
         any_stretch = true
+        if cs.stretch_past_max {
+          fl = fl | PAST_MAX
+        }
       }
       if cs.position == Relative &&
         !(cs.inset_left_k == LEN_AUTO &&
@@ -1362,7 +1375,8 @@ fn layout_flex(
         }
         if known(kc) {
           // what sizing it would return, without laying out its subtree
-          f.unsafe_set(i + CROSS, clamp_size(kc, f.unsafe_get(i + MIN_CROSS), f.unsafe_get(i + MAX_CROSS)))
+          let hi = if (flags.unsafe_get(k) & PAST_MAX) != 0 { undef } else { f.unsafe_get(i + MAX_CROSS) }
+          f.unsafe_set(i + CROSS, clamp_size(kc, f.unsafe_get(i + MIN_CROSS), hi))
           continue
         }
         let ac = if known(avail_cross) {
@@ -1461,13 +1475,11 @@ fn layout_flex(
       for k in ln.start..<ln.end {
         if (flags.unsafe_get(k) & STRETCH) != 0 {
           let i = k * ITEM
+          // (past its most where it says so: its most bounded what it asked of the line only)
+          let hi = if (flags.unsafe_get(k) & PAST_MAX) != 0 { undef } else { f.unsafe_get(i + MAX_CROSS) }
           f.unsafe_set(
             i + CROSS,
-            clamp_size(
-              fmax(ln.cross - f.unsafe_get(i + MARGIN_CROSS), 0.0),
-              f.unsafe_get(i + MIN_CROSS),
-              f.unsafe_get(i + MAX_CROSS),
-            ),
+            clamp_size(fmax(ln.cross - f.unsafe_get(i + MARGIN_CROSS), 0.0), f.unsafe_get(i + MIN_CROSS), hi),
           )
         }
       }

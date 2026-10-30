@@ -386,10 +386,11 @@ pub fn fixture_json_app(json : String) -> Source {
 pub fn open_mode(mode : String) -> Unit {
   if mode.has_prefix("newchat") {
     app.nav.rise(NewChat)
-    if mode.has_prefix("newchat-crowded") {
+    if mode.has_prefix("newchat-crowded") || mode == "newchat-tall-model" {
       // (it starts on the model that runs on three runtimes, on the one of them its combination names)
       let n = @sffixture.new_fix
       n.crowded = true
+      n.tall = mode == "newchat-tall-model"
       n.model = "deepseek-v4-1-flash"
       n.runtime = "dsh"
       n.d_model = n.model
@@ -397,7 +398,7 @@ pub fn open_mode(mode : String) -> Unit {
     }
     match mode {
       "newchat-station" => @sfpages.new_chat_ask("station")
-      "newchat-model" | "newchat-crowded-model" => @sfpages.new_chat_ask("model")
+      "newchat-model" | "newchat-crowded-model" | "newchat-tall-model" => @sfpages.new_chat_ask("model")
       _ => ()
     }
   } else if mode == "home-bars" {
