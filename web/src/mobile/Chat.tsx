@@ -30,7 +30,7 @@ import { StationPeek } from "../cloud/StationCards.tsx";
 import { GoRow } from "./Settings.tsx";
 import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { PENDING } from "../lastChat.ts";
-import { LOCAL_MS } from "@stillfail/ui/motion.ts";
+import { CORE_MS } from "@stillfail/ui/motion.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { useRelay } from "../Relay.tsx";
@@ -83,9 +83,10 @@ export function ChatScreen() {
     app.push(service);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [service]);
-  // The page slides in once its chat is read from the device (LOCAL_MS at most), not empty; one that has to come from
-  // its station is not waited for: the page slides in, showing it coming.
-  useReady({ topic: "chat", station: station.address, session: key }, LOCAL_MS);
+  // The page slides in once its chat is read from the device, however long the core takes (CORE_MS at most), not as its
+  // messages' bones a moment before them; one the core says has to come from its station is not waited for: the page
+  // slides in, showing it coming.
+  useReady({ topic: "chat", station: station.address, session: key }, CORE_MS);
   const chat = useChat(station.address, { session: key });
   const view = chat.value;
   const navigate = useNavigate();

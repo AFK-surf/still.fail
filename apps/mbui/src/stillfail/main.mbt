@@ -158,6 +158,7 @@ fn refused(name : String) -> Json {
 ///|
 let core_source : @sfapp.Source = {
   topic: core_topic,
+  waits: fn(name, params) { @core.subscribe(name, params~).followed().waiting },
   call: fn(name, params, done) {
     if read_only && !read_only_calls.contains(name) {
       done(Err(refused(name)))

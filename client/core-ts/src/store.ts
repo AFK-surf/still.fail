@@ -49,6 +49,9 @@ export interface Source {
   stop(topic: Topic): void;
   /// The current value of a topic marked stale, as it goes out; undefined while it has none.
   compute?(topic: Topic): Value | undefined;
+  /// Whether a topic with no value yet waits on a station for it (nothing it shows is on the device), not only on what
+  /// it is computed from being computed: its subscribers are told so (`waiting`).
+  waits?(topic: Topic): boolean;
 }
 
 /// Keeps a watched topic subscribed; `drop` lets the topic go like a UI unsubscribing.
@@ -84,6 +87,8 @@ type Entry = {
   output?: Output;
   /// A page's first subscriber waiting for its first value (OPENED): its trace, and what the core spent making it.
   opening?: { span: Span; workMs: number; computes: number; mdFrom: number };
+  /// Its subscribers told it waits on a station (Source.waits), while it has no value.
+  waiting?: boolean;
 };
 
 type Out = { value: unknown } | { delta: AnyOp[] } | { error: CoreError };
@@ -168,11 +173,14 @@ export class Store {
     entry.idle = null;
     const cached = entry.sent;
     if (cached !== undefined) this.host.emit(client, to(whole(cached), id));
-    else if (entry.opening === undefined && this.#tracer !== null && OPENED.has(topic.topic)) {
-      const span = this.#tracer.root(`${topic.topic}.open`, Kind.Internal);
-      // (made anew, or kept from a page shown a moment ago and let go: its view made again either way)
-      span.set("stillfail.anew", started);
-      entry.opening = { span, workMs: 0, computes: 0, mdFrom: readAfresh.chars };
+    else {
+      if (entry.waiting === true) this.host.emit(client, { id, waiting: true });
+      if (entry.opening === undefined && this.#tracer !== null && OPENED.has(topic.topic)) {
+        const span = this.#tracer.root(`${topic.topic}.open`, Kind.Internal);
+        // (made anew, or kept from a page shown a moment ago and let go: its view made again either way)
+        span.set("stillfail.anew", started);
+        entry.opening = { span, workMs: 0, computes: 0, mdFrom: readAfresh.chars };
+      }
     }
     if (started) this.#start(topic);
     else {
@@ -439,8 +447,16 @@ export class Store {
         now.opening.workMs += this.host.monotonicMs() - workFrom;
         now.opening.computes++;
       }
+      // Nothing to show yet: whoever shows it told once if that waits on a station, not on the core (a page opening
+      // then shows what is to come at once, and otherwise waits for what the device holds).
+      if (now.waiting !== true && now.subscribers.length > 0 && this.#source?.waits?.(topic) === true) {
+        now.waiting = true;
+        for (const [client, id] of now.subscribers) this.host.emit(client, { id, waiting: true });
+        now.opening?.span.set("stillfail.waiting", true);
+      }
       return;
     }
+    now.waiting = false;
     const c: present.Clock = { now: this.host.nowMs(), offsetMin: this.host.utcOffsetMin(this.host.nowMs()) };
     let value: Value = now.value;
     if ("ok" in value) {

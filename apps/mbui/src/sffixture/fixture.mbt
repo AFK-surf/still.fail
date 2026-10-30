@@ -1188,6 +1188,7 @@ pub fn fixture(mode : String) -> Source {
       fixture_stream(name, params, on_value, done)
     },
     cancel: fn(_) {  },
+    waits: fn(_, _) { false },
     call_bytes: fn(name, params, bytes, done) {
       match fixture_kept(name, params, Some(bytes)) {
         Some(r) => {

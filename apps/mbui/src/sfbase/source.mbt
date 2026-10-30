@@ -15,6 +15,9 @@ pub(all) struct Source {
   /// derived.mbt), followed: the computed is worked out again as the topic changes, a signal of its changes set as
   /// they come (the core client's Sub.changes; a made-up core's own as its state changes)
   topic : (String, Map[String, Json]) -> Topic
+  /// whether the core said that topic, which has no value yet, waits on a station for it: none of what it shows is on
+  /// the device (a chat whose messages are still to come), not the core still reading what is. Read as `topic` is.
+  waits : (String, Map[String, Json]) -> Bool
   /// a call to the core; `done` gets its answer or its error
   call : (String, Json, (Result[Json, Json]) -> Unit) -> Unit
   /// a call with bytes beside it (a file's part going up: `station.upload.part`)
@@ -106,6 +109,7 @@ pub fn made_source(
         None => { value: None, error: None, version: 0 }
       }
     },
+    waits: fn(_, _) { false },
     call,
     call_bytes: fn(name, params, _, done) { call(name, params, done) },
     read_bytes: fn(name, _, done) { done(Err({ "code": "unknown_call", "message": Json::string("no " + name) })) },
