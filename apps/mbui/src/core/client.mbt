@@ -368,10 +368,11 @@ pub fn Client::cancel(self : Client, id : Int) -> Unit {
 }
 
 ///|
-/// Whether message `m` is a topic's change alone, its value or what changed of it, for one already read (not the first,
-/// nothing waiting on it: no wait of the runtime's ended by it, no edit's draft come with it): what it changes is said by
-/// its topic's signal and nothing else (Sub::changed), so it may be taken as it comes, before the frame decides what it
-/// does (@ui.on_message_said).
+/// Whether message `m` is a topic's change alone, its value or what changed of it (its first too: the runtime's wait
+/// for it ended as it is taken, Runtime::outside_end being only that; no edit's draft come with it): what it changes is
+/// said by its topic's signal and nothing else (Sub::changed), so it may be taken as it comes, before the frame decides
+/// what it does (@ui.on_message_said). (A chat opened was built twice for its first values, taken by the frame: the
+/// frame it was opened in again, or the next whole, 2026-10-30.)
 pub fn Client::topic_said(self : Client, m : Map[String, Json]) -> Bool {
   if m.contains("fatal") {
     return false
@@ -382,8 +383,6 @@ pub fn Client::topic_said(self : Client, m : Map[String, Json]) -> Bool {
   }
   match self.subs.get(id) {
     Some(s) =>
-      s.version > 0 &&
-      !self.sub_waits.contains(id) &&
       !self.echo_waits.values().any(fn(w) { w.0 == id }) &&
       (m.contains("value") || m.contains("delta") || m.contains("error"))
     None => false
