@@ -1,0 +1,31 @@
+# 小屏, a finger: a chat opened from the chats and gone back from, six times: what opening a chat costs, its first
+# frames above all (a page built anew, its rows too). Some 300 ms of work in all.
+timeout 20000
+until 整理发布清单
+wait 500
+log measure
+tap 整理发布清单
+wait 600
+back
+wait 600
+tap 整理发布清单
+wait 600
+back
+wait 600
+tap 整理发布清单
+wait 600
+back
+wait 600
+tap 整理发布清单
+wait 600
+back
+wait 600
+tap 整理发布清单
+wait 600
+back
+wait 600
+tap 整理发布清单
+wait 600
+back
+wait 600
+exit
