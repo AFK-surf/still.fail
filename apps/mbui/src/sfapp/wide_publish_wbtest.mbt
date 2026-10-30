@@ -151,6 +151,52 @@ test "wide: the message header's ⋯ offers 复制消息链接 and 分享这一�
 }
 
 ///|
+/// Whether `words` are drawn now within 24 of (x, y) (a panel going out shrinks a little toward where it hangs): None
+/// where they are not drawn.
+fn drawn_near(t : @ui.Tester, words : String, x : Double, y : Double) -> Bool? {
+  for w in t.words() {
+    if w.0 == words {
+      return Some((w.1 - x).abs() < 24.0 && (w.2 - y).abs() < 24.0)
+    }
+  }
+  None
+}
+
+///|
+test "wide: the message's ⋯ menu goes out where it hung, closed by Escape or a click away" {
+  for how in ["escape", "away"] {
+    reset()
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+    let t = @ui.Tester::new(fn(c) { view(c, fixture("chat")) }, w=1280.0, h=800.0, platform=0)
+    t.run_for(@ui.move_most_ms)
+    let (x, y, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
+    t.move(x + 24.0, y + 8.0)
+    t.frame()
+    t.frame()
+    t.click(Button, label="更多操作")
+    t.run_for(@ui.move_most_ms)
+    let (_, mx, my, _, _, _) = t.words().filter(fn(w) { w.0 == "复制消息链接" })[0]
+    if how == "escape" {
+      t.key(@ui.key_escape)
+    } else {
+      // (the pointer away from the message, then a click there: the ⋯ shown only under it goes with the menu)
+      t.move(400.0, 250.0)
+      t.frame()
+      t.tap(400.0, 250.0)
+    }
+    // its exit's first frames: drawn, where it was (not cut off, not from the window's corner)
+    t.frame()
+    assert_eq(drawn_near(t, "复制消息链接", mx, my), Some(true), msg="\{how}: the frame after")
+    t.frame()
+    assert_eq(drawn_near(t, "复制消息链接", mx, my), Some(true), msg="\{how}: two frames after")
+    t.frame()
+    assert_eq(drawn_near(t, "复制消息链接", mx, my), Some(true), msg="\{how}: three frames after")
+    t.run_for(@ui.move_most_ms)
+    assert_eq(drawn_near(t, "复制消息链接", mx, my), None, msg="\{how}: gone")
+  }
+}
+
+///|
 test "touch: the message header has neither; the held bar copies its position link" {
   let calls : Array[Made] = []
   let t = fake_core(calls)

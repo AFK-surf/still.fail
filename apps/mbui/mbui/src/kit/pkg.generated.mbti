@@ -566,6 +566,7 @@ pub(all) struct MediaTrack {
 pub(all) struct Menu {
   open : Bool
   chosen : String?
+  shown : Bool
 }
 
 pub(all) struct MenuItemState {

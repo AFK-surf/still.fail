@@ -212,7 +212,7 @@
     "layout-read-back": {
       "src/kit/disclosure.mbt": 1,
       "src/kit/media.mbt": 2,
-      "src/kit/menu.mbt": 3,
+      "src/kit/menu.mbt": 2,
       "src/kit/pick.mbt": 1,
       "src/kit/popover.mbt": 5,
       "src/kit/toast.mbt": 1
