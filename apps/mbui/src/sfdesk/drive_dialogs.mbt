@@ -24,9 +24,9 @@ priv struct Picker {
 // kept across runs: the picker's state (dialogs_reset puts it back)
 let dialogs : Picker = {
   picking: @signals.signal("", same=fn(a, b) { a == b }),
-  at: @signals.signal(None),
-  value: @signals.signal(None),
-  last: @signals.signal(None),
+  at: @signals.signal(None, same=fn(a, b) { physical_equal(a, b) || (a is None && b is None) }),
+  value: @signals.signal(None, same=fn(a, b) { physical_equal(a, b) || (a is None && b is None) }),
+  last: @signals.signal(None, same=fn(a, b) { physical_equal(a, b) || (a is None && b is None) }),
   error: @signals.signal("", same=fn(a, b) { a == b }),
   denied: @signals.signal(false, same=fn(a, b) { a == b }),
   serial: @signals.signal(0, same=fn(a, b) { a == b }),
@@ -41,13 +41,16 @@ fn dialogs_reset() -> Unit {
 
 ///|
 fn picker_close() -> Unit {
+  // (one open, or one asked, let go: what was under way for it told by the serial; none, nothing changed)
+  if @signals.untracked(fn() { dialogs.picking.get() != "" || dialogs.asking.get() }) {
+    dialogs.serial.set(dialogs.serial.get() + 1)
+  }
   dialogs.picking.set("")
   dialogs.at.set(None)
   dialogs.value.set(None)
   dialogs.last.set(None)
   dialogs.error.set("")
   dialogs.denied.set(false)
-  dialogs.serial.set(dialogs.serial.get() + 1)
   dialogs.asking.set(false)
   dialogs.filter.set("")
 }

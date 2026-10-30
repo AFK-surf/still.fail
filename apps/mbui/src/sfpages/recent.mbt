@@ -41,7 +41,7 @@ fn recent_reset() -> Unit {
   recent.access.set(NoGallery)
   recent.reading = None
   recent.again = false
-  recent.photos.replace([])
+  recent.photos.clear()
   recent.chosen.clear()
 }
 
