@@ -732,6 +732,11 @@ fn input_came() -> Unit {
 
 ///|
 fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
+  // a touch screen's finger as the host has it, by the system's id for it (touches.mbt)
+  if kind >= 10 && kind <= 13 {
+    touch_in(kind - 10, button, x, y)
+    return
+  }
   // the keys held as it goes down, read once and kept with it (a replay hands the same on); what the host says it
   // came from, a finger or a mouse, likewise
   pointer_in(kind, x, y, button, if kind == 0 { mods_held() } else { 0 }, by=h_event_finger())
@@ -1676,8 +1681,10 @@ fn app_state_taken(s : Int) -> Unit {
     return
   }
   app_state.val = s
-  // (no longer in front: a finger held on the window's tree let go of now)
+  // (no longer in front: the fingers down called off, all of it (touches.mbt); a finger held on the window's tree let
+  // go of now)
   if (s & 2) == 0 {
+    touches_off()
     view_hold_lost()
   }
   match app_change.val {

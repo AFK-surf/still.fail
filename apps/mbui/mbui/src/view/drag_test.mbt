@@ -633,3 +633,68 @@ test "held by as many fingers as it takes, each told by its own; one more: each 
   t1.drag_at(id1, Up, 10.0, 10.0, 30.0, finger=0) |> ignore
   assert_eq((one, second), (["Down 0", "Off 0"], false))
 }
+
+///|
+/// Two fingers held on a box taking two, then called off, the first Off told doing `what` ("dispose": the tree let
+/// go of; "anew": another on_drag said): what each on_drag was told after the fingers went down.
+fn off_mid(what : String) -> (Array[String], Array[String]) {
+  let first : Array[String] = []
+  let after : Array[String] = []
+  let node : Ref[@view.View?] = Ref(None)
+  let tree : Ref[@view.Tree?] = Ref(None)
+  let t = @view.Tree::new(
+    fn(root) {
+      node.val = Some(
+        root.box(fn(b) {
+          b
+          .width(Is(Some(100.0)))
+          .height(Is(Some(100.0)))
+          .on_drag(
+            fn(d) {
+              first.push("\{d.kind} \{d.finger}")
+              if d.kind == Off {
+                if what == "dispose" {
+                  tree.val.unwrap().dispose()
+                } else {
+                  node.val.unwrap().on_drag(fn(d) { after.push("\{d.kind} \{d.finger}") }) |> ignore
+                }
+              }
+            },
+            fingers=2,
+          )
+          |> ignore
+        }),
+      )
+    },
+    time=fn() { 0.0 },
+  )
+  tree.val = Some(t)
+  t.frame(390.0, 844.0) |> ignore
+  let id = gesture_id(t)
+  t.drag_at(id, Down, 10.0, 10.0, 10.0, finger=0) |> ignore
+  t.drag_at(id, Down, 50.0, 50.0, 20.0, finger=1) |> ignore
+  t.drag_at(id, Off, 10.0, 10.0, 30.0) |> ignore
+  (first, after)
+}
+
+///|
+test "called off with two fingers down, what the first Off told lets the node go or says another on_drag: nothing more told to what it let go of, nothing to the new one" {
+  assert_eq(off_mid("dispose"), (["Down 0", "Down 1", "Off 0"], []))
+  assert_eq(off_mid("anew"), (["Down 0", "Down 1", "Off 0"], []))
+}
+
+///|
+test "timed work called off again and again with no frame, the clock never moved: nothing of it left on the timeline, nothing kept by its node" {
+  let node : Ref[@view.View?] = Ref(None)
+  let t = @view.Tree::new(fn(root) { node.val = Some(root.box(fn(_) {  })) }, time=fn() { 0.0 })
+  t.frame(390.0, 844.0) |> ignore
+  let v = node.val.unwrap()
+  let (due, owned) = (t.due_count(), v.owned_count())
+  for i in 0..<50 {
+    let off = v.at_moment(1000.0 + i.to_double(), fn() {  })
+    off()
+    let stop = v.steps(60, 10, fn(_, _) {  })
+    stop()
+  }
+  assert_eq((t.due_count(), v.owned_count()), (due, owned))
+}

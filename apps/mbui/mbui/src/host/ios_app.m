@@ -275,57 +275,43 @@ static double drawn_for;
 // Each touch at its own time (UITouch.timestamp: seconds since startup, CACurrentMediaTime's clock), which MoonBit
 // asks for while handling it; a move with the samples coalesced into it (120 Hz digitizers), each at its time.
 static double event_time = -1;
-static void touch(int kind, UITouch *t, UIView *v) {
-  CGPoint p = [t locationInView:v];
-  event_time = t.timestamp * 1000.0;
-  mb_cb.pointer(kind, p.x, p.y, 0);
+// Each finger by an id of its own from its down to its end (a UITouch is the same object all that while; its
+// coalesced samples are others): handed on as it comes (pointer kinds 10 down, 11 moved, 12 up, 13 called off, the id
+// where a button goes), what the fingers come to the app's to work out (touches.mbt: two of them its, the first let
+// go the second the first, one called off all of it).
+static NSMapTable<UITouch *, NSNumber *> *touch_ids;
+static int touch_next = 1;
+static int touch_id(UITouch *u) {
+  if (!touch_ids) touch_ids = [NSMapTable weakToStrongObjectsMapTable];
+  NSNumber *n = [touch_ids objectForKey:u];
+  if (!n) {
+    n = @(touch_next++);
+    [touch_ids setObject:n forKey:u];
+  }
+  return n.intValue;
+}
+// finger `u`'s event (`kind` 10-13) where sample `at` of it was, at its time
+static void touch_at(int kind, UITouch *u, UITouch *at, UIView *v) {
+  CGPoint p = [at locationInView:v];
+  event_time = at.timestamp * 1000.0;
+  mb_cb.pointer(kind, p.x, p.y, touch_id(u));
   event_time = -1;
 }
-// The first finger is the pointer (0 down, 1 moved, 2 up, 3 cancelled); a second one is told apart (4 down, 5 moved,
-// 6 up) for a pinch, a third and on not at all. The first lifted while a second is down: 8, where the first was, and
-// the one left becomes the first, its moves coming as the first's.
-static __weak UITouch *first_touch, *second_touch;
 - (void)touchesBegan:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
-  for (UITouch *u in t) {
-    if (!first_touch) {
-      first_touch = u;
-      touch(0, u, self);
-    } else if (!second_touch) {
-      second_touch = u;
-      touch(4, u, self);
-    }
-  }
+  for (UITouch *u in t) touch_at(10, u, u, self);
 }
 - (void)touchesMoved:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
-  UITouch *u = first_touch && [t containsObject:first_touch] ? first_touch : nil;
-  if (u) {
+  for (UITouch *u in t) {
     NSArray<UITouch *> *all = [e coalescedTouchesForTouch:u];
     if (all.count == 0) all = @[ u ];
-    for (UITouch *c in all) touch(1, c, self);
-  }
-  if (second_touch && [t containsObject:second_touch]) touch(5, second_touch, self);
-}
-static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
-  if (second_touch && [t containsObject:second_touch]) {
-    touch(6, second_touch, v);
-    second_touch = nil;
-  }
-  if (first_touch && [t containsObject:first_touch]) {
-    if (second_touch) {
-      touch(8, first_touch, v);
-      first_touch = second_touch;
-      second_touch = nil;
-    } else {
-      touch(end, first_touch, v);
-      first_touch = nil;
-    }
+    for (UITouch *c in all) touch_at(11, u, c, self);
   }
 }
 - (void)touchesEnded:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
-  touch_gone(2, t, self);
+  for (UITouch *u in t) touch_at(12, u, u, self);
 }
 - (void)touchesCancelled:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
-  touch_gone(3, t, self);
+  for (UITouch *u in t) touch_at(13, u, u, self);
 }
 
 // ---- hardware keys ----
@@ -572,9 +558,10 @@ static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2
 @end
 
 @implementation MBTakeTouch
-- (void)canvasTouch:(int)kind at:(CGPoint)p time:(double)t {
+// finger `u`'s event (kind 10-13, as the canvas's own: touch_at) at `p`, at time `t`
+- (void)canvasTouch:(int)kind of:(UITouch *)u at:(CGPoint)p time:(double)t {
   event_time = t * 1000.0;
-  mb_cb.pointer(kind, p.x, p.y, 0);
+  mb_cb.pointer(kind, p.x, p.y, touch_id(u));
   event_time = -1;
 }
 - (void)touchesBegan:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
@@ -595,11 +582,11 @@ static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2
       self.two = u;
       if (self.state == UIGestureRecognizerStatePossible && [self.mode isEqualToString:@"pinch"]) {
         self.state = UIGestureRecognizerStateBegan;
-        [self canvasTouch:0 at:self.from time:self.one.timestamp];
-        [self canvasTouch:1 at:[self.one locationInView:self.canvas] time:self.one.timestamp];
-        [self canvasTouch:4 at:[u locationInView:self.canvas] time:u.timestamp];
+        [self canvasTouch:10 of:self.one at:self.from time:self.one.timestamp];
+        [self canvasTouch:11 of:self.one at:[self.one locationInView:self.canvas] time:self.one.timestamp];
+        [self canvasTouch:10 of:u at:[u locationInView:self.canvas] time:u.timestamp];
       } else if (self.state == UIGestureRecognizerStateBegan || self.state == UIGestureRecognizerStateChanged) {
-        [self canvasTouch:4 at:[u locationInView:self.canvas] time:u.timestamp];
+        [self canvasTouch:10 of:u at:[u locationInView:self.canvas] time:u.timestamp];
       }
     }
   }
@@ -612,8 +599,8 @@ static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2
     double dx = p.x - self.from.x, dy = p.y - self.from.y;
     if ([self.mode isEqualToString:@"vertical"] && fabs(dy) > self.slop && fabs(dy) > fabs(dx)) {
       self.state = UIGestureRecognizerStateBegan;
-      [self canvasTouch:0 at:self.from time:u.timestamp];
-      [self canvasTouch:1 at:p time:u.timestamp];
+      [self canvasTouch:10 of:u at:self.from time:u.timestamp];
+      [self canvasTouch:11 of:u at:p time:u.timestamp];
     } else if ([self.mode isEqualToString:@"vertical"] && fabs(dx) > self.slop) {
       // sideways first: the page's
       self.state = UIGestureRecognizerStateFailed;
@@ -621,26 +608,34 @@ static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2
     return;
   }
   self.state = UIGestureRecognizerStateChanged;
-  if ([t containsObject:u]) [self canvasTouch:1 at:p time:u.timestamp];
-  if (self.two && [t containsObject:self.two]) [self canvasTouch:5 at:[self.two locationInView:self.canvas] time:self.two.timestamp];
+  if ([t containsObject:u]) [self canvasTouch:11 of:u at:p time:u.timestamp];
+  if (self.two && [t containsObject:self.two])
+    [self canvasTouch:11 of:self.two at:[self.two locationInView:self.canvas] time:self.two.timestamp];
 }
+// `t` let go (12) or called off (13): taken, each handed on as it is; the first let go with the second down, the
+// second the first from then (as touches.mbt has it), the touch the canvas's till it is let go too
 - (void)ended:(NSSet<UITouch *> *)t kind:(int)kind {
   BOOL taken = self.state == UIGestureRecognizerStateBegan || self.state == UIGestureRecognizerStateChanged;
   if (taken && self.two && [t containsObject:self.two]) {
-    [self canvasTouch:6 at:[self.two locationInView:self.canvas] time:self.two.timestamp];
+    [self canvasTouch:kind of:self.two at:[self.two locationInView:self.canvas] time:self.two.timestamp];
     self.two = nil;
   }
   if (self.one && [t containsObject:self.one]) {
-    if (taken) [self canvasTouch:kind at:[self.one locationInView:self.canvas] time:self.one.timestamp];
-    self.state = taken ? (kind == 2 ? UIGestureRecognizerStateEnded : UIGestureRecognizerStateCancelled)
+    if (taken) [self canvasTouch:kind of:self.one at:[self.one locationInView:self.canvas] time:self.one.timestamp];
+    if (taken && kind == 12 && self.two) {
+      self.one = self.two;
+      self.two = nil;
+      return;
+    }
+    self.state = taken ? (kind == 12 ? UIGestureRecognizerStateEnded : UIGestureRecognizerStateCancelled)
                        : UIGestureRecognizerStateFailed;
   }
 }
 - (void)touchesEnded:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
-  [self ended:t kind:2];
+  [self ended:t kind:12];
 }
 - (void)touchesCancelled:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
-  [self ended:t kind:3];
+  [self ended:t kind:13];
 }
 - (void)reset {
   [super reset];

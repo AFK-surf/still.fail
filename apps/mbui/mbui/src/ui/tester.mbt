@@ -1371,6 +1371,15 @@ pub fn Tester::touch(self : Tester, kind : Int, x : Double, y : Double) -> Unit 
 }
 
 ///|
+/// A touch screen's finger as a host hands it on (touches.mbt): `phase` 0 down, 1 moved, 2 up, 3 called off, `id` the
+/// system's for that finger, at `at` (its own time, said with it: @hostapi.event_time).
+pub fn Tester::touch_raw(self : Tester, phase : Int, id : Int, x : Double, y : Double, at : Double) -> Unit {
+  self.fake.event_at = at
+  on_pointer(10 + phase, x, y, id)
+  self.fake.event_at = -1.0
+}
+
+///|
 /// A finger's event (Tester::touch's) that happened at `at`, taken now, later (the host's clock past it): as a host hands
 /// on an event it got a while before, its own time said with it (@hostapi.event_time).
 pub fn Tester::touch_at(self : Tester, kind : Int, x : Double, y : Double, at : Double) -> Unit {

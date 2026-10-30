@@ -545,37 +545,14 @@ static void scroll(GdkEvent *ev, double x, double y) {
   if (dx != 0 || dy != 0) mb_cb.wheel(x, y, dx, dy, phase | (mods << 4));
 }
 
-// The touches: the first as the pointer, the second as the second finger (4 down, 5 moved, 6 up; the first lifted before it, 8), any more none.
-static GdkEventSequence *touch1, *touch2;
-
+// The touches, each by its sequence (the same from its begin to its end): handed on as they come (pointer kinds 10
+// begun, 11 moved, 12 ended, 13 called off, an id of the sequence's where a button goes), what they come to the app's
+// to work out (touches.mbt: two of them its, the first let go the second the first, one called off all of it).
 static void touch(GdkEvent *ev, GdkEventType t, double x, double y) {
   GdkEventSequence *s = gdk_event_get_event_sequence(ev);
-  int end = t == GDK_TOUCH_END || t == GDK_TOUCH_CANCEL;
-  if (t == GDK_TOUCH_BEGIN) {
-    if (!touch1) {
-      touch1 = s;
-      gtk_widget_grab_focus(area);
-      mb_cb.pointer(0, x, y, 0);
-    } else if (!touch2) {
-      touch2 = s;
-      mb_cb.pointer(4, x, y, 0);
-    }
-    return;
-  }
-  if (s == touch1) {
-    // (the first lifted while a second is down: 8, where it was, the second the first from here)
-    if (end && touch2) {
-      mb_cb.pointer(8, x, y, 0);
-      touch1 = touch2;
-      touch2 = NULL;
-      return;
-    }
-    mb_cb.pointer(end ? 2 : 1, x, y, 0);
-    if (end) touch1 = NULL;
-  } else if (s == touch2) {
-    mb_cb.pointer(end ? 6 : 5, x, y, 0);
-    if (end) touch2 = NULL;
-  }
+  int kind = t == GDK_TOUCH_BEGIN ? 10 : t == GDK_TOUCH_UPDATE ? 11 : t == GDK_TOUCH_END ? 12 : 13;
+  if (kind == 10) gtk_widget_grab_focus(area);
+  mb_cb.pointer(kind, x, y, (int32_t)(intptr_t)s);
 }
 
 void mb_app_scroll(void *event) {

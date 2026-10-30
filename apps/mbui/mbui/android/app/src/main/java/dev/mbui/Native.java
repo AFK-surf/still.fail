@@ -14,6 +14,8 @@ final class Native {
     /** The last frame drawn again as it was presented, the native views' pictures as they are now (android_host.c). */
     static native void redraw();
     static native void pointer(int kind, float x, float y, double time);
+    /** A touch screen's finger (kind 10 down, 11 moved, 12 up, 13 called off), by its pointer id, at its own time. */
+    static native void touch(int kind, int id, float x, float y, double time);
     static native void key(int code, int mods);
     static native void text(int kind, String s, int a, int b);
     static native void back(int kind, float x, float progress, int edge);

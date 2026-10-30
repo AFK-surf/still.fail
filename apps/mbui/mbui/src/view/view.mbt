@@ -1204,8 +1204,11 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
   match n.on_drag {
     Some(f) => {
       let t = self.cause_now()
+      let fingers = self.fingers_off()
       @signals.untracked(fn() {
-        for g in self.fingers_off() {
+        for g in fingers {
+          // (each told only while the node and this on_drag are still its: what one told let go of hears no more)
+          guard bound_still(n, h, f) else { break }
           f({ kind: Off, x: 0.0, y: 0.0, at: t, wx: 0.0, wy: 0.0, ox: 0.0, oy: 0.0, finger: g })
         }
       })
@@ -1286,10 +1289,13 @@ pub fn Tree::drag_at(
         let told = fn(kind : DragIs, finger : Int) {
           f({ kind, x: x - nx, y: y - ny, at: t, wx: x, wy: y, ox: x - nx, oy: y - ny, finger })
         }
-        // (called off, all of it: each finger down told so)
+        // (called off, all of it: the hold and the fingers let go of first, then each finger down told so while the node
+        // and this on_drag are still its: what one told let go of hears no more)
         let off = fn() {
           self.held = None
-          for g in self.fingers_off() {
+          let fingers = self.fingers_off()
+          for g in fingers {
+            guard bound_still(n, id, f) else { break }
             told(Off, g)
           }
         }
@@ -1337,6 +1343,17 @@ pub fn Tree::drag_at(
     }
   })
   took.val
+}
+
+///|
+/// Whether node `n` is still `id` and its on_drag still `f` (not let go, not said anew).
+fn bound_still(n : Node, id : NodeId, f : (Drag) -> Unit) -> Bool {
+  n.live &&
+  n.gen == id.gen &&
+  (match n.on_drag {
+    Some(g) => physical_equal(g, f)
+    None => false
+  })
 }
 
 ///|
@@ -2039,6 +2056,25 @@ fn Tree::due_at(self : Tree, d : Due) -> Double {
 }
 
 ///|
+/// What was due by `live` (View::at_moment, View::steps), called off or run out: taken off the timeline at once, what
+/// it would have done let go with it (nothing of it held till the clock next comes by).
+fn Tree::unschedule(self : Tree, live : Ref[Bool]) -> Unit {
+  self.timeline.retain(fn(d) {
+    match d {
+      Steps(s, _) => !physical_equal(s.live, live)
+      Once(o, _) => !physical_equal(o.live, live)
+      Leaves(_, _) => true
+    }
+  })
+}
+
+///|
+/// How many things are due on its timeline (each held till it is done or called off).
+pub fn Tree::due_count(self : Tree) -> Int {
+  self.timeline.length()
+}
+
+///|
 /// Node `id`'s leaving or coming back ending, due in its turn (once).
 fn Tree::due_leaving(self : Tree, id : NodeId) -> Unit {
   for d in self.timeline {
@@ -2186,14 +2222,16 @@ pub fn View::steps(self : View, per_second : Int, count : Int, step : (Int, Doub
     if live.val {
       live.val = false
       (unkeep.val)()
+      tree.unschedule(live)
     }
   }
   unkeep.val = self.owns_while(stop)
   let last = fn(i : Int, at : Double) {
     step(i, at)
-    if i == count - 1 {
+    if i == count - 1 && live.val {
       live.val = false
       (unkeep.val)()
+      tree.unschedule(live)
     }
   }
   tree.timeline.push(Steps({ first: tick_after(tree.cause_now(), per_second), per_second, count, k: 0, step: last, live }, tree.told))
@@ -2696,6 +2734,7 @@ pub fn View::at_moment(self : View, when : Double, f : () -> Unit) -> () -> Unit
     if live.val {
       live.val = false
       (unkeep.val)()
+      tree.unschedule(live)
     }
   }
   unkeep.val = self.owns_while(stop)

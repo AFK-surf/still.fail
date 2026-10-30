@@ -177,6 +177,7 @@ fn view_forget() -> Unit {
   view_fingers[0] = -1
   view_fingers[1] = -1
   view_fingers[2] = 0
+  touches_forget()
   view_input_to.val = -3
   old_islands.clear()
   old_placed.clear()

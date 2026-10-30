@@ -1772,16 +1772,20 @@
   }
 
   function setupInput() {
+    // (a touch screen's fingers each by its pointerId, as they come: kinds 10 down, 11 moved, 12 up, 13 called off, what
+    // they come to the app's to work out, touches.mbt)
+    const touch = (e) => e.pointerType === 'touch';
     canvas.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       canvas.setPointerCapture(e.pointerId);
-      ptr(0, e, e.button);
+      if (touch(e)) ptr(10, e, e.pointerId);
+      else ptr(0, e, e.button);
       // keep the keyboard on the textarea while an editor has focus
       if (imeActive) ta.focus({ preventScroll: true });
     });
-    canvas.addEventListener('pointermove', (e) => ptr(1, e, 0));
-    canvas.addEventListener('pointerup', (e) => ptr(2, e, e.button === 2 ? 2 : 0));
-    canvas.addEventListener('pointercancel', (e) => ptr(3, e, 0));
+    canvas.addEventListener('pointermove', (e) => (touch(e) ? ptr(11, e, e.pointerId) : ptr(1, e, 0)));
+    canvas.addEventListener('pointerup', (e) => (touch(e) ? ptr(12, e, e.pointerId) : ptr(2, e, e.button === 2 ? 2 : 0)));
+    canvas.addEventListener('pointercancel', (e) => (touch(e) ? ptr(13, e, e.pointerId) : ptr(3, e, 0)));
     // the pointer gone out of the page (nothing hovered); a right click is the app's (its context menus)
     canvas.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') cb.pointer(7, -1, -1, 0); });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
