@@ -18,7 +18,7 @@ fn files_page_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
 ///|
 /// On the tape (laid out Medium, the sidebar in use at first), what shows of the page tapped: the page over.
 fn files_page_over(t : @ui.Tester, w : Double, h : Double) -> Unit {
-  if @sfdesk.wide.tape && @sfdesk.wide.tape_at != @sfdesk.TapePane::Page {
+  if @sfdesk.wide.tape && @sfdesk.wide.tape_at.get() != @sfdesk.TapePane::Page {
     t.tap(w - @sfdesk.tape_shows / 2.0, h / 2.0)
     t.run_for(@ui.move_most_ms)
   }
@@ -75,10 +75,10 @@ test "on the tape a folder opened in the files' page in use goes over it: back c
     Drive(d) => assert_eq(d.path, "")
     _ => fail("not the folder it was opened from")
   }
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   t.back()
   t.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
 }
 
 ///|
@@ -121,7 +121,7 @@ test "a narrow folder's row held with a finger: what can be done to it in a shee
   // press does, and asks nothing of what it holds)
   m.right_click(720.0 - @sfdesk.tape_shows / 2.0, 450.0)
   m.run_for(@ui.move_most_ms)
-  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   assert_false(@sf.presenting())
   let (x, y) = rightmost(m, "季度数据.csv")
   m.right_click(x, y)

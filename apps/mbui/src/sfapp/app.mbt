@@ -133,7 +133,7 @@ fn pages_shell(src : Source) -> Shell {
         @sfdesk.show_page()
       }
     },
-    edit_rail: fn() { @sfdesk.wide.editing = true },
+    edit_rail: fn() { @sfdesk.wide.editing.set(true) },
   }
 }
 

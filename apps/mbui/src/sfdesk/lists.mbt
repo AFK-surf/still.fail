@@ -95,7 +95,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       if jobs > 0 {
         let chip = c.id("side/open-jobs")
         if c.clicked(chip) {
-          wide.jobs_open = !wide.jobs_open
+          wide.jobs_open.set(!wide.jobs_open.get())
         }
         let b = c.box(style=foot_chip, id=chip, fn() {
           c.box(style=foot_chip_dot, fn() {  }) |> ignore
@@ -105,7 +105,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let p = @kit.popover(
           c,
           "side/open-jobs",
-          wide.jobs_open,
+          wide.jobs_open.get(),
           chip,
           side=Top,
           along=End,
@@ -114,7 +114,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           look=@sf.beside_look(Px(open_jobs_pop_w), most=dmin(open_jobs_pop_most, c.height * 0.6)),
           fn() { open_jobs(c, src, w) },
         )
-        wide.jobs_open = p.value
+        wide.jobs_open.set(p.value)
       }
     })
     // over the lists: their scroll bar keeps clear of it (the web's --nav-foot)
@@ -566,7 +566,7 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     return
   }
   c.box(style=todo_box, fn() {
-    if band_row(c, "side/attention", wide.attention_open, fn() {
+    if band_row(c, "side/attention", wide.attention_open.get(), fn() {
         band_mark(c, "bell", t.p.muted)
         band_words(c, @sf.t("web-main.attention.entry"))
         c.box(style=todo_slot, fn() {
@@ -576,7 +576,7 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         })
         |> ignore
       }) {
-      wide.attention_open = !wide.attention_open
+      wide.attention_open.set(!wide.attention_open.get())
     }
   })
   |> ignore
@@ -611,7 +611,7 @@ fn todo_all(src : Source, w : Workspace) -> Int {
 fn todo_shown(src : Source, w : Workspace) -> Bool {
   // (待处理 a tab of the system's: rail_native.mbt)
   !@sf.native_on() &&
-  !rail_items(src, w.id).contains("attention") && (todo_all(src, w) > 0 || wide.attention_open)
+  !rail_items(src, w.id).contains("attention") && (todo_all(src, w) > 0 || wide.attention_open.get())
 }
 
 ///|

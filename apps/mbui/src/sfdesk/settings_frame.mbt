@@ -164,7 +164,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           if app.nav.top() != Home {
             app.nav.replace(Home)
           }
-          wide.landed = ""
+          wide.landed.set("")
         }
         // (the way back is the frame's, not one of the list's rows: a group's room between them)
         @sf.list_apart(c)

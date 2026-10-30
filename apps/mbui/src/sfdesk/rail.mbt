@@ -139,7 +139,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
   let lit = lit_place()
   let rail_id = c.id("rail")
   match c.menu_asked(rail_id) {
-    Some((x, y)) if wide.rail_menu is None => wide.rail_menu = Some(("", x, y))
+    Some((x, y)) if wide.rail_menu.get() is None => wide.rail_menu.set(Some(("", x, y)))
     _ => ()
   }
   // (under the window's buttons where they are the system's, at its left: macOS's; where they are the app's, at its
@@ -197,7 +197,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
       // a place left out of the rail but in view: at the foot of its places, lit, while it is
       let in_view = rail_in_view(src, w)
       let shown = places.copy()
-      if in_view != "" && !places.contains(in_view) && !wide.editing {
+      if in_view != "" && !places.contains(in_view) && !wide.editing.get() {
         shown.push(in_view)
       }
       let shown_list = if shown.contains(list) { list } else { "chats" }
@@ -235,10 +235,10 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
             break
           }
         }
-        wide.landed = ""
+        wide.landed.set("")
       } else {
         open_settings()
-        wide.peek_next = wide.crowded
+        wide.peek_next.set(wide.crowded)
       }
     }
     rail_ground(
@@ -348,7 +348,7 @@ fn rail_ground(
   let b = c.box(style=rail_item, id~, fn() {
     // (lit in the closed bar, on its floating ground: the words' colour at 12%, as plain a step above it as the
     // selected grey is above the sidebar; Rail.css.ts item, closed)
-    let lit = if wide.closed { @sf.alpha(t.p.text, lit_in_bar) } else { t.p.selected }
+    let lit = if wide.closed.get() { @sf.alpha(t.p.text, lit_in_bar) } else { t.p.selected }
     rail_square(c, nav_ground(c, key, hover, on, lit~), fn() { body(@sf.mix(t.p.text, ink, t.p.muted)) })
     |> ignore
   })
@@ -498,42 +498,43 @@ fn rail_place(
   let t = @sf.theme()
   let id = c.id("rail/" + place)
   match c.menu_asked(id) {
-    Some((x, y)) => wide.rail_menu = Some((place, x, y))
+    Some((x, y)) => wide.rail_menu.set(Some((place, x, y)))
     None => ()
   }
   // dragged up or down (past a few points) while the rail is changed or with ⌘ held as it was pressed: to another place
   // in the rail, the others as they were until let go (where the pointer is read only by the place it drags)
   let py = fn() { c.pointer().1 }
-  let dragged = match wide.rail_drag {
+  let dragged = match wide.rail_drag.get() {
     Some((p, y0, _)) if p == place =>
       if c.pressed(id) {
-        wide.rail_drag = Some((p, y0, py() - y0))
+        wide.rail_drag.set(Some((p, y0, py() - y0)))
         true
       } else {
         // let go: its place by how far it went
         let dy = py() - y0
         let from = places.search_by(fn(x) { x == place }).unwrap_or(0)
         let to = dmax(0.0, dmin((places.length() - 1).to_double(), from.to_double() + (dy / rail_pitch).round())).to_int()
-        wide.rail_drag = None
+        wide.rail_drag.set(None)
         if dy.abs() > rail_slop && to != from {
           let next = places.filter(fn(x) { x != place })
           next.insert(to, place)
-          rail_keep(src, w.id, next)
+          // (the press let go took it: told once, whichever build took it)
+          c.tell("rail-keep", fn() { rail_keep(src, w.id, next) })
         }
         dy.abs() > rail_slop
       }
     // (only while the rail is changed, or pressed with ⌘ held: Rail.tsx drag)
-    None if c.pressed(id) && (wide.editing || (c.press().mods & @ui.mod_cmd) != 0) => {
-      wide.rail_drag = Some((place, py(), 0.0))
+    None if c.pressed(id) && (wide.editing.get() || (c.press().mods & @ui.mod_cmd) != 0) => {
+      wide.rail_drag.set(Some((place, py(), 0.0)))
       false
     }
     _ => false
   }
-  let moved = match wide.rail_drag {
+  let moved = match wide.rail_drag.get() {
     Some((p, _, dy)) if p == place && dy.abs() > rail_slop => dy
     _ => 0.0
   }
-  if c.clicked(id) && !dragged && !wide.editing {
+  if c.clicked(id) && !dragged && !wide.editing.get() {
     // the lit place pressed again (not 待处理, a panel): its sidebar folded or opened, not gone to; folded so with the
     // pointer on the rail, it is shown a while (Rail.tsx's rail onClickCapture); on the tape, the page brought over
     if on && place != "attention" && !place_bare(lit_place()) {
@@ -548,7 +549,7 @@ fn rail_place(
       rail_go(c, src, w, place)
       // (pressed into a place whose sidebar is folded for the page's room: shown a while from the start, as the web's
       // pressed into a folded one)
-      wide.peek_next = wide.crowded && !place_bare(place) && place != "attention"
+      wide.peek_next.set(wide.crowded && !place_bare(place) && place != "attention")
     }
   }
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
@@ -570,7 +571,7 @@ fn rail_place(
     _ => ""
   }
   rail_edit_frame(c, src, w, place, moved, fn() {
-    rail_ground(c, id, on || (place == "attention" && wide.attention_open), fn(color) {
+    rail_ground(c, id, on || (place == "attention" && wide.attention_open.get()), fn(color) {
       if place == "stations" {
         // the stations at a glance (Sidebar.tsx RailStations: StationGlyph, 20)
         @sf.station_glyph(c, stations_at_glance(src, w.id).0, rail_icon_size, color, t.p.red) |> ignore
@@ -587,7 +588,7 @@ fn rail_place(
     }, label~, tipped=!rail_carded(place))
     // 对话's, 用量's: what the place is about at a glance, beside it as the pointer rests on it (in place of its tip: what
     // it said is in the card; 用量's with the card to share of the agents' week)
-    if rail_carded(place) && !wide.editing {
+    if rail_carded(place) && !wide.editing.get() {
       @sfpages.hover(c, "rail/card/" + place, id, side=Right, along=Start, fn() { @sfpages.rail_card(c, src, w, place) })
       |> ignore
     }
@@ -618,7 +619,7 @@ fn desk_home() -> Unit {
 pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
   match place {
     "attention" => {
-      wide.attention_open = !wide.attention_open
+      wide.attention_open.set(!wide.attention_open.get())
     }
     "chats" | "mine" | "watching" => {
       // its list in the sidebar (Rail.tsx toList): 对话 all of them, the others theirs
@@ -635,7 +636,7 @@ pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
         ()
       } else {
         @sfbase.go_place("chats") |> ignore
-        wide.landed = ""
+        wide.landed.set("")
       }
     }
     "archive" => {
@@ -692,7 +693,7 @@ pub fn rail_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 ///|
 /// The rail's menu opened as a right click on `place` opens it (sffix's rail-menu).
 pub fn open_rail_menu(place : String) -> Unit {
-  wide.rail_menu = Some((place, 0.0, 0.0))
+  wide.rail_menu.set(Some((place, 0.0, 0.0)))
 }
 
 ///|
@@ -701,7 +702,7 @@ pub fn open_rail_menu(place : String) -> Unit {
 /// the row pointed at, puts one in it and the rail is changed from there), 从侧边条移除 the place right clicked,
 /// 自定义侧边条, 侧边条恢复默认 when it was changed.
 fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let (place, _, _) = match wide.rail_menu {
+  let (place, _, _) = match wide.rail_menu.get() {
     Some(m) => m
     None => {
       @sf.dropdown(c, "rail-menu", false, 0, [], {}, @sf.menu_w) |> ignore
@@ -755,13 +756,13 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           let next = kept.copy()
           next.push(i)
           rail_keep(src, w.id, next)
-          wide.editing = true
+          wide.editing.set(true)
         }
       }
     },
   )
   if !m.open || added.val != "" {
-    wide.rail_menu = None
+    wide.rail_menu.set(None)
   }
   if added.val != "" {
     return
@@ -769,7 +770,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   match m.chosen {
     Some("remove") => rail_keep(src, w.id, kept.filter(fn(i) { i != place }))
     Some("reset") => rail_keep(src, w.id, words_in(items(rail_view(src), "default")))
-    Some("customize") => wide.editing = true
+    Some("customize") => wide.editing.set(true)
     Some(v) if v.has_prefix("go:") => rail_go(c, src, w, v.view(start_offset=3).to_string())
     _ => ()
   }
@@ -878,7 +879,7 @@ pub fn settings_beside(route : @settings.Route) -> Unit {
 /// A place of the rail as it is drawn, `moved` with its drag; while the rail is changed (自定义侧边条), outlined, its
 /// − at its top left corner (Rail.css.ts editing, remove).
 fn rail_edit_frame(c : @ui.Ctx, src : Source, w : Workspace, place : String, moved : Double, body : () -> Unit) -> Unit {
-  if !wide.editing {
+  if !wide.editing.get() {
     c.box(ty=moved, body) |> ignore
     return
   }
@@ -922,7 +923,7 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let p = @kit.popover(
     c,
     "rail/adder",
-    wide.editing,
+    wide.editing.get(),
     c.id("rail"),
     side=Right,
     along=Start,
@@ -958,10 +959,10 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     },
   )
   // (pressing in the rail does not end it: its places are moved and taken out there)
-  if !p.value && wide.editing {
+  if !p.value && wide.editing.get() {
     let (px, _, _) = c.pointer()
     if px >= rail_w {
-      wide.editing = false
+      wide.editing.set(false)
     }
   }
 }
@@ -1060,23 +1061,23 @@ pub fn rail_stations_label(src : Source, ws : String) -> String {
 fn sidebar_edge(c : @ui.Ctx, at : Double) -> Unit {
   let id = c.id("sidebar-edge")
   // its width dragged open, and shown a while (the same width as open); folded, only pressed (any way it moves)
-  let sized = !wide.folded || wide.peeking.get()
+  let sized = !wide.folded.get() || wide.peeking.get()
   // (folded, it is pressed alone: the hand, as what takes presses)
-  if !wide.folded {
+  if !wide.folded.get() {
     c.cursor(id, ResizeX)
   }
-  let (least, most) = if sized { (side_min, side_max) } else { (wide.side_w, wide.side_w) }
-  let said = @sf.handle_drag(c, id, wide.side_w, min=least, max=most)
+  let (least, most) = if sized { (side_min, side_max) } else { (wide.side_w.get(), wide.side_w.get()) }
+  let said = @sf.handle_drag(c, id, wide.side_w.get(), min=least, max=most)
   match said {
-    Dragging(w) => wide.side_w = w
-    Dropped(w) if sized => wide.side_w = w
+    Dragging(w) => wide.side_w.set(w)
+    Dropped(w) if sized => wide.side_w.set(w)
     // (folded: the web's moves go nowhere, so a press that moved is a press)
-    Dropped(_) | Pressed | Twice => wide.folded = !wide.folded
+    Dropped(_) | Pressed | Twice => wide.folded.set(!wide.folded.get())
     Untouched => ()
   }
   let active = c.pressed(id) || said is Dragging(_)
-  wide.edge_held = active
-  let words = if wide.folded {
+  wide.edge_held.set(active)
+  let words = if wide.folded.get() {
     @sf.t("web-main.sidebar.open")
   } else {
     @sf.t("web-pages.workspace.resizeSidebar") + " · " + @sf.t("web-main.sidebar.close")
@@ -1089,7 +1090,7 @@ fn sidebar_edge(c : @ui.Ctx, at : Double) -> Unit {
         over=false,
         on=c.lit(id) || c.focus_shown(id) || active,
         active~,
-        line=!wide.folded,
+        line=!wide.folded.get(),
       )
       // (the whole strip, its line in its middle, as the web's: the list's bar's thumb, shown, takes the pointer where
       // it is over it, @ui's hit test; the user, 2026-10-28: 以 divider 为中心，左右各 6px)

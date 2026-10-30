@@ -16,11 +16,11 @@ test "host reads: the shortcuts as the Tester's system writes them (⌘ on macOS
   for p in [(0, "⌘K", "Ctrl+K"), (3, "Ctrl+K", "⌘K")] {
     let (platform, shown, not_shown) = p
     let t = reads_tester(platform~)
-    @sfdesk.wide.keys_open = true
+    @sfdesk.wide.keys_open.set(true)
     t.draw()
     assert_true(t.find(shown) is Some(_), msg="platform \{platform}: no \{shown}")
     assert_true(t.find(not_shown) is None, msg="platform \{platform}: \{not_shown}")
-    @sfdesk.wide.keys_open = false
+    @sfdesk.wide.keys_open.set(false)
   }
 }
 

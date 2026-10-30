@@ -262,7 +262,7 @@ pub let side_pane : @ui.Style = @ui.css("w=Full h=Full clip")
 /// slides out, what it showed (its tabs and the one in front).
 priv struct PanelOwn {
   width : @signals.Signal[Double?]
-  was : @signals.Signal[(String, Bool)?]
+  was : @sf.LiveMap[String, Bool]
   asked : @signals.Signal[String]
   leaving : @signals.Signal[(String, Array[String], String)?]
 }
@@ -270,7 +270,7 @@ priv struct PanelOwn {
 ///|
 let panel_own : PanelOwn = {
   width: @signals.signal(None, same=fn(a, b) { a == b }),
-  was: @signals.signal(None, same=fn(a, b) { a == b }),
+  was: @sf.LiveMap::new(),
   asked: @signals.signal("", same=fn(a, b) { a == b }),
   leaving: @signals.signal(None, same=fn(a, b) { a == b }),
 }
@@ -278,7 +278,7 @@ let panel_own : PanelOwn = {
 ///|
 pub fn side_slide_reset() -> Unit {
   panel_own.width.set(None)
-  panel_own.was.set(None)
+  panel_own.was.clear()
   panel_own.asked.set("")
   panel_own.leaving.set(None)
 }
@@ -333,15 +333,18 @@ pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page 
   side_over.val = over
   let whole = if over { dmin(side_over_w, c.width) } else { whole }
   let name = "--side-panel/" + key
-  match panel_own.was.get() {
-    Some((k, was)) if k == key && was != open && panel_own.asked.get() == key => {
+  match panel_own.was.get(key) {
+    Some(was) if was != open && panel_own.asked.get() == key => {
       panel_own.asked.set("")
       // (in and out on a Move as long as it is wide)
       c.move_state([("side-panel", [name])])
     }
     _ => ()
   }
-  panel_own.was.set(Some((key, open)))
+  // (each page's own: a panel beside one page and beside another, each as it was last built)
+  if panel_own.was.get(key) != Some(open) {
+    panel_own.was[key] = open
+  }
   // its column (the panel) as wide as it has got
   let col = c.moved(name, if open { whole } else { 0.0 })
   if col <= 0.0 {

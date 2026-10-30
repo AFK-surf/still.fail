@@ -34,7 +34,7 @@ let attention_size : FixedArray[Double] = [0.0]
 /// first; then each workspace's chats that want the viewer, not read since (the one in view's first), 忽略 on the row
 /// pointed at (`decision.dismiss`); pressed, its chat; 通知设置 at its foot.
 fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let close = fn() { wide.attention_open = false }
+  let close = fn() { wide.attention_open.set(false) }
   // (the window turned beside the system's tabs: what it opened from is elsewhere, closed: rail_native.mbt)
   if native_turned(c, attention_size) {
     close()
@@ -44,7 +44,7 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // its stations all reached again: a trouble later in the same words is new (said once the frame is built)
   c.after_build("attention/forget", fn() { trouble_forget(src, w) })
   // looked at as it opens (kept at once), no longer listed once it closes: listed while it is first read
-  if wide.attention_open && attention.trouble_seen is None {
+  if wide.attention_open.get() && attention.trouble_seen is None {
     attention.trouble_seen = Some(trouble_kept(src, w, "seen"))
     let now = station_trouble_words(src, w)
     if railed && now != "" {
@@ -54,13 +54,13 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     if railed && long_jobs_lit(src, w) {
       c.tell("attention/jobs-seen", fn() { long_jobs_seen(src, w) })
     }
-  } else if !wide.attention_open {
+  } else if !wide.attention_open.get() {
     attention.trouble_seen = None
   }
   let p = @kit.popover(
     c,
     "attention",
-    wide.attention_open,
+    wide.attention_open.get(),
     trigger,
     // (the system's bell: in its column down the side, beside it from its top; at the top's lead, under it from its left)
     side=if @sf.native_side() {
@@ -75,13 +75,13 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     look=@sf.beside_look(Px(attention_w), inner=att_list),
     fn() { attention_rows(c, src, w, railed, close) },
   )
-  wide.attention_open = p.value
+  wide.attention_open.set(p.value)
 }
 
 ///|
 /// 待处理's panel open (a screen's fixture).
 pub fn open_attention() -> Unit {
-  wide.attention_open = true
+  wide.attention_open.set(true)
 }
 
 ///|

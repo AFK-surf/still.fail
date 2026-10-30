@@ -52,7 +52,8 @@ pub(all) struct Asking {
 /// the one under the pointer, files dropped from outside still being read (their pick, where they go), what is asked.
 priv struct FDrag {
   mut press : (Dragged, Double, Double)?
-  mut item : Dragged?
+  /// (told as it changes: what shows it carried, built before what takes it in the frame, built again for it)
+  item : @signals.Signal[Dragged?]
   mut targets : Array[FTarget]
   mut drawn : Array[FTarget]
   mut over : String
@@ -69,7 +70,7 @@ priv struct FDrag {
 // kept across runs: the drag's state (drag_reset puts it back)
 let fdrag : FDrag = {
   press: None,
-  item: None,
+  item: @signals.signal(None),
   targets: [],
   drawn: [],
   over: "",
@@ -82,7 +83,7 @@ let fdrag : FDrag = {
 ///|
 fn drag_reset() -> Unit {
   fdrag.press = None
-  fdrag.item = None
+  fdrag.item.set(None)
   fdrag.targets = []
   fdrag.drawn = []
   fdrag.over = ""
@@ -105,7 +106,7 @@ fn fdrag_press(c : @ui.Ctx, item : Dragged) -> Unit {
   if !@sf.pointer_rests() {
     return
   }
-  if fdrag.press is None && fdrag.item is None {
+  if fdrag.press is None && fdrag.item.get() is None {
     // (where it went down: the frame that sees the press may see it moved already)
     fdrag.press = Some((item, c.press_x, c.press_y))
   }
@@ -114,7 +115,7 @@ fn fdrag_press(c : @ui.Ctx, item : Dragged) -> Unit {
 ///|
 /// Whether a row is what is being dragged.
 fn fdrag_carried(station : String, root : String, path : String) -> Bool {
-  match fdrag.item {
+  match fdrag.item.get() {
     Some(i) => i.station == station && i.root == root && i.path == path
     None => false
   }
@@ -142,7 +143,7 @@ fn fdrag_effect(item : Dragged, station : String, mods : Int) -> String {
 /// that copies from others (not into what is carried itself); 个人收藏 a folder; the computer's files any folder
 /// written to.
 fn fdrag_takes(t : FTarget) -> Bool {
-  match (fdrag.item, t.into) {
+  match (fdrag.item.get(), t.into) {
     (Some(i), None) => i.dir
     (Some(i), Some(into)) => {
       let root = into.root.unwrap_or("")
@@ -195,7 +196,7 @@ fn fdrag_target(
   if fdrag.over != key {
     return None
   }
-  match (fdrag.item, into) {
+  match (fdrag.item.get(), into) {
     (Some(_), None) => Some("keep")
     (Some(i), Some(at)) => Some(fdrag_effect(i, at.station, @ui.mods_held()))
     (None, Some(_)) => Some("upload")
@@ -215,10 +216,10 @@ pub fn drag_frame(c : @ui.Ctx, src : Source, ws : String, outside? : Bool = true
   // the targets drawn last frame are where a drop lands now
   fdrag.drawn = fdrag.targets
   fdrag.targets = []
-  match (fdrag.press, fdrag.item) {
+  match (fdrag.press, fdrag.item.get()) {
     (Some((item, x0, y0)), None) if down =>
       if (px - x0).abs() > fdrag_slop || (py - y0).abs() > fdrag_slop {
-        fdrag.item = Some(item)
+        fdrag.item.set(Some(item))
         fdrag.press = None
       }
     (_, Some(item)) if !down => {
@@ -226,7 +227,7 @@ pub fn drag_frame(c : @ui.Ctx, src : Source, ws : String, outside? : Bool = true
         Some(t) => fdrag_drop(c, src, ws, item, t, @ui.mods_held())
         None => ()
       }
-      fdrag.item = None
+      fdrag.item.set(None)
       fdrag.press = None
     }
     _ => if !down { fdrag.press = None }
@@ -262,7 +263,7 @@ pub fn drag_frame(c : @ui.Ctx, src : Source, ws : String, outside? : Bool = true
       fdrag.later.push(f)
     }
   }
-  fdrag.over = match (fdrag.item, @ui.files_held()) {
+  fdrag.over = match (fdrag.item.get(), @ui.files_held()) {
     (Some(_), _) =>
       match fdrag_at(c, px, py) {
         Some(t) => t.key
@@ -636,7 +637,7 @@ fn clash_foot(c : @ui.Ctx) -> Unit {
 /// where it is would do.
 fn drag_ghost(c : @ui.Ctx, page : Int) -> Unit {
   let t = @sf.theme()
-  match (fdrag.item, c.rect_of(page)) {
+  match (fdrag.item.get(), c.rect_of(page)) {
     (Some(i), Some((x0, y0, _, _))) => {
       let (px, py, _) = c.pointer()
       c.layer(fn() {
@@ -764,7 +765,7 @@ let fdrag_keep_on : @ui.Style = fdrag_keep.then(@ui.css("border=B1 border_color=
 ///|
 /// What is carried now (a row dragged), for what it goes over to show it (a chat's composer).
 pub fn dragged() -> Dragged? {
-  fdrag.item
+  fdrag.item.get()
 }
 
 ///|

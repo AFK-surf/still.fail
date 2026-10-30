@@ -22,7 +22,7 @@ test "a place gone to at each width on either screen: 文件 the stack's root fr
     if @sfdesk.wide.tape {
       t.back()
       t.run_for(@ui.move_most_ms)
-      assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side, msg=at)
+      assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side, msg=at)
     } else if t.query(Tab, label="文件") is None && t.query(Button, label="文件") is None {
       t.back()
       t.run_for(@ui.move_most_ms)

@@ -53,7 +53,7 @@ fn native_workspace_placed(c : @ui.Ctx) -> Unit {
   let floating : Array[@hostapi.NavFloating] = []
   let blocked = @sf.presenter_visible()
   let semantics = c.semantics_tree()
-  if !bar.bare && !switcher_open() && (!wide.tape || wide.tape_at == Side) {
+  if !bar.bare && !switcher_open() && (!wide.tape || wide.tape_at.get() == Side) {
     // Semantic anchors also survive a sidebar drawn from its kept part.
     for s in semantics {
       if !s.hidden || blocked {
@@ -511,7 +511,7 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   for id in taps {
     // (anything else chosen in the bars closes 待处理's panel, as a tap off a popover of the system's does)
     if id != "act/attention" && id != "lead/attention" {
-      wide.attention_open = false
+      wide.attention_open.set(false)
     }
     // (a tab left keeps what it showed, given back as it is chosen again; the one shown chosen again changes nothing,
     // as the system's tab apps have it: the user, 2026-10-26)
@@ -559,7 +559,7 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           for i in 1..<pages.length() {
             app.nav.push(pages[i])
           }
-          wide.landed = ""
+          wide.landed.set("")
         }
         _ => rail_go(c, src, w, place)
       }

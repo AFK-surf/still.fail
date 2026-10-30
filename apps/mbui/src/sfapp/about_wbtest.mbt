@@ -33,7 +33,7 @@ fn one_page_tester(
   // laid out Medium, the settings' list in use beside it: the page brought over (as a press on it does) before what is
   // in it is pressed
   if @sfdesk.wide.tape {
-    @sfdesk.wide.tape_ask = Some(@sfdesk.TapePane::Page)
+    @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Page))
     t.draw()
     t.run_for(@ui.move_most_ms)
   }
