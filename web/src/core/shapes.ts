@@ -6509,6 +6509,15 @@ export interface SkillDoc {
 	size?: string;
 }
 
+/** A station that may use a shared skill and does not. */
+export interface SkillShareMissing {
+	station: string;
+	/** name | same-name | refused (share/index.ts Missing). */
+	why: string;
+	/** Why, in words. */
+	whyText?: string;
+}
+
 /** How a skill is shared between the workspace's stations. */
 export interface SkillShare {
 	id: string;
@@ -6518,6 +6527,12 @@ export interface SkillShare {
 	allow?: string[];
 	/** Edits made on an older copy, kept beside the skill (SKILL.conflict-*.md), on its host. */
 	conflicts?: string[];
+	/** On its host: the stations that have it. */
+	users?: string[];
+	/** On its host: the stations that may use it and do not, and why. */
+	missing?: SkillShareMissing[];
+	/** On its host: why it is not being shared now (too large, unreadable), in words; absent while it is. */
+	unreadText?: string;
 }
 
 /**

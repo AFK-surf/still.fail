@@ -1007,9 +1007,11 @@ web-main.memory.projects
 web-main.memory.projects.none
 web-main.memory.projects.when
 web-main.memory.share.conflicts
+web-main.memory.share.missing
 web-main.memory.share.from
 web-main.memory.share.shared
 web-main.memory.share.switch
+web-main.memory.share.users
 web-main.memory.skill
 web-main.memory.when
 web-main.menu.more

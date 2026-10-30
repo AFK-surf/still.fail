@@ -639,6 +639,11 @@
   "core-logic.memory.no_when": "(When to use not specified)",
   "core-logic.memory.overview": "Overview",
   "core-logic.memory.empty": "(Empty)",
+  "core-logic.memory.share.missing.name": "its version doesn't support this name; it syncs once updated",
+  "core-logic.memory.share.missing.same_name": "it has its own skill with this name and uses that",
+  "core-logic.memory.share.missing.refused": "it refused the skill; it will be tried again",
+  "core-logic.memory.share.too_large": "Over 512 KB or 200 files; syncing is paused",
+  "core-logic.memory.share.unreadable": "Couldn't read the skill; syncing is paused",
   "core-logic.memory.points": {
     "one": "1 point",
     "other": "{n} points"

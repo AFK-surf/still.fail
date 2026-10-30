@@ -435,6 +435,7 @@
   "station.share.borrowedEdit": "此 Profile 由其他 station 分享，请在其所在的 station 上修改",
   "station.share.hostOffline": "登录该账号的 station {host} 无响应，暂时无法使用",
   "station.share.managersOnly": "只有 workspace 管理员能分享",
+  "station.share.skillName": "此名称无法在所有 station 上用作目录名：不能以 . 开头，不能以点或空格结尾，不能包含 / \\ : * ? \" < > |",
   "station.core.driveOldStation": "此 station 版本过旧，不支持文件功能，请先更新",
   "station.drive.invalid_request": "请求无效",
   "station.drive.not_a_root": "此文件夹不在已固定的文件夹中",

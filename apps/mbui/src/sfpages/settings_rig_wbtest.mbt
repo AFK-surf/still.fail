@@ -86,7 +86,7 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     Profile(a, id) => profile_page(c, core, here, frame, a, id)
     PickModels(a, id) => pick_models_page(c, core, here, frame, a, id)
     LocalStation => local_station_page(c, core, frame)
-    MemoryDoc(a, skill, at) => memory_doc_page(c, core, frame, a, skill, at)
+    MemoryDoc(a, skill, at) => memory_doc_page(c, core, here, frame, a, skill, at)
     AutoCompletion => completion_page(c, core, here, frame)
     AutoPolicy(st) => policy_page(c, core, here, frame, st)
     ProfileModels(a, id) => profile_models_page(c, core, here, frame, a, id)

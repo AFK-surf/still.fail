@@ -14,6 +14,8 @@ export const memoryRowValue = style({ flex: "none", fontSize: vars.textMeta, col
 export const memoryChevron = style({ flex: "none", color: vars.subtle });
 export const memoryTag = style({ flex: "none", fontSize: vars.textMeta, color: vars.subtle });
 export const memoryConflict = style({ margin: "0", fontSize: vars.textMeta, color: vars.amber });
+/** Which stations have a shared skill. */
+export const memoryUsers = style({ margin: "0", fontSize: vars.textMeta, color: vars.muted });
 export const memoryNone = style({ margin: "0", fontSize: vars.textUi });
 /** A page's head: when it is read, and its sharing. */
 export const memoryHead = style({ marginBottom: "16px" });

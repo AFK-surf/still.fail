@@ -441,6 +441,7 @@
   "station.share.borrowedEdit": "This Profile is shared from another station; edit it on that station",
   "station.share.hostOffline": "{host}, the station signed in to this account, isn't responding; it's unavailable right now",
   "station.share.managersOnly": "Only workspace admins can share",
+  "station.share.skillName": "This name can't be a folder name on every station: it can't start with a dot, end with a dot or a space, or contain / \\ : * ? \" < > |",
   "station.core.driveOldStation": "This station is too old for Files; update it first",
   "station.drive.invalid_request": "Invalid request",
   "station.drive.not_a_root": "That folder isn't one of the pinned folders",

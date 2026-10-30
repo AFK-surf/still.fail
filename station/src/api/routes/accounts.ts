@@ -218,7 +218,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
         manager(r.viewer, r.lang);
         const body = input(r);
         const skill = segment(name!);
-        if (!portableName(skill)) throw new Refusal(400, "bad skill name");
+        if (!portableName(skill)) throw new Refusal(400, tr(r.lang, "station.share.skillName"));
         try {
           await sharing.shareSkill(skill, body.on !== false, stations(body.allow));
         } catch (e) {

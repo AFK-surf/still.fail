@@ -68,7 +68,16 @@ function sharing(dataDir: string, raw: Json, dir: string, name: string): Json {
     try {
       conflicts = readdirSync(joined(dir, name)).filter((n) => /^SKILL\.conflict-.*\.md$/.test(n));
     } catch {}
-    return { id: typeof hosted === "string" ? hosted : hosted.id, role: "host", host: station, allow: Array.isArray(hosted?.allow) ? hosted.allow : null, conflicts };
+    const id = typeof hosted === "string" ? hosted : hosted.id;
+    // Which stations have it, which may and do not and why, and why it is not being shared now (share/index.ts Hosted).
+    const state = readJson(joined(dataDir, "share/state.json"))?.hosted?.[id] ?? {};
+    const missing = typeof state.missing === "object" && state.missing !== null ? state.missing : {};
+    const users = Object.entries(typeof state.told === "object" && state.told !== null ? state.told : {}).flatMap(([s, v]) => (typeof v === "number" && v >= 0 && !(s in missing) ? [s] : []));
+    return {
+      id, role: "host", host: station, allow: Array.isArray(hosted?.allow) ? hosted.allow : null, conflicts, users,
+      missing: Object.entries(missing).flatMap(([s, why]) => (typeof why === "string" ? [{ station: s, why }] : [])),
+      ...(typeof state.unread === "string" ? { unread: state.unread } : {}),
+    };
   }
   try {
     const path = joined(dir, name);

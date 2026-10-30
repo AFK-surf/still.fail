@@ -101,10 +101,17 @@ export type SharingDeps = {
 };
 
 /// `dir`: of a skill, its directory's device and inode (`dev:ino`), by which it is found again once renamed.
-type Hosted = { version: number; hash: string; kind: ShareKind; name: string; allow: string[] | null; told: Record<string, number>; dir?: string };
+/// `missing`: the stations that may use it but do not, and why (Missing). `unread`: why what it is cannot be read now
+/// (too-large: past what may be shared; unreadable), so its stations keep the last of it.
+type Hosted = { version: number; hash: string; kind: ShareKind; name: string; allow: string[] | null; told: Record<string, number>; dir?: string; missing?: Record<string, Missing>; unread?: string };
+/// Why a station that may use a share does not: it refused the share's name (name), it has a skill of its own by that
+/// name, which wins (same-name), it refused for another reason (refused).
+export type Missing = "name" | "same-name" | "refused";
 /// `workspace`: of a skill, the workspace it was had in, whose agents' skills it is linked into (absent: the home one's,
 /// as files of before have it).
 type Borrowed = { version: number; hash: string; kind: ShareKind; name: string; host: string; allow: string[] | null; workspace?: string; pending?: boolean; stale?: boolean };
+/// A share of this station's: what it is, who may use it, its content's hash (null: unreadable now, `unread` why).
+type Own = { kind: ShareKind; name: string; allow: string[] | null; hash: string | null; profile?: Json; skill?: string; unread?: string };
 type State = {
   /// What this station shares: its version (raised when what it is changes) and each station told of it, at which
   /// version (-1: told it is no longer for it).
@@ -134,6 +141,17 @@ function portable(p: Json): Json {
   return out;
 }
 
+class TooLarge extends Error {}
+
+/// Keeps why a station that may use a share does not (null: it does, or may not).
+function miss(hosted: Hosted, peer: string, why: Missing | null) {
+  if (why !== null) (hosted.missing ??= {})[peer] = why;
+  else if (hosted.missing) {
+    delete hosted.missing[peer];
+    if (Object.keys(hosted.missing).length === 0) delete hosted.missing;
+  }
+}
+
 /// A skill's files, relative paths to their bytes; refused past the limits (or with links in it).
 function readSkill(dir: string): Record<string, Buffer> {
   const files: Record<string, Buffer> = {};
@@ -148,7 +166,7 @@ function readSkill(dir: string): Record<string, Buffer> {
         // A conflict kept beside the skill is the host's to show, not part of what is shared.
         if (/^SKILL\.conflict-/.test(name)) continue;
         bytes += meta.size;
-        if (bytes > MAX_SKILL_BYTES || Object.keys(files).length >= MAX_SKILL_FILES) throw new Error("the skill is too large to share (512 KB, 200 files at most)");
+        if (bytes > MAX_SKILL_BYTES || Object.keys(files).length >= MAX_SKILL_FILES) throw new TooLarge("the skill is too large to share (512 KB, 200 files at most)");
         files[relative(dir, path).split(sep).join("/")] = readFileSync(path);
       }
     }
@@ -390,8 +408,8 @@ export class Sharing {
   }
 
   /// What this station shares now, by id: what it is, who may use it, its content's hash (null: unreadable now).
-  private ownShares(): Map<string, { kind: ShareKind; name: string; allow: string[] | null; hash: string | null; profile?: Json; skill?: string }> {
-    const out = new Map<string, { kind: ShareKind; name: string; allow: string[] | null; hash: string | null; profile?: Json; skill?: string }>();
+  private ownShares(): Map<string, Own> {
+    const out = new Map<string, Own>();
     for (const p of this.profiles()) {
       if (!isObject(p.share) || p.share.borrowed === true || typeof p.share.id !== "string") continue;
       out.set(p.share.id, { kind: "profile", name: String(p.name ?? p.id), allow: Array.isArray(p.share.allow) ? p.share.allow : null, hash: this.profileHash(p), profile: p });
@@ -399,12 +417,14 @@ export class Sharing {
     for (const [name, { id, allow }] of Object.entries(this.sharedSkills())) {
       const dir = join(this.skillsDir(), name);
       let hash: string | null = null;
+      let unread: string | undefined;
       try {
         hash = skillHash(readSkill(dir));
       } catch (e) {
+        unread = e instanceof TooLarge ? "too-large" : "unreadable";
         log.warn("share", "a shared skill could not be read", { name, error: (e as Error).message });
       }
-      out.set(id, { kind: "skill", name, allow, hash, skill: name });
+      out.set(id, { kind: "skill", name, allow, hash, skill: name, unread });
     }
     return out;
   }
@@ -451,15 +471,19 @@ export class Sharing {
     this.followSkills(state);
     let pending = false;
     const silent = new Set(this.unreachable.keys());
-    const tell = async (peer: string, ws: string | null, request: Json): Promise<boolean> => {
+    /// Its answer; a refusal kept on what it was of (`hosted`: shown where it is shared, till it is taken).
+    const tell = async (peer: string, ws: string | null, request: Json, hosted?: Hosted): Promise<Json | Error> => {
       try {
-        await this.deps.ask(peer, ws, request);
-        return true;
+        const answer = (await this.deps.ask(peer, ws, request)) ?? {};
+        if (hosted) miss(hosted, peer, answer.hidden === true ? "same-name" : null);
+        return answer;
       } catch (e) {
         pending = true;
         // Said, as a copy that could not be had is: else nothing on the host says why a station never got a share.
         log.info("share", "a station could not be told of a share", { id: request.id, peer, by: whoSaid(e), error: (e as Error).message });
-        return false;
+        // One that did not answer is asked again; what it was before stands meanwhile.
+        if (hosted && e instanceof Refused) miss(hosted, peer, /bad skill name/.test(e.message) ? "name" : "refused");
+        return e as Error;
       }
     };
 
@@ -468,9 +492,14 @@ export class Sharing {
     const own = this.ownShares();
     for (const [id, now] of own) {
       if (now.kind === "skill") this.watchHosted(now.skill!, join(this.skillsDir(), now.skill!));
-      if (now.hash === null) continue;
       const was = state.hosted[id];
       const hosted: Hosted = was ?? { version: 0, hash: "", kind: now.kind, name: now.name, allow: now.allow, told: {} };
+      if (now.hash === null) {
+        hosted.unread = now.unread;
+        state.hosted[id] = hosted;
+        continue;
+      }
+      delete hosted.unread;
       // Its name is part of what it is: a skill renamed is linked under its new name where it is copied.
       if (hosted.hash !== now.hash || hosted.name !== now.name) {
         hosted.version += 1;
@@ -487,20 +516,22 @@ export class Sharing {
         const ws = this.reach(now, peer, rosters);
         if (ws !== null && this.mayUse(now.allow, peer)) {
           if (hosted.told[peer] === hosted.version) continue;
-          if (await tell(peer, ws, { method: "share.changed", id, kind: now.kind, name: now.name, version: hosted.version, allow: now.allow })) hosted.told[peer] = hosted.version;
-        } else if (peer in hosted.told) {
-          if (await tell(peer, null, { method: "share.changed", id, gone: true })) delete hosted.told[peer];
+          if (!((await tell(peer, ws, { method: "share.changed", id, kind: now.kind, name: now.name, version: hosted.version, allow: now.allow }, hosted)) instanceof Error)) hosted.told[peer] = hosted.version;
+        } else {
+          miss(hosted, peer, null);
+          if (peer in hosted.told && !((await tell(peer, null, { method: "share.changed", id, gone: true })) instanceof Error)) delete hosted.told[peer];
         }
       }
       // Stations in none of this station's workspaces now: forgotten.
       for (const peer of Object.keys(hosted.told)) if (!rosters.has(peer)) delete hosted.told[peer];
+      for (const peer of Object.keys(hosted.missing ?? {})) if (!rosters.has(peer)) miss(hosted, peer, null);
     }
     // No longer shared: each station told is told so, then it is forgotten.
     for (const [id, hosted] of Object.entries(state.hosted)) {
       if (own.has(id)) continue;
       for (const peer of Object.keys(hosted.told)) {
         if (rosters !== null && !rosters.has(peer)) delete hosted.told[peer];
-        else if (await tell(peer, null, { method: "share.changed", id, gone: true })) delete hosted.told[peer];
+        else if (!((await tell(peer, null, { method: "share.changed", id, gone: true })) instanceof Error)) delete hosted.told[peer];
       }
       if (Object.keys(hosted.told).length === 0) delete state.hosted[id];
     }
@@ -509,7 +540,7 @@ export class Sharing {
       const left: string[] = [];
       for (const peer of moved.tell) {
         if (peer === moved.to || (rosters !== null && !rosters.has(peer))) continue;
-        if (!(await tell(peer, null, { method: "share.changed", id, host: moved.to }))) left.push(peer);
+        if ((await tell(peer, null, { method: "share.changed", id, host: moved.to })) instanceof Error) left.push(peer);
       }
       if (left.length === 0) delete state.moved[id];
       else moved.tell = left;
@@ -528,7 +559,7 @@ export class Sharing {
       try {
         if (had.pending && had.kind === "skill") await this.sendSkillEdit(id, had);
         if (!had.stale) {
-          const now = await this.deps.ask(had.host, this.askIn(had), { method: "share.version", id });
+          const now = await this.deps.ask(had.host, this.askIn(had), { method: "share.version", id, ...(had.kind === "skill" ? { hidden: !this.skillLinked(id, had) } : {}) });
           this.unreachable.delete(had.host);
           if (typeof now?.moved === "string") {
             had.host = now.moved;
@@ -652,6 +683,8 @@ export class Sharing {
           mkdirSync(skills, { recursive: true });
           // Where links are refused, a junction will do: its target is the copy's own directory, which stays where it is.
           linkSync(target, link, { junction: true });
+          // Its host hears it is shown here (it may have been told otherwise).
+          if (this.checked.delete(id)) this.again = true;
         } else if (!isLink(link) || readlinkSync(link) !== target) continue;
       } catch (e) {
         // This copy's alone: the others are linked all the same.
@@ -659,6 +692,16 @@ export class Sharing {
         continue;
       }
       this.watchBorrowed(id, target);
+    }
+  }
+
+  /// Whether something else is under a copied skill's name here (one of this station's own, or another's copy).
+  private nameTaken(had: Borrowed): boolean {
+    try {
+      const link = join(this.skillsDir(this.askIn(had)), had.name);
+      return existsSync(link) || isLink(link);
+    } catch {
+      return false;
     }
   }
 
@@ -741,7 +784,16 @@ export class Sharing {
     if (!own) throw new Error("this station does not share that");
     if (!this.mayUse(own.allow, peer) || this.reach(own, peer) === null) throw new Error("that share is not for this station");
     const version = state.hosted[id]?.version ?? 0;
-    if (method === "share.version") return { version };
+    if (method === "share.version") {
+      // A copy of a skill not shown there, as one of that station's own has its name (or shown again).
+      const hosted = state.hosted[id];
+      if (hosted && typeof request.hidden === "boolean" && (hosted.missing?.[peer] ?? null) !== (request.hidden ? "same-name" : null)) {
+        miss(hosted, peer, request.hidden ? "same-name" : null);
+        this.writeState(state);
+        this.deps.changed();
+      }
+      return { version };
+    }
     if (own.kind === "profile") {
       const p = own.profile!;
       if (method === "share.get") {
@@ -809,6 +861,9 @@ export class Sharing {
     }
     this.writeState(state);
     void this.reconcile();
+    // Not to be shown here, as something of this station's has its name (its own skill wins): said to its host.
+    const now = state.borrowed[id];
+    if (now?.kind === "skill" && !this.skillLinked(id, now) && this.nameTaken(now)) return { heard: true, hidden: true };
     return { heard: true };
   }
 

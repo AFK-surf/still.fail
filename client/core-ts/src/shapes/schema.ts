@@ -1302,7 +1302,15 @@ export const SHAPES: Record<string, Shape> = {
     ["host", "String"],
     ["allow", opt(vec("String"))],
     ["conflicts", vec("String"), { default: true, doc: "Edits made on an older copy, kept beside the skill (SKILL.conflict-*.md), on its host." }],
+    ["users", vec("String"), { default: true, doc: "On its host: the stations that have it." }],
+    ["missing", vec("SkillShareMissing"), { default: true, doc: "On its host: the stations that may use it and do not, and why." }],
+    ["unreadText", opt("String"), { doc: "On its host: why it is not being shared now (too large, unreadable), in words; absent while it is." }],
   ], { doc: "How a skill is shared between the workspace's stations." }),
+  SkillShareMissing: struct([
+    ["station", "String"],
+    ["why", "String", { doc: "name | same-name | refused (share/index.ts Missing)." }],
+    ["whyText", "String", { default: true, doc: "Why, in words." }],
+  ], { doc: "A station that may use a shared skill and does not." }),
   StatusView: struct([
     ["state", opt("String")],
     ["text", opt("String"), { said: true }],
