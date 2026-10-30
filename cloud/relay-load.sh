@@ -1,6 +1,6 @@
 #!/bin/sh
 # Sends this machine's relay's counters to still.fail cloud, for the admin's console (its 中继 page: src/relay-load.ts),
-# run every minute by a systemd timer on the relays on machines of their own (Beijing's, Hong Kong's). still.fail cloud
+# run every minute by a systemd timer on the relays on machines of their own (Beijing's, Hong Kong's, Shenzhen's). still.fail cloud
 # believes it as the relay whose address it comes from. /etc/iroh-relay/load.env says which relay this is:
 #   RELAY_URL=https://39.105.157.122
 #   CLOUD=https://app.still.fail   (optional)
