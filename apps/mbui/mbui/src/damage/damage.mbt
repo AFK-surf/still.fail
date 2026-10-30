@@ -191,7 +191,10 @@ pub fn Damage::next(
   } else {
     [(0.0, 0.0, -1.0, -1.0)]
   }
-  self.keep(inst, count, w, h, scale, r, g, b)
+  // (nothing changed of as many: what is kept is it already, every number the same, not copied again)
+  if !(same_frame && out.is_empty() && count == self.n) {
+    self.keep(inst, count, w, h, scale, r, g, b)
+  }
   out
 }
 
