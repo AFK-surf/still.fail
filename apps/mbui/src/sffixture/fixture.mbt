@@ -1108,6 +1108,11 @@ pub fn fixture(mode : String) -> Source {
   {
     topic: fn(name, params) { fixture_topic(f, name, params) },
     call: fn(name, params, done) {
+      // (answered at once, as a core's answer comes from outside: what it changes of what is no signal taken so)
+      let done = fn(r) {
+        @ui.came_from_outside()
+        done(r)
+      }
       // (what it does to the 奏 page's queue once taken)
       let done = fixture_queue_done(f, name, params, done)
       match fixture_kept(name, params, None) {

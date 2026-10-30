@@ -276,7 +276,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
             close()
             @sfbase.history_push()
             if g.0 != w.id {
-              app.picked = g.0
+              app.picked.set(g.0)
               (src.call)("prefs.set", Json::object({ "workspace": Json::string(g.0) }), fn(_) {  })
               desk_home()
             }

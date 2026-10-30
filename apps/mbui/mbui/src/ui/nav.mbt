@@ -93,6 +93,9 @@ struct Nav[P] {
   // where a finger has it (`p` while it follows one, mode 3), as a signal: what reads where it is (Nav::at) is drawn
   // again as the finger moves, nothing taken as an input (on_back, edge_move)
   finger : @signals.Signal[Double]
+  // (its pages as they change, as a signal: what reads them (top, depth, pages, under, a nav built) built again for it,
+  // wherever and whenever they changed: a choice told after a frame, a test's step)
+  said : @signals.Signal[Int]
   mut p0 : Double
   mut p1 : Double
   // when the motion started (-1: at its first frame), how long (a Move's over how far it goes: move_ms), and how fast
@@ -167,6 +170,7 @@ pub fn[P] Nav::new(
     gone: [],
     p: 0.0,
     finger: @signals.signal(0.0),
+    said: @signals.signal(0),
     p0: 0.0,
     p1: 0.0,
     t0: -1.0,
@@ -204,20 +208,29 @@ pub fn[P] Nav::new(
 }
 
 ///|
+/// Its pages changed: what reads them told.
+fn[P] Nav::told(self : Nav[P]) -> Unit {
+  self.said.set(@signals.untracked(fn() { self.said.get() }) + 1)
+}
+
+///|
 /// The page on top.
 pub fn[P] Nav::top(self : Nav[P]) -> P {
+  self.said.get() |> ignore
   self.pages[self.pages.length() - 1].page
 }
 
 ///|
 /// How many pages are in the stack.
 pub fn[P] Nav::depth(self : Nav[P]) -> Int {
+  self.said.get() |> ignore
   self.pages.length()
 }
 
 ///|
 /// The pages, bottom to top.
 pub fn[P] Nav::pages(self : Nav[P]) -> Array[P] {
+  self.said.get() |> ignore
   self.pages.map(fn(e) { e.page })
 }
 
@@ -227,6 +240,7 @@ pub fn[P] Nav::pages(self : Nav[P]) -> Array[P] {
 /// What a page asks of where it stands (whether it is the root, where its back goes), never the stack's depth or the
 /// page under its top: those are the top's, and a root under a page coming in is still the root.
 pub fn[P] Nav::under(self : Nav[P]) -> P? {
+  self.said.get() |> ignore
   match self.built {
     Some(e) => e.under
     None => self.pages[self.pages.length() - 1].under
@@ -449,6 +463,7 @@ pub fn[P] Nav::top_shows(self : Nav[P]) -> Bool {
 pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
   self.settle()
   self.pages.push(nav_page(page, Some(self.top())))
+  self.told()
   self.p = 1.0
   self.go(1, 0.0, brings=true)
 }
@@ -477,6 +492,7 @@ pub fn[P] Nav::rise(self : Nav[P], page : P) -> Unit {
   let e = nav_page(page, Some(self.top()))
   e.rise = true
   self.pages.push(e)
+  self.told()
   self.p = 1.0
   self.go(1, 0.0, brings=true)
 }
@@ -510,6 +526,7 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
     }
   }
   self.leaving = self.pages.pop()
+  self.told()
   self.topped()
   self.go(2, 1.0, brings=true)
   true
@@ -520,6 +537,7 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
 pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
   self.settle()
   let was = self.pages.pop()
+  self.told()
   match was {
     Some(e) => self.gone.push(e)
     None => ()
@@ -531,6 +549,7 @@ pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
     None => ()
   }
   self.pages.push(e)
+  self.told()
   wake()
 }
 
@@ -634,6 +653,7 @@ fn[P] Nav::gesture(
 /// Gone back from where a finger left the page: on from there, as fast as it let it go (`v`, its widths per ms).
 fn[P] Nav::let_go(self : Nav[P], v : Double) -> Unit {
   self.leaving = self.pages.pop()
+  self.told()
   match self.leaving {
     Some(e) => (self.went_back)(e.page, e.over, e.rise, self.pages())
     None => ()
@@ -661,6 +681,8 @@ pub fn[P] Ctx::nav(
   floor? : Int = 0,
   takes_back? : Bool = true,
 ) -> Int {
+  // (its pages read: built again as they change)
+  nav.said.get() |> ignore
   stacks_said.get() |> ignore
   nav.floor = floor
   nav.room_w = self.width
@@ -978,6 +1000,8 @@ pub fn[P] Ctx::nav_flat(
   stacks? : Bool = false,
   takes_back? : Bool = true,
 ) -> Int {
+  // (its pages read: built again as they change)
+  nav.said.get() |> ignore
   stacks_said.get() |> ignore
   if stacks && nav.stacked() {
     // (one pushed over it slides in once it has what it shows, waiting as long as one put in place waits:

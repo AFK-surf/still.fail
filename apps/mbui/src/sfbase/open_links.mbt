@@ -279,7 +279,7 @@ pub fn pick_workspace(src : Source, ws : String) -> Unit {
     return
   }
   history_push()
-  app.picked = ws
+  app.picked.set(ws)
   link_workspace.val = ws
   (src.call)("prefs.set", { "workspace": Json::string(ws) }, fn(_) {  })
 }

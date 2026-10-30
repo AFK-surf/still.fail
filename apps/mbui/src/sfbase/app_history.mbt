@@ -162,7 +162,7 @@ fn history_go(src : Source, spot : Spot) -> Unit {
     None => ""
   }
   if spot.ws != ws {
-    app.picked = spot.ws
+    app.picked.set(spot.ws)
     (src.call)("prefs.set", { "workspace": Json::string(spot.ws) }, fn(_) {  })
   }
   history_now.val = Some(spot)

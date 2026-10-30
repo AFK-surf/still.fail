@@ -388,19 +388,19 @@ test "wide, another workspace switched to: back brings the first workspace again
   // ⌃2: the second workspace, its own page beside its chats
   t.key(@ui.key_of_char('2'), mods=@ui.mod_ctrl)
   t.run_for(@ui.move_most_ms)
-  assert_eq(app.picked, "ws2")
+  assert_eq(app.picked.get(), "ws2")
   let second = app.nav.pages()
   assert_false(second == chat)
   // back: the first workspace in view again (the prefs told), the chat in its place
   t.key(@ui.key_of_char('['), mods=@ui.mod_cmd)
   t.run_for(@ui.move_most_ms)
-  assert_eq(app.picked, "ws1")
+  assert_eq(app.picked.get(), "ws1")
   assert_true(app.nav.pages() == chat)
   assert_true(named(calls, "prefs.set").last().map(fn(m) { text(Some(m.params), "workspace") }) == Some("ws1"))
   // forward: the second again, as it was
   t.key(@ui.key_of_char(']'), mods=@ui.mod_cmd)
   t.run_for(@ui.move_most_ms)
-  assert_eq(app.picked, "ws2")
+  assert_eq(app.picked.get(), "ws2")
   assert_true(app.nav.pages() == second)
 }
 

@@ -153,6 +153,16 @@ let presented_now : Array[Presented] = []
 let presented_count : Ref[Int] = Ref(0)
 
 ///|
+/// Told as one is presented or let go: the host (presented) built again for it, wherever it was asked from.
+// kept across runs: only counts on
+let presented_said : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+fn presented_told() -> Unit {
+  presented_said.set(@signals.untracked(fn() { presented_said.get() }) + 1)
+}
+
+///|
 /// Whether the host draws over nothing of the app's this frame (presented's `alone`).
 // kept across runs: said by the host each frame; put back by presenters_reset (parts_reset)
 let presented_alone : Ref[Bool] = Ref(false)
@@ -175,6 +185,7 @@ pub fn presenters_reset() -> Unit {
 ///|
 fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit = fn() {  }) -> Unit {
   presented_count.val += 1
+  presented_told()
   presented_now.push({
     serial: presented_count.val,
     shows,
@@ -782,6 +793,7 @@ pub fn close_presented() -> Unit {
 ///|
 /// Closes the one at `i` and all over it (a pick a panel opened goes with the panel).
 fn close_from(i : Int) -> Unit {
+  presented_told()
   for k in i..<presented_now.length() {
     presented_now[k].open = false
   }
@@ -793,6 +805,7 @@ fn close_from(i : Int) -> Unit {
 /// opened it), and anchored to what opened it wherever that is.
 /// `alone`: nothing of the app's is under it (a share over another app): a sheet on the page's paper, not frosted.
 pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
+  presented_said.get() |> ignore
   presented_alone.val = alone
   presented_how.clear()
   let (ww, _) = c.window_size()

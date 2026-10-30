@@ -210,6 +210,13 @@ fn outside_came() -> Unit {
 }
 
 ///|
+/// What came from outside that is no signal (a made-up core answering a call at once, as a core's message is): taken
+/// as an event from outside, what is kept built anew for it (outside_came).
+pub fn came_from_outside() -> Unit {
+  outside_came()
+}
+
+///|
 /// A list's rows laid on the device's pixels as a host lays them (Ctx::rows_on_grid), from now on, or not (as every
 /// frame of a Tester's was always laid out).
 pub fn Tester::keep_parts(self : Tester, on : Bool) -> Unit {

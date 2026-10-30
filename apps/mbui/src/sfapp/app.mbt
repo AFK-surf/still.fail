@@ -348,6 +348,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // the screens live in their cards (screen_links.mbt): which are on the screen, their frames acknowledged
   peeks_frame(c, src)
   // pages left: where they were left told once the frame's builds are over (a later build would see them left too)
+  @sfbase.left_said.get() |> ignore
   if left_pages.length() > 0 {
     c.after_build("pages-left", fn() { pages_left(src) })
   }

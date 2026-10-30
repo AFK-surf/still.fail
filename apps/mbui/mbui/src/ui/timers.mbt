@@ -117,12 +117,20 @@ fn Ctx::sweep_helds(self : Ctx) -> Unit {
 /// What `id` names happened now (letters typed, a tip closed): Ctx::within asks how long ago.
 pub fn Ctx::mark(self : Ctx, id : Int) -> Unit {
   marks_at[id] = self.clock
+  // (what read it, in this build or kept, told: built again from it)
+  marks_said.set(@signals.untracked(fn() { marks_said.get() }) + 1)
 }
+
+///|
+/// Told as anything is marked (Ctx::mark): what asked how long ago (Ctx::within) built again.
+// kept across runs: only counts on
+let marks_said : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// Whether what `id` names was marked (Ctx::mark) less than `ms` (a declared length) ago: woken as that ends, later
 /// (nothing waits on it), so what read it is built again then.
 pub fn Ctx::within(self : Ctx, id : Int, ms : Double) -> Bool {
+  marks_said.get() |> ignore
   match marks_at.get(id) {
     Some(at) if self.clock - at < ms => {
       // (what reads it read so till then: drawn again as it ends)
