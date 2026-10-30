@@ -769,11 +769,12 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
   // inputrec.mbt)
   let mut quiet = false
   let c = g()
-  // a second finger (4 down, 5 moved, 6 up: hosts with touch screens), for a pinch (native.mbt `second_pointer`)
-  if kind >= 4 && kind <= 6 {
-    on_second(kind, x, y)
-    // one of two lifted (which, the host does not say): the moves from here may be the other's, its own track
-    if kind == 6 {
+  // a second finger (4 down, 5 moved, 6 up: hosts with touch screens; 8 the first let go, the second the first from
+  // here), for a pinch (native.mbt `second_pointer`)
+  if (kind >= 4 && kind <= 6) || kind == 8 {
+    on_second(if kind == 8 { 6 } else { kind }, x, y)
+    // one of two lifted: the moves from here may be the other's, its own track
+    if kind == 6 || kind == 8 {
       track_x.reset()
       track_y.reset()
     }

@@ -584,3 +584,52 @@ test "a node that stays: its gestures pressed and let go again and again, its ti
   }
   assert_eq((v.owned_count(), said.length(), said.contains("never")), (base, 15, false))
 }
+
+///|
+/// A box taking `fingers` fingers at once, what its on_drag was told (which, which finger).
+fn fingers_tree(fingers : Int, seen : Array[String]) -> @view.Tree {
+  @view.Tree::new(
+    fn(root) {
+      root.box(fn(b) {
+        b
+        .width(Is(Some(100.0)))
+        .height(Is(Some(100.0)))
+        .on_drag(fn(d) { seen.push("\{d.kind} \{d.finger}") }, fingers~)
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+}
+
+///|
+test "held by as many fingers as it takes, each told by its own; one more: each of those down called off, the rest of it nobody's" {
+  let seen = []
+  let t = fingers_tree(2, seen)
+  t.frame(390.0, 844.0) |> ignore
+  let id = gesture_id(t)
+  let took = [
+    t.drag_at(id, Down, 10.0, 10.0, 10.0, finger=0),
+    t.drag_at(id, Down, 50.0, 50.0, 20.0, finger=1),
+    t.drag_at(id, Moved, 60.0, 60.0, 30.0, finger=1),
+    // (a finger it was not told of: nothing)
+    t.drag_at(id, Moved, 60.0, 60.0, 35.0, finger=7),
+    t.drag_at(id, Up, 10.0, 10.0, 40.0, finger=0),
+    t.drag_at(id, Moved, 70.0, 70.0, 50.0, finger=1),
+    t.drag_at(id, Down, 20.0, 20.0, 60.0, finger=2),
+    t.drag_at(id, Down, 30.0, 30.0, 70.0, finger=3),
+    t.drag_at(id, Moved, 30.0, 30.0, 80.0, finger=3),
+  ]
+  assert_eq(seen, ["Down 0", "Down 1", "Moved 1", "Up 0", "Moved 1", "Down 2", "Off 1", "Off 2"])
+  assert_eq(took, [true, true, true, true, true, true, true, false, false])
+  // (taking one: a second calls it off)
+  let one = []
+  let t1 = fingers_tree(1, one)
+  t1.frame(390.0, 844.0) |> ignore
+  let id1 = gesture_id(t1)
+  t1.drag_at(id1, Down, 10.0, 10.0, 10.0, finger=0) |> ignore
+  let second = t1.drag_at(id1, Down, 50.0, 50.0, 20.0, finger=1)
+  t1.drag_at(id1, Up, 10.0, 10.0, 30.0, finger=0) |> ignore
+  assert_eq((one, second), (["Down 0", "Off 0"], false))
+}

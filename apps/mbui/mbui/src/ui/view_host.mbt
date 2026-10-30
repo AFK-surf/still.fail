@@ -84,6 +84,13 @@ priv enum ViewHeld {
 let view_held : Ref[ViewHeld?] = Ref(None)
 
 ///|
+/// The fingers the host tells of by its two slots (its first: kinds 0-3; its second: 4, 5, 6), each the id the tree
+/// knows that finger by (Drag's `finger`) from its down to its end (-1: none in that slot), and the next id: the host
+/// moving its second into its first as the first is let go (kind 8) the same finger still.
+// kept across runs: put back as a run begins (view_forget)
+let view_fingers : FixedArray[Int] = FixedArray::make(3, -1)
+
+///|
 /// Told as the tree has something for a frame to do: what paints reads it, so the frame paints again (and asks the
 /// host for one: h_frame_owed, nothing come from outside the old view).
 // kept across runs: only a count
@@ -167,6 +174,9 @@ fn view_forget() -> Unit {
   }
   view_app.val = None
   view_held.val = None
+  view_fingers[0] = -1
+  view_fingers[1] = -1
+  view_fingers[2] = 0
   view_input_to.val = -3
   old_islands.clear()
   old_placed.clear()
@@ -509,7 +519,10 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
         // (held by a node of the tree's: the finger its, each event at its moment)
         Dragged(id) if button != 2 => {
           view_held.val = Some(Dragging(id))
-          tree.drag_at(id, Down, x, y, at) |> ignore
+          view_fingers[0] = 0
+          view_fingers[1] = -1
+          view_fingers[2] = 1
+          tree.drag_at(id, Down, x, y, at, finger=0) |> ignore
           h_frame_owed()
           true
         }
@@ -552,7 +565,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     }
     (1, Some(Dragging(id))) => {
       // (the hold called off meanwhile (the node gone, leaving, taking no press): the rest of it nobody's)
-      if !tree.drag_at(id, Moved, x, y, at) {
+      if !tree.drag_at(id, Moved, x, y, at, finger=view_fingers[0]) {
         view_held.val = Some(Nowhere)
       }
       h_frame_owed()
@@ -581,24 +594,45 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       h_frame_owed()
       true
     }
-    // (a second finger while one held on a node of the tree's: no gesture of two fingers there yet, the hold called off
-    // and the rest of it taken by nothing)
-    (4 | 5 | 6, Some(Dragging(id))) => {
-      view_held.val = Some(Nowhere)
-      tree.drag_at(id, Off, x, y, at) |> ignore
+    // (a second finger while one held on a node of the tree's: the node's too, as one of the fingers it takes (on_drag's
+    // `fingers`), each by its own id; one more than it takes calls the hold off, the rest of it nobody's)
+    (4 | 5 | 6 | 8, Some(Dragging(id))) => {
+      let took = match kind {
+        4 => {
+          view_fingers[1] = view_fingers[2]
+          view_fingers[2] = view_fingers[2] + 1
+          tree.drag_at(id, Down, x, y, at, finger=view_fingers[1])
+        }
+        5 => tree.drag_at(id, Moved, x, y, at, finger=view_fingers[1])
+        // (the second let go; or the first, the second the host's first from here: the same finger, its id)
+        6 => {
+          let g = view_fingers[1]
+          view_fingers[1] = -1
+          tree.drag_at(id, Up, x, y, at, finger=g)
+        }
+        _ => {
+          let g = view_fingers[0]
+          view_fingers[0] = view_fingers[1]
+          view_fingers[1] = -1
+          tree.drag_at(id, Up, x, y, at, finger=g)
+        }
+      }
+      if !took {
+        view_held.val = Some(Nowhere)
+      }
       h_frame_owed()
       true
     }
-    (4 | 5 | 6, Some(Node(_))) => {
+    (4 | 5 | 6 | 8, Some(Node(_))) => {
       // (a second finger on a press: called off, the rest nobody's)
       view_held.val = Some(Nowhere)
       tree.event(at, fn() { tree.hold_lost_in(0) })
       true
     }
-    (4 | 5 | 6, Some(Nowhere)) => true
+    (4 | 5 | 6 | 8, Some(Nowhere)) => true
     (2 | 3, Some(Dragging(id))) => {
       view_held.val = None
-      tree.drag_at(id, if kind == 2 { Up } else { Off }, x, y, at) |> ignore
+      tree.drag_at(id, if kind == 2 { Up } else { Off }, x, y, at, finger=view_fingers[0]) |> ignore
       h_frame_owed()
       true
     }

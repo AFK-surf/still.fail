@@ -651,11 +651,11 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
                 int i = e.getActionIndex();
                 if (i > 1) return true;
                 boolean down = e.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN;
-                // the first lifted: the one left becomes the first (its moves come as the first's), the pinch ends
+                // the first lifted: 8, where it was; the one left becomes the first (its moves come as the first's)
                 int at = down ? i : (i == 0 ? 0 : 1);
                 final float sx = e.getX(at) / density, sy = e.getY(at) / density;
                 final double st = e.getEventTime();
-                final int sk = down ? 4 : 6;
+                final int sk = down ? 4 : (i == 0 ? 8 : 6);
                 toGL(() -> Native.pointer(sk, sx, sy, st));
                 return true;
             }

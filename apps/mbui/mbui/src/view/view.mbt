@@ -135,6 +135,8 @@ struct Node {
   mut on_press : (() -> Unit)?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
+  /// how many fingers held on it at once it takes (View::on_drag's `fingers`): one more calls the hold off
+  mut fingers : Int
   /// where in it a finger is taken at a moment (View::takes; none: all of it)
   mut takes : ((Double, Double, Double) -> Bool)?
   /// what ends what its on_drag set going (a gesture's: its hold's moment, its dispatch), as it is said anew or let go
@@ -217,6 +219,8 @@ pub struct Tree {
   mut hosting : Int
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
+  /// the fingers down on it (each by its id: Drag's `finger`), in the order they went down
+  downs : Array[Int]
   /// what the last frame changed: the nodes whose content it made again, those placed or faded otherwise
   changed : Array[NodeId]
   composed : Array[NodeId]
@@ -288,6 +292,7 @@ pub fn Tree::new(
     order_holder: [],
     hosting: -1,
     held: None,
+    downs: [],
     changed: [],
     composed: [],
     removed: [],
@@ -380,6 +385,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         props: {},
         on_press: None,
         on_drag: None,
+        fingers: 1,
         takes: None,
         drag_end: None,
         slot: false,
@@ -1106,14 +1112,19 @@ pub(all) struct Drag {
   /// is)
   ox : Double
   oy : Double
+  /// which finger: the same one from its down to its end, whichever others went down or were let go meanwhile (the
+  /// first of a hold 0, the next 1 and on)
+  finger : Int
 } derive(Eq, Show, Debug)
 
 ///|
 /// What a finger or the pointer held on it does as it goes: put down on it, it is the node's till it is let go or
 /// called off (moved anywhere meanwhile), each event handled at its own moment as one change (Tree::event), outside
-/// any tracking. One let go meanwhile is told nothing more.
-pub fn View::on_drag(self : View, f : (Drag) -> Unit) -> View {
+/// any tracking. One let go meanwhile is told nothing more. Up to `fingers` held on it at once, each told by its own
+/// events (Drag's `finger`); one more down calls the hold off (each of those down told Off), the rest of it nobody's.
+pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1) -> View {
   guard self.live() is Some(n) else { return self }
+  n.fingers = if fingers < 1 { 1 } else { fingers }
   self.drag_ended()
   // (said anew: a finger held on it now is the one before's, ended)
   match self.tree.held {
@@ -1193,7 +1204,11 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
   match n.on_drag {
     Some(f) => {
       let t = self.cause_now()
-      @signals.untracked(fn() { f({ kind: Off, x: 0.0, y: 0.0, at: t, wx: 0.0, wy: 0.0, ox: 0.0, oy: 0.0 }) })
+      @signals.untracked(fn() {
+        for g in self.fingers_off() {
+          f({ kind: Off, x: 0.0, y: 0.0, at: t, wx: 0.0, wy: 0.0, ox: 0.0, oy: 0.0, finger: g })
+        }
+      })
     }
     None => ()
   }
@@ -1225,7 +1240,15 @@ fn Tree::laid_now(self : Tree) -> Unit {
 /// where it is in its own terms then. A down takes the hold; anything else goes only to the node holding it. Where that
 /// one takes no press by then (leaving, or what holds it said to take none) the hold is called off, told so once (Off),
 /// and nothing more goes to it; let go (View::let_go), it is told nothing. Whether it took the event.
-pub fn Tree::drag_at(self : Tree, id : NodeId, kind : DragIs, x : Double, y : Double, at : Double) -> Bool {
+pub fn Tree::drag_at(
+  self : Tree,
+  id : NodeId,
+  kind : DragIs,
+  x : Double,
+  y : Double,
+  at : Double,
+  finger? : Int = 0,
+) -> Bool {
   // (one moment for all of it: an event's own, or the one it is told in)
   let t = if self.cause_at >= 0.0 { self.cause_at } else { at }
   if self.cause_at < 0.0 {
@@ -1242,6 +1265,11 @@ pub fn Tree::drag_at(self : Tree, id : NodeId, kind : DragIs, x : Double, y : Do
     if kind != Down && !holding {
       return
     }
+    // (a finger not down on it: none of its)
+    if kind != Down && kind != Off && !self.downs.contains(finger) {
+      took.val = true
+      return
+    }
     if id.at < 0 || id.at >= self.nodes.length() {
       self.held = None
       return
@@ -1255,20 +1283,68 @@ pub fn Tree::drag_at(self : Tree, id : NodeId, kind : DragIs, x : Double, y : Do
       None => self.held = None
       Some(f) => {
         let (nx, ny, _) = self.placed(id.at)
+        let told = fn(kind : DragIs, finger : Int) {
+          f({ kind, x: x - nx, y: y - ny, at: t, wx: x, wy: y, ox: x - nx, oy: y - ny, finger })
+        }
+        // (called off, all of it: each finger down told so)
+        let off = fn() {
+          self.held = None
+          for g in self.fingers_off() {
+            told(Off, g)
+          }
+        }
         if self.pressless_at(id.at) {
           if holding {
-            self.held = None
-            f({ kind: Off, x: x - nx, y: y - ny, at: t, wx: x, wy: y, ox: x - nx, oy: y - ny })
+            off()
           }
           return
         }
-        self.held = if kind == Up || kind == Off { None } else { Some(id) }
-        took.val = true
-        f({ kind, x: x - nx, y: y - ny, at: t, wx: x, wy: y, ox: x - nx, oy: y - ny })
+        match kind {
+          Down if holding =>
+            if self.downs.contains(finger) {
+              took.val = true
+            } else if self.downs.length() < n.fingers {
+              // (another finger, as many as it takes)
+              self.downs.push(finger)
+              took.val = true
+              told(Down, finger)
+            } else {
+              // (one more than it takes: the hold called off)
+              off()
+            }
+          Down => {
+            self.held = Some(id)
+            self.downs.clear()
+            self.downs.push(finger)
+            took.val = true
+            told(Down, finger)
+          }
+          Moved => {
+            took.val = true
+            told(Moved, finger)
+          }
+          Up => {
+            self.downs.retain(fn(g) { g != finger })
+            if self.downs.is_empty() {
+              self.held = None
+            }
+            took.val = true
+            told(Up, finger)
+          }
+          Off => off()
+        }
       }
     }
   })
   took.val
+}
+
+///|
+/// The fingers down on what is held, in the order they went down (none told: the first's), let go of.
+fn Tree::fingers_off(self : Tree) -> Array[Int] {
+  let was = if self.downs.is_empty() { [0] } else { self.downs.copy() }
+  self.downs.clear()
+  was
 }
 
 ///|

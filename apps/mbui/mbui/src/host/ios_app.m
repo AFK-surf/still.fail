@@ -282,8 +282,8 @@ static void touch(int kind, UITouch *t, UIView *v) {
   event_time = -1;
 }
 // The first finger is the pointer (0 down, 1 moved, 2 up, 3 cancelled); a second one is told apart (4 down, 5 moved,
-// 6 up) for a pinch, a third and on not at all. The first lifted while a second is down: the pinch ends (6, where the
-// first was) and the one left becomes the first, its moves coming as the first's.
+// 6 up) for a pinch, a third and on not at all. The first lifted while a second is down: 8, where the first was, and
+// the one left becomes the first, its moves coming as the first's.
 static __weak UITouch *first_touch, *second_touch;
 - (void)touchesBegan:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
   for (UITouch *u in t) {
@@ -312,7 +312,7 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
   }
   if (first_touch && [t containsObject:first_touch]) {
     if (second_touch) {
-      touch(6, first_touch, v);
+      touch(8, first_touch, v);
       first_touch = second_touch;
       second_touch = nil;
     } else {

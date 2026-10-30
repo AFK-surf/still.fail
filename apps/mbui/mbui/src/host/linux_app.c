@@ -545,7 +545,7 @@ static void scroll(GdkEvent *ev, double x, double y) {
   if (dx != 0 || dy != 0) mb_cb.wheel(x, y, dx, dy, phase | (mods << 4));
 }
 
-// The touches: the first as the pointer, the second as the second finger (4 down, 5 moved, 6 up), any more none.
+// The touches: the first as the pointer, the second as the second finger (4 down, 5 moved, 6 up; the first lifted before it, 8), any more none.
 static GdkEventSequence *touch1, *touch2;
 
 static void touch(GdkEvent *ev, GdkEventType t, double x, double y) {
@@ -563,6 +563,13 @@ static void touch(GdkEvent *ev, GdkEventType t, double x, double y) {
     return;
   }
   if (s == touch1) {
+    // (the first lifted while a second is down: 8, where it was, the second the first from here)
+    if (end && touch2) {
+      mb_cb.pointer(8, x, y, 0);
+      touch1 = touch2;
+      touch2 = NULL;
+      return;
+    }
     mb_cb.pointer(end ? 2 : 1, x, y, 0);
     if (end) touch1 = NULL;
   } else if (s == touch2) {

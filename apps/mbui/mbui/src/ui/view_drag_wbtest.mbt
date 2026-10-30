@@ -162,3 +162,52 @@ test "window tree: a press on a node called off as a hold is: the window behind,
   })
   assert_eq((plain, behind, pressless, second), ((1, 0), (0, 0), (0, 0), (0, 0)))
 }
+
+///|
+/// A node taking two fingers held, the host's events `events` (kind, x, y) each at its own moment 10 apart: what it was
+/// told (which, which finger, where), and whether anything of the tree's still holds a finger after.
+fn two_fingers(events : Array[(Int, Double, Double)]) -> (Array[String], Bool) {
+  let seen : Array[String] = []
+  let t = Tester::new(fn(_c) {  })
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.over(Is(true)) |> ignore
+      b.box(fn(h) {
+        h
+        .width(Is(Some(200.0)))
+        .height(Is(Some(200.0)))
+        .on_drag(fn(d) { seen.push("\{d.kind} \{d.finger} \{d.x},\{d.y}") }, fingers=2)
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  let t0 = t.time()
+  for i, e in events {
+    t.touch_at(e.0, e.1, e.2, t0 + 10.0 * i.to_double())
+  }
+  t.drawn_now()
+  (seen, view_holds())
+}
+
+///|
+test "window tree: two fingers on a node that takes two: each by its own id, the second's the same finger after the first is let go, the hold the node's till the last is" {
+  assert_eq(
+    two_fingers([(0, 10.0, 10.0), (4, 50.0, 50.0), (1, 20.0, 20.0), (5, 60.0, 60.0), (6, 60.0, 60.0), (2, 20.0, 20.0)]),
+    (["Down 0 10,10", "Down 1 50,50", "Moved 0 20,20", "Moved 1 60,60", "Up 1 60,60", "Up 0 20,20"], false),
+  )
+  // (the first let go first: the host's first from then on the second, still finger 1)
+  assert_eq(
+    two_fingers([(0, 10.0, 10.0), (4, 50.0, 50.0), (8, 10.0, 10.0), (1, 70.0, 70.0), (2, 80.0, 80.0)]),
+    (["Down 0 10,10", "Down 1 50,50", "Up 0 10,10", "Moved 1 70,70", "Up 1 80,80"], false),
+  )
+  // (a finger let go, another put down: a new one, 2)
+  assert_eq(
+    two_fingers([(0, 10.0, 10.0), (4, 50.0, 50.0), (6, 50.0, 50.0), (4, 90.0, 90.0), (3, 10.0, 10.0)]),
+    (["Down 0 10,10", "Down 1 50,50", "Up 1 50,50", "Down 2 90,90", "Off 0 10,10", "Off 2 10,10"], false),
+  )
+}
