@@ -2342,7 +2342,7 @@ test "viewer on the tree, a wide window, marking: a tool held down and not let g
 }
 
 ///|
-test "viewer on the tree, a wide window, marking: a box drawn, what to say of it asked at once in the tools' place; said done, its note's card shown over the tools in the frame after; undone from the tools, the card gone in the frame after" {
+test "viewer on the tree, a wide window, marking: a box drawn, what to say of it asked at once in the tools' place; said done, its note's card shown over the tools in the frame after; undone from the tools, the card gone in the frame after; redone and undone with no input at all, the card back and gone in the frame after" {
   let t = preview_tester("image", w=1280.0, platform=0)
   t.host_says_finger(Some(false))
   let v = viewer.get().unwrap()
@@ -2374,4 +2374,14 @@ test "viewer on the tree, a wide window, marking: a box drawn, what to say of it
   t.draw()
   assert_eq(marking.shapes.length(), 0, msg="undone")
   assert_true(t.find(card) is None, msg="its card gone")
+  // (marking changed with no input at all, the frame after drawn as the host draws it, no step of the test's: the
+  // notes follow marking itself, not what an input builds again)
+  t.run_for(1000.0)
+  @sfbase.marks_redo()
+  t.frame_at(t.time() + t.frame_period())
+  assert_eq(marking.shapes.length(), 1, msg="redone, no input")
+  assert_true(t.find(card) is Some(_), msg="redone, no input: its card back in the frame after")
+  @sfbase.marks_undo()
+  t.frame_at(t.time() + t.frame_period())
+  assert_true(t.find(card) is None, msg="undone, no input: its card gone in the frame after")
 }
