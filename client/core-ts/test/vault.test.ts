@@ -18,7 +18,7 @@ import { type Entry, Signer, entryHash, next } from "../src/lock.ts";
 import { hex, utf8 } from "../src/util.ts";
 import {
   type BoxCert, type Item, type Request, type Vault, TAG, boxPublic, decrypt, encryptWith, fromWords, grantContext, itemContext, keyContext,
-  openSeal, recoveryPair, saveContext, sealWith, sign, signedOk, toWords,
+  openSeal, recoveryPair, saveContext, sealWith, sign, signedOk, toWords, verifies,
 } from "../src/vault/crypto.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
 import { BOX_KEY, BOX_PUB, UNLOCK_MS } from "../src/views/vault.ts";
@@ -34,6 +34,20 @@ function key(seed: Uint8Array) {
   const id = `ed25519:${hex(ed25519.getPublicKey(seed))}`;
   return { id, hex: hex(ed25519.getPublicKey(seed)), signBytes: (b: Uint8Array) => hex(ed25519.sign(b, seed)) };
 }
+
+test("a_signature_is_checked_once_for_what_it_is_over_not_again_each_time_it_is_asked", () => {
+  // A chat's vault cards checked their device's certificate (a P-256 signature, in JS) twice each time the chat was
+  // made: 0.87 s of opening one on a phone (2026-10-31).
+  const signer = key(fill(7));
+  const record = sign({ device: "d-once", ws: "w", box: "x25519:" + "00".repeat(32) }, TAG.box, signer);
+  const before = verifies.count;
+  for (let i = 0; i < 5; i++) assert.ok(signedOk(record, TAG.box));
+  assert.equal(verifies.count - before, 1, "checked once");
+  // what it is over changed, or under another tag: checked, and not good
+  assert.equal(signedOk({ ...record, device: "d-other" }, TAG.box), false);
+  assert.equal(signedOk(record, TAG.vault), false);
+  assert.equal(verifies.count - before, 3);
+});
 
 test("the formats: the core makes and checks the stations' vectors", () => {
   const signer = key(unhex(V.signer.seed));
