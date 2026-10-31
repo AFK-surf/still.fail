@@ -2263,6 +2263,8 @@ fn composer_notice(
   let inline_high = dmax(text_line, @ui.Space::S7.px())
   let inline_side = inline_high + 2.0 * composer_notice_pad
   let inline_inset = capsule_pad_alone + (t.round.side + 1.0) / 2.0 - inline_side / 2.0
+  // The 28-high chooser's capsule is concentric with the notice when its end is this far from the edge.
+  let inline_end = (inline_side - @ui.Space::S7.px()) / 2.0
   let beside = if choices.is_empty() {
     false
   } else {
@@ -2273,7 +2275,7 @@ fn composer_notice(
     let choice_width = choices.fold(init=0.0, fn(w, choice) {
       dmax(w, c.words_across(@sf.t(choice.1), composer_notice_choice_words))
     }) + 2.0 * @ui.Space::S2.px() + @ui.Space::S1_25.px() + 12.0
-    inline_side + summary_width + @ui.Space::S3.px() + choice_width + @ui.Space::S4.px() <= width - 2.0 * inline_inset
+    inline_side + summary_width + @ui.Space::S3.px() + choice_width + inline_end <= width - 2.0 * inline_inset
   }
   let line_high = if beside { inline_high } else { text_line }
   let side = line_high + 2.0 * composer_notice_pad
@@ -2323,11 +2325,12 @@ fn composer_notice(
         if open { composing.cold_open.set(choice_key) }
         else if composing.cold_open.get() == choice_key { composing.cold_open.set("") }
       },
-      side=Top, disabled=held,
+      side=Top, disabled=held, capsule=beside,
     )
     selected.val = menu.chosen
   }
-  let b = c.box(style=composer_notice_box.then(round), glass=@sf.glass_floating(), fn() {
+  let box_style = if beside { composer_notice_box.then(@ui.style(pr=@sf.room_of(inline_end))) } else { composer_notice_box }
+  let b = c.box(style=box_style.then(round), glass=@sf.glass_floating(), fn() {
     if choices.length() > 0 {
       if beside {
         c.box(style=composer_notice_flow, fn() {
@@ -2337,7 +2340,8 @@ fn composer_notice(
       } else {
         draw_title()
         c.box(style=composer_notice_choice_line, fn() {
-          c.box(style=@ui.style(w=Fixed(side)), fn() {  }) |> ignore
+          // The chooser's own inset puts its label on the same line as the summary's words.
+          c.box(style=@ui.style(w=Fixed(side - @ui.Space::S2.px())), fn() {  }) |> ignore
           draw_choice()
         }) |> ignore
       }

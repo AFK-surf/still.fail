@@ -3408,7 +3408,8 @@ let command_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 /// `entries` (a choice each: @kit.menu_radio) on `side`, 220 wide at least. `open`: whether its menu is open now, the
 /// view's; `set_open`: what opens or closes it, as it is pressed (as it is let go) or dismissed (at that moment: Escape,
 /// a press beside it). What was chosen comes back. `lead`: what stands before its words (a station's mark), in the ink
-/// its words have. `disabled`: out of reach, with any open menu closed.
+/// its words have. `disabled`: out of reach, with any open menu closed. `capsule`: round it as a capsule when it sits
+/// at the end of another capsule, so the two can share a centre.
 pub fn chooser(
   c : @ui.Ctx,
   key : String,
@@ -3419,17 +3420,29 @@ pub fn chooser(
   side? : @ui.Side = Bottom,
   lead? : (Int64) -> Unit,
   disabled? : Bool = false,
+  capsule? : Bool = false,
 ) -> @kit.Menu {
   let p = theme().p
   let id = c.id(key)
   if !disabled {
     c.on_press(id, fn() { set_open(!open()) })
+    // Set the view's state as the key comes, before layout can rebuild the frame without that key. Otherwise the
+    // menu may open for one build, lose its first-item focus on the next, and reopen with its panel focused instead.
+    c.on_key(id, fn(code, mods) {
+      if code == @ui.key_code_down && mods == 0 && !open() {
+        set_open(true)
+        true
+      } else {
+        false
+      }
+    })
   } else if open() {
     c.tell(key + "/disabled", fn() { set_open(false) })
   }
   let opened = open() && !disabled
-  let lit = !disabled && (c.lit(id) || opened)
-  let b = c.box(style=chooser_box, selected=opened, disabled~, id=if disabled { 0 } else { id }, fn() {
+  let focused = !disabled && c.focus_shown(id)
+  let lit = !disabled && (c.lit(id) || opened || focused)
+  let b = c.box(style=if capsule { chooser_box.then(chooser_capsule) } else { chooser_box }, selected=opened || focused, disabled~, id=if disabled { 0 } else { id }, fn() {
     match lead {
       Some(f) => f(if lit { p.text } else { p.muted })
       None => ()
@@ -3437,10 +3450,13 @@ pub fn chooser(
     c.text(words, style=if lit { chooser_words_lit } else { chooser_words }) |> ignore
     icon(c, "chevron-down", size=chooser_chevron, color=if lit { p.text } else { p.muted }) |> ignore
   })
-  c.semantics(b, Button, id~, label=words, expanded=opened, disabled~)
+  if !disabled {
+    c.focusable(id, node=b)
+  }
+  c.semantics(b, Button, id=if disabled { 0 } else { id }, label=words, expanded=opened, disabled~)
   let menu : Ref[@kit.Menu?] = Ref(None)
   c.with_dismissed(fn(_) { set_open(false) }, fn() {
-    menu.val = Some(dropdown(c, key + "/menu", opened, id, entries, {}, chooser_menu_w, side~))
+    menu.val = Some(dropdown(c, key + "/menu", opened, if disabled { 0 } else { id }, entries, {}, chooser_menu_w, side~))
   })
   menu.val.unwrap()
 }
@@ -3450,6 +3466,10 @@ pub fn chooser(
 let chooser_box : @ui.Style = @ui.css(
   #|row h=S7 px=S2 gap=S1_25 radius=Lg align=ACenter hovered{bg=Hover} selected{bg=Hover}
 )
+
+///|
+// kept across runs: a value (no field of it changes)
+let chooser_capsule : @ui.Style = @ui.css("radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)

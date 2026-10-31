@@ -255,6 +255,49 @@ test "an offline station's cache choice stays visible but cannot be opened" {
 }
 
 ///|
+test "the cache choice can be changed from the keyboard" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-cache-cold", wide=true)
+  let choice = t.get(Button, label="接着聊")
+  t.ctx().focus_on(choice.id, visible=true)
+  t.draw()
+  assert_eq(t.focused().map(fn(n) { n.label }), Some("接着聊"), msg="the choice has keyboard focus")
+  t.enter()
+  t.draw()
+  assert_true(t.query(MenuItemRadio, label="换新上下文") is Some(_), msg="Enter opens the choices")
+  assert_eq(t.focused().map(fn(n) { n.role }), Some(MenuItemRadio), msg="the menu focuses an item")
+  t.key(@ui.key_code_down)
+  assert_eq(t.focused().map(fn(n) { n.label }), Some("换新上下文"), msg="Down moves to the other choice")
+  t.enter()
+  t.draw()
+  let asked = named(calls, "session.settings")
+  assert_eq(asked.length(), 1)
+  assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(true)))
+}
+
+///|
+test "Down opens the cache choice and keeps it open for the keyboard" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-cache-cold", wide=true)
+  let choice = t.get(Button, label="接着聊")
+  t.ctx().focus_on(choice.id, visible=true)
+  t.draw()
+  t.key(@ui.key_code_down)
+  t.draw()
+  assert_true(t.query(MenuItemRadio, label="换新上下文") is Some(_), msg="Down opens the choices")
+  t.draw()
+  assert_true(t.query(MenuItemRadio, label="换新上下文") is Some(_), msg="the choices stay open")
+  let first = t.focused().map(fn(n) { n.label })
+  assert_eq(first, Some("接着聊"), msg="Down opens the menu at its first choice, got \{first}")
+  t.key(@ui.key_code_down)
+  let second = t.focused().map(fn(n) { n.label })
+  assert_eq(second, Some("换新上下文"), msg="Down moves to the second choice, got \{second}")
+  t.enter()
+  t.draw()
+  assert_eq(named(calls, "session.settings").length(), 1)
+}
+
+///|
 test "a cache notice on a narrow page keeps its cost together and both choices reachable" {
   let calls : Array[Made] = []
   let status = "缓存已过期"
