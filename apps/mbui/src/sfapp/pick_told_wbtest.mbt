@@ -60,7 +60,7 @@ test "a run begun anew: nothing picked told, no identity of a run before given a
 /// (its own moments, from `at`; a frame between each when `framed`, else none), then a frame: what is told picked then.
 fn mouse_picked(t : @ui.Tester, from : Double, to : Double, framed : Bool) -> @sfbase.Picked {
   // (apart from the press before: a press of its own, not its double click)
-  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.double_click_ms)
   let (rx, ry, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
   let y = ry + 8.0
   let at = t.time() + between_frames_ms

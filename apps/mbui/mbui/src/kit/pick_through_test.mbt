@@ -5,10 +5,17 @@
 let pick_later_ms : Double = 100.0
 
 ///|
+/// When words are laid out for picking: always, or only as they are held (a press in them, a hold handed them).
+enum Laid {
+  Always
+  Held
+}
+
+///|
 /// Words in an old view, a cover of the tree's over them holding through; a finger held still on the first word past a
 /// long press and let go, frames drawn as it is held or (`frames` false) none between its down and its up. What was
 /// picked then, and what the cover was told.
-fn picked_through(frames : Bool) -> ((Int, Int, Bool), Array[String]) {
+fn picked_through(frames : Bool, laid? : Laid = Always) -> ((Int, Int, Bool), Array[String]) {
   let p = @kit.Pick::new()
   let said : Array[String] = []
   let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=200.0, platform=2)
@@ -20,7 +27,15 @@ fn picked_through(frames : Bool) -> ((Int, Int, Bool), Array[String]) {
         let id = c.id("w")
         c.takes_presses(id)
         let box = c.box(id~, fn() { c.rich([@ui.plain("alpha beta gamma delta")], wrap=false) |> ignore })
-        c.words(box, "w", a=p.a, b=p.b, color=0x3B82F640L)
+        // (its words laid out: always; or only while a press is in it, or a hold handed it, or once picked, as a
+        // chat's message lays out its words)
+        let lays = match laid {
+          Always => true
+          Held => p.of("w") || ((c.press().down || c.handed_hold() is Some(_)) && c.press_within(id))
+        }
+        if lays {
+          c.words(box, "w", a=p.a, b=p.b, color=0x3B82F640L)
+        }
         if p.hold(c, "w", id) {
           c.take_press()
         }
@@ -66,4 +81,116 @@ test "words under a cover holding through, held still past a long press and let 
   let want = ((0, 5, true), ["cover press", "cover drag Off"])
   assert_eq(picked_through(true), want, msg="frames between")
   assert_eq(picked_through(false), want, msg="no frame between")
+}
+
+///|
+test "words laid out only as they are held, under a cover holding through: held past a long press and let go with no frame between, the frame after picks the word under the finger, as with frames between; once" {
+  let want = ((0, 5, true), ["cover press", "cover drag Off"])
+  assert_eq(picked_through(true, laid=Held), want, msg="frames between")
+  assert_eq(picked_through(false, laid=Held), want, msg="no frame between")
+}
+
+///|
+/// What comes after a finger held past a long press on words under a cover holding through, with no frame between
+/// (handed_lost's): nothing; the press called off instead of let go; or, let go, before a frame: the words not shown in
+/// the frame it comes to (shown in the one after), a modal layer over them, their old view taking no presses, the
+/// window's tree made anew, a press on a button of the tree's (as it goes down now, or `same`: said to go down at the moment the first did).
+enum After {
+  Nothing
+  Off
+  Hidden
+  Modal
+  Inert
+  Anew
+  Button(same~ : Bool)
+} derive(Show)
+
+///|
+/// Words laid out only as they are held under a cover holding through (picked_through's), a button of the tree's below
+/// them, the finger held past a long press with no frame between, then `after`: whether a word is picked once frames come.
+fn handed_lost(after : After) -> Bool {
+  let p = @kit.Pick::new()
+  let shown = @signals.signal(true)
+  let open = @signals.signal(true)
+  let modal = @signals.signal(false)
+  let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=2)
+  t.check_looks(false)
+  let make = fn(root : @view.View) {
+    root.box(fn(b) {
+      b.over(Is(true)).width(Is(Some(400.0))).height(Is(Some(300.0))) |> ignore
+      @ui.old(b, fn(c) {
+        if !shown.get() {
+          return
+        }
+        let id = c.id("w")
+        c.takes_presses(id)
+        let box = c.box(id~, fn() { c.rich([@ui.plain("alpha beta gamma delta")], wrap=false) |> ignore })
+        if p.of("w") || ((c.press().down || c.handed_hold() is Some(_)) && c.press_within(id)) {
+          c.words(box, "w", a=p.a, b=p.b, color=0x3B82F640L)
+        }
+        if p.hold(c, "w", id) {
+          c.take_press()
+        }
+      })
+      .over(Is(true))
+      .presses(By(fn() { open.get() }))
+      |> ignore
+      b.box(fn(cv) {
+        cv.over(Is(true)).width(Is(Some(400.0))).height(Is(Some(200.0))).gesture(@ui.touch_slop(), through=@ui.long_press_ms) |> ignore
+      })
+      |> ignore
+      b.box(fn(bt) {
+        bt.offset(Is((0.0, 220.0))).width(Is(Some(100.0))).height(Is(Some(60.0))).on_press(fn() {  }) |> ignore
+      })
+      |> ignore
+      b.box(fn(l) {
+        l.over(Is(true)).modal(By(fn() { modal.get() })) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  @ui.set_view_app(make)
+  t.draw()
+  let (rx, ry, _, rh) = t.rect_of("alpha beta gamma delta").unwrap()
+  let (x, y) = (rx + 4.0, ry + rh / 2.0)
+  let down = t.time()
+  t.touch(0, x, y)
+  t.advance(@ui.long_press_ms + pick_later_ms)
+  t.touch(if after is Off { 3 } else { 2 }, x, y)
+  match after {
+    Hidden => {
+      shown.set(false)
+      t.draw()
+      shown.set(true)
+    }
+    Modal => modal.set(true)
+    Inert => open.set(false)
+    Anew => @ui.set_view_app(make)
+    Button(same~) =>
+      if same {
+        t.touch_at(0, 50.0, 250.0, down)
+        t.touch_at(2, 50.0, 250.0, down)
+      } else {
+        t.touch(0, 50.0, 250.0)
+        t.touch(2, 50.0, 250.0)
+      }
+    _ => ()
+  }
+  t.draw()
+  modal.set(false)
+  open.set(true)
+  t.draw()
+  t.draw()
+  p.of("w")
+}
+
+///|
+test "a hold handed through and not taken yet: called off, or let go and, before a frame, what it was held on not shown in the frame it came to, a modal layer over it, its old view taking no presses, the tree made anew, another press down (on a button of the tree's; at the same moment as it): picks nothing later" {
+  let picked = [Off, Hidden, Modal, Inert, Anew, Button(same=false), Button(same=true)].filter(handed_lost).map(fn(a) {
+    "\{a}"
+  })
+  assert_eq(picked, [])
+  // (none of them: picked, as picked_through has it)
+  assert_eq(handed_lost(Nothing), true)
 }

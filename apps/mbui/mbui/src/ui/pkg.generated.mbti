@@ -1044,6 +1044,7 @@ pub fn Ctx::hand_lit(Self, Bool) -> Bool
 pub fn Ctx::hand_on(Self, Int32) -> Bool
 pub fn Ctx::hand_shown(Self, Bool, () -> Unit) -> Unit
 pub fn Ctx::handed_hold(Self) -> (Double, Double)?
+pub fn Ctx::handed_taken(Self) -> Unit
 pub fn Ctx::has_focus(Self, Int32) -> Bool
 #callsite(autofill(loc))
 pub fn Ctx::held(Self, String, Bool, Double, keep? : Bool, later? : Bool, loc~ : SourceLoc) -> Bool
