@@ -49,7 +49,7 @@ jobs:
       - uses: actions/cache/restore@v4
         id: had
         with:
-          path: ${{ runner.tool_cache }}/moon-ci
+          path: ${{ runner.environment == 'self-hosted' && 'moon-ci-put' || format('{0}/moon-ci', runner.tool_cache) }}
           key: ${{ steps.tag.outputs.key }}
           lookup-only: true
       - name: "Installed (MOON_HOME: moon-ci in the runner's tool cache)"
@@ -71,16 +71,19 @@ jobs:
             "$MOON_HOME"/bin/moon_cove* "$MOON_HOME"/bin/moonc-prove*
           ls "$MOON_HOME/bin"
           PATH="$MOON_HOME/bin:$PATH" moon version --all
+          # (a self-hosted runner's saved from moon-ci-put in its workspace: the path every runner of it asks by,
+          # .github/actions/mbui-moonbit)
+          if [ "${{ runner.environment }}" = self-hosted ]; then rm -rf moon-ci-put && cp -R "$MOON_HOME" moon-ci-put; fi
       - if: steps.had.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: ${{ runner.tool_cache }}/moon-ci
+          path: ${{ runner.environment == 'self-hosted' && 'moon-ci-put' || format('{0}/moon-ci', runner.tool_cache) }}
           key: ${{ steps.tag.outputs.key }}
       # (put in, or this fails: a save that could not be made is only a warning of actions/cache/save's, run 39533061843's
       # every put green with nothing saved)
       - uses: actions/cache/restore@v4
         with:
-          path: ${{ runner.tool_cache }}/moon-ci
+          path: ${{ runner.environment == 'self-hosted' && 'moon-ci-put' || format('{0}/moon-ci', runner.tool_cache) }}
           key: ${{ steps.tag.outputs.key }}
           lookup-only: true
           fail-on-cache-miss: true
