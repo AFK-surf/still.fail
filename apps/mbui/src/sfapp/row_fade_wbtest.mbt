@@ -172,6 +172,9 @@ test "a removed chat row is not built when its old fade would have ended" {
   assert_true(end > t.time())
   shown.val = false
   t.draw()
+  // Removing the row changes layout; the host's following frame accounts for that before the old end comes.
+  t.frame_at(t.time() + t.frame_period())
+  assert_eq(t.built_why(), "the one before it laid out otherwise")
   t.frame_at(end)
   assert_eq(t.built_why(), "")
   assert_eq(t.wanted_after(), @double.infinity)
