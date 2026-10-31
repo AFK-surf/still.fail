@@ -2375,8 +2375,10 @@ test "viewer on the tree, a wide window, marking: a box drawn, what to say of it
   assert_eq(marking.shapes.length(), 0, msg="undone")
   assert_true(t.find(card) is None, msg="its card gone")
   // (marking changed with no input at all, the frame after drawn as the host draws it, no step of the test's: the
-  // notes follow marking itself, not what an input builds again)
-  t.run_for(1000.0)
+  // notes follow marking itself, not what an input builds again; a host's frame first, nothing changed: parts kept on it
+  // (the frame's, not the notes' alone: the notes' own kept is what the whole-build check holds the next frame to))
+  t.frame_at(t.time() + t.frame_period())
+  assert_true(t.parts_kept() > 0, msg="a host's frame, nothing changed: its parts kept (\{t.parts_kept()}), built \{t.built_why()}")
   @sfbase.marks_redo()
   t.frame_at(t.time() + t.frame_period())
   assert_eq(marking.shapes.length(), 1, msg="redone, no input")
