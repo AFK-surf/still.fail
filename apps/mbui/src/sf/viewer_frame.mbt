@@ -284,18 +284,26 @@ pub fn viewer_zoom(c : @ui.Ctx, key : String, z : @kit.Zoom, ink : ViewerInk) ->
   if c.width <= viewer_small_w {
     return
   }
+  // (how big it is shown as this frame draws it, a glide read of its way: Zoom::scale_now; a click from how big it is
+  // shown at the click's own moment, whatever frame took it: Zoom::scale_at, as the keys' and the nodes' are; the
+  // click itself still taken as this view is built, the old way)
+  let shown = z.scale_now()
+  // (each tool's click's own moment: Ctx::clicked_at, by the id each tool's key makes)
+  let at = fn(part : String) { c.clicked_at(c.id(key + part)) }
   c.box(style=keys_row(), fn() {
-    if viewer_tool(c, key + "/zoom-out", "minus", t("web-main.preview.zoomOutKey"), ink, disabled=z.scale <= z.min_scale() + viewer_zoom_slack) {
-      z.zoom_to(z.scale / viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
+    if viewer_tool(c, key + "/zoom-out", "minus", t("web-main.preview.zoomOutKey"), ink, disabled=shown <= z.min_scale() + viewer_zoom_slack) {
+      let at = at("/zoom-out")
+      z.zoom_to(z.scale_at(at) / viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true, at~)
     }
-    if viewer_text_tool(c, key + "/zoom-reset", "\{(z.scale * 100.0).round().to_int()}%", t("web-main.preview.fitKey"), ink, wide=true) {
-      z.reset()
+    if viewer_text_tool(c, key + "/zoom-reset", "\{(shown * 100.0).round().to_int()}%", t("web-main.preview.fitKey"), ink, wide=true) {
+      z.reset(at=at("/zoom-reset"))
     }
-    if viewer_tool(c, key + "/zoom-in", "plus", t("web-main.preview.zoomInKey"), ink, disabled=z.scale >= z.max_scale() - viewer_zoom_slack) {
-      z.zoom_to(z.scale * viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
+    if viewer_tool(c, key + "/zoom-in", "plus", t("web-main.preview.zoomInKey"), ink, disabled=shown >= z.max_scale() - viewer_zoom_slack) {
+      let at = at("/zoom-in")
+      z.zoom_to(z.scale_at(at) * viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true, at~)
     }
     if viewer_text_tool(c, key + "/zoom-actual", "1:1", t("web-main.preview.actualKey"), ink) {
-      z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true)
+      z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true, at=at("/zoom-actual"))
     }
   })
   |> ignore

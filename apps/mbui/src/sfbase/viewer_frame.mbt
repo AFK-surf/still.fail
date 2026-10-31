@@ -109,12 +109,10 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bo
   } else {
     false
   }
-  // (told as it changes: the floating bar's nodes follow it, Viewer::bars_shown)
-  if near != v.near_bar {
+  // (told as it changes: the floating bar's nodes follow it, Viewer::bars_shown; the window's tree's viewer follows the
+  // pointer along the top itself, as it moves: viewer_tree.mbt's image_layer)
+  if !v.in_tree && near != v.near_bar {
     v.near_bar = near
-    if v.in_tree {
-      v.awake_told.set(@signals.untracked(fn() { v.awake_told.get() }) + 1)
-    }
   }
   // going, beside the system's bars (an iPhone Duo's): the page's tabs handed back to them as it goes, not once it is
   // gone, so that the system's change of them is under way as the picture flies back (the page's own bars coming back

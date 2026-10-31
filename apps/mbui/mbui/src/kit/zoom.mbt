@@ -389,6 +389,19 @@ pub fn Zoom::rect(self : Zoom) -> (Double, Double, Double, Double)? {
 }
 
 ///|
+/// How big it is shown as the frame draws it, as Zoom::rect has it (what it was told, a glide's way read of its motion:
+/// what reads it built again as it is told otherwise and as the glide goes), not the field Zoom::step copies it into.
+pub fn Zoom::scale_now(self : Zoom) -> Double {
+  let d = self.place.get()
+  if d.gliding && !d.flinging {
+    let e = self.glide.shown()
+    self.g_from[0] + (d.to.0 - self.g_from[0]) * e
+  } else {
+    d.scale
+  }
+}
+
+///|
 /// Where the picture shows at the moment `at` (an event's: what it is decided by, where the finger is on it then), by
 /// what it was told and the ways it is on, read of nothing followed; Zoom::rect's at that moment.
 pub fn Zoom::rect_at(self : Zoom, at : Double) -> (Double, Double, Double, Double)? {

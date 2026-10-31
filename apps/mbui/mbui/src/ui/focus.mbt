@@ -452,6 +452,8 @@ fn Ctx::press_focused(self : Ctx, key : Int) -> Bool {
   for f in self.last_focusables {
     if f.id == self.focus && (f.keys & key) != 0 && !self.layer_inert(f.layer) && island_allows(f.island) {
       self.clicked.push(f.id)
+      // (its moment the frame's that takes the key: Ctx::clicked_at)
+      self.click_times[f.id] = self.moment()
       made_pressed(f.id)
       self.focus_moved(self.focus, visible=true)
       return true

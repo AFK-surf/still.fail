@@ -779,6 +779,7 @@ pub fn Zoom::rect_at(Self, Double) -> (Double, Double, Double, Double)?
 pub fn Zoom::reset(Self, at? : Double) -> Unit
 pub fn Zoom::resize_keeping(Self, Double, Double, (Double, Double)?, Double, when? : Double) -> Unit
 pub fn Zoom::scale_at(Self, Double) -> Double
+pub fn Zoom::scale_now(Self) -> Double
 pub fn Zoom::scale_shown(Self, Double) -> Double
 pub fn Zoom::scales_told(Self) -> (Double, Double)
 pub fn Zoom::step(Self) -> Unit
