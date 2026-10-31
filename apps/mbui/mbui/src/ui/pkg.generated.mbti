@@ -1049,11 +1049,13 @@ pub fn Ctx::glass_solid(Self) -> Bool
 pub fn Ctx::hand_lit(Self, Bool) -> Bool
 pub fn Ctx::hand_on(Self, Int32) -> Bool
 pub fn Ctx::hand_shown(Self, Bool, () -> Unit) -> Unit
+pub fn Ctx::handed_hold(Self) -> (Double, Double)?
 pub fn Ctx::has_focus(Self, Int32) -> Bool
 #callsite(autofill(loc))
 pub fn Ctx::held(Self, String, Bool, Double, keep? : Bool, later? : Bool, loc~ : SourceLoc) -> Bool
 pub fn Ctx::held_down(Self, Int32) -> Bool
 pub fn Ctx::held_due(Self, String) -> Double
+pub fn Ctx::held_for(Self, Double) -> Bool
 pub fn Ctx::held_long(Self, Int32) -> Bool
 pub fn Ctx::held_look(Self, Int32, Double) -> Look
 pub fn Ctx::hidden_from_semantics(Self, () -> Unit) -> Unit
