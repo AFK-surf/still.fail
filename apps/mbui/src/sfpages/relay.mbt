@@ -297,9 +297,7 @@ fn relay_mentions_pop(
         |> ignore
         let active = relay_mention_active(n)
         for i, p in mentions {
-          if relay_person(c, src, p, i == active) {
-            pick(p)
-          }
+          relay_person(c, src, p, i == active, fn() { pick(p) })
           // (moved to by the keys: in view where the menu scrolls)
           if keyed && i == active {
             c.show(c.id("relay/person/" + text(Some(p), "id")))
@@ -317,8 +315,9 @@ fn relay_mentions_pop(
 
 ///|
 /// A person the note can mention (the composer's `@` menu's row: ref_item): their picture, their name, their full name
-/// at its end where it says more; `on`, the one chosen. True on the frame after a press.
-fn relay_person(c : @ui.Ctx, src : Source, p : Json, on : Bool) -> Bool {
+/// at its end where it says more; `on`, the one chosen; `picked` as it is pressed (as it is let go: an Escape after it,
+/// before a frame, closes the menu, not the choice).
+fn relay_person(c : @ui.Ctx, src : Source, p : Json, on : Bool, picked : () -> Unit) -> Unit {
   let id = c.id("relay/person/" + text(Some(p), "id"))
   let name = text(Some(p), "name")
   let b = c.box(style=(if on { ref_item_on } else { ref_item }).then(@sf.pick_high()), id~, fn() {
@@ -332,7 +331,7 @@ fn relay_person(c : @ui.Ctx, src : Source, p : Json, on : Bool) -> Bool {
     }
   })
   c.semantics(b, Button, id~, label=name, selected=on)
-  c.clicked(id)
+  c.on_press(id, picked)
 }
 
 ///|

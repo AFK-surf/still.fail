@@ -452,8 +452,12 @@ fn with_composer(c : @ui.Ctx, i : Int, key : String) -> Unit {
 fn keyboard_let_go(c : @ui.Ctx, cap : Int) -> Unit {
   let press = c.press()
   if press.fresh {
-    // (on the composer or what is in it, as the press went down: the hand's, not where it was drawn)
-    composing.outside = !c.press_within(cap) && !@sf.presenting() && !composing.menu_up
+    // (on the composer or what is in it, its `@` menu's too, as the press went down: the hand's, not where it was
+    // drawn; a chat picked in the menu as the press is let go closes it before this frame is built)
+    composing.outside = !c.press_within(cap) &&
+      !c.press_within(c.id(ref_menu_key + "/panel")) &&
+      !@sf.presenting() &&
+      !composing.menu_up
   }
   if composing.outside && c.editor_focused(composer_field_key) && press.lifted && !press.long {
     composing.outside = false

@@ -3,9 +3,8 @@
 
 ///|
 /// 大屏, a mouse's: the relay dialog to #dev open from a chat's row, "看下 @p" typed in its note, its @ menu shown.
-fn relay_mentions_tester() -> @ui.Tester raise {
+fn relay_mentions_tester(calls? : Array[Made] = []) -> @ui.Tester raise {
   new_run()
-  let calls : Array[Made] = []
   let base = fixture("home")
   let people : Json = [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao" }, { "id": "U2", "name": "peter" }]
   let src : Source = {
@@ -81,4 +80,27 @@ test "wide: the relay's @ menu dismissed by a press beside it in the dialog: clo
   seen.push(mentions_closed())
   assert_eq(seen, [false, true, true])
   assert_true(t.find("开头附一句（可选）") is Some(_), msg="the dialog went with the menu")
+}
+
+///|
+/// A person in the @ menu pressed (as the host hands it on), then Escape at once, a frame between or none: the note
+/// then, and whether it was relayed.
+fn relay_picked_then_escape(frames : Bool) -> (String, Int) raise {
+  let calls : Array[Made] = []
+  let t = relay_mentions_tester(calls~)
+  let (px, py, pw, ph) = t.rect_of("pengxiao").unwrap()
+  t.touch_at(0, px + pw / 2.0, py + ph / 2.0, t.time())
+  t.touch_at(2, px + pw / 2.0, py + ph / 2.0, t.time())
+  if frames {
+    t.frame()
+  }
+  t.key_told(@ui.key_escape, 0, t.time())
+  t.draw()
+  t.run_for(@kit.pop_out_ms)
+  (relaying.note.text(), named(calls, "chat.relay").length())
+}
+
+///|
+test "wide: a person pressed in the relay's @ menu, then Escape at once: put in once, not relayed, a frame between or none" {
+  assert_eq((relay_picked_then_escape(false), relay_picked_then_escape(true)), (("看下 @pengxiao ", 0), ("看下 @pengxiao ", 0)))
 }
