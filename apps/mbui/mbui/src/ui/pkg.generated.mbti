@@ -514,7 +514,7 @@ pub fn sp_at(Double, Double) -> Double
 
 pub fn space_scale() -> Array[Space]
 
-pub fn span(String, weight? : Int32, bold? : Bool, italic? : Bool, code? : Bool, mono? : Bool, serif? : Bool, scale? : Double, color? : Int64, bg? : Int64, ground? : Ground?, strike? : Bool, underline? : Bool, link? : String, drawing? : InlineDrawing?) -> Run
+pub fn span(String, weight? : Int32, bold? : Bool, italic? : Bool, code? : Bool, mono? : Bool, serif? : Bool, face? : Int32?, scale? : Double, color? : Int64, bg? : Int64, ground? : Ground?, strike? : Bool, underline? : Bool, link? : String, drawing? : InlineDrawing?) -> Run
 
 pub fn stable_hash(String) -> Int64
 
@@ -2040,6 +2040,7 @@ pub(all) struct Run {
   code : Bool
   mono : Bool
   serif : Bool
+  face : Int32?
   scale : Double
   color : Int64
   bg : Int64

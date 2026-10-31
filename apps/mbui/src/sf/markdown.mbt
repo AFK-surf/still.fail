@@ -65,6 +65,9 @@ priv struct Md {
   line : Double
   /// the words in the serif face (a reader's layout; code stays in the code face)
   serif : Bool
+  /// Faces tried for prose and code (None: the chosen face; Some(0): the app's face for that kind).
+  text_face : Int?
+  code_face : Int?
   /// a document's headings, as the web's reader has them (Reader.css.ts): levels 1 to 3 larger than the words (1.5,
   /// 1.3, 1.12), as far above as they are high and half that below; a message's are at the words' size
   document : Bool
@@ -507,7 +510,8 @@ fn web() -> Palette {
 /// `line`: the lines' height over the size (0: Markdown's own); `one_line`: its first block's words alone, on one line
 /// as wide as they are, cut with an ellipsis where the column is narrower (a notice closed: Chat.css.ts
 /// `msgSystemBox:not([data-open])`). `chat_title`: the title of the chat a link written bare names, its reference
-/// reading as it (the message's chats, as the core says them).
+/// reading as it (the message's chats, as the core says them). `text_face` and `code_face`: faces tried for the
+/// corresponding words (None: as chosen; Some(0): the app's face for that kind).
 pub fn markdown(
   c : @ui.Ctx,
   text : String,
@@ -529,6 +533,8 @@ pub fn markdown(
   bleed? : Double = 0.0,
   copy? : Bool = true,
   paths? : Bool = false,
+  text_face? : Int? = None,
+  code_face? : Int? = None,
 ) -> Int {
   let t = theme()
   // (in a page's bones, made-up words: each paragraph as it is, asking the core for nothing)
@@ -553,6 +559,8 @@ pub fn markdown(
     paths,
     line,
     serif: false,
+    text_face,
+    code_face,
     document,
     bleed,
     copy,
@@ -672,6 +680,8 @@ pub fn markdown_part(
     paths: false,
     line,
     serif,
+    text_face: None,
+    code_face: None,
     document,
     bleed: 0.0,
     copy: true,
@@ -810,7 +820,7 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
       match (self.code)(lang, code) {
         // (drawn another way: 4 under it, as Markdown.kt's chart)
         Some(draw) => [{ top: 0.0, bottom: 4.0, draw }]
-        None => [{ top: 0.0, bottom: 8.0, draw: fn() { code_block(c, code, lang, colours~) } }]
+        None => [{ top: 0.0, bottom: 8.0, draw: fn() { code_block(c, code, lang, colours~, face=self.code_face) } }]
       }
     MathBlock(source, drawing) => [{ top: 0.0, bottom: 8.0, draw: fn() {
       c.sideways("sf-math/" + source, fn() {
@@ -1109,6 +1119,17 @@ fn Md::words(
   runs_of(xs, runs, weight >= 600, false, false, "", p.accent_text, titles, self.paths)
   self.n = self.n + 1
   let runs = found_weight(runs, self.found)
+  let runs = if self.text_face is None && self.code_face is None {
+    runs
+  } else {
+    runs.map(fn(run) {
+      let face = if run.code || run.mono { self.code_face } else { self.text_face }
+      match face {
+        Some(_) => { ..run, face }
+        None => run
+      }
+    })
+  }
   c.rich(
     if self.serif { runs.map(fn(x) { if x.mono { x } else { { ..x, serif: true } } }) } else { runs },
     key="sf-md/p\{self.n}",
@@ -1217,7 +1238,7 @@ let copied_at : LiveMap[Int, Bool] = LiveMap::new()
 /// language and a copy button; the code in the code face, 12 on 18 lines,
 /// in its colours as the core said them (ink.mbt), scrolled sideways rather than
 /// wrapped.
-pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? = None) -> Unit {
+pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? = None, face? : Int? = None) -> Unit {
   let t = theme()
   let w = web()
   let id = c.id("sf-code/" + code)
@@ -1312,6 +1333,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
         wrap=false,
         breaks=true,
         color=t.p.text,
+        face=face.unwrap_or(0),
       )
       |> ignore
     })
