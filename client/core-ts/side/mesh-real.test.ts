@@ -456,6 +456,35 @@ test("relay_probes_disable_ip_without_disabling_live_hole_punching", { skip: noR
   server.kill();
 });
 
+test("a_faster_entrance_to_the_same_relay_keeps_the_open_link", { skip: noRelay, timeout: 20_000 }, async () => {
+  const [relayUrl, relayProcess] = await relay();
+  const slowDirect = await slowed(relayUrl, 100);
+  const station = await Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [relayUrl], discovery: false, relayOnly: true });
+  await station.endpoint.online();
+  const e = env(new FakeHost());
+  const mesh = await e.runner.run(Mesh.make(e, [slowDirect]));
+  try {
+    const link = await e.runner.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+    assert.ok(sameRelay(link.via(), slowDirect));
+    const before = await request(e.runner, link, head("/admin/api/overview"));
+    assert.equal(before.status, 200);
+    await e.runner.run(readAll(before.body));
+
+    mesh.retune([slowDirect], [relayUrl], { [relayUrl]: slowDirect });
+    while (!sameRelay(link.via(), relayUrl)) await sleep(50);
+    assert.equal(mesh.current(station.id()), link);
+    const after = await request(e.runner, link, head("/admin/api/overview"));
+    assert.equal(after.status, 200);
+    await e.runner.run(readAll(after.body));
+    assert.equal(station.conns.length, 1, "the station kept the same connection");
+  } finally {
+    await e.runner.run(mesh.close());
+    e.runner.shutdown();
+    await station.close();
+    relayProcess.kill();
+  }
+});
+
 /// A phone's link to a station abroad went through the relay nearest the phone, the station's way there slow
 /// (2026-10-01, bft: 11 s a round trip); measured, it moves to the relay that is quicker the whole way.
 test("a_link_through_a_slow_relay_moves_to_the_quicker_one", { skip: noRelay }, async () => {

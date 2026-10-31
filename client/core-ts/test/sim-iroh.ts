@@ -506,6 +506,8 @@ export class SimEndpoint {
   /// The relays it is on by now (getting onto one takes a while: `#goOnto`).
   readonly #onto = new Set<string>();
   readonly #keeps: string[] = [];
+  /// The access selected for a relay with multiple entrances, one socket on that server at a time.
+  readonly #access = new Map<string, string>();
   readonly #incoming: SimConnection[] = [];
   #accepting: ((c: SimConnection | null) => void) | null = null;
   #held = 0;
@@ -523,7 +525,7 @@ export class SimEndpoint {
   readonly alpns: Uint8Array[];
   readonly direct: boolean;
 
-  constructor(net: SimNet, side: "device" | "station", key: Uint8Array, relays: string[], relayOnly: boolean, alpns: Uint8Array[], direct: boolean, lookup = false) {
+  constructor(net: SimNet, side: "device" | "station", key: Uint8Array, relays: string[], relayOnly: boolean, alpns: Uint8Array[], direct: boolean, lookup = false, entries: { entry: string; relay: string }[] = []) {
     this.net = net;
     this.side = side;
     this.key = key;
@@ -532,7 +534,12 @@ export class SimEndpoint {
     this.lookup = lookup;
     this.alpns = alpns;
     this.direct = direct;
-    for (const r of relays) this.#goOnto(r);
+    for (const r of relays) {
+      const choices = [r, ...entries.filter((e) => href(e.relay) === r).map((e) => href(e.entry))];
+      const access = choices.sort((a, b) => net.leg(a, side).ms - net.leg(b, side).ms)[0]!;
+      this.#access.set(r, access);
+      this.#goOnto(access);
+    }
   }
 
   id(): string {
@@ -573,7 +580,7 @@ export class SimEndpoint {
     // Addresses it is dialled at: none reached from off the station's LAN (`SimNet.away`).
     const ips = [...(addr.ips ?? []), ...(known?.ips ?? [])];
     if (this.relayOnly || !there.direct || ips.length === 0 || (this.net.away && (addr.ips?.length ?? 0) > 0)) {
-      const told = [...(addr.relays ?? []), ...(known?.relays ?? []), ...this.relays].map(href);
+      const told = [...(addr.relays ?? []), ...(known?.relays ?? []), ...this.relays].map(href).map((r) => this.#access.get(r) ?? r);
       // The path through the relay of the quickest round trip carries it, as iroh's path selector chooses among relays
       // (an endpoint on one relay alone, on that one).
       const reachable = told.filter((r) => there.reachableOn(r));
@@ -583,11 +590,11 @@ export class SimEndpoint {
       if (relay === null) return NEVER;
       // iroh sends its first packets on every path it knows of, going onto each relay of them: those it was told of, and
       // those its lookups found (the relays the other end is at home on).
-      for (const r of new Set([...told, ...(this.lookup ? there.relays : [])])) this.net.onto(this, r);
+      for (const r of new Set([...told, ...(this.lookup ? there.relays.map((url) => this.#access.get(url) ?? url) : [])])) this.net.onto(this, r);
       await this.#goOnto(relay);
     }
     // A path through every relay both are on (the device's endpoint home on each of its relays, as the station is).
-    const alts = relay === null ? [] : [...new Set([...(addr.relays ?? []), ...(known?.relays ?? []), ...this.relays].map(href))].filter((r) => there.reachableOn(r) && this.relays.some((o) => this.net.server(o) === this.net.server(r)));
+    const alts = relay === null ? [] : [...new Set([...(addr.relays ?? []), ...(known?.relays ?? []), ...this.relays].map(href).map((r) => this.#access.get(r) ?? r))].filter((r) => there.reachableOn(r) && this.relays.some((o) => this.net.server(o) === this.net.server(r)));
     const way = new Way(this.net, relay, [this.side, there.side], alts);
     // A handshake: a round trip, its packets lost as the way loses them (sent again after QUIC's initial probe timeout,
     // a second, twice as long each time). One the other end holds, or through a relay that is down, is never answered.
@@ -657,8 +664,27 @@ export class SimEndpoint {
       }
   }
   async networkChange(): Promise<void> {}
-  relayStatus(): { url: string; connected: boolean }[] {
-    return this.relays.map((url) => ({ url, connected: this.#onto.has(url) }));
+  async setRelayEntries(entries: { entry: string; relay: string }[]): Promise<void> {
+    for (const relay of this.relays) {
+      const choices = [relay, ...entries.filter((e) => href(e.relay) === relay).map((e) => href(e.entry))];
+      const access = choices.sort((a, b) => this.net.leg(a, this.side).ms - this.net.leg(b, this.side).ms)[0]!;
+      const before = this.#access.get(relay) ?? relay;
+      if (before === access) continue;
+      this.net.off(this, before);
+      this.#onto.delete(before);
+      this.#on.delete(before);
+      this.#access.set(relay, access);
+      await this.#goOnto(access);
+      for (const c of this.conns) {
+        if (c.way.relay === before && c.reason === null) c.way.relay = c.peer.way.relay = access;
+      }
+    }
+  }
+  relayStatus(): { url: string; connected: boolean; access: string }[] {
+    return this.relays.map((url) => {
+      const access = this.#access.get(url) ?? url;
+      return { url, connected: this.#onto.has(access), access };
+    });
   }
   async close(): Promise<void> {
     if (this.#closed) return;
@@ -789,6 +815,11 @@ export class SimNet {
     urls.add(href(url));
   }
 
+  /// A relay socket superseded by an entrance for the same logical relay is no longer registered.
+  off(endpoint: SimEndpoint, url: string): void {
+    this.#onto.get(endpoint)?.get(this.server(url))?.delete(href(url));
+  }
+
   /// Each endpoint that went onto one relay through two URLs or more (`open`: of those still open): one key there twice,
   /// which iroh-relay takes as one connection taking the other's place, back and forth.
   twice(open = false): string[] {
@@ -853,7 +884,7 @@ export class SimNet {
   /// The device's iroh, as a host gives the core.
   iroh(): Iroh {
     return wrapIroh(
-      async (o) => this.#add(new SimEndpoint(this, "device", o.secretKey, o.relayUrls.map(href), o.relayOnly, [], false, o.lookup)) as never,
+      async (o) => this.#add(new SimEndpoint(this, "device", o.secretKey, o.relayUrls.map(href), o.relayOnly, [], false, o.lookup, o.relayEntries)) as never,
       (b) => b,
     );
   }

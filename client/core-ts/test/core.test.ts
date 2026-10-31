@@ -38,6 +38,27 @@ test("the_relays_are_the_list_or_the_one_from_before_there_were_several", () => 
   assert.equal(relaysOf({}), null);
 });
 
+test("refreshing_an_account_updates_its_relay_entrances", async () => {
+  const host = new FakeHost();
+  signIn(host);
+  const relay = "https://hong-kong.test";
+  const entry = "https://beijing.test:8443";
+  let withEntry = false;
+  host.onFetch((req) => req.url.endsWith("/v1/me")
+    ? jsonResponse(200, { workspaces: [], invitations: [], relay_urls: [relay], relay_entries: withEntry ? [entry] : [], relay_entry_targets: withEntry ? { [entry]: relay } : {} })
+    : jsonResponse(404, { error: "not_found" }));
+  const core = await Core.create(host, { clock: host.time.clock });
+  await host.settle();
+  const seen: unknown[] = [];
+  core.inner.cloudSync.onRelays = (relays, entries, targets) => seen.push({ relays, entries, targets });
+  withEntry = true;
+  await run(core.inner.cloudSync.refreshAccount("s1"));
+  assert.deepEqual(seen.at(-1), { relays: [relay], entries: [entry], targets: { [entry]: relay } });
+  assert.deepEqual(core.inner.cloudSync.entriesNow(), [entry]);
+  assert.deepEqual(core.inner.cloudSync.entryTargetsNow(), { [entry]: relay });
+  core.close();
+});
+
 test("parses_the_client_messages_of_the_protocol", () => {
   assert.deepEqual(parseClientMessage({ id: 7, call: "job.stop", params: { station: "ws1/st1", id: "j1" } }), { kind: "call", id: 7, call: "job.stop", params: { station: "ws1/st1", id: "j1" } });
   assert.deepEqual(parseClientMessage({ id: 1, call: "auth.signOut" }), { kind: "call", id: 1, call: "auth.signOut", params: null });

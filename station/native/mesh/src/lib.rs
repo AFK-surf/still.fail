@@ -10,7 +10,7 @@ mod thumbs;
 mod local;
 mod usage;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
 
@@ -45,6 +45,8 @@ pub struct Options {
     pub alpns: Vec<Buffer>,
     /// still.fail's relays, ours first; none: relays off (tests on one machine).
     pub relay_urls: Vec<String>,
+    /// Alternative addresses into the same relays, used by client endpoints.
+    pub relay_entries: Option<Vec<RelayEntry>>,
     /// Found on the LAN and through the DHT, as a station is. Off for tests.
     pub discovery: Option<bool>,
     /// Where to listen; any free port when not said.
@@ -56,6 +58,12 @@ pub struct Options {
     pub relay_only: Option<bool>,
     /// Advanced choice, cubic by default; read when the endpoint is created.
     pub congestion: Option<String>,
+}
+
+#[napi(object)]
+pub struct RelayEntry {
+    pub entry: String,
+    pub relay: String,
 }
 
 #[napi]
@@ -98,11 +106,15 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
     let bytes: [u8; 32] = options.secret_key.as_ref().try_into().map_err(|_| failed("the key is not 32 bytes"))?;
     let key = SecretKey::from_bytes(&bytes);
     let relays: Vec<RelayUrl> = options.relay_urls.iter().map(|u| relay_url(u)).collect::<Result<_, _>>()?;
+    let entries: Vec<(RelayUrl, RelayUrl)> = options.relay_entries.unwrap_or_default().iter().map(|e| Ok((relay_url(&e.entry)?, relay_url(&e.relay)?))).collect::<napi::Result<_>>()?;
+    let relay_map = iroh::RelayMap::from_iter(relays.iter().map(|relay| {
+        iroh::RelayConfig::from(relay.clone()).with_entries(entries.iter().filter(|(_, target)| target == relay).map(|(entry, _)| entry.clone()))
+    }));
     let transport = transport(options.congestion.as_deref().unwrap_or("cubic"))?;
     let mut builder = IrohEndpoint::builder(Minimal)
         .secret_key(key.clone())
         .alpns(options.alpns.iter().map(|a| a.to_vec()).collect())
-        .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays.clone())) })
+        .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(relay_map) })
         .home_on_every_relay()
         .transport_config(transport);
     if let Some(addr) = &options.bind_addr {
@@ -298,6 +310,17 @@ impl Endpoint {
         Ok(())
     }
 
+    /// Replace forwarding entrances without closing the endpoint's existing connections.
+    #[napi]
+    pub async fn set_relay_entries(&self, entries: Vec<RelayEntry>) -> napi::Result<()> {
+        let mut grouped = BTreeMap::<RelayUrl, Vec<RelayUrl>>::new();
+        for entry in entries {
+            grouped.entry(relay_url(&entry.relay)?).or_default().push(relay_url(&entry.entry)?);
+        }
+        self.inner.set_relay_entries(grouped.into_iter().collect()).await;
+        Ok(())
+    }
+
     /// The network changed (a phone's, after it slept): its sockets and relay connection looked at anew.
     #[napi]
     pub async fn network_change(&self) {
@@ -307,7 +330,7 @@ impl Endpoint {
     /// Its home relays, and whether it is connected to each now.
     #[napi]
     pub fn relay_status(&self) -> Vec<RelayState> {
-        self.inner.home_relay_status().get().iter().map(|s| RelayState { url: s.url().to_string(), connected: s.is_connected() }).collect()
+        self.inner.home_relay_status().get().iter().map(|s| RelayState { url: s.url().to_string(), connected: s.is_connected(), access: s.access_url().to_string() }).collect()
     }
 
     #[napi]
@@ -323,6 +346,7 @@ impl Endpoint {
 pub struct RelayState {
     pub url: String,
     pub connected: bool,
+    pub access: String,
 }
 
 /// One way a connection can go: through a relay (its URL) or direct; the one chosen now, its round trip, and the

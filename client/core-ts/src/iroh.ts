@@ -66,7 +66,9 @@ export interface IrohEndpoint {
   /// The network changed: its sockets and relay connection looked at anew.
   networkChange(): Effect.Effect<void>;
   /// Its home relays, and whether it is connected to each now.
-  relayStatus(): { url: string; connected: boolean }[];
+  relayStatus(): { url: string; connected: boolean; access?: string }[];
+  /// Update forwarding entrances without closing any station connection.
+  setRelayEntries?(entries: { entry: string; relay: string }[]): Effect.Effect<void, HostError>;
   close(): Effect.Effect<void>;
 }
 
@@ -75,6 +77,8 @@ export type BindOptions = {
   secretKey: Uint8Array;
   /// still.fail's relays, its own first; none: relays off (tests on one machine).
   relayUrls: string[];
+  /// Alternative entrances to the same relay, not additional independent relays.
+  relayEntries?: { entry: string; relay: string }[];
   /// Look stations up on the LAN and in the DHT (a client's: not announced itself).
   lookup: boolean;
   /// Relays alone, no IP transports (what measures a relay's way must not go direct).

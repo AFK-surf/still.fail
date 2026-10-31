@@ -7,7 +7,7 @@ import { record, said } from "../record.ts";
 import { Effect, Exit, Fiber, Scope } from "effect";
 import type { AccountView } from "../accounts.ts";
 import { NOT_BETA, notBetaText, readCredential, type Credential } from "../cloud.ts";
-import { CREDENTIAL_FOR_S, CREDENTIAL_KEY, CREDENTIAL_OTHERS, CREDENTIAL_OTHERS_KEPT, entriesOf, PUSH_KEY, relaysOf, type Inner } from "../core.ts";
+import { CREDENTIAL_FOR_S, CREDENTIAL_KEY, CREDENTIAL_OTHERS, CREDENTIAL_OTHERS_KEPT, entriesOf, entryTargetsOf, PUSH_KEY, relaysOf, type Inner } from "../core.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import type { Pull } from "../host.ts";
 import { current, t } from "../i18n.ts";
@@ -42,8 +42,10 @@ export class CloudSync {
   readonly #sockets = new Map<string, Fiber.Fiber<void, never>>();
   /// The relays the mesh uses, as the first `/v1/me` of this run or the kept one said.
   relays: string[] | null = null;
-  /// Told the relays and entries the first `/v1/me` of this run names (the mesh may be up on those kept from the last).
-  onRelays: ((relays: string[], entries: string[]) => void) | null = null;
+  /// The account whose cloud supplied this run's relays; a later refresh from it may update the entrances.
+  #relaySource: string | null = null;
+  /// Told when the source account's `/v1/me` names relays and entrances (the mesh may be up on those kept from the last).
+  onRelays: ((relays: string[], entries: string[], targets: Record<string, string>) => void) | null = null;
   /// Told when the stations each account reaches may have changed (the station sync follows).
   onReach: (() => void) | null = null;
   /// The lock entries a hello to a station of the workspace brings (views/lock.ts `carried`): none, null.
@@ -169,10 +171,15 @@ export class CloudSync {
       if (!core.accounts.list().some((a) => a.sub === sub)) return;
       if (answer._tag === "Success") {
         const relays = relaysOf(answer.success);
+        if (this.#relaySource !== null && !core.accounts.list().some((a) => a.sub === this.#relaySource)) {
+          this.#relaySource = null;
+          this.relays = null;
+        }
         const first = relays !== null && this.relays === null;
-        if (first) this.relays = relays;
+        if (first) this.#relaySource = sub;
+        if (relays !== null && this.#relaySource === sub) this.relays = relays;
         core.data.put("me", sub, answer.success);
-        if (first) this.onRelays?.(relays, entriesOf(answer.success));
+        if (relays !== null && this.#relaySource === sub) this.onRelays?.(relays, entriesOf(answer.success), entryTargetsOf(answer.success));
         this.mes.set(sub, null);
       } else {
         // A beta app the account may not use: what it reached is not reached through this app.
@@ -357,13 +364,23 @@ export class CloudSync {
     });
   }
 
-  /// The relay entries any account's `/v1/me` named, as held now (`entriesOf`); none from a cloud from before them.
-  entriesNow(): string[] {
+  /// The same account's `/v1/me` that supplies the relays, live or kept from the last run.
+  #relayMe(): unknown {
+    if (this.#relaySource !== null) return this.#core.data.record("me", this.#relaySource);
     for (const account of this.#core.accounts.list()) {
-      const entries = entriesOf(this.#core.data.record("me", account.sub));
-      if (entries.length > 0) return entries;
+      const me = this.#core.data.record("me", account.sub);
+      if (relaysOf(me) !== null) return me;
     }
-    return [];
+    return null;
+  }
+
+  /// The relay entries that account's `/v1/me` named; none from a cloud from before them.
+  entriesNow(): string[] {
+    return entriesOf(this.#relayMe());
+  }
+
+  entryTargetsNow(): Record<string, string> {
+    return entryTargetsOf(this.#relayMe());
   }
 
   /// A workspace's own relays, as its members' `/v1/me` name them: used besides still.fail's for its stations alone.
@@ -680,4 +697,3 @@ function readKept(v: unknown): KeptCredential | null {
 function strip(k: KeptCredential): Credential {
   return { credential: k.credential, issued_at: k.issued_at, expires_at: k.expires_at, relay_url: k.relay_url };
 }
-

@@ -8,21 +8,25 @@ import type { WayView } from "./types";
 
 export const relayUrls = (env: { PUBLIC_ORIGIN: string; RELAY_URL?: string; RELAY_URLS?: string }): string[] => originList(env.RELAY_URL || env.PUBLIC_ORIGIN, env.RELAY_URLS);
 
-type RelayEnv = { PUBLIC_ORIGIN: string; RELAY_URL?: string; RELAY_URLS?: string; RELAY_ENTRIES?: string; RELAY_NAMES?: Record<string, string> };
+type RelayEnv = { PUBLIC_ORIGIN: string; RELAY_URL?: string; RELAY_URLS?: string; RELAY_ENTRIES?: string; RELAY_ENTRY_TARGETS?: Record<string, string>; RELAY_NAMES?: Record<string, string> };
 
 /** What a station or a device is told about the relays: the one, as before, all of them, and the names of those named.
  * A device (`device`) is told of RELAY_ENTRIES as well, as `relay_entries`: another way into a relay, through a machine
  * its own line reaches well and whose line to that relay is good (Beijing's to Hong Kong's: a phone in the mainland
- * reaches Beijing well, a station in Tokyo Hong Kong; 2026-10-08, bft). A device dials an entry on an endpoint of its
- * own, on that entry alone (client/core-ts mesh.ts). Never among `relay_urls`: an entry is a relay already there under
- * another URL, and an endpoint on both is on that relay twice under one key, the connection made last taking the
- * other's place, back and forth. Devices that had entries among their relays lost a fifth of their connects to every
- * station that way (2026-10-08); a station is not told of them for the same reason. */
-export function relays(env: RelayEnv, device = false): { relay_url: string; relay_urls: string[]; relay_names: Record<string, string>; relay_entries?: string[] } {
+ * reaches Beijing well, a station in Tokyo Hong Kong; 2026-10-08, bft). `relay_entry_targets` says which relay is on
+ * the other side. An entry is not another relay: putting both among `relay_urls` registers the same key twice and the
+ * connections displace each other. New clients choose an entrance within the relay connection; older ones dial each
+ * entry on an endpoint of its own. A station is not told the entries. */
+export function relays(env: RelayEnv, device = false): { relay_url: string; relay_urls: string[]; relay_names: Record<string, string>; relay_entries?: string[]; relay_entry_targets?: Record<string, string> } {
   const own = relayUrls(env);
   const entries = device ? originList("", env.RELAY_ENTRIES).filter((u) => !own.map(sameUrl).includes(sameUrl(u))) : [];
   const names = Object.fromEntries([...own, ...entries].flatMap((url) => (env.RELAY_NAMES?.[url] ? [[url, env.RELAY_NAMES[url]]] : [])));
-  return { relay_url: own[0], relay_urls: own, relay_names: names, ...(device ? { relay_entries: entries } : {}) };
+  const targets = Object.fromEntries(entries.flatMap((entry) => {
+    const target = Object.entries(env.RELAY_ENTRY_TARGETS ?? {}).find(([url]) => sameUrl(url) === sameUrl(entry))?.[1];
+    const relay = own.find((url) => target !== undefined && sameUrl(url) === sameUrl(target));
+    return relay === undefined ? [] : [[entry, relay]];
+  }));
+  return { relay_url: own[0], relay_urls: own, relay_names: names, ...(device ? { relay_entries: entries, relay_entry_targets: targets } : {}) };
 }
 
 /** At most this many relays of a workspace's own (directory.ts setRelays). */

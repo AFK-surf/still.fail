@@ -36,6 +36,8 @@ export interface Env {
   /** Ways into the relays for devices alone (comma-separated): one relay machine's address forwarding to another's relay
    * (relays.ts). */
   RELAY_ENTRIES?: string;
+  /** The relay each entry forwards to, keyed by the entry's URL (relays.ts). */
+  RELAY_ENTRY_TARGETS?: Record<string, string>;
   /** What the relays are called (by their URL) where people see which one a connection goes through (relays.ts). */
   RELAY_NAMES?: Record<string, string>;
   /** How loaded the relays are, for the console (relay-load.ts). */

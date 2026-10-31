@@ -192,6 +192,15 @@ function sameRelay(a: string | null, b: string): boolean {
   }
 }
 
+/// Only entries whose target is one of this endpoint's relays can be chosen within that relay's connection.
+function entryRoutes(relays: string[], entries: string[], targets: Record<string, string>): { entry: string; relay: string }[] {
+  return entries.flatMap((entry) => {
+    const target = Object.entries(targets).find(([url]) => sameRelay(url, entry))?.[1];
+    const relay = relays.find((url) => target !== undefined && sameRelay(url, target));
+    return relay === undefined ? [] : [{ entry, relay }];
+  });
+}
+
 /// The key of the endpoint on one relay alone: the device key's, made over for that relay.
 export function pinnedKey(secret: Uint8Array, relay: string): Uint8Array {
   const prefix = utf8("stillfail/relay-endpoint/1\0");
@@ -658,11 +667,11 @@ export type MeshEnv = { host: Host; runner: Runner; tracer: Tracer; iroh: Iroh; 
 export class Mesh {
   readonly #env: MeshEnv;
   relays: string[];
-  /// Ways into a relay through another relay's machine (cloud relays.ts `relay_entries`): each dialled on an endpoint
-  /// of its own and through it alone, never on the main endpoint. An entry is a relay already reached under another URL:
-  /// on both, one key is on that relay twice, the connection made last taking the other's place, back and forth
-  /// (2026-10-08: with the entries among their relays, phones' connects to any station failed one in five).
+  /// Ways into a relay through another relay's machine (cloud relays.ts `relay_entries`). The main endpoint treats an
+  /// entry as another entrance to that relay, not another relay connection: using the same key on both would make them
+  /// displace each other. A pinned endpoint for measurements or workspace restrictions has its own key.
   entries: string[];
+  entryTargets: Record<string, string>;
   #endpoint: IrohEndpoint;
   #secret: Uint8Array;
   readonly #links = new Map<string, Opening>();
@@ -726,10 +735,11 @@ export class Mesh {
   /// When each station's way through each relay last had its speed told (`mesh.speed`), by `#came`'s keys.
   readonly #speedSaid = new Map<string, number>();
 
-  private constructor(env: MeshEnv, relays: string[], entries: string[], endpoint: IrohEndpoint, secret: Uint8Array, days: Record<string, Day>, speeds: Record<string, Record<string, Speed>>, said: Record<string, Said>) {
+  private constructor(env: MeshEnv, relays: string[], entries: string[], targets: Record<string, string>, endpoint: IrohEndpoint, secret: Uint8Array, days: Record<string, Day>, speeds: Record<string, Record<string, Speed>>, said: Record<string, Said>) {
     this.#env = env;
     this.relays = relays;
     this.entries = entries;
+    this.entryTargets = targets;
     this.#endpoint = endpoint;
     this.#secret = secret;
     this.#days = days;
@@ -738,7 +748,7 @@ export class Mesh {
   }
 
   /// Binds the endpoint with the stored device key (made and stored the first time). No relays binds without one.
-  static make(env: MeshEnv, relays: string[], entries: string[] = []): Effect.Effect<Mesh, CoreError> {
+  static make(env: MeshEnv, relays: string[], entries: string[] = [], targets: Record<string, string> = {}): Effect.Effect<Mesh, CoreError> {
     return Effect.gen(function* () {
       const host = env.host;
       const stored = yield* Effect.mapError(host.storageGet(DEVICE_KEY), asCoreError);
@@ -754,8 +764,9 @@ export class Mesh {
       const speedsRaw = parseJson(yield* Effect.orElseSucceed(host.storageGet(SPEED_KEY), () => null)) as J;
       const speeds: Record<string, Record<string, Speed>> = speedsRaw !== null && typeof speedsRaw === "object" && !Array.isArray(speedsRaw) ? speedsRaw : {};
       const said = saidOf(parseJson(yield* Effect.orElseSucceed(host.storageGet(SAID_KEY), () => null)));
-      const endpoint = yield* Mesh.#bind(env.iroh, secret, relays, false, env.takes);
-      const mesh = new Mesh(env, relays, entries.filter((e) => !relays.some((r) => sameRelay(r, e))), endpoint, secret, days, speeds, said);
+      const fresh = entries.filter((e) => !relays.some((r) => sameRelay(r, e)));
+      const endpoint = yield* Mesh.#bind(env.iroh, secret, relays, false, env.takes, entryRoutes(relays, fresh, targets));
+      const mesh = new Mesh(env, relays, fresh, targets, endpoint, secret, days, speeds, said);
       env.runner.fork(mesh.#accepting(endpoint));
       env.runner.fork(mesh.#watch());
       env.runner.fork(mesh.#tally());
@@ -763,8 +774,8 @@ export class Mesh {
     });
   }
 
-  static #bind(iroh: Iroh, secret: Uint8Array, relays: string[], relayOnly = false, alpns: Uint8Array[] = []): Effect.Effect<IrohEndpoint, CoreError> {
-    return Effect.mapError(iroh.bind({ secretKey: secret, relayUrls: relays, lookup: !relayOnly && relays.length > 0, relayOnly, ...(alpns.length > 0 ? { alpns } : {}) }), (e) => meshError(t("core-logic.mesh.bind_failed", { error: e.message })));
+  static #bind(iroh: Iroh, secret: Uint8Array, relays: string[], relayOnly = false, alpns: Uint8Array[] = [], relayEntries: { entry: string; relay: string }[] = []): Effect.Effect<IrohEndpoint, CoreError> {
+    return Effect.mapError(iroh.bind({ secretKey: secret, relayUrls: relays, lookup: !relayOnly && relays.length > 0, relayOnly, ...(alpns.length > 0 ? { alpns } : {}), ...(relayEntries.length > 0 ? { relayEntries } : {}) }), (e) => meshError(t("core-logic.mesh.bind_failed", { error: e.message })));
   }
 
   /// The connections the main endpoint takes (`MeshEnv.takes`), each handed on, until it is closed (bound anew).
@@ -1004,7 +1015,7 @@ export class Mesh {
         return this.#endpoint;
       }
       this.#reboundAt = now;
-      const bound = yield* Effect.result(Mesh.#bind(this.#env.iroh, this.#secret, this.relays, false, this.#env.takes));
+      const bound = yield* Effect.result(Mesh.#bind(this.#env.iroh, this.#secret, this.relays, false, this.#env.takes, entryRoutes(this.relays, this.entries, this.entryTargets)));
       record(this.#env.host, "conn rebind", () => `${always ? "relays retold" : "a dial unanswered, nothing open"} -> ${bound._tag === "Failure" ? `failed: ${said(bound.failure.message)}` : "bound"}`);
       if (bound._tag === "Failure") return this.#endpoint;
       const endpoint = bound.success;
@@ -1022,14 +1033,23 @@ export class Mesh {
   /// (a cloud from before `relay_entries` had the entries among the relays). Dialled as told from now on; the endpoint
   /// is bound anew on the new relays if its were others, the links on it closed (an entry among its relays would keep it
   /// on that entry's relay twice).
-  retune(relays: string[], entries: string[]): void {
+  retune(relays: string[], entries: string[], targets: Record<string, string> = {}): void {
     const same = (a: string[], b: string[]) => a.length === b.length && a.every((r, i) => sameRelay(r, b[i]!));
     const fresh = entries.filter((e) => !relays.some((r) => sameRelay(r, e)));
-    if (this.#closed || (same(this.relays, relays) && same(this.entries, fresh))) return;
+    const beforeRoutes = entryRoutes(this.relays, this.entries, this.entryTargets);
+    const afterRoutes = entryRoutes(relays, fresh, targets);
+    const sameRoutes = beforeRoutes.length === afterRoutes.length && beforeRoutes.every((r, i) => sameRelay(r.entry, afterRoutes[i]!.entry) && sameRelay(r.relay, afterRoutes[i]!.relay));
+    if (this.#closed || (same(this.relays, relays) && same(this.entries, fresh) && sameRoutes)) return;
     const rebind = !same(this.relays, relays);
     this.relays = relays;
     this.entries = fresh;
+    this.entryTargets = targets;
     if (rebind) this.#env.runner.fork(Effect.asVoid(this.#rebind(true)));
+    else if (!sameRoutes) {
+      const setEntries = this.#endpoint.setRelayEntries?.bind(this.#endpoint);
+      if (setEntries) this.#env.runner.fork(Effect.catch(setEntries(afterRoutes), () => Effect.asVoid(this.#rebind(true))));
+      else this.#env.runner.fork(Effect.asVoid(this.#rebind(true)));
+    }
   }
 
   /// The relays a station is dialled and measured on: still.fail's, then its workspace's own. The endpoint stays bound
@@ -1226,7 +1246,7 @@ export class Mesh {
       if (secret.length !== 32) return yield* Effect.fail(CoreError.invalid(t("core-logic.mesh.bad_device_key")));
       const stored = yield* Effect.mapError(this.#env.host.storageGet(DEVICE_KEY), asCoreError);
       if (stored !== null && hex(stored) === hex(secret)) return;
-      const endpoint = yield* Mesh.#bind(this.#env.iroh, secret, this.relays, false, this.#env.takes);
+      const endpoint = yield* Mesh.#bind(this.#env.iroh, secret, this.relays, false, this.#env.takes, entryRoutes(this.relays, this.entries, this.entryTargets));
       this.#env.runner.fork(this.#accepting(endpoint));
       yield* Effect.mapError(this.#env.host.storageSet(DEVICE_KEY, secret), asCoreError);
       this.#secret = secret;
@@ -2445,13 +2465,13 @@ export function meshWire(inner: Inner): StationWire {
       inner.runner.fork(
         Effect.gen(function* () {
           const made = yield* Effect.result(
-            Effect.flatMap(inner.cloudSync.relaysNow(), (relays) => Mesh.make({ host: inner.host, runner: inner.runner, tracer: inner.tracer, iroh, wakes: inner.wakes, ...takes(inner) }, relays, inner.cloudSync.entriesNow())),
+            Effect.flatMap(inner.cloudSync.relaysNow(), (relays) => Mesh.make({ host: inner.host, runner: inner.runner, tracer: inner.tracer, iroh, wakes: inner.wakes, ...takes(inner) }, relays, inner.cloudSync.entriesNow(), inner.cloudSync.entryTargetsNow())),
           );
           if (made._tag === "Success") {
             up = made.success;
             // This run's `/v1/me` may have come while it came up on the relays kept from the last.
             const told = inner.cloudSync.relays;
-            if (told !== null) up.retune(told, inner.cloudSync.entriesNow());
+            if (told !== null) up.retune(told, inner.cloudSync.entriesNow(), inner.cloudSync.entryTargetsNow());
           } else mesh = null;
           Deferred.doneUnsafe(d, made._tag === "Success" ? Effect.succeed(made.success) : Effect.fail(made.failure));
         }),
@@ -2460,7 +2480,7 @@ export function meshWire(inner: Inner): StationWire {
     });
   inner.mesh = get;
   inner.meshNow = () => up;
-  inner.cloudSync.onRelays = (relays, entries) => up?.retune(relays, entries);
+  inner.cloudSync.onRelays = (relays, entries, targets) => up?.retune(relays, entries, targets);
   return new MeshWire({
     mesh: get,
     meshNow: () => up,
