@@ -542,7 +542,9 @@ let coast_decel : Double = 0.997
 
 ///|
 /// The finger left the list at `v` (logical pixels per ms, positive down
-/// the list) at `at` (the input's time): it flings, or what it pulled past an end goes back.
+/// the list) at `at` (the input's time, or the moment the press was called off): it flings, or what it pulled past an
+/// end goes back. What goes back sets out at `at`; a fling at its first frame on Android and iOS (Compose's playtime 0,
+/// step_scroll), the desktop's coast at `at`.
 fn Ctx::release(self : Ctx, st : ListState, v : Double, at : Double) -> Unit {
   st.held = false
   if scroll_logging() {
@@ -557,7 +559,7 @@ fn Ctx::release(self : Ctx, st : ListState, v : Double, at : Double) -> Unit {
       let away = (st.over_edge > 0 && v > 0.0) || (st.over_edge < 0 && v < 0.0)
       if away &&
         fling_distance(v, self.scale) <= st.over * dmax(st.vp_h, 1.0) {
-        self.spring_back(st, -(v.abs() * 1000.0 * self.scale).round() * 13.0, -1.0)
+        self.spring_back(st, -(v.abs() * 1000.0 * self.scale).round() * 13.0, at)
         return
       }
     }
@@ -572,13 +574,16 @@ fn Ctx::release(self : Ctx, st : ListState, v : Double, at : Double) -> Unit {
       st.fling_done = 0.0
       st.vel = v
       self.moving(st.ease_mover, st as &Moving, what="a list's fling")
+    } else if st.over_state == 1 {
+      // no fling: a stretch left as it is goes back from now, as it was let go (or called off)
+      self.spring_back(st, 0.0, at)
     }
-    // a stretch left as it is goes back once the fling is over (step)
+    // a stretch left as it is under a fling goes back once the fling is over (step)
   } else if kind == 1 {
     if st.over_state == 1 && st.over > 0.0 {
       st.over = rubber(st.over, st.vp_h)
-      // moving away from the content is outward
-      self.spring_back(st, if st.over_edge > 0 { -v } else { v }, -1.0)
+      // moving away from the content is outward; from now, as it was let go (or called off)
+      self.spring_back(st, if st.over_edge > 0 { -v } else { v }, at)
     } else if v.abs() >= 0.02 {
       st.fling = 2
       st.fling_v = v
