@@ -9,6 +9,11 @@ impl @hostapi.Host for FakeHost with install_package(_, a0, a1) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with window_show(self) {
+  self.window_shows = self.window_shows + 1
+}
+
+///|
 impl @hostapi.Host for FakeHost with reduce_motion(_) {
   reduced_motion()
 }

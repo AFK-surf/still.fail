@@ -281,6 +281,7 @@ pub fn Tester::new(
     clipboard_secret: -1.0,
     clipboard_image: -1,
     back_on: false,
+    window_shows: 0,
     platform,
     keys: keys.unwrap_or(platform),
     pointing: match pointing {
@@ -1505,6 +1506,12 @@ pub fn Tester::list_moving(self : Tester) -> Bool {
 /// Whether the host was told the app takes back.
 pub fn Tester::takes_back(self : Tester) -> Bool {
   self.fake.back_on
+}
+
+///|
+/// How many times the app asked its host to show the window it held (@hostapi.window_show).
+pub fn Tester::window_shows(self : Tester) -> Int {
+  self.fake.window_shows
 }
 
 ///|

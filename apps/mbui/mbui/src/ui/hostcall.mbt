@@ -37,6 +37,8 @@ struct FakeHost {
   mut clipboard_image : Int
   // whether the app takes back (a page to go back to), as last told
   mut back_on : Bool
+  // how many times the window held (window_hold) was asked to be shown (@hostapi.window_show)
+  mut window_shows : Int
   // the system it plays (as @hostapi.platform: 0 macOS, 1 iOS, 2 Android)
   platform : Int
   // the system whose keys are typed (keys_system: Tester::new's `keys`, by default `platform`'s; a browser's the one

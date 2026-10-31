@@ -74,6 +74,8 @@ fn reset() -> Unit {
   share_in.find.set("")
   share_closing.val = false
   splash_waited.set(false)
+  splash_from.val = -1.0
+  splash_owner.val = None
   first_shown.val = false
   first_waiting.val = false
   first_has.val = 0
@@ -476,6 +478,8 @@ fn app_ground(c : @ui.Ctx, src : Source) -> @ui.Made {
 /// theme, the window's sides, the layers over it).
 pub fn app_tree(src : Source) -> (@view.View) -> Unit {
   fn(root) {
+    // (what the splash waits by, kept by what lives through the app's states: splash_begin)
+    splash_owner.val = Some(root)
     // (its nodes drawn in still.fail's theme, the one its old views are built in, as light or dark is set: view's
     // with_theme)
     @ui.set_tree_theme(@sf.ui_theme_now)
@@ -908,9 +912,17 @@ pub let toast_action_ms : Double = @sf.toast_action_ms
 /// icon on the system's splash, then the page: three pictures in a second, 2026-10-26 「打开的时候感觉乱闪」.)
 fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
   let t = @sf.theme()
-  // a second after the app's first splash, it is said that it waits, and for what, from then on
-  if !splash_waited.get() && @kit.after(c, "splash-label", true, splash_label_ms) {
-    splash_waited.set(true)
+  // a second after the app's first splash, it is said that it waits, and for what, from then on: set at that moment
+  // by what lives through the app's states (splash_begin), nothing set as this is built; with no window's tree (a
+  // test's old view alone), as the build finds it waited
+  if !splash_waited.get() {
+    match splash_owner.val {
+      Some(owner) if owner.alive() => splash_begin(owner, c.moment())
+      _ =>
+        if @kit.after(c, "splash-label", true, splash_label_ms) {
+          splash_waited.set(true)
+        }
+    }
   }
   if !now && !splash_waited.get() {
     // (the ground alone: the window held is not shown for it, view_in)
@@ -945,6 +957,27 @@ let splash_label_ms : Double = 1000.0
 /// Whether the app's first splash has waited its second (splash_label_ms): its mark and what it waits for shown from
 /// then on.
 let splash_waited : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
+
+///|
+/// When the app's first splash began (-1: none yet), and what keeps the moment it has waited its second: the window's
+/// tree's root, which lives through the app's states (app_tree).
+// kept across runs: put back as a run begins (new_run)
+let splash_from : Ref[Double] = Ref(-1.0)
+
+///|
+// kept across runs: put back as a run begins (new_run)
+let splash_owner : Ref[@view.View?] = Ref(None)
+
+///|
+/// The app's first splash begun at `at` (once; a splash begun again, in another of the app's states, waits for the same
+/// moment): the moment it has waited its second kept by `owner`, splash_waited set then, at that moment.
+fn splash_begin(owner : @view.View, at : Double) -> Unit {
+  if splash_from.val >= 0.0 {
+    return
+  }
+  splash_from.val = at
+  owner.at_moment(at + splash_label_ms, fn() { splash_waited.set(true) }) |> ignore
+}
 
 ///|
 fn dmin(a : Double, b : Double) -> Double {
