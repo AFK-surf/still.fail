@@ -24,6 +24,7 @@ import {
 import { checkLock } from "../src/vault/lock-check.ts";
 import { forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
 import { BOX_KEY, BOX_PUB, UNLOCK_MS } from "../src/views/vault.ts";
+import { read as readLock } from "../src/views/lock.ts";
 import { subscribe, call } from "./helpers.ts";
 import { type Answers, base, entry, started, stationReplies, status } from "./station-fixture.ts";
 
@@ -599,6 +600,23 @@ test("a_chat_with_vault_cards_opens_checking_no_signature_once_this_device_check
   } finally {
     await again.close();
   }
+});
+
+test("the_lock_is_checked_as_it_comes_so_a_chat_with_vault_cards_opens_checking_none", async () => {
+  // Checked as the first chat with vault cards opened, the whole chain once on a version's first run: 1.2 s of it on
+  // a phone (0.1.6345, 2026-10-31). Read from the cloud, the lock is checked then, beside what waits.
+  const r = await rig(false, false, cardsInChat());
+  stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock") ? r.lock : r.st.reply(req)));
+  forgetVerifiedHere();
+  const before = verifies.count;
+  await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+  await r.host.time.pass(100, 10);
+  assert.ok(verifies.count > before, "checked as it came");
+  const checked = verifies.count;
+  const chat = await r.watch(2, { topic: "chat", station: "ws/st", thread: 7 });
+  assert.equal(chat().messages.filter((m: any) => m.card?.vaultAsk).length, 2);
+  assert.equal(verifies.count - checked, 0, "none as the chat opened");
+  r.core.close();
 });
 
 test("vault calls: a secret an agent asks to keep, opened with this device's box key, written into a vault of one's own, then told", async () => {

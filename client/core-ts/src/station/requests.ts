@@ -14,6 +14,7 @@ import { Kind, route, type Span, type SpanContext } from "../trace.ts";
 import { fromBase64, get, hex, isObject, parseJson, toJsonBytes } from "../util.ts";
 import type { StationAddr } from "./addr.ts";
 import { concat, readAll, replyHeader, type RequestHead, type ScreenAsk, type StationWire, type WireReply, type WireSocket } from "./wire.ts";
+import { timed } from "../spent.ts";
 
 export const IDEMPOTENCY_KEY = "idempotency-key";
 /// A request that only reads though it is no GET (POST /changed/<list>, what is held in its body): asked again on
@@ -218,7 +219,7 @@ export class Requests {
             hand();
             span.set("http.response.body.size", came);
             if (came !== loaded) span.set("stillfail.body.decompressed", loaded);
-            const parsed = json ? parseJson(bytes) : undefined;
+            const parsed = json ? timed("reply.parse", () => parseJson(bytes)) : undefined;
             if (json && parsed === undefined && reply.status >= 200 && reply.status < 300 && reply.status !== 204 && reply.status !== 205) {
               return yield* Effect.fail(new CoreError("bad_response", t("station.core.invalidReply")));
             }

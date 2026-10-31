@@ -43,7 +43,8 @@ import { Priority } from "../sync/scheduler.ts";
 import type { SpanContext } from "../trace.ts";
 import { get, isObject } from "../util.ts";
 import { type Checked, checkLock, signerIn } from "../vault/lock-check.ts";
-import { unsealOwn, writePlain } from "./vault.ts";
+import { unsealOwn, vaultCome, writePlain } from "./vault.ts";
+import { laterSleep } from "../runtime.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -294,6 +295,8 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     if (base !== null && (f.devices.has(base) || requests.some((r) => r.base === base))) declined = undefined;
     else if (base !== null && (was?.requests ?? []).some((r) => r.base === base)) declined = base;
     inner.data.put("lock", ws, { head, entries: head === null ? [] : entries, requests, ...(declined ? { declined } : {}), ...(seen ? { seen } : {}) });
+    // checked as it comes, in a turn of its own (views/vault.ts vaultCome)
+    inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => vaultCome(inner, ws)))));
     // In the lock, or its request at the cloud: what kept it from asking is past.
     if (base !== null && (f.devices.has(base) || requests.some((r) => r.base === base))) part(inner, ws).failed = null;
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
