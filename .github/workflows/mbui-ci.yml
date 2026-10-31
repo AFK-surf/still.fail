@@ -155,10 +155,13 @@ jobs:
           name: android-apk
           path: apps/mbui/mbui/android/app/build/outputs/apk/debug/*.apk
 
-  # Android's device checks on an emulator, each push (no machine of ours): the streams' (scripts/android-streams.sh:
+  # Android's device checks on an emulator (no machine of ours): the streams' (scripts/android-streams.sh:
   # plain, reopen, away, anew, thrown) over streamdemo, the soft keyboard's (scripts/android-keyboard.sh: up, back,
   # behind, cold) over devicedemo; the emulator the cache's (.github/actions/mbui-android-emulator, AOSP's image)
   android-devices:
+    # Once a day (and asked for), never on a push: an emulator's timing is no gate (2026-10-31, as asked: "这种不确定测试只
+    # 定期跑，永远不阻塞 ci"; its 430-520 s were what every mbui push's checks waited for)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     defaults:
       run:
         working-directory: apps/mbui/mbui
@@ -201,6 +204,8 @@ jobs:
   # person's phone aborted at each start (#2665: API 34's Paint.getFontMetricsInt overload, Android 10-13; and with
   # minSdk 29, Android 10 never started at all: MainActivity's insets are API 30's).
   android-oldest:
+    # Once a day (and asked for), as android-devices: an emulator's run is no gate (2026-10-31)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     defaults:
       run:
         working-directory: apps/mbui/mbui

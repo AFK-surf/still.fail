@@ -5,39 +5,12 @@
 # on the runner image, emulator and system image the reference was made on (goldens/render/android.txt). The picture
 # drawn is the artifact: what a PR that changes it commits, saying why.
 name: mbui-render-android
+# Once a day (and asked for), never on a push or a pull request: an emulator's run is no gate (2026-10-31, as asked:
+# "这种不确定测试只定期跑，永远不阻塞 ci"; its pixels and answers are SwiftShader's and the pinned image's, not a phone's)
 on:
-  pull_request:
-    paths: &paths
-      - "apps/mbui/mbui/src/host/android_host.c"
-      - "apps/mbui/mbui/src/host/gles_render.h"
-      - "apps/mbui/mbui/android/app/src/main/java/dev/mbui/MBText.java"
-      - "apps/mbui/mbui/android/app/src/main/java/dev/mbui/Images.java"
-      - "apps/mbui/mbui/android/apk.json"
-      - "apps/mbui/mbui/android/apk.lock"
-      - "apps/mbui/mbui/tools/apk/**"
-      - "apps/mbui/mbui/scripts/apk"
-      - "apps/mbui/mbui/scripts/android.sh"
-      - "apps/mbui/mbui/src/render/**"
-      - "apps/mbui/mbui/src/damage/**"
-      - "apps/mbui/mbui/src/ui/drawlist.mbt"
-      - "apps/mbui/mbui/src/ui/scene.mbt"
-      - "apps/mbui/mbui/src/ui/line.mbt"
-      - "apps/mbui/mbui/tools/chk/pictures.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
-      - "apps/mbui/mbui/src/ui/smooth.mbt"
-      - "apps/mbui/mbui/src/host/corner*"
-      - "apps/mbui/mbui/goldens/render/android*"
-      - "apps/mbui/mbui/goldens/render/controls.dl"
-      - "apps/mbui/mbui/scripts/render_dl.sh"
-      - "apps/mbui/mbui/scripts/render_android.sh"
-      - "apps/mbui/mbui/scripts/render_android_hook.sh"
-      - ".github/workflows/mbui-render-android.yml"
-  push:
-    branches: [main]
-    paths: *paths
+  schedule:
+    - cron: "17 4 * * *"
   workflow_dispatch:
-
-
 
 jobs:
   offscreen:

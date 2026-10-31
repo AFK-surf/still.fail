@@ -4,39 +4,12 @@
 # Tester's test and run here (every frame the same), then the committed tape's text (android_controls) asked of the
 # emulator's text system again (every answer the same). When Android's host changes.
 name: mbui-host-android
+# Once a day (and asked for), never on a push or a pull request: an emulator's run is no gate (2026-10-31, as asked:
+# "这种不确定测试只定期跑，永远不阻塞 ci"; its pixels and answers are SwiftShader's and the pinned image's, not a phone's)
 on:
-  pull_request:
-    paths: &paths
-      - "apps/mbui/mbui/src/ui/native.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/viewcheck.mbt"
-      - "apps/mbui/mbui/src/host/android_host.c"
-      - "apps/mbui/mbui/src/host/gles_render.h"
-      - "apps/mbui/mbui/src/host/done_watch.h"
-      - "apps/mbui/mbui/src/ui/drive.mbt"
-      - "apps/mbui/mbui/scripts/done_runner.py"
-      - "apps/mbui/mbui/android/**"
-      - "apps/mbui/mbui/scripts/android.sh"
-      - "apps/mbui/mbui/scripts/host_contract.sh"
-      - "apps/mbui/mbui/tools/chk/textrec.mbt"
-      - "apps/mbui/mbui/test/host/**"
-      - "apps/mbui/mbui/src/kitdemo/gallery/textcheck.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/textrec_android_*"
-      - ".github/workflows/mbui-host-android.yml"
-      - "apps/mbui/mbui/src/host/marks.mbt"
-      - "apps/mbui/mbui/src/host/host_native.mbt"
-      - "apps/mbui/mbui/src/kitdemo/gallery/markscheck.mbt"
-      - "apps/mbui/mbui/src/kitdemo/main.mbt"
-      - "apps/mbui/mbui/test/marks/**"
-      - "apps/mbui/mbui/goldens/marks/android*"
-      - "apps/mbui/mbui/src/host/moon.pkg"
-      - "apps/mbui/mbui/src/host/post.h"
-      - "apps/mbui/mbui/src/ui/app.mbt"
-  push:
-    branches: [main]
-    paths: *paths
+  schedule:
+    - cron: "47 4 * * *"
   workflow_dispatch:
-
-
 
 jobs:
   contracts:
