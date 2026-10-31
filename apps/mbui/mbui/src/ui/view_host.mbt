@@ -1322,6 +1322,8 @@ fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
       f()
     }
   }
+  // (the hand as this event left it, whole, at its moment: hand_turns.mbt)
+  turns_said(g(), h_event_time())
 }
 
 ///|
