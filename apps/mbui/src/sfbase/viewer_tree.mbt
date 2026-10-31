@@ -13,9 +13,10 @@
 //   - in it, what draws the picture (an old view taking a press only on what it has to press: a mark's pin, the words
 //     written; the picture where its zoom has it as the frame draws it, its flight, the pictures beside it), and over
 //     it the bars: the floating bar on a small screen, its picture coming or whole and not marked, nodes of its own
-//     (image_head, head_as_nodes: how much of it has come, its tools, their tips); the rest an old view taking a
-//     press only where it has something to press (the bar across the top of a wide screen, marking's, the ways to
-//     the pictures beside it).
+//     (image_head, head_as_nodes: how much of it has come, its tools, their tips); the bar across the top of a wider
+//     screen, its picture whole and not marked, nodes too (image_bar, bar_as_nodes); the ways to the pictures beside
+//     it while it is not marked (image_steps); the rest an old view taking a press only where it has something to
+//     press (the bar across the top while its picture comes, marking's bars).
 //
 // It sets out as the node is made (that moment its cause's: the thumbnail tapped), and is done at its ways' declared
 // ends (moments on the node's timeline): landed, the thumbnail shows again; gone, it is let go.
@@ -259,6 +260,14 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   // (the bar across the top of a wider window, its picture whole, its nodes: where the old bars draw it not,
   // bar_as_nodes)
   n.show(fn() { bar_as_nodes(vw, stage().0) }, fn(h) { image_bar(h, src, vw, stage) })
+  // (the ways to the pictures beside it, its nodes, while it is not marked)
+  n.show(
+    fn() {
+      marks_said()
+      !marking.on
+    },
+    fn(h) { image_steps(h, src, vw, stage) },
+  )
   // (a mouse's pointer along the top where the bar across it is: the bar shown while it is there, whatever is over it
   // then, the bar itself as it shows; as the pointer comes in or goes out (vf_bar's near, as the old frame read it of
   // its pointer each frame))
@@ -342,18 +351,17 @@ fn image_ends(n : @view.View, vw : Viewer) -> Unit {
 }
 
 ///|
-/// The bars over the picture and what is said with them (viewer_layer's, for a viewer the window's tree draws): the
-/// steps to the pictures beside it, its bar (or marking's foot), what marking made said (back, what was asked to be
-/// saved, a download asked: its layer's, image_layer).
+/// The bars over the picture and what is said with them (viewer_layer's, for a viewer the window's tree draws): its bar
+/// (or marking's foot), what marking made said (back, what was asked to be saved, a download asked: its layer's,
+/// image_layer); the ways to the pictures beside it are nodes (image_steps).
 fn image_bars(c : @ui.Ctx, src : Source, v : Viewer) -> Unit {
   // (marking as it is: the bars follow what a finger on the picture did to it)
   marks_said()
   src_now.val = src.now
   let shown = if v.flies { v.flying() } else { v.fade.get() }
   c.box(style=viewer_under, fn() {
-    if !marking.on {
-      c.layer(fn() { vf_steps(v, c, src, shown) }) |> ignore
-    } else {
+    // (the ways to the pictures beside it its nodes: image_steps)
+    if marking.on {
       c.layer(fn() {
         c.spacer()
         marks_foot(c)
@@ -822,6 +830,33 @@ fn image_bar(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, D
     fn() {
       if !vw.closing {
         vw.shut(@ui.current())
+      }
+    },
+    tips,
+  )
+  |> ignore
+  tips_at.val = Some(h.box(fn(l) { l.over(Is(true)) |> ignore }))
+}
+
+///|
+/// The ways to the pictures before and after viewer `vw`'s as nodes in `h` (viewer_steps_node, as vf_steps has them):
+/// each while what is beside it says there is one (imageNear's, its folder's), there while its bars are
+/// (Viewer::bars_shown), as far in as the viewer is (Viewer::shown_on), a phone's sizes under 640; pressed, a step to
+/// that one at the press's moment (Viewer::go). Their tips in a layer of their own over all of it.
+fn image_steps(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, Double)) -> Unit {
+  h.over(Is(true)) |> ignore
+  let tips_at : Ref[@view.View?] = Ref(None)
+  let tips = @sf.TipLayer::new(fn() { tips_at.val })
+  @sf.viewer_steps_node(
+    h,
+    fn() { vw.near_ids(src).0 is Some(_) },
+    fn() { vw.near_ids(src).1 is Some(_) },
+    fn() { vw.bars_shown() },
+    fn(node) { vw.shown_on(node) },
+    fn() { stage().0 <= @sf.viewer_small_w },
+    fn(dir) {
+      if !vw.closing {
+        vw.go(@ui.current(), src, dir, 0.0)
       }
     },
     tips,

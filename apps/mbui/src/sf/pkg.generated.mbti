@@ -2150,6 +2150,8 @@ pub let viewer_small_w : Double
 
 pub fn viewer_steps(@ui.Ctx, String, Bool, Bool, Bool, Double) -> Int32
 
+pub fn viewer_steps_node(@view.View, () -> Bool, () -> Bool, () -> Bool, (@view.View) -> Double, () -> Bool, (Int32) -> Unit, TipLayer) -> @view.View
+
 pub fn viewer_tool(@ui.Ctx, String, String, String, ViewerInk, on? : Bool, disabled? : Bool) -> Bool
 
 pub fn viewer_tool_corner() -> @ui.Style
