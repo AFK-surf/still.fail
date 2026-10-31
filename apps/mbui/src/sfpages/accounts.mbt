@@ -125,7 +125,7 @@ fn profile_view(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, s : Js
   blocks.push(fn() { profile_quota(c, core, address, p) })
   blocks.push(fn() { profile_usage(c, core, here, s, p, entry) })
   blocks.push(fn() { profile_used_by(c, core, address, o, p) })
-  if entry is Some(_) && items(entry, "members").filter(fn(m) { text(Some(m), "role") != "user" }).length() > 1 {
+  if entry is Some(_) && !items(entry, "places").is_empty() {
     blocks.push(fn() { profile_stations(c, core, address, entry) })
   }
   if !copy {
@@ -802,30 +802,33 @@ fn profile_used_by(c : @ui.Ctx, core : Core, address : String, o : Json?, p : Js
 }
 
 ///|
-/// The same account on several stations (StationsSection): each one's part, its state and who uses it there, to its
-/// page there (here's, going nowhere).
+/// Each station that has the account, once; a station with several profiles opens one that works.
 fn profile_stations(c : @ui.Ctx, core : Core, here_station : String, entry : Json?) -> Unit {
   @sf.section(c, @sf.t("web-pages.profiles.account.each"), fn() {
     @sf.group(c, fn() {
-      for m in items(entry, "members") {
+      for m in items(entry, "places") {
         let mv = Some(m)
         let station = text(mv, "station")
         let pid = text(mv, "profileId")
-        let used = count(mv, "usedBy")
+        let state = field(mv, "state")
+        let current = station == here_station
         if @sf.link_row(
             c,
-            "profile-station/" + station + "/" + pid,
-            text(mv, "title"),
-            note=join([text(mv, "about"), if used > 0 { @sf.t("web-pages.settings.profiles.usedBy", args=[("n", used.to_string())]) } else { "" }], " · "),
-            goes=station != here_station,
-            lead=fn() { @sf.status_dot(c, if flag(mv, "online") { "online" } else { "offline" }) },
+            "profile-station/" + station,
+            text(mv, "stationName"),
+            goes=!current && pid != "",
+            title_after=fn() {
+              if current { @sf.pill(c, @sf.t("web-pages.connect.current")) }
+            },
             tail=fn() {
               if !flag(mv, "online") {
                 @sf.pill(c, @sf.t("web-pages.stations.offline"))
+              } else if pid == "" && text(state, "text") != "" {
+                @sf.pill(c, text(state, "text"), tone=pill_tone(text(state, "tone")))
               } else if !flag(mv, "usable") {
-                @sf.pill(c, @sf.t("web-pages.settings.profiles.hostAway", args=[("station", text(entry, "hostName"))]), tone=Red)
-              } else if text(mv, "checkTone") != "green" {
-                @sf.pill(c, text(mv, "checkText"), tone=pill_tone(text(mv, "checkTone")))
+                @sf.pill(c, @sf.t("web-pages.settings.profiles.hostAway", args=[("station", text(mv, "sourceName"))]), tone=Red)
+              } else if text(state, "text") != "" {
+                @sf.pill(c, text(state, "text"), tone=pill_tone(text(state, "tone")))
               }
             },
           ) {

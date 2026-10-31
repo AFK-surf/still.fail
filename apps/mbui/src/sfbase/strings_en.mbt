@@ -1904,7 +1904,7 @@ let en : Map[String, String] = {
   "web-pages.settings.prices.title": "Prices",
   "web-pages.settings.profiles.add": "Add profile",
   "web-pages.settings.profiles.addFirst": "Add your first profile",
-  "web-pages.settings.profiles.hostAway": "{station} offline",
+  "web-pages.settings.profiles.hostAway": "Can't reach {station}",
   "web-pages.settings.profiles.lead": "A profile is the account agents use to run models: a subscription, or a key for a model service. Each profile runs on its station, and {name} sets up which runtimes it can use.",
   "web-pages.settings.profiles.offlineAdd": "Offline. Add it once it's online",
   "web-pages.settings.profiles.usedBy": "Used by {n}",
