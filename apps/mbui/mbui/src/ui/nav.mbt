@@ -856,6 +856,7 @@ pub fn[P] Ctx::nav(
   let before_node = self.back_node_next
   let before_edge = self.back_edge_next
   let before_island = self.back_island_next
+  let before_chain = self.back_chain_next
   let leaving = nav.leaving is Some(_)
   let i = self.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
     // (pushed: the page it covers takes nothing from the moment it is pushed)
@@ -868,21 +869,35 @@ pub fn[P] Ctx::nav(
     self.back_next = None
     self.back_node_next = -1
     self.back_island_next = None
+    self.back_chain_next = Unsaid
     // (going back: the page leaving takes nothing)
     self.nav_layer(nav, top, false, rising, way, bg, page, inert=leaving)
   })
+  let stack_takes = takes_back && (n > floor + 1 || nav.mode >= 3 || (floor == 0 && nav.mode != 0))
+  let stack : BackEntry = {
+    f: fn(kind, x, w, t, progress) { nav.gesture(kind, x, w, t, progress~) },
+    node: i,
+    edge,
+    island: self.island_said(),
+    layer: 0,
+  }
   if self.back_next is Some(_) && !leaving && takes_back {
-    ()
-  } else if takes_back && (n > floor + 1 || nav.mode >= 3 || (floor == 0 && nav.mode != 0)) {
-    self.back_next = Some(fn(kind, x, w, t, progress) { nav.gesture(kind, x, w, t, progress~) })
-    self.back_node_next = i
-    self.back_edge_next = edge
-    self.back_island_next = self.island_said()
+    // (what the top page said first, the stack under it, what was before it under that: what takes back as each over
+    // it took it, Ctx::layer_back_taken)
+    let under = if stack_takes { Said(stack, before_chain) } else { before_chain }
+    self.back_chain_next = back_list_over(self.back_chain_next, under)
+  } else if stack_takes {
+    self.back_next = Some(stack.f)
+    self.back_node_next = stack.node
+    self.back_edge_next = stack.edge
+    self.back_island_next = stack.island
+    self.back_chain_next = Said(stack, before_chain)
   } else {
     self.back_next = before
     self.back_node_next = before_node
     self.back_edge_next = before_edge
     self.back_island_next = before_island
+    self.back_chain_next = before_chain
   }
   i
 }
@@ -892,6 +907,7 @@ pub fn[P] Ctx::nav(
 /// it before: true when it took it; when not, back is as it was. For what goes back only when nothing within it does
 /// (a stack drawn flat, whose pop is taken after it: Ctx::nav_flat).
 pub fn Ctx::took_back(self : Ctx, body : () -> Unit) -> Bool {
+  let before_chain = self.back_chain_next
   let before = self.back_next
   let before_node = self.back_node_next
   let before_edge = self.back_edge_next
@@ -899,14 +915,18 @@ pub fn Ctx::took_back(self : Ctx, body : () -> Unit) -> Bool {
   self.back_next = None
   self.back_node_next = -1
   self.back_island_next = None
+  self.back_chain_next = Unsaid
   body()
   if self.back_next is Some(_) {
+    // (what was before it under what it said: what takes back as each over it took it)
+    self.back_chain_next = back_list_over(self.back_chain_next, before_chain)
     true
   } else {
     self.back_next = before
     self.back_node_next = before_node
     self.back_edge_next = before_edge
     self.back_island_next = before_island
+    self.back_chain_next = before_chain
     false
   }
 }
@@ -1079,6 +1099,7 @@ pub fn Ctx::take_back(self : Ctx, f : () -> Unit) -> Unit {
   })
   self.back_node_next = -1
   self.back_island_next = self.island_said()
+  self.back_says()
 }
 
 ///|
@@ -1099,6 +1120,7 @@ pub fn Ctx::follow_back(self : Ctx, f : (BackStep) -> Unit) -> Unit {
   })
   self.back_node_next = -1
   self.back_island_next = self.island_said()
+  self.back_says()
 }
 
 ///|

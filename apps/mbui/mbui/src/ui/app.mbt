@@ -479,6 +479,9 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.back_node = c.back_node_next
   c.back_island = c.back_island_next
   c.back_edge = c.back_edge_next
+  c.back_chain = c.back_chain_next
+  // (a layer's that took back already, said again as it was kept: what it was said over, in its place)
+  c.back_layer_spent()
   // (the host told whether the app takes back, as what the old views said now has it: Ctx::back_told_host)
   c.back_told_host()
   let hi = c.hit_ids
@@ -617,6 +620,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.back_next = None
   c.back_node_next = -1
   c.back_island_next = None
+  c.back_chain_next = Unsaid
   let root = c.alloc(kind_box)
   c.nodes[root].w = Px(w)
   c.nodes[root].h = Px(h)

@@ -641,12 +641,25 @@ priv struct BackSaid {
   own : Bool
   edge : Double
   island : @view.NodeId?
+  /// what takes back under it as said so far (Ctx's `back_chain_next`)
+  chain : BackList
+  /// a row's or a part's: what it said over what was said as it began, the last first, each whether its node is one of
+  /// its own (from its first)
+  over : Array[(BackEntry, Bool)]
 }
 
 ///|
 /// What takes back as said so far.
 fn Ctx::back_said(self : Ctx) -> BackSaid {
-  { f: self.back_next, node: self.back_node_next, own: false, edge: self.back_edge_next, island: self.back_island_next }
+  {
+    f: self.back_next,
+    node: self.back_node_next,
+    own: false,
+    edge: self.back_edge_next,
+    island: self.back_island_next,
+    chain: self.back_chain_next,
+    over: [],
+  }
 }
 
 ///|
@@ -660,7 +673,8 @@ fn Ctx::back_as(self : Ctx, b : BackSaid) -> Bool {
   f_same &&
   self.back_node_next == b.node &&
   self.back_edge_next == b.edge &&
-  self.back_island_next == b.island
+  self.back_island_next == b.island &&
+  (physical_equal(self.back_chain_next, b.chain) || (self.back_chain_next is Unsaid && b.chain is Unsaid))
 }
 
 ///|
@@ -706,12 +720,30 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   rn.lit_all = self.lit_all
   self.build_take(rn.marks, rn.said, cut=false)
   // (what takes back as its build left it, where it changed it: its node, where one of its own, from its first)
+  // (and what it said over what was said as it began, its own nodes from its first: said again over what is said then;
+  // where it put back something else, kept it is not)
+  let mut back_otherwise = false
   rn.back = if self.back_as(b.back) {
     None
   } else {
     let node = self.back_node_next
     let own = node >= r && node < r + rn.n
-    Some({ ..self.back_said(), node: if own { node - r } else { node }, own })
+    let over : Array[(BackEntry, Bool)] = []
+    let mut at = self.back_chain_next
+    while !(physical_equal(at, b.back.chain) || (at is Unsaid && b.back.chain is Unsaid)) {
+      match at {
+        Said(e, under) => {
+          let mine = e.node >= r && e.node < r + rn.n
+          over.push(({ ..e, node: if mine { e.node - r } else { e.node } }, mine))
+          at = under
+        }
+        Unsaid => {
+          back_otherwise = true
+          break
+        }
+      }
+    }
+    Some({ ..self.back_said(), node: if own { node - r } else { node }, own, over })
   }
   rn.info.clear()
   for j in b.info..<self.info_reads.length() {
@@ -728,6 +760,9 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
         kept_census_names[j]
       }
     }
+  }
+  if rn.why == "" && back_otherwise {
+    rn.why = "back said otherwise than over what was said before it"
   }
   if rn.why == "" {
     rn.why = self.row_nodes_why(r, rn.n, part~)
@@ -874,6 +909,11 @@ fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
       self.back_node_next = if b.own { rn.base + b.node } else { b.node }
       self.back_edge_next = b.edge
       self.back_island_next = b.island
+      // (what it said, over what is said now: its own nodes where they are now)
+      for k = b.over.length() - 1; k >= 0; k = k - 1 {
+        let (e, mine) = b.over[k]
+        self.back_chain_next = Said({ ..e, node: if mine { rn.base + e.node } else { e.node } }, self.back_chain_next)
+      }
     }
     None => ()
   }

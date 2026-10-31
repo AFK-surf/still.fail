@@ -501,6 +501,12 @@ pub struct Ctx {
   /// the old view what takes back was said in by Ctx::on_back (its back_node none), none in a layer of its own
   mut back_island : @view.NodeId?
   mut back_island_next : @view.NodeId?
+  /// what takes back as the old views said it, the last said first, what it was said over under it (what takes it once
+  /// a layer above it took it: Ctx::layer_back_taken), as the last frame had it and as this frame's builds say it; each
+  /// layer's opening, by its id, while it is built (Ctx::overlay)
+  mut back_chain : BackList
+  mut back_chain_next : BackList
+  layer_gen : Map[Int, Int]
   /// a back gesture held from its start (Ctx::back_gesture), and whether the rest of one called off is nobody's
   mut back_held : BackHeld?
   mut back_off : Bool
@@ -769,6 +775,9 @@ fn Ctx::new() -> Ctx {
     back_next: None,
     back_island: None,
     back_island_next: None,
+    back_chain: Unsaid,
+    back_chain_next: Unsaid,
+    layer_gen: Map::new(),
     back_held: None,
     back_off: false,
     back_node_next: -1,
