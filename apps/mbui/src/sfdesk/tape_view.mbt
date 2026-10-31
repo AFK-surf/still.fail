@@ -7,9 +7,10 @@
 //     own, `show`), each as wide as its binding says (tape_room: the window, the sidebar's width, the side panel's);
 //   - in each panel, what it holds an old view (an island), built for the room the tree gives it; over each panel not in
 //     use, a cover of the tree's: a tap or a secondary press brings it over, a drag across pulls it with the finger and,
-//     let go, over or back, each at its event's moment (tape_cover);
-//   - over the panels, an old view taking presses where it draws them alone: the edges dragged (tape_edge), and what a
-//     screen reader says of the covers.
+//     let go, over or back, a finger held still on it handed to the words under it (the long press's), each at its
+//     event's moment; what it says a screen reader reads, its press of it the same as a tap, at that press's moment
+//     (tape_cover);
+//   - over the panels, an old view taking presses where it draws them alone: the edges dragged (tape_edge).
 //
 // The tape's move is a trajectory committed at its cause (tape_moves_from): where everything was at that moment,
 // worked out of the trajectory before it alone (never of a state already changed), and where it all goes, as the
@@ -21,9 +22,8 @@
 //
 // Still the old frame's (the way there): what the panels hold (their islands); which page the page's panel draws while
 // one put on top is waited for (Nav::shows_when, read as its island builds); the edges (their drags read as their island
-// builds); what a screen reader says of the covers (an old view's, its press read as it builds); a passage picked
-// bringing the page over (read as the page's island builds); back (said by the islands as they are built: the frame's in
-// the island under all of it, tape_under).
+// builds; their pointer's shape and tip wait on the tree's); a passage picked bringing the page over (read as the page's
+// island builds); back (said by the islands as they are built: the frame's in the island under all of it, tape_under).
 
 ///|
 /// The tape's move, committed at its cause: its way (from 0 as it set out to 1), and of each thing it moves where it was
@@ -836,6 +836,16 @@ fn tape_cover(n : @view.View, p : TapePane, room : () -> (Double, Double, Double
       fn(cover) {
         cover
         .grow(Is(1.0))
+        // (what a screen reader says of it: a button, what pressing it does; none of the one in use, on its way to it
+        // or pulled over, its own widgets read out)
+        .says(By(fn() { Some(@view.said(Button, label=tape_words(p))) }))
+        .hides(By(fn() { wide.tape_at.get() == p }))
+        // (pressed by a screen reader: brought over at that moment, as a tap brings it; a finger and the pointer its
+        // gesture's, as ever: what drags a node is what a press on it finds)
+        .on_press(fn() {
+          wide.tape_ask.set(Some(p))
+          tape_take_ask(cover.cause_at()) |> ignore
+        })
         .on_menu(fn(m) {
           wide.tape_ask.set(Some(p))
           tape_take_ask(m.at) |> ignore
@@ -1061,8 +1071,7 @@ fn tape_panel_built(c : @ui.Ctx, src : Source) -> Unit {
 ///|
 /// Over the tape's panels (its island, as wide as the tape, moved with it): the edge between the sidebar or the side
 /// panel in use and the page beside it, dragged, its width (the sidebar's kept as the wide frame's is: side_follow),
-/// the page beside it showing what it leaves; a press on it where it lies over what shows of the page, the page's. What a
-/// screen reader says of the covers (what pressing one does), its press theirs.
+/// the page beside it showing what it leaves; a press on it where it lies over what shows of the page, the page's.
 fn tape_hand_built(c : @ui.Ctx, src : Source) -> Unit {
   let (now, _, _, _) = @sfbase.workspace_in_view(src)
   guard now is Some(w) else { return }
@@ -1082,24 +1091,6 @@ fn tape_hand_built(c : @ui.Ctx, src : Source) -> Unit {
   let col = tape_col_at(t)
   let main_w = tape_page_at(t)
   let side = tape_shown_side()
-  // (what a screen reader says of each panel not in use: its cover's words, a press of it bringing it over)
-  let panels = [(Side, bar_in_now(), col - bar_in_now() - bar_gap_now()), (Page, col, main_w)]
-  if side is Some(_) {
-    panels.push((Panel, col + main_w + bar_gap_now(), r.panel_w))
-  }
-  for panel in panels {
-    let (p, left, width) = panel
-    let left = left + o
-    if width <= 0.0 || p == wide.tape_at.get() {
-      continue
-    }
-    let id = c.id("tape/" + p.to_string())
-    let b = c.box(style=@ui.style(w=Fixed(width), h=Fixed(r.panel_h)), left~, top=r.panel_top, fn() {  })
-    c.semantics(b, Button, id~, label=tape_words(p))
-    if c.clicked(id) {
-      wide.tape_ask.set(Some(p))
-    }
-  }
   match wide.tape_at.get() {
     Side => {
       let id = c.id("tape/side-edge")

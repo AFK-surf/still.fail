@@ -254,11 +254,16 @@ squeeze and contrast checks; film's images before and after where a step touches
    worked out of the move before it alone, and where it goes), drawn as the row's offset; what is no cause of a move
    (the window, an edge dragged, the system's column) puts things where they go at once; the page brought over once
    the core has what it shows or its stay on top has waited its while (a moment of the timeline); a cover of the tree's
-   over each panel not in use takes a tap, the secondary button and a finger's pull, each at its event's moment. Still
-   the old way there: the edges' drags and what a screen reader says of the covers (an island over the panels), a
-   finger held through a cover to pick the words under it, back, which page the page's panel draws while one is
-   waited for (Nav::shows_when). Old view still: the wide frame off the tape (sfdesk's frame: the rail, the sidebar
-   and the page side by side, laid out Large), a window of its own, the sign-in and the splash; the theme each island is built
+   over each panel not in use takes a tap, the secondary button and a finger's pull, each at its event's moment, a
+   finger held still on it handed to the words under it (View::gesture's `through`), and says what it is, a screen
+   reader's press of it its own at that press's moment (View::says, on_press). Laid out Large, the wide frame off the
+   tape (still.fail's sfdesk/pane_view.mbt): its shell, row, column and page nodes made once, laid out by the tree,
+   what each holds an island; the block's fold (⌘\, shown a while) a move committed at its cause, set out from where
+   the move before had it then; the tape left mid-move for a place with no sidebar of its own, the block closing from
+   where the tape had it then. Still the old way on both: the edges' drags (an island over the panels: their pointer's
+   shape and tip wait on the tree's), back, which page the page's panel draws while one is waited for
+   (Nav::shows_when), a peek's move aside read from the page's old layout. Old view still: a window of its own, the
+   sign-in and the splash; the theme each island is built
    in; back, said by the islands as they are built, in the tree's order (the top page first, then the stack's swipe);
    which island takes a press where they lie one over another (where more than one is at a point, all of them are told
    of the input); the window's sides beside the system's bars (beside_sides: the islands are placed in the window's
