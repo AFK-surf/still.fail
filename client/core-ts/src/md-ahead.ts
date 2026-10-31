@@ -11,6 +11,7 @@ import { merge } from "./entries.ts";
 import { markdown, markdownHere, mdKey } from "./markdown.ts";
 import { laterSleep, type Runner } from "./runtime.ts";
 import { PAGE } from "./station/channel-kinds.ts";
+import { timed } from "./spent.ts";
 
 /// How lately a reply was said to be read ahead, and how many chats a station has read ahead as the core starts.
 export const AHEAD_MS = 3 * 86_400_000;
@@ -75,7 +76,7 @@ export class MdAhead {
           const next = this.#queue.shift()!;
           this.#queued.delete(`${next.station}\u0001${next.key}`);
           const store = this.#data.mdStore(next.station, next.of);
-          if (store !== undefined && !markdownHere(next.text) && !store.has(next.key)) markdown(next.text, store);
+          if (store !== undefined && !markdownHere(next.text) && !store.has(next.key)) timed("md.ahead", () => markdown(next.text, store));
         }
       }).pipe(Effect.ensuring(Effect.sync(() => (this.#running = false)))),
     );
