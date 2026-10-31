@@ -1931,9 +1931,10 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
   }
   let width = composer_width(c.width)
   let place = if apart { composer_place(c.width) } else { composer_alone }
+  let mut notices = -1
   let foot = c.box(style=chat_foot_top.then(@ui.style(pb=@sf.room_of(composer_foot_in(c.width)))), fn() {
     match v {
-      Some(v) => chat_notices(c, src, r, v, width)
+      Some(v) => notices = c.box(style=chat_notices_box, fn() { chat_notices(c, src, r, v, width) })
       None => ()
     }
     c.box(style=@ui.style(w=Fixed(width)), fn() {
@@ -1955,8 +1956,18 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
     })
     |> ignore
   })
+  // what is said over it stands on its ground: up and down with it as it changes shape, in the same frames, not at
+  // its new place at once (as a new chat's choices over it: new_chat.mbt)
+  if notices >= 0 {
+    with_composer(c, notices, "composer/notices/" + spec.draft)
+  }
   @motion.measure(c, foot, "composer/foot")
 }
+
+///|
+/// What is said over a chat's composer (chat_notices), one block standing on it.
+// kept across runs: a value (no field of it changes)
+let chat_notices_box : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 /// Whether the composer's 抄送 menu is open now (cc_chooser).
