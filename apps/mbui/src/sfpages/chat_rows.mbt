@@ -359,12 +359,12 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
     "key": Json::string(a.key),
   })
   let said = match a.wait {
-    Some((_, _, w)) => ("wait", if w != "" { w } else { @sf.t("web-main.activity.waiting") }, false)
+    Some((_, _, w)) => ("wait", if w != "" { w } else { @sf.t("web-main.activity.waiting") }, false, true)
     None => {
       let n = field(field(live.value, "activity"), "now")
       match text(n, "text") {
-        "" => ("busy", @sf.t("web-main.activity.busy"), false)
-        s => (text(n, "key"), s, flag(n, "mono"))
+        "" => ("busy", @sf.t("web-main.activity.busy"), false, false)
+        s => (text(n, "key"), s, flag(n, "mono"), flag(n, "important"))
       }
     }
   }
@@ -484,15 +484,16 @@ fn work_ring(c : @ui.Ctx, waiting : Bool) -> Unit {
 }
 
 ///|
-/// What an activity says now, steadied (useSteady): another thing replaces the one shown after it has stayed 700 ms,
-/// each glyph giving way to the next step's at its place. The line goes from the one's width to the other's (its clock
-/// with it); the same thing's new words show at once. In the muted ink, the text's under the pointer.
-fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : Bool, came : Double?, clock : String) -> Unit {
-  let (key, words, mono) = said
+/// What an activity says now, steadied: brief routine steps are coalesced, while important ones have a turn even if
+/// they have finished. Each step has time to be read; each glyph gives way to the next step's at its place.
+/// The line goes from the one's width to the other's (its clock with it); the same thing's new words show at once.
+/// In the muted ink, the text's under the pointer.
+fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), hot : Bool, came : Double?, clock : String) -> Unit {
+  let (key, words, mono, important) = said
   let st = match steadies.get(row) {
     Some(s) => s
     None => {
-      let s = { key, words, mono, was: "", was_mono: false, at: -1.0e9, came: @signals.signal(-1.0e9), asked: 0.0, places: 1 }
+      let s = { key, words, mono, important, was: "", was_mono: false, at: c.moment(), pending: None, pending_at: 0.0, important_next: None, came: @signals.signal(-1.0e9), asked: 0.0, places: 1 }
       steadies[row] = s
       s
     }
@@ -509,43 +510,112 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : 
     st.key = key
     st.words = words
     st.mono = mono
+    st.important = important
     st.was = ""
-    st.at = -1.0e9
+    st.at = at
+    st.pending = None
+    st.important_next = None
     swap.snap(1.0)
     reveal.snap(0.0)
     // A list can reserve this row's turn in the future, while the message above it is still landing. A delayed
     // tween waits for that turn; an already-started turn catches up from its declared start.
     let later = dmax(at - c.moment(), 0.0)
     reveal.animate(1.0, @motion.tween(activity_glyph_in_ms, ease=Linear, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
-  } else if key == st.key || words == st.words {
-    st.key = key
-    st.words = words
-    st.mono = mono
-  } else if c.moment() >= st.at + steady_dwell_ms {
-    st.was = st.words
-    st.was_mono = st.mono
-    st.key = key
-    st.words = words
-    st.mono = mono
-    st.at = c.moment()
-    swap.snap(0.0)
-    reveal.snap(0.0)
-    // (a Move as long as the line's change in width)
-    let style = if hot { now_words_hot } else { now_words }
-    let old_cells = c.words_glyph_cells(st.was, style, mono=st.was_mono)
-    let new_cells = c.words_glyph_cells(st.words, style, mono=st.mono)
-    // The reading order spans the part that can actually be seen, even when one step is much longer than the line.
-    let visible = match (@motion.measured_rect(c, "activity-area/" + row), @motion.measured_rect(c, "now-room/" + row)) {
-      (Some((x, _, w, _)), Some((start, _, _, _))) =>
-        dmax(x + w - start - (if clock == "" { 0.0 } else { c.words_across(clock, activity_clock) + c.space(S2) }), 0.0)
-      _ => c.width
-    }
-    st.places = activity_change_places(old_cells, new_cells, visible)
-    reveal.animate(1.0, @motion.tween(@sfbase.glyph_change_in_ms, ease=Linear))
-    let widened = c.words_across(st.words, style, mono=st.mono) - c.words_across(st.was, style, mono=st.was_mono)
-    swap.animate(1.0, @motion.move(over=dmax(c.text_size(Meta).1, widened.abs())))
   } else {
-    c.wake_in(st.at + steady_dwell_ms - c.moment())
+    let now = c.moment()
+    let mut next : (String, String, Bool, Bool, Double)? = None
+    if st.came.get() > now {
+      // Before the reserved row's turn, its first words are whatever the agent is doing at that turn.
+      st.key = key
+      st.words = words
+      st.mono = mono
+      st.important = important
+      st.pending = None
+      st.important_next = None
+    } else {
+      if important && key != st.key && words != st.words {
+        let since = match st.important_next {
+          Some((old, _, _, at)) if old == key => at
+          _ => now
+        }
+        st.important_next = Some((key, words, mono, since))
+      }
+      match st.important_next {
+        Some((next_key, next_words, next_mono, since)) => {
+          // Do not restart a change already under way, or interrupt an important step before it can be read.
+          let wait = if st.important {
+            steady_dwell_ms
+          } else if c.reduced_motion() {
+            0.0
+          } else if st.was == "" {
+            activity_glyph_in_ms
+          } else {
+            @sfbase.glyph_change_in_ms
+          }
+          let at = dmax(st.at + wait, since)
+          if now < at {
+            c.shows_until(at)
+          } else {
+            next = Some((next_key, next_words, next_mono, true, at))
+            st.important_next = None
+            // The live step may have moved on while the important one waited. Give it a turn after this one.
+            if key != next_key && words != next_words {
+              st.pending = Some(key)
+              st.pending_at = now
+              c.shows_until(dmax(at + steady_dwell_ms, now + steady_candidate_ms))
+            } else {
+              st.pending = None
+            }
+          }
+        }
+        None =>
+          if key == st.key || words == st.words {
+            st.key = key
+            st.words = words
+            st.mono = mono
+            st.important = important
+            st.pending = None
+          } else {
+            // A routine step gone before its own glyph change could finish never starts one.
+            if st.pending != Some(key) {
+              st.pending = Some(key)
+              st.pending_at = now
+            }
+            let at = dmax(st.at + steady_dwell_ms, st.pending_at + steady_candidate_ms)
+            if now < at {
+              c.shows_until(at)
+            } else {
+              next = Some((key, words, mono, false, at))
+              st.pending = None
+            }
+          }
+      }
+    }
+    if next is Some((next_key, next_words, next_mono, next_important, at)) {
+      st.was = st.words
+      st.was_mono = st.mono
+      st.key = next_key
+      st.words = next_words
+      st.mono = next_mono
+      st.important = next_important
+      st.at = at
+      swap.snap(0.0)
+      reveal.snap(0.0)
+      // (a Move as long as the line's change in width)
+      let style = if hot { now_words_hot } else { now_words }
+      let old_cells = c.words_glyph_cells(st.was, style, mono=st.was_mono)
+      let new_cells = c.words_glyph_cells(st.words, style, mono=st.mono)
+      // The reading order spans the part that can actually be seen, even when one step is much longer than the line.
+      let visible = match (@motion.measured_rect(c, "activity-area/" + row), @motion.measured_rect(c, "now-room/" + row)) {
+        (Some((x, _, w, _)), Some((start, _, _, _))) =>
+          dmax(x + w - start - (if clock == "" { 0.0 } else { c.words_across(clock, activity_clock) + c.space(S2) }), 0.0)
+        _ => c.width
+      }
+      st.places = activity_change_places(old_cells, new_cells, visible)
+      reveal.animate(1.0, @motion.tween(@sfbase.glyph_change_in_ms, ease=Linear), start_at=at)
+      let widened = c.words_across(st.words, style, mono=st.mono) - c.words_across(st.was, style, mono=st.was_mono)
+      swap.animate(1.0, @motion.move(over=dmax(c.text_size(Meta).1, widened.abs())), start_at=at)
+    }
   }
   let k = swap.get()
   let style = if hot { now_words_hot } else { now_words }
@@ -684,9 +754,15 @@ priv struct Steady {
   mut key : String
   mut words : String
   mut mono : Bool
+  mut important : Bool
   mut was : String
   mut was_mono : Bool
   mut at : Double
+  /// the latest different step and when it was first said
+  mut pending : String?
+  mut pending_at : Double
+  /// an important step waiting for an earlier change, and when it was first said
+  mut important_next : (String, String, Bool, Double)?
   /// when this agent's current activity row came into the watched list
   came : @signals.Signal[Double]
   /// how wide the words asked their line to be, the last frame they were laid out
@@ -719,6 +795,10 @@ let ring_out_ms : Double = 160.0
 ///|
 /// Each thing an activity says stays this long at least (DWELL_MS) before the next begins.
 let steady_dwell_ms : Double = 700.0
+
+///|
+/// A step gone before its glyphs could have arrived does not interrupt the words shown.
+let steady_candidate_ms : Double = @sfbase.glyph_change_in_ms
 
 ///|
 /// The ring round the picture: 24 across, its arcs 1.5 (3 round the 18).

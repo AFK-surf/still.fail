@@ -63,6 +63,17 @@ export function kindOf(tool: string): string {
   }
 }
 
+/// Steps worth retaining briefly in the chat's activity even if they finish quickly. A shell command or an unknown
+/// tool can do many different things, so its importance is not guessed from its words. Routine reads, searches and
+/// remote task status checks can instead be coalesced when the agent moves on at once.
+export function importantCall(tool: string, input: string): boolean {
+  const name = toolName(tool);
+  const kind = kindOf(tool);
+  if (kind === "edit" || kind === "agent") return true;
+  if (name === "station_task") return args(input)?.action === "start";
+  return ["request_user_input", "request_user_input_async", "chat_create", "session_send", "job_start"].includes(name);
+}
+
 function verb(kind: string): string {
   return ["read", "search", "edit", "command", "web", "agent", "thread"].includes(kind) ? t(`core-logic.activity.verb.${kind}`) : t("core-logic.activity.verb.other");
 }

@@ -1089,6 +1089,7 @@ export const SHAPES: Record<string, Shape> = {
     ["key", "String"],
     ["text", "String", { said: true }],
     ["mono", opt("bool"), { doc: "A tool call, shown in a monospaced font like its execution history summary." }],
+    ["important", opt("bool"), { doc: "A consequential step: show it even if it finishes quickly, ahead of routine work." }],
   ], { doc: "What an agent at work does now (activity.ts): `key` names the thing (a step, or where the turn stands), `text` says\nit; the same thing keeps its key while its words change.", keepNone: true }),
   Activity: struct([
     ["now", "ActivityNow"],

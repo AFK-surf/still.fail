@@ -231,6 +231,41 @@ test("a_session_at_work_is_followed_live", async () => {
   core.close();
 });
 
+test("an_important_activity_reaches_the_live_topic_ahead_of_a_routine_call", async () => {
+  const answers = base();
+  answers["GET /chats"] = [{ id: "7", thread: 7, session: "k1", title: "部署", agents: [{ key: "k1", process: "running" }], lastActiveAt: 1 }];
+  const { host, core, push } = await started(answers);
+  try {
+    const ui = core.connect();
+    const values = new Map();
+    const usage = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
+    subscribe(core, ui, 1, { topic: "live", station: "ws/st", key: "k1" });
+    await host.settle();
+    push("live", {
+      key: "k1", type: "timeline", start: 0, usage,
+      entries: [
+        { kind: "user", text: "fix it" },
+        { kind: "tool_call", tool: "apply_patch", callId: "edit", text: "{}" },
+        { kind: "tool_call", tool: "Read", callId: "read", text: "{}" },
+      ],
+    });
+    await host.time.pass(100);
+    apply(host, values);
+    assert.equal(v(values, 1).activity.now.key, "edit");
+    assert.equal(v(values, 1).activity.now.important, true, "the live topic carries the step's importance");
+    push("live", {
+      key: "k1", type: "timeline", start: 3, usage,
+      entries: [{ kind: "tool_result", callId: "edit", ok: true, text: "done" }],
+    });
+    await host.time.pass(100);
+    apply(host, values);
+    assert.equal(v(values, 1).activity.now.key, "read");
+    assert.notEqual(v(values, 1).activity.now.important, true);
+  } finally {
+    core.close();
+  }
+});
+
 test("where_a_chat_was_left_is_there_as_it_opens_after_a_restart_from_the_database", async () => {
   const first = await started();
   const ui1 = first.core.connect();

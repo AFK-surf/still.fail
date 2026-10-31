@@ -40,6 +40,7 @@ pub fn fixture_reset() -> Unit {
   fix_phone.val = ""
   fix_phone_link.val = ""
   fix_working_now.val = ("call:1", working_step)
+  fix_working_important.val = false
   kept_chats.clear()
   fixture_pictures.clear()
   fix_threads.clear()

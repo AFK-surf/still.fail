@@ -390,6 +390,27 @@ test("a_task_on_another_station_says_where_it_runs_and_what", () => {
   assert.equal(g.summary, "在 Studio 上运行 typecheck web · 共 2 项");
 });
 
+test("activity_prefers_an_important_running_step_to_a_routine_one", () => {
+  const call = (tool: string, id: string, input: J) => ({ kind: "tool_call", tool, callId: id, text: JSON.stringify(input) });
+  const timeline = [
+    { kind: "user", text: "fix it" },
+    call("apply_patch", "edit", { patch: "fix" }),
+    call("Read", "read", { file_path: "/a.ts" }),
+  ];
+  assert.equal(activity({ timeline }).now.key, "edit");
+  assert.equal(activity({ timeline }).now.important, true);
+  const afterEdit = [...timeline, { kind: "tool_result", callId: "edit", ok: true, text: "done" }];
+  assert.equal(activity({ timeline: afterEdit }).now.key, "read");
+  assert.notEqual(activity({ timeline: afterEdit }).now.important, true);
+  assert.notEqual(activity({ timeline: [], phase: { phase: "thinking" } }).now.important, true);
+});
+
+test("activity_tells_a_remote_task_start_from_a_status_check", () => {
+  const call = (action: string) => ({ kind: "tool_call", tool: "mcp__stillfail__station_task", callId: "a", text: JSON.stringify({ action, key: "test", station: "studio" }) });
+  assert.equal(activity({ timeline: [call("start")] }).now.important, true);
+  assert.notEqual(activity({ timeline: [call("get")] }).now.important, true);
+});
+
 test("a_slack_messages_files_are_its_files_not_its_words", () => {
   const path = "/w/s/workspace/uploads/2026-10-27T09-15-34-F0-image.png";
   const text = `看这个\n\nAttached files:\n- ${path} (image.png, 1709315 bytes)\n- /w/s/workspace/uploads/b (a (1), b.txt, 3 bytes)`;
