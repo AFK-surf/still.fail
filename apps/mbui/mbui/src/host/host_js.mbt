@@ -470,11 +470,11 @@ fn env(name : String) -> String {
 }
 
 ///|
-/// Who to tell when the app comes to the front or leaves it (host_native.mbt): the browser's page never tells (shown
-/// and in front).
-fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
-  ignore(f)
-}
+/// Who to tell when the app comes to the front or leaves it (host_native.mbt): the page shown (its tab in front, its
+/// window not minimized: visibilityState) and in front (it has the focus), as each changes (web/host.js H.setAppState).
+/// Without it a tab behind another took itself as looked at: what it showed read, a screen in it kept open.
+extern "js" fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit =
+  #|(f) => { const H = globalThis.__mbhost; if (H && H.setAppState) H.setAppState(f); }
 
 ///|
 /// Whether the system is set to dark (see host_native.mbt): the browser's prefers-color-scheme.
