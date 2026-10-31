@@ -58,9 +58,12 @@ const SAID_MAX = 200;
 
 class Refused extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  /// Said beside `error`.
+  readonly more: Record<string, unknown>;
+  constructor(status: number, message: string, more: Record<string, unknown> = {}) {
     super(message);
     this.status = status;
+    this.more = more;
   }
 }
 
@@ -117,7 +120,7 @@ export class OutflowServer {
     const server = createServer((req, res) => {
       const answering = this.#answer(req, res)
         .catch((e) => {
-          if (e instanceof Refused) send(res, e.status, { error: e.message });
+          if (e instanceof Refused) send(res, e.status, { error: e.message, ...e.more });
           else {
             log.warn("outflow", "a request was not answered", { error: (e as Error).message });
             send(res, 500, { error: "the station could not answer" });
@@ -260,7 +263,14 @@ export class OutflowServer {
   async #read(req: IncomingMessage, res: ServerResponse, url: URL) {
     const token = /^Bearer (\S+)$/i.exec(req.headers.authorization ?? "")?.[1] ?? "";
     const grant = this.#o.grants.byToken(token);
-    if (grant === null) throw new Refused(401, "revoked");
+    if (grant === null) {
+      // A token of a grant revoked here, or one this station never gave (another station's, a copy gone stale): told
+      // apart, and which station says so, for the program to know where to ask.
+      const was = this.#o.grants.revokedOf(token);
+      if (was !== null) throw new Refused(401, "revoked", { grant: was.grant, revokedAt: was.at });
+      const { id, name } = this.#o.workspace.here();
+      throw new Refused(401, "unknown token", { station: { id, name } });
+    }
     const whole = grant.reach === "workspace";
     if (url.pathname === "/v1/stations") {
       const here = this.#o.workspace.here();
