@@ -127,6 +127,33 @@ test("a message during a running turn is steered into it", async () => {
   await r.close();
 });
 
+test("a message steered in as the turn ends is worked on in its thread, and the ended turn's state no longer stands", async () => {
+  const r = new Rig();
+  const first = message();
+  await r.accept(first);
+  await settle();
+  const key = sessionKey("cl", "C1", first.threadTs);
+  const session = r.claude.last();
+  await r.call(key, "chat_state", { kind: "all_done", done: "回复了测试消息，没有待办" });
+  await r.accept(reply(first, "9999.1", "review #4557"));
+  await settle();
+  assert.ok(session.steers[0]!.includes("review #4557"));
+  // Claude had already answered: the message written as it ended becomes a turn of its own.
+  session.complete();
+  session.busyNow = true;
+  session.events({ type: "turnStarted" });
+  await settle();
+  const thread = `C1/${first.threadTs}`;
+  assert.deepEqual(r.chat.stands.filter(([t]) => t === thread).map(([, s]) => s?.kind ?? null), ["done"]);
+  const last = r.chat.statuses.filter(([t]) => t === thread).at(-1)!;
+  assert.equal(last[1], "9999.1", "the status line is on the message it works on");
+  assert.notEqual(last[2], "", "it shows working again, which takes the done line away");
+  session.complete();
+  await settle();
+  assert.equal(r.chat.statuses.filter(([t]) => t === thread).at(-1)![2], "", "its own end clears the line");
+  await r.close();
+});
+
 test("a message during a running turn moves what it waits on to the background, unless its profile says not", async () => {
   const r = new Rig();
   const first = message();
