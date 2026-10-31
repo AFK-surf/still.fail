@@ -24,9 +24,7 @@
 // Still the old frame's (the way there): what the panels hold (their islands); a page pushed over the page's own stack
 // (Nav::push_over: its slide waits as Ctx::nav's, asked as its island builds: Nav::shows_when's comes_when); the edges
 // (their drags read as their island builds; their pointer's shape and tip wait on the tree's); a passage picked bringing
-// the page over (read as the page's island builds); back where what is over the whole window is on top (the shell's,
-// said by the island under all of it as it builds: tape_under). Back while the tape takes it is a node of the tree's
-// (tape_takes_back, tape_back_step).
+// the page over (read as the page's island builds). Back is a node of the tree's (wide_takes_back, wide_back_step).
 
 ///|
 /// The tape's move, committed at its cause: its way (from 0 as it set out to 1), and of each thing it moves where it was
@@ -465,7 +463,7 @@ fn tape_let_go(p : TapePane, v : Double, at : Double) -> Unit {
 
 ///|
 /// Back on the tape bringing `p` over (the one before the one in use: tape_back_to), step by step as the system's back
-/// gesture goes (tape_back_step): the tape in its hand from where it began, as a finger pulling `p` over has it,
+/// gesture goes (wide_back_step): the tape in its hand from where it began, as a finger pulling `p` over has it,
 /// moved as far as the gesture has come from the edge it came from; gone through, `p` brought over from there; let go,
 /// over or back as a finger's is; called off, back where it was. Each at its step's moment. A back with no gesture (a
 /// back key, ⌘[) brings `p` over at once.
@@ -519,25 +517,26 @@ fn tape_back(p : TapePane, step : @ui.BackStep) -> Unit {
 }
 
 ///|
-/// Whether back is the tape's now, as the shell has it (wide_back): what is over the whole window (a station's screen, a
-/// file read or played) not on top, and back to go somewhere (a panel brought over, a page popped, another place's
-/// sidebar back to the chats').
-fn tape_takes_back(src : Source) -> Bool {
-  !(app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_))) && wide_back(src) is Some(_)
+/// Whether back is the wide frame's now (the tape's, or the frame's off it: its node, tape_view, pane_view), as the shell
+/// has it (wide_back): somewhere to go (a panel brought over, a page popped, another place's sidebar back to the chats',
+/// the entry before in the history, what is over the whole window put away). All it reads is told as it changes (the
+/// stack, the panel in use, the history's entries: sfbase's history_said).
+pub fn wide_takes_back(src : Source) -> Bool {
+  wide_back(src) is Some(_)
 }
 
 ///|
-/// What back on the tape does, as it is chosen (tape_back_what): a panel brought over, followed as the gesture goes
-/// (tape_back); the shell's back (wide_back), done once as the gesture goes through or a back with none comes; nothing.
-priv enum TapeBack {
+/// What back on the wide frame does, as it is chosen (wide_back_what): a panel of the tape brought over, followed as the
+/// gesture goes (tape_back); the shell's back (wide_back), done once as the gesture goes through or a back with none comes; nothing.
+priv enum WideBack {
   Follows(TapePane)
   Once(() -> Unit)
   Nothing
 }
 
 ///|
-/// What back on the tape does now.
-fn tape_back_what(src : Source) -> TapeBack {
+/// What back on the wide frame does now.
+fn wide_back_what(src : Source) -> WideBack {
   match tape_back_to() {
     Some(p) => Follows(p)
     None =>
@@ -549,18 +548,18 @@ fn tape_back_what(src : Source) -> TapeBack {
 }
 
 ///|
-/// A step of back on the tape (tape_view's node), at its moment: what it does chosen as a gesture begins, the whole
-/// gesture's (`held`, while it goes), or as a back with no gesture comes (tape_back_what); each step to that alone,
+/// A step of back on the wide frame (its node's: tape_view's, pane_view's), at its moment: what it does chosen as a gesture begins, the whole
+/// gesture's (`held`, while it goes), or as a back with no gesture comes (wide_back_what); each step to that alone,
 /// whatever changed meanwhile.
-fn tape_back_step(src : Source, held : Ref[TapeBack?], step : @ui.BackStep) -> Unit {
+fn wide_back_step(src : Source, held : Ref[WideBack?], step : @ui.BackStep) -> Unit {
   let what = match (step, held.val) {
     (Began(_, _), _) => {
-      let w = tape_back_what(src)
+      let w = wide_back_what(src)
       held.val = Some(w)
       w
     }
     (_, Some(w)) => w
-    (Back, None) => tape_back_what(src)
+    (Back, None) => wide_back_what(src)
     _ => return
   }
   if step is (LetGo(_, _) | CalledOff | Back) {
@@ -574,9 +573,9 @@ fn tape_back_step(src : Source, held : Ref[TapeBack?], step : @ui.BackStep) -> U
 }
 
 ///|
-/// The tape's node taking back let go at `at` (no longer the tape's: the tree tells it nothing more of a gesture going
-/// on to it): the gesture it held let go, the panel it pulled over back where it was in use, from there.
-fn tape_back_left(held : Ref[TapeBack?], at : Double) -> Unit {
+/// The wide frame's node taking back let go at `at` (back no longer its: the tree tells it nothing more of a gesture
+/// going on to it): the gesture it held let go, a panel of the tape it pulled over back where it was in use, from there.
+fn wide_back_left(held : Ref[WideBack?], at : Double) -> Unit {
   guard held.val is Some(_) else { return }
   held.val = None
   // (the tape itself let go with it: nothing of it moves, what it held let go as the tape is: tape_view)
@@ -733,15 +732,15 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       tape_settle(chat, open, known, v.cause_at())
     },
   )
-  // back while the tape takes it (tape_takes_back), a node of the window's tree's: drawn before the panels, what an old
+  // back while the wide frame takes it (wide_takes_back), a node of the window's tree's: drawn before the panels, what an old
   // view in one of them says takes back (a page's own stack) taking it before it, what is over them too; whose it is
-  // said at the cause that changes it, each step taken at its moment (tape_back_step)
-  let held : Ref[TapeBack?] = Ref(None)
-  v.show(fn() { tape_takes_back(src) }, fn(b) {
-    b.follows_back(fn(step) { tape_back_step(src, held, step) }) |> ignore
+  // said at the cause that changes it, each step taken at its moment (wide_back_step)
+  let held : Ref[WideBack?] = Ref(None)
+  v.show(fn() { wide_takes_back(src) }, fn(b) {
+    b.follows_back(fn(step) { wide_back_step(src, held, step) }) |> ignore
     // (let go as a gesture goes on to it, as what it takes back by is (told nothing more): what it held of it let go
     // here, the tape back where it was in use)
-    b.owns(fn() { tape_back_left(held, v.cause_at()) }) |> ignore
+    b.owns(fn() { wide_back_left(held, v.cause_at()) }) |> ignore
   })
   v.box(fn(row) {
     tape_goes.parts.clear()
@@ -1284,8 +1283,7 @@ fn tape_edge(
 /// The frame under the tape's panels with workspace `w` in view (an island under all of it: sfapp's taped_shell): how
 /// the lists take the hand, the sidebar of this place and workspace as it was left, the system's tabs where it has its
 /// own bars, what the page's bars and the sidebar's parts work out from (as open, apart: on the tape nothing of them
-/// moves), the chat landed on, the window's buttons' row, back (the panels' own taken first, said after it), the web
-/// services' pages let go.
+/// moves), the chat landed on, the window's buttons' row, the web services' pages let go.
 pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Unit {
   c.mouse_drags_lists(pane_finger())
   wide.side_place = side_place()
@@ -1315,15 +1313,7 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   if @ui.window_inset() {
     title_row(c, "window-title-row", closed_bar_top)
   }
-  // back (⌘[, a mouse's back button), the shell's one way (sfbase's go_back), after what the panels take it for: the
-  // tape's node's while the tape takes it (tape_view, tape_takes_back); else, what is over the whole window on top,
-  // the shell's here
-  if !app.menu && !tape_takes_back(src) {
-    match @sfbase.back_step() {
-      Some(f) => c.take_back(f)
-      None => ()
-    }
-  }
+  // (back, the shell's one way: the tape's node's, tape_view, wide_takes_back)
   // the pages of web services' and visualizations' tabs closed, no longer drawn, let go (service_tab.mbt)
   sv_sweep(c, src)
 }

@@ -134,8 +134,16 @@ pub fn open_link_in(
 }
 
 ///|
-/// What a link opens, opened (AppState.open): false when it opens nothing here.
+/// What a link opens, opened (AppState.open): false when it opens nothing here. One act, all its steps (a workspace
+/// switched, the stack put down, a page opened): an entry for where it left from, of where it lands (history_act).
 pub fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -> Bool {
+  let opened = Ref(false)
+  history_act(fn() { opened.val = open_target_now(src, t, outside, at) })
+  opened.val
+}
+
+///|
+fn open_target_now(src : Source, t : LinkTarget, outside : Bool, at : Double?) -> Bool {
   let at = match at { Some(_) => at; None => t.message }
   let ws = t.workspace
   let address = ws + "/" + t.station
@@ -278,10 +286,11 @@ pub fn pick_workspace(src : Source, ws : String) -> Unit {
   if ws == "" || ws == link_workspace.val {
     return
   }
-  history_push()
-  app.picked.set(ws)
-  link_workspace.val = ws
-  (src.call)("prefs.set", { "workspace": Json::string(ws) }, fn(_) {  })
+  history_act(fn() {
+    app.picked.set(ws)
+    link_workspace.val = ws
+    (src.call)("prefs.set", { "workspace": Json::string(ws) }, fn(_) {  })
+  })
 }
 
 ///|
@@ -295,26 +304,28 @@ pub fn open_item(
   service : String?,
   at : Double?,
 ) -> Unit {
-  history_push()
-  pick_workspace(src, ws)
-  (shell.val.home)()
-  if app.nav.top() != Home {
-    app.nav.replace(Home)
-  }
-  let r = chat_ref(station, session)
-  match at {
-    Some(seq) => {
-      // (what the end-to-end flows of a notification tapped look for: e2e/flows/40-notice-wait.check)
-      @hostapi.log("notice opens \{station}|\{session} at \{seq.to_int()}")
-      go_to(r, seq)
+  // (one act, all its steps: an entry for where it left from, of where it lands)
+  history_act(fn() {
+    pick_workspace(src, ws)
+    (shell.val.home)()
+    if app.nav.top() != Home {
+      app.nav.replace(Home)
     }
-    None => ()
-  }
-  open_page(Chat(r))
-  match service {
-    Some(job) => open_page(Service(station, job))
-    None => ()
-  }
+    let r = chat_ref(station, session)
+    match at {
+      Some(seq) => {
+        // (what the end-to-end flows of a notification tapped look for: e2e/flows/40-notice-wait.check)
+        @hostapi.log("notice opens \{station}|\{session} at \{seq.to_int()}")
+        go_to(r, seq)
+      }
+      None => ()
+    }
+    open_page(Chat(r))
+    match service {
+      Some(job) => open_page(Service(station, job))
+      None => ()
+    }
+  })
 }
 
 ///|
