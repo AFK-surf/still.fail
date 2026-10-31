@@ -381,6 +381,12 @@ fn own_clock() -> Bool {
 }
 
 ///|
+/// The system under the browser, whose keys the person types with (@hostapi.keys_platform): Apple's (macOS, and iOS's
+/// and iPadOS's keyboards: 0), Android's (2), Windows' (3), Linux's (5); -1 where the browser does not say.
+extern "js" fn keys_platform() -> Int =
+  #|() => { if (typeof navigator === "undefined") return -1; const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || ""; return /mac|iphone|ipad|ipod|ios/i.test(p) ? 0 : /android/i.test(p) ? 2 : /win/i.test(p) ? 3 : /linux|cros|x11/i.test(p) ? 5 : -1; }
+
+///|
 /// Whether the system asks for less motion: the browser's prefers-reduced-motion.
 extern "js" fn reduce_motion() -> Bool =
   #|() => typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches

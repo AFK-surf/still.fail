@@ -194,6 +194,8 @@ pub fn key_catch(Bool) -> Unit
 
 pub fn keyboard() -> Int32
 
+pub fn keys_platform() -> Int32
+
 pub fn local_font_families() -> String
 
 pub fn local_station() -> String
@@ -726,6 +728,7 @@ pub(open) trait Host {
   fn frame_awaiting(Self, Int32, String) -> Unit = _
   fn own_clock(Self) -> Bool = _
   fn reduce_motion(Self) -> Bool = _
+  fn keys_platform(Self) -> Int32 = _
   fn exit(Self, Int32) -> Unit = _
   fn mem_bytes(Self) -> Double = _
   fn set_back(Self, FuncRef[(Int32, Double, Double, Int32) -> Unit]) -> Unit = _

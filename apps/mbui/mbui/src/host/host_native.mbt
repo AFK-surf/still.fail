@@ -689,6 +689,12 @@ fn own_clock() -> Bool {
 }
 
 ///|
+/// The system whose keys the person types with (@hostapi.keys_platform): the host's own.
+fn keys_platform() -> Int {
+  -1
+}
+
+///|
 /// Whether the system asks for less motion (macOS and iOS: Reduce Motion;
 /// Android: animations off, its animator duration scale 0). Read at most
 /// once a second.

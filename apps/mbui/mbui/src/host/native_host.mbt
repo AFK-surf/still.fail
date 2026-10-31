@@ -301,6 +301,11 @@ impl @hostapi.Host for Native with reduce_motion(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with keys_platform(_) {
+  keys_platform()
+}
+
+///|
 impl @hostapi.Host for Native with exit(_, code) {
   exit(code)
 }

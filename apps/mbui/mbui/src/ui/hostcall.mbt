@@ -39,6 +39,9 @@ struct FakeHost {
   mut back_on : Bool
   // the system it plays (as @hostapi.platform: 0 macOS, 1 iOS, 2 Android)
   platform : Int
+  // the system whose keys are typed (keys_system: Tester::new's `keys`, by default `platform`'s; a browser's the one
+  // under it)
+  keys : Int
   // what the person points with (Tester::new's `pointing`: by default its system's; as the host says its events came,
   // where it does: Tester::host_says_finger)
   mut pointing : Pointing
@@ -442,6 +445,29 @@ fn h_platform() -> Int {
     }
   }
 }
+
+///|
+/// The system whose keys the person types with (keys_system): a Tester's the system it plays; else the host's, but a
+/// browser's the system under it where it says (@hostapi.keys_platform), asked once.
+fn h_keys() -> Int {
+  match fake.val {
+    Some(f) => f.keys
+    None => {
+      if host_keys.val < -1 {
+        host_keys.val = @hostapi.keys_platform()
+      }
+      if host_keys.val >= 0 {
+        host_keys.val
+      } else {
+        h_platform()
+      }
+    }
+  }
+}
+
+///|
+// kept across runs: what the real host said of its keys (asked once, -2 not yet): a Tester never reads it
+let host_keys : Ref[Int] = { val: -2 }
 
 ///|
 /// The host's system, asked once.
