@@ -298,6 +298,30 @@ test "Down opens the cache choice and keeps it open for the keyboard" {
 }
 
 ///|
+test "choosing how to continue an expired cache keeps the draft's keyboard" {
+  for platform in [1, 2] {
+    let calls : Array[Made] = []
+    let t = fake_core(calls, platform~, over=fn(name, tp) {
+      if name != "chat" { return tp }
+      match tp.value {
+        Some(v) => { ..tp, value: Some(@sffixture.with_cache_cold(v)) }
+        None => tp
+      }
+    })
+    t.tap_text("发消息")
+    t.type_text("签名")
+    keyboard_up(t, 300.0)
+    t.click(Button, label="接着聊")
+    assert_true(t.ime().0, msg="the keyboard stays while the choices are shown")
+    t.click(MenuItemRadio, label="换新上下文")
+    assert_eq(named(calls, "session.settings").length(), 1)
+    assert_true(t.ime().0, msg="the keyboard stays after choosing")
+    t.type_text("权限")
+    assert_eq(t.ime().1, "签名权限")
+  }
+}
+
+///|
 test "a cache notice on a narrow page keeps its cost together and both choices reachable" {
   let calls : Array[Made] = []
   let status = "缓存已过期"
