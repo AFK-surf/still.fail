@@ -1020,8 +1020,8 @@ pub fn Field::laid(self : Field, font_size? : Double = 15.0, line? : Double = 0.
 
 ///|
 /// How wide and tall a plain Ctx::editor showing what `l` says is laid out in width `w` (as its node is: its words
-/// wrapped in it where it holds more than a line, as tall as they come to between a line and `max_lines`, as wide as
-/// they come to in it, what holds it growing it; none, as wide as its words come to on their lines), in the system's size of words as it is now (what the tree's words are
+/// wrapped in it where it holds more than a line, as tall as they come to between a line and `max_lines`; none, as
+/// wide as its words come to on their lines), in the system's size of words as it is now (what the tree's words are
 /// measured in too: Tree::words_again as it changes).
 pub fn FieldLaid::size(self : FieldLaid, w : Double?) -> (Double, Double) {
   let z = g().editor_sizing(self.font_size, self.line, self.max_lines, true, self.text_line)
@@ -1030,10 +1030,8 @@ pub fn FieldLaid::size(self : FieldLaid, w : Double?) -> (Double, Double) {
     None => 1.0e9
   }, z.wrap, z.line, self.trim)
   (
-    // (offered at most a width, as wide as its words come to in it: what holds it grows it to its room, as a field
-    // of Ctx::editor's own is laid out in what it is given; none, as wide as they come to)
     match w {
-      Some(w) => dmin(tw, w)
+      Some(w) => w
       None => tw
     },
     dclamp(th, z.min_h, z.max_h),

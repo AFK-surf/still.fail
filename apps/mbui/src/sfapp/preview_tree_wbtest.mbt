@@ -2630,3 +2630,37 @@ test "viewer on the tree, a wide window, marking: a note's words written and mor
   t.draw()
   assert_eq(marking.note_field.text(), "这里对齐", msg="opened again: all of it")
 }
+
+///|
+/// Marking on a wide window, a box drawn (its note asked for as the finger lifts), the first frame `late` after that
+/// moment: how opaque the note's card is drawn (the window's tree's) half its coming in after that moment, and once it
+/// has come in.
+fn wide_note_first(late : Double) -> (Double, Double) raise {
+  let (t, v, _) = wide_marking()
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  let (px, py) = (rx + rw / 3.0, ry + rh / 3.0)
+  t.touch(0, px, py)
+  t.touch(1, px + 60.0, py + 40.0)
+  t.touch(2, px + 60.0, py + 40.0)
+  let at = t.time()
+  let card = fn() {
+    match @ui.view_tree().unwrap().drawn().iter().find_first(fn(d) { d.ground == @sfbase.note_ground }) {
+      Some(d) => d.alpha
+      None => -1.0
+    }
+  }
+  t.frame_at(at + late)
+  t.frame_at(at + note_pop_ms / 2.0)
+  let half = card()
+  t.frame_at(at + note_pop_ms + 20.0)
+  (half, card())
+}
+
+///|
+test "viewer on the tree, a wide window, marking: a note asked for comes in from the moment it was, its first frame on time or late: half way in as opaque either way, coming in still, all of it once in" {
+  let (half, whole) = wide_note_first(0.0)
+  let (late_half, late_whole) = wide_note_first(40.0)
+  assert_true(half > 0.0 && half < 1.0, msg="half way: coming in: \{half}")
+  assert_eq(late_half, half, msg="its first frame late: as far in at that moment")
+  assert_eq((whole, late_whole), (1.0, 1.0), msg="come in: all of it")
+}

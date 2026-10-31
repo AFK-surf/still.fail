@@ -366,7 +366,9 @@ fn note_box_node(w : @view.View) -> Unit {
       })
       // the field, an old view's: as tall as it lays out (at least as a key is, its words in its middle)
       row.box(fn(f) {
-        f.grow(Is(1.0)).padding(Is((8.0, 7.0, 8.0, 7.0))) |> ignore
+        // (the room its row leaves between its keys, as note_box's Fill: none of its own before it is shared out, giving
+        // way as they do)
+        f.grow(Is(1.0)).basis(Is(Some(0.0))).shrink(Is(1.0)).padding(Is((8.0, 7.0, 8.0, 7.0))) |> ignore
         @ui.old(f, fn(c) {
           c.box(w=Fill(1.0), h=Fill(1.0), justify=JCenter, fn() {
             c.editor(
