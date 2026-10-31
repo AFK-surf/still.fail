@@ -175,8 +175,16 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
 /// the next one starts (nobody waits for the turn to end to change it). Another model starts over
 /// what went with the old one: its effort back to the runtime's default, its profile back to the station's choice
 /// (picked here, among those with the model enabled), unless given with it. Given back to the station to pick again
-/// (`repick`), its account is picked now as a new session's would be.
+/// (`repick`), its account is picked now as a new session's would be. Whether it goes on afresh once its prompt cache is
+/// over (`afresh`, null: as the station is set) is read as its next turn starts: its process goes on.
 export async function configure(hub: Hub, key: string, change: SessionChange, lang: Lang = stationLang()) {
+  const { afresh, ...rest } = change;
+  if (afresh !== undefined) {
+    if (!hub.store.getSession(key)) throw new Error(`unknown session ${key}`);
+    hub.store.setSessionAfresh(key, afresh);
+    log.info("hub", "going on afresh once its cache is over set", { session: key, afresh: afresh ?? "station's" });
+    if (Object.keys(rest).length === 0) return;
+  }
   const { row, model, effort, profile, repick } = hub.accounts.change(key, change, lang);
   if (profile !== undefined) hub.store.setSessionProfile(key, profile ?? row.profile, profile !== null);
   if (model !== row.model || effort !== row.effort) hub.store.setSessionModel(key, model, effort);

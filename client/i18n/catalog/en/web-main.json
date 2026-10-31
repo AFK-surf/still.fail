@@ -168,7 +168,7 @@
   "web-main.chat.archived": "Archived",
   "web-main.chat.archivedNamed": "Archived \"{title}\"",
   "web-main.chat.afresh": "Start afresh",
-  "web-main.chat.afreshBusy": "Starting afresh",
+  "web-main.chat.goOn": "Go on as is",
   "web-main.chat.archivedPlaceholder": "Restore to send",
   "web-main.chat.deleteFailed": "Couldn't delete: {error}",
   "web-main.chat.empty": "Send a message here; agents in this chat reply here",

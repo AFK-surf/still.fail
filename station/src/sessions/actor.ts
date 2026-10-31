@@ -132,8 +132,8 @@ export type SessionDeps = {
   /// What a session whose context was cleared is told with its next prompt (sessions/afresh.ts `toldCleared`): to read
   /// back what it needs of its work too when `readBack` (cleared to go on afresh, as on another account).
   cleared?(key: string, readBack: boolean): string;
-  /// Whether its next message is to start it afresh, at `now` (sessions/afresh.ts `goesAfresh`): the station set to, and
-  /// its large context's prompt cache over.
+  /// Whether its next message or notice is to start it afresh, at `now` (sessions/afresh.ts `goesAfresh`): its chat or
+  /// station set to, and its large context's prompt cache over.
   coldAfresh?(key: string, now: number): boolean;
   /// What a session whose runtime session could not be resumed is told with its next prompt (sessions/afresh.ts
   /// `toldResumeLost`).
@@ -914,10 +914,11 @@ export class SessionActor {
     try {
       // Until the runtime says it has sent its request, the turn is starting.
       this.deps.live?.event(this.key, { kind: "phase", phase: "starting" });
-      // A person's message to it at rest, its large context's cache over, where the station is set to (config.json
-      // `afreshWhenCold`): it goes on afresh, as 换新上下文 has it by hand, not with all of it sent again. Not while it
-      // waits on work of its own or has work going in the background (which would end with its process).
-      if (kind === "input" && this.waiting === null && !this.holding() && !this.agent?.session.busy() && this.deps.coldAfresh?.(this.key, this.now()) === true) {
+      // Started by a message or a notice, its large context's cache over, where its chat or else its station is set to
+      // (`afresh`, config.json `afreshWhenCold`): it goes on afresh, as 换新上下文 has it by hand, not with all of it
+      // sent again (a wait of its own ends with it). Not while it has work going in the background (which would end
+      // with its process).
+      if ((kind === "input" || kind === "job") && !this.holding() && !this.agent?.session.busy() && this.deps.coldAfresh?.(this.key, this.now()) === true) {
         await this.clearNow(true, "station.notice.afreshCold", "as its cache is over");
       }
       let agent = await this.ensureAgent();

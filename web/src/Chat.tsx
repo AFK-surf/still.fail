@@ -168,7 +168,7 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
       {askedFile}
       {(chat.archived || chat.cacheCold || chat.offline) && <ComposerNotices className={css.offlineNotice}>
         {chat.archived && <ArchiveNotice offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
-        {chat.cacheCold && !chat.archived && <CacheColdNotice cold={chat.cacheCold} offline={chat.offline} afresh={api.afresh} />}
+        {chat.cacheCold && !chat.archived && <CacheColdNotice cold={chat.cacheCold} offline={chat.offline} setAfresh={api.setAfresh} />}
         {chat.offline && <ComposerNotice mark={<Unplug size={16} />}><StationInWords station={station.address} text={chat.offlineNote ?? (station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline"))} /></ComposerNotice>}
       </ComposerNotices>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}

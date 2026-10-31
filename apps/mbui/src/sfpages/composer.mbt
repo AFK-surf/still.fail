@@ -54,7 +54,7 @@ priv struct Composing {
   /// whether a notice over a chat's composer, new to it, comes in (chat_notices: the chat shown the frame before)
   mut notices_new : Bool
   /// what each notice over a chat's composer said as it was last drawn, by its key: drawn so as it leaves
-  notices_said : Map[String, (String, (Int, String, String, Bool)?, String??, String)]
+  notices_said : Map[String, (String, (Int, String, String, Bool)?, String??, String, Array[(Int, String, Bool)])]
   /// the page's choices in its row as it was last drawn, as the frame before left them, and those of the page it came
   /// from that this one has not, while they leave (a new chat's, gone to its chat)
   mut toolbar : (() -> Unit)?
@@ -2060,7 +2060,9 @@ let cc_note_box : @ui.Style = @ui.css("row px=S2 gap=S2 align=ACenter")
 /// What is said over a chat's composer (Chat.tsx ChatShown, ArchiveNotice, CacheColdNotice, offlineNotice), each a
 /// capsule of its own over it, as the composer is (`width` wide: composer_notice): an archived chat's, with its
 /// 还原对话 (why it failed under it, till it is tried again; not while its station is down); its agent's prompt cache
-/// over, with its 换新上下文 (why it failed in a toast); its station down.
+/// over, saying what going on would read again, with the choice of how it goes on as it is next started, by a message
+/// or a notice: 接着聊 or 换新上下文, the one it takes marked, the other pressed to take it (as its chat chose, or else
+/// its station is set; why it failed in a toast); its station down.
 fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Double) -> Unit {
   let key = r.station + ":" + r.session
   // (built before its composer: whether this chat's composer was drawn the frame before, as the composer has it once
@@ -2109,24 +2111,18 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
     )
   }
   match v.cache_cold {
-    // its station goes on afresh by itself: said, nothing to tap
-    Some((_, said, true)) if !v.archived => composer_notice(c, width, "wait", said, None, chat=key)
-    Some((session, said, _)) if !v.archived => {
-      let afresh = c.id("composer/afresh")
-      let doing = "session.clear/" + r.station + "/" + session
+    Some((session, said, afresh)) if !v.archived => {
+      let go_on = c.id("composer/goOn")
+      let fresh = c.id("composer/afresh")
+      let doing = "session.settings/" + r.station + "/" + session
       let busy = @sfbase.doing(doing)
-      if !busy && !v.offline && c.clicked(afresh) {
-        let params : Json = { "station": Json::string(r.station), "key": Json::string(session), "readBack": Json::boolean(true) }
-        c.tell("composer/afresh", fn() { @sfbase.act(src, @sf.t("web-main.chat.afresh"), doing, "session.clear", params) })
+      // (the one not taken, pressed: taken from its next start)
+      let (other, words) = if afresh { (go_on, "web-main.chat.goOn") } else { (fresh, "web-main.chat.afresh") }
+      if !busy && !v.offline && c.clicked(other) {
+        let params : Json = { "station": Json::string(r.station), "key": Json::string(session), "afresh": Json::boolean(!afresh) }
+        c.tell("composer/afresh", fn() { @sfbase.act(src, @sf.t(words), doing, "session.settings", params) })
       }
-      composer_notice(
-        c,
-        width,
-        "wait",
-        said,
-        Some((afresh, if busy { "web-main.chat.afreshBusy" } else { "web-main.chat.afresh" }, "web-main.chat.afresh", busy || v.offline)),
-        chat=key,
-      )
+      composer_notice(c, width, "wait", said, None, chat=key, choices=[(go_on, "web-main.chat.goOn", !afresh), (fresh, "web-main.chat.afresh", afresh)], held=busy || v.offline)
     }
     _ => ()
   }
@@ -2154,9 +2150,9 @@ fn notices_gone(c : @ui.Ctx, width : Double, chat : String, now : Array[Bool]) -
       continue
     }
     match composing.notices_said.get("composer/notice/" + chat + "/" + mark) {
-      Some((said, offer, failed, icon)) => {
+      Some((said, offer, failed, icon, choices)) => {
         let offer = offer.map(fn(o) { (o.0, o.1, o.2, true) })
-        composer_notice(c, width, mark, said, offer, failed?=failed, icon~, chat~, gone=true)
+        composer_notice(c, width, mark, said, offer, failed?=failed, icon~, chat~, gone=true, choices~, held=true)
       }
       None => ()
     }
@@ -2168,8 +2164,9 @@ fn notices_gone(c : @ui.Ctx, width : Double, chat : String, now : Array[Bool]) -
 /// drawn in from the composer's (`width`) so its mark (icon `icon`, else `mark`, which notice it is; `updating`, the
 /// update's mark turning) stands over the composer's ＋ in the middle of its round start, its words quiet where the
 /// composer's are, what it offers at its end (`offer`: its target, its words' key now, its name's key for what reads
-/// the screen, whether it is out of reach) in the words' colour, a step heavier; why what it offers failed (`failed`)
-/// under its words, red.
+/// the screen, whether it is out of reach) in the words' colour, a step heavier, or a choice of two or more
+/// (`choices`: each its target, its words' key, whether it is the one taken: that one marked ✓ in the words' colour, the
+/// others quiet, pressed to take them; `held`, out of reach); why what it offers failed (`failed`) under its words, red.
 fn composer_notice(
   c : @ui.Ctx,
   width : Double,
@@ -2180,13 +2177,15 @@ fn composer_notice(
   icon? : String,
   chat? : String = "",
   gone? : Bool = false,
+  choices? : Array[(Int, String, Bool)] = [],
+  held? : Bool = false,
 ) -> Unit {
   let icon = icon.unwrap_or(mark)
   // shown while its chat is, it comes in as what is put in the composer does, one its chat opens with there at once;
   // gone, it leaves as a row of a list does, drawn as it was (notices_gone)
   let key = "composer/notice/" + chat + "/" + mark
   if !gone {
-    composing.notices_said[key] = (said, offer, failed, icon)
+    composing.notices_said[key] = (said, offer, failed, icon, choices)
   }
   let look = @motion.presence(c, key, !gone, initial=composing.notices_new, enter=@sf.waiting_in, exit=@sf.leave)
   if gone && look is None {
@@ -2225,6 +2224,21 @@ fn composer_notice(
           c.semantics(b, Button, id~, label=@sf.t(name), disabled=off)
         }
         None => ()
+      }
+      if choices.length() > 0 {
+        c.box(style=composer_notice_choices, fn() {
+          for choice in choices {
+            let (id, words, taken) = choice
+            let b = c.box(id~, style=composer_notice_choice, fn() {
+              if taken {
+                @sf.icon(c, "check", size=composer_notice_check, color=t.p.text) |> ignore
+              }
+              c.text(@sf.t(words), style=if taken { composer_notice_button } else { composer_notice_other }) |> ignore
+            })
+            c.semantics(b, Radio, id~, label=@sf.t(words), check=if taken { On } else { Off }, disabled=held && !taken)
+          }
+        })
+        |> ignore
       }
     })
     |> ignore
@@ -2270,6 +2284,25 @@ let composer_notice_mark : Double = 16.0
 /// What a line offers: 12 from its words.
 // kept across runs: a value (no field of it changes)
 let composer_notice_offer : @ui.Style = @ui.css("pl=S3")
+
+///|
+/// A choice a line offers: 12 from its words, its options 12 apart.
+// kept across runs: a value (no field of it changes)
+let composer_notice_choices : @ui.Style = @ui.css("row pl=S3 gap=S3")
+
+///|
+/// An option of it: the one taken with its ✓ 4 before its words, across their middle.
+// kept across runs: a value (no field of it changes)
+let composer_notice_choice : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+
+///|
+/// An option not taken: as quiet as its words, not a step heavier.
+// kept across runs: a value (no field of it changes)
+let composer_notice_other : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
+
+///|
+/// How big the ✓ of the option taken is.
+let composer_notice_check : Double = 12.0
 
 ///|
 /// Its words: the ui size, muted, wrapped in the rest of the line.

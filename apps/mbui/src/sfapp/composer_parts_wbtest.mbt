@@ -175,7 +175,7 @@ test "an archived chat's restore failing says why under it, in red; tapped again
 }
 
 ///|
-test "its agent's cache over: said over the composer, 换新上下文 clears its context to go on afresh, under way meanwhile" {
+test "its agent's cache over: said over the composer, 接着聊 taken, 换新上下文 takes going on afresh, not asked again meanwhile" {
   let calls : Array[Made] = []
   let t = fake_core(calls, over=fn(name, tp) {
     if name != "chat" {
@@ -186,21 +186,25 @@ test "its agent's cache over: said over the composer, 换新上下文 clears its
       None => tp
     }
   })
-  assert_true(t.find("缓存已过期，接着聊约需 $1.49") is Some(_))
+  assert_true(t.find("缓存已过期，重读约 $1.49") is Some(_))
+  assert_true(t.get(Radio, label="接着聊").check is Some(On))
+  assert_true(t.get(Radio, label="换新上下文").check is Some(Off))
+  t.tap_text("接着聊")
+  t.draw()
+  assert_eq(named(calls, "session.settings").length(), 0, msg="the one taken: nothing to ask")
   t.tap_text("换新上下文")
   t.draw()
-  let asked = named(calls, "session.clear")
+  let asked = named(calls, "session.settings")
   assert_eq(asked.length(), 1)
   assert_eq(text(Some(asked[0].params), "key"), "s-c1")
-  assert_eq(field(Some(asked[0].params), "readBack"), Some(Json::boolean(true)))
-  assert_true(t.find("正在换新上下文") is Some(_), msg="under way")
-  (asked[0].done)(Ok(Json::object({})))
+  assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(true)))
+  t.tap_text("换新上下文")
   t.draw()
-  assert_true(t.find("换新上下文") is Some(_), msg="done: as the core's view says")
+  assert_eq(named(calls, "session.settings").length(), 1, msg="on its way: not asked again")
 }
 
 ///|
-test "its agent's cache over, its station going on afresh by itself: said, nothing to tap" {
+test "its agent's cache over, set to go on afresh: 换新上下文 taken, 接着聊 takes going on" {
   let calls : Array[Made] = []
   let t = fake_core(calls, over=fn(name, tp) {
     if name != "chat" {
@@ -209,27 +213,32 @@ test "its agent's cache over, its station going on afresh by itself: said, nothi
     match tp.value {
       Some(Object(o)) => {
         let o2 = o.copy()
-        o2["cacheCold"] = { "session": "s-c1", "text": "缓存已过期，下一条消息将换新上下文", "auto": true }
+        o2["cacheCold"] = { "session": "s-c1", "text": "缓存已过期，重读约 $1.49", "afresh": true }
         { ..tp, value: Some(Json::object(o2)) }
       }
       _ => tp
     }
   })
-  assert_true(t.find("缓存已过期，下一条消息将换新上下文") is Some(_))
-  assert_true(!t.words().iter().any(fn(w) { w.0 == "换新上下文" }), msg="no 换新上下文 to tap")
+  assert_true(t.find("缓存已过期，重读约 $1.49") is Some(_))
+  assert_true(t.get(Radio, label="换新上下文").check is Some(On))
+  t.tap_text("接着聊")
+  t.draw()
+  let asked = named(calls, "session.settings")
+  assert_eq(asked.length(), 1)
+  assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(false)))
 }
 
 ///|
-test "its agent's cache over, in the wide frame: said over the composer, 换新上下文 clears its context to go on afresh" {
+test "its agent's cache over, in the wide frame: said over the composer, 换新上下文 sets it to go on afresh" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-cache-cold", wide=true)
-  assert_true(t.find("缓存已过期，接着聊约需 $1.49") is Some(_))
+  assert_true(t.find("缓存已过期，重读约 $1.49") is Some(_))
   t.tap_text("换新上下文")
   t.draw()
-  let asked = named(calls, "session.clear")
+  let asked = named(calls, "session.settings")
   assert_eq(asked.length(), 1)
   assert_eq(text(Some(asked[0].params), "key"), "s-c1")
-  assert_eq(field(Some(asked[0].params), "readBack"), Some(Json::boolean(true)))
+  assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(true)))
 }
 
 ///|

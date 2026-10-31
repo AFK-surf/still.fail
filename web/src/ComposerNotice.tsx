@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Check } from "@stillfail/ui/icons.tsx";
 import * as css from "./ComposerNotice.css.ts";
 
 /**
@@ -17,6 +18,17 @@ export function ComposerNotice({ mark, children, offer, error }: { mark: ReactNo
 /** What a notice offers, at its end: its words' colour, a step heavier; quiet while it cannot be done. */
 export function NoticeOffer({ onClick, disabled, children }: { onClick: () => void; disabled: boolean; children: ReactNode }) {
   return <button type="button" className={css.offer} onClick={onClick} disabled={disabled}>{children}</button>;
+}
+
+/** A choice a notice offers, at its end: the option taken marked ✓ in its words' colour, the others quiet, pressed to
+ * take them (not while `held`). The app's is the same (mbui sfpages composer_notice `choices`). */
+export function NoticeChoice({ options, held }: { options: { label: string; taken: boolean; take: () => void }[]; held: boolean }) {
+  return <span className={css.choices} role="radiogroup">
+    {options.map((o) => <button key={o.label} type="button" role="radio" aria-checked={o.taken} className={o.taken ? css.taken : css.choice}
+      onClick={() => { if (!o.taken && !held) o.take(); }} disabled={held && !o.taken}>
+      {o.taken && <Check size={12} />}{o.label}
+    </button>)}
+  </span>;
 }
 
 /** The notices over the composer, one over another, 8 apart. */

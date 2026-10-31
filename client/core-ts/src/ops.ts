@@ -80,7 +80,7 @@ export const PARAMS: Record<string, string> = {
   "session.compact": "key:string",
   "session.clear": "key:string readBack?:boolean",
   "session.delete": "key:string",
-  "session.settings": "key:string profile?:string model?:string effort?:string fast?:boolean repick?:boolean",
+  "session.settings": "key:string profile?:string model?:string effort?:string fast?:boolean repick?:boolean afresh?:boolean",
   "chat.archive": "archived?:boolean session:string thread?:number",
   "chat.keep": "kept?:boolean thread:number",
   "chat.rename": "session?:string title?:string thread?:number",
@@ -310,13 +310,13 @@ function stationOp(name: string, params: unknown): Request | null {
     // set by the workspace's owners and admins.
     case "search.setPersonal":
       return op("PUT", () => "/search/settings", p.pick(["personal"]), OVERVIEW);
-    // Whether a person's message to an agent whose large context's cache is over starts it afresh by itself (its
-    // station's routes/context.ts); set by the workspace's owners and admins.
     case "network.setCongestion":
       return op("PUT", () => "/network/settings", p.pick(["congestion"]), OVERVIEW);
     // The station started again by its launcher (its routes/network.ts), managers only.
     case "station.restart":
       return op("POST", () => "/station/restart", null, OVERVIEW);
+    // Whether a message or notice to an agent whose large context's cache is over starts it afresh by itself, unless its
+    // chat chose (`session.settings` `afresh`); its station's routes/context.ts, set by the workspace's owners and admins.
     case "context.setAfresh":
       return op("PUT", () => "/context/settings", p.pick(["afreshWhenCold"]), OVERVIEW);
     // Whether it sends its log to still.fail, scrubbed (its station's routes/diagnostics.ts); set by the workspace's
@@ -344,7 +344,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "session.delete":
       return op("DELETE", () => `/sessions/${p.at("key")}`, null, session("key"));
     case "session.settings":
-      return op("POST", () => `/sessions/${p.at("key")}/settings`, p.pick(["profile", "model", "effort", "fast", "repick"]), session("key"));
+      return op("POST", () => `/sessions/${p.at("key")}/settings`, p.pick(["profile", "model", "effort", "fast", "repick", "afresh"]), session("key"));
     case "chat.archive": {
       const method = p.bool("archived") ? "POST" : "DELETE";
       const fallback = op(method, () => `/sessions/${p.at("session")}/archive`, null, session("session"));

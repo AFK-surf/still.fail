@@ -468,13 +468,13 @@ const followed: DemoExtension = {
     return { ...chat, messages: [...chat.messages, ...said] };
   },
 };
-/** Its agent at rest, its prompt cache over (the core's `cacheCold`): said over the composer, with 换新上下文. */
+/** Its agent at rest, its prompt cache over (the core's `cacheCold`): said over the composer, with 换新上下文 to switch it. */
 const cacheCold: DemoExtension = {
   then: (t, value) => {
     if (t.topic !== "chat" || !value) return undefined;
     const chat = value as ChatView;
     const session = chat.agents[0]?.session.key;
-    return session ? { ...chat, cacheCold: { session, text: "缓存已过期，接着聊约需 $1.49" } } : undefined;
+    return session ? { ...chat, cacheCold: { session, text: "缓存已过期，重读约 $1.49", afresh: false } } : undefined;
   },
 };
 /** Its agent's prompt cache over and its station down: two notices over the composer, one over the other. */

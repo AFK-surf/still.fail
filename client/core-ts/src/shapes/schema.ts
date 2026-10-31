@@ -91,6 +91,7 @@ export const SHAPES: Record<string, Shape> = {
     ["model", opt("String")],
     ["effort", opt("String")],
     ["fast", opt("bool")],
+    ["afresh", opt("bool"), { doc: "Whether it goes on afresh once its prompt cache is over, as chosen in its chat (`session.settings`);\nabsent: as its station is set (`StationContext::afreshWhenCold`)." }],
     ["runtimeSessionId", opt("String")],
     ["contextActions", opt(vec("String")), { doc: "What its station can do to its context by hand: compact, clear (one from before says none)." }],
     ["workspace", opt("String")],
@@ -3103,9 +3104,9 @@ export const SHAPES: Record<string, Shape> = {
     ["tabs", opt("ChatTabs"), { doc: "Its side panel's tabs as this device keeps them for it (prefs `chatTabs`, chat-tabs.ts); absent from a core\nbefore it." }],
   ], { doc: "An item's page: its chat (with the viewer's read position), or its agent before it has one." }),
   ChatCacheCold: struct([
-    ["session", "String", { doc: "The agent's session: `session.clear` with `readBack` gives it a fresh context." }],
-    ["text", "String", { said: true, doc: "What is said: its cache over, and the context going on reads again (缓存已过期，接着聊约需 $1.40);\nits station set to go on afresh by itself, that the next message does." }],
-    ["auto", opt("bool"), { doc: "Its station goes on afresh by itself (`StationContext::afreshWhenCold`): nothing to tap. Absent otherwise." }],
+    ["session", "String", { doc: "The agent's session: `session.settings` with `afresh` switches whether it goes on afresh." }],
+    ["text", "String", { said: true, doc: "What is said: its cache over, and what going on would read again (缓存已过期，重读约 $1.40)." }],
+    ["afresh", "bool", { doc: "It goes on afresh as it is next started (by a message or a notice): its context cleared, told to read\nback what it needs. As chosen in its chat (`Session::afresh`), or else as its station is set\n(`StationContext::afreshWhenCold`); switched any time with `session.settings` `afresh`." }],
   ], { doc: "A chat's agent whose prompt cache is over (ChatView::cacheCold)." }),
   ChatCcTo: struct([
     ["thread", "i64", { client: "I54", doc: "The thread's id: `chat.cc`'s `to`." }],
