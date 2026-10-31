@@ -175,7 +175,7 @@ test "an archived chat's restore failing says why under it, in red; tapped again
 }
 
 ///|
-test "its agent's cache over: said over the composer, 接着聊 taken, 换新上下文 takes going on afresh, not asked again meanwhile" {
+test "its agent's cache over: the current choice opens the choices and changing it asks once" {
   let calls : Array[Made] = []
   let t = fake_core(calls, over=fn(name, tp) {
     if name != "chat" {
@@ -186,20 +186,24 @@ test "its agent's cache over: said over the composer, 接着聊 taken, 换新上
       None => tp
     }
   })
-  assert_true(t.find("缓存已过期，重读约 $1.49") is Some(_))
-  assert_true(t.get(Radio, label="接着聊").check is Some(On))
-  assert_true(t.get(Radio, label="换新上下文").check is Some(Off))
-  t.tap_text("接着聊")
+  assert_true(t.find("缓存已过期") is Some(_))
+  assert_true(t.find("重读约 $1.49") is Some(_))
+  t.click(Button, label="接着聊")
+  assert_true(t.get(MenuItemRadio, label="接着聊").check is Some(On))
+  assert_true(t.get(MenuItemRadio, label="换新上下文").check is Some(Off))
+  t.click(MenuItemRadio, label="接着聊")
   t.draw()
   assert_eq(named(calls, "session.settings").length(), 0, msg="the one taken: nothing to ask")
-  t.tap_text("换新上下文")
+  t.run_for(@kit.pop_out_ms)
+  t.click(Button, label="接着聊")
+  t.click(MenuItemRadio, label="换新上下文")
   t.draw()
   let asked = named(calls, "session.settings")
   assert_eq(asked.length(), 1)
   assert_eq(text(Some(asked[0].params), "key"), "s-c1")
   assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(true)))
-  t.tap_text("换新上下文")
   t.draw()
+  assert_true(t.get(Button, label="接着聊").disabled, msg="the choice is held while the change is on its way")
   assert_eq(named(calls, "session.settings").length(), 1, msg="on its way: not asked again")
 }
 
@@ -213,15 +217,17 @@ test "its agent's cache over, set to go on afresh: 换新上下文 taken, 接着
     match tp.value {
       Some(Object(o)) => {
         let o2 = o.copy()
-        o2["cacheCold"] = { "session": "s-c1", "text": "缓存已过期，重读约 $1.49", "afresh": true }
+        o2["cacheCold"] = { "session": "s-c1", "status": "缓存已过期", "detail": "重读约 $1.49", "afresh": true }
         { ..tp, value: Some(Json::object(o2)) }
       }
       _ => tp
     }
   })
-  assert_true(t.find("缓存已过期，重读约 $1.49") is Some(_))
-  assert_true(t.get(Radio, label="换新上下文").check is Some(On))
-  t.tap_text("接着聊")
+  assert_true(t.find("缓存已过期") is Some(_))
+  assert_true(t.find("重读约 $1.49") is Some(_))
+  t.click(Button, label="换新上下文")
+  assert_true(t.get(MenuItemRadio, label="换新上下文").check is Some(On))
+  t.click(MenuItemRadio, label="接着聊")
   t.draw()
   let asked = named(calls, "session.settings")
   assert_eq(asked.length(), 1)
@@ -229,11 +235,157 @@ test "its agent's cache over, set to go on afresh: 换新上下文 taken, 接着
 }
 
 ///|
+test "an offline station's cache choice stays visible but cannot be opened" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" { return tp }
+    match tp.value {
+      Some(Object(o)) => {
+        let o2 = o.copy()
+        o2["cacheCold"] = { "session": "s-c1", "status": "缓存已过期", "detail": "重读约 $1.49", "afresh": false }
+        o2["offline"] = Json::boolean(true)
+        { ..tp, value: Some(Json::object(o2)) }
+      }
+      _ => tp
+    }
+  })
+  assert_true(t.get(Button, label="接着聊").disabled)
+  assert_true(t.query(MenuItemRadio, label="换新上下文") is None)
+  assert_eq(named(calls, "session.settings").length(), 0)
+}
+
+///|
+test "the cache choice can be changed from the keyboard" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-cache-cold", wide=true)
+  let choice = t.get(Button, label="接着聊")
+  t.ctx().focus_on(choice.id, visible=true)
+  t.draw()
+  assert_eq(t.focused().map(fn(n) { n.label }), Some("接着聊"), msg="the choice has keyboard focus")
+  t.enter()
+  t.draw()
+  assert_true(t.query(MenuItemRadio, label="换新上下文") is Some(_), msg="Enter opens the choices")
+  assert_eq(t.focused().map(fn(n) { n.role }), Some(MenuItemRadio), msg="the menu focuses an item")
+  t.key(@ui.key_code_down)
+  assert_eq(t.focused().map(fn(n) { n.label }), Some("换新上下文"), msg="Down moves to the other choice")
+  t.enter()
+  t.draw()
+  let asked = named(calls, "session.settings")
+  assert_eq(asked.length(), 1)
+  assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(true)))
+}
+
+///|
+test "Down opens the cache choice and keeps it open for the keyboard" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-cache-cold", wide=true)
+  let choice = t.get(Button, label="接着聊")
+  t.ctx().focus_on(choice.id, visible=true)
+  t.draw()
+  t.key(@ui.key_code_down)
+  t.draw()
+  assert_true(t.query(MenuItemRadio, label="换新上下文") is Some(_), msg="Down opens the choices")
+  t.draw()
+  assert_true(t.query(MenuItemRadio, label="换新上下文") is Some(_), msg="the choices stay open")
+  let first = t.focused().map(fn(n) { n.label })
+  assert_eq(first, Some("接着聊"), msg="Down opens the menu at its first choice, got \{first}")
+  t.key(@ui.key_code_down)
+  let second = t.focused().map(fn(n) { n.label })
+  assert_eq(second, Some("换新上下文"), msg="Down moves to the second choice, got \{second}")
+  t.enter()
+  t.draw()
+  assert_eq(named(calls, "session.settings").length(), 1)
+}
+
+///|
+test "choosing how to continue an expired cache keeps the draft's keyboard" {
+  for platform in [1, 2] {
+    let calls : Array[Made] = []
+    let t = fake_core(calls, platform~, over=fn(name, tp) {
+      if name != "chat" { return tp }
+      match tp.value {
+        Some(v) => { ..tp, value: Some(@sffixture.with_cache_cold(v)) }
+        None => tp
+      }
+    })
+    t.tap_text("发消息")
+    t.type_text("签名")
+    keyboard_up(t, 300.0)
+    t.click(Button, label="接着聊")
+    assert_true(t.ime().0, msg="the keyboard stays while the choices are shown")
+    t.click(MenuItemRadio, label="换新上下文")
+    assert_eq(named(calls, "session.settings").length(), 1)
+    assert_true(t.ime().0, msg="the keyboard stays after choosing")
+    t.type_text("权限")
+    assert_eq(t.ime().1, "签名权限")
+  }
+}
+
+///|
+test "a cache notice on a narrow page keeps its cost together and both choices reachable" {
+  let calls : Array[Made] = []
+  let status = "缓存已过期"
+  let detail = "重读约 $7.50"
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) => {
+        let o2 = o.copy()
+        o2["cacheCold"] = { "session": "s-c1", "status": Json::string(status), "detail": Json::string(detail), "afresh": true }
+        { ..tp, value: Some(Json::object(o2)) }
+      }
+      _ => tp
+    }
+  })
+  t.resize(360.0, 844.0)
+  t.set_font_scale(1.3)
+  t.draw()
+  assert_eq(t.lines_of(status), [status], msg="the status fits beside the mark")
+  assert_eq(t.lines_of(detail), [detail], msg="the cost stays together")
+  t.click(Button, label="换新上下文")
+  assert_true(t.get(MenuItemRadio, label="换新上下文").check is Some(On))
+  t.click(MenuItemRadio, label="接着聊")
+  let asked = named(calls, "session.settings")
+  assert_eq(asked.length(), 1)
+  assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(false)))
+}
+
+///|
+test "the cache notice keeps status and cost together with a compact choice on a narrow page" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" { return tp }
+    match tp.value {
+      Some(v) => { ..tp, value: Some(@sffixture.with_cache_cold(v)) }
+      None => tp
+    }
+  })
+  t.resize(360.0, 844.0)
+  t.draw()
+  let (sx, sy, sw, _) = t.rect_of("缓存已过期").unwrap()
+  let (dx, dy, _, _) = t.rect_of("重读约 $1.49").unwrap()
+  let (cx, cy, cw, _) = t.get(Button, label="接着聊").rect
+  assert_true(dx >= sx + sw && dy == sy, msg="the status and cost share a line")
+  let glass = t.drawn_glass_corners().filter(fn(g) { g.0 < sx && g.0 + g.2 > cx + cw && g.1 < sy && g.1 + g.3 > cy })
+  assert_eq(glass.length(), 1)
+  t.click(Button, label="接着聊")
+  t.click(MenuItemRadio, label="换新上下文")
+  assert_eq(named(calls, "session.settings").length(), 1)
+}
+
+///|
 test "its agent's cache over, in the wide frame: said over the composer, 换新上下文 sets it to go on afresh" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-cache-cold", wide=true)
-  assert_true(t.find("缓存已过期，重读约 $1.49") is Some(_))
-  t.tap_text("换新上下文")
+  assert_true(t.find("缓存已过期") is Some(_))
+  assert_true(t.find("重读约 $1.49") is Some(_))
+  let (_, sy, _, sh) = t.rect_of("缓存已过期").unwrap()
+  let (_, cy, _, ch) = t.get(Button, label="接着聊").rect
+  assert_true((sy + sh / 2.0 - cy - ch / 2.0).abs() < 1.0, msg="status and choice are centred together")
+  t.click(Button, label="接着聊")
+  t.click(MenuItemRadio, label="换新上下文")
   t.draw()
   let asked = named(calls, "session.settings")
   assert_eq(asked.length(), 1)

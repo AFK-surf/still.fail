@@ -979,20 +979,37 @@ fn station_diagnostics(c : @ui.Ctx, core : Core, address : String, diagnostics :
 }
 
 ///|
-/// How it goes on with a session whose prompt cache is over (StationContext.tsx ContextSection): whether a person's
-/// message to an agent at rest whose large context's cache is over starts it afresh by itself, said by the workspace's
-/// managers (others read it).
+/// How it goes on with a session whose prompt cache is over (StationContext.tsx ContextSection): the station default
+/// and its estimated cost threshold, said by the workspace's managers (others read them).
 fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, manager : Bool) -> Unit {
-  st_section(c, @sf.t("web-pages.stations.context.section"), fn() {
+  let cost = match field(context, "afreshAbove") {
+    Some(Number(value, ..)) => Some(value)
+    _ => None
+  }
+  let busy = is_doing(core, ["context.setAfresh"], [("station", address)])
+  let on = flag(context, "afreshWhenCold")
+  // The default is one switch. Once enabled, its threshold can be edited directly from the section heading.
+  let actions : (() -> Unit)? = match cost {
+    Some(value) if on && manager =>
+      Some(fn() {
+        if @sf.action(c, "context-cost/" + address, @sf.t("web-pages.stations.context.customAmount"), disabled=busy) {
+          station_cold_custom(core, address, value)
+        }
+      })
+    _ => None
+  }
+  st_section(c, @sf.t("web-pages.stations.context.section"), actions?, fn() {
     @sf.group(c, fn() {
-      let busy = is_doing(core, ["context.setAfresh"], [("station", address)])
-      let on = flag(context, "afreshWhenCold")
       let now = @sf.switch_row(
         c,
         "context-afresh/" + address,
         @sf.t("web-pages.stations.context.afresh"),
         on,
-        note=@sf.t("web-pages.stations.context.afreshLine"),
+        note=match cost {
+          Some(value) if value == 0.0 => @sf.t("web-pages.stations.context.afreshZeroLine")
+          Some(value) => @sf.t("web-pages.stations.context.afreshCostLine", args=[("amount", "$" + value.to_string())])
+          None => @sf.t("web-pages.stations.context.afreshLineLegacy")
+        },
         disabled=!manager,
         busy~,
       )
@@ -1006,6 +1023,51 @@ fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, 
       }
     })
   })
+}
+
+///|
+/// The threshold can be any non-negative, finite amount, including zero.
+fn station_cold_amount(words : String) -> Double? {
+  match (try Some(@json.parse(words.trim(chars=" \t\n").to_owned())) catch { _ => None }) {
+    Some(Number(v, ..)) if v >= 0.0 && !v.is_inf() && !v.is_nan() => Some(v)
+    _ => None
+  }
+}
+
+///|
+/// A custom threshold is entered in its own editor, keeping the words being typed there.
+fn station_cold_custom(core : Core, address : String, cost : Double) -> Unit {
+  let field_ = @ui.Field::new(text=cost.to_string())
+  let key = "context-cost-custom/" + (desk_dialogs.val + 1).to_string()
+  let title = @sf.t("web-pages.stations.context.threshold")
+  open_dialog(
+    @sf.t("web-pages.stations.context.customAmount"),
+    fn(c, _) {
+      @sf.field(c, title, hint=@sf.t("web-pages.stations.context.amountHint"), fn() {
+        @sf.input(c, key, placeholder=title, field=field_) |> ignore
+      })
+    },
+    fn(c, shut) {
+      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+        shut()
+      }
+      let amount = station_cold_amount(field_.text())
+      let changed = match amount {
+        Some(v) => v != cost
+        None => false
+      }
+      let busy = is_doing(core, ["context.setAfresh"], [("station", address)])
+      if @sf.button(c, @sf.t("common.save"), key=key + "/save", tone=Primary, busy~, disabled=!changed) {
+        match amount {
+          Some(v) => {
+            @settings.act(core, @sf.t("web-pages.stations.context.what"), "context.setAfresh", obj([("station", str(address)), ("afreshAbove", Json::number(v))]))
+            shut()
+          }
+          None => ()
+        }
+      }
+    },
+  )
 }
 
 ///|

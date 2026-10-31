@@ -16,6 +16,6 @@ export function CacheColdNotice({ cold, setAfresh, offline }: { cold: ChatCacheC
       { label: t("web-main.chat.goOn"), taken: !cold.afresh, take: () => void operation.run(false) },
       { label: t("web-main.chat.afresh"), taken: cold.afresh, take: () => void operation.run(true) },
     ]} />}>
-    {cold.text}
+    {cold.status}<br />{cold.detail}
   </ComposerNotice>;
 }

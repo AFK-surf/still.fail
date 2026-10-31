@@ -5,6 +5,7 @@
 // reads them as one (read/tail.ts ChainTail).
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { coldAfresh, coldWorth } from "../../../client/core-ts/src/cache-policy.ts";
 import { afresh, cleared, resumeLost, threadAddress } from "../agents/instructions.ts";
 import type { Profile } from "../agents/runtime.ts";
 import { log } from "../ops/log.ts";
@@ -28,19 +29,17 @@ export function toldCleared(hub: Hub, key: string, readBack = false): string {
   return readBack ? afresh(key, threads) : cleared(key, threads);
 }
 
-/// The context at least that is worth going on afresh with once its cache is over (the core's views/brief.ts
-/// `COLD_FROM`, which says so over its composer): about what a new conversation is given before it reads back what it
-/// needs, and some.
-const COLD_FROM = 50_000;
-
 /// Whether session `key` started at `now` (by a message, or a notice) is to start afresh: set to in its chat, or else its
 /// station (`afreshWhenCold`), its runtime session's prompt cache over (read/usage.ts `usageNow`: as its runtime told
-/// what it wrote) and its context worth it.
+/// what it wrote), and its context worth it. The station's default takes the estimated reread cost into account.
 export function goesAfresh(hub: Hub, key: string, now: number): boolean {
   const row = hub.store.getSession(key);
-  if (!(row?.afresh ?? hub.config().afreshWhenCold) || row?.runtimeSessionId == null) return false;
+  if (row?.runtimeSessionId == null) return false;
   const u = usageNow(hub.store, key);
-  return u?.lastCallAt !== undefined && u.cacheMs !== undefined && u.lastCallAt + u.cacheMs <= now && (u.contextTokens ?? 0) >= COLD_FROM;
+  if (u?.lastCallAt === undefined || u.cacheMs === undefined || u.lastCallAt + u.cacheMs > now) return false;
+  const { afreshWhenCold, afreshAbove } = hub.config();
+  const threshold = afreshWhenCold || row.afresh === true ? afreshAbove : undefined;
+  return coldWorth(u.contextTokens ?? 0, u.rereadCost, threshold, row.afresh, afreshWhenCold) && coldAfresh(row.afresh, afreshWhenCold, afreshAbove, u.rereadCost);
 }
 
 /// What a session whose runtime session could not be resumed is told as its new one starts: where its earlier

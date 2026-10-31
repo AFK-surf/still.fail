@@ -559,10 +559,9 @@ pub(all) struct ChatView {
   offline_note : String?
   /// its station gone for its update: that line marked with the update's mark in place of the unplugged one
   updating : Bool
-  /// its agent's prompt cache over (the core's `cacheCold`): that agent's session, what the line over the composer
-  /// says (going on reads its context again, or that it goes on afresh), and whether it goes on afresh as it is next
-  /// started (as its chat chose, or else its station is set; 换新上下文 or 接着聊 turns it the other way)
-  cache_cold : (String, String, Bool)?
+  /// its agent's prompt cache over (the core's `cacheCold`): that agent's session, the status, what rereading costs,
+  /// and whether it goes on afresh as it is next started (as its chat chose, or else its station is set)
+  cache_cold : (String, String, String, Bool)?
   /// where it stands, as its row's second line says it without a card waiting (the core's `stateText`, `stateLead`,
   /// `stateRest`): said at the end of its messages
   state : (String, String, String)?
@@ -685,7 +684,7 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
     offline_note: opt_text(s, "offlineNote"),
     updating: flag(s, "updating"),
     cache_cold: match field(s, "cacheCold") {
-      Some(Object(_)) as cold => Some((text(cold, "session"), text(cold, "text"), flag(cold, "afresh")))
+      Some(Object(_)) as cold => Some((text(cold, "session"), text(cold, "status"), text(cold, "detail"), flag(cold, "afresh")))
       _ => None
     },
     state: match opt_text(s, "stateText") {

@@ -89,7 +89,7 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const [shown, setShown] = useState<Shown | null>(null);
   const use = useCallback((spec: HostComposer) => {
     latest.current = spec;
-    setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.offlineNote === spec.offlineNote && was.archived === spec.archived && was.cacheCold?.session === spec.cacheCold?.session && was.cacheCold?.text === spec.cacheCold?.text && was.cacheCold?.afresh === spec.cacheCold?.afresh ? was
+    setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.offlineNote === spec.offlineNote && was.archived === spec.archived && was.cacheCold?.session === spec.cacheCold?.session && was.cacheCold?.status === spec.cacheCold?.status && was.cacheCold?.detail === spec.cacheCold?.detail && was.cacheCold?.afresh === spec.cacheCold?.afresh ? was
       : { station: spec.station, session: spec.session ?? null, placeholder: spec.placeholder, offline: spec.offline, ...(spec.offlineNote !== undefined ? { offlineNote: spec.offlineNote } : {}), ...(spec.archived !== undefined ? { archived: spec.archived } : {}), ...(spec.cacheCold !== undefined ? { cacheCold: spec.cacheCold } : {}) }));
   }, []);
   const station = id === undefined ? undefined : stations?.find((s) => s.id === id);

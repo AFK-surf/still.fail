@@ -13,9 +13,11 @@ priv struct SettingsFixture {
   marks : Map[String, String]
   /// the station's updating by itself
   mut auto : Bool
-  /// the station going on afresh by itself once a session's cache is over
+  /// the station's congestion control
   mut congestion : String
+  /// the station going on afresh by itself once a session's cache is over, and its cost threshold
   mut afresh : Bool
+  mut afresh_above : Double
   /// the station sending its log to still.fail
   mut logs : Bool
   /// a program granted Studio's data and another asking for it (docs/data-outflow.md: its overview's
@@ -86,6 +88,7 @@ let fx : SettingsFixture = {
   auto: false,
   congestion: "cubic",
   afresh: false,
+  afresh_above: 1.0,
   logs: true,
   outflow: false,
   outflow_answer: None,
@@ -175,6 +178,7 @@ fn fixture_reset() -> Unit {
   fx.marks.clear()
   fx.auto = false
   fx.afresh = false
+  fx.afresh_above = 1.0
   fx.logs = true
   fx.outflow = false
   fx.outflow_answer = None
@@ -1116,7 +1120,7 @@ fn fx_station(address : String) -> Json {
             ],
           ),
           ("search", obj([("files", str("spotlight")), ("personal", Json::boolean(false))])),
-          ("context", obj([("afreshWhenCold", Json::boolean(fx.afresh))])),
+          ("context", obj([("afreshWhenCold", Json::boolean(fx.afresh)), ("afreshAbove", Json::number(fx.afresh_above))])),
           ("diagnostics", obj([("logs", Json::boolean(fx.logs))])),
           ("network", obj([("congestion", str(fx.congestion))])),
           ("outflowGrants", Json::number(if fx.outflow { 2.0 } else { 0.0 })),
@@ -2301,7 +2305,15 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       Some(Ok(obj([])))
     }
     "context.setAfresh" => {
-      fx.afresh = flag(p, "afreshWhenCold")
+      match field(p, "afreshWhenCold") {
+        Some(True) => fx.afresh = true
+        Some(False) => fx.afresh = false
+        _ => ()
+      }
+      match field(p, "afreshAbove") {
+        Some(Number(above, ..)) => fx.afresh_above = above
+        _ => ()
+      }
       fx_changed()
       Some(Ok(obj([])))
     }

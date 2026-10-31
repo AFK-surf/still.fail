@@ -67,11 +67,126 @@ test "a station's 设置 switches going on afresh once a session's cache is over
   t.run_for(@ui.move_most_ms)
   scrolled_to(t, 390.0, "缓存过期后自动换新上下文")
   assert_true(t.find("缓存过期后自动换新上下文") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("缓存过期且重读估算费用达到 $1 时换新；对话中的选择优先") is Some(_), msg="the default threshold is visible")
+  assert_true(t.all(Button, label="自定义金额").is_empty(), msg="only the switch is shown while it is off")
   // (the switch alone takes the press: by its label)
   t.click(Switch, label="缓存过期后自动换新上下文")
   t.draw()
   assert_eq(asked.length(), 1, msg="switched")
   assert_eq(field(Some(asked[0]), "afreshWhenCold"), Some(Json::boolean(true)))
+  t.click(Button, label="自定义金额")
+  t.draw()
+  presented_in(t)
+  assert_true(t.find("重读费用门槛（美元）") is Some(_), msg="customization opens the amount editor directly")
+  let amount = t.get(TextField, label="重读费用门槛（美元）")
+  let (fx, fy, fw, fh) = amount.rect
+  t.tap(fx + fw / 2.0, fy + fh / 2.0)
+  t.clear()
+  t.type_text("-1")
+  assert_true(t.all(Button, label="保存").filter(fn(n) { !n.disabled }).is_empty(), msg="a negative amount cannot be saved")
+  t.clear()
+  t.type_text("2.5")
+  let saves = t.all(Button, label="保存").filter(fn(n) { !n.disabled })
+  assert_eq(saves.length(), 1, msg="the changed amount can be saved")
+  let (x, y, w, h) = saves[0].rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.draw()
+  assert_eq(asked.length(), 2, msg="the custom threshold is saved")
+  assert_eq(field(Some(asked[1]), "afreshAbove"), Some(Json::number(2.5)))
+  assert_true(t.get(Switch, label="缓存过期后自动换新上下文").check is Some(On), msg="saving the amount leaves the switch on")
+  presented_in(t)
+  t.click(Button, label="自定义金额")
+  t.draw()
+  presented_in(t)
+  let zero = t.get(TextField, label="重读费用门槛（美元）")
+  let (zx, zy, zw, zh) = zero.rect
+  t.tap(zx + zw / 2.0, zy + zh / 2.0)
+  t.clear()
+  t.type_text("0")
+  t.click(Button, label="保存")
+  t.draw()
+  assert_eq(asked.length(), 3, msg="zero can be saved")
+  assert_eq(field(Some(asked[2]), "afreshAbove"), Some(Json::number(0.0)))
+  assert_true(t.find("门槛 $0：过期就换；对话选择优先") is Some(_), msg="zero is described as unconditional")
+}
+
+///|
+test "an older station's cache switch does not imply that it has a cost threshold" {
+  fn old(v : Json) -> Json {
+    match v {
+      Object(o) => {
+        let p = o.copy()
+        for k, x in o {
+          p[k] = old(x)
+        }
+        p.remove("afreshAbove")
+        Json::object(p)
+      }
+      Array(a) => Json::array(a.map(old))
+      _ => v
+    }
+  }
+  let over = fn(base : Source) -> Source {
+    {
+      ..base,
+      topic: fn(name, params) {
+        let v = (base.topic)(name, params)
+        match v.value {
+          Some(x) => { ..v, value: Some(old(x)) }
+          None => v
+        }
+      },
+    }
+  }
+  let t = setting_tester(Station("ws1/st1"), 390.0, platform=2, h=2400.0, over~, ready=fn() {
+    @settings.station_parts["ws1/st1"] = "settings"
+  })
+  t.run_for(@ui.move_most_ms)
+  scrolled_to(t, 390.0, "缓存过期后自动换新上下文")
+  assert_true(t.find("缓存过期后，下次启动换新上下文；对话中的选择优先") is Some(_))
+  assert_true(t.all(Button, label="自定义金额").is_empty())
+}
+
+///|
+test "a workspace member can see the cache threshold but cannot change it" {
+  let asked : Array[Json] = []
+  let t = setting_tester(
+    Station("ws1/st1"),
+    390.0,
+    platform=2,
+    h=2400.0,
+    over=fn(s) {
+      {
+        ..s,
+        topic: fn(name, params) {
+          let v = (s.topic)(name, params)
+          match (name, v.value) {
+            ("workspace", Some(Object(o))) => {
+              let p = o.copy()
+              p["role"] = Json::string("member")
+              { ..v, value: Some(Json::object(p)) }
+            }
+            _ => v
+          }
+        },
+        call: fn(name, params, done) {
+          if name == "context.setAfresh" { asked.push(params) }
+          (s.call)(name, params, done)
+        },
+      }
+    },
+    ready=fn() {
+      @settings.fixture_call("context.setAfresh", obj([("afreshWhenCold", Json::boolean(true))])) |> ignore
+      @settings.station_parts["ws1/st1"] = "settings"
+    },
+  )
+  t.run_for(@ui.move_most_ms)
+  scrolled_to(t, 390.0, "缓存过期后自动换新上下文")
+  assert_true(t.find("缓存过期且重读估算费用达到 $1 时换新；对话中的选择优先") is Some(_))
+  assert_true(t.get(Switch, label="缓存过期后自动换新上下文").disabled)
+  assert_true(t.get(Switch, label="缓存过期后自动换新上下文").check is Some(On))
+  assert_true(t.all(Button, label="自定义金额").is_empty(), msg="a member cannot edit the amount")
+  assert_eq(asked.length(), 0)
 }
 
 ///|

@@ -3,6 +3,7 @@
 // and used (its tokens, the cache's hit rate, how full its context is), the latest of what it did and what it does now,
 // its jobs at work, and what is wrong.
 import { args, doing, type Known, tasksOf, toolName } from "../activity.ts";
+import { coldAfresh, coldWorth } from "../cache-policy.ts";
 import * as format from "../format.ts";
 import { usageOf } from "../history.ts";
 import { t } from "../i18n.ts";
@@ -112,18 +113,14 @@ export function usageNow(session: unknown, live: unknown): J {
   return has(first) ? first : has(then) ? then : null;
 }
 
-/// The context at least that is worth going on afresh with once its cache is over: about what a new conversation is
-/// given before it reads back what it needs (its instructions, its tools), and some.
-const COLD_FROM = 50_000;
-
 /// Of a chat's agents (ViewsInner `agent`), the one at rest whose prompt cache is over, with a context worth going on
 /// afresh with (the largest of those): the line over the composer that says what going on would read again
 /// (ChatCacheCold); and in how long, at `now`, another's is over (Infinity: none's to come). None at work, with no
 /// runtime session to go on in, or of a station that does not tell how long its cache lasts. One waiting on work of its
 /// own is said too: what it waits on starts it again. Whether it goes on afresh as it is next started (by a message or
 /// a notice): as chosen in its chat (its session's `afresh`), or else as its station is set (`station`).
-export function cacheCold(agents: unknown, now: number, station = false): [J, number] {
-  let cold: { session: string; context: number; cost: number | null; afresh: boolean } | null = null;
+export function cacheCold(agents: unknown, now: number, station = false, threshold?: number): [J, number] {
+  let cold: { session: string; context: number | null; cost: number | null; afresh: boolean } | null = null;
   let next = Infinity;
   for (const a of arr(agents)) {
     const status = get(a, "status");
@@ -133,19 +130,26 @@ export function cacheCold(agents: unknown, now: number, station = false): [J, nu
     if (typeof key !== "string" || typeof get(session, "runtimeSessionId") !== "string") continue;
     const u = usageNow(session, null);
     const [at, ms, context] = [get(u, "lastCallAt"), get(u, "cacheMs"), get(u, "contextTokens")];
-    if (typeof at !== "number" || typeof ms !== "number" || typeof context !== "number" || context < COLD_FROM) continue;
+    const chosen = get(session, "afresh");
+    const cost = typeof get(u, "rereadCost") === "number" ? u.rereadCost as number : undefined;
+    // The price makes a small context worth mentioning even when automatic replacement is off: the person can still
+    // choose what to do with it. An older station gives no threshold and keeps its former 50K-token rule.
+    const count = typeof context === "number" ? context : null;
+    if (typeof at !== "number" || typeof ms !== "number" ||
+      !coldWorth(count ?? 0, cost, threshold, chosen, station)) continue;
     if (at + ms > now) {
       next = Math.min(next, at + ms - now);
       continue;
     }
-    const chosen = get(session, "afresh");
-    const afresh = typeof chosen === "boolean" ? chosen : station;
-    if (cold === null || context > cold.context) cold = { session: key, context, cost: typeof get(u, "rereadCost") === "number" ? u.rereadCost : null, afresh };
+    const afresh = coldAfresh(chosen, station, threshold, cost);
+    if (cold === null || (count ?? 0) > (cold.context ?? 0)) cold = { session: key, context: count, cost: cost ?? null, afresh };
   }
   if (cold === null) return [null, next];
-  const tokens = format.compactNumber(cold.context);
-  const text = cold.cost !== null ? t("core-views.agent.cacheColdCost", { tokens, cost: money(cold.cost) }) : t("core-views.agent.cacheCold", { tokens });
-  return [{ session: cold.session, text, afresh: cold.afresh }, next];
+  const status = t("core-views.agent.cacheColdStatus");
+  const detail = cold.cost !== null ? t("core-views.agent.cacheColdCostDetail", { cost: money(cold.cost) })
+    : cold.context !== null ? t("core-views.agent.cacheColdTokensDetail", { tokens: format.compactNumber(cold.context) })
+    : t("core-views.agent.cacheColdUnknownDetail");
+  return [{ session: cold.session, status, detail, afresh: cold.afresh }, next];
 }
 
 /// What it has going in the background past its turns (its live view's `tasks`, as its station says them), each with
