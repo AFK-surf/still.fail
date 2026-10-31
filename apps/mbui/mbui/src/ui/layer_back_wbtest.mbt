@@ -841,3 +841,67 @@ test "a layer's anchor with a press of another's drawn over it there (no part of
 test "a layer's anchor, a press of its own in it: on the anchor, nothing dismissed" {
   assert_eq(anchor_pressed().0, [])
 }
+
+///|
+test "the same layer opened from one button, ended by what it is for (Ctx::layer_ended), opened at once from another with no frame closing it: the new opening takes presses and Escape, told its own closing once, the focus back on the second" {
+  let open = Ref(false)
+  let told = Ref(0)
+  let pressed = Ref(0)
+  let ids = [0, 0]
+  let menu = Ref(0)
+  let item_id = Ref(0)
+  let t = Tester::new(
+    fn(c) {
+      for k in 0..<2 {
+        let id = c.id("opener \{k}")
+        ids[k] = id
+        c.focusable(id)
+        c.box(id~, w=Px(80.0), h=Px(30.0), fn() {  }) |> ignore
+      }
+      if open.val {
+        c.with_dismissed(
+          fn(_) {
+            told.val += 1
+            open.val = false
+          },
+          fn() {
+            menu.val = c.id("menu")
+            c.overlay("menu", modal=true, fn() {
+              let item = c.id("item")
+              item_id.val = item
+              c.focusable(item)
+              if c.clicked(item) {
+                pressed.val += 1
+              }
+              c.box(id=item, w=Px(100.0), h=Px(40.0), fn() {  }) |> ignore
+            })
+            |> ignore
+          },
+        )
+      }
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+  )
+  t.draw()
+  g().focus_moved(ids[0])
+  t.draw()
+  open.val = true
+  t.draw()
+  t.draw()
+  // ended by what it is for, then opened from the second at once: no frame between
+  g().layer_ended(menu.val)
+  g().focus_moved(ids[1])
+  t.draw()
+  t.draw()
+  // the new opening: a press in it its own, Escape dismissing it, told once, the focus back on the second
+  let (x, y, w, h) = g().rect_of(item_id.val).unwrap()
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.draw()
+  t.key_told(key_escape, 0, t.time())
+  let at_once = open.val
+  t.draw()
+  t.draw()
+  assert_eq((pressed.val, told.val, at_once, open.val, g().focused_id() == ids[1]), (1, 1, false, false, true))
+}

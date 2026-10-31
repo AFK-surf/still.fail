@@ -10,6 +10,7 @@ fn desk_composer_tester(
   platform? : Int = 0,
   over? : (String, Topic) -> Topic = fn(_, t) { t },
   kept? : ((String, String) -> String)? = None,
+  answers? : (String, Json) -> Json? = fn(_, _) { None },
 ) -> (@ui.Tester, Source) {
   new_run()
   let base = fixture("chat")
@@ -19,7 +20,11 @@ fn desk_composer_tester(
     topic: fn(name, params) { over(name, (base.topic)(name, params)) },
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
-      (base.call)(name, params, done)
+      // (what the test answers for the core, `answers`: else the fixture's)
+      match answers(name, params) {
+        Some(v) => done(Ok(v))
+        None => (base.call)(name, params, done)
+      }
     },
     call_bytes: fn(name, params, bytes, done) {
       calls.push({ name, params, bytes: Some(bytes), done, heard: None })

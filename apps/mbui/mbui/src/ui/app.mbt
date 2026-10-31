@@ -532,6 +532,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.desk_frame_end()
   // (the hand as this frame left it, what it drew published, at its clock: hand_turns.mbt)
   turns_said(c, c.clock, frame=true)
+  // (what takes a field's keys the frame no longer said so of, let go: Ctx::on_key)
+  keys_taken_built()
   c.bars_frame_end()
   c.sync_ime()
   c.sync_text_menu()
@@ -1623,6 +1625,14 @@ fn on_key(code : Int, mods : Int) -> Unit {
 
 ///|
 fn on_key_now(code : Int, mods : Int) -> Unit {
+  // what the part over the field with the focus said it takes of its keys, at their moment, before the field, the
+  // tree's Tab or the frame (Ctx::on_key): the one place a key is handed it or not
+  if keys_taken_now(g().focus_allowed(), code, mods) {
+    took_input("key", h_now(), [code.to_double(), mods.to_double()])
+    hand_event()
+    h_request_frame()
+    return
+  }
   // (taken by a node of the window's tree, at its moment: no input of the old views', taped alone: view_host.mbt)
   if view_key(code, mods) {
     input_taped("key", h_now(), [code.to_double(), mods.to_double()])
@@ -1630,10 +1640,6 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
   }
   took_input("key", h_now(), [code.to_double(), mods.to_double()])
   hand_event()
-  // (taken by what said it takes it, at its moment: Ctx::on_key)
-  if keys_taken_now(code, mods) {
-    return
-  }
   key_in(code, mods)
   // (Escape to the topmost layer it dismisses, at its moment: overlay.mbt)
   if code == key_escape {
@@ -1651,10 +1657,18 @@ fn key_in(code : Int, mods : Int) -> Unit {
   if catcher_key(c, code, mods) {
     return
   }
+  // (a field with the focus under a layer the keys go to, modal, a menu with the focus in it, Ctx::keys_reach: its keys
+  // not its; that layer's to read as the frame takes them, Ctx::key_pressed)
+  let under = c.editors.contains(focus) && !c.keys_reach(focus)
+  let focus = if under { 0 } else { focus }
   // ⌘Z, ⇧⌘Z (Ctrl+Z, Ctrl+Y elsewhere) with a field focused: its edits undone and done again (editor_undo.mbt)
   let step = if c.editors.contains(focus) { step_of(code, mods, h_keys()) } else { None }
   // every key the app may read (Ctx::key_pressed), and whether the focused field takes it (the editor's own keys)
   desk_key(code, mods, c.editors.contains(focus) && (field_key(code) || step is Some(_)))
+  if under {
+    h_request_frame()
+    return
+  }
   // ⌘V (Ctrl+V) as the app's key: the host saw files or a picture on the clipboard (mac_app.m, win_app.c), read for
   // the field focused (Ctx::editor: them where it takes files, its words where it does not)
   if code == key_of_char('v') && (mods & (mod_cmd | mod_ctrl)) != 0 && c.editors.contains(focus) {

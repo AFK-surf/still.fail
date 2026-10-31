@@ -152,6 +152,7 @@ fn composing_reset() -> Unit {
   composing.restore_errors.clear()
   composing.outside = false
   composing.menu_up = false
+  ref_keyed.val = ""
   composing.cc_open = false
   composing.hint_shape = ""
   composing.opened = (-1, "", "")
@@ -674,8 +675,8 @@ fn composer_text(
         placeholder_color=@sf.alpha(p.subtle, hint_in.get() * said_look.alpha),
         caret_color=if away { @sf.alpha(p.accent, 0.0) } else { p.accent },
         enter_sends=@sf.enter_sends(),
-        // (the `@` menu open: ↑ / ↓ choose in it, Enter and Tab pick)
-        leaves=ref_leaves(src, spec, w, c.editor_focused(composer_field_key)),
+        // (the `@` menu open: ↑ / ↓ choose in it, Enter and Tab pick, as each comes: it takes them, Ctx::on_key; what it
+        // does not take is the field's)
         files=!no_files,
         // words pasted at once past the core's bound: a file of their own (Chat.tsx onPaste)
         paste_limit=if no_files || w.starting { 0 } else { @sfbase.paste_threshold(c, src) },
