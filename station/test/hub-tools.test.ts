@@ -526,18 +526,22 @@ test("an agent names its chat once, and again only after people said enough; nev
   const to = `EMBER/${thread.threadTs}`;
   const post = (title: string) => r.call(key, "chat_post", { to, text: "ok", title });
   const named = () => r.store.getThread(thread.id)!.autoTitle;
+  // Its model asks again: it has read what people said meanwhile (else its post says it had not).
+  const read = () => r.claude.last().events({ type: "live", event: { kind: "phase", phase: "requesting" } });
   assert.equal(await post("  登录\n排查。 "), `Posted to ${to}. Titled the chat "登录 排查".`);
   assert.equal(named(), "登录 排查");
   assert.equal(await post("登录 排查"), `Posted to ${to}.`, "the same name: nothing to say");
   assert.ok((await post("登录问题排查")).includes("Title not changed: people have said too little"));
   for (let n = 0; n < 5; n++) sayIn(r.hub, thread.id, "local", `再看 ${n}`);
   await settle();
+  read();
   assert.ok((await post("部署失败")).endsWith('Titled the chat "部署失败".'));
   assert.equal(r.store.autoTitle(thread.id).changes, 1);
   // Someone has it open: the new name waits for them to leave.
   for (let n = 0; n < 5; n++) sayIn(r.hub, thread.id, "local", `又一件 ${n}`);
   r.store.setRead("local", thread.id, r.store.lastEntry(thread.id));
   await settle();
+  read();
   assert.ok((await post("证书过期")).endsWith('The chat will be titled "证书过期" once nobody has it open.'));
   assert.equal(named(), "部署失败");
   // A name people gave stays.

@@ -703,6 +703,43 @@ test("messages that arrive while a turn cannot take them go in the next turn", a
   await r.close();
 });
 
+test("a message said before the agent's post, unread when it posted, is said to come before that post", async () => {
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const session = r.claude.last();
+  session.unsteerable = true;
+  await r.accept(reply(m, "9999.3", "wait, not that"));
+  await settle();
+  const result = await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "Done." });
+  assert.ok(result.includes("you had not read yet came in this thread (ts 9999.3)"), result);
+  const post = r.said(r.thread("C1", m.threadTs).id).find((x) => x.text === "Done.")!;
+  session.complete();
+  await settle();
+  assert.ok(matches(session.prompts[1]!, [`ts="9999.3" before="${post.ts}">`, "wait, not that"]), session.prompts[1]);
+  await r.close();
+});
+
+test("a message steered into the turn is unread by the post its model was already writing, not by one after it asked again", async () => {
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const session = r.claude.last();
+  await r.accept(reply(m, "9999.4", "also the docs"));
+  await settle();
+  assert.ok(session.steers[0]!.includes("also the docs"));
+  const result = await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "Fixed the build." });
+  assert.ok(result.includes("(ts 9999.4)"), result);
+  session.events({ type: "live", event: { kind: "phase", phase: "requesting" } });
+  const later = await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "Docs too." });
+  assert.ok(!later.includes("had not read"), later);
+  await r.close();
+});
+
 test("a connect's runtime, profile and model decide the session", async () => {
   const r = new Rig();
   const m = say("<@UGPT> refactor this");
