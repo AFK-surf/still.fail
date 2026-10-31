@@ -479,14 +479,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.back_node = c.back_node_next
   c.back_island = c.back_island_next
   c.back_edge = c.back_edge_next
-  let takes = match c.back {
-    Some(_) => true
-    None => false
-  }
-  if takes != c.back_told {
-    c.back_told = takes
-    h_back_enabled(takes)
-  }
+  // (the host told whether the app takes back, as what the old views said now has it: Ctx::back_told_host)
+  c.back_told_host()
   let hi = c.hit_ids
   c.hit_ids = c.next_hit_ids
   c.next_hit_ids = hi
