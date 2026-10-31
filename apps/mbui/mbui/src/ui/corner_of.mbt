@@ -8,19 +8,25 @@ pub fn corner_roots() -> CornerRoots {
 }
 
 ///|
-/// What linked corners of the window's tree's nodes are worked out from: the window's corner as the system draws it and
-/// the window's theme's ranges, as the frame began (view_frame); told as either changes, what read it worked out again.
+/// The window's corner as the system draws it, for the window's tree's nodes: as the frame began (view_frame), told as
+/// it changes (the window maximized, another system's corner), what read it worked out again.
 // kept across runs: set as each frame begins
-let tree_corner_roots : @signals.Signal[CornerRoots] = @signals.signal(
-  { window: 0.0, fit: None },
-  same=fn(a, b) { a == b },
-)
+let tree_window_corner : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
 
 ///|
-/// A node of the window's tree's corner linked so (View::radius): worked out from the window's roots as they are now,
-/// again as they change (the window maximized, another system's corner, another theme's ranges).
+/// A node of the window's tree's corner linked so (View::radius): worked out from the window's roots as they are now
+/// (tree_corner_roots_now), again as they change (the window maximized, another system's corner, another theme's
+/// ranges).
 pub fn corner_of(k : CornerOf) -> @view.Live[Double] {
-  By(fn() { k.radius(tree_corner_roots.get()) })
+  By(fn() { k.radius(tree_corner_roots_now()) })
+}
+
+///|
+/// What linked corners of the window's tree's nodes are worked out from now, followed: the window's corner as the frame
+/// began (tree_window_corner), the ranges of the theme its nodes are drawn in (tree_theme: the one the app tells it, as
+/// it changes, at once; else the window's): what reads it worked out again as either changes.
+pub fn tree_corner_roots_now() -> CornerRoots {
+  { window: tree_window_corner.get(), fit: tree_theme().corner_fit }
 }
 
 ///|
@@ -68,4 +74,32 @@ let tree_theme_of : @signals.Signal[(() -> Theme)?] = @signals.signal(None, same
 /// read where it is drawn so it follows as it changes (a signal read in `f`): told as the tree is made.
 pub fn set_tree_theme(f : () -> Theme) -> Unit {
   tree_theme_of.set(Some(f))
+}
+
+///|
+/// Whether the window has none of the system's title bar (window_inset: its buttons in the app's top row; not full
+/// screen nor going there), as the frame began (view_frame); told as it changes, what read it worked out again.
+// kept across runs: set as each frame begins
+let tree_inset_said : @signals.Signal[Bool?] = @signals.signal(None, same=fn(a, b) { a == b })
+
+///|
+/// window_inset for a node of the window's tree: as the frame began, followed (tree_inset_said); before the first
+/// frame, the window's.
+pub fn window_inset_now() -> Bool {
+  match tree_inset_said.get() {
+    Some(on) => on
+    None => window_inset()
+  }
+}
+
+///|
+/// window_keys_left for a node of the window's tree (window_inset_now), followed.
+pub fn window_keys_left_now() -> Bool {
+  window_inset_now() && platform() != 3 && platform() != 5
+}
+
+///|
+/// window_keys_own for a node of the window's tree (window_inset_now), followed.
+pub fn window_keys_own_now() -> Bool {
+  window_inset_now() && (platform() == 3 || platform() == 5)
 }

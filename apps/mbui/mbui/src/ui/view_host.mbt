@@ -273,7 +273,10 @@ pub fn view_painted() -> ViewPaintWork {
 /// As a run begins: no tree, its nodes let go. What took back by the old views no more held (what calls it and what it
 /// was said in): none takes back till a frame of the next says what does; nothing held of them.
 fn view_forget() -> Unit {
-  @signals.untracked(fn() { tree_theme_of.set(None) })
+  @signals.untracked(fn() {
+    tree_theme_of.set(None)
+    tree_inset_said.set(None)
+  })
   view_shape_of.val = OfOld
   let c = g()
   targets_forget()
@@ -379,7 +382,7 @@ fn view_runs_measure(runs : Array[@view.WordsRun], look : @view.WordsLook, width
 
 ///|
 /// How words are shaped changed for all of them (the system's size of words, Ctx::font_scale, as a frame begins; the
-/// faces given, faces.mbt words_forgotten): the words of the window's tree measured and drawn again so, as an old
+/// faces given, faces.mbt words_forgotten; lines set as a browser sets them or not, set_web_lines): the words of the window's tree measured and drawn again so, as an old
 /// view's are laid out anew.
 fn view_words_rescaled() -> Unit {
   match view_app.val {
@@ -403,10 +406,12 @@ fn view_frame(w : Double, h : Double, t : Double) -> Unit {
   // or ending taken ahead of an input still to come before `t`)
   @signals.untracked(fn() { tree.at(t) })
   view_window.val = (w, h)
-  // (what its linked corners are worked out from, as of now: corner_of; the ranges the theme for this width has, as
-  // this frame will pick it, not the one the last frame was built in)
-  tree_corner_roots.set({ window: window_corner(), fit: g().theme_for(w).corner_fit })
+  // (the theme for this width, as this frame will pick it, not the one the last frame was built in: what its nodes are
+  // drawn in where the app tells its tree none; the window's corner as of now: what linked corners are worked out
+  // from, with the ranges of the theme its nodes are drawn in, corner_of)
   tree_theme_said.set(Some(g().theme_for(w)))
+  tree_window_corner.set(window_corner())
+  tree_inset_said.set(Some(window_inset()))
   // (the logic's moment for all of this frame: what the host has come to as it began; brought again in the frame, the
   // tree goes no further than that, whatever time its building takes)
   view_logic_at.val = h_now()
@@ -1056,6 +1061,16 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           view_input_went(part)
           false
         }
+        // (the app's own top row: its own, nothing under it taking it; where it moves the window, the window the
+        // host's to move from here by the primary button, the rest of the press nobody's; the focus where it is, as the
+        // old frame's top row leaves it (old_pointer_now: before it is moved); the secondary button moves nothing)
+        TopRow(id) => {
+          view_held.val = Some(Nowhere)
+          if button != 2 && tree.moves_window(id) {
+            h_window_drag()
+          }
+          true
+        }
         // (nothing of the tree's there: where the one old view is the whole window, its own (the old root's, as it was
         // before the tree: what it draws past the window, a list scrolled on below it, is its own: a way there, no rule
         // of the tree's); else nobody's)
@@ -1097,7 +1112,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           }
           !old_whole.val
         }
-        Pressed(_) | Dragged(_) => true
+        Pressed(_) | Dragged(_) | TopRow(_) => true
       }
     (2, Some(Node(id))) => {
       view_held.val = None
@@ -2107,6 +2122,11 @@ fn view_point_tell(tree : @view.Tree, over? : Bool) -> Unit {
             tree.pointed_to(None)
             view_old_pointed(Some((x, y)))
             view_shape_of.val = OfOld
+          }
+          TopRow(_) => {
+            tree.pointed_to(None)
+            view_old_pointed(None)
+            view_shape_of.val = OfGround
           }
           Nothing => {
             tree.pointed_to(None)

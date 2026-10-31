@@ -85,6 +85,8 @@ pub fn back_step() -> (() -> Unit)?
 
 pub fn badge_frame(@ui.Ctx, Source, Workspace) -> Unit
 
+pub fn bar_as_nodes(Viewer, Double) -> Bool
+
 pub fn bare_shell() -> Shell
 
 pub let bars_from : Double

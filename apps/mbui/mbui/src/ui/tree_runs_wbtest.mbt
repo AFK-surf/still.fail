@@ -456,3 +456,141 @@ test "the pointer within a node under an old view's layer over all of it: within
   t.draw()
   assert_true(told.last() == Some(false), msg="a finger: the frame after the same")
 }
+
+///|
+/// A window 400 by 300 (a mouse's), its top row 44 high that moves the window (`node`: a node of the tree's,
+/// View::moves_window, a button of its own at its start; else an old view's, Ctx::window_drag, the same button), under
+/// it a button with the keyboard's focus (Tab): the primary button pressed on the row's blank, then the secondary
+/// there, then the primary on its button. How many times the window was moved after each, whether the focus stayed
+/// after each, how many times the row's button was pressed at the end.
+fn window_row(node : Bool) -> (Array[Int], Array[Bool], Int) raise {
+  let pressed = Ref(0)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
+  set_view_app(fn(root) {
+    if node {
+      root.box(fn(top) {
+        top.height(Is(Some(44.0))).row(Is(true)).moves_window(Is(true)) |> ignore
+        top.box(fn(k) { k.width(Is(Some(40.0))).on_press(fn() { pressed.val += 1 }) |> ignore }) |> ignore
+      })
+      |> ignore
+    }
+    old(root, fn(c) {
+      if !node {
+        let top = c.id("top")
+        let key = c.id("key")
+        c.window_drag(top)
+        if c.clicked(key) {
+          pressed.val += 1
+        }
+        c.box(id=top, w=Fill(1.0), h=Px(44.0), fn() { c.box(id=key, w=Px(40.0), h=Px(44.0), fn() {  }) |> ignore })
+        |> ignore
+      }
+      // (what holds the keyboard's focus: a button of its own, not a field, which a press elsewhere keeps it in)
+      let field = c.id("field")
+      let n = c.box(w=Px(80.0), h=Px(40.0), id=field, fn() {  })
+      c.focusable(field, node=n)
+      c.semantics(n, Button, id=field, label="field")
+    }).grow(Is(1.0))
+    |> ignore
+  })
+  t.draw()
+  t.tab()
+  let field = t.ctx().focused_id()
+  assert_true(field != 0 && field == t.get(Button, label="field").id, msg="node \{node}: the button focused")
+  let drags : Array[Int] = []
+  let kept : Array[Bool] = []
+  for press in [(200.0, 20.0, 0), (200.0, 20.0, 2), (20.0, 20.0, 0)] {
+    let (x, y, button) = press
+    on_pointer(0, x, y, button)
+    on_pointer(2, x, y, button)
+    t.draw()
+    drags.push(t.window_drags())
+    kept.push(t.ctx().focused_id() == field)
+  }
+  (drags, kept, pressed.val)
+}
+
+///|
+test "a row of the tree's that moves the window, as the old view's top row does: the primary button on its blank moves the window, the secondary moves nothing; the keyboard's focus kept by both; its button pressed, not moved by" {
+  let old_row = window_row(false)
+  let node_row = window_row(true)
+  assert_eq(old_row.0, [1, 1, 1], msg="the old view's: moved by the primary button on its blank alone")
+  assert_eq(node_row.0, old_row.0, msg="the tree's: moved as the old view's is")
+  assert_eq(node_row.1, old_row.1, msg="the focus as the old view's leaves it")
+  assert_eq(node_row.1[0:2].to_array(), [true, true], msg="the focus kept by a press on the blank, either button")
+  assert_eq(node_row.2, old_row.2, msg="its button pressed as the old view's is")
+}
+
+///|
+test "a node's words in a line shorter than their font, measured again as lines come to be set as a browser sets them and back (set_web_lines), the same node, no frame between: as tall as such words are laid out then, as an old view's are" {
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  t.check_looks(false)
+  set_web_lines(false)
+  // (a font taller than its line: 20 in lines of 14)
+  let look : @view.WordsLook = { size: 20.0, weight: 400, line: 14.0, wrap: false }
+  let node : Ref[@view.View?] = Ref(None)
+  set_view_app(fn(root) {
+    root.lines_up(Is(Some(Start))) |> ignore
+    node.val = Some(root.box(fn(n) { n.words(Is("整理发布清单"), ink=0x333333FFL, look~) |> ignore }))
+  })
+  t.draw()
+  let n = node.val.unwrap()
+  // (as an old view's words are laid out now, the lines as they are set now)
+  let laid = fn() { layout_text("整理发布清单", 20.0, 400, 1.0e9, false, line=14.0).h }
+  let android = laid()
+  assert_eq(n.laid_size().1, android, msg="Android's lines: as tall as such words are")
+  set_web_lines(true)
+  let web = laid()
+  let now = n.laid_size().1
+  set_web_lines(false)
+  let back = n.laid_size().1
+  assert_true(web != android, msg="the two ways differ here: \{android} and \{web}")
+  assert_eq(now, web, msg="a browser's lines: measured again at once")
+  assert_eq(back, android, msg="Android's again: measured again at once")
+}
+
+///|
+test "a node kept no narrower than what it holds (View::keeps_held), sharing its row alike with one beside it: as wide as its words need where they need more than its share, the one beside giving way, at once as its words or their face change (no frame between, the same nodes); its share again as they need less" {
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  t.check_looks(false)
+  t.ui_face_wider(0.1)
+  let words = @signals.signal("界面草图", same=fn(a, b) { a == b })
+  let parts : Ref[(@view.View?, @view.View?, @view.View?)] = Ref((None, None, None))
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false }
+  set_view_app(fn(root) {
+    root.box(fn(row) {
+      row.row(Is(true)).width(Is(Some(300.0))) |> ignore
+      let a = row.box(fn(a) { a.basis(Is(Some(0.0))).grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore })
+      let mut held : @view.View? = None
+      let b = row.box(fn(b) {
+        b.basis(Is(Some(0.0))).grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))).keeps_held(Is(true)) |> ignore
+        held = Some(b.box(fn(w) { w.words(By(fn() { words.get() }), ink=0x333333FFL, look~) |> ignore }))
+      })
+      parts.val = (Some(a), Some(b), held)
+    })
+    |> ignore
+  })
+  t.draw()
+  let (a, b, held) = (parts.val.0.unwrap(), parts.val.1.unwrap(), parts.val.2.unwrap())
+  // (as laid out now, no frame drawn: the one beside, it, its words)
+  let now = fn() { (a.laid_size().0, b.laid_size().0, held.laid_size().0) }
+  let alike = fn(at : String) raise {
+    let (wa, wb, ww) = now()
+    assert_true((wb - dmax(150.0, ww)).abs() < 0.01 && (wa + wb - 300.0).abs() < 0.01, msg="\{at}: \{(wa, wb, ww)}")
+  }
+  alike("short words: each its share")
+  assert_eq(b.laid_size().0, 150.0, msg="short words: its share")
+  words.set("界面草图界面草图界面草图界面草图")
+  alike("longer words: as wide as they need")
+  let longer = b.laid_size().0
+  assert_true(longer > 150.0, msg="longer words: wider than its share: \{longer}")
+  assert_true(face_add(@hostapi.face_ui, "/fonts/ui.ttf"), msg="given")
+  alike("their face wider")
+  assert_true(b.laid_size().0 > longer + 1.0, msg="their face wider: wider still: \{now()}")
+  face_clear(@hostapi.face_ui)
+  alike("their face gone")
+  assert_eq(b.laid_size().0, longer, msg="their face gone: as before")
+  words.set("界面草图")
+  alike("short again")
+  assert_eq(b.laid_size().0, 150.0, msg="short again: its share")
+}

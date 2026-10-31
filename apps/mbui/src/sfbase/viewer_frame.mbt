@@ -149,8 +149,9 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bo
     vf_native(v, c, src)
     return
   }
-  // (the floating bar over a picture its nodes: viewer_tree.mbt's image_head)
-  if head_as_nodes(v, c.width) {
+  // (the floating bar over a picture its nodes: viewer_tree.mbt's image_head; the bar across the top over one whole,
+  // its image_bar)
+  if head_as_nodes(v, c.width) || bar_as_nodes(v, c.width) {
     return
   }
   // a picture's bar goes as the pointer rests (not while it comes, nor marking); what is read stays

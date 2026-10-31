@@ -239,7 +239,9 @@ fn han_metrics(size : Double, weight : Int, style? : Int = 0) -> (Double, Double
 let web_lines : Ref[Bool] = Ref(false)
 
 ///|
-/// Whether lines are set as a browser sets them from now on (web_lines); the layouts made the other way let go.
+/// Whether lines are set as a browser sets them from now on (web_lines); the layouts made the other way let go, the
+/// window's tree's words measured and drawn again so (view_words_rescaled), as for any change of how all words are
+/// shaped.
 pub fn set_web_lines(on : Bool) -> Unit {
   if web_lines.val != on {
     web_lines.val = on
@@ -248,6 +250,7 @@ pub fn set_web_lines(on : Bool) -> Unit {
         s.lay = None
       }
     }
+    view_words_rescaled()
   }
 }
 

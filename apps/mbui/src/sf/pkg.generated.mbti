@@ -1980,7 +1980,7 @@ pub fn tip_look(@ui.Ctx, String, String) -> Unit
 
 pub let tip_max : @ui.Len
 
-pub fn tip_node(TipLayer, @view.View, () -> String, side? : @view.Side, delay? : Double, skip? : Bool, gap? : Double, at_pointer? : Bool) -> TipHand
+pub fn tip_node(TipLayer, @view.View, () -> String, side? : @view.Side, delay? : Double, skip? : Bool, gap? : Double, at_pointer? : Bool, within? : Bool) -> TipHand
 
 pub let title : @ui.TextStyle
 
@@ -2110,6 +2110,12 @@ pub fn viewer_bar_floats(Double) -> Bool
 
 pub let viewer_bar_h : Double
 
+pub let viewer_bar_in : Double
+
+pub let viewer_bar_ms : Double
+
+pub fn viewer_bar_node(@view.View, () -> String, () -> String, () -> String, () -> String, () -> Bool, (@view.View) -> Double, () -> Double, () -> Double, () -> ViewerInk, (@view.View, @view.Live[Double]) -> Unit, () -> Unit, TipLayer) -> @view.View
+
 pub let viewer_bar_raised : Raised
 
 pub let viewer_bar_reach : Double
@@ -2224,7 +2230,7 @@ pub fn window_corner_key() -> @paint.CornerOf
 
 pub fn window_corner_past(Double) -> Double
 
-pub fn window_end_in(Double) -> Double
+pub fn window_end_in(Double, roots? : @paint.CornerRoots) -> Double
 
 pub fn window_follow(Double) -> @paint.CornerOf
 

@@ -2209,14 +2209,15 @@ pub fn line_end_in(corner : Double, alone : Double, side? : Double = bar_key_sid
 ///|
 /// How far in from the window's side a bar's last button stands at the window's top corner in a window's whole: where
 /// the bar's buttons follow the window's corner (bar_keys_link: a Mac's 16), as far as from the bar's top, so concentric
-/// with it; else `alone`, as in a square window.
-pub fn window_end_in(alone : Double) -> Double {
+/// with it; else `alone`, as in a square window. `roots`: what the window's corner is worked out from (the old views',
+/// as they ask it; a node's, followed: @ui.tree_corner_roots_now).
+pub fn window_end_in(alone : Double, roots? : @ui.CornerRoots = @ui.corner_roots()) -> Double {
   // (the window's own buttons there where the app draws them: the bar's last before them, alone: window_keys)
   if @ui.window_keys_own() {
     return window_keys_room() + alone
   }
   match bar_keys_link() {
-    Some(link) if link.follows(@ui.corner_roots()) => bar_keys_top()
+    Some(link) if link.follows(roots) => bar_keys_top()
     _ => alone
   }
 }

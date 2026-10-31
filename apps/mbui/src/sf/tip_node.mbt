@@ -35,7 +35,9 @@ let tip_out_scale : Double = 0.97
 /// layer over all of the window). What shows it and what shuts it as the file's head says. `delay`: how long the
 /// pointer rests on it before it shows; `skip`: shown at once where another of the layer went a moment before; `gap`:
 /// how far from what it is beside; `at_pointer`: beside the pointer as it moves along the control, its middle level with
-/// it (a tall thin thing's: an edge, usePointerTip), not the control's middle.
+/// it (a tall thin thing's: an edge, usePointerTip), not the control's middle. `within`: shown by the pointer within
+/// `anchor` as it is placed (View::pointer_within), where it is no control and takes no press (a bar's name, what is
+/// pressed there the bar's), not by its being pointed at.
 pub fn tip_node(
   tips : TipLayer,
   anchor : @view.View,
@@ -45,6 +47,7 @@ pub fn tip_node(
   skip? : Bool = true,
   gap? : Double = tip_gap,
   at_pointer? : Bool = false,
+  within? : Bool = false,
 ) -> TipHand {
   let open : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
   // (a finger held on its control: Held while it is down, Lifted a while once it is let go, till then or the next
@@ -108,7 +111,7 @@ pub fn tip_node(
   // whether it takes input at all, whether there is anything to say)
   let state = fn() {
     (
-      @ui.pointing() is Mouse && anchor.pointed(),
+      @ui.pointing() is Mouse && (if within { anchor.pointer_within() } else { anchor.pointed() }),
       anchor.pressed(),
       anchor.focus_shown(),
       anchor.takes_input(),
