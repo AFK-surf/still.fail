@@ -65,7 +65,7 @@ const RELEASE = process.env.STILLFAIL_NATIVE_RELEASE ?? "native-artifacts";
 const STORE = process.env.STILLFAIL_NATIVE_STORE ?? "https://app.still.fail/releases/natives";
 /// still.fail Helper's icon (design/brand/make.py draws it): in its own directory, one of its inputs.
 const HELPER_ICON = "station/native/helper/icon.png";
-const VENDORED = ["vendor/iroh", "vendor/iroh-mdns-address-lookup", "vendor/noq-udp", "vendor/swarm-discovery"];
+const VENDORED = ["vendor/iroh", "vendor/iroh-mdns-address-lookup", "vendor/n0-mainline", "vendor/noq-udp", "vendor/swarm-discovery"];
 /// The Hermes of the core's engine: React Native's `rn` (on Android its hermes-android, libhermes.so and its headers, as
 /// apps/mbui/scripts/android-core.sh packs it), and on Windows, which has no prebuilt one with its C++ API,
 /// facebook/hermes at the tag that Hermes is made from.
