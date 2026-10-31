@@ -171,7 +171,7 @@ fn login_fill(c : @ui.Ctx, s : ScreenSess) -> Unit {
           }
           "choosing" =>
             // one under another, as wide as its words (none out to the panel's corner)
-            c.box(style=fill_choices, fn() {
+            c.box(style=fill_choice_list, fn() {
               for i, l in s.fill_choices {
                 let words = if l.username == "" { l.title } else { l.title + " · " + l.username }
                 if soft_button(c, "fill-pick/\{i}", words) {
@@ -192,4 +192,4 @@ fn login_fill(c : @ui.Ctx, s : ScreenSess) -> Unit {
 
 ///|
 /// The logins to pick from: one under another, each as wide as its words.
-let fill_choices : @ui.Style = @ui.css("align=AStart pt=S2 gap=S2")
+let fill_choice_list : @ui.Style = @ui.css("align=AStart pt=S2 gap=S2")
