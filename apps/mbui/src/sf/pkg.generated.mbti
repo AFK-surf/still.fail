@@ -2100,6 +2100,10 @@ pub fn viewer_act_foot(@ui.Ctx) -> Double
 
 pub fn viewer_act_head(@ui.Ctx) -> Double
 
+pub fn viewer_back_at_corner() -> Bool
+
+pub fn viewer_back_corner(Double) -> @paint.CornerOf
+
 pub let viewer_back_icon : Double
 
 pub fn viewer_bar(@ui.Ctx, String, String, String, String, Bool, ViewerInk, () -> Unit, title? : String, capsule_end? : Bool) -> Bool
@@ -2121,6 +2125,8 @@ pub let viewer_bar_raised : Raised
 pub let viewer_bar_reach : Double
 
 pub let viewer_bar_saturation : Double
+
+pub fn viewer_bar_start_in(Double, @paint.CornerRoots) -> Double
 
 pub fn viewer_bar_under() -> Double
 
