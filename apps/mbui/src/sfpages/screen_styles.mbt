@@ -354,7 +354,7 @@ let ended_why : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=A(On
 ///|
 /// Its capsules side by side, 8 between.
 // kept across runs: a value (no field of it changes)
-let ended_keys : @ui.Style = @ui.style(row=true, gap=S2, justify=JCenter)
+let ended_keys : @ui.Style = @ui.css("row gap=S2 justify=JCenter")
 
 ///|
 /// 重新打开 (Controls.kt Button at 34 high, 16 in, 12 more under the words): the ink with the page's colour on it in
