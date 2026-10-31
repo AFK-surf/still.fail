@@ -30,10 +30,10 @@ let tool_faint : Double = 0.35
 /// middle), saying what `said` says as that changes, in the ink `ink` says: its icon the ink's muted, its own where the
 /// hand is on it (a mouse's pointer over it, a finger pressing it), pressed, or on; its ground the ink's hover where
 /// the hand is on it, laid over its chosen one while on; faint and taking nothing where it cannot be pressed. Its
-/// corner `corner` (round: Is(tool_side / 2.0); at the window's corner, linked to it: @ui.corner_of). Ringed where the
-/// keyboard's focus is on it (a kit control's ring). Pressed (a press, Enter or Space with the focus, a screen reader's
-/// Activate), `press`, as one change. Its words its tip below it (tip_node), in the window's tips' layer `tip`, as
-/// viewer_tool's. The node.
+/// corner `corner` (round: Is(tool_side / 2.0); at the window's corner, linked to it: @ui.corner_of). Lit where the
+/// keyboard's focus shows on it as where the hand is on it (its hover ground and ink). Pressed (a press, Enter or
+/// Space with the focus, a screen reader's Activate), `press`, as one change. Its words its tip below it (tip_node), in
+/// the window's tips' layer `tip`, as viewer_tool's. The node.
 pub fn tool_node(
   parent : @view.View,
   said : () -> ToolSaid,
@@ -43,12 +43,14 @@ pub fn tool_node(
   tip? : TipLayer,
 ) -> @view.View {
   parent.box(fn(v) {
-    // (where the hand is on it, as a box's hovered look has it: a mouse's pointer over it, a finger pressing it)
+    // (where the hand is on it, as a box's hovered look has it: a mouse's pointer over it, a finger pressing it; and
+    // where the keyboard's focus shows on it, drawn as the hand on it is: the user, 2026-10-31「焦点就按 hover 样式来」)
     let lit = fn() {
-      match @ui.pointing() {
+      v.focus_shown() ||
+      (match @ui.pointing() {
         Mouse => v.pointed()
         Finger => v.pressed()
-      }
+      })
     }
     v
     .width(Is(Some(tool_side)))
@@ -92,36 +94,6 @@ pub fn tool_node(
           k.ink
         } else {
           k.muted
-        }
-      }))
-      |> ignore
-    })
-    |> ignore
-    // (its ring, where the keyboard's focus is on it, as a kit control's (kit's focus_ring): the theme's focus line, its
-    // gap out from its edge, in its corner as far out)
-    let out = fn() {
-      let t = @ui.tree_theme()
-      t.focus_gap + t.focus_w
-    }
-    v.box(fn(r) {
-      r
-      .over(Is(true))
-      .width(By(fn() { Some(tool_side + 2.0 * out()) }))
-      .height(By(fn() { Some(tool_side + 2.0 * out()) }))
-      .offset(By(fn() { (-out(), -out()) }))
-      .radius(By(fn() {
-        let k = match corner {
-          Is(k) => k
-          By(f) => f()
-        }
-        k + out()
-      }))
-      .border(By(fn() {
-        if v.focus_shown() {
-          let t = @ui.tree_theme()
-          (t.focus_w, t.focus)
-        } else {
-          (0.0, 0L)
         }
       }))
       |> ignore

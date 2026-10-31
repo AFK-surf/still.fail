@@ -243,25 +243,40 @@ test "a tool as a node pressed at each way in's moment, no frame drawn: a click,
 }
 
 ///|
-test "a tool as a node ringed as the keyboard's focus comes to it, as a kit control is (the theme's focus line, its gap out from its edge, in its corner as far out); gone as the focus goes (a press beside it); the old one taking no focus at all" {
-  let said = @signals.signal({ icon: "copy", label: "复制", on: false, disabled: false }, same=fn(a, b) { a == b })
+/// Tool "复制 new" saying `s`: what it draws (within its square) at rest, with the pointer over it, and with the
+/// keyboard's focus on it the pointer away; whether the focus came to it; what it draws once the focus is let go.
+fn hovered_focused(s : ToolSaid) -> (Array[String], Array[String], Array[String], Bool, Array[String]) raise {
+  let said = @signals.signal(s, same=fn(a, b) { a == b })
   let t = tools_tester(said, @signals.signal(page_viewer_ink()), {})
-  let n = t.get(Button, label="复制 new")
-  let th = t.ctx().theme()
-  let out = th.focus_gap + th.focus_w
-  let around = (n.rect.0 - out, n.rect.1 - out, n.rect.2 + 2.0 * out, n.rect.3 + 2.0 * out)
-  let unringed = drawn_within(t, around)
+  let n = t.get(Button, label=s.label + " new")
+  t.leave()
+  let rest = drawn_within(t, n.rect)
+  t.move(n.rect.0 + 16.0, n.rect.1 + 16.0)
+  let hovered = drawn_within(t, n.rect)
+  t.leave()
   t.tab()
-  assert_eq(t.ctx().focused_id(), n.id, msg="Tab to it: the one stop")
-  let ringed = drawn_within(t, around)
-  let ring = ringed.filter(fn(l) { !unringed.contains(l) })
-  assert_eq(ring.length(), 1, msg="one ring: \{ring}")
-  let f = ring[0].split(" ").map(fn(v) { v.to_string() }).to_array()
-  assert_eq((f[0], f[1], f[2], f[3]), ("0", "0", (n.rect.2 + 2.0 * out).to_string(), (n.rect.3 + 2.0 * out).to_string()), msg="\{ring[0]}")
+  let came = t.ctx().focused_id() == n.id
+  let focused = drawn_within(t, n.rect)
   // (a press on nothing that takes one: the focus let go)
   t.tap(300.0, 150.0)
-  let after = drawn_within(t, around)
-  assert_eq(after, unringed, msg="the focus gone: no ring: \{after.filter(fn(l) { !unringed.contains(l) })}; focus \{t.ctx().focused_id()}, the node \{n.id}, read out \{t.semantics().map(fn(s) { (s.id, s.label, s.actions) })}")
+  t.leave()
+  (rest, hovered, focused, came, drawn_within(t, n.rect))
+}
+
+///|
+test "a tool as a node lit as the keyboard's focus comes to it as where the hand is on it (its hover ground and ink), on or not; as at rest once the focus goes; unable, not lit and taking no focus" {
+  let copy = { icon: "copy", label: "复制", on: false, disabled: false }
+  for st in [("plain", copy), ("on", { ..copy, on: true })] {
+    let (what, s) = st
+    let (rest, hovered, focused, came, after) = hovered_focused(s)
+    assert_true(came, msg="\{what}: Tab to it")
+    assert_true(hovered != rest, msg="\{what}: hovered lit")
+    assert_eq(focused, hovered, msg="\{what}: focused as hovered")
+    assert_eq(after, rest, msg="\{what}: the focus gone, as at rest")
+  }
+  let (rest, _, focused, came, _) = hovered_focused({ ..copy, disabled: true })
+  assert_true(!came, msg="unable: no focus")
+  assert_eq(focused, rest, msg="unable: not lit")
 }
 
 ///|

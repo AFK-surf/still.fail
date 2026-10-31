@@ -61,9 +61,6 @@ pub(all) struct Look {
   /// View::radius, View::glass
   mut radius : Double
   mut glass : @paint.Glass?
-  /// the line drawn round its edge inside it, how wide and in what colour (0 wide: none): View::border
-  mut border : Double
-  mut border_ink : Int64
   mut alpha : Double
   mut dx : Double
   mut dy : Double
@@ -95,9 +92,6 @@ pub(all) struct Content {
   tint : Int64
   radius : Double
   glass : @paint.Glass?
-  /// the line round its edge, inside it (View::border)
-  border : Double
-  border_ink : Int64
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
 } derive(Eq, Debug)
@@ -110,7 +104,6 @@ pub fn Content::draws(self : Content) -> Bool {
   self.words != "" ||
   !self.shapes.is_empty() ||
   self.glass is Some(_) ||
-  self.border > 0.0 ||
   self.shadow.0 > 0.0 ||
   self.hosted
 }
@@ -134,8 +127,6 @@ pub(all) struct Drawn {
   tint : Int64
   radius : Double
   glass : @paint.Glass?
-  border : Double
-  border_ink : Int64
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
 } derive(Eq, Debug)
@@ -527,8 +518,6 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.tint = 0L
       n.look.radius = 0.0
       n.look.glass = None
-      n.look.border = 0.0
-      n.look.border_ink = 0L
       n.look.words_look = words_plain
       n.look.shadow = (0.0, 0.0, 0L)
       n.said = None
@@ -584,7 +573,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, border: 0.0, border_ink: 0L, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), drawn_as: "" },
+        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), drawn_as: "" },
         parent,
         kids: [],
         owner: None,
@@ -1268,17 +1257,6 @@ pub fn View::tint(self : View, ink : Live[Int64]) -> View {
   self
 }
 
-///|
-/// The line drawn round its edge, inside it, in its corners (`width` wide, in `ink`; 0 wide: none), as it changes:
-/// paint's. What draws it is its own, a ground or none under it.
-pub fn View::border(self : View, line : Live[(Double, Int64)]) -> View {
-  self.bind(21, line, Paint, fn(l) {
-    let n = self.tree.nodes[self.at]
-    n.look.border = l.0
-    n.look.border_ink = l.1
-  })
-  self
-}
 
 ///|
 /// How round its corners are (its ground's and its glass's; a linked corner's as worked out where it is said): paint's.
@@ -3412,8 +3390,6 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     tint: n.look.tint,
     radius: n.look.radius,
     glass: n.look.glass,
-    border: n.look.border,
-    border_ink: n.look.border_ink,
     words_look: n.look.words_look,
     shadow: n.look.shadow,
     hosted: n.hosted,
@@ -3522,8 +3498,6 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     tint: c.tint,
     radius: c.radius,
     glass: c.glass,
-    border: c.border,
-    border_ink: c.border_ink,
     words_look: c.words_look,
     shadow: c.shadow,
     hosted: c.hosted,

@@ -11,16 +11,16 @@ test "a node drawn in the tree's theme: the wide one's, then in the first frame 
   set_view_app(fn(root) {
     root.box(fn(n) {
       id.val = Some(n.id())
-      n.width(Is(Some(40.0))).height(Is(Some(40.0))).border(By(fn() { (2.0, tree_theme().focus) })) |> ignore
+      n.width(Is(Some(40.0))).height(Is(Some(40.0))).ground(By(fn() { tree_theme().focus })) |> ignore
     })
     |> ignore
   })
   t.ctx().set_theme(wide, narrow~, narrow_below=300.0)
   t.draw()
   let tree = view_app.val.unwrap()
-  assert_eq(tree.drawn_of(id.val.unwrap()).unwrap().border_ink, 0x112233FFL, msg="wide")
+  assert_eq(tree.drawn_of(id.val.unwrap()).unwrap().ground, 0x112233FFL, msg="wide")
   t.resize(250.0, 200.0)
-  assert_eq(tree.drawn_of(id.val.unwrap()).unwrap().border_ink, 0x445566FFL, msg="the first frame at the narrow width")
+  assert_eq(tree.drawn_of(id.val.unwrap()).unwrap().ground, 0x445566FFL, msg="the first frame at the narrow width")
 }
 
 ///|

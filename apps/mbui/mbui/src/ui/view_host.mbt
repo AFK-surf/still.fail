@@ -610,9 +610,8 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   if blur > 0.0 && c.glass is None {
     self.push_inst(0.0, dy, c.w, c.h, c.radius, 2.0, 0.0, blur, cast, 1.0, 0.0, 0.0, 0.0, 0.0)
   }
-  // (its ground, and the line round its edge in it: one rect, as a box with a border draws them)
-  if c.ground != 0L || c.border > 0.0 {
-    self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, c.border, c.border_ink, 1.0)
+  if c.ground != 0L {
+    self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, 0.0, 0L, 1.0)
   }
   if c.words != "" {
     let k = c.words_look
