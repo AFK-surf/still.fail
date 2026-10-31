@@ -492,12 +492,18 @@ fn ask_dismiss(
     fn() {
       // (let go or answered on screen: faded where it is, its room kept till it is out of sight)
       let look = @motion.presence(c, "dismiss-live/" + k, live, enter=@motion.trans(fade=0.0, spec=archive_tween))
-      let b = c.box(style=dismiss_room, id=if live { id } else { 0 }, fn() {
-        c.rich([@ui.span(@sf.t("web-main.chat.asks.dismiss"), underline=hot)], style=if hot {
-          dismiss_words_hot
-        } else {
-          dismiss_words
-        })
+      // (the library's button of words alone, as the second answer of a card that asks is: a press's room the native
+      // input's, lit under the hand or the finger as every button is; its words at the column's start, its ground
+      // reaching past them)
+      let b = c.box(style=dismiss_room, fn() {
+        @sf.button(
+          c,
+          @sf.t("web-main.chat.asks.dismiss"),
+          key="ask-dismiss/" + k,
+          tone=Ghost,
+          disabled=!live,
+          reach=@sf.ghost_at_start(),
+        )
         |> ignore
       })
       c.look(b, look.unwrap_or(@ui.look(alpha=0.0)))
@@ -536,9 +542,9 @@ let settled_line : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=S
 let settled_room : @ui.Style = @ui.css("align=AStart")
 
 ///|
-/// 忽略 (askDismiss): 6 under the options, 12 on 18 in the subtle ink, the text's and underlined under the pointer.
+/// 忽略 under the options: 6 under them, a button of words alone (@sf.button, Ghost).
 // kept across runs: a value (no field of it changes)
-let dismiss_room : @ui.Style = @ui.css("pt=S0_5")
+let dismiss_room : @ui.Style = @ui.css("pt=S0_5 align=AStart")
 
 ///|
 /// 忽略 at the end of the card saying what the chat needs (`at_end`): the line's words, as wide as they are, the quiet
@@ -546,13 +552,6 @@ let dismiss_room : @ui.Style = @ui.css("pt=S0_5")
 // kept across runs: a value (no field of it changes)
 let dismiss_end : @ui.TextStyle = @ui.text_style(w=Hug, wrap=false)
 
-///|
-// kept across runs: a value (no field of it changes)
-let dismiss_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let dismiss_words_hot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false)
 
 ///|
 /// An agent's request as its card in place of its post's words: a little under the post's head, as a card under a

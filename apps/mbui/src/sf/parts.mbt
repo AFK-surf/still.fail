@@ -223,6 +223,13 @@ let button_reshape : @motion.Spec = @motion.move()
 let button_padx : Double = 16.0
 
 ///|
+/// Where a button of words alone stands at the start of a column (忽略 under a card): its words at the column's start,
+/// its ground reaching past them as one at a row's end does past its end.
+pub fn ghost_at_start() -> @ui.Style {
+  outset_start(button_padx)
+}
+
+///|
 /// How big a button's icon is.
 let button_icon : Double = 16.0
 
