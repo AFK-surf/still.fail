@@ -1271,6 +1271,8 @@ pub fn refs_search(Source, String, Map[String, Json]) -> Topic
 
 pub fn refs_sent_marks(String, String) -> Array[(Int32, Int32)]
 
+pub fn refs_still_at(@ui.Field, (Int32, String)?, String, String) -> Bool
+
 pub fn relay_connect(String) -> Json?
 
 pub fn relay_go(Source, Json?, done? : () -> Unit) -> Unit

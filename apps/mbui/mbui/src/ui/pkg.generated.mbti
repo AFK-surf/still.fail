@@ -1098,6 +1098,7 @@ pub fn Ctx::laid_rect(Self, Int32, loc~ : SourceLoc) -> (Double, Double, Double,
 #callsite(autofill(loc))
 pub fn Ctx::laid_size(Self, Int32, loc~ : SourceLoc) -> (Double, Double)?
 pub fn Ctx::layer(Self, pad? : Double, align? : Align, () -> Unit) -> Int32
+pub fn Ctx::layer_ended(Self, Int32) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::left_out(Self, Int32, loc~ : SourceLoc) -> Bool
 pub fn Ctx::lifetime(Self, String) -> @effect.Scope
@@ -1157,6 +1158,7 @@ pub fn Ctx::now(Self, loc~ : SourceLoc) -> Double
 #callsite(autofill(loc))
 pub fn Ctx::now_before(Self, Double, loc~ : SourceLoc) -> Double
 pub fn Ctx::on_back(Self, () -> Unit) -> Unit
+pub fn Ctx::on_key(Self, Int32, (Int32, Int32) -> Bool) -> Unit
 pub fn Ctx::on_press(Self, Int32, () -> Unit) -> Unit
 pub fn Ctx::open_url(Self, String) -> Bool
 pub fn Ctx::overlay(Self, String, modal? : Bool, trap? : Bool, escape? : Bool, on_escape? : () -> Bool, stays? : () -> Bool, outside? : Bool, scrim? : Int64, anchor? : Int32, initial_focus? : Int32, return_focus? : Int32, inert? : Bool, () -> Unit) -> Overlay
@@ -2517,6 +2519,7 @@ pub fn Tester::tells_update(Self, String) -> Unit
 pub fn Tester::text_menu(Self) -> (Bool, Double, Double, Double, Double, Int32)
 pub fn Tester::text_missing(Self) -> Array[String]
 pub fn Tester::text_runs(Self) -> Array[TextRun]
+pub fn Tester::text_told(Self, String, Double) -> Unit
 pub fn Tester::time(Self) -> Double
 pub fn Tester::touch(Self, Int32, Double, Double) -> Unit
 pub fn Tester::touch_at(Self, Int32, Double, Double, Double) -> Unit

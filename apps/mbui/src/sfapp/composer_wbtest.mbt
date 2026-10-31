@@ -24,7 +24,6 @@ fn fake_core(
   made? : Ref[Source?] = Ref(None),
   ups? : Map[String, Json] = Map::new(),
   platform? : Int = 2,
-  answers? : (String, Json) -> Json? = fn(_, _) { None },
 ) -> @ui.Tester {
   new_run()
   // the drafts the fake core has named (its `draft.put`)
@@ -34,14 +33,6 @@ fn fake_core(
     ..base,
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
-      // (what the test answers for the core, `answers`: else as below)
-      match answers(name, params) {
-        Some(v) => {
-          done(Ok(v))
-          return
-        }
-        None => ()
-      }
       match name {
         "draft.get" => done(Ok(kept))
         // the core's name for the draft (DraftView.id): another once it is put back empty

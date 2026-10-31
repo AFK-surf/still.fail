@@ -4,32 +4,13 @@
 ///|
 /// The desk's composer focused, "看 @首页" typed, its menu of chats shown: the Tester, whether that menu is closed for
 /// its `@` (sfbase's refs_at none), and its source.
-fn ref_menu_tester(calls? : Array[Made] = [], answers? : (String, Json) -> Json? = ref_at_answers) -> (@ui.Tester, () -> Bool, Source) raise {
-  let (t, src) = desk_composer_tester(calls, answers~)
+fn ref_menu_tester(calls? : Array[Made] = []) -> (@ui.Tester, () -> Bool, Source) raise {
+  let (t, src) = desk_composer_tester(calls)
   desk_focus(t)
   t.type_text("看 @首页")
   t.frame()
   assert_true(t.find("引用对话") is Some(_), msg=t.words().map(fn(x) { x.0 }).join("|"))
   (t, fn() { @sfbase.refs_at("ws1/st1:s-c1") is None }, src)
-}
-
-///|
-/// The core's `ref.at` for words the fixture's kept answers do not hold, as the core's refAt (refLinks.ts) has them:
-/// an `@` with words after it, the caret after `@首页` (its query 首页); one on a second line; an `@` a `[` follows,
-/// none.
-fn ref_at_answers(name : String, params : Json) -> Json? {
-  guard name == "ref.at" else { return None }
-  let words = text(Some(params), "text")
-  let caret = number(Some(params), "caret").to_int()
-  if words == "第一行\n看 @首页" && caret == 9 {
-    Some({ "at": { "start": 6, "query": "首页" } })
-  } else if words == "看 @首页 后文" && caret == 5 {
-    Some({ "at": { "start": 2, "query": "首页" } })
-  } else if words == "看 @首页[" {
-    Some({ "at": Json::null() })
-  } else {
-    None
-  }
 }
 
 ///|
@@ -190,7 +171,7 @@ test "desk composer: its menu under a panel that leaves the field its focus: Ent
 /// the host hands them on, a frame between each or none: where the caret is then, and how often a chat was referenced.
 fn ref_phone_then(keys : Array[Int], frames : Bool) -> (Int, Int, String) raise {
   let calls : Array[Made] = []
-  let t = fake_core(calls, answers=ref_at_answers)
+  let t = fake_core(calls)
   t.tap_text("发消息")
   t.type_text("第一行")
   t.enter()
@@ -226,7 +207,7 @@ test "a finger's composer: a chat picked from its menu by Enter, then ↑ before
 ///|
 test "desk composer: its menu for an @ with words after it: Enter puts the one chosen in for the @ and what follows it to the caret, the words after the caret as they were" {
   let calls : Array[Made] = []
-  let (t, src) = desk_composer_tester(calls, answers=ref_at_answers)
+  let (t, src) = desk_composer_tester(calls)
   desk_focus(t)
   t.type_text("看 @首页 后文")
   for _ in 0..<3 {
@@ -269,7 +250,7 @@ test "desk composer: its menu, `[` typed after its @ and Enter before a frame (i
 ///|
 test "desk composer: its menu for an @ with words after it, the caret moved into those words and Enter before a frame: not the menu's, the words after the @ not taken as its" {
   let calls : Array[Made] = []
-  let (t, src) = desk_composer_tester(calls, answers=ref_at_answers)
+  let (t, src) = desk_composer_tester(calls)
   desk_focus(t)
   t.type_text("看 @首页 后文")
   for _ in 0..<3 {
@@ -290,7 +271,7 @@ test "desk composer: its menu for an @ with words after it, the caret moved into
 ///|
 test "desk composer: its menu for an @ with words after it, the caret moved into those words, then the chat shown pressed before a frame: not the menu's, the words after the @ as they were" {
   let calls : Array[Made] = []
-  let (t, src) = desk_composer_tester(calls, answers=ref_at_answers)
+  let (t, src) = desk_composer_tester(calls)
   desk_focus(t)
   t.type_text("看 @首页 后文")
   for _ in 0..<3 {
