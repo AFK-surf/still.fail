@@ -351,6 +351,9 @@ pub struct Tree {
   /// node's own cell told as it comes or goes (View::pressed, View::pointed)
   mut pressing : NodeId?
   mut pointed : NodeId?
+  /// every node read as pointed at and pressed (Tree::lit_all), for what measures what the hand changes, at the moment
+  /// of the frame before it (ui's hand_moves.mbt): not the hand's, nothing of it changed
+  mut lit_every : Bool
   // where the pointer is in the window, as it is said (Tree::point_at; (-1, -1) none): what goes beside it is placed
   // by (View::beside's `at_pointer`)
   mut pointer_xy : (Double, Double)
@@ -469,6 +472,7 @@ pub fn Tree::new(
     retarget: fn(t, _, _, _) { t },
     pressing: None,
     pointed: None,
+    lit_every: false,
     pointer_xy: (-1.0, -1.0),
     backing: None,
     focused: None,
@@ -4137,7 +4141,8 @@ fn Tree::held_to(self : Tree, h : NodeId?) -> Unit {
 fn Tree::hand_told(self : Tree, id : NodeId?, cell : (Node) -> @signals.Signal[Bool]?, on : Bool) -> Unit {
   guard id is Some(i) && self.alive_id(i) else { return }
   match cell(self.nodes[i.at]) {
-    Some(s) => s.set(on)
+    // (every node lit for what measures the hand: Tree::lit_all)
+    Some(s) => s.set(on || self.lit_every)
     None => ()
   }
 }
@@ -4150,7 +4155,7 @@ pub fn View::pressed(self : View) -> Bool {
   let s = match n.pressed_cell {
     Some(s) => s
     None => {
-      let s = @signals.signal(self.tree.pressing == Some(self.id()), same=fn(a, b) { a == b })
+      let s = @signals.signal(self.tree.lit_every || self.tree.pressing == Some(self.id()), same=fn(a, b) { a == b })
       n.pressed_cell = Some(s)
       s
     }
@@ -4166,7 +4171,7 @@ pub fn View::pointed(self : View) -> Bool {
   let s = match n.pointed_cell {
     Some(s) => s
     None => {
-      let s = @signals.signal(self.tree.pointed == Some(self.id()), same=fn(a, b) { a == b })
+      let s = @signals.signal(self.tree.lit_every || self.tree.pointed == Some(self.id()), same=fn(a, b) { a == b })
       n.pointed_cell = Some(s)
       s
     }
