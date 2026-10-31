@@ -386,7 +386,7 @@ const RELAY: Record<string, { url: string; sha256: string }> = {
 const AGENT_DESKTOP_VERSION = "1.0.2";
 const AGENT_DESKTOP_URL = (triple: string) => `https://github.com/vercel-labs/agent-desktop/releases/download/v${AGENT_DESKTOP_VERSION}/agent-desktop-v${AGENT_DESKTOP_VERSION}-${triple}.tar.gz`;
 const AGENT_DESKTOP: Record<string, { url: string; sha256: string }> = {
-  "darwin-arm64": { url: "https://github.com/zzj3720/agent-desktop/releases/download/v1.0.2-sf.3/agent-desktop-v1.0.2-sf.3-aarch64-apple-darwin.tar.gz", sha256: "63c9f3aa9051527b18c395dad18cece089ff852d0a4c4fdf30474375fd653cd3" },
+  "darwin-arm64": { url: AGENT_DESKTOP_URL("aarch64-apple-darwin"), sha256: "7bee385196d7b478de80cf05ca4304aaa38f0eba593b3406ad3c247c1773be19" },
   "win32-x64": { url: AGENT_DESKTOP_URL("x86_64-pc-windows-msvc"), sha256: "2186c76e7df197c0e67365e45d36d869f74714c56bb8a73817e2a66f3e18e222" },
 };
 /// What its archives hold: the command, and on macOS the helper it starts beside itself (the clipboard's).
