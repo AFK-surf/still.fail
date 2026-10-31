@@ -604,7 +604,7 @@ pub fn Ctx::take_key(self : Ctx, code : Int, mods? : Int = 0) -> Bool {
 /// Whether `ch` came with the platform's command key held (⌘ on macOS, Ctrl elsewhere), and Shift if `shift`:
 /// a shortcut (⌘K).
 pub fn Ctx::shortcut(self : Ctx, ch : Char, shift? : Bool = false) -> Bool {
-  let cmd = if h_platform() == 0 { mod_cmd } else { mod_ctrl }
+  let cmd = if h_keys() == 0 { mod_cmd } else { mod_ctrl }
   self.key_pressed(key_of_char(ch), mods=cmd | (if shift { mod_shift_key } else { 0 }))
 }
 

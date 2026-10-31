@@ -31,6 +31,43 @@ fn caret_of(f : @ui.Field) -> Int {
 }
 
 ///|
+test "a browser on a Mac types as a Mac: ⌥← a word back, ⌘← the line's start, ⌘Z undone; Ctrl+← nothing" {
+  let f = @ui.Field::new(text="hello world")
+  let t = @ui.Tester::new(
+    fn(c) { c.editor("e", field=f, font_size=10.0, enter_sends=false) |> ignore },
+    w=300.0,
+    h=200.0,
+    platform=4,
+    keys=0,
+  )
+  t.draw()
+  t.tap(14.0, 14.0)
+  f.set("hello world", caret=11)
+  t.draw()
+  assert_eq(@ui.keys_system(), 0)
+  t.key(@ui.key_code_left, mods=@ui.mod_alt)
+  assert_eq(caret_of(f), 6)
+  t.key(@ui.key_code_left, mods=@ui.mod_ctrl)
+  assert_eq(caret_of(f), 6)
+  t.key(@ui.key_code_left, mods=@ui.mod_cmd)
+  assert_eq(caret_of(f), 0)
+  t.type_text("X")
+  assert_eq(f.text(), "Xhello world")
+  t.key(@ui.key_of_char('z'), mods=@ui.mod_cmd)
+  assert_eq(f.text(), "hello world")
+}
+
+///|
+test "a browser on Windows types as Windows: Ctrl+← a word back, ⌥← nothing" {
+  let (f, t) = keys_field("hello world", 11, platform=4)
+  assert_eq(@ui.keys_system(), 4)
+  t.key(@ui.key_code_left, mods=@ui.mod_alt)
+  assert_eq(caret_of(f), 11)
+  t.key(@ui.key_code_left, mods=@ui.mod_ctrl)
+  assert_eq(caret_of(f), 6)
+}
+
+///|
 test "⌘← ⌘→ on a Mac: to the ends of the line the caret shows on; where it wraps, its end shows at its end" {
   // ten on the first line, three on the next
   let (f, t) = keys_field("一二三四五六七八九十甲乙丙", 3, w=124.0)

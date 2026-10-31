@@ -49,7 +49,7 @@ pub fn keys_text(prefs : Json?, action : String) -> String {
 ///|
 /// The modifier said `Mod`: ⌘ on a Mac, Ctrl elsewhere.
 fn mod_key() -> Int {
-  if @ui.platform() == 0 {
+  if @ui.keys_system() == 0 {
     @ui.mod_cmd
   } else {
     @ui.mod_ctrl
@@ -128,7 +128,7 @@ pub fn binding_of(code : Int, mods : Int) -> String? {
         return None
       }
   }
-  let mac = @ui.platform() == 0
+  let mac = @ui.keys_system() == 0
   let parts : Array[String] = []
   if mac && (mods & @ui.mod_ctrl) != 0 {
     parts.push("Ctrl")

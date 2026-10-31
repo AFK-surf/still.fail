@@ -899,7 +899,7 @@ fn desk_reader_sides(c : @ui.Ctx, r : Reading, style : ReaderStyle, panel? : Boo
 ///|
 /// The ⌘ of this machine's shortcuts (⌘ on a Mac, Ctrl elsewhere).
 fn desk_mod() -> Int {
-  if @ui.platform() == 0 {
+  if @ui.keys_system() == 0 {
     @ui.mod_cmd
   } else {
     @ui.mod_ctrl
