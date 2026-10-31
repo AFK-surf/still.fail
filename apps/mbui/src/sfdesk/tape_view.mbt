@@ -575,6 +575,17 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       None => None
     }
   }
+  // (where the system lays out the app's tabs, its bars handed what the tape's frame has for them each frame it shows:
+  // rail_native.mbt nav_frame)
+  nav_held.val = fn() {
+    if !@sf.native_able() {
+      return None
+    }
+    match @sfbase.workspace_in_view(src) {
+      (Some(w), all, _, _) => Some((src, w, all))
+      _ => None
+    }
+  }
   // (at rest where it is in use as it is made: no move from wherever another frame left it)
   tape_goes.way.put(1.0)
   tape_goes.rest.set(true)
@@ -587,6 +598,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     tape_goes.node = None
     tape_goes.parts.clear()
     tape_goes.panel_of = fn() { None }
+    nav_held.val = fn() { None }
     wide.tape = false
   })
   |> ignore

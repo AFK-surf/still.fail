@@ -10,8 +10,9 @@ pub(all) struct NativeBars {
   /// whether the system shows the app's tabs now (they were handed it and it took them), a signal: what is laid out by
   /// them (the window's sides beside the bars) follows it
   on : @signals.Signal[Bool]
-  /// how wide its column down the window's trailing edge is (0: across the top and foot upright, or none)
-  mut side : Double
+  /// how wide its column down the window's trailing edge is (0: across the top and foot upright, or none), a signal:
+  /// what is laid out beside it (the tape's panels) follows it
+  side : @signals.Signal[Double]
   /// the screen's corners where the cards along its edges follow them, each its own (top left, then round it: an
   /// iPhone Duo's outer screen 8 along its hinge, 59 on the other side; 0: the window's own, as elsewhere)
   corners : FixedArray[Double]
@@ -21,7 +22,7 @@ pub(all) struct NativeBars {
 // kept across runs: rail_native.mbt says it again each frame, native_bars_reset as the app begins anew
 pub let native_bars : NativeBars = {
   on: @signals.signal(false, same=fn(a, b) { a == b }),
-  side: 0.0,
+  side: @signals.signal(0.0, same=fn(a, b) { a == b }),
   corners: FixedArray::make(4, 0.0),
 }
 
@@ -29,7 +30,7 @@ pub let native_bars : NativeBars = {
 /// As at the start: none.
 pub fn native_bars_reset() -> Unit {
   native_bars.on.set(false)
-  native_bars.side = 0.0
+  native_bars.side.set(0.0)
   native_bars.corners.fill(0.0)
   native_foot_made.val = None
   native_over_clear()
@@ -52,14 +53,14 @@ pub fn native_on() -> Bool {
 /// Whether its bars run down the window's trailing edge (on its side, its outer screen): the app's actions in that
 /// column; upright they are across the top and foot.
 pub fn native_side() -> Bool {
-  native_bars.on.get() && native_bars.side > 0.0
+  native_bars.on.get() && native_bars.side.get() > 0.0
 }
 
 ///|
 /// How far in from the window's trailing edge what is pressed keeps clear of the column (0 where there is none).
 pub fn native_clear() -> Double {
   if native_bars.on.get() {
-    native_bars.side
+    native_bars.side.get()
   } else {
     0.0
   }
@@ -69,7 +70,7 @@ pub fn native_clear() -> Double {
 /// How much of the window's foot the system's tabs take across it (upright: the safe area's foot, the home indicator's
 /// line with them), what is over the window's whole keeps clear of (a toast); 0 where they are not there.
 pub fn native_foot() -> Double {
-  if native_bars.on.get() && native_bars.side == 0.0 {
+  if native_bars.on.get() && native_bars.side.get() == 0.0 {
     @ui.system_bars().bottom
   } else {
     0.0

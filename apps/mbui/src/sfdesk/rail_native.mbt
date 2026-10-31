@@ -242,7 +242,7 @@ fn hex_of(k : Int64) -> String {
 /// The system's column down the window's trailing edge as the system says its bars take it now (none upright, nor
 /// without its bars).
 fn native_side_now() -> Unit {
-  @sf.native_bars.side = if @sf.native_bars.on.get() { dmax(0.0, @ui.system_bars().right) } else { 0.0 }
+  @sf.native_bars.side.set(if @sf.native_bars.on.get() { dmax(0.0, @ui.system_bars().right) } else { 0.0 })
 }
 
 ///|
@@ -263,7 +263,9 @@ let nav_log_on : Ref[Int] = Ref(-1)
 /// A frame of the app, `body`: the system's bars as it wants them handed to the host once it is drawn (only as they
 /// change: @hostapi.nav_bar), the page's actions in them, none where it wants none (a phone's frame).
 pub fn nav_frame(body : () -> Unit) -> Unit {
-  nav_want.val = None
+  // (held by the tape while it shows: its frame is the window's tree's, what is under its panels built as what it reads
+  // changes, not each frame: tape_view.mbt)
+  nav_want.val = (nav_held.val)()
   // (where the system lays out the app's tabs, the wide frame hands it them each frame (frame.mbt: on the tape) and it
   // takes them: the frame is laid out with them from the first it can, as the frames after it are, not one laid out
   // without them (the cards on the tape with no room for its column, the page past the window's edge) and the next
@@ -326,7 +328,7 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
       @hostapi.nav_bar_none()
       nav_untaken.val = @sf.native_able()
       @sf.native_bars.on.set(false)
-      @sf.native_bars.side = 0.0
+      @sf.native_bars.side.set(0.0)
     }
   }
 }
@@ -617,12 +619,19 @@ let column_short : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) 
 let column_short_below : Double = 600.0
 
 ///|
+/// Where the frame hands the system's bars the places and the page's actions while the tape shows, whatever of the old
+/// view is built that frame (tape_view.mbt): the workspace in view and all of them, as they are then; None off it.
+// kept across runs: put back as a run begins (rail_native_reset)
+let nav_held : Ref[() -> (Source, Workspace, Array[Workspace])?] = Ref(fn() { None })
+
+///|
 /// What this file keeps put back as the app begins anew (desk.mbt reset).
 fn rail_native_reset() -> Unit {
   native_workspace_anchor.val = 0
   column_short.set(false)
   @sf.native_bars_reset()
   nav_want.val = None
+  nav_held.val = fn() { None }
   nav_untaken.val = false
   native_sidebar_items.clear()
   floating_bar.val = None
