@@ -723,6 +723,20 @@ export class Views implements Owner {
     });
   }
 
+  /// A tree shown from an older reading was read again in the background: show its current reading in the views that
+  /// used it. The things page also keeps what it drew until its entries change.
+  mdChanged(station: string, of: string): void {
+    if (of.startsWith("t:")) {
+      const thread = Number(of.slice(2));
+      this.#thingsKept.delete(`${station}/${thread}`);
+      for (const view of this.chatViews(station, thread)) this.#core.store.invalidate(view);
+      this.#invalidate((v) => v.station === station && v.thread === thread && ["chatLetters", "chatThings", "imageNear"].includes(v.topic));
+    } else if (of.startsWith("s:")) {
+      const key = of.slice(2);
+      this.#invalidate((v) => v.station === station && ((v.topic === "history" && v.key === key) || (v.topic === "chat" && v.thread === null && v.session === key)));
+    }
+  }
+
   /// A message on its way to a chat: shown in it at once, as `sending`; `after` is the chat's newest entry now.
   outboxAdd(station: string, thread: number, message: J): string {
     const after = u64(get(this.ok({ topic: "thread", station, thread }), "last")) ?? 0;

@@ -1701,6 +1701,37 @@ export class AccountDb {
     }
   }
 
+  /// Owners with cached trees from an older reading, in bounded pages, so updating them does not hold up the app.
+  oldMdOwners(reading: number, after: { station: string; of: string }): { station: string; of: string }[] {
+    if (!this.#mdKept) return [];
+    return this.sql.all(
+      `SELECT station, of FROM md_kept
+       WHERE (station > ? OR (station = ? AND of > ?))
+         AND CAST(substr(key, 1, instr(key, '.') - 1) AS INTEGER) < ?
+       GROUP BY station, of ORDER BY station, of LIMIT 20`,
+      [after.station, after.station, after.of, reading],
+    ).map((r) => ({ station: String(r[0]), of: String(r[1]) }));
+  }
+
+  /// Stop looking through an owner's sources once none of its older trees remain.
+  hasOldMd(station: string, of: string, reading: number): boolean {
+    if (!this.#mdKept) return false;
+    return this.sql.all("SELECT 1 FROM md_kept WHERE station = ? AND of = ? AND CAST(substr(key, 1, instr(key, '.') - 1) AS INTEGER) < ? LIMIT 1", [station, of, reading]).length > 0;
+  }
+
+  /// A bounded page of a cached tree owner's source entries, newest first. Sequence numbers need not be contiguous.
+  mdSourcePage(station: string, of: string, before: number): { n: number; json: unknown }[] {
+    const thread = of.startsWith("t:") ? Number(of.slice(2)) : null;
+    const session = of.startsWith("s:") ? of.slice(2) : null;
+    if (thread !== null && Number.isSafeInteger(thread)) {
+      return this.sql.all("SELECT n, json FROM entry WHERE station = ? AND thread = ? AND n < ? ORDER BY n DESC LIMIT 50", [station, thread, before]).map((r) => ({ n: Number(r[0]), json: parse(r[1]) }));
+    }
+    if (session !== null) {
+      return this.sql.all("SELECT i, json FROM transcript WHERE station = ? AND session = ? AND i < ? ORDER BY i DESC LIMIT 50", [station, session, before]).map((r) => ({ n: Number(r[0]), json: parse(r[1]) }));
+    }
+    return [];
+  }
+
   /// The tree of the text keyed `key` (its JSON), noted as shown `at`; null when it is not kept.
   keptMd(station: string, key: string, at: number): string | null {
     if (!this.#mdKept) return null;
@@ -1719,7 +1750,7 @@ export class AccountDb {
 
   /// Keeps the tree of the text keyed `key`, read for `of` (a chat, `t:<thread>`; an agent, `s:<session>`); past
   /// MD_KEPT, the least lately shown go.
-  keepMd(station: string, of: string, key: string, json: string, at: number): void {
+  keepMd(station: string, of: string, key: string, json: string, at: number, replaces?: string): void {
     if (this.readOnly) return;
     this.#write(() => {
       if (!this.#mdKept) {
@@ -1729,6 +1760,11 @@ export class AccountDb {
       // (what all of them take, counted once and then kept count of: a tree is kept with each reply read)
       this.#mdSize ??= Number(this.sql.all("SELECT coalesce(sum(size), 0) FROM md_kept")[0]?.[0] ?? 0);
       const was = Number(this.sql.all("SELECT size FROM md_kept WHERE station = ? AND key = ?", [station, key])[0]?.[0] ?? 0);
+      if (replaces !== undefined && replaces !== key) {
+        const old = Number(this.sql.all("SELECT size FROM md_kept WHERE station = ? AND key = ?", [station, replaces])[0]?.[0] ?? 0);
+        this.sql.run("DELETE FROM md_kept WHERE station = ? AND key = ?", [station, replaces]);
+        this.#mdSize -= old;
+      }
       this.sql.run("INSERT OR REPLACE INTO md_kept (station, key, of, size, used, json) VALUES (?, ?, ?, ?, ?, ?)", [station, key, of, json.length, at, json]);
       this.#mdSize += json.length - was;
       if (this.#mdSize <= MD_KEPT) return;
