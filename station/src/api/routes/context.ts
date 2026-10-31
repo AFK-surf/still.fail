@@ -1,6 +1,7 @@
-// How the station goes on with a session whose prompt cache is over (config.json `afreshWhenCold`): a person's message to
-// an agent at rest, its large context's cache over, starts it afresh (its context cleared, told to read back what it
-// needs) rather than send all of it again at full price. The overview says it to any member (`context`); PUT
+// How the station goes on with a session whose prompt cache is over (config.json `afreshWhenCold`), unless its chat
+// chose otherwise (sessions `afresh`, session.settings): a message or notice to an agent, its large context's cache
+// over, starts it afresh (its context cleared, told to read back what it needs) rather than send all of it again at
+// full price. The overview says it to any member (`context`); PUT
 // /context/settings `{afreshWhenCold}` changes it, for the workspace's owners and admins.
 import { type Answer, type Request, error, json } from "../request.ts";
 import type { Route } from "../admin.ts";

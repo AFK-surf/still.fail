@@ -1031,6 +1031,11 @@ export interface Session {
 	model?: string;
 	effort?: string;
 	fast?: boolean;
+	/**
+	 * Whether it goes on afresh once its prompt cache is over, as chosen in its chat (`session.settings`);
+	 * absent: as its station is set (`StationContext::afreshWhenCold`).
+	 */
+	afresh?: boolean;
 	runtimeSessionId?: string;
 	/** What its station can do to its context by hand: compact, clear (one from before says none). */
 	contextActions?: string[];
@@ -1576,15 +1581,16 @@ export interface ChatAsk {
 
 /** A chat's agent whose prompt cache is over (ChatView::cacheCold). */
 export interface ChatCacheCold {
-	/** The agent's session: `session.clear` with `readBack` gives it a fresh context. */
+	/** The agent's session: `session.settings` with `afresh` switches whether it goes on afresh. */
 	session: string;
-	/**
-	 * What is said: its cache over, and the context going on reads again (缓存已过期，接着聊约需 $1.40);
-	 * its station set to go on afresh by itself, that the next message does.
-	 */
+	/** What is said: its cache over, and what going on would read again (缓存已过期，重读约 $1.40). */
 	text: string;
-	/** Its station goes on afresh by itself (`StationContext::afreshWhenCold`): nothing to tap. Absent otherwise. */
-	auto?: boolean;
+	/**
+	 * It goes on afresh as it is next started (by a message or a notice): its context cleared, told to read
+	 * back what it needs. As chosen in its chat (`Session::afresh`), or else as its station is set
+	 * (`StationContext::afreshWhenCold`); switched any time with `session.settings` `afresh`.
+	 */
+	afresh: boolean;
 }
 
 /** A thread a chat's messages can be copied to (docs/relay.md "抄送"). */

@@ -18,6 +18,18 @@ export const notice = style({
 export const mark = style({ flex: "none", display: "grid", placeItems: "center", width: "32px", marginRight: "2px" });
 export const words = style({ flex: "1", minWidth: "0", display: "flex", flexDirection: "column" });
 export const failed = style({ color: vars.red });
+export const choices = style({ flex: "none", marginLeft: "12px", display: "inline-flex", gap: "12px" });
+
+/** An option not taken: quiet as the notice's words, pressed to take it. */
+export const choice = style({
+  display: "inline-flex", alignItems: "center", gap: "4px", padding: "0", border: "0", background: "none", font: "inherit",
+  color: vars.muted, fontWeight: 400, cursor: "pointer",
+  selectors: { "&:disabled": { cursor: "default" } },
+});
+
+/** The option taken: its ✓ before it, in the words' colour, a step heavier. */
+export const taken = style([choice, { color: vars.text, fontWeight: 500, cursor: "default" }]);
+
 export const offer = style({
   flex: "none", marginLeft: "12px", padding: "0", border: "0", background: "none", font: "inherit", fontWeight: 500,
   color: vars.text, cursor: "pointer",

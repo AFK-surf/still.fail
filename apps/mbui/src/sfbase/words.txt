@@ -750,7 +750,7 @@ web-main.attention.settings
 web-main.attention.untitled
 web-main.attention.waitOne
 web-main.chat.afresh
-web-main.chat.afreshBusy
+web-main.chat.goOn
 web-main.chat.agentCard.background
 web-main.chat.agentCard.cache
 web-main.chat.agentCard.context

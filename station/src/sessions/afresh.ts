@@ -33,11 +33,12 @@ export function toldCleared(hub: Hub, key: string, readBack = false): string {
 /// needs, and some.
 const COLD_FROM = 50_000;
 
-/// Whether a person's message to session `key` is to start it afresh, at `now`: the station set to (`afreshWhenCold`),
-/// its runtime session's prompt cache over (read/usage.ts `usageNow`: as its runtime told what it wrote) and its context
-/// worth it.
+/// Whether session `key` started at `now` (by a message, or a notice) is to start afresh: set to in its chat, or else its
+/// station (`afreshWhenCold`), its runtime session's prompt cache over (read/usage.ts `usageNow`: as its runtime told
+/// what it wrote) and its context worth it.
 export function goesAfresh(hub: Hub, key: string, now: number): boolean {
-  if (!hub.config().afreshWhenCold || hub.store.getSession(key)?.runtimeSessionId == null) return false;
+  const row = hub.store.getSession(key);
+  if (!(row?.afresh ?? hub.config().afreshWhenCold) || row?.runtimeSessionId == null) return false;
   const u = usageNow(hub.store, key);
   return u?.lastCallAt !== undefined && u.cacheMs !== undefined && u.lastCallAt + u.cacheMs <= now && (u.contextTokens ?? 0) >= COLD_FROM;
 }

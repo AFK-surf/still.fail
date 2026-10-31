@@ -150,7 +150,7 @@
   "web-main.chat.archived": "已归档",
   "web-main.chat.archivedNamed": "已归档「{title}」",
   "web-main.chat.afresh": "换新上下文",
-  "web-main.chat.afreshBusy": "正在换新上下文",
+  "web-main.chat.goOn": "接着聊",
   "web-main.chat.archivedPlaceholder": "还原对话后才能发送",
   "web-main.chat.deleteFailed": "无法删除：{error}",
   "web-main.chat.empty": "在此发送消息，此对话中的 agent 会在这里回复",

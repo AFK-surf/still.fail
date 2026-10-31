@@ -70,20 +70,25 @@ test("an_agent_at_rest_whose_cache_is_over_is_offered_a_fresh_context", () => {
   const agent = (key: string, u: object | null, patch: object = {}) =>
     ({ status: "final", wait: null, session: { key, runtimeSessionId: `r-${key}`, usage: u }, ...patch });
   // Its cache over: said with what going on reads again and what it costs.
-  assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR), [{ session: "a", text: "缓存已过期，接着聊约需 $1.60" }, Infinity]);
-  // Its station going on afresh by itself: said so, nothing to tap.
-  assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR, true), [{ session: "a", text: "缓存已过期，下一条消息将换新上下文", auto: true }, Infinity]);
+  assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR), [{ session: "a", text: "缓存已过期，重读约 $1.60", afresh: false }, Infinity]);
+  // Its station going on afresh by itself: what going on would cost said all the same, the choice on afresh.
+  assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR, true), [{ session: "a", text: "缓存已过期，重读约 $1.60", afresh: true }, Infinity]);
+  // Its chat's own choice outweighs its station's, either way.
+  const chose = (afresh: boolean) => agent("a", null, { session: { key: "a", runtimeSessionId: "r-a", usage: usage(0, 200_000), afresh } });
+  assert.equal(cacheCold([chose(true)], HOUR)[0].afresh, true);
+  assert.equal(cacheCold([chose(false)], HOUR, true)[0].afresh, false);
+  // Waiting on work of its own: said too, as what it waits on starts it again.
+  assert.equal(cacheCold([agent("a", usage(0, 200_000), { wait: { since: 0, seconds: 600 } })], HOUR)[0].session, "a");
   // Not yet: computed again as it is over.
   assert.deepEqual(cacheCold([agent("a", usage(0, 200_000))], HOUR - 5 * MIN), [null, 5 * MIN]);
   // Unpriced: what it reads, without a cost.
-  assert.equal(cacheCold([agent("a", usage(0, 200_000, { rereadCost: undefined }))], HOUR)[0].text, "缓存已过期，接着聊要重读 200K token");
+  assert.equal(cacheCold([agent("a", usage(0, 200_000, { rereadCost: undefined }))], HOUR)[0].text, "缓存已过期，重读要 200K token");
   // Of several, the largest context.
   assert.equal(cacheCold([agent("a", usage(0, 80_000)), agent("b", usage(0, 300_000))], 2 * HOUR)[0].session, "b");
-  // None at work, waiting on its own work, cleared already, with a small context, or not told how long its cache lasts.
+  // None at work, cleared already, with a small context, or not told how long its cache lasts.
   for (const a of [
     agent("a", usage(0, 200_000), { status: "running" }),
     agent("a", usage(0, 200_000), { status: "queued" }),
-    agent("a", usage(0, 200_000), { wait: { since: 0, seconds: 600 } }),
     agent("a", usage(0, 200_000), { session: { key: "a", runtimeSessionId: null, usage: usage(0, 200_000) } }),
     agent("a", usage(0, 20_000)),
     agent("a", usage(0, 200_000, { cacheMs: undefined })),

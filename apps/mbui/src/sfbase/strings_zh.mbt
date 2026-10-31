@@ -758,7 +758,7 @@ let zh : Map[String, String] = {
   "web-main.attention.untitled": "新对话",
   "web-main.attention.waitOne": "待你处理",
   "web-main.chat.afresh": "换新上下文",
-  "web-main.chat.afreshBusy": "正在换新上下文",
+  "web-main.chat.goOn": "接着聊",
   "web-main.chat.agentCard.background": "后台进行中",
   "web-main.chat.agentCard.cache": "缓存命中",
   "web-main.chat.agentCard.context": "上下文",

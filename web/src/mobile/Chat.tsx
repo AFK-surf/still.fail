@@ -536,7 +536,7 @@ function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => vo
   useLayoutEffect(() => use({
     ...composerShown(view, here.station), send,
     restore: () => api.archive({ thread: view.thread?.id ?? null, session: here.key }, false),
-    afresh: api.afresh,
+    setAfresh: api.setAfresh,
     ...(view.cc?.length && view.thread ? { cc: { to: view.cc, toggle: (o: ChatCcTo) => act(call("chat.cc", { station: here.station, thread: view.thread!.id, to: o.thread, on: !o.on }), t("web-mobile.chat.ccStart", { place: o.place })) } } : {}),
     // Typing starts the session's runtime, so a cold start overlaps the writing.
     type: () => {
