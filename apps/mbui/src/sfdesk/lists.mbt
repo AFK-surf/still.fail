@@ -94,27 +94,29 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
       if jobs > 0 {
         let chip = c.id("side/open-jobs")
-        if c.clicked(chip) {
-          wide.jobs_open.set(!wide.jobs_open.get())
-        }
+        // (pressed: opened or closed as it is let go, as it is then)
+        c.on_press(chip, fn() { wide.jobs_open.set(!wide.jobs_open.get()) })
         let b = c.box(style=foot_chip, id=chip, fn() {
           c.box(style=foot_chip_dot, fn() {  }) |> ignore
           c.text(@sf.t("web-main.jobs.chip", args=[("n", jobs.to_string())]), style=foot_chip_words) |> ignore
         })
         c.semantics(b, Button, id=chip, label=@sf.t("web-main.jobs.long"))
-        let p = @kit.popover(
-          c,
-          "side/open-jobs",
-          wide.jobs_open.get(),
-          chip,
-          side=Top,
-          along=End,
-          offset=6.0,
-          // (scrolling in itself past 420, or 60% of the window: openJobsPop; or what the room it has leaves it)
-          look=@sf.beside_look(Px(open_jobs_pop_w), most=dmin(open_jobs_pop_most, c.height * 0.6)),
-          fn() { open_jobs(c, src, w) },
-        )
-        wide.jobs_open.set(p.value)
+        // (dismissed by the hand, Escape or a press outside it and its chip: closed at that moment)
+        c.with_dismissed(fn(_) { wide.jobs_open.set(false) }, fn() {
+          @kit.popover(
+            c,
+            "side/open-jobs",
+            wide.jobs_open.get(),
+            chip,
+            side=Top,
+            along=End,
+            offset=6.0,
+            // (scrolling in itself past 420, or 60% of the window: openJobsPop; or what the room it has leaves it)
+            look=@sf.beside_look(Px(open_jobs_pop_w), most=dmin(open_jobs_pop_most, c.height * 0.6)),
+            fn() { open_jobs(c, src, w) },
+          )
+          |> ignore
+        })
       }
     })
     // over the lists: their scroll bar keeps clear of it (the web's --nav-foot)

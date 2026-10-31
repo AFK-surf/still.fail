@@ -40,6 +40,8 @@ pub fn chat_drop(@ui.Ctx, @sfbase.Source, String, String, Int32) -> Unit
 
 pub fn chat_find_open(@ui.Ctx, @sfbase.ChatRef) -> Unit
 
+pub fn chat_pops_open() -> (Bool, Bool)
+
 pub fn chat_talk(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, Int32, () -> Unit) -> Unit
 
 pub let closed_bar_in : Double

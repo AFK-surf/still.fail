@@ -42,6 +42,12 @@ pub fn open_info_pop() -> Unit {
 }
 
 ///|
+/// Whether its info's popover is open, and its services' (tests).
+pub fn chat_pops_open() -> (Bool, Bool) {
+  (chat_own.info_open, chat_own.jobs_open)
+}
+
+///|
 /// ⌘F's bar opened in chat `r`: what opens under the bar closed.
 pub fn chat_find_open(c : @ui.Ctx, r : ChatRef) -> Unit {
   chat_own.info_open = false
@@ -315,9 +321,11 @@ fn chat_bar(
             }
             jobs_trigger(c, src, r)
             screen_trigger(c, r, view)
-            if !in_bars &&
-              @sf.icon_button(c, "more", key="chat-more", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.info")) {
-              info()
+            if !in_bars {
+              @sf.icon_button(c, "more", key="chat-more", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.info"))
+              |> ignore
+              // (pressed: opened or closed as it is let go, as it is then)
+              c.on_press(c.id("chat-more"), info)
             }
             // the side panel's switch while it is closed: the first agent's history in it (none where the chat's actions
             // are in the system's bars: its history's switch there)
@@ -599,9 +607,10 @@ fn jobs_trigger(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   if items(view, "jobs").length() == 0 {
     return
   }
-  if @sf.icon_button(c, "web", key="chat-jobs", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.services"), shortcut="chat.jobs") {
-    chat_own.jobs_open = !chat_own.jobs_open
-  }
+  @sf.icon_button(c, "web", key="chat-jobs", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.services"), shortcut="chat.jobs")
+  |> ignore
+  // (pressed: opened or closed as it is let go, as it is then)
+  c.on_press(c.id("chat-jobs"), fn() { chat_own.jobs_open = !chat_own.jobs_open })
   match text(view, "alarm") {
     "" => ()
     alarm =>
@@ -653,19 +662,28 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
   }
   // (its ⋯ in the system's bars: from the mark where it was chosen, rail_native.mbt)
   let (info_at, info_side, info_along) = bar_anchor(c.id("chat-more"), Bottom, End)
-  let info = @kit.popover(
-    c,
-    "chat-info-pop",
-    chat_own.info_open,
-    info_at,
-    side=info_side,
-    along=info_along,
-    look=@sf.beside_look(@ui.Size::Px(chat_info_w)),
-    fn() { chat_info(c, src, w, r, v, chat) },
-  )
-  // (closed by what was pressed in it, or as a popover closes: Escape, a press outside)
-  chat_own.info_open = chat_own.info_open && info.value
-  let jobs = @kit.popover(
+  // (closed by what was pressed in it; dismissed by the hand, Escape or a press outside it and its button, at that
+  // moment)
+  c.with_dismissed(fn(_) { chat_own.info_open = false }, fn() {
+    @kit.popover(
+      c,
+      "chat-info-pop",
+      chat_own.info_open,
+      info_at,
+      side=info_side,
+      along=info_along,
+      look=@sf.beside_look(@ui.Size::Px(chat_info_w)),
+      fn() { chat_info(c, src, w, r, v, chat) },
+    )
+    |> ignore
+  })
+  c.with_dismissed(fn(_) { chat_own.jobs_open = false }, fn() { chat_jobs_pop(c, src, r) })
+}
+
+///|
+/// The chat's services' popover (JobsPanel), by its button.
+fn chat_jobs_pop(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
+  @kit.popover(
     c,
     "chat-jobs-pop",
     chat_own.jobs_open,
@@ -685,7 +703,7 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
       jobs_popover(c, src, r.station, (src.topic)("chatJobs", chat_params(r)).value, open, open)
     },
   )
-  chat_own.jobs_open = chat_own.jobs_open && jobs.value
+  |> ignore
 }
 
 ///|
