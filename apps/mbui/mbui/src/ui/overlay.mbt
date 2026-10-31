@@ -32,6 +32,11 @@ struct Layer {
   modal : Bool
   trap : Bool
   escape : Bool
+  // (said first as an Escape comes to it: whether it took it itself, within it, not dismissed)
+  on_escape : (() -> Bool)?
+  // (asked as the hand would dismiss it, Escape, back, a press outside: whether it stays open then, the Escape or back
+  // taken all the same; Ctx::dismiss, its view's own, not asked)
+  stays : (() -> Bool)?
   outside : Bool
   inert : Bool
   anchor : Int
@@ -50,18 +55,23 @@ pub(all) struct Overlay {
 /// A layer over the page (see the file's head), `key` its id's, built by `body`. `modal`: a ground (`scrim`, its
 /// colour; clear by default) under what it holds takes the presses and wheels it does not, and the page is hidden
 /// from the semantics tree; `trap` (with `modal` by default) keeps Tab in it. Dismissed by Escape and the back
-/// (unless not `escape`), by a press outside (unless not `outside`); a press on `anchor` (its trigger's id) does not
-/// dismiss it. As it opens the focus goes to `initial_focus` (-1: its first focusable; 0: nowhere, it stays; -2, by
-/// default: the first focusable when it traps, else nowhere); as it goes, back to `return_focus` (0, by default:
-/// what had it as it opened). `inert`: leaving (its exit drawn): it takes no press, focus or key, is not dismissed,
-/// is hidden from the semantics tree, and the focus goes back as though it had gone; its scrim is still drawn (as it
-/// fades), taking nothing.
+/// (unless not `escape`; an Escape `on_escape` says it took, asked as it comes, within it, no dismissal: one step back
+/// inside it), by a press outside (unless not `outside`); none of them while `stays` says it stays, asked as each
+/// comes (what it is doing may not be left: an Escape or a back taken by it all the same, nothing under it told; its
+/// view's own Ctx::dismiss not asked). A
+/// press on `anchor` (its trigger's id) does not dismiss it. As it opens the focus goes to `initial_focus` (-1: its
+/// first focusable; 0: nowhere, it stays; -2, by default: the first focusable when it traps, else nowhere); as it
+/// goes, back to `return_focus` (0, by default: what had it as it opened). `inert`: leaving (its exit drawn): it takes
+/// no press, focus or key, is not dismissed, is hidden from the semantics tree, and the focus goes back as though it
+/// had gone; its scrim is still drawn (as it fades), taking nothing.
 pub fn Ctx::overlay(
   self : Ctx,
   key : String,
   modal? : Bool = false,
   trap? : Bool = modal,
   escape? : Bool = true,
+  on_escape? : () -> Bool,
+  stays? : () -> Bool,
   outside? : Bool = true,
   scrim? : Int64 = 0L,
   anchor? : Int = 0,
@@ -133,6 +143,8 @@ pub fn Ctx::overlay(
     modal,
     trap: trap && !inert,
     escape,
+    on_escape,
+    stays,
     outside,
     inert,
     anchor,
@@ -351,7 +363,7 @@ fn Ctx::layer_keys(self : Ctx) -> Unit {
         if self.in_layer(l, x, y) {
           break
         }
-        if l.outside && (l.anchor == 0 || target != l.anchor) {
+        if l.outside && (l.anchor == 0 || target != l.anchor) && !layer_stays(l) {
           self.dismissals[l.id] = Outside
         }
         if l.modal {
@@ -751,6 +763,10 @@ fn layer_back_forget() -> Unit {
 /// said over, the host told so; a gesture held by an opening closed since, nothing.
 fn Ctx::layer_back_taken(self : Ctx, id : Int, gen : Int) -> Unit {
   guard self.layer_gen.get(id) == Some(gen) && !self.layer_retired_now(id) else { return }
+  // (staying open as it is taken: taken all the same, nothing done)
+  if self.last_layers.iter().any(fn(l) { l.id == id && layer_stays(l) }) {
+    return
+  }
   self.dismissals[id] = Back
   self.layer_dismissed(id, Back)
 }
@@ -913,7 +929,15 @@ fn Ctx::layer_escape(self : Ctx, keys : Array[(Int, Int, Bool)]) -> Int {
       for k in 0..<keys.length() {
         let (code, mods, taken) = keys[k]
         if code == key_escape && !taken {
-          self.dismissals[l.id] = Escape
+          // (one step back within it first, where it says it took it so: not dismissed)
+          let within = layer_stays(l) ||
+            (match l.on_escape {
+              Some(f) => f()
+              None => false
+            })
+          if !within {
+            self.dismissals[l.id] = Escape
+          }
           keys[k] = (code, mods, true)
           took = true
         }
@@ -929,4 +953,13 @@ fn Ctx::layer_escape(self : Ctx, keys : Array[(Int, Int, Bool)]) -> Int {
     }
   }
   keys_layer
+}
+
+///|
+/// Whether layer `l` says it stays open now, as something would dismiss it (Ctx::overlay's `stays`).
+fn layer_stays(l : Layer) -> Bool {
+  match l.stays {
+    Some(f) => f()
+    None => false
+  }
 }

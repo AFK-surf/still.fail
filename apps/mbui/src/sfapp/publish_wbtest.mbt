@@ -4,8 +4,9 @@
 
 ///|
 /// The chat's sheet open over the fixture's chat; `chat.publishPreview` answered with fix_preview, `chat.publish` with
-/// its link, the rest with nothing.
-fn publish_core(calls : Array[Made]) -> @ui.Tester {
+/// its link, the rest with nothing; `preview` in its place, where given; `finish` false: what is asked of the host (a
+/// picture decoded) done only as the test says (Tester::finish).
+fn publish_core(calls : Array[Made], preview? : () -> Json = fix_preview, finish? : Bool = true) -> @ui.Tester {
   new_run()
   let base = fixture("chat-info")
   let src : Source = {
@@ -13,7 +14,7 @@ fn publish_core(calls : Array[Made]) -> @ui.Tester {
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
       match name {
-        "chat.publishPreview" => done(Ok(fix_preview()))
+        "chat.publishPreview" => done(Ok(preview()))
         "chat.publish" =>
           done(
             Ok({
@@ -29,7 +30,7 @@ fn publish_core(calls : Array[Made]) -> @ui.Tester {
     },
   }
   open_fixture_over("chat-info", src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2, finish~)
   t.run_for(@ui.move_most_ms)
   t
 }
