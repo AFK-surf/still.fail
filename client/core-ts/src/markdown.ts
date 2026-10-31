@@ -36,7 +36,7 @@ export type MdStore = { has(key: string): boolean; get(key: string): string | nu
 
 /// How the trees kept are read: another number whenever what `parse` makes of a text changes (a test holds it to the
 /// trees of a set of texts: markdown.test.ts), so a tree kept by a core before is read afresh, not shown.
-export const MD_READING = 5;
+export const MD_READING = 6;
 
 /// A text's key among the trees kept: the reading, its length and two FNV-1a hashes of it (64 bits).
 export function mdKey(text: string): string {

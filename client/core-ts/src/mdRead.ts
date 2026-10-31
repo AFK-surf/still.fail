@@ -8,6 +8,7 @@
 // The nodes say where in the text they stand where markdown.ts reads its runs from (`position`): a block by its lines,
 // words by where they are found in turn in the text (they are the same characters wherever found).
 import MarkdownIt from "markdown-it";
+import cjkFriendly from "markdown-it-cjk-friendly";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -16,6 +17,9 @@ type J = any;
 export type Node = { type: string; position?: { start: { offset?: number }; end: { offset?: number } }; children?: Node[]; value?: string; depth?: number; lang?: string | null; ordered?: boolean | null; start?: number | null; spread?: boolean | null; checked?: boolean | null; align?: (string | null)[] | null; url?: string; title?: string | null; alt?: string | null; identifier?: string; label?: string | null; referenceType?: string };
 
 const reader = new MarkdownIt("default", { html: true, linkify: false, typographer: false });
+// CommonMark's punctuation flanking rules can leave emphasis marks visible when CJK words have no spaces between them.
+// Use the same delimiter scan for emphasis and the GFM tilde rule below, without changing the source's offsets.
+reader.use(cjkFriendly);
 reader.disable(["strikethrough"]);
 // An address as written: not percent-encoded, none refused.
 reader.normalizeLink = (url: string) => url;

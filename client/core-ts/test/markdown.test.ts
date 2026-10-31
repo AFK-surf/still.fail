@@ -19,6 +19,22 @@ test("markdown_reads_blocks_as_html_names_them", () => {
   assert.deepEqual(read("```ts\nconst a = 1;\n```\n\n```\nplain\n```"), [["pre", { code: "const a = 1;", lang: "ts", ink: "h6j2c2fc" }], ["pre", { code: "plain" }]]);
 });
 
+test("markdown_reads_emphasis_next_to_cjk_punctuation_and_words", () => {
+  // The two bold spans from an agent's reply must not merge when the first ends with a Chinese full stop.
+  assert.deepEqual(read("- **原因还没有官方定论。**有实验显示，**额度扣得更快**，但样本有限。"), [
+    ["list", [["li", [["b", ["原因还没有官方定论。"]], "有实验显示，", ["b", ["额度扣得更快"]], "，但样本有限。"]]]],
+  ]);
+  assert.deepEqual(read("前面**“强调。”**后面"), [["p", ["前面", ["b", ["“强调。”"]], "后面"]]]);
+  assert.deepEqual(read("前面*「斜体。」*后面"), [["p", ["前面", ["i", ["「斜体。」"]], "后面"]]]);
+  assert.deepEqual(read("前面~~「删除。」~~后面"), [["p", ["前面", ["s", ["「删除。」"]], "后面"]]]);
+  assert.deepEqual(read("前面**`代码`**后面"), [["p", ["前面", ["b", [["code", { content: "代码" }]]], "后面"]]]);
+  assert.deepEqual(read("**この文です。**次の文。"), [["p", [["b", ["この文です。"]], "次の文。"]]]);
+  assert.deepEqual(read("**이 용어(term)**를 강조"), [["p", [["b", ["이 용어(term)"]], "를 강조"]]]);
+  // The same marks in code stay literal, as does an English-only case under CommonMark's usual rules.
+  assert.deepEqual(read("`**原文。**继续`"), [["p", [["code", { content: "**原文。**继续" }]]]]);
+  assert.deepEqual(read("**words.**next"), [["p", ["**words.**next"]]]);
+});
+
 test("markdown_an_inline_code_or_a_link_naming_a_file_says_its_path_its_line_and_a_chips_words", () => {
   assert.deepEqual(read("见 `src/a.ts:12`，`npm test` 不是，[说明](docs/notes.md#L3)"), [
     ["p", [
@@ -125,6 +141,12 @@ test("markdown_is_read_once_on_the_device_where_its_tree_is_kept", () => {
   kept.set(mdKey(broken), "{");
   assert.deepEqual(markdown(broken, store), parse(broken));
   assert.equal(kept.get(mdKey(broken)), JSON.stringify(parse(broken)));
+  // A reply kept by the previous reader is read again, so corrections apply to messages already on the device.
+  const old = `**旧消息。**后面 ${Math.random()}`;
+  const oldKey = mdKey(old).replace(/^\d+\./, `${MD_READING - 1}.`);
+  kept.set(oldKey, JSON.stringify([["p", ["old reading"]]]));
+  assert.deepEqual(markdown(old, store), parse(old));
+  assert.equal(kept.get(mdKey(old)), JSON.stringify(parse(old)));
   // The key: the reading, the length, then the text's hashes.
   assert.ok(mdKey("ab").startsWith(`${MD_READING}.2.`));
   assert.notEqual(mdKey("ab"), mdKey("ba"));
@@ -140,9 +162,10 @@ test("markdown_kept_on_the_device_is_read_as_this_reading_reads_it_or_its_readin
     "```ts\nconst a: number = 1; // 注释\nexport function f() { return `x${a}`; }\n```\n\n```sh\necho \"$HOME\" && ls -la\n```\n\n```\nplain\n```",
     "行内 $x^2 + y_1$ 和 \\(\\frac{a}{b}\\)，\n\n$$\n\\sum_{i=0}^{n} i = \\frac{n(n+1)}{2}\n$$\n\n\\[ e^{i\\pi} + 1 = 0 \\]\n\n价格 $5 和 $10",
     "<b>不要</b> 原样\n第二行  \n硬换行 &amp; &lt; &#x4e2d;\n\n![图](a.png \"标题\") [引用][r]\n\n[r]: https://r.dev",
+    "前面**“强调。”**后面，*斜体。*继续，~~删除。~~继续。",
   ];
   const digest = createHash("sha256").update(JSON.stringify(texts.map(parse))).digest("hex").slice(0, 16);
-  assert.equal(`${MD_READING}:${digest}`, "5:5bf390265ff58043", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
+  assert.equal(`${MD_READING}:${digest}`, "6:ebb30f81510c7bf3", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
 });
 
 test("a_link_or_picture_alone_on_its_line_is_a_paragraph_of_its_own_with_no_blank_line_round_it", () => {
