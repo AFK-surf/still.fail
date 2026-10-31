@@ -147,6 +147,11 @@ struct Nav[P] {
   mut flat_asked : Int
   mut flat_for : Int
   mut flat_from : Double
+  // drawn flat, what shows in place of the one on top as its owner says it at its causes (Nav::flat_keep): the stay
+  // (an entry's serial and its time on top) kept shown while the one on top is waited for; whether an owner says it
+  // (Nav::flat_owned): then that alone decides, Nav::shows_when's frames none of it
+  mut flat_kept : (Int, Int)?
+  mut flat_owner : Bool
   // the page being built (Ctx::nav, Ctx::nav_flat), what Nav::under answers for
   mut built : NavPage[P]?
   // the pages at and under this index are not the stack's to slide or go back from (Ctx::nav's `floor`: a pane's stack
@@ -210,6 +215,8 @@ pub fn[P] Nav::new(
     flat_asked: -1,
     flat_for: -1,
     flat_from: -1.0,
+    flat_kept: None,
+    flat_owner: false,
     built: None,
     floor: 0,
     hosted: None,
@@ -458,6 +465,56 @@ pub fn[P] Nav::shows_when(self : Nav[P], ready : () -> Bool, most : Double) -> U
 }
 
 ///|
+/// The stay of the page on top: its entry (a page put on the stack is an entry of its own, the same page twice two) and
+/// its time on top (come back to, another), read as it changes. What a wait for what it shows is the wait of.
+pub fn[P] Nav::top_stay(self : Nav[P]) -> (Int, Int) {
+  self.said.get() |> ignore
+  let top = self.pages[self.pages.length() - 1]
+  (top.serial, top.stint)
+}
+
+///|
+/// Drawn flat (Ctx::nav_flat), what shows is said by its owner at its causes, not by the frames (`owned`; let go, as
+/// Nav::shows_when says it): what it keeps shown (Nav::flat_keep) and when the one on top shows.
+pub fn[P] Nav::flat_owned(self : Nav[P], owned : Bool) -> Unit {
+  if self.flat_owner != owned || (!owned && self.flat_kept is Some(_)) {
+    self.flat_owner = owned
+    self.flat_kept = None
+    self.told()
+  }
+}
+
+///|
+/// Drawn flat by an owner (Nav::flat_owned), the stay shown in place of the one on top (Nav::top_stay's of a page shown
+/// before it), kept so till its owner says otherwise (`None`: the one on top), whatever frames are drawn: its entry kept
+/// while it shows, though it has left the stack, then let go (forgotten and told, Nav's `on_leave`) as any other. A
+/// stay no longer there (its entry let go, or on top again as another stay) keeps nothing.
+pub fn[P] Nav::flat_keep(self : Nav[P], stay : (Int, Int)?) -> Unit {
+  if self.flat_kept != stay {
+    self.flat_kept = stay
+    self.told()
+  }
+}
+
+///|
+/// The entry kept shown in place of the one on top (Nav::flat_keep), where it is still the stay kept: in the stack
+/// under the top, or gone from it and not let go yet.
+fn[P] Nav::flat_kept_entry(self : Nav[P]) -> NavPage[P]? {
+  guard self.flat_kept is Some((serial, stint)) else { return None }
+  let top = self.pages[self.pages.length() - 1]
+  if top.serial == serial {
+    return None
+  }
+  let find = fn(es : Array[NavPage[P]]) -> NavPage[P]? {
+    es.iter().find_first(fn(e) { e.serial == serial && e.stint == stint })
+  }
+  match find(self.pages) {
+    Some(e) => Some(e)
+    None => find(self.gone)
+  }
+}
+
+///|
 /// Drawn flat (Ctx::nav_flat), the page drawn in place of the one on top this frame while that one is waited for
 /// (Nav::shows_when): the page drawn there last, until the one on top has what it shows or its wait is over; else none.
 /// The same whoever asks in a frame.
@@ -487,6 +544,9 @@ fn[P] Nav::flat_held(self : Nav[P], c : Ctx) -> NavPage[P]? {
 /// slides in once it has what it shows (Nav::comes_when); one pushed over a stack drawn flat holds its own slide.
 /// Asked as the frame builds, after Nav::shows_when.
 pub fn[P] Nav::top_shows(self : Nav[P]) -> Bool {
+  if self.flat_owner {
+    return self.stacked() || self.flat_kept_entry() is None
+  }
   self.stacked() || self.flat_held(g()) is None
 }
 
@@ -1084,8 +1144,9 @@ pub fn[P] Ctx::nav_flat(
     nav.settle()
   }
   let top = nav.pages[nav.pages.length() - 1]
-  // the page put on top since the last frame drawn, waited for while that one stays (Nav::shows_when)
-  let held = nav.flat_held(self)
+  // the page put on top since, waited for while the one before stays: as its owner said it at its causes
+  // (Nav::flat_keep), else as the frames found it (Nav::shows_when)
+  let held = if nav.flat_owner { nav.flat_kept_entry() } else { nav.flat_held(self) }
   // what left the stack forgotten (and told), but the page that stays shown while the new one is waited for
   let kept : Array[NavPage[P]] = []
   for e in nav.gone {

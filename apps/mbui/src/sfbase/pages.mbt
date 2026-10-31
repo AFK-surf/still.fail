@@ -204,7 +204,16 @@ pub fn open_chat(r : ChatRef) -> Unit {
 /// and the app's own doings call, never the stack themselves.
 pub fn open_page(p : Page) -> Unit {
   history_push()
-  (shell.val.open)(p)
+  shell_change(fn() { (shell.val.open)(p) })
+}
+
+///|
+/// What the shell does to open a page, one change (what reads the stack told once, of where it ends: a chat opened
+/// beside the sidebar pops to the root and pushes it, never seen at the root between).
+fn shell_change(f : () -> Unit) -> Unit {
+  @signals.start_batch()
+  f()
+  @signals.end_batch()
 }
 
 ///|
@@ -212,7 +221,7 @@ pub fn open_page(p : Page) -> Unit {
 /// layout has it (Shell's `open_over`).
 pub fn open_page_over(p : Page) -> Unit {
   history_push()
-  (shell.val.open_over)(p)
+  shell_change(fn() { (shell.val.open_over)(p) })
 }
 
 

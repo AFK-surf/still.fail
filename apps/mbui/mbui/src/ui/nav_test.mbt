@@ -669,3 +669,103 @@ test "a page pushed before the stack was ever laid out (before the first frame, 
   assert_eq(half_way_x("first", true), tapped, msg="pushed as the first frame builds it")
   assert_eq(half_way_x("first", false), tapped, msg="pushed as the first frame builds it, no frame between")
 }
+
+///|
+test "nav_flat, its owner saying what shows (Nav::flat_keep): the stay kept shows in place of the one on top, its entry kept though it left the stack; let go, told it left once; another entry of the same page none of it" {
+  let left : Array[String] = []
+  let nav = @ui.Nav::new("page one", on_leave=fn(p) { left.push(p) })
+  nav.flat_owned(true)
+  let t = @ui.Tester::new(fn(c) { c.nav_flat(nav, fn(p) { c.text(p, wrap=false) |> ignore }) |> ignore })
+  t.draw()
+  let one = nav.top_stay()
+  // put in its place, the one before kept: drawn whatever frames come, not told it left
+  nav.replace("page two")
+  nav.flat_keep(Some(one))
+  t.draw()
+  t.draw()
+  assert_true(t.find("page one") is Some(_) && t.find("page two") is None)
+  assert_eq(left, [])
+  // let go: the one on top shows, the one kept told it left, once
+  nav.flat_keep(None)
+  t.draw()
+  t.draw()
+  assert_true(t.find("page two") is Some(_) && t.find("page one") is None)
+  assert_eq(left, ["page one"])
+  // the same page put there again is another entry: the stay kept before keeps nothing of it
+  nav.replace("page one")
+  nav.flat_keep(Some(one))
+  t.draw()
+  assert_true(t.find("page one") is Some(_) && t.find("page two") is None)
+  assert_eq(left, ["page one", "page two"])
+  // back to the frames' way (Nav::shows_when, none asked): the one on top at once
+  nav.flat_owned(false)
+  nav.replace("page three")
+  t.draw()
+  assert_true(t.find("page three") is Some(_))
+}
+
+///|
+/// A flat stack's view whose owner says what shows (Nav::flat_owned): page i its title and a long list.
+fn flat_kept_view(nav : @ui.Nav[Int]) -> (@ui.Ctx) -> Unit {
+  fn(c) {
+    c.nav_flat(nav, fn(i) {
+      c.column(w=Fill(1.0), h=Fill(1.0), fn() {
+        c.text("title \{i}", wrap=false) |> ignore
+        c.list("rows", 200, 30.0, fn(r) { c.text("row \{r} of \{i}", wrap=false) |> ignore }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+test "nav_flat, its owner keeping the page before (Nav::flat_keep): its list where it was scrolled, frame after frame; let go, the page on top from its top, told it left once; the same page again a new list" {
+  let left = []
+  let nav = @ui.Nav::new(0, on_leave=fn(p) { left.push(p) })
+  nav.flat_owned(true)
+  let t = @ui.Tester::new(flat_kept_view(nav))
+  t.wheel(100.0, 400.0, 900.0)
+  let before = t.visible()
+  assert_true(before.0 > 10)
+  let zero = nav.top_stay()
+  nav.replace(1)
+  nav.flat_keep(Some(zero))
+  t.draw()
+  t.draw()
+  assert_true(t.find("title 0") is Some(_))
+  assert_eq(t.visible(), before)
+  assert_eq(left, [])
+  nav.flat_keep(None)
+  t.draw()
+  assert_true(t.find("title 1") is Some(_))
+  assert_eq(t.visible().0, 0)
+  t.draw()
+  assert_eq(left, [0])
+  // page 0 again: another entry, its list from its top
+  nav.replace(0)
+  t.draw()
+  assert_eq(t.visible().0, 0)
+  assert_eq(left, [0, 1])
+}
+
+///|
+test "nav_flat, its owner keeping a stay: one on top again since (come back to: another time on top) keeps nothing" {
+  let nav = @ui.Nav::new(0)
+  nav.flat_owned(true)
+  let t = @ui.Tester::new(flat_kept_view(nav))
+  t.draw()
+  let zero = nav.top_stay()
+  // over it and back: page 0 the same entry, another time on top
+  nav.push(1)
+  t.draw()
+  nav.pop() |> ignore
+  t.run_for(page_ms)
+  assert_eq(nav.top_stay().0, zero.0)
+  assert_true(nav.top_stay() != zero)
+  // another put on top, the stay before page 0's last time on top asked to be kept: none
+  nav.push(2)
+  nav.flat_keep(Some(zero))
+  t.draw()
+  assert_true(t.find("title 2") is Some(_) && t.find("title 0") is None)
+}
