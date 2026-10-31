@@ -155,6 +155,10 @@ fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
     return
   }
   self.asked_actions.push((id, action))
+  // (a reader's Activate a click, its moment the one it is asked at: Ctx::clicked_at)
+  if action == Activate {
+    self.click_times[id] = self.moment()
+  }
   // an input, as a tap is: its frame and the one after, what reads what is asked built again (hand.mbt)
   hand_event()
   input_came()

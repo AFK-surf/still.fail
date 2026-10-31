@@ -356,6 +356,10 @@ pub struct Ctx {
   /// where the pointer let go of the last click since the last frame (none: a key's, a reader's Activate), for where in
   /// what was clicked it was (Ctx::clicked_on)
   mut click_at : (Double, Double)?
+  /// when each of what was clicked since the last frame was last clicked, by its id: a pointer's as it let go on it, its
+  /// own time; a reader's Activate, the moment it was asked; a key's with the focus on it, as the frame took it (an old
+  /// view's keys taken as it is built) (Ctx::clicked_at)
+  click_times : Map[Int, Double]
   /// how many presses in a row the last one was (NSEvent's clickCount: 2 a double click's second), and how many, when
   /// and where, for the next to count on from
   mut clicks : Int
@@ -701,6 +705,7 @@ fn Ctx::new() -> Ctx {
     double_clicked: [],
     last_click: (0, 0.0, 0.0, 0.0),
     click_at: None,
+    click_times: {},
     clicks: 0,
     press_run: (0, -1.0e9, 0.0, 0.0),
     drag_scroll: 0,
@@ -2205,6 +2210,19 @@ pub fn Ctx::moment(self : Ctx) -> Double {
     self.clock
   } else {
     h_now()
+  }
+}
+
+///|
+/// The moment `id` was last clicked since the last frame (Ctx::clicked, every way in told as one, the last of them): a
+/// pointer's as it let go on it, its own time as the host told it, whatever frame took it; a reader's Activate, the
+/// moment it was asked; Enter or Space with the focus on it, the moment the frame took the key (an old view's keys are
+/// taken as it is built, not as they came: their own moment is no part of this). Clicked by none of them, the moment
+/// now (Ctx::moment). What a click sets going starts there.
+pub fn Ctx::clicked_at(self : Ctx, id : Int) -> Double {
+  match self.click_times.get(id) {
+    Some(t) => t
+    None => self.moment()
   }
 }
 

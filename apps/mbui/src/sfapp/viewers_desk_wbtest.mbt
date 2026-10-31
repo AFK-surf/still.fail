@@ -125,27 +125,29 @@ test "desk: the bar hidden by a click shows while the pointer is along the top, 
 test "desk: ⌘ and the wheel (or a pinch) zoom round the pointer, the wheel alone pans; + − 0 1 as the web's keys" {
   let t = desk_tester("chat-preview-image")
   let z = viewer.get().unwrap().zoom
+  // (how big it is shown now, as the picture is drawn: its glide's way read at the moment, not a field)
+  let shown = fn() { z.scale_at(t.time()) }
   // 600 × 400 fitted in 1280 × 800: as it is
-  assert_true((z.scale - 1.0).abs() < 0.001)
+  assert_true((shown() - 1.0).abs() < 0.001)
   // fitted, the wheel alone moves nothing
   t.wheel_with(640.0, 400.0, 0.0, 120.0, 0)
-  assert_true((z.scale - 1.0).abs() < 0.001)
+  assert_true((shown() - 1.0).abs() < 0.001)
   // ⌘ and the wheel up: e^(200 × 0.002)
   t.wheel_with(640.0, 400.0, 0.0, -200.0, @ui.wheel_mod_cmd)
-  assert_true((z.scale - @dmath.exp(0.4)).abs() < 0.01, msg="\{z.scale}")
+  assert_true((shown() - @dmath.exp(0.4)).abs() < 0.01, msg="\{shown()}")
   // a pinch (a wheel with ⌃, marked so): its small steps finer
   t.wheel_with(640.0, 400.0, 0.0, -10.0, @ui.wheel_mod_ctrl | @ui.wheel_mod_pinch)
-  assert_true((z.scale - @dmath.exp(0.4) * @dmath.exp(0.1)).abs() < 0.01, msg="\{z.scale}")
+  assert_true((shown() - @dmath.exp(0.4) * @dmath.exp(0.1)).abs() < 0.01, msg="\{shown()}")
   // 0 fitted again, + a quarter more (its glide run), 1 as it is
   t.key(@ui.key_of_char('0'))
   t.run_for(@ui.move_most_ms)
-  assert_true((z.scale - 1.0).abs() < 0.001, msg="\{z.scale}")
+  assert_true((shown() - 1.0).abs() < 0.001, msg="\{shown()}")
   t.key(@ui.key_of_char('='))
   t.run_for(@ui.move_most_ms)
-  assert_true((z.scale - 1.25).abs() < 0.01, msg="\{z.scale}")
+  assert_true((shown() - 1.25).abs() < 0.01, msg="\{shown()}")
   t.key(@ui.key_of_char('1'))
   t.run_for(@ui.move_most_ms)
-  assert_true((z.scale - 1.0).abs() < 0.01, msg="\{z.scale}")
+  assert_true((shown() - 1.0).abs() < 0.01, msg="\{shown()}")
 }
 
 ///|

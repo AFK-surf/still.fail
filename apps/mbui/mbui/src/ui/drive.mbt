@@ -29,7 +29,8 @@
 //   enter                       backspace                 back       the system's back
 //   paste TEXT                  TEXT on the clipboard, then the system's paste
 //   pasten N TEXT               TEXT repeated to N characters, pasted
-//   wheel DY                    the list under the middle of the window scrolled by DY
+//   wheel DY [MODS]             the list under the middle of the window scrolled by DY (with MODS held: cmd, ctrl,
+//                               alt, shift joined by +; ⌘ and a wheel over a picture zoom it)
 //   wheelat DY TEXT             the list under the lowest TEXT scrolled by DY, a mouse wheel's notches (eased in)
 //   wheelxat DX TEXT            what scrolls sideways under the lowest TEXT scrolled by DX, a wheel's (a trackpad's)
 //   move X Y                    the pointer moved there, no button down (negative: from the right, the bottom)
@@ -1203,7 +1204,26 @@ fn drive_steps(c : Ctx) -> Unit {
         return
       }
       "wheel" => {
-        on_wheel(c.width / 2.0, c.height / 2.0, 0.0, number(arg), 0)
+        // (DY, then what is held with it: cmd, ctrl, alt, shift joined by +, as a key's are said)
+        let (dy, held) = match arg.find(" ") {
+          Some(i) => (arg.view(end_offset=i).to_string(), arg.view(start_offset=i + 1).to_string())
+          None => (arg, "")
+        }
+        let mut mods = 0
+        for m in held.split("+") {
+          match m.to_string() {
+            "cmd" => mods = mods | wheel_mod_cmd
+            "ctrl" => mods = mods | wheel_mod_ctrl
+            "alt" | "option" => mods = mods | wheel_mod_alt
+            "shift" => mods = mods | wheel_mod_shift
+            "" => ()
+            other => {
+              drive_fail(c, d, "wheel DY [cmd+ctrl+alt+shift]: \{other}")
+              return
+            }
+          }
+        }
+        on_wheel(c.width / 2.0, c.height / 2.0, 0.0, number(dy), mods * 16)
         acted()
         return
       }

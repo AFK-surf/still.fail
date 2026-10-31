@@ -814,6 +814,7 @@ pub struct Ctx {
   double_clicked : Array[Int32]
   mut last_click : (Int32, Double, Double, Double)
   mut click_at : (Double, Double)?
+  click_times : Map[Int32, Double]
   mut clicks : Int32
   mut press_run : (Int32, Double, Double, Double)
   mut drag_scroll : Int32
@@ -990,6 +991,7 @@ pub fn Ctx::capped_id(Self, String) -> Int32
 pub fn Ctx::catch_keys(Self, String, Bool) -> Unit
 pub fn Ctx::clear_code_field(Self, String) -> Unit
 pub fn Ctx::clicked(Self, Int32) -> Bool
+pub fn Ctx::clicked_at(Self, Int32) -> Double
 pub fn Ctx::clicked_on(Self, Int32, Int32) -> Bool
 pub fn Ctx::code_field(Self, String, length? : Int32, groups? : Array[Int32], wrong? : Bool, enabled? : Bool, autofocus? : Bool, box_w? : Double, box_h? : Double, min_scale? : Double, radius? : Double, gap? : Double, group_gap? : Double, font_size? : Double, weight? : Int32, mono? : Bool, color? : Int64, disabled_color? : Int64, edge? : Int64, next_edge? : Int64, wrong_edge? : Int64) -> String?
 pub fn Ctx::color(Self, Color) -> Int64

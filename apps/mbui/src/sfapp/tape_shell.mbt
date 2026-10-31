@@ -7,7 +7,8 @@
 //   - the tape: its row of panels, moved as its move says, what each holds an island of its own;
 //   - over it, a station's screen, a file read or played over the whole window, what opens over the panels (sfdesk's
 //     overlays.mbt), the presenters (signed_in_over): taking presses where they draw them alone, the panels' covers
-//     under them the tree's.
+//     under them the tree's;
+//   - over all of it, an image opened: nodes of the tree's (wide_viewer, sfbase's viewer_tree.mbt).
 
 ///|
 /// The tape's shell (above), in node `v`.
@@ -19,6 +20,7 @@ fn taped_shell(v : @view.View, src : Source) -> Unit {
   // (page_local_ms at most), as a page pushed on a phone slides in then
   @sfdesk.tape_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms)
   @ui.old(v, fn(c) { taped_over(c, src) }).over(Is(true)) |> @ui.old_takes_own |> ignore
+  wide_viewer(v, src)
 }
 
 ///|
@@ -31,6 +33,15 @@ fn paned_shell(v : @view.View, src : Source) -> Unit {
   // a page opened in the pane shows once the core has given what it shows (page_local_ms at most: pane_page_built)
   @sfdesk.pane_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms)
   @ui.old(v, fn(c) { taped_over(c, src) }).over(Is(true)) |> @ui.old_takes_own |> ignore
+  wide_viewer(v, src)
+}
+
+///|
+/// An image opened over the wide frame, over all of it (as narrow_shell's over its pages and bar): nodes of the
+/// tree's of its own (sfbase's viewer_tree.mbt), its stage the whole window, followed; what is opened otherwise the
+/// old view's over the panels (sfdesk's overlays.mbt, file_viewer).
+fn wide_viewer(v : @view.View, src : Source) -> Unit {
+  @sfbase.viewer_node(v, src, fn() { v.window() })
 }
 
 ///|
