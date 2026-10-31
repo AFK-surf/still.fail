@@ -159,3 +159,20 @@ test "a removed chat row does not leave the hold's wake behind" {
   t.draw()
   assert_eq(t.wanted_after(), @double.infinity)
 }
+
+///|
+test "a removed chat row is not built when its old fade would have ended" {
+  let on = Ref(true)
+  let shown = Ref(true)
+  let t = fading_chat_row(on, Ref(0), Ref(0), shown~)
+  on.val = false
+  t.draw()
+  t.run_for(@sfpages.left_lit_ms + @sfpages.left_fade_ms / 4.0)
+  let end = t.rest_of("row-lit/")
+  assert_true(end > t.time())
+  shown.val = false
+  t.draw()
+  t.frame_at(end)
+  assert_eq(t.built_why(), "")
+  assert_eq(t.wanted_after(), @double.infinity)
+}
