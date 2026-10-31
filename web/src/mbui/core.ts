@@ -122,3 +122,13 @@ function load(src: string): Promise<void> {
 // (named by this build: a page of a newer build never runs an older app's script from the browser's cache)
 await load(`/mbui/host.js?b=${BUILT_AT}`);
 await load(`/mbui/app.js?b=${BUILT_AT}`);
+
+/// The page's address as a link the app was opened with (mbui's system channel, `{"link": url}`: a chat's
+/// /w/…/chats/… or /o/… page, as the app takes one the system opens it with), as it loads and as the browser goes back
+/// or forward to another; the app's own page names nothing.
+function tellLink(): void {
+  if (location.pathname === "/" || location.pathname === "/mbui.html" || location.pathname === "/mbui") return;
+  host()?.post("system", JSON.stringify({ link: location.href }));
+}
+tellLink();
+addEventListener("popstate", tellLink);
