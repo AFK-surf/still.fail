@@ -1005,7 +1005,7 @@
   // The pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the
   // shader to read (u_segs): a float texture of SEGS_ROW fours a row (136 instances' 15), as many rows as they take.
   const SEGS_ROW = 2040;
-  let segsTex = null, segsRows = 0;
+  let segsTex = null, segsRows = 0, segsHad = null, segsHadRows = 0;
   function segsUpload(n) {
     let d = n;
     while (d > 0 && Math.round(f32[(d - 1) * INST + 5]) === 12) d--;
@@ -1017,16 +1017,27 @@
       segsTex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, segsTex);
       segsRows = rows * 2;
+      segsHad = null;
       gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, SEGS_ROW, segsRows);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     }
     gl.bindTexture(gl.TEXTURE_2D, segsTex);
     const from = d * INST, need = rows * SEGS_ROW * 4;
+    // (the same pieces as the texture holds, as a list scrolled has them, its bands moved and not their shares:
+    // nothing to upload, as the GLES host's segs_upload)
+    const pieces = f32.subarray(from, n * INST);
+    if (segsHad && segsHad.length === pieces.length && segsHadRows === rows) {
+      let same = true;
+      for (let i = 0; i < pieces.length; i++) if (pieces[i] !== segsHad[i]) { same = false; break; }
+      if (same) return;
+    }
+    segsHad = pieces.slice();
+    segsHadRows = rows;
     let data = f32.subarray(from, from + need);
     if (data.length < need) {
       data = new Float32Array(need);
-      data.set(f32.subarray(from, n * INST));
+      data.set(pieces);
     }
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, SEGS_ROW, rows, gl.RGBA, gl.FLOAT, data);
   }
@@ -1045,6 +1056,9 @@
     if (!cv) dirtyTold = false;
     const parts = takeParts(cvOk);
     target = cv ? cv.fb : null;
+    // the frame's instances and its shapes' pieces uploaded once, whether drawn whole or a part at a time (each part
+    // uploaded them all again: a list scrolled spent a fifth of its frames in bufferData)
+    frameUpload(n);
     if (!parts) {
       drawFrame(n, r, g, b, false);
       missing = drewMissing;
@@ -1072,6 +1086,16 @@
     }
   };
 
+  // The frame's `n` instances (in f32, its ground after them) and its shapes' pieces into the GPU's buffer and texture:
+  // once a frame (H.present), each part drawn from them.
+  let uploadedFor = -1;
+  function frameUpload(n) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, f32.subarray(0, n * INST + INST), gl.STREAM_DRAW);
+    segsUpload(n);
+    uploadedFor = n;
+  }
+
   // The frame's `n` instances (in f32, its ground after them) drawn into `target`: `part`, only into `cut` over what
   // it holds, else all of it, cleared to the ground.
   function drawFrame(n, r, g, b, part) {
@@ -1091,8 +1115,7 @@
     gl.useProgram(prog);
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-    gl.bufferData(gl.ARRAY_BUFFER, f32.subarray(0, len + INST), gl.STREAM_DRAW);
-    segsUpload(n);
+    if (uploadedFor !== n) frameUpload(n);
     mainState();
     if (part) {
       for (let i = 0; i < INST / 4; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, len * 4 + i * 16);
