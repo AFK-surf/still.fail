@@ -66,8 +66,12 @@ pub fn Pick::hold(self : Pick, c : @ui.Ctx, key : String, id : Int, may? : Bool 
   // (where it went down: a hold a cover over it handed on, held long already, let go since or not (Ctx::handed_hold);
   // else the press still down there, as long since it went down, its own moment (a frame asked for when it will
   // have been), once a press)
-  let at = match c.handed_hold() {
+  let handed = match c.handed_hold() {
     Some(xy) if may && c.press_within(id) => Some(xy)
+    _ => None
+  }
+  let at = match handed {
+    Some(xy) => Some(xy)
     _ =>
       if may &&
         press.down &&
@@ -92,6 +96,10 @@ pub fn Pick::hold(self : Pick, c : @ui.Ctx, key : String, id : Int, may? : Bool 
       self.widening = true
       self.handle = 0
       self.press = press.frame
+      // (the hold handed here taken, once)
+      if handed is Some(_) {
+        c.handed_taken()
+      }
       // (picked as the view is built, after what draws it read it: built again in this frame, as it is)
       c.built_from_changed("a passage picked")
       true

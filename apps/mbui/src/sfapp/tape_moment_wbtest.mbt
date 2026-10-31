@@ -435,3 +435,64 @@ test "中屏 to 大屏 and back while a page waits: each made waits anew from th
   assert_eq(page_across_shells(false), stepped)
   assert_eq(stepped, [@sfdesk.TapePane::Side, @sfdesk.TapePane::Side, @sfdesk.TapePane::Page])
 }
+
+///|
+/// On the tape (a finger's, the sidebar in use), a finger held still on the words of the page beside it from `t0`
+/// past a long press and let go, frames every 16 ms (`framed`) or none till the one after it is let go: in that frame,
+/// what is picked (its message, where it runs), how many times it was told picked, the haptics this press set off, the
+/// panel in use; and the same once frames went on after it.
+fn held_let_go(
+  framed : Bool,
+) -> (
+  (String, Int, Int, Int, Array[@ui.Haptic], @sfdesk.TapePane),
+  (String, Int, Int, Int, Array[@ui.Haptic], @sfdesk.TapePane),
+) {
+  let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  t.keep_parts(true)
+  let (rx, ry, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
+  let (x, y) = (rx + 24.0, ry + 8.0)
+  let told = Ref(0)
+  let first = Ref(true)
+  let stop = @signals.effect(fn() {
+    @sfbase.picked.get() |> ignore
+    if first.val {
+      first.val = false
+    } else {
+      told.val += 1
+    }
+  })
+  let felt = t.haptics().length()
+  let now = fn() -> (String, Int, Int, Int, Array[@ui.Haptic], @sfdesk.TapePane) {
+    (pk.ts, pk.sel.a, pk.sel.b, told.val, t.haptics()[felt:].to_array(), @sfdesk.wide.tape_at.get())
+  }
+  let t0 = t.time() + between_frames_ms
+  t.advance(t0 - t.time())
+  t.touch_raw(0, 1, x, y, t0)
+  let up = t0 + long_press_ms + 20.0
+  if framed {
+    while t.time() + 16.0 < up {
+      t.frame_at(t.time() + 16.0)
+    }
+  }
+  t.advance(up - t.time())
+  t.touch_raw(2, 1, x, y, up)
+  t.frame_at(up + 10.0)
+  let at_first = now()
+  t.run_for(@ui.move_most_ms)
+  let later = now()
+  stop()
+  (at_first, later)
+}
+
+///|
+test "中屏: a finger held on the page beside the sidebar past a long press and let go before any frame: the frame after picks the word under it, as with frames all along; told once, felt once" {
+  let (along, along_later) = held_let_go(true)
+  let (none, none_later) = held_let_go(false)
+  assert_true(along.0 != "" && along.2 > along.1, msg="\{along}")
+  assert_eq(none, along)
+  assert_eq(along.3, 1)
+  assert_eq(along.4.length(), 1, msg="\{along.4}")
+  // (nothing more after: not picked again, told again or felt again)
+  assert_eq(along_later, along)
+  assert_eq(none_later, none)
+}

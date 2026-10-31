@@ -160,28 +160,44 @@ fn Ctx::long_press(self : Ctx, id : Int) -> Bool {
 ///|
 /// The press just down held long already, as the window's tree found it (a hold a cover of its handed on, as long held
 /// as since the finger went down: view_through): what it is on held long as the build it comes to sees it (as
-/// Ctx::long_press tells), its press no click, whatever frames come before it is let go.
-fn Ctx::held_through(self : Ctx) -> Unit {
+/// Ctx::long_press tells), its press no click, whatever frames come before it is let go. False where no press is
+/// down on anything.
+fn Ctx::held_through(self : Ctx) -> Bool {
   if !self.down || self.active == 0 || self.press_at < 0.0 {
-    return
+    return false
   }
   self.held_told = self.press_at
   self.held_on = self.active
   // (the build it comes to: the next begun)
   self.held_build = builds_made.val + 1
   self.take_press()
+  true
 }
 
 ///|
-/// Where the press went down, if the window's tree handed it here held long already (a cover's hold handed on:
-/// Ctx::held_through) and this is the build it comes to: let go since or not, it is a long press there, once, whatever
-/// frames came between. What a hold over words takes as held (kit's Pick::hold), as a held press is.
+/// Where the press went down, if the window's tree handed it to the old views held long already (a cover's hold handed
+/// on: view_through, view_handed) and this is a build of the frame it comes to (the frame the first build begun after
+/// it is of, each build of it: what it is held on lays out what it needs of it, words, and reads it back so), not
+/// taken yet (Ctx::handed_taken), what it was handed to taking input still (no modal layer over it, not leaving, not
+/// gone), no press down since: let go since or not, it is a long press there, once, whatever frames came between. What
+/// a hold over words takes as held (kit's Pick::hold), as a held press is.
 pub fn Ctx::handed_hold(self : Ctx) -> (Double, Double)? {
   hand.down.get() |> ignore
-  if self.press_at >= 0.0 && self.held_told == self.press_at && self.held_build == self.build_no {
-    Some((self.press_x, self.press_y))
-  } else {
-    None
+  match view_handed.val {
+    Some(h) if !h.taken &&
+      h.frame == self.frame_no &&
+      h.down == downs_made.val &&
+      old_owner_open(h.owner) => Some((h.x, h.y))
+    _ => None
+  }
+}
+
+///|
+/// The hold handed here (Ctx::handed_hold) taken by what it is held on: none to take after it.
+pub fn Ctx::handed_taken(self : Ctx) -> Unit {
+  match view_handed.val {
+    Some(h) => h.taken = true
+    None => ()
   }
 }
 

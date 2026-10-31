@@ -85,6 +85,43 @@ priv enum ViewHeld {
 let view_held : Ref[ViewHeld?] = Ref(None)
 
 ///|
+/// A hold the window's tree handed the old views (view_through) as a long press: what of them it was handed to (where
+/// it went down, old_press_owner's), the press it is (the downs before it, downs_made), where the finger went down,
+/// the build it comes to (the next begun as it was handed) and the frame that build is of (set as that build begins:
+/// view_handed_comes), whether what it is held on took it (Ctx::handed_taken). What it was handed to taking input no
+/// more, the press called off, another down, the window's tree made anew, that frame over: none.
+priv struct Handed {
+  owner : @view.NodeId?
+  down : Int
+  x : Double
+  y : Double
+  build : Int
+  mut frame : Int
+  mut taken : Bool
+}
+
+///|
+// kept across runs: put back as a run begins (view_forget)
+let view_handed : Ref[Handed?] = Ref(None)
+
+///|
+/// The presses gone down so far, a finger's or a button's, wherever they went (pointer_in_now): each one's own, two at
+/// the same moment two.
+// kept across runs: only a count
+let downs_made : Ref[Int] = Ref(0)
+
+///|
+/// As a build begins: the hold handed the old views (view_handed) comes to the frame of the first build begun after it
+/// was handed, and to that frame's builds alone; gone once a build of another frame begins.
+fn view_handed_comes(c : Ctx) -> Unit {
+  match view_handed.val {
+    Some(h) if h.frame < 0 => if c.build_no >= h.build { h.frame = c.frame_no }
+    Some(h) if h.frame != c.frame_no => view_handed.val = None
+    _ => ()
+  }
+}
+
+///|
 /// The fingers the host tells of by its two slots (its first: kinds 0-3; its second: 4, 5, 6), each the id the tree
 /// knows that finger by (Drag's `finger`) from its down to its end (-1: none in that slot), and the next id: the host
 /// moving its second into its first as the first is let go (kind 8) the same finger still.
@@ -224,6 +261,7 @@ fn view_forget() -> Unit {
   }
   view_app.val = None
   view_held.val = None
+  view_handed.val = None
   view_point.val = None
   view_fingers[0] = -1
   view_fingers[1] = -1
@@ -1390,6 +1428,11 @@ fn view_modals_told() -> Unit {
 fn view_captures_off(at : Double, gone : (@view.NodeId?) -> Bool) -> Unit {
   let c = g()
   let mut said = false
+  // (a hold handed to an old view, let go since or not, not taken yet: none's)
+  match view_handed.val {
+    Some(h) if gone(h.owner) => view_handed.val = None
+    _ => ()
+  }
   match c.back_held {
     // (a swipe from the edge: called off with its press, below)
     Some(h) if c.edge != 2 && gone(h.owner) => {
@@ -1545,8 +1588,18 @@ fn view_through(to : @view.Target, x : Double, y : Double, down_at : Double) -> 
       view_input_went(part)
       old_pointer_now(0, x, y, 0, 0, down_at)
       // (a long press already, as the tree found it: what it is on held long as the next build sees it, its press no
-      // click when let go, whatever frames come between)
-      c.held_through()
+      // click when let go, whatever frames come between; handed to what of the old views it went down on, as this press)
+      if c.held_through() {
+        view_handed.val = Some({
+          owner,
+          down: downs_made.val,
+          x: c.press_x,
+          y: c.press_y,
+          build: c.held_build,
+          frame: -1,
+          taken: false,
+        })
+      }
     }
     _ => ()
   }

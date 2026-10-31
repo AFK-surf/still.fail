@@ -214,7 +214,9 @@ pub fn pickable(
   if c.clicked(id) && !press.long {
     c.blur()
   }
-  let pressed_in = press.down && c.press_within(id)
+  // (a press in it, or a hold the window's tree handed it, let go since or not: its words laid out for what the hold
+  // picks, read back by the build after, Ctx::handed_hold)
+  let pressed_in = (press.down || c.handed_hold() is Some(_)) && c.press_within(id)
   // built first: a link held in it is the link's menu (its hold told while building), not a pick
   let box = c.box(style=if fill { pick_fill } else { pick_own }, id~, fn() {
     marks(id)

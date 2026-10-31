@@ -292,6 +292,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     old_built.val = false
     building.val = true
     c.build_no = next_build()
+    // (a hold handed an old view: the frame it comes to, as its build begins; gone once that frame is)
+    view_handed_comes(c)
     root = frame_build(c, w, h)
     perf_at[3] = perf_at[3] + 1
     let built_layers = c.layers.length()
@@ -771,11 +773,16 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
   if (kind <= 3 || view_holds()) && view_pointer(kind, x, y, button) {
     view_pointed()
     input_taped("pointer", h_event_time(), args)
-    return
+  } else {
+    took_input("pointer", h_event_time(), args)
+    view_pointed()
+    old_pointer_now(kind, x, y, button, mods, h_event_time())
   }
-  took_input("pointer", h_event_time(), args)
-  view_pointed()
-  old_pointer_now(kind, x, y, button, mods, h_event_time())
+  // (a finger or button down, wherever it went (a node of the tree's, the old view): a press of its own from here, a
+  // hold handed before it none's, view_handed)
+  if kind == 0 || kind == 4 {
+    downs_made.val = downs_made.val + 1
+  }
 }
 
 ///|
@@ -1286,6 +1293,8 @@ fn Ctx::press_called_off(self : Ctx, x : Double, y : Double, t : Double) -> Unit
   c.editor_tap = 0
   c.handle_drag = 0
   c.word_drag = 0
+  // (a hold handed here and not taken yet: called off with the press)
+  view_handed.val = None
   if c.edge == 2 {
     c.back_gesture(3, x, t) |> ignore
   }
