@@ -169,7 +169,7 @@ fn stop_agents(src : Source, r : ChatRef, v : ChatView) -> Unit {
 }
 
 ///|
-/// Into the archive, asked first where the chat keeps watch (its watch runs on in the archive: the core's words).
+/// Into the archive, asked first where the chat keeps watch (in the core's words).
 fn archive_asked(src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   if field(chat, "watch") is Some(Object(_)) {
     chat_own.archive_asking = chat_key(r)

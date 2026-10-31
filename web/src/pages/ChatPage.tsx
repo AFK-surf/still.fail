@@ -299,7 +299,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
       toast(t("web-pages.chat.archiveFailed", { error: error instanceof Error ? error.message : String(error) }));
     }
   };
-  // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
+  // A chat keeping watch is archived only once asked, in the core's words.
   const [askArchive, setAskArchive] = useState(false);
   useShortcut("chat.archive", chatView.value && !chatView.value.archived && !chatView.value.offline && keeper
     ? () => { if (chatView.value?.watch) setAskArchive(true); else void archive(); } : null);

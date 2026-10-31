@@ -6,9 +6,19 @@
 ///|
 /// The fixture's chat on an iPhone, the window `w` × `h`, the size classes and the hinge said as its host says them
 /// (`fold`: its message's JSON, "" none; `bars`: the bars' message, "" the status bar and the home indicator round it).
-fn duo_chat(w : Double, h : Double, width : String, fold : String, bars? : String = "") -> @ui.Tester {
+fn duo_chat(w : Double, h : Double, width : String, fold : String, bars? : String = "", calls? : Array[Made]) -> @ui.Tester {
   new_run()
-  let src = fixture("chat")
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      match calls {
+        Some(all) => all.push({ name, params, bytes: None, done, heard: None })
+        None => ()
+      }
+      (base.call)(name, params, done)
+    },
+  }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=1)
   t.post(@hostapi.system_channel, if bars != "" {
@@ -112,6 +122,20 @@ test "half open on its back half: the messages over the fold, under it the compo
   t.post(@hostapi.system_channel, across("open"))
   t.draw()
   assert_true(@sfdesk.is_wide(t.ctx()))
+}
+
+///|
+test "half open: a recent chat under the composer is swiped left to archive it" {
+  let calls : Array[Made] = []
+  let t = duo_chat(626.0, 890.0, "regular", across("half"), calls~)
+  let title = "首页的列表改成按天分组"
+  let (x, y) = t.find(title).unwrap()
+  t.drag(x + 420.0, y, x + 20.0, y)
+  t.run_for(@ui.move_most_ms)
+  let asked = named(calls, "chat.archive")
+  assert_eq(asked.length(), 1)
+  assert_eq(text(Some(asked[0].params), "session"), "s-c2")
+  assert_true(t.locate("=" + title).is_empty())
 }
 
 ///|

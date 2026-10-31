@@ -1655,9 +1655,9 @@ export class Views implements Owner {
       row.archivable = true;
       if (present.offered(row, hint)) row.settled = true;
     }
-    // Swiped away by a finger whenever it has ended: unread, pinned, kept or not recommended by its station's review
-    // alike (the swipe is the viewer's own say, nothing offered), its station there to take it.
-    if (present.ended(row) && row.offline === undefined) row.swipeArchive = true;
+    // A swipe is the viewer's own choice: every made chat can be archived this way while its station is there,
+    // regardless of the chat's state or whether it is recommended for archiving.
+    if (row.offline === undefined && row.pending !== true) row.swipeArchive = true;
     const line = present.rowStateLine(row);
     if (line !== null) {
       row.stateText = line[0];

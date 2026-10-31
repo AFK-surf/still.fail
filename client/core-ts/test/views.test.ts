@@ -691,7 +691,7 @@ test("a_done_chat_is_offered_to_archive_as_the_archive_hint_says_and_archivable_
   }
 });
 
-test("an_ended_chat_is_swiped_away_unread_pinned_kept_or_not_recommended_alike_its_station_there", async () => {
+test("any_made_chat_is_swiped_away_regardless_of_its_state_its_station_there", async () => {
   const t = setup();
   const now = t.host.nowMs();
   const u = ui();
@@ -704,18 +704,33 @@ test("an_ended_chat_is_swiped_away_unread_pinned_kept_or_not_recommended_alike_i
     r.agents[0].lastTurn = { kind: "message", declared: "final", ending: "all_done", outcome: "completed", startedAt: 1, endedAt: 1 };
     return { ...r, ...more };
   };
+  const running = row("running", now - 1);
+  running.agents[0].process = "running";
+  const failed = row("failed", now - 2);
+  failed.agents[0].lastTurn = { kind: "message", outcome: "failed", startedAt: 1, endedAt: 2 };
+  const watching = row("watching", now - 3);
+  watching.agents[0].watch = { names: ["CI"], since: 1, at: 2 };
+  const decision = deciding("decision", 7, 3, now - 4, false);
+  const pending = { ...row("pending", now - 5), pending: true };
+  const empty = { ...row("empty", now - 6), agents: [] };
   t.set(rows("ws/st"), [
     done("unread", { unread: true }),
     done("pinned", { pinned: 5 }),
     done("kept", { archiveReminderDismissed: true }),
     done("reviewed", { archiveReviewed: true, archiveRecommended: false }),
-    row("active", now - 1),
+    running,
+    failed,
+    watching,
+    decision,
+    pending,
+    empty,
   ]);
   await t.read(u, 1);
   const flags = (v: J): J => Object.fromEntries(v.days.flatMap((d: J) => d.items.map((i: J) => [i.id, [i.swipeArchive ?? false, i.archivable ?? false]])));
-  // Each ended: swiped away, though none of them is offered to archive with one tap.
+  // A swipe is the viewer's own choice, not the recommendation to archive with one tap.
   assert.deepEqual(flags(u.value), {
-    unread: [true, false], pinned: [true, false], kept: [true, false], reviewed: [true, false], active: [false, false],
+    unread: [true, false], pinned: [true, false], kept: [true, false], reviewed: [true, false],
+    running: [true, false], failed: [true, false], watching: [true, false], decision: [true, false], pending: [false, false], empty: [true, false],
   });
   // Its station offline: nothing there to take it.
   t.set(link("ws/st"), { state: "offline" });

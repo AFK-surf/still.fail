@@ -2431,7 +2431,7 @@ export const SHAPES: Record<string, Shape> = {
     ["decision", opt("RowDecision"), { doc: "The card it waits on (an agent's post with a card no one has answered yet), as the viewer sees it. Absent when\nthere is none (and from a station before decisions)." }],
     ["settled", opt("bool"), { doc: "Nothing is left in it: each of its agents ended all_done, nothing at work, no card waiting for the viewer,\nnothing unread; where its station's archive review is on, only once the review recommended archiving it; and the\nviewer's `archiveHint` offers it. Drawn faded, below the rest of its day (the core orders it so). Absent otherwise." }],
     ["archivable", opt("bool"), { doc: "Nothing is left in it, whatever the viewer's `archiveHint` says: offer to archive it with one tap\n(`chat.archive`). Absent otherwise." }],
-    ["swipeArchive", opt("bool"), { doc: "It has ended (each of its agents ended all_done, no card waiting for the viewer) and its station is online:\na finger's swipe left archives it (`chat.archive`), unread, pinned, kept or not recommended by its station's\narchive review alike. Absent otherwise." }],
+    ["swipeArchive", opt("bool"), { doc: "A made chat whose station is online: a finger's swipe left archives it (`chat.archive`), whatever its state,\nunread, pinned, kept or not recommended by its station's archive review alike. Absent otherwise." }],
     ["kept", opt("bool"), { doc: "The viewer kept it (`chat.keep`): never offered for archiving, nor archived on its own; `chat.keep {kept: false}` lets it go. Absent otherwise." }],
     ["stateText", opt("String"), { said: true, doc: "Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 奏 · … (a\ncard waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with\nno card waiting, or with nothing to say." }],
     ["stateLead", opt("StateLead"), { doc: "What leads `stateText`, for a client to say as a mark of its own (a bell, a check, the waiting arc, the radar;\n奏 · …'s word in bold), not read back out of its words. Absent when nothing does (an agent's failure, an unsent message)." }],
@@ -2456,7 +2456,7 @@ export const SHAPES: Record<string, Shape> = {
   RowWatch: struct([
     ["text", "String", { said: true }],
     ["ask", "String", { said: true }],
-  ], { doc: "A watching chat (core, present.ts): what it watches in words (监控中：盯 CI), and what archiving it by hand asks\nfirst (`ask`: it runs on in the archive)." }),
+  ], { doc: "A watching chat (core, present.ts): what it watches in words (监控中：盯 CI), and what archiving it by hand asks\nfirst (`ask`: archiving stops its watch)." }),
   ChatDay: struct([
     ["daysAgo", "i64", { client: "I54" }],
     ["at", "f64"],

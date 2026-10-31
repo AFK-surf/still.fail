@@ -566,7 +566,7 @@ fn chat_info_body(c : @ui.Ctx, src : Source, r : ChatRef, close : () -> Unit) ->
             })
             |> ignore
           }) {
-          // a chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words)
+          // a chat keeping watch is archived only once asked, in the core's words
           match (view, text(field(chat, "watch"), "ask")) {
             (Some(v), "") => archive_chat(src, r, v)
             (Some(v), ask) => {

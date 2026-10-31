@@ -100,7 +100,7 @@ fn android_home() -> @ui.Tester {
 
 ///|
 test "a row pressed: on the ground it has held once the press is not the list's (the tap timeout)" {
-  // one that cannot be archived, one that can (swiped left)
+  // one needing the viewer, one offered for archiving
   for title in ["夜里的构建又失败了", "把旧的截图都换成新的"] {
     let t = android_home()
     t.scroll_to(12)
@@ -289,7 +289,7 @@ test "a chat keeping watch is archived only once asked, in the core's words" {
   t.tap(lx, ly)
   assert_eq(named(calls, "chat.archive").length(), 0)
   assert_true(t.find("归档「盯着 CI，绿了告诉我」？") is Some(_))
-  assert_true(t.find("它会在归档里继续盯着。") is Some(_))
+  assert_true(t.find("「主干构建」仍在监控。归档会停止监控。") is Some(_))
   // its 归档, beside 取消
   let (cx, cy, cw, ch) = t.rect_of("取消").unwrap()
   t.tap(cx + cw + 40.0, cy + ch / 2.0)
@@ -319,6 +319,49 @@ test "a row with nothing left in it, swiped left past a third: off, then archive
   assert_eq(named(calls, "chat.archive").length(), 1)
   // its line felt as it was passed, once (Home.kt: TextHandleMove)
   assert_eq(t.haptics(), [@ui.Haptic::TextHandleMove])
+}
+
+///|
+test "a finger swipes a running, waiting, failed or unread chat to archive it on both small and large screens" {
+  for w in [390.0, 1100.0] {
+    for (title, session) in [
+      ("整理发布清单", "s-c1"),
+      ("首页的列表改成按天分组", "s-c2"),
+      ("夜里的构建又失败了", "s-c3"),
+      ("给设置页加一个深色模式开关", "s-c4"),
+      ("周报的模板", "s-c10"),
+    ] {
+      let calls : Array[Made] = []
+      let t = wide_tester(calls, w~, h=900.0, platform=2)
+      if session == "s-c10" {
+        t.scroll_to(12)
+        t.draw()
+      }
+      let (_, y) = t.find(title).unwrap()
+      let start = if w < 600.0 { 340.0 } else { @sfdesk.rail_w + 200.0 }
+      let finish = if w < 600.0 { 100.0 } else { @sfdesk.rail_w + 30.0 }
+      t.drag(start, y, finish, y)
+      t.run_for(@ui.move_most_ms)
+      let asked = named(calls, "chat.archive")
+      assert_eq(asked.length(), 1, msg="\{w}: \{title}")
+      assert_eq(text(Some(asked[0].params), "session"), session, msg="\{w}: \{title}")
+      assert_eq(field(Some(asked[0].params), "archived"), Some(Json::boolean(true)))
+    }
+  }
+}
+
+///|
+test "a finger swiping a chat keeping watch asks before archiving it" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  let (x, y) = t.find("盯着 CI，绿了告诉我").unwrap()
+  t.drag(x + 190.0, y, x + 10.0, y)
+  assert_eq(named(calls, "chat.archive").length(), 0)
+  assert_true(t.find("归档「盯着 CI，绿了告诉我」？") is Some(_))
+  assert_true(t.find("「主干构建」仍在监控。归档会停止监控。") is Some(_))
+  let (cx, cy, cw, ch) = t.rect_of("取消").unwrap()
+  t.tap(cx + cw + 40.0, cy + ch / 2.0)
+  assert_eq(named(calls, "chat.archive").length(), 1)
 }
 
 ///|
