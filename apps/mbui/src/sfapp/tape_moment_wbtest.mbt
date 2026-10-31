@@ -392,31 +392,21 @@ fn page_across_shells(stepped : Bool) -> Array[@sfdesk.TapePane] {
   let t0 = t.time() + between_frames_ms
   t.advance(t0 - t.time())
   open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
-  // (stepped: a frame each 16 ms, none for 100 ms round the window made another size: the rows laid out anew at once
-  // for it are no move of theirs, rows_steady.mbt measuring them anew after such a while)
-  let quiet = Ref(0.0)
-  let to = fn(at : Double, resized : Bool) {
-    let until = if resized { t0 + at - 100.0 } else { t0 + at }
+  let to = fn(at : Double) {
     if stepped {
-      while true {
-        let next = dmax(t.time() + 16.0, quiet.val)
-        if next >= until {
-          break
-        }
-        t.frame_at(next)
+      while t.time() + 16.0 < t0 + at {
+        t.frame_at(t.time() + 16.0)
       }
     }
     t.advance(t0 + at - t.time())
   }
-  to(300.0, true)
+  to(300.0)
   t.resize(1280.0, 800.0)
-  quiet.val = t.time() + 100.0
-  to(600.0, true)
+  to(600.0)
   t.resize(720.0, 800.0)
-  quiet.val = t.time() + 100.0
   @sfdesk.bring_page()
   [1100.0, 1400.0, 1700.0].map(fn(at) {
-    to(at, false)
+    to(at)
     t.frame_at(t0 + at)
     @sfdesk.wide.tape_at.get()
   })
