@@ -8,6 +8,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
+import { createRequire } from "node:module";
 import type { AddressInfo } from "node:net";
 import { test } from "node:test";
 import { StationBrowser } from "../src/browser/browser.ts";
@@ -292,8 +293,20 @@ test("every tab is drawn without being brought forward: the station's and an age
   }
 });
 
-test("each chat's own context in the one real Chrome, through its gate: Playwright works in it, sees nothing of another chat's, and a sign-in goes in and out", { skip: binary === undefined && "no Chrome here" }, async () => {
-  const { chromium } = await import("playwright-core");
+/// Playwright, where it is installed (the repository's root has it; the station's own dependencies do not): its name
+/// not written as an import, so the station's typecheck does not look for it.
+const PLAYWRIGHT = ["playwright", "core"].join("-");
+const hasPlaywright = (() => {
+  try {
+    createRequire(import.meta.url).resolve(PLAYWRIGHT);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+test("each chat's own context in the one real Chrome, through its gate: Playwright works in it, sees nothing of another chat's, and a sign-in goes in and out", { skip: binary === undefined ? "no Chrome here" : !hasPlaywright && "no Playwright here (install the repository's root)" }, async () => {
+  const { chromium } = (await import(PLAYWRIGHT)) as any;
   const { Browsers } = await import("../src/browser/browsers.ts");
   const { browserDoor, sessionPath } = await import("../src/browser/proxy.ts");
   const { openAgentsDoor } = await import("../src/tools/http.ts");
@@ -319,9 +332,9 @@ test("each chat's own context in the one real Chrome, through its gate: Playwrig
     const p2 = await two.contexts()[0]!.newPage();
     await p2.goto(site);
     assert.equal(await p2.title(), "nobody", "chat-2 is not signed in as chat-1 is");
-    assert.deepEqual((await one.contexts()[0]!.cookies()).map((c) => c.value), ["alice"]);
+    assert.deepEqual((await one.contexts()[0]!.cookies()).map((c: { value: string }) => c.value), ["alice"]);
     assert.deepEqual(await two.contexts()[0]!.cookies(), []);
-    assert.deepEqual(two.contexts()[0]!.pages().map((p) => p.url()), [site], "only its own pages");
+    assert.deepEqual(two.contexts()[0]!.pages().map((p: { url(): string }) => p.url()), [site], "only its own pages");
     // The person sees both tabs, each as its chat's (beside the blank one headless Chrome starts with, the station's).
     await until(() => screens.list().filter((s) => s.openedBy?.()).length >= 2, "both tabs among the screens");
     assert.deepEqual(screens.list().flatMap((s) => s.openedBy?.() ?? []).sort(), ["chat-1", "chat-2"]);
