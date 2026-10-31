@@ -58,12 +58,12 @@ pub(all) struct Overlay {
 /// (unless not `escape`; an Escape `on_escape` says it took, asked as it comes, within it, no dismissal: one step back
 /// inside it), by a press outside (unless not `outside`); none of them while `stays` says it stays, asked as each
 /// comes (what it is doing may not be left: an Escape or a back taken by it all the same, nothing under it told; its
-/// view's own Ctx::dismiss not asked). A
-/// press on `anchor` (its trigger's id) does not dismiss it. As it opens the focus goes to `initial_focus` (-1: its
-/// first focusable; 0: nowhere, it stays; -2, by default: the first focusable when it traps, else nowhere); as it
-/// goes, back to `return_focus` (0, by default: what had it as it opened). `inert`: leaving (its exit drawn): it takes
-/// no press, focus or key, is not dismissed, is hidden from the semantics tree, and the focus goes back as though it
-/// had gone; its scrim is still drawn (as it fades), taking nothing.
+/// view's own Ctx::dismiss not asked). A press on `anchor` (its trigger's id), or on what it holds, does not dismiss
+/// it. As it opens the focus goes to `initial_focus` (-1: its first focusable; 0: nowhere, it stays; -2, by
+/// default: the first focusable when it traps, else nowhere); as it goes, back to `return_focus` (0, by default: what
+/// had it as it opened). `inert`: leaving (its exit drawn): it takes no press, focus or key, is not dismissed, is
+/// hidden from the semantics tree, and the focus goes back as though it had gone; its scrim is still drawn (as it
+/// fades), taking nothing.
 pub fn Ctx::overlay(
   self : Ctx,
   key : String,
@@ -352,7 +352,8 @@ fn Ctx::layer_keys(self : Ctx) -> Unit {
   self.keys_layer = self.layer_escape(desk.keys)
   match self.press_down {
     Some((x, y)) => {
-      let target = hit_in(self.hit_ids, self.hit_rects, x, y)
+      // (what took the press as it went down: the window's tree's, none of the old frame's)
+      let target = if self.press_down_tree { 0 } else { hit_in(self.hit_ids, self.hit_rects, x, y) }
       let mut k = self.last_layers.length() - 1
       while k >= 0 {
         let l = self.last_layers[k]
@@ -363,7 +364,7 @@ fn Ctx::layer_keys(self : Ctx) -> Unit {
         if self.in_layer(l, x, y) {
           break
         }
-        if l.outside && (l.anchor == 0 || target != l.anchor) && !layer_stays(l) {
+        if l.outside && (l.anchor == 0 || !self.on_anchor(l.anchor, target, x, y)) && !layer_stays(l) {
           self.dismissals[l.id] = Outside
         }
         if l.modal {
@@ -374,6 +375,7 @@ fn Ctx::layer_keys(self : Ctx) -> Unit {
     None => ()
   }
   self.press_down = None
+  self.press_down_tree = false
 }
 
 ///|
@@ -962,4 +964,17 @@ fn layer_stays(l : Layer) -> Bool {
     Some(f) => f()
     None => false
   }
+}
+
+///|
+/// Whether a press at (x, y) of the window, `target` what takes it, is on `anchor` (a layer's trigger, Ctx::overlay's):
+/// it, or what the last frame drew in it (its own targets: a rail's places; Ctx::holders, as Ctx::press_within has it:
+/// not what only lies over it, nor where what holds it cuts it away).
+fn Ctx::on_anchor(self : Ctx, anchor : Int, target : Int, x : Double, y : Double) -> Bool {
+  if target == anchor {
+    return true
+  }
+  let held : Array[Int] = []
+  self.holders(self.hit_of(target, x, y), held)
+  held.contains(anchor)
 }

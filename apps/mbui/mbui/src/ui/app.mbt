@@ -781,6 +781,7 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
     if kind == 0 {
       let c = g()
       c.press_down = Some((x, y))
+      c.press_down_tree = true
       c.layer_keys_now()
     }
   } else {

@@ -613,6 +613,8 @@ pub struct Ctx {
   dismissals : Map[Int, Dismiss]
   layer_return : Map[Int, Int]
   mut press_down : (Double, Double)?
+  // (the window's tree took that press: none of the old frame's targets did, whatever its targets lie under it)
+  mut press_down_tree : Bool
   // output
   mut inst : FixedArray[Double]
   mut ninst : Int
@@ -844,6 +846,7 @@ fn Ctx::new() -> Ctx {
     dismissals: Map::new(),
     layer_return: Map::new(),
     press_down: None,
+    press_down_tree: false,
     inst: FixedArray::make(inst_size * 4096, 0.0),
     ninst: 0,
     segs: [],
@@ -2030,17 +2033,7 @@ fn Ctx::press_on_at(self : Ctx, target : Int, x : Double, y : Double) -> Unit {
   if target == 0 {
     return
   }
-  let k = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y)
-  // (a finger reaching what is smaller than its tip from round it: what holds that one)
-  let k = if k >= 0 && self.hit_ids[k] == target {
-    k
-  } else {
-    let mut j = self.hit_ids.length() - 1
-    while j >= 0 && self.hit_ids[j] != target {
-      j = j - 1
-    }
-    j
-  }
+  let k = self.hit_of(target, x, y)
   self.holders(k, self.press_on)
   self.press_on.push(target)
   // a cover a finger is held through (Ctx::holds_through): what lies under it, and what holds that, too
@@ -2071,6 +2064,23 @@ fn Ctx::press_on_at(self : Ctx, target : Int, x : Double, y : Double) -> Unit {
 /// Whether the last frame's hit target `j` holds target `k` (`k` drawn in it: Ctx::hit_ends), as Ctx::holders reads.
 fn Ctx::holds_hit(self : Ctx, j : Int, k : Int) -> Bool {
   j < k && j < self.hit_ends.length() && self.hit_ends[j] > k
+}
+
+///|
+/// Which of the last frame's hit targets a press going down at (x, y) on `target` is (its index; -1 none): the one
+/// there, or where it reaches what is smaller than a finger's tip from round it, the last drawn of `target`'s.
+fn Ctx::hit_of(self : Ctx, target : Int, x : Double, y : Double) -> Int {
+  let k = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y)
+  // (a finger reaching what is smaller than its tip from round it: what holds that one)
+  if k >= 0 && self.hit_ids[k] == target {
+    k
+  } else {
+    let mut j = self.hit_ids.length() - 1
+    while j >= 0 && self.hit_ids[j] != target {
+      j = j - 1
+    }
+    j
+  }
 }
 
 ///|

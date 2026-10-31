@@ -463,6 +463,25 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   |> ignore
   // what the page's pane shows as the page on top changes, at its cause's moment (page_wait.mbt)
   pane_page_wait.follow(v, fn(p) { (fold_goes.ready)(p) }, fn() { fold_goes.most })
+  // another place's or workspace's sidebar as it was left (side_take), at that cause, as the tape takes it: not as the
+  // frame after it is built, so what follows it before then (its place pressed again) finds it so
+  v.reacts(
+    fn() {
+      match @sfbase.workspace_in_view(src).0 {
+        Some(w) if (src.topic)("prefs", {}).value is Some(_) => w.id + "\n" + side_group(src, w.id)
+        _ => ""
+      }
+    },
+    fn(key) {
+      if key == "" {
+        return
+      }
+      match @sfbase.workspace_in_view(src).0 {
+        Some(w) => side_take(src, w.id) |> ignore
+        None => ()
+      }
+    },
+  )
   // the block moved for what it is moved for, at that moment: from where it is then; else what it goes to changed by
   // what is no cause of a move, put there at once
   let first = Ref(true)
