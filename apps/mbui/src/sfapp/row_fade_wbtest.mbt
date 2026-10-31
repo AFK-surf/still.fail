@@ -6,8 +6,8 @@ fn fading_chat_row(on : Ref[Bool], builds : Ref[Int], opened : Ref[Int], shown? 
   let src = fixture("home")
   let item = chat_item({
     "id": "fade-row",
-    "station": "station",
-    "session": "session",
+    "station": "ws1/st1",
+    "session": "s-c1",
     "title": "Fade row",
     "people": [
       { "id": "lin", "shown": { "name": "Lin", "display": "Lin", "mine": false } },
