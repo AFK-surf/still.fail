@@ -126,3 +126,10 @@ void mb_host_passwords_end(int32_t id) {
 }
 
 #endif
+
+// This device's passkeys (host_native.mbt `wa_*`): none on Apple's systems, which sign a sign-in for another site only
+// for a browser they entitle (win_passkeys.c is Windows').
+int32_t mb_host_passkeys_able(void) { return 0; }
+int32_t mb_host_passkeys_get(moonbit_string_t ask) { (void)ask; return 0; }
+moonbit_string_t mb_host_passkeys_out(int32_t id) { (void)id; return mb_string_from_ns(@""); }
+void mb_host_passkeys_end(int32_t id) { (void)id; }

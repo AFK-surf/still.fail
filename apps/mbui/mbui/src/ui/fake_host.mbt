@@ -620,3 +620,41 @@ impl @hostapi.Host for FakeHost with pw_out(_, id) {
 impl @hostapi.Host for FakeHost with pw_end(_, _) {
   ()
 }
+
+// This device's passkeys (@hostapi passkeys.mbt) as a test has them: none, unless it says how the device answers
+// (`fake_passkey`: given the relying party, the client data, the verification and the ids asked, the host's answer as
+// it gives it), each ask ended at once.
+
+///|
+/// How the device answers a test's ask for a passkey: None, no passkeys here.
+pub let fake_passkey : Ref[((String, String, String, String) -> String)?] = Ref(None)
+
+///|
+/// The asks for a passkey in a test, by their id (from 1): the relying party, the client data, the verification, the
+/// ids asked (hex, joined by commas).
+pub let fake_passkey_asks : Array[(String, String, String, String)] = []
+
+///|
+impl @hostapi.Host for FakeHost with wa_able(_) {
+  fake_passkey.val is Some(_)
+}
+
+///|
+impl @hostapi.Host for FakeHost with wa_get(_, ask) {
+  guard fake_passkey.val is Some(_) else { return 0 }
+  let p = ask.split("\u{1f}").map(fn(a) { a.to_owned() }).to_array()
+  fake_passkey_asks.push((p.get(0).unwrap_or(""), p.get(1).unwrap_or(""), p.get(2).unwrap_or(""), p.get(3).unwrap_or("")))
+  fake_passkey_asks.length()
+}
+
+///|
+impl @hostapi.Host for FakeHost with wa_out(_, id) {
+  guard fake_passkey.val is Some(answer) && id >= 1 && id <= fake_passkey_asks.length() else { return "" }
+  let (rp, client, uv, ids) = fake_passkey_asks[id - 1]
+  answer(rp, client, uv, ids)
+}
+
+///|
+impl @hostapi.Host for FakeHost with wa_end(_, _) {
+  ()
+}

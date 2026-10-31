@@ -105,12 +105,30 @@ export interface ScreenView {
   watchLogin?(heard: (login: LoginField | null) => void): () => void;
   /// Fills the login form the focus is in with what the person's app gave, if the page is still on `host`.
   fill?(f: LoginFill): Promise<void>;
+  /// Hears a page's ask to sign in with a passkey (WebAuthn's navigator.credentials.get, a tab of the browser), checked
+  /// against the site it is on as the station knows it, and null as it goes (answered, given up by the page, or the
+  /// page gone), until the returned function. Only a view a person drives is asked: their app signs it with a passkey
+  /// of their own device.
+  watchPasskey?(heard: (ask: PasskeyAsk | null) => void): () => void;
+  /// Answers the ask `a.id` with what the person's app signed (or that it signed nothing), if the page is still where
+  /// it asked.
+  passkey?(a: PasskeyAnswer): Promise<void>;
 }
 
 /// A login field in focus: the site's host (as the browser has its address, not as the page says it), and which field.
 export type LoginField = { host: string; field: "username" | "password" };
 /// A login form filled from a person's app: for `host`, its account and password (either may be absent).
 export type LoginFill = { host: string; username?: string; password?: string };
+/// A page's ask to sign in with a passkey: `id` its own; the site's host and the relying party it names (the host, or
+/// a domain the host is under); the client data the station made of it (its challenge, the tab's origin as the
+/// browser has its address), which the device signs as it is; the credentials the site takes (base64url ids, none:
+/// any of the device's for it); whether the person is to be verified (`required`, `preferred`, `discouraged`).
+export type PasskeyAsk = { id: string; host: string; rpId: string; clientData: string; allow: string[]; userVerification: string };
+/// What a person's app answers an ask with (base64url): the credential signed with, its authenticator data, the
+/// signature and the user handle; or `error` (the person said no, or the device has none).
+export type PasskeyAnswer =
+  | { id: string; credential: string; authenticatorData: string; signature: string; userHandle?: string }
+  | { id: string; error: string };
 
 export type ScreenKind = "desktop" | "browser" | "simulator";
 

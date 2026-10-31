@@ -21,10 +21,10 @@ import { Tabs } from "../src/browser/tabs.ts";
 import { openAgentsDoor } from "../src/tools/http.ts";
 import { McpEndpoint } from "../src/tools/mcp.ts";
 import WebSocket, { WebSocketServer } from "ws";
-import { TabView, hostOf, jpegSize, keyCode, keyEvent, toViewport } from "../src/browser/view.ts";
+import { TabView, hostOf, jpegSize, rpFor, keyCode, keyEvent, toViewport } from "../src/browser/view.ts";
 import { makeScreens } from "../src/screens/source.ts";
 import { browserTools, howTo } from "../src/browser/tool.ts";
-import { asked, parseFill } from "../src/mesh/screens.ts";
+import { asked, parseFill, parsePasskey } from "../src/mesh/screens.ts";
 
 const dirs: string[] = [];
 const scratch = () => {
@@ -891,6 +891,22 @@ test("a login form filled from a person's app: what the wire takes (a host, an a
   assert.equal(parseFill({ t: "text", text: "p" }), null);
   assert.equal(hostOf("https://Accounts.Google.com./signin?x=1"), "accounts.google.com");
   assert.equal(hostOf("about:blank"), "");
+});
+
+test("a passkey sign-in answered from a person's app: what the wire takes (base64url, bounded; or a browser's error); the relying parties a tab's host may name", () => {
+  assert.deepEqual(parsePasskey({ t: "passkey", id: "1", credential: "CQk", authenticatorData: "AAAA", signature: "BwcH", userHandle: "BQ" }), { id: "1", credential: "CQk", authenticatorData: "AAAA", signature: "BwcH", userHandle: "BQ" });
+  assert.deepEqual(parsePasskey({ t: "passkey", id: "1", error: "NotAllowedError" }), { id: "1", error: "NotAllowedError" });
+  assert.equal(parsePasskey({ t: "passkey", id: "1", credential: "CQk", authenticatorData: "AA==", signature: "BwcH" }), null, "base64url only");
+  assert.equal(parsePasskey({ t: "passkey", id: "1", credential: "CQk", signature: "BwcH" }), null);
+  assert.equal(parsePasskey({ t: "passkey", id: "1", error: "<script>" }), null);
+  assert.equal(parsePasskey({ t: "fill", host: "github.com", password: "p" }), null);
+  assert.equal(rpFor("github.com", "github.com"), true);
+  assert.equal(rpFor("google.com", "accounts.google.com"), true);
+  assert.equal(rpFor("Google.com.", "accounts.google.com"), true);
+  assert.equal(rpFor("evil.com", "accounts.google.com"), false);
+  assert.equal(rpFor("com", "google.com"), false, "a bare suffix");
+  assert.equal(rpFor("ogle.com", "google.com"), false);
+  assert.equal(rpFor("", "google.com"), false);
 });
 
 test("a site's cookies: its own and its subdomains', set again as DevTools takes them; taken out by setting them expired", () => {

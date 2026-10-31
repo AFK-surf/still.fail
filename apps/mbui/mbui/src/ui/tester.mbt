@@ -84,6 +84,8 @@ fn reset_globals() -> Unit {
   drop_reset()
   fake_op.val = None
   fake_op_runs.clear()
+  fake_passkey.val = None
+  fake_passkey_asks.clear()
   image_cache.clear()
   images_said.clear()
   views_told_text.clear()

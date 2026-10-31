@@ -10,7 +10,7 @@
 // Pull-driven: Chrome casts a frame only once those before it are acknowledged (it keeps at most two out), and a frame
 // is acknowledged only when the one after it is asked for (`next`), so a slow viewer slows the casting rather than
 // having frames pile up. Of two waiting, the newer is given and the older let go.
-import { type Clip, type Frame, type FrameConfig, type LoginField, type LoginFill, type ScreenInput, type ScreenVideo, type ScreenView, type ViewOptions, CLIP_TEXT_MAX } from "../screens/source.ts";
+import { type Clip, type Frame, type FrameConfig, type LoginField, type LoginFill, type PasskeyAnswer, type PasskeyAsk, type ScreenInput, type ScreenVideo, type ScreenView, type ViewOptions, CLIP_TEXT_MAX } from "../screens/source.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
 
 /// The page's viewport in CSS pixels, as Page.getLayoutMetrics says it (what the screencast's frames show); null when
@@ -221,6 +221,72 @@ export const fillScript = (username: string | undefined, password: string | unde
   return did;
 })(${JSON.stringify(username ?? null)}, ${JSON.stringify(password ?? null)})`;
 
+/// The binding a tab's passkey sign-ins call while a person driving it signs them from their own device.
+export const PASSKEY_BINDING = "__stillfailPasskey";
+/// What takes a page's passkey sign-in (navigator.credentials.get with `publicKey`) to the person driving it, run in a
+/// page's top document before its own scripts (and each one it opens while watched): the ask said through the binding
+/// as `{"id", "rpId", "challenge", "allow", "userVerification"}` (base64url), `{"id", "gone": true}` as the page gives it
+/// up (its signal), and answered by the station with `__stillfailPasskeyDone(id, answer)`: a credential made as the
+/// browser makes it, or the error the browser would give. The platform is said to have an authenticator, so that sites
+/// offer passkeys. Anything else (a password asked, a passkey made) goes to the browser as before.
+export const PASSKEY_HOOK = `(() => {
+  if (window !== window.top || window.__stillfailPasskeyHook || !navigator.credentials) return;
+  window.__stillfailPasskeyHook = true;
+  const creds = navigator.credentials;
+  const get = creds.get.bind(creds);
+  const bytes = (v) => v instanceof ArrayBuffer ? new Uint8Array(v) : ArrayBuffer.isView(v) ? new Uint8Array(v.buffer, v.byteOffset, v.byteLength) : null;
+  const b64 = (v) => { const u = bytes(v); if (!u) return null; let s = ""; for (const b of u) s += String.fromCharCode(b); return btoa(s).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/, ""); };
+  const buf = (s) => { const t = atob(s.replace(/-/g, "+").replace(/_/g, "/")); const u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
+  const waiting = new Map();
+  let next = 0;
+  const said = (v) => { try { window.${PASSKEY_BINDING}(JSON.stringify(v)); return true; } catch { return false; } };
+  Object.defineProperty(window, "__stillfailPasskeyDone", { value: (id, a) => {
+    const w = waiting.get(id);
+    if (!w) return;
+    waiting.delete(id);
+    if (a.error) return w.no(new DOMException(a.error === "NotAllowedError" ? "The operation either timed out or was not allowed." : String(a.error), a.error === "NotAllowedError" ? "NotAllowedError" : "UnknownError"));
+    const response = { clientDataJSON: buf(a.clientData), authenticatorData: buf(a.authenticatorData), signature: buf(a.signature), userHandle: a.userHandle ? buf(a.userHandle) : null };
+    const credential = { id: a.credential, rawId: buf(a.credential), type: "public-key", authenticatorAttachment: "platform", response,
+      getClientExtensionResults: () => ({}),
+      toJSON: () => ({ id: a.credential, rawId: a.credential, type: "public-key", authenticatorAttachment: "platform", clientExtensionResults: {},
+        response: { clientDataJSON: b64(response.clientDataJSON), authenticatorData: a.authenticatorData, signature: a.signature, userHandle: a.userHandle || null } }) };
+    try { Object.setPrototypeOf(response, AuthenticatorAssertionResponse.prototype); Object.setPrototypeOf(credential, PublicKeyCredential.prototype); } catch {}
+    w.yes(credential);
+  } });
+  creds.get = function (options) {
+    const pk = options && options.publicKey;
+    if (!pk || !bytes(pk.challenge)) return get(options);
+    const id = String(++next);
+    const allow = Array.isArray(pk.allowCredentials) ? pk.allowCredentials.map((c) => b64(c && c.id)).filter((x) => x) : [];
+    const ask = { id, rpId: typeof pk.rpId === "string" && pk.rpId !== "" ? pk.rpId : location.hostname, challenge: b64(pk.challenge), allow, userVerification: pk.userVerification || "preferred" };
+    return new Promise((yes, no) => {
+      const signal = options.signal;
+      if (signal && signal.aborted) return no(signal.reason !== undefined ? signal.reason : new DOMException("The operation was aborted.", "AbortError"));
+      waiting.set(id, { yes, no });
+      if (signal) signal.addEventListener("abort", () => {
+        if (!waiting.delete(id)) return;
+        said({ id, gone: true });
+        no(signal.reason !== undefined ? signal.reason : new DOMException("The operation was aborted.", "AbortError"));
+      });
+      if (!said(ask)) { waiting.delete(id); get(options).then(yes, no); }
+    });
+  };
+  // (a page left takes what it asked with it)
+  window.addEventListener("pagehide", () => { for (const id of waiting.keys()) said({ id, gone: true }); waiting.clear(); });
+  if (window.PublicKeyCredential) {
+    PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable = () => Promise.resolve(true);
+    PublicKeyCredential.isConditionalMediationAvailable = () => Promise.resolve(true);
+  }
+})()`;
+
+/// Whether a page on `host` may ask for a passkey of relying party `rpId`: the host itself, or a domain it is under
+/// that is more than one label (as browsers take it, short of the public suffix list: a site's own passkeys are kept
+/// for its own domain, and a device has none for a bare suffix).
+export function rpFor(rpId: string, host: string): boolean {
+  const rp = rpId.toLowerCase().replace(/\.$/, "");
+  return rp !== "" && (rp === host || (rp.includes(".") && host.endsWith("." + rp)));
+}
+
 /// The host of an address (lower case, no trailing dot); "" for one with none (about:blank).
 export function hostOf(url: string): string {
   try {
@@ -251,6 +317,11 @@ export class TabView implements ScreenView {
   #delivered: number[] = [];
   #waiter: ((frame: Frame | null) => void) | null = null;
   #ended = false;
+  /// The passkey sign-in a page asked last and not yet answered: its id, the origin it was asked on, the client data
+  /// made of it.
+  #asked: { id: string; origin: string; clientData: string } | null = null;
+  /// Who hears the passkey sign-ins (watchPasskey), told as the one asked is answered.
+  #passkeyHeard: ((ask: PasskeyAsk | null) => void) | null = null;
   #keyframe = false;
   #last: { data: Uint8Array; config: FrameConfig } | null = null;
   #config: FrameConfig | null = null;
@@ -452,10 +523,106 @@ export class TabView implements ScreenView {
     await cdp.send("Runtime.evaluate", { expression: fillScript(f.username, f.password), contextId: executionContextId, returnByValue: true }, session);
   }
 
+  /// A page's passkey sign-ins, as its hook asks them, each checked against the tab's address as the browser has it
+  /// (its origin, its host for the relying party) and made into the client data the device is to sign; null as the
+  /// one asked goes. Until the returned function, which answers what is still asked as the browser would with none.
+  watchPasskey(heard: (ask: PasskeyAsk | null) => void): () => void {
+    const { cdp, session, targetId } = this.#p;
+    let on = true;
+    let script: string | null = null;
+    this.#passkeyHeard = heard;
+    const unlisten = cdp.on((e) => {
+      if (!on || e.method !== "Runtime.bindingCalled" || e.sessionId !== session || e.params?.name !== PASSKEY_BINDING) return;
+      let said: any = null;
+      try {
+        said = JSON.parse(String(e.params.payload));
+      } catch {}
+      if (typeof said?.id !== "string" || said.id === "" || said.id.length > 32) return;
+      const id: string = said.id;
+      if (said.gone === true) {
+        if (this.#asked?.id === id) {
+          this.#asked = null;
+          heard(null);
+        }
+        return;
+      }
+      const b64 = (v: unknown): v is string => typeof v === "string" && v !== "" && v.length <= 1366 && /^[A-Za-z0-9_-]+$/.test(v);
+      const allow: unknown[] = Array.isArray(said.allow) ? said.allow.slice(0, 64) : [];
+      if (typeof said.rpId !== "string" || !b64(said.challenge) || !allow.every(b64)) return;
+      const userVerification = ["required", "preferred", "discouraged"].includes(said.userVerification) ? said.userVerification : "preferred";
+      void this.#url(targetId).then((url) => {
+        if (!on) return;
+        let origin = "";
+        try {
+          const u = new URL(url);
+          // (a secure context only, as WebAuthn takes: https, or this machine's own)
+          if (u.protocol === "https:" || (u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1"))) origin = u.origin;
+        } catch {}
+        const host = hostOf(url);
+        if (origin === "" || !rpFor(said.rpId, host)) {
+          void this.#answer({ id, error: "NotAllowedError" });
+          return;
+        }
+        const clientData = JSON.stringify({ type: "webauthn.get", challenge: said.challenge, origin, crossOrigin: false });
+        // (one asked at a time, the latest: one before it is answered as given up)
+        if (this.#asked !== null) void this.#answer({ id: this.#asked.id, error: "NotAllowedError" });
+        this.#asked = { id, origin, clientData };
+        heard({ id, host, rpId: said.rpId.toLowerCase().replace(/\.$/, ""), clientData, allow: allow as string[], userVerification });
+      });
+    });
+    const undo = () => {
+      if (this.#passkeyHeard === heard) this.#passkeyHeard = null;
+      if (this.#ended) return;
+      if (this.#asked !== null) void this.#answer({ id: this.#asked.id, error: "NotAllowedError" });
+      this.#asked = null;
+      void cdp.send("Runtime.removeBinding", { name: PASSKEY_BINDING }, session).catch(() => {});
+      if (script !== null) void cdp.send("Page.removeScriptToEvaluateOnNewDocument", { identifier: script }, session).catch(() => {});
+    };
+    void (async () => {
+      try {
+        await cdp.send("Runtime.addBinding", { name: PASSKEY_BINDING }, session);
+        script = (await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: PASSKEY_HOOK }, session))?.identifier ?? null;
+        await cdp.send("Runtime.evaluate", { expression: PASSKEY_HOOK }, session);
+        if (!on) undo();
+      } catch {}
+    })();
+    return () => {
+      if (!on) return;
+      on = false;
+      unlisten();
+      undo();
+    };
+  }
+
+  /// Answers the page's passkey sign-in with what the person's app signed, only the one asked last, while the tab is
+  /// still on the origin it was asked on (its client data the station's own, as it was signed).
+  async passkey(a: PasskeyAnswer): Promise<void> {
+    const asked = this.#asked;
+    if (this.#ended || asked === null || asked.id !== a.id) return;
+    this.#asked = null;
+    this.#passkeyHeard?.(null);
+    let origin = "";
+    try {
+      origin = new URL(await this.#url(this.#p.targetId)).origin;
+    } catch {}
+    if (origin !== asked.origin) return;
+    await this.#answer("error" in a ? a : { ...a, clientData: Buffer.from(asked.clientData).toString("base64url") });
+  }
+
+  /// The page's hook told how its ask `a.id` went.
+  async #answer(a: { id: string } & Record<string, unknown>): Promise<void> {
+    await this.#p.cdp.send("Runtime.evaluate", { expression: `window.__stillfailPasskeyDone && window.__stillfailPasskeyDone(${JSON.stringify(a.id)}, ${JSON.stringify(a)})` }, this.#p.session).catch(() => {});
+  }
+
+  /// The address of tab `targetId` as the browser has it now ("" for none).
+  async #url(targetId: string): Promise<string> {
+    const { targetInfo } = await this.#p.cdp.send("Target.getTargetInfo", { targetId }).catch(() => ({ targetInfo: null }));
+    return String(targetInfo?.url ?? "");
+  }
+
   /// The host of tab `targetId` as the browser has its address now ("" for none).
   async #host(targetId: string): Promise<string> {
-    const { targetInfo } = await this.#p.cdp.send("Target.getTargetInfo", { targetId }).catch(() => ({ targetInfo: null }));
-    return hostOf(String(targetInfo?.url ?? ""));
+    return hostOf(await this.#url(targetId));
   }
 
   close() {

@@ -721,6 +721,26 @@ impl @hostapi.Host for Native with pw_end(_, id) {
 }
 
 ///|
+impl @hostapi.Host for Native with wa_able(_) {
+  wa_able() != 0
+}
+
+///|
+impl @hostapi.Host for Native with wa_get(_, ask) {
+  wa_get(ask)
+}
+
+///|
+impl @hostapi.Host for Native with wa_out(_, id) {
+  wa_out(id)
+}
+
+///|
+impl @hostapi.Host for Native with wa_end(_, id) {
+  wa_end(id)
+}
+
+///|
 impl @hostapi.Host for Native with pk_start(_, kind) {
   pk_start(kind)
 }

@@ -47,6 +47,8 @@ const KEY_MAX = 64;
 const TEXT_MAX = 16_384;
 /// The most a login's account or password filled from this device's password manager may be.
 const FILL_MAX = 1024;
+/// The most each part of a passkey's answer may be, base64url.
+const PASSKEY_MAX = 8192;
 
 export type ScreenCall =
   /// `ask.control` as asked; `auto` (none asked): control unless someone else drives it as it opens.
@@ -236,6 +238,18 @@ export function checkInput(input: unknown): J {
       if (typeof input.host !== "string" || input.host === "" || input.host.length > 253 || !word(input.username) || !word(input.password)) throw bad();
       if (input.username === undefined && input.password === undefined) throw bad();
       return { t: "fill", host: input.host, ...(input.username !== undefined ? { username: input.username } : {}), ...(input.password !== undefined ? { password: input.password } : {}) };
+    }
+    // A page's passkey sign-in answered from this device (`passkey` of the view's state): what it signed, base64url, or
+    // why it signed nothing.
+    case "passkey": {
+      const b64 = (v: unknown) => typeof v === "string" && v !== "" && v.length <= PASSKEY_MAX && /^[A-Za-z0-9_-]+$/.test(v);
+      if (typeof input.id !== "string" || input.id === "" || input.id.length > 32) throw bad();
+      if (input.error !== undefined) {
+        if (typeof input.error !== "string" || !/^[A-Za-z]{1,40}$/.test(input.error)) throw bad();
+        return { t: "passkey", id: input.id, error: input.error };
+      }
+      if (!b64(input.credential) || !b64(input.authenticatorData) || !b64(input.signature) || (input.userHandle !== undefined && !b64(input.userHandle))) throw bad();
+      return { t: "passkey", id: input.id, credential: input.credential, authenticatorData: input.authenticatorData, signature: input.signature, ...(input.userHandle !== undefined ? { userHandle: input.userHandle } : {}) };
     }
     // A file dropped into the view, shown in the machine's file manager (a screen whose `drop` says `reveal`).
     case "reveal":
@@ -790,9 +804,22 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 else if (state.control && isObject(s.login) && typeof s.login.host === "string" && s.login.host !== "" && s.login.host.length <= 253 && (s.login.field === "username" || s.login.field === "password")) {
                   state.login = { host: s.login.host, field: s.login.field };
                 }
+                // A page's passkey sign-in, while driving it: this device's passkeys may answer it (`passkey`).
+                if (s.passkey === null) delete state.passkey;
+                else if (state.control && isObject(s.passkey)) {
+                  const p = s.passkey;
+                  const str = (v: unknown, max: number): v is string => typeof v === "string" && v !== "" && v.length <= max;
+                  const allow = Array.isArray(p.allow) ? p.allow.filter((a: unknown) => str(a, 1366)).slice(0, 64) : [];
+                  if (str(p.id, 32) && str(p.host, 253) && str(p.rpId, 253) && str(p.clientData, 4096)) {
+                    state.passkey = { id: p.id, host: p.host, rpId: p.rpId, clientData: p.clientData, allow, userVerification: typeof p.userVerification === "string" ? p.userVerification : "preferred" };
+                  }
+                }
                 // Whether this view's input is taken, as the station says (a read-only member's is not).
                 if (typeof s.control === "boolean") state.control = s.control && control;
-                if (!state.control) delete state.login;
+                if (!state.control) {
+                  delete state.login;
+                  delete state.passkey;
+                }
                 const access = accessOf(s.access);
                 if (access) state.access = access;
                 if (Array.isArray(s.viewers)) onIt = names(s.viewers);

@@ -1837,6 +1837,14 @@ export const SHAPES: Record<string, Shape> = {
     ["host", "String", { doc: "The site's host, as the station's browser has the tab's address (not as the page says it)." }],
     ["field", "String", { doc: "`username` or `password`: which of its fields the focus is in." }],
   ], { doc: "A login field in focus on a screen (a tab of the station's browser)." }),
+  ScreenPasskey: struct([
+    ["id", "String", { doc: "The page's own, answered with `screen.input` `{t: \"passkey\", id, …}`." }],
+    ["host", "String", { doc: "The site's host, as the station's browser has the tab's address." }],
+    ["rpId", "String", { doc: "The relying party it asks for: the host, or a domain the host is under." }],
+    ["clientData", "String", { doc: "The client data to sign as it is (JSON: the challenge, the tab's origin), the station's own." }],
+    ["allow", vec("String"), { doc: "The credentials the site takes (base64url ids); none: any of this device's for `rpId`." }],
+    ["userVerification", "String", { doc: "`required`, `preferred` or `discouraged`." }],
+  ], { doc: "A page's sign-in with a passkey on a screen (a tab of the station's browser), for this device to sign." }),
   ScreenViewState: struct([
     ["phase", "String", { doc: "`connecting`, `live`, `reconnecting`, `ended` (the station ended it, or the screen went), `outdated` (the\nstation is from before screens), `gone` (no such screen), `denied` (it cannot be seen now: no permission to\ncapture, no display) or `failed`." }],
     ["message", opt("String"), { doc: "Why, in the viewer's words, for a phase that is not `connecting` or `live`." }],
@@ -1860,6 +1868,7 @@ export const SHAPES: Record<string, Shape> = {
     ["scale", opt("ScreenScale"), { doc: "While driving it: its display's scale, set with `screen.input` `{t: \"scale\", percent}` and put back as it was\nonce nobody views it (a Windows station's desktop; none elsewhere, or while only looking)." }],
     ["resolution", opt("ScreenResolution"), { doc: "While driving it: its display's resolution, set with `screen.input` `{t: \"resolution\", width, height}`\nand put back as it was once nobody views it (a Windows station's desktop; none elsewhere, or while only looking)." }],
     ["login", opt("ScreenLogin"), { doc: "While driving it: the login field in focus (a tab of the browser), for this device's password manager to\nfill with `screen.input` `{t: \"fill\", host, username?, password?}`; none when the focus is in none." }],
+    ["passkey", opt("ScreenPasskey"), { doc: "While driving it: a page's sign-in with a passkey (a tab of the browser), for this device to sign and\nanswer with `screen.input` `{t: \"passkey\", id, credential, authenticatorData, signature, userHandle?}` (base64url) or\n`{t: \"passkey\", id, error}`; none when none is asked." }],
   ], { doc: "A screen view as its page draws it (`screen.view`'s `{state}` values): each one whole, the latest is how it is." }),
   PrefsView: struct([
     ["onlyMine", "bool", { default: true, doc: "The lists show only the chats and connects the viewer takes part in." }],

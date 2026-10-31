@@ -17,7 +17,7 @@ import { liveClock } from "../ops/fibers.ts";
 import { tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { type AccessShown, type ScreenHub, ScreenRefused, accessShown } from "../screens/hub.ts";
-import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type LoginFill, type Region, type ScreenInput, type ScreenSource, type ScreenView, type ViewFit, CLIP_PNG_MAX, clipFits, regionOf } from "../screens/source.ts";
+import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type LoginFill, type PasskeyAnswer, type Region, type ScreenInput, type ScreenSource, type ScreenView, type ViewFit, CLIP_PNG_MAX, clipFits, regionOf } from "../screens/source.ts";
 import { type Viewer, readOnly } from "./credential.ts";
 import type { Stream } from "./native.ts";
 import { type Fps, FrameLatency, Pacer, type Quality, STILL_MS, START_RATE, Sharpener, Sizer, isFps, loopStall, rateCeiling } from "./screen-pace.ts";
@@ -95,6 +95,17 @@ export function parseFill(v: any): LoginFill | null {
   const word = (x: unknown) => typeof x === "string" && x.length <= 1024;
   if ((v.username !== undefined && !word(v.username)) || (v.password !== undefined && !word(v.password)) || (v.username === undefined && v.password === undefined)) return null;
   return { host: v.host, ...(v.username !== undefined ? { username: v.username } : {}), ...(v.password !== undefined ? { password: v.password } : {}) };
+}
+
+/// What a client's input frame answers a page's passkey sign-in with (`{t: "passkey", id, credential, authenticatorData,
+/// signature, userHandle?}`, base64url, signed by the person's own device; or `{t: "passkey", id, error}`): null when it
+/// is not that.
+export function parsePasskey(v: any): PasskeyAnswer | null {
+  if (v === null || typeof v !== "object" || v.t !== "passkey" || typeof v.id !== "string" || v.id === "" || v.id.length > 32) return null;
+  if (v.error !== undefined) return typeof v.error === "string" && /^[A-Za-z]{1,40}$/.test(v.error) ? { id: v.id, error: v.error } : null;
+  const b64 = (x: unknown): x is string => typeof x === "string" && x !== "" && x.length <= 8192 && /^[A-Za-z0-9_-]+$/.test(x);
+  if (!b64(v.credential) || !b64(v.authenticatorData) || !b64(v.signature) || (v.userHandle !== undefined && !b64(v.userHandle))) return null;
+  return { id: v.id, credential: v.credential, authenticatorData: v.authenticatorData, signature: v.signature, ...(v.userHandle !== undefined ? { userHandle: v.userHandle } : {}) };
 }
 
 /// A client's `look` frame (JSON `{region, maxWidth, maxHeight}`): the part of the screen it shows (null: the whole) and
@@ -273,6 +284,7 @@ class ViewSession {
   #unwatch: () => void = () => {};
   #unclip: () => void = () => {};
   #unlogin: () => void = () => {};
+  #unpasskey: () => void = () => {};
   #unpoint: () => void = () => {};
   #title: string;
   /// The bit rate the source was last asked for.
@@ -364,6 +376,7 @@ class ViewSession {
     this.#closed = true;
     this.#unclip();
     this.#unlogin();
+    this.#unpasskey();
     this.#unpoint();
     this.view.close();
     this.#leave();
@@ -407,6 +420,12 @@ class ViewSession {
     if (this.control && this.view.watchLogin) {
       this.#unlogin = this.view.watchLogin((login) => {
         if (!this.#closed) void this.#state({ login });
+      });
+    }
+    // A page's passkey sign-in, to a person who drives it (their app signs it with a passkey of their own device).
+    if (this.control && this.view.watchPasskey) {
+      this.#unpasskey = this.view.watchPasskey((passkey) => {
+        if (!this.#closed) void this.#state({ passkey });
       });
     }
     // The pointer, where the source's pictures leave it out (a video of the desktop): the client draws it.
@@ -604,6 +623,11 @@ class ViewSession {
             if (fill !== null) {
               // Only a view that drives it fills it.
               if (this.control && this.view.fill) this.#then(() => this.view.fill!(fill));
+              break;
+            }
+            const passkey = parsePasskey(raw);
+            if (passkey !== null) {
+              if (this.control && this.view.passkey) this.#then(() => this.view.passkey!(passkey));
               break;
             }
             const e = parseInput(raw);

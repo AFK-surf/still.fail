@@ -6285,6 +6285,22 @@ export interface ScreenLogin {
 	field: string;
 }
 
+/** A page's sign-in with a passkey on a screen (a tab of the station's browser), for this device to sign. */
+export interface ScreenPasskey {
+	/** The page's own, answered with `screen.input` `{t: "passkey", id, …}`. */
+	id: string;
+	/** The site's host, as the station's browser has the tab's address. */
+	host: string;
+	/** The relying party it asks for: the host, or a domain the host is under. */
+	rpId: string;
+	/** The client data to sign as it is (JSON: the challenge, the tab's origin), the station's own. */
+	clientData: string;
+	/** The credentials the site takes (base64url ids); none: any of this device's for `rpId`. */
+	allow: string[];
+	/** `required`, `preferred` or `discouraged`. */
+	userVerification: string;
+}
+
 /** A display mode's size, in pixels. */
 export interface ScreenSize {
 	width: number;
@@ -6380,6 +6396,12 @@ export interface ScreenViewState {
 	 * fill with `screen.input` `{t: "fill", host, username?, password?}`; none when the focus is in none.
 	 */
 	login?: ScreenLogin;
+	/**
+	 * While driving it: a page's sign-in with a passkey (a tab of the browser), for this device to sign and
+	 * answer with `screen.input` `{t: "passkey", id, credential, authenticatorData, signature, userHandle?}` (base64url) or
+	 * `{t: "passkey", id, error}`; none when none is asked.
+	 */
+	passkey?: ScreenPasskey;
 }
 
 /** A station's screens (the `screens` topic; docs/remote-screens.md, client/core-ts/src/screens.ts). */

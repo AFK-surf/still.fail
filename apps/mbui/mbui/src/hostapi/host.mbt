@@ -153,6 +153,10 @@ pub(open) trait Host {
   pw_run(Self, String) -> Int = _
   pw_out(Self, Int) -> String = _
   pw_end(Self, Int) -> Unit = _
+  wa_able(Self) -> Bool = _
+  wa_get(Self, String) -> Int = _
+  wa_out(Self, Int) -> String = _
+  wa_end(Self, Int) -> Unit = _
   pk_start(Self, Int) -> Int = _
   pk_state(Self, Int) -> Int = _
   pk_count(Self, Int) -> Int = _
@@ -933,6 +937,26 @@ impl Host with pw_out(_, _) {
 
 ///|
 impl Host with pw_end(_, _) {
+  ()
+}
+
+///|
+impl Host with wa_able(_) {
+  false
+}
+
+///|
+impl Host with wa_get(_, _) {
+  0
+}
+
+///|
+impl Host with wa_out(_, _) {
+  ""
+}
+
+///|
+impl Host with wa_end(_, _) {
   ()
 }
 
@@ -2467,6 +2491,28 @@ fn pw_out(id : Int) -> String {
 ///|
 fn pw_end(id : Int) -> Unit {
   current.val.pw_end(id)
+}
+
+// This device's passkeys (passkeys.mbt): a sign-in signed, how it ended.
+
+///|
+fn wa_able() -> Bool {
+  current.val.wa_able()
+}
+
+///|
+fn wa_get(ask : String) -> Int {
+  current.val.wa_get(ask)
+}
+
+///|
+fn wa_out(id : Int) -> String {
+  current.val.wa_out(id)
+}
+
+///|
+fn wa_end(id : Int) -> Unit {
+  current.val.wa_end(id)
 }
 
 ///|

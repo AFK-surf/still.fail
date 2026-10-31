@@ -129,6 +129,12 @@ priv struct ScreenSess {
   mut fill_choices : Array[@hostapi.PasswordLogin]
   mut fill_note : String
   mut fill_host : String
+  /// signing the page's passkey sign-in on this device (screen_passkey.mbt): where it is (`asking`, `said`; "" nothing
+  /// under way), the ask under way, what it said where it did not sign, and the page's ask it is for
+  passkey_step : @signals.Signal[String]
+  mut passkey_run : @hostapi.PasskeyRun?
+  mut passkey_note : String
+  mut passkey_id : String
 }
 
 ///|
@@ -202,6 +208,10 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         fill_choices: [],
         fill_note: "",
         fill_host: "",
+        passkey_step: @signals.signal(""),
+        passkey_run: None,
+        passkey_note: "",
+        passkey_id: "",
       }
       screens_open[key] = s
       s

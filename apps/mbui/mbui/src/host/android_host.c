@@ -2092,3 +2092,9 @@ int32_t mb_host_passwords_able(void) { return 0; }
 int32_t mb_host_passwords_run(moonbit_string_t args) { (void)args; return 0; }
 moonbit_string_t mb_host_passwords_out(int32_t id) { (void)id; return moonbit_make_string_raw(0); }
 void mb_host_passwords_end(int32_t id) { (void)id; }
+
+// This device's passkeys (host_native.mbt `wa_*`): none here (win_passkeys.c).
+int32_t mb_host_passkeys_able(void) { return 0; }
+int32_t mb_host_passkeys_get(moonbit_string_t ask) { (void)ask; return 0; }
+moonbit_string_t mb_host_passkeys_out(int32_t id) { (void)id; return moonbit_make_string_raw(0); }
+void mb_host_passkeys_end(int32_t id) { (void)id; }

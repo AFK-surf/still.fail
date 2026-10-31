@@ -18,3 +18,18 @@ test "op's answers: a site's logins from its list, a login's account and passwor
   assert_eq(@hostapi.login_fields(got), ("zzj", "s3cret"))
   assert_eq(@hostapi.login_fields("{\"label\":\"password\",\"value\":\"only\"}"), ("", "only"))
 }
+
+///|
+test "a passkey's parts between the host's hex and the wire's base64url, both ways" {
+  assert_eq(@hostapi.b64url_of_hex(""), "")
+  assert_eq(@hostapi.b64url_of_hex("0909"), "CQk")
+  assert_eq(@hostapi.b64url_of_hex("010203"), "AQID")
+  assert_eq(@hostapi.b64url_of_hex("fbff"), "-_8")
+  assert_eq(@hostapi.b64url_of_hex("FBFF"), "-_8")
+  assert_eq(@hostapi.b64url_of_hex("0g"), "")
+  assert_eq(@hostapi.b64url_of_hex("abc"), "")
+  assert_eq(@hostapi.hex_of_b64url("CQk"), "0909")
+  assert_eq(@hostapi.hex_of_b64url("AQID"), "010203")
+  assert_eq(@hostapi.hex_of_b64url("-_8="), "fbff")
+  assert_eq(@hostapi.hex_of_b64url("a+b"), "")
+}

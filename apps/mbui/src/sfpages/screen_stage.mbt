@@ -288,6 +288,7 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
         c.box(style=stage_foot_column, fn() {
           drops(c, s)
           login_fill(c, s)
+          passkey_sign(c, s)
           match s.undriven() {
             Some(why) =>
               c.box(style=undriven_box, fn() {

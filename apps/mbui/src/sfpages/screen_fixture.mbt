@@ -370,3 +370,17 @@ fn screen_fix_one_password() -> Unit {
     }
   })
 }
+
+///|
+/// This device's passkeys as the tests have them (the Tester's): github.com's signs (credential 09 09, its authenticator
+/// data, signature and user handle); any other site's none (the person told no passkey of it here).
+fn screen_fix_passkeys() -> Unit {
+  @ui.fake_passkey_asks.clear()
+  @ui.fake_passkey.val = Some(fn(rp, _client, _uv, _ids) {
+    if rp == "github.com" {
+      "0\u{1f}0909\u{1f}abcdef\u{1f}070707\u{1f}05\u{1f}\u{1f}"
+    } else {
+      "1\u{1f}\u{1f}\u{1f}\u{1f}\u{1f}NotAllowedError\u{1f}"
+    }
+  })
+}
