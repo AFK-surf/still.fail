@@ -25,6 +25,7 @@ options(
     // (the files the app carries: in its code on the native hosts, fetched beside its script in a browser)
     "font_assets.mbt": [ "native" ],
     "font_assets_js.mbt": [ "js" ],
+    "font_assets_native.mbt": [ "native" ],
     "math_glyphs.mbt": [ "native" ],
     "math_glyphs_native.mbt": [ "native" ],
     "math_glyphs_js.mbt": [ "js" ],

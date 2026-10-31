@@ -125,7 +125,20 @@ pub fn faces(src : Source, wide : Bool) -> Unit {
         None => ""
       }
     }
+    // the app's own code face come after it started (a browser's: give_faces had none to give), given the frame it comes
+    if now == "" &&
+      host_face == @hostapi.face_code &&
+      !@ui.face_given(host_face) &&
+      @sf.code_face().length() > 0 {
+      ignore(@ui.face_add_bytes(host_face, @sf.code_face()))
+    }
     if faces_in[host_face] == now {
+      continue
+    }
+    // (a file the app carries not here yet, as a browser's come after it starts: given the frame it comes, the
+    // system's face until then)
+    if (now == desktop_face && inter_face() is None) ||
+      (now == "" && host_face == @hostapi.face_code && @sf.code_face().length() == 0) {
       continue
     }
     @ui.face_clear(host_face)
