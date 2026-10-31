@@ -29,6 +29,7 @@ import { log } from "../ops/log.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { type Json, type Store } from "../store/store.ts";
 import { type Jobs, jobJson, tail } from "./jobs.ts";
+import { BUSY_MAX } from "./admit.ts";
 import { detailed, summary } from "./load.ts";
 import { type Inbox, MESH_WAIT_MS, NoBytes, type PeerCall, PeerBus, Refused, bytesOf, withBytes } from "../mesh/bus.ts";
 import { fileBytes, readBytes, stopBytes, writeBytes } from "../mesh/files.ts";
@@ -497,16 +498,22 @@ export class Remote {
     return `remote_${basename(task)}`;
   }
 
-  /// What a task waiting in the queue is told of it: its place and why it waits (none for one not waiting).
-  private queued(jobId: string): Json {
-    const q = this.jobs.queueOf(jobId);
+  /// What a task waiting in the queue is told of it: its place, what blocks it, and the measured machine's capacity.
+  private async queued(jobId: string, readLoad: () => Promise<Json> = () => this.measuredLoad()): Promise<Json> {
+    let q = this.jobs.queueOf(jobId);
+    if (q === null) return {};
+    const load = await readLoad();
+    // It may have started while the host was being read; do not return its old queued state.
+    q = this.jobs.queueOf(jobId);
     if (q === null) return {};
     const why =
       q.why === "memory" ? "the machine's memory is under pressure"
-      : q.why === "screen" ? `another task that uses the screen runs${q.holder !== undefined ? ` (${q.holder})` : ""}`
+      : q.why === "screen" ? q.holder !== undefined ? `the screen is held by ${q.holder}` : "the screen is held or an earlier request is waiting for it"
       : q.why === "person" ? "a person is using this machine's screen (its input not idle): no task is given it meanwhile"
-      : "the machine is busy";
-    return { queue: { place: q.place, why: q.why, ...(q.holder !== undefined ? { holder: q.holder } : {}), note: `Waiting in this station's queue (${q.place === 1 ? "next" : `number ${q.place}`}): ${why}. It starts by itself when there is room; you are told when it ends, as for any task.` } };
+      : q.cause === "sampling" ? "the queue is sampling CPU use before another task starts"
+      : q.cause === "cpu" ? `the queue measured the CPUs at least ${BUSY_MAX * 100}% busy`
+      : "it is waiting for its turn";
+    return { queue: { ...q, load, note: `Waiting in this station's queue (${q.place === 1 ? "next" : `number ${q.place}`}): ${why}. It starts by itself when there is room; you are told when it ends, as for any task.` } };
   }
 
   private running(task: string): boolean {
@@ -886,13 +893,18 @@ export class Remote {
     return out;
   }
 
+  /// A host reading with its own time, or why it is unavailable; a slow reader never holds a task reply indefinitely.
+  private async measuredLoad(): Promise<Json> {
+    const read = this.load;
+    if (read === null) return { unavailable: "not measured" };
+    const load = await this.bounded(Promise.resolve().then(read), LOAD_WAIT_MS);
+    return load === null ? { unavailable: `not measured within ${LOAD_WAIT_MS / 1000} s` } : "ok" in load ? load.ok : { unavailable: load.error.message };
+  }
+
   /// `describe`'s answer: what this station takes, and how busy it is (`load`, LOAD_WAIT_MS at most).
   private async describe(): Promise<Json> {
     const answer: Json = { protocol: 1, os: OS, arch: ARCH, tasks: true, sessions: true, messages: true, reads: true, files: true, chats: true, sync: 1, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
-    if (this.load !== null) {
-      const load = await this.bounded(this.load(), LOAD_WAIT_MS);
-      answer.load = load === null ? { unavailable: `not measured within ${LOAD_WAIT_MS / 1000} s` } : "ok" in load ? load.ok : { unavailable: load.error.message };
-    }
+    if (this.load !== null) answer.load = await this.measuredLoad();
     return answer;
   }
 
@@ -963,16 +975,19 @@ export class Remote {
     return this.bus.handle(workspace, peer, request);
   }
 
-  private async task(workspace: string, peer: string, method: string, request: Json): Promise<Json> {
+  private async task(workspace: string, peer: string, method: string, request: Json, queueLoad?: () => Promise<Json>): Promise<Json> {
     if (method === "task.gets") {
       // What `task.get` says of each, in one request (a source follows all its tasks here at once: `follow`).
       const asked = field(request, "tasks");
       if (!Array.isArray(asked) || asked.length > GETS_MAX) throw new Error(`tasks are required (at most ${GETS_MAX})`);
       const tasks: Json[] = [];
+      // One host reading for all queued tasks in this batch, including when the reader is slow or unavailable.
+      let reading: Promise<Json> | undefined;
+      const readLoad = () => (reading ??= this.measuredLoad());
       for (const one of asked) {
         const [session, key] = [field(one, "session"), field(one, "key")];
         try {
-          tasks.push({ session, key, result: await this.task(workspace, peer, "task.get", { session, key }) });
+          tasks.push({ session, key, result: await this.task(workspace, peer, "task.get", { session, key }, readLoad) });
         } catch (error) {
           tasks.push({ session, key, error: (error as Error).message });
         }
@@ -1093,7 +1108,8 @@ export class Remote {
           meta.pushed = this.said(id);
           writeJson(record, meta);
         }
-        return { key, job: jobJson(started), ...this.queued(started.id), ...(meta.push ? { push: true } : {}) };
+        const queue = await this.queued(started.id, queueLoad);
+        return { key, job: jobJson(this.store.getJob(jobId) ?? started), ...queue, ...(meta.push ? { push: true } : {}) };
       }
       case "sync.begin": {
         if (job) return { key, started: true };
@@ -1194,7 +1210,9 @@ export class Remote {
       case "task.log": {
         const lines = Math.min(Math.max(asU64(field(request, "lines")) ?? 50, 1), 1000);
         const push = typeof meta.push === "string" ? { push: true } : {};
-        return { key, job: job ? jobJson(job) : null, log: job ? tail(job.log, lines) : null, notices: this.store.jobNotices(jobId, 20), ...this.queued(jobId), ...push };
+        const queue = await this.queued(jobId, queueLoad);
+        const current = this.store.getJob(jobId);
+        return { key, job: current ? jobJson(current) : null, log: current ? tail(current.log, lines) : null, notices: this.store.jobNotices(jobId, 20), ...queue, ...push };
       }
       case "task.stop": {
         if (!job) throw new Error("task has not started");

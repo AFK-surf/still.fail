@@ -47,6 +47,8 @@ export type Started = { id: string; screen: boolean };
 
 /// Why a task waits, for its agent (station_task's answer): the screen another task's, or a person's.
 export type Why = "memory" | "busy" | "screen" | "person";
+/// A CPU wait is either for a sample or for CPUs the sample found busy.
+export type BusyCause = "sampling" | "cpu";
 
 /// The machine's input idle less than this: a person is at it (or works it through still.fail).
 export const PERSON_IDLE_MS = 60_000;
@@ -65,16 +67,20 @@ export class Busy {
     if (ticks !== null) this.seen.push({ at, ticks });
   }
 
-  /// The share (0–1) since the oldest ticks kept, or the oldest noted at `since` or after; null before they span half
-  /// of BUSY_SPAN_MS.
-  share(since: number | null = null): number | null {
+  /// The measured share (0–1), its span and its last look; null before they span half of BUSY_SPAN_MS.
+  sample(since: number | null = null): { share: number; seconds: number; checkedAt: number } | null {
     const first = since === null ? this.seen[0] : this.seen.find((s) => s.at >= since);
     const last = this.seen.at(-1);
     if (first === undefined || last === undefined || last.at - first.at < BUSY_SPAN_MS / 2) return null;
     const [b0, t0] = first.ticks;
     const [b1, t1] = last.ticks;
     if (t1 <= t0) return null;
-    return Math.min(Math.max((b1 - b0) / (t1 - t0), 0), 1);
+    return { share: Math.min(Math.max((b1 - b0) / (t1 - t0), 0), 1), seconds: (last.at - first.at) / 1000, checkedAt: last.at };
+  }
+
+  /// The share since the oldest ticks kept, or the oldest noted at `since` or after.
+  share(since: number | null = null): number | null {
+    return this.sample(since)?.share ?? null;
   }
 }
 
@@ -121,7 +127,7 @@ export function pick(
   lastStart: number | null,
   lastOf: (session: string) => number | null,
   claims: Claims = { held: false, asked: null },
-): { start: Waiting } | { wait: Why } | null {
+): { start: Waiting } | { wait: Why; cause?: BusyCause } | null {
   if (waiting.length === 0) return null;
   if (room.pressure === "high" || room.pressure === "critical") return { wait: "memory" };
   // (the screen another task's, a person's, or asked for by a command before this task came)
@@ -130,8 +136,9 @@ export function pick(
   const able = waiting.filter((w) => !(w.screen && (screenBusy || person || (claims.asked !== null && claims.asked <= w.queuedAt))));
   if (able.length === 0) return { wait: !screenBusy && person ? "person" : "screen" };
   if (running.length > 0) {
-    if (lastStart !== null && now - lastStart < RAMP_MS) return { wait: "busy" };
-    if (room.busy === null || room.busy >= BUSY_MAX) return { wait: "busy" };
+    if (lastStart !== null && now - lastStart < RAMP_MS) return { wait: "busy", cause: "sampling" };
+    if (room.busy === null) return { wait: "busy", cause: "sampling" };
+    if (room.busy >= BUSY_MAX) return { wait: "busy", cause: "cpu" };
   }
   // The session whose task last started longest ago (never: first), its oldest task.
   const last = (w: Waiting) => lastOf(w.session) ?? -Infinity;

@@ -126,3 +126,26 @@ test("measured from the host page's sample, and said in one line; what a station
   assert.equal(summary({ unavailable: "not measured within 1 s" }), "unknown (not measured within 1 s)");
   assert.deepEqual(detailed({ protocol: 1, tasks: true }), { protocol: 1, tasks: true, load: OLDER });
 });
+
+test("unknown memory is never reported as all available", async () => {
+  const samples = [
+    { totalBytes: 64 * 1024 ** 3 },
+    { totalBytes: 64 * 1024 ** 3, usedBytes: 0, known: false },
+    { totalBytes: 64 * 1024 ** 3, usedBytes: 65 * 1024 ** 3 },
+    { totalBytes: 0, usedBytes: 0 },
+  ];
+  for (const memory of samples) {
+    const load = await measure({
+      host: { sample: async () => ({ memory }), recentBusy: () => null },
+      gpus: { read: async () => null },
+      running: () => ({ remoteTasks: 0, jobs: 0, services: 0, turns: 0 }),
+      relay: () => null,
+    });
+    assert.equal(load.memory.availableBytes, null);
+    assert.equal(load.cpus, null);
+    assert.equal(load.disk.totalBytes, null);
+    assert.equal(load.disk.freeBytes, null);
+    assert.equal(load.checkedAt, null);
+    assert.doesNotMatch(summary(load), /memory .* free/);
+  }
+});

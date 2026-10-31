@@ -23,8 +23,8 @@ export function output(command: string, args: string[]): string | null {
 
 /// What a system's memory left says of its pressure (where it has no level of its own): under a tenth available is high,
 /// under 4% critical.
-export function pressureOfAvailable(available: number, total: number): "normal" | "high" | "critical" | null {
-  if (!(total > 0) || !(available >= 0)) return null;
+export function pressureOfAvailable(available: number | null, total: number | null): "normal" | "high" | "critical" | null {
+  if (available === null || total === null || !(total > 0) || !(available >= 0) || available > total) return null;
   const share = available / total;
   return share < 0.04 ? "critical" : share < 0.1 ? "high" : "normal";
 }
@@ -65,13 +65,13 @@ export function parseTopMem(text: string): Map<number, number> {
   return out;
 }
 
-/// field: the number after `label:` in `text`, e.g. vm_stat's and /proc/meminfo's lines (0 when it does not read).
-export function field(text: string, label: string): number {
+/// The number after `label:` in `text` (vm_stat and /proc/meminfo); null if absent or unreadable.
+export function fieldOrNull(text: string, label: string): number | null {
   for (const line of text.split("\n")) {
     if (!line.startsWith(`${label}:`)) continue;
-    return parseU64(firstWord(trim(line.slice(label.length + 1)).replace(/\.+$/, ""))) ?? 0;
+    return parseU64(firstWord(trim(line.slice(label.length + 1)).replace(/\.+$/, "")));
   }
-  return 0;
+  return null;
 }
 
 /// proc_stat_ticks: CPU time from /proc/stat's first line; waiting on disks (iowait) counts as idle, as top counts it.

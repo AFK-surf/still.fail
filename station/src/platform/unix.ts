@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
 import { holder } from "./processes.ts";
-import { field, firstWord, idleOfIoreg, output, parseF64, parseLsof, parsePs, parseTopMem, parseU64, pressureOfAvailable, pressureOfLevel, procStatTicks, trim } from "./text.ts";
+import { fieldOrNull, firstWord, idleOfIoreg, output, parseF64, parseLsof, parsePs, parseTopMem, parseU64, pressureOfAvailable, pressureOfLevel, procStatTicks, trim } from "./text.ts";
 
 const MACOS = process.platform === "darwin";
 /// Names in the order people read them (numbers by value, case aside), as the drive sorts them.
@@ -98,27 +98,39 @@ const host: Host = {
       const vm = output("vm_stat", []);
       if (vm !== null) {
         const after = vm.split("page size of ")[1];
-        const page = (after !== undefined ? parseU64(firstWord(after)) : null) ?? 16384;
-        const pages = (label: string) => field(vm, label);
-        const used = Math.max(pages("Anonymous pages") - pages("Pages purgeable") + pages("Pages wired down") + pages("Pages occupied by compressor"), 0) * page;
-        const swapText = output("sysctl", ["-n", "vm.swapusage"]);
-        const usedText = swapText?.split("used = ")[1]?.split("M")[0];
-        const swapMb = usedText === undefined ? null : parseF64(usedText);
-        return { totalBytes: total, usedBytes: Math.min(used, total), swapUsedBytes: swapMb === null ? null : Math.round(swapMb * 1024 * 1024) };
+        const page = after !== undefined ? parseU64(firstWord(after)) : null;
+        const anonymous = fieldOrNull(vm, "Anonymous pages");
+        const purgeable = fieldOrNull(vm, "Pages purgeable");
+        const wired = fieldOrNull(vm, "Pages wired down");
+        const compressed = fieldOrNull(vm, "Pages occupied by compressor");
+        if (total > 0 && page !== null && page > 0 && anonymous !== null && purgeable !== null && wired !== null && compressed !== null) {
+          const used = Math.max(anonymous - purgeable + wired + compressed, 0) * page;
+          const swapText = output("sysctl", ["-n", "vm.swapusage"]);
+          const usedText = swapText?.split("used = ")[1]?.split("M")[0];
+          const swapMb = usedText === undefined ? null : parseF64(usedText);
+          return { totalBytes: total, usedBytes: Math.min(used, total), swapUsedBytes: swapMb === null ? null : Math.round(swapMb * 1024 * 1024) };
+        }
       }
-      return { totalBytes: total, usedBytes: 0, swapUsedBytes: null };
+      return { totalBytes: total, usedBytes: 0, swapUsedBytes: null, known: false };
     }
     let info = "";
     try {
       info = readFileSync("/proc/meminfo", "utf8");
     } catch {
-      // None: zeros.
+      // No memory data; report it as unknown below.
     }
-    const kb = (k: string) => field(info, k) * 1024;
+    const total = fieldOrNull(info, "MemTotal");
+    const available = fieldOrNull(info, "MemAvailable");
+    const swapTotal = fieldOrNull(info, "SwapTotal");
+    const swapFree = fieldOrNull(info, "SwapFree");
+    const swapUsedBytes = swapTotal !== null && swapFree !== null && swapFree <= swapTotal ? (swapTotal - swapFree) * 1024 : null;
+    if (total === null || total <= 0 || available === null || available > total) {
+      return { totalBytes: (total ?? 0) * 1024, usedBytes: 0, swapUsedBytes, known: false };
+    }
     return {
-      totalBytes: kb("MemTotal"),
-      usedBytes: Math.max(kb("MemTotal") - kb("MemAvailable"), 0),
-      swapUsedBytes: Math.max(kb("SwapTotal") - kb("SwapFree"), 0),
+      totalBytes: total * 1024,
+      usedBytes: (total - available) * 1024,
+      swapUsedBytes,
     };
   },
   cpuModel() {
@@ -533,7 +545,7 @@ export const unix: Platform = {
     try {
       if (MACOS) return pressureOfLevel((await run("sysctl", ["-n", "kern.memorystatus_vm_pressure_level"])).stdout);
       const info = readFileSync("/proc/meminfo", "utf8");
-      return pressureOfAvailable(field(info, "MemAvailable"), field(info, "MemTotal"));
+      return pressureOfAvailable(fieldOrNull(info, "MemAvailable"), fieldOrNull(info, "MemTotal"));
     } catch {
       return null;
     }

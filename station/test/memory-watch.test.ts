@@ -8,7 +8,7 @@ import { TestClock } from "effect/testing";
 import type { Pressure } from "../src/jobs/admit.ts";
 import { MemoryWatch, SETTLE_MS, STOP_GRACE_MS, type Unit, limitOf, unitsOf } from "../src/jobs/memory.ts";
 import type { ProcessInfo } from "../src/platform/index.ts";
-import { parsePs, parseTopMem, pressureOfAvailable, pressureOfLevel } from "../src/platform/text.ts";
+import { fieldOrNull, parsePs, parseTopMem, pressureOfAvailable, pressureOfLevel } from "../src/platform/text.ts";
 
 const GiB = 1024 ** 3;
 const p = (pid: number, ppid: number, pgid: number, gib: number, command = "node"): ProcessInfo => ({ pid, ppid, pgid, bytes: gib * GiB, command });
@@ -48,6 +48,10 @@ test("a unit is a job's group and what it started, or one command a runtime star
 });
 
 test("what the machines say reads", () => {
+  assert.equal(fieldOrNull("Anonymous pages: 0.\n", "Anonymous pages"), 0);
+  assert.equal(fieldOrNull("Anonymous pages: 123.\n", "Anonymous pages"), 123);
+  assert.equal(fieldOrNull("Anonymous pages: unknown\n", "Anonymous pages"), null);
+  assert.equal(fieldOrNull("Pages wired down: 123.\n", "Anonymous pages"), null);
   assert.equal(pressureOfLevel("1\n"), "normal");
   assert.equal(pressureOfLevel("2"), "high");
   assert.equal(pressureOfLevel("4"), "critical");
@@ -56,6 +60,9 @@ test("what the machines say reads", () => {
   assert.equal(pressureOfAvailable(9, 100), "high");
   assert.equal(pressureOfAvailable(3, 100), "critical");
   assert.equal(pressureOfAvailable(1, 0), null);
+  assert.equal(pressureOfAvailable(fieldOrNull("MemTotal: 100 kB\n", "MemAvailable"), 100), null);
+  assert.equal(pressureOfAvailable(0, null), null);
+  assert.equal(pressureOfAvailable(101, 100), null);
   assert.deepEqual(parsePs("  1     0     1  1024 /sbin/launchd\n99705 99451 99705 27 node a b\n"), [
     { pid: 1, ppid: 0, pgid: 1, bytes: 1024 * 1024, command: "/sbin/launchd" },
     { pid: 99705, ppid: 99451, pgid: 99705, bytes: 27 * 1024, command: "node a b" },
