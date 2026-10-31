@@ -395,9 +395,10 @@ test "a video's ‹ and › go to a frame's very start, a frame on from the one 
 ///|
 /// A chat's video (16:9, its still the station's poster) alone on a page, the viewer over it once it is tapped open;
 /// how long it is as its message says, `duration` (none: not said).
-fn video_in_chat(duration? : Double = 0.0) -> @ui.Tester {
+fn video_in_chat(duration? : Double = 0.0, still? : Bool = true) -> @ui.Tester {
   new_run()
-  let src : Source = { ..fixture("chat"), poster: fn(_, _, name) { fixture_file(name) } }
+  // (no still: the station's not come yet, its thumbnail black with its play mark alone)
+  let src : Source = { ..fixture("chat"), poster: fn(_, _, name) { if still { fixture_file(name) } else { "" } } }
   let a : Attachment = {
     name: "演示录屏.mp4",
     path: "uploads/fx/演示录屏.mp4",
