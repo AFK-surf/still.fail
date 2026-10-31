@@ -2236,6 +2236,7 @@ pub fn Tester::awaited(Self) -> Array[String]
 pub fn Tester::awake(Self) -> Bool
 pub fn Tester::back(Self) -> Unit
 pub fn Tester::back_gesture(Self, Double, Bool, steps? : Int32) -> Unit
+pub fn Tester::back_raw(Self, Int32, Double, Double) -> Unit
 pub fn Tester::backspace(Self) -> Unit
 pub fn Tester::badge(Self) -> Int32
 pub fn Tester::bench(Self, String, fps? : Double, max? : Int32, each~ : (Self, Bool) -> Unit) -> Array[String]

@@ -26,6 +26,8 @@ pub fn View::takes_back(self : View, f : () -> Unit) -> View {
   n.on_back = Some(f)
   n.on_back_step = None
   n.back_said = n.back_said + 1
+  // (what takes back changed: what hosts the tree told, once the change is committed whole: Tree::on_modals)
+  self.tree.modals_told()
   self
 }
 
@@ -39,6 +41,7 @@ pub fn View::follows_back(self : View, f : (BackStep) -> Unit) -> View {
   n.on_back_step = Some(f)
   n.on_back = None
   n.back_said = n.back_said + 1
+  self.tree.modals_told()
   self
 }
 

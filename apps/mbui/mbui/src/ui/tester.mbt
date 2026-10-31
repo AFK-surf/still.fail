@@ -1375,6 +1375,16 @@ pub fn Tester::back(self : Tester) -> Unit {
 }
 
 ///|
+/// The system's back as a host hands it on (host_native.mbt set_back) at `at`, its own time said with it, no frame drawn:
+/// `kind` 0 its gesture begun, 1 moved to `x` (from the edge it came from), 2 gone back (a back with no gesture where none
+/// began), 3 called off.
+pub fn Tester::back_raw(self : Tester, kind : Int, x : Double, at : Double) -> Unit {
+  self.fake.event_at = at
+  on_back(kind, x, if kind == 2 { 1.0 } else { 0.0 }, 0)
+  self.fake.event_at = -1.0
+}
+
+///|
 /// The system's back gesture (Android's predictive back) from the left
 /// edge to `x`, in `steps` moves a frame apart; then gone back (`commit`)
 /// or called off. Not settled: the page is where it was let go.

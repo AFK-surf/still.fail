@@ -262,9 +262,13 @@ squeeze and contrast checks; film's images before and after where a step touches
    the move before had it then; the tape left mid-move for a place with no sidebar of its own, the block closing from
    where the tape had it then. On both what the page's pane shows while a page put on top waits for what it shows is
    its node's, at its causes (still.fail's sfdesk/page_wait.mbt; Nav::flat_keep: the one shown before kept by the
-   stack till the core gives it or its wait is over). Still the old way on both: the edges'
-   drags (an island over the panels: their pointer's shape and tip wait on the tree's), back (its following the
-   system's gesture waits on the tree's), a page pushed over the page's own stack (its slide Ctx::nav's), a peek's move
+   stack till the core gives it or its wait is over). On the tape back while the tape takes it is a node of the tree's
+   (still.fail's sfdesk tape_takes_back: a View::follows_back in a show bound to it, said at the cause that changes
+   it), what it does chosen as a gesture begins (a panel followed as it goes, or the shell's back done once), the host
+   told the app takes back as the tree changes what takes it (Ctx::back_told_host); what an old view says takes back (a
+   page's own stack, a layer over all) takes it before. Still the old way on both: the edges'
+   drags (an island over the panels: their pointer's shape and tip wait on the tree's), back where what is over the
+   whole window is on top and off the tape (the shell's, said by the island under the panels as it builds), a page pushed over the page's own stack (its slide Ctx::nav's), a peek's move
    aside read from the page's old layout. Old view still: a window of its own, the
    sign-in and the splash; the theme each island is built
    in; back, said by the islands as they are built, in the tree's order (the top page first, then the stack's swipe);

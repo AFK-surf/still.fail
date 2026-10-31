@@ -496,3 +496,260 @@ test "中屏: a finger held on the page beside the sidebar past a long press and
   assert_eq(along_later, along)
   assert_eq(none_later, none)
 }
+
+///|
+/// How long a finger is down tapping, and how far apart the steps of the system's back gesture come (tape_backs): the
+/// gesture begun two steps after the tap, a frame between where frames are drawn all along.
+let back_tap_ms : Double = 40.0
+
+///|
+let back_step_ms : Double = 16.0
+
+///|
+/// The page's words on the tape.
+let back_words : String = "做完了：列表、跳到最新的按钮"
+
+///|
+/// The tape for back (a finger's, the sidebar in use: back the system's), its clock from `t0` on: `to(at)` takes it to
+/// `t0 + at`, with frames every 16 ms on the way (`framed`) or none.
+fn tape_backs(framed : Bool) -> (@ui.Tester, Double, (Double) -> Unit) {
+  let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
+  let t0 = t.time() + between_frames_ms
+  let to = fn(at : Double) {
+    if framed {
+      while t.time() + 16.0 < t0 + at {
+        t.frame_at(t.time() + 16.0)
+      }
+    }
+    t.advance(t0 + at - t.time())
+  }
+  (t, t0, to)
+}
+
+///|
+/// A tap on what shows of the page beside the sidebar at `t0 + at`, let go back_tap_ms after: the page brought over.
+fn tap_page(t : @ui.Tester, t0 : Double, to : (Double) -> Unit, at : Double) -> Unit {
+  let x = 690.0 - @sfdesk.tape_shows / 2.0
+  to(at)
+  t.touch_raw(0, 1, x, 400.0, t0 + at)
+  to(at + back_tap_ms)
+  t.touch_raw(2, 1, x, 400.0, t0 + at + back_tap_ms)
+}
+
+///|
+/// The system's back gesture from the edge on the tape's clock (tape_backs): begun at `at`, moved 40 along each
+/// back_step_ms `steps` times, `between` done as it has moved `mid` times; ended (`end`: 2 gone through, 3 called off, -1
+/// not) back_step_ms after the last.
+fn gesture(
+  t : @ui.Tester,
+  t0 : Double,
+  to : (Double) -> Unit,
+  at : Double,
+  steps~ : Int = 5,
+  mid~ : Int = 3,
+  between~ : () -> Unit = fn() {  },
+  end~ : Int = 2,
+) -> Double {
+  to(at)
+  t.back_raw(0, 0.0, t0 + at)
+  for i in 1..=steps {
+    let s = at + back_step_ms * i.to_double()
+    to(s)
+    t.back_raw(1, 40.0 * i.to_double(), t0 + s)
+    if i == mid {
+      between()
+    }
+  }
+  let e = at + back_step_ms * (steps + 1).to_double()
+  if end >= 0 {
+    to(e)
+    t.back_raw(end, 40.0 * steps.to_double(), t0 + e)
+  }
+  e
+}
+
+///|
+/// On the tape the page brought over by a tap, then at once the system's back gesture 200 along, gone through
+/// (`through`) or called off, frames all along (`framed`) or none till it ends: whether the host was told the app takes
+/// back as the tap ended, before a frame; what the tape has pulled over and how far, 120 along; the panel in use as
+/// the gesture ends and whether back is still the app's then, before a frame; the panel in use once the tape rests, and
+/// where the words are then.
+fn back_after_tap(
+  framed : Bool,
+  through : Bool,
+) -> (Bool, (@sfdesk.TapePane?, Double), @sfdesk.TapePane, Bool, @sfdesk.TapePane, Double) raise {
+  let (t, t0, to) = tape_backs(framed)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  assert_false(t.takes_back())
+  tap_page(t, t0, to, 0.0)
+  let taken = t.takes_back()
+  let mid : Ref[(@sfdesk.TapePane?, Double)] = Ref((None, 0.0))
+  let e = gesture(t, t0, to, back_tap_ms + back_step_ms * 2.0, end=if through { 2 } else { 3 }, between=fn() {
+    mid.val = (@sfdesk.wide.tape_pull.get(), @sfdesk.wide.tape_drag.get())
+  })
+  // (as it ends, before any frame)
+  let ended = @sfdesk.wide.tape_at.get()
+  let still = t.takes_back()
+  t.frame_at(t0 + e + 10.0)
+  t.run_for(@ui.move_most_ms)
+  (taken, mid.val, ended, still, @sfdesk.wide.tape_at.get(), t.rect_of(back_words).unwrap().0)
+}
+
+///|
+test "中屏: the page brought over by a tap and the system's back gesture begun at once, before any frame: back the app's as the tap is let go, the tape following it as it goes, on to the sidebar gone through (back the system's again at once), back to the page called off, as with frames all along" {
+  for through in [true, false] {
+    let along = back_after_tap(true, through)
+    let none = back_after_tap(false, through)
+    assert_eq(none, along, msg="through \{through}")
+    let want = if through { @sfdesk.TapePane::Side } else { @sfdesk.TapePane::Page }
+    assert_eq((along.0, along.2, along.3, along.4), (true, want, !through, want), msg="through \{through}")
+    // (120 along, the sidebar pulled over with it)
+    assert_eq(along.1, (Some(@sfdesk.TapePane::Side), 120.0), msg="through \{through}")
+  }
+}
+
+///|
+/// On the tape the page in use (brought over by a tap, frames or none), back with no gesture at once: the panel in use
+/// then, before a frame, and whether back is the app's.
+fn back_no_gesture(framed : Bool) -> (@sfdesk.TapePane, Bool) {
+  let (t, t0, to) = tape_backs(framed)
+  tap_page(t, t0, to, 0.0)
+  to(back_tap_ms + back_step_ms * 2.0)
+  t.back_raw(2, 0.0, t0 + back_tap_ms + back_step_ms * 2.0)
+  (@sfdesk.wide.tape_at.get(), t.takes_back())
+}
+
+///|
+test "中屏: back with no gesture just after the page is brought over, before a frame: the sidebar over at once, back the system's" {
+  assert_eq(back_no_gesture(false), back_no_gesture(true))
+  assert_eq(back_no_gesture(false), (@sfdesk.TapePane::Side, false))
+}
+
+///|
+/// On the tape the page in use, the system's back gesture begun and, 120 along, a chat opened over the page (what back
+/// does now another: that chat taken off); gone through: the panel in use as it ends, before a frame, and how deep the
+/// stack is; once at rest, the same.
+fn back_changed_midway(framed : Bool) -> (@sfdesk.TapePane, Int, @sfdesk.TapePane, Int) {
+  let (t, t0, to) = tape_backs(framed)
+  tap_page(t, t0, to, 0.0)
+  to(back_tap_ms + @ui.move_most_ms)
+  let other : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" }
+  let e = gesture(t, t0, to, back_tap_ms + @ui.move_most_ms + back_step_ms, between=fn() {
+    @sfbase.open_page(Chat(other))
+  })
+  let ended = (@sfdesk.wide.tape_at.get(), app.nav.depth())
+  t.frame_at(t0 + e + 10.0)
+  t.run_for(page_local_ms + @ui.move_most_ms)
+  (ended.0, ended.1, @sfdesk.wide.tape_at.get(), app.nav.depth())
+}
+
+///|
+test "中屏: what back does chosen as its gesture begins, the whole gesture's: a chat opened over the page as it goes, gone through, the sidebar comes over as it began to, the chat opened kept" {
+  let none = back_changed_midway(false)
+  assert_eq(none, back_changed_midway(true))
+  assert_eq(none, (@sfdesk.TapePane::Side, 3, @sfdesk.TapePane::Side, 3))
+}
+
+///|
+/// On the tape the page in use: a question asked over the whole window (a presenter's, an old view's layer over all),
+/// shown; back: the question's (closed), the page still in use; back again: the tape's, the sidebar over. And a gesture
+/// begun on the tape before a question is asked, gone through: the tape's as it began, the question still asked.
+fn back_under_question(gone_through_first : Bool) -> (Bool, @sfdesk.TapePane, Bool, @sfdesk.TapePane) {
+  let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
+  page_over(t, 690.0)
+  let ask = fn() { @sf.confirm("删除", "删除这个对话？", "删除", fn() {  }) }
+  if gone_through_first {
+    let t0 = t.time()
+    gesture(t, t0, fn(at) { t.advance(t0 + at - t.time()) }, 0.0, between=ask) |> ignore
+    let first = (@sf.presenting(), @sfdesk.wide.tape_at.get())
+    t.run_for(@ui.move_most_ms)
+    return (first.0, first.1, @sf.presenting(), @sfdesk.wide.tape_at.get())
+  }
+  ask()
+  t.run_for(@ui.move_most_ms)
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  let first = (@sf.presenting(), @sfdesk.wide.tape_at.get())
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  (first.0, first.1, @sf.presenting(), @sfdesk.wide.tape_at.get())
+}
+
+///|
+test "中屏: a question asked over the tape takes back before it, closed, back the tape's again; a gesture begun before it was asked the tape's as it began" {
+  assert_eq(back_under_question(false), (false, @sfdesk.TapePane::Page, false, @sfdesk.TapePane::Side))
+  assert_eq(back_under_question(true), (true, @sfdesk.TapePane::Side, true, @sfdesk.TapePane::Side))
+}
+
+///|
+/// On the tape the page in use, the system's back gesture begun and moved 120 along (`gesture`) or none, then the window
+/// made 大屏 (the tape let go, its node taking back with it) and 中屏 again, then the gesture gone through (the host's
+/// word for one the app holds no more): what the new tape has of a pull, and the panel in use, before a frame and once
+/// it rests.
+fn back_across_shells(gesture_on : Bool, framed : Bool) -> ((@sfdesk.TapePane?, Double, Bool), @sfdesk.TapePane, @sfdesk.TapePane) {
+  let (t, t0, to) = tape_backs(framed)
+  tap_page(t, t0, to, 0.0)
+  let b = back_tap_ms + @ui.move_most_ms
+  if gesture_on {
+    gesture(t, t0, to, b, steps=3, end=-1) |> ignore
+  }
+  let s = b + back_step_ms * 4.0
+  to(s)
+  t.resize(1280.0, 840.0)
+  to(s + back_step_ms)
+  t.resize(690.0, 840.0)
+  to(s + back_step_ms * 2.0)
+  if gesture_on {
+    t.back_raw(2, 120.0, t0 + s + back_step_ms * 2.0)
+  }
+  let pull = (@sfdesk.wide.tape_pull.get(), @sfdesk.wide.tape_drag.get(), @sfdesk.wide.tape_backing)
+  let ended = @sfdesk.wide.tape_at.get()
+  t.frame_at(t0 + s + back_step_ms * 3.0)
+  t.run_for(@ui.move_most_ms)
+  (pull, ended, @sfdesk.wide.tape_at.get())
+}
+
+///|
+test "中屏: a back gesture under way as the window goes 大屏 and back: nothing of it on the tape made again, its end taken by nothing, as with no gesture" {
+  let none = back_across_shells(false, false)
+  assert_eq(none.0, (None, 0.0, false))
+  for framed in [false, true] {
+    assert_eq(back_across_shells(true, framed), none, msg="framed \{framed}")
+  }
+}
+
+///|
+/// On the tape another place's sidebar in use (the settings': back goes to the chats', done once), the system's back
+/// gesture begun and, 120 along, the page brought over (back now another: the sidebar back over); gone through
+/// (`through`) or called off, frames all along (`framed`) or none: the panel in use 120 along, and as it ends (before a
+/// frame) the place lit and the panel in use.
+fn back_once(framed : Bool, through : Bool) -> (@sfdesk.TapePane, String, @sfdesk.TapePane) {
+  let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
+  @sfdesk.open_settings()
+  t.run_for(@ui.move_most_ms)
+  let t0 = t.time() + between_frames_ms
+  let to = fn(at : Double) {
+    if framed {
+      while t.time() + 16.0 < t0 + at {
+        t.frame_at(t.time() + 16.0)
+      }
+    }
+    t.advance(t0 + at - t.time())
+  }
+  let mid = Ref(@sfdesk.TapePane::Side)
+  gesture(t, t0, to, 0.0, end=if through { 2 } else { 3 }, between=fn() {
+    @sfdesk.bring_page()
+    mid.val = @sfdesk.wide.tape_at.get()
+  })
+  |> ignore
+  (mid.val, @sfdesk.lit_place(), @sfdesk.wide.tape_at.get())
+}
+
+///|
+test "中屏: back from another place's sidebar chosen as its gesture begins (to the chats'), the page brought over as it goes: gone through, the chats' as chosen; called off, nothing; frames or none" {
+  for framed in [false, true] {
+    assert_eq(back_once(framed, true).1, "chats", msg="framed \{framed}")
+    assert_eq(back_once(framed, false), (@sfdesk.TapePane::Page, "settings", @sfdesk.TapePane::Page), msg="framed \{framed}")
+  }
+  assert_eq(back_once(false, true), back_once(true, true))
+}
