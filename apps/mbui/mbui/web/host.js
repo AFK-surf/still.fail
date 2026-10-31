@@ -1678,10 +1678,16 @@
     held = null;
     generation++;
   };
+  // a face's descriptors: its weight (0: variable, all of them); the words' faces (1, 2) with Inter's single-storey a and
+  // open digits, as the Mac's host sets them (apple_text.m face_font: cv11, ss01; a face without them is as it is)
+  const faceDescriptors = (face, weight) => ({
+    weight: weight ? String(weight) : '1 1000',
+    ...(face === 1 || face === 2 ? { featureSettings: '"cv11" 1, "ss01" 1' } : {}),
+  });
   // a face's file (a URL), for a weight (0: variable, all of them): drawn in once the page has loaded it
   H.faceAdd = (face, url, weight) => {
     if (!(face > 0 && face < 16) || typeof FontFace !== 'function') return false;
-    const ff = new FontFace(`mbface${face}`, `url(${JSON.stringify(url)})`, { weight: weight ? String(weight) : '1 1000' });
+    const ff = new FontFace(`mbface${face}`, `url(${JSON.stringify(url)})`, faceDescriptors(face, weight));
     ff.load().then(() => {
       document.fonts.add(ff);
       faces.add(face);
@@ -1693,7 +1699,7 @@
   // the same, the file's bytes given
   H.faceAddBytes = (face, data, weight) => {
     if (!(face > 0 && face < 16) || typeof FontFace !== 'function') return false;
-    const ff = new FontFace(`mbface${face}`, data, { weight: weight ? String(weight) : '1 1000' });
+    const ff = new FontFace(`mbface${face}`, data, faceDescriptors(face, weight));
     ff.load().then(() => {
       document.fonts.add(ff);
       faces.add(face);

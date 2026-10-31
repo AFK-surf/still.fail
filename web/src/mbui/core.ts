@@ -5,6 +5,9 @@
 // "core" (the host's `post`), its bytes beside its JSON.
 import { BUILT_AT } from "../core/built.ts";
 import { BETA } from "../channel.ts";
+// the app's words' face in a browser: the web's own Inter (its Latin, as the web's pages have it), not the whole face
+// the native hosts carry (apps/mbui src/sfbase/inter_face_js.mbt)
+import interLatin from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
 
 /// The worker's name, as the web's pages name theirs (src/core/client.ts): one build's pages share its core.
 const workerName = `stillfail-core-${BUILT_AT}${BETA ? "-test" : ""}`;
@@ -128,21 +131,21 @@ function load(src: string): Promise<void> {
 startWorker();
 
 /// The files the app carries (fonts, the formulas' outlines: apps/mbui's tools/assets), fetched beside its script and
-/// given to it as `globalThis.__mbassets`: the faces it starts in before it runs (its *_js.mbt read them as it starts),
-/// the rest once it runs (read as they are drawn: a formula, the share card), the page drawn again as each comes. One
+/// given to it as `globalThis.__mbassets`: the face its words start in before it runs, the rest once it runs (read as
+/// they are drawn: code, a formula, the share card), the page drawn again as each comes. One
 /// that does not come is left out: the app draws in the system's faces where its own is missing.
 const assets: Record<string, Uint8Array> = {};
 (globalThis as { __mbassets?: Record<string, Uint8Array> }).__mbassets = assets;
-const fetchCarried = (name: string) =>
-  fetch(`/mbui/assets/${name}?b=${BUILT_AT}`).then((r) => (r.ok ? r.arrayBuffer() : null), () => null)
+const fetchCarried = (name: string, url = `/mbui/assets/${name}?b=${BUILT_AT}`) =>
+  fetch(url).then((r) => (r.ok ? r.arrayBuffer() : null), () => null)
     .then((b) => { if (b) assets[name] = new Uint8Array(b); });
-const starting = Promise.all(["jetbrains_mono.ttf", "inter.ttf.gz"].map(fetchCarried));
+const starting = fetchCarried("inter.woff2", interLatin);
 
 // (named by this build: a page of a newer build never runs an older app's script from the browser's cache)
 await load(`/mbui/host.js?b=${BUILT_AT}`);
 await starting;
 await load(`/mbui/app.js?b=${BUILT_AT}`);
-for (const name of ["math_glyphs.gz", "share_400.gz", "share_600.gz"])
+for (const name of ["jetbrains_mono.ttf", "math_glyphs.gz", "share_400.gz", "share_600.gz"])
   void fetchCarried(name).then(() => (host() as { requestFrame?(): void } | undefined)?.requestFrame?.());
 
 /// The page's address as a link the app was opened with (mbui's system channel, `{"link": url}`: a chat's

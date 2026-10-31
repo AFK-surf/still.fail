@@ -10,7 +10,6 @@
 let carried : Array[(String, String, String)] = [
   ("src/sf/font_assets.mbt", "code_face_ttf", "jetbrains_mono.ttf"),
   ("src/sf/math_glyphs.mbt", "math_glyphs_gz", "math_glyphs.gz"),
-  ("src/sfbase/inter_face.mbt", "inter_gz", "inter.ttf.gz"),
   ("src/sfbase/share_face.mbt", "share_400_gz", "share_400.gz"),
   ("src/sfbase/share_face.mbt", "share_600_gz", "share_600.gz"),
 ]

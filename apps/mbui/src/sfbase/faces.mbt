@@ -66,25 +66,6 @@ fn faces_reset() -> Unit {
 pub let desktop_face : String = "\u{1}inter"
 
 ///|
-// kept across runs: the same bytes once made
-let inter_bytes : Ref[Bytes?] = Ref(None)
-
-///|
-fn inter_face() -> Bytes? {
-  match inter_bytes.val {
-    Some(b) => Some(b)
-    None =>
-      match @zip.gunzip(inter_gz) {
-        Some(b) => {
-          inter_bytes.val = Some(b)
-          Some(b)
-        }
-        None => None
-      }
-  }
-}
-
-///|
 /// The places' faces as a visualization's page is set in them (viz_file.mbt viz_tokens), by host face (1 ui, 2 text,
 /// 3 code): each one's family as CSS has it ("": the page's own), and the stylesheet a face still.fail keeps is had
 /// from there ("": none, the family the machine's or the page's).
@@ -144,7 +125,20 @@ pub fn faces(src : Source, wide : Bool) -> Unit {
         None => ""
       }
     }
+    // the app's own code face come after it started (a browser's: give_faces had none to give), given the frame it comes
+    if now == "" &&
+      host_face == @hostapi.face_code &&
+      !@ui.face_given(host_face) &&
+      @sf.code_face().length() > 0 {
+      ignore(@ui.face_add_bytes(host_face, @sf.code_face()))
+    }
     if faces_in[host_face] == now {
+      continue
+    }
+    // (a file the app carries not here yet, as a browser's come after it starts: given the frame it comes, the
+    // system's face until then)
+    if (now == desktop_face && inter_face() is None) ||
+      (now == "" && host_face == @hostapi.face_code && @sf.code_face().length() == 0) {
       continue
     }
     @ui.face_clear(host_face)

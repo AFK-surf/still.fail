@@ -5,13 +5,16 @@
 ///|
 /// The faces the app carries, given to the hosts (@ui.face_add_bytes): the code face. Once, before the first frame.
 pub fn give_faces() -> Unit {
-  ignore(@ui.face_add_bytes(@hostapi.face_code, code_face()))
+  // (in a browser it may come after the app starts: given then, sfbase's faces)
+  if code_face().length() > 0 {
+    ignore(@ui.face_add_bytes(@hostapi.face_code, code_face()))
+  }
 }
 
 ///|
 /// The code face the app carries (JetBrains Mono), its file's bytes: given again where none is chosen for code, and
 /// to the fonts page's 默认 (a face of its own there).
 pub fn code_face() -> Bytes {
-  code_face_ttf
+  code_face_bytes()
 }
 
