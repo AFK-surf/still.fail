@@ -251,13 +251,15 @@ pub let hover_close_ms : Double
 
 pub let hover_open_ms : Double
 
-pub fn image_box(@sfbase.Attachment, Double) -> (Double, Double, Bool)
+pub fn image_box(@sfbase.Attachment, Double, min_tall_width? : Double) -> (Double, Double, Bool)
 
 pub let image_copy_px : Int32
 
 pub let image_least : Double
 
 pub fn image_reveal(@ui.Ctx, String, Double, Double, @ui.Fit, String, radius? : Double, held? : Bool) -> Unit
+
+pub let image_tall_min_w : Double
 
 pub fn invitations_waiting(@sfbase.Source) -> Array[(Json?, Json)]
 
@@ -421,7 +423,7 @@ pub fn picking(MessageHere, @ui.Ctx, @sfbase.Source, String, Double, String, Str
 
 pub fn picture_out(@ui.Ctx, Bytes?, copy_said? : Bool) -> Bool
 
-pub fn picture_share(@sfbase.Attachment, Double) -> (Double, Double)
+pub fn picture_share(@sfbase.Attachment, Double, min_tall_width? : Double) -> (Double, Double)
 
 pub fn plan_list(@ui.Ctx, Array[Json]) -> Unit
 
