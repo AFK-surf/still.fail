@@ -54,9 +54,12 @@ let old_islands : Array[OldIsland] = []
 let old_made : Ref[Int] = Ref(0)
 
 ///|
-/// Where each old view was placed as the frame began: its node, its place (x, y), size, how opaque (in the window).
+/// Where each old view was placed as the frame began: its node, where it is drawn (x, y: Tree::projected's, what moves
+/// or fades it or what holds it with it), its size, how opaque (in the window), and where its layout alone puts it (ox,
+/// oy: Tree::laid_origin, which none of that moves). Its old frame is laid out at the second, moved to the first as it
+/// is painted (old_frame).
 // kept across runs: put back as a run begins (view_forget)
-let old_placed : Array[(@view.NodeId, Double, Double, Double, Double, Double)] = []
+let old_placed : Array[(@view.NodeId, Double, Double, Double, Double, Double, Double, Double)] = []
 
 ///|
 /// Whether the one old view is the whole window, wholly opaque: the old frame is its build, as with no tree.
@@ -470,23 +473,26 @@ fn old_place(tree : @view.Tree) -> Unit {
   // (laid out as big as its node is, where it is drawn: old views drawn as big as they are laid out, View::scale)
   tree.each_drawn_scaled(fn(c, x, y, a, _) {
     if c.hosted && old_islands.iter().any(fn(o) { o.id == c.id }) {
-      old_placed.push((c.id, x, y, c.w, c.h, a))
+      let (ox, oy) = tree.laid_origin(c.id).unwrap_or((x, y))
+      old_placed.push((c.id, x, y, c.w, c.h, a, ox, oy))
     }
   })
   // (and nothing else of the tree's to see or press: the old frame, its overlays with it, is all that is drawn)
   old_whole.val = old_placed.length() == 1 &&
     (match old_placed[0] {
-      (id, x, y, iw, ih, a) => x == 0.0 && y == 0.0 && iw == w && ih == h && a == 1.0 && tree.drawn_scale(id) == 1.0 && tree.alone(id)
+      (id, x, y, iw, ih, a, _, _) => x == 0.0 && y == 0.0 && iw == w && ih == h && a == 1.0 && tree.drawn_scale(id) == 1.0 && tree.alone(id)
     })
 }
 
 ///|
-/// Where the old views are, said as the frame's settings are (frame_watch.mbt looks_env): one moved, resized or faded,
-/// the old frame is built again.
+/// Where the old views are laid out, said as the frame's settings are (frame_watch.mbt looks_env): one laid out
+/// elsewhere or resized, the old frame is built again; one only moved or faded (what moves it, or what holds it, by its
+/// offset, a page slid by its width) builds nothing: it is moved where it is drawn and drawn as opaque as it is as the
+/// frame is painted (old_frame's moved_by, view_paint).
 fn view_island_said() -> String {
   // (and whether the one is the frame whole, the rest of the tree showing nothing: built so or in a box of its own)
   "\{old_whole.val} " +
-  old_placed.map(fn(p) { "\{p.0.at}.\{p.0.gen}:\{p.1},\{p.2},\{p.3},\{p.4},\{p.5}" }).join(" ")
+  old_placed.map(fn(p) { "\{p.0.at}.\{p.0.gen}:\{p.6},\{p.7},\{p.3},\{p.4}" }).join(" ")
 }
 
 ///|
@@ -523,12 +529,14 @@ fn old_frame(c : Ctx) -> Unit {
   for p in old_placed {
     match old_islands.iter().find_first(fn(o) { o.id == p.0 }) {
       Some(o) => {
-        // (on whole pixels: what it holds, laid out where it is, drawn so, its words not crawling as it moves)
-        let (_, x, y, w, h, _) = p
+        // (on whole pixels: what it holds, laid out where its layout puts it, drawn so, its words not crawling as it
+        // moves)
+        let (id, _, _, w, h, _, ox, oy) = p
+        let (left, top) = (on_pixels(ox, c.scale), on_pixels(oy, c.scale))
         let i = c.box(
           style=style(w=Fixed(w), h=Fixed(h), clip=true),
-          left=on_pixels(x, c.scale),
-          top=on_pixels(y, c.scale),
+          left~,
+          top~,
           fn() {
             // (its part's id, as made_put names it here: what is let go with it, what an input to it builds)
             o.part = c.id(o.key)
@@ -539,6 +547,16 @@ fn old_frame(c : Ctx) -> Unit {
             })
           },
         )
+        // (moved to where it is drawn, from where it is laid out, as it is painted (Ctx::moved_by): what it holds, its
+        // clip, where it takes a finger and where its words are, with it; read again as the tree is: on whole pixels,
+        // as it is laid out and as what takes a press is placed)
+        c.moved_carries(i, fn(_, _) {
+          view_due.get() |> ignore
+          match old_placed.iter().find_first(fn(q) { q.0 == id }) {
+            Some(q) => (on_pixels(q.1, c.scale) - left, on_pixels(q.2, c.scale) - top)
+            None => (0.0, 0.0)
+          }
+        })
         old_boxes[o.id] = i
         old_box_owners[i] = (o.owner, o.id)
       }
