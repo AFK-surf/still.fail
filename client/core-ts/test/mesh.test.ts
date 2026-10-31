@@ -763,6 +763,41 @@ const truly = (s: Sim, relay: string) => {
   return cost(2 * (d.ms + st.ms), Number.isFinite(bps) ? bps : null);
 };
 
+// A phone can reach a station's Hong Kong relay directly, or through its Beijing entry. The latter is a way into
+// the same relay, not another server: use it when it is quicker while keeping the station's connection alive and
+// without registering the same endpoint twice at the relay (which displaces one of its registrations).
+sim("a_faster_entry_to_the_same_relay_is_used_without_displacing_the_connection", async (s) => {
+  const hongKong = s.relay("https://hong-kong.relay.test/", { device: { ms: 500 }, station: { ms: 40 } });
+  const beijingEntry = s.net.entry("https://beijing.relay.test:8443/", hongKong, { device: { ms: 20 }, station: { ms: 40 } });
+  const station = await s.stationOn(hongKong, []);
+  const mesh = await s.run(Mesh.make(env(s), [hongKong], [beijingEntry], { [beijingEntry]: hongKong }));
+  const id = station.id();
+  const link = await reach(s, mesh, id);
+  await s.time.pass(3 * EXPLORE_MS);
+  assert.ok(sameRelay(via(mesh, id), beijingEntry), `through ${via(mesh, id)}: ${JSON.stringify(mesh.measured(id))}`);
+  assert.equal(mesh.current(id), link, "changing the relay entry must keep the station connection");
+  assert.deepEqual(s.net.twice(true), [], "one endpoint must not displace itself at the relay");
+  assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+  await close(s, station, mesh);
+});
+
+sim("an_entry_told_after_connecting_updates_the_existing_connection", async (s) => {
+  const hongKong = s.relay("https://hong-kong.relay.test/", { device: { ms: 500 }, station: { ms: 40 } });
+  const beijingEntry = s.net.entry("https://beijing.relay.test:8443/", hongKong, { device: { ms: 20 }, station: { ms: 40 } });
+  const station = await s.stationOn(hongKong, []);
+  const mesh = await s.run(Mesh.make(env(s), [hongKong]));
+  const id = station.id();
+  const link = await reach(s, mesh, id);
+  assert.ok(sameRelay(via(mesh, id), hongKong));
+  mesh.retune([hongKong], [beijingEntry], { [beijingEntry]: hongKong });
+  await s.time.pass(3 * EXPLORE_MS);
+  assert.equal(mesh.current(id), link, "the already open connection must be kept");
+  assert.ok(sameRelay(via(mesh, id), beijingEntry));
+  assert.deepEqual(s.net.twice(true), []);
+  assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+  await close(s, station, mesh);
+});
+
 sim("its_pings_say_when_no_way_answers_and_when_one_answers_again", async (s) => {
   const a = s.relay("https://a.relay.test/", { device: { ms: 20 }, station: { ms: 20 } });
   const b = s.relay("https://b.relay.test/", { device: { ms: 30 }, station: { ms: 30 } });

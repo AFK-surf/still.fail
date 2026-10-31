@@ -29,7 +29,7 @@ const STORE = "values";
 const RECORDS = "records";
 
 /// What client/iroh-wasm's module gives (web/src/core/iroh-pkg).
-export type IrohModule = { bind(options: { secretKey: Uint8Array; relayUrls: string[] }): Promise<unknown> };
+export type IrohModule = { bind(options: { secretKey: Uint8Array; relayUrls: string[]; relayEntries?: { entry: string; relay: string }[] }): Promise<unknown> };
 
 /// What the core uses of SQLite's WASM build (`@sqlite.org/sqlite-wasm`, its oo1 API), as worker.ts loads it: a
 /// database on the pool of OPFS files (`opfs-sahpool`), and one in memory.
@@ -437,7 +437,7 @@ export class WebHost implements Host {
 
 /// client/iroh-wasm as the core's iroh: loaded (`load`) the first time the mesh binds.
 export function webIroh(load: () => Promise<IrohModule>): Iroh {
-  return wrapIroh(async (o: BindOptions) => (await load()).bind({ secretKey: o.secretKey, relayUrls: o.relayUrls }) as Promise<BoundEndpoint>, (b) => b);
+  return wrapIroh(async (o: BindOptions) => (await load()).bind({ secretKey: o.secretKey, relayUrls: o.relayUrls, ...(o.relayEntries ? { relayEntries: o.relayEntries } : {}) }) as Promise<BoundEndpoint>, (b) => b);
 }
 
 /// A core in this worker: one client per port.

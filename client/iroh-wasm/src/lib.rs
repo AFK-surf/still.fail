@@ -11,6 +11,7 @@
 //! must own what they hold.
 
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -42,6 +43,14 @@ struct Options {
     secret_key: Vec<u8>,
     /// still.fail's relays, its own first.
     relay_urls: Vec<String>,
+    #[serde(default)]
+    relay_entries: Vec<RelayEntry>,
+}
+
+#[derive(Deserialize)]
+struct RelayEntry {
+    entry: String,
+    relay: String,
 }
 
 /// Through a relay a round trip is hundreds of milliseconds: a first window of 256 KB sends what a screen needs in
@@ -66,9 +75,13 @@ pub fn bind(options: JsValue) -> Promise {
         let options: Options = serde_wasm_bindgen::from_value(options).map_err(failed)?;
         let bytes: [u8; 32] = options.secret_key.as_slice().try_into().map_err(|_| failed("the key is not 32 bytes"))?;
         let relays: Vec<RelayUrl> = options.relay_urls.iter().map(|u| relay_url(u)).collect::<Result<_, _>>()?;
+        let entries: Vec<(RelayUrl, RelayUrl)> = options.relay_entries.iter().map(|e| Ok((relay_url(&e.entry)?, relay_url(&e.relay)?))).collect::<Result<_, JsValue>>()?;
+        let relay_map = iroh::RelayMap::from_iter(relays.iter().map(|relay| {
+            iroh::RelayConfig::from(relay.clone()).with_entries(entries.iter().filter(|(_, target)| target == relay).map(|(entry, _)| entry.clone()))
+        }));
         let endpoint = IrohEndpoint::builder(Minimal)
             .secret_key(SecretKey::from_bytes(&bytes))
-            .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays)) })
+            .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(relay_map) })
             .home_on_every_relay()
             .transport_config(transport())
             .bind()
@@ -104,6 +117,7 @@ pub struct Endpoint {
 struct RelayState {
     url: String,
     connected: bool,
+    access: String,
 }
 
 #[wasm_bindgen]
@@ -132,6 +146,21 @@ impl Endpoint {
         Ok(())
     }
 
+    /// Replace forwarding entrances without closing existing connections.
+    #[wasm_bindgen(js_name = setRelayEntries)]
+    pub fn set_relay_entries(&self, entries: JsValue) -> Promise {
+        let endpoint = self.inner.clone();
+        future_to_promise(async move {
+            let entries: Vec<RelayEntry> = serde_wasm_bindgen::from_value(entries).map_err(failed)?;
+            let mut grouped = BTreeMap::<RelayUrl, Vec<RelayUrl>>::new();
+            for entry in entries {
+                grouped.entry(relay_url(&entry.relay)?).or_default().push(relay_url(&entry.entry)?);
+            }
+            endpoint.set_relay_entries(grouped.into_iter().collect()).await;
+            Ok(JsValue::UNDEFINED)
+        })
+    }
+
     /// The network changed: its relay connection looked at anew.
     #[wasm_bindgen(js_name = networkChange)]
     pub fn network_change(&self) -> Promise {
@@ -145,7 +174,7 @@ impl Endpoint {
     /// Its home relays, and whether it is connected to each now.
     #[wasm_bindgen(js_name = relayStatus)]
     pub fn relay_status(&self) -> Result<JsValue, JsValue> {
-        let states: Vec<RelayState> = self.inner.home_relay_status().get().iter().map(|s| RelayState { url: s.url().to_string(), connected: s.is_connected() }).collect();
+        let states: Vec<RelayState> = self.inner.home_relay_status().get().iter().map(|s| RelayState { url: s.url().to_string(), connected: s.is_connected(), access: s.access_url().to_string() }).collect();
         to_js(&states)
     }
 

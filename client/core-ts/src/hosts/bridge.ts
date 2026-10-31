@@ -58,6 +58,7 @@ import { FileSource } from "../file-source.ts";
 import type { CoreModule } from "../module.ts";
 import { HostError } from "../error.ts";
 import type { CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohPath, IrohStream } from "../iroh.ts";
+import { accessOf } from "../iroh-bindings.ts";
 import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest, type HttpResponse, type LoopbackRequest, type Pull, type Sql, type SqlRow, type SqlValue, type StreamResponse, type TcpConnection, type SqlError, type Unzstd, sqlError } from "../host.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { t } from "../i18n.ts";
@@ -440,7 +441,7 @@ export function bridgeIroh(bridge: Bridge): Iroh {
     reset: (code) => void Effect.runFork(Effect.ignore(bridge.call("istream.reset", { id, code }))),
     tap: (call, prefix) => Effect.map(bridge.call("istream.tap", { id, call }, prefix), (a) => (a.json as J)?.tapped === true),
   });
-  const connection = (id: number): IrohConnection => ({
+  const connection = (id: number, endpointId: number): IrohConnection => ({
     remoteId: () => String(bridge.sync("conn.remoteId", { id })),
     openBi: () => Effect.map(bridge.call("conn.openBi", { id }), (a) => stream(handle(a))),
     acceptBi: () => Effect.orElseSucceed(Effect.map(bridge.call("conn.acceptBi", { id }), (a) => ((a.json as J)?.end === true ? null : stream(handle(a)))), () => null),
@@ -448,24 +449,29 @@ export function bridgeIroh(bridge: Bridge): Iroh {
     close: (code, reason) => void Effect.runFork(Effect.ignore(bridge.call("conn.close", { id, code, reason }))),
     closeReason: () => (bridge.sync("conn.closeReason", { id }) as CloseReason | null) ?? null,
     closed: () => Effect.orElseSucceed(Effect.map(bridge.call("conn.closed", { id }), (a) => a.json as CloseReason), () => ({ kind: "other", reason: "" }) as CloseReason),
-    paths: () => (bridge.sync("conn.paths", { id }) as IrohPath[]) ?? [],
+    paths: () => {
+      const paths = (bridge.sync("conn.paths", { id }) as IrohPath[]) ?? [];
+      const statuses = (bridge.sync("iroh.relayStatus", { id: endpointId }) as { url: string; access?: string }[]) ?? [];
+      return paths.map((p) => ({ ...p, relay: accessOf(p.relay, statuses) }));
+    },
     stats: () => bridge.sync("conn.stats", { id }) as ReturnType<IrohConnection["stats"]>,
   });
   const endpoint = (id: number): IrohEndpoint => ({
     id: () => String(bridge.sync("iroh.endpointId", { id })),
-    connect: (addr: IrohAddr, alpn, additional) => Effect.map(bridge.call("iroh.connect", { id, addr, additional: additional.map(hex) }, alpn), (a) => connection(handle(a))),
+    connect: (addr: IrohAddr, alpn, additional) => Effect.map(bridge.call("iroh.connect", { id, addr, additional: additional.map(hex) }, alpn), (a) => connection(handle(a), id)),
     accept: () =>
       Effect.orElseSucceed(
-        Effect.map(bridge.call("iroh.accept", { id }), (a) => ((a.json as J)?.end === true ? null : { connection: connection(handle(a)), alpn: unhex(String((a.json as J).alpn)) })),
+        Effect.map(bridge.call("iroh.accept", { id }), (a) => ((a.json as J)?.end === true ? null : { connection: connection(handle(a), id), alpn: unhex(String((a.json as J).alpn)) })),
         () => null,
       ),
     addAddr: (addr) => void bridge.sync("iroh.addAddr", { id, addr }),
     networkChange: () => Effect.ignore(bridge.call("iroh.networkChange", { id }), { log: "Unhandled", message: "network change told" }),
     relayStatus: () => (bridge.sync("iroh.relayStatus", { id }) as { url: string; connected: boolean }[]) ?? [],
+    setRelayEntries: (entries) => Effect.asVoid(bridge.call("iroh.setRelayEntries", { id, entries })),
     close: () => Effect.ignore(bridge.call("iroh.close", { id }), { log: "Unhandled", message: "endpoint closed" }),
   });
   return {
-    bind: (o) => Effect.map(bridge.call("iroh.bind", { relayUrls: o.relayUrls, lookup: o.lookup, relayOnly: o.relayOnly, alpns: (o.alpns ?? []).map(hex) }, o.secretKey), (a) => endpoint(handle(a))),
+    bind: (o) => Effect.map(bridge.call("iroh.bind", { relayUrls: o.relayUrls, ...(o.relayEntries ? { relayEntries: o.relayEntries } : {}), lookup: o.lookup, relayOnly: o.relayOnly, alpns: (o.alpns ?? []).map(hex) }, o.secretKey), (a) => endpoint(handle(a))),
   };
 }
 

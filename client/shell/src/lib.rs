@@ -9,7 +9,7 @@
 //! Operations are named and take JSON and maybe bytes; bridge.ts lists them. `sf_shell_call` answers later through
 //! `complete(ctx, id, json, error, bytes)` from any thread; `sf_shell_call_sync` answers at once.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ffi::{CStr, c_char, c_void};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -851,6 +851,19 @@ impl Inner {
                     None => Ok(Answer::json(json!({ "end": true }))),
                 }
             }
+            "iroh.setRelayEntries" => {
+                let endpoint = match self.handle(id_of(&a)?)? {
+                    Handle::Endpoint(endpoint, _) => endpoint,
+                    Handle::Unbound { .. } => return Ok(Answer::json(json!({}))),
+                    _ => return Err("not an endpoint".into()),
+                };
+                let mut entries = BTreeMap::<RelayUrl, Vec<RelayUrl>>::new();
+                for entry in a.get("entries").and_then(Value::as_array).into_iter().flatten() {
+                    entries.entry(relay_url(str_of(entry, "relay")?)?).or_default().push(relay_url(str_of(entry, "entry")?)?);
+                }
+                endpoint.set_relay_entries(entries.into_iter().collect()).await;
+                Ok(Answer::json(json!({})))
+            }
             "iroh.networkChange" => {
                 let endpoint = match self.handle(id_of(&a)?)? {
                     Handle::Endpoint(endpoint, _) => endpoint,
@@ -1098,13 +1111,17 @@ impl Inner {
         let bytes: [u8; 32] = key.as_slice().try_into().map_err(|_| "the key is not 32 bytes".to_string())?;
         let key = SecretKey::from_bytes(&bytes);
         let relays: Vec<RelayUrl> = a.get("relayUrls").and_then(Value::as_array).into_iter().flatten().map(|u| relay_url(u.as_str().unwrap_or_default())).collect::<Result<_, _>>()?;
+        let entries: Vec<(RelayUrl, RelayUrl)> = a.get("relayEntries").and_then(Value::as_array).into_iter().flatten().map(|e| Ok((relay_url(str_of(e, "entry")?)?, relay_url(str_of(e, "relay")?)?))).collect::<Result<_, String>>()?;
+        let relay_map = iroh::RelayMap::from_iter(relays.iter().map(|relay| {
+            iroh::RelayConfig::from(relay.clone()).with_entries(entries.iter().filter(|(_, target)| target == relay).map(|(entry, _)| entry.clone()))
+        }));
         let mut cubic = noq_proto::congestion::CubicConfig::default();
         cubic.initial_window(256 * 1024);
         let alpns: Vec<Vec<u8>> = a.get("alpns").and_then(Value::as_array).into_iter().flatten().map(|x| hex::decode(x.as_str().unwrap_or_default()).map_err(err)).collect::<Result<_, _>>()?;
         let mut builder = Endpoint::builder(Minimal)
             .secret_key(key)
             .alpns(alpns)
-            .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays.clone())) })
+            .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(relay_map) })
             // Home on every relay at once, each path kept alive each second and given up after 3 s of silence: one
             // connection to a station goes through every relay it is on, and on through another as one goes (the
             // station's mesh addon: PATH_KEEP_ALIVE, PATH_IDLE).
@@ -1241,7 +1258,7 @@ impl Inner {
                 e.address_lookup().map_err(err)?.add(iroh::address_lookup::MemoryLookup::from_endpoint_info([addr]));
                 Ok(Value::Null)
             }
-            ("iroh.relayStatus", Handle::Endpoint(e, _)) => Ok(Value::Array(e.home_relay_status().get().iter().map(|s| json!({ "url": s.url().to_string(), "connected": s.is_connected() })).collect())),
+            ("iroh.relayStatus", Handle::Endpoint(e, _)) => Ok(Value::Array(e.home_relay_status().get().iter().map(|s| json!({ "url": s.url().to_string(), "connected": s.is_connected(), "access": s.access_url().to_string() })).collect())),
             ("conn.remoteId", Handle::Conn(c)) => Ok(json!(hex::encode(c.remote_id().as_bytes()))),
             ("conn.closeReason", Handle::Conn(c)) => Ok(c.close_reason().map(|e| close_info(&e)).unwrap_or(Value::Null)),
             ("conn.paths", Handle::Conn(c)) => Ok(Value::Array(

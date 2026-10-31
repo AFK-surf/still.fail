@@ -200,6 +200,8 @@ test("the relays handed out: still.fail's first, then RELAY_URLS, each once", ()
   assert.deepEqual(relays(entered, true).relay_urls, ["https://app.still.fail", "https://39.105.157.122"]);
   assert.deepEqual(relays(entered, true).relay_entries, ["https://39.105.157.122:8443"]);
   assert.deepEqual(relays(env, true).relay_entries, []);
+  assert.deepEqual(relays({ ...entered, RELAY_ENTRY_TARGETS: { "https://39.105.157.122:8443/": "https://app.still.fail/", "https://elsewhere.test": "https://app.still.fail" } }, true).relay_entry_targets, { "https://39.105.157.122:8443": "https://app.still.fail" });
+  assert.deepEqual(relays({ ...entered, RELAY_ENTRY_TARGETS: { "https://39.105.157.122:8443": "https://unknown.test" } }, true).relay_entry_targets, {});
   assert.deepEqual(relays({ ...entered, RELAY_NAMES: { "https://39.105.157.122:8443": "北京转香港" } }, true).relay_names, { "https://39.105.157.122:8443": "北京转香港" });
   // Named as RELAY_NAMES says, only those handed out.
   const named = { ...env, RELAY_URLS: "https://39.105.157.122", RELAY_NAMES: { "https://39.105.157.122": "北京", "https://gone.example": "旧的" } };
