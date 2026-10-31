@@ -24,11 +24,12 @@ export type InboundMessage = {
 /// them back (a file over a free workspace's limit, a deleted one).
 export type InboundFile = { id: string; name: string; size: number; url: string | null };
 
-/// What a platform tells the station: a new message, or an edit of one already said (deletes are not taken: the
-/// station keeps what was said).
+/// What a platform tells the station: a new message, an edit, or a request to stop a bot's current turn (deletes are not
+/// taken: the station keeps what was said).
 export type ChatEvent =
   | { type: "message"; message: InboundMessage }
-  | { type: "changed"; channel: string; threadTs: string; ts: string; text: string };
+  | { type: "changed"; channel: string; threadTs: string; ts: string; text: string }
+  | { type: "stop"; channel: string; threadTs: string; ts: string; localAt?: number | null };
 
 /// A channel or group a bot is in. `kind`: a Slack channel (a new thread in it); a Feishu topic group (a new topic); a
 /// Feishu group (the group's conversation, taken over: docs/feishu.md「会话怎么分」).

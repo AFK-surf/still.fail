@@ -66,7 +66,8 @@ station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/
 
 - `@名字 <任务>`：开始一个会话（单会话连接则把这个 thread 带进它的会话）。
 - 同一个 thread 里可以 @ 多个连接，它们各自有独立的会话。
-- `-stop`：中断当前 turn。
+- Slack 的运行状态条可点停止：只中断点中的 bot 在这个 thread 的当前 turn；真正结束后 station 说「已停止当前任务」。新 Slack app 自带此事件订阅；已有 app 在连接拥有者配置了可管理该 app 的 Slack 配置 token 后由 station 自动加上。也可以在连接页保存 app 设置时加上。
+- `-stop`：中断当前 turn；同一 thread 有多个代理时，它们都会收到停止请求。
 - `-compact`：在两轮之间压缩 agent 的上下文（Claude Code 的 `/compact`、Codex 的 `thread/compact/start`），完成后 station 在 thread 里说一声。
 - `-clear`：在两轮之间清空上下文：进程结束，下一条消息开始新的 runtime 会话；之前的会话仍在执行历史里。
 - 这两件事在 still.fail 的 agent 卡片（手机）和会话详情（桌面）里也能点。

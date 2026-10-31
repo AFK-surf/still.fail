@@ -154,6 +154,13 @@ export function toEvent(event: Json, botUserId: string, botId: string): ChatEven
   };
   const kind = text(event?.type);
   const subtype = typeof event?.subtype === "string" ? event.subtype : null;
+  if (kind === "agent_session_stopped") {
+    const channel = text(event.channel);
+    const threadTs = text(event.thread_ts);
+    const ts = text(event.event_ts);
+    if (!channel || !threadTs || !/^\d+(?:\.\d+)?$/.test(ts) || !Number.isFinite(Number(ts))) return null;
+    return { type: "stop", channel, threadTs, ts };
+  }
   if (kind === "message" && subtype === "message_changed") {
     const changed = event.message ?? null;
     const ts = text(changed?.ts);
@@ -223,6 +230,8 @@ export type SlackSurfaceOptions = {
   backoffMs?: number;
   clock?: Clock.Clock;
   onHeard?: () => void;
+  /// A new turn began showing its status, an opportunity to retry an app setup that previously failed.
+  onWorking?: () => void;
 };
 /// The most of a question's words its card carries (Slack takes 12,000 characters of Markdown in a message, and long
 /// options are listed with them).
@@ -245,6 +254,7 @@ export class SlackSurface extends ConnectedSurface {
   private stands = new Map<string, { ts: string; mine: Said | null; block: Json }>();
   /// One change at a time in each thread, in order.
   private standing = new Map<string, Promise<void>>();
+  private onWorking: () => void;
 
   constructor(options: SlackSurfaceOptions) {
     if (!options.appToken.startsWith("xapp-")) throw new Error("slack.appToken must be an app-level token (xapp-…)");
@@ -254,6 +264,7 @@ export class SlackSurface extends ConnectedSurface {
     this.appToken = options.appToken;
     this.botToken = options.botToken;
     this.client = options.client ?? new SlackClient();
+    this.onWorking = options.onWorking ?? (() => {});
   }
 
   protected identify() {
@@ -297,6 +308,7 @@ export class SlackSurface extends ConnectedSurface {
         }
         if (envelope?.type !== "events_api") return;
         const event = toEvent(envelope.payload?.event ?? null, bot, botId);
+        if (event?.type === "stop") event.localAt = this.client.localTimeUpper(event.ts);
         const envelopeId = envelope.envelope_id ?? null;
         void (async () => {
           try {
@@ -794,7 +806,14 @@ export class SlackSurface extends ConnectedSurface {
   }
 
   protected statusLine(thread: ThreadRef) {
-    const call = async (method: string, params: Params) => void (await this.client.api(method, params, this.botToken));
+    let working = false;
+    const call = async (method: string, params: Params) => {
+      await this.client.api(method, params, this.botToken);
+      if (method !== "assistant.threads.setStatus") return;
+      const status = params.find(([key]) => key === "status")?.[1] ?? "";
+      if (status !== "" && !working) this.onWorking();
+      working = status !== "";
+    };
     return new ThreadStatus(call, this.run, thread.channel, thread.threadTs);
   }
 }

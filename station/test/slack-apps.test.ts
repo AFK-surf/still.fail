@@ -14,6 +14,7 @@ import {
   slackManifest,
   upsertToken,
   withSocketMode,
+  withStopEvent,
 } from "../src/slack/apps.ts";
 import { SlackApiError, SlackClient } from "../src/slack/web.ts";
 import { FakeSlack } from "./slack-fake.ts";
@@ -22,10 +23,15 @@ type Json = any;
 const strings = (v: Json): string[] => (Array.isArray(v) ? v : []);
 
 test("a new app has every permission group on", () => {
-  const settings = settingsOf(slackManifest("ember"));
+  const manifest = slackManifest("ember");
+  const settings = settingsOf(manifest);
   assert.equal(settings.name, "ember");
   assert.equal(Object.keys(settings.groups).length, SLACK_GROUPS.length);
   assert.ok(Object.values(settings.groups).every((on) => on));
+  assert.ok(manifest.settings.event_subscriptions.bot_events.includes("agent_session_stopped"));
+  const old = structuredClone(manifest);
+  old.settings.event_subscriptions.bot_events = old.settings.event_subscriptions.bot_events.filter((e: string) => e !== "agent_session_stopped");
+  assert.ok(applySettings(old, {}).settings.event_subscriptions.bot_events.includes("agent_session_stopped"), "an existing app gets it when saved");
 });
 
 test("turning a group off removes its scopes and events but keeps unknown ones", () => {
@@ -47,6 +53,41 @@ test("turning a group off removes its scopes and events but keeps unknown ones",
 
 test("the base group cannot be turned off", () => {
   assert.equal(settingsOf(applySettings(slackManifest("ember"), { groups: { base: false } })).groups.base, true);
+});
+
+test("the stop subscription changes only the connected app's event list", () => {
+  const old = slackManifest("ember");
+  old.settings.event_subscriptions.bot_events = ["app_mention", "an_unknown_event"];
+  const next = withStopEvent(old);
+  assert.ok(next);
+  assert.deepEqual(next.settings.event_subscriptions.bot_events, ["app_mention", "an_unknown_event", "agent_session_stopped"]);
+  assert.deepEqual(next.oauth_config, old.oauth_config);
+  assert.deepEqual(old.settings.event_subscriptions.bot_events, ["app_mention", "an_unknown_event"]);
+  assert.equal(withStopEvent(next), null);
+  assert.equal(withStopEvent(withSocketMode(old, false)), null);
+});
+
+test("automatic and manual edits of the same app keep both changes", async () => {
+  const fake = await FakeSlack.start();
+  let manifest = slackManifest("before");
+  manifest.settings.event_subscriptions.bot_events = ["app_mention"];
+  fake.answer("apps.manifest.export", () => ({ ok: true, manifest }));
+  fake.answer("apps.manifest.update", (s) => {
+    manifest = JSON.parse(s.params.manifest!);
+    return { ok: true };
+  });
+  const apps = new SlackApps({ client: new SlackClient(fake.base), load: () => [token("me", "T1", "test", Date.now() + 3_600_000)], save: () => {} });
+  try {
+    await Promise.all([
+      apps.editManifest("me", "A1", withStopEvent),
+      apps.editManifest("me", "A1", (m) => applySettings(m, { name: "after" })),
+    ]);
+    assert.equal(manifest.display_information.name, "after");
+    assert.ok(manifest.settings.event_subscriptions.bot_events.includes("agent_session_stopped"));
+    assert.equal(fake.calls("apps.manifest.update").length, 2);
+  } finally {
+    await fake.close();
+  }
 });
 
 test("an old app gets a bot user and its messages tab on any change", () => {

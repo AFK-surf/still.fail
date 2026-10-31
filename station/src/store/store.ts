@@ -691,6 +691,7 @@ export class Store {
       this.#tx(() => {
         const threads: number[] = this.#all("SELECT thread FROM thread_sessions WHERE session = ?", key).map((r) => r.thread);
         this.#run("DELETE FROM thread_sessions WHERE session = ?", key);
+        this.#run("DELETE FROM slack_stops WHERE session = ?", key);
         this.#run("DELETE FROM deliveries WHERE session = ?", key);
         this.#run("DELETE FROM letter_deliveries WHERE session = ?", key);
         this.#run("DELETE FROM turns WHERE session_key = ?", key);
@@ -1642,6 +1643,20 @@ export class Store {
   lastTurn(session: string): TurnSummary | null {
     const r = this.#one("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at DESC, rowid DESC LIMIT 1", session);
     return r ? toTurnSummary(r) : null;
+  }
+
+  /// The latest Slack stop for this session and bot in a thread, and the turn it was aimed at (null if none ran).
+  slackStop(session: string, connect: string, channel: string, threadTs: string): { ts: string; turn: string | null } | null {
+    const row = this.#one("SELECT event_ts, turn_id FROM slack_stops WHERE session = ? AND connect = ? AND channel = ? AND thread_ts = ?", session, connect, channel, threadTs);
+    return row ? { ts: row.event_ts, turn: row.turn_id } : null;
+  }
+
+  /// Keep a stop's target before acknowledging Slack, so a retry cannot act on a different turn.
+  rememberSlackStop(session: string, connect: string, channel: string, threadTs: string, ts: string, turn: string | null): void {
+    this.#run(
+      "INSERT INTO slack_stops (session, connect, channel, thread_ts, event_ts, turn_id) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (session, connect, channel, thread_ts) DO UPDATE SET event_ts = excluded.event_ts, turn_id = excluded.turn_id",
+      session, connect, channel, threadTs, ts, turn,
+    );
   }
 
   listTurns(session: string): TurnRow[] {

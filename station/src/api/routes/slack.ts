@@ -210,8 +210,7 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
     // An app made here, being connected: Socket Mode and its events on in its manifest (Slack has it off until then).
     if (made) {
       try {
-        const current = await apps.exportManifest(made.by, made.appId);
-        await apps.updateManifest(made.by, made.appId, withSocketMode(current, true));
+        await apps.editManifest(made.by, made.appId, (current) => withSocketMode(current, true));
       } catch (e) {
         throw new Refused(400, tr(lang, "station.slackApp.socketModeFailed", { error: slackError(e, lang) }));
       }
@@ -319,8 +318,7 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
     const by = idOf(r.viewer);
     let permissionsUpdated: boolean;
     try {
-      const current = await apps.exportManifest(by, app);
-      permissionsUpdated = await apps.updateManifest(by, app, applySettings(current, edit));
+      permissionsUpdated = await apps.editManifest(by, app, (current) => applySettings(current, edit));
     } catch (e) {
       throw new Refused(400, tr(lang, "station.slackApp.updateRefused", { error: slackError(e, lang) }));
     }

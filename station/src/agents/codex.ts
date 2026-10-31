@@ -950,11 +950,13 @@ export class CodexSession implements AgentSession {
   async backgroundTools() {}
 
   async abort() {
-    if (this.state.closed || !this.state.busy || this.state.turnId === null) return;
+    if (this.state.closed || !this.state.busy) return;
+    if (this.state.turnId === null) throw new Error("codex has not reported its running turn id");
     try {
       await this.host.request("turn/interrupt", { threadId: this.threadId, turnId: this.state.turnId });
     } catch (error) {
       log.warn("agents::codex", "codex interrupt failed", { thread: this.threadId, error: String(error) });
+      throw error;
     }
   }
 
