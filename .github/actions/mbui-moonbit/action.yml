@@ -80,6 +80,8 @@ runs:
       run: |
         [ -d apps/mbui/mbui/tools ] || exit 0
         for t in mbc chk detlint apk; do echo "$t=$(sh apps/mbui/mbui/scripts/$t key)" >> "$GITHUB_OUTPUT"; done
+        # (the app's: scripts/testexe, a test program's runs for scripts/test.sh)
+        [ ! -f apps/mbui/scripts/testexe ] || echo "testexe=$(bash apps/mbui/scripts/testexe key)" >> "$GITHUB_OUTPUT"
     - if: steps.tools.outputs.mbc != ''
       uses: actions/cache@v4
       with:
@@ -87,6 +89,13 @@ runs:
           apps/mbui/mbui/tools/_build/native/release/build/mbc/mbc.exe
           apps/mbui/mbui/tools/_build/native/release/build/mbc/mbc.exe.src
         key: mbui-tool-mbc-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.mbc }}
+    - if: steps.tools.outputs.testexe != ''
+      uses: actions/cache@v4
+      with:
+        path: |
+          apps/mbui/tools/_build/native/release/build/sftools/testexe/testexe.exe
+          apps/mbui/tools/_build/native/release/build/sftools/testexe/testexe.exe.src
+        key: mbui-tool-testexe-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.testexe }}
     - if: steps.tools.outputs.chk != ''
       uses: actions/cache@v4
       with:

@@ -213,7 +213,8 @@ jobs:
         id: tests
         run: |
           set -o pipefail
-          chmod +x "$RUNNER_TEMP/app-test/sfapp.whitebox_test.exe"
+          chmod +x "$RUNNER_TEMP/app-test/sfapp.whitebox_test.exe" "$RUNNER_TEMP/app-test/testexe"
+          TESTEXE="$RUNNER_TEMP/app-test/testexe" \
           APP_EXE="$RUNNER_TEMP/app-test/sfapp.whitebox_test.exe" APP_INFO="$RUNNER_TEMP/app-test/__whitebox_test_info.json" \
             TIMES=1 TARGETS=native PARTS=app APP_GROUP=${{ matrix.group }} SFAPP_SHARDS=${{ github.event_name == 'schedule' && 1 || 4 }} LINES_OUT=40 \
             bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
