@@ -4,18 +4,20 @@
 // core does. Self-contained (its only import the words) so that the web may import it as it is.
 import { t } from "./i18n.ts";
 
-const KIND_WORDS = ["token", "ssh_key", "login", "file"];
-const MODE_WORDS = ["proxy", "env", "ssh", "file"];
+const KIND_WORDS = ["token", "ssh_key", "login", "file", "browser"];
+const MODE_WORDS = ["proxy", "env", "ssh", "file", "browser"];
+/// The ways an item goes only to the hosts it names (a proxy's, a sign-in's sites): they are said with it.
+const HOSTED = ["proxy", "browser"];
 const SCOPE_WORDS = ["once", "hour", "chat"];
 
 /// A kind of item in a word (Token, SSH 密钥, 登录); "" for one not known.
 export const kindText = (kind: unknown): string => (typeof kind === "string" && KIND_WORDS.includes(kind) ? t(`core-views.vault.kind.${kind}`) : "");
 /// A way an agent is given it, in a word (代理, 环境变量, ssh-agent, 文件).
 export const modeText = (mode: string): string => (MODE_WORDS.includes(mode) ? t(`core-views.vault.mode.${mode}`) : mode);
-/// How an agent gets it, in a line: 代理 · 限 api.github.com; ssh-agent; 环境变量.
+/// How an agent gets it, in a line: 代理 · 限 api.github.com; 浏览器 · 限 github.com; ssh-agent; 环境变量.
 export function howText(mode: string, hosts: readonly string[]): string {
   const name = modeText(mode);
-  return mode === "proxy" && hosts.length > 0 ? `${name} · ${t("core-views.vault.only_to", { hosts: hosts.join(", ") })}` : name;
+  return HOSTED.includes(mode) && hosts.length > 0 ? `${name} · ${t("core-views.vault.only_to", { hosts: hosts.join(", ") })}` : name;
 }
 /// The longest a grant of it lasts, in a word (仅一次, 1 小时, 直到对话归档): any but these, the chat.
 export const lastsText = (lasts: unknown): string => t(`core-views.vault.lasts.${typeof lasts === "string" && SCOPE_WORDS.includes(lasts) ? lasts : "chat"}`);
@@ -26,7 +28,7 @@ export const lastsText = (lasts: unknown): string => t(`core-views.vault.lasts.$
 export function itemWords(row: { kind?: unknown; listed: boolean; modes: string[]; hosts: string[]; env?: unknown; lasts: unknown; lastUse?: unknown }, vaultLasts: unknown): {
   kindText: string; agentText: string; lineText: string; howText: string; lastsText: string; shut: { key: string; label: string; value: string; secret: boolean; mono: boolean }[];
 } {
-  const agentText = row.listed ? [t("core-views.vault.agent_may"), ...row.modes.map(modeText), ...(row.modes.includes("proxy") ? row.hosts : [])].join(" · ") : t("core-views.vault.private");
+  const agentText = row.listed ? [t("core-views.vault.agent_may"), ...row.modes.map(modeText), ...(row.modes.some((m) => HOSTED.includes(m)) ? row.hosts : [])].join(" · ") : t("core-views.vault.private");
   return {
     kindText: kindText(row.kind),
     agentText,
@@ -43,7 +45,7 @@ export function itemWords(row: { kind?: unknown; listed: boolean; modes: string[
 function lineText(row: { listed: boolean; modes: string[]; hosts: string[]; env?: unknown; lastUse?: unknown }): string {
   const env = typeof row.env === "string" && row.env !== "" ? row.env : null;
   const ways = !row.listed ? [t("core-views.vault.private")]
-    : [...row.modes.flatMap((m) => (m === "proxy" ? [modeText(m), ...row.hosts] : m === "env" && env ? [`${modeText(m)} ${env}`] : [modeText(m)])), ...(env && !row.modes.includes("env") ? [env] : [])];
+    : [...row.modes.flatMap((m) => (HOSTED.includes(m) ? [modeText(m), ...row.hosts] : m === "env" && env ? [`${modeText(m)} ${env}`] : [modeText(m)])), ...(env && !row.modes.includes("env") ? [env] : [])];
   const use = row.lastUse as { at?: { ago?: unknown }; chatTitle?: unknown } | undefined;
   const when = String(use?.at?.ago ?? "");
   const used = use === undefined ? [] : [typeof use.chatTitle === "string" && use.chatTitle !== "" ? t("core-views.vault.usedIn", { when, chat: use.chatTitle }) : t("core-views.vault.used", { when })];
@@ -70,6 +72,7 @@ export function shownFields(plain: unknown): { key: string; label: string; value
     ];
   }
   if (kind === "ssh_key") return [...row("private_key", "private_key", true, true), ...row("public_key", "public_key", false, true)];
+  if (kind === "browser") return row("cookies", "cookies", true, true);
   if (kind === "login") return [...row("username", "username", false, false), ...row("password", "password", true, true), ...row("totp", "totp", true, true)];
   return row("value", "value", true, true);
 }
@@ -78,6 +81,7 @@ export function shownFields(plain: unknown): { key: string; label: string; value
 export function shutFields(kind: unknown): { key: string; label: string; value: string; secret: boolean; mono: boolean }[] {
   const dots = (n: number) => "•".repeat(Math.min(Math.max(n, 8), 20));
   if (kind === "file") return ["filename", "content"].map((key) => ({ key, label: t(`core-views.vault.field.${key}`), value: dots(key === "content" ? 20 : 10), secret: true, mono: key === "content" }));
+  if (kind === "browser") return shownFields({ kind, fields: { cookies: dots(20) } });
   const fields: Record<string, string> = kind === "ssh_key" ? { private_key: dots(20) } : kind === "login" ? { username: dots(10), password: dots(12) } : { value: dots(20) };
   return shownFields({ kind: kind === "ssh_key" || kind === "login" ? kind : "token", fields });
 }

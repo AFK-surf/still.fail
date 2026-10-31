@@ -219,6 +219,7 @@ using @settings {
   vault_ask,
   vault_hosts,
   vault_kinds,
+  vault_item_kinds,
   vault_lasts,
   vault_problem,
   vault_put_params,

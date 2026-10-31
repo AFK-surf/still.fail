@@ -34,10 +34,10 @@ export function hostAllowed(host: string, patterns: string[]): boolean {
 }
 
 /// The value a grant's secret is used as: a token's value, a login's password, an SSH key's private key, a file's
-/// content (its bytes in base64).
+/// content (its bytes in base64), a sign-in's cookies.
 export function valueOf(secret: Secret): string | null {
   const f = secret.fields ?? {};
-  const v = secret.kind === "ssh_key" ? f.private_key : secret.kind === "login" ? f.password : secret.kind === "file" ? f.content : f.value;
+  const v = secret.kind === "ssh_key" ? f.private_key : secret.kind === "login" ? f.password : secret.kind === "file" ? f.content : secret.kind === "browser" ? f.cookies : f.value;
   return typeof v === "string" && v !== "" ? v : null;
 }
 
@@ -92,6 +92,7 @@ export class Keeper {
       return "the grant's hosts are not all the item's";
     }
     if (g.mode === "proxy" && g.hosts.length === 0) return "a grant through the proxy names its hosts";
+    if (g.mode === "browser" && g.hosts.length === 0) return "a sign-in's grant names its sites (an app from before sign-ins sends none: update it)";
     const by = typeof g.sig?.key === "string" ? signerOf(lock, g.sig.key) : null;
     if (by === null || !vault.members.includes(by.sub)) return "a grant is signed by a vault member's device in the lock";
     if (!signedOk(g, TAG.grant)) return "the grant's signature is invalid";
@@ -119,6 +120,7 @@ export class Keeper {
     if (!d.listing.modes.includes(request.mode)) return `the item is not given by ${request.mode}`;
     if (!d.hosts.every((h) => d.listing.hosts.includes(h) || (!h.startsWith("*.") && hostAllowed(h, d.listing.hosts)))) return "the hosts are not all the item's";
     if (request.mode === "proxy" && d.hosts.length === 0) return "given through the proxy, it names its hosts";
+    if (request.mode === "browser" && d.hosts.length === 0) return "a sign-in's grant names its sites";
     if (valueOf(secret) === null) return "the item has no value to use";
     const now = this.#now();
     const grant = { v: 1, ws: request.ws, request: request.id, vault: request.vault, item: request.item, mode: request.mode, hosts: d.hosts, scope: d.scope, exp: now + LASTS[d.scope], secret: "", at: now } as unknown as Grant;

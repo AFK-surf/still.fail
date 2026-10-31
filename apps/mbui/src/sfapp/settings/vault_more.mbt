@@ -11,6 +11,7 @@ fn vault_fields(kind : String) -> Array[String] {
     "ssh_key" => ["private_key", "public_key"]
     "login" => ["username", "password", "totp"]
     "file" => ["content", "filename"]
+    "browser" => ["cookies"]
     _ => []
   }
 }
@@ -255,16 +256,17 @@ pub fn vault_put_params(
     let modes = match k {
       "ssh_key" => ["ssh"]
       "file" => ["file"]
+      "browser" => ["browser"]
       _ => [mode]
     }
     let listing = [
       ("name", str(name)),
       ("kind", str(k)),
       ("modes", Json::array(modes.map(str))),
-      ("hosts", Json::array((if modes == ["proxy"] { vault_hosts(words) } else { [] }).map(str))),
+      ("hosts", Json::array((if modes == ["proxy"] || modes == ["browser"] { vault_hosts(words) } else { [] }).map(str))),
     ]
     let env = got("env")
-    if env != "" && k != "ssh_key" {
+    if env != "" && k != "ssh_key" && k != "browser" {
       listing.push(("env", str(env)))
     }
     // its own longest grant (none: its vault's)
@@ -297,13 +299,14 @@ pub fn vault_problem(k : String, words : Map[String, String], agent : Bool, mode
     "token" => got("value") != ""
     "ssh_key" => got("private_key") != ""
     "file" => got("content") != ""
+    "browser" => got("cookies") != ""
     _ => got("username") != "" || got("password") != ""
   }
   if got("name") == "" {
     "name"
   } else if !filled_in {
     "fields"
-  } else if agent && mode == "proxy" && k != "ssh_key" && k != "file" && vault_hosts(words).length() == 0 {
+  } else if agent && ((mode == "proxy" && k != "ssh_key" && k != "file") || k == "browser") && vault_hosts(words).length() == 0 {
     "hosts"
   } else {
     ""

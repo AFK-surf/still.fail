@@ -8,11 +8,12 @@ import { nameOf, peerNamed } from "../mesh/peer-http.ts";
 import { routes as vaultRoutes } from "../api/routes/vault.ts";
 import { routes as requestRoutes } from "../api/routes/vault-requests.ts";
 import { wall } from "../ops/fibers.ts";
+import { Browser } from "../browser/service.ts";
 import { Agents } from "../sessions/agents.ts";
 import { sender } from "../sessions/messages.ts";
 import { ControlPlane, Events, Parts, Paths, Previous, Store } from "../services.ts";
 import { vaultTools } from "./tool.ts";
-import { plainStore } from "./plain.ts";
+import { plainStore, shown } from "./plain.ts";
 import { Secrets } from "./secrets.ts";
 import { vaultStore } from "./store.ts";
 
@@ -30,6 +31,7 @@ export const VaultLive = Layer.effectDiscard(
     // What the process before held may come until it is gone (it gives it as it begins to hand over).
     let coming = true;
     const previous = yield* Previous;
+    const browsers = yield* Browser;
     // The vault's secrets, asked for by agents and granted from the members' apps.
     const secrets = new Secrets({
       db: store.db, vaults, plain: plainStore(store.db), hub, data, home: () => cloud.home(), lock, now: () => wall.now(),
@@ -43,7 +45,12 @@ export const VaultLive = Layer.effectDiscard(
       ask: (station, request) => remote.ask(station, request),
       workOf: (ws, peer, session) => remote.work(ws, peer, session),
       coming: () => coming,
+      // Sign-ins (kind browser) go into each chat's own context in the station's browser (docs/vault.md 登录态).
+      browsers: { cookies: (session, sites, station) => browsers.cookies(session, sites, station), signIn: (session, d) => browsers.signIn(session, d) },
     });
+    browsers.onTakenOut((session, request, cookies) => secrets.renewed(session, request, cookies));
+    browsers.onFresh((session) => secrets.signInAgain(session));
+    secrets.onPlainWritten((i) => events.tell("vault-plain", shown(i), `vault-plain\0${i.id}`, { workspace: i.ws, email: i.owner }));
     // The grants, the boxes of requests waiting and the secrets to keep, only in memory: over to the next process at a
     // handover (an update), so no agent asks again.
     parts.carry("vault", () => secrets.carried(), (what) => {

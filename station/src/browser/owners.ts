@@ -1,6 +1,7 @@
 // Which session opened each tab of the station's browser (docs/remote-screens.md, "Whose a tab is"): learnt from the
 // session's own connection to it (proxy.ts) and from a tab's opener, kept in <data>/browser/owners.json as Chrome keeps
-// its tabs, so the next station process that takes the browser up still knows them. A tab gone is forgotten.
+// its tabs, so the next station process that takes the browser up still knows them. A tab gone is forgotten. These are
+// the station's own context's tabs: one in a chat's own context (browsers.ts) is that chat's, by its context.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { log } from "../ops/log.ts";
@@ -19,11 +20,6 @@ export class Owners {
   /// The session that opened tab `targetId`, if one is known.
   of(targetId: string): string | undefined {
     return this.#of.get(targetId);
-  }
-
-  /// The tabs `session` opened.
-  ofSession(session: string): string[] {
-    return [...this.#of].filter(([, s]) => s === session).map(([id]) => id);
   }
 
   /// Tab `targetId` is `session`'s; whether that is news.

@@ -6,39 +6,62 @@
 
 ## The station's browser
 
+> chat EMBER/1793439516.811000 (2026-10-31, 用户定): one Chrome for the station, with no window, and in it an
+> environment of each chat's own, kept in memory; sign-ins only from the vault (docs/vault.md 登录态). Turned down: a
+> Chrome per chat (some 300 MB each before any tab: "我们有用户的"), and a browser embedding Chromium (CEF 156
+> off-screen: Google's sign-in refused it, below).
+
 - Each station keeps one real Chrome (Google Chrome, not a bundled Chromium; Chromium/Edge only when no Chrome is
-  installed), started on demand as a normal browser with its own persistent profile (`<data>/browser/profile`) and
+  installed), started on demand with its own profile (`<data>/browser/profile`, the station's own context's) and
   `--remote-debugging-port=0` (a non-default user data dir, so Chrome honours it); the port is read from
-  `DevToolsActivePort`. It stays up while used, and goes after a long idle (an hour); logins persist in the profile.
-  It outlives a station process (as jobs do): the next one finds it by `DevToolsActivePort` and takes it up; one that
-  dies in use is started again, on the same port when it is free (`station/src/browser/`).
-- It never comes in front of what the person at the machine is doing. It starts with no window
-  (`--no-startup-window`; a window it starts with makes it the front app). Every tab is opened in a window of its own,
-  behind the others (`Target.createTarget` with `newWindow: true, background: true`: the station's, and a session's
-  as its door passes it on), where it is the front tab of its window, so drawn: its screenshots and screencast come
-  without its being brought forward. Nothing brings a tab forward: a view does not, and a session's
-  `Target.activateTarget` and `Page.bringToFront` are answered as done and not passed on. Measured on a Mac (Edge 156,
-  2026-10-29, Finder in front): a tab opened in front, or brought forward, made the browser the front app; one opened
-  so stayed behind, `visible`, and gave screenshots of its page; a tab behind another in its window gave none.
-- Sites must see a person's browser: headful wherever the machine shows windows (`--headless=new` only where it
-  shows none), no automation switches, and two tells undone: Chrome reports `navigator.webdriver = true` for any
-  debuggable browser (`--disable-blink-features=AutomationControlled`), and headless says `HeadlessChrome` in its user
-  agent (given the headful one's). With either, Google's sign-in answers "This browser or app may not be secure";
-  without them it goes on to the next step, headful or headless, with Playwright attached (Chrome 155, 2026-10-17).
-- Agents get a CDP endpoint of it from the `browser` tool, their session's own (below), and drive it with
-  chrome-devtools-mcp (`--wsEndpoint`) or Playwright (`connectOverCDP`). Sessions share the browser (and its logins)
-  and open their own tabs.
-- **Whose a tab is.** The `browser` tool gives each session its own address of the browser on the agents' door,
-  `ws://127.0.0.1:<door>/browser/<session key, base64url>` (`station/src/browser/proxy.ts`): a WebSocket passed through
-  to Chrome's DevTools as it is, from which the station learns the tabs the session opens (a `Target.createTarget`
-  asked on it and the `targetId` its answer gives; a tab one of those opens, by its `openerId`, is the session's too).
-  It is kept in `<data>/browser/owners.json` beside the profile, so the next station process taking the browser up
-  still knows, and forgotten as a tab goes. The station opens tabs of its own too, nobody's: a login's page for a person
-  to finish there (docs/remote-login.md, 在 station 的浏览器中登录; `StationBrowser.openTab`), closed as the login ends. The address stays when Chrome is started again or another station process
-  takes the door (the door's socket is the launcher's), so a client that lost its connection connects to it again;
-  connecting starts the browser if it is not running. Only programs on this machine reach it (the door's rule for
-  `/peer`). A tab opened at Chrome's own port is nobody's. When a session is archived or deleted, the tabs it opened
-  are closed.
+  `DevToolsActivePort`. It stays up while used, and goes after a long idle (an hour). It outlives a station process
+  (as jobs do): the next one finds it by `DevToolsActivePort` and takes it up; one that dies in use is started again,
+  on the same port when it is free (`station/src/browser/`).
+- It opens no window on the machine: headless (`--headless=new`; headful only where asked, `chromeHost({headless:
+  false})`), its tabs seen and driven from people's apps. Every tab is still opened as in a window of its own, behind
+  the others (`Target.createTarget` with `newWindow: true, background: true`), and nothing brings a tab forward: a
+  view does not, and a session's `Target.activateTarget` and `Page.bringToFront` are answered as done and not passed
+  on (a headful one, measured on a Mac, Edge 156, 2026-10-29: a tab opened in front, or brought forward, made the
+  browser the front app; one opened so stayed behind and gave screenshots of its page).
+- Sites must see a person's browser: no automation switches, and two tells undone: Chrome reports
+  `navigator.webdriver = true` for any debuggable browser (`--disable-blink-features=AutomationControlled`), and
+  headless says `HeadlessChrome` in its user agent (given the headful one's). With either, Google's sign-in answers
+  "This browser or app may not be secure"; without them it goes on to the next step (Chrome 155, 2026-10-17; Chrome
+  156, 2026-10-31: headless, headful, and in a context made over DevTools alike reached Google's 验证身份 step, and
+  Cloudflare's check passed; CEF 156's sample client off-screen was refused at once).
+- **A chat's own environment** (`station/src/browser/browsers.ts`). Each chat has a browser context of its own in the
+  one Chrome (`Target.createBrowserContext`), made when its agent first asks for the browser: its tabs, cookies,
+  storage and cache are its own, in memory only (nothing of a chat's is written to the station's disk), and go with
+  the chat (archived or deleted: `Target.disposeBrowserContext`) or with Chrome (ended: a chat asking again has a new
+  one). Which context is whose is kept beside the browser (`<data>/browser/contexts.json`, with the Chrome they are
+  in), so the next station process takes them up with it. A tab in a chat's context is that chat's: people see which
+  chat a tab is, and it opens that chat. The station's own context (the profile's) holds the tabs it opens itself, no
+  chat's: a login's page for a person to finish there (docs/remote-login.md, 在 station 的浏览器中登录;
+  `StationBrowser.openTab`), closed as the login ends; and the sign-ins made there before chats had their own, which
+  an agent may keep in the vault from it (`secret_save {kind: "browser", browser: "station"}`).
+- **A chat's way in** (`station/src/browser/proxy.ts`, `gate.ts`). The `browser` tool gives each session its own
+  address on the agents' door, `ws://127.0.0.1:<door>/browser/<session key, base64url>`: a WebSocket to Chrome's
+  DevTools through a gate that lets the session reach its chat's context only. It reads every message the agent sends:
+  one on a target session goes only to a session of its own target's; one on the browser's own target only for the
+  methods it knows (the Target domain's for its own targets, cookies, permissions and downloads put as its context's,
+  `Browser.getVersion` and the like), a new tab opened in its context, `Target.getBrowserContexts` answered with its
+  context as the default (so Playwright's `contexts()[0]` and puppeteer's default context are it); the browser's own
+  session (`Target.attachToBrowserTarget`), `Browser.close`, tracing and anything else refused as an unknown method
+  is. Of what Chrome sends it reads only the browser's news of targets and the answers it asked to look at: news of
+  another chat's target never reaches the agent, and one Chrome attached it to on its own (auto-attach) is let go of
+  at once (`Target.detachFromTarget`, the gate's own, its answer kept from the agent). Measured with Playwright 1.63
+  on Chrome 156 (station/side/browser.test.ts): two chats each sign in or not on the same site, see only their own
+  pages and cookies, and are refused another's tab and the browser's close. The address stays when Chrome is started
+  again or another station process takes the door (the door's socket is the launcher's), so a client that lost its
+  connection connects to it again; connecting starts the browser if it is not running. Only programs on this machine
+  reach it (the door's rule for `/peer`). Chrome's own port is not given to agents; the agents run as the station's
+  system user, so one bent on it could still find it: the gate holds agents to their chat as they are given to work,
+  not against the machine's own user.
+- **Sign-ins from the vault.** A sign-in granted (docs/vault.md 登录态) is put into its chat's context
+  (`Storage.setCookies` with the context's id, its sites' cookies only) and taken out when its grant ends (each of them
+  set again to have expired), its cookies as they were then given back to the vault; one whose grant ended while the
+  browser was closed is taken out before the chat's agent has it again. A context made anew gets the sign-ins still
+  granted again.
 - Every tab is a screen source (`browser:<targetId>`): CDP screencast for frames, `Input.dispatch*` for input, on a
   CDP connection of the view's own. Chrome draws (and casts) only the front tab of a window: a tab is alone in its
   window (above), but for one a page opens itself, which goes in front of the page that opened it there; that one casts

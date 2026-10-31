@@ -1,32 +1,24 @@
-// The station's browser as each session reaches it (docs/remote-screens.md, "Whose a tab is"): a WebSocket on the
-// agents' door, ws://127.0.0.1:<door>/browser/<the session's key, base64url>, passed through to the browser's DevTools
-// as it is. What goes by tells which tabs the session opens: a Target.createTarget asked on it, and the targetId its
-// answer gives (a tab one of those opens is the session's too: tabs.ts). Nothing asked on it brings the browser in front
-// of what the person at the machine is doing: each tab asked for is opened in a window of its own, behind the others
-// (the front tab of its window, so drawn and seen without being brought forward), and a tab asked to be brought forward
-// (Target.activateTarget, Page.bringToFront) is answered as done and left where it is. The address stays when Chrome is started again
-// or another station process takes the door: a client that lost its connection connects to the same one again.
+// A chat's way to the station's browser (docs/remote-screens.md, "A chat's own environment"): a WebSocket on the agents'
+// door, ws://127.0.0.1:<door>/browser/<the session's key, base64url>, to the DevTools of the station's one Chrome
+// through a gate (gate.ts) that lets the session reach only its chat's own browser context: its tabs, its cookies.
+// Nothing asked on it brings the browser in front of what the person at the machine is doing: each tab asked for is
+// opened in a window of its own, behind the others, and a tab asked to be brought forward is answered as done and left
+// where it is. The address stays when Chrome is started again or another station process takes the door: a client that
+// lost its connection connects to the same one again.
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Duplex } from "node:stream";
 import WebSocket, { type RawData, WebSocketServer } from "ws";
 import { wall } from "../ops/fibers.ts";
 import type { DoorRoute } from "../parts.ts";
 import { refuseUpgrade } from "../tools/http.ts";
-import type { StationBrowser } from "./browser.ts";
+import { Gate, type GateParts } from "./gate.ts";
 
+export { BEHIND } from "./gate.ts";
 export const PREFIX = "browser";
 /// The largest message passed either way (a screenshot of a large page is big).
 const MAX = 256 * 1024 * 1024;
 /// How long the browser's DevTools are given to take the connection (Chrome's time: the machine's clock).
 const OPEN_MS = 10_000;
-/// An answer longer than this is no Target.createTarget's: it is passed on unread.
-const ANSWER_MAX = 4096;
-/// How a tab is opened: in a window of its own, behind the person's (measured on a Mac, Edge 156, 2026-10-29: a tab
-/// opened so leaves the app in front where it is, and is drawn; a tab behind another in its window is not, and a tab
-/// brought forward or opened in front makes the browser the front app).
-export const BEHIND = { newWindow: true, background: true } as const;
-/// What would bring the browser in front: answered here, never passed on.
-const FRONT = new Set(["Target.activateTarget", "Page.bringToFront"]);
 
 /// Where `session` reaches the browser, after the door's origin (`http://127.0.0.1:<port>`).
 export function sessionPath(session: string): string {
@@ -41,8 +33,14 @@ export function sessionOfPath(url: string): string | null {
   return session !== "" && sessionPath(session) === `/${PREFIX}/${m[1]}` ? session : null;
 }
 
+/// What the door asks of the browsers (browsers.ts Browsers): for a session, the browser's DevTools (started if it is
+/// not running) and its chat's context there.
+export type DoorBrowsers = {
+  open(session: string): Promise<{ ws: string; gate: GateParts }>;
+};
+
 /// The browser's route on the agents' door.
-export function browserDoor(browser: StationBrowser): DoorRoute {
+export function browserDoor(browser: DoorBrowsers): DoorRoute {
   const server = new WebSocketServer({ noServer: true, perMessageDeflate: false, maxPayload: MAX });
   return {
     prefix: PREFIX,
@@ -52,15 +50,13 @@ export function browserDoor(browser: StationBrowser): DoorRoute {
     async upgrade(req: IncomingMessage, socket: Duplex, head: Buffer) {
       const session = sessionOfPath(req.url ?? "");
       if (session === null) return refuseUpgrade(socket, 404, "the station's browser is /browser/<session>, as the browser tool gives it");
-      let ws: string;
+      let opened: { ws: string; gate: GateParts };
       try {
-        const status = await browser.endpoint();
-        if (status.ws === undefined) throw new Error("it has no DevTools address");
-        ws = status.ws;
+        opened = await browser.open(session);
       } catch (e) {
         return refuseUpgrade(socket, 503, `the station's browser could not be started: ${(e as Error).message}`);
       }
-      const upstream = new WebSocket(ws, { perMessageDeflate: false, maxPayload: MAX });
+      const upstream = new WebSocket(opened.ws, { perMessageDeflate: false, maxPayload: MAX });
       try {
         await wall.within(OPEN_MS, new Promise<void>((resolve, reject) => {
           upstream.once("open", () => resolve());
@@ -70,42 +66,35 @@ export function browserDoor(browser: StationBrowser): DoorRoute {
         upstream.terminate();
         return refuseUpgrade(socket, 502, (e as Error).message);
       }
-      server.handleUpgrade(req, socket, head, (client) => pass(client, upstream, (targetId) => browser.own(targetId, session)));
+      server.handleUpgrade(req, socket, head, (client) => pass(client, upstream, new Gate(opened.gate)));
     },
   };
 }
 
-/// Both ways, as they come, until either side ends; `opened`: a tab this connection asked for.
-export function pass(client: WebSocket, upstream: WebSocket, opened: (targetId: string) => void) {
-  // The Target.createTarget asked and not answered yet, by the target session they were asked on and their id.
-  const asked = new Set<string>();
-  const key = (session: unknown, id: unknown) => `${typeof session === "string" ? session : ""}\0${String(id)}`;
-  const parsed = (data: RawData): any => {
-    try {
-      return JSON.parse(data.toString());
-    } catch {
-      return null;
-    }
+/// Both ways through `gate`, until either side ends.
+export function pass(client: WebSocket, upstream: WebSocket, gate: Gate) {
+  const up = (texts: string[]) => {
+    if (upstream.readyState === WebSocket.OPEN) for (const t of texts) upstream.send(t);
+  };
+  const down = (texts: string[]) => {
+    if (client.readyState === WebSocket.OPEN) for (const t of texts) client.send(t);
   };
   client.on("message", (data, binary) => {
-    let out: RawData | string = data;
-    const text = binary ? "" : data.toString();
-    if (text.includes('"Target.createTarget"') || text.includes('"Target.activateTarget"') || text.includes('"Page.bringToFront"')) {
-      const m = parsed(data);
-      if (m?.method === "Target.createTarget" && m.id !== undefined) {
-        asked.add(key(m.sessionId, m.id));
-        out = JSON.stringify({ ...m, params: { ...m.params, ...BEHIND } });
-      } else if (FRONT.has(m?.method) && m.id !== undefined) {
-        if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify({ id: m.id, ...(typeof m.sessionId === "string" ? { sessionId: m.sessionId } : {}), result: {} }));
-        return;
-      }
-    }
-    if (upstream.readyState === WebSocket.OPEN) upstream.send(out, { binary });
+    // DevTools speaks text; anything else is not let through.
+    if (binary) return;
+    const passed = gate.fromClient(data.toString());
+    up(passed.up);
+    down(passed.down);
   });
   upstream.on("message", (data, binary) => {
-    if (!binary && asked.size > 0 && byteLength(data) <= ANSWER_MAX) {
-      const m = parsed(data);
-      if (m?.id !== undefined && asked.delete(key(m.sessionId, m.id)) && typeof m.result?.targetId === "string") opened(m.result.targetId);
+    if (!binary) {
+      const text = data.toString();
+      if (gate.wants(text)) {
+        const passed = gate.fromChrome(text);
+        up(passed.up);
+        down(passed.down);
+        return;
+      }
     }
     if (client.readyState === WebSocket.OPEN) client.send(data, { binary });
   });
@@ -119,8 +108,4 @@ export function pass(client: WebSocket, upstream: WebSocket, opened: (targetId: 
     ws.on("close", end);
     ws.on("error", end);
   }
-}
-
-function byteLength(data: RawData): number {
-  return Array.isArray(data) ? data.reduce((n, b) => n + b.length, 0) : data instanceof ArrayBuffer ? data.byteLength : data.length;
 }

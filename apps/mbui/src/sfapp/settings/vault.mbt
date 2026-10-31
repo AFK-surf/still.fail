@@ -8,11 +8,18 @@
 pub let vault_kinds : Array[String] = ["token", "ssh_key", "login", "file"]
 
 ///|
+/// Every kind an item may be: those added by hand (`vault_kinds`), then a sign-in (kind browser: a site's cookies, kept
+/// only as an agent asks to keep them from a chat's browser, never typed in).
+// kept across runs: a table, never written
+pub let vault_item_kinds : Array[String] = [..vault_kinds, "browser"]
+
+///|
 pub fn kind_icon(kind : String) -> String {
   match kind {
     "ssh_key" => "server"
     "login" => "user"
     "file" => "file-text"
+    "browser" => "globe"
     _ => "key"
   }
 }
@@ -20,7 +27,7 @@ pub fn kind_icon(kind : String) -> String {
 ///|
 pub fn mode_name(mode : String) -> String {
   match mode {
-    "proxy" | "env" | "ssh" | "file" => tr("android-settings.vault.mode." + mode)
+    "proxy" | "env" | "ssh" | "file" | "browser" => tr("android-settings.vault.mode." + mode)
     m => m
   }
 }

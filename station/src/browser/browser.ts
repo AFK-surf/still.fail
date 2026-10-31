@@ -9,7 +9,7 @@ import type { Screens } from "../screens/source.ts";
 import type { Cdp } from "./cdp.ts";
 import { type ChromeHost, type Running, readState, writeState } from "./chrome.ts";
 import { Owners } from "./owners.ts";
-import { BEHIND } from "./proxy.ts";
+import { BEHIND } from "./gate.ts";
 import { type TabInfo, Tabs } from "./tabs.ts";
 
 /// Unused this long (no agent asking for it, no tab coming, going or navigated, no one watching), it is closed.
@@ -47,6 +47,8 @@ export type BrowserOptions = {
   idleMs?: number;
   /// Chrome's time for the tabs (tabs.ts `later`): the machine's unless given.
   later?: (ms: number, f: () => void) => () => void;
+  /// The session whose chat's context a browser context is (browsers.ts): a tab in it is that session's.
+  contextOwner?: (browserContextId: string | undefined) => string | undefined;
 };
 
 type Up = { running: Running; cdp: Cdp; tabs: Tabs; since: number };
@@ -122,6 +124,19 @@ export class StationBrowser {
     if (typeof targetId !== "string" || targetId === "") throw new Error("Chrome opened no tab.");
     await up.tabs.arrived(targetId);
     return targetId;
+  }
+
+  /// A command on the browser's own DevTools connection (its cookies: browsers.ts), the browser started if it is not
+  /// running.
+  async send(method: string, params: object = {}): Promise<any> {
+    this.used();
+    const up = await this.#ensure();
+    return up.cdp.send(method, params);
+  }
+
+  /// The browser context of target `targetId` (any target: a page, a frame, a worker), when it is known.
+  contextOf(targetId: string): string | undefined {
+    return this.#up?.tabs.contextOf(targetId);
   }
 
   /// Whether tab `targetId` is there.
@@ -224,7 +239,7 @@ export class StationBrowser {
     const cdp = await chrome.connect(running.ws);
     const tabs = new Tabs({
       cdp, screens, connect: () => chrome.connect(running.ws), now: () => this.#fibers.now(), activity: () => this.used(), later: this.#o.later,
-      owners: this.#owners,
+      owners: this.#owners, ...(this.#o.contextOwner ? { contextOwner: this.#o.contextOwner } : {}),
     });
     try {
       await tabs.start();

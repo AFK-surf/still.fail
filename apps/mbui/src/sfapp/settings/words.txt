@@ -793,6 +793,7 @@ android-settings.vault.ask.kept
 android-settings.vault.ask.kind.login
 android-settings.vault.ask.kind.ssh_key
 android-settings.vault.ask.kind.file
+android-settings.vault.ask.kind.browser
 android-settings.vault.ask.kind.token
 android-settings.vault.ask.notKept
 android-settings.vault.ask.on
@@ -827,6 +828,7 @@ android-settings.vault.howNote
 android-settings.vault.items
 android-settings.vault.kind.login
 android-settings.vault.kind.file
+android-settings.vault.kind.browser
 android-settings.vault.kind.ssh_key
 android-settings.vault.kind.token
 android-settings.vault.lasts
@@ -855,6 +857,7 @@ android-settings.vault.mode.env
 android-settings.vault.mode.proxy
 android-settings.vault.mode.ssh
 android-settings.vault.mode.file
+android-settings.vault.mode.browser
 android-settings.vault.name
 android-settings.vault.namePlaceholder
 android-settings.vault.needsLock
@@ -1584,6 +1587,7 @@ web-pages.vault.editor.proxyNote
 web-pages.vault.editor.publicKey
 web-pages.vault.editor.sshNote
 web-pages.vault.editor.fileNote
+web-pages.vault.editor.browserNote
 web-pages.vault.editor.fileEnvPlaceholder
 web-pages.vault.editor.file
 web-pages.vault.editor.fileNamePlaceholder
@@ -1598,6 +1602,7 @@ web-pages.vault.hidden
 web-pages.vault.how
 web-pages.vault.kind.login
 web-pages.vault.kind.file
+web-pages.vault.kind.browser
 web-pages.vault.kind.ssh_key
 web-pages.vault.kind.token
 web-pages.vault.lasts.chat

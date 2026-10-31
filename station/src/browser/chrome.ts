@@ -3,11 +3,14 @@
 // it (it outlives a handover, as jobs do), and ended. What it is used for is browser.ts's.
 //
 // It is started as a person's browser would be, so that sites let it sign in: no --enable-automation, no
-// --remote-debugging-pipe, headless only where the machine shows no windows. Two things still tell a site it is
+// --remote-debugging-pipe; headless, so that it opens no window on the machine at all (its tabs are seen and driven
+// from people's apps, docs/remote-screens.md; headful only when asked). Two things still tell a site it is
 // driven, and are undone: Chrome says navigator.webdriver = true of any browser it lets be debugged (undone by
 // --disable-blink-features=AutomationControlled), and a headless one says HeadlessChrome in its user agent (given
 // the headful one's). With either, Google refuses to sign in ("This browser or app may not be secure"; checked on
-// Chrome 155, 2026-10-17).
+// Chrome 155, 2026-10-17). Without them, headless, in its default context or one made over DevTools (a chat's:
+// browsers.ts), Google's sign-in goes on to its next step (Chrome 156, 2026-10-31; a browser embedding Chromium, CEF
+// 156 off-screen, was refused there).
 import { createServer } from "node:net";
 import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -70,8 +73,9 @@ export function chromeArgs(o: { profile: string; port: number; headless: boolean
     "--disable-backgrounding-occluded-windows",
     "--disable-renderer-backgrounding",
     "--disable-background-timer-throttling",
-    // Headful, no window of its own as it starts: one would make it the machine's front app, over what the person
-    // there is doing (its tabs come in windows opened behind: proxy.ts BEHIND; measured on a Mac, Edge 156, 2026-10-29).
+    // Headful (when asked), no window of its own as it starts: one would make it the machine's front app, over what the
+    // person there is doing (its tabs come in windows opened behind: gate.ts BEHIND; measured on a Mac, Edge 156,
+    // 2026-10-29).
     ...(o.headless ? ["--headless=new", "--window-size=1280,900"] : ["--no-startup-window"]),
     ...(o.userAgent ? [`--user-agent=${o.userAgent}`] : []),
   ];
@@ -143,7 +147,7 @@ export type ChromeOptions = {
   dir: string;
   /// The program (else the machine's best: platform.browsers).
   binary?: string;
-  /// Headless (else where the machine shows no windows).
+  /// Headless (the default: no window on the machine), or headful.
   headless?: boolean;
 };
 
@@ -185,7 +189,7 @@ export function chromeHost(o: ChromeOptions): ChromeHost {
   async function launch(retried = false, anyPort = false, windowless = false): Promise<Running> {
     const binary = o.binary ?? platform.browsers(process.env)[0];
     if (binary === undefined) throw new Error("There is no Chrome on this machine: install Google Chrome (or Chromium or Edge) and ask again.");
-    const headless = windowless || (o.headless ?? !platform.hasDisplay(process.env));
+    const headless = windowless || (o.headless ?? true);
     mkdirSync(profile, { recursive: true });
     rmSync(activePort, { force: true });
     const state = readState(o.dir);
