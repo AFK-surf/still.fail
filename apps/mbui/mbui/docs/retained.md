@@ -260,9 +260,9 @@ squeeze and contrast checks; film's images before and after where a step touches
    tape (still.fail's sfdesk/pane_view.mbt): its shell, row, column and page nodes made once, laid out by the tree,
    what each holds an island; the block's fold (⌘\, shown a while) a move committed at its cause, set out from where
    the move before had it then; the tape left mid-move for a place with no sidebar of its own, the block closing from
-   where the tape had it then. On the tape what the page's panel shows while a page put on top waits for what it shows
-   is its owner's, at its causes (Nav::flat_keep: the one shown before kept by the stack till the core gives it or its
-   wait is over); laid out Large, still as the frames find it (Nav::shows_when). Still the old way on both: the edges'
+   where the tape had it then. On both what the page's pane shows while a page put on top waits for what it shows is
+   its node's, at its causes (still.fail's sfdesk/page_wait.mbt; Nav::flat_keep: the one shown before kept by the
+   stack till the core gives it or its wait is over). Still the old way on both: the edges'
    drags (an island over the panels: their pointer's shape and tip wait on the tree's), back (its following the
    system's gesture waits on the tree's), a page pushed over the page's own stack (its slide Ctx::nav's), a peek's move
    aside read from the page's old layout. Old view still: a window of its own, the

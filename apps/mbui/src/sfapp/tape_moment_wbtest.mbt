@@ -269,19 +269,27 @@ test "中屏: a screen reader's press of a panel's cover brings it over at that 
 /// Whether the page's panel draws the chat titled `title` (in its bar: where the tape has the page then, past the
 /// sidebar's column; the sidebar's rows say the titles too).
 fn page_draws(t : @ui.Tester, title : String) -> Bool {
-  let col = @sfdesk.tape_col_now(t.time())
+  let col = if @sfdesk.wide.tape {
+    @sfdesk.tape_col_now(t.time())
+  } else {
+    // (off the tape, Large: past the block's column)
+    match @sfdesk.pane_seen() {
+      Some((_, col)) => col
+      None => 0.0
+    }
+  }
   t.locate(title).iter().any(fn(p) { p.0 > col })
 }
 
 ///|
-/// On the tape (the sidebar in use), the core answering `late` after it is asked, a second chat opened at `t0` between
-/// frames, frames drawn at `t0 +` each of `frames`, then at `t0 + at`: whether the page's panel draws the chat before it,
-/// whether it draws the one opened.
-fn page_waited(late : Double, frames : Array[Double], at : Double) -> (Bool, Bool) {
+/// On the tape (the sidebar in use; a window `w` wide: Large, off it), the core answering `late` after it is asked, a
+/// second chat opened at `t0` between frames, frames drawn at `t0 +` each of `frames`, then at `t0 + at`: whether the
+/// page's pane draws the chat before it, whether it draws the one opened.
+fn page_waited(late : Double, frames : Array[Double], at : Double, w? : Double = 720.0) -> (Bool, Bool) {
   new_run()
   let src = round_trip(fixture("chat"), late)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=800.0, platform=0)
   t.draw()
   t.run_for(late * 6.0 + @ui.move_most_ms)
   let t0 = t.time() + between_frames_ms
@@ -350,4 +358,63 @@ test "中屏: a page opened in the page's panel shows once, as its view comes or
     let end = along[along.length() - 1]
     assert_eq(page_waited_seen(late, [end]), [seen[seen.length() - 1]], msg="late \{late}")
   }
+}
+
+///|
+test "大屏: a page opened in the page's pane, its view on its way: the one before shown till its wait is over, from the moment it was opened, whichever frames came" {
+  let late = 10000.0
+  let every = Array::makei(((page_local_ms + 40.0) / 16.0).to_int(), fn(i) { 16.0 * (i + 1).to_double() })
+  for at in [page_local_ms / 2.0, page_local_ms + 40.0] {
+    let stepped = page_waited(late, every.filter(fn(f) { f < at }), at, w=1280.0)
+    let jumped = page_waited(late, [], at, w=1280.0)
+    assert_eq(jumped, stepped, msg="at \{at}")
+    if at < page_local_ms {
+      assert_eq(stepped, (true, false), msg="at \{at}: the one before still")
+    } else {
+      assert_eq(stepped, (false, true), msg="at \{at}: the one opened")
+    }
+  }
+}
+
+///|
+/// On the tape, the core answering long after it is asked: a chat opened at `t0` (between frames), the window made Large
+/// at `t0 + 300` and the tape again at `t0 + 600`, the page asked over then; frames every 16 ms between (`stepped`) or
+/// none but those: the panel in use at `t0 +` 1100 (past where the first wait was due), 1400 (past where Large's was),
+/// 1700 (past where the tape's again is).
+fn page_across_shells(stepped : Bool) -> Array[@sfdesk.TapePane] {
+  new_run()
+  let late = 10000.0
+  let src = round_trip(fixture("chat"), late)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
+  t.draw()
+  t.run_for(late * 6.0 + @ui.move_most_ms)
+  let t0 = t.time() + between_frames_ms
+  t.advance(t0 - t.time())
+  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
+  let to = fn(at : Double) {
+    if stepped {
+      while t.time() + 16.0 < t0 + at {
+        t.frame_at(t.time() + 16.0)
+      }
+    }
+    t.advance(t0 + at - t.time())
+  }
+  to(300.0)
+  t.resize(1280.0, 800.0)
+  to(600.0)
+  t.resize(720.0, 800.0)
+  @sfdesk.bring_page()
+  [1100.0, 1400.0, 1700.0].map(fn(at) {
+    to(at)
+    t.frame_at(t0 + at)
+    @sfdesk.wide.tape_at.get()
+  })
+}
+
+///|
+test "中屏 to 大屏 and back while a page waits: each made waits anew from then, what was due in the one let go never comes; brought over once, frames or none" {
+  let stepped = page_across_shells(true)
+  assert_eq(page_across_shells(false), stepped)
+  assert_eq(stepped, [@sfdesk.TapePane::Side, @sfdesk.TapePane::Side, @sfdesk.TapePane::Page])
 }

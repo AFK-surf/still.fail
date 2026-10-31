@@ -9,7 +9,8 @@
 // Measured on the rows' places in their list as laid out (from the list's top: the list carried by its page moves
 // none of them), by their keys where the list is given them (ListRows) and else by their index; not while the list
 // is scrolled by the hand or put elsewhere at once by the app (a frame it did so starts it anew), nor across a gap of
-// more than a few frames in the frames' times.
+// more than a few frames in the frames' times, nor across the window made another size (what it lays out anew for that
+// is there at once, no move of its rows: from that frame on anew).
 //
 // What steps now is known, a file at a time (`rows_steady_known`, given by the app's tests as their package starts): a
 // Tester made in a file shows at most as many as its file's bar, which only falls as they are mended.
@@ -40,6 +41,8 @@ priv struct RowsSteady {
   found : Set[String]
   /// each list's id, and when it was first shown (-1e9: long since)
   lists : Map[Int, Double]
+  /// the window's size as the last frame measured was drawn (its rows measured anew from a frame drawn another size)
+  mut window : (Double, Double)
 }
 
 ///|
@@ -48,7 +51,7 @@ let rows_steady_counting : Bool = false
 
 ///|
 // kept across runs: begun anew by each Tester (rows_steady_begin)
-let rows_steady : RowsSteady = { held: true, file: "", seen: {}, found: Set::new(), lists: {} }
+let rows_steady : RowsSteady = { held: true, file: "", seen: {}, found: Set::new(), lists: {}, window: (-1.0, -1.0) }
 
 ///|
 /// Each file's bar: how many jolts a Tester made there may show (the app's tests' known faults, falling as mended).
@@ -71,6 +74,7 @@ fn rows_steady_begin(loc : String, held : Bool) -> Unit {
   rows_steady.seen.clear()
   rows_steady.found.clear()
   rows_steady.lists.clear()
+  rows_steady.window = (-1.0, -1.0)
   rows_steady.file = match loc.find(":") {
     Some(i) => loc.unsafe_substring(start=0, end=i)
     None => loc
@@ -83,6 +87,10 @@ fn rows_steady_begin(loc : String, held : Bool) -> Unit {
 fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[String] {
   let out : Array[String] = []
   let here : Set[String] = Set::new()
+  // (the window made another size since the last frame: what each list's rows are laid out at for it is there at once,
+  // none of it a row's move; from this frame on anew, what was found kept)
+  let resized = rows_steady.window != (self.width, self.height)
+  rows_steady.window = (self.width, self.height)
   for i in 0..<self.count {
     let ln = self.nodes[i]
     if ln.kind != kind_list {
@@ -140,7 +148,7 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
           }
         _ => false
       }
-      if !free || gap || anew {
+      if !free || gap || anew || resized {
         seen.clear()
       }
       if seen.length() > 0 && now - seen[seen.length() - 1].0 < 0.5 * period {
