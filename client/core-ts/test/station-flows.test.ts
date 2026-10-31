@@ -2243,6 +2243,31 @@ test("live_steps_and_phase", async () => {
   core.close();
 });
 
+test("an_ended_step_goes_once_the_transcript_held_goes_past_it_however_it_came", async () => {
+  const answers: J = base();
+  const s = await ui(answers, (st) => (st.gate.follows = true));
+  const { host, core, read } = s;
+  core.receive(1, { kind: "subscribe", id: 1, subscribe: liveK });
+  await read();
+  await read();
+  const push = (m: J) => s.push("live", { key: "k1", ...m });
+  push({ type: "timeline", start: 0, entries: ["a", "b"], usage: {} });
+  push({ type: "steps", steps: [], phase: null });
+  push({ type: "step", event: { kind: "start", id: "s1", step: "thinking" } });
+  push({ type: "step", event: { kind: "end", id: "s1" } });
+  await read();
+  assert.deepEqual(liveOf(core).steps.map((st: J) => [st.id, st.ended]), [["s1", true]]);
+  // What came after it is read, not told on the stream (its summary says the transcript went further): the step it
+  // recorded goes all the same.
+  answers["GET /sessions/k1/timeline?after=1&before=1000000000000000&limit=200&brief=1"] = { start: 2, entries: ["c", "d"], end: 4 };
+  s.push("session", { ...session("k1"), transcriptLength: 4 });
+  await host.time.pass(EVENTS_COALESCE_MS + 100);
+  await read();
+  assert.deepEqual(liveOf(core).timeline, ["a", "b", "c", "d"]);
+  assert.deepEqual(liveOf(core).steps, []);
+  core.close();
+});
+
 test("a_bad_station_and_a_stations_no_are_errors_a_passing_failure_keeps_loading", async () => {
   const answers: J = { ...base(), "GET /sessions": status(404, { error: "没有" }), "GET /threads": status(502, { error: "坏了" }) };
   const { host, core } = await started(answers);
