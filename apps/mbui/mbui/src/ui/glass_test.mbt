@@ -44,6 +44,27 @@ test "glass one after another shares a capture; glass after something drawn take
 }
 
 ///|
+test "contained glass frosts its own box alone: a capture of its own even right after glass of the same blur" {
+  let contained = @ui.Glass::frosted(blur=14.0, tint=0L, solid=0L, contained=true)
+  let t = @ui.Tester::new(fn(c) {
+    c.box(w=Fill(1.0), h=Fill(1.0), bg=0x1559C4FFL, fn() {
+      c.layer(fn() {
+        c.box(w=Fill(1.0), h=Px(50.0), glass=contained, fn() {  }) |> ignore
+        c.box(w=Fill(1.0), h=Px(30.0), glass=contained, fn() {  }) |> ignore
+        c.box(w=Fill(1.0), h=Px(30.0), glass=@ui.Glass::frosted(blur=14.0, tint=0L, solid=0L), fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  let gs = t.drawn_glass()
+  assert_eq(gs.length(), 3)
+  assert_eq(t.drawn_glass_contained(), [true, true, false])
+  assert_true(gs[0].5 != gs[1].5)
+  assert_true(gs[1].5 != gs[2].5)
+}
+
+///|
 test "where less transparency is asked for, glass is its solid ground" {
   let t = @ui.Tester::new(glass_scene)
   t.set_reduce_transparency(true)

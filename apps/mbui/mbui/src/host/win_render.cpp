@@ -733,9 +733,13 @@ static void ensure_canvas(int tw, int th) {
 static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *f, int32_t start, int32_t end,
                    int32_t count) {
   const float *a = f + start * MB_INST;
-  float blur = a[7];
+  // (a blur said below 0: frosting only what is under its own box, its edges carried on past them: glass.mbt
+  // contained; in from its edges as far as its roundest corner's curve comes in at 45°, so nothing out of its corners
+  // is in it either)
+  float blur = fabsf(a[7]);
   int kind = (int)(a[5] + 0.5f);
-  float margin = 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
+  float round = fmaxf(fmaxf(fmaxf(a[4], a[24]), fmaxf(a[25], a[26])), a[27]);
+  float margin = a[7] < 0.0f ? -0.2929f * round - 0.5f : 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
   float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
   int n = 0;
   for (int32_t i = start; i < end; i++) {

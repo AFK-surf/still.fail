@@ -841,8 +841,12 @@
   // shares_capture) too; false when none of it shows
   function capture(start, end, count) {
     const a = start * INST;
-    const blur = f32[a + 7], kind = Math.round(f32[a + 5]);
-    const margin = 3 * blur + (kind === 6 ? f32[a + 21] * (1 + f32[a + 22]) + f32[a + 23] : 0) + 2;
+    // (a blur said below 0: frosting only what is under its own box, its edges carried on past them: glass.mbt
+    // contained; in from its edges as far as its roundest corner's curve comes in at 45°, so nothing out of its
+    // corners is in it either)
+    const blur = Math.abs(f32[a + 7]), kind = Math.round(f32[a + 5]);
+    const round = Math.max(f32[a + 4], f32[a + 24], f32[a + 25], f32[a + 26], f32[a + 27]);
+    const margin = f32[a + 7] < 0 ? -0.2929 * round - 0.5 : 3 * blur + (kind === 6 ? f32[a + 21] * (1 + f32[a + 22]) + f32[a + 23] : 0) + 2;
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     gn = 0;
     for (let i = start; i < end; i++) {

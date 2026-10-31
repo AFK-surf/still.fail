@@ -495,7 +495,7 @@ static void glass_through(const double *f, int32_t count) {
     if (kind != 5 || b[20] >= 0 || !nh || through_n >= MB_THROUGH || is_through((float)b[20]) || !shows_of(b, r))
       continue;
     // (its blur reaches a hole near it too)
-    float m = 3.0f * (float)b[7];
+    float m = 3.0f * fabsf((float)b[7]);
     for (int h = 0; h < nh; h++)
       if (holes[h][0] < r[2] + m && r[0] - m < holes[h][2] && holes[h][1] < r[3] + m && r[1] - m < holes[h][3]) {
         through_tid[through_n++] = (float)b[20];
@@ -517,7 +517,7 @@ static void glass_through(const double *f, int32_t count) {
       e[4 + k] = b[k];
       e[8 + k] = b[36 + k];
     }
-    e[12] = b[7];
+    e[12] = fabs(b[7]);
     e[13] = b[6];
     e[14] = b[15];
     e[15] = under;
@@ -535,9 +535,13 @@ typedef struct { int px0, py0, w, h, k; float sg; GU g; } Grab;
 static int grab_of(Grab *m, const float *f, int32_t start, int32_t end, int32_t count, int tw, int th) {
   memset(m, 0, sizeof *m);
   const float *a = f + start * MB_INST;
-  float blur = a[7];
+  // (a blur said below 0: frosting only what is under its own box, its edges carried on past them: glass.mbt
+  // contained; in from its edges as far as its roundest corner's curve comes in at 45°, so nothing out of its corners
+  // is in it either)
+  float blur = fabsf(a[7]);
   int kind = (int)(a[5] + 0.5f);
-  float margin = 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
+  float round = fmaxf(fmaxf(fmaxf(a[4], a[24]), fmaxf(a[25], a[26])), a[27]);
+  float margin = a[7] < 0.0f ? -0.2929f * round - 0.5f : 3.0f * blur + (kind == 6 ? a[21] * (1.0f + a[22]) + a[23] : 0.0f) + 2.0f;
   float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
   int n = 0;
   for (int32_t i = start; i < end; i++) {
