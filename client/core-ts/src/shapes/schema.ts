@@ -2731,6 +2731,8 @@ export const SHAPES: Record<string, Shape> = {
   ], { keepNone: true }),
   UsageView: struct([
     ["days", "u32"],
+    ["split", "String", { default: true, doc: "The list each day's bar is split by (people, chats, profiles, models): the one asked for, else\nthe people's where several spent, the models' where one did." }],
+    ["only", opt("UsageOnly"), { doc: "The one person, account or model everything is of, when one was asked for." }],
     ["wait", "ListNote", { doc: "What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be." }],
     ["empty", "bool"],
     ["tiles", vec("UsageTile")],
@@ -2892,7 +2894,13 @@ export const SHAPES: Record<string, Shape> = {
     ["label", "String"],
     ["value", "String"],
     ["sub", "String"],
+    ["change", opt("String"), { doc: "Against the days before as many: 比前 7 天 ↑18%; none where they spent nothing or are not all read." }],
   ], { doc: "折合费用 $1,911 (按 API 价算).", keepNone: true }),
+  UsageOnly: struct([
+    ["list", "String", { doc: "people, profiles or models" }],
+    ["key", "String", { doc: "Its item's `key` in that list." }],
+    ["title", "String", { said: true }],
+  ], { doc: "The one the usage page shows alone: 只看 林.", keepNone: true }),
   UsageTick: struct([
     ["value", "f64"],
     ["label", "String", { doc: "2k" }],
@@ -2900,7 +2908,7 @@ export const SHAPES: Record<string, Shape> = {
   UsageSeries: struct([
     ["key", "String"],
     ["name", "String", { said: true }],
-  ], { doc: "A part of each day's bar: a person (`key` their email or reference), or the rest (`key` empty).", keepNone: true }),
+  ], { doc: "A part of each day's bar: an item of the list it is split by (`key` its key there), or the rest (`key` empty).", keepNone: true }),
   UsageDay: struct([
     ["day", "String"],
     ["label", "String"],

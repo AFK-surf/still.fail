@@ -295,6 +295,33 @@ test "usage: the totals, the days, 30 天 picked" {
 }
 
 ///|
+test "usage: each total against the days before; a list splits the days, one of it pressed seen alone till 只看 is" {
+  let t = settings_tester("usage")
+  assert_true(t.find("比前 7 天 ↑18%") is Some(_))
+  // the days split by the people (the core's choice: several spent), the people listed
+  assert_true(t.find("Ana") is Some(_))
+  t.tap_text("按模型")
+  t.run_for(@ui.move_most_ms)
+  // split by the models now, the days' parts and the list both
+  assert_true(t.find("GPT-6") is Some(_))
+  assert_true(t.find("Ana") is None)
+  // a model of the list pressed: everything of it alone, said over the days
+  t.scroll_to_end()
+  t.draw()
+  t.tap_text("Haiku 5")
+  t.run_for(@ui.move_most_ms)
+  t.scroll_to(0)
+  t.draw()
+  assert_true(t.find("$50") is Some(_))
+  assert_true(t.find("只看 Haiku 5") is Some(_))
+  // taken off there: all of it again
+  t.tap_text("只看 Haiku 5")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("$118") is Some(_))
+  assert_true(t.find("只看 Haiku 5") is None)
+}
+
+///|
 test "profiles, connects, the vault: their lists" {
   let t = settings_tester("profiles")
   assert_true(t.find("Claude 主账号") is Some(_))

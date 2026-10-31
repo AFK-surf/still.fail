@@ -6740,6 +6740,15 @@ export interface UsageList {
 	items: UsageItem[];
 }
 
+/** The one the usage page shows alone: 只看 林. */
+export interface UsageOnly {
+	/** people, profiles or models */
+	list: string;
+	/** Its item's `key` in that list. */
+	key: string;
+	title: string;
+}
+
 export interface UsageRate {
 	label: string;
 	value: string;
@@ -6757,7 +6766,7 @@ export interface UsagePriceTable {
 	rows: UsagePriceRow[];
 }
 
-/** A part of each day's bar: a person (`key` their email or reference), or the rest (`key` empty). */
+/** A part of each day's bar: an item of the list it is split by (`key` its key there), or the rest (`key` empty). */
 export interface UsageSeries {
 	key: string;
 	name: string;
@@ -6775,6 +6784,8 @@ export interface UsageTile {
 	label: string;
 	value: string;
 	sub: string;
+	/** Against the days before as many: 比前 7 天 ↑18%; none where they spent nothing or are not all read. */
+	change?: string;
 }
 
 /**
@@ -6785,6 +6796,13 @@ export interface UsageTile {
  */
 export interface UsageView {
 	days: number;
+	/**
+	 * The list each day's bar is split by (people, chats, profiles, models): the one asked for, else
+	 * the people's where several spent, the models' where one did.
+	 */
+	split?: string;
+	/** The one person, account or model everything is of, when one was asked for. */
+	only?: UsageOnly;
 	/** What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be. */
 	wait: ListNote;
 	empty: boolean;

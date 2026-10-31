@@ -1411,6 +1411,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "*.firstText",
   ],
   "usage": [
+    "only.title",
     "wait.text",
     "wait.failing.*.text",
     "wait.failing.*.message",

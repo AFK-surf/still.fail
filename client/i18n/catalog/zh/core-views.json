@@ -395,6 +395,8 @@
   "core-views.usage.prices.offline": "station 离线，无法读取价目",
   "core-views.usage.prices.output": "输出",
   "core-views.usage.prices.unit": "美元 / 100 万 token",
+  "core-views.usage.tile.change": "比前 {n} 天 {change}",
+  "core-views.usage.tile.same": "与前 {n} 天持平",
   "core-views.usage.tile.calls": "模型调用",
   "core-views.usage.tile.calls_sub": "日均 {n} 次",
   "core-views.usage.tile.calls_value": "{n} 次",

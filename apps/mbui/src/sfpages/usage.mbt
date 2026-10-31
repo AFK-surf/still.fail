@@ -1,19 +1,23 @@
 // 用量, one page in every frame (ember web/src/cloud/settings.tsx UsageSettings; the narrow app's mobile/Usage.tsx; Usage.tsx UsageBody, Tiles, DaysChart, Bar,
 // Rankings, Ranking, Row, Notes; Usage.css.ts): what the agents spent over the last 7 or 30 days (picked at the page's
-// head), as the core's `usage` view says it: a few totals (the first the way to the prices), each day's cost as a bar
-// split by who it was for (the day pointed at or picked says its numbers, and with several people what each spent),
-// who, which chats, which accounts and which models spent the most, how it is counted. Everything shown is the
-// core's: the page only picks the days, the day and the list shown.
+// head), as the core's `usage` view says it: a few totals, each against the days before as many (the first the way to
+// the prices); then one choice of people, chats, accounts or models (a usage console's "group by") that splits each
+// day's cost as a bar (the day pointed at or picked says its numbers, and what each part spent) and lists who of them
+// spent the most; a person, account or model of the list pressed shows everything of it alone (a console's filter,
+// said over the chart, taken off there), a chat opens. How it is counted last. Everything shown is the core's: the page
+// only picks the days, the list, the one alone and the day.
 
 ///|
-/// What the page picked: its days, the day clicked ("" the last) and the one pointed at ("" none), the list shown
-/// ("" the people's) and whether all of it.
+/// What the page picked: its days, the day clicked ("" the last) and the one pointed at ("" none), the list the days
+/// are split by and shown ("" the core's choice) and whether all of it, and the one seen alone (its list and key; ""
+/// none).
 priv struct UsagePick {
   days : @signals.Signal[Int]
   day : @signals.Signal[String]
   pointed : @signals.Signal[String]
   list : @signals.Signal[String]
   all : @signals.Signal[Bool]
+  only : @signals.Signal[(String, String)]
 }
 
 ///|
@@ -24,6 +28,7 @@ let usage_pick : UsagePick = {
   pointed: @signals.signal("", same=fn(a, b) { a == b }),
   list: @signals.signal("", same=fn(a, b) { a == b }),
   all: @signals.signal(false, same=fn(a, b) { a == b }),
+  only: @signals.signal(("", ""), same=fn(a, b) { a == b }),
 }
 
 ///|
@@ -33,6 +38,7 @@ fn usage_reset() -> Unit {
   usage_pick.pointed.set("")
   usage_pick.list.set("")
   usage_pick.all.set(false)
+  usage_pick.only.set(("", ""))
 }
 
 ///|
@@ -46,7 +52,7 @@ let usage_days_choices : Array[Int] = [7, 30]
 pub fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let days = usage_pick.days.get()
-  let topic = (core.topic)("usage", { "scope": str(here.workspace), "days": Json::number(days.to_double()) })
+  let topic = (core.topic)("usage", usage_args(here, days))
   let v = topic.value
   let body : Array[() -> Unit] = []
   match (v, topic.error) {
@@ -82,6 +88,22 @@ pub fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> U
 }
 
 ///|
+/// What the page asks the core's `usage` view for: its workspace's `days`, split by the list picked, of the one picked
+/// alone.
+fn usage_args(here : Here, days : Int) -> Map[String, Json] {
+  let args : Map[String, Json] = { "scope": str(here.workspace), "days": Json::number(days.to_double()) }
+  let list = usage_pick.list.get()
+  if list != "" {
+    args["split"] = str(list)
+  }
+  let (only_list, only_key) = usage_pick.only.get()
+  if only_list != "" {
+    args["only"] = { "list": str(only_list), "key": str(only_key) }
+  }
+  args
+}
+
+///|
 /// The page's body under its head (UsageBody): the totals, the days and the lists (or that nothing was spent, or what
 /// it waits on), how it is counted; 28 apart.
 fn usage_body(c : @ui.Ctx, core : Core, look : Look, v : Json?) -> Unit {
@@ -110,13 +132,22 @@ fn usage_body(c : @ui.Ctx, core : Core, look : Look, v : Json?) -> Unit {
 ///|
 /// What was spent (`v`): the days, the lists; narrow, each on a card, as the narrow app's.
 fn usage_shown(c : @ui.Ctx, core : Core, look : Look, v : Json?) -> Unit {
+  // (the lists' choice close over the days it splits)
   match look {
     Narrow => {
-      c.box(style=ug_narrow_card, fn() { usage_chart(c, v) }) |> ignore
+      c.box(style=ug_split_days, fn() {
+        usage_split_head(c, v)
+        c.box(style=ug_narrow_card, fn() { usage_chart(c, v) }) |> ignore
+      })
+      |> ignore
       c.box(style=ug_narrow_card, fn() { usage_rankings(c, core, v) }) |> ignore
     }
     Wide => {
-      usage_chart(c, v)
+      c.box(style=ug_split_days, fn() {
+        usage_split_head(c, v)
+        usage_chart(c, v)
+      })
+      |> ignore
       usage_rankings(c, core, v)
     }
   }
@@ -200,6 +231,10 @@ fn usage_tile_pair(c : @ui.Ctx, core : Core, tiles : Array[Json], from : Int) ->
     let b = c.box(style=if prices { ug_tile_link } else { ug_tile }, id~, fn() {
       c.text(text(tv, "label"), style=ug_tile_label) |> ignore
       c.text(text(tv, "value"), style=ug_tile_value) |> ignore
+      // (against the days before as many, where they were read and spent)
+      if text(tv, "change") != "" {
+        c.text(text(tv, "change"), style=ug_tile_change) |> ignore
+      }
       c.text(if prices { @sf.t("web-main.usage.seePrices") } else { text(tv, "sub") }, style=ug_tile_sub) |> ignore
     })
     if prices {
@@ -437,28 +472,59 @@ fn usage_bar(c : @ui.Ctx, dv : Json?, series : Array[Json], top : Double, many :
 }
 
 ///|
-/// The lists, one at a time (Rankings): which, at their head (the people's first), then the most spent first, the
-/// first 8 until all are asked for (Ranking).
+/// Which of the lists is shown: the one the days are split by (the core's `split`: the one picked, else its choice).
+fn usage_list_at(v : Json?, lists : Array[Json]) -> Int {
+  let want = if usage_pick.list.get() == "" { text(v, "split") } else { usage_pick.list.get() }
+  lists.search_by(fn(l) { text(Some(l), "key") == want }).unwrap_or(0)
+}
+
+///|
+/// Over the days (a console's "group by" and its filter): the lists, one picked to split the days by and list under
+/// them; and where one person, account or model is seen alone, that said, pressed to see all again.
+fn usage_split_head(c : @ui.Ctx, v : Json?) -> Unit {
+  let lists = items(v, "lists")
+  if lists.length() == 0 {
+    return
+  }
+  let at = usage_list_at(v, lists)
+  c.box(style=ug_split_head, fn() {
+    let titles = lists.map(fn(l) { text(Some(l), "title") })
+    // (narrow: as wide as the page, each an equal share; wide: each as wide as ug_list_pick_w at least)
+    let picked = @sf.segmented(c, "usage-lists", titles, at, item_w=ug_list_pick_w, said=@sf.t("web-main.usage.splitBy"))
+    if picked != at {
+      usage_pick.list.set(text(Some(lists[picked]), "key"))
+      usage_pick.all.set(false)
+    }
+    let only = field(v, "only")
+    if only is Some(Object(_)) {
+      let name = text(only, "title")
+      // (on a line of its own, as wide as its words)
+      c.box(style=ug_only_line, fn() {
+        if @sf.chip(c, @sf.t("web-main.usage.only", args=[("name", name)]), key="usage-only", icon="close",
+          said=@sf.t("web-main.usage.onlyOff", args=[("name", name)])) {
+          usage_pick.only.set(("", ""))
+        }
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The lists, one at a time (Rankings): the one the days are split by, the most spent first, the first 8 until all
+/// are asked for (Ranking).
 fn usage_rankings(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
   let lists = items(v, "lists")
   if lists.length() == 0 {
     return
   }
-  let want = if usage_pick.list.get() == "" { "people" } else { usage_pick.list.get() }
-  let at = lists.search_by(fn(l) { text(Some(l), "key") == want }).unwrap_or(0)
+  let at = usage_list_at(v, lists)
   let list = Some(lists[at])
   let kind = text(list, "key")
   c.box(style=ug_rankings, fn() {
-    c.box(style=ug_list_head, fn() {
-      let titles = lists.map(fn(l) { text(Some(l), "title") })
-      // (narrow: as wide as the card, each an equal share; wide: each as wide as ug_list_pick_w at least)
-      let picked = @sf.segmented(c, "usage-lists", titles, at, item_w=ug_list_pick_w)
-      if picked != at {
-        usage_pick.list.set(text(Some(lists[picked]), "key"))
-        usage_pick.all.set(false)
-      }
-    })
-    |> ignore
+    // (what they are listed by, over them)
+    c.box(style=ug_list_head, fn() { c.text(@sf.t("web-main.usage.ranked"), style=ug_list_title) |> ignore }) |> ignore
     let all_items = items(list, "items")
     c.box(style=ug_rows, fn() {
       for i, it in all_items {
@@ -503,13 +569,20 @@ fn usage_row(c : @ui.Ctx, core : Core, it : Json, rank : Int, kind : String) -> 
   let iv = Some(it)
   let chat = field(iv, "chat")
   let opens = kind == "chats" && chat is Some(Object(_))
-  let id = if opens { c.id("usage-item/" + kind + "/" + text(iv, "key")) } else { 0 }
+  // (a person, account or model: seen alone; not the one already)
+  let alone = kind != "chats" && usage_pick.only.get() != (kind, text(iv, "key"))
+  let id = if opens || alone { c.id("usage-item/" + kind + "/" + text(iv, "key")) } else { 0 }
   if opens {
     if c.clicked(id) {
       (core.open_chat)(text(chat, "station"), text(chat, "session"), text(iv, "title"))
     }
   }
-  c.box(style=if opens { ug_row_link } else { ug_row }, id~, fn() {
+  if alone && c.clicked(id) {
+    usage_pick.only.set((kind, text(iv, "key")))
+    usage_pick.all.set(false)
+    usage_pick.day.set("")
+  }
+  let b = c.box(style=if opens || alone { ug_row_link } else { ug_row }, id~, fn() {
     c.box(style=ug_row_line, fn() {
       let person = field(iv, "person")
       if kind == "people" && person is Some(Object(_)) {
@@ -531,14 +604,19 @@ fn usage_row(c : @ui.Ctx, core : Core, it : Json, rank : Int, kind : String) -> 
       } else {
         c.box(style=ug_rank_box, fn() { c.text(rank.to_string(), style=ug_rank) |> ignore }) |> ignore
       }
+      // (its name and cost on a line, what it is and its share on the next: what it is shares its line with the
+      // share's few words alone, the room of large words on a phone)
       c.box(style=ug_row_text, fn() {
-        c.text(text(iv, "title"), style=ug_row_title) |> ignore
-        c.text(join([text(iv, "sub"), text(iv, "detail")], " · "), style=ug_row_sub) |> ignore
-      })
-      |> ignore
-      c.box(style=ug_row_cost, fn() {
-        c.text(text(iv, "costText"), style=ug_cost) |> ignore
-        c.text(text(iv, "shareText"), style=ug_row_share_words) |> ignore
+        c.box(style=ug_row_pair, fn() {
+          c.text(text(iv, "title"), style=ug_row_title) |> ignore
+          c.text(text(iv, "costText"), style=ug_cost) |> ignore
+        })
+        |> ignore
+        c.box(style=ug_row_pair, fn() {
+          c.text(join([text(iv, "sub"), text(iv, "detail")], " · "), style=ug_row_sub) |> ignore
+          c.text(text(iv, "shareText"), style=ug_row_share_words) |> ignore
+        })
+        |> ignore
       })
       |> ignore
     })
@@ -559,7 +637,9 @@ fn usage_row(c : @ui.Ctx, core : Core, it : Json, rank : Int, kind : String) -> 
     })
     |> ignore
   })
-  |> ignore
+  if alone {
+    c.semantics(b, Button, id~, label=@sf.t("web-main.usage.only", args=[("name", text(iv, "title"))]))
+  }
 }
 
 ///|
@@ -620,6 +700,11 @@ let ug_tile_label : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 /// Its figure (tileValue: the heading's 22 on 30, 600).
 // kept across runs: a value (no field of it changes)
 let ug_tile_value : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false, w=Full)
+
+///|
+/// Its figure against the days before (比前 7 天 ↑18%): the label's size, in the words' ink, under the figure.
+// kept across runs: a value (no field of it changes)
+let ug_tile_change : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, w=Full)
 
 ///|
 /// What it is made of (tileSub), in lines where the tile is narrower than it: none of it cut.
@@ -792,8 +877,27 @@ let ug_share_rest : @ui.Style = @ui.css("h=Full")
 let ug_rankings : @ui.Style = @ui.css("w=Full")
 
 ///|
+/// The lists' choice and the days under it, 16 apart.
+// kept across runs: a value (no field of it changes)
+let ug_split_days : @ui.Style = @ui.css("w=Full gap=S4")
+
+///|
+/// The lists' head (listHead: 8 over the rows), what they are listed by in the label's words.
 // kept across runs: a value (no field of it changes)
 let ug_list_head : @ui.Style = @ui.css("row w=Full pb=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ug_list_title : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+
+///|
+/// Over the days: the lists' choice and the one seen alone under it, 8 apart.
+// kept across runs: a value (no field of it changes)
+let ug_split_head : @ui.Style = @ui.css("w=Full gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ug_only_line : @ui.Style = @ui.css("row w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -826,15 +930,16 @@ let ug_row_text : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_row_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false, w=Full)
+let ug_row_pair : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_row_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Full)
+let ug_row_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false, w=@sf.grow)
 
 ///|
+/// What it is (its calls and tokens), in lines where the row is narrower than it: none of it cut.
 // kept across runs: a value (no field of it changes)
-let ug_row_cost : @ui.Style = @ui.css("gap=SPx align=AEnd")
+let ug_row_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
