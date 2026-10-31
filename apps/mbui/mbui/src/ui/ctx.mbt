@@ -242,6 +242,9 @@ struct EditorState {
   mut built_id : Int
   /// what its words are told as, as they change (a Field's: Field::text followed), none for an editor of its own
   mut said_words : @signals.Signal[String]?
+  /// its words with what the input method composes in them told as, as that changes (Field::composed_said), once
+  /// asked for
+  mut said_composed : @signals.Signal[String]?
 }
 
 ///|

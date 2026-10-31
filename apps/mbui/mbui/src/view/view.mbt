@@ -1716,6 +1716,38 @@ pub fn View::words(
 }
 
 ///|
+/// How big it is as what it hosts (the node View::hosted made: nothing of the tree's own in it) is laid out, as `content` says what
+/// that is as it changes: `size` given it and the width it is offered (None: none offered, as wide as it comes to),
+/// answering how wide and tall; offered exactly a width, as wide as that. `size` reads nothing that changes but what
+/// `content` gives it (run with nothing followed): measured again only as `content` comes out otherwise, as the room
+/// offered changes, or as all words are measured anew (Tree::words_again). Laid out by what holds it as words are.
+pub fn[K : Eq] View::measured(self : View, content : Live[K], size : (K, Double?) -> (Double, Double)) -> View {
+  guard self.live() is Some(n) else { return self }
+  let tree = self.tree
+  let k : Ref[K?] = Ref(None)
+  n.flex.measure = Some(fn(w, wm, _h, _hm) {
+    tree.work.measured = tree.work.measured + 1
+    match k.val {
+      Some(v) => {
+        let (mw, mh) = @signals.untracked(fn() {
+          size(v, match wm {
+            Exactly | AtMost => Some(w)
+            Undefined => None
+          })
+        })
+        match wm {
+          Exactly => (w, mh)
+          _ => (mw, mh)
+        }
+      }
+      None => (0.0, 0.0)
+    }
+  })
+  self.bind(35, content, Layout, fn(v) { k.val = Some(v) })
+  self
+}
+
+///|
 /// The words it shows in pieces, each set its own way (a weight, an ink: WordsRun), one paragraph laid out as one
 /// (View::words otherwise: read out, found and measured as the pieces' words one after another), as they change.
 pub fn View::words_runs(

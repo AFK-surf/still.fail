@@ -370,8 +370,9 @@ pub fn View::finger_target(self : View, x : Double, y : Double) -> Bool {
 /// What its words measure and how they are drawn changed for all of them (the system's size of words, how the theme
 /// shapes them): every node with words laid out and drawn again.
 pub fn Tree::words_again(self : Tree) -> Unit {
+  // (what shows words, and what is measured as what it hosts is: View::measured)
   for at, n in self.nodes {
-    if n.live && n.look.words != "" {
+    if n.live && (n.look.words != "" || n.flex.measure is Some(_)) {
       self.layout_marked_at(at)
       self.look_marked_at(at)
     }
