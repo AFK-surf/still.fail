@@ -2021,11 +2021,24 @@
       }
       ta.value = '';
     });
-    ta.addEventListener('paste', (e) => {
-      const t = e.clipboardData.getData('text/plain');
-      if (t) cb.text(0, t, 0, 0);
+    // ⌘V (the browser's paste): files on the clipboard (copied in Finder, a screenshot's picture) are the app's ⌘V
+    // (1000 + v), which reads the clipboard for them (H.clipRead: this paste's, as the page may not read files off the
+    // clipboard itself), as the Mac's host's paste_now; else its words, put in as typed
+    const pasted = (e) => {
+      const files = [...(e.clipboardData?.files || [])];
+      if (files.length) {
+        pasteHeld = { files, text: e.clipboardData.getData('text/plain') || '' };
+        cb.key(1000 + 'v'.charCodeAt(0), keysCmd());
+      } else {
+        const t = e.clipboardData?.getData('text/plain') || '';
+        if (t && e.target === ta) cb.text(0, t, 0, 0);
+        else if (t) return;
+      }
       e.preventDefault();
-    });
+    };
+    ta.addEventListener('paste', pasted);
+    // (with no field focused, what is pasted goes to the page: a chat's ⌘V of a picture with the composer not focused)
+    window.addEventListener('paste', (e) => { if (e.target !== ta) pasted(e); });
     ta.addEventListener('compositionupdate', (e) => cb.text(1, e.data || '', (e.data || '').length, 0));
     ta.addEventListener('compositionend', (e) => {
       cb.text(1, '', 0, 0);
@@ -2129,6 +2142,10 @@
   const PNG_MAX = 8 << 20, SOURCE_MAX = 32 << 20, PIXELS_MAX = 16 * 1024 * 1024;
   const clips = new Map();
   let clipNext = 1;
+  // what the browser's last paste had of files, for the app's read of the clipboard it set off (setupInput's `pasted`)
+  let pasteHeld = null;
+  // the command key of the system the page is on, as the app's ⌘V is said (@hostapi.keys_platform: ⌘ on Apple's)
+  const keysCmd = () => (/mac|iphone|ipad|ipod/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '') ? 8 : 2);
   async function asPng(blob) {
     if (blob.type === 'image/png') return blob.size <= PNG_MAX ? [1, new Uint8Array(await blob.arrayBuffer())] : [2, null];
     if (blob.size > SOURCE_MAX) return [2, null];
@@ -2144,12 +2161,22 @@
   }
   H.clipRead = () => {
     const id = clipNext++;
-    const r = { state: 0, text: '', picture: 0, png: new Uint8Array(0) };
+    const r = { state: 0, text: '', picture: 0, png: new Uint8Array(0), files: [] };
     clips.set(id, r);
+    const held = pasteHeld;
+    pasteHeld = null;
     (async () => {
       const cl = navigator.clipboard;
       try {
-        if (cl && cl.read) {
+        if (held) {
+          // the paste's own files (the browser's paste event: H's `pasted`), read whole up to the most a file is read
+          // (@hostapi.clip_file_max); its words beside them
+          r.text = held.text;
+          for (const f of held.files) {
+            if (f.size > 1024 * 1024 * 1024) continue;
+            r.files.push([f.name || (f.type.startsWith('image/') ? 'image.png' : 'file'), new Uint8Array(await f.arrayBuffer())]);
+          }
+        } else if (cl && cl.read) {
           for (const item of await cl.read()) {
             if (item.types.includes('text/plain')) r.text = await (await item.getType('text/plain')).text();
             const t = item.types.find((x) => x.startsWith('image/'));
@@ -2180,10 +2207,10 @@
   H.clipPicture = (id) => (clips.get(id) || {}).picture || 0;
   H.clipText = (id) => (clips.get(id) || {}).text || '';
   H.clipPng = (id) => (clips.get(id) || {}).png || new Uint8Array(0);
-  // (a page reads no files off the clipboard: the browser's paste event has them, not navigator.clipboard)
-  H.clipFiles = () => 0;
-  H.clipFileName = () => '';
-  H.clipFile = () => new Uint8Array(0);
+  // (a page reads files off the clipboard only in a paste: the browser's paste event has them, not navigator.clipboard)
+  H.clipFiles = (id) => (clips.get(id) || {}).files?.length || 0;
+  H.clipFileName = (id, i) => (clips.get(id) || {}).files?.[i]?.[0] || '';
+  H.clipFile = (id, i) => (clips.get(id) || {}).files?.[i]?.[1] || new Uint8Array(0);
   H.clipEnd = (id) => { clips.delete(id); };
   H.clipSet = (text, png, label) => {
     const cl = navigator.clipboard;
