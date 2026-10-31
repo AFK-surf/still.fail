@@ -72,7 +72,8 @@ export function dbName(sub: string): string {
 }
 
 /// The device's own values (not an account's): kept in the host's storage, one storage value per table, read at start.
-export const DEVICE_TABLES = ["prefs", "changelog", "choice", "chat_ref", "drive_place"] as const;
+/// (`verified`: signatures checked on this device, vault/verified.ts)
+export const DEVICE_TABLES = ["prefs", "changelog", "choice", "chat_ref", "drive_place", "verified"] as const;
 export type DeviceTable = (typeof DEVICE_TABLES)[number];
 
 class Device {
@@ -245,7 +246,10 @@ class Watched implements Sql {
 
   all(sql: string, params?: readonly SqlValue[]): SqlRow[] {
     try {
-      return this.#inner.all(sql, params);
+      const rows = this.#inner.all(sql, params);
+      rowsRead.count += rows.length;
+      if (rowsRead.by) rowsRead.by.set(sql, (rowsRead.by.get(sql) ?? 0) + rows.length);
+      return rows;
     } catch (e) {
       return this.#saw(e);
     }
@@ -255,6 +259,10 @@ class Watched implements Sql {
     this.#inner.close();
   }
 }
+
+/// How many rows the core read from its databases: what a page opening read of what the device holds (test/
+/// chat-open-lookup.test.ts: a chat opens by what it shows, not by what the device holds besides).
+export const rowsRead: { count: number; by?: Map<string, number> } = { count: 0 };
 
 /// An account's database opened, or why not (`sql`: the file opened, its tables not read).
 type Opened = { db: AccountDb; sql: Sql } | { db: null; sql: Sql | null; error: SqlError | HostError };

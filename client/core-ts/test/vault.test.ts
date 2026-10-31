@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { Effect } from "effect";
+import { Core } from "../src/core.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { HostError } from "../src/error.ts";
 import { t } from "../src/i18n.ts";
@@ -21,6 +22,7 @@ import {
   openSeal, recoveryPair, saveContext, sealWith, sign, signedOk, toWords, verifies,
 } from "../src/vault/crypto.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
+import { forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
 import { BOX_KEY, BOX_PUB, UNLOCK_MS } from "../src/views/vault.ts";
 import { subscribe, call } from "./helpers.ts";
 import { type Answers, base, entry, started, stationReplies, status } from "./station-fixture.ts";
@@ -47,6 +49,27 @@ test("a_signature_is_checked_once_for_what_it_is_over_not_again_each_time_it_is_
   assert.equal(signedOk({ ...record, device: "d-other" }, TAG.box), false);
   assert.equal(signedOk(record, TAG.vault), false);
   assert.equal(verifies.count - before, 3);
+});
+
+test("a_signature_checked_on_this_device_is_kept_past_the_run_not_checked_again_as_the_app_starts", () => {
+  // The lock's entries and a device's certificate were checked again each time the app started, the first chat with
+  // vault cards waiting for it: 0.87 s on a phone (0.1.6339, 2026-10-31).
+  const kept = new Map<string, unknown>();
+  keepVerified({ get: (k) => kept.get(k), put: (k, ok) => void kept.set(k, ok) });
+  try {
+    const signer = key(fill(9));
+    const record = sign({ device: "d-kept", ws: "w", box: "x25519:" + "11".repeat(32) }, TAG.box, signer);
+    const before = verifies.count;
+    assert.ok(signedOk(record, TAG.box));
+    assert.equal(kept.size, 1);
+    // the app started anew: what this run found is gone, what is kept answers
+    forgetVerifiedHere();
+    assert.ok(signedOk(record, TAG.box));
+    assert.equal(verifies.count - before, 1, "checked once");
+    assert.equal(signedOk({ ...record, device: "d-kept-2" }, TAG.box), false);
+  } finally {
+    keepVerified(null);
+  }
 });
 
 test("the formats: the core makes and checks the stations' vectors", () => {
@@ -551,6 +574,31 @@ test("a chat's card of an agent's request comes answered with its post, from the
   const there = await w.watch(2, { topic: "chat", station: "ws/st", thread: 7 });
   assert.deepEqual(there().messages.filter((m: any) => m.card?.vaultAsk).map((m: any) => m.card.vaultAsk.answer), ["elsewhere", "elsewhere"]);
   w.core.close();
+});
+
+test("a_chat_with_vault_cards_opens_checking_no_signature_once_this_device_checked_them_the_app_started_anew", async () => {
+  // The lock's entries and this device's certificate, checked as the first chat with vault cards opened after each
+  // start: 0.87 s of it on a phone (2026-10-31). Checked once on this device, opening one checks none.
+  const r = await rig(false, false, cardsInChat());
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const chat = await r.watch(2, { topic: "chat", station: "ws/st", thread: 7 });
+  assert.equal(chat().messages.filter((m: any) => m.card?.vaultAsk).length, 2);
+  await r.core.close();
+  forgetVerifiedHere();
+  const again = await Core.create(r.host, { clock: r.host.time.clock, sample: 0, wire: () => new HostWire(r.host) });
+  try {
+    await r.host.time.pass(1000, 100);
+    r.host.takeEmitted();
+    const before = verifies.count;
+    subscribe(again, again.connect(), 2, { topic: "chat", station: "ws/st", thread: 7 });
+    await r.host.time.pass(200, 10);
+    const value = r.host.takeEmitted().map(([, m]) => m as any).find((m) => m.id === 2 && "value" in m)?.value;
+    assert.deepEqual(value.messages.filter((m: any) => m.card?.vaultAsk).map((m: any) => m.card.vaultAsk.answer), ["approve", "approve"]);
+    assert.equal(verifies.count - before, 0, "no signature checked");
+  } finally {
+    await again.close();
+  }
 });
 
 test("vault calls: a secret an agent asks to keep, opened with this device's box key, written into a vault of one's own, then told", async () => {

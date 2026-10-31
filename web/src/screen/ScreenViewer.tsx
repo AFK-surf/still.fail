@@ -50,7 +50,7 @@ const tell = (name: string, params: Record<string, unknown>) => { core().call(na
 
 const newName = () => (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
 
-export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onGone, phone = false, panel }: {
+export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onGone, onGrants, phone = false, panel }: {
   /** The station's address (`<workspace>/<id>`). */
   station: string;
   /** The screen's id on it (`desktop`, `browser:<target>`). */
@@ -61,6 +61,8 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
   onWindow?: (() => void) | undefined;
   /** Its screen gone (a sign-in's tab closed as it ended): what was opened for it is left. */
   onGone?: (() => void) | undefined;
+  /** Opens its station's page where its grants are asked for (权限): offered while one is missing. */
+  onGrants?: (() => void) | undefined;
   /** The phone's way: bars above and below, fingers, the keyboard on asking. */
   phone?: boolean;
   /** Beside a chat, in a tab of its side panel (named there): its page opened instead (`onExpand`). */
@@ -422,6 +424,8 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
   /** What happened, as the core says it (and what the station lacks, where it says). */
   const headline = OVER.has(phase) ? t(`web-pages.screen.over.${phase}`) : "";
   const why = [failure ?? shown?.message, access?.message].filter((w, i, all): w is string => !!w && w !== headline && all.indexOf(w) === i);
+  // Denied for a grant the station lacks (macOS's): where it is asked for is a tap away, not to be looked for.
+  const granting = phase === "denied" && onGrants !== undefined && (access?.capture === false || access?.control === false);
   // How this device reaches the station while it is seen: the way (直连, a relay), its round trip and packets lost,
   // each in its colour as it gets worse (the station page's figures, the `stationNet` view). With a mouse they are the
   // bar's own mark (NetChip); a phone says them in its head's line.
@@ -525,7 +529,8 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onG
           </div>
           <div className={`${css.noteFoot} ${panelEdge}`}>
             <PanelButton tone={AGAIN.has(phase) ? "quiet" : "accent"} onClick={onBack}>{t("common.back")}</PanelButton>
-            {AGAIN.has(phase) && <PanelButton tone="accent" onClick={() => { setShown(null); setAttempt((n) => n + 1); }}>{t("web-pages.screen.again")}</PanelButton>}
+            {AGAIN.has(phase) && <PanelButton tone={granting ? "quiet" : "accent"} onClick={() => { setShown(null); setAttempt((n) => n + 1); }}>{t("web-pages.screen.again")}</PanelButton>}
+            {granting && <PanelButton tone="accent" onClick={onGrants}>{t("web-pages.screen.toGrants")}</PanelButton>}
           </div>
         </div>
       )}

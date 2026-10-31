@@ -552,11 +552,17 @@ fn app_version() -> Int {
 }
 
 ///|
-fn update_install(url : String, sha256 : String, size : Double, name : String) -> Unit {
+fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool) -> Unit {
   ignore(url)
   ignore(sha256)
   ignore(size)
   ignore(name)
+  ignore(now)
+}
+
+///|
+fn update_apply(said : String) -> Unit {
+  ignore(said)
 }
 
 ///|

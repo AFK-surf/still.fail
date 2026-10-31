@@ -1245,11 +1245,27 @@ pub fn fixture(mode : String) -> Source {
 pub fn fixture_update(version : String) -> Unit {
   update.available.set(Some({
     "versionName": Json::string(version),
+    "file": Json::string("android/stillfail-beta-\{version}.apk"),
+    "size": Json::number(23515867.0),
     "news": ["改进：对话列表滑到底时不再多停一下", "修复：图片预览关闭后偶尔留下一块空白", "新增：设置里可以给 station 起别名"],
   }))
   if update.source is None {
     fixture_updates()
   }
+}
+
+///|
+/// The newer build offered (fixture_update) as the host says it goes: `phase` (downloading, ready, allow…), how far
+/// (`percent`, -1 not known), put in place by itself while the app is away where `away` (Android's).
+pub fn fixture_update_goes(version : String, phase : String, percent? : Int = -1, away? : Bool = true) -> Unit {
+  let said : Json = {
+    "phase": Json::string(phase),
+    "percent": Json::number(percent.to_double()),
+    "error": Json::string(""),
+    "file": Json::string("stillfail-beta-\{version}.apk"),
+    "away": Json::boolean(away),
+  }
+  @ui.update_told_as(said.stringify())
 }
 
 ///|

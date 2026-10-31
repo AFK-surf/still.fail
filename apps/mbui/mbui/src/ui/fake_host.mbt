@@ -19,8 +19,13 @@ impl @hostapi.Host for FakeHost with drive(_, a0, a1) {
 }
 
 ///|
-impl @hostapi.Host for FakeHost with update_install(_, a0, a1, a2, a3) {
-  update_install(a0, a1, a2, a3)
+impl @hostapi.Host for FakeHost with update_fetch(_, a0, a1, a2, a3, a4) {
+  update_fetch(a0, a1, a2, a3, a4)
+}
+
+///|
+impl @hostapi.Host for FakeHost with update_apply(_, a0) {
+  update_apply(a0)
 }
 
 ///|

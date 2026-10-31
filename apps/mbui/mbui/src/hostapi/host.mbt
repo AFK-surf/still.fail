@@ -97,7 +97,8 @@ pub(open) trait Host {
   shared_in(Self) -> String = _
   shared_in_file(Self, Int) -> Bytes = _
   app_version(Self) -> Int = _
-  update_install(Self, String, String, Double, String) -> Unit = _
+  update_fetch(Self, String, String, Double, String, Bool) -> Unit = _
+  update_apply(Self, String) -> Unit = _
   update_state(Self) -> String = _
   install_package(Self, String, Bytes) -> Unit = _
   drive(Self, Int, String) -> Bool = _
@@ -651,7 +652,12 @@ impl Host with app_version(_) {
 }
 
 ///|
-impl Host with update_install(_, _, _, _, _) {
+impl Host with update_fetch(_, _, _, _, _, _) {
+  ()
+}
+
+///|
+impl Host with update_apply(_, _) {
   ()
 }
 
@@ -1984,16 +1990,30 @@ pub fn app_version() -> Int {
 }
 
 ///|
-/// A newer build at `url` (its `sha256`, `size` bytes) downloaded as `name`, checked and handed to the system's
-/// installer (Android: still.fail's Updates.kt), or put in this app's place and opened as it quits (macOS: mac_app.m;
-/// Linux, its own installer run: linux_update.h); nothing elsewhere. How it goes: `update_state`.
-pub fn update_install(url : String, sha256 : String, size : Double, name : String) -> Unit {
-  current.val.update_install(url, sha256, size, name)
+/// A newer build at `url` (its `sha256`, `size` bytes) downloaded as `name` by itself and checked, made ready to be put
+/// in this app's place (`update_apply`; Android's Updates.java puts it in place by itself once the app has been out of
+/// sight a while). `now`: asked by the person, downloaded at once; else it may wait for a network that costs nothing
+/// (Android's: none metered). One already ready, or coming, by that name: nothing more. Nothing where the app does
+/// not update itself. How it goes: `update_state`.
+pub fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool) -> Unit {
+  current.val.update_fetch(url, sha256, size, name, now)
 }
 
 ///|
-/// How an update goes, as JSON text: `{"phase","percent","error"}` (phase idle, allow: the person's leave to install
-/// apps asked for, downloading, retrying, installing, handed, failed); "" where there is none.
+/// The build made ready (`update_fetch`) put in this app's place now: the app ends, and is opened again as the newer
+/// build where the system lets it (macOS, Windows, Linux); where it does not (Android: no app opens itself from
+/// behind), the newer build says `said` in a notification that opens it. Where the person's leave to install apps
+/// is wanted (Android's), the system's page for it is opened first, and once it is given the build is put in place.
+pub fn update_apply(said : String) -> Unit {
+  current.val.update_apply(said)
+}
+
+///|
+/// How an update goes, as JSON text: `{"phase","percent","error","file"}`: phase idle, waiting (for a network that
+/// costs nothing), downloading, retrying, ready (downloaded and checked, waiting to be put in place), allow (the
+/// person's leave to install apps wanted), installing, failed; `file` the build's name (update_fetch's) while there is
+/// one; `away` true where a build ready is put in place by itself while the app is out of sight (Android's); "" where
+/// the app does not update itself.
 pub fn update_state() -> String {
   current.val.update_state()
 }

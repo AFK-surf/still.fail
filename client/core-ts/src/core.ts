@@ -34,6 +34,7 @@ import { CloudSync } from "./sync/cloud.ts";
 import { Priority, Scheduler } from "./sync/scheduler.ts";
 import { Kind, SAMPLE, Tracer } from "./trace.ts";
 import { spentClock } from "./spent.ts";
+import { keepVerified } from "./vault/verified.ts";
 import { Wakes, WakingHost } from "./wake.ts";
 import { Workspaces } from "./workspace.ts";
 import { install as installStationCalls } from "./station/calls.ts";
@@ -208,6 +209,8 @@ export class Core {
       inner.data.onSignedOut = (sub, me) => inner.cloudSync?.signedOut(sub, me);
       inner.data.onNote = () => inner.status.setDb(inner.data.notes);
       yield* inner.data.open(inner.accounts.list().map((a) => a.sub));
+      // (signatures checked once on this device, kept with its own values: vault/verified.ts)
+      keepVerified({ get: (k) => inner.data.device.get("verified", k), put: (k, ok) => void inner.data.device.put("verified", k, ok) });
       prefs.followLang(inner.data);
       prefs.followApp(inner.data);
       // What goes out is what the clients' types say (client/core-ts/src/shapes/schema.ts).

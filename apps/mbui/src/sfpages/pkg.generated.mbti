@@ -490,8 +490,6 @@ pub fn row_mark(@ui.Ctx, String, String) -> Unit
 
 pub let row_more : @ui.Style
 
-pub fn row_moving(@ui.Ctx, Int32, String, String, Int32) -> Unit
-
 pub fn sample_chat(Int32) -> @sfbase.ChatItem
 
 pub fn sample_stations() -> Array[Json]
@@ -599,6 +597,10 @@ pub let triple_words_xs : @ui.TextStyle
 pub fn turn_off_dialog(@settings.Core, String, String) -> Unit
 
 pub fn unpremultiplied(FixedArray[Byte]) -> FixedArray[Byte]
+
+pub fn update_card(@ui.Ctx, @sfbase.Source) -> Unit
+
+pub fn update_card_shown() -> Bool
 
 pub fn usage_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame) -> Unit
 

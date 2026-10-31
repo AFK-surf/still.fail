@@ -105,10 +105,6 @@ fn transfers_list(
       @sf.t("web-pages.files.transfers"),
       fn(c, _) {
         let all = coming(src, ws)
-        // (a newer build of the app first: sfbase updates.mbt)
-        if update_coming() {
-          update_row(c, src)
-        }
         for k in all.keeping {
           keeping_row(c, src, k)
         }
@@ -170,96 +166,31 @@ fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
 }
 
 ///|
-/// In a small screen's home's top bar: what comes to this device and goes between the stations, a newer build of the
-/// app among it (offered, coming, failed: sfbase updates.mbt), as one key (@sf.progress_key: the download's mark, a
-/// ring as far as what comes has come, the accent's dot while a build is offered, red's when one failed); pressed,
-/// their list (from the foot). Nothing while there is none.
+/// In a small screen's home's top bar: what comes to this device and goes between the stations, as one key
+/// (@sf.progress_key: the download's mark, a ring as far as what comes has come, red's dot when one failed); pressed,
+/// their list (from the foot). Nothing while there is none. (A newer build of the app is not among it: the host
+/// brings it by itself, sfbase updates.mbt.)
 pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark : Double) -> Unit {
   let all = coming(src, ws)
   let id = c.id("home/transfers")
   let go = fn(at : DriveAt) { open_page(Drive(at)) }
-  let build = update_coming()
-  if all.none() && !build {
+  if all.none() {
     transfers_list(c, src, ws, id, go, true)
     return
   }
   let (n, percent, failed) = all.going()
-  let updating = @sfbase.update_under_way()
-  // how far: what comes, else the build as far as the host says (not known: none)
-  let ring = if n > 0 {
-    Some(percent.to_double() / 100.0)
-  } else if updating {
-    Some(@sfbase.update_part().or(0.0))
-  } else {
-    None
-  }
+  let ring = if n > 0 { Some(percent.to_double() / 100.0) } else { None }
   let label = if n > 0 { coming_words(n, percent) } else { @sf.t("web-pages.files.transfers") }
-  let offered = build && !updating && @sfbase.update_phase() != "failed"
-  if @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, dot=offered, failed=failed || @sfbase.update_phase() == "failed") {
+  if @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, failed~) {
     ftransfers.open.set(!ftransfers.open.get())
   }
   transfers_list(c, src, ws, id, go, false)
 }
 
 ///|
-/// Whether a newer build of the app is to be listed with what comes: offered (it brings something the changelog
-/// says), coming, being installed, or failed.
-fn update_coming() -> Bool {
-  let offered = match @sfbase.update.available.get() {
-    Some(v) => items(Some(v), "news").length() > 0
-    None => false
-  }
-  offered || @sfbase.update_under_way() || @sfbase.update_phase() == "failed"
-}
-
-///|
-/// A newer build of the app with what comes (sfbase updates.mbt): 更新到 …; offered, what it brings first, its key
-/// to install it (the list staying open, to watch it come); coming, how far (a bar) and how it stands; failed, why in
-/// red, its key to try again.
-fn update_row(c : @ui.Ctx, src : Source) -> Unit {
-  let t = @sf.theme()
-  let failed = @sfbase.update_phase() == "failed"
-  let going = @sfbase.update_under_way()
-  let version = text(@sfbase.update.available.get(), "versionName")
-  let first = match items(@sfbase.update.available.get(), "news").get(0) {
-    Some(String(line)) => line
-    _ => ""
-  }
-  let said = if going { @sfbase.update_progress() } else if failed { @sfbase.update_why() } else { first }
-  c.box(style=ftransfer_row, fn() {
-    c.box(style=ftransfer_mark, fn() {
-      @sf.icon(c, if failed { "retry" } else { "sparks" }, size=transfer_icon, color=if failed { t.p.red } else { t.p.muted }) |> ignore
-    })
-    |> ignore
-    c.box(style=ftransfer_text, fn() {
-      c.box(style=ftransfer_title, fn() {
-        c.text(@sf.t("android-chat.home.update", args=[("version", version)]), style=ftransfer_title_words) |> ignore
-      })
-      |> ignore
-      if going {
-        @sf.progress(c, "update/coming", @sfbase.update_part())
-      }
-      if said != "" {
-        c.text(said, style=if failed { ftransfer_failed } else { ftransfer_status }) |> ignore
-      }
-    })
-    |> ignore
-    c.box(style=ftransfer_actions, fn() {
-      if !going &&
-        @sf.panel_icon_button(c, "update/install", if failed { "retry" } else { "download" }, @sf.t("android-chat.home.update", args=[("version", version)])) {
-        // (the list stays: how far the build has come is said in this row as it downloads)
-        c.tell("update/install", fn() { @sfbase.update_install(src) })
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// Whether a small screen's home's top bar has its key (transfers_key): what comes, or a newer build.
+/// Whether a small screen's home's top bar has its key (transfers_key): what comes.
 pub fn transfers_key_shown(src : Source, ws : String) -> Bool {
-  transfers_shown(src, ws) || update_coming()
+  transfers_shown(src, ws)
 }
 
 ///|

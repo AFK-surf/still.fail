@@ -351,7 +351,8 @@ pub fn composer(
           match (spec.toolbar, composing.toolbar_leaving) {
             (Some(f), _) => {
               chosen = c.box(style=choices, f)
-              // a new chat's, its first words sent: fading as its other parts by the composer do
+              // a new chat's, the chat its first words were sent to not made: coming back as its other parts by the
+              // composer do
               let (_, gone) = @sfbase.new_sending(c)
               if gone > 0.0 {
                 c.look(chosen, @ui.look(alpha=1.0 - gone))

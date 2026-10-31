@@ -215,6 +215,8 @@ pub let presence_out_ms : Double
 
 pub fn progress(@ui.Ctx, String, Double?, max? : Double, w? : @ui.Size, label? : String, look? : (@ui.Ctx, ProgressState) -> Unit) -> Unit
 
+pub let progress_known_ms : Double
+
 pub fn progress_look(@ui.Ctx, ProgressState) -> Unit
 
 pub fn progress_look_of(h? : Double, track? : Int64, fill? : Int64, period? : Double) -> (@ui.Ctx, ProgressState) -> Unit
@@ -628,6 +630,7 @@ pub fn Presence::leaving(Self) -> Bool
 
 pub(all) struct ProgressState {
   t : Double?
+  known : Double
 }
 
 pub(all) struct RadioState {

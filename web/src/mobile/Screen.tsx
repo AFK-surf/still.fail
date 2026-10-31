@@ -24,7 +24,7 @@ export function ScreenScreen() {
   return (
     <div className={pagesCss.mScreen}>
       <ScreenViewer key={`${station.address} ${id}`} station={station.address} screen={id} backLabel={t("common.back")} onBack={app.pop} phone
-        onGone={leaves ? app.pop : undefined} />
+        onGone={leaves ? app.pop : undefined} onGrants={() => app.push(app.at(`/s/${station.id}/overview`))} />
     </div>
   );
 }

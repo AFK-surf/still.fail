@@ -567,7 +567,7 @@ pub fn note_list(@ui.Ctx, Int32, String, Double, Double) -> Unit
 
 pub let note_pop_ms : Double
 
-pub fn note_thumb(@ui.Ctx, String, Int32, Double, picture~ : String, letterbox? : Bool, list? : String) -> Unit
+pub fn note_thumb(@ui.Ctx, String, Int32, Double, picture~ : String, letterbox? : Bool, list? : String, over? : (Double) -> Unit) -> Unit
 
 pub let notice_host : @ref.Ref[@sfbase.NoticeHost]
 
@@ -959,8 +959,6 @@ pub let update : @sfbase.Update
 
 pub fn update_asks() -> Bool
 
-pub fn update_busy() -> Bool
-
 pub fn update_check(@sfbase.Source, Bool, done? : (String) -> Unit) -> Unit
 
 pub fn update_dialog(@sfbase.Source) -> Unit
@@ -973,29 +971,19 @@ pub fn update_first(@sfbase.Source) -> Unit
 
 pub fn update_from_menu(@sfbase.Source) -> Unit
 
-pub fn update_install(@sfbase.Source) -> Unit
+pub fn update_go(@sfbase.Source) -> Unit
 
-pub fn update_part() -> Double?
-
-pub fn update_percent() -> Int32
-
-pub fn update_phase() -> String
-
-pub fn update_progress() -> String
+pub fn update_now() -> @sfbase.UpdateNow
 
 pub fn update_reset() -> Unit
 
 pub fn update_row_tapped(@sfbase.Source) -> Unit
 
-pub fn update_say(String) -> Unit
-
 pub fn update_stands() -> @settings.VersionNow
-
-pub fn update_under_way() -> Bool
 
 pub let update_version : @ref.Ref[Int32]
 
-pub fn update_why() -> String
+pub fn update_wants_you() -> Bool
 
 pub fn upload_id(String, Int32) -> String
 
@@ -1271,6 +1259,8 @@ pub using @sfbase {type TurnFor}
 pub using @sfbase {type Turns}
 
 pub using @sfbase {type Update}
+
+pub using @sfbase {type UpdateNow}
 
 pub using @sfbase {type UpdateSaid}
 

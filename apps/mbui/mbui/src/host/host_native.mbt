@@ -235,7 +235,11 @@ extern "C" fn ffi_app_version() -> Int = "mb_host_app_version"
 
 ///|
 #borrow(url, sha256, name)
-extern "C" fn ffi_update_install(url : String, sha256 : String, size : Double, name : String) -> Unit = "mb_host_update_install"
+extern "C" fn ffi_update_fetch(url : String, sha256 : String, size : Double, name : String, now : Int) -> Unit = "mb_host_update_fetch"
+
+///|
+#borrow(said)
+extern "C" fn ffi_update_apply(said : String) -> Unit = "mb_host_update_apply"
 
 ///|
 extern "C" fn ffi_update_state() -> String = "mb_host_update_state"
@@ -884,15 +888,19 @@ fn app_version() -> Int {
 }
 
 ///|
-/// A newer build at `url` (its `sha256`, `size` bytes) downloaded as `name`, checked and handed to the system's
-/// installer (Android: still.fail's Updates.kt); nothing elsewhere. How it goes: `update_state`.
-fn update_install(url : String, sha256 : String, size : Double, name : String) -> Unit {
-  ffi_update_install(url, sha256, size, name)
+/// A newer build downloaded and made ready (@hostapi.update_fetch).
+fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool) -> Unit {
+  ffi_update_fetch(url, sha256, size, name, if now { 1 } else { 0 })
 }
 
 ///|
-/// How an update goes, as JSON text: `{"phase","percent","error"}` (phase idle, allow: the person's leave to install
-/// apps asked for, downloading, retrying, installing, handed, failed); "" where there is none.
+/// The build made ready put in this app's place now (@hostapi.update_apply).
+fn update_apply(said : String) -> Unit {
+  ffi_update_apply(said)
+}
+
+///|
+/// How an update goes, as JSON text (@hostapi.update_state).
 fn update_state() -> String {
   ffi_update_state()
 }

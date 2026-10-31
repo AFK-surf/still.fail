@@ -56,7 +56,7 @@ test("where a file was left, put just before the core closes, is read by the cor
 
 test("each device table changed just before the core closes is written before it goes", async () => {
   const { host, core } = await started();
-  const keyOf = { prefs: "device", changelog: "seen", choice: "station", chat_ref: "last", drive_place: `${ST}\n${ROOT}\nbook.txt` } as const;
+  const keyOf = { prefs: "device", changelog: "seen", choice: "station", chat_ref: "last", drive_place: `${ST}\n${ROOT}\nbook.txt`, verified: "a1" } as const;
   for (const table of DEVICE_TABLES) core.inner.data.put(table, keyOf[table], { table, n: 1 });
   // Closed at once: the writer has written none of them.
   await core.close();

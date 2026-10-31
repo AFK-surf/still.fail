@@ -439,6 +439,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-bars" => "bars"
     "settings-kept" | "settings-kept-many" | "settings-kept-fill" => "kept"
     "settings-changelog" => "changelog"
+    "settings-about-flow" => "about"
     "settings-fonts-coming" | "settings-fonts-code" => "fonts"
     "settings-prices" => "prices:7"
     "settings-run" | "settings-run-models" | "settings-run-accounts" => "run:ws1/st1#s-c1"

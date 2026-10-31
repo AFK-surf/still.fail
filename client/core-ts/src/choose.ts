@@ -15,6 +15,7 @@ import * as model from "./shapes/model.ts";
 import type { Store, Value, Watch } from "./store.ts";
 import { arr as arrU, equal, get as getU, isObject } from "./util.ts";
 import { borrowable, models, quotaLine, servingIn, sourced } from "./views/models.ts";
+import { pendingKeyMade } from "./views/local.ts";
 import { ofAddress } from "./workspace.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -140,6 +141,8 @@ export class Choose implements Owner {
   readonly #watches = new Map<string, { topic: Topic; watches: Watch[] }>();
   readonly #drafts = new Map<string, Record<string, J>>();
   readonly #adding = new Map<string, J>();
+  /// The key each scope's next new chat is to be made under (`next`), until one is made under it.
+  readonly #next = new Map<string, string>();
 
   constructor(env: ChooseEnv) {
     this.#env = env;
@@ -242,7 +245,7 @@ export class Choose implements Owner {
 
   #newChat(scope: string): J {
     const kept = this.#kept(scope);
-    const view: J = { kept, any: false, efforts: [], accounts: [], pickAccount: false, waiting: false, frequent: [] };
+    const view: J = { kept, next: this.#nextKey(scope), any: false, efforts: [], accounts: [], pickAccount: false, waiting: false, frequent: [] };
     const found = this.#online(scope);
     if (!Array.isArray(found)) {
       view.error = found.error;
@@ -360,6 +363,23 @@ export class Choose implements Owner {
     this.#keepStation(ofAddress(station), stationId(station));
     this.#changed();
     return ask;
+  }
+
+  /// The key scope `scope`'s next new chat is to be made under: what its page becomes as its first words are sent,
+  /// before the core has made it (`newChat.create` `key`), the same until a chat is made under it.
+  #nextKey(scope: string): string {
+    let key = this.#next.get(scope);
+    if (key === undefined) {
+      key = pendingKeyMade();
+      this.#next.set(scope, key);
+    }
+    return key;
+  }
+
+  /// A chat made under `key`: its scope's next new chat under another.
+  taken(key: string): void {
+    for (const [scope, next] of this.#next) if (next === key) this.#next.delete(scope);
+    this.#changed();
   }
 
   /// A new chat accepted by the core.

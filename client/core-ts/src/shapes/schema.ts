@@ -2066,6 +2066,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A chat in 待处理 (`WorkspaceMark.items`)." }),
   NewChatView: struct([
     ["kept", "String", { doc: "The station last started on (or picked) in the scope, its id: the page holds its place with it until the\nstations are known." }],
+    ["next", "String", { doc: "The key its next chat is to be made under (`newChat.create` `key`): the page becomes that chat as its first\nwords are sent, not once the core has made it." }],
     ["stations", opt(vec("StationView")), { doc: "The scope's stations up now; none until its workspace has been read (`error`: why it could not be)." }],
     ["error", opt("String"), { said: true }],
     ["any", "bool", { doc: "Whether the scope has any station, up or not." }],

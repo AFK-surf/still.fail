@@ -441,8 +441,13 @@ impl @hostapi.Host for Native with app_version(_) {
 }
 
 ///|
-impl @hostapi.Host for Native with update_install(_, url, sha256, size, name) {
-  update_install(url, sha256, size, name)
+impl @hostapi.Host for Native with update_fetch(_, url, sha256, size, name, now) {
+  update_fetch(url, sha256, size, name, now)
+}
+
+///|
+impl @hostapi.Host for Native with update_apply(_, said) {
+  update_apply(said)
 }
 
 ///|

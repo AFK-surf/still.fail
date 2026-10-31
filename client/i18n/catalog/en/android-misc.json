@@ -584,5 +584,16 @@
   "android-misc.adb.stations.notLent": "Not shared yet",
   "android-misc.adb.ask.pair.title": "This station isn't paired with your phone yet",
   "android-misc.adb.ask.pair.about": "Pair once on the phone, and it can reach this phone from then on.",
+  "android-misc.updates.allow": "Allow installing the update",
+  "android-misc.updates.allowWhy": "{app} needs your permission to install apps, then updates by itself",
+  "android-misc.updates.download": "Download {version}",
+  "android-misc.updates.downloadingVersion": "Downloading {version}",
+  "android-misc.updates.installingVersion": "Installing {version}",
+  "android-misc.updates.ready": "Restart to update to {version}",
+  "android-misc.updates.readyAway": "Installs by itself once you've been away from {app} for a while",
+  "android-misc.updates.readyQuit": "Installs when you quit {app}",
+  "android-misc.updates.retry": "Retry updating to {version}",
+  "android-misc.updates.updated": "{app} updated to {version}. Tap to open",
+  "android-misc.updates.waitWifi": "Downloads by itself on Wi‑Fi · {size}",
   "android-misc.adb.manage": "Manage in Settings"
 }
