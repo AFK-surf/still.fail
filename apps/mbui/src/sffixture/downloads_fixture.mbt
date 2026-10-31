@@ -84,9 +84,9 @@ pub fn fix_download_shown(d : FixDownload) -> Json {
 }
 
 ///|
-/// A file opened and let go, being brought after everything else, made up (client/core-ts fill.ts): its file (a
-/// chat's session `key`, or a drive's `root` and `path`), what it is called, how big, how much is here, how it stands
-/// (going, yielding, waiting, queued).
+/// A file opened and let go, being brought after everything else, or one a person asked to load (`wanted`), made up
+/// (client/core-ts fill.ts): its file (a chat's session `key`, or a drive's `root` and `path`), what it is called, how
+/// big, how much is here, how it stands (going, yielding, waiting, queued).
 pub(all) struct FixKeeping {
   station : String
   key : String
@@ -95,8 +95,9 @@ pub(all) struct FixKeeping {
   name : String
   title : String
   size : Double
-  loaded : Double
+  mut loaded : Double
   state : String
+  wanted : Bool
 }
 
 ///|
@@ -146,12 +147,16 @@ pub fn fix_keeping_shown(k : FixKeeping) -> Json {
     "state": Json::string(k.state),
     "statusText": Json::string(
       match k.state {
+        _ if k.wanted && k.state != "waiting" => "正在加载 \{percent}% · \{@sf.file_size(k.size)}"
         "going" => "后台缓存 \{percent}% · \{@sf.file_size(k.size)}"
         "yielding" => "后台缓存暂停，正在看的优先 · \{percent}%"
         "waiting" => "后台缓存等待连接 station · \{percent}%"
         _ => "后台缓存排队中 · \{percent}%"
       },
     ),
+  }
+  if k.wanted {
+    o["wanted"] = Json::boolean(true)
   }
   // where it was opened (KeptFrom): a chat's in its chat, a drive's where it is
   if k.root == "" {
@@ -208,8 +213,8 @@ pub fn fix_fill_prefs_set(params : Json) -> Unit {
 /// package coming, the recording after it).
 pub fn fix_keeping_message(station : String, key : String) -> Unit {
   let mb = 1024.0 * 1024.0
-  fix_keeping.push({ station, key, root: "", path: "", name: "发布包.zip", title: "发布包.zip", size: 50.0 * mb, loaded: 21.0 * mb, state: "going" })
-  fix_keeping.push({ station, key, root: "", path: "", name: "演示录屏.mp4", title: "演示录屏.mp4", size: 5.0 * mb, loaded: 1.0 * mb, state: "queued" })
+  fix_keeping.push({ station, key, root: "", path: "", name: "发布包.zip", title: "发布包.zip", size: 50.0 * mb, loaded: 21.0 * mb, state: "going", wanted: false })
+  fix_keeping.push({ station, key, root: "", path: "", name: "演示录屏.mp4", title: "演示录屏.mp4", size: 5.0 * mb, loaded: 1.0 * mb, state: "queued", wanted: false })
 }
 
 ///|
@@ -238,6 +243,7 @@ pub fn fix_every_transfer(station : String, key : String, root : String) -> Unit
     size: 186.0 * 1024.0 * 1024.0,
     loaded: 84.0 * 1024.0 * 1024.0,
     state: "going",
+    wanted: false,
   })
   fix_keeping.push({
     station,
@@ -249,6 +255,7 @@ pub fn fix_every_transfer(station : String, key : String, root : String) -> Unit
     size: 42.0 * 1024.0 * 1024.0,
     loaded: 5.0 * 1024.0 * 1024.0,
     state: "queued",
+    wanted: false,
   })
   fix_keeping.push({
     station: "ws1/st2",
@@ -260,6 +267,7 @@ pub fn fix_every_transfer(station : String, key : String, root : String) -> Unit
     size: 320.0 * 1024.0 * 1024.0,
     loaded: 64.0 * 1024.0 * 1024.0,
     state: "waiting",
+    wanted: false,
   })
 }
 
@@ -317,6 +325,34 @@ pub fn fixture_downloads_call(f : Fixture, name : String, params : Json) -> Resu
       Some(Ok({}))
     }
     "download.retry" => Some(Ok({}))
+    "fill.want" => {
+      let k : FixKeeping = {
+        station: text(p, "station"),
+        key: text(p, "key"),
+        root: "",
+        path: "",
+        name: text(p, "name"),
+        title: text(p, "name"),
+        size: number(p, "size"),
+        loaded: 0.0,
+        state: "going",
+        wanted: true,
+      }
+      if fix_keeping.iter().any(fn(was) { fix_keeping_id(was) == fix_keeping_id(k) }) {
+        return Some(Ok({}))
+      }
+      fix_keeping.insert(0, k)
+      for i in 1..=20 {
+        fix_later(i.to_double() * fix_download_step_ms, fn() {
+          k.loaded = k.size * i.to_double() / 20.0
+          if i == 20 {
+            fix_keeping.retain(fn(x) { fix_keeping_id(x) != fix_keeping_id(k) })
+          }
+        })
+      }
+      f.changed()
+      Some(Ok({}))
+    }
     "fill.stop" => {
       let id = text(p, "id")
       fix_keeping.retain(fn(k) { fix_keeping_id(k) != id })

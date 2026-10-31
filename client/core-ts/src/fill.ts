@@ -10,6 +10,10 @@
 // what was kept of it goes. Not one past FILL_MAX, nor one whose rest its kind has no room for (it would push out what
 // else is kept, then itself), nor one a download fetches, nor one last read before FILL_RECENT_MS ago (what was opened
 // lately, not every file ever let go of: those kept before this went on would all come at once).
+// A chat's file a person asked to load (加载, `fill.want`: a video to play from here) is brought the same way, before
+// all else and at once: not after what is waited on, not bound by the prefs, whether or not any of it was read. It is
+// one thing whichever way it began: what was read of it, what was brought of it, however sparse, is never asked again;
+// only what is not kept is. Stopped (`fill.stop`), it is no longer brought; what came of it stays kept.
 import { Effect } from "effect";
 import type { Inner } from "./core.ts";
 import { handlers } from "./core/execute.ts";
@@ -19,10 +23,11 @@ import { Beside } from "./protocol.ts";
 import { Kind } from "./trace.ts";
 import { Priority } from "./sync/scheduler.ts";
 import { AGAIN_MS, DOWNLOAD_PART, titleOf } from "./views/downloads.ts";
-import type { Unfinished } from "./drive-kept.ts";
+import { chatKeptId, type Unfinished } from "./drive-kept.ts";
 import { bytes } from "./format.ts";
 import { t } from "./i18n.ts";
 import { get, isObject } from "./util.ts";
+import { conform } from "./conform.ts";
 
 /// The most a file is brought whole by itself, unless the prefs say otherwise (`fillMax`).
 export const FILL_MAX = 1024 * 1024 * 1024;
@@ -51,7 +56,7 @@ function partOf(f: Unfinished): Extract<Call, { kind: "stationFilePart" | "drive
 }
 
 /// One being brought, as the pages list it (`downloads`' `keeping`): coming now, given way to what a person waits on,
-/// waiting for its station, or after the others.
+/// waiting for its station, or after the others (`wanted`: a person asked to load it, never given way).
 type KeepingState = "going" | "yielding" | "waiting" | "queued";
 
 /// How sure a file is to be brought: on (`prefs.fillOff` not so) and up to how big (`prefs.fillMax`: 0 none).
@@ -72,6 +77,8 @@ export class Fill {
   readonly #later = new Set<string>();
   /// Waiting for a poke: what goes on.
   #poked: (() => void) | null = null;
+  /// Waiting for nothing to be waited on a while: what goes on at once (one asked to load).
+  #wake: (() => void) | null = null;
   /// Poked since the files were last looked at.
   #dirty = false;
   #started = false;
@@ -123,25 +130,44 @@ export class Fill {
       const loaded = Math.min(f.size, going?.loaded ?? f.have);
       const call = partOf(f);
       const station = call?.station ?? "";
-      const state: KeepingState = going !== null ? (this.#yielding ? "yielding" : "going")
+      const state: KeepingState = going !== null ? (this.#yielding && !f.wanted ? "yielding" : "going")
         : this.#away.has(station) || !this.#reached(station) ? "waiting"
-        : this.#yielding && out.length === 0 ? "yielding"
+        : this.#yielding && out.length === 0 && !f.wanted ? "yielding"
         : "queued";
       const percent = f.size > 0 ? Math.floor((loaded / f.size) * 100) : 0;
-      const statusText = state === "going" ? t("core-logic.keeping.going", { percent, total: bytes(f.size) })
+      const statusText = f.wanted && state !== "waiting" ? t("core-logic.download.loading", { percent, total: bytes(f.size) })
+        : state === "going" ? t("core-logic.keeping.going", { percent, total: bytes(f.size) })
         : state === "yielding" ? t("core-logic.keeping.yielding", { percent })
         : state === "waiting" ? t("core-logic.keeping.waiting", { percent })
         : t("core-logic.keeping.queued", { percent });
       const where = call === null ? {} : call.kind === "stationFilePart" ? { key: call.key } : { root: call.root, path: call.path };
       const name = call === null ? f.id : call.kind === "stationFilePart" ? call.name : (call.path.split("/").pop() ?? call.path);
       const from = this.#from.get(f.id);
-      out.push({ id: f.id, station, ...where, name, title: call?.kind === "stationFilePart" ? titleOf(name) : name, size: f.size, loaded, progress: f.size > 0 ? loaded / f.size : 0, state, statusText, ...(from !== undefined ? { from } : {}) });
+      out.push({ id: f.id, station, ...where, name, title: call?.kind === "stationFilePart" ? titleOf(name) : name, size: f.size, loaded, progress: f.size > 0 ? loaded / f.size : 0, state, statusText, ...(f.wanted ? { wanted: true } : {}), ...(from !== undefined ? { from } : {}) });
     }
     // what comes now first
     return out.sort((a, b) => Number(b.state === "going" || b.state === "yielding") - Number(a.state === "going" || a.state === "yielding"));
   }
 
-  /// Not brought any more, what was kept of it let go (`fill.stop`); all of them (`fill.stopAll`).
+  /// The chat's file (its `station`, session `key`, `name`, `size` as its message says) to be loaded (加载): brought
+  /// before everything else, at once, from what is kept of it; `from`: where it was asked (KeptFrom), listed with it.
+  want(station: string, key: string, name: string, size: number, from: unknown): Effect.Effect<void> {
+    const id = chatKeptId(station, key, name);
+    const kept = this.#inner.driveKept;
+    return Effect.gen({ self: this }, function* () {
+      if (from !== undefined && from !== null) yield* kept.noteFrom(id, from);
+      // all of it here already: nothing to bring
+      if (yield* kept.whole(id, size)) return;
+      yield* kept.want(id, "chat", size);
+      this.#failed.delete(id);
+      const wake = this.#wake;
+      this.#wake = null;
+      wake?.();
+      this.poke();
+    });
+  }
+
+  /// Not brought any more, what was kept of it kept (`fill.stop`); all of them (`fill.stopAll`).
   stop(ids: string[] | null): Effect.Effect<void> {
     const self = this;
     return Effect.gen(function* () {
@@ -149,7 +175,8 @@ export class Fill {
         if (self.#going?.id === id) {
           self.#stopping.add(id);
           self.#stop?.();
-        } else yield* self.#inner.driveKept.forget(id);
+        }
+        yield* self.#inner.driveKept.unwant(id);
         self.#list = self.#list.filter((f) => f.id !== id);
       }
       self.#told.clear();
@@ -195,9 +222,16 @@ export class Fill {
     const inner = this.#inner;
     const self = this;
     return Effect.gen(function* () {
-      if (inner.waited.count > 0 && self.#list.length > 0) self.#yield(true);
-      yield* inner.waited.idle(IDLE_MS);
-      self.#yield(false);
+      // (one a person asked to load and can be had now: at once, not after what is waited on)
+      const urgent = (yield* self.#look()).some((f) => f.wanted && self.#ready(f));
+      if (!urgent) {
+        if (inner.waited.count > 0 && self.#list.length > 0) self.#yield(true);
+        yield* Effect.raceFirst(inner.waited.idle(IDLE_MS), Effect.callback<void>((resume) => {
+          self.#wake = () => resume(Effect.void);
+        }));
+        self.#wake = null;
+        self.#yield(false);
+      }
       self.#dirty = false;
       const next = yield* self.#next();
       if (next === null) {
@@ -226,28 +260,27 @@ export class Fill {
         const loaded = isObject(v) && typeof v.loaded === "number" ? v.loaded : 0;
         self.#moved(id, f.have + loaded, f.size);
       };
+      const reading = Effect.map(read(inner, call, heard, [0, 0], span.context), (got) => {
+        [ended, answer] = [true, got];
+      });
+      // (one asked to load is what a person waits on itself: nothing else stops it but its being stopped)
       const part = Effect.suspend(() =>
-        inner.waited.count > 0
-          ? Effect.void
-          : Effect.raceFirst(
-              Effect.map(read(inner, call, heard, [0, 0], span.context), (got) => {
-                [ended, answer] = [true, got];
-              }),
-              Effect.raceFirst(inner.waited.begun(), stopped),
-            ),
+        f.wanted ? Effect.raceFirst(reading, stopped)
+        : inner.waited.count > 0 ? Effect.void
+        : Effect.raceFirst(reading, Effect.raceFirst(inner.waited.begun(), stopped)),
       );
-      const done = yield* Effect.result(inner.scheduler.ask(station, `${station} fill`, Priority.idle, part));
+      const done = yield* Effect.result(inner.scheduler.ask(station, `${station} fill`, f.wanted ? Priority.asked : Priority.idle, part));
       span.end();
       self.#going = null;
       self.#stop = null;
-      if (self.#stopping.delete(id)) {
-        yield* inner.driveKept.forget(id);
-        return;
-      }
+      if (self.#stopping.delete(id)) return;
       if (done._tag === "Success") {
         // read through and still not kept (the station says it is another size than its message did): not again
         const said = (answer instanceof Beside ? answer.value : answer) as { total?: unknown } | null;
-        if (ended && call.kind === "stationFilePart" && said?.total !== f.size) self.#failed.add(id);
+        if (ended && call.kind === "stationFilePart" && said?.total !== f.size) {
+          self.#failed.add(id);
+          if (f.wanted) yield* inner.driveKept.loaded(id);
+        } else if (f.wanted && (yield* inner.driveKept.whole(id, f.size))) yield* inner.driveKept.loaded(id);
         return;
       }
       const e = done.failure;
@@ -255,7 +288,10 @@ export class Fill {
       else if (unreached(e)) self.#away.add(station);
       // gone from the station: what was kept of it is of no use
       else if (e.status === 404) yield* inner.driveKept.forget(id);
-      else self.#failed.add(id);
+      else {
+        self.#failed.add(id);
+        if (f.wanted) yield* inner.driveKept.loaded(id);
+      }
     });
   }
 
@@ -270,12 +306,13 @@ export class Fill {
       if (fromChanged) this.#changed();
       const { on, most } = bounds(inner);
       // (only what was opened: a viewer said where; a still read off a film in its message, none)
-      const list = on ? files.filter((f) => from.has(f.id) && f.size <= most && !this.#failed.has(f.id) && !this.#stopping.has(f.id) && !inner.downloads.has(f.id) && partOf(f) !== null) : [];
+      // (one asked to load whatever the prefs say; others only what was opened, within the prefs' bound)
+      const list = files.filter((f) => (f.wanted || (on && from.has(f.id) && f.size <= most)) && !this.#failed.has(f.id) && !this.#stopping.has(f.id) && !inner.downloads.has(f.id) && partOf(f) !== null);
       // the one coming no longer to be (turned off, past the bound now): its part stops, what came of it kept
       if (this.#going !== null && !list.some((f) => f.id === this.#going?.id)) this.#stop?.();
       const was = this.#list;
       this.#list = list;
-      if (was.length !== list.length || was.some((f, i) => f.id !== list[i].id || f.have !== list[i].have)) this.#changed();
+      if (was.length !== list.length || was.some((f, i) => f.id !== list[i].id || f.have !== list[i].have || f.wanted !== list[i].wanted)) this.#changed();
       return list;
     });
   }
@@ -285,12 +322,17 @@ export class Fill {
     return Effect.map(this.#look(), (list) => {
       for (const f of list) {
         const call = partOf(f);
-        if (call === null) continue;
-        if (this.#away.has(call.station) || !this.#reached(call.station) || this.#later.has(f.id)) continue;
+        if (call === null || !this.#ready(f)) continue;
         return [f, call];
       }
       return null;
     });
+  }
+
+  /// Whether a part of it can be asked now: its station reached, it not waiting to be asked again.
+  #ready(f: Unfinished): boolean {
+    const call = partOf(f);
+    return call !== null && !this.#away.has(call.station) && this.#reached(call.station) && !this.#later.has(f.id);
   }
 }
 
@@ -298,6 +340,17 @@ export function install(inner: Inner): void {
   inner.fill = new Fill(inner);
   handlers.fill = (core, call) => {
     const c = call as Extract<Call, { kind: "fill" }>;
+    if (c.action === "want") {
+      const p = c.params;
+      const size = p.size;
+      for (const field of ["station", "key", "name"] as const) {
+        if (typeof p[field] !== "string" || p[field] === "") return Effect.fail(CoreError.invalid(t("core-misc.params.missing", { field })));
+      }
+      if (typeof size !== "number" || !Number.isSafeInteger(size) || size <= 0) return Effect.fail(CoreError.invalid(t("core-misc.params.missing", { field: "size" })));
+      // (where it was asked, KeptFrom, leading back there from the list; one not of that shape left out)
+      const shaped = isObject(p.from) ? conform("KeptFrom", p.from) : null;
+      return Effect.as(core.fill.want(p.station as string, p.key as string, p.name as string, size, shaped !== null && "ok" in shaped ? shaped.ok : undefined), {});
+    }
     const id = c.params.id;
     if (c.action === "stop" && (typeof id !== "string" || id === "")) return Effect.fail(CoreError.invalid(t("core-misc.params.missing", { field: "id" })));
     return Effect.as(core.fill.stop(c.action === "stop" ? [id as string] : null), {});

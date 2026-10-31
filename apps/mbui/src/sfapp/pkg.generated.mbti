@@ -172,7 +172,7 @@ pub fn download_of_drive(@sfbase.Source, String, String, String) -> Json?
 
 pub fn download_retry(@sfbase.Source, String) -> Unit
 
-pub fn download_start(@sfbase.Source, String, String, String, Double, keep? : Bool, from? : Json) -> Unit
+pub fn download_start(@sfbase.Source, String, String, String, Double, from? : Json) -> Unit
 
 pub fn download_start_drive(@sfbase.Source, String, String, String, String, Double, Double) -> Unit
 

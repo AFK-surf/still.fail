@@ -162,9 +162,10 @@ export type Call =
   | { kind: "browse"; name: string; params: Record<string, unknown> }
   /// A chat's file downloaded to this device (views/downloads.ts): its params read there.
   | { kind: "download"; action: "start" | "retry" | "take" | "read" | "done" | "cancel"; params: Record<string, unknown> }
-  /// What was opened and let go, brought after everything else (fill.ts): one no longer brought (`fill.stop {id}`), or
-  /// all (`fill.stopAll`), what was kept of each let go.
-  | { kind: "fill"; action: "stop" | "stopAll"; params: Record<string, unknown> }
+  /// What was opened and let go, brought after everything else, and what a person asked to load, before it (fill.ts): a
+  /// chat's file to load (`fill.want {station, key, name, size, from?}`), one no longer brought (`fill.stop {id}`), or
+  /// all (`fill.stopAll`), what was kept of each kept.
+  | { kind: "fill"; action: "want" | "stop" | "stopAll"; params: Record<string, unknown> }
   /// An app's module's call (module.ts): `<module>.<name>`, its params as the module checked them.
   | { kind: "module"; name: string; call: HeldCall };
 
@@ -373,7 +374,7 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
   if (name === "download.start" || name === "download.retry" || name === "download.take" || name === "download.read" || name === "download.done" || name === "download.cancel") {
     return { kind: "download", action: name.slice(9) as "start" | "retry" | "take" | "read" | "done" | "cancel", params: isObject(params) ? (params as Record<string, unknown>) : {} };
   }
-  if (name === "fill.stop" || name === "fill.stopAll") return { kind: "fill", action: name === "fill.stop" ? "stop" : "stopAll", params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  if (name === "fill.want" || name === "fill.stop" || name === "fill.stopAll") return { kind: "fill", action: name === "fill.want" ? "want" : name === "fill.stop" ? "stop" : "stopAll", params: isObject(params) ? (params as Record<string, unknown>) : {} };
   if (name.startsWith("vault.") && VAULT_CALLS.includes(name.slice(6))) {
     const p = read(params, [["workspace", S, "req"]]);
     return { kind: "vault", name: name.slice(6), workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
