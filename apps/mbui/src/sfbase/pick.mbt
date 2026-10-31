@@ -36,6 +36,7 @@ pub let share_offered : Ref[(Int, Double, Double, () -> Unit, String)?] = Ref(No
 ///|
 /// Told as a message offers its turn (share_offered): what shows the menu, built apart from the message (another old
 /// view's), follows it.
+// kept across runs: a count told, nothing reads what it is (only that it changed)
 pub let share_offered_told : @signals.Signal[Int] = @signals.signal(0)
 
 ///|

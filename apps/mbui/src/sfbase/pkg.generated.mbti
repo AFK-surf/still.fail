@@ -5,6 +5,7 @@ import {
   "mbui/hostapi",
   "mbui/kit",
   "mbui/motion",
+  "mbui/paint",
   "mbui/signals",
   "mbui/ui",
   "mbui/view",
@@ -194,7 +195,7 @@ pub fn csv_table(@ui.Ctx, Viewer, String, Bool, Bool) -> Unit
 
 pub fn cut_line(@ui.Ctx, String) -> Unit
 
-pub fn dark_glass() -> @ui.Glass
+pub fn dark_glass() -> @paint.Glass
 
 pub let dark_glass_blur : Double
 
@@ -692,6 +693,8 @@ pub let kept_places : Map[String, KeptPlace]
 
 pub fn kept_read(String) -> Bytes?
 
+pub fn leaving_back() -> Unit
+
 pub fn leaving_done() -> Unit
 
 pub let left_pages : Array[Page]
@@ -916,6 +919,8 @@ pub let new_leave_ms : Double
 
 pub fn new_nav() -> @ui.Nav[Page]
 
+pub fn new_sending(@ui.Ctx) -> (Double, Double)
+
 pub fn new_viewer(String, String, Attachment, DriveFile?, Stepping, named? : Bool) -> Viewer
 
 pub fn no_fragment(String) -> String
@@ -1026,7 +1031,7 @@ pub fn own_screen(String, String) -> Bool
 
 pub let page_bridge_js : String
 
-pub fn page_glass() -> @ui.Glass
+pub fn page_glass() -> @paint.Glass
 
 pub let page_glass_blur : Double
 
@@ -1386,6 +1391,8 @@ pub let share_card_of : @ref.Ref[(Source, Workspace) -> Unit]
 
 pub let share_offered : @ref.Ref[(Int32, Double, Double, () -> Unit, String)?]
 
+pub let share_offered_told : @signals.Signal[Int32]
+
 pub let share_over : @signals.Signal[Bool]
 
 pub fn share_turn_tool(@ui.Ctx, String, Int32, String, () -> Unit) -> Unit
@@ -1584,7 +1591,7 @@ pub fn use_core_markdown(Source) -> Unit
 
 pub fn utf8_whole(Bytes) -> Int32
 
-pub fn vf_bar(Viewer, @ui.Ctx, Source, Double) -> Unit
+pub fn vf_bar(Viewer, @ui.Ctx, Source, Double, keys? : Bool) -> Unit
 
 pub fn vf_coming(Viewer, @ui.Ctx) -> Unit
 
@@ -2335,6 +2342,7 @@ pub(all) struct FreshChat {
   made_sig : @signals.Signal[String]
   sent : @signals.Signal[Bool]
   starting : @signals.Signal[Bool]
+  sending : @signals.Signal[Bool]
   became : @signals.Signal[ChatRef?]
   scene : @signals.Signal[Json?]
   room : @signals.Signal[Double]
@@ -2784,7 +2792,6 @@ pub(all) struct Reading {
   mut over : String
   mut over_frame : Int32
   admitted : Map[String, Bool]
-  rises : Map[String, @motion.Anim]
   mut list_read : @ui.ListReader?
   mut newest : String
   mut following_row : Bool
@@ -2993,6 +3000,7 @@ pub(all) struct Sink {
 
 pub(all) struct Source {
   topic : (String, Map[String, Json]) -> Topic
+  waits : (String, Map[String, Json]) -> Bool
   call : (String, Json, (Result[Json, Json]) -> Unit) -> Unit
   call_bytes : (String, Json, Bytes, (Result[Json, Json]) -> Unit) -> Unit
   read_bytes : (String, Json, (Result[(Json, Bytes), Json]) -> Unit) -> Unit
@@ -3060,6 +3068,7 @@ pub(all) struct Thumb {
   picture : String
   seen : (Double, Double, Double, Double)?
   clear : (Double, Double)?
+  over : (Double) -> Unit
 }
 
 pub(all) struct ThumbLook {
@@ -3068,6 +3077,7 @@ pub(all) struct ThumbLook {
   picture : String
   id : Int32
   list : String
+  over : (Double) -> Unit
 }
 
 pub(all) struct Topic {

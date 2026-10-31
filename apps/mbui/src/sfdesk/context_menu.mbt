@@ -43,6 +43,7 @@ pub let context : ContextMenu = {
 ///|
 /// Told as the menu is opened (context_at): what shows it, built apart from what was right clicked (another old view's),
 /// follows it.
+// kept across runs: a count told, nothing reads what it is (only that it changed)
 let context_told : @signals.Signal[Int] = @signals.signal(0)
 
 ///|

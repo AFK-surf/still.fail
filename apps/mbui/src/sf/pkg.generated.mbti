@@ -4,6 +4,7 @@ package "stillfail/sf"
 import {
   "mbui/kit",
   "mbui/motion",
+  "mbui/paint",
   "mbui/pixels",
   "mbui/signals",
   "mbui/ui",
@@ -122,7 +123,7 @@ pub fn bar_key(@ui.Ctx, String, String, String, enabled? : Bool) -> Bool
 
 pub let bar_key_side : Double
 
-pub fn bar_keys_link() -> @ui.CornerOf?
+pub fn bar_keys_link() -> @paint.CornerOf?
 
 pub fn bar_keys_top() -> Double
 
@@ -256,7 +257,7 @@ pub fn close_presented_of(Int32) -> Unit
 
 pub fn closed_bar_corner(Double) -> @ui.Radius
 
-pub fn closed_bar_of(Double) -> @ui.CornerOf
+pub fn closed_bar_of(Double) -> @paint.CornerOf
 
 pub let code : @ui.TextStyle
 
@@ -316,19 +317,19 @@ pub fn copy_command(@ui.Ctx, String, String, copy~ : String, copied~ : String) -
 
 pub let corner_clear_room : @ui.Space
 
-pub let corner_fit : @ui.CornerFit
+pub let corner_fit : @paint.CornerFit
 
 pub let corner_inset : Double
 
 pub let corner_ladder : Array[Double]
 
-pub fn corner_radii(FixedArray[@ui.CornerOf]) -> FixedArray[Double]
+pub fn corner_radii(FixedArray[@paint.CornerOf]) -> FixedArray[Double]
 
 pub fn corner_remove_face(@ui.Ctx) -> Int32
 
 pub fn corner_remove_reach(Double) -> Double
 
-pub fn corners_radius(FixedArray[@ui.CornerOf]) -> @ui.Radius
+pub fn corners_radius(FixedArray[@paint.CornerOf]) -> @ui.Radius
 
 pub let custom_field_dense_w : @ui.Len
 
@@ -556,7 +557,7 @@ pub fn file_size(Double) -> String
 
 pub fn file_tile(@ui.Ctx, String, dir? : Bool, progress? : Double?, error? : Bool) -> Unit
 
-pub fn file_tile_fill(Double, Double, Int64) -> @ui.Shape
+pub fn file_tile_fill(Double, Double, Int64) -> @paint.Shape
 
 pub let files_gap : @ui.Space
 
@@ -622,27 +623,27 @@ pub let full_words : @ui.TextStyle
 
 pub fn give_faces() -> Unit
 
-pub fn glass_action() -> @ui.Glass
+pub fn glass_action() -> @paint.Glass
 
-pub fn glass_bar() -> @ui.Glass
+pub fn glass_bar() -> @paint.Glass
 
-pub fn glass_bar_ball() -> @ui.Glass
+pub fn glass_bar_ball() -> @paint.Glass
 
-pub fn glass_bottom_bar() -> @ui.Glass
+pub fn glass_bottom_bar() -> @paint.Glass
 
 pub let glass_chooser_h : @ui.Len
 
 pub let glass_chooser_station_most : @ui.Len
 
-pub fn glass_floating(tint? : Int64) -> @ui.Glass
+pub fn glass_floating(tint? : Int64) -> @paint.Glass
 
-pub fn glass_foot() -> @ui.Glass
+pub fn glass_foot() -> @paint.Glass
 
-pub fn glass_knob() -> @ui.Glass
+pub fn glass_knob() -> @paint.Glass
 
-pub fn glass_lens() -> @ui.Glass
+pub fn glass_lens() -> @paint.Glass
 
-pub fn glass_sheet() -> @ui.Glass
+pub fn glass_sheet() -> @paint.Glass
 
 pub let glide_ms : Double
 
@@ -720,7 +721,7 @@ pub fn icon(@ui.Ctx, String, size? : Double, color? : Int64, by_ink? : Bool) -> 
 
 pub fn icon_action(@ui.Ctx, String, String, String, disabled? : Bool) -> Bool
 
-pub fn icon_button(@ui.Ctx, String, key? : String, size? : Double, icon_size? : Double, on? : Bool, lit? : Bool, round? : Bool, corner? : Double, linked? : @ui.CornerOf, ink? : Int64, quiet? : Int64, disabled? : Bool, label? : String, shortcut? : String) -> Bool
+pub fn icon_button(@ui.Ctx, String, key? : String, size? : Double, icon_size? : Double, on? : Bool, lit? : Bool, round? : Bool, corner? : Double, linked? : @paint.CornerOf, ink? : Int64, quiet? : Int64, disabled? : Bool, label? : String, shortcut? : String) -> Bool
 
 pub let icon_button_side : Double
 
@@ -1262,7 +1263,7 @@ pub fn pane_foot_in(holds? : Double) -> Double
 
 pub fn pane_radii() -> FixedArray[Double]?
 
-pub let pane_round : @ref.Ref[FixedArray[@ui.CornerOf]?]
+pub let pane_round : @ref.Ref[FixedArray[@paint.CornerOf]?]
 
 pub fn pane_top_right() -> Double?
 
@@ -1530,7 +1531,7 @@ pub let radii : @ui.RadiusScale
 
 pub fn radius_between(Double) -> @ui.Radius
 
-pub fn rail_ground_radius(@ui.CornerOf, Double, alone? : Double) -> @ui.Radius
+pub fn rail_ground_radius(@paint.CornerOf, Double, alone? : Double) -> @ui.Radius
 
 pub let rail_ground_side : Double
 
@@ -1932,13 +1933,13 @@ pub fn tape_bar_start(Double, side? : Double) -> Double
 
 pub let tape_corner : Double
 
-pub fn tape_corners(left~ : Bool, right~ : Bool) -> FixedArray[@ui.CornerOf]
+pub fn tape_corners(left~ : Bool, right~ : Bool) -> FixedArray[@paint.CornerOf]
 
-pub let tape_edge : @ui.CornerOf
+pub let tape_edge : @paint.CornerOf
 
 pub let tape_line : Double
 
-pub fn tape_side_corners() -> FixedArray[@ui.CornerOf]
+pub fn tape_side_corners() -> FixedArray[@paint.CornerOf]
 
 pub let text_in : Double
 
@@ -2096,7 +2097,7 @@ pub fn viewer_host() -> ViewerHost
 
 pub fn viewer_lit(ViewerInk) -> @ui.Style
 
-pub fn viewer_page_glass() -> @ui.Glass
+pub fn viewer_page_glass() -> @paint.Glass
 
 pub fn viewer_reset() -> Unit
 
@@ -2113,6 +2114,8 @@ pub fn viewer_tool_corner() -> @ui.Style
 pub let viewer_tool_icon : Double
 
 pub fn viewer_zoom(@ui.Ctx, String, @kit.Zoom, ViewerInk) -> Unit
+
+pub fn viewer_zoom_key(@kit.Zoom, Int32, Int32, Double) -> Bool
 
 pub fn viewer_zoom_keys(@ui.Ctx, @kit.Zoom) -> Unit
 
@@ -2172,13 +2175,13 @@ pub fn window_clear_in(Double) -> Double
 
 pub fn window_corner_clear(Double) -> Double
 
-pub fn window_corner_key() -> @ui.CornerOf
+pub fn window_corner_key() -> @paint.CornerOf
 
 pub fn window_corner_past(Double) -> Double
 
 pub fn window_end_in(Double) -> Double
 
-pub fn window_follow(Double) -> @ui.CornerOf
+pub fn window_follow(Double) -> @paint.CornerOf
 
 pub let window_in : Double
 

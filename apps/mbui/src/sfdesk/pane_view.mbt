@@ -233,7 +233,7 @@ fn fold_look_of(r : PaneRoom, shift : Double) -> FoldLook {
     blur,
     fall,
     shade,
-    corner: if bar { @sf.closed_bar_of(rail_closed_ground_in).radius() } else { 0.0 },
+    corner: if bar { @sf.closed_bar_of(rail_closed_ground_in).radius(@ui.corner_roots()) } else { 0.0 },
     ground: dock_ground(bar),
     side_w: if bar || @sf.native_on() { s } else { s + side_into_rail },
     rail_w: if bar { rail_closed_w } else { rail_shown_w },
