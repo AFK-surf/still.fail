@@ -15,3 +15,14 @@ import {
   "stillfail/gallery",
   "stillfail/sfapp/settings",
 }
+
+options(
+  // (the files the app carries: in its code on the native hosts, fetched beside its script in a browser)
+  targets: {
+    "inter_face.mbt": [ "native" ],
+    "inter_face_js.mbt": [ "js" ],
+    "share_face.mbt": [ "native" ],
+    "share_face_native.mbt": [ "native" ],
+    "share_face_js.mbt": [ "js" ],
+  },
+)

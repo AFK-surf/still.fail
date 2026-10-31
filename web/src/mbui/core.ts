@@ -38,13 +38,19 @@ function toApp(data: unknown): void {
 
 let worker: Worker | null = null;
 
-function start(): boolean {
-  if (worker) return true;
+/// The core's worker, started as the page loads: its databases and the station links come up while the app's script is
+/// still on its way (the app's `start` takes the one there is).
+function startWorker(): void {
+  if (worker) return;
   void navigator.storage?.persist?.().catch(() => false);
   // Spelled out: Vite bundles a worker only from a literal `new Worker(new URL(…, import.meta.url))`.
   worker = new Worker(new URL("../core/worker.ts", import.meta.url), { type: "module", name: workerName });
   worker.onmessage = (event: MessageEvent) => toApp(event.data);
   worker.onerror = (event) => host()?.post("core", JSON.stringify({ fatal: event.message || "the core's worker failed" }));
+}
+
+function start(): boolean {
+  startWorker();
   return true;
 }
 
@@ -119,9 +125,25 @@ function load(src: string): Promise<void> {
   });
 }
 
+startWorker();
+
+/// The files the app carries (fonts, the formulas' outlines: apps/mbui's tools/assets), fetched beside its script and
+/// given to it as `globalThis.__mbassets`: the faces it starts in before it runs (its *_js.mbt read them as it starts),
+/// the rest once it runs (read as they are drawn: a formula, the share card), the page drawn again as each comes. One
+/// that does not come is left out: the app draws in the system's faces where its own is missing.
+const assets: Record<string, Uint8Array> = {};
+(globalThis as { __mbassets?: Record<string, Uint8Array> }).__mbassets = assets;
+const fetchCarried = (name: string) =>
+  fetch(`/mbui/assets/${name}?b=${BUILT_AT}`).then((r) => (r.ok ? r.arrayBuffer() : null), () => null)
+    .then((b) => { if (b) assets[name] = new Uint8Array(b); });
+const starting = Promise.all(["jetbrains_mono.ttf", "inter.ttf.gz"].map(fetchCarried));
+
 // (named by this build: a page of a newer build never runs an older app's script from the browser's cache)
 await load(`/mbui/host.js?b=${BUILT_AT}`);
+await starting;
 await load(`/mbui/app.js?b=${BUILT_AT}`);
+for (const name of ["math_glyphs.gz", "share_400.gz", "share_600.gz"])
+  void fetchCarried(name).then(() => (host() as { requestFrame?(): void } | undefined)?.requestFrame?.());
 
 /// The page's address as a link the app was opened with (mbui's system channel, `{"link": url}`: a chat's
 /// /w/…/chats/… or /o/… page, as the app takes one the system opens it with), as it loads and as the browser goes back

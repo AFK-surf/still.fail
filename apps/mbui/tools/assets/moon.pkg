@@ -1,0 +1,9 @@
+import {
+  "mbctools/sys",
+  "moonbitlang/core/env",
+  "moonbitlang/core/buffer",
+}
+
+options(
+  "is-main": true,
+)

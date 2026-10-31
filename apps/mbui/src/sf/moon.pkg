@@ -18,7 +18,17 @@ import {
 import { "stillfail/sfkept" } for "test"
 
 options(
-  targets: { "math_env_js_wbtest.mbt": [ "js" ], "math_env_native_wbtest.mbt": [ "native" ] },
+  targets: {
+    "math_env_js_wbtest.mbt": [ "js" ],
+    "math_env_native_wbtest.mbt": [ "native" ],
+    // (the files the app carries: in its code on the native hosts, fetched beside its script in a browser)
+    "font_assets.mbt": [ "native" ],
+    "font_assets_js.mbt": [ "js" ],
+    "math_glyphs.mbt": [ "native" ],
+    "math_glyphs_native.mbt": [ "native" ],
+    "math_glyphs_js.mbt": [ "js" ],
+    "faces_wbtest.mbt": [ "native" ],
+  },
   "pre-build": [
     { "input": "math.json", "output": "math_fixture_wbtest.mbt", "command": ":embed -i $input -o $output --name math_fixture" },
     { "input": "math-mac.textrec", "output": "math_text_wbtest.mbt", "command": ":embed -i $input -o $output --name math_text" },
