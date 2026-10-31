@@ -819,10 +819,8 @@ fn tape_cover(n : @view.View, p : TapePane, room : () -> (Double, Double, Double
   n.box(fn(holder) {
     holder.over(Is(true)).padding(By(room)) |> ignore
     holder.show(
-      fn() {
-        // (the one in use, at rest, takes what is done on it; moving to it, or pulled, still the cover's)
-        wide.tape_at.get() != p || !tape_goes.rest.get() || wide.tape_pull.get() == Some(p)
-      },
+      // (the one in use, at rest, takes what is done on it; moving to it, or pulled, still the cover's)
+      fn() { tape_covered(p) },
       fn(cover) {
         cover
         .grow(Is(1.0))
@@ -928,6 +926,12 @@ fn tape_behind(c : @ui.Ctx, p : TapePane, body : () -> Unit) -> Unit {
   } else {
     @sf.with_ground(c, @sf.behind_ground(k~), shown)
   }
+}
+
+///|
+/// Whether panel `p` has its cover over it (tape_cover): not in use, or on its way to be, or pulled over by a finger.
+fn tape_covered(p : TapePane) -> Bool {
+  wide.tape_at.get() != p || !tape_goes.rest.get() || wide.tape_pull.get() == Some(p)
 }
 
 ///|
