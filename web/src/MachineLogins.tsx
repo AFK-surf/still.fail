@@ -14,14 +14,14 @@
 // is used least goes into the row's ⋯); the step itself where this device cannot do it (a web page and a loopback) or
 // its port was taken just now. A step this client cannot do at all is said in the card.
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { MachineLoginShown, MachineLoginsView } from "./core/shapes.ts";
+import type { MachineLoginShown, MachineLoginsView, MachineLoginTool } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
 import { Link } from "react-router";
 import { stationBase } from "./station.tsx";
 import { useDoing } from "./doing.ts";
 import { Menu, PanelIconButton, Section, Spinner } from "./ui.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
-import { ArrowUpRight, Close, Key, More } from "@stillfail/ui/icons.tsx";
+import { ArrowUpRight, ChevronRight, Close, Key, More } from "@stillfail/ui/icons.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./MachineLogins.css.ts";
 import { t } from "./i18n.ts";
@@ -282,49 +282,63 @@ function StepButton({ label, solid, busy = false, external = false, more = [], o
 
 /**
  * A station page's 登录 (docs/remote-login.md): only the logins done there through still.fail. Agents start them (用户定:
- * nobody types a command); one under way is its card, as in its chat; one ended a row saying how it ended, which chat's
- * agent started it (a link) and who ended it. Nothing at all when there are none (or the station is from before them).
- * `marked`: the login a link pointed to (`?login=`), brought into view.
+ * nobody types a command); one under way is its card, as in its chat; those ended a row per program (用户定 2026-10-31:
+ * a row per try buried the page in 已取消), saying who last logged in to it, from which chat, and how many tries, which
+ * it opens to. Nothing at all when there are none (or the station is from before them). `marked`: the login a link
+ * pointed to (`?login=`), brought into view (its program's row opened).
  */
 export function LoginsSection({ station, marked }: { station: string; marked?: string | null }) {
   const view = useMachineLogins(station);
   if (!view || !view.supported || view.logins.length === 0) return null;
   const active = view.logins.filter((l) => l.active);
-  const past = view.logins.filter((l) => !l.active);
   return (
     <Section title={t("web-main.logins.title")} description={t("web-main.logins.lead")}>
       {active.length > 0 && <div className={css.cards}>{active.map((l) => <LoginCard key={l.id} station={station} id={l.id} marked={l.id === marked} />)}</div>}
-      {past.length > 0 && <div className={pagesCss.list}>{past.map((l) => <PastRow key={l.id} station={station} login={l} marked={l.id === marked} />)}</div>}
+      {view.tools.length > 0 && <div className={pagesCss.list}>{view.tools.map((tool) => <ToolRow key={tool.name} station={station} tool={tool} marked={marked ?? null} />)}</div>}
     </Section>
   );
 }
 
-/** Which chat's agent started a login: its title, a link to it. */
-function StartedIn({ station, login }: { station: string; login: MachineLoginShown }) {
-  if (!login.chat) return null;
-  const title = login.chatTitle || t("web-main.logins.aChat");
-  const words = t("web-main.logins.startedIn", { chat: "\u0000" }).split("\u0000");
-  return <>{words[0]}<Link className={css.chatLink} to={`${stationBase(station)}/chats/${encodeURIComponent(login.chat)}`}>{title}</Link>{words[1]}</>;
+/** A chat's title, a link to it. */
+function ChatLink({ station, chat, title }: { station: string; chat: string; title?: string | undefined }) {
+  return <Link className={css.chatLink} to={`${stationBase(station)}/chats/${encodeURIComponent(chat)}`} onClick={(e) => e.stopPropagation()}>{title || t("web-main.logins.aChat")}</Link>;
 }
 
 /**
- * A login that ended: its program (devin, as its card names it: its command line is the agent's way, not what was
- * logged in to), which chat's agent started it, how it ended, when (pressed: nothing).
+ * A program's logins that ended (gcloud, as its card names it: its command line is the agent's way): who last logged
+ * in to it and when, from which chat; pressed, its tries, each when, how it ended and the chat.
  */
-function PastRow({ station, login, marked }: { station: string; login: MachineLoginShown; marked: boolean }) {
+function ToolRow({ station, tool, marked }: { station: string; tool: MachineLoginTool; marked: string | null }) {
+  const holds = marked !== null && tool.tries.some((l) => l.id === marked);
+  const [open, setOpen] = useState(holds);
   const box = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (marked) box.current?.scrollIntoView({ block: "center" }); }, [marked]);
-  // Who ended it says how it ended (张三 取消), else the status does (已取消); then when.
-  const rest = [login.doneByText || login.statusText, login.whenText].filter(Boolean).join(" · ");
+  useEffect(() => { if (holds) { setOpen(true); box.current?.querySelector("[data-marked]")?.scrollIntoView({ block: "center" }); } }, [holds]);
   return (
-    <div ref={box} className={`${pagesCss.listRow} ${css.pastRow}`} data-marked={marked || undefined}>
-      <span className={`${pagesCss.mark} ${css.mark}`}><Key size={18} strokeWidth={1.7} /></span>
-      <span className={pagesCss.cardRowText}>
-        <strong className={css.name}>{login.name}</strong>
-        <span className={login.state === "failed" ? css.stateFailed : css.state}>
-          {login.chat && <><StartedIn station={station} login={login} />{" · "}</>}{rest}
+    <div ref={box}>
+      <div className={`${pagesCss.listRow} ${css.toolRow}`} onClick={() => setOpen(!open)}>
+        <span className={`${pagesCss.mark} ${css.mark}`}><Key size={18} strokeWidth={1.7} /></span>
+        <span className={pagesCss.cardRowText}>
+          <strong className={css.name}>{tool.name}</strong>
+          <span className={tool.failed ? css.stateFailed : css.state}>
+            {tool.summaryText}{tool.chat && <>{" · 「"}<ChatLink station={station} chat={tool.chat} title={tool.chatTitle} />{"」"}</>}
+          </span>
         </span>
-      </span>
+        <button type="button" className={css.toolCount} aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpen(!open); }}>
+          {tool.countText}<span className={`${css.toggle} ${open ? css.toggleOpen : ""}`}><ChevronRight size={14} /></span>
+        </button>
+      </div>
+      {open && <div className={css.tries}>{tool.tries.map((l) => <Try key={l.id} station={station} login={l} marked={l.id === marked} />)}</div>}
+    </div>
+  );
+}
+
+/** One try of a program's: when, how it ended (who ended it says how: 张三 取消; else the status: 已取消), its chat. */
+function Try({ station, login, marked }: { station: string; login: MachineLoginShown; marked: boolean }) {
+  return (
+    <div className={css.tryRow} data-marked={marked || undefined}>
+      <span className={css.tryWhen}>{login.whenText}</span>
+      <span className={login.state === "failed" ? css.tryFailed : css.tryHow}>{login.doneByText || login.statusText}</span>
+      <span className={css.tryChat}>{login.chat && <>「<ChatLink station={station} chat={login.chat} title={login.chatTitle} />」</>}</span>
     </div>
   );
 }

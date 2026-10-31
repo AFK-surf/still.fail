@@ -1363,7 +1363,19 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       )
     // Studio's logins (station_logins.mbt): codex's under way, gh's done yesterday
     // (the settings' own pages only: a chat's login cards are the chats' fixture's)
-    "machineLogins" if mode.has_prefix("settings") && text(Some(Json::object(params)), "station") == "ws1/st1" =>
+    "machineLogins" if mode.has_prefix("settings") && text(Some(Json::object(params)), "station") == "ws1/st1" => {
+      let gh_login = obj([
+        ("id", str("login-0")),
+        ("active", Json::boolean(false)),
+        ("name", str("gh")),
+        ("command", str("env GH_HOST=github.com /opt/homebrew/bin/gh auth login")),
+        ("chat", str("s-c1")),
+        ("chatTitle", str("整理发布清单")),
+        ("whenText", str("昨天")),
+        ("statusText", str("已登录")),
+        ("doneByText", str("林 完成")),
+        ("state", str("done")),
+      ])
       Some(
         obj([
           ("supported", Json::boolean(true)),
@@ -1373,21 +1385,26 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             "logins",
             [
               obj([("id", str("login-2")), ("active", Json::boolean(true)), ("command", str("codex login"))]),
+              gh_login,
+            ],
+          ),
+          (
+            "tools",
+            [
               obj([
-                ("id", str("login-0")),
-                ("active", Json::boolean(false)),
                 ("name", str("gh")),
-                ("command", str("env GH_HOST=github.com /opt/homebrew/bin/gh auth login")),
+                ("summaryText", str("林 登录 · 昨天")),
+                ("failed", Json::boolean(false)),
                 ("chat", str("s-c1")),
                 ("chatTitle", str("整理发布清单")),
-                ("whenText", str("昨天")),
-                ("statusText", str("已登录")),
-                ("state", str("done")),
+                ("countText", str("1 次")),
+                ("tries", [gh_login]),
               ]),
             ],
           ),
         ]),
       )
+    }
     "machineLogin" if mode.has_prefix("settings") && text(Some(Json::object(params)), "id") == "login-2" =>
       Some(
         obj([

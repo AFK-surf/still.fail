@@ -840,7 +840,6 @@
   "web-main.logins.copyCode": "Copy the code",
   "web-main.logins.copyCodeWhat": "copy the code",
   "web-main.logins.codeCopied": "Code copied",
-  "web-main.logins.startedIn": "started by the agent of “{chat}”",
   "web-main.logins.aChat": "a chat",
   "web-main.logins.signIn": "Sign in in the browser",
   "web-main.logins.pasteCode": "Paste the code",

@@ -933,7 +933,6 @@ web-main.letters.count
 web-main.letters.none
 web-main.letters.title
 web-main.list.separator
-web-main.logins.aChat
 web-main.logins.answerWhat
 web-main.logins.cancelWhat
 web-main.logins.codeCopied
@@ -951,7 +950,6 @@ web-main.logins.openWhat
 web-main.logins.pasteCode
 web-main.logins.pasteLead
 web-main.logins.signIn
-web-main.logins.startedIn
 web-main.logins.title
 web-main.logins.waitingBrowser
 web-main.machine.this

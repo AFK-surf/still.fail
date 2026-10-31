@@ -368,13 +368,16 @@ export class StationTopics implements Owner {
     const role = get(this.#core.data.shared({ topic: "workspace", workspace: ws }), "role");
     const active = (l: unknown) => (typeof get(l, "endedAt") === "number" ? 1 : 0);
     const started = (l: unknown) => (typeof get(l, "startedAt") === "number" ? (get(l, "startedAt") as number) : 0);
+    const sorted = [...held.logins].sort((a, b) => active(a) - active(b) || started(b) - started(a));
+    const all = sorted.map(shown);
     return {
       ok: {
         supported: held.supported !== false,
         loaded: held.supported !== null,
         canLogin: role !== "viewer",
         canRelay: this.#core.host.listen !== undefined,
-        logins: [...held.logins].sort((a, b) => active(a) - active(b) || started(b) - started(a)).map(shown),
+        logins: all,
+        tools: logins.toolsShown(sorted.map((l, i): [unknown, unknown] => [l, all[i]]).filter(([, s]) => !get(s, "active"))),
       },
     };
   }
