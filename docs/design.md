@@ -69,7 +69,7 @@ still.fail 直接提供 HTTP MCP，不为每个会话额外起进程：
 | `chat_history(to, before?, limit?)` | 读自己某个对话更早的消息 |
 | `chat_list` / `chat_read` | 列出 / 读这台 station 上的任意对话（按链接、thread 地址或会话 key） |
 | `session_history` | 读某个会话的执行历史 |
-| `slack_api(method, params, to?)` | 以连接的 Slack bot 身份调任意 Web API；别的会话所在的 thread 不能写 |
+| `slack_api(method, params, to?, bot?)` | 以连接的 Slack bot 身份调任意 Web API（still.fail 聊天没有自己的连接：用 station 的 Slack bot，有几个时按 `bot` 选，不给就用绑定到本会话运行时的那个）；别的会话所在的 thread 不能写 |
 | `job_start` / `job_list` / `job_log` / `job_stop` | 后台任务和 web 服务 |
 
 - 每个会话有自己的 token，MCP 服务按 token 识别会话。agent 无法冒充其他会话。
