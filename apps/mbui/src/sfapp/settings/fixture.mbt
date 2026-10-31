@@ -1146,10 +1146,25 @@ fn fx_archive() -> Json {
 }
 
 ///|
-fn fx_usage(days : Int) -> Json {
+/// The list `only` (a key) is of ("" none).
+fn only_shown_list(lists : Array[(String, String, Array[(String, String, String, String, Double)])], only : String) -> String {
+  for l in lists {
+    if l.2.search_by(fn(it) { it.0 == only }) is Some(_) {
+      return l.0
+    }
+  }
+  ""
+}
+
+///|
+/// What the core's `usage` view says (views/usage.ts) of a made-up workspace: its days split by the list `split`
+/// asks for, of the one person, account or model `only` names (its key) alone.
+fn fx_usage(days : Int, split? : String = "people", only? : String = "") -> Json {
+  // (the one alone: a part of everything)
+  let part = if only == "" { 1.0 } else { 0.42 }
   let daily : Array[Json] = []
   for i in 0..<days {
-    let cost = ((i * 37 + 11) % 23).to_double() + 4.0
+    let cost = (((i * 37 + 11) % 23).to_double() + 4.0) * part
     let a = cost * 0.6
     let b = cost * 0.3
     let rest = cost - a - b
@@ -1186,20 +1201,70 @@ fn fx_usage(days : Int) -> Json {
       ("detail", str("1,204 次 · 3.2 万")),
     ])
   }
+  let series = match split {
+    "models" => [("claude-opus-5-5", "Opus 5.5"), ("gpt-6", "GPT-6"), ("", "其他")]
+    "profiles" => [("Studio/cc", "公司 Claude"), ("Studio/codex", "Codex 团队"), ("", "其他")]
+    "chats" => [("Studio/1", "整理发布清单"), ("Studio/4", "给设置页加一个深色模式开关"), ("", "其他")]
+    _ => [("lin@example.com", "林"), ("ana@example.com", "Ana"), ("", "其他")]
+  }
+  let lists = [
+    ("people", "按人", [("lin@example.com", "林", "", "$80", 0.68), ("ana@example.com", "Ana", "", "$31", 0.26), ("wu@example.com", "吴", "", "$7.20", 0.06)]),
+    (
+      "chats",
+      "按对话",
+      [
+        ("Studio/1", "整理发布清单", "Studio", "$31", 0.26),
+        ("Studio/4", "给设置页加一个深色模式开关", "Studio", "$22", 0.19),
+        ("MBA/3", "夜里的构建又失败了", "MBA", "$15", 0.13),
+      ],
+    ),
+    ("profiles", "按账号", [("Studio/cc", "公司 Claude", "Studio · 最多 Opus 5.5", "$84", 0.71), ("Studio/codex", "Codex 团队", "Studio · 最多 GPT-6", "$34", 0.29)]),
+    ("models", "按模型", [("claude-opus-5-5", "Opus 5.5", "", "$84", 0.71), ("gpt-6", "GPT-6", "", "$28", 0.24), ("claude-haiku-5", "Haiku 5", "", "$6.10", 0.05)]),
+  ]
+  let only_shown = match lists.search_by(fn(l) { l.2.search_by(fn(it) { it.0 == only }) is Some(_) }) {
+    Some(k) if only != "" => {
+      let (list, _, its) = lists[k]
+      let it = its[its.search_by(fn(it) { it.0 == only }).unwrap()]
+      obj([("list", str(list)), ("key", str(only)), ("title", str(it.1))])
+    }
+    _ => Json::null()
+  }
   obj([
     ("days", Json::number(days.to_double())),
+    ("split", str(split)),
+    ("only", only_shown),
     ("wait", obj([("reading", Json::boolean(false)), ("failing", []), ("empty", Json::boolean(false))])),
     ("empty", Json::boolean(false)),
     (
       "tiles",
       [
-        obj([("label", str("折合费用")), ("value", str(if days == 7 { "$118" } else { "$486" })), ("sub", str("按 API 价算"))]),
-        obj([("label", str("调用")), ("value", str(if days == 7 { "1,416" } else { "5,830" })), ("sub", str("3 个 station"))]),
-        obj([("label", str("token")), ("value", str(if days == 7 { "2,310 万" } else { "9,870 万" })), ("sub", str("输入 · 输出 · 缓存"))]),
-        obj([("label", str("对话")), ("value", str("42")), ("sub", str("其中 9 个今天"))]),
+        obj([
+          ("label", str("折合费用")),
+          ("value", str(if only != "" { "$50" } else if days == 7 { "$118" } else { "$486" })),
+          ("sub", str("按 API 标准单价估算")),
+          ("change", str(if days == 7 { "比前 7 天 ↑18%" } else { "比前 30 天 ↓6.4%" })),
+        ]),
+        obj([
+          ("label", str("模型调用")),
+          ("value", str(if only != "" { "595 次" } else if days == 7 { "1,416 次" } else { "5,830 次" })),
+          ("sub", str(if days == 7 { "日均 202 次" } else { "日均 194 次" })),
+          ("change", str(if days == 7 { "比前 7 天 ↑9.2%" } else { "比前 30 天 ↓3.1%" })),
+        ]),
+        obj([
+          ("label", str("输入 token")),
+          ("value", str(if only != "" { "970 万" } else if days == 7 { "2,310 万" } else { "9,870 万" })),
+          ("sub", str("缓存命中 91%")),
+          ("change", str(if days == 7 { "比前 7 天 ↑21%" } else { "比前 30 天 ↑2.5%" })),
+        ]),
+        obj([
+          ("label", str("输出 token")),
+          ("value", str(if only != "" { "18 万" } else if days == 7 { "43 万" } else { "1.8 亿" })),
+          ("sub", str("平均每次 304")),
+          ("change", str(if days == 7 { "比前 7 天 ↓4.0%" } else { "与前 30 天持平" })),
+        ]),
       ],
     ),
-    ("series", [obj([("key", str("lin@example.com")), ("name", str("林"))]), obj([("key", str("ana@example.com")), ("name", str("Ana"))]), obj([("key", str("")), ("name", str("其他"))])]),
+    ("series", Json::array(series.map(fn(x) { obj([("key", str(x.0)), ("name", str(x.1))]) }))),
     ("daily", Json::array(daily)),
     ("many", Json::boolean(days > 10)),
     ("max", Json::number(27.0)),
@@ -1208,22 +1273,17 @@ fn fx_usage(days : Int) -> Json {
     ("ticks", [obj([("value", Json::number(10.0)), ("label", str("10"))]), obj([("value", Json::number(20.0)), ("label", str("20"))]), obj([("value", Json::number(30.0)), ("label", str("30"))])]),
     (
       "lists",
-      [
-        obj([
-          ("key", str("chats")),
-          ("title", str("按对话")),
-          (
-            "items",
-            [
-              item("c1", "整理发布清单", "Studio", "$31", 0.26, "26%"),
-              item("c4", "给设置页加一个深色模式开关", "Studio", "$22", 0.19, "19%"),
-              item("c3", "夜里的构建又失败了", "MBA", "$15", 0.13, "13%"),
-            ],
-          ),
-        ]),
-        obj([("key", str("people")), ("title", str("按人")), ("items", [item("lin", "林", "", "$80", 0.68, "68%")])]),
-        obj([("key", str("models")), ("title", str("按模型")), ("items", [item("opus", "Opus 5.5", "", "$96", 0.81, "81%")])]),
-      ],
+      Json::array(
+        lists.map(fn(l) {
+          let (key, title, its) = l
+          let shown = if only == "" { its } else { its.filter(fn(it) { it.0 == only || key != only_shown_list(lists, only) }) }
+          obj([
+            ("key", str(key)),
+            ("title", str(title)),
+            ("items", Json::array(shown.map(fn(it) { item(it.0, it.1, it.2, it.3, it.4, (it.4 * 100.0).to_int().to_string() + "%") }))),
+          ])
+        }),
+      ),
     ),
     ("notes", []),
     ("basis", str("按各服务商公开的 API 价格折算，不是实际账单。")),
@@ -1980,6 +2040,18 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           match params.get("days") {
             Some(Number(n, ..)) => n.to_int()
             _ => 7
+          },
+          split=match params.get("split") {
+            Some(String(l)) => l
+            _ => "people"
+          },
+          only=match params.get("only") {
+            Some(Object(o)) =>
+              match o.get("key") {
+                Some(String(k)) => k
+                _ => ""
+              }
+            _ => ""
           },
         ),
       )

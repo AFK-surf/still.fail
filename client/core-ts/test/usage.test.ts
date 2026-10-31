@@ -181,3 +181,44 @@ test("the_bars_scale_is_a_round_top_cut_in_two_or_three_steps_each_said_short", 
   const s = scale(5351);
   assert.deepEqual(s.ticks.map((t) => t.value), [2000, 4000, 6000]);
 });
+
+test("each_total_said_against_the_days_before_as_many", () => {
+  const rows = [
+    row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 12, 6.0),
+    row("2026-09-30", "a@x", 7, "cc", "claude-opus-5-5", 10, 5.0),
+    row("2026-09-25", "a@x", 7, "cc", "claude-opus-5-5", 10, 4.0),
+    // (before the days before: in neither)
+    row("2026-09-10", "a@x", 7, "cc", "claude-opus-5-5", 500, 500.0),
+  ];
+  const read = (from: number, since = 0) => [{ address: "ws/st", name: "studio", online: true, value: ok({ ...station(rows), from, since }) }];
+  const v = usageView(read(NOW - 60 * 86_400_000), 7, NOW, 480, { id: "a@x", email: "a@x" }, []);
+  assert.deepEqual(v.tiles.map((x: J) => x.change), ["比前 7 天 ↑175%", "比前 7 天 ↑120%", "比前 7 天 ↑120%", "比前 7 天 ↑120%"]);
+  // read only from within the days before (an older core's 30 days for 30), or recorded only since then: none said
+  assert.equal(usageView(read(NOW - 10 * 86_400_000), 7, NOW, 480, { id: "a@x", email: "a@x" }, []).tiles[0].change, null);
+  assert.equal(usageView(read(NOW - 60 * 86_400_000, NOW - 10 * 86_400_000), 7, NOW, 480, { id: "a@x", email: "a@x" }, []).tiles[0].change, null);
+  // nothing spent before: none
+  const fresh = [{ address: "ws/st", name: "studio", online: true, value: ok({ ...station(rows.slice(0, 2)), from: NOW - 60 * 86_400_000 }) }];
+  assert.equal(usageView(fresh, 7, NOW, 480, { id: "a@x", email: "a@x" }, []).tiles[0].change, null);
+  assert.ok("ok" in conform("UsageView", v));
+});
+
+test("the_days_split_by_the_list_picked_and_one_seen_alone", () => {
+  const rows = [
+    row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 10, 3.0),
+    row("2026-10-02", "a@x", 8, "cc", "claude-sonnet-5", 4, 1.0),
+    row("2026-10-01", "b@x", 7, "cc", "claude-sonnet-5", 2, 2.0),
+  ];
+  const sources: Source[] = [{ address: "ws/st", name: "studio", online: true, value: ok(station(rows)) }];
+  const me = { id: "a@x", email: "a@x" };
+  // several people: split by them; asked, by the models
+  assert.equal(usageView(sources, 7, NOW, 480, me, []).split, "people");
+  const byModel = usageView(sources, 7, NOW, 480, me, [], { split: "models" });
+  assert.deepEqual([byModel.split, byModel.series.map((s: J) => s.name), byModel.daily[6].parts], ["models", ["Opus 5.5", "Sonnet 5"], [3, 1]]);
+  // one person alone: only their calls, the days split by their models (one person: the models' by default)
+  const alone = usageView(sources, 7, NOW, 480, me, [], { only: { list: "people", key: "b@x" } });
+  assert.deepEqual([alone.only, alone.split, alone.tiles[1].value, alone.lists[0].items.length], [{ list: "people", key: "b@x", title: "b@x" }, "models", "2 次", 1]);
+  // a model alone, and a list that cannot be (a chat opens instead)
+  assert.equal(usageView(sources, 7, NOW, 480, me, [], { only: { list: "models", key: "claude-sonnet-5" } }).tiles[1].value, "6 次");
+  assert.equal(usageView(sources, 7, NOW, 480, me, [], { only: { list: "chats", key: "ws/st/7" } }).only, null);
+  assert.ok("ok" in conform("UsageView", alone));
+});

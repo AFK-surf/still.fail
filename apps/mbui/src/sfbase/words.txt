@@ -1196,8 +1196,12 @@ web-main.usage.days
 web-main.usage.noModelUsage
 web-main.usage.noPrices
 web-main.usage.none
+web-main.usage.only
+web-main.usage.onlyOff
+web-main.usage.ranked
 web-main.usage.seePrices
 web-main.usage.showAll
+web-main.usage.splitBy
 web-main.versions.auto
 web-main.versions.autoIdleTip
 web-main.versions.autoTip

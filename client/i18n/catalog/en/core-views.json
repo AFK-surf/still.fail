@@ -470,6 +470,8 @@
   "core-views.usage.prices.offline": "Station offline; prices unavailable",
   "core-views.usage.prices.output": "Output",
   "core-views.usage.prices.unit": "USD / 1M tokens",
+  "core-views.usage.tile.change": "{change} vs previous {n} days",
+  "core-views.usage.tile.same": "Same as previous {n} days",
   "core-views.usage.tile.calls": "Model calls",
   "core-views.usage.tile.calls_sub": "{n}/day avg",
   "core-views.usage.tile.calls_value": {

@@ -664,6 +664,10 @@
   "web-main.resources.show": "Show",
   "web-main.usage.none": "No usage in this period",
   "web-main.usage.rankBy": "Sort by",
+  "web-main.usage.only": "Only {name}",
+  "web-main.usage.onlyOff": "Show all, not only {name}",
+  "web-main.usage.splitBy": "Group by",
+  "web-main.usage.ranked": "By cost",
   "web-main.usage.seePrices": "See prices →",
   "web-main.usage.showAll": {
     "one": "Show all",
