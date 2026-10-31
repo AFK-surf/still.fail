@@ -786,6 +786,8 @@ test "over: ended, outdated, gone, denied said in the screen's place; 重新打�
   assert_true(r.t.find("已结束") is Some(_))
   assert_true(r.t.find("agent 关掉了这个标签页") is Some(_))
   assert_true(r.t.find("重新打开") is Some(_))
+  // (no grant missing: nothing to go and ask for)
+  assert_true(r.t.find("前往权限设置") is None)
   // gone, the core saying the headline's words: said once
   r.t.tap_text("重新打开")
   assert_eq(r.told("screen.view").length(), 2)
@@ -804,6 +806,30 @@ test "over: ended, outdated, gone, denied said in the screen's place; 重新打�
   nav_rested(r.t)
   assert_true(!(app.nav.top() is Screen(_)))
   r.t.draw()
+  screen_done(r.t)
+}
+
+///|
+test "denied for a grant the station lacks: its station's 权限 a tap away (前往权限设置), beside 重新打开" {
+  // (2026-10-31 the user: 「这个交互不合格，需要用户自己找入口」「你至少能跳到设置」)
+  let r = screen_rig()
+  r.state(
+    "denied",
+    message="此 Mac 尚未允许 still.fail Helper 录制屏幕和进行操作。",
+    access={
+      "capture": false,
+      "control": false,
+      "message": "那台 Mac 上已弹出授权窗口：请在其中点击「允许」，将 still.fail Helper 拖入系统设置的列表，然后重新打开画面。",
+      "app": "still.fail Helper",
+    },
+  )
+  r.finish()
+  assert_true(r.t.find("重新打开") is Some(_))
+  r.t.tap_text("前往权限设置")
+  nav_rested(r.t)
+  assert_true(app.nav.top() == Setting(@settings.Route::Station("ws-1/st-1")))
+  assert_eq(@settings.station_parts.get("ws-1/st-1"), Some("settings"))
+  @settings.station_parts.remove("ws-1/st-1")
   screen_done(r.t)
 }
 

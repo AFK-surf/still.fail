@@ -343,21 +343,41 @@ fn screen_ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
     for w in whys {
       c.text(w, style=ended_why) |> ignore
     }
+    // denied for a grant the station lacks (macOS's): its station's page where it is asked for (设置's 权限), a tap
+    // away rather than looked for
+    let access = field(s.state, "access")
+    let granting = phase == "denied" &&
+      (field(access, "capture") == Some(Json::boolean(false)) || field(access, "control") == Some(Json::boolean(false)))
     // a light capsule on the dark either way: the solid one in the dark theme, the soft one in the light
     if phase == "ended" || phase == "denied" || phase == "failed" {
-      let id = c.id("screen-again/" + s.view)
-      let dark = c.theme().dark
-      let i = c.box(style=if dark { again_solid } else { again_soft }, id~, fn() {
-        c.text(@sf.t("web-pages.screen.again"), style=if dark { again_solid_words } else { again_soft_words })
-        |> ignore
+      c.box(style=ended_keys, fn() {
+        if again_key(c, "screen-again/" + s.view, @sf.t("web-pages.screen.again")) {
+          c.tell("screen-again/" + s.view, fn() { s.open(s.src) })
+        }
+        if granting && again_key(c, "screen-grants/" + s.view, @sf.t("web-pages.screen.toGrants")) {
+          let station = s.station
+          c.tell("screen-grants/" + s.view, fn() {
+            @settings.station_parts[station] = "settings"
+            open_page(Setting(@settings.Route::Station(station)))
+          })
+        }
       })
-      c.semantics(i, Button, id~, label=@sf.t("web-pages.screen.again"), actions=[Activate])
-      if c.clicked(id) {
-        c.tell("screen-again/" + s.view, fn() { s.open(s.src) })
-      }
+      |> ignore
     }
   })
   |> ignore
+}
+
+///|
+/// A capsule under what happened (重新打开, 前往权限设置), light on the screen's dark: whether it was pressed.
+fn again_key(c : @ui.Ctx, key : String, words : String) -> Bool {
+  let id = c.id(key)
+  let dark = c.theme().dark
+  let i = c.box(style=if dark { again_solid } else { again_soft }, id~, fn() {
+    c.text(words, style=if dark { again_solid_words } else { again_soft_words }) |> ignore
+  })
+  c.semantics(i, Button, id~, label=words, actions=[Activate])
+  c.clicked(id)
 }
 
 ///|

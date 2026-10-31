@@ -1797,6 +1797,7 @@ let en : Map[String, String] = {
   "web-pages.profiles.verifiedAdded": "Verified and added",
   "web-pages.profiles.workspaces.lead": "This station is also in other workspaces; by default, a profile is used in all of them",
   "web-pages.screen.again": "Open again",
+  "web-pages.screen.toGrants": "Go to permissions",
   "web-pages.screen.and": ", ",
   "web-pages.screen.combo.close": "Close window",
   "web-pages.screen.combo.desktop": "Show desktop",

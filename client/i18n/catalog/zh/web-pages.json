@@ -1532,6 +1532,7 @@
   "web-pages.screen.key.down": "下方向键",
   "web-pages.screen.key.right": "右方向键",
   "web-pages.screen.again": "重新打开",
+  "web-pages.screen.toGrants": "前往权限设置",
   "web-pages.screen.over.ended": "已结束",
   "web-pages.screen.over.outdated": "station 需要更新",
   "web-pages.screen.over.gone": "屏幕已不存在",
