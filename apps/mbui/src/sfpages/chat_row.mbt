@@ -209,7 +209,7 @@ pub fn chat_row(
   let offline = item.offline is Some(_)
   // (`apart`: the room its list keeps under it, outside the slot a swipe moves it in)
   // a finger's: its chat's page in view, its ground on; gone back from it, the ground stays while the page slides off
-  // and a while after, then fades, the row alone built for its frames (the user, 2026-10-29: 「别那么快消失，留一会儿」)
+  // and a while after, then fades (the user, 2026-10-29: 「别那么快消失，留一会儿」)
   // (one row: the chat last in view; another's in view, it is that one's. Its time from the frame it was gone back
   // from, on the clock: not paused while the list is out of view)
   let left_at = c.id("row-left/" + key)
@@ -227,47 +227,44 @@ pub fn chat_row(
   } else {
     false
   }
-  let lit = on || (left && c.within(left_at, left_lit_ms))
-  let lit = @motion.animate(
+  let lit_on = on || (left && c.within(left_at, left_lit_ms))
+  let lit = @motion.told(
     c,
     "row-lit/" + key,
-    if lit { 1.0 } else { 0.0 },
-    spec=if lit { @motion.Snap(0.0) } else { @motion.tween(left_fade_ms, ease=Leave) },
+    if lit_on { 1.0 } else { 0.0 },
+    spec=if lit_on { @motion.Snap(0.0) } else { @motion.tween(left_fade_ms, ease=Leave) },
   )
-  // (faded: forgotten)
-  if left && lit == 0.0 {
+  // (the same motion says its end for the row to forget it: no clock read as it is built)
+  if left && !lit_on && lit.over() {
     row_left.val = ("", false)
   }
   let draw = fn(tx : Double, apart : Bool) -> Int {
-    let ground = if finger {
+    let finger_ground = fn() {
       // held, its menu open, or pressed where it rests (not swiped over its 归档): the ink at 5%
       if held || menu_on || (pressed && tx == 0.0 && !found) {
         @sf.alpha(t.p.text, 0.05)
-      } else if lit > 0.0 {
-        @sf.alpha(t.p.selected, lit)
-      } else if lifted >= 0.0 {
-        // going ahead of others, on a ground of its own over them: held to 60% of its 480 ms, then fading
-        let p = lifted / lift_ms
-        @sf.alpha(@sf.over(t.p.bg, @sf.alpha(t.p.text, 0.06)), if p < 0.6 { 1.0 } else { 1.0 - (p - 0.6) / 0.4 })
-      } else if tx != 0.0 {
-        // moved across: over 归档's words, which it uncovers as it goes
-        t.p.bg
       } else {
-        0L
+        let share = lit.get()
+        if share > 0.0 {
+          @sf.alpha(t.p.selected, share)
+        } else if lifted >= 0.0 {
+          // going ahead of others, on a ground of its own over them: held to 60% of its 480 ms, then fading
+          let p = lifted / lift_ms
+          @sf.alpha(@sf.over(t.p.bg, @sf.alpha(t.p.text, 0.06)), if p < 0.6 { 1.0 } else { 1.0 - (p - 0.6) / 0.4 })
+        } else if tx != 0.0 {
+          // moved across: over 归档's words, which it uncovers as it goes
+          t.p.bg
+        } else {
+          0L
+        }
       }
-    } else {
-      0L
     }
-    // (with a mouse, its ground easing as the pointer comes and goes worked out as it is painted, not built again each
-    // frame it eases: @sf.nav_ground_by, @ui.Ctx::bg_by)
-    let eased = if finger { None } else { Some(@sf.nav_ground_by(c, "row/" + key, hover || pressed, on)) }
+    // (both the finger's selected ground and the mouse's eased ground are read as they are painted)
+    let eased = if finger { finger_ground } else { @sf.nav_ground_by(c, "row/" + key, hover || pressed, on) }
     // (lifted, its card is its ground: the row's own drawn by the card round it, not square inside it)
     let lifted_ink = dmin(1.0, dmax(0.0, lift))
-    let ground = if lifted_ink > 0.0 { 0L } else { ground }
-    let ground_by : (() -> Int64)? = match eased {
-      Some(f) if lifted_ink <= 0.0 => Some(f)
-      _ => None
-    }
+    let ground = 0L
+    let ground_by : (() -> Int64)? = if lifted_ink <= 0.0 { Some(eased) } else { None }
     // (what shows of it over the list's: what its faces' rings are cut in)
     let face_ground = @sf.over(list_ground, if lifted_ink > 0.0 { t.p.raised } else { ground })
     let face_ground_by : (() -> Int64)? = match ground_by {
