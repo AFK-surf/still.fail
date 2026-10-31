@@ -2365,11 +2365,11 @@ let corners_hold : Ref[Bool] = Ref(true)
 /// once, with what and where. So what a test reaches, every state of every screen it walks through, keeps to it, not
 /// only the screens a test of corners looks at.
 fn Tester::hold_corners(self : Tester) -> Unit {
-  let c = g()
-  if !corners_hold.val || c.corner_ladder.is_empty() || c.frame_by is Some(_) || c.motion_left || c.page_in_hand {
+  if !corners_hold.val {
     return
   }
-  let faults = c.corner_faults()
+  let c = g()
+  let faults = c.held_corner_faults()
   if faults.is_empty() {
     return
   }
@@ -2377,4 +2377,15 @@ fn Tester::hold_corners(self : Tester) -> Unit {
     faults.join("\n")
   println(said)
   abort(said)
+}
+
+///|
+/// What the corner rule finds on the frame just drawn as Tester::hold_corners holds it: where the theme says its ladder
+/// and nothing on it moves (Ctx's `motion_left`, the window's tree's drawn as moving too: view_frame_end), the frame's
+/// and the window's tree's nodes (Ctx::with_tree_nodes); none otherwise.
+fn Ctx::held_corner_faults(self : Ctx) -> Array[String] {
+  if self.corner_ladder.is_empty() || self.frame_by is Some(_) || self.motion_left || self.page_in_hand {
+    return []
+  }
+  self.with_tree_nodes(fn() { self.corner_faults() })
 }

@@ -65,7 +65,11 @@ pub fn viewer_bar(
     if top > 0.0 {
       c.box(style=@ui.style(w=Full, h=Fixed(top)), fn() {  }) |> ignore
     }
-    c.box(style=viewer_bar_row, fn() {
+    // (its way back at the window's top left corner, as a page's bar's last key at its right is: viewer_back_at_corner)
+    let at_corner = viewer_back_at_corner()
+    let alone = c.theme().corner(Xl)
+    let start = if at_corner { viewer_bar_start_in(alone, @ui.corner_roots()) } else { viewer_bar_in }
+    c.box(style=viewer_bar_row.then(@ui.style(pl=room(start))), fn() {
       // clear of the window's buttons at its left, the system's (ViewerBar.css.ts: 84 in, not in full screen)
       if @ui.window_keys_left() {
         c.box(style=viewer_bar_buttons, fn() {  }) |> ignore
@@ -75,7 +79,8 @@ pub fn viewer_bar(
         if live && c.clicked(id) {
           went = true
         }
-        let b = c.box(style=viewer_back_box.then(viewer_lit(ink)), id=if live { id } else { 0 }, fn() {
+        let corner = if at_corner { @ui.style(radius=Linked(viewer_back_corner(alone))) } else { @ui.style() }
+        let b = c.box(style=viewer_back_box.then(corner).then(viewer_lit(ink)), id=if live { id } else { 0 }, fn() {
           icon(c, "chevron-left", size=viewer_back_icon, color=ink.ink) |> ignore
           // (short of room, its words leave it whole and the chevron stays, as a page's bar's way back does)
           c.box(drop=1, fn() {
@@ -295,6 +300,34 @@ let viewer_bar_buttons : @ui.Style = @ui.style(w=Fixed(viewer_buttons_w), h=Full
 ///|
 /// (its row's px)
 pub let viewer_bar_in : Double = 12.0
+
+///|
+/// Whether the way back stands at the window's top left corner: no buttons of the system's there (window_keys_left),
+/// the bar in the window's whole, not a pane's (in_pane, as bar_keys_link has the bar's last key at its right).
+pub fn viewer_back_at_corner() -> Bool {
+  !@ui.window_keys_left() && !in_pane()
+}
+
+///|
+/// The corner of the way back at the window's top left corner (viewer_back_at_corner): the window's followed from as far
+/// in as it stands from the bar's top (bar_keys_top), a block concentric with it where the window's corner lets one
+/// follow it (a Mac's 16, 6 in: 11.2), as a page's bar's last key at its right is (window_corner_key); `alone` (the
+/// theme's Xl) where it cannot.
+pub fn viewer_back_corner(alone : Double) -> @ui.CornerOf {
+  Follow(Window, bar_keys_top(), alone)
+}
+
+///|
+/// How far in from the window's left the way back stands at the window's corner (viewer_back_at_corner): as far as from
+/// the bar's top where it follows the window's corner there (viewer_back_corner, `alone` round where it cannot), else
+/// the bar's 12.
+pub fn viewer_bar_start_in(alone : Double, roots : @ui.CornerRoots) -> Double {
+  if viewer_back_corner(alone).follows(roots) {
+    bar_keys_top()
+  } else {
+    viewer_bar_in
+  }
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
