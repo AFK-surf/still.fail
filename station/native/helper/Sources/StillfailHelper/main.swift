@@ -10,7 +10,7 @@
 //   one starting itself again (STILLFAIL_HELPER_TAKEOVER), which waits for the lock.
 //
 // Each connection to the socket is one request: a JSON line `{token, op, …}`, the token the station gave it at start.
-//   hello               → {ok, v: 1, pid, app, capabilities: ["screen", "files", "simulator"]}
+//   hello               → {ok, v: 1, pid, app, capabilities: ["screen", "files", "simulator", "outflow", "ui"]}
 //   status              → {capture, control, display, responsible, files, live: {capture, control}, asking, asked}:
 //                         `live` what this very process may do (macOS gives a running process a new grant only once it
 //                         starts again); `files` the folder grants (Files.swift); `asked` what the window shows
@@ -22,6 +22,8 @@
 //   simulator.view      {udid, maxWidth, maxHeight, codec, fps?, bitrate?}: a view of a booted iOS Simulator, its messages
 //                       ScreenView's (SimulatorView.swift says its input)
 //   files.*             the drive's protected folders (Files.swift says them)
+//   ui                  {args}: agent-desktop run with them (Ui.swift: the apps' accessibility trees, acted on by ref)
+//                       → {ok, status, out}: its exit status and its JSON envelope
 //   watch               → {ok}, then held open for as long as this process is (the station's supervision); a grant
 //                         changing while the window is up, and the window closing, are told on it as a line
 //                         {event: "grants"}

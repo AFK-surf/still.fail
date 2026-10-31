@@ -4,10 +4,16 @@
 // a session keeps one view of a screen open while it uses it (closed after IDLE_MS unused), joined to the screen's
 // people as "agent: <its chat>", so it shows in `controlledBy` and a person watching sees it work. A person driving the
 // screen at that moment has it: the agent's input is refused until they leave it.
+//
+// On the desktop an agent also reads an app's window as its accessibility tree (`tree`, screens/ui.ts: agent-desktop)
+// and acts on its elements by ref (`ref` with click, type, set, scroll; `app` with key): through the accessibility API,
+// not the pointer or the keyboard focus, so it needs no picture, works on a window behind others, and goes on while a
+// person drives the screen. Each such action answers with the app's tree again.
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { tr } from "../ops/i18n.ts";
 import { type ScreenHub, ScreenRefused, accessShown } from "../screens/hub.ts";
+import { treeText } from "../screens/ui.ts";
 import type { Frame, ScreenInput, ScreenSource, ScreenView } from "../screens/source.ts";
 import type { Content, Tool, ToolReply } from "./mcp.ts";
 
@@ -23,6 +29,10 @@ export const FIRST_MS = 10_000;
 export const WAIT_MAX = 30_000;
 /// A drag's moves between its press and its release.
 export const DRAG_STEPS = 8;
+/// After an action by ref, this long before the app's tree is read again, unless `wait` says otherwise.
+export const TREE_SETTLE_MS = 200;
+/// A scroll by ref: this many pixels of `dx`/`dy` a unit of agent-desktop's (a wheel notch's lines).
+export const SCROLL_UNIT_PX = 100;
 
 /// `mods` bits as the contract has them (CDP's order).
 export const MODS = { alt: 1, ctrl: 2, meta: 4, shift: 8 } as const;
@@ -30,11 +40,11 @@ export const MODS = { alt: 1, ctrl: 2, meta: 4, shift: 8 } as const;
 export const COMPUTER = {
   name: "computer",
   description:
-    "Operate one of this station's screens yourself (the `screen` tool lists them: desktop, browser:<tab>, simulator:<udid>, an iOS Simulator booted here, touched where you click): take a screenshot, click, move, drag, scroll, type text, press keys. Coordinates are pixels of the latest screenshot of that screen (each result says its size and how it maps to the screen). Every action returns a fresh screenshot unless screenshot=false. For web pages prefer the browser's DevTools (the `browser` tool: Playwright/chrome-devtools-mcp read the page itself); use this for native apps and what DevTools cannot reach. While a person is controlling the screen your input is refused: wait, or ask them in the chat. When you are stuck (a sign-in, a captcha, a permission), give the person the screen's link from the `screen` tool with chat_post kind=need_human.",
+    "Operate one of this station's screens yourself (the `screen` tool lists them: desktop, browser:<tab>, simulator:<udid>, an iOS Simulator booted here, touched where you click): take a screenshot, click, move, drag, scroll, type text, press keys. Coordinates are pixels of the latest screenshot of that screen (each result says its size and how it maps to the screen). Every action returns a fresh screenshot unless screenshot=false. On the desktop prefer an app's accessibility tree: action=tree with app (no app: the apps running) gives its window as text, an element a line with its ref (e12); then click, type, set (replace a field's value with text) or scroll with ref act on that element without the pointer or the focus (also behind other windows, and while a person drives the screen), and key with app sends keys to that app; each answers with the app's tree again. A big window: tree with skeleton=true first, then tree with ref for one part. Use screenshots for what has no tree (a canvas, a game, a picture). For web pages prefer the browser's DevTools (the `browser` tool: Playwright/chrome-devtools-mcp read the page itself); use this for native apps and what DevTools cannot reach. While a person is controlling the screen your input by coordinates is refused: wait, or ask them in the chat. When you are stuck (a sign-in, a captcha, a permission), give the person the screen's link from the `screen` tool with chat_post kind=need_human.",
   inputSchema: {
     type: "object",
     properties: {
-      action: { type: "string", enum: ["screenshot", "click", "move", "drag", "scroll", "type", "key", "wait"], description: "What to do (default screenshot)" },
+      action: { type: "string", enum: ["screenshot", "tree", "click", "move", "drag", "scroll", "type", "set", "key", "wait"], description: "What to do (default screenshot)" },
       screen: { type: "string", description: "The screen's id from the `screen` tool: desktop, browser:<targetId>, simulator:<udid>" },
       x: { type: "number", description: "click, move, scroll: the point, in screenshot pixels from the left" },
       y: { type: "number", description: "click, move, scroll: the point, in screenshot pixels from the top" },
@@ -44,11 +54,16 @@ export const COMPUTER = {
       to: { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2, description: "drag: [x, y] where it is released" },
       dx: { type: "number", description: "scroll: pixels to the right (negative: left)" },
       dy: { type: "number", description: "scroll: pixels down (negative: up)" },
-      text: { type: "string", description: "type: the text, as if typed (a newline presses Enter)" },
+      text: { type: "string", description: "type: the text, as if typed (a newline presses Enter); set: the element's new value" },
       key: { type: "string", description: "key: a key or a combination, e.g. Enter, Escape, Tab, ArrowDown, PageDown, F5, a, ctrl+shift+t, cmd+c and cmd+Left on a Mac (on Windows cmd is the Windows key: ctrl+c there)" },
       mods: { type: "array", items: { type: "string", enum: ["cmd", "ctrl", "alt", "shift"] }, description: "key: modifiers held besides those in key" },
       ms: { type: "number", description: "wait: how long (ms, at most 30000) before the screenshot" },
-      wait: { type: "number", description: "After an action: ms before its screenshot (default 500)" },
+      app: { type: "string", description: "tree: the app whose window to read (its name, e.g. Finder); key: send the keys to this app without focusing it" },
+      window: { type: "string", description: "tree: one of the app's windows, by the id a tree answer names (when it has several)" },
+      ref: { type: "string", description: "click, type, set, scroll: the element, by its ref in the latest tree (e12); tree: read only the part under it" },
+      skeleton: { type: "boolean", description: "tree: only the window's outline (containers say how much is inside), for a big window" },
+      tree: { type: "boolean", description: "After an action by ref: read the app's tree again (default true)" },
+      wait: { type: "number", description: "After an action: ms before its screenshot (default 500), or before the tree is read again (by ref: default 200)" },
       screenshot: { type: "boolean", description: "After an action: return a screenshot (default true)" },
     },
     required: ["screen"],
@@ -289,6 +304,24 @@ class AgentView {
 }
 
 const num = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+/// The tree a session read last on a screen: its refs are that snapshot's, and an action by ref reads it again so.
+type Tree = { snapshot: string; app: string; window: string };
+
+/// agent-desktop's envelope (screens/ui.ts): its data, or what it said went wrong as the agent reads it.
+function answered(envelope: any, what: string): any {
+  if (envelope?.ok === true) return envelope.data ?? {};
+  const e = envelope?.error ?? {};
+  const lines = [`${what}: ${e.code ?? "ERROR"}: ${e.message ?? "agent-desktop failed"}`];
+  if (typeof e.suggestion === "string" && e.suggestion) lines.push(e.suggestion);
+  // The windows to choose from, when the app has several.
+  if (e.details !== undefined) lines.push(`Details: ${JSON.stringify(e.details)}`);
+  const retry = e.disposition?.retry;
+  if (retry === "safe") lines.push("It was not done; it is safe to try again.");
+  else if (retry === "unsafe") lines.push("It may have been done: read the tree before doing it again.");
+  throw new Refused(lines.join("\n"));
+}
 
 /// The agents' hands on the station's screens: their views, by session and screen.
 export class Computer {
@@ -297,6 +330,8 @@ export class Computer {
   readonly #views = new Map<string, AgentView>();
   /// Views being opened, so two calls at once open one.
   readonly #opening = new Map<string, Promise<AgentView>>();
+  /// Each session's latest tree on a screen, by `session\nscreen`.
+  readonly #trees = new Map<string, Tree>();
 
   constructor(parts: ComputerParts) {
     this.#p = parts;
@@ -312,6 +347,7 @@ export class Computer {
   /// A session ended: its views close.
   closeSession(session: string) {
     for (const v of [...this.#views.values()]) if (v.session === session) v.close();
+    for (const key of [...this.#trees.keys()]) if (key.startsWith(`${session}\n`)) this.#trees.delete(key);
   }
 
   closeAll() {
@@ -387,6 +423,7 @@ export class Computer {
     if (id === "") throw new Refused(`screen is required: the id of one of this station's screens (${there()}); the \`screen\` tool lists them.`);
     const source = hub.get(id);
     if (source === undefined) throw new Refused(`no screen ${id} on this station (it has: ${there()})`);
+    if (action === "tree" || action === "set" || str(args.ref) !== "" || (action === "key" && str(args.app) !== "")) return this.#byTree(session, source, action, args);
     const acting = action !== "screenshot" && action !== "wait";
 
     // What the input will be, checked before anything is opened or sent.
@@ -427,6 +464,112 @@ export class Computer {
     const content: Content[] = [{ type: "text", text: [did, this.#described(source, size, view)].filter(Boolean).join("\n") }];
     content.push({ type: "image", data: Buffer.from(frame.data).toString("base64"), mimeType: "image/jpeg" });
     return { content };
+  }
+
+  /// An app's tree (`tree`), or an action on one of its elements by ref, answered with its tree again.
+  async #byTree(session: string, source: ScreenSource, action: string, args: Record<string, unknown>): Promise<ToolReply> {
+    const id = source.id;
+    if (source.ui === undefined) throw new Refused(`The screen ${id} has no accessibility trees: use screenshots and coordinates there (trees are the desktop's).`);
+    if (source.access) {
+      await this.#p.hub.refresh();
+      const access = source.access();
+      if (!access.control) throw new Refused(`${accessShown(access, "en")?.message ?? `The screen ${id} cannot be driven now.`}\n${this.#handOver(id)}`);
+    }
+    const ui = (cmd: string[]) => source.ui!(cmd).catch((error) => {
+      if (error instanceof Refused) throw error;
+      throw new Refused(`The screen ${id}'s apps could not be read: ${error instanceof ScreenRefused ? (accessShown(error.access, "en")?.message ?? error.message) : (error as Error).message}`);
+    });
+    const key = `${session}\n${id}`;
+    const latest = this.#trees.get(key);
+    const ref = str(args.ref);
+    /// A ref as agent-desktop takes it: its snapshot's (`@s1:e12`), the latest tree's for a bare one.
+    const qualified = () => {
+      if (ref.startsWith("@")) return ref;
+      if (!/^e\d+$/.test(ref)) throw new Refused(`${action}: ref is an element's ref from the latest tree, e.g. e12`);
+      if (latest === undefined) throw new Refused(`${action}: no tree read yet on ${id}: call action=tree with app first`);
+      return `@${latest.snapshot}:${ref}`;
+    };
+
+    if (action === "tree") {
+      const app = str(args.app);
+      const window = str(args.window);
+      if (app === "" && ref === "") return { content: [{ type: "text", text: this.#apps(answered(await ui(["list-apps"]), "apps")) }] };
+      const at: Tree = ref === "" ? { snapshot: "", app, window } : { ...(latest ?? { snapshot: "", app, window }), ...(app ? { app } : {}) };
+      return { content: [{ type: "text", text: await this.#read(key, at, ui, { root: ref === "" ? null : qualified(), skeleton: args.skeleton === true }) }] };
+    }
+
+    let cmd: string[];
+    let said: string;
+    switch (action) {
+      case "click": {
+        const b = args.button === undefined ? "left" : args.button;
+        if (b !== "left" && b !== "right") throw new Refused("click: by ref, button is left or right");
+        const verb = b === "right" ? "right-click" : args.double === true ? "double-click" : "click";
+        cmd = [verb, qualified()];
+        said = `${b === "right" ? "Right-clicked" : args.double === true ? "Double-clicked" : "Clicked"} ${ref}.`;
+        break;
+      }
+      case "type":
+      case "set": {
+        if (typeof args.text !== "string" || (action === "type" && args.text === "")) throw new Refused(`${action}: text is required`);
+        cmd = action === "type" ? ["type", qualified(), args.text] : ["set-value", qualified(), args.text];
+        const shown = JSON.stringify(args.text.length > 80 ? `${args.text.slice(0, 80)}…` : args.text);
+        said = action === "type" ? `Typed ${shown} into ${ref}.` : `Set ${ref} to ${shown}.`;
+        break;
+      }
+      case "scroll": {
+        const dx = num(args.dx) ? args.dx : 0;
+        const dy = num(args.dy) ? args.dy : 0;
+        if (dx === 0 && dy === 0) throw new Refused("scroll: give dx and/or dy (pixels; dy > 0 scrolls down)");
+        const vertical = Math.abs(dy) >= Math.abs(dx);
+        const along = vertical ? dy : dx;
+        const direction = vertical ? (dy > 0 ? "down" : "up") : dx > 0 ? "right" : "left";
+        const amount = Math.max(1, Math.min(50, Math.round(Math.abs(along) / SCROLL_UNIT_PX)));
+        cmd = ["scroll", qualified(), "--direction", direction, "--amount", String(amount)];
+        said = `Scrolled ${ref} ${direction} by ${amount}.`;
+        break;
+      }
+      case "key": {
+        const combo = str(args.key);
+        if (combo === "") throw new Refused("key: key is required (e.g. Enter, cmd+c)");
+        const mods = Array.isArray(args.mods) ? args.mods.filter((m): m is string => typeof m === "string") : [];
+        cmd = ["press", [...mods, combo].join("+"), "--app", str(args.app)];
+        said = `Pressed ${[...mods, combo].join("+")} in ${str(args.app)}.`;
+        break;
+      }
+      default:
+        throw new Refused(`${action}: not by ref (by ref: click, type, set, scroll; key with app)`);
+    }
+    answered(await ui(cmd), action);
+    // The app read again: its own tree, or the one named (key's).
+    const again: Tree | undefined = action === "key" ? (latest?.app === str(args.app) ? latest : { snapshot: "", app: str(args.app), window: "" }) : latest;
+    if (again === undefined || args.tree === false) return { content: [{ type: "text", text: said }] };
+    await this.#sleep(num(args.wait) ? Math.min(WAIT_MAX, Math.max(0, args.wait)) : TREE_SETTLE_MS);
+    return { content: [{ type: "text", text: `${said}\n${await this.#read(key, again, ui, { root: null, skeleton: false })}` }] };
+  }
+
+  /// An app's window read (or the part under `root`), kept as the session's latest tree: what an agent reads.
+  async #read(key: string, at: Tree, ui: (cmd: string[]) => Promise<unknown>, o: { root: string | null; skeleton: boolean }): Promise<string> {
+    const cmd = ["snapshot", "--compact"];
+    if (at.app) cmd.push("--app", at.app);
+    if (at.window) cmd.push("--window-id", at.window);
+    if (o.root !== null) cmd.push("--root", o.root);
+    if (o.skeleton) cmd.push("--skeleton");
+    const data = answered(await ui(cmd), "tree");
+    const snapshot = String(data.snapshot_id ?? "");
+    const window = data.window ?? {};
+    this.#trees.set(key, { snapshot, app: String(data.app ?? at.app), window: String(window.id ?? at.window) });
+    const head = `${data.app ?? at.app} window ${window.id ?? "?"} ${JSON.stringify(window.title ?? "")}${o.root ? `, under ${o.root.slice(o.root.lastIndexOf(":") + 1)}` : ""}${data.complete === false ? " (not all of it: read a part with ref)" : ""}. Act on an element by its ref (ref: "e12").`;
+    return `${head}\n${treeText(data.tree ?? {})}`;
+  }
+
+  /// The apps running that people use (in the Dock, on the taskbar): those agent-desktop says are in the foreground,
+  /// else all but the background ones.
+  #apps(data: any): string {
+    const apps: { name?: string; presentation?: string }[] = (Array.isArray(data?.apps) ? data.apps : []).filter((a: any) => typeof a?.name === "string" && a.name);
+    const foreground = apps.filter((a) => a.presentation === "foreground");
+    const shown = [...new Set((foreground.length > 0 ? foreground : apps.filter((a) => a.presentation !== "background")).map((a) => a.name!))];
+    return `Apps running (give one as app with action=tree): ${shown.join(", ") || "none"}`;
   }
 
   #sleep(ms: number): Promise<void> {
