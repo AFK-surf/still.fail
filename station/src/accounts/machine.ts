@@ -8,7 +8,7 @@
 // reading that differs from the last (`changes`).
 import type { Clock } from "effect";
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { codexHome, type Env, readClaudeCredentials } from "../agents/machine-logins.ts";
 import { liveClock } from "../ops/fibers.ts";
@@ -178,6 +178,28 @@ export function codexClaimsIn(text: string): Json | undefined {
     return JSON.parse(Buffer.from(payload.replace(/=+$/, ""), "base64url").toString("utf8"));
   } catch {
     return undefined;
+  }
+}
+
+/// Codex's ChatGPT workspace and user, kept until the auth file changes. The account id is shared by members of a
+/// workspace, while one person can belong to several workspaces: both identify whose allowance a profile spends.
+const codexIds = new Map<string, { stamp: string; id: string | null }>();
+export function codexAccountIdentity(home: string): string | null {
+  const path = join(home, "auth.json");
+  try {
+    const st = statSync(path);
+    const stamp = `${st.size}:${st.mtimeMs}:${st.ino}`;
+    const kept = codexIds.get(path);
+    if (kept?.stamp === stamp) return kept.id;
+    const text = readFileSync(path, "utf8");
+    const id = JSON.parse(text)?.tokens?.account_id;
+    const user = codexClaimsIn(text)?.sub;
+    const found = typeof id === "string" && id.trim() !== "" && typeof user === "string" && user.trim() !== "" ? JSON.stringify([id, user]) : null;
+    codexIds.set(path, { stamp, id: found });
+    return found;
+  } catch {
+    codexIds.delete(path);
+    return null;
   }
 }
 

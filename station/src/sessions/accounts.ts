@@ -45,7 +45,7 @@ export class Accounts {
   private checkAgain: (id: string) => Promise<unknown> = async () => {};
   private rechecking = new Map<string, Promise<void>>();
   private picked = new Map<string, number>();
-  /// Profiles a turn ran into the allowance of, and when: passed over until their allowance is read again, or for
+  /// Accounts a turn ran into the allowance of, and when: passed over until their allowance is read again, or for
   /// SPENT_FOR_MS when it is not.
   private spent = new Map<string, number>();
   /// Where each model's context is compacted on this station, and when that was learnt.
@@ -80,13 +80,29 @@ export class Accounts {
     return run;
   }
 
+  /// Several profiles can spend the same account's allowance. An unknown account keeps its own profile's identity.
+  private accountKey(id: string, health = this.health(id)): string {
+    return typeof health.account === "string" && health.account !== "" ? `account:${health.account}` : `profile:${id}`;
+  }
+
   healthOf(id: string): ProfileHealth {
     const health: ProfileHealth = { ...this.health(id) };
-    const at = this.spent.get(id);
+    const key = this.accountKey(id, health);
+    // Another profile of the same account may have read its allowance more recently. A failed read does not replace a
+    // successful one; sign-in checks remain specific to each profile.
+    if (key.startsWith("account:")) {
+      for (const other of this.deps.config().profiles) {
+        if (other.id === id) continue;
+        const candidate = this.health(other.id);
+        if (this.accountKey(other.id, candidate) !== key || candidate.quota?.state !== "ok") continue;
+        if (health.quota?.state !== "ok" || Number(candidate.quota.checkedAt ?? 0) > Number(health.quota.checkedAt ?? 0)) health.quota = candidate.quota;
+      }
+    }
+    const at = this.spent.get(key);
     if (at !== undefined) {
       // Read again since: what it says now counts.
       const checked = health.quota?.checkedAt;
-      if ((typeof checked === "number" && checked > at) || this.deps.clock.currentTimeMillisUnsafe() - at > SPENT_FOR_MS) this.spent.delete(id);
+      if ((typeof checked === "number" && checked > at) || this.deps.clock.currentTimeMillisUnsafe() - at > SPENT_FOR_MS) this.spent.delete(key);
       else health.spent = true;
     }
     return health;
@@ -96,8 +112,13 @@ export class Accounts {
   /// counted.
   pick(candidates: Profile[], model: string | null | undefined, strict: boolean, except?: string): Profile {
     const running = this.deps.running(except);
-    const profile = pickProfile(candidates, model, { health: (id) => this.healthOf(id), load: (id) => running.filter((p) => p === id).length, lastPicked: (id) => this.picked.get(id) ?? 0, now: () => this.deps.clock.currentTimeMillisUnsafe() }, strict);
-    this.picked.set(profile.id, this.deps.clock.currentTimeMillisUnsafe());
+    const load = new Map<string, number>();
+    for (const id of running) {
+      const key = this.accountKey(id);
+      load.set(key, (load.get(key) ?? 0) + 1);
+    }
+    const profile = pickProfile(candidates, model, { health: (id) => this.healthOf(id), load: (id) => load.get(this.accountKey(id)) ?? 0, lastPicked: (id) => this.picked.get(this.accountKey(id)) ?? 0, now: () => this.deps.clock.currentTimeMillisUnsafe() }, strict);
+    this.picked.set(this.accountKey(profile.id), this.deps.clock.currentTimeMillisUnsafe());
     return profile;
   }
 
@@ -189,7 +210,7 @@ export class Accounts {
     const row = store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
     const left = ranOn ?? row.profile;
-    this.spent.set(left, this.deps.clock.currentTimeMillisUnsafe());
+    this.spent.set(this.accountKey(left), this.deps.clock.currentTimeMillisUnsafe());
     const config = this.deps.config();
     const name = (id: string) => config.profiles.find((p) => p.id === id)?.name ?? id;
     if (row.profile !== left) return [name(left), name(row.profile)];
@@ -214,9 +235,9 @@ export class Accounts {
     const row = this.deps.store.getSession(key);
     const now = this.deps.clock.currentTimeMillisUnsafe();
     if (!row) return now + SPENT_FOR_MS;
-    const full = windowsOf(this.health(row.profile).quota).filter((w) => Number(w.usedPercent) >= 100 && typeof w.resetsAt === "number" && w.resetsAt > now);
+    const full = windowsOf(this.healthOf(row.profile).quota).filter((w) => Number(w.usedPercent) >= 100 && typeof w.resetsAt === "number" && w.resetsAt > now);
     if (full.length > 0) return Math.max(...full.map((w) => w.resetsAt as number));
-    return (this.spent.get(row.profile) ?? now) + SPENT_FOR_MS;
+    return (this.spent.get(this.accountKey(row.profile)) ?? now) + SPENT_FOR_MS;
   }
 
   /// The reasoning levels every eligible account offers for a model (a pinned account may offer more): automatic
