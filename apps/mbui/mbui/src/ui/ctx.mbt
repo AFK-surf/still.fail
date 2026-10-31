@@ -240,6 +240,8 @@ struct EditorState {
   mut built_frame : Int
   mut built_key : String
   mut built_id : Int
+  /// what its words are told as, as they change (a Field's: Field::text followed), none for an editor of its own
+  mut said_words : @signals.Signal[String]?
 }
 
 ///|
