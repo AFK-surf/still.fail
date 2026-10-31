@@ -636,9 +636,8 @@ pub fn workspace_squares(c : @ui.Ctx, src : Source, w : Workspace, all : Array[W
   }
   c.box(style=rail_ws_list, id=area, fn() {
     // the ＋
-    if c.clicked(add) {
-      ws_menu.val = !open
-    }
+    // (pressed: opened or closed as it is let go, as it is then)
+    c.on_press(add, fn() { ws_menu.val = !ws_menu.val })
     let hot = c.lit(add) || open
     let plus = (parts.square)(
       if hot { t.p.hover } else { 0L },
@@ -754,8 +753,17 @@ fn workspace_menu(c : @ui.Ctx, src : Source, add : Int) -> Unit {
     }
   }
   // beside it, its foot level with the ＋'s (side right, align end, sideOffset 10)
-  let m = @sf.dropdown(c, "rail/ws-menu", ws_menu.val, add, entries, icons, rail_ws_menu_w, side=Right, along=End, offset=rail_ws_menu_off)
-  ws_menu.val = m.open
+  // (dismissed by the hand, Escape or a press outside it and the ＋: closed at that moment; closed as an item is chosen)
+  let menu : Ref[@kit.Menu?] = Ref(None)
+  c.with_dismissed(fn(_) { ws_menu.val = false }, fn() {
+    menu.val = Some(
+      @sf.dropdown(c, "rail/ws-menu", ws_menu.val, add, entries, icons, rail_ws_menu_w, side=Right, along=End, offset=rail_ws_menu_off),
+    )
+  })
+  let m = menu.val.unwrap()
+  if m.chosen is Some(_) {
+    ws_menu.val = false
+  }
   match m.chosen {
     Some("create") => open_new_workspace(src)
     Some("account") => (src.sign_in)()
