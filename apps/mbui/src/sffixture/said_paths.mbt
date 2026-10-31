@@ -1446,6 +1446,9 @@ pub let said_paths : Map[String, Array[String]] = {
     "*.firstText",
   ],
   "usage": [
+    "only.title",
+    "accounts.*.title",
+    "accounts.*.quota.detail",
     "wait.text",
     "wait.failing.*.text",
     "wait.failing.*.message",
@@ -1456,6 +1459,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "lists.*.items.*.person.shown.name",
     "lists.*.items.*.person.shown.display",
     "lists.*.items.*.topModel",
+    "lists.*.parts.*.title",
   ],
   "vaultItems": [
     "name",

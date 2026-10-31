@@ -640,6 +640,12 @@
   "web-main.tool.took": "Took {time}",
   "web-main.unfold": "More",
   "web-main.usage.costPrices": "Estimated cost; see prices",
+  "web-main.usage.accounts": "Subscription limits",
+  "web-main.usage.topChats": "Top chats by cost",
+  "web-main.usage.makeup": "Breakdown",
+  "web-main.usage.details": "Calls and tokens",
+  "web-main.usage.spent": "{cost} equivalent",
+  "web-main.usage.daily": "Daily cost",
   "web-main.usage.days": {
     "one": "1 day",
     "other": "{n} days"
@@ -668,6 +674,10 @@
   "web-main.resources.show": "Show",
   "web-main.usage.none": "No usage in this period",
   "web-main.usage.rankBy": "Sort by",
+  "web-main.usage.only": "Only {name}",
+  "web-main.usage.onlyOff": "Show all, not only {name}",
+  "web-main.usage.splitBy": "Group by",
+  "web-main.usage.ranked": "By cost",
   "web-main.usage.seePrices": "See prices →",
   "web-main.usage.showAll": {
     "one": "Show all",

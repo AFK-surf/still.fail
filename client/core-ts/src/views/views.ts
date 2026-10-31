@@ -821,7 +821,8 @@ export class Views implements Owner {
         break;
       case "usage":
         scope = view.scope as string;
-        perStation = (s) => [{ topic: "stationUsage", station: s }];
+        // (and its accounts, as the profiles page reads them: each subscription's allowance)
+        perStation = (s) => [{ topic: "stationUsage", station: s }, { topic: "link", station: s }, { topic: "overview", station: s }, { topic: "host", station: s }, { topic: "way", station: s }];
         break;
       case "fleet":
         // (the card shared of the agents at work: views/fleet.ts)
@@ -1301,7 +1302,9 @@ export class Views implements Owner {
         const sources = stations.map((s) => ({ address: s.address, name: s.name, online: s.online, value: s.online ? this.value({ topic: "stationUsage", station: s.address }) : undefined }));
         const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
         const now = this.#core.host.nowMs();
-        return { ok: usageView(sources, typeof view.days === "number" ? view.days : 7, now, this.#core.host.utcOffsetMin(now), this.me(scope), members_) };
+        const listed = this.#stationsView(scope);
+        const accounts = listed !== undefined && "ok" in listed ? arr(get(workspaceProfiles(listed.ok as J[]), "items")) : [];
+        return { ok: usageView(sources, typeof view.days === "number" ? view.days : 7, now, this.#core.host.utcOffsetMin(now), this.me(scope), members_, { split: view.split, only: view.only, day: view.day }, accounts) };
       }
       case "fleet": {
         const scope = view.scope as string;

@@ -295,6 +295,26 @@ test "usage: the totals, the days, 30 天 picked" {
 }
 
 ///|
+test "usage: a model of the makeup pressed seen alone till 只看 is" {
+  let t = settings_tester("usage")
+  assert_true(t.find("↑18%") is Some(_) && t.find("比前 7 天") is Some(_))
+  // a model pressed: everything of it alone, said under the cost
+  t.scroll_to_end()
+  t.draw()
+  t.tap_text("Haiku 5")
+  t.run_for(@ui.move_most_ms)
+  t.scroll_to(0)
+  t.draw()
+  assert_true(t.find("$50") is Some(_))
+  assert_true(t.find("只看 Haiku 5") is Some(_))
+  // taken off there: all of it again
+  t.tap_text("只看 Haiku 5")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("$118") is Some(_))
+  assert_true(t.find("只看 Haiku 5") is None)
+}
+
+///|
 test "profiles, connects, the vault: their lists" {
   let t = settings_tester("profiles")
   assert_true(t.find("Claude 主账号") is Some(_))

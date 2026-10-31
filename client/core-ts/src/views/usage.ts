@@ -1,6 +1,7 @@
 // What the agents spent (views/usage.rs): every online station's usage put together for a scope's last 7 or 30
-// days, as the usage page shows it: a few totals, each day's cost split by who it was for, and who, which chats, which
-// accounts and which models spent the most.
+// days, as the usage page shows it: a few totals against the days before as many, each day's cost split by the people,
+// chats, accounts or models picked (`split`), and who, which chats, which accounts and which models spent the most; all
+// of it of one person, account or model where one is picked (`only`).
 import type { CoreError } from "../error.ts";
 import { current, t, tr, type Lang } from "../i18n.ts";
 import { waitNote } from "../looks.ts";
@@ -198,12 +199,55 @@ export function priceTables(sources: Source[], first: string, last: string): J[]
   });
 }
 
-/// The view: `days` local days to `now`, the viewer `me` among the workspace's `members`.
-export function usageView(sources: Source[], daysAsked: number, now: number, offset: number, me: J, members: J[]): J {
+/// What a list's first few spent and the rest (其他), as its share of the whole: what it is made of at a glance; none
+/// for a list of one (one person, one model: nothing to tell apart).
+const PARTS = 3;
+function partsOf(items: J[]): J[] {
+  const first = items.slice(0, items.length > PARTS + 1 ? PARTS : PARTS + 1);
+  const out = first.map((i) => ({ key: i.key, title: i.title, cost: i.cost, costText: i.costText, share: i.share, shareText: i.shareText }));
+  if (items.length > first.length) {
+    const rest = items.slice(first.length);
+    const cost = rest.reduce((n, i) => n + i.cost, 0);
+    const share = rest.reduce((n, i) => n + i.share, 0);
+    out.push({ key: "", title: t("core-views.usage.others"), cost, costText: money(cost), share, shareText: percent(share, 1) });
+  }
+  return out;
+}
+
+/// The lists a day's bar can be split by, and what can be picked to see alone (a chat opens instead).
+const SPLITS = ["people", "chats", "profiles", "models"];
+const ONLY = ["people", "profiles", "models"];
+
+/// What the page picked: the list the days' bars are split by (else the people's where there are several, the models'
+/// where one), and the one person, account or model to see alone.
+export type UsagePick = { split?: unknown; only?: unknown; day?: unknown };
+
+/// `now` against `before`, the days before as many: ↑18% and up, 持平 and none; nothing where nothing was spent before.
+function change(now: number, before: number): { change: string | null; trend: string } {
+  if (!(before > 0)) return { change: null, trend: "" };
+  const p = ((now - before) / before) * 100;
+  if (Math.abs(p) < 0.5) return { change: t("core-views.usage.tile.same"), trend: "" };
+  const n = Math.abs(p) >= 10 ? Math.round(Math.abs(p)).toFixed(0) : Math.abs(p).toFixed(1).replace(/\.0$/, "");
+  return { change: `${p > 0 ? "↑" : "↓"}${n}%`, trend: p > 0 ? "up" : "down" };
+}
+
+/// The view: `days` local days to `now`, the viewer `me` among the workspace's `members`, as `pick` asks; `accounts` the
+/// workspace's accounts as the profiles page lists them (views/profiles.ts workspaceProfiles), for each subscription's
+/// allowance beside what it spent.
+export function usageView(sources: Source[], daysAsked: number, now: number, offset: number, me: J, members: J[], pick: UsagePick = {}, accounts: J[] = []): J {
   const days = Math.min(Math.max(daysAsked, 1), 30);
   const dayList: string[] = [];
   for (let i = days - 1; i >= 0; i--) dayList.push(localDay(now - i * DAY_MS, offset));
   const first = dayList[0];
+  // the days before as many, to say each total against
+  const before = new Set<string>();
+  for (let i = 2 * days - 1; i >= days; i--) before.add(localDay(now - i * DAY_MS, offset));
+  const beforeFirst = localDay(now - (2 * days - 1) * DAY_MS, offset);
+  const onlyList = get(pick.only, "list");
+  const onlyKey = get(pick.only, "key");
+  const only: { list: string; key: string } | null = typeof onlyList === "string" && ONLY.includes(onlyList) && typeof onlyKey === "string" ? { list: onlyList, key: onlyKey } : null;
+  // the one day everything but the days' bars is of, where one is picked (one of the days)
+  const dayOnly = typeof pick.day === "string" && dayList.includes(pick.day) ? pick.day : null;
   const several = sources.filter((s) => s.online).length > 1;
   let reading = false;
   const waiting: string[] = [];
@@ -211,7 +255,24 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   const notes: string[] = [];
   let since: number | null = null;
   const total = new Sum();
-  const byDay = new Map<string, [Sum, Map<string, number>]>(dayList.map((d) => [d, [new Sum(), new Map()]]));
+  const earlier = new Sum();
+  // whether every station's rows reach back over the days before (an older one read only 30 days; one recording since)
+  let compared = true;
+  // each chat's cost by who it was for and by model (its words: the most of each)
+  const chatWho = new Map<string, Map<string, number>>();
+  const chatModel = new Map<string, Map<string, number>>();
+  const most = (m: Map<string, number> | undefined): string | null => {
+    let best: [string, number] | null = null;
+    for (const [k, v] of m ?? []) if (best === null || v > best[1] || (v === best[1] && k < best[0])) best = [k, v];
+    return best === null ? null : best[0];
+  };
+  const bump = (m: Map<string, Map<string, number>>, key: string, name: string, by: number) => {
+    const at = m.get(key) ?? new Map<string, number>();
+    m.set(key, at);
+    at.set(name, (at.get(name) ?? 0) + by);
+  };
+  // each day's sum and its cost by each list's keys
+  const byDay = new Map<string, [Sum, Record<string, Map<string, number>>]>(dayList.map((d) => [d, [new Sum(), { people: new Map(), chats: new Map(), profiles: new Map(), models: new Map() }]]));
   const people = new Map<string, Item>();
   const chats = new Map<string, Item>();
   const profiles = new Map<string, Item>();
@@ -243,6 +304,8 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
     }
     const value = s.value.ok as J;
     reading ||= get(value, "reading") === true;
+    const from = get(value, "from");
+    if (typeof from !== "number" || localDay(from, offset) > beforeFirst) compared = false;
     if (typeof get(value, "since") === "number") since = since === null ? value.since : Math.min(since, value.since);
     const place = several ? s.name : null;
     const threads = get(value, "threads") ?? null;
@@ -251,23 +314,38 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
     for (const row of arr(get(value, "rows"))) {
       const day = typeof get(row, "day") === "string" ? row.day : "";
       const at = byDay.get(day);
-      if (!at) continue;
-      const [daySum, dayPeople] = at;
-      daySum.add(row);
-      total.add(row);
+      if (!at && !before.has(day)) continue;
       const text = (k: string): string | null => (typeof get(row, k) === "string" ? row[k] : null);
       const reference = text("person");
       const knownPerson = reference !== null && isObject(get(stationPeople, reference)) ? stationPeople[reference] : undefined;
       const person = present.person(knownPerson !== undefined ? knownPerson : { id: reference ?? "", name: t("core-views.usage.unknown_person"), email: null }, me, members);
       const personKey = (typeof person.email === "string" ? person.email : typeof person.id === "string" ? person.id : "").toLowerCase();
       const name = typeof person.shown?.display === "string" ? person.shown.display : "";
-      const cost = typeof get(row, "cost") === "number" ? row.cost : 0;
-      dayPeople.set(personKey, (dayPeople.get(personKey) ?? 0) + cost);
-      entry(people, personKey, () => ({ key: personKey, title: name, sub: null, extra: { person: knownPerson !== undefined ? person : null }, sum: new Sum() })).sum.add(row);
-
       const session = text("session") ?? "";
       const thread = typeof get(row, "thread") === "number" && Number.isInteger(row.thread) && row.thread >= 0 ? (row.thread as number) : null;
       const chatKey = `${s.address}/${thread !== null ? thread : session}`;
+      const profile = text("profile") ?? "";
+      const profileKey = `${s.address}/${profile}`;
+      const m = text("model") ?? "";
+      const keys: Record<string, string> = { people: personKey, chats: chatKey, profiles: profileKey, models: model.key(m) };
+      if (only !== null && keys[only.list] !== only.key) continue;
+      if (!at) {
+        earlier.add(row);
+        continue;
+      }
+      const [daySum, dayParts] = at;
+      daySum.add(row);
+      const cost = typeof get(row, "cost") === "number" ? row.cost : 0;
+      for (const list of SPLITS) dayParts[list].set(keys[list], (dayParts[list].get(keys[list]) ?? 0) + cost);
+      // (a day picked: the days' bars all of them, the rest of it alone)
+      if (dayOnly !== null && day !== dayOnly) continue;
+      total.add(row);
+      // (by cost, else by calls where none was priced)
+      const weight = cost > 0 ? cost : (typeof get(row, "calls") === "number" ? row.calls : 0) * 1e-9;
+      bump(chatWho, chatKey, name, weight);
+      if (m !== "") bump(chatModel, chatKey, model.name(m), weight);
+      entry(people, personKey, () => ({ key: personKey, title: name, sub: null, extra: { person: knownPerson !== undefined ? person : null }, sum: new Sum() })).sum.add(row);
+
       entry(chats, chatKey, () => {
         const known = thread !== null ? get(threads, String(thread)) : undefined;
         const title = typeof get(known, "title") === "string" ? known.title : t("core-views.usage.deleted_chat");
@@ -282,14 +360,11 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
         return { key: chatKey, title, sub: sub.length > 0 ? sub.join(" · ") : null, extra: { chat: page }, sum: new Sum() };
       }).sum.add(row);
 
-      const profile = text("profile") ?? "";
-      const profileKey = `${s.address}/${profile}`;
       entry(profiles, profileKey, () => {
         const pname = get(get(stationProfiles, profile), "name");
         const title = typeof pname === "string" && pname !== "" ? pname : profile === "" ? t("core-views.usage.unknown_account") : t("core-views.usage.deleted_account", { profile });
         return { key: profileKey, title, sub: place, extra: {}, sum: new Sum() };
       }).sum.add(row);
-      const m = text("model") ?? "";
       if (m !== "") {
         const used = profileModels.get(profileKey) ?? new Map<string, [string, number]>();
         profileModels.set(profileKey, used);
@@ -305,7 +380,19 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
     }
   }
 
-  const ranked = [...people].sort((a, b) => b[1].sum.cost - a[1].sum.cost || (a[1].title < b[1].title ? -1 : a[1].title > b[1].title ? 1 : 0));
+  // (recorded only since within the days before: no telling what they spent; a day picked: none to say it against)
+  if (since !== null && localDay(since, offset) > beforeFirst) compared = false;
+  if (dayOnly !== null) compared = false;
+  // each chat said with who it was for and its model, the most of each, before where it is (who only where several
+  // spent, the model only where several were used: one of them says nothing)
+  for (const [key, item] of chats) {
+    const said = [people.size > 1 ? most(chatWho.get(key)) : null, models.size > 1 ? most(chatModel.get(key)) : null, item.sub].filter((x): x is string => x !== null && x !== "");
+    item.sub = said.length > 0 ? said.join(" · ") : null;
+  }
+  const lists_: Record<string, Map<string, Item>> = { people, chats, profiles, models };
+  const splitAsked = typeof pick.split === "string" && SPLITS.includes(pick.split) ? pick.split : null;
+  const split = splitAsked ?? (people.size > 1 ? "people" : "models");
+  const ranked = [...lists_[split]].sort((a, b) => b[1].sum.cost - a[1].sum.cost || (a[1].title < b[1].title ? -1 : a[1].title > b[1].title ? 1 : 0));
   const top = ranked.slice(0, ranked.length > SERIES + 1 ? SERIES : SERIES + 1).map(([k, i]) => [k, i.title] as [string, string]);
   const rest = ranked.length > top.length;
   const series: J[] = top.map(([key, name]) => ({ key, name }));
@@ -313,11 +400,12 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   const today = localDay(now, offset);
   // Too many days for each to say its date under its bar: today's and one a week back from the last.
   const many = byDay.size > 10;
-  const daily = [...byDay].map(([day, [sum, split]], i) => {
-    const parts = top.map(([k]) => split.get(k) ?? 0);
+  const daily = [...byDay].map(([day, [sum, byList]], i) => {
+    const split_ = byList[split];
+    const parts = top.map(([k]) => split_.get(k) ?? 0);
     if (rest) {
       let other = 0;
-      for (const [k, v] of split) if (!top.some(([x]) => x === k)) other += v;
+      for (const [k, v] of split_) if (!top.some(([x]) => x === k)) other += v;
       parts.push(other);
     }
     const name = day === today ? t("core-views.usage.today") : dayLabel(day);
@@ -333,16 +421,18 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
       calls: sum.calls,
       callsText: t("core-views.usage.calls", { n: count(sum.calls) }),
       partsText: parts.map(money),
+      sharesText: parts.map((p) => percent(p, sum.cost)),
       parts,
     };
   });
   const max = [...byDay.values()].reduce((m, [s]) => Math.max(m, s.cost), 0);
   const input = total.input + total.cacheRead + total.cacheWrite;
+  const vs = (now_: number, before_: number) => (compared ? change(now_, before_) : { change: null, trend: "" });
   const tiles = [
-    { label: t("core-views.usage.tile.cost"), value: total.costText(), sub: t("core-views.usage.tile.cost_sub") },
-    { label: t("core-views.usage.tile.calls"), value: t("core-views.usage.tile.calls_value", { n: count(total.calls) }), sub: t("core-views.usage.tile.calls_sub", { n: count(total.calls / days) }) },
-    { label: t("core-views.usage.tile.input"), value: count(input), sub: t("core-views.usage.tile.input_sub", { percent: percent(total.cacheRead, input) }) },
-    { label: t("core-views.usage.tile.output"), value: count(total.output), sub: t("core-views.usage.tile.output_sub", { n: count(total.calls > 0 ? total.output / total.calls : 0) }) },
+    { label: t("core-views.usage.tile.cost"), value: total.costText(), sub: t("core-views.usage.tile.cost_sub"), ...(total.unpriced > 0 || earlier.unpriced > 0 ? { change: null, trend: "" } : vs(total.cost, earlier.cost)) },
+    { label: t("core-views.usage.tile.calls"), value: t("core-views.usage.tile.calls_value", { n: count(total.calls) }), sub: t("core-views.usage.tile.calls_sub", { n: count(total.calls / days) }), ...vs(total.calls, earlier.calls) },
+    { label: t("core-views.usage.tile.input"), value: count(input), sub: t("core-views.usage.tile.input_sub", { percent: percent(total.cacheRead, input) }), ...vs(input, earlier.input + earlier.cacheRead + earlier.cacheWrite) },
+    { label: t("core-views.usage.tile.output"), value: count(total.output), sub: t("core-views.usage.tile.output_sub", { n: count(total.calls > 0 ? total.output / total.calls : 0) }), ...vs(total.output, earlier.output) },
   ];
   for (const [key, used] of profileModels) {
     const most = [...used.values()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))[0];
@@ -354,7 +444,20 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
     { key: "chats", title: t("core-views.usage.by.chats"), items: itemsShown([...chats.values()], total) },
     { key: "profiles", title: t("core-views.usage.by.profiles"), items: itemsShown([...profiles.values()], total) },
     { key: "models", title: t("core-views.usage.by.models"), items: itemsShown([...models.values()], total) },
-  ];
+  ].map((l) => ({ ...l, parts: l.items.length > 1 ? partsOf(l.items) : [] }));
+  // each subscription with an allowance: what is left of it, and what it spent (its copies' on every station)
+  const spentBy = new Map([...profiles].map(([k, i]) => [k, i.sum]));
+  const allowances = accounts
+    .filter((a) => get(get(get(a, "profile"), "quota"), "state") === "ok" && arr(get(get(get(a, "profile"), "quota"), "windows")).length > 0)
+    .map((a) => {
+      const sum = new Sum();
+      for (const m of arr(get(a, "members"))) {
+        const spent = spentBy.get(`${get(m, "station")}/${get(m, "profileId")}`);
+        if (spent !== undefined) for (const k of ["cost", "calls", "input", "cacheRead", "cacheWrite", "output", "unpriced"] as const) (sum as J)[k] += spent[k];
+      }
+      return { key: String(get(a, "key") ?? ""), title: String(get(a, "title") ?? ""), quota: a.profile.quota, cost: sum.cost, costText: sum.costText() };
+    })
+    .sort((a, b) => b.cost - a.cost || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
   if (reading) notes.unshift(t("core-views.usage.note.reading"));
   if (since !== null && localDay(since, offset) > first) {
     const label = dayLabel(localDay(since, offset));
@@ -363,7 +466,10 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   }
   if (total.unpriced > 0) notes.push(t("core-views.usage.note.unpriced", { n: count(total.unpriced) }));
   const { top: scaleTop, ticks } = scale(max);
-  return { days, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, total.calls === 0), empty: total.calls === 0, tiles, series, daily, many, max, top: scaleTop, ticks, lists, notes, basis: t("core-views.usage.basis") };
+  // the one seen alone, by its name in its list (none spent in the days: its key)
+  const onlyShown = only !== null ? { list: only.list, key: only.key, title: lists_[only.list].get(only.key)?.title ?? only.key } : null;
+  const dayShown = dayOnly !== null ? (dayOnly === today ? t("core-views.usage.today") : dayLabel(dayOnly)) : null;
+  return { days, day: dayOnly, accounts: allowances, split, only: onlyShown, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, total.calls === 0), empty: total.calls === 0, tiles, versus: t("core-views.usage.tile.versus", { n: days }), period: dayShown ?? t("core-views.usage.period", { n: days }), series, daily, many, max, top: scaleTop, ticks, lists, notes, basis: t("core-views.usage.basis") };
 }
 
 export { tr };

@@ -6834,6 +6834,15 @@ export interface StatusView {
 	items: StatusItem[];
 }
 
+/** A subscription on the usage page: its allowance as its profile shows it, what its copies spent in the days. */
+export interface UsageAccount {
+	key: string;
+	title: string;
+	quota: Quota;
+	cost: number;
+	costText: string;
+}
+
 /**
  * A day (`day` 2026-10-01, `label` 10/1): what it cost, split as `series` (`parts`, in dollars, and in words), and its
  * calls.
@@ -6857,6 +6866,8 @@ export interface UsageDay {
 	tick?: string;
 	/** Each of `parts` as a share of the day's cost (0 to 1; 0.01 at least for one spent at all). */
 	shares?: number[];
+	/** Each of `parts` as a share of the day's cost in words: 60%, <1%. */
+	sharesText?: string[];
 }
 
 /**
@@ -6881,11 +6892,36 @@ export interface UsageItem {
 	topModel?: string;
 }
 
+/** One of a list's first few, or the rest of it, as its share of the whole. */
+export interface UsagePart {
+	/** Its item's `key`; empty for the rest (其他). */
+	key: string;
+	title: string;
+	cost: number;
+	costText: string;
+	share: number;
+	shareText: string;
+}
+
 /** 按人 / 按对话 / 按账号 / 按模型 (`key` people, chats, profiles, models), the most spent first. */
 export interface UsageList {
 	key: string;
 	title: string;
 	items: UsageItem[];
+	/**
+	 * Its first three and the rest (其他), or its first four: what it is made of at a glance; none
+	 * with one item (one person, one model: nothing to tell apart).
+	 */
+	parts?: UsagePart[];
+}
+
+/** The one the usage page shows alone: 只看 林. */
+export interface UsageOnly {
+	/** people, profiles or models */
+	list: string;
+	/** Its item's `key` in that list. */
+	key: string;
+	title: string;
 }
 
 export interface UsageRate {
@@ -6905,7 +6941,7 @@ export interface UsagePriceTable {
 	rows: UsagePriceRow[];
 }
 
-/** A part of each day's bar: a person (`key` their email or reference), or the rest (`key` empty). */
+/** A part of each day's bar: an item of the list it is split by (`key` its key there), or the rest (`key` empty). */
 export interface UsageSeries {
 	key: string;
 	name: string;
@@ -6923,6 +6959,10 @@ export interface UsageTile {
 	label: string;
 	value: string;
 	sub: string;
+	/** Against the days before as many (`versus`): ↑18%, 持平; none where they spent nothing or are not all read. */
+	change?: string;
+	/** Which way `change` goes: up, down, or "" (the same, or none). */
+	trend?: string;
 }
 
 /**
@@ -6933,10 +6973,25 @@ export interface UsageTile {
  */
 export interface UsageView {
 	days: number;
+	/**
+	 * The list each day's bar is split by (people, chats, profiles, models): the one asked for, else
+	 * the people's where several spent, the models' where one did.
+	 */
+	split?: string;
+	/** The one person, account or model everything is of, when one was asked for. */
+	only?: UsageOnly;
+	/** The one day (2026-10-01) everything but the days' bars is of, when one was asked for. */
+	day?: string;
+	/** Each subscription with an allowance the core can read: what is left of it, and what it spent in the days. */
+	accounts?: UsageAccount[];
 	/** What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be. */
 	wait: ListNote;
 	empty: boolean;
 	tiles: UsageTile[];
+	/** What each tile's `change` is against: 比前 7 天. */
+	versus?: string;
+	/** The days counted, as said over them: 近 7 天. */
+	period?: string;
 	series: UsageSeries[];
 	daily: UsageDay[];
 	/** Days too many for each to say its date under its bar (more than 10): narrower bars, a date a week. */

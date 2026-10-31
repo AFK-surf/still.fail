@@ -1,6 +1,6 @@
-// 用量's days (usage.mbt usage_chart, the web's Usage.tsx DaysChart): the day tapped (the last at first) said over them, each
-// day's bar in the middle of its day over its date, standing on the days' foot as high as its share of the scale's top,
-// split by who it was for 1 apart, and with several people what each spent that day under them.
+// 用量's days (usage.mbt usage_chart, the web's Usage.tsx DaysChart): each day's bar in the middle of its day over its
+// date, standing on the days' foot as high as its share of the scale's top; all in full until a day is picked, then
+// the others faded, the day pressed again let go. And the page: what someone opening it wants to know, most first.
 
 ///|
 /// A week's days, the last today, `parts` spent on each by each person (one person: one each), on the scale the core
@@ -54,7 +54,7 @@ fn usage_inked(r : (Double, Double, Double, Double, Int64), ink : Int64) -> Bool
 fn days_tester(v : Json) -> @ui.Tester {
   usage_reset()
   let t = @ui.Tester::new(fn(c) {
-    c.box(align=AStart, fn() { c.box(w=Px(282.0), fn() { usage_chart(c, Some(v)) }) |> ignore }) |> ignore
+    c.box(align=AStart, fn() { c.box(w=Px(282.0), fn() { usage_chart(c, Some(v)) |> ignore }) |> ignore }) |> ignore
   }, platform=2)
   t.draw()
   t
@@ -82,70 +82,73 @@ test "usage: each day's bar 16 wide in the middle of its day, over its date, on 
       }
     }
   }
-  // the day picked at first, the last: its cost and calls over the bars; the scale's lines said
-  assert_true(t.rect_of("$8") is Some(_))
-  assert_true(t.rect_of("80 次调用") is Some(_))
+  // none picked at first: every day's bar in full; the scale's lines said
+  assert_eq(bars.filter(fn(r) { r.4 == @sf.usage_series(0) }).length(), 7)
+  assert_eq(usage_pick.day.get(), "")
   assert_true(t.rect_of("50") is Some(_) && t.rect_of("100") is Some(_))
 }
 
 ///|
-test "usage: a day split by its people 1 apart, the first at the foot; each of them, what they spent that day, under the days" {
-  let parts = [[12.0, 8.0], [10.0, 6.0], [30.0, 18.0], [40.0, 40.0], [20.0, 12.0], [16.0, 8.0], [6.0, 2.0]]
-  let t = days_tester(usage_week(parts))
-  let ann = t.drawn_rects().filter(fn(r) { usage_inked(r, @sf.usage_series(0)) && r.2 == 16.0 })
-  let bo = t.drawn_rects().filter(fn(r) { usage_inked(r, @sf.usage_series(1)) && r.2 == 16.0 })
-  assert_eq((ann.length(), bo.length()), (7, 7))
-  // the most spent: Bo's part over Ann's, 1 apart; the two (and the gap) its 120
-  let (_, ay, _, ah, _) = ann[3]
-  let (_, by, _, bh, _) = bo[3]
-  assert_true((by + bh + 1.0 - ay).abs() < 0.01)
-  assert_true((ah - 4.0 + bh + 1.0 - 120.0).abs() < 0.01)
-  assert_true((bh - 59.5).abs() < 0.01)
-  // today's people under the days, each with what they spent
-  assert_true(t.rect_of("Ann") is Some(_) && t.rect_of("$6") is Some(_))
-  assert_true(t.rect_of("Bo") is Some(_) && t.rect_of("$2") is Some(_))
-}
-
-///|
-test "usage: a finger slid across the days shows the day under it as it goes; the day it lets go on stays, the others faded" {
+test "usage: a finger slid across the days lets go on a day: it stays, the others faded; a day tapped, then tapped again, let go" {
   let costs = [20.0, 16.0, 48.0, 80.0, 32.0, 24.0, 8.0]
   let t = days_tester(usage_week(costs.map(fn(c) { [c] })))
   let at = fn(label : String) -> (Double, Double) {
     let (x, y, w, h) = t.rect_of(label).unwrap()
     (x + w / 2.0, y + h / 2.0)
   }
-  // pressed over 10/19's bar, above its date: that day said while the finger is on it
+  let full = fn() {
+    t.drawn_rects().filter(fn(r) { usage_inked(r, @sf.usage_series(0)) && r.2 == 16.0 && r.4 == @sf.usage_series(0) })
+  }
+  // slid from over 10/19's bar across to 10/21's date and let go there: it stays
   let (x2, y2) = at("10/19")
-  t.press_at(x2, y2 - 60.0)
-  assert_true(t.rect_of("$48") is Some(_))
-  // slid across to 10/21's date and let go there: it stays
   let (x4, y4) = at("10/21")
   t.drag(x2, y2 - 60.0, x4, y4)
-  assert_true(t.rect_of("$32") is Some(_) && t.rect_of("320 次调用") is Some(_))
   t.draw()
-  assert_true(t.rect_of("$32") is Some(_))
-  // a tap on a date picks its day
+  assert_eq(usage_pick.day.get(), "2026-10-21")
+  assert_eq(full().length(), 1)
+  // a tap on a date picks its day: its bar alone in full, the first
   let (x0, y0) = at("10/17")
   t.tap(x0, y0)
   t.draw()
-  assert_true(t.rect_of("$20") is Some(_) && t.rect_of("200 次调用") is Some(_))
-  // the day shown's bar in full, the others' faded
-  let bars = t.drawn_rects().filter(fn(r) { usage_inked(r, @sf.usage_series(0)) && r.2 == 16.0 })
-  assert_eq(bars.length(), 7)
-  assert_eq(bars.filter(fn(r) { r.4 == @sf.usage_series(0) }).length(), 1)
-  assert_eq(bars[0].4, @sf.usage_series(0))
+  assert_eq(usage_pick.day.get(), "2026-10-17")
+  assert_eq(full().length(), 1)
+  assert_eq(full()[0].0, t.drawn_rects().filter(fn(r) { usage_inked(r, @sf.usage_series(0)) && r.2 == 16.0 })[0].0)
+  // tapped again: let go, every day in full
+  t.tap(x0, y0)
+  t.draw()
+  assert_eq(usage_pick.day.get(), "")
+  assert_eq(full().length(), 7)
 }
 
 ///|
-test "用量, at each width and with either hand: the totals, a day's numbers, the lists; 30 天 picked" {
+test "用量, at each width and with either hand: the cost and its change, what it is made of, the allowance, the chats, the makeup, the days, the calls; a day picked, then let go; 30 天 picked" {
   for case in page_cases {
     let (w, platform) = case
     let t = setting_tester(Usage, w, platform~)
     let at = "\{w} platform \{platform}"
-    assert_true(t.find("$118") is Some(_), msg=at)
-    assert_true(t.find("今天") is Some(_), msg=at)
-    // the lists, the people's first (the web's): who spent what share
-    assert_true(t.find("68%") is Some(_), msg=at)
+    // the cost, its change, and who spent it under it
+    assert_true(t.find("$118") is Some(_) && t.find("↑18%") is Some(_) && t.find("比前 7 天") is Some(_), msg=at)
+    assert_true(t.find("$80") is Some(_), msg=at)
+    // the subscription's allowance beside what it spent
+    assert_true(t.find("lin@example.com") is Some(_) && t.find("折合 $84") is Some(_), msg=at)
+    // the chats that cost the most, each with who and which model
+    assert_true(t.find("整理发布清单") is Some(_) && t.find("林 · Opus 5.5 · Studio") is Some(_), msg=at)
+    // the people, the models and the accounts at once
+    assert_true(t.find("按人") is Some(_) && t.find("按模型") is Some(_) && t.find("按账号") is Some(_), msg=at)
+    assert_true(t.find("GPT-6") is Some(_) && t.find("Codex 团队") is Some(_), msg=at)
+    // the calls and tokens, under the rest
+    assert_true(t.find("1,416 次") is Some(_), msg=at)
+    // a day picked (the days far down: scrolled to): everything of it, said over it, its chip back to all the days
+    t.scroll_to_end()
+    t.draw()
+    t.tap_text("10/3")
+    t.draw()
+    t.scroll_to(0)
+    t.draw()
+    assert_true(t.find("折合费用 · 10/3") is Some(_) && t.find("$20") is Some(_), msg=at)
+    t.tap_text("只看 10/3")
+    t.draw()
+    assert_true(t.find("折合费用 · 近 7 天") is Some(_) && t.find("$118") is Some(_), msg=at)
     t.tap_text("30 天")
     t.draw()
     assert_true(t.find("$486") is Some(_), msg=at)
