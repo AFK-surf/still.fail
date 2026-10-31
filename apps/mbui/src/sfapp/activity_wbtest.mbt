@@ -36,6 +36,89 @@ let agent_soon_ms : Double = 100.0
 let display_frame_ms : Double = 1000.0 / 120.0
 
 ///|
+/// The working agent's card, returned only for that agent as the core would return it.
+fn activity_card_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
+  new_run()
+  let base = fixture("chat-working")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let got = (base.topic)(name, params)
+      if name == "agentCard" && text(Some(Json::object(params)), "key") != "s-c1" {
+        { ..got, value: None }
+      } else {
+        got
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+/// The centre of the picture in the working agent's activity line.
+fn activity_picture(t : @ui.Tester) -> (Double, Double) raise {
+  let lines = t.all(Button).filter(fn(s) { s.label.has_prefix("Claude：") })
+  assert_eq(lines.length(), 1, msg="the working agent's line")
+  let (x, y, _, h) = lines[0].rect
+  (x + 12.0, y + h / 2.0)
+}
+
+///|
+test "activity: the picture opens its agent's card under the pointer, and still opens its history when pressed" {
+  for (w, h) in [(390.0, 844.0), (900.0, 800.0), (1280.0, 800.0)] {
+    let t = activity_card_tester(w, h, 0)
+    let (x, y) = activity_picture(t)
+    assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is None)
+    let (wx, wy, ww, wh) = t.rect_of(@sffixture.working_step).unwrap()
+    t.move(wx + ww / 2.0, wy + wh / 2.0)
+    t.run_for(@sfpages.hover_open_ms * 2.0)
+    assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is None, msg="the activity's words do not open the card")
+    t.move(x, y)
+    t.run_for(@sfpages.hover_open_ms * 2.0)
+    let card = t.rect_of("8 轮 · 共干了 1 小时 12 分")
+    assert_true(card is Some(_), msg="the working agent's card appears over its picture")
+    let (cx, cy, cw, ch) = card.unwrap()
+    // The pointer can cross into the card and use it without it disappearing.
+    t.move(cx + cw / 2.0, cy + ch / 2.0)
+    t.run_for(@sfpages.hover_close_ms * 2.0)
+    assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is Some(_))
+    t.move(1.0, 1.0)
+    t.run_for(@sfpages.hover_close_ms * 2.0)
+    assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is None)
+    t.tap(x, y)
+    t.frame()
+    let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+    if w >= 600.0 {
+      assert_eq(side_now(r).1, "s-c1", msg="pressing the picture opens this agent's history")
+    } else {
+      assert_true(app.nav.top() is History(_, "s-c1", _), msg="pressing the picture opens this agent's history")
+    }
+  }
+}
+
+///|
+test "activity: a touch on the picture still opens its agent's history" {
+  let t = activity_card_tester(390.0, 844.0, 2)
+  let (x, y) = activity_picture(t)
+  t.tap(x, y)
+  t.frame()
+  assert_true(app.nav.top() is History(_, "s-c1", _))
+}
+
+///|
+test "activity: a mouse used with a touch-native system opens the same card" {
+  let t = activity_card_tester(390.0, 844.0, 2)
+  let (x, y) = activity_picture(t)
+  t.host_says_finger(Some(false))
+  t.move(x, y)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is Some(_))
+}
+
+///|
 test "activity: its line coming in at the list's end is followed, the list gliding to its end as the line opens" {
   new_run()
   let clock : Ref[Double] = { val: 0.0 }
