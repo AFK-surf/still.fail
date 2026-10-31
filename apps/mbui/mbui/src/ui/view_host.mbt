@@ -471,13 +471,12 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         // origin; what it put over all of it at its root (its overlays) after the tree, as where it is in a box: theirs)
         // (in the order the old frame's root holds them in, as painting it would: what goes over its siblings after
         // them)
-        self.paint_held(self.nodes[root], 1.0, but=fn(ch) { self.nodes[ch].layer || self.nodes[ch].portal })
+        self.in_window(fn() {
+          self.paint_held(self.nodes[root], 1.0, but=fn(ch) { self.nodes[ch].layer || self.nodes[ch].portal })
+        })
       } else {
         match old_boxes.get(c.id) {
-          Some(i) => {
-            // (painted in no clip of the window's (island_clips), as its targets were found: Ctx::view_targets)
-            island_clips(fn() { self.paint(i, a) })
-          }
+          Some(i) => self.in_window(fn() { self.paint(i, a) })
           None => ()
         }
       }
@@ -2031,4 +2030,14 @@ fn old_said_allowed(c : Ctx, id : Int) -> Bool {
     Some(h) => tree.acts_on(h)
     None => true
   }
+}
+
+///|
+/// An old view painted as the window shows it, in its clip: what of it lies outside the window not painted, nothing of
+/// it asked of the host, as the old frame paints from its root (its targets found whole apart from it: view_targets).
+/// Not what the tree's own nodes make (view_made: whole, where they are, cut as they are put into the frame).
+fn Ctx::in_window(self : Ctx, f : () -> Unit) -> Unit {
+  push_clip(0.0, 0.0, self.width, self.height)
+  f()
+  pop_clip()
 }
