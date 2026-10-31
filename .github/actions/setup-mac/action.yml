@@ -23,6 +23,8 @@ runs:
         echo "SCCACHE_DIR=$HOME/stillfail-ci/sccache" >> "$GITHUB_ENV"
         # 10G: what five days of jobs read was under 5G (2026-10-20), and at 25G it filled mini1's disk with the rest.
         echo "SCCACHE_CACHE_SIZE=10G" >> "$GITHUB_ENV"
+        # Keep native artifacts within 5 GiB when old enough to be unused by any running job (scripts/native.ts).
+        echo "STILLFAIL_NATIVE_CACHE_MAX_BYTES=5368709120" >> "$GITHUB_ENV"
         echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
         # Cloudflare's API reached directly by the releases' puts (scripts/release-put.sh), not through the proxy the
         # machine's DNS sends everything to; GitHub stays through it (github.com is not reached directly at all).

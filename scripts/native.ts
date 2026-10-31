@@ -43,7 +43,7 @@
 import { execFileSync, spawnSync, type SpawnSyncOptions } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import {
-  copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync,
+  copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync,
 } from "node:fs";
 import { homedir, hostname, platform as osPlatform, arch as osArch, tmpdir } from "node:os";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
@@ -678,6 +678,23 @@ const CACHE = process.env.STILLFAIL_NATIVE_CACHE ??
 const cached = (part: string, target: Target, k: string) => join(CACHE, part, `${target}-${k}`);
 const log = (msg: string) => process.stderr.write(`native: ${msg}\n`);
 
+// A path handed to a caller may be used after native.ts exits. On mini1, CI sets a budget and only versions not
+// requested for a day may be evicted (its jobs finish within ten minutes). Older caches without a usage record are
+// first marked now, so jobs started before tracking was introduced get the same grace period. Records live outside
+// artifacts: they must not become part of the archives published to the native store.
+const accessRecord = (dir: string) => join(CACHE, ".access", basename(dirname(dir)), basename(dir));
+function noteUse(dir: string) {
+  const record = accessRecord(dir);
+  try {
+    mkdirSync(dirname(record), { recursive: true });
+    writeFileSync(record, "");
+  } catch { /* A read-only cache can still be used. */ }
+}
+const cacheBudget = () => {
+  const bytes = Number(process.env.STILLFAIL_NATIVE_CACHE_MAX_BYTES);
+  return Number.isSafeInteger(bytes) && bytes > 0 ? bytes : 0;
+};
+
 /// One process at a time gets or builds a key on this machine (the others wait for it): a directory made atomically,
 /// holding the pid, taken over when that process is gone.
 function acquire(dir: string): () => void {
@@ -703,6 +720,70 @@ function acquire(dir: string): () => void {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
     }
   }
+}
+
+// Never wait on a particular artifact while pruning: another build may hold it while requesting a second one.
+function tryAcquire(dir: string): (() => void) | null {
+  const lock = `${dir}.lock`;
+  let made = false;
+  try {
+    mkdirSync(lock);
+    made = true;
+    writeFileSync(join(lock, "pid"), String(process.pid));
+    return () => rmSync(lock, { recursive: true, force: true });
+  } catch {
+    if (made) rmSync(lock, { recursive: true, force: true });
+    return null;
+  }
+}
+
+function allocated(dir: string): number {
+  const s = lstatSync(dir);
+  if (!s.isDirectory()) return s.blocks * 512;
+  return s.blocks * 512 + readdirSync(dir).reduce((n, name) => n + allocated(join(dir, name)), 0);
+}
+
+function trimCache(limit: number) {
+  // Serialize the accounting, so concurrent jobs do not each remove enough versions to reach the budget.
+  const release = acquire(join(CACHE, ".prune"));
+  try {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const entries: { dir: string; bytes: number; used: number }[] = [];
+    for (const [part, spec] of Object.entries(PARTS)) {
+      const parent = join(CACHE, part);
+      if (!existsSync(parent)) continue;
+      for (const e of readdirSync(parent, { withFileTypes: true })) {
+        if (!e.isDirectory() || !spec.targets.some((target) =>
+          new RegExp(`^${target}-[0-9a-f]{24}$`).test(e.name))) continue;
+        const dir = join(parent, e.name), record = accessRecord(dir);
+        try {
+          if (!existsSync(record)) {
+            const unlock = tryAcquire(dir);
+            if (unlock) try { if (!existsSync(record) && existsSync(dir)) noteUse(dir); } finally { unlock(); }
+          }
+          // A locked or unwritable legacy entry has no trustworthy last-use time and is never evicted.
+          const used = existsSync(record) ? statSync(record).mtimeMs : Date.now();
+          entries.push({ dir, used, bytes: allocated(dir) });
+        } catch { /* A concurrent build may have replaced this entry. */ }
+      }
+    }
+    let total = entries.reduce((n, e) => n + e.bytes, 0);
+    for (const e of entries.sort((a, b) => a.used - b.used)) {
+      if (total <= limit) break;
+      if (e.used >= cutoff) continue;
+      const unlock = tryAcquire(e.dir);
+      if (!unlock) continue;
+      try {
+        // A caller may have requested it since the accounting pass.
+        const record = accessRecord(e.dir);
+        if (!existsSync(record) || statSync(record).mtimeMs >= cutoff) continue;
+        rmSync(e.dir, { recursive: true, force: true });
+        rmSync(record, { force: true });
+        total -= e.bytes;
+        log(`removed cold cache ${basename(dirname(e.dir))}/${basename(e.dir)}`);
+      } finally { unlock(); }
+    }
+  } finally { release(); }
 }
 
 /// Puts a finished directory in place of `final` (a rename: whoever looks sees all of it or nothing).
@@ -800,13 +881,14 @@ function buildHere(part: string, target: Target, k: string): string {
 async function get(part: string, target: Target, mode: "any" | "fetch" | "build" | "prebuild" = "any"): Promise<string> {
   const k = key(part, target);
   const dir = cached(part, target, k);
-  if (mode !== "build" && complete(dir, part, target)) return dir;
+  const budget = cacheBudget();
+  if (!budget && mode !== "build" && complete(dir, part, target)) { noteUse(dir); return dir; }
   const policy = process.env.STILLFAIL_NATIVE ?? "";
-  return await lockedAsync(dir, async () => {
-    if (mode !== "build" && complete(dir, part, target)) return dir;
+  const result = await lockedAsync(dir, async () => {
+    if (mode !== "build" && complete(dir, part, target)) { noteUse(dir); return dir; }
     if (mode !== "build" && policy !== "build" && policy !== "offline") {
       const got = await download(part, target, k);
-      if (got) return got;
+      if (got) { noteUse(got); return got; }
     }
     // What is prebuilt (`msvc`) CI builds only in the prebuild workflow, run by hand: anywhere else said, with how.
     if (mode !== "prebuild" && P(part).msvc && (mode === "fetch" || ((onWindows(part, target) || onLinux(part, target)) && process.env.CI))) {
@@ -814,8 +896,12 @@ async function get(part: string, target: Target, mode: "any" | "fetch" | "build"
     }
     if (mode === "fetch" || policy === "offline") throw new Error(`${part} ${target} ${k} is not prebuilt (STILLFAIL_NATIVE=${policy || "-"}, ${mode})`);
     // n0's relay is downloaded from n0 whatever the policy: "building" it is that.
-    return buildHere(part, target, k);
+    const built = buildHere(part, target, k);
+    noteUse(built);
+    return built;
   });
+  if (budget) try { trimCache(budget); } catch (e) { log(`could not trim the cache: ${(e as Error).message}`); }
+  return result;
 }
 async function lockedAsync<T>(dir: string, f: () => Promise<T>): Promise<T> {
   const release = acquire(dir);
@@ -825,7 +911,11 @@ async function lockedAsync<T>(dir: string, f: () => Promise<T>): Promise<T> {
 function ensure(part: string, target: Target): string {
   const k = key(part, target);
   const dir = cached(part, target, k);
-  if (complete(dir, part, target)) return dir;
+  if (complete(dir, part, target)) {
+    if (!cacheBudget()) { noteUse(dir); return dir; }
+    const release = acquire(dir);
+    try { if (complete(dir, part, target)) { noteUse(dir); return dir; } } finally { release(); }
+  }
   const out = execFileSync(process.execPath, [join(ROOT, "scripts/native.ts"), "path", part, target], { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
   return out.trim();
 }

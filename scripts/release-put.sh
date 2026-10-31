@@ -13,8 +13,9 @@
 # from there first, and deletes it there once all is put (scripts/release-prune.ts deletes what stays after two days).
 #   release-put.sh [--files | --feeds | --stage] <dir>…
 #   release-put.sh --hand <dir> | --unhand <dir> <name>…
+#   release-put.sh --clean-uploaded <name> <local copy>
 set -eu
-root=$(cd "$(dirname "$0")/.." && pwd)
+root=${STILLFAIL_RELEASE_TOOLS_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
 
 # STILLFAIL_DIRECT_DNS (mini1's CI jobs: .github/actions/setup-mac): Cloudflare's API reached directly, by the address
 # that DNS server gives, not through the machine's own (the proxy on the home network, whose line went down for hours twice on
@@ -68,6 +69,33 @@ get() {
   done
   return 1
 }
+# A build's warm directory holds a second copy of the signed Mac archive. Remove it only after reading the object back
+# from R2 and comparing every byte. If the read or comparison fails, keep the local copy for a retry.
+clean_uploaded() {
+  [ -f "$2" ] || return 0
+  back=$(mktemp)
+  if get "$1" "$back" && cmp -s "$back" "$2"; then
+    rm -f "$back"
+    rm -f "$2" || { echo "could not remove $2" >&2; return 1; }
+    echo "removed uploaded local copy of $1"
+  else
+    rm -f "$back"
+    echo "could not verify $1 in R2; kept $2" >&2
+    return 1
+  fi
+}
+# --files receives a staging copy. The optional source identifies the warm build copy of this one object; compare
+# them before cleaning it, so a later build with a different file at that path cannot be removed accidentally.
+clean_cache_copy() {
+  [ "$1" = "${STILLFAIL_RELEASE_CACHE_KEY:-}" ] || return 0
+  source=${STILLFAIL_RELEASE_CACHE_SOURCE:-}
+  [ -n "$source" ] && [ -f "$source" ] || return 0
+  if ! cmp -s "$2" "$source"; then
+    echo "local copy of $1 differs from the upload; kept $source" >&2
+    return 0
+  fi
+  clean_uploaded "$1" "$source"
+}
 drop() {
   if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "$account_id" ]; then
     # shellcheck disable=SC2086 # direct is words
@@ -97,6 +125,10 @@ taken=""
 case "${1:-}" in
   --files) passes="node files"; taken=yes; shift ;;
   --feeds) passes=feeds; shift ;;
+  --clean-uploaded)
+    [ "$#" -eq 3 ] || { echo "usage: release-put.sh --clean-uploaded <name> <local copy>" >&2; exit 1; }
+    clean_uploaded "$2" "$3"
+    exit 0 ;;
   --stage)
     shift
     stage="staged/$(date -u +%s)-${GITHUB_SHA:-$(git -C "$root" rev-parse HEAD)}"
@@ -149,7 +181,7 @@ for dir in "$@"; do
     pids=""
     for name in $names; do
       [ "$(pass_of "$name")" = "$pass" ] || continue
-      { put "$name" "$dir/$name" "$(type_of "$name")" && if [ -n "$taken" ]; then rm "$dir/$name"; fi; } &
+      { put "$name" "$dir/$name" "$(type_of "$name")" && clean_cache_copy "$name" "$dir/$name" && if [ -n "$taken" ]; then rm "$dir/$name"; fi; } &
       pids="$pids $!"
     done
     for pid in $pids; do wait "$pid" || { echo "not all of $dir was put" >&2; exit 1; }; done

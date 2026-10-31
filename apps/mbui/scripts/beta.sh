@@ -344,6 +344,11 @@ publish() {
   check_put "$name" "$C/last-$part" || { echo "beta: $name did not come back as made: the feed stays as it was" >&2; exit 1; }
   local tc=$(secs $t0)
   sh "$REPO/scripts/release-put.sh" --feeds "$dir"
+  if [ "$part" = mac ]; then
+    local built="$WORK/out/mac/stillfail-mbui-$n-arm64-mac.zip"
+    # check_put just verified last-mac against R2; only remove the matching warm build copy.
+    if [ -f "$built" ] && cmp -s "$built" "$C/last-mac"; then rm -f "$built"; fi
+  fi
   summary "- put $name (${tp} s), checked (${tc} s), the feed: $ORIGIN/releases/$part/mbui/latest.json, $ORIGIN/releases/latest/$part-mbui ($(secs $t0) s)"
 }
 
