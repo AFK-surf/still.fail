@@ -884,7 +884,14 @@ pub fn Ctx::own_ground(self : Ctx, i : Int) -> Bool {
     return false
   }
   let n = self.nodes[i]
-  (n.bg & 0xFFL) >= 0x80L || n.glass is Some(_) || n.border_w > 0.0
+  stands_alone(n.bg, glass=n.glass is Some(_), edge=n.border_w)
+}
+
+///|
+/// Whether a box on ground `ground` (with glass, with an edge `edge` wide) stands on a ground of its own (Ctx::own_ground:
+/// a colour more solid than not, glass, an edge): for a node of the window's tree as for an old view's box.
+pub fn stands_alone(ground : Int64, glass? : Bool = false, edge? : Double = 0.0) -> Bool {
+  (ground & 0xFFL) >= 0x80L || glass || edge > 0.0
 }
 
 ///|

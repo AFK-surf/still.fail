@@ -33,7 +33,10 @@ let tool_faint : Double = 0.35
 /// corner `corner` (round: Is(tool_side / 2.0); at the window's corner, linked to it: @ui.corner_of). Lit where the
 /// keyboard's focus shows on it as where the hand is on it (its hover ground and ink). Pressed (a press, Enter or
 /// Space with the focus, a screen reader's Activate), `press`, as one change. Its words its tip below it (tip_node), in
-/// the window's tips' layer `tip`, as viewer_tool's. The node.
+/// the window's tips' layer `tip`, as viewer_tool's. `lights` false: neither its ground nor its ink answers the hand (a
+/// marking tool's, picture_button's: only on or not; the keyboard's focus still shown on it). `ripples`: a press
+/// ripples over it and, where its ground is one of its own (@ui.stands_alone), sinks it (press_look: picture_button's).
+/// The node.
 pub fn tool_node(
   parent : @view.View,
   said : () -> ToolSaid,
@@ -41,26 +44,25 @@ pub fn tool_node(
   corner : @view.Live[Double],
   press : () -> Unit,
   tip? : TipLayer,
+  lights? : Bool = true,
+  ripples? : Bool = false,
 ) -> @view.View {
   parent.box(fn(v) {
     // (where the hand is on it, as a box's hovered look has it: a mouse's pointer over it, a finger pressing it; and
-    // where the keyboard's focus shows on it, drawn as the hand on it is: the user, 2026-10-31「焦点就按 hover 样式来」)
+    // where the keyboard's focus shows on it, drawn as the hand on it is: the user, 2026-10-31「焦点就按 hover 样式来」;
+    // none where it does not light, `lights` false)
     let lit = fn() {
       v.focus_shown() ||
-      (match @ui.pointing() {
-        Mouse => v.pointed()
-        Finger => v.pressed()
-      })
+      (
+        lights &&
+        (match @ui.pointing() {
+          Mouse => v.pointed()
+          Finger => v.pressed()
+        })
+      )
     }
-    v
-    .width(Is(Some(tool_side)))
-    .height(Is(Some(tool_side)))
-    .padding(Is((tool_icon_in, tool_icon_in, tool_icon_in, tool_icon_in)))
-    .radius(corner)
-    .presses(By(fn() { !said().disabled }))
-    .focusable(By(fn() { !said().disabled }))
-    .alpha(By(fn() { if said().disabled { tool_faint } else { 1.0 } }))
-    .ground(By(fn() {
+    // (its ground: the ink's hover where the hand is on it, over its chosen one while on)
+    let ground = fn() {
       let s = said()
       let i = ink()
       let under = if s.on { i.chosen } else { 0L }
@@ -73,13 +75,32 @@ pub fn tool_node(
       } else {
         under
       }
-    }))
+    }
+    v
+    .width(Is(Some(tool_side)))
+    .height(Is(Some(tool_side)))
+    .padding(Is((tool_icon_in, tool_icon_in, tool_icon_in, tool_icon_in)))
+    .radius(corner)
+    .presses(By(fn() { !said().disabled }))
+    .focusable(By(fn() { !said().disabled }))
+    .alpha(By(fn() { if said().disabled { tool_faint } else { 1.0 } }))
+    .ground(By(ground))
     .says(By(fn() {
       let s = said()
       Some(@view.said(Button, label=s.label, pressed=s.on))
     }))
     .on_press(press)
     |> ignore
+    // (what it shows inked as the hand is on it, pressed or on; else the ink's muted)
+    let shown_ink = fn() {
+      let k = ink()
+      let s = said()
+      if s.on || (!s.disabled && (lit() || (lights && v.pressed()))) {
+        k.ink
+      } else {
+        k.muted
+      }
+    }
     v.box(fn(i) {
       i
       .width(Is(Some(viewer_tool_icon)))
@@ -87,20 +108,19 @@ pub fn tool_node(
       .shapes(By(fn() { tool_shapes(said().icon) }))
       // (called as an old view's icon is, by what finds it on screen)
       .drawn_as(By(fn() { "/icon/" + said().icon + "/" }))
-      .tint(By(fn() {
-        let s = said()
-        let k = ink()
-        if s.on || (!s.disabled && (lit() || v.pressed())) {
-          k.ink
-        } else {
-          k.muted
-        }
-      }))
+      .tint(By(shown_ink))
       |> ignore
     })
     |> ignore
     // (a finger on it: a tap presses it; held still long_press_ms, its tip shown while it stays down and a while after,
     // the press then no tap (kit's tooltip's held_long); a mouse's held as long, still a press as it is let go)
+    // (a press's ripple over it and, where its ground is one of its own as it goes down (@ui.stands_alone, as the old
+    // view's box's own_ground), its sink: picture_button's, @motion.ripple)
+    let rippled = if ripples {
+      Some(press_look(v, corner, fn() { @ui.stands_alone(ground()) }))
+    } else {
+      None
+    }
     let hand = match tip {
       Some(tips) => Some(tip_node(tips, v, fn() { said().label }, side=Bottom))
       None => None
@@ -110,6 +130,7 @@ pub fn tool_node(
     let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
     v.gesture(
       @ui.touch_slop(),
+      press?=rippled,
       tap=fn(d) {
         if on_it(d) && !@signals.untracked(fn() { said().disabled }) {
           press()

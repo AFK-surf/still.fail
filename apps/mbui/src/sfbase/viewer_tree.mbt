@@ -260,6 +260,14 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   // (the bar across the top of a wider window, its picture whole, its nodes: where the old bars draw it not,
   // bar_as_nodes)
   n.show(fn() { bar_as_nodes(vw, stage().0) }, fn(h) { image_bar(h, src, vw, stage) })
+  // (marking's foot while it marks: its tools nodes, its notes the old view's, one column)
+  n.show(
+    fn() {
+      marks_said()
+      marking.on
+    },
+    fn(h) { marks_foot_node(h, fn() { (@sf.viewer_host().room)().1 }) },
+  )
   // (the ways to the pictures beside it, its nodes, while it is not marked)
   n.show(
     fn() {
@@ -351,8 +359,8 @@ fn image_ends(n : @view.View, vw : Viewer) -> Unit {
 }
 
 ///|
-/// The bars over the picture and what is said with them (viewer_layer's, for a viewer the window's tree draws): its bar
-/// (or marking's foot), what marking made said (back, what was asked to be saved, a download asked: its layer's,
+/// The bars over the picture and what is said with them (viewer_layer's, for a viewer the window's tree draws): its bar,
+/// what marking made said (back, what was asked to be saved, a download asked: its layer's,
 /// image_layer); the ways to the pictures beside it are nodes (image_steps).
 fn image_bars(c : @ui.Ctx, src : Source, v : Viewer) -> Unit {
   // (marking as it is: the bars follow what a finger on the picture did to it)
@@ -360,18 +368,7 @@ fn image_bars(c : @ui.Ctx, src : Source, v : Viewer) -> Unit {
   src_now.val = src.now
   let shown = if v.flies { v.flying() } else { v.fade.get() }
   c.box(style=viewer_under, fn() {
-    // (the ways to the pictures beside it its nodes: image_steps)
-    if marking.on {
-      c.layer(fn() {
-        c.spacer()
-        marks_foot(c)
-        let nav = (@sf.viewer_host().room)().1
-        if nav > 0.0 {
-          c.box(style=@ui.style(w=Full, h=Fixed(nav)), fn() {  }) |> ignore
-        }
-      })
-      |> ignore
-    }
+    // (the ways to the pictures beside it its nodes: image_steps; marking's foot too: marks_foot_node)
     // (its keys its node's: Viewer::key_on)
     c.layer(fn() { vf_bar(v, c, src, shown, keys=false) }) |> ignore
   })
