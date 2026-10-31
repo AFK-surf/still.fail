@@ -423,6 +423,14 @@ form only while the tab is still on that host: in a world of the page's top fram
 so the page's scripts do not change how it goes), each field's value set as its own setter does and `input` and `change`
 told, as typing leaves them. Nothing of it is logged; an agent's view of the tab (the `computer` tool) hears no login.
 
+Android has no such tool: there the system's autofill service is asked (2026-11-01; mbui hostapi autofill.mbt,
+dev.mbui.Autofills), as a browser asks it for its pages. While the app asks, its view says it holds a login form of
+that site (an account's field and a password's, virtual, under the tab's host as their web domain), and the request is
+the person's (`AutofillManager.requestAutofill`, on 填入): the service (1Password, Google's, whichever they chose in
+the system's settings) offers its logins for the site itself, and the one they pick, filled into that form, goes to the
+station as above. The session is cancelled once it came, so nothing is offered to be saved. A service may trust a web
+domain only from browsers it knows; one that does not offers nothing for it.
+
 ### Signing in with a passkey
 
 > chat EMBER/1793439516.811000 (2026-11-01): a site that signs in with a passkey takes one of the person's own, on

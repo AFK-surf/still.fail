@@ -535,6 +535,8 @@ android-misc.screen.fill.none
 android-misc.screen.fill.noOp
 android-misc.screen.fill.failed
 android-misc.screen.fill.empty
+android-misc.screen.fill.offerAuto
+android-misc.screen.fill.autoPick
 android-misc.screen.passkey.offer
 android-misc.screen.passkey.button
 android-misc.screen.passkey.asking

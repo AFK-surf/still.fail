@@ -1070,6 +1070,21 @@ extern "C" fn pw_out(id : Int) -> String = "mb_host_passwords_out"
 ///|
 extern "C" fn pw_end(id : Int) -> Unit = "mb_host_passwords_end"
 
+// The system's autofill (autofill.mbt): android_host.c on dev.mbui.Autofills; none elsewhere, where `af_able` is 0.
+
+///|
+extern "C" fn af_able() -> Int = "mb_host_autofill_able"
+
+///|
+#borrow(host)
+extern "C" fn af_ask(host : String) -> Int = "mb_host_autofill_ask"
+
+///|
+extern "C" fn af_take() -> String = "mb_host_autofill_take"
+
+///|
+extern "C" fn af_end() -> Unit = "mb_host_autofill_end"
+
 // This device's passkeys (passkeys.mbt): the platform's authenticator asked to sign (win_passkeys.c on Windows; none
 // elsewhere, where `wa_able` is 0).
 

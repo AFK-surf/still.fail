@@ -725,6 +725,28 @@ fn pw_end(_id : Int) -> Unit {
 
 }
 
+// The system's autofill (autofill.mbt): a page's is the browser's own.
+
+///|
+fn af_able() -> Int {
+  0
+}
+
+///|
+fn af_ask(_host : String) -> Int {
+  0
+}
+
+///|
+fn af_take() -> String {
+  ""
+}
+
+///|
+fn af_end() -> Unit {
+
+}
+
 // This device's passkeys (passkeys.mbt): a page signs nothing for another site.
 
 ///|

@@ -84,6 +84,18 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         return super.dispatchHoverEvent(e);
     }
 
+    /** A login form of a site the app asks the autofill service for, while it does (Autofills); none else. */
+    @Override
+    public void onProvideAutofillVirtualStructure(android.view.ViewStructure structure, int flags) {
+        Autofills.provide(this, structure);
+    }
+
+    /** The login the autofill service filled into that form (Autofills). */
+    @Override
+    public void autofill(android.util.SparseArray<android.view.autofill.AutofillValue> values) {
+        Autofills.filled(values);
+    }
+
     // ---- its surface (main thread) ----
 
     /** Its surface made: the streams' layers (StreamLayer) put under it, where it is the host's. */

@@ -257,3 +257,9 @@ void mb_host_passwords_end(int32_t id) {
   }
   ReleaseSRWLockExclusive(&lock);
 }
+
+// The system's autofill (host_native.mbt `af_*`): none on Windows (android_host.c).
+int32_t mb_host_autofill_able(void) { return 0; }
+int32_t mb_host_autofill_ask(moonbit_string_t host) { (void)host; return 0; }
+moonbit_string_t mb_host_autofill_take(void) { return moonbit_make_string_raw(0); }
+void mb_host_autofill_end(void) {}

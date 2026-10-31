@@ -124,6 +124,12 @@ pub fn face_clear(Int32) -> Unit
 
 pub fn face_given(Int32) -> Bool
 
+pub let fake_autofill : @ref.Ref[Bool]
+
+pub let fake_autofill_asks : Array[String]
+
+pub fn fake_autofill_picks(String, String, String) -> Unit
+
 pub let fake_op : @ref.Ref[((Array[String]) -> (Int32, String, String))?]
 
 pub let fake_op_runs : Array[Array[String]]

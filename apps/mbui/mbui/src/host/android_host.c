@@ -53,6 +53,8 @@ static jclass updates_cls, shares_cls, keeps_cls, holds_cls;
 static jclass gallery_cls, marks_cls;
 static void device_init(JNIEnv *env);  // android_device.h
 static jmethodID m_mk_start, m_mk_state, m_mk_png;
+static jclass autofills_cls;
+static jmethodID m_af_able, m_af_ask, m_af_take, m_af_end;
 static jmethodID m_face_add, m_face_add_bytes, m_face_clear, m_ahead, m_flush;
 static jmethodID m_cs_known, m_cs_decode;
 static jmethodID m_v_text, m_v_still, m_v_lost;
@@ -149,6 +151,11 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_bl_open = (*env)->GetStaticMethodID(env, login_cls, "open", "(ILjava/lang/String;)I");
   m_bl_back = (*env)->GetStaticMethodID(env, login_cls, "back", "(I)Ljava/lang/String;");
   m_bl_end = (*env)->GetStaticMethodID(env, login_cls, "end", "(I)V");
+  autofills_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Autofills"));
+  m_af_able = (*env)->GetStaticMethodID(env, autofills_cls, "able", "()I");
+  m_af_ask = (*env)->GetStaticMethodID(env, autofills_cls, "ask", "(Ljava/lang/String;)I");
+  m_af_take = (*env)->GetStaticMethodID(env, autofills_cls, "take", "()Ljava/lang/String;");
+  m_af_end = (*env)->GetStaticMethodID(env, autofills_cls, "end", "()V");
   m_open_tab = (*env)->GetStaticMethodID(env, login_cls, "openTab", "(Ljava/lang/String;)Z");
   holds_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/LoginService"));
   m_hold_words = (*env)->GetStaticMethodID(env, holds_cls, "words",
@@ -2088,6 +2095,34 @@ void mb_host_stream_direct(int32_t sid, double route, double after, int32_t what
     if (what & 2) r->audio = sid;
   }
   pthread_mutex_unlock(&routes_lock);
+}
+
+// The system's autofill (host_native.mbt `af_*`, hostapi/autofill.mbt): dev.mbui.Autofills puts a login form of the
+// site asked for before the autofill service, and keeps the login the person picks there until it is taken.
+int32_t mb_host_autofill_able(void) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, autofills_cls, m_af_able);
+}
+
+int32_t mb_host_autofill_ask(moonbit_string_t host) {
+  JNIEnv *env = env_();
+  jstring h = jstr(env, host);
+  jint ok = (*env)->CallStaticIntMethod(env, autofills_cls, m_af_ask, h);
+  (*env)->DeleteLocalRef(env, h);
+  return ok;
+}
+
+moonbit_string_t mb_host_autofill_take(void) {
+  JNIEnv *env = env_();
+  jstring s = (jstring)(*env)->CallStaticObjectMethod(env, autofills_cls, m_af_take);
+  moonbit_string_t out = s ? mstr(env, s) : moonbit_make_string_raw(0);
+  if (s) (*env)->DeleteLocalRef(env, s);
+  return out;
+}
+
+void mb_host_autofill_end(void) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, autofills_cls, m_af_end);
 }
 
 // This device's password manager (host_native.mbt `pw_*`): none here (apple_passwords.m, win_passwords.c).

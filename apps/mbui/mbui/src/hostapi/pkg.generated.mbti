@@ -21,6 +21,14 @@ pub let atlas_plot : Int32
 
 pub fn atlas_size(Bool) -> Int32
 
+pub fn autofill() -> Bool
+
+pub fn autofill_ask(String) -> Bool
+
+pub fn autofill_end() -> Unit
+
+pub fn autofill_take() -> (String, String, String)?
+
 pub fn b64url_of_hex(String) -> String
 
 pub fn back_enabled(Bool) -> Unit
@@ -872,6 +880,10 @@ pub(open) trait Host {
   fn pw_run(Self, String) -> Int32 = _
   fn pw_out(Self, Int32) -> String = _
   fn pw_end(Self, Int32) -> Unit = _
+  fn af_able(Self) -> Bool = _
+  fn af_ask(Self, String) -> Int32 = _
+  fn af_take(Self) -> String = _
+  fn af_end(Self) -> Unit = _
   fn wa_able(Self) -> Bool = _
   fn wa_get(Self, String) -> Int32 = _
   fn wa_out(Self, Int32) -> String = _
