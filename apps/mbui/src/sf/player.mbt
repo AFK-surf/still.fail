@@ -703,33 +703,47 @@ fn ended_card(c : @ui.Ctx, v : PlayerView, p : @kit.Media, f : @kit.MediaFrame, 
   let left = seconds - gone
   c.layer(fn() {
     c.box(style=player_middle, fn() {
-      c.box(style=player_next_box.then(@ui.style(bg=Data(ink.ground))), fn() {
-        c.text(t("android-misc.drive.player.ended"), style=player_next_note.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
-        let id = c.id(key + "/now")
-        if c.clicked(id) {
-          go_now()
-        }
-        let b = c.box(style=player_next_now.then(@ui.style(bg=Data(alpha(ink.text, media_rate_share)))), id~, fn() {
-          c.text(t("android-misc.drive.player.nextOne", args=[("name", other)]), style=player_next_words.then(@ui.text_style(color=Data(ink.text))))
-          |> ignore
-        })
-        c.semantics(b, Button, id~, label=t("android-misc.drive.player.nextOne", args=[("name", other)]))
-        let after = t("web-pages.drive.player.nextIn", args=[("n", left.to_string())])
-        c.text(after, style=player_next_note.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
-        let cancel = c.id(key + "/off")
-        if c.clicked(cancel) {
+      let note = t("android-misc.drive.player.nextOne", args=[("name", other)]) +
+        " · " +
+        t("web-pages.drive.player.nextIn", args=[("n", left.to_string())])
+      player_ask(c, ink, t("android-misc.drive.player.ended"), note, fn() {
+        // (as a confirming dialog's: the way out first, what it does last)
+        if button(c, t("common.cancel"), key=key + "/off", tone=Ghost) {
           v.ended_off = other
         }
-        let x = c.box(style=player_next_off, id=cancel, fn() {
-          c.text(t("common.cancel"), style=player_next_note.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
-        })
-        c.semantics(x, Button, id=cancel, label=t("common.cancel"))
+        if button(c, t("android-misc.drive.player.next"), key=key + "/now", tone=Primary) {
+          go_now()
+        }
       })
-      |> ignore
     })
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// What the player asks over its picture (that it cannot play, what comes next at its end): a card that asks (ask.mbt)
+/// alone in the stage's middle (its words in its middle, its buttons across its foot), a confirming dialog's width
+/// whatever it says (its seconds counting down move nothing), on the night over a picture.
+fn player_ask(c : @ui.Ctx, ink : MediaInk, title : String, note : String, buttons : () -> Unit) -> Unit {
+  let draw = fn() {
+    c.box(style=player_ask_room, fn() {
+      c.box(style=player_ask_card, fn() {
+        card(c, fill=true, ground=ink.ground, fn() {
+          ask_words(c, title, note, centred=true)
+          ask_buttons_across(c, buttons)
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  if ink.text == media_dark_text {
+    on_the_night(draw)
+  } else {
+    draw()
+  }
 }
 
 ///|
@@ -767,29 +781,26 @@ fn player_waits(c : @ui.Ctx, p : @kit.Media, f : @kit.MediaFrame, ink : MediaInk
             c.box(style=player_pill.then(@ui.style(bg=Data(ink.ground))), fn() {
               spinner(c, size=player_pill_spinner) |> ignore
               let what = t(if f.phase == Opening { "common.opening" } else { "web-pages.drive.player.buffering" })
-              c.text(
-                if f.rate >= 0.0 { what + " · " + file_size(f.rate) + "/s" } else { what },
-                style=player_pill_words.then(@ui.text_style(color=Data(ink.text))),
-              )
-              |> ignore
+              let words = player_pill_words.then(@ui.text_style(color=Data(ink.text)))
+              if f.rate >= 0.0 {
+                // (its rate, said anew each second, in a room as wide as the widest it says: the pill keeps its width)
+                let said = what + " · " + file_size(f.rate) + "/s"
+                let most = player_rate_widest.fold(init=c.words_across(said, words), fn(w, r) {
+                  dmax(w, c.words_across(what + " · " + r, words))
+                })
+                c.box(style=@ui.style(w=Fixed(most)), fn() { c.text(said, style=words) |> ignore }) |> ignore
+              } else {
+                c.text(what, style=words) |> ignore
+              }
             })
             |> ignore
           }
         Failed =>
-          c.box(style=player_failed_box, fn() {
-            c.text(t("web-pages.drive.player.failed", args=[("error", "")]), style=player_pill_words.then(@ui.text_style(color=Data(ink.text))))
-            |> ignore
-            let id = c.id(p.key() + "/retry")
-            if c.clicked(id) {
+          player_ask(c, ink, t("android-chat.video.failed"), "", fn() {
+            if button(c, t("android-misc.drive.player.retry"), key=p.key() + "/retry", tone=Primary) {
               p.retry()
             }
-            let b = c.box(style=player_next_now.then(@ui.style(bg=Data(alpha(ink.text, media_rate_share)))), id~, fn() {
-              c.text(t("android-misc.drive.player.retry"), style=player_next_words.then(@ui.text_style(color=Data(ink.text))))
-              |> ignore
-            })
-            c.semantics(b, Button, id~, label=t("android-misc.drive.player.retry"))
           })
-          |> ignore
         _ => ()
       }
     })
@@ -2000,9 +2011,6 @@ fn phone_timeline_h() -> Double {
 let phone_timeline_least : Double = 26.0
 
 ///|
-let player_next_w : Double = 280.0
-
-///|
 // kept across runs: a value (no field of it changes)
 let player_fill : @ui.Style = @ui.css("w=Full h=Full")
 
@@ -2024,29 +2032,19 @@ let player_pill : @ui.Style = @ui.css("row px=S3 py=S1_5 gap=S2 radius=Xl1_5 ali
 let player_pill_words : @ui.TextStyle = @ui.text_style(size=Ui, wrap=false)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let player_failed_box : @ui.Style = @ui.css("p=S8 gap=S3 align=ACenter")
+/// The widest a rate of bytes is said (file_size's, a second's): what the waiting pill keeps the room of.
+// kept across runs: a value (never changed)
+let player_rate_widest : Array[String] = ["1023 B/s", "1024 KB/s", "999.9 MB/s"]
 
 ///|
-/// The next one's card: 280 wide, 20 and 16 in, 12 between; its button 40 high.
+/// Round what the player asks (player_ask): its card clear of the screen's sides as a page's cards are.
 // kept across runs: a value (no field of it changes)
-let player_next_box : @ui.Style = @ui.style(w=Fixed(player_next_w), px=S5, py=S4, gap=S3, radius=Xl1_5, align=ACenter)
+let player_ask_room : @ui.Style = @ui.css("w=Full px=S4 align=ACenter")
 
 ///|
+/// The card itself: a confirming dialog's width (confirm_w), never wider than the room.
 // kept across runs: a value (no field of it changes)
-let player_next_note : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let player_next_now : @ui.Style = @ui.css("w=Full h=S10 px=S4 radius=Xl align=ACenter justify=JCenter clip")
-
-///|
-// kept across runs: a value (no field of it changes)
-let player_next_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let player_next_off : @ui.Style = @ui.css("px=S3 py=S1")
+let player_ask_card : @ui.Style = @ui.style(w=Cut, min_w=Within(confirm_w), max_w=Fixed(confirm_w))
 
 ///|
 /// A phone's bar at the top: 8 and 6 in, 48 high, its corner 16; the name 15 in 600, which of how many 12.
