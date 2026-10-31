@@ -395,27 +395,21 @@ pub fn emit_goes(Emits, Double) -> Bool
 
 pub fn emit_held(Emits, Double) -> Bool
 
-pub let emit_hop : Double
-
 pub fn emit_keeps(Emits) -> Map[String, Bool]
 
 pub fn emit_next(@ui.Ctx, Emits, String, at? : Double) -> Unit
 
-pub fn emit_out(@ui.Ctx, Int32, Emits, Double, Double) -> Unit
+pub fn emit_out(@ui.Ctx, Int32, Int32, Emits, Double) -> Unit
 
 pub let emit_out_ms : Double
 
 pub fn emit_release(Emits) -> Unit
 
-pub let emit_rise : Double
-
-pub fn emit_settle(Double) -> Double
-
-pub fn emit_smooth(Double) -> Double
-
 pub fn emit_step(@ui.Ctx, Emits, Turns, Double) -> Unit
 
 pub fn emit_take(@ui.Ctx, Emits, ChatView, Map[String, Bool]) -> Unit
+
+pub fn emit_words_only(Emits, Double) -> Bool
 
 pub let emits : Map[String, Emits]
 
@@ -2212,6 +2206,7 @@ pub(all) struct Emits {
   mut held_until : Double
   mut out_key : String
   mut taken : Array[Message]
+  out_at : Map[String, @motion.Anim]
   said : @signals.Signal[Int32]
 }
 pub fn Emits::changed(Self) -> Unit
@@ -3127,6 +3122,8 @@ pub(all) struct Turn {
   pose : Pose
   from : (Double, Double)?
   clock : @motion.Anim
+  span : Double
+  warp : (Double, Double, Double)?
 }
 
 pub(all) struct TurnAsk {

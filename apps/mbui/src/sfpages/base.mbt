@@ -87,6 +87,7 @@ using @sfbase {
   emit_flight,
   emit_folded,
   emit_goes,
+  emit_words_only,
   emit_out,
   emits,
   error_words,

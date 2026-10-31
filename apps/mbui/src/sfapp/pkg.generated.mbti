@@ -286,7 +286,7 @@ pub fn emit_keeps(@sfbase.Emits) -> Map[String, Bool]
 
 pub fn emit_next(@ui.Ctx, @sfbase.Emits, String, at? : Double) -> Unit
 
-pub fn emit_out(@ui.Ctx, Int32, @sfbase.Emits, Double, Double) -> Unit
+pub fn emit_out(@ui.Ctx, Int32, Int32, @sfbase.Emits, Double) -> Unit
 
 pub let emit_out_ms : Double
 
@@ -295,6 +295,8 @@ pub fn emit_release(@sfbase.Emits) -> Unit
 pub fn emit_step(@ui.Ctx, @sfbase.Emits, @sfbase.Turns, Double) -> Unit
 
 pub fn emit_take(@ui.Ctx, @sfbase.Emits, @sfbase.ChatView, Map[String, Bool]) -> Unit
+
+pub fn emit_words_only(@sfbase.Emits, Double) -> Bool
 
 pub let emits : Map[String, @sfbase.Emits]
 

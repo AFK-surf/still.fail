@@ -161,7 +161,12 @@ pub fn chat_list(
             }
             rd.fresh.remove(keys[i]) |> ignore
             if !flies && !emitted {
-              rd.rows.enter(c, ri, keys[i], lead=top)
+              // (an agent's words come in a glyph at a time when there is no avatar to come out of: emit_words_only)
+              let grown = match e {
+                Said(m) => !emit_words_only(em, m.seq)
+                _ => true
+              }
+              rd.rows.enter(c, ri, keys[i], lead=top, grown~)
             }
             // where it stands: its room what it leaves as a floor when it goes, as an agent's line's (act_rooms)
             if e is State(_, _, _) {

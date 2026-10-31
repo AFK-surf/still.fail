@@ -130,7 +130,7 @@ first frames in a leap; and a move told again with a little left of its way took
 - What is not a move keeps a length of its own: what comes and goes by fading, a few points' rise or a 0.97 scale
   (kind 2), a control answering (kind 7), what waits and what is lit (kinds 8, 9). Words sent flying (kind 4) keep
   their own curve, their length as a Move's of their way scales (`flight_way_ms`); a message's avatar going home to
-  its activity likewise (emit.mbt `return_ms`), its hop a hop's (its time its height's, over the higher of its ends).
+  its activity likewise (emit.mbt `return_ms`); its glide to the message and its drop on to the next a pose's own.
   detlint's `motion-length` stops a tween on Move.
 - A test waits for a move's end by `@ui.move_most_ms` (any move is over by then), or by `move_ms` of the way it set.
 

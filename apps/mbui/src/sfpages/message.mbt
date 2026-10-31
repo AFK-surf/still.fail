@@ -103,7 +103,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
     return
   }
   let emits = match here.list {
-    Some(l) if emit_goes(l.emits, m.seq) => Some(l)
+    Some(l) if emit_goes(l.emits, m.seq) || emit_words_only(l.emits, m.seq) => Some(l)
     _ => None
   }
   // what still.fail itself says (a limit hit, a failure): a notice across the chat, not someone's message
@@ -234,8 +234,9 @@ pub fn others_message(
   let row = if share is Some(_) { c.id("message/" + key) } else { 0 }
   if row != 0 { c.cursor(row, Arrow) }
   c.box(style=if share is Some(_) { msg_row_share } else { msg_row }, id=row, fn() {
+    let head = Ref(0)
     let col = c.box(style=if share is Some(_) { msg_main_share } else { msg_main }, fn() {
-      c.box(style=if inline { msg_head_inline } else { msg_head }, fn() {
+      head.val = c.box(style=if inline { msg_head_inline } else { msg_head }, fn() {
         name()
         if !inline {
           match route {
@@ -252,7 +253,6 @@ pub fn others_message(
           None => ()
         }
       })
-      |> ignore
       if inline {
         match route {
           Some(r) => c.box(style=msg_route_line, fn() { r() }) |> ignore
@@ -261,11 +261,11 @@ pub fn others_message(
       }
       body()
     })
-    // coming out of its agent's picture (sfbase's emit.mbt): from 35% at its corner, unrolling from its top
+    // coming out of its agent's picture (sfbase's emit.mbt): its head out of the picture, unrolling from its top
     match emits {
       Some((em, _, seq)) => {
         @motion.measure(c, col, "emit-col/" + seq_s(seq))
-        emit_out(c, col, em, seq, emit_from_x)
+        emit_out(c, col, head.val, em, seq)
       }
       None => ()
     }
@@ -1107,11 +1107,6 @@ let bubble_ground : @ui.Style = @ui.css("w=Full h=Full radius=Xl2 bg=Neutral")
 ///|
 // kept across runs: a value (no field of it changes)
 let bubble_bare : @ui.Style = @ui.css("px=S3_5 py=S2 radius=Xl2")
-
-///|
-/// Where a message comes out of its agent's picture, across its column: out in the margin before it (Chat.css.ts
-/// msgRow[data-emitting] > msgMain: -16).
-let emit_from_x : Double = -16.0
 
 ///|
 /// That its agents have yet to take it (msgWaiting): a spinner and the words 5 apart.
