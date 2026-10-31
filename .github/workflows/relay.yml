@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-24.04
     # production's bucket token, on main only
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
         with: { sparse-checkout: station/native/mesh/Cargo.toml, sparse-checkout-cone-mode: false }

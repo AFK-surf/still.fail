@@ -98,7 +98,7 @@ jobs:
     runs-on: ubuntu-24.04
     # production's secrets (the key, the bucket's token) on main only: a branch's run builds, unsigned, and puts nothing
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
-    timeout-minutes: 10
+    timeout-minutes: 5
     env:
       MBUI_FRESH: 1
       MBUI_CACHE: ${{ github.workspace }}/.ci/release
@@ -191,7 +191,7 @@ jobs:
     name: linux (${{ matrix.arch }})
     runs-on: ${{ matrix.os }}
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
-    timeout-minutes: 10
+    timeout-minutes: 5
     env:
       MBUI_FRESH: 1
       MBUI_CACHE: ${{ github.workspace }}/.ci/release
@@ -263,7 +263,7 @@ jobs:
     if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.mac == 'yes'
     runs-on: macos-26
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
-    timeout-minutes: 10
+    timeout-minutes: 5
     env:
       MBUI_FRESH: 1
       MBUI_CACHE: ${{ github.workspace }}/.ci/release
@@ -399,7 +399,7 @@ jobs:
     needs: what
     if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.ios == 'yes'
     runs-on: xcode-27
-    timeout-minutes: 10
+    timeout-minutes: 5
     env:
       MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
@@ -525,7 +525,7 @@ jobs:
     if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.win == 'yes'
     runs-on: windows-2025
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
-    timeout-minutes: 10
+    timeout-minutes: 5
     # (actions: the pipeline's run of this commit and its natives artifact, for the test station's natives; write: this
     # run cancelled when main's pipeline run of this commit was, below)
     permissions:
@@ -667,7 +667,8 @@ jobs:
               gh run cancel "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY"
               sleep 120; exit 1
             fi
-            [ $((SECONDS - t0)) -lt 360 ] || { echo "::error::the pipeline's natives job not done after 6 minutes (run ${run:-not found})"; exit 1; }
+            # (3 minutes: inside the job's 5, said before the job is stopped)
+            [ $((SECONDS - t0)) -lt 180 ] || { echo "::error::the pipeline's natives job not done after 3 minutes (run ${run:-not found})"; exit 1; }
             sleep 5
           done
           echo "(its natives job done after $((SECONDS - t0)) s: run $run)"
@@ -769,14 +770,14 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: |
           Z=$RUNNER_TEMP/zip
-          node apps/mbui/scripts/waitfor.mjs --deadline 300 --what "the installer's put" --exists "$(cygpath -w "$Z/status")" > /dev/null || { cat "$Z/log"; exit 1; }
+          node apps/mbui/scripts/waitfor.mjs --deadline 150 --what "the installer's put" --exists "$(cygpath -w "$Z/status")" > /dev/null || { cat "$Z/log"; exit 1; }
           cat "$Z/log"
           cat "$Z/summary" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
           [ "$(cat "$Z/status")" = 0 ]
       - name: Signed in against a local still.fail, then Home (e2e/win.sh)
         run: |
           E=$RUNNER_TEMP/e2e
-          node apps/mbui/scripts/waitfor.mjs --deadline 600 --what "the e2e flow" --exists "$(cygpath -w "$E/status")" > /dev/null || { cat "$E/log"; exit 1; }
+          node apps/mbui/scripts/waitfor.mjs --deadline 150 --what "the e2e flow" --exists "$(cygpath -w "$E/status")" > /dev/null || { cat "$E/log"; exit 1; }
           cat "$E/log"
           [ "$(cat "$E/status")" = 0 ]
       # Each desktop app still Electron's as released (the beta, the stable one), installed, moved over to this app built
