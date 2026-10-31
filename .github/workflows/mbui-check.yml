@@ -8,6 +8,9 @@ on:
   push:
     branches: [main]
     paths: ["apps/mbui/**", ".github/workflows/mbui-check.yml"]
+  # (once a day: sfapp's page tests all in one process, below)
+  schedule:
+    - cron: "53 3 * * *"
 # main: one run at a time, the newest waiting (a red one seen, as every commit's was in the pipeline); called, the
 # pipeline's own (a branch's newest push stops its run before).
 concurrency:
@@ -31,7 +34,8 @@ jobs:
   native:
     name: native (${{ matrix.part }}${{ matrix.group && format(' {0}', matrix.group) || '' }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # (a push's 5 minutes, the pipeline's call of a branch's push too; the day's, its pages in one process, 10)
+    timeout-minutes: ${{ github.event_name == 'push' && 5 || 10 }}
     strategy:
       fail-fast: false
       matrix:
@@ -113,12 +117,13 @@ jobs:
           # (mbc's account of each program's build, its units compiled and its link, said after: moon shows a
           # compiler's output only when it fails, and where a part's time went was not to be seen)
           export MBC_LOG="$RUNNER_TEMP/mbc.log"
-          # (sfapp's page tests in one process, SFAPP_SHARDS=1, their files one after another, the screen sweeps a
-          # process each beside them and the part's other packages: what one file leaves behind that a later one trips
-          # on shows here, which shards' fewer files each partly hide; the run the longest of them, not their sum. The
-          # pages were 162-196 s on main in one with kept_rows_kinds_wbtest.mbt's sweep among them, 70 s of their 128
-          # run alone; in two by name, 207 s and 84, 2026-10-26; that sweep a process of its own now, test.sh)
-          TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} APP_GROUP=${{ matrix.group }} SFAPP_SHARDS=1 LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+          # (sfapp's page tests, on a push, in four processes side by side, its files dealt round them (SFAPP_SHARDS=4):
+          # the runner's four cores, one of them working while the other three waited when all 162 files ran in one,
+          # the app's fourth group the longest job of every mbui push, its pages 110-196 s of its 190-300, 2026-10-31,
+          # as asked. Once a day in one process (SFAPP_SHARDS=1), their files one after another: what one file leaves
+          # behind that a later one trips on shows there, which shards' fewer files each partly hide. The screen
+          # sweeps a process each beside them either way, test.sh)
+          TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} APP_GROUP=${{ matrix.group }} SFAPP_SHARDS=${{ github.event_name == 'schedule' && 1 || 4 }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
       - name: The mbui app's check (detlint, then native type-checked)
         if: matrix.part == 'replay'
         # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23. On the replay
