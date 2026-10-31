@@ -3516,6 +3516,7 @@ dependencies = [
  "iroh-mdns-address-lookup",
  "libadb",
  "libc",
+ "n0-mainline",
  "noq-proto",
  "reqwest",
  "rusqlite",

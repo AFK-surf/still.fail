@@ -51,6 +51,7 @@ per 5 s tick of its ways.
 | `conn rebind: a dial unanswered, nothing open -> bound \| relays retold -> … \| skipped: Nms since the last (REBIND_MS)` | mesh.ts #rebind | the main endpoint bound anew, and why |
 | `conn stuck: <station> not rebound: N link(s) open` | mesh.ts link | a dial left unanswered before, the endpoint not bound anew as links are open on it |
 | `conn network-change: told the main endpoint (the network changed \| retry \| the UI back after Ns), N link(s) open, N relay endpoint(s) not told` | mesh.ts #watch | a wake (the system's network change, 重试, the app back) told to iroh |
+| `dht: dht#N read failed #n: <kind> [(os error N)], next read in Nms \| binding anew failed: … \| bound anew: port A -> B \| reads back after n failed, Nms after the first \| lookup <id8> asked [again, joining the one going] \| first answer after Nms \| done after Nms: N answer(s) (Nms before)` | record.ts recordDht (the shell's `dht.said`, vendor/n0-mainline's ember) | the DHT lookup's socket and lookups, kept while the record is on however long between takes (a phone back after minutes away says what its socket did then), taken at most once a tick, as each dial starts and ends, and at each wake; `(Nms before)`: when it happened. A failing socket says its first 3 failures and then each power of two; at most 64 lines between takes (`N line(s) dropped`). `reads back`: a datagram came in on the socket again (not yet a valid DHT answer: that is a lookup's `first answer`). A lookup names the station by its id's first 8 and says when, not which dial it served |
 | `conn ways: <station> <way> in=+B out=+B missed=N [*<relay or address> <rtt> +sent/lost; …] \| …` | mesh.ts #steer | each 5 s tick of a station's ways (where it has more than one to choose between): bytes in and out of each link since the last, its pings missed in a row, each path's packets sent and lost since (`*` the one in use) |
 | `link miss: <station> misses=N/12 cloud=up\|down -> reconnecting\|offline\|error: <why>` | station/link.ts | a try at the station's event stream that did not open; `cloud`: still.fail cloud's socket as it was (any account's) |
 | `link wait: <station> Ns (backoff \| answered \| brief streams \| tried seldom: LONG_MISSES \| tried seldom: the cloud says offline) misses=N why=…` | station/link.ts | how long until the next try, and why that long |
@@ -63,7 +64,11 @@ and later `link woke` (by what). A wait of 600s (`tried seldom`) with no `link w
 it: look for `cloud socket … open` (it would) and `net: path … said` (it would). The `conn dial` lines of the same
 minutes say where each try stopped: `onto=-` (no relay reached), `dialled=-` with `no-answer` (no QUIC connection in
 time: the station or the way), `openBi`/`sent` missing (the connection made, then lost). `conn stuck` with links open
-means the endpoint was not bound anew for them.
+means the endpoint was not bound anew for them. A station the DHT is asked about (`dht: … lookup <id8>`) in the
+same seconds as its dial, with `done after …: 0 answer(s)` or a socket failing (`read failed`) before it, could not be
+found through the DHT then (that lookup had no answer; a later one may); whether that is why the dial failed the lines
+do not say: `via=main+addresses` means the dial had addresses given, and `via=main` without them may still have had a
+relay or addresses iroh kept, so neither says whether the dial needed the DHT.
 
 ## From a warm phone to the culprit
 

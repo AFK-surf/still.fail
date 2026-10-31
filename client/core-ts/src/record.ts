@@ -55,3 +55,34 @@ export function dialLine(d: {
   const ms = (x: number) => (x < 0 ? "-" : `${Math.round(x)}ms`);
   return `#${d.n} ${stationTag(d.station)} via=${d.via} onto=${ms(d.onto)} credential=${ms(d.credential)} dialled=${ms(d.dialled)} openBi=${ms(d.openBi)} sent=${ms(d.sent)} total=${ms(d.total)} -> ${d.outcome}`;
 }
+
+/// Per host: whether the DHT's lines are being kept, and when they were last taken (`recordDht`).
+const dhtTakes = new WeakMap<object, { kept: boolean; at: number }>();
+
+/// The DHT lookup's lines since the last take (the shell's `dht.said`: vendor/n0-mainline's ember), as `dht:` lines
+/// each saying how long before it was. While the record is on the shell keeps them however long until the next take
+/// (an app back after minutes away says what its socket did then); once off it is told, once, to keep none. `every`:
+/// not taken again within that many ms (a station's tick, each station's: one take a tick between them); a dial and a
+/// wake take at once. A line names its DHT (`dht#N`) and a lookup the station it is of (its id's first 8): which dial
+/// a lookup served is not said, only when.
+export function recordDht(
+  host: Recording & { nowMs(): number },
+  from: { dhtSaid?(keep: boolean): { lines: { at: number; text: string }[]; dropped: number } },
+  every = 0,
+): void {
+  if (from.dhtSaid === undefined) return;
+  const was = dhtTakes.get(host) ?? { kept: false, at: -Infinity };
+  if (!recording(host)) {
+    if (was.kept) {
+      dhtTakes.set(host, { kept: false, at: was.at });
+      from.dhtSaid(false);
+    }
+    return;
+  }
+  const now = host.nowMs();
+  if (was.kept && now - was.at < every) return;
+  dhtTakes.set(host, { kept: true, at: now });
+  const { lines, dropped } = from.dhtSaid(true);
+  for (const line of lines) record(host, "dht", () => `${line.text} (${Math.max(0, Math.round(now - line.at))}ms before)`);
+  if (dropped > 0) record(host, "dht", () => `${dropped} line(s) dropped for want of room`);
+}
