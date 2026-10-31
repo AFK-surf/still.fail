@@ -23,7 +23,7 @@ const ZH = {
   questionsTitle: "常见问题",
   questions: [
     { q: "和直接在终端里用 Claude Code 有什么不同？", a: "终端里的 agent 只能坐在那台电脑前用。still.fail 把你每台电脑上的 agent 放到一处：在手机、Slack 或飞书里随时交代和查看，看每台电脑的负载，密钥在 agent 使用前由你批准。agent 本身不变。" },
-    { q: "要付费吗？", a: "目前免费，免费版限制 workspace 和成员数量。agent 用的是你自己的订阅账号或 API 密钥。" },
+    { q: "要付费吗？", a: "目前免费，套餐限制 workspace 和成员数量，每个 workspace 最多 64 台 station。agent 用的是你自己的订阅账号或 API 密钥。" },
     { q: "代码和对话会传到云端吗？", a: "不会。对话、文件和记录保存在你的电脑上，云端只负责账号和中继。中继只转发加密数据，看不到内容。" },
     { q: "电脑要一直开着吗？", a: "agent 在你的电脑上运行，所以电脑要开着、联网。still.fail station 随登录启动，不用开着窗口。" },
     { q: "不在同一个网络里，能连上吗？", a: "能。设备之间先直接连接，连不通时经加密中继转发，不用配置端口、VPN 或内网穿透。" },
@@ -80,7 +80,7 @@ const EN: typeof ZH = {
   questionsTitle: "Questions",
   questions: [
     { q: "How is it different from Claude Code in a terminal?", a: "An agent in a terminal is used at that computer. still.fail puts the agents on all your computers in one place: direct and follow them from your phone, Slack or Feishu, see each computer's load, and approve a key before an agent uses it. The agents themselves are unchanged." },
-    { q: "Does it cost anything?", a: "It's free for now. The free plan limits workspaces and members. Agents use your own subscriptions or API keys." },
+    { q: "Does it cost anything?", a: "It's free for now. Plans limit workspaces and members, and each workspace can have up to 64 stations. Agents use your own subscriptions or API keys." },
     { q: "Do my code and chats go to the cloud?", a: "No. Chats, files and history stay on your computers; the cloud only handles accounts and relays. A relay passes on encrypted data it can't read." },
     { q: "Does my computer have to stay on?", a: "Agents run on your computer, so it has to be on and online. The still.fail station starts at login; no window needs to stay open." },
     { q: "Does it work across networks?", a: "Yes. Devices connect directly, and through an encrypted relay when they can't. No ports, VPN or tunnels to set up." },

@@ -68,6 +68,15 @@ export class Directory extends ProductionDirectory {
     this.ctx.storage.sql.exec("DELETE FROM migrations WHERE name = 'free-plan'");
     this.migrateFreePlan();
   }
+  /** A station limit from before the shared cap, kept as an existing workspace's setting. */
+  legacyStationLimit(workspace: string, limit: number) {
+    this.ctx.storage.sql.exec("UPDATE workspaces SET max_stations = ? WHERE id = ?", limit, workspace);
+  }
+  /** A station already enrolled before the shared cap was introduced. */
+  previouslyEnrolledStation(workspace: string, station: string, by: string) {
+    this.ctx.storage.sql.exec("INSERT INTO stations (id, last_seen, version) VALUES (?, ?, ?)", station, nowSeconds(), "0.3.1");
+    this.ctx.storage.sql.exec("INSERT INTO station_members (workspace, station, name, enrolled_at, enrolled_by) VALUES (?, ?, ?, ?, ?)", workspace, station, "earlier", nowSeconds(), by);
+  }
   /**
    * The stations as they were kept before a station could be in several workspaces: one table, a row each (with
    * `marks`, the emoji and icon it gained later; without, as a table older than them), each station in the one

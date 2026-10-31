@@ -45,7 +45,7 @@ See [docs/design.md](docs/design.md) and [docs/cloud.md](docs/cloud.md) for deta
 ## Get started
 
 1. Open the [web app](https://app.still.fail), or download the desktop app (macOS on Apple silicon, Windows x64) or the Android app from [still.fail](https://still.fail).
-2. Create a workspace. The free plan includes one workspace for one person, with no limit on stations.
+2. Create a workspace. The free plan includes one workspace for one person and up to 64 stations.
 3. Choose **Add station** and run the command it shows on the machine that will run your agents: macOS (arm64), Linux (x64, arm64) or Windows (x64).
 4. Add a profile on that station: sign in to Claude Code, Codex, DeepSeek Harness or Grok Build. Those runtimes and their accounts are separate from this project, and agents run with that machine's user permissions; read the [trust boundary](SECURITY.md#trust-boundary) first.
 5. Start a chat in the app, or connect a Slack or Feishu bot to the station and mention it in a thread.

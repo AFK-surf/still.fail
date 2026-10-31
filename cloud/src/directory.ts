@@ -12,6 +12,7 @@
 // station over the mesh.
 import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
+import { STATIONS_PER_WORKSPACE } from "../../client/limits.ts";
 import { CODE_TTL_DAYS, isAdmin, newCode, normalizeCode } from "./admin";
 import { digest, nowSeconds, randomSecret, type Identity } from "./auth";
 import { header } from "./compat";
@@ -36,14 +37,13 @@ export const ENROLLMENT_TTL_SEC = 60 * 60;
 export const LOCK_REQUEST_TTL_SEC = 7 * 24 * 60 * 60;
 const LIMITS = { openInvitations: 50, pushPerUser: 32 };
 /**
- * What an account may create, and what each workspace it created may hold (its creator counted among the people). Every
- * account is on the free plan: one workspace, just its creator, and no station limit. A code or the admin's say makes it
- * standard (#standard); the admin's own go up to the old bounds.
+ * What an account may create and how many people each workspace it created may hold (its creator among them). A code
+ * or the admin's say makes an account standard (#standard); the admin's own go up to the old bounds.
  */
 export const PLANS = {
-  free: { workspaces: 1, members: 1, stations: null },
-  standard: { workspaces: 5, members: 6, stations: 64 },
-  admin: { workspaces: 32, members: 200, stations: 64 },
+  free: { workspaces: 1, members: 1 },
+  standard: { workspaces: 5, members: 6 },
+  admin: { workspaces: 32, members: 200 },
 } as const;
 export type Plan = keyof typeof PLANS;
 
@@ -151,7 +151,7 @@ export class Directory extends DurableObject<Env> {
       if (!marked.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE workspaces ADD COLUMN ${column}`);
     }
     // Nor had workspaces limits of their own (people, stations; both or neither), before the admin could make one for
-    // a company: one without holds what its creator's plan lets it (#limits).
+    // a company. max_stations stays for old clients and records; the current cap is shared by all workspaces.
     for (const column of ["max_members INTEGER", "max_stations INTEGER"]) {
       if (!marked.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE workspaces ADD COLUMN ${column}`);
     }
@@ -432,17 +432,11 @@ export class Directory extends DurableObject<Env> {
     return isAdmin(this.env, creator.email as string) ? "admin" : this.#standard(creator.sub as string) ? "standard" : "free";
   }
 
-  /** How many people and stations a workspace may hold: its own limits (one the admin made for a company), or its plan's. */
-  #limits(workspace: string): { members: number; stations: number | null } {
-    const own = this.#one("SELECT max_members, max_stations FROM workspaces WHERE id = ?", workspace);
-    if (own && own.max_members !== null && own.max_stations !== null) return { members: own.max_members as number, stations: own.max_stations as number };
-    const plan = PLANS[this.#plan(workspace)];
-    return { members: plan.members, stations: plan.stations };
-  }
-
-  /** How many people a workspace may hold, its creator among them. */
+  /** How many people a workspace may hold: its own limit, or its creator's plan's. */
   #memberCap(workspace: string): number {
-    return this.#limits(workspace).members;
+    const own = this.#one("SELECT max_members, max_stations FROM workspaces WHERE id = ?", workspace);
+    if (own && own.max_members !== null && own.max_stations !== null) return own.max_members as number;
+    return PLANS[this.#plan(workspace)].members;
   }
 
   /** Who a workspace holds or has let in: members, emails added but not signed in yet, and, with `invited`, open invitations. */
@@ -967,10 +961,8 @@ export class Directory extends DurableObject<Env> {
   }
 
   #stationsFull(workspace: string): boolean {
-    const limit = this.#limits(workspace).stations;
-    if (limit === null) return false;
     const stations = this.#one("SELECT COUNT(*) AS n FROM station_members WHERE workspace = ?", workspace)!.n as number;
-    return stations >= limit;
+    return stations >= STATIONS_PER_WORKSPACE;
   }
 
   /**
@@ -1277,7 +1269,7 @@ export class Directory extends DurableObject<Env> {
     return { id, joined, added };
   }
 
-  /** The admin sets how many people and stations a workspace may hold; what it holds beyond them stays, nothing more is let in. */
+  /** The admin sets how many people a workspace may hold; stations have the shared limit. */
   adminSetLimits(workspace: string, input: { members?: unknown; stations?: unknown }): { members: number; stations: number } {
     if (!this.#one("SELECT 1 AS x FROM workspaces WHERE id = ?", workspace)) fail(404, "workspace_not_found");
     const limits = limitsOf(input);
@@ -1287,7 +1279,7 @@ export class Directory extends DurableObject<Env> {
 
   /**
    * An enrollment the admin makes without being in the workspace: a station installed for a company, before it is
-   * theirs. Only a workspace made for a company (#limits of its own) none of whose owners has signed in yet; from then
+   * theirs. Only a workspace made for a company (with its own member limit) none of whose owners has signed in yet; from then
    * on its stations are its owners' to add.
    */
   async adminEnrollment(by: string, workspace: string, name: unknown): Promise<{ token: string; expires_at: number }> {
@@ -1335,12 +1327,11 @@ export class Directory extends DurableObject<Env> {
       added: added.get(w.id as string) ?? [],
       // As adminEnrollment has it: one made for a company, none of its owners signed in yet.
       enrollable: w.max_members !== null && !(members.get(w.id as string) ?? []).some((m) => m.role === "owner"),
-      // As #limits has it: its own, or its creator's plan's.
+      // As #memberCap has it: its own, or its creator's plan's. Stations use the same cap for all workspaces.
+      station_seats: STATIONS_PER_WORKSPACE,
       ...(w.max_members !== null && w.max_stations !== null
-        ? { seats: w.max_members as number, station_seats: w.max_stations as number, plan: "enterprise" as const }
-        : { seats: PLANS[plan(w)].members, ...(PLANS[plan(w)].stations === null
-          ? { stations_unlimited: true as const }
-          : { station_seats: PLANS[plan(w)].stations ?? undefined }), plan: plan(w) }),
+        ? { seats: w.max_members as number, plan: "enterprise" as const }
+        : { seats: PLANS[plan(w)].members, plan: plan(w) }),
     }));
   }
 
@@ -1652,13 +1643,15 @@ function emailsOf(value: unknown): string[] {
   return wanted;
 }
 
-/** The most a company's workspace may be given: people, stations. */
+/** The largest member limit and the largest legacy station argument accepted from older clients. */
 export const LIMITS_MAX = { members: 1000, stations: 256 } as const;
 
-/** A workspace's own limits as the admin gives them: whole numbers from 1 to LIMITS_MAX. */
+/** A workspace's member limit; accept the older station argument but use the shared cap. */
 function limitsOf(input: { members?: unknown; stations?: unknown }): { members: number; stations: number } {
   const whole = (v: unknown, max: number) => (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= max ? v : fail(400, "invalid_limits"));
-  return { members: whole(input.members, LIMITS_MAX.members), stations: whole(input.stations, LIMITS_MAX.stations) };
+  const members = whole(input.members, LIMITS_MAX.members);
+  whole(input.stations, LIMITS_MAX.stations);
+  return { members, stations: STATIONS_PER_WORKSPACE };
 }
 
 /**

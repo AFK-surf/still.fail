@@ -183,7 +183,7 @@ test("a station joins a second workspace: named there; its home's at the top of 
   }
 });
 
-test("joining a free workspace has no station limit; an explicit limit is the joined workspace's", async () => {
+test("joining and leaving workspaces keeps their memberships; an old custom station limit cannot lower the fixed cap", async () => {
   const h = await harness();
   try {
     const alice = h.as(await h.login("alice"));
@@ -201,9 +201,12 @@ test("joining a free workspace has no station limit; an explicit limit is the jo
     assert.equal((await enroll(h, y, late, true)).status, 200, "a third station can join the free workspace");
     const admin = h.as(await h.login("alice"), "admin");
     assert.equal((await admin("POST", `/v1/admin/workspaces/${lab}/limits`, { members: 1, stations: 3 })).status, 200);
-    // An explicit workspace limit still applies when a token is redeemed and when one is requested.
-    assert.deepEqual(Object.values(await enroll(h, extra, extraToken, true)), [429, { error: "too_many_stations" }]);
-    assert.equal((await bob("POST", `/v1/workspaces/${lab}/enrollments`, { name: "more" })).status, 429);
+    const namespace: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
+    const directory = namespace.get(namespace.idFromName("primary")) as { legacyStationLimit(workspace: string, limit: number): Promise<void> };
+    await directory.legacyStationLimit(lab, 3);
+    // An old custom cap of 3 no longer prevents another station joining.
+    assert.equal((await enroll(h, extra, extraToken, true)).status, 200);
+    assert.equal((await bob("DELETE", `/v1/workspaces/${lab}/stations/${extra.id}`)).status, 200);
     assert.deepEqual([await count(alice, home), await count(bob, lab)], [2, 3]);
 
     // Taken out of its home, it stays in the lab, its home now (at the top of its state, no longer `joined` there).

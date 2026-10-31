@@ -45,14 +45,14 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 
 ## 套餐和额度
 
-免费版每个账号可创建 1 个 workspace，每个 workspace 限 1 人，station 数量不限；标准版及企业 workspace 的上限各自计算。
+免费版每个账号可创建 1 个 workspace，每个 workspace 限 1 人；标准版的人数和 workspace 额度各自计算。所有 workspace 最多加入 64 台 station；已超过的 station 保留，但不能再加入新的。
 
 ## 企业 workspace
 
 给企业预先建好 workspace 和专属 station（比如一台为它准备的 Mac mini），由管理后台（admin.still.fail）做，不需要运维账号加入那个 workspace：
 
 - **新建**：`POST /v1/admin/workspaces {name, owners: [email], members, stations}`。owner 按邮箱加：已有账号的立刻成为 owner，没有的进 `added`，首次用这个邮箱登录时成为 owner。创建人记为管理员，但管理员不是成员；这类 workspace 不计入管理员自己的 workspace 数。
-- **自己的上限**：`workspaces.max_members` / `max_stations`（两个一起设，1–1000 人、1–256 台），有值就用它，不看创建人的套餐（`#limits`）；没有的照旧按创建人的套餐。`POST /v1/admin/workspaces/:id/limits {members, stations}` 修改：已超出的保留，只是不能再加入新的。后台列表里标「企业版」（`plan: "enterprise"`，带 `seats`、`station_seats` 和还没登录的 `added`）。
+- **自己的人数上限**：`workspaces.max_members`（1–1000 人），有值就用它，不看创建人的套餐（`#memberCap`）；没有的按创建人的套餐。station 上限固定为 64 台；旧的 `max_stations` 值留在库里但不再决定上限。`POST /v1/admin/workspaces/:id/limits {members, stations}` 仍接受旧的 station 数值，返回实际的 64；已超出的保留，只是不能再加入新的。后台列表里标「企业版」（`plan: "enterprise"`，带 `seats`、`station_seats` 和还没登录的 `added`）。
 - **装 station**：`POST /v1/admin/workspaces/:id/enrollments {name}` 出一条一次性登记命令（正式版安装器，1 小时有效），在那台机器上执行即加入。只给企业 workspace、并且还没有 owner 登录进来的时候（否则 `409 not_before_owner`，列表里 `enrollable` 说能不能）：owner 一进来，加 station 就是他们自己的事。
 - owner 一直没登录的，管理后台也能删除（`/v1/admin/workspaces/:id/delete` 不再要求有 owner 成员）。
 - 企业 owner 开了安全模式之后，cloud 不能再往里加人、加 station，预建要在开之前做完。
