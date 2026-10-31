@@ -2590,3 +2590,43 @@ test "viewer on the tree, a wide window, marking: a note done (its card drawn), 
   t.touch(2, cx, cy)
   assert_eq(marking.note, id, msg="its card: its note open again as the click is let go")
 }
+
+///|
+/// Marking on a wide window, a box drawn (its note asked for), then the clock on `ms`: in one frame, or a frame each
+/// drag_step_ms: the frame then.
+fn wide_note_at(ms : Double, frames : Bool) -> Int64 raise {
+  let (t, _, _, _) = wide_box_noted("")
+  let end = t.time() + ms
+  if frames {
+    while t.time() + @ui.drag_step_ms < end {
+      t.frame_at(t.time() + @ui.drag_step_ms)
+    }
+  }
+  t.frame_at(end)
+  t.frame_hash()
+}
+
+///|
+test "viewer on the tree, a wide window, marking: a note asked for comes in the same at a moment whatever frames came between; come in, nothing of it reads the clock; let go, nothing of it left" {
+  assert_eq(wide_note_at(note_pop_ms / 2.0, true), wide_note_at(note_pop_ms / 2.0, false), msg="half way in: the same")
+  let (t, _, click, _) = wide_box_noted("")
+  t.frame_at(t.time() + note_pop_ms)
+  t.draw()
+  assert_false(@ui.view_tree().unwrap().clock_read(), msg="come in: nothing reads the clock")
+  click(pv("android-chat.annotate.done"))
+  t.draw()
+  assert_true(marking.note < 0, msg="done: let go")
+  assert_false(@ui.view_tree().unwrap().clock_read(), msg="let go: nothing of it reads the clock")
+}
+
+///|
+test "viewer on the tree, a wide window, marking: a note's words written and more being composed, its 完成 clicked with no frame between: all it shows kept as the click is let go; opened again, all of it" {
+  let (t, _, click, id) = wide_box_noted("这里")
+  t.compose("对齐")
+  click(pv("android-chat.annotate.done"))
+  assert_eq(marking.comments.get(id), Some("这里对齐"), msg="let go: what was composed kept too")
+  t.draw()
+  @sfbase.marks_open_note(t.ctx(), id)
+  t.draw()
+  assert_eq(marking.note_field.text(), "这里对齐", msg="opened again: all of it")
+}

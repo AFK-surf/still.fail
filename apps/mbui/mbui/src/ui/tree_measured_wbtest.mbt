@@ -237,3 +237,36 @@ test "a node as tall as a plain field with no line said in the old view it hosts
   let (_, _, _, rh2) = t.get(TextField).rect
   assert_true(h2 > h && h2 == rh2, msg="the theme's line longer: taller, as its editor: \{(h, h2, rh2)}")
 }
+
+///|
+test "a node as tall as the field in the old view it hosts, between two keys 36 across in a row across the window: as wide as the row leaves it, the key after it at its end" {
+  let field = Field::new(text="a")
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=400.0, platform=0)
+  let holder : Ref[@view.NodeId?] = Ref(None)
+  let after : Ref[@view.NodeId?] = Ref(None)
+  set_view_app(fn(root) {
+    root.box(fn(row) {
+      row.over(Is(true)).row(Is(true)) |> ignore
+      row.box(fn(k) { k.width(Is(Some(36.0))).height(Is(Some(36.0))) |> ignore }) |> ignore
+      row.box(fn(h) {
+        holder.val = Some(h.id())
+        h.grow(Is(1.0)) |> ignore
+        old(h, fn(c) { c.editor("e", field~, font_size=16.0, line=21.0, max_lines=8, plain=true, enter_sends=false) |> ignore })
+        .grow(Is(1.0))
+        .measured(By(fn() { field.laid(font_size=16.0, line=21.0, max_lines=8) }), fn(l, w) { l.size(w) })
+        |> ignore
+      })
+      |> ignore
+      row.box(fn(k) {
+        after.val = Some(k.id())
+        k.width(Is(Some(36.0))).height(Is(Some(36.0))) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let (_, _, w, _) = measured_at(holder)
+  let (ax, _, _, _) = measured_at(after)
+  assert_eq((w, ax), (228.0, 264.0), msg="as wide as the row leaves it, the key after it at its end")
+}

@@ -294,21 +294,23 @@ fn marks_note_shown() -> (Int, Int, String, Int64)? {
 /// asked for, from that moment, and again as another is. 删除 and 完成 done as their press is let go on them.
 fn note_box_node(w : @view.View) -> Unit {
   let keys_in = @sf.capsule_in(note_box_corner, 36.0)
-  let pop = @motion.Way::new(1.0)
-  let popped = Ref(-1)
+  let pop = NotePop::new()
   w.padding(Is((12.0, 0.0, 12.0, 8.0))) |> ignore
   w.box(fn(b) {
     // (its coming in, from the moment the note was asked for: another asked for, from then again)
-    let shown = fn() {
-      marks_said()
-      let id = marking.note
-      if id != popped.val {
-        popped.val = id
-        pop.put(0.0)
-        pop.go(1.0, @motion.tween(note_pop_ms, ease=Out), at=b.cause_at())
-      }
-      pop.value_at(b.drawn_at())
-    }
+    b.reacts(
+      fn() {
+        marks_said()
+        marking.note
+      },
+      fn(id) {
+        if id >= 0 {
+          pop.again(b)
+        }
+      },
+    )
+    b.owns(fn() { (pop.due)() }) |> ignore
+    let shown = fn() { pop.shown(b) }
     b
     .padding(Is((keys_in, 10.0, keys_in, keys_in)))
     .gap(Is(6.0))
@@ -401,6 +403,42 @@ fn note_box_node(w : @view.View) -> Unit {
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// How far a note's box has come in (note_box_node's): its way, from nothing to all of it over note_pop_ms, and the
+/// moment it is all there (a moment of its node's: what reads it told then, the clock read no more), let go as it
+/// comes in again and as the node is.
+priv struct NotePop {
+  way : @motion.Way
+  ended : @signals.Signal[Int]
+  mut due : () -> Unit
+}
+
+///|
+fn NotePop::new() -> NotePop {
+  { way: @motion.Way::new(0.0), ended: @signals.signal(0), due: fn() {  } }
+}
+
+///|
+/// Coming in anew from nothing, from `n`'s cause's moment.
+fn NotePop::again(self : NotePop, n : @view.View) -> Unit {
+  (self.due)()
+  self.way.put(0.0)
+  self.way.go(1.0, @motion.tween(note_pop_ms, ease=Out), at=n.cause_at())
+  self.due = n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+}
+
+///|
+/// How far it has come in as `n` is drawn: at the moment it is drawn at while it comes, all of it once it is there.
+fn NotePop::shown(self : NotePop, n : @view.View) -> Double {
+  self.way.said()
+  self.ended.get() |> ignore
+  if self.way.goes_at(n.logic_at()) {
+    self.way.value_at(n.drawn_at())
+  } else {
+    self.way.target()
+  }
 }
 
 ///|

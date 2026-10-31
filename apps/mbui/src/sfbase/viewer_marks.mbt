@@ -959,8 +959,9 @@ pub fn marks_back(c : @ui.Ctx) -> Unit {
 
 ///|
 pub fn marks_note_done(c : @ui.Ctx) -> Unit {
+  // (all it shows taken, what the input method was composing in it too: Field::take, the note done with it)
   if marking.note >= 0 {
-    marking.comments[marking.note] = marking.note_field.text()
+    marking.comments[marking.note] = marking.note_field.take()
   }
   marking.note = -1
   marks_changed()
