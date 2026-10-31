@@ -23,6 +23,7 @@ import * as pagesCss from "../styles/pages.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as conversationCss from "../styles/conversation.css.ts";
 import { t } from "../i18n.ts";
+import { STATIONS_PER_WORKSPACE } from "../../../client/limits.ts";
 
 // Each account is asked once per page load whether it is the admin.
 const probes = new Map<string, Promise<boolean>>();
@@ -793,17 +794,17 @@ function PendingDialog({ account, search, onClose }: { account: Account; search:
 
 /** Whole numbers from 1 to the most the cloud takes (directory.ts LIMITS_MAX), or null. */
 const limit = (text: string, max: number): number | null => (/^[0-9]{1,4}$/.test(text.trim()) && Number(text) >= 1 && Number(text) <= max ? Number(text) : null);
-const MAX = { members: 1000, stations: 256 };
+const MAX = { members: 1000 };
 
-function LimitFields({ members, stations, setMembers, setStations, submit }: { members: string; stations: string; setMembers(v: string): void; setStations(v: string): void; submit(): void }) {
+function LimitFields({ members, setMembers, submit }: { members: string; setMembers(v: string): void; submit(): void }) {
   const enter = (e: React.KeyboardEvent) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) submit(); };
   return (
     <>
       <Field label={t("web-pages.admin.ws.memberLimit")} htmlFor="limit-members" hint={t("web-pages.admin.ws.limitHint", { max: MAX.members })}>
         <input id="limit-members" className={controlsCss.input} inputMode="numeric" value={members} onChange={(e) => setMembers(e.target.value)} onKeyDown={enter} />
       </Field>
-      <Field label={t("web-pages.admin.ws.stationLimit")} htmlFor="limit-stations" hint={t("web-pages.admin.ws.limitHint", { max: MAX.stations })}>
-        <input id="limit-stations" className={controlsCss.input} inputMode="numeric" value={stations} onChange={(e) => setStations(e.target.value)} onKeyDown={enter} />
+      <Field label={t("web-pages.admin.ws.stationLimit")} htmlFor="limit-stations" hint={t("web-pages.admin.ws.stationFixed", { n: STATIONS_PER_WORKSPACE })}>
+        <input id="limit-stations" className={controlsCss.input} value={STATIONS_PER_WORKSPACE} readOnly />
       </Field>
     </>
   );
@@ -816,15 +817,14 @@ function NewWorkspaceDialog({ account, search, onClose }: { account: Account; se
   const [name, setName] = useState("");
   const [owners, setOwners] = useState("");
   const [members, setMembers] = useState("20");
-  const [stations, setStations] = useState("2");
   const emails = owners.split(/[\s,，;；]+/).filter(Boolean);
-  const caps = { members: limit(members, MAX.members), stations: limit(stations, MAX.stations) };
-  const create = useAction(() => admin.createWorkspace(account.sub, { name: name.trim(), owners: emails, members: caps.members!, stations: caps.stations! }), (made) => {
+  const cap = limit(members, MAX.members);
+  const create = useAction(() => admin.createWorkspace(account.sub, { name: name.trim(), owners: emails, members: cap!, stations: STATIONS_PER_WORKSPACE }), (made) => {
     toast(t("web-pages.admin.ws.created"));
     navigate(`${PATH.workspaces}/${encodeURIComponent(made.id)}${search}`);
     onClose();
   });
-  const ready = name.trim() !== "" && emails.length > 0 && caps.members !== null && caps.stations !== null && !create.busy;
+  const ready = name.trim() !== "" && emails.length > 0 && cap !== null && !create.busy;
   const submit = () => { if (ready) create.run(); };
   return (
     <Dialog open onClose={onClose} title={t("web-pages.admin.ws.new")} description={t("web-pages.admin.ws.newLead")}
@@ -840,7 +840,7 @@ function NewWorkspaceDialog({ account, search, onClose }: { account: Account; se
         <input id="ws-owners" className={controlsCss.input} inputMode="email" autoComplete="off" spellCheck={false} value={owners} placeholder="name@example.com" onChange={(e) => setOwners(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) submit(); }} />
       </Field>
-      <LimitFields members={members} stations={stations} setMembers={setMembers} setStations={setStations} submit={submit} />
+      <LimitFields members={members} setMembers={setMembers} submit={submit} />
       {create.error && <p className={controlsCss.fieldError} role="alert">{create.error.message}</p>}
     </Dialog>
   );
@@ -849,10 +849,9 @@ function NewWorkspaceDialog({ account, search, onClose }: { account: Account; se
 function LimitsDialog({ account, workspace, limits, onClose }: { account: Account; workspace: string; limits: { members: number; stations: number | null }; onClose(): void }) {
   const toast = useToast();
   const [members, setMembers] = useState(String(limits.members));
-  const [stations, setStations] = useState(limits.stations === null ? "" : String(limits.stations));
-  const caps = { members: limit(members, MAX.members), stations: limit(stations, MAX.stations) };
-  const save = useAction(() => admin.setLimits(account.sub, workspace, { members: caps.members!, stations: caps.stations! }), () => { toast(t("web-pages.admin.ws.limitsSaved")); onClose(); });
-  const ready = caps.members !== null && caps.stations !== null && !save.busy;
+  const cap = limit(members, MAX.members);
+  const save = useAction(() => admin.setLimits(account.sub, workspace, { members: cap!, stations: STATIONS_PER_WORKSPACE }), () => { toast(t("web-pages.admin.ws.limitsSaved")); onClose(); });
+  const ready = cap !== null && !save.busy;
   const submit = () => { if (ready) save.run(); };
   return (
     <Dialog open onClose={onClose} title={t("web-pages.admin.ws.limits")} description={t("web-pages.admin.ws.limitsLead")}
@@ -860,7 +859,7 @@ function LimitsDialog({ account, workspace, limits, onClose }: { account: Accoun
         <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
         <Button variant="primary" busy={save.busy} disabled={!ready} onClick={submit}>{t("common.save")}</Button>
       </>}>
-      <LimitFields members={members} stations={stations} setMembers={setMembers} setStations={setStations} submit={submit} />
+      <LimitFields members={members} setMembers={setMembers} submit={submit} />
       {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
     </Dialog>
   );
