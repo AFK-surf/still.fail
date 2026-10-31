@@ -99,7 +99,7 @@ fn install() -> Unit {
 /// Whether `on` has held for `ms`, asked each frame: the framework's wait (Ctx::held), a wake when it will have.
 /// Not on, it starts again from nothing, unless `keep`: then it waits where it was (a toast's time, paused while the
 /// pointer is over it). `key` in the scope it is asked in. `later`: what is shown does not wait for it (a toast going
-/// away after its time); by default it does (a menu opening once the pointer rests).
+/// away after its time); by default it does (a menu opening once the pointer rests). `since`, `owned`: Ctx::held's.
 #callsite(autofill(loc))
 pub fn after(
   c : @ui.Ctx,
@@ -108,9 +108,11 @@ pub fn after(
   ms : Double,
   keep? : Bool = false,
   later? : Bool = false,
+  since? : Double = -1.0,
+  owned? : Bool = false,
   loc~ : SourceLoc,
 ) -> Bool {
-  c.held(key, on, ms, keep~, later~, loc~)
+  c.held(key, on, ms, keep~, later~, since~, owned~, loc~)
 }
 
 ///|

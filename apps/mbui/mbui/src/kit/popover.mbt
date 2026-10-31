@@ -150,12 +150,29 @@ pub fn hover_card(
     Mouse => {
       let on_trigger = c.hovered(trigger)
       let on_card = was && (c.hovered(c.id(key + "/panel")) || c.pointer_in_overlay(id) || c.keyboard_in_overlay(id))
+      // (counted from when what it waits for came to be, by the hand's facts each since when (hand_turns.mbt), not
+      // from the frame that first saw it: all of them so, it has been since the last of them came; one not known, from
+      // this frame: Ctx::held's `since`)
+      let panel = c.id(key + "/panel")
       if was {
-        !after(c, key + "/out", !(on_trigger || on_card), close_delay)
+        let off = !(on_trigger || on_card)
+        let since = if off {
+          latest([
+            c.hover_since(trigger),
+            c.hover_since(panel),
+            c.pointer_in_overlay_since(id),
+            c.keyboard_in_overlay_since(id),
+          ])
+        } else {
+          -1.0
+        }
+        !after(c, key + "/out", off, close_delay, since~, owned=true)
       } else {
         // (a pointer carrying a press, a drag of something else across the trigger, rests on nothing: it opens once
         // let go there)
-        after(c, key + "/in", on_trigger && !c.press().down, open_delay)
+        let rests = on_trigger && !c.press().down
+        let since = if rests { latest([c.hover_since(trigger), c.down_since()]) } else { -1.0 }
+        after(c, key + "/in", rests, open_delay, since~, owned=true)
       }
     }
   }
@@ -178,6 +195,19 @@ pub fn hover_card(
   }
   kit.val.opens[id] = open
   open
+}
+
+///|
+/// The last of when each came to be (-1: one not known, so neither the last).
+fn latest(at : Array[Double]) -> Double {
+  let mut last = -1.0
+  for t in at {
+    if t < 0.0 {
+      return -1.0
+    }
+    last = dmax(last, t)
+  }
+  last
 }
 
 ///|

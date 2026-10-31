@@ -530,6 +530,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
     c.focus_frame_end()
   }
   c.desk_frame_end()
+  // (the hand as this frame left it, what it drew published, at its clock: hand_turns.mbt)
+  turns_said(c, c.clock, frame=true)
   c.bars_frame_end()
   c.sync_ime()
   c.sync_text_menu()

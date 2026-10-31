@@ -1013,6 +1013,7 @@ pub fn Ctx::cycle_look(Self, Int32, Double, (Double) -> Look, resident? : Bool, 
 pub fn Ctx::direction(Self) -> Direction
 pub fn Ctx::dismiss(Self, Int32, why? : Dismiss) -> Unit
 pub fn Ctx::double_clicked(Self, Int32) -> Bool
+pub fn Ctx::down_since(Self) -> Double
 pub fn Ctx::drag_area(Self, Int32, axis? : DragAxis, w? : Size, h? : Size, ty? : Double, () -> Unit) -> Int32
 pub fn Ctx::drag_of(Self, Int32) -> Drag?
 pub fn Ctx::drag_on(Self, Int32, axis? : DragAxis, hold? : Bool) -> Unit
@@ -1061,7 +1062,7 @@ pub fn Ctx::handed_hold(Self) -> (Double, Double)?
 pub fn Ctx::handed_taken(Self) -> Unit
 pub fn Ctx::has_focus(Self, Int32) -> Bool
 #callsite(autofill(loc))
-pub fn Ctx::held(Self, String, Bool, Double, keep? : Bool, later? : Bool, loc~ : SourceLoc) -> Bool
+pub fn Ctx::held(Self, String, Bool, Double, keep? : Bool, later? : Bool, since? : Double, owned? : Bool, loc~ : SourceLoc) -> Bool
 pub fn Ctx::held_down(Self, Int32) -> Bool
 pub fn Ctx::held_due(Self, String) -> Double
 pub fn Ctx::held_for(Self, Double) -> Bool
@@ -1069,6 +1070,7 @@ pub fn Ctx::held_long(Self, Int32) -> Bool
 pub fn Ctx::held_look(Self, Int32, Double) -> Look
 pub fn Ctx::hidden_from_semantics(Self, () -> Unit) -> Unit
 pub fn Ctx::holds_through(Self, Int32) -> Unit
+pub fn Ctx::hover_since(Self, Int32) -> Double
 pub fn Ctx::hovered(Self, Int32) -> Bool
 pub fn Ctx::id(Self, String) -> Int32
 pub fn Ctx::image(Self, String, w? : Size, h? : Size, fit? : Fit, radius? : Double, bg? : Int64, fade? : Bool, still? : Bool) -> Int32
@@ -1086,6 +1088,7 @@ pub fn Ctx::kept_part(Self, Int32, String, () -> Unit, read_out? : Bool, own? : 
 pub fn Ctx::key_catcher(Self, String) -> KeyCatch
 pub fn Ctx::key_pressed(Self, Int32, mods? : Int32, in_field? : Bool) -> Bool
 pub fn Ctx::keyboard_in_overlay(Self, Int32) -> Bool
+pub fn Ctx::keyboard_in_overlay_since(Self, Int32) -> Double
 pub fn Ctx::keyboard_up(Self) -> Bool
 pub fn Ctx::keys(Self) -> Array[(Int32, Int32, Bool)]
 pub fn Ctx::keys_came(Self) -> Bool
@@ -1173,6 +1176,7 @@ pub fn Ctx::place_most(Self, padding? : Double) -> Double
 pub fn Ctx::pointer(Self) -> (Double, Double, Bool)
 pub fn Ctx::pointer_at(Self) -> Double
 pub fn Ctx::pointer_in_overlay(Self, Int32) -> Bool
+pub fn Ctx::pointer_in_overlay_since(Self, Int32) -> Double
 pub fn Ctx::pointer_velocity(Self) -> (Double, Double)
 pub fn Ctx::present_ms(Self) -> Double
 pub fn Ctx::press(Self) -> Press

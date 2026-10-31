@@ -16,7 +16,7 @@ pub fn accessible_icon(@ui.Ctx, String, () -> Unit) -> Unit
 pub fn accordion(@ui.Ctx, String, Array[Fold], Array[String], multiple? : Bool, collapsible? : Bool, label? : String, look? : (@ui.Ctx, TriggerState) -> Unit) -> @ui.Changed[Array[String]]
 
 #callsite(autofill(loc))
-pub fn after(@ui.Ctx, String, Bool, Double, keep? : Bool, later? : Bool, loc~ : SourceLoc) -> Bool
+pub fn after(@ui.Ctx, String, Bool, Double, keep? : Bool, later? : Bool, since? : Double, owned? : Bool, loc~ : SourceLoc) -> Bool
 
 pub fn alert_dialog(@ui.Ctx, String, Bool, String, String, description? : String, cancel? : String, danger? : Bool, w? : Double, look? : (@ui.Ctx, DialogState, () -> Unit) -> Unit, body? : () -> Unit) -> Alert
 

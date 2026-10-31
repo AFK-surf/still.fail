@@ -125,6 +125,7 @@ fn hand_reset() -> Unit {
   for k in [hand.over, hand.pressed, hand.press_on, hand.clicked, hand.double, hand.held, hand.focus, hand.shown] {
     k.set([])
   }
+  turns_reset(0.0)
 }
 
 ///|
