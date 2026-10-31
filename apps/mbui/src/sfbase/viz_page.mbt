@@ -18,6 +18,8 @@
 /// what is under it shows meanwhile), the theme it was told.
 pub(all) struct VizFrame {
   view : @ui.NativeView
+  /// The scoped place currently drawing this view; none once its page has left.
+  mut owner : Int?
   html : String
   page : Bool
   mut height : Int
@@ -37,6 +39,34 @@ pub(all) struct VizFrame {
 ///|
 /// The pages drawn, by where they are drawn (their message's place and file, a chart's code, the full screen's).
 pub let viz_frames : Map[String, VizFrame] = Map([])
+
+///|
+/// Additional views for a place shown in more than one page at once. The first is kept in viz_frames; each free view
+/// is reused after its page leaves, so returning to a chat keeps its already drawn contents.
+let viz_extra_frames : Map[String, Array[VizFrame]] = Map([])
+
+///|
+fn viz_frame_for(key : String, owner : Int) -> VizFrame? {
+  let first = viz_frames.get(key)
+  match first {
+    Some(f) if f.owner == Some(owner) => return Some(f)
+    _ => ()
+  }
+  let extras = viz_extra_frames.get(key)
+  match extras {
+    Some(frames) => for f in frames { if f.owner == Some(owner) { return Some(f) } }
+    None => ()
+  }
+  match first {
+    Some(f) if f.owner is None => return Some(f)
+    _ => ()
+  }
+  match extras {
+    Some(frames) => for f in frames { if f.owner is None { return Some(f) } }
+    None => ()
+  }
+  None
+}
 
 ///|
 /// Heights pages were last drawn at (by their content), so one drawn again takes its room at once.
@@ -137,7 +167,8 @@ pub fn viz_frame(
   if !viz_left_chats.is_empty() {
     viz_shown_again(key)
   }
-  let f = match viz_frames.get(key) {
+  let owner = c.id("viz/owner/" + key)
+  let f = match viz_frame_for(key, owner) {
     Some(f) => f
     None => {
       let page = !viz_is_fragment(html)
@@ -155,6 +186,7 @@ pub fn viz_frame(
       }
       let f : VizFrame = {
         view,
+        owner: None,
         html,
         page,
         height: viz_heights.get(html).unwrap_or(0),
@@ -168,9 +200,24 @@ pub fn viz_frame(
         reveal: Some(@motion.Anim::new(0.0)),
       }
       cell.val = Some(f)
-      viz_frames[key] = f
+      if viz_frames.contains(key) {
+        match viz_extra_frames.get(key) {
+          Some(extras) => extras.push(f)
+          None => viz_extra_frames[key] = [f]
+        }
+      } else {
+        viz_frames[key] = f
+      }
       f
     }
+  }
+  if f.owner != Some(owner) {
+    f.owner = Some(owner)
+    c.on_page_release("viz/owner/" + key, fn() {
+      if f.owner == Some(owner) {
+        f.owner = None
+      }
+    })
   }
   // the theme told only when it changes (a page told it as it loads draws again: a chart redrawn)
   if f.dark != dark || f.ground != ground || f.font_scale != @ui.font_scale() || f.faces != viz_faces_key() {
@@ -180,7 +227,7 @@ pub fn viz_frame(
     f.faces = viz_faces_key()
     let scheme = if dark { "dark" } else { "light" }
     let g = viz_css_color(ground)
-    c.tell("viz/theme/" + key, fn() {
+    c.tell("viz/theme/" + key + "/" + owner.to_string(), fn() {
       f.view.script(
         "postMessage({emberViz:true,type:\"theme\",tokens:" +
         viz_tokens_json(dark) +
@@ -234,7 +281,7 @@ pub fn viz_frame(
     // as tall as it said, from the height it had as it says another: a move for its cause, so what is over and under
     // it in a list goes there with it, not in one frame (rows_steady.mbt); on the list's way where it has one (a row's
     // own content, as under_post's)
-    let tall = @motion.anim(c, "viz-h/" + key, said, global=true)
+    let tall = @motion.anim(c, "viz-h/" + key + "/" + owner.to_string(), said, global=true)
     if tall.target() != said {
       match c.row_way() {
         Some(way) => on_row_way(c, tall, said, way)
@@ -384,11 +431,16 @@ pub fn viz_close(prefix : String) -> Unit {
   for k, f in viz_frames {
     if k.has_prefix(prefix) {
       f.view.close()
+      match viz_extra_frames.get(k) {
+        Some(extras) => for extra in extras { extra.view.close() }
+        None => ()
+      }
       gone.push(k)
     }
   }
   for k in gone {
     viz_frames.remove(k)
+    viz_extra_frames.remove(k)
   }
 }
 
@@ -885,6 +937,7 @@ pub let viz_mermaid_box : @ui.Style = @ui.css("w=Full")
 /// What the visualizations keep put back as the app begins anew (sfbase's reset).
 pub fn viz_pages_reset() -> Unit {
   viz_frames.clear()
+  viz_extra_frames.clear()
   viz_left_chats.clear()
   viz_heights.clear()
   viz_full.set(None)

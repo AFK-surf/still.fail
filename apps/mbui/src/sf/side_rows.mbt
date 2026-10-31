@@ -216,7 +216,8 @@ pub let nav_mark_side : Double = 16.0
 /// that line's `end` (muted, never cut: the title gives way), then the `lines` under them (list_row_line each; `keep_lines` of
 /// them always, empty where it says none: list_row `lines`); the pointer's
 /// ground on hover, the selected one's when it is the page in view; `more`, another row under it (nav_apart). True
-/// when pressed.
+/// when pressed. `foot` is a last line across the row; `foot_capsule` places a capsule on it at its foot corner's
+/// inset (list_row's).
 pub fn nav_item(
   c : @ui.Ctx,
   key : String,
@@ -227,6 +228,8 @@ pub fn nav_item(
   lines? : () -> Unit,
   keep_lines? : Int = 0,
   more? : Bool = false,
+  foot? : () -> Unit,
+  foot_capsule? : Double,
 ) -> Bool {
   let id = c.id(key)
   let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
@@ -251,6 +254,8 @@ pub fn nav_item(
         }
       },
       lines=keep_lines,
+      foot?,
+      foot_capsule?,
     )
     |> ignore
   })

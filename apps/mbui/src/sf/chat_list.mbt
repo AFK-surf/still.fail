@@ -15,6 +15,8 @@ pub(all) struct ChatList {
   text : @ui.Style
   head : @ui.Style
   meta : @ui.Style
+  /// height of a line under the title (meta), for placing a capsule at a row's foot
+  meta_h : Double
   /// its title's line's height (a row's mark beside it: a sidebar list's item's)
   head_h : Double
   /// its title (unread: heavier) and what was said last
@@ -113,6 +115,7 @@ pub let mouse_chat_list : ChatList = {
   // (pointed at, room at its end for 归档: 24)
   head_h: mouse_head_h,
   meta: @ui.css("row w=Full h=S4_5 gap=S1_5 align=ACenter"),
+  meta_h: @ui.Space::S4_5.px(),
   title: @ui.text_style(size=Ui, color=Fg, leading=L6, wrap=false, w=Full),
   title_unread: @ui.text_style(size=Ui, weight=Medium, color=Fg, leading=L6, wrap=false, w=Full),
   last: @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false, w=Full),
@@ -168,6 +171,7 @@ pub let touch_chat_list : ChatList = {
   head: @ui.style(row=true, w=Full, h=Fixed(touch_title_h), gap=S2, align=ACenter),
   head_h: touch_title_h,
   meta: @ui.css("row w=Full h=S5 gap=S2 align=ACenter"),
+  meta_h: @ui.Space::S5.px(),
   title: @ui.text_style(size=Ui, color=Fg, leading=L7, wrap=false, w=Full),
   title_unread: @ui.text_style(size=Ui, weight=Semibold, color=Fg, leading=L7, wrap=false, w=Full),
   last: @ui.text_style(size=Meta, color=Muted, leading=L6, wrap=false, w=Full),

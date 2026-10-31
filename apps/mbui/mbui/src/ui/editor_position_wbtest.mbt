@@ -92,3 +92,57 @@ test "placing a kept field at a new parent origin moves its words with its box" 
   }
   fail("the field was not built")
 }
+
+///|
+test "painting an editor uses its node's current position" {
+  let field = Field::new(text="the editor's words")
+  let t = Tester::new(fn(c) {
+    c.editor("field", field~, plain=true) |> ignore
+  }, w=400.0, h=400.0)
+  t.check_looks(false)
+  t.draw()
+  let c = g()
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if n.kind == kind_editor {
+      // Model a moved, retained node without another layout. Paint must not use its previous origin.
+      n.y = n.y + 30.0
+      frame_paint(c, paint_base.root, alone=true)
+      let runs = t.text_runs().filter(fn(r) { r.text == "the editor's words" })
+      assert_eq(runs.length(), 1)
+      assert_eq(runs[0].top, n.y + n.pad_t - field.st.scroll)
+      return
+    }
+  }
+  fail("the field was not built")
+}
+
+///|
+test "a field follows shared text without losing local edits or selection" {
+  let field = Field::new(text="typed before the answer")
+  field.follow("first answer")
+  assert_eq(field.text(), "typed before the answer")
+  field.follow("later answer")
+  assert_eq(field.text(), "typed before the answer")
+  field.follow("reset", generation=1)
+  assert_eq(field.text(), "reset")
+  field.pick(1, 3)
+  field.follow("reset", generation=1)
+  assert_eq(field.selection(), (1, 3))
+  field.follow("updated", generation=1)
+  assert_eq(field.text(), "updated")
+}
+
+///|
+test "following shared text preserves a composition until it ends or is reset" {
+  let field = Field::new(text="base")
+  field.follow("base")
+  let t = Tester::new(fn(c) { c.editor("field", field~) |> ignore })
+  t.tap(5.0, 5.0)
+  t.compose("candidate")
+  field.follow("new source")
+  assert_eq(field.st.marked, "candidate")
+  assert_eq(field.st.source_text, Some("base"))
+  field.follow("base", generation=1)
+  assert_eq(field.st.marked, "", msg="an explicit reset discards the composition")
+}

@@ -7,6 +7,7 @@
 import { t } from "../i18n.ts";
 import { waitNote } from "../looks.ts";
 import * as model from "../shapes/model.ts";
+import { profileServes } from "./profile-scope.ts";
 
 type J = any;
 
@@ -79,6 +80,59 @@ export function workspaceProfiles(stations: J[]): J {
     const at = [first((m, i) => owns(m) && m.online && !troubled(i)), first((m) => owns(m) && m.online), first(owns), 0].find((i) => i >= 0)!;
     const [s, p] = list[at]!;
     const subscription = p.access?.kind === "subscription";
+    const servesHere = list.map(([station, profile]) => profileServes(profile, String(station.station).split("/")[0] ?? "", station.joined === true));
+    // The host's sharing permission and workspace scope are authoritative over an old copy's; different shares of
+    // this account can each allow different stations. A copy whose host has not been read carries what it knows.
+    const shares = new Map<string, { share: J; serves: boolean }>();
+    for (const [i, [, profile]] of list.entries()) {
+      const share = profile.share;
+      if (!isObject(share) || typeof share.id !== "string") continue;
+      const before = shares.get(share.id);
+      if (!before || share.role === "host" || (before.share.role !== "host" && servesHere[i] && !before.serves)) {
+        shares.set(share.id, { share, serves: servesHere[i]! });
+      }
+    }
+    const allowed = (share: J, stationId: string) => String(share.host) === stationId || share.allow == null || (Array.isArray(share.allow) && share.allow.includes(stationId));
+    // A station is a place once even when it has several profiles for this account. Use a working copy for its state
+    // and link, preferring a local copy where equally well; one broken copy must not make the whole station look broken.
+    const byStation = new Map<string, { i: number; rank: number }>();
+    for (const [i, m] of members.entries()) {
+      if (!servesHere[i]) continue;
+      const share = list[i]![1].share;
+      const authoritative = m.role === "user" ? shares.get(String(share.id)) : undefined;
+      if (m.role === "user" && ((authoritative && !authoritative.serves) || !allowed(authoritative?.share ?? share, m.stationId))) continue;
+      const trouble = troubled(i) || m.checkTone === "red" || m.checkTone === "amber";
+      const rank = m.usable ? (trouble ? 2 : 3) : (m.online ? 1 : 0);
+      const before = byStation.get(m.stationId);
+      if (!before || rank > before.rank || (rank === before.rank && owns(m) && !owns(members[before.i]))) byStation.set(m.stationId, { i, rank });
+    }
+    const places = [...byStation.values()].map(({ i }) => {
+      const m = members[i]!;
+      const profile = list[i]![1];
+      const sourceName = m.role === "user" ? name(String(profile.share.host)) : "";
+      return {
+        station: m.station, stationId: m.stationId, stationName: m.stationName, profileId: m.profileId,
+        online: m.online, usable: m.usable, sourceName, state: stateOf(true, sourceName, profile, null).state,
+      };
+    });
+    // Permission can arrive before a station's profile does (or while the station is away). Keep that place, but do
+    // not claim the copy is ready or link to a profile whose id is not known yet.
+    for (const station of stations) {
+      const id = String(station.id);
+      if (byStation.has(id)) continue;
+      const source = [...shares.values()].find((x) => x.serves && allowed(x.share, id));
+      if (!source) continue;
+      const share = source.share;
+      const online = station.online === true;
+      places.push({
+        station: String(station.station), stationId: id, stationName: String(station.name), profileId: "",
+        online, usable: false, sourceName: id === String(share.host) ? "" : name(String(share.host)),
+        state: !online ? null : { text: t(isObject(station.overview) ? "core-views.profiles.waitSync" : "core-views.profiles.reading"), tone: "neutral" },
+      });
+    }
+    // Keep the workspace's order as a pending copy arrives, so its row does not jump to a different position.
+    const stationOrder = new Map<string, number>(stations.map((station, i) => [String(station.id), i]));
+    places.sort((a, b) => (stationOrder.get(a.stationId) ?? 0) - (stationOrder.get(b.stationId) ?? 0));
     const share = list.map(([, x]) => x.share).find((x) => isObject(x)) ?? null;
     // Each station once: two of its profiles signed in to the same account are one place it is signed in.
     const stationsOf = (ms: J[]): string[] => [...new Map(ms.map((m) => [m.stationId, m.stationName])).values()];
@@ -116,6 +170,7 @@ export function workspaceProfiles(stations: J[]): J {
       editable: owns(members[at]),
       canShare: s.overview?.sharing === true,
       members,
+      places,
     });
   }
   // By kind of account; in each, what needs a look first, then by name.

@@ -71,6 +71,117 @@ pub fn quota_chips(
 }
 
 ///|
+/// A sidebar row's allowance starts with its text. If full chips need more room, they may extend under the mark. Where
+/// even those do not fit, each window's mark stands over its figure, keeping the figures together in one line. More
+/// windows form balanced rows, each still whole. Its nav_item gives it the whole row as `foot` and says
+/// foot_capsule=fill_chip_small_h so the capsules are at the same inset from the row's foot.
+pub fn nav_quota_chips(c : @ui.Ctx, q : Json?, key? : String = "quota") -> Unit {
+  guard has_quota(q) else { return }
+  let windows = match chip_field(q, "windows") {
+    Some(Array(a)) => a
+    _ => []
+  }
+  let inset = capsule_in(row_corner, fill_chip_small_h)
+  let side = theme().chat_list.band_pad
+  // A capsule reaches the corner until it is past the outer corner's circle-equivalent radius.
+  let clear = dmax(0.0, inset + fill_chip_small_h / 2.0 - side)
+  // A line that starts with the words is in past the mark and the row's gap (item's S2).
+  let text_in = nav_mark_side + @ui.Space::S2.px()
+  let columns = fn(first : Int, last : Int, suffix : String) {
+    for i in first..<last {
+      let w = windows[i]
+      c.box(style=nav_quota_column, keep=true, fn() {
+        c.text(chip_str(Some(w), "mark"), style=nav_quota_mark) |> ignore
+        // A capsule stays centred in a metadata line, including when its mark is above it. list_row places that
+        // line's middle by the foot corner; without the line around it the capsule would sit too close to the foot.
+        c.box(style=@ui.style(h=Fixed(theme().chat_list.meta_h), justify=JCenter), fn() {
+          quota_chip(c, Some(w), small=true, compact=true, marked=false, key=key + suffix + "/" + i.to_string())
+        }) |> ignore
+      }) |> ignore
+    }
+  }
+  // Keep the rows balanced: four windows are two and two, five are three and two, never three with one left alone.
+  let grid = fn(limit : Int, indented : Bool) {
+    let count = windows.length()
+    let rows = (count + limit - 1) / limit
+    let each = count / rows
+    let extra = count % rows
+    let style = if indented {
+      @ui.style(pl=room(text_in), pr=room(clear), gap=S1)
+    } else {
+      @ui.style(w=Full, mx=room(inset - side), gap=S1)
+    }
+    c.box(style~, keep=true, fn() {
+      for row in 0..<rows {
+        let first = row * each + (if row < extra { row } else { extra })
+        let last = first + each + (if row < extra { 1 } else { 0 })
+        let line = if indented {
+          @ui.style(row=true, gap=S1)
+        } else {
+          @ui.style(row=true, w=Full, gap=S1, justify=JBetween)
+        }
+        let line = if limit == 2 { line.then(@ui.style(h=Fixed(theme().chat_list.meta_h), align=ACenter)) } else { line }
+        c.box(style=line, keep=true, fn() {
+          let suffix = "/grid/" + limit.to_string() + (if indented { "/text" } else { "/full" })
+          if limit == 2 {
+            // Two full, marked chips per line are shorter than labels over figures and keep each pair together.
+            for i in first..<last {
+              c.box(keep=true, fn() {
+                quota_chip(c, Some(windows[i]), small=true, key=key + suffix + "/" + i.to_string())
+              }) |> ignore
+            }
+          } else {
+            columns(first, last, suffix)
+          }
+        }) |> ignore
+      }
+    }) |> ignore
+  }
+  c.box(style=quota_chips_line, one_of=true, fn() {
+    c.box(style=@ui.style(row=true, pl=room(text_in), pr=room(clear)), keep=true, fn() {
+      quota_chips(c, q, small=true, gap=4.0, key=key + "/start")
+    }) |> ignore
+    // There may be room for whole marked chips under the mark, even if there is not room beside it.
+    c.box(style=@ui.style(row=true, w=Full, ml=room(inset - side), mr=room(clear), gap=S1), keep=true, fn() {
+      for i in 0..<windows.length() {
+        c.box(keep=true, fn() {
+          quota_chip(c, Some(windows[i]), small=true, key=key + "/under/" + i.to_string())
+        }) |> ignore
+      }
+    }) |> ignore
+    c.box(style=@ui.style(row=true, pl=room(text_in), pr=room(clear), gap=S0_5), keep=true, fn() {
+      columns(0, windows.length(), "/columns")
+    }) |> ignore
+    c.box(
+      // The end capsules sit in the row's foot corners: put them at the same inset from each side as from the foot.
+      style=@ui.style(row=true, w=Full, mx=room(inset - side), gap=S0_5, justify=JBetween),
+      keep=true,
+      fn() {
+        columns(0, windows.length(), "/wide-columns")
+      },
+    ) |> ignore
+    // Further ways are each narrower than the one before. A row with one window is only used when no pair fits.
+    for limit in [3, 2, 1] {
+      let rows = (windows.length() + limit - 1) / limit
+      let each = windows.length() / rows
+      let widest = each + (if windows.length() % rows > 0 { 1 } else { 0 })
+      if rows > 1 && widest == limit && (each >= 2 || limit == 1) {
+        grid(limit, true)
+        grid(limit, false)
+      }
+    }
+  }) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_quota_column : @ui.Style = @ui.css("align=ACenter gap=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_quota_mark : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, leading=L4, center=true, wrap=false)
+
+///|
 /// The ways a worded window says itself, each shorter than the one before: its name and what is left (每周剩 95%), its
 /// name and the figure (每周 95%), its mark and the figure (W 95%).
 fn quota_worded(w : Json?, form : Int) -> (String, String) {
@@ -88,12 +199,14 @@ fn quota_worded(w : Json?, form : Int) -> (String, String) {
 
 ///|
 /// One window of an allowance (components.tsx QuotaChip), or the one an agent is short of: what is left in it, filled
-/// as far as that, its mark before it where `marked`; over it while it is pointed at, `said` (what is left of it and
-/// when it fills again: quota_said), the chip `key`'s.
+/// as far as that, its mark before it where `marked`; `compact` gives a small, unmarked figure less padding when the
+/// mark is above it; over it while pointed at, `said` (what is left and when it fills again: quota_said), the chip
+/// `key`'s.
 pub fn quota_chip(
   c : @ui.Ctx,
   w : Json?,
   small? : Bool = false,
+  compact? : Bool = false,
   marked? : Bool = true,
   key? : String = "quota",
   said? : String,
@@ -106,6 +219,7 @@ pub fn quota_chip(
     if marked { chip_str(w, "mark") } else { "" },
     left.to_string() + "%",
     small~,
+    compact~,
     key=key + "/" + chip_str(w, "mark"),
     said=said.unwrap_or(quota_said(w)),
   )

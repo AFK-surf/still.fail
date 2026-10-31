@@ -30,6 +30,7 @@ pub fn level_color(level : String) -> Int64 {
 /// and its `mark` before it in the text's colour, whatever the level: the fill says the level, and over it the level's
 /// ink, or a grey a step quieter, read too faint (amber 3.3 to 1, the mark 3.9 to 1 in the dark; docs/ui-panels.md
 /// 对比度). Its words are the caption's, a screen's own (11 with keyboard and mouse, 12 with touch), 600, tabular.
+/// `compact`: less horizontal padding around a small chip's figure when its mark stands separately above it.
 /// `said`: what it is, over it while it is pointed at (QuotaBars', MeterChips' tips: what is left of what and when it
 /// fills again, what is used of how much), the chip `key`'s (none: no tip).
 pub fn fill_chip(
@@ -39,6 +40,7 @@ pub fn fill_chip(
   mark : String,
   words : String,
   small? : Bool = false,
+  compact? : Bool = false,
   drop? : Int = 0,
   keep? : Bool = false,
   key? : String = "",
@@ -74,7 +76,14 @@ pub fn fill_chip(
       })
       |> ignore
     }
-    let words_style = if small { chip_words_small } else { chip_words }
+    // A figure on its own in a narrow column needs less room around it than a mark and figure in one chip.
+    let words_style = if small && compact {
+      chip_words_small.then(@ui.style(px=S1))
+    } else if small {
+      chip_words_small
+    } else {
+      chip_words
+    }
     c.box(style=if chip_joined(mark, words) { words_style.then(chip_joined_gap) } else { words_style }, fn() {
       if mark != "" {
         c.text(mark, style=chip_text) |> ignore

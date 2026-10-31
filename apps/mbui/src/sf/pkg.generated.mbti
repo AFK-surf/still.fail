@@ -578,7 +578,7 @@ pub let files_gap : @ui.Space
 
 pub let files_row_end : @ui.Space
 
-pub fn fill_chip(@ui.Ctx, Int32, String, String, String, small? : Bool, drop? : Int32, keep? : Bool, key? : String, said? : String) -> Unit
+pub fn fill_chip(@ui.Ctx, Int32, String, String, String, small? : Bool, compact? : Bool, drop? : Int32, keep? : Bool, key? : String, said? : String) -> Unit
 
 pub let fill_chip_corner : Double
 
@@ -890,7 +890,7 @@ pub let list_pad : Double
 
 pub let list_room : @ui.Space
 
-pub fn list_row(@ui.Ctx, Int32, ListAt, Int64, () -> Unit, () -> Unit, mark? : () -> Unit, high? : Bool, end_room? : Double, corner? : () -> Unit, corner_w? : Double, lines? : Int32, after? : () -> Unit, slotted? : Bool, end_slot? : Double, corner_end? : Double, ground_by? : () -> Int64) -> Int32
+pub fn list_row(@ui.Ctx, Int32, ListAt, Int64, () -> Unit, () -> Unit, mark? : () -> Unit, high? : Bool, end_room? : Double, corner? : () -> Unit, corner_w? : Double, lines? : Int32, after? : () -> Unit, slotted? : Bool, end_slot? : Double, corner_end? : Double, ground_by? : () -> Int64, foot? : () -> Unit, foot_capsule? : Double) -> Int32
 
 pub fn list_row_in(ListAt) -> @ui.Style
 
@@ -959,6 +959,8 @@ pub fn markdown(@ui.Ctx, String, key? : String, tree? : Json?, size? : Double, l
 pub fn markdown_part(@ui.Ctx, String, Array[Json], String, apart? : Bool, size? : Double, ink? : Int64, line? : Double, serif? : Bool, document? : Bool, found? : Array[String], on_link? : (String) -> Unit) -> Unit
 
 pub let markdown_read : @ref.Ref[((String, (Json?) -> Unit) -> Unit)?]
+
+pub fn marks_actions_node(@view.View, () -> MarksActionsSaid, () -> ViewerInk, @view.Live[Double], () -> Unit, () -> Unit, () -> Unit, tip? : TipLayer) -> @view.View
 
 pub fn md_node_at(Json) -> Int32
 
@@ -1162,13 +1164,15 @@ pub fn nav_ground_by(@ui.Ctx, String, Bool, Bool, lit? : Int64) -> () -> Int64
 
 pub fn nav_ground_on(@ui.Ctx, Int32, String, Bool, Bool, lit? : Int64) -> Unit
 
-pub fn nav_item(@ui.Ctx, String, Bool, () -> Unit, () -> Unit, end? : () -> Unit, lines? : () -> Unit, keep_lines? : Int32, more? : Bool) -> Bool
+pub fn nav_item(@ui.Ctx, String, Bool, () -> Unit, () -> Unit, end? : () -> Unit, lines? : () -> Unit, keep_lines? : Int32, more? : Bool, foot? : () -> Unit, foot_capsule? : Double) -> Bool
 
 pub let nav_mark_side : Double
 
 pub fn nav_meta() -> @ui.TextStyle
 
 pub fn nav_new() -> @ui.Style
+
+pub fn nav_quota_chips(@ui.Ctx, Json?, key? : String) -> Unit
 
 pub fn nav_row(@ui.Ctx, String, Bool, () -> Unit, align? : @ui.Align, more? : Bool) -> Bool
 
@@ -1524,7 +1528,7 @@ pub let quiet : @ui.TextStyle
 
 pub let quieter : @ui.TextStyle
 
-pub fn quota_chip(@ui.Ctx, Json?, small? : Bool, marked? : Bool, key? : String, said? : String) -> Unit
+pub fn quota_chip(@ui.Ctx, Json?, small? : Bool, compact? : Bool, marked? : Bool, key? : String, said? : String) -> Unit
 
 pub fn quota_chips(@ui.Ctx, Json?, small? : Bool, marked? : Bool, worded? : Bool, gap? : Double, key? : String) -> Unit
 
@@ -2100,6 +2104,10 @@ pub fn viewer_act_foot(@ui.Ctx) -> Double
 
 pub fn viewer_act_head(@ui.Ctx) -> Double
 
+pub fn viewer_back_at_corner() -> Bool
+
+pub fn viewer_back_corner(Double) -> @paint.CornerOf
+
 pub let viewer_back_icon : Double
 
 pub fn viewer_bar(@ui.Ctx, String, String, String, String, Bool, ViewerInk, () -> Unit, title? : String, capsule_end? : Bool) -> Bool
@@ -2121,6 +2129,8 @@ pub let viewer_bar_raised : Raised
 pub let viewer_bar_reach : Double
 
 pub let viewer_bar_saturation : Double
+
+pub fn viewer_bar_start_in(Double, @paint.CornerRoots) -> Double
 
 pub fn viewer_bar_under() -> Double
 
@@ -2340,6 +2350,7 @@ pub(all) struct ChatList {
   text : @ui.Style
   head : @ui.Style
   meta : @ui.Style
+  meta_h : Double
   head_h : Double
   title : @ui.TextStyle
   title_unread : @ui.TextStyle
@@ -2568,6 +2579,17 @@ pub(all) enum Look {
   Narrow
   Wide
 } derive(Eq, Show)
+
+pub(all) struct MarksActionsSaid {
+  error : String
+  ready : Bool
+  busy : Bool
+  can_put : Bool
+  cancel : String
+  download : String
+  put : String
+  making : String
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) struct MediaInk {
   text : Int64

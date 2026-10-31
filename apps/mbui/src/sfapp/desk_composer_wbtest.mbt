@@ -793,7 +793,7 @@ fn strip_photos(t : @ui.Tester) -> Array[String] {
 }
 
 ///|
-test "on a phone, a finger down outside the composer lets go of the keyboard once lifted (Keyboard.kt letsGoOfKeyboard)" {
+test "a finger's tap outside the composer keeps the keyboard until it is put away" {
   let calls : Array[Made] = []
   let (t, _) = desk_composer_tester(calls, pointing=Finger, platform=2)
   t.draw()
@@ -801,6 +801,8 @@ test "on a phone, a finger down outside the composer lets go of the keyboard onc
   assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
   t.tap(450.0, 60.0)
   t.draw()
+  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  t.keyboard_gone()
   assert_true(!t.ctx().editor_focused(@sfpages.composer_field_key))
 }
 

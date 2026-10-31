@@ -3723,6 +3723,13 @@ pub fn Tree::each_drawn(self : Tree, f : (Content, Double, Double, Double) -> Un
 /// The scene gone through as each_drawn goes through it, `f` given besides how big each is drawn (its own scale and its
 /// holders', View::scale: what it draws as big about where the window draws its origin).
 pub fn Tree::each_drawn_scaled(self : Tree, f : (Content, Double, Double, Double, Double) -> Unit) -> Unit {
+  self.each_drawn_in_order(fn(_, c, x, y, a, s) { f(c, x, y, a, s) })
+}
+
+///|
+/// The scene gone through as each_drawn_scaled goes through it, `f` given besides each one's place in the order (Tree's
+/// `order`, what holds it there `order_holder`'s).
+fn Tree::each_drawn_in_order(self : Tree, f : (Int, Content, Double, Double, Double, Double) -> Unit) -> Unit {
   let wx : Array[Double] = Array::make(self.order.length(), 0.0)
   let wy : Array[Double] = Array::make(self.order.length(), 0.0)
   let wa : Array[Double] = Array::make(self.order.length(), 1.0)
@@ -3739,7 +3746,7 @@ pub fn Tree::each_drawn_scaled(self : Tree, f : (Content, Double, Double, Double
     ws[i] = bs * n.ls
     hosted_unscaled(n, ws[i])
     match n.content {
-      Some(c) => f(c, wx[i], wy[i], wa[i], ws[i])
+      Some(c) => f(i, c, wx[i], wy[i], wa[i], ws[i])
       None => ()
     }
   }
@@ -3775,6 +3782,27 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
 pub fn Tree::drawn(self : Tree) -> Array[Drawn] {
   let out = []
   self.each_drawn_scaled(fn(c, x, y, a, s) { out.push(unfolded(c, x, y, a, s)) })
+  out
+}
+
+///|
+/// The scene unfolded as Tree::drawn has it, its corners as big as it is drawn too, each with what holds it as drawn (its index in the same array, -1: none
+/// drawn round it) and whether it takes a press (View::on_press): for a check of where things stand in what holds them
+/// (ui's corner rule).
+pub fn Tree::drawn_held(self : Tree) -> Array[(Drawn, Int, Bool)] {
+  let out : Array[(Drawn, Int, Bool)] = []
+  // (each in the order's place, where it is in what is drawn: -1 where it draws nothing)
+  let at_out : Array[Int] = Array::make(self.order.length(), -1)
+  self.each_drawn_in_order(fn(i, c, x, y, a, s) {
+    let mut h = self.order_holder[i]
+    while h >= 0 && at_out[h] < 0 {
+      h = self.order_holder[h]
+    }
+    at_out[i] = out.length()
+    // (its corner as big as it is drawn, as its size is: where the window draws it, in the window's points)
+    let d = { ..unfolded(c, x, y, a, s), radius: c.radius * s }
+    out.push((d, if h >= 0 { at_out[h] } else { -1 }, self.nodes[c.id.at].on_press is Some(_)))
+  })
   out
 }
 

@@ -398,7 +398,7 @@ pub fn flight_ground_of(@ui.Ctx, @sfbase.SendFlight) -> Double
 
 pub fn flight_hint_away(@ui.Ctx, String) -> Bool
 
-pub fn flight_landing(@ui.Ctx, @sfbase.SendFlight, Int32, String, share? : (Double, Double)) -> Unit
+pub fn flight_landing(@ui.Ctx, @sfbase.SendFlight, Int32, String, share? : (Double, Double), top_crop? : Bool) -> Unit
 
 pub let flight_ms : Double
 
@@ -570,7 +570,7 @@ pub fn note_list(@ui.Ctx, Int32, String, Double, Double) -> Unit
 
 pub let note_pop_ms : Double
 
-pub fn note_thumb(@ui.Ctx, String, Int32, Double, picture~ : String, letterbox? : Bool, list? : String, over? : (Double) -> Unit) -> Unit
+pub fn note_thumb(@ui.Ctx, String, Int32, Double, picture~ : String, letterbox? : Bool, top_crop? : Bool, list? : String, over? : (Double) -> Unit) -> Unit
 
 pub let notice_host : @ref.Ref[@sfbase.NoticeHost]
 

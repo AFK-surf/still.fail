@@ -500,6 +500,8 @@
   "core-views.profiles.group.cursor": "Cursor subscriptions",
   "core-views.profiles.group.devin": "Devin subscriptions",
   "core-views.profiles.group.key": "API keys",
+  "core-views.profiles.waitSync": "Waiting to sync",
+  "core-views.profiles.reading": "Loading",
   "core-views.profiles.usableOn": "Usable on {stations}",
   "core-views.profiles.away": "{station} offline",
   "core-views.profiles.troubleOn": "{station}: {trouble}",

@@ -42,6 +42,8 @@ export class MdAhead {
   readonly #queue: Ahead[] = [];
   readonly #queued = new Set<string>();
   readonly #waiting = new Map<string, Set<string>>();
+  /// A kept entry is immutable: reuse its text's key while that entry is held, without keeping the entry alive.
+  readonly #keys = new WeakMap<object, string>();
   #running = false;
 
   constructor(data: Data, runner: Runner, now: () => number, changed: (station: string, of: string) => void = () => {}) {
@@ -114,10 +116,16 @@ export class MdAhead {
     const store = this.#data.mdStore(station, `t:${thread}`);
     if (span === null || store === undefined) return;
     const page = this.#data.logRange("entry", station, id, Math.max(1, span.max - PAGE + 1), span.max);
-    for (const m of merge([...page.values()])) {
+    const sources = new Map<number, object>();
+    for (const m of merge([...page.values()], (seq, entry) => sources.set(seq, entry))) {
       const text = typeof m.text === "string" ? m.text : "";
       if (m.authorKind === "person" || text === "" || text.includes("<@")) continue;
-      const key = mdKey(text);
+      const source = typeof m.seq === "number" ? sources.get(m.seq) : undefined;
+      let key = source === undefined ? undefined : this.#keys.get(source);
+      if (key === undefined) {
+        key = mdKey(text);
+        if (source !== undefined) this.#keys.set(source, key);
+      }
       if (!store.has(key)) this.#enqueue({ station, of: `t:${thread}`, text, key });
     }
     this.#run();

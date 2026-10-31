@@ -99,7 +99,7 @@ fn EditorState::delete_selection(self : EditorState) -> Bool {
   if a == b {
     return false
   }
-  self.text = sub(self.text, 0, a) + sub(self.text, b, self.text.length())
+  self.put_words(sub(self.text, 0, a) + sub(self.text, b, self.text.length()))
   self.caret = a
   self.anchor = a
   true
@@ -108,9 +108,7 @@ fn EditorState::delete_selection(self : EditorState) -> Bool {
 ///|
 fn EditorState::insert(self : EditorState, s : String) -> Unit {
   self.delete_selection() |> ignore
-  self.text = sub(self.text, 0, self.caret) +
-    s +
-    sub(self.text, self.caret, self.text.length())
+  self.put_words(sub(self.text, 0, self.caret) + s + sub(self.text, self.caret, self.text.length()))
   self.caret = self.caret + s.length()
   self.anchor = self.caret
   self.marked = ""
@@ -535,7 +533,7 @@ fn EditorState::erase(self : EditorState, r : Reach, up : Bool) -> Unit {
   let a = imin(to, self.caret)
   let b = imax(to, self.caret)
   if a < b {
-    self.text = sub(t, 0, a) + sub(t, b, t.length())
+    self.put_words(sub(t, 0, a) + sub(t, b, t.length()))
     self.caret = a
     self.anchor = a
   }
@@ -543,6 +541,13 @@ fn EditorState::erase(self : EditorState, r : Reach, up : Bool) -> Unit {
 
 ///|
 fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) -> Unit {
+  self.key_edit(code, mods, now)
+  self.words_told()
+}
+
+///|
+/// A key on it (EditorState::key's), what it does done.
+fn EditorState::key_edit(self : EditorState, code : Int, mods : Int, now : Double) -> Unit {
   // (one the app takes for itself: not the field's)
   if mods == 0 && self.leaves.contains(code) {
     return
@@ -617,6 +622,7 @@ fn EditorState::text_input(
   let (text, anchor, caret) = (self.text, self.anchor, self.caret)
   self.put_text(kind, s, a, b, now)
   self.edited(text, anchor, caret, kind != text_paste)
+  self.words_told()
 }
 
 ///|
@@ -687,14 +693,14 @@ fn EditorState::text_set(self : EditorState, s : String, a : Int, b : Int) -> Un
     return
   }
   if ca >= 0 && cb > ca && cb <= n && sa == sb && sa >= ca && sa <= cb {
-    self.text = sub(s, 0, ca) + sub(s, cb, n)
+    self.put_words(sub(s, 0, ca) + sub(s, cb, n))
     self.caret = ca
     self.anchor = ca
     self.marked = sub(s, ca, cb)
     self.msel_a = sa - ca
     self.msel_b = sa - ca
   } else {
-    self.text = s
+    self.put_words(s)
     self.anchor = sa
     self.caret = sb
     self.marked = ""
@@ -998,6 +1004,10 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     Some(s) => s
     None => return
   }
+  // Paint from the node's current position, even if it was moved without laying the editor out again. Input and the
+  // host's caret position also use these origins after this paint.
+  st.ox = n.x + n.pad_l - st.scroll_x
+  st.oy = n.y + n.pad_t - st.scroll
   let tl = match st.tl {
     Some(t) => t
     None => return
@@ -1212,6 +1222,8 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
 fn EditorState::fresh(text : String, now : Double) -> EditorState {
   {
     text,
+    source_text: None,
+    source_generation: 0,
     caret: text.length(),
     anchor: text.length(),
     marked: "",
@@ -1264,6 +1276,26 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     built_frame: -1,
     built_key: "",
     built_id: 0,
+    said_words: None,
+  }
+}
+
+///|
+/// Its words now `text`: every change of what it holds goes by here (typing, its input method, a paste, a cut, an undo
+/// or redo, Field::set); told where they are followed once the whole of what changed them is done
+/// (EditorState::words_told).
+fn EditorState::put_words(self : EditorState, text : String) -> Unit {
+  self.text = text
+}
+
+///|
+/// What it holds told where its words are followed (a Field's: Field::text), as a whole edit has left it (its words,
+/// its caret, what is composed): at the end of each way in that edits it (a key, the input method's text, an undo or
+/// redo, Field::set), never between the words and the rest; nothing told where its words are as they were.
+fn EditorState::words_told(self : EditorState) -> Unit {
+  match self.said_words {
+    Some(s) => s.set(self.text)
+    None => ()
   }
 }
 
@@ -1283,13 +1315,63 @@ pub fn Field::new(text? : String = "") -> Field {
   let st = EditorState::fresh(text, 0.0)
   // (its caret blinks from when its editor is first built, not from the app's start)
   st.blink_again = true
+  // (its words told as they change, whatever changes them: EditorState::put_words)
+  st.said_words = Some(@signals.signal(text, same=fn(a, b) { a == b }))
   { st, }
 }
 
 ///|
-/// Its words as written (what the input method composes not counted).
+/// The field owned by the editor named `key` in the current scope. It is forgotten with its page, along with the
+/// editor's layout, selection and scrolling. Use the same key and scope when giving it to Ctx::editor.
+pub fn Ctx::editor_field(self : Ctx, key : String) -> Field {
+  let id = self.id(key)
+  match self.editors.get(id) {
+    Some(st) => {
+      // (its words followed from now on, as a Field's are: Field::new)
+      if st.said_words is None {
+        st.said_words = Some(@signals.signal(st.text, same=fn(a, b) { a == b }))
+      }
+      { st, }
+    }
+    None => {
+      let field = Field::new()
+      self.editors[id] = field.st
+      self.own(id)
+      field
+    }
+  }
+}
+
+///|
+/// Follow shared text while this editor has no local edit. The first value preserves text typed before it arrived;
+/// changing `generation` replaces local edits too (for an explicit reset).
+pub fn Field::follow(self : Field, text : String, generation? : Int = 0) -> Unit {
+  let st = self.st
+  let reset = st.source_text is Some(_) && st.source_generation != generation
+  // A composition is a local edit even before its text is committed. Keep the previous source until it ends so a
+  // cancelled composition can still follow a newer source, and an explicit reset can discard it.
+  if st.marked != "" && !reset {
+    return
+  }
+  let replace = match st.source_text {
+    None => st.text == ""
+    Some(was) => reset || st.text == was
+  }
+  if replace && (st.text != text || (reset && st.marked != "")) {
+    self.set(text)
+  }
+  st.source_text = Some(text)
+  st.source_generation = generation
+}
+
+///|
+/// Its words as written (what the input method composes not counted), followed: what reads them is told as they change,
+/// typed, pasted, undone or set (EditorState::put_words), before any frame.
 pub fn Field::text(self : Field) -> String {
-  self.st.text
+  match self.st.said_words {
+    Some(s) => s.get()
+    None => self.st.text
+  }
 }
 
 ///|
@@ -1315,7 +1397,7 @@ pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
     st.forget_edits()
   }
   st.marked = ""
-  st.text = text
+  st.put_words(text)
   st.caret = at
   st.anchor = at
   st.pref_x = -1.0
@@ -1327,6 +1409,8 @@ pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
   // the caret shown at once where it is put; and a frame to draw it, written from wherever it was (an answer between
   // frames, a fiber, a timer), as the input's own changes have
   st.blink_again = true
+  // (told as the whole of it is so: its words, its caret, nothing composed)
+  st.words_told()
   field_written()
 }
 
@@ -1358,6 +1442,8 @@ pub fn Field::pick(self : Field, from : Int, to : Int) -> Unit {
 /// Its words given up (sent): what the input method was composing put in first, then none left in it.
 pub fn Field::take(self : Field) -> String {
   let st = self.st
+  // (one edit: what was composed put in and all of it taken, told once as it is left)
+  @signals.start_batch()
   if st.marked.length() > 0 {
     // (when: its blinking starts again as it is next built)
     st.text_input(2, "", 0, 0, 0.0)
@@ -1365,6 +1451,7 @@ pub fn Field::take(self : Field) -> String {
   }
   let t = st.text
   self.set("")
+  @signals.end_batch()
   t
 }
 
@@ -1379,11 +1466,13 @@ fn Ctx::put_editor_text(self : Ctx, key : String, text : String) -> Unit {
         st.forget_edits()
       }
       st.marked = ""
-      st.text = text
+      st.put_words(text)
       st.caret = text.length()
       st.anchor = st.caret
       st.upstream = -1
       st.blink0 = self.clock
+      // (told as the whole of it is so, where its words are followed: a Field taken of it, Ctx::editor_field)
+      st.words_told()
     }
     None => {
       let st = EditorState::fresh(text, self.clock)

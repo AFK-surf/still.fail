@@ -62,10 +62,6 @@ priv struct Composing {
   mut toolbar_leaving : (() -> Unit)?
   restoring : @sf.LiveMap[String, Bool]
   restore_errors : @sf.LiveMap[String, String]
-  /// a finger went down outside it (keyboard_let_go); its `@` menu up over it as it was last drawn (a press in it is
-  /// the composer's own)
-  mut outside : Bool
-  mut menu_up : Bool
   /// what its field says while empty as it was last drawn, till another is to be said and it has faded out
   /// (composer_text)
   hint_shown : @signals.Signal[String]
@@ -118,8 +114,6 @@ let composing : Composing = {
   toolbar_leaving: None,
   restoring: @sf.LiveMap::new(),
   restore_errors: @sf.LiveMap::new(),
-  outside: false,
-  menu_up: false,
   hint_shown: @signals.signal("", same=fn(a, b) { a == b }),
   taking: @signals.signal(false, same=fn(a, b) { a == b }),
   cc_open: false,
@@ -153,8 +147,6 @@ fn composing_reset() -> Unit {
   composing.notices_said.clear()
   composing.restoring.clear()
   composing.restore_errors.clear()
-  composing.outside = false
-  composing.menu_up = false
   ref_keyed.val = ""
   composing.cc_open = false
   composing.cold_open.set("")
@@ -218,8 +210,6 @@ pub fn composer(
     if c.editor_focused(composer_field_key) {
       composing.wanted = false
     } else {
-      // (the press that asked for it, lifted outside it, not taken for one letting go of the keyboard)
-      composing.outside = false
       c.focus_editor(composer_field_key)
       composing.taking.set(true)
       // (this frame's alone: what reads it built again the frame after, as it has the cursor)
@@ -419,10 +409,6 @@ pub fn composer(
       @motion.layout(c, part.0, "composer/part/" + part.1, spec=shape, by=holds)
     }
   }
-  // with a finger: a tap outside it lets go of the keyboard (a scroll does wherever it is: mbui's list drag)
-  if @ui.pointing() is Finger {
-    keyboard_let_go(c, cap)
-  }
   @motion.measure(c, box, "composer/content")
   if w.error != "" {
     c.box(style=error_box, fn() { c.text(w.error, style=composer_error_words) |> ignore }) |> ignore
@@ -447,29 +433,6 @@ fn with_composer(c : @ui.Ctx, i : Int, key : String) -> Unit {
   match composer_shape(c) {
     Some((by, spec)) => @motion.layout(c, i, key, spec~, by~)
     None => ()
-  }
-}
-
-///|
-/// A finger down outside the composer (`cap`), nothing over it presented (its `@` menu, a sheet), lets go of the
-/// keyboard once lifted; lifted after a long press (not a tap) the keyboard stays (still.fail's Android app's
-/// Keyboard.kt letsGoOfKeyboard). A finger scrolling the messages lets go of it in mbui (a list's drag), for any field.
-fn keyboard_let_go(c : @ui.Ctx, cap : Int) -> Unit {
-  let press = c.press()
-  if press.fresh {
-    // (on the composer or what is in it, its `@` menu's too, as the press went down: the hand's, not where it was
-    // drawn; a chat picked in the menu as the press is let go closes it before this frame is built)
-    composing.outside = !c.press_within(cap) &&
-      !c.press_within(c.id(ref_menu_key + "/panel")) &&
-      !@sf.presenting() &&
-      !composing.menu_up
-  }
-  if composing.outside && c.editor_focused(composer_field_key) && press.lifted && !press.long {
-    composing.outside = false
-    c.blur()
-  }
-  if press.lifted {
-    composing.outside = false
   }
 }
 
@@ -693,7 +656,6 @@ fn composer_text(
       }
       // `@` and a few letters: the chats they find over the composer (Enter picks one there)
       let menu = ref_menu(c, src, spec, w, cap, res.focused)
-      composing.menu_up = menu
       match res.submitted {
         // (they stay in the field until they go)
         Some(words) => {

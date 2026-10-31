@@ -58,6 +58,91 @@ fn view_rect(t : @ui.Tester, id : Int) -> (Double, Double, Double, Double)? {
 }
 
 ///|
+test "two scoped copies of a visualization each own their native view" {
+  new_run()
+  let t = @ui.Tester::new(fn(c) {
+    @sf.begin(c) |> ignore
+    c.with_theme(@sf.ui_theme(), fn() {
+      for page in [1, 2] {
+        c.scope(page, fn() {
+          viz_mermaid_block(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
+        })
+      }
+    })
+  }, w=390.0, h=700.0, platform=1)
+  t.keep_parts(true)
+  t.check_looks(false)
+  t.draw()
+  let views = opened_views(t, 2)
+  assert_eq(views.length(), 2, msg="each page has its own Mermaid view")
+  assert_true(view_rect(t, views[0]).unwrap().1 != view_rect(t, views[1]).unwrap().1, msg="each view is placed at its own node")
+}
+
+///|
+test "two copies of a visualization move with their rows while scrolling" {
+  new_run()
+  let t = @ui.Tester::new(fn(c) {
+    @sf.begin(c) |> ignore
+    c.with_theme(@sf.ui_theme(), fn() {
+      c.list("rows", 6, 160.0, fn(i) {
+        c.column(h=Px(160.0), fn() {
+          if i == 1 || i == 2 {
+            viz_mermaid_block(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
+          } else {
+            c.text("row \{i}") |> ignore
+          }
+        }) |> ignore
+      }, h=Px(340.0)) |> ignore
+    })
+  }, w=390.0, h=340.0, platform=1)
+  t.keep_parts(true)
+  t.check_looks(false)
+  t.draw()
+  let views = opened_views(t, 2)
+  assert_eq(views.length(), 2)
+  let a = view_rect(t, views[0]).unwrap().1
+  let b = view_rect(t, views[1]).unwrap().1
+  t.wheel(195.0, 180.0, 70.0)
+  let next_a = view_rect(t, views[0]).unwrap().1
+  let next_b = view_rect(t, views[1]).unwrap().1
+  assert_true(next_a < a, msg="the first visualization follows its row")
+  assert_eq(next_a - a, next_b - b, msg="both visualizations follow their rows by the same distance")
+}
+
+///|
+test "a visualization view is reused after its page leaves and all its copies close together" {
+  new_run()
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(fn(c) {
+    @sf.begin(c) |> ignore
+    c.with_theme(@sf.ui_theme(), fn() {
+      c.nav(nav, fn(_) {
+        viz_mermaid_block(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
+      }) |> ignore
+    })
+  }, w=390.0, h=700.0, platform=1)
+  t.keep_parts(true)
+  t.check_looks(false)
+  t.draw()
+  assert_eq(opened_views(t, 2).length(), 1)
+  nav.push(1)
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(opened_views(t, 2).length(), 2)
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  nav.push(2)
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let views = opened_views(t, 2)
+  assert_eq(views.length(), 2, msg="a page that left releases its view for the next page")
+  @sfbase.viz_close("chat/ws1/st1:s-c1/")
+  for id in views {
+    assert_true(t.views().contains("close \{id}"), msg="closing a chat closes every copy")
+  }
+}
+
+///|
 test "a placed HTML file is drawn in its message, 120 high, covered until it has drawn; then as tall as it says" {
   let t = chat_tester("chat-viz")
   t.frame()

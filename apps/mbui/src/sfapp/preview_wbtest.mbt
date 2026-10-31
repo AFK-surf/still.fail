@@ -1048,7 +1048,7 @@ test "marking: a note written and done, the picture put in the chat: its quote t
   let tick = t.locate("icon:check")
   t.tap(tick[0].0, tick[0].1)
   t.draw()
-  let (px, py, pw, ph) = t.rect_of("添加到对话").unwrap()
+  let (px, py, pw, ph) = t.get(Button, label=pv("android-chat.preview.put")).rect
   t.tap(px + pw / 2.0, py + ph / 2.0)
   // the viewer closed back to the chat, the quote of the mark in its composer with what its note said
   t.run_for(@ui.move_most_ms)

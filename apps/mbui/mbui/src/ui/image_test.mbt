@@ -28,6 +28,23 @@ test "an image loads at the size it is shown, fades in, and is cropped to cover"
 }
 
 ///|
+test "a cover's vertical crop can start at the top, middle or bottom" {
+  let place = Ref(0.0)
+  let t = @ui.Tester::new(
+    fn(c) { c.image("tall.jpg", w=Px(100.0), h=Px(200.0), fit=FitCoverAt(place.val), fade=false) |> ignore },
+    w=300.0,
+    h=400.0,
+    images=[("tall.jpg", 100, 1000)],
+  )
+  for (position, top) in [(0.0, 0.0), (0.5, 0.4), (1.0, 0.8)] {
+    place.val = position
+    t.draw()
+    let im = t.drawn_images()[0]
+    assert_true((im[5] - top).abs() < 0.001 && (im[7] - 0.2).abs() < 0.001, msg="\{im}")
+  }
+}
+
+///|
 test "an image with a free height takes its proportions once known" {
   let t = @ui.Tester::new(
     fn(c) {

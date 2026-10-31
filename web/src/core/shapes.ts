@@ -5922,6 +5922,21 @@ export interface ProfileState {
 	tone: Tone;
 }
 
+/** One station where an account is available, even when several profiles there have it. */
+export interface ProfilePlace {
+	station: string;
+	stationId: string;
+	stationName: string;
+	/** The profile to open on this station; empty until its profile is known. */
+	profileId: string;
+	online: boolean;
+	usable: boolean;
+	/** For a borrowed subscription, the station it came from; otherwise empty. */
+	sourceName: string;
+	/** The chosen profile's status when it needs a look or has not been checked. */
+	state?: ProfileState;
+}
+
 export interface ShareStation {
 	id: string;
 	station: string;
@@ -5969,8 +5984,10 @@ export interface WorkspaceProfile {
 	editable: boolean;
 	/** Its station can share it (one older than sharing cannot). */
 	canShare: boolean;
-	/** Each station that has this account: one row, its page their parts. */
+	/** Each profile on each station that has this account. */
 	members?: ProfileMember[];
+	/** Each station allowed this account once, choosing a working profile where it has several; pending copies remain visible. */
+	places?: ProfilePlace[];
 }
 
 /**

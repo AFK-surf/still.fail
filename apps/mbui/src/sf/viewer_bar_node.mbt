@@ -66,7 +66,7 @@ pub fn viewer_bar_node(
         .lines_up(Is(Some(Middle)))
         .height(Is(Some(viewer_bar_h)))
         .gap(Is(@ui.Space::px(S4)))
-        .padding(By(fn() { (@ui.Space::px(S3), 0.0, bar_end_in(width()), hairline_h) }))
+        .padding(By(fn() { (bar_start_in(), 0.0, bar_end_in(width()), hairline_h) }))
         |> ignore
         // clear of the window's buttons at its left, the system's (ViewerBar.css.ts: 84 in, not in full screen)
         row.show(@ui.window_keys_left_now, fn(k) { k.width(Is(Some(viewer_buttons_w))) |> ignore })
@@ -148,6 +148,30 @@ fn bar_end_in(w : Double) -> Double {
 }
 
 ///|
+/// How far in from the window's left the bar's way back stands (viewer_bar's start): at the window's corner where nothing
+/// of the system's is there (viewer_bar_start_in, the theme's Xl where it cannot follow it), as the window's corner is now
+/// for the window's tree, followed; 12 after the system's buttons.
+fn bar_start_in() -> Double {
+  if @ui.window_keys_left_now() {
+    viewer_bar_in
+  } else {
+    viewer_bar_start_in(@ui.tree_theme().corner(Xl), @ui.tree_corner_roots_now())
+  }
+}
+
+///|
+/// The corner of the bar's way back (viewer_bar's): the window's followed at its top left corner (viewer_back_corner) as
+/// the window's corner is now for the window's tree; the theme's Xl after the system's buttons, or where it cannot.
+fn bar_back_corner() -> Double {
+  let alone = @ui.tree_theme().corner(Xl)
+  if @ui.window_keys_left_now() {
+    alone
+  } else {
+    viewer_back_corner(alone).radius(@ui.tree_corner_roots_now())
+  }
+}
+
+///|
 /// The corner of the bar's tools (viewer_tool_corner's, for the bar across the top): the one a page's bar's buttons
 /// share at the window's corner (bar_keys_link: window_corner_key), followed as the window's corner changes and as its
 /// own buttons come to be the app's or not (full screen); round where they are the app's.
@@ -171,8 +195,9 @@ fn bar_words(size : @ui.TextSize, line : @ui.Leading, weight : Int) -> @view.Wor
 
 ///|
 /// The way back (viewer_bar's: ViewerBar.css.ts back) in `parent`: 32 high, 4 before the chevron and 10 after the words,
-/// the page's corner; the chevron and `words` in the ink's own, its hover ground where the hand is on it (or the
-/// keyboard's focus shows); `went` as it is pressed, at the press's moment. Read out a button, by its words.
+/// at the window's corner following it (bar_back_corner); the chevron and `words` in the ink's own, its hover ground
+/// where the hand is on it (or the keyboard's focus shows); `went` as it is pressed, at the press's moment. Read out a
+/// button, by its words.
 fn back_node(parent : @view.View, words : () -> String, ink : () -> ViewerInk, went : () -> Unit) -> @view.View {
   parent.box(fn(v) {
     let lit = fn() {
@@ -188,7 +213,7 @@ fn back_node(parent : @view.View, words : () -> String, ink : () -> ViewerInk, w
     .height(Is(Some(@ui.Space::px(S8))))
     .padding(Is((@ui.Space::px(S1), 0.0, @ui.Space::px(S2_5), 0.0)))
     .gap(Is(@ui.Space::px(S0_5)))
-    .radius(By(fn() { @ui.tree_theme().corner(Xl) }))
+    .radius(By(bar_back_corner))
     .shrink(Is(1.0))
     .min_width(Is(Some(0.0)))
     .presses(Is(true))

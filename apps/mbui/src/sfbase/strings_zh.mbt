@@ -1879,7 +1879,7 @@ let zh : Map[String, String] = {
   "web-pages.settings.prices.title": "价目表",
   "web-pages.settings.profiles.add": "添加 Profile",
   "web-pages.settings.profiles.addFirst": "添加第一个 Profile",
-  "web-pages.settings.profiles.hostAway": "{station} 离线",
+  "web-pages.settings.profiles.hostAway": "无法连接 {station}",
   "web-pages.settings.profiles.lead": "Profile 是 agent 用来运行模型的账号：一份订阅，或一个模型服务的 key。每个 Profile 在其所在的 station 上运行，可使用哪些运行时由 {name} 自动配置。",
   "web-pages.settings.profiles.offlineAdd": "离线，上线后再添加",
   "web-pages.settings.profiles.usedBy": "{n} 个连接正在使用",

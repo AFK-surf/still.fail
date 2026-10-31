@@ -6,6 +6,8 @@
 pub(all) enum Fit {
   /// fills the box, cropping what sticks out
   FitCover
+  /// fills the box, placing the vertical crop at 0 (top) to 1 (bottom)
+  FitCoverAt(Double)
   /// shows all of it inside the box
   FitContain
   /// stretched to the box
@@ -231,7 +233,7 @@ fn image_size(src : String) -> (Double, Double)? {
 /// tile's side it would be stretched several times over, blurred.)
 fn Ctx::image_px(self : Ctx, src : String, bw : Double, bh : Double, fit : Fit) -> Double {
   match (fit, image_size(src)) {
-    (FitCover, Some((ow, oh))) if ow > 0.0 && oh > 0.0 && bw > 0.0 && bh > 0.0 =>
+    (FitCover | FitCoverAt(_), Some((ow, oh))) if ow > 0.0 && oh > 0.0 && bw > 0.0 && bh > 0.0 =>
       dmax(ow, oh) * dmax(bw / ow, bh / oh) * self.scale
     _ => dmax(bw, bh) * self.scale
   }
@@ -491,12 +493,13 @@ fn Ctx::draw_image(
   }
   let (x, y, w, h, u0, v0, du, dv) = match fit {
     FitFill => (bx, by, bw, bh, 0.0, 0.0, 1.0, 1.0)
-    FitCover => {
-      // the part of the image the box shows, centred
+    FitCover | FitCoverAt(_) => {
+      // The part of the image the box shows, centred across and placed vertically by fit.
       let k = dmax(bw / e.w, bh / e.h)
       let du = bw / k / e.w
       let dv = bh / k / e.h
-      (bx, by, bw, bh, (1.0 - du) / 2.0, (1.0 - dv) / 2.0, du, dv)
+      let vertical = match fit { FitCoverAt(y) => dclamp(y, 0.0, 1.0); _ => 0.5 }
+      (bx, by, bw, bh, (1.0 - du) / 2.0, (1.0 - dv) * vertical, du, dv)
     }
     FitContain => {
       let k = dmin(bw / e.w, bh / e.h)

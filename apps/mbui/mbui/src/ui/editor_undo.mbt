@@ -67,6 +67,13 @@ fn EditorState::forget_edits(self : EditorState) -> Unit {
 /// The field's last edit undone, as it was before it, what was picked then picked again (Undo); or the last undone
 /// done again (Redo). Nothing while the input method composes (its keys are its own then), nor when there is none.
 fn EditorState::step(self : EditorState, s : Step, now : Double) -> Unit {
+  self.step_edit(s, now)
+  self.words_told()
+}
+
+///|
+/// An undo or redo of it (EditorState::step's), done.
+fn EditorState::step_edit(self : EditorState, s : Step, now : Double) -> Unit {
   if self.marked.length() > 0 {
     return
   }
@@ -76,7 +83,7 @@ fn EditorState::step(self : EditorState, s : Step, now : Double) -> Unit {
   }
   guard from.pop() is Some((text, anchor, caret)) else { return }
   to.push((self.text, self.anchor, self.caret))
-  self.text = text
+  self.put_words(text)
   self.anchor = anchor
   self.caret = caret
   self.typed = None

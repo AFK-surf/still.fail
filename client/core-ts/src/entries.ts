@@ -8,8 +8,9 @@ export function nOf(entry: unknown): number | null {
   return typeof n === "number" && Number.isInteger(n) && n >= 0 ? n : null;
 }
 
-/// The messages of a run of entries, in thread order (`seq` is the message's n).
-export function merge(entries: unknown[]): Record<string, unknown>[] {
+/// The messages of a run of entries, in thread order (`seq` is the message's n). `source`, when supplied, hears each
+/// message and each edit changing its words; the last entry it hears for a message supplied its current words.
+export function merge(entries: unknown[], source?: (seq: number, entry: object) => void): Record<string, unknown>[] {
   const messages = new Map<number, Record<string, unknown>>();
   for (const entry of entries) {
     const n = nOf(entry);
@@ -43,16 +44,20 @@ export function merge(entries: unknown[]): Record<string, unknown>[] {
       // What two chats' agents wrote each other (views.ts isLetter): which way, and the other chat.
       if (isObject(entry.letter)) message.letter = entry.letter;
       messages.set(n, message);
+      source?.(n, entry);
     } else if (kind === "edit") {
       const target = entry.target;
-      const message = typeof target === "number" ? messages.get(target) : undefined;
+      if (typeof target !== "number") continue;
+      const message = messages.get(target);
       if (!message) continue;
       // Its card restated by its author (a vault request's outcome): the card alone when the words are the same.
       if (isObject(entry.card)) {
         message.card = entry.card;
         if ((entry.text ?? "") === message.text) continue;
       }
-      message.text = entry.text === undefined ? "" : entry.text;
+      const text = entry.text === undefined ? "" : entry.text;
+      if (text !== message.text) source?.(target, entry);
+      message.text = text;
       message.attachments = entry.attachments === undefined ? [] : entry.attachments;
       message.quotes = entry.quotes === undefined ? [] : entry.quotes;
       message.editedAt = field("at");

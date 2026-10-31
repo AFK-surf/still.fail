@@ -1099,6 +1099,34 @@ fn Ctx::own(self : Ctx, id : Int) -> Unit {
 }
 
 ///|
+struct OwnedReleases {
+  ids : Array[Int]
+  callbacks : Map[Int, () -> Unit]
+}
+
+///|
+/// Calls the latest `release` when the current page leaves its stack, once per key in the current scope. A retained
+/// page keeps its resources while another page is over it. Outside a stack there is no page to release.
+pub fn Ctx::on_page_release(self : Ctx, key : String, release : () -> Unit) -> Unit {
+  if self.owner == 0 {
+    return
+  }
+  let id = self.id(key)
+  let callbacks = match self.owned_releases.get(self.owner) {
+    Some(callbacks) => callbacks
+    None => {
+      let callbacks : OwnedReleases = { ids: [], callbacks: {} }
+      self.owned_releases[self.owner] = callbacks
+      callbacks
+    }
+  }
+  if !callbacks.callbacks.contains(id) {
+    callbacks.ids.push(id)
+  }
+  callbacks.callbacks[id] = release
+}
+
+///|
 /// Forgets what page `serial`'s widgets held.
 fn Ctx::forget(self : Ctx, serial : Int) -> Unit {
   match self.owned.get(serial) {
@@ -1115,6 +1143,18 @@ fn Ctx::forget(self : Ctx, serial : Int) -> Unit {
         }
       }
       self.owned.remove(serial)
+    }
+    None => ()
+  }
+  match self.owned_releases.get(serial) {
+    Some(callbacks) => {
+      self.owned_releases.remove(serial)
+      for id in callbacks.ids {
+        match callbacks.callbacks.get(id) {
+          Some(release) => release()
+          None => ()
+        }
+      }
     }
     None => ()
   }

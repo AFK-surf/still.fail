@@ -275,6 +275,31 @@ test "slider: the arrows a step, Page keys ten, Home and End the ends; Increment
 }
 
 ///|
+test "slider: a tap on its track sets the value even when no frame is drawn while pressed" {
+  let v = Ref(20.0)
+  let t = @ui.Tester::new(fn(c) {
+    v.val = slider(c, "s", v.val, w=Px(240.0), label="Volume").value
+  }, platform=2)
+  let (x, y, w, h) = t.get(@ui.Role::Slider, label="Volume").rect
+  t.tap(x + w * 0.75, y + h / 2.0)
+  assert_true(v.val > 20.0, msg="a tap sets the slider")
+}
+
+///|
+test "slider: a drag between frames sets the value where it ends" {
+  let v = Ref(20.0)
+  let t = @ui.Tester::new(fn(c) {
+    v.val = slider(c, "s", v.val, w=Px(240.0), label="Volume").value
+  }, platform=2)
+  let (x, y, w, h) = t.get(@ui.Role::Slider, label="Volume").rect
+  t.touch(0, x + w * 0.2, y + h / 2.0)
+  t.touch(1, x + w * 0.75, y + h / 2.0)
+  t.touch(2, x + w * 0.75, y + h / 2.0)
+  t.draw()
+  assert_true(v.val > 60.0, msg="a drag sets the slider where it ends")
+}
+
+///|
 test "slider: dragged along its track, it follows the pointer to the nearest step; right to left, mirrored" {
   let v = Ref(0.0)
   let t = @ui.Tester::new(fn(c) {

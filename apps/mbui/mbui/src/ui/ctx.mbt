@@ -149,6 +149,9 @@ struct ListState {
 ///|
 struct EditorState {
   mut text : String
+  /// The last shared value followed by this editor, and its reset generation.
+  mut source_text : String?
+  mut source_generation : Int
   mut caret : Int
   mut anchor : Int
   mut marked : String
@@ -237,6 +240,8 @@ struct EditorState {
   mut built_frame : Int
   mut built_key : String
   mut built_id : Int
+  /// what its words are told as, as they change (a Field's: Field::text followed), none for an editor of its own
+  mut said_words : @signals.Signal[String]?
 }
 
 ///|
@@ -487,6 +492,7 @@ pub struct Ctx {
   // the time on top of the page being built (nav.mbt Ctx::page_stint)
   mut stint : Int
   owned : Map[Int, Array[Int]]
+  owned_releases : Map[Int, OwnedReleases]
   // back: where it goes this frame (the Nav drawn that can go back) and the
   // node it is drawn in, as the last frame had them; whether the host was
   // told that the app takes back; a finger on the left edge (1: there, 2:
@@ -777,6 +783,7 @@ fn Ctx::new() -> Ctx {
     owner: 0,
     stint: 0,
     owned: Map::new(),
+    owned_releases: Map::new(),
     back: None,
     back_node: -1,
     back_edge: 20.0,

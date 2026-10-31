@@ -195,20 +195,124 @@ fn corner_gaps(a : Node, b : Node, k : Int) -> (Double, Double) {
 /// container's corner that is not as far from both edges, or not concentric (within half a pixel).
 pub fn Tester::corner_faults(self : Tester) -> Array[String] {
   ignore(self)
-  g().corner_faults()
+  let c = g()
+  c.with_tree_nodes(fn() { c.corner_faults() })
 }
 
 ///|
 /// Where a frame built with all that shows only while lit shown (Ctx::lit_shown: a row's 归档 under the pointer, every
-/// row's at once) breaks the corner rule; the frames after it as before.
+/// row's at once; the window's tree's nodes each told it is pointed at and pressed, Tree::lit_all) breaks the corner
+/// rule; the frames after it as before, the tree's hand as it is.
 pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
   let c = g()
   c.lit_all = true
+  match view_app.val {
+    Some(tree) => tree.lit_all(true)
+    None => ()
+  }
   self.frame()
-  let faults = c.corner_faults()
+  let faults = c.with_tree_nodes(fn() { c.corner_faults() })
   c.lit_all = false
+  match view_app.val {
+    Some(tree) => tree.lit_all(false)
+    None => ()
+  }
   self.frame()
   faults
+}
+
+///|
+/// `f` asked of the frame just built with the window's tree's nodes among its own (view_host.mbt), as they are drawn:
+/// each a box where the window draws it, its ground, its corner, its glass, whether it cuts what it holds to it, how
+/// opaque, what holds it as drawn, whether it takes a press, its words in it; each old view's box held by the tree's node it is drawn in. The frame as it was after. Where
+/// the old view is the whole window (old_whole), none: the tree draws nothing else.
+fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T) -> T {
+  let tree = match view_app.val {
+    Some(t) if !old_whole.val => t
+    _ => return f()
+  }
+  let count = self.count
+  let kept : Array[Node] = []
+  let reparented : Array[(Int, Int)] = []
+  let add = fn(n : Node) -> Int {
+    let i = self.count
+    if i < self.nodes.length() {
+      kept.push(self.nodes[i])
+      self.nodes[i] = n
+    } else {
+      self.nodes.push(n)
+    }
+    self.count = i + 1
+    i
+  }
+  let held = tree.drawn_held()
+  // (each drawn one's node here, and the last of what it holds so far: what follows it among them)
+  let at : Array[Int] = Array::make(held.length(), -1)
+  let last : Map[Int, Int] = Map([])
+  let link = fn(parent : Int, i : Int) {
+    if parent < 0 {
+      return
+    }
+    let p = self.nodes[parent]
+    match last.get(parent) {
+      Some(l) => self.nodes[l].next = i
+      None => p.first = i
+    }
+    last[parent] = i
+    p.kids = p.kids + 1
+  }
+  for k, h in held {
+    let (d, holder, presses) = h
+    let parent = if holder >= 0 { at[holder] } else { -1 }
+    let n = Node::new()
+    n.kind = kind_box
+    n.x = d.x
+    n.y = d.y
+    n.fw = d.w
+    n.fh = d.h
+    n.bg = d.ground
+    n.radius = d.radius
+    n.glass = d.glass
+    n.clip = d.clips
+    n.opacity = d.alpha
+    n.parent = parent
+    if presses {
+      n.hit = true
+      // (an id none of the frame's has: one it lights)
+      n.id = -(k + 1)
+    }
+    let i = add(n)
+    at[k] = i
+    link(parent, i)
+    if d.words != "" {
+      let w = Node::new()
+      w.kind = kind_text
+      w.text = d.words
+      w.x = d.x
+      w.y = d.y
+      w.parent = i
+      link(i, add(w))
+    }
+    // (an old view drawn here: its box held by this node)
+    if d.hosted {
+      match old_boxes.get(d.id) {
+        Some(b) if b < count => {
+          reparented.push((b, self.nodes[b].parent))
+          self.nodes[b].parent = i
+        }
+        _ => ()
+      }
+    }
+  }
+  let out = f()
+  for r in reparented {
+    self.nodes[r.0].parent = r.1
+  }
+  for k, n in kept {
+    self.nodes[count + k] = n
+  }
+  self.count = count
+  out
 }
 
 ///|

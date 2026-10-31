@@ -325,8 +325,7 @@
     "reset-wire": {},
     "page-hand": {
       "src/sfapp/app.mbt": 1,
-      "src/sfdesk/frame.mbt": 2,
-      "src/sfpages/composer.mbt": 1
+      "src/sfdesk/frame.mbt": 2
     },
     "page-screen": {},
     "page-look": {

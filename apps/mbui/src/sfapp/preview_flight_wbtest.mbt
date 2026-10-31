@@ -31,9 +31,11 @@ fn photo_sent(
   cut? : Double = 0.0,
   listed? : Bool = false,
   head? : Bool = false,
+  tall? : Bool = false,
 ) -> @ui.Tester {
   new_run()
-  let a = flight_photo()
+  let photo = flight_photo()
+  let a = if tall { { ..photo, width: 400.0, height: 2000.0 } } else { photo }
   @sfbase.sent_pictures[@sfbase.sent_key("ws1/st1", a.path)] = "sent-key"
   let base = fixture("chat")
   let src : Source = {
@@ -76,11 +78,32 @@ fn photo_sent(
     },
     w=390.0,
     h=844.0,
-    images=[("sent-key", 1200, 900), ("mem:preview/ws1/st1/s-c1/uploads/fx/photo.jpg", 1200, 900)],
+    images=if tall {
+      [("sent-key", 400, 2000), ("mem:preview/ws1/st1/s-c1/uploads/fx/photo.jpg", 400, 2000)]
+    } else {
+      [("sent-key", 1200, 900), ("mem:preview/ws1/st1/s-c1/uploads/fx/photo.jpg", 1200, 900)]
+    },
   )
   t.draw()
   t.run_for(@ui.image_fade_ms)
   t
+}
+
+///|
+test "a tall preview opens from the top of its picture and returns there" {
+  let held : Ref[(() -> Unit)?] = Ref(None)
+  let t = photo_sent(Ref(0.0), held, tall=true)
+  let id = "ws1/st1/s-c1/uploads/fx/photo.jpg"
+  let thumb = thumb_of(t.ctx(), id).unwrap()
+  assert_true(thumb.top_crop)
+  assert_true(t.drawn_images().iter().any(fn(i) { (i[5] - 0.0).abs() < 0.001 && (i[7] - 0.375).abs() < 0.001 }))
+  t.tap(thumb.x + thumb.w / 2.0, thumb.y + thumb.h / 2.0)
+  assert_true(viewer.get().unwrap().fly_from.unwrap().top_crop)
+  t.run_for(@ui.move_most_ms)
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  t.draw()
+  assert_true(t.drawn_images().iter().any(fn(i) { (i[5] - 0.0).abs() < 0.001 && (i[7] - 0.375).abs() < 0.001 }))
 }
 
 ///|

@@ -234,3 +234,34 @@ fn swatch_node(b : @view.View, color : () -> Int64) -> Unit {
   |> ignore
   b.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
 }
+
+///|
+/// Marking's actions in the bar across the top of viewer `vw` (marks_actions_node, as vf_tools has marks_actions there):
+/// as marking says as it changes; 取消 leaves marking, 下载 makes the marked picture to keep, 添加到对话 (where there is
+/// a chat's draft) to put in it, each at the moment its press is let go (Viewer::finish_marks).
+fn marks_actions_node_of(row : @view.View, vw : Viewer, ink : () -> @sf.ViewerInk, tips : @sf.TipLayer) -> Unit {
+  @sf.marks_actions_node(
+    row,
+    fn() {
+      marks_said()
+      {
+        error: marking.error,
+        ready: !marking.busy && marks_any(),
+        busy: marking.busy,
+        can_put: vw.draft_key() != "",
+        cancel: pv("common.cancel"),
+        download: pv("android-chat.marks.downloadMarked"),
+        put: pv("android-chat.preview.put"),
+        making: pv("android-chat.marks.making"),
+      }
+    },
+    ink,
+    // (round as marking's own actions are, picture_key: not as the bar's tools at the window's corner)
+    Is(picture_key),
+    fn() { marks_leave() },
+    fn() { vw.finish_marks(@ui.current(), false) },
+    fn() { vw.finish_marks(@ui.current(), true) },
+    tip=tips,
+  )
+  |> ignore
+}

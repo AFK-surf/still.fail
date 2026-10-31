@@ -45,6 +45,7 @@ test("a shared subscription whose host is away comes from a copy, unusable, firs
   assert.deepEqual([view.items[0].look, view.items[0].state], [true, { text: "studio 离线", tone: "red" }]);
   assert.equal(view.attention, 1);
   assert.equal(view.items[0].editable, false);
+  assert.deepEqual(view.items[0].places.map((p: any) => [p.stationName, p.usable, p.sourceName]), [["studio", false, ""], ["mini", false, "studio"]]);
   // Still listed as up by the cloud, but not answering the station borrowing it: away all the same.
   const late = workspaceProfiles([
     station(A, "studio", true, null),
@@ -103,9 +104,104 @@ test("an account is called by what it is signed in to, and said usable where any
   ]);
   assert.equal(view.items.length, 1);
   assert.deepEqual([view.items[0].title, view.items[0].where], ["z@x.test", "Studio、Mini1、ccvm 可用"]);
+  assert.deepEqual(view.items[0].places.map((p: any) => p.stationName), ["Studio", "Mini1", "ccvm"], "a separate login is available even outside the host's share limit");
   // A key: by its profile's name.
   const key = workspaceProfiles([station(A, "Studio", true, [profile("备用 key", { access: { kind: "anthropic-api", key: "sk-1…2345" } })])]);
   assert.deepEqual([key.items[0].title, key.items[0].where], ["备用 key", "Studio 可用"]);
+});
+
+test("each station appears once for an account it can use, even when it has its own login and a borrowed one", () => {
+  const C = "c".repeat(64);
+  const D = "d".repeat(64);
+  const share = { id: "sh-1", host: A, allow: null };
+  const sub = { email: "z@x.test", runtime: "codex" };
+  const row = workspaceProfiles([
+    station(A, "Studio", true, [profile("codex-3720", { ...sub, share: { ...share, role: "host", users: [B, C, D] } })]),
+    station(B, "MBA", true, [profile("sh-1", { ...sub, share: { ...share, role: "user" } })]),
+    station(C, "Mini1", true, [profile("local", sub), profile("sh-1", { ...sub, share: { ...share, role: "user" } })]),
+    station(D, "ccvm", true, [profile("local", sub), profile("sh-1", { ...sub, share: { ...share, role: "user" } })]),
+  ]).items[0];
+  // Fall back to the old presentation to make the repeated stations visible in the failure on main.
+  const places = row.places ?? row.members;
+  assert.deepEqual(places.map((p: any) => p.stationName), ["Studio", "MBA", "Mini1", "ccvm"]);
+  assert.equal(row.members.length, 6, "the underlying profiles remain available individually");
+});
+
+test("a station with several copies uses one that works, and retains offline places", () => {
+  const C = "c".repeat(64);
+  const D = "d".repeat(64);
+  const sub = { email: "z@x.test", runtime: "codex" };
+  const share = { id: "sh-1", host: A, allow: null };
+  const row = workspaceProfiles([
+    station(A, "Studio", true, [profile("host", { ...sub, share: { ...share, role: "host" } })]),
+    station(B, "MBA", true, [
+      profile("needs-login", { ...sub, checkText: "需要登录", checkTone: "red", trouble: { title: "需要登录" } }),
+      profile("borrowed", { ...sub, share: { ...share, role: "user", reachable: true } }),
+    ]),
+    station(C, "Mini1", true, [
+      profile("unreachable", { ...sub, share: { id: "other", host: D, role: "user", reachable: false } }),
+      profile("available", { ...sub, share: { ...share, role: "user", reachable: true } }),
+    ]),
+    station(D, "ccvm", false, [profile("offline", sub)]),
+  ]).items[0];
+  const places = row.places ?? row.members;
+  assert.deepEqual(places.map((p: any) => [p.stationName, p.profileId, p.online, p.usable]), [
+    ["Studio", "host", true, true], ["MBA", "borrowed", true, true],
+    ["Mini1", "available", true, true], ["ccvm", "offline", false, false],
+  ]);
+  const broken = workspaceProfiles([station(A, "Studio", true, [profile("blocked", { ...sub, trouble: { title: "额度查询失败" } })])]).items[0].places[0];
+  assert.deepEqual(broken.state, { text: "额度查询失败", tone: "amber" }, "trouble remains visible even when the last login check passed");
+});
+
+test("a shared account lists all allowed stations while their copies or overviews are still pending", () => {
+  const C = "c".repeat(64);
+  const D = "d".repeat(64);
+  const sub = { email: "z@x.test", runtime: "codex" };
+  const row = workspaceProfiles([
+    station(A, "Studio", true, [profile("host", { ...sub, share: { id: "sh-1", role: "host", host: A, allow: [B, C] } })]),
+    station(B, "MBA", true, []),
+    station(C, "Mini1", false, null),
+    // The host has revoked ccvm; its old copy has not heard that yet.
+    station(D, "ccvm", true, [profile("stale", { ...sub, share: { id: "sh-1", role: "user", host: A, allow: null } })]),
+  ]).items[0];
+  const places = row.places ?? row.members;
+  assert.deepEqual(places.map((p: any) => [p.stationName, p.profileId, p.online, p.state?.text ?? null]), [
+    ["Studio", "host", true, null], ["MBA", "", true, "等待同步"], ["Mini1", "", false, null],
+  ]);
+  const reading = workspaceProfiles([
+    station(A, "Studio", true, [profile("host", { ...sub, share: { id: "sh-1", role: "host", host: A, allow: [B] } })]),
+    station(B, "MBA", true, null),
+  ]).items[0].places[1];
+  assert.equal(reading.state.text, "正在读取");
+});
+
+test("a share withheld from this workspace does not make its stations usable here", () => {
+  const C = "c".repeat(64);
+  const D = "d".repeat(64);
+  const sub = { email: "z@x.test", runtime: "codex" };
+  const share = { id: "sh-1", host: A, allow: null };
+  const row = workspaceProfiles([
+    // The host's newer overview says the share is withheld here; an old copy has not heard it yet.
+    station(A, "Studio", true, [profile("host", { ...sub, serves: false, share: { ...share, role: "host" } })]),
+    station(B, "MBA", true, [profile("stale", { ...sub, serves: true, share: { ...share, role: "user" } })]),
+    station(C, "Mini1", true, [profile("local", { ...sub, serves: true })]),
+    station(D, "ccvm", true, []),
+  ]).items[0];
+  assert.deepEqual((row.places ?? row.members).map((p: any) => p.stationName), ["Mini1"]);
+  assert.equal(row.members.length, 3, "the page can still find the profiles for managing them");
+
+  // An older joined station says the same thing in workspaces instead of serves.
+  const older = workspaceProfiles([
+    { ...station(A, "Studio", true, [profile("host", { ...sub, workspaces: ["other"], share: { ...share, role: "host" } })]), joined: true },
+    station(B, "MBA", true, [profile("local", { ...sub, serves: true })]),
+  ]).items[0];
+  assert.deepEqual((older.places ?? older.members).map((p: any) => p.stationName), ["MBA"]);
+
+  const open = workspaceProfiles([
+    { ...station(A, "Studio", true, [profile("host", { ...sub, serves: true, share: { ...share, role: "host" } })]), joined: true },
+    station(B, "MBA", true, []),
+  ]).items[0];
+  assert.deepEqual(open.places.map((p: any) => p.stationName), ["Studio", "MBA"], "a joined station may share when this workspace is allowed");
 });
 
 test("a station with two profiles signed in to the same account: its rows named by their profiles too", () => {

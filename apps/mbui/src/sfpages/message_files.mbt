@@ -27,7 +27,7 @@ pub fn message_files(
   // each one's width as the row lays it (an image's and a video's box at most the column's)
   let widths = list.map(fn(a) {
     match file_kind(a.name) {
-      "image" => dmin(image_box(a, image_least).0, room)
+      "image" => dmin(image_box(a, image_least, min_tall_width=image_tall_min_w).0, room)
       "video" => dmin(image_box(a, video_least).0, room)
       _ => dmin(@sf.file_card_across(c, a.name, a.size), room)
     }
@@ -60,7 +60,10 @@ pub fn message_files(
           // (as wide as laid out for it: a card does not give way to the picture beside it)
           let item = c.box(style=@ui.style(w=Fixed(widths[i] + hung)), fn() { file_item(c, src, here, list[i], widths[i], by~) })
           match flight_here(here) {
-            Some(f) => flight_landing(c, f, item, @sfbase.file_key(list[i]), share=landing_share(list[i]))
+            Some(f) => flight_landing(
+              c, f, item, @sfbase.file_key(list[i]), share=landing_share(list[i]),
+              top_crop=file_kind(list[i].name) == "image" && tall_image_cropped(list[i]),
+            )
             None => ()
           }
         }
@@ -126,15 +129,21 @@ pub fn file_kind(name : String) -> String {
 ///|
 /// The box an image takes in the chat, known before it loads (imageBox.ts): its own proportions (sent with it, or its
 /// ThumbHash's) within 360×300, a tiny one drawn to 40 on its longer side; a strip thinner than `least` letterboxed in
-/// a box that thick; 240×160 for one sent before sizes were kept. (width, height, letterboxed)
-pub fn image_box(a : Attachment, least : Double) -> (Double, Double, Bool) {
+/// a box that thick; 240×160 for one sent before sizes were kept. A tall image at the height limit is cropped to at
+/// least `min_tall_width` across. (width, height, letterboxed)
+pub fn image_box(a : Attachment, least : Double, min_tall_width? : Double = 0.0) -> (Double, Double, Bool) {
   let (w, h) = match own_size(a) {
     Some(s) => s
     None => return (box_unknown_w, box_unknown_h, false)
   }
-  let scale = dmin(dmin(dmax(1.0, box_tiny / dmax(w, h)), box_most_w / w), box_most_h / h)
+  let height_scale = box_most_h / h
+  let scale = dmin(dmin(dmax(1.0, box_tiny / dmax(w, h)), box_most_w / w), height_scale)
   let width = w * scale
   let height = h * scale
+  let hash_only = a.width <= 0.0 || a.height <= 0.0
+  if (scale == height_scale || hash_only) && w * box_most_h / h < min_tall_width {
+    return (min_tall_width.round(), box_most_h, false)
+  }
   if width >= least && height >= least {
     return (width.round(), height.round(), false)
   }
@@ -146,7 +155,7 @@ pub fn image_box(a : Attachment, least : Double) -> (Double, Double, Bool) {
 /// `image`); None for any other file.
 fn image_ratio(a : Attachment) -> Double? {
   guard file_kind(a.name) == "image" else { return None }
-  let (w, h, _) = image_box(a, image_least)
+  let (w, h, _) = image_box(a, image_least, min_tall_width=image_tall_min_w)
   Some(w / h)
 }
 
@@ -162,10 +171,20 @@ fn own_size(a : Attachment) -> (Double, Double)? {
 }
 
 ///|
+/// Whether the chat's minimum width crops a tall image: show its beginning, at the top of the box.
+fn tall_image_cropped(a : Attachment) -> Bool {
+  let (bw, bh, _) = image_box(a, image_least, min_tall_width=image_tall_min_w)
+  match own_size(a) {
+    Some((w, h)) => bw == image_tall_min_w && bh == box_most_h && w * bh / h < bw
+    None => false
+  }
+}
+
+///|
 /// The share of its box's width and height a picture takes in it (image_box's, `least` thick): all of it, or a
 /// letterboxed one's, its own proportions fitted inside, centred (imageBox.ts letterbox).
-pub fn picture_share(a : Attachment, least : Double) -> (Double, Double) {
-  let (bw, bh, letterbox) = image_box(a, least)
+pub fn picture_share(a : Attachment, least : Double, min_tall_width? : Double = 0.0) -> (Double, Double) {
+  let (bw, bh, letterbox) = image_box(a, least, min_tall_width~)
   match own_size(a) {
     Some((w, h)) if letterbox => {
       let k = dmin(bw / w, bh / h)
@@ -179,7 +198,7 @@ pub fn picture_share(a : Attachment, least : Double) -> (Double, Double) {
 /// Where in its box a file sent from here lands (flight.mbt): an image's or a video's picture, its share of it.
 fn landing_share(a : Attachment) -> (Double, Double) {
   match file_kind(a.name) {
-    "image" => picture_share(a, image_least)
+    "image" => picture_share(a, image_least, min_tall_width=image_tall_min_w)
     "video" => picture_share(a, video_least)
     _ => (1.0, 1.0)
   }
@@ -233,7 +252,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 
   let open = c.id("msg-file/" + @sfbase.file_key(a))
   let owner = owner_of(here, a)
-  let (bw, bh, letterbox) = image_box(a, image_least)
+  let (bw, bh, letterbox) = image_box(a, image_least, min_tall_width=image_tall_min_w)
   let h = bh * w / bw
   let sent = sent_picture(here.station, a)
   // (still going up, its picture not here: no station has it to ask yet)
@@ -258,17 +277,19 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   // the picture covering the whole box; a letterboxed one's covering its own proportions centred in it, all it and
   // what it waits on take, the box's corners cutting it (imageBox.ts letterbox; any: its frame's, concentric with
   // what holds it where it is in a corner of that, a quote's card)
-  let (sw, sh) = picture_share(a, image_least)
+  let (sw, sh) = picture_share(a, image_least, min_tall_width=image_tall_min_w)
   let (pw, ph) = (w * sw, h * sh)
+  let top_crop = tall_image_cropped(a)
+  let fit : @ui.Fit = if top_crop { FitCoverAt(0.0) } else { FitCover }
   let likeness = @gallery.thumbhash_image(a.thumbhash).unwrap_or("")
   let picture = fn() {
     if key != "" && sent is None {
-      image_reveal(c, key, pw, ph, FitCover, a.thumbhash, radius=0.0, held=src.images.held(id))
+      image_reveal(c, key, pw, ph, fit, a.thumbhash, radius=0.0, held=src.images.held(id))
     } else if key != "" {
-      c.image(key, w=Px(pw), h=Px(ph), fit=FitCover, bg=0L, fade=false) |> ignore
+      c.image(key, w=Px(pw), h=Px(ph), fit~, bg=0L, fade=false) |> ignore
     } else if likeness != "" {
       // (frosted as its way in will start: image_reveal's)
-      c.image(likeness, w=Px(pw), h=Px(ph), fit=FitCover, bg=0L, fade=false) |> ignore
+      c.image(likeness, w=Px(pw), h=Px(ph), fit~, bg=0L, fade=false) |> ignore
       reveal_frosted(c, reveal_blur)
     }
   }
@@ -314,7 +335,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     }
   })
   // where it is and what it shows, for the preview to fly from and back into; hidden while the preview is its picture
-  note_thumb(c, thumb, b, @sf.message_file_corner, picture=shows, letterbox~, list=list_of(here))
+  note_thumb(c, thumb, b, @sf.message_file_corner, picture=shows, letterbox~, top_crop~, list=list_of(here))
   c.look(b, @ui.look(alpha=thumb_shows(thumb)))
   // held by a finger for its menu: lifted over the menu's scrim (@sf.lift_over)
   @sf.lift_over(c, b, "file/" + thumb, @sf.lift_of(c, "file/" + thumb, false, file_held_open(open)), file_lift_scale)
@@ -676,7 +697,7 @@ pub fn image_reveal(
       }
       let strip = c.box(style=@ui.style(w=Full, h=Fixed(y1 - y0), clip=true), fn() {
         let inner = match likeness {
-          Some(l) => c.image(l, w=Px(w), h=Px(h), fit=FitCover, bg=0L, fade=false)
+          Some(l) => c.image(l, w=Px(w), h=Px(h), fit~, bg=0L, fade=false)
           None => c.box(style=reveal_ground.then(@ui.style(w=Fixed(w), h=Fixed(h))), fn() {  })
         }
         c.look(inner, @ui.look(dy=-y0))
@@ -756,6 +777,10 @@ let image_px_most : Double = 8192.0
 /// The least an image's box is across (16) and a video's (96: its play mark and its name); the box of one sent before
 /// sizes were kept (240×160); the most (360×300); a tiny one drawn to 40 on its longer side (imageBox.ts).
 pub let image_least : Double = 16.0
+
+///|
+/// A tall image at the height limit is at least this wide, cropped without changing its proportions.
+pub let image_tall_min_w : Double = 160.0
 
 ///|
 pub let video_least : Double = 96.0
