@@ -208,7 +208,17 @@ pub let page_beside_least : Double
 
 pub fn page_goes_on() -> Bool
 
+pub fn pane_fold_at(Double) -> (Double, Double)?
+
+pub fn pane_fold_from() -> (Double, Double)?
+
+pub fn pane_node() -> @view.View?
+
 pub fn pane_parts(@sfbase.DriveAt, Array[@sfbase.DvStation]) -> (String, String)
+
+pub fn pane_reach_at(Double) -> (Double, Double, Double, Double)?
+
+pub fn pane_seen() -> (Array[@view.NodeId], Double)?
 
 pub fn pane_under(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Array[@sfbase.Workspace]) -> Unit
 
@@ -375,6 +385,8 @@ pub fn tab_service(String) -> String?
 pub fn tab_take_drop(@ui.Ctx) -> (@sfbase.Dragged, Double, Double)?
 
 pub fn tape_along_at(Double) -> (Double, Double)
+
+pub fn tape_col_now(Double) -> Double
 
 pub fn tape_holds(@sfbase.Source, @sfbase.Workspace, Double) -> Bool
 
