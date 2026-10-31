@@ -755,7 +755,11 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   // (by build: a frame built again paints again, and what the last build did not paint is not shown)
   v.painted = self.build_no
   v.seq = self.ninst
-  v.hits_before = self.next_hit_ids.length()
+  // (where it is among the frame's targets: what is over it after it, its covers; found with them where they are found
+  // alone, Ctx::node_targets)
+  if !dr.targets_said {
+    v.hits_before = self.next_hit_ids.length()
+  }
   // (its content on whole device pixels too, as where it shows is: placed between pixels, the row its edge half
   // covers shows what is under the canvas, a line along the picture's edge)
   v.at[0] = cx

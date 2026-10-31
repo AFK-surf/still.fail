@@ -352,6 +352,19 @@ fn Ctx::bar_drawn(self : Ctx, id : Int) -> BarAt? {
 /// for the pointer (the frame's bars), to draw once what it holds is drawn (Ctx::paint_bar). None where nothing of it
 /// scrolls past its view, or it is one of boxes scrolled as one (drawn along the list they are in: Ctx::across_bars).
 fn Ctx::bar_at(self : Ctx, n : Node) -> BarAt? {
+  let b = self.bar_where(n)
+  match b {
+    // (kept with the frame's targets where they are found alone: Ctx::node_targets)
+    Some(at) if !dr.targets_said => self.next_bars.push(at)
+    _ => ()
+  }
+  b
+}
+
+///|
+/// Where the bar of what scrolls in node `n` runs (Ctx::bar_at), nothing kept of it: what its thumb is a target where
+/// (Ctx::bar_target), as the frame's targets are found.
+fn Ctx::bar_where(self : Ctx, n : Node) -> BarAt? {
   // (where the hand has the bars: read so)
   bars_said.get() |> ignore
   let ((cx0, cy0, cx1, cy1), (_, r_tr, r_br, r_bl), _) = clip_at(clip_top())
@@ -414,10 +427,6 @@ fn Ctx::bar_at(self : Ctx, n : Node) -> BarAt? {
       _ => None
     }
   }
-  match b {
-    Some(at) => self.next_bars.push(at)
-    None => ()
-  }
   b
 }
 
@@ -461,8 +470,21 @@ fn foot_bar(
 /// The bars of the boxes scrolled as one (Ctx::sideways `across`: a long text's lines, each a row of list `n`) drawn
 /// since `from` in its rows: one each, along the list's foot under them, kept and drawn as any (its clip pushed).
 fn Ctx::across_bars(self : Ctx, n : Node, from : Int, alpha : Double) -> Unit {
+  for b in self.across_found(n, from) {
+    if !dr.targets_said {
+      self.next_bars.push(b)
+    }
+    self.paint_bar(b, alpha)
+  }
+}
+
+///|
+/// The bars along the foot of list `n` of the boxes in its rows scrolled as one, seen since `from` (Ctx::across_bars),
+/// where each runs: those seen let go.
+fn Ctx::across_found(self : Ctx, n : Node, from : Int) -> Array[BarAt] {
+  let found : Array[BarAt] = []
   if self.across_seen.length() <= from {
-    return
+    return found
   }
   let ((cx0, cy0, cx1, cy1), (_, _, r_br, r_bl), _) = clip_at(clip_top())
   let done : Array[Int] = []
@@ -476,10 +498,7 @@ fn Ctx::across_bars(self : Ctx, n : Node, from : Int, alpha : Double) -> Unit {
       Some(st) => {
         let shows = (dmax(x, cx0), dmax(n.y, cy0), dmin(x + w, cx1), dmin(n.y + n.fh, cy1))
         match foot_bar(id, x, w, w + st.max, st.x, shows, r_bl, r_br) {
-          Some(b) => {
-            self.next_bars.push(b)
-            self.paint_bar(b, alpha)
-          }
+          Some(b) => found.push(b)
           None => ()
         }
       }
@@ -487,6 +506,18 @@ fn Ctx::across_bars(self : Ctx, n : Node, from : Int, alpha : Double) -> Unit {
     }
   }
   self.across_seen.truncate(from)
+  found
+}
+
+///|
+/// Their thumbs' targets (Ctx::node_targets), where they show.
+fn Ctx::across_targets(self : Ctx, n : Node, from : Int, alpha : Double) -> Unit {
+  for b in self.across_found(n, from) {
+    self.next_bars.push(b)
+    if self.bar_shows(b) * alpha > 0.002 {
+      self.bar_target(b)
+    }
+  }
 }
 
 ///|
@@ -519,6 +550,12 @@ fn Ctx::paint_bar(self : Ctx, b : BarAt, alpha : Double) -> Unit {
     0L,
     (if lit { 0.45 } else { 0.26 }) * shown,
   )
+  self.bar_target(b)
+}
+
+///|
+/// Bar `b`'s thumb a target for a mouse where it shows (Ctx::paint_bar draws it so): as the frame's targets are found.
+fn Ctx::bar_target(self : Ctx, b : BarAt) -> Unit {
   if pointing() is Mouse {
     let ((cx0, cy0, cx1, cy1), _, _) = clip_at(clip_top())
     let g = scroll_bar_grab
@@ -531,6 +568,16 @@ fn Ctx::paint_bar(self : Ctx, b : BarAt, alpha : Double) -> Unit {
     )
     |> ignore
   }
+}
+
+///|
+/// How much of bar `b` shows now (0 hidden), as it is drawn (Ctx::paint_bar), what it wakes for aside.
+fn Ctx::bar_shows(self : Ctx, b : BarAt) -> Double {
+  guard self.bar_owner(b.id) is Some((bar, until, _)) else { return 0.0 }
+  let hide = bar.hides_at(until)
+  let t = self.clock
+  let fading = t < bar.in_at + scrollbar_fade_ms || (t >= hide && t < hide + scrollbar_fade_ms)
+  bar.shown(if fading { self.now() } else { t }, until)
 }
 
 ///|

@@ -273,6 +273,15 @@ pub struct Tree {
   /// node's own cell told as it comes or goes (View::pressed, View::pointed)
   mut pressing : NodeId?
   mut pointed : NodeId?
+  /// what follows what is under the pointer, while it is over the window (Tree::point_at)
+  mut point_stop : (() -> Unit)?
+  /// let go (Tree::dispose): what is made for it after stops at once
+  mut gone : Bool
+  /// which following of the point is the one now (Tree::follow_point): each said, and each let go, another
+  mut point_said : Int
+  /// how many times what a point would hit may have changed (a layout, a place, the order, a node made or let go, what
+  /// takes presses or holds a layer): what is pointed at worked out again only past one (Tree::hits_said)
+  mut hits : Int
   /// the fingers down on it (each by its id: Drag's `finger`), in the order they went down
   downs : Array[Int]
   /// what the last frame changed: the nodes whose content it made again, those placed or faded otherwise
@@ -355,6 +364,10 @@ pub fn Tree::new(
     held: None,
     pressing: None,
     pointed: None,
+    point_stop: None,
+    gone: false,
+    point_said: 0,
+    hits: 0,
     downs: [],
     changed: [],
     composed: [],
@@ -401,6 +414,7 @@ pub fn words_measure(words : String, width : Double) -> (Double, Double) {
 /// A node made in `parent` (-1: the root), its scope its own (made with nothing reading: owned by nothing else).
 fn Tree::made(self : Tree, parent : Int) -> View {
   self.work.made = self.work.made + 1
+  self.hits = self.hits + 1
   let at = match self.free.pop() {
     Some(i) => {
       let n = self.nodes[i]
@@ -588,6 +602,9 @@ pub fn Tree::alive(self : Tree) -> Int {
 ///|
 /// The whole tree let go: every node's scope stopped, what goes with it run, callbacks and measures dropped.
 pub fn Tree::dispose(self : Tree) -> Unit {
+  self.gone = true
+  // (what follows the pointer held by nothing of the tree's nodes: let go with it, told nothing more)
+  self.point_stopped()
   if self.nodes.length() > 0 && self.nodes[0].live {
     self.root().let_go()
   }
@@ -708,6 +725,7 @@ fn Tree::marked(self : Tree) -> Unit {
 /// holder's layout reused, is no sign the rest are).
 fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
   self.layout_due = true
+  self.hits = self.hits + 1
   self.marked()
   let mut i = at
   while i >= 0 {
@@ -735,6 +753,7 @@ fn Tree::place_marked_at(self : Tree, at : Int) -> Unit {
   if !n.place_due {
     n.place_due = true
     self.places_due.push(at)
+    self.hits = self.hits + 1
     self.marked()
   }
 }
@@ -743,6 +762,7 @@ fn Tree::place_marked_at(self : Tree, at : Int) -> Unit {
 /// The order the nodes are drawn in to be made again (one made, let go or moved among its siblings).
 fn Tree::order_marked(self : Tree) -> Unit {
   self.order_due = true
+  self.hits = self.hits + 1
   self.marked()
 }
 
@@ -1188,6 +1208,7 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
   let set = fn(on : Bool) {
     guard self.live() is Some(n) else { return }
     n.inert = !on
+    self.tree.hits = self.tree.hits + 1
     if !on {
       self.tree.hold_lost_in(self.at)
     }
@@ -1223,6 +1244,7 @@ pub fn View::modal(self : View, on : Live[Bool]) -> View {
   let set = fn(on : Bool) {
     guard self.live() is Some(n) else { return }
     n.modal = on
+    self.tree.hits = self.tree.hits + 1
     match self.tree.modals.search(self.at) {
       Some(i) if !on => self.tree.modals.remove(i) |> ignore
       None if on => self.tree.modals.push(self.at)
@@ -1649,6 +1671,7 @@ fn Tree::asked_at(
 pub fn View::on_press(self : View, f : () -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
   n.on_press = Some(f)
+  self.tree.hits = self.tree.hits + 1
   self
 }
 
@@ -1698,6 +1721,7 @@ pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1) -> Vie
     _ => ()
   }
   n.on_drag = Some(f)
+  self.tree.hits = self.tree.hits + 1
   self
 }
 
@@ -1708,6 +1732,7 @@ pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1) -> Vie
 pub fn View::takes(self : View, f : (Double, Double, Double) -> Bool) -> View {
   guard self.live() is Some(n) else { return self }
   n.takes = Some(f)
+  self.tree.hits = self.tree.hits + 1
   self
 }
 
@@ -2153,6 +2178,7 @@ fn View::let_go(self : View) -> Unit {
   self.tree.free.push(self.at)
   self.tree.order_marked()
   self.tree.work.let_go = self.tree.work.let_go + 1
+  self.tree.hits = self.tree.hits + 1
 }
 
 ///|
@@ -3292,6 +3318,13 @@ pub(all) enum Target {
 /// What a press at (x, y) is for: the topmost node drawn there (by the order drawn, where the scene composed draws it:
 /// the same places as what is drawn) that is held (View::on_drag), does something when pressed or hosts the old view.
 pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
+  self.target_in(x, y, tracked=false)
+}
+
+///|
+/// The same, what decides where a node takes it (View::takes) read `tracked` (followed by what asks it: Tree::point_at)
+/// or not.
+fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Target {
   // (the logic's moment, what is where taken as of then: View::takes)
   let at = self.logic_at()
   let found : Array[Target] = []
@@ -3300,7 +3333,7 @@ pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
     if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.pressless_at(c.id.at) {
       let n = self.nodes[c.id.at]
       let here = match n.takes {
-        Some(f) => @signals.untracked(fn() { f(x - cx, y - cy, at) })
+        Some(f) => if tracked { f(x - cx, y - cy, at) } else { @signals.untracked(fn() { f(x - cx, y - cy, at) }) }
         None => true
       }
       if !here {
@@ -3452,20 +3485,78 @@ pub fn View::pointed(self : View) -> Bool {
 /// topmost, is pointed at (View::pointed), nothing else; none where (x, y) is none (the pointer gone). The one it was
 /// over and the one it is over now told, nothing else.
 pub fn Tree::point_at(self : Tree, x : Double, y : Double) -> Unit {
-  let now : NodeId? = if x < 0.0 || y < 0.0 {
-    None
-  } else {
-    match self.target_at(x, y) {
-      Pressed(id) | Dragged(id) => Some(id)
-      _ => None
-    }
+  // (none: nothing followed, nothing pointed at from now)
+  if x < 0.0 || y < 0.0 {
+    self.point_stopped()
+    self.pointed_to(None)
+    return
   }
+  self.follow_point(x, y, fn(t) {
+    self.pointed_to(
+      match t {
+        Pressed(id) | Dragged(id) => Some(id)
+        _ => None
+      },
+    )
+  })
+}
+
+///|
+/// What is at (x, y) followed (Tree::target_at, what decides where a node takes it (View::takes) read so): `then` told
+/// it now and as it changes, whatever it is (a node's, the old view's, nothing), till the next point is followed, or
+/// none (x or y below 0: nothing told, nothing followed), or the tree is let go. What is where, as the layout or the
+/// order changes, is followed by being said again (Tree::hits_said).
+pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -> Unit) -> Unit {
+  self.point_stopped()
+  if x < 0.0 || y < 0.0 {
+    return
+  }
+  // (this one the one followed from now: what it is first told may let it go (another point, none, the tree let go),
+  // which this one's number then no longer is)
+  let mine = self.point_said
+  let stop = self.queued(fn() { self.target_in(x, y, tracked=true) }, then)
+  if self.gone || self.point_said != mine {
+    stop()
+  } else {
+    self.point_stop = Some(stop)
+  }
+}
+
+///|
+/// What follows the point let go (Tree::follow_point): told nothing more.
+fn Tree::point_stopped(self : Tree) -> Unit {
+  // (what is being made to follow one no longer the one: Tree::follow_point)
+  self.point_said = self.point_said + 1
+  match self.point_stop {
+    Some(stop) => stop()
+    None => ()
+  }
+  self.point_stop = None
+}
+
+///|
+/// What the pointer is over now `now`, of what takes a press there (View::pointed): the one it was over and the one it
+/// is over told, as they change.
+pub fn Tree::pointed_to(self : Tree, now : NodeId?) -> Unit {
   let was = self.pointed
   if was != now {
     self.pointed = now
     self.hand_told(was, fn(n) { n.pointed_cell }, false)
     self.hand_told(now, fn(n) { n.pointed_cell }, true)
   }
+}
+
+///|
+/// How many times what a point hits may have changed so far (Tree's `hits`): what is pointed at by a still pointer
+/// is worked out again past one, not every frame.
+pub fn Tree::hits_said(self : Tree) -> Int {
+  self.hits
+}
+
+///|
+/// What the pointer is over now, of what takes a press there (Tree::point_at), None nothing.
+pub fn Tree::pointed_now(self : Tree) -> NodeId? {
+  self.pointed
 }
 
 ///|

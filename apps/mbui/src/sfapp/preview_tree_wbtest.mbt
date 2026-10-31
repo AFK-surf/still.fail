@@ -291,6 +291,8 @@ test "viewer on the tree: opened from the chat, zoomed, closed back into its thu
   }
   t.run_for(@sfpages.reveal_ms)
   let (x, y) = t.locate("img:compare.png")[0]
+  // (the pointer over the window, what is under it followed as long as it is: the window's, not the viewer's)
+  t.move(x, y)
   let before = tree_held()
   let first = opened_closed(t, x, y, before)
   let again = opened_closed(t, x, y, before)

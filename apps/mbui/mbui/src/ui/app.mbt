@@ -761,13 +761,17 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
   if by >= 0 {
     args.push(by.to_double())
   }
+  // (where a mouse points, said before the event is taken; what it is over told once it is: view_host.mbt)
+  view_point_said(kind, x, y)
   // (what the tree made once routes elsewhere than to the old view (a press on a node of its own, one outside the old
   // view's island) is no input of the old view's: taped alone, view_host.mbt)
   if (kind <= 3 || view_holds()) && view_pointer(kind, x, y, button) {
+    view_pointed()
     input_taped("pointer", h_event_time(), args)
     return
   }
   took_input("pointer", h_event_time(), args)
+  view_pointed()
   // (a press down, up or called off, a second finger, the pointer gone: what reads what came is built again; a pointer
   // moved is the hand's place, read by what reads it: hand.mbt)
   if kind != 1 {
