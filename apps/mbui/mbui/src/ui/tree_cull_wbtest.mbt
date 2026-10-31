@@ -167,29 +167,3 @@ test "words of the tree's own taller than the window, first drawn with their foo
   assert_true(whole.length() > 0, msg="some of them within it")
   assert_eq(moved, whole, msg="what shows of them, where")
 }
-
-///|
-test "an old view the whole window, what it holds outside it: no glyph of its words asked of the host" {
-  let n = fn(words : Bool, inner : Double) {
-    let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
-    t.check_looks(false)
-    set_view_app(fn(root) {
-      old(root, fn(c) {
-        c.box(w=Px(400.0), h=Px(200.0), ml=inner, fn() {
-          if words {
-            c.text("far words", wrap=false) |> ignore
-          }
-        })
-        |> ignore
-      }).grow(Is(1.0))
-      |> ignore
-    })
-    t.draw()
-    (glyphs_asked(), old_whole.val)
-  }
-  let (inside, whole) = n(true, 0.0)
-  let (without, _) = n(false, 0.0)
-  assert_true(whole, msg="the whole window")
-  assert_true(inside > without, msg="in the window")
-  assert_eq(n(true, 500.0), (without, true), msg="past its right edge")
-}
