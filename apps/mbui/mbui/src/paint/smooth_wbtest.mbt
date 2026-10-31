@@ -26,11 +26,12 @@ test "a smooth corner is the web's superellipse: |x|^n + |y|^n = 1 over the radi
   assert_true((smooth_exponent * smooth_exponent - 8.0).abs() < 1.0e-12)
   // within a hundredth of a pixel of it over a radius of 200 (more than any the apps have at 4×: the wholly smooth
   // corner by its polynomials), and half way to it (a box with half the room, by its powers) within a millionth, of the
-  // exponent half way
+  // exponent half way (the curve itself: half smooth, this corner has little room across, and so eases a little into
+  // its long edges as a capsule's end does, capsule_ease)
   for s in [(1.0, 0.01), (0.5, 1.0e-6)] {
     for j in 0..=40 {
       let (x, y, _, _) = on_curve(160.0, s.0, 1.5707963267948966 * j.to_double() / 40.0)
-      let d = sd_corner(x, y, 300.0, 200.0, 160.0, s.0)
+      let d = corner_shape(x, y, 300.0, 200.0, 160.0, s.0, 1.0e30)
       assert_true(d.abs() < s.1, msg="\{s.0} at \{j}: \{d} off the curve")
     }
   }
@@ -218,4 +219,102 @@ test "the wholly smooth corner's polynomials are its factors within 2e-5" {
     assert_true((smooth_a(t) - (1.0 + tn) / g).abs() < 2.0e-5, msg="a at \{t}")
     assert_true((smooth_b(t) - (1.0 + tn) / (u * g)).abs() < 2.0e-5, msg="b at \{t}")
   }
+}
+
+///|
+/// How far below the top edge a capsule 300 by 80 (its corners 40) has its top edge `u` r from its right tip, in r: the
+/// point on that column where sd_box is 0, by halving.
+fn capsule_drop(hx : Double, u : Double) -> Double {
+  let x = hx - 40.0 * u
+  let mut lo = 0.0
+  let mut hi = 40.0
+  for _ in 0..<60 {
+    let mid = (lo + hi) / 2.0
+    if sd_box(x, mid, hx, 40.0, 40.0) <= 0.0 {
+      lo = mid
+    } else {
+      hi = mid
+    }
+  }
+  (40.0 - lo) / 40.0
+}
+
+///|
+test "a capsule's end is Apple's: the circle's at its middle, easing into the long edges until 2 r from the tip" {
+  // (the user, 2026-10-31: 苹果的那个按钮就看不出直线和半圆的接点) measured off iOS 26's alert button 144 high, top and
+  // bottom of both ends: how far below the edge its outline lies, in r, u r from the tip
+  let apple = [
+    (0.325, 0.2628),
+    (0.525, 0.1225),
+    (0.725, 0.0507),
+    (0.825, 0.0328),
+    (0.925, 0.0183),
+    (1.025, 0.0134),
+    (1.125, 0.0097),
+    (1.225, 0.0046),
+    (1.325, 0.0035),
+    (1.525, 0.0004),
+  ]
+  for p in apple {
+    let (u, want) = p
+    let got = capsule_drop(150.0, u)
+    assert_true((got - want).abs() < 0.005, msg="at \{u} r: \{got}, Apple's \{want}")
+  }
+  // the circle's at its middle, the edge's from 2 r in; a circle met the edge at r with nothing left
+  for u in [0.1, 0.2, 0.3] {
+    let circle = 1.0 - (u * (2.0 - u)).sqrt()
+    assert_true((capsule_drop(150.0, u) - circle).abs() < 1.0e-9, msg="at \{u}: \{capsule_drop(150.0, u)}, the circle \{circle}")
+  }
+  assert_true(capsule_drop(150.0, 1.0) > 0.01)
+  assert_true(capsule_drop(150.0, 2.0) < 1.0e-9)
+  // it only ever comes nearer the edge, and bends less and less into it: no bump, no second turn
+  let mut last = capsule_drop(150.0, 0.0)
+  let mut last_slope = -1.0e9
+  for i in 1..=200 {
+    let u = i.to_double() * 0.01
+    let d = capsule_drop(150.0, u)
+    assert_true(d <= last + 1.0e-9, msg="back out at \{u}")
+    if u > 1.2 {
+      let slope = (d - last) / 0.01
+      assert_true(slope >= last_slope - 1.0e-6, msg="bends back at \{u}")
+      last_slope = slope
+    }
+    last = d
+  }
+  // along the straight edge and round the tip the distance is the edge's and the circle's
+  for off in [-0.5, 0.5] {
+    assert_true((sd_box(0.0, 40.0 + off, 150.0, 40.0, 40.0) - off).abs() < 1.0e-12)
+    assert_true((sd_box(150.0 + off, 0.0, 150.0, 40.0, 40.0) - off).abs() < 1.0e-12)
+  }
+}
+
+///|
+test "how far a capsule's end eases in goes with the room it has: a circle round, none at once as it grows" {
+  // a circle 80 across: a circle's distance
+  for j in 0..=40 {
+    let a = 1.5707963267948966 * j.to_double() / 40.0
+    for off in [-1.0, 0.0, 1.0] {
+      let x = (40.0 + off) * @dmath.cos(a)
+      let y = (40.0 + off) * @dmath.sin(a)
+      let l = (x * x + y * y).sqrt()
+      assert_true((sd_box(x, y, 40.0, 40.0, 40.0) - (l - 40.0)).abs() < 1.0e-12)
+    }
+  }
+  // standing up, the same as lying down
+  for u in [0.5, 0.9, 1.3] {
+    let x = 150.0 - 40.0 * u
+    for y in [37.0, 39.5, 40.5] {
+      assert_eq(sd_box(y, x, 40.0, 150.0, 40.0), sd_box(x, y, 150.0, 40.0, 40.0))
+    }
+  }
+  // a capsule growing from a circle: its outline at r from the tip never jumps
+  let mut last = capsule_drop(40.0, 1.0)
+  for i in 1..=120 {
+    let d = capsule_drop(40.0 + i.to_double() * 0.5, 1.0)
+    assert_true((d - last).abs() < 0.001, msg="jumps at \{40.0 + i.to_double() * 0.5}")
+    last = d
+  }
+  // a corner with room across (wholly smooth), and a round one given in a big box (a window's): not eased
+  assert_eq(capsule_ease(1.0, 0.0), 0.0)
+  assert_eq(sd_box(140.0, 30.0, 150.0, 40.0, 12.0), sd_corner(140.0, 30.0, 150.0, 40.0, 12.0, 1.0))
 }
