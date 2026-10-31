@@ -1,11 +1,13 @@
 // An agent's message coming out of its activity's avatar (ember apps/android chat/screens/ChatMotion.kt; web
-// useEmissions), one at a time: the activity folds to its avatar (Fold), the avatar hops to where the message goes
-// (Float: up, slowing, then falling ever faster, stretched, stopping dead there), the message comes out of it as it
-// lands, the avatar flattened by the fall and springing back (Spit), and the avatar goes on down to where the activity
-// now is, which unfolds again (Return). Until its turn a message waits out of the list. With motion reduced, each pose
-// at once. Messages no one watches just appear: arriving while the page is not in front or the reader has scrolled up,
-// and all still waiting when that happens. Only drawn: the message is laid out (and tapped) where it is from the
-// frame it comes into the list; the flying avatar is a picture over the list.
+// useEmissions), one at a time: the activity folds to its avatar (Fold), the avatar glides to where the message goes
+// (Float), the message comes out of it as it is there (Spit), and the avatar glides on to where the activity now is,
+// which unfolds again (Return). One way from its activity and back, no hop (the user, 2026-10-31: 「整个头像运动需要流
+// 畅且符合逻辑，并且不要有突变」, then 「不要跳跃了」): each glide sets out from rest where the one before left the
+// avatar and comes to rest where it goes, so it never jumps, stops dead or starts at speed. Until its turn a message
+// waits out of the list. With motion reduced, each pose at once. Messages no one watches just appear: arriving while
+// the page is not in front or the reader has scrolled up, and all still waiting when that happens. Only drawn: the
+// message is laid out (and tapped) where it is from the frame it comes into the list; the flying avatar is a picture
+// over the list.
 
 ///|
 pub(all) enum Pose {
@@ -31,15 +33,9 @@ pub fn Pose::ms(self : Pose) -> Double {
 pub let emit_out_ms : Double = Spit.ms() + Return.ms()
 
 ///|
-/// The same agent's next message, waiting as one comes out: the avatar drops on to it, no hop (how long).
+/// The same agent's next message, waiting as one comes out: the avatar glides on to it from the one before, not
+/// going home first (how long).
 pub let emit_drop_ms : Double = 280.0
-
-///|
-/// The hop: how high over the higher of its two ends, and the share of its time spent going up.
-pub let emit_hop : Double = 34.0
-
-///|
-pub let emit_rise : Double = 0.42
 
 ///|
 /// A message's turn: its seq and agent, its pose and how far through it (`clock`, 0 to 1, said as the pose sets out,
@@ -51,6 +47,11 @@ pub(all) struct Turn {
   pose : Pose
   from : (Double, Double)?
   clock : @motion.Anim
+  /// how long its clock is (ms)
+  span : Double
+  /// its way stretched as it goes (a Float waiting for words sent to land, emit_step): how far it was, how fast it went
+  /// on and how fast it ends, over its clock (0 to 1: emit_clock); None: the clock itself
+  warp : (Double, Double, Double)?
 }
 
 ///|
@@ -83,6 +84,9 @@ pub(all) struct Emits {
   mut out_key : String
   /// the chat's messages as last taken (emit_take), each decided: the same version again holds none new
   mut taken : Array[Message]
+  /// each message out of an avatar coming out (its seq's): its words' way in, 0 to 1 over emit_out_ms_most from the
+  /// avatar landing on it (emit_out)
+  out_at : Map[String, @motion.Anim]
   /// how many times it changed, as a signal (Emits::changed): what reads it (a message's row, an activity's:
   /// Emits::read) is built again as it does, kept or not (mbui's kept_nodes.mbt)
   said : @signals.Signal[Int]
@@ -125,6 +129,7 @@ pub fn emits_of(key : String) -> Emits {
         held_until: -1.0,
         out_key: "",
         taken: [],
+        out_at: {},
         said: @signals.signal(0),
       }
       emits[key] = e
@@ -156,6 +161,11 @@ pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Boo
     let agent = if m.author_kind == "agent" && !m.mine && !m.system { m.by.agent } else { "" }
     let goes = e.watched && m.said && agent != "" && showing.contains(agent)
     e.decided[k] = goes
+    // its agent's turn over already, no avatar to come out of: it comes in where it is, its words a glyph at a time
+    // from now as they would out of one (emit_out), not grown in as a row (the user, 2026-10-31: 「为啥第二条是弹出来的」)
+    if !goes && e.watched && m.said && agent != "" {
+      e.out_at[k] = pose_clock(emit_out_ms_most, Some(c.moment()))
+    }
     if goes {
       // its agent's activity folds from now
       e.queue.push((m.seq, agent, pose_clock(Fold.ms(), None)))
@@ -164,6 +174,14 @@ pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Boo
   if e.decided.length() != decided {
     e.changed()
   }
+}
+
+///|
+/// Whether an agent's message comes in with no avatar to come out of, its words a glyph at a time (emit_take): its row
+/// opens where it is, what it holds not grown in.
+pub fn emit_words_only(e : Emits, seq : Double) -> Bool {
+  e.read()
+  e.decided.get(seq_s(seq)) == Some(false) && e.out_at.contains(seq_s(seq))
 }
 
 ///|
@@ -271,6 +289,8 @@ pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
     pose: if float { Float } else { Fold },
     from: None,
     clock: if float { pose_clock(Float.ms(), at) } else { pose_clock(left, at) },
+    span: if float { Float.ms() } else { left },
+    warp: None,
   })
   // said once as a turn sets out: it moves until its poses are played (Emits::rest_at)
   c.moving(e.mover, e as &@ui.Moving)
@@ -335,6 +355,15 @@ pub fn pose_clock(ms : Double, at : Double?) -> @motion.Anim {
 pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Unit {
   // (what of it is read as it is built, as it was: what reads it told where it changed, Emits::changed)
   let was_shown = (e.current, e.copied, e.held_until, e.done.length(), e.queue.length())
+  // the words of what came out all in: drawn as laid out from here, what showed them built again (emit_out)
+  let now = c.moment()
+  let all_in = e.out_at.iter().filter(fn(o) { now >= o.1.ends() }).map(fn(o) { o.0 }).collect()
+  for k in all_in {
+    e.out_at.remove(k)
+  }
+  if all_in.length() > 0 {
+    e.changed()
+  }
   if !e.watched || @ui.reduced_motion() {
     emit_release(e)
     turns.over(c, Emits, turns.moment(c))
@@ -364,13 +393,20 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
     // so it comes down as they do (not there before them, waiting)
     let t = match t.pose {
       Float if sending >= 0.0 && sending > t.clock.ends() && sending != e.held_until && !t.clock.over() => {
-        let u = t.clock.get()
-        // (its way is linear: where it is says when now is on it)
-        let now = t.clock.ends() - (1.0 - u) * pose_ms(Float, t.from)
-        let way = @motion.Anim::new(u)
-        way.animate(1.0, @motion.tween(sending - now, ease=Linear), start_at=now)
+        // (its clock is linear: how far it is says when now is on it) going on from where it is at the speed it has,
+        // to come down at its own end speed when they land: no step in its speed (Turn's warp)
+        let s = t.clock.get()
+        let now = t.clock.ends() - (1.0 - s) * t.span
+        let u = emit_clock(c, t)
+        let rate = turn_rate(t)
+        let way = @motion.Anim::new(0.0)
+        let long = sending - now
+        way.animate(1.0, @motion.tween(long, ease=Linear), start_at=now)
+        let most = 3.0 * (1.0 - u)
+        let end_rate = 1.0 / pose_ms(Float, t.from)
         e.held_until = sending
-        let t = { ..t, clock: way }
+        let warp = Some((u, dmin(rate * long, most), dmin(end_rate * long, most)))
+        let t = { ..t, clock: way, span: long, warp }
         e.current = Some(t)
         c.moving(e.mover, e as &@ui.Moving)
         t
@@ -384,7 +420,8 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
     // the next from where this one was declared to end, whichever frame sees it
     let at = t.clock.ends()
     match t.pose {
-      Fold => e.current = Some({ ..t, pose: Float, clock: pose_clock(Float.ms(), Some(at)) })
+      Fold =>
+        e.current = Some({ ..t, pose: Float, clock: pose_clock(Float.ms(), Some(at)), span: Float.ms(), warp: None })
       Float => {
         if sending != -1.0 {
           if sending > e.held_until {
@@ -395,7 +432,9 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
         }
         let at = dmax(at, e.held_until)
         e.held_until = -1.0
-        e.current = Some({ ..t, pose: Spit, from: None, clock: pose_clock(Spit.ms(), Some(at)) })
+        e.out_at[seq_s(t.seq)] = pose_clock(emit_out_ms_most, Some(at))
+        let clock = pose_clock(Spit.ms(), Some(at))
+        e.current = Some({ ..t, pose: Spit, from: None, clock, span: Spit.ms(), warp: None })
       }
       Spit =>
         match (e.queue.get(0), e.landed) {
@@ -409,9 +448,14 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
               pose: Float,
               from: Some(l),
               clock: pose_clock(emit_drop_ms, Some(at)),
+              span: emit_drop_ms,
+              warp: None,
             })
           }
-          _ => e.current = Some({ ..t, pose: Return, clock: pose_clock(return_ms(e), Some(at)) })
+          _ => {
+            let span = return_ms(e)
+            e.current = Some({ ..t, pose: Return, clock: pose_clock(span, Some(at)), span, warp: None })
+          }
         }
       Return => {
         e.done[seq_s(t.seq)] = true
@@ -443,24 +487,45 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : Double) -> Uni
 }
 
 ///|
-/// The current pose's time, 0 to 1, linear.
+/// How far through its pose, 0 to 1: its clock, or (stretched as it went: Turn's warp) a cubic from where it was at
+/// the speed it had to its end at the speed it ends at.
 pub fn emit_clock(c : @ui.Ctx, t : Turn) -> Double {
   ignore(c)
-  t.clock.get()
+  let s = t.clock.get()
+  match t.warp {
+    Some((u0, m0, m1)) => hermite(u0, m0, 1.0, m1, s)
+    None => s
+  }
 }
 
 ///|
-/// What is left, at `s` seconds, of a spring let go from 1 (stiffness 520, damping 14, mass 1: under-damped).
-pub fn emit_settle(s : Double) -> Double {
-  let w0 = (520.0).sqrt()
-  let z = 14.0 / (2.0 * w0)
-  let wd = w0 * (1.0 - z * z).sqrt()
-  @dmath.exp(-z * w0 * s) * (@dmath.cos(wd * s) + z * w0 / wd * @dmath.sin(wd * s))
+/// How fast it goes through its pose now (a share a ms).
+fn turn_rate(t : Turn) -> Double {
+  match t.warp {
+    Some((u0, m0, m1)) => hermite_slope(u0, m0, 1.0, m1, t.clock.get()) / t.span
+    None => 1.0 / t.span
+  }
 }
 
 ///|
-pub fn emit_smooth(t : Double) -> Double {
-  t * t * (3.0 - 2.0 * t)
+/// The cubic from `p0` going at `m0` to `p1` going at `m1`, at `s` (0 to 1; speeds over the whole of it).
+fn hermite(p0 : Double, m0 : Double, p1 : Double, m1 : Double, s : Double) -> Double {
+  let s2 = s * s
+  let s3 = s2 * s
+  (2.0 * s3 - 3.0 * s2 + 1.0) * p0 +
+  (s3 - 2.0 * s2 + s) * m0 +
+  (-2.0 * s3 + 3.0 * s2) * p1 +
+  (s3 - s2) * m1
+}
+
+///|
+/// Its speed at `s` (over the whole of it).
+fn hermite_slope(p0 : Double, m0 : Double, p1 : Double, m1 : Double, s : Double) -> Double {
+  let s2 = s * s
+  (6.0 * s2 - 6.0 * s) * p0 +
+  (3.0 * s2 - 4.0 * s + 1.0) * m0 +
+  (-6.0 * s2 + 6.0 * s) * p1 +
+  (3.0 * s2 - 2.0 * s) * m1
 }
 
 ///|
@@ -525,71 +590,130 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
   e.trace = (u, avatar.1, landing.1)
   match t.pose {
     Float => {
-      // on from the message before it: only the drop
+      // from its activity's avatar, or on from the message before it (where it was)
       let start = match t.from {
         Some(f) => f
         None => avatar
       }
       e.trace = (u, start.1, landing.1)
-      let rise = if t.from is Some(_) { 0.0 } else { emit_rise }
-      let top = if t.from is Some(_) { start.1 } else { dmin(start.1, landing.1) - emit_hop }
-      let up = if rise > 0.0 { u / rise } else { 1.0 }
-      let down = (u - rise) / (1.0 - rise)
-      let y = if u < rise {
-        start.1 + (top - start.1) * (1.0 - @dmath.pow(1.0 - up, 2.5))
-      } else {
-        top + (landing.1 - top) * @dmath.pow(dmax(down, 0.0), 2.5)
-      }
-      let across = if u < 0.5 { 4.0 * u * u * u } else { 1.0 - @dmath.pow(-2.0 * u + 2.0, 3.0) / 2.0 }
-      let stretch = if u < rise { 0.07 * @dmath.sin(@math.PI * up) } else { 0.14 * down * down }
-      Some((start.0 + (landing.0 - start.0) * across, y, 1.0 - stretch * 0.6, 1.0 + stretch))
+      Some((hermite(start.0, 0.0, landing.0, 0.0, u), hermite(start.1, 0.0, landing.1, 0.0, u), 1.0, 1.0))
     }
     Spit => {
       e.landed = Some(landing)
-      let k = emit_settle(u * Spit.ms() / 1000.0)
-      let swell = 1.0 +
-        0.12 *
-        (if u < 0.4 {
-          emit_smooth(u / 0.4)
-        } else if u < 0.75 {
-          1.0 - emit_smooth((u - 0.4) / 0.35)
-        } else {
-          0.0
-        })
-      Some((landing.0, landing.1, swell * (1.0 + 0.16 * k), swell * (1.0 - 0.2 * k)))
+      Some((landing.0, landing.1, 1.0, 1.0))
     }
-    _ => {
-      let k = 1.0 - (1.0 - u) * (1.0 - u) * (1.0 - u)
-      Some((landing.0 + (avatar.0 - landing.0) * k, landing.1 + (avatar.1 - landing.1) * k, 1.0, 1.0))
-    }
+    _ =>
+      // home from where it let the message out
+      Some((hermite(landing.0, 0.0, avatar.0, 0.0, u), hermite(landing.1, 0.0, avatar.1, 0.0, u), 1.0, 1.0))
   }
 }
 
 ///|
-/// A message coming out of its avatar (Chat.kt emitOut, 380 ms): its column from 35% about `from_x` across (its
-/// avatar's middle: over the head's start on a phone, 12; out in the margin before it on the desktop, Chat.css.ts
-/// msgRow[data-emitting] > msgMain: -16) and 12 down, unrolling from its top, both on Ease.Out over the whole; its
-/// opacity in by 35% of the time.
-pub fn emit_out(c : @ui.Ctx, i : Int, e : Emits, seq : Double, from_x : Double) -> Unit {
+/// A message coming out of its avatar as it lands: its head (name, time) sliding out of the avatar beside it, its
+/// words a glyph at a time, in the order they read but each a little before or after its turn (the user, 2026-10-31:
+/// 「有没有那种每个字独立动的动效」「整体按顺序，局部扰动」), each fading in as it rises into place, a little more or
+/// less than the next. Its words never scaled.
+pub fn emit_out(c : @ui.Ctx, col : Int, head : Int, e : Emits, seq : Double) -> Unit {
   e.read()
   if emit_awaited(e, seq) {
-    c.look(i, @ui.look(alpha=0.0))
+    c.look(col, @ui.look(alpha=0.0))
     return
   }
-  if !emit_emitting(e, seq) {
-    return
+  let way = match e.out_at.get(seq_s(seq)) {
+    Some(way) => way
+    None => return
   }
-  let t = e.current.unwrap()
-  let u = emit_clock(c, t)
-  let k = @ui.Ease::Out.at(u)
-  match @motion.measured_rect(c, "emit-col/" + seq_s(seq)) {
-    Some((_, _, cw, ch)) => {
-      let s = 0.35 + 0.65 * k
-      c.look(i, @ui.look(alpha=if u < 0.35 { @ui.Ease::Out.at(u / 0.35) } else { 1.0 }, scale=s, ox=if cw > 0.0 { from_x / cw } else { 0.0 }, oy=if ch > 0.0 { 12.0 / ch } else { 0.0 }))
-      // (what has come out fading to the edge it unrolls from under, by each pixel: @ui.cut_soft)
-      c.cut_to_top(i, ch * k, soft=@ui.cut_soft(ch * k, ch * (1.0 - k)))
+  // (built again as they are all in: emit_step lets them go then)
+  c.wake_in(dmax(way.ends() - c.moment(), 0.0))
+  // (how far on from its coming out, read as it is painted)
+  let since = fn() { way.get() * emit_out_ms_most }
+  c.look_by(head, fn() {
+    let k = @ui.Ease::Out.at(dmin(since() / emit_head_ms, 1.0))
+    @ui.look(alpha=k, dx=-emit_out_slide * (1.0 - k))
+  })
+  // (what is not words, a list's mark, a quote's bar, a code block's ground, comes with the glyph after it: the first
+  // of its line, Ctx::glyphs_by)
+  let salt = seq.to_int64().to_int()
+  let key = "emit-col/" + seq_s(seq)
+  c.glyphs_by(col, fn(at) {
+    match @motion.measured_rect(c, key) {
+      Some(r) => glyph_out(since(), at, r, salt)
+      None => { alpha: 1.0, dy: 0.0, scale: 1.0 }
     }
-    None => c.look(i, @ui.look(alpha=0.0))
-  }
+  })
 }
 
+///|
+/// A glyph of a message (`at`; `col`: the message's words' box in the window, `salt`: which message), `ms` after it
+/// came out. What shows of the message is read in order, a line at a time and along each line (each line
+/// emit_line_ms, less where more lines show: all of them within emit_screen_ms), each glyph a little before or after
+/// its turn (up to half of emit_glyph_jitter); then over emit_glyph_ms faded in as it rises into place. What is out
+/// of view is there at once (the user, 2026-10-31: 「应该屏幕外面不一样，在屏幕里面你不一样能他妈行吗」, then
+/// 「让它出快点」). Its size as it is (「单字不用尺寸动效吧，用淡入」).
+fn glyph_out(ms : Double, at : @ui.GlyphAt, col : (Double, Double, Double, Double), salt : Int) -> @ui.GlyphLook {
+  let still : @ui.GlyphLook = { alpha: 1.0, dy: 0.0, scale: 1.0 }
+  let (x0, y0, w, h) = col
+  // what shows of it, in lines; out of it, there at once
+  let shown_top = dmax(at.top, y0)
+  let shown_foot = dmin(at.foot, y0 + h)
+  if at.y + at.h <= shown_top || at.y >= shown_foot {
+    return still
+  }
+  let lines = dmax((shown_foot - shown_top) / emit_line_points, 1.0)
+  let line_ms = dmin(emit_line_ms, emit_screen_ms / lines)
+  // how far into what shows it is read: its line, and along it
+  let read = dmax(at.y - shown_top, 0.0) / emit_line_points +
+    (if w > 0.0 { dmax(dmin((at.x - x0) / w, 1.0), 0.0) } else { 0.0 })
+  let (j0, j1) = (glyph_noise(at.index, salt), glyph_noise(at.index, salt + 7919))
+  let start = dmax(read * line_ms + (j0 - 0.5) * emit_glyph_jitter, 0.0)
+  let p = (ms - start) / emit_glyph_ms
+  if p <= 0.0 {
+    return { alpha: 0.0, dy: 0.0, scale: 1.0 }
+  }
+  if p >= 1.0 {
+    return still
+  }
+  let rise = emit_glyph_rise * (0.7 + 0.6 * j1)
+  { alpha: @ui.Ease::Out.at(dmin(p / 0.7, 1.0)), dy: rise * (1.0 - @ui.Ease::Out.at(p)), scale: 1.0 }
+}
+
+///|
+/// A number from 0 to 1 for glyph `i` of message `salt`, the same each time (a hash: no chance in it).
+fn glyph_noise(i : Int, salt : Int) -> Double {
+  let mut h = (i * 374761393 + salt * 668265263).to_uint()
+  h = (h ^ (h >> 13)) * 1274126177U
+  h = h ^ (h >> 16)
+  (h & 0xFFFFU).reinterpret_as_int().to_double() / 65535.0
+}
+
+///|
+/// A message's words coming out: how long a line's reading takes, the most all that shows of it takes (its lines' share
+/// then shorter), a line's height for that (points), how far before or after its turn each glyph may be, how long each
+/// takes, and how far each rises.
+let emit_line_ms : Double = 120.0
+
+///|
+let emit_screen_ms : Double = 500.0
+
+///|
+let emit_line_points : Double = 22.0
+
+///|
+let emit_glyph_jitter : Double = 50.0
+
+///|
+let emit_glyph_ms : Double = 220.0
+
+///|
+let emit_glyph_rise : Double = 6.0
+
+///|
+/// The head's sliding out (ms); how long it all takes at most.
+let emit_head_ms : Double = 260.0
+
+///|
+let emit_out_ms_most : Double = emit_screen_ms + emit_line_ms + emit_glyph_jitter / 2.0 + emit_glyph_ms
+
+///|
+/// How far a message's head slides out of the avatar (points).
+let emit_out_slide : Double = 10.0

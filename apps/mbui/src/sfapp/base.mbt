@@ -302,6 +302,7 @@ pub using @sfbase {
   seq_s,
   emit_take,
   emit_goes,
+  emit_words_only,
   emit_held,
   emit_emitting,
   emit_awaited,

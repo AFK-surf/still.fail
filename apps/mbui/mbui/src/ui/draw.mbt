@@ -166,6 +166,8 @@ priv struct Drawn {
   mut look_by : (() -> Look)?
   /// its ground's colour worked out as it is painted (Ctx::bg_by), in place of its own
   mut bg_by : (() -> Int64)?
+  /// each glyph of the words it holds drawn with what this gives as it is painted (Ctx::glyphs_by)
+  mut glyphs_by : ((GlyphAt) -> GlyphLook)?
 }
 
 ///|
@@ -403,6 +405,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     cycle: None,
     look_by: None,
     bg_by: None,
+    glyphs_by: None,
   }
   // (held by the node: docs/retained.md, the way there's 1; in the build's entries too, for a row's build to know what
   // it said a look of: Ctx::nodes_end)
@@ -469,6 +472,39 @@ pub fn Ctx::look(self : Ctx, i : Int, look : Look) -> Unit {
   }
   let e = self.drawn_of(i)
   e.look = e.look.then(look)
+}
+
+///|
+/// How a glyph is drawn over how it is laid out: its opacity, how far down it is moved and how it is scaled about its
+/// middle.
+pub(all) struct GlyphLook {
+  alpha : Double
+  dy : Double
+  scale : Double
+} derive(Show, Eq)
+
+///|
+/// A glyph as it is painted, for its own look (Ctx::glyphs_by): its number (from 0 in the order painted, the order
+/// read in), where its line's box starts (x, y in the window) and its line's height, and the top and foot of what
+/// cuts the node that says the looks (the window's part it shows in; not what cuts a part of it, a code block's box). What is not a glyph is said with the number of the glyph after it, its own
+/// box's start and height.
+pub(all) struct GlyphAt {
+  index : Int
+  x : Double
+  y : Double
+  h : Double
+  top : Double
+  foot : Double
+} derive(Show, Eq)
+
+///|
+/// Each glyph of the words node `i` holds (the node's and all in it) drawn with what `f` gives for it as it is
+/// painted: words coming in a glyph at a time. What else it draws (a list's mark, a quote's bar, a code block's
+/// ground, a picture) is drawn by what `f` gives for where it is, so it comes with its line's words. Read as it is
+/// drawn, not as it is built, as Ctx::look_by: what `f` reads paints the frame again as it changes, nothing built or
+/// laid out; `f` works out the same for the same state and time.
+pub fn Ctx::glyphs_by(self : Ctx, i : Int, f : (GlyphAt) -> GlyphLook) -> Unit {
+  self.drawn_of(i).glyphs_by = Some(f)
 }
 
 ///|

@@ -1049,6 +1049,7 @@ pub fn Ctx::frame_dt(Self) -> Double
 pub fn Ctx::frame_ms(Self) -> Double
 pub fn Ctx::frame_number(Self) -> Int32
 pub fn Ctx::glass_solid(Self) -> Bool
+pub fn Ctx::glyphs_by(Self, Int32, (GlyphAt) -> GlyphLook) -> Unit
 pub fn Ctx::hand_lit(Self, Bool) -> Bool
 pub fn Ctx::hand_on(Self, Int32) -> Bool
 pub fn Ctx::hand_shown(Self, Bool, () -> Unit) -> Unit
@@ -1412,6 +1413,21 @@ pub(all) struct GifFrames {
 
 type Glyph
 
+pub(all) struct GlyphAt {
+  index : Int32
+  x : Double
+  y : Double
+  h : Double
+  top : Double
+  foot : Double
+} derive(Eq, Show)
+
+pub(all) struct GlyphLook {
+  alpha : Double
+  dy : Double
+  scale : Double
+} derive(Eq, Show)
+
 pub(all) struct Ground {
   room : Double
   height : Double
@@ -1610,7 +1626,7 @@ pub struct ListRows[T] {
   // private fields
 }
 pub fn[T] ListRows::came(Self[T], String) -> Double?
-pub fn[T] ListRows::enter(Self[T], Ctx, Int32, String, lead? : Double) -> Unit
+pub fn[T] ListRows::enter(Self[T], Ctx, Int32, String, lead? : Double, grown? : Bool) -> Unit
 pub fn[T] ListRows::leave(Self[T], Ctx, Int32, String, lead? : Double) -> Unit
 pub fn[T] ListRows::new() -> Self[T]
 pub fn[T] ListRows::opening(Self[T], Ctx) -> Bool

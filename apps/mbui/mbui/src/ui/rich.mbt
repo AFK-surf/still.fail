@@ -1207,6 +1207,12 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
     }
     let l = lay.line_of[c]
     let top = oy + lay.line_y[l]
+    // (its own look, where what holds it says one: Ctx::glyphs_by)
+    let own = glyph_next(ox + lay.xs[c], top, lay.line_h[l])
+    match own {
+      Some(gl) if gl.alpha <= 0.002 => continue
+      _ => ()
+    }
     if top > cy1 || top + lay.line_h[l] < cy0 {
       continue
     }
@@ -1222,25 +1228,33 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
     }
     let gx = on_pixels(ox + lay.xs[c] + lay.pre[c] + g.ox / z, sc)
     let gy = on_glyph_row(top + lay.line_base[l], g.oy / z, sc)
+    let (gw, gh) = (g.gw / z, g.gh / z)
+    // (moved and scaled about its middle by its own look)
+    let (gx, gy, gw, gh, ga) = match own {
+      Some(gl) => (gx + gw * (1.0 - gl.scale) / 2.0, gy + gh * (1.0 - gl.scale) / 2.0 + gl.dy, gw * gl.scale, gh * gl.scale, alpha * gl.alpha)
+      None => (gx, gy, gw, gh, alpha)
+    }
+    glyph_pushing.val = true
     self.push_inst(
       gx,
       gy,
-      g.gw / z,
-      g.gh / z,
+      gw,
+      gh,
       0.0,
       if g.color { 3.0 } else { 1.0 },
       0.0,
       0.0,
       if g.color { 0xFFFFFFFFL } else { colors[lay.run_of[c]] },
-      alpha,
+      ga,
       g.u,
       g.v,
       g.gw * (sc / zoom),
       g.gh * (sc / zoom),
     )
+    glyph_pushing.val = false
     if inst_owners_kept() {
       let (x0, x1) = lay.span_x(c, c + 1)
-      inst_cell(self.ninst - 1, gx, g.gw / z, ox + x0 + lay.pre[c], ox + x1)
+      inst_cell(self.ninst - 1, gx, gw, ox + x0 + lay.pre[c], ox + x1)
     }
   }
   for k, run in r.runs {

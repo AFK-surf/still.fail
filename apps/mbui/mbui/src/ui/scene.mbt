@@ -595,6 +595,15 @@ fn Ctx::push_inst(
   if (self.ninst + 1) * inst_size > self.inst.length() {
     self.grow()
   }
+  // (what is not a glyph in words drawn a glyph at a time, a list's mark, a quote's bar, a code block's ground: with
+  // the glyph after it, its line's first: Ctx::glyphs_by)
+  let (y, alpha, c2d) = match glyph_look.val {
+    Some(f) if !glyph_pushing.val => {
+      let l = f({ index: glyph_n.val, x, y, h, top: glyph_cut.val.0, foot: glyph_cut.val.1 })
+      (y + l.dy, alpha * l.alpha, if kind == 0.0 { c2d * l.alpha } else { c2d })
+    }
+    _ => (y, alpha, c2d)
+  }
   let b = self.ninst * inst_size
   let a = self.inst
   a[b] = x
@@ -741,6 +750,40 @@ fn Ctx::emit_rect(
 }
 
 ///|
+/// The look each glyph painted now is drawn with, and the number of the next (Ctx::glyphs_by): None, as laid out.
+// kept across runs: set only while a node that says it is painted, put back as it is done
+let glyph_look : Ref[((GlyphAt) -> GlyphLook)?] = Ref(None)
+
+///|
+// kept across runs: set only while a node that says it is painted, put back as it is done
+let glyph_n : Ref[Int] = Ref(0)
+
+///|
+/// The top and foot of what cuts the node whose glyphs have looks of their own (Ctx::glyphs_by), as it is painted: what
+/// of it shows, not what cuts a part of it (a code block's own box).
+// kept across runs: set only while a node that says it is painted, put back as it is done
+let glyph_cut : Ref[(Double, Double)] = Ref((0.0, 0.0))
+
+///|
+/// Whether what is pushed now is a glyph (drawn by its own look) rather than what goes with them.
+// kept across runs: set only while a glyph is pushed, put back as it is
+let glyph_pushing : Ref[Bool] = Ref(false)
+
+///|
+/// The next glyph's own look, where what is painted says one (Ctx::glyphs_by), counted: its line's box from (x, y),
+/// `h` high.
+fn glyph_next(x : Double, y : Double, h : Double) -> GlyphLook? {
+  match glyph_look.val {
+    Some(f) => {
+      let gi = glyph_n.val
+      glyph_n.val = gi + 1
+      Some(f({ index: gi, x, y, h, top: glyph_cut.val.0, foot: glyph_cut.val.1 }))
+    }
+    None => None
+  }
+}
+
+///|
 fn Ctx::emit_text(
   self : Ctx,
   tl : TextLayout,
@@ -790,6 +833,12 @@ fn Ctx::emit_text(
     }
     let line = tl.line_of[c]
     let top = oy + line.to_double() * tl.line_h
+    // (its own look, where what holds it says one: numbered whether or not it shows, Ctx::glyphs_by)
+    let own = glyph_next(ox + tl.xs[c], top, tl.line_h)
+    match own {
+      Some(l) if l.alpha <= 0.002 => continue
+      _ => ()
+    }
     if top > cy1 || top + tl.line_h < cy0 {
       continue
     }
@@ -808,6 +857,12 @@ fn Ctx::emit_text(
     let gx = on_pixels(ox + dx + tl.xs[c] + s.pad + g.ox / z, sc)
     let gy = on_glyph_row(top + tl.ascent, g.oy / z, sc)
     let adaptive = glass_paint.ink_r > 0.0 && !g.color
+    // (moved and scaled about its middle by its own look)
+    let (gx, gy, gw, gh, ga) = match own {
+      Some(l) => (gx + gw * (1.0 - l.scale) / 2.0, gy + gh * (1.0 - l.scale) / 2.0 + l.dy, gw * l.scale, gh * l.scale, alpha * l.alpha)
+      None => (gx, gy, gw, gh, alpha)
+    }
+    glyph_pushing.val = true
     self.push_inst(
       gx,
       gy,
@@ -824,13 +879,14 @@ fn Ctx::emit_text(
       } else {
         span_color(spans, s.starts[c], color)
       },
-      alpha,
+      ga,
       g.u,
       g.v,
       // (its pixels in the atlas: as many as the host made)
       g.gw * (sc / zoom),
       g.gh * (sc / zoom),
     )
+    glyph_pushing.val = false
     if inst_owners_kept() {
       let x0 = ox + dx + tl.xs[c] + s.pad
       inst_cell(self.ninst - 1, gx, gw, x0, x0 + s.adv[c] - 2.0 * s.pad)
@@ -914,7 +970,27 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if passes {
     self.passing += 1
   }
+  // (its glyphs each drawn by a look of its own, numbered from here: Ctx::glyphs_by)
+  let glyphs_was = match self.drawn_entry(i) {
+    Some({ glyphs_by: Some(f), .. }) if drawing => {
+      let was = (glyph_look.val, glyph_n.val, glyph_cut.val)
+      let k = clip_top()
+      glyph_look.val = Some(f)
+      glyph_n.val = 0
+      glyph_cut.val = (clip_stack[k + 1], clip_stack[k + 3])
+      Some(was)
+    }
+    _ => None
+  }
   self.paint_node(i, alpha_in)
+  match glyphs_was {
+    Some((f, n, cut)) => {
+      glyph_look.val = f
+      glyph_n.val = n
+      glyph_cut.val = cut
+    }
+    None => ()
+  }
   if passes {
     self.passing -= 1
   }
