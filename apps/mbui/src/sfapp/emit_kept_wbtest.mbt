@@ -97,8 +97,9 @@ fn emit_sent(t : @ui.Tester, words : String, focused : Bool) -> String {
   let shown = t.find("收到：「" + words + "」") is Some(_)
   // (its avatar home: no flying copy, its activity's own shown again)
   let done = em.current is None && em.queue.length() == 0 && em.copied == ""
-  // (let go, nothing goes on: no display frame asked for once it is over, a wake at most (the station's own timers);
-  // focused, the caret's blink asks for its own)
+  // (let go, nothing goes on: no display frame asked for once it is over; at most the next step of a working mark
+  // still drawn (resident cycle_look, a wake each cycle_step_ms: the list's spoke, src/sf/icons.mbt spoke_turn, and
+  // its rows' marks, src/sfpages/chat_mark.mbt lead_look); focused, the caret's blink asks for its own)
   let idle = focused || t.wanted_after() != 0.0
   if shown && done && idle {
     "ok"
@@ -181,5 +182,6 @@ test "kept, host frames: the chat left before its answer is shown no more, and a
   let rd = reading_of(emit_chat)
   // (the chat's page not drawn: never shown, whatever it marked used while it was)
   assert_true(rd.shown_frame < t.ctx().frame_number() - 1, msg="shown under Home: \{emit_said(t)}")
+  // (a wake each cycle_step_ms for the working marks the screen under it still draws, never a frame each frame)
   assert_true(t.wanted_after() != 0.0, msg="still asks: \{stall}; \{emit_said(t)}")
 }
