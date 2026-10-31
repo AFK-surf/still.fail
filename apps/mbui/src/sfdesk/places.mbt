@@ -198,6 +198,10 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           },
         ].filter(fn(x) { x != "" })
         let facts = facts.join(" · ")
+        let quota = field(p, "quota")
+        let ok = text(quota, "state") == "ok"
+        let windows = ok && items(quota, "windows").length() > 0
+        let credits = ok && !windows && text(quota, "creditsText") != ""
         if nav_item(
             c,
             "profiles/" + text(e, "key"),
@@ -206,27 +210,41 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             // (a subscription by its account, a key by its name: the core's)
             fn() { nav_title(c, if text(e, "title") == "" { text(p, "name") } else { text(e, "title") }, away=!usable) },
             lines=fn() {
-              @sf.list_row_line(c, fn() {
-                if trouble != "" {
-                  c.text(trouble, style=nav_meta().then(trouble_ink(tone))) |> ignore
-                }
-                // what is left of its allowance has the line to itself (a key's balance where its provider says
-                // one); else where it is and who uses it, cut where the row runs out
-                let quota = field(p, "quota")
-                let ok = text(quota, "state") == "ok"
-                if ok && items(quota, "windows").length() > 0 {
-                  @sf.quota_chips(c, quota, small=true, gap=4.0, key="profiles/" + text(e, "key"))
-                } else if ok && text(quota, "creditsText") != "" {
-                  c.text(text(quota, "creditsText"), style=nav_meta()) |> ignore
-                } else {
-                  if trouble != "" && facts != "" {
-                    c.text("·", style=nav_meta()) |> ignore
+              // The state (or where the account can be used) and its allowance each have their own line: neither
+              // may take the room the other's words need. Keeping both lines also keeps the row's height as its
+              // station goes offline and comes back.
+              if windows || credits {
+                @sf.list_row_line(c, fn() {
+                  if trouble != "" {
+                    c.text(trouble, style=nav_meta().then(trouble_ink(tone))) |> ignore
+                  } else {
+                    c.text(facts, style=nav_meta().then(place_fill)) |> ignore
                   }
-                  c.text(facts, style=nav_meta().then(place_fill)) |> ignore
-                }
-              })
+                })
+              }
+              if !windows {
+                @sf.list_row_line(c, fn() {
+                  if trouble != "" && !credits {
+                    c.text(trouble, style=nav_meta().then(trouble_ink(tone))) |> ignore
+                  }
+                  if credits {
+                    c.text(text(quota, "creditsText"), style=nav_meta()) |> ignore
+                  } else {
+                    if trouble != "" && facts != "" {
+                      c.text("·", style=nav_meta()) |> ignore
+                    }
+                    c.text(facts, style=nav_meta().then(place_fill)) |> ignore
+                  }
+                })
+              }
             },
             more~,
+            foot?=if windows {
+              Some(fn() { @sf.nav_quota_chips(c, quota, key="profiles/" + text(e, "key")) })
+            } else {
+              None
+            },
+            foot_capsule?=if windows { Some(@sf.fill_chip_small_h) } else { None },
           ) {
           place_pick[place_key(w.id, "profiles")] = route
           @sfbase.show_chosen()

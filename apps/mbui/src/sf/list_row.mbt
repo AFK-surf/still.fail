@@ -17,7 +17,8 @@
 /// slot it is moved across in (list_row_slot: a finger's swipe), whose corners are its: its own ground square, so
 /// nothing shows between it and what it uncovers beside it as it moves; `end_slot`: how wide what stands at its first
 /// line's end is, in one column with the last of what stands in its corner (`corner_end` wide: a face's by default).
-/// Its box, the one pressed.
+/// `foot`: a last line across the row, under the mark's column too. `foot_capsule`: the height of a capsule on that
+/// line, whose foot must be at the corner's inset. Its box, the one pressed.
 pub fn list_row(
   c : @ui.Ctx,
   id : Int,
@@ -36,6 +37,8 @@ pub fn list_row(
   end_slot? : Double = 0.0,
   corner_end? : Double = 0.0,
   ground_by? : () -> Int64,
+  foot? : () -> Unit,
+  foot_capsule? : Double,
 ) -> Int {
   let l = theme().chat_list
   let line = @ui.style(h=Fixed(l.head_h))
@@ -55,7 +58,16 @@ pub fn list_row(
     None => @ui.style(bg=Data(ground))
   }
   let ground = if slotted { ground.then(list_row_square) } else { ground }
-  let row = c.box(style=(if high { l.row } else { l.item }).then(list_row_in(at)).then(ground), id~, fn() {
+  // A capsule on the last line can reach the row's foot corner. Its centre is at the middle of that line; keep its
+  // foot as far in as a capsule of its height is from the corner, with the line's own space around it counted.
+  let item = match (at, foot_capsule) {
+    (Side, Some(h)) => {
+      let bottom = capsule_in(row_corner, h) - (l.meta_h - h) / 2.0
+      l.item.then(@ui.style(pb=room(bottom)))
+    }
+    _ => l.item
+  }
+  let top = fn() {
     match mark {
       Some(m) => c.box(style=list_row_mark.then(line), m) |> ignore
       None => ()
@@ -86,6 +98,19 @@ pub fn list_row(
       }
     })
     |> ignore
+  }
+  let row = c.box(style=(if high { l.row } else { item }).then(list_row_in(at)).then(ground), id~, fn() {
+    match foot {
+      None => top()
+      Some(f) =>
+        c.box(style=l.text, fn() {
+          c.box(style=@ui.style(row=true, w=Full, gap=S2, align=AStart), top) |> ignore
+          // A foot may take more than one line when what it says cannot fit on one; a single line keeps the same
+          // height and centring as the row's other metadata lines.
+          c.box(style=l.meta.then(@ui.style(h=Hug, min_h=Fixed(l.meta_h))), f) |> ignore
+        })
+        |> ignore
+    }
     match (corner, at) {
       (Some(k), Side) => c.box(right=l.aside_end, bottom=l.aside_end, k) |> ignore
       _ => ()

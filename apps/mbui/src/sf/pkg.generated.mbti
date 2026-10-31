@@ -578,7 +578,7 @@ pub let files_gap : @ui.Space
 
 pub let files_row_end : @ui.Space
 
-pub fn fill_chip(@ui.Ctx, Int32, String, String, String, small? : Bool, drop? : Int32, keep? : Bool, key? : String, said? : String) -> Unit
+pub fn fill_chip(@ui.Ctx, Int32, String, String, String, small? : Bool, compact? : Bool, drop? : Int32, keep? : Bool, key? : String, said? : String) -> Unit
 
 pub let fill_chip_corner : Double
 
@@ -890,7 +890,7 @@ pub let list_pad : Double
 
 pub let list_room : @ui.Space
 
-pub fn list_row(@ui.Ctx, Int32, ListAt, Int64, () -> Unit, () -> Unit, mark? : () -> Unit, high? : Bool, end_room? : Double, corner? : () -> Unit, corner_w? : Double, lines? : Int32, after? : () -> Unit, slotted? : Bool, end_slot? : Double, corner_end? : Double, ground_by? : () -> Int64) -> Int32
+pub fn list_row(@ui.Ctx, Int32, ListAt, Int64, () -> Unit, () -> Unit, mark? : () -> Unit, high? : Bool, end_room? : Double, corner? : () -> Unit, corner_w? : Double, lines? : Int32, after? : () -> Unit, slotted? : Bool, end_slot? : Double, corner_end? : Double, ground_by? : () -> Int64, foot? : () -> Unit, foot_capsule? : Double) -> Int32
 
 pub fn list_row_in(ListAt) -> @ui.Style
 
@@ -1162,13 +1162,15 @@ pub fn nav_ground_by(@ui.Ctx, String, Bool, Bool, lit? : Int64) -> () -> Int64
 
 pub fn nav_ground_on(@ui.Ctx, Int32, String, Bool, Bool, lit? : Int64) -> Unit
 
-pub fn nav_item(@ui.Ctx, String, Bool, () -> Unit, () -> Unit, end? : () -> Unit, lines? : () -> Unit, keep_lines? : Int32, more? : Bool) -> Bool
+pub fn nav_item(@ui.Ctx, String, Bool, () -> Unit, () -> Unit, end? : () -> Unit, lines? : () -> Unit, keep_lines? : Int32, more? : Bool, foot? : () -> Unit, foot_capsule? : Double) -> Bool
 
 pub let nav_mark_side : Double
 
 pub fn nav_meta() -> @ui.TextStyle
 
 pub fn nav_new() -> @ui.Style
+
+pub fn nav_quota_chips(@ui.Ctx, Json?, key? : String) -> Unit
 
 pub fn nav_row(@ui.Ctx, String, Bool, () -> Unit, align? : @ui.Align, more? : Bool) -> Bool
 
@@ -1524,7 +1526,7 @@ pub let quiet : @ui.TextStyle
 
 pub let quieter : @ui.TextStyle
 
-pub fn quota_chip(@ui.Ctx, Json?, small? : Bool, marked? : Bool, key? : String, said? : String) -> Unit
+pub fn quota_chip(@ui.Ctx, Json?, small? : Bool, compact? : Bool, marked? : Bool, key? : String, said? : String) -> Unit
 
 pub fn quota_chips(@ui.Ctx, Json?, small? : Bool, marked? : Bool, worded? : Bool, gap? : Double, key? : String) -> Unit
 
@@ -2346,6 +2348,7 @@ pub(all) struct ChatList {
   text : @ui.Style
   head : @ui.Style
   meta : @ui.Style
+  meta_h : Double
   head_h : Double
   title : @ui.TextStyle
   title_unread : @ui.TextStyle
