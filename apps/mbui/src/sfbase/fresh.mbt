@@ -11,7 +11,8 @@ pub(all) struct FreshChat {
   sent : @signals.Signal[Bool]
   /// a message on its way (the create and the send)
   starting : @signals.Signal[Bool]
-  /// its first words sent from the page (its scene leaving from then: new_sending; back again if they were not taken)
+  /// its first words sent from the page (its scene leaving from then; back again as the page is the new chat again,
+  /// the chat not made: new_sending)
   sending : @signals.Signal[Bool]
   /// the chat it became (its scene leaving over it: new_leave)
   became : @signals.Signal[ChatRef?]
@@ -66,8 +67,8 @@ pub fn new_fade(c : @ui.Ctx) -> @motion.Anim {
 
 ///|
 /// The new chat's first words sent, or the new chat left for a chat: its scene leaves, from now, and its choices fade
-/// (on a phone as Android's LeaveFade): as the words are taken off its composer, not once the core has made the chat
-/// and taken them in, which the page then becomes, going on as they went (new_chat_leaving_of).
+/// (on a phone as Android's LeaveFade), over the chat it became (new_chat_leaving_of): as the words go, not once the
+/// core has made the chat and taken them in.
 pub fn became_starts(wide~ : Bool) -> Unit {
   let c = @ui.current()
   let leave = new_leave(c)
@@ -88,8 +89,9 @@ pub fn leaving_back() -> Unit {
 }
 
 ///|
-/// How far the new chat's scene and its choices have gone (0 … 1 each) while it is still the new chat: from its first
-/// words sent, before the chat is made (none once it has become the chat: the frame draws it leaving over the chat).
+/// How far the new chat's scene and its choices have gone (0 … 1 each) while it is the new chat after its first words
+/// were sent: the page the new chat again, the chat not made, they coming back from where they had got to (none
+/// while it is the chat: the frame draws it leaving over the chat).
 pub fn new_sending(c : @ui.Ctx) -> (Double, Double) {
   if fresh.sending.get() && fresh.became.get() is None {
     (new_leave(c).get(), new_fade(c).get())
@@ -142,6 +144,36 @@ pub fn pick_new(src : Source, ws : String, fill : Map[String, Json]) -> Unit {
     }
   })
 }
+
+///|
+/// The view of the chat a new chat became (`r`), as it is till the core's is read: made with nothing in it but its
+/// title (what the page was, 新对话, as the core calls it) and what was sent from here, never said to be empty, as the
+/// core's first view of it has its first message in its outbox (views.ts pendingChat); kept for the chat so each frame
+/// reads the same (None for any other chat).
+pub fn fresh_view(r : ChatRef) -> (ChatView, Array[Entry])? {
+  match fresh.became.get() {
+    Some(b) if b == r =>
+      match fresh_views.val {
+        Some((k, v, list)) if k == r => Some((v, list))
+        _ => {
+          let v = chat_view_made({
+            "title": Json::string(r.title),
+            "pending": Json::boolean(true),
+            "key": Json::string(r.session),
+          })
+          // (never empty: its first message is in it from the frame it was sent, sent_local)
+          let list = entries_of(v).filter(fn(e) { !(e is Empty) })
+          fresh_views.val = Some((r, v, list))
+          Some((v, list))
+        }
+      }
+    _ => None
+  }
+}
+
+///|
+// kept across runs: one chat's, made again for another (fresh_view)
+let fresh_views : Ref[(ChatRef, ChatView, Array[Entry])?] = Ref(None)
 
 ///|
 /// Whether chat `r` is the one a new chat just became, its scene still leaving over it (till the end declared as it

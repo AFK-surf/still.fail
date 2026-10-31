@@ -736,6 +736,32 @@ async function choosing(speed = false, profileFast = false, sessionFast: boolean
   });
 }
 
+test("a_new_chat_is_made_under_the_key_its_page_had_before_it_was_made_and_its_page_reads_it_so_at_once", async () => {
+  const { host, core } = await choosing();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "newChat", scope: "ws" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  const next = v(values, 1).next;
+  assert.ok(typeof next === "string" && next.startsWith("new:"), String(next));
+  // made under it, and read under it from then (the chat's page, the moment the words were sent)
+  const made = await ask(host, core, ui, 2, "newChat.create", { station: "ws/st", key: next });
+  assert.equal(made.key, next);
+  subscribe(core, ui, 3, { topic: "chat", station: "ws/st", thread: null, session: next });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 3).pending, true);
+  // the next one under another; a key already used is refused, not made twice
+  const after = v(values, 1).next;
+  assert.ok(typeof after === "string" && after.startsWith("new:") && after !== next, String(after));
+  await assert.rejects(ask(host, core, ui, 4, "newChat.create", { station: "ws/st", key: next }));
+  // none given: one made by the core, as before
+  const own = await ask(host, core, ui, 5, "newChat.create", { station: "ws/st" });
+  assert.ok(String(own.key).startsWith("new:") && own.key !== next);
+  core.close();
+});
+
 test("new_chat_combos_are_local_to_a_workspace_persist_and_pick_model_and_depth_together", async () => {
   const { host, core } = await choosing();
   let ui = core.connect();

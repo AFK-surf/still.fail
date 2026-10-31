@@ -48,7 +48,10 @@ export function installChoose(inner: Inner): Choose {
         case "newChat.create":
           return Effect.gen(function* () {
             const ask = yield* attempt(() => choose.create(field("station")));
-            const made = yield* handlers.chatCreate!(inner, { kind: "chatCreate", station: field("station"), ask }, progress, at, ctx);
+            // (by the key the page named it by as its first words were sent: the topic's `next`)
+            const key = field("key");
+            const made = yield* handlers.chatCreate!(inner, { kind: "chatCreate", station: field("station"), ask, ...(key !== "" ? { key } : {}) }, progress, at, ctx);
+            choose.taken(key);
             choose.used(field("station"), ask);
             return { key: get(made, "key") ?? null, runtime: ask.runtime ?? null, model: ask.model ?? null, effort: ask.effort ?? null };
           });

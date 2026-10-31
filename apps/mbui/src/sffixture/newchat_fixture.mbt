@@ -277,7 +277,21 @@ pub fn fix_session_pick() -> Json {
 }
 
 ///|
+/// The `newChat` topic (fix_new_chat_of), with the key the next chat made from it is to have (`next`: new:N, as
+/// newChat.create makes it).
 pub fn fix_new_chat(f : Fixture) -> Json {
+  match fix_new_chat_of(f) {
+    Object(m) => {
+      let o = m.copy()
+      o["next"] = Json::string("new:\{new_fix.made + 1}")
+      Json::object(o)
+    }
+    v => v
+  }
+}
+
+///|
+fn fix_new_chat_of(f : Fixture) -> Json {
   let n = new_fix
   // its stations read stations_slow_ms after the page first asks (MBUI_FIXTURE=stations-slow: Home, for the films of
   // what shows meanwhile)
@@ -509,7 +523,17 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
     }
     "newChat.create" => {
       n.made += 1
-      Some(Ok({ "key": Json::string("new:\{n.made}") }))
+      // (under the key the page had for it, `next`)
+      let key = match params {
+        Object(p) =>
+          match p.get("key") {
+            Some(String(k)) => k
+            _ => "new:\{n.made}"
+          }
+        _ => "new:\{n.made}"
+      }
+      f.changed()
+      Some(Ok({ "key": Json::string(key) }))
     }
     _ => None
   }

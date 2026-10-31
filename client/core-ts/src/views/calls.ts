@@ -258,10 +258,13 @@ export class ViewCalls {
       const c = call as Of<"chatCreate">;
       return Effect.andThen(
         parse(c.station),
-        Effect.sync(() => {
-          const key = local.pendingNew(c.station, c.ask);
-          this.makeChat(key);
-          return { key };
+        Effect.try({
+          try: () => {
+            const key = local.pendingNew(c.station, c.ask, c.key);
+            this.makeChat(key);
+            return { key };
+          },
+          catch: asCoreError,
         }),
       );
     };

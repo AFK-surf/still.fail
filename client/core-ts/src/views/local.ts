@@ -7,6 +7,7 @@
 import type { Data } from "../data.ts";
 import { join, SEP } from "../data.ts";
 import type { AccountDb } from "../db/account.ts";
+import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { localId } from "../ids.ts";
 import { arr as arrU, equal, get as getU, isObject } from "../util.ts";
@@ -18,6 +19,12 @@ const get = (v: unknown, k: string): J => getU(v, k);
 
 /// The prefix of the keys the core gives chats not made yet: no station's session key starts so.
 export const PENDING_PREFIX = "new:";
+
+/// A key for a chat asked for here: named as the core names what it makes here (localId), not by the clock: a recorded
+/// new chat's key comes again in its replay.
+export function pendingKeyMade(): string {
+  return `${PENDING_PREFIX}${localId("chat")}`;
+}
 
 /// A chat asked for here (`chat.create`): until its station has made it, it is shown from what is known here.
 export type Pending = {
@@ -145,11 +152,10 @@ export class Local {
     if (chat) this.#data.putLocal(PENDING, chat.station, key, chat);
   }
 
-  pendingNew(station: string, ask: J): string {
+  /// `key`: the one the page named it by as its first words were sent (the `newChat` topic's `next`), else one made now.
+  pendingNew(station: string, ask: J, key: string = pendingKeyMade()): string {
+    if (!key.startsWith(PENDING_PREFIX) || this.#pending.has(key)) throw CoreError.invalid("newChat.create: a key already used");
     const now = this.#now();
-    // named as the core names what it makes here (localId), not by the clock: a recorded new chat's key comes again
-    // in its replay
-    const key = `${PENDING_PREFIX}${localId("chat")}`;
     this.#pending.set(key, { station, ask, createdAt: now, queue: [], failed: null, made: null, listed: false, making: false });
     const db = this.#data.of(station);
     if (db) this.#pendingDb.set(key, db);

@@ -46,7 +46,7 @@ export type Call =
   | { kind: "chatXshare"; station: string; workspace: string | null; session: string; thread: number | null; to: string[]; write: boolean }
   | { kind: "stationJoin"; workspace: string; station: string; name: string | null }
   | { kind: "chatSend"; station: string; thread: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown; client: string | null }
-  | { kind: "chatCreate"; station: string; ask: Record<string, unknown> }
+  | { kind: "chatCreate"; station: string; ask: Record<string, unknown>; key?: string }
   | { kind: "shareIn"; scope: string; source: string; title: string | null; target: { station: string; id?: string }; key: string | null }
   | { kind: "chatSendTo"; station: string; session: string; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown; client: string | null }
   | { kind: "decisionAnswer"; station: string; thread: number; seq: number; option: string }
