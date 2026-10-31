@@ -382,3 +382,77 @@ test "a node's words made as the atlas has no room for them this frame (an old v
   assert_eq((drawn_after, want_after), (drawn, want), msg="the frame after: the same")
   assert_eq(view_paint_work.made, made, msg="the frame after: not made again")
 }
+
+///|
+test "the pointer within a node under an old view's layer over all of it: within as where it is says, the layer opened and closed over a pointer that stays, moved under it, never told otherwise; what it points at, its shape and the press the layer's; out of the window, or a finger, not within as it is told" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  let told : Array[Bool] = []
+  let band_id : Ref[@view.NodeId?] = Ref(None)
+  let layer_pressed = Ref(false)
+  let open = @signals.signal(false, same=fn(a, b) { a == b })
+  set_view_app(fn(root) {
+    root.lines_up(Is(Some(Start))) |> ignore
+    root.box(fn(band) {
+      band_id.val = Some(band.id())
+      band.width(Is(Some(400.0))).height(Is(Some(40.0))).on_press(fn() {  }).cursor(Is(Some(ResizeY))) |> ignore
+      // (the old view over it takes presses only where it draws: old_takes_own)
+      band.reacts(fn() { band.pointer_within() }, fn(w) { told.push(w) })
+    })
+    |> ignore
+    old(root, fn(c) {
+      if open.get() {
+        c.overlay("over all", fn() {
+          let id = c.id("layer")
+          c.box(w=Px(400.0), h=Px(300.0), id~, bg=0x0000FF40L, fn() {  }) |> ignore
+          c.cursor(id, Crosshair)
+          if c.pressed(id) {
+            layer_pressed.val = true
+          }
+        })
+        |> ignore
+      }
+    }).over(Is(true))
+    |> old_takes_own
+    |> ignore
+  })
+  t.draw()
+  t.move(20.0, 20.0)
+  let tree = view_app.val.unwrap()
+  assert_true(told.last() == Some(true), msg="within, nothing over it: \{told}")
+  assert_true(tree.pointed_now() == band_id.val, msg="pointed at, nothing over it")
+  assert_eq(t.cursor(), ResizeY, msg="its shape, nothing over it")
+  // (the layer opened over the pointer that stays, the frames after it; moved under it; closed: never told otherwise)
+  let from = told.length()
+  open.set(true)
+  t.draw()
+  t.draw()
+  assert_true(tree.pointed_now() is None, msg="what it points at the layer's")
+  assert_eq(t.cursor(), Crosshair, msg="the layer's shape")
+  t.move(30.0, 25.0)
+  t.draw()
+  t.touch(0, 30.0, 25.0)
+  t.draw()
+  assert_true(layer_pressed.val, msg="the press the layer's")
+  t.touch(2, 30.0, 25.0)
+  t.draw()
+  open.set(false)
+  t.draw()
+  t.draw()
+  assert_eq(t.cursor(), ResizeY, msg="its shape again, the layer gone")
+  assert_true(!told[from:].iter().any(fn(w) { !w }), msg="never told it is not within: \{told[from:]}")
+  assert_true(@signals.untracked(fn() { told.last() }) == Some(true), msg="within throughout")
+  // (out of the window, as the host tells it, no frame drawn: not within then; the frame after the same)
+  on_pointer(7, -1.0, -1.0, 0)
+  assert_true(told.last() == Some(false), msg="out of the window: not within, as it is told: \{told}")
+  t.draw()
+  assert_true(told.last() == Some(false), msg="out of the window: the frame after the same")
+  // (back in, then a finger down, no frame drawn: no pointer, not within then; the frame after the same)
+  t.move(20.0, 20.0)
+  t.draw()
+  assert_true(told.last() == Some(true), msg="back in: within")
+  t.touch_raw(0, 1, 200.0, 200.0, t.time())
+  assert_true(told.last() == Some(false), msg="a finger down: no pointer, not within, as it is told: \{told}")
+  t.touch_raw(2, 1, 200.0, 200.0, t.time())
+  t.draw()
+  assert_true(told.last() == Some(false), msg="a finger: the frame after the same")
+}

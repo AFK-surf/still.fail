@@ -1,5 +1,5 @@
-// The image viewer as nodes of the window's tree (the narrow shell's: sfapp's narrow_shell.mbt; docs/retained.md), made
-// as it opens and let go as it has gone, over the pages:
+// The image viewer as nodes of the window's tree (every shell's: sfapp's narrow_shell.mbt, tape_shell.mbt;
+// docs/retained.md), made as it opens and let go as it has gone, over the pages:
 //
 //   - its layer: the whole window, a modal layer while it is the one open (View::modal: what is under it, the pages
 //     and what the shell draws round them, takes no press, key, wheel or stop of Tab, and is read out none, as the old
@@ -53,7 +53,7 @@ fn tree_viewer() -> Viewer? {
 }
 
 ///|
-/// The image viewer in node `v` of the window's tree (laid out over the pages: narrow_shell), made as one opens and let
+/// The image viewer in node `v` of the window's tree (laid out over the pages: narrow_shell, tape_shell), made as one opens and let
 /// go as it has gone; another opened (a step to the one beside it) another node.
 /// `stage`: how big the room it is laid out in is (the window's, less what the shell keeps clear of the system's bars),
 /// what its picture is fitted to, as it changes.
@@ -256,6 +256,19 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   |> ignore
   // (the floating bar over it on a small screen, its nodes: where the old bars draw it not, head_as_nodes)
   n.show(fn() { head_as_nodes(vw, stage().0) }, fn(h) { image_head(h, src, vw, stage) })
+  // (a mouse's pointer along the top where the bar across it is: the bar shown while it is there, whatever is over it
+  // then, the bar itself as it shows; as the pointer comes in or goes out (vf_bar's near, as the old frame read it of
+  // its pointer each frame))
+  n.box(fn(top) {
+    top.over(Is(true)).height(Is(Some(@sf.viewer_bar_h))) |> ignore
+    top.reacts(fn() { top.pointer_within() && @sf.pointer_rests() }, fn(near) {
+      if vw.near_bar != near {
+        vw.near_bar = near
+        vw.awake_said()
+      }
+    })
+  })
+  |> ignore
 }
 
 ///|

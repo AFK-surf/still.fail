@@ -2085,7 +2085,10 @@ fn view_point_tell(tree : @view.Tree, over? : Bool) -> Unit {
       view_cursor_tell()
     }
     Some((x, y)) if over => {
-      tree.follow_point(-1.0, -1.0, fn(_) {  })
+      // (nothing of the tree's followed under the layer, the pointer still where it is: what is under it so, whatever
+      // is over it, View::pointer_within; what it points at the old view's)
+      tree.unfollow()
+      tree.pointer_is(x, y)
       tree.pointed_to(None)
       view_old_pointed(Some((x, y)))
       view_shape_of.val = OfOld
