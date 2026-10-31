@@ -448,7 +448,7 @@ let zh : Map[String, String] = {
   "android-misc.invite.code": "邀请码",
   "android-misc.invite.codeExpired": "邀请码已过期",
   "android-misc.invite.codeInvalid": "邀请码无效，检查是否输入有误",
-  "android-misc.invite.codeLead": "免费版可创建 1 个 workspace（1 人、2 台 station），此账号已创建过。如有邀请码，在下方填写即可升级到标准版并继续创建；也可以请正在使用 {app} 的人将 {email} 邀请进他们的 workspace。",
+  "android-misc.invite.codeLead": "免费版可创建 1 个 workspace，限 1 人，此账号已创建过。如有邀请码，在下方填写即可升级到标准版并继续创建；也可以请正在使用 {app} 的人将 {email} 邀请进他们的 workspace。",
   "android-misc.invite.codeNeeded": "免费版仅可创建 1 个 workspace，此账号已创建。输入邀请码升级到标准版即可创建更多。",
   "android-misc.invite.codeRequired": "免费版仅可创建 1 个 workspace，继续创建需要邀请码",
   "android-misc.invite.codeUsed": "邀请码已被使用",

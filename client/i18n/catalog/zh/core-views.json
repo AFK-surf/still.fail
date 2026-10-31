@@ -48,7 +48,7 @@
   "core-views.admin.invitation.by": "{name} 邀请",
   "core-views.admin.may_create.admin": "管理员不受限制",
   "core-views.admin.may_create.creator": "标准版：最多 5 个 workspace，每个 6 人",
-  "core-views.admin.may_create.no": "免费版：1 个 workspace、1 个人、2 台 station",
+  "core-views.admin.may_create.no": "免费版：1 个 workspace、1 个人",
   "core-views.admin.may_create.yes": "标准版：最多 5 个 workspace，每个 6 人",
   "core-views.admin.no_station": "无 station",
   "core-views.admin.not_in": "尚未加入",

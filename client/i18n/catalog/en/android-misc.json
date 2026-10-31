@@ -136,7 +136,7 @@
   "android-misc.invite.code": "Invite code",
   "android-misc.invite.codeExpired": "Invite code expired",
   "android-misc.invite.codeInvalid": "Invalid invite code. Check for typos.",
-  "android-misc.invite.codeLead": "The free plan includes 1 workspace (1 person, 2 stations), and this account has used it. Enter an invite code below to upgrade to Standard and create more, or ask someone using {app} to invite {email} to theirs.",
+  "android-misc.invite.codeLead": "The free plan includes 1 workspace for 1 person, and this account has used it. Enter an invite code below to upgrade to Standard and create more, or ask someone using {app} to invite {email} to theirs.",
   "android-misc.invite.codeNeeded": "The free plan includes 1 workspace and this account has used it. Enter an invite code to upgrade to Standard and create more.",
   "android-misc.invite.codeRequired": "The free plan includes 1 workspace; creating another requires an invite code",
   "android-misc.invite.codeUsed": "Invite code already used",

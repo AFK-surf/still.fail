@@ -351,7 +351,7 @@
   "web-pages.cloud.inviteCode": "邀请码",
   "web-pages.cloud.inviteLoading": "正在读取邀请",
   "web-pages.cloud.inviteOnly": "免费版 workspace 额度已用完",
-  "web-pages.cloud.inviteOnlyBody": "免费版可创建 1 个 workspace（1 人、2 台 station），此账号已创建过。如有邀请码，在下方填写并升级为标准版即可继续创建；也可以让正在使用 {name} 的人将 {email} 邀请至其 workspace。",
+  "web-pages.cloud.inviteOnlyBody": "免费版可创建 1 个 workspace，限 1 人，此账号已创建过。如有邀请码，在下方填写并升级为标准版即可继续创建；也可以让正在使用 {name} 的人将 {email} 邀请至其 workspace。",
   "web-pages.cloud.inviteOnlyFor": "此邀请仅限 {email} 接受。",
   "web-pages.cloud.inviteSignIn": "你收到一个 {name} workspace 的邀请。登录后，再决定是否加入。",
   "web-pages.cloud.inviteUnusable": "邀请无效",

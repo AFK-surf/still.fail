@@ -45,7 +45,7 @@ still.fail 把你选定的机器连到你在的任何地方。每台机器运行
 ## 开始使用
 
 1. 打开[网页版](https://app.still.fail)，或在 [still.fail](https://still.fail) 下载桌面版（Apple 芯片的 Mac、Windows x64）或安卓版。
-2. 创建 workspace。免费版包含一个 workspace、一个成员和两台 station。
+2. 创建 workspace。免费版包含一个 workspace、一个成员，station 数量不限。
 3. 选择「添加 station」，在要运行 agent 的机器上执行页面给出的命令：macOS（arm64）、Linux（x64、arm64）或 Windows（x64）。
 4. 在那台 station 上添加 Profile：登录 Claude Code、Codex、DeepSeek Harness 或 Grok Build。这些 runtime 及其账号与本项目无关，agent 以那台机器的用户权限运行，请先阅读[信任边界](SECURITY.md#trust-boundary)。
 5. 在 app 里新建对话，或为 station 连接 Slack、飞书机器人，然后在 thread 里 @ 它。
