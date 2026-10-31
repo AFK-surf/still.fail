@@ -1970,8 +1970,18 @@ fn cmd_shim(args : Array[String]) -> Unit {
     let lines_of : Array[(Bytes, Array[Bytes])] = [
       (b"cl", [self_exe.val, b"wrap", b"--real", real, b"--"]),
     ]
+    // (beside MSVC's cl: LLVM's clang-cl, MBC_REAL_CC, has none beside it, only lld-link and llvm-lib)
+    let n = lower(basename(real))
+    let tools = if n == b"clang-cl" || n == b"clang-cl.exe" {
+      match which(b"cl", dirs=path) {
+        Some(c) => dirname(c)
+        None => dirname(real)
+      }
+    } else {
+      dirname(real)
+    }
     for tool in [b"lib", b"link"] {
-      let t = path_join(dirname(real), cat([tool, b".exe"]))
+      let t = path_join(tools, cat([tool, b".exe"]))
       if !is_file(t) {
         fatal("no \{str(t)} beside \{str(real)}")
       }

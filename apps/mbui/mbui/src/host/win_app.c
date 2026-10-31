@@ -504,7 +504,7 @@ static int touch(HWND h, UINT msg, WPARAM wp) {
   return 1;
 }
 
-static LPCWSTR cursor_name(int kind) {
+static LPCSTR cursor_name(int kind) {
   switch (kind) {
     case 1: return IDC_HAND;
     case 2: return IDC_IBEAM;
