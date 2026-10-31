@@ -2547,3 +2547,146 @@ test "viewer on the tree, a wide window, a picture of a chat's marked: 添加到
   assert_true(viewer.get() is None, msg="made: the viewer closed back to the chat")
   assert_eq(quoted() - before, 1, msg="put in the chat's draft once")
 }
+
+///|
+/// Marking on a wide window, a box drawn: its note asked for at once, what is said of it written (no frame between):
+/// the tester, the viewer, the clicker, the box's id.
+fn wide_box_noted(said : String) -> (@ui.Tester, Viewer, (String) -> Unit raise, Int) raise {
+  let (t, v, click) = wide_marking()
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  let (px, py) = (rx + rw / 3.0, ry + rh / 3.0)
+  t.touch(0, px, py)
+  t.touch(1, px + 60.0, py + 40.0)
+  t.touch(2, px + 60.0, py + 40.0)
+  t.draw()
+  assert_true(marking.note >= 0, msg="its note asked for")
+  let id = marking.note
+  if said != "" {
+    t.text_told(said, t.time())
+  }
+  (t, v, click, id)
+}
+
+///|
+test "viewer on the tree, a wide window, marking: a box's note written and its 完成 clicked: what is said of it kept and the note closed as the click is let go, before any frame; closed after a frame" {
+  let (t, _, click, id) = wide_box_noted("这里对齐")
+  click(pv("android-chat.annotate.done"))
+  assert_eq(marking.comments.get(id), Some("这里对齐"), msg="let go: what is said of it kept")
+  assert_true(marking.note < 0, msg="let go: the note closed")
+  t.draw()
+  assert_true(marking.note < 0, msg="a frame after: closed")
+  assert_eq(marking.comments.get(id), Some("这里对齐"), msg="a frame after: kept")
+}
+
+///|
+/// Marking on a wide window, a box drawn (its note asked for), then the clock on `ms`: in one frame, or a frame each
+/// drag_step_ms: the frame then.
+fn wide_note_at(ms : Double, frames : Bool) -> Int64 raise {
+  let (t, _, _, _) = wide_box_noted("")
+  let end = t.time() + ms
+  if frames {
+    while t.time() + @ui.drag_step_ms < end {
+      t.frame_at(t.time() + @ui.drag_step_ms)
+    }
+  }
+  t.frame_at(end)
+  t.frame_hash()
+}
+
+///|
+test "viewer on the tree, a wide window, marking: a note asked for comes in the same at a moment whatever frames came between; come in, nothing of it reads the clock; let go, nothing of it left" {
+  assert_eq(wide_note_at(note_pop_ms / 2.0, true), wide_note_at(note_pop_ms / 2.0, false), msg="half way in: the same")
+  let (t, _, click, _) = wide_box_noted("")
+  t.frame_at(t.time() + note_pop_ms)
+  t.draw()
+  assert_false(@ui.view_tree().unwrap().clock_read(), msg="come in: nothing reads the clock")
+  click(pv("android-chat.annotate.done"))
+  t.draw()
+  assert_true(marking.note < 0, msg="done: let go")
+  assert_false(@ui.view_tree().unwrap().clock_read(), msg="let go: nothing of it reads the clock")
+}
+
+///|
+test "viewer on the tree, a wide window, marking: a note's words written and more being composed, its 完成 clicked with no frame between: all it shows kept as the click is let go; opened again, all of it" {
+  let (t, _, click, id) = wide_box_noted("这里")
+  t.compose("对齐")
+  click(pv("android-chat.annotate.done"))
+  assert_eq(marking.comments.get(id), Some("这里对齐"), msg="let go: what was composed kept too")
+  t.draw()
+  @sfbase.marks_open_note(t.ctx(), id)
+  t.draw()
+  assert_eq(marking.note_field.text(), "这里对齐", msg="opened again: all of it")
+}
+
+///|
+/// Marking on a wide window, a box drawn (its note asked for as the finger lifts), the first frame `late` after that
+/// moment: how opaque the note's card is drawn (the window's tree's) half its coming in after that moment, and once it
+/// has come in.
+fn wide_note_first(late : Double) -> (Double, Double) raise {
+  let (t, v, _) = wide_marking()
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  let (px, py) = (rx + rw / 3.0, ry + rh / 3.0)
+  t.touch(0, px, py)
+  t.touch(1, px + 60.0, py + 40.0)
+  t.touch(2, px + 60.0, py + 40.0)
+  let at = t.time()
+  let card = fn() {
+    match @ui.view_tree().unwrap().drawn().iter().find_first(fn(d) { d.ground == @sfbase.note_ground }) {
+      Some(d) => d.alpha
+      None => -1.0
+    }
+  }
+  t.frame_at(at + late)
+  t.frame_at(at + note_pop_ms / 2.0)
+  let half = card()
+  t.frame_at(at + note_pop_ms + 20.0)
+  (half, card())
+}
+
+///|
+test "viewer on the tree, a wide window, marking: a note asked for comes in from the moment it was, its first frame on time or late: half way in as opaque either way, coming in still, all of it once in" {
+  let (half, whole) = wide_note_first(0.0)
+  let (late_half, late_whole) = wide_note_first(40.0)
+  assert_true(half > 0.0 && half < 1.0, msg="half way: coming in: \{half}")
+  assert_eq(late_half, half, msg="its first frame late: as far in at that moment")
+  assert_eq((whole, late_whole), (1.0, 1.0), msg="come in: all of it")
+}
+
+///|
+test "viewer on the tree, a wide window, marking: a second box's note written, its 删除批注 pressed: nothing gone as it goes down; let go, that box gone and its note closed before any frame, the first box kept" {
+  let (t, v, click, first) = wide_box_noted("第一个")
+  click(pv("android-chat.annotate.done"))
+  t.draw()
+  // (a second box, lower down)
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  let (px, py) = (rx + rw / 2.0, ry + rh * 2.0 / 3.0)
+  t.touch(0, px, py)
+  t.touch(1, px + 60.0, py + 40.0)
+  t.touch(2, px + 60.0, py + 40.0)
+  t.draw()
+  let second = marking.note
+  assert_true(second >= 0 && second != first, msg="the second box's note asked for")
+  t.text_told("第二个", t.time())
+  t.run_for(note_pop_ms)
+  let (x, y, w, h) = t.get(Button, label=pv("android-chat.annotate.remove")).rect
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  assert_eq((marking.note, marking.shapes.length()), (second, 2), msg="pressed: nothing gone")
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  assert_eq(
+    (marking.note, marking.shapes.map(fn(s) { s.id })),
+    (-1, [first]),
+    msg="let go: the second box gone, its note closed, the first kept",
+  )
+  t.draw()
+  assert_eq(marking.comments.get(first), Some("第一个"), msg="a frame after: the first's note as it was")
+}
+
+///|
+test "viewer on the tree, a wide window, marking: a note asked for, come in: its 完成 and 删除批注 found by what they are called, where a finger reaches them, as a test finds a box by its label" {
+  let (t, _, _, _) = wide_box_noted("")
+  t.run_for(note_pop_ms)
+  for name in [pv("android-chat.annotate.done"), pv("android-chat.annotate.remove")] {
+    assert_eq(t.locate("=" + name).length(), 1, msg="\{name}: seen")
+    assert_eq(t.reachable("=" + name).length(), 1, msg="\{name}: where a finger reaches it")
+  }
+}

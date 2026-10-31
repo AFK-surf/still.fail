@@ -973,14 +973,15 @@ test "marking: a box's pin up and right of its corner wherever the marks before 
   let (px, py, pw, ph) = t.rect_of("1").unwrap()
   assert_true((px + pw / 2.0 - (x + 100.0 * k - 2.0 + 12.0)).abs() < 1.0, msg="the pin's x")
   assert_true((py + ph / 2.0 - (y + 100.0 * k - 22.0 + 12.0)).abs() < 1.0, msg="the pin's y")
-  // its note open: 框, the field's 添加批注（可选）, the tick; the tools and their cards away
+  // its note open: 框, the field's 添加批注（可选）, the tick; the tools and their cards away (seen once the note, coming
+  // in from nothing as it is asked for, shows: what is drawn faded to nothing is not on screen)
   assert_eq(marking.note, marking.shapes[1].id)
+  t.run_for(note_pop_ms)
   assert_true(t.find("框") is Some(_))
   assert_true(t.find("添加批注（可选）") is Some(_))
-  t.run_for(note_pop_ms)
   assert_true(t.find("只引用") is None)
   t.type_text("这里对齐")
-  let tick = t.locate("icon:check")
+  let tick = t.reachable("icon:check")
   assert_eq(tick.length(), 1)
   t.tap(tick[0].0, tick[0].1)
   t.draw()
@@ -1045,7 +1046,8 @@ test "marking: a note written and done, the picture put in the chat: its quote t
   t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
   t.run_for(note_pop_ms)
   t.type_text("这里对齐")
-  let tick = t.locate("icon:check")
+  let tick = t.reachable("icon:check")
+  assert_eq(tick.length(), 1, msg="完成 where a finger reaches it: \{tick}")
   t.tap(tick[0].0, tick[0].1)
   t.draw()
   let (px, py, pw, ph) = t.get(Button, label=pv("android-chat.preview.put")).rect
