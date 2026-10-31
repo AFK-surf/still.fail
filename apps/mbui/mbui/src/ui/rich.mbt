@@ -26,6 +26,8 @@ pub(all) struct Run {
   mono : Bool
   /// the serif face (a reader's words)
   serif : Bool
+  /// None: the paragraph's face; Some(0): the app's face; Some(n): host face n.
+  face : Int?
   /// of the paragraph's size
   scale : Double
   /// 0: the paragraph's (a link's own colour, a code run's)
@@ -73,6 +75,7 @@ pub fn span(
   code? : Bool = false,
   mono? : Bool = false,
   serif? : Bool = false,
+  face? : Int? = None,
   scale? : Double = 1.0,
   color? : Int64 = 0L,
   bg? : Int64 = 0L,
@@ -89,6 +92,7 @@ pub fn span(
     code,
     mono,
     serif,
+    face,
     scale,
     color,
     bg,
@@ -233,6 +237,18 @@ fn run_style(r : Run) -> Int {
   (if r.italic { @hostapi.style_italic } else { 0 }) |
   (if r.code || r.mono { @hostapi.style_mono } else { 0 }) |
   (if r.serif && !r.code && !r.mono { @hostapi.style_serif } else { 0 })
+}
+
+///|
+/// A run may name its own face instead of the paragraph's, including the app's face when the paragraph is in the
+/// face for what people wrote. Other paragraph features, such as tabular digits, stay in effect.
+fn Rich::run_style(self : Rich, run : Run) -> Int {
+  let faces = match run.face {
+    None => self.faces
+    Some(face) =>
+      (self.faces & (@hostapi.style_face(15) | @hostapi.style_words).lnot()) | faces_style(false, face)
+  }
+  run_style(run) | faces
 }
 
 ///|
@@ -400,7 +416,7 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
       None => drawings.push(None)
     }
     let weight = r.run_weight(run)
-    let style = run_style(run) | r.faces
+    let style = r.run_style(run)
     let s = shape(run.text, size, weight, style~, spacing=r.spacing)
     let (a, d) = line_metrics(size, weight, words_cjk(run.text), style~)
     let (l, lasc, _) = set_line(lh * size / r.size, a, d, sc, px)
@@ -1022,7 +1038,7 @@ fn cut_rich(r : Rich, lay : RichLayout, w : Double) -> Rich {
   // the run the line's words end in, by the last of it that fits
   let style_of = fn(c : Int) { r.runs[lay.run_of[imin(imax(c, 0), count - 1)]] }
   let dots_w = fn(run : Run) {
-    shape("…", r.run_size(run), r.run_weight(run), style=run_style(run) | r.faces, spacing=r.spacing).adv.fold(
+    shape("…", r.run_size(run), r.run_weight(run), style=r.run_style(run), spacing=r.spacing).adv.fold(
       init=0.0,
       fn(s, x) { s + x },
     )
@@ -1069,8 +1085,9 @@ fn rich_zoomed_keys(r : Rich, lay : RichLayout) -> Array[Int]? {
       continue
     }
     let (c0, c1) = (lay.run_c0[k], lay.run_c1[k])
-    let s = shape(run.text, r.run_size(run), r.run_weight(run), style=run_style(run) | r.faces, spacing=r.spacing)
-    match zoomed_keys(run.text, s, r.run_size(run), r.run_weight(run), run_style(run) | r.faces, r.spacing) {
+    let style = r.run_style(run)
+    let s = shape(run.text, r.run_size(run), r.run_weight(run), style~, spacing=r.spacing)
+    match zoomed_keys(run.text, s, r.run_size(run), r.run_weight(run), style, r.spacing) {
       Some(big) if big.length() == c1 - c0 =>
         for c in c0..<c1 {
           keys[c] = big[c - c0]

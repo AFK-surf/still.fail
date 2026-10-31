@@ -148,8 +148,120 @@ test "a face's file the host cannot read where it is: had through the core inste
 ///|
 /// The places' choice's `place` tapped (its words drawn after what the page is for, which names them too).
 fn tap_place(t : @ui.Tester, place : String) -> Unit {
-  let (x, y) = t.find_last(place).unwrap()
-  t.tap(x, y)
+  // Match the whole label: 正文's 跟随界面 also contains 界面, but is not the places' choice.
+  let labels = t.words().filter(fn(w) { w.0 == place && w.5 > 0.5 })
+  let label = labels[labels.length() - 1]
+  t.tap(label.1 + label.3 / 2.0, label.2 + label.4 / 2.0)
+}
+
+///|
+/// The width of the words as laid out, independent of where their line is on the page.
+fn preview_width(t : @ui.Tester, words : String) -> Double raise {
+  let rects = t.run_rects(words)
+  assert_eq(rects.length(), 1)
+  rects[0].2
+}
+
+///|
+test "pointing at an interface or text face tries it on the whole message, keeping inline code in its own face" {
+  for place in ["界面", "正文"] {
+    let t = settings_tester("fonts")
+    if place == "正文" {
+      tap_place(t, place)
+      t.draw()
+    }
+    // Distinguish the preview face without making the chat wrap and move the row out from under the pointer.
+    t.face_wider(preview_faces_from + 2, 0.01)
+    t.draw()
+    let text_before = preview_width(t, "Safari 和 Chrome 都试过了。")
+    let inline_before = preview_width(t, "preventDefault")
+    let mine_before = preview_width(t, "登录页在 Safari 上点了没反应")
+    let name_before = preview_width(t, "Claude")
+    let (x, y) = t.find("思源宋体").unwrap()
+    t.move(x + 4.0, y + 4.0)
+    t.draw()
+    t.draw()
+    let text_after = preview_width(t, "Safari 和 Chrome 都试过了。")
+    let mine_after = preview_width(t, "登录页在 Safari 上点了没反应")
+    let name_after = preview_width(t, "Claude")
+    let row_after = t.find("思源宋体")
+    assert_true(text_after > text_before, msg="place=\{place} row_before=\{(x, y)} row_after=\{row_after} text=\{text_before},\{text_after} mine=\{mine_before},\{mine_after} name=\{name_before},\{name_after}")
+    assert_eq(preview_width(t, "preventDefault"), inline_before)
+    t.move(x, 4.0)
+    t.draw()
+    t.draw()
+    assert_eq(preview_width(t, "Safari 和 Chrome 都试过了。"), text_before)
+  }
+}
+
+///|
+test "pointing at a code face tries it on inline code and the code block, keeping prose in its own face" {
+  let t = settings_tester("fonts")
+  tap_place(t, "代码")
+  t.face_wider(preview_faces_from + 5, 0.3)
+  t.draw()
+  let text_before = preview_width(t, "Safari 和 Chrome 都试过了。")
+  let inline_before = preview_width(t, "preventDefault")
+  let block_before = preview_width(t, "form.onsubmit")
+  let (x, y) = t.find("Fira Code").unwrap()
+  t.move(x + 4.0, y + 4.0)
+  t.draw()
+  t.draw()
+  assert_eq(preview_width(t, "Safari 和 Chrome 都试过了。"), text_before)
+  assert_true(preview_width(t, "preventDefault") > inline_before)
+  assert_true(preview_width(t, "form.onsubmit") > block_before)
+  t.move(x, 4.0)
+  t.draw()
+  t.draw()
+  assert_eq(preview_width(t, "preventDefault"), inline_before)
+  assert_eq(preview_width(t, "form.onsubmit"), block_before)
+}
+
+///|
+test "pointing at 跟随界面 previews the interface face even when a different text face is chosen" {
+  let t = settings_tester("fonts")
+  t.ui_face_wider(0.05)
+  t.tap_text("思源黑体")
+  t.draw()
+  tap_place(t, "正文")
+  t.draw()
+  t.tap_text("霞鹜文楷")
+  t.draw()
+  assert_true(@ui.face_given(@hostapi.face_ui))
+  assert_true(@ui.face_given(@hostapi.face_text))
+  let text_before = preview_width(t, "Safari 和 Chrome 都试过了。")
+  let mine_before = preview_width(t, "登录页在 Safari 上点了没反应")
+  let (x, y) = t.find("跟随界面").unwrap()
+  t.move(x + 4.0, y + 4.0)
+  t.draw()
+  t.draw()
+  assert_true(preview_width(t, "Safari 和 Chrome 都试过了。") > text_before)
+  assert_true(preview_width(t, "登录页在 Safari 上点了没反应") > mine_before)
+  t.move(x, 4.0)
+  t.draw()
+  t.draw()
+  assert_eq(preview_width(t, "Safari 和 Chrome 都试过了。"), text_before)
+  assert_eq(preview_width(t, "登录页在 Safari 上点了没反应"), mine_before)
+}
+
+///|
+test "pointing at an interface face leaves a separately chosen text face alone" {
+  let t = settings_tester("fonts")
+  tap_place(t, "正文")
+  t.draw()
+  t.tap_text("霞鹜文楷")
+  t.draw()
+  tap_place(t, "界面")
+  t.face_wider(preview_faces_from + 2, 0.05)
+  t.draw()
+  let text_before = preview_width(t, "Safari 和 Chrome 都试过了。")
+  let name_before = preview_width(t, "Claude")
+  let (x, y) = t.find("思源宋体").unwrap()
+  t.move(x + 4.0, y + 4.0)
+  t.draw()
+  t.draw()
+  assert_eq(preview_width(t, "Safari 和 Chrome 都试过了。"), text_before)
+  assert_true(preview_width(t, "Claude") > name_before)
 }
 
 ///|

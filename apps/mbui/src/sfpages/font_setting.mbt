@@ -92,16 +92,27 @@ fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
         ("ui", Some(f)) => f
         _ => as_chosen("ui")
       }
+      // None keeps the chosen face. Some(0) explicitly follows the interface, even if a separate text face is chosen.
       let text_face = match (place, try_face) {
-        ("text", Some(f)) => f
-        ("ui", Some(f)) if chosen_of("text") == "" => f
-        _ => if chosen_of("text") == "" { ui_face } else { as_chosen("text") }
+        ("text", Some(f)) => Some(f)
+        ("ui", Some(f)) if chosen_of("text") == "" => Some(f)
+        _ => {
+          let face = if chosen_of("text") == "" { ui_face } else { as_chosen("text") }
+          if face == 0 { None } else { Some(face) }
+        }
+      }
+      let code_face = match (place, try_face) {
+        ("code", Some(f)) => Some(f)
+        _ => {
+          let face = as_chosen("code")
+          if face == 0 { None } else { Some(face) }
+        }
       }
       // held at its tallest while the pointer is over the faces (their box, the gaps between rows too): a face tried
       // sets its words otherwise (taller, wrapped elsewhere), moving the faces under it; let go, the row under the
       // pointer would be another, tried in turn, and the page would shake
       c.box(style=fp_held, id=c.id("fonts/preview"), taps=false, tallest=c.hovered(faces_id), fn() {
-        font_preview(c, ui_face, text_face)
+        font_preview(c, ui_face, text_face, code_face)
       })
       |> ignore
     },
@@ -281,14 +292,15 @@ fn local_faces(c : @ui.Ctx, core : Core, place : String, tid : Int, picked : Str
 /// A chat as the faces set it (FontSetting.tsx Preview, Fonts.kt FontPreview): their message in its bubble, an agent's
 /// under its name and when, its words as a chat's are (body_size), on a card of the page; their bubble in its
 /// top right corner the ladder's inset in (a block of the ladder's, tall enough not to be a capsule), the agent's words
-/// 20 in. `ui_face`, `text_face`: the host faces tried in it (0: as the app is set now).
-fn font_preview(c : @ui.Ctx, ui_face : Int, text_face : Int) -> Unit {
+/// 20 in. `ui_face` is the interface's host face (0: as chosen); `text_face` and `code_face` are tried in their
+/// words (None: as chosen, Some(0): the app's face for that kind).
+fn font_preview(c : @ui.Ctx, ui_face : Int, text_face : Int?, code_face : Int?) -> Unit {
   @sf.page_card(c, fn() {
     c.box(style=fp_column, fn() {
       c.box(style=fp_mine_room, fn() {
         c.box(style=fp_mine_clear, fn() {  }) |> ignore
         c.box(style=fp_bubble, fn() {
-          c.rich([@ui.span(@sf.t("web-pages.appearance.fonts.sampleMine"))], key="fonts/sample-mine", style=@sf.body, words=true, face=text_face)
+          c.rich([@ui.span(@sf.t("web-pages.appearance.fonts.sampleMine"))], key="fonts/sample-mine", style=@sf.body, words=text_face is None, face=text_face.unwrap_or(0))
           |> ignore
         })
         |> ignore
@@ -306,6 +318,8 @@ fn font_preview(c : @ui.Ctx, ui_face : Int, text_face : Int) -> Unit {
           @sf.t("web-pages.appearance.fonts.sampleText") + "\n\n" + fp_sample_code + "\n\n" + @sf.t("web-pages.appearance.fonts.sampleAfter"),
           key="fonts/sample",
           size=body_size,
+          text_face~,
+          code_face~,
         )
         |> ignore
       })

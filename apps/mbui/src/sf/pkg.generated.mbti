@@ -266,7 +266,7 @@ pub let code_big_size : @ui.TextSize
 
 pub let code_big_tracking : @ui.Tracking
 
-pub fn code_block(@ui.Ctx, String, String, colours? : String?) -> Unit
+pub fn code_block(@ui.Ctx, String, String, colours? : String?, face? : Int32?) -> Unit
 
 pub let code_edge : @ui.Color
 
@@ -954,7 +954,7 @@ pub let mark_said_h : @ui.Len
 
 pub let mark_yellow : Int64
 
-pub fn markdown(@ui.Ctx, String, key? : String, tree? : Json?, size? : Double, line? : Double, one_line? : Bool, ink? : Int64, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, on_link_shown? : ((String, String, Int32) -> Unit)?, files? : (String) -> Placed?, found? : Array[String], code? : (String, String) -> (() -> Unit)?, screens? : Screens?, chat_title? : (String) -> String?, document? : Bool, bleed? : Double, copy? : Bool, paths? : Bool) -> Int32
+pub fn markdown(@ui.Ctx, String, key? : String, tree? : Json?, size? : Double, line? : Double, one_line? : Bool, ink? : Int64, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, on_link_shown? : ((String, String, Int32) -> Unit)?, files? : (String) -> Placed?, found? : Array[String], code? : (String, String) -> (() -> Unit)?, screens? : Screens?, chat_title? : (String) -> String?, document? : Bool, bleed? : Double, copy? : Bool, paths? : Bool, text_face? : Int32?, code_face? : Int32?) -> Int32
 
 pub fn markdown_part(@ui.Ctx, String, Array[Json], String, apart? : Bool, size? : Double, ink? : Int64, line? : Double, serif? : Bool, document? : Bool, found? : Array[String], on_link? : (String) -> Unit) -> Unit
 
