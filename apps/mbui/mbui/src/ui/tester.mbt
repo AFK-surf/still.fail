@@ -295,6 +295,7 @@ pub fn Tester::new(
     bold: 0.0,
     ui_face: 0.0,
     tabular: 0.0,
+    glyph_box: (6.0, 10.0),
     faces_wider: {},
     views: [],
     view_ids: 0,
@@ -1963,6 +1964,12 @@ pub fn Tester::ui_face_wider(self : Tester, em : Double) -> Unit {
 /// shapes ignore it otherwise).
 pub fn Tester::tabular_wider(self : Tester, em : Double) -> Unit {
   self.fake.tabular = em
+}
+
+///|
+/// Each glyph's picture `w` by `h` points from now on (6 by 10 till said: the fake host's), so few fill the atlas.
+pub fn Tester::glyph_box(self : Tester, w : Double, h : Double) -> Unit {
+  self.fake.glyph_box = (w, h)
 }
 
 ///|

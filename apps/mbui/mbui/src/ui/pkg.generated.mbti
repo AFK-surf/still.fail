@@ -2364,6 +2364,7 @@ pub fn Tester::frames_owed(Self) -> Unit
 pub fn Tester::gallery(Self, Array[@hostapi.GalleryPhoto]) -> Unit
 pub fn Tester::gap_faults(Self) -> Array[String]
 pub fn Tester::get(Self, @view.Role, label? : String) -> SemNode raise
+pub fn Tester::glyph_box(Self, Double, Double) -> Unit
 pub fn Tester::glyphs_shown(Self) -> Array[(Double, Double, Double, Double)]
 pub fn Tester::hand_moves(Self) -> Array[String]
 pub fn Tester::haptics(Self) -> Array[Haptic]

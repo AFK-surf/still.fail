@@ -1424,3 +1424,89 @@ fn looked_preview(look : @signals.Signal[String], platform : Int) -> @ui.Tester 
   t.run_for(@ui.move_most_ms)
   t
 }
+
+///|
+/// A picture opened on a fold half open (its crease across, so a small screen however wide: tabletop.mbt), `w` wide,
+/// its whole held by the test while `hold` (how much has come told by it: `said`, the whole given: `given`).
+fn folded_preview(
+  w : Double,
+  hold : Bool,
+  said : Map[String, (Json) -> Unit],
+  given : Map[String, () -> Unit],
+) -> @ui.Tester {
+  new_run()
+  let base = fixture("chat-preview-image")
+  let src : Source = {
+    ..base,
+    read_going: fn(name, params, on_value, done) {
+      if hold && name == "station.file" {
+        let file = text(Some(params), "name")
+        said[file] = on_value
+        given[file] = fn() { (base.read_going)(name, params, on_value, done) }
+      } else {
+        (base.read_going)(name, params, on_value, done)
+      }
+    },
+  }
+  preview_src.val = Some(src)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=626.0, platform=1)
+  t.post(@hostapi.system_channel, "{\"fold\":{\"hinge\":\"half\",\"divisions\":[{\"x\":0,\"y\":300,\"w\":\{w},\"h\":30}]}}")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+test "viewer on the tree, a fold half open wider than a phone: its floating bar its nodes, its kind and size after its name with its tools, none of the old bar's and no zoom's tools (zoomed by the hand and the keys); made narrower than a phone, the kind and size gone, the bar the same nodes" {
+  let said : Map[String, (Json) -> Unit] = {}
+  let given : Map[String, () -> Unit] = {}
+  let t = folded_preview(890.0, true, said, given)
+  assert_true(@sf.layout(890.0) is Small, msg="a small screen however wide")
+  let v = viewer.get().unwrap()
+  assert_true(v.coming() && v.in_tree, msg="coming, the tree's viewer")
+  let zoom = [
+    @sf.t("web-main.preview.zoomOutKey"),
+    @sf.t("web-main.preview.fitKey"),
+    @sf.t("web-main.preview.zoomInKey"),
+    @sf.t("web-main.preview.actualKey"),
+  ]
+  (given.get(v.file.name).unwrap())()
+  t.draw()
+  t.run_for(@kit.progress_known_ms)
+  assert_true(!v.coming(), msg="whole")
+  for l in [@sf.t("web-main.annotate.image"), @sf.t("common.copy"), @sf.t("web-main.preview.download"), @sf.t("web-main.preview.closeKey")] {
+    assert_eq(t.all(Button, label=l).length(), 1, msg="\{l}: one, the node's: \{t.all(Button, label=l).length()}")
+  }
+  for l in zoom {
+    assert_eq(t.all(Button, label=l).length(), 0, msg="whole: no zoom's tool: \{l}")
+  }
+  let meta = @sfbase.vf_meta(v, preview_src.val.unwrap())
+  assert_true(meta != "" && t.find(meta) is Some(_), msg="its kind and size after its name: \{meta}")
+  // (zoomed by the keys: = (+), a quarter more)
+  let z = v.zoom
+  let fitted = z.scale_at(t.time())
+  t.key(@ui.key_of_char('='))
+  t.run_for(@ui.move_most_ms)
+  let now = z.scale_at(t.time())
+  assert_true((now - fitted * @sf.viewer_zoom_step).abs() < 0.0001, msg="+: a quarter more, \{fitted} then \{now}")
+  // (narrower than a phone, the same pose: the kind and size gone, the rest the same nodes)
+  t.resize(600.0, 626.0)
+  t.post(@hostapi.system_channel, "{\"fold\":{\"hinge\":\"half\",\"divisions\":[{\"x\":0,\"y\":300,\"w\":600,\"h\":30}]}}")
+  t.draw()
+  assert_true(t.find(meta) is None, msg="narrow: no kind and size")
+  assert_eq(t.all(Button, label=@sf.t("common.copy")).length(), 1, msg="narrow: its tools still")
+  assert_true(viewer.get().unwrap().in_tree, msg="the same viewer")
+  // (wide again: its kind and size back, still none of the old bar's)
+  t.resize(890.0, 626.0)
+  t.post(@hostapi.system_channel, "{\"fold\":{\"hinge\":\"half\",\"divisions\":[{\"x\":0,\"y\":300,\"w\":890,\"h\":30}]}}")
+  t.draw()
+  for l in [@sf.t("common.copy"), @sf.t("web-main.preview.closeKey")] {
+    assert_eq(t.all(Button, label=l).length(), 1, msg="wide again: \{l} one: \{t.all(Button, label=l).length()}")
+  }
+  for l in zoom {
+    assert_eq(t.all(Button, label=l).length(), 0, msg="wide again: no zoom's tool: \{l}")
+  }
+  assert_true(t.find(meta) is Some(_), msg="wide again: its kind and size")
+  assert_true(viewer.get().unwrap().in_tree, msg="the same viewer")
+}
