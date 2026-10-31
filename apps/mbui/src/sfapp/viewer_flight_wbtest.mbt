@@ -92,3 +92,43 @@ test "a film closed back into its thumbnail: the player's bars go with it as it 
   assert_false(words_show(t, "0:04"))
   assert_true(words_show(t, "演示录屏.mp4"))
 }
+
+///|
+test "a film not come yet, no still of it either, closed: it flies back from where it landed, not from a dot in the middle" {
+  new_run()
+  // (its still not come from the station: its thumbnail black, its play mark alone)
+  let src : Source = { ..fixture("chat"), poster: fn(_, _, _) { "" } }
+  let a : Attachment = {
+    name: "演示录屏.mp4",
+    path: "uploads/fx/演示录屏.mp4",
+    size: 5242880.0,
+    width: 1280.0,
+    height: 720.0,
+    thumbhash: "",
+    owner: "s-c1",
+    upload: "",
+    duration: 0.0,
+    frames: 0,
+    held: false,
+  }
+  let t = @ui.Tester::new(
+    fn(c) {
+      chat_file(c, src, a)
+      preview(c, src)
+    },
+    w=390.0,
+    h=844.0,
+  )
+  t.draw()
+  t.tap_text("演示录屏.mp4")
+  // the player has read nothing of it yet: no size, no frame
+  t.set_player(1, natural=(0.0, 0.0), shown=false)
+  t.run_for(@ui.move_most_ms)
+  t.back()
+  t.draw()
+  let v = pv_leaving.get().unwrap()
+  assert_true(v.flies && v.fly_back)
+  // from the 16:9 box across the screen it landed as (its size as its message says it)
+  let (_, _, w, h) = v.fly_to.unwrap()
+  assert_true((w - 390.0).abs() < 1.0 && (h - 219.375).abs() < 1.0)
+}
