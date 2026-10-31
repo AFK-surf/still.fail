@@ -2005,6 +2005,8 @@ pub fn tone_ground(Int64) -> Int64
 
 pub fn tool_button(@ui.Ctx, String, String, String, on_press~ : () -> Unit, drop? : Int32, lit? : Int64, disabled? : Bool, shortcut? : String) -> Tool
 
+pub fn tool_mark(@ui.Ctx, String, Double) -> Unit
+
 pub fn tool_of(String, () -> Unit, drop? : Int32, instead? : Array[MenuItem]) -> Tool
 
 pub let tools_apart : Double

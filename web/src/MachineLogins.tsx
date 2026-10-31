@@ -20,8 +20,10 @@ import { Link } from "react-router";
 import { stationBase } from "./station.tsx";
 import { useDoing } from "./doing.ts";
 import { Menu, PanelIconButton, Section, Spinner } from "./ui.tsx";
+import * as uiCss from "./ui.css.ts";
+import { StationMark } from "./StationMark.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
-import { ArrowUpRight, ChevronRight, Close, Key, More } from "@stillfail/ui/icons.tsx";
+import { ArrowUpRight, ChevronRight, Close, More } from "@stillfail/ui/icons.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./MachineLogins.css.ts";
 import { t } from "./i18n.ts";
@@ -316,7 +318,7 @@ function ToolRow({ station, tool, marked }: { station: string; tool: MachineLogi
   return (
     <div ref={box}>
       <div className={`${pagesCss.listRow} ${css.toolRow}`} onClick={() => setOpen(!open)}>
-        <span className={`${pagesCss.mark} ${css.mark}`}><Key size={18} strokeWidth={1.7} /></span>
+        <span className={css.mark}><ToolMark tool={tool} size={22} /></span>
         <span className={pagesCss.cardRowText}>
           <strong className={css.name}>{tool.name}</strong>
           <span className={tool.failed ? css.stateFailed : css.state}>
@@ -331,6 +333,19 @@ function ToolRow({ station, tool, marked }: { station: string; tool: MachineLogi
     </div>
   );
 }
+
+/**
+ * What a program is drawn with: its maker's mark in its colours (the core's `mark`: gh GitHub's, wrangler Cloudflare's;
+ * web/public/tools, from Simple Icons, CC0, and the model makers' set), those whose colour is black in the text's, else a
+ * terminal's.
+ */
+export function ToolMark({ tool, size }: { tool: MachineLoginTool; size: number }) {
+  if (!tool.mark) return <StationMark icon="glyph:terminal" size={size} />;
+  return <img className={uiCss.modelLogo} src={`${import.meta.env.BASE_URL}tools/${tool.mark}.svg`} alt={tool.name} width={size} height={size} data-mono={INK_TOOLS.has(tool.mark) || undefined} />;
+}
+
+/** The tools' marks drawn in the text's colour (black ones, white in the dark). */
+const INK_TOOLS = new Set(["github", "cursor", "vercel", "openai", "devin"]);
 
 /** One try of a program's: when, how it ended (who ended it says how: 张三 取消; else the status: 已取消), its chat. */
 function Try({ station, login, marked }: { station: string; login: MachineLoginShown; marked: boolean }) {

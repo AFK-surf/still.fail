@@ -187,6 +187,19 @@ function endedText(state: string, l: J, name: string, station: string): string {
   return reason !== "" ? t("core-logic.machineLogin.endedFailedWhy", { ...what, reason }) : t("core-logic.machineLogin.endedFailed", what);
 }
 
+/// Whose mark a program is drawn with, in its maker's colours (用户 2026-10-31: one key for every program told them apart
+/// by nothing; then 用原本的颜色): the maker of the program or of the service it logs in to, by its name (web/public/tools,
+/// the app's tool_* drawables); none, a terminal's.
+const MARKS: Record<string, string> = {
+  gh: "github", gcloud: "google-cloud", gsutil: "google-cloud", bq: "google-cloud", firebase: "firebase",
+  wrangler: "cloudflare", cloudflared: "cloudflare", vercel: "vercel", az: "azure", npm: "npm", npx: "npm", docker: "docker",
+  python: "python", python3: "python", codex: "openai", claude: "claude", devin: "devin", cursor: "cursor",
+  "cursor-agent": "cursor", supabase: "supabase", netlify: "netlify", stripe: "stripe", terraform: "terraform",
+  kubectl: "kubernetes",
+};
+
+export const toolMark = (name: string): string | undefined => MARKS[name];
+
 /// The logins that ended, a row per program (用户定 2026-10-31: a row per attempt buried the page in 已取消), in the order of
 /// each one's latest: who last logged in to it and when (else that nobody has yet, and how its latest ended), from which
 /// chat, how many tries, and the tries themselves. `ended`: each as the station holds it and as shown, newest first.
@@ -204,8 +217,10 @@ export function toolsShown(ended: [J, J][]): J[] {
     const said = done
       ? who !== "" ? t("core-logic.machineLogin.loggedInBy", { name: who }) : s.statusText
       : t("core-logic.machineLogin.neverDone", { status: s.statusText });
+    const mark = toolMark(name);
     return {
       name,
+      ...(mark !== undefined ? { mark } : {}),
       summaryText: [said, s.whenText].filter((w) => w !== "").join(" · "),
       failed: !done && s.state === "failed",
       ...(s.chat !== undefined ? { chat: s.chat } : {}),

@@ -121,6 +121,23 @@ pub fn maker_mark(
 }
 
 ///|
+/// A program a station logs in to (the core's `MachineLoginTool.mark`; the web's MachineLogins.tsx ToolMark): its
+/// maker's mark in its colours, those whose colour is black in the page's ink; a terminal's where it has none.
+pub fn tool_mark(c : @ui.Ctx, mark : String, size : Double) -> Unit {
+  let name = "tool_" + mark.replace_all(old="-", new="_")
+  if mark == "" || !drawables.contains(name) {
+    station_mark(c, "", "glyph:terminal", size, theme().p.muted)
+    return
+  }
+  let tint = if ink_tools.contains(mark) { Some(theme().p.text) } else { None }
+  drawable(c, name, size, tint?=tint) |> ignore
+}
+
+///|
+/// The tools' marks drawn in the page's ink (black ones: white in the dark).
+let ink_tools : Array[String] = ["github", "cursor", "vercel", "openai", "devin"]
+
+///|
 /// Slack's mark (a chat that came from Slack).
 pub fn slack_mark(c : @ui.Ctx, size : Double) -> Int {
   drawable(c, "slack", size)
