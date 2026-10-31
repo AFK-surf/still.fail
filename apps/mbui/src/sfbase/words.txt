@@ -1750,7 +1750,8 @@ web-pages.profiles.signingIn
 web-pages.profiles.signingInNote
 web-pages.profiles.spreadAdd
 web-pages.profiles.spreadLead
-web-pages.profiles.spreadLine
+web-pages.profiles.spreadOpen
+web-pages.profiles.spreadTitle
 web-pages.profiles.spreadWhat
 web-pages.profiles.step1Devin
 web-pages.profiles.step2

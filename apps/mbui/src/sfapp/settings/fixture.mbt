@@ -49,7 +49,7 @@ priv struct SettingsFixture {
   mut resets_used : Int
   /// the models named by hand on ChatGPT 团队 (`profile.addModel`)
   models_added : Array[String]
-  /// the models given to the other profiles from ChatGPT 团队's page (`profile.addModel` on another one: its 都加上)
+  /// the profiles given ChatGPT 团队's GPT-6 mini from its page (`profile.addModel` on another one), by id
   models_given : Array[String]
   /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away or its
   /// prompt closed
@@ -353,6 +353,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 2)
     // ChatGPT 团队's page at its models: GPT-6 mini to be given to 备用 key too
     "settings-profile-spread" => up("", "settings/profile/ws1/st1/cx", 3)
+    "settings-profile-spread-dialog" => fixture_open.desk = "profile-spread"
     // ChatGPT 团队's models on their page (many, a filter, one to name by hand)
     "settings-profile-models" => up("", "settings/profile-models/ws1/st1/cx", 0)
     "settings-profile-login" => {
@@ -465,7 +466,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
       "profile:ws1/st1#cc"
     "settings-profile-key" => "profile:ws1/st1#k2"
-    "settings-profile-quota" | "settings-profile-spread" => "profile:ws1/st1#cx"
+    "settings-profile-quota" | "settings-profile-spread" | "settings-profile-spread-dialog" => "profile:ws1/st1#cx"
     "settings-profile-models" => "profile-models:ws1/st1#cx"
     "settings-me-reading" => "me"
     "settings-profiles-pick" | "settings-profiles-monthly" => "profiles"
@@ -671,17 +672,27 @@ fn fx_cc_with(more : Array[(String, Json)]) -> Array[(String, Json)] {
 
 ///|
 /// A profile's models the others could have too (views/profiles.ts spread): ChatGPT 团队's GPT-6 mini, which 备用 key
-/// lists, until given to it.
+/// and MBA's 团队 key list, each until given it.
 fn fx_spread(id : String) -> Json {
-  if id != "cx" || fx.models_given.contains("gpt-6-mini") {
+  let targets = [("ws1/st1", "Studio", "k2", "备用 key"), ("ws1/st2", "MBA", "team", "团队 key")].filter(fn(x) {
+    !fx.models_given.contains(x.2)
+  })
+  if id != "cx" || targets.is_empty() {
     return Json::array([])
   }
   [
     obj([
       ("model", str("gpt-6-mini")),
       ("name", str("GPT-6-MINI")),
-      ("targets", [obj([("station", str("ws1/st1")), ("stationName", str("Studio")), ("profileId", str("k2")), ("profileName", str("备用 key")), ("title", str("备用 key")), ("model", str("gpt-6-mini"))])]),
-      ("targetsText", str("备用 key")),
+      (
+        "targets",
+        Json::array(
+          targets.map(fn(x) {
+            obj([("station", str(x.0)), ("stationName", str(x.1)), ("profileId", str(x.2)), ("profileName", str(x.3)), ("title", str(x.3)), ("model", str("gpt-6-mini"))])
+          }),
+        ),
+      ),
+      ("targetsText", str(targets.map(fn(x) { x.3 }).join("、"))),
     ]),
   ]
 }
@@ -2239,7 +2250,11 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       Some(Ok(obj([])))
     }
     "profile.addModel" => {
-      (if text(p, "id") == "cx" { fx.models_added } else { fx.models_given }).push(text(p, "model"))
+      if text(p, "id") == "cx" {
+        fx.models_added.push(text(p, "model"))
+      } else {
+        fx.models_given.push(text(p, "id"))
+      }
       fx_changed()
       Some(Ok(obj([])))
     }

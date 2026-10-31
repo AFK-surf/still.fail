@@ -931,7 +931,7 @@ fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?, spread 
             add_model(c, core, address, id)
           }
           if spread.length() > 0 {
-            model_spread(c, core, spread)
+            model_spread(c, core, address, id, spread)
           }
       })
     },
@@ -1597,15 +1597,19 @@ fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Uni
               // (its id over it while it is pointed at: Accounts.tsx's tip)
               let item = c.id("profile-model-item/" + key + "/" + m)
               c.box(style=pf_pool_item.then(@sf.row_least_h()), id=item, taps=false, points=true, fn() {
-                let now = @kit.checkbox(c, "profile-model/" + key + "/" + m, if on { On } else { Off }, label=name(m), disabled=busy).value
-                if (now == On) != on {
-                  commit(if on { enabled.filter(fn(x) { x != m }) } else { enabled.copy()..push(m) })
+                // (one being saved: its spinner in its box's place, as big, so nothing beside or after it moves; a
+                // spinner after its name widened its series and moved the ones after it, 2026-10-31 用户「loading 会
+                // 导致页面抖动」)
+                if saving.contains(m) {
+                  c.box(style=pf_pool_spin, fn() { @sf.spinner(c, size=pf_spin) |> ignore }) |> ignore
+                } else {
+                  let now = @kit.checkbox(c, "profile-model/" + key + "/" + m, if on { On } else { Off }, label=name(m), disabled=busy).value
+                  if (now == On) != on {
+                    commit(if on { enabled.filter(fn(x) { x != m }) } else { enabled.copy()..push(m) })
+                  }
                 }
                 @sf.maker_mark(c, text(field(field(p, "makers"), m), "id"), text(p, "runtime"), pf_chip_glyph) |> ignore
                 c.text(name(m), style=pf_chip_words) |> ignore
-                if saving.contains(m) {
-                  @sf.spinner(c, size=pf_spin) |> ignore
-                }
                 match found {
                   Some(f) if !f.contains(m) => c.text(@sf.t("web-pages.profiles.gone"), style=pf_gone) |> ignore
                   _ => ()
@@ -1637,35 +1641,72 @@ fn text_toggle(c : @ui.Ctx, key : String, words : String, disabled : Bool) -> Bo
 }
 
 ///|
-/// A profile's models other profiles of the workspace list and do not have on (the core's `spread`): a line each, the
-/// model and those profiles, and 都加上 giving it to every one of them (`profile.addModel` on each one's station, as that
-/// provider spells it).
-fn model_spread(c : @ui.Ctx, core : Core, spread : Array[Json]) -> Unit {
-  c.box(style=pf_spread, fn() {
-    c.text(@sf.t("web-pages.profiles.spreadLead"), style=pf_muted) |> ignore
-    for s in spread {
-      let sv = Some(s)
-      let targets = items(sv, "targets")
-      let on = fn(x : Json) { [("station", text(Some(x), "station")), ("id", text(Some(x), "profileId"))] }
-      let adding = targets.iter().any(fn(x) { is_doing(core, ["profile.addModel"], on(x)) })
-      c.box(style=pf_input_row, fn() {
-        c.text(
-          @sf.t("web-pages.profiles.spreadLine", args=[("model", text(sv, "name")), ("profiles", text(sv, "targetsText"))]),
-          style=pf_spread_words,
-        )
-        |> ignore
-        if @sf.button(c, @sf.t("web-pages.profiles.spreadAdd"), key="profile-spread/" + text(sv, "model"), busy=adding) && !adding {
-          let what = @sf.t("web-pages.profiles.spreadWhat", args=[("model", text(sv, "name"))])
-          for x in targets {
-            let xv = Some(x)
-            @settings.act(core, what, "profile.addModel", obj([("station", str(text(xv, "station"))), ("id", str(text(xv, "profileId"))), ("model", str(text(xv, "model")))]))
-          }
+/// A profile's models other profiles of the workspace list and do not have on (the core's `spread`): one quiet press
+/// under its models, 加到其他 profile (how many could be given), opening them in a dialog, not on the page (2026-10-31
+/// 用户「不要直接展开在主页面」).
+fn model_spread(c : @ui.Ctx, core : Core, address : String, id : String, spread : Array[Json]) -> Unit {
+  let n = spread.fold(init=0, fn(k, s) { k + items(Some(s), "targets").length() })
+  let asked = fx_spread_up.val
+  fx_spread_up.val = false
+  if text_toggle(c, "profile-spread/" + address + "/" + id, @sf.t("web-pages.profiles.spreadOpen", args=[("n", n.to_string())]), false) ||
+    asked {
+    spread_dialog(core, address, id, spread)
+  }
+}
+
+///|
+/// The dialog of a profile's models others could have, put up by a fixture's mode (settings-profile-spread-dialog) as
+/// its page is drawn.
+// kept across runs: said by the settings' fixture; pages.mbt reset puts it back
+pub let fx_spread_up : Ref[Bool] = Ref(false)
+
+///|
+/// The dialog of a profile's models others could have: each model's name over a box for each profile that could have
+/// it, none ticked; 添加 gives each ticked one its model (`profile.addModel` on its station, as that provider spells
+/// it), and closes.
+fn spread_dialog(core : Core, address : String, id : String, spread : Array[Json]) -> Unit {
+  let ticked : Map[String, Bool] = {}
+  let key_of = fn(s : Json, x : Json) { text(Some(s), "model") + "\n" + text(Some(x), "station") + "\n" + text(Some(x), "profileId") }
+  let any = fn() { ticked.iter().any(fn(e) { e.1 }) }
+  open_dialog(
+    @sf.t("web-pages.profiles.spreadTitle"),
+    description=@sf.t("web-pages.profiles.spreadLead"),
+    fn(c, _) {
+      c.box(style=pf_spread, fn() {
+        for s in spread {
+          c.box(style=pf_spread_model, fn() {
+            c.text(text(Some(s), "name"), style=pf_spread_name) |> ignore
+            @sf.group(c, fn() {
+              for x in items(Some(s), "targets") {
+                let k = key_of(s, x)
+                let on = ticked.get(k).unwrap_or(false)
+                let now = @sf.check_row(c, "profile-spread-pick/" + k, text(Some(x), "profileName"), on, note=text(Some(x), "stationName"))
+                if now != on {
+                  ticked[k] = now
+                }
+              }
+            })
+          })
+          |> ignore
         }
       })
       |> ignore
-    }
-  })
-  |> ignore
+    },
+    fn(c, shut) {
+      if @sf.button(c, @sf.t("web-pages.profiles.spreadAdd"), key="profile-spread-add/" + address + "/" + id, tone=Primary, disabled=!any()) {
+        shut()
+        for s in spread {
+          let what = @sf.t("web-pages.profiles.spreadWhat", args=[("model", text(Some(s), "name"))])
+          for x in items(Some(s), "targets") {
+            if ticked.get(key_of(s, x)).unwrap_or(false) {
+              let xv = Some(x)
+              @settings.act(core, what, "profile.addModel", obj([("station", str(text(xv, "station"))), ("id", str(text(xv, "profileId"))), ("model", str(text(xv, "model")))]))
+            }
+          }
+        }
+      }
+    },
+  )
 }
 
 ///|
@@ -1804,13 +1845,18 @@ let pf_share_value : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 let pf_models_body : @ui.Style = @ui.css("w=Full gap=S2_5")
 
 ///|
-/// Its models other profiles could have: 8 apart, its words taking the room before 都加上.
+/// The dialog's models, 16 apart.
 // kept across runs: a value (no field of it changes)
-let pf_spread : @ui.Style = @ui.css("w=Full gap=S2")
+let pf_spread : @ui.Style = @ui.css("w=Full gap=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_spread_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=@sf.grow)
+let pf_spread_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, w=Full)
+
+///|
+/// A model of them: its name, its profiles' boxes 6 under it.
+// kept across runs: a value (no field of it changes)
+let pf_spread_model : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1872,6 +1918,11 @@ let pf_pool_list : @ui.Style = @ui.css("gap=SPx")
 /// A model's row (its height at least a row's, row_least_h at its use: the press's room).
 // kept across runs: a value (no field of it changes)
 let pf_pool_item : @ui.Style = @ui.css("row gap=S2 align=ACenter")
+
+///|
+/// A model's spinner while it is saved, in its checkbox's place: as big (the kit's 18).
+// kept across runs: a value (no field of it changes)
+let pf_pool_spin : @ui.Style = @ui.css("row w=S4_5 h=S4_5 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

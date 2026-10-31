@@ -99,15 +99,24 @@ test "a profile's models, wide with a mouse: the series side by side, a model's 
 }
 
 ///|
-test "a profile's page, wide: a model of its that another profile lists and has not on is given to it at 都加上" {
+test "a profile's page, wide: its models other profiles could have are given to those ticked in a dialog" {
   let t = setting_tester(Profile("ws1/st1", "cx"), 1280.0)
-  scrolled_to(t, 1280.0, "GPT-6-MINI → 备用 key")
-  assert_true(t.find("工作区里其他 profile 也能用这些模型，还没开：") is Some(_))
-  tap_words(t, "都加上")
+  // on the page only the press that opens them, with how many could be given
+  scrolled_to(t, 1280.0, "加到其他 profile（2）")
+  assert_true(t.find("团队 key") is None, msg="not on the page")
+  t.tap_text("加到其他 profile（2）")
+  t.run_for(@kit.presence_in_ms)
+  assert_true(@sf.presenting(), msg="a dialog")
+  assert_true(t.find("GPT-6-MINI") is Some(_))
+  assert_true(t.find("备用 key") is Some(_) && t.find("团队 key") is Some(_))
+  // none ticked: nothing to add yet; one ticked, added to it alone
+  tap_words(t, "备用 key")
+  t.frame()
+  tap_words(t, "添加")
   t.frame()
   t.frame()
-  assert_true(t.find("GPT-6-MINI → 备用 key") is None, msg="given: none left to give")
-  assert_true(t.find("都加上") is None)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("加到其他 profile（1）") is Some(_), msg="团队 key still offered")
 }
 
 // A profile's quota reset and its models (Accounts.tsx QuotaSection, ModelPool) over ChatGPT 团队: a reset used once

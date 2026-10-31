@@ -221,6 +221,8 @@ pub fn fonts_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
 pub let fx_policy_up : @ref.Ref[String]
 
+pub let fx_spread_up : @ref.Ref[Bool]
+
 pub let fx_vault_add_up : @ref.Ref[Bool]
 
 pub fn here_of(@sfbase.ChatRef, @sfbase.ChatView, String, @sfbase.Turns, @sfbase.Emits, @sfbase.SendFlight?, @settings.Core, inline? : Bool, gutter? : Double) -> MessageHere
