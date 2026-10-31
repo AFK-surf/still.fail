@@ -1347,6 +1347,46 @@ let menu_open_at : Ref[(Double, Double)] = Ref((0.0, 0.0))
 let menu_going : Set[String] = Set::new()
 
 ///|
+/// Told as the menu open or those going out change: what reads them through menu_shown, menu_is_open, menu_open_key
+/// or a ⋯'s own look (a part built apart: a kept row, an island) built again as they do, not left as it was.
+// kept across runs: a count told, nothing reads what it is (only that it changed)
+let menu_told : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+fn menu_changed() -> Unit {
+  menu_told.set(@signals.untracked(fn() { menu_told.get() }) + 1)
+}
+
+///|
+/// The menu open now ("" none), read so its change is told to what read it.
+fn menu_now() -> String {
+  menu_told.get() |> ignore
+  menu_open.val
+}
+
+///|
+/// The menu open now: `key` ("" none).
+fn menu_set(key : String) -> Unit {
+  if menu_open.val != key {
+    menu_open.val = key
+    menu_changed()
+  }
+}
+
+///|
+/// The menu `key` going out (its exit playing), or not.
+fn menu_going_set(key : String, going : Bool) -> Unit {
+  if menu_going.contains(key) != going {
+    if going {
+      menu_going.add(key)
+    } else {
+      menu_going.remove(key)
+    }
+    menu_changed()
+  }
+}
+
+///|
 /// No menu open, no mark's words (the app begun again).
 pub fn parts_reset() -> Unit {
   submenu_hover.val = ""
@@ -1356,6 +1396,28 @@ pub fn parts_reset() -> Unit {
   about_open.val = ""
   menu_open_at.val = (0.0, 0.0)
   menu_going.clear()
+  menu_changed()
+}
+
+///|
+/// The menu `key` closed now, by whatever closes it as it is pressed (a dismissal, its button pressed again): no longer
+/// the one open (unless another is by then), and going out from now, so what shows its button only under the pointer
+/// still builds it as its exit plays.
+fn menu_close(key : String) -> Unit {
+  if menu_open.val == key {
+    menu_set("")
+  }
+  menu_going_set(key, true)
+}
+
+///|
+/// The menu `key` opened, or closed where it is the one open: its button pressed.
+fn menu_flip(key : String) -> Unit {
+  if menu_open.val == key {
+    menu_close(key)
+  } else {
+    menu_set(key)
+  }
 }
 
 ///|
@@ -1372,7 +1434,7 @@ fn menu_items(
   offset? : Double = 6.0,
   at? : (Double, Double, Double, Double),
 ) -> Bool {
-  let open = menu_open.val == key
+  let open = menu_now() == key
   let entries : Array[@kit.Entry] = []
   let icons : Map[String, String] = {}
   let danger : Array[String] = []
@@ -1396,18 +1458,20 @@ fn menu_items(
       }
     }
   }
-  let m = dropdown(c, key, open, trigger, entries, icons, menu_w, submenu~, side~, along~, offset~, at?, danger~)
-  if open && !m.open {
-    menu_open.val = ""
+  // (dismissed, closed at the moment of what dismissed it: Escape, a press beside it)
+  let menu : Ref[@kit.Menu?] = Ref(None)
+  c.with_dismissed(fn(_) { menu_close(key) }, fn() {
+    menu.val = Some(dropdown(c, key, open, trigger, entries, icons, menu_w, submenu~, side~, along~, offset~, at?, danger~))
+  })
+  let m = menu.val.unwrap()
+  // (a submenu's Left, its own back, is a key taken as it is built)
+  if submenu && open && !m.open && menu_open.val == key {
+    menu_set("")
   }
-  if m.shown && !m.open {
-    menu_going.add(key)
-  } else {
-    menu_going.remove(key)
-  }
+  menu_going_set(key, m.shown && !m.open)
   match m.chosen {
     Some(v) => {
-      menu_open.val = ""
+      menu_set("")
       let i = v.iter().fold(init=0, fn(n, ch) { n * 10 + (ch.to_int() - 48) })
       match items.get(i) {
         Some(Some(item)) => c.tell(key + "/chosen", item.select)
@@ -1423,11 +1487,12 @@ fn menu_items(
 /// A menu behind ⋯ (parts.tsx Menu): an icon button (`label`, the app's word for 更多; shaped as a bar's tools are:
 /// tool_button) that opens `items` under it, along its end, 4 below. Whether it is open.
 pub fn menu_of(c : @ui.Ctx, key : String, items : Array[MenuItem?], label~ : String, size? : Double = 32.0) -> Bool {
-  let open = menu_open.val == key
-  if icon_button(c, "more", key=key + "/more", size~, on=open, round=true, linked?=bar_keys_link(), label~) {
-    menu_open.val = if open { "" } else { key }
-  }
-  menu_items(c, key, c.id(key + "/more"), items, along=End, offset=4.0)
+  let open = menu_now() == key
+  let id = c.id(key + "/more")
+  icon_button(c, "more", key=key + "/more", size~, on=open, round=true, linked?=bar_keys_link(), label~) |> ignore
+  // (pressed as it is let go: open or not as it is then)
+  c.on_press(id, fn() { menu_flip(key) })
+  menu_items(c, key, id, items, along=End, offset=4.0)
 }
 
 ///|
@@ -1527,7 +1592,7 @@ let tools_line_look : @ui.Style = @ui.css("row align=ACenter")
 /// A right click's menu (Radix's ContextMenu, Drive.tsx MenuContent): opened at the pointer by `menu_open_here`, then
 /// drawn there while it is open. Whether it is open.
 pub fn context_items(c : @ui.Ctx, key : String, items : Array[MenuItem?]) -> Bool {
-  if menu_open.val != key {
+  if menu_now() != key {
     return false
   }
   let (x, y) = menu_open_at.val
@@ -1537,14 +1602,20 @@ pub fn context_items(c : @ui.Ctx, key : String, items : Array[MenuItem?]) -> Boo
 ///|
 /// The menu `key` opened at (`x`, `y`): a right click there.
 pub fn menu_open_here(key : String, x : Double, y : Double) -> Unit {
-  menu_open.val = key
+  menu_set(key)
   menu_open_at.val = (x, y)
+}
+
+///|
+/// The key of the menu open now ("" none).
+pub fn menu_open_key() -> String {
+  menu_now()
 }
 
 ///|
 /// Whether the menu `key` is open now.
 pub fn menu_is_open(key : String) -> Bool {
-  menu_open.val == key
+  menu_now() == key
 }
 
 ///|
@@ -1552,7 +1623,7 @@ pub fn menu_is_open(key : String) -> Bool {
 /// keeps it while this holds, so the menu goes out where it hung (not cut off, nor from the window's corner where
 /// the ⋯ is not drawn the frame it plays in).
 pub fn menu_shown(key : String) -> Bool {
-  menu_open.val == key || menu_going.contains(key)
+  menu_now() == key || menu_going.contains(key)
 }
 
 ///|

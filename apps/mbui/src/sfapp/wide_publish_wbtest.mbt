@@ -229,6 +229,34 @@ test "wide: the message's ⋯ menu goes out where it hung, closed by Escape or a
 }
 
 ///|
+test "wide: the message's ⋯ menu closed by its ⋯ pressed again, the pointer then off the message: goes out where it hung" {
+  new_run()
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let src = fixture("chat")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  let (x, y, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
+  t.move(x + 24.0, y + 8.0)
+  t.frame()
+  t.frame()
+  // (where the ⋯ is, read before its menu covers the page)
+  let (bx, by, bw, bh) = t.get(Button, label="更多操作").rect
+  t.click(Button, label="更多操作")
+  t.run_for(@ui.move_most_ms)
+  let (_, mx, my, _, _, _) = t.words().filter(fn(w) { w.0 == "复制消息链接" })[0]
+  // (pressed again as the host hands it on, then the pointer off the message, no frame between)
+  t.touch(0, bx + bw / 2.0, by + bh / 2.0)
+  t.touch(2, bx + bw / 2.0, by + bh / 2.0)
+  t.touch(1, 400.0, 250.0)
+  t.frame()
+  assert_eq(drawn_near(t, "复制消息链接", mx, my), Some(true), msg="the frame after")
+  t.frame()
+  assert_eq(drawn_near(t, "复制消息链接", mx, my), Some(true), msg="two frames after")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(drawn_near(t, "复制消息链接", mx, my), None, msg="gone")
+}
+
+///|
 test "touch: the message header has neither; the held bar copies its position link" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
