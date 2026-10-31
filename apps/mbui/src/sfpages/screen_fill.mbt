@@ -192,4 +192,5 @@ fn login_fill(c : @ui.Ctx, s : ScreenSess) -> Unit {
 
 ///|
 /// The logins to pick from: one under another, each as wide as its words.
+// kept across runs: a value (no field of it changes)
 let fill_choice_list : @ui.Style = @ui.css("align=AStart pt=S2 gap=S2")
