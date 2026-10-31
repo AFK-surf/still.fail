@@ -455,6 +455,10 @@ fn is_glass(kind : Int) -> Bool {
 fn glass_margin(a : FixedArray[Double], k : Int) -> Double {
   let o = k * inst_size
   let liquid = kind_at(a, k) == 6
+  // (contained: its own box, its blur said below 0)
+  if a[o + 7] < 0.0 {
+    return 2.0 + reach_pad
+  }
   3.0 * a[o + 7] +
   (if liquid { a[o + 21] * (1.0 + a[o + 22]) + a[o + 23] } else { 0.0 }) +
   2.0 +

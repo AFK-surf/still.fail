@@ -27,6 +27,10 @@ pub(all) struct Glass {
   // frosted: frosts what the glass before it frosts (its capture), not what
   // has been drawn since
   shares_capture : Bool
+  // frosted: frosts only what is under its own box, its edges carried on
+  // past them (CSS backdrop-filter's), so nothing round it bleeds in at its
+  // rim: a picture's frost (a message's image coming in)
+  contained : Bool
 } derive(Eq, Show, Debug)
 
 ///|
@@ -40,6 +44,7 @@ pub fn Glass::frosted(
   rim_lit? : Double = 0.0,
   rim_back? : Double = 0.0,
   shares_capture? : Bool = false,
+  contained? : Bool = false,
 ) -> Glass {
   {
     blur,
@@ -57,6 +62,7 @@ pub fn Glass::frosted(
     merge: 0.0,
     adaptive: false,
     shares_capture,
+    contained,
   }
 }
 
@@ -101,6 +107,7 @@ pub fn Glass::liquid(
     merge,
     adaptive,
     shares_capture: false,
+    contained: false,
   }
 }
 
