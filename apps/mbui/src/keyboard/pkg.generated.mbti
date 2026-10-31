@@ -1,0 +1,93 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "stillfail/keyboard"
+
+import {
+  "moonbitlang/core/debug",
+  "stillfail/pinyin",
+}
+
+// Values
+pub let bar_h : Double
+
+pub let board_h : Double
+
+pub fn cap_at(Array[Cap], Double, Double) -> Int32
+
+pub fn caps(Board) -> Array[Cap]
+
+pub fn run() -> Unit
+
+pub let unit_width : Double
+
+// Errors
+
+// Types and methods
+pub struct Board {
+  composer : @pinyin.Composer?
+  mut chinese : Bool
+  mut page : Page
+  mut shift : Shift
+  mut kind : String
+  mut action : String
+  // private fields
+}
+pub fn Board::back(Self) -> Array[Out]
+pub fn Board::composing(Self) -> Bool
+pub fn Board::new(@pinyin.Composer?) -> Self
+pub fn Board::pick(Self, Int32) -> Array[Out]
+pub fn Board::start(Self, String, String) -> Unit
+pub fn Board::tap(Self, Key, Double) -> Array[Out]
+
+pub struct Cap {
+  key : Key
+  label : String
+  small : String
+  look : Look
+  x : Double
+  y : Double
+  w : Double
+  h : Double
+  cell_x : Double
+  cell_y : Double
+  cell_w : Double
+  cell_h : Double
+}
+
+pub(all) enum Key {
+  Letter(Char)
+  Break
+  ShiftKey
+  Back
+  PageKey
+  Lang
+  Space
+  EnterKey
+  Words(String)
+} derive(Eq, Show, @debug.Debug)
+
+pub(all) enum Look {
+  Light
+  Grey
+  Green
+} derive(Eq, Show, @debug.Debug)
+
+pub(all) enum Out {
+  Commit(String)
+  Delete
+  Enter
+} derive(Eq, Show, @debug.Debug)
+
+pub(all) enum Page {
+  Letters
+  Signs
+} derive(Eq, Show, @debug.Debug)
+
+pub(all) enum Shift {
+  Off
+  Once
+  Locked
+} derive(Eq, Show, @debug.Debug)
+
+// Type aliases
+
+// Traits

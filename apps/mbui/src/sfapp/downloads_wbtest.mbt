@@ -4,12 +4,14 @@
 // here, then said done.
 
 ///|
-/// The fixture `mode` with the core's `downloads` as `list` says, its calls kept in `calls`; `download.take` answered
-/// as taken, `download.read` (the saving's) answered with `bytes` (of `type`) a part at a time, `part` at most.
+/// The fixture `mode` with the core's `downloads` as `list` says (what it brings as `keeping`), its calls kept in
+/// `calls`; `download.take` answered as taken, `download.read` (the saving's) answered with `bytes` (of `type`) a part
+/// at a time, `part` at most.
 fn downloads_src(
   mode : String,
   list : Array[Json],
   calls : Array[(String, Json)],
+  keeping? : Array[Json] = [],
   bytes? : Bytes = b"PK\x03\x04",
   part? : Int = 4 * 1024 * 1024,
 ) -> Source {
@@ -18,7 +20,7 @@ fn downloads_src(
     ..base,
     topic: fn(name, params) {
       if name == "downloads" {
-        { value: Some({ "downloads": Json::array(list) }), error: None, version: 1 }
+        { value: Some({ "downloads": Json::array(list), "keeping": Json::array(keeping) }), error: None, version: 1 }
       } else {
         (base.topic)(name, params)
       }
@@ -27,7 +29,8 @@ fn downloads_src(
       calls.push((name, params))
       match name {
         "download.take" => done(Ok({ "taken": true }))
-        "download.start" | "download.retry" | "download.done" | "download.cancel" => done(Ok({}))
+        "download.start" | "download.retry" | "download.done" | "download.cancel" | "fill.want" | "fill.stop" =>
+          done(Ok({}))
         _ => (base.call)(name, params, done)
       }
     },
@@ -65,11 +68,12 @@ fn listed(name : String, state : String, loaded : Double, size : Double, said : 
 }
 
 ///|
-test "downloads: a message's video right clicked, 加载: the core brings it onto the device only, not saved; while it comes, 停止加载 calls it off" {
+test "downloads: a message's video right clicked, 加载: the core brings it before all else from what is here, not saved; while it is brought, loaded or in the background alike, 停止加载 stops it" {
   new_run()
   let calls : Array[(String, Json)] = []
   let list : Array[Json] = []
-  let src = downloads_src("chat-download", list, calls)
+  let keeping : Array[Json] = []
+  let src = downloads_src("chat-download", list, calls, keeping~)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")
   t.run_for(@ui.move_most_ms)
@@ -89,32 +93,59 @@ test "downloads: a message's video right clicked, 加载: the core brings it ont
   assert_false(@sf.presented_open_of(first))
   // (gone as it closes)
   t.run_for(@kit.pop_out_ms)
-  let starts = calls.filter(fn(m) { m.0 == "download.start" })
-  assert_eq(starts.length(), 1)
-  let p = Some(starts[0].1)
-  assert_eq(field(p, "keep"), Some(Json::boolean(true)))
+  assert_eq(calls.filter(fn(m) { m.0 == "download.start" }).length(), 0)
+  let wants = calls.filter(fn(m) { m.0 == "fill.want" })
+  assert_eq(wants.length(), 1)
+  let p = Some(wants[0].1)
   assert_eq(text(p, "key"), "s-c1")
   assert_eq(text(p, "name"), "演示录屏.mp4")
+  assert_true(field(p, "from") is Some(Object(_)))
   // nothing opened over the chat
   assert_true(viewer.get() is None)
-  // coming (only kept): its menu calls it off instead
-  let going = listed("演示录屏.mp4", "going", 1048576.0, 5242880.0, "正在加载 20% · 5 MB")
-  match going {
-    Object(o) => o["keep"] = Json::boolean(true)
-    _ => ()
+  // brought as loaded: how far over its picture, its menu stops it
+  let id = "chat\nws1/st1\ns-c1\n演示录屏.mp4"
+  let brought = fn(state : String, said : String, wanted : Bool) -> Json {
+    let o : Map[String, Json] = {
+      "id": Json::string(id),
+      "station": "ws1/st1",
+      "key": "s-c1",
+      "name": "演示录屏.mp4",
+      "title": "演示录屏.mp4",
+      "size": 5242880.0,
+      "loaded": 1048576.0,
+      "progress": 0.2,
+      "state": Json::string(state),
+      "statusText": Json::string(said),
+    }
+    if wanted {
+      o["wanted"] = Json::boolean(true)
+    }
+    Json::object(o)
   }
-  list.push(going)
+  keeping.push(brought("going", "正在加载 20% · 5 MB", true))
   t.draw()
   assert_true(t.find("正在加载 20% · 5 MB") is Some(_))
-  video()
-  assert_true(@sf.last_presented() != first && @sf.presented_open_of(@sf.last_presented()))
-  // (加载 alone, not in 停止加载)
-  assert_eq(t.words().filter(fn(w) { w.0 == tr("web-main.file.load") }).length(), 0)
-  let stop = t.reachable(tr("web-main.file.stopLoading"))
-  assert_eq(stop.length(), 1)
-  t.tap(stop[0].0, stop[0].1)
-  t.frame()
-  assert_eq(calls.filter(fn(m) { m.0 == "download.cancel" }).map(fn(m) { text(Some(m.1), "id") }), ["ws1/st1|s-c1|演示录屏.mp4"])
+  let stop_it = fn() raise {
+    video()
+    assert_true(@sf.last_presented() != first && @sf.presented_open_of(@sf.last_presented()))
+    // (加载 alone, not in 停止加载)
+    assert_eq(t.words().filter(fn(w) { w.0 == tr("web-main.file.load") }).length(), 0)
+    let stop = t.reachable(tr("web-main.file.stopLoading"))
+    assert_eq(stop.length(), 1)
+    t.tap(stop[0].0, stop[0].1)
+    t.frame()
+    t.run_for(@kit.pop_out_ms)
+  }
+  stop_it()
+  assert_eq(calls.filter(fn(m) { m.0 == "fill.stop" }).map(fn(m) { text(Some(m.1), "id") }), [id])
+  // brought in the background (opened and let go): the same, one thing whichever way it began
+  keeping.clear()
+  keeping.push(brought("queued", "后台缓存排队中 · 20%", false))
+  t.draw()
+  assert_true(t.find("后台缓存排队中 · 20%") is Some(_))
+  stop_it()
+  assert_eq(calls.filter(fn(m) { m.0 == "fill.stop" }).length(), 2)
+  assert_eq(calls.filter(fn(m) { m.0 == "fill.want" }).length(), 1, msg="加载 not asked again over it")
 }
 
 ///|

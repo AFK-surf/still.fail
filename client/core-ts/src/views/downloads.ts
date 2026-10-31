@@ -8,8 +8,9 @@
 // is here the app takes it (`download.take`, once), reads it a part at a time (`download.read`: off the device) into
 // the system's downloads and says it is done (`download.done`, with where the system put it): where the app can read it
 // back (Host.savedRead), the file saved is its copy on the device, what was kept of it let go (read from there until it
-// is no longer there: drive-kept.ts `saved`); elsewhere (the web, iOS: out of reach) the device keeps of it what it
-// kept before it was asked (nothing, if it kept none of it), not a second copy.
+// is no longer there: drive-kept.ts `saved`); elsewhere (the web, iOS: out of reach) what was fetched stays kept, as
+// it does when the download is called off: what came to this device is never asked of its station again.
+// What is only to be had on this device (加载: a video to play) is not a download: fill.ts brings it (`fill.want`).
 //
 // Topic:
 //   downloads {}                  this device's downloads, newest first: under way, waiting for their station, all
@@ -20,10 +21,6 @@
 //                                 a chat's file (`from`: where it was opened, KeptFrom, listed with it) (its session `key`, its `name` at the station, its `size` as the message
 //                                 says) fetched to be saved: one of it under way or ready is that one (a failed one, or
 //                                 one waiting for its station, starts again); answers {download}
-//   download.start {..., keep: true}
-//                                 only onto this device (加载: a video to play): fetched and kept as its viewer keeps it,
-//                                 out of the list once all of it is here, never saved (asked again without `keep`, the
-//                                 one under way is saved once it is here)
 //   download.start {station, root, path, name, size, mtime}
 //                                 a file of the station's drive, as its folder lists it
 //   download.start {station, root, path, name, zip: true}
@@ -33,9 +30,9 @@
 //   download.read {id, offset, length}
 //                                 bytes of one all here, as kept (from the station again only where what was kept is
 //                                 gone): {type, total} and the bytes
-//   download.done {id, at?}       saved (`at`: where the system put it), or the saving given up: out of the list, what
-//                                 was fetched for it let go (all of it, where it is read back from `at`)
-//   download.cancel {id}          stopped and out of the list, what was fetched for it let go
+//   download.done {id, at?}       saved (`at`: where the system put it), or the saving given up: out of the list (what
+//                                 was kept of it let go where it is read back from `at`; else kept)
+//   download.cancel {id}          stopped and out of the list, what was fetched for it kept
 import { Effect, Fiber } from "effect";
 import type { Inner, Progress } from "../core.ts";
 import { handlers } from "../core/execute.ts";
@@ -82,10 +79,6 @@ type Download = {
   error: string | null;
   /// When it was asked, in whole ms (the shapes' i64: a host's clock says fractions of one).
   startedAt: number;
-  /// Whether the device kept any of the file before it was asked (a viewer's): kept so once it is saved.
-  keptBefore: boolean;
-  /// Only to be kept on this device, not saved (`download.start`'s `keep`).
-  keep: boolean;
   /// A chat's file's: where it was opened (KeptFrom), as the page that asked said it.
   opened?: unknown;
   /// The percent last told (the list is told again as it moves on a whole percent, not at every piece).
@@ -94,8 +87,9 @@ type Download = {
 };
 
 /// What is written down of one (drive-kept.ts `download`): enough to go on with it as the core starts again (a
-/// chat's from before drives were downloaded: `key`, no `from`).
-type Noted = Pick<Download, "id" | "station" | "name" | "size" | "keptBefore" | "startedAt"> & { from?: From; key?: string; keep?: boolean; opened?: unknown };
+/// chat's from before drives were downloaded: `key`, no `from`; one only to be kept, from before fill.ts brought those:
+/// `keep`).
+type Noted = Pick<Download, "id" | "station" | "name" | "size" | "startedAt"> & { from?: From; key?: string; keep?: boolean; opened?: unknown };
 
 /// The kept file a download fetches into and is read from: its id among those kept, its kind there, as it was (the
 /// mtime a drive's folder said); null for a folder not zipped yet.
@@ -127,7 +121,6 @@ export function titleOf(name: string): string {
 export function shown(d: Download): Record<string, unknown> {
   const statusText =
     d.state === "going" && d.from.kind === "zip" && d.from.made === null ? t("core-logic.download.zipping")
-    : d.state === "going" && d.keep ? t("core-logic.download.loading", { percent: percent(d), total: bytes(d.size) })
     : d.state === "going" ? t("core-logic.download.going", { percent: percent(d), total: bytes(d.size) })
     : d.state === "waiting" ? t("core-logic.download.waiting", { percent: percent(d) })
     : d.state === "ready" ? t("core-logic.download.ready", { total: bytes(d.size) })
@@ -145,7 +138,6 @@ export function shown(d: Download): Record<string, unknown> {
     active: d.state !== "failed",
     statusText,
     ...(d.error !== null ? { error: d.error } : {}),
-    ...(d.keep ? { keep: true } : {}),
     startedAt: d.startedAt,
     ...(d.opened !== undefined ? { from: d.opened } : {}),
   };
@@ -183,18 +175,15 @@ export class Downloads {
   }
 
   #note(d: Download): Effect.Effect<void> {
-    const noted: Noted = { id: d.id, station: d.station, from: d.from, name: d.name, size: d.size, keptBefore: d.keptBefore, startedAt: d.startedAt, ...(d.keep ? { keep: true } : {}), ...(d.opened !== undefined ? { opened: d.opened } : {}) };
+    const noted: Noted = { id: d.id, station: d.station, from: d.from, name: d.name, size: d.size, startedAt: d.startedAt, ...(d.opened !== undefined ? { opened: d.opened } : {}) };
     return this.#inner.driveKept.noteDownload(d.id, noted);
   }
 
-  /// Out of the list and no longer written down; what was fetched for it let go (what the device kept of the file
-  /// before it was asked stays).
+  /// Out of the list and no longer written down; what was fetched for it stays kept (never asked of its station again).
   #drop(d: Download): Effect.Effect<void> {
     this.#held.delete(d.id);
     this.#invalidate();
-    const store = this.#inner.driveKept;
-    const file = kept(d.station, d.from);
-    return Effect.andThen(store.dropDownload(d.id), d.keptBefore || file === null ? Effect.void : store.forget(file.id));
+    return this.#inner.driveKept.dropDownload(d.id);
   }
 
   /// The whole of it here, a part at a time: each part read as kept, or fetched and kept. A folder is zipped on the
@@ -221,13 +210,15 @@ export class Downloads {
       }
       const file = kept(d.station, from)!;
       for (let at = 0; at < d.size;) {
-        const length = Math.min(DOWNLOAD_PART, d.size - at);
-        const held = yield* inner.driveKept.read(file.id, file.mtime, d.size, at, length);
-        if (held !== null && held.bytes.length > 0) {
-          at += held.bytes.length;
+        // what is kept from here on, however it came (a viewer's read, a player's ranges, what was loaded): taken
+        // as it is, never asked again; only up to the next stretch kept asked of the station
+        const until = yield* inner.driveKept.keptUntil(file.id, file.mtime, d.size, at, d.size);
+        if (until > at) {
+          at = until;
           self.#moved(d, at);
           continue;
         }
+        const length = Math.min(DOWNLOAD_PART, (yield* inner.driveKept.nextKept(file.id, file.mtime, d.size, at, d.size)) - at);
         const was = at;
         const heard = (n: number) => self.#moved(d, was + n);
         if (from.kind === "chat") {
@@ -292,7 +283,7 @@ export class Downloads {
   }
 
   /// Fetching it, in the core's own scope: on by itself until it is all here, has failed, its station is not reached,
-  /// or it is called off. One only to be kept is done once it is all here: out of the list, what it fetched kept.
+  /// or it is called off.
   #go(d: Download): void {
     d.state = "going";
     d.error = null;
@@ -302,11 +293,6 @@ export class Downloads {
       Effect.flatMap(Effect.result(this.#fetching(d)), (r) => {
         d.fiber = null;
         if (this.#held.get(d.id) !== d) return Effect.void;
-        if (r._tag === "Success" && d.keep) {
-          this.#held.delete(d.id);
-          this.#invalidate();
-          return this.#inner.driveKept.dropDownload(d.id);
-        }
         if (r._tag === "Success") {
           d.state = "ready";
           d.loaded = d.size;
@@ -336,9 +322,14 @@ export class Downloads {
           // (a chat's written down before drives were downloaded: its session and name)
           const from: From | null = n.from ?? (typeof n.key === "string" ? { kind: "chat", key: n.key, file: n.name } : null);
           if (from === null) continue;
+          // (one only to be kept, written down before fill.ts brought those: brought by it, from what is kept)
+          if (n.keep === true && from.kind === "chat") {
+            this.#inner.runner.fork(Effect.andThen(this.#inner.fill.want(n.station, from.key, from.file, n.size, n.opened), this.#inner.driveKept.dropDownload(n.id)));
+            continue;
+          }
           // (asked again before this was read: that one)
           if (this.#held.has(n.id)) continue;
-          const d: Download = { id: n.id, station: n.station, from, name: n.name, size: n.size, loaded: 0, state: "going", error: null, startedAt: Math.floor(n.startedAt ?? 0), keptBefore: n.keptBefore === true, keep: n.keep === true, told: -1, fiber: null, ...(n.opened !== undefined ? { opened: n.opened } : {}) };
+          const d: Download = { id: n.id, station: n.station, from, name: n.name, size: n.size, loaded: 0, state: "going", error: null, startedAt: Math.floor(n.startedAt ?? 0), told: -1, fiber: null, ...(n.opened !== undefined ? { opened: n.opened } : {}) };
           this.#held.set(d.id, d);
           this.#go(d);
         }
@@ -371,19 +362,8 @@ export class Downloads {
       const from: From = typeof p.key === "string" ? { kind: "chat", key: need(p.key, "key"), file: name }
         : p.zip === true ? { kind: "zip", root: need(p.root, "root"), path: need(p.path, "path"), made: null }
         : { kind: "drive", root: need(p.root, "root"), path: need(p.path, "path"), mtime: count(p.mtime) ?? 0 };
-      const keep = p.keep === true;
       const id = idOf(station, from);
-      const file = kept(station, from);
-      // The one asked before: one only being kept, asked to be saved, is saved once it is here.
-      const that = (was: Download) =>
-        Effect.gen(function* () {
-          if (was.keep && !keep) {
-            was.keep = false;
-            yield* self.#note(was);
-            self.#invalidate();
-          }
-          return { download: shown(was) };
-        });
+      const that = (was: Download) => Effect.succeed({ download: shown(was) });
       // (a chat's file: where it was opened, KeptFrom, leading back there from the list)
       const shaped = from.kind === "chat" && isObject(p.from) ? conform("KeptFrom", p.from) : null;
       const opened = shaped !== null && "ok" in shaped ? shaped.ok : undefined;
@@ -393,11 +373,7 @@ export class Downloads {
           if (was.state === "failed" || was.state === "waiting") self.#go(was);
           return yield* that(was);
         }
-        const keptBefore = file === null ? false : yield* self.#inner.driveKept.has(file.id);
-        // (asked again while that was read: the one made then)
-        const again = held.get(id);
-        if (again !== undefined) return yield* that(again);
-        const d: Download = { id, station, from, name, size, loaded: 0, state: "going", error: null, startedAt: Math.floor(self.#inner.host.nowMs()), keptBefore, keep, told: -1, fiber: null, ...(opened !== undefined ? { opened } : {}) };
+        const d: Download = { id, station, from, name, size, loaded: 0, state: "going", error: null, startedAt: Math.floor(self.#inner.host.nowMs()), told: -1, fiber: null, ...(opened !== undefined ? { opened } : {}) };
         held.set(id, d);
         yield* self.#note(d);
         self.#go(d);

@@ -3304,8 +3304,6 @@ export interface DownloadShown {
 	/** How it stands, in a line: 正在下载 42% · 18.3 MB · 等待连接 station · 正在保存 · 下载失败：… . */
 	statusText: string;
 	error?: string;
-	/** Only brought onto this device (加载: a video to play), not saved: out of the list once it is here. */
-	keep?: boolean;
 	startedAt: number;
 	/** A chat's file's: where it was opened, as the page that asked said it. */
 	from?: KeptFrom;
@@ -3314,7 +3312,10 @@ export interface DownloadShown {
 /** How a file brought after everything else stands: coming now, given way to what is waited on, waiting for its station to be reached, or after the others. */
 export type KeepingState = "going" | "yielding" | "waiting" | "queued";
 
-/** A file opened and let go before all of it came, brought whole after everything else (fill.ts), as the pages show it. */
+/**
+ * A file opened and let go before all of it came, brought whole after everything else, or one a person asked to load,
+ * brought before it (fill.ts), as the pages show it.
+ */
 export interface KeepingShown {
 	/** Its own (`fill.stop`). */
 	id: string;
@@ -3335,9 +3336,11 @@ export interface KeepingShown {
 	/** How much of it is here, 0 to 1. */
 	progress: number;
 	state: KeepingState;
+	/** A person asked to load it (加载, `fill.want`): brought before everything else, at once. */
+	wanted?: boolean;
 	/** A chat's file's: where it was opened, as the viewer said it. */
 	from?: KeptFrom;
-	/** How it stands, in a line: 后台缓存 42% · 18.3 MB · 后台缓存排队中 · 12% . */
+	/** How it stands, in a line: 正在加载 42% · 18.3 MB · 后台缓存 42% · 18.3 MB · 后台缓存排队中 · 12% . */
 	statusText: string;
 }
 

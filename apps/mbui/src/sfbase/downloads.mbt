@@ -27,26 +27,14 @@ pub fn downloads_reset() -> Unit {
 
 ///|
 /// The file a message names (`station`, its session `key`, its `name` at the station, its `size` as the message says)
-/// downloaded by the core: one under way or ready is that one, a failed one starts again. `keep`: only brought onto
-/// this device, as its viewer keeps it (加载: a video played from here at once), not saved. `from`: where it was opened
+/// downloaded by the core: one under way or ready is that one, a failed one starts again. `from`: where it was opened
 /// (Viewer::opened_from), listed with it.
-pub fn download_start(
-  src : Source,
-  station : String,
-  key : String,
-  name : String,
-  size : Double,
-  keep? : Bool = false,
-  from? : Json,
-) -> Unit {
+pub fn download_start(src : Source, station : String, key : String, name : String, size : Double, from? : Json) -> Unit {
   let p : Map[String, Json] = {
     "station": Json::string(station),
     "key": Json::string(key),
     "name": Json::string(name),
     "size": Json::number(size),
-  }
-  if keep {
-    p["keep"] = Json::boolean(true)
   }
   match from {
     Some(f) => p["from"] = f
@@ -146,13 +134,28 @@ pub fn keeping_of(src : Source, station : String, key : String, name : String) -
 }
 
 ///|
-/// The file `id` no longer brought after everything else, what was kept of it let go (`fill.stop`).
+/// The file a message names (as `download_start`'s) loaded (加载): brought onto this device by the core before
+/// everything else, from what of it is here already, to play from here; listed with what is brought (`keeping_of`,
+/// `wanted`), never saved. `from`: where it was asked, listed with it.
+pub fn fill_want(src : Source, station : String, key : String, name : String, size : Double, from : Json) -> Unit {
+  let p : Map[String, Json] = {
+    "station": Json::string(station),
+    "key": Json::string(key),
+    "name": Json::string(name),
+    "size": Json::number(size),
+    "from": from,
+  }
+  (src.call)("fill.want", Json::object(p), fn(_) {  })
+}
+
+///|
+/// The file `id` no longer brought (loaded, or after everything else), what came of it kept (`fill.stop`).
 pub fn keeping_stop(src : Source, id : String) -> Unit {
   (src.call)("fill.stop", { "id": Json::string(id) }, fn(_) {  })
 }
 
 ///|
-/// None of them brought any more, what was kept of each let go (`fill.stopAll`).
+/// None of them brought any more, what came of each kept (`fill.stopAll`).
 pub fn keeping_stop_all(src : Source) -> Unit {
   (src.call)("fill.stopAll", {}, fn(_) {  })
 }

@@ -1,0 +1,92 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "stillfail/pinyin"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn read_text(String) -> String?
+
+pub fn write_text(String, String) -> Bool
+
+// Errors
+
+// Types and methods
+pub struct Candidate {
+  text : String
+  typed : Int32
+  syls : Array[Int32]
+  cost : Int32
+} derive(Show)
+
+pub struct Composer {
+  dict : Dict
+  learned : Learned
+  // private fields
+}
+pub fn Composer::active(Self) -> Bool
+pub fn Composer::as_typed(Self) -> String
+pub fn Composer::back(Self) -> Bool
+pub fn Composer::candidates(Self) -> Array[Candidate]
+pub fn Composer::clear(Self) -> Unit
+pub fn Composer::keys(Self) -> String
+pub fn Composer::new(Dict, Scheme, learned? : Learned) -> Self
+pub fn Composer::pick(Self, Int32) -> String?
+pub fn Composer::preedit(Self) -> String
+pub fn Composer::press(Self, Char) -> Unit
+pub fn Composer::scheme(Self) -> Scheme
+pub fn Composer::set_scheme(Self, Scheme) -> Unit
+pub fn Composer::takes(Self, Char) -> Bool
+
+pub struct Dict {
+  // private fields
+}
+pub fn Dict::candidates(Self, Spelled, Learned, most? : Int32) -> Array[Candidate]
+pub fn Dict::has_word(Self, Array[Int32], String) -> Bool
+pub fn Dict::load(String) -> Self?
+pub fn Dict::parse(String) -> Self
+pub fn Dict::sentence(Self, Spelled, Learned) -> Candidate?
+pub fn Dict::size(Self) -> Int32
+pub fn Dict::syllable(Self, String) -> Int32
+pub fn Dict::syllable_name(Self, Int32) -> String
+pub fn Dict::syllables(Self) -> Int32
+pub fn Dict::syllables_read(Self, Spelled, Learned) -> Array[String]?
+
+pub struct Learned {
+  // private fields
+}
+pub fn Learned::add_phrase(Self, Array[Int32], String) -> Unit
+pub fn Learned::bonus(Self, String) -> Int32
+pub fn Learned::new() -> Self
+pub fn Learned::parse(String, Dict) -> Self
+pub fn Learned::picked(Self, String) -> Unit
+pub fn Learned::to_text(Self, Dict) -> String
+
+pub(all) enum Scheme {
+  Full
+  Xiaohe
+} derive(Eq, Show, @debug.Debug)
+
+pub struct Spelled {
+  steps : Array[Array[Step]]
+  typed_at : Array[Int32]
+}
+pub fn Spelled::length(Self) -> Int32
+
+pub struct Speller {
+  scheme : Scheme
+  // private fields
+}
+pub fn Speller::new(Dict, Scheme) -> Self
+pub fn Speller::spell(Self, String) -> Spelled
+
+pub struct Step {
+  end : Int32
+  syls : Array[Int32]
+  cost : Int32
+}
+
+// Type aliases
+
+// Traits

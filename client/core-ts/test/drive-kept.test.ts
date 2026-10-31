@@ -111,12 +111,16 @@ test("a video's parts are kept as played, a stream's too; the page of what the d
   const again = t.host.takeEmitted().map(([, m]) => m as { id?: number; bytes?: Uint8Array }).filter((m) => m.id === 4 && m.bytes !== undefined);
   assert.deepEqual(again.flatMap((m) => [...m.bytes!]), [...bytesOf(8, 40)]);
   assert.equal(reads(t.host), 2);
-  // what was not played: from the station, from where what was played stops (32: 30 and 31 kept)
-  await read(t, ui, 5, "film.mp4", 30, 12, said, "played");
+  // what was not played: from the station, only the stretch between what was played (32 to 40: 30 and 31 kept
+  // before it, 40 and 41 after)
+  const got = await read(t, ui, 5, "film.mp4", 30, 12, said, "played");
+  assert.deepEqual([...got.bytes], [...bytesOf(12, 30)]);
   assert.equal(reads(t.host), 3);
+  const asked = new URL(t.host.requests.filter((r) => r.url.includes("/drive/read")).at(-1)!.url).searchParams;
+  assert.deepEqual([asked.get("offset"), asked.get("length")], ["32", "8"]);
   call(t.core, ui, 6, "cache.usage", {});
   await t.host.settle();
-  assert.equal((answers(t.host.takeEmitted(), 6)?.ok as { drive: number }).drive, 16 + 8 + 10);
+  assert.equal((answers(t.host.takeEmitted(), 6)?.ok as { drive: number }).drive, 16 + 8 + 8);
   call(t.core, ui, 7, "drive.kept.clear", {});
   await t.host.settle();
   assert.ok(answers(t.host.takeEmitted(), 7)?.ok === null);
@@ -182,7 +186,8 @@ test("a part read stopped short (let go of, or broken off) keeps what came of it
     inner,
     { offset: 10, length: 20 },
     100,
-    { type: "video/mp4", bytes: bytesOf(4, 10) },
+    (at) => Effect.succeed(at === 10 ? { type: "video/mp4", bytes: bytesOf(4, 10) } : null),
+    (_at, end) => Effect.succeed(end),
     undefined,
     (piece) => taken.push([...piece]),
     (at, _length, _before, take, said) =>

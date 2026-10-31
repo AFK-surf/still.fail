@@ -265,7 +265,7 @@ pub fn download_of_drive(Source, String, String, String) -> Json?
 
 pub fn download_retry(Source, String) -> Unit
 
-pub fn download_start(Source, String, String, String, Double, keep? : Bool, from? : Json) -> Unit
+pub fn download_start(Source, String, String, String, Double, from? : Json) -> Unit
 
 pub fn download_start_drive(Source, String, String, String, String, Double, Double) -> Unit
 
@@ -478,6 +478,8 @@ pub fn files_tabs_act(Source, String, String, pane? : DriveAt, id? : String, sid
 pub fn files_taken(String) -> Array[Dragged]
 
 pub fn fill(String, Array[(String, String)]) -> String
+
+pub fn fill_want(Source, String, String, String, Double, Json) -> Unit
 
 pub fn filter_of(Source, String) -> String
 
