@@ -148,6 +148,20 @@ test "a chat row's fade respects reduced motion" {
 }
 
 ///|
+test "reducing motion during a chat row's fade puts it at its end" {
+  let on = Ref(true)
+  let t = fading_chat_row(on, Ref(0), Ref(0))
+  on.val = false
+  t.draw()
+  t.run_for(@sfpages.left_lit_ms + @sfpages.left_fade_ms / 2.0)
+  assert_true(fade_row_ground(t) != 0L)
+  t.set_reduce_motion(true)
+  t.draw()
+  assert_eq(fade_row_ground(t), 0L)
+  assert_eq(t.rest_of("row-lit/"), -1.0)
+}
+
+///|
 test "a removed chat row does not leave the hold's wake behind" {
   let on = Ref(true)
   let shown = Ref(true)
