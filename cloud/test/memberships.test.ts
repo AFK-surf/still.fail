@@ -183,24 +183,28 @@ test("a station joins a second workspace: named there; its home's at the top of 
   }
 });
 
-test("enrolling still moves; leaving one workspace keeps the others; the plan's limit is the joined workspace's", async () => {
+test("joining a free workspace has no station limit; an explicit limit is the joined workspace's", async () => {
   const h = await harness();
   try {
     const alice = h.as(await h.login("alice"));
     const bob = h.as(await h.login("bob"));
     const home = await create(alice, "Home");
-    // Bob's is on the free plan: two stations.
+    // Bob's is on the free plan.
     const lab = await create(bob, "Lab");
-    const x = await key(), y = await key(), z = await key();
+    const x = await key(), y = await key(), z = await key(), extra = await key();
     assert.equal((await enroll(h, x, await token(alice, home, "studio"))).status, 200);
     assert.equal((await enroll(h, y, await token(alice, home, "nas"))).status, 200);
     const late = await token(bob, lab, "late");
+    const extraToken = await token(bob, lab, "extra");
     assert.equal((await enroll(h, x, await token(bob, lab, "x in lab"), true)).status, 200);
     assert.equal((await enroll(h, z, await token(bob, lab, "z"))).status, 200);
-    // Full: joining is refused as enrolling is; the home counts its own.
-    assert.deepEqual(Object.values(await enroll(h, y, late, true)), [429, { error: "too_many_stations" }]);
+    assert.equal((await enroll(h, y, late, true)).status, 200, "a third station can join the free workspace");
+    const admin = h.as(await h.login("alice"), "admin");
+    assert.equal((await admin("POST", `/v1/admin/workspaces/${lab}/limits`, { members: 1, stations: 3 })).status, 200);
+    // An explicit workspace limit still applies when a token is redeemed and when one is requested.
+    assert.deepEqual(Object.values(await enroll(h, extra, extraToken, true)), [429, { error: "too_many_stations" }]);
     assert.equal((await bob("POST", `/v1/workspaces/${lab}/enrollments`, { name: "more" })).status, 429);
-    assert.deepEqual([await count(alice, home), await count(bob, lab)], [2, 2]);
+    assert.deepEqual([await count(alice, home), await count(bob, lab)], [2, 3]);
 
     // Taken out of its home, it stays in the lab, its home now (at the top of its state, no longer `joined` there).
     const sx = await connect(h, x);
@@ -208,7 +212,7 @@ test("enrolling still moves; leaving one workspace keeps the others; the plan's 
     assert.equal((await alice("DELETE", `/v1/workspaces/${home}/stations/${x.id}`)).status, 200);
     const after = await sx.state();
     assert.deepEqual([after.workspace, after.workspace_name, after.name, after.workspaces], [lab, "Lab", "x in lab", []]);
-    assert.deepEqual((await view(bob, lab)).stations.map((s: any) => [s.id, s.joined]), [[x.id, undefined], [z.id, undefined]]);
+    assert.deepEqual((await view(bob, lab)).stations.map((s: any) => [s.id, s.joined]), [[x.id, undefined], [z.id, undefined], [y.id, true]]);
     assert.deepEqual((await view(alice, home)).stations.map((s: any) => s.id), [y.id]);
     // Taken out of its last, it is let go, as before.
     assert.equal((await bob("DELETE", `/v1/workspaces/${lab}/stations/${x.id}`)).status, 200);

@@ -48,7 +48,7 @@
   "core-views.admin.invitation.by": "Invited by {name}",
   "core-views.admin.may_create.admin": "No limit (admin)",
   "core-views.admin.may_create.creator": "Standard: up to 5 workspaces of 6 people",
-  "core-views.admin.may_create.no": "Free: 1 workspace, 1 person, 2 stations",
+  "core-views.admin.may_create.no": "Free: 1 workspace, 1 person",
   "core-views.admin.may_create.yes": "Standard: up to 5 workspaces of 6 people",
   "core-views.admin.no_station": "No station",
   "core-views.admin.not_in": "Not joined yet",

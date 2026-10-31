@@ -37,11 +37,11 @@ export const LOCK_REQUEST_TTL_SEC = 7 * 24 * 60 * 60;
 const LIMITS = { openInvitations: 50, pushPerUser: 32 };
 /**
  * What an account may create, and what each workspace it created may hold (its creator counted among the people). Every
- * account is on the free plan: one workspace, just its creator, two stations. A code or the admin's say makes it
+ * account is on the free plan: one workspace, just its creator, and no station limit. A code or the admin's say makes it
  * standard (#standard); the admin's own go up to the old bounds.
  */
 export const PLANS = {
-  free: { workspaces: 1, members: 1, stations: 2 },
+  free: { workspaces: 1, members: 1, stations: null },
   standard: { workspaces: 5, members: 6, stations: 64 },
   admin: { workspaces: 32, members: 200, stations: 64 },
 } as const;
@@ -433,7 +433,7 @@ export class Directory extends DurableObject<Env> {
   }
 
   /** How many people and stations a workspace may hold: its own limits (one the admin made for a company), or its plan's. */
-  #limits(workspace: string): { members: number; stations: number } {
+  #limits(workspace: string): { members: number; stations: number | null } {
     const own = this.#one("SELECT max_members, max_stations FROM workspaces WHERE id = ?", workspace);
     if (own && own.max_members !== null && own.max_stations !== null) return { members: own.max_members as number, stations: own.max_stations as number };
     const plan = PLANS[this.#plan(workspace)];
@@ -967,8 +967,10 @@ export class Directory extends DurableObject<Env> {
   }
 
   #stationsFull(workspace: string): boolean {
+    const limit = this.#limits(workspace).stations;
+    if (limit === null) return false;
     const stations = this.#one("SELECT COUNT(*) AS n FROM station_members WHERE workspace = ?", workspace)!.n as number;
-    return stations >= this.#limits(workspace).stations;
+    return stations >= limit;
   }
 
   /**
@@ -1336,7 +1338,9 @@ export class Directory extends DurableObject<Env> {
       // As #limits has it: its own, or its creator's plan's.
       ...(w.max_members !== null && w.max_stations !== null
         ? { seats: w.max_members as number, station_seats: w.max_stations as number, plan: "enterprise" as const }
-        : { seats: PLANS[plan(w)].members, station_seats: PLANS[plan(w)].stations, plan: plan(w) }),
+        : { seats: PLANS[plan(w)].members, ...(PLANS[plan(w)].stations === null
+          ? { stations_unlimited: true as const }
+          : { station_seats: PLANS[plan(w)].stations ?? undefined }), plan: plan(w) }),
     }));
   }
 

@@ -67,7 +67,7 @@ type UserPage = Timed & {
 type WorkspacePage = Timed & {
   id: string; title: string; creator: { id: string; title: string } | null; people: string;
   /** Missing from a core from before. */
-  stationCount?: string; plan?: string | null; limits?: { members: number; stations: number } | null; enrollable?: boolean;
+  stationCount?: string; plan?: string | null; limits?: { members: number; stations: number | null } | null; enrollable?: boolean;
   members: (Timed & { id: string; title: string; person: PersonLike; role: string })[];
   /** Emails added that have not signed in yet. */
   added?: (Timed & { id: string; email: string; line: string })[];
@@ -846,10 +846,10 @@ function NewWorkspaceDialog({ account, search, onClose }: { account: Account; se
   );
 }
 
-function LimitsDialog({ account, workspace, limits, onClose }: { account: Account; workspace: string; limits: { members: number; stations: number }; onClose(): void }) {
+function LimitsDialog({ account, workspace, limits, onClose }: { account: Account; workspace: string; limits: { members: number; stations: number | null }; onClose(): void }) {
   const toast = useToast();
   const [members, setMembers] = useState(String(limits.members));
-  const [stations, setStations] = useState(String(limits.stations));
+  const [stations, setStations] = useState(limits.stations === null ? "" : String(limits.stations));
   const caps = { members: limit(members, MAX.members), stations: limit(stations, MAX.stations) };
   const save = useAction(() => admin.setLimits(account.sub, workspace, { members: caps.members!, stations: caps.stations! }), () => { toast(t("web-pages.admin.ws.limitsSaved")); onClose(); });
   const ready = caps.members !== null && caps.stations !== null && !save.busy;

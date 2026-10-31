@@ -90,7 +90,7 @@
   "core-misc.cloud.station_not_found": "找不到此 station",
   "core-misc.cloud.too_many_invitations": "待处理的邀请过多，请先撤回部分邀请",
   "core-misc.cloud.too_many_members": "成员已达上限：免费版仅限本人 1 人，标准版最多 6 人",
-  "core-misc.cloud.too_many_stations": "station 已达上限：免费版每个 workspace 2 台",
+  "core-misc.cloud.too_many_stations": "此 workspace 的 station 数量已达上限",
   "core-misc.cloud.too_many_workspaces": "创建的 workspace 过多",
   "core-misc.cloud.workspace_not_found": "找不到此 workspace，或你已不在其中",
   "core-misc.connect.access_token": "这是 Access Token。需要的是其下方以 xoxe-1- 开头的 Refresh Token。",

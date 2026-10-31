@@ -534,8 +534,8 @@ export function workspace(id: string, workspaces: J, users: J, now: number): J {
     people: whole(seats) ? `${members.length + added.length} / ${seats}` : String(members.length),
     stationCount: whole(stationSeats) ? `${stations.length} / ${stationSeats}` : String(stations.length),
     plan: enterprise ? t("core-views.admin.enterprise") : null,
-    // What the limits form starts from: a cloud from before gives neither.
-    limits: whole(seats) && whole(stationSeats) ? { members: seats, stations: stationSeats } : null,
+    // What the limits form starts from: an older cloud gives neither station_seats nor stations_unlimited.
+    limits: whole(seats) && (whole(stationSeats) || get(w, "stations_unlimited") === true) ? { members: seats, stations: whole(stationSeats) ? stationSeats : null } : null,
     // The admin puts a station in only before the company's owners are in (directory.ts adminEnrollment).
     enrollable: get(w, "enrollable") === true,
     members,

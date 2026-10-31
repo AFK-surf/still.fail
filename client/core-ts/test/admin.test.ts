@@ -111,6 +111,21 @@ test("a_workspaces_page_has_its_people_and_stations", () => {
   assert.equal(page.members[0].role, "Owner");
 });
 
+test("an unlimited station count is shown without a cap and the admin can set one", () => {
+  const input = workspaces();
+  input.workspaces[0].stations_unlimited = true;
+  let page = workspace("w1", input, users(), NOW);
+  assert.equal(page.stationCount, "2");
+  assert.deepEqual(page.limits, { members: 2, stations: null });
+  delete input.workspaces[0].stations_unlimited;
+  input.workspaces[0].station_seats = 64;
+  page = workspace("w1", input, users(), NOW);
+  assert.equal(page.stationCount, "2 / 64");
+  assert.deepEqual(page.limits, { members: 2, stations: 64 });
+  delete input.workspaces[0].station_seats;
+  assert.equal(workspace("w1", input, users(), NOW).limits, null, "an older cloud gives no station limit");
+});
+
 test("the_overview_points_at_lists", () => {
   let v = overview(users(), workspaces(), { codes: [] }, null, NOW, 480);
   assert.equal(v.stats[0].value, 3);

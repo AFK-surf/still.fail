@@ -81,8 +81,10 @@ export interface AdminWorkspace {
   invitations: (InvitationView & { inviter: string })[];
   /** How many people it may hold. Missing from a cloud from before. */
   seats?: number;
-  /** How many stations it may hold. Missing from a cloud from before. */
+  /** How many stations it may hold. Missing from a cloud from before, or when there is no limit. */
   station_seats?: number;
+  /** There is no station limit. Missing from a cloud from before. */
+  stations_unlimited?: true;
   /** Its creator's plan, or `enterprise`: limits of its own, the admin made it for a company. Missing from a cloud from before. */
   plan?: PlanName | "enterprise";
   /** Emails added that have not signed in yet (a company's owners, at first). Missing from a cloud from before. */

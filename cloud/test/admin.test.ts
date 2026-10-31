@@ -234,7 +234,7 @@ test("an account creates up to five workspaces, and a workspace lets in up to fi
   }
 });
 
-test("a workspace on the free plan holds just its creator and two stations; the standard plan lifts both", async () => {
+test("the free plan limits workspaces and people, but not stations", async () => {
   const h = await harness();
   try {
     const aliceTokens = await h.login("alice");
@@ -258,13 +258,21 @@ test("a workspace on the free plan holds just its creator and two stations; the 
     };
     assert.equal(await enroll(), 200);
     assert.equal(await enroll(), 200);
-    assert.deepEqual(await enroll(), [429, "too_many_stations"]);
-    const plans = async () => ((await (await aliceAdmin("GET", "/v1/admin/workspaces")).json()) as any).workspaces.map((x: any) => [x.plan, x.seats]);
-    assert.deepEqual(await plans(), [["free", 1]]);
+    assert.equal(await enroll(), 200);
+    const plans = async () => ((await (await aliceAdmin("GET", "/v1/admin/workspaces")).json()) as any).workspaces.map((x: any) => [x.plan, x.seats, x.station_seats, x.stations_unlimited]);
+    assert.deepEqual(await plans(), [["free", 1, undefined, true]]);
 
     await aliceAdmin("POST", `/v1/admin/users/${bobTokens.subject}/may-create`, { on: true });
-    assert.deepEqual(await plans(), [["standard", 6]]);
+    assert.deepEqual(await plans(), [["standard", 6, 64, undefined]]);
     assert.equal((await bob("POST", `/v1/workspaces/${w}/invitations`, { role: "member", email: "carol@example.test" })).status, 200);
+    assert.equal(await enroll(), 200);
+    await aliceAdmin("POST", `/v1/admin/users/${bobTokens.subject}/may-create`, { on: false });
+    // More than even the standard plan's 64 stations: there is no replacement numeric cap on free.
+    for (let n = 4; n < 65; n++) assert.equal(await enroll(), 200, `station ${n + 1}`);
+    assert.deepEqual(await plans(), [["free", 1, undefined, true]]);
+    await aliceAdmin("POST", `/v1/admin/users/${bobTokens.subject}/may-create`, { on: true });
+    assert.deepEqual(await enroll(), [429, "too_many_stations"], "the standard plan retains its cap");
+    await aliceAdmin("POST", `/v1/admin/users/${bobTokens.subject}/may-create`, { on: false });
     assert.equal(await enroll(), 200);
   } finally {
     await h.close();

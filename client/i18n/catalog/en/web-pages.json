@@ -366,7 +366,7 @@
   "web-pages.cloud.inviteCode": "Invite code",
   "web-pages.cloud.inviteLoading": "Loading invite",
   "web-pages.cloud.inviteOnly": "You've used your free workspace",
-  "web-pages.cloud.inviteOnlyBody": "The free plan includes 1 workspace (1 person, 2 stations), and this account has used it. Enter an invite code below to upgrade to Standard and create more, or ask someone using {name} to invite {email} to theirs.",
+  "web-pages.cloud.inviteOnlyBody": "The free plan includes 1 workspace for 1 person, and this account has used it. Enter an invite code below to upgrade to Standard and create more, or ask someone using {name} to invite {email} to theirs.",
   "web-pages.cloud.inviteOnlyFor": " Only {email} can accept it.",
   "web-pages.cloud.inviteSignIn": "You're invited to a {name} workspace. Sign in, then choose whether to join.",
   "web-pages.cloud.inviteUnusable": "Invalid invite",

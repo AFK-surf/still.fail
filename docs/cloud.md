@@ -43,6 +43,10 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 
 账号按邮箱合并（Directory `accountFor`）：验证码登录时，这个邮箱已有账号（包括 Google 的）就登进那个；Google 登录时，Google `sub` 还没有账号而这个邮箱已有（先用邮箱注册的），也进那个。App Store 审核账号（`pw-`）不参与。没有 `EMAIL` 绑定或 `EMAIL_FROM` 时不出选择页，直接去 Google，和以前一样。
 
+## 套餐和额度
+
+免费版每个账号可创建 1 个 workspace，每个 workspace 限 1 人，station 数量不限；标准版及企业 workspace 的上限各自计算。
+
 ## 企业 workspace
 
 给企业预先建好 workspace 和专属 station（比如一台为它准备的 Mac mini），由管理后台（admin.still.fail）做，不需要运维账号加入那个 workspace：
