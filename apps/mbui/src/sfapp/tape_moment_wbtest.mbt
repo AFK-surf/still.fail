@@ -54,7 +54,7 @@ fn tape_turned(
   before : Array[Double],
   after : Array[Double],
 ) -> ((Double, Double), @sfdesk.TapePane, (Double, Double), (Double, Double)) {
-  reset()
+  new_run()
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
@@ -113,7 +113,7 @@ test "on the tape the real button and back: the side panel comes over, back brin
 
 ///|
 test "on the tape a page come on top waits anew each time: one waited for before, come back to before the core has it, waits again" {
-  reset()
+  new_run()
   let late = 10000.0
   let src = round_trip(fixture("chat"), late)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
@@ -144,7 +144,7 @@ test "on the tape a page come on top waits anew each time: one waited for before
 
 ///|
 test "on the tape a page waiting as the tape is made again (大屏 and back) waits anew from then" {
-  reset()
+  new_run()
   let late = 10000.0
   let src = round_trip(fixture("chat"), late)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
@@ -263,4 +263,91 @@ test "中屏: a screen reader's press of a panel's cover brings it over at that 
   @ui.current().ask_action(page[0], Activate)
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+}
+
+///|
+/// Whether the page's panel draws the chat titled `title` (in its bar: where the tape has the page then, past the
+/// sidebar's column; the sidebar's rows say the titles too).
+fn page_draws(t : @ui.Tester, title : String) -> Bool {
+  let col = @sfdesk.tape_col_now(t.time())
+  t.locate(title).iter().any(fn(p) { p.0 > col })
+}
+
+///|
+/// On the tape (the sidebar in use), the core answering `late` after it is asked, a second chat opened at `t0` between
+/// frames, frames drawn at `t0 +` each of `frames`, then at `t0 + at`: whether the page's panel draws the chat before it,
+/// whether it draws the one opened.
+fn page_waited(late : Double, frames : Array[Double], at : Double) -> (Bool, Bool) {
+  new_run()
+  let src = round_trip(fixture("chat"), late)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
+  t.draw()
+  t.run_for(late * 6.0 + @ui.move_most_ms)
+  let t0 = t.time() + between_frames_ms
+  t.advance(t0 - t.time())
+  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
+  for f in frames {
+    t.frame_at(t0 + f)
+  }
+  t.frame_at(t0 + at)
+  (page_draws(t, "整理发布清单"), page_draws(t, "首页的列表改成按天分组"))
+}
+
+///|
+test "中屏: a page opened in the page's panel, its view on its way: the one before shown till its wait is over, from the moment it was opened, whichever frames came" {
+  let late = 10000.0
+  // (each frame along, or none till just before its wait is over, or none at all)
+  let every = Array::makei(((page_local_ms + 40.0) / 16.0).to_int(), fn(i) { 16.0 * (i + 1).to_double() })
+  for at in [page_local_ms / 2.0, page_local_ms + 40.0] {
+    let stepped = page_waited(late, every.filter(fn(f) { f < at }), at)
+    let late_frames = page_waited(late, [page_local_ms - 20.0].filter(fn(f) { f < at }), at)
+    let jumped = page_waited(late, [], at)
+    assert_eq(late_frames, stepped, msg="at \{at}")
+    assert_eq(jumped, stepped, msg="at \{at}")
+    if at < page_local_ms {
+      assert_eq(stepped, (true, false), msg="at \{at}: the one before still")
+    } else {
+      assert_eq(stepped, (false, true), msg="at \{at}: the one opened")
+    }
+  }
+}
+
+///|
+/// The same, its view come `late` after each ask, the page's panel seen at each of `at` (frames drawn there alone).
+fn page_waited_seen(late : Double, at : Array[Double]) -> Array[(Bool, Bool)] {
+  new_run()
+  let src = round_trip(fixture("chat"), late)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
+  t.draw()
+  t.run_for(10000.0 * 6.0 + @ui.move_most_ms)
+  let t0 = t.time() + between_frames_ms
+  t.advance(t0 - t.time())
+  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
+  at.map(fn(a) {
+    t.frame_at(t0 + a)
+    (page_draws(t, "整理发布清单"), page_draws(t, "首页的列表改成按天分组"))
+  })
+}
+
+///|
+test "中屏: a page opened in the page's panel shows once, as its view comes or its wait is over, whichever is first; the one before never again, frames or none" {
+  let along = Array::makei(32, fn(i) { 40.0 * (i + 1).to_double() })
+  for late in [100.0, 10000.0] {
+    let seen = page_waited_seen(late, along)
+    // (the one before, then the one opened from one moment on: never both, never neither, never back)
+    let mut switched = false
+    for i, s in seen {
+      if s == (false, true) {
+        switched = true
+      } else {
+        assert_true(s == (true, false) && !switched, msg="late \{late}, at \{along[i]}: \{s} (\{seen})")
+      }
+    }
+    assert_true(switched, msg="late \{late}: never shown \{seen}")
+    // none drawn till after it: the same at the end
+    let end = along[along.length() - 1]
+    assert_eq(page_waited_seen(late, [end]), [seen[seen.length() - 1]], msg="late \{late}")
+  }
 }
