@@ -29,9 +29,13 @@ export function forgetVerifiedHere(): void {
 /// Whether `alg`'s signature `sig` by `pub` over `msg` is good, checked once (`check`) for that signature over those bytes.
 function once(alg: string, pub: Uint8Array, sig: Uint8Array, msg: Uint8Array, check: () => boolean): boolean {
   const key = hex(sha256(utf8(`${alg}\u0000${hex(pub)}\u0000${hex(sig)}\u0000${hex(sha256(msg))}`)));
-  const known = here.get(key) ?? kept?.get(key);
+  const mine = here.get(key);
+  const stored = kept?.get(key);
+  const known = mine ?? stored;
   if (typeof known === "boolean") {
     here.set(key, known);
+    // (found this run before what it is kept in was given: kept now)
+    if (typeof stored !== "boolean") kept?.put(key, known);
     return known;
   }
   const ok = check();
