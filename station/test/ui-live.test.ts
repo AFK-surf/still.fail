@@ -13,7 +13,7 @@ import { Computer, type Timers } from "../src/tools/computer.ts";
 const binary = process.env.STILLFAIL_AGENT_DESKTOP;
 const live = process.env.STILLFAIL_UI_LIVE === "1" && !!binary;
 const windows = process.platform === "win32";
-const editor = windows ? { launch: "notepad", app: "Notepad" } : { launch: "TextEdit", app: "TextEdit" };
+const editor = windows ? { launch: "notepad", app: /notepad(\.exe)?/i } : { launch: "TextEdit", app: /TextEdit/ };
 
 const timers: Timers = {
   later: (ms, f) => {
@@ -32,11 +32,13 @@ test("a real editor: its tree, a line set into its text by ref, read back from t
   const launched: any = await ui(["launch", editor.launch, "--timeout", "30000"]);
   assert.equal(launched.ok, true, JSON.stringify(launched));
   try {
+    // Its name as the apps running say it (Windows': its executable's, notepad.exe), as an agent takes it.
     const apps = say(await computer.act("t", { screen: "desktop", action: "tree" }));
-    assert.match(apps, new RegExp(editor.app));
+    const app = apps.slice(apps.indexOf(":") + 1).split(",").map((a) => a.trim()).find((a) => editor.app.test(a));
+    assert.ok(app, apps);
     // An editor with several windows (documents it reopened) is refused with them to choose from, as an agent is: the
     // first is taken.
-    const read = (window?: string) => computer.act("t", { screen: "desktop", action: "tree", app: editor.app, ...(window ? { window } : {}) });
+    const read = (window?: string) => computer.act("t", { screen: "desktop", action: "tree", app, ...(window ? { window } : {}) });
     const tree = say(
       await read().catch((error: Error) => {
         const window = /"id":"([^"]+)"/.exec(error.message)?.[1];
@@ -50,6 +52,6 @@ test("a real editor: its tree, a line set into its text by ref, read back from t
     const after = say(await computer.act("t", { screen: "desktop", action: "set", ref: field[1], text: line }));
     assert.ok(after.includes(line), `the line is not in the tree read again:\n${after}`);
   } finally {
-    await ui(["close-app", editor.app, "--force"]);
+    await ui(["close-app", windows ? "notepad.exe" : "TextEdit", "--force"]);
   }
 });
