@@ -102,6 +102,9 @@ struct Nav[P] {
   // it set out (its widths per ms: a finger's let go, a slide under way)
   mut t0 : Double
   mut dur : Double
+  // how far it goes, in widths or heights of its room, where that room was not known as it was told (never laid out):
+  // how long it takes worked out once it is, from when it was told (Ctx::nav); none, known
+  mut dur_way : Double?
   mut v0 : Double
   // the room it was last built in (Ctx::nav): how far a width or a height of its way is
   mut room_w : Double
@@ -179,6 +182,7 @@ pub fn[P] Nav::new(
     p1: 0.0,
     t0: -1.0,
     dur: 0.0,
+    dur_way: None,
     v0: 0.0,
     room_w: 0.0,
     room_h: 0.0,
@@ -298,6 +302,8 @@ fn[P] Nav::go(
     None => (self.room_w, self.room_h)
   }
   let room = if rising { room_h } else { room_w }
+  // (a room not known (no frame has laid it out): no way is no length; how long, once it is known, Ctx::nav)
+  self.dur_way = if room > 0.0 { None } else { Some((p1 - self.p).abs()) }
   self.dur = move_ms((p1 - self.p).abs() * room)
   self.v0 = v
   // told in a frame, it starts there, at its time (its end known as it is told); told between frames, at the next
@@ -716,6 +722,21 @@ pub fn[P] Ctx::nav(
   nav.floor = floor
   nav.room_w = self.width
   nav.room_h = self.height
+  // (told before its room was known: how long its way takes, worked out now that it is, once; when it set out kept)
+  match nav.dur_way {
+    Some(way) => {
+      let rising = match nav.leaving {
+        Some(e) => e.rise
+        None => nav.pages[nav.pages.length() - 1].rise
+      }
+      let room = if rising { nav.room_h } else { nav.room_w }
+      if room > 0.0 {
+        nav.dur = move_ms(way * room)
+        nav.dur_way = None
+      }
+    }
+    None => ()
+  }
   if nav.mode == 3 {
     self.page_in_hand = true
   }
