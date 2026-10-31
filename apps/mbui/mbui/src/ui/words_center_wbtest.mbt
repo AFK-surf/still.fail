@@ -87,3 +87,55 @@ test "a node's centred words, the node made wider: each line in the middle of it
     msg="\{narrow.length()} \{wide.length()}",
   )
 }
+
+///|
+/// Words ending a line in spaces, said and wrapped, in pieces each its own ink, and the same words whole.
+let spaced_words : String = "Reading your workspaces   \nstill.fail's core waits on the station that holds them, a while now"
+
+///|
+/// A node of the tree 200 wide at the window's top left, its words centred: `runs` in pieces where given, else whole;
+/// the glyphs' places drawn, and drawn again as the node is told otherwise and back.
+fn centred_spaced(runs : Bool) -> (Array[(Double, Double)], Array[(Double, Double)]) {
+  let center = @signals.signal(true, same=fn(a, b) { a == b })
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  let look : @view.WordsLook = { size: 13.0, weight: 400, line: 18.0, wrap: true }
+  set_view_app(fn(root) {
+    root.box(fn(v) {
+      v.width(Is(Some(200.0))) |> ignore
+      if runs {
+        v.words_runs(
+          Is([
+            @view.words_run("Reading your ", ink=0xFF0000FFL),
+            @view.words_run("workspaces   \nstill.fail's core ", ink=0x00FF00FFL),
+            @view.words_run("waits on the station that holds them, a while now", ink=0x0000FFFFL),
+          ]),
+          look~,
+        )
+        |> ignore
+      } else {
+        v.words(Is(spaced_words), look~) |> ignore
+      }
+      v.words_centered(By(fn() { center.get() })) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let first = glyphs_from_first(t)
+  center.set(false)
+  t.draw()
+  center.set(true)
+  t.draw()
+  (first, glyphs_from_first(t))
+}
+
+///|
+test "a node's words in pieces centred, lines ending in spaces said and wrapped: each glyph where the same words whole are drawn centred, drawn again so" {
+  let (whole, whole_again) = centred_spaced(false)
+  let (runs, runs_again) = centred_spaced(true)
+  let lines = whole.map(fn(g) { g.1 }).fold(init=[], fn(ys : Array[Double], y) { if ys.contains(y) { ys } else { ys + [y] } })
+  assert_eq(
+    (runs == whole, runs_again == runs, whole_again == whole, whole.length() > 0, lines.length() > 2),
+    (true, true, true, true, true),
+    msg="whole \{whole.length()} glyphs, in pieces \{runs.length()}; first whole \{whole[:4]}, in pieces \{runs[:4]}; lines \{lines}",
+  )
+}

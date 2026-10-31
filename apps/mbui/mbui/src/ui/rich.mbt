@@ -1274,11 +1274,15 @@ fn Ctx::emit_rich_glyphs(
   let sc = self.scale
   let zoom = words_zoom.val
   let zoomed = rich_zoomed_keys(r, lay)
-  // (each line in the middle of `center_in` where given, by how wide it is laid out: as emit_text's lines are)
-  let line_dx = rich_line_center(lay, center_in)
   let ox0 = ox
   for c in 0..<lay.starts.length() {
-    let ox = if line_dx.is_empty() { ox0 } else { ox0 + line_dx[lay.line_of[c]] }
+    // (each line in the middle of `center_in` where given, by its width without the spaces it ends in: as emit_text's)
+    let line = lay.line_of[c]
+    let ox = if center_in >= 0.0 && line < lay.line_w.length() {
+      ox0 + dmax((center_in - lay.line_w[line]) / 2.0, 0.0)
+    } else {
+      ox0
+    }
     let key = lay.keys[c]
     if key == -2 {
       match lay.drawings[lay.run_of[c]] {
@@ -1363,22 +1367,4 @@ fn Ctx::emit_rich_glyphs(
       inst_cell(self.ninst - 1, gx, gw, ox + x0 + lay.pre[c], ox + x1)
     }
   }
-}
-
-///|
-/// How far each line of `lay` stands in to be in the middle of `w` (none where `w` is below 0): by how wide it is laid
-/// out (its clusters' furthest reach), never out past its start.
-fn rich_line_center(lay : RichLayout, w : Double) -> Array[Double] {
-  if w < 0.0 {
-    return []
-  }
-  let ends : Array[Double] = Array::make(lay.line_y.length(), 0.0)
-  for c in 0..<lay.starts.length() {
-    let l = lay.line_of[c]
-    let e = lay.xs[c] + lay.adv[c]
-    if l < ends.length() && e > ends[l] {
-      ends[l] = e
-    }
-  }
-  ends.map(fn(e) { dmax((w - e) / 2.0, 0.0) })
 }
