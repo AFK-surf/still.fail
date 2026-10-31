@@ -960,6 +960,8 @@ pub fn markdown_part(@ui.Ctx, String, Array[Json], String, apart? : Bool, size? 
 
 pub let markdown_read : @ref.Ref[((String, (Json?) -> Unit) -> Unit)?]
 
+pub fn marks_actions_node(@view.View, () -> MarksActionsSaid, () -> ViewerInk, @view.Live[Double], () -> Unit, () -> Unit, () -> Unit, tip? : TipLayer) -> @view.View
+
 pub fn md_node_at(Json) -> Int32
 
 pub fn md_node_depth(Json) -> Int32?
@@ -2577,6 +2579,17 @@ pub(all) enum Look {
   Narrow
   Wide
 } derive(Eq, Show)
+
+pub(all) struct MarksActionsSaid {
+  error : String
+  ready : Bool
+  busy : Bool
+  can_put : Bool
+  cancel : String
+  download : String
+  put : String
+  making : String
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) struct MediaInk {
   text : Int64

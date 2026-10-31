@@ -729,13 +729,12 @@ pub fn head_as_nodes(v : Viewer, w : Double) -> Bool {
 
 ///|
 /// Whether viewer `vw`'s bar across the top is its nodes (image_bar), `w` wide, the old bar's (vf_bar's) not: a picture
-/// here, coming or whole (not read, played or marked), not on a small screen (whose bar floats: head_as_nodes), its own bar
+/// here, coming or whole or marked (not read or played), not on a small screen (whose bar floats: head_as_nodes), its own bar
 /// (not the system's beside it). As each is told.
 pub fn bar_as_nodes(v : Viewer, w : Double) -> Bool {
   marks_said()
   v.in_tree &&
   v.shown_kind() == Some(KImage) &&
-  !marking.on &&
   !@sf.viewer_bar_floats(w) &&
   !@sf.native_on()
 }
@@ -818,7 +817,11 @@ fn image_bar(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, D
     fn() { vw.file.name },
     fn() { vf_meta(vw, src) },
     fn() { if vw.file.path.has_prefix("draft:") { "" } else { vw.file.path } },
-    fn() { !vw.bars_shown() },
+    fn() {
+      // (marking, there: Viewer::bars_shown)
+      marks_said()
+      !vw.bars_shown()
+    },
     fn(node) { vw.shown_on(node) },
     fn() { (@sf.viewer_host().room)().0 },
     fn() { stage().0 },
@@ -828,7 +831,16 @@ fn image_bar(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, D
       row.show(fn() { vw.coming() }, fn(r) {
         @sf.viewer_coming_node(r, fn() { vw.got.get() }, fn() { vw.file.size }, ink) |> ignore
       })
-      image_tools(row, src, vw, ink, corner, tips)
+      // (its tools; marking, marking's actions in their place: vf_tools's)
+      let marked = fn() {
+        marks_said()
+        marking.on
+      }
+      row.show(fn() { !marked() }, fn(r) {
+        r.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@sf.keys_apart())) |> ignore
+        image_tools(r, src, vw, ink, corner, tips)
+      })
+      row.show(marked, fn(r) { marks_actions_node_of(r, vw, ink, tips) })
     },
     fn() {
       if !vw.closing {

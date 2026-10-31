@@ -2387,3 +2387,163 @@ test "viewer on the tree, a wide window, marking: a box drawn, what to say of it
   t.frame_at(t.time() + t.frame_period())
   assert_true(t.find(card) is None, msg="undone, no input: its card gone in the frame after")
 }
+
+///|
+/// A picture opened in a wide window (a mouse), marking: its top bar's 取消 clicked (`frames`: the frame after drawn
+/// before what is looked at; else none): whether marking is still on as the click is let go, and after.
+fn wide_marking_cancel(frames : Bool) -> (Bool, Bool) raise {
+  let t = preview_tester("image", w=1280.0, platform=0)
+  t.host_says_finger(Some(false))
+  let click = fn(label : String) raise {
+    let (x, y, w, h) = t.get(Button, label~).rect
+    t.touch(0, x + w / 2.0, y + h / 2.0)
+    t.touch(2, x + w / 2.0, y + h / 2.0)
+  }
+  click(@sf.t("web-main.annotate.image"))
+  t.draw()
+  assert_true(marking.on, msg="marking")
+  click(pv("common.cancel"))
+  let let_go = marking.on
+  if frames {
+    t.draw()
+  }
+  (let_go, marking.on)
+}
+
+///|
+test "viewer on the tree, a wide window, marking: its top bar the tree's; 取消 leaves marking as its click is let go, the frames drawn after or none" {
+  for frames in [true, false] {
+    let (let_go, after) = wide_marking_cancel(frames)
+    assert_true(!let_go, msg="frames \{frames}: marking left as the click is let go")
+    assert_true(!after, msg="frames \{frames}: left")
+  }
+  let t = preview_tester("image", w=1280.0, platform=0)
+  t.host_says_finger(Some(false))
+  let v = viewer.get().unwrap()
+  let (x, y, w, h) = t.get(Button, label=@sf.t("web-main.annotate.image")).rect
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  t.draw()
+  assert_true(@sfbase.bar_as_nodes(v, 1280.0), msg="marking: the bar across the top its nodes")
+  // (nothing drawn: 下载 unable; a box drawn, able)
+  let download = pv("android-chat.marks.downloadMarked")
+  assert_true(t.get(Button, label=download).disabled, msg="nothing drawn: 下载 unable")
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  let (px, py) = (rx + rw / 3.0, ry + rh / 3.0)
+  t.touch(0, px, py)
+  t.touch(1, px + 60.0, py + 40.0)
+  t.touch(2, px + 60.0, py + 40.0)
+  t.draw()
+  let (dx, dy, dw, dh) = t.get(Button, label=pv("android-chat.annotate.done")).rect
+  t.touch(0, dx + dw / 2.0, dy + dh / 2.0)
+  t.touch(2, dx + dw / 2.0, dy + dh / 2.0)
+  t.draw()
+  assert_true(!t.get(Button, label=download).disabled, msg="a box drawn: 下载 able")
+}
+
+///|
+/// A picture opened in a wide window (a mouse), marking: the tester, the viewer, and a click at a labelled button's
+/// middle (pressed and let go, no frame after).
+fn wide_marking() -> (@ui.Tester, Viewer, (String) -> Unit raise) raise {
+  let t = preview_tester("image", w=1280.0, platform=0)
+  t.host_says_finger(Some(false))
+  let click = fn(label : String) raise {
+    let (x, y, w, h) = t.get(Button, label~).rect
+    t.touch(0, x + w / 2.0, y + h / 2.0)
+    t.touch(2, x + w / 2.0, y + h / 2.0)
+  }
+  click(@sf.t("web-main.annotate.image"))
+  t.draw()
+  assert_true(marking.on, msg="marking")
+  (t, viewer.get().unwrap(), click)
+}
+
+///|
+test "viewer on the tree, a wide window, marking's 下载: nothing drawn, nothing made; a box drawn, clicked twice with no frame between, the marked picture asked for once, being made from the first" {
+  let (t, v, click) = wide_marking()
+  let download = pv("android-chat.marks.downloadMarked")
+  click(download)
+  t.draw()
+  assert_eq(t.marks_drawn().length(), 0, msg="nothing drawn: nothing made")
+  assert_true(!marking.busy, msg="nothing drawn: not making")
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  let (px, py) = (rx + rw / 3.0, ry + rh / 3.0)
+  t.touch(0, px, py)
+  t.touch(1, px + 60.0, py + 40.0)
+  t.touch(2, px + 60.0, py + 40.0)
+  t.draw()
+  click(pv("android-chat.annotate.done"))
+  t.draw()
+  click(download)
+  assert_true(marking.busy, msg="let go: being made at once")
+  click(download)
+  t.draw()
+  let drawn = t.marks_drawn()
+  assert_eq(drawn.length(), 1, msg="twice, no frame between: asked for once")
+  assert_eq(items(Some(@json.parse(drawn[0])), "marks").length(), 1, msg="the box")
+}
+
+///|
+test "viewer on the tree, a wide window, marking's 下载 with words being written: able as words come to be and unable as they go, told with no frame between; the words put down first, the marked picture made with them, once" {
+  let (t, v, click) = wide_marking()
+  click(pv("android-chat.marks.tool.text"))
+  t.draw()
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  t.touch(0, rx + rw / 3.0, ry + rh / 3.0)
+  t.touch(2, rx + rw / 3.0, ry + rh / 3.0)
+  t.draw()
+  assert_true(marking.writing is Some(_), msg="writing")
+  let download = pv("android-chat.marks.downloadMarked")
+  // (a word typed and taken out again, told with no frame between: nothing to keep, nothing made)
+  t.text_told("看", t.time())
+  t.key_told(@ui.key_code_backspace, 0, t.time())
+  click(download)
+  assert_eq(t.marks_drawn().length(), 0, msg="typed and taken out, no frame between: nothing made")
+  assert_true(!marking.busy, msg="typed and taken out: not making")
+  // (words typed, no frame between: made with them, once)
+  t.text_told("看这里", t.time())
+  click(download)
+  assert_true(marking.busy, msg="words typed, no frame between: being made as the click is let go")
+  click(pv("android-chat.marks.downloadMarked"))
+  t.draw()
+  let drawn = t.marks_drawn()
+  assert_eq(drawn.length(), 1, msg="made once: \{drawn}")
+  assert_true(drawn[0].contains("看这里"), msg="with the words: \{drawn[0]}")
+  assert_true(marking.writing is None, msg="the words put down")
+}
+
+///|
+test "viewer on the tree, a wide window, a picture of a chat's marked: 添加到对话 clicked twice with no frame between, the marked picture asked for once, being made from the first; made, put in that chat's draft once, the viewer closed back to it" {
+  let t = preview_tester("step", w=1280.0, platform=0)
+  t.host_says_finger(Some(false))
+  let (a, _) = preview_files().iter().find_first(fn(f) { f.0.name == "界面草图.png" }).unwrap()
+  open_preview("ws1/st1", "s-c1", a, steps=InChat(Some(1.0), "s-c1"))
+  t.run_for(@ui.move_most_ms)
+  let click = fn(label : String) raise {
+    let (x, y, w, h) = t.get(Button, label~).rect
+    t.touch(0, x + w / 2.0, y + h / 2.0)
+    t.touch(2, x + w / 2.0, y + h / 2.0)
+  }
+  click(@sf.t("web-main.annotate.image"))
+  t.draw()
+  let v = viewer.get().unwrap()
+  assert_true(marking.on && v.draft_key() == "ws1/st1:s-c1", msg="marking, a draft to put it in: \{v.draft_key()}")
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  let (px, py) = (rx + rw / 3.0, ry + rh / 3.0)
+  t.touch(0, px, py)
+  t.touch(1, px + 60.0, py + 40.0)
+  t.touch(2, px + 60.0, py + 40.0)
+  t.draw()
+  click(pv("android-chat.annotate.done"))
+  t.draw()
+  let put = pv("android-chat.preview.put")
+  let quoted = fn() { @sfbase.writings.get("ws1/st1:s-c1").map(fn(w) { w.quotes.length() }).unwrap_or(0) }
+  let before = quoted()
+  click(put)
+  assert_true(marking.busy && marking.to_draft, msg="let go: being made for the draft at once")
+  click(pv("android-chat.marks.making"))
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.marks_drawn().length(), 1, msg="twice, no frame between: asked for once")
+  assert_true(viewer.get() is None, msg="made: the viewer closed back to the chat")
+  assert_eq(quoted() - before, 1, msg="put in the chat's draft once")
+}
