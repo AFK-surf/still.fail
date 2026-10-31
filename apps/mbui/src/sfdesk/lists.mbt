@@ -576,7 +576,7 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         })
         |> ignore
       }) {
-      wide.attention_open.set(!wide.attention_open.get())
+      attention_set(!wide.attention_open.get())
     }
   })
   |> ignore

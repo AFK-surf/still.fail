@@ -669,7 +669,7 @@ fn desk_home() -> Unit {
 pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
   match place {
     "attention" => {
-      wide.attention_open.set(!wide.attention_open.get())
+      attention_set(!wide.attention_open.get())
     }
     "chats" | "mine" | "watching" => {
       // its list in the sidebar (Rail.tsx toList): 对话 all of them, the others theirs

@@ -579,7 +579,7 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   for id in taps {
     // (anything else chosen in the bars closes 待处理's panel, as a tap off a popover of the system's does)
     if id != "act/attention" && id != "lead/attention" {
-      wide.attention_open.set(false)
+      attention_set(false)
     }
     // (a tab left keeps what it showed, given back as it is chosen again; the one shown chosen again changes nothing,
     // as the system's tab apps have it: the user, 2026-10-26)

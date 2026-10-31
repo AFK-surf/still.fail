@@ -16,7 +16,7 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   if pressed("chat.switch") {
     if framed {
       switcher_toggle(c)
-      wide.attention_open.set(false)
+      attention_set(false)
     } else {
       @sfpages.search_summon(c, switcher_offered(c, src, w), app.nav.top() != Home)
     }
@@ -71,7 +71,7 @@ fn frame_escape(c : @ui.Ctx) -> Bool {
   } else if wide.keys_open.get() {
     wide.keys_open.set(false)
   } else if wide.attention_open.get() {
-    wide.attention_open.set(false)
+    attention_set(false)
   } else if @sfpages.rename_escape(c) {
     ()
   } else {
