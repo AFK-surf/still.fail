@@ -31,9 +31,10 @@
 /// the page's panel is, where the sidebar's column ends (where the page's panel starts on the tape), how far behind each
 /// panel is (Side, Page, Panel: 0 in use, 1 its ground a step darker). Whether the tape is at rest (its way's end come),
 /// what is due at that end; the side panel last open (closed while in use: shown, as it was, while the tape moves off it);
-/// the page put on top whose wait for what it shows is over (the moment it was put there and `most` past it); the finger
-/// pulling a panel over (where it went down across, the window's; where and when it was last, how fast it went there,
-/// px/s).
+/// the page on top's stay there (each page come on top a stay of its own, by its number: a page come back to waits
+/// anew) and the stay whose wait for what it shows is over (`most` past the moment it began), what is due then; the
+/// finger pulling a panel over (where it went down across, the window's; where and when it was last, how fast it went
+/// there, px/s).
 priv struct TapeGoes {
   way : @motion.Way
   x : FixedArray[Double]
@@ -43,7 +44,9 @@ priv struct TapeGoes {
   rest : @signals.Signal[Bool]
   mut end_due : () -> Unit
   last_side : @signals.Signal[SideOf?]
-  waited : @signals.Signal[Page?]
+  stay : @signals.Signal[(Int, Page?)]
+  mut stays : Int
+  waited : @signals.Signal[Int]
   mut wait_due : () -> Unit
   /// told as a move is committed or where things go is put (what works out where they are from it reads it)
   said : @signals.Signal[Int]
@@ -72,7 +75,9 @@ let tape_goes : TapeGoes = {
   rest: @signals.signal(true, same=fn(a, b) { a == b }),
   end_due: fn() {  },
   last_side: @signals.signal(None, same=fn(a, b) { a == b }),
-  waited: @signals.signal(None, same=fn(a, b) { a == b }),
+  stay: @signals.signal((-1, None), same=fn(a, b) { a == b }),
+  stays: 0,
+  waited: @signals.signal(-1, same=fn(a, b) { a == b }),
   wait_due: fn() {  },
   said: @signals.signal(0),
   pull_x0: 0.0,
@@ -99,7 +104,8 @@ fn tape_goes_reset() -> Unit {
   }
   tape_goes.rest.set(true)
   tape_goes.last_side.set(None)
-  tape_goes.waited.set(None)
+  tape_goes.stay.set((-1, None))
+  tape_goes.waited.set(-1)
   tape_goes.pull_x0 = 0.0
   tape_goes.pull_last = (0.0, 0.0)
   tape_goes.pull_v = 0.0
@@ -416,11 +422,12 @@ fn tape_to(p : TapePane, at : Double) -> Unit {
 }
 
 ///|
-/// Whether the page on top shows what it is for: the core has given it (sfapp's pane_ready), or its wait is over (its
-/// moment on the tree's timeline: tape_goes.waited).
+/// Whether the page on top shows what it is for: the core has given it (sfapp's pane_ready), or its stay's wait is over
+/// (its moment on the tree's timeline: tape_goes.waited; a stay said for the page on top now, not one before it).
 fn tape_page_ready() -> Bool {
   let top = app.nav.top()
-  (tape_goes.ready)(top) || tape_goes.waited.get() == Some(top)
+  let (stay, on) = tape_goes.stay.get()
+  (tape_goes.ready)(top) || (on == Some(top) && tape_goes.waited.get() == stay)
 }
 
 ///|
@@ -583,11 +590,14 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     wide.tape = false
   })
   |> ignore
-  // the page put on top waited for `most` ms at most, from the moment it was put there: its wait over a moment of the
-  // tree's timeline
+  // each page come on top a stay of its own, waited for `most` ms at most from the moment it came: its wait over a
+  // moment of the tree's timeline
   v.reacts(fn() { app.nav.top() }, fn(top) {
     (tape_goes.wait_due)()
-    tape_goes.wait_due = v.at_moment(v.cause_at() + tape_goes.most, fn() { tape_goes.waited.set(Some(top)) })
+    tape_goes.stays = tape_goes.stays + 1
+    let stay = tape_goes.stays
+    tape_goes.stay.set((stay, Some(top)))
+    tape_goes.wait_due = v.at_moment(v.cause_at() + tape_goes.most, fn() { tape_goes.waited.set(stay) })
   })
   // the side panel last open, kept while it closes (tape_shown_side); let go once the tape rests at the page
   v.reacts(fn() { (tape_goes.panel_of)() }, fn(side) {
@@ -743,6 +753,13 @@ pub fn tape_seen() -> (Array[@view.NodeId], Double, Double)? {
 }
 
 ///|
+/// Where the tape's move committed has the tape at `t` (its own: no finger's pull) and how wide it has the page's panel,
+/// worked out of the move alone, for a test.
+pub fn tape_along_at(t : Double) -> (Double, Double) {
+  (tape_along(tape_goes.x, 0, t), tape_page_at(t))
+}
+
+///|
 /// What the tape's panels' islands are built from besides what they read: the theme, whether a finger has the pointer.
 fn tape_island_key() -> String {
   let t = @sf.theme()
@@ -785,6 +802,8 @@ fn tape_panel_box(n : @view.View, before : Double, held : (@view.View) -> Unit) 
 /// moment. A tap, or the pointer's secondary button (no menu of what it holds), brings it over; a drag across brings it
 /// with the finger (the tape in the hand from there) and, let go, over or back. Drags on the one in use are its own.
 fn tape_cover(n : @view.View, p : TapePane, room : () -> (Double, Double, Double, Double)) -> Unit {
+  // (where and when the finger went down on it, the window's: where a pull begins from, however the cover moved since)
+  let down : Ref[(Double, Double)?] = Ref(None)
   n.box(fn(holder) {
     holder.over(Is(true)).padding(By(room)) |> ignore
     holder.show(
@@ -801,11 +820,18 @@ fn tape_cover(n : @view.View, p : TapePane, room : () -> (Double, Double, Double
         })
         .gesture(
           @ui.press_slop,
+          press=fn(d) { down.val = Some((d.wx, d.at)) },
           tap=fn(d) {
+            down.val = None
             wide.tape_ask.set(Some(p))
             tape_take_ask(d.at) |> ignore
           },
-          drag=fn(d) { tape_pulled(p, d) },
+          drag=fn(d) {
+            tape_pulled(p, d, down.val.unwrap_or((d.wx, d.at)))
+            if d.kind is (Up | Off) {
+              down.val = None
+            }
+          },
         )
         |> ignore
       },
@@ -815,16 +841,16 @@ fn tape_cover(n : @view.View, p : TapePane, room : () -> (Double, Double, Double
 }
 
 ///|
-/// A finger dragging panel `p`'s cover across (tape_cover): the tape in its hand from where it began (unless another is
-/// in its hand: back's), moved as far as it has come; let go, over or back (tape_let_go); called off, back.
-fn tape_pulled(p : TapePane, d : @view.Drag) -> Unit {
-  // (where the finger went down across, the window's: where it is less how far it has come in the cover, which no pull
-  // moved before it began; how far it has come from there, as far as `p` may come)
+/// A finger dragging panel `p`'s cover across (tape_cover), gone down at `down` (where across the window, when): the tape
+/// in its hand from where it went down (unless another is in its hand: back's), moved as far as it has come from there;
+/// let go, over or back (tape_let_go), as fast as it went from where it was last told (from its down where none was);
+/// called off, back.
+fn tape_pulled(p : TapePane, d : @view.Drag, down : (Double, Double)) -> Unit {
   let begin = fn() {
     wide.tape_pull.set(Some(p))
     wide.tape_drag.set(0.0)
-    tape_goes.pull_x0 = d.wx - (d.x - d.ox)
-    tape_goes.pull_last = (tape_goes.pull_x0, d.at)
+    tape_goes.pull_x0 = down.0
+    tape_goes.pull_last = down
     tape_goes.pull_v = 0.0
   }
   let moved = fn() {
