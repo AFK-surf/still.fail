@@ -1,7 +1,7 @@
 // Where the station stands with still.fail cloud: <data>/mesh/cloud.json (its fields, mode and pretty JSON as the Rust
 // station writes them: the desktop app and `bin/stillfail` read it too). One copy in memory, written through on every
 // change and told to whoever listens; the file is watched only for `enroll` writing it from another process.
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch } from "node:fs";
+import { type FSWatcher, existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch } from "node:fs";
 import { dirname, join } from "node:path";
 import { nowSecs, writePrivate } from "../ops/files.ts";
 import { wall } from "../ops/fibers.ts";
@@ -142,7 +142,7 @@ export class Cloud {
   private planeGateways: string[] | undefined;
   private listeners = new Set<(s: CloudState | null) => void>();
   private writing = false;
-  private watcher: { close(): void } | undefined;
+  private watcher: FSWatcher | undefined;
   readonly data: string;
 
   constructor(data: string) {
@@ -154,6 +154,12 @@ export class Cloud {
       this.watcher = watch(meshDir(data), { persistent: false }, (_, name) => {
         if (name === "cloud.json" && !this.writing) this.reload();
         if (name === "lock.json" && !this.writing) this.reloadLock();
+      });
+      // The watch failing later (macOS turning it down: EMFILE) ends it, not the station.
+      this.watcher.on("error", (error) => {
+        log.warn("cloud", "cloud.json no longer watched", { error: error.message });
+        this.watcher?.close();
+        this.watcher = undefined;
       });
     } catch {
       // No mesh directory yet: `enroll` makes it, and the station is started anew after.

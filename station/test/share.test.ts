@@ -387,6 +387,28 @@ test("a shared skill: copied and linked under its name, edits go back to the hos
   assert.equal(existsSync(link), false);
 });
 
+test("a shared skill's watch failing (macOS turning it down: EMFILE) is dropped, not the station, and followed again", async () => {
+  const cloud = new FakeCloud();
+  const all = new Map<string, Station>();
+  const a = station(cloud, A, () => all);
+  const b = station(cloud, B, () => all);
+  all.set(A, a).set(B, b);
+  const dir = join(a.data, "agent", "skills", "ember");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "SKILL.md"), "---\nname: ember\ndescription: 项目记忆：ember\n---\nfirst\n");
+  await a.sharing.shareSkill("ember", true, null);
+  await settle(a, b);
+  const watchers = (a.sharing as any).watchers as Map<string, any>;
+  const failed = watchers.get("hosted:ember");
+  assert.ok(failed, "the shared skill is followed");
+  // As Node tells it when FSEventStreamStart fails: an 'error' event on the watcher.
+  assert.doesNotThrow(() => failed.emit("error", Object.assign(new Error("EMFILE: too many open files, watch"), { code: "EMFILE" })));
+  await settle(a, b);
+  assert.ok(watchers.get("hosted:ember") && watchers.get("hosted:ember") !== failed, "followed again");
+  await a.sharing.close();
+  await b.sharing.close();
+});
+
 test("a skill named in any script is shared; renamed, it is linked under its new name; deleted, it is no longer shared", async () => {
   const cloud = new FakeCloud();
   const all = new Map<string, Station>();
