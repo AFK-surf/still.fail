@@ -2280,10 +2280,29 @@ pub fn Tester::set_window_snap(self : Tester, state : Int) -> Unit {
 }
 
 ///|
-/// Whether a press at (x, y) would drag the window (what it lands on is a target of Ctx::window_drag), pressing nothing.
+/// Whether a press at (x, y) would drag the window (what it lands on is a target of Ctx::window_drag, or a node of the
+/// window's tree's top row that moves it: View::moves_window), pressing nothing. Found as a press is (view_pointer):
+/// what the old frame put over all of it at its root first; then the tree's, an old view's where the tree hosts one
+/// there, or where nothing of the tree's is and the one old view is the whole window, taking input.
 pub fn Tester::drags_window_at(self : Tester, x : Double, y : Double) -> Bool {
   let c = self.ctx()
-  desk_drags(hit_in(c.hit_ids, c.hit_rects, x, y))
+  let old = fn() { desk_drags(hit_in(c.hit_ids, c.hit_rects, x, y)) }
+  match view_tree() {
+    None => old()
+    Some(tree) => {
+      // (what the old views take presses at, where the tree has them now)
+      old_hits_place(c, Some(tree))
+      if old_root_hit(c, x, y) {
+        return old()
+      }
+      match tree.target_at(x, y) {
+        TopRow(id) => tree.moves_window(id)
+        Pressed(_) | Dragged(_) => false
+        Hosted(_) => old()
+        Nothing => old_whole.val && island_allows(old_whole_island()) && old()
+      }
+    }
+  }
 }
 
 ///|

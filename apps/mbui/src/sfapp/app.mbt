@@ -385,6 +385,11 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
   // (the state it is in, a node of the window's tree where the app runs as one (app_tree): its old view put here;
   // else made once among the frame's)
   if @ui.old_islands_around() {
+    // (starting or failed, nodes of the window's tree with no old view to say it: said here, as the state is)
+    match app_is(src) {
+      (Starting | Failed) as state => splash_said(src, state)
+      _ => ()
+    }
     @ui.old_views_here(c)
   } else {
     c.made("app-ground", fn() { app_ground(c, src) })
@@ -512,7 +517,10 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
         .grow(Is(1.0))
         |> ignore
       }
-      if state == SignedIn {
+      if state == Starting || state == Failed {
+        // starting or failed, the splash: the window's tree's nodes (splash_tree)
+        splash_tree(v, src, state)
+      } else if state == SignedIn {
         // where the app is, put in the history's entry now as the stack or the workspace in view changes, at that
         // change (sfbase's app_history.mbt: a person's act pushed an entry before it moved the stack, one for all the
         // steps it takes, noted once it is done: history_acts_ended); on the wide frame Home alone is passing (land)
@@ -574,7 +582,7 @@ fn app_state_island(c : @ui.Ctx, src : Source, state : AppIs) -> Unit {
 /// The app in state `state` (app_ground's island).
 fn app_state(c : @ui.Ctx, src : Source, state : AppIs) -> Unit {
   match state {
-    Failed => splash(c, (src.fatal)(), true)
+    Failed => splash(c, splash_label(src, state), true)
     SignedOut => {
       // the sign-in page inside the bars (SignIn.kt: windowInsetsPadding(systemBars)) (sfpages' gate.mbt)
       within_bars(c, fn() { @sfpages.sign_in_page(c, src) })
@@ -588,15 +596,8 @@ fn app_state(c : @ui.Ctx, src : Source, state : AppIs) -> Unit {
     }
     SignedIn => signed_in(c, src)
     Starting => {
-      let accounts = (src.topic)("accounts", {})
-      splash(
-        c,
-        match accounts.error {
-          Some(e) => Some(text(Some(e), "message"))
-          None => None
-        },
-        accounts.error is Some(_),
-      )
+      let label = splash_label(src, state)
+      splash(c, label, label is Some(_))
     }
   }
 }
@@ -946,6 +947,73 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
       }
     },
   )
+  |> ignore
+}
+
+///|
+/// What the splash says it waits for, or what failed (`state` Starting or Failed): the core's failure; the accounts'
+/// error. Said at once where there is one (splash's `now`).
+fn splash_label(src : Source, state : AppIs) -> String? {
+  match state {
+    Failed => (src.fatal)()
+    _ =>
+      match (src.topic)("accounts", {}).error {
+        Some(e) => Some(text(Some(e), "message"))
+        None => None
+      }
+  }
+}
+
+///|
+/// Starting or failed, the window's tree's nodes in its place (app_state_tree): what an old view's build of the app's
+/// state says of the frame (app_state_island), said from the state it is in as the frame begins (view_in): no first
+/// page waiting nor its pictures; the ground alone until the splash's second, unless there is something to say at once.
+fn splash_said(src : Source, state : AppIs) -> Unit {
+  first_waiting.val = false
+  @sfbase.held_pictures_waiting.val = false
+  frame_bare.val = !splash_waited.get() && splash_label(src, state) is None
+}
+
+///|
+/// The splash (`state` Starting or Failed) as the window's tree's nodes (app_state_tree's): what `splash` draws, the
+/// ground alone till its second (splash_begin, at this moment if none has begun) unless there is something to say at
+/// once; then still.fail's mark and what it says under it, its lines each in the middle, all in the middle of the
+/// window. Where the window's buttons are in the app's top row (as that changes), its top drags it, under all of it.
+fn splash_tree(v : @view.View, src : Source, state : AppIs) -> Unit {
+  v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
+  v.show(fn() { @ui.window_inset_now() }, fn(o) {
+    o.over(Is(true)) |> ignore
+    o.box(fn(b) { b.height(By(fn() { Some(window_band_now()) })).moves_window(Is(true)) |> ignore }) |> ignore
+  })
+  match splash_owner.val {
+    Some(owner) if owner.alive() => splash_begin(owner, v.cause_at())
+    _ => ()
+  }
+  let label = fn() { splash_label(src, state) }
+  let mark = fn() { if @sf.theme().dark { "stillfail_mark_dark" } else { "stillfail_mark" } }
+  v.box(fn(s) {
+    s.over(Is(true)).pad(Is(24.0)).lines_up(Is(Some(Middle))) |> ignore
+    // (in the middle of the window's height: as much room above as below)
+    s.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+    s.show(fn() { splash_waited.get() || label() is Some(_) }, fn(m) {
+      m.gap(Is(16.0)).lines_up(Is(Some(Middle))) |> ignore
+      // (the mark a picture of curves, drawn by an old view as the window's pixels have it)
+      m.box(fn(k) {
+        k.width(Is(Some(56.0))).height(By(fn() { Some(@sf.drawable_height(mark(), 56.0)) })) |> ignore
+        @ui.old(k, fn(c) { @sf.drawable(c, mark(), 56.0) |> ignore }).grow(Is(1.0)) |> ignore
+      })
+      |> ignore
+      m.show(fn() { label() is Some(_) }, fn(w) {
+        w
+        .words(By(fn() { label().unwrap_or("") }))
+        .words_look(By(fn() { { size: @sf.theme().t.meta, weight: 400, line: 18.0, wrap: true } }))
+        .ink(By(fn() { @sf.theme().p.muted }))
+        .words_centered(Is(true))
+        |> ignore
+      })
+    })
+    s.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+  })
   |> ignore
 }
 

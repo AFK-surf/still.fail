@@ -98,6 +98,13 @@ pub fn window_inset_now() -> Bool {
 }
 
 ///|
+/// window_points_to_content for a node of the window's tree: at the zoom the frame is drawn at, followed
+/// (tree_window_zoom).
+pub fn window_points_to_content_now(points : Double) -> Double {
+  points / tree_window_zoom.get()
+}
+
+///|
 /// window_keys_left for a node of the window's tree (window_inset_now), followed.
 pub fn window_keys_left_now() -> Bool {
   window_inset_now() && platform() != 3 && platform() != 5
