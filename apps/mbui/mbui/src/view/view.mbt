@@ -77,6 +77,8 @@ pub(all) struct Look {
   mut drawn_as : String
   /// whether what it holds is cut to it, its corners round as its own (View::clips)
   mut clips : Bool
+  /// whether its words' lines each stand in the middle of its width (View::words_centered)
+  mut words_center : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -101,6 +103,8 @@ pub(all) struct Content {
   hosted : Bool
   /// what it holds cut to it, its corners round as its own (View::clips)
   clips : Bool
+  /// its words' lines each in the middle of its width (View::words_centered)
+  words_center : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -139,6 +143,8 @@ pub(all) struct Drawn {
   hosted : Bool
   /// what it holds cut to it, its corners round as its own (View::clips)
   clips : Bool
+  /// its words' lines each in the middle of its width (View::words_centered)
+  words_center : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -578,6 +584,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.pivot = At(0.5, 0.5)
       n.look.drawn_as = ""
       n.look.clips = false
+      n.look.words_center = false
       n.went = None
       n.parent = parent
       n.slot = false
@@ -624,7 +631,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), drawn_as: "", clips: false },
+        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), drawn_as: "", clips: false, words_center: false },
         parent,
         kids: [],
         owner: None,
@@ -1340,6 +1347,15 @@ pub fn View::over(self : View, on : Live[Bool]) -> View {
 /// finger or the pointer is taken is as it was (what is past it still takes them), unlike an old view's clip.
 pub fn View::clips(self : View, on : Live[Bool]) -> View {
   self.bind(34, on, Paint, fn(on) { self.tree.nodes[self.at].look.clips = on })
+  self
+}
+
+///|
+/// Whether its words' lines each stand in the middle of its width (as wide as it is as it is drawn: a line wrapped,
+/// each part of it), as an old view's centred words do (Ctx::text's `center`): how they are drawn only, measured and
+/// wrapped as ever, a change of it drawn again, nothing laid out again.
+pub fn View::words_centered(self : View, on : Live[Bool]) -> View {
+  self.bind(36, on, Paint, fn(on) { self.tree.nodes[self.at].look.words_center = on })
   self
 }
 
@@ -3653,6 +3669,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     shadow: n.look.shadow,
     hosted: n.hosted,
     clips: n.look.clips,
+    words_center: n.look.words_center,
   })
   self.changed.push(id)
   self.pending.push(id)
@@ -3769,6 +3786,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     shadow: c.shadow,
     hosted: c.hosted,
     clips: c.clips,
+    words_center: c.words_center,
   }
 }
 
