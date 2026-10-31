@@ -421,7 +421,7 @@ fn center_panel(
     @sf.panel_group(c, label=@sf.t("web-pages.screen.combos"), fn() {
       combo_tiles(c, s, combos_for(screen_os(src, s.station)), done)
     })
-    @sf.panel_group(c, label=@sf.t("web-pages.screen.keys"), fn() { key_tiles(c, s, u) })
+    @sf.panel_group(c, label=@sf.t("web-pages.screen.commonKeys"), fn() { key_tiles(c, s, u) })
     // the mouse's buttons shown or not (the keys row's, the floating pair), kept on this device
     @sf.panel_group(c, fn() {
       let on = mouse_shown(s, u)

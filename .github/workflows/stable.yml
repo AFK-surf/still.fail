@@ -227,5 +227,10 @@ jobs:
           git tag -f deployed/stable "$RELEASE_REVISION"
           # As mini1's own GitHub login, not the run's token: GitHub refuses that token a ref to a commit that changes a
           # workflow (no `workflows` permission), and a tag stuck behind such a commit stays stuck (2026-10-02, e3ae7c10).
-          git push --no-verify -f "https://github.com/$GITHUB_REPOSITORY" refs/tags/deployed/stable
+          # (again on a dropped connection: one from mini1 to github.com failed the tag's push alone, the beta out, main
+          # 30f68adc 41249459343, 2026-11-01)
+          for i in 1 2 3; do
+            git push --no-verify -f "https://github.com/$GITHUB_REPOSITORY" refs/tags/deployed/stable && break
+            [ $i = 3 ] && exit 1; sleep 10
+          done
           echo "Published stable 0.1.$RELEASE_VERSION from $RELEASE_REVISION" >> "$GITHUB_STEP_SUMMARY"

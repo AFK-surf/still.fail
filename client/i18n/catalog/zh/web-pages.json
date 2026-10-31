@@ -1576,7 +1576,7 @@
   "web-pages.screen.quality.hd": "高清",
   "web-pages.screen.quality.original": "原画",
   "web-pages.screen.combos": "组合键",
-  "web-pages.screen.keys": "常用键",
+  "web-pages.screen.commonKeys": "常用键",
   "web-pages.screen.combo.switchApp": "切换应用",
   "web-pages.screen.combo.spotlight": "聚焦搜索",
   "web-pages.screen.combo.missionControl": "调度中心",

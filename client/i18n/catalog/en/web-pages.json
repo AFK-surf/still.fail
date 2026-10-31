@@ -1651,7 +1651,7 @@
   "web-pages.screen.quality.hd": "HD",
   "web-pages.screen.quality.original": "Original",
   "web-pages.screen.combos": "Key combos",
-  "web-pages.screen.keys": "Keys",
+  "web-pages.screen.commonKeys": "Keys",
   "web-pages.screen.combo.switchApp": "Switch apps",
   "web-pages.screen.combo.spotlight": "Spotlight",
   "web-pages.screen.combo.missionControl": "Mission Control",

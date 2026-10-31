@@ -799,7 +799,12 @@ jobs:
           # Not the repository's pre-push check (the runner's checkout has the hooks on): this run checked it all.
           # As mini1's own GitHub login, not the run's token: GitHub refuses that token a ref to a commit that changes a
           # workflow (no `workflows` permission), and a tag stuck behind such a commit stays stuck (2026-10-02, e3ae7c10).
-          git push --no-verify -f "https://github.com/$GITHUB_REPOSITORY" refs/tags/deployed/beta
+          # (again on a dropped connection: one from mini1 to github.com failed the tag's push alone, the beta out, main
+          # 30f68adc 41249459343, 2026-11-01)
+          for i in 1 2 3; do
+            git push --no-verify -f "https://github.com/$GITHUB_REPOSITORY" refs/tags/deployed/beta && break
+            [ $i = 3 ] && exit 1; sleep 10
+          done
       - if: needs.plan.outputs.relay == 'true'
         run: echo "::warning::the relay changed and is not deployed here, as that drops every connection. Run ~/bin/ember-deploy on studio."
 

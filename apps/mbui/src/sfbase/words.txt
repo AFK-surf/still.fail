@@ -1796,12 +1796,12 @@ web-pages.screen.combo.switchApp
 web-pages.screen.combo.switchWindow
 web-pages.screen.combo.taskManager
 web-pages.screen.combos
+web-pages.screen.commonKeys
 web-pages.screen.fps
 web-pages.screen.fps.auto
 web-pages.screen.fpsHint.auto
 web-pages.screen.fpsHint.cap
 web-pages.screen.fpsHint.high
-web-pages.screen.keys
 web-pages.screen.leave
 web-pages.screen.mouseButtons
 web-pages.screen.panel
