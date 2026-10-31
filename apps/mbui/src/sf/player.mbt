@@ -656,10 +656,12 @@ fn player_still(c : @ui.Ctx, n : @ui.NativeView, still : String, x : Double, y :
 /// What the speed shows as and the speeds to pick (the menu under it: each a choice, the one it plays at checked).
 fn speed_menu(c : @ui.Ctx, v : PlayerView, p : @kit.Media, trigger : Int) -> Unit {
   let entries = player_speeds.map(fn(sp) { @kit.menu_radio(sp.to_string(), sp == p.speed(), label=speed_label(sp)) })
-  let m = dropdown(c, p.key() + "/speeds", v.rates, trigger, entries, {}, player_speeds_w, side=Top)
-  if !m.open {
-    v.rates = false
-  }
+  // (dismissed, closed at the moment of what dismissed it: Escape, a press beside it)
+  let menu : Ref[@kit.Menu?] = Ref(None)
+  c.with_dismissed(fn(_) { v.rates = false }, fn() {
+    menu.val = Some(dropdown(c, p.key() + "/speeds", v.rates, trigger, entries, {}, player_speeds_w, side=Top))
+  })
+  let m = menu.val.unwrap()
   match m.chosen {
     Some(chosen) =>
       match player_speeds.iter().find_first(fn(sp) { sp.to_string() == chosen }) {
@@ -1199,12 +1201,16 @@ fn desk_play_controls(
       let sid = c.id(key + "/speed")
       let speed_slot = c.id(key + "/speed-slot")
       c.box(id=speed_slot, taps=false, drop=player_drop_speed, fn() {
-        if media_rate(c, key + "/speed", speed_label(p.speed()), t("web-pages.drive.player.rate"), on, ink~) {
-          v.rates = !v.rates
-          p.wake()
-        }
+        media_rate(c, key + "/speed", speed_label(p.speed()), t("web-pages.drive.player.rate"), on, ink~) |> ignore
       })
       |> ignore
+      // (pressed as it is let go, while it can be: open or not as it is then)
+      if on {
+        c.on_press(sid, fn() {
+          v.rates = !v.rates
+          p.wake()
+        })
+      }
       speed_menu(c, v, p, sid)
       let (subtitle, subs_on) = p.subtitle()
       let subs_label = t(if subs_on { "web-pages.drive.player.captionsOff" } else { "web-pages.drive.player.captionsOn" })
@@ -1274,9 +1280,13 @@ fn desk_play_controls(
       let more = key + "/more"
       let open = menu_open.val == more
       c.box(more=true, fn() {
-        if media_key(c, more, "more", t("web-main.menu.more"), on, small=true, lit=open, ink~) {
-          menu_open.val = if open { "" } else { more }
-          p.wake()
+        media_key(c, more, "more", t("web-main.menu.more"), on, small=true, lit=open, ink~) |> ignore
+        // (pressed as it is let go, while it can be: open or not as it is then)
+        if on {
+          c.on_press(c.id(more), fn() {
+            menu_open.val = if menu_open.val == more { "" } else { more }
+            p.wake()
+          })
         }
       })
       |> ignore
@@ -1773,9 +1783,13 @@ fn phone_controls(
       c.box(style=desk_grow, fn() {  }) |> ignore
       // the speed, as a figure: its menu of speeds
       let sid = c.id(key + "/speed")
-      if phone_speed(c, key + "/speed", speed_label(p.speed()), on, t("android-misc.drive.player.speed"), ink, lit=v.rates) {
-        v.rates = !v.rates
-        p.wake()
+      phone_speed(c, key + "/speed", speed_label(p.speed()), on, t("android-misc.drive.player.speed"), ink, lit=v.rates) |> ignore
+      // (pressed as it is let go, while it can be: open or not as it is then)
+      if on {
+        c.on_press(sid, fn() {
+          v.rates = !v.rates
+          p.wake()
+        })
       }
       speed_menu(c, v, p, sid)
       let (subtitle, subs_on) = p.subtitle()

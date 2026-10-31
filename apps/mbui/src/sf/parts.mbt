@@ -1396,8 +1396,20 @@ fn menu_items(
       }
     }
   }
-  let m = dropdown(c, key, open, trigger, entries, icons, menu_w, submenu~, side~, along~, offset~, at?, danger~)
-  if open && !m.open {
+  // (dismissed, closed at the moment of what dismissed it: Escape, a press beside it, unless another is open by then;
+  // going out from then, so what shows its ⋯ only under the pointer still builds it)
+  let menu : Ref[@kit.Menu?] = Ref(None)
+  c.with_dismissed(fn(_) {
+    if menu_open.val == key {
+      menu_open.val = ""
+    }
+    menu_going.add(key)
+  }, fn() {
+    menu.val = Some(dropdown(c, key, open, trigger, entries, icons, menu_w, submenu~, side~, along~, offset~, at?, danger~))
+  })
+  let m = menu.val.unwrap()
+  // (a submenu's Left, its own back, is a key taken as it is built)
+  if submenu && open && !m.open && menu_open.val == key {
     menu_open.val = ""
   }
   if m.shown && !m.open {
@@ -1424,10 +1436,11 @@ fn menu_items(
 /// tool_button) that opens `items` under it, along its end, 4 below. Whether it is open.
 pub fn menu_of(c : @ui.Ctx, key : String, items : Array[MenuItem?], label~ : String, size? : Double = 32.0) -> Bool {
   let open = menu_open.val == key
-  if icon_button(c, "more", key=key + "/more", size~, on=open, round=true, linked?=bar_keys_link(), label~) {
-    menu_open.val = if open { "" } else { key }
-  }
-  menu_items(c, key, c.id(key + "/more"), items, along=End, offset=4.0)
+  let id = c.id(key + "/more")
+  icon_button(c, "more", key=key + "/more", size~, on=open, round=true, linked?=bar_keys_link(), label~) |> ignore
+  // (pressed as it is let go: open or not as it is then)
+  c.on_press(id, fn() { menu_open.val = if menu_open.val == key { "" } else { key } })
+  menu_items(c, key, id, items, along=End, offset=4.0)
 }
 
 ///|
@@ -1539,6 +1552,12 @@ pub fn context_items(c : @ui.Ctx, key : String, items : Array[MenuItem?]) -> Boo
 pub fn menu_open_here(key : String, x : Double, y : Double) -> Unit {
   menu_open.val = key
   menu_open_at.val = (x, y)
+}
+
+///|
+/// The key of the menu open now ("" none).
+pub fn menu_open_key() -> String {
+  menu_open.val
 }
 
 ///|
