@@ -9,7 +9,7 @@ pub fn submenu_row(c : @ui.Ctx, key : String, label : String, items : Array[Menu
   let row = key + "/row"
   let id = c.id(row)
   if c.rect_of(id) is None {
-    if menu_open.val == key { menu_open.val = "" }
+    if menu_now() == key { menu_set("") }
     if submenu_hover.val == key { submenu_hover.val = "" }
   }
   let pressed = menu_item(c, label, key=row, end="chevron-right")
@@ -21,9 +21,9 @@ pub fn submenu_row(c : @ui.Ctx, key : String, label : String, items : Array[Menu
   let entered = hovered && submenu_hover.val != key
   if hovered { submenu_hover.val = key } else if submenu_hover.val == key { submenu_hover.val = "" }
   if pressed || (c.has_focus(id) && c.take_key(if c.rtl() { @ui.key_code_left } else { @ui.key_code_right })) || entered {
-    menu_open.val = key
+    menu_set(key)
   }
   if menu_items(c, key, id, items, submenu=true, side=Right, along=Start, offset=panel_pad + panel_pad) {
-    menu_open.val = key
+    menu_set(key)
   }
 }

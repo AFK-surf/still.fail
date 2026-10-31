@@ -1044,6 +1044,8 @@ pub fn menu_of(@ui.Ctx, String, Array[MenuItem?], label~ : String, size? : Doubl
 
 pub fn menu_open_here(String, Double, Double) -> Unit
 
+pub fn menu_open_key() -> String
+
 pub let menu_raised : Raised
 
 pub fn menu_row(@ui.Ctx, @kit.MenuItemState, String, Bool, Double, ((@ui.Ctx, @kit.MenuItemState) -> Unit)?, danger? : Bool, mark? : (@ui.Ctx, Double) -> Unit, note? : String, at_top? : Bool, at_foot? : Bool) -> Unit

@@ -52,6 +52,8 @@ fn player_tester(
 ) -> @ui.Tester {
   let (w, h, platform) = window.unwrap_or(if narrow { (390.0, 844.0, 1) } else { (1280.0, 800.0, 0) })
   viewer_reset()
+  // (no menu left open by the test before: the app begun again)
+  parts_reset()
   set_viewer_host(viewer_host_default())
   set_words(fn(key, args) {
     args.fold(init=test_words.get(key).unwrap_or(key), fn(said, a) { said.replace_all(old="{" + a.0 + "}", new=a.1) })
