@@ -1,0 +1,21 @@
+#!/bin/bash
+# A package's tests run on its test program built already (tools/testexe, in MoonBit: its main.mbt says what), for
+# scripts/test.sh:  scripts/testexe parts … | said … | path | key
+# Built here only when there is none built from these very sources (by content): CI keeps it built for each change of
+# them (.github/actions/mbui-moonbit).
+D=$(cd "$(dirname "$0")" && pwd)
+A=$(cd "$D/.." && pwd)
+T=$A/tools
+B=$T/_build/native/release/build/sftools/testexe/testexe.exe
+src=$(cd "$A" && find tools/testexe tools/moon.mod tools/moon.work mbui/tools/sys -type f | LC_ALL=C sort | xargs cat | cksum)
+# (`key`: what it is built from, said: the key CI keeps the tool by)
+[ "${1:-}" != key ] || { echo "$src" | tr ' ' -; exit 0; }
+if [ ! -x "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
+  # (moon: the toolchain the scripts use)
+  . "$D/env.sh"
+  (cd "$T" && env -u MOON_CC moon build --target native --release testexe >&2) || { echo "testexe: tools/testexe did not build" >&2; exit 1; }
+  echo "$src" > "$B.src"
+fi
+# (`path`: the program, for a job that takes it elsewhere: check-mbui's app-build puts it beside sfapp's)
+[ "${1:-}" != path ] || { echo "$B"; exit 0; }
+exec "$B" "$@"

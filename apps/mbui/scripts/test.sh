@@ -9,8 +9,9 @@
 # what one file leaves behind that a later one trips on shows best there, and check-mbui's run of the day runs them so
 # (a push's in 4). mbui's own: its scripts/test.sh.
 # APP_EXE (with APP_INFO, its tests' list, __whitebox_test_info.json): sfapp's test program built elsewhere (check-mbui's
-# app-build job's), its runs asked of it directly (scripts/test_exe.py), nothing built here. APP_BUILD_OUT: sfapp's test
-# program built only, it and its tests' list put in that directory for them.
+# app-build job's), its runs asked of it directly (scripts/testexe; TESTEXE: that tool built elsewhere too, beside it),
+# nothing built here. APP_BUILD_OUT: sfapp's test program built only, it, its tests' list and the tool put in that
+# directory for them.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
@@ -94,7 +95,8 @@ for t in ${TARGETS:-native}; do
   if [ -n "${APP_BUILD_OUT:-}" ]; then
     b=_build/native/release/test/stillfail/sfapp
     [ -f $b/sfapp.whitebox_test.exe ] || { moon test $mode $pkgs --build-only 2>&1 | grep -v "$F" | tail -40; exit 1; }
-    mkdir -p "$APP_BUILD_OUT" && cp $b/sfapp.whitebox_test.exe $b/__whitebox_test_info.json "$APP_BUILD_OUT/"
+    mkdir -p "$APP_BUILD_OUT" && cp $b/sfapp.whitebox_test.exe $b/__whitebox_test_info.json "$APP_BUILD_OUT/" &&
+      cp "$(bash "$D/testexe" path)" "$APP_BUILD_OUT/testexe" || exit 1
     echo "test.sh: sfapp's test program put in $APP_BUILD_OUT ($(du -h $b/sfapp.whitebox_test.exe | cut -f1))"
     exit 0
   fi
@@ -142,8 +144,8 @@ for t in ${TARGETS:-native}; do
       # leaves behind that a later one trips on shows (shards, a process each, hide it))
       runs+=("${pages[*]}")
     elif [ -n "${APP_EXE:-}" ]; then
-      # (on a program built elsewhere: the pages in one run whose n programs each take the next file (test_exe.py's
-      # APP_JOBS), not dealt out beforehand: by name round four one took 75 s while another took 21, 2026-11-01)
+      # (on a program built elsewhere: the pages in one run whose n programs each take the next file (exe_run's
+      # xargs -P), not dealt out beforehand: by name round four one took 75 s while another took 21, 2026-11-01)
       runs+=("${pages[*]}")
       export APP_JOBS=$n
     else
@@ -166,7 +168,7 @@ for t in ${TARGETS:-native}; do
     fx=_build/native/release/test/stillfail/sfreplay/flows/flows.blackbox_test.exe
     if [ $t = native ] && [ -z "${UPDATE:-}" ] && [ -f $fx ]; then
       # (native: their files in one run of the program built above, whose n programs each take the next file
-      # (test_exe.py's APP_JOBS), not dealt out beforehand: dealt by name round three, 68 s, 43 and 41, the replay
+      # (exe_run's xargs -P), not dealt out beforehand: dealt by name round three, 68 s, 43 and 41, the replay
       # part's 183 s the pipeline's longest job, chat-opener-links 41248997629, 2026-11-01)
       runs+=("@flows ${flows[*]}")
     else
@@ -231,6 +233,24 @@ for t in ${TARGETS:-native}; do
       *) [ $# -le 2 ] && echo $(basename -a "$@") || echo "$# files ($(basename "$1") ...)" ;;
     esac
   }
+  # exe_run EXE INFO JOBS PKG FILE… | FILE --index FROM-TO: a run on a test program built already, JOBS of it side by
+  # side, each taking the next part when done with one (xargs -P); tools/testexe says what to ask it and what it said
+  exe_run() {
+    local exe=$1 info=$2 j=$3 pkg=$4 d c
+    shift 4
+    d=$(mktemp -d)
+    "$TESTEXE" parts "$info" "$j" "$@" > "$d/parts" || { rm -rf "$d"; return 2; }
+    [ ! -s "$d/parts" ] || sed "s|^|$d/|" "$d/parts" | xargs -P "$j" -L 1 sh -c \
+      's=$(date +%s); "$0" "$2" > "$1.out" 2>&1; echo "$? $(($(date +%s) - s))" > "$1.code"' "$exe"
+    "$TESTEXE" said "$info" "$d" "$pkg"
+    c=$?
+    rm -rf "$d"
+    return $c
+  }
+  # (the tool, built before the runs side by side, not by each: TESTEXE, or scripts/testexe's)
+  if [ -n "${APP_EXE:-}" ] || [[ " ${runs[*]} " = *" @flows "* ]]; then
+    [ -n "${TESTEXE:-}" ] || TESTEXE=$(bash "$D/testexe" path) || exit 1
+  fi
   pids=()
   for i in "${!runs[@]}"; do
     # (a run of nothing is none: moon test of no package would be every package's)
@@ -238,9 +258,10 @@ for t in ${TARGETS:-native}; do
     # (each run's time with TIMES: the part's run is the longest of them, and which one it is is said)
     { if [ "${runs[i]%% *}" = @flows ]; then
         f=_build/native/release/test/stillfail/sfreplay/flows
-        APP_JOBS=${REPLAY_SHARDS:-3} TEST_PKG=stillfail/sfreplay/flows python3 "$D/test_exe.py" $f/flows.blackbox_test.exe \
-          $f/__blackbox_test_info.json ${runs[i]#@flows } > "$out.$i" 2>&1
-      elif [ -n "${APP_EXE:-}" ]; then python3 "$D/test_exe.py" "$APP_EXE" "$APP_INFO" ${runs[i]} > "$out.$i" 2>&1
+        exe_run $f/flows.blackbox_test.exe $f/__blackbox_test_info.json ${REPLAY_SHARDS:-3} stillfail/sfreplay/flows \
+          ${runs[i]#@flows } > "$out.$i" 2>&1
+      elif [ -n "${APP_EXE:-}" ]; then
+        exe_run "$APP_EXE" "$APP_INFO" ${APP_JOBS:-1} stillfail/sfapp ${runs[i]} > "$out.$i" 2>&1
       else moon test $mode ${runs[i]} ${UPDATE:+--update} > "$out.$i" 2>&1; fi; c=$?
       echo "$(( $(date +%s) - s )) s: $(run_name ${runs[i]})" > "$out.time.$i"
       exit $c; } &
