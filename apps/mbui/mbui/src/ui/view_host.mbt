@@ -256,6 +256,9 @@ fn view_forget() -> Unit {
   c.back_next = None
   c.back_node_next = -1
   c.back_island_next = None
+  c.back_chain_next = Unsaid
+  c.back_chain = Unsaid
+  layer_back_forget()
   c.back_held = None
   c.back_off = false
   match view_app.val {

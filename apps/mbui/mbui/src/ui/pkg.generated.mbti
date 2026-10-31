@@ -640,7 +640,11 @@ pub(all) enum Along {
   End
 } derive(Eq, Show, @debug.Debug)
 
+type BackEntry
+
 type BackHeld
+
+type BackList
 
 type Bar
 
@@ -894,6 +898,9 @@ pub struct Ctx {
   mut back_edge_next : Double
   mut back_island : @view.NodeId?
   mut back_island_next : @view.NodeId?
+  mut back_chain : BackList
+  mut back_chain_next : BackList
+  layer_gen : Map[Int32, Int32]
   mut back_held : BackHeld?
   mut back_off : Bool
   mut back_told : Bool

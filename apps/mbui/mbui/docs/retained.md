@@ -267,8 +267,9 @@ squeeze and contrast checks; film's images before and after where a step touches
    it; what is over the whole window put away and the history's entry before among it), what it does chosen as a
    gesture begins (a panel of the tape followed as it goes, or the shell's back done once, the history's entry chosen
    then), the host told the app takes back as the tree changes what takes it (Ctx::back_told_host); what an old view
-   says takes back (a page's own stack, a layer over all: what a layer said stays its till a frame says otherwise, a
-   second back before it lost to it) takes it before. The history's entries are made at their causes (still.fail's
+   says takes back (a page's own stack, a layer over all) takes it before: a layer's (Ctx::overlay), as this opening of
+   it, given up as it takes back, what it was said over (a page's own stack's) taking the next, though the layer closes
+   only as it is built next. The history's entries are made at their causes (still.fail's
    sfbase app_history.mbt: a person's act one change, its entry once that change is committed), but for an act taken as
    an old view builds (a row pressed), done with that build. Still the old way on both: the edges' drags, their look,
    pointer's shape, tip (frame-numbered) and what they say (an island over the panels: waiting on the tree's tip), a

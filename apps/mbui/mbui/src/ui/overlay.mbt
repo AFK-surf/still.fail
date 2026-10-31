@@ -72,8 +72,23 @@ pub fn Ctx::overlay(
 ) -> Overlay {
   let id = self.id(key)
   let dismissed = self.dismissals.get(id)
+  // (leaving, its exit drawn: the opening it was over, its back given up with it; open again, another)
+  if inert {
+    match self.layer_gen.get(id) {
+      Some(g) => {
+        self.layer_gen.remove(id)
+        layer_back_spent.remove(g)
+      }
+      None => ()
+    }
+  }
   if dismissed is Some(_) {
     self.dismissals.remove(id)
+    // (its back taken, read: what it says from here is said anew)
+    match self.layer_gen.get(id) {
+      Some(g) => layer_back_spent.remove(g)
+      None => ()
+    }
     // the view closes it as it reads this: built again, closed
     self.read_changed("a layer dismissed")
   }
@@ -115,10 +130,23 @@ pub fn Ctx::overlay(
     anchor,
     initial,
   })
-  // the back to it, unless a layer built in it (over it) takes it after
+  // the back to it, unless a layer built in it (over it) takes it after: to this opening of it (layer_gen), what it is
+  // said over taking back once it took it (Ctx::layer_back_taken)
   if escape && !inert {
+    let gen = match self.layer_gen.get(id) {
+      Some(g) => g
+      None => {
+        layer_opened.val = layer_opened.val + 1
+        self.layer_gen[id] = layer_opened.val
+        layer_opened.val
+      }
+    }
     // (the system's back is an input: its frames are the framework's)
-    self.take_back(fn() { self.dismissals[id] = Back })
+    self.take_back(fn() { self.layer_back_taken(id, gen) })
+    self.back_chain_next = match self.back_chain_next {
+      Said(e, under) => Said({ ..e, layer: gen }, under)
+      none => none
+    }
   }
   self.with_parent(i, fn() {
     if modal && (!inert || scrim != 0L) {
@@ -566,6 +594,16 @@ fn Ctx::layer_built_in(self : Ctx, l : Int, outer : Int) -> Bool {
 /// As the frame ends: this frame's layers the last frame's for the next.
 fn Ctx::layers_frame_end(self : Ctx) -> Unit {
   for l in self.last_layers {
+    // (not built this frame: its opening over)
+    if !self.layers.iter().any(fn(x) { x.id == l.id }) {
+      match self.layer_gen.get(l.id) {
+        Some(g) => {
+          self.layer_gen.remove(l.id)
+          layer_back_spent.remove(g)
+        }
+        None => ()
+      }
+    }
     if !l.inert && !self.layers.iter().any(fn(x) { x.id == l.id }) {
       self.layer_return.remove(l.id)
     }
@@ -715,4 +753,99 @@ pub fn Ctx::place(
   }
   let (x, y) = (keep(x, w, vw), keep(y, h, vh))
   (x, y, side)
+}
+
+///|
+/// What takes back as one of the old views said it (Ctx's `back_next` and what goes with it), and the layer's opening it
+/// is of (Ctx::overlay; 0: none's).
+struct BackEntry {
+  f : (Int, Double, Double, Double, Double) -> Unit
+  node : Int
+  edge : Double
+  island : @view.NodeId?
+  layer : Int
+}
+
+///|
+/// What takes back as the old views said it, the last said first (Ctx's `back_chain`): each what takes it once the one
+/// over it, a layer's, took it.
+enum BackList {
+  Said(BackEntry, BackList)
+  Unsaid
+}
+
+///|
+/// What takes back said as it is now (Ctx's `back_next` and what goes with it) over what was said before it.
+fn Ctx::back_says(self : Ctx) -> Unit {
+  match self.back_next {
+    Some(f) =>
+      self.back_chain_next = Said(
+        { f, node: self.back_node_next, edge: self.back_edge_next, island: self.back_island_next, layer: 0 },
+        self.back_chain_next,
+      )
+    None => ()
+  }
+}
+
+///|
+/// What `top` says over what `under` does: the whole of it, in its order, then `under`'s.
+fn back_list_over(top : BackList, under : BackList) -> BackList {
+  match top {
+    Unsaid => under
+    Said(e, rest) => Said(e, back_list_over(rest, under))
+  }
+}
+
+///|
+/// The openings of layers so far (Ctx's `layer_gen`): each its own, a layer of the same key opened again another.
+// kept across runs: only a count
+let layer_opened : Ref[Int] = Ref(0)
+
+///|
+/// The layers' openings whose back was taken (Ctx::layer_back_taken), till they read it (Ctx::overlay: dismissed) or
+/// close: what they said of back no more what takes it, said again as a part kept or not.
+// kept across runs: put back by layer_back_forget
+let layer_back_spent : Set[Int] = Set::new()
+
+///|
+fn layer_back_forget() -> Unit {
+  layer_back_spent.clear()
+}
+
+///|
+/// Back taken by layer `id` as its opening `gen` (Ctx::overlay's): where that is the one open now, it is dismissed (its
+/// view closes it as it is built next), and what takes back from now (as of this moment: the next back) is what it was
+/// said over, the host told so; a gesture held by an opening closed since, nothing.
+fn Ctx::layer_back_taken(self : Ctx, id : Int, gen : Int) -> Unit {
+  guard self.layer_gen.get(id) == Some(gen) else { return }
+  self.dismissals[id] = Back
+  layer_back_spent.add(gen)
+  self.back_layer_spent()
+  self.back_told_host()
+}
+
+///|
+/// What takes back as published (Ctx's `back`, `back_chain`), a layer's opening whose back was taken already on top:
+/// what it was said over, and so on down, in its place.
+fn Ctx::back_layer_spent(self : Ctx) -> Unit {
+  let mut moved = false
+  while self.back_chain is Said(e, under) && e.layer != 0 && layer_back_spent.contains(e.layer) {
+    self.back_chain = under
+    moved = true
+  }
+  if moved {
+    match self.back_chain {
+      Said(e, _) => {
+        self.back = Some(e.f)
+        self.back_node = e.node
+        self.back_edge = e.edge
+        self.back_island = e.island
+      }
+      Unsaid => {
+        self.back = None
+        self.back_node = -1
+        self.back_island = None
+      }
+    }
+  }
 }
