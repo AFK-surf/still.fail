@@ -209,13 +209,25 @@ fn local_face_row(c : @ui.Ctx, core : Core, place : String, chosen : String) -> 
   let rkey = "fonts/face/" + place + "/local"
   let tid = c.id(rkey)
   let name = if picked != "" { picked } else { @sf.t("web-pages.appearance.fonts.local") }
-  if @sf.choice_row(c, rkey, picked != "", @sf.t("web-pages.appearance.fonts.local"), body=fn() {
-      face_words(c, rkey, name, face, "", false)
-    }) {
+  @sf.choice_row(c, rkey, picked != "", @sf.t("web-pages.appearance.fonts.local"), body=fn() {
+    face_words(c, rkey, name, face, "", false)
+  })
+  |> ignore
+  // (pressed: opened or closed as it is let go, as it is then)
+  c.on_press(tid, fn() {
     local_open.val = !local_open.val
     local_filter.set("")
-  }
-  let p = @kit.popover(
+  })
+  // (dismissed by the hand, Escape or a press outside it and its row: closed at that moment; closed as one is picked)
+  c.with_dismissed(fn(_) { local_open.val = false }, fn() { local_faces(c, core, place, tid, picked) })
+}
+
+///|
+/// 本机字体's popover under its row `tid`: the families installed here, found by its field (`picked` checked), one
+/// picked the place's face.
+fn local_faces(c : @ui.Ctx, core : Core, place : String, tid : Int, picked : String) -> Unit {
+  let t = @sf.theme()
+  @kit.popover(
     c,
     "fonts/local",
     local_open.val,
@@ -262,7 +274,7 @@ fn local_face_row(c : @ui.Ctx, core : Core, place : String, chosen : String) -> 
       }
     },
   )
-  local_open.val = p.value
+  |> ignore
 }
 
 ///|
