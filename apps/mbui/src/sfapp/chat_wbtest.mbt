@@ -110,6 +110,23 @@ test "near the top the page before comes in, and what is in view stays where it 
 }
 
 ///|
+test "a chat whose latest page is all letters to other chats: the page before comes in, and it is never said to be empty" {
+  // (the user, 2026-10-31: a chat its agents had written other chats a page of letters in showed a spinner for good,
+  // over 在此发送消息…, its messages never coming)
+  reset()
+  let src = fixture("chat-letters")
+  let empty = @sf.t("web-main.chat.empty")
+  let said_empty = Ref(false)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.each_frame(Some(fn() { if t.find(empty) is Some(_) { said_empty.val = true } }))
+  t.run_for(@ui.move_most_ms)
+  t.each_frame(None)
+  assert_true(t.find("做完了：列表、跳到最新的按钮") is Some(_))
+  assert_true(!said_empty.val)
+}
+
+///|
 test "a reference to another chat is its chip, and opens that chat" {
   let t = chat_tester("chat")
   let scrolled = scroll_run_clear(t, "首页的列表改成按天分组")

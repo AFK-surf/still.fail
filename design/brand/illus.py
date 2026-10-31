@@ -7,6 +7,7 @@ eyes and cheeks, the app icon's), its eyes shut when it is asleep.
 make.py writes them and mbui's VectorDrawables of them, as `python3 design/brand/illus.py` alone does.
 Dashes are drawn as their own strokes, not stroke-dasharray, which VectorDrawables do not have.
 """
+import json
 import math
 import os
 import sys
@@ -220,6 +221,12 @@ def write(repo):
         src = os.path.join(repo, "web/public", f"illus-{name}.svg")
         with open(src, "w") as fh:
             fh.write(text)
+        if name == "sign-in":
+            # (still.fail cloud's sign-in pages draw it in place: their pages fetch nothing, page.ts)
+            with open(os.path.join(repo, "cloud/src/illus.ts"), "w") as fh:
+                fh.write("// web/public/illus-sign-in.svg, for still.fail cloud's sign-in pages (page.ts) to draw in place: written by\n"
+                         "// design/brand/illus.py, not by hand.\n"
+                         f"export const SIGN_IN_ILLUSTRATION = {json.dumps(text)};\n")
         if name not in VD:
             continue
         light, dark = svg2vd.css_vars(ET.parse(src).getroot())

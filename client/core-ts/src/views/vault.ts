@@ -63,6 +63,7 @@ import { ofAddress } from "../workspace.ts";
 import { stamp } from "../present.ts";
 import type { VaultOutcome } from "./local.ts";
 import { fileBytes, howText, itemWords, kindText, modeText, shownFields, statusWords } from "../vault-words.ts";
+import { timed } from "../spent.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -166,7 +167,7 @@ function lockOf(inner: Inner, ws: string): Checked | CoreError {
   if (had?.at === at) return had.lock;
   let lock: Checked | CoreError;
   try {
-    lock = checkLock(entries, nowS(inner));
+    lock = timed("vault.lock", () => checkLock(entries, nowS(inner)));
     if (lock.disabled) lock = new CoreError("vault_needs_lock", t("core-misc.vault.needsLock"));
   } catch (e) {
     lock = asCoreError(e);
@@ -516,6 +517,13 @@ export function askAnswers(inner: Inner, ws: string, asks: { request: string; sa
           : (items(inner, ws, r.vault)[r.item]?.listing?.lasts ?? h.vaults[r.vault]?.lasts ?? "chat");
     return { answer: "approve", lasts };
   });
+}
+
+/// The workspace's lock checked, and this device's certificate in it, as they come (lock.ts, as the lock is read): what
+/// a chat's vault cards are answered by is there as the chat opens, not checked then (a chat opens by looking up what
+/// it shows: test/chat-open-lookup.test.ts).
+export function vaultCome(inner: Inner, ws: string): void {
+  timed("vault.come", () => askAnswers(inner, ws, [{ request: "", save: true }]));
 }
 
 /// The `vaults` topic.

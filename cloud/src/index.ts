@@ -9,7 +9,7 @@ import { windowsInstallScript } from "./install-windows.ts";
 import { requestLang, tr } from "./i18n.ts";
 import { latestDownload, serveRelease } from "./releases.ts";
 import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
-import { devicePage, googleStart, consumeLoginRate } from "./login";
+import { devicePage, googleStart, consumeLoginRate, signedInPage } from "./login";
 import { passwordSignIn } from "./password";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
@@ -124,6 +124,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
     const lang = requestLang(request);
     return devicePage(lang, tr(lang, "cloud.login.complete.title"), `<p>${tr(lang, "cloud.login.complete.body")}</p>`);
   }
+  // Where an app's browser sign-in ends once the browser has come back to it (mbui's browser_login `done`): it is
+  // signed in, the page can be closed; on Android, `app` its package, a link back to it should it not come forward.
+  if (path === "/v1/auth/done" && request.method === "GET") return signedInPage(requestLang(request), url.searchParams.get("app"));
   // The sign-in page's forms (Google, or a code sent to an email: login.ts `choose`).
   const choice = /^\/v1\/auth\/login\/([A-Za-z0-9_-]{43})$/.exec(path);
   if (choice && request.method === "POST") return env.LOGINS.getByName(choice[1]!).choose(choice[1]!, request);

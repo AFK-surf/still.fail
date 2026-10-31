@@ -27,6 +27,7 @@ pub fn login_cards_reset() -> Unit {
   logins_here.pressed.clear()
   logins_here.typed.clear()
   logins_here.fields.clear()
+  st_logins_open.clear()
 }
 
 ///|

@@ -217,6 +217,47 @@ test("a device signs in with an email's code: the mail names it", { timeout: 300
   }
 });
 
+test("an app's browser sign-in ends on a page saying it is signed in, an Android app's with a link back to it", { timeout: 30000 }, async () => {
+  const h = await harness();
+  try {
+    const page = await h.fetch("/v1/auth/done", { headers: { "accept-language": "zh-CN" } });
+    assert.equal(page.status, 200);
+    const text = await page.text();
+    assert.match(text, /<h1>已登录<\/h1>/);
+    assert.doesNotMatch(text, /intent:/, "no app named, no link");
+    const android = await (await h.fetch("/v1/auth/done?app=fail.still.android", { headers: { "accept-language": "en" } })).text();
+    assert.match(android, /<h1>Signed in<\/h1>/);
+    assert.match(android, /href="intent:\/\/back#Intent;scheme=fail\.still\.android;package=fail\.still\.android;end"/);
+    const odd = await (await h.fetch("/v1/auth/done?app=" + encodeURIComponent('x"><script>'))).text();
+    assert.doesNotMatch(odd, /intent:|<script>/, "not a package: no link");
+  } finally {
+    await h.close();
+  }
+});
+
+test("the sign-in page signs an account set up for it in with its password, a wrong one said so on the page", { timeout: 30000 }, async () => {
+  const h = await harness({ mail: true, reviewAccounts: JSON.stringify([{ email: "Review@Example.test", password: "correct horse battery", name: "App Review" }]) });
+  try {
+    const b = await browser(h, "10.9.0.1");
+    assert.match(b.page, /name="via" value="password-page"/, "a link to the page that asks for a password");
+    const asked = await (await b.post({ via: "password-page" })).text();
+    assert.match(asked, /name="via" value="password"/);
+    assert.match(asked, /type="password"/);
+    const wrong = await b.post({ via: "password", email: "review@example.test", password: "correct horse batter" });
+    assert.equal(wrong.status, 200);
+    const page = await wrong.text();
+    assert.match(page, /邮箱或密码错误|Wrong email or password/);
+    assert.match(page, /name="email" value="review@example.test"/, "what was typed kept");
+    assert.match(await (await b.post({ via: "password", email: "someone@example.test", password: "correct horse battery" })).text(), /邮箱或密码错误|Wrong email or password/, "an email not set up");
+    const right = await b.post({ via: "password", email: " Review@EXAMPLE.test ", password: "correct horse battery" });
+    const tokens = await b.exchange(right);
+    assert.equal(tokens.email, "review@example.test");
+    assert.match(tokens.subject, /^pw-[A-Za-z0-9_-]{32}$/, "the account /v1/auth/password signs in");
+  } finally {
+    await h.close();
+  }
+});
+
 test("without a way to send mail, signing in goes straight to Google as before", { timeout: 30000 }, async () => {
   const h = await harness();
   try {

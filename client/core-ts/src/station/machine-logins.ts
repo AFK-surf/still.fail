@@ -187,6 +187,35 @@ function endedText(state: string, l: J, name: string, station: string): string {
   return reason !== "" ? t("core-logic.machineLogin.endedFailedWhy", { ...what, reason }) : t("core-logic.machineLogin.endedFailed", what);
 }
 
+/// The logins that ended, a row per program (用户定 2026-10-31: a row per attempt buried the page in 已取消), in the order of
+/// each one's latest: who last logged in to it and when (else that nobody has yet, and how its latest ended), from which
+/// chat, how many tries, and the tries themselves. `ended`: each as the station holds it and as shown, newest first.
+export function toolsShown(ended: [J, J][]): J[] {
+  const by = new Map<string, [J, J][]>();
+  for (const pair of ended) {
+    const tries = by.get(pair[1].name);
+    if (tries) tries.push(pair);
+    else by.set(pair[1].name, [pair]);
+  }
+  return [...by].map(([name, tries]) => {
+    const done = tries.find(([, s]) => s.state === "done");
+    const [raw, s] = done ?? tries[0]!;
+    const who = done && isObject(raw.doneBy) ? person(raw.doneBy) : "";
+    const said = done
+      ? who !== "" ? t("core-logic.machineLogin.loggedInBy", { name: who }) : s.statusText
+      : t("core-logic.machineLogin.neverDone", { status: s.statusText });
+    return {
+      name,
+      summaryText: [said, s.whenText].filter((w) => w !== "").join(" · "),
+      failed: !done && s.state === "failed",
+      ...(s.chat !== undefined ? { chat: s.chat } : {}),
+      ...(s.chatTitle !== undefined ? { chatTitle: s.chatTitle } : {}),
+      countText: t("core-logic.machineLogin.tries", { n: tries.length }),
+      tries: tries.map(([, shown]) => shown),
+    };
+  });
+}
+
 // ── the relay ──
 
 /// Where a login's callback is to come: its port and the loopback addresses to listen on (localhost: both, for the

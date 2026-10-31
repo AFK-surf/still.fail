@@ -991,7 +991,6 @@ web-main.keymap.sidebar.toggle
 web-main.keymap.space
 web-main.list.separator
 web-main.logins.lead
-web-main.logins.startedIn
 web-main.logins.title
 web-main.memory.builtin
 web-main.memory.count

@@ -15,19 +15,43 @@ const markedGround = `color-mix(in srgb, ${vars.accent} 12%, transparent)`;
 
 /** The cards of those under way, one under another, above the rows of those ended. */
 export const cards = style({ display: "grid", justifyItems: "start", gap: "8px", marginBottom: "8px" });
-/** A login that ended: what it says is all there is (not pressed). */
-export const pastRow = style({ selectors: { "&:hover": { background: "none" }, "&[data-marked]": { background: markedGround } } });
+/** A program's logins that ended: pressed, its tries open under it. */
+export const toolRow = style({ cursor: "pointer" });
 export const mark = style({ width: "36px", height: "36px", color: vars.muted });
 export const name = style({ fontWeight: "500", color: vars.text, ...ellipsis });
 /** The chat whose agent started it. */
 export const chatLink = style({ color: "inherit", textDecoration: "underline", textUnderlineOffset: "2px" });
 export const state = style({ color: vars.muted, ...ellipsis });
 export const stateFailed = style({ color: vars.red, ...ellipsis });
+/** How many tries, and which way they are (open: down), at the row's end. */
+export const toolCount = style({
+  display: "inline-flex", alignItems: "center", gap: "4px", flex: "none", padding: "4px 0 4px 8px", border: "0",
+  background: "none", color: vars.muted, font: "inherit", fontSize: vars.textMeta, whiteSpace: "nowrap", cursor: "pointer",
+});
+export const toggle = style({ display: "inline-flex", color: vars.subtle, transition: `transform ${vars.dur} ${vars.easeOut}` });
+export const toggleOpen = style({ transform: "rotate(90deg)" });
+/** A program's tries, under its row, in line with its words (12 in, the 36 mark, 12 apart). */
+export const tries = style({ display: "grid", padding: "0 12px 8px 60px", fontSize: vars.textMeta, color: vars.muted });
+export const tryRow = style({
+  display: "grid", gridTemplateColumns: "88px minmax(0, 12em) minmax(0, 1fr)", gap: "12px", padding: "3px 0",
+  borderRadius: vars.rField, selectors: { "&[data-marked]": { background: markedGround } },
+});
+export const tryWhen = style({ whiteSpace: "nowrap" });
+export const tryHow = style({ ...ellipsis });
+export const tryFailed = style({ color: vars.red, ...ellipsis });
+export const tryChat = style({ ...ellipsis });
 /** The phone's station page: the cards of those under way, in from its edges as its cards are. */
 export const phoneCards = style({ display: "grid", gap: "8px", padding: "0 16px" });
-/** The phone's station page: a login's command over who, when and how it ended. */
+/** The phone's station page: a program over who last logged in to it, when and from which chat. */
 export const phoneRowText = style({ flex: "1", minWidth: 0, display: "grid", gap: "2px" });
 export const phoneState = style({ fontSize: vars.textMeta, color: "var(--m-muted)", ...ellipsis });
+export const phoneFailed = style({ fontSize: vars.textMeta, color: vars.red, ...ellipsis });
+export const phoneCount = style({ display: "inline-flex", alignItems: "center", gap: "4px", flex: "none", fontSize: vars.textMeta, color: "var(--m-muted)", whiteSpace: "nowrap" });
+/** The phone's station page: a program's tries, under its row, in line with its words. */
+export const phoneTry = style({
+  display: "grid", gap: "2px", padding: "6px 16px",
+  selectors: { "&:last-child": { paddingBottom: "12px" }, "&[data-marked]": { background: markedGround } },
+});
 /** The phone's station page: under the list, what it is. */
 export const phoneLead = style({ margin: "8px 24px 0", fontSize: vars.textCaption, color: "var(--m-muted)" });
 

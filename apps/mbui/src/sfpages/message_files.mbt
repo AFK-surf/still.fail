@@ -267,7 +267,9 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     } else if key != "" {
       c.image(key, w=Px(pw), h=Px(ph), fit=FitCover, bg=0L, fade=false) |> ignore
     } else if likeness != "" {
+      // (frosted as its way in will start: image_reveal's)
       c.image(likeness, w=Px(pw), h=Px(ph), fit=FitCover, bg=0L, fade=false) |> ignore
+      reveal_frosted(c, reveal_blur)
     }
   }
   // one the device holds and not decoded yet: what the app's first page waits for
@@ -604,10 +606,12 @@ fn reveal_px(c : @ui.Ctx, w : Double, h : Double) -> Double {
 
 ///|
 /// A message's image coming in, as the web's (msgImageWait, msgImageReveal): until it is decoded what it waits on (its
-/// likeness, the ThumbHash sent with it, else the neutral ground); once it is, brushed in from its top (an edge half its
-/// height deep going down it), blurred to sharp and from 1.04 its size to its own (1100 ms, the ease out), what it
-/// waited on fading out behind it (300 ms, from 800). One already decoded as it is first shown, or one the device had
-/// (`held`: kept here, not brought from its station, a decode away), comes as it is.
+/// likeness, the ThumbHash sent with it, else the neutral ground) under the frost its way in starts with, so nothing
+/// changes as it is decoded but the edge setting off (the user, 2026-10-31: the likeness first, then blurred, then
+/// brushed in was a change too many); once it is, brushed in from its top (an edge half its height deep going down
+/// it), blurred to sharp and from 1.04 its size to its own (1100 ms, the ease out), what it waited on fading out behind
+/// it (300 ms, from 800). One already decoded as it is first shown, or one the device had (`held`: kept here, not
+/// brought from its station, a decode away), comes as it is.
 pub fn image_reveal(
   c : @ui.Ctx,
   key : String,
@@ -644,14 +648,8 @@ pub fn image_reveal(
     return
   }
   c.look(img, @ui.look(alpha=if ready { 1.0 } else { 0.0 }, scale=1.0 + reveal_grow * (1.0 - e)))
-  // blurred to sharp: a frost over it and what it waits on, its blur going
-  let frost = fn() {
-    let blur = reveal_blur * (1.0 - e)
-    if ready && blur > reveal_blur_least {
-      c.layer(fn() { c.box(style=reveal_frost, glass=@ui.Glass::frosted(blur~, tint=0L, solid=0L), fn() {  }) |> ignore })
-      |> ignore
-    }
-  }
+  // blurred to sharp: a frost over it and what it waits on, its blur going (all of it while it waits)
+  let frost = fn() { reveal_frosted(c, reveal_blur * (1.0 - e)) }
   // what it waits on, under the edge brushing down (its band in steps), fading out from 800 ms
   let waited = if ready {
     1.0 - dmin(1.0, dmax(0.0, (p * reveal_ms - reveal_wait_after_ms) / reveal_wait_out_ms))
@@ -705,6 +703,15 @@ pub fn image_reveal(
   })
   |> ignore
   frost()
+}
+
+///|
+/// The frost over a message's image and what it waits on, `blur` deep (none under a quarter): image_reveal's.
+fn reveal_frosted(c : @ui.Ctx, blur : Double) -> Unit {
+  if blur > reveal_blur_least {
+    c.layer(fn() { c.box(style=reveal_frost, glass=@ui.Glass::frosted(blur~, tint=0L, solid=0L), fn() {  }) |> ignore })
+    |> ignore
+  }
 }
 
 ///|

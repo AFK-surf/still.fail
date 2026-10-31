@@ -21,6 +21,7 @@ import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
 import { ensureFilesKept, ensureKept, ensureMdKept, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, versionOf } from "./schema.ts";
 import { readItem, type Said } from "../elsewhere.ts";
+import { timed } from "../spent.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -332,6 +333,10 @@ export class AccountDb {
   }
 
   #commit(): void {
+    timed("db.commit", () => this.#commitNow());
+  }
+
+  #commitNow(): void {
     if (!this.#inTx) return this.#settled();
     const changes = this.#changes;
     const precious = this.#precious;

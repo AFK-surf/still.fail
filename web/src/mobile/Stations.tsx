@@ -6,7 +6,7 @@ import { useAct } from "@stillfail/ui/toast.tsx";
 // versions), with how many connects and profiles run on it (settings' lists have them, ./Settings.tsx).
 import { useReady } from "../core/react.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { LoginCard, useMachineLogins } from "../MachineLogins.tsx";
 import * as loginsCss from "../MachineLogins.css.ts";
@@ -338,22 +338,42 @@ function StationPage({ s, manager, login }: { s: StationView; manager: boolean; 
 
 /**
  * The logins done on it through still.fail (as the wide screen's station page, ../MachineLogins.tsx LoginsSection):
- * agents start them; one under way is its card, as in its chat; those ended, rows. Nothing when there are none.
+ * agents start them; one under way is its card, as in its chat; those ended, a row per program saying who last logged
+ * in to it and how many tries, tapped open to them. Nothing when there are none.
  */
 function Logins({ station, marked }: { station: string; marked: string | null }) {
   const view = useMachineLogins(station);
+  const [open, setOpen] = useState<string | null>(null);
+  const holding = view?.tools.find((tool) => tool.tries.some((l) => l.id === marked))?.name ?? null;
   if (!view || !view.supported || view.logins.length === 0) return null;
   const active = view.logins.filter((l) => l.active);
-  const past = view.logins.filter((l) => !l.active);
+  const opened = open ?? holding;
   return (
     <>
       <SectionHeader title={t("web-main.logins.title")} start={24} />
       {active.length > 0 && <div className={loginsCss.phoneCards}>{active.map((l) => <LoginCard key={l.id} station={station} id={l.id} marked={l.id === marked} />)}</div>}
-      {past.length > 0 && (
+      {view.tools.length > 0 && (
         <ListCard>
-          {past.map((l) => {
-            const said = [l.chatTitle ? t("web-main.logins.startedIn", { chat: l.chatTitle }) : null, l.doneByText || l.statusText, l.whenText].filter(Boolean).join(" · ");
-            return <ListRow key={l.id}><span className={loginsCss.phoneRowText}><span className={listsCss.mRowTitle}>{l.name}</span><span className={loginsCss.phoneState}>{said}</span></span></ListRow>;
+          {view.tools.map((tool) => {
+            const said = [tool.summaryText, tool.chatTitle ? `「${tool.chatTitle}」` : null].filter(Boolean).join(" · ");
+            const on = opened === tool.name;
+            return (
+              <Fragment key={tool.name}>
+                <ListRow onClick={() => setOpen(on ? "" : tool.name)}>
+                  <span className={loginsCss.phoneRowText}>
+                    <span className={listsCss.mRowTitle}>{tool.name}</span>
+                    <span className={tool.failed ? loginsCss.phoneFailed : loginsCss.phoneState}>{said}</span>
+                  </span>
+                  <span className={loginsCss.phoneCount}>{tool.countText}<span className={`${loginsCss.toggle} ${on ? loginsCss.toggleOpen : ""}`}><ChevronRight size={14} /></span></span>
+                </ListRow>
+                {on && tool.tries.map((l) => (
+                  <div key={l.id} className={loginsCss.phoneTry} data-marked={l.id === marked || undefined}>
+                    <span className={l.state === "failed" ? loginsCss.phoneFailed : loginsCss.phoneState}>{[l.whenText, l.doneByText || l.statusText].filter(Boolean).join(" · ")}</span>
+                    {l.chatTitle && <span className={loginsCss.phoneState}>「{l.chatTitle}」</span>}
+                  </div>
+                ))}
+              </Fragment>
+            );
           })}
         </ListCard>
       )}

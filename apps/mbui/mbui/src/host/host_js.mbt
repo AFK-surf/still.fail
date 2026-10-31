@@ -664,7 +664,7 @@ fn drawn_pixels_of(
 // A sign-in in the browser that comes back here (browser_login.mbt): a page cannot listen.
 
 ///|
-fn bl_start(_path : String) -> Int {
+fn bl_start(_path : String, _done : String) -> Int {
   0
 }
 

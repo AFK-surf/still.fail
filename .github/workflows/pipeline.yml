@@ -57,6 +57,7 @@ jobs:
       natives: ${{ steps.natives.outputs.natives }}
       windows_natives: ${{ steps.plan.outputs.windows_natives }}
       mbui: ${{ steps.plan.outputs.mbui }}
+      browser: ${{ steps.plan.outputs.browser }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, fetch-tags: true, filter: "blob:none" } # (the history's commits and trees: the range, the paths it changed; a blob read is fetched then)
@@ -123,6 +124,13 @@ jobs:
           # to mbui (apps/mbui/mbui).
           mbui=false
           if has '^apps/mbui/' || has '^\.github/workflows/mbui-check\.yml$'; then mbui=true; fi
+          # The web in Chrome (check-browser): for a change to the web or its browser tests (scripts/check.sh's browser
+          # part says which exactly), or to the workflows (the job checks everything then). None, and its eight runners
+          # are not started: each fetched pnpm's 280 MB store and did nothing, 2.2 GB of a push's 4 GB of the Actions
+          # cache's downloads, whose account limit GitHub slows them by (mbui-only branches, login-flow-look 41162994216,
+          # 2026-10-31).
+          browser=false
+          if [ "$range" = all ] || has '^(web/|test/browser/)' || printf '%s\n' "$changed" | grep '^\.github/' | grep -qv '^\.github/workflows/mbui[.-]'; then browser=true; fi
           {
             echo "range=$range"
             echo "parts=${static[*]}"
@@ -136,8 +144,9 @@ jobs:
             echo "win_beta=$win_beta"
             echo "windows_natives=$windows_natives"
             echo "mbui=$mbui"
+            echo "browser=$browser"
           } >> "$GITHUB_OUTPUT"
-          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android_beta=$android_beta mac_beta=$mac_beta win_beta=$win_beta relay=$relay mbui=$mbui"
+          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android_beta=$android_beta mac_beta=$mac_beta win_beta=$win_beta relay=$relay mbui=$mbui browser=$browser"
 
   # The native parts for this commit (scripts/native.ts): each one whose key the release native-artifacts lacks is
   # built here (once per key and machine: mini1's cache is shared by its runners and the checks beside this job wait
@@ -317,7 +326,7 @@ jobs:
   # then (sync-tick-draw, 40559708530).
   check-browser:
     needs: [plan, natives]
-    if: ${{ !cancelled() && !failure() }}
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.browser == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
@@ -398,7 +407,7 @@ jobs:
     needs: [plan, check, check-linux, check-browser]
     # Not on the implicit success(): a skipped job before it (natives, when nothing native changed) would
     # skip it too (2026-10-04 to 05: the API was not deployed for a day). The checks it needs passed or were not needed.
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 10
@@ -422,7 +431,7 @@ jobs:
   static:
     needs: [plan, natives, check, check-linux, check-browser, api]
     # After the API (a page may need what it adds), or without it when it did not change.
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result)
     runs-on: [self-hosted, mini1]
     environment: production
     timeout-minutes: 10
@@ -656,7 +665,7 @@ jobs:
   # failed. Then the changelog that says so (scripts/changelog-put.sh): in this job, not one more after it.
   put:
     needs: [plan, check, check-linux, check-browser, api, static, station, modules, android, desktop, desktop-win]
-    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && (needs.station.result == 'success' || needs.modules.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success')
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && (needs.station.result == 'success' || needs.modules.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success')
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 10
@@ -704,7 +713,7 @@ jobs:
   # cloud counts as out as soon as it is listed, not before the API carrying it is deployed.
   changelog:
     needs: [plan, check, check-linux, check-browser, api, static, put]
-    if: always() && github.ref == 'refs/heads/main' && needs.put.result == 'skipped' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result)
+    if: always() && github.ref == 'refs/heads/main' && needs.put.result == 'skipped' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result)
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 10
@@ -720,7 +729,7 @@ jobs:
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
     needs: [plan, natives, check, check-linux, check-browser, api, static, station, modules, android, desktop, desktop-win, put]
-    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result)
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result)
     runs-on: [self-hosted, quick]
     timeout-minutes: 10
     permissions:
@@ -763,7 +772,7 @@ jobs:
       # main: every part the plan said changed went out, or this run fails (a job skipped where it should have run went
       # unnoticed for a day: the API, 2026-10-04 to 05). Skipped is right only for a part the plan left alone, or when a
       # check before it failed (the run has failed then anyway).
-      - if: github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success'
+      - if: github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true'))
         run: |
           missed=""
           planned() { [ "$1" = true ] && [ "$2" = skipped ] && missed="$missed $3"; return 0; }

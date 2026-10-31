@@ -671,8 +671,8 @@ impl @hostapi.Host for Native with ref_frame(_, name) {
 }
 
 ///|
-impl @hostapi.Host for Native with bl_start(_, path) {
-  bl_start(path)
+impl @hostapi.Host for Native with bl_start(_, path, done) {
+  bl_start(path, done)
 }
 
 ///|

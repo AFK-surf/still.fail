@@ -998,7 +998,6 @@ let zh : Map[String, String] = {
   "web-main.keymap.space": "空格",
   "web-main.list.separator": "、",
   "web-main.logins.lead": "agent 在这台 station 上做的登录，所有 chat 的 agent 都会用",
-  "web-main.logins.startedIn": "「{chat}」的 agent 发起",
   "web-main.logins.title": "登录",
   "web-main.memory.builtin": "station 内置",
   "web-main.memory.count": "{n} 个",

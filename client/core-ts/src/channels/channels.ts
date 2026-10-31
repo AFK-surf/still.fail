@@ -21,6 +21,7 @@ import { t } from "../i18n.ts";
 import { Priority } from "../sync/scheduler.ts";
 import type { SpanContext } from "../trace.ts";
 import * as fill from "./fill.ts";
+import { timed } from "../spent.ts";
 
 export type { Read } from "./fill.ts";
 
@@ -103,7 +104,7 @@ export class Channels {
   }
 
   #put(c: Channel, items: [number, unknown][], cutAfter: number | null = null): void {
-    if (items.length > 0 || cutAfter !== null) this.#held.put(c, items, cutAfter);
+    if (items.length > 0 || cutAfter !== null) timed(`put.${c.kind.name}`, () => this.#held.put(c, items, cutAfter));
   }
 
   // ── what says how far a channel goes ──

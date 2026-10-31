@@ -427,6 +427,44 @@ test "viewer on the tree, marking: a mark moved and called off: back where it wa
 }
 
 ///|
+test "viewer on the tree, marking: a box's corner handle taken: the box stretched from the corner across, not moved; undone back" {
+  let t = preview_tester("image", platform=1)
+  pressed(t, Button, @sf.t("web-main.annotate.image"))
+  assert_true(marking.tool == Rect)
+  let z = viewer.get().unwrap().zoom
+  let (x, y, w, _) = z.rect().unwrap()
+  let k = w / z.nw
+  // a box drawn from 40, 40 to 160, 100 on the picture, its note left unsaid (a tap beside it closes it)
+  told_by(t, t.time(), [(0, 0, x + 40.0, y + 40.0, 10.0), (1, 0, x + 100.0, y + 70.0, 20.0), (2, 0, x + 160.0, y + 100.0, 30.0)], At([]))
+  display_frame(t)
+  assert_eq(marking.shapes.length(), 1)
+  told_by(t, t.time(), [(0, 0, x + 20.0, y + 20.0, 10.0), (2, 0, x + 20.0, y + 20.0, 20.0)], At([]))
+  display_frame(t)
+  assert_eq(marking.note, -1)
+  // picked by its left edge (a tap: nothing to undo), then its foot right handle (drawn half a reach out of the
+  // corner) taken 40, 30 further
+  pressed(t, Button, pv("android-chat.marks.tool.select"))
+  let past = marking.past.length()
+  told_by(t, t.time(), [(0, 0, x + 40.0, y + 70.0, 10.0), (2, 0, x + 40.0, y + 70.0, 20.0)], At([]))
+  display_frame(t)
+  assert_eq(marking.picked, marking.shapes[0].id)
+  assert_eq(marking.past.length(), past)
+  let hx = x + 160.0 + @sfbase.mark_reach / 2.0
+  let hy = y + 100.0 + @sfbase.mark_reach / 2.0
+  told_by(t, t.time(), [(0, 0, hx, hy, 10.0), (1, 0, hx + 20.0, hy + 15.0, 20.0), (2, 0, hx + 40.0, hy + 30.0, 30.0)], At([]))
+  display_frame(t)
+  let (bx, by, bw, bh) = marking.shapes[0].bounds()
+  let near = fn(a : Double, b : Double) { (a - b).abs() < 0.01 }
+  assert_true(near(bx * k, 40.0) && near(by * k, 40.0), msg="its top left stays: \{(bx * k, by * k)}")
+  assert_true(near(bw * k, 160.0) && near(bh * k, 90.0), msg="stretched as far as the finger went: \{(bw * k, bh * k)}")
+  assert_eq(marking.past.length(), past + 1)
+  marks_undo()
+  let (_, _, uw, uh) = marking.shapes[0].bounds()
+  assert_true(near(uw * k, 120.0) && near(uh * k, 60.0))
+  marks_leave()
+}
+
+///|
 test "viewer on the tree, marking: a second finger as a stroke is drawn: the stroke dropped, the two a pinch" {
   let t = pen_marking()
   let (x, y, _, _) = viewer.get().unwrap().zoom.rect().unwrap()

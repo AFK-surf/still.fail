@@ -78,21 +78,8 @@ pub fn landing_error_words(e : Json) -> String {
 }
 
 ///|
-/// The page: its illustration, then what it says and offers, 12 apart, 24 in from the sides and 40 from the top.
 // kept across runs: a value (no field of it changes)
-let landing_page : @ui.Style = @ui.css("w=Full h=Full px=S6 py=S10 gap=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let landing_title : @ui.TextStyle = @ui.text_style(size=Heading, weight=Bold, color=Fg, center=true, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let landing_lead : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let landing_error : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, w=Full)
+let landing_error : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, center=true, w=Full)
 
 ///|
 /// An invitation: a card of the ladder's on the surface, its words 20 in, its button under them in its foot corners
@@ -143,16 +130,17 @@ pub fn no_workspace(c : @ui.Ctx, src : Source, ws : Json?, by_link : () -> Unit)
 }
 
 ///|
-/// The illustration over what the page says (Workspaces.kt Illustration: 260 wide at most).
-fn landing_picture(c : @ui.Ctx) -> Unit {
+/// A page of the way in after signing in (@sf.way_in_page): the sign-in page's picture in the sign-in page's place,
+/// what `body` says and offers under it, as the sign-in page has them.
+fn landing_frame(c : @ui.Ctx, body : () -> Unit) -> Unit {
   let t = @sf.theme()
-  @sf.drawable(c, if t.dark { "illus_sign_in_dark" } else { "illus_sign_in" }, dmin(260.0, c.width - 48.0)) |> ignore
+  @sf.way_in_page(c, if t.dark { "illus_sign_in_dark" } else { "illus_sign_in" }, body)
 }
 
 ///|
-/// 切换账号: another account signed in (the system's browser).
+/// 切换账号: another account signed in (the system's browser), what the page offers last.
 fn switch_account_button(c : @ui.Ctx, src : Source) -> Unit {
-  if @sf.button(c, @sf.t("android-misc.account.switch"), key="landing/switch", busy=(src.signing_in)()) {
+  if @sf.way_in_link(c, "landing/switch", @sf.t("android-misc.account.switch"), busy=(src.signing_in)()) {
     (src.sign_in)()
   }
 }
@@ -252,10 +240,9 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json], by_link : (
     }
   }
   let asking = landing.asked.get()
-  c.box(style=landing_page, fn() {
-    landing_picture(c)
+  landing_frame(c, fn() {
     if pending.length() > 0 {
-      c.text(@sf.t("android-misc.invite.received"), style=landing_title) |> ignore
+      @sf.way_in_title(c, @sf.t("android-misc.invite.received"))
       for p in pending {
         let (account, inv) = p
         let iv = Some(inv)
@@ -292,32 +279,29 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json], by_link : (
       }
       if asking {
         invite_code_form(c, src, first)
-      } else if @sf.button(c, @sf.t("android-misc.invite.declineCreate"), key="landing/decline-create", busy=landing.creating.get()) {
+      } else if @sf.way_in_button(c, "landing/decline-create", @sf.t("android-misc.invite.declineCreate"), solid=false, busy=landing.creating.get()) {
         create_workspace(src, first, "")
       }
     } else if asking {
-      c.text(@sf.t("android-misc.invite.onlyInvited", args=[("app", "still.fail")]), style=landing_title) |> ignore
-      c.text(@sf.t("android-misc.invite.codeLead", args=[("app", "still.fail"), ("email", text(first, "email"))]), style=landing_lead)
-      |> ignore
+      @sf.way_in_title(c, @sf.t("android-misc.invite.onlyInvited", args=[("app", "still.fail")]))
+      @sf.way_in_note(c, @sf.t("android-misc.invite.codeLead", args=[("app", "still.fail"), ("email", text(first, "email"))]))
       invite_code_form(c, src, first)
       switch_account_button(c, src)
     } else {
-      c.text(@sf.t("android-misc.workspace.none"), style=landing_title) |> ignore
-      c.text(@sf.t("android-misc.workspace.none.lead", args=[("app", "still.fail"), ("email", text(first, "email"))]), style=landing_lead)
-      |> ignore
-      if @sf.button(c, @sf.t("android-misc.workspace.createOne"), key="landing/create", tone=Primary, busy=landing.creating.get()) {
+      @sf.way_in_title(c, @sf.t("android-misc.workspace.none"))
+      @sf.way_in_note(c, @sf.t("android-misc.workspace.none.lead", args=[("app", "still.fail"), ("email", text(first, "email"))]))
+      if @sf.way_in_button(c, "landing/create", @sf.t("android-misc.workspace.createOne"), busy=landing.creating.get()) {
         create_workspace(src, first, "")
       }
       if landing.create_error.get() != "" {
         c.text(landing.create_error.get(), style=landing_error) |> ignore
       }
-      if @sf.button(c, @sf.t("android-misc.invite.byLink"), key="landing/by-link") {
+      if @sf.way_in_button(c, "landing/by-link", @sf.t("android-misc.invite.byLink"), solid=false) {
         by_link()
       }
       switch_account_button(c, src)
     }
   })
-  |> ignore
 }
 
 ///|
@@ -345,12 +329,10 @@ fn accept_invitation(src : Source, account : Json?, id : String) -> Unit {
 /// An account the app may not be used with (Blocked): why, its email; it signs out, or another signs in.
 fn blocked_page(c : @ui.Ctx, src : Source, entry : Json?) -> Unit {
   let account = field(entry, "account")
-  c.box(style=landing_page, fn() {
-    landing_picture(c)
-    c.text(text(entry, "blocked"), style=landing_title) |> ignore
-    c.text(text(account, "email"), style=landing_lead) |> ignore
-    if @sf.button(c, @sf.t("android-misc.account.signOut"), key="landing/sign-out", tone=Primary, busy=landing.leaving.get()) &&
-      !landing.leaving.get() {
+  landing_frame(c, fn() {
+    @sf.way_in_title(c, text(entry, "blocked"))
+    @sf.way_in_note(c, text(account, "email"))
+    if @sf.way_in_button(c, "landing/sign-out", @sf.t("android-misc.account.signOut"), busy=landing.leaving.get()) {
       landing.leaving.set(true)
       landing.leave_error.set("")
       (src.call)("auth.signOut", { "account": Json::string(text(account, "sub")) }, fn(r) {
@@ -366,7 +348,6 @@ fn blocked_page(c : @ui.Ctx, src : Source, entry : Json?) -> Unit {
     }
     switch_account_button(c, src)
   })
-  |> ignore
 }
 
 ///|

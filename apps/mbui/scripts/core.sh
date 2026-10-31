@@ -448,8 +448,8 @@ console.log(b && b.state ? b.host + ':' + b.port + b.path : 'none');" "$url" 2>&
   ok "another path is not taken" '[ "$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:$port/favicon.ico)" = 404 ]'
   ok "nor the callback under another host name" '[ "$(curl -s -o /dev/null -w "%{http_code}" -H "Host: elsewhere.example:$port" "http://127.0.0.1:$port/oauth/callback?code=x&state=y")" = 404 ]'
   ok "the app still waits" 'kill -0 $pid 2>/dev/null'
-  local page=$(curl -s "http://127.0.0.1:$port/oauth/callback?code=x&state=not-this-one")
-  ok "the browser coming back gets the host's page" 'echo "$page" | grep -q "已回到 app"'
+  local back=$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" "http://127.0.0.1:$port/oauth/callback?code=x&state=not-this-one")
+  ok "the browser coming back is sent on to still.fail cloud's page saying it is signed in ($back)" '[ "${back%% *}" = 302 ] && case "${back#* }" in https://*/v1/auth/done) true ;; *) false ;; esac'
   local exit_code=0
   # (its end, as the system tells it: mbui's scripts/chk logwait --pid, kqueue's; not waited for forever, then killed)
   "$MBUI_DIR/scripts/chk" logwait --pid $pid --deadline 60 > /dev/null || kill $pid 2> /dev/null

@@ -36,6 +36,7 @@ import { SseParser } from "./sse.ts";
 import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
 import { Retold } from "./retold.ts";
+import { timed } from "../spent.ts";
 
 export { HOST_KEY, LINK_KEY, LONG_MISSES, MISSES, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS, STREAM_QUIET_MS, Link } from "./link.ts";
 export type { EventsFor, LiveView } from "./link.ts";
@@ -1022,6 +1023,10 @@ export class StationsSync {
   // ── events ──
 
   onEvent(address: string, name: string, raw: string): void {
+    timed(`event.${name}`, () => this.#onEvent(address, name, raw));
+  }
+
+  #onEvent(address: string, name: string, raw: string): void {
     const data = parseJson(raw);
     if (data === undefined) return;
     const core = this.#core;

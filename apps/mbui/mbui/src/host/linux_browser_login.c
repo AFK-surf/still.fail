@@ -20,6 +20,7 @@ typedef struct login {
   struct login *next;
   int id, lid, port;
   char *path;
+  char *done;  // where the browser is sent on to once it has come back ("": this host's page)
   char *back;  // where the browser came back to, once it has (under `lock`)
 } login;
 
@@ -90,6 +91,7 @@ static void took(void *ctx, const char *json, size_t len, const uint8_t *body, s
   login *l = find(id);
   int lid = l ? l->lid : 0, port = l ? l->port : 0;
   char *want = l ? strdup(l->path) : NULL;
+  char *done = l ? strdup(l->done) : NULL;
   pthread_rwlock_unlock(&lock);
   if (!l) {
     free(j);
@@ -119,9 +121,15 @@ static void took(void *ctx, const char *json, size_t len, const uint8_t *body, s
   // DNS rebinding, is not), its path, a GET.
   int ours = (strcmp(host, a) == 0 || strcmp(host, b) == 0) && strcmp(method, "GET") == 0 && strlen(want) == bare &&
              strncmp(path, want, bare) == 0;
-  const char *headers[] = {"Content-Type", "text/html; charset=utf-8", "Cache-Control", "no-store"};
-  const char *page = ours ? page_ok : page_no;
-  mb_listen_respond(lid, strtol(request, NULL, 10), ours ? 200 : 404, headers, 2, (const uint8_t *)page, strlen(page));
+  if (ours && *done) {
+    // on to the app's page saying it is done (in its look, the browser's language)
+    const char *headers[] = {"Location", done, "Cache-Control", "no-store"};
+    mb_listen_respond(lid, strtol(request, NULL, 10), 302, headers, 2, NULL, 0);
+  } else {
+    const char *headers[] = {"Content-Type", "text/html; charset=utf-8", "Cache-Control", "no-store"};
+    const char *page = ours ? page_ok : page_no;
+    mb_listen_respond(lid, strtol(request, NULL, 10), ours ? 200 : 404, headers, 2, (const uint8_t *)page, strlen(page));
+  }
   if (ours) {
     // After the answer (the same queue): nothing else is taken.
     mb_listen_close(lid);
@@ -135,12 +143,14 @@ static void took(void *ctx, const char *json, size_t len, const uint8_t *body, s
     mb_app_wake();
   }
   free(want);
+  free(done);
   free(j);
 }
 
-int32_t mb_host_browser_login_start(moonbit_string_t path) {
+int32_t mb_host_browser_login_start(moonbit_string_t path, moonbit_string_t done) {
   login *l = calloc(1, sizeof *l);
   l->path = utf8(path);
+  l->done = utf8(done);
   pthread_rwlock_wrlock(&lock);
   l->id = ++login_next;
   l->next = logins;
@@ -159,6 +169,7 @@ int32_t mb_host_browser_login_start(moonbit_string_t path) {
     pthread_rwlock_unlock(&lock);
     fprintf(stderr, "browser login: %s\n", why);
     free(l->path);
+    free(l->done);
     free(l);
     return 0;
   }
@@ -224,6 +235,7 @@ void mb_host_browser_login_end(int32_t id) {
   if (!l) return;
   mb_listen_close(l->lid);
   free(l->path);
+  free(l->done);
   free(l->back);
   free(l);
 }

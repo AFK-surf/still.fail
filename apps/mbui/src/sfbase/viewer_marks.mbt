@@ -97,6 +97,75 @@ pub fn Mark::moved(self : Mark, dx : Double, dy : Double) -> Mark {
 }
 
 ///|
+/// Stretched from `anchor` (ax, ay) by (`sx`, `sy`) (ImageMarks.kt scaled): words evenly, by `sx`, their size with
+/// them.
+pub fn Mark::scaled(self : Mark, ax : Double, ay : Double, sx : Double, sy : Double) -> Mark {
+  if self.kind == "words" {
+    let k = dmax(0.2, sx.abs())
+    { ..self, w: self.w * k, pts: [ax + (self.pts[0] - ax) * k, ay + (self.pts[1] - ay) * k] }
+  } else {
+    { ..self, pts: self.pts.mapi(fn(i, v) { if i % 2 == 0 { ax + (v - ax) * sx } else { ay + (v - ay) * sy } }) }
+  }
+}
+
+///|
+/// A handle of the picked mark (ImageMarks.kt MarkHandle): a corner of its box (`Corner(1, 1)` its foot right; the
+/// corner across stays), or an end of an arrow (0 its tail, 1 its point).
+pub(all) enum MarkHandle {
+  Corner(Int, Int)
+  End(Int)
+} derive(Eq)
+
+///|
+/// The picked mark's handles and where each is drawn, in the image's pixels at `k` stage points to one: an arrow's on
+/// its ends; a box's (words': their foot right only) on the corners of its dashed frame, half a reach out of its own.
+/// Where they are drawn is where a finger takes them.
+pub fn Mark::handles(self : Mark, k : Double) -> Array[(MarkHandle, Double, Double)] {
+  if self.kind == "arrow" {
+    return [(End(0), self.pts[0], self.pts[1]), (End(1), self.pts[2], self.pts[3])]
+  }
+  let (bx, by, bw, bh) = self.bounds()
+  let out = mark_reach / 2.0 / k
+  let corners = if self.kind == "words" { [(1, 1)] } else { [(0, 0), (1, 0), (0, 1), (1, 1)] }
+  corners.map(fn(cc) {
+    let (cx, cy) = cc
+    (
+      Corner(cx, cy),
+      if cx == 1 { bx + bw + out } else { bx - out },
+      if cy == 1 { by + bh + out } else { by - out },
+    )
+  })
+}
+
+///|
+/// The mark as its handle `h` (None: the whole of it) taken from `orig` is moved by (`dx`, `dy`): an arrow's end goes
+/// with it; a corner too, the box stretched from the corner across.
+pub fn Mark::dragged(self : Mark, h : MarkHandle?, dx : Double, dy : Double) -> Mark {
+  match h {
+    None => self.moved(dx, dy)
+    Some(End(e)) => {
+      let pts = self.pts.copy()
+      pts[2 * e] += dx
+      pts[2 * e + 1] += dy
+      { ..self, pts, }
+    }
+    Some(Corner(cx, cy)) => {
+      let (bx, by, bw, bh) = self.bounds()
+      let ax = bx + (1 - cx).to_double() * bw
+      let ay = by + (1 - cy).to_double() * bh
+      let ratio = fn(d : Double, from : Double, a : Double) {
+        if (from - a).abs() < 1.0e-6 {
+          1.0
+        } else {
+          (from + d - a) / (from - a)
+        }
+      }
+      self.scaled(ax, ay, ratio(dx, bx + cx.to_double() * bw, ax), ratio(dy, by + cy.to_double() * bh, ay))
+    }
+  }
+}
+
+///|
 /// An arrow's barbs (ImageMarks.kt barbs): back from its point, a half its size apart.
 pub fn arrow_barbs(ax : Double, ay : Double, bx : Double, by : Double, w : Double) -> (Double, Double, Double, Double) {
   let dx = bx - ax
@@ -163,11 +232,11 @@ pub fn Mark::distance(self : Mark, x : Double, y : Double) -> Double {
 }
 
 ///|
-/// A finger on the image while marking: drawing a mark, or moving the one picked (its tail or point when an arrow's end
-/// was taken: `end` 0 the tail, 1 the point; -1 the whole), from where (in the image's pixels).
+/// A finger on the image while marking: drawing a mark, or moving the one picked (by the handle taken, None the
+/// whole), from where (in the image's pixels).
 pub(all) enum MarkDrag {
   Drawing(Mark)
-  Moving(Int, Double, Double, Mark, Int, Array[Mark], Bool)
+  Moving(Int, Double, Double, Mark, MarkHandle?, Array[Mark], Bool)
 }
 
 ///|
@@ -400,17 +469,12 @@ pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Dou
           )
           marks_changed()
         }
-        Some(Moving(id, fx, fy, orig, end, before, _)) => {
-          let next = if end >= 0 {
-            let pts = orig.pts.copy()
-            pts[2 * end] = x
-            pts[2 * end + 1] = y
-            { ..orig, pts, }
-          } else {
-            orig.moved(x - fx, y - fy)
-          }
+        Some(Moving(id, fx, fy, orig, handle, before, _)) => {
+          let next = orig.dragged(handle, x - fx, y - fy)
           marking.shapes = marking.shapes.map(fn(s) { if s.id == id { next } else { s } })
-          marking.drag = Some(Moving(id, fx, fy, orig, end, before, true))
+          // (changed only when it is not where it was: a tap's let go comes as a move of its own, to no undo)
+          let changed = next.pts != orig.pts || next.w != orig.w
+          marking.drag = Some(Moving(id, fx, fy, orig, handle, before, changed))
           marks_changed()
         }
         None => ()
@@ -470,6 +534,24 @@ fn marks_finger_down(c : @ui.Ctx, x : Double, y : Double, k : Double) -> Unit {
   }
   let reach = mark_reach / k
   if marking.tool == Select || marking.tool == Words {
+    // the picked mark's handles first (ImageMarks.kt down), then the marks, the topmost first
+    if marking.tool == Select {
+      match marking.shapes.iter().find_first(fn(s) { s.id == marking.picked }) {
+        Some(s) =>
+          match
+            s
+            .handles(k)
+            .iter()
+            .find_first(fn(h) { ((h.1 - x) * (h.1 - x) + (h.2 - y) * (h.2 - y)).sqrt() < reach * 1.4 }) {
+            Some((h, _, _)) => {
+              marking.drag = Some(Moving(s.id, x, y, s, Some(h), marking.shapes, false))
+              return
+            }
+            None => ()
+          }
+        None => ()
+      }
+    }
     let hit = marking.shapes
       .rev()
       .iter()
@@ -478,25 +560,15 @@ fn marks_finger_down(c : @ui.Ctx, x : Double, y : Double, k : Double) -> Unit {
       })
     match hit {
       Some(s) => {
-        // an arrow's end near the finger: that end moves; words with the words tool: written again
+        // words with the words tool: written again
         if s.kind == "words" && marking.tool == Words {
           marking.writing = Some((s.id, s.pts[0], s.pts[1], s.w, s.color))
           marking.write_field.set(s.text)
           c.focus_editor("marks/write")
           return
         }
-        let mut end = -1
-        if s.kind == "arrow" && marking.picked == s.id {
-          for e in 0..<2 {
-            let ex = s.pts[2 * e]
-            let ey = s.pts[2 * e + 1]
-            if ((ex - x) * (ex - x) + (ey - y) * (ey - y)).sqrt() < reach * 1.4 {
-              end = e
-            }
-          }
-        }
         marking.picked = s.id
-        marking.drag = Some(Moving(s.id, x, y, s, end, marking.shapes, false))
+        marking.drag = Some(Moving(s.id, x, y, s, None, marking.shapes, false))
       }
       None =>
         if marking.tool == Select {
@@ -584,21 +656,17 @@ pub fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double
   let handles : Array[(Double, Double)] = []
   match marking.shapes.iter().find_first(fn(s) { s.id == marking.picked && marking.tool == Select }) {
     Some(s) => {
-      let (bx, by, bw, bh) = s.bounds()
-      let reach = mark_reach / 2.0
       if s.kind != "arrow" {
+        let (bx, by, bw, bh) = s.bounds()
+        let reach = mark_reach / 2.0
         let x0 = rx + bx * k - reach
         let y0 = ry + by * k - reach
         let x1 = rx + (bx + bw) * k + reach
         let y1 = ry + (by + bh) * k + reach
         dashes([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)], lines)
-        let corners = if s.kind == "words" { [(1, 1)] } else { [(0, 0), (1, 0), (0, 1), (1, 1)] }
-        for cc in corners {
-          handles.push((if cc.0 == 1 { x1 } else { x0 }, if cc.1 == 1 { y1 } else { y0 }))
-        }
-      } else {
-        handles.push((rx + s.pts[0] * k, ry + s.pts[1] * k))
-        handles.push((rx + s.pts[2] * k, ry + s.pts[3] * k))
+      }
+      for h in s.handles(k) {
+        handles.push((rx + h.1 * k, ry + h.2 * k))
       }
     }
     None => ()

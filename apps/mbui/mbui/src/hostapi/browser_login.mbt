@@ -2,7 +2,8 @@
 // redirect, RFC 8252 §7.3), for any app and any service: the host listens on 127.0.0.1 at a port the system picks, the
 // app makes its login page with `redirect` as where to come back, `open` hands it to the browser, and `back` gives
 // the address the browser came back to (with its query) once it has. The host answers that browser with a page saying
-// it can be closed, and takes nothing else (another path, another host name, a second time). Checking what came back
+// it can be closed (or sends it on to the service's own page saying so: `done`), and takes nothing else (another path,
+// another host name, a second time). Checking what came back
 // (its state) and exchanging it are the app's: the host knows nothing of the service.
 //
 // Opening is $BROWSER, else `open`, on macOS, so a station's remote login (ember docs/remote-login.md) can run such an
@@ -30,8 +31,11 @@ pub struct BrowserLogin {
 
 ///|
 /// Listens for the browser coming back to `path` (with its query): None when this host cannot (or no port is free).
-pub fn browser_login(path? : String = "/callback") -> BrowserLogin? {
-  let id = bl_start(path)
+/// Come back, the browser is sent on to `done` (the service's page saying it is done, in its look and the browser's
+/// language; on Android with `app=<the app's package>` added, for its way back to the app) where one is given, else
+/// shown the host's own page saying it can be closed.
+pub fn browser_login(path? : String = "/callback", done? : String = "") -> BrowserLogin? {
+  let id = bl_start(path, done)
   if id == 0 {
     return None
   }

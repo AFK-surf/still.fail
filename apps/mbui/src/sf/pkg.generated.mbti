@@ -461,6 +461,8 @@ pub let dot_size : @ui.Len
 
 pub fn drawable(@ui.Ctx, String, Double, tint? : Int64) -> Int32
 
+pub fn drawable_height(String, Double) -> Double
+
 pub fn drawable_icon(String) -> String
 
 pub fn drawable_pixels(String, Int32, tint? : Int64) -> (Int32, Int32, FixedArray[Byte])?
@@ -2149,7 +2151,17 @@ pub fn waiting_page(@ui.Ctx, String, String, String, () -> Unit) -> Unit
 
 pub let wake_ms : Double
 
-pub fn way_in(@ui.Ctx, String, String, String, String, String, busy? : Bool) -> Bool
+pub fn way_in(@ui.Ctx, String, String, String, String, String, busy? : Bool, said? : String, bad? : Bool) -> Bool
+
+pub fn way_in_button(@ui.Ctx, String, String, solid? : Bool, busy? : Bool) -> Bool
+
+pub fn way_in_link(@ui.Ctx, String, String, busy? : Bool) -> Bool
+
+pub fn way_in_note(@ui.Ctx, String) -> Unit
+
+pub fn way_in_page(@ui.Ctx, String, () -> Unit) -> Unit
+
+pub fn way_in_title(@ui.Ctx, String) -> Unit
 
 pub fn way_line(@ui.Ctx, String, Array[String], WayLook, (Int32) -> Unit) -> Unit
 

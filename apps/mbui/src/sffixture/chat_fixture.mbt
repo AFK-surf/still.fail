@@ -450,6 +450,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_flag(with_cache_cold(rich_chat(f.older)), "offline")
           } else if f.mode == "chat-peeks" {
             with_message(rich_chat(f.older), peeks_answer)
+          } else if f.mode == "chat-letters" && f.older == 0 {
+            with_none_shown(rich_chat(f.older))
           } else if f.mode == "chat-cc" {
             with_cc(rich_chat(f.older))
           } else if f.mode == "chat-need" {
@@ -1819,6 +1821,23 @@ pub fn with_cache_cold(v : Json) -> Json {
     Object(m) => {
       let o = m.copy()
       o["cacheCold"] = { "session": "s-c1", "text": "缓存已过期，接着聊约需 $1.49" }
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// chat-letters: its latest page all letters its agents wrote other chats (not shown in it, views.ts isLetter), its
+/// messages before them: as the core opens it, nothing shown and more before, till the page before is asked.
+pub fn with_none_shown(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      o["messages"] = Json::array([])
+      o["more"] = Json::boolean(true)
+      // (its first entry the page's, a letter: paged back by it, as the core's cursor, views.ts firstEntry)
+      o["firstEntry"] = Json::number(201.0)
       Json::object(o)
     }
     _ => v

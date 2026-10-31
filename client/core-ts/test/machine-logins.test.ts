@@ -76,6 +76,28 @@ test("a station's logins: read as its stream opens, in words, told as they chang
   old.core.close();
 });
 
+test("those ended, a row per program: who last logged in to it, else how its latest ended; the tool tried latest first", async () => {
+  const at = (h: number) => Date.UTC(2026, 9, 12, h);
+  const ended = (id: string, name: string, h: number, more: object) => ({ id, name, command: [name, "auth", "login"], waiting: false, chat: `ember:${id}`, chatTitle: `t-${id}`, startedAt: at(h), expiresAt: 2, endedAt: at(h) + 60_000, ...more });
+  const g1 = ended("g1", "gcloud", 1, { state: "done", doneBy: { email: "z@x.com", name: "Zanwei Guo" } });
+  const g2 = ended("g2", "gcloud", 2, { state: "cancelled" });
+  const g3 = ended("g3", "gcloud", 3, { state: "failed", timedOut: true });
+  const h1 = ended("h1", "gh", 4, { state: "failed", error: "gh: device code expired" });
+  const { host, core } = await started({ ...base(), "GET /machine-logins": { logins: [g1, h1, device, g3, g2] } });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "machineLogins", station: ST });
+  await host.settle();
+  drain(host, values);
+  const [gh, gcloud, ...more] = v(values, 1).tools;
+  assert.deepEqual(more, [], "the gh under way is its card, not a try of a row");
+  assert.deepEqual([gh.name, gh.failed, gh.countText, gh.chatTitle, gh.tries.map((l: any) => l.id)], ["gh", true, "1 次", "t-h1", ["h1"]]);
+  assert.match(gh.summaryText, /^没有登录成功过 · 最近一次登录失败 · 10\/12 \d{1,2}:\d{2}$/);
+  assert.deepEqual([gcloud.name, gcloud.failed, gcloud.countText, gcloud.chat, gcloud.tries.map((l: any) => l.id)], ["gcloud", false, "3 次", "ember:g1", ["g3", "g2", "g1"]]);
+  assert.match(gcloud.summaryText, /^Zanwei Guo 登录 · 10\/12 \d{1,2}:\d{2}$/, "the one that went through, though two tried after it");
+  core.close();
+});
+
 test("a login's terminal: its stream asks for it while it is shown, all of it first, then the rows that changed", async () => {
   const { host, core, push, streams } = await started(listed());
   const ui = core.connect();

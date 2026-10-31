@@ -1026,8 +1026,8 @@ fn drawn_pixels_of(
 // android_host.c on android/…/BrowserLogin.java).
 
 ///|
-#borrow(path)
-extern "C" fn bl_start(path : String) -> Int = "mb_host_browser_login_start"
+#borrow(path, done)
+extern "C" fn bl_start(path : String, done : String) -> Int = "mb_host_browser_login_start"
 
 ///|
 extern "C" fn bl_port(id : Int) -> Int = "mb_host_browser_login_port"

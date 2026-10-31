@@ -1,6 +1,6 @@
 // What the stories show that the site's demo has none of (src/demo/mount.tsx extendDemo): a novel and a note to read,
 // a clip and a picture in a folder, the changelog's news. Made up here, the same every time.
-import type { DriveEntry, DriveKind, HistoryItem, HistoryStep, HistoryView, MachineLoginScreen, MachineLoginShown, MachineLoginsView } from "../src/core/shapes.ts";
+import type { DriveEntry, DriveKind, HistoryItem, HistoryStep, HistoryView, MachineLoginScreen, MachineLoginShown, MachineLoginsView, MachineLoginTool } from "../src/core/shapes.ts";
 import { opensOf } from "../../client/core-ts/src/drive-kind.ts";
 import { lineOf, markdown } from "../../client/core-ts/src/markdown.ts";
 import clipUrl from "./assets/story-clip.mp4?url";
@@ -279,7 +279,21 @@ export const SCREENS: Record<string, MachineLoginScreen> = {
 
 /** The demo's station's logins: `listed`, those done there (under way first). */
 export function loginsView(canLogin = true, canRelay = true, listed: string[] = ["device", "done", "failed", "cancelled"]): MachineLoginsView {
-  return { supported: true, loaded: true, canLogin, canRelay, logins: listed.map((id) => LOGINS[id]!) };
+  const logins = listed.map((id) => LOGINS[id]!);
+  // Those ended, a row per program, as the core groups them (station/machine-logins.ts toolsShown).
+  const by = new Map<string, MachineLoginShown[]>();
+  for (const l of logins.filter((l) => !l.active)) by.set(l.name, [...(by.get(l.name) ?? []), l]);
+  const tools = [...by].map(([name, tries]): MachineLoginTool => {
+    const done = tries.find((l) => l.state === "done");
+    const l = done ?? tries[0]!;
+    const said = done ? (done.doneByText ? done.doneByText.replace(/ 完成$/, " 登录") : l.statusText) : `没有登录成功过 · 最近一次${l.statusText}`;
+    return {
+      name, summaryText: [said, l.whenText].filter(Boolean).join(" · "), failed: !done && l.state === "failed",
+      ...(l.chat !== undefined ? { chat: l.chat } : {}), ...(l.chatTitle !== undefined ? { chatTitle: l.chatTitle } : {}),
+      countText: `${tries.length} 次`, tries,
+    };
+  });
+  return { supported: true, loaded: true, canLogin, canRelay, logins, tools };
 }
 
 /** Formulas beside Chinese text, with code, currency, an invalid command and a formula wider than a phone. */

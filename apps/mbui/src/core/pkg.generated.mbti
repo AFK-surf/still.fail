@@ -17,6 +17,8 @@ pub fn cancel(Int32) -> Unit
 
 pub let client : Client
 
+pub fn cloud() -> String
+
 pub fn fatal() -> String?
 
 pub fn has_browser_session() -> Bool
@@ -159,6 +161,7 @@ pub struct Sub {
   mut value : Json?
   mut error : Json?
   mut version : Int32
+  mut waiting : Bool
   changes : @signals.Signal[Int32]
   // private fields
 }

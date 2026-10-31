@@ -1,8 +1,9 @@
 // The browser of CI's Windows run (e2e/win.sh), standing in for the person: the app's BROWSER (browser.cmd). It takes
 // the login page the app opens, goes through the local cloud's sign-in as a browser does (its cookie, the sign-in
 // page's choice of Google when it asks), Google's own page answered by the dev cloud as alice choosing herself
-// (/__dev/google, cloud/test/dev.ts), and follows the cloud's redirect back to the app's loopback address, whose page it
-// keeps. Each step goes to E2E_BROWSER_LOG; the page the app answered with is the last line (BACK <status> <words>).
+// (/__dev/google, cloud/test/dev.ts), and follows the cloud's redirect back to the app's loopback address, which sends
+// it on to the cloud's page saying it is signed in (/v1/auth/done), whose page it keeps. Each step goes to
+// E2E_BROWSER_LOG; the page it ended on is the last line (BACK <status> <words>).
 import { appendFileSync } from "node:fs";
 
 const say = (s) => {
@@ -18,7 +19,7 @@ try {
     say(`GET ${url.origin}${url.pathname}`);
     let r = await fetch(url, { redirect: "manual", headers: ours && cookie ? { cookie } : {} });
     if (ours) for (const c of r.headers.getSetCookie()) cookie = c.split(";")[0];
-    if (r.status === 200 && ours) {
+    if (r.status === 200 && ours && url.pathname !== "/v1/auth/done") {
       // the page that asks how to sign in (when the cloud offers email too): Google, as a person picks it
       const page = await r.text();
       const id = /action="\/v1\/auth\/login\/([A-Za-z0-9_-]{43})"/.exec(page)?.[1];

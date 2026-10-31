@@ -60,6 +60,15 @@ pub fn has_drawable(name : String) -> Bool {
 /// The picture `name` drawn `w` wide (as tall as it is for that), in its own
 /// colours (a maker's mark, an illustration: their colours asked no contrast,
 /// @ui's own_colours) or all in `tint`.
+/// How tall drawable `name` is drawn `w` wide (`drawable`'s; as wide as tall when there is none so named).
+pub fn drawable_height(name : String, w : Double) -> Double {
+  match drawables.get(name) {
+    Some(d) => w * d.h / d.w
+    None => w
+  }
+}
+
+///|
 pub fn drawable(c : @ui.Ctx, name : String, w : Double, tint? : Int64) -> Int {
   match drawables.get(name) {
     Some(d) => {
