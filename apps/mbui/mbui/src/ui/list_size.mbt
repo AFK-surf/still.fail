@@ -486,28 +486,32 @@ pub fn[T] ListRows::rows(
     // the rows gone ahead of others (`moves`: a chat with news to its list's top): each leaves where it was, a copy of
     // it as it was, and comes where it is, as a row gone and a row new do (2026-10-31 the user: 「原地缩下去再从目标点挤
     // 出来更合理」, not across the rows between, which it would cover)
+    // Those that moved are the fewest whose order changed: all but the most rows kept in the order they had (one gone
+    // down past others moved, not each it passed, which only kept their order among themselves)
     let ahead : Set[String] = Set::new()
     {
       let before : Map[String, Int] = {}
-      let mut j = 0
-      for r in self.order {
-        if here.contains(r.0) {
-          before[r.0] = j
-          j += 1
-        }
+      for j, r in self.order {
+        before[r.0] = j
       }
-      let mut kept = 0
+      let at : Array[Int] = []
+      let was_at : Array[Int] = []
       for i, k in keys {
         match before.get(k) {
           Some(b) => {
-            if b > kept && moves(items[i]) {
-              ahead.add(k)
-              self.causes.by[k] = (Comes(from(k).unwrap_or(now)), ms(k).unwrap_or(row_size_ms))
-              began = true
-            }
-            kept += 1
+            at.push(i)
+            was_at.push(b)
           }
           None => ()
+        }
+      }
+      let kept = in_order_most(was_at)
+      for n, i in at {
+        if !kept[n] && moves(items[i]) {
+          let k = keys[i]
+          ahead.add(k)
+          self.causes.by[k] = (Comes(from(k).unwrap_or(now)), ms(k).unwrap_or(row_size_ms))
+          began = true
         }
       }
     }
@@ -621,6 +625,44 @@ pub fn[T] ListRows::rows(
 ///|
 /// What a row gone ahead of others leaves by where it was is keyed by: its key and this (ListRows::rows' `moves`).
 pub let row_moved_mark : String = "\u{2}was"
+
+///|
+/// Which of `was` (the rows' places before, in their order now) are among the most that are still in the order they
+/// had: a longest increasing run of them, not necessarily side by side. The others are the fewest that moved.
+fn in_order_most(was : Array[Int]) -> Array[Bool] {
+  let n = was.length()
+  // ends[l]: the index into `was` that ends the run of l + 1 found with the least last place; back[i]: the one before
+  // i in its run (-1 none)
+  let ends : Array[Int] = []
+  let back = Array::make(n, -1)
+  for i in 0..<n {
+    let mut lo = 0
+    let mut hi = ends.length()
+    while lo < hi {
+      let mid = (lo + hi) / 2
+      if was[ends[mid]] < was[i] {
+        lo = mid + 1
+      } else {
+        hi = mid
+      }
+    }
+    if lo > 0 {
+      back[i] = ends[lo - 1]
+    }
+    if lo == ends.length() {
+      ends.push(i)
+    } else {
+      ends[lo] = i
+    }
+  }
+  let kept = Array::make(n, false)
+  let mut i = if ends.is_empty() { -1 } else { ends[ends.length() - 1] }
+  while i >= 0 {
+    kept[i] = true
+    i = back[i]
+  }
+  kept
+}
 
 ///|
 /// What changed its rows' heights, for the list's layout (Ctx::list's `sized`).
