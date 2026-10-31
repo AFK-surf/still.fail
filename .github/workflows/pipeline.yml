@@ -453,10 +453,26 @@ jobs:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
         run: sh .github/deploy.sh api
 
+  # The app for the browser (the web's /mbui.html: apps/mbui/scripts/web-app.sh), built where MoonBit's cache is
+  # (GitHub's runners: Mini1's runners each have a tool cache of their own, the static job's none of it, run
+  # 41173786825) and handed to the static job.
+  mbui-web:
+    needs: [plan]
+    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/mbui-moonbit
+      - run: bash apps/mbui/scripts/web-app.sh
+      - uses: actions/upload-artifact@v4
+        with: { name: "mbui-web-${{ github.sha }}", path: web/public/mbui, retention-days: 7 }
+
   static:
-    needs: [plan, natives, check, check-linux, check-browser, api]
+    needs: [plan, natives, check, check-linux, check-browser, api, mbui-web]
     # After the API (a page may need what it adds), or without it when it did not change.
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result) && needs.mbui-web.result == 'success'
     runs-on: [self-hosted, mini1]
     environment: production
     timeout-minutes: 5
@@ -465,8 +481,9 @@ jobs:
         with: { fetch-depth: 0 } # the web app's build number (__BUILD__, build.json) is the commits in the history
       - uses: ./.github/actions/setup-mac
       - uses: ./.github/actions/natives
-      # (the app's page, /mbui.html: deploy.py builds the app for the browser where MoonBit is)
-      - uses: ./.github/actions/mbui-moonbit
+      # (the app's page, /mbui.html: the app as mbui-web built it, which deploy.py takes as it is)
+      - uses: actions/download-artifact@v4
+        with: { name: "mbui-web-${{ github.sha }}", path: web/public/mbui }
       - name: Deploy ${{ needs.plan.outputs.parts }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
