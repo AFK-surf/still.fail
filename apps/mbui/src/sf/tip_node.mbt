@@ -35,8 +35,7 @@ pub fn tip_node(tips : TipLayer, anchor : @view.View, label : () -> String, side
   let rest : Ref[(() -> Unit)?] = Ref(None)
   // (how it comes in, this time it is shown: from when, from how far in it was (shown again as it went: as far as it
   // had gone), whether it is in whole yet, and the moment that says so: this showing's own, let go as it goes)
-  let fade : TipFade = { from_at: 0.0, from: 0.0, calm: @signals.signal(true, same=fn(a, b) { a == b }), due: None }
-  let shown : Ref[@view.View?] = Ref(None)
+  let fade = TipFade::new()
   let anchor_id = anchor.id()
   // (made in its layer as it is first shown where there is one then (none yet: shown the next time it is, as there is
   // one), held there for its control, let go with it)
@@ -44,10 +43,7 @@ pub fn tip_node(tips : TipLayer, anchor : @view.View, label : () -> String, side
   let make = fn() -> Bool {
     guard (tips.layer)() is Some(l) else { return false }
     let holder = l.box(fn(h) { h.over(Is(true)) |> ignore }).lives_with(anchor)
-    holder.show(fn() { open.get() }, leave=@kit.pop_out_ms, fn(t) {
-      shown.val = Some(t)
-      tip_look_node(t, anchor_id, side, label, fade)
-    })
+    holder.show(fn() { open.get() }, leave=@kit.pop_out_ms, fn(t) { tip_look_node(t, anchor_id, side, label, fade) })
     true
   }
   let stop_rest = fn() {
@@ -62,21 +58,15 @@ pub fn tip_node(tips : TipLayer, anchor : @view.View, label : () -> String, side
       return
     }
     let at = anchor.cause_at()
-    fade.stop()
     if on {
       if !made.val {
         made.val = make()
       }
-      // (from where it is now: none of it, or as far as it had gone going)
-      fade.from = match shown.val {
-        Some(t) if t.alive() => 1.0 - @ui.Ease::at(Leave, @signals.untracked(fn() { t.going() }))
-        _ => 0.0
-      }
-      fade.from_at = at
-      fade.calm.set(false)
-      fade.due = Some(anchor.at_moment(at + tip_in_ms, fn() { fade.calm.set(true) }))
+      // (in, as kit's tip_in: from where it is at this moment, eased out)
+      fade.go(anchor, 1.0, at, tip_in_ms, Out)
     } else {
-      fade.calm.set(true)
+      // (out, as pop_out: from where it is at this moment, eased to leave, over as long as it is kept going)
+      fade.go(anchor, 0.0, at, @kit.pop_out_ms, Leave)
       tips.went_at = at
     }
     open.set(on)
@@ -130,17 +120,52 @@ pub fn tip_node(tips : TipLayer, anchor : @view.View, label : () -> String, side
 }
 
 ///|
-/// How a tip comes in, the time it is shown (tip_node): from when (`from_at`), from how far in (`from`: 0, or as far as
-/// it had gone going, shown again), whether it is in whole (`calm`: the clock read no more), the moment that says so.
+/// How far a tip is in (0 none of it, 1 all of it) as it comes and goes (tip_node): one way at a time, from where the
+/// one before had it at the moment it was turned (`from`, worked out of that one as of then: the same however far it had
+/// got), to `to` over `ms` from `start` as `ease` has it; while it goes (`moving`, till the moment it ends: the clock
+/// read no longer than that), the moment it ends its own, let go as another way is set out.
 struct TipFade {
-  mut from_at : Double
   mut from : Double
-  calm : @signals.Signal[Bool]
+  mut to : Double
+  mut start : Double
+  mut ms : Double
+  mut ease : @ui.Ease
+  moving : @signals.Signal[Bool]
   mut due : (() -> Unit)?
 }
 
 ///|
-/// The moment this showing comes in whole by let go (another showing, or its going, its own).
+/// A tip none of which is in, going nowhere.
+fn TipFade::new() -> TipFade {
+  { from: 0.0, to: 0.0, start: 0.0, ms: 0.0, ease: Out, moving: @signals.signal(false, same=fn(a, b) { a == b }), due: None }
+}
+
+///|
+/// How far in it is at `t`, by the way it goes now.
+fn TipFade::at(self : TipFade, t : Double) -> Double {
+  if self.ms <= 0.0 || t >= self.start + self.ms {
+    return self.to
+  }
+  let p = (t - self.start) / self.ms
+  self.from + (self.to - self.from) * self.ease.at(if p < 0.0 { 0.0 } else { p })
+}
+
+///|
+/// It set going to `to` from `at` over `ms` as `ease` has it, from where it is at `at`; its end, the moment `node` says
+/// it is (its own, the way before's let go).
+fn TipFade::go(self : TipFade, node : @view.View, to : Double, at : Double, ms : Double, ease : @ui.Ease) -> Unit {
+  self.from = self.at(at)
+  self.to = to
+  self.start = at
+  self.ms = ms
+  self.ease = ease
+  self.stop()
+  self.moving.set(true)
+  self.due = Some(node.at_moment(at + ms, fn() { self.moving.set(false) }))
+}
+
+///|
+/// Its end's moment let go of (another way set out, its control gone).
 fn TipFade::stop(self : TipFade) -> Unit {
   match self.due {
     Some(s) => s()
@@ -150,8 +175,18 @@ fn TipFade::stop(self : TipFade) -> Unit {
 }
 
 ///|
+/// How far in it is as drawn now: by the clock while it goes, where it went once it is there.
+fn TipFade::shown(self : TipFade, t : @view.View) -> Double {
+  if self.moving.get() {
+    self.at(t.drawn_at())
+  } else {
+    self.to
+  }
+}
+
+///|
 /// A tip's node `t` as tip_look draws it (tip_box, tip_words), beside `anchor` on `side`, saying `label`: its look and
-/// its words set as the window's theme says, as that changes; coming in as `fade` says, going as it leaves.
+/// its words set as the window's theme says, as that changes; in and out as `fade` says.
 fn tip_look_node(t : @view.View, anchor : @view.NodeId, side : @view.Side, label : () -> String, fade : TipFade) -> Unit {
   let theme = fn() { @ui.tree_theme() }
   let px = @ui.Space::px(S2_5)
@@ -166,16 +201,14 @@ fn tip_look_node(t : @view.View, anchor : @view.NodeId, side : @view.Side, label
     let (blur, dy) = @ui.Shadow::blur_y(Md)
     (blur, dy, theme().shadow)
   }))
+  // (its ground in first, its words after, as kit's tip_in and pop_out have them (ground_first): the ground the first
+  // half of the way in, the words the second; going, the other way round)
   .alpha(By(fn() {
-    // (coming in from when it was said to, eased out; going, faded as it leaves; else whole, the clock not read)
-    let gone = t.going()
-    if gone > 0.0 {
-      1.0 - @ui.Ease::at(Leave, gone)
-    } else if fade.calm.get() {
-      1.0
+    let a = fade.shown(t)
+    if a * 2.0 < 1.0 {
+      a * 2.0
     } else {
-      let p = (t.drawn_at() - fade.from_at) / tip_in_ms
-      fade.from + (1.0 - fade.from) * @ui.Ease::at(Out, if p < 0.0 { 0.0 } else if p > 1.0 { 1.0 } else { p })
+      1.0
     }
   }))
   .says(By(fn() { Some(@view.said(Tooltip, label=label())) }))
@@ -188,6 +221,17 @@ fn tip_look_node(t : @view.View, anchor : @view.NodeId, side : @view.Side, label
       { size, weight: 400, line, wrap: true }
     }))
     .ink(By(fn() { theme().color(OnPrimary) }))
+    .alpha(By(fn() {
+      // (of its ground's: what of the words shows over as much of the ground as there is)
+      let a = fade.shown(t)
+      let ground = if a * 2.0 < 1.0 { a * 2.0 } else { 1.0 }
+      let words = if a * 2.0 - 1.0 > 0.0 { a * 2.0 - 1.0 } else { 0.0 }
+      if ground > 0.0 {
+        words / ground
+      } else {
+        0.0
+      }
+    }))
     |> ignore
   })
   |> ignore

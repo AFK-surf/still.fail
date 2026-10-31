@@ -442,33 +442,90 @@ test "a tip put on a control that has the keyboard's focus already: shown at onc
 }
 
 ///|
-/// A tip shown as its control is rested on, left 40 after, rested on again 40 after that (within the skip: at once):
-/// what it is drawn as at `look`, frames drawn all along (`dense`) or none between the steps and `look`.
-fn tip_again(dense : Bool, look : Double) -> Array[String] raise {
+/// How opaque the tip of "复制 new" is drawn now: its ground's alpha, and its words' most (0 where none is drawn).
+fn tip_alphas(t : @ui.Tester) -> (Double, Double) {
+  let tips = t.semantics().filter(fn(s) { s.role == Tooltip && s.label == "复制 new" })
+  guard tips is [tip, ..] else { return (0.0, 0.0) }
+  let (rx, ry, rw, rh) = tip.rect
+  let mut ground = 0.0
+  let mut words = 0.0
+  for line in t.drawlist().split("\n") {
+    let f = line.split(" ").map(fn(v) { v.to_string() }).to_array()
+    if f.length() < 21 || f[0] != "i" {
+      continue
+    }
+    let (x, y, a) = match (number_of(f[1]), number_of(f[2]), number_of(f[12])) {
+      (Some(x), Some(y), Some(a)) => (x, y, a)
+      _ => continue
+    }
+    if x < rx - 0.5 || y < ry - 0.5 || x > rx + rw + 0.5 || y > ry + rh + 0.5 {
+      continue
+    }
+    if f[6] == "0" && x == rx && y == ry {
+      ground = a
+    } else if f[6] == "1" && a > words {
+      words = a
+    }
+  }
+  (ground, words)
+}
+
+///|
+/// A tip rested on and shown, then: left at 40 into its coming in, rested on again 40 after (within the skip: at once).
+/// How opaque it is drawn (tip_alphas) at each of `looks` (from its showing), frames drawn all along (`dense`) or none
+/// but at those moments; and at each turn, just before it and just after.
+fn tip_turns(dense : Bool, looks : Array[Double]) -> Array[(Double, Double)] raise {
   let said = @signals.signal({ icon: "copy", label: "复制", on: false, disabled: false }, same=fn(a, b) { a == b })
   let t = tools_tester(said, @signals.signal(page_viewer_ink()), {})
   let n = t.get(Button, label="复制 new")
   let (cx, cy) = (n.rect.0 + 16.0, n.rect.1 + 16.0)
   t.move(cx, cy)
   t.run_for(tip_delay_ms)
-  let step = fn(ms : Double) { if dense { t.run_for(ms) } else { t.advance(ms) } }
-  step(tip_short_ms * 2.0)
-  t.touch(1, 380.0, 190.0)
-  step(tip_short_ms * 2.0)
-  t.touch(1, cx, cy)
-  step(look)
-  t.frames_owed()
-  match t.semantics().filter(fn(s) { s.role == Tooltip && s.label == "复制 new" }) {
-    [s, ..] => drawn_within(t, s.rect)
-    _ => ["none"]
+  let start = t.time()
+  let out : Array[(Double, Double)] = []
+  let to = fn(at : Double) {
+    let ms = start + at - t.time()
+    if ms > 0.0 {
+      if dense {
+        t.run_for(ms)
+      } else {
+        t.advance(ms)
+        t.frames_owed()
+        t.draw()
+      }
+    }
   }
+  for at in looks {
+    to(at)
+    out.push(tip_alphas(t))
+    // (the turns: left at 40, back at 80, each looked at as it happens)
+    if at == tip_short_ms * 2.0 {
+      t.touch(1, 380.0, 190.0)
+      t.draw()
+      out.push(tip_alphas(t))
+    } else if at == tip_short_ms * 4.0 {
+      t.touch(1, cx, cy)
+      t.draw()
+      out.push(tip_alphas(t))
+    }
+  }
+  out
 }
 
 ///|
-test "a tip left and come back to a moment after (rested on again within its skip): come back from as far as it had gone, its first showing's end no end of this one; frames or none between, the same" {
-  let early = tip_again(true, tip_short_ms * 2.0)
-  assert_eq(tip_again(false, tip_short_ms * 2.0), early, msg="40 after: frames or none, the same")
-  let whole = tip_again(true, tip_settled_ms * 2.0)
-  assert_eq(tip_again(false, tip_settled_ms * 2.0), whole, msg="400 after: the same")
-  assert_true(early != whole, msg="40 after it came back (the first showing's end past): not yet whole")
+test "a tip coming in and going as kit's does: its ground the first half of the way, its words the second (none while its ground is not whole); turned back and forth, from where it was each time; frames or none between, the same" {
+  let looks = [tip_short_ms / 4.0, tip_short_ms * 2.0, tip_short_ms * 3.0, tip_short_ms * 4.0, tip_short_ms * 5.0, tip_settled_ms * 2.0]
+  let dense = tip_turns(true, looks)
+  assert_eq(tip_turns(false, looks), dense, msg="frames or none, the same")
+  // (5 in: its ground part of the way, its words none)
+  let (g5, w5) = dense[0]
+  assert_true(g5 > 0.0 && g5 < 1.0 && w5 == 0.0, msg="5 in: \{dense[0]}")
+  // (left at 40: as it was the moment before, then going from there)
+  assert_eq(dense[2], dense[1], msg="left at 40: from where it was")
+  // (going: its words first, as its ground stays)
+  assert_true(dense[3].1 < dense[2].1 && dense[3].0 == dense[2].0, msg="going: its words less at 60 \{dense}")
+  // (back at 80: from where it was going, no jump)
+  assert_eq(dense[5], dense[4], msg="back at 80: from where it was")
+  // (whole at last, its words too)
+  assert_true(dense[7].0 == 1.0 && dense[7].1 > 0.0, msg="whole at 400: \{dense}")
 }

@@ -579,7 +579,13 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   }
   if c.words != "" {
     let k = c.words_look
-    let tl = layout_text(c.words, k.size, k.weight, c.w + 0.5, k.wrap, line=k.line)
+    // (one line given less than it is wide: cut to it, ending in an ellipsis, as an old view's words on one line are)
+    let tl = layout_text(c.words, k.size, k.weight, if k.wrap { c.w + 0.5 } else { 1.0e9 }, k.wrap, line=k.line)
+    let tl = if !k.wrap && tl.w > c.w + 0.5 {
+      ellipsized(c.words, tl, c.w, fn(s) { layout_text(s, k.size, k.weight, 1.0e9, false, line=k.line) })
+    } else {
+      tl
+    }
     self.emit_text(tl, 0.0, 0.0, c.ink, 1.0)
   }
   // (its shapes, as bands worked out once for the outlines said (kept by them, whatever colour they are drawn in), in
