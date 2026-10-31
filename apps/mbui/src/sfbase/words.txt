@@ -1024,6 +1024,7 @@ web-main.preview.kind.image
 web-main.preview.kind.text
 web-main.preview.kind.video
 web-main.preview.loadFailed
+web-main.preview.loadingLabel
 web-main.preview.nextKey
 web-main.preview.path
 web-main.preview.pr.closed

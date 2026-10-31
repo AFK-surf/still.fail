@@ -638,18 +638,18 @@ fn whole_answered_later(fails : Bool) -> (Int, Bool, Bool) {
   let asked = Ref(0)
   let src : Source = {
     ..base,
-    read_bytes: fn(name, params, done) {
+    read_going: fn(name, params, on_value, done) {
       if name == "station.file" {
         asked.val = asked.val + 1
         @sffixture.fix_later(30.0, fn() {
           if fails {
             done(Err({ "code": "gone", "message": "没了" }))
           } else {
-            (base.read_bytes)(name, params, done)
+            (base.read_going)(name, params, on_value, done)
           }
         })
       } else {
-        (base.read_bytes)(name, params, done)
+        (base.read_going)(name, params, on_value, done)
       }
     },
   }
@@ -684,15 +684,15 @@ test "viewer on the tree: the one beside it read ahead, stepped to before its an
   let later = 2000.0
   let src : Source = {
     ..base,
-    read_bytes: fn(name, params, done) {
+    read_going: fn(name, params, on_value, done) {
       let file = text(Some(params), "name")
       if name == "station.file" {
         asked[file] = asked.get(file).unwrap_or(0) + 1
       }
       if name == "station.file" && file == "第二版.png" {
-        @sffixture.fix_later(later, fn() { (base.read_bytes)(name, params, done) })
+        @sffixture.fix_later(later, fn() { (base.read_going)(name, params, on_value, done) })
       } else {
-        (base.read_bytes)(name, params, done)
+        (base.read_going)(name, params, on_value, done)
       }
     },
   }
@@ -756,11 +756,11 @@ fn read_ahead_by(frames : Bool) -> (Array[String], Array[String], String, Bool) 
   let asked : Array[String] = []
   let src : Source = {
     ..base,
-    read_bytes: fn(name, params, done) {
+    read_going: fn(name, params, on_value, done) {
       if name == "station.file" {
         asked.push(text(Some(params), "name"))
       }
-      (base.read_bytes)(name, params, done)
+      (base.read_going)(name, params, on_value, done)
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
@@ -811,15 +811,15 @@ let up_at_ms : Double = 60.0
 let tap_step_ms : Double = 5.0
 
 ///|
-/// A made-up source whose whole files read through it are counted in `asked`.
+/// A made-up source whose whole files read through it (as they come: read_going) are counted in `asked`.
 fn counted(base : Source, asked : Ref[Int]) -> Source {
   {
     ..base,
-    read_bytes: fn(name, params, done) {
+    read_going: fn(name, params, on_value, done) {
       if name == "station.file" {
         asked.val = asked.val + 1
       }
-      (base.read_bytes)(name, params, done)
+      (base.read_going)(name, params, on_value, done)
     },
   }
 }
@@ -1042,4 +1042,33 @@ test "viewer on the tree: fading in and out, its picture as far in as its ground
       assert_true((o - fade).abs() < 0.01, msg="at \{at} (closing \{closing}) a picture drawn \{o} opaque, its fade \{fade}: \{shown}")
     }
   }
+}
+
+///|
+test "viewer on the tree, a wide window: a picture as it comes says how much has come in its bar, 正在打开 before the core has said" {
+  new_run()
+  let base = fixture("chat-preview-step")
+  // (each picture's whole held, how much of it has come told by the test)
+  let said : Map[String, (Json) -> Unit] = {}
+  let src : Source = {
+    ..base,
+    read_going: fn(name, params, on_value, done) {
+      if name == "station.file" {
+        said[text(Some(params), "name")] = on_value
+      } else {
+        (base.read_going)(name, params, on_value, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let v = viewer.get().unwrap()
+  assert_true(v.coming())
+  assert_true(t.find("正在打开") is Some(_))
+  (said.get(v.file.name).unwrap())({ "loaded": 1024.0, "total": 4096.0 })
+  t.draw()
+  assert_true(t.find("正在打开") is None)
+  assert_true(t.find("正在读取 1 KB / 4 KB") is Some(_))
 }

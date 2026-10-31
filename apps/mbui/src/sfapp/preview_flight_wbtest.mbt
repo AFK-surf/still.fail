@@ -39,11 +39,11 @@ fn photo_sent(
   let src : Source = {
     ..base,
     file: fn(_, _, _) { "" },
-    read_bytes: fn(name, params, done) {
+    read_going: fn(name, params, on_value, done) {
       if name == "station.file" {
         held.val = Some(fn() { done(Ok((Json::object({}), b"photo"))) })
       } else {
-        (base.read_bytes)(name, params, done)
+        (base.read_going)(name, params, on_value, done)
       }
     },
   }

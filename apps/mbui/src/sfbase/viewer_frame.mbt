@@ -159,9 +159,14 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bo
     shown,
     ink,
     fn() {
-      match v.got.get() {
-        Some(got) if v.coming() && (@sf.layout(c.width) is Small) => file_progress(c, got, v.file.size)
-        _ => ()
+      // while a picture comes, how much of it has (FilePreview.tsx: FileComing in the bar): in the floating head its
+      // card once the core has said; in the bar along the top, beside the tools, from the start
+      if v.coming() {
+        match (@sf.layout(c.width), v.got.get()) {
+          (Small, Some(got)) => file_progress(c, got, v.file.size)
+          (Small, None) => ()
+          (_, got) => @sf.viewer_coming(c, "preview", got, v.file.size, ink)
+        }
       }
       vf_tools(v, c, ink, v.download(src))
     },

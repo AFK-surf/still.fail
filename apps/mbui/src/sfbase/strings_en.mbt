@@ -1052,6 +1052,7 @@ let en : Map[String, String] = {
   "web-main.preview.kind.text": "Text",
   "web-main.preview.kind.video": "Video",
   "web-main.preview.loadFailed": "Couldn't load: {error}",
+  "web-main.preview.loadingLabel": "Loading",
   "web-main.preview.nextKey": "Next (→)",
   "web-main.preview.path": "Path",
   "web-main.preview.pr.closed": "Closed",
