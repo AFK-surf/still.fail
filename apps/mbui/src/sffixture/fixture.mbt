@@ -861,10 +861,17 @@ pub fn fixture_stations_way(v : Json?) -> Json? {
 /// (src/sffilm's MBUI_CORE_MS: what shows meanwhile filmed too). What is due comes as the fixture is next read
 /// (fix_later).
 pub fn round_trip(base : Source, ms : Double) -> Source {
+  round_trip_by(base, fn() { ms })
+}
+
+///|
+/// `base` answering as round_trip does, each ask `ms()` late as it is asked: a test's own setup answered at once, what
+/// it watches late (a chat opened once the first is shown: its view on its way while the test looks).
+pub fn round_trip_by(base : Source, ms : () -> Double) -> Source {
   let read : Map[String, Bool] = {}
   {
     ..base,
-    call: fn(name, params, done) { (base.call)(name, params, fn(r) { fix_later(ms, fn() { done(r) }) }) },
+    call: fn(name, params, done) { (base.call)(name, params, fn(r) { fix_later(ms(), fn() { done(r) }) }) },
     topic: fn(name, params) {
       let t = (base.topic)(name, params)
       let k = name + Json::object(params).stringify()
@@ -874,7 +881,7 @@ pub fn round_trip(base : Source, ms : Double) -> Source {
         Some(false) => { value: None, error: None, version: -1 }
         None => {
           read[k] = false
-          fix_later(ms, fn() { read[k] = true })
+          fix_later(ms(), fn() { read[k] = true })
           { value: None, error: None, version: -1 }
         }
       })
