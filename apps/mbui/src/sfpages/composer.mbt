@@ -2342,6 +2342,7 @@ let composer_notice_box : @ui.Style = @ui.css("mb=S2 pr=S4 py=S2 gap=S1")
 
 ///|
 /// The choice track's end and the notice's round end are concentric on a single line.
+// kept across runs: a value (no field of it changes)
 let composer_notice_inline_end : @ui.Style = @ui.css("pr=S2")
 
 ///|
@@ -2369,20 +2370,25 @@ let composer_notice_flow : @ui.Style = @ui.css("row w=Full gap=S3 justify=JBetwe
 
 ///|
 /// A wrapped choice fills its line, starting under the summary rather than under the mark.
+// kept across runs: a value (no field of it changes)
 let composer_notice_choice_line : @ui.Style = @ui.css("row w=Full")
 
 ///|
 /// The mark and summary stay together; where they share a line with the choice they are centred in that line.
+// kept across runs: a value (no field of it changes)
 let composer_notice_title : @ui.Style = @ui.css("row w=Full align=AStart")
 
 ///|
+// kept across runs: a value (no field of it changes)
 let composer_notice_title_inline : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 /// Status and cost read together, each whole if the line has to wrap.
+// kept across runs: a value (no field of it changes)
 let composer_notice_summary : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
+// kept across runs: a value (no field of it changes)
 let composer_notice_status : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, wrap=true)
 
 ///|
