@@ -496,6 +496,7 @@
   "web-main.prose.copyCsv": "复制为 CSV",
   "web-main.prose.copyMarkdown": "复制为 Markdown",
   "web-main.prose.copyTable": "复制表格",
+  "web-main.quota.figure": "剩 {left}%",
   "web-main.quota.left": "{label}剩余 {left}%",
   "web-main.quota.leftAlone": "剩余 {left}%",
   "web-main.quota.unchecked": "尚未查询额度",

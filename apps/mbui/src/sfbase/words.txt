@@ -1041,6 +1041,7 @@ web-main.profile.signedIn
 web-main.prose.copyCsv
 web-main.prose.copyMarkdown
 web-main.prose.copyTable
+web-main.quota.figure
 web-main.quota.left
 web-main.quota.leftAlone
 web-main.quota.unchecked

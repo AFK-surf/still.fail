@@ -15,8 +15,12 @@ pub fn has_quota(q : Json?) -> Bool {
 ///|
 /// An allowance's windows (components.tsx QuotaBars compact, QuotaChip each, ProfilesNav.tsx Windows): a chip per
 /// window, what is left in it, filled as far as that, its mark before it where `marked` (the web's default; a chat's
-/// agents only with more than one), or `worded`, what is left said in words (每周剩余 78%: a profile's row, which has the
-/// room); `small`, a lower line; `gap` apart; nothing while the core cannot say (`state` not ok) or there is no window.
+/// agents only with more than one), or `worded`, its name and what is left in words, as a machine's chips say theirs
+/// (每周剩 78%, as 内存剩 12.3 G: a profile's row, where a touch has no tip to say what W is); `small`, a lower line;
+/// `gap` apart; nothing while the core cannot say (`state` not ok) or there is no window.
+/// Worded, the line said one way for all its chips, the longest that fits the room it is given whole (Ctx::box one_of): a
+/// phone's row has not the room for 5 小时剩 62%, 每周剩 95% and 每月剩 97%, so they say 5 小时 62%, 每周 95%…, then
+/// 5H 62%, W 95%…, never one chip a way of its own nor one cut short.
 /// Each says over it while it is pointed at what is left of it and when it fills again; `key` names them where the same
 /// allowance shows more than once in a place (a list's rows: each its profile's).
 pub fn quota_chips(
@@ -33,24 +37,64 @@ pub fn quota_chips(
     Some(Array(a)) => a
     _ => []
   }
-  c.box(style=quota_chips_row.then(@ui.style(gap=room(gap))), fn() {
-    for w in windows {
-      quota_chip(c, Some(w), small~, marked~, worded~, key~)
+  if !worded {
+    c.box(style=quota_chips_row.then(@ui.style(gap=room(gap))), fn() {
+      for w in windows {
+        quota_chip(c, Some(w), small~, marked~, key~)
+      }
+    })
+    |> ignore
+    return
+  }
+  // (its ways, each shorter than the one before, the first that fits the line's room shown: Ctx::box one_of)
+  c.box(style=quota_chips_line, one_of=true, fn() {
+    for form in 0..<3 {
+      c.box(style=quota_chips_row.then(@ui.style(gap=room(gap))), fn() {
+        for w in windows {
+          let (mark, words) = quota_worded(Some(w), form)
+          fill_chip(
+            c,
+            chip_left(Some(w)),
+            chip_str(Some(w), "level"),
+            mark,
+            words,
+            small~,
+            key=key + "/" + chip_str(Some(w), "mark") + "/" + form.to_string(),
+            said=quota_said(Some(w)),
+          )
+        }
+      })
+      |> ignore
     }
   })
   |> ignore
 }
 
 ///|
+/// The ways a worded window says itself, each shorter than the one before: its name and what is left (每周剩 95%), its
+/// name and the figure (每周 95%), its mark and the figure (W 95%).
+fn quota_worded(w : Json?, form : Int) -> (String, String) {
+  let left = chip_left(w).to_string()
+  let name = match chip_str(w, "label") {
+    "" => chip_str(w, "mark")
+    label => label
+  }
+  match form {
+    0 => (name, t("web-main.quota.figure", args=[("left", left)]))
+    1 => (name, left + "%")
+    _ => (chip_str(w, "mark"), left + "%")
+  }
+}
+
+///|
 /// One window of an allowance (components.tsx QuotaChip), or the one an agent is short of: what is left in it, filled
-/// as far as that, its mark before it where `marked`, or with its name in words where `worded`; over it while it is
-/// pointed at, `said` (what is left of it and when it fills again: quota_said), the chip `key`'s.
+/// as far as that, its mark before it where `marked`; over it while it is pointed at, `said` (what is left of it and
+/// when it fills again: quota_said), the chip `key`'s.
 pub fn quota_chip(
   c : @ui.Ctx,
   w : Json?,
   small? : Bool = false,
   marked? : Bool = true,
-  worded? : Bool = false,
   key? : String = "quota",
   said? : String,
 ) -> Unit {
@@ -59,8 +103,8 @@ pub fn quota_chip(
     c,
     left,
     chip_str(w, "level"),
-    if marked && !worded { chip_str(w, "mark") } else { "" },
-    if worded { quota_left(w) } else { left.to_string() + "%" },
+    if marked { chip_str(w, "mark") } else { "" },
+    left.to_string() + "%",
     small~,
     key=key + "/" + chip_str(w, "mark"),
     said=said.unwrap_or(quota_said(w)),
@@ -191,3 +235,8 @@ fn chip_left(v : Json?) -> Int {
 /// The chips in a line, in its middle.
 // kept across runs: a value (no field of it changes)
 let quota_chips_row : @ui.Style = @ui.css("row align=ACenter")
+
+///|
+/// A worded line of them: as wide as what holds it, the room its ways are fitted to (Ctx::box one_of).
+// kept across runs: a value (no field of it changes)
+let quota_chips_line : @ui.Style = @ui.css("row w=Full align=ACenter")

@@ -320,6 +320,19 @@ test "profiles, connects, the vault: their lists" {
 }
 
 ///|
+test "profiles on a phone: an allowance of three windows said one way for all, each chip whole (OpenCode Go's)" {
+  let t = settings_tester("profiles", shows="settings-profiles-monthly")
+  // (on one line 5 小时剩余 62%, 本周剩余 19% and 每月剩余 97% were cut to 5 小时剩…, 本周剩余…, 每月剩余…, 2026-10-31)
+  // a phone's 390 has the room for all three in full: each its name and what is left, whole
+  let shown = t.words().filter(fn(w) { w.5 > 0.5 }).map(fn(w) { w.0 })
+  for words in ["5 小时", "剩 62%", "本周", "剩 19%", "每月", "剩 97%"] {
+    assert_true(shown.contains(words), msg="\{words}: \{shown}")
+    assert_eq(t.lines_of(words), [words], msg=words)
+  }
+  assert_eq(t.squeeze_faults(), [])
+}
+
+///|
 test "下方栏: a place's \"−\" takes it off its bar (the bars kept as the workspace's)" {
   let t = settings_tester("bars")
   bars_picked.set(None)
