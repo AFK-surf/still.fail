@@ -141,6 +141,11 @@ for t in ${TARGETS:-native}; do
       # (one: the files that test the pages in one process, every one after the ones moon runs before it, so what one
       # leaves behind that a later one trips on shows (shards, a process each, hide it))
       runs+=("${pages[*]}")
+    elif [ -n "${APP_EXE:-}" ]; then
+      # (on a program built elsewhere: the pages in one run whose n programs each take the next file (test_exe.py's
+      # APP_JOBS), not dealt out beforehand: by name round four one took 75 s while another took 21, 2026-11-01)
+      runs+=("${pages[*]}")
+      export APP_JOBS=$n
     else
       for ((k = 0; k < n; k++)); do
         shard=()
