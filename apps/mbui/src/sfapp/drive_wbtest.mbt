@@ -102,6 +102,8 @@ test "held: what can be done to it in a sheet (EntrySheet); 重命名 changes it
   assert_true(!@sf.presenting())
   // (its sheet sunk away)
   sheet_rested(t, "sf-present")
+  // (its row as it was closing where it was, the row named anew opening where it goes: their way over)
+  t.run_for(@ui.row_size_ms)
   t.draw()
   assert_true(t.find("年度数据.csv") is Some(_))
   assert_true(t.find("季度数据.csv") is None)

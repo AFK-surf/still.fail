@@ -175,6 +175,10 @@ nothing else gives way:
     least; where none fits, the shortest is cut with an ellipsis. A placeholder is words on one line as any others:
     never cut by its field's edge, cut with an ellipsis where it has no shorter way that fits (one an agent wrote has
     none);
+  - a row of ways of saying one thing, each shorter than the one before, of which it shows only the first that fits
+    its room whole, the last where none does: `Ctx::box one_of` (SwiftUI's ViewThatFits for what is more than words:
+    an allowance's chips all in words, then in figures, then by their marks, one way for all of them); it needs at
+    least what its last way needs, and the ways it does not show are laid out, drawn, pressed and read out nowhere;
   - what is cut or scrolled by its own box: `clip`, `sideways` (not a box's corners: what draws inside them keeps to
     them itself, as a press's ripple does).
 - A row that has not the room for every least even so (a page that said not how something gives, words longer than

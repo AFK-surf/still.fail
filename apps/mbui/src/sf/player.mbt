@@ -703,33 +703,47 @@ fn ended_card(c : @ui.Ctx, v : PlayerView, p : @kit.Media, f : @kit.MediaFrame, 
   let left = seconds - gone
   c.layer(fn() {
     c.box(style=player_middle, fn() {
-      c.box(style=player_next_box.then(@ui.style(bg=Data(ink.ground))), fn() {
-        c.text(t("android-misc.drive.player.ended"), style=player_next_note.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
-        let id = c.id(key + "/now")
-        if c.clicked(id) {
-          go_now()
-        }
-        let b = c.box(style=player_next_now.then(@ui.style(bg=Data(alpha(ink.text, media_rate_share)))), id~, fn() {
-          c.text(t("android-misc.drive.player.nextOne", args=[("name", other)]), style=player_next_words.then(@ui.text_style(color=Data(ink.text))))
-          |> ignore
-        })
-        c.semantics(b, Button, id~, label=t("android-misc.drive.player.nextOne", args=[("name", other)]))
-        let after = t("web-pages.drive.player.nextIn", args=[("n", left.to_string())])
-        c.text(after, style=player_next_note.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
-        let cancel = c.id(key + "/off")
-        if c.clicked(cancel) {
+      let note = t("android-misc.drive.player.nextOne", args=[("name", other)]) +
+        " · " +
+        t("web-pages.drive.player.nextIn", args=[("n", left.to_string())])
+      player_ask(c, ink, t("android-misc.drive.player.ended"), note, fn() {
+        // (as a confirming dialog's: the way out first, what it does last)
+        if button(c, t("common.cancel"), key=key + "/off", tone=Ghost) {
           v.ended_off = other
         }
-        let x = c.box(style=player_next_off, id=cancel, fn() {
-          c.text(t("common.cancel"), style=player_next_note.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
-        })
-        c.semantics(x, Button, id=cancel, label=t("common.cancel"))
+        if button(c, t("android-misc.drive.player.next"), key=key + "/now", tone=Primary) {
+          go_now()
+        }
       })
-      |> ignore
     })
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// What the player asks over its picture (that it cannot play, what comes next at its end): a card that asks (ask.mbt)
+/// alone in the stage's middle (its words in its middle, its buttons across its foot), a confirming dialog's width
+/// whatever it says (its seconds counting down move nothing), on the night over a picture.
+fn player_ask(c : @ui.Ctx, ink : MediaInk, title : String, note : String, buttons : () -> Unit) -> Unit {
+  let draw = fn() {
+    c.box(style=player_ask_room, fn() {
+      c.box(style=player_ask_card, fn() {
+        card(c, fill=true, ground=ink.ground, fn() {
+          ask_words(c, title, note, centred=true)
+          ask_buttons_across(c, buttons)
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  if ink.text == media_dark_text {
+    on_the_night(draw)
+  } else {
+    draw()
+  }
 }
 
 ///|
@@ -767,29 +781,26 @@ fn player_waits(c : @ui.Ctx, p : @kit.Media, f : @kit.MediaFrame, ink : MediaInk
             c.box(style=player_pill.then(@ui.style(bg=Data(ink.ground))), fn() {
               spinner(c, size=player_pill_spinner) |> ignore
               let what = t(if f.phase == Opening { "common.opening" } else { "web-pages.drive.player.buffering" })
-              c.text(
-                if f.rate >= 0.0 { what + " · " + file_size(f.rate) + "/s" } else { what },
-                style=player_pill_words.then(@ui.text_style(color=Data(ink.text))),
-              )
-              |> ignore
+              let words = player_pill_words.then(@ui.text_style(color=Data(ink.text)))
+              if f.rate >= 0.0 {
+                // (its rate, said anew each second, in a room as wide as the widest it says: the pill keeps its width)
+                let said = what + " · " + file_size(f.rate) + "/s"
+                let most = player_rate_widest.fold(init=c.words_across(said, words), fn(w, r) {
+                  dmax(w, c.words_across(what + " · " + r, words))
+                })
+                c.box(style=@ui.style(w=Fixed(most)), fn() { c.text(said, style=words) |> ignore }) |> ignore
+              } else {
+                c.text(what, style=words) |> ignore
+              }
             })
             |> ignore
           }
         Failed =>
-          c.box(style=player_failed_box, fn() {
-            c.text(t("web-pages.drive.player.failed", args=[("error", "")]), style=player_pill_words.then(@ui.text_style(color=Data(ink.text))))
-            |> ignore
-            let id = c.id(p.key() + "/retry")
-            if c.clicked(id) {
+          player_ask(c, ink, t("android-chat.video.failed"), "", fn() {
+            if button(c, t("android-misc.drive.player.retry"), key=p.key() + "/retry", tone=Primary) {
               p.retry()
             }
-            let b = c.box(style=player_next_now.then(@ui.style(bg=Data(alpha(ink.text, media_rate_share)))), id~, fn() {
-              c.text(t("android-misc.drive.player.retry"), style=player_next_words.then(@ui.text_style(color=Data(ink.text))))
-              |> ignore
-            })
-            c.semantics(b, Button, id~, label=t("android-misc.drive.player.retry"))
           })
-          |> ignore
         _ => ()
       }
     })
@@ -814,7 +825,9 @@ fn player_cover(c : @ui.Ctx, name : String, ink : MediaInk) -> Unit {
 ///|
 /// The player `p` of `file` over its page (see the file's head): `list` the folder's others it steps through (in order,
 /// the one playing among them), `on_go` another of them opened, back to `back_label`; `still` (an image's key) shown
-/// where its picture will be until its first frame is. A phone's or a desktop's, as the page is.
+/// where its picture will be until its first frame is. A phone's or a desktop's, as the page is. `flying`: its picture
+/// flown in from a thumbnail or back into it by what opened it (the preview's, sfbase viewer.mbt), only its bars and
+/// controls drawn over that, on no ground of their own, answering nothing.
 pub fn player_view(
   c : @ui.Ctx,
   p : @kit.Media,
@@ -824,6 +837,7 @@ pub fn player_view(
   on_back~ : () -> Unit,
   on_go~ : (String) -> Unit,
   still? : String = "",
+  flying? : Bool = false,
 ) -> Unit {
   // what the view holds of the file it shows (zoomed in, its end's card, a frame being saved) not held of the next one
   // played in its place; what it holds of the player (选集 open, its speeds' menu) stays
@@ -838,9 +852,9 @@ pub fn player_view(
   }
   // laid out Small: a phone's player, as the viewer's frame
   if layout(c.width) is Small {
-    phone_player(c, p, file, list, back_label, on_back, on_go, still)
+    phone_player(c, p, file, list, back_label, on_back, on_go, still, flying)
   } else {
-    desk_player(c, p, file, list, back_label, on_back, on_go, still)
+    desk_player(c, p, file, list, back_label, on_back, on_go, still, flying)
   }
 }
 
@@ -857,6 +871,7 @@ fn desk_player(
   on_back : () -> Unit,
   on_go : (String) -> Unit,
   still : String,
+  flying : Bool,
 ) -> Unit {
   let f = p.frame(c)
   let s = f.status
@@ -905,103 +920,107 @@ fn desk_player(
   let z = v.zoom
   let (room_top, room_foot) = player_room(c.width)
   p.near(!finger && py >= 0.0 && (py < room_top || py >= c.height - room_foot))
-  // the keys (see the file's head)
-  let char = fn(ch : Char) { c.key_pressed(@ui.key_of_char(ch)) }
-  let shifted = fn(ch : Char) {
-    c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key) || c.key_pressed(@ui.key_of_char(ch.to_ascii_uppercase()))
-  }
-  if c.key_pressed(@ui.key_space) || char('k') {
-    p.play_pause()
-    p.wake()
-  }
-  if char(',') {
-    step_frame(c, p, fr, -1)
-  }
-  if char('.') {
-    step_frame(c, p, fr, 1)
-  }
-  if c.key_pressed(@ui.key_code_left) {
-    if playing {
-      p.seek_by(-p.nudge_ms())
+  // the keys (see the file's head), once it is up
+  if !flying {
+    let char = fn(ch : Char) { c.key_pressed(@ui.key_of_char(ch)) }
+    let shifted = fn(ch : Char) {
+      c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key) || c.key_pressed(@ui.key_of_char(ch.to_ascii_uppercase()))
+    }
+    if c.key_pressed(@ui.key_space) || char('k') {
+      p.play_pause()
       p.wake()
-    } else {
+    }
+    if char(',') {
       step_frame(c, p, fr, -1)
     }
-  }
-  if c.key_pressed(@ui.key_code_right) {
-    if playing {
-      p.seek_by(p.nudge_ms())
-      p.wake()
-    } else {
+    if char('.') {
       step_frame(c, p, fr, 1)
     }
-  }
-  if char('j') {
-    p.seek_by(-p.nudge_ms())
-    p.wake()
-  }
-  if char('l') {
-    p.seek_by(p.nudge_ms())
-    p.wake()
-  }
-  if c.key_pressed(@ui.key_code_up) || c.key_pressed(@ui.key_code_down) {
-    let (volume, _) = p.volume()
-    p.set_volume(volume + (if c.key_pressed(@ui.key_code_up) { player_volume_key } else { -player_volume_key }))
-    p.wake()
-  }
-  if char('m') {
-    p.toggle_mute()
-    p.wake()
-  }
-  if char('f') && picture && mac {
-    full()
-  }
-  if char('c') && p.subtitle().0 {
-    p.toggle_subtitle()
-    p.wake()
-  }
-  if shifted('n') {
-    match next {
-      Some(other) => go(other)
-      None => ()
+    if c.key_pressed(@ui.key_code_left) {
+      if playing {
+        p.seek_by(-p.nudge_ms())
+        p.wake()
+      } else {
+        step_frame(c, p, fr, -1)
+      }
+    }
+    if c.key_pressed(@ui.key_code_right) {
+      if playing {
+        p.seek_by(p.nudge_ms())
+        p.wake()
+      } else {
+        step_frame(c, p, fr, 1)
+      }
+    }
+    if char('j') {
+      p.seek_by(-p.nudge_ms())
+      p.wake()
+    }
+    if char('l') {
+      p.seek_by(p.nudge_ms())
+      p.wake()
+    }
+    if c.key_pressed(@ui.key_code_up) || c.key_pressed(@ui.key_code_down) {
+      let (volume, _) = p.volume()
+      p.set_volume(volume + (if c.key_pressed(@ui.key_code_up) { player_volume_key } else { -player_volume_key }))
+      p.wake()
+    }
+    if char('m') {
+      p.toggle_mute()
+      p.wake()
+    }
+    if char('f') && picture && mac {
+      full()
+    }
+    if char('c') && p.subtitle().0 {
+      p.toggle_subtitle()
+      p.wake()
+    }
+    if shifted('n') {
+      match next {
+        Some(other) => go(other)
+        None => ()
+      }
+    }
+    if shifted('p') {
+      match prev {
+        Some(other) => go(other)
+        None => ()
+      }
+    }
+    if picture && z.nw > 0.0 {
+      let zoom_key = fn(ch : Char) {
+        c.key_pressed(@ui.key_of_char(ch)) || c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key)
+      }
+      if zoom_key('+') || zoom_key('=') {
+        z.zoom_to(z.scale * player_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
+      } else if zoom_key('-') || zoom_key('_') {
+        z.zoom_to(z.scale / player_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
+      } else if char('0') {
+        z.reset()
+      } else if char('1') {
+        z.zoom_to(player_whole, z.bw / 2.0, z.bh / 2.0, true)
+      }
+    }
+    if c.key_pressed(@ui.key_escape) {
+      if v.rates {
+        v.rates = false
+      } else if listing {
+        v.listing = false
+      } else {
+        desk_leave(c, v, on_back)
+      }
     }
   }
-  if shifted('p') {
-    match prev {
-      Some(other) => go(other)
-      None => ()
-    }
-  }
-  if picture && z.nw > 0.0 {
-    let zoom_key = fn(ch : Char) {
-      c.key_pressed(@ui.key_of_char(ch)) || c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key)
-    }
-    if zoom_key('+') || zoom_key('=') {
-      z.zoom_to(z.scale * player_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-    } else if zoom_key('-') || zoom_key('_') {
-      z.zoom_to(z.scale / player_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-    } else if char('0') {
-      z.reset()
-    } else if char('1') {
-      z.zoom_to(player_whole, z.bw / 2.0, z.bh / 2.0, true)
-    }
-  }
-  if c.key_pressed(@ui.key_escape) {
-    if v.rates {
-      v.rates = false
-    } else if listing {
-      v.listing = false
-    } else {
-      desk_leave(c, v, on_back)
-    }
-  }
-  c.box(style=desk_play_ground.then(@ui.style(bg=Data(ink.stage))), fn() {
+  c.box(style=desk_play_ground.then(@ui.style(bg=Data(if flying { no_ground } else { ink.stage }))), fn() {
     // the picture, in the window less the list beside it, as a phone's (Media::stage): a click or a finger's tap shows
     // or hides the controls, a double one in the middle plays or pauses, on the left third back, on the right on (the
     // user, 2026-10-28); the screen filled by F or its key
     let stage = c.id(key + "/desk-stage")
     @ui.capture(c, stage)
-    p.stage(c, stage, c.width - panel)
+    if !flying {
+      p.stage(c, stage, c.width - panel)
+    }
     // the wheel: with ⌃ or ⌘ held (or a trackpad's pinch) it zooms round the pointer, alone it moves what is zoomed in
     let (wx, wy, mods) = @ui.wheel_of(c, stage)
     if picture && z.nw > 0.0 && (wx != 0.0 || wy != 0.0) {
@@ -1020,7 +1039,7 @@ fn desk_player(
       c.box(style=desk_grow_full, id=stage, fn() {
         let w = dmax(desk_none, c.width - panel)
         match p.native() {
-          Some(n) if n.here() => {
+          Some(n) if n.here() && !flying => {
             let (x, y, pw, ph) = picture_place(v, p, s, w, c.height, still, top=room_top, foot=room_foot)
             v.placed = Some((x, y, pw, ph))
             c.native(n, content=Some((x, y, pw, ph))) |> ignore
@@ -1437,6 +1456,7 @@ fn phone_player(
   on_back : () -> Unit,
   on_go : (String) -> Unit,
   still : String,
+  flying : Bool,
 ) -> Unit {
   ignore(back_label)
   let f = p.frame(c)
@@ -1468,12 +1488,14 @@ fn phone_player(
   @ui.capture(c, stage)
   // (a ground: a tap shows or hides the controls)
   c.cursor(stage, Arrow)
-  phone_gestures(c, v, p, s, fr, stage, picture, back)
-  c.box(style=player_fill.then(@ui.style(bg=Data(ink.stage))), fn() {
+  if !flying {
+    phone_gestures(c, v, p, s, fr, stage, picture, back)
+  }
+  c.box(style=player_fill.then(@ui.style(bg=Data(if flying { no_ground } else { ink.stage }))), fn() {
     // the picture where its zoom puts it, a drag down taking it down with the finger
     c.box(style=player_fill, id=stage, fn() {
       match p.native() {
-        Some(n) if n.here() => {
+        Some(n) if n.here() && !flying => {
           let (x, y, w, h) = picture_place(v, p, s, c.width, c.height, still)
           v.placed = Some((x, y + v.drag_dy, w, h))
           c.native(n, content=Some((x, y + v.drag_dy, w, h))) |> ignore
@@ -1508,7 +1530,7 @@ fn phone_player(
       |> ignore
     }
     let shown = if v.drag == DownClose || v.taken_down { desk_none } else { f.shown }
-    let live = f.on && v.drag != DownClose && !v.taken_down
+    let live = f.on && v.drag != DownClose && !v.taken_down && !flying
     // the bar at the top: back, the name, which of the folder's it is, 选集
     c.layer(fn() {
       c.box(style=@ui.style(h=Fixed(room_top)), fn() {  }) |> ignore
@@ -1576,7 +1598,7 @@ fn phone_gestures(
   let press = c.press()
   // two fingers: a pinch round the point between them, which moves the picture as it moves
   match c.second_pointer() {
-    Some((x2, y2)) if picture && c.pressed(stage) && z.nw > 0.0 => {
+    Some((x2, y2)) if picture && c.held_down(stage) && z.nw > 0.0 => {
       let cx = (px + x2) / 2.0
       let cy = (py + y2) / 2.0
       let d = ((px - x2) * (px - x2) + (py - y2) * (py - y2)).sqrt()
@@ -1591,10 +1613,12 @@ fn phone_gestures(
     }
     _ => v.pinch = (0.0, 0.0, 0.0)
   }
-  if press.fresh && (c.pressed(stage) || c.clicked(stage)) {
+  if press.fresh && (c.held_down(stage) || c.clicked(stage)) {
     v.caught = z.stop_fling()
   }
-  if down && c.pressed(stage) {
+  // (held from the moment it went down: what it does follows the finger from there, whatever shows it pressed later
+  // over what scrolls, Ctx::pressed)
+  if down && c.held_down(stage) {
     let dx = px - press.x
     let dy = py - press.y
     if v.drag == NoDrag && press.moved && !v.pinched {
@@ -1987,9 +2011,6 @@ fn phone_timeline_h() -> Double {
 let phone_timeline_least : Double = 26.0
 
 ///|
-let player_next_w : Double = 280.0
-
-///|
 // kept across runs: a value (no field of it changes)
 let player_fill : @ui.Style = @ui.css("w=Full h=Full")
 
@@ -2011,29 +2032,19 @@ let player_pill : @ui.Style = @ui.css("row px=S3 py=S1_5 gap=S2 radius=Xl1_5 ali
 let player_pill_words : @ui.TextStyle = @ui.text_style(size=Ui, wrap=false)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let player_failed_box : @ui.Style = @ui.css("p=S8 gap=S3 align=ACenter")
+/// The widest a rate of bytes is said (file_size's, a second's): what the waiting pill keeps the room of.
+// kept across runs: a value (never changed)
+let player_rate_widest : Array[String] = ["1023 B/s", "1024 KB/s", "999.9 MB/s"]
 
 ///|
-/// The next one's card: 280 wide, 20 and 16 in, 12 between; its button 40 high.
+/// Round what the player asks (player_ask): its card clear of the screen's sides as a page's cards are.
 // kept across runs: a value (no field of it changes)
-let player_next_box : @ui.Style = @ui.style(w=Fixed(player_next_w), px=S5, py=S4, gap=S3, radius=Xl1_5, align=ACenter)
+let player_ask_room : @ui.Style = @ui.css("w=Full px=S4 align=ACenter")
 
 ///|
+/// The card itself: a confirming dialog's width (confirm_w), never wider than the room.
 // kept across runs: a value (no field of it changes)
-let player_next_note : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let player_next_now : @ui.Style = @ui.css("w=Full h=S10 px=S4 radius=Xl align=ACenter justify=JCenter clip")
-
-///|
-// kept across runs: a value (no field of it changes)
-let player_next_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let player_next_off : @ui.Style = @ui.css("px=S3 py=S1")
+let player_ask_card : @ui.Style = @ui.style(w=Cut, min_w=Within(confirm_w), max_w=Fixed(confirm_w))
 
 ///|
 /// A phone's bar at the top: 8 and 6 in, 48 high, its corner 16; the name 15 in 600, which of how many 12.

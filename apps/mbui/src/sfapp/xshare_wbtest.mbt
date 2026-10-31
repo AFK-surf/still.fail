@@ -121,10 +121,10 @@ test "分享给其他 workspace on a phone: its rows a finger's, 完成 across t
 }
 
 ///|
-/// A phone's buttons are drawn the phone web's 38 (mButton: a pill that sits with the words round it); a finger reaches
-/// one from a fingertip round it all the same (mbui's press_reach: a target under 44 grown to it
-/// round its middle where the finger is on nothing else), so none is drawn taller for its reach.
-test "分享给其他 workspace on a phone: 完成 drawn as tall as a finger's room, reached at its edge" {
+/// A phone's buttons are drawn as the large screen's, 34 (button_height: the user, 2026-10-31, 「按钮既然缩，那就跟大屏一致
+/// 呗」); a finger reaches one from a fingertip round it all the same (mbui's press_reach: a target under 44 grown to it
+/// round its middle where the finger is on nothing else).
+test "分享给其他 workspace on a phone: 完成 drawn as the large screen's, reached past its edge" {
   let calls : Array[Made] = []
   let t = sheet_core(calls)
   t.tap_text("分享给其他 workspace")
@@ -137,10 +137,9 @@ test "分享给其他 workspace on a phone: 完成 drawn as tall as a finger's r
     .filter(fn(r) { r.0 <= cx && cx <= r.0 + r.2 && r.1 <= cy && cy <= r.1 + r.3 && r.3 < 60.0 })
     .iter()
     .fold(init=(0.0, 0.0, 0.0, 0.0), fn(a, r) { if r.2 > a.2 { (r.0, r.1, r.2, r.3) } else { a } })
-  // (drawn as tall as a finger's room, 44: everything pressed is that tall with touch)
-  assert_true(pill.3 >= 44.0 - 0.5, msg="drawn \{pill.3} high")
-  // (2 in from its top: within what is drawn)
-  t.tap(cx, pill.1 + 2.0)
+  assert_true((pill.3 - @sf.button_height()).abs() < 0.5, msg="drawn \{pill.3} high")
+  // (3 over its top: outside what is drawn, within a finger's 44 round its middle)
+  t.tap(cx, pill.1 - 3.0)
   t.frame()
   assert_eq(named(calls, "chat.xshare").length(), 1)
 }

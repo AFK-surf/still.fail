@@ -248,6 +248,7 @@ pub fn Tester::new(
     wall: tester_wall - time,
     scale,
     wants: false,
+    frames_on: 0,
     wake: -1.0,
     instances: 0,
     ime_active: false,

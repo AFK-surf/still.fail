@@ -49,6 +49,13 @@ export const GLIDE_EASE = `linear(${Array.from({ length: 31 }, (_, i) => ((1 - M
 export const LOCAL_MS = 100;
 
 /**
+ * The most a page opening waits for the core's answer: what it shows, read from the device in the core's own time
+ * (slower on a phone, and busy as the app comes back), or that it waits on a station for it. Cut short at LOCAL_MS, a
+ * chat on the device came in as its messages' bones, then them (2026-10-31).
+ */
+export const CORE_MS = 1000;
+
+/**
  * Whether motion is reduced on the page now: its root says so (followMotion; styles/still.ts STILL for the styles).
  * Motion reduced is one clock, not a way of its own: everything moves as it does, every motion taking no time (Motion's
  * `instantAnimations`, `play`, `motionMs`, `glideShare`; for the styles, styles/global.css.ts), so what it ends at and

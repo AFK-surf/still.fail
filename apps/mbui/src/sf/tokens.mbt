@@ -1037,7 +1037,7 @@ let wide_type : Type = {
 
 ///|
 /// A control's height (Theme::control_h): with keyboard and mouse 34, as a row and a button are (2026-10-30, one
-/// height: in place of the web's 36), a finger's (44).
+/// height: in place of the web's 36), a finger's (44); a button 34 with either (button_height).
 let wide_control_h : Double = menu_row_min
 
 ///|

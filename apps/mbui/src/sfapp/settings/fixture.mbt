@@ -56,6 +56,11 @@ priv struct SettingsFixture {
   mut pair_ended : String
   /// MBA online too (settings-profiles-pick: Profile's ＋ asks which station)
   mut mba_online : Bool
+  /// the subscriptions' allowances a month's window too, three in all (settings-profiles-monthly: OpenCode Go's)
+  mut monthly : Bool
+  /// how far the made-up workspace has changed on its own (settings-workspace-motion, settings-stations-motion): 1 a
+  /// person and a station come, 2 one of each goes (fixture_motion)
+  mut motion : Int
   /// the bytes of the drives' files kept (`cache.usage`'s `drive`), until let go (`drive.kept.clear`)
   mut drive_kept : Double
   /// the chats' files kept let go (`cache.file.clear`), by name
@@ -88,6 +93,8 @@ let fx : SettingsFixture = {
   pairing: false,
   pair_ended: "",
   mba_online: false,
+  monthly: false,
+  motion: 0,
   drive_kept: fx_drive_kept,
   kept_cleared: [],
 }
@@ -168,12 +175,60 @@ fn fixture_reset() -> Unit {
   fx.pairing = false
   fx.pair_ended = ""
   fx.mba_online = false
+  fx.monthly = false
+  fx.motion = 0
   fixture_open.sheet = ""
   fixture_open.list = ""
   fixture_open.block = 0
   fixture_open.frames = 0
   fixture_open.desk = ""
   fx_connect_step.val = "team"
+}
+
+///|
+/// The made-up workspace's people (settings-workspace-motion: 林 comes, then 周 goes).
+fn fx_members(me : Json) -> Json {
+  let all = [
+    me,
+    obj([("sub", str("u2")), ("email", str("ana@example.com")), ("name", str("Ana")), ("role", str("admin"))]),
+    obj([("sub", str("u3")), ("email", str("zhou@example.com")), ("name", str("周")), ("role", str("member"))]),
+  ]
+  if fx.motion >= 1 {
+    all.push(obj([("sub", str("u5")), ("email", str("lin2@example.com")), ("name", str("林")), ("role", str("member"))]))
+  }
+  if fx.motion >= 2 {
+    all.remove(2) |> ignore
+  }
+  Json::array(all)
+}
+
+///|
+/// `v`'s items as the made-up workspace has changed on its own (fx's `motion`): `add` come at 1, the one `gone` names
+/// gone at 2 (settings-*-motion).
+fn fx_moved(v : Json, add : Json, gone : (Json) -> Bool) -> Json {
+  match v {
+    Object(m) =>
+      match m.get("items") {
+        Some(Array(a)) => {
+          let b = a.copy()
+          if fx.motion >= 1 {
+            b.push(add)
+          }
+          m["items"] = Json::array(if fx.motion >= 2 { b.filter(fn(x) { !gone(x) }) } else { b })
+        }
+        _ => ()
+      }
+    _ => ()
+  }
+  v
+}
+
+///|
+/// The made-up workspace changed on its own as far as `step` (fx's `motion`), for the recordings of its pages' lists'
+/// motion: told to what follows the made-up core's topics.
+pub fn fixture_motion(step : Int) -> Unit {
+  fx.motion = step
+  fx_changed()
 }
 
 ///|
@@ -287,6 +342,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-stations-add" => up("add", "", 0)
     // Profile's ＋ with more than one station online: which to add it on (pressed by the film's step)
     "settings-profiles-pick" => fx.mba_online = true
+    "settings-profiles-monthly" => fx.monthly = true
     "settings-stations-existing" => up("add-existing", "", 0)
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
@@ -386,7 +442,10 @@ pub fn fixture_page(mode : String) -> String {
     "settings-fonts-coming" | "settings-fonts-code" => "fonts"
     "settings-prices" => "prices:7"
     "settings-run" | "settings-run-models" | "settings-run-accounts" => "run:ws1/st1#s-c1"
-    "settings-add-people" | "settings-workspace-mark" => "workspace"
+    "settings-add-people" | "settings-workspace-mark" | "settings-workspace-motion" => "workspace"
+    "settings-stations-motion" => "stations"
+    "settings-connects-motion" => "connects"
+    "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
     "settings-security-confirm" | "settings-security-join" | "settings-security-off" => "security"
     "settings-notify-off" | "settings-lock-prompt" => "home"
@@ -402,7 +461,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile-quota" => "profile:ws1/st1#cx"
     "settings-profile-models" => "profile-models:ws1/st1#cx"
     "settings-me-reading" => "me"
-    "settings-profiles-pick" => "profiles"
+    "settings-profiles-pick" | "settings-profiles-monthly" => "profiles"
     "settings-connect" => "connect:ws1/st1#k1"
     _ =>
       if m.has_prefix("settings-") {
@@ -476,10 +535,17 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
       ("state", str("ok")),
       (
         "windows",
+        Json::array(
         [
           obj([("label", str("5 小时")), ("usedPercent", Json::number(38.0)), ("mark", str("5H")), ("left", Json::number(62.0)), ("level", str("ok")), ("refills", str("2 小时后恢复"))]),
           obj([("label", str("本周")), ("usedPercent", Json::number(81.0)), ("mark", str("W")), ("left", Json::number(19.0)), ("level", str("amber")), ("refills", str("星期一恢复"))]),
-        ],
+        ].iter().concat(
+          (if fx.monthly {
+            [obj([("label", str("每月")), ("usedPercent", Json::number(3.0)), ("mark", str("M")), ("left", Json::number(97.0)), ("level", str("ok")), ("refills", str("11 月 1 日恢复"))])]
+          } else {
+            []
+          }).iter(),
+        ).collect()),
       ),
       ("checkedAt", Json::number(0.0)),
       ("time", obj([("checkedAt", stamp_of("3 分钟前"))])),
@@ -1342,11 +1408,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("role", str("owner")),
           (
             "members",
-            [
-              me,
-              obj([("sub", str("u2")), ("email", str("ana@example.com")), ("name", str("Ana")), ("role", str("admin"))]),
-              obj([("sub", str("u3")), ("email", str("zhou@example.com")), ("name", str("周")), ("role", str("member"))]),
-            ],
+            fx_members(me),
           ),
           ("stations", [obj([("id", str("st1")), ("name", str("Studio"))]), obj([("id", str("st2")), ("name", str("MBA"))])]),
           ("invitations", [obj([("id", str("i1")), ("role", str("member")), ("email", str("qin@example.com")), ("time", obj([("expires_at", stamp_of("", until="6 天后"))]))])]),
@@ -1372,7 +1434,20 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("offLabel", str("已关闭 1 项")),
         ]),
       )
-    "stations" => if fx.none { Some([]) } else { Some([fx_station("ws1/st1"), fx_station("ws1/st2")]) }
+    "stations" =>
+      if fx.none {
+        Some([])
+      } else {
+        // (settings-stations-motion: 3 comes, then MBA goes)
+        let all = [fx_station("ws1/st1"), fx_station("ws1/st2")]
+        if fx.motion >= 1 {
+          all.push(fx_station("ws1/st3"))
+        }
+        if fx.motion >= 2 {
+          all.remove(1) |> ignore
+        }
+        Some(Json::array(all))
+      }
     // a new device asking with this one's code (lock_prompts.mbt)
     "lockPrompts" =>
       Some(
@@ -1603,7 +1678,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       )
     "connects" =>
       Some(
-        obj([
+        fx_moved(obj([
           ("me", obj([("email", str("lin@example.com"))])),
           (
             "items",
@@ -1635,7 +1710,15 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             ],
           ),
           ("wait", obj([("reading", Json::boolean(false)), ("failing", []), ("empty", Json::boolean(false))])),
-        ]),
+        ]), obj([
+          ("station", str("ws1/st1")),
+          ("stationName", str("Studio")),
+          ("connect", fx_connect("k9", "发布助手", "online", "在线", "multi-session")),
+          ("sessions", []),
+          ("candidates", []),
+          ("running", Json::number(0.0)),
+          ("changes", Json::array([])),
+        ]), fn(x) { text(field(Some(x), "connect"), "id") == "k2" }),
       )
     "lock" =>
       Some(
@@ -1802,7 +1885,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       )
     "vaultItems" =>
       Some(
-        obj([
+        fx_moved(obj([
           ("vault", str("v1")),
           ("name", str("林的库")),
           ("open", Json::boolean(false)),
@@ -1814,7 +1897,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
               obj([("id", str("it3")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("kind", str("login")), ("listed", Json::boolean(false)), ("modes", []), ("hosts", []), ("kindText", str("登录")), ("shut", [obj([("key", str("username")), ("label", str("用户名")), ("value", str("••••••••••")), ("secret", Json::boolean(false)), ("mono", Json::boolean(false))]), obj([("key", str("password")), ("label", str("密码")), ("value", str("••••••••••••")), ("secret", Json::boolean(true)), ("mono", Json::boolean(true))])]), ("agentText", str("仅自己可见")), ("lineText", str("仅自己可见")), ("howText", str("")), ("lastsText", str("跟随默认 · 直到对话归档"))]),
             ],
           ),
-        ]),
+        ]), obj([("id", str("it4")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("name", str("OpenAI key")), ("kind", str("token")), ("listed", Json::boolean(true)), ("modes", ["proxy"]), ("hosts", ["api.openai.com"]), ("kindText", str("Token")), ("shut", []), ("agentText", str("允许 agent 申请 · 代理 · api.openai.com")), ("lineText", str("代理 · api.openai.com")), ("howText", str("代理 · 限 api.openai.com")), ("lastsText", str("跟随默认 · 直到对话归档"))]), fn(x) { text(Some(x), "id") == "it1" }),
       )
     "profiles" => {
       let list = fx_profiles().map(fn(p) {

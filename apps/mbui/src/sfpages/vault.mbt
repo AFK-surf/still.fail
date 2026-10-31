@@ -295,7 +295,7 @@ fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Un
   let shows = fn(words : Array[String]) { find == "" || words.iter().any(fn(w) { w.to_lower().contains(find) }) }
   // (a row's line: what is said of it, those words that are not empty, a dot between)
   let said = fn(words : Array[String]) { words.filter(fn(w) { w != "" }).join(" · ") }
-  let rows : Array[() -> Unit] = []
+  let rows : Array[(String, () -> Unit)] = []
   let mut reading = false
   // the profiles' accounts, as the profiles list them (folded at the foot: seen on the profiles' pages)
   let accounts : Array[() -> Unit] = []
@@ -327,7 +327,7 @@ fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Un
     }
   }
   // each vault's secrets, by name (the core's order); those it does not name, a row
-  let unnamed : Array[() -> Unit] = []
+  let unnamed : Array[(String, () -> Unit)] = []
   for row in vaults {
     let rv = Some(row)
     let topic = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(text(rv, "id")) })
@@ -342,12 +342,12 @@ fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Un
       if !has(iv, "name") || !shows([text(iv, "name"), text(iv, "kindText"), text(iv, "lineText"), text(iv, "howText")]) {
         continue
       }
-      rows.push(fn() { vault_item_row(c, core, rv, iv, many, keyed) })
+      rows.push(("it/" + text(rv, "id") + "/" + text(iv, "id"), fn() { vault_item_row(c, core, rv, iv, many, keyed) }))
     }
     let hidden = list.filter(fn(x) { !has(Some(x), "name") })
     if hidden.length() > 0 {
       let words = @sf.t("web-pages.vault.hidden", args=[("n", hidden.length().to_string())])
-      unnamed.push(fn() {
+      unnamed.push(("hidden/" + text(rv, "id"), fn() {
         // (its words where the names are; unlocked by opening one of them: the vault's key kept a while, every name
         // shown; one this device has no key to, said alone)
         let lead = fn() { c.box(style=vt_no_mark, fn() {  }) |> ignore }
@@ -356,7 +356,7 @@ fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Un
         } else if @sf.link_row(c, "vault-unlock/" + text(rv, "id"), words, value=@sf.t("web-pages.vault.unlock"), value_lit=true, chevron=false, lead~) {
           @settings.act(core, @sf.t("web-pages.vault.unlockWhat"), "vault.open", obj([("workspace", str(ws)), ("item", str(text(Some(hidden[0]), "id")))]))
         }
-      })
+      }))
     }
   }
   let out : Array[() -> Unit] = [
@@ -369,14 +369,8 @@ fn vault_all(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Un
   ]
   if rows.length() + unnamed.length() > 0 {
     out.push(fn() {
-      @sf.group(c, fn() {
-        for r in rows {
-          r()
-        }
-        for r in unnamed {
-          r()
-        }
-      })
+      // (each secret by its vault and id: one added or taken out comes and goes where it is, @sf.group_rows)
+      @sf.group(c, fn() { @sf.group_rows(c, "vault-items/" + ws, rows + unnamed) })
     })
   }
   // the accounts, folded under a row naming them (open where what is looked for is among them)

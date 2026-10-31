@@ -4,6 +4,28 @@
 // Stations.kt TopBack). Sizes in dp as there; colours src/sf's narrow palette (Theme.kt's).
 
 ///|
+/// Each page's blocks as given and as its list made of them, by the page's key (scroll_page's `keys`).
+// kept across runs: put back by settings' reset (parts_reset)
+let page_rows : Map[String, @ui.ListRows[() -> Unit]] = {}
+
+///|
+/// Each page's blocks' keys as last given.
+// kept across runs: put back by settings' reset (parts_reset)
+let page_keys : Map[String, Array[String]] = {}
+
+///|
+fn page_rows_of(key : String) -> @ui.ListRows[() -> Unit] {
+  match page_rows.get(key) {
+    Some(l) => l
+    None => {
+      let l = @ui.ListRows::new()
+      page_rows[key] = l
+      l
+    }
+  }
+}
+
+///|
 /// Theme.kt's `warn`, the same in light and dark.
 let warn : Int64 = 0xD9962BFFL
 
@@ -24,11 +46,38 @@ fn wide_side(c : @ui.Ctx) -> Double {
 
 ///|
 /// A page of the settings: what it shows, a block at a time (each laid out only when it comes into view), scrolling
-/// under what stays at its top. `key` keeps its place while it is on the stack.
-fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
+/// under what stays at its top. `key` keeps its place while it is on the stack. `keys`: each block's own (a station's
+/// id, a person's), as many as the blocks: what came, went and changed its place among them comes and goes where it is,
+/// as a chat's rows do (ListRows, docs/list-motion.md; 2026-10-31 the user: 「有一些是凭空出现的，有一些是凭空消失的」),
+/// not at once; a page whose blocks are all others now (what waited, then what came) shows them as they are.
+fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], keys? : Array[String]) -> Unit {
   // (its blocks drawn as its list lays them out, maybe after this returns: in the page's arrangement, @sf.look)
   let l = @sf.look()
   let blocks = blocks.map(fn(b) { fn() { @sf.with_look(l, b) } })
+  // (by their keys: those going still among them while they close, each keyed as it was)
+  let (blocks, keys, rows) = match keys {
+    Some(ks) if ks.length() == blocks.length() && !@sf.in_panel() => {
+      let lr = page_rows_of(key)
+      let was = page_keys.get(key).unwrap_or([])
+      page_keys[key] = ks
+      let watched = ks.iter().any(fn(k) { was.contains(k) })
+      let (b, k) = lr.rows(c, ks, blocks, fn(_) { "" }, watched~)
+      (b, k, Some(lr))
+    }
+    _ => (blocks, [], None)
+  }
+  // a block drawn in a box of its own, coming and going where it is by its key
+  let block = fn(i : Int, draw : () -> Unit) {
+    match rows {
+      Some(lr) => {
+        let n = c.box(style=@sf.full_width, draw)
+        lr.enter(c, n, keys[i])
+        lr.leave(c, n, keys[i])
+      }
+      None => draw()
+    }
+  }
+  let sized = rows.map(fn(lr) { lr.sized() })
   // in a panel (the library's presenters'), in the room the panel gives it: no page's column, no frame's room over or
   // under it
   if @sf.in_panel() {
@@ -53,10 +102,10 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
         gap(c, 80.0)
       } else {
         block_at.val = i
-        c.box(style=@sf.full_width, pl=side, pr=side, fn() { (blocks[i])() }) |> ignore
+        block(i, fn() { c.box(style=@sf.full_width, pl=side, pr=side, fn() { (blocks[i])() }) |> ignore })
         block_at.val = -1
       }
-    })
+    }, sized?)
     |> ignore
     return
   }
@@ -73,9 +122,9 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
     } else if i - head == blocks.length() {
       gap(c, foot)
     } else {
-      (blocks[i - head])()
+      block(i - head, blocks[i - head])
     }
-  })
+  }, sized?)
   |> ignore
   fixture_scroll(c, "settings/" + key)
 }

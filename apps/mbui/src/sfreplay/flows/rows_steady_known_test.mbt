@@ -12,6 +12,9 @@ fn init {
     ("src/sfreplay/flows/agent_reply_test.mbt", 1),
     ("src/sfreplay/flows/answer_option_test.mbt", 5),
     ("src/sfreplay/flows/bar_archive_test.mbt", 2),
+    // (Home's rows since 2026-10-31 on the list's rows' way, docs/list-motion.md: a chat archived as it is restored
+    // here, the row under where it was a little down as its room closes, then back; the next to mend)
+    ("src/sfreplay/flows/archive_restore_test.mbt", 1),
     ("src/sfreplay/flows/card_motion_test.mbt", 8),
     // (a row leaves before its room closes since 2026-10-30, docs/list-motion.md: the chat's state line gone as words
     // are sent and back with the agent's answer some 200 ms on, its room just set out closing, opens again)
@@ -45,6 +48,12 @@ fn init {
     // room going on as fast as it went, the message's from rest, the rows over them a little down, then up, between
     // frames 40 ms apart in this run)
     ("src/sfreplay/flows/viewer_test.mbt", 1),
+    // (Home's rows since 2026-10-31 on the list's rows' way: a chat unpinned, 已固定's heading leaving as 今天's comes
+    // over it from rest, the heading under it on its way up stopped there; the next to mend)
+    ("src/sfreplay/flows/wide_row_menu_test.mbt", 1),
+    // (Home's rows since 2026-10-31 on the list's rows' way: a new chat's room opening as a frame of the slower pass
+    // takes twice as long, the row under it setting out faster in it than the curve's start allows a frame)
+    ("src/sfreplay/flows/wide_new_chat_test.mbt", 1),
     ("src/sfreplay/flows/wide_switcher_test.mbt", 1),
   ])
 }

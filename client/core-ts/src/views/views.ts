@@ -18,12 +18,14 @@ import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import * as jobs from "../jobs.ts";
 import * as looks from "../looks.ts";
+import { conformTy, type Ty } from "../conform.ts";
 import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import * as refs from "../refs.ts";
 import { chatsLinked } from "../refLinks.ts";
+import { timed } from "../spent.ts";
 import type { Value, Watch } from "../store.ts";
-import { arr as arrU, deepFreeze, get as getU, isObject } from "../util.ts";
+import { arr as arrU, deepFreeze, get as getU, isObject, shaped, sharedValue } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
 import { archiveHintOf, badgeKindsOf, jobsSeenOf, type ArchiveHint } from "../prefs.ts";
@@ -450,6 +452,9 @@ export type ViewsEnv = {
   /// How a workspace's members' devices reach its stations (views/ways.ts), from `/v1/me`; undefined while no account's
   /// is held.
   ways?: (workspace: string) => WaysView | undefined;
+  /// Whether a station's topic with no value yet waits on the station for what it shows (station/topics.ts `waits`);
+  /// none does where not given.
+  waits?: (topic: Topic) => boolean;
 };
 
 /// An agent's request about a vault item a card names (`card.vault`), and whether it is one to keep a secret.
@@ -470,6 +475,7 @@ export function envOf(core: Inner): ViewsEnv {
     runner: core.runner,
     store: core.store,
     data: core.data,
+    waits: (topic) => core.stationTopics.waits(topic),
     emailOf: (workspace) => {
       const sub = owner(workspace);
       return sub === null ? null : (core.accounts.list().find((a) => a.sub === sub)?.email ?? null);
@@ -532,6 +538,11 @@ export class Views implements Owner {
   readonly #loading = new Set<string>();
   /// Since when each station up has had no host reading (by address): unanswered that long, it is said to be silent.
   readonly #hostless = new Map<string, number>();
+  /// Each station's overview and host reading as the stations' list shows them, made again only as the station said
+  /// something new (or, the overview's times in words, the minute changed): a host reading of one station, every few
+  /// seconds from each, made every station's anew, the list and the new chat's view after it (50-80 ms a time on a
+  /// phone, 2026-10-31).
+  readonly #stationShown = new Map<string, { overview: unknown; minute: number; shown: J; host: unknown; presented: J }>();
   /// The live views that show agents' requests about vault items (a chat's cards, the 奏 page's), by the view: the
   /// requests, each in its workspace, and how they were answered here when it was made (`#vaultCard`), so that a change
   /// of the vault shows it again only where it changes what the cards say (`vaultChanged`).
@@ -997,15 +1008,15 @@ export class Views implements Owner {
 
   /// The chats `text`, said in a chat on `station`, links to, as their stations' lists have them: each found its link,
   /// its title as its row says it, and whether it is archived (archivedRows), said so. One no list has is left out.
+  /// Each its row alone, read where it is kept: a station's whole lists, its archive's thousands of rows, read for a
+  /// link were most of what opening a chat that has one took (0.65-0.83 s on a phone, 2026-10-31).
   #linkedChats(station: string, text: string): J[] {
     if (!text.includes("/chats/") && !text.includes("/o/")) return [];
     return chatsLinked(text, station).flatMap((c) => {
-      const named = (row: J) => str(get(row, "id")) === c.id || str(get(row, "session")) === c.id;
-      const live = arr(this.ok({ topic: "chatRows", station: c.station })).find(named);
-      const gone = live === undefined ? arr(this.ok({ topic: "archivedRows", station: c.station })).find((r) => named(r) && isObject(get(r, "archived"))) : undefined;
-      const row = live ?? gone;
-      if (row === undefined) return [];
-      return [{ href: c.href, title: str(get(row, "title")) || t("core-views.new_chat"), ...(gone !== undefined ? { archived: true, note: t("core-views.search.archived") } : {}) }];
+      const found = this.#core.data.chatNamed(c.station, c.id);
+      if (found === undefined || (found.archived && !isObject(get(found.row, "archived")))) return [];
+      const row = found.row as J;
+      return [{ href: c.href, title: str(get(row, "title")) || t("core-views.new_chat"), ...(found.archived ? { archived: true, note: t("core-views.search.archived") } : {}) }];
     });
   }
 
@@ -1089,10 +1100,25 @@ export class Views implements Owner {
 
   // ── computing ──
 
+  /// Whether a view with no value yet waits on a station for what it shows (store.ts `waits`): a chat whose messages it
+  /// opens with are not on the device. Not what it is built from but not computed yet this turn (that comes as soon as
+  /// it is): the device is asked, not the thread's topic.
+  waits(view: Topic): boolean {
+    if (view.topic !== "chat" || typeof view.station !== "string") return false;
+    const station = view.station;
+    let thread: number | null = typeof view.thread === "number" ? view.thread : null;
+    const session = typeof view.session === "string" ? view.session : null;
+    if (thread === null && session !== null) {
+      const pending = session.startsWith(PENDING_PREFIX) ? this.local.pendingThread(station, session) : this.boundThread(station, session);
+      thread = typeof pending === "number" ? pending : null;
+    }
+    return thread !== null && this.#core.waits?.({ topic: "thread", station, thread }) === true;
+  }
+
   compute(view: Topic): Value | undefined {
     if (!this.#views.has(topicKey(view))) return undefined;
-    this.#sync(view);
-    const out = this.#compute(view);
+    timed(`${view.topic}.sources`, () => this.#sync(view));
+    const out = timed(`${view.topic}.make`, () => this.#compute(view));
     if (view.topic !== "chat" || out === undefined || !("ok" in out)) return out;
     const v = out.ok as J;
     const station = view.station as string;
@@ -1188,7 +1214,8 @@ export class Views implements Owner {
           const thread = out !== undefined && "ok" in out ? u64(get(get(out.ok, "thread"), "id")) : null;
           const of = thread !== null ? `t:${thread}` : typeof view.thread === "number" ? `t:${view.thread}` : `s:${String(view.session ?? "")}`;
           const held = (session: string, name: string) => this.#core.data.hasKeptFile(station, session, name, "thumb") || this.#core.data.hasKeptFile(station, session, name, "poster");
-          return this.#vaultCards(view, drawn(out, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, of), (text) => this.#linkedChats(station, text), held));
+          const shown = timed("chat.draw", () => drawn(out, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, of), (text) => timed("chat.links", () => this.#linkedChats(station, text)), held));
+          return timed("chat.vault", () => this.#vaultCards(view, shown));
         };
         if (typeof view.thread === "number") return draw(this.#chat(station, view.thread));
         const session = typeof view.session === "string" ? view.session : null;
@@ -1690,8 +1717,7 @@ export class Views implements Owner {
     const items = stations.map((s) => {
       const overview = this.ok({ topic: "overview", station: s.address });
       const hostRaw = this.ok({ topic: "host", station: s.address });
-      const host = hostRaw === undefined ? null : present.host(hostRaw);
-      const shown = overview === undefined ? null : present.decorate({ topic: "overview", station: s.address }, structuredClone(overview), c);
+      const { host, shown } = this.#stationParts(s.address, overview, hostRaw, c);
       let summary: string;
       const cause = get(this.link(s.address), "cause");
       if (!s.online && cause === "updating") summary = t("core-views.station.updating_short");
@@ -1751,6 +1777,25 @@ export class Views implements Owner {
     return { ok: items };
   }
 
+  /// A station's host reading and overview as its list's item shows them: made once for each the station said (and each
+  /// minute, for the overview's times in words), shared after (`shaped`: never changed, not copied or shaped again as
+  /// they go out).
+  #stationParts(station: string, overview: J, hostRaw: J, c: present.Clock): { host: J; shown: J } {
+    const minute = Math.floor(c.now / 60_000);
+    let kept = this.#stationShown.get(station);
+    if (!kept || kept.overview !== overview || kept.minute !== minute) {
+      const shown = overview === undefined ? null : asShaped("Overview", present.decorate({ topic: "overview", station }, structuredClone(overview), c));
+      kept = { overview, minute, shown, host: kept?.host, presented: kept?.presented ?? null };
+      this.#stationShown.set(station, kept);
+    }
+    if (kept.host !== hostRaw || kept.presented === undefined) {
+      const presented = hostRaw === undefined ? null : asShaped("Host", present.host(hostRaw));
+      kept.host = hostRaw;
+      kept.presented = presented;
+    }
+    return { host: kept.presented, shown: kept.shown };
+  }
+
   #connects(scope: string, mine: boolean): Value | undefined {
     const stations = this.#stationsOr(scope);
     if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
@@ -1803,7 +1848,7 @@ export class Views implements Owner {
       if (!isObject(page.thread)) return undefined;
       thread = structuredClone(page.thread);
     }
-    const agents = this.#agentsOf(station, thread);
+    const agents = timed("chat.agents", () => this.#agentsOf(station, thread));
     // What two chats' agents wrote each other is not said in it: it has a page of its own (`chatLetters`).
     const keys = new Set(members(thread));
     const all: J[] = merge(arr(page.entries));
@@ -1814,7 +1859,7 @@ export class Views implements Owner {
     const peopleSeqs = said.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [m.seq as number] : []));
     const waits = peopleSeqs.slice(Math.max(peopleSeqs.length - waiting, 0));
     const written = said.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [[m.seq as number, str(m.text) ?? ""] as [number, string]] : []));
-    let messages = this.#shown(station, thread, agents, said, waits);
+    let messages = timed("chat.shown", () => this.#shown(station, thread, agents, said, waits));
     // A sent message leaves the outbox as its own entry (or anything later) arrives; before the station answered
     // with its seq, it is the viewer's first message since it was sent with the same words.
     const newest = u64(page.last);
@@ -1875,7 +1920,7 @@ export class Views implements Owner {
       pendingCard = d !== null && open(d) ? [u64(d.seq) ?? 0, decisions.dismissed(d)] : null;
     }
     messages.splice(0, messages.length, ...decisions.inMessages(messages, pendingCard, outbox.filter((m) => m.state !== "failed")));
-    const elsewhere = this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false, { members: members_, bots });
+    const elsewhere = timed("chat.elsewhere", () => this.#sentElsewhere(station, thread, agents, messages, u64(page.first) !== null && page.first > 1, page.end === false, { members: members_, bots }));
     const title = row !== undefined && row.title !== undefined ? row.title : typeof page.title === "string" ? page.title : chatTitle(thread);
     const view: J = {
       me: this.me(scope),
@@ -2422,6 +2467,15 @@ export class Views implements Owner {
 
 /// When each pinned list row was pinned (the rows say only `pinned: true`).
 const pinnedAt = new WeakMap<object, number>();
+
+/// `value` put through shape `ty` once, as it would go out, and marked so (`shaped`: shared, never changed, not copied or
+/// shaped again where it goes out inside another value); as it is when it does not fit (its topic's shape says why).
+function asShaped(ty: Ty, value: J): J {
+  const out = conformTy(ty, value);
+  if (!("ok" in out) || out.ok === null || typeof out.ok !== "object") return value;
+  shaped.add(sharedValue(out.ok));
+  return out.ok;
+}
 
 /// What a chat's page draws by each message, decided here so the page only draws it (docs/client-core.md): the chats it
 /// links to (`linked`: each its title and whether it is archived), whether the

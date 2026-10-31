@@ -1669,7 +1669,8 @@ test "wide: 文件 moved onto a folder that has its name: asked first (跳过, �
   for open in ["会议记录", "设计稿", "设计稿/旧版"] {
     files_tree_open(open)
   }
-  t.frame()
+  // (what they hold opened where it is: its way over)
+  t.run_for(@ui.row_size_ms)
   let notes = t.locate("说明.txt")
   assert_eq(notes.length(), 2)
   let (x1, y1) = t.find("旧版").unwrap()

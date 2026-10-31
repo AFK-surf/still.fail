@@ -278,18 +278,20 @@ final class NativeViews {
         }
 
         /**
-         * What it asks of the app (a player's read, a site's request) put where the app finds it (`ask`), on the GL
-         * thread between frames, the app told first that until it answers the view waits on it, not on the host
-         * (state 0; not once it is ready): so no frame sees the ask before that is told.
+         * What it asks of the app (a player's read or its letting one go, a site's request) put where the app finds it
+         * (`ask`), on the GL thread between frames, and the app told it waits on it (state 0), which takes a player's
+         * reads at once: no frame comes while the window is off the screen (onStop pauses the GL thread; its events
+         * still run), and a read untaken there failed the player (STALL_NS). One event: no frame sees the ask before
+         * the word.
          */
         void askApp(Runnable ask) {
             Host.view.toGL(() -> {
                 boolean say;
                 synchronized (this) {
-                    say = !told && !closed;
+                    say = !closed;
                 }
-                if (say) Native.outside(Native.OUTSIDE_VIEW, id, 0);
                 ask.run();
+                if (say) Native.outside(Native.OUTSIDE_VIEW, id, 0);
             });
         }
 
@@ -1561,8 +1563,7 @@ final class NativeViews {
             Host.log("view " + id + ": the read at " + r.offset + " let go of, " + r.got + " of its " + r.length + " bytes here");
             waiting.remove(r.id);
             for (int i = 0; i < r.blocks; i++) coming.remove(r.block + i, r);
-            lettingGo.add(r.id);
-            Host.requestFrame();
+            askApp(() -> lettingGo.add(r.id));
         }
 
         /** The run `r` asked of the app, its bytes kept on the disk as they come, block by block (keptLock held). */
@@ -1611,8 +1612,7 @@ final class NativeViews {
                     synchronized (keptLock) {
                         // failed or stalled: told to stop, as one let go of
                         if (r.failed && waiting.remove(r.id) != null && !closed) {
-                            lettingGo.add(r.id);
-                            Host.requestFrame();
+                            askApp(() -> lettingGo.add(r.id));
                         }
                         for (int i = 0; i < r.blocks; i++) coming.remove(r.block + i, r);
                     }

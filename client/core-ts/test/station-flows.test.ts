@@ -408,6 +408,28 @@ test("a_station_down_shows_it_is_tried_again_as_soon_as_a_person_asks", async ()
   core.close();
 });
 
+test("a_stations_host_reading_makes_its_overview_in_the_list_again_not_every_time", async () => {
+  // A station tells its host reading every few seconds, each station of a workspace in turn: the list was made anew
+  // each time, every station's overview copied and its times put in words again, and the new chat's view after it
+  // (50-80 ms a time on a phone, 2026-10-31). Its overview as the list shows it is made again only as it changes.
+  const { host, core } = await started(base());
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 3, { topic: "stations", scope: "ws" });
+  await host.settle();
+  apply(host, values);
+  const item = () => (core.inner.store.get({ topic: "stations", scope: "ws" }) as J[]).find((s) => s.station === ST);
+  const before = item();
+  assert.ok(before.overview !== null && typeof before.overview === "object", JSON.stringify(before).slice(0, 300));
+  core.inner.stations.link(ST)!.memory.set("host", { os: "macOS", cpus: 8, load: 1, memory: { usedBytes: 1, totalBytes: 2 } });
+  core.inner.stations.onChange(ST, "host");
+  await host.time.pass(COALESCE_MS * 2, 10);
+  const after = item();
+  assert.notEqual(after.host, before.host, "its reading shown");
+  assert.equal(after.overview, before.overview, "its overview as it was made");
+  core.close();
+});
+
 const summary = (key: string, turns: number) => ({ ...session(key, turns), title: null, archivedAt: null, lastTurn: null });
 
 test("a_rows_digest_is_the_stations_whatever_the_order_of_its_fields", () => {

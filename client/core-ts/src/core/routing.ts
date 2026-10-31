@@ -9,6 +9,7 @@ import { Loads } from "../preview-load.ts";
 import * as status from "../status.ts";
 import type { Topic } from "../protocol.ts";
 import type { Source, Value } from "../store.ts";
+import { timed } from "../spent.ts";
 
 /// What a module that owns topics of its own plugs in (the station topics, the views, …).
 export interface Owner {
@@ -17,6 +18,7 @@ export interface Owner {
   resume?(topic: Topic): void;
   stop?(topic: Topic): void;
   compute?(topic: Topic): Value | undefined;
+  waits?(topic: Topic): boolean;
 }
 
 export class Router implements Source {
@@ -31,7 +33,7 @@ export class Router implements Source {
 
   start(topic: Topic): void {
     const owner = this.owners.find((o) => o.owns(topic));
-    if (owner?.start) owner.start(topic);
+    if (owner?.start) timed(`${topic.topic}.start`, () => owner.start!(topic));
     // Computed when it goes out: its first value now.
     this.#core.store.invalidate(topic);
   }
@@ -42,6 +44,10 @@ export class Router implements Source {
 
   stop(topic: Topic): void {
     this.owners.find((o) => o.owns(topic))?.stop?.(topic);
+  }
+
+  waits(topic: Topic): boolean {
+    return this.owners.find((o) => o.owns(topic))?.waits?.(topic) === true;
   }
 
   compute(topic: Topic): Value | undefined {

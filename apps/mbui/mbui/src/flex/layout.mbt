@@ -1035,7 +1035,9 @@ fn layout_flex(
   let flow = flow_children(node)
   // a row that leaves out what it has not the room for (Style's `drop`), as it is in this room
   let all = flow
-  let flow = if s.fits && row && known(avail_main) {
+  let flow = if s.one_of && row {
+    first_fit(flow, if known(avail_main) { avail_main } else { 1.0e9 }, cb_w, cb_h)
+  } else if s.fits && row && known(avail_main) {
     fit_flow(flow, avail_main, gap_main, cb_w, cb_h)
   } else {
     flow
@@ -1771,6 +1773,36 @@ fn fit_flow(flow : Array[Node], room : Double, gap : Double, cb_w : Double, cb_h
   let kept = []
   for j, c in flow {
     if out[j] {
+      kept.push(c)
+    }
+  }
+  kept
+}
+
+///|
+/// Of a row's items `flow` (Style's `one_of`: ways of saying one thing, each shorter than the one before), the first
+/// that fits `room` whole (as wide as what it holds, with its margins), else the last; what is put where it is said
+/// kept too, taking no room.
+fn first_fit(flow : Array[Node], room : Double, cb_w : Double, cb_h : Double) -> Array[Node] {
+  let ways = []
+  for j, c in flow {
+    if c.style.position != Absolute {
+      ways.push(j)
+    }
+  }
+  let mut pick = -1
+  for j in ways {
+    let c = flow[j]
+    let b = box_for(c, cb_w, cb_h)
+    let w = size_node(c, undef, undef, undef, undef, cb_w, cb_h, false) + b.mar_l + b.mar_r
+    pick = j
+    if w <= room + 0.01 {
+      break
+    }
+  }
+  let kept = []
+  for j, c in flow {
+    if j == pick || c.style.position == Absolute {
       kept.push(c)
     }
   }

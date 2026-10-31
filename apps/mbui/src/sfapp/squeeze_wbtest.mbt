@@ -73,8 +73,9 @@ fn screen_in(
 }
 
 ///|
-/// How long after it opens a screen is looked at: what it opens with (a page pushed, a sheet up) over.
-let squeeze_opening : Double = 1000.0
+/// How long after it opens a screen is looked at: what it opens with (a page pushed, a sheet up) over, a page whose
+/// core never answers (chat-loading) slid in once it waited the most a page opening waits (page_local_ms).
+let squeeze_opening : Double = page_local_ms + 1000.0
 
 ///|
 /// The screen at `at` (its window, language and screen) against its squeeze bar, `faults` what it has squeezed: what

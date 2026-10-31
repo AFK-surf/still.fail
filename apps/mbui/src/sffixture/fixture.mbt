@@ -930,6 +930,28 @@ pub fn fixture(mode : String) -> Source {
       _ => ""
     },
   }
+  if f.mode == "drive-motion" {
+    // the folder changing on its own: a note made at 2 s, 发布清单.md taken out at 3.6 s (rows_view's rows coming and
+    // going where they are)
+    fix_later(2000.0, fn() {
+      let a = fix_folder(fix_docs, "")
+      a.insert(4, fix_entry("新建的笔记.md", false, 1200, "刚刚"))
+      @settings.fixture_changed()
+    })
+    fix_later(3600.0, fn() {
+      let a = fix_folder(fix_docs, "")
+      match a.search_by(fn(e) { text(Some(e), "name") == "发布清单.md" }) {
+        Some(i) => a.remove(i) |> ignore
+        None => ()
+      }
+      @settings.fixture_changed()
+    })
+  }
+  if f.mode == "settings-workspace-motion" || f.mode == "settings-stations-motion" || f.mode == "settings-connects-motion" || f.mode == "settings-vault-motion" {
+    // the workspace changing on its own: a person and a station come at 2 s, one of each goes at 3.6 s
+    fix_later(2000.0, fn() { @settings.fixture_motion(1) })
+    fix_later(3600.0, fn() { @settings.fixture_motion(2) })
+  }
   if f.mode == "home-motion" {
     // the list changing on its own, a step every 1.6 s from MBUI_MOTION_AT ms (2000) after it starts: rows moving,
     // coming, going (ListMotion.kt), for the recordings of the Home rows' motion
@@ -1183,6 +1205,7 @@ pub fn fixture(mode : String) -> Source {
       fixture_stream(name, params, on_value, done)
     },
     cancel: fn(_) {  },
+    waits: fn(_, _) { false },
     call_bytes: fn(name, params, bytes, done) {
       match fixture_kept(name, params, Some(bytes)) {
         Some(r) => {

@@ -23,7 +23,10 @@ export type CoreMessage =
   /// `bytes`: a call's value may carry bytes beside its JSON (a screen view's frames): the web transfers them, the
   /// native hosts hand them over as they are (never as base64 in the JSON).
   | { id: RequestId; value: unknown; bytes?: Uint8Array }
-  | { id: RequestId; delta: AnyOp[] };
+  | { id: RequestId; delta: AnyOp[] }
+  /// A topic with no value yet whose value waits on a station (or the cloud), not on the core reading what the device
+  /// holds (store.ts `waits`): what shows it can show what is to come now, not what it holds a moment later.
+  | { id: RequestId; waiting: true };
 
 /// A call's answer with bytes beside its JSON (a file read), as a handler gives it: `{id, ok: value, bytes}`.
 export class Beside {

@@ -541,6 +541,7 @@
   "web-main.prose.copyCsv": "Copy as CSV",
   "web-main.prose.copyMarkdown": "Copy as Markdown",
   "web-main.prose.copyTable": "Copy table",
+  "web-main.quota.figure": "{left}% left",
   "web-main.quota.left": "{label}: {left}% left",
   "web-main.quota.leftAlone": "{left}% left",
   "web-main.quota.unchecked": "Quota not checked yet",

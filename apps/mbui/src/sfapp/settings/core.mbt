@@ -526,6 +526,8 @@ pub fn left(route : Route) -> Unit {
 /// As at the start: nothing chosen, no sheet (tests).
 pub fn reset() -> Unit {
   archive_reset()
+  page_rows.clear()
+  page_keys.clear()
   vault_ask_reset()
   keymap_reset()
   login_marked.val = None

@@ -33,6 +33,7 @@ import { Store } from "./store.ts";
 import { CloudSync } from "./sync/cloud.ts";
 import { Priority, Scheduler } from "./sync/scheduler.ts";
 import { Kind, SAMPLE, Tracer } from "./trace.ts";
+import { spentClock } from "./spent.ts";
 import { Wakes, WakingHost } from "./wake.ts";
 import { Workspaces } from "./workspace.ts";
 import { install as installStationCalls } from "./station/calls.ts";
@@ -177,6 +178,7 @@ export class Core {
       brand.setTestChannel(inner.host.testChannel());
       fonts.setOrigin(inner.host.cloudOrigin());
       inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
+      spentClock(() => inner.host.monotonicMs());
       // A failure let go of is a span of its own: Axiom has it though nothing waited on it.
       inner.runner.onIgnored = (what, error) => {
         const span = inner.tracer.root("ignored", Kind.Internal);

@@ -62,7 +62,7 @@ page before they start too). The cause is still the push; its moment moved on by
 a touch's time is, kept on a run's tape (`LATE`) and given again to a Tester.
 
 On 中屏's tape the same: what is brought over to the page (新建对话, what is shown with the side panel in use) is put
-on the page, and the tape brings the page over once the page shows it (`Nav::top_shows`: the core's answer waited for as a pushed page waits for it, at most `LOCAL_MS`), not
+on the page, and the tape brings the page over once the page shows it (`Nav::top_shows`: the core's answer waited for as a pushed page waits for it, at most sfapp's `page_local_ms`), not
 sliding over with the page before on it and swapping it mid-way. Every move of a state (`Ctx::move_state`: the tape,
 the sidebar, a side panel) waits for its first frame's lateness as a slide does.
 

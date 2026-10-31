@@ -287,6 +287,44 @@ test("a_chat_with_something_unread_opens_from_what_is_held_while_what_is_before_
   core.close();
 });
 
+test("a_chat_says_it_waits_on_its_station_only_while_none_of_what_it_opens_with_is_on_the_device", async () => {
+  // Chat 7's latest page is on the device; none of chat 8's, its read held up. A page opening waits for the core's
+  // answer (mbui sfapp page_ready): 7's view, however long the core takes to read it, never `waiting` before it (its
+  // page slid in as its messages' bones, then them, 2026-10-31); 8 says at once it waits, its page showing its
+  // messages to come, then its view as they are here.
+  const answers = base();
+  answers["GET /threads"] = [threadView(7, 120), threadView(8, 30)];
+  answers["GET /threads/7/entries?limit=50"] = { last: 120, entries: entries(71, 120) };
+  const held: (() => void)[] = [];
+  const { host, core } = await started(answers, 0, undefined, (s) =>
+    stationLater(s.host, (req) => {
+      if (!/\/threads\/8\/entries/.test(req.url)) return undefined;
+      return new Promise((answer) => held.push(() => answer(jsonResponse(200, { last: 30, entries: entries(1, 30) }))));
+    }));
+  assert.equal(core.inner.data.logSpan("entry", "ws/st", "8"), null, "none of 8 here");
+  host.takeEmitted();
+  const ui = core.connect();
+  const said = (id: number) => host.takeEmitted().map(([, m]) => m as Record<string, unknown>).filter((m) => m.id === id);
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7, session: null });
+  subscribe(core, ui, 2, { topic: "chat", station: "ws/st", thread: 8, session: null });
+  await host.time.pass(50, 10);
+  const emitted = host.takeEmitted().map(([, m]) => m as Record<string, unknown>);
+  const of7 = emitted.filter((m) => m.id === 1);
+  const of8 = emitted.filter((m) => m.id === 2);
+  assert.ok(of7.length > 0 && of7.every((m) => !("waiting" in m)), "7 on the device: its view, never waiting");
+  assert.ok("value" in of7[0]!, "its first message its view");
+  assert.deepEqual(of8, [{ id: 2, waiting: true }], "8 waits on its station");
+  // one more subscriber of 8 is told so too
+  subscribe(core, ui, 3, { topic: "chat", station: "ws/st", thread: 8, session: null });
+  assert.deepEqual(said(3), [{ id: 3, waiting: true }]);
+  for (const answer of held.splice(0)) answer();
+  await host.time.pass(500, 10);
+  const later = said(2);
+  assert.ok(later.length > 0 && later.every((m) => !("waiting" in m)), "then its view");
+  assert.ok("value" in later[0]!);
+  core.close();
+});
+
 test("a_chat_whose_unread_came_while_the_app_was_away_opens_at_once_with_what_is_held_and_what_came_joins_it", async () => {
   // Read to 120 here; the app away while 121..125 were said. As it opens again its lists say so before those entries
   // are on the device: the chat opens with what is held, where it opens (121) not here yet, and they join it as they

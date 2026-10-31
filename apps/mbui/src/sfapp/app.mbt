@@ -94,6 +94,8 @@ fn reset() -> Unit {
   dv_reset()
   decide_reset()
   @settings.reset()
+  @sf.group_rows_reset()
+  @sfdesk.drive_rows_reset()
   found_marking.val = ("", [], 0.0)
   find_marking.val = []
   ask_turns.clear()
@@ -608,7 +610,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       signed_in_frame(c, src, w)
       if @sfdesk.is_wide(c) {
         // a page opened in the pane shows once the core has given what it shows, the one before staying till then
-        // (LOCAL_MS at most), as a page pushed on a phone slides in then
+        // (page_local_ms at most), as a page pushed on a phone slides in then
         app.nav.shows_when(fn() { pane_ready(src, app.nav.top()) }, page_local_ms)
         // the wide frame's keys (sfdesk's keys.mbt), then the rail, the sidebar and the page beside it (sfdesk's
         // frame.mbt); what opens over them after them
@@ -630,7 +632,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         pick_back(c)
         viz_full_layer(c, src)
       } else {
-        // a page opened slides in once the core has given what it shows (App.kt Pages: LOCAL_MS at most)
+        // a page opened slides in once the core has given what it shows, or said it waits on a station (page_local_ms at
+        // most)
         app.nav.comes_when(fn() { page_ready(src, w, app.nav.top()) }, page_local_ms)
         narrow_lists(c)
         let finger = stack_by_finger()
@@ -957,9 +960,12 @@ fn dmax(a : Double, b : Double) -> Double {
 }
 
 ///|
-/// How long a page opening waits for what the core has on the device (App.kt LOCAL_MS, the library's: motion.ts): never
-/// for a station.
-let page_local_ms : Double = @sf.local_ms
+/// How long a page opening waits at most for the core's answer: what it shows, as the device holds it, or that it
+/// waits on a station (Source.waits: a chat none of whose messages are here), never for a station. As long as the
+/// first page's (first_page_ms), not LOCAL_MS: the core reads what is here in its own time, slower on a phone and
+/// busy as the app comes back (what came meanwhile read in); cut short at LOCAL_MS, a chat on the device slid in as its
+/// messages' bones, they a moment later (2026-10-31, android 0.1.6303: no request to a station as the chats opened).
+let page_local_ms : Double = splash_label_ms
 
 ///|
 /// How long the app's first page waits for what it shows (all of it the core's on the device, as a page opening's):
@@ -971,13 +977,13 @@ let first_page_ms : Double = splash_label_ms
 
 ///|
 /// Whether the core has answered (a value or why not) for what page `p` of workspace `w` shows as it opens (App.kt
-/// opening): a chat, an agent's history, Home's list and what the last update brought over it (home.mbt); any other
-/// page is not waited for.
+/// opening): a chat (or said its messages wait on a station: its page shows them to come), an agent's history, Home's
+/// list and what the last update brought over it (home.mbt); any other page is not waited for.
 fn page_ready(src : Source, w : Workspace, p : Page) -> Bool {
   let answered = fn(t : Topic) { t.value is Some(_) || t.error is Some(_) }
   match p {
-    Chat(r) => answered((src.topic)("chat", chat_params(r)))
-    History(r, key, _) => answered((src.topic)("chat", chat_params(r))) && answered((src.topic)("history", history_params(r, key)))
+    Chat(r) => chat_answered(src, r)
+    History(r, key, _) => chat_answered(src, r) && answered((src.topic)("history", history_params(r, key)))
     Home => list_ready(src, w) && answered((src.topic)("changelog", Map::new()))
     _ => true
   }
@@ -1044,12 +1050,18 @@ let window_shown : Ref[Bool] = Ref(false)
 /// shown already, what is beside it waited for in its tab; any other page is not waited for.
 fn pane_ready(src : Source, p : Page) -> Bool {
   match p {
-    Chat(r) => {
-      let t = (src.topic)("chat", chat_params(r))
-      t.value is Some(_) || t.error is Some(_)
-    }
+    Chat(r) => chat_answered(src, r)
     _ => true
   }
+}
+
+///|
+/// Whether the core has answered for chat `r`: its view, why it has none, or that its messages wait on a station (none
+/// of them on the device: Source.waits).
+fn chat_answered(src : Source, r : ChatRef) -> Bool {
+  let params = chat_params(r)
+  let t = (src.topic)("chat", params)
+  t.value is Some(_) || t.error is Some(_) || (src.waits)("chat", params)
 }
 
 ///|

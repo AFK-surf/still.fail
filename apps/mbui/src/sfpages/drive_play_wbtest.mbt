@@ -62,7 +62,10 @@ test "a song of the drive: its mark and name in the middle, alone of its kind; a
   assert_true(t.find(" / 4") is None)
   let e = play_tester("player-ended")
   assert_true(e.find("播放结束") is Some(_))
-  e.tap_text("下一个：第02集.mp4")
+  // (下一个 the card's button, its line under the title naming the one it goes to)
+  assert_true(e.find("下一个：第02集.mp4") is Some(_))
+  let (nx, ny) = e.find_last("下一个").unwrap()
+  e.tap(nx, ny)
   match app.nav.top() {
     DrivePlay(at) => assert_eq(at.path, @sffixture.fix_films + "/第02集.mp4")
     _ => fail("not the next one")

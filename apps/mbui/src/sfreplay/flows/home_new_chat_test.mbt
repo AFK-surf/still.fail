@@ -10,8 +10,8 @@ test "02-home-new-chat" {
     f.peer("peer create 另一台设备新建的对话 082947 post:新对话里的回复 082947")
     f.see("另一台设备新建的对话 082947")
     f.see("=新对话里的回复 082947")
-    // its row grown in, the rows under it moved down: to the end of their motions, as each set out
-    f.run_to_rest("layout chats/")
+    // its row come in where it is, the rows under it moved down as its room opened: to the end of the list's way
+    f.run_to_rest("a list's rows' heights")
     f.end()
   })
 }

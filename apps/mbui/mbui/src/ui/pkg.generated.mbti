@@ -966,7 +966,7 @@ pub fn Ctx::bg_by(Self, Int32, () -> Int64) -> Unit
 pub fn Ctx::blur(Self) -> Unit
 pub fn Ctx::bone_whole(Self, Int32) -> Unit
 pub fn Ctx::bones(Self, Int64, () -> Unit) -> Unit
-pub fn Ctx::box(Self, style? : Style, selected? : Bool, disabled? : Bool, dir? : Dir, w? : Size, h? : Size, pad? : Double, padx? : Double, pady? : Double, pl? : Double, pr? : Double, pt? : Double, pb? : Double, m? : Double, mx? : Double, my? : Double, ml? : Double, mr? : Double, mt? : Double, mb? : Double, left? : Double, top? : Double, right? : Double, bottom? : Double, moves? : String, gap? : Double, align? : Align, justify? : Justify, bg? : Int64, radius? : Double, border? : Double, border_color? : Int64, shadow? : Double, shadow_color? : Int64, shadow_y? : Double, min_w? : Double, max_w? : Double, min_h? : Double, max_h? : Double, clip? : Bool, tx? : Double, ty? : Double, opacity? : Double, glass? : @paint.Glass, glass_group? : Bool, notch_y? : Double, notch_r? : Double, notch_fillet? : Double, aspect? : Double, keep? : Bool, drop? : Int32, more? : Bool, shadow_out? : Bool, flow? : Bool, line_gap? : Double, gone_empty? : Bool, label? : String, name? : String, id? : Int32, taps? : Bool, points? : Bool, () -> Unit) -> Int32
+pub fn Ctx::box(Self, style? : Style, selected? : Bool, disabled? : Bool, dir? : Dir, w? : Size, h? : Size, pad? : Double, padx? : Double, pady? : Double, pl? : Double, pr? : Double, pt? : Double, pb? : Double, m? : Double, mx? : Double, my? : Double, ml? : Double, mr? : Double, mt? : Double, mb? : Double, left? : Double, top? : Double, right? : Double, bottom? : Double, moves? : String, gap? : Double, align? : Align, justify? : Justify, bg? : Int64, radius? : Double, border? : Double, border_color? : Int64, shadow? : Double, shadow_color? : Int64, shadow_y? : Double, min_w? : Double, max_w? : Double, min_h? : Double, max_h? : Double, clip? : Bool, tx? : Double, ty? : Double, opacity? : Double, glass? : @paint.Glass, glass_group? : Bool, notch_y? : Double, notch_r? : Double, notch_fillet? : Double, aspect? : Double, keep? : Bool, drop? : Int32, more? : Bool, one_of? : Bool, shadow_out? : Bool, flow? : Bool, line_gap? : Double, gone_empty? : Bool, label? : String, name? : String, id? : Int32, taps? : Bool, points? : Bool, () -> Unit) -> Int32
 pub fn Ctx::build_number(Self) -> Int32
 pub fn Ctx::building(Self) -> Int32
 #callsite(autofill(loc))
@@ -1044,6 +1044,7 @@ pub fn Ctx::has_focus(Self, Int32) -> Bool
 #callsite(autofill(loc))
 pub fn Ctx::held(Self, String, Bool, Double, keep? : Bool, later? : Bool, loc~ : SourceLoc) -> Bool
 pub fn Ctx::held_due(Self, String) -> Double
+pub fn Ctx::held_down(Self, Int32) -> Bool
 pub fn Ctx::held_long(Self, Int32) -> Bool
 pub fn Ctx::hidden_from_semantics(Self, () -> Unit) -> Unit
 pub fn Ctx::holds_through(Self, Int32) -> Unit
@@ -2315,6 +2316,7 @@ pub fn Tester::frame_perf(Self) -> FramePerf
 pub fn Tester::frame_period(Self) -> Double
 pub fn Tester::frame_shown_at(Self, Double, Double) -> Unit
 pub fn Tester::frames(Self, Int32, ms? : Double) -> Array[Int64]
+pub fn Tester::frames_on(Self) -> Int32
 pub fn Tester::frames_owed(Self) -> Unit
 pub fn Tester::gallery(Self, Array[@hostapi.GalleryPhoto]) -> Unit
 pub fn Tester::gap_faults(Self) -> Array[String]

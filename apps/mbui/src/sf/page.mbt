@@ -749,10 +749,18 @@ pub fn group_waiting(c : @ui.Ctx, rows : () -> Unit, text? : String = "") -> Uni
 
 ///|
 /// A page's long list (its rows laid out as they come into view: `Ctx::list`), its rows drawn in the arrangement of
-/// the page it is in: they are drawn after the page's frame has said it (group_row reads it).
-pub fn rows_list(c : @ui.Ctx, key : String, count : Int, est : Double, row : (Int) -> Unit) -> Int {
+/// the page it is in: they are drawn after the page's frame has said it (group_row reads it). `sized`: what changed
+/// its rows' heights, by their keys (a ListRows' answer: Ctx::list's `sized`).
+pub fn rows_list(
+  c : @ui.Ctx,
+  key : String,
+  count : Int,
+  est : Double,
+  row : (Int) -> Unit,
+  sized? : @ui.RowCauses,
+) -> Int {
   let l = look()
-  c.list(key, count, est, fn(i) { with_look(l, fn() { rows_room(c, fn() { row(i) }) }) })
+  c.list(key, count, est, fn(i) { with_look(l, fn() { rows_room(c, fn() { row(i) }) }) }, sized?)
 }
 
 ///|

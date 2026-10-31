@@ -17,6 +17,8 @@ import * as present from "./present.ts";
 import { topicDebug, topicKey, type ClientId, type CoreMessage, type RequestId, type Topic } from "./protocol.ts";
 import { laterSleep, type Runner } from "./runtime.ts";
 import { Kind, type Span, type Tracer } from "./trace.ts";
+import { readAfresh } from "./markdown.ts";
+import { spent, spentSince, timed } from "./spent.ts";
 import { equal, sharedValue } from "./util.ts";
 import { holds } from "./data.ts";
 
@@ -25,9 +27,11 @@ export const EVICT_AFTER_MS = 60_000;
 /// The topics a page opens with, each first subscriber's wait for its first value a trace of its own (`<topic>.open`,
 /// docs/telemetry.md): how long a chat took to show, and how much of that the core spent making it.
 const OPENED = new Set(["chat"]);
-/// A round of emissions that held the core this long is a trace of its own (`core.flush`): what made the core busy as
-/// a page waited for it.
+/// Rounds of emissions that held the core this long are told (`core.flush`): what made the core busy as a page waited
+/// for it. At most one a minute, saying how many there were and the worst of them: one a round was 1375 spans a phone
+/// sent in two hours, more than anything else it sent (2026-10-31).
 const FLUSH_HELD_MS = 50;
+const FLUSH_TOLD_EVERY_MS = 60_000;
 
 /// A value or the error a topic shows.
 export type Value = { ok: unknown } | { err: CoreError };
@@ -48,6 +52,9 @@ export interface Source {
   stop(topic: Topic): void;
   /// The current value of a topic marked stale, as it goes out; undefined while it has none.
   compute?(topic: Topic): Value | undefined;
+  /// Whether a topic with no value yet waits on a station for it (nothing it shows is on the device), not only on what
+  /// it is computed from being computed: its subscribers are told so (`waiting`).
+  waits?(topic: Topic): boolean;
 }
 
 /// Keeps a watched topic subscribed; `drop` lets the topic go like a UI unsubscribing.
@@ -82,7 +89,9 @@ type Entry = {
   /// How its value goes out (output.ts).
   output?: Output;
   /// A page's first subscriber waiting for its first value (OPENED): its trace, and what the core spent making it.
-  opening?: { span: Span; workMs: number; computes: number };
+  opening?: { span: Span; workMs: number; computes: number; mdFrom: number; spentFrom: Record<string, number> };
+  /// Its subscribers told it waits on a station (Source.waits), while it has no value.
+  waiting?: boolean;
 };
 
 type Out = { value: unknown } | { delta: AnyOp[] } | { error: CoreError };
@@ -113,6 +122,8 @@ export class Store {
   #clock = false;
   #clockOn = false;
   #shaped = false;
+  /// The rounds that held the core since `core.flush` last went out: how many, for how long, and the worst.
+  #heldRounds: { from: number; rounds: number; ms: number; worst: { ms: number; topics: number; slowest: string; slowestMs: number; parts: [string, number][] } | null } | null = null;
 
   readonly #tracer: Tracer | null;
 
@@ -167,11 +178,14 @@ export class Store {
     entry.idle = null;
     const cached = entry.sent;
     if (cached !== undefined) this.host.emit(client, to(whole(cached), id));
-    else if (entry.opening === undefined && this.#tracer !== null && OPENED.has(topic.topic)) {
-      const span = this.#tracer.root(`${topic.topic}.open`, Kind.Internal);
-      // (made anew, or kept from a page shown a moment ago and let go: its view made again either way)
-      span.set("stillfail.anew", started);
-      entry.opening = { span, workMs: 0, computes: 0 };
+    else {
+      if (entry.waiting === true) this.host.emit(client, { id, waiting: true });
+      if (entry.opening === undefined && this.#tracer !== null && OPENED.has(topic.topic)) {
+        const span = this.#tracer.root(`${topic.topic}.open`, Kind.Internal);
+        // (made anew, or kept from a page shown a moment ago and let go: its view made again either way)
+        span.set("stillfail.anew", started);
+        entry.opening = { span, workMs: 0, computes: 0, mdFrom: readAfresh.chars, spentFrom: { ...spent } };
+      }
     }
     if (started) this.#start(topic);
     else {
@@ -364,6 +378,7 @@ export class Store {
     const pending = this.#pending;
     this.#pending = [];
     const t0 = this.host.monotonicMs();
+    const spentFrom = this.#tracer !== null ? { ...spent } : null;
     let slowest = "";
     let slowestMs = 0;
     for (const topic of pending) {
@@ -375,15 +390,27 @@ export class Store {
         slowest = topic.topic;
       }
     }
-    const held = this.host.monotonicMs() - t0;
-    if (held >= FLUSH_HELD_MS && this.#tracer !== null) {
-      const span = this.#tracer.root("core.flush", Kind.Internal);
-      span.set("stillfail.held_ms", Math.round(held));
-      span.set("stillfail.topics", pending.length);
-      span.set("stillfail.slowest", slowest);
-      span.set("stillfail.slowest_ms", Math.round(slowestMs));
-      span.end();
-    }
+    const now = this.host.monotonicMs();
+    const held = now - t0;
+    if (held < FLUSH_HELD_MS || this.#tracer === null) return;
+    // (the first told at once; then each a minute after the one before)
+    const first = this.#heldRounds === null;
+    const h = (this.#heldRounds ??= { from: now, rounds: 0, ms: 0, worst: null });
+    h.rounds++;
+    h.ms += held;
+    if (h.worst === null || held > h.worst.ms) h.worst = { ms: held, topics: pending.length, slowest, slowestMs, parts: spentFrom ? spentSince(spentFrom) : [] };
+    if (!first && now - h.from < FLUSH_TOLD_EVERY_MS) return;
+    const span = this.#tracer.root("core.flush", Kind.Internal);
+    span.set("stillfail.rounds", h.rounds);
+    span.set("stillfail.rounds_ms", Math.round(h.ms));
+    const w = h.worst!;
+    span.set("stillfail.held_ms", Math.round(w.ms));
+    span.set("stillfail.topics", w.topics);
+    span.set("stillfail.slowest", w.slowest);
+    span.set("stillfail.slowest_ms", Math.round(w.slowestMs));
+    for (const [part, ms] of w.parts) span.set(`stillfail.ms.${part}`, Math.round(ms));
+    span.end();
+    this.#heldRounds = { from: now, rounds: 0, ms: 0, worst: null };
   }
 
   /// What the source makes of a topic now, kept shared (frozen when that is checked). A source that throws making it
@@ -438,14 +465,24 @@ export class Store {
         now.opening.workMs += this.host.monotonicMs() - workFrom;
         now.opening.computes++;
       }
+      // Nothing to show yet: whoever shows it told once if that waits on a station, not on the core (a page opening
+      // then shows what is to come at once, and otherwise waits for what the device holds).
+      if (now.waiting !== true && now.subscribers.length > 0 && this.#source?.waits?.(topic) === true) {
+        now.waiting = true;
+        for (const [client, id] of now.subscribers) this.host.emit(client, { id, waiting: true });
+        now.opening?.span.set("stillfail.waiting", true);
+      }
       return;
     }
+    now.waiting = false;
     const c: present.Clock = { now: this.host.nowMs(), offsetMin: this.host.utcOffsetMin(this.host.nowMs()) };
     let value: Value = now.value;
     if ("ok" in value) {
       // What is decorated is a copy (output.ts): not what is kept.
       now.output ??= new Output();
-      const out = now.output.shape(topic, value.ok, c, this.#shaped);
+      const output = now.output;
+      const ok = value.ok;
+      const out = timed(`${topic.topic}.shape`, () => output.shape(topic, ok, c, this.#shaped));
       value = "ok" in out ? { ok: out.ok } : { err: new CoreError("shape", t("core-misc.shape", { topic: topicDebug(topic), at: out.error })) };
     }
     // What goes out: to a subscriber taking keyed ops, its lists changed item by item; to the others, the old ops.
@@ -472,6 +509,10 @@ export class Store {
       const work = now.opening.workMs + this.host.monotonicMs() - workFrom;
       span.set("stillfail.work_ms", Math.round(work));
       span.set("stillfail.computes", now.opening.computes + 1);
+      // (Markdown read afresh meanwhile, by it or by whatever else the core did: words not kept here nor on the device)
+      span.set("stillfail.md_chars", readAfresh.chars - now.opening.mdFrom);
+      // where the core's time went meanwhile, by part (spent.ts): this chat's making and whatever else ran
+      for (const [part, ms] of spentSince(now.opening.spentFrom)) span.set(`stillfail.ms.${part}`, Math.round(ms));
       if ("err" in value) span.fail();
       span.end();
       now.opening = undefined;

@@ -2,7 +2,7 @@
 // of 文档 that no listing shows (影片: three episodes, a subtitle beside the second, a song), its files' reads never
 // answered (the player waits, as on a slow link, the same on every run) but the subtitle's; how the player stands pinned
 // for the shot (`@kit.Media::pin`): an episode paused at 5:12 of 23:24 with its subtitle, the song, an episode at its
-// end with the next one offered, one still opening. Every word in it is made up.
+// end with the next one offered, one that failed, one still opening. Every word in it is made up.
 
 ///|
 pub let fix_films : String = "影片"
@@ -53,7 +53,7 @@ pub fn fixture_play_read(params : Json, done : (Result[(Json, Bytes), Json]) -> 
 }
 
 ///|
-/// The made-up drive's film of a player's mode (player-video, -audio, -ended, -opening): its folder made up, the film and
+/// The made-up drive's film of a player's mode (player-video, -audio, -ended, -failed, -opening): its folder made up, the film and
 /// where its player stands (None: still opening); None for another mode.
 pub fn play_fixture(mode : String) -> (DriveAt, @kit.MediaStatus?)? {
   let (file, pin) : (String, @kit.MediaStatus?) = match mode {
@@ -98,6 +98,22 @@ pub fn play_fixture(mode : String) -> (DriveAt, @kit.MediaStatus?)? {
           playing: false,
           buffering: false,
           ended: true,
+          width: 1280.0,
+          height: 720.0,
+        }),
+      )
+    // (one that could not play on, its card over where it stopped)
+    "player-failed" =>
+      (
+        "第10集.mp4",
+        Some({
+          state: -1,
+          duration: 1404000.0,
+          position: 73000.0,
+          buffered: 73000.0,
+          playing: false,
+          buffering: false,
+          ended: false,
           width: 1280.0,
           height: 720.0,
         }),

@@ -146,9 +146,12 @@ pub(all) struct Style {
   // min-width, with its margins). `drop` k > 0: the k-th to be left out (the last in the row first of the same k);
   // -1: there only while something of its row is left out (its ⋯); 0: always there. `fits`: a row holding some of
   // either. Left out, an item is laid out nowhere (Node::left_out). `fit_need`: what such a row keeps of an item
-  // that stays, more than its min-width (NaN: its min-width), before one that may leave does.
+  // that stays, more than its min-width (NaN: its min-width), before one that may leave does. `one_of`: a row whose
+  // items are ways of saying one thing, each shorter than the one before, of which it keeps only the first that fits
+  // it whole (the last where none does: SwiftUI's ViewThatFits), the rest left out.
   mut drop : Int
   mut fits : Bool
+  mut one_of : Bool
   mut fit_need : Double
   // Not CSS's: the least an item of a row comes to as a last resort (NaN: its min-width), where the row has not the room
   // for all it holds at their min-widths once what may give way has: words on one line that say not how they give, and
@@ -232,6 +235,7 @@ pub fn Style::new() -> Style {
     overflow: Visible,
     drop: 0,
     fits: false,
+    one_of: false,
     fit_need: 0.0 / 0.0,
     soft_min: 0.0 / 0.0,
     stretch_past_max: false,
@@ -307,6 +311,7 @@ pub fn Style::reset(self : Style) -> Unit {
   self.overflow = Visible
   self.drop = 0
   self.fits = false
+  self.one_of = false
   self.fit_need = 0.0 / 0.0
   self.soft_min = 0.0 / 0.0
   self.stretch_past_max = false

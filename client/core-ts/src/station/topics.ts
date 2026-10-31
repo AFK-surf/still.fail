@@ -25,6 +25,7 @@ import { type Link, MEMORY, OUTFLOW, filePeekKey, linkPreviewKey, logKey } from 
 import { grantsShown } from "./outflow.ts";
 import * as logins from "./machine-logins.ts";
 import { laterSleep } from "../runtime.ts";
+import { timed } from "../spent.ts";
 import * as looks from "../looks.ts";
 
 /// A chat shows a window of its thread's entries: at most this many of what it shows (shownTo).
@@ -234,6 +235,12 @@ export class StationTopics implements Owner {
     if (["host", "live", "jobLog", "machineLoginScreen"].includes(topic.topic)) this.#sync.openEvents(station, false);
   }
 
+  /// Whether a topic with no value yet waits on its station for what it shows (store.ts `waits`): a chat's messages
+  /// none of which it opens with are on the device.
+  waits(topic: Topic): boolean {
+    return topic.topic === "thread" && typeof topic.station === "string" && typeof topic.thread === "number" && this.#waits(topic);
+  }
+
   compute(topic: Topic): Value | undefined {
     const station = topicStation(topic)!;
     try {
@@ -290,7 +297,7 @@ export class StationTopics implements Owner {
       }
       case "thread":
         if (error) return { err: error };
-        return this.#thread(topic);
+        return timed("thread.make", () => this.#thread(topic));
       case "letters":
         if (error) return { err: error };
         return this.#letters(topic);
@@ -517,6 +524,56 @@ export class StationTopics implements Owner {
     return Math.max(u64(get(this.summary(station, id), "last")) ?? 0, held ? held.max : 0);
   }
 
+  /// Whether a thread topic with no window yet waits on its station for what it opens with: nothing it would open with
+  /// is on the device (`waits`, the UI told so: its page shows its messages to come, not the core still reading).
+  #waits(topic: Topic): boolean {
+    return !this.#windows.has(topicKey(topic)) && this.#opening(topic.station as string, topic.thread as number).window === null;
+  }
+
+  /// Where a thread's window opens, from what the device holds (null: nothing it opens with is here), and the entries
+  /// around where it opens to be brought when not all of them are.
+  #opening(station: string, id: number): { window: Window | null; bring: [number, number] | null } {
+    const data = this.#core.data;
+    const summary = this.summary(station, id);
+    const span = data.logSpan("entry", station, String(id));
+    const latest = this.#latest(station, id);
+    // Where the chat is to be read: the first entry not read while something is unread, else where it was left, else
+    // its end.
+    const unread = u64(get(summary, "unread")) ?? 0;
+    const read = u64(get(summary, "read"));
+    const place = this.#placeOf(station, id);
+    const at = read !== null && unread > 0 ? read + 1 : (place?.at ?? null);
+    const atOffset = read !== null && unread > 0 ? null : (place?.offset ?? null);
+    if (at !== null && at <= latest) {
+      const from = Math.max(at - PAGE, 1);
+      const to = Math.min(at + PAGE - 1, latest);
+      let first = from;
+      let bring: [number, number] | null = null;
+      if (data.logCount("entry", station, String(id), from, to) !== to - from + 1) {
+        // Not all on the device yet: brought. What is held of it opens it now, what is not joining it as it comes: from
+        // where it opens, or, that not held (what came since it was read, the app away meanwhile), from what is held
+        // just before it, with what runs unbroken before that. Only with nothing of it held up to there does it wait.
+        bring = [from, to];
+        const held = data.logRange("entry", station, String(id), from, to);
+        first = at;
+        while (first >= from && !held.has(first)) first--;
+        if (first < from) return { window: null, bring };
+        while (first > from && held.has(first - 1)) first--;
+      }
+      return { window: { first, last: to >= latest ? null : to, at, atOffset, caught: to }, bring };
+    }
+    if (span === null) {
+      // Nothing of it yet: it opens once its latest page is here (an empty thread opens empty).
+      if (latest === 0 && summary !== null) return { window: { first: 1, last: null, at: null, atOffset: null, caught: 0 }, bring: null };
+      return { window: null, bring: null };
+    }
+    // The latest page held, as far back as it runs unbroken.
+    const page = data.logRange("entry", station, String(id), Math.max(1, latest - PAGE + 1), span.max);
+    let first = span.max;
+    while (first > 1 && page.has(first - 1) && first > latest - PAGE + 1) first--;
+    return { window: { first, last: null, at: null, atOffset: null, caught: span.max }, bring: null };
+  }
+
   #thread(topic: Topic): Value | undefined {
     const station = topic.station as string;
     const id = topic.thread as number;
@@ -527,42 +584,13 @@ export class StationTopics implements Owner {
     const latest = this.#latest(station, id);
     let window = this.#windows.get(tk);
     if (!window) {
-      // Where the chat is to be read: the first entry not read while something is unread, else where it was left, else
-      // its end.
-      const unread = u64(get(summary, "unread")) ?? 0;
-      const read = u64(get(summary, "read"));
-      const place = this.#placeOf(station, id);
-      const at = read !== null && unread > 0 ? read + 1 : (place?.at ?? null);
-      const atOffset = read !== null && unread > 0 ? null : (place?.offset ?? null);
-      if (at !== null && at <= latest) {
-        const from = Math.max(at - PAGE, 1);
-        const to = Math.min(at + PAGE - 1, latest);
-        let first = from;
-        if (data.logCount("entry", station, String(id), from, to) !== to - from + 1) {
-          // Not all on the device yet: brought. What is held of it opens it now, what is not joining it as it comes: from
-          // where it opens, or, that not held (what came since it was read, the app away meanwhile), from what is held
-          // just before it, with what runs unbroken before that. Only with nothing of it held up to there does it wait.
-          this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/${from}`, this.#sync.channels.range(entriesOf(station, id), from, to, { quiet: false })), { log: "Unhandled", message: "range read" }));
-          const held = data.logRange("entry", station, String(id), from, to);
-          first = at;
-          while (first >= from && !held.has(first)) first--;
-          if (first < from) return undefined;
-          while (first > from && held.has(first - 1)) first--;
-        }
-        window = { first, last: to >= latest ? null : to, at, atOffset, caught: to };
-      } else {
-        if (span === null) {
-          // Nothing of it yet: it opens once its latest page is here (an empty thread opens empty).
-          if (latest === 0 && summary !== null) window = { first: 1, last: null, at: null, atOffset: null, caught: 0 };
-          else return undefined;
-        } else {
-          // The latest page held, as far back as it runs unbroken.
-          const page = data.logRange("entry", station, String(id), Math.max(1, latest - PAGE + 1), span.max);
-          let first = span.max;
-          while (first > 1 && page.has(first - 1) && first > latest - PAGE + 1) first--;
-          window = { first, last: null, at: null, atOffset: null, caught: span.max };
-        }
+      const opening = this.#opening(station, id);
+      if (opening.bring) {
+        const [from, to] = opening.bring;
+        this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/${from}`, this.#sync.channels.range(entriesOf(station, id), from, to, { quiet: false })), { log: "Unhandled", message: "range read" }));
       }
+      if (!opening.window) return undefined;
+      window = opening.window;
       this.#windows.set(tk, window);
     }
     const stop = window.last ?? Math.max(latest, span?.max ?? 0);

@@ -66,6 +66,9 @@ priv struct RowNodes {
   info : Array[(String, () -> Bool)]
   used : Array[() -> Unit]
   again : Array[(Int) -> Unit]
+  /// what takes back as its build left it, where its build changed that (Ctx::on_back, take_back, a stack's: Ctx::nav,
+  /// Nav::page_built): said again as it is kept, as building it would say it
+  mut back : BackSaid?
   /// what it read of the layout as it was built, and what it read (Ctx::laid_rect, laid_size, left_out): read back once
   /// the frame is laid out, kept or built
   laid : Array[LaidRead]
@@ -467,6 +470,7 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     lit_all: false,
     reads_all: false,
     own: false,
+    back: None,
     theme: None,
     ok: false,
     why: "",
@@ -625,6 +629,38 @@ priv struct NodesBegun {
   census : Array[Int]
   info : Int
   drawn : Int
+  back : BackSaid
+}
+
+///|
+/// What takes back as the frame's builds have said so far (Ctx's `back_next` and what goes with it); a row's or a part's
+/// (RowNodes' `back`): its node from the first of its nodes where it is one of them (`own`).
+priv struct BackSaid {
+  f : ((Int, Double, Double, Double, Double) -> Unit)?
+  node : Int
+  own : Bool
+  edge : Double
+  island : @view.NodeId?
+}
+
+///|
+/// What takes back as said so far.
+fn Ctx::back_said(self : Ctx) -> BackSaid {
+  { f: self.back_next, node: self.back_node_next, own: false, edge: self.back_edge_next, island: self.back_island_next }
+}
+
+///|
+/// Whether what takes back is as `b` says.
+fn Ctx::back_as(self : Ctx, b : BackSaid) -> Bool {
+  let f_same = match (self.back_next, b.f) {
+    (None, None) => true
+    (Some(x), Some(y)) => physical_equal(x, y)
+    _ => false
+  }
+  f_same &&
+  self.back_node_next == b.node &&
+  self.back_edge_next == b.edge &&
+  self.back_island_next == b.island
 }
 
 ///|
@@ -642,6 +678,7 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
     census,
     info: self.info_reads.length(),
     drawn: dr.entries.length(),
+    back: self.back_said(),
   }
 }
 
@@ -668,6 +705,14 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
   rn.reads_out = self.reads_out
   rn.lit_all = self.lit_all
   self.build_take(rn.marks, rn.said, cut=false)
+  // (what takes back as its build left it, where it changed it: its node, where one of its own, from its first)
+  rn.back = if self.back_as(b.back) {
+    None
+  } else {
+    let node = self.back_node_next
+    let own = node >= r && node < r + rn.n
+    Some({ ..self.back_said(), node: if own { node - r } else { node }, own })
+  }
   rn.info.clear()
   for j in b.info..<self.info_reads.length() {
     rn.info.push(self.info_reads[j])
@@ -821,6 +866,16 @@ fn Ctx::nodes_said_again(self : Ctx, rn : RowNodes) -> Unit {
   }
   for f in rn.again {
     f(by)
+  }
+  // (back, as its build left it)
+  match rn.back {
+    Some(b) => {
+      self.back_next = b.f
+      self.back_node_next = if b.own { rn.base + b.node } else { b.node }
+      self.back_edge_next = b.edge
+      self.back_island_next = b.island
+    }
+    None => ()
   }
   for l in rn.laid {
     self.laid_said_again(l)

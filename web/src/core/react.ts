@@ -34,6 +34,8 @@ export interface TopicState<T> {
   error: CoreError | null;
   /** No value and no error yet. */
   loading: boolean;
+  /** Loading, and the core said it waits on a station for it: none of what it shows is on the device. */
+  waiting?: boolean;
 }
 
 interface Entry {
@@ -125,6 +127,7 @@ function listen(key: string, topic: Topic, listener: () => void): () => void {
     (value) => update(e, { value, error: null, loading: false }),
     // The last value stays on screen next to the error.
     (error) => update(e, { value: e.state.value, error, loading: false }),
+    () => { if (e.state.loading) update(e, { ...e.state, waiting: true }); },
   );
   return () => {
     e.listeners.delete(listener);
@@ -174,8 +177,9 @@ export function useTopicSelect<T, S>(topic: Topic | null, select: (state: TopicS
 }
 
 /**
- * Holds the render back until the topic has its first value, `ms` at most. Rendered as part of a navigation (a
- * transition), the page that was there stays until then instead of an empty one showing first. Once only per topic.
+ * Holds the render back until the topic has its first value, or the core says it waits on a station for it, `ms` at
+ * most. Rendered as part of a navigation (a transition), the page that was there stays until then instead of an empty
+ * one showing first. Once only per topic.
  */
 export function useReady(topic: Topic | null, ms: number): void {
   if (useContext(InBones)) topic = null;
@@ -203,7 +207,7 @@ function waitFor(key: string, topic: Topic, ms: number): Promise<void> | null {
     resolve();
   };
   const timer = setTimeout(done, ms);
-  off = listen(key, topic, () => { if (!e.state.loading) done(); });
+  off = listen(key, topic, () => { if (!e.state.loading || e.state.waiting) done(); });
   if (over) off();
   return ready;
 }

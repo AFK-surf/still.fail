@@ -752,7 +752,13 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         let need = cn.least + margins
         let fneed = cn.fit_least + margins
         let sneed = cn.soft_least + margins
-        if along && cn.drop > 0 {
+        if along && n.one_of {
+          // (ways of saying one thing, one of them shown: at least what the last, the shortest, needs)
+          sum = need
+          fsum = fneed
+          ssum = sneed
+          placed_in = 1
+        } else if along && cn.drop > 0 {
           droppable = true
         } else if along && cn.drop == -1 {
           more_need = need
@@ -809,7 +815,13 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     s.drop = n.drop
     ch = true
   }
-  let fits = fits && n.dir == Row && !n.flow
+  let one_of = n.one_of && n.dir == Row && !n.flow
+  if s.one_of != one_of {
+    s.one_of = one_of
+    ch = true
+  }
+  // (what it leaves out left out as a row's are: drawn, pressed and read out nowhere)
+  let fits = (fits || one_of) && n.dir == Row && !n.flow
   if s.fits != fits {
     s.fits = fits
     ch = true

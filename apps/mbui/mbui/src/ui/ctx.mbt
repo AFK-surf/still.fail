@@ -431,6 +431,9 @@ pub struct Ctx {
   /// what comes again every so often while shown this frame (Ctx::every): its period, who reads it
   periodic : Array[(Double, SourceLoc)]
   mut motion_left : Bool
+  /// whether this frame read a motion going (Ctx::shows_motion): its next frame asked for as this one ends, as for what
+  /// is said to move
+  mut motion_read : Bool
   /// a fiber of the window's runtime waits for the next frame (@effect.next_frame): it comes as the clock goes, not at
   /// this moment, as a motion going on
   mut fiber_frame : Bool
@@ -727,6 +730,7 @@ fn Ctx::new() -> Ctx {
     cycles: [],
     periodic: [],
     motion_left: false,
+    motion_read: false,
     fiber_frame: false,
     motion_unstarted: false,
     took_input: false,
@@ -1105,6 +1109,9 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// `drop` k > 0: there whole (as wide as what it holds) or left out of its row when the row has not the room, the
 /// lowest k first (of the same k the last in the row first), laid out nowhere and not drawn (Ctx::left_out says so, for
 /// a ⋯ that offers it instead); `more`: the row's ⋯, there only while something of it is left out.
+/// `one_of`: a row of ways of saying one thing, each shorter than the one before (an allowance's chips in words, then
+/// in figures, then by their marks), of which only the first that fits its room whole is laid out and drawn, the last
+/// where none does (SwiftUI's ViewThatFits, as Ctx::text's `shorter` for words); it needs at least what the last needs.
 /// `flow`: a row that goes on in lines when what it holds does not fit, each thing in it as wide as it is, `gap` apart
 /// along the line and between the lines, or `line_gap` between the lines (Compose's FlowRow and its two spacedBy).
 /// `gone_empty`: built holding nothing, it takes no room, its padding and margins none (CSS's :empty { display: none }):
@@ -1182,6 +1189,7 @@ pub fn Ctx::box(
   keep? : Bool = false,
   drop? : Int = 0,
   more? : Bool = false,
+  one_of? : Bool = false,
   shadow_out? : Bool = false,
   flow? : Bool = false,
   line_gap? : Double = -1.0,
@@ -1236,6 +1244,7 @@ pub fn Ctx::box(
   n.aspect = aspect
   n.keep = keep
   n.drop = if more { -1 } else { drop }
+  n.one_of = one_of
   n.shadow_out = shadow_out
   n.flow = flow
   n.line_gap = line_gap

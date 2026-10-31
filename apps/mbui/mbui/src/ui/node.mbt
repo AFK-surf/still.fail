@@ -179,6 +179,9 @@ struct Node {
   mut moved_by : ((Double, Double) -> (Double, Double))?
   mut moved_x : Double
   mut moved_y : Double
+  /// what a list's row holds that comes and goes in its room (ListRows::enter, leave): placed in its middle and faded
+  /// to its edges, not what the row is drawn on (a group's ground round it)
+  mut room_held : Bool
   mut opacity : Double
   // its ground made of what is under it (glass.mbt), and whether the liquid
   // glass inside it is one group (drawn first, merging)
@@ -281,6 +284,9 @@ struct Node {
   // left out of its row when the row has not the room (Ctx::box `drop`): k > 0 the k-th to go, -1 the row's ⋯ (there
   // only while something of it is left out), 0 always there
   mut drop : Int
+  // a row of ways of saying one thing, each shorter than the one before, only the first that fits shown (Ctx::box
+  // `one_of`)
+  mut one_of : Bool
   // the least it is laid out across in a row, as worked out from what it holds (Ctx::flex_tree): narrower, what it
   // holds would lie over what is beside it
   mut least : Double
@@ -436,6 +442,7 @@ fn Node::new() -> Node {
     moved_by: None,
     moved_x: 0.0,
     moved_y: 0.0,
+    room_held: false,
     opacity: 1.0,
     glass: None,
     glass_group: false,
@@ -489,6 +496,7 @@ fn Node::new() -> Node {
     past_most: false,
     keep: false,
     drop: 0,
+    one_of: false,
     least: 0.0,
     fit_least: 0.0,
     soft_least: 0.0,
@@ -573,6 +581,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.moved_by = None
   self.moved_x = 0.0
   self.moved_y = 0.0
+  self.room_held = false
   self.fit = FitCover
   self.fade = true
   self.still = false
@@ -605,6 +614,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.past_most = false
   self.keep = false
   self.drop = 0
+  self.one_of = false
   self.flow = false
   self.line_gap = -1.0
   self.label = ""
