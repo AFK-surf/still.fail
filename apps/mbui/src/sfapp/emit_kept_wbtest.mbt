@@ -72,14 +72,11 @@ fn emit_sent(t : @ui.Tester, words : String, focused : Bool) -> String {
     return typed
   }
   tap_send(t)
-  // (let go as a person lets it go: a press on what the chat says)
+  // A person puts the keyboard away when they are done writing.
   if !focused {
-    match t.find("推送截图前要先登录 gh。") {
-      Some((x, y)) => t.tap(x, y)
-      None => return "nothing to press beside the field: \{t.words().map(fn(w) { w.0 })}"
-    }
+    t.keyboard_gone()
     if t.ime().0 {
-      return "the field still focused after a press beside it"
+      return "the field still focused after the keyboard was put away"
     }
   }
   t.frames_owed()

@@ -1691,8 +1691,9 @@ fn narrow_track(c : @ui.Ctx, r : Reading, book : Book, p : ReaderPaper, live : B
   let v = slider(c, key, shown, 0.0, 1.0, ink=p.ink, accent=p.accent, ground=p.raised)
   if live && down && c.pressed(c.id(key)) {
     r.draft = v
-  } else if !down && r.draft >= 0.0 {
-    let to = r.draft
+  } else if !down && (r.draft >= 0.0 || (live && v != shown)) {
+    // The slider also reports a tap or the last movement of a drag that arrived between frames.
+    let to = v
     r.draft = -1.0
     let last = book.chunks.length() - 1
     reader_jump(r, (to * (if last < 0 { 0 } else { last }).to_double()).round().to_int(), 0)
