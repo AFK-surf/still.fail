@@ -11,7 +11,7 @@ import { after, describe, test } from "node:test";
 import { type Clock, type Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { signalGroup } from "../src/ops/group.ts";
-import { Jobs } from "../src/jobs/jobs.ts";
+import { Jobs, type Machine } from "../src/jobs/jobs.ts";
 import { GIVE_UP_MS, IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePath, readJson, writeJson } from "../src/jobs/remote.ts";
 import { type Load, OLDER } from "../src/jobs/load.ts";
 import { type Json, Store } from "../src/store/store.ts";
@@ -74,11 +74,11 @@ async function rounds(_what: string, clock: ReturnType<typeof testClock>, by: Du
 
 type Station = { dir: string; store: Store; jobs: Jobs; remote: Remote; told: [string, string][] };
 
-function station(options: { clock?: Clock.Clock; meshWaitMs?: number; dir?: string; store?: Store; jobs?: Jobs; notify?: (s: string, t: string) => void } = {}): Station {
+function station(options: { clock?: Clock.Clock; jobsClock?: Clock.Clock; machine?: Machine; meshWaitMs?: number; dir?: string; store?: Store; jobs?: Jobs; notify?: (s: string, t: string) => void } = {}): Station {
   const dir = options.dir ?? tempdir();
   const store = options.store ?? Store.open(":memory:");
   const told: [string, string][] = [];
-  const jobs = options.jobs ?? new Jobs({ store, data: dir, notify: () => {}, link: () => null });
+  const jobs = options.jobs ?? new Jobs({ store, data: dir, notify: () => {}, link: () => null, clock: options.jobsClock, machine: options.machine });
   const remote = new Remote({
     data: dir, store, jobs, clock: options.clock, meshWaitMs: options.meshWaitMs,
     notify: options.notify ?? ((session, text) => void told.push([session, text])),
@@ -201,6 +201,83 @@ describe("remote", { concurrency: true }, () => {
   // ── session_tests ──
 
   const callAs = (s: Station, session: string, key: string, method: string, more: Json = {}) => s.remote.handle("ws", "peer-a", { session, key, method, ...more });
+
+  test("a queued task tells the agent the measured capacity and the reason for its wait", async () => {
+    const clock = testClock();
+    let busy = 0;
+    let total = 0;
+    const machine: Machine = { cpus: () => 12, ticks: () => [busy += 55, total += 100], pressure: async () => "normal" };
+    const r = station({ jobsClock: clock, machine });
+    const capacity = { cpus: 12, cpuBusy: { share: 0.55, seconds: 60 }, memory: { totalBytes: 64 * 1024 ** 3, availableBytes: 45 * 1024 ** 3 }, checkedAt: 123 };
+    let reads = 0;
+    r.remote.setLoad(async () => { reads++; return capacity; });
+    for (const key of ["first", "second", "third"]) {
+      await callAs(r, "s", key, "task.prepare", { spec: { command: FOREVER } });
+      const started = await callAs(r, "s", key, "task.start");
+      if (key !== "first") {
+        assert.equal(started.job.queued, true);
+        assert.equal(started.queue.cause, "sampling");
+        assert.deepEqual(started.queue.load, capacity);
+      } else {
+        assert.equal(reads, 0, "a task that starts at once does not wait on a host reading");
+      }
+    }
+    const got = await callAs(r, "s", "second", "task.get");
+    assert.equal(got.queue.cause, "sampling");
+    assert.deepEqual(got.queue.load, capacity);
+    assert.equal(got.queue.decision.cpuBusy, null, "the queue has not measured a whole window yet");
+    const laterCapacity = { ...capacity, cpuBusy: { share: 0.25, seconds: 60 }, checkedAt: 456 };
+    r.remote.setLoad(async () => laterCapacity);
+    assert.deepEqual((await callAs(r, "s", "second", "task.get")).queue.load, laterCapacity, "a later request gets a new reading");
+    r.remote.setLoad(async () => { reads++; return capacity; });
+    reads = 0;
+    const batch = await r.remote.handle("ws", "peer-a", { method: "task.gets", tasks: [{ session: "s", key: "second" }, { session: "s", key: "third" }] });
+    assert.equal(reads, 1, "one capacity sample is shared by the whole batch");
+    for (const task of batch.tasks) assert.deepEqual(task.result.queue.load, capacity);
+    r.remote.setLoad(async () => { throw new Error("load unavailable"); });
+    assert.deepEqual((await callAs(r, "s", "second", "task.get")).queue.load, { unavailable: "load unavailable" });
+  });
+
+  test("a slow capacity reading never holds up a queued task's reply", async () => {
+    const clock = testClock();
+    const jobsClock = testClock();
+    const machine: Machine = { cpus: () => 12, ticks: () => [0, 0], pressure: async () => "normal" };
+    const r = station({ clock, jobsClock, machine });
+    r.remote.setLoad(() => new Promise(() => {}));
+    await callAs(r, "s", "first", "task.prepare", { spec: { command: FOREVER } });
+    await callAs(r, "s", "first", "task.start");
+    await callAs(r, "s", "second", "task.prepare", { spec: { command: FOREVER } });
+    const before = clock.asked();
+    let answer: Json = null;
+    void callAs(r, "s", "second", "task.start").then((got) => (answer = got));
+    await until("the load timeout is armed", () => clock.asked() > before);
+    await Effect.runPromise(clock.adjust("1 second"));
+    await until("a queued task's reply", () => answer !== null);
+    assert.equal(answer.job.queued, true);
+    assert.deepEqual(answer.queue.load, { unavailable: "not measured within 1 s" });
+  });
+
+  test("a task that starts while its capacity is read is no longer reported queued", async () => {
+    const clock = testClock();
+    const jobsClock = testClock();
+    let busy = 0;
+    let total = 0;
+    const machine: Machine = { cpus: () => 12, ticks: () => [busy += 20, total += 100], pressure: async () => "normal" };
+    const r = station({ clock, jobsClock, machine });
+    let read = false;
+    let release!: (load: Json) => void;
+    r.remote.setLoad(() => { read = true; return new Promise((resolve) => { release = resolve; }); });
+    await callAs(r, "s", "first", "task.prepare", { spec: { command: FOREVER } });
+    await callAs(r, "s", "first", "task.start");
+    await callAs(r, "s", "second", "task.prepare", { spec: { name: "second", command: FOREVER } });
+    const starting = callAs(r, "s", "second", "task.start");
+    await until("the capacity is being read", () => read);
+    await rounds("the second task starts", jobsClock, "5 seconds", () => r.store.listJobs(null).some((j) => j.name === "second" && j.queued !== true));
+    release({ checkedAt: 123 });
+    const answer = await starting;
+    assert.notEqual(answer.job.queued, true);
+    assert.equal(answer.queue, undefined);
+  });
 
   async function run(s: Station, session: string, key: string, command: string): Promise<Json> {
     await callAs(s, session, key, "task.prepare", { spec: { command } });

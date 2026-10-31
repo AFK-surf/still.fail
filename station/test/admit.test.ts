@@ -26,10 +26,18 @@ describe("which task starts", () => {
   test("another waits for the last to get going, then for the CPUs to have room", () => {
     const running = [{ id: "x", screen: false }];
     const waiting = [w("a", "s", 1)];
-    assert.deepEqual(pick(waiting, running, { busy: 0, pressure: "normal" }, RAMP_MS - 1, 0, never), { wait: "busy" });
-    assert.deepEqual(pick(waiting, running, { busy: 0.9, pressure: "normal" }, RAMP_MS, 0, never), { wait: "busy" });
-    assert.deepEqual(pick(waiting, running, { busy: null, pressure: "normal" }, RAMP_MS, 0, never), { wait: "busy" });
+    assert.deepEqual(pick(waiting, running, { busy: 0, pressure: "normal" }, RAMP_MS - 1, 0, never), { wait: "busy", cause: "sampling" });
+    assert.deepEqual(pick(waiting, running, { busy: 0.9, pressure: "normal" }, RAMP_MS, 0, never), { wait: "busy", cause: "cpu" });
+    assert.deepEqual(pick(waiting, running, { busy: null, pressure: "normal" }, RAMP_MS, 0, never), { wait: "busy", cause: "sampling" });
     assert.deepEqual(pick(waiting, running, { busy: 0.5, pressure: "normal" }, RAMP_MS, 0, never), { start: w("a", "s", 1) });
+  });
+
+  test("a CPU wait says whether it is measuring or the measured CPUs are busy", () => {
+    const running = [{ id: "x", screen: false }];
+    const waiting = [w("a", "s", 1)];
+    assert.deepEqual(pick(waiting, running, { busy: 0.2, pressure: "normal" }, RAMP_MS - 1, 0, never), { wait: "busy", cause: "sampling" });
+    assert.deepEqual(pick(waiting, running, { busy: null, pressure: "normal" }, RAMP_MS, 0, never), { wait: "busy", cause: "sampling" });
+    assert.deepEqual(pick(waiting, running, { busy: 0.9, pressure: "normal" }, RAMP_MS, 0, never), { wait: "busy", cause: "cpu" });
   });
 
   test("none starts while the memory is under pressure, not even the first", () => {
@@ -104,6 +112,7 @@ test("how busy the CPUs were is over the last seconds only, and unknown until th
   assert.equal(busy.share(), null, "less than half the span");
   busy.note(BUSY_SPAN_MS / 2, [10, 20]);
   assert.equal(busy.share(), 0.5);
+  assert.deepEqual(busy.sample(), { share: 0.5, seconds: 10, checkedAt: BUSY_SPAN_MS / 2 });
   // A long while later: what was noted then is not compared with.
   busy.note(10 * BUSY_SPAN_MS, [20, 40]);
   assert.equal(busy.share(), null);
@@ -217,13 +226,31 @@ describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
     const second = r.start("two", "b", "echo $STILLFAIL_CPUS");
     assert.equal(second.queued, true);
     assert.equal(second.state, "running", "running as far as its agent is concerned");
-    assert.deepEqual(r.jobs.queueOf(second.id), { place: 1, why: "busy" });
+    assert.equal(r.jobs.queueOf(second.id)!.why, "busy");
+    assert.equal(r.jobs.queueOf(second.id)!.cause, "sampling");
     // However long the CPUs stay busy, it waits.
     await r.clock.move(RAMP_MS * 4);
     assert.equal(r.store.getJob(second.id)!.queued, true);
+    await looks(r.clock, () => r.jobs.queueOf(second.id)!.decision.cpuBusy !== null);
+    assert.equal(r.jobs.queueOf(second.id)!.cause, "cpu");
+    assert.equal(r.jobs.queueOf(second.id)!.decision.cpuBusy!.share, 1);
+    assert.equal(r.jobs.queueOf(second.id)!.decision.memoryPressure, "normal");
     await stop(r, first.id);
     await until("it starts and ends", () => r.store.getJob(second.id)!.state === "exited");
     assert.equal(r.jobs.queueOf(second.id), null);
+  });
+
+  test("each waiting task says its own blocker when another task uses the screen", async () => {
+    const r = rig({ busy: 0, pressure: "normal" });
+    r.start("shots", "a", FOREVER, true);
+    const screen = r.start("next-shots", "b", FOREVER, true);
+    const plain = r.start("tests", "c", FOREVER);
+    const screenQueue = r.jobs.queueOf(screen.id)!;
+    const plainQueue = r.jobs.queueOf(plain.id)!;
+    assert.equal(screenQueue.why, "screen");
+    assert.match(screenQueue.holder!, /^shots /);
+    assert.equal(plainQueue.why, "busy");
+    assert.equal(plainQueue.cause, "sampling");
   });
 
   test("with room on the CPUs, the next starts once the last has had its ramp, told how many CPUs are free", async () => {

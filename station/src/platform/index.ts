@@ -21,7 +21,7 @@ export type ProcessInfo = { pid: number; ppid: number; pgid: number; bytes: numb
 export type Host = {
   /// CPU time since boot, all CPUs together: (busy, total); none when it cannot be read.
   cpuTicks(): [busy: number, total: number] | null;
-  memory(): { totalBytes: number; usedBytes: number; swapUsedBytes: number | null };
+  memory(): { totalBytes: number; usedBytes: number; swapUsedBytes: number | null; known?: boolean };
   cpuModel(): string;
   uptimeSec(): number;
   osName(): string;

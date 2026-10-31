@@ -23,7 +23,12 @@ Other stations' tasks (`remote_…` jobs) go through it; an agent's own jobs and
 
 A waiting task is a job with `state: running` and `queued: true` (the jobs table's `queued` and `screen` columns):
 running as far as its agent and an older source station are concerned, with no process yet. `station_task start` and
-`get` answer `queue: {place, why, note}` while it waits. Stopped while waiting, it never runs. A station that restarts
+`get` answer `queue` while it waits: its place, its own blocker and note; `cause` distinguishes a CPU sample still being
+taken from a sample that actually found the CPUs busy. `decision` contains the queue's CPU sample (share, seconds and
+time, or null until it has enough ticks) and the last memory pressure reading. `load` is the station's host reading,
+including CPU use and its sample span, available and total memory, disk space and `checkedAt`, as in `station_list`.
+If that read fails or takes over a second, `load.unavailable` says so; no numbers are invented. A batch of queued
+tasks shares one host reading. Stopped while waiting, a task never runs. A station that restarts
 takes up what still waits, as it never ran (unlike a lost running task, which is failed rather than run again). The
 queue looks at the machine every 5 s while a task waits, and when a task of its own ends.
 

@@ -27,7 +27,7 @@ import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
 import {
-  Busy, type Claim, HELD_LONG_MS, LOOK_MS, PERSON_IDLE_MS, type Pressure, type Started, type Waiting, type Why, claimsOf, cpusFor,
+  Busy, type BusyCause, type Claim, HELD_LONG_MS, LOOK_MS, PERSON_IDLE_MS, type Pressure, type Started, type Waiting, type Why, claimsOf, cpusFor,
   overstaying, pick, place, served,
 } from "./admit.ts";
 import type { Ticks } from "../read/host.ts";
@@ -588,15 +588,22 @@ export class Jobs {
     if (this.line().waiting.length > 0) this.watchQueue();
   }
 
-  /// A waiting task's place in line (1: the next) and why the first waits; null for one not waiting. Waiting for the
-  /// screen, who has it (screenHolder).
-  queueOf(id: string): { place: number; why: Why | null; holder?: string } | null {
+  /// A waiting task's place in line (1: the next), what blocks it, and the queue's measurements; null for one not
+  /// waiting. If it could start but another is ahead, `why` is null. Waiting for the screen, who has it (screenHolder).
+  queueOf(id: string): { place: number; why: Why | null; cause?: BusyCause; holder?: string; decision: { cpuBusy: ReturnType<Busy["sample"]>; memoryPressure: Pressure | null } } | null {
     const job = this.store.getJob(id);
     if (!job || job.state !== "running" || job.queued !== true) return null;
-    const p = place(this.line().waiting, id, (s) => this.lastOf.get(s) ?? null);
-    if (p === null) return null;
-    const holder = this.why === "screen" ? this.screenHolder(id) : null;
-    return { place: p, why: this.why, ...(holder !== null ? { holder } : {}) };
+    const { waiting, running } = this.line();
+    const p = place(waiting, id, (s) => this.lastOf.get(s) ?? null);
+    const task = waiting.find((w) => w.id === id);
+    if (p === null || task === undefined) return null;
+    const ramp = running.some((r) => r.id === this.lastStarted) ? this.lastStart : null;
+    const cpuBusy = this.busy.sample(ramp);
+    const selected = pick([task], running, { busy: cpuBusy?.share ?? null, pressure: this.pressure, person: this.person }, this.queueNow(), ramp, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
+    const why = selected !== null && "wait" in selected ? selected.wait : null;
+    const cause = selected !== null && "wait" in selected ? selected.cause : undefined;
+    const holder = why === "screen" ? this.screenHolder(id) : null;
+    return { place: p, why, ...(cause !== undefined ? { cause } : {}), ...(holder !== null ? { holder } : {}), decision: { cpuBusy, memoryPressure: this.pressure } };
   }
 
   /// Who has the screen, for one waiting for it (not `except`, a job of its own): the task's name, the chat it is

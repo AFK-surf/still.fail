@@ -9,20 +9,20 @@ type Json = any;
 export type Load = {
   os: string;
   arch: string;
-  cpus: number;
+  cpus: number | null;
   cpuModel: string;
   /// How busy the CPUs have been (0–1) over `seconds` (about a minute; null: since the moment before).
   cpuBusy: { share: number; seconds: number | null } | null;
   /// The run queue over 1, 5 and 15 minutes; null where the machine has none (Windows).
   loadAvg: number[] | null;
-  memory: { totalBytes: number; availableBytes: number };
+  memory: { totalBytes: number | null; availableBytes: number | null };
   /// The file system holding the station's data, where remote tasks run (remote/sessions).
-  disk: { path: string; totalBytes: number; freeBytes: number };
+  disk: { path: string; totalBytes: number | null; freeBytes: number | null };
   gpus: Gpu[] | null;
   running: { remoteTasks: number; jobs: number; services: number; turns: number };
   /// Its home relay, and how long a ping to one of still.fail's relays took (mesh/relays.ts); null off the mesh.
   relay: { home: string | null; ping: { relay: string; ms: number } | null } | null;
-  checkedAt: number;
+  checkedAt: number | null;
 };
 
 export type LoadParts = {
@@ -32,24 +32,33 @@ export type LoadParts = {
   relay(): Load["relay"];
 };
 
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
 /// The station's load now.
 export async function measure(parts: LoadParts): Promise<Load> {
   const [info, gpus] = await Promise.all([parts.host.sample(), parts.gpus.read().catch(() => null)]);
   const recent = parts.host.recentBusy();
-  const total = Number(info?.memory?.totalBytes ?? 0);
+  const cpus = num(info?.cpus);
+  const total = num(info?.memory?.totalBytes);
+  const used = num(info?.memory?.usedBytes);
+  const memTotal = total !== null && total > 0 ? total : null;
+  const available = info?.memory?.known !== false && memTotal !== null && used !== null && used >= 0 && used <= memTotal ? memTotal - used : null;
+  const size = num(info?.disk?.totalBytes);
+  const diskTotal = size !== null && size > 0 ? size : null;
+  const free = num(info?.disk?.freeBytes);
   return {
     os: String(info?.os ?? ""),
     arch: String(info?.arch ?? ""),
-    cpus: Number(info?.cpus ?? 0),
+    cpus: cpus !== null && cpus > 0 ? cpus : null,
     cpuModel: String(info?.cpuModel ?? ""),
     cpuBusy: recent !== null ? { share: recent.busy, seconds: recent.seconds } : typeof info?.cpuBusy === "number" ? { share: info.cpuBusy, seconds: null } : null,
     loadAvg: Array.isArray(info?.loadAvg) ? info.loadAvg : null,
-    memory: { totalBytes: total, availableBytes: Math.max(total - Number(info?.memory?.usedBytes ?? 0), 0) },
-    disk: { path: String(info?.disk?.path ?? ""), totalBytes: Number(info?.disk?.totalBytes ?? 0), freeBytes: Number(info?.disk?.freeBytes ?? 0) },
+    memory: { totalBytes: memTotal, availableBytes: available },
+    disk: { path: String(info?.disk?.path ?? ""), totalBytes: diskTotal, freeBytes: diskTotal !== null && free !== null && free >= 0 && free <= diskTotal ? free : null },
     gpus,
     running: parts.running(),
     relay: parts.relay(),
-    checkedAt: Number(info?.checkedAt ?? 0),
+    checkedAt: num(info?.checkedAt),
   };
 }
 
@@ -83,7 +92,6 @@ export class Net {
 export const OLDER = "unknown (older station)";
 
 const GIB = 1024 ** 3;
-const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 function gib(bytes: number): string {
   const g = bytes / GIB;
   return `${g >= 100 ? Math.round(g) : Math.round(g * 10) / 10} GiB`;
