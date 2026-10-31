@@ -293,21 +293,25 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
 
 ///|
 /// What of the window's tree shows `what` (its words, `=WORDS` exactly, `icon:NAME` what it draws is called so:
-/// View::drawn_as), the middle of each where it is drawn, in the window, not faded to nothing: what is seen, as
-/// on_screen_nodes finds an old view's, whether it takes a press or not, whatever lies over it (reachable says which
-/// of it a finger reaches).
+/// View::drawn_as; or is called `what`, its label whole: View::says), the middle of each where it is drawn, in the
+/// window, not faded to nothing: what is seen, as on_screen_nodes finds an old view's, whether it takes a press or not,
+/// whatever lies over it (reachable says which of it a finger reaches).
 fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId)] {
   guard view_app.val is Some(tree) else { return [] }
   let found = []
   for d in tree.drawn() {
+    // (or by what it is called, its label whole, as an old view's box is: as Compose's test finds a node by its
+    // contentDescription, on_screen_nodes)
+    let label = tree.said_label(d.id)
     let hit = if what.has_prefix("icon:") {
       tree.drawn_name(d.id).contains("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
     } else if what.has_prefix("=") && what.length() > 1 {
-      d.words == what.unsafe_substring(start=1, end=what.length())
+      let exact = what.unsafe_substring(start=1, end=what.length())
+      d.words == exact || (label != "" && label == exact)
     } else if what.contains(":") {
       false
     } else {
-      d.words != "" && d.words.contains(what)
+      (d.words != "" && d.words.contains(what)) || (label != "" && label == what)
     }
     let (x, y) = (d.x + d.w / 2.0, d.y + d.h / 2.0)
     if hit && d.alpha > 0.002 && d.w > 0.0 && d.h > 0.0 && x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {

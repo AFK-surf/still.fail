@@ -744,6 +744,8 @@ pub let icon_button_side : Double
 
 pub let icon_fallback : Int64
 
+pub fn icon_node(@view.View, String, Double, @view.Live[Int64]) -> @view.View
+
 pub fn icon_parts(@ui.Ctx, String, Array[Int32], size? : Double, color? : Int64) -> Int32
 
 pub fn icon_path(String) -> String

@@ -237,3 +237,51 @@ test "a node as tall as a plain field with no line said in the old view it hosts
   let (_, _, _, rh2) = t.get(TextField).rect
   assert_true(h2 > h && h2 == rh2, msg="the theme's line longer: taller, as its editor: \{(h, h2, rh2)}")
 }
+
+///|
+/// A row across the window 300 wide: a key 36 across, a node holding an old view (a plain field of `text`, 16 on 21, 8
+/// lines at most) in all the room the row leaves (as an old view's Fill: no width of its own before it is shared out,
+/// growing, giving way), its node as tall as the field lays out, a key 36 across: where the node is and how big, where
+/// the key after it is, how tall the field is read out.
+fn measured_between(text : String) -> ((Double, Double, Double, Double), Double, Double) raise {
+  let field = Field::new(text~)
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=400.0, platform=0)
+  let holder : Ref[@view.NodeId?] = Ref(None)
+  let after : Ref[@view.NodeId?] = Ref(None)
+  set_view_app(fn(root) {
+    root.box(fn(row) {
+      row.over(Is(true)).row(Is(true)).lines_up(Is(Some(Start))) |> ignore
+      row.box(fn(k) { k.width(Is(Some(36.0))).height(Is(Some(36.0))) |> ignore }) |> ignore
+      row.box(fn(h) {
+        holder.val = Some(h.id())
+        h.grow(Is(1.0)).basis(Is(Some(0.0))).shrink(Is(1.0)) |> ignore
+        old(h, fn(c) { c.editor("e", field~, font_size=16.0, line=21.0, max_lines=8, plain=true, enter_sends=false) |> ignore })
+        .measured(By(fn() { field.laid(font_size=16.0, line=21.0, max_lines=8) }), fn(l, w) { l.size(w) })
+        |> ignore
+      })
+      |> ignore
+      row.box(fn(k) {
+        after.val = Some(k.id())
+        k.width(Is(Some(36.0))).height(Is(Some(36.0))) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let (ax, _, _, _) = measured_at(after)
+  let (_, _, _, rh) = t.get(TextField).rect
+  (measured_at(holder), ax, rh)
+}
+
+///|
+test "a node as tall as the field in the old view it hosts, in all the room a row leaves between two keys 36 across: as wide as that, the key after it at its end, its words empty, short or wrapping; as tall as its editor lays them out" {
+  for text in ["", "a", "words that run on past the room this field has and onto lines more"] {
+    let ((x, _, w, h), ax, rh) = measured_between(text)
+    assert_eq((x, w, ax), (36.0, 228.0, 264.0), msg="\{text.length()} long: in the room left, the key after it at its end")
+    assert_eq(h, rh, msg="\{text.length()} long: as tall as its editor")
+    if text.length() > 20 {
+      assert_true(h > 21.0, msg="wrapping: taller: \{h}")
+    }
+  }
+}

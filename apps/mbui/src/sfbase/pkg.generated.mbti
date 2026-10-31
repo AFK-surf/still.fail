@@ -861,7 +861,7 @@ pub fn marks_finger(@ui.Ctx, Int32, Double, Double, (Double, Double, Double, Dou
 
 pub fn marks_finger_off() -> Unit
 
-pub fn marks_foot(@ui.Ctx, tools? : Bool) -> Unit
+pub fn marks_foot(@ui.Ctx, tools? : Bool, note? : Bool) -> Unit
 
 pub fn marks_json(Double, Double) -> String
 

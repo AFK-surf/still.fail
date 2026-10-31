@@ -126,6 +126,19 @@ pub fn View::says(self : View, said : Live[Said?]) -> View {
 }
 
 ///|
+/// What node `id` is called as it says (View::says: its label; "" none, or no live node).
+pub fn Tree::said_label(self : Tree, id : NodeId) -> String {
+  if self.alive_id(id) {
+    match self.nodes[id.at].said {
+      Some(s) => s.label
+      None => ""
+    }
+  } else {
+    ""
+  }
+}
+
+///|
 /// The nodes that say what they are, and those hosting an old view, in the tree's order (each before what it holds, what
 /// it holds in its order): what is read out of the window's tree (ui's semantics_tree splices each old
 /// view's in at its node), as it is now (what was told since the last frame said, no frame waited for).
