@@ -281,10 +281,12 @@ squeeze and contrast checks; film's images before and after where a step touches
    bound to what they say; where a list's thumb an old view draws is shown under one's strip, the thumb's there for a
    mouse (ui's yield_thumbs: the tree's one choice of what takes a point, Tree::on_target, as the pointer is over it,
    goes down and is handed through; looked at again as the old frame's targets are published whole, not a frame on).
-   A page pushed over the page's own stack on the tape slides at its causes (Nav::held_over). Still the old way: a
-   peek's move aside read from the page's old layout; the hand's moves checked across the whole tree (the Tester's
-   hand_moves, the corners' lit_all) and the styles' census (Tester::census) only for what the old frame draws, a
-   node of the tree's counted by none of them. Old view still: a window of its own, the
+   A page pushed over the page's own stack on the tape slides at its causes (Nav::held_over). The checks that measure
+   a frame measure the tree's nodes with the old frame's: what the hand changes (Tester::hand_moves: Tree::hand_nodes,
+   each by its own identity, every cell that reads the pointer or the press lit), the corner rule (Tester::corner_faults,
+   lit_all_faults, the rule held on every frame at rest: Tree::drawn_held, as drawn, each old view's box held by its
+   node) and the styles' census (Tester::census: Tree::styled, as each is set). Still the old way: a peek's move aside
+   read from the page's old layout. Old view still: a window of its own, the
    sign-in and the splash; the theme each island is built
    in; back, said by the islands as they are built, in the tree's order (the top page first, then the stack's swipe);
    which island takes a press where they lie one over another (where more than one is at a point, all of them are told
