@@ -714,6 +714,24 @@ const profile = (id: string, runtime: string, models: string[], checked: boolean
   quota: { state: "ok", windows: [{ label: "5 小时", usedPercent: used, resetsAt: null }], detail: null, checkedAt: 1 }, ...extra,
 });
 
+test("the profiles topic gives the app each station once when it has two copies", async () => {
+  const email = "same@x.com";
+  const profiles = [
+    profile("signed", "codex", [], true, 0, { email }),
+    profile("borrowed", "codex", [], true, 0, { email, share: { id: "sh1", role: "user", host: "other" } }),
+  ];
+  const { host, core } = await started({ ...base(), "GET /overview": { ...overview, profiles } });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "profiles", scope: "ws" });
+  await host.settle();
+  apply(host, values);
+  const row = v(values, 1).items[0];
+  assert.equal(row.members.length, 2);
+  assert.deepEqual(row.places.map((p: J) => [p.station, p.profileId, p.usable]), [["ws/st", "signed", true]]);
+  core.close();
+});
+
 /// A core whose station has three profiles: p1 (unchecked) and p2 run Claude Code, p3 Codex (core/tests.rs
 /// `choosing_core`); `speed`: its session on Codex with `fast` as given, p3 offering `fast` as `profileFast`.
 async function choosing(speed = false, profileFast = false, sessionFast: boolean | null = null) {

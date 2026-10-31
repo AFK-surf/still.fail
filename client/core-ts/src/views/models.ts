@@ -8,6 +8,7 @@ import * as present from "../present.ts";
 import * as model from "../shapes/model.ts";
 import * as reasoning from "../shapes/reasoning.ts";
 import { arr as arrU, equal, get as getU } from "../util.ts";
+import { profileServes } from "./profile-scope.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -162,11 +163,7 @@ function profilesRunning(overview: J, runtime: string, m: string | null, current
 export function servingIn(overview: J, workspace: string, joined: boolean): J {
   const profiles = get(overview, "profiles");
   if (!Array.isArray(profiles)) return overview;
-  const serves = (p: J) => {
-    const said = get(p, "serves");
-    return typeof said === "boolean" ? said : !joined || arr(get(p, "workspaces")).includes(workspace);
-  };
-  return { ...overview, profiles: profiles.filter(serves) };
+  return { ...overview, profiles: profiles.filter((p) => profileServes(p, workspace, joined)) };
 }
 
 /// The models the station can run, each with the runtimes it runs on.

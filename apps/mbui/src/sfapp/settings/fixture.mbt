@@ -60,6 +60,14 @@ priv struct SettingsFixture {
   mut mba_online : Bool
   /// the subscriptions' allowances a month's window too, three in all (settings-profiles-monthly: OpenCode Go's)
   mut monthly : Bool
+  /// The same subscription independently signed in and borrowed on several stations.
+  mut profile_hosts : Bool
+  /// Only one station is signed in; another borrows it.
+  mut profile_one_owner : Bool
+  /// A borrowing station cannot reach its source, and another station is offline.
+  mut profile_away : Bool
+  /// A station may use the account, but its copy has not arrived yet.
+  mut profile_pending : Bool
   /// how far the made-up workspace has changed on its own (settings-workspace-motion, settings-stations-motion): 1 a
   /// person and a station come, 2 one of each goes (fixture_motion)
   mut motion : Int
@@ -97,6 +105,10 @@ let fx : SettingsFixture = {
   pair_ended: "",
   mba_online: false,
   monthly: false,
+  profile_hosts: false,
+  profile_one_owner: false,
+  profile_away: false,
+  profile_pending: false,
   motion: 0,
   drive_kept: fx_drive_kept,
   kept_cleared: [],
@@ -180,6 +192,10 @@ fn fixture_reset() -> Unit {
   fx.pair_ended = ""
   fx.mba_online = false
   fx.monthly = false
+  fx.profile_hosts = false
+  fx.profile_one_owner = false
+  fx.profile_away = false
+  fx.profile_pending = false
   fx.motion = 0
   fixture_open.sheet = ""
   fixture_open.list = ""
@@ -351,6 +367,13 @@ pub fn fixture_page(mode : String) -> String {
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
     "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 2)
+    "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" => {
+      fx.profile_hosts = true
+      fx.profile_one_owner = m == "settings-profile-hosts-one"
+      fx.profile_away = m == "settings-profile-hosts-away"
+      fx.profile_pending = m == "settings-profile-hosts-pending"
+      up("", "settings/profile/ws1/st1/cc", 3)
+    }
     // ChatGPT 团队's page at its models: GPT-6 mini to be given to 备用 key too
     "settings-profile-spread" => up("", "settings/profile/ws1/st1/cx", 3)
     "settings-profile-spread-dialog" => fixture_open.desk = "profile-spread"
@@ -463,7 +486,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-station-offline" => "station:ws1/st2"
     "settings-memory" => "memory:ws1/st1"
     "settings-memory-doc" => "memory-doc:ws1/st1#发布流程"
-    "settings-profile" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
+    "settings-profile" | "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
       "profile:ws1/st1#cc"
     "settings-profile-key" => "profile:ws1/st1#k2"
     "settings-profile-quota" | "settings-profile-spread" | "settings-profile-spread-dialog" => "profile:ws1/st1#cx"
@@ -631,6 +654,51 @@ fn fx_profiles() -> Array[Json] {
       ("usedBy", []),
     ]),
   ]
+}
+
+///|
+/// The profiles of one account: independently signed in on three stations and also borrowed on three.
+fn fx_profile_hosts() -> Array[Json] {
+  let member = fn(station : String, name : String, id : String, role : String, title : String, about : String) -> Json {
+    obj([
+      ("station", str("ws1/" + station)), ("stationId", str(station)), ("stationName", str(name)),
+      ("profileId", str(id)), ("profileName", str(id)), ("role", str(role)), ("title", str(title)),
+      ("about", str(about)), ("online", Json::boolean(true)), ("usable", Json::boolean(true)),
+      ("checkText", str("可用")), ("checkTone", str("green")), ("usedBy", Json::number(0.0)), ("spread", []),
+    ])
+  }
+  let members = [
+    member("st1", "Studio", "cc", "host", "Studio", "在此 station 登录，借给 MBA、Mini1、ccvm"),
+    member("st2", "MBA", "sh1", "user", "MBA", "向 Studio 借用"),
+    member("st3", "Mini1", "local", "own", "Mini1", "在此 station 单独登录"),
+    member("st3", "Mini1", "sh1", "user", "Mini1", "向 Studio 借用"),
+    member("st4", "ccvm", "local", "own", "ccvm", "在此 station 单独登录"),
+    member("st4", "ccvm", "sh1", "user", "ccvm", "向 Studio 借用"),
+  ]
+  if fx.profile_one_owner {
+    return [members[0], members[1]]
+  }
+  members
+}
+
+///|
+/// The same account by station, as the core's places says it.
+fn fx_profile_places() -> Array[Json] {
+  let members = fx_profile_hosts()
+  let chosen = if fx.profile_one_owner { members } else { [members[0], members[1], members[2], members[4]] }
+  chosen.map(fn(m) {
+    let v = Some(m)
+    let offline = fx.profile_away && text(v, "stationId") == "st4"
+    let unavailable = fx.profile_away && text(v, "stationId") == "st2"
+    let pending = fx.profile_pending && text(v, "stationId") == "st2"
+    obj([
+      ("station", str(text(v, "station"))), ("stationId", str(text(v, "stationId"))),
+      ("stationName", str(text(v, "stationName"))), ("profileId", str(if pending { "" } else { text(v, "profileId") })),
+      ("online", Json::boolean(!offline)), ("usable", Json::boolean(!offline && !unavailable && !pending)),
+      ("sourceName", str(if unavailable || pending { "Studio" } else { "" })),
+      ("state", if pending { obj([("text", str("等待同步")), ("tone", str("neutral"))]) } else { Json::null() }),
+    ])
+  })
 }
 
 ///|
@@ -1991,9 +2059,17 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ),
           (
             "members",
-            [
+            if fx.profile_hosts && text(pv, "id") == "cc" { Json::array(fx_profile_hosts().filter(fn(m) { !fx.profile_pending || text(Some(m), "stationId") != "st2" })) } else { [
               obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Studio")), ("online", Json::boolean(true)), ("profileId", str(text(Some(p), "id"))), ("role", str("host")), ("about", str("")), ("usable", Json::boolean(true)), ("checkText", str("可用")), ("checkTone", str("green")), ("usedBy", Json::number(1.0)), ("spread", fx_spread(text(Some(p), "id")))]),
-            ],
+            ] },
+          ),
+          (
+            "places",
+            if fx.profile_hosts && text(pv, "id") == "cc" {
+              Json::array(fx_profile_places())
+            } else {
+              [obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Studio")), ("profileId", str(text(pv, "id"))), ("online", Json::boolean(true)), ("usable", Json::boolean(true)), ("sourceName", str("")), ("state", Json::null())])]
+            },
           ),
           ("editable", Json::boolean(true)),
           ("canShare", Json::boolean(true)),

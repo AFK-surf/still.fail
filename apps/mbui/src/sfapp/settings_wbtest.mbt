@@ -333,6 +333,45 @@ test "profiles on a phone: an allowance of three windows said one way for all, e
 }
 
 ///|
+test "an account's stations appear once even with several copies" {
+  for platform in [0, 2] {
+    let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-hosts", platform~)
+    assert_eq(t.words().filter(fn(w) { w.0 == "Mini1" && w.5 > 0.5 }).length(), 1, msg="one station, one row, platform \{platform}")
+    assert_true(t.find("向 Studio 借用") is None)
+    t.tap_text("Mini1")
+    assert_true(app.nav.top() is Setting(@settings.Route::Profile("ws1/st3", "local")), msg="open the station's profile, platform \{platform}")
+  }
+}
+
+///|
+test "an account signed in on one station and borrowed on another shows both stations" {
+  for platform in [0, 2] {
+    let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-hosts-one", platform~)
+    assert_true(t.find("MBA") is Some(_), msg="the other station remains visible, platform \{platform}")
+  }
+}
+
+///|
+test "an account's stations say when a source is unavailable or a station is offline" {
+  for platform in [0, 2] {
+    let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-hosts-away", platform~)
+    assert_true(t.find("无法连接 Studio") is Some(_), msg="the source is named, platform \{platform}")
+    assert_true(t.find("离线") is Some(_), msg="the offline station remains visible, platform \{platform}")
+  }
+}
+
+///|
+test "an allowed station is shown while its profile is waiting to sync" {
+  for platform in [0, 2] {
+    let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-hosts-pending", platform~)
+    assert_true(t.find("MBA") is Some(_))
+    assert_true(t.find("等待同步") is Some(_), msg="the missing copy is explained, platform \{platform}")
+    t.tap_text("MBA")
+    assert_true(app.nav.top() is Setting(@settings.Route::Profile("ws1/st1", "cc")), msg="there is no page to open yet, platform \{platform}")
+  }
+}
+
+///|
 test "下方栏: a place's \"−\" takes it off its bar (the bars kept as the workspace's)" {
   let t = settings_tester("bars")
   bars_picked.set(None)

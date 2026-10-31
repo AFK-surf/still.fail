@@ -423,6 +423,8 @@
   "core-views.profiles.group.cursor": "Cursor 订阅",
   "core-views.profiles.group.devin": "Devin 订阅",
   "core-views.profiles.group.key": "API Key",
+  "core-views.profiles.waitSync": "等待同步",
+  "core-views.profiles.reading": "正在读取",
   "core-views.profiles.usableOn": "{stations} 可用",
   "core-views.profiles.away": "{station} 离线",
   "core-views.profiles.troubleOn": "{station}：{trouble}",
