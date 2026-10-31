@@ -3544,13 +3544,13 @@ pub fn edge_look(
 }
 
 ///|
-let edge_bar_ms : Double = 180.0
+pub let edge_bar_ms : Double = 180.0
 
 ///|
-let edge_ink_ms : Double = 150.0
+pub let edge_ink_ms : Double = 150.0
 
 ///|
-let edge_line_ms : Double = 140.0
+pub let edge_line_ms : Double = 140.0
 
 ///|
 // kept across runs: a value (no field of it changes)

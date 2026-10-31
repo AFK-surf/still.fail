@@ -224,3 +224,94 @@ test "中屏 laid out for a mouse: the sidebar's edge pressed a point before whe
     assert_eq(edge_gap_pressed(able, 1.0), (able, @sfdesk.TapePane::Page), msg="past it, bars \{able}")
   }
 }
+
+///|
+/// The longest of the edge's look's moves (its bar's), as long as what it shows takes to come to rest.
+let edge_look_ms : Double = @sf.edge_bar_ms
+
+///|
+/// The sidebar's edge's bar where it is drawn, left of where the page's 收起侧边栏 is: across less that, how high, its
+/// ink; none drawn (hidden).
+fn edge_bar_drawn(t : @ui.Tester) -> (Double, Double, Int64)? raise {
+  let page = covered(t, "收起侧边栏").unwrap().0
+  match t.drawn_rects().filter(fn(r) { r.2 == @sf.edge_bar_w && r.0 < page }) {
+    [r, ..] => Some((r.0 - page, r.3, r.4))
+    [] => None
+  }
+}
+
+///|
+test "中屏 (a finger's: its bar always shown): the sidebar's edge as the tape moves to the sidebar, drawn at a scale of 1 and of 2: where the tape has it, as far from the page beside it as at rest, half way and at the end" {
+  for scale in [1.0, 2.0] {
+    new_run()
+    let src = fixture("chat")
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=840.0, platform=2, scale~)
+    say_room(t, "medium", "medium")
+    t.run_for(@ui.move_most_ms)
+    let rest = edge_bar_drawn(t)
+    assert_true(rest is Some(_), msg="scale \{scale}: shown to touch")
+    // (where its bar is in the window, less where the edge's own room is: the node it is drawn in)
+    let in_edge = fn() raise {
+      let (sx, _, _, _) = said_at(t, "调整侧边栏宽度").unwrap()
+      match t.drawn_rects().filter(fn(r) { r.2 == @sf.edge_bar_w }) {
+        [r, ..] => (r.0, r.0 - sx)
+        [] => fail("no bar")
+      }
+    }
+    let (_, rest_in) = in_edge()
+    page_over(t, 720.0)
+    let t0 = t.time() + between_frames_ms
+    t.advance(t0 - t.time())
+    @ui.view_tree().unwrap().event(t0, fn() { @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Side)) })
+    t.frame_at(t0 + @ui.move_most_ms / 3.0)
+    assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+    let half = edge_bar_drawn(t)
+    let (half_x, half_in) = in_edge()
+    let half_page = covered(t, "收起侧边栏").unwrap().0
+    t.frame_at(t0 + @ui.move_most_ms * 2.0)
+    // (half way: the tape still moving (the page not where it ends), the bar off the window's pixels)
+    assert_true(half_page != covered(t, "收起侧边栏").unwrap().0, msg="scale \{scale}: still moving")
+    assert_true((half_x * scale).round() != half_x * scale, msg="scale \{scale}: \{half_x} off the pixels")
+    assert_eq((half, edge_bar_drawn(t)), (rest, rest), msg="scale \{scale}")
+    assert_eq((half_in, in_edge().1), (rest_in, rest_in), msg="scale \{scale}: in its edge")
+  }
+}
+
+///|
+test "中屏: the sidebar's edge by a mouse: hidden at rest; pointed at, its bar shown long; pressed, in hand, nothing moved; dragged, it and the page beside it where the width has them; let go, out of hand; left, hidden again" {
+  let t = tape_chat(0, 720.0, 840.0)
+  let (ex, ey) = edge_middle(t, "调整侧边栏宽度")
+  let room = said_at(t, "调整侧边栏宽度").unwrap()
+  let page = covered(t, "收起侧边栏").unwrap()
+  let s12 = @ui.Space::px(S12)
+  assert_true(edge_bar_drawn(t) is None, msg="at rest: hidden")
+  // (pointed at: shown, long, the strong line's grey)
+  t.move(ex, ey)
+  t.run_for(edge_look_ms)
+  guard edge_bar_drawn(t) is Some((x1, h1, on_ink)) else { fail("on it: not shown") }
+  assert_eq(h1, s12, msg="on it: long")
+  // (pressed: in hand, its ink the field's grey, nothing of the room around it moved)
+  t.press_at(ex, ey)
+  t.run_for(edge_look_ms)
+  assert_true(@sfdesk.wide.edge_held.get(), msg="pressed: in hand")
+  guard edge_bar_drawn(t) is Some((x2, h2, held_ink)) else { fail("in hand: not shown") }
+  assert_true((x2, h2) == (x1, s12) && held_ink != on_ink, msg="in hand: \{(x2, h2, held_ink)}, on it \{(x1, on_ink)}")
+  assert_eq((said_at(t, "调整侧边栏宽度").unwrap(), covered(t, "收起侧边栏").unwrap()), (room, page), msg="in hand: where it was")
+  // (dragged 20 wider: the width, the page beside it and the edge 20 on, its bar with it)
+  t.move(ex + 20.0, ey)
+  t.run_for(edge_look_ms)
+  assert_eq(@sfdesk.wide.side_w.get(), 260.0, msg="dragged")
+  assert_eq(covered(t, "收起侧边栏").unwrap().0, page.0 + 20.0, msg="the page as far on")
+  assert_eq(edge_bar_drawn(t).map(fn(b) { (b.0, b.1) }), Some((x1, s12)), msg="its bar with the edge")
+  // (let go on it: out of hand, its grey the strong line's again)
+  t.release(ex + 20.0, ey)
+  t.run_for(edge_look_ms)
+  assert_true(!@sfdesk.wide.edge_held.get(), msg="let go: out of hand")
+  assert_eq(edge_bar_drawn(t).map(fn(b) { (b.1, b.2) }), Some((s12, on_ink)), msg="let go, still on it")
+  // (left: hidden, nothing asked of the frames after)
+  t.leave()
+  t.run_for(edge_look_ms)
+  assert_true(edge_bar_drawn(t) is None, msg="left: hidden")
+  assert_true(t.at_rest(), msg="left: \{t.rest_why()}")
+}

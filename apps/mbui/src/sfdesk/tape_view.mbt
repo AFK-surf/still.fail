@@ -24,9 +24,8 @@
 // A page pushed over the page's own stack (Nav::push_over) slides in at its causes: the stack held by the tape's node
 // (Nav::held_over), what shows of it drawn by the page's island (Ctx::nav). Still the old frame's (the way there): what
 // the panels hold (their islands); which of the stack's pages take presses, and back, said as that island builds;
-// the edges (their drags read as their island builds; their pointer's shape and tip wait on the tree's); a passage
-// picked bringing the page over (read as the page's island builds). Back is a node of the tree's (wide_takes_back,
-// wide_back_step).
+// a passage picked bringing the page over (read as the page's island builds). The edges and back are nodes of the
+// tree's (tape_side_edge, tape_panel_edge; wide_takes_back, wide_back_step).
 
 ///|
 /// The tape's move, committed at its cause: its way (from 0 as it set out to 1), and of each thing it moves where it was
@@ -815,14 +814,9 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
         (bar_gap_now(), t, 0.0, b)
       })
     })
-    // how the edges look (drawn by an old view, taking nothing); over it the edges themselves, the tree's, what is done
-    // with them taken at each event's moment
-    // (drawing nothing that takes a press: a finger anywhere on it is what lies under it's)
-    // (how the edges stand as their nodes say it, this tape's: what their look is drawn by)
+    // the edges, the tree's, over the panels: what is done with them taken at each event's moment, how they look drawn
+    // by them (whether each is in hand, this tape's)
     let edges_on : TapeEdgesOn = { side: tape_edge_on(), panel: tape_edge_on() }
-    @ui.old(row, fn(c) { tape_hand_built(c, src, edges_on) }, key=tape_island_key).over(Is(true))
-    |> @ui.old_takes_own
-    |> ignore
     let tips = @sf.TipLayer::new(fn() { Some(v) })
     row.box(fn(edges) {
       edges.over(Is(true)) |> ignore
@@ -1155,89 +1149,21 @@ fn tape_panel_built(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-/// Over the tape's panels (its island, as wide as the tape, moved with it): how the edge between the sidebar or the side
-/// panel in use and the page beside it looks (@sf.edge_look, in the gap's middle; always shown to touch, which points
-/// at nothing, else while the pointer is on the column), drawn alone: what is done with it is the tree's edge's over it
-/// (tape_side_edge, tape_panel_edge). What it reads to draw it: the tape's room and where its move has it, the gap,
-/// whether the pointer is on the column, and the edge's node's pointed and held (TapeEdgesOn, as this tape holds it).
-fn tape_hand_built(c : @ui.Ctx, src : Source, edges_on : TapeEdgesOn) -> Unit {
-  let (now, _, _, _) = @sfbase.workspace_in_view(src)
-  guard now is Some(_) else { return }
-  let r = tape_room_now()
-  tape_goes.said.get() |> ignore
-  tape_goes.way.said()
-  let t = if tape_goes.way.goes_at(c.moment()) {
-    tape_goes.way.get() |> ignore
-    c.moment()
-  } else {
-    @double.infinity
-  }
-  // (where it is on the tape: it is placed on the window's pixels, as an old view is (ui's old_frame), the tape moved
-  // past them by what the rounding left; what it draws put back by that, where the tape has it)
-  let x = tape_x_at(r, t)
-  let o = x - (x * c.scale).round() / c.scale
-  let col = tape_col_at(t)
-  let main_w = tape_page_at(t)
-  match wide.tape_at.get() {
-    Side =>
-      tape_edge_drawn(c, "tape/side-edge", col + o - bar_gap_now(), r.panel_top, r.panel_h, Right, edges_on.side)
-    Panel if tape_shown_side() is Some(_) =>
-      tape_edge_drawn(c, "tape/panel-edge", col + o + main_w, r.panel_top, r.panel_h, Left, edges_on.panel)
-    _ => ()
-  }
-}
-
-///|
-/// How the tape's two edges stand as their nodes have them: whether the pointer is on each, whether each is in hand.
-priv struct TapeEdgesOn {
-  side : TapeEdgeOn
-  panel : TapeEdgeOn
-}
-
-///|
+/// Whether one of the tape's edges is in hand, as its node says it (its look drawn by it: tape_edge_at), this tape's.
 priv struct TapeEdgeOn {
-  pointed : @signals.Signal[Bool]
   held : @signals.Signal[Bool]
 }
 
 ///|
 fn tape_edge_on() -> TapeEdgeOn {
-  {
-    pointed: @signals.signal(false, same=fn(a, b) { a == b }),
-    held: @signals.signal(false, same=fn(a, b) { a == b }),
-  }
+  { held: @signals.signal(false, same=fn(a, b) { a == b }) }
 }
 
 ///|
-/// The edge's look (tape_hand_built), in the gap at `gap` on the tape, `top` and `h` the panels', its `edge` the one in
-/// use's (the sidebar's right, the side panel's left), lit as `on` says, taking nothing.
-fn tape_edge_drawn(
-  c : @ui.Ctx,
-  key : String,
-  gap : Double,
-  top : Double,
-  h : Double,
-  edge : @ui.Side,
-  on : TapeEdgeOn,
-) -> Unit {
-  let (before, after) = tape_edge_reach(edge)
-  let held = on.held.get()
-  c.box(
-    style=@ui.style(
-      row=true,
-      w=Fixed(before + bar_gap_now() + after),
-      h=Fixed(h),
-      pl=@sf.room_of(before),
-      pr=@sf.room_of(after),
-      justify=JCenter,
-    ),
-    left=gap - before,
-    top~,
-    fn() {
-      @sf.edge_look(c, key, over=@sf.pointed_or_finger(c, false), on=on.pointed.get() || held, active=held)
-    },
-  )
-  |> ignore
+/// The tape's two edges' (TapeEdgeOn), this tape's.
+priv struct TapeEdgesOn {
+  side : TapeEdgeOn
+  panel : TapeEdgeOn
 }
 
 ///|
@@ -1254,8 +1180,9 @@ fn tape_edge_reach(edge : @ui.Side) -> (Double, Double) {
 
 ///|
 /// Where the edge whose gap begins at `gap(t)` across the tape is, in node `n` (over the tape's row, moved with it): as
-/// wide as the gap and what it reaches past it, as high as the panels, the tape as of the moment it is drawn at, its
-/// pointed and held said to `on` (what its look reads, tape_hand_built) as they change; the node put in it by `made`.
+/// wide as the gap and what it reaches past it, as high as the panels, the tape as of the moment it is drawn at; the node
+/// put in it by `made`, its look in the gap's middle (@sf.edge_look_node: shown as @sf.edge_over has it, always to
+/// touch, which points at nothing; on it while the pointer is on it or it is in hand, `on`'s held; active in hand).
 fn tape_edge_at(
   n : @view.View,
   holder : @view.View,
@@ -1276,12 +1203,19 @@ fn tape_edge_at(
   }))
   |> ignore
   let e = made(n)
-  n.reacts(fn() { e.pointed() }, fn(p) { on.pointed.set(p) })
-  n.owns(fn() {
-    on.pointed.set(false)
-    on.held.set(false)
+  e.box(fn(g) {
+    g
+    .over(Is(true))
+    .padding(By(fn() {
+      let (before, _) = tape_edge_reach(edge)
+      (before + (bar_gap_now() - @sf.handle_w) / 2.0, 0.0, 0.0, 0.0)
+    }))
+    |> ignore
+    @sf.edge_look_node(g, @sf.edge_over, fn() { e.pointed() || on.held.get() }, fn() { on.held.get() })
+    |> ignore
   })
   |> ignore
+  n.owns(fn() { on.held.set(false) }) |> ignore
 }
 
 ///|

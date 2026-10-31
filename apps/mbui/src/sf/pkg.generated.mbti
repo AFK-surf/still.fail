@@ -476,17 +476,27 @@ pub let ease_out : @ui.Ease
 
 pub fn ease_to(@ui.Ctx, String, Bool) -> Double
 
+pub let edge_bar_ms : Double
+
 pub let edge_bar_w : Double
 
 pub let edge_finger_reach : Double
 
 pub let edge_in : @ui.Space
 
+pub let edge_ink_ms : Double
+
+pub let edge_line_ms : Double
+
 pub let edge_line_steps : Int32
 
 pub fn edge_look(@ui.Ctx, String, over~ : Bool, on~ : Bool, active~ : Bool, line? : Bool) -> Unit
 
+pub fn edge_look_node(@view.View, () -> Bool, () -> Bool, () -> Bool, line? : Bool) -> @view.View
+
 pub fn edge_node(@view.View, () -> String, () -> Double, () -> Double, () -> Double, @view.Side, (Resized, Double) -> Unit, (Bool) -> Unit, on_beside? : (Double) -> Bool, beside? : (Double) -> Unit, tips? : TipLayer, side? : @view.Side) -> @view.View
+
+pub fn edge_over() -> Bool
 
 pub fn edge_reach(Double) -> (Double, Double)
 
