@@ -381,10 +381,9 @@ fn own_clock() -> Bool {
 }
 
 ///|
-/// Whether the system asks for less motion: the web host does not say.
-fn reduce_motion() -> Bool {
-  false
-}
+/// Whether the system asks for less motion: the browser's prefers-reduced-motion.
+extern "js" fn reduce_motion() -> Bool =
+  #|() => typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches
 
 ///|
 fn exit(code : Int) -> Unit {
@@ -483,10 +482,10 @@ fn font_scale() -> Double {
 }
 
 ///|
-/// What the app was started to be used with (see host_native.mbt): a browser cannot tell (0: the platform's, @ui).
-fn native_pointing() -> Int {
-  0
-}
+/// What the app was started to be used with (see host_native.mbt): the browser's primary pointer as the page loads, a
+/// coarse one (a finger) touch, a fine one (a mouse, a touchpad) keyboard and mouse; 0 where it says neither.
+extern "js" fn native_pointing() -> Int =
+  #|() => (typeof matchMedia === "undefined" ? 0 : matchMedia("(pointer: coarse)").matches ? 1 : matchMedia("(pointer: fine)").matches ? 2 : 0)
 
 ///|
 /// Whether a keyboard is at hand (see host_native.mbt): a browser cannot tell (-1: the platform's, @ui).
@@ -833,19 +832,16 @@ fn mk_png(_id : Int) -> Bytes {
   b""
 }
 
-// Notifications (notify.mbt): not shown by a page yet; what would be is said on the log.
+// Notifications (notify.mbt): the browser's (web/host.js H.noticeShow …, the Notification API), shown while the page
+// is open; a page with none of it says what would be on the log.
 
 ///|
-fn nt_show(channel : String, tag : String, title : String, body : String, opens : String) -> Unit {
-  ignore(channel)
-  ignore(opens)
-  log("NOTICE " + tag + "\t" + title + "\t" + body)
-}
+extern "js" fn nt_show(channel : String, tag : String, title : String, body : String, opens : String) -> Unit =
+  #|(c, t, ti, b, o) => { const H = globalThis.__mbhost; if (H && H.noticeShow) H.noticeShow(c, t, ti, b, o); }
 
 ///|
-fn nt_cancel(tag : String) -> Unit {
-  ignore(tag)
-}
+extern "js" fn nt_cancel(tag : String) -> Unit =
+  #|(t) => { const H = globalThis.__mbhost; if (H && H.noticeCancel) H.noticeCancel(t); }
 
 ///|
 /// The system's own bars (@hostapi.nav_bar): none in a browser, the app draws its own.
@@ -860,19 +856,12 @@ fn nv_able() -> Int {
 }
 
 ///|
-fn nt_state(what : Int) -> Int {
-  if what == 2 {
-    -1
-  } else {
-    0
-  }
-}
+extern "js" fn nt_state(what : Int) -> Int =
+  #|(w) => { const H = globalThis.__mbhost; return H && H.noticeState ? H.noticeState(w) : (w === 2 ? -1 : 0); }
 
 ///|
-fn nt_text(what : Int) -> String {
-  ignore(what)
-  ""
-}
+extern "js" fn nt_text(what : Int) -> String =
+  #|(w) => { const H = globalThis.__mbhost; return H && H.noticeText ? H.noticeText(w) : ""; }
 
 // Native views over the canvas (see host_native.mbt): DOM elements under the canvas (web/host.js), shown through its
 // holes; PDFs: none drawn here.
