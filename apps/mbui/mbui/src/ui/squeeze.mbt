@@ -303,7 +303,7 @@ fn Node::squeeze_cuts(self : Node) -> Bool {
 /// where it is said, what is over the whole window, one drawn moved off its place (`tx`, `ty`: a face over the one
 /// before it, something on its way).
 fn Node::squeeze_aside(self : Node) -> Bool {
-  self.layer || self.portal || self.pager != 0 || self.placed_at() || self.tx != 0.0 || self.ty != 0.0 || self.moved_x != 0.0 || self.moved_y != 0.0
+  self.layer || self.portal || self.pager != 0 || self.placed_at() || self.moved_off()
 }
 
 ///|

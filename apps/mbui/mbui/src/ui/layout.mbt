@@ -1025,6 +1025,18 @@ fn Node::by_size(self : Node, w : Double, h : Double) -> Unit {
 /// out (Ctx::moved_place, frame_watch.mbt). `f` gives the same for the same state and time, however often asked.
 pub fn Ctx::moved_by(self : Ctx, i : Int, f : (Double, Double) -> (Double, Double)) -> Unit {
   self.nodes[i].moved_by = Some(f)
+  // (a motion, whatever said it before: Ctx::moved_carries)
+  self.nodes[i].moved_carries = false
+}
+
+///|
+/// Node `i` moved by `f` as Ctx::moved_by moves it, where that only carries it from where it is laid out to where it is
+/// drawn (an old view's box, laid out once where its layout puts it, drawn where the window's tree draws it:
+/// view_host.mbt old_frame): what measures the frame (gaps.mbt's shown_whole, squeeze's aside) takes where it is drawn
+/// for its place, as it took the box placed there, not as a thing on its way.
+fn Ctx::moved_carries(self : Ctx, i : Int, f : (Double, Double) -> (Double, Double)) -> Unit {
+  self.nodes[i].moved_by = Some(f)
+  self.nodes[i].moved_carries = true
 }
 
 ///|

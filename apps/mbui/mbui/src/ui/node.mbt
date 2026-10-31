@@ -179,6 +179,9 @@ struct Node {
   mut moved_by : ((Double, Double) -> (Double, Double))?
   mut moved_x : Double
   mut moved_y : Double
+  /// what moves it only carries it from where it is laid out to where it is drawn (Ctx::moved_carries: an old view's
+  /// box, moved to where the window's tree draws it): where it is drawn is its place, as any node's, not a motion
+  mut moved_carries : Bool
   /// what a list's row holds that comes and goes in its room (ListRows::enter, leave): placed in its middle and faded
   /// to its edges, not what the row is drawn on (a group's ground round it)
   mut room_held : Bool
@@ -444,6 +447,7 @@ fn Node::new() -> Node {
     moved_by: None,
     moved_x: 0.0,
     moved_y: 0.0,
+    moved_carries: false,
     room_held: false,
     opacity: 1.0,
     glass: None,
@@ -584,6 +588,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.moved_by = None
   self.moved_x = 0.0
   self.moved_y = 0.0
+  self.moved_carries = false
   self.room_held = false
   self.fit = FitCover
   self.fade = true
@@ -716,6 +721,13 @@ fn Node::reset_words(self : Node) -> Unit {
 /// Whether it is put in its parent by where it is said to be (`at_*`), out of the flow.
 fn Node::placed_at(self : Node) -> Bool {
   !self.at_l.is_nan() || !self.at_t.is_nan() || !self.at_r.is_nan() || !self.at_b.is_nan()
+}
+
+///|
+/// Whether it is drawn moved off its place: by its offset (`tx`, `ty`), or by what moves it (Ctx::moved_by) where
+/// that is a motion, not what only carries it to where it is drawn (Ctx::moved_carries).
+fn Node::moved_off(self : Node) -> Bool {
+  self.tx != 0.0 || self.ty != 0.0 || (!self.moved_carries && (self.moved_x != 0.0 || self.moved_y != 0.0))
 }
 
 ///|

@@ -3866,6 +3866,28 @@ fn Tree::projected(self : Tree, at : Int) -> (Double, Double, Double, Double) {
 }
 
 ///|
+/// Where node `id` is laid out in the window by its layout alone, as each_drawn_scaled goes down to it (a slot adds
+/// nothing of its own): each holder's place in what holds it as laid out, with no offset (View::offset, a page slid
+/// by its width), no scale, and none of what places one beside another (View::beside) — so what moves or fades it, or
+/// what holds it, leaves it where it is, and only its layout moves it. Where what draws it as it is laid out (an old
+/// view, hosted) is laid out once, and moved to where it is drawn (Tree::projected) as it is painted. None for one let go.
+pub fn Tree::laid_origin(self : Tree, id : NodeId) -> (Double, Double)? {
+  guard self.alive_id(id) else { return None }
+  let mut x = 0.0
+  let mut y = 0.0
+  let mut i = id.at
+  while i >= 0 {
+    let n = self.nodes[i]
+    if !n.slot {
+      x = x + n.flex.left
+      y = y + n.flex.top
+    }
+    i = n.parent
+  }
+  Some((x, y))
+}
+
+///|
 /// A press at (x, y): the topmost node drawn there that does something when pressed does it, outside any tracking, as
 /// one change. True if one did. Found where it is drawn (its holders' offsets with its own: View::rect).
 pub fn Tree::press(self : Tree, x : Double, y : Double) -> Bool {

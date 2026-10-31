@@ -249,7 +249,7 @@ fn Ctx::shown_whole(self : Ctx) -> (Array[Bool], Array[Int]) {
       b.x + b.fw <= self.width + gap_slack &&
       b.y + b.fh <= self.height + gap_slack
     let aside = b.layer || b.portal || b.pager != 0 || b.placed_at()
-    let moved = b.tx != 0.0 || b.ty != 0.0 || b.moved_x != 0.0 || b.moved_y != 0.0
+    let moved = b.moved_off()
     if p < 0 || p >= n {
       whole[i] = b.opacity > 0.01 && inside && !moved
       layer[i] = i
