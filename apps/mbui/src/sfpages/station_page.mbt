@@ -11,9 +11,7 @@
 fn station_page_reset() -> Unit {
   env_forms.clear()
   env_forms_made.val = 0
-  env_fields.clear()
-  env_seeded.clear()
-  env_sent.clear()
+  env_drafts.clear()
   rs_shown.clear()
 }
 
@@ -768,9 +766,17 @@ let env_forms : Map[String, String] = {}
 let env_forms_made : Ref[Int] = Ref(0)
 
 ///|
-/// The field of a station's variables, by station.
-// kept across runs: made as a page first shows one; station_page_reset empties it
-let env_fields : Map[String, @ui.Field] = {}
+/// The shared draft, independent of the editor and its page's layout and selection.
+priv struct EnvDraft {
+  pending : @signals.Signal[String?]
+  reset : @signals.Signal[Int]
+  mut source : String?
+  mut sent : String?
+}
+
+///|
+// kept across runs: made as a station's page opens its draft; station_page_reset empties it
+let env_drafts : Map[String, EnvDraft] = {}
 
 ///|
 /// The editor (AgentEnvEditor): the field, what is wrong under it (a line the core cannot take), 取消 while changed,
@@ -789,48 +795,62 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
     }
   }
   let d = (core.topic)("agentEnvForm", { "station": str(address), "form": str(form) }).value
-  let field_ = match env_fields.get(address) {
-    Some(f) => f
+  let draft = match env_drafts.get(address) {
+    Some(draft) => draft
     None => {
-      let f = @ui.Field::new()
-      env_fields[address] = f
-      f
+      let draft : EnvDraft = { pending: @signals.signal(None, same=fn(a, b) { a == b }), reset: @signals.signal(0), source: None, sent: None }
+      env_drafts[address] = draft
+      draft
     }
   }
-  // what the core has, once it has it (again after 取消); after, what it comes to says the field too while nothing
-  // typed here since waits on it (a save elsewhere, the draft read again): what is typed is the field's
+  let field_ = c.editor_field("env/" + address)
+  let pending = draft.pending.get()
+  let generation = draft.reset.get()
+  // Keep the latest edit visible on every page while the core catches up. A late answer for an older edit must not
+  // replace it; only an answer for the latest edit clears the pending value.
   if d is Some(Object(_)) && !flag(d, "pending") {
     let now = text(d, "text")
-    match env_seeded.get(address) {
-      None => {
-        env_seeded[address] = now
-        // (what was typed before it came is kept, and goes to the draft as typed: never wiped by it)
-        if field_.text() == "" {
-          field_.set(now)
+    draft.source = Some(now)
+    if pending == Some(now) {
+      c.tell("env-ack/" + form, fn() {
+        if @signals.untracked(fn() { draft.pending.get() }) == Some(now) {
+          draft.pending.set(None)
+          draft.sent = None
         }
-      }
-      Some(was) if was != now => {
-        if field_.text() == was {
-          field_.set(now)
-        }
-        env_seeded[address] = now
-      }
-      _ => ()
+      })
     }
+  }
+  let source = match pending {
+    Some(_) => pending
+    None => draft.source
+  }
+  match source {
+    Some(words) => field_.follow(words, generation~)
+    None => ()
+  }
+  // The core cannot edit a form while it saves. An edit typed then is still shared immediately, and sent once saving
+  // finishes. An older acknowledgement never clears or resends a newer value.
+  if pending is Some(words) && d is Some(Object(_)) && !flag(d, "pending") && text(d, "text") != words && draft.sent != Some(words) {
+    c.tell("env-edit/" + form, fn() {
+      if @signals.untracked(fn() { draft.pending.get() }) == Some(words) && draft.sent != Some(words) {
+        draft.sent = Some(words)
+        station_env_edit(core, address, form, words)
+      }
+    })
   }
   let saving = is_doing(core, ["agentEnv.form.save"], [("station", address), ("form", form)])
   c.box(style=st_editor, fn() {
     // (first in its card, in its corners on the words' inset: the ladder's small block's corner there)
     let typed = @sf.textarea(c, "env/" + address, rows=6, field=field_, placeholder=env_placeholder, corner=@sf.small_corner)
-    if env_seeded.contains(address) && typed != text(d, "text") && typed != env_sent.get(address).unwrap_or("") {
-      env_sent[address] = typed
+    if source is Some(words) && typed != words {
       c.tell("env-edit/" + form, fn() {
-        @settings.act(
-          core,
-          @sf.t("web-pages.stations.agentEnvEdit"),
-          "agentEnv.form.edit",
-          obj([("station", str(address)), ("form", str(form)), ("input", obj([("text", str(typed))]))]),
-        )
+        draft.pending.set(Some(typed))
+        if flag(d, "pending") {
+          draft.sent = None
+        } else {
+          draft.sent = Some(typed)
+          station_env_edit(core, address, form, typed)
+        }
       })
     }
     // what is wrong, a line each
@@ -859,8 +879,11 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
     @sf.card_foot(c, at_end=true, fn() {
       if flag(d, "dirty") &&
         @sf.button(c, @sf.t("common.cancel"), key="env-reset/" + address, tone=Ghost) {
-        env_seeded.remove(address)
-        env_sent.remove(address)
+        @signals.start_batch()
+        draft.pending.set(None)
+        draft.sent = None
+        draft.reset.set(@signals.untracked(fn() { draft.reset.get() }) + 1)
+        @signals.end_batch()
         @settings.act(
           core,
           @sf.t("web-pages.stations.agentEnvEdit"),
@@ -884,14 +907,15 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
 }
 
 ///|
-/// What of the core's a station's field last took (first, again after 取消, or as it changed with nothing typed since),
-/// and what was last sent of it.
-// kept across runs: said as the field is filled and typed in; station_page_reset empties them
-let env_seeded : Map[String, String] = {}
-
-///|
-// kept across runs: said as what is typed is sent; station_page_reset empties it
-let env_sent : Map[String, String] = {}
+/// Sends one value of the shared variables draft to the core.
+fn station_env_edit(core : Core, address : String, form : String, typed : String) -> Unit {
+  @settings.act(
+    core,
+    @sf.t("web-pages.stations.agentEnvEdit"),
+    "agentEnv.form.edit",
+    obj([("station", str(address)), ("form", str(form)), ("input", obj([("text", str(typed))]))]),
+  )
+}
 
 ///|
 let env_placeholder : String = "HTTPS_PROXY=http://127.0.0.1:7890\nNO_PROXY=localhost,.internal"

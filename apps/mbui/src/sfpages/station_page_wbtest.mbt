@@ -417,6 +417,120 @@ test "the variables' field follows the core's text that comes after the page ope
 }
 
 ///|
+test "two station variables editors share the draft without sharing editor state" {
+  @sfbase.reset()
+  reset()
+  @settings.reset()
+  @sffixture.fixture_reset()
+  @sf.presenters_reset()
+  @sf.set_words(@sfbase.fill)
+  let env : Ref[(String, Int, Bool)] = Ref(("E2E_A=1", 1, false))
+  let saving = Ref(false)
+  let edits : Array[Json] = []
+  let base = @sffixture.fixture("settings")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if name == "agentEnvForm" {
+        let (words, version, dirty) = env.val
+        { value: Some({ "text": Json::string(words), "lines": [], "errors": 0, "dirty": Json::boolean(dirty), "pending": Json::boolean(saving.val) }), error: None, version }
+      } else {
+        (base.topic)(name, params)
+      }
+    },
+    call: fn(name, params, done) {
+      if name == "agentEnv.form.edit" {
+        edits.push(params)
+        if flag(field(Some(params), "input"), "reset") {
+          env.val = ("E2E_A=1", 5, false)
+        }
+        done(Ok(Json::null()))
+      } else {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  let first : Ref[@ui.Field?] = Ref(None)
+  let second : Ref[@ui.Field?] = Ref(None)
+  let t = @ui.Tester::new(fn(c) {
+    @sf.begin(c) |> ignore
+    c.with_theme(@sf.ui_theme(), fn() {
+      let core = @sfbase.settings_core(src, rig_workspace)
+      c.scope(1, fn() {
+        first.val = Some(c.editor_field("env/ws1/st1"))
+        station_env_editor(c, core, "ws1/st1")
+      })
+      c.scope(2, fn() {
+        second.val = Some(c.editor_field("env/ws1/st1"))
+        station_env_editor(c, core, "ws1/st1")
+      })
+    })
+  }, w=390.0, h=900.0, platform=1)
+  t.check_looks(false)
+  t.keep_parts(true)
+  t.draw()
+  let a = first.val.unwrap()
+  let b = second.val.unwrap()
+  assert_eq(a.text(), "E2E_A=1")
+  assert_eq(b.text(), "E2E_A=1")
+  a.pick(0, 0)
+  b.pick(3, 3)
+  assert_eq(a.selection(), (0, 0), msg="each editor owns its selection")
+  assert_eq(b.selection(), (3, 3))
+
+  let fields = t.all(TextField, label=env_placeholder)
+  assert_eq(fields.length(), 2)
+  let (x, y, w, _) = fields[0].rect
+  t.tap(x + w - 8.0, y + 8.0)
+  a.pick(a.text().length(), a.text().length())
+  t.type_text("2")
+  t.draw()
+  assert_eq(a.text(), "E2E_A=12")
+  assert_eq(b.text(), "E2E_A=12", msg="the second editor follows an edit before the core answers")
+  a.set("E2E_A=1")
+  t.draw()
+  t.draw()
+  assert_eq(b.text(), "E2E_A=1", msg="reverting to the old core value is an edit too")
+  a.set("E2E_A=123")
+  t.draw()
+  t.draw()
+  assert_eq(b.text(), "E2E_A=123")
+  assert_eq(edits.length(), 3)
+
+  env.val = ("E2E_A=12", 2, true)
+  t.draw()
+  t.draw()
+  assert_eq(a.text(), "E2E_A=123", msg="an older core answer does not replace a newer edit")
+  assert_eq(b.text(), "E2E_A=123")
+  assert_eq(edits.length(), 3, msg="an older answer does not send another edit")
+  env.val = ("E2E_A=123", 3, true)
+  t.draw()
+  t.draw()
+  env.val = ("E2E_A=4", 4, true)
+  t.draw()
+  t.draw()
+  assert_eq(a.text(), "E2E_A=4", msg="later core changes reach both editors")
+  assert_eq(b.text(), "E2E_A=4")
+  saving.val = true
+  t.draw()
+  a.set("E2E_A=45")
+  t.draw()
+  t.draw()
+  assert_eq(b.text(), "E2E_A=45")
+  assert_eq(edits.length(), 3, msg="an edit made while saving is not sent until saving finishes")
+  saving.val = false
+  t.draw()
+  t.draw()
+  assert_eq(edits.length(), 4, msg="the queued edit is sent after saving")
+  t.tap_text(@sf.t("common.cancel"))
+  t.draw()
+  t.draw()
+  assert_eq(a.text(), "E2E_A=1", msg="cancel restores the core's draft on both pages")
+  assert_eq(b.text(), "E2E_A=1")
+  assert_eq(edits.length(), 5, msg="cancel sends one reset and does not resend the old edit")
+}
+
+///|
 test "on this machine's own page its display says so and opens nothing; its browser's tab opens" {
   let t = setting_tester(Station("ws1/st1"), 390.0, platform=0, h=2400.0, ready=fn() {
     @sfbase.machine_here.val = Some("ws1/st1")

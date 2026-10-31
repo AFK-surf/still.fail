@@ -908,6 +908,7 @@ pub struct Ctx {
   mut owner : Int32
   mut stint : Int32
   owned : Map[Int32, Array[Int32]]
+  owned_releases : Map[Int32, OwnedReleases]
   mut back : ((Int32, Double, Double, Double, Double) -> Unit)?
   mut back_node : Int32
   mut back_edge : Double
@@ -1043,6 +1044,7 @@ pub fn Ctx::drawn_pixels(Self, Int32, inset? : Double) -> ImagePixels
 pub fn Ctx::drawn_rect(Self, Int32) -> (Double, Double, Double, Double)
 pub fn Ctx::drawn_scale(Self) -> Double
 pub fn Ctx::editor(Self, String, placeholder? : String, shorter? : Array[String], w? : Size, font_size? : Double, max_lines? : Int32, plain? : Bool, line? : Double, trim? : Bool, color? : Int64, placeholder_color? : Int64, caret_color? : Int64, enter_sends? : Bool, leaves? : Array[Int32], ime_action? : Int32, paste_limit? : Int32, secret? : Bool, words? : Bool, look? : (String) -> (String, Array[(Int32, Int32, Int64)]), field? : Field, files? : Bool) -> EditorResult
+pub fn Ctx::editor_field(Self, String) -> Field
 pub fn Ctx::editor_focused(Self, String) -> Bool
 pub fn Ctx::effect(Self, String, async (@effect.Scope) -> Unit) -> Unit
 #callsite(autofill(loc))
@@ -1177,6 +1179,7 @@ pub fn Ctx::now(Self, loc~ : SourceLoc) -> Double
 pub fn Ctx::now_before(Self, Double, loc~ : SourceLoc) -> Double
 pub fn Ctx::on_back(Self, () -> Unit) -> Unit
 pub fn Ctx::on_key(Self, Int32, (Int32, Int32) -> Bool) -> Unit
+pub fn Ctx::on_page_release(Self, String, () -> Unit) -> Unit
 pub fn Ctx::on_press(Self, Int32, () -> Unit) -> Unit
 pub fn Ctx::open_url(Self, String) -> Bool
 pub fn Ctx::overlay(Self, String, modal? : Bool, trap? : Bool, escape? : Bool, on_escape? : () -> Bool, stays? : () -> Bool, outside? : Bool, scrim? : Int64, anchor? : Int32, initial_focus? : Int32, return_focus? : Int32, inert? : Bool, () -> Unit) -> Overlay
@@ -1384,6 +1387,7 @@ type FakeHost
 
 type Field
 pub fn Field::colors(Self, placeholder~ : Int64, caret~ : Int64) -> Unit
+pub fn Field::follow(Self, String, generation? : Int32) -> Unit
 pub fn Field::new(text? : String) -> Self
 pub fn Field::pick(Self, Int32, Int32) -> Unit
 pub fn Field::selection(Self) -> (Int32, Int32)
@@ -1839,6 +1843,8 @@ pub(all) struct Overlay {
   node : Int32
   dismissed : Dismiss?
 }
+
+type OwnedReleases
 
 pub struct Page {
   start : Int32

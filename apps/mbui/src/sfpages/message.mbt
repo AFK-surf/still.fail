@@ -559,6 +559,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
   }
   let rest = files.filter(fn(a) { !placed.contains(a.name) })
   if m.text != "" {
+    let mermaid_blocks = Ref(0)
     @sf.markdown(
       c,
       m.text,
@@ -621,7 +622,12 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
           None => lang
         }
         if first.to_lower() == "mermaid" && code.trim() != "" {
-          Some(fn() { viz_mermaid_block(c, "chat/" + here.station + ":" + here.session + "/" + m.ts, code, @sf.theme().p.subtle) })
+          // Two identical blocks in one message still occupy two places, each with its own view.
+          let block = mermaid_blocks.val
+          mermaid_blocks.val += 1
+          Some(fn() {
+            c.scope(block, fn() { viz_mermaid_block(c, "chat/" + here.station + ":" + here.session + "/" + m.ts, code, @sf.theme().p.subtle) })
+          })
         } else {
           None
         }
