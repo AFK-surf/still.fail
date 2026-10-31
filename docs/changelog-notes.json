@@ -1,4 +1,7 @@
 {
+  "3972ec39a": {
+    "parts": ["android", "desktop"]
+  },
   "86bb9ced2": {
     "parts": ["android", "desktop", "web"]
   },
