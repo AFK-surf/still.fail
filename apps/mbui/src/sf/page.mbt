@@ -1925,10 +1925,10 @@ pub fn dials(c : @ui.Ctx, dials : Array[Dial]) -> Unit {
       let lit = (fill.to_double() / 10.0).round().to_int()
       let cell = if narrow { dl_cell_narrow } else { dl_cell_wide }
       c.box(style=if narrow { dl_dial_narrow } else { dl_dial_wide }, fn() {
-        c.box(style=dl_number_line, fn() {
-          c.text(d.number, style=if low { dl_number.then(@ui.text_style(color=Data(ink))) } else { dl_number }) |> ignore
-          c.text(d.unit, style=dl_unit) |> ignore
-        })
+        c.rich(
+          [@ui.span(d.number), @ui.span(d.unit, weight=500, scale=t.t.meta / dl_number_size, color=t.p.muted)],
+          style=if low { dl_number.then(@ui.text_style(color=Data(ink))) } else { dl_number },
+        )
         |> ignore
         c.box(style=if narrow { dl_cells_narrow } else { dl_cells_wide }, fn() {
           for i in 0..<10 {
@@ -1966,17 +1966,14 @@ let dl_dial_wide : @ui.Style = @ui.css("min_w=S24 gap=S0_5 align=AStart")
 let dl_dial_narrow : @ui.Style = @ui.style(w=grow, gap=S0_5, align=AStart)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let dl_number_line : @ui.Style = @ui.css("row gap=SPx align=AEnd")
-
-///|
 /// Its figure (quotaDialNumber: the display size, 600, the words' ink while there is plenty).
 // kept across runs: a value (no field of it changes)
 let dl_number : @ui.TextStyle = @ui.text_style(size=code_big_size, weight=Semibold, color=Fg, wrap=false)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let dl_unit : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, weight=Medium, color=Muted, wrap=false)
+/// Its figure's size, which its unit (quotaDialUnit: the meta size, 500, muted) is a part of: the two are one line's
+/// runs, so the unit stands on the figure's baseline.
+let dl_number_size : Double = 28.0
 
 ///|
 /// Its ten cells (quotaDialCells: 4 over and 6 under; a cell 8 by 14, 2 apart, round 2; narrow 6 wide), those not lit

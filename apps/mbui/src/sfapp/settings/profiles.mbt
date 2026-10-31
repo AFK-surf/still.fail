@@ -499,15 +499,7 @@ fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
       let left = clamp(count(wv, "left"))
       let lit = (left.to_double() / 10.0 + 0.5).floor().to_int()
       c.box(min_w=96.0, gap=2.0, fn() {
-        c.box(dir=Row, align=AEnd, fn() {
-          c.text(left.to_string(), size=t.t.display, weight=600, color=if low { tone } else { t.p.text }, wrap=false, line=32.0)
-          |> ignore
-          c.box(pl=1.0, fn() {
-            c.text("%", size=t.t.ui, weight=500, color=t.p.muted, wrap=false, line=26.0) |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
+        dial_figure(c, left.to_string(), "%", if low { tone } else { t.p.text })
         c.box(dir=Row, pt=4.0, pb=6.0, gap=2.0, fn() {
           for i in 0..<10 {
             c.box(w=Px(7.0), h=Px(14.0), radius=2.0, bg=if i < lit { tone } else { t.p.line }, fn() {  }) |> ignore
