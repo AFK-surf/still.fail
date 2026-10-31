@@ -79,7 +79,8 @@ pub fn[T] Changed::changed(self : Changed[T]) -> Bool {
 /// focus (unless not `focusable`, or `disabled`: nothing happens to it then but being pointed at), and as taking
 /// presses (as Ctx::clicked asked: the pointer's hand over it; not `disabled`). `keys`: those of
 /// Enter and Space that press it (press_enter, press_space); `focus_on_press`: a press gives it the focus (a slider's
-/// thumb), else only the keyboard does. `node`: its node (as Ctx::box returns it), for where the focus goes in order.
+/// thumb), unless a finger uses it while a field has the focus; else only the keyboard does. `node`: its node (as
+/// Ctx::box returns it), for where the focus goes in order.
 /// `holds`: held however long, it is still pressed and let go a tap (a control that answers being held, its knob a
 /// lens while a finger is on it), never long pressed.
 pub fn Ctx::interact(

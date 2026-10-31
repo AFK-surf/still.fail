@@ -50,15 +50,20 @@ pub fn slider(
   let span = if max > min { max - min } else { 1.0 }
   let mut now = snap(value, min, max, step)
   if !disabled {
-    // the pointer: where it is along the track (last frame's), the value there
+    // The pointer: where it is along the track (last frame's), the value there. A tap can go down and up between
+    // frames, so take its recorded position at a tap or drag end as well as a pointer still down.
     match c.drag_of(id) {
-      Some(d) if d.down => {
-        let (x, _, rw, _) = r.rect()
-        // the thumb's middle runs from half a thumb in to half a thumb from the end
-        if rw > thumb_room {
-          let along = dclamp((d.x - x - thumb_room / 2.0) / (rw - thumb_room), 0.0, 1.0)
-          let k = if c.rtl() { 1.0 - along } else { along }
-          now = snap(min + k * span, min, max, step)
+      Some(d) => {
+        let tapped = d.take_tap()
+        let ended = d.take_end()
+        if d.down || tapped || ended {
+          let (x, _, rw, _) = r.rect()
+          // the thumb's middle runs from half a thumb in to half a thumb from the end
+          if rw > thumb_room {
+            let along = dclamp((d.x - x - thumb_room / 2.0) / (rw - thumb_room), 0.0, 1.0)
+            let k = if c.rtl() { 1.0 - along } else { along }
+            now = snap(min + k * span, min, max, step)
+          }
         }
       }
       _ => ()
