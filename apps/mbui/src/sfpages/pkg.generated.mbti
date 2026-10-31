@@ -293,6 +293,8 @@ pub fn list_key(@sfbase.ChatRef) -> String
 
 pub let lists_top_in : Double
 
+pub fn local_menu_open() -> Bool
+
 pub let local_open : @ref.Ref[Bool]
 
 pub fn local_station_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit

@@ -114,9 +114,8 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
       // its menu (⋯)
       let mid = c.id("local/menu")
       let open = local_menu.val
-      if c.clicked(mid) {
-        local_menu.val = !open
-      }
+      // (pressed: opened or closed as it is let go, as it is then)
+      c.on_press(mid, fn() { local_menu.val = !local_menu.val })
       let b = c.box(style=ls_more, id=mid, fn() { @sf.icon(c, "more", size=ws_more_icon, color=t.p.muted) |> ignore })
       c.semantics(b, Button, id=mid, label=@sf.t("web-main.menu.more"), expanded=open)
       let entries : Array[@kit.Entry] = []
@@ -137,19 +136,23 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
       entries.push(
         @kit.menu_item("folder", label=@settings.local_folder_label()),
       )
-      let m = @sf.dropdown(
-        c,
-        "local/menu-list",
-        open,
-        mid,
-        entries,
-        { "stop": "stop", "start": "play", "restart": "refresh", "update": "refresh", "log": "file-text", "folder": "folder" },
-        @sf.menu_w,
-        along=End,
-      )
-      if open && !m.open {
-        local_menu.val = false
-      }
+      // (dismissed by the hand, Escape or a press outside it and its ⋯: closed at that moment; closed as one is chosen)
+      let menu : Ref[@kit.Menu?] = Ref(None)
+      c.with_dismissed(fn(_) { local_menu.val = false }, fn() {
+        menu.val = Some(
+          @sf.dropdown(
+            c,
+            "local/menu-list",
+            open,
+            mid,
+            entries,
+            { "stop": "stop", "start": "play", "restart": "refresh", "update": "refresh", "log": "file-text", "folder": "folder" },
+            @sf.menu_w,
+            along=End,
+          ),
+        )
+      })
+      let m = menu.val.unwrap()
       match m.chosen {
         Some(a) => {
           local_menu.val = false
@@ -285,6 +288,12 @@ pub fn local_stopped_words(s : Json?) -> String {
 /// Whether its menu is open.
 // kept across runs: said by the page's ⋯; reset puts it back
 let local_menu : Ref[Bool] = Ref(false)
+
+///|
+/// Whether its menu is open (tests).
+pub fn local_menu_open() -> Bool {
+  local_menu.val
+}
 
 ///|
 /// (card: its parts 10 apart, the card's padding and ground)
