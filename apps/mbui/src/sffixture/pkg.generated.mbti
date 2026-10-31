@@ -529,6 +529,8 @@ pub fn with_message(Json, String) -> Json
 
 pub fn with_need(Json) -> Json
 
+pub fn with_none_shown(Json) -> Json
+
 pub fn with_sent(Json, String) -> Json
 
 pub fn with_state(Json, (String, String, String)) -> Json

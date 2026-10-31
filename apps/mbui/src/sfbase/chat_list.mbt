@@ -320,7 +320,8 @@ pub fn entries_of(v : ChatView) -> Array[Entry] {
   if v.more {
     out.push(Older)
   }
-  if v.messages.length() == 0 && v.outbox.length() == 0 && v.elsewhere.length() == 0 {
+  // (nothing in it: not a window showing none of it, what it shows before being brought, `more`)
+  if v.messages.length() == 0 && v.outbox.length() == 0 && v.elsewhere.length() == 0 && !v.more {
     out.push(Empty)
   }
   for e in v.elsewhere {
@@ -1598,7 +1599,9 @@ pub fn list_after(
   let n = list.length()
     // put in place once: at the unread line (a few lines of what came before it in view), else where the core opened
     // it, else at its end (where the list starts)
-    if !rd.placed && v.messages.length() > 0 && !v.unread_above {
+    // (a window showing none of what is before it, its latest page all letters to other chats: nothing to put in
+    // place, at its end as it starts, and the page before asked as it comes, below)
+    if !rd.placed && (v.messages.length() > 0 || v.more) && !v.unread_above {
       rd.placed = true
     }
     // put in place this build: the list scrolled there is laid out again in this frame (mbui's same-frame rebuild: a
