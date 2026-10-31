@@ -1418,7 +1418,7 @@ pub let player_speeds : Array[Double]
 
 pub let player_track_inset : Double
 
-pub fn player_view(@ui.Ctx, @kit.Media, ViewerFile, Array[String], back_label~ : String, on_back~ : () -> Unit, on_go~ : (String) -> Unit, still? : String) -> Unit
+pub fn player_view(@ui.Ctx, @kit.Media, ViewerFile, Array[String], back_label~ : String, on_back~ : () -> Unit, on_go~ : (String) -> Unit, still? : String, flying? : Bool) -> Unit
 
 pub fn player_view_let_go(String) -> Unit
 

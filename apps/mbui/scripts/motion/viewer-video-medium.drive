@@ -1,0 +1,13 @@
+# Laid out Medium on an opened fold's inner screen (MBUI_WIN=690x840 MBUI_FILM_PLATFORM=2, MBUI_FIXTURE=chat-download):
+# the chat brought over, its video opened in the viewer and closed.
+system {"size_class":{"width":"medium","height":"medium"}}
+timeout 20000
+until 新建对话
+wait 600
+tapxy -24 420
+wait 900
+until 演示录屏.mp4
+tap 演示录屏.mp4
+wait 1500
+back
+wait 1500

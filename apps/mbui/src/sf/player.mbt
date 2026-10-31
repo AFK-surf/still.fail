@@ -814,7 +814,9 @@ fn player_cover(c : @ui.Ctx, name : String, ink : MediaInk) -> Unit {
 ///|
 /// The player `p` of `file` over its page (see the file's head): `list` the folder's others it steps through (in order,
 /// the one playing among them), `on_go` another of them opened, back to `back_label`; `still` (an image's key) shown
-/// where its picture will be until its first frame is. A phone's or a desktop's, as the page is.
+/// where its picture will be until its first frame is. A phone's or a desktop's, as the page is. `flying`: its picture
+/// flown in from a thumbnail or back into it by what opened it (the preview's, sfbase viewer.mbt), only its bars and
+/// controls drawn over that, on no ground of their own, answering nothing.
 pub fn player_view(
   c : @ui.Ctx,
   p : @kit.Media,
@@ -824,6 +826,7 @@ pub fn player_view(
   on_back~ : () -> Unit,
   on_go~ : (String) -> Unit,
   still? : String = "",
+  flying? : Bool = false,
 ) -> Unit {
   // what the view holds of the file it shows (zoomed in, its end's card, a frame being saved) not held of the next one
   // played in its place; what it holds of the player (选集 open, its speeds' menu) stays
@@ -838,9 +841,9 @@ pub fn player_view(
   }
   // laid out Small: a phone's player, as the viewer's frame
   if layout(c.width) is Small {
-    phone_player(c, p, file, list, back_label, on_back, on_go, still)
+    phone_player(c, p, file, list, back_label, on_back, on_go, still, flying)
   } else {
-    desk_player(c, p, file, list, back_label, on_back, on_go, still)
+    desk_player(c, p, file, list, back_label, on_back, on_go, still, flying)
   }
 }
 
@@ -857,6 +860,7 @@ fn desk_player(
   on_back : () -> Unit,
   on_go : (String) -> Unit,
   still : String,
+  flying : Bool,
 ) -> Unit {
   let f = p.frame(c)
   let s = f.status
@@ -905,103 +909,107 @@ fn desk_player(
   let z = v.zoom
   let (room_top, room_foot) = player_room(c.width)
   p.near(!finger && py >= 0.0 && (py < room_top || py >= c.height - room_foot))
-  // the keys (see the file's head)
-  let char = fn(ch : Char) { c.key_pressed(@ui.key_of_char(ch)) }
-  let shifted = fn(ch : Char) {
-    c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key) || c.key_pressed(@ui.key_of_char(ch.to_ascii_uppercase()))
-  }
-  if c.key_pressed(@ui.key_space) || char('k') {
-    p.play_pause()
-    p.wake()
-  }
-  if char(',') {
-    step_frame(c, p, fr, -1)
-  }
-  if char('.') {
-    step_frame(c, p, fr, 1)
-  }
-  if c.key_pressed(@ui.key_code_left) {
-    if playing {
-      p.seek_by(-p.nudge_ms())
+  // the keys (see the file's head), once it is up
+  if !flying {
+    let char = fn(ch : Char) { c.key_pressed(@ui.key_of_char(ch)) }
+    let shifted = fn(ch : Char) {
+      c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key) || c.key_pressed(@ui.key_of_char(ch.to_ascii_uppercase()))
+    }
+    if c.key_pressed(@ui.key_space) || char('k') {
+      p.play_pause()
       p.wake()
-    } else {
+    }
+    if char(',') {
       step_frame(c, p, fr, -1)
     }
-  }
-  if c.key_pressed(@ui.key_code_right) {
-    if playing {
-      p.seek_by(p.nudge_ms())
-      p.wake()
-    } else {
+    if char('.') {
       step_frame(c, p, fr, 1)
     }
-  }
-  if char('j') {
-    p.seek_by(-p.nudge_ms())
-    p.wake()
-  }
-  if char('l') {
-    p.seek_by(p.nudge_ms())
-    p.wake()
-  }
-  if c.key_pressed(@ui.key_code_up) || c.key_pressed(@ui.key_code_down) {
-    let (volume, _) = p.volume()
-    p.set_volume(volume + (if c.key_pressed(@ui.key_code_up) { player_volume_key } else { -player_volume_key }))
-    p.wake()
-  }
-  if char('m') {
-    p.toggle_mute()
-    p.wake()
-  }
-  if char('f') && picture && mac {
-    full()
-  }
-  if char('c') && p.subtitle().0 {
-    p.toggle_subtitle()
-    p.wake()
-  }
-  if shifted('n') {
-    match next {
-      Some(other) => go(other)
-      None => ()
+    if c.key_pressed(@ui.key_code_left) {
+      if playing {
+        p.seek_by(-p.nudge_ms())
+        p.wake()
+      } else {
+        step_frame(c, p, fr, -1)
+      }
+    }
+    if c.key_pressed(@ui.key_code_right) {
+      if playing {
+        p.seek_by(p.nudge_ms())
+        p.wake()
+      } else {
+        step_frame(c, p, fr, 1)
+      }
+    }
+    if char('j') {
+      p.seek_by(-p.nudge_ms())
+      p.wake()
+    }
+    if char('l') {
+      p.seek_by(p.nudge_ms())
+      p.wake()
+    }
+    if c.key_pressed(@ui.key_code_up) || c.key_pressed(@ui.key_code_down) {
+      let (volume, _) = p.volume()
+      p.set_volume(volume + (if c.key_pressed(@ui.key_code_up) { player_volume_key } else { -player_volume_key }))
+      p.wake()
+    }
+    if char('m') {
+      p.toggle_mute()
+      p.wake()
+    }
+    if char('f') && picture && mac {
+      full()
+    }
+    if char('c') && p.subtitle().0 {
+      p.toggle_subtitle()
+      p.wake()
+    }
+    if shifted('n') {
+      match next {
+        Some(other) => go(other)
+        None => ()
+      }
+    }
+    if shifted('p') {
+      match prev {
+        Some(other) => go(other)
+        None => ()
+      }
+    }
+    if picture && z.nw > 0.0 {
+      let zoom_key = fn(ch : Char) {
+        c.key_pressed(@ui.key_of_char(ch)) || c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key)
+      }
+      if zoom_key('+') || zoom_key('=') {
+        z.zoom_to(z.scale * player_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
+      } else if zoom_key('-') || zoom_key('_') {
+        z.zoom_to(z.scale / player_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
+      } else if char('0') {
+        z.reset()
+      } else if char('1') {
+        z.zoom_to(player_whole, z.bw / 2.0, z.bh / 2.0, true)
+      }
+    }
+    if c.key_pressed(@ui.key_escape) {
+      if v.rates {
+        v.rates = false
+      } else if listing {
+        v.listing = false
+      } else {
+        desk_leave(c, v, on_back)
+      }
     }
   }
-  if shifted('p') {
-    match prev {
-      Some(other) => go(other)
-      None => ()
-    }
-  }
-  if picture && z.nw > 0.0 {
-    let zoom_key = fn(ch : Char) {
-      c.key_pressed(@ui.key_of_char(ch)) || c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key)
-    }
-    if zoom_key('+') || zoom_key('=') {
-      z.zoom_to(z.scale * player_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-    } else if zoom_key('-') || zoom_key('_') {
-      z.zoom_to(z.scale / player_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-    } else if char('0') {
-      z.reset()
-    } else if char('1') {
-      z.zoom_to(player_whole, z.bw / 2.0, z.bh / 2.0, true)
-    }
-  }
-  if c.key_pressed(@ui.key_escape) {
-    if v.rates {
-      v.rates = false
-    } else if listing {
-      v.listing = false
-    } else {
-      desk_leave(c, v, on_back)
-    }
-  }
-  c.box(style=desk_play_ground.then(@ui.style(bg=Data(ink.stage))), fn() {
+  c.box(style=desk_play_ground.then(@ui.style(bg=Data(if flying { no_ground } else { ink.stage }))), fn() {
     // the picture, in the window less the list beside it, as a phone's (Media::stage): a click or a finger's tap shows
     // or hides the controls, a double one in the middle plays or pauses, on the left third back, on the right on (the
     // user, 2026-10-28); the screen filled by F or its key
     let stage = c.id(key + "/desk-stage")
     @ui.capture(c, stage)
-    p.stage(c, stage, c.width - panel)
+    if !flying {
+      p.stage(c, stage, c.width - panel)
+    }
     // the wheel: with ⌃ or ⌘ held (or a trackpad's pinch) it zooms round the pointer, alone it moves what is zoomed in
     let (wx, wy, mods) = @ui.wheel_of(c, stage)
     if picture && z.nw > 0.0 && (wx != 0.0 || wy != 0.0) {
@@ -1020,7 +1028,7 @@ fn desk_player(
       c.box(style=desk_grow_full, id=stage, fn() {
         let w = dmax(desk_none, c.width - panel)
         match p.native() {
-          Some(n) if n.here() => {
+          Some(n) if n.here() && !flying => {
             let (x, y, pw, ph) = picture_place(v, p, s, w, c.height, still, top=room_top, foot=room_foot)
             v.placed = Some((x, y, pw, ph))
             c.native(n, content=Some((x, y, pw, ph))) |> ignore
@@ -1437,6 +1445,7 @@ fn phone_player(
   on_back : () -> Unit,
   on_go : (String) -> Unit,
   still : String,
+  flying : Bool,
 ) -> Unit {
   ignore(back_label)
   let f = p.frame(c)
@@ -1468,12 +1477,14 @@ fn phone_player(
   @ui.capture(c, stage)
   // (a ground: a tap shows or hides the controls)
   c.cursor(stage, Arrow)
-  phone_gestures(c, v, p, s, fr, stage, picture, back)
-  c.box(style=player_fill.then(@ui.style(bg=Data(ink.stage))), fn() {
+  if !flying {
+    phone_gestures(c, v, p, s, fr, stage, picture, back)
+  }
+  c.box(style=player_fill.then(@ui.style(bg=Data(if flying { no_ground } else { ink.stage }))), fn() {
     // the picture where its zoom puts it, a drag down taking it down with the finger
     c.box(style=player_fill, id=stage, fn() {
       match p.native() {
-        Some(n) if n.here() => {
+        Some(n) if n.here() && !flying => {
           let (x, y, w, h) = picture_place(v, p, s, c.width, c.height, still)
           v.placed = Some((x, y + v.drag_dy, w, h))
           c.native(n, content=Some((x, y + v.drag_dy, w, h))) |> ignore
@@ -1508,7 +1519,7 @@ fn phone_player(
       |> ignore
     }
     let shown = if v.drag == DownClose || v.taken_down { desk_none } else { f.shown }
-    let live = f.on && v.drag != DownClose && !v.taken_down
+    let live = f.on && v.drag != DownClose && !v.taken_down && !flying
     // the bar at the top: back, the name, which of the folder's it is, 选集
     c.layer(fn() {
       c.box(style=@ui.style(h=Fixed(room_top)), fn() {  }) |> ignore

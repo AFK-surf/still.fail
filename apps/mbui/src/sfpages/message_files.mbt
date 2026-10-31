@@ -491,18 +491,16 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   }
   let target = if landing { 0.0 } else { 1.0 }
   let marks = @motion.animate(c, "video-marks/" + @sfbase.file_key(a), target, spec=@motion.tween(@sf.dur_ms, ease=Out), from=target)
-  let b = c.box(style=video_frame.then(@ui.style(w=Fixed(w), h=Fixed(h))), id=open, fn() {
-    if still != "" && still != "!" {
-      c.layer(fn() {
-        c.image(still, w=Px(w), h=Px(h), fit=if letterbox { FitContain } else { FitCover }, bg=0L)
-        |> ignore
+  // its play mark in its middle, its band at its foot, at `alpha`: here, and over its picture as the viewer flies it
+  // out of here and back (note_thumb's over)
+  let over = fn(alpha : Double) {
+    c.layer(fn() {
+      let middle = c.box(style=video_middle, fn() {
+        @sf.play_mark(c, video_play_side, @sf.video_shade) |> ignore
       })
-      |> ignore
-    }
-    let middle = c.box(style=video_middle, fn() {
-      @sf.play_mark(c, video_play_side, @sf.video_shade) |> ignore
+      c.look(middle, @ui.look(alpha~))
     })
-    c.look(middle, @ui.look(alpha=marks))
+    |> ignore
     c.layer(fn() {
       let foot = c.box(style=video_foot_room, fn() {
         c.box(style=video_name_band, fn() {
@@ -523,12 +521,26 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
         })
         |> ignore
       })
-      c.look(foot, @ui.look(alpha=marks))
+      c.look(foot, @ui.look(alpha~))
     })
     |> ignore
+  }
+  let b = c.box(style=video_frame.then(@ui.style(w=Fixed(w), h=Fixed(h))), id=open, fn() {
+    if still != "" && still != "!" {
+      c.layer(fn() {
+        c.image(still, w=Px(w), h=Px(h), fit=if letterbox { FitContain } else { FitCover }, bg=0L)
+        |> ignore
+      })
+      |> ignore
+    }
+    over(marks)
   })
   // where it is and what it shows, for the preview to fly from and back into; hidden while the preview is its picture
-  note_thumb(c, thumb, b, @sf.message_file_corner, picture=if still == "!" { "" } else { still }, letterbox~, list=list_of(here))
+  note_thumb(c, thumb, b, @sf.message_file_corner, picture=if still == "!" { "" } else { still }, letterbox~, list=list_of(here), over=fn(
+    alpha,
+  ) {
+    over(alpha * marks)
+  })
   c.look(b, @ui.look(alpha=thumb_shows(thumb)))
   // held by a finger for its menu: lifted over the menu's scrim (@sf.lift_over)
   @sf.lift_over(c, b, "file/" + thumb, @sf.lift_of(c, "file/" + thumb, false, file_held_open(open)), file_lift_scale)
