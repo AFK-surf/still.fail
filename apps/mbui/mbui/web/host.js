@@ -1780,7 +1780,7 @@
   // (one atlas: colour glyphs in it with the others)
   H.atlasSize = (colour) => colour ? 0 : ATLAS;
 
-  // `e` drawn in white, a pixel round its bounds: its box (in `e`) and its picture, held for H.glyphPut (where it
+  // `e` drawn in black, a pixel round its bounds: its box (in `e`) and its picture, held for H.glyphPut (where it
   // goes in the atlas is MoonBit's: hostapi's atlas.mbt)
   function rasterize(e, key) {
     held = null;
@@ -1801,15 +1801,18 @@
     rc.height = ph;
     rctx.clearRect(0, 0, pw, ph);
     rctx.font = font(e.size * sc, e.weight, e.style);
-    rctx.fillStyle = '#fff';
+    // drawn in black, as words are mostly dark on light: a canvas makes light words on nothing heavier (its text's
+    // contrast and gamma for light ink), and words drawn from a white glyph were a sixth bolder than the Mac's app
+    // draws them (Han and Latin alike: 328580 against 282186 of ink, white and black, at 24 px)
+    rctx.fillStyle = '#000';
     rctx.textBaseline = 'alphabetic';
     rctx.fillText(e.c, pad + l, pad + a);
     const img = rctx.getImageData(0, 0, pw, ph);
-    // drawn in white: a cluster with colours of its own (grey ones too: any pixel of some opacity not white) is an
+    // drawn in black: a cluster with colours of its own (grey ones too: any pixel of some opacity not black) is an
     // emoji's
     let color = 0;
     for (let i = 0; i < img.data.length && !color; i += 4) {
-      if (img.data[i + 3] > 64 && Math.min(img.data[i], img.data[i + 1], img.data[i + 2]) < 224) color = 1;
+      if (img.data[i + 3] > 64 && Math.max(img.data[i], img.data[i + 1], img.data[i + 2]) > 32) color = 1;
     }
     held = { key, img, pw, ph };
     e.w = pw / sc;
