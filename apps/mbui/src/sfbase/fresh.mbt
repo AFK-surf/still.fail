@@ -20,6 +20,9 @@ pub(all) struct FreshChat {
   /// scene leaving keeps clear, so nothing of it moves)
   scene : @signals.Signal[Json?]
   room : @signals.Signal[Double]
+  /// narrow, how tall its foot was (the band, the choices, the composer): what of the scene leaving is not seen, as it
+  /// was not
+  foot : @signals.Signal[Double]
 }
 
 ///|
@@ -32,6 +35,7 @@ pub let fresh : FreshChat = {
   became: @signals.signal(None),
   scene: @signals.signal(None),
   room: @signals.signal(0.0, same=fn(a, b) { a == b }),
+  foot: @signals.signal(0.0, same=fn(a, b) { a == b }),
 }
 
 ///|
@@ -45,6 +49,7 @@ pub fn fresh_reset() -> Unit {
   fresh.became.set(None)
   fresh.scene.set(None)
   fresh.room.set(0.0)
+  fresh.foot.set(0.0)
 }
 
 ///|
