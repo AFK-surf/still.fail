@@ -79,7 +79,7 @@ pub fn Ctx::press(self : Ctx) -> Press {
   }
   if down && !p.moved && !p.long {
     // (a moment: the frame at it woken, wake_in)
-    let held = self.clock - self.press_seen_at
+    let held = self.clock - (if self.press_at >= 0.0 { self.press_at } else { self.press_seen_at })
     if held >= long_press_ms - held_slack_ms {
       p = { ..p, long: true }
     } else {

@@ -173,6 +173,38 @@ fn Ctx::held_through(self : Ctx) -> Unit {
 }
 
 ///|
+/// Where the press went down, if the window's tree handed it here held long already (a cover's hold handed on:
+/// Ctx::held_through) and this is the build it comes to: let go since or not, it is a long press there, once, whatever
+/// frames came between. What a hold over words takes as held (kit's Pick::hold), as a held press is.
+pub fn Ctx::handed_hold(self : Ctx) -> (Double, Double)? {
+  hand.down.get() |> ignore
+  if self.press_at >= 0.0 && self.held_told == self.press_at && self.held_build == self.build_no {
+    Some((self.press_x, self.press_y))
+  } else {
+    None
+  }
+}
+
+///|
+/// Whether the press under way has been held still `ms` since it went down (its own moment, Ctx's `press_at`: a hold
+/// the window's tree handed on, since the finger went down, Ctx::held_through), whatever is pressed: what a hold over
+/// words asks (kit's Pick::hold). A frame asked for when it will have been.
+pub fn Ctx::held_for(self : Ctx, ms : Double) -> Bool {
+  // (read so: what reads it is built again as it is pressed or let go, hand.mbt; held long a moment, woken at)
+  hand.down.get() |> ignore
+  if !self.down || self.dragging || self.press_strayed || self.press_at < 0.0 {
+    return false
+  }
+  let held = self.clock - self.press_at
+  if held >= ms {
+    true
+  } else {
+    self.wake_in(ms - held)
+    false
+  }
+}
+
+///|
 /// Whether a press is down on `id`, from the moment it went down (no wait for what scrolls: Ctx::pressed has it, for
 /// how a thing shows it is pressed), read so (hand.mbt): what a gesture on it follows, whatever it shows.
 pub fn Ctx::held_down(self : Ctx, id : Int) -> Bool {
