@@ -1732,6 +1732,15 @@ pub fn with_working(v : Json) -> Json {
               let w = am.copy()
               w["status"] = Json::string("running")
               w["since"] = Json::number(-200000.0)
+              match field(Some(a), "session") {
+                Some(Object(session)) => {
+                  let running = session.copy()
+                  running["statusText"] = Json::string("正在工作")
+                  running["tone"] = Json::string("accent")
+                  w["session"] = Json::object(running)
+                }
+                _ => ()
+              }
               Json::object(w)
             }
             _ => a

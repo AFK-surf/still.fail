@@ -402,8 +402,13 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
   let area = c.box(style=activity_row_box, id=row, fn() {
     let line = c.box(style=if here.inline { activity_line_narrow } else { activity_line }, id~, fn() {
       let face = c.box(style=activity_face, fn() {
-        let av = c.box(fn() { agent_avatar(c, src, here, "a:" + a.key, a.maker, a.runtime, "", "") })
+        // The picture is only pointed at: a press still belongs to the activity line that opens its history.
+        let avatar = c.id("activity-avatar/" + a.key)
+        let av = c.box(id=avatar, taps=false, points=true, fn() { agent_avatar(c, src, here, "a:" + a.key, a.maker, a.runtime, "", "") })
         @motion.measure(c, av, "emit-avatar/" + rk + "/" + a.key)
+        if em.copied != a.key {
+          agent_hover(c, src, here, "activity-agent-hover/" + a.key, avatar, a.key)
+        }
         let ring = @motion.animate(c, "ring/" + here.station + "/" + a.key, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(
           ring_out_ms,
           ease=Leave,

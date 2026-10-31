@@ -361,7 +361,7 @@ pub fn fix_chat_jobs() -> Json {
 ///|
 /// This slice's topics in the fixture, for its modes (Some: handled, with its value).
 pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json?? {
-  if !decide_mode(f.mode) {
+  if !decide_mode(f.mode) && !(f.mode == "chat-working" && name == "agentCard") {
     return None
   }
   match name {
