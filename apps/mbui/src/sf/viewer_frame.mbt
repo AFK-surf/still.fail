@@ -295,6 +295,49 @@ pub fn viewer_zoom(c : @ui.Ctx, key : String, z : @kit.Zoom, ink : ViewerInk) ->
 }
 
 ///|
+/// How much of a file opened has come, in the bar beside its tools (FilePreview.tsx FileComing inBar, fpHeadProgress):
+/// "正在读取 **1.2 MB** / 3.4 MB" in the meta's size, then a bar 120 wide; before the core has said how much,
+/// 正在打开 over a bar that sweeps. `got`: what has come and its whole size, else the size it was sent with.
+pub fn viewer_coming(c : @ui.Ctx, key : String, got : (Double, Double?)?, size : Double, ink : ViewerInk) -> Unit {
+  let total = match got {
+    Some((_, Some(n))) if n > 0.0 => Some(n)
+    _ => if size > 0.0 { Some(size) } else { None }
+  }
+  c.box(style=vfr_coming_row, fn() {
+    match (got, total) {
+      (Some((loaded, _)), Some(n)) => {
+        c.rich(
+          [
+            @ui.span(t("web-main.preview.loadingLabel") + " "),
+            @ui.span(file_size(loaded), weight=600, color=ink.ink),
+            @ui.span(" / " + file_size(n)),
+          ],
+          style=vfr_coming_words.then(@ui.text_style(color=Data(ink.muted))),
+        )
+        |> ignore
+        progress(c, key + "/coming", Some(if loaded >= n { 1.0 } else { loaded / n }), w=Px(vfr_coming_track))
+      }
+      _ => {
+        c.text(t("common.opening"), style=vfr_coming_words.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
+        progress(c, key + "/coming", None, w=Px(vfr_coming_track))
+      }
+    }
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let vfr_coming_row : @ui.Style = @ui.css("row gap=S2_5 px=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let vfr_coming_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
+
+///|
+let vfr_coming_track : Double = 120.0
+
+///|
 /// An image's zoom by the keys (useZoom's): + in, − out, 0 fitted, 1 as it is (+ is ⇧= on most keyboards).
 pub fn viewer_zoom_keys(c : @ui.Ctx, z : @kit.Zoom) -> Unit {
   // (a key taken at the frame's moment: on from how big it shows then)

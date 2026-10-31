@@ -1144,15 +1144,8 @@ pub fn Viewer::read_whole(self : Viewer, src : Source, done : (Result[Bytes, Jso
           Err(e) => done(Err(e))
         }
       })
-    // an image as it comes: grown from its thumbnail, nothing said of how far it has got (as Android's ImageStage)
-    None if self.shown_kind() == Some(KImage) && self.file.size <= big_file =>
-      (src.read_bytes)("station.file", Json::object(file_params(self)), fn(r) {
-        match r {
-          Ok((_, bytes)) => done(Ok(bytes))
-          Err(e) => done(Err(e))
-        }
-      })
-    // what else: how much has come as it comes (ChatFiles.kt fetch: `progress`, the core's `{loaded, total}`)
+    // what else, an image too (grown from its thumbnail meanwhile): how much has come as it comes, said in its bar
+    // as the web's (FilePreview.tsx FileComing; ChatFiles.kt fetch: `progress`, the core's `{loaded, total}`)
     None => {
       let p = file_params(self)
       p["progress"] = Json::boolean(true)

@@ -1033,6 +1033,7 @@ let zh : Map[String, String] = {
   "web-main.preview.kind.text": "文本",
   "web-main.preview.kind.video": "视频",
   "web-main.preview.loadFailed": "无法载入：{error}",
+  "web-main.preview.loadingLabel": "正在读取",
   "web-main.preview.nextKey": "下一张（→）",
   "web-main.preview.path": "路径",
   "web-main.preview.pr.closed": "已关闭",
