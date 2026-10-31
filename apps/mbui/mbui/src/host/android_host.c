@@ -2086,3 +2086,9 @@ void mb_host_stream_direct(int32_t sid, double route, double after, int32_t what
   }
   pthread_mutex_unlock(&routes_lock);
 }
+
+// This device's password manager (host_native.mbt `pw_*`): none here (apple_passwords.m, win_passwords.c).
+int32_t mb_host_passwords_able(void) { return 0; }
+int32_t mb_host_passwords_run(moonbit_string_t args) { (void)args; return 0; }
+moonbit_string_t mb_host_passwords_out(int32_t id) { (void)id; return moonbit_make_string_raw(0); }
+void mb_host_passwords_end(int32_t id) { (void)id; }

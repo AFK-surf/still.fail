@@ -21,6 +21,8 @@
 //   screen-files-going, -done (-dark)   two files sent to its machine: going (the first under a free name), then there
 //   screen-center, -stats (-dark)       driving a Windows desktop that changes its scale: 控制中心 open; the view's
 //                                       figures open
+//   screen-login-fill, -pick (-dark)    driving a tab whose focus is in github.com's password field: 用 1Password
+//                                       填入 offered; pressed, its two logins there to pick from
 
 ///|
 /// The fixture's screen mode ("" none), its dark taken off.
@@ -221,6 +223,22 @@ pub fn screen_fixture_stream(
       st["video"] = { "capture": "Windows.Graphics.Capture", "encoder": "NVENC", "hardware": true }
       on_value({ "state": Json::object(st) }, None)
     }
+    "screen-login-fill" | "screen-login-pick" => {
+      live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
+      let st = match screen_fix_state("live", true, true, [], "", None, None, None, None, Some(["text", "png"]), Some(drop)) {
+        Object(m) => m.copy()
+        _ => {}
+      }
+      st["login"] = { "host": "github.com", "field": "password" }
+      on_value({ "state": Json::object(st) }, None)
+      screen_fix_one_password()
+      if m == "screen-login-pick" {
+        match screens_open.get(screen_key(screen_fix_at.station, screen_fix_at.screen)) {
+          Some(s) => s.fill_start()
+          None => ()
+        }
+      }
+    }
     "screen-files-going" | "screen-files-done" => {
       live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
       screen_fix_drops(m == "screen-files-done")
@@ -331,4 +349,24 @@ fn screen_fix_drops(done : Bool) -> Unit {
 /// The view of `screen` on `station`, if its page made it.
 fn screen_sess_of(station : String, screen : String) -> ScreenSess? {
   screens_open.get(screen_key(station, screen))
+}
+
+///|
+/// 1Password as the fixture and the tests have it (the Tester's `op`): two logins for github.com (one for gitlab.com), each one's account and password.
+fn screen_fix_one_password() -> Unit {
+  @ui.fake_op_runs.clear()
+  @ui.fake_op.val = Some(fn(args) {
+    if args.length() >= 2 && args[0] == "item" && args[1] == "list" {
+      (
+        0,
+        "[{\"id\":\"gh1\",\"title\":\"GitHub\",\"additional_information\":\"zzj\",\"urls\":[{\"href\":\"https://github.com/login\"}]},{\"id\":\"gh2\",\"title\":\"GitHub 工作\",\"additional_information\":\"zzj-work\",\"urls\":[{\"href\":\"github.com\"}]},{\"id\":\"gl\",\"title\":\"GitLab\",\"urls\":[{\"href\":\"https://gitlab.com\"}]}]",
+        "",
+      )
+    } else if args.length() >= 3 && args[0] == "item" && args[1] == "get" {
+      let who = if args[2] == "gh1" { "zzj" } else { "zzj-work" }
+      (0, "[{\"id\":\"username\",\"label\":\"username\",\"value\":\"\{who}\"},{\"id\":\"password\",\"label\":\"password\",\"purpose\":\"PASSWORD\",\"value\":\"pw-\{who}\"}]", "")
+    } else {
+      (1, "", "unknown command")
+    }
+  })
 }

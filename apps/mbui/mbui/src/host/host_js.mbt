@@ -693,6 +693,28 @@ fn bl_end(_id : Int) -> Unit {
 
 }
 
+// This device's password manager (passwords.mbt): a page runs no program.
+
+///|
+fn pw_able() -> Int {
+  0
+}
+
+///|
+fn pw_run(_args : String) -> Int {
+  0
+}
+
+///|
+fn pw_out(_id : Int) -> String {
+  ""
+}
+
+///|
+fn pw_end(_id : Int) -> Unit {
+
+}
+
 // Files picked (pick.mbt): the page's file input (web/host.js H.pickStart), its answer told as outside kind 3.
 
 ///|

@@ -45,6 +45,8 @@ const LOOK_WHOLE = 0.98;
 /// What a key's names and a text may hold.
 const KEY_MAX = 64;
 const TEXT_MAX = 16_384;
+/// The most a login's account or password filled from this device's password manager may be.
+const FILL_MAX = 1024;
 
 export type ScreenCall =
   /// `ask.control` as asked; `auto` (none asked): control unless someone else drives it as it opens.
@@ -227,6 +229,13 @@ export function checkInput(input: unknown): J {
       const px = (n: unknown) => finite(n) && Number.isInteger(n) && n >= 640 && n <= 16384;
       if (!px(input.width) || !px(input.height)) throw bad();
       return { t: "resolution", width: input.width, height: input.height };
+    }
+    // A login form filled from this device's password manager, for the site the view's state said (`login`).
+    case "fill": {
+      const word = (v: unknown) => v === undefined || (typeof v === "string" && v.length <= FILL_MAX);
+      if (typeof input.host !== "string" || input.host === "" || input.host.length > 253 || !word(input.username) || !word(input.password)) throw bad();
+      if (input.username === undefined && input.password === undefined) throw bad();
+      return { t: "fill", host: input.host, ...(input.username !== undefined ? { username: input.username } : {}), ...(input.password !== undefined ? { password: input.password } : {}) };
     }
     // A file dropped into the view, shown in the machine's file manager (a screen whose `drop` says `reveal`).
     case "reveal":
@@ -776,8 +785,14 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 if (isObject(s.cursor) && finite(s.cursor.x) && finite(s.cursor.y)) state.cursor = { x: unit(s.cursor.x), y: unit(s.cursor.y), ...(typeof s.cursor.shape === "string" ? { shape: s.cursor.shape } : {}) };
                 else if (s.cursor === null) delete state.cursor;
                 if (typeof s.title === "string" && s.title !== "") state.title = s.title;
+                // The login field in focus, while driving it: this device's password manager may fill it (`fill`).
+                if (s.login === null) delete state.login;
+                else if (state.control && isObject(s.login) && typeof s.login.host === "string" && s.login.host !== "" && s.login.host.length <= 253 && (s.login.field === "username" || s.login.field === "password")) {
+                  state.login = { host: s.login.host, field: s.login.field };
+                }
                 // Whether this view's input is taken, as the station says (a read-only member's is not).
                 if (typeof s.control === "boolean") state.control = s.control && control;
+                if (!state.control) delete state.login;
                 const access = accessOf(s.access);
                 if (access) state.access = access;
                 if (Array.isArray(s.viewers)) onIt = names(s.viewers);

@@ -82,6 +82,8 @@ fn reset_globals() -> Unit {
   building.val = false
   messages_reset()
   drop_reset()
+  fake_op.val = None
+  fake_op_runs.clear()
   image_cache.clear()
   images_said.clear()
   views_told_text.clear()

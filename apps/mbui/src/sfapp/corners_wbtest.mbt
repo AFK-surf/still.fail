@@ -48,7 +48,7 @@ let corner_modes : Array[String] = [
   "lock-none", "lock-refused", "lock-security", "lock-waiting", "lock-wrong", "screen-agent-driving",
   "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",
   "screen-denied", "screen-ended", "screen-failed", "screen-files-done", "screen-files-going", "screen-full",
-  "screen-full-tools", "screen-gone", "screen-live", "screen-not-drivable", "screen-outdated", "screen-read-only",
+  "screen-full-tools", "screen-gone", "screen-live", "screen-login-fill", "screen-login-pick", "screen-not-drivable", "screen-outdated", "screen-read-only",
   "screen-reconnecting", "screen-trackpad", "screen-trackpad-command", "settings-home", "settings-appearance",
   "settings-me", "settings-me-reading", "settings-workspace", "settings-security", "settings-vault",
   "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station", "settings-station-offline", "settings-station-env", "settings-station-processes",

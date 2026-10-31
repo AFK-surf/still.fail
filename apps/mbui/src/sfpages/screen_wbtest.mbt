@@ -906,6 +906,49 @@ test "while it is looked at a phone may turn as it is held (the system's turn bu
 }
 
 ///|
+test "a login field in focus while driving a tab: 用 1Password 填入; its logins for the site picked from, the one picked filled; none on a host without one" {
+  let r = screen_rig()
+  r.live(others=[])
+  // no password manager on this host: nothing offered
+  r.state("live", others=[], more={ "login": { "host": "github.com", "field": "password" } })
+  r.t.draw()
+  assert_true(r.t.find("用 1Password 填入") is None)
+  screen_fix_one_password()
+  r.t.draw()
+  assert_true(r.t.find("用 1Password 填入") is Some(_))
+  assert_true(r.t.find("github.com") is Some(_))
+  r.tap_label("填入")
+  r.t.draw()
+  r.t.draw()
+  // two for github.com (gitlab.com's not among them): picked from
+  assert_eq(@ui.fake_op_runs[0], ["item", "list", "--categories", "Login", "--format", "json"])
+  assert_true(r.t.find("选一个 github.com 的登录") is Some(_))
+  assert_true(r.labelled("GitLab") is None)
+  r.tap_label("GitHub 工作 · zzj-work")
+  r.t.draw()
+  r.t.draw()
+  assert_eq(@ui.fake_op_runs[1], ["item", "get", "gh2", "--fields", "label=username,label=password", "--reveal", "--format", "json"])
+  let fill = r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" })
+  assert_eq(fill.length(), 1)
+  assert_eq(text(Some(fill[0]), "host"), "github.com")
+  assert_eq(text(Some(fill[0]), "username"), "zzj-work")
+  assert_eq(text(Some(fill[0]), "password"), "pw-zzj-work")
+  // the focus left the login: nothing offered
+  r.state("live", others=[])
+  r.t.draw()
+  assert_true(r.t.find("用 1Password 填入") is None)
+  // a site 1Password has no login for: said so
+  r.state("live", others=[], more={ "login": { "host": "example.org", "field": "username" } })
+  r.t.draw()
+  r.tap_label("填入")
+  r.t.draw()
+  r.t.draw()
+  assert_true(r.t.find("1Password 里没有 example.org 的登录") is Some(_))
+  @ui.fake_op.val = None
+  screen_done(r.t)
+}
+
+///|
 /// Live and driven, a station that carries the clipboard both ways and takes files.
 fn driven(r : ScreenRig) -> Unit {
   r.live(others=[], clipboard=["text", "png"], drop={ "folder": "/Users/alice/Downloads", "reveal": true })

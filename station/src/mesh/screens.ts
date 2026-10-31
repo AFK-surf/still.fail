@@ -17,7 +17,7 @@ import { liveClock } from "../ops/fibers.ts";
 import { tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { type AccessShown, type ScreenHub, ScreenRefused, accessShown } from "../screens/hub.ts";
-import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenInput, type ScreenSource, type ScreenView, type ViewFit, CLIP_PNG_MAX, clipFits, regionOf } from "../screens/source.ts";
+import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type LoginFill, type Region, type ScreenInput, type ScreenSource, type ScreenView, type ViewFit, CLIP_PNG_MAX, clipFits, regionOf } from "../screens/source.ts";
 import { type Viewer, readOnly } from "./credential.ts";
 import type { Stream } from "./native.ts";
 import { type Fps, FrameLatency, Pacer, type Quality, STILL_MS, START_RATE, Sharpener, Sizer, isFps, loopStall, rateCeiling } from "./screen-pace.ts";
@@ -85,6 +85,16 @@ export function parseResolution(v: any): { width: number; height: number } | nul
 /// What a client's input frame asks of the file manager (`{t: "reveal", path}`): the path, or null when it is not that.
 export function parseReveal(v: any): string | null {
   return v !== null && typeof v === "object" && v.t === "reveal" && typeof v.path === "string" && v.path !== "" && v.path.length <= 4096 ? v.path : null;
+}
+
+/// What a client's input frame fills a login form with (`{t: "fill", host, username?, password?}`: from the person's own
+/// password manager, for the site the view's state said): null when it is not that. Each word is a field's: 1024
+/// characters at most.
+export function parseFill(v: any): LoginFill | null {
+  if (v === null || typeof v !== "object" || v.t !== "fill" || typeof v.host !== "string" || v.host === "" || v.host.length > 253) return null;
+  const word = (x: unknown) => typeof x === "string" && x.length <= 1024;
+  if ((v.username !== undefined && !word(v.username)) || (v.password !== undefined && !word(v.password)) || (v.username === undefined && v.password === undefined)) return null;
+  return { host: v.host, ...(v.username !== undefined ? { username: v.username } : {}), ...(v.password !== undefined ? { password: v.password } : {}) };
 }
 
 /// A client's `look` frame (JSON `{region, maxWidth, maxHeight}`): the part of the screen it shows (null: the whole) and
@@ -262,6 +272,7 @@ class ViewSession {
   #leave: () => void = () => {};
   #unwatch: () => void = () => {};
   #unclip: () => void = () => {};
+  #unlogin: () => void = () => {};
   #unpoint: () => void = () => {};
   #title: string;
   /// The bit rate the source was last asked for.
@@ -352,6 +363,7 @@ class ViewSession {
     if (this.#closed) return;
     this.#closed = true;
     this.#unclip();
+    this.#unlogin();
     this.#unpoint();
     this.view.close();
     this.#leave();
@@ -389,6 +401,12 @@ class ViewSession {
     if (types.length > 0 && this.view.watchClipboard) {
       this.#unclip = this.view.watchClipboard((clip) => {
         if (!this.#closed && types.includes(clip.type) && clipFits(clip)) void this.#send(KIND.clipboard, clipPayload(clip));
+      });
+    }
+    // The login field in focus, to a person who drives it (their app offers to fill it from their password manager).
+    if (this.control && this.view.watchLogin) {
+      this.#unlogin = this.view.watchLogin((login) => {
+        if (!this.#closed) void this.#state({ login });
       });
     }
     // The pointer, where the source's pictures leave it out (a video of the desktop): the client draws it.
@@ -580,6 +598,12 @@ class ViewSession {
             const reveal = parseReveal(raw);
             if (reveal !== null) {
               if (this.source.reveal && this.view.reveal) this.#then(() => this.view.reveal!(reveal));
+              break;
+            }
+            const fill = parseFill(raw);
+            if (fill !== null) {
+              // Only a view that drives it fills it.
+              if (this.control && this.view.fill) this.#then(() => this.view.fill!(fill));
               break;
             }
             const e = parseInput(raw);

@@ -15,8 +15,8 @@ import { StationBrowser } from "../src/browser/browser.ts";
 import { type Cdp, connectCdp } from "../src/browser/cdp.ts";
 import { chromeHost } from "../src/browser/chrome.ts";
 import { BEHIND } from "../src/browser/proxy.ts";
-import { COPY_BINDING, jpegSize } from "../src/browser/view.ts";
-import type { Clip } from "../src/screens/source.ts";
+import { COPY_BINDING, LOGIN_BINDING, jpegSize } from "../src/browser/view.ts";
+import type { Clip, LoginField } from "../src/screens/source.ts";
 import { makeScreens } from "../src/screens/source.ts";
 import { platform } from "../src/platform/index.ts";
 
@@ -194,6 +194,53 @@ test("a tab's clipboard, for a person driving it: what the page copies is heard,
     await evaluate("location.reload(); true");
     await until(async () => (await evaluate("document.readyState")) === "complete" && (await evaluate(`typeof window.${COPY_BINDING}`)) === "undefined", "a page loaded since has no binding");
     assert.equal(await evaluate("navigator.webdriver"), false, "still not said to be automated");
+    view.close();
+  } finally {
+    agent?.close();
+    await browser.stop().catch(() => {});
+    await browser.close();
+    server.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a tab's login form, for a person driving it: the field in focus said with the tab's host, filled from their app only while the tab is on that host", { skip: binary === undefined && "no Chrome here" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "side-browser-login-"));
+  const screens = makeScreens();
+  const browser = new StationBrowser({ dir, chrome: chromeHost({ dir, headless: true }), screens });
+  // A sign-in form as sites make them: the page keeps what is typed in its own state (as React does), told by input.
+  const page = `<title>login</title><body><form><input id=u name=email autocomplete=username><input id=p type=password></form><input id=q name=search>
+<script>window.typed = {}; for (const el of document.querySelectorAll("input")) el.addEventListener("input", () => (typed[el.id] = el.value));</script>`;
+  const server = createServer((_, res) => res.writeHead(200, { "content-type": "text/html" }).end(page));
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  let agent: Cdp | null = null;
+  try {
+    const s = await browser.endpoint();
+    agent = await connectCdp(s.ws!);
+    const { targetId } = await agent.send("Target.createTarget", { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/` });
+    const { sessionId } = await agent.send("Target.attachToTarget", { targetId, flatten: true });
+    const evaluate = async (expression: string) => (await agent!.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, sessionId)).result?.value;
+    await until(async () => (await evaluate("document.readyState")) === "complete", "the page loads");
+    const tab = await until(() => screens.get(`browser:${targetId}`), "the tab is a screen");
+    const view = await tab.open({ maxWidth: 800, maxHeight: 600, codecs: ["jpeg"] });
+    await view.next();
+    const heard: (LoginField | null)[] = [];
+    const unwatch = view.watchLogin!((l) => heard.push(l));
+    await until(async () => (await evaluate(`typeof window.${LOGIN_BINDING}`)) === "function", "the binding is there");
+    await evaluate("p.focus(); true");
+    await until(() => heard.at(-1)?.field === "password", "the password field in focus is said");
+    assert.deepEqual(heard.at(-1), { host: "127.0.0.1", field: "password" }, "with the tab's host");
+    await evaluate("q.focus(); true");
+    await until(() => heard.at(-1) === null, "a field that is no login's: none");
+    await evaluate("u.focus(); true");
+    await until(() => heard.at(-1)?.field === "username", "the account field");
+    // Filled for another host: nothing; for its own: both fields, as typing would leave them, the page told.
+    await view.fill!({ host: "evil.example", username: "a@x.com", password: "pw" });
+    assert.equal(await evaluate("u.value + '|' + p.value"), "|");
+    await view.fill!({ host: "127.0.0.1", username: "a@x.com", password: "correct horse" });
+    assert.equal(await evaluate("u.value + '|' + p.value"), "a@x.com|correct horse");
+    assert.deepEqual(await evaluate("typed"), { u: "a@x.com", p: "correct horse" }, "the page heard it as typed");
+    unwatch();
     view.close();
   } finally {
     agent?.close();

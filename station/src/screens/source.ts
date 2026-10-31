@@ -99,7 +99,18 @@ export interface ScreenView {
   /// Shows a file in the machine's file manager (a file dropped into the view, put on the machine): the source's
   /// `reveal` says it can.
   reveal?(path: string): Promise<void>;
+  /// Hears the login field the source's focus is in (a page's username or password field: a tab of the browser), with
+  /// the site it is on as the station knows it, and null as the focus leaves one, until the returned function. Only a
+  /// view a person drives is asked: their app offers to fill it from their own password manager.
+  watchLogin?(heard: (login: LoginField | null) => void): () => void;
+  /// Fills the login form the focus is in with what the person's app gave, if the page is still on `host`.
+  fill?(f: LoginFill): Promise<void>;
 }
+
+/// A login field in focus: the site's host (as the browser has its address, not as the page says it), and which field.
+export type LoginField = { host: string; field: "username" | "password" };
+/// A login form filled from a person's app: for `host`, its account and password (either may be absent).
+export type LoginFill = { host: string; username?: string; password?: string };
 
 export type ScreenKind = "desktop" | "browser" | "simulator";
 

@@ -582,3 +582,41 @@ impl @hostapi.Host for FakeHost with ga_read_rows(self, a0) {
 impl @hostapi.Host for FakeHost with ga_read_end(self, a0) {
   self.gallery_read_end(a0)
 }
+
+// This device's password manager (@hostapi passwords.mbt) as a test has it: none, unless it says how `op` answers
+// (`fake_op`: its exit code, output and error output for the arguments given), each run ended at once.
+
+///|
+/// How `op` answers a test, given its arguments: None, no password manager here.
+pub let fake_op : Ref[((Array[String]) -> (Int, String, String))?] = Ref(None)
+
+///|
+/// The runs of `op` asked for in a test, by their id (from 1): their arguments.
+pub let fake_op_runs : Array[Array[String]] = []
+
+///|
+impl @hostapi.Host for FakeHost with pw_able(_) {
+  fake_op.val is Some(_)
+}
+
+///|
+impl @hostapi.Host for FakeHost with pw_run(_, args) {
+  guard fake_op.val is Some(_) else { return 0 }
+  let given = args.split("\u{1f}").map(fn(a) { a.to_owned() }).to_array()
+  // (each argument ended by the separator: the last piece is none)
+  ignore(given.pop())
+  fake_op_runs.push(given)
+  fake_op_runs.length()
+}
+
+///|
+impl @hostapi.Host for FakeHost with pw_out(_, id) {
+  guard fake_op.val is Some(answer) && id >= 1 && id <= fake_op_runs.length() else { return "" }
+  let (code, out, err) = answer(fake_op_runs[id - 1])
+  "\{code}\u{1f}\{out}\u{1f}\{err}\u{1f}"
+}
+
+///|
+impl @hostapi.Host for FakeHost with pw_end(_, _) {
+  ()
+}

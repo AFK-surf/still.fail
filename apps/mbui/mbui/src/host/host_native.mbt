@@ -1048,6 +1048,22 @@ extern "C" fn bl_back(id : Int) -> String = "mb_host_browser_login_back"
 ///|
 extern "C" fn bl_end(id : Int) -> Unit = "mb_host_browser_login_end"
 
+// This device's password manager (passwords.mbt): `op` run without a window (apple_passwords.m on macOS, win_passwords.c
+// on Windows; none on iOS, Android and Linux, where `pw_able` is 0).
+
+///|
+extern "C" fn pw_able() -> Int = "mb_host_passwords_able"
+
+///|
+#borrow(args)
+extern "C" fn pw_run(args : String) -> Int = "mb_host_passwords_run"
+
+///|
+extern "C" fn pw_out(id : Int) -> String = "mb_host_passwords_out"
+
+///|
+extern "C" fn pw_end(id : Int) -> Unit = "mb_host_passwords_end"
+
 // Files picked (pick.mbt; mac_app.m's open panel, android_host.c on MainActivity's pickers).
 
 ///|

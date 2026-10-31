@@ -1,0 +1,8 @@
+# A tab of a station's browser driven, its focus in github.com's password field (sfpages screen_fill.mbt):
+# 用 1Password 填入 offered under the picture; pressed, its two logins there to pick from.
+timeout 20000
+until 用 1Password 填入
+wait 1500
+tap =填入
+until 选一个
+wait 1500
