@@ -104,6 +104,7 @@ let settings_deep : Ref[Bool] = Ref(false)
 fn settings_fixture(src : Source, core : Core) -> Unit {
   match @settings.fixture_desk() {
     "policy-text" => @sfpages.fx_policy_up.val = "text"
+    "profile-spread" => @sfpages.fx_spread_up.val = true
     "policy-option" => @sfpages.fx_policy_up.val = "option"
     "lock-confirm" =>
       match items((core.topic)("lock", { "workspace": Json::string("ws1") }).value, "requests") {
