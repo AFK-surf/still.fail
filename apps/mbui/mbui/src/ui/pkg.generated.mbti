@@ -520,6 +520,8 @@ pub fn stable_hash(String) -> Int64
 
 pub fn stable_hash_bytes(Bytes) -> Int64
 
+pub fn stands_alone(Int64, glass? : Bool, edge? : Double) -> Bool
+
 pub let still_look : Look
 
 pub fn stream_audio_here() -> Bool
