@@ -1,6 +1,7 @@
 import { devicePage, escape } from "./page";
 import { requestLang, tr, type Lang } from "./i18n.ts";
 import { mailConfigured, sendCode } from "./mail";
+import { passwordAccounts, passwordIdentity } from "./password";
 export { devicePage } from "./page";
 
 /** An Android app's package (its intent's scheme and package): letters, digits and underscores, dotted. */
@@ -35,6 +36,9 @@ type Attempt = {
   identity?: Identity;
   codeHash?: string;
   sessionId?: string;
+  /** Signed in with a password (password.ts: an account set up for it, App Store review's): its session one of many
+   * people's, the oldest let go when they are too many (Account.create's `shared`). */
+  shared?: boolean;
   /** Signing in with an email: where the code went, the code's hash (with the attempt's id), until when it holds and how
    * many wrong ones were typed. */
   email?: string;
@@ -202,7 +206,7 @@ export class LoginAttempt extends DurableObject<Env> {
         return reply({ pending: true }, 202);
       }
       if (!attempt.identity || !attempt.sessionId) return reply({ error: "invalid_grant" }, 401);
-      const result = await this.env.ACCOUNTS.getByName(attempt.identity.sub).create(attempt.identity, attempt.sessionId, attempt.name);
+      const result = await this.env.ACCOUNTS.getByName(attempt.identity.sub).create(attempt.identity, attempt.sessionId, attempt.name, attempt.shared);
       if (result.ok) {
         const tokens = (await result.json()) as Tokens;
         attempt.receipt = await seal(this.env, tokens, nowSeconds() + REFRESH_RETRY_SEC);
@@ -308,8 +312,28 @@ export class LoginAttempt extends DurableObject<Env> {
         `<p class="or">${tr(lang, "cloud.login.choose.or")}</p>` +
         `<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="email"><input type="email" name="email" value="${escape(email)}" placeholder="${tr(lang, "cloud.login.email.placeholder")}" autocomplete="email" required maxlength="254"><button>${tr(lang, "cloud.login.email.send")}</button></form>` +
         (error ? `<p class="error">${escape(error)}</p>` : "") +
+        // With a password, for the accounts set up for it (password.ts): a page of its own behind a quiet link, as the web's
+        // sign-in page folds it away.
+        `<p class="links"><button form="password" class="link">${tr(lang, "cloud.login.password.open")}</button></p><form id="password" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="password-page"></form>` +
         `<p class="legal">${tr(lang, "cloud.login.choose.agree", { terms: legalLink(lang, "terms"), privacy: legalLink(lang, "privacy") })}</p>`,
       cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
+    );
+  }
+
+  /** The page that asks for an email and its password (an account set up for one, password.ts), `email` typed and
+   * whether the last was wrong with it; 换一种方式 back to the page that asks how. */
+  private passwordPage(lang: Lang, id: string, attempt: Attempt, browser: string, email = "", wrong = false): Response {
+    const csrf = `<input type="hidden" name="csrf" value="${browser}">`;
+    const action = `/v1/auth/login/${id}`;
+    return devicePage(
+      lang,
+      tr(lang, "cloud.login.password.title"),
+      `<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="password"><input type="email" name="email" value="${escape(email)}" placeholder="${tr(lang, "cloud.login.email.placeholder")}" autocomplete="username" required maxlength="254"${email ? "" : " autofocus"}><input type="password" name="password" placeholder="${tr(lang, "cloud.login.password.field")}" autocomplete="current-password" required maxlength="256"${email ? " autofocus" : ""}><button>${tr(lang, "cloud.login.password.submit")}</button></form>` +
+        (wrong ? `<p class="error">${tr(lang, "cloud.login.password.wrong")}</p>` : "") +
+        `<p class="links"><button form="back" class="link">${tr(lang, "cloud.login.password.other")}</button></p><form id="back" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="back"></form>`,
+      cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
+      // A right password sends the browser back where the attempt returns, as the code's page's right code does.
+      attempt.device ? undefined : returnSource(attempt.redirect),
     );
   }
 
@@ -340,8 +364,8 @@ export class LoginAttempt extends DurableObject<Env> {
 
   /**
    * POST /v1/auth/login/:id, from the page that asks how to sign in (choosePage, codePage), in the browser that started
-   * the attempt (its cookie and the form's csrf): `via` google (on to Google), email (a code to `email`), resend, back
-   * (another email) or code (the `code` typed).
+   * the attempt (its cookie and the form's csrf): `via` google (on to Google), email (a code to `email`), password-page (the
+   * page that asks for a password), password (an account set up for one, password.ts), resend, back (another email) or code (the `code` typed).
    */
   async choose(id: string, request: Request): Promise<Response> {
     return this.ctx.blockConcurrencyWhile(async () => {
@@ -394,6 +418,19 @@ export class LoginAttempt extends DurableObject<Env> {
         if (!EMAIL.test(email) || !email.split("@")[1]!.includes(".")) return this.choosePage(lang, id, attempt, browser, email, tr(lang, "cloud.login.email.invalid"));
         return send(email);
       }
+      if (via === "password-page") return this.passwordPage(lang, id, attempt, browser);
+      if (via === "password") {
+        const email = (form.get("email") ?? "").trim().toLowerCase();
+        const password = form.get("password") ?? "";
+        if (!(await consumeLoginRate(this.env, request))) return this.choosePage(lang, id, attempt, browser, "", tr(lang, "cloud.login.email.limited"));
+        const account = password.length <= 256 ? passwordAccounts(this.env).find((a) => a.email.trim().toLowerCase() === email) : undefined;
+        // Digests compared, as password.ts does: the time it takes says nothing of how much of it was right.
+        if (!account || (await digest(password)) !== (await digest(account.password))) return this.passwordPage(lang, id, attempt, browser, email, true);
+        attempt.shared = true;
+        const finish = await this.complete(id, attempt, await passwordIdentity(account));
+        if (attempt.device) finish.searchParams.delete("state");
+        return redirect(finish.toString(), cookie(this.env.PUBLIC_ORIGIN, id, "", 0));
+      }
       if (via === "resend" && attempt.phase === "code" && attempt.email) return send(attempt.email);
       if (via === "back") {
         attempt.phase = "choosing";
@@ -442,7 +479,7 @@ export class LoginAttempt extends DurableObject<Env> {
         return reply({ error: "invalid_grant" }, 401);
       attempt.phase = "used";
       this.ctx.storage.kv.put("attempt", attempt);
-      return this.env.ACCOUNTS.getByName(attempt.identity.sub).create(attempt.identity, attempt.sessionId, attempt.name);
+      return this.env.ACCOUNTS.getByName(attempt.identity.sub).create(attempt.identity, attempt.sessionId, attempt.name, attempt.shared);
     });
   }
 
