@@ -1269,11 +1269,20 @@ fn Ctx::emit_rich_glyphs(
   cy0 : Double,
   cy1 : Double,
   unplaced? : Array[(Int, Double, Double, Double)],
+  center_in? : Double = -1.0,
 ) -> Unit {
   let sc = self.scale
   let zoom = words_zoom.val
   let zoomed = rich_zoomed_keys(r, lay)
+  let ox0 = ox
   for c in 0..<lay.starts.length() {
+    // (each line in the middle of `center_in` where given, by its width without the spaces it ends in: as emit_text's)
+    let line = lay.line_of[c]
+    let ox = if center_in >= 0.0 && line < lay.line_w.length() {
+      ox0 + dmax((center_in - lay.line_w[line]) / 2.0, 0.0)
+    } else {
+      ox0
+    }
     let key = lay.keys[c]
     if key == -2 {
       match lay.drawings[lay.run_of[c]] {

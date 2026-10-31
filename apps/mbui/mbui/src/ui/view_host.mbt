@@ -832,7 +832,18 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
     let colors = r.runs.map(fn(run) { if run.color != 0L { run.color } else { c.ink } })
     let k = clip_top()
     let from = self.ninst - start
-    self.emit_rich_glyphs(r, lay, 0.0, 0.0, colors, 1.0, clip_stack[k + 1], clip_stack[k + 3], unplaced=glyphs)
+    self.emit_rich_glyphs(
+      r,
+      lay,
+      0.0,
+      0.0,
+      colors,
+      1.0,
+      clip_stack[k + 1],
+      clip_stack[k + 3],
+      unplaced=glyphs,
+      center_in=if c.words_center { c.w } else { -1.0 },
+    )
     if over && lay.w > c.w + 0.5 {
       cut = (from, self.ninst - start)
     }
@@ -848,7 +859,8 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
       tl
     }
     let from = self.ninst - start
-    self.emit_text(tl, 0.0, 0.0, c.ink, 1.0, unplaced=glyphs)
+    // (each line in the middle of its width where it says so, as an old view's centred words: Ctx::text's `center`)
+    self.emit_text(tl, 0.0, 0.0, c.ink, 1.0, unplaced=glyphs, center_in=if c.words_center { c.w } else { -1.0 })
     // (cut short to less than its ellipsis: no further than its box, as an old view's line is in the box that clips it)
     if !k.wrap && tl.w > c.w + 0.5 {
       cut = (from, self.ninst - start)
