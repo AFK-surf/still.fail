@@ -498,9 +498,9 @@ fn ask_dismiss(
 
 ///|
 /// 忽略 at the end of the line saying what the chat needs (`at_end`; `live` it takes a press, else faded where it was):
-/// the library's button of words alone ending the line's row (@sf.ask_line_button).
+/// quiet words to press ending the line's row, a button's room round them (@sf.ask_line_button).
 fn need_dismiss(c : @ui.Ctx, key : String, live : Bool) -> Unit {
-  @sf.ask_line_button(c, @sf.t("web-main.chat.asks.dismiss"), key~, disabled=!live) |> ignore
+  @sf.ask_line_button(c, @sf.t("web-main.chat.asks.dismiss"), key~, mark=state_icon, disabled=!live) |> ignore
 }
 
 ///|

@@ -3786,14 +3786,54 @@ pub fn ask_line_start(icon : Double) -> @ui.Style {
 }
 
 ///|
-/// A button of words alone ending ask_line_card's row (忽略 ending what a chat needs): the library's button, its ground
-/// concentric with the row's end corner, as far in from the row's top, foot and end as a capsule as high stands in a
-/// corner as round (capsule_in), the row as tall as holds it so. `disabled`: there and faded, taking no press. True on the frame after it was pressed.
-pub fn ask_line_button(c : @ui.Ctx, label : String, key~ : String, disabled? : Bool = false) -> Bool {
+/// Words to press ending ask_line_card's row (忽略 ending what a chat needs): quiet, the line's own words (not a
+/// button's: the user, 2026-10-31, 太明显了), in its ink under the hand; their room a button's (as tall, round as it,
+/// the press's room as least as the native input's), its ground under the hand or the finger concentric with the row's
+/// end corner (capsule_in), its words where they stood, as far in as the row's start mark `mark` wide is from its start; on the
+/// first of the row's lines, however many the words before it take. `disabled`: there and faded, taking no press.
+/// True on the frame after it was pressed.
+pub fn ask_line_button(
+  c : @ui.Ctx,
+  label : String,
+  key~ : String,
+  mark~ : Double,
+  disabled? : Bool = false,
+) -> Bool {
   let h = button_height()
-  let out = option_type().pad_in - capsule_in(option_row_corner, h)
-  button(c, label, key~, tone=Ghost, disabled~, reach=@ui.style(mt=room(-out), mb=room(-out), mr=room(-out)))
+  let pad = option_type().pad_in
+  let inset = capsule_in(option_row_corner, h)
+  let out = pad - inset
+  let id = c.id(key)
+  let live = !disabled
+  let lit = ease_to(c, "sf-ask-line-btn/\{id}", live && (c.lit(id) || c.pressed(id)))
+  let seen = @motion.animate(c, "sf-ask-line-btn-seen/\{id}", if disabled { 0.45 } else { 1.0 }, spec=@motion.tween(dur_ms, ease=Out))
+  let look = theme().chat_list
+  // (its words as far in from its end as the bell's from the row's start: the bell's room in its disc's column)
+  let side = (ask_line_disc() - mark) / 2.0
+  let b = c.box(
+    style=@ui.style(mt=room(-out), mb=room(-out), mr=room(-out)),
+    dir=Row,
+    h=Px(h),
+    padx=out + side,
+    align=ACenter,
+    bg=alpha(theme().p.hover, lit),
+    radius=h / 2.0,
+    opacity=seen,
+    id=if live { id } else { 0 },
+    fn() {
+      // (its ink the quiet one's, the line's own under the hand, over dur_ms)
+      let ink = mix(theme().p.text, lit, theme().p.muted)
+      let words = look.state_quiet.then(ask_line_button_words).then(@ui.text_style(color=Data(ink)))
+      c.text(label, style=ask_line_words(words)) |> ignore
+    },
+  )
+  c.semantics(b, Button, id=if live { id } else { 0 }, label~, disabled=!live)
+  live && c.clicked(id)
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let ask_line_button_words : @ui.TextStyle = @ui.text_style(w=Hug, wrap=false)
 
 ///|
 /// The words of ask_line_card's row (what it says, 忽略 at its end): `words` on lines as high as ask_line_mark's
