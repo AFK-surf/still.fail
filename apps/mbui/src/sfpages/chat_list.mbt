@@ -108,9 +108,10 @@ pub fn chat_list(
             rd.fresh.remove(keys[i]) |> ignore
             let leaving = rd.rows.went(keys[i]) is Some(_)
             let here = here_of(r, v, rk, turns, em, None, core, inline=narrow, gutter~)
-            let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving) })
+            let came = rd.rows.came(keys[i])
+            let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving, came) })
             @motion.keyed(c, ri, mk, by=makes_way(lf, keys[i]))
-            rd.rows.enter(c, ri, keys[i], lead=top)
+            rd.rows.enter(c, ri, keys[i], lead=top, grown=false)
             rd.rows.leave(c, ri, keys[i], lead=top)
           }
           _ => {

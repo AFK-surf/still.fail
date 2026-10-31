@@ -350,7 +350,7 @@ fn unsent_button(
 /// long its turn has run; pressed, its history beside the chat. One of several agents: its own stop under the pointer.
 /// For a message to come out of its picture the line folds to the picture, which is away while its copy flies
 /// (sfbase's emit.mbt).
-fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : Emits, rk : String, leaving : Bool) -> Unit {
+fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : Emits, rk : String, leaving : Bool, came : Double?) -> Unit {
   let p = @sf.theme().p
   let folded = emit_folded(em, a.key)
   let tail = @motion.animate(c, "tail/" + a.key, if folded { 0.0 } else { 1.0 }, spec=@motion.tween(fold_ms, ease=Out))
@@ -398,7 +398,8 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
     open_detail(src, here_ref(here), a.key)
   }
   let row = c.id("activity-row/" + a.key)
-  c.box(style=activity_row_box, id=row, fn() {
+  let row_key = rk + "\u{1}" + a.key
+  let area = c.box(style=activity_row_box, id=row, fn() {
     let line = c.box(style=if here.inline { activity_line_narrow } else { activity_line }, id~, fn() {
       let face = c.box(style=activity_face, fn() {
         let av = c.box(fn() { agent_avatar(c, src, here, "a:" + a.key, a.maker, a.runtime, "", "") })
@@ -422,9 +423,19 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
       let cut = tail < 1.0 && natural > 0.0
       let tb = c.box(style=if cut { activity_tail_cut.then(@ui.style(max_w=Fixed(natural * tail))) } else { activity_tail }, fn() {
         let inner = c.box(style=activity_tail, fn() {
-          steady_words(c, rk + "\u{1}" + a.key, said, c.hovered(id))
+          steady_words(c, row_key, said, c.hovered(id), came, clock)
           if clock != "" {
-            c.text(clock, style=activity_clock) |> ignore
+            let time = c.text(clock, style=activity_clock)
+            // The row can be kept after its arrival cause is forgotten. Its paint stays the same: the settled look
+            // is the identity whether the cause is still present or has been let go.
+            let at = if c.still() { None } else { came }
+            c.look_by(time, fn() {
+              let k = match at {
+                Some(start) => @ui.Ease::Out.at(dmax(dmin((c.moment() - start) / @ui.row_size_ms, 1.0), 0.0))
+                None => 1.0
+              }
+              @ui.look(alpha=k)
+            })
           }
         })
         if !cut {
@@ -457,7 +468,7 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
       }
     }
   })
-  |> ignore
+  @motion.measure(c, area, "activity-area/" + row_key)
 }
 
 ///|
@@ -474,20 +485,39 @@ fn work_ring(c : @ui.Ctx, waiting : Bool) -> Unit {
 
 ///|
 /// What an activity says now, steadied (useSteady): another thing replaces the one shown after it has stayed 700 ms,
-/// rolling in under it, its line going from the one's width to the other's as they roll (what is beside it, its clock,
+/// each glyph giving way to the next step's at its place. The line goes from the one's width to the other's (its clock
 /// with it); the same thing's new words show at once. In the muted ink, the text's under the pointer.
-fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : Bool) -> Unit {
+fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : Bool, came : Double?, clock : String) -> Unit {
   let (key, words, mono) = said
   let st = match steadies.get(row) {
     Some(s) => s
     None => {
-      let s = { key, words, mono, was: "", was_mono: false, at: -1.0e9, asked: 0.0 }
+      let s = { key, words, mono, was: "", was_mono: false, at: -1.0e9, came: @signals.signal(-1.0e9), asked: 0.0, places: 1 }
       steadies[row] = s
       s
     }
   }
   let swap = @motion.anim(c, "now-swap/" + row, 1.0, global=true)
-  if key == st.key || words == st.words {
+  let reveal = @motion.anim(c, "now-glyphs/" + row, 1.0, global=true)
+  let new_line = match came {
+    Some(at) => at != st.came.get()
+    None => false
+  }
+  if new_line {
+    let at = came.unwrap()
+    st.came.set(at)
+    st.key = key
+    st.words = words
+    st.mono = mono
+    st.was = ""
+    st.at = -1.0e9
+    swap.snap(1.0)
+    reveal.snap(0.0)
+    // A list can reserve this row's turn in the future, while the message above it is still landing. A delayed
+    // tween waits for that turn; an already-started turn catches up from its declared start.
+    let later = dmax(at - c.moment(), 0.0)
+    reveal.animate(1.0, @motion.tween(activity_glyph_in_ms, ease=Linear, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
+  } else if key == st.key || words == st.words {
     st.key = key
     st.words = words
     st.mono = mono
@@ -499,8 +529,19 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : 
     st.mono = mono
     st.at = c.moment()
     swap.snap(0.0)
-    // (a Move as long as the furthest it goes: a line up, or from the one's width to the other's)
+    reveal.snap(0.0)
+    // (a Move as long as the line's change in width)
     let style = if hot { now_words_hot } else { now_words }
+    let old_cells = c.words_glyph_cells(st.was, style, mono=st.was_mono)
+    let new_cells = c.words_glyph_cells(st.words, style, mono=st.mono)
+    // The reading order spans the part that can actually be seen, even when one step is much longer than the line.
+    let visible = match (@motion.measured_rect(c, "activity-area/" + row), @motion.measured_rect(c, "now-room/" + row)) {
+      (Some((x, _, w, _)), Some((start, _, _, _))) =>
+        dmax(x + w - start - (if clock == "" { 0.0 } else { c.words_across(clock, activity_clock) + c.space(S2) }), 0.0)
+      _ => c.width
+    }
+    st.places = activity_change_places(old_cells, new_cells, visible)
+    reveal.animate(1.0, @motion.tween(@sfbase.glyph_change_in_ms, ease=Linear))
     let widened = c.words_across(st.words, style, mono=st.mono) - c.words_across(st.was, style, mono=st.was_mono)
     swap.animate(1.0, @motion.move(over=dmax(c.text_size(Meta).1, widened.abs())))
   } else {
@@ -508,48 +549,134 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool), hot : 
   }
   let k = swap.get()
   let style = if hot { now_words_hot } else { now_words }
-  // the line short of what they asked of it last frame: it cut them where it ends, and cuts them there as they roll
+  // the line short of what they asked of it last frame: it cuts them where it ends during the turn too
   let cut = match @motion.measured_size(c, "now-room/" + row) {
     Some((w, _)) => w < st.asked - 0.5
     None => false
   }
   let room = c.box(style=now_room, fn() {
-    if k < 1.0 {
-      // the one before rolled up out of its line as the new one rolls in under it, the two one over the other in a
-      // window a line high: the line never empty, never two things' words in it at once (docs/motion.md rule 4; a
-      // crossfade had both there, the user 2026-10-29: 「会闪」 of the one out before the other in). The window as wide
-      // as the line has room for, as the words at rest are (the user 2026-10-29: 「activity 滚动的时候会超长」 of a
-      // window each step's whole width, past the screen's edge): the words in it whole and cut by its edge as it
-      // goes from the one's width to the other's, or cut short where the line ends, as at rest
+    if k < 1.0 || (!reveal.over() && st.was != "") {
+      // Both steps keep their shaped text. At each place the outgoing glyph fades before the incoming one arrives,
+      // so their ink does not overlap. The window keeps the line no wider than it has room for.
       let line = c.text_size(Meta).1
       let from = c.words_across(st.was, style, mono=st.was_mono)
       let to = c.words_across(st.words, style, mono=st.mono)
+      let old_cells = c.words_glyph_cells(st.was, style, mono=st.was_mono)
+      let new_cells = c.words_glyph_cells(st.words, style, mono=st.mono)
       let across = from + (to - from) * k
       st.asked = across
-      let mut rolled = -1
+      let mut changing = -1
       let window = c.box(style=@ui.style(w=Cut, max_w=Fixed(across), h=Fixed(line), clip=true), fn() {
         let wide = if from > to { from } else { to }
-        let both = c.box(style=@ui.style(w=if cut { Full } else { Fixed(wide) }), fn() {
-          c.rich([@ui.span(st.was, mono=st.was_mono)], style~) |> ignore
-          c.rich([@ui.span(st.words, mono=st.mono)], style~) |> ignore
+        let both = c.box(style=@ui.style(w=if cut { Full } else { Fixed(wide) }, h=Fixed(line)), fn() {
+          let before = c.rich([@ui.span(st.was, mono=st.was_mono)], style~)
+          activity_change_glyphs(c, before, row, reveal, false, k, old_cells, new_cells, st.places)
+          c.layer(fn() {
+            c.box(style=now_glyph_layer, fn() {
+              let next = c.rich([@ui.span(st.words, mono=st.mono)], style~)
+              activity_change_glyphs(c, next, row, reveal, true, k, old_cells, new_cells, st.places)
+            }) |> ignore
+          }) |> ignore
         })
-        c.look(both, @ui.look(dy=-line * k))
-        rolled = both
+        changing = both
       })
-      // what rolls out and in fading out towards the window's top and foot, and its end as it widens or narrows (or
-      // where the line cuts it short), each pixel by where it is: not cut off at its edges (the user, 2026-10-30:
-      // 「现在有很多粗暴裁剪的」)
-      let roll = @ui.cut_soft(line * k, line * (1.0 - k))
+      // Fade the end where the window widens, narrows, or cuts the line short.
       let gone = (to - from).abs()
       let end = if cut { @ui.cut_soft_most } else { @ui.cut_soft(gone * k, gone * (1.0 - k)) }
-      c.fade_to(rolled, window, top=roll, end~, foot=roll)
+      c.fade_to(changing, window, end~)
     } else {
       st.asked = c.words_across(st.words, style, mono=st.mono)
-      c.rich([@ui.span(st.words, mono=st.mono)], style~) |> ignore
+      let next = c.rich([@ui.span(st.words, mono=st.mono)], style~)
+      activity_glyphs(c, next, row, reveal)
     }
   })
   @motion.measure(c, room, "now-room/" + row)
 }
+
+///|
+/// How many positions of either step can be seen; glyphs past the window do not make the visible change rush.
+fn activity_change_places(old_cells : Array[(Double, Double)], new_cells : Array[(Double, Double)], visible : Double) -> Int {
+  let mut count = 0
+  let length = if old_cells.length() > new_cells.length() { old_cells.length() } else { new_cells.length() }
+  for i in 0..<length {
+    if (i < old_cells.length() && old_cells[i].0 < visible) || (i < new_cells.length() && new_cells[i].0 < visible) {
+      count = i + 1
+    }
+  }
+  if count > 0 { count } else { 1 }
+}
+
+///|
+/// The two shaped lines share a change for each glyph's place; one fades before the other begins. Their centres go
+/// together from the old line's positions to the new line's, even when their advances differ.
+fn activity_change_glyphs(
+  c : @ui.Ctx,
+  node : Int,
+  row : String,
+  reveal : @motion.Anim,
+  incoming : Bool,
+  k : Double,
+  old_cells : Array[(Double, Double)],
+  new_cells : Array[(Double, Double)],
+  places : Int,
+) -> Unit {
+  c.glyphs_by(node, fn(at) {
+    let intervals = if places > 1 { places - 1 } else { 1 }
+    let along = dmin(at.index.to_double() / intervals.to_double(), 1.0)
+    let look = @sfbase.glyph_change(reveal.get() * @sfbase.glyph_change_in_ms, along * @sfbase.glyph_change_line_ms, at.index, row.length(), incoming)
+    let (dx, sx) = if at.index < old_cells.length() && at.index < new_cells.length() {
+      let (old_x, old_w) = old_cells[at.index]
+      let (new_x, new_w) = new_cells[at.index]
+      let distance = new_x - old_x
+      let width = old_w + (new_w - old_w) * k
+      let face_w = if incoming { new_w } else { old_w }
+      (if incoming { -distance * (1.0 - k) } else { distance * k }, if face_w > 0.0 { dmin(width / face_w, 1.0) } else { 1.0 })
+    } else if at.index < old_cells.length() && new_cells.length() > 0 {
+      // The old line is longer: its tail follows the end of the paired cells instead of being run over by them.
+      let n = new_cells.length() - 1
+      let (old_x, old_w) = old_cells[n]
+      let (new_x, new_w) = new_cells[n]
+      ((new_x + new_w / 2.0 - old_x - old_w / 2.0) * k, 1.0)
+    } else if at.index < new_cells.length() && old_cells.length() > 0 {
+      // The new line is longer: its tail starts after the old line, preserving its own spacing as the room opens.
+      let n = old_cells.length() - 1
+      let (old_x, old_w) = old_cells[n]
+      let (new_x, new_w) = new_cells[n]
+      ((old_x + old_w / 2.0 - new_x - new_w / 2.0) * (1.0 - k), 1.0)
+    } else {
+      (0.0, 1.0)
+    }
+    { ..look, dx, sx }
+  })
+}
+
+///|
+/// The first activity uses the message's per-glyph arrival. Existing activity when a chat opens has no arrival clock
+/// and is shown whole.
+fn activity_glyphs(c : @ui.Ctx, node : Int, row : String, reveal : @motion.Anim) -> Unit {
+  if reveal.over() {
+    return
+  }
+  let key = "now-glyph-box/" + row
+  @motion.measure(c, node, key)
+  c.glyphs_by(node, fn(at) {
+    match @motion.measured_rect(c, key) {
+      Some((x, _, w, _)) => {
+        let along = if w > 0.0 { dmax(dmin((at.x - x) / w, 1.0), 0.0) } else { 0.0 }
+        let elapsed = reveal.get() * activity_glyph_in_ms - activity_glyph_delay_ms
+        @sfbase.glyph_in(elapsed, along * @sfbase.glyph_line_ms, at.index, row.length())
+      }
+      None => { alpha: 0.0, dx: 0.0, dy: 0.0, scale: 1.0, sx: 1.0 }
+    }
+  })
+}
+
+///|
+/// Let a new activity's room begin opening before its first words arrive.
+let activity_glyph_delay_ms : Double = @ui.move_least_ms / 2.0
+
+///|
+let activity_glyph_in_ms : Double = activity_glyph_delay_ms + @sfbase.glyph_line_in_ms
 
 ///|
 /// What each activity shows, steadied (steady_words), by its row.
@@ -560,8 +687,12 @@ priv struct Steady {
   mut was : String
   mut was_mono : Bool
   mut at : Double
+  /// when this agent's current activity row came into the watched list
+  came : @signals.Signal[Double]
   /// how wide the words asked their line to be, the last frame they were laid out
   mut asked : Double
+  /// how many places of the current step change fit in the line
+  mut places : Int
 }
 
 ///|
@@ -586,7 +717,7 @@ let fold_ms : Double = 200.0
 let ring_out_ms : Double = 160.0
 
 ///|
-/// Each thing an activity says stays this long at least (DWELL_MS); it rolls to the next as a near move does.
+/// Each thing an activity says stays this long at least (DWELL_MS) before the next begins.
 let steady_dwell_ms : Double = 700.0
 
 ///|
@@ -716,6 +847,11 @@ let activity_tail_cut : @ui.Style = activity_tail.then(@ui.css("clip"))
 /// words give way and nothing else does; how long (activityElapsed, flex none), subtle, whole.
 // kept across runs: a value (no field of it changes)
 let now_room : @ui.Style = @ui.css("row")
+
+///|
+/// The incoming line starts at the same edge as the line it replaces.
+// kept across runs: a value (no field of it changes)
+let now_glyph_layer : @ui.Style = @ui.css("align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)

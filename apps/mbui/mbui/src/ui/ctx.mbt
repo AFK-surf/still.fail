@@ -1764,6 +1764,26 @@ pub fn Ctx::text(
 /// tracking and digits): a column of words of a length known made as wide as the widest of them (a table's labels),
 /// never cut. `mono`: in the code face, as a rich span said mono is.
 pub fn Ctx::words_across(self : Ctx, s : String, style : TextStyle, mono? : Bool = false) -> Double {
+  self.words_line(s, style, mono).w
+}
+
+///|
+/// The centre and width of a line's shaped glyph advances, in the order Ctx::glyphs_by numbers them. A glyph changing
+/// into another can follow its actual place even when the two lines have different fonts or character widths.
+pub fn Ctx::words_glyph_cells(self : Ctx, s : String, style : TextStyle, mono? : Bool = false) -> Array[(Double, Double)] {
+  let line = self.words_line(s, style, mono)
+  let cells : Array[(Double, Double)] = []
+  for i in 0..<line.shaped.keys.length() {
+    if line.shaped.keys[i] >= 0 {
+      cells.push((line.xs[i] + line.shaped.adv[i] / 2.0, line.shaped.adv[i]))
+    }
+  }
+  cells
+}
+
+///|
+/// The same one-line shaping for a measurement and the rich words it describes.
+fn Ctx::words_line(self : Ctx, s : String, style : TextStyle, mono : Bool) -> TextLayout {
   let st = self.text_patch(Some(style))
   let (s_size, _) = self.text_sizes(st)
   let size = self.sp(s_size.unwrap_or(15.0))
@@ -1774,7 +1794,7 @@ pub fn Ctx::words_across(self : Ctx, s : String, style : TextStyle, mono? : Bool
   }
   let tabular = st.tabular.unwrap_or(self.theme.tabular)
   let face = (if tabular { @hostapi.style_tabular } else { 0 }) | (if mono { @hostapi.style_mono } else { 0 })
-  layout_text(s, size, weight, 1.0e9, false, spacing~, style=face).w
+  layout_text(s, size, weight, 1.0e9, false, spacing~, style=face)
 }
 
 ///|

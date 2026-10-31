@@ -160,6 +160,7 @@ the curves: a move's length and curve are a Move's (Curves, above), what goes go
 | 2 | a sheet | up and down a Move as long as it is tall, let go as fast as the finger went; its scrim to 0.28 over 300 ms | web/src/mobile/app.css.ts:82-97 |
 | 2 | a dialog | in 200 ms ease-out from 0.98, a little low, and clear; its ground's fade 180 ms; out at once (`@kit.dialog_in`, `ground_in`) | web/ui/src/parts.css.ts:180, 193 |
 | 2 | a message | in 220 ms ease-out, up from 6 below (`@sf.enter_ms`, `enter_rise`) | `ENTER`, web/ui/src/motion.ts:19-20 |
+| 2 | an agent's activity words | a new line arrives glyph by glyph with the agent message's fade and rise; on a step change each old glyph fades before its successor rises into place, each with its own timing and a gentle bias in reading order | `glyph_in`, `glyph_change`, `steady_words` |
 | 2 | a row new to a list | grown in from 0.9 and clear over 240 ms ease-out, 100 ms after (`@sf.row_grown_in`) | web/src/listMotion.ts:54 |
 | 2 | what goes from a list: a row, the agent's line, what leaves the outbox | out 200 ms on `Leave`, a copy shrinking to 0.9 as it fades (`@sf.leave`) | `LEAVE`, web/ui/src/motion.ts:21-22, web/src/listMotion.ts:116 |
 | 2 | a bar | in a Move of its 120 points' drop, out 250 ms on `Leave` | web/src/mobile/Bar.css.ts:17 |
