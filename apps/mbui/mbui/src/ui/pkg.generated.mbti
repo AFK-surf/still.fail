@@ -470,8 +470,6 @@ pub fn set_platform(Int32?) -> Unit
 
 pub fn set_pointing(Pointing?) -> Unit
 
-pub fn set_tree_theme(() -> Theme) -> Unit
-
 pub fn set_view_app((@view.View) -> Unit, around? : (Ctx) -> Unit) -> Unit
 
 pub fn set_web_lines(Bool) -> Unit
@@ -560,8 +558,6 @@ pub let tracker_horizon_ms : Double
 
 pub fn tree_cause() -> Double?
 
-pub fn tree_theme() -> Theme
-
 pub fn update_apply(String) -> Unit
 
 pub fn update_fetch(String, String, Double, String, Bool) -> Unit
@@ -638,7 +634,17 @@ pub(all) enum Align {
   AStretch
 } derive(Eq)
 
+pub(all) enum Along {
+  Start
+  Middle
+  End
+} derive(Eq, Show, @debug.Debug)
+
+type BackEntry
+
 type BackHeld
+
+type BackList
 
 type Bar
 
@@ -892,6 +898,12 @@ pub struct Ctx {
   mut back_edge_next : Double
   mut back_island : @view.NodeId?
   mut back_island_next : @view.NodeId?
+  mut back_chain : BackList
+  mut back_chain_next : BackList
+  layer_gen : Map[Int32, Int32]
+  mut layer_hook : ((Dismiss) -> Unit)?
+  layer_on_dismiss : Map[Int32, (Int32, (Dismiss) -> Unit)]
+  layer_retired : Map[Int32, Int32]
   mut back_held : BackHeld?
   mut back_off : Bool
   mut back_told : Bool
@@ -1040,6 +1052,7 @@ pub fn Ctx::frame_dt(Self) -> Double
 pub fn Ctx::frame_ms(Self) -> Double
 pub fn Ctx::frame_number(Self) -> Int32
 pub fn Ctx::glass_solid(Self) -> Bool
+pub fn Ctx::glyphs_by(Self, Int32, (GlyphAt) -> GlyphLook) -> Unit
 pub fn Ctx::hand_lit(Self, Bool) -> Bool
 pub fn Ctx::hand_on(Self, Int32) -> Bool
 pub fn Ctx::hand_shown(Self, Bool, () -> Unit) -> Unit
@@ -1153,7 +1166,7 @@ pub fn Ctx::paint_rect(Self, Double, Double, Double, Double, radius~ : Double, I
 pub fn Ctx::passes(Self, Int32) -> Unit
 pub fn Ctx::paths_into(Self, Int32, String) -> Array[DroppedPath]?
 pub fn Ctx::picture(Self, String, x~ : Double, y~ : Double, w~ : Double, h~ : Double, w_? : Size, h_? : Size, max_px? : Int32) -> Int32
-pub fn Ctx::place(Self, (Double, Double, Double, Double), Double, Double, side? : @view.Side, along? : @view.Along, offset? : Double, along_offset? : Double, padding? : Double, flip? : Bool) -> (Double, Double, @view.Side)
+pub fn Ctx::place(Self, (Double, Double, Double, Double), Double, Double, side? : Side, along? : Along, offset? : Double, along_offset? : Double, padding? : Double, flip? : Bool) -> (Double, Double, Side)
 pub fn Ctx::place_by_size(Self, Int32, (Double, Double) -> (Double, Double)) -> Unit
 pub fn Ctx::place_most(Self, padding? : Double) -> Double
 pub fn Ctx::pointer(Self) -> (Double, Double, Bool)
@@ -1246,6 +1259,7 @@ pub fn Ctx::watch_press(Self, Int32) -> Bool
 pub fn Ctx::window_drag(Self, Int32) -> Unit
 pub fn Ctx::window_size(Self) -> (Double, Double)
 pub fn Ctx::with_direction(Self, Direction, () -> Unit) -> Unit
+pub fn Ctx::with_dismissed(Self, (Dismiss) -> Unit, () -> Unit) -> Unit
 pub fn Ctx::with_theme(Self, Theme, () -> Unit) -> Unit
 pub fn Ctx::within(Self, Int32, Double) -> Bool
 pub fn Ctx::words(Self, Int32, String, a? : Int32, b? : Int32, color? : Int64, round? : Double) -> Unit
@@ -1402,6 +1416,21 @@ pub(all) struct GifFrames {
 }
 
 type Glyph
+
+pub(all) struct GlyphAt {
+  index : Int32
+  x : Double
+  y : Double
+  h : Double
+  top : Double
+  foot : Double
+} derive(Eq, Show)
+
+pub(all) struct GlyphLook {
+  alpha : Double
+  dy : Double
+  scale : Double
+} derive(Eq, Show)
 
 pub(all) struct Ground {
   room : Double
@@ -1601,7 +1630,7 @@ pub struct ListRows[T] {
   // private fields
 }
 pub fn[T] ListRows::came(Self[T], String) -> Double?
-pub fn[T] ListRows::enter(Self[T], Ctx, Int32, String, lead? : Double) -> Unit
+pub fn[T] ListRows::enter(Self[T], Ctx, Int32, String, lead? : Double, grown? : Bool) -> Unit
 pub fn[T] ListRows::leave(Self[T], Ctx, Int32, String, lead? : Double) -> Unit
 pub fn[T] ListRows::new() -> Self[T]
 pub fn[T] ListRows::opening(Self[T], Ctx) -> Bool
@@ -1639,9 +1668,7 @@ pub fn Made::on_press(Self, () -> Unit) -> Self
 pub struct MarkedImage {
   // private fields
 }
-pub fn MarkedImage::id(Self) -> Int32
 pub fn MarkedImage::made(Self) -> Bytes?
-pub fn MarkedImage::ready(Self) -> Bool
 
 type MoveRun
 
@@ -2039,11 +2066,17 @@ pub(all) enum Shadow {
   Xl
   Cast(Double, Double, Int64)
 } derive(Eq, Show, @debug.Debug)
-pub fn Shadow::blur_y(Self) -> (Double, Double)
 
 type Shaped
 
 type Shot
+
+pub(all) enum Side {
+  Top
+  Right
+  Bottom
+  Left
+} derive(Eq, Show, @debug.Debug)
 
 pub struct SiteReply {
   // private fields
@@ -2361,8 +2394,6 @@ pub fn Tester::live_image(Self, Int32) -> Int32?
 pub fn Tester::local_acts(Self) -> Array[String]
 pub fn Tester::locate(Self, String) -> Array[(Double, Double)]
 pub fn Tester::look_of(Self, String) -> (Double, Double, Double)?
-pub fn Tester::marks_answer(Self, Int32) -> Unit
-pub fn Tester::marks_by_hand(Self) -> Unit
 pub fn Tester::marks_drawn(Self) -> Array[String]
 pub fn Tester::marks_make(Self, Bytes) -> Unit
 pub fn Tester::messages_taken(Self) -> Int32
@@ -2734,8 +2765,6 @@ pub struct WordsPiece {
 // Type aliases
 pub using @view {type Action}
 
-pub using @view {type Along}
-
 pub using @view {type BackStep}
 
 pub using @view {type Check}
@@ -2753,8 +2782,6 @@ pub using @paint {type Glass}
 pub using @view {type Role}
 
 pub using @paint {type Shape}
-
-pub using @view {type Side}
 
 // Traits
 trait ClipNumbers

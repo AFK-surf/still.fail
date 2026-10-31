@@ -92,65 +92,95 @@ function partProgress(c: { progress: boolean; stream: boolean }, progress: Progr
   return [c.progress ? (loaded) => progress({ loaded }) : undefined, undefined];
 }
 
-/// A part read with `keep` (`c`: from its offset, its length, of a file `size` long), first from what is kept of it
-/// from that offset on (`kept`, as DriveKept.from has it: all of it, the first of it, or null), then the rest from the
-/// station, asked from where what is kept stops (`read(at, length, before, take, said)`: `before` bytes of the part
-/// had already, its bytes to `take` as they come, what the station says it is to `said` as its answer begins). What is
-/// kept goes on first, as the station's bytes would (to `sink`, else counted to `heard`). What comes from the station
-/// is kept (`keep(head, at, bytes)`, where the station's head says it is the file it was) as the read ends, and as it
-/// stops short (an error, or let go of: a player gone elsewhere, a view closed): what came is not read again. The
-/// station saying the file is another than the one kept (`same` not so: changed there since its folder was read), what
-/// was kept is not put before what it brings: the part read again whole from the station, or (its first bytes gone to
-/// `sink` already) not had. The part whole (none with `sink`), what it is, and the station's answer (null: all of it
-/// was kept).
+/// A part read with `keep` (`c`: from its offset, its length, of a file `size` long): each stretch of it kept here
+/// (`look(at, length)`, as DriveKept.from has it: all of it, the first of it, or null) taken from here, and only each
+/// stretch between them not kept (to `next(at, end)`: where the next kept begins, DriveKept.nextKept) asked of the
+/// station (`read(at, length, before, take, said)`: `before` bytes of the part had already, its bytes to `take` as they
+/// come, what the station says it is to `said` as its answer begins): what was kept, however sparse, is never asked
+/// again. The part goes on in its order, kept and fetched alike, as the station's bytes would (to `sink`, else counted
+/// to `heard`). What comes from the station is kept (`keep(head, at, bytes)`, where the station's head says it is the
+/// file it was) as each read ends, and as it stops short (an error, or let go of: a player gone elsewhere, a view
+/// closed): what came is not read again. The station saying the file is another than the one kept (`same` not so:
+/// changed there since its folder was read), what was kept is not put beside what it brings: the part read again whole
+/// from the station, or (bytes of it gone to `sink` already) not had. The part whole (none with `sink`), what it is,
+/// and the station's last answer (null: all of it was kept).
 export function keptFirst<H extends { type: string; total: number }, G extends H>(
   inner: Inner,
   c: { offset: number; length: number; quiet?: boolean },
   size: number,
-  kept: { type: string; bytes: Uint8Array } | null,
+  look: (at: number, length: number) => Effect.Effect<{ type: string; bytes: Uint8Array } | null>,
+  next: (at: number, end: number) => Effect.Effect<number>,
   heard: ((loaded: number) => void) | undefined,
   sink: ((piece: Uint8Array) => void) | undefined,
   read: (at: number, length: number, before: number, take: (piece: Uint8Array) => void, said: (head: H) => void) => Effect.Effect<G, CoreError>,
   keep: (head: H, at: number, bytes: Uint8Array) => Effect.Effect<void>,
   same: (head: H) => boolean,
 ): Effect.Effect<{ type: string; bytes: Uint8Array; got: G | null }, CoreError> {
-  const have = kept?.bytes ?? new Uint8Array(0);
-  if (have.length > 0) {
-    if (sink) sink(have);
-    else heard?.(have.length);
-  }
-  const want = Math.max(0, Math.min(c.offset + c.length, size) - c.offset);
-  if (kept !== null && have.length >= want) return Effect.succeed({ type: kept.type, bytes: sink ? new Uint8Array(0) : have, got: null });
-  const at = c.offset + have.length;
-  const pieces: Uint8Array[] = [];
-  let head: H | null = null;
-  return read(at, c.offset + c.length - at, have.length, (piece) => {
-    pieces.push(piece);
-    sink?.(piece);
-  }, (h) => {
-    head = h;
-  }).pipe(
-    Effect.onExit((exit) =>
-      Effect.suspend(() => {
-        const came = joined(pieces);
-        const said: H | null = exit._tag === "Success" ? exit.value : head;
-        if (said === null || came.length === 0) return Effect.void;
-        // (the core's own read, `quiet`, has it kept before it ends: what it looks at next is past it)
-        if (c.quiet === true) return keep(said, at, came);
-        inner.runner.fork(keep(said, at, came));
-        return Effect.void;
-      }),
-    ),
-    Effect.flatMap((got) => {
-      if (have.length === 0 || same(got)) return Effect.succeed({ type: got.type, bytes: sink ? new Uint8Array(0) : joined([have, joined(pieces)]), got });
-      if (sink) return Effect.fail(new CoreError("changed", t("station.core.fileUnreadable")));
-      const whole: Uint8Array[] = [];
-      return Effect.map(
-        read(c.offset, c.length, 0, (piece) => whole.push(piece), () => {}),
-        (again) => ({ type: again.type, bytes: joined(whole), got: again }),
-      );
-    }),
-  );
+  const end = Math.max(c.offset, Math.min(c.offset + c.length, size));
+  // One stretch not kept, from `at` to `to`, from the station; what comes kept as it comes.
+  const fetch = (at: number, to: number, out: Uint8Array[]) => {
+    const pieces: Uint8Array[] = [];
+    let head: H | null = null;
+    // (the last stretch asked as the part asks, to its end: a station's file longer than said is read as it is)
+    const length = to === end ? c.offset + c.length - at : to - at;
+    return read(at, length, at - c.offset, (piece) => {
+      pieces.push(piece);
+      out.push(piece);
+      sink?.(piece);
+    }, (h) => {
+      head = h;
+    }).pipe(
+      Effect.onExit((exit) =>
+        Effect.suspend(() => {
+          const came = joined(pieces);
+          const said: H | null = exit._tag === "Success" ? exit.value : head;
+          if (said === null || came.length === 0) return Effect.void;
+          // (the core's own read, `quiet`, has it kept before it ends: what it looks at next is past it)
+          if (c.quiet === true) return keep(said, at, came);
+          inner.runner.fork(keep(said, at, came));
+          return Effect.void;
+        }),
+      ),
+      Effect.map((got) => [got, joined(pieces).length] as const),
+    );
+  };
+  return Effect.gen(function* () {
+    const out: Uint8Array[] = [];
+    let type: string | null = null;
+    let got: G | null = null;
+    let fromHere = false;
+    let at = c.offset;
+    while (at < end) {
+      const here = yield* look(at, end - at);
+      if (here !== null && here.bytes.length > 0) {
+        fromHere = true;
+        type ??= here.type;
+        out.push(here.bytes);
+        if (sink) sink(here.bytes);
+        at += here.bytes.length;
+        heard?.(at - c.offset);
+        continue;
+      }
+      const to = yield* next(at, end);
+      const [answer, came] = yield* fetch(at, Math.max(to, at + 1), out);
+      got = answer;
+      if (!same(answer)) {
+        // another file than the one kept: none of what was kept goes with it
+        if (fromHere && sink) return yield* Effect.fail(new CoreError("changed", t("station.core.fileUnreadable")));
+        if (fromHere || at > c.offset) {
+          const whole: Uint8Array[] = [];
+          const again = yield* read(c.offset, c.length, 0, (piece) => whole.push(piece), () => {});
+          return { type: again.type, bytes: joined(whole), got: again };
+        }
+        return { type: answer.type, bytes: sink ? new Uint8Array(0) : joined(out), got: answer };
+      }
+      type = answer.type;
+      // (the station's file ends here: nothing past it to ask)
+      if (came === 0) break;
+      at += came;
+    }
+    return { type: type ?? "", bytes: sink ? new Uint8Array(0) : joined(out), got };
+  });
 }
 
 /// Preview sockets open, by client and the name its UI gave each: where `preview.socket.send` puts the page's messages.
@@ -346,15 +376,15 @@ export function install(): void {
           (got) => partAnswer(c, { type: got.type, total: got.total }, got.bytes),
         );
       }
-      // With `keep`: what is kept of it from its offset, the rest from the station (keptFirst), kept as it comes.
+      // With `keep`: what is kept of it from here, only what is not from the station (keptFirst), kept as it comes.
       const [size, id] = [c.keep, chatKeptId(c.station, c.key, c.name)];
       return Effect.gen(function* () {
-        const kept = yield* inner.driveKept.from(id, 0, size, c.offset, c.length);
         const part = yield* keptFirst<{ type: string; total: number }, { type: string; total: number; bytes: Uint8Array }>(
           inner,
           c,
           size,
-          kept,
+          (at, length) => inner.driveKept.from(id, 0, size, at, length),
+          (at, end) => inner.driveKept.nextKept(id, 0, size, at, end),
           heard,
           sink,
           (at, length, before, take, said) =>
@@ -411,12 +441,12 @@ export function install(): void {
     }
     const [keep, mtime, size] = [c.keep, c.mtime, c.size];
     return Effect.gen(function* () {
-      const kept = yield* inner.driveKept.from(id, mtime, size, c.offset, c.length);
       const part = yield* keptFirst<{ type: string; total: number; mtime: number | null }, { type: string; total: number; mtime: number | null; bytes: Uint8Array }>(
         inner,
         c,
         size,
-        kept,
+        (at, length) => inner.driveKept.from(id, mtime, size, at, length),
+        (at, end) => inner.driveKept.nextKept(id, mtime, size, at, end),
         heard,
         sink,
         (at, length, before, take, said) =>

@@ -260,6 +260,9 @@ fn view_forget() -> Unit {
   c.back_next = None
   c.back_node_next = -1
   c.back_island_next = None
+  c.back_chain_next = Unsaid
+  c.back_chain = Unsaid
+  layer_back_forget()
   c.back_held = None
   c.back_off = false
   match view_app.val {
@@ -1545,7 +1548,8 @@ fn view_captures_off(at : Double, gone : (@view.NodeId?) -> Bool) -> Unit {
 /// the old frame's own order puts it at (a modal layer's old view not built yet, nothing of its own there: the one
 /// under it found none the less).
 fn old_hit_open(k : Int) -> Bool {
-  old_owner_open(old_hit_owner(k))
+  // (and not what a layer dismissed since drew: overlay.mbt layer_retired_ids)
+  old_owner_open(old_hit_owner(k)) && !layer_retired_ids.contains(g().hit_ids[k])
 }
 
 ///|
@@ -1729,7 +1733,7 @@ fn view_key(code : Int, mods : Int) -> Bool {
   }
   if c.last_layers
     .iter()
-    .any(fn(l) { !l.inert && (l.modal || c.focus_in_layer(l.id) || (code == key_escape && l.escape)) }) {
+    .any(fn(l) { c.layer_takes(l) && (l.modal || c.focus_in_layer(l.id) || (code == key_escape && l.escape)) }) {
     return false
   }
   // (Enter or Space on a node of its own with the focus, of the keys that press it: its press, at the key's moment)

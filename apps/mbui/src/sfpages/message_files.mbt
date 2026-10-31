@@ -430,9 +430,10 @@ fn image_box_style(w : Double, h : Double, shown : Bool) -> @ui.Style {
 ///|
 /// A video (FileItem's video): its still on black (the frame the preview was left at, else the station's), its play
 /// mark in its middle, its name at its foot over a dark band, how long it is at the band's end; while the core
-/// downloads it, or brings it after everything else once opened and let go (fill.ts), how far there over a bar. Held or
-/// right clicked, its menu: 引用; 加载 (brought onto this device by the core, whatever page shows, to play from here at
-/// once), 停止加载 while it comes.
+/// downloads it, or brings it (loaded, or after everything else once opened and let go: fill.ts), how far there over a
+/// bar. Held or right clicked, its menu: 引用; 加载 (brought onto this device by the core before everything else, from
+/// what of it is here, whatever page shows, to play from here at once), 停止加载 while it is brought either way (what
+/// came stays).
 fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?) -> Unit {
 
   let open = c.id("msg-file/" + @sfbase.file_key(a))
@@ -443,15 +444,14 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     open_file(here, a)
   }
   let name = stored_name(a.path)
-  let coming = download_of(src, here.station, owner, name)
+  let saving = download_of(src, here.station, owner, name)
+  let brought = keeping_of(src, here.station, owner, name)
   // (being downloaded to be saved: it comes anyway, nothing to load or stop here)
-  let load : Array[@sf.MenuItem?] = if going_up {
+  let load : Array[@sf.MenuItem?] = if going_up || flag(saving, "active") {
     []
-  } else if flag(coming, "active") && flag(coming, "keep") {
-    let id = text(coming, "id")
-    [Some(@sf.menu_item_of(@sf.t("web-main.file.stopLoading"), fn() { download_cancel(src, id) }, icon="stop"))]
-  } else if flag(coming, "active") {
-    []
+  } else if brought is Some(_) {
+    let id = text(brought, "id")
+    [Some(@sf.menu_item_of(@sf.t("web-main.file.stopLoading"), fn() { keeping_stop(src, id) }, icon="stop"))]
   } else {
     let (station, size) = (here.station, a.size)
     // (where it was asked: its chat and the file, as its viewer would say it, the list leading back here)
@@ -462,7 +462,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     }
     [
       Some(
-        @sf.menu_item_of(@sf.t("web-main.file.load"), fn() { download_start(src, station, owner, name, size, keep=true, from=Json::object(from)) }, icon="download"),
+        @sf.menu_item_of(@sf.t("web-main.file.load"), fn() { fill_want(src, station, owner, name, size, Json::object(from)) }, icon="download"),
       ),
     ]
   }

@@ -588,8 +588,9 @@ pub(all) struct FixKeeping {
   name : String
   title : String
   size : Double
-  loaded : Double
+  mut loaded : Double
   state : String
+  wanted : Bool
 }
 
 pub(all) struct FixWrite {

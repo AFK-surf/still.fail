@@ -1,15 +1,16 @@
 // A chat's files downloaded to this device by the core (views/downloads.ts): fetched a part at a time whatever page
 // asked, how far each has come told to every page (`downloads`), kept with its chat as it comes, so the app that takes
-// it reads it from the device; once saved, the device keeps of it what it kept before. One read in part before (a
-// preview) goes on from there; one stopped by the app's end goes on as it starts again; one whose station is not
-// reached waits for it; one that failed starts again when asked again; one called off is gone, what was fetched of it
-// with it.
+// it reads it from the device; saved, called off or given up, what came stays kept (never asked of the station again),
+// but where the app can read the copy saved back. One read in part before (a preview) goes on from there; one stopped
+// by the app's end goes on as it starts again; one whose station is not reached waits for it; one that failed starts
+// again when asked again.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect } from "effect";
 import type { FakeHost } from "../src/testing.ts";
 import { Core } from "../src/core.ts";
 import { AGAIN_MS, titleOf } from "../src/views/downloads.ts";
+import { chatKeptId } from "../src/drive-kept.ts";
 import { RECONNECT_MS } from "../src/station/sync.ts";
 import { HostError } from "../src/error.ts";
 import { HostWire } from "../src/station/wire.ts";
@@ -115,10 +116,12 @@ test("a chat's file downloaded a part at a time, ready for the page that takes i
   const read = await r.ask("station.file.part", { station: ST, key: "k1", name: "build.zip", offset: 4 * MB, length: 4 * MB, keep: true, size: zip.length });
   assert.deepEqual([...read.bytes.slice(0, 4)], [...zip.slice(4 * MB, 4 * MB + 4)]);
   assert.equal(r.parts("build.zip"), 3, "not asked of the station again");
-  // saved: out of the list, and none of it kept beside the copy saved (the device kept none of it before)
+  // saved where the app cannot read it back: out of the list, what came kept, read from the device after
   await r.ask("download.done", { id });
   assert.deepEqual(await r.view(), []);
-  assert.equal(await Effect.runPromise(r.core.inner.driveKept.has(id)), false);
+  assert.equal(await Effect.runPromise(r.core.inner.driveKept.whole(id, zip.length)), true);
+  await r.ask("station.file.part", { station: ST, key: "k1", name: "build.zip", offset: 0, length: 4 * MB, keep: true, size: zip.length });
+  assert.equal(r.parts("build.zip"), 3);
   r.core.close();
 });
 
@@ -144,30 +147,6 @@ test("saved, a file a viewer kept before stays kept: the device keeps what it ke
   r.core.close();
 });
 
-test("a video loaded (keep): brought onto the device only, out of the list once here, never saved; played, off the device; asked to be saved while it comes, saved", async () => {
-  const film = bytesOf(9 * MB, 7);
-  const r = await rig(new Map([["film.mp4", film], ["b.mp4", film]]));
-  const started = await r.ask("download.start", { station: ST, key: "k1", name: "film.mp4", size: film.length, keep: true });
-  const id = started.ok.download.id as string;
-  assert.deepEqual([started.ok.download.keep, started.ok.download.state], [true, "going"]);
-  assert.match(started.ok.download.statusText, /正在加载/);
-  // all here: out of the list, nothing to take, but kept
-  assert.deepEqual(await r.view(), []);
-  assert.equal(await Effect.runPromise(r.core.inner.driveKept.has(id)), true);
-  assert.deepEqual((await r.ask("download.take", { id })).ok, { taken: false });
-  assert.equal(r.parts("film.mp4"), 3);
-  // played: off the device, the station not asked again
-  await r.ask("station.file.part", { station: ST, key: "k1", name: "film.mp4", offset: 4 * MB, length: 4 * MB, keep: true, size: film.length });
-  assert.equal(r.parts("film.mp4"), 3);
-  // one loading asked to be saved as well (before it is here): saved once it is, kept as any download is
-  call(r.core, r.core.connect(), 900, "download.start", { station: ST, key: "k1", name: "b.mp4", size: film.length, keep: true });
-  const again = await r.ask("download.start", { station: ST, key: "k1", name: "b.mp4", size: film.length });
-  assert.equal(again.ok.download.keep, undefined);
-  const [d] = await r.view();
-  assert.deepEqual([d.name, d.state, d.keep], ["b.mp4", "ready", undefined]);
-  r.core.close();
-});
-
 test("a download stopped by the app's end goes on as the core starts again, from what it had fetched; one taken and not saved is taken again", async () => {
   const big = bytesOf(12 * MB, 2);
   const small = bytesOf(MB, 4);
@@ -189,6 +168,25 @@ test("a download stopped by the app's end goes on as the core starts again, from
   const after = await again.view();
   assert.deepEqual(after.map((d) => [d.name, d.state, d.loaded]).sort(), [["big.zip", "ready", big.length], ["small.zip", "ready", MB]]);
   assert.equal(r.parts("big.zip"), 4, "its first part not fetched again (one asked and let go as the core stopped)");
+  core.close();
+});
+
+test("a video's load written down as a download before fill.ts brought those goes on as fill.ts's, from what is kept", async () => {
+  const film = bytesOf(9 * MB, 8);
+  const t = await started();
+  files(t.host, new Map([["film.mp4", film]]));
+  const r = await watch(t);
+  await r.ask("station.file.part", { station: ST, key: "k1", name: "film.mp4", offset: 0, length: 4 * MB, keep: true, size: film.length });
+  const id = chatKeptId(ST, "k1", "film.mp4");
+  await Effect.runPromise(r.core.inner.driveKept.noteDownload(id, { id, station: ST, from: { kind: "chat", key: "k1", file: "film.mp4" }, name: "film.mp4", size: film.length, keptBefore: true, startedAt: 1, keep: true }));
+  r.core.close();
+  const core = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+  await t.host.time.pass(500);
+  const again = await watch({ host: t.host, core });
+  assert.deepEqual(await again.view(), []);
+  assert.equal(await Effect.runPromise(core.inner.driveKept.whole(id, film.length)), true);
+  assert.equal(r.parts("film.mp4"), 3, "its first part not fetched again");
+  assert.deepEqual(await Effect.runPromise(core.inner.driveKept.downloads()), []);
   core.close();
 });
 
@@ -254,7 +252,7 @@ test("a download goes on from what a preview kept of it; one that failed starts 
   r.core.close();
 });
 
-test("a download called off while it comes stops there", async () => {
+test("a download called off while it comes stops there, what came kept; asked again, only the rest is fetched", async () => {
   const big = bytesOf(12 * MB, 1);
   const t = await rig(new Map([["big.zip", big]]));
   const release = t.host.hold(`name=big.zip&offset=${4 * MB}&length=${4 * MB}`);
@@ -265,8 +263,13 @@ test("a download called off while it comes stops there", async () => {
   release();
   assert.deepEqual(await t.view(), []);
   assert.equal(t.parts("big.zip"), 2, "the third part never asked");
-  // what was fetched of it let go
-  assert.equal(await Effect.runPromise(t.core.inner.driveKept.has(id)), false);
+  // what came of it kept: asked again, only what did not come
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.has(id)), true);
+  await t.ask("download.start", { station: ST, key: "k1", name: "big.zip", size: big.length });
+  assert.equal((await t.view())[0].state, "ready");
+  const asked = t.host.requests.filter((q) => q.url.includes("name=big.zip&")).map((q) => new URL(q.url).searchParams.get("offset"));
+  // (the second never came: it was held as it was called off)
+  assert.deepEqual(asked.slice(2), [String(4 * MB), String(8 * MB)], "the first part not asked again");
   t.core.close();
 });
 
@@ -296,14 +299,14 @@ test("saved where the app can read it back, that is the file's copy on the devic
   r.core.close();
 });
 
-test("saved where the app cannot read it back (the web's, iOS's): the device keeps what it kept before", async () => {
+test("saved where the app cannot read it back (the web's, iOS's): what came stays kept", async () => {
   const zip = bytesOf(MB, 13);
   const r = await rig(new Map([["notes.zip", zip]]));
   const id = (await r.ask("download.start", { station: ST, key: "k1", name: "notes.zip", size: zip.length })).ok.download.id;
   await r.view();
   await r.ask("download.take", { id });
   await r.ask("download.done", { id, at: "notes.zip" });
-  assert.equal(await Effect.runPromise(r.core.inner.driveKept.has(id)), false);
+  assert.equal(await Effect.runPromise(r.core.inner.driveKept.whole(id, zip.length)), true);
   r.core.close();
 });
 
@@ -323,10 +326,11 @@ test("a drive's file downloaded as its folder lists it, read off the device to b
   assert.deepEqual([...part.bytes], [...doc.slice(4 * MB)]);
   assert.equal(reads(), 2, "off the device");
   await r.ask("download.done", { id });
-  // changed on the station since its folder was read: fetched as it is now, from its start
+  // changed on the station since (its folder read again: another mtime, the size not yet known): what was kept of it
+  // as it was let go, fetched as it is now, from its start
   const now = bytesOf(3 * MB, 19);
   drive.files.set("docs\n报告/年报.pdf", { bytes: now, mtime: 1800 });
-  const again = (await r.ask("download.start", { station: ST, root: "docs", path: "报告/年报.pdf", name: "年报.pdf", size: doc.length, mtime: 1700 })).ok.download.id;
+  const again = (await r.ask("download.start", { station: ST, root: "docs", path: "报告/年报.pdf", name: "年报.pdf", size: doc.length, mtime: 1800 })).ok.download.id;
   const [d2] = await r.view();
   assert.deepEqual([d2.state, d2.size], ["ready", now.length]);
   await r.ask("download.take", { id: again });

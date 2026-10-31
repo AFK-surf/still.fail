@@ -742,17 +742,22 @@ pub fn[T] ListRows::leave(
 /// list's way at once, what it holds in the middle of it, faded in and grown from
 /// row_held_look as it opens, cut by it at both ends, what is cut fading out to them: a row going (ListRows::leave)
 /// played back. By how far it is open as the list lays it out, read as it is painted, its row not built again for it.
-/// Nothing once it is open, nor for a row there already.
+/// Nothing once it is open, nor for a row there already. Not `grown`: what it holds as it is (it comes in a way of its
+/// own: words a glyph at a time), only cut by its room.
 pub fn[T] ListRows::enter(
   self : ListRows[T],
   c : Ctx,
   i : Int,
   key : String,
   lead? : Double = 0.0,
+  grown? : Bool = true,
 ) -> Unit {
   self.causes.by_room.add(key)
   self.causes.leads[key] = lead
   c.nodes[i].room_held = true
+  if !grown {
+    return
+  }
   let causes = self.causes
   c.look_by(i, fn() {
     causes.read()

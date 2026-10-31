@@ -21,6 +21,9 @@
 // never let go by `clear` while its message waits.
 // Where a chat's file was opened (`origin`: its chat, the file as its message has it) is written down beside it while
 // any of it is kept, so what lists it (fill.ts, views/downloads.ts) leads back there.
+// A chat's file a person asked to load (加载, `wanted`) is written down too, whatever of it is kept yet (none at
+// first): fill.ts brings it before everything else, and goes on with it as the core starts again, until all of it is
+// kept or the person stops it.
 // The downloads asked of this device and not yet saved are written down here too (views/downloads.ts), beside the
 // files they bring: one stopped by the app's end goes on as it starts again. A chat's file saved where the person
 // keeps files, where the app can read it back (Host.savedRead), is that file's copy on the device: what was kept of it
@@ -69,8 +72,8 @@ export function outboxKeptId(id: string): string {
 }
 
 /// A file kept in part (`unfinished`): what it is kept as, `have` bytes of it, the first of it not kept (`at`,
-/// `length` bytes on from there).
-export type Unfinished = { id: string; kind: KeepKind; mtime: number; size: number; have: number; at: number; length: number };
+/// `length` bytes on from there); whether a person asked to load it (`wanted`).
+export type Unfinished = { id: string; kind: KeepKind; mtime: number; size: number; have: number; at: number; length: number; wanted: boolean };
 
 /// A chat's file kept: where it is, its size, the bytes kept of it (fewer: a part of it read), when it was last read.
 export type ChatKept = { station: string; key: string; name: string; size: number; bytes: number; used: number };
@@ -105,7 +108,8 @@ export class DriveKept {
         ); CREATE TABLE IF NOT EXISTS download (id TEXT PRIMARY KEY, json TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS saved (id TEXT PRIMARY KEY, at TEXT NOT NULL, size INTEGER NOT NULL, type TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS upload (id TEXT PRIMARY KEY, json TEXT NOT NULL, at INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS origin (id TEXT PRIMARY KEY, json TEXT NOT NULL);`);
+        CREATE TABLE IF NOT EXISTS origin (id TEXT PRIMARY KEY, json TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS wanted (id TEXT PRIMARY KEY, kind TEXT NOT NULL, size INTEGER NOT NULL);`);
         return (this.#sql = opened.success);
       } catch {
         return (this.#sql = null);
@@ -125,6 +129,7 @@ export class DriveKept {
     sql.run("DELETE FROM part WHERE id = ?", [id]);
     sql.run("DELETE FROM kept WHERE id = ?", [id]);
     sql.run("DELETE FROM origin WHERE id = ?", [id]);
+    sql.run("DELETE FROM wanted WHERE id = ?", [id]);
     return this.#forget(keys);
   }
 
@@ -179,6 +184,33 @@ export class DriveKept {
       const now = this.#host.nowMs();
       if (now - kept.used >= USED_EVERY_MS) sql.run("UPDATE kept SET used = ? WHERE id = ?", [now, id]);
       return { type: kept.type, bytes: at === end ? out : out.subarray(0, at - offset) };
+    });
+  }
+
+  /// How far on from `at` (to `end` at most) the file `id` (as it was: `mtime`, `size`) is kept without a break, as its
+  /// parts say (their bytes not read): `at` when the byte there is not kept.
+  keptUntil(id: string, mtime: number, size: number, at: number, end: number): Effect.Effect<number> {
+    return Effect.map(this.#db(), (sql) => {
+      const kept = sql === null ? null : this.#kept(sql, id);
+      if (sql === null || kept === null || kept.mtime !== mtime || kept.size !== size) return at;
+      let to = at;
+      for (const r of sql.all("SELECT at, length FROM part WHERE id = ? AND at + length > ? AND at < ? ORDER BY at", [id, at, end])) {
+        const [from, length] = [Number(r[0]), Number(r[1])];
+        if (from > to) break;
+        to = Math.max(to, from + length);
+      }
+      return Math.min(to, end);
+    });
+  }
+
+  /// Where the next part kept of the file `id` (as it was: `mtime`, `size`) begins after `at` and before `end`; `end`
+  /// when none does. From `at` (a byte not kept) to there is what is not kept: what alone is asked of the station.
+  nextKept(id: string, mtime: number, size: number, at: number, end: number): Effect.Effect<number> {
+    return Effect.map(this.#db(), (sql) => {
+      const kept = sql === null ? null : this.#kept(sql, id);
+      if (sql === null || kept === null || kept.mtime !== mtime || kept.size !== size) return end;
+      const r = sql.all("SELECT min(at) FROM part WHERE id = ? AND at > ? AND at < ?", [id, at, end])[0];
+      return r === undefined || r[0] === null || r[0] === undefined ? end : Number(r[0]);
     });
   }
 
@@ -263,11 +295,13 @@ export class DriveKept {
   /// The files of `kinds` a part of which is kept and not all (`have` bytes of it), read since `since` (ms), the most lately read first,
   /// each with where the first of it not kept is (`at`, `length` bytes on from there): those whose rest fits in what
   /// their kind keeps beside all else kept of it (bringing it would not push out another, nor then itself), and none
-  /// being written now.
+  /// being written now. Those a person asked to load (`want`) first, however long ago and however little of them is
+  /// kept (none yet: all of it from its start).
   unfinished(kinds: readonly KeepKind[], since = 0): Effect.Effect<Unfinished[]> {
     return Effect.map(this.#db(), (sql) => {
       if (sql === null) return [];
       const found: (Unfinished & { used: number })[] = [];
+      const wanted = new Map(sql.all("SELECT id, kind, size FROM wanted").map((r) => [String(r[0]), { kind: String(r[1]), size: Number(r[2]) }] as const));
       for (const kind of kinds) {
         const rows = sql.all("SELECT k.id, k.mtime, k.size, k.used FROM kept k WHERE k.kind = ?", [kind]);
         const parts = new Map<string, [number, number][]>();
@@ -279,26 +313,59 @@ export class DriveKept {
         }
         let total = 0;
         for (const of of parts.values()) for (const [, length] of of) total += length;
+        const seen = new Set<string>();
         for (const r of rows) {
           const [id, mtime, size, used] = [String(r[0]), Number(r[1]), Number(r[2]), Number(r[3])];
+          seen.add(id);
+          const want = wanted.has(id);
           const of = parts.get(id) ?? [];
-          if (of.length === 0 || used < since || this.#writing.has(id)) continue;
+          if ((of.length === 0 && !want) || (used < since && !want) || this.#writing.has(id)) continue;
           // the first byte not kept, and the first kept after it
           let end = 0;
           let gap: [number, number] | null = null;
           let have = 0;
           for (const [at, length] of of) {
-            have += length;
             if (gap === null && at > end) gap = [end, at];
+            have += Math.max(0, at + length - Math.max(at, end));
             end = Math.max(end, at + length);
           }
           if (gap === null && end < size) gap = [end, size];
-          if (gap === null || total - have + size > this.#most[kind]) continue;
-          found.push({ id, kind, mtime, size, have: Math.min(have, size), at: gap[0], length: gap[1] - gap[0], used });
+          if (gap === null || (!want && total - have + size > this.#most[kind])) continue;
+          found.push({ id, kind, mtime, size, have: Math.min(have, size), at: gap[0], length: gap[1] - gap[0], wanted: want, used });
+        }
+        // asked to load, none of it kept yet
+        for (const [id, w] of wanted) {
+          if (w.kind !== kind || seen.has(id) || this.#writing.has(id) || w.size <= 0) continue;
+          found.push({ id, kind, mtime: 0, size: w.size, have: 0, at: 0, length: w.size, wanted: true, used: Number.POSITIVE_INFINITY });
         }
       }
-      return found.sort((a, b) => b.used - a.used || (a.id < b.id ? -1 : 1)).map(({ used: _, ...f }) => f);
+      return found.sort((a, b) => Number(b.wanted) - Number(a.wanted) || b.used - a.used || (a.id < b.id ? -1 : 1)).map(({ used: _, ...f }) => f);
     });
+  }
+
+  /// The chat's file `id`, `size` long, asked to be loaded (加载): written down, brought before everything else
+  /// (`unfinished`) until all of it is kept or it is no longer wanted.
+  want(id: string, kind: KeepKind, size: number): Effect.Effect<void> {
+    return Effect.map(this.#db(), (sql) => { sql?.run("INSERT OR REPLACE INTO wanted (id, kind, size) VALUES (?, ?, ?)", [id, kind, size]); });
+  }
+
+  /// The file `id` no longer asked to be loaded, nor brought as one opened and let go (where it was opened forgotten):
+  /// what is kept of it stays kept, read from here as before.
+  unwant(id: string): Effect.Effect<void> {
+    return Effect.map(this.#db(), (sql) => {
+      sql?.run("DELETE FROM wanted WHERE id = ?", [id]);
+      sql?.run("DELETE FROM origin WHERE id = ?", [id]);
+    });
+  }
+
+  /// Whether a person asked to load the file `id` and it is not all here yet.
+  wanted(id: string): Effect.Effect<boolean> {
+    return Effect.map(this.#db(), (sql) => sql !== null && sql.all("SELECT 1 FROM wanted WHERE id = ?", [id]).length > 0);
+  }
+
+  /// The file `id` all kept: no longer asked to be loaded (where it was opened stays, for what lists it).
+  loaded(id: string): Effect.Effect<void> {
+    return Effect.map(this.#db(), (sql) => { sql?.run("DELETE FROM wanted WHERE id = ?", [id]); });
   }
 
   /// What is kept of the file `id` let go (found changed on the station), unless a part of it is being written.
