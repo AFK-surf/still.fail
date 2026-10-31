@@ -1633,3 +1633,415 @@ test "viewer on the tree, a wide window: a toast said as it shows (a call's answ
   assert_eq(done.val, 1, msg="pressed: done")
   assert_true(viewer.get() is Some(_), msg="the viewer stays")
 }
+
+///|
+/// The bar across the top of a wide window as it is drawn: its glass's top (the glass as wide as the window, at its
+/// top: the window's tree's, else an old view's), None where none is drawn.
+fn wide_bar_top(t : @ui.Tester) -> Double? {
+  for d in @ui.view_tree().unwrap().drawn() {
+    if d.glass is Some(_) && d.w == 1280.0 && d.y <= 0.0 {
+      return Some(d.y)
+    }
+  }
+  let mut out = None
+  for g in t.drawn_glass() {
+    if g.2 == 1280.0 && g.1 <= 0.0 {
+      out = Some(g.1)
+    }
+  }
+  out
+}
+
+///|
+/// A picture opened in a wide window, clicked on (the bars hidden by it, at the click's moment), and `after` ms later
+/// drawn (`frames`: the frames between at the display's pace; else none between): where the bar across the top is
+/// drawn then.
+fn wide_bar_after_click(frames : Bool, after : Double) -> Double? raise {
+  let t = wide_preview()
+  let v = viewer.get().unwrap()
+  assert_true(v.in_tree, msg="the tree's viewer")
+  assert_eq(wide_bar_top(t), Some(0.0), msg="the bar across the top, there as it opens")
+  let (x, y, w, h) = v.zoom.rect().unwrap()
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  assert_true(!v.bars_shown(), msg="clicked: its bars hidden")
+  if frames {
+    t.run_for(after)
+  } else {
+    t.advance(after)
+    t.draw()
+  }
+  wide_bar_top(t)
+}
+
+///|
+test "viewer on the tree, a wide window, a mouse: a click on the picture hides the bar across the top from the click's moment, going up as far by a moment the frames drawn between or none" {
+  // (half its way: as far as the bar's own way has gone by then)
+  let half = @sf.viewer_bar_ms / 2.0
+  let drawn = wide_bar_after_click(true, half)
+  let none = wide_bar_after_click(false, half)
+  match drawn {
+    Some(y) => assert_true(y < -1.0 && y > -@sf.viewer_bar_h, msg="under way: \{y}")
+    None => fail("frames: the bar gone half its way")
+  }
+  assert_eq(none, drawn, msg="no frame between: as far up as with them")
+}
+
+///|
+/// A picture opened in a wide window (1280 by 844, a mouse's), held coming till the test gives it (`given`).
+fn held_wide_preview(
+  given : Map[String, () -> Unit],
+  platform? : Int = 0,
+  corner? : Double = 0.0,
+  w? : Double = 1280.0,
+) -> @ui.Tester {
+  new_run()
+  let base = fixture("chat-preview-image")
+  let src : Source = {
+    ..base,
+    read_going: fn(name, params, on_value, done) {
+      if name == "station.file" {
+        given[text(Some(params), "name")] = fn() { (base.read_going)(name, params, on_value, done) }
+      } else {
+        (base.read_going)(name, params, on_value, done)
+      }
+    },
+  }
+  preview_src.val = Some(src)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform~, window_corner=corner)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+/// The bar across the top of a wide window, the window told it has none of the system's title bar or has (`inset`),
+/// a frame drawn: where its way back starts (-1: none), whether a press on its blank (between the way back and the name) moved
+/// the window, whether the bars still show after it, the viewer open; how far in from the window's side its last tool (download) ends,
+/// where it has one (-1 none: a picture coming has none).
+fn wide_bar_inset(t : @ui.Tester, v : Viewer, inset : Bool) -> ((Double, Bool, Bool), Double) raise {
+  t.set_window_inset(inset)
+  t.draw()
+  // (none: -1, the bar gone)
+  let back = match t.all(Button, label=v.desk_back(preview_src.val.unwrap())) {
+    [b, ..] => b.rect
+    [] => (-1.0, -1.0, 0.0, 0.0)
+  }
+  let last = match t.all(Button, label=@sf.t("web-main.preview.download")) {
+    [d, ..] => 1280.0 - (d.rect.0 + d.rect.2)
+    [] => -1.0
+  }
+  let before = t.window_drags()
+  let (x, y) = (dmax(back.0, 0.0) + back.2 + 100.0, @sf.viewer_bar_h / 2.0)
+  t.touch(0, x, y)
+  t.touch(2, x, y)
+  t.draw()
+  // (and whether the viewer is still open: a press passed under the bar, round the picture, would close it)
+  ((back.0, t.window_drags() > before, v.bars_shown() && viewer.get() is Some(_)), last)
+}
+
+///|
+test "viewer on the tree, a wide window, the bar across the top as the old bar is, the window gone full screen and back (its title bar the system's, then the app's again), the same viewer, on a Mac and on Windows: clear of the window's buttons at its left (a Mac's) while they are in it, its last tool clear of them at its right (Windows', the app's own) while they are, else at the window's corner; a press on its blank moving the window then, nothing under it taking the press" {
+  for platform in [0, 3] {
+    let given : Map[String, () -> Unit] = {}
+    let t = held_wide_preview(given, platform~)
+    let v = viewer.get().unwrap()
+    assert_true(v.coming() && v.in_tree, msg="\{platform}: coming, the tree's viewer")
+    // (the old bar's, while it comes: what the bar across the top does)
+    let old = []
+    for inset in [true, false, true] {
+      old.push(wide_bar_inset(t, v, inset).0)
+    }
+    (given.get(v.file.name).unwrap())()
+    t.draw()
+    t.run_for(@kit.progress_known_ms)
+    assert_true(!v.coming(), msg="\{platform}: whole")
+    assert_true(@sfbase.bar_as_nodes(v, 1280.0), msg="\{platform}: whole, the bar its nodes")
+    let node = []
+    let last = []
+    for inset in [true, false, true] {
+      let (n, l) = wide_bar_inset(t, v, inset)
+      node.push(n)
+      last.push(l)
+      // (where a page's bar's last stands, the window so: clear of its own buttons where they are the app's, else at
+      // its corner)
+      let want = if @ui.window_keys_own() {
+        @sf.window_keys_room_at(1280.0) + @sf.viewer_bar_in
+      } else {
+        @sf.window_end_in(@sf.viewer_bar_in)
+      }
+      assert_true((l - want).abs() < 0.001, msg="\{platform}, inset \{inset}: its last tool \{l} in, as a page's bar's last: \{want}")
+    }
+    assert_true(viewer.get().map(fn(now) { physical_equal(now, v) }).unwrap_or(false), msg="\{platform}: the same viewer")
+    assert_eq(node, old, msg="\{platform}: as the old bar: \{node} and \{old}")
+    assert_true(old[0].1 && !old[1].1 && old[2].1 && old[0].2 && old[1].2, msg="\{platform}: moved while inset: \{old}")
+    if platform == 0 {
+      assert_true(old[0].0 > old[1].0, msg="a Mac's: clear of its buttons at the left while inset: \{old}")
+    } else {
+      assert_true(last[0] > last[1] && last[2] == last[0], msg="Windows': clear of its buttons at the right while inset: \{last}")
+    }
+  }
+}
+
+///|
+/// Whether the bar across the top is drawn out of the way (none of it drawn, or all of it up past the window's top).
+fn wide_bar_out(t : @ui.Tester) -> Bool {
+  match wide_bar_top(t) {
+    None => true
+    Some(y) => y <= -@sf.viewer_bar_h
+  }
+}
+
+///|
+test "viewer on the tree, a wide window, a mouse, motion reduced: a click on the picture hides the bar across the top at once, the next shows it at once, the first frame after each where it goes; nothing read of the clock after" {
+  let t = wide_preview()
+  // (as the settings set it: this device's motion reduced, read by the app each frame)
+  (preview_src.val.unwrap().call)("prefs.set", { "motion": "reduce" }, fn(_) {  })
+  t.draw()
+  assert_true(@ui.current().still(), msg="motion reduced")
+  let v = viewer.get().unwrap()
+  assert_eq(wide_bar_top(t), Some(0.0), msg="there")
+  let (x, y, w, h) = v.zoom.rect().unwrap()
+  let click = fn() {
+    t.touch(0, x + w / 2.0, y + h / 2.0)
+    t.touch(2, x + w / 2.0, y + h / 2.0)
+    t.draw()
+  }
+  click()
+  let out = wide_bar_out(t)
+  let ticking_out = @ui.view_tree().unwrap().clock_read()
+  // (the next click no second of a double one)
+  t.advance(double_tap_ms * 2.0)
+  click()
+  let back = wide_bar_top(t)
+  let ticking_back = @ui.view_tree().unwrap().clock_read()
+  (preview_src.val.unwrap().call)("prefs.set", { "motion": Json::null() }, fn(_) {  })
+  t.draw()
+  assert_true(out, msg="hidden: out of the way in the first frame")
+  assert_eq(back, Some(0.0), msg="shown again: there in the first frame")
+  assert_true(!ticking_out && !ticking_back, msg="nothing read of the clock after: \{ticking_out} \{ticking_back}")
+}
+
+///|
+/// Where the middle of the file's name is drawn across the window: the window's tree's words, else the old bar's.
+fn wide_name_middle(t : @ui.Tester, name : String) -> Double {
+  for d in @ui.view_tree().unwrap().drawn() {
+    if d.words == name && d.alpha > 0.0 {
+      return d.x + d.w / 2.0
+    }
+  }
+  for w in t.words() {
+    if w.0 == name && w.5 > 0.0 {
+      return w.1 + w.3 / 2.0
+    }
+  }
+  -1.0
+}
+
+///|
+test "viewer on the tree, a wide window, the bar across the top: its file's name in the window's middle, as the old bar has it, however wide the way back and the tools are" {
+  let given : Map[String, () -> Unit] = {}
+  let t = held_wide_preview(given)
+  let v = viewer.get().unwrap()
+  assert_true(v.coming(), msg="coming: the old bar")
+  let old = wide_name_middle(t, v.file.name)
+  (given.get(v.file.name).unwrap())()
+  t.draw()
+  t.run_for(@kit.progress_known_ms)
+  assert_true(@sfbase.bar_as_nodes(v, 1280.0), msg="whole: the bar its nodes")
+  let node = wide_name_middle(t, v.file.name)
+  assert_true(old > 0.0 && (old - 640.0).abs() < 1.0, msg="the old bar's in the middle: \{old}")
+  assert_true((node - old).abs() < 0.5, msg="the nodes' where the old bar's is: \{node} and \{old}")
+}
+
+///|
+test "viewer on the tree, a wide window, the bar across the top: its last tool as far in from the window's side as a page's bar's last, on a Mac (its window's corner 16, followed), on Windows 11 (8, too square to follow) and on an Android tablet (none), 1280 wide and 840" {
+  for (platform, corner, w) in [(0, 16.0, 1280.0), (3, 8.0, 1280.0), (2, 0.0, 1280.0), (2, 0.0, 840.0)] {
+    let given : Map[String, () -> Unit] = {}
+    let t = held_wide_preview(given, platform~, corner~, w~)
+    let v = viewer.get().unwrap()
+    (given.get(v.file.name).unwrap())()
+    t.draw()
+    t.run_for(@kit.progress_known_ms)
+    assert_true(@sfbase.bar_as_nodes(v, w), msg="\{platform} \{w}: whole, the bar its nodes")
+    let last = match t.all(Button, label=@sf.t("web-main.preview.download")) {
+      [d, ..] => w - (d.rect.0 + d.rect.2)
+      [] => -1.0
+    }
+    // (a page's bar's last, as the old views have it: the window's corner and the theme's ranges as they ask them)
+    let want = @sf.window_end_in(@sf.viewer_bar_in)
+    assert_true(
+      (last - want).abs() < 0.001,
+      msg="\{platform} \{w}: its last tool \{last} in, a page's bar's \{want}; roots \{@ui.tree_corner_roots_now()} and \{@ui.corner_roots()}",
+    )
+  }
+}
+
+///|
+test "viewer on the tree, a window 600 wide (a Mac's, not a small screen), the bar across the top: its tools, no zoom's tools (zoomed by the hand and the keys)" {
+  let t = preview_tester("image", w=600.0, platform=0)
+  let v = viewer.get().unwrap()
+  assert_true(@sfbase.bar_as_nodes(v, 600.0), msg="whole: the bar its nodes")
+  for l in [@sf.t("web-main.preview.zoomOutKey"), @sf.t("web-main.preview.fitKey"), @sf.t("web-main.preview.zoomInKey"), @sf.t("web-main.preview.actualKey")] {
+    assert_eq(t.all(Button, label=l).length(), 0, msg="no \{l}")
+  }
+  for l in [@sf.t("web-main.annotate.image"), @sf.t("common.copy"), @sf.t("web-main.preview.download")] {
+    assert_eq(t.all(Button, label=l).length(), 1, msg="\{l}")
+  }
+}
+
+///|
+test "viewer on the tree, an Android tablet 840 wide, a picture whose name is far longer than the bar's middle: the bar's tools whole, its last as far in as a page's bar's last; the way back clear of them" {
+  let t = preview_tester("long", w=840.0, platform=2)
+  let v = viewer.get().unwrap()
+  assert_true(@sfbase.bar_as_nodes(v, 840.0), msg="whole: the bar its nodes")
+  let rect = fn(l : String) {
+    match t.all(Button, label=l) {
+      [d, ..] => d.rect
+      [] => (-1.0, -1.0, -1.0, -1.0)
+    }
+  }
+  let first = rect(@sf.t("web-main.annotate.image"))
+  let last = rect(@sf.t("web-main.preview.download"))
+  let back = rect(v.desk_back(preview_src.val.unwrap()))
+  // (what is beside the name, the row's own room and its gaps out, halved: what each side would have alike)
+  let mut middle = 0.0
+  for d in @ui.view_tree().unwrap().drawn() {
+    if d.words == v.file.name || d.words == @sfbase.vf_meta(v, preview_src.val.unwrap()) {
+      middle = dmax(middle, d.w)
+    }
+  }
+  // (the middle no wider than the bar lets it be: the window's width less 320)
+  let middle = dmin(middle, 840.0 - 320.0)
+  let end_in = @sf.window_end_in(@sf.viewer_bar_in)
+  let half = (840.0 - @sf.viewer_bar_in - end_in - 2.0 * 16.0 - middle) / 2.0
+  let tools = last.0 + last.2 - first.0
+  assert_true(tools > 0.0 && tools <= half, msg="the tools whole, within what is beside the name: \{tools} and \{half}")
+  assert_true((840.0 - (last.0 + last.2) - end_in).abs() < 0.001, msg="its last tool \{840.0 - (last.0 + last.2)} in, a page's bar's \{end_in}")
+  assert_true(back.0 + back.2 <= first.0, msg="the way back clear of the tools: \{back} and \{first}")
+}
+
+///|
+/// A picture `what` (the fixture's chat-preview-…) opened in a wide window `w` wide on `platform` (0 a Mac, 3 Windows),
+/// the window's buttons in the app's top row (inset), the system's words `fs`; held coming while `hold` (how much has
+/// come said once: 1 KB of 4 KB); else whole. Where the bar across the top has its way back, each of its tools, its
+/// progress bar and the words beside it (each x, w; none: (-1, 0)), and whether it is as `hold` says and the bar its
+/// nodes ("nodes" 1, else 0).
+fn wide_bar_room(what : String, w : Double, platform : Int, fs : Double, hold : Bool) -> Map[String, (Double, Double)] raise {
+  new_run()
+  let base = fixture("chat-preview-" + what)
+  let said : Map[String, (Json) -> Unit] = {}
+  let src : Source = {
+    ..base,
+    read_going: fn(name, params, on_value, done) {
+      if hold && name == "station.file" {
+        said[text(Some(params), "name")] = on_value
+      } else {
+        (base.read_going)(name, params, on_value, done)
+      }
+    },
+  }
+  preview_src.val = Some(src)
+  // (opened 1280 wide, then the window made `w` wide: the chat under it opening the picture at 840 on a Mac, its
+  // buttons in it, draws a message over the field's hint for a frame (words_over), as on main: no part of the bar's)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=844.0, platform~, window_corner=if platform == 0 { 16.0 } else { 8.0 })
+  t.set_window_inset(true)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  t.resize(w, 844.0)
+  t.draw()
+  // (the system's words said once it is open: the bar measured again by them, nothing under it moving meanwhile)
+  t.set_font_scale(fs)
+  t.draw()
+  let v = viewer.get().unwrap()
+  if hold {
+    (said.get(v.file.name).unwrap())({ "loaded": 1024.0, "total": 4096.0 })
+    t.draw()
+  }
+  t.run_for(@kit.progress_known_ms)
+  let out : Map[String, (Double, Double)] = {}
+  // (coming and the bar its nodes: 1; else 0)
+  out["nodes"] = (if v.coming() == hold && @sfbase.bar_as_nodes(v, w) { 1.0 } else { 0.0 }, 0.0)
+  let at = fn(k : String, l : String) {
+    out[k] = match t.all(Button, label=l) {
+      [b, ..] => (b.rect.0, b.rect.2)
+      [] => (-1.0, 0.0)
+    }
+  }
+  at("back", v.desk_back(src))
+  at("mark", @sf.t("web-main.annotate.image"))
+  at("copy", @sf.t("common.copy"))
+  at("download", @sf.t("web-main.preview.download"))
+  out["bar"] = match t.all(ProgressBar) {
+    [b, ..] => (b.rect.0, b.rect.2)
+    [] => (-1.0, 0.0)
+  }
+  out["words"] = (-1.0, 0.0)
+  for d in @ui.view_tree().unwrap().drawn() {
+    if d.words.has_prefix("正在读取") && d.alpha > 0.0 {
+      out["words"] = (d.x, d.w)
+    }
+  }
+  out
+}
+
+///|
+test "viewer on the tree, the bar across the top, a name far longer than its middle, on a Mac and on Windows with the window's buttons in it, the system's words 1 and 1.3, 700, 840 and 1280 wide: its tools whole and its last where a page's bar's last is, the way back clear of them and where it is with a short name" {
+  let seen = []
+  for platform in [0, 3] {
+    for fs in [1.0, 1.3] {
+      for w in [700.0, 840.0, 1280.0] {
+        for hold in [false] {
+          let short = wide_bar_room("image", w, platform, fs, hold)
+          let long = wide_bar_room("long", w, platform, fs, hold)
+          let end_in = if platform == 3 {
+            @sf.window_keys_room_at(w) + @sf.viewer_bar_in
+          } else {
+            @sf.window_end_in(@sf.viewer_bar_in)
+          }
+          let at = "platform \{platform}, words \{fs}, \{w} wide, \{if hold { "coming" } else { "whole" }}"
+          let get = fn(m : Map[String, (Double, Double)], k : String) { m.get(k).unwrap_or((-1.0, 0.0)) }
+          if get(short, "nodes").0 != 1.0 || get(long, "nodes").0 != 1.0 {
+            fail("\{at}: the bar not its nodes")
+          }
+          if hold {
+            let (sbx, sbw) = get(short, "bar")
+            let (_, sww) = get(short, "words")
+            if sbx < 0.0 || sbw != 120.0 || sww <= 0.0 {
+              fail("\{at}: the short name's words and bar not there to measure by: \{get(short, "bar")} \{get(short, "words")}")
+            }
+            let (bx, bw) = get(long, "bar")
+            let (wx, ww) = get(long, "words")
+            seen.push(
+              "\{at}: bar \{(bx, bw)} (short \{get(short, "bar")}), words \{(wx, ww)} (short \{get(short, "words")}), ends \{w - (bx + bw)} in, want ≥ \{end_in}; back \{get(long, "back")}",
+            )
+            if bw != get(short, "bar").1 || ww != get(short, "words").1 || ww <= 0.0 {
+              fail("\{at}: the words or the bar cut: \{seen.last()}")
+            }
+            if w - (bx + bw) < end_in - 0.001 {
+              fail("\{at}: over the window's buttons: \{seen.last()}")
+            }
+          } else {
+            let (mx, mw) = get(long, "mark")
+            let (dx, dw) = get(long, "download")
+            let (cx, cw) = get(long, "copy")
+            let (kx, kw) = get(long, "back")
+            seen.push("\{at}: mark \{(mx, mw)}, copy \{(cx, cw)}, download \{(dx, dw)}, ends \{w - (dx + dw)} in, want \{end_in}; back \{(kx, kw)} (short \{get(short, "back")})")
+            if mw != @sf.tool_side || cw != @sf.tool_side || dw != @sf.tool_side {
+              fail("\{at}: a tool cut: \{seen.last()}")
+            }
+            if (w - (dx + dw) - end_in).abs() > 0.001 {
+              fail("\{at}: its last not where a page's bar's last is: \{seen.last()}")
+            }
+            if kx + kw > mx + 0.001 || kx != get(short, "back").0 {
+              fail("\{at}: the way back over the tools or moved: \{seen.last()}")
+            }
+          }
+        }
+      }
+    }
+  }
+  ignore(seen)
+}

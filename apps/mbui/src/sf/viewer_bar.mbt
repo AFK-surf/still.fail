@@ -245,7 +245,7 @@ pub fn viewer_bar_under() -> Double {
 
 ///|
 /// Its going and coming (ViewerBar.css.ts: transform and opacity, 240 ms ease-out).
-let viewer_bar_ms : Double = 240.0
+pub let viewer_bar_ms : Double = 240.0
 
 ///|
 /// Its glass: the ground at 82% over a 20 blur, saturated 1.4; its line at 70%.
@@ -294,7 +294,7 @@ let viewer_bar_buttons : @ui.Style = @ui.style(w=Fixed(viewer_buttons_w), h=Full
 
 ///|
 /// (its row's px)
-let viewer_bar_in : Double = 12.0
+pub let viewer_bar_in : Double = 12.0
 
 ///|
 // kept across runs: a value (no field of it changes)

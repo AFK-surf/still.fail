@@ -1182,6 +1182,18 @@ fn layout_flex(
         cross_by_height = true
       }
       let min_main = if row { cb.min_w } else { cb.min_h }
+      // (one never narrower than what it holds: at least as wide as that comes to, measured here, as a basis of auto
+      // would be: what changes in it makes it so again, as anything it holds changing lays its line out again)
+      let min_main = if row && cs.min_held {
+        let held = size_node(c, undef, undef, undef, undef, cb_w, cb_h, false)
+        if known(min_main) {
+          fmax(min_main, held)
+        } else {
+          held
+        }
+      } else {
+        min_main
+      }
       let max_main = if row { cb.max_w } else { cb.max_h }
       f.unsafe_set(i + MIN_MAIN, min_main)
       f.unsafe_set(i + SOFT_MIN, if row && !(s.fits && cs.drop != 0) { cs.soft_min } else { undef })

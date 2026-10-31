@@ -256,6 +256,9 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   |> ignore
   // (the floating bar over it on a small screen, its nodes: where the old bars draw it not, head_as_nodes)
   n.show(fn() { head_as_nodes(vw, stage().0) }, fn(h) { image_head(h, src, vw, stage) })
+  // (the bar across the top of a wider window, its picture whole, its nodes: where the old bars draw it not,
+  // bar_as_nodes)
+  n.show(fn() { bar_as_nodes(vw, stage().0) }, fn(h) { image_bar(h, src, vw, stage) })
   // (a mouse's pointer along the top where the bar across it is: the bar shown while it is there, whatever is over it
   // then, the bar itself as it shows; as the pointer comes in or goes out (vf_bar's near, as the old frame read it of
   // its pointer each frame))
@@ -720,41 +723,54 @@ pub fn head_as_nodes(v : Viewer, w : Double) -> Bool {
 }
 
 ///|
+/// Whether viewer `vw`'s bar across the top is its nodes (image_bar), `w` wide, the old bar's (vf_bar's) not: a picture
+/// here whole (not coming, read, played or marked), not on a small screen (whose bar floats: head_as_nodes), its own bar
+/// (not the system's beside it). As each is told.
+pub fn bar_as_nodes(v : Viewer, w : Double) -> Bool {
+  marks_said()
+  v.in_tree &&
+  v.shown_kind() == Some(KImage) &&
+  !marking.on &&
+  !v.coming() &&
+  !@sf.viewer_bar_floats(w) &&
+  !@sf.native_on()
+}
+
+///|
+/// How far in viewer `vw` is as node `node` is drawn (its flight's share, else its fade, sampled as it is drawn while
+/// either goes; where neither goes, as it is).
+fn Viewer::shown_on(self : Viewer, node : @view.View) -> Double {
+  let vw = self
+  vw.fly.said()
+  vw.fade.said()
+  let now = node.logic_at()
+  let t = if vw.fly.goes_at(now) || vw.fade.goes_at(now) { node.drawn_at() } else { @double.infinity }
+  if vw.flies {
+    vw.flight_share_at(t)
+  } else {
+    vw.fade.value_at(t)
+  }
+}
+
+///|
 /// Viewer `vw`'s floating bar as nodes in `h` (viewer_head_node, as vf_bar has it there): its file's name (its kind and
-/// size after it, wider than a phone), there while its bars are (Viewer::bars_shown), as far in as the viewer is (its
-/// flight's share, else its fade, sampled as it is drawn while either goes); while its picture comes, how much of it
-/// has once the core has said (file_progress_node); its tools: mark and copy once its picture is all here (copied: a
-/// check for copied_ms, from the press's moment), download (unable while there is nothing to save; a ring while the
-/// core downloads it; none while it comes), ×. Each press done at its moment; what a download asks for told once, as
-/// it is asked. Their tips in a layer of its own over all of it.
+/// size after it, wider than a phone), there while its bars are (Viewer::bars_shown), as far in as the viewer is
+/// (Viewer::shown_on); while its picture comes, how much of it has once the core has said (file_progress_node); its
+/// tools (image_tools), ×. Each press done at its moment. Their tips in a layer of its own over all of it.
 fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, Double)) -> Unit {
   h.over(Is(true)) |> ignore
   let ink = fn() { @sf.page_viewer_ink() }
-  let round : @view.Live[Double] = Is(@sf.tool_side / 2.0)
   let tips_at : Ref[@view.View?] = Ref(None)
   let tips = @sf.TipLayer::new(fn() { tips_at.val })
   let whole = fn() { vw.bytes.get() is Some(_) }
   let dl = fn() { vw.download(src) }
-  // (copied: a check from the press, its end its own, another press another end)
-  let copied : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
-  let copied_end : Ref[() -> Unit] = Ref(fn() {  })
   @sf.viewer_head_node(
     h,
     fn() { vw.file.name },
     // (its kind and size after its name where the bar has room: wider than a phone, viewer_head_node)
     fn() { vf_meta(vw, src) },
     fn() { vw.bars_shown() },
-    fn(node) {
-      vw.fly.said()
-      vw.fade.said()
-      let now = node.logic_at()
-      let t = if vw.fly.goes_at(now) || vw.fade.goes_at(now) { node.drawn_at() } else { @double.infinity }
-      if vw.flies {
-        vw.flight_share_at(t)
-      } else {
-        vw.fade.value_at(t)
-      }
-    },
+    fn(node) { vw.shown_on(node) },
     fn() { (@sf.viewer_host().room)().0 },
     fn() { stage().0 },
     ink,
@@ -764,67 +780,7 @@ fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, 
       row.show(fn() { vw.coming() && vw.got.get() is Some(_) }, fn(r) {
         file_progress_node(r, fn() { vw.got.get().unwrap_or((0.0, None)) }, fn() { vw.file.size }) |> ignore
       })
-      // 标注图片: once its whole picture is here (annotate/ImageMarks.tsx)
-      row.show(whole, fn(r) {
-        @sf.tool_node(
-          r,
-          fn() { { icon: "edit", label: @sf.t("web-main.annotate.image"), on: false, disabled: false } },
-          ink,
-          round,
-          fn() { marks_start() },
-          tip=tips,
-        )
-        |> ignore
-      })
-      // 复制: the whole picture on the clipboard, a check a moment after (FilePreview.tsx CopyImage)
-      row.show(whole, fn(r) {
-        let t = @sf.tool_node(
-          r,
-          fn() {
-            if copied.get() {
-              { icon: "check", label: @sf.t("common.copied"), on: false, disabled: false }
-            } else {
-              { icon: "copy", label: @sf.t("common.copy"), on: false, disabled: false }
-            }
-          },
-          ink,
-          round,
-          fn() {
-            match @signals.untracked(fn() { vw.bytes.get() }) {
-              Some(b) => {
-                @ui.current().copy_image(b)
-                vw.copied += 1
-                (copied_end.val)()
-                copied.set(true)
-                copied_end.val = r.at_moment(r.cause_at() + @sf.copied_ms, fn() { copied.set(false) })
-              }
-              None => ()
-            }
-          },
-          tip=tips,
-        )
-        ignore(t)
-        r.owns(fn() { (copied_end.val)() }) |> ignore
-      })
-      // download: what is here saved at once; one told of, read whole first; a ring while the core downloads it
-      row.show(fn() { !vw.coming() && !downloading(dl()) }, fn(r) {
-        @sf.tool_node(
-          r,
-          fn() {
-            let saving = vw.bytes.get() is Some(_) || (vw.told_of() && !vw.asked)
-            { icon: "download", label: @sf.t("web-main.preview.download"), on: false, disabled: !saving }
-          },
-          ink,
-          round,
-          fn() { vw.ask_save(@ui.current()) },
-          tip=tips,
-        )
-        |> ignore
-      })
-      row.show(fn() { !vw.coming() && downloading(dl()) }, fn(r) {
-        @sf.tool_ring_node(r, fn() { number(dl(), "progress") }, fn() { @sf.t("web-main.preview.download") }, ink, round)
-        |> ignore
-      })
+      image_tools(row, src, vw, ink, Is(@sf.tool_side / 2.0), tips)
     },
     fn() { "\{whole()} \{downloading(dl())} \{vw.coming()} \{vw.got.get() is Some(_)}" },
     fn() {
@@ -837,6 +793,122 @@ fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, 
   |> ignore
   // (its tips over all of it)
   tips_at.val = Some(h.box(fn(l) { l.over(Is(true)) |> ignore }))
+}
+
+///|
+/// Viewer `vw`'s bar across the top as nodes in `h` (viewer_bar_node, as vf_bar has it there): back to where it was
+/// opened from by name, its file's name and the line about it (which of how many, its size, its kind, its size in
+/// pixels), where the file is its tip (none for a draft's, kept on this device alone); gone up while its bars are not
+/// shown (Viewer::bars_shown), as far in as the viewer is (Viewer::shown_on); its tools (image_tools), each round as a
+/// page's bar's buttons are at the window's corner. Its way back closes it, at the press's moment. Their tips in a layer
+/// of its own over all of it.
+fn image_bar(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, Double)) -> Unit {
+  h.over(Is(true)) |> ignore
+  let ink = fn() { @sf.page_viewer_ink() }
+  let tips_at : Ref[@view.View?] = Ref(None)
+  let tips = @sf.TipLayer::new(fn() { tips_at.val })
+  @sf.viewer_bar_node(
+    h,
+    fn() { vw.desk_back(src) },
+    fn() { vw.file.name },
+    fn() { vf_meta(vw, src) },
+    fn() { if vw.file.path.has_prefix("draft:") { "" } else { vw.file.path } },
+    fn() { !vw.bars_shown() },
+    fn(node) { vw.shown_on(node) },
+    fn() { (@sf.viewer_host().room)().0 },
+    fn() { stage().0 },
+    ink,
+    fn(row, corner) { image_tools(row, src, vw, ink, corner, tips) },
+    fn() {
+      if !vw.closing {
+        vw.shut(@ui.current())
+      }
+    },
+    tips,
+  )
+  |> ignore
+  tips_at.val = Some(h.box(fn(l) { l.over(Is(true)) |> ignore }))
+}
+
+///|
+/// A picture's tools in a bar's row `row` (vf_tools's, as nodes): mark and copy once its picture is all here (copied:
+/// a check for copied_ms, from the press's moment); download (unable while there is nothing to save; a ring while the
+/// core downloads it; none while it comes). Each `corner` round, in `ink`, its tip in `tips`; each press done at its
+/// moment, what a download asks for told once, as it is asked.
+fn image_tools(
+  row : @view.View,
+  src : Source,
+  vw : Viewer,
+  ink : () -> @sf.ViewerInk,
+  corner : @view.Live[Double],
+  tips : @sf.TipLayer,
+) -> Unit {
+  let whole = fn() { vw.bytes.get() is Some(_) }
+  let dl = fn() { vw.download(src) }
+  // (copied: a check from the press, its end its own, another press another end)
+  let copied : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
+  let copied_end : Ref[() -> Unit] = Ref(fn() {  })
+  // 标注图片: once its whole picture is here (annotate/ImageMarks.tsx)
+  row.show(whole, fn(r) {
+    @sf.tool_node(
+      r,
+      fn() { { icon: "edit", label: @sf.t("web-main.annotate.image"), on: false, disabled: false } },
+      ink,
+      corner,
+      fn() { marks_start() },
+      tip=tips,
+    )
+    |> ignore
+  })
+  // 复制: the whole picture on the clipboard, a check a moment after (FilePreview.tsx CopyImage)
+  row.show(whole, fn(r) {
+    let t = @sf.tool_node(
+      r,
+      fn() {
+        if copied.get() {
+          { icon: "check", label: @sf.t("common.copied"), on: false, disabled: false }
+        } else {
+          { icon: "copy", label: @sf.t("common.copy"), on: false, disabled: false }
+        }
+      },
+      ink,
+      corner,
+      fn() {
+        match @signals.untracked(fn() { vw.bytes.get() }) {
+          Some(b) => {
+            @ui.current().copy_image(b)
+            vw.copied += 1
+            (copied_end.val)()
+            copied.set(true)
+            copied_end.val = r.at_moment(r.cause_at() + @sf.copied_ms, fn() { copied.set(false) })
+          }
+          None => ()
+        }
+      },
+      tip=tips,
+    )
+    ignore(t)
+    r.owns(fn() { (copied_end.val)() }) |> ignore
+  })
+  // download: what is here saved at once; one told of, read whole first; a ring while the core downloads it
+  row.show(fn() { !vw.coming() && !downloading(dl()) }, fn(r) {
+    @sf.tool_node(
+      r,
+      fn() {
+        let saving = vw.bytes.get() is Some(_) || (vw.told_of() && !vw.asked)
+        { icon: "download", label: @sf.t("web-main.preview.download"), on: false, disabled: !saving }
+      },
+      ink,
+      corner,
+      fn() { vw.ask_save(@ui.current()) },
+      tip=tips,
+    )
+    |> ignore
+  })
+  row.show(fn() { !vw.coming() && downloading(dl()) }, fn(r) {
+    @sf.tool_ring_node(r, fn() { number(dl(), "progress") }, fn() { @sf.t("web-main.preview.download") }, ink, corner)
+    |> ignore
+  })
 }
 
 ///|

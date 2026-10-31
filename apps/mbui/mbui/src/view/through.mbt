@@ -92,6 +92,8 @@ fn Tree::target_under(self : Tree, id : NodeId, x : Double, y : Double) -> (Targ
         found.push(Pressed(c.id))
       } else if n.hosted {
         found.push(Hosted(c.id))
+      } else if n.top_row {
+        found.push(TopRow(c.id))
       }
     }
   })

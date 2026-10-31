@@ -181,6 +181,10 @@ struct Node {
   /// its properties' bindings, by property: what stops each
   props : Map[Int, () -> Unit]
   mut on_press : (() -> Unit)?
+  /// whether it is a top row of the app's own (View::moves_window: a press on it its own), and whether a press on it
+  /// moves the window now
+  mut top_row : Bool
+  mut moves_window : Bool
   /// what the pointer's secondary button pressed on it asks for (View::on_menu)
   mut on_menu : ((Menu) -> Unit)?
   /// what a wheel turned over it does (View::on_wheel)
@@ -572,6 +576,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.slot = false
       n.hosted = false
       n.on_press = None
+      n.top_row = false
+      n.moves_window = false
       n.on_menu = None
       n.on_wheel = None
       n.on_key = None
@@ -620,6 +626,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         drop_next: 0,
         props: {},
         on_press: None,
+        top_row: false,
+        moves_window: false,
         on_menu: None,
         on_wheel: None,
         on_key: None,
@@ -1260,6 +1268,32 @@ pub fn View::grow(self : View, g : Live[Double]) -> View {
 }
 
 ///|
+/// Whether it is never narrower, in a row, than what it holds needs (the old views' `keep`: a bar's tools kept whole),
+/// whatever its basis and least width say, as it changes: what is beside it gives way first; what it holds changing
+/// (its words, their face, its parts, their gaps) lays it out so again. Layout's.
+pub fn View::keeps_held(self : View, on : Live[Bool]) -> View {
+  self.bind(33, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.min_held = on })
+  self
+}
+
+///|
+/// How wide (in a row; tall, in a column) it is before the room left is shared out (View::grow), as it changes: None as
+/// what it holds is; Some(0.0) none, so that those that grow alike are alike however much each holds (the old views'
+/// Fill). It says nothing of how narrow it may come to: that is its least width's (View::min_width) or, never narrower
+/// than what it holds, View::keeps_held's. Layout's.
+pub fn View::basis(self : View, b : Live[Double?]) -> View {
+  self.bind(21, b, Layout, fn(b) {
+    self.tree.nodes[self.at].flex.style.set_basis(
+      match b {
+        Some(v) => Pt(v)
+        None => Auto
+      },
+    )
+  })
+  self
+}
+
+///|
 /// How big it is laid out as of the logic's moment (Tree::logic_at): what was told before it laid out first (what an event
 /// changed before it asks, laid out as a frame would), as of the window's size its last frame gave (0 by 0 before the
 /// first). For what is said at a moment by how big a thing is then (how long a slide across it takes), never followed.
@@ -1872,7 +1906,7 @@ fn Tree::asked_at(
     self.each_drawn_scaled(fn(c, cx, cy, _, s) {
       if self.finger_on(c, cx, cy, s, x, y, now, tracked=false) {
         let n = self.nodes[c.id.at]
-        if takes(n) || n.on_drag is Some(_) || n.on_press is Some(_) || n.hosted {
+        if takes(n) || n.on_drag is Some(_) || n.on_press is Some(_) || n.top_row || n.hosted {
           found.val = Some(c.id)
         }
       }
@@ -1898,6 +1932,37 @@ pub fn View::on_press(self : View, f : () -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
   n.on_press = Some(f)
   self.tree.hits = self.tree.hits + 1
+  self
+}
+
+///|
+/// A top row of the app's own (Ctx::window_drag's): a press on it, where nothing over it takes the press, is its own,
+/// nothing under it taking it; while `on` holds, it moves the window (and a double click on it zooms it), as the
+/// system's title bar does, in a window with none of the system's (a window gone full screen has the system's again).
+/// Taken so where it takes presses (View::presses). Said at the moment it changes, as whether it takes presses is.
+pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.top_row = true
+  self.tree.hits = self.tree.hits + 1
+  match n.props.get(32) {
+    Some(stop) => {
+      n.props.remove(32)
+      stop()
+    }
+    None => ()
+  }
+  let set = fn(on : Bool) {
+    guard self.live() is Some(n) else { return }
+    n.moves_window = on
+  }
+  match on {
+    Is(v) => set(v)
+    By(f) =>
+      self.owning(fn() {
+        let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
+        n.props[32] = stop
+      })
+  }
   self
 }
 
@@ -2578,6 +2643,8 @@ fn View::let_go(self : View) -> Unit {
     f()
   }
   n.on_press = None
+  n.top_row = false
+  n.moves_window = false
   n.on_menu = None
   n.on_wheel = None
   n.on_key = None
@@ -3805,7 +3872,7 @@ pub fn Tree::alone(self : Tree, id : NodeId) -> Bool {
   self.each_drawn(fn(c, _, _, _) {
     if c.id != id && c.id.at != 0 {
       let n = self.nodes[c.id.at]
-      if c.draws() || n.on_press is Some(_) || n.on_drag is Some(_) {
+      if c.draws() || n.on_press is Some(_) || n.on_drag is Some(_) || n.top_row {
         alone = false
       }
     }
@@ -3837,6 +3904,8 @@ pub(all) enum Target {
   Pressed(NodeId)
   Dragged(NodeId)
   Hosted(NodeId)
+  /// a top row of the app's own, what moves the window (View::moves_window)
+  TopRow(NodeId)
   Nothing
 } derive(Eq, Debug)
 
@@ -3910,7 +3979,7 @@ pub fn Tree::taken_over(self : Tree, id : NodeId) -> Array[(Double, Double, Doub
       return
     }
     let n = self.nodes[c.id.at]
-    if n.hosted || (n.on_press is None && n.on_drag is None) {
+    if n.hosted || (n.on_press is None && n.on_drag is None && !n.top_row) {
       return
     }
     match self.areas_of(n, cx, cy, c.w, c.h, s) {
@@ -3919,6 +3988,12 @@ pub fn Tree::taken_over(self : Tree, id : NodeId) -> Array[(Double, Double, Doub
     }
   })
   out
+}
+
+///|
+/// Whether a press on node `id` moves the window now (View::moves_window).
+pub fn Tree::moves_window(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes[id.at].moves_window
 }
 
 ///|
@@ -3972,6 +4047,8 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
         found.push(Pressed(c.id))
       } else if n.hosted {
         found.push(Hosted(c.id))
+      } else if n.top_row {
+        found.push(TopRow(c.id))
       }
     }
   })

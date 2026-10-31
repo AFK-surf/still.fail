@@ -119,3 +119,35 @@ test "corners linked: a link's radius, whether it follows, where it stands" {
     None => fail("a capsule 40 high stands in a 34")
   }
 }
+
+///|
+test "corners linked of the window's tree's nodes: worked out from the ranges of the theme the app tells its tree, as it tells them, no frame between; a Windows 11 window's 8, too square to follow 6 in, a button there alone; none told, as though there were none" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0, window_corner=8.0)
+  // (the app's theme's ranges, as its own signal says them)
+  let fit : @signals.Signal[CornerFit?] = @signals.signal(None, same=fn(a, b) { a == b })
+  let drawn : Ref[@view.NodeId?] = Ref(None)
+  set_view_app(fn(root) {
+    set_tree_theme(fn() { { ..Theme::light(), corner_fit: fit.get() } })
+    root.box(fn(b) {
+      b.width(Is(Some(32.0))).height(Is(Some(32.0))).radius(corner_of(Follow(Window, 6.0, 16.0))) |> ignore
+      drawn.val = Some(b.id())
+    })
+    |> ignore
+  })
+  t.draw()
+  let id = drawn.val.unwrap()
+  let tree = view_tree().unwrap()
+  // (the node's corner as the tree has it at the tester's moment, brought there, no frame drawn)
+  let radius = fn() {
+    tree.bring_to(t.time())
+    tree.drawn().filter(fn(d) { d.id == id }).map(fn(d) { d.radius })
+  }
+  let seen = []
+  for f in [None, Some(fit_ranges), None] {
+    fit.set(f)
+    seen.push((tree_corner_roots_now(), radius()))
+  }
+  assert_eq(seen[0], ({ window: 8.0, fit: None }, [concentric(8.0, 6.0)]), msg="none: followed, as any is")
+  assert_eq(seen[1], ({ window: 8.0, fit: Some(fit_ranges) }, [16.0]), msg="told: too square to follow, alone, at once")
+  assert_eq(seen[2], seen[0], msg="none again: as before, at once")
+}

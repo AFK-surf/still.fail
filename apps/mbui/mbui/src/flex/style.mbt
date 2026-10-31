@@ -162,6 +162,10 @@ pub(all) struct Style {
   // a taller one runs as far down as that one, not stopping at its most with the room under it empty (CSS's max-height
   // caps the stretch too).
   mut stretch_past_max : Bool
+  // Not CSS's: an item of a row never narrower along it than what it holds needs (its size from what it holds, as a
+  // flex basis of auto would be: the old views' `keep`), whatever its flex basis and min-width say: what is beside it
+  // gives way first.
+  mut min_held : Bool
   // bumped by every change to what the box comes from (its lengths and box
   // sizing): a node's box stands while it is the same (Node's box_ver)
   priv mut ver : Int
@@ -239,6 +243,7 @@ pub fn Style::new() -> Style {
     fit_need: 0.0 / 0.0,
     soft_min: 0.0 / 0.0,
     stretch_past_max: false,
+    min_held: false,
     ver: 0,
     basis_v: 0.0,
     basis_k: LEN_AUTO,
@@ -315,6 +320,7 @@ pub fn Style::reset(self : Style) -> Unit {
   self.fit_need = 0.0 / 0.0
   self.soft_min = 0.0 / 0.0
   self.stretch_past_max = false
+  self.min_held = false
   self.ver = self.ver + 1
   self.basis_v = 0.0
   self.basis_k = LEN_AUTO

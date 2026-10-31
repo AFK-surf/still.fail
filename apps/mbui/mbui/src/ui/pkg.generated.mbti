@@ -568,6 +568,8 @@ pub let tracker_horizon_ms : Double
 
 pub fn tree_cause() -> Double?
 
+pub fn tree_corner_roots_now() -> @paint.CornerRoots
+
 pub fn tree_theme() -> Theme
 
 pub fn update_apply(String) -> Unit
@@ -618,9 +620,15 @@ pub fn window_corner_at(Int32) -> Double
 
 pub fn window_inset() -> Bool
 
+pub fn window_inset_now() -> Bool
+
 pub fn window_keys_left() -> Bool
 
+pub fn window_keys_left_now() -> Bool
+
 pub fn window_keys_own() -> Bool
+
+pub fn window_keys_own_now() -> Bool
 
 pub fn window_open(String) -> Bool
 
