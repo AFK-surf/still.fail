@@ -4879,6 +4879,11 @@ export interface MachineLoginTool {
 	/** The program (gh, gcloud). */
 	name: string;
 	/**
+	 * The mark it is drawn with, its maker's or its service's (github, google-cloud: web/public/tools); none: a
+	 * terminal's.
+	 */
+	mark?: string;
+	/**
 	 * Its latest login that went through, who and when (张三 登录 · 10/30 16:04); else that none has and how the
 	 * latest ended (没有登录成功过 · 最近一次已取消 · 03:12).
 	 */

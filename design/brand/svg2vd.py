@@ -6,7 +6,9 @@ inherited fill and stroke, CSS custom properties from an embedded <style>
 (with a prefers-color-scheme: dark block, written out as `<name>_dark`), and
 fill="currentColor" (drawn black, tinted where it is shown).
 
-    python3 design/brand/svg2vd.py <svg directory> <drawable directory>
+    python3 design/brand/svg2vd.py <svg directory> <drawable directory> [<prefix>]
+
+With a prefix, each file is named by it and its own name (web/public/tools: tool_github), not by NAMES.
 """
 import math
 import os
@@ -201,7 +203,7 @@ def convert(path, variables):
     return "\n".join(lines + body + ["</vector>", ""])
 
 
-def main(src, dst):
+def main(src, dst, prefix=""):
     os.makedirs(dst, exist_ok=True)
     for file in sorted(os.listdir(src)):
         if not file.endswith(".svg"):
@@ -209,7 +211,7 @@ def main(src, dst):
         stem = file[:-4]
         dark = stem.endswith("-dark")
         base = stem[:-5] if dark else stem
-        name = NAMES[base] + ("_dark" if dark else "")
+        name = (prefix + base.replace("-", "_") if prefix else NAMES[base]) + ("_dark" if dark else "")
         root = ET.parse(os.path.join(src, file)).getroot()
         light_vars, dark_vars = css_vars(root)
         with open(os.path.join(dst, name + ".xml"), "w") as f:
@@ -220,4 +222,4 @@ def main(src, dst):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main(*sys.argv[1:4])

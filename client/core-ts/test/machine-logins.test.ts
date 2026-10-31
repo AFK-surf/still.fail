@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { Effect, Queue } from "effect";
 import type { LoopbackRequest, Pull } from "../src/host.ts";
 import { HostError } from "../src/error.ts";
-import { AFTER_MS, isCallback } from "../src/station/machine-logins.ts";
+import { AFTER_MS, isCallback, toolMark } from "../src/station/machine-logins.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { answers, call, subscribe, v } from "./helpers.ts";
@@ -95,6 +95,7 @@ test("those ended, a row per program: who last logged in to it, else how its lat
   assert.match(gh.summaryText, /^没有登录成功过 · 最近一次登录失败 · 10\/12 \d{1,2}:\d{2}$/);
   assert.deepEqual([gcloud.name, gcloud.failed, gcloud.countText, gcloud.chat, gcloud.tries.map((l: any) => l.id)], ["gcloud", false, "3 次", "ember:g1", ["g3", "g2", "g1"]]);
   assert.match(gcloud.summaryText, /^Zanwei Guo 登录 · 10\/12 \d{1,2}:\d{2}$/, "the one that went through, though two tried after it");
+  assert.deepEqual([gh.mark, gcloud.mark, toolMark("python3"), toolMark("mytool")], ["github", "google-cloud", "python", undefined], "its maker's mark, none for a program not known");
   core.close();
 });
 

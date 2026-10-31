@@ -8,7 +8,7 @@ import { useReady } from "../core/react.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
-import { LoginCard, useMachineLogins } from "../MachineLogins.tsx";
+import { LoginCard, ToolMark, useMachineLogins } from "../MachineLogins.tsx";
 import * as loginsCss from "../MachineLogins.css.ts";
 import { useJoinable, useMemberships, useStations, type StationView } from "../api.ts";
 import type { EnvVar, Host, JoinableStation, StationElevation, StationNet } from "../core/shapes.ts";
@@ -360,6 +360,7 @@ function Logins({ station, marked }: { station: string; marked: string | null })
             return (
               <Fragment key={tool.name}>
                 <ListRow onClick={() => setOpen(on ? "" : tool.name)}>
+                  <ToolMark tool={tool} size={22} />
                   <span className={loginsCss.phoneRowText}>
                     <span className={listsCss.mRowTitle}>{tool.name}</span>
                     <span className={tool.failed ? loginsCss.phoneFailed : loginsCss.phoneState}>{said}</span>

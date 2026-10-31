@@ -361,7 +361,11 @@ fn station_logins(c : @ui.Ctx, core : Core, station : String) -> Unit {
               note=if failed { "" } else { said },
               trouble=if failed { said } else { "" },
               folds=open,
-              lead=fn() { st_row_mark(c, "key") },
+              // (its maker's mark, bare, in its colours; else a terminal's: one key for all told them apart by nothing)
+              lead=fn() {
+                c.box(style=lg_mark, fn() { @sf.tool_mark(c, text(tv, "mark"), 20.0) })
+                |> ignore
+              },
               // (how many tries at its end, not as what it says: its name, a station's words, keeps the line)
               tail=fn() { c.text(text(tv, "countText"), style=lg_count) |> ignore },
             ) {
@@ -563,7 +567,13 @@ let lg_cards : @ui.Style = @ui.css("w=Full gap=S3 pb=S3")
 ///|
 /// Where a try's mark would be, under its program's: its words where the program's name is.
 // kept across runs: a value (no field of it changes)
-let lg_no_mark : @ui.Style = @ui.css("w=S4")
+let lg_no_mark : @ui.Style = @ui.css("w=S6")
+
+///|
+/// A program's mark before its name, bare (用户 2026-10-31: 不要那个背景色): its middle in a square as wide as a try's
+/// lg_no_mark.
+// kept across runs: a value (no field of it changes)
+let lg_mark : @ui.Style = @ui.css("w=S6 h=S6 align=ACenter justify=JCenter")
 
 ///|
 /// How many tries a program's row stands for, at its end (the meta's 13, muted, one line).

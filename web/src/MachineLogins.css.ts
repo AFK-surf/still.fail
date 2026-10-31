@@ -17,7 +17,8 @@ const markedGround = `color-mix(in srgb, ${vars.accent} 12%, transparent)`;
 export const cards = style({ display: "grid", justifyItems: "start", gap: "8px", marginBottom: "8px" });
 /** A program's logins that ended: pressed, its tries open under it. */
 export const toolRow = style({ cursor: "pointer" });
-export const mark = style({ width: "36px", height: "36px", color: vars.muted });
+/** A program's mark, bare (no tile: 用户 2026-10-31 不要那个背景色), before its name. */
+export const mark = style({ display: "inline-grid", placeItems: "center", flex: "none", width: "24px", height: "24px" });
 export const name = style({ fontWeight: "500", color: vars.text, ...ellipsis });
 /** The chat whose agent started it. */
 export const chatLink = style({ color: "inherit", textDecoration: "underline", textUnderlineOffset: "2px" });
@@ -30,8 +31,8 @@ export const toolCount = style({
 });
 export const toggle = style({ display: "inline-flex", color: vars.subtle, transition: `transform ${vars.dur} ${vars.easeOut}` });
 export const toggleOpen = style({ transform: "rotate(90deg)" });
-/** A program's tries, under its row, in line with its words (12 in, the 36 mark, 12 apart). */
-export const tries = style({ display: "grid", padding: "0 12px 8px 60px", fontSize: vars.textMeta, color: vars.muted });
+/** A program's tries, under its row, in line with its words (12 in, the 24 mark, 12 apart). */
+export const tries = style({ display: "grid", padding: "0 12px 8px 48px", fontSize: vars.textMeta, color: vars.muted });
 export const tryRow = style({
   display: "grid", gridTemplateColumns: "88px minmax(0, 12em) minmax(0, 1fr)", gap: "12px", padding: "3px 0",
   borderRadius: vars.rField, selectors: { "&[data-marked]": { background: markedGround } },
@@ -47,9 +48,9 @@ export const phoneRowText = style({ flex: "1", minWidth: 0, display: "grid", gap
 export const phoneState = style({ fontSize: vars.textMeta, color: "var(--m-muted)", ...ellipsis });
 export const phoneFailed = style({ fontSize: vars.textMeta, color: vars.red, ...ellipsis });
 export const phoneCount = style({ display: "inline-flex", alignItems: "center", gap: "4px", flex: "none", fontSize: vars.textMeta, color: "var(--m-muted)", whiteSpace: "nowrap" });
-/** The phone's station page: a program's tries, under its row, in line with its words. */
+/** The phone's station page: a program's tries, under its row, in line with its words (16 in, the 22 mark, 12 apart). */
 export const phoneTry = style({
-  display: "grid", gap: "2px", padding: "6px 16px",
+  display: "grid", gap: "2px", padding: "6px 16px 6px 50px",
   selectors: { "&:last-child": { paddingBottom: "12px" }, "&[data-marked]": { background: markedGround } },
 });
 /** The phone's station page: under the list, what it is. */

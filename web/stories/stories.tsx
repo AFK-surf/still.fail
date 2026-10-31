@@ -1025,7 +1025,7 @@ export const stories: Story[] = [
   { id: "login-card-checking", group: "登录", title: "卡片 · 码已贴回，正在确认", render: loginCard("checking"), demo: logins() },
   { id: "login-card-checking-phone", group: "登录", title: "卡片 · 码已贴回，正在确认 · 手机", phone: true, render: loginCard("checking", 12), demo: logins() },
   { id: "login-card-question", group: "登录", title: "卡片 · agent 在回答命令的问题", render: loginCard("question"), demo: logins() },
-  { id: "logins-section-past", group: "登录", title: "station 页 · 登录（只有做过的）", render: loginsSection, demo: logins({ listed: ["done", "failed", "timeout", "cancelled"] }) },
+  { id: "logins-section-past", group: "登录", title: "station 页 · 登录（只有做过的）", render: loginsSection, demo: logins({ listed: ["done", "failed", "timeout", "cancelled", "other"] }) },
   { id: "login-card-open", group: "登录", title: "卡片 · 打开网址", render: loginCard("open"), demo: logins() },
   { id: "login-card-done", group: "登录", title: "卡片 · 已登录", render: loginCard("done"), demo: logins() },
   { id: "login-card-failed", group: "登录", title: "卡片 · 失败", render: loginCard("failed"), demo: logins() },

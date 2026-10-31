@@ -266,6 +266,8 @@ export const LOGINS: Record<string, MachineLoginShown> = {
     error: "Your browser has been opened to visit:\n\n    https://accounts.google.com/o/oauth2/auth?...\n\nERROR: (gcloud.auth.login) There was a problem with web authentication.\nTry running again with --no-browser.",
   }),
   timeout: login("timeout", "gcloud auth login", { state: "failed", active: false, statusText: "超时了，没等到浏览器回来", endedText: "在 Studio 上登录 gcloud 超时了", endedAt: LOGIN_AT + 15 * 60_000 }),
+  // A program still.fail has no maker's mark for: a terminal's.
+  other: login("other", "mytool login", { state: "done", active: false, statusText: "登录完成", doneByText: "Ada 完成", chatTitle: "跑内部脚本", whenText: "10/13 10:02", endedAt: LOGIN_AT - 2 * 86_400_000 }),
   cancelled: login("cancelled", "npm login", { state: "cancelled", active: false, statusText: "已取消", endedText: "Ada 取消了在 Studio 上登录 npm", doneByText: "Ada 取消", chatTitle: "npm 发包", whenText: "10/14 18:42", endedAt: LOGIN_AT + 60_000 }),
 };
 /** A login seen by a read-only member: no page, no code, only how it stands. */
@@ -278,7 +280,7 @@ export const SCREENS: Record<string, MachineLoginScreen> = {
 };
 
 /** The demo's station's logins: `listed`, those done there (under way first). */
-export function loginsView(canLogin = true, canRelay = true, listed: string[] = ["device", "done", "failed", "cancelled"]): MachineLoginsView {
+export function loginsView(canLogin = true, canRelay = true, listed: string[] = ["device", "done", "failed", "cancelled", "other"]): MachineLoginsView {
   const logins = listed.map((id) => LOGINS[id]!);
   // Those ended, a row per program, as the core groups them (station/machine-logins.ts toolsShown).
   const by = new Map<string, MachineLoginShown[]>();
@@ -287,8 +289,9 @@ export function loginsView(canLogin = true, canRelay = true, listed: string[] = 
     const done = tries.find((l) => l.state === "done");
     const l = done ?? tries[0]!;
     const said = done ? (done.doneByText ? done.doneByText.replace(/ 完成$/, " 登录") : l.statusText) : `没有登录成功过 · 最近一次${l.statusText}`;
+    const mark = ({ gh: "github", gcloud: "google-cloud", npm: "npm" } as Record<string, string>)[name];
     return {
-      name, summaryText: [said, l.whenText].filter(Boolean).join(" · "), failed: !done && l.state === "failed",
+      name, ...(mark ? { mark } : {}), summaryText: [said, l.whenText].filter(Boolean).join(" · "), failed: !done && l.state === "failed",
       ...(l.chat !== undefined ? { chat: l.chat } : {}), ...(l.chatTitle !== undefined ? { chatTitle: l.chatTitle } : {}),
       countText: `${tries.length} 次`, tries,
     };
