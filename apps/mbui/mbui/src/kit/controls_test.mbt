@@ -12,28 +12,28 @@ test "switch: a tap turns it, the view keeps it; Activate too; disabled, nothing
     })
     |> ignore
   })
-  t.click(@ui.Switch, label="Wi-Fi")
+  t.click(@ui.Role::Switch, label="Wi-Fi")
   assert_true(on.val)
-  assert_eq(t.get(@ui.Switch, label="Wi-Fi").check, Some(@ui.On))
-  t.act(@ui.Switch, @ui.Activate, label="Wi-Fi")
+  assert_eq(t.get(@ui.Role::Switch, label="Wi-Fi").check, Some(@ui.Check::On))
+  t.act(@ui.Role::Switch, @ui.Action::Activate, label="Wi-Fi")
   assert_false(on.val)
-  t.click(@ui.Switch, label="Airplane")
+  t.click(@ui.Role::Switch, label="Airplane")
   assert_false(off.val)
 }
 
 ///|
 test "checkbox: a click checks it; Space with the focus unchecks it; neither (mixed) goes to checked" {
-  let v : Ref[@ui.Check] = Ref(@ui.Off)
+  let v : Ref[@ui.Check] = Ref(@ui.Check::Off)
   let t = @ui.Tester::new(fn(c) { v.val = checkbox(c, "terms", v.val, label="Terms").value })
-  t.click(@ui.Checkbox, label="Terms")
-  assert_eq(v.val, @ui.On)
+  t.click(@ui.Role::Checkbox, label="Terms")
+  assert_eq(v.val, @ui.Check::On)
   t.key(@ui.key_tab)
   t.key(@ui.key_space)
-  assert_eq(v.val, @ui.Off)
-  v.val = @ui.Mixed
+  assert_eq(v.val, @ui.Check::Off)
+  v.val = @ui.Check::Mixed
   t.frame()
-  t.click(@ui.Checkbox, label="Terms")
-  assert_eq(v.val, @ui.On)
+  t.click(@ui.Role::Checkbox, label="Terms")
+  assert_eq(v.val, @ui.Check::On)
 }
 
 ///|
@@ -42,7 +42,7 @@ test "radio group: a tap checks one; the arrows move the focus along it and chec
   let t = @ui.Tester::new(fn(c) {
     v.val = radio_group(c, "size", [item("a", label="Small"), item("b", label="Medium"), item("c", label="Large")], v.val, label="Size").value
   })
-  t.click(@ui.Radio, label="Large")
+  t.click(@ui.Role::Radio, label="Large")
   assert_eq(v.val, "c")
   // Tab lands on the checked one; Down from the last wraps to the first
   t.key(@ui.key_tab)
@@ -50,8 +50,8 @@ test "radio group: a tap checks one; the arrows move the focus along it and chec
   assert_eq(v.val, "a")
   t.key(@ui.key_code_down)
   assert_eq(v.val, "b")
-  assert_eq(t.get(@ui.Radio, label="Medium").check, Some(@ui.On))
-  assert_eq(t.get(@ui.Radio, label="Small").check, Some(@ui.Off))
+  assert_eq(t.get(@ui.Role::Radio, label="Medium").check, Some(@ui.Check::On))
+  assert_eq(t.get(@ui.Role::Radio, label="Small").check, Some(@ui.Check::Off))
 }
 
 ///|
@@ -72,14 +72,14 @@ test "toggle group: single, a tap picks one and a second tap lets it go; multipl
     })
     |> ignore
   })
-  t.click(@ui.Radio, label="Left")
+  t.click(@ui.Role::Radio, label="Left")
   assert_eq(one.val, ["l"])
-  t.click(@ui.Radio, label="Right")
+  t.click(@ui.Role::Radio, label="Right")
   assert_eq(one.val, ["r"])
-  t.click(@ui.Radio, label="Right")
+  t.click(@ui.Role::Radio, label="Right")
   assert_eq(one.val, [])
-  t.click(@ui.Button, label="Bold")
-  t.click(@ui.Button, label="Italic")
+  t.click(@ui.Role::Button, label="Bold")
+  t.click(@ui.Role::Button, label="Italic")
   assert_eq(many.val, ["b", "i"])
 }
 
@@ -113,7 +113,7 @@ test "toggle group that slides: its thumb behind the pressed item, getting there
     }
   }
   assert_true(under("Left"))
-  t.click(@ui.Radio, label="Right")
+  t.click(@ui.Role::Radio, label="Right")
   assert_eq(v.val, ["r"])
   // the thumb on its spring, set out from rest as the click was taken: there once its slide is over
   t.run_for(@ui.cover_slide_ms)
@@ -216,7 +216,7 @@ test "another item pressed: the thumb on its way between the two, and another ch
   let on_its_way = fn(v : Ref[Array[String]]) -> @ui.Tester raise {
     let t = slid_group(Ref(0.0), v)
     t.draw()
-    t.click(@ui.Radio, label="Right")
+    t.click(@ui.Role::Radio, label="Right")
     assert_eq(v.val, ["r"])
     t.run_for(mid_way)
     assert_false(thumb_on(t, "Left"))
@@ -261,12 +261,12 @@ test "slider: the arrows a step, Page keys ten, Home and End the ends; Increment
   assert_eq(v.val, 100.0)
   t.key(@ui.key_code_home)
   assert_eq(v.val, 0.0)
-  t.act(@ui.Slider, @ui.Increment, label="Volume")
+  t.act(@ui.Role::Slider, @ui.Action::Increment, label="Volume")
   assert_eq(v.val, 5.0)
-  t.act(@ui.Slider, @ui.Decrement, label="Volume")
-  t.act(@ui.Slider, @ui.Decrement, label="Volume")
+  t.act(@ui.Role::Slider, @ui.Action::Decrement, label="Volume")
+  t.act(@ui.Role::Slider, @ui.Action::Decrement, label="Volume")
   assert_eq(v.val, 0.0)
-  let s = t.get(@ui.Slider, label="Volume")
+  let s = t.get(@ui.Role::Slider, label="Volume")
   assert_eq(s.value, "0")
   assert_eq(s.range, Some((0.0, 100.0, 0.0)))
 }
@@ -277,7 +277,7 @@ test "slider: dragged along its track, it follows the pointer to the nearest ste
   let t = @ui.Tester::new(fn(c) {
     v.val = slider(c, "s", v.val, min=0.0, max=10.0, step=1.0, w=Px(200.0), label="S").value
   })
-  let (x, y, w, h) = t.get(@ui.Slider, label="S").rect
+  let (x, y, w, h) = t.get(@ui.Role::Slider, label="S").rect
   t.drag(x + 1.0, y + h / 2.0, x + w * 0.7, y + h / 2.0)
   assert_eq(v.val, 7.0)
   t.drag(x + w * 0.7, y + h / 2.0, x + w * 0.2, y + h / 2.0)
@@ -297,12 +297,12 @@ test "snap: in range, on the step from min" {
 test "progress: its value as a percentage and its range; not known, neither, and its band a cycle said (a frame each frame while shown)" {
   let v : Ref[Double?] = Ref(Some(30.0))
   let t = @ui.Tester::new(fn(c) { progress(c, "upload", v.val, max=60.0, label="Upload") })
-  let p = t.get(@ui.ProgressBar, label="Upload")
+  let p = t.get(@ui.Role::ProgressBar, label="Upload")
   assert_eq(p.value, "50%")
   assert_eq(p.range, Some((0.0, 60.0, 30.0)))
   v.val = None
   t.draw()
-  assert_eq(t.get(@ui.ProgressBar, label="Upload").range, None)
+  assert_eq(t.get(@ui.Role::ProgressBar, label="Upload").range, None)
   // a wait: a frame asked for each frame while it shows (Ctx::cycle), said as a cycle: what never ends does not keep a
   // test from idle
   assert_true(t.ctx().wants_frame)
@@ -320,7 +320,7 @@ test "progress: told a value anew, it goes there over progress_ms from where it 
   assert_eq(shown.val, Some(0.5))
   v.val = Some(60.0)
   t.draw()
-  assert_eq(t.get(@ui.ProgressBar, label="Upload").value, "100%")
+  assert_eq(t.get(@ui.Role::ProgressBar, label="Upload").value, "100%")
   t.run_for(progress_ms / 2.0)
   let half = shown.val.unwrap()
   assert_true(half > 0.5 && half < 1.0, msg="\{half}")
@@ -334,7 +334,7 @@ test "avatar: named by its person, their initials while it has no picture" {
   assert_eq(initials("ada"), "A")
   assert_eq(initials("林 子 健"), "林子")
   let t = @ui.Tester::new(fn(c) { avatar(c, "", "Ada Lovelace") })
-  ignore(t.get(@ui.Image, label="Ada Lovelace"))
+  ignore(t.get(@ui.Role::Image, label="Ada Lovelace"))
   assert_true(t.find("AL") is Some(_))
 }
 
@@ -350,31 +350,31 @@ test "password field: hidden, its words are not read out; the button shows them,
   t.tap_text("Password")
   t.type_text("hunter2")
   assert_eq(words.val, "hunter2")
-  assert_eq(t.get(@ui.TextField).value, "")
-  t.click(@ui.Button, label="显示")
+  assert_eq(t.get(@ui.Role::TextField).value, "")
+  t.click(@ui.Role::Button, label="显示")
   assert_true(shown.val)
-  assert_eq(t.get(@ui.TextField).value, "hunter2")
-  assert_eq(t.get(@ui.Button, label="隐藏").pressed, Some(true))
-  t.click(@ui.Button, label="隐藏")
+  assert_eq(t.get(@ui.Role::TextField).value, "hunter2")
+  assert_eq(t.get(@ui.Role::Button, label="隐藏").pressed, Some(true))
+  t.click(@ui.Role::Button, label="隐藏")
   assert_false(shown.val)
-  assert_eq(t.get(@ui.TextField).value, "")
+  assert_eq(t.get(@ui.Role::TextField).value, "")
 }
 
 ///|
 test "toggle: a tap presses it, Activate lets it go; said pressed or not" {
   let on = Ref(false)
   let t = @ui.Tester::new(fn(c) { on.val = toggle(c, "Bold", on.val).value })
-  t.click(@ui.Button, label="Bold")
+  t.click(@ui.Role::Button, label="Bold")
   assert_true(on.val)
-  assert_eq(t.get(@ui.Button, label="Bold").pressed, Some(true))
-  t.act(@ui.Button, @ui.Activate, label="Bold")
+  assert_eq(t.get(@ui.Role::Button, label="Bold").pressed, Some(true))
+  t.act(@ui.Role::Button, @ui.Action::Activate, label="Bold")
   assert_false(on.val)
-  assert_eq(t.get(@ui.Button, label="Bold").pressed, Some(false))
+  assert_eq(t.get(@ui.Role::Button, label="Bold").pressed, Some(false))
 }
 
 ///|
 test "label: a tap on it turns its control, or gives its field the focus" {
-  let v : Ref[@ui.Check] = Ref(@ui.Off)
+  let v : Ref[@ui.Check] = Ref(@ui.Check::Off)
   let t = @ui.Tester::new(fn(c) {
     c.column(gap=8.0, fn() {
       c.row(gap=8.0, fn() {
@@ -388,11 +388,11 @@ test "label: a tap on it turns its control, or gives its field the focus" {
     |> ignore
   })
   t.tap_text("Accept the terms")
-  assert_eq(v.val, @ui.On)
+  assert_eq(v.val, @ui.Check::On)
   t.tap_text("Name")
-  assert_true(t.get(@ui.TextField, label="Your name").focused)
+  assert_true(t.get(@ui.Role::TextField, label="Your name").focused)
   t.type_text("Ada")
-  assert_eq(t.get(@ui.TextField, label="Your name").value, "Ada")
+  assert_eq(t.get(@ui.Role::TextField, label="Your name").value, "Ada")
 }
 
 ///|
@@ -421,7 +421,7 @@ test "separator, aspect ratio, accessible icon, visually hidden: what the tree s
       #|
     ),
   )
-  let (_, _, w, h) = t.get(@ui.Group, label="Picture").rect
+  let (_, _, w, h) = t.get(@ui.Role::Group, label="Picture").rect
   assert_eq(w, 160.0)
   assert_eq(h, 90.0)
 }
@@ -440,7 +440,7 @@ test "text field: typed in, its words the view's to read; Enter hands them on" {
   t.tap_text("Name")
   t.type_text("Ada")
   assert_eq(got.val, "Ada")
-  assert_eq(t.get(@ui.TextField, label="Name").value, "Ada")
+  assert_eq(t.get(@ui.Role::TextField, label="Name").value, "Ada")
   t.enter()
   assert_eq(sent.val, 1)
 }
@@ -485,10 +485,10 @@ test "toggle group that grows: as wide as where it is, its items equal shares" {
     w=400.0,
     h=200.0,
   )
-  let (_, _, gw, _) = t.get(@ui.Group, label="G").rect
+  let (_, _, gw, _) = t.get(@ui.Role::Group, label="G").rect
   assert_eq(gw, 300.0)
-  let (_, _, aw, _) = t.get(@ui.Radio, label="A").rect
-  let (_, _, bw, _) = t.get(@ui.Radio, label="Bbbbbb").rect
+  let (_, _, aw, _) = t.get(@ui.Role::Radio, label="A").rect
+  let (_, _, bw, _) = t.get(@ui.Role::Radio, label="Bbbbbb").rect
   assert_eq(aw, bw)
 }
 
@@ -516,8 +516,8 @@ test "toggle group that grows, short of room for equal shares: an item as wide a
   )
   // its words whole, not cut to the half it would share
   assert_eq(t.lines_of(long), [long])
-  let (ax, _, aw, _) = t.get(@ui.Radio, label="A").rect
-  let (bx, _, bw, _) = t.get(@ui.Radio, label=long).rect
+  let (ax, _, aw, _) = t.get(@ui.Role::Radio, label="A").rect
+  let (bx, _, bw, _) = t.get(@ui.Role::Radio, label=long).rect
   assert_true(bw > 100.0)
   assert_true(bx >= ax + aw - 0.5)
   assert_true((ax + aw + bw - 200.0).abs() < 0.5)
@@ -527,7 +527,7 @@ test "toggle group that grows, short of room for equal shares: an item as wide a
 test "switch: its knob slides to the side it was turned to by a rest of its own (switch_rest)" {
   let on = Ref(false)
   let t = @ui.Tester::new(fn(c) { on.val = switch(c, "wifi", on.val, label="Wi-Fi").value })
-  t.click(@ui.Switch, label="Wi-Fi")
+  t.click(@ui.Role::Switch, label="Wi-Fi")
   let rest = switch_rest("wifi")
   assert_true(rest > t.time())
   t.run_for(rest - t.time())

@@ -226,6 +226,7 @@ fn view_forget() -> Unit {
   old_placed.clear()
   old_hits.clear()
   next_old_hits.clear()
+  tree_said_ids.clear()
   old_hits_rects.clear()
   old_hits_clips.clear()
   nav_views.clear()
@@ -1753,4 +1754,152 @@ fn view_pointed_again() -> Unit {
 /// takes the pointer at (x, y), by its hit targets as last drawn: what a press there is routed by (old_root_hit).
 fn old_layer_over(x : Double, y : Double) -> Bool {
   old_root_hit(g(), x, y, pressed=false)
+}
+
+///|
+/// The ids the window's tree's nodes are read out by (Ctx::semantics_spliced), each the node it is: below every id an
+/// old view's widget has (theirs are its key's, Ctx::id: never so), by the node's index.
+// kept across runs: written as the tree is read out, put back as a run begins (view_forget)
+let tree_said_ids : Map[Int, @view.NodeId] = Map([])
+
+///|
+/// The id node `id` of the window's tree is read out by.
+fn tree_said_id(id : @view.NodeId) -> Int {
+  let k = -2_000_000_000 + id.at
+  tree_said_ids[k] = id
+  k
+}
+
+///|
+/// `action` asked of what is read out as `id` (a screen reader's, a test's), where it is a node of the window's tree:
+/// done as it is done by hand, at the moment it is asked (Activate: its on_press, as a press on it runs it; one let go
+/// or taking no presses, nothing). Whether it was one.
+fn tree_said_action(id : Int, action : Action) -> Bool {
+  match (tree_said_ids.get(id), view_app.val) {
+    (Some(nid), Some(tree)) => {
+      match action {
+        Activate =>
+          if tree.takes_presses(nid) {
+            tree.run_press_at(nid, view_moment()) |> ignore
+            h_frame_owed()
+          }
+        _ => ()
+      }
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+/// What is read out of the window where it is a tree (Ctx::semantics_tree): its nodes that say what they are, in its
+/// order; at each node hosting an old view, what that old view's widgets say, in their order (the one old view the
+/// whole window: all of the old frame's), under what holds that node; what the old frame put over all of it at its
+/// root (its layers) last, as it is drawn over the rest. What a modal layer of the tree keeps from input hidden; a node
+/// taking no presses disabled, read out so.
+fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
+  let (old, nodes_of) = self.semantics_old()
+  // (each old widget's old view: its box's node, -1 the whole window, -2 what is over all of it at its root)
+  let owner = nodes_of.map(fn(i) { self.said_owner(i) })
+  let out : Array[SemNode] = []
+  let moved = Array::make(old.length(), -1)
+  let said = tree.said_order()
+  let at = Array::make(said.length(), -1)
+  let put_old = fn(k : Int, parent : Int, depth : Int, hidden : Bool) {
+    let s = old[k]
+    let up = if s.parent >= 0 && moved[s.parent] >= 0 { moved[s.parent] } else { parent }
+    let d = if up >= 0 { out[up].depth + 1 } else { depth }
+    out.push({ ..s, parent: up, depth: d, hidden: s.hidden || hidden })
+    moved[k] = out.length() - 1
+  }
+  tree_said_ids.clear()
+  for j, sn in said {
+    let parent = if sn.parent >= 0 { at[sn.parent] } else { -1 }
+    if sn.hosted {
+      let mine = match old_boxes.get(sn.id) {
+        Some(_) => sn.id.at
+        None => -1
+      }
+      for k in 0..<old.length() {
+        if owner[k] == mine || (old_whole.val && owner[k] == -1) {
+          put_old(k, parent, sn.depth, !sn.allowed)
+        }
+      }
+      at[j] = parent
+      continue
+    }
+    match sn.said {
+      Some(s) => {
+        let label = if s.label != "" {
+          s.label
+        } else {
+          match tree.drawn_of(sn.id) {
+            Some(d) => d.words
+            None => ""
+          }
+        }
+        let presses = !sn.disabled && tree.takes_presses(sn.id)
+        let actions = if s.actions.length() > 0 {
+          s.actions
+        } else if presses {
+          [Activate]
+        } else {
+          []
+        }
+        out.push({
+          id: tree_said_id(sn.id),
+          role: s.role,
+          label,
+          description: s.description,
+          value: s.value,
+          check: s.check,
+          expanded: s.expanded,
+          selected: s.selected,
+          pressed: s.pressed,
+          disabled: sn.disabled,
+          modal: false,
+          range: None,
+          actions: if sn.disabled { [] } else { actions },
+          rect: sn.rect,
+          focused: false,
+          hidden: !sn.allowed,
+          parent,
+          depth: if parent >= 0 { out[parent].depth + 1 } else { 0 },
+        })
+        at[j] = out.length() - 1
+      }
+      None => at[j] = parent
+    }
+  }
+  // (what the old frame put over all of it at its root: last)
+  for k in 0..<old.length() {
+    if owner[k] == -2 {
+      put_old(k, -1, 0, false)
+    }
+  }
+  out
+}
+
+///|
+/// Whose old node `i` is: the window's tree's node whose old view it is in (its box's, old_boxes: that node's index),
+/// -2 what the old frame put over all of it at its root (a layer of its own), -1 the old frame's own (the one old view
+/// the whole window).
+fn Ctx::said_owner(self : Ctx, i : Int) -> Int {
+  let mut j = i
+  while j >= 0 {
+    for id, b in old_boxes {
+      if b == j {
+        return id.at
+      }
+    }
+    let n = self.nodes[j]
+    if n.parent < 0 && j != 0 {
+      return -2
+    }
+    if (n.layer || n.portal) && n.parent == 0 {
+      return -2
+    }
+    j = n.parent
+  }
+  -1
 }

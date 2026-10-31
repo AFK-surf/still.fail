@@ -6,6 +6,7 @@ import {
   "mbui/motion",
   "mbui/paint",
   "mbui/ui",
+  "mbui/view",
   "moonbitlang/core/debug",
 }
 
@@ -42,7 +43,7 @@ pub fn button_text(size? : ButtonSize, tone? : Variant) -> @ui.TextStyle
 
 pub fn card(tone? : CardTone) -> @ui.Style
 
-pub fn checkbox(@ui.Ctx, String, @ui.Check, label? : String, disabled? : Bool, look? : (@ui.Ctx, CheckboxState) -> Unit) -> @ui.Changed[@ui.Check]
+pub fn checkbox(@ui.Ctx, String, @view.Check, label? : String, disabled? : Bool, look? : (@ui.Ctx, CheckboxState) -> Unit) -> @ui.Changed[@view.Check]
 
 pub fn checkbox_look(@ui.Ctx, CheckboxState) -> Unit
 
@@ -362,7 +363,7 @@ pub(all) enum CardTone {
 } derive(Eq, Show, @debug.Debug)
 
 pub(all) struct CheckboxState {
-  check : @ui.Check
+  check : @view.Check
   hovered : Bool
   pressed : Bool
   focus_shown : Bool

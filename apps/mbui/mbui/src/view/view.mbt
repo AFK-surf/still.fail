@@ -185,6 +185,8 @@ struct Node {
   mut slot : Bool
   /// drawn by what hosts the tree (View::hosted)
   mut hosted : Bool
+  /// what it says it is, read out (View::says); None nothing
+  mut said : Said?
   /// its instance to be made again (its look changed); its place (and what it holds) to be worked out again
   mut look_due : Bool
   mut place_due : Bool
@@ -428,6 +430,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.tint = 0L
       n.look.radius = 0.0
       n.look.glass = None
+      n.said = None
       n.look.alpha = 1.0
       n.look.dx = 0.0
       n.look.dy = 0.0
@@ -488,6 +491,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         drag_end: None,
         slot: false,
         hosted: false,
+        said: None,
         look_due: false,
         place_due: false,
         placed: false,
@@ -774,6 +778,8 @@ priv enum Phase {
   Paint
   Place
   Both
+  /// what it says it is (View::says): read out as asked, nothing laid out, placed or drawn again for it
+  Said
 }
 
 ///|
@@ -965,6 +971,7 @@ fn[T : Eq] View::bind(self : View, prop : Int, live : Live[T], phase : Phase, ap
         tree.layout_marked_at(at)
         tree.look_marked_at(at)
       }
+      Said => tree.marked()
     }
   }
   match n.props.get(prop) {

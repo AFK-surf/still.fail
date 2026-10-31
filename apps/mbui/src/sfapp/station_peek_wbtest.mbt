@@ -159,7 +159,7 @@ test "station screen submenu stays reachable outside its hover card and opens a 
   assert_true(t.find("Studio 的屏幕") is Some(_))
   t.key(@ui.key_code_left)
   t.frame()
-  assert_true(t.query(@ui.MenuItem, label="Studio 的屏幕") is None)
+  assert_true(t.query(@ui.Role::MenuItem, label="Studio 的屏幕") is None)
   t.tap_text("屏幕")
   t.run_for(@kit.presence_in_ms)
   t.tap_text("Studio 的屏幕")

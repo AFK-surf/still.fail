@@ -126,7 +126,7 @@ test "narrow: the model's panel has the models across it, every name whole, how 
   // (a window too short for all of it)
   let t = crowded("newchat-crowded-model", h=crowded_short)
   run_to_sheet_rest(t)
-  let sheet = t.get(@ui.Dialog).rect
+  let sheet = t.get(@ui.Role::Dialog).rect
   let (_, _, _, sh) = sheet
   // more than the window has room for: the sheet as tall as its most
   assert_true((sh - crowded_short * @sf.sheet_most).abs() < 1.0, msg="the sheet is \{sh} high")
@@ -159,7 +159,7 @@ test "narrow: the model's panel has the models across it, every name whole, how 
 test "narrow, few models: the same panel; one runtime, nothing to choose of it" {
   let t = crowded("newchat-model")
   run_to_sheet_rest(t)
-  let sheet = t.get(@ui.Dialog).rect
+  let sheet = t.get(@ui.Role::Dialog).rect
   let model = t.get(Button, label="GPT-6").rect
   assert_true(t.query(Button, label="Claude Code") is None)
   assert_true(t.get(Radio, label="高").rect.1 > model.1)
@@ -194,6 +194,6 @@ test "wide: how hard it thinks along its line, from the model's own to the most"
   for i in 1..<order.length() {
     assert_true(order[i].1 == order[0].1 && order[i].0 > order[i - 1].0, msg="\{order}")
   }
-  let (px, _, pw, _) = t.get(@ui.Dialog).rect
+  let (px, _, pw, _) = t.get(@ui.Role::Dialog).rect
   assert_true(order[order.length() - 1].0 + order[order.length() - 1].2 <= px + pw, msg="past the panel")
 }

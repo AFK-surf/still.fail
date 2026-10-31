@@ -11,69 +11,6 @@
 // (Ctx::semantics_tree), from what the last frame built.
 
 ///|
-/// What a widget is (ARIA's roles, those the components use).
-pub(all) enum Role {
-  Text
-  Group
-  Button
-  Link
-  Checkbox
-  Switch
-  Radio
-  RadioGroup
-  Slider
-  ProgressBar
-  Tab
-  TabList
-  TabPanel
-  Dialog
-  AlertDialog
-  Tooltip
-  Menu
-  MenuBar
-  MenuItem
-  MenuItemCheckbox
-  MenuItemRadio
-  Listbox
-  Option
-  Combobox
-  Toolbar
-  Separator
-  Image
-  TextField
-  Status
-  Region
-  Navigation
-  Form
-  Heading
-  ScrollArea
-} derive(Eq, Show, Debug)
-
-///|
-/// A checkbox's state (and a menu's checkbox item's): off, on, or neither (some of what it stands for is on).
-pub(all) enum Check {
-  Off
-  On
-  Mixed
-} derive(Eq, Show, Debug)
-
-///|
-/// What can be done to a widget: pressed (a click, a tap), moved up or down a step (a slider), opened or closed,
-/// sent away (a dialog, a menu: Escape), given the keyboard's focus.
-pub(all) enum Action {
-  Activate
-  Increment
-  Decrement
-  Expand
-  Collapse
-  Dismiss
-  Focus
-  /// words put in a field in place of what it held, as a screen reader writes them (UI Automation's SetValue,
-  /// TalkBack's set text); among what a widget says it takes, its words are none's (SetText(""))
-  SetText(String)
-} derive(Eq, Show, Debug)
-
-///|
 /// What a widget said of its node this frame.
 struct Sem {
   node : Int
@@ -197,6 +134,10 @@ pub fn Ctx::visually_hidden(self : Ctx, label : String, role? : Role = Text) -> 
 /// `action` asked of the widget `id` (by a test, by the host's accessibility): its widget sees it the next frame.
 pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
   ignore(self)
+  // (a node of the window's tree's: its own, as a press on it is, at the moment it is asked)
+  if tree_said_action(id, action) {
+    return
+  }
   self.asked_actions.push((id, action))
   // an input, as a tap is: its frame and the one after, what reads what is asked built again (hand.mbt)
   hand_event()
@@ -234,6 +175,15 @@ pub fn Ctx::text_asked(self : Ctx, id : Int) -> String? {
 /// holds, what it holds in the order it is laid out: a list's rows top to bottom, though it builds the one it stands
 /// at first), what no frame's tree holds left out (a row built again in its place).
 pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
+  match view_app.val {
+    Some(tree) => self.semantics_spliced(tree)
+    None => self.semantics_old().0
+  }
+}
+
+///|
+/// The old views' tree (Ctx::semantics_tree, with no window's tree), and the node each of its is said of.
+fn Ctx::semantics_old(self : Ctx) -> (Array[SemNode], Array[Int]) {
   let count = self.count
   // by node: what said something of it (the last to say wins), -1 none
   let said = Array::make(count, -1)
@@ -267,7 +217,9 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
       }
     }
   }
+  let nodes_of : Array[Int] = []
   for i in self.tree_order() {
+    let said_before = out.length()
     let n = self.nodes[i]
     let p = n.parent
     let parent_out = if p >= 0 { up[p] } else { -1 }
@@ -402,8 +354,11 @@ pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {
         depth,
       })
     }
+    if out.length() > said_before {
+      nodes_of.push(i)
+    }
   }
-  out
+  (out, nodes_of)
 }
 
 ///|

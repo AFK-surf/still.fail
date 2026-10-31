@@ -214,7 +214,7 @@ fn share_card_laid(t : @ui.Tester) -> Unit raise {
   }
   // (the picture drawn smaller where its sheet is short, its words laid out as large: over the button as it is drawn,
   // the button in its sheet or dialog)
-  let (_, dy, _, dh) = t.get(@ui.Dialog).rect
+  let (_, dy, _, dh) = t.get(@ui.Role::Dialog).rect
   assert_true(line.length() == 1 && button.rect.1 + button.rect.3 <= dy + dh + 0.5, msg="\{(line, button.rect)}")
   // another kind's line and the chats at work's each on one line (as tall as each other, both Meta's)
   match (t.rect_of("OpenCode Go 订阅"), t.rect_of("9 个对话正在运行")) {

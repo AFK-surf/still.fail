@@ -617,17 +617,6 @@ pub fn words_over_known(Array[(String, Int32)]) -> Unit
 // Errors
 
 // Types and methods
-pub(all) enum Action {
-  Activate
-  Increment
-  Decrement
-  Expand
-  Collapse
-  Dismiss
-  Focus
-  SetText(String)
-} derive(Eq, Show, @debug.Debug)
-
 pub(all) enum Align {
   AStart
   ACenter
@@ -679,12 +668,6 @@ pub(all) struct Changed[T] {
   response : Response
 }
 pub fn[T] Changed::changed(Self[T]) -> Bool
-
-pub(all) enum Check {
-  Off
-  On
-  Mixed
-} derive(Eq, Show, @debug.Debug)
 
 pub(all) enum ClipPicture {
   NoPicture
@@ -939,8 +922,8 @@ pub struct Ctx {
   mut direction : Direction
   sems : Array[Sem]
   mut sem_hide : Int32
-  asked_actions : Array[(Int32, Action)]
-  actions : Array[(Int32, Action)]
+  asked_actions : Array[(Int32, @view.Action)]
+  actions : Array[(Int32, @view.Action)]
   mut a11y_sent : String
   mut focus_visible : Bool
   mut focus_roved : Bool
@@ -973,10 +956,10 @@ pub struct Ctx {
   mut bench_list : Int32
 }
 pub fn Ctx::a11y_lines(Self) -> String
-pub fn Ctx::action_asked(Self, Int32, Action) -> Bool
+pub fn Ctx::action_asked(Self, Int32, @view.Action) -> Bool
 pub fn Ctx::after_build(Self, String, () -> Unit) -> Unit
 pub fn Ctx::any_right_click(Self) -> Bool
-pub fn Ctx::ask_action(Self, Int32, Action) -> Unit
+pub fn Ctx::ask_action(Self, Int32, @view.Action) -> Unit
 pub fn Ctx::back(Self) -> Bool
 pub fn Ctx::bench_frames(Self, Bool) -> Unit
 pub fn Ctx::bg_by(Self, Int32, () -> Int64) -> Unit
@@ -1200,7 +1183,7 @@ pub fn Ctx::selected_text(Self) -> String
 pub fn Ctx::selection_box(Self) -> (Double, Double, Double, Double)?
 pub fn Ctx::selection_clear(Self) -> Unit
 pub fn Ctx::selection_end(Self) -> (Double, Double, Double)?
-pub fn Ctx::semantics(Self, Int32, Role, id? : Int32, label? : String, description? : String, value? : String, check? : Check, expanded? : Bool, selected? : Bool, pressed? : Bool, disabled? : Bool, modal? : Bool, range? : (Double, Double, Double), actions? : Array[Action]) -> Unit
+pub fn Ctx::semantics(Self, Int32, @view.Role, id? : Int32, label? : String, description? : String, value? : String, check? : @view.Check, expanded? : Bool, selected? : Bool, pressed? : Bool, disabled? : Bool, modal? : Bool, range? : (Double, Double, Double), actions? : Array[@view.Action]) -> Unit
 pub fn Ctx::semantics_dump(Self) -> String
 pub fn Ctx::semantics_tree(Self) -> Array[SemNode]
 pub fn Ctx::set_clear(Self, Int64) -> Unit
@@ -1247,7 +1230,7 @@ pub fn Ctx::text_size(Self, TextSize) -> (Double, Double)
 pub fn Ctx::theme(Self) -> Theme
 pub fn Ctx::took_back(Self, () -> Unit) -> Bool
 pub fn Ctx::unfocus(Self) -> Unit
-pub fn Ctx::visually_hidden(Self, String, role? : Role) -> Unit
+pub fn Ctx::visually_hidden(Self, String, role? : @view.Role) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::wake_in(Self, Double, later? : Bool, loc~ : SourceLoc) -> Unit
 pub fn Ctx::watch_press(Self, Int32) -> Bool
@@ -1992,43 +1975,6 @@ pub fn RichLayout::offset_at(Self, Double, Double) -> Int32
 pub fn RichLayout::rects(Self, Int32, Int32) -> Array[(Double, Double, Double, Double)]
 pub fn RichLayout::run_at(Self, Int32) -> Int32
 
-pub(all) enum Role {
-  Text
-  Group
-  Button
-  Link
-  Checkbox
-  Switch
-  Radio
-  RadioGroup
-  Slider
-  ProgressBar
-  Tab
-  TabList
-  TabPanel
-  Dialog
-  AlertDialog
-  Tooltip
-  Menu
-  MenuBar
-  MenuItem
-  MenuItemCheckbox
-  MenuItemRadio
-  Listbox
-  Option
-  Combobox
-  Toolbar
-  Separator
-  Image
-  TextField
-  Status
-  Region
-  Navigation
-  Form
-  Heading
-  ScrollArea
-} derive(Eq, Show, @debug.Debug)
-
 pub struct RowCauses {
   by : Map[String, (RowSize, Double)]
   mut keys : Array[String]
@@ -2062,18 +2008,18 @@ type Sem
 
 pub struct SemNode {
   id : Int32
-  role : Role
+  role : @view.Role
   label : String
   description : String
   value : String
-  check : Check?
+  check : @view.Check?
   expanded : Bool?
   selected : Bool?
   pressed : Bool?
   disabled : Bool
   modal : Bool
   range : (Double, Double, Double)?
-  actions : Array[Action]
+  actions : Array[@view.Action]
   rect : (Double, Double, Double, Double)
   focused : Bool
   hidden : Bool
@@ -2275,12 +2221,12 @@ pub struct Tester {
   mut each : (() -> Unit)?
 }
 pub fn Tester::a11y_said(Self) -> String
-pub fn Tester::act(Self, Role, Action, label? : String) -> Unit raise
+pub fn Tester::act(Self, @view.Role, @view.Action, label? : String) -> Unit raise
 pub fn Tester::adaptive_glyphs(Self) -> Int32
 pub fn Tester::add_image(Self, String, Int32, Int32) -> Unit
 pub fn Tester::add_pixels(Self, String, Int32, Int32, FixedArray[Byte]) -> Unit
 pub fn Tester::advance(Self, Double) -> Unit
-pub fn Tester::all(Self, Role, label? : String) -> Array[SemNode]
+pub fn Tester::all(Self, @view.Role, label? : String) -> Array[SemNode]
 pub fn Tester::answer_native(Self, Int32, Json) -> Unit
 pub fn Tester::app_state(Self, Bool, Bool, awake? : Bool) -> Unit
 pub fn Tester::assert_idle(Self) -> Unit
@@ -2303,7 +2249,7 @@ pub fn Tester::census(Self) -> Census
 pub fn Tester::check_looks(Self, Bool) -> Unit
 pub fn Tester::check_rows(Self, Double, Double) -> Unit raise
 pub fn Tester::clear(Self) -> Unit
-pub fn Tester::click(Self, Role, label? : String) -> Unit raise
+pub fn Tester::click(Self, @view.Role, label? : String) -> Unit raise
 pub fn Tester::clipboard(Self) -> String
 pub fn Tester::clipboard_gives(Self, String) -> Unit
 pub fn Tester::clipboard_gives_clip(Self, Clipboard) -> Unit
@@ -2372,7 +2318,7 @@ pub fn Tester::frames(Self, Int32, ms? : Double) -> Array[Int64]
 pub fn Tester::frames_owed(Self) -> Unit
 pub fn Tester::gallery(Self, Array[@hostapi.GalleryPhoto]) -> Unit
 pub fn Tester::gap_faults(Self) -> Array[String]
-pub fn Tester::get(Self, Role, label? : String) -> SemNode raise
+pub fn Tester::get(Self, @view.Role, label? : String) -> SemNode raise
 pub fn Tester::glyphs_shown(Self) -> Array[(Double, Double, Double, Double)]
 pub fn Tester::hand_moves(Self) -> Array[String]
 pub fn Tester::haptics(Self) -> Array[Haptic]
@@ -2449,7 +2395,7 @@ pub fn Tester::posted(Self) -> Int32
 pub fn Tester::presented(Self) -> (FixedArray[Double], Int32, (Double, Double, Double))
 pub fn Tester::press(Self, String) -> Unit
 pub fn Tester::press_at(Self, Double, Double) -> Unit
-pub fn Tester::query(Self, Role, label? : String) -> SemNode?
+pub fn Tester::query(Self, @view.Role, label? : String) -> SemNode?
 pub fn Tester::reachable(Self, String) -> Array[(Double, Double)]
 pub fn Tester::rect_of(Self, String) -> (Double, Double, Double, Double)?
 pub fn Tester::refuse_native(Self, Int32, String) -> Unit
@@ -2784,6 +2730,10 @@ pub struct WordsPiece {
 }
 
 // Type aliases
+pub using @view {type Action}
+
+pub using @view {type Check}
+
 pub using @paint {type CornerFit}
 
 pub using @paint {type CornerOf}
@@ -2791,6 +2741,8 @@ pub using @paint {type CornerOf}
 pub using @paint {type CornerRoots}
 
 pub using @paint {type Glass}
+
+pub using @view {type Role}
 
 pub using @paint {type Shape}
 
