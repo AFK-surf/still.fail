@@ -1397,6 +1397,10 @@ pub fn settings_core(Source, Workspace) -> @settings.Core
 
 pub let share_card_of : @ref.Ref[(Source, Workspace) -> Unit]
 
+pub let share_face : Int32
+
+pub fn share_face_given() -> Int32
+
 pub let share_offered : @ref.Ref[(Int32, Double, Double, () -> Unit, String)?]
 
 pub let share_offered_told : @signals.Signal[Int32]

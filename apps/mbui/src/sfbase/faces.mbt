@@ -42,7 +42,11 @@ let previews : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
 pub let own_code_face : Int = 15
 
 ///|
-/// The first host face of the previews (each face's by its place in the list, faces_most - 1 the last).
+/// The host face the share card is set in (share_face.mbt), whatever this device chose for its places.
+pub let share_face : Int = 14
+
+///|
+/// The first host face of the previews (each face's by its place in the list, share_face - 1 the last).
 pub let preview_faces_from : Int = 4
 
 ///|
@@ -53,6 +57,7 @@ fn faces_reset() -> Unit {
     faces_web[i] = ("", "")
   }
   previews.clear()
+  share_face_asked.val = false
 }
 
 ///|
@@ -287,7 +292,7 @@ fn face_failed(id : String) -> String {
 /// is here (asked for the first time).
 fn face_preview(src : Source, id : String, index : Int, variable : Bool) -> Int {
   let host_face = preview_faces_from + index
-  if host_face >= own_code_face {
+  if host_face >= share_face {
     return 0
   }
   match previews.get(id) {
@@ -309,6 +314,26 @@ fn face_preview(src : Source, id : String, index : Int, variable : Bool) -> Int 
       0
     }
   }
+}
+
+///|
+/// Whether the share card's face was given to its host (once a run: a host that takes none is not asked again).
+let share_face_asked : Ref[Bool] = Ref(false)
+
+///|
+/// The share card's face given to its host face (share_face) once, each weight's file unzipped (the card's words set in
+/// it from then on; until it is, or where the host takes none, in the app's): `share_face`, to name as words' face.
+pub fn share_face_given() -> Int {
+  if !share_face_asked.val && !@ui.face_given(share_face) {
+    share_face_asked.val = true
+    for file in [(share_400_gz, 400), (share_600_gz, 600)] {
+      match @zip.gunzip(file.0) {
+        Some(b) => ignore(@ui.face_add_bytes(share_face, b, weight=file.1))
+        None => ()
+      }
+    }
+  }
+  share_face
 }
 
 ///|

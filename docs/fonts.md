@@ -54,3 +54,10 @@ name and a line of the face.
 A new face, or a new version of one: add it to `FACES` in fonts.py, run `python3 scripts/fonts.py --put` (fontTools
 and brotli; wrangler logged in, from `cloud/`), and copy the files it prints into `FACES` in fonts.ts. Put files are
 never changed: a new version is a new folder.
+
+## The share card's face
+
+The card to share (docs/ui-panels.md) is set in a face of its own whatever a device chose: 霞鹜文楷 for Chinese, EB
+Garamond (grown 1.14 times, as tall as 文楷) for Latin and figures, made one font a weight (a host face has no fallback
+of its own) with only the characters the card says, and carried in the app (`apps/mbui/src/sfbase/share_face.mbt`,
+host face 14). `python3 scripts/fonts.py --share` makes it again; run it when the card's words change.
