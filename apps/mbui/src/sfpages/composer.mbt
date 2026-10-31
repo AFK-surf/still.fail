@@ -1960,6 +1960,12 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
 }
 
 ///|
+/// Whether the composer's 抄送 menu is open now (cc_chooser).
+pub fn composer_cc_open() -> Bool {
+  composing.cc_open
+}
+
+///|
 /// In a chat whose agents are in Slack or Feishu threads: which of them what is sent is copied to too (Chat.tsx
 /// CcChooser, `chat.cc`), each thread's bot saying there who wrote it on still.fail. Each thread ticked (its mark and
 /// place) is said just before send, on one line and once opened alike (the composer's `note`: where it is copied stays
@@ -1970,7 +1976,9 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
 fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Array[@sfbase.ChatCcTo]) -> Unit {
   let p = @sf.theme().p
   let id = c.id("composer/cc")
-  let open = if c.clicked(id) { !composing.cc_open } else { composing.cc_open }
+  // (pressed as it is let go: open or not as it is then)
+  c.on_press(id, fn() { composing.cc_open = !composing.cc_open })
+  let open = composing.cc_open
   let lit = c.lit(id) || open
   let on = to.filter(fn(o) { o.on }).map(fn(o) { (o.via, o.place) })
   let label = @sf.t("web-main.composer.ccLabel")
@@ -1992,8 +2000,14 @@ fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Arra
       @sf.icon(c, "check", size=14.0, color=p.text) |> ignore
     }
   }
-  let m = @sf.dropdown(c, "composer/cc/menu", open, id, entries, {}, @sf.chooser_menu_w, side=Top, along=End, marks~, check_end=true, row_end~)
-  composing.cc_open = m.open
+  // (dismissed, closed at the moment of what dismissed it: Escape, a press beside it)
+  let menu : Ref[@kit.Menu?] = Ref(None)
+  c.with_dismissed(fn(_) { composing.cc_open = false }, fn() {
+    menu.val = Some(
+      @sf.dropdown(c, "composer/cc/menu", open, id, entries, {}, @sf.chooser_menu_w, side=Top, along=End, marks~, check_end=true, row_end~),
+    )
+  })
+  let m = menu.val.unwrap()
   match m.chosen {
     Some(v) =>
       match to.search_by(fn(o) { o.thread.to_string() == v }) {
@@ -2006,8 +2020,11 @@ fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Arra
             "on": Json::boolean(!o.on),
           }
           c.tell("composer/cc", fn() { (src.call)("chat.cc", params, fn(_) {  }) })
-          // one: done once ticked; several: open to tick the next
-          composing.cc_open = to.length() > 1
+          // one: done once ticked; several: left as it is, open to tick the next (a tick never opens it: closed by
+          // then, Escape after the tick, it stays closed)
+          if to.length() <= 1 {
+            composing.cc_open = false
+          }
         }
         None => ()
       }

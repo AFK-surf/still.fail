@@ -3405,21 +3405,24 @@ let command_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 ///|
 /// A choice that opens a menu of what it can be (Chooser, controls.css.ts chooser): quiet words (12) and a small
 /// chevron, 28 high, 8 in, 8 round, the hover's ground and the ink pointed at or open; pressed, its menu (@sf.dropdown) of
-/// `entries` (a choice each: @kit.menu_radio) on `side`, 220 wide at least. `open`: whether its menu is open, the
-/// view's (what it is now comes back with what was chosen). `lead`: what stands before its words (a station's mark),
-/// in the ink its words have.
+/// `entries` (a choice each: @kit.menu_radio) on `side`, 220 wide at least. `open`: whether its menu is open now, the
+/// view's; `set_open`: what opens or closes it, as it is pressed (as it is let go) or dismissed (at that moment: Escape,
+/// a press beside it). What was chosen comes back. `lead`: what stands before its words (a station's mark), in the ink
+/// its words have.
 pub fn chooser(
   c : @ui.Ctx,
   key : String,
   words : String,
   entries : Array[@kit.Entry],
-  open : Bool,
+  open : () -> Bool,
+  set_open : (Bool) -> Unit,
   side? : @ui.Side = Bottom,
   lead? : (Int64) -> Unit,
 ) -> @kit.Menu {
   let p = theme().p
   let id = c.id(key)
-  let opened = if c.clicked(id) { !open } else { open }
+  c.on_press(id, fn() { set_open(!open()) })
+  let opened = open()
   let lit = c.lit(id) || opened
   let b = c.box(style=chooser_box, selected=opened, id~, fn() {
     match lead {
@@ -3430,7 +3433,11 @@ pub fn chooser(
     icon(c, "chevron-down", size=chooser_chevron, color=if lit { p.text } else { p.muted }) |> ignore
   })
   c.semantics(b, Button, id~, label=words, expanded=opened)
-  dropdown(c, key + "/menu", opened, id, entries, {}, chooser_menu_w, side~)
+  let menu : Ref[@kit.Menu?] = Ref(None)
+  c.with_dismissed(fn(_) { set_open(false) }, fn() {
+    menu.val = Some(dropdown(c, key + "/menu", opened, id, entries, {}, chooser_menu_w, side~))
+  })
+  menu.val.unwrap()
 }
 
 ///|

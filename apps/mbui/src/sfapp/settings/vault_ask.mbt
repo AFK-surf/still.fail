@@ -59,6 +59,22 @@ fn Asked::typed_in(self : Asked) -> Typed? {
 let vault_menu : Ref[String] = Ref("")
 
 ///|
+/// The scope's menu of request `key` open, or closed where it is the one open.
+fn vault_menu_set(key : String, on : Bool) -> Unit {
+  if on {
+    vault_menu.val = key
+  } else if vault_menu.val == key {
+    vault_menu.val = ""
+  }
+}
+
+///|
+/// Which request's scope menu is open now ("" none).
+pub fn vault_menu_open() -> String {
+  vault_menu.val
+}
+
+///|
 /// Whether what is asked is a file the person picks: its card fills its column, as wide before the file is picked as
 /// after.
 fn Asked::picks_file(self : Asked) -> Bool {
@@ -560,12 +576,14 @@ pub fn vault_foot(
   let pick = fn() {
     if picks {
       let entries = scopes.map(fn(s) { @kit.menu_radio(s, s == scope, label=tr("android-settings.vault.scope." + s)) })
-      let m = @sf.chooser(c, "vault/" + request + "/scope", tr("android-settings.vault.scope." + scope), entries, vault_menu.val == request)
-      if m.open {
-        vault_menu.val = request
-      } else if vault_menu.val == request {
-        vault_menu.val = ""
-      }
+      let m = @sf.chooser(
+        c,
+        "vault/" + request + "/scope",
+        tr("android-settings.vault.scope." + scope),
+        entries,
+        fn() { vault_menu.val == request },
+        fn(on) { vault_menu_set(request, on) },
+      )
       match m.chosen {
         Some(s) => {
           vault_picked[request] = s
