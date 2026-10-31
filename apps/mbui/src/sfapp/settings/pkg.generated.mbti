@@ -328,6 +328,8 @@ pub fn vault_foot(@ui.Ctx, Core, String, String, Answer, Bool, typed? : Typed?, 
 
 pub fn vault_hosts(Map[String, String]) -> Array[String]
 
+pub let vault_item_kinds : Array[String]
+
 pub let vault_kinds : Array[String]
 
 pub let vault_lasts : Array[String]

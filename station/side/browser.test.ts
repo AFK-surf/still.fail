@@ -8,6 +8,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
+import { createRequire } from "node:module";
 import type { AddressInfo } from "node:net";
 import { test } from "node:test";
 import { StationBrowser } from "../src/browser/browser.ts";
@@ -288,6 +289,80 @@ test("every tab is drawn without being brought forward: the station's and an age
     await browser.stop().catch(() => {});
     await browser.close();
     server.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/// Playwright, where it is installed (the repository's root has it; the station's own dependencies do not): its name
+/// not written as an import, so the station's typecheck does not look for it.
+const PLAYWRIGHT = ["playwright", "core"].join("-");
+const hasPlaywright = (() => {
+  try {
+    createRequire(import.meta.url).resolve(PLAYWRIGHT);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+test("each chat's own context in the one real Chrome, through its gate: Playwright works in it, sees nothing of another chat's, and a sign-in goes in and out", { skip: binary === undefined ? "no Chrome here" : !hasPlaywright && "no Playwright here (install the repository's root)" }, async () => {
+  const { chromium } = (await import(PLAYWRIGHT)) as any;
+  const { Browsers } = await import("../src/browser/browsers.ts");
+  const { browserDoor, sessionPath } = await import("../src/browser/proxy.ts");
+  const { openAgentsDoor } = await import("../src/tools/http.ts");
+  const { McpEndpoint } = await import("../src/tools/mcp.ts");
+  const dir = mkdtempSync(join(tmpdir(), "side-contexts-"));
+  const screens = makeScreens();
+  const browsers = new Browsers({ dir, chrome: chromeHost({ dir }), screens });
+  // A site that signs in whoever comes with ?as=…, and says who it is signed in as.
+  const server = createServer((req, res) => {
+    const as = new URL(req.url ?? "/", "http://x").searchParams.get("as");
+    const cookie = /who=([^;]+)/.exec(req.headers.cookie ?? "")?.[1] ?? "nobody";
+    res.writeHead(200, { "content-type": "text/html", ...(as ? { "set-cookie": `who=${as}; Path=/` } : {}) }).end(`<title>${as ?? cookie}</title>`);
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const site = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
+  const door = await openAgentsDoor({ port: 0 }, new McpEndpoint(() => undefined, []), () => ({ status: 404, body: {} }), () => null, () => [browserDoor(browsers)]);
+  const connect = (session: string) => chromium.connectOverCDP(`ws://127.0.0.1:${door.port}${sessionPath(session)}`);
+  try {
+    const one = await connect("chat-1");
+    const two = await connect("chat-2");
+    const p1 = await one.contexts()[0]!.newPage();
+    await p1.goto(`${site}?as=alice`);
+    const p2 = await two.contexts()[0]!.newPage();
+    await p2.goto(site);
+    assert.equal(await p2.title(), "nobody", "chat-2 is not signed in as chat-1 is");
+    assert.deepEqual((await one.contexts()[0]!.cookies()).map((c: { value: string }) => c.value), ["alice"]);
+    assert.deepEqual(await two.contexts()[0]!.cookies(), []);
+    assert.deepEqual(two.contexts()[0]!.pages().map((p: { url(): string }) => p.url()), [site], "only its own pages");
+    // The person sees both tabs, each as its chat's (beside the blank one headless Chrome starts with, the station's).
+    await until(() => screens.list().filter((s) => s.openedBy?.()).length >= 2, "both tabs among the screens");
+    assert.deepEqual(screens.list().flatMap((s) => s.openedBy?.() ?? []).sort(), ["chat-1", "chat-2"]);
+    // Another chat's tab cannot be reached, nor the browser closed.
+    await assert.rejects(two.newBrowserCDPSession(), /not for one chat's browser/, "no session of the browser's own");
+    const raw = await connectCdp(`ws://127.0.0.1:${door.port}${sessionPath("chat-2")}`);
+    const [otherTab] = browsers.tabs("chat-1");
+    await assert.rejects(raw.send("Target.attachToTarget", { targetId: otherTab!.id, flatten: true }), /No such target of this chat's/);
+    await assert.rejects(raw.send("Browser.close"), /not for one chat's browser/);
+    const { targetInfos } = await raw.send("Target.getTargets");
+    assert.ok(targetInfos.every((t: any) => t.targetId !== otherTab!.id), "another chat's tab is not listed");
+    raw.close();
+    // A sign-in from the vault goes into chat-2's context only, and out again as its grant ends.
+    await browsers.signIn("chat-2", { request: "r_1", sites: ["127.0.0.1"], cookies: JSON.stringify([{ name: "who", value: "bob", domain: "127.0.0.1", path: "/" }]), until: Math.floor(Date.now() / 1000) + 2 });
+    await p2.reload();
+    assert.equal(await p2.title(), "bob");
+    await p1.reload();
+    assert.equal(await p1.title(), "alice", "chat-1 as it was");
+    await until(async () => (await two.contexts()[0]!.cookies()).length === 0, "taken out as its grant ends", 10_000);
+    await one.close();
+    await two.close();
+    await browsers.closeOf("chat-1");
+    assert.equal(browsers.tabs("chat-1").length, 0);
+  } finally {
+    await door.close(0);
+    server.close();
+    await browsers.station.stop();
+    await browsers.close();
     rmSync(dir, { recursive: true, force: true });
   }
 });

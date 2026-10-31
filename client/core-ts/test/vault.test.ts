@@ -537,6 +537,37 @@ test("vault calls: an agent's request approved (sealed to its keeper, signed) or
   r.core.close();
 });
 
+test("vault calls: a sign-in granted with the newer cookies its request carries: written as its next version, and those granted", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const old = JSON.stringify([{ name: "user_session", value: "abc", domain: "github.com", path: "/" }]);
+  const newer = JSON.stringify([{ name: "user_session", value: "renewed", domain: "github.com", path: "/" }]);
+  const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "browser", name: "GitHub", fields: { cookies: old } }, listing: { name: "GitHub", kind: "browser", modes: ["browser"], hosts: ["github.com"] } });
+  const here = [...r.st.boxes.values()][0]!;
+  const keeper = fill(5);
+  const request = (rid: string, renewal?: Request["renewal"]): Request => ({
+    id: rid, ws: "ws", vault: id, item: put.id, session: "k1", chat: "7", mode: "browser", reason: "看 PR", hosts: ["github.com"], box: boxPublic(keeper), at: 1, status: "pending", ...(renewal ? { renewal } : {}),
+  });
+  const renewal = { id: "n_1", sealed: [{ device: here.device, box: here.box, secret: sealWith(here.box, utf8(JSON.stringify({ cookies: newer })), saveContext("ws", "n_1"), fill(6)) }] };
+  r.st.requests.push(request("r_b", renewal));
+  r.push("vault-request", request("r_b", renewal));
+  await r.watch(1, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(500);
+  r.take();
+  const asked = r.host.secureAsked.length;
+  await r.ask("vault.approve", { request: "r_b", scope: "hour" });
+  assert.equal(r.host.secureAsked.length, asked + 1, "the person is asked once, for the grant and the new version alike");
+  const grant = r.st.grants.at(-1) as any;
+  assert.deepEqual([grant.mode, grant.hosts], ["browser", ["github.com"]], "a sign-in's grant names its sites");
+  assert.equal(JSON.parse(new TextDecoder().decode(openSeal(keeper, grant.secret, grantContext("ws", "r_b")))).fields.cookies, newer);
+  const written = r.st.items.get(put.id)!;
+  assert.ok(signedOk(written, TAG.item));
+  assert.deepEqual([written.version, written.listing?.modes], [1, ["browser"]]);
+  assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.cookies, newer);
+  r.core.close();
+});
+
 /// Chat 7's posts as its station answers them: a person's, then an agent's asking to use `gh` (r_1), then one asking to
 /// keep a login (r_s), their cards as the station writes them (station/src/vault/secrets.ts).
 function cardsInChat(): Answers {

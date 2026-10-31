@@ -1756,6 +1756,7 @@
   "web-pages.vault.kind.ssh_key": "SSH 密钥",
   "web-pages.vault.kind.login": "登录",
   "web-pages.vault.kind.file": "文件",
+  "web-pages.vault.kind.browser": "登录态",
   "web-pages.vault.agentMay": "允许 agent 申请",
   "web-pages.vault.private": "仅自己可见",
   "web-pages.vault.hidden": {
@@ -1813,6 +1814,7 @@
   "web-pages.vault.editor.envNote": "环境变量：命令可读取明文，有泄露给 agent 的风险",
   "web-pages.vault.editor.sshNote": "ssh-agent：私钥不出 station，仅提供签名",
   "web-pages.vault.editor.fileNote": "文件：命令运行时临时写出，路径放进变量，命令可读取内容",
+  "web-pages.vault.editor.browserNote": "浏览器：批准后放进这个对话自己的浏览器环境，只限下面的网站，到期取出；agent 拿不到 cookie 本身",
   "web-pages.vault.editor.fileEnvPlaceholder": "KUBECONFIG",
   "web-pages.vault.editor.hosts": "限定域名",
   "web-pages.vault.editor.hostsPlaceholder": "api.github.com, *.example.com",

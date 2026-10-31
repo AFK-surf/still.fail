@@ -25,8 +25,8 @@ export type Item = {
   v: 1; ws: string; vault: string; id: string; version: number; epoch: number; deleted?: true; ct: string;
   listing?: Listing; at: number; sig: Sig;
 };
-export type Kind = "token" | "ssh_key" | "login" | "file";
-export type Mode = "proxy" | "ssh" | "env" | "file";
+export type Kind = "token" | "ssh_key" | "login" | "file" | "browser";
+export type Mode = "proxy" | "ssh" | "env" | "file" | "browser";
 /// How long a grant lasts: one use, an hour, or the chat until it is archived.
 export type Scope = "once" | "hour" | "chat";
 /// The scopes, shortest first.
@@ -49,6 +49,10 @@ export type Request = {
   /// Another station of the workspace its commands run on (secret_use `station`, docs/vault.md 在另一台 station 上用):
   /// its id and name, said on the card; the secret is sent there for each command and kept there only while it runs.
   runOn?: { id: string; name: string };
+  /// A sign-in's newer cookies, taken out of a chat's browser as an earlier grant of it ended (docs/vault.md 登录态
+  /// 写回), sealed to each of its vault's members' devices set up (`saveContext` under its id): the app that grants this
+  /// request writes them as the item's next version and grants those.
+  renewal?: { id: string; sealed: Sealed[] };
 };
 /// What an agent asks to keep: the item's listing, and the fields of it that are not secret (a login's account name, an
 /// SSH key's public half, a file's name), said on its card. `typed`: the secret is none the agent holds, but what the
@@ -196,8 +200,8 @@ export const VAULT_ID = new RegExp(`^v_${ULID}$`);
 export const ITEM_ID = new RegExp(`^i_${ULID}$`);
 const HOST = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/;
 const ENV = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const KINDS: Kind[] = ["token", "ssh_key", "login", "file"];
-const MODES: Mode[] = ["proxy", "ssh", "env", "file"];
+const KINDS: Kind[] = ["token", "ssh_key", "login", "file", "browser"];
+const MODES: Mode[] = ["proxy", "ssh", "env", "file", "browser"];
 const int = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 0;
 const text = (v: unknown, max = 200): v is string => typeof v === "string" && v.length <= max;
 const b64 = (v: unknown, max: number): v is string => typeof v === "string" && v.length <= max && B64URL.test(v);
@@ -259,11 +263,22 @@ export function vaultOk(lock: LockState, prev: Vault | null, next: Vault, copy =
   return null;
 }
 
+/// Why a listing is not one as a sign-in (kind and mode browser) must be, or null: a sign-in is given only into a
+/// chat's browser, and only a sign-in is; its hosts are the sites it is for (each with its subdomains: no *.), one at least.
+export function browserListingOk(l: { kind: Kind; modes: Mode[]; hosts: string[] }): string | null {
+  const sign = l.kind === "browser";
+  if (sign !== l.modes.includes("browser") || (sign && l.modes.length !== 1)) return "a sign-in (kind browser) is given into a chat's browser (modes: [\"browser\"]), and only a sign-in is";
+  if (sign && (l.hosts.length === 0 || l.hosts.some((h) => h.startsWith("*.")))) return "a sign-in names the sites it is for (github.com: its subdomains with it)";
+  return null;
+}
+
 /// Why a listing is not one, or null.
 function listingOk(l: any): string | null {
   if (l === null || typeof l !== "object" || !text(l.name) || !KINDS.includes(l.kind)) return "a listing is {name, kind, modes, hosts, env?}";
-  if (!Array.isArray(l.modes) || !l.modes.every((m: unknown) => MODES.includes(m as Mode)) || !unique(l.modes)) return "modes are proxy, ssh, env or file";
+  if (!Array.isArray(l.modes) || !l.modes.every((m: unknown) => MODES.includes(m as Mode)) || !unique(l.modes)) return "modes are proxy, ssh, env, file or browser";
   if (!Array.isArray(l.hosts) || l.hosts.length > 64 || !l.hosts.every((h: unknown) => text(h, 253) && HOST.test(h as string))) return "hosts are domain names (*.example.com allowed)";
+  const why = browserListingOk(l);
+  if (why) return why;
   if (l.env !== undefined && !(text(l.env, 100) && ENV.test(l.env))) return "env is a variable name";
   if (l.lasts !== undefined && !SCOPES.includes(l.lasts)) return "lasts is once, hour or chat";
   return null;

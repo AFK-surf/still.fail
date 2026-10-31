@@ -23,8 +23,8 @@ export type Vault = {
   /// Deleted by its owner (`vault.delete`): sealed to no one under a new epoch, its items gone; it stays deleted.
   deleted?: true;
 };
-export type Kind = "token" | "ssh_key" | "login" | "file";
-export type Mode = "proxy" | "ssh" | "env" | "file";
+export type Kind = "token" | "ssh_key" | "login" | "file" | "browser";
+export type Mode = "proxy" | "ssh" | "env" | "file" | "browser";
 /// How long a grant lasts: one use, an hour, or the chat until it is archived.
 export type Scope = "once" | "hour" | "chat";
 /// The scopes, shortest first.
@@ -50,6 +50,10 @@ export type Request = {
   save?: Save;
   /// Its fields, sealed by the station that asked to each of the person's devices set up (`saveContext`).
   sealed?: { device: string; box: string; secret: string }[];
+  /// A sign-in's newer fields (its cookies as an earlier grant of it ended), sealed by the station to each of its
+  /// vault's members' devices set up (`saveContext` under its id): written as the item's next version when this
+  /// request is granted, and granted.
+  renewal?: { id: string; sealed: { device: string; box: string; secret: string }[] };
 };
 /// `typed`: its secret is what the person types in on its card (nothing sealed: the app writes what was typed).
 export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true };

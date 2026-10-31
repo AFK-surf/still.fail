@@ -1831,6 +1831,7 @@
   "web-pages.vault.kind.ssh_key": "SSH key",
   "web-pages.vault.kind.login": "Login",
   "web-pages.vault.kind.file": "File",
+  "web-pages.vault.kind.browser": "Sign-in",
   "web-pages.vault.agentMay": "Agents may ask",
   "web-pages.vault.private": "Only for you",
   "web-pages.vault.hidden": {
@@ -1888,6 +1889,7 @@
   "web-pages.vault.editor.envNote": "Env variable: the command sees the value, and agents may get it",
   "web-pages.vault.editor.sshNote": "ssh-agent: the key stays in the station; agents can only sign with it",
   "web-pages.vault.editor.fileNote": "File: written out while a command runs, its path in the variable; the command can read it",
+  "web-pages.vault.editor.browserNote": "Browser: put into the chat's own browser environment once approved, for the sites below only, and taken out when the grant ends; the agent never gets the cookies themselves",
   "web-pages.vault.editor.fileEnvPlaceholder": "KUBECONFIG",
   "web-pages.vault.editor.hosts": "Only to",
   "web-pages.vault.editor.hostsPlaceholder": "api.github.com, *.example.com",

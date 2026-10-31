@@ -735,8 +735,8 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
   }
 }
 
-const KINDS = ["token", "ssh_key", "login", "file"];
-const MODES = ["proxy", "ssh", "env", "file"];
+const KINDS = ["token", "ssh_key", "login", "file", "browser"];
+const MODES = ["proxy", "ssh", "env", "file", "browser"];
 /// The most a file kept may be, its bytes (the station's FILE_MOST): one credential's file, not a store of files.
 const FILE_MOST = 64 * 1024;
 
@@ -753,7 +753,7 @@ function fileProblem(fields: Record<string, string>): CoreError | null {
 
 /// An item's plaintext as a call gives it: its kind and name, its fields as words.
 function plainOf(v: unknown): Plain {
-  if (!isObject(v) || !KINDS.includes(v.kind as string) || typeof v.name !== "string") throw CoreError.invalid("plain: {kind: token|ssh_key|login|file, name, fields, domains, notes}");
+  if (!isObject(v) || !KINDS.includes(v.kind as string) || typeof v.name !== "string") throw CoreError.invalid("plain: {kind: token|ssh_key|login|file|browser, name, fields, domains, notes}");
   const fields: Record<string, string> = {};
   for (const [k, x] of Object.entries(isObject(v.fields) ? v.fields : {})) if (typeof x === "string") fields[k] = x;
   const bad = v.kind === "file" ? fileProblem(fields) : null;
@@ -836,7 +836,7 @@ class Vaults {
   /// A vault's key: kept unsealed a while, else unsealed with this device's box key (the person asked); `fresh`: asked
   /// even when it is kept (an agent's grant). In hand, it is given on to the members' devices set up since that have
   /// none (`#give`: its owner's device only), unless the call is that giving itself (`give` false).
-  #key(v: Vault, self: { device: string }, fresh: boolean, reason: string, give = true): Effect.Effect<Uint8Array, CoreError> {
+  #key(v: Vault, self: { device: string }, fresh: boolean, reason: string, give = true, unsealed?: (priv: Uint8Array) => void): Effect.Effect<Uint8Array, CoreError> {
     const inner = this.#inner;
     const ws = this.ws;
     const self_ = this;
@@ -849,6 +849,7 @@ class Vaults {
         const priv = yield* self_.#boxKey(reason);
         if (boxPublic(priv) !== mine.cert.box) return yield* fail("vault_no_key", t("core-misc.vault.noKey"));
         const key = yield* Effect.try({ try: () => openSeal(priv, mine.wrapped, keyContext(ws, v.id, v.epoch)), catch: asCoreError });
+        unsealed?.(priv);
         self_.#keep(v, key);
         return key;
       }),
@@ -1224,8 +1225,34 @@ class Vaults {
       const item = items(inner, self.ws, v.id)[r.item];
       if (!item || item.deleted) return yield* fail("vault_unknown", t("core-misc.vault.unknownItem"));
       if (!allows(item.listing?.lasts ?? v.lasts, scope)) return yield* fail("vault_scope", t("core-misc.vault.scopeTooLong"));
-      const key = yield* self.#key(v, who, true, t("core-misc.vault.reason.approve", { name: item.listing?.name ?? v.name }));
-      const bytes = yield* self.#plain(lock, v, item, key);
+      // (this device's box key, as it was unsealed for it: a sign-in's newer cookies the request carries are opened with it)
+      const unsealed: { priv?: Uint8Array } = {};
+      const key = yield* self.#key(v, who, true, t("core-misc.vault.reason.approve", { name: item.listing?.name ?? v.name }), true, (p) => (unsealed.priv = p));
+      let bytes = yield* self.#plain(lock, v, item, key);
+      // A sign-in's newer cookies (docs/vault.md 登录态 写回): written as its next version, and granted.
+      const renewal = r.mode === "browser" ? r.renewal?.sealed.find((x) => x.device === who.device) : undefined;
+      const priv = unsealed.priv;
+      if (renewal !== undefined && priv !== undefined) {
+        const renewed = yield* Effect.result(Effect.try({
+          try: () => {
+            const was = JSON.parse(new TextDecoder().decode(bytes)) as Plain;
+            const fields = JSON.parse(new TextDecoder().decode(openSeal(priv, renewal.secret, saveContext(self.ws, r.renewal!.id)))) as Record<string, unknown>;
+            if (was.kind !== "browser" || typeof fields.cookies !== "string" || fields.cookies === "") throw new Error("no sign-in's cookies");
+            return plainOf({ ...was, fields: { ...was.fields, cookies: fields.cookies } });
+          },
+          catch: asCoreError,
+        }));
+        if (renewed._tag === "Success") {
+          const plain = renewed.success;
+          const version = item.version + 1;
+          const nonce = new Uint8Array(12);
+          inner.host.randomBytes(nonce);
+          const ct = encryptWith(key, utf8(JSON.stringify(plain)), itemContext(self.ws, v.id, item.id, version, v.epoch), nonce);
+          const next = sign({ v: 1 as const, ws: self.ws, vault: v.id, id: item.id, version, epoch: v.epoch, ct, ...(item.listing ? { listing: item.listing } : {}), at: nowS(inner) }, TAG.item, signer);
+          const put = yield* Effect.result(self.#putItem(next, v));
+          if (put._tag === "Success") bytes = utf8(JSON.stringify(plain));
+        }
+      }
       const grantTo = (box: string): Grant => {
         const eph = new Uint8Array(32);
         inner.host.randomBytes(eph);
@@ -1326,7 +1353,7 @@ class Vaults {
       inner.host.randomBytes(eph);
       const grant: Grant | null = r.box
         ? sign(
-            { v: 1 as const, ws: self.ws, request: r.id, vault: vault.id, item: r.item, mode: r.mode, hosts: r.mode === "proxy" ? (r.hosts ?? s.hosts) : [], scope, exp: now + GRANT_SECS[scope], secret: sealWith(r.box, utf8(JSON.stringify(body.plain)), grantContext(self.ws, r.id), eph), at: now },
+            { v: 1 as const, ws: self.ws, request: r.id, vault: vault.id, item: r.item, mode: r.mode, hosts: r.mode === "proxy" || r.mode === "browser" ? (r.hosts ?? s.hosts) : [], scope, exp: now + GRANT_SECS[scope], secret: sealWith(r.box, utf8(JSON.stringify(body.plain)), grantContext(self.ws, r.id), eph), at: now },
             TAG.grant,
             signer,
           )

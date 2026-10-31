@@ -24,8 +24,10 @@ export type TabsParts = {
   activity(): void;
   /// `f` once, `ms` from now (Chrome's time: the machine's); the function returned calls it off.
   later?(ms: number, f: () => void): () => void;
-  /// Which session opened each tab; none: not known.
+  /// Which session opened each tab of the station's own context; none: not known.
   owners?: Owners;
+  /// The session whose chat's context a browser context is (browsers.ts).
+  contextOwner?: (browserContextId: string | undefined) => string | undefined;
 };
 
 /// Chrome tells of a tab's new address, not of its title, which the page sets after (Chrome 155): the titles are read
@@ -85,6 +87,8 @@ class Tab implements ScreenSource {
 export class Tabs {
   readonly #p: TabsParts;
   readonly #tabs = new Map<string, { tab: Tab; remove: () => void }>();
+  /// The browser context of every target told of (pages, frames, workers): whose chat's it is (gate.ts).
+  readonly #contexts = new Map<string, string>();
   readonly #views = new Set<TabView>();
   #unlisten: () => void = () => {};
   #closed = false;
@@ -136,9 +140,14 @@ export class Tabs {
     });
   }
 
-  /// The session that opened tab `targetId`, when known.
+  /// The session whose tab `targetId` is: its context's chat's, else the one that opened it in the station's own.
   ownerOf(targetId: string): string | undefined {
-    return this.#p.owners?.of(targetId);
+    return this.#p.contextOwner?.(this.#contexts.get(targetId)) ?? this.#p.owners?.of(targetId);
+  }
+
+  /// The browser context of target `targetId`, when it was told of.
+  contextOf(targetId: string): string | undefined {
+    return this.#contexts.get(targetId);
   }
 
   /// Tab `targetId` was opened by `session` (its connection said so): the screens' watchers hear, once it is there.
@@ -150,7 +159,7 @@ export class Tabs {
 
   /// The tabs `session` opened that are there now.
   ofSession(session: string): string[] {
-    return (this.#p.owners?.ofSession(session) ?? []).filter((id) => this.#tabs.has(id));
+    return [...this.#tabs.keys()].filter((id) => this.ownerOf(id) === session);
   }
 
   /// Closes tab `targetId` (it leaves the screens as Chrome tells it went).
@@ -207,6 +216,8 @@ export class Tabs {
       if (this.#ready) this.#p.activity();
     };
     const info = e.params?.targetInfo;
+    if (typeof info?.targetId === "string" && typeof info.browserContextId === "string") this.#contexts.set(info.targetId, info.browserContextId);
+    if (e.method === "Target.targetDestroyed" && !this.#tabs.has(e.params?.targetId)) this.#contexts.delete(e.params?.targetId);
     switch (e.method) {
       case "Target.targetCreated":
         if (info?.type !== "page") return;
@@ -235,6 +246,7 @@ export class Tabs {
         const known = this.#tabs.get(e.params.targetId);
         if (known === undefined) return;
         this.#tabs.delete(e.params.targetId);
+        this.#contexts.delete(e.params.targetId);
         this.#p.owners?.drop(e.params.targetId);
         known.remove();
         activity();

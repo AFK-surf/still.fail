@@ -85,8 +85,14 @@ function harness(lock: () => ReturnType<typeof world>["state"] | null, starter =
     notify: (k: string, text: string) => notified.push([k, text]),
   };
   const dir = mkdtempSync(join(tmpdir(), "vault-save-"));
-  const make = () => new Secrets({ db, vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => 1_000_000 });
-  return { db, vaults, plain, notified, cards, dir, make, secrets: make() };
+  // The chats' browsers: the cookies each was asked for (`jar`, as JSON) and the sign-ins put in.
+  const browser = { jar: "[]", asked: [] as [string, string[], boolean][], signedIn: [] as [string, { request: string; sites: string[]; cookies: string; until: number }][] };
+  const browsers = {
+    cookies: async (session: string, sites: string[], station: boolean) => (browser.asked.push([session, sites, station]), browser.jar),
+    signIn: async (session: string, d: { request: string; sites: string[]; cookies: string; until: number }) => void browser.signedIn.push([session, d]),
+  };
+  const make = () => new Secrets({ db, vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => 1_000_000, browsers });
+  return { db, vaults, plain, notified, cards, dir, make, browser, secrets: make() };
 }
 
 /// What the agent was told of request `asked` once decided: secret_save answers at once that it waits, and the decision
@@ -360,6 +366,94 @@ test("a file its owner picks without security mode: kept with the fields their a
     assert.ok(typeof kept !== "string");
     assert.deepEqual(kept.fields, { content, filename: "a.p12" });
     assert.match(await decided(h, asked), /Kept: 「证书」/);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a sign-in to keep: its sites' cookies read from the chat's browser (or the station's), never given, printed or typed; kept, it goes into the chat's browser; its new cookies kept as it comes out", async () => {
+  const h = harness(() => null, "bob@x.com");
+  try {
+    await assert.rejects(h.secrets.save("s1", { name: "GitHub", kind: "browser", reason: "x", value: "v", hosts: ["github.com"], cwd: h.dir }), /read from this chat's browser/);
+    await assert.rejects(h.secrets.save("s1", { name: "GitHub", kind: "browser", reason: "x", cwd: h.dir }), /names the sites/);
+    await assert.rejects(h.secrets.save("s1", { name: "GitHub", kind: "browser", reason: "x", hosts: ["*.github.com"], cwd: h.dir }), /names the sites/);
+    await assert.rejects(h.secrets.save("s1", { name: "GitHub", kind: "browser", reason: "x", hosts: ["github.com"], cwd: h.dir }), /holds no cookies of github.com: sign in there first/);
+    h.browser.jar = JSON.stringify([{ name: "user_session", value: "abc", domain: "github.com", path: "/" }]);
+    const asked = h.secrets.save("s1", { name: "GitHub · bob", kind: "browser", reason: "登录 GitHub", hosts: ["github.com"], browser: "station", cwd: h.dir });
+    await tick();
+    assert.deepEqual(h.browser.asked.at(-1), ["s1", ["github.com"], true], "read from the station's own browser");
+    const [r] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.ok(r && r.mode === "browser" && !JSON.stringify(r).includes("abc"));
+    assert.match(h.cards.at(-1)!.text, /登录态/);
+    assert.deepEqual(h.cards.at(-1)!.card.vault.hosts, ["github.com"]);
+    const kept = h.secrets.savedPlain(WS, null, "bob@x.com", { request: r.id });
+    assert.ok(typeof kept !== "string");
+    assert.deepEqual([kept.kind, kept.fields, kept.listing], ["browser", { cookies: h.browser.jar }, { name: "GitHub · bob", kind: "browser", modes: ["browser"], hosts: ["github.com"] }]);
+    assert.match(await decided(h, asked), /Kept/);
+    // Kept, the chat that asked has it in its browser, for as long as its grant lasts.
+    assert.deepEqual(h.browser.signedIn.map(([s, d]) => [s, d.request, d.sites, d.cookies]), [["s1", r.id, ["github.com"], h.browser.jar]]);
+    await assert.rejects(h.secrets.run("s1", { grant: r.id, command: "true", cwd: h.dir }), /is not run with/);
+    // Asked again (another chat would): its card says where it goes, and it goes in once granted.
+    void h.secrets.ask("s1", { item: "GitHub · bob", reason: "看 PR" });
+    await tick();
+    const [use] = pendingOf(h.secrets, null, "bob@x.com");
+    assert.ok(use && use.mode === "browser");
+    assert.match(h.cards.at(-1)!.text, /放进这个对话的浏览器（限 github.com/);
+    assert.equal(h.secrets.grantPlain(WS, null, "bob@x.com", { request: use.id, scope: "hour" }), null);
+    assert.equal(h.browser.signedIn.length, 2);
+    assert.equal(h.browser.signedIn[1]![1].until, 1000 + 3600);
+    // Taken out with new cookies: the item keeps them; the same again is no new version.
+    const renewed = JSON.stringify([{ name: "user_session", value: "renewed", domain: "github.com", path: "/" }]);
+    h.secrets.renewed("s1", use.id, renewed);
+    assert.deepEqual([h.plain.item(WS, kept.id)!.version, h.plain.item(WS, kept.id)!.fields.cookies], [1, renewed]);
+    h.secrets.renewed("s1", use.id, renewed);
+    assert.equal(h.plain.item(WS, kept.id)!.version, 1);
+    // A context made anew: what is still granted goes in again.
+    h.secrets.signInAgain("s1");
+    assert.equal(h.browser.signedIn.length, 4);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a sign-in in a vault: its newer cookies, which the station cannot write, sealed to its members' devices and carried by its next request, kept until a grant carries them", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  h.vaults.putVault(w.vault);
+  h.vaults.putBox(w.cert(w.alice));
+  try {
+    h.browser.jar = JSON.stringify([{ name: "user_session", value: "abc", domain: "github.com", path: "/" }]);
+    const asked = h.secrets.save("s1", { name: "GitHub", kind: "browser", reason: "登录 GitHub", hosts: ["github.com"], cwd: h.dir });
+    await tick();
+    const [r] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.deepEqual(opened(r!, w.alice), { cookies: h.browser.jar });
+    h.vaults.putItem(written(r!, w.alice, { cookies: h.browser.jar }));
+    const grantOf = (req: Request, cookies: string, scope: "hour" | "chat") => signed(
+      { v: 1 as const, ws: WS, request: req.id, vault: VAULT, item: req.item, mode: "browser" as const, hosts: ["github.com"], scope, exp: 1000 + 3600, secret: seal(req.box, Buffer.from(JSON.stringify({ kind: "browser", name: "GitHub", fields: { cookies } })), grantContext(WS, req.id)), at: 1000 },
+      TAG.grant, w.alice.signer,
+    );
+    assert.equal(h.secrets.saved(w.state, "alice", { request: r!.id, vault: VAULT, grant: grantOf(r!, h.browser.jar, "hour") }), null);
+    await decided(h, asked);
+    // Taken out with newer cookies: sealed to her device, nothing of them in the clear.
+    const renewed = JSON.stringify([{ name: "user_session", value: "renewed", domain: "github.com", path: "/" }]);
+    h.secrets.renewed("s1", r!.id, renewed);
+    const ask = async () => {
+      void h.secrets.ask("s1", { item: "GitHub", reason: "看 PR" });
+      await tick();
+      return pendingOf(h.secrets, w.state, "alice@x.com").at(-1)!;
+    };
+    const next = await ask();
+    assert.ok(next.renewal && !JSON.stringify(next).includes("renewed"));
+    assert.deepEqual(next.renewal.sealed.map((x) => x.device), [w.alice.base.hex]);
+    assert.deepEqual(JSON.parse(Buffer.from(openSeal(w.alice.box.priv, next.renewal.sealed[0]!.secret, saveContext(WS, next.renewal.id))).toString()), { cookies: renewed });
+    // Granted with the cookies it had (an app from before renewals): they stay for the next.
+    assert.equal(h.secrets.grant(w.state, "alice", grantOf(next, h.browser.jar, "hour")), null);
+    const after = await ask();
+    assert.equal(after.renewal?.id, next.renewal.id);
+    // Granted with them (the app wrote them as the item's next version): kept no longer.
+    assert.equal(h.secrets.grant(w.state, "alice", grantOf(after, renewed, "hour")), null);
+    assert.deepEqual(h.browser.signedIn.at(-1)![1].cookies, renewed);
+    assert.equal((await ask()).renewal, undefined);
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }

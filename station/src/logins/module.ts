@@ -30,7 +30,7 @@ export const LoginsLive = Layer.effectDiscard(
     const { hub, place, accounts } = yield* Agents;
     const browser = yield* Browser;
     const screens = yield* ScreenRegistry;
-    const pages = new LoginPages(browser, (changed) => screens.watch(() => changed()));
+    const pages = new LoginPages(browser.station, (changed) => screens.watch(() => changed()));
     const logins = yield* Effect.acquireRelease(Effect.sync(() => new Logins({ data, clock: hub.clock, pages })), (l) => Effect.promise(() => l.close()));
     accounts.logins.attach(pages);
     const loginLink = (session: string | null, id: string) => {

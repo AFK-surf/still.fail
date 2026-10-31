@@ -5,7 +5,7 @@
 // the owner's decision, the proxy), and that their values stay out of the files agents read. Once security mode is on,
 // nothing is written here but deletions: the owner's app moves each item into their encrypted vault (`vault.migrate`).
 import type { DatabaseSync } from "node:sqlite";
-import { type Kind, type Listing, type Mode, type Scope, SCOPES } from "./crypto.ts";
+import { type Kind, type Listing, type Mode, type Scope, SCOPES, browserListingOk } from "./crypto.ts";
 
 /// The id a plain library goes by where a vault's would (requests, the core's topics).
 export const PLAIN = "plain";
@@ -33,10 +33,11 @@ CREATE TABLE IF NOT EXISTS vault_plain_lasts (
 );
 `;
 
-export const KINDS: Kind[] = ["token", "ssh_key", "login", "file"];
-export const MODES: Mode[] = ["proxy", "ssh", "env", "file"];
-/// The fields each kind of item holds: a file's `content` is its bytes in base64, `filename` what it is called.
-export const FIELDS: Record<Kind, string[]> = { token: ["value"], ssh_key: ["private_key", "public_key"], login: ["username", "password", "totp"], file: ["content", "filename"] };
+export const KINDS: Kind[] = ["token", "ssh_key", "login", "file", "browser"];
+export const MODES: Mode[] = ["proxy", "ssh", "env", "file", "browser"];
+/// The fields each kind of item holds: a file's `content` is its bytes in base64, `filename` what it is called; a
+/// sign-in's `cookies` the cookies of its sites, as JSON (browser/signins.ts).
+export const FIELDS: Record<Kind, string[]> = { token: ["value"], ssh_key: ["private_key", "public_key"], login: ["username", "password", "totp"], file: ["content", "filename"], browser: ["cookies"] };
 /// The most a file kept in the vault may be (its bytes): one credential's file (a kubeconfig, a service account's key,
 /// a certificate), not a store of files.
 export const FILE_MOST = 64 * 1024;
@@ -67,7 +68,7 @@ export function plainOk(prev: PlainItem | null, next: PlainItem, owner: string):
   if (prev?.deleted) return "the item is deleted";
   if (!Number.isSafeInteger(next.at)) return "at is unix seconds";
   if (next.deleted === true) return null;
-  if (!KINDS.includes(next.kind)) return "kind is token, ssh_key, login or file";
+  if (!KINDS.includes(next.kind)) return "kind is token, ssh_key, login, file or browser";
   if (!isStr(next.name, 200) || next.name.trim() === "") return "an item has a name";
   if (!isStr(next.notes, 10_000)) return "notes are text";
   const fields = next.fields;
@@ -79,10 +80,12 @@ export function plainOk(prev: PlainItem | null, next: PlainItem, owner: string):
   const l = next.listing;
   if (l !== undefined) {
     if (l === null || typeof l !== "object" || !isStr(l.name, 200) || l.kind !== next.kind) return "a listing names the item and its kind";
-    if (!Array.isArray(l.modes) || l.modes.length === 0 || !l.modes.every((m) => MODES.includes(m))) return "a listing's modes are proxy, ssh, env or file";
+    if (!Array.isArray(l.modes) || l.modes.length === 0 || !l.modes.every((m) => MODES.includes(m))) return "a listing's modes are proxy, ssh, env, file or browser";
     if (l.modes.includes("file") !== (next.kind === "file") || (next.kind === "file" && l.modes.length > 1)) return "a file is given as a file, and only a file is";
     if (!Array.isArray(l.hosts) || !l.hosts.every((h) => isStr(h, 253) && /^(\*\.)?[a-z0-9.-]+$/.test(h))) return "a listing's hosts are host names";
     if (l.modes.includes("proxy") && l.hosts.length === 0) return "given through the proxy, it names its hosts";
+    const sign = browserListingOk(l);
+    if (sign !== null) return sign;
     if (l.env !== undefined && !(isStr(l.env, 100) && /^[A-Za-z_][A-Za-z0-9_]*$/.test(l.env))) return "env is a variable's name";
     if (l.lasts !== undefined && !SCOPES.includes(l.lasts)) return "lasts is once, hour or chat";
   }

@@ -134,6 +134,16 @@ chat EMBER/1793263359.091000（「我们密钥库缺一个文件类型的密钥�
 - **界面**：编辑器里「文件」一类，选文件后显示「文件名 · 大小」和「更换文件」；条目页显示文件名，内容是 UTF-8 文本时作为可显示/复制的秘密，否则显示「二进制 · 大小」。
 - **兼容**：旧 station 不认 `file`（listing 校验不过，副本补不上；明文库 `PUT` 被拒），旧 core 显示时类型为空。旧 station 收到 `vault.run` 的 `mode: file` 会拒绝，不会把 base64 当环境变量用。
 
+## 登录态（2026-10-31 用户定）
+
+chat EMBER/1793439516.811000。station 浏览器里每个 chat 一个只在内存里的环境（docs/remote-screens.md「A chat's own environment」），登录态只存在密钥库里，不落 station 硬盘：
+
+- **条目**：kind `browser`，字段 `cookies`（这几个网站的 cookie，DevTools `Storage.setCookies` 收的样子，JSON），listing 的 `hosts` 是网站（`github.com` 连同子域名，不写 `*.`），方式只有 `browser`、也只有登录态是这种方式（`browserListingOk`）。
+- **存入**：`secret_save {kind: "browser", hosts}` 不收 value、command、path：station 自己从这个 chat 的环境（或 `browser: "station"`，从 station 自己的 profile，迁移以前登录过的）读出这几个网站的 cookie，agent 看不到；一个都没有就拒绝，让人先在远程画面里登录。卡片和别的存入一样，存进去之后这个 chat 直接拿到授权。
+- **使用**：`secret_use` 一个登录态（方式 `browser`），卡片写「放进这个对话的浏览器（限 网站，到期取出）」；批准后 station 把 cookie 放进这个 chat 的环境（只放这些网站的），授权到期取出，`secret_run` 不收它。授权的 `hosts` 必须写上网站（老 app 批准时不写，station 拒收，要升级）。
+- **写回**：到期取出时把那一刻的 cookie 交回密钥库（网站中途会换新的）：不加锁的库 station 直接写成条目的新版本。加锁的库 station 解不开也签不了：新 cookie 封给这个库各成员已设置的设备（`saveContext`，id `n_…`），存在 `vault_renewals`（每条只留最新一份），跟着这一条下一次的申请走（`Request.renewal`）；批准那次 app 本来就要解开设备箱钥匙（同一次指纹），顺手解开它、写成条目的新版本，授权给出去的也是新的。授权里的 cookie 和它对得上（station 只存它的摘要比对），station 才删掉这份；老 app 批准时不认它，就留给下一次。
+- **环境重建**：Chrome 重启后环境没了，chat 再要浏览器时新建一个，还在授权期内的登录态重新放进去（`signInAgain`）。
+
 ## agent 存入（2026-10-24 用户定）
 
 chat EMBER/1792782824.926000（「当然是 agent 申请添加我来审批」）。agent 手上有了以后还要用的凭据（用 `op`/`bw` 读出的密码、人给的 token、自己建的 key），由 agent 申请存进库，人在卡片上批准，不让人自己去 app 里填。

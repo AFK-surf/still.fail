@@ -1,30 +1,47 @@
 ---
 name: stillfail-browser
-description: Use the station's own Chrome for web work that needs a login or should look like a person's browser (sites, dashboards, consoles, anything behind a sign-in), and ask a person to sign in or solve a captcha in it.
+description: Use the station's own Chrome (this chat's own environment in it) for web work that needs a login or should look like a person's browser (sites, dashboards, consoles, anything behind a sign-in), ask a person to sign in or solve a captcha in it, and keep and reuse sign-ins through the vault.
 ---
 
 # The station's browser
 
-Each station keeps one real Google Chrome with its own persistent profile: whatever someone signs into there stays
-signed in, for every session on the station. Get it with the `browser` tool (it starts it if needed): it gives this
-chat's own address of it, `ws://127.0.0.1:<port>/browser/<…>`. Drive it there with your own client:
+Each station keeps one real Google Chrome, with no window on the machine, and in it an environment of this chat's own:
+its tabs, cookies and storage are this chat's alone, kept in memory only, and gone when the chat is archived. No other
+chat sees them, and you see nothing of another chat's. Get it with the `browser` tool (it starts it if needed): it
+gives this chat's address of it, `ws://127.0.0.1:<port>/browser/<…>`. Drive it there with your own client:
 
 - chrome-devtools-mcp: `npx -y chrome-devtools-mcp@latest --wsEndpoint <that address>`
 - Playwright: `chromium.connectOverCDP("<that address>")`, then `browser.contexts()[0].newPage()` (the default
-  context has the sign-ins; a new context has none).
+  context is this chat's environment).
 
-Tabs opened through that address (and the popups they open) are this chat's: people see in their app which chat
-opened a tab, can close it there, and the tabs close when this chat is archived. Chrome's own port works too, but the
-tabs opened there are nobody's.
+Through that address you reach this chat's environment only: what touches another chat's tabs or the browser as a
+whole (closing it, a session of the browser's own) is refused. People see this chat's tabs in their app, and may
+close them there.
 
 Rules:
 
-- Use it, not a Chrome or Chromium you launch yourself, for anything behind a login: a browser you start has none of
-  the sign-ins, and sites often refuse to sign in an automated one.
-- It is shared. Open a tab of your own and close it when done; leave other tabs alone; do not close the browser.
-- `browser` with action `tabs` lists the tabs; `stop` closes it for everyone (only when it is stuck).
-- It is closed after an hour unused and restarted if it dies while in use; when your connection drops (that, or the
-  station restarted), connect again to the same address.
+- Use it, not a Chrome or Chromium you launch yourself, for anything behind a login: sites often refuse to sign in an
+  automated one, and the vault's sign-ins go only into this one.
+- Close the tabs you are done with.
+- `browser` with action `tabs` lists this chat's tabs; `stop` closes this chat's environment (its tabs and the
+  cookies in it; sign-ins still granted go in again when you next ask).
+- When your connection drops (the browser was restarted, the station restarted), connect again to the same address.
+  A browser restarted gives this chat a new environment: sign-ins made in it by hand are gone, sign-ins still granted
+  from the vault go in again.
+
+## Sign-ins: kept in the vault, given by grant
+
+What this chat is signed in to comes from the vault, the person's, as a sign-in (kind `browser`: the cookies of the
+sites it is for):
+
+- `secret_list` lists the sign-ins you may ask for; `secret_use {item, reason}` (its mode `browser`) asks for one. Once
+  granted, its cookies are in this chat's environment for as long as the grant lasts, then taken out again (the
+  site's newer cookies kept in the vault). Nothing is run with secret_run; you never get the cookies.
+- None there yet: have the person sign in here (below); once they did, offer to keep it: `secret_save {name, kind:
+  "browser", hosts: [the sites, e.g. "github.com"], reason}` reads the cookies from this chat's environment (never
+  shown to you), and its card asks them to keep it. Other chats then ask for it instead of signing in again.
+- A sign-in made before each chat had its own environment is still in the station's own profile: `secret_save {…,
+  kind: "browser", browser: "station"}` reads it from there.
 
 ## Its tabs as screens (the `computer` tool)
 
@@ -40,8 +57,8 @@ ask them. When you are stuck, hand over as below.
 A sign-in (password, 2FA, a code sent to their phone), a captcha or a consent that only a person may give: do not try
 to get around it. Leave the page on that step, give the tab to a person with the `screen` tool (a link that opens the
 tab in their still.fail app, where they see it and type into it), ask in the chat with need_human ("log in here",
-"solve the captcha"), and end your turn. When they say it is done, carry on in the same tab: the sign-in is now in
-the profile for later too.
+"solve the captcha"), and end your turn. When they say it is done, carry on in the same tab; then offer to keep the
+sign-in (above), so it outlives this chat.
 
 Never ask for passwords or codes in the chat, and never type someone's credentials you were not given for that
 purpose.

@@ -10,7 +10,7 @@
 // in the station's database (`vault_requests`, `vault_audit`), never a secret; the vaults' grants only in memory (carried
 // over to the next process at a handover, `carried`), the plain library's written down without their value (`vault_grants`) and taken up again after a restart. A grant ends
 // with its chat: archived or deleted, its session's grants are dropped.
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { basename } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -22,7 +22,7 @@ import { log } from "../ops/log.ts";
 import { type Json, STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { hold } from "../updates/holds.ts";
-import { type BoxCert, type Deny, type Grant, type Kind, type Listing, type Mode, type Request, type Save, type Scope, SCOPES, TAG, allows, certOk, saveContext, seal, signedOk, signerOf } from "./crypto.ts";
+import { type BoxCert, type Deny, type Grant, type Kind, type Listing, type Mode, type Request, type Save, type Scope, type Sealed, SCOPES, TAG, allows, certOk, saveContext, seal, signedOk, signerOf } from "./crypto.ts";
 import { type Carried, type Held, Keeper, accountOf, hostAllowed, valueOf } from "./keeper.ts";
 import { FILE_MOST, KINDS, MODES, PLAIN, type PlainItem, type PlainStore, plainOk } from "./plain.ts";
 import { Proxy, placeholder } from "./proxy.ts";
@@ -49,6 +49,12 @@ CREATE TABLE IF NOT EXISTS vault_audit (
   session TEXT NOT NULL,
   kind TEXT NOT NULL,
   detail TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS vault_renewals (
+  ws TEXT NOT NULL,
+  item TEXT NOT NULL,
+  body TEXT NOT NULL,
+  PRIMARY KEY (ws, item)
 );
 CREATE TABLE IF NOT EXISTS vault_grants (
   ws TEXT NOT NULL,
@@ -78,12 +84,15 @@ const SAVE_WORDS = {
   save: { label: "存入密钥库", detail: "agent 之后每次使用仍需你批准" },
   deny: { label: "拒绝", detail: "不保存，通知 agent" },
 };
-const KIND_WORDS: Record<Kind, string> = { token: "Token", login: "登录", ssh_key: "SSH 密钥", file: "文件" };
+const KIND_WORDS: Record<Kind, string> = { token: "Token", login: "登录", ssh_key: "SSH 密钥", file: "文件", browser: "登录态" };
 const howWords = (mode: Mode, hosts: string[]): string =>
-  mode === "proxy" ? `代理（限 ${hosts.join(", ")}）` : mode === "ssh" ? "ssh-agent（私钥不出 station）" : mode === "file" ? "文件（命令运行时临时写出，可读取内容）" : "环境变量（命令可读取明文）";
+  mode === "proxy" ? `代理（限 ${hosts.join(", ")}）` : mode === "ssh" ? "ssh-agent（私钥不出 station）" : mode === "file" ? "文件（命令运行时临时写出，可读取内容）"
+  : mode === "browser" ? `放进这个对话的浏览器（限 ${hosts.join(", ")}，到期取出）` : "环境变量（命令可读取明文）";
+/// Whether a request in `mode` names the hosts it goes to (on its card, in its grant).
+const hosted = (mode: Mode): boolean => mode === "proxy" || mode === "browser";
 
 /// The field of each kind that holds its secret.
-const SECRET_FIELD: Record<Kind, string> = { token: "value", login: "password", ssh_key: "private_key", file: "content" };
+const SECRET_FIELD: Record<Kind, string> = { token: "value", login: "password", ssh_key: "private_key", file: "content", browser: "cookies" };
 /// The most a secret typed in may be, its fields together (as a command's output may: one secret); a file's, as
 /// plainOk says (FILE_MOST of bytes).
 const TYPED_MOST = 64 * 1024;
@@ -98,6 +107,9 @@ function typedFields(kind: Kind, v: unknown): Record<string, string> | undefined
   const size = fields.reduce((n, [k, x]) => n + k.length + (x as string).length, 0);
   return (all[SECRET_FIELD[kind]] ?? "").trim() !== "" && (kind === "file" || size <= TYPED_MOST) ? all : undefined;
 }
+
+/// What a sign-in's cookies are known by where they are not kept (a renewal's, `#renewalGranted`).
+const digestOf = (cookies: string): string => createHash("sha256").update(cookies, "utf8").digest("hex");
 
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 /// A ULID: 48 bits of milliseconds, 80 random.
@@ -136,6 +148,18 @@ export type SecretsDeps = {
   /// Whether what the process before this one held may still come (a handover under way, `carry`): until then a
   /// request whose box is not here yet is not let go.
   coming?(): boolean;
+  /// The chats' browsers (browser/browsers.ts), for sign-ins (kind browser); none: no sign-in is kept or given.
+  browsers?: SignIns;
+};
+
+/// What the vault asks of the chats' browsers for sign-ins (browser/browsers.ts Browsers).
+export type SignIns = {
+  /// The cookies of `sites` (each with its subdomains) in `session`'s chat's browser, or in the station's own
+  /// (`station`: where sign-ins were made before chats had browsers of their own), as JSON; the browser started if need be.
+  cookies(session: string, sites: string[], station: boolean): Promise<string>;
+  /// Grant `request`'s sign-in put into `session`'s chat's browser until `until` (unix seconds): its cookies of `sites`
+  /// set now, taken out again then.
+  signIn(session: string, d: { request: string; sites: string[]; cookies: string; until: number }): Promise<void>;
 };
 
 /// What goes over to the next station process at a handover, from memory to memory (never written down): the keeper's
@@ -164,6 +188,8 @@ export class Secrets {
   readonly plain: PlainStore;
   readonly #d: SecretsDeps;
   readonly #listeners: ((r: Request) => void)[] = [];
+  /// Who hears of an item of the plain library written here (a sign-in's new cookies).
+  #plainWritten: (i: PlainItem) => void = () => {};
   /// The secrets agents asked to keep, by request, until decided: only in memory (a restart forgets them). The plain
   /// library's is written from here once approved; a vault's is sealed to its owner's devices set up later.
   readonly #unsaved = new Map<string, Record<string, string>>();
@@ -244,6 +270,11 @@ export class Secrets {
   /// Tells `f` of each request made or decided (the members' event streams).
   listen(f: (r: Request) => void) {
     this.#listeners.push(f);
+  }
+
+  /// Tells `f` of each item of the plain library this writes itself (`renewed`).
+  onPlainWritten(f: (i: PlainItem) => void) {
+    this.#plainWritten = f;
   }
 
   #told(r: Request) {
@@ -385,7 +416,8 @@ export class Secrets {
     const mode = (a.mode ?? listing.modes[0]) as Mode;
     if (!listing.modes.includes(mode)) throw new Refused(`「${listing.name}」 is given only by ${listing.modes.join(", ")}.`);
     if (a.reason.trim() === "") throw new Refused("reason is required: why you need it, for the person deciding");
-    const hosts = a.hosts?.length ? a.hosts : mode === "proxy" ? listing.hosts : [];
+    const hosts = a.hosts?.length ? a.hosts : hosted(mode) ? listing.hosts : [];
+    if (mode === "browser" && this.#d.browsers === undefined) throw new Refused("This station has no browser for a sign-in to go into.");
     const now = this.#d.now();
     const id = `r_${ulid(now)}`;
     const request: Request = {
@@ -393,6 +425,7 @@ export class Secrets {
       ...(a.command ? { command: a.command } : {}), ...(hosts.length ? { hosts } : {}), ...(runOn ? { runOn } : {}),
       // The plain library's needs no box: its owner decides, and the station reads the value itself.
       box: plain ? "" : this.keeper.open(id), at: Math.floor(now / 1000), status: "pending", ...(plain && found.owner ? { owner: found.owner } : {}),
+      ...(mode === "browser" && !plain ? this.#renewalOf(ws, found.item) : {}),
     };
     const kept: Kept = { request, thread: null, cardTs: null };
     const thread = this.#d.hub.store.latestThread(session);
@@ -422,6 +455,9 @@ export class Secrets {
             ? `The file is written out for each command alone (removed when it ends) and its path is in ${l.env ?? "the variable you name in env"} and ${SECRET_VAR} (e.g. kubectl --kubeconfig "$${SECRET_VAR}"); its output comes back with the file's content hidden.`
             : `The command gets the value in ${l.env ?? "the variable you name in env"} and ${SECRET_VAR}; its output comes back with the value hidden.`;
     const until = new Date(held.grant.exp * 1000).toISOString();
+    if (held.grant.mode === "browser") {
+      return `Granted: the sign-in 「${l.name}」 (grant ${r.id}) goes into this chat's browser (the \`browser\` tool): its cookies of ${held.grant.hosts.join(", ")}, until ${until}, when they are taken out again. Open the site there; nothing is run with secret_run, and you never get the cookies themselves.`;
+    }
     const lasts = held.grant.scope === "once" ? "for one command" : held.grant.scope === "chat" ? `until this chat is archived (${until} at the latest)` : `until ${until}`;
     const where = r.runOn ? ` Its commands run on ${r.runOn.name}, in this chat's directory there (where station_task runs); the value is sent there only for each command.` : "";
     return `Granted: 「${l.name}」, grant ${r.id}, ${lasts}. Run with secret_run {grant: "${r.id}", command: "…"${l.env ? "" : ', env: "NAME"'}}. ${how}${accountSaid(held)}${where} You never get the value itself.`;
@@ -449,7 +485,7 @@ export class Secrets {
           ],
           ...(owner ? { assignee: owner.toLowerCase() } : {}),
           // The request as the app draws it (VaultAsk.tsx); its outcome added once decided (#settle).
-          vault: { request: r.id, name: l.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: r.mode, hosts: r.mode === "proxy" ? (r.hosts ?? l.hosts) : [], ...(r.runOn ? { station: r.runOn.name } : {}) },
+          vault: { request: r.id, name: l.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: r.mode, hosts: hosted(r.mode) ? (r.hosts ?? l.hosts) : [], ...(r.runOn ? { station: r.runOn.name } : {}) },
         }
       : null;
     return this.#postCard(session, thread, text, card);
@@ -508,11 +544,15 @@ export class Secrets {
     session: string,
     a: {
       name: string; kind: string; reason: string; value?: string; command?: string; path?: string; username?: string; public_key?: string; filename?: string; modes?: string[]; hosts?: string[]; env?: string;
-      cwd: string; station?: string;
+      cwd: string; station?: string; browser?: "chat" | "station";
     },
   ): Promise<string> {
     const { ws, lock } = this.#placeOf(session);
     const kind = a.kind as Kind;
+    // A sign-in is read from a browser, never given, printed or typed in.
+    if (kind === "browser" && (a.value !== undefined || a.command !== undefined || a.path !== undefined || a.station !== undefined)) throw new Refused("A sign-in (kind browser) is read from this chat's browser (or the station's: browser \"station\"), its cookies of hosts: give no value, command, path or station.");
+    if (kind === "browser" && this.#d.browsers === undefined) throw new Refused("This station has no browser to read a sign-in from.");
+    if (kind !== "browser" && a.browser !== undefined) throw new Refused("browser says where a sign-in is read from: give kind browser");
     if (a.path !== undefined && kind !== "file") throw new Refused("path is a file's: give kind file");
     if (a.path !== undefined && (a.command !== undefined || a.value !== undefined)) throw new Refused("Give a file as path, command or value, one of them.");
     // A file given by its path: read as a command printing it would (here or on the station named), ~/ its home there.
@@ -523,15 +563,15 @@ export class Secrets {
     if (from !== null && command === undefined) throw new Refused("station says where command runs: give command (or path)");
     const email = this.#starter(session);
     if (email === null) throw new Refused("No one started this chat: there is no one to keep a secret for.");
-    if (!KINDS.includes(kind)) throw new Refused("kind is token, login, ssh_key or file");
+    if (!KINDS.includes(kind)) throw new Refused("kind is token, login, ssh_key, file or browser");
     const name = a.name.trim();
     if (name === "" || name.length > 200) throw new Refused("name is required (at most 200 characters): what the person and agents will know it by");
     if (a.reason.trim() === "") throw new Refused("reason is required: why it is worth keeping, for the person deciding");
     if (a.value !== undefined && command !== undefined) throw new Refused("Give the secret as value or as a command that prints it (command), not both; neither, and the card asks the person to type it in.");
-    const typed = a.value === undefined && command === undefined;
+    const typed = kind !== "browser" && a.value === undefined && command === undefined;
     const hosts = [...new Set((a.hosts ?? []).map((h) => h.trim().toLowerCase()).filter((h) => h !== ""))];
-    const modes = (a.modes?.length ? [...new Set(a.modes)] : kind === "ssh_key" ? ["ssh"] : kind === "file" ? ["file"] : hosts.length > 0 ? ["proxy"] : ["env"]) as Mode[];
-    if (!modes.every((m) => MODES.includes(m))) throw new Refused("modes are proxy, ssh, env or file");
+    const modes = (a.modes?.length ? [...new Set(a.modes)] : kind === "ssh_key" ? ["ssh"] : kind === "file" ? ["file"] : kind === "browser" ? ["browser"] : hosts.length > 0 ? ["proxy"] : ["env"]) as Mode[];
+    if (!modes.every((m) => MODES.includes(m))) throw new Refused("modes are proxy, ssh, env, file or browser");
     if (modes.includes("ssh") !== (kind === "ssh_key")) throw new Refused("an SSH key is given by ssh (or env), and only an SSH key is");
     if (kind === "file" && (modes.length !== 1 || modes[0] !== "file")) throw new Refused("a file is given as a file (modes: [\"file\"])");
     const sub = lock === null ? null : this.#memberOf(lock, email);
@@ -543,7 +583,7 @@ export class Secrets {
     const draft = (fields: Record<string, string>): PlainItem => ({ ws, id: item, owner: email, version: 0, kind, name, fields, notes: "", listing, at: Math.floor(now / 1000) });
     // (a file's value: its bytes in base64; given as value, its text)
     const fieldsOf = (value: string): Record<string, string> =>
-      kind === "token" ? { value } : kind === "login" ? { ...(a.username ? { username: a.username } : {}), password: value }
+      kind === "token" ? { value } : kind === "browser" ? { cookies: value } : kind === "login" ? { ...(a.username ? { username: a.username } : {}), password: value }
       : kind === "file" ? { content: value, ...(filename ? { filename } : {}) } : { private_key: value, ...(a.public_key ? { public_key: a.public_key } : {}) };
     const why = plainOk(null, draft(fieldsOf("eA==")), email);
     if (why !== null) throw new Refused(why);
@@ -556,6 +596,12 @@ export class Secrets {
       if (got.tooLong) throw new Refused(`${a.path !== undefined ? "The file is" : "The command printed"} more than 64 KB: that is not one secret; nothing was kept.`);
       if (kind === "file" && got.raw === undefined) throw new Refused(`${from?.name ?? "That station"} cannot read a file as its bytes yet: update it.`);
       value = kind === "file" ? got.raw! : got.out;
+    }
+    if (kind === "browser") {
+      value = await this.#d.browsers!.cookies(session, hosts, a.browser === "station");
+      const found = JSON.parse(value) as unknown[];
+      if (found.length === 0) throw new Refused(`${a.browser === "station" ? "The station's browser" : "This chat's browser"} holds no cookies of ${hosts.join(", ")}: sign in there first (a person, in the tab you give them with the \`screen\` tool); nothing was kept.`);
+      if (value.length > TYPED_MOST) throw new Refused(`The cookies of ${hosts.join(", ")} are more than ${TYPED_MOST / 1024} KB: name the sites the sign-in is for, not more; nothing was kept.`);
     }
     if (kind === "file" && Buffer.byteLength(value, "base64") > FILE_MOST) throw new Refused(`The file is more than ${FILE_MOST / 1024} KB; nothing was kept.`);
     if (value === "" && !typed) throw new Refused("The secret is empty; nothing was kept.");
@@ -603,7 +649,7 @@ export class Secrets {
           assignee: r.owner,
           // The request as the app draws it (VaultAsk.tsx): `save` says it is one to keep; its outcome added once decided.
           vault: {
-            request: r.id, name: s.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: s.modes[0], hosts: s.modes[0] === "proxy" ? s.hosts : [],
+            request: r.id, name: s.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: s.modes[0], hosts: hosted(s.modes[0]!) ? s.hosts : [],
             ...(r.runOn ? { station: r.runOn.name } : {}),
             save: { kind: s.kind, ...(s.username ? { username: s.username } : {}), ...(s.filename ? { filename: s.filename } : {}), ...(s.typed ? { typed: true } : {}) },
           },
@@ -696,7 +742,7 @@ export class Secrets {
     // Keeping it lets the chat that asked use it, for as long as the person's items are given.
     const lasts = this.#d.plain.lasts(ws, next.owner)?.lasts ?? null;
     const scope = SCOPES.filter((x) => allows(lasts, x)).at(-1)!;
-    const held = this.keeper.hold(k.request, { scope, hosts: s.modes[0] === "proxy" ? s.hosts : [], listing: next.listing!, lasts }, { kind: s.kind, name: s.name, fields });
+    const held = this.keeper.hold(k.request, { scope, hosts: hosted(s.modes[0]!) ? s.hosts : [], listing: next.listing!, lasts }, { kind: s.kind, name: s.name, fields });
     if (held !== null) log.warn("vault", "a kept secret's grant to its chat not held", { why: held });
     this.#settle(k.request, "granted");
     return this.#d.plain.item(ws, next.id)!;
@@ -720,6 +766,10 @@ export class Secrets {
     }
     this.#audit(k.request, status, "");
     this.#told(k.request);
+    if (status === "granted" && k.request.mode === "browser") {
+      this.#renewalGranted(k.request);
+      this.#signIn(k.request);
+    }
     // The agent is told in its session: no tool call waits for it.
     if (status !== "expired") {
       const l = this.#listingOf(r);
@@ -729,6 +779,80 @@ export class Secrets {
         // The session is gone: nobody to tell.
       }
     }
+  }
+
+  /// A sign-in granted: put into the chat's browser while the grant lasts.
+  #signIn(r: Request) {
+    const held = this.keeper.usable(r.session, r.id);
+    const cookies = typeof held === "string" ? null : valueOf(held.secret);
+    if (typeof held === "string" || cookies === null || this.#d.browsers === undefined) return;
+    this.keeper.spend(r.id);
+    this.#audit(r, "use", `browser ${held.grant.hosts.join(" ")}`);
+    void this.#d.browsers.signIn(r.session, { request: r.id, sites: held.grant.hosts, cookies, until: held.grant.exp }).catch((e) =>
+      log.warn("vault", "a sign-in could not be put into its chat's browser", { request: r.id, error: (e as Error).message }));
+  }
+
+  /// `session`'s chat has a new context in the browser (Chrome started again): its sign-ins still granted put in again.
+  signInAgain(session: string) {
+    for (const h of this.keeper.held(session)) {
+      const cookies = h.grant.mode === "browser" ? valueOf(h.secret) : null;
+      if (cookies === null || this.#d.browsers === undefined) continue;
+      void this.#d.browsers.signIn(session, { request: h.request.id, sites: h.grant.hosts, cookies, until: h.grant.exp }).catch((e) =>
+        log.warn("vault", "a sign-in could not be put into its chat's browser again", { request: h.request.id, error: (e as Error).message }));
+    }
+  }
+
+  /// A sign-in taken out of its chat's browser as its grant ended, with its cookies as they were then: kept as the
+  /// item's new version where the station keeps it (the plain library), so the next chat given it has the site's latest.
+  /// A vault's item is written only by its members' apps: not here.
+  renewed(session: string, request: string, cookies: string) {
+    const row = this.#d.db.prepare("SELECT ws FROM vault_requests WHERE id = ? AND session = ?").get(request, session) as { ws: string } | undefined;
+    const k = row ? this.#kept(row.ws, request) : null;
+    if (k === null) return;
+    if (k.request.vault !== PLAIN) return this.#renewSealed(k.request, cookies);
+    const item = this.#d.plain.item(k.request.ws, k.request.item);
+    if (item === null || item.deleted || item.kind !== "browser" || item.fields.cookies === cookies) return;
+    const next: PlainItem = { ...item, version: item.version + 1, fields: { ...item.fields, cookies }, at: Math.floor(this.#d.now() / 1000) };
+    const why = plainOk(item, next, item.owner);
+    if (why !== null) return log.warn("vault", "a sign-in's new cookies not kept", { request, why });
+    this.#d.plain.put(next);
+    this.#audit(k.request, "renewed", "");
+    this.#plainWritten(next);
+  }
+
+  /// A vault's sign-in's newer cookies: the station cannot write its item (only its members' apps can), so they are
+  /// sealed to its members' devices set up and kept (the latest only) until a grant of it carries them: the app that
+  /// grants the next request for it writes them as the item's next version (docs/vault.md 登录态 写回).
+  #renewSealed(r: Request, cookies: string) {
+    const lock = this.#d.lock(this.#d.hub.store.getSession(r.session)?.ws ?? null);
+    const vault = lock === null ? null : this.#d.vaults.vault(lock.ws, r.vault);
+    if (lock === null || vault === null) return;
+    const certs = vault.members.flatMap((sub) => this.#certsOf(lock, sub));
+    if (certs.length === 0) return;
+    const id = `n_${ulid(this.#d.now())}`;
+    const body = { id, sealed: certs.map((c) => this.#sealTo(c, r.ws, id, { cookies })), digest: digestOf(cookies) };
+    this.#d.db.prepare("INSERT INTO vault_renewals (ws, item, body) VALUES (?, ?, ?) ON CONFLICT (ws, item) DO UPDATE SET body = excluded.body").run(r.ws, r.item, JSON.stringify(body));
+    this.#audit(r, "renewal", "");
+  }
+
+  /// The newer cookies kept for sign-in `item`, for a request of it to carry.
+  #renewalOf(ws: string, item: string): { renewal?: Request["renewal"] } {
+    const row = this.#d.db.prepare("SELECT body FROM vault_renewals WHERE ws = ? AND item = ?").get(ws, item) as { body: string } | undefined;
+    if (row === undefined) return {};
+    const { id, sealed } = JSON.parse(row.body) as { id: string; sealed: Sealed[] };
+    return { renewal: { id, sealed } };
+  }
+
+  /// A sign-in granted with the newer cookies its request carried (its grant's are those): they are written now, kept
+  /// no longer. A grant with others (an app from before renewals) leaves them for the next.
+  #renewalGranted(r: Request) {
+    if (r.renewal === undefined) return;
+    const held = this.keeper.usable(r.session, r.id);
+    const cookies = typeof held === "string" ? null : valueOf(held.secret);
+    const row = this.#d.db.prepare("SELECT body FROM vault_renewals WHERE ws = ? AND item = ?").get(r.ws, r.item) as { body: string } | undefined;
+    const kept = row === undefined ? null : (JSON.parse(row.body) as { id: string; digest: string });
+    if (kept === null || kept.id !== r.renewal.id || cookies === null || digestOf(cookies) !== kept.digest) return;
+    this.#d.db.prepare("DELETE FROM vault_renewals WHERE ws = ? AND item = ?").run(r.ws, r.item);
   }
 
   /// POST vault/grants: `grant`, sent by `sub`'s app; why it is refused, or null.
@@ -756,7 +880,7 @@ export class Secrets {
     if (lock !== null) return "security mode is on: the plain library's secrets are moved into the vault, not given out";
     const item = this.#d.plain.item(ws, k.request.item);
     if (item === null || item.deleted || item.listing === undefined) return "the item is gone, or not one agents may ask for";
-    const hosts = k.request.mode === "proxy" ? (k.request.hosts ?? item.listing.hosts) : [];
+    const hosts = hosted(k.request.mode) ? (k.request.hosts ?? item.listing.hosts) : [];
     const why = this.keeper.hold(k.request, { scope: d.scope as Scope, hosts, listing: item.listing, lasts: this.#lastsOf(k.request, item.listing) }, { kind: item.kind, name: item.name, fields: item.fields });
     if (why !== null) return why;
     this.#settle(k.request, "granted", d.scope as Scope);
@@ -800,6 +924,7 @@ export class Secrets {
   async run(session: string, a: { grant: string; command: string; env?: string; cwd: string; under?: string; timeoutMs?: number; station?: string }): Promise<string> {
     const held = this.keeper.usable(session, a.grant);
     if (typeof held === "string") throw new Refused(held);
+    if (held.grant.mode === "browser") throw new Refused("A sign-in is not run with: it is in this chat's browser (the `browser` tool) while its grant lasts.");
     if (a.env !== undefined && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(a.env)) throw new Refused("env must be a variable name");
     // Where it was granted for, and nowhere else.
     const on = held.request.runOn ?? null;
