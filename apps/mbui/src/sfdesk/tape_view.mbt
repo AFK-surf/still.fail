@@ -1297,7 +1297,6 @@ fn tape_side_edge(
   on : TapeEdgeOn,
 ) -> Unit {
   tape_edge_at(n, holder, Right, fn(t) { tape_col_at(t) - bar_gap_now() }, on, fn(n) {
-    let (before, _) = tape_edge_reach(Right)
     @sf.edge_node(
       n,
       fn() { @sf.t("web-pages.workspace.resizeSidebar") },
@@ -1320,7 +1319,8 @@ fn tape_side_edge(
         on.held.set(h)
         wide.edge_held.set(h)
       },
-      on_beside=fn(x) { x >= before + bar_gap_now() },
+      // (where the page shows from in it, as the gap and its reach are at the press: what it is drawn by then)
+      on_beside=fn(x) { x >= tape_edge_reach(Right).0 + bar_gap_now() },
       beside=fn(at) {
         wide.tape_ask.set(Some(Page))
         tape_take_ask(at) |> ignore
@@ -1337,7 +1337,6 @@ fn tape_side_edge(
 /// where it lies over what shows of the page, the page brought over.
 fn tape_panel_edge(n : @view.View, holder : @view.View, tips : @sf.TipLayer, on : TapeEdgeOn) -> Unit {
   tape_edge_at(n, holder, Left, fn(t) { tape_col_at(t) + tape_page_at(t) }, on, fn(n) {
-    let (before, _) = tape_edge_reach(Left)
     @sf.edge_node(
       n,
       fn() { @sf.t("web-pages.chat.resizePanel") },
@@ -1356,7 +1355,7 @@ fn tape_panel_edge(n : @view.View, holder : @view.View, tips : @sf.TipLayer, on 
         }
       },
       fn(h) { on.held.set(h) },
-      on_beside=fn(x) { x < before },
+      on_beside=fn(x) { x < tape_edge_reach(Left).0 },
       beside=fn(at) {
         wide.tape_ask.set(Some(Page))
         tape_take_ask(at) |> ignore

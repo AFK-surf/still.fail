@@ -194,15 +194,15 @@ test "中屏: the sidebar's edge held by a finger, the touch called off by the s
 }
 
 ///|
-/// 中屏 on the tape, a mouse's, the system laying out the app's tabs (`nav_able`: an iPhone's with a mouse at hand, its
-/// bars from the first frame), the sidebar in use: the gap beside the page as the bars have it then, and which pane is
-/// in use after a click (down and up at once, as a host hands them on) at `dx` from where the page shows from, the
-/// tape's move had its while.
-fn edge_gap_clicked(nav_able : Bool, dx : Double) -> (Bool, @sfdesk.TapePane) raise {
+/// 中屏 on the tape of an iPhone's (platform 1) started with a mouse at hand (its native input a mouse's: GCMouse), the
+/// system laying out the app's tabs or not (`nav_able`: from its first frame), the sidebar in use: the gap beside the page as the bars have it then, and which pane is
+/// in use after a press by a finger (down and up at once, as a host hands them on: laid out for the mouse, pressed by a
+/// hand on its screen) at `dx` from where the page shows from, the tape's move had its while.
+fn edge_gap_pressed(nav_able : Bool, dx : Double) -> (Bool, @sfdesk.TapePane) raise {
   new_run()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=840.0, platform=0, nav_able~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=840.0, platform=1, native=Mouse, nav_able~)
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   let (_, ey) = edge_middle(t, "调整侧边栏宽度")
@@ -218,9 +218,9 @@ fn edge_gap_clicked(nav_able : Bool, dx : Double) -> (Bool, @sfdesk.TapePane) ra
 }
 
 ///|
-test "中屏: the sidebar's edge clicked a point before where the page shows from, in the gap, the system's bars on or off: the edge's own; a point after, the page's" {
+test "中屏 laid out for a mouse: the sidebar's edge pressed a point before where the page shows from, in the gap, the system's bars on or off: the edge's own; a point after, the page's" {
   for able in [false, true] {
-    assert_eq(edge_gap_clicked(able, -1.0), (able, @sfdesk.TapePane::Side), msg="in the gap, bars \{able}")
-    assert_eq(edge_gap_clicked(able, 1.0), (able, @sfdesk.TapePane::Page), msg="past it, bars \{able}")
+    assert_eq(edge_gap_pressed(able, -1.0), (able, @sfdesk.TapePane::Side), msg="in the gap, bars \{able}")
+    assert_eq(edge_gap_pressed(able, 1.0), (able, @sfdesk.TapePane::Page), msg="past it, bars \{able}")
   }
 }
