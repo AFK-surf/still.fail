@@ -591,9 +591,11 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   tape_goes.rest.set(true)
   tape_put(tape_to_of(tape_room_now()))
   v.owns(fn() {
-    // (left for the frame off the tape: the block closes from where the tape had it, pane_view)
+    // (left for the frame off the tape, at this change's moment: the block closes from where the tape had it then, its
+    // column and how far the tape was moved (with a finger's pull), pane_view)
+    let at = v.cause_at()
     let r = tape_room_now()
-    fold_goes.left_tape = Some(fold_look_tape(r.s, tape_col_at(@double.infinity), r.top, r.foot))
+    fold_goes.left_tape = Some(fold_look_tape(r.s, tape_col_at(at), r.top, r.foot, x=tape_x_at(r, at)))
     (tape_goes.end_due)()
     tape_goes.end_due = fn() {  }
     (tape_goes.wait_due)()
@@ -765,6 +767,13 @@ pub fn tape_seen() -> (Array[@view.NodeId], Double, Double)? {
     }
     _ => None
   }
+}
+
+///|
+/// Where the tape's move committed has the sidebar's column end at `t` (where the page's panel starts on the tape), for a
+/// test.
+pub fn tape_col_now(t : Double) -> Double {
+  tape_col_at(t)
 }
 
 ///|

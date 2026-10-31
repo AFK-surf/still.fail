@@ -424,7 +424,7 @@ fn dock(
   let dock_h = dmax(0.0, c.height - top - foot - mt - mb)
   // (over the page, as the web's block is; `held`, in an island of its own: tape_view.mbt, pane_view.mbt)
   let column = fn() {
-    c.box(style=dock_column.then(@ui.style(w=Fixed(col))), tx=x, fn() {
+    c.box(style=dock_column.then(@ui.style(w=Fixed(col))), tx=x + f.x, fn() {
       let b = c.box(
         style=look.then(
           @ui.style(

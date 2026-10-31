@@ -26,6 +26,7 @@
 /// the sidebar shows, its shadow (blur, fall, how much of its colour), its corner (0 open), its ground; the sidebar's
 /// box's width; the rail's width and padding (left, top, bottom) and its top row's height; where the edge's strip starts.
 priv struct FoldLook {
+  x : Double
   col : Double
   aside : Double
   bar_pl : Double
@@ -59,6 +60,7 @@ priv struct FoldLook {
 fn fold_mix(a : FoldLook, b : FoldLook, k : Double) -> FoldLook {
   let m = fn(x : Double, y : Double) { x + (y - x) * k }
   {
+    x: m(a.x, b.x),
     col: m(a.col, b.col),
     aside: m(a.aside, b.aside),
     bar_pl: m(a.bar_pl, b.bar_pl),
@@ -94,6 +96,7 @@ fn fold_mix(a : FoldLook, b : FoldLook, k : Double) -> FoldLook {
 fn fold_far(a : FoldLook, b : FoldLook) -> Double {
   let mut far = 0.0
   for d in [
+    a.x - b.x,
     a.col - b.col,
     a.aside - b.aside,
     a.bar_pl - b.bar_pl,
@@ -192,6 +195,7 @@ fn fold_look_of(r : PaneRoom, shift : Double) -> FoldLook {
     open_shadow
   }
   {
+    x: 0.0,
     col: rail_left() + (if bar { 0.0 } else { s }),
     aside: shift,
     bar_pl: if !bar || over_bars {
@@ -255,12 +259,13 @@ fn fold_look_of(r : PaneRoom, shift : Double) -> FoldLook {
 /// What the block is shown as on the tape (a panel of its own, apart from the page: 6 from the window's edges, 8 from
 /// the page's panel, its line and the closed bar's shadow), the sidebar `s` wide in its column `col`, the bars `top` and
 /// `foot` clear: where it closes from as the tape is left for a place with no sidebar of its own (pane_view).
-fn fold_look_tape(s : Double, col : Double, top : Double, foot : Double) -> FoldLook {
+fn fold_look_tape(s : Double, col : Double, top : Double, foot : Double, x? : Double = 0.0) -> FoldLook {
   {
     ..fold_look_of(
       { gated: false, bare: false, own: true, crowded: false, on_fold: None, bar: false, peek: false, s, top, foot },
       0.0,
     ),
+    x,
     col,
     ml: bar_in_now(),
     mt: bar_in_now(),
@@ -289,6 +294,8 @@ priv struct FoldGoes {
   said : @signals.Signal[Int]
   mut left_tape : FoldLook?
   mut node : @view.View?
+  /// its row, the column, the page's pane, as made (for what is asked of them: pane_seen)
+  parts : Array[@view.View]
   mut page_id : Int
   /// whether the core has given what the page shows of a page (sfapp's pane_ready), waited for that long at most
   mut ready : (Page) -> Bool
@@ -306,6 +313,7 @@ let fold_goes : FoldGoes = {
   said: @signals.signal(0),
   left_tape: None,
   node: None,
+  parts: [],
   page_id: 0,
   ready: fn(_) { true },
   most: 0.0,
@@ -384,12 +392,13 @@ fn fold_moves_from(at : Double, to : FoldLook, was_look? : FoldLook) -> Unit {
 ///|
 /// Where the block goes put there at once, no move (the window, the edge dragged, the room folding it): what goes on of
 /// a move goes on for the rest of it to there.
-fn fold_put(to : FoldLook) -> Unit {
+fn fold_put(to : FoldLook, at : Double) -> Unit {
   match (fold_goes.from, fold_goes.to) {
     (Some(_), Some(was)) if was == to => return
     _ => ()
   }
-  if fold_goes.way.goes_at(@ui.current().moment()) {
+  // (as of the change's moment: what goes on of a move then goes on to there)
+  if fold_goes.way.goes_at(at) {
     fold_goes.to = Some(to)
   } else {
     fold_goes.from = Some(to)
@@ -434,7 +443,22 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   fold_goes.node = Some(v)
   fold_goes.ready = ready
   fold_goes.most = most
-  v.owns(fn() { fold_goes.node = None }) |> ignore
+  // (what this frame committed is its own: let go with it, the next one made starting from none, or from the tape as it
+  // was left then)
+  fold_goes.from = None
+  fold_goes.to = None
+  fold_goes.was = None
+  fold_goes.shift = 0.0
+  fold_goes.way.put(1.0)
+  v.owns(fn() {
+    fold_goes.node = None
+    fold_goes.parts.clear()
+    fold_goes.from = None
+    fold_goes.to = None
+    fold_goes.was = None
+    fold_goes.left_tape = None
+  })
+  |> ignore
   // the block moved for what it is moved for, at that moment: from where it is then; else what it goes to changed by
   // what is no cause of a move, put there at once
   let first = Ref(true)
@@ -481,14 +505,17 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
           fold_moves_from(at, look)
         }
         (None, Some(t)) if made && cause.bare => fold_moves_from(at, look, was_look=t)
-        _ => fold_put(look)
+        _ => fold_put(look, at)
       }
     },
   )
   v.box(fn(row) {
+    fold_goes.parts.clear()
+    fold_goes.parts.push(row)
     row.row(Is(true)).grow(Is(1.0)) |> ignore
     // the rail and the sidebar's column: what the block takes of the row, open or folded, where its move has got
     row.box(fn(col) {
+      fold_goes.parts.push(col)
       col
       .width(By(fn() {
         match @sfbase.workspace_in_view(src).0 {
@@ -504,6 +531,7 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     |> ignore
     // the page's pane in what the column leaves, under the bars at the top
     row.box(fn(pane) {
+      fold_goes.parts.push(pane)
       pane
       .grow(Is(1.0))
       .padding(By(fn() { (0.0, @ui.system_bars().top, 0.0, 0.0) }))
@@ -519,6 +547,33 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   |> ignore
   // the block over them (reaching over the page shown a while), its edge, 更新: taking presses where they draw them
   @ui.old(v, fn(c) { pane_block_built(c, src) }, key=tape_island_key).over(Is(true)) |> @ui.old_takes_own |> ignore
+}
+
+///|
+/// What the window's tree has of the frame off the tape, for a test: who its shell, its row, the block's column and the
+/// page's pane are (made once: the same while it shows), and how wide the column is laid out. None while it does not
+/// show.
+pub fn pane_seen() -> (Array[@view.NodeId], Double)? {
+  match fold_goes.node {
+    Some(v) if fold_goes.parts.length() == 3 => {
+      let (_, _, w, _) = fold_goes.parts[1].rect()
+      Some(([v.id()] + fold_goes.parts.map(fn(p) { p.id() }), w))
+    }
+    _ => None
+  }
+}
+
+///|
+/// Where the block's move committed has the block at `t` (how far across it is drawn, the column it takes), worked out
+/// of the move alone, for a test; None where none is committed.
+pub fn pane_fold_at(t : Double) -> (Double, Double)? {
+  match (fold_goes.from, fold_goes.to) {
+    (Some(a), Some(b)) => {
+      let f = if fold_goes.way.goes_at(t) { fold_mix(a, b, fold_goes.way.value_at(t)) } else { b }
+      Some((f.x, f.col))
+    }
+    _ => None
+  }
 }
 
 ///|
