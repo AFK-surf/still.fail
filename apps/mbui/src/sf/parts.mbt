@@ -4093,10 +4093,8 @@ pub fn way_in(
   said? : String = "",
   bad? : Bool = false,
 ) -> Bool {
-  let p = theme().p
   let bare = native_input() is Mouse
-  let id = c.id("sign-in")
-  let pressed = !busy && c.clicked(id)
+  let mut pressed = false
   // (what was said kept as it goes, its room closing under it)
   if said != "" {
     way_in_said.val = (said, bad)
@@ -4104,37 +4102,13 @@ pub fn way_in(
   let open = @motion.anim(c, "sign-in/said", if said != "" { 1.0 } else { 0.0 }, global=true)
   open.follow(if said != "" { 1.0 } else { 0.0 }, @motion.move().per_unit(@motion.reveal_height("sign-in/said")))
   let share = open.get()
-  c.box(style=sign_in_box, fn() {
-    drawable(c, art, dmin(sign_in_picture_w, c.width - sign_in_side_w - sign_in_side_w)) |> ignore
+  way_in_page(c, art, fn() {
     if !bare {
-      c.box(style=sign_in_title_box, fn() { c.text(title, style=sign_in_title) |> ignore }) |> ignore
-      c.text(note, style=sign_in_note) |> ignore
+      way_in_title(c, title)
+      way_in_note(c, note)
     }
     c.box(style=sign_in_gap, fn() {  }) |> ignore
-    let mut words_at = -1
-    let b = c.box(style=if bare { sign_in_button_desk } else { sign_in_button_touch }, id~, fn() {
-      // (as a button's: the spinner's room opening before its words, @sf.button)
-      let turning = ease_to(c, "sign-in/busy", busy)
-      let over = @motion.animate(c, "sign-in/over", if busy { 1.0 } else { 0.0 }, spec=button_reshape)
-      if busy || over > 0.0 {
-        let room = button_icon + sign_in_spin_gap
-        c.box(style=@ui.style(row=true, w=Fixed(room * over), h=Fixed(button_icon)), fn() {
-          let s = c.box(style=button_spin, fn() {
-            spinner(c, size=button_icon, ring=alpha(p.bg, 0.3), arc=p.bg) |> ignore
-          })
-          c.look(s, @ui.look(alpha=turning, scale=over, ox=0.0))
-        })
-        |> ignore
-      }
-      words_at = c.text(label, style=sign_in_words)
-      // SignIn.kt: clip(CircleShape).clickable
-      if !busy {
-        @motion.ripple(c, id, sign_in_button_h / 2.0)
-      }
-    })
-    // (its words changed, 登录或注册 to 正在登录: moved to their new place, not at once)
-    @motion.layout(c, words_at, "sign-in/words", by=label, spec=button_reshape)
-    c.semantics(b, Button, id=if busy { 0 } else { id }, label~, disabled=busy)
+    pressed = way_in_button(c, "sign-in", label, busy~)
     if share > 0.0 {
       let (words, red) = way_in_said.val
       @motion.reveal(c, "sign-in/said", share, middle=true, fn() {
@@ -4146,9 +4120,110 @@ pub fn way_in(
       c.text(foot, style=sign_in_many) |> ignore
     }
   })
-  |> ignore
   pressed
 }
+
+///|
+/// A page of the way in (way_in's, and those after it till a workspace is open: none yet, an invitation, an account
+/// not let in), in the box it is given: its picture (`art`) over what `body` says and offers, all of it in the middle
+/// of the page, no wider than a tablet's button. The picture keyed: from one of these pages to the next it goes from
+/// where it was to its new place, not at once.
+pub fn way_in_page(c : @ui.Ctx, art : String, body : () -> Unit) -> Unit {
+  let w = dmin(sign_in_picture_w, c.width - sign_in_side_w - sign_in_side_w)
+  // (its foot at the same height on each of them, whatever is under it: what changes from page to page is under the
+  // picture, the picture and the title where they were)
+  let above = dmax(0.0, c.height * way_in_picture_foot - drawable_height(art, w) - way_in_page_top)
+  c.box(style=way_in_whole, fn() {
+    c.box(style=@ui.style(h=Fixed(above)), fn() {  }) |> ignore
+    let picture = drawable(c, art, w)
+    @motion.layout(c, picture, "way-in/picture", spec=button_reshape)
+    c.box(style=way_in_column, body) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// Where a way-in page's picture ends, down its page (way_in_page): a little over its middle, so a page of a button or
+/// two sits about the middle and one with more has room under it.
+let way_in_picture_foot : Double = 0.42
+
+///|
+/// A way-in page (way_in_page): its picture and what is under it in a column down its middle, 30 in from its sides
+/// and 40 from its top and foot, 12 apart (SignIn.kt: padding(horizontal = 30.dp, vertical = 40.dp), spacedBy(12.dp)).
+// kept across runs: a value (no field of it changes)
+let way_in_whole : @ui.Style = @ui.style(w=Full, h=Full, px=sign_in_side, py=S10, gap=S3, align=ACenter)
+
+///|
+/// How far down a way-in page what it holds starts (way_in_whole's py: S10).
+let way_in_page_top : Double = 40.0
+
+///|
+/// A way-in page's title (way_in_page): under the picture, 28, bold.
+pub fn way_in_title(c : @ui.Ctx, title : String) -> Unit {
+  c.box(style=sign_in_title_box, fn() { c.text(title, style=sign_in_title) |> ignore }) |> ignore
+}
+
+///|
+/// What a way-in page says under its title (way_in_page): the body's size, muted, centred.
+pub fn way_in_note(c : @ui.Ctx, note : String) -> Unit {
+  c.text(note, style=sign_in_note) |> ignore
+}
+
+///|
+/// A way-in page's button (way_in_page; `key` its own): 50 high, a pill across a touch screen's page (420 at most),
+/// 300 on a desktop; `solid` the ink's, the one thing to do, else the chip's ground; `busy` while what it does is under
+/// way: a spinner before its words, not pressed again. Its words changed, they move to their new place. True on the
+/// frame after it was pressed.
+pub fn way_in_button(c : @ui.Ctx, key : String, label : String, solid? : Bool = true, busy? : Bool = false) -> Bool {
+  let p = theme().p
+  let bare = native_input() is Mouse
+  let id = c.id(key)
+  let pressed = !busy && c.clicked(id)
+  let h = ease_to(c, key + "/lit", !busy && (c.lit(id) || c.pressed(id)))
+  let (ground, ink) = if solid {
+    (mix(p.primary_hover, h, p.primary), p.bg)
+  } else {
+    (over(p.chip, alpha(p.hover, h)), p.text)
+  }
+  let mut words_at = -1
+  let b = c.box(style=if bare { sign_in_button_desk } else { sign_in_button_touch }, bg=ground, id~, fn() {
+    // (as a button's: the spinner's room opening before its words, @sf.button)
+    let turning = ease_to(c, key + "/busy", busy)
+    let over = @motion.animate(c, key + "/over", if busy { 1.0 } else { 0.0 }, spec=button_reshape)
+    if busy || over > 0.0 {
+      let room = button_icon + sign_in_spin_gap
+      c.box(style=@ui.style(row=true, w=Fixed(room * over), h=Fixed(button_icon)), fn() {
+        let s = c.box(style=button_spin, fn() {
+          spinner(c, size=button_icon, ring=alpha(ink, 0.3), arc=if solid { ink } else { p.accent }) |> ignore
+        })
+        c.look(s, @ui.look(alpha=turning, scale=over, ox=0.0))
+      })
+      |> ignore
+    }
+    words_at = c.text(label, style=sign_in_words, color=ink)
+    // SignIn.kt: clip(CircleShape).clickable
+    if !busy {
+      @motion.ripple(c, id, sign_in_button_h / 2.0)
+    }
+  })
+  // (its words changed, 登录或注册 to 正在登录: moved to their new place, not at once)
+  @motion.layout(c, words_at, key + "/words", by=label, spec=button_reshape)
+  c.semantics(b, Button, id=if busy { 0 } else { id }, label~, disabled=busy)
+  pressed
+}
+
+///|
+/// What a way-in page offers last, quietly (way_in_page: 切换账号): its words alone, the page's ink, a ground under the
+/// pointer. True on the frame after it was pressed.
+pub fn way_in_link(c : @ui.Ctx, key : String, label : String, busy? : Bool = false) -> Bool {
+  button(c, label, key~, tone=Ghost, busy~)
+}
+
+///|
+/// What a way-in page says and offers under its picture (way_in_page): a column 12 apart, its things in its middle,
+/// no wider than a tablet's button.
+// kept across runs: a value (no field of it changes)
+let way_in_column : @ui.Style = @ui.style(w=Full, max_w=Fixed(sign_in_touch_w), gap=S3, align=ACenter)
 
 ///|
 /// What was last said under the sign-in button (way_in): kept as its room closes.
@@ -4186,21 +4261,7 @@ let sign_in_button_h : Double = 50.0
 let sign_in_picture_w : Double = 300.0
 
 ///|
-/// The page: its picture, words and button in a column in its middle, 30 in from its sides and 40 from its top and
-/// foot, 12 apart (SignIn.kt: padding(horizontal = 30.dp, vertical = 40.dp), spacedBy(12.dp)).
-// kept across runs: a value (no field of it changes)
-let sign_in_box : @ui.Style = @ui.style(
-  w=Full,
-  h=Full,
-  px=sign_in_side,
-  py=S10,
-  gap=S3,
-  align=ACenter,
-  justify=JCenter,
-)
-
-///|
-/// What the page leaves either side of the picture (its sides: sign_in_box's px).
+/// What the page leaves either side of the picture (its sides: way_in_whole's px).
 let sign_in_side_w : Double = 30.0
 
 ///|
@@ -4214,7 +4275,8 @@ let sign_in_title : @ui.TextStyle = @ui.text_style(
   size=sign_in_title_size,
   weight=Bold,
   color=Fg,
-  wrap=false,
+  center=true,
+  w=Full,
   leading=Font,
 )
 
