@@ -57,6 +57,20 @@ test("days_split_by_who_and_lists_ranked_by_cost", () => {
   assert.deepEqual(v.notes, ["4 次调用的模型无价目，未计入费用"]);
 });
 
+test("an_account_says_the_model_it_used_the_most_tokens_of", () => {
+  const rows = [
+    row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 3, 3.0),
+    row("2026-10-02", "a@x", 7, "cc", "claude-sonnet-5", 2, 0.5),
+    row("2026-10-01", "a@x", 7, "cc", "claude-sonnet-5", 2, 0.5),
+    row("2026-09-20", "a@x", 7, "cc", "claude-haiku-5", 100, 1.0),
+  ];
+  const sources: Source[] = [{ address: "ws/st", name: "studio", online: true, value: ok(station(rows)) }];
+  const v = usageView(sources, 7, NOW, 480, { id: "a@x", email: "a@x" }, []);
+  // (Sonnet's 4 calls the most tokens in the 7 days, though Opus cost more; Haiku's before them not counted)
+  assert.equal(v.lists[2].items[0].topModel, "最多 Sonnet 5");
+  assert.equal(v.lists[3].items[0].topModel, undefined);
+});
+
 test("thirty_days_say_a_date_a_week_under_their_bars", () => {
   const v = usageView([{ address: "ws/st", name: "studio", online: true, value: ok(station([row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 1, 1.0)])) }], 30, NOW, 480, { id: "a@x", email: "a@x" }, []);
   assert.equal(v.many, true);

@@ -853,11 +853,11 @@ fn cd_secret_dialog(core : Core, station : String, cv : Json?) -> Unit {
 fn cd_avatar(c : @ui.Ctx, core : Core, cv : Json?, size : Double) -> Unit {
   match opt_text(cv, "botImage") {
     Some(image) => avatar(c, core, text(cv, "id"), text(cv, "name"), size, picture=image)
-    // (its kind's mark three fifths of it, on a tile 2.4 times the mark: pages.css.ts mark)
+    // (its kind's mark three fifths of it, on a tile of its side: no larger than the room its head gives it, which
+    // a tile 2.4 times the mark was, over the lines under it on a phone)
     None => {
       let mark = (size * cd_avatar_mark).round()
-      let side = mark * cd_tile_share
-      c.box(style=cd_avatar_box.then(@ui.style(w=Fixed(side), h=Fixed(side), bg=Data(@sf.theme().p.paper))), fn() {
+      c.box(style=cd_avatar_box.then(@ui.style(w=Fixed(size), h=Fixed(size), bg=Data(@sf.theme().p.paper))), fn() {
         cn_kind(c, text(cv, "kind"), mark)
       })
       |> ignore
@@ -871,9 +871,6 @@ let cd_avatar_size : Double = 52.0
 
 ///|
 let cd_avatar_mark : Double = 0.6
-
-///|
-let cd_tile_share : Double = 2.4
 
 ///|
 let cd_icon : Double = 14.0

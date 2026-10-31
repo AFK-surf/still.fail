@@ -6711,7 +6711,7 @@ export interface UsageDay {
 /**
  * A person, chat, account or model, and what it spent: `share` of the total cost (of the calls, when nothing was
  * priced), `detail` its calls and tokens in a line (`callsText`, `tokensText` each alone: 1,204 · 3.2 万). A person's `person` (with `shown`); a chat's page (`chat`), when
- * it is still there.
+ * it is still there; an account's `topModel`, the model it used the most tokens of, in words (最多 Opus 5.5).
  */
 export interface UsageItem {
 	key: string;
@@ -6727,6 +6727,7 @@ export interface UsageItem {
 	detail: string;
 	person?: Creator;
 	chat?: UsageChat;
+	topModel?: string;
 }
 
 /** 按人 / 按对话 / 按账号 / 按模型 (`key` people, chats, profiles, models), the most spent first. */

@@ -377,6 +377,7 @@
   "core-views.usage.calls": "{n} 次调用",
   "core-views.usage.deleted_account": "{profile}（已删除）",
   "core-views.usage.deleted_chat": "已删除的对话",
+  "core-views.usage.top_model": "最多 {model}",
   "core-views.usage.detail": "{n} 次调用 · {tokens} token",
   "core-views.usage.no_price": "无价目，不计入费用",
   "core-views.usage.note.offline": "{name} 离线，其用量未计入",

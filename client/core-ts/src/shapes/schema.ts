@@ -2934,7 +2934,8 @@ export const SHAPES: Record<string, Shape> = {
     ["detail", "String"],
     ["person", opt("Creator")],
     ["chat", opt("UsageChat")],
-  ], { doc: "A person, chat, account or model, and what it spent: `share` of the total cost (of the calls, when nothing was\npriced), `detail` its calls and tokens in a line (`callsText`, `tokensText` each alone: 1,204 · 3.2 万). A person's `person` (with `shown`); a chat's page (`chat`), when\nit is still there." }),
+    ["topModel", opt("String"), { said: true }],
+  ], { doc: "A person, chat, account or model, and what it spent: `share` of the total cost (of the calls, when nothing was\npriced), `detail` its calls and tokens in a line (`callsText`, `tokensText` each alone: 1,204 · 3.2 万). A person's `person` (with `shown`); a chat's page (`chat`), when\nit is still there; an account's `topModel`, the model it used the most tokens of, in words (最多 Opus 5.5)." }),
   UsageChat: struct([
     ["station", "String"],
     ["thread", opt("i64"), { client: opt("I54") }],
