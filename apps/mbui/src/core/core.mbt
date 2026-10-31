@@ -1,7 +1,7 @@
 // The app's one core: the engine (src/host/core_api.h; Hermes on the Rust shell, on macOS, iOS, Android and Windows)
 // linked into the app, its messages posted by core_native.c to mbui's queue on the channel "core" (mb_post, any thread), which hands each to `receive`
-// on the UI thread as the next frame begins (the app's `@ui.on_message("core", @core.receive)`). On the web there is no
-// engine yet (js.mbt): `start` says so.
+// on the UI thread as the next frame begins (the app's `@ui.on_message("core", @core.receive)`). In a browser it is the
+// page's (js.mbt: still.fail's web core worker, its messages posted to the same queue).
 
 ///|
 priv struct Engine {
@@ -319,6 +319,9 @@ fn take(msg : Json, bytes : Bytes?) -> Unit {
   match msg {
     Object(m) if m.contains("mbui_auth") => web_auth_done(m)
     Object(m) if m.contains("clocked") => clocked(m)
+    // (the web's: the tab whose worker ran the core went, another tab's runs it now, web/src/core/worker.ts: asked
+    // again what this client had asked of the one before)
+    Object(m) if m.contains("rejoin") => client.restarted()
     _ => {
       match receive_hook.val {
         Some(f) => f()
@@ -383,8 +386,8 @@ fn restart() -> Unit {
 /// (`{account, return_to}`) or why not (the person closed the page, or an error of the core's).
 pub fn sign_in(on_done : (Result[Json, Json]) -> Unit) -> Unit {
   let params : Map[String, Json] = {
-    "redirect_uri": Json::string("stillfail://auth/callback"),
-    "return_to": Json::string("/"),
+    "redirect_uri": Json::string(auth_redirect()),
+    "return_to": Json::string(auth_return_to()),
   }
   client.call("auth.begin", params=Json::object(params), on_done=fn(r) {
     match r {

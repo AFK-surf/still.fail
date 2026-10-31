@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>still.fail</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <!-- still.fail's app as every device runs it (apps/mbui), drawn by mbui's web host: src/mbui/core.ts -->
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #F5F3EF; }
+    @media (prefers-color-scheme: dark) { html, body { background: #1F2023; } }
+    #c { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+    /* receives the input method; sits at the caret, invisible */
+    #ime { position: fixed; left: 0; top: 0; width: 2px; height: 20px; opacity: 0; padding: 0; border: 0;
+           resize: none; overflow: hidden; font-size: 16px; caret-color: transparent; color: transparent;
+           background: transparent; outline: none; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <textarea id="ime" autocapitalize="off" autocomplete="off" spellcheck="false"></textarea>
+  <script type="module" src="/src/mbui/core.ts"></script>
+</body>
+</html>

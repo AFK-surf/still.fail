@@ -4,7 +4,7 @@
 // asks on its own; `files` is None until it has answered, then what was picked (none when it was called off). A frame
 // is asked for as the answer comes, so a view can look each frame. iOS: its photo picker (PHPickerViewController), its
 // document picker, its camera (UIImagePickerController). Windows: its file dialog (IFileOpenDialog, the pictures' kinds
-// for Photos; no camera: win_files.h). Not on the web yet (`pick` is None there).
+// for Photos; no camera: win_files.h). The web: the page's file input (web/host.js H.pickStart).
 
 ///|
 /// What the system's pickers offer.

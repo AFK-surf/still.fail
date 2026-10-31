@@ -688,42 +688,35 @@ fn bl_end(_id : Int) -> Unit {
 
 }
 
-// Files picked (pick.mbt): not from a page yet.
+// Files picked (pick.mbt): the page's file input (web/host.js H.pickStart), its answer told as outside kind 3.
 
 ///|
-fn pk_start(_kind : Int) -> Int {
-  0
-}
+extern "js" fn pk_start(kind : Int) -> Int =
+  #|(k) => { const H = globalThis.__mbhost; return H && H.pickStart ? H.pickStart(k) : 0 }
 
 ///|
-fn pk_state(_id : Int) -> Int {
-  -1
-}
+extern "js" fn pk_state(id : Int) -> Int =
+  #|(i) => { const H = globalThis.__mbhost; return H && H.pickState ? H.pickState(i) : -1 }
 
 ///|
-fn pk_count(_id : Int) -> Int {
-  0
-}
+extern "js" fn pk_count(id : Int) -> Int =
+  #|(i) => globalThis.__mbhost.pickCount(i)
 
 ///|
-fn pk_name(_id : Int, _i : Int) -> String {
-  ""
-}
+extern "js" fn pk_name(id : Int, i : Int) -> String =
+  #|(id, i) => globalThis.__mbhost.pickName(id, i)
 
 ///|
-fn pk_bytes(_id : Int, _i : Int) -> Bytes {
-  b""
-}
+extern "js" fn pk_bytes(id : Int, i : Int) -> Bytes =
+  #|(id, i) => globalThis.__mbhost.pickBytes(id, i)
 
 ///|
-fn pk_info(_id : Int, _i : Int) -> String {
-  ""
-}
+extern "js" fn pk_info(id : Int, i : Int) -> String =
+  #|(id, i) => globalThis.__mbhost.pickInfo(id, i)
 
 ///|
-fn pk_end(_id : Int) -> Unit {
-
-}
+extern "js" fn pk_end(id : Int) -> Unit =
+  #|(i) => { const H = globalThis.__mbhost; if (H && H.pickEnd) H.pickEnd(i) }
 
 // Files kept on the device (keep.mbt): a page keeps none.
 

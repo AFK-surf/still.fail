@@ -23,3 +23,14 @@ extern "C" fn ffi_now() -> Double = "mbc_now_ms"
 extern "C" fn ffi_wall_ms() -> Double = "mbc_wall_ms"
 
 extern "C" fn ffi_screen_ack(call : Double, ts : Double) -> Int = "mbc_screen_ack"
+
+///|
+/// Where the cloud sends a sign-in back to: the app's own scheme, which the system's browser session hands back.
+fn auth_redirect() -> String {
+  "stillfail://auth/callback"
+}
+
+///|
+fn auth_return_to() -> String {
+  "/"
+}
