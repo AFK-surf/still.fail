@@ -8,7 +8,7 @@
 import { Effect } from "effect";
 import type { Data } from "./data.ts";
 import { merge } from "./entries.ts";
-import { markdown, markdownHere, mdKey } from "./markdown.ts";
+import { MD_READING, mdKey, oldMdKey, refreshMarkdown } from "./markdown.ts";
 import { laterSleep, type Runner } from "./runtime.ts";
 import { PAGE } from "./station/channel-kinds.ts";
 import { timed } from "./spent.ts";
@@ -21,18 +21,34 @@ export const AHEAD_AFTER_MS = 3000;
 
 type Ahead = { station: string; of: string; text: string; key: string };
 
+/// Sources used by the chat and history readers in a kept entry. Only a source whose old key is actually in the cache
+/// is read; the same fields also occur in entries that never had a Markdown tree.
+function* sourceTexts(value: unknown): Generator<string> {
+  if (Array.isArray(value)) {
+    for (const part of value) yield* sourceTexts(part);
+  } else if (value !== null && typeof value === "object") {
+    for (const [key, part] of Object.entries(value)) {
+      if (typeof part === "string" && ["text", "result", "more", "words"].includes(key)) yield part;
+      else if (part !== null && typeof part === "object") yield* sourceTexts(part);
+    }
+  }
+}
+
 export class MdAhead {
   readonly #data: Data;
   readonly #runner: Runner;
   readonly #now: () => number;
+  readonly #changed: (station: string, of: string) => void;
   readonly #queue: Ahead[] = [];
   readonly #queued = new Set<string>();
+  readonly #waiting = new Map<string, Set<string>>();
   #running = false;
 
-  constructor(data: Data, runner: Runner, now: () => number) {
+  constructor(data: Data, runner: Runner, now: () => number, changed: (station: string, of: string) => void = () => {}) {
     this.#data = data;
     this.#runner = runner;
     this.#now = now;
+    this.#changed = changed;
   }
 
   /// The chats each station's agents spoke in latest, read ahead.
@@ -43,6 +59,50 @@ export class MdAhead {
         for (const thread of this.#data.recentThreads(station, since, AHEAD_CHATS)) this.thread(station, thread);
       }
     }
+    this.#upgrade();
+  }
+
+  /// After a reader change, update trees already on the device as background work too, including old and archived
+  /// chats. The old cache did not keep its source, so read it from each owner's kept entries in bounded pages.
+  #upgrade(): void {
+    this.#runner.fork(Effect.gen({ self: this }, function* () {
+      dbs: for (const db of this.#data.dbs()) {
+        if (db.meta("md_reading_ahead") === String(MD_READING)) continue;
+        let after = { station: "", of: "" };
+        for (;;) {
+          yield* Effect.yieldNow;
+          if (!this.#data.dbs().includes(db)) continue dbs;
+          const owners = db.oldMdOwners(MD_READING, after);
+          if (owners.length === 0) break;
+          for (const owner of owners) {
+            after = owner;
+            let before = Number.MAX_SAFE_INTEGER;
+            const store = this.#data.mdStore(owner.station, owner.of);
+            if (store === undefined) continue;
+            for (;;) {
+              yield* Effect.yieldNow;
+              if (!this.#data.dbs().includes(db)) continue dbs;
+              if (!db.hasOldMd(owner.station, owner.of, MD_READING)) break;
+              const page = db.mdSourcePage(owner.station, owner.of, before);
+              if (page.length === 0) break;
+              before = page[page.length - 1]!.n;
+              for (const row of page) {
+                for (const text of sourceTexts(row.json)) {
+                  if (text === "") continue;
+                  yield* Effect.yieldNow;
+                  if (!this.#data.dbs().includes(db)) continue dbs;
+                  const key = mdKey(text);
+                  if (store.has(key)) continue;
+                  const old = oldMdKey(store, key, 1);
+                  if (old !== null) timed("md.upgrade", () => refreshMarkdown(text, store, old));
+                }
+              }
+            }
+          }
+        }
+        if (!db.readOnly && this.#data.dbs().includes(db)) db.setMeta("md_reading_ahead", String(MD_READING));
+      }
+    }));
   }
 
   /// A chat's entries held changed: what its agents said on its latest page and is not read yet, read in turn, however
@@ -56,13 +116,36 @@ export class MdAhead {
     const page = this.#data.logRange("entry", station, id, Math.max(1, span.max - PAGE + 1), span.max);
     for (const m of merge([...page.values()])) {
       const text = typeof m.text === "string" ? m.text : "";
-      if (m.authorKind === "person" || text === "" || text.includes("<@") || markdownHere(text)) continue;
+      if (m.authorKind === "person" || text === "" || text.includes("<@")) continue;
       const key = mdKey(text);
-      if (this.#queued.has(`${station}\u0001${key}`) || store.has(key)) continue;
-      this.#queued.add(`${station}\u0001${key}`);
-      this.#queue.push({ station, of: `t:${thread}`, text, key });
+      if (!store.has(key)) this.#enqueue({ station, of: `t:${thread}`, text, key });
     }
     this.#run();
+  }
+
+  /// An older tree went out in a view. Read it after the view goes out, then tell each view that used that tree.
+  refresh(station: string, of: string, text: string): void {
+    const key = mdKey(text);
+    const id = `${station}\u0001${key}`;
+    const waiting = this.#waiting.get(id) ?? new Set<string>();
+    waiting.add(of);
+    this.#waiting.set(id, waiting);
+    this.#enqueue({ station, of, text, key }, true);
+    this.#run();
+  }
+
+  #enqueue(next: Ahead, first = false): void {
+    const id = `${next.station}\u0001${next.key}`;
+    if (this.#queued.has(id)) {
+      if (first) {
+        const at = this.#queue.findIndex((x) => x.station === next.station && x.key === next.key);
+        if (at > 0) this.#queue.unshift(this.#queue.splice(at, 1)[0]!);
+      }
+      return;
+    }
+    this.#queued.add(id);
+    if (first) this.#queue.unshift(next);
+    else this.#queue.push(next);
   }
 
   #run(): void {
@@ -72,11 +155,19 @@ export class MdAhead {
       Effect.gen({ self: this }, function* () {
         while (this.#queue.length > 0) {
           // each in a turn of its own: what a UI asks meanwhile goes first
+          yield* Effect.yieldNow;
           yield* laterSleep(0);
           const next = this.#queue.shift()!;
-          this.#queued.delete(`${next.station}\u0001${next.key}`);
+          const id = `${next.station}\u0001${next.key}`;
+          this.#queued.delete(id);
           const store = this.#data.mdStore(next.station, next.of);
-          if (store !== undefined && !markdownHere(next.text) && !store.has(next.key)) timed("md.ahead", () => markdown(next.text, store));
+          if (store !== undefined && !store.has(next.key)) timed("md.ahead", () => refreshMarkdown(next.text, store, oldMdKey(store, next.key, 1) ?? undefined));
+          const waiting = this.#waiting.get(id);
+          this.#waiting.delete(id);
+          if (store !== undefined) for (const of of waiting ?? []) {
+            const prefix = `${next.station}\u0001`;
+            if (![...this.#waiting].some(([other, owners]) => other.startsWith(prefix) && owners.has(of))) this.#changed(next.station, of);
+          }
         }
       }).pipe(Effect.ensuring(Effect.sync(() => (this.#running = false)))),
     );

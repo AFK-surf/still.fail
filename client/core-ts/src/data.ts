@@ -281,6 +281,8 @@ export class Data {
   readonly device: Device;
   readonly #changed: ((topic: Topic) => void)[] = [];
   readonly #logChanged: ((table: string, station: string, id: string) => void)[] = [];
+  /// An older drawable Markdown tree was shown; its current reading is made in the background.
+  onOldMd: ((station: string, of: string, text: string) => void) | null = null;
   readonly #chatsChanged: ((station: string, changes: RowChange[], first: boolean) => void)[] = [];
   readonly #modelEdits = new Map<string, [unknown, unknown]>();
   /// Sign-ins for new profiles as their station answered a step of them (`login.new`, `login.code`), by station and
@@ -1226,7 +1228,8 @@ export class Data {
     return {
       has: (key) => db.hasMd(station, key),
       get: (key) => db.keptMd(station, key, this.#host.nowMs()),
-      put: (key, json) => db.keepMd(station, of, key, json, Math.floor(this.#host.nowMs())),
+      put: (key, json, replaces) => db.keepMd(station, of, key, json, Math.floor(this.#host.nowMs()), replaces),
+      ...(this.onOldMd === null ? {} : { refresh: (text: string) => this.onOldMd?.(station, of, text) }),
     };
   }
 

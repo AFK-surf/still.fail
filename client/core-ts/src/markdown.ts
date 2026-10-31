@@ -32,11 +32,15 @@ export type MdNode = MdWords | [kind: string] | [kind: string, children: MdNode[
 export type Md = MdNode[];
 
 /// Where trees are kept past this run (an account's database: `md_kept`), by their text's key (`mdKey`), as JSON.
-export type MdStore = { has(key: string): boolean; get(key: string): string | null; put(key: string, json: string): void };
+export type MdStore = { has(key: string): boolean; get(key: string): string | null; put(key: string, json: string, replaces?: string): void; refresh?(text: string): void };
 
 /// How the trees kept are read: another number whenever what `parse` makes of a text changes (a test holds it to the
-/// trees of a set of texts: markdown.test.ts), so a tree kept by a core before is read afresh, not shown.
+/// trees of a set of texts: markdown.test.ts). A drawable older tree can be shown while it is read again in the background.
 export const MD_READING = 6;
+
+/// Earlier readings whose tree format this core can still draw while they are read again. Raise this independently of
+/// MD_READING if a future change makes an old tree impossible to draw; a change in interpretation alone need not.
+export const MD_DRAWABLE_FROM = 1;
 
 /// A text's key among the trees kept: the reading, its length and two FNV-1a hashes of it (64 bits).
 export function mdKey(text: string): string {
@@ -48,6 +52,16 @@ export function mdKey(text: string): string {
     b = Math.imul(b ^ c, 0x0100019d);
   }
   return `${MD_READING}.${text.length}.${(a >>> 0).toString(36)}.${(b >>> 0).toString(36)}`;
+}
+
+/// The latest drawable older reading, if one is still kept. Each lookup is by the cache's primary key.
+export function oldMdKey(store: MdStore, key: string, from = MD_DRAWABLE_FROM): string | null {
+  const suffix = key.slice(key.indexOf("."));
+  for (let reading = MD_READING - 1; reading >= from; reading--) {
+    const old = `${reading}${suffix}`;
+    if (store.has(old)) return old;
+  }
+  return null;
 }
 
 /// The tree of `text`: read once while it is kept here (the latest texts, up to `KEPT_CHARS` of them), and, given
@@ -71,6 +85,22 @@ export function markdown(text: string, store?: MdStore): Md {
       // Not a tree after all: read afresh, kept again.
     }
   }
+  if (md === null && stored === null && store?.refresh) {
+    const oldKey = oldMdKey(store, key);
+    const old = oldKey === null ? null : store.get(oldKey);
+    if (old !== null && oldKey !== null) {
+      try {
+        const previous = JSON.parse(old) as Md;
+        // Return the old tree without reading the text on the opening path. Do not put it in memory as the current
+        // reading: the background reader replaces it and tells any view that showed it.
+        store.refresh(text);
+        shaped.add(sharedValue(previous));
+        return previous;
+      } catch {
+        // A damaged older tree is not drawable.
+      }
+    }
+  }
   const fresh = md === null;
   if (fresh) readAfresh.chars += text.length;
   md ??= parse(text);
@@ -82,6 +112,23 @@ export function markdown(text: string, store?: MdStore): Md {
   shaped.add(sharedValue(md));
   remember(text, md, text.length + json.length);
   return md;
+}
+
+/// Read and keep a current tree in the background, replacing the older one without temporarily doubling cache usage.
+export function refreshMarkdown(text: string, store: MdStore, oldKey?: string): void {
+  const key = mdKey(text);
+  if (store.has(key)) return;
+  let md = kept.get(text)?.md;
+  if (md === undefined) {
+    readAfresh.chars += text.length;
+    md = parse(text);
+    const json = JSON.stringify(md);
+    shaped.add(sharedValue(md));
+    remember(text, md, text.length + json.length);
+    store.put(key, json, oldKey);
+  } else {
+    store.put(key, JSON.stringify(md), oldKey);
+  }
 }
 
 /// How many characters of Markdown were read afresh this run (not kept here or on the device): what a page waited for
