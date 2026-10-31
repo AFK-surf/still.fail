@@ -262,7 +262,7 @@ export function settled(row: J): boolean {
   return ended(row) && get(row, "unread") !== true;
 }
 
-/// Archived with one tap (the page's bar, a phone's swipe): settled, not pinned, not kept by the viewer; and where its
+/// Offered for archiving with one tap (the page's bar): settled, not pinned, not kept by the viewer; and where its
 /// station's archive review is on (`archiveReviewed`), only once the review recommended it.
 export function archivable(row: J): boolean {
   if (!settled(row) || pinned(row) || get(row, "archiveReminderDismissed") === true) return false;

@@ -215,6 +215,10 @@ pub fn row(
   for k, v in more {
     r[k] = v
   }
+  // The core lets any made chat on an online station be swiped to archive, regardless of its state.
+  if !more.contains("offline") && more.get("pending") != Some(Json::boolean(true)) {
+    r["swipeArchive"] = Json::boolean(true)
+  }
   Json::object(r)
 }
 
@@ -350,7 +354,7 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
       "stateLead": "watch",
       "stateRest": "监控中：每 5 分钟看一次主干的构建",
       "stateAbout": 12,
-      "watch": { "text": "监控中：主干构建", "ask": "它会在归档里继续盯着。" },
+      "watch": { "text": "监控中：主干构建", "ask": "「主干构建」仍在监控。归档会停止监控。" },
     }),
   ]
   // home-pins: rows from a station that knows pins, for their menus' 固定 and 保留
@@ -369,7 +373,6 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
     row("c8", "把旧的截图都换成新的", "ws1/st1", "昨天 10:30", {
       "settled": true,
       "archivable": true,
-      "swipeArchive": true,
       "stateText": "做完了",
       "stateLead": "done",
       "stateRest": "",

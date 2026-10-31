@@ -491,7 +491,7 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
   };
   const path = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   const open = useOpenPage(path);
-  // Ended, its station there (the core's `swipeArchive`): swiped left, archived.
+  // Made, its station there (the core's `swipeArchive`): swiped left, archived.
   const archivable = !!item.swipeArchive;
   const row = (
     <button type="button" className={css.mChatRow} data-held={held || undefined} data-offline={item.offline ? true : undefined}
@@ -542,8 +542,8 @@ const TAKES = 0.35;
 const FLING = 0.6;
 
 /**
- * A row whose chat has ended (the core's `swipeArchive`): swiped left, it is archived. The row follows the
- * finger, 归档 showing in ink where it uncovers; let go far enough or flung, it goes off and the list closes over it, else
+ * A row whose chat is made and station is there (the core's `swipeArchive`): swiped left, it is archived. The row
+ * follows the finger, 归档 showing in ink where it uncovers; let go far enough or flung, it goes off and the list closes over it, else
  * it springs back. Read on the frame, which does not move (going up or down first is the list's scrolling).
  */
 function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: boolean; onDrag: () => void; children: ReactNode }) {
@@ -678,7 +678,7 @@ function useRowMenu(item: ChatItem, busy: boolean) {
       run: (title) => api.rename(item, title),
     }) },
     { label: t("web-main.chat.copyLink"), icon: <Copy size={16} />, action: () => copyLink(item) },
-    // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
+    // A chat keeping watch is archived only once asked, in the core's words.
     { label: t("web-mobile.home.archive"), icon: <Archive size={16} />, action: () => {
       const archive = () => archiveSaid(api, item, item.title, app.toast);
       // Asked first when it keeps watch; either way said at once by its title, why not if it was not.

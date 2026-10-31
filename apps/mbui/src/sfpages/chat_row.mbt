@@ -4,8 +4,8 @@
 // mark before its title (bolder while something in it is unread), its station's mark, then where it stands or the
 // last thing said, who is in it at the second line's end; pressed, its chat (where the shell has it). With a mouse:
 // pointed at, its time in that place and 归档 at its top right; right clicked, its menu at the pointer; renamed in
-// place. With a finger: 66 high and in the phone's type; held, its time, and held long its menu; a chat with nothing
-// left in it is swiped left to archive it. The menu is the presenters' (@sf.menu): 固定,
+// place. With a finger: 66 high and in the phone's type; held, its time, and held long its menu; a chat is swiped left
+// to archive it. The menu is the presenters' (@sf.menu): 固定,
 // 重命名, 保留, 复制会话链接, 转到频道, 复制 session 文件路径, 归档, each where the chat has it.
 
 ///|
@@ -101,9 +101,10 @@ let row_held : Ref[(Int, Bool)] = Ref((0, false))
 /// A chat's row in a list (Sidebar.tsx ChatRow, mobile/Home.tsx ChatRow): `lead` whose pictures lead, `on` its chat the
 /// page in view, `list_ground` the list's ground (round its faces), `more` another row under it (@sf.list_more).
 /// `lifted`: how far it is in going ahead of others (its ground of its own over them; -1 not); `unghost` whether it
-/// leaves the list without a copy (swiped off), or with one again. `found`: a chat a search found (pressed alone: not
-/// held, archived nor swiped); `opened`: what a press does instead of opening its chat. Its answer is the box that
-/// moves as the list changes. `at`: where its list stands (ListsFrame), its words in and its ground rounded so.
+/// leaves the list without a copy (swiped off), or with one again. `found`: a chat a search found, or a recent chat
+/// under the composer (pressed alone, not held for its menu); `opened`: what a press does instead of opening its chat.
+/// Its answer is the box that moves as the list changes. `at`: where its list stands (ListsFrame), its words in and
+/// its ground rounded so.
 pub fn chat_row(
   c : @ui.Ctx,
   src : Source,
@@ -199,8 +200,8 @@ pub fn chat_row(
   // menu's 归档
   let archive_key = !finger && menu && !renaming && c.hand_lit(hover)
   // (swiped to archive, where what the row offers is not under a pointer's hover: the screen's, as its ⋯ is; a pointer
-  // has its 归档 key), which rows the core says: those ended, their stations there
-  let swipes = @sf.more_held() && item.swipe_archive && !found
+  // has its 归档 key), which rows the core says: made chats whose stations are there
+  let swipes = @sf.more_held() && item.swipe_archive
   // held by a finger, it lifts off the list toward the finger (iOS's context menu): a little as its time shows, all
   // the way once its menu opens, back down as the menu goes (kind 7, a control answering: held, its menu open)
   let lift = if finger && !found { @sf.lift_of(c, "row/" + key, held, menu_on) } else { 0.0 }
@@ -836,7 +837,7 @@ let listed : Ref[Array[ChatItem]] = Ref([])
 
 ///|
 /// Archives a row's chat (Sidebar.tsx useArchive, mobile/Home.tsx useRowArchive): its 归档 key, its menu's, its swipe;
-/// one keeping watch only once asked, in the core's words (its watch runs on in the archive). Its chat in view goes to
+/// one keeping watch only once asked, in the core's words. Its chat in view goes to
 /// the chat after it in the list (else before it; else the list alone) at once. Said at once, by its title (the core's
 /// list has it gone); why not, when not (`failed` told then).
 fn archive_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  }, failed? : () -> Unit = fn() {  }) -> Unit {
@@ -912,7 +913,7 @@ let fling_from : Double = 16.0
 let swipe_fill_ms : Double = 140.0
 
 ///|
-/// A finger's archivable row (mobile/Home.tsx SwipeArchive), swiped left to archive it: it follows the finger in its
+/// A finger's row (mobile/Home.tsx SwipeArchive), swiped left to archive it: it follows the finger in its
 /// slot (cut to its corners where its list stands, `at`), uncovering 归档 at the right edge (filled in ink once letting
 /// go would archive it); let go past `archive_at_share` of its width or flung left, it goes off to the left and is
 /// archived, else it springs back. Archiving refused, it comes back; one keeping watch springs back and asks first, as

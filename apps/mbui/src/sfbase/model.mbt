@@ -112,7 +112,7 @@ pub(all) struct ChatItem {
   people_text : String
   pending : Bool
   settled : Bool
-  /// ended and its station there: a finger's swipe left archives it (the core's swipeArchive)
+  /// made and its station there: a finger's swipe left archives it (the core's swipeArchive)
   swipe_archive : Bool
   watch_ask : String?
   /// lastActiveAt in words (3 分钟前), and as its day and time (its row's time's tip)

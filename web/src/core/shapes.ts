@@ -1685,7 +1685,7 @@ export interface Person {
 
 /**
  * A watching chat (core, present.ts): what it watches in words (监控中：盯 CI), and what archiving it by hand asks
- * first (`ask`: it runs on in the archive).
+ * first (`ask`: archiving stops its watch).
  */
 export interface RowWatch {
 	text: string;
@@ -1905,9 +1905,8 @@ export interface ChatItem {
 	 */
 	archivable?: boolean;
 	/**
-	 * It has ended (each of its agents ended all_done, no card waiting for the viewer) and its station is online:
-	 * a finger's swipe left archives it (`chat.archive`), unread, pinned, kept or not recommended by its station's
-	 * archive review alike. Absent otherwise.
+	 * A made chat whose station is online: a finger's swipe left archives it (`chat.archive`), whatever its state,
+	 * unread, pinned, kept or not recommended by its station's archive review alike. Absent otherwise.
 	 */
 	swipeArchive?: boolean;
 	/** The viewer kept it (`chat.keep`): never offered for archiving, nor archived on its own; `chat.keep {kept: false}` lets it go. Absent otherwise. */

@@ -1115,7 +1115,7 @@ function ArchiveRow({ here, view, thread }: { here: Here; view: ChatView; thread
   };
   // Asked first, then as at once.
   const asked = () => { app.pop(); return archiveSaid(api, of, view.title, app.toast); };
-  // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
+  // A chat keeping watch is archived only once asked, in the core's words.
   return <InfoRow onClick={() => view.watch ? confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), atOnce: "web-mobile.home.archiveFailed", run: asked }) : archive()}><Archive size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.archive")}</span></InfoRow>;
 }
 

@@ -273,7 +273,7 @@ function ChatRowOf({ item, lead }: { item: ChatItem; lead: "agents" | "people" }
   const to = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   const move = useComposerMove();
   const archive = useArchive(item, to);
-  // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
+  // A chat keeping watch is archived only once asked, in the core's words.
   const [asking, setAsking] = useState(false);
   const archiveAsked = () => { if (item.watch) setAsking(true); else void archive(); };
   const pin = usePin(item);
