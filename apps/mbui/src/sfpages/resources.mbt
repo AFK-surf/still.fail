@@ -570,9 +570,9 @@ fn rs_flat(c : @ui.Ctx, core : Core, address : String, groups : Array[Json], col
 
 ///|
 /// A row of the table (tr), set apart from the next by its room (no line under it: only a menu's parts are set apart
-/// by one).
+/// by one); a row's least height at least (@sf.row_least_h: a press's room, its heads and its rows pressed).
 fn rs_line(c : @ui.Ctx, style : @ui.Style, id : Int, body : () -> Unit) -> Int {
-  c.box(style~, id~, body)
+  c.box(style=style.then(@sf.row_least_h()), id~, body)
 }
 
 ///|

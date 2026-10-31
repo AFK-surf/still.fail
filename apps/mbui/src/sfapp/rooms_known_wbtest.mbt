@@ -32,8 +32,12 @@
 /// a box to tick on them: 6 room fewer. What was said in a chat besides words beside it a screen of its own
 /// (chat-things-side), what chat-letters-side has: its tab's close key, 3 more. A new chat whose station lends its files
 /// (newchat-lend), what newchat has: its station and model chips and its frequent ones, 7 more. The card to share swept
-/// (share-card and its looks), over a new chat's composer laid out Medium on a tablet: its chips, 10 more.)
-let rooms_known : Map[String, Int] = { "room": 308, "apart": 0, "hover": 0 }
+/// (share-card and its looks), over a new chat's composer laid out Medium on a tablet: its chips, 10 more. Medium's
+/// tape a tree's nodes, its panels whole where they stand (2026-10-31): what they hold measured there as Large's sidebar
+/// is; two rooms meeting, a hair over each other by the layout's rounding, each its own side (thirds of a segmented
+/// choice, a policy's options none before); a station's processes' table and a history's lines a row's least high:
+/// 256.)
+let rooms_known : Map[String, Int] = { "room": 256, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

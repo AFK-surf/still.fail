@@ -148,7 +148,8 @@ fn Ctx::room_faults(self : Ctx) -> Array[String] {
   }
   // where two rooms meet, each has the part nearer what it is drawn as (press_reach: the nearest): the two cut where
   // the gap between them is halved, across the way they stand apart most. Drawn over each other, a press there would
-  // be either's.
+  // be either's. Which side each is on by their middles: two that meet, the layout's rounding running one a hair past
+  // where the next starts (thirds of a row), each keeps its own side of the line between them.
   for j in 0..<targets.length() {
     for k in (j + 1)..<targets.length() {
       let (a, b) = (targets[j], targets[k])
@@ -170,7 +171,7 @@ fn Ctx::room_faults(self : Ctx) -> Array[String] {
         continue
       }
       if gx >= gy {
-        if ax1 <= bx0 {
+        if ax0 + ax1 <= bx0 + bx1 {
           let m = (ax1 + bx0) / 2.0
           rooms[j] = (rax0, ray0, dmin(rax1, m), ray1)
           rooms[k] = (dmax(rbx0, m), rby0, rbx1, rby1)
@@ -179,7 +180,7 @@ fn Ctx::room_faults(self : Ctx) -> Array[String] {
           rooms[j] = (dmax(rax0, m), ray0, rax1, ray1)
           rooms[k] = (rbx0, rby0, dmin(rbx1, m), rby1)
         }
-      } else if ay1 <= by0 {
+      } else if ay0 + ay1 <= by0 + by1 {
         let m = (ay1 + by0) / 2.0
         rooms[j] = (rax0, ray0, rax1, dmin(ray1, m))
         rooms[k] = (rbx0, dmax(rby0, m), rbx1, rby1)
