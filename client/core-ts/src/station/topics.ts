@@ -17,7 +17,7 @@ import { equal, get, isObject, parseJson } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { StationAddr } from "./addr.ts";
 import { PAGE, TRANSCRIPT_PAGE, entriesOf, transcriptOf } from "./channel-kinds.ts";
-import type { StationsSync } from "./sync.ts";
+import { type StationsSync, stepShown } from "./sync.ts";
 import type { LinkNet } from "./wire.ts";
 import { screenCard, screensChanged, screensView } from "../screens.ts";
 import { down, downWords, isLetter, members } from "../views/views.ts";
@@ -408,7 +408,7 @@ export class StationTopics implements Owner {
       first: from,
       timeline,
       usage: view?.usage ?? null,
-      steps: view?.steps ?? [],
+      steps: (view?.steps ?? []).filter((step) => stepShown(step, end)),
       phase: view?.phase ?? null,
     };
     if (view?.rate !== null && view?.rate !== undefined) value.rate = view.rate;
