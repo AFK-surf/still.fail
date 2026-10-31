@@ -977,11 +977,55 @@ fn notch_lips(w : Double, cy : Double, r : Double) -> (Double, Double)? {
 ///|
 /// The glass `w` wide from `top` to `bottom` (in the panel's frame) with the notch cut into its top (Bar.kt: the
 /// glass clipped to its outline, its lit rim, `glass_bottom_bar`; solid, its ground), and the notch's own edge lit
-/// (white at 70%, 22% in the dark, 1 wide across the outline, under the glass's top).
-fn bar_glass(c : @ui.Ctx, w : Double, top : Double, bottom : Double, cy : Double, r : Double) -> Unit {
+/// (white at 70%, 22% in the dark, 1 wide across the outline, under the glass's top). The notch where `cy` and `r` have
+/// it; `moves`: on its way, drawn where it is as each frame is painted (notch_at, BarModel::k_painted), nothing of it
+/// built or laid out again: its outline is the glass's and its edge's, the edge seen between its lips as they part.
+fn bar_glass(c : @ui.Ctx, w : Double, top : Double, bottom : Double, cy : Double, r : Double, moves : Bool) -> Unit {
   let t = @sf.theme()
   let h = bottom - top
   let corner = dmin(rad, h / 2.0)
+  let edge_ink = @sf.alpha(0xFFFFFFFFL, if t.dark { 0.22 } else { 0.7 })
+  if moves {
+    // (the notch where it is drawn, and where its lips are then: none while the circle is not through the edge)
+    let notch = fn() {
+      let (cy, r) = notch_at(bar.k_painted(@ui.current()))
+      (cy, r, notch_lips(w, cy, r))
+    }
+    let glass = at(c, 0.0, top, w, h, radius=corner, glass=@sf.glass_bottom_bar())
+    c.notch_by(glass, fn() {
+      match notch() {
+        (cy, r, Some(_)) => (cy, r, fillet)
+        (_, _, None) => (0.0, 0.0, 0.0)
+      }
+    })
+    c.floats_over(glass)
+    // the notch's outline alone, as drawn at rest (below), cut between its lips as it is painted
+    let lips = at(c, 0.0, top + 0.5, w, h, clip=true, body=fn() {
+      let edge = at(
+        c,
+        -0.5,
+        -1.0,
+        w + 1.0,
+        h + 4.0,
+        radius=corner + 0.5,
+        border=1.0,
+        border_color=edge_ink,
+      )
+      c.notch_by(edge, fn() {
+        let (cy, r, _) = notch()
+        (cy + 0.5, r - 0.5, fillet + 0.5)
+      })
+      // (no lips, no edge: nothing of it drawn)
+      c.look_by(edge, fn() { @ui.look(alpha=if notch().2 is Some(_) { 1.0 } else { 0.0 }) })
+    })
+    c.cut_across_by(lips, fn() {
+      match notch().2 {
+        Some((l, rr)) => (l, rr)
+        None => (0.0, 0.0)
+      }
+    })
+    return
+  }
   match notch_lips(w, cy, r) {
     // (over what runs under it: the scroll bar there keeps clear of it)
     None => c.floats_over(at(c, 0.0, top, w, h, radius=corner, glass=@sf.glass_bottom_bar()))
@@ -1011,7 +1055,7 @@ fn bar_glass(c : @ui.Ctx, w : Double, top : Double, bottom : Double, cy : Double
           h + 4.0,
           radius=corner + 0.5,
           border=1.0,
-          border_color=@sf.alpha(0xFFFFFFFFL, if t.dark { 0.22 } else { 0.7 }),
+          border_color=edge_ink,
           notch_y=cy + 0.5,
           notch_r=r - 0.5,
           notch_fillet=fillet + 0.5,
@@ -1020,6 +1064,33 @@ fn bar_glass(c : @ui.Ctx, w : Double, top : Double, bottom : Double, cy : Double
       })
       |> ignore
     }
+  }
+}
+
+///|
+/// The notch with it `k` open (BarModel::k_now): where its circle's middle is below the glass's top, its radius.
+fn notch_at(k : Double) -> (Double, Double) {
+  (-lift * k, (drop / 2.0 + notch_gap) * k)
+}
+
+///|
+/// A disc in the notch (令's, its ground under the glass) as the notch is `k_now` open: growing out of the bar's edge as
+/// it opens, there whole once open; `moves`: on its way, as each frame is painted (BarModel::k_painted).
+fn disc_look(c : @ui.Ctx, disc : Int, moves : Bool, k_now : Double) -> Unit {
+  let look = fn(k : Double) {
+    if k <= 0.001 {
+      // (closed: not there)
+      @ui.look(alpha=0.0)
+    } else if k < 1.0 {
+      @ui.look(alpha=dmin(1.0, k * 3.0), scale=dmax(0.001, k), dy=lift * (1.0 - k))
+    } else {
+      @ui.look()
+    }
+  }
+  if moves {
+    c.look_by(disc, fn() { look(bar.k_painted(@ui.current())) })
+  } else if k_now < 1.0 {
+    c.look(disc, look(k_now))
   }
 }
 
@@ -1077,27 +1148,54 @@ let bar_shadow_y : Double = 4.0
 let bar_shadow_fade : Int = 8
 
 ///|
-/// A place's look: its icon (28) in `idle`, `lit` over it as far as it is lit (`v`: two pictures, one each colour,
+/// How lit a place is as it is drawn: as it is (`Lit`: 1 lit, 0 not), or on its way, read as each frame is painted
+/// (`Going`: its glide, Glide::painted): lighting up or going dim draws it again, nothing built.
+priv enum Tint {
+  Lit(Double)
+  Going(Glide)
+}
+
+///|
+/// A place's look: its icon (28) in `idle`, `lit` over it as far as it is lit (`tint`: two pictures, one each colour,
 /// rather than one more of each colour on its way between them), its dot at the icon's top right.
-fn place_face(c : @ui.Ctx, place : String, idle : Int64, lit : Int64, v : Double, dot : Int64) -> Unit {
+fn place_face(c : @ui.Ctx, place : String, idle : Int64, lit : Int64, tint : Tint, dot : Int64) -> Unit {
   let name = place_icon(place)
   let icon = fn(color : Int64) {
     match bar_glyph.val {
-      Some(g) if place == "stations" => @sf.station_glyph(c, g, 28.0, color, @sf.theme().p.red) |> ignore
-      _ => @sf.icon(c, name, size=28.0, color~) |> ignore
+      Some(g) if place == "stations" => @sf.station_glyph(c, g, 28.0, color, @sf.theme().p.red)
+      _ => @sf.icon(c, name, size=28.0, color~)
     }
   }
-  if v < 0.999 {
-    icon(idle)
-  }
-  if v > 0.001 {
+  // the lit picture over it as opaque as it is lit: as it is, or as each frame is painted (`by`)
+  let lit_over = fn(v : Double, by : (() -> @ui.Look)?) {
     c.layer(align=ACenter, fn() {
-      c.box(h=Fill(1.0), justify=JCenter, opacity=v, fn() {
-        icon(lit)
-      })
-      |> ignore
+      let over = c.box(h=Fill(1.0), justify=JCenter, opacity=v, fn() { icon(lit) |> ignore })
+      match by {
+        Some(f) => c.look_by(over, f)
+        None => ()
+      }
     })
     |> ignore
+  }
+  match tint {
+    Lit(v) => {
+      if v < 0.999 {
+        icon(idle) |> ignore
+      }
+      if v > 0.001 {
+        lit_over(v, None)
+      }
+    }
+    // on its way: both pictures, each shown as it is as each frame is painted (the idle one gone once nearly lit, the lit
+    // one as opaque as it is lit, gone once nearly dim), as they are built when it is still
+    Going(g) => {
+      let shown = icon(idle)
+      c.look_by(shown, fn() { @ui.look(alpha=if g.painted(@ui.current()) < 0.999 { 1.0 } else { 0.0 }) })
+      lit_over(1.0, Some(fn() {
+        let v = g.painted(@ui.current())
+        @ui.look(alpha=if v > 0.001 { v } else { 0.0 })
+      }))
+    }
   }
   if dot != 0L {
     c.layer(align=ACenter, fn() {
@@ -1115,11 +1213,13 @@ fn place_face(c : @ui.Ctx, place : String, idle : Int64, lit : Int64, v : Double
 let tint_ms : Double = 300.0
 
 ///|
-/// How lit place `id` is this frame (bar_tell sends it; one it has not told yet as `on` is).
-fn tint_of(id : String, on : Bool) -> Double {
+/// How lit place `id` is drawn as built at `now` (bar_tell sends it; one it has not told yet as `on` is): on its way,
+/// read as it is painted.
+fn tint_of(id : String, on : Bool, now : Double) -> Tint {
   match bar.tints.get(id) {
-    Some(g) => g.value
-    None => if on { 1.0 } else { 0.0 }
+    Some(g) if g.end() > now => Going(g)
+    Some(g) => Lit(g.value)
+    None => Lit(if on { 1.0 } else { 0.0 })
   }
 }
 
@@ -1128,7 +1228,7 @@ fn tint_of(id : String, on : Bool) -> Double {
 /// nothing over it; `active`: the place shown (its top page's).
 fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown : Bool) -> Unit {
   // a part of its own, kept as its nodes (mbui's Ctx::kept_as_nodes: what floats over the pages said again with it):
-  // what its springs read of the clock as they go builds it again each frame, not the pages under it. Its key what it
+  // what of it goes and is read as it is built builds it again each frame, not the pages under it. Its key what it
   // is laid out by besides what it reads: the window, the navigation bar's room, the ground, the place shown and
   // whether it shows
   let t = @sf.theme()
@@ -1137,9 +1237,8 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     c.id("bar/kept"),
     key,
     fn() {
+      // (what of it goes is read in the phase that draws it: bar_drawn)
       bar_drawn(c, src, ws, active, shown)
-      // where its springs are, read as it was built: built again as they are told and each frame while they go
-      c.shows_motion(bar_clock.mover, bar_springs_end() > c.moment())
     },
     read_out=true,
   )
@@ -1511,17 +1610,46 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   // narrow_shell's reaction; bar_retell: the finger, read below as it is built): read only, the same in every build at
   // that moment, whichever frames came
   m.sample()
-  let swap = m.swap_at(bar_clock.now)
+  let now = bar_clock.now
+  // what goes is read in the phase that draws it. The notch opening or closing, each place lighting up or going dim
+  // and the bar going down or coming back change only how it is painted: read as each frame is painted, where they
+  // are drawn (BarModel::k_painted, Glide::painted), this built once for them, as where they go is told, and again as
+  // they end (what shows of it then: a disc gone with the notch closed). The panel, the ball (its size and its stretch
+  // are its shape), its lens, a bar chosen landing and the notch's icon swapping are read here: built each frame
+  // they go.
+  c.shows_motion(
+    bar_clock.mover,
+    dmax(
+      m.o.end(),
+      dmax(
+        m.held.end(),
+        dmax(
+          dmax(m.ball_x.end(), m.ball_y.end()),
+          dmax(dmax(m.ball_alpha.end(), m.ball_scale.end()), m.icon_swap.end()),
+        ),
+      ),
+    ) >
+    now,
+  )
+  // (each as it ends, whichever ends first: what shows of each then is built at its own end)
+  let ends = [m.k.end(), m.o.end(), m.vis.end()]
+  for _, g in m.tints {
+    ends.push(g.end())
+  }
+  for e in ends {
+    if e > now {
+      c.shows_until(e)
+    }
+  }
+  let swap = m.swap_at(now)
   let drag = m.drag
   let drag_y = m.drag_y
   let final_cs = bar_centres(w, if notched && !m.mode.get() { 1.0 } else { 0.0 }, items.length())
   // the finger's place, and the place a let-go would choose (what is lit under it)
   let cand = bar_finger(told_here, final_cs, drag, drag_y)
   let active_key = active.unwrap_or("")
-  // for the motion log (scripts/motionplot.py): the bar going and coming, the panel (a bar chosen landing)
-  if m.vis.value != m.vis.target {
-    @motion.log_frame(c, "bar/vis", "value=\{m.vis.value} to=\{m.vis.target}")
-  }
+  // for the motion log (scripts/motionplot.py): the panel (a bar chosen landing); the bar going and coming as it is
+  // painted (below)
   if swap is Some(_) {
     @motion.log_frame(c, "bar/swap", "value=\{m.o.x} to=\{m.o.to}")
   } else if m.o.x != m.o.to {
@@ -1535,6 +1663,8 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     None => active_key
   }
   let k_now = m.k_now()
+  // the notch on its way: drawn where it is as each frame is painted, laid out where it is now
+  let k_moves = m.k_going(now)
   let clip_top = bar_glass_top(reach, m.o.x)
   let notch_r = (drop / 2.0 + notch_gap) * k_now
   let notch_y = -lift * k_now
@@ -1568,7 +1698,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
       bar_shadow(c, w, clip_top, panel)
       // under the glass, 令's own disc: the glass frosts it as it frosts the pages (Bar.kt: the action a haze source),
       // its warmth round the notch, fading down from it; the disc itself under 令, as large and as grown
-      if k_now > 0.001 {
+      if k_moves || k_now > 0.001 {
         let under = at(
           c,
           w / 2.0 - drop / 2.0,
@@ -1578,14 +1708,12 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
           radius=drop / 2.0,
           bg=@sf.over(t.p.bg, @sf.alpha(t.p.accent, action_ink)),
         )
-        if k_now < 1.0 {
-          c.look(under, @ui.look(alpha=dmin(1.0, k_now * 3.0), scale=dmax(0.001, k_now), dy=lift * (1.0 - k_now)))
-        }
+        disc_look(c, under, k_moves, k_now)
       }
-      bar_glass(c, w, clip_top, panel, notch_y, notch_r)
+      bar_glass(c, w, clip_top, panel, notch_y, notch_r, k_moves)
       // 令 in the notch: accent glass, growing out of the bar as the notch opens about its middle, which comes up to
       // the bar's edge (laid out as it is open, drawn so); closing, it keeps the last action's icon as it shrinks
-      if k_now > 0.001 {
+      if k_moves || k_now > 0.001 {
         let face = m_face.val
         let disc = at(
           c,
@@ -1595,11 +1723,12 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
           drop,
           radius=drop / 2.0,
           glass=@sf.glass_action().sharing(),
-          id=if k_now > 0.9 { action_id } else { 0 },
+          // (an anchor for what it opens while it may be open: whether a press takes it is the key's, at its moment)
+          id=if k_moves || k_now > 0.9 { action_id } else { 0 },
           body=fn() {
             // (pressed through the notch's key over it, a node of the window's tree: bar_glass_node)
             match bar_notch_at.val {
-              Some(n) if k_now > 0.9 => c.presses_to_node(n)
+              Some(n) if k_moves || k_now > 0.9 => c.presses_to_node(n)
               _ => ()
             }
             // from one action to another with another icon (令 and a ＋): the icon swaps, the circle stays
@@ -1628,12 +1757,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
             }
           },
         )
-        if k_now < 1.0 {
-          c.look(
-            disc,
-            @ui.look(alpha=dmin(1.0, k_now * 3.0), scale=dmax(0.001, k_now), dy=lift * (1.0 - k_now)),
-          )
-        }
+        disc_look(c, disc, k_moves, k_now)
       }
       // the ball, under the places, stretched by its speed toward where it goes; its glass frosts what the bar's does
       let scale = (1.0 + 0.06 * m.held.x) * m.ball_scale.value
@@ -1680,7 +1804,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
                   Some((_, _, cs_set, ck)) => cs_set == i && ck == key
                   None => active_key == key
                 }
-                let tint = tint_of("row:" + key, on)
+                let tint = tint_of("row:" + key, on, now)
                 let row_y = over + n.to_double() * bar_row + bar_row / 2.0
                 // (a row the glass is not under yet, the panel coming up: pressed through nothing)
                 let row_presses = if row_y + 24.0 > clip_top { presses } else { None }
@@ -1690,10 +1814,17 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
             }
           }
           // the bar's places, over the ball
-          let now_cs = bar_centres(w, k_now, items.length())
+          // (the notch on its way: each laid out where the notch is going, whenever it is built, and drawn, pressed and
+          // read out where the notch has it as each frame is painted, on the device's pixels)
+          let now_cs = bar_centres(w, if k_moves { m.k_end() } else { k_now }, items.length())
           for j, key in items {
-            let tint = tint_of("bar:" + key, under == key)
-            place_at(c, key, now_cs[j], bar_mid, slot, idle, lit, tint, dots, presses) |> ignore
+            let tint = tint_of("bar:" + key, under == key, now)
+            let p = place_at(c, key, now_cs[j], bar_mid, slot, idle, lit, tint, dots, presses)
+            if k_moves {
+              let n = items.length()
+              let laid = now_cs[j]
+              c.moved_by(p, fn(_, _) { (bar_centres(w, bar.k_painted(@ui.current()), n)[j] - laid, 0.0) })
+            }
           }
         }
         Some(_) => ()
@@ -1744,7 +1875,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
                     slot,
                     idle,
                     lit,
-                    was("row:" + key),
+                    Lit(was("row:" + key)),
                     dots,
                     presses,
                   )
@@ -1755,7 +1886,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
             let laid_items = s.sets[s.cur]
             let laid_cs = bar_centres(w, k_now, laid_items.length())
             for j, key in laid_items {
-              let p = place_at(c, key, laid_cs[j], bar_mid - clip_top, slot, idle, lit, was("bar:" + key), dots, presses)
+              let p = place_at(c, key, laid_cs[j], bar_mid - clip_top, slot, idle, lit, Lit(was("bar:" + key)), dots, presses)
               c.look(p, @ui.look(dy=shift))
             }
           })
@@ -1774,7 +1905,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
               } else {
                 from + (end - from) * t
               }
-              let p = place_at(c, key, now_cs[j], bar_mid - clip_top, slot, idle, lit, tint, dots, presses)
+              let p = place_at(c, key, now_cs[j], bar_mid - clip_top, slot, idle, lit, Lit(tint), dots, presses)
               if j < xs.length() {
                 c.look(p, @ui.look(alpha~, dx=xs[j] - now_cs[j], dy=y + row_drop - bar_mid))
               }
@@ -1792,6 +1923,9 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
     let vis = m.vis
     c.look_by(holder, fn() {
       let v = vis.painted(@ui.current())
+      if v != vis.target {
+        @motion.log_frame(@ui.current(), "bar/vis", "value=\{v} to=\{vis.target}")
+      }
       @ui.look(alpha=v, dy=(1.0 - v) * bar_drop)
     })
   }
@@ -1835,7 +1969,7 @@ fn place_at(
   slot : Double,
   idle : Int64,
   lit : Int64,
-  tint : Double,
+  tint : Tint,
   dots : Map[String, Int64],
   glass : @view.NodeId?,
 ) -> Int {
@@ -1902,6 +2036,27 @@ fn bar_glass_top(reach : Double, o : Double) -> Double {
 /// The notch as it is at `t`: as its place has it, closed as far as the panel is up (fully by half open).
 fn BarModel::k_at(self : BarModel, t : Double) -> Double {
   self.k.value_at(t) * (1.0 - dclamp(2.0 * self.o.value_at(t), 0.0, 1.0))
+}
+
+///|
+/// Where the notch as drawn (BarModel::k_now) is going: where its spring and the panel's are sent.
+fn BarModel::k_end(self : BarModel) -> Double {
+  self.k.to * (1.0 - dclamp(2.0 * self.o.to, 0.0, 1.0))
+}
+
+///|
+/// Whether the notch as drawn (BarModel::k_now) is on its way at `now`: its own spring or the panel's going.
+fn BarModel::k_going(self : BarModel, now : Double) -> Bool {
+  dmax(self.k.end(), self.o.end()) > now
+}
+
+///|
+/// The notch as `c` paints (BarModel::k_at the frame's moment): said to move while it goes (painted again each frame
+/// till its end, as Glide::painted is), nothing built or laid out for it.
+fn BarModel::k_painted(self : BarModel, c : @ui.Ctx) -> Double {
+  let t = c.moment()
+  c.shows_motion(bar_clock.mover, self.k_going(t))
+  self.k_at(t)
 }
 
 ///|

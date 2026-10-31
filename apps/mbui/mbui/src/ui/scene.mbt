@@ -708,13 +708,18 @@ fn Ctx::corners_each(self : Ctx, k : Int, r0 : Double, r1 : Double, r2 : Double,
 /// The notch of node `n` (Ctx::box `notch_r`) on the instance just emitted for it (its ground or its glass): where
 /// its circle's middle is below the top (21), its radius (22), its fillets' (23).
 fn Ctx::notch_last(self : Ctx, n : Node) -> Unit {
-  if n.notch_r <= 0.0 {
+  // (worked out as it is painted: Ctx::notch_by)
+  let (y, r, f) = match node_drawn(n) {
+    Some({ notch_by: Some(by), .. }) => by()
+    _ => (n.notch_y, n.notch_r, n.notch_f)
+  }
+  if r <= 0.0 {
     return
   }
   let b = (self.ninst - 1) * inst_size
-  self.inst[b + 21] = n.notch_y
-  self.inst[b + 22] = n.notch_r
-  self.inst[b + 23] = n.notch_f
+  self.inst[b + 21] = y
+  self.inst[b + 22] = r
+  self.inst[b + 23] = f
 }
 
 ///|
