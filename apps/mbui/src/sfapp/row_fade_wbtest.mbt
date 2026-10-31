@@ -105,12 +105,18 @@ test "a chat row keeps its colour, face rings, geometry and press as its selecte
   assert_eq(fade_row_ground(t), ground)
   assert_eq(fade_rings(t, @sf.over(0x123456FFL, ground)), 2)
   assert_eq(fade_row_rect(t), rect)
+  let (x, y) = t.find("Fade row").unwrap()
+  t.press_at(x, y)
+  t.run_for(@ui.tap_indication_ms)
+  let pressed = @sf.alpha(@sf.theme().p.text, 0.05)
+  assert_true(t.drawn_rects().iter().any(fn(r) { r.2 == rect.2 && r.3 == rect.3 && r.4 == pressed }))
+  assert_eq(fade_rings(t, @sf.over(0x123456FFL, pressed)), 2)
+  t.release(x, y)
+  assert_eq(opened.val, 1)
   t.run_for(@sfpages.left_fade_ms)
   assert_eq(fade_row_ground(t), 0L)
   assert_eq(fade_rings(t, 0x123456FFL), 2)
   assert_eq(fade_row_rect(t), rect)
-  t.tap_text("Fade row")
-  assert_eq(opened.val, 1)
 }
 
 ///|
