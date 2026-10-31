@@ -61,7 +61,7 @@ pub fn Ctx::code_field(
       code_fields[id] = s
       self.own(id)
       if autofocus {
-        self.focus = id
+        self.focus_moved(id)
       }
       s
     }

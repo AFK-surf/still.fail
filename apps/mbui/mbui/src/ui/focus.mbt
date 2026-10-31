@@ -159,8 +159,8 @@ pub fn Ctx::has_focus(self : Ctx, id : Int) -> Bool {
 ///|
 /// Whether `id` has the focus and it shows (it came by the keyboard): where a focus ring is drawn.
 pub fn Ctx::focus_shown(self : Ctx, id : Int) -> Bool {
-  // (shown as the keys moved it: hand.mbt)
-  hand_presses_read()
+  // (shown as the keys moved it, told as that changes: hand.mbt)
+  hand.shown.has(id) |> ignore
   self.has_focus(id) && self.focus_visible
 }
 
@@ -168,13 +168,18 @@ pub fn Ctx::focus_shown(self : Ctx, id : Int) -> Bool {
 /// The focus given to `id` (a field, a button, what a dialog opens on); `visible`: shown as though the keyboard moved
 /// it.
 pub fn Ctx::focus_on(self : Ctx, id : Int, visible? : Bool = false) -> Unit {
-  self.focus = id
   if visible {
     self.focus_visible = true
+  }
+  self.focus_moved(id)
+  if visible {
     // (as the keys moved it: in view where it scrolls)
     self.show(id)
   }
-  self.read_changed("the focus given")
+  // (in a build: built again from it; else what read it told by the focus's move itself: Ctx::focus_moved)
+  if building.val {
+    self.read_changed("the focus given")
+  }
 }
 
 ///|
@@ -208,7 +213,7 @@ fn Ctx::focus_frame_start(self : Ctx) -> Unit {
   for a in self.asked_actions {
     self.actions.push(a)
     if a.1 == Focus {
-      self.focus = a.0
+      self.focus_moved(a.0)
     }
   }
   self.asked_actions.clear()
@@ -255,13 +260,14 @@ fn Ctx::focus_frame_start(self : Ctx) -> Unit {
 }
 
 ///|
-/// What can take the focus now, in Tab's order: the last frame's, those of the layer that traps it if one does, each
-/// roving group once (at its stop).
+/// What can take the focus now, in Tab's order: the last frame's (where the window is a tree, spliced with its nodes'
+/// as it is now: Ctx::focus_spliced), those of the layer that traps it if one does, each roving group once (at its
+/// stop).
 fn Ctx::tab_stops(self : Ctx) -> Array[Focusable] {
   let trap = self.trapping_layer()
   let out : Array[Focusable] = []
   let seen : Map[Int, Bool] = {}
-  for f in self.last_focusables {
+  for f in self.focus_spliced() {
     if trap != 0 && !self.layer_within(f.layer, trap) {
       continue
     }
@@ -343,8 +349,7 @@ fn Ctx::tab(self : Ctx, back : Bool) -> Unit {
 /// The focus moved to `id` by the keyboard: it shows, brought into view where it scrolls (Ctx::show); its group (if
 /// any) has it as its current item.
 fn Ctx::move_focus(self : Ctx, id : Int, roved? : Bool = false) -> Unit {
-  self.focus = id
-  self.focus_visible = true
+  self.focus_moved(id, visible=true)
   self.show(id)
   self.focus_roved = roved
   for f in self.last_focusables {
@@ -355,7 +360,10 @@ fn Ctx::move_focus(self : Ctx, id : Int, roved? : Bool = false) -> Unit {
       }
     }
   }
-  self.read_changed("the focus moved")
+  // (in a build: built again from it; else what read it told by the focus's move itself: Ctx::focus_moved)
+  if building.val {
+    self.read_changed("the focus moved")
+  }
 }
 
 ///|
@@ -445,7 +453,7 @@ fn Ctx::press_focused(self : Ctx, key : Int) -> Bool {
     if f.id == self.focus && (f.keys & key) != 0 && !self.layer_inert(f.layer) && island_allows(f.island) {
       self.clicked.push(f.id)
       made_pressed(f.id)
-      self.focus_visible = true
+      self.focus_moved(self.focus, visible=true)
       return true
     }
   }
@@ -456,7 +464,7 @@ fn Ctx::press_focused(self : Ctx, key : Int) -> Bool {
 /// A primary press went down on `target` (0 nothing): it takes the focus if it does on a press; else the focus is let
 /// go from anything but a field (a field keeps it: what is tapped beside it, a send button, does not take its keys).
 fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
-  self.focus_visible = false
+  self.focus_moved(self.focus, visible=false)
   // a press on the ground of a layer that traps the focus leaves it where it is (in the layer)
   let trap = self.trapping_layer()
   if trap != 0 && target == trap {
@@ -466,7 +474,7 @@ fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
   let tap_later = h_feel() == 2 && self.editors.contains(target)
   for f in self.last_focusables {
     if f.id == target && f.on_press && !tap_later {
-      self.focus = target
+      self.focus_moved(target)
       return
     }
   }
@@ -475,7 +483,7 @@ fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
     self.focus_allowed() != 0 &&
     !self.editors.contains(self.focus) &&
     !self.dev.catchers.contains(self.focus) {
-    self.focus = 0
+    self.focus_moved(0)
   }
 }
 
@@ -549,4 +557,28 @@ fn Ctx::focus_keeps(self : Ctx, code : Int, mods : Int) -> Bool {
     }
   }
   false
+}
+
+///|
+/// The focus to `id` (0: none; an old widget's id, or the one a node of the window's tree is read out by: tree_said_id),
+/// shown as `visible` says (none: as it was): every move of the focus, whoever moves it (Tab, a press, a field, a layer
+/// opening or closing, a screen reader), the window's tree told at once of what of its own has it (its node's, Tree::
+/// focus_to: one focus, read on either side); a node's no longer able to take it (let go, another tree's, leaving,
+/// taking no press, under a modal layer), the focus to none.
+fn Ctx::focus_moved(self : Ctx, id : Int, visible? : Bool) -> Unit {
+  self.focus = id
+  match visible {
+    Some(v) => self.focus_visible = v
+    None => ()
+  }
+  // (both sides told as one change)
+  @signals.start_batch()
+  focus_told_tree(self)
+  // (between builds, what of the old views reads it told now, with the tree's, the host owing a frame: what read it
+  // built again, nothing else; in a build, what the frame does with it, as before: hand_focus_said)
+  if !building.val {
+    hand_focus_said(self)
+    h_frame_owed()
+  }
+  @signals.end_batch()
 }

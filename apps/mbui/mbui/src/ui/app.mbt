@@ -995,7 +995,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
       // (Compose's tap); a finger that moves on drags what is under it (the list), the field untouched
       Some(_) if h_feel() == 2 => c.editor_tap = target
       Some(st) => {
-        c.focus = target
+        c.focus_moved(target)
         c.editor_drag = true
         // a press with Shift: what is picked widened to it; a double click's second the word there, a triple's the
         // paragraph, the drag on from it going by them (a Mac's fields, a browser's)
@@ -1010,7 +1010,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
       }
       // (on nothing: the focus let go, where it may take input now; one a modal layer of the window's tree keeps from
       // input, kept as it is, view_host.mbt)
-      None => if target == 0 && c.focus_allowed() != 0 { c.focus = 0 }
+      None => if target == 0 && c.focus_allowed() != 0 { c.focus_moved(0) }
     }
   } else if kind == 1 {
     // a bar's thumb held: what it is for follows the pointer, nothing else sees it move
@@ -1192,7 +1192,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
           if c.focus == c.editor_tap {
             c.ime_sig = "tap"
           }
-          c.focus = c.editor_tap
+          c.focus_moved(c.editor_tap)
           let (was, at, lx, ly) = c.last_tap
           if was == c.editor_tap &&
             t - at <= double_tap_ms &&
@@ -1681,7 +1681,7 @@ fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
       _ => ()
     }
     if c.editors.contains(c.focus) || c.dev.catchers.contains(c.focus) {
-      c.focus = 0
+      c.focus_moved(0)
       h_request_frame()
     }
     return
@@ -1775,7 +1775,7 @@ fn handle_move(c : Ctx, x : Double, y : Double, t : Double) -> Unit {
 ///|
 /// Moves focus to an editor (used by tests and the bench).
 pub fn Ctx::focus_editor(self : Ctx, key : String) -> Unit {
-  self.focus = self.id(key)
+  self.focus_moved(self.id(key))
 }
 
 ///|

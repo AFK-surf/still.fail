@@ -975,7 +975,7 @@ fn Ctx::forget(self : Ctx, serial : Int) -> Unit {
         drags.remove(id)
         code_fields.remove(id)
         if self.focus == id {
-          self.focus = 0
+          self.focus_moved(0)
         }
       }
       self.owned.remove(serial)

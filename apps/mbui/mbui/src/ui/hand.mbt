@@ -23,6 +23,9 @@ priv struct Hand {
   /// what has the focus, as a member and as what it is (Ctx::has_focus, focused_id)
   focus : @signals.Keyed[Int]
   focus_id : @signals.Signal[Int]
+  /// what has the focus where it shows (it came by the keyboard: Ctx::focus_shown), by member: told as that alone
+  /// changes too, what has it not told
+  shown : @signals.Keyed[Int]
   /// where the pointer is, whether it is down, the current input (Ctx::pointer, Ctx::press, pointing)
   pointer : @signals.Signal[(Double, Double)]
   down : @signals.Signal[Bool]
@@ -51,6 +54,7 @@ let hand : Hand = {
   held: @signals.keyed(),
   focus: @signals.keyed(),
   focus_id: @signals.signal(0),
+  shown: @signals.keyed(),
   pointer: @signals.signal((0.0, 0.0), same=fn(a, b) { a.0 == b.0 && a.1 == b.1 }),
   down: @signals.signal(false),
   pointing: @signals.signal(Finger),
@@ -77,6 +81,7 @@ fn hand_arrive(c : Ctx) -> Unit {
   hand.held.set(if c.held_on != 0 { [c.held_on] } else { [] })
   hand.focus.set(if c.focus != 0 { [c.focus] } else { [] })
   hand.focus_id.set(c.focus)
+  hand.shown.set(if c.focus != 0 && c.focus_visible { [c.focus] } else { [] })
   hand.pointer.set((c.px, c.py))
   hand.down.set(c.down)
   let p = c.press_seen
@@ -117,7 +122,7 @@ fn hand_presses_read() -> Unit {
 ///|
 /// Put back as a run begins (reset_globals): nothing over, pressed, clicked, held or focused.
 fn hand_reset() -> Unit {
-  for k in [hand.over, hand.pressed, hand.press_on, hand.clicked, hand.double, hand.held, hand.focus] {
+  for k in [hand.over, hand.pressed, hand.press_on, hand.clicked, hand.double, hand.held, hand.focus, hand.shown] {
     k.set([])
   }
 }
@@ -126,10 +131,12 @@ fn hand_reset() -> Unit {
 /// The focus as a pass of the frame's build left it (the layers' focus moved in, a field asked for it): said at once,
 /// what read it told, so a build again of the frame sees it as this one left it.
 fn hand_focus_said(c : Ctx) -> Unit {
+  @signals.start_batch()
   if @signals.untracked(fn() { hand.focus_id.get() }) != c.focus {
-    @signals.start_batch()
     hand.focus.set(if c.focus != 0 { [c.focus] } else { [] })
     hand.focus_id.set(c.focus)
-    @signals.end_batch()
   }
+  // (whether it shows, as that alone changes: a press letting a field keep it, unshown)
+  hand.shown.set(if c.focus != 0 && c.focus_visible { [c.focus] } else { [] })
+  @signals.end_batch()
 }

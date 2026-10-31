@@ -650,7 +650,7 @@ pub fn Ctx::keys(self : Ctx) -> Array[(Int, Int, Bool)] {
 ///|
 /// The focused field let go of (the keyboard's words go nowhere until another is pressed).
 pub fn Ctx::unfocus(self : Ctx) -> Unit {
-  self.focus = 0
+  self.focus_moved(0)
 }
 
 ///|

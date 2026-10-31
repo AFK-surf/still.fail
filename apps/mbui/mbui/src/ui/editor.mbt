@@ -837,7 +837,7 @@ pub fn Ctx::editor(
       self.held_told = self.press_at
       self.take_press()
       self.editor_tap = 0
-      self.focus = id
+      self.focus_moved(id)
       if st.pick_word(self.press_x, self.press_y, self.clock) {
         self.word_drag = id
       }
@@ -1434,7 +1434,7 @@ pub fn Ctx::editor_focused(self : Ctx, key : String) -> Bool {
 /// is drawn let go of from the frame it was let go in, as the focus given is (Ctx::focus_on).
 pub fn Ctx::blur(self : Ctx) -> Unit {
   let had = self.focus != 0
-  self.focus = 0
+  self.focus_moved(0)
   for k in self.layer_return.keys().collect() {
     self.layer_return[k] = 0
   }
