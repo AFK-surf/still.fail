@@ -4,7 +4,9 @@
 //
 // A glass instance (scene.mbt's 28 numbers):
 //   0-3 rect · 4 radius · 5 kind (5 frosted, 6 liquid) · 6 saturation
-//   7 blur (the Gaussian's deviation, logical px: CSS blur()'s)
+//   7 blur (the Gaussian's deviation, logical px: CSS blur()'s); said below 0
+//     for glass `contained`: its capture only its own box, its edges carried
+//     on past them
 //   8-11 tint rgba (over the frost) · 16-19, 24-27 clip (rect, corners)
 //   frosted: 12-14 the rim's hairline, its lit top-left, its back (white's
 //            alpha, Bar.kt rim) · 15 opacity · 21-23 a notch in its top
@@ -159,7 +161,7 @@ fn Ctx::glass_inst(
     radius,
     kind,
     gl.saturation,
-    gl.blur,
+    if gl.contained && !gl.liquid { -gl.blur } else { gl.blur },
     gl.tint,
     1.0,
     if gl.liquid { gl.rim } else { gl.rim_edge },
@@ -190,10 +192,12 @@ fn Ctx::glass_capture(self : Ctx, k : Int, liquid : Bool, shares : Bool) -> Unit
     return
   }
   // one capture with the glass just before it: right after it, as it is,
-  // the same blur, not over it, and (liquid) a group of fewer than 8
+  // the same blur, not over it, and (liquid) a group of fewer than 8; glass
+  // contained (blur below 0) a capture of its own box alone
   let prev = glass_paint.run_start + glass_paint.run_len
   let mut same = glass_paint.run != 0 &&
     prev == k &&
+    blur >= 0.0 &&
     a[(k - 1) * inst_size + 5] == kind &&
     a[(k - 1) * inst_size + 7] == blur &&
     (!liquid || glass_paint.run_len < 8)

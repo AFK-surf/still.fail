@@ -709,7 +709,7 @@ pub fn image_reveal(
 /// The frost over a message's image and what it waits on, `blur` deep (none under a quarter): image_reveal's.
 fn reveal_frosted(c : @ui.Ctx, blur : Double) -> Unit {
   if blur > reveal_blur_least {
-    c.layer(fn() { c.box(style=reveal_frost, glass=@ui.Glass::frosted(blur~, tint=0L, solid=0L), fn() {  }) |> ignore })
+    c.layer(fn() { c.box(style=reveal_frost, glass=@ui.Glass::frosted(blur~, tint=0L, solid=0L, contained=true), fn() {  }) |> ignore })
     |> ignore
   }
 }

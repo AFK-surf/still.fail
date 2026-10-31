@@ -47,6 +47,8 @@ test "a message's image waiting is its likeness under the frost its way in start
   t.draw()
   let frost = t.drawn_glass()
   assert_eq(frost.length(), 1, msg="its likeness frosted while asked: \{frost}")
+  // the frost of its box alone: nothing round it (the message's ground) bleeding in at its rim
+  assert_eq(t.drawn_glass_contained(), [true])
   // here, not decoded yet; then decoded, its way in starting: the same frost over it
   key.val = "pic"
   t.frame()

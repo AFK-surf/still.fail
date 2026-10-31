@@ -83,8 +83,9 @@ pub(all) struct Glass {
   merge : Double
   adaptive : Bool
   shares_capture : Bool
+  contained : Bool
 } derive(Eq, Show, @debug.Debug)
-pub fn Glass::frosted(blur~ : Double, tint~ : Int64, solid~ : Int64, saturation? : Double, rim_edge? : Double, rim_lit? : Double, rim_back? : Double, shares_capture? : Bool) -> Self
+pub fn Glass::frosted(blur~ : Double, tint~ : Int64, solid~ : Int64, saturation? : Double, rim_edge? : Double, rim_lit? : Double, rim_back? : Double, shares_capture? : Bool, contained? : Bool) -> Self
 pub fn Glass::liquid(blur? : Double, tint? : Int64, solid? : Int64, saturation? : Double, rim? : Double, bezel? : Double, refraction? : Double, chroma? : Double, merge? : Double, adaptive? : Bool) -> Self
 pub fn Glass::sharing(Self) -> Self
 
