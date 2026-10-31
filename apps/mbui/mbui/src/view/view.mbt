@@ -75,6 +75,8 @@ pub(all) struct Look {
   mut pivot : Pivot
   /// what it draws called by name, as what finds it on screen calls it (an icon's: View::drawn_as)
   mut drawn_as : String
+  /// whether what it holds is cut to it, its corners round as its own (View::clips)
+  mut clips : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -97,6 +99,8 @@ pub(all) struct Content {
   glass : @paint.Glass?
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
+  /// what it holds cut to it, its corners round as its own (View::clips)
+  clips : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -133,6 +137,8 @@ pub(all) struct Drawn {
   glass : @paint.Glass?
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
+  /// what it holds cut to it, its corners round as its own (View::clips)
+  clips : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -571,6 +577,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.scale = 1.0
       n.look.pivot = At(0.5, 0.5)
       n.look.drawn_as = ""
+      n.look.clips = false
       n.went = None
       n.parent = parent
       n.slot = false
@@ -617,7 +624,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), drawn_as: "" },
+        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), drawn_as: "", clips: false },
         parent,
         kids: [],
         owner: None,
@@ -1324,6 +1331,15 @@ pub fn View::over(self : View, on : Live[Bool]) -> View {
     s.set_inset_right(inset)
     s.set_inset_bottom(inset)
   })
+  self
+}
+
+///|
+/// Whether what it holds is cut to it, its corners round as its own (View::radius), as an old view's box that clips is
+/// (a progress bar's track cutting its part at its round ends), as it changes: paint's. How it is drawn only: where a
+/// finger or the pointer is taken is as it was (what is past it still takes them), unlike an old view's clip.
+pub fn View::clips(self : View, on : Live[Bool]) -> View {
+  self.bind(34, on, Paint, fn(on) { self.tree.nodes[self.at].look.clips = on })
   self
 }
 
@@ -3640,6 +3656,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     runs: n.look.runs,
     shadow: n.look.shadow,
     hosted: n.hosted,
+    clips: n.look.clips,
   })
   self.changed.push(id)
   self.pending.push(id)
@@ -3749,6 +3766,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     runs: c.runs,
     shadow: c.shadow,
     hosted: c.hosted,
+    clips: c.clips,
   }
 }
 

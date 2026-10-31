@@ -18,19 +18,18 @@ pub fn progress_node(
 ) -> @view.View {
   // (how far, drawn to it as told; whether it is known, drawn into it as it becomes so: each from where it is, there
   // at once as it is made)
-  let at = TipFade::new()
-  let known = TipFade::new()
+  // (each a motion's way: there at once with motion reduced, as the old one's Anim is)
   let first = @signals.untracked(part)
-  at.from = first.unwrap_or(0.0)
-  at.to = at.from
-  known.from = if first is Some(_) { 1.0 } else { 0.0 }
-  known.to = known.from
+  let at = EdgeWay::new(first.unwrap_or(0.0))
+  let known = EdgeWay::new(if first is Some(_) { 1.0 } else { 0.0 })
   parent.box(fn(bar) {
     bar
     .row(Is(true))
     .height(Is(Some(h)))
     .radius(Is(h / 2.0))
     .ground(By(track))
+    // (its part cut to it at its round ends, as the old one's track cuts it: @kit.progress_look_of's clip)
+    .clips(Is(true))
     .says(By(fn() {
       match part() {
         Some(k) => Some(@view.said(ProgressBar, value="\{(k * 100.0).round().to_int()}%", range=(0.0, k * 100.0, 100.0)))
@@ -39,15 +38,12 @@ pub fn progress_node(
     }))
     |> ignore
     bar.reacts(part, fn(p) {
-      let t = bar.cause_at()
       match p {
         Some(k) => {
-          at.go(bar, k, t, @kit.progress_ms, Out)
-          if known.to < 1.0 {
-            known.go(bar, 1.0, t, @kit.progress_known_ms, InOut)
-          }
+          at.go(bar, k, @kit.progress_ms, ease=Out)
+          known.go(bar, 1.0, @kit.progress_known_ms, ease=InOut)
         }
-        None => if known.to > 0.0 { known.go(bar, 0.0, t, @kit.progress_known_ms, InOut) }
+        None => known.go(bar, 0.0, @kit.progress_known_ms, ease=InOut)
       }
     })
     // (the part drawn, from `lo` to `hi` of the track, as of when it is drawn)

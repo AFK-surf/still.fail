@@ -228,3 +228,65 @@ fn back_shapes() -> Array[@ui.Shape] {
     None => []
   }
 }
+
+///|
+/// How much of a file opened has come, in the bar across the top beside its tools, as nodes (viewer_coming's,
+/// FilePreview.tsx FileComing inBar): "正在读取 **1.2 MB** / 3.4 MB" in the meta's size in the ink's quieter colour, the
+/// size so far in bold in its own, then a progress bar 120 wide (progress_node); before the core has said how much and
+/// with no size it was sent with, 正在打开 over a bar that sweeps. `got`: what has come and its whole size; `size`: the
+/// size it was sent with. Each as it changes. The row's node.
+pub fn viewer_coming_node(
+  parent : @view.View,
+  got : () -> (Double, Double?)?,
+  size : () -> Double,
+  ink : () -> ViewerInk,
+) -> @view.View {
+  let total = fn() -> Double? {
+    match got() {
+      Some((_, Some(n))) if n > 0.0 => Some(n)
+      _ => if size() > 0.0 { Some(size()) } else { None }
+    }
+  }
+  parent.box(fn(row) {
+    row
+    .row(Is(true))
+    .lines_up(Is(Some(Middle)))
+    .gap(Is(@ui.Space::px(S2_5)))
+    .padding(Is((@ui.Space::px(S2), 0.0, @ui.Space::px(S2), 0.0)))
+    |> ignore
+    row.box(fn(w) {
+      w
+      .words_runs(By(fn() {
+        match (got(), total()) {
+          (Some((loaded, _)), Some(n)) =>
+            [
+              @view.words_run(t("web-main.preview.loadingLabel") + " "),
+              @view.words_run(file_size(loaded), weight=600, ink=ink().ink),
+              @view.words_run(" / " + file_size(n)),
+            ]
+          _ => [@view.words_run(t("common.opening"))]
+        }
+      }))
+      .words_look(By(fn() {
+        let (size, line) = @ui.tree_theme().text_size(Meta)
+        { size, weight: 400, line, wrap: false }
+      }))
+      .ink(By(fn() { ink().muted }))
+      |> ignore
+    })
+    |> ignore
+    progress_node(
+      row,
+      fn() {
+        match (got(), total()) {
+          (Some((loaded, _)), Some(n)) => Some(if loaded >= n { 1.0 } else { loaded / n })
+          _ => None
+        }
+      },
+      fn() { @ui.tree_theme().line },
+      fn() { theme().p.accent },
+    )
+    .width(Is(Some(vfr_coming_track)))
+    |> ignore
+  })
+}

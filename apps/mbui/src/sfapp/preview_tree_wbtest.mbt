@@ -1688,12 +1688,14 @@ test "viewer on the tree, a wide window, a mouse: a click on the picture hides t
 }
 
 ///|
-/// A picture opened in a wide window (1280 by 844, a mouse's), held coming till the test gives it (`given`).
+/// A picture opened in a wide window (1280 by 844, a mouse's), held coming till the test gives it (`given`), how much
+/// of it has come said as the test says it (`said`: the core's progress, as it calls it).
 fn held_wide_preview(
   given : Map[String, () -> Unit],
   platform? : Int = 0,
   corner? : Double = 0.0,
   w? : Double = 1280.0,
+  said? : Map[String, (Json) -> Unit] = {},
 ) -> @ui.Tester {
   new_run()
   let base = fixture("chat-preview-image")
@@ -1701,6 +1703,7 @@ fn held_wide_preview(
     ..base,
     read_going: fn(name, params, on_value, done) {
       if name == "station.file" {
+        said[text(Some(params), "name")] = on_value
         given[text(Some(params), "name")] = fn() { (base.read_going)(name, params, on_value, done) }
       } else {
         (base.read_going)(name, params, on_value, done)
@@ -1742,13 +1745,13 @@ fn wide_bar_inset(t : @ui.Tester, v : Viewer, inset : Bool) -> ((Double, Bool, B
 }
 
 ///|
-test "viewer on the tree, a wide window, the bar across the top as the old bar is, the window gone full screen and back (its title bar the system's, then the app's again), the same viewer, on a Mac and on Windows: clear of the window's buttons at its left (a Mac's) while they are in it, its last tool clear of them at its right (Windows', the app's own) while they are, else at the window's corner; a press on its blank moving the window then, nothing under it taking the press" {
+test "viewer on the tree, a wide window, the bar across the top the same coming and whole, the window gone full screen and back (its title bar the system's, then the app's again), the same viewer, on a Mac and on Windows: clear of the window's buttons at its left (a Mac's) while they are in it, its last tool clear of them at its right (Windows', the app's own) while they are, else at the window's corner; a press on its blank moving the window then, nothing under it taking the press" {
   for platform in [0, 3] {
     let given : Map[String, () -> Unit] = {}
     let t = held_wide_preview(given, platform~)
     let v = viewer.get().unwrap()
     assert_true(v.coming() && v.in_tree, msg="\{platform}: coming, the tree's viewer")
-    // (the old bar's, while it comes: what the bar across the top does)
+    // (while it comes: the bar across the top as it is then, the same bar's as once it is whole)
     let old = []
     for inset in [true, false, true] {
       old.push(wide_bar_inset(t, v, inset).0)
@@ -1774,7 +1777,7 @@ test "viewer on the tree, a wide window, the bar across the top as the old bar i
       assert_true((l - want).abs() < 0.001, msg="\{platform}, inset \{inset}: its last tool \{l} in, as a page's bar's last: \{want}")
     }
     assert_true(viewer.get().map(fn(now) { physical_equal(now, v) }).unwrap_or(false), msg="\{platform}: the same viewer")
-    assert_eq(node, old, msg="\{platform}: as the old bar: \{node} and \{old}")
+    assert_eq(node, old, msg="\{platform}: whole as while it came: \{node} and \{old}")
     assert_true(old[0].1 && !old[1].1 && old[2].1 && old[0].2 && old[1].2, msg="\{platform}: moved while inset: \{old}")
     if platform == 0 {
       assert_true(old[0].0 > old[1].0, msg="a Mac's: clear of its buttons at the left while inset: \{old}")
@@ -1840,19 +1843,19 @@ fn wide_name_middle(t : @ui.Tester, name : String) -> Double {
 }
 
 ///|
-test "viewer on the tree, a wide window, the bar across the top: its file's name in the window's middle, as the old bar has it, however wide the way back and the tools are" {
+test "viewer on the tree, a wide window, the bar across the top: its file's name in the window's middle, coming and whole, however wide the way back and the tools are" {
   let given : Map[String, () -> Unit] = {}
   let t = held_wide_preview(given)
   let v = viewer.get().unwrap()
-  assert_true(v.coming(), msg="coming: the old bar")
+  assert_true(v.coming(), msg="coming")
   let old = wide_name_middle(t, v.file.name)
   (given.get(v.file.name).unwrap())()
   t.draw()
   t.run_for(@kit.progress_known_ms)
   assert_true(@sfbase.bar_as_nodes(v, 1280.0), msg="whole: the bar its nodes")
   let node = wide_name_middle(t, v.file.name)
-  assert_true(old > 0.0 && (old - 640.0).abs() < 1.0, msg="the old bar's in the middle: \{old}")
-  assert_true((node - old).abs() < 0.5, msg="the nodes' where the old bar's is: \{node} and \{old}")
+  assert_true(old > 0.0 && (old - 640.0).abs() < 1.0, msg="coming: in the middle: \{old}")
+  assert_true((node - old).abs() < 0.5, msg="whole: where it was while it came: \{node} and \{old}")
 }
 
 ///|
@@ -1988,12 +1991,12 @@ fn wide_bar_room(what : String, w : Double, platform : Int, fs : Double, hold : 
 }
 
 ///|
-test "viewer on the tree, the bar across the top, a name far longer than its middle, on a Mac and on Windows with the window's buttons in it, the system's words 1 and 1.3, 700, 840 and 1280 wide: its tools whole and its last where a page's bar's last is, the way back clear of them and where it is with a short name" {
+test "viewer on the tree, the bar across the top, a name far longer than its middle, on a Mac and on Windows with the window's buttons in it, the system's words 1 and 1.3, 700, 840 and 1280 wide: whole, its tools whole and its last where a page's bar's last is, the way back clear of them and where it is with a short name; coming, how much has come in words and its bar as whole as with a short name, clear of the window's buttons" {
   let seen = []
   for platform in [0, 3] {
     for fs in [1.0, 1.3] {
       for w in [700.0, 840.0, 1280.0] {
-        for hold in [false] {
+        for hold in [false, true] {
           let short = wide_bar_room("image", w, platform, fs, hold)
           let long = wide_bar_room("long", w, platform, fs, hold)
           let end_in = if platform == 3 {
@@ -2209,4 +2212,61 @@ test "viewer on the tree, a wide window, transparency reduced: the way to the pi
   let back = (glass_there(), shadows().length())
   assert_eq(reduced, (0, 1, [blur]), msg="reduced: no glass, its solid ground, its shadow")
   assert_eq(back, (1, 1), msg="back: its glass, its shadow")
+}
+
+///|
+test "viewer on the tree, a wide window, its picture coming: the bar across the top's way back clicked, the viewer closing as it is let go, no frame drawn after it" {
+  let given : Map[String, () -> Unit] = {}
+  let t = held_wide_preview(given)
+  let v = viewer.get().unwrap()
+  assert_true(v.coming() && v.in_tree, msg="coming, the tree's viewer")
+  let (x, y, w, h) = t.get(Button, label=v.desk_back(preview_src.val.unwrap())).rect
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  assert_true(v.closing, msg="let go: closing at once")
+}
+
+///|
+test "viewer on the tree, a wide window, its picture coming as the core says it: not known, then known, then more, then whole; each as it is said (its bar read out), drawn so; whole, its bar gone and its tools there; closed while it comes, nothing read of the clock after" {
+  let given : Map[String, () -> Unit] = {}
+  let said : Map[String, (Json) -> Unit] = {}
+  let t = held_wide_preview(given, said~)
+  let v = viewer.get().unwrap()
+  assert_true(v.coming() && @sfbase.bar_as_nodes(v, 1280.0), msg="coming: the bar its nodes")
+  let bar = fn() {
+    match t.all(ProgressBar) {
+      [b] => Some((b.value, b.range))
+      _ => None
+    }
+  }
+  assert_eq(bar(), Some(("", None)), msg="not known: a bar that sweeps")
+  assert_true(t.find(@sf.t("common.opening")) is Some(_), msg="not known: 正在打开")
+  (said.get(v.file.name).unwrap())({ "loaded": 1024.0, "total": 4096.0 })
+  assert_eq(bar(), Some(("25%", Some((0.0, 25.0, 100.0)))), msg="known: said at once")
+  t.draw()
+  assert_true(t.find("正在读取 1 KB / 4 KB") is Some(_), msg="known: in words")
+  (said.get(v.file.name).unwrap())({ "loaded": 3072.0, "total": 4096.0 })
+  assert_eq(bar(), Some(("75%", Some((0.0, 75.0, 100.0)))), msg="more: said at once")
+  t.draw()
+  assert_true(t.find("正在读取 3 KB / 4 KB") is Some(_), msg="more: in words")
+  assert_eq(t.all(Button, label=@sf.t("common.copy")).length(), 0, msg="coming: no copy")
+  (given.get(v.file.name).unwrap())()
+  t.draw()
+  t.run_for(@kit.progress_known_ms)
+  assert_true(!v.coming(), msg="whole")
+  assert_eq(bar(), None, msg="whole: its bar gone")
+  assert_true(t.find("正在读取") is None, msg="whole: its words gone")
+  assert_eq(t.all(Button, label=@sf.t("common.copy")).length(), 1, msg="whole: its copy")
+  // (another, closed while it comes)
+  let given2 : Map[String, () -> Unit] = {}
+  let t2 = held_wide_preview(given2)
+  let v2 = viewer.get().unwrap()
+  assert_true(v2.coming(), msg="coming again")
+  t2.key_told(@ui.key_escape, 0, t2.time())
+  t2.run_for(@ui.move_most_ms)
+  t2.run_for(@sfpages.reveal_ms)
+  assert_true(viewer.get() is None && pv_leaving.get() is None, msg="closed while it comes")
+  t2.draw()
+  let tree = @ui.view_tree().unwrap()
+  assert_true(!tree.clock_read() && !tree.cycle_read(), msg="nothing read of the clock after")
 }

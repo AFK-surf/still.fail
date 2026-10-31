@@ -14,9 +14,9 @@
 //     written; the picture where its zoom has it as the frame draws it, its flight, the pictures beside it), and over
 //     it the bars: the floating bar on a small screen, its picture coming or whole and not marked, nodes of its own
 //     (image_head, head_as_nodes: how much of it has come, its tools, their tips); the bar across the top of a wider
-//     screen, its picture whole and not marked, nodes too (image_bar, bar_as_nodes); the ways to the pictures beside
-//     it while it is not marked (image_steps); the rest an old view taking a press only where it has something to
-//     press (the bar across the top while its picture comes, marking's bars).
+//     screen, its picture coming or whole and not marked, nodes too (image_bar, bar_as_nodes); the ways to the
+//     pictures beside it while it is not marked (image_steps); the rest an old view taking a press only where it has
+//     something to press (marking's bars).
 //
 // It sets out as the node is made (that moment its cause's: the thumbnail tapped), and is done at its ways' declared
 // ends (moments on the node's timeline): landed, the thumbnail shows again; gone, it is let go.
@@ -732,14 +732,13 @@ pub fn head_as_nodes(v : Viewer, w : Double) -> Bool {
 
 ///|
 /// Whether viewer `vw`'s bar across the top is its nodes (image_bar), `w` wide, the old bar's (vf_bar's) not: a picture
-/// here whole (not coming, read, played or marked), not on a small screen (whose bar floats: head_as_nodes), its own bar
+/// here, coming or whole (not read, played or marked), not on a small screen (whose bar floats: head_as_nodes), its own bar
 /// (not the system's beside it). As each is told.
 pub fn bar_as_nodes(v : Viewer, w : Double) -> Bool {
   marks_said()
   v.in_tree &&
   v.shown_kind() == Some(KImage) &&
   !marking.on &&
-  !v.coming() &&
   !@sf.viewer_bar_floats(w) &&
   !@sf.native_on()
 }
@@ -807,8 +806,9 @@ fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, 
 /// Viewer `vw`'s bar across the top as nodes in `h` (viewer_bar_node, as vf_bar has it there): back to where it was
 /// opened from by name, its file's name and the line about it (which of how many, its size, its kind, its size in
 /// pixels), where the file is its tip (none for a draft's, kept on this device alone); gone up while its bars are not
-/// shown (Viewer::bars_shown), as far in as the viewer is (Viewer::shown_on); its tools (image_tools), each round as a
-/// page's bar's buttons are at the window's corner. Its way back closes it, at the press's moment. Their tips in a layer
+/// shown (Viewer::bars_shown), as far in as the viewer is (Viewer::shown_on); while its picture comes, how much of it
+/// has (viewer_coming_node); its tools once it no longer does (image_tools), each round as a page's bar's buttons are at
+/// the window's corner. Its way back closes it, at the press's moment. Their tips in a layer
 /// of its own over all of it.
 fn image_bar(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, Double)) -> Unit {
   h.over(Is(true)) |> ignore
@@ -826,7 +826,13 @@ fn image_bar(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, D
     fn() { (@sf.viewer_host().room)().0 },
     fn() { stage().0 },
     ink,
-    fn(row, corner) { image_tools(row, src, vw, ink, corner, tips) },
+    fn(row, corner) {
+      // (while it comes, how much of it has: FilePreview.tsx FileComing in the bar, from the start)
+      row.show(fn() { vw.coming() }, fn(r) {
+        @sf.viewer_coming_node(r, fn() { vw.got.get() }, fn() { vw.file.size }, ink) |> ignore
+      })
+      image_tools(row, src, vw, ink, corner, tips)
+    },
     fn() {
       if !vw.closing {
         vw.shut(@ui.current())

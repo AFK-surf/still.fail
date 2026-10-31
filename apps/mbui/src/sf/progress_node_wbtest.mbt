@@ -116,3 +116,24 @@ test "a progress bar as nodes drawn and read out as the old view's is (its range
   progress_said(t, "50%", Some((0.0, 50.0, 100.0)))
   assert_true(!tree.cycle_read() && !tree.clock_read(), msg="known and there: nothing reads the clock")
 }
+
+///|
+test "a progress bar as nodes, motion reduced, drawn as the old view's is: a part told anew there in the first frame, not known and known again there at once, nothing read of the clock after any of them" {
+  @ui.set_motion_chosen(Some(true))
+  let part : @signals.Signal[Double?] = @signals.signal(Some(0.25), same=fn(a, b) { a == b })
+  let t = progress_pair(part)
+  let tree = @ui.view_tree().unwrap()
+  let seen : Array[(String, (Array[(Int, Int)], Array[(Int, Int)]), Bool)] = []
+  for step in [("three quarters", Some(0.75)), ("not known", None), ("known again", Some(0.5))] {
+    part.set(step.1)
+    t.draw()
+    seen.push((step.0, progress_drawn(t), tree.clock_read() || tree.cycle_read()))
+  }
+  @ui.set_motion_chosen(None)
+  for s in seen {
+    let (what, (old, new), ticking) = s
+    assert_true(old.length() >= 2, msg="\{what}: the old one drawn: \{old}")
+    assert_eq(new, old, msg="\{what}: in the first frame, as the old one")
+    assert_true(!ticking, msg="\{what}: nothing read of the clock after")
+  }
+}
