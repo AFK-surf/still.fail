@@ -2440,23 +2440,28 @@ void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   if (json) mb_post("system", (const char *)json.bytes, json.length, NULL, 0);
 }
 
-// ---- Updates (@hostapi.app_version, update_install, update_state) ----
+// ---- Updates (@hostapi.app_version, update_fetch, update_apply, update_state) ----
 // The app keeping itself current, as still.fail's desktop app does (Electron's autoUpdater; on macOS Squirrel's
-// ShipIt): a newer build the core found (`app.update`: the release's zip) downloaded into the app's caches, picking up
-// where a cut connection left off (the bytes so far kept in `<name>.part`, the rest asked for as a range, a few times
-// over with a growing pause while each try gets further: Android's Updates.java), checked against its size and
-// SHA-256, unzipped beside the app (on its volume), and taken only when it is this app, newer, and signed as this one
-// is (its signature valid and meeting this app's designated requirement: still.fail's team and this app's id; a build
-// signed ad hoc, a developer's, takes none). It is put in this app's place (the bundles swapped, this one's thrown
-// away), and opened as this one quits (a shell waits for this process to end first: two cores never share the
-// data). How it goes the app reads (`update_state`: the phase, how far, what went wrong), told each time it changes
-// (MB_OUTSIDE_UPDATE, id 1: 0 while the host works at it, -1 failed). Only an app's bundle has a version here (a
-// build run as a bare program, 0, never asks).
+// ShipIt): a newer build the core found (`app.update`: the release's zip) downloaded by itself into the app's caches
+// (update_fetch), picking up where a cut connection left off (the bytes so far kept in `<name>.part`, the rest asked
+// for as a range, a few times over with a growing pause while each try gets further: Android's Updates.java), checked
+// against its size and SHA-256, unzipped beside the app (on its volume), and taken only when it is this app, newer,
+// and signed as this one is (its signature valid and meeting this app's designated requirement: still.fail's team and
+// this app's id; a build signed ad hoc, a developer's, takes none): ready. Asked to (update_apply), it is put in this
+// app's place (the bundles swapped, this one's thrown away), and opened as this one quits (a shell waits for this
+// process to end first: two cores never share the data); the app quit with one ready, it is put in place as it goes
+// (update_at_quit), not opened. How it goes the app reads (`update_state`: the phase, how
+// far, what went wrong, the build), told each time it changes (MB_OUTSIDE_UPDATE, id 1: 0 while the host works at it,
+// 1 once it is ready, -1 failed). Only an app's bundle has a version here (a build run as a bare program, 0, never
+// asks).
 
-static NSString *update_phase = @"idle";  // idle | downloading | retrying | installing | failed
+static NSString *update_phase = @"idle";  // idle | downloading | retrying | ready | installing | failed
 static int update_percent = -1;
 static NSString *update_error = @"";
 static BOOL update_working;
+// the build asked for (its file's name), and once ready, its app unzipped and checked beside this one
+static NSString *update_file = @"";
+static NSURL *update_staged;
 
 int32_t mb_host_app_version(void) {
   NSBundle *b = NSBundle.mainBundle;
@@ -2471,9 +2476,9 @@ static void update_say(NSString *phase, int percent, NSString *error) {
     update_phase = phase;
     update_percent = percent;
     update_error = error ?: @"";
-    if ([phase isEqualToString:@"failed"]) update_working = NO;
+    if ([phase isEqualToString:@"failed"] || [phase isEqualToString:@"ready"]) update_working = NO;
     if (changed) {
-      mb_host_outside(MB_OUTSIDE_UPDATE, 1, [phase isEqualToString:@"failed"] ? -1 : 0);
+      mb_host_outside(MB_OUTSIDE_UPDATE, 1, [phase isEqualToString:@"failed"] ? -1 : [phase isEqualToString:@"ready"] ? 1 : 0);
       [the_view requestFrame];
     }
   });
@@ -2610,7 +2615,9 @@ static NSString *update_download(NSString *dir, NSURL *url, NSString *sha256, lo
     [fm removeItemAtPath:zip error:NULL];
   }
   long long have = (long long)[[fm attributesOfItemAtPath:part error:NULL] fileSize];
-  if (size > 0 && have > size) [fm removeItemAtPath:part error:NULL];
+  if (size > 0 && have > size) [fm removeItemAtPath:part error:NULL], have = 0;
+  // how far from the first: what an earlier try kept (0 none), not "not known" till the first bytes come
+  if (size > 0) update_say(@"downloading", (int)(have * 100 / size), nil);
   // tries in a row that got no further before it gives up (pauses of 1, 2, 4, 8, 16 s between them)
   const int retries = 6;
   int failures = 0;
@@ -2675,15 +2682,18 @@ static BOOL update_signed_as_this(NSURL *app, NSString **why) {
   return st == errSecSuccess;
 }
 
-// The zip unzipped beside this app (a folder the system gives for replacing it, on its volume), its app checked, and
-// swapped into this one's place: nil, or why not.
-static NSString *update_put(NSString *zip) {
+// The zip unzipped beside this app (a folder the system gives for replacing it, on its volume) and its app checked:
+// the app, or nil and why not.
+static NSURL *update_stage(NSString *zip, NSString **why) {
   NSFileManager *fm = NSFileManager.defaultManager;
   NSURL *here = NSBundle.mainBundle.bundleURL;
   NSError *e = nil;
   NSURL *stage = [fm URLForDirectory:NSItemReplacementDirectory inDomain:NSUserDomainMask appropriateForURL:here
                               create:YES error:&e];
-  if (!stage) return [NSString stringWithFormat:@"can't write beside %@: %@", here.path, e.localizedDescription];
+  if (!stage) {
+    *why = [NSString stringWithFormat:@"can't write beside %@: %@", here.path, e.localizedDescription];
+    return nil;
+  }
   NSTask *unzip = [NSTask new];
   unzip.launchPath = @"/usr/bin/ditto";
   unzip.arguments = @[ @"-x", @"-k", zip, stage.path ];
@@ -2692,26 +2702,50 @@ static NSString *update_put(NSString *zip) {
   NSURL *app = nil;
   for (NSURL *u in [fm contentsOfDirectoryAtURL:stage includingPropertiesForKeys:nil options:0 error:NULL])
     if ([u.pathExtension isEqualToString:@"app"]) app = u;
-  NSString *why = nil;
   NSBundle *b = app ? [NSBundle bundleWithURL:app] : nil;
-  if (unzip.terminationStatus != 0 || !b) why = @"incomplete";
+  if (unzip.terminationStatus != 0 || !b) *why = @"incomplete";
   else if (![b.bundleIdentifier isEqualToString:NSBundle.mainBundle.bundleIdentifier])
-    why = [NSString stringWithFormat:@"another app (%@)", b.bundleIdentifier];
+    *why = [NSString stringWithFormat:@"another app (%@)", b.bundleIdentifier];
   else if ([[b objectForInfoDictionaryKey:@"CFBundleVersion"] intValue] <= mb_host_app_version())
-    why = @"not newer";
-  else update_signed_as_this(app, &why);
-  if (!why && ![fm replaceItemAtURL:here withItemAtURL:app backupItemName:nil options:0 resultingItemURL:NULL error:&e])
-    why = [NSString stringWithFormat:@"can't replace %@: %@", here.path, e.localizedDescription];
-  [fm removeItemAtURL:stage error:NULL];
-  return why;
+    *why = @"not newer";
+  else update_signed_as_this(app, why);
+  if (*why) {
+    [fm removeItemAtURL:stage error:NULL];
+    return nil;
+  }
+  return app;
 }
 
-void mb_host_update_install(moonbit_string_t url_s, moonbit_string_t sha256_s, double size, moonbit_string_t name_s) {
+// The app quitting with a build ready (the person never said 重启更新): put in its place as it goes, not opened (the
+// next time the person opens the app, it is the newer build).
+static void update_at_quit(void) {
+  NSURL *app = update_staged;
+  if (!app || ![update_phase isEqualToString:@"ready"]) return;
+  update_staged = nil;
+  NSFileManager *fm = NSFileManager.defaultManager;
+  NSError *e = nil;
+  if ([fm replaceItemAtURL:NSBundle.mainBundle.bundleURL withItemAtURL:app backupItemName:nil options:0
+          resultingItemURL:NULL error:&e])
+    update_log(@"in place as this one quits");
+  else
+    update_log([NSString stringWithFormat:@"not put in place as this one quits: %@", e.localizedDescription]);
+  [fm removeItemAtURL:app.URLByDeletingLastPathComponent error:NULL];
+}
+
+void mb_host_update_fetch(moonbit_string_t url_s, moonbit_string_t sha256_s, double size, moonbit_string_t name_s,
+                          int32_t now) {
+  (void)now;  // (no network here costs more than another)
   if (update_working || mb_host_app_version() <= 0) return;
   NSURL *url = [NSURL URLWithString:mb_ns_from_string(url_s)];
   NSString *sha256 = mb_ns_from_string(sha256_s), *name = mb_ns_from_string(name_s).lastPathComponent;
   if (!url || !name.length) return;
+  // (ready already, or being put in place)
+  if ([name isEqualToString:update_file] && ([update_phase isEqualToString:@"ready"] || [update_phase isEqualToString:@"installing"]))
+    return;
+  if (update_staged) [NSFileManager.defaultManager removeItemAtURL:update_staged.URLByDeletingLastPathComponent error:NULL];
+  update_staged = nil;
   update_working = YES;
+  update_file = name;
   update_phase = @"downloading";
   update_percent = -1;
   update_error = @"";
@@ -2722,16 +2756,49 @@ void mb_host_update_install(moonbit_string_t url_s, moonbit_string_t sha256_s, d
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
     NSString *why = nil;
     NSString *zip = update_download(dir, url, sha256, (long long)size, name, &why);
-    if (zip) {
-      update_say(@"installing", -1, nil);
-      why = update_put(zip);
+    NSURL *app = zip ? update_stage(zip, &why) : nil;
+    if (!app) {
+      update_log([NSString stringWithFormat:@"failed: %@", why]);
+      update_say(@"failed", -1, why);
+      return;
     }
+    update_log([NSString stringWithFormat:@"%@ ready", app.path]);
+    dispatch_async(dispatch_get_main_queue(), ^{
+      update_staged = app;
+      static dispatch_once_t once;
+      dispatch_once(&once, ^{
+        atexit(update_at_quit);
+      });
+    });
+    update_say(@"ready", -1, nil);
+  });
+}
+
+void mb_host_update_apply(moonbit_string_t said) {
+  (void)said;  // (opened again here: nothing to say)
+  NSURL *app = update_staged;
+  if (!app || ![update_phase isEqualToString:@"ready"]) return;
+  update_staged = nil;
+  update_phase = @"installing";
+  update_percent = -1;
+  mb_host_outside(MB_OUTSIDE_UPDATE, 1, 0);
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSURL *here = NSBundle.mainBundle.bundleURL;
+    NSError *e = nil;
+    NSString *why = nil;
+    if (![fm replaceItemAtURL:here withItemAtURL:app backupItemName:nil options:0 resultingItemURL:NULL error:&e])
+      why = [NSString stringWithFormat:@"can't replace %@: %@", here.path, e.localizedDescription];
+    [fm removeItemAtURL:app.URLByDeletingLastPathComponent error:NULL];
     if (why) {
       update_log([NSString stringWithFormat:@"failed: %@", why]);
       update_say(@"failed", -1, why);
       return;
     }
-    [NSFileManager.defaultManager removeItemAtPath:zip error:NULL];
+    NSString *caches = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES).firstObject;
+    [fm removeItemAtPath:[[[caches stringByAppendingPathComponent:NSBundle.mainBundle.bundleIdentifier]
+                             stringByAppendingPathComponent:@"updates"] stringByAppendingPathComponent:update_file]
+                   error:NULL];
     update_log(@"in place; opened again as this one quits");
     dispatch_async(dispatch_get_main_queue(), ^{
       // opened again once this process has ended, said on the update's log (the app's path as $0, the log's as $1:
@@ -2753,7 +2820,8 @@ void mb_host_update_install(moonbit_string_t url_s, moonbit_string_t sha256_s, d
 
 moonbit_string_t mb_host_update_state(void) {
   if (mb_host_app_version() <= 0) return moonbit_make_string_raw(0);
-  NSDictionary *st = @{@"phase" : update_phase, @"percent" : @(update_percent), @"error" : update_error};
+  NSDictionary *st =
+      @{@"phase" : update_phase, @"percent" : @(update_percent), @"error" : update_error, @"file" : update_file};
   NSData *json = [NSJSONSerialization dataWithJSONObject:st options:0 error:NULL];
   return mb_string_from_ns([[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] ?: @"");
 }

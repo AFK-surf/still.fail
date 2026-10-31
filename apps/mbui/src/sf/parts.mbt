@@ -4161,12 +4161,11 @@ let sign_in_many : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 
 
 ///|
-/// A newer build offered (Home.kt's update key; one look wherever a frame puts it, the size of the keys beside it:
-/// `side` across, its mark `mark`): the download mark in its middle, an accent dot in its top right; while it is `busy`
-/// (asked again first, downloaded, installed), in the mark's place how far it has come (coming_mark: `coming`, 0 to 1,
-/// from its top; None while not known, the spinner's quarter turning there), no words; one that
-/// failed, its dot red, `why` its tip. Said to be `label` (下载中 42% while it comes). True on the frame it is
-/// pressed, not while it is busy.
+/// A newer build ready for the person's word (Home.kt's update key; one look wherever a frame puts it, the size of the
+/// keys beside it: `side` across, its mark `mark`): the download mark in its middle (the key is there only while the
+/// build waits on its press: no dot over it to say so); while it is `busy` (being put in place), in the mark's place
+/// how far it has come (coming_mark: `coming`, 0 to 1, from its top; None while not known, the spinner's quarter
+/// turning there), no words. `why` its tip. Said to be `label`. True on the frame it is pressed, not while it is busy.
 pub fn update_key(
   c : @ui.Ctx,
   key : String,
@@ -4175,7 +4174,6 @@ pub fn update_key(
   label : String,
   why : String,
   coming : Double?,
-  failed : Bool,
   busy : Bool,
 ) -> Bool {
   let t = theme()
@@ -4189,16 +4187,6 @@ pub fn update_key(
         coming_mark(c, key, coming, mark, t.p.text)
       } else {
         icon(c, "download", size=mark, color=t.p.text) |> ignore
-        c.layer(fn() {
-          c.box(style=update_dot_at, fn() {
-            c.box(style=update_dot_ring, fn() {
-              c.box(style=if failed { update_dot_bad } else { update_dot }, fn() {  }) |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
       }
       if !busy {
         press_ripple(c, id, side / 2.0)
@@ -4448,8 +4436,8 @@ let sync_out_ms : Double = 400.0
 ///|
 /// A key of a bar for what comes by itself (what comes to this device: sfdesk transfers.mbt), as update_key draws one:
 /// round, `side` across, its `glyph` `mark` big in its middle, in its place while something comes how far it has come
-/// (`coming`: coming_mark; None while nothing comes), update_key's dot where something waits on a press (`dot`: the
-/// accent's) or `failed` (red's); pressed, what comes (the page's). True on its press.
+/// (`coming`: coming_mark; None while nothing comes), update_key's dot, red's, where something `failed`; pressed, what
+/// comes (the page's). True on its press.
 pub fn progress_key(
   c : @ui.Ctx,
   key : String,
@@ -4458,7 +4446,6 @@ pub fn progress_key(
   glyph : String,
   label : String,
   coming : Double?,
-  dot~ : Bool,
   failed~ : Bool,
 ) -> Bool {
   let t = theme()
@@ -4472,10 +4459,10 @@ pub fn progress_key(
       } else {
         icon(c, glyph, size=mark, color=t.p.text) |> ignore
       }
-      if failed || dot {
+      if failed {
         c.layer(fn() {
           c.box(style=update_dot_at, fn() {
-            c.box(style=update_dot_ring, fn() { c.box(style=if failed { update_dot_bad } else { update_dot }, fn() {  }) |> ignore })
+            c.box(style=update_dot_ring, fn() { c.box(style=update_dot_bad, fn() {  }) |> ignore })
             |> ignore
           })
           |> ignore
@@ -4552,10 +4539,6 @@ let update_dot_side : Double = 13.0
 
 ///|
 let update_dot_rim : Double = 2.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let update_dot : @ui.Style = @ui.css("w=Full h=Full radius=Full bg=Accent")
 
 ///|
 // kept across runs: a value (no field of it changes)

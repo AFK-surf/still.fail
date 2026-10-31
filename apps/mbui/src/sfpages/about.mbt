@@ -97,34 +97,37 @@ let perf_turned : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 /// This build and the way to a newer one, a row each on every screen. Its name and version, words of a length known,
-/// the row's alone. Then, where newer builds are asked for here (not on iOS, nor run from the sources), what can be
-/// done, said by the row's own words: 更新到 <version> where a newer build is known (installed), else 检查更新 (still.fail
-/// cloud asked now); pressed, the update dialog opens and says how it goes (updates.mbt update_dialog), and pressed
-/// while it goes, opens again. What is under way under its words (正在检查, 下载中 40%, 正在安装: words of no length
-/// known, on a line of their own) and under them the bar, from asking to installing (Progress: how far while it
-/// downloads, else a piece sweeping across), as the dialog has it: the row as tall all the way. (A spinner at its end
-/// while how far was not known, the bar only while it was, made the row taller and shorter again as it went: 正在检查,
-/// 下载中, 正在安装, 2026-10-28. A button at the row's end took what its words left: the name cut to 「still.fail…」 and
-/// 下载中 40% broken in two beside 更新到 0.1.5283 on a phone, 2026-10-26.)
+/// the row's alone. Then, where newer builds are asked for here (not on iOS, nor run from the sources), how the update
+/// stands said by the row's own words (updates.mbt update_stands): 检查更新, 下载 <version> (waiting for Wi‑Fi),
+/// 正在下载 <version>, 重启以更新到 <version>, 允许安装更新, 重试…; pressed, what is the person's to do is done, else the
+/// update dialog opens and says how it goes. The line under its words (how far, what it waits for, why it failed:
+/// words of no length known, on a line of their own) and under them the bar while something is under way (Progress:
+/// how far while it downloads, else a piece sweeping across), as the dialog has it, coming and going with the row
+/// growing and closing round it. (A spinner at its end while how
+/// far was not known, the bar only while it was, made the row taller and shorter again as it went, 2026-10-28. A
+/// button at the row's end took what its words left: the name cut to 「still.fail…」 on a phone, 2026-10-26.)
 fn version_rows(c : @ui.Ctx, core : Core) -> Unit {
   let v = (core.version_now)()
   @sf.link_row(c, "", "still.fail mbui " + build_version(), goes=false) |> ignore
   if !v.asks {
     return
   }
-  let busy = v.doing != ""
-  let label = if v.newer != "" {
-    @sf.t("android-settings.version.update", args=[("version", v.newer)])
-  } else {
-    @sf.t("android-settings.version.check")
-  }
+  // (the bar coming and going with what is under way, the row growing and closing with it: not there in a frame)
+  let open = @motion.anim(c, "about/version/bar", if v.going { 1.0 } else { 0.0 })
+  open.follow(if v.going { 1.0 } else { 0.0 }, @motion.move().per_unit(@motion.reveal_height("about/version/below")))
+  let share = open.get()
   let pressed = @sf.link_row(
     c,
     "about/version",
-    label,
-    note=v.doing,
+    v.label,
+    note=v.note,
     chevron=false,
-    below?=if busy { Some(fn() { @sf.progress(c, "about/version/part", v.part) }) } else { None },
+    below?=if v.going || share > 0.0 {
+      Some(fn() { @sf.progress(c, "about/version/part", v.part) })
+    } else {
+      None
+    },
+    below_open=share,
   )
   if pressed {
     (core.version_tap)()

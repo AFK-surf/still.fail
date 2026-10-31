@@ -77,6 +77,8 @@ pub fn drive_pane(@ui.Ctx, @sfbase.Source, Previewed, String, () -> Unit, () -> 
 
 pub fn drive_row(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt, @sfbase.DvEntry, RowProps, Shown, compact? : Bool, depth? : Int32, expanded? : Bool, on_toggle? : () -> Unit, column? : Bool, along? : Bool) -> Unit
 
+pub fn drive_rows_reset() -> Unit
+
 pub fn drive_start(@sfbase.DvStation) -> String?
 
 pub fn drive_stations(@sfbase.Source, String) -> (Array[@sfbase.DvStation]?, String?)

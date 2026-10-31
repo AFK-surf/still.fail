@@ -242,6 +242,8 @@ public class MainActivity extends Activity {
         }
         if (multicast != null) multicast.acquire();
         Streams.behind(false);
+        // a newer build ready stays out while the app is in sight (Updates.started)
+        Updates.started();
         // the window's size classes and the device's fold, said to the app as they change (src/hostapi/system.mbt)
         folds.start();
         // back on screen after a while off it: said to the app (src/hostapi/system.mbt)
@@ -262,6 +264,8 @@ public class MainActivity extends Activity {
         folds.stop();
         if (multicast != null) multicast.release();
         if (hiddenAt == 0) hiddenAt = android.os.SystemClock.elapsedRealtime();
+        // a newer build ready put in place once the app stays out of sight a while (Updates.stopped)
+        Updates.stopped();
         super.onStop();
     }
 
@@ -446,7 +450,7 @@ public class MainActivity extends Activity {
         setBackEnabled(Host.backWanted);
         Host.resumed = true;
         Host.tellAppState();
-        // a newer build asked for while the person was away giving the leave to install it (Updates.resumed)
+        // back from giving the leave to install apps: a newer build ready goes on (Updates.resumed)
         Updates.resumed();
         // whether it is over another app, said to the app as it changes (src/hostapi/system.mbt `over`)
         if (saidOver == null || saidOver != over()) {

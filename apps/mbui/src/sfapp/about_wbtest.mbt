@@ -67,7 +67,7 @@ let one_page_cases : Array[(Double, Int, Bool, Bool)] = [
 ]
 
 ///|
-test "the update dialog with a newer build: what it brings (its first five, 还有 n 项); 更新 asks again before it downloads, turning, 关闭 beside it" {
+test "the update dialog with a newer build: what it brings (its first five, 还有 n 项); 下载 asks still.fail cloud now, then hands the newest to the host, how it comes under them, 关闭 beside it; ready, 重启更新 asks again, then puts it in place" {
   let t = one_page_tester(@settings.Route::About, 1280.0)
   let asked : Array[(Result[Json, String]) -> Unit] = []
   update_version.val = 2
@@ -89,17 +89,30 @@ test "the update dialog with a newer build: what it brings (its first five, 还�
   assert_true(t.find("新增：六") is None)
   assert_true(t.find("还有 2 项") is Some(_))
   assert_true(t.find("稍后") is Some(_))
-  t.click(Button, label="更新")
+  t.click(Button, label="下载")
   t.draw()
+  // still.fail cloud asked now first (the newest there is), checking said meanwhile; then handed to the host, on any
+  // network (the person's word)
   assert_eq(asked.length(), 1)
-  assert_true(update.installing.get())
   assert_true(t.find("正在检查最新版本") is Some(_))
+  (asked[0])(Ok(update.available.get().unwrap()))
+  t.draw()
+  assert_eq(t.update_asked(), ["fetch stillfail-3.zip false", "fetch stillfail-3.zip true"])
+  t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\",\"file\":\"stillfail-3.zip\"}")
+  t.draw()
+  assert_true(t.find("正在下载 0.1.3 · 40%") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("关闭") is Some(_))
-  // none newer by now: said in the dialog, no toast
-  (asked[0])(Ok(Json::null()))
+  // ready: 重启更新, which puts it in place
+  t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-3.zip\"}")
   t.draw()
+  t.click(Button, label="重启更新")
   t.draw()
-  assert_true(t.find("已是最新版本") is Some(_))
+  assert_eq(asked.length(), 2)
+  (asked[1])(Ok(update.available.get().unwrap()))
+  t.draw()
+  assert_eq(t.update_asked(), [
+    "fetch stillfail-3.zip false", "fetch stillfail-3.zip true", "fetch stillfail-3.zip false", "apply",
+  ])
   assert_eq(app.toast.get(), "")
   update_reset()
 }

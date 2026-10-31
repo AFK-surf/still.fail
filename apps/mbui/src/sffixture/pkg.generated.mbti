@@ -391,6 +391,8 @@ pub fn fixture_topic_inner(Fixture, String, Map[String, Json]) -> Json?
 
 pub fn fixture_update(String) -> Unit
 
+pub fn fixture_update_goes(String, String, percent? : Int32, away? : Bool) -> Unit
+
 pub fn fixture_updates(ms? : Double) -> Unit
 
 pub let fixture_viz_html : String

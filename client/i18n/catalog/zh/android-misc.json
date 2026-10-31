@@ -557,5 +557,16 @@
   "android-misc.adb.stations.notLent": "还没有共享过去",
   "android-misc.adb.ask.pair.title": "这台 station 还没和你的手机配对",
   "android-misc.adb.ask.pair.about": "在手机上配对一次，以后它就能一直连上这台手机。",
+  "android-misc.updates.allow": "允许安装更新",
+  "android-misc.updates.allowWhy": "{app} 需要你允许它安装应用，之后会自动更新",
+  "android-misc.updates.download": "下载 {version}",
+  "android-misc.updates.downloadingVersion": "正在下载 {version}",
+  "android-misc.updates.installingVersion": "正在安装 {version}",
+  "android-misc.updates.ready": "重启以更新到 {version}",
+  "android-misc.updates.readyAway": "离开 {app} 一段时间后自动安装",
+  "android-misc.updates.readyQuit": "退出 {app} 时自动安装",
+  "android-misc.updates.retry": "重试更新到 {version}",
+  "android-misc.updates.updated": "{app} 已更新到 {version}，点按打开",
+  "android-misc.updates.waitWifi": "连接 Wi‑Fi 后自动下载 · {size}",
   "android-misc.adb.manage": "在设置里管理"
 }

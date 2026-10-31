@@ -686,13 +686,14 @@ test "wide, the window's buttons in the app's top row: the sidebar shown a while
 }
 
 ///|
-test "wide: a newer build of the desktop app: 更新 the update key in the sidebar's first row before the filter, as large as it; folded, past the rail, the page bar's start clear of it" {
+test "wide: a newer build of the desktop app ready: 重启更新 the update key in the sidebar's first row before the filter, as large as it; folded, past the rail, the page bar's start clear of it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  update.available.set(Some({ "versionName": "0.1.9999" }))
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
   t.frame()
   t.frame()
-  let (x, y, w, h) = t.query(Button, label="更新").unwrap().rect
+  let (x, y, w, h) = t.query(Button, label="重启更新").unwrap().rect
   let (fx, fy, _, fh) = t.query(Button, label="筛选会话：全部").unwrap().rect
   assert_eq((y, h), (fy, fh))
   assert_true(x + w <= fx, msg="更新 to \{x + w}, the filter from \{fx}")
@@ -700,7 +701,7 @@ test "wide: a newer build of the desktop app: 更新 the update key in the sideb
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
   t.move(1000.0, 400.0)
   t.run_for(@ui.move_most_ms)
-  let (fx, _, _, _) = t.query(Button, label="更新").unwrap().rect
+  let (fx, _, _, _) = t.query(Button, label="重启更新").unwrap().rect
   assert_eq(fx, @sfdesk.update_closed_in)
   assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_update_in)
   // shown a while: 更新 back in the sidebar's first row, the bar starting past the sidebar with its own 12
@@ -712,24 +713,27 @@ test "wide: a newer build of the desktop app: 更新 the update key in the sideb
 }
 
 ///|
-test "wide: under a phone's status bar, 更新 below it (the bar takes what is pressed on it), in the sidebar's first row" {
+test "wide: under a phone's status bar, 重启更新 below it (the bar takes what is pressed on it), in the sidebar's first row" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":32,\"bottom\":0,\"left\":0,\"right\":0}}")
-  update.available.set(Some({ "versionName": "0.1.9999" }))
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
   t.frame()
   t.run_for(@ui.move_most_ms)
-  let (_, y, _, h) = t.query(Button, label="更新").unwrap().rect
+  let (_, y, _, h) = t.query(Button, label="重启更新").unwrap().rect
   assert_true(y >= 32.0, msg="\{y}")
   // in the sidebar's first row (新建对话's), on its line
   let (_, fy, _, fh) = t.query(Button, label="筛选会话：全部").unwrap().rect
   assert_eq((y, h), (fy, fh))
-  // pressed, the newer build asked for (update_install: asked again first)
-  update.source = Some({ check: fn(_, _, done) { done(Ok(Json::null())) }, url: fn(f) { f } })
-  update_version.val = 1
-  let (x, _, w, _) = t.query(Button, label="更新").unwrap().rect
+  // pressed: still.fail cloud asked now (none newer than the one ready), then it is put in place (update_go)
+  let (x, _, w, _) = t.query(Button, label="重启更新").unwrap().rect
   t.tap(x + w / 2.0, y + h / 2.0)
-  assert_eq(update.available.get(), None)
+  assert_eq(t.update_asked(), ["fetch stillfail-beta-0.1.9999.apk false", "apply"])
+  // (the host at it: turning, no press)
+  t.tells_update("{\"phase\":\"installing\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-beta-0.1.9999.apk\"}")
+  t.frame()
+  assert_true(t.query(Button, label="正在重启").unwrap().disabled)
 }
 
 ///|

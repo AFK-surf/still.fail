@@ -85,5 +85,7 @@
   "desktop.startUpdate.title": "Updating {app}",
   "desktop.startUpdate.checking": "Checking for a new version",
   "desktop.startUpdate.downloading": "Downloading {version}: {got} / {size} MB",
+  "desktop.update.download": "Download",
+  "desktop.update.restart": "Restart to update",
   "desktop.startUpdate.skip": "Skip"
 }

@@ -1,11 +1,18 @@
 package dev.mbui;
 
 import android.app.PendingIntent;
+import android.app.job.JobInfo;
+import android.app.job.JobParameters;
+import android.app.job.JobScheduler;
+import android.app.job.JobService;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
@@ -18,29 +25,47 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.security.MessageDigest;
 
 /**
- * The app keeping itself current (@hostapi.update_install, still.fail's Updates.kt and Install.kt): a newer build the core
- * found (`app.update`) downloaded into the cache, picking up where a cut connection left off (the bytes so far kept in
- * `<name>.part`, the rest asked for as a range, a few times over with a growing pause while each try gets further),
- * checked against its sha256, and handed to the system's installer, which installs it over this one once the person
- * agrees. Installing apps needs the person's leave (安装未知应用): without it the system's page for it opens instead. How
- * it goes the app reads (`state`, on the GL thread: the phase, how far, what went wrong), told each time it changes
- * (`changed`).
+ * The app keeping itself current (@hostapi.update_fetch, update_apply; still.fail's Updates.kt and Install.kt): a newer
+ * build the core found (`app.update`) downloaded by itself into the app's files (`fetch`), picking up where a cut
+ * connection left off (the bytes so far kept in `<name>.part`, the rest asked for as a range, a few times over with a
+ * growing pause while each try gets further), checked against its sha256 and kept: ready. On a metered network it waits
+ * for one that is not (a job), unless the person asked for it. A build ready is put in place while the person is away
+ * from the app: once it has been out of sight for AWAY_MS (a job; not while a sign-in waits in the browser), handed to
+ * the system's installer, which installs it over this one without asking (UPDATE_PACKAGES_WITHOUT_USER_ACTION), so
+ * the app opened next is the newer build. Asked to put it in place now (`apply`), it is at once: the app ends (no app
+ * may open itself again from behind), and the newer build says so in a notification that opens it. Installing apps
+ * needs the person's leave (安装未知应用): asked now without it, the system's page for it opens and, once given, the
+ * build goes in; found missing while away, the app is told (phase allow) and the build waits. How it goes the app
+ * reads (`state`, on the GL thread: the phase, how far, what went wrong, the build), told each time it changes
+ * (`changed`). What it asked for and the build ready are kept in the app's files: a job of a later run takes them up.
  */
 final class Updates {
-    /** idle | allow (the person's leave asked) | downloading | retrying | installing | handed | failed */
+    /** idle | waiting (for a network that is not metered) | downloading | retrying | ready | allow | installing | failed */
     static volatile String phase = "idle";
     static volatile int percent = -1;
     static volatile String error = "";
+    /** The build asked for, by its file's name ("" none). */
+    static volatile String file = "";
     static Thread worker;
     /** Tries in a row that got no further before a download gives up (pauses 1, 2, 4, 8, 16 s between them). */
     static final int RETRIES = 6;
+    /** How long the app is out of sight before a build ready is put in place. */
+    static final long AWAY_MS = 10 * 60_000L;
+    static final int FETCH_JOB = 7201, AWAY_JOB = 7202;
+    /** Whether the app's window is on the screen (MainActivity's onStart to onStop). */
+    static volatile boolean inSight;
+    /** The person asked for the build to go in now, and the leave to install apps was asked first; what it says after. */
+    static volatile String nowSaid;
+    private static boolean restored;
 
     /**
-     * How it goes changed (Native.OUTSIDE_UPDATE): `state` 0 while the host works at it, 1 once it does no more (handed
-     * to the installer, the person's leave asked), -1 failed.
+     * How it goes changed (Native.OUTSIDE_UPDATE): `state` 0 while the host works at it, 1 once it does no more (ready,
+     * waiting, the person's leave wanted), -1 failed.
      */
     static void changed(int state) {
         Native.tell(Native.OUTSIDE_UPDATE, 1, state);
@@ -57,42 +82,142 @@ final class Updates {
     }
 
     static String state() {
+        Context c = app();
+        if (c != null) restore(c);
         try {
-            return new org.json.JSONObject().put("phase", phase).put("percent", percent).put("error", error).toString();
+            // (`away`: a build ready is put in place by itself while the app is out of sight)
+            return new org.json.JSONObject().put("phase", phase).put("percent", percent).put("error", error).put("file", file)
+                    .put("away", true).toString();
         } catch (org.json.JSONException e) {
             return "";
         }
     }
 
-    /** The build asked for while the person's leave was asked (url, sha256, size, name): taken up as they come back. */
-    static Object[] waiting;
-
-    static synchronized void install(String url, String sha256, double size, String name) {
+    private static Context app() {
         Context c = Host.activity;
-        if (c == null || (worker != null && worker.isAlive())) return;
-        if (!c.getPackageManager().canRequestPackageInstalls()) {
-            phase = "allow";
-            waiting = new Object[] {url, sha256, size, name};
-            Host.log("update: the person's leave to install apps asked for");
-            c.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + c.getPackageName()))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        return c == null ? null : c.getApplicationContext();
+    }
+
+    /** Where the builds are kept: the app's files' updates/ (what is asked for in `asked`, a build whole once ready). */
+    static File dir(Context c) {
+        File d = new File(c.getFilesDir(), "updates");
+        d.mkdirs();
+        return d;
+    }
+
+    /** The build whole and checked in `dir` (its name, the newest), newer than this one; null none. */
+    private static File readyIn(Context c) {
+        File[] all = dir(c).listFiles();
+        if (all == null) return null;
+        long mine;
+        try {
+            mine = c.getPackageManager().getPackageInfo(c.getPackageName(), 0).getLongVersionCode();
+        } catch (PackageManager.NameNotFoundException e) {
+            return null;
+        }
+        File best = null;
+        long bestCode = mine;
+        for (File f : all) {
+            if (!f.getName().endsWith(".apk")) continue;
+            PackageInfo p = c.getPackageManager().getPackageArchiveInfo(f.getPath(), 0);
+            long code = p == null ? 0 : p.getLongVersionCode();
+            if (code > bestCode) {
+                if (best != null) best.delete();
+                best = f;
+                bestCode = code;
+            } else {
+                // this build's, or older: put in place already, or never to be
+                f.delete();
+            }
+        }
+        return best;
+    }
+
+    /**
+     * What an earlier run left, taken up once: a build ready (ready again), what it had asked for (still asked for:
+     * waiting); the cache's updates/ of builds before these were kept in the app's files, let go.
+     */
+    static synchronized void restore(Context c) {
+        if (restored) return;
+        restored = true;
+        deleteAll(new File(c.getCacheDir(), "updates"));
+        File ready = readyIn(c);
+        String[] asked = asked(c);
+        if (ready != null) {
+            file = ready.getName();
+            phase = "ready";
+        } else if (asked != null) {
+            file = asked[3];
+            phase = "waiting";
+        }
+    }
+
+    private static void deleteAll(File d) {
+        File[] all = d.listFiles();
+        if (all != null) for (File f : all) f.delete();
+        d.delete();
+    }
+
+    /** What was asked for last: url, sha256, size, name; null none (or the build it names put in place since). */
+    private static String[] asked(Context c) {
+        try {
+            String[] a = new String(Files.readAllBytes(new File(dir(c), "asked").toPath()), StandardCharsets.UTF_8).split("\n");
+            return a.length == 4 ? a : null;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private static boolean metered(Context c) {
+        ConnectivityManager cm = c.getSystemService(ConnectivityManager.class);
+        return cm == null || cm.isActiveNetworkMetered();
+    }
+
+    /**
+     * The build at `url` made ready (@hostapi.update_fetch): downloaded now where the network is not metered or the
+     * person asked (`now`), else once one that is not comes (a job). One ready, or coming, of that name: nothing more.
+     */
+    static synchronized void fetch(String url, String sha256, double size, String name, boolean now) {
+        Context c = app();
+        if (c == null) return;
+        restore(c);
+        name = new File(name).getName();
+        if (worker != null && worker.isAlive()) return;
+        if (name.equals(file) && (phase.equals("ready") || phase.equals("allow") || phase.equals("installing"))) return;
+        try {
+            Files.write(new File(dir(c), "asked").toPath(),
+                    (url + "\n" + sha256 + "\n" + (long) size + "\n" + name).getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            Host.log("update: what is asked for not kept: " + e);
+        }
+        file = name;
+        percent = -1;
+        error = "";
+        if (!now && metered(c)) {
+            phase = "waiting";
+            Host.log("update: " + name + " waits for a network that is not metered");
+            JobScheduler js = c.getSystemService(JobScheduler.class);
+            if (js != null) js.schedule(new JobInfo.Builder(FETCH_JOB, new ComponentName(c, Job.class))
+                    .setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED).setPersisted(false).build());
             changed(1);
             return;
         }
-        waiting = null;
-        Context app = c.getApplicationContext();
+        start(c, url, sha256, (long) size, name);
+    }
+
+    /** The download on a thread of its own: ready, then put in place once the app is out of sight a while. */
+    private static void start(Context c, String url, String sha256, long size, String name) {
         phase = "downloading";
-        percent = -1;
-        error = "";
+        // how far from the first: what an earlier try kept (0 none), not "not known" till the first bytes come
+        long have = new File(dir(c), name + ".part").length();
+        percent = size > 0 ? (int) (Math.min(have, size) * 100 / size) : -1;
         changed(0);
         worker = new Thread(() -> {
             try {
-                File apk = download(app, url, sha256, (long) size, name);
-                phase = "installing";
-                changed(0);
-                installApk(app, apk);
-                phase = "handed";
-                Host.log("update: " + apk.getName() + " handed to the system's installer");
+                download(c, url, sha256, size, name);
+                phase = "ready";
+                Host.log("update: " + name + " ready");
+                if (!inSight) away(c);
             } catch (Exception e) {
                 phase = "failed";
                 error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
@@ -103,25 +228,180 @@ final class Updates {
         worker.start();
     }
 
-    /**
-     * The app back in front (MainActivity.onResume): the build asked for while the person's leave was asked goes on
-     * once they gave it, as though asked again; not given, it waits (the system's page is not opened again).
-     */
-    static synchronized void resumed() {
-        Object[] w = waiting;
-        Context c = Host.activity;
-        if (w == null || !phase.equals("allow") || c == null || !c.getPackageManager().canRequestPackageInstalls()) return;
-        Host.log("update: the person's leave to install apps given, the download goes on");
-        install((String) w[0], (String) w[1], (Double) w[2], (String) w[3]);
+    /** What was asked for downloaded (FETCH_JOB, on a network that is not metered), waiting till it is whole. */
+    static void fetchAsked(Context c) throws InterruptedException {
+        Thread w;
+        synchronized (Updates.class) {
+            restore(c);
+            String[] a = asked(c);
+            if (a == null || !phase.equals("waiting") || (worker != null && worker.isAlive())) return;
+            start(c, a[0], a[1], Long.parseLong(a[2]), a[3]);
+            w = worker;
+        }
+        w.join();
     }
 
+    /** The app's window on the screen (MainActivity.onStart): a build ready stays out while it is. */
+    static void started() {
+        inSight = true;
+        Context c = app();
+        JobScheduler js = c == null ? null : c.getSystemService(JobScheduler.class);
+        if (js != null) js.cancel(AWAY_JOB);
+    }
+
+    /** The app's window off the screen (MainActivity.onStop): a build ready put in place once it stays so a while. */
+    static void stopped() {
+        inSight = false;
+        Context c = app();
+        if (c != null && phase.equals("ready")) away(c);
+    }
+
+    private static void away(Context c) {
+        JobScheduler js = c.getSystemService(JobScheduler.class);
+        if (js != null) js.schedule(new JobInfo.Builder(AWAY_JOB, new ComponentName(c, Job.class))
+                .setMinimumLatency(AWAY_MS).setPersisted(false).build());
+    }
+
+    /**
+     * Out of sight a while (AWAY_JOB): the build ready put in place, unless the app came back meanwhile or a sign-in
+     * waits in the browser (then a while later again); without the leave to install apps, the app is told (allow).
+     */
+    static synchronized void awayLong(Context c) {
+        restore(c);
+        if (inSight || !phase.equals("ready")) return;
+        if (LoginService.listening()) {
+            away(c);
+            return;
+        }
+        if (!c.getPackageManager().canRequestPackageInstalls()) {
+            phase = "allow";
+            Host.log("update: ready, the person's leave to install apps wanted");
+            changed(1);
+            return;
+        }
+        put(c, null);
+    }
+
+    /**
+     * The build ready put in place now (@hostapi.update_apply): the app ends; the newer build says `said` in a
+     * notification. Without the leave to install apps, the system's page for it opens first (resumed takes it up).
+     */
+    static synchronized void apply(String said) {
+        Context c = app();
+        if (c == null) return;
+        restore(c);
+        if (!phase.equals("ready") && !phase.equals("allow")) return;
+        if (!c.getPackageManager().canRequestPackageInstalls()) {
+            phase = "allow";
+            nowSaid = said;
+            Host.log("update: the person's leave to install apps asked for");
+            Host.activity.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + c.getPackageName()))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            changed(1);
+            return;
+        }
+        put(c, said);
+    }
+
+    /**
+     * The app back in front (MainActivity.onResume) with the leave to install apps given: the build ready again, put
+     * in place now where the person had asked for it now; not given, it waits (the system's page not opened again).
+     */
+    static synchronized void resumed() {
+        Context c = app();
+        if (c == null || !phase.equals("allow") || !c.getPackageManager().canRequestPackageInstalls()) return;
+        Host.log("update: the person's leave to install apps given");
+        phase = "ready";
+        String said = nowSaid;
+        nowSaid = null;
+        if (said != null) put(c, said);
+        else changed(1);
+    }
+
+    /** The build ready handed to the installer; `said` (put in place now) kept for the newer build's notification. */
+    private static void put(Context c, String said) {
+        File apk = readyIn(c);
+        if (apk == null) {
+            phase = "idle";
+            file = "";
+            changed(1);
+            return;
+        }
+        phase = "installing";
+        changed(0);
+        File note = new File(dir(c), "said");
+        if (said != null) {
+            try {
+                Files.write(note.toPath(), said.getBytes(StandardCharsets.UTF_8));
+            } catch (IOException ignored) {
+            }
+        } else {
+            note.delete();
+        }
+        new Thread(() -> {
+            try {
+                installApk(c, apk);
+                Host.log("update: " + apk.getName() + " handed to the system's installer");
+            } catch (Exception e) {
+                phase = "failed";
+                error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                Host.log("update failed: " + error);
+                changed(-1);
+            }
+        }, "mbui-update-put").start();
+    }
+
+    /** The jobs: what is asked for downloaded on a network that is not metered; the build ready put in while away. */
+    public static final class Job extends JobService {
+        @Override
+        public boolean onStartJob(JobParameters p) {
+            Context c = getApplicationContext();
+            new Thread(() -> {
+                try {
+                    if (p.getJobId() == FETCH_JOB) fetchAsked(c);
+                    else awayLong(c);
+                } catch (Exception e) {
+                    Host.log("update job: " + e);
+                }
+                jobFinished(p, false);
+            }, "mbui-update-job").start();
+            return true;
+        }
+
+        @Override
+        public boolean onStopJob(JobParameters p) {
+            return false;
+        }
+    }
+
+    /**
+     * The app put in place by the system (MY_PACKAGE_REPLACED, in the newer build): what was kept for it let go; put in
+     * place at the person's word, its notification, which opens it.
+     */
+    public static final class Replaced extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context c, Intent intent) {
+            File d = dir(c);
+            File note = new File(d, "said");
+            String said = null;
+            try {
+                said = new String(Files.readAllBytes(note.toPath()), StandardCharsets.UTF_8);
+            } catch (IOException ignored) {
+            }
+            File[] all = d.listFiles();
+            if (all != null) for (File f : all) f.delete();
+            if (said != null && !said.isEmpty()) Notices.show(c, "still.fail", "update", said, "", "");
+        }
+    }
+
+    /** The build downloaded whole into `dir` and checked against its sha256. */
     static File download(Context c, String url, String sha256, long size, String name) throws IOException, InterruptedException {
-        File dir = new File(c.getCacheDir(), "updates");
-        dir.mkdirs();
+        File dir = dir(c);
         File apk = new File(dir, name);
         File part = new File(dir, name + ".part");
         File[] old = dir.listFiles();
-        if (old != null) for (File f : old) if (!f.equals(part) && !f.equals(apk)) f.delete();
+        // (another build's, whole or in part, let go; what is asked for kept)
+        if (old != null) for (File f : old) if (!f.equals(part) && !f.equals(apk) && !f.getName().equals("asked")) f.delete();
         if (apk.exists()) {
             if (sha256(apk).equalsIgnoreCase(sha256)) return apk;
             apk.delete();
@@ -292,9 +572,23 @@ final class Updates {
                 Intent confirm = Build.VERSION.SDK_INT >= 33 ? intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent.class)
                         : intent.getParcelableExtra(Intent.EXTRA_INTENT);
                 if (confirm == null) return;
+                boolean self = intent.getBooleanExtra(SELF, true);
+                if (self && !inSight) {
+                    // (the system's page could not open from behind: ready again, for the person's word)
+                    Host.log("update: the installer asks the person to confirm, away: ready again");
+                    phase = "ready";
+                    changed(1);
+                    return;
+                }
                 Host.log("update: the installer asks the person to confirm");
                 context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            } else if (status != PackageInstaller.STATUS_SUCCESS && status != PackageInstaller.STATUS_FAILURE_ABORTED) {
+            } else if (status == PackageInstaller.STATUS_FAILURE_ABORTED) {
+                // the person said no to the system's page: ready again
+                if (intent.getBooleanExtra(SELF, true) && phase.equals("installing")) {
+                    phase = "ready";
+                    changed(1);
+                }
+            } else if (status != PackageInstaller.STATUS_SUCCESS) {
                 String m = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
                 if (!intent.getBooleanExtra(SELF, true)) {
                     installFailed(intent.getStringExtra(NAME), m == null ? "install failed" : m);

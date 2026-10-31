@@ -58,7 +58,7 @@ static jmethodID m_cs_known, m_cs_decode;
 static jmethodID m_v_text, m_v_still, m_v_lost;
 static jmethodID m_ga_access, m_ga_ask, m_ga_answers, m_ga_read, m_ga_state, m_ga_rows, m_ga_end, m_pk_photo;
 static jmethodID m_kp_begin, m_kp_append, m_kp_finish, m_kp_state, m_kp_where, m_kp_end;
-static jmethodID m_up_version, m_up_install, m_up_state, m_up_package, m_sh_share, m_sh_in, m_sh_file;
+static jmethodID m_up_version, m_up_fetch, m_up_apply, m_up_state, m_up_package, m_sh_share, m_sh_in, m_sh_file;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static jintArray ahead_buf;
@@ -114,7 +114,8 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_over_done = (*env)->GetStaticMethodID(env, host_cls, "overDone", "(Z)V");
   updates_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Updates"));
   m_up_version = (*env)->GetStaticMethodID(env, updates_cls, "versionCode", "()I");
-  m_up_install = (*env)->GetStaticMethodID(env, updates_cls, "install", "(Ljava/lang/String;Ljava/lang/String;DLjava/lang/String;)V");
+  m_up_fetch = (*env)->GetStaticMethodID(env, updates_cls, "fetch", "(Ljava/lang/String;Ljava/lang/String;DLjava/lang/String;Z)V");
+  m_up_apply = (*env)->GetStaticMethodID(env, updates_cls, "apply", "(Ljava/lang/String;)V");
   m_up_package = (*env)->GetStaticMethodID(env, updates_cls, "installPackage", "(Ljava/lang/String;[B)V");
   m_up_state = (*env)->GetStaticMethodID(env, updates_cls, "state", "()Ljava/lang/String;");
   shares_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Shares"));
@@ -672,19 +673,26 @@ moonbit_bytes_t mb_host_shared_in_file(int32_t i) {
   return out;
 }
 
-// Updates (Updates.java): this build's version code, a newer one installed, how that goes.
+// Updates (Updates.java): this build's version code, a newer one made ready and put in place, how that goes.
 int32_t mb_host_app_version(void) {
   JNIEnv *env = env_();
   return (*env)->CallStaticIntMethod(env, updates_cls, m_up_version);
 }
 
-void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name) {
+void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now) {
   JNIEnv *env = env_();
   jstring u = jstr(env, url), h = jstr(env, sha256), n = jstr(env, name);
-  (*env)->CallStaticVoidMethod(env, updates_cls, m_up_install, u, h, size, n);
+  (*env)->CallStaticVoidMethod(env, updates_cls, m_up_fetch, u, h, size, n, (jboolean)(now != 0));
   (*env)->DeleteLocalRef(env, u);
   (*env)->DeleteLocalRef(env, h);
   (*env)->DeleteLocalRef(env, n);
+}
+
+void mb_host_update_apply(moonbit_string_t said) {
+  JNIEnv *env = env_();
+  jstring s = jstr(env, said);
+  (*env)->CallStaticVoidMethod(env, updates_cls, m_up_apply, s);
+  (*env)->DeleteLocalRef(env, s);
 }
 
 // A package handed to the system's installer (Updates.installPackage, @hostapi.install_package); what comes of it is

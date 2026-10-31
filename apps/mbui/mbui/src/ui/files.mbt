@@ -390,20 +390,44 @@ pub fn GalleryRead::photos(self : GalleryRead) -> Array[@hostapi.GalleryPhoto]? 
 }
 
 ///|
-/// A newer build downloaded, checked and handed to the system's installer (@hostapi.update_install): how it goes,
-/// `update_state`, and the host's word as it changes (hostcall.mbt's outside_update). What the host says as it takes
-/// it (downloading) is read at once, not on its event a frame or more later: until then it said nothing was under
-/// way, and what shows how it goes went from 正在检查 to nothing to 下载中 (the update dialog's bar gone and back, its
-/// sheet shorter and taller again, 2026-10-28). Under a Tester, nothing.
-pub fn update_install(url : String, sha256 : String, size : Double, name : String) -> Unit {
+/// A newer build downloaded and made ready (@hostapi.update_fetch): how it goes, `update_state`, and the host's word as
+/// it changes (hostcall.mbt's outside_update). What the host says as it takes it (downloading, waiting) is read at
+/// once, not on its event a frame or more later: until then it said nothing was under way, and what shows how it goes
+/// went from nothing to 下载中 a frame late (the update dialog's bar gone and back, its sheet shorter and taller
+/// again, 2026-10-28). Under a Tester, kept as asked (Tester::update_asked).
+pub fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool) -> Unit {
   match fake.val {
-    Some(_) => ()
+    Some(_) => update_asked.push("fetch \{name} \{now}")
     None => {
-      @hostapi.update_install(url, sha256, size, name)
+      @hostapi.update_fetch(url, sha256, size, name, now)
       update_told.set(@hostapi.update_state())
     }
   }
 }
+
+///|
+/// The build made ready put in this app's place now (@hostapi.update_apply), as update_fetch. Under a Tester, kept as
+/// asked.
+pub fn update_apply(said : String) -> Unit {
+  match fake.val {
+    Some(_) => update_asked.push("apply")
+    None => {
+      @hostapi.update_apply(said)
+      update_told.set(@hostapi.update_state())
+    }
+  }
+}
+
+///|
+/// What the app asked of the host's updates under a Tester ("fetch <name> <now>", "apply"), in order.
+pub fn Tester::update_asked(self : Tester) -> Array[String] {
+  ignore(self)
+  update_asked.copy()
+}
+
+///|
+// kept across runs: a Tester's alone, emptied as one begins (update_told's put back with it)
+let update_asked : Array[String] = []
 
 ///|
 /// How an update goes (@hostapi.update_state's JSON), "" where there is none (a Tester's, a host that does not update
@@ -418,6 +442,13 @@ pub fn update_state() -> String {
 /// does (hostcall.mbt's on_outside): what reads it follows it.
 pub fn Tester::tells_update(self : Tester, state : String) -> Unit {
   ignore(self)
+  update_told.set(state)
+}
+
+///|
+/// How an update goes, said as a host would (@hostapi.update_state's JSON) where there is none to say it: a made-up
+/// run's pictures of it (still.fail's fixtures).
+pub fn update_told_as(state : String) -> Unit {
   update_told.set(state)
 }
 
