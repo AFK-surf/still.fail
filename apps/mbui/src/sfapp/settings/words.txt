@@ -971,6 +971,7 @@ desktop.local.busy
 desktop.local.byHand
 desktop.local.noService
 web-main.about
+web-main.attention.entry
 web-main.filter.all
 web-main.filter.connects.all
 web-main.filter.connects.mine

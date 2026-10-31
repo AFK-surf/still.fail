@@ -336,7 +336,7 @@ pub fn fixture_page(mode : String) -> String {
       obj([
         ("supported", Json::boolean(true)),
         ("developer", Json::boolean(true)),
-        ("wireless", Json::boolean(fx_adb.val != "off")),
+        ("wireless", Json::boolean(fx_adb.val != "off" && fx_adb.val != "chats-off")),
         ("wifi", Json::boolean(true)),
         ("canSwitch", Json::boolean(false)),
         ("reads", Json::boolean(false)),
@@ -454,7 +454,7 @@ pub fn fixture_page(mode : String) -> String {
       "stations"
     "settings-adb" | "settings-adb-off" | "settings-adb-unpaired" | "settings-adb-pairing" | "settings-adb-connected" | "settings-adb-failed" =>
       "adb:ws1/st1"
-    "settings-adb-chats" | "settings-adb-idle" => "adb:"
+    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-idle" => "adb:"
     // the second station a phone is lent to, its first paired already
     "settings-adb-second" => "adb:ws1/st2"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-login" | "settings-profile-login-station" =>
@@ -2941,19 +2941,19 @@ fn fx_adb_share() -> Json {
       ])
     // settings' 共享调试, its switch on: two chats granted it, one asking; lent to both their stations, Studio's adb
     // holding the phone and the other's waiting to be paired
-    "chats" =>
+    "chats" | "chats-off" =>
       obj([
         ("sharing", Json::boolean(true)),
         ("station", str("ws1/st2")),
         ("phase", str("offered")),
-        ("adb", str("unpaired")),
+        ("adb", str(if fx.motion == 0 { "unpaired" } else { "connected" })),
         ("on", Json::boolean(true)),
         ("tunnels", Json::number(0.0)),
         (
           "lends",
           Json::array([
             obj([("station", str("ws1/st1")), ("phase", str("offered")), ("adb", str("connected")), ("tunnels", Json::number(1.0))]),
-            obj([("station", str("ws1/st2")), ("phase", str("offered")), ("adb", str("unpaired")), ("tunnels", Json::number(0.0))]),
+            obj([("station", str("ws1/st2")), ("phase", str("offered")), ("adb", str(if fx.motion == 0 { "unpaired" } else { "connected" })), ("tunnels", Json::number(0.0))]),
           ]),
         ),
         (
@@ -2961,7 +2961,7 @@ fn fx_adb_share() -> Json {
           Json::array([
             obj([("station", str("ws1/st1")), ("id", str("p-1")), ("reason", str("装上刚编好的测试包，看首屏在折叠屏展开时排得对不对")), ("status", str("granted")), ("scope", str("chat"))]),
             obj([("station", str("ws1/st2")), ("id", str("p-2")), ("reason", str("录一段登录流程的视频")), ("status", str("granted")), ("scope", str("hour"))]),
-            obj([("station", str("ws1/st1")), ("id", str("p-3")), ("reason", str("看通知权限弹窗的文案")), ("status", str("pending"))]),
+            obj([("station", str("ws1/st1")), ("id", str("p-3")), ("session", str("s-c1")), ("reason", str("看通知权限弹窗的文案")), ("status", str("pending"))]),
           ]),
         ),
       ])

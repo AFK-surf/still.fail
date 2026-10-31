@@ -978,6 +978,7 @@ let zh : Map[String, String] = {
   "desktop.local.byHand": "此 station 为手动启动，此处只能停止",
   "desktop.local.noService": "本机没有单独安装的 station",
   "web-main.about": "说明",
+  "web-main.attention.entry": "待处理",
   "web-main.filter.all": "全部",
   "web-main.filter.connects.all": "全部连接",
   "web-main.filter.connects.mine": "我的",

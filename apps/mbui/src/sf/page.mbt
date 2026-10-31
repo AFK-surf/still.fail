@@ -1816,11 +1816,27 @@ pub fn block(c : @ui.Ctx, body : () -> Unit) -> Unit {
 }
 
 ///|
-/// Words on a card (cardRowText): its title strong, `words` under it, `note` quieter under them, `bad` in red.
-pub fn card_lines(c : @ui.Ctx, title : String, words? : String = "", note? : String = "", bad? : String = "") -> Unit {
+/// Words on a card (cardRowText): its title strong, `title_after` on its line, `words` under it, `note` quieter under
+/// them, `bad` in red.
+pub fn card_lines(
+  c : @ui.Ctx,
+  title : String,
+  words? : String = "",
+  note? : String = "",
+  bad? : String = "",
+  title_after? : () -> Unit,
+) -> Unit {
   c.box(style=desk_card_text, fn() {
     if title != "" {
-      c.text(title, style=desk_strong) |> ignore
+      match title_after {
+        Some(f) =>
+          c.box(style=title_line, keep=true, fn() {
+            c.text(title, style=desk_strong.then(cut_words)) |> ignore
+            f()
+          })
+          |> ignore
+        None => c.text(title, style=desk_strong) |> ignore
+      }
     }
     if words != "" {
       c.text(words, style=desk_words) |> ignore
