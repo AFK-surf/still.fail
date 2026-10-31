@@ -58,13 +58,14 @@ test "scale: a node drawn half as big about its middle, what it holds with it; a
 }
 
 ///|
-/// A node drawn `s` as big holding an old view (View::hosted) where `hosted` holds, each as it changes: drawn once.
+/// A node 100 by 40 drawn `s` as big holding an old view 60 by 20 (View::hosted) where `hosted` holds, each as it
+/// changes: drawn once.
 fn scaled_hosting(s : @signals.Signal[Double], hosted : @signals.Signal[Bool]) -> @view.Tree {
   let t = @view.Tree::new(
     fn(root) {
       root.box(fn(n) {
         n.over(Is(true)).width(Is(Some(100.0))).height(Is(Some(40.0))).scale(By(fn() { s.get() })) |> ignore
-        n.show(fn() { hosted.get() }, fn(h) { h.hosted() |> ignore })
+        n.show(fn() { hosted.get() }, fn(h) { h.width(Is(Some(60.0))).height(Is(Some(20.0))).hosted() |> ignore })
       })
       |> ignore
     },
@@ -81,16 +82,9 @@ test "scale holding an old view, both whole: drawn as ever" {
 }
 
 ///|
-/// Whether this run is the one of `scene`, scripts/refused_scale.sh's (each in a process of its own, where the program
-/// stopping as it says is the result; in every other run, nothing).
-fn refused_scene(scene : String) -> Bool {
-  @env.get_env_var("MBUI_REFUSED") == Some(scene)
-}
-
-///|
-/// A tree made whole, a node of it 100 by 40 drawn `s` as big as `s` is said, an old view in it from the start where
-/// `hosting`.
-fn refusal_tree(s : @signals.Signal[Double], hosting : Bool) -> (@view.Tree, Ref[@view.View?]) {
+/// A tree made whole, a node of it 100 by 40 drawn `s` as big as `s` is said (about its middle), an old view in it from
+/// the start where `hosting`.
+fn scaled_tree(s : @signals.Signal[Double], hosting : Bool) -> (@view.Tree, Ref[@view.View?]) {
   let holder : Ref[@view.View?] = Ref(None)
   let t = @view.Tree::new(
     fn(root) {
@@ -110,39 +104,75 @@ fn refusal_tree(s : @signals.Signal[Double], hosting : Bool) -> (@view.Tree, Ref
 }
 
 ///|
-test "refused (refused_scale.sh): an old view put straight in what is drawn half as big" {
-  guard refused_scene("hosted-in-scaled") else { return }
-  let (_, holder) = refusal_tree(@signals.signal(0.5), false)
+/// The old views the scene has as it is gone through (Tree::each_drawn_scaled): where each is drawn, how big, and how
+/// big it is drawn of how big it is laid out; each as Tree::drawn_of has it too, asserted the same.
+fn hosted_drawn(t : @view.Tree) -> Array[(Double, Double, Double, Double, Double)] raise {
+  let out = []
+  let mut same = true
+  t.each_drawn_scaled(fn(c, x, y, _, s) {
+    if c.hosted {
+      let d = t.drawn_of(c.id).unwrap()
+      same = same && (d.x, d.y, d.w, d.h) == (x, y, c.w * s, c.h * s) && t.drawn_scale(c.id) == s
+      out.push((x, y, c.w * s, c.h * s, s))
+    }
+  })
+  assert_true(same, msg="each where Tree::drawn_of has it, as big: \{out}")
+  out
+}
+
+///|
+test "scale: an old view put in what is drawn half as big: drawn there, as big, about its middle" {
+  let (t, holder) = scaled_tree(@signals.signal(0.5), false)
   holder.val.unwrap().hosted() |> ignore
-  println("not refused")
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(hosted_drawn(t), [(25.0, 10.0, 50.0, 20.0, 0.5)])
 }
 
 ///|
-test "refused (refused_scale.sh): what holds an old view said straight to be drawn half as big" {
-  guard refused_scene("scale-over-hosted") else { return }
-  let (_, holder) = refusal_tree(@signals.signal(1.0), true)
+test "scale: what holds an old view said to be drawn half as big: drawn there, as big" {
+  let (t, holder) = scaled_tree(@signals.signal(1.0), true)
+  assert_eq(hosted_drawn(t), [(0.0, 0.0, 100.0, 40.0, 1.0)], msg="whole")
   holder.val.unwrap().scale(Is(0.5)) |> ignore
-  println("not refused")
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(hosted_drawn(t), [(25.0, 10.0, 50.0, 20.0, 0.5)], msg="half as big")
 }
 
 ///|
-test "refused (refused_scale.sh): an old view shown in what is drawn half as big, by a change" {
-  guard refused_scene("hosted-shown") else { return }
+test "scale: an old view shown by a change in what is drawn half as big: drawn in it, as big" {
   let hosted = @signals.signal(false, same=fn(a, b) { a == b })
   let t = scaled_hosting(@signals.signal(0.5), hosted)
+  assert_eq(hosted_drawn(t), [], msg="not shown")
   t.event(10.0, fn() { hosted.set(true) })
   t.frame(400.0, 300.0) |> ignore
-  println("not refused")
+  let drawn = hosted_drawn(t)
+  // (in what holds it, drawn at (25, 10) 50 by 20)
+  assert_true(
+    drawn.length() == 1 &&
+    drawn[0].4 == 0.5 &&
+    drawn[0].2 == 30.0 &&
+    drawn[0].3 == 10.0 &&
+    drawn[0].0 >= 25.0 &&
+    drawn[0].1 >= 10.0 &&
+    drawn[0].0 + drawn[0].2 <= 75.0 &&
+    drawn[0].1 + drawn[0].3 <= 30.0,
+    msg="shown: \{drawn}",
+  )
 }
 
 ///|
-test "refused (refused_scale.sh): what holds an old view scaled by a change" {
-  guard refused_scene("scaled-by") else { return }
+test "scale: what holds an old view scaled by a change: drawn as big as it is now, and whole again" {
   let s = @signals.signal(1.0, same=fn(a, b) { a == b })
   let t = scaled_hosting(s, @signals.signal(true))
+  let whole = hosted_drawn(t)
+  assert_true(whole.length() == 1 && whole[0].4 == 1.0 && whole[0].2 == 60.0 && whole[0].3 == 20.0, msg="whole: \{whole}")
   t.event(10.0, fn() { s.set(0.5) })
   t.frame(400.0, 300.0) |> ignore
-  println("not refused")
+  let (x, y, w, h, _) = whole[0]
+  // (about the middle of what holds it, (50, 20))
+  assert_eq(hosted_drawn(t), [(50.0 + (x - 50.0) * 0.5, 20.0 + (y - 20.0) * 0.5, w * 0.5, h * 0.5, 0.5)], msg="half as big")
+  t.event(20.0, fn() { s.set(1.0) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(hosted_drawn(t), whole, msg="whole again")
 }
 
 ///|

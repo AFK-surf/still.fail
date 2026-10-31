@@ -844,7 +844,7 @@ pub fn Ctx::editor(
       self.take_press()
       self.editor_tap = 0
       self.focus_moved(id)
-      if st.pick_word(self.press_x, self.press_y, self.clock) {
+      if (match st.local(self.press_x, self.press_y) { Some((lx, ly)) => st.pick_word(lx, ly, self.clock); None => false }) {
         self.word_drag = id
       }
       haptic(LongPress)
@@ -955,6 +955,20 @@ fn EditorState::on_handle(self : EditorState, x : Double, y : Double) -> Bool {
   let dx = x - mx
   let dy = y - my
   (dx * dx + dy * dy).sqrt() <= handle_r + 8.0
+}
+
+///|
+/// A point in the window (`x`, `y`: where a pointer is, as the window is now) as a point of its words as they are
+/// placed (the terms st.ox, st.oy and its caret's place are in): where it is in an old view hosted in a node drawn
+/// moved, bigger or smaller since its words were placed (Ctx::island_now), the point of it drawn there now; else the
+/// same. None where it is drawn as nothing: no point of it there, nothing to do with the input. What takes a pointer
+/// in the window turns it so as it takes it (app.mbt); what is in its words' terms already (a trackpad's float,
+/// moved by its own way) is not turned again.
+fn EditorState::local(self : EditorState, x : Double, y : Double) -> (Double, Double)? {
+  match g().island_now_of_id(self.built_id) {
+    Some((px, py, qx, qy, s)) => if s > 0.0 { Some((px + (x - qx) / s, py + (y - qy) / s)) } else { None }
+    None => Some((x, y))
+  }
 }
 
 ///|
@@ -1200,11 +1214,16 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
           let (cx, cl) = st.place_of(tl, coff)
           let x = st.ox + cx
           let y = st.oy + cl.to_double() * tl.line_h
+          // (where it is drawn: an old view hosted in a node drawn bigger or smaller, as big, about its top left)
+          let (x, y, w, h) = match self.island_now_of_id(st.built_id) {
+            Some((px, py, qx, qy, s)) => (qx + (x - px) * s, qy + (y - py) * s, 2.0 * s, tl.line_h * s)
+            None => (x, y, 2.0, tl.line_h)
+          }
           let (a, b) = st.sel()
-          let sig = "\{x.to_int()},\{y.to_int()},\{a},\{b},\{st.text.length()},\{stable_hash(st.text)}"
+          let sig = "\{x.to_int()},\{y.to_int()},\{w},\{h},\{a},\{b},\{st.text.length()},\{stable_hash(st.text)}"
           if sig != self.ime_sig {
             self.ime_sig = sig
-            h_set_ime(true, x, y, 2.0, tl.line_h, st.text, a, b)
+            h_set_ime(true, x, y, w, h, st.text, a, b)
           }
         }
         None => ()
@@ -1605,6 +1624,8 @@ fn EditorState::pick_at(self : EditorState, by : PickBy) -> Unit {
 /// A press with Shift at (`x`, `y`) (a mouse's): what is picked widened to there from its anchor, what was composed
 /// committed first.
 fn EditorState::widen_by_pointer(self : EditorState, x : Double, y : Double, t : Double) -> Unit {
+  // (a pointer's, in the window: where it is in the words, none where they are drawn as nothing)
+  guard self.local(x, y) is Some((x, y)) else { return }
   self.blink0 = t
   self.menu = false
   self.sel_handles = false

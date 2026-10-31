@@ -100,7 +100,7 @@ fn words_let_go(x : Double, y : Double, words : String) -> Unit {
     Some(st) => {
       c.focus_visible = false
       c.focus_moved(target)
-      place_caret(st, x, y, h_now())
+      place_caret_at(st, x, y, h_now())
       st.text_input(text_paste, words, 0, 0, h_now())
     }
     None => dropping.words = Some((drop_within(c, x, y), words, c.frame_no))
@@ -163,7 +163,7 @@ pub fn Ctx::words_into(self : Ctx, id : Int, key : String) -> Unit {
           dropping.paths = None
           drop_taken(d.pick)
           if d.target == field {
-            place_caret(st, d.x, d.y, self.clock)
+            place_caret_at(st, d.x, d.y, self.clock)
           }
           st.text_input(text_paste, paths_words(d.paths), 0, 0, self.clock)
           self.focus_on(field)
@@ -205,7 +205,7 @@ fn drops_frame_end(c : Ctx) -> Unit {
       Some(st) if d.frame == c.frame_no => {
         c.focus_visible = false
         c.focus_moved(d.target)
-        place_caret(st, d.x, d.y, c.clock)
+        place_caret_at(st, d.x, d.y, c.clock)
         st.text_input(text_paste, paths_words(d.paths), 0, 0, c.clock)
         hand_event()
         c.owe_next()

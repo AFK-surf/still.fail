@@ -777,11 +777,11 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (what the host says of the streams and the native views, read of it each frame: what changed come from outside)
   streams_arrive()
   views_arrive()
+  // (what came as the frame began told the window's tree: brought before what it does again is decided, where the old
+  // views are placed part of that, and what a still pointer is over found so before the hand is said: view_host.mbt)
+  view_arrived()
   // (the hand as the frame sees it: what read what changed of it told, hand.mbt)
   hand_arrive(c)
-  // (what came as the frame began told the window's tree: brought before what it does again is decided, where the old
-  // views are placed part of that: view_host.mbt)
-  view_arrived()
   // (what reads the clock and the host's settings read so: what read them is stale where they changed; what a part or
   // a list's row kept read of the frame and of a moment, told: kept_part.mbt's KeptClock)
   frame_clock.set(t)
