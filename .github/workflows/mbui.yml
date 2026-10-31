@@ -36,6 +36,9 @@ on:
       - ".github/actions/setup/**"
       - ".github/actions/msvc/**"
       - ".github/actions/apt/**"
+  # (the Windows app run end to end, once a day: below, the windows job's E2E)
+  schedule:
+    - cron: "23 4 * * *"
   workflow_dispatch:
 # main: one at a time, a push meanwhile waits as one run of the newest; a branch: only its newest push matters.
 concurrency:
@@ -51,7 +54,7 @@ jobs:
   # builds put nothing and took two of the organization's 5 macOS jobs at once for each push, check-mbui's native
   # waiting 1.5 to 15 minutes for one (2026-10-21).
   what:
-    if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -69,6 +72,8 @@ jobs:
         run: |
           branch=; [ "$GITHUB_REF" = refs/heads/main ] || [ "$GITHUB_EVENT_NAME" != push ] || branch=1
           for p in android mac win linux ios; do
+            # (the day's run: the Windows app alone, built and run end to end, nothing put)
+            if [ "$GITHUB_EVENT_NAME" = schedule ]; then v=no; [ $p = win ] && v=yes; echo "$p=$v" >> "$GITHUB_OUTPUT"; echo "$p: $v"; continue; fi
             # iOS has no feed: build every matching main push, independently of Android.
             if [ "$p" != ios ] && [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_EVENT_NAME" = push ]; then v=$(bash apps/mbui/scripts/beta.sh changed "$p"); else v=yes; fi
             # (Linux's two machines each have a feed: a package for both when either's is behind, as arm64's before its first)
@@ -82,7 +87,7 @@ jobs:
           # identity and its data's place, how it is built as the desktop app, the release's feeds), since main (a
           # branch) or the push before (main).
           v=no
-          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then v=yes
+          if [ "$GITHUB_EVENT_NAME" != push ]; then v=yes
           else
             base=${{ github.event.before }}
             [ -n "$branch" ] && base=$(git merge-base origin/main HEAD)
@@ -524,8 +529,9 @@ jobs:
     needs: what
     if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.win == 'yes'
     runs-on: windows-2025
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
-    timeout-minutes: 5
+    environment: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && 'production' || '' }}
+    # (a push's 5 minutes; the day's run, end to end and moved over from the desktop app, 10)
+    timeout-minutes: ${{ github.event_name == 'push' && 5 || 10 }}
     # (actions: the pipeline's run of this commit and its natives artifact, for the test station's natives; write: this
     # run cancelled when main's pipeline run of this commit was, below)
     permissions:
@@ -537,6 +543,11 @@ jobs:
     env:
       MSYS: winsymlinks:nativestrict
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
+      # The app run end to end (e2e/win.sh: signed in against a local still.fail, its files, a notice, its update; the
+      # desktop app moved over to it, handoff.sh) once a day and when asked, never on a push: a window on a machine,
+      # its browser, its notices and its installer, is no gate (2026-10-31, as asked: "这种不确定测试只定期跑，永远不阻塞
+      # ci"; on a push its flow was the last ~40 s of the job, the handoff 1-2 minutes more)
+      E2E: ${{ github.event_name != 'push' && '1' || '' }}
     steps:
       # Defender's real-time scan kept off what the job writes and runs: each new file and each program's first start was
       # scanned, MoonBit's 114 MB (206 MB of programs) put in in 12-25 s against 2 s for as much of the build's, 2026-10-30
@@ -630,6 +641,8 @@ jobs:
           quiet() { "$@" > "$RUNNER_TEMP/packages.log" 2>&1 || { c=$?; cat "$RUNNER_TEMP/packages.log"; echo "packages: $* in $PWD: exit $c"; return $c; }; }
           quiet pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
           (cd client/core-ts && quiet pnpm install --frozen-lockfile --prefer-offline)
+          # (the cloud and the test station: the e2e flow's alone)
+          [ -n "$E2E" ] || exit 0
           (cd cloud && quiet pnpm install --frozen-lockfile --prefer-offline)
           (cd station && quiet pnpm install --frozen-lockfile --prefer-offline && quiet pnpm run build)
       # The test station's natives (e2e/win.sh: mesh and runner, win32-x64), by their keys. A change to one of them is in
@@ -638,6 +651,7 @@ jobs:
       # artifact, as the pipeline's own jobs do, .github/actions/natives); main's it published to the release. None
       # missing, nothing waited for (the run of #1493 found mesh missing and failed building it here).
       - name: The test station's natives (the pipeline's natives job's, for a change to them)
+        if: env.E2E == '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -683,6 +697,7 @@ jobs:
       # (APP=stillfail)" says it is whole), then runs it. Waited for at the end, with the installer's put (main's), the
       # cache's save and the order of names' and the sealed values' checks beside it.
       - name: The e2e flow started (e2e/win.sh, the app waited for)
+        if: env.E2E == '1'
         run: |
           E=$RUNNER_TEMP/e2e; mkdir -p "$E"
           nohup bash -c 'E2E_APP="$0/app" bash apps/mbui/e2e/win.sh > "$0/log" 2>&1; echo $? > "$0/status"' "$E" > /dev/null 2>&1 &
@@ -693,7 +708,7 @@ jobs:
           [ ! -d .ci/hbc ] || echo "HBC_KEY=mbui-win-hbc-$(ls .ci/hbc | sha256sum | cut -c1-16)" >> "$GITHUB_ENV"
       - name: Build (APP=stillfail)
         run: |
-          B=$RUNNER_TEMP/build E=$RUNNER_TEMP/e2e
+          B=$RUNNER_TEMP/build E=$RUNNER_TEMP/e2e; mkdir -p "$E"
           # (the e2e flow told the app is not coming, else it would wait its 10 minutes)
           trap '[ -s "$E/app" ] || echo failed > "$E/app"' EXIT
           # the installer's own program made while the app compiles (win.sh setup takes it), not beside the e2e flow
@@ -729,7 +744,7 @@ jobs:
       # cache's save and the e2e flow (one after another they were ~6 + 13 + 17 s after the build, 2026-10-24,
       # 40064767331; the put mostly waiting on the network)
       - name: The Windows app's installer signed, put, checked, then its feed, started
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           # its .sig, which the feed carries (the app takes a build only as it says it: docs/release-signing.md)
@@ -767,7 +782,7 @@ jobs:
             apps/mbui/mbui/out
           key: ${{ env.BUILD_KEY }}
       - name: The Windows app's installer signed, put, checked, then its feed
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
           Z=$RUNNER_TEMP/zip
           node apps/mbui/scripts/waitfor.mjs --deadline 150 --what "the installer's put" --exists "$(cygpath -w "$Z/status")" > /dev/null || { cat "$Z/log"; exit 1; }
@@ -775,6 +790,7 @@ jobs:
           cat "$Z/summary" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
           [ "$(cat "$Z/status")" = 0 ]
       - name: Signed in against a local still.fail, then Home (e2e/win.sh)
+        if: env.E2E == '1'
         run: |
           E=$RUNNER_TEMP/e2e
           node apps/mbui/scripts/waitfor.mjs --deadline 150 --what "the e2e flow" --exists "$(cygpath -w "$E/status")" > /dev/null || { cat "$E/log"; exit 1; }
@@ -784,7 +800,7 @@ jobs:
       # as it by its own updater (e2e/win/handoff.sh: ~1-2 min each), for a change to what that goes by (the what job).
       # Last: it builds the app again as the desktop app, in the place the e2e flow and the installer's put take it from.
       - name: The desktop app moved over to this app by its own updater (e2e/win/handoff.sh)
-        if: needs.what.outputs.handoff == 'yes'
+        if: env.E2E == '1' && needs.what.outputs.handoff == 'yes'
         run: bash apps/mbui/e2e/win/handoff.sh
       - if: always()
         uses: actions/upload-artifact@v4
