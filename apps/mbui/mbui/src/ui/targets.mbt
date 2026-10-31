@@ -51,7 +51,10 @@ fn Ctx::node_targets(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   // (a native view: where it is among the targets, what is said after it over it, its covers: NativeView::tell_covers)
   if n.kind == kind_native {
     match native_nodes.get(i) {
-      Some((v, _, _)) if !v.closed && v.id != 0 => v.hits_before = self.next_hit_ids.length()
+      Some((v, _, _)) if !v.closed && v.id != 0 => {
+        v.hits_before = self.next_hit_ids.length()
+        v.island = targets_island.val
+      }
       _ => ()
     }
     return
@@ -181,6 +184,7 @@ fn Ctx::targets_found(self : Ctx, root : Int, tree : @view.Tree) -> Int {
     if c.id.at == 0 || a <= 0.002 || !c.hosted {
       return
     }
+    targets_island.val = Some(c.id)
     if old_whole.val {
       let from = self.next_hit_ids.length()
       self.paint_held(self.nodes[root], 1.0, but=fn(ch) { self.nodes[ch].layer || self.nodes[ch].portal })
@@ -197,6 +201,7 @@ fn Ctx::targets_found(self : Ctx, root : Int, tree : @view.Tree) -> Int {
       }
     }
   })
+  targets_island.val = None
   let layers_from = self.next_hit_ids.length()
   let mut ch = self.nodes[root].first
   while ch >= 0 {
@@ -319,3 +324,7 @@ fn Ctx::targets_again(self : Ctx) -> Unit {
 /// none.
 // kept across runs: only ever counted on
 let targets_finds : Ref[Int] = Ref(0)
+
+///|
+/// The node of the window's tree hosting the old view whose targets are being found (none: none, or no tree).
+let targets_island : Ref[@view.NodeId?] = Ref(None)

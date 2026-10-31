@@ -177,8 +177,8 @@ struct Node {
   mut fingers : Int
   /// which saying of its on_drag it is (each said anew, or let go, another): what was told by one is that one's alone
   mut drag_said : Int
-  /// where in it a finger is taken at a moment (View::takes; none: all of it)
-  mut takes : ((Double, Double, Double) -> Bool)?
+  /// where in it a finger is taken at a moment (View::takes, View::hosted_takes; none: all of it)
+  mut takes : Takes?
   /// what ends what its on_drag set going (a gesture's: its hold's moment, its dispatch), as it is said anew or let go
   mut drag_end : (() -> Unit)?
   /// a slot (show, pick, each): no box of its own, what it holds laid out as its holder's own
@@ -1654,7 +1654,7 @@ fn Tree::asked_at(
       if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.pressless_at(c.id.at) {
         let n = self.nodes[c.id.at]
         let here = match n.takes {
-          Some(f) => @signals.untracked(fn() { f(x - cx, y - cy, now) })
+          Some(f) => @signals.untracked(fn() { f.here(x - cx, y - cy, c.w, c.h, now) })
           None => true
         }
         if here && (takes(n) || n.on_drag is Some(_) || n.on_press is Some(_) || n.hosted) {
@@ -1737,12 +1737,53 @@ pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1) -> Vie
 }
 
 ///|
-/// Where in it a finger is taken, as of a moment (`f` given where in it, in its own terms, and the logic's moment as a
-/// finger comes: Tree::target_at): what it draws there then, the rest passed to what is under it as though it were not
-/// there. Of the same state what draws it is drawn by, worked out at that moment.
-pub fn View::takes(self : View, f : (Double, Double, Double) -> Bool) -> View {
+/// Where in a node a finger is taken at a moment, the rest passed to what is under it as though it were not there.
+pub(all) enum Takes {
+  /// rects of it (x0, y0, x1, y1, in its own terms), given how big it is and the moment: what a finger finds, and what
+  /// a host drawing under it is told covers what it draws (Tree::finger_areas)
+  Areas((Double, Double, Double) -> Array[(Double, Double, Double, Double)])
+  /// a node hosting another's (View::hosted): where what it hosts takes it, asked of the point (in its own terms) and
+  /// the moment; what it hosts tells a host its own targets
+  AsHosted((Double, Double, Double) -> Bool)
+}
+
+///|
+/// Whether a finger at (x, y) in a node `w` by `h` (in its own terms) is taken at `at`.
+fn Takes::here(self : Takes, x : Double, y : Double, w : Double, h : Double, at : Double) -> Bool {
+  match self {
+    Areas(f) => f(w, h, at).iter().any(fn(r) { x >= r.0 && y >= r.1 && x < r.2 && y < r.3 })
+    AsHosted(f) => f(x, y, at)
+  }
+}
+
+///|
+/// Where in it a finger is taken, as of a moment (`areas` given how big it is and the logic's moment as a finger comes:
+/// Tree::target_at): what it draws there then, as rects of it in its own terms (x0, y0, x1, y1), the rest passed to
+/// what is under it as though it were not there. Of the same state what draws it is drawn by, worked out at that
+/// moment; a host drawing under it told the same (Tree::finger_areas).
+pub fn View::takes(
+  self : View,
+  areas : (Double, Double, Double) -> Array[(Double, Double, Double, Double)],
+) -> View {
+  self.takes_so(Areas(areas))
+}
+
+///|
+/// A node hosting another's (View::hosted): where in it a finger is taken, as what it hosts finds it (`f` given where in
+/// it, in its own terms, and the logic's moment), the rest passed to what is under it. What it hosts tells a host
+/// drawing under it its own targets.
+pub fn View::hosted_takes(self : View, f : (Double, Double, Double) -> Bool) -> View {
+  // (a node of the tree's own says where it takes one as rects, View::takes: what a host under it is told the same)
+  if self.live() is Some(n) && !n.hosted {
+    abort("hosted_takes of a node hosting nothing: View::takes")
+  }
+  self.takes_so(AsHosted(f))
+}
+
+///|
+fn View::takes_so(self : View, t : Takes) -> View {
   guard self.live() is Some(n) else { return self }
-  n.takes = Some(f)
+  n.takes = Some(t)
   self.tree.hits = self.tree.hits + 1
   self
 }
@@ -3328,6 +3369,84 @@ pub(all) enum Target {
 } derive(Eq, Debug)
 
 ///|
+/// Where a node takes a finger as it is drawn now (Tree::finger_areas).
+pub(all) enum FingerAreas {
+  /// rects of the window (x0, y0, x1, y1): none where it takes none
+  InWindow(Array[(Double, Double, Double, Double)])
+  /// all of it drawn, where what it hosts takes one (View::hosted_takes; a hosted node saying nothing of it)
+  AsItHosts
+} derive(Eq, Debug)
+
+///|
+/// Where in the window node `id` takes a finger as it is drawn now, at the logic's moment (Tree::target_at's): none where
+/// it is not drawn, or takes none (it or what holds it leaving or said to take none, a modal layer over it that it is
+/// not in); where it hosts another's and says nothing else of it, as that finds it; else its box, or what it says it
+/// takes of it (View::takes).
+pub fn Tree::finger_areas(self : Tree, id : NodeId) -> FingerAreas {
+  let none = InWindow([])
+  guard self.alive_id(id) && !self.pressless_at(id.at) && self.drawn_of(id) is Some(d) else { return none }
+  let n = self.nodes[id.at]
+  self.areas_of(n, d.x, d.y, d.w, d.h)
+}
+
+///|
+fn Tree::areas_of(self : Tree, n : Node, x : Double, y : Double, w : Double, h : Double) -> FingerAreas {
+  match n.takes {
+    Some(Areas(f)) => {
+      // (read so: a host told it as a frame is painted, painted again as it changes, Tree::taken_over)
+      let rs = f(w, h, self.logic_at())
+      InWindow(
+        rs
+        .iter()
+        .filter_map(fn(r) {
+          let x0 = x + (if r.0 > 0.0 { r.0 } else { 0.0 })
+          let y0 = y + (if r.1 > 0.0 { r.1 } else { 0.0 })
+          let x1 = x + (if r.2 < w { r.2 } else { w })
+          let y1 = y + (if r.3 < h { r.3 } else { h })
+          if x1 > x0 && y1 > y0 {
+            Some((x0, y0, x1, y1))
+          } else {
+            None
+          }
+        })
+        .collect(),
+      )
+    }
+    Some(AsHosted(_)) => AsItHosts
+    None => if n.hosted { AsItHosts } else { InWindow([(x, y, x + w, y + h)]) }
+  }
+}
+
+///|
+/// Where in the window what of the tree's own is drawn over node `id` takes a finger now (a press or a hold: nodes drawn
+/// after it, those it holds too, taking presses, each where it takes one: Tree::finger_areas), what it hosts not of
+/// it: rects of the window (x0, y0, x1, y1). What a host drawing in it is told covers what it draws, with what is over
+/// it of what it hosts.
+pub fn Tree::taken_over(self : Tree, id : NodeId) -> Array[(Double, Double, Double, Double)] {
+  let out = []
+  guard self.alive_id(id) else { return out }
+  let past = Ref(false)
+  self.each_drawn(fn(c, cx, cy, _) {
+    if c.id == id {
+      past.val = true
+      return
+    }
+    if !past.val || self.pressless_at(c.id.at) {
+      return
+    }
+    let n = self.nodes[c.id.at]
+    if n.hosted || (n.on_press is None && n.on_drag is None) {
+      return
+    }
+    match self.areas_of(n, cx, cy, c.w, c.h) {
+      InWindow(rs) => out.append(rs)
+      AsItHosts => ()
+    }
+  })
+  out
+}
+
+///|
 /// What a press at (x, y) is for: the topmost node drawn there (by the order drawn, where the scene composed draws it:
 /// the same places as what is drawn) that is held (View::on_drag), does something when pressed or hosts the old view.
 pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
@@ -3346,7 +3465,12 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
     if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.pressless_at(c.id.at) {
       let n = self.nodes[c.id.at]
       let here = match n.takes {
-        Some(f) => if tracked { f(x - cx, y - cy, at) } else { @signals.untracked(fn() { f(x - cx, y - cy, at) }) }
+        Some(f) =>
+          if tracked {
+            f.here(x - cx, y - cy, c.w, c.h, at)
+          } else {
+            @signals.untracked(fn() { f.here(x - cx, y - cy, c.w, c.h, at) })
+          }
         None => true
       }
       if !here {

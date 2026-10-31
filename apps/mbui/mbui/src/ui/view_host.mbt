@@ -1335,7 +1335,7 @@ fn view_presses_at(x : Double, y : Double) -> @view.NodeId? {
 /// canvas).
 pub fn old_takes_own(v : @view.View) -> @view.View {
   let id = v.id()
-  v.takes(fn(lx, ly, _) {
+  v.hosted_takes(fn(lx, ly, _) {
     let (nx, ny, _, _) = v.rect()
     let (x, y) = (nx + lx, ny + ly)
     let c = g()
@@ -1348,7 +1348,7 @@ pub fn old_takes_own(v : @view.View) -> @view.View {
 ///|
 /// Old view `v` taking no finger at all: what it draws is drawn, what is under it in the tree takes every press there.
 pub fn old_takes_none(v : @view.View) -> @view.View {
-  v.takes(fn(_, _, _) { false })
+  v.takes(fn(_, _, _) { [] })
 }
 
 ///|

@@ -76,7 +76,7 @@ fn hands(platform? : Int = 0) -> Hands {
       .height(Is(Some(40.0)))
       .presses(By(fn() { takes.get() }))
       .on_press(fn() {  })
-      .takes(fn(_, _, _) { enabled.get() })
+      .takes(fn(w, h, _) { if enabled.get() { [(0.0, 0.0, w, h)] } else { [] } })
       .ground(By(fn() { if n.pointed() { hand_tree_lit } else { hand_off } }))
       |> ignore
     })

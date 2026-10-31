@@ -71,6 +71,8 @@ pub struct NativeView {
   /// how many presses' rects the frame had when it was painted (those after it are drawn over it), and the rects of
   /// those over it the host was last told (`covers`)
   priv mut hits_before : Int
+  /// the node of the window's tree hosting the old view it is in, as its targets were last found (none: no tree)
+  priv mut island : @view.NodeId?
   priv mut told_covers : String
 }
 
@@ -209,6 +211,7 @@ fn NativeView::make(
     touch: All,
     keeps_cookies: false,
     hits_before: 0,
+    island: None,
     told_covers: "",
     read,
     reading: {},
@@ -759,6 +762,7 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   // alone, Ctx::node_targets)
   if !dr.targets_said {
     v.hits_before = self.next_hit_ids.length()
+    v.island = None
   }
   // (its content on whole device pixels too, as where it shows is: placed between pixels, the row its edge half
   // covers shows what is under the canvas, a line along the picture's edge)
@@ -1037,18 +1041,44 @@ let covers_most : Int = 32
 /// x1 y1 …" in points, the window's; "" none), each cut to where the view is seen.
 fn NativeView::tell_covers(self : NativeView, c : Ctx) -> Unit {
   let v = self
-  let (vx0, vy0, vx1, vy1) = (v.at[4], v.at[5], v.at[6], v.at[7])
-  let out = StringBuilder()
-  let mut n = 0
+  let seen = (v.at[4], v.at[5], v.at[6], v.at[7])
+  let over : Array[(Double, Double, Double, Double)] = []
+  let tree = view_app.val
+  // (in the window's tree: where the node hosting its old view takes no finger, all of it the tree's (a modal layer of
+  // the tree's over it, the node leaving, said to take none or only some of it): Tree::finger_areas)
+  match (tree, v.island) {
+    (Some(t), Some(h)) =>
+      match t.finger_areas(h) {
+        InWindow(rs) => over.append(rects_less(seen, rs))
+        AsItHosts => ()
+      }
+    _ => ()
+  }
+  // (what of the old views' takes a press after it: each where the node hosting its old view takes a finger)
   let rects = c.next_hit_rects
   for j in v.hits_before..<c.next_hit_ids.length() {
+    let r = (rects[j * 4], rects[j * 4 + 1], rects[j * 4 + 2], rects[j * 4 + 3])
+    let held = match tree {
+      Some(t) => next_old_hits.iter().find_first(fn(o) { j >= o.from && j < o.to }).map(fn(o) { t.finger_areas(o.id) })
+      None => None
+    }
+    match held {
+      Some(InWindow(rs)) => for a in rs { over.push(rect_meet(r, a)) }
+      _ => over.push(r)
+    }
+  }
+  // (what of the tree's own takes a finger drawn over the node hosting it: Tree::taken_over)
+  match (tree, v.island) {
+    (Some(t), Some(h)) => over.append(t.taken_over(h))
+    _ => ()
+  }
+  let out = StringBuilder()
+  let mut n = 0
+  for r in over {
     if n >= covers_most {
       break
     }
-    let x0 = dmax(rects[j * 4], vx0)
-    let y0 = dmax(rects[j * 4 + 1], vy0)
-    let x1 = dmin(rects[j * 4 + 2], vx1)
-    let y1 = dmin(rects[j * 4 + 3], vy1)
+    let (x0, y0, x1, y1) = rect_meet(r, seen)
     if x1 > x0 && y1 > y0 {
       if n > 0 {
         out.write_string(" ")
@@ -1062,6 +1092,42 @@ fn NativeView::tell_covers(self : NativeView, c : Ctx) -> Unit {
     v.told_covers = said
     h_view_tell(v.id, 4, said)
   }
+}
+
+///|
+/// Where rects `a` and `b` (x0, y0, x1, y1) meet (empty: x1 <= x0 or y1 <= y0).
+fn rect_meet(
+  a : (Double, Double, Double, Double),
+  b : (Double, Double, Double, Double),
+) -> (Double, Double, Double, Double) {
+  (dmax(a.0, b.0), dmax(a.1, b.1), dmin(a.2, b.2), dmin(a.3, b.3))
+}
+
+///|
+/// What of rect `a` none of `cut` is over, as rects (x0, y0, x1, y1).
+fn rects_less(
+  a : (Double, Double, Double, Double),
+  cut : Array[(Double, Double, Double, Double)],
+) -> Array[(Double, Double, Double, Double)] {
+  let mut left = [a]
+  for k in cut {
+    let next = []
+    for r in left {
+      let (x0, y0, x1, y1) = rect_meet(r, k)
+      if x1 <= x0 || y1 <= y0 {
+        next.push(r)
+        continue
+      }
+      // (what is above it, below it, then beside it between those)
+      for p in [(r.0, r.1, r.2, y0), (r.0, y1, r.2, r.3), (r.0, y0, x0, y1), (x1, y0, r.2, y1)] {
+        if p.2 > p.0 && p.3 > p.1 {
+          next.push(p)
+        }
+      }
+    }
+    left = next
+  }
+  left
 }
 
 ///|

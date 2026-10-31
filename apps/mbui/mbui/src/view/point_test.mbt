@@ -12,7 +12,7 @@ fn pointed_tree(enabled : @signals.Signal[Bool], seen : Ref[Bool]) -> @view.Tree
         .width(Is(Some(40.0)))
         .height(Is(Some(40.0)))
         .on_press(fn() {  })
-        .takes(fn(_, _, _) { enabled.get() })
+        .takes(fn(w, h, _) { if enabled.get() { [(0.0, 0.0, w, h)] } else { [] } })
         .ground(
           By(fn() {
             seen.val = b.pointed()
@@ -62,7 +62,7 @@ fn two_buttons(a : @signals.Signal[Bool], b : @signals.Signal[Bool]) -> @view.Tr
       root.row(Is(true)) |> ignore
       for e in [a, b] {
         root.box(fn(n) {
-          n.width(Is(Some(40.0))).height(Is(Some(40.0))).on_press(fn() {  }).takes(fn(_, _, _) { e.get() }) |> ignore
+          n.width(Is(Some(40.0))).height(Is(Some(40.0))).on_press(fn() {  }).takes(fn(w, h, _) { if e.get() { [(0.0, 0.0, w, h)] } else { [] } }) |> ignore
         })
         |> ignore
       }
