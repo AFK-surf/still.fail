@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { Effect } from "effect";
+import { Core } from "../src/core.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { HostError } from "../src/error.ts";
 import { t } from "../src/i18n.ts";
@@ -573,6 +574,31 @@ test("a chat's card of an agent's request comes answered with its post, from the
   const there = await w.watch(2, { topic: "chat", station: "ws/st", thread: 7 });
   assert.deepEqual(there().messages.filter((m: any) => m.card?.vaultAsk).map((m: any) => m.card.vaultAsk.answer), ["elsewhere", "elsewhere"]);
   w.core.close();
+});
+
+test("a_chat_with_vault_cards_opens_checking_no_signature_once_this_device_checked_them_the_app_started_anew", async () => {
+  // The lock's entries and this device's certificate, checked as the first chat with vault cards opened after each
+  // start: 0.87 s of it on a phone (2026-10-31). Checked once on this device, opening one checks none.
+  const r = await rig(false, false, cardsInChat());
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const chat = await r.watch(2, { topic: "chat", station: "ws/st", thread: 7 });
+  assert.equal(chat().messages.filter((m: any) => m.card?.vaultAsk).length, 2);
+  await r.core.close();
+  forgetVerifiedHere();
+  const again = await Core.create(r.host, { clock: r.host.time.clock, sample: 0, wire: () => new HostWire(r.host) });
+  try {
+    await r.host.time.pass(1000, 100);
+    r.host.takeEmitted();
+    const before = verifies.count;
+    subscribe(again, again.connect(), 2, { topic: "chat", station: "ws/st", thread: 7 });
+    await r.host.time.pass(200, 10);
+    const value = r.host.takeEmitted().map(([, m]) => m as any).find((m) => m.id === 2 && "value" in m)?.value;
+    assert.deepEqual(value.messages.filter((m: any) => m.card?.vaultAsk).map((m: any) => m.card.vaultAsk.answer), ["approve", "approve"]);
+    assert.equal(verifies.count - before, 0, "no signature checked");
+  } finally {
+    await again.close();
+  }
 });
 
 test("vault calls: a secret an agent asks to keep, opened with this device's box key, written into a vault of one's own, then told", async () => {

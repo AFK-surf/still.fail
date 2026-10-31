@@ -1,7 +1,7 @@
 // What agents said, read once on the device (markdown.ts, md-ahead.ts): a chat opened keeps its replies' trees in its
-// account's database (read from there as the app starts anew, not again); the latest replies of a chat said lately
-// are read ahead as they come, before it is opened; a person's words, a reply with a Slack person in it and one said
-// long ago are not.
+// account's database (read from there as the app starts anew, not again); the latest replies of a chat are read ahead
+// as they come, however long ago they were said, before it is opened (a chat opens by looking up what it shows:
+// chat-open-lookup.test.ts); a person's words and a reply with a Slack person in it are not.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mdKey, parse } from "../src/markdown.ts";
@@ -30,8 +30,8 @@ test("a_chat_opened_keeps_its_agents_markdown_read_on_the_device", async () => {
   const text = `改好了：**列表** 和 \`按钮\` ${Math.random()}`;
   const answers = { ...base(), "GET /threads/7/entries?limit=50": { last: 3, entries: [entry(1, "m1"), entry(2, "m2"), reply(3, text, 3)] } };
   const { host, core } = await started(answers);
-  // Said long ago: not read ahead.
-  assert.equal(kept(host).has(mdKey(text)), false);
+  // Said long ago, read as it came (and kept): there as the chat opens.
+  assert.equal(kept(host).get(mdKey(text)), "t:7");
   const ui = core.connect();
   subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
   await host.settle();
@@ -42,7 +42,7 @@ test("a_chat_opened_keeps_its_agents_markdown_read_on_the_device", async () => {
   core.close();
 });
 
-test("a_chats_latest_replies_said_lately_are_read_ahead_as_they_come", async () => {
+test("a_chats_latest_replies_are_read_ahead_as_they_come_however_long_ago_said", async () => {
   const recent = `刚才的 **回复** ${Math.random()}`;
   const mention = `<@U1> 看一下 **这个** ${Math.random()}`;
   const person = `人说的 **话** ${Math.random()}`;
@@ -55,6 +55,6 @@ test("a_chats_latest_replies_said_lately_are_read_ahead_as_they_come", async () 
   const { host, core } = await started(answers);
   await host.time.pass(100);
   const read = kept(host);
-  assert.deepEqual([recent, mention, person, old].map((t) => read.get(mdKey(t)) ?? null), ["t:7", null, null, null]);
+  assert.deepEqual([recent, mention, person, old].map((t) => read.get(mdKey(t)) ?? null), ["t:7", null, null, "t:7"]);
   core.close();
 });

@@ -2,8 +2,9 @@
 // one reply at a time, and kept on the device, so the chat opens with it read. Reading it as the chat opened was the
 // most of opening one: a page of agents' replies, ~80 000 characters, took ~0.3 s in Hermes on a Mac Studio
 // (bench/chat-open.ts), the messages to come breathing on a phone each time a chat was opened the first time since the
-// app started. Read are the chats spoken in lately (AHEAD_MS): as their entries come, and those of the latest
-// (AHEAD_CHATS a station) as the core starts.
+// app started. Read is what comes, whenever it was said (a chat opens by looking up what it shows: an old chat's
+// replies came to the device read as the sync brought them, test/chat-open-lookup.test.ts), and as the core starts
+// what the chats spoken in lately (AHEAD_MS, AHEAD_CHATS a station) said.
 import { Effect } from "effect";
 import type { Data } from "./data.ts";
 import { merge } from "./entries.ts";
@@ -43,19 +44,18 @@ export class MdAhead {
     }
   }
 
-  /// A chat's entries held changed: what its agents said lately on its latest page and is not read yet, read in turn.
-  /// (A reply with a Slack person in it is shown with their name in place (views.ts shownMessage): read as it opens.)
+  /// A chat's entries held changed: what its agents said on its latest page and is not read yet, read in turn, however
+  /// long ago it was said. (A reply with a Slack person in it is shown with their name in place (views.ts
+  /// shownMessage): read as it opens.)
   thread(station: string, thread: number): void {
     const id = String(thread);
     const span = this.#data.logSpan("entry", station, id);
     const store = this.#data.mdStore(station, `t:${thread}`);
     if (span === null || store === undefined) return;
-    const since = this.#now() - AHEAD_MS;
     const page = this.#data.logRange("entry", station, id, Math.max(1, span.max - PAGE + 1), span.max);
     for (const m of merge([...page.values()])) {
       const text = typeof m.text === "string" ? m.text : "";
-      const at = typeof m.createdAt === "number" ? m.createdAt : 0;
-      if (m.authorKind === "person" || text === "" || text.includes("<@") || at < since || markdownHere(text)) continue;
+      if (m.authorKind === "person" || text === "" || text.includes("<@") || markdownHere(text)) continue;
       const key = mdKey(text);
       if (this.#queued.has(`${station}\u0001${key}`) || store.has(key)) continue;
       this.#queued.add(`${station}\u0001${key}`);
