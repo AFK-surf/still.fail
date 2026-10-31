@@ -4186,6 +4186,7 @@ pub fn way_in_button(c : @ui.Ctx, key : String, label : String, solid? : Bool = 
     (over(p.chip, alpha(p.hover, h)), p.text)
   }
   let mut words_at = -1
+  // det-ok(box-loose): its ground eased between its tone's and the hover's, as @sf.button's
   let b = c.box(style=if bare { sign_in_button_desk } else { sign_in_button_touch }, bg=ground, id~, fn() {
     // (as a button's: the spinner's room opening before its words, @sf.button)
     let turning = ease_to(c, key + "/busy", busy)
@@ -4200,6 +4201,7 @@ pub fn way_in_button(c : @ui.Ctx, key : String, label : String, solid? : Bool = 
       })
       |> ignore
     }
+    // det-ok(box-loose): its words in the ink its ground's tone takes (the page's ground on the ink's, the ink on the chip's)
     words_at = c.text(label, style=sign_in_words, color=ink)
     // SignIn.kt: clip(CircleShape).clickable
     if !busy {
