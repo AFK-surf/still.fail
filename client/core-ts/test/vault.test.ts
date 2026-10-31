@@ -21,6 +21,7 @@ import {
   openSeal, recoveryPair, saveContext, sealWith, sign, signedOk, toWords, verifies,
 } from "../src/vault/crypto.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
+import { forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
 import { BOX_KEY, BOX_PUB, UNLOCK_MS } from "../src/views/vault.ts";
 import { subscribe, call } from "./helpers.ts";
 import { type Answers, base, entry, started, stationReplies, status } from "./station-fixture.ts";
@@ -47,6 +48,27 @@ test("a_signature_is_checked_once_for_what_it_is_over_not_again_each_time_it_is_
   assert.equal(signedOk({ ...record, device: "d-other" }, TAG.box), false);
   assert.equal(signedOk(record, TAG.vault), false);
   assert.equal(verifies.count - before, 3);
+});
+
+test("a_signature_checked_on_this_device_is_kept_past_the_run_not_checked_again_as_the_app_starts", () => {
+  // The lock's entries and a device's certificate were checked again each time the app started, the first chat with
+  // vault cards waiting for it: 0.87 s on a phone (0.1.6339, 2026-10-31).
+  const kept = new Map<string, unknown>();
+  keepVerified({ get: (k) => kept.get(k), put: (k, ok) => void kept.set(k, ok) });
+  try {
+    const signer = key(fill(9));
+    const record = sign({ device: "d-kept", ws: "w", box: "x25519:" + "11".repeat(32) }, TAG.box, signer);
+    const before = verifies.count;
+    assert.ok(signedOk(record, TAG.box));
+    assert.equal(kept.size, 1);
+    // the app started anew: what this run found is gone, what is kept answers
+    forgetVerifiedHere();
+    assert.ok(signedOk(record, TAG.box));
+    assert.equal(verifies.count - before, 1, "checked once");
+    assert.equal(signedOk({ ...record, device: "d-kept-2" }, TAG.box), false);
+  } finally {
+    keepVerified(null);
+  }
 });
 
 test("the formats: the core makes and checks the stations' vectors", () => {
