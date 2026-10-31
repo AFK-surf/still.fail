@@ -450,8 +450,14 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
       UIBarButtonItem *b = slot.barItems[ident];
       BOOL reuse = b && [slot.barSpecs[ident] isEqual:d] && [slot.barInk isEqual:ink] && [slot.barAccent isEqual:accent];
       if (!reuse) {
-        // (a picture the host loads: drawn in once it is here, on the item made, while it is shown)
+        // (the same action said otherwise, its icon, words, menu or dot, in the same colours: the item there changed in
+        // place, not made anew, so the system swaps what it shows on the button there and fades none of the column's
+        // buttons, as Outlook's do: the user, 2026-10-31; a new item, even with its identifier, is faded in for the old)
+        UIBarButtonItem *was = b && [slot.barInk isEqual:ink] && [slot.barAccent isEqual:accent] ? b : nil;
+        // (a picture the host loads: drawn in once it is here, on the item, while it is shown and still said so)
         __block __weak UIBarButtonItem *drawn = nil;
+        __weak MBSlot *slotWeak = slot;
+        BOOL (^still)(void) = ^BOOL { return [slotWeak.barSpecs[ident] isEqual:d]; };
         NSString *spec = d[@"icon"];
         // (a workspace's mark a disc nearly the glass's own size, on the glass as it is: its picture once here, else its
         // letter on its colour, an emoji alone with no colour round it: the user, 2026-10-28)
@@ -466,30 +472,28 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
                                             : [NSString stringWithFormat:@"avatars:%@\x1f%@", mark, [spec substringFromIndex:pic.location + 1]];
         }
         UIImage *icon = [spec hasPrefix:@"avatars:"] ? nav_avatars(spec, nav_face, ^{
-                          drawn.image = nav_avatars(spec, nav_face, nil);
+                          if (still()) drawn.image = nav_avatars(spec, nav_face, nil);
                         })
                         : [spec length] ? nav_any_then(spec, 24, ^{
-                            drawn.image = nav_any(spec, 24);
+                            if (still()) drawn.image = nav_any(spec, 24);
                           })
                                         : nav_letter(d[@"title"], 24);
         BOOL prominent = [d[@"prominent"] boolValue];
         // (said with where the item is in the app's view, for what opens from it: a popover at it)
         __block __weak UIBarButtonItem *weak = nil;
-        b = [[UIBarButtonItem alloc]
-            initWithPrimaryAction:[UIAction actionWithTitle:d[@"title"]
-                                                      image:icon
-                                                 identifier:nil
-                                                    handler:^(UIAction *a) {
-                                                      UIBarButtonItem *it = weak;
-                                                      UIView *v = the_view;
-                                                      if (it && v) {
-                                                        CGRect r = [it frameInView:v];
-                                                        say_system(@{@"nav" : ident, @"at" : @[ @(r.origin.x), @(r.origin.y), @(r.size.width), @(r.size.height) ]});
-                                                      } else {
-                                                        say_system(@{@"nav" : ident});
-                                                      }
-                                                    }]];
-        weak = b;
+        UIAction *action = [UIAction actionWithTitle:d[@"title"]
+                                               image:icon
+                                          identifier:nil
+                                             handler:^(UIAction *a) {
+                                               UIBarButtonItem *it = weak;
+                                               UIView *v = the_view;
+                                               if (it && v) {
+                                                 CGRect r = [it frameInView:v];
+                                                 say_system(@{@"nav" : ident, @"at" : @[ @(r.origin.x), @(r.origin.y), @(r.size.width), @(r.size.height) ]});
+                                               } else {
+                                                 say_system(@{@"nav" : ident});
+                                               }
+                                             }];
         // (with a menu: its rows, the one checked so, each said as chosen)
         NSArray *rows = d[@"menu"];
         if (rows.count) {
@@ -499,10 +503,22 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
             CGRect r = it && v ? [it frameInView:v] : CGRectZero;
             say_system(@{@"nav" : row, @"at" : @[ @(r.origin.x), @(r.origin.y), @(r.size.width), @(r.size.height) ]});
           });
-          b = [[UIBarButtonItem alloc] initWithImage:icon menu:menu];
+          if (was.menu) {
+            b = was;
+            b.menu = menu;
+            b.image = icon;
+          } else {
+            b = [[UIBarButtonItem alloc] initWithImage:icon menu:menu];
+          }
           b.title = d[@"title"];
-          drawn = b;
+        } else if (was && !was.menu) {
+          b = was;
+          b.primaryAction = action;
+        } else {
+          b = [[UIBarButtonItem alloc] initWithPrimaryAction:action];
         }
+        weak = b;
+        drawn = b;
 #ifdef __IPHONE_26_0
         if (@available(iOS 26.0, *)) {
           // Match the same action across configurations so UIKit carries its glass through the transition.
@@ -511,6 +527,7 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
             b.style = UIBarButtonItemStyleProminent;
             b.tintColor = accent;
           } else {
+            b.style = UIBarButtonItemStylePlain;
             b.tintColor = ink;
           }
           // (the app's own, 待处理's, on a glass of its own, apart from the card's: the user, 2026-10-27)
@@ -527,7 +544,6 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
           b.badge = [d[@"dot"] boolValue] ? [UIBarButtonItemBadge indicatorBadge] : nil;
         }
 #endif
-        drawn = b;
       }
       keptItems[ident] = b;
       keptSpecs[ident] = d;
