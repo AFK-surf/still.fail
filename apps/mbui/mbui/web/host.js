@@ -1925,12 +1925,19 @@
   };
 
   // ---- input ----
-  let imeActive = false;
+  let imeActive = false, composing = false;
   H.setIme = (active, x, y, w, h, text, s, e) => {
     imeActive = active;
     ta.style.left = `${x}px`;
     ta.style.top = `${y}px`;
     ta.style.height = `${h}px`;
+    // the field's words and selection in the input method's own field, as the other hosts give theirs (the Mac's
+    // NSTextInputClient, Android's InputConnection): an input method reads what is before the caret (WeChat's puts a
+    // space between Chinese and Latin by it); left alone while it composes
+    if (active && !composing) {
+      if (ta.value !== text) ta.value = text;
+      if (ta.selectionStart !== s || ta.selectionEnd !== e) ta.setSelectionRange(s, e);
+    }
     if (active && document.activeElement !== ta) ta.focus({ preventScroll: true });
     if (!active && document.activeElement === ta) ta.blur();
   };
@@ -2014,12 +2021,13 @@
       cb.key(own ?? 1000 + c.charCodeAt(0), mods);
       e.preventDefault();
     });
+    // (what is put in goes to the field as typed; the input method's field is given the field's words again as the
+    // app says them, setIme)
     ta.addEventListener('input', (e) => {
       if (e.isComposing) return;
       if (e.inputType === 'insertText' || e.inputType === 'insertReplacementText') {
         if (e.data) cb.text(0, e.data, 0, 0);
       }
-      ta.value = '';
     });
     // ⌘V (the browser's paste): files on the clipboard (copied in Finder, a screenshot's picture) are the app's ⌘V
     // (1000 + v), which reads the clipboard for them (H.clipRead: this paste's, as the page may not read files off the
@@ -2039,11 +2047,12 @@
     ta.addEventListener('paste', pasted);
     // (with no field focused, what is pasted goes to the page: a chat's ⌘V of a picture with the composer not focused)
     window.addEventListener('paste', (e) => { if (e.target !== ta) pasted(e); });
+    ta.addEventListener('compositionstart', () => { composing = true; });
     ta.addEventListener('compositionupdate', (e) => cb.text(1, e.data || '', (e.data || '').length, 0));
     ta.addEventListener('compositionend', (e) => {
+      composing = false;
       cb.text(1, '', 0, 0);
       if (e.data) cb.text(0, e.data, 0, 0);
-      ta.value = '';
     });
     window.addEventListener('resize', H.requestFrame);
   }
