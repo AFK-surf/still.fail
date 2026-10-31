@@ -57,6 +57,10 @@ pub fn bench(
     pointing?=pointing,
     env=[("MBUI_LOCALE", arg("MBUI_LOCALE")), ("MBUI_DARK", arg("MBUI_DARK"))],
     live={ host, turn: fn() { spin(1.0) } },
+    before=fn() {
+      let z = @ui.window_zoom()
+      set_offscreen_view(w / z, h / z, scale * z)
+    },
     // (a test's own check of each frame at rest not run: not the app's work)
     corners_held=false,
     words_over_held=false,

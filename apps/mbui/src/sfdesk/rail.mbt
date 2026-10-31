@@ -192,7 +192,7 @@ fn rail(
   } else if wide.tape {
     @sf.rail_ground_radius(@sf.tape_side_corners()[3], @sf.rail_in_tape() + rail_ground_in)
   } else {
-    @sf.rail_ground_radius(Window, closed_bar_in + rail_closed_ground_in, alone=in_bar.radius(@ui.corner_roots()))
+    @sf.rail_ground_radius(Window, rail_window_in() + rail_ground_in, alone=in_bar.radius(@ui.corner_roots()))
   }
   // (what it stands on: the marks hung on its grounds' corners on discs of it)
   rail_under.val = dock_ground(bar)
@@ -201,7 +201,8 @@ fn rail(
   } else if wide.tape {
     rail_open_tape()
   } else {
-    rail_open
+    let inset = rail_window_in()
+    rail_open.then(@ui.style(w=Fixed(rail_shown_w + inset - rail_in_px), pl=@sf.room_of(inset), pb=@sf.room_of(inset)))
   }
   // (where the block's move has got: its width and padding, its top row's, between closed and open: pane_view.mbt)
   let (look, top_h) = match moving {
@@ -220,10 +221,15 @@ fn rail(
       // what is pressed there its places')
       title_row(c, "rail/top", dmax(top_h, closed_bar_top))
     }
-    c.box(style=rail_head, fn() {
-      c.box(style=rail_top.then(@ui.style(h=Fixed(top_h))), fn() {  }) |> ignore
-      let places = rail_items(src, w.id)
-      let shown = rail_shown(src, w)
+    // Keep the title-bar space and settings in place when the window is short. The places and workspaces each give
+    // way and scroll instead of pushing settings outside the window. Their marks may extend into the rail's margin.
+    if top_h > 0.0 {
+      let first_top = dmax(0.0, top_h - rail_gap)
+      c.box(style=rail_top.then(@ui.style(h=Fixed(first_top))), fn() {  }) |> ignore
+    }
+    let places = rail_items(src, w.id)
+    let shown = rail_shown(src, w)
+    c.capped("rail/places", c.height, shrinks=true, mx=-rail_ground_in, padx=rail_ground_in, fn() {
       c.box(style=rail_places_col, fn() {
         for place in shown {
           rail_place(c, src, w, place, rail_lit(src, w, place), places)
@@ -236,10 +242,13 @@ fn rail(
     // what comes and goes (transfers.mbt), over the workspaces
     rail_transfers(c, src, w.id)
     // the workspaces (sfpages' workspace.mbt), on the rail's squares and with its corner's marks
-    @sfpages.workspace_squares(c, src, w, all, {
-      square: fn(ground, body, id) { rail_square(c, ground, body, id~) },
-      corner: fn(tone) { rail_tone_mark(c, tone) },
+    c.capped("rail/workspaces", c.height, shrinks=true, mx=-rail_ground_in, padx=rail_ground_in, fn() {
+      @sfpages.workspace_squares(c, src, w, all, {
+        square: fn(ground, body, id) { rail_square(c, ground, body, id~) },
+        corner: fn(tone) { rail_tone_mark(c, tone) },
+      })
     })
+    |> ignore
     // settings
     let gear = c.id("rail/settings")
     if c.clicked(gear) {
@@ -278,7 +287,7 @@ fn rail_top_h(bar : Bool) -> Double {
   if bar {
     0.0
   } else if @ui.window_keys_left() {
-    rail_top_inset + rail_gap
+    dmax(rail_top_inset + rail_gap, @ui.window_points_to_content(side_top_inset))
   } else if wide.tape {
     // (and its first place's middle on the line of the sidebar's first row beside it, 新建对话's: pengxiao, 2026-10-25)
     dmax(@sf.rail_in_tape(), tape_first_row_mid() - rail_item_side / 2.0)
@@ -329,6 +338,25 @@ fn rail_open_tape() -> @ui.Style {
 let rail_in_px : Double = 8.0
 
 ///|
+/// The open rail's place in the window's corner: its ground follows that corner where the system's corner and the
+/// theme's ranges allow it. When the ground is round, its centre follows the system's circular corner instead.
+fn rail_window_in() -> Double {
+  let window : @ui.CornerOf = Window
+  let corner = window.radius(@ui.corner_roots())
+  let base = closed_bar_in + rail_closed_ground_in
+  if corner <= base {
+    return base - rail_ground_in
+  }
+  let (at, radius) = @sf.box_fit(corner, base, 0.0)
+  let at = if corner > 0.0 && radius >= rail_sq_side / 2.0 - 0.5 {
+    corner - rail_sq_side / 2.0
+  } else {
+    at
+  }
+  at - rail_ground_in
+}
+
+///|
 /// How much more of the rail shows on the tape (its places further in: rail_open_tape), the sidebar as much narrower.
 fn rail_tape_more() -> Double {
   @sf.rail_in_tape() - rail_in_px
@@ -337,11 +365,6 @@ fn rail_tape_more() -> Double {
 ///|
 /// What of the rail shows beside the sidebar open: its 56 less the 8 the sidebar reaches over.
 let rail_shown_w : Double = 48.0
-
-///|
-/// The rail's top row and its places (the top row's 6 under it its own: in the closed bar it has none).
-// kept across runs: a value (no field of it changes)
-let rail_head : @ui.Style = @ui.css("align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1109,4 +1132,3 @@ pub fn rail_stations_label(src : Source, ws : String) -> String {
     "Station"
   }
 }
-

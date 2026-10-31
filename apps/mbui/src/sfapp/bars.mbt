@@ -85,7 +85,7 @@ fn window_band() -> Double {
   if @ui.window_keys_own() {
     @sf.window_keys_band
   } else {
-    window_band_mac
+    dmax(window_band_mac, @ui.window_points_to_content(window_band_mac))
   }
 }
 

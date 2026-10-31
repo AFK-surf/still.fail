@@ -9,6 +9,12 @@ let supported = true
 extern "C" fn ffi_init_offscreen(w : Double, h : Double, scale : Double) -> Unit = "mb_render_init_offscreen"
 
 ///|
+extern "C" fn ffi_set_offscreen_view(w : Double, h : Double, scale : Double) -> Unit = "mb_render_set_size"
+
+///|
+extern "C" fn ffi_text_set_scale(scale : Double) -> Unit = "mb_text_set_scale"
+
+///|
 #borrow(path)
 extern "C" fn ffi_open(path : String, w : Int, h : Int, fps : Int) -> Int = "mbf_open"
 
@@ -92,6 +98,12 @@ fn now_ms() -> Double {
 ///|
 fn init_offscreen(w : Double, h : Double, scale : Double) -> Unit {
   ffi_init_offscreen(w, h, scale)
+}
+
+///|
+fn set_offscreen_view(w : Double, h : Double, scale : Double) -> Unit {
+  ffi_text_set_scale(scale)
+  ffi_set_offscreen_view(w, h, scale)
 }
 
 ///|

@@ -35,11 +35,12 @@ pub(all) struct CornerFit {
 } derive(Eq, Show, Debug)
 
 ///|
-/// What every linked corner is worked out from: the window's corner as the system draws it, and the theme's ranges
-/// (None: any corner, any place).
+/// What every linked corner is worked out from: the window's corner in content points, the zoom at which those points
+/// are drawn, and the theme's ranges (None: any corner, any place).
 pub(all) struct CornerRoots {
   window : Double
   fit : CornerFit?
+  zoom : Double
 } derive(Eq, Show, Debug)
 
 ///|
@@ -51,7 +52,7 @@ pub fn CornerOf::radius(self : CornerOf, at : CornerRoots) -> Double {
     Follow(from, inset, alone) => {
       let r = from.radius(at)
       let k = concentric(r, inset)
-      if r > 0.0 && inset < r && corner_fit_ok(at.fit, k, inset) {
+      if r > 0.0 && inset < r && corner_fit_ok(at.fit, k, inset, if from is Window { at.zoom } else { 1.0 }) {
         k
       } else {
         alone
@@ -67,7 +68,7 @@ pub fn CornerOf::follows(self : CornerOf, at : CornerRoots) -> Bool {
   match self {
     Follow(from, inset, _) => {
       let r = from.radius(at)
-      r > 0.0 && inset < r && corner_fit_ok(at.fit, concentric(r, inset), inset)
+      r > 0.0 && inset < r && corner_fit_ok(at.fit, concentric(r, inset), inset, if from is Window { at.zoom } else { 1.0 })
     }
     _ => true
   }
@@ -108,9 +109,11 @@ pub fn CornerOf::capsule_at(self : CornerOf, height : Double, at : CornerRoots) 
 
 ///|
 /// Whether a corner `k` round, `d` in from what it follows, is one ranges `fit` let it have (any where there are none).
-fn corner_fit_ok(fit : CornerFit?, k : Double, d : Double) -> Bool {
+/// A window does not zoom with its contents: for its linked corners, the smallest visible radius is judged after the
+/// content zoom, so an enlarged but still visibly round corner does not suddenly fall back to its unrelated own radius.
+fn corner_fit_ok(fit : CornerFit?, k : Double, d : Double, zoom : Double) -> Bool {
   match fit {
-    Some(f) => k >= f.least - 0.5 && k <= f.most + 0.5 && d >= f.near - 0.5 && d <= f.far + 0.5
+    Some(f) => k * zoom >= f.least - 0.5 && k <= f.most + 0.5 && d >= f.near - 0.5 && d <= f.far + 0.5
     None => k >= 0.0
   }
 }

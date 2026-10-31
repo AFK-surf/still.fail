@@ -138,6 +138,16 @@ extern "js" fn js_env(name : String) -> String =
   #|(n) => (typeof location !== "undefined" && new URLSearchParams(location.search).get(n)) || ""
 
 ///|
+fn set_window_zoom(_zoom : Double) -> Unit {
+  ()
+}
+
+///|
+fn set_window_key(_f : FuncRef[(Int, Int) -> Int]) -> Unit {
+  ()
+}
+
+///|
 fn run(
   title : String,
   frame : FuncRef[(Double, Double, Double, Double) -> Unit],

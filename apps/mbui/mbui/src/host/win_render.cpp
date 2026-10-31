@@ -1256,7 +1256,7 @@ int mb_render_snapshot(const wchar_t *path) {
     if (mb_views_count() > 0) {
       // the native views' pictures under the canvas, seen through its holes (premultiplied: canvas + under × (1 - α))
       out = (uint8_t *)calloc((size_t)w * h, 4);
-      mb_views_draw_under(out, w, h, vscale);
+      mb_views_draw_under(out, w, h, mb_app_scale());
       for (int y = 0; y < h; y++) {
         const uint8_t *s = px + (size_t)y * stride;
         uint8_t *d = out + (size_t)y * w * 4;

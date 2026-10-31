@@ -132,7 +132,12 @@ pub fn viewer_frame_act(
     c.box(style=vfr_act_room, fn() {
       c.spacer()
       let foot = (viewer_host().room)().1
-      c.box(style=vfr_act_band.then(@ui.style(pb=room(vfr_act_in + foot))), glass=glass_foot(), fn() {
+      // A small layout can also be shown inside a rounded window (for example after zooming in). Its long buttons
+      // keep their shape and stand past each window corner when the foot has not already brought them past it.
+      let bottom = vfr_act_in + foot
+      let left = vfr_act_side_at(@ui.window_corner_at(3), bottom)
+      let right = vfr_act_side_at(@ui.window_corner_at(2), bottom)
+      c.box(style=vfr_act_band.then(@ui.style(pl=room(left), pr=room(right), pb=room(bottom))), glass=glass_foot(), fn() {
         c.box(style=vfr_act_row, fn() {
           if button(c, t("common.cancel"), key=key + "/cancel", w=Fill(1.0)) {
             closed = true
@@ -186,6 +191,21 @@ pub fn viewer_act_foot(c : @ui.Ctx) -> Double {
 ///|
 /// The band's buttons 12 in from its top and foot (the page's bar under it besides).
 let vfr_act_in : Double = 12.0
+
+///|
+/// The band's buttons' usual distance from its sides.
+let vfr_act_side : Double = 16.0
+
+///|
+/// A long action cannot follow a corner: if it lies beside the arc, keep it past that arc by its usual side room.
+fn vfr_act_side_at(corner : Double, bottom : Double) -> Double {
+  let reach = corner + corner_fit.near
+  if corner > 0.0 && bottom < reach && vfr_act_side < reach {
+    corner + vfr_act_side
+  } else {
+    vfr_act_side
+  }
+}
 
 ///|
 /// What lays the band at the window's foot: the window's whole, the band at its end.

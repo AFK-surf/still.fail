@@ -1870,6 +1870,8 @@ void mb_host_set_app_state(void (*f)(int32_t)) {
 
 // Whether the system is set to dark (@hostapi.system_dark): the screen's interface style.
 // Words as the app sizes them (@hostapi.font_scale): the system's own size of words not followed here yet.
+void mb_host_set_window_zoom(double zoom) { (void)zoom; }
+void mb_host_set_window_key(int32_t (*f)(int32_t, int32_t)) { (void)f; }
 double mb_host_font_scale(void) { return 1.0; }
 // What the app was started to be used with (@hostapi.native_pointing): keyboard and mouse where a mouse or a trackpad is
 // connected as it starts (GCMouse: an iPad's Magic Keyboard, a mouse), else touch.

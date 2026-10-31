@@ -1106,6 +1106,9 @@ int32_t mb_host_system_dark(void) {
   return dark ? 1 : 0;
 }
 
+void mb_host_set_window_zoom(double zoom) { (void)zoom; }
+void mb_host_set_window_key(int32_t (*f)(int32_t, int32_t)) { (void)f; }
+
 // Words as the app sizes them (@hostapi.font_scale): the system's text scale (GNOME's "Large Text", its scaling
 // factor), as Xft's DPI over 96.
 double mb_host_font_scale(void) {

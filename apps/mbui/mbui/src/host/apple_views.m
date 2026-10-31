@@ -1453,18 +1453,19 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
     [v grabPage];
     return;
   }
+  if (v && is_page(v) && op == 8) {
+    // The page's own scale and the window's content zoom have already been composed by the UI.
+    if (value > 0) {
+      v.scale = value;
+      if (@available(macOS 11.0, iOS 14.0, *)) v.web.pageZoom = value;
+    }
+    return;
+  }
   if (v && v.kind == 3) {
     switch (op) {
       case 5: if (v.web.canGoBack) [v.web goBack]; break;
       case 6: if (v.web.canGoForward) [v.web goForward]; break;
       case 7: [v.web reload]; break;
-      case 8:
-        // laid out at its rect over the scale (CSS pixels the bigger), drawn at the scale
-        if (value > 0) {
-          v.scale = value;
-          if (@available(macOS 11.0, iOS 14.0, *)) v.web.pageZoom = value;
-        }
-        break;
     }
     return;
   }

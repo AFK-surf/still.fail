@@ -1,6 +1,12 @@
 // Native host: the C/Objective-C side lives in apple_*.m and mac_app.m (and
 // ios_app.m, built by scripts/ios.sh). Every call here is a plain C call.
 
+extern "C" fn set_window_zoom(zoom : Double) -> Unit = "mb_host_set_window_zoom"
+
+///|
+extern "C" fn set_window_key(f : FuncRef[(Int, Int) -> Int]) -> Unit = "mb_host_set_window_key"
+
+///|
 #borrow(title)
 extern "C" fn ffi_run(
   title : String,

@@ -43,13 +43,15 @@ pub fn Stream::pointer_image(
     return
   }
   let told = pointer_told(self.id)
-  if told.key == key {
+  let z = window_zoom_drawn.val
+  let key_at_zoom = key + "/" + z.to_string()
+  if told.key == key_at_zoom {
     return
   }
-  told.key = key
+  told.key = key_at_zoom
   match fake.val {
     Some(f) => fake_fed(f, self.id, "pointer \{key} \{w}x\{h} hot=\{hx},\{hy}")
-    None => @hostapi.stream_pointer(self.id, png(), w, h, hx, hy)
+    None => @hostapi.stream_pointer(self.id, png(), w * z, h * z, hx * z, hy * z)
   }
 }
 

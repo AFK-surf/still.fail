@@ -24,6 +24,8 @@ pub struct Tester {
   /// what the test looks at after each frame it draws, as it is drawn (Tester::each_frame): a frame an input's draw
   /// passes over on its way (the one that takes it, before the ones after) seen too
   mut each : (() -> Unit)?
+  /// A real renderer's setup immediately before the next frame, for a Tester that draws its frames offscreen.
+  before : (() -> Unit)?
 }
 
 ///|
@@ -46,6 +48,7 @@ pub fn run_let_go() -> Unit {
 /// the packages over it: on_reset) emptied; then checked (leaked_state), so that what is added later and not
 /// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
+  window_zoom_reset()
   run_let_go()
   the_ctx.val = Ctx::new()
   looks_reset()
@@ -213,6 +216,7 @@ fn leaked_state() -> Array[String] {
 /// (Tester::hold_words_over); false for a test that draws them on purpose, to find them.
 /// `nav_able`: whether the system lays out the app's tabs itself (an iPhone Duo's: @hostapi.nav_bar_able), as a host
 /// says it from the app's first frame on; Tester::set_nav_able changes it later.
+/// `before`: a live renderer's frame setup, called before every frame including the first (a film's offscreen target).
 /// `loc`: where it is made, said where a check of its frames fails (frame_watch.mbt, words_over.mbt).
 #callsite(autofill(loc))
 pub fn Tester::new(
@@ -245,6 +249,7 @@ pub fn Tester::new(
   words_over_held? : Bool = true,
   nav_able? : Bool = false,
   tree? : (@view.View) -> Unit,
+  before? : () -> Unit,
   loc~ : SourceLoc,
 ) -> Tester {
   let f = {
@@ -434,7 +439,7 @@ pub fn Tester::new(
     None => set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
   }
   let (period, between) = test_frame_period()
-  let t = { fake: f, w, h, frames: 0, seed, origin: time, period, times: [], between, host_frames: false, each: None }
+  let t = { fake: f, w, h, frames: 0, seed, origin: time, period, times: [], between, host_frames: false, each: None, before }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
   match run.bind(run_first_frame) {
@@ -693,6 +698,10 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
       self.h = h
       tester_size.val = None
     }
+    None => ()
+  }
+  match self.before {
+    Some(f) => f()
     None => ()
   }
   on_frame(self.w, self.h, self.fake.scale, if shown > at { shown } else { at })

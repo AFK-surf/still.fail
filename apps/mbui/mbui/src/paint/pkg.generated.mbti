@@ -65,6 +65,7 @@ pub fn CornerOf::source(Self, CornerRoots) -> Double?
 pub(all) struct CornerRoots {
   window : Double
   fit : CornerFit?
+  zoom : Double
 } derive(Eq, Show, @debug.Debug)
 
 pub(all) struct Glass {

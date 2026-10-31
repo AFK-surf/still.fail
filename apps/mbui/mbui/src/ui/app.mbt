@@ -73,13 +73,18 @@ pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -
   bench.mode = if bench.host == bench_app { 0 } else { bench.host }
   drive_init()
   @hostapi.set_back(fn(k, x, p, e) { on_back(k, x, p, e) })
+  @hostapi.set_window_key(fn(code, mods) {
+    let taken = Ref(false)
+    view_event(fn() { taken.val = window_key_taken(code, mods) })
+    if taken.val { 1 } else { 0 }
+  })
   @hostapi.set_app_state(fn(s) { on_app_state(s) })
   outside_told.val = @hostapi.set_outside(fn(k, id, st) { on_outside(k, id, st) })
   @hostapi.run(
     title,
     fn(w, h, s, t) { on_frame(w, h, s, t) },
-    fn(k, x, y, b) { on_pointer(k, x, y, b) },
-    fn(x, y, dx, dy, ph) { on_wheel(x, y, dx, dy, ph) },
+    fn(k, x, y, b) { host_pointer(k, x, y, b) },
+    fn(x, y, dx, dy, ph) { host_wheel(x, y, dx, dy, ph) },
     fn(k, m) { on_key(k, m) },
     fn(k, s, a, b) { on_text(k, s, a, b) },
   )
@@ -87,6 +92,16 @@ pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -
 
 ///|
 fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
+  let z = window_zoom_wanted.get()
+  if z != window_zoom_drawn.val {
+    let ratio = window_zoom_drawn.val / z
+    view_point.val = view_point.val.map(fn(p) { (p.0 * ratio, p.1 * ratio) })
+    view_point_seen.val = (-1, false, -1)
+    view_words_rescaled()
+  }
+  window_zoom_drawn.val = z
+  tree_window_zoom.set(z)
+  let (w, h, scale) = (w / z, h / z, scale * z)
   let c = g()
   let fed = inputs_since.val
   inputs_since.val = false
@@ -1622,7 +1637,23 @@ fn wheel_taken() -> Unit {
 ///|
 fn on_key(code : Int, mods : Int) -> Unit {
   // (one event, at its own moment: view_host.mbt)
-  view_event(fn() { on_key_now(code, mods) })
+  view_event(fn() {
+    if !window_key_taken(code, mods) {
+      on_key_now(code, mods)
+    }
+  })
+}
+
+///|
+/// A window-wide key takes precedence over a page or modal layer, including a native page with its own focus.
+fn window_key_taken(code : Int, mods : Int) -> Bool {
+  match window_key_handler.val {
+    Some(handle) if handle(code, mods) => {
+      input_taped("key", h_now(), [code.to_double(), mods.to_double()])
+      true
+    }
+    _ => false
+  }
 }
 
 ///|

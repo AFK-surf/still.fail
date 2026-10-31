@@ -481,6 +481,8 @@ static int shows_of(const double *b, float r[4]) {
 // a backdrop over the views whose holes were painted before it (the last of them: `under`), at that view's place
 // among them. Told to the views (which say whether they can frost: else none is through, the glass as before).
 static void glass_through(const double *f, int32_t count) {
+  // Instances are in content points; the system views underneath are placed in window points.
+  double zoom = mlayer && mlayer.contentsScale > 0 ? vscale / mlayer.contentsScale : 1.0;
   float holes[MB_HOLES][4];
   int nh = 0;
   through_n = 0;
@@ -513,11 +515,11 @@ static void glass_through(const double *f, int32_t count) {
     if (kind != 5 || !is_through((float)b[20]) || under <= 0 || n >= MB_FROSTS || !shows_of(b, r)) continue;
     double *e = frosts + n++ * MB_FROST_N;
     for (int k = 0; k < 4; k++) {
-      e[k] = r[k];
-      e[4 + k] = b[k];
-      e[8 + k] = b[36 + k];
+      e[k] = r[k] * zoom;
+      e[4 + k] = b[k] * zoom;
+      e[8 + k] = b[36 + k] * zoom;
     }
-    e[12] = fabs(b[7]);
+    e[12] = fabs(b[7]) * zoom;
     e[13] = b[6];
     e[14] = b[15];
     e[15] = under;
@@ -1274,7 +1276,8 @@ static int snapshot_of(uint8_t *px, int w, int h, const char *path) {
     // the native views' content under the canvas, seen through its holes
     CGContextRef under = CGBitmapContextCreate(NULL, w, h, 8, bpr, cs,
         kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
-    mb_views_draw_under(under, vscale);
+    double view_scale = mlayer && mlayer.contentsScale > 0 ? mlayer.contentsScale : vscale;
+    mb_views_draw_under(under, view_scale);
     CGContextDrawImage(under, CGRectMake(0, 0, w, h), img);
     CGImageRelease(img);
     img = CGBitmapContextCreateImage(under);

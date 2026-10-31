@@ -2208,17 +2208,34 @@ pub fn line_end_in(corner : Double, alone : Double, side? : Double = bar_key_sid
 
 ///|
 /// How far in from the window's side a bar's last button stands at the window's top corner in a window's whole: where
-/// the bar's buttons follow the window's corner (bar_keys_link: a Mac's 16), as far as from the bar's top, so concentric
-/// with it; else `alone`, as in a square window. `roots`: what the window's corner is worked out from (the old views',
-/// as they ask it; a node's, followed: @ui.tree_corner_roots_now).
+/// the bar's buttons can follow the window's corner (bar_keys_link: a Mac's 16), as far as from the bar's top, so
+/// concentric with it; else past the arc where needed. `roots`: what the window's corner is worked out from (the old
+/// views', as they ask it; a node's, followed: @ui.tree_corner_roots_now).
 pub fn window_end_in(alone : Double, roots? : @ui.CornerRoots = @ui.corner_roots()) -> Double {
   // (the window's own buttons there where the app draws them: the bar's last before them, alone: window_keys)
   if @ui.window_keys_own() {
     return window_keys_room() + alone
   }
   match bar_keys_link() {
-    Some(link) if link.follows(roots) => bar_keys_top()
+    Some(_) => window_key_in(alone, roots~)
     _ => alone
+  }
+}
+
+///|
+/// A bar-sized key at the window's corner. Its linked corner must fit in the key as well as in the theme's range;
+/// when it does not, keep the key clear of the window's arc instead of drawing a smaller, non-concentric circle there.
+pub fn window_key_in(alone : Double, roots? : @ui.CornerRoots = @ui.corner_roots()) -> Double {
+  window_link_in(window_corner_key(), alone, roots)
+}
+
+///|
+/// Where a bar-sized control linked to the window may stand, given that its drawn corner must fit in its box.
+fn window_link_in(link : @ui.CornerOf, alone : Double, roots : @ui.CornerRoots) -> Double {
+  if link.follows(roots) && link.radius(roots) <= bar_key_side / 2.0 + 0.5 {
+    bar_keys_top()
+  } else {
+    window_corner_past(alone, roots~)
   }
 }
 
@@ -2238,9 +2255,9 @@ pub fn window_clear_in(alone : Double) -> Double {
 /// edge in the corner's band: a bar's, a page's foot's): past the corner by `alone` (a Mac's 16, 12: 28), not by an arc
 /// it cannot follow (the user, 2026-10-30: 只有长胶囊不行, a circle there a block following it, bar_keys_link); `alone`
 /// where that is past it already (Windows 11's 8), or there is none.
-pub fn window_corner_past(alone : Double) -> Double {
+pub fn window_corner_past(alone : Double, roots? : @ui.CornerRoots = @ui.corner_roots()) -> Double {
   let window : @ui.CornerOf = Window
-  let r = window.radius(@ui.corner_roots())
+  let r = window.radius(roots)
   if r > 0.0 && alone < r + corner_fit.near {
     r + alone
   } else {

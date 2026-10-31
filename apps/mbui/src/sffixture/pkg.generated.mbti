@@ -610,6 +610,7 @@ pub(all) struct Fixture {
   mode : String
   mut workspace : String
   mut appearance : String
+  mut window_zoom : String
   mut motion : String
   archived : Map[String, Bool]
   filters : Map[String, String]

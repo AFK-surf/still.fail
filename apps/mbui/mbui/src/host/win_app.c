@@ -51,6 +51,14 @@ static HWND hwnd;
 static int want_frame;
 static double wake_at = -1;  // mb_now_ms() of the earliest wake_after, or -1
 static double scale = 1;
+static double window_content_zoom = 1.0;
+static int32_t (*window_key)(int32_t, int32_t);
+
+void mb_host_set_window_zoom(double zoom) {
+  if (zoom > 0) window_content_zoom = zoom;
+}
+void mb_host_set_window_key(int32_t (*f)(int32_t, int32_t)) { window_key = f; }
+int32_t mb_host_window_key(int32_t code, int32_t mods) { return window_key ? window_key(code, mods) : 0; }
 static double frame_w, frame_h;  // the last frame's size in points
 static int ime_active;
 static double caret[4];  // x, y, w, h in points, from set_ime
@@ -204,8 +212,9 @@ static void draw_frame(void) {
   }
   frame_w = rc.right / scale;
   frame_h = rc.bottom / scale;
-  mb_text_set_scale(scale);
-  mb_render_set_size(rc.right, rc.bottom, frame_w, frame_h, scale);
+  mb_text_set_scale(scale * window_content_zoom);
+  mb_render_set_size(rc.right, rc.bottom, frame_w / window_content_zoom, frame_h / window_content_zoom,
+                     scale * window_content_zoom);
   double begins = mb_now_ms();
   frame_late = last_begin >= 0 && !script ? fmax(0, begins - last_begin - display_period()) : 0;
   last_begin = begins;

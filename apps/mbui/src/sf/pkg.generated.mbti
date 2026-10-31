@@ -2242,13 +2242,15 @@ pub fn window_corner_clear(Double) -> Double
 
 pub fn window_corner_key() -> @paint.CornerOf
 
-pub fn window_corner_past(Double) -> Double
+pub fn window_corner_past(Double, roots? : @paint.CornerRoots) -> Double
 
 pub fn window_end_in(Double, roots? : @paint.CornerRoots) -> Double
 
 pub fn window_follow(Double) -> @paint.CornerOf
 
 pub let window_in : Double
+
+pub fn window_key_in(Double, roots? : @paint.CornerRoots) -> Double
 
 pub fn window_keys(@ui.Ctx) -> Unit
 

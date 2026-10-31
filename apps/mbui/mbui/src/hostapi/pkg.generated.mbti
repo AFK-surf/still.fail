@@ -351,6 +351,10 @@ pub fn set_sideways(Bool) -> Unit
 
 pub fn set_turnable(Bool) -> Unit
 
+pub fn set_window_key(FuncRef[(Int32, Int32) -> Int32]) -> Unit
+
+pub fn set_window_zoom(Double) -> Unit
+
 pub fn shape(String, Double, Int32, Int32, FixedArray[Double]) -> Int32
 
 pub fn share(String, String, String, Bytes) -> Bool
@@ -724,6 +728,8 @@ pub(all) enum SystemSaid {
 
 // Traits
 pub(open) trait Host {
+  fn set_window_zoom(Self, Double) -> Unit = _
+  fn set_window_key(Self, FuncRef[(Int32, Int32) -> Int32]) -> Unit = _
   fn window_setup(Self, Double, Double, Double, Double, Bool) -> Unit = _
   fn window_inset(Self) -> Bool = _
   fn window_hold(Self) -> Unit = _

@@ -250,11 +250,11 @@ fn init {
       _ => ""
     }
     match kind {
-      "over" => dropping.held = Some((num("x"), num("y")))
+      "over" => dropping.held = Some((num("x") / window_zoom_drawn.val, num("y") / window_zoom_drawn.val))
       "drop" => {
         dropping.held = None
         let id = num("pick").to_int()
-        let (x, y) = (num("x"), num("y"))
+        let (x, y) = (num("x") / window_zoom_drawn.val, num("y") / window_zoom_drawn.val)
         dropping.drops.push((x, y, id, g().frame_no))
         // (where they are, as the host says: taken so, they are not read)
         let paths = match v {
@@ -289,7 +289,7 @@ fn init {
         match v {
           Object(m) =>
             match m.get("text") {
-              Some(String(s)) if s != "" => words_let_go(num("x"), num("y"), s)
+              Some(String(s)) if s != "" => words_let_go(num("x") / window_zoom_drawn.val, num("y") / window_zoom_drawn.val, s)
               _ => ()
             }
           _ => ()

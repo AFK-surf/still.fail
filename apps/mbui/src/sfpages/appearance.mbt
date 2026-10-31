@@ -60,6 +60,23 @@ pub fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       })
     },
   ]
+  if @ui.window_zoom_supported() {
+    settings.push(fn() {
+      let zoom = @settings.pref(core, "windowZoom")
+      let label = if zoom == "" { "100%" } else { zoom + "%" }
+      let id = c.id("appearance/window-zoom")
+      @sf.setting(c, @sf.t("desktop.menu.zoom"), fn() {
+        if @sf.button(c, label, key="appearance/window-zoom") {
+          let choices = @sfbase.window_zoom_levels.map(fn(z) {
+            @sf.choice(z.0, (if z.0 == "" { "100" } else { z.0 }) + "%")
+          })
+          @sf.pick(@sf.t("desktop.menu.zoom"), choices, zoom, fn(value) {
+            @settings.set_pref(core, "windowZoom", value)
+          }, from=Of(id), search=false)
+        }
+      })
+    })
+  }
   // files dragged into a chat from outside (where they can be: @ui.takes_drops): named by their path (the default), or
   // sent as files
   if @ui.takes_drops() {

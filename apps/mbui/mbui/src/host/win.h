@@ -37,6 +37,8 @@ typedef struct {
 } mb_callbacks;
 
 extern mb_callbacks mb_cb;
+int32_t mb_host_window_key(int32_t code, int32_t mods);
+int32_t mb_host_mods_held(void);
 
 // renderer (win_render.cpp)
 int mb_render_init(void *hwnd);

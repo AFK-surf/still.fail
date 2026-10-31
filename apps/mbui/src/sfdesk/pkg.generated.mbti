@@ -440,6 +440,8 @@ pub fn wide_back(@sfbase.Source) -> (() -> Unit)?
 
 pub fn wide_takes_back(@sfbase.Source) -> Bool
 
+pub fn window_zoom_keys(@ui.Ctx, @sfbase.Source) -> Unit
+
 pub fn with_side(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, @sfbase.ChatRef, @sfbase.ChatView?, () -> Unit) -> Unit
 
 // Errors

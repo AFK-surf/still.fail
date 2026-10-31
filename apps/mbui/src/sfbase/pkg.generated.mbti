@@ -1783,6 +1783,8 @@ pub fn window_page(String) -> Page?
 
 pub fn window_text(Page) -> String?
 
+pub let window_zoom_levels : Array[(String, Double)]
+
 pub fn with_lingering(Reading, Array[Entry]) -> Array[Entry]
 
 pub let working_turn_ms : Double

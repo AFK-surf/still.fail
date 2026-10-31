@@ -53,6 +53,7 @@ pub fn Ctx::a11y_lines(self : Ctx) -> String {
     used[n] = true
     num[k] = n
     let (x, y, w, h) = s.rect
+    let z = window_zoom_drawn.val
     let (lo, at, hi) = match s.range {
       Some((lo, v, hi)) => (lo.to_string(), v.to_string(), hi.to_string())
       None => ("", "", "")
@@ -63,10 +64,10 @@ pub fn Ctx::a11y_lines(self : Ctx) -> String {
       s.id.to_string(),
       s.role.to_string(),
       a11y_flags(s),
-      a11y_length(x),
-      a11y_length(y),
-      a11y_length(w),
-      a11y_length(h),
+      a11y_length(x * z),
+      a11y_length(y * z),
+      a11y_length(w * z),
+      a11y_length(h * z),
       a11y_clean(s.label),
       a11y_clean(s.value),
       a11y_clean(s.description),

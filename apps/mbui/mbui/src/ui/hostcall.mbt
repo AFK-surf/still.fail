@@ -869,6 +869,8 @@ fn h_set_ime(
   a : Int,
   b : Int,
 ) -> Unit {
+  let z = window_zoom_drawn.val
+  let (x, y, w, h) = (x * z, y * z, w * z, h * z)
   match fake.val {
     Some(f) => {
       f.ime_active = active
@@ -883,6 +885,8 @@ fn h_set_ime(
 
 ///|
 fn h_text_menu(shown : Bool, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit {
+  let z = window_zoom_drawn.val
+  let (x, y, w, h) = (x * z, y * z, w * z, h * z)
   match fake.val {
     Some(f) => f.text_menu = (shown, x, y, w, h, can)
     None => @hostapi.text_menu(shown, x, y, w, h, can)
@@ -1595,24 +1599,28 @@ fn h_view_place(
   r3 : Double,
   shown : Bool,
 ) -> Unit {
+  let z = window_zoom_drawn.val
+  let (px, py, pw, ph) = (x * z, y * z, w * z, h * z)
+  let (pcx0, pcy0, pcx1, pcy1) = (cx0 * z, cy0 * z, cx1 * z, cy1 * z)
+  let (pr0, pr1, pr2, pr3) = (r0 * z, r1 * z, r2 * z, r3 * z)
   match fake.val {
     Some(f) => {
       f.views.push(
-        "place \{id} \{x} \{y} \{w} \{h} in \{cx0} \{cy0} \{cx1} \{cy1}" +
-        (if r0 == r1 && r1 == r2 && r2 == r3 {
-          if r0 > 0.0 {
-            " round \{r0}"
+        "place \{id} \{px} \{py} \{pw} \{ph} in \{pcx0} \{pcy0} \{pcx1} \{pcy1}" +
+        (if pr0 == pr1 && pr1 == pr2 && pr2 == pr3 {
+          if pr0 > 0.0 {
+            " round \{pr0}"
           } else {
             ""
           }
         } else {
-          " round \{r0} \{r1} \{r2} \{r3}"
+          " round \{pr0} \{pr1} \{pr2} \{pr3}"
         }) +
         (if shown { "" } else { " hidden" }),
       )
       f.view_at[id] = (dmax(x, cx0), dmax(y, cy0), dmin(x + w, cx1), dmin(y + h, cy1), shown)
     }
-    None => @hostapi.view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, r0, r1, r2, r3, shown)
+    None => @hostapi.view_place(id, px, py, pw, ph, pcx0, pcy0, pcx1, pcy1, pr0, pr1, pr2, pr3, shown)
   }
 }
 
@@ -2340,6 +2348,8 @@ fn h_window_open(what : String) -> Bool {
 
 ///|
 fn h_window_snap(x : Double, y : Double, w : Double, h : Double) -> Unit {
+  let z = window_zoom_drawn.val
+  let (x, y, w, h) = (x * z, y * z, w * z, h * z)
   match fake.val {
     Some(f) => f.snap = (x, y, w, h)
     None => @hostapi.window_snap(x, y, w, h)
