@@ -165,6 +165,9 @@ priv struct ViewBlock {
   /// its glyphs where they are before they are set on the pixels (instance, x, the line's baseline, the glyph's own
   /// offset from it), each set on them where the scene composes it, as an old view's are where they are painted
   glyphs : Array[(Int, Double, Double, Double)]
+  /// the glyphs it draws from, each where it was in the atlas as it was made (key, u, v): kept there as it is composed
+  /// frame after frame, made again once one is not (view_glyphs_held)
+  kept : Array[(Int, Double, Double)]
 }
 
 ///|
@@ -373,8 +376,9 @@ fn view_runs_measure(runs : Array[@view.WordsRun], look : @view.WordsLook, width
 }
 
 ///|
-/// The system's size of words changed (Ctx::font_scale, as a frame begins): the words of the window's tree measured and
-/// drawn again at it, as an old view's are laid out anew.
+/// How words are shaped changed for all of them (the system's size of words, Ctx::font_scale, as a frame begins; the
+/// faces given, faces.mbt words_forgotten): the words of the window's tree measured and drawn again so, as an old
+/// view's are laid out anew.
 fn view_words_rescaled() -> Unit {
   match view_app.val {
     Some(t) => t.words_again()
@@ -590,6 +594,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     view_brought(tree)
   }
   dr.targets_said = true
+  // (what is composed of content made before kept in the atlas, before anything this frame places a glyph)
+  view_glyphs_held(tree)
   let n0 = self.ninst
   tree.each_drawn_scaled(fn(c, x, y, a, s) {
     // (the root, the window, is drawn by nothing of its own)
@@ -646,6 +652,29 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
 }
 
 ///|
+/// As a frame's paint goes through the tree, before anything of it places a glyph: the glyphs each node's content
+/// composed in this frame (as it is drawn now: what is not drawn, gone or faded out, holds none) draws from kept in the
+/// atlas through this frame (Atlas::drawn: never emptied for another while drawn from), as glyphs an old view draws are
+/// as it draws them; content one of whose glyphs is no longer where it was (its plot emptied, the atlas made anew, or
+/// one there was no room for as it was made) made again as it is composed, never composed out of what the atlas now
+/// holds there instead.
+fn view_glyphs_held(tree : @view.Tree) -> Unit {
+  let stale : Array[@view.NodeId] = []
+  tree.each_drawn_scaled(fn(c, _x, _y, a, _s) {
+    if c.id.at == 0 || a <= 0.002 || c.hosted {
+      return
+    }
+    match view_blocks.get(c.id) {
+      Some(b) if !glyphs_still(b.kept) => stale.push(c.id)
+      _ => ()
+    }
+  })
+  for id in stale {
+    view_blocks.remove(id)
+  }
+}
+
+///|
 /// Content `c`'s instances made (its ground, its words) where it is its own (its top left at 0, 0, wholly opaque), out
 /// of the frame's: what is kept for it, composed wherever it is drawn (Ctx::view_blit).
 fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
@@ -661,6 +690,10 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   let mut glass_at = -1
   let mut cut = (0, 0)
   let glyphs : Array[(Int, Double, Double, Double)] = []
+  // (the glyphs it draws from, told as they are drawn: kept in the atlas as long as it is composed, view_glyphs_held)
+  let was_kept = glyphs_kept.val
+  let kept : Array[(Int, Double, Double)] = []
+  glyphs_kept.val = Some(kept)
   match c.glass {
     Some(gl) if solid => self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, gl.solid, 0.0, 0L, 1.0)
     Some(gl) => {
@@ -769,7 +802,21 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   }
   inst_owners.tree_words[c.id] = c.words
   self.ninst = start
-  { inst, cells, marks, segs, glass_at, shares: c.glass.map_or(false, fn(g) { g.shares_capture }), solid, cut, w: c.w, h: c.h, glyphs: glyphs.map(fn(g) { (g.0 - start, g.1, g.2, g.3) }) }
+  glyphs_kept.val = was_kept
+  {
+    inst,
+    cells,
+    marks,
+    segs,
+    glass_at,
+    shares: c.glass.map_or(false, fn(g) { g.shares_capture }),
+    solid,
+    cut,
+    w: c.w,
+    h: c.h,
+    glyphs: glyphs.map(fn(g) { (g.0 - start, g.1, g.2, g.3) }),
+    kept,
+  }
 }
 
 ///|

@@ -1424,3 +1424,152 @@ fn looked_preview(look : @signals.Signal[String], platform : Int) -> @ui.Tester 
   t.run_for(@ui.move_most_ms)
   t
 }
+
+///|
+/// A picture opened on a fold half open (its crease across, so a small screen however wide: tabletop.mbt), `w` wide,
+/// its whole held by the test while `hold` (how much has come told by it: `said`, the whole given: `given`).
+fn folded_preview(
+  w : Double,
+  hold : Bool,
+  said : Map[String, (Json) -> Unit],
+  given : Map[String, () -> Unit],
+) -> @ui.Tester {
+  new_run()
+  let base = fixture("chat-preview-image")
+  let src : Source = {
+    ..base,
+    read_going: fn(name, params, on_value, done) {
+      if hold && name == "station.file" {
+        let file = text(Some(params), "name")
+        said[file] = on_value
+        given[file] = fn() { (base.read_going)(name, params, on_value, done) }
+      } else {
+        (base.read_going)(name, params, on_value, done)
+      }
+    },
+  }
+  preview_src.val = Some(src)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=626.0, platform=1)
+  t.post(@hostapi.system_channel, "{\"fold\":{\"hinge\":\"half\",\"divisions\":[{\"x\":0,\"y\":300,\"w\":\{w},\"h\":30}]}}")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+test "viewer on the tree, a fold half open wider than a phone: its floating bar its nodes, its kind and size after its name and its zoom (−, its per cent, +, 1:1) with its tools, none of the old bar's; coming, no zoom; made narrower than a phone, the zoom and the kind and size gone, the bar the same nodes" {
+  let said : Map[String, (Json) -> Unit] = {}
+  let given : Map[String, () -> Unit] = {}
+  let t = folded_preview(890.0, true, said, given)
+  assert_true(@sf.layout(890.0) is Small, msg="a small screen however wide")
+  let v = viewer.get().unwrap()
+  assert_true(v.coming() && v.in_tree, msg="coming, the tree's viewer")
+  let zoom = [
+    @sf.t("web-main.preview.zoomOutKey"),
+    @sf.t("web-main.preview.fitKey"),
+    @sf.t("web-main.preview.zoomInKey"),
+    @sf.t("web-main.preview.actualKey"),
+  ]
+  for l in zoom {
+    assert_eq(t.all(Button, label=l).length(), 0, msg="coming: no \{l}")
+  }
+  (given.get(v.file.name).unwrap())()
+  t.draw()
+  t.run_for(@kit.progress_known_ms)
+  assert_true(!v.coming(), msg="whole")
+  let all = zoom.copy()
+  all.push_iter([@sf.t("web-main.annotate.image"), @sf.t("common.copy"), @sf.t("web-main.preview.download"), @sf.t("web-main.preview.closeKey")].iter())
+  for l in all {
+    assert_eq(t.all(Button, label=l).length(), 1, msg="\{l}: one, the node's: \{t.all(Button, label=l).length()}")
+  }
+  let meta = @sfbase.vf_meta(v, preview_src.val.unwrap())
+  assert_true(meta != "" && t.find(meta) is Some(_), msg="its kind and size after its name: \{meta}")
+  // (1:1 pressed: its per cent there once its glide has it there)
+  pressed(t, Button, @sf.t("web-main.preview.actualKey"))
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("100%") is Some(_), msg="1:1")
+  // (narrower than a phone, the same pose: the zoom and the kind and size gone, the rest the same nodes)
+  t.resize(600.0, 626.0)
+  t.post(@hostapi.system_channel, "{\"fold\":{\"hinge\":\"half\",\"divisions\":[{\"x\":0,\"y\":300,\"w\":600,\"h\":30}]}}")
+  t.draw()
+  for l in zoom {
+    assert_eq(t.all(Button, label=l).length(), 0, msg="narrow: no \{l}")
+  }
+  assert_true(t.find(meta) is None, msg="narrow: no kind and size")
+  assert_eq(t.all(Button, label=@sf.t("common.copy")).length(), 1, msg="narrow: its tools still")
+  assert_true(viewer.get().unwrap().in_tree, msg="the same viewer")
+  // (wide again: its zoom back, one of each, its kind and size back, still none of the old bar's)
+  t.resize(890.0, 626.0)
+  t.post(@hostapi.system_channel, "{\"fold\":{\"hinge\":\"half\",\"divisions\":[{\"x\":0,\"y\":300,\"w\":890,\"h\":30}]}}")
+  t.draw()
+  let again = zoom.copy()
+  again.push_iter([@sf.t("common.copy"), @sf.t("web-main.preview.closeKey")].iter())
+  for l in again {
+    assert_eq(t.all(Button, label=l).length(), 1, msg="wide again: \{l} one: \{t.all(Button, label=l).length()}")
+  }
+  assert_true(t.find(meta) is Some(_), msg="wide again: its kind and size")
+  assert_true(viewer.get().unwrap().in_tree, msg="the same viewer")
+}
+
+///|
+/// How wide the floating bar is drawn (its glass, along the window's top).
+fn head_drawn_w() -> Double {
+  let mut w = 0.0
+  for d in @ui.view_tree().unwrap().drawn() {
+    if d.glass is Some(_) && d.y < 120.0 && d.h <= 60.0 && d.w > w {
+      w = d.w
+    }
+  }
+  w
+}
+
+///|
+/// A fold half open wider than a phone, its picture whole: zoomed to the most it zooms to (1600%) and back to fitted,
+/// each by its tools' way (`frames`: gliding, the frames drawn to its end; else at once, no frame between the two): how
+/// wide its per cent tool and the bar are fitted, at the most, and fitted again.
+fn zoomed_and_back(frames : Bool) -> ((Double, Double), (Double, Double), (Double, Double)) raise {
+  let t = folded_preview(890.0, false, {}, {})
+  let v = viewer.get().unwrap()
+  let fit_key = @sf.t("web-main.preview.fitKey")
+  let widths = fn() raise { (t.get(Button, label=fit_key).rect.2, head_drawn_w()) }
+  let fitted = widths()
+  let z = v.zoom
+  if frames {
+    z.zoom_to(z.max_scale(), z.bw / 2.0, z.bh / 2.0, true, at=t.time())
+    t.run_for(z.glide_ends() - t.time() + 1.0)
+  } else {
+    z.zoom_to(z.max_scale(), z.bw / 2.0, z.bh / 2.0, false, at=t.time())
+    t.draw()
+  }
+  let most = widths()
+  if frames {
+    z.reset(at=t.time())
+    t.run_for(z.glide_ends() - t.time() + 1.0)
+  } else {
+    z.fit_now(at=t.time())
+    t.draw()
+  }
+  (fitted, most, widths())
+}
+
+///|
+test "viewer on the tree, a fold half open wider than a phone: zoomed to 1600% its per cent's tool wider, the bar wider with it; fitted again, the bar as wide as it was at its widest (never narrower once open); gliding there and back, or at once" {
+  for frames in [true, false] {
+    let (fitted, most, back) = zoomed_and_back(frames)
+    assert_true(most.0 > fitted.0, msg="frames \{frames}: 1600%'s tool wider than 100%'s: \{fitted} then \{most}")
+    assert_true(most.1 > fitted.1, msg="frames \{frames}: the bar wider with it")
+    assert_eq(back.1, most.1, msg="frames \{frames}: fitted again, the bar as wide as at its widest: \{back}")
+  }
+}
+
+///|
+test "viewer on the tree, a fold half open wider than a phone: zoomed to 1600% and fitted again with no frame between: the bar as wide as 1600% laid it out, as told" {
+  let (_, most, _) = zoomed_and_back(false)
+  let t = folded_preview(890.0, false, {}, {})
+  let z = viewer.get().unwrap().zoom
+  z.zoom_to(z.max_scale(), z.bw / 2.0, z.bh / 2.0, false, at=t.time())
+  z.fit_now(at=t.time())
+  t.draw()
+  assert_eq(head_drawn_w(), most.1, msg="its widest kept from the 1600% told between frames")
+}

@@ -659,6 +659,38 @@ pub fn Zoom::step(self : Zoom) -> Unit {
 }
 
 ///|
+/// When the glide it was told to go on has it there (the frames' clock, ms; -1 none going), followed: told again as it
+/// is told otherwise (Zoom::told). What shows how big it is (a per cent) reads the clock until then, nothing after.
+pub fn Zoom::glide_ends(self : Zoom) -> Double {
+  self.told()
+  if !self.gliding || !self.glide.on {
+    return -1.0
+  }
+  self.glide.end()
+}
+
+///|
+/// How big it was shown as it was last told and how big it was told to be (a glide it was told: from where it set out,
+/// to where it goes; else where it is, twice), followed: told again as it is told otherwise (Zoom::told). What is laid
+/// out by how big it is (a per cent's room) by these, as they are told, never by the way between.
+pub fn Zoom::scales_told(self : Zoom) -> (Double, Double) {
+  self.told()
+  if self.gliding {
+    (self.g_from[0], self.g_to[0])
+  } else {
+    (self.scale, self.scale)
+  }
+}
+
+///|
+/// How big it is shown as what is drawn is drawn at `now` (a node's drawn_at: Zoom::glide_ends' reader), as it was
+/// told: a glide's way read at that moment while it goes, where it was told to go after.
+pub fn Zoom::scale_shown(self : Zoom, now : Double) -> Double {
+  self.told()
+  self.scale_at(now)
+}
+
+///|
 /// When a fling has it where it rests (the frames' clock, ms; -1 none going).
 pub fn Zoom::fling_ends(self : Zoom) -> Double {
   if !self.flinging {

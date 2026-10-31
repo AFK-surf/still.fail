@@ -2026,7 +2026,7 @@ pub fn tool_button(@ui.Ctx, String, String, String, on_press~ : () -> Unit, drop
 
 pub fn tool_mark(@ui.Ctx, String, Double) -> Unit
 
-pub fn tool_node(@view.View, () -> ToolSaid, () -> ViewerInk, @view.Live[Double], () -> Unit, tip? : TipLayer) -> @view.View
+pub fn tool_node(@view.View, () -> ToolSaid, () -> ViewerInk, @view.Live[Double], () -> Unit, tip? : TipLayer, words? : () -> String, room? : () -> String, wide? : Bool) -> @view.View
 
 pub fn tool_of(String, () -> Unit, drop? : Int32, instead? : Array[MenuItem]) -> Tool
 
@@ -2267,6 +2267,10 @@ pub let workspace_letter : @ui.TextStyle
 pub let workspace_tile : @ui.Style
 
 pub let workspace_tile_mark : Double
+
+pub fn zoom_room(@kit.Zoom) -> String
+
+pub fn zoom_tools_node(@view.View, @kit.Zoom, () -> ViewerInk, @view.Live[Double], tip? : TipLayer) -> @view.View
 
 // Errors
 
