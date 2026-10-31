@@ -1731,11 +1731,12 @@ fn old_taker_at(tree : @view.Tree, island : @view.NodeId, x : Double, y : Double
 }
 
 ///|
-/// A hold the window's tree handed on (Tree::on_through), as one change of its moment, the cover's hold ended: to a
-/// node of the tree's, the finger's events its from now; to an old view, the old frame told the finger went down when
-/// it did, where it is now (a press of the old frame's own from here, as long held: what a long press picks, picked),
-/// its events the old view's from now.
-fn view_through(to : @view.Target, x : Double, y : Double, down_at : Double) -> Unit {
+/// A finger the window's tree handed on (Tree::on_through), as one change of its moment, the cover's hold ended: to a
+/// node of the tree's, the finger's events its from now; to an old view, its events the old view's from now, the old
+/// frame told: held long (`why` Held), the finger went down when it did, where it is now (a press of the old frame's own
+/// from here, as long held: what a long press picks, picked); moved before a hold (Moved), it went down when and where
+/// it did, then moved to where it is now (no hold of anything's: what it is, the old frame's claim says from there).
+fn view_through(to : @view.Target, x : Double, y : Double, down_at : Double, why : @view.Handed) -> Unit {
   match to {
     Dragged(u) => {
       view_held.val = Some(Dragging(u))
@@ -1743,14 +1744,26 @@ fn view_through(to : @view.Target, x : Double, y : Double, down_at : Double) -> 
     }
     Hosted(island) => {
       let c = g()
-      let owner = old_press_owner(c, x, y, island)
+      // (what of it the finger went down on: where it is, held; where it went down, moved)
+      let (px, py) = match why {
+        Moved(x0, y0) => (x0, y0)
+        Held => (x, y)
+      }
+      let owner = old_press_owner(c, px, py, island)
       let part = match owner {
         Some(o) if !old_whole.val => old_part_of(o)
         _ => -1
       }
       view_held.val = Some(Old(part, owner))
       view_input_went(part)
-      old_pointer_now(0, x, y, 0, 0, down_at)
+      match why {
+        Moved(x0, y0) => {
+          old_pointer_now(0, x0, y0, 0, 0, down_at)
+          old_pointer_now(1, x, y, 0, 0, view_moment())
+          return
+        }
+        Held => old_pointer_now(0, x, y, 0, 0, down_at)
+      }
       // (a long press already, as the tree found it: what it is on held long as the next build sees it, its press no
       // click when let go, whatever frames come between; handed to what of the old views it went down on, as this press)
       if c.held_through() {

@@ -152,6 +152,13 @@ pub fn Ctx::drag_of(self : Ctx, id : Int) -> Drag? {
 }
 
 ///|
+/// Whether a press going down now is to hold drag area `d` still before it drags it (Ctx::drag_on's `hold`, a
+/// finger's): what this press is, as it goes down, before anything of the one before is let go (drag_down sets it so).
+fn waits_held(d : Drag) -> Bool {
+  d.hold && pointing() is Finger
+}
+
+///|
 /// Whether a finger is yet to hold drag area `d` still before it drags it (Ctx::drag_on's `hold`): not its press till
 /// then.
 fn holds_first(d : Drag) -> Bool {
@@ -204,7 +211,7 @@ fn drag_down(id : Int, x : Double, y : Double) -> Bool {
       d.down = true
       d.moving = false
       // (a finger's as it went down: what the press is, whatever comes after)
-      d.waits = d.hold && pointing() is Finger
+      d.waits = waits_held(d)
       d.held = false
       d.x0 = x
       d.y0 = y

@@ -486,6 +486,8 @@ pub let edge_line_steps : Int32
 
 pub fn edge_look(@ui.Ctx, String, over~ : Bool, on~ : Bool, active~ : Bool, line? : Bool) -> Unit
 
+pub fn edge_node(@view.View, () -> String, () -> Double, () -> Double, () -> Double, @view.Side, (Resized, Double) -> Unit, (Bool) -> Unit, on_beside? : (Double) -> Bool, beside? : (Double) -> Unit, tips? : TipLayer, side? : @view.Side) -> @view.View
+
 pub fn edge_reach(Double) -> (Double, Double)
 
 pub fn edge_row(Surface, Double, first? : Bool, last? : Bool) -> @ui.Style
@@ -1966,7 +1968,7 @@ pub fn tip_look(@ui.Ctx, String, String) -> Unit
 
 pub let tip_max : @ui.Len
 
-pub fn tip_node(TipLayer, @view.View, () -> String, side? : @view.Side) -> TipHand
+pub fn tip_node(TipLayer, @view.View, () -> String, side? : @view.Side, delay? : Double, skip? : Bool, gap? : Double, at_pointer? : Bool) -> TipHand
 
 pub let title : @ui.TextStyle
 

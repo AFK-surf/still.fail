@@ -142,10 +142,11 @@ fn claim_down(c : Ctx, x : Double, y : Double) -> Unit {
 }
 
 ///|
-/// Whether `id` is a drag area a finger is yet to hold still before it is the press's (Ctx::drag_on's `hold`).
+/// Whether `id` is a drag area the press going down now is to hold still before it is the press's (Ctx::drag_on's
+/// `hold`): this press's, as it goes down (asked before drag_down sets it, not what the one before left).
 fn claim_holds_first(id : Int) -> Bool {
   match drags.get(id) {
-    Some(d) => holds_first(d)
+    Some(d) => waits_held(d)
     None => false
   }
 }

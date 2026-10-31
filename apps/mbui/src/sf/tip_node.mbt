@@ -32,8 +32,20 @@ let tip_out_scale : Double = 0.97
 
 ///|
 /// A tip saying `label` (as it changes; none said: no tip) of the control `anchor`, on its `side`, in `tips` (its
-/// layer over all of the window). What shows it and what shuts it as the file's head says.
-pub fn tip_node(tips : TipLayer, anchor : @view.View, label : () -> String, side? : @view.Side = Bottom) -> TipHand {
+/// layer over all of the window). What shows it and what shuts it as the file's head says. `delay`: how long the
+/// pointer rests on it before it shows; `skip`: shown at once where another of the layer went a moment before; `gap`:
+/// how far from what it is beside; `at_pointer`: beside the pointer as it moves along the control, its middle level with
+/// it (a tall thin thing's: an edge, usePointerTip), not the control's middle.
+pub fn tip_node(
+  tips : TipLayer,
+  anchor : @view.View,
+  label : () -> String,
+  side? : @view.Side = Bottom,
+  delay? : Double = tip_delay_ms,
+  skip? : Bool = true,
+  gap? : Double = tip_gap,
+  at_pointer? : Bool = false,
+) -> TipHand {
   let open : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
   // (a finger held on its control: Held while it is down, Lifted a while once it is let go, till then or the next
   // press, wherever it lands; Free otherwise)
@@ -62,7 +74,9 @@ pub fn tip_node(tips : TipLayer, anchor : @view.View, label : () -> String, side
       }
     })
     |> ignore
-    holder.show(fn() { open.get() }, leave=@kit.pop_out_ms, fn(t) { tip_look_node(t, anchor_id, side, label, fade) })
+    holder.show(fn() { open.get() }, leave=@kit.pop_out_ms, fn(t) {
+      tip_look_node(t, anchor_id, side, label, fade, gap, at_pointer)
+    })
     true
   }
   let stop_rest = fn() {
@@ -128,13 +142,13 @@ pub fn tip_node(tips : TipLayer, anchor : @view.View, label : () -> String, side
       set_open(false)
     } else if focused || @signals.untracked(fn() { open.get() }) {
       set_open(true)
-    } else if at - tips.went_at <= @kit.tooltip_skip_ms {
+    } else if skip && at - tips.went_at <= @kit.tooltip_skip_ms {
       // (another of the layer's went a moment ago: at once)
       set_open(true)
     } else {
       // (rested on a while from now: shown then, as it is then, a pointer over it carrying no press, taking input)
       rest.val = Some(
-        anchor.at_moment(at + tip_delay_ms, fn() {
+        anchor.at_moment(at + delay, fn() {
           let (over, pressed, _, takes, says, _) = @signals.untracked(state)
           if over && !pressed && takes && says && !shut.val {
             set_open(true)
@@ -268,12 +282,20 @@ fn TipFade::shown(self : TipFade, t : @view.View) -> Double {
 ///|
 /// A tip's node `t` as tip_look draws it (tip_box, tip_words), beside `anchor` on `side`, saying `label`: its look and
 /// its words set as the window's theme says, as that changes; in and out as `fade` says.
-fn tip_look_node(t : @view.View, anchor : @view.NodeId, side : @view.Side, label : () -> String, fade : TipFade) -> Unit {
+fn tip_look_node(
+  t : @view.View,
+  anchor : @view.NodeId,
+  side : @view.Side,
+  label : () -> String,
+  fade : TipFade,
+  gap : Double,
+  at_pointer : Bool,
+) -> Unit {
   let theme = fn() { @ui.tree_theme() }
   let px = @ui.Space::px(S2_5)
   let py = @ui.Space::px(S1_25)
   t
-  .beside(anchor, side~, along=Middle, offset=tip_gap)
+  .beside(anchor, side~, along=Middle, offset=gap, at_pointer~)
   .padding(Is((px, py, px, py)))
   .max_width(Is(Some(tip_widest)))
   .radius(By(fn() { theme().corner(Lg) }))
