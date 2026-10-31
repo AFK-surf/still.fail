@@ -74,6 +74,8 @@ priv struct Composing {
   taking : @signals.Signal[Bool]
   /// its 抄送 menu open (cc_chooser)
   mut cc_open : Bool
+  /// the cache choice menu open for this notice (composer_notice)
+  cold_open : @signals.Signal[String]
   /// the shape its field's hint was last shown on (composer_hint): changed, the hint waits till it is there
   mut hint_shape : String
   /// whether it is a box or a capsule and how roomy, as the frame began and as built now (frame, then, now): what opens
@@ -121,6 +123,7 @@ let composing : Composing = {
   hint_shown: @signals.signal("", same=fn(a, b) { a == b }),
   taking: @signals.signal(false, same=fn(a, b) { a == b }),
   cc_open: false,
+  cold_open: @signals.signal("", same=fn(a, b) { a == b }),
   hint_shape: "",
   opened: (-1, "", ""),
   wanted: false,
@@ -154,6 +157,7 @@ fn composing_reset() -> Unit {
   composing.menu_up = false
   ref_keyed.val = ""
   composing.cc_open = false
+  composing.cold_open.set("")
   composing.hint_shape = ""
   composing.opened = (-1, "", "")
   composing.wanted = false
@@ -2130,7 +2134,7 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
       Some((restore, if busy { "web-main.archived.restoring" } else { "web-main.archived.restore" }, "web-main.archived.restore", busy || v.offline)),
       failed=composing.restore_errors.get(key),
       chat=key,
-    )
+    ) |> ignore
   }
   match v.cache_cold {
     Some((session, status, detail, afresh)) if !v.archived => {
@@ -2138,13 +2142,19 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
       let fresh = c.id("composer/afresh")
       let doing = "session.settings/" + r.station + "/" + session
       let busy = @sfbase.doing(doing)
-      // (the one not taken, pressed: taken from its next start)
-      let (other, words) = if afresh { (go_on, "web-main.chat.goOn") } else { (fresh, "web-main.chat.afresh") }
-      if !busy && !v.offline && c.clicked(other) {
-        let params : Json = { "station": Json::string(r.station), "key": Json::string(session), "afresh": Json::boolean(!afresh) }
-        c.tell("composer/afresh", fn() { @sfbase.act(src, @sf.t(words), doing, "session.settings", params) })
+      let chosen = composer_notice(c, width, "wait", status, None, chat=key, choices=[(go_on, "web-main.chat.goOn", !afresh), (fresh, "web-main.chat.afresh", afresh)], held=busy || v.offline, summary=Some((status, detail)))
+      match chosen {
+        Some(value) => {
+          composing.cold_open.set("")
+          let next = value == fresh.to_string()
+          if !busy && !v.offline && next != afresh && (value == fresh.to_string() || value == go_on.to_string()) {
+            let words = if next { "web-main.chat.afresh" } else { "web-main.chat.goOn" }
+            let params : Json = { "station": Json::string(r.station), "key": Json::string(session), "afresh": Json::boolean(next) }
+            c.tell("composer/afresh", fn() { @sfbase.act(src, @sf.t(words), doing, "session.settings", params) })
+          }
+        }
+        None => ()
       }
-      composer_notice(c, width, "wait", status, None, chat=key, choices=[(go_on, "web-main.chat.goOn", !afresh), (fresh, "web-main.chat.afresh", afresh)], held=busy || v.offline, summary=Some((status, detail)))
     }
     _ => ()
   }
@@ -2158,7 +2168,7 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
           @sf.t("web-main.chat.offline")
         }
     }
-    composer_notice(c, width, "unplug", said, None, icon=if v.updating { "updating" } else { "unplug" }, chat=key)
+    composer_notice(c, width, "unplug", said, None, icon=if v.updating { "updating" } else { "unplug" }, chat=key) |> ignore
   }
   notices_gone(c, width, key, [v.archived, v.cache_cold is Some(_) && !v.archived, v.offline])
 }
@@ -2174,7 +2184,7 @@ fn notices_gone(c : @ui.Ctx, width : Double, chat : String, now : Array[Bool]) -
     match composing.notices_said.get("composer/notice/" + chat + "/" + mark) {
       Some((said, offer, failed, icon, choices, summary)) => {
         let offer = offer.map(fn(o) { (o.0, o.1, o.2, true) })
-        composer_notice(c, width, mark, said, offer, failed?=failed, icon~, chat~, gone=true, choices~, held=true, summary~)
+        composer_notice(c, width, mark, said, offer, failed?=failed, icon~, chat~, gone=true, choices~, held=true, summary~) |> ignore
       }
       None => ()
     }
@@ -2187,9 +2197,9 @@ fn notices_gone(c : @ui.Ctx, width : Double, chat : String, now : Array[Bool]) -
 /// update's mark turning) stands over the composer's ＋ in the middle of its round start, its words quiet where the
 /// composer's are, what it offers at its end (`offer`: its target, its words' key now, its name's key for what reads
 /// the screen, whether it is out of reach) in the words' colour, a step heavier, or a choice of two or more
-/// (`choices`: each its target, its words' key, whether it is the one taken: grouped in a quiet track, with the chosen
-/// option lifted; `held`, out of reach); why what it offers failed (`failed`) under its words, red. `summary`
-/// holds the status and detail as separate words when the core supplies them.
+/// (`choices`: each its target, its words' key, whether it is the one taken; `held`, out of reach). The chosen
+/// value is shown in a quiet menu control. Why what it offers failed (`failed`) is under its words, red. `summary`
+/// holds the status and detail as separate words when the core supplies them. The choice's value comes back.
 fn composer_notice(
   c : @ui.Ctx,
   width : Double,
@@ -2203,7 +2213,7 @@ fn composer_notice(
   choices? : Array[(Int, String, Bool)] = [],
   held? : Bool = false,
   summary? : (String, String)? = None,
-) -> Unit {
+) -> String? {
   let icon = icon.unwrap_or(mark)
   // shown while its chat is, it comes in as what is put in the composer does, one its chat opens with there at once;
   // gone, it leaves as a row of a list does, drawn as it was (notices_gone)
@@ -2214,18 +2224,15 @@ fn composer_notice(
   let look = @motion.presence(c, key, !gone, initial=composing.notices_new, enter=@sf.waiting_in, exit=@sf.leave)
   if gone && look is None {
     composing.notices_said.remove(key)
-    return
+    return None
   }
   let t = @sf.theme()
   // its mark over the composer's ＋, in the middle of its round start: in a square as high as it is (a line and its
   // padding), its ends drawn in from the composer's as far as that takes (2026-10-29 the user: 圆角往里缩, 图标依然对准
   // 加号; as wide as the composer, its mark stood 7.5 off the middle of its round end)
-  // The choice track is taller than a line of words. If everything fits together, that track is the line's height;
-  // otherwise the first line is only words and the choice takes the line below it.
+  // If the summary and the chooser fit together, they share a line. Otherwise the chooser follows the summary.
   let text_line = if choices.is_empty() { t.t.meta_line } else { c.sp(t.t.meta_line) }
-  let option_high = dmax(@ui.Space::S7.px(), text_line)
-  let choice_high = option_high + 2.0 * @ui.Space::S0_5.px()
-  let inline_high = dmax(text_line, choice_high)
+  let inline_high = dmax(text_line, @ui.Space::S7.px())
   let inline_side = inline_high + 2.0 * composer_notice_pad
   let inline_inset = capsule_pad_alone + (t.round.side + 1.0) / 2.0 - inline_side / 2.0
   let beside = if choices.is_empty() {
@@ -2235,10 +2242,10 @@ fn composer_notice(
       Some((status, detail)) => c.words_across(status, composer_notice_status) + @ui.Space::S2.px() + c.words_across(detail, composer_notice_flow_words)
       None => c.words_across(said, composer_notice_flow_words)
     }
-    let choice_width = choices.fold(init=2.0 * @ui.Space::S0_5.px(), fn(w, choice) {
-      w + c.words_across(@sf.t(choice.1), composer_notice_button) + 2.0 * @ui.Space::S2.px()
-    }) + (choices.length() - 1).to_double() * @ui.Space::S0_5.px()
-    inline_side + summary_width + @ui.Space::S3.px() + choice_width + @ui.Space::S2.px() <= width - 2.0 * inline_inset
+    let choice_width = choices.fold(init=0.0, fn(w, choice) {
+      dmax(w, c.words_across(@sf.t(choice.1), composer_notice_choice_words))
+    }) + 2.0 * @ui.Space::S2.px() + @ui.Space::S1_25.px() + 12.0
+    inline_side + summary_width + @ui.Space::S3.px() + choice_width + @ui.Space::S4.px() <= width - 2.0 * inline_inset
   }
   let line_high = if beside { inline_high } else { text_line }
   let side = line_high + 2.0 * composer_notice_pad
@@ -2272,32 +2279,38 @@ fn composer_notice(
       }
     }) |> ignore
   }
-  let draw_choices = fn(fill : Bool) {
-    c.box(style=if fill { composer_notice_choices.then(@ui.style(w=@sf.grow)) } else { composer_notice_choices }, keep=fill, fn() {
-      for choice in choices {
-        let (id, words, taken) = choice
-        let option = composer_notice_choice.then(@ui.style(h=Fixed(option_high)))
-        let b = c.box(id~, selected=taken, style=if fill { option.then(@ui.style(w=@sf.grow)) } else { option }, keep=fill, fn() {
-          c.text(@sf.t(words), style=if taken { composer_notice_button } else { composer_notice_other }) |> ignore
-        })
-        c.semantics(b, Radio, id~, label=@sf.t(words), check=if taken { On } else { Off }, disabled=held && !taken)
-      }
-    }) |> ignore
+  let selected : Ref[String?] = Ref(None)
+  let draw_choice = fn() {
+    let current = choices.fold(init="", fn(words, choice) {
+      if choice.2 { @sf.t(choice.1) } else { words }
+    })
+    let entries = choices.map(fn(choice) {
+      @kit.menu_radio(choice.0.to_string(), choice.2, label=@sf.t(choice.1), disabled=held)
+    })
+    let choice_key = key + "/choice"
+    let menu = @sf.chooser(
+      c, choice_key, current, entries,
+      fn() { composing.cold_open.get() == choice_key },
+      fn(open) {
+        if open { composing.cold_open.set(choice_key) }
+        else if composing.cold_open.get() == choice_key { composing.cold_open.set("") }
+      },
+      side=Top, disabled=held,
+    )
+    selected.val = menu.chosen
   }
-  // Beside the words, the track is inset as far from the end as it is from the top and bottom, concentric with it.
-  let box_style = if beside { composer_notice_box.then(composer_notice_inline_end) } else { composer_notice_box }
-  let b = c.box(style=box_style.then(round), glass=@sf.glass_floating(), fn() {
+  let b = c.box(style=composer_notice_box.then(round), glass=@sf.glass_floating(), fn() {
     if choices.length() > 0 {
       if beside {
         c.box(style=composer_notice_flow, fn() {
           draw_title()
-          draw_choices(false)
+          draw_choice()
         }) |> ignore
       } else {
         draw_title()
         c.box(style=composer_notice_choice_line, fn() {
           c.box(style=@ui.style(w=Fixed(side)), fn() {  }) |> ignore
-          draw_choices(true)
+          draw_choice()
         }) |> ignore
       }
     } else {
@@ -2331,6 +2344,7 @@ fn composer_notice(
   }
   // over a chat's messages, as the composer: their scroll bar keeps clear of it
   c.floats_over(b)
+  selected.val
 }
 
 ///|
@@ -2339,11 +2353,6 @@ fn composer_notice(
 /// what it offers 16 from its end, 8 over and under its words, 8 over the composer.
 // kept across runs: a value (no field of it changes)
 let composer_notice_box : @ui.Style = @ui.css("mb=S2 pr=S4 py=S2 gap=S1")
-
-///|
-/// The choice track's end and the notice's round end are concentric on a single line.
-// kept across runs: a value (no field of it changes)
-let composer_notice_inline_end : @ui.Style = @ui.css("pr=S2")
 
 ///|
 /// How far a notice's line is in from its top and bottom (its box's py=S2).
@@ -2369,7 +2378,7 @@ let composer_notice_offer : @ui.Style = @ui.css("pl=S3")
 let composer_notice_flow : @ui.Style = @ui.css("row w=Full gap=S3 justify=JBetween align=ACenter")
 
 ///|
-/// A wrapped choice fills its line, starting under the summary rather than under the mark.
+/// A wrapped choice starts under the summary rather than under the mark.
 // kept across runs: a value (no field of it changes)
 let composer_notice_choice_line : @ui.Style = @ui.css("row w=Full")
 
@@ -2397,19 +2406,9 @@ let composer_notice_status : @ui.TextStyle = @ui.text_style(size=Meta, weight=Me
 let composer_notice_flow_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=true)
 
 ///|
-/// A choice a line offers: a quiet track around its options.
+/// The chooser's own text style, used to measure its widest possible label before placing it.
 // kept across runs: a value (no field of it changes)
-let composer_notice_choices : @ui.Style = @ui.css("row p=S0_5 gap=S0_5 radius=Full bg=A(Fg,O5)")
-
-///|
-/// An option of it: the chosen one lifted from the track, with room around either to press.
-// kept across runs: a value (no field of it changes)
-let composer_notice_choice : @ui.Style = @ui.css("row px=S2 radius=Full align=ACenter justify=JCenter hovered{bg=Hover} selected{bg=Lifted}")
-
-///|
-/// Both labels keep their width when the choice changes; the other remains quiet.
-// kept across runs: a value (no field of it changes)
-let composer_notice_other : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Muted)
+let composer_notice_choice_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, wrap=false, color=Muted)
 
 ///|
 /// Its words: the ui size, muted, wrapped in the rest of the line.

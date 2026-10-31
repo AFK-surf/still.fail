@@ -175,7 +175,7 @@ test "an archived chat's restore failing says why under it, in red; tapped again
 }
 
 ///|
-test "its agent's cache over: said over the composer, 接着聊 taken, 换新上下文 takes going on afresh, not asked again meanwhile" {
+test "its agent's cache over: the current choice opens the choices and changing it asks once" {
   let calls : Array[Made] = []
   let t = fake_core(calls, over=fn(name, tp) {
     if name != "chat" {
@@ -188,19 +188,22 @@ test "its agent's cache over: said over the composer, 接着聊 taken, 换新上
   })
   assert_true(t.find("缓存已过期") is Some(_))
   assert_true(t.find("重读约 $1.49") is Some(_))
-  assert_true(t.get(Radio, label="接着聊").check is Some(On))
-  assert_true(t.get(Radio, label="换新上下文").check is Some(Off))
-  t.tap_text("接着聊")
+  t.click(Button, label="接着聊")
+  assert_true(t.get(MenuItemRadio, label="接着聊").check is Some(On))
+  assert_true(t.get(MenuItemRadio, label="换新上下文").check is Some(Off))
+  t.click(MenuItemRadio, label="接着聊")
   t.draw()
   assert_eq(named(calls, "session.settings").length(), 0, msg="the one taken: nothing to ask")
-  t.tap_text("换新上下文")
+  t.run_for(@kit.pop_out_ms)
+  t.click(Button, label="接着聊")
+  t.click(MenuItemRadio, label="换新上下文")
   t.draw()
   let asked = named(calls, "session.settings")
   assert_eq(asked.length(), 1)
   assert_eq(text(Some(asked[0].params), "key"), "s-c1")
   assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(true)))
-  t.tap_text("换新上下文")
   t.draw()
+  assert_true(t.get(Button, label="接着聊").disabled, msg="the choice is held while the change is on its way")
   assert_eq(named(calls, "session.settings").length(), 1, msg="on its way: not asked again")
 }
 
@@ -222,12 +225,33 @@ test "its agent's cache over, set to go on afresh: 换新上下文 taken, 接着
   })
   assert_true(t.find("缓存已过期") is Some(_))
   assert_true(t.find("重读约 $1.49") is Some(_))
-  assert_true(t.get(Radio, label="换新上下文").check is Some(On))
-  t.tap_text("接着聊")
+  t.click(Button, label="换新上下文")
+  assert_true(t.get(MenuItemRadio, label="换新上下文").check is Some(On))
+  t.click(MenuItemRadio, label="接着聊")
   t.draw()
   let asked = named(calls, "session.settings")
   assert_eq(asked.length(), 1)
   assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(false)))
+}
+
+///|
+test "an offline station's cache choice stays visible but cannot be opened" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" { return tp }
+    match tp.value {
+      Some(Object(o)) => {
+        let o2 = o.copy()
+        o2["cacheCold"] = { "session": "s-c1", "status": "缓存已过期", "detail": "重读约 $1.49", "afresh": false }
+        o2["offline"] = Json::boolean(true)
+        { ..tp, value: Some(Json::object(o2)) }
+      }
+      _ => tp
+    }
+  })
+  assert_true(t.get(Button, label="接着聊").disabled)
+  assert_true(t.query(MenuItemRadio, label="换新上下文") is None)
+  assert_eq(named(calls, "session.settings").length(), 0)
 }
 
 ///|
@@ -253,15 +277,16 @@ test "a cache notice on a narrow page keeps its cost together and both choices r
   t.draw()
   assert_eq(t.lines_of(status), [status], msg="the status fits beside the mark")
   assert_eq(t.lines_of(detail), [detail], msg="the cost stays together")
-  assert_true(t.get(Radio, label="换新上下文").check is Some(On))
-  t.click(Radio, label="接着聊")
+  t.click(Button, label="换新上下文")
+  assert_true(t.get(MenuItemRadio, label="换新上下文").check is Some(On))
+  t.click(MenuItemRadio, label="接着聊")
   let asked = named(calls, "session.settings")
   assert_eq(asked.length(), 1)
   assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(false)))
 }
 
 ///|
-test "the cache notice keeps status and cost together above its choices on a narrow page" {
+test "the cache notice keeps status and cost together with a compact choice on a narrow page" {
   let calls : Array[Made] = []
   let t = fake_core(calls, over=fn(name, tp) {
     if name != "chat" { return tp }
@@ -274,16 +299,12 @@ test "the cache notice keeps status and cost together above its choices on a nar
   t.draw()
   let (sx, sy, sw, _) = t.rect_of("缓存已过期").unwrap()
   let (dx, dy, _, _) = t.rect_of("重读约 $1.49").unwrap()
-  let (cx, cy, _, _) = t.get(Radio, label="接着聊").rect
-  let (fx, _, fw, _) = t.get(Radio, label="换新上下文").rect
+  let (cx, cy, cw, _) = t.get(Button, label="接着聊").rect
   assert_true(dx >= sx + sw && dy == sy, msg="the status and cost share a line")
-  assert_true(cy > sy, msg="the choices follow the complete summary")
-  let glass = t.drawn_glass_corners().filter(fn(g) { g.0 < sx && g.0 + g.2 > fx + fw && g.1 < sy && g.1 + g.3 > cy })
+  let glass = t.drawn_glass_corners().filter(fn(g) { g.0 < sx && g.0 + g.2 > cx + cw && g.1 < sy && g.1 + g.3 > cy })
   assert_eq(glass.length(), 1)
-  let (gx, _, gw, _, _) = glass[0]
-  assert_true((cx - sx - 2.0).abs() < 1.0, msg="the choice starts under the summary")
-  assert_true((gx + gw - (fx + fw) - 18.0).abs() < 1.0, msg="the choice fills the line")
-  t.click(Radio, label="换新上下文")
+  t.click(Button, label="接着聊")
+  t.click(MenuItemRadio, label="换新上下文")
   assert_eq(named(calls, "session.settings").length(), 1)
 }
 
@@ -294,9 +315,10 @@ test "its agent's cache over, in the wide frame: said over the composer, 换新�
   assert_true(t.find("缓存已过期") is Some(_))
   assert_true(t.find("重读约 $1.49") is Some(_))
   let (_, sy, _, sh) = t.rect_of("缓存已过期").unwrap()
-  let (_, cy, _, ch) = t.get(Radio, label="接着聊").rect
+  let (_, cy, _, ch) = t.get(Button, label="接着聊").rect
   assert_true((sy + sh / 2.0 - cy - ch / 2.0).abs() < 1.0, msg="status and choice are centred together")
-  t.tap_text("换新上下文")
+  t.click(Button, label="接着聊")
+  t.click(MenuItemRadio, label="换新上下文")
   t.draw()
   let asked = named(calls, "session.settings")
   assert_eq(asked.length(), 1)
