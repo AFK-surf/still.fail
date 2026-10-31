@@ -381,10 +381,9 @@ fn own_clock() -> Bool {
 }
 
 ///|
-/// Whether the system asks for less motion: the web host does not say.
-fn reduce_motion() -> Bool {
-  false
-}
+/// Whether the system asks for less motion: the browser's prefers-reduced-motion.
+extern "js" fn reduce_motion() -> Bool =
+  #|() => typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches
 
 ///|
 fn exit(code : Int) -> Unit {
@@ -483,10 +482,10 @@ fn font_scale() -> Double {
 }
 
 ///|
-/// What the app was started to be used with (see host_native.mbt): a browser cannot tell (0: the platform's, @ui).
-fn native_pointing() -> Int {
-  0
-}
+/// What the app was started to be used with (see host_native.mbt): the browser's primary pointer as the page loads, a
+/// coarse one (a finger) touch, a fine one (a mouse, a touchpad) keyboard and mouse; 0 where it says neither.
+extern "js" fn native_pointing() -> Int =
+  #|() => (typeof matchMedia === "undefined" ? 0 : matchMedia("(pointer: coarse)").matches ? 1 : matchMedia("(pointer: fine)").matches ? 2 : 0)
 
 ///|
 /// Whether a keyboard is at hand (see host_native.mbt): a browser cannot tell (-1: the platform's, @ui).
