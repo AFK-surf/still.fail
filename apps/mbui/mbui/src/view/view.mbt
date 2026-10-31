@@ -1420,14 +1420,10 @@ pub fn View::shift(self : View, d : Live[(Double, Double)]) -> View {
 /// its anchor, on the side it went to, lined up as it is: a popover's, grown from what opened it): its place's. Drawn,
 /// pressed, taken (View::takes, what a host under it is told covers it) and read out where it is drawn, as big: one
 /// projection of it and its holders (Tree::projected); laid out as before. Where what it holds cuts them, cut as far
-/// in; its words, its shapes and its corners drawn as big. It holds no old view (View::hosted) while it is drawn other
-/// than as big as laid out: refused (hosted_unscaled), whichever was said first.
+/// in; its words, its shapes and its corners drawn as big. An old view it holds (View::hosted) laid out as big as its
+/// node, drawn, pressed, typed into and read out as big where it is drawn, by what hosts the tree (ui's island_proj).
 pub fn View::scale(self : View, s : Live[Double], about? : Pivot = At(0.5, 0.5)) -> View {
   self.bind(30, s, Place, fn(s) {
-    // (an old view held in it: refused as the scale is said, hosted_unscaled)
-    if s != 1.0 && self.tree.hosts_within(self.at) {
-      hosted_refused(s)
-    }
     let n = self.tree.nodes[self.at]
     n.look.scale = s
     n.look.pivot = about
@@ -3744,7 +3740,6 @@ fn Tree::each_drawn_in_order(self : Tree, f : (Int, Content, Double, Double, Dou
     wy[i] = by + bs * (n.ly + (1.0 - n.ls) * n.lpy)
     wa[i] = ba * n.la
     ws[i] = bs * n.ls
-    hosted_unscaled(n, ws[i])
     match n.content {
       Some(c) => f(i, c, wx[i], wy[i], wa[i], ws[i])
       None => ()
@@ -3861,7 +3856,6 @@ fn Tree::projected(self : Tree, at : Int) -> (Double, Double, Double, Double) {
     a = a * m.la
     s = s * m.ls
   }
-  hosted_unscaled(self.nodes[at], s)
   (x, y, a, s)
 }
 
@@ -3922,11 +3916,6 @@ pub fn View::hosted(self : View, make? : (View) -> Unit = fn(v) { v.grow(Is(1.0)
   let tree = self.tree
   self.box(fn(v) {
     tree.nodes[v.at].hosted = true
-    // (in what is drawn scaled: refused as it is put there, hosted_unscaled)
-    match tree.scale_over(v.at) {
-      Some(s) => hosted_refused(s)
-      None => ()
-    }
     tree.hosting = v.at
     make(v)
   })

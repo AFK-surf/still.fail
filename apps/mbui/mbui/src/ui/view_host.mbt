@@ -56,10 +56,11 @@ let old_made : Ref[Int] = Ref(0)
 ///|
 /// Where each old view was placed as the frame began: its node, where it is drawn (x, y: Tree::projected's, what moves
 /// or fades it or what holds it with it), its size, how opaque (in the window), and where its layout alone puts it (ox,
-/// oy: Tree::laid_origin, which none of that moves). Its old frame is laid out at the second, moved to the first as it
-/// is painted (old_frame).
+/// oy: Tree::laid_origin, which none of that moves), and how big it is drawn (its scale and its holders',
+/// Tree::projected's). Its old frame is laid out at the second, moved to the first as it is painted and drawn as big
+/// as the last says about it (old_frame).
 // kept across runs: put back as a run begins (view_forget)
-let old_placed : Array[(@view.NodeId, Double, Double, Double, Double, Double, Double, Double)] = []
+let old_placed : Array[(@view.NodeId, Double, Double, Double, Double, Double, Double, Double, Double)] = []
 
 ///|
 /// Whether the one old view is the whole window, wholly opaque: the old frame is its build, as with no tree.
@@ -315,6 +316,8 @@ fn view_forget() -> Unit {
   tree_said_of.clear()
   old_hits_rects.clear()
   old_hits_clips.clear()
+  old_scrolls_rects.clear()
+  old_bars.clear()
   nav_views.clear()
   old_boxes.clear()
   old_box_owners.clear()
@@ -434,7 +437,11 @@ let view_logic_at : Ref[Double] = Ref(0.0)
 /// frame decides what of the old views it builds again (where they are placed is part of that: view_island_said).
 fn view_arrived() -> Unit {
   match view_app.val {
-    Some(tree) if tree.told_since() => view_brought(tree)
+    Some(tree) if tree.told_since() => {
+      view_brought(tree)
+      // (what a still pointer is over, as what came moved it: view_pointed_again)
+      view_pointed_again()
+    }
     _ => ()
   }
 }
@@ -471,16 +478,16 @@ fn old_place(tree : @view.Tree) -> Unit {
   old_placed.clear()
   // (in the tree's order: built so, what is over another built after it, its presses and its back taken first)
   // (laid out as big as its node is, where it is drawn: old views drawn as big as they are laid out, View::scale)
-  tree.each_drawn_scaled(fn(c, x, y, a, _) {
+  tree.each_drawn_scaled(fn(c, x, y, a, s) {
     if c.hosted && old_islands.iter().any(fn(o) { o.id == c.id }) {
       let (ox, oy) = tree.laid_origin(c.id).unwrap_or((x, y))
-      old_placed.push((c.id, x, y, c.w, c.h, a, ox, oy))
+      old_placed.push((c.id, x, y, c.w, c.h, a, ox, oy, s))
     }
   })
   // (and nothing else of the tree's to see or press: the old frame, its overlays with it, is all that is drawn)
   old_whole.val = old_placed.length() == 1 &&
     (match old_placed[0] {
-      (id, x, y, iw, ih, a, _, _) => x == 0.0 && y == 0.0 && iw == w && ih == h && a == 1.0 && tree.drawn_scale(id) == 1.0 && tree.alone(id)
+      (id, x, y, iw, ih, a, _, _, _) => x == 0.0 && y == 0.0 && iw == w && ih == h && a == 1.0 && tree.drawn_scale(id) == 1.0 && tree.alone(id)
     })
 }
 
@@ -531,7 +538,7 @@ fn old_frame(c : Ctx) -> Unit {
       Some(o) => {
         // (on whole pixels: what it holds, laid out where its layout puts it, drawn so, its words not crawling as it
         // moves)
-        let (id, _, _, w, h, _, ox, oy) = p
+        let (id, _, _, w, h, _, ox, oy, _) = p
         let (left, top) = (on_pixels(ox, c.scale), on_pixels(oy, c.scale))
         let i = c.box(
           style=style(w=Fixed(w), h=Fixed(h), clip=true),
@@ -555,6 +562,18 @@ fn old_frame(c : Ctx) -> Unit {
           match old_placed.iter().find_first(fn(q) { q.0 == id }) {
             Some(q) => (on_pixels(q.1, c.scale) - left, on_pixels(q.2, c.scale) - top)
             None => (0.0, 0.0)
+          }
+        })
+        // (drawn as big as it is, about where it is moved to (its top left): what it holds with it; laid out as big as
+        // its node, where it is told it takes a finger, its words are and it is read out projected so as each is read:
+        // Ctx::island_now)
+        c.look_by(i, fn() {
+          view_due.get() |> ignore
+          let s = island_scale(id)
+          if s == 1.0 {
+            still_look
+          } else {
+            look(scale=s, ox=0.0, oy=0.0)
           }
         })
         old_boxes[o.id] = i
@@ -1439,6 +1458,48 @@ fn old_part_hit(c : Ctx, x : Double, y : Double, pressed? : Bool = false) -> Int
 }
 
 ///|
+/// How big the old view hosted in node `id` is drawn (its scale and its holders', as it was placed: old_place); 1 for
+/// one not placed.
+fn island_scale(id : @view.NodeId) -> Double {
+  match old_placed.iter().find_first(fn(q) { q.0 == id }) {
+    Some(q) => q.8
+    None => 1.0
+  }
+}
+
+///|
+/// How the old view old node `i` is in is placed and drawn now (an old view hosted in a node: Tree::projected), where
+/// that is other than how its nodes were placed (moved where it was drawn as last painted, as big as laid out:
+/// Ctx::moved_shift): its box's top left as its nodes are placed (px, py), where it is drawn now (qx, qy: the tree
+/// as it is, brought to an input's moment as that comes) and how big (s). A point p of its nodes as placed is drawn at
+/// q + s·(p − p0); one drawn at p is p0 + (p − q) / s of them. None where it is drawn as its nodes are placed, or in no
+/// old view hosted.
+fn Ctx::island_now(self : Ctx, i : Int) -> (Double, Double, Double, Double, Double)? {
+  guard i >= 0 && i < self.count else { return None }
+  guard self.nodes[i].island is Some(id) else { return None }
+  guard view_app.val is Some(tree) else { return None }
+  guard old_boxes.get(id) is Some(b) else { return None }
+  guard tree.drawn_of(id) is Some(d) else { return None }
+  let s = tree.drawn_scale(id)
+  let (px, py) = (self.nodes[b].x, self.nodes[b].y)
+  let (qx, qy) = (on_pixels(d.x, self.scale), on_pixels(d.y, self.scale))
+  guard s != 1.0 || px != qx || py != qy else { return None }
+  Some((px, py, qx, qy, s))
+}
+
+///|
+/// island_now of the old node whose id is `id`.
+fn Ctx::island_now_of_id(self : Ctx, id : Int) -> (Double, Double, Double, Double, Double)? {
+  guard id != 0 else { return None }
+  for i in 0..<self.count {
+    if self.nodes[i].id == id {
+      return self.island_now(i)
+    }
+  }
+  None
+}
+
+///|
 /// The old view in node `id`'s part (-1: none known: all of them).
 fn old_part_of(id : @view.NodeId) -> Int {
   match old_islands.iter().find_first(fn(o) { o.id == id }) {
@@ -1549,11 +1610,16 @@ pub fn old_views_look(c : Ctx, look : Look) -> Bool {
 
 ///|
 /// What an old view takes presses at, as the last frame painted it: its node, its hit targets among the frame's (from,
-/// to), and where its box was then.
+/// to), what scrolls in it among the frame's scroll targets (scrolls_from, scrolls_to), its bars among the frame's
+/// (bars_from, bars_to), and where its box was then.
 priv struct OldHits {
   id : @view.NodeId
   from : Int
   to : Int
+  scrolls_from : Int
+  scrolls_to : Int
+  bars_from : Int
+  bars_to : Int
   x : Double
   y : Double
 }
@@ -1580,6 +1646,18 @@ let old_hits_rects : Array[Double] = []
 ///|
 // kept across runs: put back as a run begins (view_forget)
 let old_hits_clips : Array[Double] = []
+
+///|
+/// What scrolls in an old view or stops the wheel there, as the last frame painted it: the frame's scroll targets'
+/// rects (Ctx::scroll_rects) as painted, placed where it is now from them as its hit targets are (old_hits_place).
+// kept across runs: put back as a run begins (view_forget)
+let old_scrolls_rects : Array[Double] = []
+
+///|
+/// The frame's bars (Ctx::bars) as the last frame painted them: placed where each old view is now from them as its hit
+/// targets are (old_hits_place).
+// kept across runs: put back as a run begins (view_forget)
+let old_bars : Array[BarAt] = []
 
 ///|
 /// An old view painted with none of the window's clips over it (its own, and those within it, cut it): where it takes
@@ -1617,6 +1695,10 @@ fn old_hits_framed(c : Ctx) -> Unit {
   old_hits_rects.push_iter(c.hit_rects.iter())
   old_hits_clips.clear()
   old_hits_clips.push_iter(c.hit_clips.iter())
+  old_scrolls_rects.clear()
+  old_scrolls_rects.push_iter(c.scroll_rects.iter())
+  old_bars.clear()
+  old_bars.push_iter(c.bars.iter())
   old_hits_place(c, view_app.val)
 }
 
@@ -1630,16 +1712,7 @@ fn old_hits_place(c : Ctx, tree : @view.Tree?) -> Unit {
   let rects = c.hit_rects
   let clips = c.hit_clips
   for h in old_hits {
-    let (dx, dy, on) = match tree {
-      None => (0.0, 0.0, true)
-      Some(t) =>
-        match t.drawn_of(h.id) {
-          // (where they are, whatever a modal layer over them lets them take: that asked as the input comes,
-          // Tree::target_at; what reads them for where things are, a thumbnail's place, reads them so)
-          Some(d) if t.presses_here(h.id) => (on_pixels(d.x, c.scale) - h.x, on_pixels(d.y, c.scale) - h.y, true)
-          _ => (0.0, 0.0, false)
-        }
-    }
+    let (at_x, at_y, on, s) = old_hits_moved(c, h, tree)
     for k in h.from..<h.to {
       let r = k * 4
       if r + 3 >= rects.length() || r + 3 >= old_hits_rects.length() {
@@ -1653,21 +1726,165 @@ fn old_hits_place(c : Ctx, tree : @view.Tree?) -> Unit {
         continue
       }
       // (the window's edges: its base clip's, at 0)
-      rects[r] = dmax(old_hits_rects[r] + dx, 0.0)
-      rects[r + 1] = dmax(old_hits_rects[r + 1] + dy, 0.0)
-      rects[r + 2] = old_hits_rects[r + 2] + dx
-      rects[r + 3] = old_hits_rects[r + 3] + dy
+      rects[r] = dmax(at_x(old_hits_rects[r]), 0.0)
+      rects[r + 1] = dmax(at_y(old_hits_rects[r + 1]), 0.0)
+      rects[r + 2] = at_x(old_hits_rects[r + 2])
+      rects[r + 3] = at_y(old_hits_rects[r + 3])
       let b = k * clip_n
       if b + clip_n <= clips.length() && b + clip_n <= old_hits_clips.length() {
         for o in [0, 12] {
-          clips[b + o] = old_hits_clips[b + o] + dx
-          clips[b + o + 1] = old_hits_clips[b + o + 1] + dy
-          clips[b + o + 2] = old_hits_clips[b + o + 2] + dx
-          clips[b + o + 3] = old_hits_clips[b + o + 3] + dy
+          clips[b + o] = at_x(old_hits_clips[b + o])
+          clips[b + o + 1] = at_y(old_hits_clips[b + o + 1])
+          clips[b + o + 2] = at_x(old_hits_clips[b + o + 2])
+          clips[b + o + 3] = at_y(old_hits_clips[b + o + 3])
+          // (its corners as round as it is drawn big)
+          for q in 4..<8 {
+            clips[b + o + q] = old_hits_clips[b + o + q] * s
+          }
+        }
+      }
+    }
+    // (what scrolls in it, so)
+    let scrolls = c.scroll_rects
+    for k in h.scrolls_from..<h.scrolls_to {
+      let r = k * 4
+      if r + 3 >= scrolls.length() || r + 3 >= old_scrolls_rects.length() {
+        continue
+      }
+      if !on {
+        scrolls[r] = 1.0e9
+        scrolls[r + 1] = 1.0e9
+        scrolls[r + 2] = -1.0e9
+        scrolls[r + 3] = -1.0e9
+        continue
+      }
+      scrolls[r] = dmax(at_x(old_scrolls_rects[r]), 0.0)
+      scrolls[r + 1] = dmax(at_y(old_scrolls_rects[r + 1]), 0.0)
+      scrolls[r + 2] = at_x(old_scrolls_rects[r + 2])
+      scrolls[r + 3] = at_y(old_scrolls_rects[r + 3])
+    }
+    // (its bars: where each runs and its thumb, drawn so; how far what it is for scrolls for a point of the window's
+    // its thumb moves, as big; how near its edge the pointer brings one out stays the hand's, Ctx::bar_near_at)
+    for k in h.bars_from..<h.bars_to {
+      if k >= c.bars.length() || k >= old_bars.length() {
+        continue
+      }
+      let b = old_bars[k]
+      c.bars[k] = if !on {
+        { ..b, x0: 1.0e9, y0: 1.0e9, x1: -1.0e9, y1: -1.0e9 }
+      } else {
+        {
+          ..b,
+          x0: at_x(b.x0),
+          y0: at_y(b.y0),
+          x1: at_x(b.x1),
+          y1: at_y(b.y1),
+          top_in: b.top_in * s,
+          foot_in: b.foot_in * s,
+          tx: at_x(b.tx),
+          ty: at_y(b.ty),
+          tw: b.tw * s,
+          th: b.th * s,
+          ratio: b.ratio / s,
         }
       }
     }
   }
+}
+
+///|
+/// `f` asked of the frame just built with what each old view holds where the window draws it (its box laid out where
+/// its node's layout puts it, moved where it is drawn as it is painted, Ctx::moved_by; drawn as big as its node is,
+/// Ctx::island_now): from its box's place to where its node is drawn, its sizes, corners, edges and what it is drawn
+/// off by as big; for a check of where things stand and how big (the corner rule, a press's room). The frame's nodes as
+/// they were after, what holds each and what follows it untouched.
+fn[T] Ctx::with_old_drawn(self : Ctx, f : () -> T) -> T {
+  let tree = match view_app.val {
+    Some(t) if !old_whole.val => t
+    _ => return f()
+  }
+  let count = self.count
+  let moved_back : Array[(Int, Double, Double, Double, Double, Double, FixedArray[Double]?, Double, Double, Double)] = []
+  for id, b in old_boxes {
+    if b >= count {
+      continue
+    }
+    guard tree.drawn_of(id) is Some(d) else { continue }
+    let s = tree.drawn_scale(id)
+    let (px, py) = (self.nodes[b].x, self.nodes[b].y)
+    if s == 1.0 && px == d.x && py == d.y {
+      continue
+    }
+    let stack = [b]
+    while stack.pop() is Some(j) {
+      let o = self.nodes[j]
+      moved_back.push((j, o.x, o.y, o.fw, o.fh, o.radius, o.radii, o.tx, o.ty, o.border_w))
+      o.x = d.x + (o.x - px) * s
+      o.y = d.y + (o.y - py) * s
+      o.fw = o.fw * s
+      o.fh = o.fh * s
+      o.radius = o.radius * s
+      o.radii = o.radii.map(fn(r) { FixedArray::makei(r.length(), fn(k) { r[k] * s }) })
+      o.tx = o.tx * s
+      o.ty = o.ty * s
+      o.border_w = o.border_w * s
+      let mut ch = o.first
+      while ch >= 0 && ch < count {
+        stack.push(ch)
+        ch = self.nodes[ch].next
+      }
+    }
+  }
+  let out = f()
+  for m in moved_back {
+    let o = self.nodes[m.0]
+    o.x = m.1
+    o.y = m.2
+    o.fw = m.3
+    o.fh = m.4
+    o.radius = m.5
+    o.radii = m.6
+    o.tx = m.7
+    o.ty = m.8
+    o.border_w = m.9
+  }
+  out
+}
+
+///|
+/// Whether the bar of `id` the last frame drew takes the pointer as the tree has things now: one of an old view's, as its
+/// targets are (where it is drawn as nothing, or takes no presses, none); any other, yes.
+fn old_bar_takes(c : Ctx, id : Int) -> Bool {
+  let mut k = c.bars.length() - 1
+  while k >= 0 && c.bars[k].id != id {
+    k = k - 1
+  }
+  match old_hits.iter().find_first(fn(h) { k >= h.bars_from && k < h.bars_to }) {
+    Some(h) => old_hits_moved(c, h, view_app.val).2
+    None => true
+  }
+}
+
+///|
+/// Where what old view `h` painted is now (`tree`: as the tree has it; none, where it was painted): a point of it from
+/// its place then to where it is drawn, as big (x, y), whether it takes presses there, how big it is drawn.
+fn old_hits_moved(c : Ctx, h : OldHits, tree : @view.Tree?) -> ((Double) -> Double, (Double) -> Double, Bool, Double) {
+  // (and as big as it is drawn now, about its top left: Tree::drawn_scale; nothing taken where it is drawn as nothing)
+  let (dx, dy, on, s) = match tree {
+    None => (0.0, 0.0, true, 1.0)
+    Some(t) =>
+      match t.drawn_of(h.id) {
+        // (where they are, whatever a modal layer over them lets them take: that asked as the input comes,
+        // Tree::target_at; what reads them for where things are, a thumbnail's place, reads them so)
+        Some(d) if t.presses_here(h.id) => {
+          let s = t.drawn_scale(h.id)
+          (on_pixels(d.x, c.scale) - h.x, on_pixels(d.y, c.scale) - h.y, s > 0.0, s)
+        }
+        _ => (0.0, 0.0, false, 1.0)
+      }
+  }
+  // (a point of what was painted, from its place then (h.x, h.y) to where it is drawn now, as big)
+  (fn(v) { h.x + dx + (v - h.x) * s }, fn(v) { h.y + dy + (v - h.y) * s }, on, s)
 }
 
 ///|
@@ -1696,8 +1913,13 @@ fn view_presses_at(x : Double, y : Double) -> @view.NodeId? {
 pub fn old_takes_own(v : @view.View) -> @view.View {
   let id = v.id()
   v.hosted_takes(fn(lx, ly, _) {
+    // (its own point where it is drawn, as big: Tree::finger_on's)
     let (nx, ny, _, _) = v.rect()
-    let (x, y) = (nx + lx, ny + ly)
+    let s = match view_app.val {
+      Some(tree) => tree.drawn_scale(id)
+      None => 1.0
+    }
+    let (x, y) = (nx + lx * s, ny + ly * s)
     let c = g()
     let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
     let k = press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y)
@@ -1838,7 +2060,8 @@ fn old_press_owner(c : Ctx, x : Double, y : Double, chosen : @view.NodeId) -> @v
   let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
   // (a handle of the focused field's selection or caret, before what is under it: that field's)
   match c.editors.get(c.focus_allowed()) {
-    Some(st) if st.on_sel_handle(x, y) != 0 || st.on_handle(x, y) => return c.island_of_id(c.focus)
+    Some(st) if (match st.local(x, y) { Some((lx, ly)) => st.on_sel_handle(lx, ly) != 0 || st.on_handle(lx, ly); None => false }) =>
+      return c.island_of_id(c.focus)
     _ => ()
   }
   let k = press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y)
@@ -2164,6 +2387,9 @@ fn view_pointed() -> Unit {
 /// other side told it is over nothing of its: the old views' pointer nowhere (what they lit lit no longer), the tree's
 /// point gone. What it was worked out against kept (view_point_seen), for a still pointer.
 fn view_point_tell(tree : @view.Tree, over? : Bool) -> Unit {
+  // (what the old views take a pointer at, where the tree has them now, before anything is found under it: whether one
+  // takes it there (old_takes_own) and what of it is under it, as a press there is, old_hits_place)
+  old_hits_place(g(), Some(tree))
   // (what the old frame put over all of it there: as said, else by its hit targets as last drawn: old_layer_over)
   let over = match (over, view_point.val) {
     (Some(o), _) => o
@@ -2370,7 +2596,15 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
     let d = if up >= 0 { out[up].depth + 1 } else { depth }
     // (in a node taking no presses: read out disabled, nothing to be done to it)
     let off = s.disabled || disabled
-    out.push({ ..s, parent: up, depth: d, hidden: s.hidden || hidden, disabled: off, actions: if off { [] } else { s.actions } })
+    // (where it is drawn: in an old view hosted in a node drawn bigger or smaller, as big, about its top left)
+    let rect = match self.island_now(nodes_of[k]) {
+      Some((px, py, qx, qy, sc)) => {
+        let (x, y, w, h) = s.rect
+        (qx + (x - px) * sc, qy + (y - py) * sc, w * sc, h * sc)
+      }
+      None => s.rect
+    }
+    out.push({ ..s, parent: up, depth: d, hidden: s.hidden || hidden, disabled: off, actions: if off { [] } else { s.actions }, rect })
     moved[k] = out.length() - 1
   }
   // (those let go read out no more: their ids nobody's)

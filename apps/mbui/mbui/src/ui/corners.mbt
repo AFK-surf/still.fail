@@ -304,7 +304,8 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T) -> T {
       }
     }
   }
-  let out = f()
+  // (what the old views hold where it is drawn, as big, as the window draws it: Ctx::with_old_drawn)
+  let out = self.with_old_drawn(f)
   for r in reparented {
     self.nodes[r.0].parent = r.1
   }

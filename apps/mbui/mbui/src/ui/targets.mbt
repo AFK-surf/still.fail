@@ -187,15 +187,39 @@ fn Ctx::targets_found(self : Ctx, root : Int, tree : @view.Tree) -> Int {
     targets_island.val = Some(c.id)
     if old_whole.val {
       let from = self.next_hit_ids.length()
+      let scrolls_from = self.next_scroll_ids.length()
+      let bars_from = self.next_bars.length()
       self.paint_held(self.nodes[root], 1.0, but=fn(ch) { self.nodes[ch].layer || self.nodes[ch].portal })
-      next_old_hits.push({ id: c.id, from, to: self.next_hit_ids.length(), x: 0.0, y: 0.0 })
+      next_old_hits.push({
+        id: c.id,
+        from,
+        to: self.next_hit_ids.length(),
+        scrolls_from,
+        scrolls_to: self.next_scroll_ids.length(),
+        bars_from,
+        bars_to: self.next_bars.length(),
+        x: 0.0,
+        y: 0.0,
+      })
     } else {
       match old_boxes.get(c.id) {
         Some(i) => {
           // (in no clip of the window's (island_clips), where it was laid out)
           let from = self.next_hit_ids.length()
+          let scrolls_from = self.next_scroll_ids.length()
+          let bars_from = self.next_bars.length()
           island_clips(fn() { self.paint(i, a) })
-          next_old_hits.push({ id: c.id, from, to: self.next_hit_ids.length(), x: self.nodes[i].x, y: self.nodes[i].y })
+          next_old_hits.push({
+            id: c.id,
+            from,
+            to: self.next_hit_ids.length(),
+            scrolls_from,
+            scrolls_to: self.next_scroll_ids.length(),
+            bars_from,
+            bars_to: self.next_bars.length(),
+            x: self.nodes[i].x,
+            y: self.nodes[i].y,
+          })
         }
         None => ()
       }
@@ -316,8 +340,8 @@ fn Ctx::targets_again(self : Ctx) -> Unit {
   self.points.each(fn(k, v) { self.next_points[k] = v })
   self.passes.each(fn(k, v) { self.next_passes[k] = v })
   self.next_scroll_ids.append(self.scroll_ids)
-  self.next_scroll_rects.append(self.scroll_rects)
-  self.next_bars.append(self.bars)
+  self.next_scroll_rects.append(old_scrolls_rects)
+  self.next_bars.append(old_bars)
 }
 
 ///|

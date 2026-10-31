@@ -35,7 +35,9 @@ pub fn room_least() -> Double {
 /// `apart:` first.
 pub fn Tester::room_faults(self : Tester) -> Array[String] {
   ignore(self)
-  g().room_faults()
+  // (what the old views hold where it is drawn, as big: Ctx::with_old_drawn)
+  let c = g()
+  c.with_old_drawn(fn() { c.room_faults() })
 }
 
 ///|

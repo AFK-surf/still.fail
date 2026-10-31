@@ -342,48 +342,6 @@ pub fn View::drawn_scale(self : View) -> Double {
 }
 
 ///|
-/// An old view hosted (View::hosted) drawn bigger or smaller (`s`, its holders' scale and its own: View::scale) is not
-/// done: what it draws, where it takes a finger, where its words are selected and where a host is told it covers are
-/// its own, as big as it is laid out, none of them told of a scale yet. Refused where the scene is composed or a node's
-/// place asked, whichever came first (a scale said and an old view put in it after, or the other way round), not drawn
-/// otherwise than it says.
-fn hosted_unscaled(n : Node, s : Double) -> Unit {
-  if n.hosted && s != 1.0 {
-    hosted_refused(s)
-  }
-}
-
-///|
-/// An old view hosted in what is drawn `s` as big: refused (hosted_unscaled). Said where it comes about: as an old view
-/// is put in what is said to be drawn scaled (View::hosted), as what holds one is said to be (View::scale), however
-/// either came (made, shown, its scale changed); where the scene is gone through, as what holds besides.
-fn hosted_refused(s : Double) -> Unit {
-  abort("an old view hosted in what is drawn \{s} as big: View::scale holds no old view")
-}
-
-///|
-/// The scale of what holds node `at` (it too) that is drawn other than as big as laid out, the first of them up from
-/// it, as it is said now (View::scale); none where all are whole.
-fn Tree::scale_over(self : Tree, at : Int) -> Double? {
-  let mut i = at
-  while i >= 0 {
-    let s = self.nodes[i].look.scale
-    if s != 1.0 {
-      return Some(s)
-    }
-    i = self.nodes[i].parent
-  }
-  None
-}
-
-///|
-/// Whether node `at` or what it holds is an old view hosted (View::hosted).
-fn Tree::hosts_within(self : Tree, at : Int) -> Bool {
-  let n = self.nodes[at]
-  n.live && (n.hosted || n.kids.iter().any(fn(k) { self.hosts_within(k) }))
-}
-
-///|
 /// A finger or a button went down in the window at `at`, wherever it lands (the host's, before it goes to
 /// what takes it): one change at that moment, told to what follows the window's presses (View::window_downs).
 pub fn Tree::went_down(self : Tree, at : Double) -> Unit {

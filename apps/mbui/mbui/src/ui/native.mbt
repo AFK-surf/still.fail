@@ -1054,13 +1054,26 @@ fn NativeView::tell_covers(self : NativeView, c : Ctx) -> Unit {
       }
     _ => ()
   }
-  // (what of the old views' takes a press after it: each where the node hosting its old view takes a finger)
+  // (what of the old views' takes a press after it: each where the node hosting its old view takes a finger, where it
+  // is drawn, as big: painted where it is laid out, placed as its targets are, old_hits_moved)
   let rects = c.next_hit_rects
   for j in v.hits_before..<c.next_hit_ids.length() {
     let r = (rects[j * 4], rects[j * 4 + 1], rects[j * 4 + 2], rects[j * 4 + 3])
-    let held = match tree {
-      Some(t) => next_old_hits.iter().find_first(fn(o) { j >= o.from && j < o.to }).map(fn(o) { t.finger_areas(o.id) })
-      None => None
+    let island = next_old_hits.iter().find_first(fn(o) { j >= o.from && j < o.to })
+    let r = match island {
+      Some(o) => {
+        let (at_x, at_y, on, _) = old_hits_moved(c, o, tree)
+        if on {
+          (at_x(r.0), at_y(r.1), at_x(r.2), at_y(r.3))
+        } else {
+          (0.0, 0.0, 0.0, 0.0)
+        }
+      }
+      None => r
+    }
+    let held = match (tree, island) {
+      (Some(t), Some(o)) => Some(t.finger_areas(o.id))
+      _ => None
     }
     match held {
       Some(InWindow(rs)) => for a in rs { over.push(rect_meet(r, a)) }

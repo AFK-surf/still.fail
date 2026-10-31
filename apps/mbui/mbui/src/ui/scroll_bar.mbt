@@ -685,6 +685,10 @@ fn Ctx::bar_press(self : Ctx, target : Int) -> Bool {
 /// The pointer holding a bar's thumb moved to (x, y): what it is for scrolled as far as the thumb went, by the bar's
 /// track as last drawn.
 fn Ctx::bar_drag_move(self : Ctx, x : Double, y : Double) -> Unit {
+  // (in an old view drawn as nothing now: nothing moved by the pointer, old_bar_takes)
+  if !old_bar_takes(self, self.bar_drag) {
+    return
+  }
   match self.bar_drawn(self.bar_drag) {
     Some(b) => {
       let d = (if b.foot { x - self.last_x } else { y - self.last_y }) * b.ratio
