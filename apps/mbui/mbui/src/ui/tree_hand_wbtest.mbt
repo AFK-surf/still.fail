@@ -402,3 +402,55 @@ test "each old view's place among the frame's targets given out with them: one l
     None => fail("the button no target")
   }
 }
+
+///|
+/// What the host is told covers native view `v` (view_tell 4): rects, four numbers each.
+fn covers_of(v : NativeView) -> Array[Double] {
+  fake.val.unwrap().view_covers.get(v.id).unwrap_or([])
+}
+
+///|
+test "a native view in an old view in the window's tree: what takes a press over it told the host as its covers, what is under it not; gone, none; back, again; another colour, the same" {
+  let over = @signals.signal(true, same=fn(a, b) { a == b })
+  let ink = @signals.signal(0x777777FFL, same=fn(a, b) { a == b })
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
+  t.check_looks(false)
+  // (opened of the Tester's host)
+  let page = NativeView::page("<p>page</p>")
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.over(Is(true)).width(Is(Some(400.0))).height(Is(Some(200.0))) |> ignore
+      old(b, fn(c) {
+        // (under it: a button the page is drawn over)
+        let under = c.id("under")
+        c.clicked(under) |> ignore
+        c.box(w=Px(60.0), h=Px(40.0), id=under, fn() {  }) |> ignore
+        c.layer(fn() { c.native(page) |> ignore }) |> ignore
+        if over.get() {
+          c.layer(fn() {
+            let id = c.id("over")
+            c.clicked(id) |> ignore
+            let i = c.box(w=Px(80.0), h=Px(40.0), id~, fn() {  })
+            c.bg_by(i, fn() { ink.get() })
+          })
+          |> ignore
+        }
+      }).grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.frame_at(t.time() + frame_period_default)
+  assert_eq(covers_of(page), [0.0, 0.0, 80.0, 40.0])
+  over.set(false)
+  t.frame_at(t.time() + frame_period_default)
+  assert_eq(covers_of(page), [], msg="gone")
+  over.set(true)
+  t.frame_at(t.time() + frame_period_default)
+  assert_eq(covers_of(page), [0.0, 0.0, 80.0, 40.0], msg="back")
+  // (another colour: the same covers; what holds a native view is built again each frame, its targets found again so)
+  ink.set(0x3366CCFFL)
+  t.frame_at(t.time() + frame_period_default)
+  assert_eq(covers_of(page), [0.0, 0.0, 80.0, 40.0], msg="another colour: its covers")
+}
