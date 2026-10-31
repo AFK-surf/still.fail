@@ -222,6 +222,51 @@ test "a new chat's first words sent with the keyboard up: no words over others o
 }
 
 ///|
+test "a new chat's restored picture travels from its composer into its first message" {
+  let base = fixture_app("newchat-attach")
+  let src : Source = {
+    ..base,
+    draft_picture: fn(_, _) {
+      @ui.add_image("mem:test/new-restored", png_head())
+      "mem:test/new-restored"
+    },
+    topic: fn(name, params) {
+      let now = (base.topic)(name, params)
+      if name != "composer" { return now }
+      let m = match now.value { Some(Object(v)) => v.copy(); _ => return now }
+      m["files"] = Json::array(items(now.value, "files").map(fn(file) {
+        guard file is Object(o) else { return file }
+        let waiting = o.copy()
+        waiting.remove("done")
+        waiting["waits"] = Json::boolean(true)
+        Json::object(waiting)
+      }))
+      { value: Some(Json::object(m)), error: now.error, version: now.version }
+    },
+    call: fn(name, params, done) {
+      match name {
+        // Hold creation so the first row remains local while it is checked.
+        "newChat.create" => ()
+        _ => (base.call)(name, params, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.drive("timeout 20000\nuntil 想让 agent 做什么？\n") |> ignore
+  // The fixture normally starts with an in-memory picture. Its source after a restart is the kept draft instead.
+  @sfbase.writing_pictures.remove("seed-0")
+  @sfbase.sent_pictures.clear()
+  t.frame()
+  t.run_for(@ui.image_fade_ms)
+  assert_true(t.locate("img:mem:test/new-restored").length() > 0)
+  tap_send(t)
+  let flying = send_flight.get().unwrap().files
+  assert_true(flying.iter().any(fn(f) { f.key == "upload:seed-0" && f.picture == "mem:test/new-restored" }))
+  let row = sending_of(send_flight.get().unwrap().turns)[0].row
+  assert_eq(sent_picture("ws1/st1", row.attachments[0]), Some("mem:test/new-restored"))
+}
+
+///|
 test "a new chat's first words and picture sent with the keyboard up: no words over others on any frame" {
   let src = fixture_app("newchat-attach")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)

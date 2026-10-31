@@ -543,6 +543,92 @@ fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
 }
 
 ///|
+test "desk composer: a restored picture sent while uploading keeps the picture shown in the draft" {
+  let calls : Array[Made] = []
+  let (t, _) = desk_composer_tester(
+    calls,
+    over=fn(name, now) {
+      if name != "composer" { return now }
+      let m = match now.value { Some(Object(v)) => v.copy(); _ => {} }
+      m["files"] = [{ "id": "kept-1", "name": "照片.png", "size": 120, "sent": 40 }]
+      m["ready"] = Json::boolean(true)
+      { value: Some(Json::object(m)), error: now.error, version: now.version }
+    },
+    kept=Some(fn(_, _) {
+      @ui.add_image("mem:test/kept", png_head())
+      "mem:test/kept"
+    }),
+  )
+  t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
+  assert_eq(loaded_sources(t), 1)
+  desk_focus(t)
+  t.enter()
+  let row = sending_of("ws1/st1\u{1}s-c1")[0].row
+  assert_eq(row.attachments.length(), 1)
+  assert_eq(sent_picture("ws1/st1", row.attachments[0]), Some("mem:test/kept"))
+  let flying = send_flight.get().unwrap().files
+  assert_eq(flying.map(fn(f) { (f.key, f.picture) }), [("upload:kept-1", "mem:test/kept")])
+}
+
+///|
+test "desk composer: a restored picture already uploaded stays visible when sent" {
+  let calls : Array[Made] = []
+  let (t, _) = desk_composer_tester(
+    calls,
+    over=fn(name, now) {
+      if name != "composer" { return now }
+      let m = match now.value { Some(Object(v)) => v.copy(); _ => {} }
+      m["files"] = [{ "id": "kept-1", "name": "照片.png", "size": 120, "done": { "name": "照片.png", "path": "/w/uploads/照片.png", "size": 120 } }]
+      m["ready"] = Json::boolean(true)
+      { value: Some(Json::object(m)), error: now.error, version: now.version }
+    },
+    kept=Some(fn(_, _) {
+      @ui.add_image("mem:test/kept", png_head())
+      "mem:test/kept"
+    }),
+  )
+  t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
+  assert_eq(loaded_sources(t), 1)
+  desk_focus(t)
+  t.enter()
+  let row = sending_of("ws1/st1\u{1}s-c1")[0].row
+  assert_eq(row.attachments.length(), 1)
+  assert_eq(sent_picture("ws1/st1", row.attachments[0]), Some("mem:test/kept"))
+  let flying = send_flight.get().unwrap().files
+  assert_eq(flying.map(fn(f) { (f.key, f.picture) }), [("/w/uploads/照片.png", "mem:test/kept")])
+}
+
+///|
+test "desk composer: a restored quote's picture stays with it when sent" {
+  let calls : Array[Made] = []
+  let (t, _) = desk_composer_tester(
+    calls,
+    over=fn(name, now) {
+      if name != "composer" { return now }
+      let m = match now.value { Some(Object(v)) => v.copy(); _ => {} }
+      m["quotes"] = [{
+        "id": "quote-1", "author": "Ana", "text": "看这里", "role": "person", "comment": "",
+        "own": { "id": "kept-1", "name": "照片.png", "size": 120, "done": { "name": "照片.png", "path": "/w/uploads/照片.png", "size": 120 } },
+      }]
+      m["ready"] = Json::boolean(true)
+      { value: Some(Json::object(m)), error: now.error, version: now.version }
+    },
+    kept=Some(fn(_, _) {
+      @ui.add_image("mem:test/kept", png_head())
+      "mem:test/kept"
+    }),
+  )
+  t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
+  assert_eq(loaded_sources(t), 1)
+  desk_focus(t)
+  t.enter()
+  let row = sending_of("ws1/st1\u{1}s-c1")[0].row
+  assert_eq(row.attachments.length(), 1)
+  assert_eq(sent_picture("ws1/st1", row.attachments[0]), Some("mem:test/kept"))
+  assert_true(send_flight.get().unwrap().files.iter().any(fn(f) { f.key == "/w/uploads/照片.png" && f.picture == "mem:test/kept" }))
+}
+
+///|
 test "desk composer: a draft kept, read again as the app starts, shows its pictures as the device keeps them (composer.picture), any other file as its card" {
   let calls : Array[Made] = []
   let asked : Array[String] = []

@@ -319,6 +319,72 @@ test "a long press on a message lets the keyboard be; a tap on it lets it go" {
 }
 
 ///|
+test "a picture restored in the composer remains visible in the sending message" {
+  new_run()
+  let base = fixture("chat")
+  let in_draft = Ref(true)
+  let src : Source = {
+    ..base,
+    draft_picture: fn(_, _) {
+      @ui.add_image("mem:test/restored", png_head())
+      "mem:test/restored"
+    },
+    // Its station has not supplied a picture: the message must use the one already in the composer.
+    file: fn(_, _, _) { "" },
+    topic: fn(name, params) {
+      let now = (base.topic)(name, params)
+      if name != "composer" || !in_draft.val { return now }
+      let m = match now.value { Some(Object(v)) => v.copy(); _ => {} }
+      m["files"] = [{ "id": "kept-1", "name": "截图.png", "size": 120, "sent": 40 }]
+      m["ready"] = Json::boolean(true)
+      { value: Some(Json::object(m)), error: now.error, version: now.version + 1 }
+    },
+    call: fn(name, params, done) {
+      match name {
+        "composer.take" => {
+          in_draft.val = false
+          done(Ok({ "text": "", "quotes": [], "attachments": [], "uploads": [{ "id": "kept-1", "name": "截图.png", "size": 120 }], "version": 2 }))
+        }
+        "chat.send" => ()
+        _ => (base.call)(name, params, done)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
+  assert_true(t.locate("img:mem:test/restored").length() > 0)
+  tap_send(t)
+  let flying = send_flight.get().unwrap().files
+  assert_eq(flying.map(fn(f) { (f.key, f.picture) }), [("upload:kept-1", "mem:test/restored")])
+  t.run_for(@sfbase.flight_most_ms)
+  let points = t.locate("img:mem:test/restored")
+  assert_true(points.length() > 0, msg="the sending message has no picture")
+  assert_true(points.iter().any(fn(p) {
+    t.drawn_images().iter().any(fn(i) { i[8] > 0.9 && p.0 >= i[0] && p.0 <= i[0] + i[2] && p.1 >= i[1] && p.1 <= i[1] + i[3] })
+  }), msg="the sending message did not draw the picture: \{t.drawn_images()}")
+}
+
+///|
+test "a freshly picked picture remains visible throughout sending" {
+  new_run()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  @sfbase.writing_add(src, @sfbase.writing(src, "ws1/st1:s-c1"), "ws1/st1", "截图.png", png_head())
+  t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
+  let tile = t.drawn_images().filter(fn(i) { (i[2] - 56.0).abs() < 0.5 && i[8] > 0.9 })
+  assert_true(tile.length() > 0, msg="no visible picture in the composer: \{t.drawn_images()}")
+  tap_send(t)
+  assert_true(t.drawn_images().iter().any(fn(i) { i[2] >= 55.5 && i[8] > 0.9 }), msg="as it is sent: \{t.drawn_images()}")
+  t.run_for(@sfbase.flight_len(true) * 0.4)
+  assert_true(t.drawn_images().iter().any(fn(i) { i[2] > 56.5 && i[8] > 0.9 }), msg="on its way: \{t.drawn_images()}")
+  t.run_for(@sfbase.flight_len(true) + @sf.hint_back_ms)
+  assert_true(t.drawn_images().iter().any(fn(i) { i[2] > 56.5 && i[8] > 0.9 }), msg="in the message: \{t.drawn_images()}")
+}
+
+///|
 test "files sent fly from their tiles to their places in the message, then are its own" {
   new_run()
   let clock : Ref[Double] = { val: 0.0 }
