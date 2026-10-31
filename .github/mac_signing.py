@@ -38,7 +38,12 @@ SECRETS = ('MACOS_DEVELOPER_ID_KEYCHAIN_B64_1', 'MACOS_DEVELOPER_ID_KEYCHAIN_B64
 def run(args, **kwargs):
     result = subprocess.run(args, **kwargs)
     if result.returncode:
-        raise SystemExit('mac_signing: failed: ' + ' '.join(args[:2]))
+        # (what it said, when kept to be read: notarytool's submit failed main's beta with nothing but its name, the
+        # reason in the output kept for its verdict, run 41169187343)
+        for said in (result.stdout, result.stderr):
+            if said:
+                print(said if isinstance(said, str) else said.decode(errors='replace'), file=sys.stderr, flush=True)
+        raise SystemExit(f'mac_signing: failed: {" ".join(args[:2])} (exit {result.returncode})')
     return result
 
 
