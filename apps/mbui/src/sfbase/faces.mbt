@@ -325,11 +325,15 @@ let share_face_asked : Ref[Bool] = Ref(false)
 /// it from then on; until it is, or where the host takes none, in the app's): `share_face`, to name as words' face.
 pub fn share_face_given() -> Int {
   if !share_face_asked.val && !@ui.face_given(share_face) {
-    share_face_asked.val = true
-    for file in [(share_400_gz, 400), (share_600_gz, 600)] {
-      match @zip.gunzip(file.0) {
-        Some(b) => ignore(@ui.face_add_bytes(share_face, b, weight=file.1))
-        None => ()
+    // (asked again while a file is not here yet: a browser's come after the app started, share_face_js.mbt)
+    let files = share_files()
+    share_face_asked.val = files.iter().all(fn(f) { f.0.length() > 0 })
+    if share_face_asked.val {
+      for file in files {
+        match @zip.gunzip(file.0) {
+          Some(b) => ignore(@ui.face_add_bytes(share_face, b, weight=file.1))
+          None => ()
+        }
       }
     }
   }

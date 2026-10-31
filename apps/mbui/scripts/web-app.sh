@@ -19,5 +19,8 @@ else
   npx --yes esbuild@$ESBUILD --minify "$MBUI_APP_MOD/out/web/demo.js" --outfile="$out/app.js" --log-level=error
 fi
 cp "$MBUI_DIR/web/host.js" "$out/host.js"
+# the files the app carries, fetched beside its script (tools/assets; the page's src/mbui/core.ts)
+rm -rf "$out/assets"
+bash "$D/assets" "$MBUI_APP_MOD" "$out/assets" > /dev/null
 ls -la "$out"
 gzip -9 -c "$out/app.js" | wc -c | xargs echo "app.js gzip bytes:"
