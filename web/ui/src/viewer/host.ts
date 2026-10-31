@@ -41,7 +41,7 @@ export interface ViewerHost {
 }
 
 // The core's defaults (client/core-ts/src/prefs.ts readerOf).
-let style: ReaderStyle = { size: 18, line: 1.7, margin: 22, face: "sans", indent: true, paper: "follow" };
+let style: ReaderStyle = { size: 20, line: 1.7, margin: 22, face: "sans", indent: true, paper: "follow" };
 
 let host: ViewerHost = {
   useNarrow: () => false,

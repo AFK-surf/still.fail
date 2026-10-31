@@ -1672,6 +1672,7 @@ pub fn Ctx::spacer(self : Ctx) -> Unit {
 ///|
 /// Words, in the theme's colour unless `color`. `style` (style.mbt) says how they look, its dark and narrow blocks by
 /// the theme; what is said here besides wins over the style's same property (a size said here keeps the style's line).
+/// `line_em` sets the line height as a multiple of the drawn text size, after the system's text scaling.
 /// `tracking`: letter spacing in pixels; `max_lines`: wrapped words cut after that many lines, ending in an ellipsis;
 /// `tabular`: digits all one width, a number keeping its width as it changes (the theme's `tabular` where unsaid).
 /// `trim`: a font taller than the line not padded beyond its own reach where a host sets lines on whole pixels (as
@@ -1693,6 +1694,7 @@ pub fn Ctx::text(
   wrap? : Bool,
   w? : Size,
   line? : Double,
+  line_em? : Double,
   trim? : Bool = false,
   center? : Bool,
   tracking? : Double,
@@ -1730,12 +1732,16 @@ pub fn Ctx::text(
       None => s_size.unwrap_or(15.0)
     },
   )
-  n.line_h = match line {
-    Some(l) => self.sp(l)
+  n.line_h = match line_em {
+    Some(em) => n.font_size * em
     None =>
-      match s_line {
+      match line {
         Some(l) => self.sp(l)
-        None => self.theme.text_line * n.font_size
+        None =>
+          match s_line {
+            Some(l) => self.sp(l)
+            None => self.theme.text_line * n.font_size
+          }
       }
   }
   n.line_trim = trim

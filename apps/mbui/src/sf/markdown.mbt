@@ -732,6 +732,12 @@ fn Md::lh(self : Md, size : Double) -> Double {
 }
 
 ///|
+/// A line's height as drawn: a reader's line is a multiple of the drawn size, including the system's scaling.
+fn Md::drawn_lh(self : Md, size : Double) -> Double {
+  if self.line > 0.0 { self.c.sp(size) * self.line } else { self.c.sp(self.lh(size)) }
+}
+
+///|
 fn Md::pieces(self : Md, blocks : Array[MdBlock], tight : Bool) -> Array[Piece] {
   let out = []
   for b in blocks {
@@ -980,17 +986,21 @@ fn Md::list(self : Md, l : MdList, depth : Int) -> Piece {
         c.box(dir=Row, align=AStart, fn() {
           if l.ordered {
             c.box(dir=Row, min_w=marker_w, pr=md_marker_gap, justify=JEnd, fn() {
-              c.text("\{number}.", size=s, line=self.lh(s), color=ink, wrap=false)
+              c.text(
+                "\{number}.", size=s, color=ink, wrap=false,
+                line?=if self.line > 0.0 { None } else { Some(self.lh(s)) },
+                line_em?=if self.line > 0.0 { Some(self.line) } else { None },
+              )
               |> ignore
             })
             |> ignore
           } else {
             // (on the first line's middle: the line as the words are set, at the system's size of words; Markdown.kt
             // Bullet's lh(textSize).toDp())
-            bullet(c, depth, s, c.sp(self.lh(s)), ink)
+            bullet(c, depth, s, self.drawn_lh(s), ink)
           }
           match task {
-            Some(done) => task_box(c, done, c.sp(self.lh(s)))
+            Some(done) => task_box(c, done, self.drawn_lh(s))
             None => ()
           }
           c.box(w=Fill(1.0), fn() { stack(c, inner, false) }) |> ignore
@@ -1138,7 +1148,8 @@ fn Md::words(
     breaks~,
     weight=if weight > 0 { weight } else { 400 },
     color=ink,
-    line=self.lh(size),
+    line?=if self.line > 0.0 { None } else { Some(self.lh(size)) },
+    line_em?=if self.line > 0.0 { Some(self.line) } else { None },
     link_color=p.blue,
     pressed_bg=alpha(p.blue, 0.14),
     code_color=p.code_ink,

@@ -803,8 +803,8 @@ fn RichLayout::pieces(self : RichLayout, k : Int) -> Array[(Int, Int, Int)] {
 
 ///|
 /// A paragraph of runs, wrapped as one text in `size` (the runs' sizes
-/// relative to it) with lines `line` high (0: the font's own). Links are
-/// drawn in `link_color` (unless a run has its own), with `pressed_bg`
+/// relative to it) with lines `line` high (0: the font's own). `line_em`, when given, sets the line as a multiple of
+/// the drawn size after system text scaling. Links are drawn in `link_color` (unless a run has its own), with `pressed_bg`
 /// behind them while held; tapped, `on_link` is told where they lead; held a long press's time, or right clicked,
 /// `on_link_hold` (with the piece of line under the finger or the pointer); `on_link_shown`, each link's way, its
 /// words and its id as the paragraph is built (what shows over it while it is pointed at: a card by that id,
@@ -830,6 +830,7 @@ pub fn Ctx::rich(
   weight? : Int,
   color? : Int64,
   line? : Double,
+  line_em? : Double,
   trim? : Bool = false,
   wrap? : Bool,
   w? : Size,
@@ -854,7 +855,11 @@ pub fn Ctx::rich(
   let size = self.sp(first(size, s_size).unwrap_or(15.0))
   let weight = first(weight, opt_weight(st.weight)).unwrap_or(400)
   let color = first(color, opt_color(self.theme, st.color)).unwrap_or(0x1D1D1FFFL)
-  let line = first(line, s_line).map(fn(l) { self.sp(l) }).unwrap_or(self.theme.text_line * size)
+  // An em line follows the drawn size, including the system's non-linear text scaling.
+  let line = match line_em {
+    Some(em) => size * em
+    None => first(line, s_line).map(fn(l) { self.sp(l) }).unwrap_or(self.theme.text_line * size)
+  }
   let wrap = first(wrap, st.wrap).unwrap_or(true)
   let w = first(w, opt_size(st.w)).unwrap_or(Auto)
   let spacing = match (tracking, st.tracking) {

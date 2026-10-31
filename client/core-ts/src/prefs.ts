@@ -25,7 +25,7 @@ type Map_ = Record<string, unknown>;
 
 /// How the drive's reader lays text out on this device (docs/drive.md): each number within its bounds, its default
 /// where none is kept; the papers and faces there are.
-const READER_NUMBERS = { size: [12, 32, 18], line: [1.2, 2.4, 1.7], margin: [8, 44, 22] } as const;
+const READER_NUMBERS = { size: [12, 32, 20], line: [1.2, 2.4, 1.7], margin: [8, 44, 22] } as const;
 const PAPERS = ["follow", "white", "green", "grey", "night"];
 const FACES = ["serif", "sans"];
 
@@ -143,8 +143,10 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
       // Kept as it reads: what this build does not know is not kept.
       prefs.bars = barsOf(value);
     } else if (field === "reader" && isObject(value)) {
-      // Only what is said changes: one setting of the 排版 sheet at a time.
-      prefs.reader = readerOf({ ...(isObject(prefs.reader) ? prefs.reader : {}), ...value });
+      // Keep only settings actually chosen. Filling in the others here would freeze their defaults whenever someone
+      // changed an unrelated setting (for example, choosing paper would also save the current default text size).
+      const chosen = { ...(isObject(prefs.reader) ? prefs.reader : {}), ...value };
+      prefs.reader = Object.fromEntries(Object.entries(readerOf(chosen)).filter(([key]) => key in chosen));
     } else if (field === "fonts" && isObject(value)) {
       // Only the places said change; a face not there is an error.
       const put = fonts.put(prefs.fonts, value);
@@ -223,7 +225,8 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   if ("fillMax" in prefs && (typeof prefs.fillMax !== "number" || !Number.isSafeInteger(prefs.fillMax) || prefs.fillMax < 0)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "fillMax" }));
   if ("language" in prefs && !(prefs.language === "zh" || prefs.language === "en")) throw CoreError.invalid(t("core-misc.params.language"));
   withLang(prefs);
-  const shaped = conform("PrefsView", prefs);
+  // The view's reader is whole; the stored choices may omit fields that still follow the default.
+  const shaped = conform("PrefsView", isObject(prefs.reader) ? { ...prefs, reader: readerOf(prefs.reader) } : prefs);
   if ("error" in shaped) throw CoreError.invalid(t("core-misc.params.invalid", { error: shaped.error }));
   data.set(PREFS, prefs);
 }
