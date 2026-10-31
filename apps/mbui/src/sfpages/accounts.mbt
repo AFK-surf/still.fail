@@ -186,15 +186,11 @@ fn profile_head(c : @ui.Ctx, core : Core, here : Here, address : String, name : 
       if text(p, "checkTone") != "green" {
         @sf.pill(c, text(p, "checkText"), tone=pill_tone(text(p, "checkTone")))
       }
-      // (short of room, when it was checked leaves, then what the check said is cut short; checking again kept)
-      c.text(text(p, "checkLine"), style=pf_check_words) |> ignore
+      // what the check said and when, words of one line (short of room, cut from its end: when it was checked first;
+      // nothing of it moving under the rest as what the check said changes); checking again kept
       let ago = text(field(field(field(p, "check"), "time"), "checkedAt"), "ago")
-      if ago != "" {
-        c.box(drop=pf_drop_checked, fn() {
-          c.text(@sf.t("web-pages.profiles.checkedAt", args=[("time", ago)]), style=pf_sub_quiet) |> ignore
-        })
-        |> ignore
-      }
+      let when = if ago != "" { @sf.t("web-pages.profiles.checkedAt", args=[("time", ago)]) } else { "" }
+      c.text(join([text(p, "checkLine"), when], " · "), style=pf_check_words) |> ignore
       let checking = is_doing(core, ["profile.check"], on)
       if @sf.icon_action(c, "refresh", "profile-check/" + address + "/" + id, @sf.t("web-pages.profiles.recheck"), disabled=checking) {
         @settings.act(core, @sf.t("web-pages.profiles.recheck"), "profile.check", obj([("station", str(address)), ("id", str(id))]))
@@ -235,10 +231,8 @@ fn runtime_tags(c : @ui.Ctx, runtimes : Array[Json], decision : Bool) -> Unit {
     for r in runtimes {
       match r {
         String(rt) =>
-          c.box(style=pf_tag, fn() {
-            @sf.maker_mark(c, "", rt, pf_tag_glyph) |> ignore
-            c.text(runtime_tag(rt), style=pf_tag_words) |> ignore
-          })
+          // (its words alone: its maker's mark is the head's)
+          c.box(style=pf_tag, fn() { c.text(runtime_tag(rt), style=pf_tag_words) |> ignore })
           |> ignore
         _ => ()
       }
@@ -706,7 +700,9 @@ fn profile_quota(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit 
 }
 
 ///|
-/// What it spent in the last 7 days (UsageSection): its cost, calls and tokens as the usage view counts them for it,
+/// What it spent in the last 7 days (UsageSection): its cost (its share of the workspace's under it) and tokens (the
+/// model it used most under them) as the usage view counts them for it (its calls not, nor what its tokens are made
+/// of: they say nothing a person acts on, the user 2026-10-31),
 /// side by side; on several stations, here's alone. The way to the whole usage at its heading.
 fn profile_usage(c : @ui.Ctx, core : Core, here : Here, s : Json?, p : Json?, entry : Json?) -> Unit {
   let address = text(s, "station")
@@ -739,8 +735,7 @@ fn profile_usage(c : @ui.Ctx, core : Core, here : Here, s : Json?, p : Json?, en
         Some(_) =>
           @sf.figures(c, [
             (@sf.t("web-pages.profiles.usageCost"), text(item, "costText"), @sf.t("web-pages.profiles.usageShare", args=[("share", text(item, "shareText"))])),
-            (@sf.t("web-pages.profiles.usageCalls"), text(item, "callsText"), @sf.t("web-pages.profiles.usageCallsSub")),
-            ("Tokens", text(item, "tokensText"), @sf.t("web-pages.profiles.usageTokensSub")),
+            ("Tokens", text(item, "tokensText"), text(item, "topModel")),
           ])
         None =>
           @sf.group(c, fn() {
@@ -844,7 +839,7 @@ fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit
       @sf.loose(c, fn() {
         let found = strings(p, "decisionModels")
         if found.length() > 0 {
-          c.box(style=pf_chips, fn() {
+          c.box(style=pf_chips, flow=true, fn() {
             for m in found {
               c.box(style=pf_chip, fn() { c.text(m, style=pf_chip_words) |> ignore }) |> ignore
             }
@@ -896,12 +891,17 @@ fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit
             if on.length() == 0 {
               c.text(@sf.t("web-pages.profiles.noModels"), style=pf_muted) |> ignore
             } else {
-              c.box(style=pf_chips, fn() {
+              // (each's maker's mark where they are of more than one: one maker's are the head's)
+              let makers = on.map(fn(m) { text(field(field(p, "makers"), m), "id") })
+              let marked = makers.iter().any(fn(k) { k != makers[0] })
+              c.box(style=pf_chips, flow=true, fn() {
                 for m in on {
                   // (its id over it while it is pointed at: Accounts.tsx's tip)
                   let chip = c.id("profile-model-chip/" + key + "/" + m)
                   c.box(style=pf_chip, id=chip, taps=false, points=true, fn() {
-                    @sf.maker_mark(c, text(field(field(p, "makers"), m), "id"), text(p, "runtime"), pf_chip_glyph) |> ignore
+                    if marked {
+                      @sf.maker_mark(c, text(field(field(p, "makers"), m), "id"), text(p, "runtime"), pf_chip_glyph) |> ignore
+                    }
                     c.text(name(m), style=pf_chip_words) |> ignore
                   })
                   |> ignore
@@ -1667,9 +1667,6 @@ let pf_muted : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted
 let pf_mark_glyph : Double = 26.0
 
 ///|
-let pf_tag_glyph : Double = 12.0
-
-///|
 let pf_chip_glyph : Double = 14.0
 
 
@@ -1688,14 +1685,6 @@ let pf_user_avatar : Double = 24.0
 let pf_check_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, wrap=false, w=Cut)
 
 ///|
-/// What leaves its check's line first, short of room: when it was checked.
-let pf_drop_checked : Int = 1
-
-///|
-// kept across runs: a value (no field of it changes)
-let pf_sub_quiet : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Subtle, wrap=false)
-
-///|
 /// Its state under its name (profileState: 8 apart).
 // kept across runs: a value (no field of it changes)
 let pf_state : @ui.Style = @ui.css("row gap=S2 align=ACenter")
@@ -1703,7 +1692,7 @@ let pf_state : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 ///|
 /// The runtimes' tags (runtimeTags: 4 apart, 8 after the name; a tag 18 high, 5 in, round 5, the hover's ground).
 // kept across runs: a value (no field of it changes)
-let pf_tags : @ui.Style = @ui.css("row pl=S2 gap=S1 align=ACenter")
+let pf_tags : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

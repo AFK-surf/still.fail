@@ -215,6 +215,8 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   const people = new Map<string, Item>();
   const chats = new Map<string, Item>();
   const profiles = new Map<string, Item>();
+  // Each account's tokens by model (its key: its name, its tokens), for the one it used most.
+  const profileModels = new Map<string, Map<string, [string, number]>>();
   const models = new Map<string, Item>();
   const entry = (map: Map<string, Item>, key: string, make: () => Item) => {
     let item = map.get(key);
@@ -288,6 +290,14 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
         return { key: profileKey, title, sub: place, extra: {}, sum: new Sum() };
       }).sum.add(row);
       const m = text("model") ?? "";
+      if (m !== "") {
+        const used = profileModels.get(profileKey) ?? new Map<string, [string, number]>();
+        profileModels.set(profileKey, used);
+        const one = new Sum();
+        one.add(row);
+        const was = used.get(model.key(m));
+        used.set(model.key(m), [model.name(m), (was?.[1] ?? 0) + one.tokens()]);
+      }
       entry(models, model.key(m), () => {
         const priced = get(row, "cost") !== undefined && row.cost !== null;
         return { key: model.key(m), title: m === "" ? t("core-views.usage.unknown_which_model") : model.name(m), sub: priced ? null : t("core-views.usage.no_price"), extra: {}, sum: new Sum() };
@@ -334,6 +344,11 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
     { label: t("core-views.usage.tile.input"), value: count(input), sub: t("core-views.usage.tile.input_sub", { percent: percent(total.cacheRead, input) }) },
     { label: t("core-views.usage.tile.output"), value: count(total.output), sub: t("core-views.usage.tile.output_sub", { n: count(total.calls > 0 ? total.output / total.calls : 0) }) },
   ];
+  for (const [key, used] of profileModels) {
+    const most = [...used.values()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))[0];
+    const item = profiles.get(key);
+    if (item !== undefined && most !== undefined && most[1] > 0) item.extra.topModel = t("core-views.usage.top_model", { model: most[0] });
+  }
   const lists = [
     { key: "people", title: t("core-views.usage.by.people"), items: itemsShown([...people.values()], total) },
     { key: "chats", title: t("core-views.usage.by.chats"), items: itemsShown([...chats.values()], total) },

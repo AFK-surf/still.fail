@@ -149,3 +149,67 @@ test "a profile's models, a narrow page with a mouse: chosen in place, one named
   assert_true(t.find("全选筛选结果") is Some(_))
   assert_true(t.find("取消选择筛选结果") is Some(_))
 }
+
+///|
+/// The fixture's Claude subscription as android 0.1.6389 showed one (2026-10-31): named by its long address, four
+/// models on, its last 7 days' figures large.
+fn long_profile(s : Source) -> Source {
+  fn shaped(v : Json) -> Json {
+    match v {
+      Object(o) if o.get("id") == Some(Json::string("cc")) && o.contains("available") => {
+        let p = o.copy()
+        let ms : Array[Json] = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5", "claude-haiku-5"]
+        p["name"] = "claude5@jimmfly.example.com"
+        p["models"] = Json::array(ms)
+        p["available"] = Json::array(ms)
+        p["names"] = { "claude-fable-5-1": "Fable 5.1", "claude-opus-5-5": "Opus 5.5", "claude-sonnet-5": "Sonnet 5", "claude-haiku-5": "Haiku 5" }
+        p["series"] = [{ "name": "Claude", "models": Json::array(ms) }]
+        Json::object(p)
+      }
+      Object(o) => {
+        let p = o.copy()
+        for k, x in o {
+          p[k] = shaped(x)
+        }
+        if o.contains("lists") && o.contains("tiles") {
+          let lists = match o.get("lists") { Some(Array(a)) => a.copy(); _ => [] }
+          lists.push({ "key": "profiles", "items": [{ "key": "ws1/st1/cc", "costText": "$1,735", "shareText": "64%", "callsText": "2.2 万", "tokensText": "49.7 亿", "topModel": "最多 Opus 5.5" }] })
+          p["lists"] = Json::array(lists)
+        }
+        Json::object(p)
+      }
+      Array(a) => Json::array(a.map(shaped))
+      _ => v
+    }
+  }
+  {
+    ..s,
+    topic: fn(name, params) {
+      let v = (s.topic)(name, params)
+      match v.value {
+        Some(x) => { ..v, value: Some(shaped(x)) }
+        None => v
+      }
+    },
+  }
+}
+
+///|
+test "a profile's page on a phone: its long name, its figures on one line and its models' names whole, nothing squeezed" {
+  // (326, the page android 0.1.6389 cut its name, its Tokens figure and its models' names on, 2026-10-31)
+  for w in [326.0, 390.0] {
+    let t = setting_tester(Profile("ws1/st1", "cc"), w, platform=2, over=long_profile, h=2400.0)
+    // (its switches' words, beside their switches, are another's)
+    let faults = t.squeeze_faults().filter(fn(f) { !f.contains("for what shares their row") })
+    assert_eq(faults, [], msg=w.to_string() + faults.join("; "))
+    assert_true(t.find("模型请求次数") is None && t.find("输入、缓存和输出") is None, msg="\{w}: no calls, nor what tokens are")
+    for f in ["$1,735", "49.7 亿", "最多 Opus 5.5", "Fable 5.1", "Opus 5.5", "Sonnet 5", "Haiku 5"] {
+      assert_true(t.find(f) is Some(_), msg="\{w}: \{f}")
+    }
+    // its figures side by side
+    let (_, y1, _, _) = t.rect_of("$1,735").unwrap()
+    let (x3, y3, w3, _) = t.rect_of("49.7 亿").unwrap()
+    assert_eq(y3, y1, msg="\{w}: one line")
+    assert_true(x3 + w3 <= w, msg="\{w}: inside the page")
+  }
+}

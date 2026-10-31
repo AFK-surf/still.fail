@@ -757,11 +757,27 @@ export function profile(p: J): J {
   // Who a sign-in goes to: OpenCode for OpenCode Go, Kimi for Kimi Code, else its runtime's vendor.
   o.signInProvider = kind === "opencode-go" ? "OpenCode" : get(o.access, "provider") === "kimi-code" ? "Kimi"
     : (SIGN_IN[str(o.runtime) ?? ""] ?? "ChatGPT");
-  // Its last check in a line (its detail, without the 可用 (Works) a working one starts with: its state says that), or that it
-  // has none yet.
+  // Its last check in a line (its detail, without the 可用 (Works) a working one starts with: its state says that, nor the
+  // address it signed in as where that is its name: its head says it), or that it has none yet.
   const detailOf = str(get(o.check, "detail"));
-  o.checkLine = isObject(o.check) ? (detailOf ?? "").replace(/^(可用[，,]|Works,)\s*/, "") : t("core-views.present.profile.never_checked");
+  const named = str(o.name) ?? "";
+  o.checkLine = isObject(o.check)
+    ? withoutPart((detailOf ?? "").replace(/^(可用[，,]|Works,)\s*/, ""), named)
+    : t("core-views.present.profile.never_checked");
   return o;
+}
+
+/// A line of parts (a detail's: 已登录，an address，a plan) without the part that is `part` and the comma before it.
+function withoutPart(line: string, part: string): string {
+  if (part === "") return line;
+  const pieces = line.split(/([，,]\s*)/);
+  const kept: string[] = [];
+  for (let i = 0; i < pieces.length; i += 2) {
+    if (pieces[i] === part) continue;
+    if (kept.length > 0) kept.push(pieces[i - 1]);
+    kept.push(pieces[i]);
+  }
+  return kept.join("");
 }
 
 /// Who a runtime's subscription signs in to.

@@ -197,6 +197,18 @@ test("an_account_its_provider_refuses_says_so_whatever_its_check_found", () => {
   assert.equal(ok.checkText, "可用");
 });
 
+test("a_profiles_check_line_leaves_out_the_address_that_is_its_name", () => {
+  let q: J = { name: "claude5@example.com", check: { state: "ok", detail: "已登录，claude5@example.com，max" } };
+  q = p.profile(q);
+  assert.equal(q.checkLine, "已登录，max");
+  let last: J = { name: "claude5@example.com", check: { state: "ok", detail: "已登录，claude5@example.com" } };
+  last = p.profile(last);
+  assert.equal(last.checkLine, "已登录");
+  let other: J = { name: "主账号", check: { state: "ok", detail: "Signed in, a@example.com" } };
+  other = p.profile(other);
+  assert.equal(other.checkLine, "Signed in, a@example.com");
+});
+
 test("a_rows_state_puts_block_first", () => {
   const agents = [{ lastTurn: { outcome: "failed" } }, { process: "running" }, { lastTurn: { declared: "block" } }];
   assert.equal(p.rowState(agents), "block");

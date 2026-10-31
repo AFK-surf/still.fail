@@ -354,8 +354,10 @@ fn narrow_page(
   if top > 0.0 {
     blocks.push(fn() { c.box(style=@ui.style(w=Full, h=Fixed(top)), fn() {  }) |> ignore })
   }
+  // (a head of its own under back: back's line is its first, what it does at that line's end)
+  let back_in_head = head is Some(_) && !named && back is Some(_)
   match back {
-    Some(label) =>
+    Some(label) if !back_in_head =>
       blocks.push(fn() {
         c.box(style=pg_back_line, fn() {
           if nav_back(c, "settings-back", label) {
@@ -364,7 +366,7 @@ fn narrow_page(
         })
         |> ignore
       })
-    None => ()
+    _ => ()
   }
   // (a place's top page: the frame's bar over it names it, and holds what it does at its end)
   if named {
@@ -396,11 +398,24 @@ fn narrow_page(
       |> ignore
     })
   }
+  match (head, back) {
+    (Some(h), Some(label)) if back_in_head =>
+      blocks.push(fn() {
+        own_head_back.val = Some(fn() {
+          if nav_back(c, "settings-back", label) {
+            on_back()
+          }
+        })
+        c.box(style=pg_card_room, h) |> ignore
+        own_head_back.val = None
+      })
+    _ => ()
+  }
   // (what follows in the page's room: narrow_list)
   let chrome = blocks.length()
   // (a head of its own says its name in place of the title, 10 over what follows as a card is)
   match head {
-    Some(h) if !named => blocks.push(fn() { c.box(style=pg_card_room, h) |> ignore })
+    Some(h) if !named && !back_in_head => blocks.push(fn() { c.box(style=pg_card_room, h) |> ignore })
     _ => ()
   }
   if !lead.is_empty() {
@@ -1874,16 +1889,27 @@ pub fn icon_action(c : @ui.Ctx, icon : String, key : String, label : String, dis
 }
 
 ///|
-/// Figures side by side (the usage's tiles: what each is, its number large, a line under it), on the page's ground as
-/// cards of their own (narrow, 12 from the page's sides as its cards).
+/// Figures side by side (the usage's tiles: what each is, its number large, a line under it where it has one), on the
+/// page's ground as cards of their own (narrow, 12 from the page's sides as its cards). Always on one line, sharing it
+/// (the web's minmax(0, 1fr)): narrow, closer (8 apart, 12 in) and their numbers a size smaller, so three stand on a
+/// phone's page, each's line under it there only where it fits whole.
 pub fn figures(c : @ui.Ctx, figures : Array[(String, String, String)]) -> Unit {
-  c.box(style=if look() == Narrow { pg_card_room } else { wide_block }, fn() {
-    c.box(style=fig_row, fn() {
+  let narrow = look() == Narrow
+  c.box(style=if narrow { pg_card_room } else { wide_block }, fn() {
+    c.box(style=if narrow { fig_row_narrow } else { fig_row }, fn() {
       for f in figures {
-        c.box(style=fig_tile, fn() {
+        c.box(style=if narrow { fig_tile_narrow } else { fig_tile }, fn() {
           c.text(f.0, style=fig_label) |> ignore
-          c.text(f.1, style=fig_value) |> ignore
-          c.text(f.2, style=fig_sub) |> ignore
+          c.text(f.1, style=if narrow { fig_value_narrow } else { fig_value }) |> ignore
+          if f.2 == "" {
+            ()
+          } else if narrow {
+            // (its line under it whole, or none: words cut short say nothing)
+            c.box(style=fig_sub_line, fn() { c.box(drop=1, fn() { c.text(f.2, style=fig_sub_whole) |> ignore }) |> ignore })
+            |> ignore
+          } else {
+            c.text(f.2, style=fig_sub) |> ignore
+          }
         })
         |> ignore
       }
@@ -2007,10 +2033,10 @@ let dl_reset : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted
 /// (given the box's side), its `name`, renamed by `rename` (said `rename_label`) where it may be, `busy` while it is
 /// saved; `tags` (its runtimes: what it is); `lines` of what it is and where, `dot` (a state's: online, offline …)
 /// before the first; how it stands under them (`state`), what is wrong with it (`warnings`: its words, red or not),
-/// what it does at the end of its name's line (`actions`), the lines under it as wide as its words. Wide, the web's
-/// identity: its mark 48, its name large with its tags and a pencil after it. Narrow: its name the page's large title,
-/// its mark beside it and what it does at the end of its line, the name pressed to rename it; its tags in the small
-/// line under it.
+/// what it does at the end of its name's line (`actions`). Wide, the web's identity: its mark 48, its name large with
+/// its tags and a pencil after it, the lines under it as wide as its words. Narrow: its mark, its name and what it does
+/// in one line, the name a size under the page's large title (on more lines only where it does not fit one), pressed
+/// to rename it; its tags and lines under them, from the page's edge.
 pub fn own_head(
   c : @ui.Ctx,
   mark : (Double) -> Unit,
@@ -2026,97 +2052,140 @@ pub fn own_head(
   actions? : () -> Unit,
 ) -> Unit {
   let narrow = look() == Narrow
-  // the first line: the dot, (narrow) its tags, what it is
-  let first = fn(words : String) {
-    c.box(style=head_line_row, fn() {
-      if dot != "" {
-        status_dot(c, dot)
-      }
-      if narrow {
-        match tags {
-          Some(f) => f()
-          None => ()
+  // what is under its name: the first line (the dot, narrow its tags, what it is), the others, how it stands, what is
+  // wrong with it
+  let below = fn() {
+    let shown = lines.filter(fn(l) { l != "" })
+    if shown.length() > 0 || dot != "" || (narrow && tags is Some(_)) {
+      c.box(style=head_line_row, fn() {
+        if dot != "" {
+          status_dot(c, dot)
         }
-      }
-      if words != "" {
-        c.text(words, style=if narrow { head_line_narrow } else { head_line }) |> ignore
-      }
-    })
-    |> ignore
-  }
-  c.box(style=if narrow { head_narrow } else { head_wide }, fn() {
-    c.box(style=if narrow { head_mark_narrow } else { head_mark_wide }, fn() {
-      mark(if narrow { head_mark_narrow_side } else { head_mark_wide_side })
-    })
-    |> ignore
-    c.box(style=head_identity, keep=true, fn() {
-      // its name and what it does on the name's line, the lines under them as wide as its words (lines of their own)
-      c.box(style=if narrow { head_name_row_narrow } else { head_name_row }, fn() {
         if narrow {
-          // its name the large title, in as many lines as it takes; pressed, renamed
+          match tags {
+            Some(f) => f()
+            None => ()
+          }
+        }
+        if shown.length() > 0 {
+          c.text(shown[0], style=if narrow { head_line_narrow } else { head_line }) |> ignore
+        }
+      })
+      |> ignore
+    }
+    for i, l in shown {
+      if i > 0 {
+        c.text(l, style=if narrow { head_line_narrow } else { head_line }) |> ignore
+      }
+    }
+    match state {
+      Some(f) => c.box(style=head_state, f) |> ignore
+      None => ()
+    }
+    // (red where it does not work, else amber)
+    for w in warnings {
+      c.text(w.0, style=if w.1 { head_warn_red } else { head_warn_amber }) |> ignore
+    }
+  }
+  let end = fn() {
+    match actions {
+      Some(f) => c.box(style=head_actions, f) |> ignore
+      None => ()
+    }
+  }
+  if narrow {
+    // back's line over it, given by its page (narrow_page): what it does at that line's end, over the page's corner
+    let back_line = own_head_back.val
+    own_head_back.val = None
+    match back_line {
+      Some(b) =>
+        c.box(style=pg_back_line, fn() {
+          b()
+          c.box(style=pg_row_words, fn() {  }) |> ignore
+          end()
+        })
+        |> ignore
+      None => ()
+    }
+    // (16 over what follows; under a state's line, its button's room is that room already)
+    let body = fn() {
+      c.box(style=if state is None { head_narrow.then(head_narrow_foot) } else { head_narrow }, fn() {
+        c.box(style=head_top_narrow, fn() {
+          c.box(style=head_mark_narrow, fn() { mark(head_mark_narrow_side) }) |> ignore
           c.box(style=pg_row_words, fn() {
+            // its name a size under the page's large title (its mark beside it: a phone's line), on as many lines as
+            // it takes (an address broken after its @ and its dots, not inside a word of it)
+            let words = fn() {
+              c.text(name.replace_all(old="@", new="@\u{200B}").replace_all(old=".", new=".\u{200B}"), style=head_name_lines)
+              |> ignore
+            }
             match rename {
               Some(f) => {
                 let id = c.id("own-head-name")
-                let b = c.box(style=head_name_press, id~, fn() { c.text(name, style=head_name_narrow) |> ignore })
+                let b = c.box(style=head_name_press, id~, words)
                 c.semantics(b, Button, id~, label=if rename_label == "" { name } else { rename_label })
                 if c.clicked(id) {
                   f()
                 }
               }
-              None => c.text(name, style=head_name_narrow) |> ignore
+              None => words()
             }
             if busy {
               spinner(c, size=spinner_inline) |> ignore
             }
           })
           |> ignore
-        } else {
-          c.box(style=head_name_line.then(head_name_grow), fn() {
-            // (short of room, its name is cut short, what follows it kept)
-            c.text(name, style=head_name_wide) |> ignore
-            if busy {
-              spinner(c, size=spinner_inline) |> ignore
-            }
-            match tags {
-              Some(f) => f()
-              None => ()
-            }
-            match rename {
-              Some(f) => if icon_action(c, "edit", "own-head-rename", rename_label) { f() }
-              None => ()
-            }
-          })
-          |> ignore
-        }
-        match actions {
-          Some(f) => c.box(style=head_actions, f) |> ignore
-          None => ()
-        }
+          if back_line is None {
+            end()
+          }
+        })
+        |> ignore
+        below()
       })
       |> ignore
-      let shown = lines.filter(fn(l) { l != "" })
-      if shown.length() > 0 || dot != "" || (narrow && tags is Some(_)) {
-        first(if shown.length() > 0 { shown[0] } else { "" })
-      }
-      for i, l in shown {
-        if i > 0 {
-          c.text(l, style=if narrow { head_line_narrow } else { head_line }) |> ignore
-        }
-      }
-      match state {
-        Some(f) => c.box(style=head_state, f) |> ignore
-        None => ()
-      }
-      // what is wrong with it, under how it is (red where it does not work, else amber)
-      for w in warnings {
-        c.text(w.0, style=if w.1 { head_warn_red } else { head_warn_amber }) |> ignore
-      }
+    }
+    // (under back's line from the page's edges, in the page's room as the rest of it is)
+    match back_line {
+      Some(_) => c.box(style=pg_room, body) |> ignore
+      None => body()
+    }
+    return
+  }
+  c.box(style=head_wide, fn() {
+    c.box(style=head_mark_wide, fn() { mark(head_mark_wide_side) }) |> ignore
+    c.box(style=head_identity, keep=true, fn() {
+      // its name and what it does on the name's line, the lines under them as wide as its words (lines of their own)
+      c.box(style=head_name_row, fn() {
+        c.box(style=head_name_line.then(head_name_grow), fn() {
+          // (short of room, its name is cut short, what follows it kept)
+          c.text(name, style=head_name_wide) |> ignore
+          if busy {
+            spinner(c, size=spinner_inline) |> ignore
+          }
+          match tags {
+            Some(f) => c.box(style=head_tags_wide, f) |> ignore
+            None => ()
+          }
+          match rename {
+            Some(f) => if icon_action(c, "edit", "own-head-rename", rename_label) { f() }
+            None => ()
+          }
+        })
+        |> ignore
+        end()
+      })
+      |> ignore
+      below()
     })
     |> ignore
   })
   |> ignore
 }
+
+///|
+/// Back's line a narrow page gives the own head it draws under it (narrow_page), taken by the head as it is drawn.
+// kept across runs: said by a page round its head's drawing, None outside it
+let own_head_back : Ref[(() -> Unit)?] = Ref(None)
 
 ///|
 /// A finger's press rippling over a row (ListRow's, its corner concentric with its card's; square outside one).
@@ -2576,7 +2645,15 @@ let fig_row : @ui.Style = @ui.css("row w=Full gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
+let fig_row_narrow : @ui.Style = @ui.css("row w=Full gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
 let fig_tile : @ui.Style = @ui.style(w=grow, min_w=S28, px=S4, py=S3_5, gap=S0_5, radius=Xl3, bg=Card)
+
+///|
+// kept across runs: a value (no field of it changes)
+let fig_tile_narrow : @ui.Style = @ui.style(w=grow, min_w=S0, px=S3, py=S3, gap=S0_5, radius=Xl3, bg=Card)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2588,7 +2665,19 @@ let fig_value : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, co
 
 ///|
 // kept across runs: a value (no field of it changes)
+let fig_value_narrow : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Fg, wrap=false, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
 let fig_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let fig_sub_whole : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let fig_sub_line : @ui.Style = @ui.css("row w=Full")
 
 ///|
 /// A page's own head: wide, its mark 48 and its words beside it, 16 apart, 28 over what follows; narrow, its mark 40,
@@ -2598,7 +2687,16 @@ let head_wide : @ui.Style = @ui.css("row w=Full pb=S7 gap=S4 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_narrow : @ui.Style = @ui.css("row w=Full px=S1 pb=S4 gap=S3 align=AStart")
+let head_narrow : @ui.Style = @ui.css("w=Full px=S1 gap=S1_5")
+
+///|
+/// Narrow, its mark, its name and what it does: a line across its middle.
+// kept across runs: a value (no field of it changes)
+let head_top_narrow : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let head_narrow_foot : @ui.Style = @ui.css("pb=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2606,7 +2704,7 @@ let head_mark_wide : @ui.Style = @ui.css("w=S12 h=S12 radius=Lg bg=Neutral align
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_mark_narrow : @ui.Style = @ui.css("w=S10 h=S10 mt=S1 radius=Lg bg=Neutral align=ACenter justify=JCenter")
+let head_mark_narrow : @ui.Style = @ui.css("w=S10 h=S10 radius=Lg bg=Neutral align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2622,7 +2720,12 @@ let head_name_wide : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibol
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_name_narrow : @ui.TextStyle = large_title.then(full_words)
+let head_name_lines : @ui.TextStyle = @ui.text_style(size=Heading, weight=Bold, color=Fg, w=Full)
+
+///|
+/// Wide, its tags 8 after its name.
+// kept across runs: a value (no field of it changes)
+let head_tags_wide : @ui.Style = @ui.css("pl=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2645,7 +2748,6 @@ let head_name_row : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_name_row_narrow : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart")
 
 ///|
 /// Its name and what follows it, wide, taking what the line leaves what it does.

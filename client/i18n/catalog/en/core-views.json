@@ -443,6 +443,7 @@
   },
   "core-views.usage.deleted_account": "{profile} (deleted)",
   "core-views.usage.deleted_chat": "Deleted chat",
+  "core-views.usage.top_model": "Mostly {model}",
   "core-views.usage.detail": {
     "one": "1 call · {tokens} tokens",
     "other": "{n} calls · {tokens} tokens"
