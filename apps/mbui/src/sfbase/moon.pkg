@@ -21,6 +21,7 @@ options(
   targets: {
     "inter_face.mbt": [ "native" ],
     "inter_face_js.mbt": [ "js" ],
+    "inter_face_native.mbt": [ "native" ],
     "share_face.mbt": [ "native" ],
     "share_face_native.mbt": [ "native" ],
     "share_face_js.mbt": [ "js" ],

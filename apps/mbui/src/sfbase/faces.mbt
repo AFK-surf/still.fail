@@ -66,25 +66,6 @@ fn faces_reset() -> Unit {
 pub let desktop_face : String = "\u{1}inter"
 
 ///|
-// kept across runs: the same bytes once made
-let inter_bytes : Ref[Bytes?] = Ref(None)
-
-///|
-fn inter_face() -> Bytes? {
-  match inter_bytes.val {
-    Some(b) => Some(b)
-    None =>
-      match @zip.gunzip(inter_gz) {
-        Some(b) => {
-          inter_bytes.val = Some(b)
-          Some(b)
-        }
-        None => None
-      }
-  }
-}
-
-///|
 /// The places' faces as a visualization's page is set in them (viz_file.mbt viz_tokens), by host face (1 ui, 2 text,
 /// 3 code): each one's family as CSS has it ("": the page's own), and the stylesheet a face still.fail keeps is had
 /// from there ("": none, the family the machine's or the page's).

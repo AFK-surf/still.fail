@@ -5,6 +5,9 @@
 // "core" (the host's `post`), its bytes beside its JSON.
 import { BUILT_AT } from "../core/built.ts";
 import { BETA } from "../channel.ts";
+// the app's words' face in a browser: the web's own Inter (its Latin, as the web's pages have it), not the whole face
+// the native hosts carry (apps/mbui src/sfbase/inter_face_js.mbt)
+import interLatin from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
 
 /// The worker's name, as the web's pages name theirs (src/core/client.ts): one build's pages share its core.
 const workerName = `stillfail-core-${BUILT_AT}${BETA ? "-test" : ""}`;
@@ -133,10 +136,10 @@ startWorker();
 /// that does not come is left out: the app draws in the system's faces where its own is missing.
 const assets: Record<string, Uint8Array> = {};
 (globalThis as { __mbassets?: Record<string, Uint8Array> }).__mbassets = assets;
-const fetchCarried = (name: string) =>
-  fetch(`/mbui/assets/${name}?b=${BUILT_AT}`).then((r) => (r.ok ? r.arrayBuffer() : null), () => null)
+const fetchCarried = (name: string, url = `/mbui/assets/${name}?b=${BUILT_AT}`) =>
+  fetch(url).then((r) => (r.ok ? r.arrayBuffer() : null), () => null)
     .then((b) => { if (b) assets[name] = new Uint8Array(b); });
-const starting = Promise.all(["jetbrains_mono.ttf", "inter.ttf.gz"].map(fetchCarried));
+const starting = Promise.all([fetchCarried("jetbrains_mono.ttf"), fetchCarried("inter.woff2", interLatin)]);
 
 // (named by this build: a page of a newer build never runs an older app's script from the browser's cache)
 await load(`/mbui/host.js?b=${BUILT_AT}`);
