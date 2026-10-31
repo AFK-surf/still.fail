@@ -187,6 +187,15 @@ fn Ctx::hand_faults(self : Ctx, rest : Map[String, HandMark]) -> Array[String] {
 pub fn Tester::hand_moves(self : Tester) -> Array[String] {
   let c = g()
   let rest = c.hand_marks()
+  // (the window's tree's nodes too: each that reads the pointer told it is over it, View::pointed)
+  let tree_rest = match view_app.val {
+    Some(tree) => tree.hand_nodes()
+    None => []
+  }
+  match view_app.val {
+    Some(tree) => tree.lit_all(true)
+    None => ()
+  }
   c.lit_every = true
   c.lit_all = true
   // (how it is drawn changed by the test: built whole, as the frame after it is, frame_watch.mbt)
@@ -195,9 +204,118 @@ pub fn Tester::hand_moves(self : Tester) -> Array[String] {
   on_frame(self.w, self.h, self.fake.scale, self.fake.time)
   self.frames = self.frames + 1
   let faults = c.hand_faults(rest)
+  match view_app.val {
+    Some(tree) => {
+      faults.append(tree_hand_faults(tree_rest, tree.hand_nodes()))
+      tree.lit_all(false)
+    }
+    None => ()
+  }
   c.lit_every = false
   c.lit_all = false
   test_stepped()
   frame_ended_outside()
   faults
+}
+
+///|
+/// Where the window's tree's nodes, every one that reads the pointer told it is over it (Tree::lit_all), stand
+/// otherwise than `rest`, as they were with none (Tree::hand_nodes): as Ctx::hand_faults has it of the old frame's
+/// nodes, one line for each that the hand lights grown or shrunk, or for words set otherwise, with nothing in it that is;
+/// and for each it lights moved up or down in what holds it, nothing before it there grown, once for what holds it.
+fn tree_hand_faults(rest : Array[@view.HandNode], now : Array[@view.HandNode]) -> Array[String] {
+  let was : Map[String, @view.HandNode] = Map([])
+  for r in rest {
+    was[r.key] = r
+  }
+  let grew : Map[String, Bool] = Map([])
+  for n in now {
+    match was.get(n.key) {
+      Some(m) =>
+        if (n.lights && !hand_near(m.h, n.h)) ||
+          (n.words && (!hand_near(m.size, n.size) || !weights_alike(m, n) || !hand_near(m.line, n.line))) {
+          grew[n.key] = true
+        }
+      None => ()
+    }
+  }
+  // (what holds one grown grew by it: told once, of the one that grew)
+  let holder_of : Map[String, String] = Map([])
+  for n in now {
+    holder_of[n.key] = n.holder
+  }
+  let holds_grown : Set[String] = Set([])
+  for n in now {
+    if grew.contains(n.key) {
+      let mut h = n.holder
+      while h != "" && !holds_grown.contains(h) {
+        holds_grown.add(h)
+        h = holder_of.get(h).unwrap_or("")
+      }
+    }
+  }
+  let out : Array[String] = []
+  for n in now {
+    if grew.contains(n.key) && !holds_grown.contains(n.key) {
+      let m = was[n.key]
+      let words = if n.words {
+        ", its words \{m.size} at weights \{m.weights} on a line of \{m.line} at rest, \{n.size} at \{n.weights} on \{n.line} lit"
+      } else {
+        ""
+      }
+      out.push("the tree's node \{n.key}\{tree_said(n)} is \{m.w.round()}×\{m.h.round()} at rest, \{n.w.round()}×\{n.h.round()} lit\{words}")
+    }
+  }
+  // moved in what holds it, nothing before it there grown
+  let grown_before : Set[String] = Set([])
+  let told : Set[String] = Set([])
+  for n in now {
+    match was.get(n.key) {
+      Some(m) =>
+        if n.lights &&
+          !hand_near(m.y, n.y) &&
+          !grown_before.contains(n.holder) &&
+          !grew.contains(n.holder) &&
+          !holds_grown.contains(n.holder) &&
+          !told.contains(n.holder) {
+          told.add(n.holder)
+          out.push("the tree's node \{n.key}\{tree_said(n)} moves in \{n.holder} lit, from \{m.y.round()} down in it to \{n.y.round()}")
+        }
+      None => ()
+    }
+    if grew.contains(n.key) || holds_grown.contains(n.key) {
+      grown_before.add(n.holder)
+    }
+  }
+  out
+}
+
+///|
+/// Whether a tree's node's words are set in the same weights lit as at rest: the same words each in the weight it was;
+/// words said otherwise (what they say is the page's, as it is in the frame's nodes) the same weights among them.
+fn weights_alike(m : @view.HandNode, n : @view.HandNode) -> Bool {
+  if m.said == n.said {
+    return m.weights == n.weights
+  }
+  let used = fn(ws : Array[(Int, Int)]) {
+    let set : Array[Int] = []
+    for w in ws {
+      if !set.contains(w.1) {
+        set.push(w.1)
+      }
+    }
+    set.sort()
+    set
+  }
+  used(m.weights) == used(n.weights)
+}
+
+///|
+/// What a tree's node says, to name it in a fault (「…」), none where it says nothing.
+fn tree_said(n : @view.HandNode) -> String {
+  if n.said == "" {
+    ""
+  } else {
+    " 「\{n.said}」"
+  }
 }
