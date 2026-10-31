@@ -198,7 +198,7 @@ struct Node {
   /// the key the next of them is kept by
   mut drop_next : Int
   /// its properties' bindings, by property: what stops each
-  props : Map[Int, () -> Unit]
+  props : Map[Prop, () -> Unit]
   mut on_press : (() -> Unit)?
   /// whether it is a top row of the app's own (View::moves_window: a press on it its own), and whether a press on it
   /// moves the window now
@@ -1150,10 +1150,55 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
 }
 
 ///|
+/// A property of a node bound to what says it (View::bind: its one binding, one bound again let go of first), by name:
+/// two that set the same thing two ways one binding (Width: View::width in points, View::width_share as a share;
+/// Words: View::words, View::words_runs), any other its own, so that one bound never lets go of another's.
+priv enum Prop {
+  Width
+  Height
+  Padding
+  Row
+  Grow
+  Ground
+  Alpha
+  Offset
+  Words
+  Over
+  Shift
+  Presses
+  Modal
+  Shapes
+  Tint
+  Radius
+  Glass
+  Says
+  Hides
+  Focusable
+  Cursor
+  Basis
+  Ink
+  Shadow
+  MaxWidth
+  WordsLook
+  Shrink
+  Gap
+  MinWidth
+  LinesUp
+  Scale
+  DrawnAs
+  MovesWindow
+  KeepsHeld
+  Clips
+  Measured
+  WordsCentered
+  Picture
+} derive(Eq, Hash)
+
+///|
 /// Property `prop` of the node (its one binding: one bound before is let go), set by `apply`: once, or as what it
 /// reads changes (Tree::queued: as the frame takes it), set again only if it came out otherwise than it last did,
 /// marking what its phase does again.
-fn[T : Eq] View::bind(self : View, prop : Int, live : Live[T], phase : Phase, apply : (T) -> Unit) -> Unit {
+fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, apply : (T) -> Unit) -> Unit {
   guard self.live() is Some(n) else { return }
   let tree = self.tree
   let at = self.at
@@ -1209,7 +1254,7 @@ fn[T : Eq] View::bind(self : View, prop : Int, live : Live[T], phase : Phase, ap
 ///|
 /// Its width (points; None: as its content and its holder make it).
 pub fn View::width(self : View, w : Live[Double?]) -> View {
-  self.bind(0, w, Layout, fn(w) {
+  self.bind(Width, w, Layout, fn(w) {
     self.tree.nodes[self.at].flex.style.set_width(match w {
       Some(w) => Pt(w)
       None => Auto
@@ -1221,7 +1266,7 @@ pub fn View::width(self : View, w : Live[Double?]) -> View {
 ///|
 /// Its height (points; None: as its content and its holder make it).
 pub fn View::height(self : View, h : Live[Double?]) -> View {
-  self.bind(1, h, Layout, fn(h) {
+  self.bind(Height, h, Layout, fn(h) {
     self.tree.nodes[self.at].flex.style.set_height(match h {
       Some(h) => Pt(h)
       None => Auto
@@ -1234,7 +1279,7 @@ pub fn View::height(self : View, h : Live[Double?]) -> View {
 /// Room inside it, at its left, top, right and bottom: one property (pad and sides say it too, the last said its one
 /// binding).
 pub fn View::padding(self : View, p : Live[(Double, Double, Double, Double)]) -> View {
-  self.bind(2, p, Layout, fn(p) {
+  self.bind(Padding, p, Layout, fn(p) {
     let s = self.tree.nodes[self.at].flex.style
     s.set_padding_left(Pt(p.0))
     s.set_padding_top(Pt(p.1))
@@ -1278,14 +1323,14 @@ pub fn View::sides(self : View, lr : Live[(Double, Double)]) -> View {
 ///|
 /// What it holds laid out across (true) or down.
 pub fn View::row(self : View, across : Live[Bool]) -> View {
-  self.bind(3, across, Layout, fn(a) { self.tree.nodes[self.at].flex.style.direction = if a { Row } else { Column } })
+  self.bind(Row, across, Layout, fn(a) { self.tree.nodes[self.at].flex.style.direction = if a { Row } else { Column } })
   self
 }
 
 ///|
 /// How much of the room left it takes.
 pub fn View::grow(self : View, g : Live[Double]) -> View {
-  self.bind(4, g, Layout, fn(g) { self.tree.nodes[self.at].flex.style.grow = g })
+  self.bind(Grow, g, Layout, fn(g) { self.tree.nodes[self.at].flex.style.grow = g })
   self
 }
 
@@ -1294,7 +1339,7 @@ pub fn View::grow(self : View, g : Live[Double]) -> View {
 /// whatever its basis and least width say, as it changes: what is beside it gives way first; what it holds changing
 /// (its words, their face, its parts, their gaps) lays it out so again. Layout's.
 pub fn View::keeps_held(self : View, on : Live[Bool]) -> View {
-  self.bind(33, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.min_held = on })
+  self.bind(KeepsHeld, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.min_held = on })
   self
 }
 
@@ -1304,7 +1349,7 @@ pub fn View::keeps_held(self : View, on : Live[Bool]) -> View {
 /// Fill). It says nothing of how narrow it may come to: that is its least width's (View::min_width) or, never narrower
 /// than what it holds, View::keeps_held's. Layout's.
 pub fn View::basis(self : View, b : Live[Double?]) -> View {
-  self.bind(21, b, Layout, fn(b) {
+  self.bind(Basis, b, Layout, fn(b) {
     self.tree.nodes[self.at].flex.style.set_basis(
       match b {
         Some(v) => Pt(v)
@@ -1337,7 +1382,7 @@ pub fn View::window(self : View) -> (Double, Double) {
 /// Laid out over what holds it (true), filling all of its room whatever else it holds, or in its turn among them: what
 /// lies one over another (a stack's pages, what floats over them) said so, drawn in the order they are held.
 pub fn View::over(self : View, on : Live[Bool]) -> View {
-  self.bind(9, on, Layout, fn(on) {
+  self.bind(Over, on, Layout, fn(on) {
     let s = self.tree.nodes[self.at].flex.style
     let inset : @flex.Dim = if on { Pt(0.0) } else { Auto }
     s.position = if on { Absolute } else { Relative }
@@ -1354,7 +1399,7 @@ pub fn View::over(self : View, on : Live[Bool]) -> View {
 /// (a progress bar's track cutting its part at its round ends), as it changes: paint's. How it is drawn only: where a
 /// finger or the pointer is taken is as it was (what is past it still takes them), unlike an old view's clip.
 pub fn View::clips(self : View, on : Live[Bool]) -> View {
-  self.bind(34, on, Paint, fn(on) { self.tree.nodes[self.at].look.clips = on })
+  self.bind(Clips, on, Paint, fn(on) { self.tree.nodes[self.at].look.clips = on })
   self
 }
 
@@ -1363,7 +1408,7 @@ pub fn View::clips(self : View, on : Live[Bool]) -> View {
 /// each part of it), as an old view's centred words do (Ctx::text's `center`): how they are drawn only, measured and
 /// wrapped as ever, a change of it drawn again, nothing laid out again.
 pub fn View::words_centered(self : View, on : Live[Bool]) -> View {
-  self.bind(36, on, Paint, fn(on) { self.tree.nodes[self.at].look.words_center = on })
+  self.bind(WordsCentered, on, Paint, fn(on) { self.tree.nodes[self.at].look.words_center = on })
   self
 }
 
@@ -1374,14 +1419,14 @@ pub fn View::words_centered(self : View, on : Live[Bool]) -> View {
 /// In its tint where it has one (View::tint), each of its paths keeping its own opacity; a tint changed draws it again
 /// in it, its curves not cut again. Paint's.
 pub fn View::picture(self : View, picture : Live[@pixels.Vector?]) -> View {
-  self.bind(37, picture, Paint, fn(p) { self.tree.nodes[self.at].look.picture = p })
+  self.bind(Picture, picture, Paint, fn(p) { self.tree.nodes[self.at].look.picture = p })
   self
 }
 
 ///|
 /// Its ground (0: none): paint's.
 pub fn View::ground(self : View, ink : Live[Int64]) -> View {
-  self.bind(5, ink, Paint, fn(k) { self.tree.nodes[self.at].look.ground = k })
+  self.bind(Ground, ink, Paint, fn(k) { self.tree.nodes[self.at].look.ground = k })
   self
 }
 
@@ -1390,7 +1435,7 @@ pub fn View::ground(self : View, ink : Live[Int64]) -> View {
 /// paint's. What they come to as they are drawn is worked out once for the shapes said (their outlines), whatever colour
 /// they are drawn in (View::tint).
 pub fn View::shapes(self : View, shapes : Live[Array[@paint.Shape]]) -> View {
-  self.bind(13, shapes, Paint, fn(s) { self.tree.nodes[self.at].look.shapes = s })
+  self.bind(Shapes, shapes, Paint, fn(s) { self.tree.nodes[self.at].look.shapes = s })
   self
 }
 
@@ -1398,7 +1443,7 @@ pub fn View::shapes(self : View, shapes : Live[Array[@paint.Shape]]) -> View {
 /// The one colour its shapes are drawn in (0: each its own): paint's; a change of it draws them again in it, nothing of
 /// their outlines worked out again.
 pub fn View::tint(self : View, ink : Live[Int64]) -> View {
-  self.bind(14, ink, Paint, fn(k) { self.tree.nodes[self.at].look.tint = k })
+  self.bind(Tint, ink, Paint, fn(k) { self.tree.nodes[self.at].look.tint = k })
   self
 }
 
@@ -1406,7 +1451,7 @@ pub fn View::tint(self : View, ink : Live[Int64]) -> View {
 ///|
 /// How round its corners are (its ground's and its glass's; a linked corner's as worked out where it is said): paint's.
 pub fn View::radius(self : View, r : Live[Double]) -> View {
-  self.bind(15, r, Paint, fn(r) { self.tree.nodes[self.at].look.radius = r })
+  self.bind(Radius, r, Paint, fn(r) { self.tree.nodes[self.at].look.radius = r })
   self
 }
 
@@ -1414,14 +1459,14 @@ pub fn View::radius(self : View, r : Live[Double]) -> View {
 /// The glass it is drawn as, under its ground and what it draws (@paint.Glass: frosted or liquid; None: none): paint's.
 /// What it frosts is what the frame drew under it, wherever it is composed (its capture told as the frame is).
 pub fn View::glass(self : View, g : Live[@paint.Glass?]) -> View {
-  self.bind(16, g, Paint, fn(g) { self.tree.nodes[self.at].look.glass = g })
+  self.bind(Glass, g, Paint, fn(g) { self.tree.nodes[self.at].look.glass = g })
   self
 }
 
 ///|
 /// How opaque it is drawn, what it holds with it: its place's.
 pub fn View::alpha(self : View, a : Live[Double]) -> View {
-  self.bind(6, a, Place, fn(a) { self.tree.nodes[self.at].look.alpha = a })
+  self.bind(Alpha, a, Place, fn(a) { self.tree.nodes[self.at].look.alpha = a })
   self
 }
 
@@ -1429,7 +1474,7 @@ pub fn View::alpha(self : View, a : Live[Double]) -> View {
 /// How far it is drawn off where it is laid out, what it holds with it: its place's (a move on the compositor: never
 /// laid out again).
 pub fn View::offset(self : View, d : Live[(Double, Double)]) -> View {
-  self.bind(7, d, Place, fn(d) {
+  self.bind(Offset, d, Place, fn(d) {
     let n = self.tree.nodes[self.at]
     n.look.dx = d.0
     n.look.dy = d.1
@@ -1441,7 +1486,7 @@ pub fn View::offset(self : View, d : Live[(Double, Double)]) -> View {
 /// How far it is drawn off where it is laid out in its own widths and heights, what it holds with it: its place's, as
 /// big as it is laid out in the frame drawing it (a page slid off by its width moves with its room as that changes).
 pub fn View::shift(self : View, d : Live[(Double, Double)]) -> View {
-  self.bind(10, d, Place, fn(d) {
+  self.bind(Shift, d, Place, fn(d) {
     let n = self.tree.nodes[self.at]
     n.look.sx = d.0
     n.look.sy = d.1
@@ -1458,7 +1503,7 @@ pub fn View::shift(self : View, d : Live[(Double, Double)]) -> View {
 /// in; its words, its shapes and its corners drawn as big. An old view it holds (View::hosted) laid out as big as its
 /// node, drawn, pressed, typed into and read out as big where it is drawn, by what hosts the tree (ui's island_proj).
 pub fn View::scale(self : View, s : Live[Double], about? : Pivot = At(0.5, 0.5)) -> View {
-  self.bind(30, s, Place, fn(s) {
+  self.bind(Scale, s, Place, fn(s) {
     let n = self.tree.nodes[self.at]
     n.look.scale = s
     n.look.pivot = about
@@ -1473,9 +1518,9 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
   // (whether it takes input is the logic's: said at the moment it changes, as a structure's change is, a finger held on
   // it or in it let go of then; said anew, what was said before let go of, as any property's binding is)
   guard self.live() is Some(n) else { return self }
-  match n.props.get(11) {
+  match n.props.get(Presses) {
     Some(stop) => {
-      n.props.remove(11)
+      n.props.remove(Presses)
       stop()
     }
     None => ()
@@ -1497,7 +1542,7 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[11] = stop
+        n.props[Presses] = stop
       })
   }
   self
@@ -1511,9 +1556,9 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
 /// pages their input back as it begins to go, whatever is still drawn of it).
 pub fn View::modal(self : View, on : Live[Bool]) -> View {
   guard self.live() is Some(n) else { return self }
-  match n.props.get(12) {
+  match n.props.get(Modal) {
     Some(stop) => {
-      n.props.remove(12)
+      n.props.remove(Modal)
       stop()
     }
     None => ()
@@ -1534,7 +1579,7 @@ pub fn View::modal(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[12] = stop
+        n.props[Modal] = stop
       })
   }
   self
@@ -1743,7 +1788,7 @@ pub fn View::words(
       _ => (mw, mh)
     }
   })
-  self.bind(8, words, Both, fn(s) {
+  self.bind(Words, words, Both, fn(s) {
     tree.nodes[at].look.words = s
     tree.nodes[at].look.runs = []
   })
@@ -1778,7 +1823,7 @@ pub fn[K : Eq] View::measured(self : View, content : Live[K], size : (K, Double?
       None => (0.0, 0.0)
     }
   })
-  self.bind(35, content, Layout, fn(v) { k.val = Some(v) })
+  self.bind(Measured, content, Layout, fn(v) { k.val = Some(v) })
   self
 }
 
@@ -1794,7 +1839,7 @@ pub fn View::words_runs(
   let tree = self.tree
   let at = self.at
   self.words(Is(""), ink~, look~) |> ignore
-  self.bind(8, runs, Both, fn(rs) {
+  self.bind(Words, runs, Both, fn(rs) {
     let words = StringBuilder()
     for r in rs {
       words.write_string(r.text)
@@ -2023,9 +2068,9 @@ pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
   guard self.live() is Some(n) else { return self }
   n.top_row = true
   self.tree.hits = self.tree.hits + 1
-  match n.props.get(32) {
+  match n.props.get(MovesWindow) {
     Some(stop) => {
-      n.props.remove(32)
+      n.props.remove(MovesWindow)
       stop()
     }
     None => ()
@@ -2039,7 +2084,7 @@ pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[32] = stop
+        n.props[MovesWindow] = stop
       })
   }
   self

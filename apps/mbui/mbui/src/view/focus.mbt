@@ -30,9 +30,9 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
   // changes, as the change saying it is committed, the focus on it let go of then; said anew, what was said before let
   // go of)
   guard self.live() is Some(n) else { return self }
-  match n.props.get(19) {
+  match n.props.get(Focusable) {
     Some(stop) => {
-      n.props.remove(19)
+      n.props.remove(Focusable)
       stop()
     }
     None => ()
@@ -63,7 +63,7 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
           self.owning(fn() { set(v, first.val) })
           first.val = false
         })
-        n.props[19] = stop
+        n.props[Focusable] = stop
       })
   }
   self

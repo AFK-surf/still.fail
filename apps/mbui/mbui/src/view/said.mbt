@@ -121,7 +121,7 @@ pub(all) struct SaidNode {
 ///|
 /// What it says it is, as it changes (None: nothing): what is read out of it, nothing else of it done again for it.
 pub fn View::says(self : View, said : Live[Said?]) -> View {
-  self.bind(17, said, Said, fn(s) { self.tree.nodes[self.at].said = s })
+  self.bind(Says, said, Said, fn(s) { self.tree.nodes[self.at].said = s })
   self
 }
 
@@ -190,6 +190,6 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
 /// It and all it holds kept from what is read out while `hidden` holds (ARIA's aria-hidden: what only decorates, what is
 /// shown and not there to be used), whatever it says; drawn and pressed as ever.
 pub fn View::hides(self : View, hidden : Live[Bool]) -> View {
-  self.bind(18, hidden, Said, fn(h) { self.tree.nodes[self.at].said_hidden = h })
+  self.bind(Hides, hidden, Said, fn(h) { self.tree.nodes[self.at].said_hidden = h })
   self
 }
