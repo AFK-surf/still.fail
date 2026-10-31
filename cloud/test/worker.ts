@@ -166,6 +166,14 @@ export class Account extends ProductionAccount {
     if (session.rotated !== undefined) session.rotated -= seconds;
     this.ctx.storage.kv.put("account", account);
   }
+  /** As if the session was signed in `seconds` earlier than it was. */
+  signedInEarlier(id: string, seconds: number) {
+    const account = this.ctx.storage.kv.get<any>("account");
+    const session = account.sessions.find((s: any) => s.id === id);
+    session.created -= seconds;
+    session.expires -= seconds;
+    this.ctx.storage.kv.put("account", account);
+  }
   statistics() {
     return {
       quota: this.ctx.storage.kv.get("quota"),

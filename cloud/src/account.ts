@@ -147,7 +147,10 @@ export class Account extends DurableObject<Env> {
       }
       session.generation++;
       session.rotated = now;
-      session.idle = Math.min(session.expires, nowSeconds() + SESSION_IDLE_SEC);
+      // A session in use lives on: its lifetime counts from its last refresh, not from signing in, so one used every
+      // day is never signed out in the middle of it (2026-10-31). Unused, it still ends after SESSION_IDLE_SEC.
+      session.expires = now + SESSION_TTL_SEC;
+      session.idle = Math.min(session.expires, now + SESSION_IDLE_SEC);
       const tokens = await this.mint(data, session);
       session.retry = {
         hash,
