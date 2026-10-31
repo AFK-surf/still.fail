@@ -1082,18 +1082,6 @@ pub fn Ctx::take_back(self : Ctx, f : () -> Unit) -> Unit {
 }
 
 ///|
-/// A step of back as a gesture goes (Ctx::follow_back): begun at x (from the edge it came from, its time), moved to x,
-/// let go at x (back if it went far enough or fast enough: whose back it is decides, as a stack does), called off; or
-/// back now (the system decided, from where the gesture had it, or a back with no gesture: a back key, ⌘[).
-pub(all) enum BackStep {
-  Began(Double, Double)
-  Moved(Double, Double)
-  LetGo(Double, Double)
-  CalledOff
-  Back
-} derive(Eq, Show, Debug)
-
-///|
 /// Back taken by what is drawn over the stack, on the frames it calls this, after the stack is drawn, followed as it
 /// goes (Ctx::take_back's, step by step): the system's back gesture (Android's predictive back, from either edge: x
 /// from the edge it came from, as a stack's page follows it) and a back with no gesture come to `f` as their steps;

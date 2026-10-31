@@ -165,8 +165,11 @@ struct Node {
   /// how many times what a key does to it was said (View::on_key): a key asked of it as it was said then, asked only
   /// while it still is so (Tree::key_at)
   mut key_said : Int
-  /// what back does to it (View::takes_back)
+  /// what back does to it, once done (View::takes_back) or step by step (View::follows_back), and how many times it
+  /// was said (a gesture held by one saying of it goes to that one alone: Tree::back_step)
   mut on_back : (() -> Unit)?
+  mut on_back_step : ((BackStep) -> Unit)?
+  mut back_said : Int
   /// whether it is held, and pointed at, as what reads it reads it (View::pressed, View::pointed): made as first read,
   /// let go with it
   mut pressed_cell : @signals.Signal[Bool]?
@@ -175,6 +178,8 @@ struct Node {
   /// none: it takes the focus all the same, pressed by no key), and its cells of whether it has it and it shows (View::focused, View::focus_shown): made as first read, let go
   /// with it
   mut focusable : Bool
+  /// the pointer's shape over it, said (View::cursor; none: as it is shown without being told, Tree::cursor_of)
+  mut cursor : Cursor?
   mut focus_keys : Int
   mut focused_cell : @signals.Signal[Bool]?
   mut focus_shown_cell : @signals.Signal[Bool]?
@@ -300,6 +305,9 @@ pub struct Tree {
   /// the node with the keyboard's focus, and whether it shows (it came by the keyboard): its cells told as it comes or
   /// goes (View::focused); what hosts the tree told as it is let go of at a cause (the node let go, leaving, taking
   /// no press, under a modal layer: Tree::on_focus_lost)
+  /// the node a back gesture is held by, as it said it then (Tree::back_step): from its start till it is let go,
+  /// called off or the node goes
+  mut backing : (NodeId, Int)?
   mut focused : NodeId?
   mut focus_visible : Bool
   mut on_focus_lost : (NodeId) -> Unit
@@ -397,6 +405,7 @@ pub fn Tree::new(
     hosts_at: fn(_, _, _) { None },
     pressing: None,
     pointed: None,
+    backing: None,
     focused: None,
     focus_visible: false,
     on_focus_lost: fn(_) {  },
@@ -479,10 +488,12 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.on_wheel = None
       n.on_key = None
       n.on_back = None
+      n.on_back_step = None
       n.pressed_cell = None
       n.pointed_cell = None
       n.focusable = false
       n.focus_keys = 0
+      n.cursor = None
       n.focused_cell = None
       n.focus_shown_cell = None
       n.key_said = 0
@@ -523,9 +534,12 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         on_key: None,
         key_said: 0,
         on_back: None,
+        on_back_step: None,
+        back_said: 0,
         pressed_cell: None,
         pointed_cell: None,
         focusable: false,
+        cursor: None,
         focus_keys: 0,
         focused_cell: None,
         focus_shown_cell: None,
@@ -1267,6 +1281,7 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
     if !on {
       self.tree.hold_lost_in(self.at)
       self.tree.focus_lost_in(self.at)
+      self.tree.back_lost_in(self.at)
     }
     // (what hosts it holds in it told, at this cause, once the change is committed whole: Tree::on_modals)
     self.tree.modals_told()
@@ -1350,6 +1365,10 @@ fn Tree::modals_now(self : Tree) -> Unit {
     }
     match self.focused {
       Some(h) if !self.allows(h) => self.focus_lost_in(0)
+      _ => ()
+    }
+    match self.backing {
+      Some((b, _)) if !self.allows(b) => self.back_lost_in(0)
       _ => ()
     }
   }
@@ -1646,34 +1665,6 @@ fn Tree::topmost_from(self : Tree, at : Int, has : (Node) -> Bool, out : Array[I
   if has(n) {
     out.push(at)
   }
-}
-
-///|
-/// What back does to it, while it takes input (as a key's: View::on_key): `f`, as back is done (the system's back let
-/// go there, a back with no gesture, a back button), as one change outside any tracking; the topmost such takes back
-/// before any other (Tree::back_taker).
-pub fn View::takes_back(self : View, f : () -> Unit) -> View {
-  guard self.live() is Some(n) else { return self }
-  n.on_back = Some(f)
-  self
-}
-
-///|
-/// What takes back now of the tree's: the node drawn last that takes back (View::takes_back) and may take input, with
-/// what it does; none where no node does.
-pub fn Tree::back_taker(self : Tree) -> (NodeId, () -> Unit)? {
-  if self.nodes.length() == 0 || !self.nodes[0].live {
-    return None
-  }
-  let found : Array[Int] = []
-  self.topmost_from(0, fn(n) { n.on_back is Some(_) }, found)
-  for i in found {
-    let n = self.nodes[i]
-    if n.live && !self.pressless_at(i) && n.on_back is Some(f) {
-      return Some(({ at: i, gen: n.gen }, f))
-    }
-  }
-  None
 }
 
 ///|
@@ -2371,6 +2362,12 @@ fn View::let_go(self : View) -> Unit {
   n.on_wheel = None
   n.on_key = None
   n.on_back = None
+  n.on_back_step = None
+  // (a back gesture it held: let go of with it, nothing more told it)
+  match self.tree.backing {
+    Some((b, _)) if b.at == self.at && b.gen == self.gen => self.tree.backing = None
+    _ => ()
+  }
   n.said = None
   n.said_hidden = false
   n.pressed_cell = None
@@ -2379,6 +2376,7 @@ fn View::let_go(self : View) -> Unit {
   self.tree.focus_lost_in(self.at)
   n.focusable = false
   n.focus_keys = 0
+  n.cursor = None
   n.focused_cell = None
   n.focus_shown_cell = None
   self.drag_ended()
@@ -2675,6 +2673,7 @@ fn View::leave(self : View, v : View, ms : Double) -> Unit {
   // (leaving, it takes no input: a finger held on it or in it let go of now)
   self.tree.hold_lost_in(v.at)
   self.tree.focus_lost_in(v.at)
+  self.tree.back_lost_in(v.at)
   self.tree.modals_told()
   self.tree.due_leaving(v.id())
   self.tree.marked()
