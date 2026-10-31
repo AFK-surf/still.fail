@@ -294,7 +294,19 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   }
   const titled = typeof args.title === "string" ? nameChat(hub, thread.thread, args.title) : "";
   const place = threadAddress(thread.thread.channel, thread.thread.threadTs) + (opening !== null ? ` (added to the station's first message there, ts ${posted})` : "");
-  return kind !== null ? `Posted to ${place}, and recorded state ${saidAs(kind)}.${titled}${offered}` : `Posted to ${place}.${titled}${offered}`;
+  const crossed = unreadBefore(hub, key, thread.thread.id, n);
+  return kind !== null ? `Posted to ${place}, and recorded state ${saidAs(kind)}.${crossed}${titled}${offered}` : `Posted to ${place}.${crossed}${titled}${offered}`;
+}
+
+/// Messages said in the thread before the agent's post (entry `n`) that it had not read when it wrote it, as the post's
+/// result says them: they come to it next, written without seeing the post. Empty when none.
+function unreadBefore(hub: Hub, key: string, thread: number, n: number): string {
+  const pending = hub.store.pendingMessages(key).filter((m) => m.message.apart !== true && m.message.thread === thread && m.message.n < n);
+  const unread = [...pending, ...(actorOf(hub, key)?.unreadIn(thread, n) ?? [])];
+  const ts = [...new Set(unread.map((m) => m.message.ts))];
+  if (ts.length === 0) return "";
+  const one = ts.length === 1;
+  return ` Before this post went up, ${one ? "a message" : "messages"} you had not read yet came in this thread (ts ${ts.join(", ")}): written without seeing your post, ${one ? "it comes" : "they come"} to you next.`;
 }
 
 /// The agent's first post in a conversation its chat was relayed to (hub.openings): added under the station's first

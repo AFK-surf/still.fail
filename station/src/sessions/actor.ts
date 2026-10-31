@@ -18,7 +18,7 @@ import { Places } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
-import { type Handed, handedOf } from "../store/rows.ts";
+import { type Handed, type PendingMessage, handedOf } from "../store/rows.ts";
 
 /// How an agent ended its turn (chat_post / chat_state `kind`).
 export type DeclaredState = { kind: "all_done" } | { kind: "need_help" } | { kind: "waiting"; seconds: number };
@@ -64,6 +64,7 @@ export type SessionStore = {
   untoldWidgetModels(key: string): any[];
   markWidgetModelsTold(key: string, pairs: [string, string][]): void;
   heardThreads(key: string): Set<number> | number[];
+  postAfter(key: string, thread: number, n: number): string | null;
   threadSessions(thread: number): { session: string; connect: string }[];
   getSession(key: string): any | null;
   hasTurns(key: string): boolean;
@@ -291,6 +292,8 @@ export class SessionActor {
   /// The threads of those messages: a runtime that had not read them when its turn ended takes them as a turn of its
   /// own, which works for them again.
   private steeredFor: Working[] = [];
+  /// Messages given to the running turn since its model was last asked: what it writes now was written without them.
+  private unread: PendingMessage[] = [];
   private queued = 0;
 
   constructor(key: string, runtime: RuntimeKind, deps: SessionDeps) {
@@ -382,6 +385,11 @@ export class SessionActor {
       this.notices = [];
       if (!this.turn && !this.agent?.session.busy()) await this.letGo();
     });
+  }
+
+  /// The messages of `thread` given to the running turn that its model has not read yet (before entry `before`).
+  unreadIn(thread: number, before: number): PendingMessage[] {
+    return this.unread.filter((m) => m.message.thread === thread && m.message.n < before);
   }
 
   /// It posted in a chat (chat_post), in turn order.
@@ -662,6 +670,7 @@ export class SessionActor {
       const steered = this.steered;
       this.steered = [];
       this.steeredFor = [];
+      this.unread = [];
       if (!agent && !turn) return;
       const store = this.deps.store;
       const resume = (turn !== null || busy) && !(turn?.declared && settled(turn.declared));
@@ -804,6 +813,7 @@ export class SessionActor {
         this.workFor(pending);
         this.delivered(pending, widgets);
         this.steered.push(...pending.map(handedOf));
+        this.unread.push(...pending.filter((m: PendingMessage) => m.message.apart !== true));
         const from = (w: Working) => pending.some((m: any) => m.connect === w.connect && m.channel === w.channel && m.threadTs === w.threadTs);
         this.steeredFor = [...this.steeredFor.filter((w) => !from(w)), ...this.workingFor.filter(from)];
       }
@@ -881,7 +891,14 @@ export class SessionActor {
       const [name, user] = [chat?.botName?.() ?? "", chat?.botUserId?.() ?? ""];
       if (name !== "") selves.set(m.connect, user === "" ? name : `${name} (${chat?.mention?.(user) ?? `<@${user}>`})`);
     }
-    const text = formatInbound(said, newThreads, names, selves);
+    // What it posted in a thread after a message there was said: the message was written without seeing that post.
+    const posts = new Map<PendingMessage, string>();
+    for (const m of said) {
+      if (m.message.apart === true) continue;
+      const ts = store.postAfter(this.key, m.message.thread, m.message.n);
+      if (ts !== null) posts.set(m, ts);
+    }
+    const text = formatInbound(said, newThreads, names, selves, posts);
     const models = store.untoldWidgetModels(this.key);
     const widgets = models.map((w: any): [string, string] => [w.path, w.model]);
     const told = formatWidgetModels(models);
@@ -953,6 +970,7 @@ export class SessionActor {
       if (agent.busy() && (await agent.steer(prompt))) return;
       this.steered = [];
       this.steeredFor = [];
+      this.unread = [];
       this.beginTurn(kind, by);
       try {
         await agent.prompt(prompt);
@@ -1135,6 +1153,8 @@ export class SessionActor {
         void this.enqueue(() => this.onTurnEnded(generation, event.outcome));
         break;
       case "live":
+        // Asking its model: what was given to the turn so far goes with the request.
+        if (event.event.kind === "phase" && event.event.phase === "requesting") this.unread = [];
         this.deps.live?.event(this.key, event.event);
         if (this.isCurrent(generation)) this.heard(event.event);
         this.onLive(event.event);

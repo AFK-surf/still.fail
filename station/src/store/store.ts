@@ -658,6 +658,11 @@ export class Store {
     return this.#one("SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'person'", thread, n).c;
   }
 
+  /// The session's first post in a thread after entry `n`: its ts, null when it has posted none since.
+  postAfter(session: string, thread: number, n: number): string | null {
+    return this.#all("SELECT ts FROM entries WHERE thread = ? AND n > ? AND kind = 'message' AND author_kind = 'agent' AND author = ? ORDER BY n LIMIT 1", thread, n, session)[0]?.ts ?? null;
+  }
+
   /// When anyone last read a thread (moved their read position), in ms; null if nobody has.
   lastReadAt(thread: number): number | null {
     return this.#one("SELECT MAX(at) AS at FROM reads WHERE thread = ?", thread).at;
