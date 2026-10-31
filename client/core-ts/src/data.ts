@@ -6,7 +6,7 @@
 // Topics of this data have no value of their own: their value is read from here (`shared`), by query, when it goes
 // out; each database's writer says which topics a burst changed, and the store pushes what changed (keyed deltas).
 import { Effect, Fiber, Queue } from "effect";
-import { AccountDb, LIST_OF, type Changes, type Derive, type ListKind, type RowChange, frozen } from "./db/account.ts";
+import { AccountDb, LIST_OF, type Changes, type Derive, type ListKind, type LogTable, type RowChange, frozen } from "./db/account.ts";
 import type { Host, Sql, SqlRow, SqlValue } from "./host.ts";
 import { HostError, SqlError, sqlError } from "./host.ts";
 import type { MdStore } from "./markdown.ts";
@@ -999,13 +999,13 @@ export class Data {
   // ── what is kept within the device's room ──
 
   /// Whether a log's items were let go for room and its chat is not shown: the sync leaves it as it is.
-  evicted(kind: "entry" | "transcript", station: string, id: string): boolean {
+  evicted(kind: LogTable, station: string, id: string): boolean {
     return !this.#shown.has(`${kind}\u0001${station}\u0001${id}`) && (this.of(station)?.evicted(kind, station, id) ?? false);
   }
 
   /// A UI shows a log's chat (`open`), or no longer does: shown, it is the most recently opened and not let go. Answers
   /// whether its items had been let go (the sync is to bring them back).
-  opened(kind: "entry" | "transcript", station: string, id: string, open: boolean): boolean {
+  opened(kind: LogTable, station: string, id: string, open: boolean): boolean {
     const key = `${kind}\u0001${station}\u0001${id}`;
     const count = (this.#shown.get(key) ?? 0) + (open ? 1 : -1);
     if (count > 0) this.#shown.set(key, count);
@@ -1158,11 +1158,11 @@ export class Data {
 
   // ── logs: a thread's entries, a session's transcript ──
 
-  logNumbers(table: "entry" | "transcript", station: string, id: string): readonly number[] {
+  logNumbers(table: LogTable, station: string, id: string): readonly number[] {
     return this.of(station)?.logNumbers(table, station, id) ?? [];
   }
 
-  logRange(table: "entry" | "transcript", station: string, id: string, from: number, to: number): Map<number, unknown> {
+  logRange(table: LogTable, station: string, id: string, from: number, to: number): Map<number, unknown> {
     return this.of(station)?.logRange(table, station, id, from, to) ?? new Map();
   }
 
@@ -1176,20 +1176,20 @@ export class Data {
     return this.of(station)?.slackNames(station) ?? [];
   }
 
-  logSpan(table: "entry" | "transcript", station: string, id: string): { min: number; max: number; count: number } | null {
+  logSpan(table: LogTable, station: string, id: string): { min: number; max: number; count: number } | null {
     return this.of(station)?.logSpan(table, station, id) ?? null;
   }
 
-  logCount(table: "entry" | "transcript", station: string, id: string, from: number, to: number): number {
+  logCount(table: LogTable, station: string, id: string, from: number, to: number): number {
     return this.of(station)?.logCount(table, station, id, from, to) ?? 0;
   }
 
   /// Items into a log, by number (an entry's `n`, a transcript item's index). `cutAfter`: nothing past it is kept.
-  putItems(table: "entry" | "transcript", station: string, id: string, items: [number, unknown][], cutAfter: number | null = null): void {
+  putItems(table: LogTable, station: string, id: string, items: [number, unknown][], cutAfter: number | null = null): void {
     this.of(station)?.putLog(table, station, id, items, cutAfter);
   }
 
-  forgetLog(table: "entry" | "transcript", station: string, id: string): void {
+  forgetLog(table: LogTable, station: string, id: string): void {
     this.of(station)?.forgetLog(table, station, id);
   }
 

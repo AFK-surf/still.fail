@@ -55,7 +55,7 @@ const OWN_MARKS = /^\/*threads\/+[^/]+\/+(read|dismissed|closed-card)(?:\/.*)?$/
 const READS = /^\/*(changed\/+(chats|threads|sessions)|batch)$/;
 /// What a batch may read (POST /batch): the history a client brings onto its device in the background, each a read
 /// whose answer is JSON. At most BATCH_MOST of them, BATCH_AT_ONCE at a time.
-const BATCHED = [/^\/threads\/\d+\/entries$/, /^\/threads\/\d+$/, /^\/sessions\/[^/]+$/, /^\/sessions\/[^/]+\/timeline$/];
+const BATCHED = [/^\/threads\/\d+\/entries$/, /^\/threads\/\d+\/letters$/, /^\/threads\/\d+$/, /^\/sessions\/[^/]+$/, /^\/sessions\/[^/]+\/timeline$/];
 const BATCH_MOST = 64;
 const BATCH_AT_ONCE = 4;
 

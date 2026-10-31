@@ -176,9 +176,15 @@ export async function postFrom(hub: Hub, thread: SessionThread, author: string, 
       said = kept;
     }
   }
-  const letter = opened ? {} : { letter: { way: "in" as const, title, link } };
-  const [n] = hub.store.insertMessage({ thread: row.id, ts, authorKind: "agent", author, text: said, attachments: files, ...letter });
-  hub.deliver(row.id, n, targets.filter((t) => t !== author), said);
+  const hearing = targets.filter((t) => t !== author);
+  if (opened) {
+    const [n] = hub.store.insertMessage({ thread: row.id, ts, authorKind: "agent", author, text: said, attachments: files });
+    hub.deliver(row.id, n, hearing, said);
+  } else {
+    // (in the chat's own log of letters, not among what is said in it: store/schema.ts LETTERS)
+    const n = hub.store.insertLetter({ thread: row.id, ts, authorKind: "agent", author, text: said, attachments: files, letter: { way: "in", title, link } });
+    hub.deliverLetter(row.id, n, hearing);
+  }
   return threadAddress(row.channel, row.threadTs);
 }
 
@@ -193,5 +199,5 @@ function keptOut(hub: Hub, key: string, title: string, link: string | null, text
   }
   const row = own.thread;
   const said = `${tr(stationLang(), "station.session.to", { to: chatNamed(row.surface, title, link) })}\n\n${text}`;
-  hub.store.insertMessage({ thread: row.id, ts: hub.nextTs(), authorKind: "agent", author: key, text: said, letter: { way: "out", title, link } });
+  hub.store.insertLetter({ thread: row.id, ts: hub.nextTs(), authorKind: "agent", author: key, text: said, letter: { way: "out", title, link } });
 }

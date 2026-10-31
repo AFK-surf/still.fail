@@ -611,6 +611,39 @@ export function entries(station: Store, _viewer: Viewer, thread: number, params:
   return { last, entries: entryViews(api, thread, found) };
 }
 
+/// GET /threads/:id/letters: the chat's own log of letters (store/schema.ts LETTERS), numbered from 1 in it, read as
+/// its entries are (`after`, `before` with `limit`, `from` and `to`, none of them the latest page). Letters from before
+/// it are among its entries, marked so.
+export function letters(station: Store, _viewer: Viewer, thread: number, params: Record<string, string> | [string, string][]): Json {
+  useNames(station);
+  const pairs = Array.isArray(params) ? params : Object.entries(params);
+  const param = (name: string) => pairs.find(([k]) => k === name)?.[1];
+  const api = apiOf(station);
+  if (store.getThread(api.store, thread) === null) throw new HttpError(404, `unknown thread ${thread}`);
+  const number = (name: string): bigint | null => {
+    const v = param(name);
+    if (v === undefined) return null;
+    const n = parseF64(v);
+    if (n !== null && Number.isFinite(n) && Math.trunc(n) === n && n >= 0) return asI64(n);
+    throw new HttpError(400, tr("station.admin.notInteger", { name }));
+  };
+  const [after, before, from, to] = [number("after"), number("before"), number("from"), number("to")];
+  const asked = param("limit");
+  const parsedLimit = asked === undefined ? null : parseF64(asked);
+  const wanted = parsedLimit === null || parsedLimit === 0 ? 50 : parsedLimit;
+  const limit = Number.isNaN(wanted) ? 0 : Math.trunc(Math.min(Math.max(wanted, 1), 500));
+  if ((from !== null) !== (to !== null)) throw new HttpError(400, tr("station.admin.fromAndTo"));
+  const s = api.store;
+  const last = store.lastLetter(s, thread);
+  const found =
+    after !== null
+      ? store.lettersBetween(s, thread, BigInt.asIntN(64, after + 1n), store.I64_MAX)
+      : from !== null && to !== null
+        ? store.lettersBetween(s, thread, from, to)
+        : store.lettersBefore(s, thread, before, limit);
+  return { last, letters: entryViews(api, thread, found) };
+}
+
 /// EntryRow as serde writes it: its fields in their order, the skipped Nones left out.
 function entryJson(e: EntryRow): Json {
   const v: Json = {};

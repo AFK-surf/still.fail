@@ -103,7 +103,7 @@ test("a message is recorded once and delivered to every session in its thread", 
   assert.deepEqual(store.deliver(thread.id, first[0], ["a", "b"]), ["a", "b"]);
   assert.deepEqual(store.deliver(thread.id, first[0], ["a", "b"]), []);
   assert.deepEqual(store.pendingMessages("b").map((m) => [m.message.text, m.connect]), [["hi", "gpt"]]);
-  store.markDelivered("a", [[thread.id, first[0]]]);
+  store.markDelivered("a", [{ thread: thread.id, n: first[0], apart: false }]);
   assert.deepEqual(store.sessionsWithPending(), ["b"]);
   assert.equal(store.latestThread("a")!.thread.id, thread.id);
   assert.equal(store.sessionThread("b", "C1", "1.1")!.connect, "gpt");
@@ -849,9 +849,9 @@ test("bindings tell both sessions; delivered can be taken back", () => {
   store.joinThread(thread.id, "a", "ember");
   const [n] = say(store, thread.id, "1.2", "person", "local", "hi");
   store.deliver(thread.id, n, ["a"]);
-  store.markDelivered("a", [[thread.id, n]]);
+  store.markDelivered("a", [{ thread: thread.id, n, apart: false }]);
   assert.deepEqual([...store.heardThreads("a")], [thread.id]);
-  store.markUndelivered("a", [[thread.id, n]]);
+  store.markUndelivered("a", [{ thread: thread.id, n, apart: false }]);
   assert.equal(store.pendingMessages("a").length, 1);
   assert.deepEqual([...store.heardThreads("a")], []);
 });

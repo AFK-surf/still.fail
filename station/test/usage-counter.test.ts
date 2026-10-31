@@ -192,7 +192,7 @@ test("each call is counted once, for whom its turn worked, where and on what", a
   r.store.startTurn("t1", "ember:c-1", "input");
   const [n] = r.store.insertMessage(newMessage(chat.id, "2.0", "person", "b@x", "hi"));
   r.store.deliver(chat.id, n, ["ember:c-1"]);
-  r.store.markDelivered("ember:c-1", [[chat.id, n]]);
+  r.store.markDelivered("ember:c-1", [{ thread: chat.id, n, apart: false }]);
   r.store.endTurn("t1", "completed", null, null, null);
   await pause();
   r.store.startTurnFor("t2", "ember:c-1", "input", { profile: "cc2", person: "a@x", thread: chat.id });
@@ -267,7 +267,7 @@ test("each part's calls are put to the turns they were made in, those turns alon
   await pause();
   const [n] = r.store.insertMessage(newMessage(chat.id, "2.0", "person", "b@x", "再看看"));
   r.store.deliver(chat.id, n, ["ember:c-1"]);
-  r.store.markDelivered("ember:c-1", [[chat.id, n]]);
+  r.store.markDelivered("ember:c-1", [{ thread: chat.id, n, apart: false }]);
   append(main, [claudeLine("m4", at(), "claude-opus-5-5", usage(4, 0, 0, 0, 1))]);
   assert.equal(await r.usage.read(), 1);
   assert.deepEqual(asked.at(-1), [last, last]);

@@ -16,7 +16,7 @@ import { Priority } from "../sync/scheduler.ts";
 import { equal, get, isObject, parseJson } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { StationAddr } from "./addr.ts";
-import { PAGE, TRANSCRIPT_PAGE, entriesOf, transcriptOf } from "./channel-kinds.ts";
+import { PAGE, TRANSCRIPT_PAGE, entriesOf, lettersOf, transcriptOf } from "./channel-kinds.ts";
 import { type StationsSync, stepShown } from "./sync.ts";
 import type { LinkNet } from "./wire.ts";
 import { screenCard, screensChanged, screensView } from "../screens.ts";
@@ -92,7 +92,7 @@ export class StationTopics implements Owner {
       if (topic.topic === "chatRows" || topic.topic === "*") core.store.invalidateAll((t) => (t.topic === "screens" || t.topic === "screenCard") && (topic.topic === "*" || t.station === topic.station));
     });
     core.data.onLogChange((table, station, id) => {
-      const topics = core.store.liveTopics().filter((t) => t.station === station && ((table === "entry" && (t.topic === "thread" || t.topic === "letters") && String(t.thread) === id) || (table === "transcript" && t.topic === "live" && t.key === id)));
+      const topics = core.store.liveTopics().filter((t) => t.station === station && ((table === "entry" && (t.topic === "thread" || t.topic === "letters") && String(t.thread) === id) || (table === "letter" && t.topic === "letters" && String(t.thread) === id) || (table === "transcript" && t.topic === "live" && t.key === id)));
       for (const topic of topics) core.store.changed(topic);
     });
   }
@@ -637,7 +637,23 @@ export class StationTopics implements Owner {
       this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/1`, this.#sync.channels.range(entriesOf(station, id), 1, latest, { quiet: false })), { log: "Unhandled", message: "range read" }));
     }
     const entries = [...held.keys()].sort((a, b) => a - b).map((n) => held.get(n));
-    return { ok: { entries, whole: held.size >= latest, thread: this.summary(station, id) } };
+    // Its letters' own log (channel-kinds.ts LETTERS; those from before it are among its entries): all of it, read as
+    // its entries are.
+    const lettersLast = u64(get(this.summary(station, id), "lettersLast")) ?? 0;
+    const letters = lettersLast === 0 ? new Map<number, unknown>() : data.logRange("letter", station, String(id), 1, lettersLast);
+    const lk = `${tk}\u0001letters`;
+    if (letters.size < lettersLast && (this.#wholes.get(lk) ?? 0) < lettersLast) {
+      this.#wholes.set(lk, lettersLast);
+      this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `letters/${id}/1`, this.#sync.channels.range(lettersOf(station, id), 1, lettersLast, { quiet: false })), { log: "Unhandled", message: "letters read" }));
+    }
+    return {
+      ok: {
+        entries,
+        letters: [...letters.keys()].sort((a, b) => a - b).map((n) => letters.get(n)),
+        whole: held.size >= latest && letters.size >= lettersLast,
+        thread: this.summary(station, id),
+      },
+    };
   }
 
   /// Where a window kept from entry `from` on toward `to` (either way) ends to hold WINDOW of what its chat shows (its

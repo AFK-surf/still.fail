@@ -169,6 +169,12 @@ export function ensureSaid(sql: Sql): void {
   dropSaidIndex(sql);
 }
 
+/// A thread's letters (what its agents and other chats' wrote each other), item by item: their own log beside its
+/// entries (the station's GET /threads/:id/letters, numbered from 1 in it). Made where missing at every open, as `said`.
+export function ensureLetters(sql: Sql): void {
+  sql.exec("CREATE TABLE IF NOT EXISTS letter (station TEXT NOT NULL, thread INTEGER NOT NULL, n INTEGER NOT NULL, json TEXT NOT NULL, PRIMARY KEY (station, thread, n)) WITHOUT ROWID");
+}
+
 /// What is kept of each log (a thread's entries, `entry`; an agent's transcript, `transcript`) as the device holds
 /// within its room (data.ts KEPT): when its chat was last opened here, and whether its items were let go for room.
 /// Made where missing at every open, as `said`.

@@ -19,7 +19,7 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureFilesKept, ensureKept, ensureMdKept, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, versionOf } from "./schema.ts";
+import { ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, versionOf } from "./schema.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 import { timed } from "../spent.ts";
 
@@ -226,6 +226,17 @@ const PRECIOUS = /^(INSERT|DELETE|UPDATE)[^(]*\b(outbox|pending|first|changing|d
 /// The chat columns of a row, and its JSON without them.
 type ChatCols = { json: string; unread: number | null; thread: number | null; session: string | null; clientKey: string | null; lastActive: number; pinnedAt: number | null; mine: number; running: number; tone: string | null; asks: number };
 
+
+/// The logs a station's channels are held in (station/channel-kinds.ts): a thread's entries, its letters (their own log
+/// beside its entries), a session's transcript.
+export type LogTable = "entry" | "letter" | "transcript";
+
+/// A log's id column and item number column.
+const logColumns = (table: LogTable): [string, string] => (table === "transcript" ? ["session", "i"] : ["thread", "n"]);
+
+/// A log's id as its id column holds it (a thread's a number).
+const logId = (table: LogTable, id: string): SqlValue => (table === "transcript" ? id : Number(id));
+
 export class AccountDb {
   readonly sub: string;
   readonly name: string;
@@ -273,6 +284,7 @@ export class AccountDb {
     if (!this.readOnly) {
       const was = this.sql.all("SELECT value FROM meta WHERE key = 'account'")[0]?.[0];
       if (was === undefined) this.sql.run("INSERT INTO meta (key, value) VALUES ('account', ?)", [sub]);
+      ensureLetters(sql);
       try {
         ensureSaid(sql);
         this.#said = true;
@@ -1360,13 +1372,13 @@ export class AccountDb {
   }
 
   /// Whether a log's items were let go for room (and not brought back since).
-  evicted(kind: "entry" | "transcript", station: string, id: string): boolean {
+  evicted(kind: LogTable, station: string, id: string): boolean {
     return this.#evicted.has(K(kind, station, id));
   }
 
   /// A log's chat opened here: the most recently opened, and kept again (its items brought back by the sync). Answers
   /// whether they had been let go.
-  opened(kind: "entry" | "transcript", station: string, id: string, at: number): boolean {
+  opened(kind: LogTable, station: string, id: string, at: number): boolean {
     const was = this.#evicted.delete(K(kind, station, id));
     this.#write(() => {
       this.sql.run("INSERT INTO log_use (kind, station, id, opened, evicted) VALUES (?, ?, ?, ?, 0) ON CONFLICT (kind, station, id) DO UPDATE SET opened = excluded.opened, evicted = 0", [kind, station, id, at]);
@@ -1375,7 +1387,7 @@ export class AccountDb {
   }
 
   /// When a log was last opened here (`opened`), null when it never was.
-  lastOpened(kind: "entry" | "transcript", station: string, id: string): number | null {
+  lastOpened(kind: LogTable, station: string, id: string): number | null {
     const v = this.sql.all("SELECT opened FROM log_use WHERE kind = ? AND station = ? AND id = ?", [kind, station, id])[0]?.[0];
     return typeof v === "number" ? v : null;
   }
@@ -1407,19 +1419,19 @@ export class AccountDb {
   // ── a thread's entries and a session's transcript ──
 
   /// The numbers of a log's items held, in order.
-  logNumbers(table: "entry" | "transcript", station: string, id: string): readonly number[] {
+  logNumbers(table: LogTable, station: string, id: string): readonly number[] {
     const cacheKey = K(table, station, id);
     const hit = this.#logIndices.get(cacheKey);
     if (hit) return hit.numbers;
-    const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
-    const numbers = this.sql.all(`SELECT ${col} FROM ${table} WHERE station = ? AND ${key} = ? ORDER BY ${col}`, [station, table === "entry" ? Number(id) : id]).map((r) => r[0] as number);
+    const [key, col] = logColumns(table);
+    const numbers = this.sql.all(`SELECT ${col} FROM ${table} WHERE station = ? AND ${key} = ? ORDER BY ${col}`, [station, logId(table, id)]).map((r) => r[0] as number);
     this.#logIndices.set(cacheKey, new LogIndex(numbers));
     return numbers;
   }
 
   /// A log's items `from ..= to` held, by number.
-  logRange(table: "entry" | "transcript", station: string, id: string, from: number, to: number): Map<number, J> {
-    const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
+  logRange(table: LogTable, station: string, id: string, from: number, to: number): Map<number, J> {
+    const [key, col] = logColumns(table);
     const out = new Map<number, J>();
     const index = this.#logIndices.get(K(table, station, id));
     if (index) {
@@ -1436,7 +1448,7 @@ export class AccountDb {
       if (out.size === Math.max(0, end - first)) return out;
       out.clear();
     }
-    const rows = this.sql.all(`SELECT ${col}, json FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} BETWEEN ? AND ? ORDER BY ${col}`, [station, table === "entry" ? Number(id) : id, from, to]);
+    const rows = this.sql.all(`SELECT ${col}, json FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} BETWEEN ? AND ? ORDER BY ${col}`, [station, logId(table, id), from, to]);
     for (const r of rows) {
       const n = r[0] as number;
       out.set(n, this.#logItem(table, station, id, n, r[1]));
@@ -1454,33 +1466,33 @@ export class AccountDb {
   }
 
   /// The highest and lowest numbers a log holds, and how many (null when it holds none).
-  logSpan(table: "entry" | "transcript", station: string, id: string): { min: number; max: number; count: number } | null {
+  logSpan(table: LogTable, station: string, id: string): { min: number; max: number; count: number } | null {
     const index = this.#logIndices.get(K(table, station, id));
     if (index) return index.span;
-    const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
-    const r = this.sql.all(`SELECT min(${col}), max(${col}), count(*) FROM ${table} WHERE station = ? AND ${key} = ?`, [station, table === "entry" ? Number(id) : id])[0];
+    const [key, col] = logColumns(table);
+    const r = this.sql.all(`SELECT min(${col}), max(${col}), count(*) FROM ${table} WHERE station = ? AND ${key} = ?`, [station, logId(table, id)])[0];
     return r && r[2] !== 0 ? { min: r[0] as number, max: r[1] as number, count: r[2] as number } : null;
   }
 
   /// How many of `from ..= to` a log holds.
-  logCount(table: "entry" | "transcript", station: string, id: string, from: number, to: number): number {
+  logCount(table: LogTable, station: string, id: string, from: number, to: number): number {
     const index = this.#logIndices.get(K(table, station, id));
     if (index) return index.count(from, to);
-    const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
-    return (this.sql.all(`SELECT count(*) FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} BETWEEN ? AND ?`, [station, table === "entry" ? Number(id) : id, from, to])[0]?.[0] as number) ?? 0;
+    const [key, col] = logColumns(table);
+    return (this.sql.all(`SELECT count(*) FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} BETWEEN ? AND ?`, [station, logId(table, id), from, to])[0]?.[0] as number) ?? 0;
   }
 
   /// Items into a log, by number; those it holds the same are not written. `cutAfter`: nothing past it is kept.
   /// `keep`: what is held stays (an import: what the sync brought is newer).
-  putLog(table: "entry" | "transcript", station: string, id: string, items: [number, J][], cutAfter: number | null = null, keep = false): void {
+  putLog(table: LogTable, station: string, id: string, items: [number, J][], cutAfter: number | null = null, keep = false): void {
     if (items.length === 0 && cutAfter === null) return;
     this.#write(() => {
       const cacheKey = K(table, station, id);
       const index = this.#logIndices.get(cacheKey);
       // A failed SQL write must never leave a cached index of a different transaction state.
       this.#logIndices.delete(cacheKey);
-      const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
-      const k: SqlValue = table === "entry" ? Number(id) : id;
+      const [key, col] = logColumns(table);
+      const k: SqlValue = logId(table, id);
       let changed = false;
       const written: [number, J][] = [];
       if (items.length > 0) {
@@ -1605,13 +1617,16 @@ export class AccountDb {
 
   #forgetEntries(station: string, thread: number): void {
     if (this.sql.run("DELETE FROM entry WHERE station = ? AND thread = ?", [station, thread]) > 0) this.#tellLog("entry", station, String(thread));
+    if (this.sql.run("DELETE FROM letter WHERE station = ? AND thread = ?", [station, thread]) > 0) this.#tellLog("letter", station, String(thread));
   }
 
   /// A log known no more.
-  forgetLog(table: "entry" | "transcript", station: string, id: string): void {
+  forgetLog(table: LogTable, station: string, id: string): void {
     this.#write(() => {
       if (table === "entry") this.#forgetEntries(station, Number(id));
-      else {
+      else if (table === "letter") {
+        if (this.sql.run("DELETE FROM letter WHERE station = ? AND thread = ?", [station, Number(id)]) > 0) this.#tellLog("letter", station, id);
+      } else {
         if (this.sql.run("DELETE FROM transcript WHERE station = ? AND session = ?", [station, id]) > 0) this.#tellLog("transcript", station, id);
         if (this.#hasSlackSaid() && this.sql.run("DELETE FROM slack_said WHERE station = ? AND session = ?", [station, id]) > 0) this.#tellLog("slack", station, id);
       }
@@ -1802,7 +1817,7 @@ export class AccountDb {
   /// What is held of a station goes, every table of it.
   forgetStation(station: string): void {
     this.#write(() => {
-      for (const [table, column] of [["station", "address"], ["slack_app", "station"], ["list", "station"], ["chat", "station"], ["session", "station"], ["thread", "station"], ["thread_member", "station"], ["entry", "station"], ["transcript", "station"], ["job", "station"], ["outbox", "station"], ["pending", "station"], ["first", "station"], ["changing", "station"], ["draft", "station"]]) {
+      for (const [table, column] of [["station", "address"], ["slack_app", "station"], ["list", "station"], ["chat", "station"], ["session", "station"], ["thread", "station"], ["thread_member", "station"], ["entry", "station"], ["letter", "station"], ["transcript", "station"], ["job", "station"], ["outbox", "station"], ["pending", "station"], ["first", "station"], ["changing", "station"], ["draft", "station"]]) {
         this.sql.run(`DELETE FROM ${table} WHERE ${column} = ?`, [station]);
       }
       if (this.sql.all("SELECT 1 FROM sqlite_master WHERE name = 'log_use'").length > 0) this.sql.run("DELETE FROM log_use WHERE station = ?", [station]);

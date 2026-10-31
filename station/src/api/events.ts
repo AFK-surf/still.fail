@@ -655,6 +655,25 @@ export class Events {
         this.itemsChanged({ threads: [change.id] });
         break;
       }
+      case "letters": {
+        // A chat's letters kept in their own log (store/schema.ts LETTERS): as GET /threads/:id/letters has them, and
+        // the thread as each viewer has it (how many letters, how far their log goes).
+        const who = this.clients[0] ?? this.last;
+        if (this.listening() && who && change.letters.length > 0) {
+          const first = change.letters[0]!.n;
+          const last = change.letters.at(-1)!.n;
+          this.whenRead(
+            this.deps.readers
+              .read("letters", { viewer: who.viewer, thread: change.id, params: [["from", String(first)], ["to", String(last)]] }, who.lang, TOLD)
+              .then((text) => this.emit("letters", { id: change.id, letters: JSON.parse(text).letters }, { sees: { thread: change.id } }), (e) => log.warn("events", "letters event not sent", { error: (e as Error).message })),
+          );
+          for (const { viewer, lang } of this.viewers(who).filter((v) => this.deps.seen?.(v.viewer, { thread: change.id }) ?? true)) {
+            const k = viewerKey(viewer, lang);
+            this.whenRead(this.deps.readers.read("thread", { viewer, id: change.id, lang }, lang, TOLD).then((text) => this.emit("thread-view", JSON.parse(text), { viewer: k }, `thread-view\0${change.id}\0${k}`), () => {}));
+          }
+        }
+        break;
+      }
       case "threadRemoved":
         this.emit("thread-removed", { id: change.id }, { sees: { ws: change.ws ?? null } });
         this.rowsChanged(null);

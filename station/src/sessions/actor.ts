@@ -18,6 +18,7 @@ import { Places } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
+import { type Handed, handedOf } from "../store/rows.ts";
 
 /// How an agent ended its turn (chat_post / chat_state `kind`).
 export type DeclaredState = { kind: "all_done" } | { kind: "need_help" } | { kind: "waiting"; seconds: number };
@@ -58,8 +59,8 @@ type Working = { connect: string; channel: string; threadTs: string; ts: string 
 /// What the actor needs of the store: the Rust Store's methods, camelCase (src/store/store.ts).
 export type SessionStore = {
   pendingMessages(key: string): any[];
-  markDelivered(key: string, pairs: [number, number][]): void;
-  markUndelivered(key: string, pairs: [number, number][]): void;
+  markDelivered(key: string, handed: Handed[]): void;
+  markUndelivered(key: string, handed: Handed[]): void;
   untoldWidgetModels(key: string): any[];
   markWidgetModelsTold(key: string, pairs: [string, string][]): void;
   heardThreads(key: string): Set<number> | number[];
@@ -286,7 +287,7 @@ export class SessionActor {
   private refills = 0;
   private refillAt = 0;
   /// Messages given to the running turn while it ran: the runtime may not have read them yet (suspend).
-  private steered: [number, number][] = [];
+  private steered: Handed[] = [];
   /// The threads of those messages: a runtime that had not read them when its turn ended takes them as a turn of its
   /// own, which works for them again.
   private steeredFor: Working[] = [];
@@ -802,7 +803,7 @@ export class SessionActor {
       if (await agent.steer(text)) {
         this.workFor(pending);
         this.delivered(pending, widgets);
-        this.steered.push(...pending.map((m: any): [number, number] => [m.message.thread, m.message.n]));
+        this.steered.push(...pending.map(handedOf));
         const from = (w: Working) => pending.some((m: any) => m.connect === w.connect && m.channel === w.channel && m.threadTs === w.threadTs);
         this.steeredFor = [...this.steeredFor.filter((w) => !from(w)), ...this.workingFor.filter(from)];
       }
@@ -852,7 +853,7 @@ export class SessionActor {
   }
 
   private delivered(messages: any[], widgets: [string, string][]) {
-    this.deps.store.markDelivered(this.key, messages.map((m): [number, number] => [m.message.thread, m.message.n]));
+    this.deps.store.markDelivered(this.key, messages.map(handedOf));
     this.deps.store.markWidgetModelsTold(this.key, widgets);
   }
 

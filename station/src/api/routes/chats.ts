@@ -1,4 +1,4 @@
-// The chat list and a chat's messages (admin/mod.rs: GET /chats, GET /threads/:id/entries).
+// The chat list and a chat's messages (admin/mod.rs: GET /chats, GET /threads/:id/entries), and its letters.
 import { type Request, error, param } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { changed } from "./changed.ts";
@@ -15,6 +15,15 @@ export const routes = ({ read }: Tools): Route[] => [
       // A thread id is an i64 in the Rust route; one that is no number is no thread.
       if (!/^[+-]?\d+$/.test(id)) return error(404, `unknown thread ${id}`);
       return read(r, "entries", { viewer: r.viewer, thread: Number(id), params: r.query });
+    },
+  },
+  {
+    // its letters, kept in their own log (store/schema.ts LETTERS)
+    method: "GET",
+    pattern: /^\/threads\/([^/]+)\/letters$/,
+    handle: async (r: Request, [id]: string[]) => {
+      if (!/^[+-]?\d+$/.test(id)) return error(404, `unknown thread ${id}`);
+      return read(r, "letters", { viewer: r.viewer, thread: Number(id), params: r.query });
     },
   },
 ];

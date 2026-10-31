@@ -15,7 +15,7 @@ import * as rows from "../store/rows.ts";
 import {
   CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, type CardAnswer, type EntryRow, type InWorkspace, JOBS_RUNNING, LETTER_SQL, type Membership, type MessageRow, OPTIONS_BEFORE,
   PEOPLE_AT, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, STILLFAIL_SURFACE, type ThreadRow, I64_MAX, MANUAL, attachment, authorKind, cardOf, isLetter, liveShare, mergeEntries,
-  ending, parsed, quote, saidBefore, sees, takeChars, toChatShare, toEntry, toMembership, toMessage, toThread, withLetter,
+  ending, parsed, quote, saidBefore, sees, takeChars, toChatShare, toEntry, letterEntry, toMembership, toMessage, toThread, withLetter,
 } from "../store/rows.ts";
 
 export type Json = any;
@@ -42,6 +42,8 @@ export type ThreadSummary = {
   people: string[]; firstText: string | null;
   /// How many letters it has (store/rows.ts Letter), in either way.
   letters: number;
+  /// Its own log of letters' last (store/schema.ts LETTERS; 0: none).
+  lettersLast: number;
 };
 
 /// TurnSummary, as serde writes it (camelCase, the skipped Nones left out).
@@ -264,6 +266,7 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
       people: threadPeople(s, t.id, t.surface, at),
       firstText: firstText(s, t.id, at),
       letters: letterCount(s, t.id, at),
+      lettersLast: lastLetter(s, t.id),
       thread: t,
     };
   });
@@ -328,11 +331,28 @@ export function lastMessage(s: Store, thread: number, at?: number | null): Messa
   return r ? toMessage(r) : null;
 }
 
-/// How many letters the thread has (isLetter), in either way.
+/// How many letters the thread has (isLetter), in either way: those kept as entries before letters had their own log,
+/// and those of it.
 export function letterCount(s: Store, thread: number, at?: number | null): number {
+  const apart = lastLetter(s, thread);
   const archived = archivedSummary(s, thread, at);
-  if (archived !== null) return archived.messages.filter((m) => m.letter).length;
-  return one(s, "SELECT letters FROM thread_state WHERE thread = ?", thread)?.letters ?? 0;
+  if (archived !== null) return apart + archived.messages.filter((m) => m.letter).length;
+  return apart + (one(s, "SELECT letters FROM thread_state WHERE thread = ?", thread)?.letters ?? 0);
+}
+
+/// The last letter of the thread's own log of them (store/schema.ts LETTERS; 0: none).
+export function lastLetter(s: Store, thread: number): number {
+  return one(s, "SELECT MAX(n) AS n FROM letters WHERE thread = ?", thread)?.n ?? 0;
+}
+
+/// Letters of the thread's own log from n = `from` to n = `to`, both included.
+export function lettersBetween(s: Store, thread: number, from: bigint, to: bigint): EntryRow[] {
+  return all(s, "SELECT * FROM letters WHERE thread = ? AND n >= ? AND n <= ? ORDER BY n", thread, from, to).map(letterEntry);
+}
+
+/// The latest `limit` letters of the thread's own log before n (the latest of all without it), oldest first.
+export function lettersBefore(s: Store, thread: number, n: bigint | null, limit: number): EntryRow[] {
+  return all(s, "SELECT * FROM letters WHERE thread = ? AND n < ? ORDER BY n DESC LIMIT ?", thread, n ?? I64_MAX, limit).map(letterEntry).reverse();
 }
 
 /// The thread's latest message that is not a letter (isLetter), for lists: what they show and sort by.
@@ -639,7 +659,8 @@ export function sessionStats(s: Store, key: string | string[] | null): Map<strin
   if (Array.isArray(key) && key.length === 0) return new Map();
   const sql = `SELECT s.key,
        (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
-       (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
+       ((SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) +
+         (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending,
        (SELECT substr(m.text, 1, 300) FROM session_first f JOIN merged m ON m.thread = f.thread AND m.n = f.n WHERE f.session = s.key) AS first_text,
        l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
      FROM sessions s

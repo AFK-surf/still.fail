@@ -29,7 +29,7 @@ import { StationAddr } from "./addr.ts";
 import { IDEMPOTENCY_KEY, READS, Requests, httpError } from "./requests.ts";
 import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
-import { ENTRIES, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, transcriptOf } from "./channel-kinds.ts";
+import { ENTRIES, LETTERS, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, lettersOf, transcriptOf } from "./channel-kinds.ts";
 import { type HistoryRead, type Link, Links, type LiveView, MEMORY, OUTFLOW, filePeekKey, linkPreviewKey, logKey } from "./link.ts";
 import { readAll, replyHeader, type StationWire } from "./wire.ts";
 import { SseParser } from "./sse.ts";
@@ -1055,6 +1055,14 @@ export class StationsSync {
         if (viewed === undefined || viewed < newest) this.#markDirty(address, id);
         return;
       }
+      case "letters": {
+        // A thread's letters kept in their own log (channel-kinds.ts LETTERS): into it, as entries into theirs; how many
+        // it has, its summary (`thread-view`, told with it).
+        const id = u64(get(data, "id"));
+        if (id === null) return;
+        this.channels.told(lettersOf(address, id), LETTERS.items(data, { latest: true }));
+        return;
+      }
       case "live": {
         const key = str(get(data, "key"));
         if (key) this.#onLive(address, key, data);
@@ -1226,6 +1234,9 @@ export class StationsSync {
     const id = u64(get(view, "id"));
     const last = u64(get(view, "last"));
     if (id !== null && last !== null) this.channels.goesTo(entriesOf(address, id), last);
+    // (its letters' own log, as far as it goes: read if the device holds some of it and is behind)
+    const letters = u64(get(view, "lettersLast"));
+    if (id !== null && letters !== null) this.channels.goesTo(lettersOf(address, id), letters);
     // Found further while catching up (its summary read again after what was missed): one more to catch up on.
     const catching = this.#links.get(address)?.catching;
     if (id !== null && catching?.tallied && !catching.behind.has(id) && this.#behind(address, id)) {
