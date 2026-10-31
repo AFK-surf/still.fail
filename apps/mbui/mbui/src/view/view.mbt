@@ -199,6 +199,8 @@ struct Node {
   /// let go with it
   mut pressed_cell : @signals.Signal[Bool]?
   mut pointed_cell : @signals.Signal[Bool]?
+  /// whether the pointer is within it as it was last placed, made as first read (View::pointer_within)
+  mut within_cell : @signals.Signal[Bool]?
   /// whether it takes input now as what reads it reads it (View::takes_input): made as first read, let go with it
   mut input_cell : @signals.Signal[Bool]?
   /// whether it can take the keyboard's focus, which of Enter (1) and Space (2) press it as it has it (View::focusable;
@@ -369,6 +371,11 @@ pub struct Tree {
   mut gone : Bool
   /// the nodes said to go beside another (View::beside), as said (each let go is passed over, and dropped as placed)
   besides_at : Array[Int]
+  /// the nodes whose being under the pointer is read (View::pointer_within: their cells), each as it was made (its
+  /// index and generation), told again as the pointer moves and as what is placed changes
+  withins_at : Array[(Int, Int)]
+  /// whether a frame's laying out is telling what is under the pointer (Tree::laid_out): what it lays out then not again
+  mut withins_passing : Bool
   /// the nodes whose taking input is read (View::takes_input), as first read
   inputs_at : Array[Int]
   /// which following of the point is the one now (Tree::follow_point): each said, and each let go, another
@@ -477,6 +484,8 @@ pub fn Tree::new(
     point_stop: None,
     gone: false,
     besides_at: [],
+    withins_at: [],
+    withins_passing: false,
     inputs_at: [],
     point_said: 0,
     hits: 0,
@@ -566,6 +575,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.on_back_step = None
       n.pressed_cell = None
       n.pointed_cell = None
+      n.within_cell = None
       n.focusable = false
       n.focus_keys = 0
       n.input_cell = None
@@ -615,6 +625,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         back_said: 0,
         pressed_cell: None,
         pointed_cell: None,
+        within_cell: None,
         focusable: false,
         input_cell: None,
         cursor: None,
@@ -1463,6 +1474,21 @@ fn Tree::modals_settled(self : Tree) -> Unit {
   if self.committing == 0 && self.modals_due {
     self.modals_due = false
     self.modals_now()
+  }
+  self.withins_settled()
+}
+
+///|
+/// A change committed whole (outside any other being committed): where what is under the pointer is read
+/// (View::pointer_within) and the change laid out or placed anything again, laid out now as of the change's moment
+/// (Tree::laid_now: what it told pulled in, laid out, placed; what is under the pointer told then, laid_out's), so what
+/// reads it has it as the change left it, no frame waited for. Nothing laid out where nothing reads it.
+fn Tree::withins_settled(self : Tree) -> Unit {
+  if self.committing == 0 &&
+    !self.withins_passing &&
+    !self.withins_at.is_empty() &&
+    (self.layout_due || !self.places_due.is_empty() || !self.bindings_due.is_empty() || !self.pulls_marked.is_empty()) {
+    self.laid_now()
   }
 }
 
@@ -3448,6 +3474,16 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   if ordered || self.changed.length() > 0 || self.composed.length() > 0 {
     self.drawn_due = true
   }
+  // (what is under the pointer as it is placed now, View::pointer_within: told once all of it is placed, and what that
+  // told marked done in this same pass, again till nothing it tells is told otherwise: what it marked all done, as one
+  // change's whole)
+  if placing && !self.withins_passing {
+    self.withins_passing = true
+    while self.withins_told() && self.due {
+      self.laid_out(upto)
+    }
+    self.withins_passing = false
+  }
 }
 
 ///|
@@ -4228,12 +4264,86 @@ fn Tree::pointer_now(self : Tree, x : Double, y : Double) -> Unit {
     return
   }
   self.pointer_xy = p
+  self.withins_told() |> ignore
   for at in self.besides_at {
     match self.nodes[at].beside {
       Some(b) if b.at_pointer && self.nodes[at].live => self.place_marked_at(at)
       _ => ()
     }
   }
+}
+
+///|
+/// Whether the pointer (a mouse's: a finger points at nothing) is within it as it was last placed (where it is drawn,
+/// as big as it is laid out, its holders' place and scale with it), whatever is over it there and whether it takes
+/// presses (View::pointed: only what takes them, the topmost), followed: what reads it told as the pointer comes in or
+/// goes out, by its moving or by what is placed moving under it (Tree::withins_told: at the pointer's each move and
+/// as the frame places what changed). A bar shown while the pointer is along the top, under the bar as it shows.
+pub fn View::pointer_within(self : View) -> Bool {
+  guard self.live() is Some(n) else { return false }
+  let s = match n.within_cell {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(self.tree.within(self.at), same=fn(a, b) { a == b })
+      n.within_cell = Some(s)
+      self.tree.withins_at.push((self.at, n.gen))
+      s
+    }
+  }
+  s.get()
+}
+
+///|
+/// Whether the pointer is within node `at` as it was last placed (none placed yet: not).
+fn Tree::within(self : Tree, at : Int) -> Bool {
+  let (px, py) = self.pointer_xy
+  if px < 0.0 || py < 0.0 || self.nodes.length() == 0 || self.last_w <= 0.0 {
+    return false
+  }
+  let n = self.nodes[at]
+  let (x, y, s) = self.placed(at)
+  px >= x && px < x + n.lw * s && py >= y && py < y + n.lh * s
+}
+
+///|
+/// Each node whose being under the pointer is read told it again, as it is now (the pointer moved, or what is placed):
+/// those let go dropped. Whether any was told otherwise.
+fn Tree::withins_told(self : Tree) -> Bool {
+  let keep = []
+  let mut changed = false
+  for w in self.withins_at {
+    let (at, gen) = w
+    let n = self.nodes[at]
+    match n.within_cell {
+      Some(cell) if n.live && n.gen == gen => {
+        let now = self.within(at)
+        if @signals.untracked(fn() { cell.get() }) != now {
+          changed = true
+          cell.set(now)
+        }
+        keep.push(w)
+      }
+      _ => ()
+    }
+  }
+  self.withins_at.clear()
+  self.withins_at.append(keep)
+  changed
+}
+
+///|
+/// The pointer at (x, y) in the window, where it is and nothing followed there (none: below 0): what is under the
+/// pointer by where it is told so (View::pointer_within), whatever is over it then that takes it (an old view's layer
+/// over all of it: what it points at the old view's), as only the pointer's going or a finger's coming says none.
+pub fn Tree::pointer_is(self : Tree, x : Double, y : Double) -> Unit {
+  self.pointer_now(x, y)
+}
+
+///|
+/// What is at the pointer followed no more (Tree::follow_point), its place kept as it is: over what an old view's layer
+/// over all of it takes, the pointer still where it is (Tree::pointer_is).
+pub fn Tree::unfollow(self : Tree) -> Unit {
+  self.point_stopped()
 }
 
 ///|

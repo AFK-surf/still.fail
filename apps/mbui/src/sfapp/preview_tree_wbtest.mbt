@@ -1510,3 +1510,126 @@ test "viewer on the tree, a fold half open wider than a phone: its floating bar 
   assert_true(t.find(meta) is Some(_), msg="wide again: its kind and size")
   assert_true(viewer.get().unwrap().in_tree, msg="the same viewer")
 }
+
+///|
+/// A picture opened in a wide window (1280 wide, a mouse: the wide frame, its viewer the tree's), whole.
+fn wide_preview() -> @ui.Tester {
+  let t = preview_tester("image", w=1280.0, platform=0)
+  t
+}
+
+///|
+test "viewer on the tree, a wide window, a mouse: the secondary button on the picture opens its own menu (复制图片) over it, reached there; Escape the menu's first, then the viewer's" {
+  let t = wide_preview()
+  let v = viewer.get().unwrap()
+  assert_true(v.in_tree)
+  let (x, y, w, h) = v.zoom.rect().unwrap()
+  let before = @sf.last_presented()
+  t.right_click(x + w / 2.0, y + h / 2.0)
+  assert_eq(@sf.last_presented() - before, 1, msg="its own menu, once")
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(t.reachable("复制图片").length() > 0, msg="over it, reached")
+  assert_eq(t.reachable("引用").length(), 0, msg="nothing of the chat's")
+  t.key_told(@ui.key_escape, 0, t.time())
+  // (as the key is told, no frame drawn: the menu's, the viewer staying)
+  assert_true(!@sf.presenting(), msg="Escape: the menu closed at once")
+  assert_true(viewer.get() is Some(_), msg="the viewer stays")
+  t.run_for(@ui.move_most_ms)
+  assert_true(viewer.get() is Some(_), msg="the viewer stays as the menu goes")
+  t.key_told(@ui.key_escape, 0, t.time())
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@sfpages.reveal_ms)
+  assert_true(viewer.get() is None && pv_leaving.get() is None, msg="the next Escape: the viewer closed")
+}
+
+///|
+test "viewer on the tree, its window made narrow then wide again (Large, Small, Medium, Large): the same viewer, as zoomed as it was, flying in no more, one bar of it drawn, closed by Escape" {
+  let t = wide_preview()
+  let v = viewer.get().unwrap()
+  v.zoom.zoom_to(v.zoom.fit() * 2.0, v.zoom.bw / 2.0, v.zoom.bh / 2.0, false, at=t.time())
+  t.draw()
+  let zoomed = v.zoom.scale_at(t.time())
+  for size in [(390.0, 844.0), (700.0, 800.0), (1280.0, 800.0)] {
+    t.resize(size.0, size.1)
+    t.draw()
+    // (each tier's shell: Small the narrow one's, Medium the tape's, Large the panes')
+    let tier = @sf.layout(size.0)
+    assert_eq(tier, if size.0 < 600.0 { @sf.Small } else if size.0 < 840.0 { @sf.Medium } else { @sf.Large }, msg="\{size}")
+    let now = viewer.get().unwrap()
+    assert_true(physical_equal(now, v), msg="\{size}: the same viewer")
+    assert_true(now.in_tree, msg="\{size}: the tree's")
+    assert_true(!now.flies || now.fly_back, msg="\{size}: flying in no more")
+    assert_eq(now.zoom.scale_at(t.time()), zoomed, msg="\{size}: as zoomed")
+    // (one bar drawn: the floating one's × on a small screen, none across the top's, whose way back closes it)
+    let closes = t.all(Button, label=@sf.t("web-main.preview.closeKey")).length()
+    assert_eq(closes, if size.0 < 600.0 { 1 } else { 0 }, msg="\{size}: one bar's")
+  }
+  t.key_told(@ui.key_escape, 0, t.time())
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@sfpages.reveal_ms)
+  assert_true(viewer.get() is None && pv_leaving.get() is None, msg="closed by Escape")
+}
+
+///|
+/// A picture opened in a wide window (a mouse), zoomed in by ⌘ and the wheel at the stage's middle till it is larger
+/// than the stage both ways (4 times: 2400 by 1600 in 1280 by 844); the pointer put at (100, 700); then ⌘ and the
+/// wheel turned at (400, 300), off the middle, told with no frame drawn, and (`moved_after`) the pointer moved to
+/// (1200, 100) before any frame: where in the picture the point under (400, 300) was, and where it is after (as shares
+/// of the picture's width and height), and the picture's place after (none of it kept from where the wheel puts it:
+/// larger than the stage, away from its edges).
+fn wheel_centre(moved_after : Bool) -> ((Double, Double), (Double, Double), (Double, Double, Double, Double)) raise {
+  let t = wide_preview()
+  let z = viewer.get().unwrap().zoom
+  // (4 times: e^(693 × 0.002), at the stage's middle (the window's: 1280 by 844), the pointer there too: round the
+  // middle whichever way the wheel is read)
+  let (mx, my) = (z.bw / 2.0, z.bh / 2.0)
+  t.move(mx, my)
+  t.wheel_with(mx, my, 0.0, -693.0, @ui.wheel_mod_cmd)
+  t.draw()
+  let (rx, ry, rw, rh) = z.rect_at(t.time()).unwrap()
+  assert_true(rw > z.bw * 1.5 && rh > z.bh * 1.5, msg="larger than the stage both ways: \{rw} by \{rh}")
+  assert_true(
+    (rx + rw / 2.0 - z.bw / 2.0).abs() < 0.001 && (ry + rh / 2.0 - z.bh / 2.0).abs() < 0.001,
+    msg="its middle the stage's: \{(rx, ry, rw, rh)}",
+  )
+  t.move(100.0, 700.0)
+  let (bx, by) = (400.0, 300.0)
+  let before = ((bx - rx) / rw, (by - ry) / rh)
+  t.wheel_told(bx, by, 0.0, -200.0, @ui.wheel_mod_cmd, t.time())
+  if moved_after {
+    t.touch(1, 1200.0, 100.0)
+  }
+  t.draw()
+  let (sx, sy, sw, sh) = z.rect_at(t.time()).unwrap()
+  assert_true(sw > rw * 1.4, msg="zoomed in a half more")
+  (before, ((bx - sx) / sw, (by - sy) / sh), (sx, sy, sw, sh))
+}
+
+///|
+test "viewer on the tree, a wide window, a mouse: ⌘ and the wheel zoom round where the wheel turned, not where the pointer was before it nor where it went after it with no frame between" {
+  for moved_after in [false, true] {
+    let (before, after, (sx, sy, sw, sh)) = wheel_centre(moved_after)
+    // (away from the stage's edges: nothing of where the wheel put it kept in)
+    let z = viewer.get().unwrap().zoom
+    assert_true(sx < -1.0 && sy < -1.0 && sx + sw > z.bw + 1.0 && sy + sh > z.bh + 1.0, msg="clear of the stage's edges: \{(sx, sy, sw, sh)}")
+    assert_true(
+      (after.0 - before.0).abs() < 0.000001 && (after.1 - before.1).abs() < 0.000001,
+      msg="moved after \{moved_after}: the point under the wheel stays under it: \{before} then \{after}",
+    )
+  }
+}
+
+///|
+test "viewer on the tree, a wide window: a toast said as it shows (a call's answer, between frames) over it, its button reached there; pressed, done, the viewer staying" {
+  let t = wide_preview()
+  assert_true(viewer.get().unwrap().in_tree)
+  let done = Ref(0)
+  toast_later("已移到回收站", action="撤销", run=fn() { done.val += 1 })
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.reachable("撤销").length() > 0, msg="its button over the viewer, reached")
+  t.tap_text("撤销")
+  t.draw()
+  assert_eq(done.val, 1, msg="pressed: done")
+  assert_true(viewer.get() is Some(_), msg="the viewer stays")
+}
