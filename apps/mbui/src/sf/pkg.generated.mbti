@@ -200,7 +200,7 @@ pub fn card_foot_in(Double) -> Double
 
 pub let card_line : @ui.TextStyle
 
-pub fn card_lines(@ui.Ctx, String, words? : String, note? : String, bad? : String) -> Unit
+pub fn card_lines(@ui.Ctx, String, words? : String, note? : String, bad? : String, title_after? : () -> Unit) -> Unit
 
 pub let card_pad : Double
 

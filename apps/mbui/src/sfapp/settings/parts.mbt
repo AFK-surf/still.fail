@@ -47,10 +47,10 @@ fn wide_side(c : @ui.Ctx) -> Double {
 ///|
 /// A page of the settings: what it shows, a block at a time (each laid out only when it comes into view), scrolling
 /// under what stays at its top. `key` keeps its place while it is on the stack. `keys`: each block's own (a station's
-/// id, a person's), as many as the blocks: what came, went and changed its place among them comes and goes where it is,
-/// as a chat's rows do (ListRows, docs/list-motion.md; 2026-10-31 the user: 「有一些是凭空出现的，有一些是凭空消失的」),
-/// not at once; a page whose blocks are all others now (what waited, then what came) shows them as they are.
-fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], keys? : Array[String]) -> Unit {
+/// id, a person's), as many as the blocks: what came or went comes and goes where it is, as a chat's rows do
+/// (ListRows, docs/list-motion.md); `moves` also closes a block that changes order and opens it at its new place. A
+/// page whose blocks are all others now (what waited, then what came) shows them as they are.
+fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], keys? : Array[String], moves? : Bool = false) -> Unit {
   // (its blocks drawn as its list lays them out, maybe after this returns: in the page's arrangement, @sf.look)
   let l = @sf.look()
   let blocks = blocks.map(fn(b) { fn() { @sf.with_look(l, b) } })
@@ -61,7 +61,7 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], keys? : Ar
       let was = page_keys.get(key).unwrap_or([])
       page_keys[key] = ks
       let watched = ks.iter().any(fn(k) { was.contains(k) })
-      let (b, k) = lr.rows(c, ks, blocks, fn(_) { "" }, watched~)
+      let (b, k) = lr.rows(c, ks, blocks, fn(_) { "" }, watched~, moves=fn(_) { moves })
       (b, k, Some(lr))
     }
     _ => (blocks, [], None)
@@ -716,12 +716,13 @@ let page_note_box : @ui.Style = @ui.css("w=Full px=S6 pb=S2_5")
 
 ///|
 /// What stands in a card's foot corners (the ladder's: docs/ui-panels.md「圆角阶梯」), so how far in its foot is: a
-/// capsule (a button, a field: settings_button_h high), concentric with the card's corner, reaching past its words to there
-/// (`foot_across`, `foot_start`); a block (a command's box), the ladder's inset, reaching past them to it
+/// capsule (a settings button or field, or a library button of its own height), concentric with the card's corner,
+/// reaching past its words to there (`foot_across`, `foot_start`); a block (a command's box), the ladder's inset, reaching past them to it
 /// (`block_across`), round by the ladder's next step there; or nothing with a ground, its words card_pad in.
 priv enum Foot {
   Words
   Capsule
+  UiCapsule
   Block
 }
 
@@ -734,6 +735,7 @@ fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Foot = Words
   let ground = match foot {
     Words => card_ground
     Capsule => card_foot_ground
+    UiCapsule => card_ui_foot_ground
     Block => card_block_ground
   }
   c.box(style=if wide.val { wide_card_room } else { card_room }, fn() {
@@ -799,6 +801,11 @@ let card_block_ground : @ui.Style = card_ground.then(@ui.style(pb=@sf.inset_room
 /// A card with a button in its foot corners: its foot as far in as makes it concentric (@sf.foot_pad).
 // kept across runs: a value (no field of it changes)
 let card_foot_ground : @ui.Style = card_ground.then(@sf.foot_pad(settings_button_h))
+
+///|
+/// A card with a library button in its foot corners, in from the card by its own height.
+// kept across runs: a value (no field of it changes)
+let card_ui_foot_ground : @ui.Style = card_ground.then(@sf.foot_pad(@sf.button_height()))
 
 ///|
 /// Rows on one rounded card, no lines between them (Parts.kt ListCard, RowsCard): its rows know they are on one

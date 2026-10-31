@@ -1002,6 +1002,7 @@ let en : Map[String, String] = {
   "desktop.local.byHand": "This station was started manually and can only be stopped here",
   "desktop.local.noService": "No separately installed station on this machine",
   "web-main.about": "About",
+  "web-main.attention.entry": "To do",
   "web-main.filter.all": "All",
   "web-main.filter.connects.all": "All connects",
   "web-main.filter.connects.mine": "Mine",
