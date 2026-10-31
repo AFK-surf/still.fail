@@ -3779,18 +3779,20 @@ let option_row_end : Double = 12.0
 
 ///|
 /// Room at the start of ask_line_card's row where no mark leads it (what the chat needed, let go): its words where the
-/// mark `icon` wide would start in ask_line_mark's column, as far in as what ends the row (ask_line_end) is from its end.
+/// mark `icon` wide would start in ask_line_mark's column.
 pub fn ask_line_start(icon : Double) -> @ui.Style {
   let side = (ask_line_disc() - icon) / 2.0
   @ui.style(pl=room(side))
 }
 
 ///|
-/// Room at the end of ask_line_card's row for what ends it (忽略) to stand as far from the row's end as a mark `icon`
-/// wide in the middle of ask_line_mark's column stands from its start.
-pub fn ask_line_end(icon : Double) -> @ui.Style {
-  let side = (ask_line_disc() - icon) / 2.0
-  @ui.style(pr=room(side))
+/// A button of words alone ending ask_line_card's row (忽略 ending what a chat needs): the library's button, its ground
+/// concentric with the row's end corner, as far in from the row's top, foot and end as a capsule as high stands in a
+/// corner as round (capsule_in), the row as tall as holds it so. `disabled`: there and faded, taking no press. True on the frame after it was pressed.
+pub fn ask_line_button(c : @ui.Ctx, label : String, key~ : String, disabled? : Bool = false) -> Bool {
+  let h = button_height()
+  let out = option_type().pad_in - capsule_in(option_row_corner, h)
+  button(c, label, key~, tone=Ghost, disabled~, reach=@ui.style(mt=room(-out), mb=room(-out), mr=room(-out)))
 }
 
 ///|

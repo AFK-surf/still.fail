@@ -464,24 +464,14 @@ fn ask_dismiss(
       )
     })
   }
-  let hot = live && c.hovered(id)
   // (at the end of the card: there until the card goes, as the core says it let go; pressed once)
   if at_end {
     if asking {
-      let words = @sf.t("web-main.chat.asks.dismiss")
-      // (on the card row's lines, level with its first line and the bell: ask_line_words; a press reaches it from
-      // round it, press_reach)
-      let look = @sf.theme().chat_list
-      let b = c.box(id=if live { id } else { 0 }, fn() {
-        let said = (if hot { look.state_turn } else { look.state_quiet }).then(dismiss_end)
-        c.text(words, style=@sf.ask_line_words(said)) |> ignore
-      })
-      if live {
-        c.semantics(b, Button, id~, label=words)
-      }
+      need_dismiss(c, "ask-dismiss/" + k, live)
     }
     return
   }
+  let hot = live && c.hovered(id)
   under_post(
     c,
     "dismiss/" + k,
@@ -504,6 +494,13 @@ fn ask_dismiss(
       @motion.leaving(c, b, live)
     },
   )
+}
+
+///|
+/// 忽略 at the end of the line saying what the chat needs (`at_end`; `live` it takes a press, else faded where it was):
+/// the library's button of words alone ending the line's row (@sf.ask_line_button).
+fn need_dismiss(c : @ui.Ctx, key : String, live : Bool) -> Unit {
+  @sf.ask_line_button(c, @sf.t("web-main.chat.asks.dismiss"), key~, disabled=!live) |> ignore
 }
 
 ///|
@@ -539,12 +536,6 @@ let settled_room : @ui.Style = @ui.css("align=AStart")
 /// 忽略 (askDismiss): 6 under the options, 12 on 18 in the subtle ink, the text's and underlined under the pointer.
 // kept across runs: a value (no field of it changes)
 let dismiss_room : @ui.Style = @ui.css("pt=S0_5")
-
-///|
-/// 忽略 at the end of the card saying what the chat needs (`at_end`): the line's words, as wide as they are, the quiet
-/// ink and the line's own under the pointer, its room the card row's (ask_line_card), not padding of its own.
-// kept across runs: a value (no field of it changes)
-let dismiss_end : @ui.TextStyle = @ui.text_style(w=Hug, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
