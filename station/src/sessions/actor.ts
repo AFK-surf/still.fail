@@ -54,7 +54,7 @@ export type TurnFor = { profile: string | null; person: string | null; thread: n
 const nobody: TurnFor = { profile: null, person: null, thread: null };
 
 /// A chat thread the running turn works for, with the message that brought it in: it is told what the turn does.
-type Working = { connect: string; channel: string; threadTs: string; ts: string | null };
+type Working = { connect: string; channel: string; threadTs: string; ts: string | null; firstTs?: string | null; since?: number };
 
 /// What the actor needs of the store: the Rust Store's methods, camelCase (src/store/store.ts).
 export type SessionStore = {
@@ -81,6 +81,8 @@ export type SessionStore = {
   setNeed(turn: string, what: string): void;
   setAbout(turn: string, about: [number, number, string] | null): void;
   lastTurn(key: string): any | null;
+  slackStop(session: string, connect: string, channel: string, threadTs: string): { ts: string; turn: string | null } | null;
+  rememberSlackStop(session: string, connect: string, channel: string, threadTs: string, ts: string, turn: string | null): void;
   stopWait(key: string): void;
   forgetWait(key: string): void;
   listJobs(session: string | null): any[];
@@ -453,7 +455,12 @@ export class SessionActor {
     return this.enqueue(async () => {
       if (this.agent?.session.busy()) {
         this.stopRequested = true;
-        await this.agent.session.abort();
+        try {
+          await this.agent.session.abort();
+        } catch (error) {
+          this.stopRequested = false;
+          throw error;
+        }
         return;
       }
       if (this.turn) return;
@@ -461,6 +468,42 @@ export class SessionActor {
       // Nothing runs: whatever is still said to be under way (a start that failed) is not.
       this.deps.live?.turnEnded(this.key);
     });
+  }
+
+  /// Slack's stop button belongs to one bot in one thread. Bind the event to the turn it saw; a retry must not stop a
+  /// later turn. Its timestamp also rules out an event known to predate newer work.
+  async stopFromSlack(connect: string, channel: string, threadTs: string, ts: string, localAt?: number | null): Promise<void> {
+    let failure: unknown;
+    await this.enqueue(async () => {
+      try {
+        const previous = this.deps.store.slackStop(this.key, connect, channel, threadTs);
+        const at = Number(ts);
+        if (previous && Number(previous.ts) > at) return;
+        let turn: string | null;
+        if (previous && Number(previous.ts) === at) turn = previous.turn;
+        else {
+          const work = this.workingFor.find((w) => w.connect === connect && w.channel === channel && w.threadTs === threadTs);
+          const since = work?.since ?? this.deps.store.lastTurn(this.key)?.startedAt ?? 0;
+          // The first message and the stop share Slack's clock, which can order two turns even within the one-second
+          // precision of an HTTP Date. Keep the first message rather than the latest steer into the same turn.
+          const first = work?.firstTs ?? work?.ts;
+          const timely = (!first || at >= Number(first)) && (localAt === null || (localAt ?? at * 1000) >= since);
+          turn = work && this.turn && timely ? this.turn.id : null;
+          this.deps.store.rememberSlackStop(this.key, connect, channel, threadTs, ts, turn);
+        }
+        if (!turn || this.turn?.id !== turn || !this.agent?.session.busy() || this.stopRequested) return;
+        this.stopRequested = true;
+        try {
+          await this.agent.session.abort();
+        } catch (error) {
+          this.stopRequested = false;
+          throw error;
+        }
+      } catch (error) {
+        failure = error;
+      }
+    });
+    if (failure !== undefined) throw failure;
   }
 
   /// Its last turn stopped at its account's allowance, or waits to be tried again after the provider had no room for it,
@@ -833,7 +876,7 @@ export class SessionActor {
     for (const m of messages.filter((m) => m.surface !== "ember")) {
       const at = this.workingFor.find((w) => w.connect === m.connect && w.channel === m.channel && w.threadTs === m.threadTs);
       if (at) at.ts = m.message.ts;
-      else this.workingFor.push({ connect: m.connect, channel: m.channel, threadTs: m.threadTs, ts: m.message.ts });
+      else this.workingFor.push({ connect: m.connect, channel: m.channel, threadTs: m.threadTs, ts: m.message.ts, firstTs: m.message.ts, since: this.now() });
     }
     this.say(t("station.status.thinking"));
   }
@@ -1141,7 +1184,7 @@ export class SessionActor {
           // Given messages too late for the turn that ended (Claude reads one written as its turn ends as a turn of its
           // own): their threads see it working again, and where the ended turn stood no longer stands.
           if (this.workingFor.length === 0 && this.steeredFor.length > 0) {
-            this.workingFor = this.steeredFor;
+            this.workingFor = this.steeredFor.map((w) => ({ ...w, firstTs: w.ts, since: this.now() }));
             this.steeredFor = [];
             this.say(t("station.status.thinking"));
           }

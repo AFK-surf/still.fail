@@ -229,6 +229,20 @@ describe("the Codex driver", { concurrency: true }, () => {
     await session.backgroundTools(); // nothing for codex
   });
 
+  test("an interrupt rejected by the app-server is reported and can be retried", async () => {
+    const d = driver();
+    const p = profile({ env: { FAKE_INTERRUPT_FAIL_ONCE: "1" } });
+    const { events, push, until } = listen();
+    const session = await d.open(options(p), push);
+    await session.prompt("hold:1");
+    await until((e) => deltas(e).length >= 1);
+    await assert.rejects(session.abort(), /interrupt failed/);
+    assert.equal(session.busy(), true);
+    await session.abort();
+    await until(ended(1));
+    assert.deepEqual(outcome(events), { kind: "aborted" });
+  });
+
   test("a turn that starts without a prompt of ours is told as turnStarted; codex's own questions are refused", async () => {
     const d = driver();
     const p = profile();

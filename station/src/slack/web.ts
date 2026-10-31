@@ -40,6 +40,8 @@ const sleep = wall.sleep;
 export class SlackClient {
   readonly base: string;
   private timeoutMs: number;
+  /// Slack's HTTP Date is rounded down to a second. This is the lower bound on Slack time minus local time.
+  private serverOffsetLower: number | null = null;
 
   constructor(base: string = apiBase(), timeoutMs = 30_000) {
     this.base = base.replace(/\/+$/, "");
@@ -58,6 +60,9 @@ export class SlackClient {
       } else body = new URLSearchParams(params);
       const headers: Record<string, string> = token !== null ? { authorization: `Bearer ${token}` } : {};
       const response = await fetch(`${this.base}/${method}`, { method: "POST", headers, body, signal: AbortSignal.timeout(this.timeoutMs) });
+      const date = response.headers.get("date");
+      const server = date === null ? NaN : Date.parse(date);
+      if (Number.isFinite(server)) this.serverOffsetLower = server - wall.now();
       if (response.status === 429 && attempt < RETRIES) {
         const said = response.headers.get("retry-after") ?? "";
         await response.body?.cancel();
@@ -66,6 +71,12 @@ export class SlackClient {
       }
       return [response.status, await response.json()];
     }
+  }
+
+  /// Latest local instant a Slack timestamp can name, using a response already received (no extra request). Null if Slack
+  /// has not supplied a Date header. The upper bound avoids rejecting a stop just because the station clock is ahead.
+  localTimeUpper(ts: string): number | null {
+    return this.serverOffsetLower === null ? null : Number(ts) * 1000 - this.serverOffsetLower;
   }
 
   /// A Web API call as the bot (or app-level token): its answer, or an error `slack <method>: <error>`.

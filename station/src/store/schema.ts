@@ -96,6 +96,16 @@ CREATE TABLE IF NOT EXISTS thread_sessions (
   PRIMARY KEY (thread, session)
 );
 CREATE INDEX IF NOT EXISTS thread_sessions_session ON thread_sessions (session);
+-- The latest Slack stop per bot, thread and session: retries must not stop a later turn.
+CREATE TABLE IF NOT EXISTS slack_stops (
+  session TEXT NOT NULL,
+  connect TEXT NOT NULL,
+  channel TEXT NOT NULL,
+  thread_ts TEXT NOT NULL,
+  event_ts TEXT NOT NULL,
+  turn_id TEXT,
+  PRIMARY KEY (session, connect, channel, thread_ts)
+);
 -- The threads at an address on any surface (store.ts threadsAt: session_send to a thread by its channel and ts).
 CREATE INDEX IF NOT EXISTS threads_at ON threads (channel, thread_ts);
 CREATE TABLE IF NOT EXISTS entries (

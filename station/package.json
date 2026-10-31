@@ -6,8 +6,8 @@
   "scripts": {
     "check": "tsgo --noEmit",
     "build": "esbuild src/main.ts src/read/worker.ts src/search/worker.ts --outbase=src --bundle --platform=node --format=esm --target=node24 --outdir=dist --external:*.node --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" && mkdir -p dist/skills && cp src/skills/*.md dist/skills/ && cp src/agents/dsh-bridge.mjs src/agents/cursor-bridge.mjs src/agents/sandbox-bridge.mjs dist/",
-    "test": "node ../scripts/native.ts run mesh runner archive-rs -- node --test --test-timeout=600000 test/*.test.ts",
-    "test:side": "node ../scripts/native.ts run mesh runner archive-rs -- node --test side/*.test.ts"
+    "test": "node ../scripts/native.ts run mesh runner archive-rs -- node --import ./test/setup-env.mjs --test --test-timeout=600000 test/*.test.ts",
+    "test:side": "node ../scripts/native.ts run mesh runner archive-rs -- node --import ./test/setup-env.mjs --test side/*.test.ts"
   },
   "dependencies": {
     "@xterm/headless": "6.0.0",

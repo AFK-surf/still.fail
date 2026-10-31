@@ -119,6 +119,8 @@ export type HubOptions = {
   clock?: Clock.Clock;
   /// Where the machine's own Claude Code and Codex keep their sessions (default: read/machine.ts `roots`).
   machineRoots?: () => Roots;
+  /// Detached cleanup begun by the hub, for an owner of its environment to await before removing that environment.
+  background?: (work: Promise<void>) => void;
 };
 
 /// The handover file, in the data directory.
@@ -440,6 +442,16 @@ export class Hub {
   /// Takes one event from a connect's platform. Resolves once it is durably recorded (or deliberately ignored).
   async receive(connectId: string, event: ChatEvent) {
     if (event.type === "message") return this.accept(connectId, event.message);
+    if (event.type === "stop") {
+      const thread = this.store.threadAt(this.surface(connectId), event.channel, event.threadTs);
+      if (!thread) return;
+      for (const member of this.store.threadSessions(thread.id)) {
+        if (member.connect !== connectId) continue;
+        const row = this.store.getSession(member.session);
+        if (row) await this.actor(row).stopFromSlack(connectId, event.channel, event.threadTs, event.ts, event.localAt);
+      }
+      return;
+    }
     this.store.editMessage(this.surface(connectId), event.channel, event.threadTs, event.ts, event.text);
   }
 
@@ -662,7 +674,11 @@ export class Hub {
     if (sandboxIdle !== null) {
       for (const actor of this.actors.values()) {
         const ms = actor.idleMs(now);
-        if (ms !== null && ms >= sandboxIdle) void this.stopIdle(actor);
+        if (ms !== null && ms >= sandboxIdle) {
+          const work = this.stopIdle(actor);
+          this.options.background?.(work);
+          void work.catch((error) => log.warn("hub", "idle sandbox cleanup failed", { session: actor.key, error: (error as Error).message }));
+        }
       }
       return;
     }

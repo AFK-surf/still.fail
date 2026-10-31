@@ -25,6 +25,11 @@ const STALE = 200;
 // Each test has its own stand-in for Slack, surface and files: they run side by side.
 describe("slack", { concurrency: true }, () => {
   test("slack events become messages and edits, and the rest is left", () => {
+    assert.deepEqual(toEvent({ type: "agent_session_stopped", channel: "C1", thread_ts: "1.1", event_ts: "3.1", user: "U1" }, "UBOT", "BBOT"), {
+      type: "stop", channel: "C1", threadTs: "1.1", ts: "3.1",
+    });
+    assert.equal(toEvent({ type: "agent_session_stopped", channel: "C1", event_ts: "3.1" }, "UBOT", "BBOT"), null);
+    assert.equal(toEvent({ type: "agent_session_stopped", channel: "C1", thread_ts: "1.1", event_ts: "bad" }, "UBOT", "BBOT"), null);
     assert.deepEqual(toEvent({ type: "message", channel: "C1", user: "U1", ts: "2.1", thread_ts: "1.1", text: "hi <@UBOT>" }, "UBOT", "BBOT"), {
       type: "message",
       message: { channel: "C1", threadTs: "1.1", ts: "2.1", user: "U1", text: "hi <@UBOT>", addressed: true },
@@ -129,6 +134,22 @@ describe("slack", { concurrency: true }, () => {
   test("tokens must be of their kind", () => {
     assert.throws(() => new SlackSurface({ appToken: "xoxb-1", botToken: "xoxb-1" }), /app-level token/);
     assert.throws(() => new SlackSurface({ appToken: "xapp-1", botToken: "xapp-1" }), /bot token/);
+  });
+
+  test("Slack timestamps are mapped to the station clock using a response it already received", async () => {
+    const fake = await FakeSlack.start();
+    fake.answer("api.test", { __status: 200, __headers: { date: "Tue, 14 Nov 2023 22:13:20 GMT" }, __body: { ok: true } });
+    const client = new SlackClient(fake.base);
+    try {
+      assert.equal(client.localTimeUpper("1700000000.500000"), null);
+      const before = Date.now();
+      await client.api("api.test", [], "xoxb-test");
+      const after = Date.now();
+      const mapped = client.localTimeUpper("1700000000.500000")!;
+      assert.ok(mapped >= before + 500 && mapped <= after + 500);
+    } finally {
+      await fake.close();
+    }
   });
 
   test("a socket that goes quiet is given up; one that answers pings stays", async () => {

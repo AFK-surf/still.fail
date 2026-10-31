@@ -34,7 +34,7 @@ export const SLACK_GROUPS: SlackGroup[] = [
       "users:read",
       "assistant:write",
     ],
-    events: ["app_mention", "message.channels", "message.groups", "message.im", "message.mpim"],
+    events: ["agent_session_stopped", "app_mention", "message.channels", "message.groups", "message.im", "message.mpim"],
   },
   { id: "public", label: "在没加入的公开频道发言", description: "不用先邀请，也能在公开频道回复。", scopes: ["chat:write.public", "channels:join"], events: [] },
   { id: "dm", label: "主动发私信", description: "给人或多人开启私信对话。", scopes: ["im:write", "mpim:write"], events: [] },
@@ -205,6 +205,17 @@ export function applySettings(manifest: Json, edit: SlackAppEdit): Json {
 
 /// The events of the groups on (base always).
 const eventsOn = (groups: Record<string, boolean>) => SLACK_GROUPS.filter((g) => g.id === "base" || groups[g.id] === true).flatMap((g) => g.events);
+
+/// Add the native stop event to an existing Socket Mode app, keeping every other manifest field as Slack has it.
+/// Null means there is nothing to change.
+export function withStopEvent(manifest: Json): Json | null {
+  if (at(manifest, ["settings", "socket_mode_enabled"]) !== true) return null;
+  const events = strings(at(manifest, ["settings", "event_subscriptions", "bot_events"]));
+  if (events.includes("agent_session_stopped")) return null;
+  const next = structuredClone(manifest);
+  object(object(next, "settings"), "event_subscriptions").bot_events = [...events, "agent_session_stopped"];
+  return next;
+}
 
 /// A manifest with Socket Mode off or on. Off, it has no events or interactivity either (Slack asks those of an app
 /// without Socket Mode to go to a URL): an app made so lets its maker turn Socket Mode on in Slack, which is where Slack
@@ -390,6 +401,8 @@ export interface SlackService {
   exportManifest(by: string, appId: string): Promise<Json>;
   /// Whether Slack wants permissions approved again.
   updateManifest(by: string, appId: string, manifest: Json): Promise<boolean>;
+  /// Read and change one manifest in order with the station's other edits; null from `edit` leaves it alone.
+  editManifest(by: string, appId: string, edit: (manifest: Json) => Json | null): Promise<boolean>;
   createApp(by: string, team: string, manifest: Json): Promise<CreatedApp>;
   setIcon(by: string, appId: string, picture: Uint8Array, mime: string): Promise<void>;
   /// An install's code, for its bot token and its workspace's name.
@@ -427,6 +440,7 @@ export class SlackApps implements SlackService {
   private rotating = new Map<string, Promise<unknown>>();
   /// Which workspace's token owns an app, once known.
   private owner = new Map<string, string>();
+  private edits = new Map<string, Promise<boolean>>();
 
   constructor(options: SlackAppsOptions) {
     this.client = options.client;
@@ -454,6 +468,20 @@ export class SlackApps implements SlackService {
     await this.forApp(by, appId, "apps.manifest.validate", params);
     const data = await this.forApp(by, appId, "apps.manifest.update", params);
     return data.permissions_updated === true;
+  }
+
+  async editManifest(by: string, appId: string, edit: (manifest: Json) => Json | null): Promise<boolean> {
+    const before = this.edits.get(appId) ?? Promise.resolve(false);
+    const next = before.catch(() => false).then(async () => {
+      const manifest = edit(await this.exportManifest(by, appId));
+      return manifest === null ? false : this.updateManifest(by, appId, manifest);
+    });
+    this.edits.set(appId, next);
+    try {
+      return await next;
+    } finally {
+      if (this.edits.get(appId) === next) this.edits.delete(appId);
+    }
   }
 
   /// Makes the app in one of this person's workspaces (`team`); its OAuth credentials come only now, once.
