@@ -464,6 +464,10 @@ pub struct Ctx {
   left_ids : Map[Int, Bool]
   left_reads : Map[Int, (Bool, SourceLoc)]
   laid_watch : Map[Int, Int]
+  /// the boxes built `tallest` (Ctx::box), by id: the tallest each has been laid out since it was first built so
+  tallest_h : Map[Int, Double]
+  /// whether one was built so since the layout last looked at them
+  mut tallest_new : Bool
   laid_rects : Map[Int, (Double, Double, Double, Double)]
   /// the boxes whose parts shown across are asked (Ctx::shown_across): when last, and the name of the boxes whose parts
   /// are left out; what the last layout showed across in each
@@ -746,6 +750,8 @@ fn Ctx::new() -> Ctx {
     left_ids: Map::new(),
     left_reads: Map::new(),
     laid_watch: Map::new(),
+    tallest_h: Map::new(),
+    tallest_new: false,
     laid_rects: Map::new(),
     shown_watch: Map::new(),
     shown_spans: Map::new(),
@@ -1112,6 +1118,9 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// `one_of`: a row of ways of saying one thing, each shorter than the one before (an allowance's chips in words, then
 /// in figures, then by their marks), of which only the first that fits its room whole is laid out and drawn, the last
 /// where none does (SwiftUI's ViewThatFits, as Ctx::text's `shorter` for words); it needs at least what the last needs.
+/// `tallest` (with an `id`): laid out never shorter than the tallest it has been since it was first built so, frame
+/// after frame, what it holds changing; built without it, as tall as what it holds again (what is tried in a part above
+/// what the pointer is moving over, held still under it).
 /// `flow`: a row that goes on in lines when what it holds does not fit, each thing in it as wide as it is, `gap` apart
 /// along the line and between the lines, or `line_gap` between the lines (Compose's FlowRow and its two spacedBy).
 /// `gone_empty`: built holding nothing, it takes no room, its padding and margins none (CSS's :empty { display: none }):
@@ -1190,6 +1199,7 @@ pub fn Ctx::box(
   drop? : Int = 0,
   more? : Bool = false,
   one_of? : Bool = false,
+  tallest? : Bool = false,
   shadow_out? : Bool = false,
   flow? : Bool = false,
   line_gap? : Double = -1.0,
@@ -1296,6 +1306,16 @@ pub fn Ctx::box(
   n.max_w = bound_of(max_w, st.max_w, 1.0e9)
   n.min_h = bound_of(min_h, st.min_h, 0.0)
   n.max_h = bound_of(max_h, st.max_h, 1.0e9)
+  if tallest && id != 0 {
+    n.tallest = true
+    self.tallest_new = true
+    match self.tallest_h.get(id) {
+      Some(h) if h > n.min_h => n.min_h = h
+      _ => ()
+    }
+  } else if id != 0 && !self.tallest_h.is_empty() {
+    self.tallest_h.remove(id)
+  }
   let (sh_blur, sh_y) = match st.shadow {
     Some(s) => {
       let (b, y) = s.blur_y()

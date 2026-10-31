@@ -287,6 +287,8 @@ struct Node {
   // a row of ways of saying one thing, each shorter than the one before, only the first that fits shown (Ctx::box
   // `one_of`)
   mut one_of : Bool
+  // laid out never shorter than the tallest it has been while built so (Ctx::box `tallest`)
+  mut tallest : Bool
   // the least it is laid out across in a row, as worked out from what it holds (Ctx::flex_tree): narrower, what it
   // holds would lie over what is beside it
   mut least : Double
@@ -497,6 +499,7 @@ fn Node::new() -> Node {
     keep: false,
     drop: 0,
     one_of: false,
+    tallest: false,
     least: 0.0,
     fit_least: 0.0,
     soft_least: 0.0,
@@ -615,6 +618,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.keep = false
   self.drop = 0
   self.one_of = false
+  self.tallest = false
   self.flow = false
   self.line_gap = -1.0
   self.label = ""

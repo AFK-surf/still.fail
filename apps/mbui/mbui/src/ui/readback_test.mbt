@@ -341,3 +341,42 @@ test "what a box shows across: its innermost parts that show something, inside i
   assert_eq(seen[seen.length() - 1], Some((x, x + w)))
   assert_eq(x, 40.0)
 }
+
+///|
+test "a box built tallest: never shorter than the tallest it has been while so, as tall as what it holds again once not" {
+  let tall = Ref::new(40.0)
+  let held = Ref::new(true)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(fn() {
+        c.box(id=c.id("held"), taps=false, tallest=held.val, fn() {
+          c.box(w=Px(50.0), h=Px(tall.val), fn() {  }) |> ignore
+        })
+        |> ignore
+        c.text("below", wrap=false) |> ignore
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=300.0,
+  )
+  let below = fn() { t.rect_of("below").unwrap().1 }
+  assert_eq(below(), 40.0)
+  // taller: grown in the frame it changes; shorter again: held
+  tall.val = 70.0
+  t.frame()
+  assert_eq(below(), 70.0)
+  tall.val = 20.0
+  t.frame()
+  assert_eq(below(), 70.0)
+  t.frame()
+  assert_eq(below(), 70.0)
+  // let go: as what it holds, and held from there next time
+  held.val = false
+  t.frame()
+  assert_eq(below(), 20.0)
+  held.val = true
+  tall.val = 30.0
+  t.frame()
+  assert_eq(below(), 30.0)
+}

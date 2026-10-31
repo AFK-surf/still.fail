@@ -287,6 +287,7 @@ pub fn Tester::new(
     images: {},
     bold: 0.0,
     ui_face: 0.0,
+    faces_wider: {},
     views: [],
     view_ids: 0,
     view_ready: {},
@@ -1926,6 +1927,13 @@ pub fn Tester::bold_wider(self : Tester, em : Double) -> Unit {
 /// in the system's, from now on (the fake host's shapes ignore faces otherwise).
 pub fn Tester::ui_face_wider(self : Tester, em : Double) -> Unit {
   self.fake.ui_face = em
+}
+
+///|
+/// What is set in host face `face` (a face given by its number, as a face's preview is) `em` ems wider a character than
+/// in the system's, from now on.
+pub fn Tester::face_wider(self : Tester, face : Int, em : Double) -> Unit {
+  self.fake.faces_wider[face] = em
 }
 
 ///|

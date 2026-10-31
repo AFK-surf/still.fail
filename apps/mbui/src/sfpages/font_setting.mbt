@@ -9,15 +9,21 @@
 
 ///|
 fn font_setting_reset() -> Unit {
-  fonts_trying.val = ""
+  fonts_trying.set("")
   local_try_given.val = ""
   local_open.val = false
   local_filter.set("")
 }
 
 ///|
-/// The face pointed at in the faces' rows, tried in the chat before it is chosen ("" none; "\u{1}" the place's own).
-let fonts_trying : Ref[String] = Ref("")
+/// The face pointed at in the faces' rows, tried in the chat before it is chosen ("" none; "\u{1}" the place's own):
+/// said once the faces are built, the chat built again as it changes.
+let fonts_trying : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
+
+///|
+/// The face pointed at as the faces are built, said as fonts_trying once they all are.
+// kept across runs: said by the faces' rows as they are built
+let fonts_pointed : Ref[String] = Ref("")
 
 ///|
 /// 字体's setting, a block at a time: the places' choice, the chat as their faces set it, the faces of the place in
@@ -53,6 +59,8 @@ fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
       shown_in(id)
     }
   }
+  // the faces' box, pointed at (one id for the blocks: each is built in a row of its own)
+  let faces_id = c.id("fonts/faces")
   [
     fn() {
       let picked = @sf.page_choice(
@@ -67,7 +75,7 @@ fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
     },
     fn() {
       // each place as chosen, the face pointed at (last frame's) tried in its place
-      let tried = fonts_trying.val
+      let tried = fonts_trying.get()
       let try_face = if tried == "\u{1}" {
         Some(own)
       } else if tried.has_prefix(local_prefix) {
@@ -89,11 +97,17 @@ fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
         ("ui", Some(f)) if chosen_of("text") == "" => f
         _ => if chosen_of("text") == "" { ui_face } else { as_chosen("text") }
       }
-      font_preview(c, ui_face, text_face)
+      // held at its tallest while the pointer is over the faces (their box, the gaps between rows too): a face tried
+      // sets its words otherwise (taller, wrapped elsewhere), moving the faces under it; let go, the row under the
+      // pointer would be another, tried in turn, and the page would shake
+      c.box(style=fp_held, id=c.id("fonts/preview"), taps=false, tallest=c.hovered(faces_id), fn() {
+        font_preview(c, ui_face, text_face)
+      })
+      |> ignore
     },
     fn() {
-      fonts_trying.val = ""
-      @sf.group(c, fn() {
+      fonts_pointed.val = ""
+      c.box(style=fp_held, id=faces_id, taps=false, points=true, fn() { @sf.group(c, fn() {
         let none = if place == "text" { "web-pages.appearance.fonts.followUi" } else { "web-pages.appearance.fonts.default" }
         face_row(c, core, place, "none", "", @sf.t(none), own, chosen == "", "", false)
         for f in all {
@@ -130,7 +144,9 @@ fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
         if @ui.local_font_families() != "" {
           local_face_row(c, core, place, chosen)
         }
-      })
+      }) })
+      |> ignore
+      fonts_trying.set(fonts_pointed.val)
     },
   ]
 }
@@ -153,7 +169,7 @@ fn face_row(
 ) -> Unit {
   let rkey = "fonts/face/" + place + "/" + key
   if c.lit(c.id(rkey)) {
-    fonts_trying.val = if id == "" { "\u{1}" } else { id }
+    fonts_pointed.val = if id == "" { "\u{1}" } else { id }
   }
   if @sf.choice_row(c, rkey, on, name, body=fn() { face_words(c, rkey, name, face, status, bad) }) {
     @settings.set_font(core, place, if id == "" { None } else { Some(id) })
@@ -227,7 +243,7 @@ fn local_face_row(c : @ui.Ctx, core : Core, place : String, chosen : String) -> 
           for f in list {
             let rid = c.id("fonts/local/" + f)
             if c.lit(rid) {
-              fonts_trying.val = local_prefix + f
+              fonts_pointed.val = local_prefix + f
             }
             if c.clicked(rid) {
               @settings.set_font(core, place, Some(local_prefix + f))
@@ -297,6 +313,11 @@ let fp_sample_code : String = "```ts\nform.onsubmit = (e) => {\n  e.preventDefau
 /// words, 4 apart.
 // kept across runs: a value (no field of it changes)
 let fp_column : @ui.Style = @ui.css("w=Full gap=S3")
+
+///|
+/// The box the chat is held in, and the faces' (Ctx::hovered's): as wide as the page's block.
+// kept across runs: a value (no field of it changes)
+let fp_held : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
