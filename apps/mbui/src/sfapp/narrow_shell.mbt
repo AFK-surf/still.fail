@@ -172,15 +172,9 @@ fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page) -> Un
 fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // (told once the frame's builds are over, as the last saw the app, the workspace and the page on top)
   c.after_build("attend", fn() { attend(src, w.id, app.nav.top() is NewChat) })
-  // where the app is, put in the history's entry now as the frame ends (sfbase's app_history.mbt: a person's act
-  // pushed an entry before it moved the stack); on the wide frame Home alone is passing (land)
-  c.after_build("history", fn() {
-    let ws = match workspace_in_view(src).0 {
-      Some(now) => now.id
-      None => ""
-    }
-    @sfbase.history_note(ws, @sfdesk.is_wide(c) && app.nav.pages() == [Home])
-  })
+  // (a person's act taken as an old view builds (a row pressed: its change is that build's), done with it: where it
+  // left from let go where it went nowhere; where the app is noted as it changes, app_state_tree)
+  c.after_build("history", fn() { @sfbase.history_settled() })
   // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off (once the
   // frame's builds are over: a build let go of follows no workspace)
   c.after_build("notices", fn() { notices_frame(src, w) })

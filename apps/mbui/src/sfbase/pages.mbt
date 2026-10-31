@@ -203,25 +203,14 @@ pub fn open_chat(r : ChatRef) -> Unit {
 /// Page `p` opened, where the layout has it (Shell's `open`: the pane table, docs/architecture.md): what pages, links
 /// and the app's own doings call, never the stack themselves.
 pub fn open_page(p : Page) -> Unit {
-  history_push()
-  shell_change(fn() { (shell.val.open)(p) })
-}
-
-///|
-/// What the shell does to open a page, one change (what reads the stack told once, of where it ends: a chat opened
-/// beside the sidebar pops to the root and pushes it, never seen at the root between).
-fn shell_change(f : () -> Unit) -> Unit {
-  @signals.start_batch()
-  f()
-  @signals.end_batch()
+  history_act(fn() { (shell.val.open)(p) })
 }
 
 ///|
 /// Page `p` opened from the page in view (a chat's link in a message): over it, back coming to it again, where the
 /// layout has it (Shell's `open_over`).
 pub fn open_page_over(p : Page) -> Unit {
-  history_push()
-  shell_change(fn() { (shell.val.open_over)(p) })
+  history_act(fn() { (shell.val.open_over)(p) })
 }
 
 
