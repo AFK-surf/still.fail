@@ -168,6 +168,10 @@ priv struct Drawn {
   mut bg_by : (() -> Int64)?
   /// each glyph of the words it holds drawn with what this gives as it is painted (Ctx::glyphs_by)
   mut glyphs_by : ((GlyphAt) -> GlyphLook)?
+  /// its notch (Ctx::box notch_y, notch_r, notch_fillet) worked out as it is painted (Ctx::notch_by), in place of its own
+  mut notch_by : (() -> (Double, Double, Double))?
+  /// where across it is drawn, worked out as it is painted (Ctx::cut_across_by): from and to, in its own terms
+  mut cut_by : (() -> (Double, Double))?
 }
 
 ///|
@@ -406,6 +410,8 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     look_by: None,
     bg_by: None,
     glyphs_by: None,
+    notch_by: None,
+    cut_by: None,
   }
   // (held by the node: docs/retained.md, the way there's 1; in the build's entries too, for a row's build to know what
   // it said a look of: Ctx::nodes_end)
@@ -516,6 +522,36 @@ pub fn Ctx::glyphs_by(self : Ctx, i : Int, f : (GlyphAt) -> GlyphLook) -> Unit {
 /// nothing built or laid out (frame_watch.mbt). `f` works out the same for the same state and time.
 pub fn Ctx::bg_by(self : Ctx, i : Int, f : () -> Int64) -> Unit {
   self.drawn_of(i).bg_by = Some(f)
+}
+
+///|
+/// Node `i`'s notch (Ctx::box's `notch_y`, `notch_r`, `notch_fillet`: where its circle's middle is below its top, its
+/// radius, its fillets') as `f` gives it as it is painted, in place of what it was built with: the outline of its
+/// ground, border and glass only, nothing laid out by it (a bar's notch opening). Read as it is drawn, as Ctx::bg_by:
+/// what `f` reads paints the frame again as it changes, nothing built or laid out; `f` works out the same for the same
+/// state and time. A radius of 0 or less: no notch.
+pub fn Ctx::notch_by(self : Ctx, i : Int, f : () -> (Double, Double, Double)) -> Unit {
+  self.drawn_of(i).notch_by = Some(f)
+}
+
+///|
+/// Node `i` drawn only between the two `f` gives as it is painted (from and to, across, in its own terms from its
+/// left), tapped whole where it is laid out: a cut that moves as it is drawn (a bar's notch's lit edge, seen between its
+/// lips as they part), as Ctx::cut_to_left and cut_to_right cut it at once. Read as it is drawn, as Ctx::bg_by.
+pub fn Ctx::cut_across_by(self : Ctx, i : Int, f : () -> (Double, Double)) -> Unit {
+  self.drawn_of(i).cut_by = Some(f)
+}
+
+///|
+/// What node `n`'s entry says of how it is drawn (Ctx::drawn_entry, by the node).
+fn node_drawn(n : Node) -> Drawn? {
+  if !dr.any {
+    None
+  } else if dr.framing {
+    n.drawn
+  } else {
+    n.drawn_built
+  }
 }
 
 ///|
@@ -823,10 +859,25 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     e.z = 0
   }
   let keep = e.keep is Some(_)
-  let cutting = (e.bottom >= 0.0 && e.bottom < self.nodes[i].fh) ||
+  // (where across it is drawn: as cut once, and between what is worked out as it is painted, Ctx::cut_across_by)
+  // (from and to within it, meeting what is cut once; none left between them: nothing of it drawn, tapped all the same)
+  let (cut_right, cut_left, cut_empty) = match e.cut_by {
+    Some(f) => {
+      let fw = self.nodes[i].fw
+      let (from, to) = f()
+      let from = dclamp(from, 0.0, fw)
+      let to = dclamp(to, 0.0, fw)
+      let from = if e.right >= 0.0 { dmax(from, fw - e.right) } else { from }
+      let to = if e.left >= 0.0 { dmin(to, e.left) } else { to }
+      (fw - from, to, to <= from)
+    }
+    None => (e.right, e.left, false)
+  }
+  let cutting = cut_empty ||
+    (e.bottom >= 0.0 && e.bottom < self.nodes[i].fh) ||
     (e.top >= 0.0 && e.top < self.nodes[i].fh) ||
-    (e.right >= 0.0 && e.right < self.nodes[i].fw) ||
-    (e.left >= 0.0 && e.left < self.nodes[i].fw)
+    (cut_right >= 0.0 && cut_right < self.nodes[i].fw) ||
+    (cut_left >= 0.0 && cut_left < self.nodes[i].fw)
   if look.is_still() && e.z < z_flying && !keep && !e.only && !cutting && e.fade_of < 0 {
     return false
   }
@@ -877,6 +928,9 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   if alpha <= 0.002 && !keep {
     return true
   }
+  if cut_empty && !keep {
+    return true
+  }
   // (the words in it as much fainter again: Look's `words`, push_inst)
   let words_was = words_alpha.val
   words_alpha.val = words_was * look.words
@@ -924,9 +978,9 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     let left = clip_stack[k]
     let right = clip_stack[k + 2]
     push_clip(
-      if e.right >= 0.0 { dmax(left, n.x + n.fw - e.right) } else { left },
+      if cut_right >= 0.0 { dmax(left, n.x + n.fw - cut_right) } else { left },
       if e.bottom >= 0.0 { dmax(top, n.y + n.fh - e.bottom) } else { top },
-      if e.left >= 0.0 { dmin(right, n.x + e.left) } else { right },
+      if cut_left >= 0.0 { dmin(right, n.x + cut_left) } else { right },
       if e.top >= 0.0 { dmin(bottom, n.y + e.top) } else { bottom },
     )
   }
@@ -975,8 +1029,8 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     let a = self.inst
     let top = e.bottom >= 0.0 && e.bottom < n.fh
     let foot = e.top >= 0.0 && e.top < n.fh
-    let start = e.right >= 0.0 && e.right < n.fw
-    let end = e.left >= 0.0 && e.left < n.fw
+    let start = cut_right >= 0.0 && cut_right < n.fw
+    let end = cut_left >= 0.0 && cut_left < n.fw
     for k in i0..<self.ninst {
       let b = k * inst_size
       if top || foot {
@@ -993,9 +1047,9 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
         inst_fade_across(
           a,
           b,
-          n.x + n.fw - e.right + dx,
+          n.x + n.fw - cut_right + dx,
           if start { e.cut_soft } else { 0.0 },
-          n.x + e.left + dx,
+          n.x + cut_left + dx,
           if end { e.cut_soft } else { 0.0 },
         )
       }

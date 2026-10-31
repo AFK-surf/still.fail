@@ -1031,6 +1031,7 @@ pub fn Ctx::copy_secret(Self, String, clear_ms~ : Double) -> Unit
 pub fn Ctx::copy_text(Self, String) -> Unit
 pub fn Ctx::cover(Self, String, Int32, Array[Int32], Int32, (Self, Double, Double) -> Unit) -> Unit
 pub fn Ctx::cursor(Self, Int32, @view.Cursor) -> Unit
+pub fn Ctx::cut_across_by(Self, Int32, () -> (Double, Double)) -> Unit
 pub fn Ctx::cut_to_bottom(Self, Int32, Double, soft? : Double) -> Unit
 pub fn Ctx::cut_to_left(Self, Int32, Double, soft? : Double) -> Unit
 pub fn Ctx::cut_to_right(Self, Int32, Double, soft? : Double) -> Unit
@@ -1183,6 +1184,7 @@ pub fn Ctx::node_parent(Self, Int32) -> Int32
 pub fn Ctx::node_radii(Self, Int32) -> (Double, Double, Double, Double)
 pub fn Ctx::node_radius(Self, Int32) -> Double
 pub fn Ctx::node_rect(Self, Int32) -> (Double, Double, Double, Double)
+pub fn Ctx::notch_by(Self, Int32, () -> (Double, Double, Double)) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::now(Self, loc~ : SourceLoc) -> Double
 #callsite(autofill(loc))
