@@ -1,4 +1,4 @@
-// Updates on Windows (@hostapi.app_version, update_install, update_state), as mac_app.m's "Updates": the app keeping
+// Updates on Windows (@hostapi.app_version, update_fetch, update_apply, update_state), as mac_app.m's "Updates": the app keeping
 // itself current, as still.fail's desktop app did (electron-updater's NsisUpdater). A newer build the core found
 // (`app.update`, its signature checked there: the release's installer, its sha256 and size the signed ones) downloaded
 // into the app's own folder (%LOCALAPPDATA%\<its id>\updates), picking up where a cut connection left off (the bytes so
@@ -39,9 +39,12 @@ int32_t mb_host_app_version(void) {
 }
 
 static SRWLOCK update_lock = SRWLOCK_INIT;
-static char update_phase[16] = "idle";  // idle | downloading | retrying | installing | failed
+static char update_phase[16] = "idle";  // idle | downloading | retrying | ready | installing | failed
 static int update_percent = -1;
 static WCHAR update_error[300];
+// the build asked for (its file's name), and once ready, where its installer is and the folder it runs in
+static WCHAR update_file[MAX_PATH], update_ready[MAX_PATH * 2], update_ready_dir[MAX_PATH];
+static void update_at_quit(void);
 static volatile LONG update_working, update_untold;
 
 static void update_say(const char *phase, int percent, const WCHAR *error) {
@@ -51,7 +54,7 @@ static void update_say(const char *phase, int percent, const WCHAR *error) {
   update_percent = percent;
   lstrcpynW(update_error, error ? error : L"", 300);
   ReleaseSRWLockExclusive(&update_lock);
-  if (!strcmp(phase, "failed")) InterlockedExchange(&update_working, 0);
+  if (!strcmp(phase, "failed") || !strcmp(phase, "ready")) InterlockedExchange(&update_working, 0);
   if (changed) {
     InterlockedExchange(&update_untold, 1);
     mb_app_wake();
@@ -62,9 +65,9 @@ static void update_say(const char *phase, int percent, const WCHAR *error) {
 static void update_tell(mb_outside_fn tell) {
   if (!InterlockedExchange(&update_untold, 0)) return;
   AcquireSRWLockShared(&update_lock);
-  int failed = !strcmp(update_phase, "failed");
+  int failed = !strcmp(update_phase, "failed"), ready = !strcmp(update_phase, "ready");
   ReleaseSRWLockShared(&update_lock);
-  if (tell) tell(MB_OUTSIDE_UPDATE, 1, failed ? -1 : 0);
+  if (tell) tell(MB_OUTSIDE_UPDATE, 1, failed ? -1 : ready ? 1 : 0);
 }
 
 moonbit_string_t mb_host_update_state(void) {
@@ -73,6 +76,8 @@ moonbit_string_t mb_host_update_state(void) {
   AcquireSRWLockShared(&update_lock);
   size_t o = (size_t)snprintf(b, sizeof b, "{\"phase\":\"%s\",\"percent\":%d,\"error\":\"", update_phase, update_percent);
   o = json_put(b, o, sizeof b - 4, update_error, (int)wcslen(update_error));
+  o += (size_t)snprintf(b + o, sizeof b - o, "\",\"file\":\"");
+  o = json_put(b, o, sizeof b - 4, update_file, (int)wcslen(update_file));
   ReleaseSRWLockShared(&update_lock);
   o += (size_t)snprintf(b + o, sizeof b - o, "\"}");
   moonbit_string_t s = moonbit_make_string_raw((int32_t)o);
@@ -216,13 +221,15 @@ static DWORD WINAPI update_thread(void *arg) {
     MoveFileExW(file, part, MOVEFILE_REPLACE_EXISTING);
     got = 1;
   }
+  // how far from the first: what an earlier try kept (0 none), not "not known" till the first bytes come
+  if (!got && j->size) update_say("downloading", (int)(file_size(part) * 100 / j->size), NULL);
   for (int failures = 0; got == 0;) {
     ULONGLONG before = file_size(part);
     got = update_try(j, part, why);
     if (got != 0) break;
     if (file_size(part) > before) failures = 0;
     if (++failures >= 5) break;
-    update_say("retrying", -1, NULL);
+    update_say("retrying", update_percent, NULL);
     // (a cut download tried again a while after, a longer one each time it gets no further, as Android's Updates.java:
     // on this thread of its own)
     Sleep(1000u << (failures - 1));
@@ -242,22 +249,14 @@ static DWORD WINAPI update_thread(void *arg) {
   } else {
     DeleteFileW(file);
     MoveFileW(part, file);
-    update_say("installing", -1, NULL);
-    // the installer, run as the desktop app's updater ran it: it ends this app, puts the new one in its place, opens it
-    WCHAR command[MAX_PATH * 3];
-    _snwprintf(command, MAX_PATH * 3, L"\"%ls\" --updated /S --force-run", file);
-    STARTUPINFOW si = {sizeof si};
-    PROCESS_INFORMATION pi;
-    if (CreateProcessW(file, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, j->dir, &si, &pi)) {
-      CloseHandle(pi.hThread);
-      CloseHandle(pi.hProcess);
-      update_log(L"%ls run: this one quits", file);
-      fflush(stdout);
-      PostMessageW(hwnd, WM_MB_QUIT, 0, 0);
-    } else {
-      _snwprintf(why, 300, L"the installer did not start (%lu)", GetLastError());
-      update_say("failed", -1, why);
-    }
+    AcquireSRWLockExclusive(&update_lock);
+    lstrcpynW(update_ready, file, MAX_PATH * 2);
+    lstrcpynW(update_ready_dir, j->dir, MAX_PATH);
+    ReleaseSRWLockExclusive(&update_lock);
+    update_log(L"%ls ready", file);
+    static volatile LONG at_quit;
+    if (!InterlockedExchange(&at_quit, 1)) atexit(update_at_quit);
+    update_say("ready", -1, NULL);
   }
   free(j->url);
   free(j->name);
@@ -265,7 +264,29 @@ static DWORD WINAPI update_thread(void *arg) {
   return 0;
 }
 
-void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name) {
+// The app quitting with a build ready (the person never said 重启更新): its installer run as it goes, without opening
+// the app after (no --force-run: the next time the person opens it, it is the newer build).
+static void update_at_quit(void) {
+  WCHAR file[MAX_PATH * 2], dir[MAX_PATH], command[MAX_PATH * 3];
+  AcquireSRWLockExclusive(&update_lock);
+  int ready = !strcmp(update_phase, "ready") && update_ready[0];
+  lstrcpynW(file, update_ready, MAX_PATH * 2);
+  lstrcpynW(dir, update_ready_dir, MAX_PATH);
+  update_ready[0] = 0;
+  ReleaseSRWLockExclusive(&update_lock);
+  if (!ready) return;
+  _snwprintf(command, MAX_PATH * 3, L"\"%ls\" --updated /S", file);
+  STARTUPINFOW si = {sizeof si};
+  PROCESS_INFORMATION pi;
+  if (CreateProcessW(file, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, dir, &si, &pi)) {
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    update_log(L"%ls run as this one quits", file);
+  }
+}
+
+void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now) {
+  (void)now;  // (no network here is told apart as costing more)
   if (mb_host_app_version() <= 0 || InterlockedCompareExchange(&update_working, 1, 0) != 0) return;
   update_job *j = (update_job *)calloc(1, sizeof *j);
   if (!j) return;
@@ -288,6 +309,19 @@ void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, doubl
     InterlockedExchange(&update_working, 0);
     return;
   }
+  // (ready already, or being put in place)
+  AcquireSRWLockShared(&update_lock);
+  int same = !wcscmp(j->name, update_file) && (!strcmp(update_phase, "ready") || !strcmp(update_phase, "installing"));
+  ReleaseSRWLockShared(&update_lock);
+  if (same) {
+    free(j->url), free(j->name), free(j);
+    InterlockedExchange(&update_working, 0);
+    return;
+  }
+  AcquireSRWLockExclusive(&update_lock);
+  lstrcpynW(update_file, j->name, MAX_PATH);
+  update_ready[0] = 0;
+  ReleaseSRWLockExclusive(&update_lock);
   for (int i = 0; i < 64; i++) j->sha256[i] = (char)sha256[i];
   j->size = (ULONGLONG)size;
   PWSTR local = NULL;
@@ -299,4 +333,32 @@ void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, doubl
   HANDLE t = CreateThread(NULL, 0, update_thread, j, 0, NULL);
   if (t) CloseHandle(t);
   else update_say("failed", -1, L"no thread");
+}
+
+void mb_host_update_apply(moonbit_string_t said) {
+  (void)said;  // (opened again here: nothing to say)
+  WCHAR file[MAX_PATH * 2], dir[MAX_PATH];
+  AcquireSRWLockExclusive(&update_lock);
+  int ready = !strcmp(update_phase, "ready") && update_ready[0];
+  lstrcpynW(file, update_ready, MAX_PATH * 2);
+  lstrcpynW(dir, update_ready_dir, MAX_PATH);
+  if (ready) update_ready[0] = 0;
+  ReleaseSRWLockExclusive(&update_lock);
+  if (!ready) return;
+  update_say("installing", -1, NULL);
+  // the installer, run as the desktop app's updater ran it: it ends this app, puts the new one in its place, opens it
+  WCHAR command[MAX_PATH * 3], why[300];
+  _snwprintf(command, MAX_PATH * 3, L"\"%ls\" --updated /S --force-run", file);
+  STARTUPINFOW si = {sizeof si};
+  PROCESS_INFORMATION pi;
+  if (CreateProcessW(file, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, dir, &si, &pi)) {
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    update_log(L"%ls run: this one quits", file);
+    fflush(stdout);
+    PostMessageW(hwnd, WM_MB_QUIT, 0, 0);
+  } else {
+    _snwprintf(why, 300, L"the installer did not start (%lu)", GetLastError());
+    update_say("failed", -1, why);
+  }
 }

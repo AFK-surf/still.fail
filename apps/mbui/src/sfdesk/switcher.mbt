@@ -284,13 +284,16 @@ fn switcher_offered(c : @ui.Ctx, src : Source, w : Workspace) -> Array[@sfpages.
     }
     _ => ()
   }
-  // the app's newer build, as 更新 over the sidebar offers it (brand.mbt)
-  if update.available.get() is Some(_) && !update_under_way() {
-    offer(action_offered("update.app", "download", version=text(update.available.get(), "versionName"), fn() { update_install(src) }))
+  // the app's newer build, as 关于's row offers it: one ready put in place, or one downloaded now (what the person's
+  // word does, sfbase updates.mbt update_go)
+  match update_now() {
+    Offered(v, ..) | Failed(v, _) | Ready(v, ..) | Allow(v) =>
+      offer(action_offered("update.app", "download", version=text(Some(v), "versionName"), fn() { update_go(src) }))
+    _ => ()
   }
   // looking for a newer build now, as the menu's 检查更新… does (its dialog: what it finds, or that there is none); found
   // only by typing (the core's), wherever the app asks still.fail cloud for its builds
-  if update.source is Some(_) && !update_under_way() {
+  if update.source is Some(_) && !(update_now() is (Coming(_, _) | Installing(_))) {
     offer(action_offered("update.check", "refresh", fn() { @sfbase.update_from_menu(src) }))
   }
   offer(action_offered("chat.new", "compose", fn() { new_chat() }))

@@ -411,9 +411,11 @@ pub fn round_like(Double, room? : Double) -> Double
 
 pub fn round_like_out(Double, room? : Double) -> Double
 
-pub let row_leave_ms : Double
+pub let row_gone_at : Double
 
-pub let row_leave_scale : Double
+pub fn row_held_look(Double, ox? : Double, oy? : Double) -> Look
+
+pub let row_moved_mark : String
 
 pub let row_size_ms : Double
 
@@ -549,9 +551,13 @@ pub let tracker_horizon_ms : Double
 
 pub fn tree_cause() -> Double?
 
-pub fn update_install(String, String, Double, String) -> Unit
+pub fn update_apply(String) -> Unit
+
+pub fn update_fetch(String, String, Double, String, Bool) -> Unit
 
 pub fn update_state() -> String
+
+pub fn update_told_as(String) -> Unit
 
 pub fn utc_offset_min(Double) -> Int32
 
@@ -887,6 +893,7 @@ pub struct Ctx {
   cycles : Array[(Double, SourceLoc)]
   periodic : Array[(Double, SourceLoc)]
   mut motion_left : Bool
+  mut motion_read : Bool
   mut fiber_frame : Bool
   mut motion_unstarted : Bool
   mut took_input : Bool
@@ -1075,9 +1082,10 @@ pub fn Ctx::hand_shown(Self, Bool, () -> Unit) -> Unit
 pub fn Ctx::has_focus(Self, Int32) -> Bool
 #callsite(autofill(loc))
 pub fn Ctx::held(Self, String, Bool, Double, keep? : Bool, later? : Bool, loc~ : SourceLoc) -> Bool
-pub fn Ctx::held_due(Self, String) -> Double
 pub fn Ctx::held_down(Self, Int32) -> Bool
+pub fn Ctx::held_due(Self, String) -> Double
 pub fn Ctx::held_long(Self, Int32) -> Bool
+pub fn Ctx::held_look(Self, Int32, Double) -> Look
 pub fn Ctx::hidden_from_semantics(Self, () -> Unit) -> Unit
 pub fn Ctx::holds_through(Self, Int32) -> Unit
 pub fn Ctx::hovered(Self, Int32) -> Bool
@@ -1658,10 +1666,11 @@ pub struct ListRows[T] {
   // private fields
 }
 pub fn[T] ListRows::came(Self[T], String) -> Double?
-pub fn[T] ListRows::leave(Self[T], Ctx, Int32, String) -> Unit
+pub fn[T] ListRows::enter(Self[T], Ctx, Int32, String, lead? : Double) -> Unit
+pub fn[T] ListRows::leave(Self[T], Ctx, Int32, String, lead? : Double) -> Unit
 pub fn[T] ListRows::new() -> Self[T]
 pub fn[T] ListRows::opening(Self[T], Ctx) -> Bool
-pub fn[T] ListRows::rows(Self[T], Ctx, Array[String], Array[T], (T) -> String, watched? : Bool, ms? : (String) -> Double?, from? : (String) -> Double?, comes? : (T) -> Bool) -> (Array[T], Array[String])
+pub fn[T] ListRows::rows(Self[T], Ctx, Array[String], Array[T], (T) -> String, watched? : Bool, ms? : (String) -> Double?, from? : (String) -> Double?, comes? : (T) -> Bool, moves? : (T) -> Bool) -> (Array[T], Array[String])
 pub fn[T] ListRows::sized(Self[T]) -> RowCauses
 pub fn[T] ListRows::went(Self[T], String) -> Double?
 
@@ -2584,6 +2593,7 @@ pub fn Tester::touch_raw(Self, Int32, Int32, Double, Double, Double) -> Unit
 pub fn Tester::turn_of(Self, String) -> Double?
 pub fn Tester::type_text(Self, String) -> Unit
 pub fn Tester::ui_face_wider(Self, Double) -> Unit
+pub fn Tester::update_asked(Self) -> Array[String]
 pub fn Tester::view_answers(Self, Int32) -> Array[(Int32, Int32, Double)]
 pub fn Tester::view_given(Self, Int32, Int32) -> (Int32, Bool)
 pub fn Tester::view_lets_go(Self, Int32, Int32) -> Unit

@@ -414,7 +414,9 @@ pub let text_menu_undo : Int32
 
 pub fn turned_sideways() -> Bool
 
-pub fn update_install(String, String, Double, String) -> Unit
+pub fn update_apply(String) -> Unit
+
+pub fn update_fetch(String, String, Double, String, Bool) -> Unit
 
 pub fn update_state() -> String
 
@@ -752,7 +754,8 @@ pub(open) trait Host {
   fn shared_in(Self) -> String = _
   fn shared_in_file(Self, Int32) -> Bytes = _
   fn app_version(Self) -> Int32 = _
-  fn update_install(Self, String, String, Double, String) -> Unit = _
+  fn update_fetch(Self, String, String, Double, String, Bool) -> Unit = _
+  fn update_apply(Self, String) -> Unit = _
   fn update_state(Self) -> String = _
   fn install_package(Self, String, Bytes) -> Unit = _
   fn drive(Self, Int32, String) -> Bool = _

@@ -241,8 +241,8 @@ pub fn settings_parts(c : @ui.Ctx, core : Core, here : @settings.Here) -> Array[
         "about",
         "info",
         @sf.t("web-pages.settings.nav.about"),
-        value=if v.newer != "" && v.doing == "" {
-          @sf.t("android-settings.version.update", args=[("version", v.newer)])
+        value=if v.ready != "" {
+          @sf.t("android-settings.version.update", args=[("version", v.ready)])
         } else {
           @settings.build_version()
         },

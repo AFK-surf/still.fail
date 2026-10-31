@@ -146,4 +146,4 @@ let run_mini1_controls : String =
   #|TEXTREC {"g":68,"r":[929,0,20,19,0,-17,0]}
   #|TEXTREC {"g":89,"r":[950,0,10,11,0,-10,0]}
   #|ENV {"motion":0,"glass":0,"dark":1,"inset":0}
-  #|DRAWHASH 1 0 960 720 1 7022544449834689611 1
+  #|DRAWHASH 1 0 960 720 1 -1978368278384962231 1

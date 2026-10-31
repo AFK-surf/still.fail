@@ -1,0 +1,7 @@
+# 关于 as an update goes, in a phone's window (sfpages about.mbt, sfbase updates.mbt): MBUI_FIXTURE=settings-about-flow,
+# where the host's word is made up on a clock: offered, the person's check (its bar sweeping), downloaded from 0 to
+# whole (the sweep drawn into how far), ready (the bar gone, the row closing round it).
+timeout 20000
+until 服务条款
+wait 7000
+exit

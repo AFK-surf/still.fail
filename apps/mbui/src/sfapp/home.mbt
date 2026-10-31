@@ -33,11 +33,15 @@ fn home_page(
     // what the last update brought, until it is seen (sfpages' changelog.mbt; beside the wide frame's rail the web
     // says it in a bubble of its own), even while the list is read
     before: fn(_, _) {
-      if @sfpages.news_of(src) is Some(_) {
-        [{ key: "changelog-news", draw: fn() { @sfpages.changelog_news(c, src) }, tucked: false }]
-      } else {
-        []
+      let cards : Array[@sfpages.ListPart] = []
+      // what the update wants of the person (the leave to install apps), over what the last one brought
+      if @sfpages.update_card_shown() {
+        cards.push({ key: "update-card", draw: fn() { @sfpages.update_card(c, src) }, tucked: false })
       }
+      if @sfpages.news_of(src) is Some(_) {
+        cards.push({ key: "changelog-news", draw: fn() { @sfpages.changelog_news(c, src) }, tucked: false })
+      }
+      cards
     },
     // what is left up a long while on the stations (OpenJobs.kt): nothing while there is none
     after: fn(_, _) {

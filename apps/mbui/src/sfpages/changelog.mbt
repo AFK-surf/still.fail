@@ -148,3 +148,52 @@ pub fn changelog_news(c : @ui.Ctx, src : Source) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// Whether the update wants the person over a small screen's list (update_card): the leave to install apps it waits
+/// for (sfbase updates.mbt: a build ready that Android puts in place by itself once given it).
+pub fn update_card_shown() -> Bool {
+  @sfbase.update_now() is Allow(_)
+}
+
+///|
+/// What the update wants of the person, at the top of a small screen's list while it does (update_card_shown), as the
+/// news over it is drawn (changelog_news's card): 允许安装更新 and why; a press does it (@sfbase.update_go: the
+/// system's page for the leave opens, and once it is given the build is put in place as the app is away). No ×: it
+/// goes once given.
+pub fn update_card(c : @ui.Ctx, src : Source) -> Unit {
+  if !update_card_shown() {
+    return
+  }
+  let t = @sf.theme()
+  c.box(style=news_room.then(@ui.style(px=@sf.room_of(t.chat_list.band_in))), fn() {
+    c.box(style=news_card, fn() {
+      let open = c.id("update-card")
+      if c.clicked(open) {
+        @sfbase.update_go(src)
+      }
+      c.box(style=update_card_words, id=open, label=@sf.t("android-misc.updates.allow"), fn() {
+        c.box(style=news_head, fn() {
+          @sf.icon(c, "download", size=16.0, color=t.p.text) |> ignore
+          c.text(@sf.t("android-misc.updates.allow"), style=news_title) |> ignore
+        })
+        |> ignore
+        c.text(@sf.t("android-misc.updates.allowWhy", args=[("app", "still.fail")]), style=update_card_line) |> ignore
+        @motion.ripple(c, open, 0.0)
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// What the update's card says: the news card's, 16 in on both sides (no × at its end).
+// kept across runs: a value (no field of it changes)
+let update_card_words : @ui.Style = @ui.css("w=Full px=S4 pt=S3 pb=S3 gap=S0_5")
+
+///|
+/// Why, wrapping (the news card's lines, whole).
+// kept across runs: a value (no field of it changes)
+let update_card_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5, w=Full)

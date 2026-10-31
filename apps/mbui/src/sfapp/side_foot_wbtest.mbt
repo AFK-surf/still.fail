@@ -43,7 +43,9 @@ fn settings_at_end(h : Double, locale? : String = "", newer? : String = "") -> @
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   // (said once 关于 has asked still.fail cloud: what it answered, none newer, said over)
   if newer != "" {
-    update.available.set(Some({ "versionName": Json::string(newer) }))
+    // (ready for the person's word: the settings' row says the version it goes to)
+    @sffixture.fixture_update(newer)
+    @sffixture.fixture_update_goes(newer, "ready")
     t.run_for(@ui.move_most_ms)
   }
   t

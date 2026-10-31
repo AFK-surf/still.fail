@@ -1881,7 +1881,7 @@ moonbit_bytes_t mb_host_shared_in_file(int32_t i) {
   return out;
 }
 
-// Updates (@hostapi.app_version, update_install, update_state): the build (its Info.plist's CFBundleVersion, the
+// Updates (@hostapi.app_version, update_fetch, update_apply, update_state): the build (its Info.plist's CFBundleVersion, the
 // build's number as Android's versionCode is: scripts/ios.sh), which the app shows and tells; it does not update
 // itself here (the App Store's, TestFlight's).
 int32_t mb_host_app_version(void) {
@@ -1894,9 +1894,10 @@ void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   if (json) mb_post("system", (const char *)json.bytes, json.length, NULL, 0);
 }
 
-void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name) {
-  (void)url; (void)sha256; (void)size; (void)name;
+void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now) {
+  (void)url; (void)sha256; (void)size; (void)name; (void)now;
 }
+void mb_host_update_apply(moonbit_string_t said) { (void)said; }
 moonbit_string_t mb_host_update_state(void) { return moonbit_make_string_raw(0); }
 
 // Turned sideways for a film (@hostapi.set_sideways, as Android's requested orientation): the scene asked to turn on

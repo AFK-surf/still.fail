@@ -104,6 +104,8 @@ pub fn fixture_followed() -> Unit
 
 pub fn fixture_machine_sessions(Core) -> Unit
 
+pub fn fixture_motion(Int32) -> Unit
+
 pub fn fixture_outflow(Bool) -> Unit
 
 pub fn fixture_outflow_answer() -> Json?
@@ -526,9 +528,11 @@ pub(all) struct VaultEditing {
 }
 
 pub(all) struct VersionNow {
-  doing : String
+  label : String
+  note : String
+  going : Bool
   part : Double?
-  newer : String
+  ready : String
   asks : Bool
 }
 

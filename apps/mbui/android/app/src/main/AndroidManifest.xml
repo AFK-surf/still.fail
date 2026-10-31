@@ -114,6 +114,14 @@
         <provider android:name=".Shares$Files" android:authorities="${applicationId}.shared" android:exported="false" android:grantUriPermissions="true" />
         <!-- mbui's Updates: what the installer says of a newer build handed to it -->
         <receiver android:name=".Updates$InstallResult" android:exported="false" />
+        <!-- Updates: what is asked for downloaded on a network that is not metered; the build ready put in while away -->
+        <service android:name=".Updates$Job" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Updates: the newer build in place (what was kept for it let go; put in at the person's word, said in a notification) -->
+        <receiver android:name=".Updates$Replaced" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <!-- the app's environment's defaults (mbui's MainActivity): the release's update feed (build.gradle.kts) -->
         <meta-data android:name="dev.mbui.env" android:value="${mbuiEnv}" />
         <!-- what shows under the system bars, light and dark (mbui's MainActivity): the page's paper (src/sf tokens) -->
