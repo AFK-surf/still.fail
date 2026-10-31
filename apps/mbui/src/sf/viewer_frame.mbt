@@ -261,47 +261,6 @@ pub fn viewer_steps(c : @ui.Ctx, key : String, before : Bool, after : Bool, awak
 }
 
 ///|
-/// A tool that says words (FilePreview.css.ts fpToolText: the zoom's per cent, 1:1): 32 high, a capsule as the tools
-/// beside it are round, 36 wide at least (52 `wide`), 8 in, 12 in the quieter ink until pointed at. True on the frame after it was pressed.
-pub fn viewer_text_tool(c : @ui.Ctx, key : String, words : String, label : String, ink : ViewerInk, wide? : Bool = false) -> Bool {
-  let id = c.id(key)
-  let hot = c.lit(id) || c.pressed(id)
-  let b = c.box(style=(if wide { vfr_text_tool_wide } else { vfr_text_tool_box }).then(viewer_tool_corner()).then(viewer_lit(ink)), id~, fn() {
-    c.text(words, style=vfr_text_tool_words.then(@ui.text_style(color=Data(if hot { ink.ink } else { ink.muted }))))
-    |> ignore
-  })
-  c.semantics(b, Button, id~, label~)
-  tip(c, key + "/tip", id, label, side=Bottom)
-  c.clicked(id)
-}
-
-///|
-/// An image's zoom in the bar (FilePreview.tsx ImageViewer's controls): −, its per cent (fitted when pressed), +, 1:1
-/// (each a quarter more or less). None under 640 (the web's phone sizes, as its 1:1 was): there a picture is zoomed as a
-/// phone's photos are, two fingers apart or a double tap (a double click; ⌘ and the wheel, a trackpad's pinch, + − 0 1
-/// as anywhere), and the bar keeps the room for its name.
-pub fn viewer_zoom(c : @ui.Ctx, key : String, z : @kit.Zoom, ink : ViewerInk) -> Unit {
-  if c.width <= viewer_small_w {
-    return
-  }
-  c.box(style=keys_row(), fn() {
-    if viewer_tool(c, key + "/zoom-out", "minus", t("web-main.preview.zoomOutKey"), ink, disabled=z.scale <= z.min_scale() + viewer_zoom_slack) {
-      z.zoom_to(z.scale / viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-    }
-    if viewer_text_tool(c, key + "/zoom-reset", "\{(z.scale * 100.0).round().to_int()}%", t("web-main.preview.fitKey"), ink, wide=true) {
-      z.reset()
-    }
-    if viewer_tool(c, key + "/zoom-in", "plus", t("web-main.preview.zoomInKey"), ink, disabled=z.scale >= z.max_scale() - viewer_zoom_slack) {
-      z.zoom_to(z.scale * viewer_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-    }
-    if viewer_text_tool(c, key + "/zoom-actual", "1:1", t("web-main.preview.actualKey"), ink) {
-      z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true)
-    }
-  })
-  |> ignore
-}
-
-///|
 /// How much of a file opened has come, in the bar beside its tools (FilePreview.tsx FileComing inBar, fpHeadProgress):
 /// "正在读取 **1.2 MB** / 3.4 MB" in the meta's size, then a bar 120 wide; before the core has said how much,
 /// 正在打开 over a bar that sweeps. `got`: what has come and its whole size, else the size it was sent with.
@@ -414,11 +373,8 @@ let viewer_page_share : Double = 0.72
 let viewer_page_blur : Double = 20.0 * 0.57735 + 0.5
 
 ///|
-/// The zoom's steps (a quarter more or less each), and the room for a scale's rounding at its ends.
+/// The zoom's steps by the keys (a quarter more or less each).
 pub let viewer_zoom_step : Double = 1.25
-
-///|
-let viewer_zoom_slack : Double = 0.000001
 
 ///|
 /// The ways beside: 22 chevrons; their glass (the canvas at 80% over a 12 blur).
@@ -486,20 +442,6 @@ let vfr_head_name : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, c
 ///|
 // kept across runs: a value (no field of it changes)
 let vfr_head_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_text_tool_box : @ui.Style = @ui.css(
-  #|h=S8 min_w=S9 px=S2 radius=Full align=ACenter justify=JCenter
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_text_tool_wide : @ui.Style = vfr_text_tool_box.then(@ui.css("min_w=S12"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let vfr_text_tool_words : @ui.TextStyle = @ui.text_style(size=Meta, wrap=false)
 
 ///|
 /// The ways beside, 16 in from the window's sides (8 under 640), in the middle of its height.

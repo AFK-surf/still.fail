@@ -31,15 +31,17 @@ fn desk_tool_x(from_end : Int) -> Double {
 }
 
 ///|
-test "desk: an image on the canvas under the bar, back to its chat by name, which of two, its size and kind; → steps, Esc closes" {
+test "desk: an image on the canvas under the bar, back to its chat by name, which of two, its size and kind, no zoom's tools in it (zoomed by the hand and the keys); → steps, Esc closes" {
   let t = desk_tester("chat-preview-step")
   assert_true(@sfdesk.is_wide(t.ctx()))
   assert_true(t.find("界面草图.png") is Some(_))
   // (its size in pixels as its message says it)
   assert_true(t.find("1 / 2 · 18 KB · 图片 · 600×400") is Some(_))
-  // the zoom's tools in the bar, its close the way back (named by the chat)
-  assert_true(t.find("100%") is Some(_))
-  assert_true(t.find("1:1") is Some(_))
+  // no zoom's tools in the bar (−, its per cent, +, 1:1: the user, 2026-11-01), its close the way back (named by the chat)
+  for k in ["web-main.preview.zoomOutKey", "web-main.preview.fitKey", "web-main.preview.zoomInKey", "web-main.preview.actualKey"] {
+    assert_eq(t.all(Button, label=@sf.t(k)).length(), 0, msg="no zoom's tool in the bar: \{k}")
+  }
+  assert_true(t.find("100%") is None && t.find("1:1") is None, msg="no zoom's tool in the bar: its per cent, 1:1")
   assert_true(t.find_last("整理发布清单") is Some(_))
   // → the one after
   t.key(@ui.key_code_right)
