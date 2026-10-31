@@ -37,7 +37,7 @@ import { dir as thumbsDir, keep } from "../drive/thumbs.ts";
 import { INTERNAL_CONNECT } from "./internal.ts";
 import { namedLocalPaths, prepare } from "./local-links.ts";
 import { suggestArchive } from "./review.ts";
-import { nameChat } from "./titles.ts";
+import { cleanTitle, nameChat } from "./titles.ts";
 
 type Json = any;
 
@@ -207,6 +207,15 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
     const thread = target(hub, key, args.to);
     if (!store.withdrawCard(key, thread.thread.id, ts)) throw new Error("withdraw must name your own message with a card in this conversation");
     return "Withdrew the answer card; its message is kept. Continue your work and record the appropriate ending state.";
+  }
+  // A topic may become clear before there is a message to post. Name the conversation without creating a message or
+  // changing the turn's state; all the same ownership, archive and naming rules apply as to a title on a post.
+  if (args.title !== undefined && args.text === undefined && args.files === undefined) {
+    if (Object.keys(args).some((k) => k !== "to" && k !== "title")) throw new Error("titling alone uses only to and title; post updates and record your ending separately");
+    if (typeof args.title !== "string" || cleanTitle(args.title) === "") throw new Error("title is empty");
+    const thread = target(hub, key, args.to);
+    if (store.manuallyArchived(thread.thread.id)) throw new Error(`${threadAddress(thread.thread.channel, thread.thread.threadTs)} was archived by hand: it takes no messages until someone restores it`);
+    return nameChat(hub, thread.thread, args.title).trim() || "The chat already has that title.";
   }
   let text = args.text === undefined ? "" : jsString(args.text).trim();
   const paths: string[] = Array.isArray(args.files) ? args.files.map(jsString) : [];
