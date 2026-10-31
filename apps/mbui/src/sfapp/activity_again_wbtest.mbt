@@ -1,6 +1,6 @@
-// An agent's line coming in, each turn of its agent's (Chat.kt Activity): its room opens as it grows from its avatar
-// and fades in, carrying what is above it up, its second turn as its first. Its key is its agent's, the same each
-// turn: gone from the chat, it is new to the list again.
+// An agent's line coming in, each turn of its agent's (Chat.kt Activity): its room opens under its words, carrying
+// what is above it up, its second turn as its first. Its key is its agent's, the same each turn: gone from the chat,
+// it is new to the list again.
 
 ///|
 /// Words just sent in the fixture's chat (`words`), delivered: its agent at work, its line asked to come in. Where the

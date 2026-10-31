@@ -2270,3 +2270,120 @@ test "viewer on the tree, a wide window, its picture coming as the core says it:
   let tree = @ui.view_tree().unwrap()
   assert_true(!tree.clock_read() && !tree.cycle_read(), msg="nothing read of the clock after")
 }
+
+///|
+/// A picture opened in a wide window (a mouse's, said so by the host), marking begun from its bar (标注图片), then the
+/// pen taken up from the marking's tools by a click: the tool as that click is let go (no frame drawn); a stroke drawn
+/// across the picture by the mouse straight after (`frames`: a frame drawn between the click and the stroke; else
+/// none): the kinds of the marks made, and how many undos they are.
+fn wide_pen_then_stroke(frames : Bool) -> (@sfbase.MarkTool, Array[String], Int) raise {
+  let t = preview_tester("image", w=1280.0, platform=0)
+  t.host_says_finger(Some(false))
+  let v = viewer.get().unwrap()
+  assert_true(v.in_tree, msg="the tree's viewer")
+  let click = fn(label : String) raise {
+    let (x, y, w, h) = t.get(Button, label~).rect
+    t.touch(0, x + w / 2.0, y + h / 2.0)
+    assert_true(@ui.pointing() is Mouse, msg="a mouse's")
+    t.touch(2, x + w / 2.0, y + h / 2.0)
+  }
+  click(@sf.t("web-main.annotate.image"))
+  t.draw()
+  assert_true(marking.on, msg="marking")
+  let past = marking.past.length()
+  click(pv("android-chat.marks.tool.pen"))
+  let taken = marking.tool
+  if frames {
+    t.draw()
+  }
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  let (x, y) = (rx + rw / 3.0, ry + rh / 3.0)
+  t.touch(0, x, y)
+  for i in 1..=4 {
+    t.touch(1, x + 20.0 * i.to_double(), y + 10.0 * i.to_double())
+  }
+  t.touch(2, x + 80.0, y + 40.0)
+  t.draw()
+  (taken, marking.shapes.map(fn(s) { s.kind }), marking.past.length() - past)
+}
+
+///|
+test "viewer on the tree, a wide window, marking: the pen taken up as its click is let go, a stroke drawn straight after it the pen's, one undo of it; the frames drawn between or none" {
+  for frames in [true, false] {
+    let (taken, kinds, undos) = wide_pen_then_stroke(frames)
+    assert_true(taken == Pen, msg="frames \{frames}: the pen as the click is let go")
+    assert_eq(kinds, ["pen"], msg="frames \{frames}: the pen's mark")
+    assert_eq(undos, 1, msg="frames \{frames}: one undo")
+  }
+}
+
+///|
+test "viewer on the tree, a wide window, marking: a tool held down and not let go, or its press called off, takes nothing up; let go on it, taken up once" {
+  let t = preview_tester("image", w=1280.0, platform=0)
+  t.host_says_finger(Some(false))
+  let (ax, ay, aw, ah) = t.get(Button, label=@sf.t("web-main.annotate.image")).rect
+  t.touch(0, ax + aw / 2.0, ay + ah / 2.0)
+  t.touch(2, ax + aw / 2.0, ay + ah / 2.0)
+  t.draw()
+  let (x, y, w, h) = t.get(Button, label=pv("android-chat.marks.tool.pen")).rect
+  let (cx, cy) = (x + w / 2.0, y + h / 2.0)
+  t.touch(0, cx, cy)
+  assert_true(marking.tool == Rect, msg="down, not let go: as it was")
+  t.touch(3, cx, cy)
+  t.draw()
+  assert_true(marking.tool == Rect, msg="called off: as it was")
+  let past = marking.past.length()
+  t.touch(0, cx, cy)
+  t.touch(2, cx, cy)
+  assert_true(marking.tool == Pen, msg="let go on it: the pen")
+  assert_eq(marking.past.length(), past, msg="nothing to undo for it")
+  t.draw()
+  assert_true(marking.tool == Pen, msg="the frame after: still the pen")
+}
+
+///|
+test "viewer on the tree, a wide window, marking: a box drawn, what to say of it asked at once in the tools' place; said done, its note's card shown over the tools in the frame after; undone from the tools, the card gone in the frame after; redone and undone with no input at all, the card back and gone in the frame after" {
+  let t = preview_tester("image", w=1280.0, platform=0)
+  t.host_says_finger(Some(false))
+  let v = viewer.get().unwrap()
+  let (ax, ay, aw, ah) = t.get(Button, label=@sf.t("web-main.annotate.image")).rect
+  t.touch(0, ax + aw / 2.0, ay + ah / 2.0)
+  t.touch(2, ax + aw / 2.0, ay + ah / 2.0)
+  t.draw()
+  assert_true(marking.on && marking.tool == Rect, msg="marking, the box")
+  let card = pv("android-chat.annotate.quoteOnly")
+  assert_true(t.find(card) is None, msg="no card yet")
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  let (x, y) = (rx + rw / 3.0, ry + rh / 3.0)
+  t.touch(0, x, y)
+  t.touch(1, x + 60.0, y + 40.0)
+  t.touch(2, x + 60.0, y + 40.0)
+  t.draw()
+  assert_eq(marking.shapes.map(fn(s) { s.kind }), ["box"], msg="a box")
+  let undo = pv("android-chat.marks.undo")
+  assert_true(t.find(card) is None && t.all(Button, label=undo).length() == 0, msg="its note asked: no card, no tools")
+  let (dx, dy, dw, dh) = t.get(Button, label=pv("android-chat.annotate.done")).rect
+  t.touch(0, dx + dw / 2.0, dy + dh / 2.0)
+  t.touch(2, dx + dw / 2.0, dy + dh / 2.0)
+  t.draw()
+  assert_true(marking.note < 0, msg="said done")
+  assert_true(t.find(card) is Some(_), msg="its card shown")
+  let (ux, uy, uw, uh) = t.get(Button, label=undo).rect
+  t.touch(0, ux + uw / 2.0, uy + uh / 2.0)
+  t.touch(2, ux + uw / 2.0, uy + uh / 2.0)
+  t.draw()
+  assert_eq(marking.shapes.length(), 0, msg="undone")
+  assert_true(t.find(card) is None, msg="its card gone")
+  // (marking changed with no input at all, the frame after drawn as the host draws it, no step of the test's: the
+  // notes follow marking itself, not what an input builds again; a host's frame first, nothing changed: parts kept on it
+  // (the frame's, not the notes' alone: the notes' own kept is what the whole-build check holds the next frame to))
+  t.frame_at(t.time() + t.frame_period())
+  assert_true(t.parts_kept() > 0, msg="a host's frame, nothing changed: its parts kept (\{t.parts_kept()}), built \{t.built_why()}")
+  @sfbase.marks_redo()
+  t.frame_at(t.time() + t.frame_period())
+  assert_eq(marking.shapes.length(), 1, msg="redone, no input")
+  assert_true(t.find(card) is Some(_), msg="redone, no input: its card back in the frame after")
+  @sfbase.marks_undo()
+  t.frame_at(t.time() + t.frame_period())
+  assert_true(t.find(card) is None, msg="undone, no input: its card gone in the frame after")
+}

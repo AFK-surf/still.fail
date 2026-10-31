@@ -18,7 +18,7 @@ import { slackTools } from "./slack.ts";
 export const CHAT_POST = {
   name: "chat_post",
   description:
-    "Post a message to one of your conversations, in Markdown (a Slack thread and a Feishu chat draw it too; mentions and files differ: see Formatting in your instructions). Users always have a chat input box and can reply freely. When you ask people to choose among answers you can name or to confirm one, carry it as a card (options, a single one is fine), and a field (text) when they must write a value; no filler options or unnecessary questions. A post that ends your turn says how with kind: all_done (nothing in the chat is left unfinished: done says why, with the evidence) or need_human (a person has to give, do or decide something: need says what; after posting a card, this is how the turn ends).",
+    "Post a message to one of your conversations, in Markdown (a Slack thread and a Feishu chat draw it too; mentions and files differ: see Formatting in your instructions). With only to and title, name the conversation without posting a message or ending the turn. Users always have a chat input box and can reply freely. When you ask people to choose among answers you can name or to confirm one, carry it as a card (options, a single one is fine), and a field (text) when they must write a value; no filler options or unnecessary questions. A post that ends your turn says how with kind: all_done (nothing in the chat is left unfinished: done says why, with the evidence) or need_human (a person has to give, do or decide something: need says what; after posting a card, this is how the turn ends).",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -63,7 +63,7 @@ export const CHAT_POST = {
       },
       "title": {
         "type": "string",
-        "description": "The conversation's name in still.fail lists (including Slack threads; does not rename anything in Slack): a few words on what it is about, in the language people use there (at most 30 characters). Give one with your first post that ends a turn in a chat. Give another only when the chat has moved to something else and the name no longer says what it is about, not to reword it; the station changes it rarely, and never over a name people gave."
+        "description": "The conversation's name in still.fail lists (including Slack threads; does not rename anything in Slack): a few words on what it is about, in the language people use there (at most 30 characters). Give it as soon as you know the topic, with a post (including a progress update) or by calling chat_post with only to and title; do not wait for the turn to end. Give another only when the chat has moved to something else and the name no longer says what it is about, not to reword it; the station changes it rarely, and never over a name people gave."
       },
       "card": {
         "type": "object",

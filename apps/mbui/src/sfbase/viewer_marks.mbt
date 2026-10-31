@@ -1045,11 +1045,17 @@ pub let picture_key : Double = 16.0
 pub let marks_put_room : @ui.Style = @ui.css("pl=S1")
 
 ///|
+/// How far over the tools (the window's tree's, marks_tools_node) the notes are, drawn without them: as far as from the
+/// tools here (8 under the notes, and the tools' column's 2 more).
+let marks_notes_over_tools : Double = 10.0
+
+///|
 /// The foot while marking (ImageMarks.kt MarksFoot, in the viewer's dark): the note being written in its box over the
 /// keyboard (Notes.kt NoteBox), else the notes as cards (a tap opens one again; Notes.kt Card) over the tools
 /// (ImageMarks.kt MarksTools: 选择, 框, 箭头, 画笔, 文字 · the colour · 删除 the picked · 撤销, 重做), the colours in a row
-/// over them when asked for.
-pub fn marks_foot(c : @ui.Ctx) -> Unit {
+/// over them when asked for. `tools` false: none of them, the tools nodes of the window's tree's under it
+/// (marks_tools_node).
+pub fn marks_foot(c : @ui.Ctx, tools? : Bool = true) -> Unit {
   if marking.note >= 0 {
     match mark_notes().iter().find_first(fn(x) { x.0 == marking.note }) {
       Some(note) => {
@@ -1063,7 +1069,8 @@ pub fn marks_foot(c : @ui.Ctx) -> Unit {
   marking.popped = -1
   // (over the picture: FilePreview.kt's darkGlass, as MarksTools has it)
   let glass = dark_glass()
-  c.box(w=Fill(1.0), pb=8.0, gap=10.0, align=ACenter, fn() {
+  // (its tools elsewhere, `tools` false: the notes as far over them as they are from the tools here)
+  c.box(w=Fill(1.0), pb=if tools { 8.0 } else { marks_notes_over_tools }, gap=10.0, align=ACenter, fn() {
     // the notes said so far, a card each; where they do not all fit, the last leave the row first, a +N card at its
     // end standing for them (a menu of them, in their order): nothing scrolled, nothing wrapped
     let notes = mark_notes()
@@ -1095,6 +1102,10 @@ pub fn marks_foot(c : @ui.Ctx) -> Unit {
         |> ignore
       })
       |> ignore
+    }
+    // (the tools nodes of the window's tree's, under what this draws: marks_tools_node)
+    if !tools {
+      return
     }
     c.box(gap=12.0, align=ACenter, fn() {
       if marking.palette {

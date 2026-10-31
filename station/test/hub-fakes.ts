@@ -307,6 +307,8 @@ export class Rig {
   clock: Clock.Clock | undefined;
   /// The machine's own sessions (read/machine.ts `roots`): none until a test makes some.
   roots: Roots | null = null;
+  /// Detached hub cleanup must finish before the rig removes its data directory.
+  background = new Set<Promise<void>>();
 
   constructor(o: Setup = {}) {
     this.clock = o.clock;
@@ -356,6 +358,10 @@ export class Rig {
       cold: o.cold,
       clock: this.clock,
       machineRoots: () => this.roots ?? { claude: join(this.dir, "no-machine/claude"), codex: join(this.dir, "no-machine/codex") },
+      background: (work) => {
+        this.background.add(work);
+        void work.then(() => this.background.delete(work), () => this.background.delete(work));
+      },
     });
   }
 
@@ -400,6 +406,7 @@ export class Rig {
   }
   async close() {
     await this.hub.shutdown();
+    while (this.background.size > 0) await Promise.allSettled([...this.background]);
     this.store.close();
     rmSync(this.dir, { recursive: true, force: true });
   }

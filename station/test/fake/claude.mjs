@@ -120,8 +120,9 @@ async function turn(text) {
       if (!process.env.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH) while (!interrupted) await pause();
       result({ is_error: true, result: "Failed to authenticate. API Error: 401 OAuth token has expired." });
     }
-  } else if (text.startsWith("hold:")) {
-    const k = Number(text.slice(5));
+  } else if (text.startsWith("hold:") || text.includes("test-hold:")) {
+    // `test-hold:` also works inside a station-formatted chat message, for the Slack Socket Mode test.
+    const k = text.startsWith("hold:") ? Number(text.slice(5)) : Number(/test-hold:(\d+)/.exec(text)?.[1] ?? 0);
     const all = await message(Array.from({ length: k }, (_, i) => `d${i} `), 0, async (i) => {
       while (i === k && !interrupted && steers.length === 0) await pause();
     });

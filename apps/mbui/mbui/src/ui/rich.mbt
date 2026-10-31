@@ -1324,9 +1324,15 @@ fn Ctx::emit_rich_glyphs(
       None => ()
     }
     let (gw, gh) = (g.gw / z, g.gh / z)
-    // (moved and scaled about its middle by its own look)
+    // (the uniform scale is about its ink's middle; an extra horizontal scale is about its advance's middle, so a
+    // glyph stays in its place while that place changes width)
     let (gx, gy, gw, gh, ga) = match own {
-      Some(gl) => (gx + gw * (1.0 - gl.scale) / 2.0, gy + gh * (1.0 - gl.scale) / 2.0 + gl.dy, gw * gl.scale, gh * gl.scale, alpha * gl.alpha)
+      Some(gl) => {
+        let ink_x = gx + gw * (1.0 - gl.scale) / 2.0
+        let cell_x = ox + lay.xs[c] + lay.adv[c] / 2.0
+        let x = if gl.sx == 1.0 { ink_x } else { cell_x + (ink_x - cell_x) * gl.sx }
+        (x + gl.dx, gy + gh * (1.0 - gl.scale) / 2.0 + gl.dy, gw * gl.scale * gl.sx, gh * gl.scale, alpha * gl.alpha)
+      }
       None => (gx, gy, gw, gh, alpha)
     }
     glyph_pushing.val = true

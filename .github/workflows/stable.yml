@@ -71,7 +71,15 @@ jobs:
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
-        run: python3 .github/release-desktop.py --stable
+        run: |
+          python3 .github/release-desktop.py --stable
+          build=$(git rev-list --count HEAD)
+          cache=${MBUI_MAC_CACHE:-"$HOME/stillfail-ci/mbui-mac-stable"}
+          work=${WORK:-"$cache/work"}
+          if [ "${MBUI_FRESH:-}" = 1 ]; then work="$GITHUB_WORKSPACE/apps/mbui"; fi
+          # The checkout is the reviewed release, which can be older than this workflow. Use this workflow's helper.
+          git show "$GITHUB_SHA:scripts/release-put.sh" > "$RUNNER_TEMP/release-put-cleanup.sh"
+          STILLFAIL_RELEASE_TOOLS_ROOT="$GITHUB_WORKSPACE" sh "$RUNNER_TEMP/release-put-cleanup.sh" --clean-uploaded "desktop/stillfail-0.1.$build-arm64-mac.zip" "$work/out/mac/stillfail-$build-arm64-mac.zip"
 
   # The Windows app is mbui's (apps/mbui, its `stable` variant: fail.still.desktop, its installer run by an installed
   # Electron app's updater, its data and sign-in kept), as the beta's became on 2026-10-26: built as the pipeline's

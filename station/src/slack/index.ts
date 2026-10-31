@@ -8,7 +8,7 @@ import { type ConnectsOptions, makeConnects } from "../connects/connects.ts";
 import { NAMES_FILE } from "../connects/keys.ts";
 import type { NameBook } from "../connects/names.ts";
 import { log } from "../ops/log.ts";
-import { type ConfigToken, SlackApps, type SlackAppLinks, slackAppLinks, upsertToken } from "./apps.ts";
+import { type ConfigToken, SlackApps, type SlackAppLinks, appIdOf, slackAppLinks, upsertToken, withStopEvent } from "./apps.ts";
 import { SlackSurface } from "./surface.ts";
 import { SlackClient } from "./web.ts";
 
@@ -25,6 +25,8 @@ export type SlackConnect = {
   team: { id: string; name: string } | null;
   botName: string | null;
   botImage: string | null;
+  /// Who added or was handed the connect: only their configuration token maintains its app.
+  owner: string | null;
   /// The still.fail workspace it was added in (docs/multi-workspace.md); null: the station's home one.
   workspace?: string | null;
 };
@@ -60,6 +62,7 @@ export function slackConnects(raw: Json): SlackConnect[] {
       team: team !== null && typeof team === "object" && nonEmpty(team.id) !== null ? { id: team.id, name: typeof team.name === "string" ? team.name : "" } : null,
       botName: nonEmpty(slack.botName),
       botImage: nonEmpty(slack.botImage),
+      owner: nonEmpty(c?.createdBy?.id),
       workspace: nonEmpty(c?.workspace),
     };
   });
@@ -105,10 +108,11 @@ export type SlackParts = ReturnType<typeof makeConnections>;
 export function makeConnections(options: SlackOptions) {
   const { config } = options;
   const client = options.client ?? new SlackClient();
+  let onWorking = (_id: string) => {};
   const create =
     options.create ??
     ((c: SlackConnect, book: NameBook, web: SlackClient) =>
-      new SlackSurface({ appToken: c.appToken, botToken: c.botToken, client: web, connect: c.id, book, pingMs: options.pingMs, staleMs: options.staleMs, clock: options.clock }));
+      new SlackSurface({ appToken: c.appToken, botToken: c.botToken, client: web, connect: c.id, book, pingMs: options.pingMs, staleMs: options.staleMs, clock: options.clock, onWorking: () => onWorking(c.id) }));
   const connects = makeConnects<SlackConnect>(options, {
     kind: "slack",
     names: NAMES_FILE.slack,
@@ -144,8 +148,77 @@ export function makeConnections(options: SlackOptions) {
     },
   });
 
+  // Upgrade connected apps as well as new ones. A configuration token lets the station maintain that app; Slack still
+  // decides whether its owner may edit it. Try once per configuration, and again when a token or connection changes.
+  const attempted = new Map<string, string>();
+  const completed = new Map<string, string>();
+  const upgrading = new Map<string, Promise<void>>();
+  const retryAtEnd = new Set<string>();
+  let closed = false;
+  const upgradeStops = () => {
+    if (closed) return;
+    if (!options.bound()) {
+      attempted.clear();
+      return;
+    }
+    const tokens = configTokens(config.raw());
+    for (const c of connects.connects()) {
+      if (!c.enabled || !(options.inWorkspace?.(c.workspace ?? null) ?? true) || connects.state(c.id)?.state !== "connected") {
+        attempted.delete(c.id);
+        continue;
+      }
+      const connection = connects.chat(c.id);
+      const team = connection?.workspace() ?? c.team?.id ?? null;
+      const own = tokens.filter((t) => c.owner !== null && t.by === c.owner);
+      if (own.length === 0) continue;
+      const versionOf = (all: ConfigToken[]) => JSON.stringify([c.appId, team, connection?.botUserId(), c.owner, all.filter((t) => t.by === c.owner).map((t) => [t.teamId, t.expiresAt])]);
+      const version = versionOf(tokens);
+      if (upgrading.has(c.id) || completed.get(c.id) === version || attempted.get(c.id) === version) continue;
+      attempted.set(c.id, version);
+      const work = (async () => {
+        const app = c.appId ?? await appIdOf(client, c.botToken);
+        if (!app) throw new Error("the Slack app id is unavailable");
+        let applicable = false;
+        await apps.editManifest(c.owner!, app, (manifest) => {
+          const current = connects.connects().find((entry) => entry.id === c.id);
+          if (closed || !options.bound() || !(options.inWorkspace?.(c.workspace ?? null) ?? true) ||
+              !current?.enabled || current.owner !== c.owner || current.appId !== c.appId || current.botToken !== c.botToken ||
+              connects.state(c.id)?.state !== "connected") return null;
+          if (!manifest || typeof manifest !== "object") throw new Error("Slack returned no app manifest");
+          applicable = true;
+          return withStopEvent(manifest);
+        });
+        if (applicable) completed.set(c.id, versionOf(configTokens(config.raw())));
+      })().catch((error) => log.warn("slack", "could not enable the native stop button", { connect: c.id, error: (error as Error)?.message ?? String(error) }))
+        .finally(() => {
+          upgrading.delete(c.id);
+          if (retryAtEnd.delete(c.id) && completed.get(c.id) !== attempted.get(c.id)) attempted.delete(c.id);
+          upgradeStops();
+        });
+      upgrading.set(c.id, work);
+    }
+  };
+  onWorking = (id) => {
+    if (upgrading.has(id)) retryAtEnd.add(id);
+    else attempted.delete(id);
+    upgradeStops();
+  };
+  const offChanges = connects.onChange(upgradeStops);
+  const offConfig = config.listen(upgradeStops);
+
   return {
     ...connects,
+    reconcile: async () => {
+      await connects.reconcile();
+      upgradeStops();
+    },
+    close: async () => {
+      closed = true;
+      offChanges();
+      offConfig();
+      const [result] = await Promise.allSettled([connects.close(), ...upgrading.values()]);
+      if (result?.status === "rejected") throw result.reason;
+    },
     apps,
     client,
     /// What the overview says of Slack for a viewer (views.rs): the apps they made that wait for a connect, and the

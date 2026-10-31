@@ -908,6 +908,7 @@ fn new_send(
     return
   }
   let words = d.text.get().trim(chars=" \n\t").to_string()
+  remember_sent_pictures(src, d, station)
   // (as its message will have them: taken out of the draft as it is sent)
   let up = up_files(d)
   let going = going_files(d)

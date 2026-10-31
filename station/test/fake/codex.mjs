@@ -177,6 +177,10 @@ function handle(msg) {
     return reply({ turnId: t.turn });
   }
   if (method === "turn/interrupt") {
+    if (process.env.FAKE_INTERRUPT_FAIL_ONCE && !process.env.FAKE_INTERRUPT_FAILED) {
+      process.env.FAKE_INTERRUPT_FAILED = "1";
+      return fail("interrupt failed");
+    }
     const t = thread(params.threadId);
     if (t.turn === params.turnId) t.interrupted = true;
     wakes.get(params.threadId)?.();

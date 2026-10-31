@@ -2028,7 +2028,7 @@ pub fn tool_button(@ui.Ctx, String, String, String, on_press~ : () -> Unit, drop
 
 pub fn tool_mark(@ui.Ctx, String, Double) -> Unit
 
-pub fn tool_node(@view.View, () -> ToolSaid, () -> ViewerInk, @view.Live[Double], () -> Unit, tip? : TipLayer) -> @view.View
+pub fn tool_node(@view.View, () -> ToolSaid, () -> ViewerInk, @view.Live[Double], () -> Unit, tip? : TipLayer, lights? : Bool, ripples? : Bool) -> @view.View
 
 pub fn tool_of(String, () -> Unit, drop? : Int32, instead? : Array[MenuItem]) -> Tool
 

@@ -27,7 +27,7 @@ import { FakeSlack, bot } from "./slack-fake.ts";
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
 process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
 
-test("an app_mention over Socket Mode starts a turn; the agent's chat_post lands in the Slack thread as chat.postMessage", async () => {
+test("Slack Socket Mode starts a Claude turn, receives its post, and stops a later turn", async () => {
   // Short: the runners' sockets live under it (104 bytes at most on macOS).
   const data = mkdtempSync(process.platform === "win32" ? join(tmpdir(), "se-") : "/tmp/se-");
   const home = join(data, "homes", "cc");
@@ -104,6 +104,22 @@ test("an app_mention over Socket Mode starts a turn; the agent's chat_post lands
     await Effect.runPromise(clock.adjust("2 seconds"));
     await slackStandIn.until("the status cleared", cleared);
     assert.equal(slackStandIn.calls("assistant.threads.setStatus")[0]!.params.thread_ts, "1700000000.000100");
+
+    // A later Slack turn waits inside the fake Claude process. A native stop event traverses the socket and the real
+    // driver, and only the result of Claude's interrupt clears the status and confirms the stop.
+    slackStandIn.event("env-2", { type: "message", channel: "C1", user: "U42", thread_ts: "1700000000.000100", ts: "1700000001.000100", text: "<@UBOT> test-hold:1" });
+    await slackStandIn.until("the next turn", () => store.listTurns(key).length === 2 && store.lastTurn(key)?.endedAt === null);
+    await Effect.runPromise(clock.adjust("2 seconds"));
+    await slackStandIn.until("working again", () => slackStandIn.calls("assistant.threads.setStatus").filter((c) => c.params.status !== "").length >= 2);
+    slackStandIn.event("env-stop", { type: "agent_session_stopped", channel: "C1", thread_ts: "1700000000.000100", event_ts: (Date.now() / 1000).toFixed(6), user: "U42" });
+    await slackStandIn.until("stop acknowledged", () => slackStandIn.acks.some((a) => a.envelope_id === "env-stop"));
+    await slackStandIn.until("stopped", () => store.lastTurn(key)?.outcome === "aborted");
+    await slackStandIn.until("stop confirmed", () => slackStandIn.calls("chat.postMessage").some((p) => p.params.text === "已停止当前任务"));
+    await hub.actor(store.getSession(key)!).flushed();
+    await settle();
+    await Effect.runPromise(clock.adjust("2 seconds"));
+    await slackStandIn.until("stop cleared the status", () => slackStandIn.calls("assistant.threads.setStatus").filter((c) => c.params.status === "").length >= 2);
+    assert.equal(store.listTurns(key).length, 2, "a stop does not restart the agent");
   } finally {
     await slack.close();
     await hub.shutdown();

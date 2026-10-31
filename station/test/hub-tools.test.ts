@@ -518,6 +518,47 @@ test("files posted to Slack go into the thread; apps without files:write link to
 
 // ── titles ──
 
+test("an agent can name a chat as soon as its topic is clear without posting a message", async () => {
+  const r = new Rig();
+  const [key, thread] = newSession(r.hub, web("local"));
+  sayIn(r.hub, thread.id, "local", "登录失败了，帮我排查");
+  await settle();
+  const to = `EMBER/${thread.threadTs}`;
+  const before = r.said(thread.id).length;
+  r.store.setRead("local", thread.id, r.store.lastEntry(thread.id));
+
+  assert.equal(await r.call(key, "chat_post", { to, title: "  登录\n排查。 " }), 'Titled the chat "登录 排查".');
+  assert.equal(r.store.getThread(thread.id)!.autoTitle, "登录 排查", "the first title appears even while the chat is open");
+  assert.equal(r.said(thread.id).length, before, "titling alone does not add a message");
+  assert.equal(await r.call(key, "chat_post", { to, title: "登录 排查" }), "The chat already has that title.");
+  const [other] = newSession(r.hub, web("other"));
+  assert.ok((await r.refused(other, "chat_post", { to, title: "别人的对话" })).includes("not a conversation of this session"));
+  assert.ok((await r.refused(key, "chat_post", { to, title: " 。 " })).includes("title is empty"));
+  assert.ok((await r.refused(key, "chat_post", { to, title: "登录", kind: "all_done", done: "完成" })).includes("only to and title"));
+  r.store.setThreadTitle(thread.id, "自己起的名字");
+  assert.ok((await r.call(key, "chat_post", { to, title: "登录问题" })).includes("people named this chat"));
+  assert.equal(r.store.getThread(thread.id)!.title, "自己起的名字");
+  assert.equal(r.said(thread.id).length, before);
+  archive(r.hub, key, true);
+  assert.ok((await r.refused(key, "chat_post", { to, title: "登录问题" })).includes("archived by hand"));
+  await r.close();
+});
+
+test("naming a Slack conversation alone does not send a Slack message", async () => {
+  const r = new Rig();
+  const m = say("<@UBOT> 帮我查构建失败");
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const to = `C1/${m.threadTs}`;
+  const before = r.said(r.thread("C1", m.threadTs).id).length;
+  assert.equal(await r.call(key, "chat_post", { to, title: "构建失败" }), 'Titled the chat "构建失败".');
+  assert.equal(r.thread("C1", m.threadTs).autoTitle, "构建失败");
+  assert.equal(r.said(r.thread("C1", m.threadTs).id).length, before);
+  assert.equal(r.chat.posts.length, 0);
+  await r.close();
+});
+
 test("an agent names its chat once, and again only after people said enough; never over people's name nor while it is open", async () => {
   const r = new Rig();
   const [key, thread] = newSession(r.hub, web("local"));
