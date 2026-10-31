@@ -84,14 +84,20 @@ fn shaped_words(
   tabular : @signals.Signal[Bool],
   at : @signals.Signal[Double],
   w? : Double = 280.0,
+  face? : Bool = false,
 ) -> (Tester, () -> (Double, Double), () -> (Double, Double)) {
   let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
   t.check_looks(false)
   t.tabular_wider(0.5)
+  t.ui_face_wider(0.1)
   let node : Ref[@view.View?] = Ref(None)
   let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true }
   set_view_app(fn(root) {
     set_tree_theme(fn() { { ..Theme::light(), tabular: tabular.get() } })
+    // (the app's words' face given before any words are made, `face`)
+    if face {
+      ignore(face_add(@hostapi.face_ui, "/fonts/ui.ttf"))
+    }
     root.lines_up(Is(Some(Start))) |> ignore
     root.box(fn(n) {
       node.val = Some(n)
@@ -176,4 +182,203 @@ test "a node's words made whole, longer than the window is tall: moved so their 
       assert_eq(inked.length(), 3, msg="\{what}: the last piece in its ink, there")
     }
   }
+}
+
+///|
+test "a node's words measured and drawn again in the app's words' face as it is given, at once (no frame between), and back as it goes: plain words and words in pieces, as wide as one made in it" {
+  for pieces in [None, Some([("界面", 0, 0L), ("草图.png", 600, 0L)])] {
+    let what = if pieces is None { "plain" } else { "in pieces" }
+    let (t, drawn, laid) = shaped_words("界面草图.png", pieces, @signals.signal(false), @signals.signal(0.0))
+    let (w0, _) = drawn()
+    assert_true(face_add(@hostapi.face_ui, "/fonts/ui.ttf"), msg="given")
+    let (w1, _) = laid()
+    assert_true(w1 > w0 + 1.0, msg="\{what}: in it at once, no frame: \{w0} then \{w1}")
+    t.draw()
+    assert_eq(drawn().0, w1, msg="\{what}: drawn so")
+    let glyphs = t.drawn_glyphs()
+    face_clear(@hostapi.face_ui)
+    assert_eq(laid().0, w0, msg="\{what}: its face gone, back at once")
+    // (as one made in it from the start)
+    let (fresh, fresh_drawn, _) = shaped_words(
+      "界面草图.png",
+      pieces,
+      @signals.signal(false),
+      @signals.signal(0.0),
+      face=true,
+    )
+    assert_eq(fresh_drawn().0, w1, msg="\{what}: as wide as one made in it")
+    assert_eq(fresh.drawn_glyphs(), glyphs, msg="\{what}: drawn as one made in it")
+    face_clear(@hostapi.face_ui)
+  }
+}
+
+///|
+/// Where in the atlas each glyph drawn at or below `y0` is drawn from (its instance's u, v), in the order drawn.
+fn glyphs_from(y0 : Double) -> Array[(Double, Double)] {
+  let c = g()
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    if c.inst[b + 5] == 1.0 && c.inst[b + 1] >= y0 {
+      out.push((c.inst[b + 12], c.inst[b + 13]))
+    }
+  }
+  out
+}
+
+///|
+test "a node's words made once, drawn frame after frame while an old view draws more glyphs than the atlas holds: its content composed again, not made again, its glyphs kept where they are in the atlas, drawn from where it has them" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  t.check_looks(false)
+  // (each glyph 500 pixels a side at 2 a point: one to a plot, sixteen plots hold 16)
+  t.glyph_box(250.0, 250.0)
+  let round = @signals.signal(0, same=fn(a, b) { a == b })
+  set_view_app(fn(root) {
+    root.lines_up(Is(Some(Start))) |> ignore
+    root.box(fn(h) {
+      h.width(Is(Some(400.0))).height(Is(Some(100.0))) |> ignore
+      // (eight new glyphs a frame)
+      old(h, fn(c) {
+        let r = round.get()
+        let sb = StringBuilder()
+        for i in 0..<8 {
+          sb.write_char((0x4E00 + r * 8 + i).unsafe_to_char())
+        }
+        c.text(sb.to_string(), size=15.0, wrap=false) |> ignore
+      }).grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(n) {
+      n.words(Is("AB"), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: false }) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let made = view_paint_work.made
+  for r in 1..=16 {
+    round.set(r)
+    t.draw()
+    assert_eq(view_paint_work.made, made, msg="its content made once, composed again")
+    // (each of its glyphs drawn from where the atlas has that glyph now)
+    let want = ['A', 'B'].map(fn(ch) {
+      match text_cache.glyphs.get(ch.to_int()) {
+        Some(gl) => (gl.u, gl.v)
+        None => (-1.0, -1.0)
+      }
+    })
+    assert_eq(glyphs_from(100.0), want, msg="after \{r * 8} more glyphs")
+  }
+}
+
+///|
+/// Each glyph drawn at or below `y0` (its instance's u, v) and where the atlas has the glyph of each of `words`' letters
+/// now (-1, -1: nowhere), in the order drawn: what is drawn and what it should be drawn from.
+fn drawn_and_held(y0 : Double, words : String) -> (Array[(Double, Double)], Array[(Double, Double)]) {
+  let want = []
+  for ch in words {
+    match text_cache.glyphs.get(ch.to_int()) {
+      Some(gl) if gl.gw > 0.0 => want.push((gl.u, gl.v))
+      _ => want.push((-1.0, -1.0))
+    }
+  }
+  (glyphs_from(y0), want)
+}
+
+///|
+/// `n` letters from `first` on, each its own glyph.
+fn letters(first : Int, n : Int) -> String {
+  let sb = StringBuilder()
+  for i in 0..<n {
+    sb.write_char((first + i).unsafe_to_char())
+  }
+  sb.to_string()
+}
+
+///|
+test "a node's words hidden (what holds them faded out) hold no room in the atlas: another node's words, as many as fill it, drawn whole; the first shown again, drawn whole too" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  t.check_looks(false)
+  // (each glyph 240 pixels a side at 2 a point: four to a plot, sixteen plots hold 64)
+  t.glyph_box(120.0, 120.0)
+  let first_shown = @signals.signal(true, same=fn(a, b) { a == b })
+  let second_there = @signals.signal(false, same=fn(a, b) { a == b })
+  let (one, two) = (letters(0x4E00, 40), letters(0x5000, 40))
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false }
+  set_view_app(fn(root) {
+    root.lines_up(Is(Some(Start))) |> ignore
+    root.box(fn(h) {
+      h.alpha(By(fn() { if first_shown.get() { 1.0 } else { 0.0 } })) |> ignore
+      h.box(fn(n) { n.offset(Is((0.0, 100.0))).words(Is(one), ink=0x333333FFL, look~) |> ignore }) |> ignore
+    })
+    |> ignore
+    root.show(fn() { second_there.get() }, fn(b) {
+      b.offset(Is((0.0, 200.0))).words(Is(two), ink=0x333333FFL, look~) |> ignore
+    })
+  })
+  t.draw()
+  let (drawn, want) = drawn_and_held(100.0, one)
+  assert_eq(drawn, want, msg="the first whole")
+  first_shown.set(false)
+  second_there.set(true)
+  t.draw()
+  let (drawn, want) = drawn_and_held(200.0, two)
+  assert_true(!want.contains((-1.0, -1.0)), msg="the second's glyphs each in the atlas: \{want}")
+  assert_eq(drawn, want, msg="the second whole, drawn from them")
+  second_there.set(false)
+  first_shown.set(true)
+  t.draw()
+  let (drawn, want) = drawn_and_held(100.0, one)
+  assert_true(!want.contains((-1.0, -1.0)), msg="the first shown again: its glyphs each in the atlas")
+  assert_eq(drawn, want, msg="the first shown again, whole")
+}
+
+///|
+test "a node's words made as the atlas has no room for them this frame (an old view's words fill it): drawn whole in the first frame there is room, their words and look the same; the frame after composed again, not made again" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  t.check_looks(false)
+  // (each glyph 240 pixels a side at 2 a point: four to a plot, sixteen plots hold 64)
+  t.glyph_box(120.0, 120.0)
+  // (which 64 new letters an old view draws, as one paints them anew in a frame: -1 none)
+  let crowd = @signals.signal(0, same=fn(a, b) { a == b })
+  let there = @signals.signal(false, same=fn(a, b) { a == b })
+  let word = letters(0x6000, 4)
+  set_view_app(fn(root) {
+    root.lines_up(Is(Some(Start))) |> ignore
+    root.box(fn(h) {
+      h.width(Is(Some(400.0))).height(Is(Some(100.0))) |> ignore
+      // (the atlas filled by an old view's words painted in this frame: 64 glyphs on lines of their own, none cut short,
+      // every plot drawn from in it)
+      old(h, fn(c) {
+        let k = crowd.get()
+        if k >= 0 {
+          c.text(letters(0x4E00 + k * 64, 64), size=15.0, wrap=true) |> ignore
+        }
+      }).grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+    root.show(fn() { there.get() }, fn(n) {
+      n.offset(Is((0.0, 100.0))).words(Is(word), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: false }) |> ignore
+    })
+  })
+  t.draw()
+  // (the node made in a frame the old view paints 64 other letters in: every plot drawn from, none for it)
+  crowd.set(1)
+  there.set(true)
+  t.draw()
+  let (_, want) = drawn_and_held(100.0, word)
+  assert_true(want.contains((-1.0, -1.0)), msg="no room for some of it as it is made: \{want}")
+  // (the old view's words gone: room again; the node's words and look the same)
+  crowd.set(-1)
+  t.draw()
+  let (drawn, want) = drawn_and_held(100.0, word)
+  assert_true(!want.contains((-1.0, -1.0)), msg="room again, the first frame: its glyphs each in the atlas: \{want}")
+  assert_eq(drawn, want, msg="drawn whole the first frame there is room")
+  // (the frame after: the same, its content composed again, not made again)
+  let made = view_paint_work.made
+  t.draw()
+  let (drawn_after, want_after) = drawn_and_held(100.0, word)
+  assert_eq((drawn_after, want_after), (drawn, want), msg="the frame after: the same")
+  assert_eq(view_paint_work.made, made, msg="the frame after: not made again")
 }

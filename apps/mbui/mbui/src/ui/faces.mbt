@@ -96,7 +96,8 @@ fn faces_style(words : Bool, face : Int) -> Int {
 let words_shaped_in : Ref[Int] = Ref::new(0)
 
 ///|
-/// Everything shaped and measured forgotten (its faces changed): shaped again as it is next asked for.
+/// Everything shaped and measured forgotten (its faces changed): shaped again as it is next asked for; the window's
+/// tree's words measured and drawn again in them at once (view_words_rescaled), as an old view's are laid out again.
 fn words_forgotten() -> Unit {
   words_shaped_in.val += 1
   clear_shapes()
@@ -104,6 +105,7 @@ fn words_forgotten() -> Unit {
   text_cache.metrics.clear()
   glyphs_forget()
   text_cache.generation = -1
+  view_words_rescaled()
 }
 
 ///|

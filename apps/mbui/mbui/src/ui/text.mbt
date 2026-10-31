@@ -159,6 +159,36 @@ fn glyphs_forget() -> Unit {
 }
 
 ///|
+/// The glyphs what is made now to be kept draws from (a node's content, made once and composed frame after frame:
+/// view_made), each told as it is drawn (its key, where it is in the atlas): None, none told.
+// kept across runs: set only while a node's content is made, and put back
+let glyphs_kept : Ref[Array[(Int, Double, Double)]?] = Ref(None)
+
+///|
+/// Glyph `key` drawn from where `g` is, told to what is made to be kept (glyphs_kept).
+fn glyph_kept(key : Int, g : Glyph) -> Unit {
+  match glyphs_kept.val {
+    Some(a) => a.push((key, g.u, g.v))
+    None => ()
+  }
+}
+
+///|
+/// Whether the glyphs `kept` (glyphs_kept's) are each where they were in the atlas still, each kept there through this
+/// frame as what draws from it is (Atlas::drawn); else (one moved or gone, or one there was no room for as it was made,
+/// told at -1, -1: never one in the atlas) what draws them is to be made again.
+fn glyphs_still(kept : Array[(Int, Double, Double)]) -> Bool {
+  for k in kept {
+    let (key, u, v) = k
+    match text_cache.glyphs.get(key) {
+      Some(g) if g.u == u && g.v == v => if g.plot >= 0 { atlas_for(g.in_colour).0.drawn(g.plot) }
+      _ => return false
+    }
+  }
+  true
+}
+
+///|
 /// How many times as large as the host makes its glyphs (the window's pixels a point) what is painted now draws its
 /// words: a shot's pixels a point over the window's (shot.mbt), 1 elsewhere.
 // kept across runs: set only while a shot is painted, within one frame's paint, and put back
@@ -888,6 +918,7 @@ fn glyph(key : Int, sc : Double) -> Glyph {
       if g.plot >= 0 {
         atlas_for(g.in_colour).0.drawn(g.plot)
       }
+      glyph_kept(key, g)
       g
     }
     None => {
@@ -916,9 +947,14 @@ fn glyph(key : Int, sc : Double) -> Glyph {
             in_colour: across > 0,
           }
           text_cache.glyphs[key] = g
+          glyph_kept(key, g)
           g
         }
-        None => no_glyph
+        // (no room while this frame is drawn: what is made to be kept made again once there is, glyphs_still)
+        None => {
+          glyph_kept(key, { ..no_glyph, u: -1.0, v: -1.0 })
+          no_glyph
+        }
       }
     }
   }

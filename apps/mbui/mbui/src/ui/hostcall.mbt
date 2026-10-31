@@ -72,6 +72,8 @@ struct FakeHost {
   mut ui_face : Double
   // what a digit set all one width (@hostapi.style_tabular) adds to its advance, in ems (0 by default: the same either way)
   mut tabular : Double
+  // how big each glyph's picture is, in points (6 by 10 by default): what fills an atlas's plots, as large ones do
+  mut glyph_box : (Double, Double)
   // what a face given by its number (face_add, a face's preview) adds to a cluster's advance in what is set in it, in
   // ems (none by default: each measures as the system's)
   faces_wider : Map[Int, Double]
@@ -680,12 +682,12 @@ fn h_glyph(key : Int, out : FixedArray[Double]) -> Unit {
   }
   match fake.val {
     Some(_) if kept_glyph(key, out) => ()
-    Some(_) => {
+    Some(f) => {
       // a glyph box per cluster, so painting is exercised
       out[0] = 0.0
       out[1] = 0.0
-      out[2] = 6.0
-      out[3] = 10.0
+      out[2] = f.glyph_box.0
+      out[3] = f.glyph_box.1
       out[4] = 0.0
       out[5] = -10.0
       out[6] = if key >= 0x1F000 { 1.0 } else { 0.0 }

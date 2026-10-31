@@ -14,8 +14,8 @@
 //     written; the picture where its zoom has it as the frame draws it, its flight, the pictures beside it), and over
 //     it the bars: the floating bar on a small screen, its picture coming or whole and not marked, nodes of its own
 //     (image_head, head_as_nodes: how much of it has come, its tools, their tips); the rest an old view taking a
-//     press only where it has something to press (the bar across the top of a wide screen, a small one wider than a
-//     phone, marking's, the ways to the pictures beside it).
+//     press only where it has something to press (the bar across the top of a wide screen, marking's, the ways to
+//     the pictures beside it).
 //
 // It sets out as the node is made (that moment its cause's: the thumbnail tapped), and is done at its ways' declared
 // ends (moments on the node's timeline): landed, the thumbnail shows again; gone, it is let go.
@@ -695,8 +695,8 @@ fn Viewer::key_on(self : Viewer, src : Source, k : @view.Key) -> Bool {
 
 ///|
 /// Whether viewer `v`'s floating bar is its nodes (image_head), `w` wide, the old bars' (vf_bar's) not: a picture here
-/// coming or whole (not read, played or marked), on a small screen no wider than a phone's (no zoom, no kind and
-/// size), its own bar (not the system's beside it: an iPhone Duo's). As each of these is told.
+/// coming or whole (not read, played or marked), on a small screen (a phone's; a fold half open wider than one, its
+/// kind and size with it), its own bar (not the system's beside it: an iPhone Duo's). As each is told.
 pub fn head_as_nodes(v : Viewer, w : Double) -> Bool {
   marks_said()
   v.in_tree &&
@@ -707,13 +707,13 @@ pub fn head_as_nodes(v : Viewer, w : Double) -> Bool {
 }
 
 ///|
-/// Viewer `vw`'s floating bar as nodes in `h` (viewer_head_node, as vf_bar has it there): its file's name, there while
-/// its bars are (Viewer::bars_shown), as far in as the viewer is (its flight's share, else its fade, sampled as it is
-/// drawn while either goes); while its picture comes, how much of it has once the core has said (file_progress_node);
-/// its tools: mark and copy once its picture is all here (copied: a check for copied_ms,
-/// from the press's moment), download (unable while there is nothing to save; a ring while the core downloads it;
-/// none while it comes), ×. Each press done at its moment; what a download asks for told once, as it is asked. Their tips in a layer of its
-/// own over all of it.
+/// Viewer `vw`'s floating bar as nodes in `h` (viewer_head_node, as vf_bar has it there): its file's name (its kind and
+/// size after it, wider than a phone), there while its bars are (Viewer::bars_shown), as far in as the viewer is (its
+/// flight's share, else its fade, sampled as it is drawn while either goes); while its picture comes, how much of it
+/// has once the core has said (file_progress_node); its tools: mark and copy once its picture is all here (copied: a
+/// check for copied_ms, from the press's moment), download (unable while there is nothing to save; a ring while the
+/// core downloads it; none while it comes), ×. Each press done at its moment; what a download asks for told once, as
+/// it is asked. Their tips in a layer of its own over all of it.
 fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, Double)) -> Unit {
   h.over(Is(true)) |> ignore
   let ink = fn() { @sf.page_viewer_ink() }
@@ -728,7 +728,8 @@ fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, 
   @sf.viewer_head_node(
     h,
     fn() { vw.file.name },
-    fn() { "" },
+    // (its kind and size after its name where the bar has room: wider than a phone, viewer_head_node)
+    fn() { vf_meta(vw, src) },
     fn() { vw.bars_shown() },
     fn(node) {
       vw.fly.said()
