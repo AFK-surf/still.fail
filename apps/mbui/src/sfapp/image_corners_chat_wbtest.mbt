@@ -44,7 +44,7 @@ fn corner_cover(a : Array[Double], px : Double, py : Double, scale : Double) -> 
 /// The made-up chat on a screen `w` by `h` at `scale`, scrolled up to its pictures as they first show: every frame of
 /// their way in, each picture's frame's corners checked pixel by pixel against what is drawn there.
 fn chat_corners(w : Double, h : Double, scale : Double) -> Int raise {
-  reset()
+  new_run()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=2, scale~)

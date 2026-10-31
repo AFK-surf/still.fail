@@ -7,7 +7,7 @@ fn landing_core(
   mode : String,
   answer? : (String, Json) -> Result[Json, Json] = fn(_, _) { Ok(Json::object({})) },
 ) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture(mode)
   let src : Source = {
     ..base,

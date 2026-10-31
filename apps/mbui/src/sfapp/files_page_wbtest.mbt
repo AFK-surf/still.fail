@@ -6,7 +6,7 @@
 /// The app over the fixture `w` by `h`, as `platform` plays it (2: a phone's system, a finger; 0: a Mac's, a mouse),
 /// at Studio's 文档.
 fn files_page_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture("home")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
   app.nav.replace(Files)
@@ -102,7 +102,7 @@ test "文件's page wide with a finger and with a mouse: its ways, its heads; a 
 
 ///|
 test "a folder opened in the columns while its station has not said what it holds: the columns stay where they were" {
-  reset()
+  new_run()
   let src = fixture("home")
   // (设计稿 never read: as a station slow to answer)
   let held : @sfbase.Source = {
@@ -179,7 +179,7 @@ test "a narrow folder's ⋯: the order and hidden files, its path, 收藏; chose
 
 ///|
 test "Pin 文件夹 on a phone: which station, then the picker in a sheet from the foot, the station's places over its folders; one entered and pinned (drive.setRoots)" {
-  reset()
+  new_run()
   let calls : Array[Made] = []
   let base = fixture("home")
   let src : Source = {

@@ -20,7 +20,7 @@ fn older_history(from : Int) -> Json {
 
 ///|
 test "an agent's history read up to its top asks for the page before once, what was read staying where it is" {
-  reset()
+  new_run()
   let base = fixture("chat")
   let from = @signals.signal(4)
   let asked : Array[Int] = []

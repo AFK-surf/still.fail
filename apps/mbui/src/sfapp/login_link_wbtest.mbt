@@ -3,7 +3,7 @@
 
 ///|
 test "a login's link: the station's page, its card brought into view" {
-  reset()
+  new_run()
   @settings.reset()
   let src = fixture("settings")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -21,7 +21,7 @@ test "a login's link: the station's page, its card brought into view" {
 
 ///|
 test "a station's 共享调试 link: its page" {
-  reset()
+  new_run()
   @settings.reset()
   let src = fixture("settings")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)

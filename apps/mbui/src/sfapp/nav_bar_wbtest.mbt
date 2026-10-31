@@ -7,7 +7,7 @@ test "nav bar: back, title and what is at its end on one line (settings' pages)"
     "settings-archive",
     "settings-profiles", "settings-stations", "settings-new-profile", "settings-run-models",
   ] {
-    reset()
+    new_run()
     @settings.reset()
     let src = fixture(mode)
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -40,7 +40,7 @@ test "nav bar: back, title and what is at its end on one line (settings' pages)"
 /// Where the top bar's back and title are on settings' `mode` with the status bar `top` high: what is seen in the band
 /// the bar's 32 line takes under it (labels, their boxes' middles).
 fn bar_line_under(mode : String, top : Double) -> Array[(String, Double)] {
-  reset()
+  new_run()
   @settings.reset()
   let src = fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)

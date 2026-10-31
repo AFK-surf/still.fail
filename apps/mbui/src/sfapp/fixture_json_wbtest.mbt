@@ -1,6 +1,6 @@
 ///|
 test "a screen's JSON: its topics by name and params, its calls answered, its pages opened" {
-  reset()
+  new_run()
   let src = fixture_json(
     #|{"workspace": "ws1",
     #| "open": [{"page": "settings"}],

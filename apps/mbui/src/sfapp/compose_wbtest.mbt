@@ -3,7 +3,7 @@
 
 ///|
 test "a draft as the core keeps it: its kept words read back into the field; what is typed told to the core, not taken back from it" {
-  reset()
+  new_run()
   let src = fixture("chat-compose")
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   assert_true(w.text.get().has_prefix("把发布清单再过一遍"))
@@ -19,7 +19,7 @@ test "a draft as the core keeps it: its kept words read back into the field; wha
 
 ///|
 test "a draft taken to be sent is empty at once and the core answers what it took; put back, it is there again with why" {
-  reset()
+  new_run()
   let src = fixture("chat")
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   @sfbase.writing_text(src, w, "  发一下  ")
@@ -37,7 +37,7 @@ test "a draft taken to be sent is empty at once and the core answers what it too
 
 ///|
 test "a draft's quotes: added with the focus on its comment line, said about, let go" {
-  reset()
+  new_run()
   let src = fixture("chat")
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   @sfbase.writing_quote(src, w, { "author": "Claude", "text": "其余的行按估计的高度占位", "ts": "ts8" })
@@ -56,7 +56,7 @@ test "a draft's quotes: added with the focus on its comment line, said about, le
 
 ///|
 test "an image of a message quoted is its quote's own picture, not among the files, and goes with it" {
-  reset()
+  new_run()
   let src = fixture("chat")
   let image : Json = { "name": "shot.png", "path": "/w/uploads/shot.png", "size": 120, "owner": "s-c1" }
   let quote : Json = { "author": "Claude", "text": "shot.png", "ts": "ts8" }
@@ -74,7 +74,7 @@ test "an image of a message quoted is its quote's own picture, not among the fil
 
 ///|
 test "what is written in a new chat goes on into the chat it made (composer.carry), the new chat's left empty" {
-  reset()
+  new_run()
   let src = fixture("chat")
   let w = @sfbase.writing(src, "new:ws1")
   @sfbase.writing_text(src, w, "把发布说明写一下")

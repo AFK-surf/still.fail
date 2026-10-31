@@ -3,7 +3,7 @@
 
 ///|
 test "a screen reader on home: the bar's buttons named as Android's, told to the host" {
-  reset()
+  new_run()
   let src = fixture("home")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.set_a11y(true)

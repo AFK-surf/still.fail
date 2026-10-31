@@ -10,7 +10,7 @@ fn login_core(
   w? : Double = 390.0,
   pointing? : @ui.Pointing,
 ) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture("chat")
   let src : Source = {
     ..base,

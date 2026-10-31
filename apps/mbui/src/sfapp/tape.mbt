@@ -192,7 +192,7 @@ let tape_slack : Double = 2.0
 /// `trace`: words whose place in each frame, Android's and here, is said too (one line a frame: TRACE …). `base`: the
 /// made-up core under the tape's answers (@sffixture.fixture("")).
 pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = []) -> Array[String] {
-  reset()
+  new_run()
   let tape = tape_read(json)
   let moment = Ref::new(-1.0)
   let src = tape_source(tape, fn() { moment.val }, base)

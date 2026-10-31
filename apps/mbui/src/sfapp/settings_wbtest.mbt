@@ -9,7 +9,7 @@ fn settings_tester(
   shows? : String = "",
   platform? : Int = 0,
 ) -> @ui.Tester {
-  reset()
+  new_run()
   if shows != "" {
     @settings.fixture_page(shows) |> ignore
   }
@@ -24,7 +24,7 @@ fn settings_tester(
 
 ///|
 test "settings come in from the left, as the gear is at the list's top left, and go back that way" {
-  reset()
+  new_run()
   let t = @ui.Tester::new(fn(c) { view(c, fixture("settings")) }, w=390.0, h=844.0)
   t.draw()
   // the gear's (App.kt transition: Settings slide in from the left, the list out to the right), once the core has
@@ -86,7 +86,7 @@ let core_late_ms : Double = 600.0
 
 ///|
 test "settings: the vault's row there before the core has said how it stands, the page under it not moved when it does" {
-  reset()
+  new_run()
   // a phone's core: each topic's first value a while late (the lock's read on Home already, the vaults' first by
   // settings)
   let src = round_trip(fixture("settings"), core_late_ms)
@@ -113,7 +113,7 @@ test "settings: the vault's row there before the core has said how it stands, th
 ///|
 test "settings: 关于 says the build, as Android's versionName (0.1.<build>), its page the app's name before it; the line alone where the host has none" {
   for case in [(4566, "0.1.4566"), (0, "0.1")] {
-    reset()
+    new_run()
     let src = fixture("settings")
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=1600.0, app_version=case.0)
     open_setting("home")
@@ -478,7 +478,7 @@ let row_h : Double = 64.0
 /// The stations' list over the settings' made-up data, no station's network open yet (stationNet's null): Studio online,
 /// its memory low, MBA offline.
 fn stations_unread_net() -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture("settings")
   let src : Source = {
     ..base,
@@ -739,7 +739,7 @@ test "the run's 账号: what 自动分配 means, then 自动分配 and each acco
 ///|
 /// A profile's page in a window tall enough for all of it (the order of what it holds read off at once).
 fn profile_whole(page : String) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture("settings")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=2400.0)
   open_setting(page)

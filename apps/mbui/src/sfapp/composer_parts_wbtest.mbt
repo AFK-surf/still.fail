@@ -311,7 +311,7 @@ test "a long press on a message lets the keyboard be; a tap on it lets it go" {
 
 ///|
 test "files sent fly from their tiles to their places in the message, then are its own" {
-  reset()
+  new_run()
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")

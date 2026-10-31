@@ -13,7 +13,7 @@ fn one_page_tester(
   mode? : String = "settings",
   over? : (Source) -> Source = fn(s) { s },
 ) -> @ui.Tester raise {
-  reset()
+  new_run()
   let src = over(fixture(mode))
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=900.0, platform~)
   if regular {

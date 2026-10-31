@@ -6,7 +6,7 @@
 /// A page of the settings' fixture (`mode` as MBUI_FIXTURE has it) at a phone's width with a finger, its calls kept in
 /// `calls` and answered.
 fn look_tester(route : @settings.Route, calls : Array[Made], mode? : String = "settings") -> @ui.Tester {
-  reset()
+  new_run()
   if mode != "settings" {
     @settings.fixture_page(mode) |> ignore
   }

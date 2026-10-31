@@ -41,7 +41,7 @@ fn held_core(
   h? : Double = 844.0,
   platform? : Int = 2,
 ) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture("home")
   let src : Source = {
     ..base,
@@ -311,7 +311,7 @@ test "a new chat's first words with the core at once: never gone, into their bub
 test "a new chat's first words not sent (the chat not made): the page the new chat again, they back in its field" {
   let held : Map[String, () -> Unit] = {}
   let unread = Ref(true)
-  reset()
+  new_run()
   let base = fixture("home")
   let src : Source = {
     ..base,
@@ -352,7 +352,7 @@ test "a new chat's first words not sent (the chat not made): the page the new ch
 /// Home over the made-up chats with the new chat's stations not read while `reading` says (the core's `newChat` with
 /// no `stations`: only the station it last started on, `kept`), the new chats asked for counted in `made`.
 fn reading_core(reading : Ref[Bool], made : Ref[Int]) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture("home")
   let src : Source = {
     ..base,

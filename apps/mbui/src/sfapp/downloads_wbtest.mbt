@@ -66,7 +66,7 @@ fn listed(name : String, state : String, loaded : Double, size : Double, said : 
 
 ///|
 test "downloads: a message's video right clicked, 加载: the core brings it onto the device only, not saved; while it comes, 停止加载 calls it off" {
-  reset()
+  new_run()
   let calls : Array[(String, Json)] = []
   let list : Array[Json] = []
   let src = downloads_src("chat-download", list, calls)
@@ -119,7 +119,7 @@ test "downloads: a message's video right clicked, 加载: the core brings it ont
 
 ///|
 test "downloads: one the core has all here is taken once, read off the device a part at a time into the host's keep, then said done once the host has kept it, whatever page shows" {
-  reset()
+  new_run()
   let calls : Array[(String, Json)] = []
   let bytes = Bytes::makei(10, fn(i) { (i * 7).to_byte() })
   let src = downloads_src("home", [listed("dist.zip", "ready", 10.0, 10.0, "已下载 · 10 B")], calls, bytes~, part=4)
@@ -154,7 +154,7 @@ test "downloads: on a phone a picture or a film is kept in the photo album, said
     ("dist.zip", 2, "Downloads", "已保存到「下载」"),
   ] {
     let (name, platform, way, said) = case
-    reset()
+    new_run()
     let calls : Array[(String, Json)] = []
     let src = downloads_src("home", [listed(name, "ready", 4.0, 4.0, "已下载 · 4 B")], calls)
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
@@ -168,7 +168,7 @@ test "downloads: on a phone a picture or a film is kept in the photo album, said
 
 ///|
 test "downloads: a file's card says how far the core has downloaded it in its size's place, ✕ calls it off; failed, why, ↻ asks it again" {
-  reset()
+  new_run()
   let calls : Array[(String, Json)] = []
   let going = listed("发布包.zip", "going", 22020096.0, 52428800.0, "正在下载 42% · 50 MB")
   let src = downloads_src("chat-download", [going], calls)
@@ -184,7 +184,7 @@ test "downloads: a file's card says how far the core has downloaded it in its si
   // nothing opened by it
   assert_true(viewer.get() is None)
   // the desk's: failed, why, in its size's place; ↻ asks it again
-  reset()
+  new_run()
   let failed = listed("发布包.zip", "failed", 0.0, 52428800.0, "下载失败：无法连接 station")
   let src = downloads_src("chat-download", [failed], calls)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
@@ -199,7 +199,7 @@ test "downloads: a file's card says how far the core has downloaded it in its si
 
 ///|
 test "downloads: a video's block in the chat says how far the core has downloaded it in its name's place" {
-  reset()
+  new_run()
   let calls : Array[(String, Json)] = []
   let going = listed("演示录屏.mp4", "waiting", 1048576.0, 5242880.0, "等待连接 station · 20%")
   let src = downloads_src("chat-download", [going], calls)
@@ -240,7 +240,7 @@ test "downloads: on the desk a file's sheet fills from its foot as the core down
 
 ///|
 test "downloads: 下载 on a file told of asks the core to download it, which goes on as the preview closes" {
-  reset()
+  new_run()
   let calls : Array[(String, Json)] = []
   let src = downloads_src("home", [], calls)
   let file : Json = { "name": "dist.zip", "path": "work/s-c1/dist.zip", "size": 52428800.0, "owner": "s-c1" }
@@ -261,7 +261,7 @@ test "downloads: 下载 on a file told of asks the core to download it, which go
 
 ///|
 test "downloads: while the core downloads a file told of, the preview says how far over a bar, and calls it off" {
-  reset()
+  new_run()
   let calls : Array[(String, Json)] = []
   let src = downloads_src("home", [listed("dist.zip", "going", 1048576.0, 52428800.0, "正在下载 2% · 50 MB")], calls)
   let file : Json = { "name": "dist.zip", "path": "work/s-c1/dist.zip", "size": 52428800.0, "owner": "s-c1" }
@@ -276,7 +276,7 @@ test "downloads: while the core downloads a file told of, the preview says how f
 
 ///|
 test "desk: a file's card has its name's extension right after its stem, not at the card's end (the web's FileName)" {
-  reset()
+  new_run()
   let src = fixture("chat-download")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")
@@ -293,7 +293,7 @@ test "desk: a file's card has its name's extension right after its stem, not at 
 
 ///|
 test "downloads: a drive's file downloading shows how far on its row; a folder being zipped for it, 0 while the station zips it" {
-  reset()
+  new_run()
   let src = fixture("drive-download")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   open_fixture_mode("drive-download")
@@ -304,7 +304,7 @@ test "downloads: a drive's file downloading shows how far on its row; a folder b
 
 ///|
 test "downloads: the desk's files page lists the drive's downloads among its transfers: how far, 正在打包, ✕ calls one off" {
-  reset()
+  new_run()
   let calls : Array[(String, Json)] = []
   let base = fixture("drive-download")
   let src : Source = {

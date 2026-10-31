@@ -25,7 +25,7 @@ fn platform_of(w : Double) -> Int {
 ///|
 /// The app over fixture `mode`, `w` × `h`, its first frame (and, with `page`, a settings page pushed): the draw list.
 fn screen_drawlist(mode : String, w : Double, h : Double, page? : String = "") -> String {
-  reset()
+  new_run()
   @settings.reset()
   let src = fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=platform_of(w))

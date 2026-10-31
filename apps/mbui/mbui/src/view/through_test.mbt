@@ -26,6 +26,10 @@ priv enum Step {
   // at its moment, as one change: the cover gone, what is under it made anew in its place
   CoverGone(Double)
   UnderAnew(Double)
+  // at its moment, as one change: what is under it moved off where the finger is; its on_drag said anew (the same one,
+  // or another)
+  UnderAway(Double)
+  Rebound(Double, Bool)
 }
 
 ///|
@@ -37,11 +41,17 @@ fn through_said(
   off_drops? : Bool = false,
   frames? : Double = 0.0,
   under_hold? : Double = through_ms,
+  off_moves? : Bool = false,
+  off_rebinds? : Bool = false,
+  under_raw? : Bool = false,
 ) -> Array[String] {
   let said : Array[String] = []
   let under_on = @signals.signal(true, same=fn(a, b) { a == b })
   let cover_on = @signals.signal(true, same=fn(a, b) { a == b })
   let made = Ref(0)
+  let under_at = @signals.signal((0.0, 0.0), same=fn(a, b) { a == b })
+  let under : Ref[@view.View?] = Ref(None)
+  let raw = fn(d : @view.Drag) { said.push("under raw \{d.kind}") }
   let t = @view.Tree::new(
     fn(top) {
       top
@@ -52,8 +62,13 @@ fn through_said(
         let name = "under\{made.val}"
         v.over(Is(true)) |> ignore
         v.box(fn(b) {
+          under.val = Some(b)
+          b.over(Is(true)).offset(By(fn() { under_at.get() })) |> ignore
+          if under_raw {
+            b.on_drag(raw) |> ignore
+            return
+          }
           b
-          .over(Is(true))
           .gesture(
             through_slop,
             press=fn(d) { said.push("\{name} press at \{d.at} since \{d.since}") },
@@ -79,6 +94,12 @@ fn through_said(
               said.push("cover drag \{d.kind}")
               if off_drops && d.kind == Off {
                 under_on.set(false)
+              }
+              if off_moves && d.kind == Off {
+                under_at.set((0.0, 500.0))
+              }
+              if off_rebinds && d.kind == Off {
+                under.val.unwrap().on_drag(raw) |> ignore
               }
             },
           )
@@ -137,6 +158,21 @@ fn through_said(
       CoverGone(at) => {
         go(at)
         t.event(at, fn() { cover_on.set(false) })
+      }
+      UnderAway(at) => {
+        go(at)
+        t.event(at, fn() { under_at.set((0.0, 500.0)) })
+      }
+      Rebound(at, same) => {
+        go(at)
+        t.event(at, fn() {
+          let u = under.val.unwrap()
+          if same {
+            u.on_drag(raw) |> ignore
+          } else {
+            u.on_drag(fn(d) { said.push("under other \{d.kind}") }) |> ignore
+          }
+        })
       }
       UnderAnew(at) => {
         go(at)
@@ -232,4 +268,39 @@ test "what is under a cover holding through held sooner than the cover hands it 
       "under1 drag Up",
     ],
   )
+}
+
+///|
+test "what is under a cover holding through moved off where the finger is before the hold's moment: nothing handed, frames between or none" {
+  let steps = [Down(10.0, 10.0, 0.0), UnderAway(later_ms), To(through_ms + later_ms)]
+  for frames in [0.0, 16.0] {
+    let said = through_said(steps, frames~)
+    assert_false(said.iter().any(fn(s) { s.has_prefix("under") }), msg="frames \{frames}: \{said}")
+  }
+}
+
+///|
+test "a cover holding through whose being called off moves what is under it off where the finger is: nothing handed, frames between or none" {
+  for frames in [0.0, 16.0] {
+    let said = through_said([Down(10.0, 10.0, 0.0), To(through_ms + later_ms)], off_moves=true, frames~)
+    assert_eq(said, ["cover press", "cover drag Off"], msg="frames \{frames}")
+  }
+}
+
+///|
+test "what is under a cover holding through, its on_drag said anew before the hold's moment (another, or the same again): nothing handed; said once, handed" {
+  let down = [Down(10.0, 10.0, 0.0)]
+  assert_eq(through_said([..down, To(through_ms + later_ms)], under_raw=true), [
+    "cover press", "cover drag Off", "under raw Down",
+  ])
+  for same in [false, true] {
+    let said = through_said([..down, Rebound(later_ms, same), To(through_ms + later_ms)], under_raw=true)
+    assert_false(said.iter().any(fn(s) { s.has_prefix("under") }), msg="same \{same}: \{said}")
+  }
+}
+
+///|
+test "a cover holding through whose being called off says what is under it's on_drag anew: nothing handed to that saying" {
+  let said = through_said([Down(10.0, 10.0, 0.0), To(through_ms + later_ms)], under_raw=true, off_rebinds=true)
+  assert_eq(said, ["cover press", "cover drag Off"])
 }

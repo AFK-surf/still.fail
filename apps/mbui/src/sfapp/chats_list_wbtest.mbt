@@ -130,7 +130,7 @@ test "a row pinned, renamed or archived: no spinner while its station answers (t
     let at = "\{w} platform \{platform}"
     let on : Json = { "station": "ws1/st2", "session": "s-c3" }
     for stage in ["running", "rechecking", "failed"] {
-      reset()
+      new_run()
       let base = fixture("home")
       let doing = Json::array(
         ["chat.pin", "chat.rename", "chat.archive"].map(fn(call) {

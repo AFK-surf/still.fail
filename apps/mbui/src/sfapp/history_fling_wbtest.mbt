@@ -53,7 +53,7 @@ let history_fling_ms : Double = 2000.0
 
 ///|
 test "touch wide: an agent's history flung toward its start rests further that way, not back at its end" {
-  reset()
+  new_run()
   let base = fixture("chat")
   let history = fling_history(12)
   let src : Source = {
@@ -105,7 +105,7 @@ let history_frame_ms : Double = 1000.0 / 120.0
 
 ///|
 test "touch wide: an agent's history as the agent writes builds again only the row its words are written in" {
-  reset()
+  new_run()
   let base = fixture("chat")
   let was = fling_history(12)
   let with_live = fn(words : String) -> Json {

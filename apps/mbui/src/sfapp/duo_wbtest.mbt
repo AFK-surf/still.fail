@@ -4,7 +4,7 @@
 
 ///|
 test "Duo standalone screen replaces app navigation with its own controls and restores it on close" {
-  reset()
+  new_run()
   let src = fixture("screen-live")
   open_fixture_over("screen-live", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
@@ -33,7 +33,7 @@ fn native_chat(
   corners? : FixedArray[Double],
   platform? : Int = 1,
 ) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, window_corner=corner, window_corners?=corners, nav_able=able)
@@ -476,7 +476,7 @@ test "an iPhone Duo: the workspace's button has a dot while another workspace ha
   // (the fixture's: ws2's chats unread, the others' mark `done`)
   let t = native_chat(951.0, 669.0, true, side=84.0)
   assert_true(workspaces_dot(t))
-  reset()
+  new_run()
   let base = fixture("chat")
   let src : Source = {
     ..base,
@@ -548,7 +548,7 @@ test "an iPhone Duo on its side: the side panel closed while in use slides off a
 
 ///|
 test "an iPhone Duo: switching workspace from an open chat never restores the old workspace's last chat" {
-  reset()
+  new_run()
   let base = fixture("chat")
   let src : Source = {
     ..base,
@@ -595,7 +595,7 @@ test "Duo HTML preview exposes close source and download in native bars" {
 
 ///|
 test "Duo new chat with a long draft and attachment keeps send above the keyboard" {
-  reset()
+  new_run()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)
@@ -799,7 +799,7 @@ test "Duo chat menu covers sidebar glass until its exit finishes" {
 
 ///|
 test "Duo screen panels toggle through native events, switch without stacking and light the active action" {
-  reset()
+  new_run()
   let src = fixture("screen-live")
   open_fixture_over("screen-live", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1)

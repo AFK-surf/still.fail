@@ -11,7 +11,7 @@ fn wide_tester(
   window_corner? : Double = 0.0,
   window_inset? : Bool = false,
 ) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture(mode)
   let src : Source = {
     ..base,
@@ -432,7 +432,7 @@ test "wide: a new chat as the web's: its scene and the composer in the pane's mi
 
 ///|
 test "wide: the machine's own sessions offered under the composer as its station answers, the composer staying where it is; pointed at, the offer lit" {
-  reset()
+  new_run()
   let base = fixture("home")
   let held : Array[(Result[Json, Json]) -> Unit] = []
   // (its station read whole: what it has, its overview, read; what its machine kept asked of it)
@@ -517,7 +517,7 @@ test "wide: the machine's own sessions offered under the composer as its station
 /// combinations and its machine's own session to go on with; on MBA none of them, but what is wrong for now and what it
 /// waits for.
 fn new_chat_by_station(h? : Double = 800.0) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture("home")
   let session = Json::object({
     "id": Json::string("m1"),
@@ -1799,7 +1799,7 @@ test "wide: words with no face chosen are set in the desktop app's face (Inter, 
 
 ///|
 test "wide: the workspace's page as on a phone: its name its title, who you are there; 成员 and those waiting, 添加成员 at the title's end, a person pressed for what can be done; 中继; leaving and deleting in red, asked first" {
-  reset()
+  new_run()
   let page = @settings.fixture_page("settings-workspace")
   let src = fixture("settings")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=1000.0, platform=0)
@@ -1829,7 +1829,7 @@ test "wide: the workspace's page as on a phone: its name its title, who you are 
 
 ///|
 test "wide: 字体's faces a row each under the places' choice, the chosen one checked; picked, kept as the device's; 外观's 拖入 chat 的文件's switch" {
-  reset()
+  new_run()
   let src = fixture("settings")
   let calls : Array[Made] = []
   let src2 : Source = {
@@ -2311,7 +2311,7 @@ test "wide: the station a chat's agent runs on, beside its mark in the bar, has 
 
 ///|
 test "wide: a working agent's card has its stop at the end of where it stands, under its label (the corner rule sees it)" {
-  reset()
+  new_run()
   let base = fixture("chat-agent-card")
   // (its agents at work, as a turn under way has them: chat_fixture.mbt)
   let src : Source = {
@@ -2362,7 +2362,7 @@ test "wide: a working agent's card has its stop at the end of where it stands, u
 
 ///|
 test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx useLinesMotion), the first gone leaving" {
-  reset()
+  new_run()
   let latest : Ref[(Array[(String, String)], Int)] = Ref(
     ([("k1", "读了 src/ui/list.mbt"), ("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt")], 1),
   )
@@ -2602,7 +2602,7 @@ fn with_row(v : Json, id : String, more : Map[String, Json]) -> Json {
 
 ///|
 test "wide: a row pressed on its state line while the core says which message that is about opens its chat there, flashing it (ChatMark.tsx jumpFromLine); on its title, where it opens" {
-  reset()
+  new_run()
   let base = fixture("chat")
   let src : Source = {
     ..base,

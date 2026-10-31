@@ -8,7 +8,7 @@ let seen_words_sent : String = "帮我看一下登录按钮在深色模式下的
 
 ///|
 test "words sent while the agent works: nothing of the page over them on their way, pages kept as a device keeps them" {
-  reset()
+  new_run()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)

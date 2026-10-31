@@ -3,7 +3,7 @@
 
 ///|
 test "turns: rows coming and what changes under a post go the moment they are asked, together, none waiting" {
-  reset()
+  new_run()
   let tu = turns_of("test")
   let phase = Ref::new(0)
   let t = @ui.Tester::new(
@@ -42,7 +42,7 @@ test "turns: rows coming and what changes under a post go the moment they are as
 
 ///|
 test "turns: what goes from under a post on screen goes at once, as out of sight (no frame of the list's says which)" {
-  reset()
+  new_run()
   let tu = turns_of("test")
   let shown = Ref::new(true)
   let t = @ui.Tester::new(

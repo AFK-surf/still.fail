@@ -5,7 +5,7 @@
 /// The place `place` at the stack's root over the made-up workspace, a phone's bars said (24 over, 48 under), in a
 /// window short enough for its list to scroll.
 fn place_tester(place : String) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture("home")
   app.nav.replace(Place(place))
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=520.0, platform=2)
@@ -50,7 +50,7 @@ test "a place's page: from under its frosted top bar, scrolled on under it, not 
 test "a page's name kept whole: 用量's share and days as wide as they are after it, giving way where its line has not the room (Usage on a 360 phone, its place's bar and the page from settings, the system's words 1, 1.3, 1.6)" {
   for from_settings in [false, true] {
     for fs in [1.0, 1.3, 1.6] {
-      reset()
+      new_run()
       let src = if from_settings {
         fixture_app("settings-usage")
       } else {

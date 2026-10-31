@@ -4,7 +4,7 @@
 
 ///|
 test "letters are not in the chat: from its sheet, the chats written with, one opened shows its letters both ways" {
-  reset()
+  new_run()
   let base = fixture("chat-info")
   let asked : Array[Map[String, Json]] = []
   let src : Source = {

@@ -48,7 +48,7 @@ fn work_source(mode : String, on? : Ref[Bool] = Ref(true), running? : Bool = tru
 
 ///|
 test "an agent's card over its name, as over its picture: its background work and its checklist in one line, which leads to its execution history" {
-  reset()
+  new_run()
   let src = work_source("chat-agent-card")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
@@ -82,7 +82,7 @@ test "an agent's card over its name, as over its picture: its background work an
 
 ///|
 test "the history's details: its turns' line says its work after it, none without it, nothing else moved; pressed, every task in the background and its whole checklist under it; the tabs and the head as they were" {
-  reset()
+  new_run()
   let on = Ref(false)
   let src = work_source("chat-history-side", on~)
   decide_src.val = Some(src)
@@ -140,7 +140,7 @@ test "the history's details: its turns' line says its work after it, none withou
 
 ///|
 test "on a phone, its details' turns say its work after them, its head as it was; pressed, all of it from the foot" {
-  reset()
+  new_run()
   let src = work_source("history-details")
   decide_src.val = Some(src)
   open_fixture_over("history-details", src)
@@ -164,7 +164,7 @@ test "on a phone, its details' turns say its work after them, its head as it was
 ///|
 test "the mark of an agent's work: at work's spokes before it while something runs in the background, none for a checklist alone" {
   let cycles = fn(running : Bool) -> Array[String] {
-    reset()
+    new_run()
     let src = work_source("chat-history-side", running~)
     let t = @ui.Tester::new(
       fn(c) { @sfpages.work_mark(c, src, "ws1/st1", "s-c1", @sfdesk.side_tab_words, @sfdesk.side_tab_words, lead=" · ") },

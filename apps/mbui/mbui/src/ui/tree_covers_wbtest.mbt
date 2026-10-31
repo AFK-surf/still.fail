@@ -243,3 +243,197 @@ test "a button of the tree's own over a native view, pointed at, where it takes 
   assert_eq(pointed_now(), None, msg="taking none: pointed at no more")
   assert_eq(covers_of(k.page), [], msg="none told")
 }
+
+///|
+test "two buttons of the tree's own over a native view, each taking a finger as a value of its own says: one let go, what it read followed no more at once, the other's still, no frame drawn; the other's changed, told" {
+  let a = @signals.signal(true, same=fn(x, y) { x == y })
+  let b = @signals.signal(true, same=fn(x, y) { x == y })
+  let a_shown = @signals.signal(true, same=fn(x, y) { x == y })
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
+  t.check_looks(false)
+  let page = NativeView::page("<p>page</p>")
+  let button = fn(v : @view.View, left : Double, on : @signals.Signal[Bool]) {
+    v.box(fn(n) {
+      n
+      .over(Is(true))
+      .width(Is(Some(80.0)))
+      .height(Is(Some(40.0)))
+      .offset(Is((left, 0.0)))
+      .on_press(fn() {  })
+      .takes(fn(w, h, _) { if on.get() { [(0.0, 0.0, w, h)] } else { [] } })
+      |> ignore
+    })
+    |> ignore
+  }
+  set_view_app(fn(root) {
+    root.box(fn(r) {
+      r.over(Is(true)).width(Is(Some(400.0))).height(Is(Some(200.0))) |> ignore
+      old(r, fn(c) { c.native(page) |> ignore }).over(Is(true)) |> ignore
+      r.show(fn() { a_shown.get() }, fn(s) {
+        s.over(Is(true)) |> ignore
+        button(s, 0.0, a)
+      })
+      button(r, 200.0, b)
+    })
+    |> ignore
+  })
+  t.draw()
+  t.frame_at(t.time() + frame_period_default)
+  assert_eq(covers_of(page), [0.0, 0.0, 80.0, 40.0, 200.0, 0.0, 280.0, 40.0])
+  assert_true(a.watched() && b.watched(), msg="both followed")
+  a_shown.set(false)
+  assert_false(a.watched(), msg="the one let go followed no more")
+  assert_true(b.watched(), msg="the other still")
+  t.frames_owed()
+  assert_eq(covers_of(page), [200.0, 0.0, 280.0, 40.0], msg="the one let go no more told")
+  b.set(false)
+  assert_eq(t.wanted_after(), 0.0, msg="the other changed: a frame asked for")
+  t.frames_owed()
+  assert_eq(covers_of(page), [], msg="the other taking none: told")
+}
+
+///|
+test "a button of the tree's own over a native view, what it reads to say where it takes a finger as wide as it is: made wider, what it read before followed no more, what it reads now followed, and told as that changes" {
+  let wide = @signals.signal(80.0, same=fn(x, y) { x == y })
+  let a = @signals.signal(true, same=fn(x, y) { x == y })
+  let b = @signals.signal(true, same=fn(x, y) { x == y })
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
+  t.check_looks(false)
+  let page = NativeView::page("<p>page</p>")
+  set_view_app(fn(root) {
+    root.box(fn(r) {
+      r.over(Is(true)).width(Is(Some(400.0))).height(Is(Some(200.0))) |> ignore
+      old(r, fn(c) { c.native(page) |> ignore }).over(Is(true)) |> ignore
+      r.box(fn(n) {
+        n
+        .over(Is(true))
+        .width(By(fn() { Some(wide.get()) }))
+        .height(Is(Some(40.0)))
+        .on_press(fn() {  })
+        .takes(fn(w, h, _) {
+          let on = if w < 100.0 { a.get() } else { b.get() }
+          if on {
+            [(0.0, 0.0, w, h)]
+          } else {
+            []
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.frame_at(t.time() + frame_period_default)
+  assert_eq(covers_of(page), [0.0, 0.0, 80.0, 40.0])
+  assert_true(a.watched() && !b.watched(), msg="narrow: the first read")
+  wide.set(120.0)
+  t.frames_owed()
+  assert_eq(covers_of(page), [0.0, 0.0, 120.0, 40.0], msg="wider")
+  assert_true(!a.watched() && b.watched(), msg="wider: the other read, the first no more")
+  b.set(false)
+  assert_eq(t.wanted_after(), 0.0, msg="what it reads now changed: a frame asked for")
+  t.frames_owed()
+  assert_eq(covers_of(page), [], msg="told")
+}
+
+///|
+/// How long after a button is first drawn what it reads to say where it takes a finger is another.
+let cutoff_ms : Double = 100.0
+
+///|
+test "a button of the tree's own over a native view, what it reads to say where it takes a finger as of the moment: past it, what it read before followed no more, what it reads now followed, and told as that changes" {
+  let a = @signals.signal(true, same=fn(x, y) { x == y })
+  let b = @signals.signal(true, same=fn(x, y) { x == y })
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
+  t.check_looks(false)
+  let cutoff = t.time() + cutoff_ms
+  let page = NativeView::page("<p>page</p>")
+  set_view_app(fn(root) {
+    root.box(fn(r) {
+      r.over(Is(true)).width(Is(Some(400.0))).height(Is(Some(200.0))) |> ignore
+      old(r, fn(c) { c.native(page) |> ignore }).over(Is(true)) |> ignore
+      r.box(fn(n) {
+        n
+        .over(Is(true))
+        .width(Is(Some(80.0)))
+        .height(Is(Some(40.0)))
+        .on_press(fn() {  })
+        .takes(fn(w, h, at) {
+          let on = if at < cutoff { a.get() } else { b.get() }
+          if on {
+            [(0.0, 0.0, w, h)]
+          } else {
+            []
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  assert_eq(covers_of(page), [0.0, 0.0, 80.0, 40.0])
+  assert_true(a.watched() && !b.watched(), msg="before: the first read")
+  t.frame_at(cutoff + frame_period_default)
+  assert_eq(covers_of(page), [0.0, 0.0, 80.0, 40.0], msg="past it")
+  assert_true(!a.watched() && b.watched(), msg="past it: the other read, the first no more")
+  b.set(false)
+  assert_eq(t.wanted_after(), 0.0, msg="what it reads now changed: a frame asked for")
+  t.frames_owed()
+  assert_eq(covers_of(page), [], msg="told")
+}
+
+///|
+test "a button of the tree's own over a native view saying nothing of where it takes a finger, then that it takes none, no frame drawn: a frame asked for, none told; pointed at, pointed at no more" {
+  let k = tree_cover(over=true)
+  assert_eq(covers_of(k.page), [0.0, 0.0, 80.0, 40.0])
+  k.button.val.unwrap().takes(fn(_, _, _) { [] }) |> ignore
+  assert_eq(k.t.wanted_after(), 0.0, msg="a frame asked for")
+  k.t.frames_owed()
+  assert_eq(covers_of(k.page), [], msg="none told")
+  let p = tree_cover(over=true)
+  p.t.move(60.0, 20.0)
+  assert_eq(pointed_now(), Some(p.button.val.unwrap().id()), msg="pointed at")
+  p.button.val.unwrap().takes(fn(_, _, _) { [] }) |> ignore
+  p.t.frames_owed()
+  assert_eq(pointed_now(), None, msg="pointed at no more")
+}
+
+///|
+test "an old view over another's native view, the node hosting it said to take a finger as it hosts, by rects of none, as it hosts again: told each time, no frame but those asked for" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
+  t.check_looks(false)
+  let page = NativeView::page("<p>page</p>")
+  let island : Ref[@view.View?] = Ref(None)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.over(Is(true)).width(Is(Some(400.0))).height(Is(Some(200.0))) |> ignore
+      old(b, fn(c) { c.native(page) |> ignore }).over(Is(true)) |> ignore
+      island.val = Some(
+        old(b, fn(c) {
+          let id = c.id("over")
+          c.clicked(id) |> ignore
+          c.box(w=Px(80.0), h=Px(40.0), id~, fn() {  }) |> ignore
+        })
+        .over(Is(true))
+        |> old_takes_own,
+      )
+    })
+    |> ignore
+  })
+  t.draw()
+  t.frame_at(t.time() + frame_period_default)
+  assert_eq(covers_of(page), [0.0, 0.0, 80.0, 40.0], msg="as it hosts")
+  let v = island.val.unwrap()
+  v.takes(fn(_, _, _) { [] }) |> ignore
+  assert_eq(t.wanted_after(), 0.0, msg="by rects of none: a frame asked for")
+  t.frames_owed()
+  assert_eq(covers_of(page), [], msg="by rects of none")
+  old_takes_own(v) |> ignore
+  assert_eq(t.wanted_after(), 0.0, msg="as it hosts again: a frame asked for")
+  t.frames_owed()
+  assert_eq(covers_of(page), [0.0, 0.0, 80.0, 40.0], msg="as it hosts again")
+}

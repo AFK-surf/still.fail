@@ -7,8 +7,10 @@ let through_later_ms : Double = 100.0
 ///|
 /// A cover 80 by 40 over an old view's button the same size at its corner (named as `name` says at each build: what
 /// is there, made anew by another name), a finger held still on it past a long press; `anew`: the button made anew by
-/// another name before then. What each was told, in order (the button: held long, clicked).
-fn old_through(anew : Bool) -> Array[String] {
+/// another name before then; `frames`: frames drawn as it is held (else none between its down and its up). What each
+/// was told, in order (the button: held long, clicked; `still`: as long held still as a long press, as what holds
+/// still over words asks: Ctx::held_for).
+fn old_through(anew : Bool, frames? : Bool = true, still? : Bool = false) -> Array[String] {
   let said : Array[String] = []
   let name = @signals.signal("a", same=fn(a, b) { a == b })
   let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0, platform=2)
@@ -29,6 +31,9 @@ fn old_through(anew : Bool) -> Array[String] {
         }
         if c.held_long(id) {
           note("\{n} held")
+        }
+        if still && c.held_for(long_press_ms) {
+          note("\{n} still")
         }
         c.box(w=Px(80.0), h=Px(40.0), id~, fn() {  }) |> ignore
       })
@@ -54,6 +59,13 @@ fn old_through(anew : Bool) -> Array[String] {
   })
   t.draw()
   t.touch(0, 20.0, 20.0)
+  if !frames {
+    // (held past a long press, let go, no frame between: drawn after)
+    t.advance(long_press_ms + through_later_ms)
+    t.touch(2, 20.0, 20.0)
+    t.draw()
+    return said
+  }
   t.draw()
   if anew {
     t.run_for(through_later_ms)
@@ -76,4 +88,15 @@ test "a cover over an old view's button made anew by another name before a long 
   let said = old_through(true)
   assert_false(said.iter().any(fn(s) { s.has_prefix("a ") || s.has_prefix("b ") }), msg="\{said}")
   assert_false(said.contains("cover tap"), msg="\{said}")
+}
+
+///|
+test "a cover over an old view's button, held past a long press and let go with no frame between: the button held long once, not clicked, as with frames" {
+  assert_eq(old_through(false, frames=false), ["cover press", "cover drag Off", "a held"])
+  assert_eq(old_through(false, frames=false), old_through(false), msg="frames or none")
+}
+
+///|
+test "a cover over an old view's button, held still past a long press: the press the old view is handed held still as long as since the finger went down, at once (what a hold over words asks)" {
+  assert_eq(old_through(false, still=true), ["cover press", "cover drag Off", "a held", "a still"])
 }

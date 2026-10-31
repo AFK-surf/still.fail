@@ -40,7 +40,7 @@ fn bar_tabs(t : @ui.Tester) -> Bool {
 /// The fixture's chat open in a window `w` × `h` of `platform`, its size classes said as its host says them (`width`
 /// "": none, a desktop's).
 fn tape_chat(platform : Int, w : Double, h : Double, width? : String = "", height? : String = "") -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
@@ -355,7 +355,7 @@ let tape_core_late_ms : Double = 50.0
 
 ///|
 test "on the tape a chat brought over while its view is on its way: the page comes over once it shows it, not sliding with the chat before on it" {
-  reset()
+  new_run()
   let src = round_trip(fixture("chat"), tape_core_late_ms)
   let read = fn(session : String) { readings.contains("ws1/st1\u{1}" + session) }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
@@ -445,7 +445,7 @@ let tape_fling_step_ms : Double = 150.0
 /// kept).
 fn tape_flung(keep : Bool) -> Array[String] {
   // (many weeks of chats in the sidebar: far to fling)
-  reset()
+  new_run()
   let src = fixture("long")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h=840.0, platform=2)
@@ -642,7 +642,7 @@ test "on the tape a finger dragging across the one in use moves no tape: the tap
 
 ///|
 test "a phone turned sideways for a film: the layout it had (the player the whole screen, no rail nor list beside it)" {
-  reset()
+  new_run()
   let src = fixture("player-video")
   open_drive_fixture("player-video")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -876,7 +876,7 @@ fn composer_and_panel(t : @ui.Tester) -> (@ui.Laid, @ui.Laid)? {
 
 ///|
 test "on a Mac's tape each panel's corners follow the window's where it stands at its edge, the others the ladder's" {
-  reset()
+  new_run()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h=840.0, platform=0, window_corner=16.0)
@@ -1196,7 +1196,7 @@ test "on the tape a passage left picked keeps nothing from coming over: the side
 /// The settings in a window `w` × 760 of a Mac's, a page of theirs opened by `open` as the app begins or after its
 /// first frame, the tape's move over.
 fn tape_settings(w : Double, open : () -> Unit, first? : Bool = false) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture("settings")
   if first {
     open()
@@ -1270,7 +1270,7 @@ test "on the tape a settings page chosen in their list shows beside it, pressed 
 
 ///|
 test "on the tape, a chat's service opened from the chat in use: its side panel comes over with it, the chat beside" {
-  reset()
+  new_run()
   let src = fixture("chat-jobs")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)

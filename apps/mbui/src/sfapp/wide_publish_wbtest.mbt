@@ -3,7 +3,7 @@
 
 ///|
 test "wide: 分享图片 from the chat's info: the picture as it would be over the window under its bar; 复制图片, a button in words at its end, copies it whole" {
-  reset()
+  new_run()
   let calls : Array[Made] = []
   let base = fixture("chat-info")
   let src : Source = {
@@ -55,7 +55,7 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
 
 ///|
 test "wide: a vault request's outcome line has its dot in the middle of its words' line, its name set apart without quotes" {
-  reset()
+  new_run()
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let src = fixture("chat-info")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
@@ -79,7 +79,7 @@ test "wide: a vault request's outcome line has its dot in the middle of its word
 
 ///|
 test "wide: a message right clicked offers 分享这一轮, which shares its turn as a picture (chat.publishPreview by its seq)" {
-  reset()
+  new_run()
   let calls : Array[Made] = []
   let base = fixture("chat")
   let src : Source = {
@@ -107,7 +107,7 @@ test "wide: a message right clicked offers 分享这一轮, which shares its tur
 
 ///|
 test "wide: a link in a message right clicked opens its own menu alone, not the message's 分享这一轮 under it" {
-  reset()
+  new_run()
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let src = fixture("chat")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
@@ -137,7 +137,7 @@ test "wide: a link in a message right clicked opens its own menu alone, not the 
 
 ///|
 test "wide: the message header's ⋯ offers 复制消息链接 and 分享这一轮, the two a right click offers" {
-  reset()
+  new_run()
   let calls : Array[Made] = []
   let base = fixture("chat")
   let src : Source = {
@@ -196,7 +196,7 @@ fn drawn_near(t : @ui.Tester, words : String, x : Double, y : Double) -> Bool? {
 ///|
 test "wide: the message's ⋯ menu goes out where it hung, closed by Escape or a click away" {
   for how in ["escape", "away"] {
-    reset()
+    new_run()
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
     let src = fixture("chat")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
