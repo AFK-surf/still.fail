@@ -35,6 +35,9 @@ export const sees = (viewer: InWorkspace, ws: string | null): boolean => ws === 
 export type SessionRow = {
   key: string; connect: string; scope: SessionScope; title: string | null; createdBy: string | null; runtime: string;
   profile: string; profilePinned: boolean; model: string | null; effort: string | null; fast: boolean | null;
+  /// Whether it goes on afresh once its prompt cache is over, as chosen in its chat (null: as its station is set,
+  /// `afreshWhenCold`).
+  afresh: boolean | null;
   runtimeSessionId: string | null; workspace: string; cwd: string | null;
   /// Which of the station's workspaces its chat is in (docs/multi-workspace.md): null is its home workspace (sessions
   /// from before, and those made outside any workspace's request). Not the `workspace` above, its directory.
@@ -341,7 +344,8 @@ export function toSession(r: Json): SessionRow {
   return {
     key: r.key, connect: r.connect, scope: r.scope === "all" ? "all" : "thread", title: r.title, createdBy: r.created_by,
     runtime: r.runtime, profile: r.profile, profilePinned: r.profile_pinned === 1, model: r.model, effort: r.effort,
-    fast: r.fast === null || r.fast === undefined ? null : r.fast !== 0, runtimeSessionId: r.runtime_session_id,
+    fast: r.fast === null || r.fast === undefined ? null : r.fast !== 0,
+    afresh: r.afresh === null || r.afresh === undefined ? null : r.afresh !== 0, runtimeSessionId: r.runtime_session_id,
     workspace: r.workspace, cwd: r.cwd ?? null, ws: r.ws ?? null, token: r.token, running: r.running === 1, createdAt: r.created_at,
     lastActiveAt: r.last_active_at, archivedAt: r.archived_at, archivedBy: r.archived_by, shownAt: r.shown_at,
   };

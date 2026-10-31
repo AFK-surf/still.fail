@@ -47,6 +47,14 @@ pub fn platform() -> Int {
 }
 
 ///|
+/// The system whose keys the person types with, as `platform` numbers them: its field's moves (⌥← a word on Apple's,
+/// Ctrl+← elsewhere), undo, the command key of shortcuts (⌘ on Apple's, Ctrl elsewhere). The host's own system, but a
+/// browser's the one under it (a page on a Mac types as a Mac); a Tester's the system it plays.
+pub fn keys_system() -> Int {
+  h_keys()
+}
+
+///|
 /// The system a program says it plays, over its host's (set_platform); -1: its host's.
 // kept across runs: what the program says once as it starts, before any frame
 let said_platform : Ref[Int] = Ref(-1)

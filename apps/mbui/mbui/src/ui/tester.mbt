@@ -179,7 +179,8 @@ fn leaked_state() -> Array[String] {
 /// it runs (hostread.mbt): the system dark, the window's buttons in its top
 /// row, environment variables, the build's version code.
 /// `platform`: the system it plays, as @hostapi.platform has them (0 macOS,
-/// 1 iOS, 2 Android: how lists scroll). `pointing`: what the person points with (@ui.pointing), by default the
+/// 1 iOS, 2 Android: how lists scroll). `keys`: the system whose keys are typed (@ui.keys_system), by default
+/// `platform`; a browser's (4) the one under it. `pointing`: what the person points with (@ui.pointing), by default the
 /// system's (a finger on iOS and Android): a run told on one system and replayed as it was (its core told that
 /// system) by the hand it was made with. `native`: what the app was started to be used with (@ui.native_pointing), by
 /// default its system's (the hand of the moment, `pointing`, changes none of it). `keyboard`: a keyboard at hand
@@ -220,6 +221,7 @@ pub fn Tester::new(
   app_version? : Int = 0,
   images? : Array[(String, Int, Int)] = [],
   platform? : Int = 0,
+  keys? : Int,
   pointing? : Pointing,
   native? : Pointing,
   keyboard? : Bool,
@@ -271,6 +273,7 @@ pub fn Tester::new(
     clipboard_image: -1,
     back_on: false,
     platform,
+    keys: keys.unwrap_or(platform),
     pointing: match pointing {
       Some(p) => p
       None => platform_pointing(platform)
@@ -1382,6 +1385,16 @@ pub fn Tester::press(self : Tester, name : String) -> Unit {
 pub fn Tester::back(self : Tester) -> Unit {
   on_back(2, 0.0, 1.0, 0)
   self.draw()
+}
+
+///|
+/// The system's back as a host hands it on (host_native.mbt set_back) at `at`, its own time said with it, no frame drawn:
+/// `kind` 0 its gesture begun, 1 moved to `x` (from the edge it came from), 2 gone back (a back with no gesture where none
+/// began), 3 called off.
+pub fn Tester::back_raw(self : Tester, kind : Int, x : Double, at : Double) -> Unit {
+  self.fake.event_at = at
+  on_back(kind, x, if kind == 2 { 1.0 } else { 0.0 }, 0)
+  self.fake.event_at = -1.0
 }
 
 ///|

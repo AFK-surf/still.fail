@@ -50,9 +50,9 @@ export interface HostComposer {
   offlineNote?: string;
   archived?: boolean;
   restore?(): Promise<unknown>;
-  /** Its agent's prompt cache over (ChatView `cacheCold`), and its context cleared to go on afresh instead. */
+  /** Its agent's prompt cache over (ChatView `cacheCold`), and whether it goes on afresh as it is next started. */
   cacheCold?: ChatCacheCold;
-  afresh?(session: string): Promise<unknown>;
+  setAfresh?(session: string, afresh: boolean): Promise<unknown>;
   /** Sends what the draft holds now (given at the moment it is sent: never a draft from an earlier render). */
   send(draft: Draft): void;
   /** Typing (a chat's agent is warmed). */
@@ -89,7 +89,7 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const [shown, setShown] = useState<Shown | null>(null);
   const use = useCallback((spec: HostComposer) => {
     latest.current = spec;
-    setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.offlineNote === spec.offlineNote && was.archived === spec.archived && was.cacheCold?.session === spec.cacheCold?.session && was.cacheCold?.text === spec.cacheCold?.text && was.cacheCold?.auto === spec.cacheCold?.auto ? was
+    setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.offlineNote === spec.offlineNote && was.archived === spec.archived && was.cacheCold?.session === spec.cacheCold?.session && was.cacheCold?.text === spec.cacheCold?.text && was.cacheCold?.afresh === spec.cacheCold?.afresh ? was
       : { station: spec.station, session: spec.session ?? null, placeholder: spec.placeholder, offline: spec.offline, ...(spec.offlineNote !== undefined ? { offlineNote: spec.offlineNote } : {}), ...(spec.archived !== undefined ? { archived: spec.archived } : {}), ...(spec.cacheCold !== undefined ? { cacheCold: spec.cacheCold } : {}) }));
   }, []);
   const station = id === undefined ? undefined : stations?.find((s) => s.id === id);
@@ -189,7 +189,7 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root }: {
       {menu}
       {(shown.archived || shown.cacheCold || shown.offline) && <ComposerNotices>
         {shown.archived && <ArchiveNotice offline={shown.offline} restore={() => latest.current?.restore?.() ?? Promise.resolve()} />}
-        {shown.cacheCold && !shown.archived && <CacheColdNotice cold={shown.cacheCold} offline={shown.offline} afresh={(session) => latest.current?.afresh?.(session) ?? Promise.resolve()} />}
+        {shown.cacheCold && !shown.archived && <CacheColdNotice cold={shown.cacheCold} offline={shown.offline} setAfresh={(session, afresh) => latest.current?.setAfresh?.(session, afresh) ?? Promise.resolve()} />}
         {shown.offline && <ComposerNotice mark={<Unplug size={16} />}>{shown.offlineNote ?? t("web-mobile.chat.offline")}</ComposerNotice>}
       </ComposerNotices>}
       {/* Files dropped in go with the message, as ＋ adds them (pasted ones, the text box takes); offline, nothing goes to the station. */}

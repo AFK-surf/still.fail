@@ -561,7 +561,7 @@ fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) ->
   self.upstream = -1
   let t = self.text
   let (anchor, caret) = (self.anchor, self.caret)
-  match edit_of(code, mods, h_platform()) {
+  match edit_of(code, mods, h_keys()) {
     Some(Move(r)) => self.move_by(r, shift, up)
     Some(Erase(r)) => self.erase(r, up)
     None =>

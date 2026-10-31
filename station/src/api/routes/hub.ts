@@ -552,6 +552,11 @@ export const routes = (tools: Tools): Route[] => {
               if (typeof i.profile === "string" || i.profile === null) change.profile = i.profile;
               // Given back to the station and its account picked again now.
               if (i.repick === true) change.repick = true;
+              // Whether it goes on afresh once its cache is over: null gives it back to the station's setting.
+              if ("afresh" in i) {
+                if (i.afresh !== null && typeof i.afresh !== "boolean") throw new Refused(400, "afresh is true, false or null");
+                change.afresh = i.afresh;
+              }
               if ("fast" in i) {
                 if (i.fast !== null && typeof i.fast !== "boolean") throw new Refused(400, tr(r.lang, "station.admin.badFast"));
                 change.fast = i.fast;

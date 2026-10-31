@@ -479,14 +479,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.back_node = c.back_node_next
   c.back_island = c.back_island_next
   c.back_edge = c.back_edge_next
-  let takes = match c.back {
-    Some(_) => true
-    None => false
-  }
-  if takes != c.back_told {
-    c.back_told = takes
-    h_back_enabled(takes)
-  }
+  // (the host told whether the app takes back, as what the old views said now has it: Ctx::back_told_host)
+  c.back_told_host()
   let hi = c.hit_ids
   c.hit_ids = c.next_hit_ids
   c.next_hit_ids = hi
@@ -1628,7 +1622,7 @@ fn key_in(code : Int, mods : Int) -> Unit {
     return
   }
   // ⌘Z, ⇧⌘Z (Ctrl+Z, Ctrl+Y elsewhere) with a field focused: its edits undone and done again (editor_undo.mbt)
-  let step = if c.editors.contains(focus) { step_of(code, mods, h_platform()) } else { None }
+  let step = if c.editors.contains(focus) { step_of(code, mods, h_keys()) } else { None }
   // every key the app may read (Ctx::key_pressed), and whether the focused field takes it (the editor's own keys)
   desk_key(code, mods, c.editors.contains(focus) && (field_key(code) || step is Some(_)))
   // ⌘V (Ctrl+V) as the app's key: the host saw files or a picture on the clipboard (mac_app.m, win_app.c), read for

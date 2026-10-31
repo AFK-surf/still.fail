@@ -342,6 +342,11 @@ export class Store {
     this.#updateSession(key, "UPDATE sessions SET fast = ?1 WHERE key = ?2", optFlag(fast), key);
   }
 
+  /// Whether it goes on afresh once its prompt cache is over (null: as the station is set).
+  setSessionAfresh(key: string, afresh: boolean | null): void {
+    this.#updateSession(key, "UPDATE sessions SET afresh = ?1 WHERE key = ?2", optFlag(afresh), key);
+  }
+
   codexSessionFast(thread: string): boolean | null {
     const r = this.#one("SELECT fast FROM sessions WHERE runtime = 'codex' AND runtime_session_id = ?", thread);
     return r === undefined || r.fast === null ? null : r.fast !== 0;

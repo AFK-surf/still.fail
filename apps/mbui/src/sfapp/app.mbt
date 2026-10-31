@@ -505,6 +505,23 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
         |> ignore
       }
       if state == SignedIn {
+        // where the app is, put in the history's entry now as the stack or the workspace in view changes, at that
+        // change (sfbase's app_history.mbt: a person's act pushed an entry before it moved the stack, one for all the
+        // steps it takes, noted once it is done: history_acts_ended); on the wide frame Home alone is passing (land)
+        v.reacts(
+          fn() {
+            let ws = match workspace_in_view(src).0 {
+              Some(now) => now.id
+              None => ""
+            }
+            let wide = !(@sf.layout(v.window().0) is Small) || @sf.native_able()
+            (ws, app.nav.pages(), wide, @sfbase.history_acts_ended())
+          },
+          fn(said) {
+            let (ws, pages, wide, _) = said
+            @sfbase.history_note(ws, wide && pages == [Home])
+          },
+        )
         // signed in, the shell it is laid out in a node picked by the window's width and what is in view
         // (narrow_shell.mbt): laid out Small with a workspace, the narrow shell's nodes; on the tape, its panels' nodes
         // (tape_shell.mbt); else the old view whole

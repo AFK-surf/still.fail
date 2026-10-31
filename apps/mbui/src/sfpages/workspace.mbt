@@ -628,7 +628,7 @@ pub fn workspace_squares(c : @ui.Ctx, src : Source, w : Workspace, all : Array[W
   let waiting = invitations_waiting(src).length() > 0
   let switch_to = fn(x : Workspace) { switch_workspace(src, x.id) }
   // ⌃1 … ⌃9 on a Mac (Alt elsewhere): the workspace at that place, as the web's keys (keymap.ts workspaceIndexOf)
-  let held = if @ui.platform() == 0 { @ui.mod_ctrl } else { @ui.mod_alt }
+  let held = if @ui.keys_system() == 0 { @ui.mod_ctrl } else { @ui.mod_alt }
   for k in 0..<dmin(9.0, all.length().to_double()).to_int() {
     if c.key_pressed(@ui.key_of_char((49 + k).unsafe_to_char()), mods=held, in_field=true) && all[k].id != w.id {
       switch_to(all[k])

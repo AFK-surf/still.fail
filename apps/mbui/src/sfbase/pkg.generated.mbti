@@ -645,6 +645,10 @@ pub fn held_seed(String, @hostapi.Picked) -> String
 
 pub let highlight_limit : Int32
 
+pub fn history_act(() -> Unit) -> Unit
+
+pub fn history_acts_ended() -> Int32
+
 pub fn history_back_step(Source) -> (() -> Unit)?
 
 pub fn history_forward_step(Source) -> (() -> Unit)?
@@ -654,6 +658,10 @@ pub fn history_note(String, Bool) -> Unit
 pub fn history_push() -> Unit
 
 pub fn history_scope(String, String) -> String
+
+pub fn history_settled() -> Unit
+
+pub fn history_tops() -> (Array[Page], Page?)
 
 pub fn hold(Source, String, String, Map[String, Json]) -> Topic
 

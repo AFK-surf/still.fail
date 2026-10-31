@@ -6,8 +6,8 @@
 # of the two (app: the design system, the pages, the screens, gallery and player; replay: the core and the flows seen
 # again), both by default; check-mbui runs each on a runner of its own. SFAPP_SHARDS: how many processes sfapp's test
 # files are run in side by side (5); 1, the pages' files all in one (the screen sweeps a process each beside them):
-# what one file leaves behind that a later one trips on shows best there, and check-mbui runs them so. mbui's own:
-# its scripts/test.sh.
+# what one file leaves behind that a later one trips on shows best there, and check-mbui's run of the day runs them so
+# (a push's in 4). mbui's own: its scripts/test.sh.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
@@ -109,9 +109,10 @@ for t in ${TARGETS:-native}; do
     # process went from 96 s to 129 on CI and the app part's run with it, 2026-10-26; a process of its own)
     # (kept_rows_kinds_wbtest.mbt's, every kind of message the fixtures hold opened twice, its rows kept and built,
     # in five tests: 70 of the pages' 128 s, each file run alone on CI, 2026-10-27, 40344557870; among the pages one
-    # of their two processes was 207 s, the other 84; two processes of its own)
+    # of their two processes was 207 s, the other 84; two processes of its own, then four: the third runner's job was
+    # its first's 0-5 alone in one process, three of its four cores waiting, 65 s of its 183 on main 99a74aa4, 2026-10-31)
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
-      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:2)
+      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:4)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
@@ -169,6 +170,8 @@ for t in ${TARGETS:-native}; do
   # (kept_rows' second run on the second since: with both of them the third's job was the part's longest after the
   # pages', the second's the shortest, 65-123 s against 157-182, fix/swipe-archive-undo 40972095755, mbui-node-asks
   # 40971809575, main ff97a641 40971760122, 2026-10-30.)
+  # (kept_rows' in four since, the first three on the third, side by side on its cores, the last on the second beside
+  # its three: the third's one process of 65 s was its job's longest, 183 s on main 99a74aa4, 2026-10-31.)
   app_group_of() {
     local n=$1
     shift
@@ -180,8 +183,8 @@ for t in ${TARGETS:-native}; do
       "src/sfapp/screens_wbtest.mbt  ") echo 2 ;;
       "src/sfapp/corners_wbtest.mbt --index "*) echo 2 ;;
       "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;
-      "src/sfapp/kept_rows_kinds_wbtest.mbt --index 0-"*) echo 3 ;;
-      "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 2 ;;
+      "src/sfapp/kept_rows_kinds_wbtest.mbt --index 8-"*) echo 2 ;;
+      "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
       "src/sfapp/contrast_wbtest.mbt  ") echo contrast ;;
       *) [ $# -gt 2 ] && echo 4 || echo 1 ;;
     esac

@@ -118,15 +118,16 @@ const COLD_FROM = 50_000;
 
 /// Of a chat's agents (ViewsInner `agent`), the one at rest whose prompt cache is over, with a context worth going on
 /// afresh with (the largest of those): the line over the composer that says what going on would read again
-/// (ChatCacheCold); and in how long, at `now`, another's is over (Infinity: none's to come). None at work or waiting on
-/// work of its own (it reads it again anyway), with no runtime session to go on in, or of a station that does not tell
-/// how long its cache lasts. `auto`: its station goes on afresh by itself (the line says the next message does).
-export function cacheCold(agents: unknown, now: number, auto = false): [J, number] {
-  let cold: { session: string; context: number; cost: number | null } | null = null;
+/// (ChatCacheCold); and in how long, at `now`, another's is over (Infinity: none's to come). None at work, with no
+/// runtime session to go on in, or of a station that does not tell how long its cache lasts. One waiting on work of its
+/// own is said too: what it waits on starts it again. Whether it goes on afresh as it is next started (by a message or
+/// a notice): as chosen in its chat (its session's `afresh`), or else as its station is set (`station`).
+export function cacheCold(agents: unknown, now: number, station = false): [J, number] {
+  let cold: { session: string; context: number; cost: number | null; afresh: boolean } | null = null;
   let next = Infinity;
   for (const a of arr(agents)) {
     const status = get(a, "status");
-    if (status === "running" || status === "queued" || get(a, "wait") != null) continue;
+    if (status === "running" || status === "queued") continue;
     const session = get(a, "session");
     const key = get(session, "key");
     if (typeof key !== "string" || typeof get(session, "runtimeSessionId") !== "string") continue;
@@ -137,13 +138,14 @@ export function cacheCold(agents: unknown, now: number, auto = false): [J, numbe
       next = Math.min(next, at + ms - now);
       continue;
     }
-    if (cold === null || context > cold.context) cold = { session: key, context, cost: typeof get(u, "rereadCost") === "number" ? u.rereadCost : null };
+    const chosen = get(session, "afresh");
+    const afresh = typeof chosen === "boolean" ? chosen : station;
+    if (cold === null || context > cold.context) cold = { session: key, context, cost: typeof get(u, "rereadCost") === "number" ? u.rereadCost : null, afresh };
   }
   if (cold === null) return [null, next];
-  if (auto) return [{ session: cold.session, text: t("core-views.agent.cacheColdAuto"), auto: true }, next];
   const tokens = format.compactNumber(cold.context);
   const text = cold.cost !== null ? t("core-views.agent.cacheColdCost", { tokens, cost: money(cold.cost) }) : t("core-views.agent.cacheCold", { tokens });
-  return [{ session: cold.session, text }, next];
+  return [{ session: cold.session, text, afresh: cold.afresh }, next];
 }
 
 /// What it has going in the background past its turns (its live view's `tasks`, as its station says them), each with

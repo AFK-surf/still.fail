@@ -1679,6 +1679,11 @@ let notice_box : @ui.Style = @ui.css("px=S2 py=S0_5")
 let notice_line : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
+/// An option of a notice's choice: the one taken with its ✓ 4 before its words.
+// kept across runs: a value (no field of it changes)
+let notice_choice : @ui.Style = @ui.css("row align=ACenter gap=S1")
+
+///|
 // kept across runs: a value (no field of it changes)
 let notice_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
@@ -1702,7 +1707,9 @@ let notice_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
 ///|
 /// What the composer says over its bar (Composer.kt ArchiveNotice, chatComposer's notices): an archived chat's, with its
 /// restore (the words underlined; why it failed in red under it, tapped again to try again); its agent's prompt cache
-/// over, with its 换新上下文 (why it failed in a toast); an offline station's.
+/// over, saying what going on would read again, with the choice of how it goes on as it is next started, by a message
+/// or a notice: 接着聊 or 换新上下文, the one it takes marked, the other pressed to take it (why it failed in a toast); an
+/// offline station's.
 fn composer_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, key : String) -> Unit {
   let t = @sf.theme()
   if v.archived {
@@ -1759,29 +1766,31 @@ fn composer_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, key : 
     |> ignore
   }
   match v.cache_cold {
-    Some((_, said, true)) if !v.archived =>
-      // its station goes on afresh by itself: said, nothing to tap
-      c.box(style=notice_box, fn() { c.text(said, style=notice_wrapped) |> ignore }) |> ignore
-    Some((session, said, _)) if !v.archived => {
-      let afresh = c.id("composer/afresh")
-      let doing = "session.clear/" + r.station + "/" + session
+    Some((session, said, afresh)) if !v.archived => {
+      let go_on = c.id("composer/goOn")
+      let fresh = c.id("composer/afresh")
+      let doing = "session.settings/" + r.station + "/" + session
       let busy = @sfbase.doing(doing)
-      if !busy && !v.offline && c.clicked(afresh) {
-        let params : Json = { "station": Json::string(r.station), "key": Json::string(session), "readBack": Json::boolean(true) }
-        c.tell("composer/afresh", fn() { @sfbase.act(src, tr("web-main.chat.afresh"), doing, "session.clear", params) })
+      // (the one not taken, pressed: taken from its next start)
+      let (other, words) = if afresh { (go_on, "web-main.chat.goOn") } else { (fresh, "web-main.chat.afresh") }
+      if !busy && !v.offline && c.clicked(other) {
+        let params : Json = { "station": Json::string(r.station), "key": Json::string(session), "afresh": Json::boolean(!afresh) }
+        c.tell("composer/afresh", fn() { @sfbase.act(src, tr(words), doing, "session.settings", params) })
       }
       c.box(style=notice_box, fn() {
-        // (its words wrapped beside it where they do not fit, 换新上下文 at the line's end)
+        // (its words wrapped beside it where they do not fit, 接着聊 and 换新上下文 at the line's end, the one taken ✓)
         c.box(style=notice_line.then(@ui.style(gap=S3)), fn() {
           c.text(said, style=notice_grown) |> ignore
-          c.box(id=afresh, fn() {
-            c.rich(
-              [@ui.span(tr(if busy { "web-main.chat.afreshBusy" } else { "web-main.chat.afresh" }), underline=true)],
-              style=if busy || v.offline { notice_words } else { restore_words },
-            )
-            |> ignore
-          })
-          |> ignore
+          for choice in [(go_on, "web-main.chat.goOn", !afresh), (fresh, "web-main.chat.afresh", afresh)] {
+            let (id, key, taken) = choice
+            let b = c.box(id~, style=notice_choice, fn() {
+              if taken {
+                @sf.icon(c, "check", size=12.0, color=t.p.text) |> ignore
+              }
+              c.text(tr(key), style=if taken { restore_words } else { notice_words }) |> ignore
+            })
+            c.semantics(b, Radio, id~, label=tr(key), check=if taken { On } else { Off }, disabled=(busy || v.offline) && !taken)
+          }
         })
         |> ignore
       })

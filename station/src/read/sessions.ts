@@ -132,7 +132,7 @@ function authorNames(s: Store, thread: number): (kind: AuthorKind, author: strin
 function sessionJson(r: SessionRow): Json {
   const v: Json = {
     key: r.key, connect: r.connect, scope: r.scope, title: r.title, createdBy: r.createdBy, runtime: r.runtime, profile: r.profile,
-    profilePinned: r.profilePinned, model: r.model, effort: r.effort, fast: r.fast, runtimeSessionId: r.runtimeSessionId, workspace: r.workspace,
+    profilePinned: r.profilePinned, model: r.model, effort: r.effort, fast: r.fast, afresh: r.afresh, runtimeSessionId: r.runtimeSessionId, workspace: r.workspace,
   };
   if (r.cwd !== null) v.cwd = r.cwd;
   Object.assign(v, { running: r.running, createdAt: r.createdAt, lastActiveAt: r.lastActiveAt, archivedAt: r.archivedAt, archivedBy: r.archivedBy, shownAt: r.shownAt });

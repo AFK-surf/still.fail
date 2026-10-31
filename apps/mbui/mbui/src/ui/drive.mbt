@@ -1421,7 +1421,7 @@ fn key_named(name : String) -> (Int, Int)? {
   let mut mods = 0
   for i in 0..<(parts.length() - 1) {
     match parts[i] {
-      "cmd" => mods = mods | (if h_platform() == 0 { mod_cmd } else { mod_ctrl })
+      "cmd" => mods = mods | (if h_keys() == 0 { mod_cmd } else { mod_ctrl })
       "ctrl" => mods = mods | mod_ctrl
       "alt" | "option" => mods = mods | mod_alt
       "shift" => mods = mods | mod_shift_key

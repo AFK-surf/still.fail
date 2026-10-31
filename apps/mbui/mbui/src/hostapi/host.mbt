@@ -69,6 +69,7 @@ pub(open) trait Host {
   frame_awaiting(Self, Int, String) -> Unit = _
   own_clock(Self) -> Bool = _
   reduce_motion(Self) -> Bool = _
+  keys_platform(Self) -> Int = _
   exit(Self, Int) -> Unit = _
   mem_bytes(Self) -> Double = _
   set_back(Self, FuncRef[(Int, Double, Double, Int) -> Unit]) -> Unit = _
@@ -509,6 +510,11 @@ impl Host with own_clock(_) {
 ///|
 impl Host with reduce_motion(_) {
   false
+}
+
+///|
+impl Host with keys_platform(_) {
+  -1
 }
 
 ///|
@@ -1731,6 +1737,13 @@ pub fn own_clock() -> Bool {
 /// once a second.
 pub fn reduce_motion() -> Bool {
   current.val.reduce_motion()
+}
+
+///|
+/// The system whose keys the person types with, as `platform` numbers them, where it is not the host's own: a
+/// browser's, the system under it (⌥← a word on a Mac's, Ctrl+← on Windows'); -1 the host's own.
+pub fn keys_platform() -> Int {
+  current.val.keys_platform()
 }
 
 ///|

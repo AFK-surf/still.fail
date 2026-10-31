@@ -66,9 +66,12 @@ pub fn back_pop() -> Unit {
   let top = app.nav.top()
   let over = app.nav.top_over()
   let risen = app.nav.risen()
+  // (one change: what notes where the app is told once, the entry left for forward first)
+  @signals.start_batch()
   if app.nav.pop() {
     went_back(top, over, risen, app.nav.pages())
   }
+  @signals.end_batch()
 }
 
 ///|
@@ -156,8 +159,7 @@ pub fn stack_open(p : Page) -> Unit {
 ///|
 /// Chat `r`'s detail `tab` opened, where the layout has it (Shell's `detail`).
 pub fn open_detail(src : Source, r : ChatRef, tab : String) -> Unit {
-  history_push()
-  (shell.val.detail)(src, r, tab)
+  history_act(fn() { (shell.val.detail)(src, r, tab) })
 }
 
 ///|
@@ -184,10 +186,11 @@ pub fn go_place(place : String, way? : Int = 0) -> Bool {
   if app.nav.depth() == 1 && app.nav.top() == page {
     return false
   }
-  history_push()
-  (shell.val.close_overlays)()
-  app.switch_way = way
-  nav_home()
-  app.nav.replace(page)
+  history_act(fn() {
+    (shell.val.close_overlays)()
+    app.switch_way = way
+    nav_home()
+    app.nav.replace(page)
+  })
   true
 }

@@ -89,6 +89,9 @@ if grep -q 'built for newer macOS version' "$OUT/build.log"; then
   grep 'built for newer macOS version' "$OUT/build.log" | head -5 >&2
   echo "mac-app.sh: something was built for a newer macOS than $MACOSX_DEPLOYMENT_TARGET" >&2; exit 1
 fi
+# (where the build's time went, said: mbc's account of the app's units and its link, the core's parts; the log
+# itself kept only for a failure, and the app's 73 s of a release's 185 s Mac job could not be told apart, 2026-10-31)
+grep -E '^mbc: |^core\.sh|hermes|^real|took|in [0-9.]+ s' "$OUT/build.log" | cut -c1-220 | head -20 || true
 BIN=$A/_build/native/release/build/stillfail/stillfail/stillfail.exe
 t2=$(now)
 

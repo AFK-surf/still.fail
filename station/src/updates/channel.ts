@@ -52,6 +52,11 @@ export async function setChannel(data: string, channel: Channel, waitMs: number,
   } catch {}
   const pid = Number.isSafeInteger(said?.pid) && said.pid > 0 ? (said.pid as number) : null;
   if (pid === null || said?.channel !== 1 || !alive(pid) || !station(pid)) return setChannelIn(data, channel);
+  // (the channel its config already says: nothing to ask. `stillfail update --beta` on a station on beta, each
+  // release's, waited on the running station and failed when it was too busy to answer in time, 2026-10-31)
+  try {
+    if (JSON.parse(readFileSync(configPath(data), "utf8"))?.updateChannel === channel) return;
+  } catch {}
   const answer = join(run, CHANNEL_ANSWER);
   rmSync(answer, { force: true });
   writeWhole(join(run, CHANNEL_ASK), channel);

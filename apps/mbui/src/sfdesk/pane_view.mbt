@@ -15,8 +15,8 @@
 // edge dragged, the window's room folding it, a fold's place) puts things where they go at once.
 //
 // Still the old view's (the way there): what the block and the page hold (their islands), the edge's drag and the
-// pointer coming on the closed bar to show it a while (read as their islands build), back (the frame's in the island
-// under all of it).
+// pointer coming on the closed bar to show it a while (read as their islands build). Back is a node of the tree's
+// (wide_takes_back, wide_back_step).
 
 ///|
 /// What the block and the page beside it are shown as, in one state of the block (fold_look_of) or where a move between
@@ -512,6 +512,14 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
       }
     },
   )
+  // back while the frame takes it (wide_takes_back: the entry before in the history, a page popped), a node of the
+  // window's tree's under the page and the block, what an old view says takes back (a page's own, a layer over all)
+  // taking it before it; whose it is said at the cause that changes it, each step taken at its moment (wide_back_step)
+  let held : Ref[WideBack?] = Ref(None)
+  v.show(fn() { wide_takes_back(src) }, fn(b) {
+    b.follows_back(fn(step) { wide_back_step(src, held, step) }) |> ignore
+    b.owns(fn() { wide_back_left(held, v.cause_at()) }) |> ignore
+  })
   v.box(fn(row) {
     fold_goes.parts.clear()
     fold_goes.parts.push(row)
@@ -704,7 +712,7 @@ fn pane_block_built(c : @ui.Ctx, src : Source) -> Unit {
 /// What the frame off the tape does under its page and block with workspace `w` in view (an island under all of it:
 /// sfapp's paned_shell): how the lists take the hand, the sidebar of this place and workspace as it was left, the
 /// system's tabs where it has its own bars, the folded sidebar shown a while as the pointer comes on the closed bar, the
-/// chat landed on, the window's buttons' row, back, the web services' pages let go.
+/// chat landed on, the window's buttons' row, the web services' pages let go.
 pub fn pane_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Unit {
   c.mouse_drags_lists(pane_finger())
   wide.side_place = side_place()
@@ -723,11 +731,6 @@ pub fn pane_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   if @ui.window_inset() {
     title_row(c, "window-title-row", closed_bar_top)
   }
-  if !app.menu {
-    match @sfbase.back_step() {
-      Some(f) => c.take_back(f)
-      None => ()
-    }
-  }
+  // (back, the shell's one way: the frame's node's, pane_view, wide_takes_back)
   sv_sweep(c, src)
 }

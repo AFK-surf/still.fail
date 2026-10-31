@@ -262,9 +262,17 @@ squeeze and contrast checks; film's images before and after where a step touches
    the move before had it then; the tape left mid-move for a place with no sidebar of its own, the block closing from
    where the tape had it then. On both what the page's pane shows while a page put on top waits for what it shows is
    its node's, at its causes (still.fail's sfdesk/page_wait.mbt; Nav::flat_keep: the one shown before kept by the
-   stack till the core gives it or its wait is over). Still the old way on both: the edges'
-   drags (an island over the panels: their pointer's shape and tip wait on the tree's), back (its following the
-   system's gesture waits on the tree's), a page pushed over the page's own stack (its slide Ctx::nav's), a peek's move
+   stack till the core gives it or its wait is over). On both back while the frame takes it is a node of the tree's
+   (still.fail's sfdesk wide_takes_back: a View::follows_back in a show bound to it, said at the cause that changes
+   it; what is over the whole window put away and the history's entry before among it), what it does chosen as a
+   gesture begins (a panel of the tape followed as it goes, or the shell's back done once, the history's entry chosen
+   then), the host told the app takes back as the tree changes what takes it (Ctx::back_told_host); what an old view
+   says takes back (a page's own stack, a layer over all: what a layer said stays its till a frame says otherwise, a
+   second back before it lost to it) takes it before. The history's entries are made at their causes (still.fail's
+   sfbase app_history.mbt: a person's act one change, its entry once that change is committed), but for an act taken as
+   an old view builds (a row pressed), done with that build. Still the old way on both: the edges' drags, their look,
+   pointer's shape, tip (frame-numbered) and what they say (an island over the panels: waiting on the tree's tip), a
+   page pushed over the page's own stack (its slide Ctx::nav's), a peek's move
    aside read from the page's old layout. Old view still: a window of its own, the
    sign-in and the splash; the theme each island is built
    in; back, said by the islands as they are built, in the tree's order (the top page first, then the stack's swipe);

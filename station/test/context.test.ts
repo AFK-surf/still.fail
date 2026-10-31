@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { usageNow } from "../src/read/usage.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
+import { configure } from "../src/sessions/lifecycle.ts";
 import { Rig, message, reply, settle } from "./hub-fakes.ts";
 
 /// A session whose first turn ended done.
@@ -205,6 +206,46 @@ test("set to, a message to an agent whose large context's cache is over starts i
   await settle();
   assert.equal(r.claude.last(), fresh);
   assert.equal(fresh.prompts.length, 2);
+  await r.close();
+});
+
+test("its chat's choice outweighs the station's: set to, a notice starts it afresh too; set not to, a message goes on", async () => {
+  const r = new Rig();
+  const { m, key, session } = await done(r);
+  // Its last call wrote an hour's cache of 200K, three hours ago.
+  const called = (n: number) =>
+    r.store.recordUsage(`/t/${key}`, { session: key, offset: n, model: "claude-opus-5-5" }, "claude", [[
+      { id: `c${n}`, at: Date.now() - 3 * 3_600_000, model: "claude-opus-5-5", subagent: false, fast: false, input: 10, cacheRead: 150_000, cacheWrite: 0, cacheWriteLong: 50_000, output: 1, calls: 1, context: 200_000, window: null },
+      { turn: null, person: null, thread: null, profile: null },
+    ]]);
+  r.store.db.prepare("UPDATE runtime_sessions SET at = 0 WHERE session_key = ?").run(key);
+  called(1);
+  // The station not set, its chat set to: a job's notice starts it afresh.
+  await configure(r.hub, key, { afresh: true });
+  assert.equal(r.session(key).afresh, true);
+  assert.equal(session.disposed, false, "its process goes on until it is started");
+  r.hub.notify(key, "a job ended");
+  await settle();
+  const fresh = r.claude.last();
+  assert.notEqual(fresh, session);
+  assert.ok(session.disposed);
+  assert.ok(fresh.prompts[0]!.startsWith("This is a new conversation"), fresh.prompts[0]);
+  assert.ok(fresh.prompts[0]!.includes("a job ended"));
+  await r.call(key, "chat_state", { kind: "all_done", done: "测试任务已完成，没有剩余工作" });
+  fresh.complete();
+  await settle();
+  // The station set to, its chat set not to: a message goes on in the same runtime session.
+  r.store.db.prepare("UPDATE runtime_sessions SET at = 0 WHERE session_key = ?").run(key);
+  called(2);
+  r.edit((raw) => (raw.afreshWhenCold = true));
+  await configure(r.hub, key, { afresh: false });
+  await r.accept(reply(m, "9999.2", "<@UBOT> and the docs", { addressed: true }));
+  await settle();
+  assert.equal(r.claude.last(), fresh);
+  assert.equal(fresh.prompts.length, 2);
+  // Given back to the station: null.
+  await configure(r.hub, key, { afresh: null });
+  assert.equal(r.session(key).afresh, null);
   await r.close();
 });
 

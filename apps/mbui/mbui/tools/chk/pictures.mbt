@@ -33,7 +33,8 @@ fn num_text(x : Double) -> String {
 ///|
 /// Whether a renderer draws lines (scene.mbt's kind 10) as they are: the picture of
 /// src/kitdemo/gallery/dl_print_wbtest.mbt's lines_shown (160 by 160 at scale 2, on white) drawn by it. Its horizontal
-/// line is the same as the rounded rect of the same shape drawn 40 under it (each pixel's channels within 3), its
+/// line is the same as the rounded rect of the same shape drawn 40 under it (each pixel's channels within 3) but where
+/// the rect's ends ease into its edges, its
 /// slanted line and its arc are inked along their middles and not off them, its half drawn line ends halfway, and its
 /// box turned 30° clockwise about its top left is drawn turned so (scene.mbt 32-34: the renderer turns it).
 fn lines(args : Array[String]) -> Int {
@@ -56,10 +57,19 @@ fn lines(args : Array[String]) -> Int {
     pic.rgb((x * s.to_double()).to_int(), (y * s.to_double()).to_int())
   }
   let bad = []
-  // the line against the rounded rect 40 under it, row by row over the band they are in
+  // the line against the rounded rect 40 under it, row by row over the band they are in; but where the rect, a
+  // capsule, eases into its long edges (from 0.3 to 2 of its radius in from either tip, mbui's capsule_ease) and the
+  // line's round cap does not
   let mut worst = 0
+  let eases = fn(x : Int) {
+    let from_tip = @cmp.minimum(x - 16 * s, 104 * s - x).to_double()
+    from_tip > 0.3 * 4.0 * s.to_double() && from_tip < 2.0 * 4.0 * s.to_double()
+  }
   for y in (12 * s)..<(28 * s) {
     for x in 0..<(160 * s) {
+      if eases(x) {
+        continue
+      }
       let a = pic.rgb(x, y)
       let b = pic.rgb(x, y + 40 * s)
       worst = @cmp.maximum(

@@ -226,6 +226,9 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   })
   view_app.val = Some(t)
   view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
+  // (the tree in place of the one before, whole: whether the app takes back, as it has it, told the host now, as a change
+  // to it is: what it takes it by said as it was made, before what tells of its changes was set)
+  g().back_told_host()
 }
 
 ///|
@@ -1458,6 +1461,8 @@ fn old_whole_island() -> @view.NodeId? {
 /// take no press): what an old view that may take input no more holds let go of then, at that cause (view_captures_off).
 fn view_modals_told() -> Unit {
   view_captures_off(view_moment(), fn(owner) { !old_owner_open(owner) })
+  // (whether the app takes back: what of the tree takes it may have changed)
+  g().back_told_host()
 }
 
 ///|
@@ -1720,8 +1725,9 @@ fn view_key(code : Int, mods : Int) -> Bool {
 /// topmost node of the window's tree that takes back and may take input (Tree::back_taker: done as back is, as an event
 /// of the tree's at back's moment, its own node its owner) and what an old view said takes it (Ctx's `back`: where its
 /// stack was laid out, the old view it was said in its owner), the one drawn over the other (Tree::drawn_later). None
-/// where nothing does.
-fn Ctx::back_taker(self : Ctx) -> BackHeld? {
+/// where nothing does. `brought`: the tree brought to back's moment first (an event's; else where it is, as a change to it is
+/// committed or a frame is painted).
+fn Ctx::back_taker(self : Ctx, brought? : Bool = true) -> BackHeld? {
   let old : BackHeld? = match self.back {
     Some(f) => {
       let (left, w) = if self.back_node >= 0 && self.back_node < self.count {
@@ -1746,7 +1752,9 @@ fn Ctx::back_taker(self : Ctx) -> BackHeld? {
     None => return old
   }
   // (the tree as of back's moment, laid out and placed as it is then: what takes it, and where it is, found so)
-  tree.bring_to(view_moment())
+  if brought {
+    tree.bring_to(view_moment())
+  }
   let node : BackHeld? = match tree.back_taker() {
     Some(id) => {
       // (where it is: x from its left, as a stack's page has it)
@@ -1791,10 +1799,23 @@ fn Ctx::back_taker(self : Ctx) -> BackHeld? {
 
 ///|
 /// Whether what takes back now may take input (Ctx::back_taker, its owner: old_owner_open).
-fn Ctx::back_open(self : Ctx) -> Bool {
-  match self.back_taker() {
+fn Ctx::back_open(self : Ctx, brought? : Bool = true) -> Bool {
+  match self.back_taker(brought~) {
     Some(h) => old_owner_open(h.owner)
     None => false
+  }
+}
+
+///|
+/// The host told whether the app takes back (what takes it may take input: Ctx::back_open), as that may have changed:
+/// what the old views said, as a frame says it (frame_paint); what of the window's tree takes it, or may take input, as
+/// the change doing it is committed (view_modals_told: a node that takes back made, let go, leaving, said to take no
+/// press, a modal layer).
+fn Ctx::back_told_host(self : Ctx) -> Unit {
+  let takes = self.back_open(brought=false)
+  if takes != self.back_told {
+    self.back_told = takes
+    h_back_enabled(takes)
   }
 }
 

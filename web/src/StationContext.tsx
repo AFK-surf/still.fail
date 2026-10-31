@@ -1,5 +1,5 @@
-// How a station goes on with a session whose prompt cache is over, on its page: whether a person's message to an agent
-// at rest whose large context's cache is over starts it afresh by itself, as 换新上下文 does by hand
+// How a station goes on with a session whose prompt cache is over, on its page: whether a message or notice to an agent
+// whose large context's cache is over starts it afresh by itself, the default of 换新上下文's switch in each chat
 // (CacheColdNotice.tsx), said by the workspace's owners and admins (others read it). The phone's page has the same row
 // (./mobile/Stations.tsx).
 import type { StationContext } from "./core/shapes.ts";

@@ -1256,17 +1256,70 @@ static void stack(MBNative *v) {
 #endif
 }
 
+// How much further in than a circle a capsule's end lies, in r, u r from its tip (mbui's capsule_ease, src/paint/
+// smooth.mbt, and corner.sl's mb_capsule_ease): 0 but from 0.3 to 1 + k.
+static double capsule_ease(double u, double k) {
+  double e = 1 + k;
+  if (k <= 0 || u <= 0.3 || u >= e) return 0;
+  double h = e - 0.3, t = (u - 0.3) / h, t2 = t * t, t3 = t2 * t;
+  double w0 = 1 - t3 * (10 - 15 * t + 6 * t2), w1 = t - t3 * (6 - 8 * t + 3 * t2),
+         w2 = t2 * (0.5 - t * (1.5 - t * (1.5 - 0.5 * t)));
+  double eased = 0.285857157145715 * w0 - 0.9801960588196068 * h * w1 + 2.7456472235843328 * h * h * w2;
+  return eased - (u < 1 ? 1 - sqrt(u * (2 - u)) : 0);
+}
+
+// How far a corner of R (given r, s smooth) eases into the edge along a side of half `ha`, the other `hc` (mbui's
+// capsule_tail's weight, its share k of the room it needs in *k): as far as it has no room across and room along.
+static double ease_weight(double r, double R, double s, double ha, double hc, double *k) {
+  *k = R > 0 ? fmin((ha - R) / R, 1) : 0;
+  double tight = 1 - (R <= 0 ? 0 : fmin(1, fmax(0, (hc - R) / (0.25 * R))));
+  return s >= 1 || *k <= 0 || tight <= 0 ? 0 : (1 - s) * tight * *k;
+}
+
+static void corner_point(CGMutablePathRef p, double x, double y) {
+  if (CGPathIsEmpty(p)) CGPathMoveToPoint(p, NULL, x, y);
+  else CGPathAddLineToPoint(p, NULL, x, y);
+}
+
 // One corner of mbui's (src/ui/smooth.mbt, src/host/corner.sl mb_sd_corner) on path p: |x|^n + |y|^n = R^n about its
-// centre (cx, cy), the quarter towards (sx, sy), from its end along x (`from_x`) or along y, as the hole's is drawn.
-static void smooth_corner(CGMutablePathRef p, double r, double room, double cx, double cy, double sx, double sy,
-                          BOOL from_x) {
+// centre (cx, cy), the quarter towards (sx, sy), from its end along x (`from_x`) or along y, as the hole's is drawn;
+// a capsule's end eased into its long edges (hx, hy the box's half sides): moved in as far as the ease says there, and
+// on along the edge until the ease is done.
+static void smooth_corner(CGMutablePathRef p, double r, double room, double hx, double hy, double cx, double cy,
+                          double sx, double sy, BOOL from_x) {
   double s = r <= 0 ? 0 : fmin(1, fmax(0, (room - r) / (0.25 * r)));
   double R = fmin(r * (1 + 0.25 * s), room), n = 2 + 0.8284271247461903 * s;
-  const int steps = 24;
-  for (int i = 0; i <= steps; i++) {
-    double t = (from_x ? i : steps - i) * M_PI_2 / steps;
-    double x = R * pow(fmax(0, cos(t)), 2 / n), y = R * pow(fmax(0, sin(t)), 2 / n);
-    CGPathAddLineToPoint(p, NULL, cx + sx * x, cy + sy * y);
+  double kx, ky;
+  double wx = ease_weight(r, R, s, hx, hy, &kx), wy = ease_weight(r, R, s, hy, hx, &ky);
+  const int steps = 24, on = 12;
+  // (the way it goes: along the edge at x's end towards the corner, round it, along the edge at y's end away; or back)
+  for (int part = 0; part < 3; part++) {
+    int which = from_x ? part : 2 - part;
+    for (int j = 0; j <= (which == 1 ? steps : on); j++) {
+      double x, y;
+      if (which == 1) {
+        double t = (from_x ? j : steps - j) * M_PI_2 / steps;
+        x = R * pow(fmax(0, cos(t)), 2 / n);
+        y = R * pow(fmax(0, sin(t)), 2 / n);
+        // (in along the round corner's normal, as the distance is)
+        double ux = 1 - x / R, uy = 1 - y / R;
+        double ex = wx * capsule_ease(ux, kx) * R, ey = wy * capsule_ease(uy, ky) * R;
+        x -= ey * x / R;
+        y -= ex * y / R;
+      } else if (which == 0) {
+        // along the edge at x's end (the side running along y), from where the ease ends to the corner, or back
+        if (wy <= 0) continue;
+        double u = 1 + ky * (from_x ? 1 - (double)j / on : (double)j / on);
+        x = R - wy * capsule_ease(u, ky) * R;
+        y = R - u * R;
+      } else {
+        if (wx <= 0) continue;
+        double u = 1 + kx * (from_x ? (double)j / on : 1 - (double)j / on);
+        x = R - u * R;
+        y = R - wx * capsule_ease(u, kx) * R;
+      }
+      corner_point(p, cx + sx * x, cy + sy * y);
+    }
   }
 }
 
@@ -1302,11 +1355,10 @@ static void round_layer(PView *c, double r0, double r1, double r2, double r3) {
     double s = k[i] <= 0 ? 0 : fmin(1, fmax(0, (most - k[i]) / (0.25 * k[i])));
     R[i] = fmin(k[i] * (1 + 0.25 * s), most);
   }
-  CGPathMoveToPoint(p, NULL, 0, R[0]);
-  smooth_corner(p, a0, most, R[0], R[0], -1, -1, YES);
-  smooth_corner(p, a1, most, w - R[1], R[1], 1, -1, NO);
-  smooth_corner(p, a2, most, w - R[2], h - R[2], 1, 1, YES);
-  smooth_corner(p, a3, most, R[3], h - R[3], -1, 1, NO);
+  smooth_corner(p, a0, most, w / 2, h / 2, R[0], R[0], -1, -1, YES);
+  smooth_corner(p, a1, most, w / 2, h / 2, w - R[1], R[1], 1, -1, NO);
+  smooth_corner(p, a2, most, w / 2, h / 2, w - R[2], h - R[2], 1, 1, YES);
+  smooth_corner(p, a3, most, w / 2, h / 2, R[3], h - R[3], -1, 1, NO);
   CGPathCloseSubpath(p);
   CAShapeLayer *m = [l.mask isKindOfClass:CAShapeLayer.class] ? (CAShapeLayer *)l.mask : [CAShapeLayer layer];
   m.frame = b;
