@@ -1129,11 +1129,17 @@ pub fn pick_new(Source, String, Map[String, Json]) -> Unit
 
 pub fn pick_reset() -> Unit
 
+pub fn pick_told_given() -> Unit
+
 pub fn pick_workspace(Source, String) -> Unit
 
 pub fn pickable(@ui.Ctx, String, String, String, String, Bool, Bool, () -> Unit, keep? : Bool, marks? : (Int32) -> Unit, share? : (() -> Unit)?, link? : String, lit? : (Int32, Int32, Int64)?) -> Unit
 
+pub let picked : @signals.Signal[Picked]
+
 pub let picked_alpha : Double
+
+pub let picked_none : Picked
 
 pub fn picked_sig(Json?) -> String
 
@@ -2711,6 +2717,13 @@ pub(all) struct PhoneAsk {
   link : String
   lasts : String
 }
+
+pub(all) struct Picked {
+  serial : Int32
+  ts : String
+  a : Int32
+  b : Int32
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) struct Place {
   name : String

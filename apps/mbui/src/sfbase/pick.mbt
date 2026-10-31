@@ -28,6 +28,47 @@ pub(all) struct ChatPick {
 pub let pk : ChatPick = { ts: "", author: "", role: "", share: None, link: "", sel: @kit.Pick::new(), taken_at: -1 }
 
 ///|
+/// What is picked as told (picked): one passage at a time, by an identity of its own (`serial`: a number each passage
+/// picked takes, never one given again; 0 none), the message it is of and where it ran as it was picked (from, to:
+/// a finger's, in its words; -1 a mouse's, the page's selection holding it).
+pub(all) struct Picked {
+  serial : Int
+  ts : String
+  a : Int
+  b : Int
+} derive(Eq, Show, Debug)
+
+///|
+/// Nothing picked.
+pub let picked_none : Picked = { serial: 0, ts: "", a: -1, b: -1 }
+
+///|
+/// What is picked, told once as a passage is picked (a new identity, what is known of it then said with it, once) and
+/// once as it is let go: what follows picking reads it, never `pk` frame by frame. Where it is made is still a build's
+/// (a finger's hold made into words, a mouse's selection read, as the old view builds: kit's Pick, Ctx::selection_box),
+/// so it is told as that build makes it.
+// kept across runs: nothing picked as a run begins (pick_reset); its identities only count on
+pub let picked : @signals.Signal[Picked] = @signals.signal(picked_none, same=fn(a, b) { a == b })
+
+///|
+/// The identity the last passage picked took (picked's `serial`).
+// kept across runs: only counts on (an identity a run before gave never given again)
+let pick_serial : Ref[Int] = Ref(0)
+
+///|
+/// A passage of message `ts` picked anew (its metadata in `pk` already), told once: its identity, where it runs.
+fn pick_told_new(ts : String, a : Int, b : Int) -> Unit {
+  pick_serial.val = pick_serial.val + 1
+  picked.set({ serial: pick_serial.val, ts, a, b })
+}
+
+///|
+/// What was picked let go: told once (nothing told where nothing was picked).
+fn pick_told_gone() -> Unit {
+  picked.set(picked_none)
+}
+
+///|
 /// A message right clicked with a mouse, and what shares its turn: the frame, where, the share and its link ("" none),
 /// for the window's right click menu to offer as 复制消息链接 and 分享这一轮 with what else it has there (sfdesk's
 /// context_menu.mbt). None once taken.
@@ -101,6 +142,15 @@ let share_turn_room : @ui.Style = @ui.css("w=S6 h=S6")
 pub fn pick_clear() -> Unit {
   pk.ts = ""
   pk.sel.clear()
+  pick_told_gone()
+}
+
+///|
+/// A passage picked here as the app is opened so (a fixture's): told as one picked by a hand is.
+pub fn pick_told_given() -> Unit {
+  if pk.ts != "" {
+    pick_told_new(pk.ts, pk.sel.a, pk.sel.b)
+  }
 }
 
 ///|
@@ -114,6 +164,7 @@ pub fn pick_reset() -> Unit {
   share_offered.val = None
   pk.taken_at = -1
   pk.sel.reset()
+  picked.set(picked_none)
   // (the press last felt, by its frame: a Tester's frames count from 0 again, and a press another test's pick was felt
   // at took this one's feel, run after composer_wbtest or motion_wbtest, 2026-10-24)
   pick_felt.val = -1
@@ -180,11 +231,17 @@ pub fn pickable(
       Some((sx, sy, sw, sh)) =>
         match c.rect_of(id) {
           Some((x, y, w, h)) if sx >= x - 1.0 && sy >= y - 1.0 && sx + sw <= x + w + 1.0 && sy + sh <= y + h + 1.0 => {
+            let anew = pk.ts != ts
             pk.ts = ts
             pk.author = author
             pk.role = role
             pk.share = share
-    pk.link = link
+            pk.link = link
+            // (a passage of this message held by the selection now, none of it before: picked anew, told once; built
+            // again, the same)
+            if anew {
+              pick_told_new(ts, -1, -1)
+            }
           }
           _ => ()
         }
@@ -215,6 +272,8 @@ pub fn pickable(
     pk.role = role
     pk.share = share
     pk.link = link
+    // (picked anew, its metadata said first: told once)
+    pick_told_new(ts, pk.sel.a, pk.sel.b)
     // the press is the pick's: the list holds still, lifting it taps nothing
     c.take_press()
     let at = press.frame
@@ -439,7 +498,10 @@ fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Un
   let (x, y) = match c.selection_end() {
     Some((ex, ey, _)) if pk.ts != "" => (ex, ey - 8.0 - pick_pop_h)
     _ => {
-      pk.ts = ""
+      if pk.ts != "" {
+        pk.ts = ""
+        pick_told_gone()
+      }
       return
     }
   }
@@ -451,6 +513,7 @@ fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Un
     }
     c.selection_clear()
     pk.ts = ""
+    pick_told_gone()
     return
   }
   // (pressed, what is picked stays picked: it is what is quoted)

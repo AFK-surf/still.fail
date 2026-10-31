@@ -16,6 +16,7 @@ pub fn open_cards_fixture(mode : String) -> Unit {
       pk.role = "agent"
       pk.sel.a = 4
       pk.sel.b = 6
+      @sfbase.pick_told_given()
     }
     // the bare address in the long answer held: its menu (link_menu.mbt)
     "chat-link-menu" => {
