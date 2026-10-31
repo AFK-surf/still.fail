@@ -9,14 +9,14 @@ APP=stillfail bash "$D/web.sh" build >/dev/null
 . "$D/env.sh"
 out=$EMBER/web/public/mbui
 mkdir -p "$out"
-# minified by the web's own esbuild where its packages are installed (MoonBit's names are long: 25 MB to 9.5, brotli
-# 2.6 MB to 2.1), else as built
-es=$(ls -d "$EMBER"/node_modules/.pnpm/esbuild@*/node_modules/esbuild/bin/esbuild 2>/dev/null | tail -1)
+# minified (MoonBit's names are long: 25 MB to 9.5, brotli 4.3 MB to 2.1) by esbuild, the version pinned here: the
+# web's own where its packages have it, else fetched (CI's mbui-web, whose install has none: deployed unminified once)
+ESBUILD=0.28.2
+es=$(ls -d "$EMBER"/node_modules/.pnpm/esbuild@$ESBUILD/node_modules/esbuild/bin/esbuild 2>/dev/null | tail -1)
 if [ -n "$es" ]; then
   "$es" --minify "$MBUI_APP_MOD/out/web/demo.js" --outfile="$out/app.js" --log-level=error
 else
-  echo "web-app: no esbuild in $EMBER/node_modules (pnpm install there): the app as built, not minified" >&2
-  cp "$MBUI_APP_MOD/out/web/demo.js" "$out/app.js"
+  npx --yes esbuild@$ESBUILD --minify "$MBUI_APP_MOD/out/web/demo.js" --outfile="$out/app.js" --log-level=error
 fi
 cp "$MBUI_DIR/web/host.js" "$out/host.js"
 ls -la "$out"
