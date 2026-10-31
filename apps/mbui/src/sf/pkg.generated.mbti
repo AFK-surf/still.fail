@@ -2144,15 +2144,11 @@ pub let viewer_small_w : Double
 
 pub fn viewer_steps(@ui.Ctx, String, Bool, Bool, Bool, Double) -> Int32
 
-pub fn viewer_text_tool(@ui.Ctx, String, String, String, ViewerInk, wide? : Bool) -> Bool
-
 pub fn viewer_tool(@ui.Ctx, String, String, String, ViewerInk, on? : Bool, disabled? : Bool) -> Bool
 
 pub fn viewer_tool_corner() -> @ui.Style
 
 pub let viewer_tool_icon : Double
-
-pub fn viewer_zoom(@ui.Ctx, String, @kit.Zoom, ViewerInk) -> Unit
 
 pub fn viewer_zoom_key(@kit.Zoom, Int32, Int32, Double) -> Bool
 

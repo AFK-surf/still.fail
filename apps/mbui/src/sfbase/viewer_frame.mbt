@@ -254,15 +254,15 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-/// The bar's tools by what it shows (FilePreview.tsx: its `controls`, then copy and download): an image's zoom and its
-/// marks, a page's or a table's 预览 / 源码, download last.
+/// The bar's tools by what it shows (FilePreview.tsx: its `controls`, then copy and download): an image's marks (its
+/// zoom by the hand and the keys alone, no tools of its own: the user, 2026-11-01), a page's or a table's 预览 / 源码,
+/// download last.
 pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Unit {
   let v = vw
   match v.shown_kind() {
     Some(KImage) if marking.on =>
       marks_actions(c, v.draft_key() != "", fn(draft) { v.finish_marks(c, draft) }, ink=ink.muted)
     Some(KImage) if !v.coming() => {
-      @sf.viewer_zoom(c, "preview", v.zoom, ink)
       // 标注图片: once its whole picture is here (annotate/ImageMarks.tsx)
       if v.bytes.get() is Some(_) && @sf.viewer_tool(c, "preview/mark", "edit", @sf.t("web-main.annotate.image"), ink) {
         marks_start()
