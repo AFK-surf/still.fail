@@ -55,14 +55,12 @@ pub fn View::words_look(self : View, look : Live[WordsLook]) -> View {
 
 ///|
 /// How much it gives way where what holds it is short of room, as it changes (0: none, laid out as big as it would
-/// be): one that does gives way down to nothing, what it shows cut to what is left (words on one line ending in an
-/// ellipsis: WordsLook's `wrap` false), the others kept whole. Layout's.
+/// be): one that does gives way down to as wide as it is at least (View::min_width: its own, else as wide as what it
+/// holds needs; Some(0) to give way down to nothing), what it shows cut to what is left (words on one line ending in an
+/// ellipsis: WordsLook's `wrap` false), the others kept whole. Its share alone: how wide it is at least is min_width's
+/// (one binding to a field). Layout's.
 pub fn View::shrink(self : View, s : Live[Double]) -> View {
-  self.bind(26, s, Layout, fn(s) {
-    let st = self.tree.nodes[self.at].flex.style
-    st.shrink = s
-    st.set_min_width(if s > 0.0 { Pt(0.0) } else { Auto })
-  })
+  self.bind(26, s, Layout, fn(s) { self.tree.nodes[self.at].flex.style.shrink = s })
   self
 }
 

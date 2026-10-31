@@ -156,6 +156,12 @@ priv struct ViewBlock {
   glass_at : Int
   shares : Bool
   solid : Bool
+  /// its words' instances (from, to; none: 0, 0) cut to its own box as it is composed, within what the frame cuts it by:
+  /// one line cut short whose ellipsis has not the room either (what is not cut keeps its own way out of its box, a
+  /// ring's, a shadow's), and how big the box is
+  cut : (Int, Int)
+  w : Double
+  h : Double
 }
 
 ///|
@@ -560,6 +566,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   // drawn solid)
   let solid = glass_paint.solid
   let mut glass_at = -1
+  let mut cut = (0, 0)
   match c.glass {
     Some(gl) if solid => self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, gl.solid, 0.0, 0L, 1.0)
     Some(gl) => {
@@ -586,7 +593,12 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
     } else {
       tl
     }
+    let from = self.ninst - start
     self.emit_text(tl, 0.0, 0.0, c.ink, 1.0)
+    // (cut short to less than its ellipsis: no further than its box, as an old view's line is in the box that clips it)
+    if !k.wrap && tl.w > c.w + 0.5 {
+      cut = (from, self.ninst - start)
+    }
   }
   // (its shapes, as bands worked out once for the outlines said (kept by them, whatever colour they are drawn in), in
   // its tint where it has one; their pieces its own, counted from 0)
@@ -643,7 +655,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   }
   inst_owners.tree_words[c.id] = c.words
   self.ninst = start
-  { inst, cells, marks, segs, glass_at, shares: c.glass.map_or(false, fn(g) { g.shares_capture }), solid }
+  { inst, cells, marks, segs, glass_at, shares: c.glass.map_or(false, fn(g) { g.shares_capture }), solid, cut, w: c.w, h: c.h }
 }
 
 ///|
@@ -682,6 +694,12 @@ fn Ctx::view_blit(self : Ctx, id : @view.NodeId, made : ViewBlock, x : Double, y
     }
     for j in 0..<4 {
       s[b + 16 + j] = clip_stack[k + j]
+    }
+    if i >= made.cut.0 && i < made.cut.1 {
+      s[b + 16] = dmax(s[b + 16], x)
+      s[b + 17] = dmax(s[b + 17], y)
+      s[b + 18] = dmin(s[b + 18], x + made.w)
+      s[b + 19] = dmin(s[b + 19], y + made.h)
     }
     for j in 0..<8 {
       s[b + 24 + j] = clip_stack[k + 4 + j]
