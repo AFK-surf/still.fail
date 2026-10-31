@@ -1,9 +1,10 @@
 // Corners, as still.fail's (its apps/android/shared/src/main/kotlin/fail/still/android/ui/Corners.kt, and the web's
 // web/src/styles/global.css.ts): a rounded rectangle's corner is a superellipse(1.5) one, |x|^n + |y|^n = 1 with
-// n = 2^1.5, over a radius a quarter longer than the one it is given. Circles and capsules are never touched: a corner
-// needs room for the longer radius, and where the box has none (the radius half its shorter side) it is the plain
-// round one. Between the two it goes over evenly, so a box that grows (a capsule of one line taking a second) changes
-// shape with its size, and never at once.
+// n = 2^1.5, over a radius a quarter longer than the one it is given. A corner needs room for the longer radius, and
+// where the box has none (the radius half its shorter side) it is round across: a circle is a circle, and a capsule's
+// end a circle's arc that eases into its long edges as Apple's does (capsule_ease) rather than meeting them at once.
+// Between the two it goes over evenly, so a box that grows (a capsule of one line taking a second) changes shape with
+// its size, and never at once.
 //
 // Every box with a radius is so, with no switch: each renderer draws its ground, edge, shadow and glass by the same
 // distance (src/host/corner.sl, `sd_corner` below number for number), what a rounded clip cuts is cut along it, and a
@@ -102,7 +103,8 @@ pub fn corner_middle(radius : Double, room : Double) -> Double {
 /// s = 0 it is a round corner's, as every renderer drew one before. Only within `band` of the curve is it worked out:
 /// the curve lies between the circle of R and that of R 2^(1/2 - 1/n) (under 1.107 R), and further than `band` inside the
 /// one or outside the other the round distance is given, of the same sign and at least `band` (the renderers pass what
-/// their cover, edge or blur reaches; by default everywhere). The renderers' `mb_sd_corner` (src/host/corner.sl).
+/// their cover, edge or blur reaches; by default everywhere). A corner with no room across its box (a capsule's end)
+/// but room along it eases into its long edges (capsule_ease). The renderers' `mb_sd_corner` (src/host/corner.sl).
 pub fn sd_corner(
   px : Double,
   py : Double,
@@ -111,6 +113,27 @@ pub fn sd_corner(
   r : Double,
   s : Double,
   band? : Double = 1.0e30,
+) -> Double {
+  let d = corner_shape(px, py, hx, hy, r, s, band)
+  let rr = dmin(r * (1.0 + (smooth_scale - 1.0) * s), dmin(hx, hy))
+  if s >= 1.0 || rr <= 0.0 {
+    return d
+  }
+  d +
+  (1.0 - s) *
+  (capsule_tail(px.abs(), py.abs(), hx, hy, rr) + capsule_tail(py.abs(), px.abs(), hy, hx, rr))
+}
+
+///|
+/// sd_corner's curve before a capsule's end eases into its edges.
+fn corner_shape(
+  px : Double,
+  py : Double,
+  hx : Double,
+  hy : Double,
+  r : Double,
+  s : Double,
+  band : Double,
 ) -> Double {
   let rr = dmin(r * (1.0 + (smooth_scale - 1.0) * s), dmin(hx, hy))
   let qx = px.abs() - hx + rr
@@ -131,6 +154,70 @@ pub fn sd_corner(
   let tn = tn1 * t
   let u = det_pow(1.0 + tn, 1.0 / n)
   (hi * u - rr) * (1.0 + tn) / (u * (1.0 + tn1 * tn1).sqrt())
+}
+
+///|
+/// A capsule's end as Apple draws one (measured off iOS 26's alert buttons, the user, 2026-10-31: 苹果的那个按钮就看不出直线
+/// 和半圆的接点): a circle's arc at its middle, but where the circle meets the long edge at once at r from the tip, bending
+/// all the way round there and then not at all, Apple's curve leaves it from 0.3 r and eases into the edge only 2 r from
+/// the tip, bending less and less to none. As how much further in than the circle it lies, in r, at `u` r from the tip,
+/// `k` the share of the room it needs along the edge (r more) the box has (a shorter capsule eases in sooner, a circle
+/// not at all): a quintic from the circle's height, slope and bend at 0.3 to the edge's at 1 + k (fitted to Apple's
+/// within 0.0017 r; it never bends back, at most 1.2 times the circle's bend).
+fn capsule_ease(u : Double, k : Double) -> Double {
+  let end = 1.0 + k
+  if k <= 0.0 || u <= ease_from || u >= end {
+    return 0.0
+  }
+  let h = end - ease_from
+  let t = (u - ease_from) / h
+  let t2 = t * t
+  let t3 = t2 * t
+  // the quintic's three weights: of the height, the slope and the bend at the start (all three 0 at the end)
+  let w0 = 1.0 - t3 * (10.0 - 15.0 * t + 6.0 * t2)
+  let w1 = t - t3 * (6.0 - 8.0 * t + 3.0 * t2)
+  let w2 = t2 * (0.5 - t * (1.5 - t * (1.5 - 0.5 * t)))
+  let eased = ease_height * w0 + ease_slope * h * w1 + ease_bend * h * h * w2
+  let round = if u < 1.0 { 1.0 - (u * (2.0 - u)).sqrt() } else { 0.0 }
+  eased - round
+}
+
+///|
+/// Where the ease leaves the circle (in r from the tip), and the circle's height below the edge, slope and bend there
+/// (1 - √0.51, -0.7 / √0.51, 0.51^-1.5).
+let ease_from : Double = 0.3
+
+///|
+let ease_height : Double = 0.285857157145715
+
+///|
+let ease_slope : Double = -0.9801960588196068
+
+///|
+let ease_bend : Double = 2.7456472235843328
+
+///|
+/// How much further out than the round corner's (`rr`) a point is once the corner eases into the edge along `along`'s
+/// side (`ha` that half side, `hc` the other's; both of the point's coordinates from the box's middle, made positive):
+/// the ease as far as the corner has no room across (its own smoothness that way) and room along, moved along the
+/// round corner's normal there (to first order: the ease is under 2% of r).
+fn capsule_tail(along : Double, across : Double, ha : Double, hc : Double, rr : Double) -> Double {
+  let k = dmin((ha - rr) / rr, 1.0)
+  let tight = 1.0 - smoothness(rr, hc)
+  if k <= 0.0 || tight <= 0.0 {
+    return 0.0
+  }
+  let e = capsule_ease((ha - along) / rr, k)
+  if e == 0.0 {
+    return 0.0
+  }
+  let qa = along - ha + rr
+  let qc = across - hc + rr
+  let ma = dmax(qa, 0.0)
+  let mc = dmax(qc, 0.0)
+  let l = (ma * ma + mc * mc).sqrt()
+  let n = if l > 0.0 { mc / l } else if qc >= qa { 1.0 } else { 0.0 }
+  tight * k * e * rr * n
 }
 
 ///|
