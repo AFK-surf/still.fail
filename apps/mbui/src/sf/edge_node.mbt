@@ -48,42 +48,58 @@ pub fn edge_node(
       let d = if edge is Left { x0 - wx } else { wx - x0 }
       dmax(least(), dmin(most(), (w0 + d).round()))
     }
+    // (let go without moving it: a press of it)
+    let pressed = fn(d : @view.Drag) {
+      held(false)
+      // (let go on it, as a press is: what is there for the finger as the tree is then, it and nothing over it)
+      if !v.finger_target(d.wx, d.wy) {
+        last_tap.val = None
+        return
+      }
+      if on_beside(d.x) {
+        last_tap.val = None
+        beside(d.at)
+        return
+      }
+      match last_tap.val {
+        Some((at, wx, wy)) if d.at - at <= @ui.double_click_ms &&
+          (d.wx - wx).abs() <= @ui.double_click_slop &&
+          (d.wy - wy).abs() <= @ui.double_click_slop => {
+          last_tap.val = None
+          said(Twice, d.at)
+        }
+        _ => {
+          last_tap.val = Some((d.at, d.wx, d.wy))
+          said(Pressed, d.at)
+        }
+      }
+    }
+    // (whether this press has moved it: a mouse's held long, not moved, and let go within the slop of where it went
+    // down is a press, as a click is, as handle_drag had it; let go past it, with no move told, a drag's end)
+    let moved = Ref(false)
+    // (where it went down in the window, as the gesture's slop is reckoned)
+    let went = Ref((0.0, 0.0))
     v.gesture(
       @ui.touch_slop(),
       press=fn(d) {
         from.val = (d.wx, @signals.untracked(width))
+        moved.val = false
+        went.val = (d.wx, d.wy)
         held(true)
       },
       hold=(@ui.long_press_ms, fn(_) {  }),
       held_first=fn(_) { @ui.pointing() is Finger },
-      tap=fn(d) {
-        held(false)
-        // (let go on it, as a press is: what is there for the finger as the tree is then, it and nothing over it)
-        if !v.finger_target(d.wx, d.wy) {
-          last_tap.val = None
-          return
-        }
-        if on_beside(d.x) {
-          last_tap.val = None
-          beside(d.at)
-          return
-        }
-        match last_tap.val {
-          Some((at, wx, wy)) if d.at - at <= @ui.double_click_ms &&
-            (d.wx - wx).abs() <= @ui.double_click_slop &&
-            (d.wy - wy).abs() <= @ui.double_click_slop => {
-            last_tap.val = None
-            said(Twice, d.at)
-          }
-          _ => {
-            last_tap.val = Some((d.at, d.wx, d.wy))
-            said(Pressed, d.at)
-          }
-        }
-      },
+      tap=pressed,
       drag=fn(d) {
         match d.kind {
-          Down | Moved => said(Dragging(@signals.untracked(fn() { to(d.wx) })), d.at)
+          Down | Moved => {
+            moved.val = true
+            said(Dragging(@signals.untracked(fn() { to(d.wx) })), d.at)
+          }
+          Up if !moved.val &&
+            @ui.pointing() is Mouse &&
+            (d.wx - went.val.0).abs() <= @ui.touch_slop() &&
+            (d.wy - went.val.1).abs() <= @ui.touch_slop() => pressed(d)
           Up => {
             said(Dropped(@signals.untracked(fn() { to(d.wx) })), d.at)
             held(false)

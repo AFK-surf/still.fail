@@ -150,3 +150,59 @@ test "an edge pressed twice in its gap: its own width again where both are at on
     )
   }
 }
+
+///|
+/// A window 400 by 300, a mouse's: at (100, 20) a box drawn `scale` as big about its top left, holding an edge 20 by
+/// 200 of the window's at its left. What is done with it, in order, as it is pressed at `down` and let go at `up`
+/// `held_ms` after, no move told between, no frame drawn.
+fn edge_scaled_press(scale : Double, down : (Double, Double), up : (Double, Double), held_ms : Double) -> Array[String] {
+  let said : Array[String] = []
+  let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    root.box(fn(h) {
+      h.over(Is(true)).offset(Is((100.0, 20.0))).scale(Is(scale), about=At(0.0, 0.0)) |> ignore
+      h.box(fn(e) {
+        e.width(Is(Some(20.0 / scale))).height(Is(Some(200.0 / scale))) |> ignore
+        edge_node(
+          e,
+          fn() { "调整宽度" },
+          fn() { 240.0 },
+          fn() { 200.0 },
+          fn() { 300.0 },
+          Right,
+          fn(r, _) { said.push("\{r}") },
+          fn(on) { said.push("held \{on}") },
+        )
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let at = t.time() + edge_gap_ms
+  t.advance(at - t.time())
+  t.touch_at(0, down.0, down.1, at)
+  t.advance(held_ms)
+  t.touch_at(2, up.0, up.1, at + held_ms)
+  said
+}
+
+///|
+test "an edge drawn bigger, a mouse's let go 10 across the window from where it went down, no move told: its drag's end there, no press of it, though that is 5 of its own; held long and let go where it went down, its press" {
+  for scale in [1.0, 2.0] {
+    for held_ms in [edge_gap_ms, @ui.long_press_ms * 2.0] {
+      assert_eq(
+        edge_scaled_press(scale, (105.0, 100.0), (115.0, 100.0), held_ms),
+        ["held true", "Dropped(250)", "held false"],
+        msg="scale \{scale}, held \{held_ms}",
+      )
+    }
+    assert_eq(
+      edge_scaled_press(scale, (105.0, 100.0), (105.0, 100.0), @ui.long_press_ms * 2.0),
+      ["held true", "held false", "Pressed"],
+      msg="scale \{scale}",
+    )
+  }
+}

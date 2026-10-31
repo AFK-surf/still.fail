@@ -77,7 +77,7 @@ fn Tree::through_found(self : Tree, id : NodeId, x : Double, y : Double, t : Dou
 /// nor held by it), and what of what a node hosts is there (Tree::hosts_at).
 fn Tree::target_under(self : Tree, id : NodeId, x : Double, y : Double) -> (Target, Int?) {
   let at = self.logic_at()
-  let found : Ref[(Target, Int?)] = Ref((Nothing, None))
+  let found : Array[Target] = []
   let past = Ref(false)
   self.each_drawn_scaled(fn(c, cx, cy, _, s) {
     if past.val || self.holds(id, c.id) {
@@ -87,15 +87,19 @@ fn Tree::target_under(self : Tree, id : NodeId, x : Double, y : Double) -> (Targ
     if self.finger_on(c, cx, cy, s, x, y, at, tracked=false) {
       let n = self.nodes[c.id.at]
       if n.on_drag is Some(_) {
-        found.val = (Dragged(c.id), None)
+        found.push(Dragged(c.id))
       } else if n.on_press is Some(_) {
-        found.val = (Pressed(c.id), None)
+        found.push(Pressed(c.id))
       } else if n.hosted {
-        found.val = (Hosted(c.id), (self.hosts_at)(c.id, x, y))
+        found.push(Hosted(c.id))
       }
     }
   })
-  found.val
+  // (what takes it there of what was found, as the host says it: as the tree finds it anywhere, Tree::chosen)
+  match self.chosen(found, x, y) {
+    Hosted(h) => (Hosted(h), (self.hosts_at)(h, x, y))
+    t => (t, None)
+  }
 }
 
 ///|

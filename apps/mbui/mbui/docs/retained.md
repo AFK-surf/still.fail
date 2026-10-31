@@ -268,13 +268,23 @@ squeeze and contrast checks; film's images before and after where a step touches
    gesture begins (a panel of the tape followed as it goes, or the shell's back done once, the history's entry chosen
    then), the host told the app takes back as the tree changes what takes it (Ctx::back_told_host); what an old view
    says takes back (a page's own stack, a layer over all) takes it before: a layer's (Ctx::overlay), as this opening of
-   it, given up as it takes back, what it was said over (a page's own stack's) taking the next, though the layer closes
-   only as it is built next. The history's entries are made at their causes (still.fail's
-   sfbase app_history.mbt: a person's act one change, its entry once that change is committed), but for an act taken as
-   an old view builds (a row pressed), done with that build. Still the old way on both: the edges' drags, their look,
-   pointer's shape, tip (frame-numbered) and what they say (an island over the panels: waiting on the tree's tip), a
-   page pushed over the page's own stack (its slide Ctx::nav's), a peek's move
-   aside read from the page's old layout. Old view still: a window of its own, the
+   it, given up as it takes back, what it was said over (a page's own stack's) taking the next; dismissed so, by Escape
+   or by a press outside it, it is given up at that moment (no input of its taken since, a press held in it called
+   off, the focus given back) and what is told as it is dismissed told then (Ctx::with_dismissed: sf's presenters
+   close what they presented at that moment), its view reading the dismissal and drawing its going as it is built
+   next; a layer whose opener is told nothing of it (no with_dismissed) is closed by its view only as it is built
+   next. The history's entries are made at their causes (still.fail's sfbase app_history.mbt: a person's act one
+   change, its entry once that change is committed), but for an act taken as an old view builds (a row pressed), done
+   with that build. The edges are nodes of the tree's on both (the tape's
+   column edges, still.fail's sfdesk/tape_view.mbt; 大屏's sidebar edge, pane_view.mbt: src/sf's edge_node and
+   edge_look_node): each press, drag and let go at its event's moment, their look, pointer's shape, words and tip
+   bound to what they say; where a list's thumb an old view draws is shown under one's strip, the thumb's there for a
+   mouse (ui's yield_thumbs: the tree's one choice of what takes a point, Tree::on_target, as the pointer is over it,
+   goes down and is handed through; looked at again as the old frame's targets are published whole, not a frame on).
+   A page pushed over the page's own stack on the tape slides at its causes (Nav::held_over). Still the old way: a
+   peek's move aside read from the page's old layout; the hand's moves checked across the whole tree (the Tester's
+   hand_moves, the corners' lit_all) and the styles' census (Tester::census) only for what the old frame draws, a
+   node of the tree's counted by none of them. Old view still: a window of its own, the
    sign-in and the splash; the theme each island is built
    in; back, said by the islands as they are built, in the tree's order (the top page first, then the stack's swipe);
    which island takes a press where they lie one over another (where more than one is at a point, all of them are told
