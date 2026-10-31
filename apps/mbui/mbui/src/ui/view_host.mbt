@@ -701,18 +701,27 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   let was_kept = glyphs_kept.val
   let kept : Array[(Int, Double, Double)] = []
   glyphs_kept.val = Some(kept)
+  // (the shadow it casts, as a box with a shadow casts it, Ctx::paint's and paint_glass's: under its ground; glass's
+  // solid ground over it; frosted glass's after the glass, outside it only, so the glass frosts not its own shadow)
+  let (blur, dy, cast) = c.shadow
   match c.glass {
-    Some(gl) if solid => self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, gl.solid, 0.0, 0L, 1.0)
+    Some(gl) if solid => {
+      if blur > 0.0 {
+        self.push_inst(0.0, dy, c.w, c.h, c.radius, 2.0, 0.0, blur, cast, 1.0, 0.0, 0.0, 0.0, 0.0)
+      }
+      self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, gl.solid, 0.0, 0L, 1.0)
+    }
     Some(gl) => {
       glass_at = self.ninst - start
       self.glass_inst(0.0, 0.0, c.w, c.h, c.radius, gl, 1.0)
+      if blur > 0.0 && !gl.liquid {
+        self.push_inst(0.0, dy, c.w, c.h, c.radius, 2.0, 0.0, blur, cast, 1.0, 1.0, dy, 0.0, 0.0)
+      }
     }
-    None => ()
-  }
-  // (the shadow it casts, under its ground, as a box with a shadow casts it: Ctx::paint's)
-  let (blur, dy, cast) = c.shadow
-  if blur > 0.0 && c.glass is None {
-    self.push_inst(0.0, dy, c.w, c.h, c.radius, 2.0, 0.0, blur, cast, 1.0, 0.0, 0.0, 0.0, 0.0)
+    None =>
+      if blur > 0.0 {
+        self.push_inst(0.0, dy, c.w, c.h, c.radius, 2.0, 0.0, blur, cast, 1.0, 0.0, 0.0, 0.0, 0.0)
+      }
   }
   if c.ground != 0L {
     self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, 0.0, 0L, 1.0)

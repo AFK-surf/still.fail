@@ -2045,3 +2045,168 @@ test "viewer on the tree, the bar across the top, a name far longer than its mid
   }
   ignore(seen)
 }
+
+///|
+/// A picture beside others opened in a wide window (a mouse's), its way to the one after (the disc at its right)
+/// clicked, then `after` ms later drawn (`frames`: the frames between at the display's pace; else none between): which
+/// picture shows, and where the strip is then.
+fn wide_step_after_click(frames : Bool, after : Double) -> (String, Double) raise {
+  let t = preview_tester("step", w=1280.0, platform=0)
+  assert_true(viewer.get().unwrap().in_tree, msg="the tree's viewer")
+  let (x, y, w, h) = t.get(Button, label=@sf.t("web-main.preview.nextKey")).rect
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  let clicked = t.time()
+  // (as it is let go, no frame drawn: the one after the one shown)
+  assert_true(viewer.get().unwrap().file.name != "界面草图.png", msg="let go: on to the one after at once")
+  if frames {
+    t.run_for(after)
+  } else {
+    t.advance(after)
+    t.draw()
+  }
+  (viewer.get().unwrap().file.name, pv_strip.way.value_at(clicked + after))
+}
+
+///|
+test "viewer on the tree, a wide window, a mouse: its way to the picture after clicked, the next one sliding in from the click's moment, as far by a moment the frames drawn between or none" {
+  let half = @ui.move_most_ms / 2.0
+  let drawn = wide_step_after_click(true, half)
+  let none = wide_step_after_click(false, half)
+  assert_true(drawn.0 != "界面草图.png", msg="frames: on to the one after: \{drawn}")
+  assert_true(drawn.1 > 1.0, msg="frames: still sliding in: \{drawn}")
+  assert_eq(none, drawn, msg="no frame between: the same one, as far in")
+}
+
+///|
+/// The way to the picture after (the disc at the right of a wide window) as it is drawn: how far in (its alpha, its
+/// ancestors' with it), None where none is drawn (the window's tree's node; else the old view's, by its key,
+/// Tester::look_of).
+fn after_disc(t : @ui.Tester) -> Double? {
+  for d in @ui.view_tree().unwrap().drawn() {
+    if d.glass is Some(_) && d.w == @ui.Space::px(S10) && d.x > 640.0 {
+      return Some(d.alpha)
+    }
+  }
+  t.look_of("preview/go/1").map(fn(l) { l.2 })
+}
+
+///|
+/// The way to the picture after's ground as it is drawn (0: none): the node's, else the old view's box there.
+fn after_disc_ground(t : @ui.Tester) -> Int64 {
+  for d in @ui.view_tree().unwrap().drawn() {
+    if d.glass is Some(_) && d.w == @ui.Space::px(S10) && d.x > 640.0 {
+      return d.ground
+    }
+  }
+  let mut out = 0L
+  for r in t.drawn_rects() {
+    if r.2 == @ui.Space::px(S10) && r.0 > 640.0 {
+      out = r.4
+    }
+  }
+  out
+}
+
+///|
+test "viewer on the tree, a wide window, a mouse: its bars hidden, the way to the one after kept by the pointer over it; held down and moved off it past its going, still there and the press its; back on it and let go, one step" {
+  let t = preview_tester("step", w=1280.0, platform=0)
+  let v = viewer.get().unwrap()
+  let (x, y, w, h) = t.get(Button, label=@sf.t("web-main.preview.nextKey")).rect
+  let (dx, dy) = (x + w / 2.0, y + h / 2.0)
+  // (the bars hidden by a click on the picture, the pointer on the disc as it goes: kept)
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  t.touch(0, rx + rw / 2.0, ry + rh / 2.0)
+  t.touch(2, rx + rw / 2.0, ry + rh / 2.0)
+  t.draw()
+  assert_true(!v.bars_shown(), msg="its bars hidden")
+  t.move(dx, dy)
+  t.run_for(@sf.sleep_ms + @sf.wake_ms)
+  assert_eq(after_disc(t), Some(1.0), msg="the pointer over it: there")
+  // (held down on it, moved off it, past its going)
+  t.touch(0, dx, dy)
+  assert_true(@ui.pointing() is Mouse, msg="a mouse's")
+  t.touch(1, dx - 300.0, dy)
+  t.run_for(@sf.sleep_ms * 2.0)
+  assert_eq(after_disc(t), Some(1.0), msg="held, moved off it: still there")
+  assert_eq(after_disc_ground(t), 0L, msg="held, moved off it: no hover ground (the pointer not on it)")
+  // (back on it, let go: one step)
+  t.touch(1, dx, dy)
+  t.touch(2, dx, dy)
+  let name = viewer.get().unwrap().file.name
+  assert_true(name != "界面草图.png", msg="let go on it: on to the one after")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(viewer.get().unwrap().file.name, name, msg="one step")
+}
+
+///|
+test "viewer on the tree, a wide window, a mouse: the way to the one after gone whole (its bars hidden, the pointer away), a click where it was steps nowhere" {
+  let t = preview_tester("step", w=1280.0, platform=0)
+  let v = viewer.get().unwrap()
+  let (x, y, w, h) = t.get(Button, label=@sf.t("web-main.preview.nextKey")).rect
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  t.touch(0, rx + rw / 2.0, ry + rh / 2.0)
+  t.touch(2, rx + rw / 2.0, ry + rh / 2.0)
+  t.run_for(@sf.sleep_ms * 2.0)
+  assert_eq(after_disc(t).unwrap_or(0.0), 0.0, msg="gone whole")
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  t.draw()
+  assert_true(viewer.get().map(fn(n) { n.file.name == "界面草图.png" }).unwrap_or(true), msg="no step")
+}
+
+///|
+test "viewer on the tree, a wide window, motion reduced: its bars hidden by a click, the way to the one after gone in the first frame; the viewer closed as it would go, nothing read of the clock after" {
+  let t = preview_tester("step", w=1280.0, platform=0)
+  (preview_src.val.unwrap().call)("prefs.set", { "motion": "reduce" }, fn(_) {  })
+  t.draw()
+  let v = viewer.get().unwrap()
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  t.touch(0, rx + rw / 2.0, ry + rh / 2.0)
+  t.touch(2, rx + rw / 2.0, ry + rh / 2.0)
+  t.draw()
+  let gone = after_disc(t)
+  (preview_src.val.unwrap().call)("prefs.set", { "motion": Json::null() }, fn(_) {  })
+  t.draw()
+  assert_eq(gone.unwrap_or(0.0), 0.0, msg="gone in the first frame")
+  // (its bars shown again, going in; closed by Escape meanwhile: nothing owed once it has gone)
+  t.touch(0, rx + rw / 2.0, ry + rh / 2.0)
+  t.touch(2, rx + rw / 2.0, ry + rh / 2.0)
+  t.advance(@sf.wake_ms / 2.0)
+  t.key_told(@ui.key_escape, 0, t.time())
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@sfpages.reveal_ms)
+  assert_true(viewer.get() is None && pv_leaving.get() is None, msg="closed")
+  t.draw()
+  assert_true(!@ui.view_tree().unwrap().clock_read(), msg="nothing read of the clock after")
+}
+
+///|
+test "viewer on the tree, a wide window: the way to the picture after drawn with its shadow under its frosted glass (Base, outside it), as the old one is" {
+  let t = preview_tester("step", w=1280.0, platform=0)
+  let (blur, _) = @ui.Shadow::blur_y(Base)
+  let disc = @ui.Space::px(S10)
+  let cast = t.drawn_shadows().filter(fn(s) { s.2 == disc && s.0 > 640.0 })
+  assert_eq(cast.length(), 1, msg="its shadow: \{t.drawn_shadows()}")
+  assert_eq(cast[0].5, blur, msg="Base's blur")
+}
+
+///|
+test "viewer on the tree, a wide window, transparency reduced: the way to the picture after on its glass's solid ground, no glass, its shadow under it (Base, one), as the old one is; back again, its glass" {
+  let t = preview_tester("step", w=1280.0, platform=0)
+  let disc = @ui.Space::px(S10)
+  let (blur, _) = @ui.Shadow::blur_y(Base)
+  let glass_there = fn() { t.drawn_glass().filter(fn(g) { g.2 == disc && g.0 > 640.0 }).length() }
+  let solid_there = fn() {
+    t.drawn_rects().filter(fn(r) { r.2 == disc && r.0 > 640.0 }).length()
+  }
+  let shadows = fn() { t.drawn_shadows().filter(fn(s) { s.2 == disc && s.0 > 640.0 }) }
+  t.set_reduce_transparency(true)
+  t.draw()
+  let reduced = (glass_there(), solid_there(), shadows().map(fn(s) { s.5 }))
+  t.set_reduce_transparency(false)
+  t.draw()
+  let back = (glass_there(), shadows().length())
+  assert_eq(reduced, (0, 1, [blur]), msg="reduced: no glass, its solid ground, its shadow")
+  assert_eq(back, (1, 1), msg="back: its glass, its shadow")
+}
