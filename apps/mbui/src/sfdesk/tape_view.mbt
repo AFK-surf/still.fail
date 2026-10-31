@@ -21,10 +21,12 @@
 // window, an edge dragged or the keyboard does to where things go is no move: there at once. Its end is a moment of the
 // timeline: the panel closed while in use let go there (side_left).
 //
-// Still the old frame's (the way there): what the panels hold (their islands); a page pushed over the page's own stack
-// (Nav::push_over: its slide waits as Ctx::nav's, asked as its island builds: Nav::shows_when's comes_when); the edges
-// (their drags read as their island builds; their pointer's shape and tip wait on the tree's); a passage picked bringing
-// the page over (read as the page's island builds). Back is a node of the tree's (wide_takes_back, wide_back_step).
+// A page pushed over the page's own stack (Nav::push_over) slides in at its causes: the stack held by the tape's node
+// (Nav::held_over), what shows of it drawn by the page's island (Ctx::nav). Still the old frame's (the way there): what
+// the panels hold (their islands); which of the stack's pages take presses, and back, said as that island builds;
+// the edges (their drags read as their island builds; their pointer's shape and tip wait on the tree's); a passage
+// picked bringing the page over (read as the page's island builds). Back is a node of the tree's (wide_takes_back,
+// wide_back_step).
 
 ///|
 /// The tape's move, committed at its cause: its way (from 0 as it set out to 1), and of each thing it moves where it was
@@ -410,10 +412,11 @@ fn tape_to(p : TapePane, at : Double) -> Unit {
 }
 
 ///|
-/// Whether the page's panel shows the page on top, as it does once the core has given what it shows or its wait is over
-/// (tape_page_wait, at its causes).
+/// Whether the page's panel shows the page on top, as it does once the core has given what it shows or its wait is over:
+/// one put in place as tape_page_wait says, one pushed over the one in place as the stack says (Nav::top_waits: its
+/// wait the stack's, Nav::held_over), each at its causes.
 fn tape_page_ready() -> Bool {
-  tape_page_wait.shows_top()
+  tape_page_wait.shows_top() && !app.nav.top_waits()
 }
 
 ///|
@@ -669,6 +672,9 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   |> ignore
   // what the page's panel shows as the page on top changes, at its cause's moment (page_wait.mbt)
   tape_page_wait.follow(v, fn(p) { (tape_goes.ready)(p) }, fn() { tape_goes.most })
+  // a page pushed over the page's own stack slides in as the core gives what it shows, at that answer's moment
+  // (tape_goes.most at most), its slides told at their causes: the stack held by this node (Nav::held_over)
+  app.nav.held_over(v, fn(p) { (tape_goes.ready)(p) }, tape_goes.most)
   // the side panel last open, kept while it closes (tape_shown_side); let go once the tape rests at the page
   v.reacts(fn() { (tape_goes.panel_of)() }, fn(side) {
     match side {
@@ -1063,8 +1069,8 @@ fn tape_page_built(c : @ui.Ctx, src : Source) -> Unit {
   // (said by this build: image_item, video_item)
   @sfbase.held_pictures_waiting.val = false
   // a page pushed over the page's own stack slides in once the core has given what it shows (page_local_ms at most), as
-  // on a phone (asked as its stack is drawn: Nav::comes_when's old way); one put in its place shows as tape_page_wait
-  // says, at its causes
+  // on a phone, at its causes as the tape's node says (Nav::held_over; Nav::comes_when's frames, the tape not held, as
+  // it is let go); one put in its place shows as tape_page_wait says, at its causes
   app.nav.shows_when(fn() { (tape_goes.ready)(app.nav.top()) }, tape_goes.most)
   let r = tape_room_now()
   let side = tape_shown_side()

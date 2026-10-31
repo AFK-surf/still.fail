@@ -62,7 +62,8 @@ fn PageWait::follow(self : PageWait, v : @view.View, ready : (Page) -> Bool, mos
     if before == stay {
       return
     }
-    if ready(app.nav.top()) {
+    // (one pushed over the one in place: shown over it as it slides in, its wait the stack's, Nav::held_over)
+    if app.nav.top_over() || ready(app.nav.top()) {
       self.shown.set(stay)
       app.nav.flat_keep(None)
       return

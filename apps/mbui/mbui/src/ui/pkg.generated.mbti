@@ -1740,6 +1740,7 @@ pub fn[P] Nav::comes_when(Self[P], () -> Bool, Double) -> Unit
 pub fn[P] Nav::depth(Self[P]) -> Int32
 pub fn[P] Nav::flat_keep(Self[P], (Int32, Int32)?) -> Unit
 pub fn[P] Nav::flat_owned(Self[P], Bool) -> Unit
+pub fn[P] Nav::held_over(Self[P], @view.View, (P) -> Bool, Double) -> Unit
 pub fn[P] Nav::moving(Self[P]) -> Bool
 pub fn[P] Nav::new(P, on_leave? : (P) -> Unit, went_back? : (P, Bool, Bool, Array[P]) -> Unit, from_left? : (P) -> Bool) -> Self[P]
 pub fn[P] Nav::offset(Self[P]) -> Double
@@ -1756,6 +1757,7 @@ pub fn[P] Nav::top(Self[P]) -> P
 pub fn[P] Nav::top_over(Self[P]) -> Bool
 pub fn[P] Nav::top_shows(Self[P]) -> Bool
 pub fn[P] Nav::top_stay(Self[P]) -> (Int32, Int32)
+pub fn[P] Nav::top_waits(Self[P]) -> Bool
 pub fn[P] Nav::under(Self[P]) -> P?
 
 type NavPage[P]
