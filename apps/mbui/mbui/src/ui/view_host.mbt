@@ -156,6 +156,8 @@ pub fn set_view_app(make : (@view.View) -> Unit, around? : (Ctx) -> Unit) -> Uni
   }
   g().back_off = back_off
   view_made_now(make)
+  // (the focus on a node of the tree before: none's now, its id nobody's)
+  focus_told_tree(g())
   // (the old frame: the old views in the tree, where they are placed; or what is built around them, which puts them
   // where it says: old_views_here)
   g_view.val = match around {
@@ -175,6 +177,8 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   // (a hold going through to an old view: what of it takes a press there, who it is; handed so, its from then)
   t.hosts_at(fn(island, x, y) { old_taker_at(t, island, x, y) })
   t.on_through(view_through)
+  // (the focus on one of its nodes let go of at a cause: none's from then, on either side)
+  t.on_focus_lost(view_focus_lost)
   t.on_due(fn() {
     view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
     // (between frames, a frame for it; in one, what it marked is done in it, and what goes on asks for the next as
@@ -770,6 +774,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       match tree.target_at(x, y) {
         // (held by a node of the tree's: the finger its, each event at its moment)
         Dragged(id) if button != 2 => {
+          view_press_unfocused(g())
           view_held.val = Some(Dragging(id))
           view_fingers[0] = 0
           view_fingers[1] = -1
@@ -784,6 +789,9 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
         }
         // (the secondary button presses nothing where nothing asks for a menu)
         Pressed(id) => {
+          if button != 2 {
+            view_press_unfocused(g())
+          }
           view_held.val = Some(if button == 2 { Nowhere } else { Node(id) })
           // (the hold its, called off as any is: the window behind, the node taking no press, a second finger)
           if button != 2 {
@@ -812,6 +820,9 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           false
         }
         Nothing => {
+          if button != 2 {
+            view_press_unfocused(g())
+          }
           view_held.val = Some(Nowhere)
           true
         }
@@ -1573,6 +1584,15 @@ fn view_key(code : Int, mods : Int) -> Bool {
     None => return false
   }
   let c = g()
+  // (Tab and Shift+Tab, at the key's moment, among what can take the focus as the tree is then (Ctx::tab_stops), the
+  // old views' as their last build said: where a field with the focus does not leave them to the app, a key catcher
+  // with it takes none)
+  if code == key_tab && (mods | mod_shift_key) == mod_shift_key && view_tab_ours(c, mods) {
+    tree.event(view_moment(), fn() { c.tab((mods & mod_shift_key) != 0) })
+    h_frame_owed()
+    return true
+  }
+  let c = g()
   let focus = c.focus_allowed()
   if c.editors.contains(focus) || c.dev.catchers.contains(focus) || c.focus_keeps(code, mods) {
     return false
@@ -1581,6 +1601,18 @@ fn view_key(code : Int, mods : Int) -> Bool {
     .iter()
     .any(fn(l) { !l.inert && (l.modal || c.focus_in_layer(l.id) || (code == key_escape && l.escape)) }) {
     return false
+  }
+  // (Enter or Space on a node of its own with the focus, of the keys that press it: its press, at the key's moment)
+  if mods == 0 && (code == key_enter || code == key_space) {
+    match tree_said_ids.get(c.focus) {
+      Some(nid) if (tree.focus_keys_of(nid) & (if code == key_enter { @view.focus_enter } else { @view.focus_space })) != 0 => {
+        if tree.press_focused_at(nid, view_moment()) {
+          h_frame_owed()
+        }
+        return true
+      }
+      _ => ()
+    }
   }
   tree.key_at(code, mods, view_moment())
 }
@@ -1864,6 +1896,16 @@ fn tree_said_action(id : Int, action : Action) -> Bool {
             h_frame_owed()
           }
         }
+        // (the focus to it, as Tab would give it, at the moment it is asked, where a screen reader may give it then (read
+        // out, able to take it; nothing of the old frame's modal over it): else the focus where it was)
+        Focus if g().modal_node() < 0 => {
+          tree.event(view_moment(), fn() {
+            if tree.focus_asked_takes(nid) {
+              g().focus_moved(id, visible=true)
+            }
+          })
+          h_frame_owed()
+        }
         _ => ()
       }
       true
@@ -1932,8 +1974,11 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
             None => ""
           }
         }
-        // (what can be done to it, of what it said or would: Activate where a press does something, nothing else yet)
+        // (what can be done to it, of what it said or would: Activate where a press does something, Focus where it can take the focus)
         let actions : Array[Action] = if !sn.disabled && tree.presses_do(sn.id) { [Activate] } else { [] }
+        if tree.can_focus(sn.id) {
+          actions.push(Focus)
+        }
         out.push({
           id: tree_said_id(sn.id),
           role: s.role,
@@ -1949,7 +1994,7 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
           range: None,
           actions,
           rect: sn.rect,
-          focused: false,
+          focused: self.focus == tree_said_id(sn.id),
           hidden: !sn.allowed || sn.hidden || old_modal,
           parent,
           depth: if parent >= 0 { out[parent].depth + 1 } else { 0 },
@@ -2041,4 +2086,108 @@ fn Ctx::in_window(self : Ctx, f : () -> Unit) -> Unit {
   push_clip(0.0, 0.0, self.width, self.height)
   f()
   pop_clip()
+}
+
+///|
+/// What can take the focus as the window's tree is now, in its order (Tree::focus_order): its nodes' own, each by the id
+/// it is read out by (tree_said_id), and at each node hosting an old view, of that old view's as its last build said
+/// them, those built in it (the one old view the whole window: all of the old frame's own); what the old frame put over
+/// all of it at its root (its layers) last. An old view's let go, leaving, taking no press or under a modal layer that
+/// does not hold it: none of its. Where the window is no tree, the old frame's as its last build said them.
+fn Ctx::focus_spliced(self : Ctx) -> Array[Focusable] {
+  guard view_app.val is Some(tree) else { return self.last_focusables }
+  let out : Array[Focusable] = []
+  for at in tree.focus_order() {
+    if at.hosted {
+      for f in self.last_focusables {
+        if f.layer == 0 && (f.island == Some(at.id) || (f.island is None && old_whole.val)) {
+          out.push(f)
+        }
+      }
+    } else {
+      out.push({
+        id: tree_said_id(at.id),
+        group: 0,
+        layer: 0,
+        node: -1,
+        keys: at.keys,
+        on_press: false,
+        island: None,
+      })
+    }
+  }
+  for f in self.last_focusables {
+    if f.layer != 0 {
+      out.push(f)
+    }
+  }
+  out
+}
+
+///|
+/// The window's tree told what of its own has the focus now (Ctx::focus_moved): the node `c`'s focus is the id of, if
+/// one (tree_said_ids), shown as `c`'s is; else none of its. A node's no longer able to take it, or an id of a node
+/// let go or of another tree's (nobody's): the focus to none, on both sides.
+fn focus_told_tree(c : Ctx) -> Unit {
+  guard view_app.val is Some(tree) else { return }
+  match tree_said_ids.get(c.focus) {
+    Some(nid) =>
+      if !tree.focus_to(Some(nid), visible=c.focus_visible) {
+        c.focus = 0
+        tree.focus_to(None) |> ignore
+      }
+    None => {
+      // (an id the tree once read out, nobody's now)
+      if c.focus >= -2_000_000_000 && c.focus < tree_said_next.val {
+        c.focus = 0
+      }
+      tree.focus_to(None) |> ignore
+    }
+  }
+}
+
+///|
+/// The focus on node `n` of the window's tree let go of at a cause (Tree::on_focus_lost: let go, leaving, taking no
+/// press or no focus, under a modal layer): none's from then, what of the old views reads it told then.
+fn view_focus_lost(n : @view.NodeId) -> Unit {
+  let c = g()
+  match tree_said_of.get(n) {
+    Some(k) if c.focus == k => {
+      c.focus = 0
+      // (what of the old views reads it told in the same change)
+      if !building.val {
+        hand_focus_said(c)
+      }
+      h_frame_owed()
+    }
+    _ => ()
+  }
+}
+
+///|
+/// Whether Tab is the focus's to move, at a key's moment (view_key): not where a field with the focus leaves it to the
+/// app with none held (it picks from what it offers there), nor a key catcher with the focus (it takes every key).
+fn view_tab_ours(c : Ctx, mods : Int) -> Bool {
+  let focus = c.focus_allowed()
+  if c.dev.catchers.contains(focus) {
+    return false
+  }
+  match c.editors.get(focus) {
+    Some(st) => !(mods == 0 && st.leaves.contains(key_tab))
+    None => true
+  }
+}
+
+///|
+/// A press of the primary button going down on a node of the window's tree, or on nothing (view_pointer), as one on an
+/// old widget that takes no focus does (Ctx::focus_on_press): the focus let go of from anything but a field or a key
+/// catcher (what is pressed beside a field, a send button, does not take its keys), not shown; one a modal layer keeps
+/// from input kept.
+fn view_press_unfocused(c : Ctx) -> Unit {
+  let focus = c.focus_allowed()
+  if focus != 0 && !c.editors.contains(focus) && !c.dev.catchers.contains(focus) {
+    c.focus_moved(0, visible=false)
+  } else {
+    c.focus_moved(c.focus, visible=false)
+  }
 }

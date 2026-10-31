@@ -502,7 +502,7 @@ fn Ctx::layers_focus(self : Ctx) -> Unit {
         first
       }
     }
-    self.focus = target
+    self.focus_moved(target)
     self.layers_opened.push(l.id)
   }
   // gone, or leaving: the focus back, when it was in it or is nowhere
@@ -521,7 +521,7 @@ fn Ctx::layers_focus(self : Ctx) -> Unit {
         f.id == self.focus && self.layer_within(f.layer, l.id)
       })
     if back != 0 && inside {
-      self.focus = back
+      self.focus_moved(back)
     }
   }
   // a field given the focus this frame under the topmost modal layer (a page's composer taking the cursor as its chat
@@ -530,7 +530,7 @@ fn Ctx::layers_focus(self : Ctx) -> Unit {
   if self.focus != self.focus_before && self.editors.contains(self.focus) {
     let modal = self.layers.filter(fn(l) { l.modal && !l.inert }).last()
     match (modal, self.focusables.iter().find_first(fn(f) { f.id == self.focus })) {
-      (Some(m), Some(f)) if !self.layer_built_in(f.layer, m.id) => self.focus = self.focus_before
+      (Some(m), Some(f)) if !self.layer_built_in(f.layer, m.id) => self.focus_moved(self.focus_before)
       _ => ()
     }
   }

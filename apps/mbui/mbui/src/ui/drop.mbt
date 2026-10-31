@@ -99,7 +99,7 @@ fn words_let_go(x : Double, y : Double, words : String) -> Unit {
   match c.editors.get(target) {
     Some(st) => {
       c.focus_visible = false
-      c.focus = target
+      c.focus_moved(target)
       place_caret(st, x, y, h_now())
       st.text_input(text_paste, words, 0, 0, h_now())
     }
@@ -204,7 +204,7 @@ fn drops_frame_end(c : Ctx) -> Unit {
     match c.editors.get(d.target) {
       Some(st) if d.frame == c.frame_no => {
         c.focus_visible = false
-        c.focus = d.target
+        c.focus_moved(d.target)
         place_caret(st, d.x, d.y, c.clock)
         st.text_input(text_paste, paths_words(d.paths), 0, 0, c.clock)
         hand_event()

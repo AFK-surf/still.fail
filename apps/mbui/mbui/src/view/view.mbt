@@ -171,6 +171,13 @@ struct Node {
   /// let go with it
   mut pressed_cell : @signals.Signal[Bool]?
   mut pointed_cell : @signals.Signal[Bool]?
+  /// whether it can take the keyboard's focus, which of Enter (1) and Space (2) press it as it has it (View::focusable;
+  /// none: it takes the focus all the same, pressed by no key), and its cells of whether it has it and it shows (View::focused, View::focus_shown): made as first read, let go
+  /// with it
+  mut focusable : Bool
+  mut focus_keys : Int
+  mut focused_cell : @signals.Signal[Bool]?
+  mut focus_shown_cell : @signals.Signal[Bool]?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
   /// how many fingers held on it at once it takes (View::on_drag's `fingers`): one more calls the hold off
@@ -290,6 +297,12 @@ pub struct Tree {
   /// node's own cell told as it comes or goes (View::pressed, View::pointed)
   mut pressing : NodeId?
   mut pointed : NodeId?
+  /// the node with the keyboard's focus, and whether it shows (it came by the keyboard): its cells told as it comes or
+  /// goes (View::focused); what hosts the tree told as it is let go of at a cause (the node let go, leaving, taking
+  /// no press, under a modal layer: Tree::on_focus_lost)
+  mut focused : NodeId?
+  mut focus_visible : Bool
+  mut on_focus_lost : (NodeId) -> Unit
   /// what follows what is under the pointer, while it is over the window (Tree::point_at)
   mut point_stop : (() -> Unit)?
   /// let go (Tree::dispose): what is made for it after stops at once
@@ -384,6 +397,9 @@ pub fn Tree::new(
     hosts_at: fn(_, _, _) { None },
     pressing: None,
     pointed: None,
+    focused: None,
+    focus_visible: false,
+    on_focus_lost: fn(_) {  },
     point_stop: None,
     gone: false,
     point_said: 0,
@@ -465,6 +481,10 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.on_back = None
       n.pressed_cell = None
       n.pointed_cell = None
+      n.focusable = false
+      n.focus_keys = 0
+      n.focused_cell = None
+      n.focus_shown_cell = None
       n.key_said = 0
       n.on_drag = None
       n.takes = None
@@ -505,6 +525,10 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         on_back: None,
         pressed_cell: None,
         pointed_cell: None,
+        focusable: false,
+        focus_keys: 0,
+        focused_cell: None,
+        focus_shown_cell: None,
         on_drag: None,
         fingers: 1,
         drag_said: 0,
@@ -1242,6 +1266,7 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
     self.tree.hits = self.tree.hits + 1
     if !on {
       self.tree.hold_lost_in(self.at)
+      self.tree.focus_lost_in(self.at)
     }
     // (what hosts it holds in it told, at this cause, once the change is committed whole: Tree::on_modals)
     self.tree.modals_told()
@@ -1321,6 +1346,10 @@ fn Tree::modals_now(self : Tree) -> Unit {
   if !self.modals.is_empty() {
     match self.held {
       Some(h) if !self.allows(h) => self.hold_lost_in(0)
+      _ => ()
+    }
+    match self.focused {
+      Some(h) if !self.allows(h) => self.focus_lost_in(0)
       _ => ()
     }
   }
@@ -2346,6 +2375,12 @@ fn View::let_go(self : View) -> Unit {
   n.said_hidden = false
   n.pressed_cell = None
   n.pointed_cell = None
+  // (the focus on it: let go of with it, what has it told so)
+  self.tree.focus_lost_in(self.at)
+  n.focusable = false
+  n.focus_keys = 0
+  n.focused_cell = None
+  n.focus_shown_cell = None
   self.drag_ended()
   n.on_drag = None
   n.drag_said = n.drag_said + 1
@@ -2639,6 +2674,7 @@ fn View::leave(self : View, v : View, ms : Double) -> Unit {
   told_going(n)
   // (leaving, it takes no input: a finger held on it or in it let go of now)
   self.tree.hold_lost_in(v.at)
+  self.tree.focus_lost_in(v.at)
   self.tree.modals_told()
   self.tree.due_leaving(v.id())
   self.tree.marked()
