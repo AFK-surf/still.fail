@@ -420,7 +420,7 @@ test "desk composer: the same file picked or pasted again while it is in the dra
 }
 
 ///|
-test "desk composer: an image sent while it goes up is among its message's files at once, its picture from here, a file of another kind a card saying how far" {
+test "desk composer: an image or a video sent while it goes up is among its message's files at once, its picture from here, a file of another kind a card saying how far" {
   let calls : Array[Made] = []
   // the draft as the page heard of it while its files went up (the fixture's core has them up at once)
   let heard : Ref[Topic?] = Ref(None)
@@ -433,6 +433,7 @@ test "desk composer: an image sent while it goes up is among its message's files
   desk_focus(t)
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   @sfbase.writing_add(src, w, "ws1/st1", "照片.png", png_head())
+  @sfbase.writing_add(src, w, "ws1/st1", "录屏.mov", b"mov", still="clip.png")
   @sfbase.writing_add(src, w, "ws1/st1", "build.log", b"abc")
   t.frame()
   let now = (src.topic)("composer", { "key": Json::string("ws1/st1:s-c1") })
@@ -450,14 +451,20 @@ test "desk composer: an image sent while it goes up is among its message's files
   heard.val = Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 })
   t.frame()
   let id = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files[0]), "id")
+  let clip = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files[1]), "id")
   t.enter()
   t.frame()
   // in the list from the frame it is sent (sent_local), as the core's outbox will have it (views.ts goingUp)
   let sent = sending_of("ws1/st1\u{1}s-c1")
   assert_eq(sent.length(), 1)
   let row = sent[0].row
-  assert_eq(row.attachments.map(fn(a) { (a.name, a.path, a.upload) }), [("照片.png", "upload:" + id, id)])
+  // (a video too, its still as picked: not a card first, then a video once the core's row comes)
+  assert_eq(row.attachments.map(fn(a) { (a.name, a.path, a.upload) }), [
+    ("照片.png", "upload:" + id, id),
+    ("录屏.mov", "upload:" + clip, clip),
+  ])
   assert_true(sent_picture("ws1/st1", row.attachments[0]) is Some(_))
+  assert_eq(sent_picture("ws1/st1", row.attachments[1]), Some("clip.png"))
   assert_eq(row.uploads.map(fn(u) { u.0 }), ["build.log"])
   // it flies there as the upload it is (file_key: its path the station's once it is up), drawn where its tile was as
   // its tile, a picture, until it sets off; not a card
@@ -465,7 +472,7 @@ test "desk composer: an image sent while it goes up is among its message's files
     Some(f) => f.files
     None => fail("nothing flies")
   }
-  assert_eq(flying.map(fn(ff) { ff.key }), ["upload:" + id])
+  assert_eq(flying.map(fn(ff) { ff.key }), ["upload:" + id, "upload:" + clip])
   assert_true(flying[0].picture != "")
   let face = @ui.Tester::new(fn(_) { (flying[0].face)() }, w=200.0, h=200.0)
   // (its bytes again: a tester of its own starts with none)

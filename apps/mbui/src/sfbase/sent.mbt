@@ -96,14 +96,15 @@ pub fn file_key(a : Attachment) -> String {
 
 ///|
 /// The files still going up with words sent from here (each its id, name, size and an image's size: the uploads of
-/// `composer.take`), as their row draws them until the core's has them (views.ts goingUp): an image among the
-/// message's files, named by its upload; any other a card saying how far (name, size, sent).
+/// `composer.take`), as their row draws them until the core's has them (views.ts goingUp): an image or a video among
+/// the message's files, named by its upload (what its picture flies to: a video as a card here, its still had nowhere
+/// to land until the core's row came); any other a card saying how far (name, size, sent).
 fn going_up(going : Array[Json]) -> (Array[Json], Array[(String, Int, Int)]) {
   let images : Array[Json] = []
   let cards : Array[(String, Int, Int)] = []
   for u in going {
     let s = Some(u)
-    if preview_kind(text(s, "name")).0 == Some(KImage) {
+    if preview_kind(text(s, "name")).0 is Some(KImage | KVideo) {
       let a : Map[String, Json] = {
         "name": Json::string(text(s, "name")),
         "path": Json::string(upload_path(text(s, "id"))),
