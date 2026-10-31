@@ -326,12 +326,14 @@ fn[P] Nav::go(
   // (not where the window's tree holds it: its slide a function of the time from its cause alone)
   self.waits_late = brings && self.hosted is None
   self.late_at = -1.0
-  // said once, as it sets out: frames until it is there
+  // said once, as it sets out: frames until it is there (held by the window's tree: its moments there told first, its
+  // start and end, or its wait, while which it is at rest: Moving's rest_at)
   self.asked = g().frame_no
   match self.hosted {
     Some(h) => (h.went)()
-    None => g().moving(self.mover, self as &Moving, what="a stack's slide")
+    None => ()
   }
+  g().moving(self.mover, self as &Moving, what="a stack's slide")
   self.shown_told()
 }
 
@@ -341,6 +343,19 @@ fn[P] Nav::go(
 /// not built in that frame, at rest, said to move again as Ctx::nav starts it.
 impl[P] Moving for Nav[P] with rest_at(self, now, frame) {
   ignore(now)
+  if self.t0 == nav_held && self.hosted is Some(_) {
+    // held by the window's tree for what its page shows: at rest while it waits, its start a moment there (Nav::held_by),
+    // said to move again as it sets out
+    -1.0
+  } else {
+    self.ends_at(frame)
+  }
+}
+
+///|
+/// When its slide is over, as a test runs to it (Nav::rest, nav_rest): Moving's rest_at, but for a slide held by the
+/// window's tree, the latest it could end (its wait's most, then its way), as one held by the frames says it.
+fn[P] Nav::ends_at(self : Nav[P], frame : Int) -> Double {
   if self.mode != 1 && self.mode != 2 && self.mode != 4 {
     -1.0
   } else if self.t0 == nav_held {
@@ -368,7 +383,7 @@ pub fn nav_rest() -> Double {
 /// When this stack's slide is over (the frames' clock; +inf: told to go, not started yet; -1: it is not sliding): what
 /// a test runs to.
 pub fn[P] Nav::rest(self : Nav[P]) -> Double {
-  self.rest_at(g().clock, g().frame_no)
+  self.ends_at(g().frame_no)
 }
 
 ///|
@@ -425,7 +440,8 @@ pub let nav_late_most : Double = 100.0
 /// goes (its readiness come, or the most it waits), its wait from when it was pushed. A push already sliding (asked
 /// later than the frame after it) is not held.
 pub fn[P] Nav::comes_when(self : Nav[P], ready : () -> Bool, most : Double) -> Unit {
-  if self.mode != 1 || self.p0 != 1.0 || self.waited {
+  // (held by the window's tree: its wait the tree's, at its causes, Nav::held_by)
+  if self.hosted is Some(_) || self.mode != 1 || self.p0 != 1.0 || self.waited {
     return
   }
   let c = g()
@@ -553,8 +569,15 @@ pub fn[P] Nav::top_shows(self : Nav[P]) -> Bool {
 ///|
 /// Pushes `page`: it slides in over the one on top.
 pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
+  self.pushes(page, false)
+}
+
+///|
+/// Pushes `page`, over the one on top (Nav::push_over) or not: what it is known as it sets out (Nav::go).
+fn[P] Nav::pushes(self : Nav[P], page : P, over : Bool) -> Unit {
   self.settle()
   self.pages.push(nav_page(page, Some(self.top())))
+  self.pages[self.pages.length() - 1].over = over
   self.told()
   self.p = 1.0
   self.go(1, 0.0, brings=true)
@@ -566,8 +589,16 @@ pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
 /// sliding, following the system's gesture, as a phone's stack has it; a page pushed (Nav::push) or put in place there
 /// is shown in place.
 pub fn[P] Nav::push_over(self : Nav[P], page : P) -> Unit {
-  self.push(page)
-  self.pages[self.pages.length() - 1].over = true
+  self.pushes(page, true)
+}
+
+///|
+/// Whether the page on top waits for what it shows before it comes in (its slide held: Nav::comes_when, Nav::held_by),
+/// read as that changes: so from its push till it has what it shows or its wait is over.
+pub fn[P] Nav::top_waits(self : Nav[P]) -> Bool {
+  self.said.get() |> ignore
+  self.shown.get() |> ignore
+  self.mode == 1 && self.t0 == nav_held
 }
 
 ///|
@@ -612,6 +643,24 @@ pub fn[P] Nav::risen(self : Nav[P]) -> Bool {
 pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
   if self.pages.length() < 2 {
     return false
+  }
+  if self.mode == 1 && self.t0 == nav_held {
+    // (still waiting for what it shows, so never shown: taken off as it is, nothing sliding, its wait called off; the
+    // page under it, shown in place all along, on top)
+    self.gone.push(self.pages.pop().unwrap())
+    wake()
+    self.mode = 0
+    self.p = 0.0
+    self.t0 = -1.0
+    self.waited = false
+    self.told()
+    self.topped()
+    match self.hosted {
+      Some(h) => (h.went)()
+      None => ()
+    }
+    self.shown_told()
+    return true
   }
   if self.mode != 0 && self.mode != 3 {
     self.settle()
@@ -779,6 +828,10 @@ pub fn[P] Ctx::nav(
   // (its pages read: built again as they change)
   nav.said.get() |> ignore
   stacks_said.get() |> ignore
+  // (held by the window's tree: its slides told at their causes, which this build learns of as what shows changes)
+  if nav.hosted is Some(_) {
+    nav.shown.get() |> ignore
+  }
   nav.floor = floor
   nav.room_w = self.width
   nav.room_h = self.height
@@ -808,12 +861,12 @@ pub fn[P] Ctx::nav(
   if nav.t0 == nav_held {
     // held for what the page pushed shows (Nav::comes_when): where it was, not moving yet; at rest by the latest its
     // slide could end (nav_rest)
-    let r = nav.rest_at(self.clock, self.frame_no)
+    let r = nav.ends_at(self.frame_no)
     if r > self.nav_rest {
       self.nav_rest = r
     }
   } else if nav.mode == 1 || nav.mode == 2 || nav.mode == 4 {
-    if nav.t0 < 0.0 {
+    if nav.t0 < 0.0 && nav.hosted is None {
       // it starts now: said to move again (not built in the frame it was to start in, it had been let be)
       nav.t0 = self.clock
       self.moving(nav.mover, nav as &Moving, what="a stack's slide")
@@ -822,7 +875,10 @@ pub fn[P] Ctx::nav(
     // painted alone (frame_watch.mbt). Its end is a moment, the frame at it built again (over at the end it says,
     // t0 + dur, to the bit: (t0 + dur - t0) / dur can fall short of 1 by a rounding)
     nav.late_check(self)
-    if nav.dur <= 0.0 || self.clock >= nav.t0 + nav.dur {
+    // (held by the window's tree: set out and over at its moments there, Nav::held_by, the frame at them drawn so)
+    if nav.hosted is Some(_) {
+      ()
+    } else if nav.dur <= 0.0 || self.clock >= nav.t0 + nav.dur {
       nav.settle()
       // the page that slid away forgotten in the frame its slide ends (`on_leave` told), not the next
       for e in nav.gone {
@@ -833,7 +889,7 @@ pub fn[P] Ctx::nav(
     } else {
       self.wake_at_time(nav.t0 + nav.dur)
     }
-    let r = nav.rest_at(self.clock, self.frame_no)
+    let r = nav.ends_at(self.frame_no)
     if r > self.nav_rest {
       self.nav_rest = r
     }
@@ -1142,9 +1198,13 @@ pub fn[P] Ctx::nav_flat(
   // (its pages read: built again as they change)
   nav.said.get() |> ignore
   stacks_said.get() |> ignore
+  // (the room it is drawn in, as Ctx::nav has it: how far what is pushed over it slides, told at its cause)
+  nav.room_w = self.width
+  nav.room_h = self.height
   if stacks && nav.stacked() {
     // (one pushed over it slides in once it has what it shows, waiting as long as one put in place waits:
     // Nav::shows_when's, asked this frame)
+    // (held by the window's tree, Nav::held_over: as its node says, at its causes, none of this)
     if nav.flat_asked == self.frame_no {
       nav.comes_when(nav.flat_ready, nav.flat_most)
     }

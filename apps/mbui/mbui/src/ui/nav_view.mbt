@@ -159,94 +159,14 @@ pub fn[P] nav_view(
   v.box(fn(s) {
     s.grow(Is(1.0)) |> ignore
     nav.floor = 0
-    // (what is due of it on the tree's timeline: its slide's end, or the end of its wait)
-    let due : Ref[() -> Unit] = Ref(fn() {  })
-    // a slide set out (at its start, said once): over at its end, the page that went let go
-    let sets_out = fn() {
-      (due.val)()
-      let t0 = nav.t0
-      due.val = s.at_moment(nav.t0 + nav.dur, fn() {
-        if nav.t0 == t0 && (nav.mode == 1 || nav.mode == 2 || nav.mode == 4) {
-          nav.settle()
-        }
-      })
-    }
-    // the page waited for goes now (it has what it shows, or its wait is over): its slide from now
-    let goes = fn() {
-      if nav.t0 == nav_held {
-        nav.waited = true
-        nav.t0 = s.logic_at()
-        sets_out()
-        nav.shown_told()
-      }
-    }
-    nav.hosted = Some({
-      now: fn() { s.logic_at() },
-      room: fn() { s.laid_size() },
-      went: fn() {
-        (due.val)()
-        due.val = fn() {  }
-        // (no frame has given the window yet: how far it goes and so how long, not known; set out once it is)
-        if @signals.untracked(fn() { s.window() }).0 <= 0.0 {
-          nav.t0 = -1.0
-          return
-        }
-        match ready {
-          Some(r) if nav.mode == 1 && nav.p0 == 1.0 => {
-            nav.wait_from = nav.t0
-            nav.held_most = most
-            if !r(nav.pages[nav.pages.length() - 1].page) {
-              nav.t0 = nav_held
-              due.val = s.at_moment(nav.wait_from + most, goes)
-              return
-            }
-            nav.waited = true
-          }
-          _ => ()
-        }
-        if nav.mode == 1 || nav.mode == 2 || nav.mode == 4 {
-          sets_out()
-        }
-      },
-    })
-    // a page told to come or go before the tree held the stack (pushed as the app began, before any frame; or as the old
-    // view held it, the window laid out otherwise): its slide set out now, at this moment, where it had not; one under
-    // way goes on to its end, said on the timeline
-    if nav.mode == 1 || nav.mode == 2 || nav.mode == 4 {
-      if nav.t0 == -1.0 {
-        nav.go(nav.mode, nav.p1, v=nav.v0)
-      } else if nav.t0 >= 0.0 {
-        sets_out()
-      } else if nav.t0 == nav_held {
-        due.val = s.at_moment(nav.wait_from + nav.held_most, goes)
-      }
-    }
-    // (one told before the window was known sets out as the first frame gives it, at that moment)
-    s.reacts(fn() { s.window().0 > 0.0 }, fn(laid) {
-      if laid && nav.t0 == -1.0 && (nav.mode == 1 || nav.mode == 2 || nav.mode == 4) {
-        nav.go(nav.mode, nav.p1, v=nav.v0)
-      }
-    })
-    // (waiting: it goes as what it shows comes, at that answer's moment)
-    match ready {
-      Some(r) =>
-        s.reacts(
-          fn() {
-            nav.shown.get() |> ignore
-            nav.said.get() |> ignore
-            nav.t0 == nav_held && r(nav.pages[nav.pages.length() - 1].page)
-          },
-          fn(now) { if now { goes() } },
-        )
-      None => ()
-    }
+    nav.held_by(s, fn() { s.laid_size() }, ready, most)
     let k = nav_views_made.val
     nav_views_made.val = k + 1
     nav_views.push((k, fn(c) {
       if nav.mode == 3 {
         c.page_in_hand = true
       }
-      let r = nav.rest_at(c.clock, c.frame_no)
+      let r = nav.ends_at(c.frame_no)
       if r > c.nav_rest {
         c.nav_rest = r
       }
@@ -256,8 +176,6 @@ pub fn[P] nav_view(
         Some(i) => nav_views.remove(i) |> ignore
         None => ()
       }
-      (due.val)()
-      nav.hosted = None
     })
     |> ignore
     s.each(
@@ -316,6 +234,128 @@ pub fn[P] nav_view(
       },
     )
   })
+}
+
+///|
+/// Stack `self` held by node `s` of the window's tree, its slides on the tree's timeline (nav_view's, and a stack an
+/// old view draws whose pages pushed over it the node over that view sets out: Nav::held_over): each told at its
+/// cause's moment (Nav::go: the tree's now), as long as its way across `room` is (as laid out as of then), its end a
+/// moment there (the page that went let go); a page pushed waiting for what it shows (`ready`) set out as it has it
+/// (a reaction, at that answer's moment) or `most` ms after it was pushed (a moment), whichever comes first, whatever
+/// frames are drawn. What is due of a slide or a wait is called off as the stack is told anew (pushed, popped, back
+/// let go or called off: Nav::go) and as the node is let go (the stack no longer this node's then: another's, or the
+/// frames' again).
+fn[P] Nav::held_by(
+  self : Nav[P],
+  s : @view.View,
+  room : () -> (Double, Double),
+  ready : ((P) -> Bool)?,
+  most : Double,
+) -> Unit {
+  let nav : Nav[P] = self
+  // (what is due of it on the tree's timeline: its slide's end, or the end of its wait)
+  let due : Ref[() -> Unit] = Ref(fn() {  })
+  // a slide set out (at its start, said once): over at its end, the page that went let go
+  let sets_out = fn() {
+    (due.val)()
+    let t0 = nav.t0
+    due.val = s.at_moment(nav.t0 + nav.dur, fn() {
+      if nav.t0 == t0 && (nav.mode == 1 || nav.mode == 2 || nav.mode == 4) {
+        nav.settle()
+      }
+    })
+  }
+  // the page waited for goes now (it has what it shows, or its wait is over): its slide from now
+  let goes = fn() {
+    if nav.t0 == nav_held {
+      nav.waited = true
+      nav.t0 = s.logic_at()
+      sets_out()
+      g().moving(nav.mover, nav as &Moving, what="a stack's slide")
+      nav.shown_told()
+    }
+  }
+  let hosted : NavHosted = {
+    now: fn() { s.logic_at() },
+    room,
+    went: fn() {
+      (due.val)()
+      due.val = fn() {  }
+      // (no frame has given the window yet: how far it goes and so how long, not known; set out once it is)
+      if @signals.untracked(fn() { s.window() }).0 <= 0.0 {
+        nav.t0 = -1.0
+        return
+      }
+      match ready {
+        Some(r) if nav.mode == 1 && nav.p0 == 1.0 => {
+          nav.wait_from = nav.t0
+          nav.held_most = most
+          if !r(nav.pages[nav.pages.length() - 1].page) {
+            nav.t0 = nav_held
+            due.val = s.at_moment(nav.wait_from + most, goes)
+            return
+          }
+          nav.waited = true
+        }
+        _ => ()
+      }
+      if nav.mode == 1 || nav.mode == 2 || nav.mode == 4 {
+        sets_out()
+      }
+    },
+  }
+  nav.hosted = Some(hosted)
+  // a page told to come or go before the tree held the stack (pushed as the app began, before any frame; or as the old
+  // view held it, the window laid out otherwise): its slide set out now, at this moment, where it had not; one under
+  // way goes on to its end, said on the timeline
+  if nav.mode == 1 || nav.mode == 2 || nav.mode == 4 {
+    if nav.t0 == -1.0 {
+      nav.go(nav.mode, nav.p1, v=nav.v0)
+    } else if nav.t0 >= 0.0 {
+      sets_out()
+    } else if nav.t0 == nav_held {
+      due.val = s.at_moment(nav.wait_from + nav.held_most, goes)
+    }
+  }
+  // (one told before the window was known sets out as the first frame gives it, at that moment)
+  s.reacts(fn() { s.window().0 > 0.0 }, fn(laid) {
+    if laid && nav.t0 == -1.0 && (nav.mode == 1 || nav.mode == 2 || nav.mode == 4) {
+      nav.go(nav.mode, nav.p1, v=nav.v0)
+    }
+  })
+  // (waiting: it goes as what it shows comes, at that answer's moment)
+  match ready {
+    Some(r) =>
+      s.reacts(
+        fn() {
+          nav.shown.get() |> ignore
+          nav.said.get() |> ignore
+          nav.t0 == nav_held && r(nav.pages[nav.pages.length() - 1].page)
+        },
+        fn(now) { if now { goes() } },
+      )
+    None => ()
+  }
+  s.owns(fn() {
+    (due.val)()
+    due.val = fn() {  }
+    // (held by another node since, made before this one was let go: that one's still)
+    match nav.hosted {
+      Some(h) if physical_equal(h, hosted) => nav.hosted = None
+      _ => ()
+    }
+  })
+  |> ignore
+}
+
+///|
+/// Stack `self`, drawn by an old view in node `s` (Ctx::nav_flat's `stacks`: a pane's stack, the pages pushed over the
+/// one in place sliding in as on a phone), held by it (Nav::held_by): its slides told at their causes' moments, as
+/// long as its way across the room the view drew it in last (Ctx::nav's, as laid out then); a page pushed over (Nav::
+/// push_over) sliding in once `ready` says it has what it shows, `most` ms after it was pushed at the latest, a page put
+/// in place not waited for here (what shows in place, the view's owner's: Nav::flat_keep).
+pub fn[P] Nav::held_over(self : Nav[P], s : @view.View, ready : (P) -> Bool, most : Double) -> Unit {
+  self.held_by(s, fn() { (self.room_w, self.room_h) }, Some(fn(p) { !self.top_over() || ready(p) }), most)
 }
 
 ///|

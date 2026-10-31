@@ -167,6 +167,68 @@ test "window tree: a page waited for sets out as what it shows comes, or as its 
 }
 
 ///|
+test "window tree: a page waited for asks no frames while it waits, frames as it slides once what it shows comes, none once it is in place" {
+  let ready = @signals.signal(false, same=fn(a, b) { a == b })
+  let (t, nav, _) = stacked(ready~, most=300.0)
+  let t0 = t.time()
+  let slides = fn() { t.moving().iter().any(fn(m) { m.has_prefix("a stack's slide") }) }
+  told_at(t, t0 + 10.0, fn() { nav.push("b") })
+  t.frame_at(t0 + 40.0)
+  // (waiting: nothing said to move, no frame asked after this one)
+  assert_true(!slides() && t.at_rest(), msg="waiting: \{t.moving()} \{t.rest_why()}")
+  told_at(t, t0 + 60.0, fn() { ready.set(true) })
+  t.frame_at(t0 + 80.0)
+  // (sliding from 60: said to move, frames till it ends)
+  assert_true(slides() && !t.at_rest(), msg="sliding: \{t.moving()} \{t.rest_why()}")
+  t.frame_at(t0 + 60.0 + move_most_ms + 10.0)
+  assert_true(!slides() && t.at_rest(), msg="in place: \{t.moving()} \{t.rest_why()}")
+}
+
+///|
+/// A page pushed with what it shows at 10, sliding; another pushed at 60 as it slides, without (`ready`'s none then),
+/// its wait 300 at most; what it shows given at 160 (`comes`) or not: the stack said to move, and the window not at
+/// rest, after the frames at 40 (the first sliding), at 200 past what set the second out (sliding, as what it shows came
+/// or its wait is over); neither after the one at 80 (the second waiting) and at the end of its slide.
+fn waits_over_slide(comes : Bool) -> Unit raise {
+  let ready = @signals.signal(true, same=fn(a, b) { a == b })
+  let (t, nav, _) = stacked(ready~, most=300.0)
+  let t0 = t.time()
+  let seen = fn(slides : Bool, at : String) raise {
+    let said = t.moving().iter().any(fn(m) { m.has_prefix("a stack's slide") })
+    assert_eq(said, slides, msg="comes \{comes}, \{at}: \{t.moving()}")
+    if slides {
+      assert_true(!t.at_rest(), msg="comes \{comes}, \{at}: frames asked")
+    } else {
+      assert_true(t.at_rest(), msg="comes \{comes}, \{at}: \{t.rest_why()}")
+    }
+  }
+  told_at(t, t0 + 10.0, fn() { nav.push("b") })
+  t.frame_at(t0 + 40.0)
+  seen(true, "the first sliding")
+  told_at(t, t0 + 60.0, fn() {
+    ready.set(false)
+    nav.push("c")
+  })
+  t.frame_at(t0 + 80.0)
+  seen(false, "the second waiting")
+  if comes {
+    told_at(t, t0 + 160.0, fn() { ready.set(true) })
+  }
+  // (sliding from 160 as it came, or from 360 as its wait is over)
+  let from = if comes { t0 + 160.0 } else { t0 + 360.0 }
+  t.frame_at(from + 40.0)
+  seen(true, "the second sliding")
+  t.frame_at(from + move_most_ms + 10.0)
+  seen(false, "in place")
+}
+
+///|
+test "window tree: a page waited for pushed as another slides: no frames asked while it waits, frames as it slides once what it shows comes or its wait is over, none once in place" {
+  waits_over_slide(true)
+  waits_over_slide(false)
+}
+
+///|
 test "window tree: a page gone back is let go at its slide's end, the one it covered kept all along" {
   let run = fn(frames : Bool) {
     let (t, nav, left) = stacked()
