@@ -4,6 +4,7 @@ package "stillfail/sfdesk"
 import {
   "mbui/signals",
   "mbui/ui",
+  "mbui/view",
   "moonbitlang/core/debug",
   "stillfail/sf",
   "stillfail/sfapp/settings",
@@ -76,6 +77,8 @@ pub fn drive_folder(@sfbase.Source, String, String, String) -> (Json?, String?)
 pub fn drive_pane(@ui.Ctx, @sfbase.Source, Previewed, String, () -> Unit, () -> Unit, (String) -> Unit, below? : Bool) -> Unit
 
 pub fn drive_row(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt, @sfbase.DvEntry, RowProps, Shown, compact? : Bool, depth? : Int32, expanded? : Bool, on_toggle? : () -> Unit, column? : Bool, along? : Bool) -> Unit
+
+pub fn drive_rows_reset() -> Unit
 
 pub fn drive_start(@sfbase.DvStation) -> String?
 
@@ -369,6 +372,8 @@ pub fn tab_service(String) -> String?
 
 pub fn tab_take_drop(@ui.Ctx) -> (@sfbase.Dragged, Double, Double)?
 
+pub fn tape_holds(@sfbase.Source, @sfbase.Workspace, Double) -> Bool
+
 pub let tape_shows : Double
 
 pub fn tape_shows_left() -> Double
@@ -378,6 +383,10 @@ pub fn tape_shows_right() -> Double
 pub fn tape_side(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, SideOf, leaving? : Bool) -> Unit
 
 pub let tape_side_max : Double
+
+pub fn tape_under(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Array[@sfbase.Workspace]) -> Unit
+
+pub fn tape_view(@view.View, @sfbase.Source, ready~ : (@sfbase.Page) -> Bool, most~ : Double) -> Unit
 
 pub fn tip_keys(@sfbase.Source) -> (String) -> String
 
@@ -599,7 +608,6 @@ pub(all) struct Wide {
   tape_ask : @signals.Signal[TapePane?]
   tape_chat : @signals.Signal[String]
   tape_panel : @signals.Signal[String]
-  mut tape_built : (String, Int32)
   mut tape_last_side : SideOf?
   tape_pull : @signals.Signal[TapePane?]
   tape_drag : @signals.Signal[Double]
@@ -607,7 +615,6 @@ pub(all) struct Wide {
   mut tape_back_x0 : Double
   mut tape_back_last : (Double, Double)
   mut tape_back_v : Double
-  mut tape_back_end : @ui.BackStep?
   tape_pick : @signals.Signal[String]
 }
 

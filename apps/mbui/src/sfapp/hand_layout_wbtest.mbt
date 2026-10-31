@@ -33,18 +33,20 @@ let hand_known : Array[String] = []
 /// the window's corner (to be stood right apart from this). A Windows window's corner is too square to follow.
 test "the hand grows no row of 待处理: a station offline and a decision to let go, 忽略 shown, as tall as at rest" {
   let src : Ref[Source?] = Ref(None)
-  let t = @ui.Tester::new(
-    fn(c) {
-      let s = match src.val {
-        Some(s) => s
-        None => {
-          let s = fixture_app("home-attention")
-          src.val = Some(s)
-          s
-        }
+  // (made as the window's tree is first made, its fake host in place: what the app's state and shell are made of)
+  let made = fn() {
+    match src.val {
+      Some(s) => s
+      None => {
+        let s = fixture_app("home-attention")
+        src.val = Some(s)
+        s
       }
-      view(c, s)
-    },
+    }
+  }
+  let t = @ui.Tester::new(
+    fn(c) { view(c, made()) },
+    tree=fn(root) { app_tree(made())(root) },
     w=1280.0,
     h=800.0,
     platform=3,
@@ -63,18 +65,20 @@ test "the hand grows no row of 待处理: a station offline and a decision to le
 fn hand_layout(mode : String, win : (String, Double, Double, Int), hand : @ui.Pointing) -> String {
   let (_, w, h, platform) = win
   let src : Ref[Source?] = Ref(None)
-  let t = @ui.Tester::new(
-    fn(c) {
-      let s = match src.val {
-        Some(s) => s
-        None => {
-          let s = fixture_app(mode)
-          src.val = Some(s)
-          s
-        }
+  // (made as the window's tree is first made, its fake host in place: what the app's state and shell are made of)
+  let made = fn() {
+    match src.val {
+      Some(s) => s
+      None => {
+        let s = fixture_app(mode)
+        src.val = Some(s)
+        s
       }
-      view(c, s)
-    },
+    }
+  }
+  let t = @ui.Tester::new(
+    fn(c) { view(c, made()) },
+    tree=fn(root) { app_tree(made())(root) },
     w~,
     h~,
     platform~,

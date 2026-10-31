@@ -38,20 +38,22 @@ fn screen_in(
 ) -> @ui.Tester {
   let (_, w, h, platform, width) = win
   let src : Ref[Source?] = Ref(None)
-  let t = @ui.Tester::new(
-    fn(c) {
-      let s = match src.val {
-        Some(s) => s
-        None => {
-          // (`said`: what people, agents and stations wrote in it at its longest: squeeze_said_wbtest.mbt)
-          let s = fixture_app(mode)
-          let s = if said { said_longest_source(s) } else { s }
-          src.val = Some(s)
-          s
-        }
+  // (made as the window's tree is first made, its fake host in place: what the app's state and shell are made of)
+  let made = fn() {
+    match src.val {
+      Some(s) => s
+      None => {
+        // (`said`: what people, agents and stations wrote in it at its longest: squeeze_said_wbtest.mbt)
+        let s = fixture_app(mode)
+        let s = if said { said_longest_source(s) } else { s }
+        src.val = Some(s)
+        s
       }
-      view(c, s)
-    },
+    }
+  }
+  let t = @ui.Tester::new(
+    fn(c) { view(c, made()) },
+    tree=fn(root) { app_tree(made())(root) },
     w~,
     h~,
     platform~,

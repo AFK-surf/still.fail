@@ -1,7 +1,9 @@
 import {
   "moonbitlang/core/json",
+  "moonbitlang/core/double",
   "mbui/ui",
   "mbui/signals",
+  "mbui/view",
   "mbui/kit",
   "mbui/hostapi",
   "mbui/pixels",

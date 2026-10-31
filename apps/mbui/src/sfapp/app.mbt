@@ -506,11 +506,13 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
       }
       if state == SignedIn {
         // signed in, the shell it is laid out in a node picked by the window's width and what is in view
-        // (narrow_shell.mbt): laid out Small with a workspace, the narrow shell's nodes; else the old view whole
+        // (narrow_shell.mbt): laid out Small with a workspace, the narrow shell's nodes; on the tape, its panels' nodes
+        // (tape_shell.mbt); else the old view whole
         v.pick(fn() { shell_is(src, v.window().0) }, fn(s, shell) {
           s.grow(Is(1.0)) |> ignore
           match shell {
             Stacked => narrow_shell(s, src)
+            Taped => taped_shell(s, src)
             Whole => whole(s)
           }
         })

@@ -197,7 +197,7 @@ pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = 
   let moment = Ref::new(-1.0)
   let src = tape_source(tape, fn() { moment.val }, base)
   tape_open(tape)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=tape.w, h=tape.h, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=tape.w, h=tape.h, platform=2)
   // the system bars as Android's window had them (the host says them: bars.mbt)
   let (top, bottom) = tape.bars
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":\{top},\"bottom\":\{bottom},\"left\":0,\"right\":0}}")
