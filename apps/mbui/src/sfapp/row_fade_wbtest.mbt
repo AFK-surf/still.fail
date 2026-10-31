@@ -30,7 +30,6 @@ fn fading_chat_row(on : Ref[Bool], builds : Ref[Int], opened : Ref[Int], shown? 
       |> ignore
     }
   }, w=390.0, h=200.0, platform=2)
-  t.check_looks(false)
   t.set_frame_period(1000.0 / 120.0)
   t.draw()
   t
@@ -67,11 +66,17 @@ test "a real chat row's selected ground fades without rebuilding or laying out i
   on.val = false
   t.draw()
   t.run_for(@sfpages.left_lit_ms + @sfpages.left_fade_ms / 4.0)
+  // A host frame, with the Tester's retained-versus-whole comparison still on.
+  t.frame_at(t.time() + t.frame_period())
+  assert_true(t.painted_why().contains("the clock read as it was painted"), msg=t.painted_why())
   let first = fade_row_ground(t)
+  // Count only the host's work, not the Tester's extra whole build used to check the retained result.
+  t.check_looks(false)
   let before = builds.val
   t.run_for(@sfpages.left_fade_ms / 4.0)
   let middle = fade_row_ground(t)
   let p = t.frame_perf()
+  t.check_looks(true)
   assert_true(first != initial && middle != first && middle != 0L, msg="\{initial} -> \{first} -> \{middle}")
   assert_eq(builds.val - before, 1, msg="only the test's first frame builds; got \{builds.val - before}")
   assert_eq((p.passes, p.laid), (0, 0), msg="the last fade frame only paints")
