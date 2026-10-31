@@ -696,6 +696,12 @@
   "core-logic.machineLogin.endedTimedOut": "Login to {name} on {station} timed out",
   "core-logic.machineLogin.endedFailed": "Login to {name} on {station} failed",
   "core-logic.machineLogin.endedFailedWhy": "Login to {name} on {station} failed: {reason}",
+  "core-logic.machineLogin.loggedInBy": "Logged in by {name}",
+  "core-logic.machineLogin.neverDone": "Never logged in · last: {status}",
+  "core-logic.machineLogin.tries": {
+    "one": "1 try",
+    "other": "{n} tries"
+  },
   "core-logic.choose.borrow.note": "This station can't use {model} yet",
   "core-logic.choose.borrow.title": "Borrow {account} from {station}",
   "core-logic.choose.borrow.body": "This station has no account that runs {model}. Borrowing makes {station} share the profile “{account}” with this station, so its chats can run on it.",

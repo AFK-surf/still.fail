@@ -2962,7 +2962,17 @@ export const SHAPES: Record<string, Shape> = {
     ["canLogin", "bool", { doc: "The viewer may start, cancel and complete logins here (a read-only member only sees how they stand)." }],
     ["canRelay", "bool", { doc: "This device can take a login's loopback callback for its station (the desktop and Android apps): web pages\ncannot listen." }],
     ["logins", vec("MachineLoginShown"), { doc: "The logins done through still.fail on this station: under way first, then those ended, newest first." }],
+    ["tools", vec("MachineLoginTool"), { doc: "Those ended, a row per program, the one tried latest first: what the station page lists under the cards of\nthose under way." }],
   ], { doc: "A station's logins to the command-line tools its agents use (the `machineLogins` topic; docs/remote-login.md): any\nlogin command, run one way; those under way and those done here." }),
+  MachineLoginTool: struct([
+    ["name", "String", { said: true, doc: "The program (gh, gcloud)." }],
+    ["summaryText", "String", { said: true, doc: "Its latest login that went through, who and when (张三 登录 · 10/30 16:04); else that none has and how the\nlatest ended (没有登录成功过 · 最近一次已取消 · 03:12)." }],
+    ["failed", "bool", { doc: "None went through and the latest failed (or timed out): said in red." }],
+    ["chat", opt("String"), { doc: "The session of the agent that started the login the summary is of." }],
+    ["chatTitle", opt("String"), { said: true, doc: "That chat's title, when it began." }],
+    ["countText", "String", { said: true, doc: "How many tries ended: 11 次." }],
+    ["tries", vec("MachineLoginShown"), { doc: "Each try that ended, newest first." }],
+  ], { doc: "A program logged in to (or tried) on a station, its tries that ended together (`MachineLoginsView.tools`)." }),
   MachineLoginShown: struct([
     ["id", "String"],
     ["station", "String"],

@@ -1022,7 +1022,6 @@ let en : Map[String, String] = {
   "web-main.keymap.space": "Space",
   "web-main.list.separator": ", ",
   "web-main.logins.lead": "Logins agents made on this station, used by every chat's agent",
-  "web-main.logins.startedIn": "started by the agent of “{chat}”",
   "web-main.logins.title": "Logins",
   "web-main.memory.builtin": "Built-in",
   "web-main.memory.count": "{n}",

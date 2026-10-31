@@ -4874,6 +4874,27 @@ export interface MachineLoginShown {
 	endedAt?: number;
 }
 
+/** A program logged in to (or tried) on a station, its tries that ended together (`MachineLoginsView.tools`). */
+export interface MachineLoginTool {
+	/** The program (gh, gcloud). */
+	name: string;
+	/**
+	 * Its latest login that went through, who and when (张三 登录 · 10/30 16:04); else that none has and how the
+	 * latest ended (没有登录成功过 · 最近一次已取消 · 03:12).
+	 */
+	summaryText: string;
+	/** None went through and the latest failed (or timed out): said in red. */
+	failed: boolean;
+	/** The session of the agent that started the login the summary is of. */
+	chat?: string;
+	/** That chat's title, when it began. */
+	chatTitle?: string;
+	/** How many tries ended: 11 次. */
+	countText: string;
+	/** Each try that ended, newest first. */
+	tries: MachineLoginShown[];
+}
+
 /**
  * A station's logins to the command-line tools its agents use (the `machineLogins` topic; docs/remote-login.md): any
  * login command, run one way; those under way and those done here.
@@ -4892,6 +4913,11 @@ export interface MachineLoginsView {
 	canRelay: boolean;
 	/** The logins done through still.fail on this station: under way first, then those ended, newest first. */
 	logins: MachineLoginShown[];
+	/**
+	 * Those ended, a row per program, the one tried latest first: what the station page lists under the cards of
+	 * those under way.
+	 */
+	tools: MachineLoginTool[];
 }
 
 /** A chat in 待处理 (`WorkspaceMark.items`). */

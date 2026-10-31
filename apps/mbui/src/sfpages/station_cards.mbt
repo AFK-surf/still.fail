@@ -321,17 +321,17 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
 
 ///|
 /// A station page's 登录 (LoginsSection): only the logins done there through still.fail; one under way its card (as in
-/// its chat), one ended a row naming its program (devin, not its command line) and saying how it ended. Nothing when
-/// there are none.
+/// its chat), those ended a row per program (用户定 2026-10-31: a row per try buried the page in 已取消; the core's
+/// `tools`) naming it (devin, not its command line), who last logged in to it, from which chat, and how many tries,
+/// pressed open to them. Nothing when there are none.
 fn station_logins(c : @ui.Ctx, core : Core, station : String) -> Unit {
-  let t = @sf.theme()
   let view = (core.topic)("machineLogins", { "station": str(station) }).value
   let logins = items(view, "logins")
   if !flag(view, "supported") || logins.length() == 0 {
     return
   }
   let active = logins.filter(fn(l) { flag(Some(l), "active") })
-  let past = logins.filter(fn(l) { !flag(Some(l), "active") })
+  let tools = items(view, "tools")
   st_section(c, @sf.t("web-main.logins.title"), description=@sf.t("web-main.logins.lead"), fn() {
     if active.length() > 0 {
       c.box(style=lg_cards, fn() {
@@ -341,37 +341,61 @@ fn station_logins(c : @ui.Ctx, core : Core, station : String) -> Unit {
       })
       |> ignore
     }
-    if past.length() > 0 {
+    if tools.length() > 0 {
       @sf.group(c, fn() {
-        for l in past {
-          let lv = Some(l)
-          // who ended it says how it ended (张三 取消), else the status does (已取消); then when
-          let by = text(lv, "doneByText")
-          let rest = join([if by == "" { text(lv, "statusText") } else { by }, text(lv, "whenText")], " · ")
-          let started = if text(lv, "chat") != "" {
-            @sf.t("web-main.logins.startedIn", args=[("chat", if text(lv, "chatTitle") == "" { @sf.t("web-main.logins.aChat") } else { text(lv, "chatTitle") })])
-          } else {
-            ""
+        for tool in tools {
+          let tv = Some(tool)
+          let name = text(tv, "name")
+          let open = st_logins_open.get(station) == Some(name)
+          let chat = match text(tv, "chatTitle") {
+            "" => ""
+            title => "「" + title + "」"
           }
-          @sf.link_row(
-            c,
-            "",
-            text(lv, "name"),
-            note=join([started, rest], " · "),
-            goes=false,
-            lead=fn() { st_row_mark(c, "key") },
-            tail=fn() {
-              if text(lv, "state") == "failed" {
-                @sf.pill(c, text(lv, "statusText"), tone=Red)
-              }
-            },
-          )
-          |> ignore
+          let said = join([text(tv, "summaryText"), chat].filter(fn(w) { w != "" }), " · ")
+          // (none went through and the latest failed: said in red)
+          let failed = flag(tv, "failed")
+          if @sf.link_row(
+              c,
+              "login-tool/" + station + "/" + name,
+              name,
+              value=text(tv, "countText"),
+              note=if failed { "" } else { said },
+              trouble=if failed { said } else { "" },
+              folds=open,
+              lead=fn() { st_row_mark(c, "key") },
+            ) {
+            st_logins_open[station] = if open { "" } else { name }
+          }
+          if open {
+            for l in items(tv, "tries") {
+              let lv = Some(l)
+              // who ended it says how it ended (张三 取消), else the status does (已取消)
+              let by = text(lv, "doneByText")
+              @sf.link_row(
+                c,
+                "",
+                text(lv, "whenText"),
+                value=if by == "" { text(lv, "statusText") } else { by },
+                value_bad=text(lv, "state") == "failed",
+                note=match text(lv, "chatTitle") {
+                  "" => ""
+                  title => "「" + title + "」"
+                },
+                goes=false,
+                lead=fn() { c.box(style=lg_no_mark, fn() {  }) |> ignore },
+              )
+              |> ignore
+            }
+          }
         }
       })
     }
   })
 }
+
+///|
+/// Which program's tries are open on a station's page, by station ("" none: closed again).
+let st_logins_open : Map[String, String] = {}
 
 // ── styles ──────────────────────────────────────────────────────────────
 
@@ -534,6 +558,11 @@ let sw_check_lit : @ui.TextStyle = sw_check_words.then(@ui.text_style(color=Fg))
 /// Logins under way, their cards 12 apart.
 // kept across runs: a value (no field of it changes)
 let lg_cards : @ui.Style = @ui.css("w=Full gap=S3 pb=S3")
+
+///|
+/// Where a try's mark would be, under its program's: its words where the program's name is.
+// kept across runs: a value (no field of it changes)
+let lg_no_mark : @ui.Style = @ui.css("w=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
