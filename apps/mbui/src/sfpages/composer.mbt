@@ -885,7 +885,7 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
           remove=true,
           // its own picture (an image of a message quoted, a mark's screenshot) in its card as a picture waiting is,
           // where it flies from to its place in the message (flying_quotes)
-          picture?=quote_picture(c, src, spec.station, v).map(fn(own) {
+          picture?=quote_picture(c, src, w, spec.station, v).map(fn(own) {
             fn() {
               let (picture, f) = own
               let tile = picture_tile(c, picture, going_now(f), gone_up(f), text(f, "error"))
@@ -1544,6 +1544,31 @@ fn up_files(w : Writing) -> Array[Json] {
 }
 
 ///|
+/// The pictures the composer is showing go with its message, including those read back from a kept draft. Remember each
+/// by its upload and, once up, by the station's path, so the local and core rows both draw the same picture.
+fn remember_sent_pictures(src : Source, w : Writing, station : String) -> Unit {
+  let remember = fn(v : Json?, picture : String) {
+    if picture == "" || picture == "!" { return }
+    let id = text(v, "id")
+    if id != "" {
+      @sfbase.sent_pictures["upload\u{1}" + id] = picture
+    }
+    let path = text(field(v, "done"), "path")
+    if station != "" && path != "" {
+      @sfbase.sent_pictures[@sfbase.sent_key(station, path)] = picture
+    }
+  }
+  for file in w.files {
+    let v = Some(file)
+    remember(v, waiting_picture(src, w, v).unwrap_or(""))
+  }
+  for q in w.quotes {
+    let v = Some(q)
+    remember(field(v, "own"), composing.pictures.get(text(v, "id")).unwrap_or(""))
+  }
+}
+
+///|
 /// The files of a draft that are up, and its images and videos still going up (drawn where they land from their
 /// pictures here: sent_local), flying as it is sent to what each is in its message (file_key: one put up from here, or
 /// still going up, its upload; any other its path), each from its tile (ChatHost.kt sending): from where its card or
@@ -1553,10 +1578,10 @@ fn flying_files(c : @ui.Ctx, src : Source, w : Writing) -> Array[FlyingFile] {
   w.files.filter_map(fn(f) {
     let v = Some(f)
     let id = text(v, "id")
-    let key = flying_key(v, going.contains(id))
+    let picture = waiting_picture(src, w, v).unwrap_or("")
+    let key = flying_key(v, going.contains(id), picture != "")
     match c.rect_of(c.id("composer/file/" + id)) {
       Some(from) if key != "" => {
-        let picture = waiting_picture(src, w, v).unwrap_or("")
         let restore = restorable(w, v)
         let (_, _, wide, _) = from
         Some({
@@ -1620,7 +1645,7 @@ fn quote_picture_key(id : String) -> String {
 /// A quote's own picture, if it is an image or a video (Chat.tsx QuotedThumb, PendingFile), and its file: the picture
 /// from here while it is this device's (a mark's screenshot), else the station's (an image of a message quoted; a
 /// video's still, as its message draws it: what grows from here to its box there as it is sent, flight.mbt).
-fn quote_picture(c : @ui.Ctx, src : Source, station : String, q : Json?) -> (String, Json?)? {
+fn quote_picture(c : @ui.Ctx, src : Source, w : Writing, station : String, q : Json?) -> (String, Json?)? {
   let own = field(q, "own")
   let kind = file_kind(text(own, "name"))
   guard own is Some(_) && (kind == "image" || kind == "video") else { return None }
@@ -1629,7 +1654,9 @@ fn quote_picture(c : @ui.Ctx, src : Source, station : String, q : Json?) -> (Str
     None => {
       let done = field(own, "done")
       let owner = text(done, "owner")
-      guard owner != "" else { return None }
+      if owner == "" {
+        return waiting_picture(src, w, own).map(fn(picture) { (picture, own) })
+      }
       if kind == "image" {
         return Some(((src.file)(station, owner, stored_name(text(done, "path"))), own))
       }
@@ -1645,12 +1672,12 @@ fn quote_picture(c : @ui.Ctx, src : Source, station : String, q : Json?) -> (Str
 ///|
 /// What a file waiting is in the message it goes with (file_key: one put up from here, or one with its picture here
 /// still going up (`going`: an image, a video), its upload; any other its path), "" none.
-fn flying_key(v : Json?, going : Bool) -> String {
+fn flying_key(v : Json?, going : Bool, pictured : Bool) -> String {
   let id = text(v, "id")
   match field(v, "done") {
     Some(_) if @sfbase.writing_put_here(id) => @sfbase.upload_path(id)
     Some(done) => text(Some(done), "path")
-    None if going && writing_pictures.contains(id) => @sfbase.upload_path(id)
+    None if going && pictured => @sfbase.upload_path(id)
     None => ""
   }
 }
@@ -1669,7 +1696,7 @@ fn flying_quotes(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
     let own = field(v, "own")
     let picture = match (own, composing.pictures.get(id), @motion.measured_rect(c, quote_picture_key(id))) {
       (Some(_), Some(picture), Some(from)) => {
-        let key = flying_key(own, going.contains(text(own, "id")))
+        let key = flying_key(own, going.contains(text(own, "id")), picture != "")
         if key != "" {
           Some((key, picture, from))
         } else {
@@ -1742,6 +1769,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   }
   let words = w.text.get().trim(chars=" \n\t").to_string()
   let rk = r.station + "\u{1}" + r.session
+  remember_sent_pictures(src, w, r.station)
   // (its references as the field's marks till the core makes them links: drawn as the field drew them)
   let marks = @sfbase.refs_sent_marks(w.key, words)
   let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), marks~)
