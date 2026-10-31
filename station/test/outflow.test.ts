@@ -175,12 +175,18 @@ test("a program asks, an admin allows what they leave in still.fail, and the pro
   r.caller.now = OTHER;
   assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1", undefined, token)).status, 200);
   r.caller.now = COMMA;
-  assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1")).status, 401);
-  assert.equal((await call(r, "GET", "/v1/usage?from=0&to=1", undefined, "sfo_not-it")).status, 401);
+  // A token this station never gave (another station's, say) is told so, with which station says it: not "revoked".
+  const unknown = { status: 401, body: { error: "unknown token", station: { id: "st-here", name: "Office" } } };
+  assert.deepEqual(await call(r, "GET", "/v1/usage?from=0&to=1"), unknown);
+  assert.deepEqual(await call(r, "GET", "/v1/usage?from=0&to=1", undefined, "sfo_not-it"), unknown);
 
-  // Revoked from still.fail: refused from then on.
+  // Revoked from still.fail: refused from then on, said so with the grant and when, after a restart too.
+  const before = r.clock.now;
   assert.equal(await m.revoke(grant!.id), 200);
-  assert.deepEqual(await call(r, "GET", "/v1/usage?from=0&to=1", undefined, token), { status: 401, body: { error: "revoked" } });
+  const at = r.grants.revokedOf(token)!.at;
+  assert.ok(at > before);
+  assert.deepEqual(await call(r, "GET", "/v1/usage?from=0&to=1", undefined, token), { status: 401, body: { error: "revoked", grant: grant!.id, revokedAt: at } });
+  assert.deepEqual(new OutflowGrants(r.data, () => 0).revokedOf(token), { grant: grant!.id, at });
   assert.equal(await m.revoke(grant!.id), 404);
 });
 

@@ -83,10 +83,16 @@ export type Request = {
   answer: null | { at: number; by: string; allow: false } | { at: number; by: string; allow: true; grant: string };
 };
 
+/// A revoked grant's token, by its SHA-256: which grant it was of and when that was revoked.
+type Revoked = { token: string; grant: string; at: number };
+
 /// What a program asking is answered, once there is an answer: its grant and token, or refused.
 export type Taken = { grant: GrantView; token: string } | "refused";
 
 const READS_KEPT = 100;
+/// Tokens of revoked grants remembered at most, for a program reading with one to be told it was revoked rather than
+/// that the token is not this station's.
+const REVOKED_KEPT = 200;
 /// Tokens a grant was given again, kept at most: the program's copies still running keep reading with theirs.
 const TOKENS_KEPT = 8;
 /// A request is kept this long after it was asked or answered, unless its program takes the answer before: one no
@@ -101,6 +107,8 @@ export class OutflowGrants {
   readonly #now: () => number;
   #grants: Grant[];
   #requests: Request[];
+  /// The SHA-256 of the tokens of grants revoked here, the newest last (at most REVOKED_KEPT).
+  #revoked: Revoked[];
   readonly #listeners = new Set<() => void>();
 
   constructor(data: string, now: () => number) {
@@ -109,6 +117,7 @@ export class OutflowGrants {
     const kept = this.#load();
     this.#grants = kept.grants;
     this.#requests = kept.requests;
+    this.#revoked = kept.revoked;
     // Allowed before a grant was made at once (it waited for its program): made now, so it shows and can be revoked.
     let made = false;
     for (const request of this.#requests) {
@@ -217,11 +226,22 @@ export class OutflowGrants {
     return this.#grants.find((g) => g.token === hash || g.again?.includes(hash)) ?? null;
   }
 
+  /// The grant `token` was of and when it was revoked, if it was one of this station's revoked since.
+  revokedOf(token: string): { grant: string; at: number } | null {
+    if (!token.startsWith(TOKEN_PREFIX)) return null;
+    const hash = digest(token);
+    const r = this.#revoked.find((x) => x.token === hash);
+    return r ? { grant: r.grant, at: r.at } : null;
+  }
+
   /// Revokes grant `id` (one its program has not come for yet too); whether there was one.
   revoke(id: string): boolean {
-    const before = this.#grants.length;
-    this.#grants = this.#grants.filter((g) => g.id !== id);
-    if (this.#grants.length === before) return false;
+    const grant = this.#grants.find((g) => g.id === id);
+    if (!grant) return false;
+    this.#grants = this.#grants.filter((g) => g !== grant);
+    const at = this.#now();
+    const hashes = [grant.token, ...(grant.again ?? [])].filter((h) => h !== "");
+    this.#revoked = [...this.#revoked, ...hashes.map((token) => ({ token, grant: id, at }))].slice(-REVOKED_KEPT);
     this.#requests = this.#requests.filter((r) => !(r.answer?.allow === true && r.answer.grant === id));
     this.#save();
     return true;
@@ -250,19 +270,20 @@ export class OutflowGrants {
     this.#save();
   }
 
-  #load(): { grants: Grant[]; requests: Request[] } {
+  #load(): { grants: Grant[]; requests: Request[]; revoked: Revoked[] } {
     try {
       const raw = JSON.parse(readFileSync(this.#file, "utf8"));
-      return { grants: Array.isArray(raw?.grants) ? raw.grants : [], requests: Array.isArray(raw?.requests) ? raw.requests : [] };
+      const list = (v: unknown) => (Array.isArray(v) ? v : []);
+      return { grants: list(raw?.grants), requests: list(raw?.requests), revoked: list(raw?.revoked) };
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== "ENOENT") log.warn("outflow", "the grants do not read; none are had", { error: (e as Error).message });
-      return { grants: [], requests: [] };
+      return { grants: [], requests: [], revoked: [] };
     }
   }
 
   #save(): void {
     const tmp = `${this.#file}.tmp-${process.pid}`;
-    writeFileSync(tmp, `${JSON.stringify({ grants: this.#grants, requests: this.#requests })}\n`, { mode: 0o600 });
+    writeFileSync(tmp, `${JSON.stringify({ grants: this.#grants, requests: this.#requests, revoked: this.#revoked })}\n`, { mode: 0o600 });
     renameSync(tmp, this.#file);
     for (const listener of this.#listeners) listener();
   }
