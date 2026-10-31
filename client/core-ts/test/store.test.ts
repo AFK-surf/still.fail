@@ -373,3 +373,37 @@ test("a_value_its_source_fails_to_make_fails_its_topic_not_the_core", async () =
   await host.time.pass(COALESCE_MS * 2, 10);
   assert.deepEqual(host.takeEmitted(), [[1, value(1, { rows: 1 })]]);
 });
+
+test("rounds_that_held_the_core_are_told_at_most_once_a_minute_with_how_many_and_the_worst", async () => {
+  // One a round was 1375 spans a phone sent in two hours, more than all else it sent (2026-10-31).
+  const host = new FakeHost();
+  const told: Record<string, unknown>[] = [];
+  const tracer = {
+    root: () => {
+      const attrs: Record<string, unknown> = {};
+      return { set: (k: string, v: unknown) => void (attrs[k] = v), end: () => void told.push(attrs) };
+    },
+  };
+  const store = new Store(host, new Runner(host.time.clock), tracer as never);
+  // each topic made in 30 ms of the core's (its clock moved on as it is made)
+  let extra = 0;
+  const mono = host.monotonicMs.bind(host);
+  host.monotonicMs = () => mono() + extra;
+  store.setSource({ start() {}, stop() {}, compute: () => ((extra += 30), { ok: extra }) });
+  const topics = [{ topic: "a" }, { topic: "b" }];
+  topics.forEach((t, i) => store.subscribe(1, i + 1, t));
+  for (const t of topics) store.invalidate(t);
+  await host.time.pass(COALESCE_MS * 2, 10);
+  assert.equal(told.length, 1, "the first at once");
+  for (let i = 0; i < 20; i++) {
+    for (const t of topics) store.invalidate(t);
+    await host.time.pass(COALESCE_MS * 2, 10);
+  }
+  assert.equal(told.length, 1, "not each round");
+  await host.time.pass(60_000, 1000);
+  for (const t of topics) store.invalidate(t);
+  await host.time.pass(COALESCE_MS * 2, 10);
+  assert.equal(told.length, 2);
+  assert.equal(told[1]!["stillfail.rounds"], 21);
+  assert.equal(told[1]!["stillfail.held_ms"], 60);
+});
