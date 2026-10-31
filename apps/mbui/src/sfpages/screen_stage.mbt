@@ -350,7 +350,7 @@ fn screen_ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
       (field(access, "capture") == Some(Json::boolean(false)) || field(access, "control") == Some(Json::boolean(false)))
     // a light capsule on the dark either way: the solid one in the dark theme, the soft one in the light
     if phase == "ended" || phase == "denied" || phase == "failed" {
-      c.box(style=ended_keys, fn() {
+      c.box(style=ended_keys, flow=true, line_gap=@ui.Space::S2.px(), fn() {
         if again_key(c, "screen-again/" + s.view, @sf.t("web-pages.screen.again")) {
           c.tell("screen-again/" + s.view, fn() { s.open(s.src) })
         }

@@ -352,7 +352,8 @@ let ended_title : @ui.TextStyle = @ui.text_style(
 let ended_why : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=A(OnVeil, O70), center=true)
 
 ///|
-/// Its capsules side by side, 8 between.
+/// Its capsules side by side, 8 between; one a line of its own where the box is too narrow for both (English on a
+/// phone).
 // kept across runs: a value (no field of it changes)
 let ended_keys : @ui.Style = @ui.css("row gap=S2 justify=JCenter")
 
