@@ -97,6 +97,8 @@ pub fn composer(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, ComposerSpec, (@sfba
 
 pub let composer_alone : ComposerPlace
 
+pub fn composer_cc_open() -> Bool
+
 pub let composer_field_key : String
 
 pub fn composer_foot_in(Double) -> Double

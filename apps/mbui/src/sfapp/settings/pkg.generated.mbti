@@ -334,6 +334,8 @@ pub let vault_kinds : Array[String]
 
 pub let vault_lasts : Array[String]
 
+pub fn vault_menu_open() -> String
+
 pub fn vault_outcome(@ui.Ctx, Asked, String, String, inline? : Bool) -> Unit
 
 pub fn vault_outcome_words(Asked, String, String) -> Array[@ui.Run]
