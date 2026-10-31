@@ -345,6 +345,7 @@ pub fn Tester::new(
     marks: [],
     marks_out: [],
     marks_next: None,
+    marks_by_hand: false,
     shares: [],
     perf: -1,
     perf_sets: [],

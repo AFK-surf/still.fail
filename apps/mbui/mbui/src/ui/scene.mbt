@@ -751,6 +751,7 @@ fn Ctx::emit_text(
   center_in? : Double = -1.0,
   spans? : Array[(Int, Int, Int64)] = [],
   font? : (Double, Int, Int, Double),
+  unplaced? : Array[(Int, Double, Double, Double)],
 ) -> Unit {
   let s = tl.shaped
   let n = s.starts.length()
@@ -807,6 +808,12 @@ fn Ctx::emit_text(
     }
     let gx = on_pixels(ox + dx + tl.xs[c] + s.pad + g.ox / z, sc)
     let gy = on_glyph_row(top + tl.ascent, g.oy / z, sc)
+    // (where it is before it is set on the pixels, for what places it again elsewhere: a node's words, set on the
+    // pixels where the scene composes them, view_blit)
+    match unplaced {
+      Some(u) => u.push((self.ninst, ox + dx + tl.xs[c] + s.pad + g.ox / z, top + tl.ascent, g.oy / z))
+      None => ()
+    }
     let adaptive = glass_paint.ink_r > 0.0 && !g.color
     self.push_inst(
       gx,

@@ -572,9 +572,9 @@ fn tip_drawn_turns(which : String) -> Array[String] raise {
   t.run_for(@kit.pop_out_ms / 2.0)
   out.push(look("half way gone"))
   t.move(cx, cy)
-  t.run_for(30.0)
+  t.run_for(a_moment_ms)
   out.push(look("back on it a moment"))
-  t.run_for(400.0)
+  t.run_for(tip_settled_ms)
   out.push(look("whole again"))
   t.move(380.0, 190.0)
   t.run_for(@kit.pop_out_ms * 0.75)
@@ -607,7 +607,7 @@ fn finger_held_tip(wait : Double, then_press : Bool) -> (Bool, Bool, Bool, Int) 
   t.run_for(@ui.long_press_ms + 50.0)
   let held = shown()
   t.touch(2, cx, cy)
-  t.run_for(50.0)
+  t.run_for(a_moment_ms)
   let lifted = shown()
   if then_press {
     // (a press elsewhere, on nothing)
@@ -691,8 +691,12 @@ test "a tool as a node's tip a finger held open: called off by the system, gone 
   assert_eq(unable, (true, true, true), msg="unable, then able again: \{unable}")
   let escaped = held_then(fn(t, _, x, y) {
     t.touch(2, x, y)
-    t.run_for(50.0)
+    t.run_for(a_moment_ms)
     t.key(@ui.key_escape)
   }, fn(_, _) {  })
   assert_eq(escaped, (true, true, true), msg="let go, Escape: \{escaped}")
 }
+
+///|
+/// A moment after an input (a finger let go, the pointer back on a tool): less than any of the motions it sets off.
+let a_moment_ms : Double = 50.0

@@ -83,6 +83,8 @@ pub fn tool_node(
       .width(Is(Some(viewer_tool_icon)))
       .height(Is(Some(viewer_tool_icon)))
       .shapes(By(fn() { tool_shapes(said().icon) }))
+      // (called as an old view's icon is, by what finds it on screen)
+      .drawn_as(By(fn() { "/icon/" + said().icon + "/" }))
       .tint(By(fn() {
         let s = said()
         let k = ink()

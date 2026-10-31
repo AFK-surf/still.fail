@@ -3245,6 +3245,7 @@ pub(all) struct Viewer {
   mut asked : Bool
   mut save_after : Bool
   mut download_asked : Bool
+  asked_told : @signals.Signal[Int32]
   mut install_after : Bool
   mut awake : Bool
   awake_told : @signals.Signal[Int32]

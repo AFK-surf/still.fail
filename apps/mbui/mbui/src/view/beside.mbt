@@ -395,3 +395,75 @@ pub fn View::finger_target(self : View, x : Double, y : Double) -> Bool {
     _ => false
   }
 }
+
+///|
+/// What its words measure and how they are drawn changed for all of them (the system's size of words): every node with
+/// words laid out and drawn again.
+pub fn Tree::words_again(self : Tree) -> Unit {
+  for at, n in self.nodes {
+    if n.live && n.look.words != "" {
+      self.layout_marked_at(at)
+      self.look_marked_at(at)
+    }
+  }
+  self.words_redone.set(@signals.untracked(fn() { self.words_redone.get() }) + 1)
+}
+
+///|
+/// How many times all its words were measured anew (Tree::words_again), followed: what is laid out by how wide its words
+/// are and keeps something of it (a bar never narrower once open) says it again as they change.
+pub fn View::words_redone(self : View) -> Int {
+  self.tree.words_redone.get()
+}
+
+///|
+/// What it draws called by name, as it changes (an icon's: "/icon/copy/", as an old view's icon is called), for what
+/// finds things on screen by what they show (a test's, a scripted run's: Tester::locate's icon:NAME); drawn and read
+/// out as ever.
+pub fn View::drawn_as(self : View, name : Live[String]) -> View {
+  self.bind(31, name, Said, fn(s) { self.tree.nodes[self.at].look.drawn_as = s })
+  self
+}
+
+///|
+/// What node `id` draws called by name (View::drawn_as; "" none, or no live node).
+pub fn Tree::drawn_name(self : Tree, id : NodeId) -> String {
+  if self.alive_id(id) {
+    self.nodes[id.at].look.drawn_as
+  } else {
+    ""
+  }
+}
+
+
+///|
+/// It laid out never narrower than it has been (a bar never narrower once open, as what it holds gives way or goes):
+/// at each change of what `by` reads (what sets how wide it is laid out: its words, what it holds, the room, the
+/// theme, the size of words), how wide it is laid out as of that change's own moment (View::laid_size), kept as its
+/// least width, no more than `most` says it may be as that changes. Whatever frames are drawn between two changes, the
+/// same: what is kept is what each change laid it out at, never what a frame happened to see.
+pub fn[T : Eq] View::keeps_width(self : View, by : () -> T, most? : () -> Double = fn() { @double.infinity }) -> View {
+  let widest : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
+  self.min_width(
+    By(fn() {
+      let w = widest.get()
+      let m = most()
+      if w <= 0.0 {
+        None
+      } else if w < m {
+        Some(w)
+      } else {
+        Some(m)
+      }
+    }),
+  )
+  |> ignore
+  // (the window's size among them: its first frame's too, the first it is laid out in)
+  self.reacts(fn() { (by(), self.window()) }, fn(_) {
+    let (w, _) = self.laid_size()
+    if w > @signals.untracked(fn() { widest.get() }) {
+      widest.set(w)
+    }
+  })
+  self
+}

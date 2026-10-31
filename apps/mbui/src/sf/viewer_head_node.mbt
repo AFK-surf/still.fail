@@ -1,15 +1,15 @@
 // The bar floating at the top of a file opened in the Small tier (viewer_head's, fpHead) as nodes of the window's tree
 // (the way there, docs/retained.md 4): what it shows bound to what says it as that changes (the file's name, its kind
 // and size, the window's width, its theme, how far the viewer is in), its tools nodes of their own (tool_node), never
-// narrower once open: how wide it was laid out is kept as what it holds changes (another tool, another name, another
-// width), at that change.
+// narrower once open: as wide as it is laid out at each change that sets how wide it is (View::keeps_width: another
+// tool, another name, the window, the theme, the system's size of words), whatever frames come between.
 
 ///|
 /// The floating bar in `parent` (a layer over the viewer's, all of its room): page glass (`glass`, as the theme says),
 /// round, 44 high, the room's top (`top`) or 8 down (16 over 640: `width`, the window's), 16 in from the window's sides
 /// at most (32 over 640) and 1080 wide at most; `name` first (`meta` after it over 640), cut short before the tools give
-/// way, then what `tools` makes in the row of tools it is given (`holds`: which they are, as
-/// that changes), then × (`close` as it is pressed). There while `awake`
+/// way, then what `tools` makes in the row of tools it is given (`holds`: which they are, as that
+/// changes), then × (`close` as it is pressed). There while `awake`
 /// (in over wake_ms, out over sleep_ms, from where it is at that moment), as far in as `shown` says of the node as it is
 /// drawn (the viewer's fade). Its tools' tips in `tips`. The bar's node.
 pub fn viewer_head_node(
@@ -47,8 +47,6 @@ pub fn viewer_head_node(
       down.height(By(fn() { Some(dmax(top(), if small() { vfr_head_top_small } else { vfr_head_top })) })) |> ignore
     })
     |> ignore
-    // (the widest it was laid out at, as what it holds last changed: it grows to what it holds, never back)
-    let widest : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
     let most = fn() { dmin(width() - (if small() { vfr_head_side_small } else { vfr_head_side }), vfr_head_most) }
     let h = room.box(fn(h) {
       h
@@ -63,7 +61,6 @@ pub fn viewer_head_node(
       .radius(Is(@ui.Space::px(S11) / 2.0))
       .glass(By(fn() { Some(glass()) }))
       .max_width(By(fn() { Some(most()) }))
-      .min_width(By(fn() { Some(dmin(widest.get(), most())) }))
       |> ignore
       // its name and meta (fpTitle): the name first, its line's meta 10 after it; what gives way short of room
       h.box(fn(title) {
@@ -121,20 +118,20 @@ pub fn viewer_head_node(
       |> ignore
     })
     head = Some(h)
-    // (what it holds changed, how its words are set, or the room it is given (the window's, its first frame's too): as
-    // wide as it is laid out then, kept)
-    room.reacts(
+    // (never narrower once open: as wide as it is laid out at each change that sets how wide it is, View::keeps_width:
+    // what it holds, its words and how they are set, the room it is given; said once all it holds is made, so that what
+    // changes it (another tool) is in it as it is measured)
+    h.keeps_width(
       fn() {
-        @ui.tree_theme() |> ignore
-        (name(), meta(), holds(), small(), width(), room.window())
+        let th = @ui.tree_theme()
+        (
+          (name(), meta(), holds(), small(), width()),
+          (h.words_redone(), th.text_size(Body), th.text_size(Meta)),
+        )
       },
-      fn(_) {
-        let (w, _) = h.laid_size()
-        if w > @signals.untracked(fn() { widest.get() }) {
-          widest.set(w)
-        }
-      },
+      most~,
     )
+    |> ignore
   })
   |> ignore
   head.unwrap()

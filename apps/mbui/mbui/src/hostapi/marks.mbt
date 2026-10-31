@@ -41,3 +41,9 @@ pub fn MarkedImage::made(self : MarkedImage) -> Bytes? {
     }
   }
 }
+
+///|
+/// Whether it is drawn (or could not be), its PNG not taken (MarkedImage::made takes it).
+pub fn MarkedImage::drawn(self : MarkedImage) -> Bool {
+  mk_state(self.id) != 0
+}

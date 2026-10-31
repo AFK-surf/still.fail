@@ -162,6 +162,9 @@ priv struct ViewBlock {
   cut : (Int, Int)
   w : Double
   h : Double
+  /// its glyphs where they are before they are set on the pixels (instance, x, the line's baseline, the glyph's own
+  /// offset from it), each set on them where the scene composes it, as an old view's are where they are painted
+  glyphs : Array[(Int, Double, Double, Double)]
 }
 
 ///|
@@ -247,6 +250,7 @@ pub fn view_painted() -> ViewPaintWork {
 /// As a run begins: no tree, its nodes let go. What took back by the old views no more held (what calls it and what it
 /// was said in): none takes back till a frame of the next says what does; nothing held of them.
 fn view_forget() -> Unit {
+  tree_theme_of.val = None
   view_shape_of.val = OfOld
   let c = g()
   targets_forget()
@@ -293,10 +297,22 @@ fn view_forget() -> Unit {
 }
 
 ///|
-/// Words of a node made once measured as they are drawn (text.mbt), in `width` (< 0: as wide as they are).
+/// Words of a node made once measured as they are drawn (text.mbt), in `width` (< 0: as wide as they are): at the
+/// system's size of words, as an old view's are (Ctx::sp: the look's size and line said at 1).
 fn view_words_measure(words : String, look : @view.WordsLook, width : Double) -> (Double, Double) {
-  let tl = layout_text(words, look.size, look.weight, if width < 0.0 { 1.0e9 } else { width }, look.wrap, line=look.line)
+  let c = g()
+  let tl = layout_text(words, c.sp(look.size), look.weight, if width < 0.0 { 1.0e9 } else { width }, look.wrap, line=c.sp(look.line))
   (tl.w, tl.h)
+}
+
+///|
+/// The system's size of words changed (Ctx::font_scale, as a frame begins): the words of the window's tree measured and
+/// drawn again at it, as an old view's are laid out anew.
+fn view_words_rescaled() -> Unit {
+  match view_app.val {
+    Some(t) => t.words_again()
+    None => ()
+  }
 }
 
 ///|
@@ -577,6 +593,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   let solid = glass_paint.solid
   let mut glass_at = -1
   let mut cut = (0, 0)
+  let glyphs : Array[(Int, Double, Double, Double)] = []
   match c.glass {
     Some(gl) if solid => self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, gl.solid, 0.0, 0L, 1.0)
     Some(gl) => {
@@ -597,14 +614,16 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   if c.words != "" {
     let k = c.words_look
     // (one line given less than it is wide: cut to it, ending in an ellipsis, as an old view's words on one line are)
-    let tl = layout_text(c.words, k.size, k.weight, if k.wrap { c.w + 0.5 } else { 1.0e9 }, k.wrap, line=k.line)
+    // (at the system's size of words, as measured: view_words_measure)
+    let (size, line) = (self.sp(k.size), self.sp(k.line))
+    let tl = layout_text(c.words, size, k.weight, if k.wrap { c.w + 0.5 } else { 1.0e9 }, k.wrap, line~)
     let tl = if !k.wrap && tl.w > c.w + 0.5 {
-      ellipsized(c.words, tl, c.w, fn(s) { layout_text(s, k.size, k.weight, 1.0e9, false, line=k.line) })
+      ellipsized(c.words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~) })
     } else {
       tl
     }
     let from = self.ninst - start
-    self.emit_text(tl, 0.0, 0.0, c.ink, 1.0)
+    self.emit_text(tl, 0.0, 0.0, c.ink, 1.0, unplaced=glyphs)
     // (cut short to less than its ellipsis: no further than its box, as an old view's line is in the box that clips it)
     if !k.wrap && tl.w > c.w + 0.5 {
       cut = (from, self.ninst - start)
@@ -665,7 +684,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   }
   inst_owners.tree_words[c.id] = c.words
   self.ninst = start
-  { inst, cells, marks, segs, glass_at, shares: c.glass.map_or(false, fn(g) { g.shares_capture }), solid, cut, w: c.w, h: c.h }
+  { inst, cells, marks, segs, glass_at, shares: c.glass.map_or(false, fn(g) { g.shares_capture }), solid, cut, w: c.w, h: c.h, glyphs: glyphs.map(fn(g) { (g.0 - start, g.1, g.2, g.3) }) }
 }
 
 ///|
@@ -721,6 +740,15 @@ fn Ctx::view_blit(self : Ctx, id : @view.NodeId, made : ViewBlock, x : Double, y
     for j in 0..<12 {
       s[b + 40 + j] = clip_stack[k + 12 + j]
     }
+  }
+  // (its glyphs set on the pixels where they are composed, as emit_text sets an old view's where it paints them: x on
+  // the pixels, down by the baseline on a row then the glyph's own offset)
+  let sc = self.scale
+  for gl in made.glyphs {
+    let (i, gx, base, goy) = gl
+    let b = at + i * inst_size
+    s[b] = on_pixels(x + gx, sc)
+    s[b + 1] = on_glyph_row(y + base, goy, sc)
   }
   // (its glass's capture, as the frame is composed here: what was drawn under it before it, wherever that is now)
   if made.glass_at >= 0 {

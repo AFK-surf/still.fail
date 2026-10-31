@@ -470,6 +470,8 @@ pub fn set_platform(Int32?) -> Unit
 
 pub fn set_pointing(Pointing?) -> Unit
 
+pub fn set_tree_theme(() -> Theme) -> Unit
+
 pub fn set_view_app((@view.View) -> Unit, around? : (Ctx) -> Unit) -> Unit
 
 pub fn set_web_lines(Bool) -> Unit
@@ -1637,7 +1639,9 @@ pub fn Made::on_press(Self, () -> Unit) -> Self
 pub struct MarkedImage {
   // private fields
 }
+pub fn MarkedImage::id(Self) -> Int32
 pub fn MarkedImage::made(Self) -> Bytes?
+pub fn MarkedImage::ready(Self) -> Bool
 
 type MoveRun
 
@@ -2357,6 +2361,8 @@ pub fn Tester::live_image(Self, Int32) -> Int32?
 pub fn Tester::local_acts(Self) -> Array[String]
 pub fn Tester::locate(Self, String) -> Array[(Double, Double)]
 pub fn Tester::look_of(Self, String) -> (Double, Double, Double)?
+pub fn Tester::marks_answer(Self, Int32) -> Unit
+pub fn Tester::marks_by_hand(Self) -> Unit
 pub fn Tester::marks_drawn(Self) -> Array[String]
 pub fn Tester::marks_make(Self, Bytes) -> Unit
 pub fn Tester::messages_taken(Self) -> Int32

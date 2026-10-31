@@ -213,6 +213,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   if fs != c.font_scale && fs > 0.0 {
     c.font_scale = fs
     c.epoch = c.epoch + 1
+    view_words_rescaled()
   }
   c.clock = t
   c.dt = if c.last_now < 0.0 { 16.67 } else { dclamp(t - c.last_now, 0.0, 100.0) }

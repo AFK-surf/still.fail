@@ -1170,13 +1170,13 @@ test "viewer on the tree, a phone's screen: its bar's tip a finger held open tak
   t.touch(0, cx, cy)
   t.run_for(@ui.long_press_ms + 50.0)
   t.touch(2, cx, cy)
-  t.run_for(50.0)
+  t.run_for(a_moment_ms)
   assert_true(copy_tip_shown(t), msg="held open")
-  t.key(@ui.key_escape)
+  t.key_told(@ui.key_escape, 0, t.time())
   assert_true(viewer.get() is Some(v) && !v.closing, msg="the first Escape the tip's: the viewer open still")
   t.run_for(@kit.pop_out_ms * 2.0)
   assert_true(!copy_tip_shown(t), msg="the tip gone")
-  t.key(@ui.key_escape)
+  t.key_told(@ui.key_escape, 0, t.time())
   assert_true(viewer.get() is None || viewer.get().unwrap().closing, msg="the next Escape the viewer's")
 }
 
@@ -1200,10 +1200,131 @@ test "viewer on the tree, a mouse: its bar's tip shown by the keyboard's focus, 
   assert_true(!@sf.presenting(), msg="the first Escape the menu's")
   assert_true(viewer.get() is Some(v) && !v.closing, msg="the viewer open still")
   assert_true(copy_tip_shown(t), msg="the tip still shown")
-  t.key(@ui.key_escape)
+  t.key_told(@ui.key_escape, 0, t.time())
   assert_true(viewer.get() is Some(v) && !v.closing, msg="the next Escape the tip's: the viewer open still")
   t.run_for(@kit.pop_out_ms * 2.0)
   assert_true(!copy_tip_shown(t), msg="the tip gone")
-  t.key(@ui.key_escape)
+  t.key_told(@ui.key_escape, 0, t.time())
   assert_true(viewer.get() is None || viewer.get().unwrap().closing, msg="then the viewer's")
+}
+
+///|
+/// The floating bar's name as the window's tree draws it now: its size and its ink.
+fn head_name_drawn() -> (Double, Int64)? {
+  let name = viewer.get().unwrap().file.name
+  @ui.view_tree().unwrap().drawn().iter().find_first(fn(d) { d.words == name }).map(fn(d) { (d.words_look.size, d.ink) })
+}
+
+///|
+test "viewer on the tree: its floating bar's words in still.fail's theme as its old views are, a touch screen's sizes from its first frame; light or dark as chosen, a frame owed at once and drawn so the frame after; a window made narrower, its first frame the same" {
+  for platform in [1, 0] {
+    let look : @signals.Signal[String] = @signals.signal("light", same=fn(a, b) { a == b })
+    let t = looked_preview(look, platform)
+    let theme = @sf.ui_theme()
+    let body = theme.text_size(Body).0
+    assert_eq(head_name_drawn().map(fn(n) { n.0 }), Some(body), msg="platform \{platform}: its name as still.fail's Body")
+    // (dark chosen, as the core's prefs say it: their appearance)
+    look.set("dark")
+    assert_eq(t.wanted_after(), 0.0, msg="platform \{platform}: dark as chosen, a frame owed at once")
+    t.draw()
+    let dark = @sf.ui_theme()
+    assert_true(dark.dark, msg="dark as set")
+    assert_eq(head_name_drawn().map(fn(n) { n.1 }), Some(dark.color(Fg)), msg="platform \{platform}: its name in the dark's ink, the frame after")
+    t.resize(360.0, 844.0)
+    t.draw()
+    assert_eq(head_name_drawn().map(fn(n) { n.0 }), Some(dark.text_size(Body).0), msg="platform \{platform}: narrower, the same size")
+  }
+}
+
+///|
+/// A moment after an input (a finger let go): less than any of the motions it sets off.
+let a_moment_ms : Double = 50.0
+
+///|
+/// How many of what was kept since `before` are `png`.
+fn kept_as(t : @ui.Tester, before : Int, png : Bytes) -> Int {
+  t.kept()[before:].to_array().filter(fn(k) { k.2 == png }).length()
+}
+
+///|
+/// Marking the image open (pen_marking, a stroke), the host's drawings answered as the test says, then
+/// 下载标注后的图片 pressed by a finger: the host asked to draw the marks onto it, its picture to come as `png`.
+fn marks_asked(png : Bytes) -> @ui.Tester raise {
+  let t = pen_marking()
+  t.marks_by_hand()
+  pen_stroke(t, false)
+  t.marks_make(png)
+  pressed(t, Button, pv("android-chat.marks.downloadMarked"))
+  t
+}
+
+///|
+test "viewer on the tree, marking: the marked picture kept once at the host's word, no frame drawn for it; not before, not again with the frames after; another drawing with the same picture kept once more" {
+  let png = b"\x89PNG-marked"
+  let t = marks_asked(png)
+  let before = t.kept().length()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(kept_as(t, before, png), 0, msg="before the host's word: none")
+  t.marks_answer(1)
+  assert_eq(kept_as(t, before, png), 1, msg="at its word, no frame drawn: once")
+  t.run_for(@ui.move_most_ms)
+  t.marks_answer(1)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(kept_as(t, before, png), 1, msg="frames after, its word again: not again")
+  // (marking on, another stroke, the same picture drawn by another drawing)
+  pen_stroke(t, false)
+  t.marks_make(png)
+  pressed(t, Button, pv("android-chat.marks.downloadMarked"))
+  t.marks_answer(2)
+  assert_eq(kept_as(t, before, png), 2, msg="another drawing, the same picture: once more")
+}
+
+///|
+test "viewer on the tree, marking: its viewer closed before the host's word, the picture kept by none, another viewer opened after taking none of it" {
+  let png = b"\x89PNG-marked"
+  let t = marks_asked(png)
+  let before = t.kept().length()
+  let name = viewer.get().unwrap().file.name
+  viewer.get().unwrap().shut(t.ctx())
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@sfpages.reveal_ms)
+  assert_true(viewer.get() is None, msg="closed")
+  // (another viewer opened on the same picture, from the chat)
+  // (another viewer opened on the same file, as the app opens one: open_preview, the fixture's own file)
+  let file = preview_files().iter().find_first(fn(f) { f.0.name == name }).unwrap().0
+  open_preview("ws1/st1", "s-c1", file)
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(viewer.get() is Some(_), msg="another viewer open")
+  t.marks_answer(1)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(kept_as(t, before, png), 0, msg="kept by none")
+}
+
+///|
+/// The image open (preview_tester's), the core's prefs saying the appearance `look` says as it changes.
+fn looked_preview(look : @signals.Signal[String], platform : Int) -> @ui.Tester {
+  new_run()
+  let base = fixture("chat-preview-image")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let got = (base.topic)(name, params)
+      match (name, got.value) {
+        ("prefs", Some(Object(m))) => {
+          let o = m.copy()
+          o["appearance"] = Json::string(look.get())
+          { ..got, value: Some(Json::object(o)) }
+        }
+        ("prefs", None) => { ..got, value: Some(Json::object({ "appearance": Json::string(look.get()) })) }
+        _ => got
+      }
+    },
+  }
+  preview_src.val = Some(src)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  t
 }

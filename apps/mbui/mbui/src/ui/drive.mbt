@@ -287,7 +287,33 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
 /// The words on screen a step looks for: text, rich text, a field's placeholder; `icon:NAME` an @sf icon. Only what
 /// is laid out inside the window counts; what is only drawn (Ctx::draw_only) does not.
 fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
-  on_screen_nodes(c, what).map(fn(p) { (p.0, p.1) })
+  on_screen_nodes(c, what).map(fn(p) { (p.0, p.1) }) + tree_on_screen(c, what).map(fn(p) { (p.0, p.1) })
+}
+
+///|
+/// What of the window's tree shows `what` (its words, `=WORDS` exactly, `icon:NAME` what it draws is called so:
+/// View::drawn_as), the middle of each where it is drawn, in the window, not faded to nothing: what is seen, as
+/// on_screen_nodes finds an old view's, whether it takes a press or not, whatever lies over it (reachable says which
+/// of it a finger reaches).
+fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId)] {
+  guard view_app.val is Some(tree) else { return [] }
+  let found = []
+  for d in tree.drawn() {
+    let hit = if what.has_prefix("icon:") {
+      tree.drawn_name(d.id).contains("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
+    } else if what.has_prefix("=") && what.length() > 1 {
+      d.words == what.unsafe_substring(start=1, end=what.length())
+    } else if what.contains(":") {
+      false
+    } else {
+      d.words != "" && d.words.contains(what)
+    }
+    let (x, y) = (d.x + d.w / 2.0, d.y + d.h / 2.0)
+    if hit && d.alpha > 0.002 && d.w > 0.0 && d.h > 0.0 && x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {
+      found.push((x, y, d.id))
+    }
+  }
+  found
 }
 
 ///|
@@ -301,6 +327,17 @@ fn reachable(c : Ctx, what : String) -> Array[(Double, Double)] {
       Some(q) => at.push(q)
       None => ()
     }
+  }
+  // (of the window's tree: where what a press there goes to is it, or holds it, as the tree finds it then)
+  match view_app.val {
+    Some(tree) =>
+      for p in tree_on_screen(c, what) {
+        match view_presses_at(p.0, p.1) {
+          Some(id) if tree.holds(id, p.2) => at.push((p.0, p.1))
+          _ => ()
+        }
+      }
+    None => ()
   }
   at
 }

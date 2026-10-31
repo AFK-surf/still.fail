@@ -74,6 +74,8 @@ pub(all) struct Look {
   /// height): View::scale
   mut scale : Double
   mut pivot : Pivot
+  /// what it draws called by name, as what finds it on screen calls it (an icon's: View::drawn_as)
+  mut drawn_as : String
 } derive(Eq, Debug)
 
 ///|
@@ -317,6 +319,8 @@ pub struct Tree {
   /// how many times a finger or a button went down anywhere in the window, as the host tells each (Tree::went_down):
   /// what closes at the next press, wherever it lands, follows it
   pressed_anywhere : @signals.Signal[Int]
+  /// how many times its words were measured anew for all of them (Tree::words_again: the system's size of words)
+  words_redone : @signals.Signal[Int]
   /// the nodes drawn, in the order they are drawn (no slot), and where in it what holds each is (-1: the window)
   order : Array[Int]
   order_holder : Array[Int]
@@ -419,6 +423,7 @@ pub fn Tree::new(
     clock: @signals.signal(start, same=fn(a, b) { a == b }),
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
     pressed_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
+    words_redone: @signals.signal(0, same=fn(a, b) { a == b }),
     time,
     cause_at: -1.0,
     measure,
@@ -535,6 +540,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.sy = 0.0
       n.look.scale = 1.0
       n.look.pivot = At(0.5, 0.5)
+      n.look.drawn_as = ""
       n.went = None
       n.parent = parent
       n.slot = false
@@ -578,7 +584,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, border: 0.0, border_ink: 0L, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5) },
+        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, border: 0.0, border_ink: 0L, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), drawn_as: "" },
         parent,
         kids: [],
         owner: None,

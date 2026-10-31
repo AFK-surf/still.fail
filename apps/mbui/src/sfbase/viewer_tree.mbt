@@ -110,6 +110,33 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   // set out as it is made: the moment of what opened it
   vw.set_out(@ui.current(), src, n.cause_at())
   image_ends(n, vw)
+  // what marking made, taken as the host says it is drawn (MarkedImage::ready, its answers' signal): kept, or into the
+  // chat's draft, once (Viewer::marks_frame takes it), by this viewer while it is the one open and its layer here; a
+  // drawing another by its id, whatever it drew
+  n.reacts(
+    fn() {
+      marks_said()
+      match marking.job {
+        Some(j) => Some((j.id(), j.ready()))
+        None => None
+      }
+    },
+    fn(job) {
+      match (job, viewer.get()) {
+        (Some((_, true)), Some(v)) if physical_equal(v, vw) && !vw.closing => vw.marks_frame(@ui.current())
+        _ => ()
+      }
+    },
+  )
+  // what was asked to be saved: a chat's file's download said to the core at the moment it was asked; what was asked
+  // for before it was here saved as its whole comes; each once (Viewer::ask_save)
+  n.reacts(fn() { (vw.asked_told.get(), vw.bytes.get() is Some(_)) }, fn(_) {
+    download_told(src, vw)
+    if vw.save_after && @signals.untracked(fn() { vw.bytes.get() }) is Some(_) {
+      vw.save_after = false
+      vw.ask_save(@ui.current())
+    }
+  })
   // what it reads asked of the core as what it needs comes (its kind sniffed, its bytes, a read failed)
   n.reacts(fn() { (vw.sniffed.get(), vw.bytes.get() is Some(_), vw.error.get() is Some(_), vw.fetching.get()) }, fn(_) {
     vw.fetch(@ui.current(), src)
@@ -294,18 +321,13 @@ fn image_ends(n : @view.View, vw : Viewer) -> Unit {
 
 ///|
 /// The bars over the picture and what is said with them (viewer_layer's, for a viewer the window's tree draws): the
-/// steps to the pictures beside it, its bar (or marking's foot), what it was asked to save once its bytes came, the
-/// download told (back is its layer's: image_layer).
+/// steps to the pictures beside it, its bar (or marking's foot), what marking made said (back, what was asked to be
+/// saved, a download asked: its layer's, image_layer).
 fn image_bars(c : @ui.Ctx, src : Source, v : Viewer) -> Unit {
   // (marking as it is: the bars follow what a finger on the picture did to it)
   marks_said()
   src_now.val = src.now
-  v.marks_frame(c)
   let shown = if v.flies { v.flying() } else { v.fade.get() }
-  if v.save_after && v.bytes.get() is Some(_) {
-    v.save_after = false
-    v.ask_save(c)
-  }
   c.box(style=viewer_under, fn() {
     if !marking.on {
       c.layer(fn() { vf_steps(v, c, src, shown) }) |> ignore
@@ -324,11 +346,6 @@ fn image_bars(c : @ui.Ctx, src : Source, v : Viewer) -> Unit {
     c.layer(fn() { vf_bar(v, c, src, shown, keys=false) }) |> ignore
   })
   |> ignore
-  if v.download_asked {
-    v.download_asked = false
-    let (station, key, name, size, from) = (v.station, v.key, v.name, v.file.size, v.opened_from())
-    c.tell("download/" + name, fn() { download_start(src, station, key, name, size, from~) })
-  }
 }
 
 ///|
@@ -680,8 +697,7 @@ pub fn head_as_nodes(v : Viewer, w : Double) -> Bool {
   v.shown_kind() == Some(KImage) &&
   !v.coming() &&
   !marking.on &&
-  w <= @sf.viewer_small_w &&
-  @sf.layout(w) is Small &&
+  @sf.viewer_bar_floats(w) &&
   !@sf.native_on()
 }
 
@@ -776,10 +792,7 @@ fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, 
           },
           ink,
           round,
-          fn() {
-            vw.ask_save(@ui.current())
-            download_told(src, vw)
-          },
+          fn() { vw.ask_save(@ui.current()) },
           tip=tips,
         )
         |> ignore
@@ -803,8 +816,8 @@ fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, 
 }
 
 ///|
-/// What viewer `vw` asked the core to download, told it at the moment it was asked (image_bars' download_asked, for the
-/// floating bar's nodes), once.
+/// What viewer `vw` asked the core to download (Viewer::ask_save), told it once, at the moment it was asked
+/// (image_layer's).
 fn download_told(src : Source, vw : Viewer) -> Unit {
   if vw.download_asked {
     vw.download_asked = false

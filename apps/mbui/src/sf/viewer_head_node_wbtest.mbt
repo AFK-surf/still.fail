@@ -108,7 +108,7 @@ let head_icons : Array[String] = ["edit", "copy", "check", "download"]
 
 ///|
 /// A head (the old one's or the node's: `old`) in a window of its own, made as `s` says and taken through `steps`
-/// (each a change to what it says and how long to go on after it), what it draws and where its × is after each:
+/// (each a change to what it says and how long to go on after it; less than none, no frame after it), what it draws and where its × is after each:
 /// one window at a time (a Tester's globals its own), all of what was seen kept before another is made.
 fn head_run(
   old : Bool,
@@ -125,6 +125,10 @@ fn head_run(
   for st in steps {
     let (what, change, ms) = st
     change(s)
+    // (less than none: no frame drawn after it, what it read of it seen by what follows only)
+    if ms < 0.0 {
+      continue
+    }
     if ms > 0.0 {
       t.run_for(ms)
     } else {
@@ -275,4 +279,65 @@ test "the floating head as nodes with next to no room for its name: what is draw
     let (x, right) = g
     assert_true(right <= first + 0.01, msg="a glyph at \{x} cut at \{right}, past the first tool at \{first}: \{glyphs}")
   }
+}
+
+///|
+/// A head (`old` or the node's) in a window of its own, the system's size of words `scale` after it is first drawn:
+/// what it draws then.
+fn head_scaled(old : Bool, scale : Double) -> Array[String] raise {
+  let t = head_tester(HeadState::new("photo.png", ["copy"]), old)
+  t.set_font_scale(scale)
+  t.draw()
+  t.draw()
+  head_drawn(t).0
+}
+
+///|
+test "the floating head as nodes at the system's size of words, changed once made: its name drawn as big as the old one's, set on the pixels where it is drawn" {
+  let old = head_scaled(true, 1.3)
+  let new = head_scaled(false, 1.3)
+  let at = (0).until(if new.length() > old.length() { new.length() } else { old.length() }).find_first(fn(k) {
+    new.get(k) != old.get(k)
+  })
+  match at {
+    Some(k) => fail("bigger words: new [\{k}] \{new.get(k)} old \{old.get(k)}; \{new.length()} drawn, old \{old.length()}")
+    None => ()
+  }
+  assert_true(new != head_scaled(false, 1.0), msg="bigger than at 1")
+}
+
+///|
+test "the floating head as nodes never narrower once open: the system's size of words made bigger, then as it was: as wide as it grew to" {
+  let t = head_tester(HeadState::new("a-longer-name-of-a-file.png", ["copy"]), false)
+  let x0 = head_drawn(t).1
+  t.set_font_scale(1.3)
+  t.draw()
+  t.draw()
+  let grown = head_drawn(t).1
+  assert_true(grown.0 > x0.0, msg="bigger words: wider (its × further right) \{grown} \{x0}")
+  t.set_font_scale(1.0)
+  t.draw()
+  t.draw()
+  assert_eq(head_drawn(t).1, grown, msg="as it was: as wide as it grew to")
+}
+
+///|
+test "the floating head as nodes never narrower once open: a longer name then a shorter one, a frame between or none, as wide as the longer laid it out" {
+  let long = fn(s : HeadState) { s.name.set("a-much-longer-name-of-a-picture.png") }
+  let short = fn(s : HeadState) { s.name.set("a.png") }
+  let framed = head_run(false, "photo.png", ["copy"], [("longer", long, 0.0), ("shorter", short, 0.0)])
+  let unframed = head_run(false, "photo.png", ["copy"], [("longer", long, -1.0), ("shorter", short, 0.0)])
+  assert_eq(unframed[unframed.length() - 1].2, framed[framed.length() - 1].2, msg="its ×, no frame between, as with one")
+  assert_true(framed[2].2.0 > framed[0].2.0, msg="wider than as made: \{framed[2].2} \{framed[0].2}")
+}
+
+///|
+test "the floating head as nodes never narrower once open: tools added, then taken away, a frame between or none, as wide as with them" {
+  let more = fn(s : HeadState) { s.tools.set(["edit", "copy", "download"]) }
+  let fewer = fn(s : HeadState) { s.tools.set(["copy"]) }
+  let framed = head_run(false, "photo.png", ["copy"], [("more", more, 0.0), ("fewer", fewer, 0.0)])
+  let unframed = head_run(false, "photo.png", ["copy"], [("more", more, -1.0), ("fewer", fewer, 0.0)])
+  assert_true(framed[1].2.0 > framed[0].2.0, msg="more tools: wider \{framed[1].2} \{framed[0].2}")
+  assert_eq(framed[2].2, framed[1].2, msg="fewer, a frame between: as wide as with them")
+  assert_eq(unframed[unframed.length() - 1].2, framed[2].2, msg="fewer, no frame between: the same")
 }

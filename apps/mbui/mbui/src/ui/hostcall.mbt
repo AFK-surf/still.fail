@@ -182,6 +182,9 @@ struct FakeHost {
   /// the PNG each drawing of marks gives (Tester::marks_make: what the next is to give, else one clear pixel)
   marks_out : Array[Bytes]
   mut marks_next : Bytes?
+  /// the marks' drawings answered as the test says (Tester::marks_by_hand, Tester::marks_answer), not by the frame
+  /// after each is asked
+  mut marks_by_hand : Bool
   /// what the app handed to the system's share sheet (@ui.share), oldest first
   shares : Array[(String, String, String, Bytes)]
   /// the device's performance record (@hostapi.perf_state: -1 none kept here, 0 off, 1 on; Tester::set_perf), and
@@ -1177,6 +1180,14 @@ fn answer_told(kind : Int) -> Unit {
 /// come by the frame) and a host's that tells no events, whenever it is read.
 fn answer_here(kind : Int, id : Int) -> Bool {
   answers_told[kind].get() |> ignore
+  let by_hand = match fake.val {
+    Some(f) => kind == outside_marks && f.marks_by_hand
+    None => false
+  }
+  // (a fake host answering by hand: its word alone, as a host that tells its events)
+  if by_hand {
+    return answers_waiting.contains(outside_key(kind, id))
+  }
   fake.val is Some(_) || !outside_told.val || answers_waiting.contains(outside_key(kind, id))
 }
 
@@ -1198,7 +1209,7 @@ fn answers_by_the_frame() -> Unit {
     kinds[(k >> 32).to_int()] = true
   }
   for kind, _ in kinds {
-    if kind < answers_told.length() && kind != outside_update {
+    if kind < answers_told.length() && kind != outside_update && !(kind == outside_marks && fake.val.map_or(false, fn(f) { f.marks_by_hand })) {
       answer_told(kind)
     }
   }

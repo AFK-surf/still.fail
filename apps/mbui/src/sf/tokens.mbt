@@ -861,7 +861,7 @@ let tone_dark : Double = 0.16
 /// A ground in a tone the palette has none for (a merged pull request's purple): its ink at the theme's opacity, as
 /// green_bg is green_ink's.
 pub fn tone_ground(ink : Int64) -> Int64 {
-  alpha(ink, if current.val.dark { tone_dark } else { tone_light })
+  alpha(ink, if theme().dark { tone_dark } else { tone_light })
 }
 
 ///|
@@ -1240,8 +1240,21 @@ fn screen_layout(width : Double) -> Layout {
 /// or dark as set: call at the top of a view.
 pub fn begin(_c : @ui.Ctx) -> Theme {
   let dark = @signals.untracked(fn() { dark_set.get() }).unwrap_or(false)
+  current.val = theme_of(dark)
+  current.val
+}
+
+///|
+/// The theme light or dark as `dark` says, its sizes by the native input (begin's): what it is made of known whenever it
+/// is asked, not only as a frame begins.
+fn theme_of(dark : Bool) -> Theme {
   let touch = native_input() is Finger
-  current.val = {
+  // (one of each: the same whenever it is asked, what is made of it kept as long as it is)
+  match themes_made.get((dark, touch)) {
+    Some(t) => return t
+    None => ()
+  }
+  let t : Theme = {
     dark,
     touch,
     p: if dark { dark_palette } else { light_palette },
@@ -1253,8 +1266,18 @@ pub fn begin(_c : @ui.Ctx) -> Theme {
     items: if touch { narrow_items } else { wide_items },
     chat_list: if touch { touch_chat_list } else { mouse_chat_list },
   }
-  current.val
+  themes_made[(dark, touch)] = t
+  t
 }
+
+///|
+/// The themes made (theme_of), by light or dark and the native input.
+// kept across runs: each a value of what it is made of
+let themes_made : Map[(Bool, Bool), Theme] = {}
+
+///|
+/// Whether a ground is drawn on in place of the page's now (with_ground): the theme is current's, as it says, till then.
+let ground_over : Ref[Int] = Ref(0)
 
 ///|
 /// A link's ink: the accent's ink (its darker one on paper, its lighter one in the dark), which reads in words; the
@@ -1268,8 +1291,10 @@ pub fn link_ink() -> Int64 {
 /// the one in use on the tape: behind_ground).
 pub fn with_ground(c : @ui.Ctx, bg : Int64, body : () -> Unit) -> Unit {
   let was = current.val
-  current.val = { ..was, p: { ..was.p, bg, } }
+  current.val = { ..theme(), p: { ..theme().p, bg, } }
+  ground_over.val += 1
   c.with_theme({ ..c.theme(), bg, }, body)
+  ground_over.val -= 1
   current.val = was
 }
 
@@ -1277,7 +1302,7 @@ pub fn with_ground(c : @ui.Ctx, bg : Int64, body : () -> Unit) -> Unit {
 /// The ground of a panel behind the one in use (the tape's): the page's a step darker, what is on it as it is
 /// (pengxiao, 2026-10-25: which one is in use told apart, the words of the others as readable); `k` of the way there.
 pub fn behind_ground(k? : Double = 1.0) -> Int64 {
-  let t = current.val
+  let t = theme()
   let veil = if t.dark { behind_dark } else { behind_light }
   // (`k` of the way there: as a panel goes behind or comes in front with the tape's move)
   let a = ((veil & 0xFFL).to_double() * k).round().to_int64()
@@ -1292,11 +1317,15 @@ let behind_light : Int64 = 0x0000000AL
 let behind_dark : Int64 = 0x00000059L
 
 ///|
-/// The theme `begin` picked.
+/// The theme now: light or dark as set (read as a signal: what is made once of it follows it, at the moment it is
+/// set), its sizes by the native input; on a ground in place of the page's, that one (with_ground).
 pub fn theme() -> Theme {
-  // (read as a signal: what is made once of it filled anew as light or dark is set)
-  dark_set.get() |> ignore
-  current.val
+  let dark = dark_set.get().unwrap_or(false)
+  if ground_over.val > 0 {
+    current.val
+  } else {
+    theme_of(dark)
+  }
 }
 
 ///|
@@ -1526,7 +1555,7 @@ pub let hairline : @ui.Len = Fixed(0.5)
 /// The theme as mbui's (its Theme's roles over this frame's palette: the paper's, light or dark), with still.fail's
 /// sizes of words: what the styles' tokens are looked up in.
 pub fn ui_theme() -> @ui.Theme {
-  let t = current.val
+  let t = theme()
   // (the same one while its palette and its sizes of words are: what was built in it is as it would be built again,
   // a list's rows kept so, mbui's kept_nodes.mbt)
   match ui_theme_made.val {
@@ -2841,3 +2870,10 @@ pub let white_ink : @ui.Color = Data(0xFFFFFFFFL)
 
 ///|
 pub let white : Int64 = 0xFFFFFFFFL
+
+///|
+/// The theme of the window's tree, as @ui sees it (ui_theme of the app's theme now: theme), followed as light or dark is
+/// set; what the app tells @ui its tree is drawn in (@ui.set_tree_theme).
+pub fn ui_theme_now() -> @ui.Theme {
+  ui_theme()
+}

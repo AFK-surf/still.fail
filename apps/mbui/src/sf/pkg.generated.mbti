@@ -2040,6 +2040,8 @@ pub let track_h : @ui.Len
 
 pub fn ui_theme() -> @ui.Theme
 
+pub fn ui_theme_now() -> @ui.Theme
+
 pub fn under_bar_room() -> @ui.Space
 
 pub let under_card_words : @ui.Style
@@ -2087,6 +2089,8 @@ pub let viewer_back_icon : Double
 pub fn viewer_bar(@ui.Ctx, String, String, String, String, Bool, ViewerInk, () -> Unit, title? : String, capsule_end? : Bool) -> Bool
 
 pub let viewer_bar_blur : Double
+
+pub fn viewer_bar_floats(Double) -> Bool
 
 pub let viewer_bar_h : Double
 
