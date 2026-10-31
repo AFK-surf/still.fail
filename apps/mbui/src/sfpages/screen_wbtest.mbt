@@ -1286,3 +1286,53 @@ test "自动 asks again as the stage grows a tenth a side, not as it grows less 
   shut(r)
   screen_done(r.t)
 }
+
+///|
+test "a page asking for a passkey while driving a tab: 用通行密钥登录; signed on this device, what it signed sent; a no told the page; none on a host without passkeys" {
+  let r = screen_rig()
+  r.live(others=[])
+  let ask = fn(rp : String) -> Json {
+    {
+      "id": "7",
+      "host": rp,
+      "rpId": rp,
+      "clientData": "{\"type\":\"webauthn.get\"}",
+      "allow": ["CQk"],
+      "userVerification": "required",
+    }
+  }
+  // no passkeys on this host: nothing offered
+  r.state("live", others=[], more={ "passkey": ask("github.com") })
+  r.t.draw()
+  assert_true(r.t.find("用通行密钥登录") is None)
+  screen_fix_passkeys()
+  r.t.draw()
+  assert_true(r.t.find("用通行密钥登录") is Some(_))
+  assert_true(r.t.find("github.com") is Some(_))
+  r.tap_label("登录")
+  r.t.draw()
+  r.t.draw()
+  // asked for the site, the client data as the station made it, the passkeys it takes (hex)
+  assert_eq(@ui.fake_passkey_asks[0], ("github.com", "{\"type\":\"webauthn.get\"}", "required", "0909"))
+  let signed = r.inputs().filter(fn(i) { text(Some(i), "t") == "passkey" })
+  assert_eq(signed.length(), 1)
+  assert_eq(text(Some(signed[0]), "id"), "7")
+  assert_eq(text(Some(signed[0]), "credential"), "CQk")
+  assert_eq(text(Some(signed[0]), "authenticatorData"), "q83v")
+  assert_eq(text(Some(signed[0]), "signature"), "BwcH")
+  assert_eq(text(Some(signed[0]), "userHandle"), "BQ")
+  // answered: the station takes it away
+  r.state("live", others=[])
+  r.t.draw()
+  assert_true(r.t.find("用通行密钥登录") is None)
+  // a site the device has none for: the page told no, as a browser tells it
+  r.state("live", others=[], more={ "passkey": ask("example.org") })
+  r.t.draw()
+  r.tap_label("登录")
+  r.t.draw()
+  r.t.draw()
+  let no = r.inputs().filter(fn(i) { text(Some(i), "t") == "passkey" && text(Some(i), "error") != "" })
+  assert_eq(no.length(), 1)
+  assert_eq(text(Some(no[0]), "error"), "NotAllowedError")
+  screen_done(r.t)
+}

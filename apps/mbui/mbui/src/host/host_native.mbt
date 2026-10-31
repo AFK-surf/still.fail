@@ -1064,6 +1064,22 @@ extern "C" fn pw_out(id : Int) -> String = "mb_host_passwords_out"
 ///|
 extern "C" fn pw_end(id : Int) -> Unit = "mb_host_passwords_end"
 
+// This device's passkeys (passkeys.mbt): the platform's authenticator asked to sign (win_passkeys.c on Windows; none
+// elsewhere, where `wa_able` is 0).
+
+///|
+extern "C" fn wa_able() -> Int = "mb_host_passkeys_able"
+
+///|
+#borrow(ask)
+extern "C" fn wa_get(ask : String) -> Int = "mb_host_passkeys_get"
+
+///|
+extern "C" fn wa_out(id : Int) -> String = "mb_host_passkeys_out"
+
+///|
+extern "C" fn wa_end(id : Int) -> Unit = "mb_host_passkeys_end"
+
 // Files picked (pick.mbt; mac_app.m's open panel, android_host.c on MainActivity's pickers).
 
 ///|

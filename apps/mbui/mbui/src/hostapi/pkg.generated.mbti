@@ -2,6 +2,7 @@
 package "mbui/hostapi"
 
 import {
+  "moonbitlang/core/debug",
   "moonbitlang/core/ref",
 }
 
@@ -19,6 +20,8 @@ pub fn atlas_generation() -> Int32
 pub let atlas_plot : Int32
 
 pub fn atlas_size(Bool) -> Int32
+
+pub fn b64url_of_hex(String) -> String
 
 pub fn back_enabled(Bool) -> Unit
 
@@ -156,6 +159,8 @@ pub let haptic_reject : Int32
 
 pub let haptic_text_handle_move : Int32
 
+pub fn hex_of_b64url(String) -> String
+
 pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit
 
 pub fn host() -> &Host
@@ -255,6 +260,10 @@ pub fn open_url(String) -> Bool
 pub fn over_done(open_app~ : Bool) -> Unit
 
 pub fn own_clock() -> Bool
+
+pub fn passkey_get(String, String, Array[String], String) -> PasskeyRun?
+
+pub fn passkeys() -> Bool
 
 pub fn passwords() -> Bool
 
@@ -648,11 +657,26 @@ pub struct OpRun {
 pub fn OpRun::done(Self) -> OpDone?
 pub fn OpRun::end(Self) -> Unit
 
+pub(all) struct PasskeyDone {
+  code : Int32
+  credential : String
+  authenticator_data : String
+  signature : String
+  user_handle : String
+  err : String
+} derive(Eq, Show, @debug.Debug)
+
+pub struct PasskeyRun {
+  // private fields
+}
+pub fn PasskeyRun::done(Self) -> PasskeyDone?
+pub fn PasskeyRun::end(Self) -> Unit
+
 pub(all) struct PasswordLogin {
   id : String
   title : String
   username : String
-} derive(Eq, Show)
+} derive(Eq, Show, @debug.Debug)
 
 pub struct Pick {
   // private fields
@@ -841,6 +865,10 @@ pub(open) trait Host {
   fn pw_run(Self, String) -> Int32 = _
   fn pw_out(Self, Int32) -> String = _
   fn pw_end(Self, Int32) -> Unit = _
+  fn wa_able(Self) -> Bool = _
+  fn wa_get(Self, String) -> Int32 = _
+  fn wa_out(Self, Int32) -> String = _
+  fn wa_end(Self, Int32) -> Unit = _
   fn pk_start(Self, Int32) -> Int32 = _
   fn pk_state(Self, Int32) -> Int32 = _
   fn pk_count(Self, Int32) -> Int32 = _

@@ -15,8 +15,8 @@ import { StationBrowser } from "../src/browser/browser.ts";
 import { type Cdp, connectCdp } from "../src/browser/cdp.ts";
 import { chromeHost } from "../src/browser/chrome.ts";
 import { BEHIND } from "../src/browser/proxy.ts";
-import { COPY_BINDING, LOGIN_BINDING, jpegSize } from "../src/browser/view.ts";
-import type { Clip, LoginField } from "../src/screens/source.ts";
+import { COPY_BINDING, LOGIN_BINDING, PASSKEY_BINDING, jpegSize } from "../src/browser/view.ts";
+import type { Clip, LoginField, PasskeyAsk } from "../src/screens/source.ts";
 import { makeScreens } from "../src/screens/source.ts";
 import { platform } from "../src/platform/index.ts";
 
@@ -240,6 +240,72 @@ test("a tab's login form, for a person driving it: the field in focus said with 
     await view.fill!({ host: "127.0.0.1", username: "a@x.com", password: "correct horse" });
     assert.equal(await evaluate("u.value + '|' + p.value"), "a@x.com|correct horse");
     assert.deepEqual(await evaluate("typed"), { u: "a@x.com", p: "correct horse" }, "the page heard it as typed");
+    unwatch();
+    view.close();
+  } finally {
+    agent?.close();
+    await browser.stop().catch(() => {});
+    await browser.close();
+    server.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a tab's passkey sign-in, for a person driving it: asked with the tab's origin, answered from their app as the browser would, refused for another site, given up with the page's signal", { skip: binary === undefined && "no Chrome here" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "side-browser-passkey-"));
+  const screens = makeScreens();
+  const browser = new StationBrowser({ dir, chrome: chromeHost({ dir, headless: true }), screens });
+  // A sign-in as sites ask it: the passkeys it takes, a challenge, what came back (or why not) kept to look at.
+  const page = `<title>passkey</title><body><script>
+window.ask = (rpId, signal) => { window.got = null; navigator.credentials.get({ signal, publicKey: { challenge: new Uint8Array([1, 2, 3]), rpId, allowCredentials: [{ type: "public-key", id: new Uint8Array([9, 9]) }], userVerification: "required" } })
+  .then((c) => (window.got = { id: c.id, raw: new Uint8Array(c.rawId).join(","), client: new TextDecoder().decode(c.response.clientDataJSON), sig: new Uint8Array(c.response.signature).join(","), user: new Uint8Array(c.response.userHandle).join(","), json: c.toJSON().response.signature, real: c instanceof PublicKeyCredential }),
+        (e) => (window.got = { error: e.name })); return true; };
+</script>`;
+  const server = createServer((_, res) => res.writeHead(200, { "content-type": "text/html" }).end(page));
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as AddressInfo).port;
+  let agent: Cdp | null = null;
+  try {
+    const s = await browser.endpoint();
+    agent = await connectCdp(s.ws!);
+    const { targetId } = await agent.send("Target.createTarget", { url: `http://127.0.0.1:${port}/` });
+    const { sessionId } = await agent.send("Target.attachToTarget", { targetId, flatten: true });
+    const evaluate = async (expression: string) => (await agent!.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, sessionId)).result?.value;
+    await until(async () => (await evaluate("document.readyState")) === "complete", "the page loads");
+    const tab = await until(() => screens.get(`browser:${targetId}`), "the tab is a screen");
+    const view = await tab.open({ maxWidth: 800, maxHeight: 600, codecs: ["jpeg"] });
+    await view.next();
+    const heard: (PasskeyAsk | null)[] = [];
+    const unwatch = view.watchPasskey!((a) => heard.push(a));
+    await until(async () => (await evaluate(`typeof window.${PASSKEY_BINDING}`)) === "function", "the binding is there");
+    assert.equal(await evaluate("PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()"), true, "sites are told there is one");
+    // Asked: said with the tab's origin (not the page's word), the passkeys it takes, as the device is to sign it.
+    await evaluate(`ask("127.0.0.1")`);
+    const ask = await until(() => heard.at(-1), "the sign-in is said");
+    assert.deepEqual({ ...ask, id: "" }, { id: "", host: "127.0.0.1", rpId: "127.0.0.1", clientData: JSON.stringify({ type: "webauthn.get", challenge: "AQID", origin: `http://127.0.0.1:${port}`, crossOrigin: false }), allow: ["CQk"], userVerification: "required" });
+    // Another ask's id, or none asked: nothing; the one asked: the page has a credential as the browser makes it.
+    await view.passkey!({ id: "nope", credential: "CQk", authenticatorData: "AAAA", signature: "BwcH" });
+    assert.equal(await evaluate("window.got"), null);
+    await view.passkey!({ id: ask.id, credential: "CQk", authenticatorData: "AAAA", signature: "BwcH", userHandle: "BQ" });
+    const got = await until(() => evaluate("window.got"), "the page has its credential");
+    assert.deepEqual(got, { id: "CQk", raw: "9,9", client: ask.clientData, sig: "7,7,7", user: "5", json: "BwcH", real: true });
+    assert.equal(heard.at(-1), null, "answered: gone");
+    // A relying party the tab is not on: refused at once, nothing said.
+    const before = heard.length;
+    await evaluate(`ask("github.com")`);
+    assert.deepEqual(await until(() => evaluate("window.got"), "refused"), { error: "NotAllowedError" });
+    assert.equal(heard.length, before);
+    // Said no on the device: as the browser says it.
+    await evaluate(`ask("127.0.0.1")`);
+    const second = await until(() => (heard.length > before ? heard.at(-1) : null), "asked again");
+    await view.passkey!({ id: second.id, error: "NotAllowedError" });
+    assert.deepEqual(await until(() => evaluate("window.got"), "said no"), { error: "NotAllowedError" });
+    // Given up by the page: gone.
+    await evaluate(`window.stop = new AbortController(); ask("127.0.0.1", stop.signal)`);
+    await until(() => heard.length > before + 1 && heard.at(-1), "asked a third time");
+    await evaluate("stop.abort(); true");
+    await until(() => heard.at(-1) === null, "given up");
+    assert.deepEqual(await evaluate("window.got"), { error: "AbortError" });
     unwatch();
     view.close();
   } finally {

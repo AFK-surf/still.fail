@@ -523,6 +523,26 @@ each("a_view_brings_its_frames_with_their_bytes_and_takes_acks_key_frames_and_in
   await host.settle();
   said(host, log);
   assert.equal(log.find((m) => m.id === 10)?.error?.code, "invalid_params");
+  // A page's passkey sign-in, said to a view that drives it; answered with what this device signed, or why not.
+  const passkey = { id: "3", host: "github.com", rpId: "github.com", clientData: '{"type":"webauthn.get"}', allow: ["CQk"], userVerification: "required" };
+  v!.send(stateFrame({ passkey }));
+  await host.settle();
+  said(host, log);
+  assert.deepEqual(lastState(log, 1).passkey, passkey);
+  call(core, ui, 11, "screen.input", { view: "v", input: { t: "passkey", id: "3", credential: "CQk", authenticatorData: "AAAA", signature: "BwcH", userHandle: "BQ" } });
+  await host.settle();
+  assert.deepEqual(v!.got.at(-1), { input: { t: "passkey", id: "3", credential: "CQk", authenticatorData: "AAAA", signature: "BwcH", userHandle: "BQ" } });
+  call(core, ui, 12, "screen.input", { view: "v", input: { t: "passkey", id: "3", error: "NotAllowedError" } });
+  await host.settle();
+  assert.deepEqual(v!.got.at(-1), { input: { t: "passkey", id: "3", error: "NotAllowedError" } });
+  call(core, ui, 13, "screen.input", { view: "v", input: { t: "passkey", id: "3", credential: "CQk", authenticatorData: "AA==", signature: "BwcH" } });
+  await host.settle();
+  said(host, log);
+  assert.equal(log.find((m) => m.id === 13)?.error?.code, "invalid_params", "base64url only");
+  v!.send(stateFrame({ passkey: null }));
+  await host.settle();
+  said(host, log);
+  assert.equal(lastState(log, 1).passkey, undefined, "gone as the page gives it up");
   // The page goes: the stream closes.
   core.receive(ui, { kind: "cancel", id: 1, cancel: true });
   await host.settle();

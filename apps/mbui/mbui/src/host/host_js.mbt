@@ -715,6 +715,28 @@ fn pw_end(_id : Int) -> Unit {
 
 }
 
+// This device's passkeys (passkeys.mbt): a page signs nothing for another site.
+
+///|
+fn wa_able() -> Int {
+  0
+}
+
+///|
+fn wa_get(_ask : String) -> Int {
+  0
+}
+
+///|
+fn wa_out(_id : Int) -> String {
+  ""
+}
+
+///|
+fn wa_end(_id : Int) -> Unit {
+
+}
+
 // Files picked (pick.mbt): the page's file input (web/host.js H.pickStart), its answer told as outside kind 3.
 
 ///|
