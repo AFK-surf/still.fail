@@ -190,11 +190,8 @@ export const LOGIN_HOOK = `(() => {
     try { if (typeof window.${LOGIN_BINDING} === "function") window.${LOGIN_BINDING}(now); } catch {}
   };
   document.addEventListener("focusin", (e) => say(kind(focused(e))), true);
-  document.addEventListener("focusout", () => setTimeout(() => {
-    let el = document.activeElement;
-    while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
-    say(kind(el));
-  }, 0), true);
+  // (where the focus goes: none, or one a focusin then says itself)
+  document.addEventListener("focusout", (e) => say(kind(e.relatedTarget)), true);
   say(kind(document.activeElement));
 })()`;
 
