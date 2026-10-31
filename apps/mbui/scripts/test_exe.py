@@ -7,6 +7,8 @@
 # ended the program (an abort) is said by name, and every test asked of it that said no result is failed.
 # APP_JOBS=N: the files in N programs side by side, each taking the next file when it is done with one (dealt out
 # beforehand, by name round four, one process took 75 s while another took 21 on CI's four cores, 2026-11-01).
+# TEST_PKG: the package said with each failure (stillfail/sfapp; the flows', stillfail/sfreplay/flows, on the program
+# the replay job built itself).
 #   test_exe.py EXE INFO_JSON FILE… | FILE --index FROM-TO
 import json, os, re, subprocess, sys, threading, time
 
@@ -23,6 +25,7 @@ else:
         n = len(tests.get(f, []))
         if n:
             asked.append((f, 0, n))
+pkg = os.environ.get("TEST_PKG") or "stillfail/sfapp"
 names = {(f, t["index"]): t["name"] for f, ts in tests.items() for t in ts}
 if not asked:
     print("Total tests: 0, passed: 0, failed: 0.")
@@ -51,11 +54,11 @@ def run(part):
         msg = done.get(key)
         if msg is None:
             why = "the program ended in it" if key == started else "not run: the program ended before it"
-            failed.append(f"[stillfail/sfapp] test {key[0]}:{key[1]} ({names.get(key, '?')}) failed: {why} (exit {p.returncode})")
+            failed.append(f"[{pkg}] test {key[0]}:{key[1]} ({names.get(key, '?')}) failed: {why} (exit {p.returncode})")
         elif msg == "skipped test":
             skipped += 1
         elif msg != "":
-            failed.append(f"[stillfail/sfapp] test {key[0]}:{key[1]} ({names.get(key, '?')}) failed: {msg}")
+            failed.append(f"[{pkg}] test {key[0]}:{key[1]} ({names.get(key, '?')}) failed: {msg}")
     return marks.sub("", said).strip(), failed, skipped, time.time() - s
 
 
