@@ -21,7 +21,7 @@ import { Tabs } from "../src/browser/tabs.ts";
 import { openAgentsDoor } from "../src/tools/http.ts";
 import { McpEndpoint } from "../src/tools/mcp.ts";
 import WebSocket, { WebSocketServer } from "ws";
-import { TabView, hostOf, jpegSize, rpFor, keyCode, keyEvent, toViewport } from "../src/browser/view.ts";
+import { TabView, hostOf, jpegSize, rpFor, sameClientData, keyCode, keyEvent, toViewport } from "../src/browser/view.ts";
 import { makeScreens } from "../src/screens/source.ts";
 import { browserTools, howTo } from "../src/browser/tool.ts";
 import { asked, parseFill, parsePasskey } from "../src/mesh/screens.ts";
@@ -907,6 +907,13 @@ test("a passkey sign-in answered from a person's app: what the wire takes (base6
   assert.equal(rpFor("com", "google.com"), false, "a bare suffix");
   assert.equal(rpFor("ogle.com", "google.com"), false);
   assert.equal(rpFor("", "google.com"), false);
+  // A device's own client data (macOS writes it its way): taken only where it says what the station's said.
+  const ours = JSON.stringify({ type: "webauthn.get", challenge: "AQID", origin: "https://github.com", crossOrigin: false });
+  assert.equal(sameClientData('{"challenge":"AQID","crossOrigin":false,"origin":"https://github.com","type":"webauthn.get"}', ours), true);
+  assert.equal(sameClientData('{"type":"webauthn.get","challenge":"AQID","origin":"https://evil.example"}', ours), false);
+  assert.equal(sameClientData('{"type":"webauthn.get","challenge":"BBBB","origin":"https://github.com"}', ours), false);
+  assert.equal(sameClientData('{"type":"webauthn.get","challenge":"AQID","origin":"https://github.com","crossOrigin":true}', ours), false);
+  assert.equal(sameClientData("not json", ours), false);
 });
 
 test("a site's cookies: its own and its subdomains', set again as DevTools takes them; taken out by setting them expired", () => {

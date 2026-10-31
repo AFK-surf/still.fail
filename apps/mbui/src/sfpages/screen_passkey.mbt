@@ -1,7 +1,7 @@
 // A page's sign-in with a passkey, signed on this device (ember docs/remote-screens.md, "Signing in with a passkey"):
 // while this viewer drives a tab of a station's browser whose page asks for one, the station says the site and the
 // client data to sign (the tab's origin, as the browser has its address); the person's own device (@hostapi
-// passkeys.mbt: Windows, which asks them itself) signs it with a passkey of theirs for that site, and what it signed
+// passkeys.mbt: Windows, or a Mac whose app is entitled as a browser, which asks them itself) signs it with a passkey of theirs for that site, and what it signed
 // goes to the station to answer the page (`screen.input` passkey). A no is answered as a browser answers it.
 
 ///|
@@ -75,6 +75,10 @@ fn ScreenSess::passkey_took(self : ScreenSess) -> Unit {
     }
     if d.user_handle != "" {
       input["userHandle"] = Json::string(d.user_handle)
+    }
+    // (the device's own client data, where it made it: the station checks it says what it asked)
+    if d.client_data != "" {
+      input["clientData"] = Json::string(d.client_data)
     }
     self.input(self.src, Json::object(input))
     self.passkey_step.set("")

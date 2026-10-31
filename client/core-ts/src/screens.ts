@@ -248,8 +248,8 @@ export function checkInput(input: unknown): J {
         if (typeof input.error !== "string" || !/^[A-Za-z]{1,40}$/.test(input.error)) throw bad();
         return { t: "passkey", id: input.id, error: input.error };
       }
-      if (!b64(input.credential) || !b64(input.authenticatorData) || !b64(input.signature) || (input.userHandle !== undefined && !b64(input.userHandle))) throw bad();
-      return { t: "passkey", id: input.id, credential: input.credential, authenticatorData: input.authenticatorData, signature: input.signature, ...(input.userHandle !== undefined ? { userHandle: input.userHandle } : {}) };
+      if (!b64(input.credential) || !b64(input.authenticatorData) || !b64(input.signature) || (input.userHandle !== undefined && !b64(input.userHandle)) || (input.clientData !== undefined && !b64(input.clientData))) throw bad();
+      return { t: "passkey", id: input.id, credential: input.credential, authenticatorData: input.authenticatorData, signature: input.signature, ...(input.userHandle !== undefined ? { userHandle: input.userHandle } : {}), ...(input.clientData !== undefined ? { clientData: input.clientData } : {}) };
     }
     // A file dropped into the view, shown in the machine's file manager (a screen whose `drop` says `reveal`).
     case "reveal":

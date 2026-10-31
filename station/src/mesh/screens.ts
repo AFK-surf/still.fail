@@ -98,14 +98,14 @@ export function parseFill(v: any): LoginFill | null {
 }
 
 /// What a client's input frame answers a page's passkey sign-in with (`{t: "passkey", id, credential, authenticatorData,
-/// signature, userHandle?}`, base64url, signed by the person's own device; or `{t: "passkey", id, error}`): null when it
+/// signature, userHandle?, clientData?}`, base64url, signed by the person's own device; or `{t: "passkey", id, error}`): null when it
 /// is not that.
 export function parsePasskey(v: any): PasskeyAnswer | null {
   if (v === null || typeof v !== "object" || v.t !== "passkey" || typeof v.id !== "string" || v.id === "" || v.id.length > 32) return null;
   if (v.error !== undefined) return typeof v.error === "string" && /^[A-Za-z]{1,40}$/.test(v.error) ? { id: v.id, error: v.error } : null;
   const b64 = (x: unknown): x is string => typeof x === "string" && x !== "" && x.length <= 8192 && /^[A-Za-z0-9_-]+$/.test(x);
-  if (!b64(v.credential) || !b64(v.authenticatorData) || !b64(v.signature) || (v.userHandle !== undefined && !b64(v.userHandle))) return null;
-  return { id: v.id, credential: v.credential, authenticatorData: v.authenticatorData, signature: v.signature, ...(v.userHandle !== undefined ? { userHandle: v.userHandle } : {}) };
+  if (!b64(v.credential) || !b64(v.authenticatorData) || !b64(v.signature) || (v.userHandle !== undefined && !b64(v.userHandle)) || (v.clientData !== undefined && !b64(v.clientData))) return null;
+  return { id: v.id, credential: v.credential, authenticatorData: v.authenticatorData, signature: v.signature, ...(v.userHandle !== undefined ? { userHandle: v.userHandle } : {}), ...(v.clientData !== undefined ? { clientData: v.clientData } : {}) };
 }
 
 /// A client's `look` frame (JSON `{region, maxWidth, maxHeight}`): the part of the screen it shows (null: the whole) and

@@ -279,6 +279,18 @@ export const PASSKEY_HOOK = `(() => {
   }
 })()`;
 
+/// Whether the client data a device made of the station's (`theirs`, JSON) says what the station's says: the same type,
+/// challenge and origin, not across origins.
+export function sameClientData(theirs: string, ours: string): boolean {
+  try {
+    const a = JSON.parse(theirs);
+    const b = JSON.parse(ours);
+    return a?.type === b.type && a?.challenge === b.challenge && a?.origin === b.origin && a?.crossOrigin !== true;
+  } catch {
+    return false;
+  }
+}
+
 /// Whether a page on `host` may ask for a passkey of relying party `rpId`: the host itself, or a domain it is under
 /// that is more than one label (as browsers take it, short of the public suffix list: a site's own passkeys are kept
 /// for its own domain, and a device has none for a bare suffix).
@@ -595,7 +607,8 @@ export class TabView implements ScreenView {
   }
 
   /// Answers the page's passkey sign-in with what the person's app signed, only the one asked last, while the tab is
-  /// still on the origin it was asked on (its client data the station's own, as it was signed).
+  /// still on the origin it was asked on: its client data the station's own as it was signed, or the device's where it
+  /// made its own of it (macOS), only if that says what the station's said (its type, challenge and origin).
   async passkey(a: PasskeyAnswer): Promise<void> {
     const asked = this.#asked;
     if (this.#ended || asked === null || asked.id !== a.id) return;
@@ -606,7 +619,13 @@ export class TabView implements ScreenView {
       origin = new URL(await this.#url(this.#p.targetId)).origin;
     } catch {}
     if (origin !== asked.origin) return;
-    await this.#answer("error" in a ? a : { ...a, clientData: Buffer.from(asked.clientData).toString("base64url") });
+    if ("error" in a) return this.#answer(a);
+    let clientData = Buffer.from(asked.clientData).toString("base64url");
+    if (a.clientData !== undefined) {
+      if (!sameClientData(Buffer.from(a.clientData, "base64url").toString("utf8"), asked.clientData)) return this.#answer({ id: a.id, error: "NotAllowedError" });
+      clientData = a.clientData;
+    }
+    await this.#answer({ ...a, clientData });
   }
 
   /// The page's hook told how its ask `a.id` went.
