@@ -23,7 +23,7 @@ on:
 jobs:
   demo:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     # (the units mbc compiles kept by content, MBC_STORE: restored on every run, saved by main's alone; without them
     # each run compiled the demo, textdiff and webdemo whole, 193 s on average and 466 s at most, 2026-10-22)
     env:
@@ -99,7 +99,7 @@ jobs:
   stillfail:
     if: github.event_name == 'workflow_dispatch' && inputs.stillfail_ref != ''
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: apps/mbui/mbui

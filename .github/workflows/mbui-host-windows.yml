@@ -39,7 +39,7 @@ on:
 jobs:
   contracts:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: apps/mbui/mbui
@@ -82,7 +82,7 @@ jobs:
         run: scripts/host_contract.sh windows play
       - name: "Streams: streamdemo's H.264 (Media Foundation's decoder) and its JPEG (WIC) each said shown to its end (STREAM done)"
         if: success() || failure()
-        timeout-minutes: 10
+        timeout-minutes: 5
         run: |
           APP=streamdemo bash scripts/win.sh build >/dev/null
           mkdir -p out/host

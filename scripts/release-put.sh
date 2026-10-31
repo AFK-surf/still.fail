@@ -20,6 +20,10 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 # that DNS server gives, not through the machine's own (the proxy on the home network, whose line went down for hours twice on
 # 2026-10-21 and failed two releases' puts; directly the upload is ~4.5 MB/s against ~5.5). Unanswered: as before.
 direct=""
+# (every curl to Cloudflare's API given up when its connection is not made in 15 s or stalls under 1 KB/s for 20 s,
+# the put tried again or wrangler's after: a TLS handshake to the direct address that never finished held the curl
+# for its own default of 300 s, the release's Android and Mac puts 5 minutes each, 2026-10-31)
+limits="--connect-timeout 15 --speed-limit 1024 --speed-time 20"
 if [ -n "${STILLFAIL_DIRECT_DNS:-}" ]; then
   ip=$(dig +short +time=3 +tries=2 @"$STILLFAIL_DIRECT_DNS" api.cloudflare.com A 2>/dev/null | grep -E '^[0-9.]+$' | head -1) || ip=""
   if [ -n "$ip" ]; then direct="--resolve api.cloudflare.com:443:$ip"; echo "Cloudflare's API directly, at $ip"
@@ -29,7 +33,7 @@ fi
 account_id=${CLOUDFLARE_ACCOUNT_ID:-}
 if [ -z "$account_id" ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
   # shellcheck disable=SC2086 # direct is words
-  account_id=$(curl $direct -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts" 2>/dev/null \
+  account_id=$(curl $direct $limits -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts" 2>/dev/null \
     | grep -o '"id":"[0-9a-f]\{32\}"' | head -1 | cut -d'"' -f4) || account_id=""
 fi
 # The object put straight through Cloudflare's API, as wrangler does it, without its start-up and at the speed the line
@@ -37,7 +41,7 @@ fi
 api_put() {
   [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "$account_id" ] || return 1
   # shellcheck disable=SC2086 # direct is words
-  curl $direct -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: $3" -T "$2" \
+  curl $direct $limits -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: $3" -T "$2" \
     "https://api.cloudflare.com/client/v4/accounts/$account_id/r2/buckets/stillfail-releases/objects/$1" > /dev/null
 }
 # put <name in the bucket> <file> <content type>, tried again twice when Cloudflare's API fails on the way.
@@ -54,7 +58,7 @@ put() {
 api_get() {
   [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "$account_id" ] || return 1
   # shellcheck disable=SC2086 # direct is words
-  curl $direct -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -o "$2" \
+  curl $direct $limits -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -o "$2" \
     "https://api.cloudflare.com/client/v4/accounts/$account_id/r2/buckets/stillfail-releases/objects/$1"
 }
 get() {
@@ -67,7 +71,7 @@ get() {
 drop() {
   if [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "$account_id" ]; then
     # shellcheck disable=SC2086 # direct is words
-    curl $direct -fsS -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    curl $direct $limits -fsS -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
       "https://api.cloudflare.com/client/v4/accounts/$account_id/r2/buckets/stillfail-releases/objects/$1" > /dev/null && return 0
   fi
   (cd "$root/cloud" && pnpm exec wrangler r2 object delete "stillfail-releases/$1" --remote >/dev/null)

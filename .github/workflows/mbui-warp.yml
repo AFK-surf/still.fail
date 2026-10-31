@@ -20,7 +20,7 @@ on:
 jobs:
   put:
     runs-on: windows-2025
-    timeout-minutes: 10
+    timeout-minutes: 5
     defaults:
       run:
         shell: bash

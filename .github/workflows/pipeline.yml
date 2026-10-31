@@ -42,7 +42,7 @@ jobs:
     # deployment jobs use production secrets; local signing stays isolated.
     if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     outputs:
       range: ${{ steps.plan.outputs.range }}
       parts: ${{ steps.plan.outputs.parts }}
@@ -156,7 +156,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.natives == 'needed'
     runs-on: [self-hosted, quick]
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
       contents: write # the release native-artifacts' assets, on main only
     steps:
@@ -190,7 +190,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.windows_natives == 'true'
     runs-on: windows-2025
-    timeout-minutes: 10
+    timeout-minutes: 5
     defaults:
       run:
         shell: bash
@@ -222,7 +222,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.station == 'true'
     runs-on: windows-2025
-    timeout-minutes: 10
+    timeout-minutes: 5
     defaults:
       run:
         shell: bash
@@ -259,8 +259,8 @@ jobs:
   # mini1-5 (label quick, on mini1 too) takes only the short jobs everything else waits on: natives (what a run's
   # builds and checks need), and main's done and station-update. Behind the builds in mini1's four, natives waited
   # 4-5 minutes, and with it every job of the run, GitHub's too (2026-10-16).
-  # No job may take over 10 minutes (2026-10-16, as asked: none should; the longest, a stable Android release, ~7):
-  # one that does is stuck, and on mini1 it holds one of four runners every run waits on.
+  # No job may take over 5 minutes (2026-10-31, as asked: the aim is 3; 10 since 2026-10-16): one that does is stuck,
+  # and on mini1 it holds one of four runners every run waits on.
   # The full check (scripts/check.sh) in two jobs: the parts that need a Mac (the station with its native parts' own
   # tests, client/'s Rust) here on mini1, the rest beside it on Linux (check-linux). In each, the steps run side by
   # side, so a part the range leaves alone costs nothing. Rust builds in targets under the job's own (setup-mac,
@@ -272,7 +272,7 @@ jobs:
     # Usually under 2 minutes, all of it with Rust built anew a few: a test that hangs (one waiting on what never comes,
     # up to its 10 minutes each) held one of mini1's four runners for most of an hour, and every run behind it waited
     # (2026-10-16, station/test/mesh-handover.test.ts on branches whose mesh needed a service it did not give).
-    timeout-minutes: 10
+    timeout-minutes: 5
     env:
       STILLFAIL_CHECK_PART: station core
     steps:
@@ -313,7 +313,7 @@ jobs:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     env:
       STILLFAIL_CHECK_PART: ts
     steps:
@@ -350,7 +350,7 @@ jobs:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.browser == 'true' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -376,7 +376,7 @@ jobs:
     if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && (needs.plan.outputs.api == 'true' || needs.plan.outputs.static == 'true') }}
     # On GitHub's runners, not mini1: a dry run of half a minute that queued there behind the builds (2026-10-16).
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
@@ -391,7 +391,7 @@ jobs:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && needs.plan.outputs.station == 'true' }}
     runs-on: macos-15
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, filter: "blob:none" }
@@ -432,7 +432,7 @@ jobs:
     if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) }}
     runs-on: ubuntu-24.04
     environment: production
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
@@ -456,7 +456,7 @@ jobs:
     if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result)
     runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # the web app's build number (__BUILD__, build.json) is the commits in the history
@@ -484,7 +484,7 @@ jobs:
     outputs:
       hand: ${{ steps.hand.outputs.key }}
     environment: production
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # the release's number is the commits in the history
@@ -523,7 +523,7 @@ jobs:
     outputs:
       hand: ${{ steps.hand.outputs.key }}
     environment: production
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # versionCode is the commits in the history
@@ -561,7 +561,7 @@ jobs:
     outputs:
       hand: ${{ steps.hand.outputs.key }}
     environment: production
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # its build is the commits in the history
@@ -601,7 +601,7 @@ jobs:
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.win_beta == 'true' }}
     runs-on: windows-2025
     environment: production
-    timeout-minutes: 10
+    timeout-minutes: 5
     defaults:
       run:
         shell: bash
@@ -665,7 +665,7 @@ jobs:
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.modules == 'true' }}
     runs-on: ubuntu-24.04
     environment: production
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, filter: "blob:none" } # its version is the build of the last commit that changed what it packs
@@ -690,7 +690,7 @@ jobs:
     if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && (needs.station.result == 'success' || needs.modules.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success')
     runs-on: ubuntu-24.04
     environment: production
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, filter: "blob:none" } # the changelog's entries are numbered by the commits up to them
@@ -726,7 +726,7 @@ jobs:
     needs: [station, put]
     if: always() && !cancelled() && github.ref == 'refs/heads/main' && needs.station.result == 'success' && needs.put.result == 'success'
     runs-on: [self-hosted, quick]
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - name: studio's station takes the published release
         run: ssh -o BatchMode=yes studio 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update --beta > /tmp/ember-station-update.log 2>&1 && tail -2 /tmp/ember-station-update.log'
@@ -738,7 +738,7 @@ jobs:
     if: always() && github.ref == 'refs/heads/main' && needs.put.result == 'skipped' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result)
     runs-on: ubuntu-24.04
     environment: production
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, filter: "blob:none" } # each entry's version is the commits up to it
@@ -753,7 +753,7 @@ jobs:
     needs: [plan, natives, check, check-linux, check-browser, api, static, station, modules, android, desktop, desktop-win, put]
     if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.check-browser.result == 'success' || (needs.check-browser.result == 'skipped' && needs.plan.outputs.browser != 'true')) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result)
     runs-on: [self-hosted, quick]
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
       contents: write # only this job updates the tag deployed/beta
     steps:

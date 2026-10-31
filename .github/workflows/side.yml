@@ -21,7 +21,7 @@ jobs:
       matrix:
         part: [core-ts, station, rust]
     runs-on: [self-hosted, mini1]
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-mac
