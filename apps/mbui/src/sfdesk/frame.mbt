@@ -558,6 +558,9 @@ fn page_in(
             let moved = c.box(style=page_aside, tx=aside, fn() {
               // (the page drawn: one on its way out, a stack's move, hands no actions to the system's bars)
               drawn_page.val = Some(page)
+              if page == app.nav.top() {
+                top_drawn.val = true
+              }
               // (the workspaces as read here: what the page is built from, read by it)
               let (now, all, _, invited) = @sfbase.workspace_in_view(src)
               main_page(c, src, now.unwrap_or(w), all, invited, page)

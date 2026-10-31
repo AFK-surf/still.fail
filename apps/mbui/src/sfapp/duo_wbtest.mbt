@@ -828,3 +828,45 @@ test "Duo screen panels toggle through native events, switch without stacking an
   assert_false(@sf.presenter_visible())
   assert_eq(@sf.native_over.active, [])
 }
+
+///|
+/// How long after it is opened the other chat's view is read (the test's core: past the most a page's coming is held
+/// for, the chat then drawn with nothing read a while).
+let other_chat_read_ms : Double = 3000.0
+
+///|
+test "an iPhone Duo on its side: another chat opened, its view read a while later: the chat's actions stay in the system's bars as they were till its own come, never taken away between" {
+  reset()
+  let base = fixture("chat")
+  // (the other chat's view read other_chat_read_ms after it is asked for: past the most its coming is held for)
+  let read = @signals.signal(false)
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      if Json::object(params).stringify().contains("s-c2") && !read.get() {
+        return { value: None, error: None, version: 0 }
+      }
+      (base.topic)(name, params)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1, nav_able=true)
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
+  t.run_for(@ui.move_most_ms)
+  let before = t.nav_said()
+  assert_true(nav_icon_of(t, "page/chat/archive") is Some(_), msg=before)
+  @sffixture.fix_later(other_chat_read_ms, fn() { read.set(true) })
+  t.tap_text("首页的列表改成按天分组")
+  // (each frame till it is read: the same bars handed, the system's buttons left as they are)
+  while !read.get() {
+    t.frame()
+    if !read.get() {
+      assert_eq(t.nav_said(), before)
+    }
+  }
+  // (read: its own, the archive gone where it has nothing to archive)
+  t.run_for(@ui.move_most_ms)
+  assert_true(nav_icon_of(t, "page/chat/info") is Some(_), msg=t.nav_said())
+  assert_true(nav_icon_of(t, "page/chat/history") is Some(_), msg=t.nav_said())
+  assert_true(nav_icon_of(t, "page/chat/archive") is None, msg=t.nav_said())
+}
