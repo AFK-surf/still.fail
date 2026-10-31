@@ -653,7 +653,15 @@ fn station_permissions(c : @ui.Ctx, core : Core, address : String, p : Json?) ->
             _ => ""
           },
           goes=false,
-          lead=fn() { st_row_mark(c, grant_icon(gid)) },
+          // (a button at its end makes its first line as tall as the button: its mark across that line's middle,
+          // by its title, not the body line's above it)
+          lead=fn() {
+            if end == "open" || end == "request" {
+              c.box(style=grant_mark_by_button(), fn() { st_row_mark(c, grant_icon(gid)) }) |> ignore
+            } else {
+              st_row_mark(c, grant_icon(gid))
+            }
+          },
           tail=fn() {
             match end {
               "open" =>
@@ -692,6 +700,12 @@ fn station_permissions(c : @ui.Ctx, core : Core, address : String, p : Json?) ->
       }
     })
   })
+}
+
+///|
+/// A grant's mark's room beside a button: as tall as the button, the mark across its middle.
+fn grant_mark_by_button() -> @ui.Style {
+  @ui.style(h=Fixed(@sf.button_height()), justify=JCenter)
 }
 
 ///|

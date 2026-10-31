@@ -832,3 +832,35 @@ fn presented_in(t : @ui.Tester) -> Unit {
   let rest = @kit.sheet_rest("sf-present")
   t.run_for(if rest > t.time() { rest - t.time() } else { @ui.move_most_ms })
 }
+
+///|
+test "a station's permissions: each grant's mark across the middle of its title's line, a 申请 beside it or not" {
+  for w in [390.0, 1280.0] {
+    new_run()
+    let src = fixture("settings")
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=4000.0, platform=0)
+    @sfbase.open_page(Setting(@settings.Route::Station("ws1/st1")))
+    t.draw()
+    t.run_for(@ui.move_most_ms)
+    // (its 设置 tab: what it is let do)
+    t.tap_text("设置")
+    t.run_for(@ui.move_most_ms)
+    for g in [("monitor", "屏幕录制"), ("cursor", "辅助功能"), ("file-text", "文稿")] {
+      let title = match t.words().search_by(fn(x) { x.0 == g.1 }) {
+        Some(i) => {
+          let x = t.words()[i]
+          (x.1, x.2, x.3, x.4)
+        }
+        None => fail("no \{g.1} at \{w}")
+      }
+      // (its mark: the one just before its title, not the settings' side's of the same name)
+      let marks = t
+        .shape_boxes()
+        .filter(fn(b) { b.0.has_prefix("sf/icon/" + g.0 + "/") && b.1 < title.0 && b.1 > title.0 - 48.0 })
+      assert_true(marks.length() == 1, msg="\{g.1}'s mark at \{w}")
+      let mark = marks[0]
+      let off = (mark.2 + mark.4 / 2.0 - (title.1 + title.3 / 2.0)).abs()
+      assert_true(off < 1.0, msg="\{g.1}'s mark \{off} off its title's middle at \{w}")
+    }
+  }
+}
