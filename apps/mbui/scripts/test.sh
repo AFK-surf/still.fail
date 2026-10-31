@@ -8,6 +8,9 @@
 # files are run in side by side (5); 1, the pages' files all in one (the screen sweeps a process each beside them):
 # what one file leaves behind that a later one trips on shows best there, and check-mbui's run of the day runs them so
 # (a push's in 4). mbui's own: its scripts/test.sh.
+# APP_EXE (with APP_INFO, its tests' list, __whitebox_test_info.json): sfapp's test program built elsewhere (check-mbui's
+# app-build job's), its runs asked of it directly (scripts/test_exe.py), nothing built here. APP_BUILD_OUT: sfapp's test
+# program built only, it and its tests' list put in that directory for them.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
@@ -23,7 +26,7 @@ for t in ${TARGETS:-native}; do
   # MBC_LTO says (its link is 30-40 s a test; main's run has it on: mbui-check.yml).)
   mode="--target $t"
   # (mbui's scripts/env.sh native_tests: the C split by mbui's scripts/mbc, units kept by content in MBC_STORE)
-  if [ $t = native ]; then native_tests "$A"; mode=$NATIVE; fi
+  if [ $t = native ] && [ -z "${APP_EXE:-}" ]; then native_tests "$A"; mode=$NATIVE; fi
   # (the parts' packages in one moon test, which runs a package's tests in one executable and the packages side by
   # side. The flows in one package, src/sfreplay/flows: each test package is a program of the whole app, its C
   # compiled apart, and five of them compiled the same change five times over; on CI's four cores the replay part was
@@ -85,8 +88,16 @@ for t in ${TARGETS:-native}; do
   out=$(mktemp)
   # Built first on its own (TIMES=1, as CI's: each said with how long it took; its errors shown by the run), then run.
   s=$(date +%s)
-  moon test $mode $pkgs --build-only > /dev/null 2>&1
-  [ -z "${TIMES:-}" ] || echo "test.sh: built in $(( $(date +%s) - s )) s"
+  [ -n "${APP_EXE:-}" ] || moon test $mode $pkgs --build-only > /dev/null 2>&1
+  [ -z "${TIMES:-}" ] || [ -n "${APP_EXE:-}" ] || echo "test.sh: built in $(( $(date +%s) - s )) s"
+  # (sfapp's test program and its tests' list put where APP_BUILD_OUT says, for the jobs that run it: nothing run)
+  if [ -n "${APP_BUILD_OUT:-}" ]; then
+    b=_build/native/release/test/stillfail/sfapp
+    [ -f $b/sfapp.whitebox_test.exe ] || { moon test $mode $pkgs --build-only 2>&1 | grep -v "$F" | tail -40; exit 1; }
+    mkdir -p "$APP_BUILD_OUT" && cp $b/sfapp.whitebox_test.exe $b/__whitebox_test_info.json "$APP_BUILD_OUT/"
+    echo "test.sh: sfapp's test program put in $APP_BUILD_OUT ($(du -h $b/sfapp.whitebox_test.exe | cut -f1))"
+    exit 0
+  fi
   s=$(date +%s)
   # (moon runs a program's tests one after another: sfapp's, the screens and every screen's squeeze among them, were
   # one core's 71 s of the app part's run while the other packages' were done, 2026-10-24. Its files in SFAPP_SHARDS
@@ -211,7 +222,8 @@ for t in ${TARGETS:-native}; do
     # (a run of nothing is none: moon test of no package would be every package's)
     [ -n "${runs[i]// /}" ] || continue
     # (each run's time with TIMES: the part's run is the longest of them, and which one it is is said)
-    { moon test $mode ${runs[i]} ${UPDATE:+--update} > "$out.$i" 2>&1; c=$?
+    { if [ -n "${APP_EXE:-}" ]; then python3 "$D/test_exe.py" "$APP_EXE" "$APP_INFO" ${runs[i]} > "$out.$i" 2>&1
+      else moon test $mode ${runs[i]} ${UPDATE:+--update} > "$out.$i" 2>&1; fi; c=$?
       echo "$(( $(date +%s) - s )) s: $(run_name ${runs[i]})" > "$out.time.$i"
       exit $c; } &
     pids+=($!)

@@ -43,20 +43,20 @@ jobs:
         # slowed by the eight beside it, and the job 250-330 s with its build; scripts/test.sh app_group_of says which is
         # where. Each builds sfapp's program itself; the first the small packages' too, its units kept apart from the other three's,
         # which take its when they have none of their own yet)
+        # (sfapp's program itself built once, app-build below, and its groups' runs on it in the app job since: each
+        # of five runners compiled the same program again, 60-150 s each, more than half of a push's runner time, and
+        # four branches pushed at once waited up to 4 minutes for runners, 2026-10-31, as asked)
         include:
-          - { part: app, group: 1/4, store: app }
-          - { part: app, group: 2/4, store: app-sfapp }
-          - { part: app, group: 3/4, store: app-sfapp }
-          - { part: app, group: 4/4, store: app-sfapp }
           - { part: app, group: pkgs, store: app-pkgs }
-          - { part: app, group: contrast, store: app-sfapp }
           - { part: replay, group: "", store: replay }
     env:
+      PART: ${{ matrix.part }}
+      GROUP: ${{ matrix.group }}
       MBC_STORE: ${{ github.workspace }}/apps/mbui/_build/native/release/mbc-store
       CACHE_PREFIX: mbui-linux-store-${{ matrix.store }}-
       # (main's units under m-, a branch's under b-: a branch takes main's newest and its own, below)
       OWN: ${{ github.ref == 'refs/heads/main' && 'm-' || 'b-' }}
-    steps:
+    steps: &native-steps
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with: { node-version-file: .node-version, package-manager-cache: false }
@@ -76,8 +76,8 @@ jobs:
             apps/mbui/_build
             !${{ env.MBC_STORE }}
             !apps/mbui/_build/**/*.mbc
-          key: mbui-moon-build-${{ matrix.part }}-${{ github.sha }}
-          restore-keys: mbui-moon-build-${{ matrix.part }}-
+          key: mbui-moon-build-${{ env.PART }}-${{ github.sha }}
+          restore-keys: mbui-moon-build-${{ env.PART }}-
       # The units main's newest run kept, and on a branch its own last run's beside them (a store by content: the two
       # together, nothing of one replaces the other's). A branch's own alone, after it took main's newer commits in
       # (a rebase), compiled again all main had changed since: 253 s of the app part where its push before was 82 s
@@ -92,7 +92,7 @@ jobs:
           # (and the three app runners that build sfapp's program alone take the first's, a superset, until they have kept theirs)
           restore-keys: |
             ${{ env.CACHE_PREFIX }}m-
-            mbui-linux-store-${{ matrix.part }}-m-
+            mbui-linux-store-${{ env.PART }}-m-
       - if: github.ref != 'refs/heads/main'
         run: |
           mkdir -p "$MBC_STORE"
@@ -109,7 +109,7 @@ jobs:
           mkdir -p "$MBC_STORE"
           cp -a -n "$RUNNER_TEMP/store-main/." "$MBC_STORE/"
           echo "units: $(find "$MBC_STORE" -mindepth 2 -maxdepth 2 -type d | wc -l) (main's $(find "$RUNNER_TEMP/store-main" -mindepth 2 -maxdepth 2 -type d | wc -l))"
-      - name: The mbui app's tests and the flows seen again (native, ${{ matrix.part }})
+      - name: The mbui app's tests and the flows seen again (native, ${{ env.PART }})
         id: tests
         run: |
           set -o pipefail
@@ -123,9 +123,13 @@ jobs:
           # as asked. Once a day in one process (SFAPP_SHARDS=1), their files one after another: what one file leaves
           # behind that a later one trips on shows there, which shards' fewer files each partly hide. The screen
           # sweeps a process each beside them either way, test.sh)
-          TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} APP_GROUP=${{ matrix.group }} SFAPP_SHARDS=${{ github.event_name == 'schedule' && 1 || 4 }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+          TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ env.PART }} APP_GROUP=${{ env.GROUP == 'build' && '1/4' || env.GROUP }} APP_BUILD_OUT=${{ env.GROUP == 'build' && format('{0}/app-test', runner.temp) || '' }} SFAPP_SHARDS=${{ github.event_name == 'schedule' && 1 || 4 }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+      # (sfapp's test program and its tests' list, for the app job's runs)
+      - if: env.GROUP == 'build'
+        uses: actions/upload-artifact@v4
+        with: { name: "mbui-app-test-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/app-test", retention-days: 1, compression-level: 1 }
       - name: The mbui app's check (detlint, then native type-checked)
-        if: matrix.part == 'replay'
+        if: env.PART == 'replay'
         # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23. On the replay
         # part's runner: the app part was 184-187 s with it, the replay part 77-100 s, 2026-10-24)
         run: moon version && bash apps/mbui/scripts/check.sh
@@ -158,7 +162,7 @@ jobs:
             apps/mbui/_build
             !${{ env.MBC_STORE }}
             !apps/mbui/_build/**/*.mbc
-          key: mbui-moon-build-${{ matrix.part }}-${{ github.sha }}
+          key: mbui-moon-build-${{ env.PART }}-${{ github.sha }}
       # What failed, and in which commit, where everyone sees it (main is pushed to directly too: red, said whose)
       - name: What failed
         if: failure()
@@ -166,12 +170,65 @@ jobs:
           failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-test.log" | sed 's/^\[stillfail\] test //; s/ failed.*//' | sort -u)
           why=$(grep -a '^flow: \|assert_idle: not' "$RUNNER_TEMP/mbui-test.log" | grep -v 'not checked idle' | sort -u | head -10)
           subject=$(git log -1 --format='%h %an: %s' "$GITHUB_SHA")
-          echo "::error title=check-mbui (${{ matrix.part }}${{ matrix.group && format(' {0}', matrix.group) || '' }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
+          echo "::error title=check-mbui (${{ env.PART }}${{ env.GROUP && format(' {0}', env.GROUP) || '' }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
           {
-            echo "### check-mbui (${{ matrix.part }}${{ matrix.group && format(' {0}', matrix.group) || '' }}) failed at $subject"
+            echo "### check-mbui (${{ env.PART }}${{ env.GROUP && format(' {0}', env.GROUP) || '' }}) failed at $subject"
             echo
             echo '```'
             printf '%s\n' "${failed:-(no test named: the check or the build failed, see the log)}"
+            echo '```'
+            [ -z "$why" ] || { echo '```'; printf '%s\n' "$why" | cut -c1-300; echo '```'; }
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # sfapp's test program built once (scripts/test.sh APP_BUILD_OUT), its units kept as the native job keeps its own
+  app-build:
+    name: native (app build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      PART: app
+      GROUP: build
+      MBC_STORE: ${{ github.workspace }}/apps/mbui/_build/native/release/mbc-store
+      CACHE_PREFIX: mbui-linux-store-app-sfapp-
+      OWN: ${{ github.ref == 'refs/heads/main' && 'm-' || 'b-' }}
+    steps: *native-steps
+
+  # sfapp's tests, the app part's groups (scripts/test.sh app_group_of), each run on the program app-build made
+  # (APP_EXE: nothing built here, no MoonBit, no units: a checkout, the program, the runs)
+  app:
+    name: native (app ${{ matrix.group }})
+    needs: app-build
+    runs-on: ubuntu-24.04
+    # (a push's 5 minutes; the day's, its pages in one process, 10)
+    timeout-minutes: ${{ github.event_name == 'push' && 5 || 10 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1/4, 2/4, 3/4, 4/4, contrast]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with: { name: "mbui-app-test-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/app-test" }
+      - name: The mbui app's tests (native, app ${{ matrix.group }}, on app-build's program)
+        id: tests
+        run: |
+          set -o pipefail
+          chmod +x "$RUNNER_TEMP/app-test/sfapp.whitebox_test.exe"
+          APP_EXE="$RUNNER_TEMP/app-test/sfapp.whitebox_test.exe" APP_INFO="$RUNNER_TEMP/app-test/__whitebox_test_info.json" \
+            TIMES=1 TARGETS=native PARTS=app APP_GROUP=${{ matrix.group }} SFAPP_SHARDS=${{ github.event_name == 'schedule' && 1 || 4 }} LINES_OUT=40 \
+            bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+      - name: What failed
+        if: failure()
+        run: |
+          failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-test.log" | sed 's/^\[stillfail[^]]*\] test //; s/ failed.*//' | sort -u)
+          why=$(grep -a '^flow: \|assert_idle: not' "$RUNNER_TEMP/mbui-test.log" | grep -v 'not checked idle' | sort -u | head -10)
+          subject=$(git log -1 --format='%h %an: %s' "$GITHUB_SHA")
+          echo "::error title=check-mbui (app ${{ matrix.group }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
+          {
+            echo "### check-mbui (app ${{ matrix.group }}) failed at $subject"
+            echo
+            echo '```'
+            printf '%s\n' "${failed:-(no test named: see the log)}"
             echo '```'
             [ -z "$why" ] || { echo '```'; printf '%s\n' "$why" | cut -c1-300; echo '```'; }
           } >> "$GITHUB_STEP_SUMMARY"

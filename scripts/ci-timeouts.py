@@ -23,6 +23,7 @@ LONGER = {
     ("mbui-android-sdk.yml", "put"): 10,
     ("mbui.yml", "windows"): 10,
     ("mbui-check.yml", "native"): 10,
+    ("mbui-check.yml", "app"): 10,
     ("prebuild.yml", "build"): 10,
     ("prebuild.yml", "again"): 10,
     ("mbui-testflight.yml", "release"): 10,
