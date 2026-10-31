@@ -158,6 +158,23 @@
   // a file held (Picked.held) taken by whoever sends it up: its File, let go here
   H.heldFile = (h) => { const f = heldFiles.get(h); heldFiles.delete(h); return f || null; };
 
+  // ---- the page shown and in front (host_native.mbt set_app_state): 1 its tab shown, | 2 it has the focus ----
+  H.setAppState = (f) => {
+    let was = -1;
+    const tellState = () => {
+      const now = (document.visibilityState === 'visible' ? 1 : 0) | (document.hasFocus() ? 2 : 0);
+      if (now === was) return;
+      was = now;
+      f(now);
+      H.requestFrame();
+    };
+    document.addEventListener('visibilitychange', tellState);
+    window.addEventListener('focus', tellState);
+    window.addEventListener('blur', tellState);
+    window.addEventListener('pageshow', tellState);
+    queueMicrotask(tellState);
+  };
+
   // ---- notifications (src/hostapi/notify.mbt): the browser's, while the page is open ----
   // One per tag (the browser replaces one of the same tag); a click brings the page to the front and gives `opens` to
   // the app (noticeText(0), once). Asked only from a press, as the browser lets a page ask.
