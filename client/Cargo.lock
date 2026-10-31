@@ -1549,7 +1549,7 @@ dependencies = [
 [[package]]
 name = "iroh"
 version = "1.0.3"
-source = "git+https://github.com/zzj3720/iroh?rev=165853e0213a3676ec5293e577e338b19dde87a9#165853e0213a3676ec5293e577e338b19dde87a9"
+source = "git+https://github.com/zzj3720/iroh?rev=fddee95da13c92e0ff700d64fc47f474b4d2a62c#fddee95da13c92e0ff700d64fc47f474b4d2a62c"
 dependencies = [
  "backon",
  "blake3",
@@ -1704,7 +1704,7 @@ dependencies = [
 [[package]]
 name = "iroh-relay"
 version = "1.3.0"
-source = "git+https://github.com/zzj3720/iroh?rev=165853e0213a3676ec5293e577e338b19dde87a9#165853e0213a3676ec5293e577e338b19dde87a9"
+source = "git+https://github.com/zzj3720/iroh?rev=fddee95da13c92e0ff700d64fc47f474b4d2a62c#fddee95da13c92e0ff700d64fc47f474b4d2a62c"
 dependencies = [
  "blake3",
  "bytes",
