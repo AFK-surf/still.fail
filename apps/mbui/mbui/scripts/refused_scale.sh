@@ -10,12 +10,13 @@
 #                                       past their call (rc 0, "not refused" said)
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
+# (as test_native builds them, --release by the C step: its programs, built by it already, run again, none built anew)
 cd "$D/.." || exit 2
 out=$(mktemp -d)
 w=0
 said='drawn 0.5 as big: View::scale holds no old view'
 run() { # scene out
-  MBUI_REFUSED=$1 moon test --target native src/view/scale_test.mbt > "$2" 2>&1
+  MBUI_REFUSED=$1 moon_test_native src/view/scale_test.mbt > "$2" 2>&1
 }
 built() { # out: no compiler's error in it
   ! grep -aq 'Error: \[\|error\[\|^error:' "$1"
@@ -61,7 +62,7 @@ trap 'rm -rf "$out"' EXIT
 for s in hosted-in-scaled scale-over-hosted hosted-shown scaled-by; do
   refused $s
 done
-moon test --target native src/view/scale_test.mbt > "$out/plain.txt" 2>&1; r=$?
+moon_test_native src/view/scale_test.mbt > "$out/plain.txt" 2>&1; r=$?
 echo "== the file's ordinary run rc=$r $(grep -a 'Total tests' "$out/plain.txt" | tail -1)"
 [ $r -ne 0 ] && w=1
 exit $w

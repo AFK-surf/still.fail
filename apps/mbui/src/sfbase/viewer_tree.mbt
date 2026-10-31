@@ -12,14 +12,20 @@
 //     changes, at that moment; what is beside it read ahead as that is said;
 //   - in it, what draws the picture (an old view taking a press only on what it has to press: a mark's pin, the words
 //     written; the picture where its zoom has it as the frame draws it, its flight, the pictures beside it), and over
-//     it the bars (an old view taking a press only where they have something to press).
+//     it the bars: the floating bar on a small screen, its picture whole and not marked, nodes of its own
+//     (image_head, head_as_nodes: its tools, their tips); the rest an old view taking a press only where it has
+//     something to press (the bar across the top of a wide screen, a small one wider than a phone, the bar while the
+//     picture comes, marking's, the ways to the pictures beside it).
 //
 // It sets out as the node is made (that moment its cause's: the thumbnail tapped), and is done at its ways' declared
 // ends (moments on the node's timeline): landed, the thumbnail shows again; gone, it is let go.
 //
-// Still the old view's here (the way there): what the bars do (their own presses, Esc and back: a press on one taken
-// as the bars' view builds, so what draws the picture follows it at the next frame), the flight in and out (where it
-// flies from, recorded as it is drawn; the thumbnail's place read of the old layout).
+// What a download, a save or marking's picture asks is done by the layer at its cause (image_layer), whichever bar
+// asked.
+//
+// Still the old view's here (the way there): what those old bars do (their own presses, Esc and back: a press on one
+// taken as the bars' view builds, so what draws the picture follows it at the next frame), the flight in and out
+// (where it flies from, recorded as it is drawn; the thumbnail's place read of the old layout).
 
 ///|
 /// How many times what draws the picture and the bars over it have been built, each (what a change built again).
