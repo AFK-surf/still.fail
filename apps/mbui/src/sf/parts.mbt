@@ -3810,15 +3810,19 @@ pub fn ask_line_button(
   let look = theme().chat_list
   // (its words as far in from its end as the bell's from the row's start: the bell's room in its disc's column)
   let side = (ask_line_disc() - mark) / 2.0
-  let b = c.box(
-    style=@ui.style(mt=room(-out), mb=room(-out), mr=room(-out)),
-    dir=Row,
-    h=Px(h),
-    padx=out + side,
+  let room_of = @ui.style(
+    row=true,
+    h=Fixed(h),
+    px=room(out + side),
+    mt=room(-out),
+    mb=room(-out),
+    mr=room(-out),
+    radius=Full,
     align=ACenter,
-    bg=alpha(theme().p.hover, lit),
-    radius=h / 2.0,
-    opacity=seen,
+    bg=Data(alpha(theme().p.hover, lit)),
+  )
+  let b = c.box(
+    style=room_of,
     id=if live { id } else { 0 },
     fn() {
       // (its ink the quiet one's, the line's own under the hand, over dur_ms)
@@ -3827,6 +3831,7 @@ pub fn ask_line_button(
       c.text(label, style=ask_line_words(words)) |> ignore
     },
   )
+  c.look(b, @ui.look(alpha=seen))
   c.semantics(b, Button, id=if live { id } else { 0 }, label~, disabled=!live)
   live && c.clicked(id)
 }
