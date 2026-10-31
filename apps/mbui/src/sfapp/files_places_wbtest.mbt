@@ -4,7 +4,7 @@
 ///|
 /// The app over the fixture `w` by `h`, as `platform` plays it (2: a phone's system, a finger; 0: a Mac's, a mouse).
 fn places_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture("home")
   @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
 }
@@ -51,7 +51,7 @@ test "文件's places with a finger: rows a size up, as a finger's list has them
 ///|
 test "文件 at the phone's stack's root: a station's row opened shows its places (drive.folders, read once); pushed over Home, back to it" {
   let calls : Array[Made] = []
-  reset()
+  new_run()
   let base = fixture("home")
   let src : Source = {
     ..base,

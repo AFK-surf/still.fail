@@ -18,7 +18,7 @@ fn screen_links_core(
   calls : Array[Made],
   over? : (String, Topic) -> Topic = fn(_, t) { t },
 ) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture("chat-screens")
   let src : Source = {
     ..base,

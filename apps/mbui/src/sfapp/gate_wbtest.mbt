@@ -27,7 +27,7 @@ fn gate_tester(
   answer? : (String, Json) -> Result[Json, Json] = fn(_, _) { Ok(Json::object({})) },
   step? : Ref[@sfbase.SignInStep] = Ref::new(Idle),
 ) -> @ui.Tester raise {
-  reset()
+  new_run()
   let base = fixture(mode)
   let src : Source = {
     ..base,

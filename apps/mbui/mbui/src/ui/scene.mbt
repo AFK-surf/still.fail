@@ -895,11 +895,13 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   // a layer (overlay.mbt): what is over everything under it (Ctx::paint_top) stays under it, and what is so in it is
   // put over the rest of it
   let layer = self.nodes[i].portal
-  // a stratum over what flies (strata.mbt): what flies put off under it, painted now
-  if layer || self.nodes[i].mark != 0 {
+  // a stratum over what flies (strata.mbt): what flies put off under it, painted now (none of it where the targets
+  // alone are found: drawn nothing)
+  let drawing = dr.mode != mode_hits
+  if drawing && (layer || self.nodes[i].mark != 0) {
     self.land_flying()
   }
-  if layer {
+  if drawing && layer {
     self.raise_tops()
   }
   let h0 = self.next_hit_ids.length()
@@ -927,7 +929,7 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if inst_owners_kept() {
     inst_owners.painting = was
   }
-  if layer {
+  if drawing && layer {
     self.raise_tops()
   }
   let id = self.nodes[i].id
@@ -941,6 +943,11 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
 fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   // drawn by its look, tapped as laid out (draw.mbt), when it has one
   if dr.any && self.drawn_paint(i, alpha_in) {
+    return
+  }
+  // (its input targets alone: Ctx::targets)
+  if dr.mode == mode_hits {
+    self.node_targets(i, alpha_in)
     return
   }
   let n = self.nodes[i]
@@ -1069,12 +1076,9 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   }
   // a modal's ground: the wheel stops at it too (overlay.mbt); and what says it stops it (Ctx::stop_wheel), what
   // scrolls in it (laid in it, later) still taking it first
-  if (n.blocks || n.stops_wheel) && n.id != 0 && n.bones == 0L {
-    self.next_scroll_ids.push(n.id)
-    self.next_scroll_rects.push(dmax(n.x, cx0))
-    self.next_scroll_rects.push(dmax(n.y, cy0))
-    self.next_scroll_rects.push(dmin(n.x + n.fw, cx1))
-    self.next_scroll_rects.push(dmin(n.y + n.fh, cy1))
+  // (said with the frame's targets where they are found alone: Ctx::node_targets)
+  if !dr.targets_said && stops_wheel(n) {
+    self.scroll_target(n, cx0, cy0, cx1, cy1)
   }
   if n.bones != 0L && (n.shapes.length() > 0 || n.lines.length() > 0) {
     // an icon, a drawing, in a page's bones: its shape
@@ -1118,16 +1122,8 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     return
   }
   if n.kind == kind_editor {
-    // its words more than it shows: what the wheel and a finger scroll there, as a box kept to a height (sideways.mbt)
-    match sideways.get(n.id) {
-      Some(sw) if sw.max > 0.0 => {
-        self.next_scroll_ids.push(n.id)
-        self.next_scroll_rects.push(dmax(n.x, cx0))
-        self.next_scroll_rects.push(dmax(n.y, cy0))
-        self.next_scroll_rects.push(dmin(n.x + n.fw, cx1))
-        self.next_scroll_rects.push(dmin(n.y + n.fh, cy1))
-      }
-      _ => ()
+    if !dr.targets_said && editor_scrolls(n) {
+      self.scroll_target(n, cx0, cy0, cx1, cy1)
     }
     self.paint_editor(n, alpha)
     return
@@ -1144,19 +1140,8 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     self.paint_page(n, alpha)
     return
   }
-  if n.kind == kind_list ||
-    (
-      n.id != 0 &&
-      (pagers.contains(n.id) ||
-      drags.contains(n.id) ||
-      captures.contains(n.id) ||
-      sideways.contains(n.id))
-    ) {
-    self.next_scroll_ids.push(n.id)
-    self.next_scroll_rects.push(dmax(n.x, cx0))
-    self.next_scroll_rects.push(dmax(n.y, cy0))
-    self.next_scroll_rects.push(dmin(n.x + n.fw, cx1))
-    self.next_scroll_rects.push(dmin(n.y + n.fh, cy1))
+  if !dr.targets_said && scrolls(n) {
+    self.scroll_target(n, cx0, cy0, cx1, cy1)
   }
   let clipped = n.clip
   if clipped {
@@ -1326,6 +1311,9 @@ fn inst_fade_moved_across(a : FixedArray[Double], b : Int, ox : Double, sx : Dou
 ///|
 /// `id`, the target said last (Ctx::push_hit), is only pointed at (Ctx::box `points`), said as it is painted.
 fn Ctx::point_said(self : Ctx, id : Int) -> Unit {
+  if dr.targets_said {
+    return
+  }
   self.next_points[id] = true
   self.next_point_hits.push(self.next_hit_ids.length() - 1)
 }

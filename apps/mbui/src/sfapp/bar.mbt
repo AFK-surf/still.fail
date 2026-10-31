@@ -2188,10 +2188,10 @@ fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
       }))
       // (a finger taken where the glass is drawn at its moment: under the panel's top as far open as it is then; above it,
       // what is under the bar's)
-      .takes(fn(_x, y, at) {
+      .takes(fn(w, h, at) {
         match told() {
-          Some(t) => y >= bar_glass_top(bar_laid(t).reach, bar.o.value_at(at))
-          None => false
+          Some(t) => [(0.0, bar_glass_top(bar_laid(t).reach, bar.o.value_at(at)), w, h)]
+          None => []
         }
       })
       .gesture(
@@ -2245,7 +2245,7 @@ fn bar_glass_node(v : @view.View, src : Source, ws : () -> Workspace?) -> Unit {
             }
           }))
           // (taken only where the notch is drawn open at its moment: closing, the panel up, what is under it the panel's)
-          .takes(fn(_x, _y, at) { bar.k_at(at) > 0.9 })
+          .takes(fn(w, h, at) { if bar.k_at(at) > 0.9 { [(0.0, 0.0, w, h)] } else { [] } })
           .on_press(fn() {
             match ws() {
               Some(w) =>

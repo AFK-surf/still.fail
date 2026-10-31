@@ -63,15 +63,27 @@ pub fn Pick::of(self : Pick, key : String) -> Bool {
 /// then (the view takes it, Ctx::take_press, and says so to the hand).
 pub fn Pick::hold(self : Pick, c : @ui.Ctx, key : String, id : Int, may? : Bool = true) -> Bool {
   let press = c.press()
-  let holding = may && press.down && !press.moved && c.press_within(id)
-  // (asked each frame, so that a press let go starts again from nothing; a frame asked for when it will have)
-  let held = after(c, key + "/hold", holding && self.press != press.frame, @ui.long_press_ms)
-  if !held {
-    return false
+  // (where it went down: a hold a cover over it handed on, held long already, let go since or not (Ctx::handed_hold);
+  // else the press still down there, as long since it went down, its own moment (a frame asked for when it will
+  // have been), once a press)
+  let at = match c.handed_hold() {
+    Some(xy) if may && c.press_within(id) => Some(xy)
+    _ =>
+      if may &&
+        press.down &&
+        !press.moved &&
+        c.press_within(id) &&
+        self.press != press.frame &&
+        c.held_for(@ui.long_press_ms) {
+        Some((press.x, press.y))
+      } else {
+        None
+      }
   }
+  guard at is Some((px, py)) else { return false }
   match c.words_of(key) {
     Some(w) if w.text != "" => {
-      let (s, e) = w.word_at(w.offset_at(press.x, press.y))
+      let (s, e) = w.word_at(w.offset_at(px, py))
       self.key = key
       self.a = s
       self.b = e

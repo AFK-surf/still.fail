@@ -61,7 +61,7 @@ fn someone(id : String, name : String) -> Person {
 
 ///|
 test "people stacked: side by side 5 over the one before, the first drawn over them all, ringed in their ground" {
-  reset()
+  new_run()
   let src = fixture("home")
   // (their colours: Lin's the sixth, Mo's the fifth)
   let people = [someone("lin", "Lin"), someone("mo", "Mo")]
@@ -83,7 +83,7 @@ test "people stacked: side by side 5 over the one before, the first drawn over t
 
 ///|
 test "a row's people (sfpages' RowAside, a finger's 18): each 3 over the one before, the one who started the chat drawn over the rest, a pixel of the row's ground round each" {
-  reset()
+  new_run()
   let src = fixture("home")
   let person = fn(id : String, name : String) -> Json {
     { "id": id.to_json(), "shown": { "name": name.to_json(), "display": name.to_json(), "mine": false.to_json() } }

@@ -2214,6 +2214,9 @@ pub fn Ctx::pointer_velocity(self : Ctx) -> (Double, Double) {
 ///|
 /// Which of the hit targets `rects` (in paint order, cut by `clips`) is topmost at (x, y): its index, -1 none.
 /// `pressed`: the one a press there goes to, past those only pointed at (Ctx::box's `points`).
+/// Those from `from` on alone; what is only pointed at, what passes the pointer on, each one's marks (parallel to `ids`)
+/// and the bars, as `points`, `passes`, `marks` and `bars` say (the targets given out last, by default: those `ids`
+/// are, where they are the frame's).
 fn hit_at(
   ids : Array[Int],
   rects : Array[Double],
@@ -2221,13 +2224,16 @@ fn hit_at(
   x : Double,
   y : Double,
   pressed? : Bool = false,
+  from? : Int = 0,
+  points? : Map[Int, Bool] = g().points,
+  passes? : Map[Int, Bool] = g().passes,
+  marks? : Array[Int],
+  bars? : Array[BarAt] = g().bars,
 ) -> Int {
-  let points = g().points
-  let passes = g().passes
   // (the frame's targets: an old view's only where the window's tree lets it take input now, view_host.mbt)
   let hits = physical_equal(ids, g().hit_ids)
   let mut k = ids.length() - 1
-  while k >= 0 {
+  while k >= from {
     let r = k * 4
     if !(pressed && points.contains(ids[k])) &&
       !passes.contains(ids[k]) &&
@@ -2243,10 +2249,13 @@ fn hit_at(
   }
   // a column's edge drawn over a list's bar: the bar's thumb, shown, takes the pointer where it is (its edge the edge's
   // elsewhere: a strip either side of its line, as the web's)
-  if k > 0 && as_drawn(ids[k]) {
-    let bars = g().bars
+  let drawn_only = match marks {
+    Some(m) => k >= 0 && k < m.length() && marks_drawn(m[k])
+    None => k >= 0 && as_drawn(ids[k])
+  }
+  if k > from && drawn_only {
     let mut j = k - 1
-    while j >= 0 {
+    while j >= from {
       let r = j * 4
       if x >= rects[r] &&
         x < rects[r + 2] &&
@@ -2260,14 +2269,24 @@ fn hit_at(
       j = j - 1
     }
   }
-  k
+  if k < from {
+    -1
+  } else {
+    k
+  }
 }
 
 ///|
 /// Whether target `id` is pressed only where it is drawn, no room grown round it (press_reach, rooms.mbt): a column's
 /// edge, its pointer's shape a resize (the user, 2026-10-28: 左右各 6px, 同 web).
 fn as_drawn(id : Int) -> Bool {
-  match marked_cursor(hit_marks(id)) {
+  marks_drawn(hit_marks(id))
+}
+
+///|
+/// The same, by its marks.
+fn marks_drawn(marks : Int) -> Bool {
+  match marked_cursor(marks) {
     Some(k) => k == Cursor::ResizeX.code() || k == Cursor::ResizeY.code()
     None => false
   }
@@ -2462,6 +2481,10 @@ fn Ctx::push_hit(
 ) -> Bool {
   if x0 > x1 || y0 > y1 {
     return false
+  }
+  // (the frame's targets found already, as its targets alone: said once, Ctx::targets)
+  if dr.targets_said {
+    return true
   }
   self.next_hit_ids.push(id)
   self.next_hit_marks.push(marks)

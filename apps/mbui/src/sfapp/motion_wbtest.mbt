@@ -4,7 +4,7 @@
 ///|
 test "Home: a chat with news goes to the top: it closes where it was and opens there, never across the rows it passes" {
   // (the clock set after reset, which puts the fixture's own back)
-  reset()
+  new_run()
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
@@ -43,7 +43,7 @@ fn home_moving(t : @ui.Tester) -> Array[String] {
 ///|
 test "Home: back from a chat to the list changed meanwhile, the list drawn as it is: nothing in it moves" {
   // (Home.kt: the list composed anew as it is come back to, its ListMotion new: nothing moves the first time)
-  reset()
+  new_run()
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
@@ -70,7 +70,7 @@ test "Home: back from a chat to the list changed meanwhile, the list drawn as it
 
 ///|
 test "Home: a new chat its station makes keeps its row (its clientKey): it neither leaves nor comes in" {
-  reset()
+  new_run()
   let made = Ref::new(false)
   let base = fixture("home")
   let src = {
@@ -148,7 +148,7 @@ test "Home: a row swiped off is archived once it has gone, and leaves no copy of
 ///|
 test "words sent fly from the field into their bubble" {
   // the fixture's own station takes what is sent: the outbox at once, the message after
-  reset()
+  new_run()
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
@@ -190,7 +190,7 @@ test "words sent fly from the field into their bubble" {
 
 ///|
 test "words sent: the composer stays as it was while they are in it, and comes down as they let go of it, not from under them" {
-  reset()
+  new_run()
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
@@ -231,7 +231,7 @@ test "words sent: the composer stays as it was while they are in it, and comes d
 
 ///|
 test "words sent set out from where they were typed and land where their message has them, set alike all the way" {
-  reset()
+  new_run()
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
@@ -270,7 +270,7 @@ test "words sent set out from where they were typed and land where their message
 
 ///|
 test "words sent break their lines in their message where the composer broke them: a paragraph goes a line a piece" {
-  reset()
+  new_run()
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
@@ -294,7 +294,7 @@ test "words sent break their lines in their message where the composer broke the
 
 ///|
 test "Home: the first rows, after the list waited, come as they are and a tap on one opens it at once" {
-  reset()
+  new_run()
   let src = fixture("home")
   let waiting = Ref::new(true)
   let src = {

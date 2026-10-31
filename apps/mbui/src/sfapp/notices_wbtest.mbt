@@ -73,7 +73,7 @@ fn notify_core(
   show? : Array[Json] = [],
   env? : Array[(String, String)] = [],
 ) -> @ui.Tester {
-  reset()
+  new_run()
   use_system(sys)
   let base = fixture("home")
   let src : Source = {

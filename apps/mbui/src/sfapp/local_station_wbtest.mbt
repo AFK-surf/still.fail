@@ -59,7 +59,7 @@ test "添加这台 Mac names the station after this machine, its .local cut" {
 ///|
 test "添加这台 Mac refused by the cloud: said why, nothing installed" {
   let calls : Array[Made] = []
-  reset()
+  new_run()
   let base = fixture("home")
   let src : Source = {
     ..base,
@@ -175,7 +175,7 @@ fn desktop_apps_station(more : Map[String, Json]) -> String {
 
 ///|
 test "built in still.fail's desktop app's place, the station that app ran here is made a service as it is" {
-  reset()
+  new_run()
   let src = fixture("home")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, env=[("MBUI_OWN", "1")])
   t.set_local_station(desktop_apps_station({}))
@@ -200,7 +200,7 @@ test "a station carried on only when still.fail's desktop app alone ran it" {
   ]
   for one in left {
     let (why, more) = one
-    reset()
+    new_run()
     let src = fixture("home")
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, env=[("MBUI_OWN", "1")])
     t.set_local_station(desktop_apps_station(more))
@@ -210,7 +210,7 @@ test "a station carried on only when still.fail's desktop app alone ran it" {
     }
   }
   // nor by an app of its own (still.fail mbui), whatever is here
-  reset()
+  new_run()
   let src = fixture("home")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
   t.set_local_station(desktop_apps_station({}))

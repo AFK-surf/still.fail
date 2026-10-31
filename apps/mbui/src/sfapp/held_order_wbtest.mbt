@@ -23,7 +23,7 @@ fn held_ids(days : Array[@sfbase.ChatDay]) -> Array[String] {
 
 ///|
 test "a held list's order is the very same while nothing comes, made again only as something does" {
-  reset()
+  new_run()
   let key = "held/test"
   let first = held_view(["a", "b"])
   let shown = @sfbase.held_order(key, first.days, false)

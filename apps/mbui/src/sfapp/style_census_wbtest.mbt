@@ -50,7 +50,7 @@ test "styles: how many values of each kind the app's screens use" {
     for dark in ["", "-dark"] {
       for size in style_ref_sizes {
         let (_, w, h) = size
-        reset()
+        new_run()
         @settings.reset()
         let src = fixture(s.0 + dark)
         let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=platform_of(w))

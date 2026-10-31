@@ -1047,6 +1047,11 @@ fn Ctx::moved_now(self : Ctx, n : Node, w : Double, h : Double) -> Unit {
 }
 
 ///|
+/// How many times something drawn was moved off where it was by what moves it (Ctx::moved_shift), so far.
+// kept across runs: only ever counted on
+let moves_said : Ref[Int] = Ref(0)
+
+///|
 /// As the frame is painted (frame_paint), before anything of it: each node moved by what moves it (Ctx::moved_by) where
 /// that has it at the frame's time, it and all it holds placed there as laid out: what that reads followed by the
 /// paint, so that a frame where only it changed is painted again so, nothing built nor laid out (frame_watch.mbt). As
@@ -1074,6 +1079,8 @@ fn Ctx::moved_place(self : Ctx) -> Unit {
 /// Node `i` and all it holds, as laid out, placed `dx` across and `dy` down from where they are: what is placed with them
 /// as they are laid out too (a field's words, where they start: layout.mbt's commit).
 fn Ctx::moved_shift(self : Ctx, i : Int, dx : Double, dy : Double) -> Unit {
+  // (what is where moved: the frame's targets found again, Ctx::view_targets)
+  moves_said.val = moves_said.val + 1
   let n = self.nodes[i]
   n.x = n.x + dx
   n.y = n.y + dy

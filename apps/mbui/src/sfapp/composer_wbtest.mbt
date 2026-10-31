@@ -25,7 +25,7 @@ fn fake_core(
   ups? : Map[String, Json] = Map::new(),
   platform? : Int = 2,
 ) -> @ui.Tester {
-  reset()
+  new_run()
   // the drafts the fake core has named (its `draft.put`)
   let drafts_named = Ref(0)
   let base = fixture("chat")
@@ -310,7 +310,7 @@ test "a message held: its words quoted into the draft, with a line for a comment
 /// A picture sent while it went up said only 正在上传 under it, however long it took (2026-10-26): how far, as the core
 /// says it, once it has been on its way a while.
 test "a message going up says how far it has gone" {
-  reset()
+  new_run()
   let src = fixture("chat-uploading")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -323,7 +323,7 @@ test "a message going up says how far it has gone" {
 
 ///|
 test "the fixture's station: sending, then the message, then an answer; a failure, then 重试" {
-  reset()
+  new_run()
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
@@ -555,7 +555,7 @@ test "the list keeps clear the room the composer takes in the very frame it grow
 
 ///|
 test "at its end, a row that comes at it: the core told the end is not in view while the list glides to it, then that it is" {
-  reset()
+  new_run()
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let base = fixture("chat")
@@ -680,7 +680,7 @@ test "a swipe from the left edge with ＋'s sheet up does not take the chat away
 
 ///|
 test "words sent fly to their own row though an older page with the viewer's messages comes in before the core has them" {
-  reset()
+  new_run()
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let base = fixture("chat")

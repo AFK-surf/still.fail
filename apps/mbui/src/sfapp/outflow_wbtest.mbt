@@ -4,7 +4,7 @@
 
 ///|
 test "a station's settings list the programs granted its data, and revoking one asks first" {
-  reset()
+  new_run()
   @settings.reset()
   @settings.fixture_outflow(true)
   let src = fixture("settings")
@@ -28,7 +28,7 @@ test "a station's settings list the programs granted its data, and revoking one 
 
 ///|
 test "a station's settings with no program granted its data ask nothing of it" {
-  reset()
+  new_run()
   @settings.reset()
   let src = fixture("settings")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=2400.0, platform=2)
@@ -42,7 +42,7 @@ test "a station's settings with no program granted its data ask nothing of it" {
 
 ///|
 test "an admin allows a program what they leave of what it asks, once the summary of it is confirmed" {
-  reset()
+  new_run()
   @settings.reset()
   @settings.fixture_outflow(true)
   let src = fixture("settings")

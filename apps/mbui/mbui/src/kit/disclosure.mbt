@@ -35,7 +35,7 @@ pub fn collapsible(
     let i = c.box(id=pick(disabled, 0, id), fn() {
       look(c, { label, open: now, hovered: r.hovered, focus_shown: r.focus_shown, disabled })
     })
-    c.semantics(i, Button, id~, label~, expanded=now, disabled~, actions=pick(disabled, [], [@ui.Activate]))
+    c.semantics(i, Button, id~, label~, expanded=now, disabled~, actions=pick(disabled, [], [@ui.Action::Activate]))
     unfolding(c, key, now, label, body)
   })
   |> ignore
@@ -172,7 +172,7 @@ pub fn accordion(
           look(c, { label: it.label, open: on, hovered: r.hovered, focus_shown: r.focus_shown, disabled: it.disabled })
         })
         c.semantics(i, Button, id=iid, label=it.label, expanded=on, disabled=it.disabled, actions=pick(it.disabled, [], [
-          @ui.Activate,
+          @ui.Action::Activate,
         ]))
         unfolding(c, key + "/" + it.value, on, it.label, fn() {
           c.box(padx=10.0, pb=12.0, fn() { (it.body)() }) |> ignore
@@ -235,7 +235,7 @@ pub fn tabs(
                 })
               })
               c.semantics(i, Tab, id=tid, label=it.label, selected=on, disabled=it.disabled, actions=pick(it.disabled, [], [
-                @ui.Activate,
+                @ui.Action::Activate,
               ]))
             }
           })

@@ -640,7 +640,7 @@ test "the keys row short of room on a phone: Esc and the arrows in it, the least
   // back: ⌥ held, in the row with Esc
   r.tap_label(tr("common.more"))
   assert_true(r.labelled("Esc") is Some(_))
-  let opt = r.t.get(@ui.Button, label=tr("android-misc.screen.key.option"))
+  let opt = r.t.get(@ui.Role::Button, label=tr("android-misc.screen.key.option"))
   assert_eq(opt.pressed, Some(true))
   // nothing over another, nothing cut
   assert_eq(r.t.squeeze_faults(), [])

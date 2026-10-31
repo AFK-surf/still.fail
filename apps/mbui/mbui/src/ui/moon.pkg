@@ -1,5 +1,6 @@
 import {
   "mbui/codec",
+  "mbui/paint",
   "mbui/pixels",
   "mbui/hostapi",
   "mbui/text",

@@ -87,6 +87,18 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       None => false
     }
   }))
+  // (its keys, at their moment, where nothing over it (a menu, a field being written in) takes them first)
+  .on_key(fn(k) { vw.key_on(src, k) })
+  // (back: leaving marking first, else closing it; a sheet, a menu over it, theirs first: Ctx::back_taker)
+  .takes_back(fn() {
+    if !vw.closing {
+      if marking.on {
+        marks_back(@ui.current())
+      } else {
+        vw.shut(@ui.current())
+      }
+    }
+  })
   |> ignore
   vw.in_tree = true
   n.owns(fn() {
@@ -275,7 +287,7 @@ fn image_ends(n : @view.View, vw : Viewer) -> Unit {
 ///|
 /// The bars over the picture and what is said with them (viewer_layer's, for a viewer the window's tree draws): the
 /// steps to the pictures beside it, its bar (or marking's foot), what it was asked to save once its bytes came, the
-/// download told, back.
+/// download told (back is its layer's: image_layer).
 fn image_bars(c : @ui.Ctx, src : Source, v : Viewer) -> Unit {
   // (marking as it is: the bars follow what a finger on the picture did to it)
   marks_said()
@@ -300,16 +312,14 @@ fn image_bars(c : @ui.Ctx, src : Source, v : Viewer) -> Unit {
       })
       |> ignore
     }
-    c.layer(fn() { vf_bar(v, c, src, shown) }) |> ignore
+    // (its keys its node's: Viewer::key_on)
+    c.layer(fn() { vf_bar(v, c, src, shown, keys=false) }) |> ignore
   })
   |> ignore
   if v.download_asked {
     v.download_asked = false
     let (station, key, name, size, from) = (v.station, v.key, v.name, v.file.size, v.opened_from())
     c.tell("download/" + name, fn() { download_start(src, station, key, name, size, from~) })
-  }
-  if !v.closing {
-    c.take_back(fn() { if marking.on { marks_back(c) } else { v.shut(c) } })
   }
 }
 
@@ -622,4 +632,32 @@ fn Viewer::image_let_go(
       v.toggle()
     }
   }
+}
+
+///|
+/// A key to viewer `vw` (its layer's: View::on_key), at its moment: Escape leaves marking (the marks it was making) or
+/// else closes it; ← and → step to the picture before and after; the zoom's keys zoom (viewer_zoom_key). True where it
+/// took the key; closing, it takes none.
+fn Viewer::key_on(self : Viewer, src : Source, k : @view.Key) -> Bool {
+  let v = self
+  if v.closing {
+    return false
+  }
+  let c = @ui.current()
+  if k.code == @ui.key_escape && k.mods == 0 {
+    if marking.on {
+      marks_back(c)
+    } else {
+      v.shut(c)
+    }
+    return true
+  }
+  if marking.on || v.shown_kind() != Some(KImage) || (k.mods & (@ui.mod_cmd | @ui.mod_ctrl | @ui.mod_alt)) != 0 {
+    return false
+  }
+  if k.code == @ui.key_code_left || k.code == @ui.key_code_right {
+    v.go(c, src, if k.code == @ui.key_code_left { -1 } else { 1 }, 0.0)
+    return true
+  }
+  @sf.viewer_zoom_key(v.zoom, k.code, k.mods, k.at)
 }

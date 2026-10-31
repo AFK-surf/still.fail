@@ -159,7 +159,7 @@ test "station screen submenu stays reachable outside its hover card and opens a 
   assert_true(t.find("Studio 的屏幕") is Some(_))
   t.key(@ui.key_code_left)
   t.frame()
-  assert_true(t.query(@ui.MenuItem, label="Studio 的屏幕") is None)
+  assert_true(t.query(@ui.Role::MenuItem, label="Studio 的屏幕") is None)
   t.tap_text("屏幕")
   t.run_for(@kit.presence_in_ms)
   t.tap_text("Studio 的屏幕")
@@ -172,7 +172,7 @@ test "station screen submenu stays reachable outside its hover card and opens a 
 
 ///|
 test "station tabs show their page beside the chat, preserve folders and release hidden screens" {
-  reset()
+  new_run()
   let calls : Array[Made] = []
   let cancelled : Array[Int] = []
   let base = fixture("chat")
@@ -220,7 +220,7 @@ test "station tabs show their page beside the chat, preserve folders and release
 
 ///|
 test "a screen beside a chat goes to a window of its own from the panel's bar (a desktop's), its tab closed here" {
-  reset()
+  new_run()
   let cancelled : Array[Int] = []
   let base = fixture("chat")
   let src : Source = {
@@ -262,7 +262,7 @@ test "a screen beside a chat goes to a window of its own from the panel's bar (a
 
 ///|
 test "共享调试 opened from a wide chat: beside it in a tab, the chats' sidebar and the chat staying as they are" {
-  reset()
+  new_run()
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
@@ -284,7 +284,7 @@ test "共享调试 opened from a wide chat: beside it in a tab, the chats' sideb
 
 ///|
 test "a login screen opened beside a chat closes its tab when the login browser is gone" {
-  reset()
+  new_run()
   let base = fixture("chat")
   let receive : Ref[((Json, Bytes?) -> Unit)?] = Ref(None)
   let src : Source = {

@@ -361,9 +361,22 @@ fn Ctx::move_focus(self : Ctx, id : Int, roved? : Bool = false) -> Unit {
 ///|
 /// An arrow, Home or End with the focus in a roving group: the focus along it. False when it is not the group's.
 fn Ctx::rove(self : Ctx, code : Int) -> Bool {
+  match self.roved_to(code) {
+    Some(id) => {
+      self.move_focus(id, roved=true)
+      true
+    }
+    None => false
+  }
+}
+
+///|
+/// Where an arrow, Home or End takes the focus along its roving group (Ctx::rove), if it is the group's: none where it
+/// is not, or the focus is in no group, or where a modal layer of the window's tree keeps it from input.
+fn Ctx::roved_to(self : Ctx, code : Int) -> Int? {
   // (none where a modal layer of the window's tree keeps the focus from input: Ctx::focus_allowed)
   if self.focus_allowed() == 0 {
-    return false
+    return None
   }
   let mut gid = 0
   for f in self.last_focusables {
@@ -372,11 +385,11 @@ fn Ctx::rove(self : Ctx, code : Int) -> Bool {
     }
   }
   if gid == 0 {
-    return false
+    return None
   }
   let gr = match self.groups.get(gid) {
     Some(gr) => gr
-    None => return false
+    None => return None
   }
   let items = self.group_items(gid)
   let n = items.length()
@@ -413,14 +426,13 @@ fn Ctx::rove(self : Ctx, code : Int) -> Bool {
   } else if code == key_end {
     n - 1
   } else if step == 0 {
-    return false
+    return None
   } else if gr.wrap {
     (at + step + n) % n
   } else {
     imax(0, imin(n - 1, at + step))
   }
-  self.move_focus(items[next].id, roved=true)
-  true
+  Some(items[next].id)
 }
 
 ///|
@@ -510,6 +522,30 @@ fn Ctx::focus_takes(self : Ctx, code : Int) -> Bool {
           code == key_page_up ||
           code == key_page_down
         ))
+    }
+  }
+  false
+}
+
+///|
+/// Whether what has the focus (where it may take input: Ctx::focus_allowed) takes key `code` (`mods` held) as its own,
+/// as the keys are taken (Ctx::focus_frame_start: no modifier; an arrow, Home or End along its roving group, Ctx::rove;
+/// Enter or Space it is pressed by, Ctx::press_focused; the arrows, Home, End, PageUp and PageDown of what says they are
+/// its own, own_arrows): what else would have the key first leaves it to it.
+fn Ctx::focus_keeps(self : Ctx, code : Int, mods : Int) -> Bool {
+  let focus = self.focus_allowed()
+  if focus == 0 || mods != 0 {
+    return false
+  }
+  if self.roved_to(code) is Some(_) {
+    return true
+  }
+  for f in self.last_focusables {
+    if f.id == focus && !self.layer_inert(f.layer) {
+      return (code == key_enter && (f.keys & press_enter) != 0) ||
+        (code == key_space && (f.keys & press_space) != 0) ||
+        ((f.keys & own_arrows) != 0 &&
+        [key_left, key_right, key_up, key_down, key_home, key_end, key_page_up, key_page_down].contains(code))
     }
   }
   false

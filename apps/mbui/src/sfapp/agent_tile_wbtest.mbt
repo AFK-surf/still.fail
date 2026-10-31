@@ -4,7 +4,7 @@
 
 ///|
 test "the joined maker's hover ground is uncovered and square at the seam" {
-  reset()
+  new_run()
   let src = fixture("chat-info")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=900.0, platform=0)
@@ -27,7 +27,7 @@ test "the joined maker's hover ground is uncovered and square at the seam" {
 ///|
 /// The fixture's chat open in a tablet's wide frame (touch), and its agent's tile: the one button saying its history.
 fn tile_on_tablet() -> (@ui.Tester, @ui.SemNode) raise {
-  reset()
+  new_run()
   let src = fixture("chat-info")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=900.0, platform=2)

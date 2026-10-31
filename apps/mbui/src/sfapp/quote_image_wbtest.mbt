@@ -6,7 +6,7 @@
 /// The chat open at its end (on `platform`'s screen: Android's, a finger), then a row up at a time until the image
 /// `name` is drawn; where it is.
 fn image_in_chat(name : String, platform? : Int = 2, w? : Double = 390.0) -> (@ui.Tester, Double, Double) {
-  reset()
+  new_run()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform~)
@@ -92,7 +92,7 @@ test "an image quoted: its picture in its card in the composer; sent, it grows f
 test "a video quoted: its still in its card in the composer; sent, it grows from there to its box in the message, never there at once" {
   // what was seen: its box in the message drawn whole as it set out from the composer, its card's ground still growing
   // round it on its way up
-  reset()
+  new_run()
   let src : Source = { ..fixture("chat-download"), poster: fn(_, _, name) { fixture_file(name) } }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")
@@ -126,7 +126,7 @@ test "a video quoted: its still in its card in the composer; sent, it grows from
 
 ///|
 test "an agent's video and file card right clicked: 引用 quotes each, its file named, nothing played or opened" {
-  reset()
+  new_run()
   let src = fixture("chat-download")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")

@@ -744,3 +744,44 @@ test "a menu asked for after its node moved, no frame between: only where it is 
   assert_true(t.menu_at(30.0, 30.0, 110.0))
   assert_eq(seen.map(fn(m) { (m.x, m.y, m.at) }), [(10.0, 10.0, 110.0)])
 }
+
+///|
+let activate_flip_ms : Double = 50.0
+
+///|
+let activate_ask_ms : Double = 100.0
+
+///|
+/// A node taking presses as `on` says, flipped by a moment of its own at activate_flip_ms, no frame between; pressed as
+/// a screen reader asks at activate_ask_ms, asked of the tree outside any event: how many times it was.
+fn activated_after_flip(on_first : Bool) -> Int {
+  let on = @signals.signal(on_first, same=fn(x, y) { x == y })
+  let pressed = Ref(0)
+  let node : Ref[@view.View?] = Ref(None)
+  let t = @view.Tree::new(
+    fn(root) {
+      node.val = Some(
+        root.box(fn(b) {
+          b
+          .width(Is(Some(80.0)))
+          .height(Is(Some(40.0)))
+          .presses(By(fn() { on.get() }))
+          .on_press(fn() { pressed.val = pressed.val + 1 })
+          .says(Is(Some(@view.said(Button, label="按钮"))))
+          |> ignore
+          b.at_moment(activate_flip_ms, fn() { on.set(!on_first) }) |> ignore
+        }),
+      )
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  t.activate_at(node.val.unwrap().id(), activate_ask_ms) |> ignore
+  pressed.val
+}
+
+///|
+test "a node pressed as a screen reader asks at a moment, outside any event: what was due before it done first, as it is then" {
+  assert_eq(activated_after_flip(true), 0)
+  assert_eq(activated_after_flip(false), 1)
+}

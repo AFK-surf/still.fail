@@ -31,7 +31,7 @@ test "a strip too thin for its box takes its own share of it, centred; any other
 
 ///|
 test "a letterboxed strip waiting to load: what it waits on is its share of its box, not the whole box" {
-  reset()
+  new_run()
   // (a picture the station never answers: waited on the whole run)
   let src : Source = { ..fixture("chat"), file: fn(_, _, _) { "never/line.png" } }
   let m = message_of({
@@ -68,7 +68,7 @@ test "a letterboxed strip waiting to load: what it waits on is its share of its 
 
 ///|
 test "a strip sent flies to its picture's place in the message, letterboxed there, on no ground" {
-  reset()
+  new_run()
   let path = "uploads/fx/line.png"
   let f : SendFlight = {
     chat: "ws1/st1:s-c1",
@@ -126,7 +126,7 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
 
 ///|
 test "an image sent while it goes up flies on to its place once it is up: its message knows it by its upload, before and after" {
-  reset()
+  new_run()
   // the message's file: going up (its path its upload's), then up (the station's), the same upload throughout (the
   // core's views.ts goingUp, uploadOf)
   let shot : Ref[Attachment] = {

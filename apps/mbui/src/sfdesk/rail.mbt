@@ -157,7 +157,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
   } else if wide.tape {
     @sf.rail_ground_radius(@sf.tape_side_corners()[3], @sf.rail_in_tape() + rail_ground_in)
   } else {
-    @sf.rail_ground_radius(Window, closed_bar_in + rail_closed_ground_in, alone=in_bar.radius())
+    @sf.rail_ground_radius(Window, closed_bar_in + rail_closed_ground_in, alone=in_bar.radius(@ui.corner_roots()))
   }
   // (what it stands on: the marks hung on its grounds' corners on discs of it)
   rail_under.val = dock_ground(bar)

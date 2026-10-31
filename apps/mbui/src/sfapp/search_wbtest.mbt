@@ -3,7 +3,7 @@
 ///|
 /// Home with the search open, its field come up (the list scrolled to it first: it starts out of view).
 fn search_tester() -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture("home")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.scroll_to(0)
@@ -196,7 +196,7 @@ test "nothing found; still being looked for, what could not be, what the core sa
 
 ///|
 test "what was found opens where the core says (SearchItem.open): a file read, a service its chat and its page, a station its page" {
-  reset()
+  new_run()
   let base : FoundItem = {
     kind: "file",
     key: "f",

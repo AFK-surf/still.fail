@@ -21,7 +21,7 @@ let kept_rows_still_ms : Double = 70.0
 /// Chat `mode` opened `w` by `h`: on 小屏 (a phone's width), on 中屏's tape (the page brought over the sidebar), or on
 /// 大屏 (a desktop's window, 1000 wide or more: with a mouse).
 fn kept_rows_open(mode : String, w : Double, h : Double) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let large = w >= 1000.0

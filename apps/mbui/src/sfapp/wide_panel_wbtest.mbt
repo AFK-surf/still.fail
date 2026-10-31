@@ -3,7 +3,7 @@
 
 ///|
 test "wide: the chat's \"…\" opens under its button; agent 往来 from it opens beside the chat; the panel closes and opens" {
-  reset()
+  new_run()
   let src = fixture("chat-letters-info")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
@@ -36,7 +36,7 @@ test "wide: the chat's \"…\" opens under its button; agent 往来 from it open
 
 ///|
 test "wide: an agent's history's head as the web's: its control, 只看收发 leaving its steps out, 详情 folding" {
-  reset()
+  new_run()
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
@@ -67,7 +67,7 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
 
 ///|
 test "wide: a quota running out beside an agent's history's control is whole however narrow its head: the control's parts leave first, its figure never cut" {
-  reset()
+  new_run()
   let base = fixture("chat")
   // (its agent's account's weekly window running out, as the core says it beside the control)
   let note : Json = {
@@ -120,7 +120,7 @@ test "wide: a quota running out beside an agent's history's control is whole how
 
 ///|
 test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: chat.tabs.open); a row's 添加到消息 into its message" {
-  reset()
+  new_run()
   let calls : Array[Made] = []
   let base = fixture("chat")
   let src : Source = {
@@ -178,7 +178,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
 
 ///|
 test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, closed and opened by its bar's button; a row's 添加到消息 into its draft" {
-  reset()
+  new_run()
   let calls : Array[Made] = []
   let base = fixture("newchat-files")
   let src : Source = {
@@ -221,7 +221,7 @@ test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, clos
 
 ///|
 test "wide: the side panel's tabs are the core's (chat.tabs.*): an agent's history before 任务, the last left in front, the panel's switch closes them all" {
-  reset()
+  new_run()
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
@@ -247,7 +247,7 @@ test "wide: the side panel's tabs are the core's (chat.tabs.*): an agent's histo
 
 ///|
 test "wide: the side panel slides in from the pane's right edge over 280 ms and out over 240, the chat narrowing and widening with it (useSidePanel)" {
-  reset()
+  new_run()
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
@@ -280,7 +280,7 @@ test "wide: the side panel slides in from the pane's right edge over 280 ms and 
 
 ///|
 test "wide: an agent's history asked as a page (a link's ?history=…&entry=…) is its chat with the history beside it (ChatPage.tsx history)" {
-  reset()
+  new_run()
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
@@ -318,7 +318,7 @@ fn slack_only(base : Source) -> Source {
 
 ///|
 test "wide: a chat of a Slack thread alone has its \"…\" too: where it is, its agents, the way to it in Slack" {
-  reset()
+  new_run()
   let src = slack_only(fixture("chat"))
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)

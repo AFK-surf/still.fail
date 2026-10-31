@@ -226,7 +226,7 @@ fn menu_panel(
                     id: iid,
                   })
                 })
-                let actions = pick(e.disabled, [], [@ui.Activate])
+                let actions = pick(e.disabled, [], [@ui.Action::Activate])
                 match e.kind {
                   Check(v) =>
                     c.semantics(row, MenuItemCheckbox, id=iid, label=e.label, check=pick(v, On, Off), disabled=e.disabled, actions~)

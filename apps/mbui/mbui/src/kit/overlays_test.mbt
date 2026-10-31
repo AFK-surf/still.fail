@@ -16,12 +16,12 @@ test "dialog: opened by its trigger, the page hidden under it, the focus in it; 
   t.tab()
   t.press("Enter")
   assert_true(open.val)
-  let d = t.get(@ui.Dialog, label="Edit profile")
+  let d = t.get(@ui.Role::Dialog, label="Edit profile")
   assert_eq(d.description, "Your name as others see it")
   assert_true(d.modal)
   // the page under it is out of the tree; the focus went to its first
-  assert_true(t.query(@ui.Button, label="Edit profile") is None)
-  assert_true(t.get(@ui.TextField, label="Name").focused)
+  assert_true(t.query(@ui.Role::Button, label="Edit profile") is None)
+  assert_true(t.get(@ui.Role::TextField, label="Name").focused)
   // Tab stays in it: the field, Save, the close button, round
   t.tab()
   t.tab()
@@ -31,7 +31,7 @@ test "dialog: opened by its trigger, the page hidden under it, the focus in it; 
   t.press("Escape")
   assert_false(open.val)
   t.draw()
-  assert_true(t.query(@ui.Dialog) is None)
+  assert_true(t.query(@ui.Role::Dialog) is None)
   assert_eq(t.focused().unwrap().label, "Edit profile")
 }
 
@@ -49,7 +49,7 @@ test "dialog: a press outside it closes it, as its close button does; one inside
   open.val = true
   t.frame()
   t.draw()
-  t.click(@ui.Button, label="关闭")
+  t.click(@ui.Role::Button, label="关闭")
   assert_false(open.val)
 }
 
@@ -65,7 +65,7 @@ test "alert dialog: opens on cancel (Enter does not do it), a press outside leav
     }
   })
   t.draw()
-  assert_eq(t.get(@ui.AlertDialog, label="Delete the chat?").description, "It cannot be undone")
+  assert_eq(t.get(@ui.Role::AlertDialog, label="Delete the chat?").description, "It cannot be undone")
   assert_eq(t.focused().unwrap().label, "取消")
   t.tap(5.0, 5.0)
   assert_true(open.val)
@@ -75,7 +75,7 @@ test "alert dialog: opens on cancel (Enter does not do it), a press outside leav
   open.val = true
   t.frame()
   t.draw()
-  t.click(@ui.Button, label="Delete")
+  t.click(@ui.Role::Button, label="Delete")
   assert_false(open.val)
   assert_eq(done.val, 1)
 }
@@ -90,19 +90,19 @@ test "popover: beside its trigger, the focus in it; its trigger toggles it, a pr
     }
     open.val = popover(c, "pop", open.val, tr.id, label="Filters", fn() { button(c, "Apply") |> ignore }).value
   })
-  t.click(@ui.Button, label="Filters")
+  t.click(@ui.Role::Button, label="Filters")
   assert_true(open.val)
   t.draw()
-  let (_, ty, _, th) = t.get(@ui.Button, label="Filters").rect
-  let (_, py, _, _) = t.get(@ui.Dialog, label="Filters").rect
+  let (_, ty, _, th) = t.get(@ui.Role::Button, label="Filters").rect
+  let (_, py, _, _) = t.get(@ui.Role::Dialog, label="Filters").rect
   assert_true(py >= ty + th)
   // not modal: the page stays in the tree
-  assert_true(t.query(@ui.Button, label="Filters") is Some(_))
+  assert_true(t.query(@ui.Role::Button, label="Filters") is Some(_))
   assert_eq(t.focused().map(fn(s) { s.label }), Some("Apply"))
   // its trigger closes it (a press on it is not outside)
-  t.click(@ui.Button, label="Filters")
+  t.click(@ui.Role::Button, label="Filters")
   assert_false(open.val)
-  t.click(@ui.Button, label="Filters")
+  t.click(@ui.Role::Button, label="Filters")
   assert_true(open.val)
   t.tap(380.0, 800.0)
   assert_false(open.val)
@@ -118,7 +118,7 @@ test "popover: it comes from 97% and clear, the first time it opens too; it goes
     }
     open.val = popover(c, "pop", open.val, tr.id, label="Filters", fn() { c.text("Unread only") |> ignore }).value
   })
-  t.click(@ui.Button, label="Filters")
+  t.click(@ui.Role::Button, label="Filters")
   // half way in (pop_ms on the ease-out): smaller and fainter than it is
   t.run_for(pop_ms / 2.0)
   let (sx, sy, alpha) = t.look_of("Unread only").unwrap()
@@ -127,7 +127,7 @@ test "popover: it comes from 97% and clear, the first time it opens too; it goes
   t.run_for(pop_ms)
   assert_eq(t.look_of("Unread only"), Some((1.0, 1.0, 1.0)))
   // closed by its trigger: going (half way out: smaller and fainter, pop_out_ms), then gone
-  t.click(@ui.Button, label="Filters")
+  t.click(@ui.Role::Button, label="Filters")
   assert_false(open.val)
   t.run_for(@kit.pop_out_ms / 2.0)
   let (sx, _, alpha) = t.look_of("Unread only").unwrap()
@@ -148,11 +148,11 @@ test "popover: not taking the focus, it stays where it was (a field typed in kee
     open.val = popover(c, "pop", open.val, tr.id, label="Filters", focus=false, fn() { button(c, "Apply") |> ignore })
       .value
   })
-  t.click(@ui.Button, label="Filters")
+  t.click(@ui.Role::Button, label="Filters")
   let before = t.focused().map(fn(s) { s.label })
   t.draw()
   assert_true(open.val)
-  assert_true(t.query(@ui.Dialog, label="Filters") is Some(_))
+  assert_true(t.query(@ui.Role::Dialog, label="Filters") is Some(_))
   assert_eq(t.focused().map(fn(s) { s.label }), before)
   assert_true(before != Some("Apply"))
   t.key(@ui.key_escape)
@@ -170,7 +170,7 @@ test "tooltip: shown once the pointer has rested on its trigger; at once by the 
     })
     |> ignore
   })
-  let (x, y, w, h) = t.get(@ui.Button, label="Bold").rect
+  let (x, y, w, h) = t.get(@ui.Role::Button, label="Bold").rect
   // (taken at its moment)
   let moved = t.time()
   t.move(x + w / 2.0, y + h / 2.0)
@@ -181,7 +181,7 @@ test "tooltip: shown once the pointer has rested on its trigger; at once by the 
   t.run_for(due - t.time())
   assert_true(shown.val)
   t.draw()
-  ignore(t.get(@ui.Tooltip, label="Bold (⌘B)"))
+  ignore(t.get(@ui.Role::Tooltip, label="Bold (⌘B)"))
   // a press shuts it until the pointer leaves
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_false(shown.val)
@@ -209,10 +209,10 @@ test "tooltip: not through a dialog over its trigger: the pointer rests on the d
     |> ignore
     open.val = dialog(c, "d", open.val, "Hello", w=200.0, fn() { c.text("Inside") |> ignore }).value
   })
-  let (x, y, w, h) = t.get(@ui.Button, label="Bold").rect
+  let (x, y, w, h) = t.get(@ui.Role::Button, label="Bold").rect
   open.val = true
   t.draw()
-  assert_true(t.query(@ui.Dialog, label="Hello") is Some(_))
+  assert_true(t.query(@ui.Role::Dialog, label="Hello") is Some(_))
   t.move(x + w / 2.0, y + h / 2.0)
   t.run_for(tooltip_delay_ms * 2.0)
   assert_false(shown.val)
@@ -234,12 +234,12 @@ test "tooltip: lying over its own trigger, it stays: the pointer on it there is 
     |> ignore
   })
   t.draw()
-  let (x, y, w, h) = t.get(@ui.Button, label="Bold").rect
+  let (x, y, w, h) = t.get(@ui.Role::Button, label="Bold").rect
   t.move(x + w / 2.0, y + h / 2.0)
   t.run_for(tooltip_delay_ms)
   assert_true(shown.val)
   t.draw()
-  let (tx, ty, tw, th) = t.get(@ui.Tooltip, label="Bold (⌘B)").rect
+  let (tx, ty, tw, th) = t.get(@ui.Role::Tooltip, label="Bold (⌘B)").rect
   // (the tip is over the trigger where the pointer is)
   assert_true(tx < x + w / 2.0 + 2.0 && ty < y + h / 2.0 && tx + tw > x + w / 2.0 && ty + th > y + h / 2.0)
   t.run_for(tooltip_delay_ms)
@@ -263,7 +263,7 @@ test "tooltip: to a finger, shown as it is held on the trigger (no tap then), go
     },
     platform=2,
   )
-  let (x, y, w, h) = t.get(@ui.Button, label="Bold").rect
+  let (x, y, w, h) = t.get(@ui.Role::Button, label="Bold").rect
   // a tap: a tap, no tip
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_eq(taps.val, 1)
@@ -321,7 +321,7 @@ test "hover card: to a finger, opened as it holds the trigger, or by a tap with 
     },
     platform=2,
   )
-  let (ax, ay, aw, ah) = t.get(@ui.Button, label="Held").rect
+  let (ax, ay, aw, ah) = t.get(@ui.Role::Button, label="Held").rect
   // a tap on one without `tap`: nothing
   t.tap(ax + aw / 2.0, ay + ah / 2.0)
   assert_false(held.val)
@@ -333,7 +333,7 @@ test "hover card: to a finger, opened as it holds the trigger, or by a tap with 
   // a press outside closes it
   t.tap(380.0, 800.0)
   assert_false(held.val)
-  let (bx, by, bw, bh) = t.get(@ui.Button, label="Tapped").rect
+  let (bx, by, bw, bh) = t.get(@ui.Role::Button, label="Tapped").rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   assert_true(tapped.val)
   // tapped again: closed
@@ -392,8 +392,8 @@ test "tooltip: one shown soon after another closed skips the wait" {
     })
     |> ignore
   })
-  let (ax, ay, aw, ah) = t.get(@ui.Button, label="A").rect
-  let (bx, by, bw, bh) = t.get(@ui.Button, label="B").rect
+  let (ax, ay, aw, ah) = t.get(@ui.Role::Button, label="A").rect
+  let (bx, by, bw, bh) = t.get(@ui.Role::Button, label="B").rect
   t.move(ax + aw / 2.0, ay + ah / 2.0)
   t.run_for(tooltip_delay_ms)
   assert_true(a.val)
@@ -419,7 +419,7 @@ test "hover card: opened once the pointer rests on its trigger, kept while over 
     })
     |> ignore
   })
-  let (x, y, w, h) = t.get(@ui.Button, label="@ada").rect
+  let (x, y, w, h) = t.get(@ui.Role::Button, label="@ada").rect
   // (taken at its moment)
   let moved = t.time()
   t.move(x + w / 2.0, y + h / 2.0)
@@ -460,8 +460,8 @@ test "hover card and tooltip: not while a press elsewhere is dragged across the 
     })
     |> ignore
   })
-  let (ax, ay, aw, ah) = t.get(@ui.Button, label="@ada").rect
-  let (bx, by, bw, bh) = t.get(@ui.Button, label="Bold").rect
+  let (ax, ay, aw, ah) = t.get(@ui.Role::Button, label="@ada").rect
+  let (bx, by, bw, bh) = t.get(@ui.Role::Button, label="Bold").rect
   // pressed on the ground (an edge dragged), carried over each trigger and held there past its wait: neither opens
   t.press_at(380.0, 800.0)
   t.move(ax + aw / 2.0, ay + ah / 2.0)
@@ -502,11 +502,11 @@ test "toasts: each goes after its time, paused under the pointer; closed, acted 
   })
   list.val = [toast("a", "Saved"), toast("b", "Sent", description="To the team", action="Undo")]
   t.draw()
-  assert_eq(t.all(@ui.Status).length(), 2)
-  assert_eq(t.get(@ui.Status, label="Sent").description, "To the team")
-  ignore(t.get(@ui.Region, label="通知"))
+  assert_eq(t.all(@ui.Role::Status).length(), 2)
+  assert_eq(t.get(@ui.Role::Status, label="Sent").description, "To the team")
+  ignore(t.get(@ui.Role::Region, label="通知"))
   // paused while the pointer is over them
-  let (x, y, w, h) = t.get(@ui.Status, label="Saved").rect
+  let (x, y, w, h) = t.get(@ui.Role::Status, label="Saved").rect
   t.move(x + w / 2.0, y + h / 2.0)
   t.run_for(life_ms)
   assert_eq(list.val.length(), 2)
@@ -522,30 +522,30 @@ test "toasts: each goes after its time, paused under the pointer; closed, acted 
   assert_eq(list.val.map(fn(x) { x.id }), [])
   // drawn while they go out (from the frame at their time), gone once they have
   t.run_for(presence_out_ms)
-  assert_eq(t.all(@ui.Status).length(), 0)
+  assert_eq(t.all(@ui.Role::Status).length(), 0)
   // the action
   list.val = [toast("c", "Archived", action="Undo")]
   t.draw()
   // come in (it rises as it does)
   t.run_for(presence_in_ms)
-  t.click(@ui.Button, label="Undo")
+  t.click(@ui.Role::Button, label="Undo")
   assert_eq(acted.val, Some("c"))
   assert_eq(list.val.length(), 0)
   // the close button
   list.val = [toast("d", "Copied")]
   t.draw()
   t.run_for(presence_in_ms)
-  t.click(@ui.Button, label="关闭")
+  t.click(@ui.Role::Button, label="关闭")
   assert_eq(list.val.length(), 0)
   // a swipe to the right
   list.val = [toast("e", "Moved")]
   t.draw()
   t.run_for(presence_in_ms)
-  let (x, y, w, h) = t.get(@ui.Status, label="Moved").rect
+  let (x, y, w, h) = t.get(@ui.Role::Status, label="Moved").rect
   t.drag(x + 20.0, y + h / 2.0, x + 20.0 + w / 2.0, y + h / 2.0)
   assert_eq(list.val.length(), 0)
   t.run_for(presence_out_ms)
-  assert_true(t.query(@ui.Status, label="Moved") is None)
+  assert_true(t.query(@ui.Role::Status, label="Moved") is None)
   t.assert_idle()
 }
 
@@ -570,16 +570,16 @@ test "sheet: up from the bottom, the page hidden; a press above it, Escape and a
     }
   })
   to_rest(t, "s")
-  let (_, y, _, h) = t.get(@ui.Dialog, label="Chat info").rect
+  let (_, y, _, h) = t.get(@ui.Role::Dialog, label="Chat info").rect
   assert_eq(y, 844.0 - 300.0)
   assert_eq(h, 300.0)
-  assert_true(t.query(@ui.Text, label="Page") is None)
-  t.click(@ui.Button, label="Pin")
+  assert_true(t.query(@ui.Role::Text, label="Page") is None)
+  t.click(@ui.Role::Button, label="Pin")
   assert_true(open.val)
   t.tap(100.0, 100.0)
   assert_false(open.val)
   to_rest(t, "s")
-  assert_true(t.query(@ui.Dialog) is None)
+  assert_true(t.query(@ui.Role::Dialog) is None)
   open.val = true
   to_rest(t, "s")
   t.press("Escape")
@@ -604,15 +604,15 @@ test "sheet with detents: let go nearer the top it goes full; low enough it clos
     open.val = sheet(c, "s", open.val, share=tall.val, detents=[0.55, 0.94], label="Workspaces", fn() {  }).open
   })
   to_rest(t, "s")
-  assert_true((t.get(@ui.Dialog, label="Workspaces").rect.3 - 422.0).abs() < 1.0)
+  assert_true((t.get(@ui.Role::Dialog, label="Workspaces").rect.3 - 422.0).abs() < 1.0)
   // dragged up past the middle: full
   t.drag(195.0, 430.0, 195.0, 200.0)
   to_rest(t, "s")
-  assert_true((t.get(@ui.Dialog, label="Workspaces").rect.3 - 844.0 * 0.94).abs() < 1.0)
+  assert_true((t.get(@ui.Role::Dialog, label="Workspaces").rect.3 - 844.0 * 0.94).abs() < 1.0)
   // asked another height: there
   tall.val = 0.7
   to_rest(t, "s")
-  assert_true((t.get(@ui.Dialog, label="Workspaces").rect.3 - 844.0 * 0.7).abs() < 1.0)
+  assert_true((t.get(@ui.Role::Dialog, label="Workspaces").rect.3 - 844.0 * 0.7).abs() < 1.0)
   // dragged down to under 30%: closed
   t.drag(195.0, 260.0, 195.0, 700.0)
   assert_false(open.val)
@@ -636,7 +636,7 @@ test "sheet: closed by the view, it sinks away and is gone" {
   assert_true(shown.val)
   t.run_for(sheet_rest("s") - t.time())
   assert_false(shown.val)
-  assert_true(t.query(@ui.Dialog) is None)
+  assert_true(t.query(@ui.Role::Dialog) is None)
   t.assert_idle()
 }
 
@@ -656,7 +656,7 @@ test "sheet: asked another height while open (what it holds grown), that tall at
   // what it holds grew (a fitted sheet as this frame lays it out): placed by its size, not chased to it
   tall.val = 600.0
   t.draw()
-  let (_, _, _, h) = t.get(@ui.Dialog).rect
+  let (_, _, _, h) = t.get(@ui.Role::Dialog).rect
   assert_eq(h, 600.0)
   // (nothing set off by it: the sheet at rest)
   assert_true(sheet_rest("s") <= t.time())
@@ -664,7 +664,7 @@ test "sheet: asked another height while open (what it holds grown), that tall at
   t.draw()
   t.run_for(sheet_rest("s") - t.time())
   assert_false(shown.val)
-  assert_true(t.query(@ui.Dialog) is None)
+  assert_true(t.query(@ui.Role::Dialog) is None)
   t.assert_idle()
 }
 
@@ -681,7 +681,7 @@ test "toasts: the room beside one takes no press (what is under it does)" {
     toaster(c, "toasts", [toast("a", "Saved")], bottom=0.0) |> ignore
   })
   t.draw()
-  let (_, y, _, h) = t.get(@ui.Status, label="Saved").rect
+  let (_, y, _, h) = t.get(@ui.Role::Status, label="Saved").rect
   t.tap(8.0, y + h / 2.0)
   assert_eq(taps.val, 1)
 }
@@ -706,7 +706,7 @@ test "sheet_rest: a test runs to when a sheet is at rest, opened or closed, by t
   t.run_for(up - t.time())
   t.assert_idle()
   // there, its button where the sheet's top puts it
-  assert_true(t.get(@ui.Button, label="OK").rect.1 >= 844.0 - 300.0)
+  assert_true(t.get(@ui.Role::Button, label="OK").rect.1 >= 844.0 - 300.0)
   open.val = false
   t.draw()
   let down = sheet_rest("info")
@@ -729,7 +729,7 @@ test "toasts: one gone (its time out) is drawn going away until its rest (toast_
   let rest = toast_rest("toasts")
   assert_true(rest > t.time() && rest < @double.infinity)
   t.run_for(rest - t.time())
-  assert_eq(t.all(@ui.Status).length(), 0)
+  assert_eq(t.all(@ui.Role::Status).length(), 0)
   assert_eq(toast_rest("toasts"), -1.0)
   t.assert_idle()
 }
@@ -748,7 +748,7 @@ test "toasts: toast_due says when the next goes (its time out), none while pause
   t.run_for(presence_in_ms)
   assert_eq(t.next_wake(), None)
   // paused under the pointer: none due
-  let (x, y, w, h) = t.get(@ui.Status, label="Saved").rect
+  let (x, y, w, h) = t.get(@ui.Role::Status, label="Saved").rect
   t.move(x + w / 2.0, y + h / 2.0)
   assert_eq(toast_due("toasts"), -1.0)
   t.move(1.0, 1.0)
@@ -761,7 +761,7 @@ test "toasts: toast_due says when the next goes (its time out), none while pause
   let rest = toast_rest("toasts")
   assert_true(rest > t.time() && rest < @double.infinity)
   t.run_for(rest - t.time())
-  assert_eq(t.all(@ui.Status).length(), 0)
+  assert_eq(t.all(@ui.Role::Status).length(), 0)
   t.assert_idle()
 }
 
@@ -786,10 +786,10 @@ test "popover: a wheel turned over it scrolls nothing under it; beside it, what 
     })
     |> ignore
   })
-  t.click(@ui.Button, label="Filters")
+  t.click(@ui.Role::Button, label="Filters")
   t.run_for(pop_ms)
-  let (px, py, pw, ph) = t.get(@ui.Dialog, label="Filters").rect
-  let (sx, sy, sw, sh) = t.get(@ui.ScrollArea, label="Log").rect
+  let (px, py, pw, ph) = t.get(@ui.Role::Dialog, label="Filters").rect
+  let (sx, sy, sw, sh) = t.get(@ui.Role::ScrollArea, label="Log").rect
   // (the popover lies over the list)
   assert_true(py < sy + sh && py + ph > sy && px < sx + sw)
   let (_, y0, _, _) = t.rect_of("line 0").unwrap()

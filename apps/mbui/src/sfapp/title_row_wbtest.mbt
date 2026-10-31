@@ -140,7 +140,7 @@ test "a window with its buttons in the app's top row: its top drags it before an
       let at = "platform \{platform} at \{w}"
       // the splash: the accounts not read yet (a window of its own still starting), past the second it shows the ground
       // alone
-      reset()
+      new_run()
       let base = fixture("home")
       let src : Source = {
         ..base,
@@ -157,7 +157,7 @@ test "a window with its buttons in the app's top row: its top drags it before an
       assert_true(!frame_bare.val, msg="\{at}: the splash's mark shown")
       row_all_drags(t, "\{at}: the splash")
       // signed out: the sign-in page
-      reset()
+      new_run()
       let src = fixture("signin")
       let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=800.0, platform~, window_inset=true)
       t.frame()

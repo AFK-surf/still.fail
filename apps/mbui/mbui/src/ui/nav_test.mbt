@@ -618,3 +618,54 @@ test "nav_flat stacking: what is put in place of one pushed over is over too; po
   assert_eq(t.rect_of("chosen").unwrap().0, 0.0)
   assert_false(t.takes_back())
 }
+
+///|
+/// Where page 1's title is half a page's slide after it set out, pushed as `how` says: "laid" (between frames, the
+/// stack laid out before: it sets out at the next frame), "before" (before the window's first frame), "first" (as the first frame builds the
+/// stack, before it was laid out); `dense`: frames drawn all the way, else that moment alone.
+fn half_way_x(how : String, dense : Bool) -> Double {
+  let nav = @ui.Nav::new(0)
+  let pushed = Ref(false)
+  if how == "before" {
+    nav.push(1)
+  }
+  let view = nav_view(nav)
+  let t = @ui.Tester::new(fn(c) {
+    if how == "first" && !pushed.val {
+      pushed.val = true
+      nav.push(1)
+    }
+    view(c)
+  })
+  if how == "laid" {
+    t.draw()
+    nav.push(1)
+  }
+  // (the frame it sets out at)
+  t.draw()
+  let start = t.time()
+  if dense {
+    // (a frame each display's frame all the way, as a host draws them)
+    let mut at = start
+    while at + @ui.frame_period_default < start + page_ms / 2.0 {
+      at = at + @ui.frame_period_default
+      t.frame_at(at)
+    }
+    t.frame_at(start + page_ms / 2.0)
+  } else {
+    t.advance(page_ms / 2.0)
+    t.draw()
+  }
+  t.rect_of("title 1").unwrap().0
+}
+
+///|
+test "a page pushed before the stack was ever laid out (before the first frame, or as it first builds it): its slide as long as its way across the room once that is known, from when it was pushed; frames between or none, where it is at a moment the same" {
+  let tapped = half_way_x("laid", true)
+  assert_true(tapped > 0.0, msg="half way: \{tapped}")
+  assert_eq(half_way_x("laid", false), tapped, msg="no frame between")
+  assert_eq(half_way_x("before", true), tapped, msg="pushed before the first frame")
+  assert_eq(half_way_x("before", false), tapped, msg="pushed before the first frame, no frame between")
+  assert_eq(half_way_x("first", true), tapped, msg="pushed as the first frame builds it")
+  assert_eq(half_way_x("first", false), tapped, msg="pushed as the first frame builds it, no frame between")
+}

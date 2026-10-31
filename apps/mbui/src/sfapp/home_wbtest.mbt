@@ -1,7 +1,7 @@
 ///|
 /// The app over a fixture, from its start (the pages, the sheet and the filters forgotten).
 fn tester(mode : String) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture(mode)
   @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
 }
@@ -17,7 +17,7 @@ test "signed out: the sign-in page" {
 
 ///|
 test "signed out in a desktop's window: 登录或注册 alone, no wider than the desktop app's; a phone's across the page" {
-  reset()
+  new_run()
   let pressed = Ref::new(0)
   let src : Source = { ..fixture("signin"), sign_in: fn() { pressed.val += 1 } }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
@@ -34,7 +34,7 @@ test "signed out in a desktop's window: 登录或注册 alone, no wider than the
   t.tap(mid + 140.0, at)
   assert_eq(pressed.val, 1)
   // a phone's: as wide as the page less its sides
-  reset()
+  new_run()
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   let (x, y, w, h) = t.rect_of("登录或注册").unwrap()
   t.tap(x + w / 2.0 + 160.0, y + h / 2.0)
@@ -93,7 +93,7 @@ fn rows_lit(t : @ui.Tester, y? : Double = -1.0) -> Int {
 ///|
 /// Home on Android (a press in what scrolls shows once it is not the list's: Ctx::pressed).
 fn android_home() -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture("home")
   @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
 }
@@ -202,7 +202,7 @@ test "the list while it is read: no rows, the shapes" {
 
 ///|
 test "a state line's lead is the core's: an icon in its words' place with what follows; none, the words as they are" {
-  reset()
+  new_run()
   let t = @ui.Tester::new(
     fn(c) {
       c.box(w=Fill(1.0), fn() {
@@ -343,7 +343,7 @@ test "a row's state line tapped while it names a message opens the chat there; i
 
 ///|
 test "a row's state line in red while a message of the viewer's in it did not go (Home.kt StateLine alert)" {
-  reset()
+  new_run()
   // (the theme as the app's frame has it: its palette, and mbui's roles over it)
   let red = Ref(0L)
   let muted = Ref(0L)
@@ -374,7 +374,7 @@ test "a row's state line in red while a message of the viewer's in it did not go
 
 ///|
 test "the filter's other lists read once its menu opens; one picked slides in over 240 ms (Home.kt shift)" {
-  reset()
+  new_run()
   let base = fixture("home")
   let read : Array[String] = []
   let src : Source = {
@@ -533,7 +533,7 @@ test "a toast is a capsule while its words fit a line; its 撤销 a capsule in i
 ///|
 test "a chat archived from its row: said at once by its title, its station not answered yet; why not once it says no" {
   let calls : Array[Made] = []
-  reset()
+  new_run()
   let base = fixture("home")
   // (chat.archive left waiting: its station's answer not come)
   let src : Source = {
@@ -624,7 +624,7 @@ test "wide: a chat archived from its row with a mouse says so with 撤销 too, w
 
 ///|
 test "the wide frame's first page: shown once its pane has landed on what the core says was open, not the list beside an empty pane before it" {
-  reset()
+  new_run()
   let base = fixture("home")
   // the core's marks of the workspaces (the chat last open in it among them) not come while `slow`
   let slow = Ref(true)

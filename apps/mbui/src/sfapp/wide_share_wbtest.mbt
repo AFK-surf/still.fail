@@ -3,7 +3,7 @@
 
 ///|
 test "wide: 分享给其他 workspace from the chat's info: a dialog lists the workspaces, ticked as shared; 完成 sends chat.xshare" {
-  reset()
+  new_run()
   let calls : Array[Made] = []
   let base = fixture("chat-info")
   let src : Source = {

@@ -109,6 +109,16 @@ let view_blocks : Map[@view.NodeId, ViewBlock] = Map([])
 priv struct ViewBlock {
   inst : FixedArray[Double]
   cells : Array[(Double, Double)]
+  /// what each of its instances is checked as (inst_owners' `mark`: its shapes' pieces by the whole shape)
+  marks : Array[Int]
+  /// its shapes' pieces (scene.mbt's kind 12): put after the frame's as it is composed, its bands (kind 11) told
+  /// where they are then (their first piece counted from these)
+  segs : Array[Double]
+  /// where its glass is among its instances (-1 none), whether it shares the last frosted capture, and whether glass was
+  /// drawn solid as it was made (made again as that changes: the system asking for less transparency)
+  glass_at : Int
+  shares : Bool
+  solid : Bool
 }
 
 ///|
@@ -162,6 +172,9 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   let t = @view.Tree::new(make, measure=view_words_measure, time=fn() { h_event_time() })
   // (a press held on an old view a modal layer now keeps from input: called off then)
   t.on_modals(view_modals_told)
+  // (a hold going through to an old view: what of it takes a press there, who it is; handed so, its from then)
+  t.hosts_at(fn(island, x, y) { old_taker_at(t, island, x, y) })
+  t.on_through(view_through)
   t.on_due(fn() {
     view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
     // (between frames, a frame for it; in one, what it marked is done in it, and what goes on asks for the next as
@@ -191,6 +204,7 @@ pub fn view_painted() -> ViewPaintWork {
 /// was said in): none takes back till a frame of the next says what does; nothing held of them.
 fn view_forget() -> Unit {
   let c = g()
+  targets_forget()
   c.back = None
   c.back_node = -1
   c.back_island = None
@@ -205,6 +219,7 @@ fn view_forget() -> Unit {
   }
   view_app.val = None
   view_held.val = None
+  view_point.val = None
   view_fingers[0] = -1
   view_fingers[1] = -1
   view_fingers[2] = 0
@@ -213,6 +228,9 @@ fn view_forget() -> Unit {
   old_islands.clear()
   old_placed.clear()
   old_hits.clear()
+  next_old_hits.clear()
+  tree_said_ids.clear()
+  tree_said_of.clear()
   old_hits_rects.clear()
   old_hits_clips.clear()
   nav_views.clear()
@@ -221,6 +239,7 @@ fn view_forget() -> Unit {
   old_whole.val = true
   old_around.val = false
   view_blocks.clear()
+  view_shape_bands.clear()
   inst_owners.tree_words.clear()
   view_paint_work.made = 0
   view_paint_work.copied = 0
@@ -249,10 +268,16 @@ fn view_frame(w : Double, h : Double, t : Double) -> Unit {
   // or ending taken ahead of an input still to come before `t`)
   @signals.untracked(fn() { tree.at(t) })
   view_window.val = (w, h)
+  // (what its linked corners are worked out from, as of now: corner_of; the ranges the theme for this width has, as
+  // this frame will pick it, not the one the last frame was built in)
+  tree_corner_roots.set({ window: window_corner(), fit: g().theme_for(w).corner_fit })
   // (the logic's moment for all of this frame: what the host has come to as it began; brought again in the frame, the
   // tree goes no further than that, whatever time its building takes)
   view_logic_at.val = h_now()
   view_brought(tree)
+  // (what a still pointer is over, the tree laid out as this frame has it, before anything is built or drawn of it:
+  // view_pointed_again)
+  view_pointed_again()
 }
 
 ///|
@@ -284,6 +309,7 @@ fn view_brought(tree : @view.Tree) -> Unit {
   // (what was let go lets go of what it drew)
   for id in tree.take_removed() {
     view_blocks.remove(id)
+    view_shape_bands.remove(id)
     inst_owners.tree_words.remove(id)
   }
   old_place(tree)
@@ -405,8 +431,35 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   if tree.told_since() {
     view_brought(tree)
   }
+  // (the frame's input targets, the old views' and what the old frame put over all of it, found before anything is
+  // drawn (Ctx::view_targets); what a still pointer is over told as they say, the tree brought so: drawn as it is now)
+  let layers_from = self.view_targets(root, tree)
+  match view_point.val {
+    Some((x, y)) => {
+      let over = hit_at(
+        self.next_hit_ids,
+        self.next_hit_rects,
+        self.next_hit_clips,
+        x,
+        y,
+        from=layers_from,
+        points=self.next_points,
+        passes=self.next_passes,
+        marks=self.next_hit_marks,
+        bars=self.next_bars,
+      ) >=
+        0
+      if over != view_point_seen.val.1 {
+        view_point_tell(tree, over~)
+      }
+    }
+    None => ()
+  }
+  if tree.told_since() {
+    view_brought(tree)
+  }
+  dr.targets_said = true
   let n0 = self.ninst
-  old_hits.clear()
   tree.each_drawn(fn(c, x, y, a) {
     // (the root, the window, is drawn by nothing of its own)
     if c.id.at == 0 || a <= 0.002 {
@@ -418,33 +471,19 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         // origin; what it put over all of it at its root (its overlays) after the tree, as where it is in a box: theirs)
         // (in the order the old frame's root holds them in, as painting it would: what goes over its siblings after
         // them)
-        let from = self.next_hit_ids.length()
         self.paint_held(self.nodes[root], 1.0, but=fn(ch) { self.nodes[ch].layer || self.nodes[ch].portal })
-        old_hits.push({ id: c.id, from, to: self.next_hit_ids.length(), x: 0.0, y: 0.0 })
       } else {
         match old_boxes.get(c.id) {
-          Some(i) => {
-            // (what it takes presses at, its own: painted in no clip of the window's (island_clips), kept as painted
-            // where it was laid out; placed where the tree has it as an input comes before the next frame paints it,
-            // cut to the window there, none while it takes no presses: old_hits_place)
-            let from = self.next_hit_ids.length()
-            island_clips(fn() { self.paint(i, a) })
-            old_hits.push({
-              id: c.id,
-              from,
-              to: self.next_hit_ids.length(),
-              x: self.nodes[i].x,
-              y: self.nodes[i].y,
-            })
-          }
+          Some(i) => self.in_window(fn() { self.paint(i, a) })
           None => ()
         }
       }
       return
     }
     let block = match view_blocks.get(c.id) {
-      Some(b) => b
-      None => {
+      // (made as glass was drawn then: solid or not)
+      Some(b) if c.glass is None || b.solid == glass_paint.solid => b
+      _ => {
         let b = self.view_made(c)
         view_blocks[c.id] = b
         b
@@ -465,6 +504,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     ch = n.next
   }
+  dr.targets_said = false
   view_paint_work.handed = view_paint_work.handed + (self.ninst - n0)
 }
 
@@ -478,13 +518,60 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
   inst_owners.painting = -1
   inst_owners.tree_painting = Some(c.id)
+  // (its glass under its ground, its capture told as it is composed (Ctx::view_blit); its solid ground where glass is
+  // drawn solid)
+  let solid = glass_paint.solid
+  let mut glass_at = -1
+  match c.glass {
+    Some(gl) if solid => self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, gl.solid, 0.0, 0L, 1.0)
+    Some(gl) => {
+      glass_at = self.ninst - start
+      self.glass_inst(0.0, 0.0, c.w, c.h, c.radius, gl, 1.0)
+    }
+    None => ()
+  }
   if c.ground != 0L {
-    self.emit_rect(0.0, 0.0, c.w, c.h, 0.0, c.ground, 0.0, 0L, 1.0)
+    self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, 0.0, 0L, 1.0)
   }
   if c.words != "" {
     let tl = layout_text(c.words, view_words_size, 400, c.w + 0.5, true, line=view_line_h)
     self.emit_text(tl, 0.0, 0.0, c.ink, 1.0)
   }
+  // (its shapes, as bands worked out once for the outlines said (kept by them, whatever colour they are drawn in), in
+  // its tint where it has one; their pieces its own, counted from 0)
+  let shape_marks : Array[(Int, Int, Int)] = []
+  let seg_start = self.segs.length()
+  if c.shapes.length() > 0 {
+    let bands = match view_shape_bands.get(c.id) {
+      Some(b) if physical_equal(b.of, c.shapes) => b
+      _ => {
+        let b = shape_bands(c.shapes)
+        view_shape_bands[c.id] = b
+        b
+      }
+    }
+    let from = self.ninst
+    for k, s in c.shapes {
+      let piece_from = self.ninst
+      if s.fill != 0L {
+        self.emit_bands(0.0, 0.0, bands.fills[k], 0.0, if c.tint != 0L { c.tint } else { s.fill }, 1.0)
+      }
+      if s.stroke != 0L && s.width > 0.0 {
+        self.emit_bands(0.0, 0.0, bands.strokes[k], s.width / 2.0, if c.tint != 0L { c.tint } else { s.stroke }, 1.0)
+      }
+      // (an icon or a line by the whole shape its pieces are of, not by a piece, nor by what else its node draws)
+      let (sw, sh) = shape_extent(s)
+      shape_marks.push((piece_from - start, self.ninst - start, if sw <= icon_most && sh <= icon_most { 1 } else { 2 }))
+    }
+    let base = (seg_start / 4).to_double()
+    for i in from..<self.ninst {
+      if self.inst[i * inst_size + 5] == 11.0 {
+        self.inst[i * inst_size + 12] = self.inst[i * inst_size + 12] - base
+      }
+    }
+  }
+  let segs = self.segs[seg_start:].to_array()
+  self.segs.truncate(seg_start)
   inst_owners.painting = was
   inst_owners.tree_painting = was_tree
   let len = (self.ninst - start) * inst_size
@@ -496,9 +583,16 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
       cells.push(inst_cell_of(k))
     }
   }
+  // (made whatever is kept now: the block is composed again in frames that keep who drew what)
+  let marks : Array[Int] = Array::make(self.ninst - start, 0)
+  for m in shape_marks {
+    for i in m.0..<m.1 {
+      marks[i] = m.2
+    }
+  }
   inst_owners.tree_words[c.id] = c.words
   self.ninst = start
-  { inst, cells }
+  { inst, cells, marks, segs, glass_at, shares: c.glass.map_or(false, fn(g) { g.shares_capture }), solid }
 }
 
 ///|
@@ -507,6 +601,9 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
 fn Ctx::view_blit(self : Ctx, id : @view.NodeId, made : ViewBlock, x : Double, y : Double, a : Double) -> Unit {
   let block = made.inst
   let n = block.length() / inst_size
+  // (its shapes' pieces after the frame's: its bands told where they are now)
+  let seg_base = (self.segs.length() / 4).to_double()
+  self.segs.append(made.segs)
   while (self.ninst + n) * inst_size > self.inst.length() {
     self.grow()
   }
@@ -520,8 +617,12 @@ fn Ctx::view_blit(self : Ctx, id : @view.NodeId, made : ViewBlock, x : Double, y
     s[b + 1] = s[b + 1] + y
     s[b + 11] = s[b + 11] * a
     let kind = s[b + 5]
-    // (a box's, a shadow's, frosted glass's border colour: faded with it; a glyph's 12-15 are where it is in the atlas)
-    if kind == 0.0 || kind == 2.0 || kind == 5.0 {
+    if kind == 11.0 {
+      s[b + 12] = s[b + 12] + seg_base
+    }
+    // (a box's, a shadow's, frosted glass's border colour, liquid glass's opacity: faded with it; a glyph's 12-15 are
+    // where it is in the atlas)
+    if kind == 0.0 || kind == 2.0 || kind == 5.0 || kind == 6.0 {
       s[b + 15] = s[b + 15] * a
     }
     if s[b + 32] != 0.0 {
@@ -538,6 +639,10 @@ fn Ctx::view_blit(self : Ctx, id : @view.NodeId, made : ViewBlock, x : Double, y
       s[b + 40 + j] = clip_stack[k + 12 + j]
     }
   }
+  // (its glass's capture, as the frame is composed here: what was drawn under it before it, wherever that is now)
+  if made.glass_at >= 0 {
+    self.glass_capture(self.ninst + made.glass_at, s[at + made.glass_at * inst_size + 5] == 6.0, made.shares)
+  }
   // (who drew them, the node, each glyph's cell as made: kept with them wherever they are composed)
   if inst_owners_kept() {
     let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
@@ -547,6 +652,7 @@ fn Ctx::view_blit(self : Ctx, id : @view.NodeId, made : ViewBlock, x : Double, y
       let k = self.ninst + i
       inst_owned(k)
       inst_owners.cell[k] = if i < made.cells.length() { made.cells[i] } else { (0.0, 1.0) }
+      inst_owners.mark[k] = if i < made.marks.length() { made.marks[i] } else { 0 }
     }
     inst_owners.painting = was
     inst_owners.tree_painting = was_tree
@@ -1093,9 +1199,16 @@ priv struct OldHits {
 }
 
 ///|
-/// Each old view's hit targets as the last frame painted them (view_paint).
+/// Each old view's place among the frame's targets as they were last given out (old_hits_framed).
 // kept across runs: put back as a run begins (view_forget)
 let old_hits : Array[OldHits] = []
+
+///|
+/// The same as this frame finds them (Ctx::view_targets), each old view's place among the frame's targets: given out with
+/// them as the frame ends (old_hits_framed), what a target's index is read by (old_hit_owner, old_hit_open) always of the
+/// targets it was found with.
+// kept across runs: put back as a run begins (view_forget)
+let next_old_hits : Array[OldHits] = []
 
 ///|
 /// What each old view takes presses at, as the last frame painted it in no clip of the window's: the frame's hit
@@ -1136,6 +1249,10 @@ fn island_clips(f : () -> Unit) -> Unit {
 ///|
 /// As a frame's hit targets are taken (frame_paint): the old views' kept as painted, and placed where they are.
 fn old_hits_framed(c : Ctx) -> Unit {
+  // (each old view's place among the targets given out now: found with them)
+  old_hits.clear()
+  old_hits.append(next_old_hits)
+  next_old_hits.clear()
   old_hits_rects.clear()
   old_hits_rects.push_iter(c.hit_rects.iter())
   old_hits_clips.clear()
@@ -1218,7 +1335,7 @@ fn view_presses_at(x : Double, y : Double) -> @view.NodeId? {
 /// canvas).
 pub fn old_takes_own(v : @view.View) -> @view.View {
   let id = v.id()
-  v.takes(fn(lx, ly, _) {
+  v.hosted_takes(fn(lx, ly, _) {
     let (nx, ny, _, _) = v.rect()
     let (x, y) = (nx + lx, ny + ly)
     let c = g()
@@ -1231,7 +1348,7 @@ pub fn old_takes_own(v : @view.View) -> @view.View {
 ///|
 /// Old view `v` taking no finger at all: what it draws is drawn, what is under it in the tree takes every press there.
 pub fn old_takes_none(v : @view.View) -> @view.View {
-  v.takes(fn(_, _, _) { false })
+  v.takes(fn(_, _, _) { [] })
 }
 
 ///|
@@ -1375,6 +1492,53 @@ fn old_press_owner(c : Ctx, x : Double, y : Double, chosen : @view.NodeId) -> @v
 }
 
 ///|
+/// What of the old view in node `island` takes a press at (x, y), placed where the tree has it now: who it is (a hit
+/// target's id; words picked from there, their paragraph's), as old_press_owner finds it, only where it is that old
+/// view's (Tree::hosts_at: what a hold going through is handed, the one found as the finger went down alone).
+fn old_taker_at(tree : @view.Tree, island : @view.NodeId, x : Double, y : Double) -> Int? {
+  let c = g()
+  old_hits_place(c, Some(tree))
+  let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
+  let k = press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y)
+  if k >= 0 {
+    return if old_hit_owner(k) == Some(island) { Some(c.hit_ids[k] * 2) } else { None }
+  }
+  match c.sel_at(x, y) {
+    Some(s) if s.island == Some(island) => Some(s.base * 2 + 1)
+    _ => None
+  }
+}
+
+///|
+/// A hold the window's tree handed on (Tree::on_through), as one change of its moment, the cover's hold ended: to a
+/// node of the tree's, the finger's events its from now; to an old view, the old frame told the finger went down when
+/// it did, where it is now (a press of the old frame's own from here, as long held: what a long press picks, picked),
+/// its events the old view's from now.
+fn view_through(to : @view.Target, x : Double, y : Double, down_at : Double) -> Unit {
+  match to {
+    Dragged(u) => {
+      view_held.val = Some(Dragging(u))
+      h_frame_owed()
+    }
+    Hosted(island) => {
+      let c = g()
+      let owner = old_press_owner(c, x, y, island)
+      let part = match owner {
+        Some(o) if !old_whole.val => old_part_of(o)
+        _ => -1
+      }
+      view_held.val = Some(Old(part, owner))
+      view_input_went(part)
+      old_pointer_now(0, x, y, 0, 0, down_at)
+      // (a long press already, as the tree found it: what it is on held long as the next build sees it, its press no
+      // click when let go, whatever frames come between)
+      c.held_through()
+    }
+    _ => ()
+  }
+}
+
+///|
 /// The old view whose back is taken now (Ctx's `back`): the one it was said in (Ctx::island_said, with it wherever it
 /// is said, put over or put back: Ctx::on_back, nav, take_back, follow_back, nav_view's); none where it is what the old
 /// frame put over all of it at its root (a layer of its own), or none is.
@@ -1395,4 +1559,486 @@ fn Ctx::island_said(self : Ctx) -> @view.NodeId? {
   } else {
     None
   }
+}
+
+///|
+/// A key (`code`, `mods` held) as the window's tree routes it: where the old views have what takes it first (the focus
+/// in a field or a key catcher of one that may take input, or on a widget that takes this key as its own:
+/// Ctx::focus_keeps; a layer of the old frame's open over all of it that takes the keys: a modal one, a menu, a
+/// dialog, one the focus is in, one Escape dismisses), theirs; else asked of the tree's
+/// nodes that take keys, at its moment (Tree::key_at). True where one of those took it.
+fn view_key(code : Int, mods : Int) -> Bool {
+  let tree = match view_app.val {
+    Some(t) => t
+    None => return false
+  }
+  let c = g()
+  let focus = c.focus_allowed()
+  if c.editors.contains(focus) || c.dev.catchers.contains(focus) || c.focus_keeps(code, mods) {
+    return false
+  }
+  if c.last_layers
+    .iter()
+    .any(fn(l) { !l.inert && (l.modal || c.focus_in_layer(l.id) || (code == key_escape && l.escape)) }) {
+    return false
+  }
+  tree.key_at(code, mods, view_moment())
+}
+
+///|
+/// What takes back now (a gesture's start, a back with no gesture, a back button): what the old views said takes it
+/// where it was said in a layer of the old frame's own over all of it (a sheet, a menu, a dialog), first; else, of the
+/// topmost node of the window's tree that takes back and may take input (Tree::back_taker: done as back is, as an event
+/// of the tree's at back's moment, its own node its owner) and what an old view said takes it (Ctx's `back`: where its
+/// stack was laid out, the old view it was said in its owner), the one drawn over the other (Tree::drawn_later). None
+/// where nothing does.
+fn Ctx::back_taker(self : Ctx) -> BackHeld? {
+  let old : BackHeld? = match self.back {
+    Some(f) => {
+      let (left, w) = if self.back_node >= 0 && self.back_node < self.count {
+        let n = self.nodes[self.back_node]
+        (n.x, n.fw)
+      } else {
+        (0.0, self.width)
+      }
+      Some({ f, left, w, owner: self.back_owner(), tree: false })
+    }
+    None => None
+  }
+  let tree = match view_app.val {
+    Some(t) => t
+    None => return old
+  }
+  let node : BackHeld? = match tree.back_taker() {
+    Some((id, f)) =>
+      Some({
+        f: fn(kind, _x, _w, t, _p) {
+          if kind == 2 || kind == 4 {
+            tree.event(t, f)
+          }
+        },
+        left: 0.0,
+        w: self.width,
+        owner: Some(id),
+        tree: true,
+      })
+    None => None
+  }
+  match (old, node) {
+    // (said by a layer of the old frame's over all of it: before anything of the tree's under it)
+    (Some(o), _) if o.owner is None => old
+    // (of those that may take it now, the one drawn over the other)
+    (Some(o), Some(n)) =>
+      match (o.owner, n.owner) {
+        (Some(island), Some(id)) if old_owner_open(o.owner) && tree.drawn_later(island, id) => old
+        _ => node
+      }
+    (None, Some(_)) => node
+    _ => old
+  }
+}
+
+///|
+/// Whether what takes back now may take input (Ctx::back_taker, its owner: old_owner_open).
+fn Ctx::back_open(self : Ctx) -> Bool {
+  match self.back_taker() {
+    Some(h) => old_owner_open(h.owner)
+    None => false
+  }
+}
+
+
+///|
+/// The bands each node's shapes came to (shape_bands), by node, for the shapes they are of: drawn again in another tint,
+/// the same; let go with the node.
+// kept across runs: let go as the nodes are, and with the tree (view_forget)
+let view_shape_bands : Map[@view.NodeId, ShapeBands] = Map([])
+
+///|
+/// How wide and high shape `s` is, by its outlines' points (its stroke's half width round them): what it is as a whole.
+fn shape_extent(s : Shape) -> (Double, Double) {
+  let (x0, y0, x1, y1) = (Ref(1.0e30), Ref(1.0e30), Ref(-1.0e30), Ref(-1.0e30))
+  for o in s.outlines {
+    let pts = o.0
+    for i in 0..<(pts.length() / 2) {
+      x0.val = dmin(x0.val, pts[2 * i])
+      x1.val = dmax(x1.val, pts[2 * i])
+      y0.val = dmin(y0.val, pts[2 * i + 1])
+      y1.val = dmax(y1.val, pts[2 * i + 1])
+    }
+  }
+  if x1.val < x0.val {
+    return (0.0, 0.0)
+  }
+  let half = if s.stroke != 0L { s.width / 2.0 } else { 0.0 }
+  (x1.val - x0.val + 2.0 * half, y1.val - y0.val + 2.0 * half)
+}
+
+///|
+/// Where a mouse's pointer is over the window as the host last said it (None: gone from it, or the hand a finger, which
+/// points at nothing): what of the window is pointed at by it, the tree's or the old views' (view_point_tell).
+// kept across runs: put back as a run begins (view_forget)
+let view_point : Ref[(Double, Double)?] = Ref(None)
+
+///|
+/// A pointer's event `kind` at (x, y): where a mouse points now (a press, a move, a release where it is), nowhere once it
+/// is gone from the window (7) or the hand is a finger. Said before the event is taken; what it points at is told once
+/// the tree has things as of the event (view_point_tell).
+fn view_point_said(kind : Int, x : Double, y : Double) -> Unit {
+  view_point.val = if kind == 7 || pointing() is Finger {
+    None
+  } else if kind <= 3 {
+    Some((x, y))
+  } else {
+    view_point.val
+  }
+}
+
+///|
+/// What a pointer's event left the pointer over, told as the event is taken: the tree brought to its moment (the moment
+/// of the event being taken: no other).
+fn view_pointed() -> Unit {
+  match view_app.val {
+    Some(tree) => {
+      tree.bring_to(view_moment())
+      view_point_tell(tree)
+    }
+    None => ()
+  }
+}
+
+///|
+/// What the pointer is over, one of the tree's or the old views', as things are now: the one the old frame puts over all
+/// of it at its root there (a menu, a sheet) the old views'; else what of the tree takes a press there (Tree::point_at),
+/// or the old view in a node there, or, where nothing of the tree's is, the old frame where it is the whole window. The
+/// other side told it is over nothing of its: the old views' pointer nowhere (what they lit lit no longer), the tree's
+/// point gone. What it was worked out against kept (view_point_seen), for a still pointer.
+fn view_point_tell(tree : @view.Tree, over? : Bool) -> Unit {
+  // (what the old frame put over all of it there: as said, else by its hit targets as last drawn: old_layer_over)
+  let over = match (over, view_point.val) {
+    (Some(o), _) => o
+    (None, Some((x, y))) => old_layer_over(x, y)
+    (None, None) => false
+  }
+  view_point_seen.val = (tree.hits_said(), over)
+  match view_point.val {
+    // (gone, or under the old frame's layer: nothing of the tree's followed; the old views' as they have it)
+    None => {
+      tree.follow_point(-1.0, -1.0, fn(_) {  })
+      tree.pointed_to(None)
+      view_old_pointed(None)
+    }
+    Some((x, y)) if over => {
+      tree.follow_point(-1.0, -1.0, fn(_) {  })
+      tree.pointed_to(None)
+      view_old_pointed(Some((x, y)))
+    }
+    // (what the tree has there followed, whatever it is, and told both sides as it comes and as it changes)
+    Some((x, y)) =>
+      tree.follow_point(x, y, fn(t) {
+        match t {
+          Pressed(id) | Dragged(id) => {
+            tree.pointed_to(Some(id))
+            view_old_pointed(None)
+          }
+          Hosted(_) => {
+            tree.pointed_to(None)
+            view_old_pointed(Some((x, y)))
+          }
+          Nothing => {
+            tree.pointed_to(None)
+            view_old_pointed(if old_whole.val { Some((x, y)) } else { None })
+          }
+        }
+      })
+  }
+}
+
+///|
+/// The old views' pointer at `at` (what they light by it, as they find it there now: their hit targets as last drawn),
+/// or nowhere (what they lit lit no longer); a press held left as it is.
+fn view_old_pointed(at : (Double, Double)?) -> Unit {
+  let c = g()
+  if c.down {
+    return
+  }
+  match at {
+    Some((x, y)) => {
+      c.px = x
+      c.py = y
+      c.point_at(x, y)
+    }
+    None =>
+      if c.px >= 0.0 || c.hover != 0 {
+        c.px = -1.0
+        c.py = -1.0
+        c.point_nowhere()
+      }
+  }
+}
+
+///|
+/// What a still pointer was last worked out against: the tree's hits said (Tree::hits_said), and whether what the old
+/// frame put over all of it at its root was there (by its hit targets as last drawn).
+// kept across runs: written as a pointer is told
+let view_point_seen : Ref[(Int, Bool)] = Ref((-1, false))
+
+///|
+/// As a frame begins, the tree laid out as it has it (view_frame): what a still pointer is over, where what a point hits
+/// may have changed since it was last told (a node moved under it, one taking presses no more, a layer opened over it;
+/// what the old frame puts over all of it, by what it last drew, as the old views' own pointing is), before anything of
+/// the frame is built or drawn: what reads it built and drawn so this frame. Nothing looked at where none of it changed;
+/// what decides where a node takes it (View::takes) is followed by the tree itself (Tree::point_at).
+fn view_pointed_again() -> Unit {
+  let tree = match view_app.val {
+    Some(t) => t
+    None => return
+  }
+  if pointing() is Finger {
+    view_point.val = None
+  }
+  let c = g()
+  match view_point.val {
+    None =>
+      if tree.pointed_now() is Some(_) {
+        view_point_tell(tree)
+      }
+    Some((x, y)) => {
+      if view_point_seen.val != (tree.hits_said(), old_layer_over(x, y)) {
+        view_point_tell(tree)
+      }
+    }
+  }
+}
+
+///|
+/// Whether what the old frame put over all of it at its root (its layers: the overlays its views open, menus, sheets)
+/// takes the pointer at (x, y), by its hit targets as last drawn: what a press there is routed by (old_root_hit).
+fn old_layer_over(x : Double, y : Double) -> Bool {
+  old_root_hit(g(), x, y, pressed=false)
+}
+
+///|
+/// The ids the window's tree's nodes are read out by (Ctx::semantics_spliced), each the node it is, and the other way:
+/// each node its own from the first time it is read out to its letting go, never another's, none given again (another
+/// tree, another run: none of these); below every id an old view's widget has (theirs are its key's, Ctx::id).
+// kept across runs: written as the tree is read out, put back as a run begins (view_forget)
+let tree_said_ids : Map[Int, @view.NodeId] = Map([])
+
+///|
+// kept across runs: written as the tree is read out, put back as a run begins (view_forget)
+let tree_said_of : Map[@view.NodeId, Int] = Map([])
+
+///|
+/// The next id given (tree_said_ids).
+// kept across runs: only ever counted on, never given twice
+let tree_said_next : Ref[Int] = Ref(-2_000_000_000)
+
+///|
+/// The id node `id` of the window's tree is read out by.
+fn tree_said_id(id : @view.NodeId) -> Int {
+  match tree_said_of.get(id) {
+    Some(k) => k
+    None => {
+      let k = tree_said_next.val
+      tree_said_next.val = k + 1
+      tree_said_of[id] = k
+      tree_said_ids[k] = id
+      k
+    }
+  }
+}
+
+///|
+/// `action` asked of what is read out as `id` (a screen reader's, a test's), where it is a node of the window's tree:
+/// done as it is done by hand, at the moment it is asked (Activate: its on_press, as a press on it runs it; one let go
+/// or taking no presses, nothing). Whether it was one.
+fn tree_said_action(id : Int, action : Action) -> Bool {
+  match (tree_said_ids.get(id), view_app.val) {
+    (Some(nid), Some(tree)) => {
+      // (what the old frame put over all of it, modal, keeps it from input as from being read out)
+      match action {
+        Activate if g().modal_node() < 0 => {
+          // (taken, its press found and done as one event of this moment: Tree::activate_at)
+          if tree.activate_at(nid, view_moment()) {
+            h_frame_owed()
+          }
+        }
+        _ => ()
+      }
+      true
+    }
+    // (an id the tree once read out, its node let go or another tree's: nothing; never an old view's)
+    _ => id >= -2_000_000_000 && id < tree_said_next.val
+  }
+}
+
+///|
+/// What is read out of the window where it is a tree (Ctx::semantics_tree): its nodes that say what they are, in its
+/// order; at each node hosting an old view, what that old view's widgets say, in their order (the one old view the
+/// whole window: all of the old frame's), under what holds that node; what the old frame put over all of it at its
+/// root (its layers) last, as it is drawn over the rest. What a modal layer of the tree keeps from input hidden; a node
+/// taking no presses disabled, read out so.
+fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
+  let (old, nodes_of) = self.semantics_old()
+  // (each old widget's old view: its box's node, -1 the whole window, -2 what is over all of it at its root)
+  let owner = nodes_of.map(fn(i) { self.said_owner(i) })
+  let out : Array[SemNode] = []
+  let moved = Array::make(old.length(), -1)
+  let said = tree.said_order()
+  let at = Array::make(said.length(), -1)
+  let put_old = fn(k : Int, parent : Int, depth : Int, hidden : Bool, disabled : Bool) {
+    let s = old[k]
+    let up = if s.parent >= 0 && moved[s.parent] >= 0 { moved[s.parent] } else { parent }
+    let d = if up >= 0 { out[up].depth + 1 } else { depth }
+    // (in a node taking no presses: read out disabled, nothing to be done to it)
+    let off = s.disabled || disabled
+    out.push({ ..s, parent: up, depth: d, hidden: s.hidden || hidden, disabled: off, actions: if off { [] } else { s.actions } })
+    moved[k] = out.length() - 1
+  }
+  // (those let go read out no more: their ids nobody's)
+  let gone = tree_said_of.keys().filter(fn(id) { !tree.lives(id) }).collect()
+  for id in gone {
+    match tree_said_of.get(id) {
+      Some(k) => tree_said_ids.remove(k)
+      None => ()
+    }
+    tree_said_of.remove(id)
+  }
+  // (what the old frame put over all of it, modal: the tree under it read out as hidden, as the old views under it are)
+  let old_modal = self.modal_node() >= 0
+  for j, sn in said {
+    let parent = if sn.parent >= 0 { at[sn.parent] } else { -1 }
+    if sn.hosted {
+      let mine = match old_boxes.get(sn.id) {
+        Some(_) => sn.id.at
+        None => -1
+      }
+      for k in 0..<old.length() {
+        if owner[k] == mine || (old_whole.val && owner[k] == -1) {
+          put_old(k, parent, sn.depth, !sn.allowed || sn.hidden, sn.disabled)
+        }
+      }
+      at[j] = parent
+      continue
+    }
+    match sn.said {
+      Some(s) => {
+        let label = if s.label != "" {
+          s.label
+        } else {
+          match tree.drawn_of(sn.id) {
+            Some(d) => d.words
+            None => ""
+          }
+        }
+        // (what can be done to it, of what it said or would: Activate where a press does something, nothing else yet)
+        let actions : Array[Action] = if !sn.disabled && tree.presses_do(sn.id) { [Activate] } else { [] }
+        out.push({
+          id: tree_said_id(sn.id),
+          role: s.role,
+          label,
+          description: s.description,
+          value: s.value,
+          check: s.check,
+          expanded: s.expanded,
+          selected: s.selected,
+          pressed: s.pressed,
+          disabled: sn.disabled,
+          modal: false,
+          range: None,
+          actions,
+          rect: sn.rect,
+          focused: false,
+          hidden: !sn.allowed || sn.hidden || old_modal,
+          parent,
+          depth: if parent >= 0 { out[parent].depth + 1 } else { 0 },
+        })
+        at[j] = out.length() - 1
+      }
+      None => at[j] = parent
+    }
+  }
+  // (what the old frame put over all of it at its root: last)
+  for k in 0..<old.length() {
+    if owner[k] == -2 {
+      put_old(k, -1, 0, false, false)
+    }
+  }
+  out
+}
+
+///|
+/// Whose old node `i` is: the window's tree's node whose old view it is in (its box's, old_boxes: that node's index),
+/// -2 what the old frame put over all of it at its root (a layer of its own), -1 the old frame's own (the one old view
+/// the whole window).
+fn Ctx::said_owner(self : Ctx, i : Int) -> Int {
+  let mut j = i
+  while j >= 0 {
+    for id, b in old_boxes {
+      if b == j {
+        return id.at
+      }
+    }
+    let n = self.nodes[j]
+    if n.parent < 0 && j != 0 {
+      return -2
+    }
+    if (n.layer || n.portal) && n.parent == 0 {
+      return -2
+    }
+    j = n.parent
+  }
+  -1
+}
+
+///|
+/// Whether old widget `id` may be acted on as a screen reader asks, as the window's tree is now (in the event it is asked
+/// in: Ctx::ask_action): the node hosting the old view it says itself in (by what it said of its node:
+/// Ctx::said_owner) read out and taking presses (Tree::acts_on); what the old frame put over all of it, always (its
+/// own). Where there is no tree, or nothing said by that id, as ever.
+fn old_said_allowed(c : Ctx, id : Int) -> Bool {
+  let tree = match view_app.val {
+    Some(t) => t
+    None => return true
+  }
+  // (what said it of its node, else the node it is: a box taking presses read out by its id)
+  let node = match c.sems.iter().find_first(fn(s) { s.id == id }) {
+    Some(s) => s.node
+    None => {
+      let mut found = -1
+      for i in 0..<c.count {
+        if c.nodes[i].id == id {
+          found = i
+          break
+        }
+      }
+      if found < 0 {
+        return true
+      }
+      found
+    }
+  }
+  let host = match c.said_owner(node) {
+    -2 => return true
+    -1 => tree.hosting()
+    at => old_boxes.keys().find_first(fn(k) { k.at == at })
+  }
+  match host {
+    Some(h) => tree.acts_on(h)
+    None => true
+  }
+}
+
+///|
+/// An old view in a box of the tree painted as the window shows it, in its clip: what of it lies outside the window not
+/// painted, nothing of it asked of the host, as the old frame painted what it held there (its targets found whole apart
+/// from it: view_targets). Not the one old view the whole window: painted as the old frame painted its root, under no
+/// clip of the window's (the base's, 0 to 1e9), as the hosts' kept runs have it drawn (their frames' hashes say each
+/// instance's clip), a bound kept as it was.
+/// Not what the tree's own nodes make (view_made: whole, where they are, cut as they are put into the frame).
+fn Ctx::in_window(self : Ctx, f : () -> Unit) -> Unit {
+  push_clip(0.0, 0.0, self.width, self.height)
+  f()
+  pop_clip()
 }

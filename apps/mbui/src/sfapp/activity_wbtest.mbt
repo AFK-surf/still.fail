@@ -3,7 +3,7 @@
 
 ///|
 test "activity: its ring steps round" {
-  reset()
+  new_run()
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
@@ -37,7 +37,7 @@ let display_frame_ms : Double = 1000.0 / 120.0
 
 ///|
 test "activity: its line coming in at the list's end is followed, the list gliding to its end as the line opens" {
-  reset()
+  new_run()
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")

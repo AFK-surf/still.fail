@@ -312,7 +312,7 @@ pub fn corners_radius(k : FixedArray[@ui.CornerOf]) -> @ui.Radius {
 ///|
 /// Corners `k`'s radii now (top left, then round it).
 pub fn corner_radii(k : FixedArray[@ui.CornerOf]) -> FixedArray[Double] {
-  k.map(fn(c) { c.radius() })
+  k.map(fn(c) { c.radius(@ui.corner_roots()) })
 }
 
 ///|
@@ -2187,7 +2187,7 @@ pub fn window_end_in(alone : Double) -> Double {
     return window_keys_room() + alone
   }
   match bar_keys_link() {
-    Some(link) if link.follows() => bar_keys_top()
+    Some(link) if link.follows(@ui.corner_roots()) => bar_keys_top()
     _ => alone
   }
 }
@@ -2210,7 +2210,7 @@ pub fn window_clear_in(alone : Double) -> Double {
 /// where that is past it already (Windows 11's 8), or there is none.
 pub fn window_corner_past(alone : Double) -> Double {
   let window : @ui.CornerOf = Window
-  let r = window.radius()
+  let r = window.radius(@ui.corner_roots())
   if r > 0.0 && alone < r + corner_fit.near {
     r + alone
   } else {
@@ -2224,7 +2224,7 @@ pub fn window_corner_past(alone : Double) -> Double {
 /// far in as it is round; else `alone`. Not a block following it: a floating button keeps its shape.
 pub fn window_corner_clear(alone : Double) -> Double {
   let window : @ui.CornerOf = Window
-  dmax(alone, window.radius())
+  dmax(alone, window.radius(@ui.corner_roots()))
 }
 
 ///|
@@ -2563,7 +2563,7 @@ pub let rail_in : @ui.Space = room(8.0)
 /// there concentric with it (box_fit: the grounds boxes as round, rail_ground_radius); else 9 as open.
 pub fn rail_in_tape() -> Double {
   let ground_in = (38.0 - rail_ground_side) / 2.0
-  let corner = tape_side_corners()[3].radius()
+  let corner = tape_side_corners()[3].radius(@ui.corner_roots())
   let d = capsule_in(corner, rail_ground_side)
   if place_fits(d) {
     d - ground_in
@@ -2638,7 +2638,7 @@ pub let rail_ground_side : Double = 30.0
 pub fn rail_ground_radius(corner : @ui.CornerOf, ground_in : Double, alone? : Double = small_corner) -> @ui.Radius {
   let link : @ui.CornerOf = Follow(corner, ground_in, alone)
   // (as round as its half or rounder there, a circle: a corner round enough for one)
-  if link.radius() >= rail_ground_side / 2.0 - 0.5 {
+  if link.radius(@ui.corner_roots()) >= rail_ground_side / 2.0 - 0.5 {
     Full
   } else {
     Linked(link)

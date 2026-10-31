@@ -109,7 +109,7 @@ fn vault_chat_src(vc : VaultChat, calls : Array[String]) -> Source {
 
 ///|
 test "a request decided in its chat: its card closes on screen to how it went, nothing of it pressed any more" {
-  reset()
+  new_run()
   let vc : VaultChat = { status: "", version: 1, vaults_asked: false }
   let calls : Array[String] = []
   let src = vault_chat_src(vc, calls)

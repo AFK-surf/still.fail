@@ -30,6 +30,9 @@ priv struct InstOwners {
   tree : Array[@view.NodeId?]
   mut tree_painting : @view.NodeId?
   tree_words : Map[@view.NodeId, String]
+  /// what each instance a node of the window's tree drew of its shapes is checked as, by the whole shape it is a piece
+  /// of: 1 an icon, 2 a line or a larger shape (0: none of these)
+  mark : Array[Int]
   own_colours : Set[Int]
 }
 
@@ -43,6 +46,7 @@ let inst_owners : InstOwners = {
   tree: [],
   tree_painting: None,
   tree_words: Map([]),
+  mark: [],
   own_colours: Set::new(),
 }
 
@@ -53,6 +57,7 @@ fn inst_owners_clear() -> Unit {
   inst_owners.owner.clear()
   inst_owners.cell.clear()
   inst_owners.tree.clear()
+  inst_owners.mark.clear()
   inst_owners.tree_painting = None
   inst_owners.own_colours.clear()
   bone_insts.clear()
@@ -84,6 +89,9 @@ fn inst_owned(k : Int) -> Unit {
   while o.length() <= k {
     o.push(-1)
   }
+  while inst_owners.mark.length() <= k {
+    inst_owners.mark.push(0)
+  }
   while cl.length() <= k {
     cl.push((0.0, 1.0))
   }
@@ -93,6 +101,7 @@ fn inst_owned(k : Int) -> Unit {
   o[k] = inst_owners.painting
   cl[k] = (0.0, 1.0)
   tr[k] = inst_owners.tree_painting
+  inst_owners.mark[k] = 0
 }
 
 ///|
@@ -202,17 +211,19 @@ fn inst_owner(k : Int) -> Int {
 ///|
 /// The owners moved as Ctx::raise_tops moves the instances, `tops` (from, to) after the rest of the `count` painted.
 fn inst_owners_raised(tops : Array[(Int, Int)], count : Int) -> Unit {
-  let raised : Array[(Int, (Double, Double), @view.NodeId?)] = []
+  // (all that is kept of who drew each, moved with it: its owner, its glyph's cell, its node of the tree's, what it is
+  // checked as)
+  let raised : Array[(Int, (Double, Double), @view.NodeId?, Int)] = []
   for r in tops {
     for q in r.0..<r.1 {
-      raised.push((inst_owner(q), inst_cell_of(q), inst_tree_owner(q)))
+      raised.push((inst_owner(q), inst_cell_of(q), inst_tree_owner(q), inst_mark_of(q)))
     }
   }
-  let moved : Array[(Int, (Double, Double), @view.NodeId?)] = []
+  let moved : Array[(Int, (Double, Double), @view.NodeId?, Int)] = []
   for k, r in tops {
     let end = if k + 1 < tops.length() { tops[k + 1].0 } else { count }
     for q in r.1..<end {
-      moved.push((inst_owner(q), inst_cell_of(q), inst_tree_owner(q)))
+      moved.push((inst_owner(q), inst_cell_of(q), inst_tree_owner(q), inst_mark_of(q)))
     }
   }
   let was = inst_owners.painting
@@ -223,6 +234,7 @@ fn inst_owners_raised(tops : Array[(Int, Int)], count : Int) -> Unit {
     inst_owners.tree_painting = o.2
     inst_owned(to)
     inst_owners.cell[to] = o.1
+    inst_owners.mark[to] = o.3
     to = to + 1
   }
   inst_owners.painting = was
@@ -650,15 +662,20 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
       out.push(s)
     }
   }
-  // (the words a node of the window's tree draws: each at its faintest letter, as an old view's are; its words its
-  // block's, their size and weight the tree's words', view_host.mbt)
-  let tree_lines : Map[@view.NodeId, (Double, String)] = Map::new()
-  let tree_order : Array[@view.NodeId] = []
+  // (what a node of the window's tree draws, by node and by what it is checked as, each its own whatever else the node
+  // draws: its words at their faintest letter, as an old view's are (their size and weight the tree's words',
+  // view_host.mbt); its shapes at their strongest piece, as an old view's icon or line)
+  let tree_lines : Map[(@view.NodeId, Int), (Double, String)] = Map::new()
+  let tree_order : Array[(@view.NodeId, Int)] = []
   for k in 0..<self.ninst {
     let b = k * inst_size
     match inst_by(k) {
       Node(id) => {
-        if a[b + 5] != 1.0 {
+        let kind = a[b + 5]
+        let is_words = kind == 1.0
+        // (a shape's piece: checked as the whole shape it is of is, an icon or a line, as made: inst_owners' `mark`)
+        let mark = if !is_words && kind == 11.0 { inst_mark_of(k) } else { 0 }
+        if !is_words && mark == 0 {
           continue
         }
         let px = a[b] + a[b + 2] / 2.0
@@ -666,29 +683,42 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
         if px < 0.0 || py < 0.0 || px > self.window_w || py > self.window_h || !in_inst_clip(a, b, px, py) {
           continue
         }
-        let (ground, _) = match self.ground_under(k, px, py) {
+        let (ground, beneath) = match self.ground_under(k, px, py) {
           Some(g) => g
           None => continue
         }
         if self.covered_after(k, px, py, Node(id)) {
           continue
         }
-        let shown = Rgb::laid(ground, inst_rgb(a, b), a[b + 11])
+        let ink = inst_rgb(a, b)
+        let shown = Rgb::laid(ground, ink, a[b + 11])
+        // (a cut through to a ground under it, or that ground's own colour; words are never that)
+        if !is_words &&
+          (same_rgb(shown, ground) || (a[b + 11] >= 0.999 && beneath.iter().any(fn(u) { same_rgb(u, ink) }))) {
+          continue
+        }
         let r = contrast_of(shown, ground)
-        let least = contrast_words_least(view_words_size, 400)
-        let text = self.by_said(Node(id))
+        let (what, least) = if is_words {
+          ("words \"\{self.by_said(Node(id))}\" \{view_words_size}/400", contrast_words_least(view_words_size, 400))
+        } else if mark == 1 {
+          ("icon", contrast_icon_least)
+        } else {
+          ("line", marks)
+        }
         let said = if r < least - 0.005 {
-          "words \"\{text}\" \{view_words_size}/400 (a node of the window's tree's) at \{a[b].round()},\{a[b + 1].round()}: " +
+          "\{what} (a node of the window's tree's) at \{a[b].round()},\{a[b + 1].round()}: " +
           "\{shown.hex()} on \{ground.hex()} \{ratio_said(r)}:1, under \{least}"
         } else {
           ""
         }
-        match tree_lines.get(id) {
-          Some((had, _)) if had <= r => ()
-          Some(_) => tree_lines[id] = (r, said)
+        // (words at their faintest letter, an icon or a line at its strongest piece)
+        let key = (id, mark)
+        match tree_lines.get(key) {
+          Some((had, _)) if (is_words && had <= r) || (!is_words && had >= r) => ()
+          Some(_) => tree_lines[key] = (r, said)
           None => {
-            tree_lines[id] = (r, said)
-            tree_order.push(id)
+            tree_lines[key] = (r, said)
+            tree_order.push(key)
           }
         }
         continue
@@ -813,8 +843,8 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
       _ => ()
     }
   }
-  for id in tree_order {
-    match tree_lines.get(id) {
+  for key in tree_order {
+    match tree_lines.get(key) {
       Some((_, said)) if said != "" => say(said)
       _ => ()
     }
@@ -834,4 +864,14 @@ pub fn Tester::contrast_faults(self : Tester, marks? : Double = contrast_mark_le
   // (drawn as before from the next frame on, built whole: frame_watch.mbt)
   test_stepped()
   c.contrast_faults_drawn(marks)
+}
+
+///|
+/// What instance `k` is checked as (inst_owners' `mark`), 0 where none is said.
+fn inst_mark_of(k : Int) -> Int {
+  if k < inst_owners.mark.length() {
+    inst_owners.mark[k]
+  } else {
+    0
+  }
 }
