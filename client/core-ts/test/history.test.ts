@@ -262,6 +262,8 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   assert.equal(then({ kind: "tool_call", tool: "Bash", text: '{"command":"ls"}', at: later(5), subagent: true }), null);
   assert.deepEqual(h.live, [{ id: "s", text: "正在思考…" }]);
   assert.equal(h.phase.text, "正在启动 Codex");
+  // The model answering is said in the person's language, as the chat's activity says it.
+  assert.equal(presentHistory({ ...live, phase: { phase: "responding", since: 5 } }, cx(threads, members, slack)).phase.text, "思考中");
   assert.equal(h.usage[4].value, "50%");
   assert.equal(h.usageLine, "调用 3 次 · 输入 2K（缓存 50%） · 输出 50");
   assert.equal(h.edge, "已到会话开头");

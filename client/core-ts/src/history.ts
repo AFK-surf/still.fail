@@ -721,7 +721,7 @@ function pushed(live: J, runtime: string): { liveSteps: { id: string; step: stri
                 ? t("core-logic.history.phase.requesting")
                 : name === "working"
                   ? t("core-logic.history.phase.working")
-                  : "Thinking";
+                  : t("core-logic.activity.thinking");
           return { phase: p.phase ?? null, text, since: p.since ?? null };
         })()
       : null;
