@@ -47,6 +47,15 @@ the same.
 
 
 
+- **n0-mainline 0.6.0** (src/actor/socket.rs; client/ only: the DHT lookup of iroh-mainline-address-lookup)
+  - A read that fails backs off (50 ms, doubling, at most 2 s), the next read's time kept on the socket so the actor's
+    select dropping a read for another branch does not cut the wait short; from the third failure in a row (~150 ms
+    after the first) the socket is bound anew, the old one closed first so its port can be taken again, else on
+    another. It went straight back to the actor's loop, the socket still readable, a core kept busy for as long as
+    the error lasted (a phone's record, 2026-10-31: `n0_mainline::actor::run` → `recv_from` in every sample of the
+    thread, minutes after the app came back; that iOS took the suspended app's socket away is a guess, the error not
+    recorded). Upstream's 0.7.1 still returns at once.
+
 - **noq-udp 1.3.0** (src/linux.rs): no UDP segmentation offload (GSO) on Android, each datagram sent on its own. An
   Android emulator's network accepts a segmented burst and drops all of it; QUIC on a direct path then got nothing
   through once it sent more than a packet or two at once, until iroh dropped the path 15 s later (docs/mesh-lan.md).
