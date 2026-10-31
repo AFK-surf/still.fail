@@ -13,8 +13,12 @@ runs:
       id: newest
       with:
         # (in the runner's own tool cache: two runners on one machine (Mini1's) shared ~/.moon-ci, and one's restore wrote
-        # over the MoonBit the other's tests were running with: moon test said nothing, run 39532570138)
-        path: ${{ runner.tool_cache }}/moon-ci
+        # over the MoonBit the other's tests were running with: moon test said nothing, run 39532570138. A self-hosted
+        # runner's put in and taken out at moon-ci-put, in its workspace, then moved there: an entry is found only by the
+        # path it was saved at, as written, and each of Mini1's runners has a tool cache of its own, so only the one the
+        # moonbit workflow put it in from ever found it, the others failing at each new release once theirs was gone:
+        # main's web deploy on mini1-2, twice, 2026-10-31, 41173735373)
+        path: ${{ runner.environment == 'self-hosted' && 'moon-ci-put' || format('{0}/moon-ci', runner.tool_cache) }}
         # (no key is this one: the newest of this prefix, the latest release the moonbit workflow put in)
         key: moonbit-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-none
         restore-keys: moonbit-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-
@@ -43,7 +47,7 @@ runs:
       uses: actions/cache/restore@v4
       id: moon
       with:
-        path: ${{ runner.tool_cache }}/moon-ci
+        path: ${{ runner.environment == 'self-hosted' && 'moon-ci-put' || format('{0}/moon-ci', runner.tool_cache) }}
         key: ${{ steps.newest.outputs.cache-matched-key }}
     - shell: bash
       env:
@@ -52,6 +56,8 @@ runs:
       run: |
         t="$RUNNER_TOOL_CACHE"; [ "${{ runner.os }}" != Windows ] || t=$(cygpath -u "$t")
         m="$t/moon-ci"
+        # (a self-hosted runner's, restored in its workspace: moved into its tool cache, over the release kept there)
+        if [ -d moon-ci-put ]; then rm -rf "$m" && mv moon-ci-put "$m"; fi
         if [ ! -x "$m/bin/moon" ] && [ ! -x "$m/bin/moon.exe" ]; then
           echo "::error::no MoonBit for ${{ runner.os }} ${{ runner.arch }} in the Actions cache: run the moonbit workflow (it puts each new release in once)"
           exit 1
