@@ -172,6 +172,24 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   let t = @view.Tree::new(make, measure=view_words_measure, time=fn() { h_event_time() })
   // (a press held on an old view a modal layer now keeps from input: called off then)
   t.on_modals(view_modals_told)
+  // (where a node takes a finger said anew, or one saying it let go: what the paint read of it for the hosts of native
+  // views (NativeView::tell_covers) followed no more, at once, the frame painted anew for it; between frames a frame
+  // asked for, in one its painting reads it)
+  t.on_takes(fn() {
+    match paint_watch.val {
+      Some(w) => {
+        w.stop()
+        paint_watch.val = None
+      }
+      None => ()
+    }
+    if !in_frame.val {
+      h_frame_owed()
+    }
+  })
+  // (a hold going through to an old view: what of it takes a press there, who it is; handed so, its from then)
+  t.hosts_at(fn(island, x, y) { old_taker_at(t, island, x, y) })
+  t.on_through(view_through)
   t.on_due(fn() {
     view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
     // (between frames, a frame for it; in one, what it marked is done in it, and what goes on asks for the next as
@@ -1488,6 +1506,50 @@ fn old_press_owner(c : Ctx, x : Double, y : Double, chosen : @view.NodeId) -> @v
   match claim_chain(c, x, y) {
     [id, ..] => c.island_of_id(id)
     [] => Some(chosen)
+  }
+}
+
+///|
+/// What of the old view in node `island` takes a press at (x, y), placed where the tree has it now: who it is (a hit
+/// target's id; words picked from there, their paragraph's), as old_press_owner finds it, only where it is that old
+/// view's (Tree::hosts_at: what a hold going through is handed, the one found as the finger went down alone).
+fn old_taker_at(tree : @view.Tree, island : @view.NodeId, x : Double, y : Double) -> Int? {
+  let c = g()
+  old_hits_place(c, Some(tree))
+  let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
+  let k = press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y)
+  if k >= 0 {
+    return if old_hit_owner(k) == Some(island) { Some(c.hit_ids[k] * 2) } else { None }
+  }
+  match c.sel_at(x, y) {
+    Some(s) if s.island == Some(island) => Some(s.base * 2 + 1)
+    _ => None
+  }
+}
+
+///|
+/// A hold the window's tree handed on (Tree::on_through), as one change of its moment, the cover's hold ended: to a
+/// node of the tree's, the finger's events its from now; to an old view, the old frame told the finger went down when
+/// it did, where it is now (a press of the old frame's own from here, as long held: what a long press picks, picked),
+/// its events the old view's from now.
+fn view_through(to : @view.Target, x : Double, y : Double, down_at : Double) -> Unit {
+  match to {
+    Dragged(u) => {
+      view_held.val = Some(Dragging(u))
+      h_frame_owed()
+    }
+    Hosted(island) => {
+      let c = g()
+      let owner = old_press_owner(c, x, y, island)
+      let part = match owner {
+        Some(o) if !old_whole.val => old_part_of(o)
+        _ => -1
+      }
+      view_held.val = Some(Old(part, owner))
+      view_input_went(part)
+      old_pointer_now(0, x, y, 0, 0, down_at)
+    }
+    _ => ()
   }
 }
 

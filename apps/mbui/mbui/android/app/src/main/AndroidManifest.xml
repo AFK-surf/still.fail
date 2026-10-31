@@ -53,6 +53,14 @@
         <provider android:name=".Shares$Files" android:authorities="${applicationId}.shared" android:exported="false" android:grantUriPermissions="true" />
         <!-- Updates: what the installer says of a newer build handed to it -->
         <receiver android:name=".Updates$InstallResult" android:exported="false" />
+        <!-- Updates: what is asked for downloaded on a network that is not metered; the build ready put in while away -->
+        <service android:name=".Updates$Job" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Updates: the newer build in place (what was kept for it let go; put in at the person's word, said in a notification) -->
+        <receiver android:name=".Updates$Replaced" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <service android:name=".LoginService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a local loopback listener alive for a few minutes while the user signs in in their browser, so the browser's OAuth redirect to 127.0.0.1 reaches the app." />
         </service>

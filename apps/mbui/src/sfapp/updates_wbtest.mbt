@@ -1,5 +1,6 @@
-// The app's updates (updates.mbt) over a source of made-up builds: Home's key when one brings something, the settings'
-// version row, nothing asked with no source.
+// The app's updates (updates.mbt) over a source of made-up builds: a newer build handed to the host at once, nothing
+// over Home while it comes, a card there only for what wants the person, the settings' version row, nothing asked with
+// no source.
 
 ///|
 fn release(news : Array[String]) -> Json {
@@ -31,14 +32,25 @@ fn updates_tester(r : Json, asked : Array[String]) -> @ui.Tester {
 }
 
 ///|
-test "a newer build that brings something: Home's download key; 关于's row offers it by its version" {
+test "a newer build: handed to the host at once to be made ready, nothing over Home while it comes; 关于's row offers it by its version" {
   let asked = []
   let t = updates_tester(release(["列表滑得更顺"]), asked)
   t.frame()
   assert_eq(asked, ["1 false"])
   assert_true(update.available.get() is Some(_))
-  assert_eq((update_stands().doing, update_stands().newer), ("", "0.1.1"))
-  // (not idle yet: a spinner turns for ever (sf/icons.mbt), till mbui#25)
+  // (as asked at the start: it may wait for a network that is not metered)
+  assert_eq(t.update_asked(), ["fetch stillfail-2.apk false"])
+  assert_eq(update_stands().label, "下载 0.1.1")
+  t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(update_button_at(t, "传输") is None, msg="the build coming shown over Home")
+  assert_true(t.find("40%") is None)
+  assert_eq((update_stands().label, update_stands().note), ("正在下载 0.1.1", "40% · 1000 B"))
+  // ready, put in place by itself while away: still nothing over Home
+  t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\",\"away\":true}")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("允许安装更新") is None)
+  assert_eq(update_stands().ready, "0.1.1")
 }
 
 ///|
@@ -53,53 +65,46 @@ fn update_button_at(t : @ui.Tester, label : String) -> (Double, Double, Double, 
 }
 
 ///|
-test "a small screen's 传输: 更新 pressed, the download the host tells of shown as it goes, not offered again (2026-10-27)" {
+test "the leave to install apps wanted: a card over Home says so; pressed, the host asked to put the build in place (its page for the leave first)" {
   let t = updates_tester(release(["列表滑得更顺"]), [])
   t.frame()
-  guard update_button_at(t, "传输") is Some((x, y, w, h)) else { fail("no 传输 key on Home") }
-  t.tap(x + w / 2.0, y + h / 2.0)
+  t.tells_update("{\"phase\":\"allow\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\",\"away\":true}")
   t.run_for(@ui.move_most_ms)
-  guard update_button_at(t, "更新到 0.1.1") is Some((x, y, w, h)) else { fail("no 更新到 0.1.1 in 传输") }
-  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_true(t.find("still.fail 需要你允许它安装应用，之后会自动更新") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  t.tap_text("允许安装更新")
+  // (still.fail cloud asked now first: the same build, handed again, taken by the host as asked already)
+  assert_eq(t.update_asked(), ["fetch stillfail-2.apk false", "fetch stillfail-2.apk false", "apply"])
+  // given: gone
+  t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\",\"away\":true}")
   t.run_for(@ui.move_most_ms)
-  // (asked again, handed to the host, which tells how it goes)
-  t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\"}")
-  t.draw()
-  assert_true(t.words().iter().any(fn(w) { w.0 == "下载中 40%" }), msg="how far it has come not said")
-  assert_true(update_button_at(t, "更新到 0.1.1") is None, msg="更新 offered again while it downloads")
-  t.tells_update("{\"phase\":\"downloading\",\"percent\":70,\"error\":\"\"}")
-  t.draw()
-  assert_true(t.words().iter().any(fn(w) { w.0 == "下载中 70%" }))
+  assert_true(t.find("允许安装更新") is None)
+}
+
+///|
+test "a build that failed is handed to the host again as the app is shown again (its check), and at the person's word now" {
+  let asked = []
+  let t = updates_tester(release(["列表滑得更顺"]), asked)
+  t.frame()
+  t.tells_update("{\"phase\":\"failed\",\"percent\":-1,\"error\":\"status 404\",\"file\":\"stillfail-2.apk\"}")
+  assert_eq((update_stands().label, update_stands().note), ("重试更新到 0.1.1", "下载返回 404"))
+  update_check(fixture("home"), false)
+  update_go(fixture("home"))
+  assert_eq(t.update_asked(), [
+    "fetch stillfail-2.apk false", "fetch stillfail-2.apk false", "fetch stillfail-2.apk false", "fetch stillfail-2.apk true",
+  ])
 }
 
 ///|
 test "none newer: the row offers to check, and asked now says 已是最新" {
   let asked = []
   let _ = updates_tester(Json::null(), asked)
-  assert_eq((update_stands().doing, update_stands().newer), ("", ""))
+  assert_eq((update_stands().label, update_stands().ready), ("检查更新", ""))
   let said = []
   update_check(fixture("home"), true, done=fn(w) { said.push(w) })
   assert_eq(said, ["已是最新"])
 }
 
 ///|
-test "a newer build installed from the list of what comes: the list stays open, to watch it download" {
-  let asked = []
-  let t = updates_tester(release(["列表滑得更顺"]), asked)
-  t.run_for(@ui.move_most_ms)
-  let open = fn(label : String) raise {
-    let (x, y, w, h) = t.query(Button, label~).unwrap().rect
-    t.tap(x + w / 2.0, y + h / 2.0)
-    t.run_for(@ui.move_most_ms)
-  }
-  open("传输")
-  let list = @sf.last_presented()
-  assert_true(list > 0 && @sf.presented_open_of(list), msg="the list opened")
-  open("更新到 0.1.1")
-  assert_eq(asked, ["1 false", "1 true"])
-  assert_true(@sf.presented_open_of(list), msg="the list still open once the build is asked for")
-}
-
 ///|
 test "no source: nothing is asked; asked now, it says why" {
   reset()
@@ -153,7 +158,7 @@ test "an update's download answered otherwise: its status in Updates.kt's words"
 fn update_key_drawn(busy : Bool, coming : Double?) -> ((Double, Double, Double, Double), Double, Double) raise {
   reset()
   let t = @ui.Tester::new(
-    fn(c) { @sf.update_key(c, "k", 34.0, 20.0, "下载中 42%", "", coming, false, busy) |> ignore },
+    fn(c) { @sf.update_key(c, "k", 34.0, 20.0, "下载中 42%", "", coming, busy) |> ignore },
     w=120.0,
     h=80.0,
   )
@@ -195,7 +200,7 @@ test "the update key while an update comes, one look on every screen: the ring i
 test "the update key while an update comes: no words, no press" {
   reset()
   let t = @ui.Tester::new(
-    fn(c) { @sf.update_key(c, "k", 34.0, 20.0, "下载中 42%", "", Some(0.42), false, true) |> ignore },
+    fn(c) { @sf.update_key(c, "k", 34.0, 20.0, "下载中 42%", "", Some(0.42), true) |> ignore },
     w=120.0,
     h=80.0,
   )

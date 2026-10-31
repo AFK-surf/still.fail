@@ -303,6 +303,8 @@ test "progress: its value as a percentage and its range; not known, neither, and
   v.val = None
   t.draw()
   assert_eq(t.get(@ui.Role::ProgressBar, label="Upload").range, None)
+  // (what was come drawn back out into the band running along it: progress_known_ms)
+  t.run_for(progress_known_ms)
   // a wait: a frame asked for each frame while it shows (Ctx::cycle), said as a cycle: what never ends does not keep a
   // test from idle
   assert_true(t.ctx().wants_frame)
@@ -533,4 +535,20 @@ test "switch: its knob slides to the side it was turned to by a rest of its own 
   t.run_for(rest - t.time())
   assert_eq(switch_rest("wifi"), -1.0)
   t.assert_idle()
+}
+
+///|
+test "progress: from not known to known, the band running along it is drawn into the part come over progress_known_ms, not changed in a frame" {
+  let v : Ref[Double?] = Ref(None)
+  let seen : Ref[ProgressState] = Ref({ t: None, known: 0.0 })
+  let t = @ui.Tester::new(fn(c) { progress(c, "upload", v.val, max=100.0, look=fn(_, s) { seen.val = s }) })
+  assert_eq(seen.val.known, 0.0)
+  v.val = Some(40.0)
+  t.draw()
+  t.run_for(progress_known_ms / 2.0)
+  let half = seen.val.known
+  assert_true(half > 0.0 && half < 1.0, msg="\{half}")
+  t.run_for(progress_known_ms)
+  assert_eq(seen.val.known, 1.0)
+  assert_eq(seen.val.t, Some(0.4))
 }

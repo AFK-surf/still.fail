@@ -1,7 +1,8 @@
 // The update's contract (scripts/host_contract.sh mac update, linux update): on a real host, the app a bundle signed as
 // the build it is handed (Linux: a folder installed as an app, its VERSION beside it),
-// MBUI_UPDATECHECK=<url>|<sha256>|<size>|<name>: that build handed to the host to put in this one's place
-// (@hostapi.update_install, as still.fail's app hands it what the core found), this build's version on the log
+// MBUI_UPDATECHECK=<url>|<sha256>|<size>|<name>: that build handed to the host to make ready (@hostapi.update_fetch,
+// as still.fail's app hands it what the core found) and, once ready, put in this one's place (update_apply), this
+// build's version on the log
 // (`UPDATECHECK version N`), then how it goes each time that changes (`UPDATECHECK state {…}`). Once the new build
 // is in place the host quits this app and opens that one; one it does not take is `failed`, and why, on the log, and
 // the run ends.
@@ -20,7 +21,7 @@ pub fn update_check_run(c : @ui.Ctx, asked : String) -> Unit {
       [url, sha256, size, name] => {
         @hostapi.log("UPDATECHECK version \{@hostapi.app_version()}")
         let size = @string.parse_int(size) catch { _ => 0 }
-        @ui.update_install(url, sha256, size.to_double(), name)
+        @ui.update_fetch(url, sha256, size.to_double(), name, true)
       }
       _ => @hostapi.log("UPDATECHECK MBUI_UPDATECHECK is url|sha256|size|name")
     }
@@ -34,6 +35,10 @@ pub fn update_check_run(c : @ui.Ctx, asked : String) -> Unit {
     let v = @json.parse(st) catch { _ => Json::null() }
     if v is Object(o) && o.get("phase") is Some(String("failed")) {
       c.after_build("update-check-end", fn() { @hostapi.exit(0) })
+    }
+    // ready: put in place (the host ends this run)
+    if v is Object(o) && o.get("phase") is Some(String("ready")) {
+      @ui.update_apply("")
     }
   }
   c.text("update check") |> ignore

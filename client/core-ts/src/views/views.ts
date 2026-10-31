@@ -923,10 +923,12 @@ export class Views implements Owner {
           // Its sharing names the viewer's other workspaces.
           { topic: "workspaces" },
         );
-        // The chats its messages link to, as their stations' lists have them, archived ones too (#linkedChats).
+        // The chats its messages link to, as their stations' lists have them (#linkedChats, each its row alone). Not the
+        // archive: shown, a station's archive is read from it whole (sync.ts archivedShown), its thousands of rows the
+        // most of opening a chat with a link in it (0.63 s on a phone, 2026-10-31); one archived meanwhile is said so
+        // as the chat is made again.
         for (const s of this.#linkedStations(station, arr(get(this.ok({ topic: "thread", station, thread }), "entries")))) {
           if (s !== station) topics.push({ topic: "chatRows", station: s });
-          topics.push({ topic: "archivedRows", station: s });
         }
         return topics;
       }

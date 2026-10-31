@@ -173,13 +173,16 @@ pub(all) enum Route {
 } derive(Eq)
 
 ///|
-/// How this build's update stands: what is under way (正在检查, 下载中 40%, 正在安装; "" while nothing is), how far
-/// it has come while it downloads and the host says how far (0 to 1, else None), the newer build known, by its name
-/// ("" while none is), and whether newer builds are asked for here at all (not on iOS, nor run from the sources).
+/// How this build's update stands, as 关于's version row says it (sfbase updates.mbt update_stands): what pressing it
+/// does (检查更新, 下载 …, 重启以更新到 …), the line under it ("" none), whether something is under way (a bar under
+/// them, how far as `part`: 0 to 1 where known), the newer build's version where one waits for the person's word ("":
+/// none), and whether newer builds are asked for here at all (not on iOS, nor run from the sources).
 pub(all) struct VersionNow {
-  doing : String
+  label : String
+  note : String
+  going : Bool
   part : Double?
-  newer : String
+  ready : String
   asks : Bool
 }
 

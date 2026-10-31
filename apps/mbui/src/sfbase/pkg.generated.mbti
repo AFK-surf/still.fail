@@ -613,6 +613,8 @@ pub fn fresh_picked(Json?) -> Unit
 
 pub fn fresh_reset() -> Unit
 
+pub fn fresh_view(ChatRef) -> (ChatView, Array[Entry])?
+
 pub let globe_mark : LinkMark
 
 pub fn go_back() -> Bool
@@ -1541,8 +1543,6 @@ pub let update : Update
 
 pub fn update_asks() -> Bool
 
-pub fn update_busy() -> Bool
-
 pub fn update_check(Source, Bool, done? : (String) -> Unit) -> Unit
 
 pub fn update_dialog(Source) -> Unit
@@ -1555,29 +1555,19 @@ pub fn update_first(Source) -> Unit
 
 pub fn update_from_menu(Source) -> Unit
 
-pub fn update_install(Source) -> Unit
+pub fn update_go(Source) -> Unit
 
-pub fn update_part() -> Double?
-
-pub fn update_percent() -> Int32
-
-pub fn update_phase() -> String
-
-pub fn update_progress() -> String
+pub fn update_now() -> UpdateNow
 
 pub fn update_reset() -> Unit
 
 pub fn update_row_tapped(Source) -> Unit
 
-pub fn update_say(String) -> Unit
-
 pub fn update_stands() -> @settings.VersionNow
-
-pub fn update_under_way() -> Bool
 
 pub let update_version : @ref.Ref[Int32]
 
-pub fn update_why() -> String
+pub fn update_wants_you() -> Bool
 
 pub fn upload_id(String, Int32) -> String
 
@@ -3148,10 +3138,22 @@ pub(all) struct Update {
   available : @signals.Signal[Json?]
   mut asked : Bool
   checking : @signals.Signal[Bool]
-  installing : @signals.Signal[Bool]
   mut source : UpdateSource?
   said : @signals.Signal[UpdateSaid]
   mut dialog : Int32
+}
+
+pub(all) enum UpdateNow {
+  Quiet
+  Checking
+  Latest
+  CouldNot(String)
+  Offered(Json, waiting~ : Bool)
+  Coming(Json, Double?)
+  Ready(Json, away~ : Bool)
+  Allow(Json)
+  Installing(Json)
+  Failed(Json, String)
 }
 
 pub(all) enum UpdateSaid {

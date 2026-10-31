@@ -33,7 +33,7 @@ export function ScreenPage() {
   return (
     <div className={css.page}>
       <ScreenViewer key={`${station.address} ${id}`} station={station.address} screen={id} backLabel={alone ? t("common.close") : t("common.back")} onBack={back}
-        onWindow={alone ? undefined : own} onGone={leaves ? back : undefined} />
+        onWindow={alone ? undefined : own} onGone={leaves ? back : undefined} onGrants={() => go(`${stationPage(scopeOf(station.address), station.id)}?part=settings`)} />
     </div>
   );
 }

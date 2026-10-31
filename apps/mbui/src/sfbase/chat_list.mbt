@@ -364,8 +364,15 @@ pub fn entries_of(v : ChatView) -> Array[Entry] {
 /// whoever reads it in a frame (the page, its side panel, the frame round it, the chats kept: linger_tick).
 pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json?) {
   let (read, topic) = chat_read.read(src, chat_params(r))
-  match (read, topic.value) {
-    (Some(c), Some(Object(_))) => (Some(c.view), c.list, topic.error)
+  match (read, topic.value, fresh_view(r)) {
+    // (the chat a new chat became is never said to be empty: its first message is in it from the frame it was sent,
+    // sent_local, while the core has it made and not yet sent to)
+    (Some(c), Some(Object(_)), Some(_)) if c.list.iter().any(fn(e) { e is Empty }) =>
+      (Some(c.view), c.list.filter(fn(e) { !(e is Empty) }), topic.error)
+    (Some(c), Some(Object(_)), _) => (Some(c.view), c.list, topic.error)
+    // the chat a new chat became as its first words were sent, till the core's view of it is read: a chat with
+    // nothing in it yet but what was sent from here (its own first view, as the core's will be: views.ts pendingChat)
+    (_, _, Some((v, list))) => (Some(v), list, None)
     _ => (None, [], topic.error)
   }
 }

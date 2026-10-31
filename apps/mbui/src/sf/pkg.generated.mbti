@@ -851,7 +851,7 @@ pub let link_mark_w : @ui.Len
 
 pub fn link_menu(String, from~ : Beside, () -> Unit, () -> Unit) -> Unit
 
-pub fn link_row(@ui.Ctx, String, String, value? : String, value_lit? : Bool, value_bad? : Bool, value_dot? : Bool, strong? : Bool, danger? : Bool, out? : Bool, chevron? : Bool, folds? : Bool, note? : String, lacks? : Bool, trouble? : String, lead? : () -> Unit, tail? : () -> Unit, below? : () -> Unit, goes? : Bool, acts? : Bool, adds? : Bool, title_after? : () -> Unit, control? : () -> Unit, note_cut? : Bool, face? : Bool) -> Bool
+pub fn link_row(@ui.Ctx, String, String, value? : String, value_lit? : Bool, value_bad? : Bool, value_dot? : Bool, strong? : Bool, danger? : Bool, out? : Bool, chevron? : Bool, folds? : Bool, note? : String, lacks? : Bool, trouble? : String, lead? : () -> Unit, tail? : () -> Unit, below? : () -> Unit, below_open? : Double, goes? : Bool, acts? : Bool, adds? : Bool, title_after? : () -> Unit, control? : () -> Unit, note_cut? : Bool, face? : Bool) -> Bool
 
 pub fn list_apart(@ui.Ctx) -> Unit
 
@@ -1491,7 +1491,7 @@ pub let preview_address_h : @ui.Len
 
 pub fn progress(@ui.Ctx, String, Double?, w? : @ui.Size, color? : Int64) -> Unit
 
-pub fn progress_key(@ui.Ctx, String, Double, Double, String, String, Double?, dot~ : Bool, failed~ : Bool) -> Bool
+pub fn progress_key(@ui.Ctx, String, Double, Double, String, String, Double?, failed~ : Bool) -> Bool
 
 pub fn progress_ring(@ui.Ctx, Double, Double, Int64) -> Int32
 
@@ -2031,7 +2031,7 @@ pub let under_card_words : @ui.Style
 
 pub fn untitled_clear() -> @ui.Style
 
-pub fn update_key(@ui.Ctx, String, Double, Double, String, String, Double?, Bool, Bool) -> Bool
+pub fn update_key(@ui.Ctx, String, Double, Double, String, String, Double?, Bool) -> Bool
 
 pub let update_raised : Raised
 

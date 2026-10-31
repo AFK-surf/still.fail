@@ -203,9 +203,17 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   if mode == "transfers" || mode == "home-transfers" || mode == "home-transfers-update" || mode == "settings-kept-fill" {
     @sffixture.fix_every_transfer("ws1/st1", "s-c1", @sffixture.fix_docs)
   }
-  // a newer build offered among them (home-transfers-update), or alone (home-update: the key's dot)
+  // a newer build ready that waits for the leave to install apps: its card over Home (home-update), over what comes
+  // too (home-transfers-update, home-update-list)
   if mode == "home-transfers-update" || mode == "home-update" || mode == "home-update-list" {
     @sffixture.fixture_update("0.1.5640")
+    @sffixture.fixture_update_goes("0.1.5640", "allow")
+  }
+  // a newer build ready where it is put in place at the person's word or as the app quits (a desktop's): 重启更新 in
+  // the sidebar
+  if mode == "home-update-ready" {
+    @sffixture.fixture_update("0.1.5640")
+    @sffixture.fixture_update_goes("0.1.5640", "ready", away=false)
   }
   if mode == "home-transfers" || mode == "home-transfers-update" || mode == "home-update-list" {
     @sfdesk.open_transfers()
@@ -230,11 +238,28 @@ pub fn open_fixture_mode(mode : String) -> Unit {
       @sfdesk.bring_page()
     }
   }
-  // 关于 with a newer build offered and still.fail cloud asked again before it downloads, on a device that sends
-  // usage statistics and error reports: its rows at their fullest
+  // 关于 as an update goes, as the host would say it (a film's: scripts/motion/update-flow.drive): offered; the
+  // person's check (its bar sweeping); downloaded from 0 to whole; ready
+  if mode == "settings-about-flow" {
+    @sffixture.fixture_update("0.1.5283")
+    let v = "0.1.5283"
+    @sffixture.fix_later(1200.0, fn() { update.checking.set(true) })
+    @sffixture.fix_later(2200.0, fn() {
+      update.checking.set(false)
+      @sffixture.fixture_update_goes(v, "downloading", percent=0)
+    })
+    for i in 1..=20 {
+      @sffixture.fix_later(2200.0 + i.to_double() * 160.0, fn() {
+        @sffixture.fixture_update_goes(v, "downloading", percent=i * 5)
+      })
+    }
+    @sffixture.fix_later(5800.0, fn() { @sffixture.fixture_update_goes(v, "ready") })
+  }
+  // 关于 with a newer build on its way, on a device that sends usage statistics and error reports: its rows at their
+  // fullest
   if mode == "settings-about" {
     @sffixture.fixture_update("0.1.5283")
-    update.installing.set(true)
+    @sffixture.fixture_update_goes("0.1.5283", "downloading", percent=40)
     reporting_host.set(Some({ get: fn() { true }, set: fn(_) {  } }))
   }
   // the search open over Home, words typed (search_fixture.mbt)

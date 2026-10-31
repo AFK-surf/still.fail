@@ -1,22 +1,26 @@
-// Updates (@hostapi.app_version, update_install, update_state) on Linux: the app keeping itself current, as the Mac's
+// Updates (@hostapi.app_version, update_fetch, update_apply, update_state) on Linux: the app keeping itself current, as the Mac's
 // does (mac_app.m's Updates), where it is installed as an app: an identity (MBUI_APP_ID) and its version in a VERSION
 // file beside its program (0.1.<n>, which still.fail's linux/install.sh puts there with it). A newer build the core
 // found (`app.update`: the release's .tar.gz of the app's folder, still.fail's scripts/beta.sh linux) downloaded into
 // the app's cache ($XDG_CACHE_HOME/<id>/updates), picking up where a cut connection left off (the bytes so far kept in
 // `<name>.part`, the rest asked for as a range, a few times over with a growing pause while each try gets further),
-// checked against its size and SHA-256, unpacked there, and taken only when it is for this machine (its name says its
+// checked against its size and SHA-256 (update_fetch: ready); asked to (update_apply), unpacked there, and taken only
+// when it is for this machine (its name says its
 // architecture: -x64-linux, -arm64-linux), this app (its folder holds this program, by its name, and its installer,
 // install.sh) and newer (its VERSION). It is put in place as a person puts it: its own installer run (the folder copied
 // where the app lives, its desktop entry written again), and the program opened again as this one quits (a shell waits
-// for this process to end first: two cores never share the data, nor the bus's name). How it goes the app reads
-// (`update_state`: the phase, how far, what went wrong), told each time it changes (MB_OUTSIDE_UPDATE, id 1: 0 while
-// the host works at it, -1 failed). Included by linux_app.c after linux_life.h (app_id, quit).
+// for this process to end first: two cores never share the data, nor the bus's name); the app quit with one ready, it
+// is put in place as it goes (update_at_quit), not opened again. How it goes the app reads
+// (`update_state`: the phase, how far, what went wrong, the build), told each time it changes (MB_OUTSIDE_UPDATE, id 1:
+// 0 while the host works at it, 1 once it is ready, -1 failed). Included by linux_app.c after linux_life.h (app_id, quit).
 #include <glib/gstdio.h>
 #include <libsoup/soup.h>
 #include <sys/utsname.h>
 
 static char *own_exe;  // the program's path as it started (the one opened again: its installer puts the new one there)
-static const char *update_phase = "idle";  // idle | downloading | retrying | installing | failed
+static const char *update_phase = "idle";  // idle | downloading | retrying | ready | installing | failed
+// the build asked for (its file's name), and once ready, its archive (main thread's)
+static char *update_file, *update_ready;
 static int update_percent = -1;
 static char *update_error;
 static int update_working, update_told = 1;
@@ -75,7 +79,7 @@ static gboolean update_said(gpointer p) {
   update_percent = w->percent;
   g_free(update_error);
   update_error = w->error;
-  if (!strcmp(w->phase, "failed")) update_working = 0;
+  if (!strcmp(w->phase, "failed") || !strcmp(w->phase, "ready")) update_working = 0;
   g_free(w);
   if (changed) {
     update_told = 0;
@@ -94,7 +98,7 @@ static void update_say(const char *phase, int percent, const char *error) {
 static void update_tell(mb_outside_fn tell) {
   if (update_told) return;
   update_told = 1;
-  if (tell) tell(MB_OUTSIDE_UPDATE, 1, !strcmp(update_phase, "failed") ? -1 : 0);
+  if (tell) tell(MB_OUTSIDE_UPDATE, 1, !strcmp(update_phase, "failed") ? -1 : !strcmp(update_phase, "ready") ? 1 : 0);
 }
 
 // One try of the download (its bytes appended to the part as they come): whether the file is whole, or why not
@@ -207,6 +211,8 @@ static char *update_download(const char *dir, const char *url, const char *sha25
     g_unlink(tgz);
   }
   if (size > 0 && file_size(part) > size) g_unlink(part);
+  // how far from the first: what an earlier try kept (0 none), not "not known" till the first bytes come
+  if (size > 0) update_say("downloading", (int)(file_size(part) * 100 / size), NULL);
   // tries in a row that got no further before it gives up (pauses of 1, 2, 4, 8, 16 s between them)
   const int retries = 6;
   int failures = 0;
@@ -325,37 +331,67 @@ static gboolean update_again(gpointer data) {
   return G_SOURCE_REMOVE;
 }
 
+// The app quitting with a build ready (the person never said 重启更新): put in place as it goes, its installer run, not
+// opened again (the next time the person opens it, it is the newer build).
+static void update_at_quit(void) {
+  if (!update_ready || strcmp(update_phase, "ready")) return;
+  char *tgz = update_ready;
+  update_ready = NULL;
+  char *why = update_put(tgz);
+  update_log(why ? why : "in place as this one quits");
+  if (!why) g_unlink(tgz);
+  g_free(why), g_free(tgz);
+}
+
+// the archive downloaded and checked: kept as ready (on the main thread, where it is read)
+static gboolean update_readied(gpointer tgz) {
+  static int at_quit;
+  g_free(update_ready);
+  update_ready = tgz;
+  if (!at_quit) at_quit = 1, atexit(update_at_quit);
+  return G_SOURCE_REMOVE;
+}
+
 static gpointer update_work(gpointer data) {
   update_ask *a = data;
   char *dir = update_dir("updates"), *why = NULL, *tgz = NULL;
   // (another machine's not downloaded at all)
   if (!update_for_here(a->name)) why = g_strdup_printf("another machine's (%s)", a->name);
   else tgz = update_download(dir, a->url, a->sha256, a->size, a->name, &why);
-  if (tgz) {
-    update_say("installing", -1, NULL);
-    why = update_put(tgz);
-  }
   if (why) {
     char *said = g_strdup_printf("failed: %s", why);
     update_log(said);
     g_free(said);
     update_say("failed", -1, why);
+    g_free(tgz);
   } else {
-    g_unlink(tgz);
-    update_log("in place; opened again as this one quits");
-    g_main_context_invoke(NULL, update_again, NULL);
+    char *said = g_strdup_printf("%s ready", tgz);
+    update_log(said);
+    g_free(said);
+    g_main_context_invoke(NULL, update_readied, tgz);
+    update_say("ready", -1, NULL);
   }
-  g_free(why), g_free(tgz), g_free(dir);
+  g_free(why), g_free(dir);
   g_free(a->url), g_free(a->sha256), g_free(a->name), g_free(a);
   return NULL;
 }
 
-void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name) {
+void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now) {
+  (void)now;  // (no network here is told apart as costing more)
   if (update_working || mb_host_app_version() <= 0) return;
   update_ask *a = g_new0(update_ask, 1);
   char *n = utf8(name);
   a->url = utf8(url), a->sha256 = utf8(sha256), a->name = g_path_get_basename(n), a->size = (gint64)size;
   g_free(n);
+  // (ready already, or being put in place)
+  if (update_file && !strcmp(update_file, a->name) && (!strcmp(update_phase, "ready") || !strcmp(update_phase, "installing"))) {
+    g_free(a->url), g_free(a->sha256), g_free(a->name), g_free(a);
+    return;
+  }
+  g_free(update_file);
+  update_file = g_strdup(a->name);
+  g_free(update_ready);
+  update_ready = NULL;
   update_working = 1;
   update_phase = "downloading";
   update_percent = -1;
@@ -366,11 +402,43 @@ void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, doubl
   g_thread_unref(g_thread_new("update", update_work, a));
 }
 
+// the archive ready unpacked, checked and installed; in place, opened again as this one quits
+static gpointer update_put_work(gpointer tgz) {
+  char *why = update_put(tgz);
+  if (why) {
+    char *said = g_strdup_printf("failed: %s", why);
+    update_log(said);
+    g_free(said);
+    update_say("failed", -1, why);
+  } else {
+    g_unlink(tgz);
+    update_log("in place; opened again as this one quits");
+    g_main_context_invoke(NULL, update_again, NULL);
+  }
+  g_free(why), g_free(tgz);
+  return NULL;
+}
+
+void mb_host_update_apply(moonbit_string_t said) {
+  (void)said;  // (opened again here: nothing to say)
+  if (!update_ready || strcmp(update_phase, "ready")) return;
+  char *tgz = update_ready;
+  update_ready = NULL;
+  update_working = 1;
+  update_phase = "installing";
+  update_percent = -1;
+  update_told = 0;
+  schedule();
+  g_thread_unref(g_thread_new("update", update_put_work, tgz));
+}
+
 moonbit_string_t mb_host_update_state(void) {
   if (mb_host_app_version() <= 0) return moonbit_make_string_raw(0);
   GString *b = g_string_new(NULL);
   g_string_printf(b, "{\"phase\":\"%s\",\"percent\":%d,\"error\":\"", update_phase, update_percent);
   json_put(b, update_error ? update_error : "");
+  g_string_append(b, "\",\"file\":\"");
+  json_put(b, update_file ? update_file : "");
   g_string_append(b, "\"}");
   moonbit_string_t s = mstr(b->str);
   g_string_free(b, TRUE);

@@ -1,11 +1,12 @@
-// The desktop app's newer build, offered over the sidebar's top (brand.tsx UpdateButton, brand.css.ts
+// The desktop app's newer build ready, offered over the sidebar's top (brand.tsx UpdateButton, brand.css.ts
 // sidebarUpdate): how an update stands is both frames' (sfbase updates.mbt).
 
 ///|
-/// Whether the desktop app has a newer build to offer, or one on its way in (brand.tsx UpdateButton: the app's update
-/// state, none while there is none).
+/// Whether the sidebar offers the update key: only while the update wants the person (sfbase updates.mbt
+/// update_wants_you: a build ready that is not put in place by itself, the leave to install apps, one being put in
+/// place at their word); while one comes it is the host's, said in 关于 alone.
 fn update_shown() -> Bool {
-  update.available.get() is Some(_) || update_under_way() || update_phase() == "failed"
+  update_wants_you()
 }
 
 ///|
@@ -22,13 +23,13 @@ fn update_button(c : @ui.Ctx, src : Source, inset : Bool, top : Double) -> Unit 
 }
 
 ///|
-/// 更新 in a row of keys (the sidebar's first, before the filter): the library's update key, the filter's size; how far
-/// it has come under its mark, a red dot where it failed (why, its tip). Pressed, the build is downloaded and the app
-/// restarts as it.
+/// 重启更新 in a row of keys (the sidebar's first, before the filter): the library's update key, the filter's size, its
+/// tip the version it goes to. Pressed, the build ready is put in place and the app starts again as it (update_go);
+/// turning while it is.
 fn update_in_row(c : @ui.Ctx, src : Source) -> Unit {
-  let (label, why, busy) = update_said()
-  if @sf.update_key(c, "side/update", update_key_side, update_key_mark, label, why, update_part(), update_phase() == "failed", busy) {
-    update_install(src)
+  let (label, tip, busy) = update_said()
+  if @sf.update_key(c, "side/update", update_key_side, update_key_mark, label, tip, None, busy) {
+    update_go(src)
   }
 }
 
@@ -40,23 +41,20 @@ let update_key_side : Double = 32.0
 let update_key_mark : Double = 16.0
 
 ///|
-/// What 更新 says, its tip, and whether it is under way.
+/// What the key says, its tip, and whether it is under way.
 fn update_said() -> (String, String, Bool) {
-  let busy = update_under_way()
-  let percent = update_percent()
-  let label = match update_phase() {
-    "downloading" | "retrying" =>
-      @sf.t("web-main.appUpdate.downloading", args=[("percent", (if percent < 0 { 0 } else { percent }).to_string())])
-    "installing" => @sf.t("web-main.appUpdate.restarting")
-    "failed" => @sf.t("web-main.appUpdate.failed")
-    _ => @sf.t("web-main.versions.update")
+  match update_now() {
+    Allow(_) =>
+      (@sf.t("android-misc.updates.allow"), @sf.t("android-misc.updates.allowWhy", args=[("app", "still.fail")]), false)
+    Installing(_) => (@sf.t("web-main.appUpdate.restarting"), "", true)
+    Ready(v, ..) =>
+      (
+        @sf.t("desktop.update.restart"),
+        @sf.t("android-misc.updates.ready", args=[("version", text(Some(v), "versionName"))]),
+        false,
+      )
+    _ => (@sf.t("desktop.update.restart"), "", false)
   }
-  let tip = if update_phase() == "failed" {
-    update_why()
-  } else {
-    @sf.t("web-main.appUpdate.title", args=[("version", text(update.available.get(), "versionName")), ("app", "still.fail")])
-  }
-  (label, tip, busy)
 }
 
 ///|

@@ -85,5 +85,7 @@
   "desktop.startUpdate.title": "正在更新 {app}",
   "desktop.startUpdate.checking": "正在检查新版本",
   "desktop.startUpdate.downloading": "正在下载 {version}：{got} / {size} MB",
+  "desktop.update.download": "下载",
+  "desktop.update.restart": "重启更新",
   "desktop.startUpdate.skip": "跳过"
 }

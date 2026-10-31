@@ -52,8 +52,13 @@ fn init {
     // over it from rest, the heading under it on its way up stopped there; the next to mend)
     ("src/sfreplay/flows/wide_row_menu_test.mbt", 1),
     // (Home's rows since 2026-10-31 on the list's rows' way: a new chat's room opening as a frame of the slower pass
-    // takes twice as long, the row under it setting out faster in it than the curve's start allows a frame)
-    ("src/sfreplay/flows/wide_new_chat_test.mbt", 1),
+    // takes twice as long, the row under it setting out faster in it than the curve's start allows a frame; and, the
+    // new chat's row in the list from its first words sent, its agent's turn over while that room still opens: the
+    // chat over it, unsettled, taking its place above it, its row there before leaving where it is, stopped there
+    // rather than going on with the room opening over it; in the chat, its agent's answer coming in as the first
+    // message's row, taken over by the core's, changes its size: the rows over the composer each on a way of their
+    // own; the next to mend, with the sidebar's rows coming and going in place)
+    ("src/sfreplay/flows/wide_new_chat_test.mbt", 3),
     ("src/sfreplay/flows/wide_switcher_test.mbt", 1),
   ])
 }

@@ -1228,7 +1228,7 @@ int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_stri
 moonbit_string_t mb_host_shared_in(void) { return moonbit_make_string_raw(0); }
 moonbit_bytes_t mb_host_shared_in_file(int32_t i) { (void)i; return moonbit_make_bytes(0, 0); }
 
-// Updates (@hostapi.app_version, update_install, update_state): win_update.h.
+// Updates (@hostapi.app_version, update_fetch, update_apply, update_state): win_update.h.
 // A package for the system's installer (@hostapi.install_package): none here, said on the system channel (system.mbt):
 // its name as UTF-8, escaped for JSON.
 void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {

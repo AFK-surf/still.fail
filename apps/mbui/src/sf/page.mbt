@@ -1119,6 +1119,7 @@ pub fn link_row(
   lead? : () -> Unit,
   tail? : () -> Unit,
   below? : () -> Unit,
+  below_open? : Double,
   goes? : Bool = true,
   acts? : Bool = false,
   adds? : Bool = false,
@@ -1175,9 +1176,12 @@ pub fn link_row(
   // first line)
   let under = note != "" || trouble != "" || below is Some(_)
   let more = fn() {
-    match below {
-      Some(f) => c.box(style=row_below, f) |> ignore
-      None => ()
+    match (below, below_open) {
+      // (what comes and goes under it: as tall as `below_open` of it, its room with it, @motion.reveal)
+      (Some(f), Some(open)) =>
+        @motion.reveal(c, key + "/below", open, middle=true, fn() { c.box(style=row_below, f) |> ignore })
+      (Some(f), None) => c.box(style=row_below, f) |> ignore
+      _ => ()
     }
   }
   let b = match look() {

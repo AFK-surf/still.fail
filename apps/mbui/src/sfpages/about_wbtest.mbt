@@ -51,7 +51,7 @@ test "关于's 性能记录 where the device keeps one, at each width and with e
 }
 
 ///|
-test "关于's version rows, at each width and with either hand: this build alone on its row; under it a row doing what it says, 检查更新 or 更新到 the newer build, what is under way under its words and the bar under them, the row as tall all the way, pressed still" {
+test "关于's version rows, at each width and with either hand: this build alone on its row; under it a row saying how the update stands by its own words (检查更新, 下载 …, 正在下载 …, 重启以更新到 …), the line under its words and the bar under them while it comes, the row as tall all the way it comes" {
   for case in page_cases {
     let (w, platform) = case
     let t = setting_tester(About, w, platform~)
@@ -59,30 +59,42 @@ test "关于's version rows, at each width and with either hand: this build alon
     t.draw()
     let at = "\{w} platform \{platform}"
     assert_true(t.query(Link, label="检查更新") is Some(_), msg=at)
-    @sfbase.update.available.set(Some({ "versionCode": 2, "versionName": "0.1.1", "file": "android/stillfail-2.apk" }))
+    @sfbase.update.available.set(Some({ "versionCode": 2, "versionName": "0.1.1", "file": "android/stillfail-2.apk", "size": 23515867 }))
     t.draw()
-    assert_true(t.query(Link, label="更新到 0.1.1") is Some(_), msg=at)
-    // pressed: still.fail cloud asked again before it is downloaded, said under the row's words, its words kept; the
-    // row pressed again opens the dialog saying how it goes
-    @sfbase.update.installing.set(true)
+    // known, not handed to the host yet: offered; waiting for Wi‑Fi, said with its size
+    assert_true(t.query(Link, label="下载 0.1.1") is Some(_), msg=at)
+    t.tells_update("{\"phase\":\"waiting\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
     t.draw()
-    assert_true(t.find("正在检查最新版本") is Some(_), msg=at)
-    assert_true(t.query(Link, label="更新到 0.1.1") is Some(_), msg=at)
-    // nothing beside what is under way, nor beside the build's name: each whole on its line
-    let (_, ny, _, nh) = t.rect_of("正在检查最新版本").unwrap()
-    let (_, uy, _, uh) = t.rect_of("更新到 0.1.1").unwrap()
-    assert_true(ny >= uy + uh, msg=at)
-    assert_true(t.beside_faults().length() == 0, msg="\{at}: \{t.beside_faults()}")
-    // asked again, downloading, installing: the row as tall each way (what is under it where it was)
-    let (_, under, _, _) = t.rect_of("更新日志").unwrap()
-    @sfbase.update.installing.set(false)
-    for told in [("downloading", 40, "下载中 40%"), ("downloading", -1, "下载中"), ("installing", -1, "正在安装")] {
-      t.tells_update("{\"phase\":\"\{told.0}\",\"percent\":\{told.1},\"error\":\"\"}")
+    assert_true(t.find("连接 Wi‑Fi 后自动下载 · 22.4 MB") is Some(_), msg=at)
+    // pressed: still.fail cloud asked now (the newest), then downloaded now, on any network
+    t.click(Link, label="下载 0.1.1")
+    assert_eq(t.update_asked(), ["fetch stillfail-2.apk false", "fetch stillfail-2.apk true"], msg=at)
+    // coming: how far under its words, nothing beside them, the row as tall each way (what is under it where it was)
+    let mut under = -1.0
+    for told in [(40, "40% · 22.4 MB"), (-1, "22.4 MB"), (70, "70% · 22.4 MB")] {
+      t.tells_update("{\"phase\":\"downloading\",\"percent\":\{told.0},\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
       t.draw()
-      assert_true(t.find(told.2) is Some(_), msg="\{at} \{told.2}")
+      assert_true(t.query(Link, label="正在下载 0.1.1") is Some(_), msg="\{at} \{told.1}")
+      let (_, ny, _, _) = t.rect_of(told.1).unwrap()
+      let (_, uy, _, uh) = t.rect_of("正在下载 0.1.1").unwrap()
+      assert_true(ny >= uy + uh, msg=at)
+      assert_true(t.beside_faults().length() == 0, msg="\{at}: \{t.beside_faults()}")
       let (_, y, _, _) = t.rect_of("更新日志").unwrap()
-      assert_eq(y, under, msg="\{at} \{told.2}")
+      if under < 0.0 {
+        under = y
+      }
+      assert_eq(y, under, msg="\{at} \{told.1}")
     }
+    // ready, put in place by itself while away (Android's): said so; pressed, put in place now
+    t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\",\"away\":true}")
+    t.draw()
+    assert_true(t.find("离开 still.fail 一段时间后自动安装") is Some(_), msg=at)
+    t.click(Link, label="重启以更新到 0.1.1")
+    assert_eq(
+      t.update_asked(),
+      ["fetch stillfail-2.apk false", "fetch stillfail-2.apk true", "fetch stillfail-2.apk false", "apply"],
+      msg=at,
+    )
     t.tells_update("")
     @sfbase.update.available.set(None)
   }

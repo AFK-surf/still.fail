@@ -1157,20 +1157,21 @@ test "新建对话 pressed on a touch device: the cursor in the new chat's compo
 
 
 ///|
-test "on the tape 更新 is in the sidebar's first row before the filter, as large as it: the sidebar where it is without one" {
+test "on the tape 重启更新 is in the sidebar's first row before the filter, as large as it: the sidebar where it is without one" {
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":36,\"bottom\":24,\"left\":0,\"right\":0}}")
   t.run_for(@ui.move_most_ms)
   let (_, ny, _, _) = t.rect_of("新建对话").unwrap()
-  update.available.set(Some({ "versionName": "0.1.9999" }))
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
   t.run_for(@ui.move_most_ms)
   let (_, ny2, _, _) = t.rect_of("新建对话").unwrap()
   assert_eq(ny2, ny)
-  let (ux, uy, uw, uh) = said_at(t, "更新").unwrap()
+  let (ux, uy, uw, uh) = said_at(t, "重启更新").unwrap()
   let (fx, fy, _, fh) = said_at(t, "筛选会话：全部").unwrap()
   assert_eq(uh, fh)
   assert_eq(uy, fy)
-  assert_true(ux + uw <= fx, msg="更新 to \{ux + uw}, the filter from \{fx}")
+  assert_true(ux + uw <= fx, msg="重启更新 to \{ux + uw}, the filter from \{fx}")
   update.available.set(None)
 }
 

@@ -1,11 +1,7 @@
-// A new chat's first words (newchat.mbt send_first, flight.mbt carried): on screen where they were typed from the frame
-// they are sent, while the chat is made and its first view read, as a phone's core answers (a round trip later each);
-// then into their bubble over the composer with the chat's list coming up out of it (480 ms after 90, Ease.Arrive), never
-// gone for a frame nor drawn twice apart.
-
-///|
-/// How long the chat made goes unread after the page has become it, as a slow core's first view of it comes.
-let read_late_ms : Double = 100.0
+// A new chat's first words (new_chat.mbt new_send, flight.mbt carried): the page the chat from the frame they are sent,
+// they on screen where they were typed, then into their bubble over the composer with the chat's list coming up out of
+// it (480 ms after 90, Ease.Arrive), the scene leaving from the same moment: however late the core answers (a phone's,
+// a round trip later each, its first view of the chat later still), never gone for a frame nor drawn twice apart.
 
 ///|
 /// Where words `s` are seen now under the bar (each copy of exactly them, not see-through): (x, y).
@@ -148,61 +144,106 @@ test "wide: a new chat's first words sent: its field's hint not drawn over them 
 }
 
 ///|
-test "a new chat's first words stay where typed while the chat is made and read, then go into their bubble over the composer" {
+test "a new chat's first words go into their bubble from the frame they are sent, the core's answers and its view of the chat however late" {
   let held : Map[String, () -> Unit] = {}
   let unread = Ref(true)
   let t = held_core(held, unread)
   let words = "把发布说明写一下"
   let typed = new_chat_sent(t, words)
-  // the chat made (the core's answer a while after): the message sent to it
-  match held.get("newChat.create") {
-    Some(give) => give()
-    None => fail("no chat asked for")
-  }
-  t.draw()
-  assert_at(typed, seen_once(t, words))
-  assert_true(app.nav.top() is NewChat)
-  // the message in the chat's outbox: the page is the chat, its view not read yet
-  match held.get("chat.send") {
-    Some(give) => give()
-    None => fail("the message not sent")
-  }
-  t.draw()
+  // the page the chat at once, by the key the core keeps for it, nothing of the core's answered
   match app.nav.top() {
     Chat(r) => assert_eq(r.session, "new:1")
     _ => fail("not the chat")
   }
-  t.run_for(read_late_ms)
-  assert_at(typed, seen_once(t, words))
-  // read: their row laid out, and from 90 ms after it they go
-  unread.val = false
-  t.draw()
-  assert_at(typed, seen_once(t, words))
-  let placed = t.time()
+  let sent = t.time()
   t.run_for(flight_carry_after_ms - 20.0)
   assert_at(typed, seen_once(t, words))
   // up with the list, no frame where they are not, nor a jump
-  let landed = one_way_till(t, words, placed + flight_carry_after_ms + flight_carry_ms + 34.0, 120.0)
+  let landed = one_way_till(t, words, sent + flight_carry_after_ms + flight_carry_ms + 34.0, 120.0)
   assert_true(send_flight.get() is None)
   // in their bubble, over the composer at the chat's foot (its rows at its end, the room over them)
   assert_true(landed.1 < typed.1 && landed.1 > typed.1 - 200.0, msg="landed at \{landed} from \{typed}")
   assert_true((landed.0 - typed.0).abs() > 1.0)
-  // (in the list from then: up only as what comes under them opens its room, its agent's line)
+  // the chat made, the message sent to it, its view read: they stay in their bubble (up only as what comes under them
+  // opens its room, its agent's line)
+  for name in ["newChat.create", "chat.send"] {
+    match held.get(name) {
+      Some(give) => give()
+      None => fail("\{name} not asked")
+    }
+    t.draw()
+    assert_at(landed, seen_once(t, words))
+  }
+  unread.val = false
+  t.draw()
   t.frame()
   let after = seen_once(t, words)
   assert_true(after.0 == landed.0 && after.1 <= landed.1 + 0.5 && landed.1 - after.1 < 12.0, msg="\{landed} then \{after}")
 }
 
 ///|
-test "a new chat's first words sent: its scene fades where it is from then, not once the chat is made" {
+/// The soft keyboard up over a phone's window (as a host says it, the app laid out above it): `h` of its 844.
+fn keyboard_up(t : @ui.Tester, h : Double) -> Unit {
+  t.set_ime_inset(h)
+  t.resize_next(390.0, 844.0 - h)
+  t.run_for(@ui.move_most_ms)
+}
+
+///|
+test "a new chat's first words sent with the keyboard up: no words over others on any frame, the core however late" {
+  // (words over words on any frame where something moves fail the test: words_over.mbt)
+  let held : Map[String, () -> Unit] = {}
+  let unread = Ref(true)
+  let t = held_core(held, unread)
+  let (_, y) = bar_places_at()
+  t.tap(195.0, y - 28.0 - 4.0)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("做任何事")
+  keyboard_up(t, 336.0)
+  let words = "把发布说明写一下"
+  t.type_text(words)
+  t.draw()
+  tap_send(t)
+  t.draw()
+  assert_true(app.nav.top() is Chat(_))
+  let typed = seen_once(t, words)
+  let landed = one_way_till(t, words, t.time() + flight_carry_after_ms + flight_carry_ms + 34.0, 120.0)
+  assert_true(landed.1 < typed.1, msg="landed at \{landed} from \{typed}")
+  for name in ["newChat.create", "chat.send"] {
+    match held.get(name) {
+      Some(give) => give()
+      None => fail("\{name} not asked")
+    }
+    t.draw()
+  }
+  unread.val = false
+  t.run_for(new_leave_ms)
+  assert_at(landed, seen_once(t, words))
+}
+
+///|
+test "a new chat's first words and picture sent with the keyboard up: no words over others on any frame" {
+  let src = fixture_app("newchat-attach")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.drive("timeout 20000\nuntil 想让 agent 做什么？\n") |> ignore
+  keyboard_up(t, 336.0)
+  tap_send(t)
+  t.draw()
+  assert_true(app.nav.top() is Chat(_))
+  t.run_for(flight_carry_after_ms + flight_carry_ms + new_leave_ms)
+  assert_true(send_flight.get() is None)
+}
+
+///|
+test "a new chat's first words sent: its scene fades where it is from then, as they go, not once the chat is made" {
   let held : Map[String, () -> Unit] = {}
   let t = held_core(held, Ref(true))
   let title = "想让 agent 做什么？"
   new_chat_sent(t, "把发布说明写一下") |> ignore
   let at = seen_once(t, title)
-  // halfway, the chat not made yet (the core's answers kept): where it was, half faded
+  // halfway, the chat not made yet (the core's answers kept), the page it already: where it was, half faded
   t.run_for(new_leave_ms / 2.0)
-  assert_true(app.nav.top() is NewChat)
+  assert_true(app.nav.top() is Chat(_))
   match t.words().filter(fn(w) { w.0 == title }) {
     [w] => {
       assert_at(at, (w.1, w.2))
@@ -230,7 +271,7 @@ test "a new chat's first words sent: its scene fades where it is from then, not 
 }
 
 ///|
-test "a new chat's first words hold its composer as tall as it was while they are in it, its chat's too, till they set out" {
+test "a new chat's first words hold its composer as tall as it was while they are in it, its chat's, till they set out" {
   let held : Map[String, () -> Unit] = {}
   let unread = Ref(true)
   let t = held_core(held, unread)
@@ -244,29 +285,14 @@ test "a new chat's first words hold its composer as tall as it was while they ar
   let tall = box()
   tap_send(t)
   t.draw()
-  assert_eq(box(), tall)
-  // while the chat is made, and as the page becomes it, unread
-  match held.get("newChat.create") {
-    Some(give) => give()
-    None => fail("no chat asked for")
-  }
-  t.draw()
-  assert_eq(box(), tall)
-  match held.get("chat.send") {
-    Some(give) => give()
-    None => fail("the message not sent")
-  }
-  t.draw()
   assert_true(app.nav.top() is Chat(_))
   assert_eq(box(), tall)
-  // read: their row laid out; let go of as they set out
-  unread.val = false
-  t.draw()
-  assert_eq(box(), tall)
+  // let go of as they set out, the core's answers kept the while
   let go = t.rest_of("composer/held-box/")
   assert_true(go > t.time() && go < @double.infinity, msg="\{go} \{t.time()}")
   t.run_for(go - t.time())
   assert_true(box() < tall, msg="\{box()} \{tall}")
+  ignore((held, unread))
 }
 
 ///|
@@ -282,7 +308,7 @@ test "a new chat's first words with the core at once: never gone, into their bub
 }
 
 ///|
-test "a new chat's first words not sent (the chat not made): they leave the screen, back in the field" {
+test "a new chat's first words not sent (the chat not made): the page the new chat again, they back in its field" {
   let held : Map[String, () -> Unit] = {}
   let unread = Ref(true)
   reset()
@@ -303,7 +329,8 @@ test "a new chat's first words not sent (the chat not made): they leave the scre
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   let words = "把发布说明写一下"
   new_chat_sent(t, words) |> ignore
-  // (its scene gone meanwhile)
+  // (the page the chat meanwhile, its scene gone)
+  assert_true(app.nav.top() is Chat(_))
   t.run_for(new_leave_ms)
   match held.get("newChat.create") {
     Some(give) => give()

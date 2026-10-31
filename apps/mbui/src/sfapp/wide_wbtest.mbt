@@ -780,7 +780,7 @@ fn hint_drawn(t : @ui.Tester) -> Bool raise {
 }
 
 ///|
-test "wide: a new chat's first words stay where they were typed while the chat is made and read, the hint gone under them, then into their bubble over the composer" {
+test "wide: a new chat's first words, the hint gone under them, into their bubble over the composer from the frame they are sent, whenever the core answers" {
   let held : Map[String, () -> Unit] = {}
   let unread = Ref(true)
   let t = held_core(held, unread, w=1280.0, h=800.0, platform=0)
@@ -794,40 +794,36 @@ test "wide: a new chat's first words stay where they were typed while the chat i
   let in_field = first_words_glyph(t)
   t.enter()
   t.draw()
-  // sent, the field emptied under them: they stay where they were, its hint not over them
+  // sent, the field emptied under them: they stay where they were, its hint not over them; the page the chat now,
+  // nothing of the core's answered
   assert_at(in_field, first_words_glyph(t))
   let typed = seen_once(t, words)
   assert_false(hint_drawn(t), msg="the hint under the words sent")
-  // the chat made, the message sent to it: the page is the chat, its view not read yet
-  match held.get("newChat.create") {
-    Some(give) => give()
-    None => fail("no chat asked for")
-  }
-  t.draw()
-  assert_at(typed, seen_once(t, words))
-  match held.get("chat.send") {
-    Some(give) => give()
-    None => fail("the message not sent")
-  }
-  t.draw()
   assert_true(app.nav.top() is Chat(_))
+  let sent = t.time()
   // the new chat's choices leave as what was by the composer does: fading where they are, on its ground as it goes
   choices_in_ground(t)
   t.run_for(new_fade_ms + 1.0)
   let (gx, _, gw, _) = composer_glass(t)
   assert_true(seen_words(t, "Studio").iter().all(fn(p) { p.0 < gx || p.0 > gx + gw }), msg="the choices gone")
-  t.run_for(read_late_ms - new_fade_ms - 1.0)
-  assert_at(typed, seen_once(t, words))
   assert_false(hint_drawn(t), msg="the hint under the words sent, the composer gone to the chat's foot")
-  // read: their row laid out, and they go at once, with the list, no frame where they are not, nor a jump
-  unread.val = false
-  t.draw()
-  let placed = t.time()
-  let landed = one_way_till(t, words, placed + flight_carry_ms + 34.0, 120.0)
+  // with the list, no frame where they are not, nor a jump
+  let landed = one_way_till(t, words, sent + flight_carry_ms + 34.0, 120.0)
   assert_true(send_flight.get() is None)
   // over the composer at the chat's foot (the chat's rows at its end), down with it from where they were typed
   let (_, foot_y, _, _) = composer_glass(t)
   assert_true(landed.1 > typed.1 && landed.1 < foot_y, msg="landed at \{landed} from \{typed}")
+  // the core's answers and its view: they stay
+  for name in ["newChat.create", "chat.send"] {
+    match held.get(name) {
+      Some(give) => give()
+      None => fail("\{name} not asked")
+    }
+    t.draw()
+  }
+  unread.val = false
+  t.draw()
+  assert_at(landed, seen_once(t, words))
   // out of the composer: its hint still away while its field has the cursor, back once it is let go of
   t.run_for(@sf.hint_back_ms)
   assert_false(hint_drawn(t), msg="the hint over the field with the cursor")

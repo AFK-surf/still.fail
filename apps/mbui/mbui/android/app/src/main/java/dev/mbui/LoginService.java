@@ -43,6 +43,11 @@ public final class LoginService extends Service {
     private static LoginService started;
     private final Handler later = new Handler(Looper.getMainLooper());
 
+    /** Whether a listener is open: a sign-in waits in the browser (Updates: the app not put in place meanwhile). */
+    static synchronized boolean listening() {
+        return running;
+    }
+
     /** {@code n} listeners are open now (Loopback, any thread). */
     static synchronized void listening(int n) {
         Context app = Host.activity != null ? Host.activity.getApplicationContext() : null;
