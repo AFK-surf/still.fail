@@ -118,7 +118,7 @@ fn ask_card(
 
 ///|
 test "a request's card is whole with its post: its answer the core's with it, nothing asked of the vault's topic" {
-  reset()
+  new_run()
   let asked : Array[String] = []
   let base = vault_src([], true, [])
   let src : Source = {
@@ -138,7 +138,7 @@ test "a request's card is whole with its post: its answer the core's with it, no
 
 ///|
 test "a request to use a secret: its title and command, 允许 for the chat (the longest the item is given), 拒绝" {
-  reset()
+  new_run()
   let calls = []
   let src = vault_src(["r1"], true, calls)
   let t = @ui.Tester::new(fn(c) { ask_card(c, src) }, w=390.0, h=844.0, platform=2)
@@ -155,7 +155,7 @@ test "a request to use a secret: its title and command, 允许 for the chat (the
 
 ///|
 test "a request to use a secret for an item given an hour at most: 允许 for the hour; a shorter one picked from the menu" {
-  reset()
+  new_run()
   let calls = []
   let src = vault_src(["r1"], true, calls)
   let t = @ui.Tester::new(fn(c) { ask_card(c, src, lasts="hour") }, w=390.0, h=844.0, platform=2)
@@ -172,7 +172,7 @@ test "a request to use a secret for an item given an hour at most: 允许 for th
 
 ///|
 test "a command that reads the secret itself: said, in the one colour the card has" {
-  reset()
+  new_run()
   let t = @ui.Tester::new(fn(c) { ask_card(c, vault_src(["r1"], true, []), mode="env") }, w=390.0, h=844.0, platform=2)
   t.draw()
   assert_true(t.find("可读取明文") is Some(_))
@@ -180,7 +180,7 @@ test "a command that reads the secret itself: said, in the one colour the card h
 
 ///|
 test "a request to keep a secret: 存入 or 不存, kept as once; its kind and account in the title" {
-  reset()
+  new_run()
   let calls = []
   let src = vault_src(["r1"], true, calls, save=true)
   let t = @ui.Tester::new(fn(c) { ask_card(c, src, save=true) }, w=390.0, h=844.0, platform=2)
@@ -198,7 +198,7 @@ test "a request to keep a secret: 存入 or 不存, kept as once; its kind and a
 
 ///|
 test "a secret the person types in: its field over 存入, which waits for something in it; what was typed goes with the approval, never shown" {
-  reset()
+  new_run()
   let calls = []
   let src = vault_src(["r1"], true, calls, save=true)
   let t = @ui.Tester::new(fn(c) { ask_card(c, src, typed="token") }, w=390.0, h=844.0, platform=2)
@@ -224,7 +224,7 @@ test "a secret the person types in: its field over 存入, which waits for somet
 
 ///|
 test "a file the person picks: 选择文件 over 存入, which waits for one; picked, its name and size, its bytes going with the approval; one too big said so, none taken" {
-  reset()
+  new_run()
   let calls = []
   let src = vault_src(["r1"], true, calls, save=true)
   let t = @ui.Tester::new(fn(c) { ask_card(c, src, typed="file") }, w=390.0, h=844.0, platform=2)
@@ -252,7 +252,7 @@ test "a file the person picks: 选择文件 over 存入, which waits for one; pi
 
 ///|
 test "a login the person types in, the agent naming no account: 用户名 over its password; Enter in the password approves" {
-  reset()
+  new_run()
   let calls = []
   let src = vault_src(["r1"], true, calls, save=true)
   let t = @ui.Tester::new(fn(c) { ask_card(c, src, typed="login") }, w=390.0, h=844.0, platform=2)
@@ -271,7 +271,7 @@ test "a login the person types in, the agent naming no account: 用户名 over i
 
 ///|
 test "a request to keep a secret while the vault is not on here: 开启密钥库 to its page, nothing approved" {
-  reset()
+  new_run()
   let calls = []
   let src = vault_src(["r1"], true, calls, save=true, set_up=false)
   let t = @ui.Tester::new(fn(c) { ask_card(c, src, save=true, answer="setUp") }, w=390.0, h=844.0, platform=2)
@@ -284,13 +284,13 @@ test "a request to keep a secret while the vault is not on here: 开启密钥库
 
 ///|
 test "a request another's to decide, or on a web page: no buttons, a line saying so" {
-  reset()
+  new_run()
   let calls = []
   let t = @ui.Tester::new(fn(c) { ask_card(c, vault_src(["r1"], true, calls), assignee="lin@x.com") }, w=390.0, h=844.0, platform=2)
   t.draw()
   assert_true(t.find("待 林晓 决策") is Some(_))
   assert_true(t.find("允许") is None)
-  reset()
+  new_run()
   let t = @ui.Tester::new(fn(c) { ask_card(c, vault_src(["r1"], false, calls), answer="elsewhere") }, w=390.0, h=844.0, platform=2)
   t.draw()
   assert_true(t.find("请在客户端批准") is Some(_))
@@ -299,7 +299,7 @@ test "a request another's to decide, or on a web page: no buttons, a line saying
 
 ///|
 test "how a request ended, the phone's as the vault's: its dot beside its words, in the middle of their line" {
-  reset()
+  new_run()
   let lines : Array[(String, (@ui.Ctx) -> Unit)] = [
     ("已允许调试手机 · 本对话内", fn(c) { @settings.phone_outcome(c, "granted", "chat", "") }),
     ("已拒绝调试手机", fn(c) { @settings.phone_outcome(c, "denied", "", "") }),
@@ -321,12 +321,12 @@ test "how a request ended, the phone's as the vault's: its dot beside its words,
 
 ///|
 test "the vault's page's request where it is not this device's to answer, or decided: a line saying so" {
-  reset()
+  new_run()
   let calls = []
   let t = @ui.Tester::new(fn(c) { vault_ask(c, vault_src(["r1"], false, calls)) }, w=390.0, h=844.0, platform=2)
   t.draw()
   assert_true(t.find("请在客户端批准") is Some(_))
-  reset()
+  new_run()
   let t = @ui.Tester::new(fn(c) { vault_ask(c, vault_src([], true, calls)) }, w=390.0, h=844.0, platform=2)
   t.draw()
   assert_true(t.find("此申请已处理") is Some(_))
@@ -343,7 +343,7 @@ fn vault_ask(c : @ui.Ctx, src : Source) -> Unit {
 
 ///|
 test "how a request ended: one line, its item named" {
-  reset()
+  new_run()
   let src = vault_src([], true, [])
   for case in [(false, "granted", "已允许使用 GitHub token · 本对话内"), (true, "granted", "已存入密码 UniFi UX7"), (false, "denied", "已拒绝使用 GitHub token"), (true, "denied", "未存入 UniFi UX7")] {
     let (save, status, words) = case

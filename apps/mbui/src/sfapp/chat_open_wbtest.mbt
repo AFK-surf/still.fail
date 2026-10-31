@@ -17,7 +17,7 @@ fn open_changed() -> Unit {
 /// Home over the fixture `chat`, laid out Small; once it shows, a topic asked anew while `slow` is not answered (the core
 /// reading it), and the chat's `waits` what `waiting` says.
 fn chat_open_tester(slow : Ref[Bool], waiting : Ref[Bool]) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture("chat")
   let asked : Map[String, Bool] = {}
   let key = fn(name : String, params : Map[String, Json]) { name + " " + Json::object(params).stringify() }

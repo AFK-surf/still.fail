@@ -179,6 +179,12 @@ struct Node {
   mut drag_said : Int
   /// where in it a finger is taken at a moment (View::takes, View::hosted_takes; none: all of it)
   mut takes : Takes?
+  /// what reads where it takes a finger (View::takes) for what asks, one for each size and moment asked of: each worked
+  /// out again as what it read changes, following nothing once nothing follows it (let go as another is asked for), all
+  /// let go as it is said anew or let go (Tree::takes_rects); what asks follows them, never what they read
+  mut takes_units : Array[(@signals.Computed[Array[(Double, Double, Double, Double)]], Double, Double, Double)]
+  /// told as where it takes a finger is said anew or it is let go: what asks follows it too
+  mut takes_ver : @signals.Signal[Int]?
   /// what ends what its on_drag set going (a gesture's: its hold's moment, its dispatch), as it is said anew or let go
   mut drag_end : (() -> Unit)?
   /// a slot (show, pick, each): no box of its own, what it holds laid out as its holder's own
@@ -286,9 +292,6 @@ pub struct Tree {
   mut pointed : NodeId?
   /// what follows what is under the pointer, while it is over the window (Tree::point_at)
   mut point_stop : (() -> Unit)?
-  /// where the point followed is and what is told of it (Tree::follow_point): followed again as where a node takes a
-  /// finger is said anew (Tree::takes_told)
-  mut point_last : (Double, Double, (Target) -> Unit)?
   /// let go (Tree::dispose): what is made for it after stops at once
   mut gone : Bool
   /// which following of the point is the one now (Tree::follow_point): each said, and each let go, another
@@ -314,8 +317,6 @@ pub struct Tree {
   /// let go, leaving, said to take no press): what it holds of its own, an old view's press, to ask whether that may
   /// still take input (Tree::takes_presses)
   mut on_modals : () -> Unit
-  /// what hosts the tree told as where a node takes a finger may have changed (Tree::on_takes)
-  mut on_takes : () -> Unit
 }
 
 ///|
@@ -384,7 +385,6 @@ pub fn Tree::new(
     pressing: None,
     pointed: None,
     point_stop: None,
-    point_last: None,
     gone: false,
     point_said: 0,
     hits: 0,
@@ -396,7 +396,6 @@ pub fn Tree::new(
     drawn_due: false,
     on_due: fn() {  },
     on_modals: fn() {  },
-    on_takes: fn() {  },
     work: {
       made: 0,
       let_go: 0,
@@ -469,6 +468,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.key_said = 0
       n.on_drag = None
       n.takes = None
+      n.takes_units = []
+      n.takes_ver = None
       n.drag_end = None
       n.look_due = false
       n.place_due = false
@@ -508,6 +509,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         fingers: 1,
         drag_said: 0,
         takes: None,
+        takes_units: [],
+        takes_ver: None,
         drag_end: None,
         slot: false,
         hosted: false,
@@ -1776,9 +1779,11 @@ fn Tree::takes_here(self : Tree, n : Node, x : Double, y : Double, w : Double, h
 }
 
 ///|
-/// Where node `n`, `w` by `h`, takes a finger at `at` as it says (View::takes): rects of it in its own terms, read as
-/// whatever asks reads (followed by it where it follows what it reads: a point followed, a frame painted). Said anew or
-/// let go, what read it is told at once (Tree::takes_told): none follows what the one before read from then.
+/// Where node `n`, `w` by `h`, takes a finger at `at` as it says (View::takes): rects of it in its own terms. What asks,
+/// where it follows what it reads (a point followed, a frame painted), follows the node's reading of it for that size and
+/// moment (takes_units: what it says and what it read for it from one reading, worked out again as what it read
+/// changes, following nothing once nothing follows it) and its telling (takes_ver: said anew, let go), never what it
+/// read: one node's let go lets go of what that read alone. What asks following nothing, read as it is.
 fn Tree::takes_rects(
   self : Tree,
   n : Node,
@@ -1788,7 +1793,41 @@ fn Tree::takes_rects(
 ) -> Array[(Double, Double, Double, Double)] {
   ignore(self)
   guard n.takes is Some(Areas(f)) else { return [] }
-  f(w, h, at)
+  if @signals.active_sub() is None {
+    return f(w, h, at)
+  }
+  let ver = match n.takes_ver {
+    Some(v) => v
+    None => {
+      let v = @signals.signal(0, same=fn(a, b) { a == b })
+      n.takes_ver = Some(v)
+      v
+    }
+  }
+  ver.get() |> ignore
+  // (those nothing follows let go of, what they read with them; the one of this size and moment, else one made)
+  let unit : Ref[@signals.Computed[Array[(Double, Double, Double, Double)]]?] = Ref(None)
+  n.takes_units = n.takes_units.filter(fn(e) {
+    let (u, uw, uh, uat) = e
+    if uw == w && uh == h && uat == at {
+      unit.val = Some(u)
+      true
+    } else if u.watched() {
+      true
+    } else {
+      u.dispose()
+      false
+    }
+  })
+  let u = match unit.val {
+    Some(u) => u
+    None => {
+      let u = @signals.computed(fn(_) { f(w, h, at) })
+      n.takes_units.push((u, w, h, at))
+      u
+    }
+  }
+  u.get()
 }
 
 ///|
@@ -1818,30 +1857,25 @@ pub fn View::hosted_takes(self : View, f : (Double, Double, Double) -> Bool) -> 
 ///|
 fn View::takes_so(self : View, t : Takes) -> View {
   guard self.live() is Some(n) else { return self }
+  // (said, then what read the one said before let go of and what asked told, one change: told, it asks the new)
   n.takes = Some(t)
-  // (what read the one said before told at once: it follows that one no more)
-  self.tree.takes_told()
+  self.tree.takes_off(n)
   self
 }
 
 ///|
-/// Where a node takes a finger is said anew, or it is let go: what read the one before follows it no more, at once (the
-/// point followed, followed again from now: Tree::follow_point; the hosts told, Tree::on_takes, theirs to read anew).
-fn Tree::takes_told(self : Tree) -> Unit {
-  self.hits = self.hits + 1
-  match (self.point_stop, self.point_last) {
-    (Some(_), Some((x, y, then))) => self.follow_point(x, y, then)
-    _ => ()
+/// Where node `n` takes a finger said anew, or it let go: its reading of it let go (what that read followed no more, at
+/// once), what asked told (takes_ver), what is pointed at worked out again.
+fn Tree::takes_off(self : Tree, n : Node) -> Unit {
+  for e in n.takes_units {
+    e.0.dispose()
   }
-  (self.on_takes)()
-}
-
-///|
-/// What hosts the tree tells as where a node takes a finger is said anew, or a node saying it let go: `f`, at once; what
-/// they read of it (Tree::finger_areas, Tree::taken_over) to follow it no more, read anew (a frame asked for), nothing
-/// read or set there.
-pub fn Tree::on_takes(self : Tree, f : () -> Unit) -> Unit {
-  self.on_takes = f
+  n.takes_units = []
+  self.hits = self.hits + 1
+  match n.takes_ver {
+    Some(v) => v.set(@signals.untracked(fn() { v.get() }) + 1)
+    None => ()
+  }
 }
 
 ///|
@@ -2278,11 +2312,9 @@ fn View::let_go(self : View) -> Unit {
   n.stop = None
   n.owner = None
   // (where it takes a finger let go of with it: what read it told at once, following what it read no more)
-  if n.takes is Some(Areas(_)) {
-    n.takes = None
-    self.tree.takes_told()
-  }
   n.takes = None
+  self.tree.takes_off(n)
+  n.takes_ver = None
   let props = n.props.values().collect()
   n.props.clear()
   for stop in props {
@@ -3465,7 +3497,7 @@ pub(all) enum FingerAreas {
   InWindow(Array[(Double, Double, Double, Double)])
   /// all of it drawn, where what it hosts takes one (View::hosted_takes; a hosted node saying nothing of it)
   AsItHosts
-} derive(Eq, Debug)
+} derive(Eq, Show, Debug)
 
 ///|
 /// Where in the window node `id` takes a finger as it is drawn now, at the logic's moment (Tree::target_at's): none where
@@ -3483,7 +3515,7 @@ pub fn Tree::finger_areas(self : Tree, id : NodeId) -> FingerAreas {
 fn Tree::areas_of(self : Tree, n : Node, x : Double, y : Double, w : Double, h : Double) -> FingerAreas {
   match n.takes {
     Some(Areas(_)) => {
-      // (read by what the node owns for it: as it changes the hosts told, Tree::on_takes; let go with the node)
+      // (read by what the node owns for it: Tree::takes_rects)
       let rs = self.takes_rects(n, w, h, self.logic_at())
       InWindow(
         rs
@@ -3820,7 +3852,6 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
   }
   // (this one the one followed from now: what it is first told may let it go (another point, none, the tree let go),
   // which this one's number then no longer is)
-  self.point_last = Some((x, y, then))
   let mine = self.point_said
   let stop = self.queued(fn() { self.target_in(x, y, tracked=true) }, then)
   if self.gone || self.point_said != mine {
@@ -3833,7 +3864,6 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
 ///|
 /// What follows the point let go (Tree::follow_point): told nothing more.
 fn Tree::point_stopped(self : Tree) -> Unit {
-  self.point_last = None
   // (what is being made to follow one no longer the one: Tree::follow_point)
   self.point_said = self.point_said + 1
   match self.point_stop {

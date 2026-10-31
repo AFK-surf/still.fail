@@ -5,7 +5,7 @@
 ///|
 /// The app over the fixture's drive.
 fn drive_tester(mode : String) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture(mode)
   open_drive_fixture(mode)
   // (a phone's: a finger)
@@ -195,7 +195,7 @@ test "a text read: where it was left, a tap brings its bars, the contents go to 
 
 ///|
 test "＋'s Station 文件: a file ticked in a folder lent goes into the chat's draft, named by its path" {
-  reset()
+  new_run()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)

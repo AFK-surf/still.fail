@@ -52,7 +52,7 @@ fn edited_core(
   epoch? : Ref[Int] = Ref::new(0),
   platform? : Int = 2,
 ) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture(mode)
   let src : Source = {
     ..base,

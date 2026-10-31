@@ -13,7 +13,7 @@ priv struct Asked {
 /// The service's page over the fixture, with its calls of the core's for the page seen by the test (station.preview
 /// answered by the fixture's station as ever).
 fn link_tester(mode? : String = "service") -> (@ui.Tester, Asked) {
-  reset()
+  new_run()
   let base = fixture(mode)
   open_drive_fixture(mode)
   let asked : Asked = { calls: [], streams: [] }

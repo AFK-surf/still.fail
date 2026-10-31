@@ -28,7 +28,7 @@ fn image_tester_asking(
   images : @sfbase.ChatImages,
   ask : ((Json) -> Unit, (Result[(Json, Bytes?), Json]) -> Unit) -> Unit,
 ) -> @ui.Tester {
-  reset()
+  new_run()
   let src : Source = {
     ..fixture("chat"),
     file: fn(station, key, name) { images.get(station, @sfbase.file_image_id(station, key, name), "mem:test/" + name, ask) },
@@ -125,7 +125,7 @@ test "the pictures that failed for want of a station asked again once it is reac
 
 ///|
 test "a chat's pictures that failed for want of its station asked again as the chat is opened again" {
-  reset()
+  new_run()
   let images = @sfbase.ChatImages::new()
   let asked = Ref::new(0)
   let src : Source = {

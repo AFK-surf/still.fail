@@ -95,7 +95,7 @@ fn kept_here(base : Source) -> Source {
 
 ///|
 test "a face kept here: given by where its files are the frame the prefs come, the first page set in it, nothing asked of the core" {
-  reset()
+  new_run()
   let base = fixture("home")
   (base.call)("prefs.set", { "fonts": { "ui": "noto-sans-sc" } }, fn(_) {  })
   let asked = Ref(0)
@@ -118,7 +118,7 @@ test "a face kept here: given by where its files are the frame the prefs come, t
 
 ///|
 test "a face's file the host cannot read where it is: had through the core instead, unzipped and checked" {
-  reset()
+  new_run()
   let base = fixture("home")
   // fetched, kept as fetched (gzipped): what the host cannot read as a face
   (base.call)("fonts.fetch", { "id": "lxgw-wenkai" }, fn(_) {  })

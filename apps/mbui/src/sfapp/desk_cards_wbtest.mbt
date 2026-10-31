@@ -4,7 +4,7 @@
 ///|
 /// The fixture's chat in the wide frame, its login `login` and the station's logins letting the viewer finish it.
 fn desk_login(calls : Array[Made], login : Json) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture("chat")
   let src : Source = {
     ..base,
@@ -60,7 +60,7 @@ test "desk: a loopback login: 在浏览器里登录 has the core listen, then op
 
 ///|
 test "desk: an agent's request to use a secret is its card in place of its words, 允许 answering it (vault.approve)" {
-  reset()
+  new_run()
   let calls : Array[String] = []
   let src = vault_src(["r1"], true, calls)
   let w : Workspace = { id: "ws1", name: "", emoji: "", icon: "", email: "" }

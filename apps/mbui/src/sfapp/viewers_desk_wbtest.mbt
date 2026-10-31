@@ -5,7 +5,7 @@
 /// The fixture's `mode` in a desktop's window: a chat's file open in its preview (chat-preview-…), a drive's text read
 /// (reader…), seen once it is in.
 fn desk_tester(mode : String) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   if mode.has_prefix("chat-preview") {
@@ -76,7 +76,7 @@ test "desk: a chat's film fitted clear of the bar and the controls, never under 
 
 ///|
 test "desk: Esc closes a chat's film as it flies in, before its player is up" {
-  reset()
+  new_run()
   let src = fixture("chat-preview-video")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })

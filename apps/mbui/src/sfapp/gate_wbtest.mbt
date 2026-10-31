@@ -26,7 +26,7 @@ fn gate_tester(
   signed : Ref[Int],
   answer? : (String, Json) -> Result[Json, Json] = fn(_, _) { Ok(Json::object({})) },
 ) -> @ui.Tester raise {
-  reset()
+  new_run()
   let base = fixture(mode)
   let src : Source = {
     ..base,

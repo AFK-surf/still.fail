@@ -5,7 +5,7 @@
 ///|
 /// The fixture's chat open (the first row's), its calls kept in `calls` and answered by the fixture.
 fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture(mode)
   let src : Source = {
     ..base,

@@ -17,7 +17,7 @@ fn relay_via_at_right(t : @ui.Tester) -> Unit raise {
 
 ///|
 test "wide: 接力到频道… from a row's menu: the dialog lists the bot's places, one picked shows who replies there, 接力 relays it (chat.relay)" {
-  reset()
+  new_run()
   let calls : Array[Made] = []
   let base = fixture("home")
   let src : Source = {
@@ -63,7 +63,7 @@ test "wide: 接力到频道… from a row's menu: the dialog lists the bot's pla
 
 ///|
 test "wide: an @ typed in the relay's note offers the people there in a popover (chat.relayPeople, chat.relayMentions); ↓ and Enter, or a press, put the one chosen in; Escape closes it for that @, the dialog staying" {
-  reset()
+  new_run()
   let calls : Array[Made] = []
   let base = fixture("home")
   let people : Json = [{ "id": "U1", "name": "pengxiao", "aka": "Peng Xiao" }, { "id": "U2", "name": "peter" }]

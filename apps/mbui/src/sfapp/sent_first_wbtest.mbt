@@ -87,7 +87,7 @@ test "refused by the core: what was sent leaves the list, the words back in the 
 
 ///|
 test "the core's row goes on from what was sent: the words fly on to it, it does not rise in again" {
-  reset()
+  new_run()
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")

@@ -3,7 +3,7 @@
 
 ///|
 fn share_tester(mode : String) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture(mode)
   open_drive_fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -99,7 +99,7 @@ test "over another app, the sheet closed: the app goes once it has sunk away, ba
 
 ///|
 test "over another app signed out: to sign in in the app first, 打开 still.fail opens it" {
-  reset()
+  new_run()
   let src = fixture("signin")
   share_in.shared.set(Some(fix_shared))
   share_in.env_taken.set(true)

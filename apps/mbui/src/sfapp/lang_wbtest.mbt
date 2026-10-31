@@ -2,7 +2,7 @@
 /// The app over a fixture, the device's language `locale` (its host's MBUI_LOCALE), the core's prefs saying `lang` when
 /// given.
 fn lang_tester(mode : String, locale : String, lang? : String) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture(mode)
   let src : Source = {
     ..base,

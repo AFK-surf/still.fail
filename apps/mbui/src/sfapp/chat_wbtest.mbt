@@ -1,7 +1,7 @@
 ///|
 /// The made-up chat open over Home (chat_fixture.mbt), from its start: pushed in.
 fn chat_tester(mode : String) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
@@ -204,7 +204,7 @@ test "images take their own proportions before they load" {
 ///|
 /// (Here, after the chat's own: a chat scrolled leaves the made-up chat as it is for the tests after it.)
 test "a file card in the chat opens its preview" {
-  reset()
+  new_run()
   let src = fixture("chat")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
@@ -338,7 +338,7 @@ let place_drag : Double = 300.0
 
 ///|
 test "a long title has what is left beside what follows it, which keeps its own width (Chat.kt BarFrame)" {
-  reset()
+  new_run()
   let t = @ui.Tester::new(
     fn(c) {
       bar_frame(
@@ -366,7 +366,7 @@ test "a long title has what is left beside what follows it, which keeps its own 
 
 ///|
 test "a chat left lets go of all that holds its thread at the core: its view and its jobs (Chat.kt's rememberTopic)" {
-  reset()
+  new_run()
   let base = fixture("chat")
   let left : Array[(String, String)] = []
   let src : Source = {
@@ -389,7 +389,7 @@ test "a chat left lets go of all that holds its thread at the core: its view and
 
 ///|
 test "left short of its end, a chat opens again where it was left, though the core still says where it first opened (Chat.kt kept)" {
-  reset()
+  new_run()
   let base = fixture("chat")
   let place : Ref[Map[String, Json]?] = Ref(None)
   let src : Source = {
@@ -510,7 +510,7 @@ test "a table wider than the message on a phone: at rest in line with the words,
 
 ///|
 test "a table on a wide list, slid sideways: out over the margin, not cut at the words' column" {
-  reset()
+  new_run()
   let src = fixture("chat-md")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   // (a window whose list is wide, its table wider than its words with its key past it)
@@ -536,7 +536,7 @@ let said_soon_ms : Double = 100.0
 
 ///|
 test "a message said just after the chat opened comes in with the list gliding after it: no half second first" {
-  reset()
+  new_run()
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
@@ -575,7 +575,7 @@ test "a message said just after the chat opened comes in with the list gliding a
 
 ///|
 test "what was said while the app was away, brought after its chat opened at its end: read from its unread line" {
-  reset()
+  new_run()
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")

@@ -24,7 +24,7 @@ fn side_panel(t : @ui.Tester) -> @ui.Laid? {
 /// MBUI_LOCALE; "": Chinese): 关于's page opened from the sidebar's list scrolled to its end, beside the sidebar still
 /// in use, 关于 its last row, lit; then a newer build known where `newer`.
 fn settings_at_end(h : Double, locale? : String = "", newer? : String = "") -> @ui.Tester raise {
-  reset()
+  new_run()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h~, platform=2, env=[("MBUI_LOCALE", locale)])

@@ -158,6 +158,21 @@ fn Ctx::long_press(self : Ctx, id : Int) -> Bool {
 }
 
 ///|
+/// The press just down held long already, as the window's tree found it (a hold a cover of its handed on, as long held
+/// as since the finger went down: view_through): what it is on held long as the build it comes to sees it (as
+/// Ctx::long_press tells), its press no click, whatever frames come before it is let go.
+fn Ctx::held_through(self : Ctx) -> Unit {
+  if !self.down || self.active == 0 || self.press_at < 0.0 {
+    return
+  }
+  self.held_told = self.press_at
+  self.held_on = self.active
+  // (the build it comes to: the next begun)
+  self.held_build = builds_made.val + 1
+  self.take_press()
+}
+
+///|
 /// Whether a press is down on `id`, from the moment it went down (no wait for what scrolls: Ctx::pressed has it, for
 /// how a thing shows it is pressed), read so (hand.mbt): what a gesture on it follows, whatever it shows.
 pub fn Ctx::held_down(self : Ctx, id : Int) -> Bool {

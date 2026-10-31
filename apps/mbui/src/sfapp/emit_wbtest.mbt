@@ -4,7 +4,7 @@
 ///|
 /// The fixture's chat open, its clock the test's; words sent and taken by the station (its agent then at work).
 fn emit_core(clock : Ref[Double]) -> @ui.Tester {
-  reset()
+  new_run()
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })

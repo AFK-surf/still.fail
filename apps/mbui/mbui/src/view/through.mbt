@@ -15,6 +15,8 @@ struct Through {
   under : Target
   // what the node hosting it said is there (Tree::hosts_at), for what a node hosts
   token : Int?
+  // which saying of its on_drag it was found holding, for a node of the tree's (another said since, even the same: no more)
+  said : Int
   finger : Int
   down_at : Double
 }
@@ -49,8 +51,11 @@ fn Tree::through_found(self : Tree, id : NodeId, x : Double, y : Double, t : Dou
   self.through = None
   guard self.alive_id(id) && self.held == Some(id) else { return }
   let (under, token) = self.target_under(id, x, y)
-  if under is Dragged(_) || (under is Hosted(_) && token is Some(_)) {
-    self.through = Some({ cover: id, under, token, finger, down_at: t })
+  match under {
+    Dragged(u) =>
+      self.through = Some({ cover: id, under, token, said: self.nodes[u.at].drag_said, finger, down_at: t })
+    Hosted(_) if token is Some(_) => self.through = Some({ cover: id, under, token, said: 0, finger, down_at: t })
+    _ => ()
   }
 }
 
@@ -100,7 +105,7 @@ fn Tree::through_takes(self : Tree, th : Through, x : Double, y : Double) -> Boo
   let at = self.logic_at()
   guard @signals.untracked(fn() { self.takes_here(n, x - d.x, y - d.y, d.w, d.h, at) }) else { return false }
   match th.under {
-    Dragged(_) => n.on_drag is Some(_)
+    Dragged(_) => n.on_drag is Some(_) && n.drag_said == th.said
     Hosted(_) => n.hosted && th.token is Some(_) && (self.hosts_at)(u, x, y) == th.token
     _ => false
   }
@@ -113,6 +118,8 @@ fn Tree::through_takes(self : Tree, th : Through, x : Double, y : Double) -> Boo
 fn Tree::hand_through(self : Tree, id : NodeId, x : Double, y : Double) -> Bool {
   guard self.through is Some(th) && th.cover == id else { return false }
   self.through = None
+  // (where things are as of this moment, what changed by then laid out: no frame between counts)
+  self.laid_now()
   guard self.held == Some(id) &&
     self.downs.length() == 1 &&
     self.downs[0] == th.finger &&
@@ -130,6 +137,7 @@ fn Tree::hand_through(self : Tree, id : NodeId, x : Double, y : Double) -> Bool 
 /// A hold going through handed on, at `now`, its cover's hold ended and what that did committed: looked at again (the
 /// one found gone, said to take no press, the tree made anew; another holding), the finger then that one's.
 fn Tree::hand_on(self : Tree, th : Through, x : Double, y : Double, now : Double) -> Unit {
+  self.laid_now()
   guard self.held is None && self.through_takes(th, x, y) else { return }
   match th.under {
     Dragged(u) => {

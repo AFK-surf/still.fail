@@ -172,21 +172,6 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   let t = @view.Tree::new(make, measure=view_words_measure, time=fn() { h_event_time() })
   // (a press held on an old view a modal layer now keeps from input: called off then)
   t.on_modals(view_modals_told)
-  // (where a node takes a finger said anew, or one saying it let go: what the paint read of it for the hosts of native
-  // views (NativeView::tell_covers) followed no more, at once, the frame painted anew for it; between frames a frame
-  // asked for, in one its painting reads it)
-  t.on_takes(fn() {
-    match paint_watch.val {
-      Some(w) => {
-        w.stop()
-        paint_watch.val = None
-      }
-      None => ()
-    }
-    if !in_frame.val {
-      h_frame_owed()
-    }
-  })
   // (a hold going through to an old view: what of it takes a press there, who it is; handed so, its from then)
   t.hosts_at(fn(island, x, y) { old_taker_at(t, island, x, y) })
   t.on_through(view_through)
@@ -1548,6 +1533,9 @@ fn view_through(to : @view.Target, x : Double, y : Double, down_at : Double) -> 
       view_held.val = Some(Old(part, owner))
       view_input_went(part)
       old_pointer_now(0, x, y, 0, 0, down_at)
+      // (a long press already, as the tree found it: what it is on held long as the next build sees it, its press no
+      // click when let go, whatever frames come between)
+      c.held_through()
     }
     _ => ()
   }

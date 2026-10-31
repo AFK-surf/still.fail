@@ -266,7 +266,7 @@ test "made again: one come at the end, one changed, one gone, one moved back, a 
 
 ///|
 test "a chat's page with nothing changed goes over none of its rows again; a message come, its rows made again" {
-  reset()
+  new_run()
   let base = fixture("chat")
   let messages = Array::makei(30, fn(i) { said(i + 1, "第 \{i + 1} 句") })
   let changes = @signals.signal(1)

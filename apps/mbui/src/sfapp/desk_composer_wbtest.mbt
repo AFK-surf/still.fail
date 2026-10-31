@@ -11,7 +11,7 @@ fn desk_composer_tester(
   over? : (String, Topic) -> Topic = fn(_, t) { t },
   kept? : ((String, String) -> String)? = None,
 ) -> (@ui.Tester, Source) {
-  reset()
+  new_run()
   let base = fixture("chat")
   let src : Source = {
     ..base,
@@ -768,7 +768,7 @@ test "the composer growing a line as it is typed in draws none of its words over
 
 ///|
 test "a chat's composer growing a line as it is typed in keeps its send whole on its way, nothing of it faded or cut" {
-  reset()
+  new_run()
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
@@ -900,7 +900,7 @@ test "on a phone a finger 3 off the send button, beside it or over it, sends: th
 
 ///|
 test "desk composer: 抄送 opens a menu of the chat's Slack and Feishu threads; several stay open to tick, ticked ones said beside 抄送 (chat.cc)" {
-  reset()
+  new_run()
   let calls : Array[Made] = []
   let base = fixture("chat")
   let src : Source = {
@@ -951,7 +951,7 @@ test "desk composer: 抄送 opens a menu of the chat's Slack and Feishu threads;
 
 ///|
 test "desk composer: where 抄送 copies to is said just before send in either shape, staying where it is as the composer opens and shuts, 抄送 beside it once opened (chat.cc)" {
-  reset()
+  new_run()
   let src = fixture("chat-cc")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
@@ -989,7 +989,7 @@ test "desk composer: where 抄送 copies to is said just before send in either s
 
 ///|
 test "desk composer: 抄送's menu has each thread's platform mark before its place, its check only at its end (chat.cc)" {
-  reset()
+  new_run()
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   let t = @ui.Tester::new(

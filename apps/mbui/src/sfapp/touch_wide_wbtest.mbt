@@ -3,7 +3,7 @@
 
 ///|
 fn touch_wide_tester() -> @ui.Tester raise {
-  reset()
+  new_run()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=860.0, h=950.0, platform=2)
@@ -53,7 +53,7 @@ test "touch wide: a row held shows its time while its menu is open, its 归档 i
 /// The fixture's chat on the narrowest tablet held upright (600 × 900, regular both ways): beside the sidebar less than a
 /// phone's width (@sfdesk.page_beside_least).
 fn touch_narrow_tester() -> @ui.Tester raise {
-  reset()
+  new_run()
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=600.0, h=900.0, platform=2)

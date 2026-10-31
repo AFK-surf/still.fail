@@ -4,7 +4,7 @@
 ///|
 /// The fixture's chat open in a window `w` × `h` of `platform`, and what it is over.
 fn open_tester(w : Double, h : Double, platform : Int) -> (@ui.Tester, Source, ChatRef) {
-  reset()
+  new_run()
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)

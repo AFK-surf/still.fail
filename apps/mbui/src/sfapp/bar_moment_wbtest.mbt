@@ -188,7 +188,7 @@ fn bar_width_beside(t : @ui.Tester, right : Int) -> Double {
 
 ///|
 test "bar: told the width of the box it is laid out in, the system's bar down the side taken off it; the window the same, that bar gone: wider" {
-  reset()
+  new_run()
   let src = fixture("home")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=466.0, h=678.0, platform=1)
   let beside = bar_width_beside(t, 84)

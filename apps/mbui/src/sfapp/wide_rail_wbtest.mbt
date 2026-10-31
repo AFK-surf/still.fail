@@ -263,7 +263,7 @@ test "wide: a row's menu has 接力到频道… for a chat with an agent" {
 ///|
 test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its field, the newest open beside it; 恢复 puts one back (chat.archive, archived false)" {
   let calls : Array[Made] = []
-  reset()
+  new_run()
   let base = fixture("home")
   let row = fn(id : String, title : String) -> Json {
     {
@@ -360,7 +360,7 @@ test "wide: 自定义侧边条 from the rail's menu: what can be added beside th
 /// The wide frame over the home fixture with what the core would say of `changed` topics, the prefs set kept as the
 /// core keeps them (a `trouble` set: there at once).
 fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture("home")
   let kept : Map[String, Json] = {}
   let src : Source = {
@@ -802,7 +802,7 @@ test "wide: folded, the window made narrow enough for the tape: the sidebar on t
 ///|
 test "wide: Station's page picked in one workspace: in another, that one's first station shown, not the page before waiting; back, the one picked" {
   let calls : Array[Made] = []
-  reset()
+  new_run()
   let base = fixture("home")
   // (the second workspace's own station: the fixture's list is the first's)
   let src : Source = {

@@ -8,7 +8,7 @@ let decide_src : Ref[Source?] = Ref(None)
 /// The app over the fixture in `mode` (its pages opened as sffix opens them), its calls kept in `calls` and answered;
 /// in a desktop's window when `wide`.
 fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false, pointing? : @ui.Pointing) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture(mode)
   let src : Source = {
     ..base,
@@ -252,7 +252,7 @@ test "the history's post: where it went with its platform's mark, in the accent'
 
 ///|
 test "接力到频道 on a phone: the pages' relay as a sheet, the places the bots are in, one picked, relayed there (chat.relay)" {
-  reset()
+  new_run()
   let calls : Array[Made] = []
   let base = fixture("chat-info")
   let places : Json = {

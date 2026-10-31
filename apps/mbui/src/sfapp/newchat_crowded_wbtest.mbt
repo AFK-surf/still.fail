@@ -5,7 +5,7 @@
 ///|
 /// A phone as narrow as most get (`w` across), newchat-crowded's page (`mode`) risen over it.
 fn crowded(mode : String, w? : Double = crowded_w, h? : Double = crowded_h) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=2)
   open_mode(mode)

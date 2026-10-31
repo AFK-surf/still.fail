@@ -4,7 +4,7 @@
 
 ///|
 fn ws_sheet_core(calls : Array[(String, Json)], invited? : Bool = false) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture("home-sheet")
   let src : Source = {
     ..base,

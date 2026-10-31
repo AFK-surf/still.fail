@@ -6,7 +6,7 @@
 /// The chat's sheet open over the fixture's chat; `chat.publishPreview` answered with fix_preview, `chat.publish` with
 /// its link, the rest with nothing.
 fn publish_core(calls : Array[Made]) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture("chat-info")
   let src : Source = {
     ..base,

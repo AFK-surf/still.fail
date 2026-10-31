@@ -4,7 +4,7 @@
 ///|
 /// Home over the fixture, the core's changelog with news (four changes), its calls kept.
 fn news_home(calls : Array[String]) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture("home")
   let src : Source = {
     ..base,

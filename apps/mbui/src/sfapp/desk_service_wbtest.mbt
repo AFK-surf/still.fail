@@ -4,7 +4,7 @@
 
 ///|
 test "desk: a web service asked as a page is its chat with the service beside it, served from the station; closed, let go" {
-  reset()
+  new_run()
   // (its agent's services known to the chat: the core keeps only a tab of one of them)
   let src = fixture("chat-info")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
@@ -58,7 +58,7 @@ test "desk: a web service asked as a page is its chat with the service beside it
 
 ///|
 test "desk: a visualization opened aside is a tab beside its chat, served from here with its name in the bar" {
-  reset()
+  new_run()
   let src = fixture("chat-viz")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
@@ -81,7 +81,7 @@ test "desk: a visualization opened aside is a tab beside its chat, served from h
 
 ///|
 test "desk: a service up pressed in 任务 beside the chat opens its own tab in front (JobsTab)" {
-  reset()
+  new_run()
   let src = fixture("chat-jobs-side")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
@@ -101,7 +101,7 @@ test "desk: a service up pressed in 任务 beside the chat opens its own tab in 
 
 ///|
 test "desk: wherever the pointer shows the side panel's edge's ↔, a drag from there sets its width (its room round it as the pointer lights it)" {
-  reset()
+  new_run()
   let src = fixture("chat-info")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)

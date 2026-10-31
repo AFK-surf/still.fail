@@ -157,7 +157,7 @@ test "under the page: the whole screen, its name and a close over it; back close
 
 ///|
 test "the whole window with the window's buttons in the app's top row (a Mac's): the bar every file opened has, clear of them; its way back closes it" {
-  reset()
+  new_run()
   let src = fixture("chat-viz")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
@@ -276,7 +276,7 @@ test "a visualization's document: a fragment in the stylesheet with its tokens a
 
 ///|
 test "on the tape what shows of a visualization's page beside the sidebar in use takes the presses there, not the page" {
-  reset()
+  new_run()
   let src = fixture("chat-viz")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   // an opened fold's inner screen upright, a finger: laid out Medium
@@ -309,7 +309,7 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
 
 ///|
 test "a page opened over the chat on a wide window shows over the chat's visualization still painted under it, not under it" {
-  reset()
+  new_run()
   let src = fixture("chat-viz")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
@@ -357,7 +357,7 @@ fn view_covered(t : @ui.Tester, id : Int) -> Bool {
 
 ///|
 test "a page that said its height stays covered till its host has drawn it (its first frame on the screen)" {
-  reset()
+  new_run()
   let src = fixture("chat-viz")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2, finish=false)
@@ -403,7 +403,7 @@ test "expanded fragments scroll while their inline copies grow with their conten
 
 ///|
 test "inline HTML is set in the faces the app is set in, a face still.fail keeps linked from its stylesheet" {
-  reset()
+  new_run()
   // none chosen: the stylesheet's own (no font token at all, an empty one would stand in its place)
   let plain = viz_document("<p>文字</p>", None, false, 0xFFFFFFFFL)
   assert_false(plain.contains("--e-font-body:"))
@@ -419,12 +419,12 @@ test "inline HTML is set in the faces the app is set in, a face still.fail keeps
   // its origin let in for the stylesheet and the files it names, nothing else of it
   assert_true(doc.contains("fonts.googleapis.com https://app.still.fail;"))
   assert_true(doc.contains("fonts.gstatic.com https://app.still.fail;"))
-  reset()
+  new_run()
 }
 
 ///|
 test "an inline page not drawn yet holds its place with a placeholder, gone once it is drawn" {
-  reset()
+  new_run()
   let src = fixture("chat-viz")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2, finish=false)

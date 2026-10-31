@@ -16,7 +16,7 @@ fn release(news : Array[String]) -> Json {
 
 ///|
 fn updates_tester(r : Json, asked : Array[String]) -> @ui.Tester {
-  reset()
+  new_run()
   let src = fixture("home")
   update_version.val = 1
   set_update_source(
@@ -107,7 +107,7 @@ test "none newer: the row offers to check, and asked now says 已是最新" {
 ///|
 ///|
 test "no source: nothing is asked; asked now, it says why" {
-  reset()
+  new_run()
   update_version.val = 1
   let said = []
   update_check(fixture("home"), false, done=fn(w) { said.push(w) })
@@ -120,7 +120,7 @@ test "no source: nothing is asked; asked now, it says why" {
 
 ///|
 test "still.fail cloud's feed asked with the release keys the app's environment adds (STILLFAIL_RELEASE_KEYS), none without" {
-  reset()
+  new_run()
   let base = fixture("home")
   let asked : Array[String] = []
   let src : Source = {
@@ -156,7 +156,7 @@ test "an update's download answered otherwise: its status in Updates.kt's words"
 /// The update key's mark (its box, as laid out) and how far its accent goes round its edge (the length of its pieces of
 /// line in the accent), drawn `busy` (how far `coming`) at 34, its mark 20.
 fn update_key_drawn(busy : Bool, coming : Double?) -> ((Double, Double, Double, Double), Double, Double) raise {
-  reset()
+  new_run()
   let t = @ui.Tester::new(
     fn(c) { @sf.update_key(c, "k", 34.0, 20.0, "下载中 42%", "", coming, busy) |> ignore },
     w=120.0,
@@ -198,7 +198,7 @@ test "the update key while an update comes, one look on every screen: the ring i
 
 ///|
 test "the update key while an update comes: no words, no press" {
-  reset()
+  new_run()
   let t = @ui.Tester::new(
     fn(c) { @sf.update_key(c, "k", 34.0, 20.0, "下载中 42%", "", Some(0.42), true) |> ignore },
     w=120.0,

@@ -4,7 +4,7 @@
 
 ///|
 test "desk: a chat switched to shows once its view has come, the chat before it staying till then; one whose view does not come shows after the most a page waits" {
-  reset()
+  new_run()
   let base = fixture("chat")
   // what is still asked is current at once; what is asked anew, while `slow`, not answered (the core's moment)
   let asked : Map[String, Bool] = {}

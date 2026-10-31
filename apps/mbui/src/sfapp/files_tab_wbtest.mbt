@@ -2,7 +2,7 @@
 
 ///|
 fn tab_tester(calls : Array[Made], platform? : Int = 0) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture("home")
   let src : Source = {
     ..base,

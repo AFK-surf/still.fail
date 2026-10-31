@@ -76,7 +76,7 @@ fn links_core(
   h? : Double = 844.0,
   platform? : Int = 2,
 ) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture(mode)
   let src : Source = {
     ..base,
@@ -356,7 +356,7 @@ test "back on screen after a while, the core is told how long it was away; anoth
 ///|
 test "a login's page on this device: the notice that holds the app up says which login, then the page in a tab" {
   let calls : Array[Made] = []
-  reset()
+  new_run()
   let base = fixture("chat")
   let src : Source = {
     ..base,

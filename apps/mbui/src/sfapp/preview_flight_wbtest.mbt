@@ -32,7 +32,7 @@ fn photo_sent(
   listed? : Bool = false,
   head? : Bool = false,
 ) -> @ui.Tester {
-  reset()
+  new_run()
   let a = flight_photo()
   @sfbase.sent_pictures[@sfbase.sent_key("ws1/st1", a.path)] = "sent-key"
   let base = fixture("chat")

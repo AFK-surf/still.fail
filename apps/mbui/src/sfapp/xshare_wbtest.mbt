@@ -4,7 +4,7 @@
 ///|
 /// The chat's sheet over the fixture's chat, its `chat` topic as `over` makes it; calls kept and answered with nothing.
 fn sheet_core(calls : Array[Made], over? : (Json?) -> Json? = fn(v) { v }) -> @ui.Tester {
-  reset()
+  new_run()
   let base = fixture("chat-info")
   let src : Source = {
     ..base,
