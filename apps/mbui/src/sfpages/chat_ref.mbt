@@ -8,7 +8,7 @@
 /// The menu for draft `w` while its field (focused, the words not locked) is at `@` and a few letters, over the
 /// composer `cap` and as wide (ChatRefMenu): its head (引用对话 and the words typed), then the chats they find, each its
 /// agent's mark, its title (another workspace's or station's whose after it), when it was last active; or what it says
-/// in their place. ↑ / ↓ choose (round), Enter or Tab (the field leaves them to it: ref_keys) or a press puts the one
+/// in their place. ↑ / ↓ choose (round), Enter or Tab (taken as each comes, before the field: Ctx::on_key) or a press puts the one
 /// chosen in; Escape closes it for this `@`. Whether it is open.
 fn ref_menu(
   c : @ui.Ctx,
@@ -18,71 +18,125 @@ fn ref_menu(
   cap : Int,
   focused : Bool,
 ) -> Bool {
-  let key = "composer/ref-menu"
+  let key = ref_menu_key
+  // (the menu's layer, its popover's: Ctx::overlay's id of `key`)
+  let menu_layer = c.id(key)
   let into = workspace_of(spec.station)
   let open = match ref_found(src, spec, w, focused) {
     None => false
     Some((query, topic, chats)) => {
       let n = chats.length()
-      let pick = fn(x : Json) {
+      // ↑ ↓ Enter Tab as each comes, before the field sees it, while the menu shown is this `@`'s: neither closed nor
+      // picked since, the field still holding it as it was where it was, the caret in what follows it (the words typed
+      // after it the `@`'s). A pick ends the menu's opening as it is made (Ctx::layer_ended): an Escape after it is the
+      // layer's that may take it then, not the menu's. Else the field's
+      let at_then = @sfbase.refs_at(w.key)
+      let before_then = match at_then {
+        Some((start, _)) if start < w.field.text().length() => w.field.text().view(end_offset=start + 1).to_string()
+        _ => ""
+      }
+      // (and what was after the caret then: the range the menu's choice is for ends where that begins)
+      let after_then = {
+        let t = w.field.text()
+        let k = w.field.selection().1
+        if k >= 0 && k <= t.length() {
+          t.view(start_offset=k).to_string()
+        } else {
+          ""
+        }
+      }
+      // whether what the menu offers is still this `@`'s: neither closed nor picked since (refs_at), the field still
+      // holding it as it was where it was, the caret where what was after it then begins
+      let offered = fn() {
+        @sfbase.refs_at(w.key) == at_then && @sfbase.refs_still_at(w.field, at_then, before_then, after_then)
+      }
+      // the one chosen put in for this `@`, while it is offered (a press's and a key's alike). Whether it was.
+      let pick = fn(x : Json) -> Bool {
+        if !offered() {
+          return false
+        }
         let item = @sfbase.chat_item(x)
         @sfbase.refs_pick(c, src, w.key, w.field, into, item.station, item.id, item.title, fn(why) {
           toast_later(@sf.t("web-main.composer.refFailed", args=[("title", item.title), ("error", why)]))
         })
+        // (the menu's opening over as it is picked in: its keys, presses and Escape no longer its, leaving as it is
+        // drawn next)
+        c.layer_ended(menu_layer)
+        true
       }
-      let mut keyed = false
       if n > 0 {
-        if c.key_pressed(@ui.key_code_down, in_field=true) {
-          @sfbase.refs_active(w.key, n, by=1) |> ignore
-          keyed = true
-        } else if c.key_pressed(@ui.key_code_up, in_field=true) {
-          @sfbase.refs_active(w.key, n, by=-1) |> ignore
-          keyed = true
-        }
-        if c.key_pressed(@ui.key_code_enter, in_field=true) || c.key_pressed(@ui.key_tab, in_field=true) {
-          pick(chats[@sfbase.refs_active(w.key, n)])
-        }
-      }
-      let shown = @kit.popover(
-        c,
-        key,
-        true,
-        cap,
-        side=Top,
-        along=Start,
-        offset=ref_menu_off,
-        label=@sf.t("web-main.chatRef.title"),
-        focus=false,
-        look=fn(c, s, body) {
-          let width = match c.rect_of(cap) {
-            Some((_, _, cw, _)) => cw
-            None => ref_menu_least
+        c.on_key(c.focused_id(), fn(code, mods) {
+          if mods != 0 || !offered() {
+            false
+          } else if code == @ui.key_code_down || code == @ui.key_code_up {
+            @sfbase.refs_active(w.key, n, by=if code == @ui.key_code_down { 1 } else { -1 }) |> ignore
+            ref_keyed.val = w.key
+            true
+          } else if code == @ui.key_code_enter || code == @ui.key_tab {
+            pick(chats[@sfbase.refs_active(w.key, n)])
+          } else {
+            false
           }
-          // (its chats scrolling past its most, or past what the window leaves them)
-          c.box(style=ref_menu_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
-            @kit.in_room(c, s, key="composer/ref-list", most=ref_menu_max - 2.0 * @sf.panel_pad, body) |> ignore
-          })
-          |> ignore
-        },
-        fn() {
-          c.box(style=@sf.full_width, fn() {
-            ref_menu_body(c, query, topic, chats, @sfbase.refs_active(w.key, n), keyed, pick, w.key)
-          })
-          |> ignore
-        },
-      )
-      // Escape (or a press away from the composer): closed for this `@`
-      if !shown.value {
-        @sfbase.refs_close(w.key)
+        })
       }
-      shown.value
+      // (moved to by the keys since the frame before: in view where the menu scrolls)
+      let keyed = ref_keyed.val == w.key
+      if ref_keyed.val == w.key {
+        ref_keyed.val = ""
+      }
+      // Escape (or a press away from the composer): closed for this `@`, at the moment of what dismissed it
+      let shown : Ref[Bool] = Ref(true)
+      c.with_dismissed(fn(_) { @sfbase.refs_close(w.key) }, fn() {
+        shown.val = @kit.popover(
+          c,
+          key,
+          true,
+          cap,
+          side=Top,
+          along=Start,
+          offset=ref_menu_off,
+          label=@sf.t("web-main.chatRef.title"),
+          focus=false,
+          look=fn(c, s, body) {
+            let width = match c.rect_of(cap) {
+              Some((_, _, cw, _)) => cw
+              None => ref_menu_least
+            }
+            // (its chats scrolling past its most, or past what the window leaves them)
+            c.box(style=ref_menu_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
+              @kit.in_room(c, s, key="composer/ref-list", most=ref_menu_max - 2.0 * @sf.panel_pad, body) |> ignore
+            })
+            |> ignore
+          },
+          fn() {
+            c.box(style=@sf.full_width, fn() {
+              ref_menu_body(c, query, topic, chats, @sfbase.refs_active(w.key, n), keyed, pick, w.key)
+            })
+            |> ignore
+          },
+        ).value
+      })
+      shown.val
     }
   }
   if !open {
     @kit.popover(c, key, false, cap, fn() {  }) |> ignore
+    // (the menu gone: what its keys asked to bring into view goes with it)
+    if ref_keyed.val == w.key {
+      ref_keyed.val = ""
+    }
   }
   open
 }
+
+///|
+/// The draft whose `@` menu ↑ or ↓ chose another in since it was last built ("" none): what it shows it brings into
+/// view.
+let ref_keyed : Ref[String] = Ref("")
+
+///|
+/// The composer's `@` menu's key (its popover's; its panel `/panel`).
+let ref_menu_key : String = "composer/ref-menu"
 
 ///|
 /// What the menu of draft `w` offers while its field (`focused`, the words not locked) is at `@` and a few letters:
@@ -105,21 +159,6 @@ fn ref_found(src : Source, spec : ComposerSpec, w : Writing, focused : Bool) -> 
 }
 
 ///|
-/// The keys the field of draft `w` leaves to its menu: ↑ / ↓, Enter and Tab while it offers chats (the web's
-/// preventDefault on them), none else.
-fn ref_leaves(src : Source, spec : ComposerSpec, w : Writing, focused : Bool) -> Array[Int] {
-  match ref_found(src, spec, w, focused) {
-    Some((_, _, chats)) if chats.length() > 0 => ref_keys
-    _ => []
-  }
-}
-
-///|
-/// The keys the field leaves to the menu while it is open (the web's preventDefault on them).
-// kept across runs: a value (no field of it changes)
-let ref_keys : Array[Int] = [@ui.key_code_up, @ui.key_code_down, @ui.key_code_enter, @ui.key_tab]
-
-///|
 fn ref_menu_body(
   c : @ui.Ctx,
   query : String,
@@ -127,7 +166,7 @@ fn ref_menu_body(
   chats : Array[Json],
   active : Int,
   keyed : Bool,
-  pick : (Json) -> Unit,
+  pick : (Json) -> Bool,
   draft : String,
 ) -> Unit {
   c.box(style=ref_head, fn() {
@@ -159,9 +198,9 @@ fn ref_menu_body(
   for i, x in chats {
     let item = @sfbase.chat_item(x)
     let id = c.id("composer/ref/" + item.station + "\t" + item.id)
-    if c.clicked(id) {
-      pick(x)
-    }
+    // (put in as it is let go, the menu ended with it: an Escape after it, before a frame, the layer's that may take it
+    // then)
+    c.on_press(id, fn() { pick(x) |> ignore })
     // (the pointer moving over a chat chooses it, as the keys do; resting, it leaves the keys' choice be)
     if c.hand_on(id) && i != active {
       @sfbase.refs_active(draft, chats.length(), to=i) |> ignore

@@ -19,6 +19,7 @@ let relay_focus : Ref[String] = Ref("")
 /// As at the start (the package's reset).
 fn relay_focus_reset() -> Unit {
   relay_focus.val = ""
+  relay_keyed.val = false
 }
 
 ///|
@@ -125,10 +126,10 @@ fn relay_body(c : @ui.Ctx, src : Source, view : Json?, link : String?, picked : 
     if picked is Some(_) || link is Some(_) {
       c.box(style=relay_note_field, fn() {
         c.text(@sf.t("web-main.relay.note"), style=relay_note_label) |> ignore
-        // (the menu open: ↑ / ↓ choose in it, Enter and Tab pick)
+        // (the menu open: ↑ / ↓ choose in it, Enter and Tab pick, as each comes: it takes them, Ctx::on_key; what it
+        // does not take is the field's)
         let mentions = relay_mentions(c, src, view)
-        let leaves = if mentions.length() > 0 { ref_keys } else { [] }
-        @sf.input(c, "relay/note", placeholder=@sf.t("web-main.relay.notePlaceholder"), leaves~, field=relaying.note) |> ignore
+        @sf.input(c, "relay/note", placeholder=@sf.t("web-main.relay.notePlaceholder"), field=relaying.note) |> ignore
         relay_focused(c, "relay/note")
         relay_mention_menu(c, src, mentions, c.editor_focused("relay/note"))
       })
@@ -222,31 +223,118 @@ fn relay_place(c : @ui.Ctx, key : String, kind : String, name : String, note : S
 ///|
 /// The people the note can mention (Relay.tsx's popover, the composer's `@` menu's look: ref_menu) while it is
 /// focused and offers some, under it and as wide: its head (可以 @ 的人 and the words typed), then each person, the
-/// one chosen on the hover's ground. ↑ / ↓ choose (round), Enter or Tab (the field leaves them to it) or a press puts
-/// the one chosen in; Escape (or a press away) closes it for this `@`.
+/// one chosen on the hover's ground. ↑ / ↓ choose (round), Enter or Tab (taken as each comes, before the field:
+/// Ctx::on_key) or a press puts the one chosen in; Escape (or a press away) closes it for this `@`.
 fn relay_mention_menu(c : @ui.Ctx, src : Source, mentions : Array[Json], focused : Bool) -> Unit {
   let key = "relay/mentions"
+  // (the menu's layer, its popover's: Ctx::overlay's id of `key`)
+  let menu_layer = c.id(key)
   let n = mentions.length()
   let open = focused && n > 0
-  let pick = fn(p : Json) {
-    relaying.note.set(text(Some(p), "note"))
+  // the `@` the menu was built for: where it starts, and the note up to and with it then (what is before it and it)
+  let at_then = number(relaying.mentions.get(), "at").to_int()
+  let before_then = if at_then >= 0 && at_then < relaying.note.text().length() {
+    relaying.note.text().view(end_offset=at_then + 1).to_string()
+  } else {
+    ""
+  }
+  // (and what was after the caret then: the range the menu's choice is for ends where that begins)
+  let after_then = {
+    let t = relaying.note.text()
+    let k = relaying.note.selection().1
+    if k >= 0 && k <= t.length() {
+      t.view(start_offset=k).to_string()
+    } else {
+      ""
+    }
+  }
+  // whether what the menu offers is still this `@`'s: not closed nor chosen for it since, the note still holding it as
+  // it was where it was, the caret where what was after it then begins (what was typed after it since the `@`'s)
+  let offered = fn() { relaying.mention_closed.get() != at_then && relay_still_at(at_then, before_then, after_then) }
+  // the one chosen put in for this `@`, while it is offered (a press's and a key's alike): it and what follows it to the
+  // caret made `@name `, what is before it and after the caret as it is. Whether it was.
+  let pick = fn(p : Json) -> Bool {
+    if !offered() {
+      return false
+    }
+    let now = relaying.note.text()
+    let caret = relaying.note.selection().1
+    let name = text(Some(p), "name")
+    relaying.note.set(
+      now.view(end_offset=at_then).to_string() + "@" + name + " " + now.view(start_offset=caret).to_string(),
+      caret=at_then + name.length() + 2,
+    )
+    // (chosen: this `@` done with, as when it is closed, for a press and a key alike; the menu's opening over as it is,
+    // its keys, presses and Escape no longer its, leaving as it is drawn next)
+    relaying.mention_closed.set(at_then)
+    c.layer_ended(menu_layer)
     relay_focus.val = "relay/note"
+    true
   }
-  let mut keyed = false
+  // ↑ ↓ Enter Tab as each comes, before the field sees it, while the menu shown is this `@`'s: not closed for it since,
+  // the note still holding it as it was where it was, the caret in what follows it (the words typed after it the
+  // `@`'s). A pick ends the menu's opening as it is made (Ctx::layer_ended): an Escape after it is the layer's that may
+  // take it then (the dialog's), not the menu's. Else the field's.
   if open {
-    if c.key_pressed(@ui.key_code_down, in_field=true) {
-      relay_mention_active(n, by=1) |> ignore
-      keyed = true
-    } else if c.key_pressed(@ui.key_code_up, in_field=true) {
-      relay_mention_active(n, by=-1) |> ignore
-      keyed = true
-    }
-    if c.key_pressed(@ui.key_code_enter, in_field=true) || c.key_pressed(@ui.key_tab, in_field=true) {
-      pick(mentions[relay_mention_active(n)])
-    }
+    c.on_key(c.focused_id(), fn(code, mods) {
+      if mods != 0 || !offered() {
+        false
+      } else if code == @ui.key_code_down || code == @ui.key_code_up {
+        relay_mention_active(n, by=if code == @ui.key_code_down { 1 } else { -1 }) |> ignore
+        relay_keyed.val = true
+        true
+      } else if code == @ui.key_code_enter || code == @ui.key_tab {
+        pick(mentions[relay_mention_active(n)])
+      } else {
+        false
+      }
+    })
   }
+  // (moved to by the keys since the frame before: in view where the menu scrolls)
+  let keyed = relay_keyed.val
+  relay_keyed.val = false
   let anchor = c.id("relay/note/field")
-  let shown = @kit.popover(
+  // Escape (or a press away): closed for this `@`, at the moment of what dismissed it
+  c.with_dismissed(fn(_) { relay_mentions_close() }, fn() {
+    relay_mentions_pop(c, src, key, open, anchor, mentions, n, keyed, pick) |> ignore
+  })
+}
+
+///|
+/// Whether the note still holds the `@` at `at` the menu was built for: what is before it and it as they were then
+/// (`before`), what was after the caret then as it was (`after`), the caret where that begins, nothing picked: the range
+/// the menu's choice is for, grown by what was typed in it since, not what the core makes of the words in it.
+fn relay_still_at(at : Int, before : String, after : String) -> Bool {
+  let now = relaying.note.text()
+  let (a, caret) = relaying.note.selection()
+  at >= 0 &&
+  before != "" &&
+  a == caret &&
+  caret > at &&
+  now.length() >= before.length() + after.length() &&
+  caret == now.length() - after.length() &&
+  now.has_prefix(before) &&
+  now.has_suffix(after)
+}
+
+///|
+/// Whether ↑ or ↓ chose another in the @ menu since it was last built (what it shows it brings into view).
+let relay_keyed : Ref[Bool] = Ref(false)
+
+///|
+/// relay_mention_menu's popover: the people, under the note.
+fn relay_mentions_pop(
+  c : @ui.Ctx,
+  src : Source,
+  key : String,
+  open : Bool,
+  anchor : Int,
+  mentions : Array[Json],
+  n : Int,
+  keyed : Bool,
+  pick : (Json) -> Bool,
+) -> @ui.Changed[Bool] {
+  @kit.popover(
     c,
     key,
     open,
@@ -277,9 +365,7 @@ fn relay_mention_menu(c : @ui.Ctx, src : Source, mentions : Array[Json], focused
         |> ignore
         let active = relay_mention_active(n)
         for i, p in mentions {
-          if relay_person(c, src, p, i == active) {
-            pick(p)
-          }
+          relay_person(c, src, p, i == active, fn() { pick(p) |> ignore })
           // (moved to by the keys: in view where the menu scrolls)
           if keyed && i == active {
             c.show(c.id("relay/person/" + text(Some(p), "id")))
@@ -293,16 +379,13 @@ fn relay_mention_menu(c : @ui.Ctx, src : Source, mentions : Array[Json], focused
       |> ignore
     },
   )
-  // Escape (or a press away): closed for this `@`
-  if open && !shown.value {
-    relay_mentions_close()
-  }
 }
 
 ///|
 /// A person the note can mention (the composer's `@` menu's row: ref_item): their picture, their name, their full name
-/// at its end where it says more; `on`, the one chosen. True on the frame after a press.
-fn relay_person(c : @ui.Ctx, src : Source, p : Json, on : Bool) -> Bool {
+/// at its end where it says more; `on`, the one chosen; `picked` as it is pressed (as it is let go, the menu ended with
+/// it: an Escape after it, before a frame, the layer's that may take it then).
+fn relay_person(c : @ui.Ctx, src : Source, p : Json, on : Bool, picked : () -> Unit) -> Unit {
   let id = c.id("relay/person/" + text(Some(p), "id"))
   let name = text(Some(p), "name")
   let b = c.box(style=(if on { ref_item_on } else { ref_item }).then(@sf.pick_high()), id~, fn() {
@@ -316,7 +399,7 @@ fn relay_person(c : @ui.Ctx, src : Source, p : Json, on : Bool) -> Bool {
     }
   })
   c.semantics(b, Button, id~, label=name, selected=on)
-  c.clicked(id)
+  c.on_press(id, picked)
 }
 
 ///|

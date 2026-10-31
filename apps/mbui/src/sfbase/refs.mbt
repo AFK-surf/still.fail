@@ -400,7 +400,8 @@ pub fn refs_pick(
 ) -> Unit {
   let f = ref_field(key)
   guard f.at.get() is Some((start, _)) else { return }
-  let caret = f.caret
+  // (the caret as it is now: the words typed after the `@` since its menu was built are the `@`'s too)
+  let caret = input.selection().1
   f.closed.set(start)
   c.tell("refs/pick/" + key, fn() {
     (src.call)(
@@ -432,6 +433,24 @@ pub fn refs_pick(
       },
     )
   })
+}
+
+///|
+/// Whether `input` still holds the `@` its menu was built for (`at`: where it starts; `before`: what was before it and
+/// it then; `after`: what was after the caret then): those as they were, the caret where `after` begins, nothing
+/// picked. The range the menu's choice is for, grown by what was typed in it since, not what the core makes of the
+/// words in it.
+pub fn refs_still_at(input : @ui.Field, at : (Int, String)?, before : String, after : String) -> Bool {
+  guard at is Some((start, _)) else { return false }
+  let now = input.text()
+  let (a, caret) = input.selection()
+  before != "" &&
+  a == caret &&
+  caret > start &&
+  now.length() >= before.length() + after.length() &&
+  caret == now.length() - after.length() &&
+  now.has_prefix(before) &&
+  now.has_suffix(after)
 }
 
 ///|

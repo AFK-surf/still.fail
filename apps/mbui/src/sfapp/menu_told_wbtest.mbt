@@ -57,3 +57,27 @@ test "大屏: a message's ⋯ pressed again with its menu open, then Escape at o
   let framed = button_then_escape(message_menu_tester(), "更多操作", open, true)
   assert_eq((none, framed), ([false, false, false], [false, false, false]))
 }
+
+///|
+test "大屏: a message's ⋯ menu, a key it does not take then Escape, no frame between: closed as Escape is taken" {
+  let t = message_menu_tester()
+  t.click(Button, label="更多操作")
+  t.run_for(@ui.move_most_ms)
+  assert_true(@sf.menu_open_key() != "", msg="opened")
+  t.key_told(@ui.key_code_left, 0, t.time())
+  t.key_told(@ui.key_escape, 0, t.time())
+  assert_eq(@sf.menu_open_key(), "")
+}
+
+///|
+test "大屏: a message's ⋯ menu, two keys then a press beside it, no frame between: closed as the press goes down" {
+  let t = message_menu_tester()
+  t.click(Button, label="更多操作")
+  t.run_for(@ui.move_most_ms)
+  t.key_told(@ui.key_code_left, 0, t.time())
+  t.key_told(@ui.key_code_right, 0, t.time())
+  t.touch_at(0, 600.0, 300.0, t.time())
+  let down = @sf.menu_open_key()
+  t.touch_at(2, 600.0, 300.0, t.time())
+  assert_eq(down, "")
+}

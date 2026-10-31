@@ -94,6 +94,19 @@ pub fn Ctx::overlay(
       None => ()
     }
   }
+  // (an opening ended by what it is for (Ctx::layer_ended: given up, nothing dismissed) built open again: another, as
+  // one dismissed is once read below, given the focus back from what has it now)
+  if dismissed is None {
+    match self.layer_gen.get(id) {
+      Some(g) if self.layer_retired.get(id) == Some(g) => {
+        self.layer_gen.remove(id)
+        self.layer_retired.remove(id)
+        self.layer_on_dismiss.remove(id)
+        self.layer_return.remove(id)
+      }
+      _ => ()
+    }
+  }
   if dismissed is Some(_) {
     self.dismissals.remove(id)
     // (read: the opening it was over ends here; built open from here, by its view keeping it so, it is another, given
@@ -784,9 +797,9 @@ fn Ctx::layer_dismissed(self : Ctx, id : Int, why : Dismiss) -> Unit {
 /// up together (their openings over: one of the same key built again is another; their back given up, what was said
 /// under them taking the next; taking no input from here, leaving as their views draw them going; the focus in one of
 /// them back where it was as it opened, where that is still there), then each told so, in that order (Ctx::with_dismissed),
-/// once, and the host told what takes back. Their views read the dismissals as they are built next (Overlay's
-/// `dismissed`), as before.
-fn Ctx::layers_dismissed(self : Ctx, gone : Array[(Int, Dismiss)]) -> Unit {
+/// once (not `tell`: none, an opening ended by what it is for, Ctx::layer_ended), and the host told what takes back.
+/// Their views read the dismissals as they are built next (Overlay's `dismissed`), as before.
+fn Ctx::layers_dismissed(self : Ctx, gone : Array[(Int, Dismiss)], tell? : Bool = true) -> Unit {
   let told : Array[((Dismiss) -> Unit, Dismiss)] = []
   for d in gone {
     let (id, why) = d
@@ -822,7 +835,9 @@ fn Ctx::layers_dismissed(self : Ctx, gone : Array[(Int, Dismiss)]) -> Unit {
     match self.layer_on_dismiss.get(id) {
       Some((g, f)) if g == gen => {
         self.layer_on_dismiss.remove(id)
-        told.push((f, why))
+        if tell {
+          told.push((f, why))
+        }
       }
       _ => ()
     }
@@ -834,6 +849,15 @@ fn Ctx::layers_dismissed(self : Ctx, gone : Array[(Int, Dismiss)]) -> Unit {
   }
   @signals.end_batch()
   self.back_told_host()
+}
+
+///|
+/// Layer `id`'s opening ended at this moment by what it is for (a choice made in it, its menu done with): as one
+/// dismissed is (Ctx::layers_dismissed), its opening over, taking no input from here (its keys, presses, the back, the
+/// focus in it given back), leaving as its view draws it going; but not dismissed, so nothing is told so
+/// (Ctx::with_dismissed's `f` is for a dismissal). Its view closes it as it is built next.
+pub fn Ctx::layer_ended(self : Ctx, id : Int) -> Unit {
+  self.layers_dismissed([(id, Escape)], tell=false)
 }
 
 ///|
@@ -850,6 +874,29 @@ fn Ctx::layer_retired_now(self : Ctx, id : Int) -> Bool {
   match (self.layer_retired.get(id), self.layer_gen.get(id)) {
     (Some(r), Some(g)) => r == g
     _ => false
+  }
+}
+
+///|
+/// The layer the keys go to as the last frame built them (Ctx::layer_escape's): the topmost open that is modal or has
+/// the focus in it; 0 none (the window's, under every layer).
+fn Ctx::keys_layer(self : Ctx) -> Int {
+  let open = self.last_layers.filter(fn(l) { self.layer_takes(l) }).rev()
+  match open.iter().find_first(fn(l) { l.modal || self.focus_in_layer(l.id) }) {
+    Some(l) => l.id
+    None => 0
+  }
+}
+
+///|
+/// Whether the keys reach `id` (the focus) as the last frame built the layers: the layer they go to is the one it is in
+/// (none, under every layer, where it is in none).
+fn Ctx::keys_reach(self : Ctx, id : Int) -> Bool {
+  let layer = self.keys_layer()
+  if layer == 0 {
+    !self.last_layers.iter().any(fn(l) { self.layer_takes(l) && self.focus_in_layer(l.id) })
+  } else {
+    self.focus_in_layer(layer) && self.focus == id
   }
 }
 
@@ -921,10 +968,7 @@ fn Ctx::back_layer_spent(self : Ctx) -> Unit {
 /// file over the window, to what it holds, its own Escape), taken and gone for everything else.
 fn Ctx::layer_escape(self : Ctx, keys : Array[(Int, Int, Bool)]) -> Int {
   let open = self.last_layers.filter(fn(l) { self.layer_takes(l) }).rev()
-  let keys_layer = match open.iter().find_first(fn(l) { l.modal || self.focus_in_layer(l.id) }) {
-    Some(l) => l.id
-    None => 0
-  }
+  let keys_layer = self.keys_layer()
   for l in open {
     if l.escape {
       let mut took = false

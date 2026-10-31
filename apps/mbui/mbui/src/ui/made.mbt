@@ -268,6 +268,7 @@ fn made_forget() -> Unit {
   made_roots.clear()
   made_placed.clear()
   made_presses.clear()
+  keys_taken.clear()
 }
 
 ///|
@@ -415,6 +416,72 @@ pub fn Ctx::on_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
   }
   self.takes_presses(id)
   made_presses[id] = f
+}
+
+///|
+/// What the part over a field said the field's keys do (Ctx::on_key), and the build that last said it (or put the part
+/// back unbuilt with it).
+priv struct KeysTaken {
+  take : (Int, Int) -> Bool
+  mut build : Int
+}
+
+///|
+/// The keys taken over each field (by the field's id, its owner): one part's at a time, the last build's to say it.
+// kept across runs: said as each build builds what takes them, let go as a build does not; a run's start clears it
+let keys_taken : Map[Int, KeysTaken] = {}
+
+///|
+/// The keys of field `owner` (the id that has the focus as they come: its editor's) that the part being built over it
+/// takes (a menu of what to put in it: ↑ ↓ to choose, Enter to put the one chosen in): `take` given each key (its code
+/// and what is held with it) as it comes, outside any build, before the window's tree's Tab, the field and the frame
+/// see it, only while `owner` has the focus where it takes input then (Ctx::focus_allowed: its island taking input;
+/// Ctx::keys_reach: no layer over it the keys go to), never a key catcher's (its keys all its own); saying whether it
+/// took it (taken, nothing else sees it). `take` asks, as the key comes, whether what it was built for still holds
+/// (the menu still open over the words it was built for): not, it takes nothing, and the key goes on as any key does. Said each build it is built (kept unbuilt with its part, as it was); a build that does not
+/// say it has let it go.
+pub fn Ctx::on_key(self : Ctx, owner : Int, take : (Int, Int) -> Bool) -> Unit {
+  if owner == 0 {
+    return
+  }
+  let w = { take, build: self.build_no }
+  keys_taken[owner] = w
+  built_used(fn() { w.build = g().build_no })
+}
+
+///|
+/// A key come (`code`, `mods`) to `focus` (the focus where it takes input, 0 none): given to what the last build said
+/// takes that field's keys, if it does.
+fn keys_taken_now(focus : Int, code : Int, mods : Int) -> Bool {
+  // (the focus where the keys go: no layer over it that takes them, modal or with the focus in it, Ctx::keys_reach; a
+  // key catcher's are all its own, as they are before anything else: catcher_key)
+  if focus == 0 || g().dev.catchers.contains(focus) || !g().keys_reach(focus) {
+    return false
+  }
+  match keys_taken.get(focus) {
+    Some(w) if w.build >= builds_made.val => {
+      @signals.start_batch()
+      let took = @signals.untracked(fn() { (w.take)(code, mods) })
+      @signals.end_batch()
+      took
+    }
+    Some(_) => {
+      keys_taken.remove(focus)
+      false
+    }
+    None => false
+  }
+}
+
+///|
+/// A frame built: what takes the keys of a field it no longer said so of let go (its part not built nor kept).
+fn keys_taken_built() -> Unit {
+  let last = builds_made.val
+  let gone : Array[Int] = []
+  keys_taken.each(fn(k, w) { if w.build < last { gone.push(k) } })
+  for k in gone {
+    keys_taken.remove(k)
+  }
 }
 
 ///|

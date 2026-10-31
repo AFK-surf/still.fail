@@ -2151,6 +2151,15 @@ pub fn Tester::key_told(self : Tester, code : Int, mods : Int, at : Double) -> U
 }
 
 ///|
+/// Text committed by the input method (Tester::type_text's) the host says came at `at`, told now, later: no frame
+/// drawn.
+pub fn Tester::text_told(self : Tester, s : String, at : Double) -> Unit {
+  self.fake.event_at = at
+  on_text(0, s, 0, 0)
+  self.fake.event_at = -1.0
+}
+
+///|
 /// The wheel turned (Tester::wheel_with's) at `at`, told now, later (the host's clock past it): as a host hands on an
 /// event it got a while before, its own time said with it (@hostapi.event_time). No frame drawn.
 pub fn Tester::wheel_told(
