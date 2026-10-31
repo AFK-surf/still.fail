@@ -767,6 +767,7 @@ pub fn Zoom::fit(Self) -> Double
 pub fn Zoom::fit_now(Self, at? : Double) -> Unit
 pub fn Zoom::fling(Self, Double, Double, at? : Double) -> Unit
 pub fn Zoom::fling_ends(Self) -> Double
+pub fn Zoom::glide_ends(Self) -> Double
 pub fn Zoom::keep(Self, (Double, Double), Double, when? : Double) -> Unit
 pub fn Zoom::max_scale(Self) -> Double
 pub fn Zoom::min_scale(Self) -> Double
@@ -778,6 +779,8 @@ pub fn Zoom::rect_at(Self, Double) -> (Double, Double, Double, Double)?
 pub fn Zoom::reset(Self, at? : Double) -> Unit
 pub fn Zoom::resize_keeping(Self, Double, Double, (Double, Double)?, Double, when? : Double) -> Unit
 pub fn Zoom::scale_at(Self, Double) -> Double
+pub fn Zoom::scale_shown(Self, Double) -> Double
+pub fn Zoom::scales_told(Self) -> (Double, Double)
 pub fn Zoom::step(Self) -> Unit
 pub fn Zoom::stop_fling(Self, at? : Double) -> Bool
 pub fn Zoom::stop_glide(Self, at? : Double) -> Unit

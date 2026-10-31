@@ -33,7 +33,11 @@ let tool_faint : Double = 0.35
 /// corner `corner` (round: Is(tool_side / 2.0); at the window's corner, linked to it: @ui.corner_of). Lit where the
 /// keyboard's focus shows on it as where the hand is on it (its hover ground and ink). Pressed (a press, Enter or
 /// Space with the focus, a screen reader's Activate), `press`, as one change. Its words its tip below it (tip_node), in
-/// the window's tips' layer `tip`, as viewer_tool's. The node.
+/// the window's tips' layer `tip`, as viewer_tool's. Saying `words` (as they change) in place of its icon, as
+/// viewer_text_tool draws a tool that says words (the zoom's per cent, 1:1): 32 high, a capsule, 36 wide at least (52
+/// `wide`), 8 in either side, the words in the meta's size, inked as its icon would be; laid out as wide as `room`
+/// says where it is given (the widest words it shows by the way between two it is told: a per cent counting through a
+/// glide), its words drawn in its middle over that, not laid out by them. The node.
 pub fn tool_node(
   parent : @view.View,
   said : () -> ToolSaid,
@@ -41,6 +45,9 @@ pub fn tool_node(
   corner : @view.Live[Double],
   press : () -> Unit,
   tip? : TipLayer,
+  words? : () -> String,
+  room? : () -> String,
+  wide? : Bool = false,
 ) -> @view.View {
   parent.box(fn(v) {
     // (where the hand is on it, as a box's hovered look has it: a mouse's pointer over it, a finger pressing it; and
@@ -52,10 +59,24 @@ pub fn tool_node(
         Finger => v.pressed()
       })
     }
+    match words {
+      None =>
+        v
+        .width(Is(Some(tool_side)))
+        .padding(Is((tool_icon_in, tool_icon_in, tool_icon_in, tool_icon_in)))
+        |> ignore
+      Some(_) => {
+        let px = @ui.Space::px(S2)
+        v
+        .row(Is(true))
+        .lines_up(Is(Some(Middle)))
+        .min_width(Is(Some(@ui.Space::px(if wide { S12 } else { S9 }))))
+        .padding(Is((px, 0.0, px, 0.0)))
+        |> ignore
+      }
+    }
     v
-    .width(Is(Some(tool_side)))
     .height(Is(Some(tool_side)))
-    .padding(Is((tool_icon_in, tool_icon_in, tool_icon_in, tool_icon_in)))
     .radius(corner)
     .presses(By(fn() { !said().disabled }))
     .focusable(By(fn() { !said().disabled }))
@@ -80,25 +101,60 @@ pub fn tool_node(
     }))
     .on_press(press)
     |> ignore
-    v.box(fn(i) {
-      i
-      .width(Is(Some(viewer_tool_icon)))
-      .height(Is(Some(viewer_tool_icon)))
-      .shapes(By(fn() { tool_shapes(said().icon) }))
-      // (called as an old view's icon is, by what finds it on screen)
-      .drawn_as(By(fn() { "/icon/" + said().icon + "/" }))
-      .tint(By(fn() {
-        let s = said()
-        let k = ink()
-        if s.on || (!s.disabled && (lit() || v.pressed())) {
-          k.ink
-        } else {
-          k.muted
+    // (what it shows inked as the hand is on it, pressed or on; else the ink's muted)
+    let shown_ink = fn() {
+      let k = ink()
+      let s = said()
+      if s.on || (!s.disabled && (lit() || v.pressed())) {
+        k.ink
+      } else {
+        k.muted
+      }
+    }
+    match words {
+      None =>
+        v.box(fn(i) {
+          i
+          .width(Is(Some(viewer_tool_icon)))
+          .height(Is(Some(viewer_tool_icon)))
+          .shapes(By(fn() { tool_shapes(said().icon) }))
+          // (called as an old view's icon is, by what finds it on screen)
+          .drawn_as(By(fn() { "/icon/" + said().icon + "/" }))
+          .tint(By(shown_ink))
+          |> ignore
+        })
+        |> ignore
+      Some(w) => {
+        let look = fn() -> @view.WordsLook {
+          let (size, line) = @ui.tree_theme().text_size(Meta)
+          { size, weight: 400, line, wrap: false }
         }
-      }))
-      |> ignore
-    })
-    |> ignore
+        // (its words in the middle of what holds them, however much wider than them it is: room either side)
+        let centred = fn(holder : @view.View, words : () -> String, seen : Bool) {
+          holder.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+          holder.box(fn(n) {
+            n.words(By(words)).words_look(By(look)).ink(By(shown_ink)) |> ignore
+            if !seen {
+              n.alpha(Is(0.0)) |> ignore
+            }
+          })
+          |> ignore
+          holder.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+        }
+        match room {
+          None => centred(v, w, true)
+          Some(r) => {
+            // (laid out by the room it is given, unseen; what it says drawn over all of it)
+            centred(v, r, false)
+            v.box(fn(o) {
+              o.over(Is(true)).row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+              centred(o, w, true)
+            })
+            |> ignore
+          }
+        }
+      }
+    }
     // (a finger on it: a tap presses it; held still long_press_ms, its tip shown while it stays down and a while after,
     // the press then no tap (kit's tooltip's held_long); a mouse's held as long, still a press as it is let go)
     let hand = match tip {

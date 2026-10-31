@@ -40,10 +40,10 @@ pub fn viewer_frame_bar(
 }
 
 ///|
-/// Whether a file opened `w` wide has the bar floating at its top (viewer_frame_bar's: the Small tier, no wider than a
-/// phone's, viewer_head_node's as nodes), not the bar across the top.
+/// Whether a file opened `w` wide has the bar floating at its top (viewer_frame_bar's: the Small tier, a phone's or a
+/// fold half open wider than one, viewer_head_node's as nodes), not the bar across the top.
 pub fn viewer_bar_floats(w : Double) -> Bool {
-  layout(w) is Small && w <= viewer_small_w
+  layout(w) is Small
 }
 
 ///|
