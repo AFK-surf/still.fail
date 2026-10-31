@@ -290,6 +290,7 @@ pub fn Tester::new(
     images: {},
     bold: 0.0,
     ui_face: 0.0,
+    tabular: 0.0,
     faces_wider: {},
     views: [],
     view_ids: 0,
@@ -1954,6 +1955,13 @@ pub fn Tester::ui_face_wider(self : Tester, em : Double) -> Unit {
 }
 
 ///|
+/// Digits set all one width (@hostapi.style_tabular) `em` ems wider than set otherwise, from now on (the fake host's
+/// shapes ignore it otherwise).
+pub fn Tester::tabular_wider(self : Tester, em : Double) -> Unit {
+  self.fake.tabular = em
+}
+
+///|
 /// What is set in host face `face` (a face given by its number, as a face's preview is) `em` ems wider a character than
 /// in the system's, from now on.
 pub fn Tester::face_wider(self : Tester, face : Int, em : Double) -> Unit {
@@ -2232,7 +2240,8 @@ pub fn Tester::tab(self : Tester, back? : Bool = false) -> Unit {
 }
 
 ///|
-/// The semantics tree of the last frame (Ctx::semantics_tree).
+/// The semantics tree as it is read now (Ctx::semantics_tree): the old views' as the last frame built them, the window's
+/// tree's nodes as they say they are now.
 pub fn Tester::semantics(self : Tester) -> Array[SemNode] {
   ignore(self)
   g().semantics_tree()

@@ -12,10 +12,10 @@
 //     changes, at that moment; what is beside it read ahead as that is said;
 //   - in it, what draws the picture (an old view taking a press only on what it has to press: a mark's pin, the words
 //     written; the picture where its zoom has it as the frame draws it, its flight, the pictures beside it), and over
-//     it the bars: the floating bar on a small screen, its picture whole and not marked, nodes of its own
-//     (image_head, head_as_nodes: its tools, their tips); the rest an old view taking a press only where it has
-//     something to press (the bar across the top of a wide screen, a small one wider than a phone, the bar while the
-//     picture comes, marking's, the ways to the pictures beside it).
+//     it the bars: the floating bar on a small screen, its picture coming or whole and not marked, nodes of its own
+//     (image_head, head_as_nodes: how much of it has come, its tools, their tips); the rest an old view taking a
+//     press only where it has something to press (the bar across the top of a wide screen, a small one wider than a
+//     phone, marking's, the ways to the pictures beside it).
 //
 // It sets out as the node is made (that moment its cause's: the thumbnail tapped), and is done at its ways' declared
 // ends (moments on the node's timeline): landed, the thumbnail shows again; gone, it is let go.
@@ -695,13 +695,12 @@ fn Viewer::key_on(self : Viewer, src : Source, k : @view.Key) -> Bool {
 
 ///|
 /// Whether viewer `v`'s floating bar is its nodes (image_head), `w` wide, the old bars' (vf_bar's) not: a picture here
-/// whole (not coming, not read, played or marked), on a small screen no wider than a phone's (no zoom, no kind and
+/// coming or whole (not read, played or marked), on a small screen no wider than a phone's (no zoom, no kind and
 /// size), its own bar (not the system's beside it: an iPhone Duo's). As each of these is told.
 pub fn head_as_nodes(v : Viewer, w : Double) -> Bool {
   marks_said()
   v.in_tree &&
   v.shown_kind() == Some(KImage) &&
-  !v.coming() &&
   !marking.on &&
   @sf.viewer_bar_floats(w) &&
   !@sf.native_on()
@@ -710,9 +709,10 @@ pub fn head_as_nodes(v : Viewer, w : Double) -> Bool {
 ///|
 /// Viewer `vw`'s floating bar as nodes in `h` (viewer_head_node, as vf_bar has it there): its file's name, there while
 /// its bars are (Viewer::bars_shown), as far in as the viewer is (its flight's share, else its fade, sampled as it is
-/// drawn while either goes), its tools: mark and copy once its picture is all here (copied: a check for copied_ms,
-/// from the press's moment), download (unable while there is nothing to save; a ring while the core downloads it),
-/// ×. Each press done at its moment; what a download asks for told once, as it is asked. Their tips in a layer of its
+/// drawn while either goes); while its picture comes, how much of it has once the core has said (file_progress_node);
+/// its tools: mark and copy once its picture is all here (copied: a check for copied_ms,
+/// from the press's moment), download (unable while there is nothing to save; a ring while the core downloads it;
+/// none while it comes), ×. Each press done at its moment; what a download asks for told once, as it is asked. Their tips in a layer of its
 /// own over all of it.
 fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, Double)) -> Unit {
   h.over(Is(true)) |> ignore
@@ -746,6 +746,10 @@ fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, 
     ink,
     fn() { @sf.viewer_page_glass() },
     fn(row) {
+      // while it comes, how much of it has, once the core has said (FilePreview.tsx: FileComing in the floating head)
+      row.show(fn() { vw.coming() && vw.got.get() is Some(_) }, fn(r) {
+        file_progress_node(r, fn() { vw.got.get().unwrap_or((0.0, None)) }, fn() { vw.file.size }) |> ignore
+      })
       // 标注图片: once its whole picture is here (annotate/ImageMarks.tsx)
       row.show(whole, fn(r) {
         @sf.tool_node(
@@ -789,7 +793,7 @@ fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, 
         r.owns(fn() { (copied_end.val)() }) |> ignore
       })
       // download: what is here saved at once; one told of, read whole first; a ring while the core downloads it
-      row.show(fn() { !downloading(dl()) }, fn(r) {
+      row.show(fn() { !vw.coming() && !downloading(dl()) }, fn(r) {
         @sf.tool_node(
           r,
           fn() {
@@ -803,12 +807,12 @@ fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, 
         )
         |> ignore
       })
-      row.show(fn() { downloading(dl()) }, fn(r) {
+      row.show(fn() { !vw.coming() && downloading(dl()) }, fn(r) {
         @sf.tool_ring_node(r, fn() { number(dl(), "progress") }, fn() { @sf.t("web-main.preview.download") }, ink, round)
         |> ignore
       })
     },
-    fn() { "\{whole()} \{downloading(dl())}" },
+    fn() { "\{whole()} \{downloading(dl())} \{vw.coming()} \{vw.got.get() is Some(_)}" },
     fn() {
       if !vw.closing {
         vw.shut(@ui.current())
@@ -830,4 +834,81 @@ fn download_told(src : Source, vw : Viewer) -> Unit {
     let (station, key, name, size, from) = (vw.station, vw.key, vw.name, vw.file.size, vw.opened_from())
     @ui.current().tell("download/" + name, fn() { download_start(src, station, key, name, size, from~) })
   }
+}
+
+///|
+/// How much of a file has come (file_progress's, FilePreview.kt FileProgress) as nodes in `parent`: "正在读取 **4 MB** /
+/// 12 MB" (the size so far in bold, in the words' ink) over a bar, on the surface (surface2 dark), 14 round, 14 and 12
+/// in, 220 wide; its size not known (neither the station's, `got`'s, nor the one it was sent with, `sent`), 正在读取 over
+/// a bar that sweeps. Each as it changes: what has come, the words' language, the theme. The card's node.
+pub fn file_progress_node(parent : @view.View, got : () -> (Double, Double?), sent : () -> Double) -> @view.View {
+  let total = fn() -> Double? {
+    match got().1 {
+      Some(n) => Some(n)
+      None => if sent() > 0.0 { Some(sent()) } else { None }
+    }
+  }
+  let wide = match @sf.file_progress_w {
+    Fixed(w) => w
+    _ => 220.0
+  }
+  parent.box(fn(card) {
+    card
+    .width(Is(Some(wide)))
+    .padding(Is((@ui.Space::px(S3_5), @ui.Space::px(S3), @ui.Space::px(S3_5), @ui.Space::px(S3))))
+    .gap(Is(@ui.Space::px(S2)))
+    .lines_up(Is(Some(Middle)))
+    .radius(Is(file_progress_corner))
+    .ground(By(fn() {
+      let t = @sf.theme()
+      if t.dark {
+        surface2_dark
+      } else {
+        t.p.card
+      }
+    }))
+    |> ignore
+    card.box(fn(w) {
+      w
+      .words_runs(By(fn() {
+        match total() {
+          Some(n) => {
+            // the size so far in bold, where the sentence has it
+            let words = pv("android-chat.file.loading.size")
+            let (before, after) = match words.find("{size}") {
+              Some(i) => (words.view(end_offset=i).to_owned(), words.view(start_offset=i + 6).to_owned())
+              None => (words, "")
+            }
+            [
+              @view.words_run(before),
+              @view.words_run(@sf.file_size(got().0), weight=600, ink=@sf.theme().p.text),
+              @view.words_run(" / " + @sf.file_size(n) + after),
+            ]
+          }
+          None => [@view.words_run(pv("common.reading"))]
+        }
+      }))
+      .words_look(By(fn() {
+        let (size, line) = @ui.tree_theme().text_size(Body)
+        { size, weight: 400, line, wrap: true }
+      }))
+      .ink(By(fn() { @ui.tree_theme().color(Muted) }))
+      |> ignore
+    })
+    |> ignore
+    // (as wide as the card has room)
+    @sf.progress_node(
+      card,
+      fn() {
+        match total() {
+          Some(n) if n > 0.0 => Some(dmin(1.0, got().0 / n))
+          _ => None
+        }
+      },
+      fn() { @ui.tree_theme().line },
+      fn() { @sf.theme().p.accent },
+    )
+    .width_share(Is(1.0))
+    |> ignore
+  })
 }

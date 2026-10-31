@@ -113,7 +113,7 @@ pub fn slider(
   } else {
     now.to_string()
   }
-  c.semantics(i, Slider, id~, label~, value=shown, range=(min, max, now), disabled~, actions=pick(disabled, [], [
+  c.semantics(i, Slider, id~, label~, value=shown, range=(min, now, max), disabled~, actions=pick(disabled, [], [
     Increment, Decrement,
   ]))
   { value: now, response: r.changed_to(now != value) }

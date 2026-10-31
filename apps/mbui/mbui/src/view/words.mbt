@@ -19,6 +19,31 @@ pub(all) struct WordsLook {
 pub let words_plain : WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true }
 
 ///|
+/// A piece of a node's words set its own way (View::words_runs): its weight (0: the words' own, WordsLook's), its ink
+/// (0: the node's, View::ink); the rest as the words are set.
+pub(all) struct WordsRun {
+  text : String
+  weight : Int
+  ink : Int64
+} derive(Eq, Debug)
+
+///|
+/// A piece of words, `text`, in `weight` (0: the words' own) and `ink` (0: the node's).
+pub fn words_run(text : String, weight? : Int = 0, ink? : Int64 = 0L) -> WordsRun {
+  { text, weight, ink }
+}
+
+///|
+/// Words in pieces measured as a test's are: as their words one after another (words_measure).
+pub fn runs_measure(runs : Array[WordsRun], look : WordsLook, width : Double) -> (Double, Double) {
+  let words = StringBuilder()
+  for r in runs {
+    words.write_string(r.text)
+  }
+  words_measure(words.to_string(), look, width)
+}
+
+///|
 /// The ink its words are drawn in, as it changes (a theme's, a state's): paint's.
 pub fn View::ink(self : View, ink : Live[Int64]) -> View {
   self.bind(22, ink, Paint, fn(k) { self.tree.nodes[self.at].look.ink = k })
@@ -99,5 +124,13 @@ pub fn View::lines_up(self : View, along : Live[Along?]) -> View {
       Some(End) => FlexEnd
     }
   })
+  self
+}
+
+///|
+/// How wide it is as a share of what holds it (0 to 1; the same binding as View::width, which says it in points), as it
+/// changes: layout's.
+pub fn View::width_share(self : View, share : Live[Double]) -> View {
+  self.bind(0, share, Layout, fn(s) { self.tree.nodes[self.at].flex.style.set_width(Pct(s * 100.0)) })
   self
 }

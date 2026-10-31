@@ -51,6 +51,8 @@ pub(all) struct Look {
   mut words : String
   /// how its words are set (View::words: their size, weight, line and whether they wrap)
   mut words_look : WordsLook
+  /// its words in pieces set their own way (View::words_runs: a weight, an ink; none: all of them as words_look says)
+  mut runs : Array[WordsRun]
   /// the shadow it casts under its ground (blur, how far down, colour; 0 blur: none): View::shadow
   mut shadow : (Double, Double, Int64)
   /// the shapes it draws over its ground (their outlines, as said: what they come to drawn kept by them), and the one
@@ -87,6 +89,7 @@ pub(all) struct Content {
   ink : Int64
   words : String
   words_look : WordsLook
+  runs : Array[WordsRun]
   shadow : (Double, Double, Int64)
   shapes : Array[@paint.Shape]
   tint : Int64
@@ -122,6 +125,7 @@ pub(all) struct Drawn {
   ink : Int64
   words : String
   words_look : WordsLook
+  runs : Array[WordsRun]
   shadow : (Double, Double, Int64)
   shapes : Array[@paint.Shape]
   tint : Int64
@@ -271,12 +275,16 @@ pub struct Tree {
   /// the moment what is drawn is drawn at (a frame's, to be shown then), a signal a look follows (Tree::drawn_at); the
   /// logic follows no clock (its moment `logic`, what is due on its timeline said once: Tree::advance)
   clock : @signals.Signal[Double]
+  /// the same moment, for what draws a wait by it (a cycle: View::cycle): what never ends, read apart from what moves
+  beat : @signals.Signal[Double]
   /// the time now, as a change is told (the host's: an event's moment, before a frame takes it); none: the clock's
   time : (() -> Double)?
   /// the moment the change a queued binding works out was told, while it is (-1: none)
   mut cause_at : Double
   /// how words are measured: (words, how they are set, width offered) -> (width, height)
   measure : (String, WordsLook, Double) -> (Double, Double)
+  /// and words in pieces set their own way (View::words_runs): (the pieces, how the words are set, width offered)
+  measure_runs : (Array[WordsRun], WordsLook, Double) -> (Double, Double)
   nodes : Array[Node]
   free : Array[Int]
   /// what a frame is to do: the nodes whose look changed, those whose place changed; whether any is to be laid out,
@@ -399,10 +407,12 @@ pub struct View {
 }
 
 ///|
-/// A tree whose root `make` makes (as the root's own: its bindings, its nodes), its words measured by `measure`.
+/// A tree whose root `make` makes (as the root's own: its bindings, its nodes), its words measured by `measure` (in
+/// pieces set their own way: `measure_runs`).
 pub fn Tree::new(
   make : (View) -> Unit,
   measure? : (String, WordsLook, Double) -> (Double, Double) = words_measure,
+  measure_runs? : (Array[WordsRun], WordsLook, Double) -> (Double, Double) = runs_measure,
   time? : () -> Double,
 ) -> Tree {
   // (the moment it is made, taken once: its logic and what it draws start there, and what it is made with is of then)
@@ -412,12 +422,14 @@ pub fn Tree::new(
   }
   let t : Tree = {
     clock: @signals.signal(start, same=fn(a, b) { a == b }),
+    beat: @signals.signal(start, same=fn(a, b) { a == b }),
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
     pressed_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
     words_redone: @signals.signal(0, same=fn(a, b) { a == b }),
     time,
     cause_at: -1.0,
     measure,
+    measure_runs,
     nodes: [],
     free: [],
     looks_due: [],
@@ -514,6 +526,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.ground = 0L
       n.look.ink = 0L
       n.look.words = ""
+      n.look.runs = []
       n.look.shapes = []
       n.look.tint = 0L
       n.look.radius = 0.0
@@ -573,7 +586,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), drawn_as: "" },
+        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), drawn_as: "" },
         parent,
         kids: [],
         owner: None,
@@ -707,9 +720,30 @@ pub fn Tree::drawn_at(self : Tree) -> Double {
 }
 
 ///|
+/// Where a cycle of `period` ms is as what is drawn is drawn (0 to 1, from moment 0 on), followed: for a wait drawn by
+/// it as long as it shows (a spinner's turn, a band of progress not known), which never ends and is no motion
+/// (Tree::cycle_read); as Ctx::cycle is an old view's.
+pub fn View::cycle(self : View, period : Double) -> Double {
+  let t = self.tree.beat.get()
+  if period <= 0.0 {
+    return 0.0
+  }
+  let p = t / period
+  p - p.floor()
+}
+
+///|
+/// Whether a wait reads the clock (View::cycle): what hosts the tree draws its frames one after another as an old view's
+/// cycle has them drawn, a wait, not a motion (Tree::clock_read).
+pub fn Tree::cycle_read(self : Tree) -> Bool {
+  self.beat.watched()
+}
+
+///|
 /// The clock set to `ms` (a frame's time).
 pub fn Tree::at(self : Tree, ms : Double) -> Unit {
   self.clock.set(ms)
+  self.beat.set(ms)
 }
 
 ///|
@@ -1576,13 +1610,44 @@ pub fn View::words(
       Undefined => -1.0
     }
     tree.work.measured = tree.work.measured + 1
-    let (mw, mh) = (tree.measure)(tree.nodes[at].look.words, tree.nodes[at].look.words_look, offered)
+    let look = tree.nodes[at].look
+    let (mw, mh) = if look.runs.is_empty() {
+      (tree.measure)(look.words, look.words_look, offered)
+    } else {
+      (tree.measure_runs)(look.runs, look.words_look, offered)
+    }
     match wm {
       Exactly => (w, mh)
       _ => (mw, mh)
     }
   })
-  self.bind(8, words, Both, fn(s) { tree.nodes[at].look.words = s })
+  self.bind(8, words, Both, fn(s) {
+    tree.nodes[at].look.words = s
+    tree.nodes[at].look.runs = []
+  })
+  self
+}
+
+///|
+/// The words it shows in pieces, each set its own way (a weight, an ink: WordsRun), one paragraph laid out as one
+/// (View::words otherwise: read out, found and measured as the pieces' words one after another), as they change.
+pub fn View::words_runs(
+  self : View,
+  runs : Live[Array[WordsRun]],
+  ink? : Int64 = 0x000000FFL,
+  look? : WordsLook = words_plain,
+) -> View {
+  let tree = self.tree
+  let at = self.at
+  self.words(Is(""), ink~, look~) |> ignore
+  self.bind(8, runs, Both, fn(rs) {
+    let words = StringBuilder()
+    for r in rs {
+      words.write_string(r.text)
+    }
+    tree.nodes[at].look.words = words.to_string()
+    tree.nodes[at].look.runs = rs
+  })
   self
 }
 
@@ -2067,11 +2132,15 @@ fn Tree::laid_now(self : Tree) -> Unit {
   let shown = @signals.untracked(fn() { self.clock.get() })
   @signals.untracked(fn() {
     self.clock.set(at)
+    self.beat.set(at)
     self.pull()
     self.laid_out(at)
   })
   if shown != at {
-    @signals.untracked(fn() { self.clock.set(shown) })
+    @signals.untracked(fn() {
+      self.clock.set(shown)
+      self.beat.set(shown)
+    })
   }
 }
 
@@ -3391,6 +3460,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     radius: n.look.radius,
     glass: n.look.glass,
     words_look: n.look.words_look,
+    runs: n.look.runs,
     shadow: n.look.shadow,
     hosted: n.hosted,
   })
@@ -3499,6 +3569,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     radius: c.radius,
     glass: c.glass,
     words_look: c.words_look,
+    runs: c.runs,
     shadow: c.shadow,
     hosted: c.hosted,
   }

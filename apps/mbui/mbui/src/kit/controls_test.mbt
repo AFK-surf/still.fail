@@ -268,7 +268,10 @@ test "slider: the arrows a step, Page keys ten, Home and End the ends; Increment
   assert_eq(v.val, 0.0)
   let s = t.get(@ui.Role::Slider, label="Volume")
   assert_eq(s.value, "0")
-  assert_eq(s.range, Some((0.0, 100.0, 0.0)))
+  assert_eq(s.range, Some((0.0, 0.0, 100.0)), msg="its least, where it is, its most")
+  let told = t.ctx().a11y_lines().split("\n").filter(fn(l) { l.contains("Slider") }).to_array()
+  let f = told[0].split("\u{1F}").map(fn(v) { v.to_string() }).to_array()
+  assert_eq([f[12], f[13], f[14]], [(0.0).to_string(), (0.0).to_string(), (100.0).to_string()], msg="told the host so")
 }
 
 ///|
@@ -299,7 +302,7 @@ test "progress: its value as a percentage and its range; not known, neither, and
   let t = @ui.Tester::new(fn(c) { progress(c, "upload", v.val, max=60.0, label="Upload") })
   let p = t.get(@ui.Role::ProgressBar, label="Upload")
   assert_eq(p.value, "50%")
-  assert_eq(p.range, Some((0.0, 60.0, 30.0)))
+  assert_eq(p.range, Some((0.0, 30.0, 60.0)), msg="its least, where it is, its most")
   v.val = None
   t.draw()
   assert_eq(t.get(@ui.Role::ProgressBar, label="Upload").range, None)

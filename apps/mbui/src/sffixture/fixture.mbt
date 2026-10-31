@@ -1185,8 +1185,18 @@ pub fn fixture(mode : String) -> Source {
       }
     },
     read_bytes,
-    // a chat's made-up files, whole: here at once, nothing said of how far they have got
-    read_going: fn(name, params, _on_value, done) { fixture_fetch(name, params, done) },
+    // a chat's made-up files, whole: here at once, nothing said of how far they have got; a picture coming never whole
+    // (MBUI_FIXTURE=chat-preview-coming, -coming-part: how much has come said once, preview_coming)
+    read_going: fn(name, params, on_value, done) {
+      if name == "station.file" && preview_coming.val is Some((held, said)) && text(Some(params), "name") == held {
+        match said {
+          Some(v) => on_value(v)
+          None => ()
+        }
+        return
+      }
+      fixture_fetch(name, params, done)
+    },
     stream: fn(name, params, _bytes, on_value, done) {
       // a player's part read (preview.mbt stream_part): as read_bytes answers it, its bytes in one piece
       if name == "station.file.part" || name == "drive.read" {

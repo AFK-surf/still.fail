@@ -463,6 +463,8 @@ pub fn phone_post() -> Json
 
 pub fn play_fixture(String) -> (@sfbase.DriveAt, @kit.MediaStatus?)?
 
+pub let preview_coming : @ref.Ref[(String, Json?)?]
+
 pub fn preview_files() -> Array[(@sfbase.Attachment, () -> Bytes)]
 
 pub fn rich_chat(Int32) -> Json

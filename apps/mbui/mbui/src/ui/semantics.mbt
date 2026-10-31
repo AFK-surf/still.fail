@@ -8,7 +8,8 @@
 // (Ctx::hidden_from_semantics: what only decorates; one its row left out); a modal over the page hides what is under it. An action asked of
 // a node (by a test, later by the host's VoiceOver, TalkBack or UI Automation) comes to its widget the next frame as
 // though it were done by hand (Ctx::interact: Activate is a click). The tree is made when asked
-// (Ctx::semantics_tree), from what the last frame built.
+// (Ctx::semantics_tree): the old views' from what the last frame built; the window's tree's nodes as they say they are
+// now, what was told since that frame said (@view.Tree::said_order), no frame waited for.
 
 ///|
 /// What a widget said of its node this frame.
@@ -186,7 +187,8 @@ pub fn Ctx::text_asked(self : Ctx, id : Int) -> String? {
 }
 
 ///|
-/// The tree of the last frame built (see the file's head), its nodes in the tree's order (a parent before what it
+/// The tree as it is read now (see the file's head: the old views' nodes as the last frame built them, the window's
+/// tree's as they say they are now), its nodes in the tree's order (a parent before what it
 /// holds, what it holds in the order it is laid out: a list's rows top to bottom, though it builds the one it stands
 /// at first), what no frame's tree holds left out (a row built again in its place).
 pub fn Ctx::semantics_tree(self : Ctx) -> Array[SemNode] {

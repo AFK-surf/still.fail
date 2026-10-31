@@ -397,8 +397,8 @@ pub fn View::finger_target(self : View, x : Double, y : Double) -> Bool {
 }
 
 ///|
-/// What its words measure and how they are drawn changed for all of them (the system's size of words): every node with
-/// words laid out and drawn again.
+/// What its words measure and how they are drawn changed for all of them (the system's size of words, how the theme
+/// shapes them): every node with words laid out and drawn again.
 pub fn Tree::words_again(self : Tree) -> Unit {
   for at, n in self.nodes {
     if n.live && n.look.words != "" {

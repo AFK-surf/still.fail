@@ -1074,6 +1074,102 @@ test "viewer on the tree, a wide window: a picture as it comes says how much has
 }
 
 ///|
+test "viewer on the tree, a phone's screen: a picture as it comes, its floating bar its nodes: its name and ×, nothing of how much before the core has said; then a card saying how much in words and a bar at that share, read again as more comes; whole, the card gone and its tools there; nothing of it reading the clock once it is gone" {
+  new_run()
+  let base = fixture("chat-preview-step")
+  // (its whole held: how much of it has come told by the test, then the whole given)
+  let said : Map[String, (Json) -> Unit] = {}
+  let held : Map[String, () -> Unit] = {}
+  let src : Source = {
+    ..base,
+    read_going: fn(name, params, on_value, done) {
+      if name == "station.file" {
+        let file = text(Some(params), "name")
+        said[file] = on_value
+        held[file] = fn() { (base.read_going)(name, params, on_value, done) }
+      } else {
+        (base.read_going)(name, params, on_value, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=1)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let v = viewer.get().unwrap()
+  assert_true(v.coming() && v.in_tree, msg="coming, the tree's viewer")
+  let close = @sf.t("web-main.preview.closeKey")
+  assert_eq(t.all(Button, label=close).length(), 1, msg="its ×, once: the old bar's not drawn as well")
+  assert_true(t.locate("icon:close").length() == 1, msg="its × the node's")
+  assert_eq(t.all(ProgressBar).length(), 0, msg="nothing of how much before the core has said")
+  assert_true(t.find("正在读取") is None)
+  assert_eq(t.all(Button, label=@sf.t("common.copy")).length(), 0, msg="no tools while it comes")
+  assert_eq(t.all(Button, label=@sf.t("web-main.preview.download")).length(), 0, msg="no download while it comes")
+  (said.get(v.file.name).unwrap())({ "loaded": 1024.0, "total": 4096.0 })
+  // (said as the core says it, no frame drawn for it)
+  let now = t.all(ProgressBar)
+  assert_eq(now.length(), 1, msg="its bar read out at once")
+  assert_eq((now[0].value, now[0].range), ("25%", Some((0.0, 25.0, 100.0))), msg="at once")
+  t.draw()
+  assert_true(t.find("正在读取 1 KB / 4 KB") is Some(_), msg="how much, in words")
+  let bars = t.all(ProgressBar)
+  assert_eq(bars.length(), 1, msg="one bar")
+  assert_eq(bars[0].value, "25%")
+  assert_eq(bars[0].range, Some((0.0, 25.0, 100.0)), msg="its least, where it is, its most")
+  (said.get(v.file.name).unwrap())({ "loaded": 3072.0, "total": 4096.0 })
+  assert_eq((t.all(ProgressBar)[0].value, t.all(ProgressBar)[0].range), ("75%", Some((0.0, 75.0, 100.0))), msg="more come: said at once, no frame drawn")
+  t.draw()
+  assert_true(t.find("正在读取 3 KB / 4 KB") is Some(_), msg="more come: its words again")
+  assert_eq(t.all(ProgressBar)[0].value, "75%", msg="and its bar")
+  assert_eq(t.all(ProgressBar)[0].range, Some((0.0, 75.0, 100.0)), msg="its range at once")
+  // (whole: the card gone, its tools there)
+  (held.get(v.file.name).unwrap())()
+  t.draw()
+  t.run_for(@kit.progress_known_ms)
+  assert_true(!v.coming(), msg="whole")
+  assert_eq(t.all(ProgressBar).length(), 0, msg="its card gone")
+  assert_true(t.find("正在读取") is None)
+  for l in [@sf.t("web-main.annotate.image"), @sf.t("common.copy"), @sf.t("web-main.preview.download"), close] {
+    assert_eq(t.all(Button, label=l).length(), 1, msg="\{l}: \{t.all(Button, label=l).length()}")
+  }
+  assert_true(!@ui.view_tree().unwrap().cycle_read(), msg="no wait drawn by the clock once whole")
+}
+
+///|
+test "viewer on the tree, a phone's screen: a picture coming, its card shown: at rest between what the core says; closed as it comes, nothing of it reading the clock once it is gone" {
+  new_run()
+  let base = fixture("chat-preview-step")
+  let said : Map[String, (Json) -> Unit] = {}
+  let src : Source = {
+    ..base,
+    read_going: fn(name, params, on_value, done) {
+      if name == "station.file" {
+        said[text(Some(params), "name")] = on_value
+      } else {
+        (base.read_going)(name, params, on_value, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=1)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let v = viewer.get().unwrap()
+  (said.get(v.file.name).unwrap())({ "loaded": 1024.0 })
+  t.draw()
+  assert_eq(t.all(ProgressBar).length(), 1, msg="a bar")
+  let tree = @ui.view_tree().unwrap()
+  assert_true(t.find("正在读取") is Some(_))
+  t.run_for(@kit.progress_known_ms)
+  t.assert_idle()
+  pressed(t, Button, @sf.t("web-main.preview.closeKey"))
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@sfpages.reveal_ms)
+  assert_true(viewer.get() is None && pv_leaving.get() is None, msg="closed")
+  assert_true(!tree.cycle_read() && !tree.clock_read(), msg="nothing of it reading the clock once it is gone")
+}
+
+///|
 test "viewer on the tree, a phone's screen: its floating bar its nodes, one of each tool (标注, 复制, 下载, ×), none of the old bar's; copied, a check for copied_ms from the press, frames drawn only as the app asks the host for them; × closes it" {
   let t = preview_tester("image", platform=1)
   let told = @sf.words_told_count()
