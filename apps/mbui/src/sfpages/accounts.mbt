@@ -1676,7 +1676,10 @@ fn spread_dialog(core : Core, address : String, id : String, spread : Array[Json
         for s in spread {
           c.box(style=pf_spread_model, fn() {
             c.text(text(Some(s), "name"), style=pf_spread_name) |> ignore
-            @sf.group(c, fn() {
+            // (its rows straight on the dialog, out past its words by a row's room so each box stands under the
+            // model's name, as 共享到其他 workspace's: a group's card was lost on the dialog's ground but for its
+            // room, 2026-10-31 用户「为啥有这么大的缩进」)
+            c.box(style=pf_spread_rows, fn() {
               for x in items(Some(s), "targets") {
                 let k = key_of(s, x)
                 let on = ticked.get(k).unwrap_or(false)
@@ -1686,6 +1689,7 @@ fn spread_dialog(core : Core, address : String, id : String, spread : Array[Json
                 }
               }
             })
+            |> ignore
           })
           |> ignore
         }
@@ -1852,6 +1856,12 @@ let pf_spread : @ui.Style = @ui.css("w=Full gap=S4")
 ///|
 // kept across runs: a value (no field of it changes)
 let pf_spread_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, w=Full)
+
+///|
+/// A model's profiles, a tick row each, out past the dialog's words by a row's own room (check_row's: its box under
+/// the model's name).
+// kept across runs: a value (no field of it changes)
+let pf_spread_rows : @ui.Style = @sf.outset_start(@sf.row_corner)
 
 ///|
 /// A model of them: its name, its profiles' boxes 6 under it.
