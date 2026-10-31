@@ -64,9 +64,9 @@ test "a row's menu at each width and with either hand: held by a finger, right c
 fn lit_rows(t : @ui.Tester) -> Int {
   let selected = @sf.theme().p.selected & 0xFFFFFF00L
   t
-  .boxes()
-  .filter(fn(b) {
-    b.h == @sfpages.touch_row_h && (b.bg & 0xFFL) != 0L && (b.bg & 0xFFFFFF00L) == selected
+  .drawn_rects()
+  .filter(fn(r) {
+    r.3 == @sfpages.touch_row_h && (r.4 & 0xFFL) != 0L && (r.4 & 0xFFFFFF00L) == selected
   })
   .length()
 }
