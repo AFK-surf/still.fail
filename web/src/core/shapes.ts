@@ -32,6 +32,8 @@ export interface ActivityNow {
 	text: string;
 	/** A tool call, shown in a monospaced font like its execution history summary. */
 	mono?: boolean;
+	/** A consequential step: show it even if it finishes quickly, ahead of routine work. */
+	important?: boolean;
 }
 
 /** What an agent at work is doing, as a chat shows it (activity.ts). */

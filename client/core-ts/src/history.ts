@@ -1,7 +1,7 @@
 // An agent's execution history as the clients show it (history.rs): what actually ran, put together here so every
 // client draws the same thing. Messages in and out, state marks and the agent's own words are boundaries; the tool
 // calls and thinking between two boundaries fold into one group, named by its latest call (shapes: HistoryView).
-import { args, doing, epochMs, kindOf, type Known, tasksOf, told, toolName } from "./activity.ts";
+import { args, doing, epochMs, importantCall, kindOf, type Known, tasksOf, told, toolName } from "./activity.ts";
 import * as format from "./format.ts";
 import * as brand from "./brand.ts";
 import { t } from "./i18n.ts";
@@ -740,7 +740,7 @@ export function activity(live: J, stations?: ReadonlyMap<string, string>): J {
   timeline.forEach((e, i) => {
     if (s(e, "kind") === "user") turn = i;
   });
-  let call: [string, string] | null = null;
+  let call: [string, string, boolean] | null = null;
   let replying = false;
   const known: Known = { stations, tasks: tasksOf(timeline) };
   for (const st of pair(timeline).steps) {
@@ -748,7 +748,11 @@ export function activity(live: J, stations?: ReadonlyMap<string, string>): J {
     if (st.call < turn || st.result !== null || e?.subagent === true) continue;
     const name = toolName(s(e, "tool"));
     if (name === "chat_post") replying = true;
-    else if (name !== "chat_state") call = [s(e, "callId") || `call:${st.call}`, doing(s(e, "tool"), s(e, "text"), known)];
+    else if (name !== "chat_state") {
+      const important = importantCall(s(e, "tool"), s(e, "text"));
+      // Of simultaneous steps, keep the most consequential; among equals, show the latest.
+      if (call === null || important || !call[2]) call = [s(e, "callId") || `call:${st.call}`, doing(s(e, "tool"), s(e, "text"), known), important];
+    }
   }
   const { liveSteps, phase } = pushed(live, "");
   // A reply being written comes as a step before its call is in the transcript.
@@ -756,8 +760,8 @@ export function activity(live: J, stations?: ReadonlyMap<string, string>): J {
   if (steps.some((st) => st?.subagent !== true && st?.ended !== true && s(st, "step") === "tool" && toolName(s(st, "tool")) === "chat_post")) replying = true;
   const rate = Number.isInteger(live?.rate) && live.rate > 0 ? (live.rate as number) : 0;
   const said = (key: string, word: string) => ({ key, text: rate > 0 ? `${t(word)} · ≈ ${rate} token/s` : t(word) });
-  if (call) return { now: { key: call[0], text: call[1], mono: true } };
-  if (replying) return { now: said("reply", "core-logic.activity.replying") };
+  if (call && (!replying || call[2])) return { now: { key: call[0], text: call[1], mono: true, ...(call[2] ? { important: true } : {}) } };
+  if (replying) return { now: { ...said("reply", "core-logic.activity.replying"), important: true } };
   const flight = liveSteps.at(-1);
   if (flight) return { now: flight.step === "text" ? said("write", "core-logic.activity.writing") : said("think", "core-logic.activity.thinking") };
   const at = typeof phase?.phase === "string" ? phase.phase : "";

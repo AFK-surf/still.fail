@@ -245,6 +245,8 @@ pub fn fix_with_syncing(Json) -> Json
 
 pub fn fix_with_trouble(Json, Map[String, Json]) -> Json
 
+pub let fix_working_important : @ref.Ref[Bool]
+
 pub let fix_working_now : @ref.Ref[(String, String)]
 
 pub fn fix_write(Fixture, String) -> FixWrite
