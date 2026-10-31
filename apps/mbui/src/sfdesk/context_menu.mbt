@@ -196,8 +196,13 @@ pub fn context_menu(c : @ui.Ctx) -> Unit {
     return
   }
   let at = (context.x, context.y, 0.0, 0.0)
-  let m = @sf.dropdown(c, "context-menu", true, 0, entries, context_icons, context_menu_w, offset=0.0, at~)
-  if !m.open {
+  // (dismissed, closed at the moment of what dismissed it: Escape, a press beside it)
+  let menu : Ref[@kit.Menu?] = Ref(None)
+  c.with_dismissed(fn(_) { context.open = false }, fn() {
+    menu.val = Some(@sf.dropdown(c, "context-menu", true, 0, entries, context_icons, context_menu_w, offset=0.0, at~))
+  })
+  let m = menu.val.unwrap()
+  if m.chosen is Some(_) {
     context.open = false
   }
   let field = context.field
