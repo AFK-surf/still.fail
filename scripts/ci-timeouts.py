@@ -10,7 +10,7 @@
 import glob, os, re, sys
 
 LIMIT = 5
-# (workflow, job): minutes. The emulator's checks of the day's (2026-10-31: android-devices 430-575 s), the Windows
+# (workflow, job): minutes. sfapp's pages in one process of the day's (mbui-check.yml native), the emulator's checks of the day's (2026-10-31: android-devices 430-575 s), the Windows
 # app's end to end of the day's (mbui.yml windows' runs that are no push), prebuild's Windows shell (300-450 s) and
 # TestFlight's release (330-550 s), both to be made faster
 LONGER = {
@@ -22,6 +22,7 @@ LONGER = {
     ("mbui-host-android.yml", "contracts"): 10,
     ("mbui-android-sdk.yml", "put"): 10,
     ("mbui.yml", "windows"): 10,
+    ("mbui-check.yml", "native"): 10,
     ("prebuild.yml", "build"): 10,
     ("prebuild.yml", "again"): 10,
     ("mbui-testflight.yml", "release"): 10,

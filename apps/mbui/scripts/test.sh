@@ -6,8 +6,8 @@
 # of the two (app: the design system, the pages, the screens, gallery and player; replay: the core and the flows seen
 # again), both by default; check-mbui runs each on a runner of its own. SFAPP_SHARDS: how many processes sfapp's test
 # files are run in side by side (5); 1, the pages' files all in one (the screen sweeps a process each beside them):
-# what one file leaves behind that a later one trips on shows best there, and check-mbui runs them so. mbui's own:
-# its scripts/test.sh.
+# what one file leaves behind that a later one trips on shows best there, and check-mbui's run of the day runs them so
+# (a push's in 4). mbui's own: its scripts/test.sh.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
