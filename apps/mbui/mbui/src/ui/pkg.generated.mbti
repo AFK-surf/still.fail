@@ -1155,7 +1155,7 @@ pub fn Ctx::now_before(Self, Double, loc~ : SourceLoc) -> Double
 pub fn Ctx::on_back(Self, () -> Unit) -> Unit
 pub fn Ctx::on_press(Self, Int32, () -> Unit) -> Unit
 pub fn Ctx::open_url(Self, String) -> Bool
-pub fn Ctx::overlay(Self, String, modal? : Bool, trap? : Bool, escape? : Bool, outside? : Bool, scrim? : Int64, anchor? : Int32, initial_focus? : Int32, return_focus? : Int32, inert? : Bool, () -> Unit) -> Overlay
+pub fn Ctx::overlay(Self, String, modal? : Bool, trap? : Bool, escape? : Bool, on_escape? : () -> Bool, stays? : () -> Bool, outside? : Bool, scrim? : Int64, anchor? : Int32, initial_focus? : Int32, return_focus? : Int32, inert? : Bool, () -> Unit) -> Overlay
 pub fn Ctx::own_colours(Self, Int32) -> Unit
 pub fn Ctx::own_ground(Self, Int32) -> Bool
 pub fn Ctx::page(Self, Pages, Int32) -> Int32

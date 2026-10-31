@@ -94,64 +94,65 @@ pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let most = dmin(switcher_most_h, c.height * switcher_most_share) - switcher_panel_rest
   let panel = c.id("switcher")
   // mbui's layer over the page (modal: its scrim takes the presses outside, Tab stays in it; Esc, back or a press
-  // outside dismiss it), the panel 14% down the window in its middle
+  // outside dismiss it, closed at that moment; Esc in one kind's list back to all of them first, within it), the panel
+  // 14% down the window in its middle
   let scrim = @sf.alpha(t.p.overlay, ground.map(fn(l) { l.alpha }).unwrap_or(1.0))
-  let o = c.overlay("switcher-layer", modal=true, scrim~, initial_focus=0, fn() {
-    // (32 short of the window at most: room round it however narrow the frame is)
-    let room = dmin(switcher_w, c.width - switcher_side - switcher_side)
-    let i = c.box(
-      style=switcher_panel.then(@ui.style(max_w=Fixed(room))),
-      bg=@sf.panel_ground(),
-      shadow=@sf.dialog_shadow,
-      shadow_y=@sf.dialog_shadow_y,
-      shadow_color=t.p.shadow,
-      id=panel,
-      fn() {
-        c.box(style=switcher_search_box, fn() {
-          let res = c.editor(
-            "switcher/field",
-            placeholder=@sf.t("web-main.switcher.search"),
-            font_size=switcher_search_size,
-            line=switcher_search_line,
-            max_lines=1,
-            plain=true,
-            color=t.p.text,
-            placeholder_color=t.p.subtle,
-            caret_color=t.p.accent,
-            enter_sends=true,
-            field=@sfpages.finder_field(),
-          )
-          // (modal, its search the only field: it has the keys while it is open, the composer's given up as it opens)
-          if !res.focused {
-            c.focus_editor("switcher/field")
-          }
-          match res.submitted {
-            // Enter: the line chosen opened
-            Some(typed) => {
-              @sfpages.finder_typed(typed)
-              @sfpages.finder_enter(close)
+  c.with_dismissed(fn(_) { close() }, fn() {
+    c.overlay("switcher-layer", modal=true, scrim~, initial_focus=0, on_escape=@sfpages.finder_back, fn() {
+      // (32 short of the window at most: room round it however narrow the frame is)
+      let room = dmin(switcher_w, c.width - switcher_side - switcher_side)
+      let i = c.box(
+        style=switcher_panel.then(@ui.style(max_w=Fixed(room))),
+        bg=@sf.panel_ground(),
+        shadow=@sf.dialog_shadow,
+        shadow_y=@sf.dialog_shadow_y,
+        shadow_color=t.p.shadow,
+        id=panel,
+        fn() {
+          c.box(style=switcher_search_box, fn() {
+            let res = c.editor(
+              "switcher/field",
+              placeholder=@sf.t("web-main.switcher.search"),
+              font_size=switcher_search_size,
+              line=switcher_search_line,
+              max_lines=1,
+              plain=true,
+              color=t.p.text,
+              placeholder_color=t.p.subtle,
+              caret_color=t.p.accent,
+              enter_sends=true,
+              field=@sfpages.finder_field(),
+            )
+            // (modal, its search the only field: it has the keys while it is open, the composer's given up as it opens)
+            if !res.focused {
+              c.focus_editor("switcher/field")
             }
-            None => @sfpages.finder_typed(res.text)
-          }
-        })
-        |> ignore
-        if switching.get() {
-          // (its lines as wide as the panel inside its edge: what they go by)
-          c.sized(room - 2.0 * switcher_edge, c.height, fn() {
-            @sfpages.finder_list(c, src, w, offered, close, idle_chats=true, most~)
+            match res.submitted {
+              // Enter: the line chosen opened
+              Some(typed) => {
+                @sfpages.finder_typed(typed)
+                @sfpages.finder_enter(close)
+              }
+              None => @sfpages.finder_typed(res.text)
+            }
           })
-        }
-      },
-    )
-    c.place_by_size(i, fn(pw, _) { ((c.width - pw) / 2.0, c.height * switcher_top_share) })
-    match shows {
-      Some(l) => c.look(i, l)
-      None => ()
-    }
+          |> ignore
+          if switching.get() {
+            // (its lines as wide as the panel inside its edge: what they go by)
+            c.sized(room - 2.0 * switcher_edge, c.height, fn() {
+              @sfpages.finder_list(c, src, w, offered, close, idle_chats=true, most~)
+            })
+          }
+        },
+      )
+      c.place_by_size(i, fn(pw, _) { ((c.width - pw) / 2.0, c.height * switcher_top_share) })
+      match shows {
+        Some(l) => c.look(i, l)
+        None => ()
+      }
+    })
+    |> ignore
   })
-  if o.dismissed is Some(_) {
-    close()
-  }
 }
 
 ///|

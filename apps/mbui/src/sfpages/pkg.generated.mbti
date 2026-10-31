@@ -435,6 +435,8 @@ pub fn publish_left_out(String) -> Bool
 
 pub fn publish_message_left_out(Double) -> Bool
 
+pub fn publish_open() -> Bool
+
 pub fn publish_reset() -> Unit
 
 pub fn publish_set(@sfbase.ChatRef, Double, Json) -> Unit

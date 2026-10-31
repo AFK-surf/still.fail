@@ -91,6 +91,12 @@ pub fn publish_close() -> Unit {
 }
 
 ///|
+/// Whether its page is open (not closed, whether or not it has gone yet).
+pub fn publish_open() -> Bool {
+  @signals.untracked(fn() { publishing.of.get() }) is Some(_)
+}
+
+///|
 /// Chat `r`'s `thread` being shared, `preview` read (a screen's fixture).
 pub fn publish_set(r : ChatRef, thread : Double, preview : Json) -> Unit {
   publish_reset()
@@ -179,65 +185,68 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
   }
   // (the picture's width: the window's on a phone, less the column its boxes to tick stand in before it on the page)
   let column = dmin(c.width - publish_tick_room(), publish_page_w)
-  let o = c.overlay("publish", modal=true, scrim=@sf.alpha(@sf.theme().p.bg, look.alpha), inert=leaving, fn() {
-    let page = c.box(style=publish_fill, fn() {
-      match publishing.read.get() {
-        0 => c.box(style=publish_note, fn() { @sf.wait_line(c, @sf.t("web-pages.chat.publish.reading"), key="publish/reading") }) |> ignore
-        2 => c.box(style=publish_note, fn() { c.text(publishing.error.get(), style=publish_problem) |> ignore }) |> ignore
-        _ if messages.length() == 0 =>
-          c.box(style=publish_note, fn() { c.text(@sf.t("web-pages.chat.publish.empty"), style=publish_note_words) |> ignore })
-          |> ignore
-        _ =>
-          c.list("publish/page/" + r.station + "/" + thread.to_string(), 1, c.height, fn(_) {
-            c.box(style=publish_column_room, fn() {
-              // (under what is over it at the top, over the band at the foot)
-              let top = @sf.room_of(@sf.viewer_act_head(c))
-              let foot = @sf.room_of(publish_page_under + @sf.viewer_act_foot(c))
-              c.box(style=@ui.style(w=Full, max_w=Fixed(publish_page_w + publish_tick_room()), pt=top, pb=foot), fn() {
-                publish_picture(c, src, here, p, column, false)
+  // (dismissed by the hand: back, Escape; closed at that moment; not while its picture is being taken, back and Escape
+  // its all the same then)
+  c.with_dismissed(fn(_) { publish_close() }, fn() {
+    let busy = fn() { @signals.untracked(fn() { publishing.busy.get() }) }
+    c.overlay("publish", modal=true, stays=busy, scrim=@sf.alpha(@sf.theme().p.bg, look.alpha), inert=leaving, fn() {
+      let page = c.box(style=publish_fill, fn() {
+        match publishing.read.get() {
+          0 => c.box(style=publish_note, fn() { @sf.wait_line(c, @sf.t("web-pages.chat.publish.reading"), key="publish/reading") }) |> ignore
+          2 => c.box(style=publish_note, fn() { c.text(publishing.error.get(), style=publish_problem) |> ignore }) |> ignore
+          _ if messages.length() == 0 =>
+            c.box(style=publish_note, fn() { c.text(@sf.t("web-pages.chat.publish.empty"), style=publish_note_words) |> ignore })
+            |> ignore
+          _ =>
+            c.list("publish/page/" + r.station + "/" + thread.to_string(), 1, c.height, fn(_) {
+              c.box(style=publish_column_room, fn() {
+                // (under what is over it at the top, over the band at the foot)
+                let top = @sf.room_of(@sf.viewer_act_head(c))
+                let foot = @sf.room_of(publish_page_under + @sf.viewer_act_foot(c))
+                c.box(style=@ui.style(w=Full, max_w=Fixed(publish_page_w + publish_tick_room()), pt=top, pb=foot), fn() {
+                  publish_picture(c, src, here, p, column, false)
+                })
+                |> ignore
               })
               |> ignore
             })
             |> ignore
-          })
-          |> ignore
-      }
-      // what it is for: on a wide screen the bar a file opened has (back to the chat), 复制图片 at its end; on a small
-      // one 取消 and 保存到相册 at the foot
-      c.layer(fn() {
-        let (label, _) = @sf.picture_out_way()
-        // (copied: 已复制 a moment after)
-        let shown = publishing.copied.get() > 0 &&
-          !@kit.after(c, "publish/copied/\{publishing.copied.get()}", true, @sf.copied_ms)
-        let (closed, acted) = @sf.viewer_frame_act(
-          c,
-          "publish",
-          if r.title != "" { r.title } else { @sf.t("common.close") },
-          @sf.t("web-pages.chat.shareImage"),
-          text(p, "hiddenText"),
-          @sf.page_viewer_ink(),
-          if shown { @sf.t("common.copied") } else { label },
-          busy=publishing.busy.get(),
-          disabled=p is None || publish_kept(p) == 0,
-        )
-        if acted && p is Some(_) && publish_kept(p) > 0 {
-          publish_go(c)
         }
-        if closed {
-          publish_close()
-        }
+        // what it is for: on a wide screen the bar a file opened has (back to the chat), 复制图片 at its end; on a small
+        // one 取消 and 保存到相册 at the foot
+        c.layer(fn() {
+          let (label, _) = @sf.picture_out_way()
+          // (copied: 已复制 a moment after)
+          let shown = publishing.copied.get() > 0 &&
+            !@kit.after(c, "publish/copied/\{publishing.copied.get()}", true, @sf.copied_ms)
+          let (closed, acted) = @sf.viewer_frame_act(
+            c,
+            "publish",
+            if r.title != "" { r.title } else { @sf.t("common.close") },
+            @sf.t("web-pages.chat.shareImage"),
+            text(p, "hiddenText"),
+            @sf.page_viewer_ink(),
+            if shown { @sf.t("common.copied") } else { label },
+            busy=publishing.busy.get(),
+            disabled=p is None || publish_kept(p) == 0,
+          )
+          if acted && p is Some(_) && publish_kept(p) > 0 {
+            publish_go(c)
+          }
+          if closed {
+            publish_close()
+          }
+        })
+        |> ignore
       })
-      |> ignore
+      c.look(page, look)
+      // the picture itself, while it is taken: the same, all of it, off the screen
+      if messages.length() > 0 {
+        c.shot(publish_shot, column, fn() { publish_picture(c, src, here, p, column, true) })
+      }
     })
-    c.look(page, look)
-    // the picture itself, while it is taken: the same, all of it, off the screen
-    if messages.length() > 0 {
-      c.shot(publish_shot, column, fn() { publish_picture(c, src, here, p, column, true) })
-    }
+    |> ignore
   })
-  if o.dismissed is Some(_) && !publishing.busy.get() {
-    publish_close()
-  }
 }
 
 ///|

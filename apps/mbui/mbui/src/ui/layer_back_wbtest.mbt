@@ -593,3 +593,149 @@ test "the same layer opened from one button, closed by Escape, then from another
   let second = from(1)
   assert_eq((first, second), (true, true))
 }
+
+///|
+/// A layer over a page that counts the Escapes it sees, the layer stepping back within itself once on Escape
+/// (on_escape) before one dismisses it: what it was told, as each of two Escapes is handed on (a frame drawn between
+/// them where `frames`), and how many the page saw.
+fn escape_steps(frames : Bool) -> (Array[String], Array[String], Int) {
+  let steps = Ref(1)
+  let told : Array[String] = []
+  let page_saw = Ref(0)
+  let t = Tester::new(
+    fn(c) {
+      if c.key_pressed(key_escape) {
+        page_saw.val = page_saw.val + 1
+      }
+      c.with_dismissed(fn(why) { told.push("\{why} with \{steps.val} left") }, fn() {
+        c.overlay(
+          "menu",
+          modal=true,
+          on_escape=fn() {
+            if steps.val > 0 {
+              steps.val = steps.val - 1
+              told.push("stepped back")
+              true
+            } else {
+              false
+            }
+          },
+          fn() { c.box(w=Px(100.0), h=Px(100.0), fn() {  }) |> ignore },
+        )
+        |> ignore
+      })
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+  )
+  t.draw()
+  t.draw()
+  t.key_told(key_escape, 0, t.time())
+  let first = told.copy()
+  if frames {
+    t.draw()
+  }
+  t.key_told(key_escape, 0, t.time())
+  let second = told.copy()
+  t.draw()
+  t.draw()
+  (first, second, page_saw.val)
+}
+
+///|
+test "a layer that steps back within itself on Escape (on_escape): the first Escape its own, as it comes, not dismissing it nor reaching the page; the next, with nothing left to step back, dismissing it; a frame between or none" {
+  for frames in [true, false] {
+    assert_eq(
+      escape_steps(frames),
+      (["stepped back"], ["stepped back", "Escape with 0 left"], 0),
+      msg="frames between: \{frames}",
+    )
+  }
+}
+
+///|
+/// A page that takes back and sees Escapes, under a modal layer that stays open while `busy` (stays), its one item
+/// focused as it opens and pressed in it counted: `hand` twice while busy (no frame between), a frame; then the item
+/// pressed; then busy no more, `hand` once, a frame, `hand` again. What the layer was told as it was dismissed, what
+/// the page saw, how often the item was pressed, and whether the item has the focus, after each of those.
+fn stays_seen(hand : (Tester) -> Unit) -> Array[(Array[String], Array[String], Int, Bool)] {
+  let busy = Ref(true)
+  let told : Array[String] = []
+  let page : Array[String] = []
+  let pressed = Ref(0)
+  let item = Ref(0)
+  let open = Ref(true)
+  let t = Tester::new(
+    fn(c) {
+      c.take_back(fn() { page.push("back") })
+      if c.key_pressed(key_escape) {
+        page.push("Escape")
+      }
+      if open.val {
+        c.with_dismissed(fn(why) {
+          told.push("\{why}")
+          open.val = false
+        }, fn() {
+          c.overlay("busy", modal=true, stays=fn() { busy.val }, initial_focus=-1, fn() {
+            let id = c.id("item")
+            item.val = id
+            c.focusable(id)
+            c.box(id~, w=Px(100.0), h=Px(100.0), fn() {  }) |> ignore
+            if c.clicked(id) {
+              pressed.val = pressed.val + 1
+            }
+          })
+          |> ignore
+        })
+      }
+    },
+    w=400.0,
+    h=300.0,
+    platform=2,
+  )
+  t.draw()
+  t.draw()
+  let seen = []
+  let look = fn() { seen.push((told.copy(), page.copy(), pressed.val, g().focused_id() == item.val && item.val != 0)) }
+  hand(t)
+  hand(t)
+  look()
+  t.draw()
+  look()
+  // (it still takes presses, as this opening of it)
+  t.tap(50.0, 50.0)
+  look()
+  busy.val = false
+  hand(t)
+  look()
+  t.draw()
+  hand(t)
+  t.draw()
+  look()
+  seen
+}
+
+///|
+test "a layer that stays open while what it does may not be left (stays): back twice, no frame between, dismisses nothing and reaches nothing under it, the layer's focus and presses its own still; once it may be left, back dismisses it at once, told once, the next back the page's" {
+  let seen = stays_seen(fn(t) { t.back_raw(2, 0.0, t.time()) })
+  assert_eq(seen, [
+    ([], [], 0, true),
+    ([], [], 0, true),
+    ([], [], 1, true),
+    (["Back"], [], 1, false),
+    (["Back"], ["back"], 1, false),
+  ])
+}
+
+///|
+test "a layer that stays open while what it does may not be left (stays): Escape twice, no frame between, dismisses nothing and reaches nothing under it, the layer's focus and presses its own still; once it may be left, Escape dismisses it at once, told once, the next Escape the page's" {
+  let seen = stays_seen(fn(t) { t.key_told(key_escape, 0, t.time()) })
+  assert_eq(seen, [
+    ([], [], 0, true),
+    ([], [], 0, true),
+    ([], [], 1, true),
+    (["Escape"], [], 1, false),
+    (["Escape"], ["Escape"], 1, false),
+  ])
+}
