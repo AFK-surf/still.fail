@@ -18,6 +18,8 @@
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <sys/utsname.h>
+#include <dlfcn.h>
+#include <mach-o/dyld.h>
 #include "post.h"
 
 mb_callbacks mb_cb;
@@ -991,6 +993,9 @@ double mb_host_mem_bytes(void);
 // label is not read, a queue let go as it is read being a crash), else "?".
 static NSString *thread_queue(thread_identifier_info_data_t *id) { return id->dispatch_qaddr ? @"gcd" : @"?"; }
 
+// The shell's threads' share of a CPU at the last ask (stillfail-shell: tokio's, the network's), in percent.
+static double shell_share;
+
 // The threads that took most of a CPU since it was last asked (each thread's own time, by its name: the core's engine,
 // the decoder, the network, the UI's), as ` name=N% …` (the 8 busiest, those of half a percent at least): where the
 // process's share goes while nothing is drawn. Asked by heat_tick only (main thread).
@@ -1024,6 +1029,7 @@ static NSString *probe_threads(double span_ms) {
   }
   vm_deallocate(mach_task_self(), (vm_address_t)threads, n * sizeof(thread_act_t));
   was = now;
+  shell_share = by[@"stillfail-shell"].doubleValue * 100.0 / MAX(1, span_ms);
   NSArray<NSString *> *top = [by keysSortedByValueUsingComparator:^(NSNumber *a, NSNumber *b) { return [b compare:a]; }];
   NSMutableString *line = [NSMutableString string];
   for (NSUInteger i = 0; i < MIN(top.count, (NSUInteger)8); i++) {
@@ -1162,6 +1168,122 @@ __attribute__((weak)) int mb_core_perf_line(double span_ms, char *out, size_t n)
   return 0;
 }
 
+// ── the shell's stacks while it keeps a CPU busy ─────────────────────────────────────────────────────────────────
+// Where the shell's threads keep SHELL_HOT% of a CPU or more over two ticks running (10 s), what each of them runs is
+// sampled into the record (off a queue of its own, SHELL_SAMPLES times one after another each tick, for at most
+// SHELL_TICKS ticks of one such stretch: a minute): a `shell stacks:` line with the app's binary (its UUID, for the build's
+// symbols), then a `shell stack:` line per thread and sample, its frames innermost first, each `+0x…` (an offset in
+// the app's binary: `atos -o <the build's binary> -l 0x100000000` on 0x100000000 plus it) or `<image>:<symbol>+N`.
+// Each thread is suspended only while its registers and frame chain are read (no allocation then: what it holds might
+// be what an allocation waits for), resumed before anything is said.
+#define SHELL_HOT 80.0
+#define SHELL_SAMPLES 3
+#define SHELL_TICKS 12
+#define SHELL_FRAMES 48
+#define SHELL_THREADS 8
+
+static int shell_hot_ticks;
+
+// The app's binary's UUID, as `dwarfdump --uuid` says it.
+static NSString *binary_uuid(void) {
+  const struct mach_header_64 *h = (const struct mach_header_64 *)_dyld_get_image_header(0);
+  const struct load_command *lc = (const struct load_command *)(h + 1);
+  for (uint32_t i = 0; i < h->ncmds; i++) {
+    if (lc->cmd == LC_UUID) return [[NSUUID alloc] initWithUUIDBytes:((const struct uuid_command *)lc)->uuid].UUIDString;
+    lc = (const struct load_command *)((const char *)lc + lc->cmdsize);
+  }
+  return @"?";
+}
+
+// One frame as the record says it (after the thread is resumed: dladdr takes dyld's lock).
+static void frame_said(uintptr_t pc, char *out, size_t n) {
+  Dl_info info;
+  uintptr_t base = (uintptr_t)_dyld_get_image_header(0);
+  if (!dladdr((const void *)pc, &info) || !info.dli_fbase) {
+    snprintf(out, n, " ?0x%lx", (unsigned long)pc);
+  } else if ((uintptr_t)info.dli_fbase == base) {
+    snprintf(out, n, " +0x%lx", (unsigned long)(pc - base));
+  } else {
+    const char *image = strrchr(info.dli_fname, '/');
+    snprintf(out, n, " %s:%s+%lu", image ? image + 1 : info.dli_fname, info.dli_sname ?: "?",
+             (unsigned long)(pc - (uintptr_t)(info.dli_saddr ?: info.dli_fbase)));
+  }
+}
+
+// The frames of each of the shell's threads now, said into the record.
+static void shell_sample(int sample) {
+#if defined(__arm64__)
+  thread_act_array_t threads;
+  mach_msg_type_number_t n = 0;
+  if (task_threads(mach_task_self(), &threads, &n) != KERN_SUCCESS) return;
+  uintptr_t frames[SHELL_THREADS][SHELL_FRAMES];
+  int depth[SHELL_THREADS], found = 0;
+  uint64_t ids[SHELL_THREADS];
+  thread_act_t self = mach_thread_self();
+  for (mach_msg_type_number_t i = 0; i < n; i++) {
+    char name[64] = "";
+    pthread_t pt = threads[i] == self ? NULL : pthread_from_mach_thread_np(threads[i]);
+    if (pt) pthread_getname_np(pt, name, sizeof name);
+    if (found < SHELL_THREADS && strcmp(name, "stillfail-shell") == 0 && thread_suspend(threads[i]) == KERN_SUCCESS) {
+      arm_thread_state64_t st;
+      mach_msg_type_number_t cnt = ARM_THREAD_STATE64_COUNT;
+      int d = 0;
+      if (thread_get_state(threads[i], ARM_THREAD_STATE64, (thread_state_t)&st, &cnt) == KERN_SUCCESS) {
+        frames[found][d++] = (uintptr_t)arm_thread_state64_get_pc(st);
+        frames[found][d++] = (uintptr_t)arm_thread_state64_get_lr(st);
+        uintptr_t fp = (uintptr_t)arm_thread_state64_get_fp(st);
+        // each frame record: the caller's fp, then the return address; read with vm_read_overwrite (a bad one fails)
+        while (fp && (fp & 7) == 0 && d < SHELL_FRAMES) {
+          uintptr_t rec[2];
+          vm_size_t got = 0;
+          if (vm_read_overwrite(mach_task_self(), fp, sizeof rec, (vm_address_t)rec, &got) != KERN_SUCCESS || got != sizeof rec) break;
+          if (!rec[1]) break;
+          frames[found][d++] = rec[1] & 0x0000000fffffffffULL;
+          if (rec[0] <= fp) break;
+          fp = rec[0];
+        }
+      }
+      thread_resume(threads[i]);
+      thread_identifier_info_data_t id = {0};
+      mach_msg_type_number_t idn = THREAD_IDENTIFIER_INFO_COUNT;
+      thread_info(threads[i], THREAD_IDENTIFIER_INFO, (thread_info_t)&id, &idn);
+      depth[found] = d;
+      ids[found] = id.thread_id;
+      found++;
+    }
+  }
+  mach_port_deallocate(mach_task_self(), self);
+  for (int t = 0; t < found; t++) {
+    char line[4096];
+    int at = snprintf(line, sizeof line, "shell stack: #%d thread %llu", sample, (unsigned long long)ids[t]);
+    for (int f = 0; f < depth[t] && at < (int)sizeof line - 1; f++) {
+      char one[160];
+      frame_said(frames[t][f], one, sizeof one);
+      at += snprintf(line + at, sizeof line - at, "%s", one);
+    }
+    mb_perf_note(line);
+  }
+  for (mach_msg_type_number_t i = 0; i < n; i++) mach_port_deallocate(mach_task_self(), threads[i]);
+  vm_deallocate(mach_task_self(), (vm_address_t)threads, n * sizeof(thread_act_t));
+#else
+  (void)sample;
+#endif
+}
+
+// At each tick of the record: the shell's stacks sampled where it has kept a CPU busy since the tick before as well.
+static void shell_watch(void) {
+  shell_hot_ticks = shell_share >= SHELL_HOT ? shell_hot_ticks + 1 : 0;
+  if (shell_hot_ticks < 2 || shell_hot_ticks > SHELL_TICKS + 1) return;
+  if (shell_hot_ticks == 2)
+    mb_perf_note([NSString stringWithFormat:@"shell stacks: shell=%.0f%% for 10s, binary %@", shell_share, binary_uuid()].UTF8String);
+  static dispatch_queue_t q;
+  if (!q) q = dispatch_queue_create("still.fail.shell-stacks", DISPATCH_QUEUE_SERIAL);
+  int first = (shell_hot_ticks - 2) * SHELL_SAMPLES;
+  dispatch_async(q, ^{
+    for (int k = 0; k < SHELL_SAMPLES; k++) shell_sample(first + k);
+  });
+}
+
 // The battery as the record says it: charging, full, unplugged (its level) or unknown.
 static NSString *battery_said(void) {
   UIDevice *d = UIDevice.currentDevice;
@@ -1207,6 +1329,7 @@ static void heat_tick(void) {
       snprintf(line, sizeof line, "shell: %s", core);
       mb_perf_note(line);
     }
+    shell_watch();
   }
 }
 
