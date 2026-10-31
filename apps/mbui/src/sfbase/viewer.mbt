@@ -298,6 +298,8 @@ pub(all) struct Thumb {
   radius : Double
   /// its picture letterboxed in it (ChatFiles.kt imageBox's fit): fitted inside its box, not cropped to it
   letterbox : Bool
+  /// a cropped picture starts at its top, rather than its middle
+  top_crop : Bool
   /// the picture it shows (its image's key), what the viewer shows of it until it has the whole: "" none of its own
   picture : String
   /// the part of its box that shows, cut by what it is in (its list, its card), where that was last drawn: what the
@@ -316,6 +318,7 @@ pub(all) struct Thumb {
 pub(all) struct ThumbLook {
   radius : Double
   letterbox : Bool
+  top_crop : Bool
   picture : String
   /// its node's id, where it is pressed (0 none): where it showed, cut, as the last frame drew it (Ctx::rect_of)
   id : Int
@@ -459,11 +462,12 @@ pub fn note_thumb(
   radius : Double,
   picture~ : String,
   letterbox? : Bool = false,
+  top_crop? : Bool = false,
   list? : String = "",
   over? : (Double) -> Unit = fn(_) {  },
 ) -> Unit {
   @motion.measure(c, node, "pv-thumb/" + id)
-  pv_thumbs[id] = { radius, letterbox, picture, id: c.node_id(node), list, over }
+  pv_thumbs[id] = { radius, letterbox, top_crop, picture, id: c.node_id(node), list, over }
 }
 
 ///|
@@ -518,6 +522,7 @@ pub fn thumb_of(c : @ui.Ctx, id : String) -> Thumb? {
         h,
         radius: l.radius,
         letterbox: l.letterbox,
+        top_crop: l.top_crop,
         picture: l.picture,
         seen: if l.id != 0 { c.rect_of(l.id) } else { None },
         over: l.over,
@@ -2113,10 +2118,10 @@ pub fn Viewer::draw_flight(
   if tw <= 0.0 || th <= 0.0 {
     return
   }
-  // where the picture lies in the thumbnail's box: covering it, or fitted inside it (FilePreview.kt fitted), centred
+  // where the picture lies in the thumbnail's box: covering it, or fitted inside it (FilePreview.kt fitted)
   let k = if from.letterbox { dmin(from.w / tw, from.h / th) } else { dmax(from.w / tw, from.h / th) }
   let (pw0, ph0) = (tw * k, th * k)
-  let (px0, py0) = (from.x + (from.w - pw0) / 2.0, from.y + (from.h - ph0) / 2.0)
+  let (px0, py0) = (from.x + (from.w - pw0) / 2.0, from.y + (if from.top_crop { 0.0 } else { (from.h - ph0) / 2.0 }))
   let along = fn(a : Double, b : Double) { a + (b - a) * p }
   let (bx, by, bw, bh) = (along(from.x, tx), along(from.y, ty), along(from.w, tw), along(from.h, th))
   let (px, py, pw, ph) = (along(px0, tx), along(py0, ty), along(pw0, tw), along(ph0, th))

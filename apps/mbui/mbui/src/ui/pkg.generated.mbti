@@ -1409,6 +1409,7 @@ pub fn FieldLines::place(Self, Int32) -> (Double, Double)
 
 pub(all) enum Fit {
   FitCover
+  FitCoverAt(Double)
   FitContain
   FitFill
 } derive(Eq)

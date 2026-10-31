@@ -198,7 +198,7 @@ test "what was sent from here draws the composer's marks as the references its m
 }
 
 ///|
-test "images take their own proportions before they load" {
+test "images are sized before they load" {
   let a : Attachment = {
     name: "a.png",
     path: "a.png",
@@ -212,9 +212,12 @@ test "images take their own proportions before they load" {
     frames: 0,
     held: false,
   }
-  assert_eq(@sfpages.image_box(a, @sfpages.image_least), (139.0, 300.0, false))
-  assert_eq(@sfpages.image_box({ ..a, width: 1600.0, height: 900.0 }, @sfpages.image_least), (360.0, 203.0, false))
-  assert_eq(@sfpages.image_box({ ..a, width: 0.0, height: 0.0 }, @sfpages.image_least), (240.0, 160.0, false))
+  let box = fn(a : Attachment) {
+    @sfpages.image_box(a, @sfpages.image_least, min_tall_width=@sfpages.image_tall_min_w)
+  }
+  assert_eq(box(a), (160.0, 300.0, false))
+  assert_eq(box({ ..a, width: 1600.0, height: 900.0 }), (360.0, 203.0, false))
+  assert_eq(box({ ..a, width: 0.0, height: 0.0 }), (240.0, 160.0, false))
   assert_eq(elapsed(200000.0), "3m 20s")
 }
 
