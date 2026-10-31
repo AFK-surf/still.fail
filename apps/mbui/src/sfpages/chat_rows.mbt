@@ -116,9 +116,7 @@ fn need_card(c : @ui.Ctx, src : Source, here : MessageHere, words : String, rest
   let dismiss = fn() {
     match seq {
       Some(seq) => ask_dismiss(c, src, here, seq, true, false, at_end=true)
-      None =>
-        c.text(@sf.t("web-main.chat.asks.dismiss"), style=@sf.ask_line_words(look.state_quiet.then(dismiss_end)))
-        |> ignore
+      None => need_dismiss(c, "need-dismissed/" + here.station + "/" + here.session, false)
     }
   }
   // (an option row's ground and room, @sf.ask_line_card: its corner and its sides an option's)
@@ -134,14 +132,8 @@ fn need_card(c : @ui.Ctx, src : Source, here : MessageHere, words : String, rest
       }
     })
     c.look(w, if asking { was.unwrap() } else { now })
-    // (its words' end as far in from the row's end as the bell's from its start: the bell's room in its disc's column
-    // mirrored, so neither end's thing lies nearer its round end than the other's; let go, 忽略 faded where it was)
-    let end_room = @sf.ask_line_end(state_icon)
-    let e = if stacked {
-      c.box(style=need_card_actions.then(end_room), dismiss)
-    } else {
-      c.box(style=end_room, dismiss)
-    }
+    // (忽略 the library's button ending the row, concentric with its end corner; let go, faded where it was)
+    let e = if stacked { c.box(style=need_card_actions, dismiss) } else { c.box(dismiss) }
     c.look(e, was.unwrap_or(@ui.look(alpha=0.0)))
     @motion.leaving(c, e, live)
   })

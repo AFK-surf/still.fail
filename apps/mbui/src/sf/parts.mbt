@@ -3779,19 +3779,66 @@ let option_row_end : Double = 12.0
 
 ///|
 /// Room at the start of ask_line_card's row where no mark leads it (what the chat needed, let go): its words where the
-/// mark `icon` wide would start in ask_line_mark's column, as far in as what ends the row (ask_line_end) is from its end.
+/// mark `icon` wide would start in ask_line_mark's column.
 pub fn ask_line_start(icon : Double) -> @ui.Style {
   let side = (ask_line_disc() - icon) / 2.0
   @ui.style(pl=room(side))
 }
 
 ///|
-/// Room at the end of ask_line_card's row for what ends it (忽略) to stand as far from the row's end as a mark `icon`
-/// wide in the middle of ask_line_mark's column stands from its start.
-pub fn ask_line_end(icon : Double) -> @ui.Style {
-  let side = (ask_line_disc() - icon) / 2.0
-  @ui.style(pr=room(side))
+/// Words to press ending ask_line_card's row (忽略 ending what a chat needs): quiet, the line's own words (not a
+/// button's: the user, 2026-10-31, 太明显了), in its ink under the hand; their room a button's (as tall, round as it,
+/// the press's room as least as the native input's), its ground under the hand or the finger concentric with the row's
+/// end corner (capsule_in), its words where they stood, as far in as the row's start mark `mark` wide is from its start; on the
+/// first of the row's lines, however many the words before it take. `disabled`: there and faded, taking no press.
+/// True on the frame after it was pressed.
+pub fn ask_line_button(
+  c : @ui.Ctx,
+  label : String,
+  key~ : String,
+  mark~ : Double,
+  disabled? : Bool = false,
+) -> Bool {
+  let h = button_height()
+  let pad = option_type().pad_in
+  let inset = capsule_in(option_row_corner, h)
+  let out = pad - inset
+  let id = c.id(key)
+  let live = !disabled
+  let lit = ease_to(c, "sf-ask-line-btn/\{id}", live && (c.lit(id) || c.pressed(id)))
+  let seen = @motion.animate(c, "sf-ask-line-btn-seen/\{id}", if disabled { 0.45 } else { 1.0 }, spec=@motion.tween(dur_ms, ease=Out))
+  let look = theme().chat_list
+  // (its words as far in from its end as the bell's from the row's start: the bell's room in its disc's column)
+  let side = (ask_line_disc() - mark) / 2.0
+  let room_of = @ui.style(
+    row=true,
+    h=Fixed(h),
+    px=room(out + side),
+    mt=room(-out),
+    mb=room(-out),
+    mr=room(-out),
+    radius=Full,
+    align=ACenter,
+    bg=Data(alpha(theme().p.hover, lit)),
+  )
+  let b = c.box(
+    style=room_of,
+    id=if live { id } else { 0 },
+    fn() {
+      // (its ink the quiet one's, the line's own under the hand, over dur_ms)
+      let ink = mix(theme().p.text, lit, theme().p.muted)
+      let words = look.state_quiet.then(ask_line_button_words).then(@ui.text_style(color=Data(ink)))
+      c.text(label, style=ask_line_words(words)) |> ignore
+    },
+  )
+  c.look(b, @ui.look(alpha=seen))
+  c.semantics(b, Button, id=if live { id } else { 0 }, label~, disabled=!live)
+  live && c.clicked(id)
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let ask_line_button_words : @ui.TextStyle = @ui.text_style(w=Hug, wrap=false)
 
 ///|
 /// The words of ask_line_card's row (what it says, 忽略 at its end): `words` on lines as high as ask_line_mark's

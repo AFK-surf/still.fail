@@ -68,9 +68,9 @@ pub fn ask_foot_lines() -> Double
 
 pub fn ask_here(String, String, (String) -> Unit, () -> Unit, value? : String, placeholder? : String, hint? : String) -> Unit
 
-pub fn ask_line_card(@ui.Ctx, column? : Bool, () -> Unit) -> Int32
+pub fn ask_line_button(@ui.Ctx, String, key~ : String, mark~ : Double, disabled? : Bool) -> Bool
 
-pub fn ask_line_end(Double) -> @ui.Style
+pub fn ask_line_card(@ui.Ctx, column? : Bool, () -> Unit) -> Int32
 
 pub fn ask_line_mark() -> @ui.Style
 
