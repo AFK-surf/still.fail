@@ -79,18 +79,20 @@ fn screen(mode : String, opening : Double) -> @ui.Tester raise {
   // (the app made as sffix makes it at its first frame, the Tester's fake host in place: what it hands over then, a
   // made-up file's picture, is the Tester's to keep, not dropped as the Tester begins)
   let src : Ref[Source?] = Ref::new(None)
-  let t = @ui.Tester::new(
-    fn(c) {
-      let s = match src.val {
-        Some(s) => s
-        None => {
-          let s = fixture_app(mode)
-          src.val = Some(s)
-          s
-        }
+  // (made as the window's tree is first made, its fake host in place: what the app's state and shell are made of)
+  let made = fn() {
+    match src.val {
+      Some(s) => s
+      None => {
+        let s = fixture_app(mode)
+        src.val = Some(s)
+        s
       }
-      view(c, s)
-    },
+    }
+  }
+  let t = @ui.Tester::new(
+    fn(c) { view(c, made()) },
+    tree=fn(root) { app_tree(made())(root) },
     w=window_w,
     h=window_h,
     // (a phone's screens, on the phone's system the Mac's run played: screens.sh rec's MBUI_PLATFORM)

@@ -432,7 +432,8 @@ fn steps_main(c : @ui.Ctx, rail : Bool, body : () -> Unit) -> Unit {
 /// One event (Ev, hEv): its mark in the gutter (on the canvas, so the turn's rail passes behind it; in a state's block on
 /// its colour) and what it is beside it, 8 apart. The rail runs down from under its mark to the next event's (`rail`:
 /// one follows), or on to the next item (`rail_last`). `state`: how the turn stands or ended, a block in its colour;
-/// `tone`: its mark in the accent or the red.
+/// `tone`: its mark in the accent or the red. `row`: its first line a row pressed whole (one_line: a row's least high),
+/// its mark in that line's middle as in a line of words', the rail from under it.
 fn ev(
   c : @ui.Ctx,
   icon : String,
@@ -440,9 +441,12 @@ fn ev(
   tone : String,
   rail? : Bool = false,
   rail_last? : Bool = false,
+  row? : Bool = false,
   body : () -> Unit,
 ) -> Unit {
   let t = @sf.theme()
+  // (the first line's height: a line of words' 20, or a row's least)
+  let line = if row { @sf.row_least() } else { h_mark }
   let ink = match (state, tone) {
     ("done", _) => t.p.green
     ("waiting", _) => t.p.blue
@@ -468,14 +472,17 @@ fn ev(
       |> ignore
     } else if rail || rail_last {
       c.layer(fn() {
-        c.box(style=if rail_last { h_rail_room_last } else { h_rail_room }, fn() {
+        let room = if rail_last { h_rail_room_last } else { h_rail_room }
+        // (from under its mark, in the middle of its first line)
+        let under = @sf.room_of((line + h_mark) / 2.0)
+        c.box(style=room.then(@ui.style(pt=under)), fn() {
           c.box(style=h_rail, fn() {  }) |> ignore
         })
         |> ignore
       })
       |> ignore
     }
-    c.box(style=h_icon, fn() {
+    c.box(style=h_icon.then(@ui.style(h=Fixed(line))), fn() {
       if icon == "pulse" {
         c.box(style=h_pulse, fn() {  }) |> ignore
       } else {
@@ -506,7 +513,7 @@ fn item_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : Str
       }
       if note != "" {
         let more = next()
-        ev(c, "bell", "", "", rail=more, rail_last=!more && rail, fn() {
+        ev(c, "bell", "", "", rail=more, rail_last=!more && rail, row=true, fn() {
           one_line(c, ik + "/note", fn() {
             c.text(@sf.t("web-main.history.reminder", args=[("name", "still.fail")]), style=h_strong) |> ignore
           }, first_line(note), "", fn() { c.text(note, style=h_note_plain) |> ignore })
@@ -523,7 +530,7 @@ fn item_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : Str
     }
     // the agent's own words reach no one (only what it posts does): a grey line, whole as it is opened
     "text" =>
-      ev(c, "said", "", "", rail_last=rail, fn() {
+      ev(c, "said", "", "", rail_last=rail, row=true, fn() {
         let words = text(content, "text")
         one_line(c, ik + "/text", fn() {
           // (a chip: in bones one piece)
@@ -621,7 +628,7 @@ fn one_line(c : @ui.Ctx, key : String, lead : () -> Unit, line : String, tone : 
     }
   }
   let hot = c.lit(id)
-  c.box(style=h_one, id~, fn() {
+  c.box(style=h_one.then(@sf.row_least_h()), id~, fn() {
     lead()
     if !open && line != "" {
       c.text(line, style=if tone == "red" {
@@ -799,9 +806,9 @@ fn slack_name(c : @ui.Ctx, src : Source, station : String, key : String, user : 
 /// it, whole as the line saying how is opened.
 fn task_view(c : @ui.Ctx, key : String, task : Json?, rail : Bool, rail_last : Bool) -> Unit {
   let failed = flag(task, "failed")
-  ev(c, if flag(task, "agent") { "agent" } else { "command" }, "", if failed { "red" } else { "" }, rail~, rail_last~, fn() {
-    let answer = text(task, "result")
-    let has = field(task, "md") is Some(Array(_)) && answer != ""
+  let answer = text(task, "result")
+  let has = field(task, "md") is Some(Array(_)) && answer != ""
+  ev(c, if flag(task, "agent") { "agent" } else { "command" }, "", if failed { "red" } else { "" }, rail~, rail_last~, row=has, fn() {
     if !has {
       c.box(style=h_one, fn() { c.text(text(task, "text"), style=if failed { h_one_red } else { h_one_words }) |> ignore })
       |> ignore
@@ -910,7 +917,7 @@ fn group_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : St
     if rail {
       c.layer(fn() { c.box(style=h_rail_room_last, fn() { c.box(style=h_rail, fn() {  }) |> ignore }) |> ignore }) |> ignore
     }
-    let b = c.box(style=h_group_head, id~, fn() {
+    let b = c.box(style=h_group_head.then(@sf.row_least_h()), id~, fn() {
       c.box(style=h_icon, fn() {
         @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=14.0, color=if hot {
           @sf.theme().p.text
@@ -1007,7 +1014,7 @@ fn opened(
     }
   }
   c.box(style=h_step, fn() {
-    let b = c.box(style=h_step_summary, id~, summary)
+    let b = c.box(style=h_step_summary.then(@sf.row_least_h()), id~, summary)
     c.semantics(b, Button, id~, expanded=open)
     if open {
       whole(c, src, station, key, rk, content, body)
@@ -1191,14 +1198,20 @@ fn tool_part(c : @ui.Ctx, key : String, part : Json?) -> Unit {
                     "+" => @sf.theme().p.green_ink
                     _ => @sf.theme().p.subtle
                   }
-                  if mark == "-" || mark == "+" {
-                    c.layer(fn() { c.box(style=tool_diff_mark, fn() { c.rich([@ui.span(mark, mono=true, color=ink)], style=tool_mono) |> ignore }) |> ignore })
+                  // (its mark in the gutter before its words, the line's ends as far in either side)
+                  c.box(style=tool_diff_mark, fn() {
+                    if mark == "-" || mark == "+" {
+                      c.rich([@ui.span(mark, mono=true, color=ink)], style=tool_mono) |> ignore
+                    }
+                  })
+                  |> ignore
+                  c.box(style=tool_diff_words, fn() {
+                    c.rich([@ui.span(if line == "" { " " } else { line }, mono=true)], style=match mark {
+                      "@" => tool_mono_head
+                      " " => tool_mono_muted
+                      _ => tool_mono
+                    })
                     |> ignore
-                  }
-                  c.rich([@ui.span(if line == "" { " " } else { line }, mono=true)], style=match mark {
-                    "@" => tool_mono_head
-                    " " => tool_mono_muted
-                    _ => tool_mono
                   })
                   |> ignore
                 },
@@ -1367,9 +1380,13 @@ let h_state_human : @ui.Style = h_state.then(@ui.css("bg=AccentBg"))
 ///|
 /// An event's mark (hIcon): 20 square, on whatever it stands on (a state's block, a group's line pointed at): the
 /// turn's rail runs from under it, so nothing of it covers the rail (a ground of its own would stand out as a square
-/// on a pane that is not the canvas).
+/// on a pane that is not the canvas). As high as its event's first line (ev's `row`), its mark in its middle.
 // kept across runs: a value (no field of it changes)
 let h_icon : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
+
+///|
+/// How high an event's mark is, and a line of its words.
+let h_mark : Double = 20.0
 
 ///|
 /// The model's pulse (activityPulse): a 7 dot in the accent.
@@ -1670,14 +1687,16 @@ let tool_path_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=@sf.
 let tool_path_extra : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, wrap=false)
 
 ///|
-/// A diff (diff: the box, 6 over and under, no sides; a line 22 in at its start, 12 at its end; taken out on the red's
-/// ground, put in on the green's, a header in the blue, 4 over it).
+/// A diff (diff: the box, 6 over and under, no sides; a line's mark 9 in at its start, its words 22, its end 9 in as
+/// its start is (what a line on its ground holds as far in from both sides: the web's 12 at its end, beside its mark
+/// laid over the line, held it 22 and 12); taken out on the red's ground, put in on the green's, a header in the blue,
+/// 4 over it).
 // kept across runs: a value (no field of it changes)
 let tool_diff : @ui.Style = @ui.style(w=Full, py=S1_5, radius=@sf.custom_field_r, bg=@sf.faint_ground, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tool_diff_line : @ui.Style = @ui.style(w=Full, pl=@sf.diff_line_in, pr=S3)
+let tool_diff_line : @ui.Style = @ui.style(row=true, w=Full, pl=@sf.diff_mark_in, pr=@sf.diff_mark_in)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1689,9 +1708,14 @@ let tool_diff_out : @ui.Style = tool_diff_line.then(@ui.css("bg=DangerBg"))
 let tool_diff_head : @ui.Style = tool_diff_line.then(@ui.css("pt=S1"))
 
 ///|
-/// The mark before a line taken out or put in, 9 in.
+/// The gutter a line's mark stands in (taken out or put in), 9 in: as far as its words are 22 in.
 // kept across runs: a value (no field of it changes)
-let tool_diff_mark : @ui.Style = @ui.style(pl=@sf.diff_mark_in)
+let tool_diff_mark : @ui.Style = @ui.style(w=Fixed(@sf.diff_line_in.px() - @sf.diff_mark_in.px()))
+
+///|
+/// A line's words: what the gutter leaves.
+// kept across runs: a value (no field of it changes)
+let tool_diff_words : @ui.Style = @ui.style(w=@sf.grow, min_w=S0)
 
 ///|
 /// A plan (plan): 2 apart, 2 in, 12; its marks in a 16 column; done struck and muted, under way in 600.

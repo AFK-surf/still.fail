@@ -5,6 +5,7 @@ import {
   "mbui/hostapi",
   "mbui/kit",
   "mbui/motion",
+  "mbui/paint",
   "mbui/signals",
   "mbui/ui",
   "mbui/view",
@@ -141,7 +142,7 @@ pub fn count(Json?, String) -> Int32
 
 pub fn css_box(Json?) -> (Double, Double, Double, Double)?
 
-pub fn dark_glass() -> @ui.Glass
+pub fn dark_glass() -> @paint.Glass
 
 pub let dark_muted : Int64
 
@@ -633,7 +634,7 @@ pub let own_code_face : Int32
 
 pub let page_bridge_js : String
 
-pub fn page_glass() -> @ui.Glass
+pub fn page_glass() -> @paint.Glass
 
 pub let page_js : String
 

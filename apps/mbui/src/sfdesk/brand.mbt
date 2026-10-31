@@ -17,7 +17,7 @@ fn update_shown() -> Bool {
 fn update_button(c : @ui.Ctx, src : Source, inset : Bool, top : Double) -> Unit {
   let left = if inset { update_closed_inset } else { update_closed_in }
   c.layer(fn() {
-    c.box(style=update_at, moves="side-update", left~, top=top + update_top, fn() { update_in_row(c, src) }) |> ignore
+    c.box(style=update_at, left~, top=top + update_top, fn() { update_in_row(c, src) }) |> ignore
   })
   |> ignore
 }

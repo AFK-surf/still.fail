@@ -176,10 +176,16 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     |> ignore
   })
   |> ignore
-  // the canvas: what a finger does on it, the picture drawn in it
+  // the canvas: what a finger does on it, the picture drawn in it, as far in as its fade has come (as its ground is; a
+  // flight's fade is put in whole, its picture the flight's own), sampled as its ground is
   n.box(fn(canvas) {
     canvas
     .over(Is(true))
+    .alpha(By(fn() {
+      vw.fade.said()
+      let now = canvas.logic_at()
+      vw.fade.value_at(if vw.fade.goes_at(now) { canvas.drawn_at() } else { @double.infinity })
+    }))
     // (closed: what is on it the viewer's going alone, a finger on it called off then)
     .presses(By(fn() {
       match pv_leaving.get() {

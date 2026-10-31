@@ -14,10 +14,14 @@
 
 ///|
 /// What the signed-in app is laid out as (app_tree): the stack of pages laid out Small, the narrow shell made of the
-/// window's tree's nodes; or the old view whole (a window of its own, the wide frame, no workspace in view yet, the
-/// window's width not known yet).
+/// window's tree's nodes; the tape (laid out Medium with a sidebar to show, or beside the system's bars: sfdesk's
+/// tape_holds), its panels the window's tree's nodes (tape_shell.mbt); the wide frame off the tape (laid out Large, or
+/// with no sidebar to show), its page and its block the tree's nodes (tape_shell.mbt's paned_shell); or the old view
+/// whole (a window of its own, no workspace in view yet, the window's width not known yet).
 priv enum ShellIs {
   Stacked
+  Taped
+  Paned
   Whole
 } derive(Eq)
 
@@ -27,11 +31,11 @@ fn shell_is(src : Source, width : Double) -> ShellIs {
   if width <= 0.0 || @sfbase.lone_page.val is Some(_) {
     return Whole
   }
-  if !(@sf.layout(width) is Small) || @sf.native_able() {
-    return Whole
-  }
+  let wide = !(@sf.layout(width) is Small) || @sf.native_able()
   match workspace_in_view(src).0 {
-    Some(_) => Stacked
+    Some(_) if !wide => Stacked
+    Some(w) if @sfdesk.tape_holds(src, w, width) => Taped
+    Some(_) => Paned
     None => Whole
   }
 }

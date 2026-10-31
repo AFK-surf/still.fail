@@ -2471,6 +2471,13 @@ fn rounded(x : Double) -> @ui.Radius {
 }
 
 ///|
+/// A corner worked out, as a style's: one on its way between two of the scale's (the wide frame's block closing to its
+/// bar: sfdesk's pane_view.mbt).
+pub fn radius_between(x : Double) -> @ui.Radius {
+  rounded(x)
+}
+
+///|
 /// A toast (toast.css.ts): 20 round, a capsule while its words fit one line (20 high, 10 over and under them), 18 in
 /// from its start, 560 wide at most, 24 over the window's foot, a floating shadow (0 8px 24px), coming in from 8 below.
 /// Its button (an archive's 撤销) a capsule 28 high in its end, concentric with it (capsule_in: 6 from its top, foot

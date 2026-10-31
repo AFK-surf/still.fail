@@ -4,6 +4,7 @@ package "stillfail/sfdesk"
 import {
   "mbui/signals",
   "mbui/ui",
+  "mbui/view",
   "moonbitlang/core/debug",
   "stillfail/sf",
   "stillfail/sfapp/settings",
@@ -119,8 +120,6 @@ pub fn folder_name(@sfbase.DvStation, @sfbase.DriveAt) -> String
 
 pub fn folder_page(@ui.Ctx, @sfbase.Source, FolderOf, NarrowOf?, front_it? : () -> Unit) -> Unit
 
-pub fn frame(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Array[@sfbase.Workspace], Bool) -> Unit
-
 pub fn go_to(@ui.Ctx, @sfbase.Source, String, @sfbase.DriveAt, (@sfbase.DriveAt) -> Unit) -> Unit
 
 pub fn go_to_open() -> Unit
@@ -209,7 +208,21 @@ pub let page_beside_least : Double
 
 pub fn page_goes_on() -> Bool
 
+pub fn pane_fold_at(Double) -> (Double, Double)?
+
+pub fn pane_fold_from() -> (Double, Double)?
+
+pub fn pane_node() -> @view.View?
+
 pub fn pane_parts(@sfbase.DriveAt, Array[@sfbase.DvStation]) -> (String, String)
+
+pub fn pane_reach_at(Double) -> (Double, Double, Double, Double)?
+
+pub fn pane_seen() -> (Array[@view.NodeId], Double)?
+
+pub fn pane_under(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Array[@sfbase.Workspace]) -> Unit
+
+pub fn pane_view(@view.View, @sfbase.Source, ready~ : (@sfbase.Page) -> Bool, most~ : Double) -> Unit
 
 pub let pane_w : Double
 
@@ -371,6 +384,14 @@ pub fn tab_service(String) -> String?
 
 pub fn tab_take_drop(@ui.Ctx) -> (@sfbase.Dragged, Double, Double)?
 
+pub fn tape_along_at(Double) -> (Double, Double)
+
+pub fn tape_col_now(Double) -> Double
+
+pub fn tape_holds(@sfbase.Source, @sfbase.Workspace, Double) -> Bool
+
+pub fn tape_seen() -> (Array[@view.NodeId], Double, Double)?
+
 pub let tape_shows : Double
 
 pub fn tape_shows_left() -> Double
@@ -380,6 +401,10 @@ pub fn tape_shows_right() -> Double
 pub fn tape_side(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, SideOf, leaving? : Bool) -> Unit
 
 pub let tape_side_max : Double
+
+pub fn tape_under(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Array[@sfbase.Workspace]) -> Unit
+
+pub fn tape_view(@view.View, @sfbase.Source, ready~ : (@sfbase.Page) -> Bool, most~ : Double) -> Unit
 
 pub fn tip_keys(@sfbase.Source) -> (String) -> String
 
@@ -580,14 +605,12 @@ pub(all) struct Wide {
   kept_folded : @signals.Signal[Bool]
   mut in_bar : Bool
   closed : @signals.Signal[Bool]
-  mut moved_as : (Bool, Bool, Bool, String, Bool)?
   mut brand_h : Double
   mut band : Double
   mut mark : Double
   mut bar_pl : Double
   mut bar_ml : Double
   mut bar_mr : Double
-  mut peek_shift : Double
   mut page_from : Double
   landed : @signals.Signal[String]
   rail_menu : @signals.Signal[(String, Double, Double)?]
@@ -601,7 +624,6 @@ pub(all) struct Wide {
   tape_ask : @signals.Signal[TapePane?]
   tape_chat : @signals.Signal[String]
   tape_panel : @signals.Signal[String]
-  mut tape_built : (String, Int32)
   mut tape_last_side : SideOf?
   tape_pull : @signals.Signal[TapePane?]
   tape_drag : @signals.Signal[Double]
@@ -609,7 +631,6 @@ pub(all) struct Wide {
   mut tape_back_x0 : Double
   mut tape_back_last : (Double, Double)
   mut tape_back_v : Double
-  mut tape_back_end : @ui.BackStep?
   tape_pick : @signals.Signal[String]
 }
 
