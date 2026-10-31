@@ -1289,6 +1289,7 @@ pub fn Ctx::with_theme(Self, Theme, () -> Unit) -> Unit
 pub fn Ctx::within(Self, Int32, Double) -> Bool
 pub fn Ctx::words(Self, Int32, String, a? : Int32, b? : Int32, color? : Int64, round? : Double) -> Unit
 pub fn Ctx::words_across(Self, String, TextStyle, mono? : Bool) -> Double
+pub fn Ctx::words_glyph_cells(Self, String, TextStyle, mono? : Bool) -> Array[(Double, Double)]
 pub fn Ctx::words_into(Self, Int32, String) -> Unit
 pub fn Ctx::words_of(Self, String) -> Words?
 pub fn Ctx::words_shape_of(Self, String) -> Words?
@@ -1453,8 +1454,10 @@ pub(all) struct GlyphAt {
 
 pub(all) struct GlyphLook {
   alpha : Double
+  dx : Double
   dy : Double
   scale : Double
+  sx : Double
 } derive(Eq, Show)
 
 pub(all) struct Ground {

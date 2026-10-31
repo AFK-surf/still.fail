@@ -617,6 +617,18 @@ pub fn fresh_view(ChatRef) -> (ChatView, Array[Entry])?
 
 pub let globe_mark : LinkMark
 
+pub fn glyph_change(Double, Double, Int32, Int32, Bool) -> @ui.GlyphLook
+
+pub let glyph_change_in_ms : Double
+
+pub let glyph_change_line_ms : Double
+
+pub fn glyph_in(Double, Double, Int32, Int32) -> @ui.GlyphLook
+
+pub let glyph_line_in_ms : Double
+
+pub let glyph_line_ms : Double
+
 pub fn go_back() -> Bool
 
 pub fn go_forward(Source) -> Bool

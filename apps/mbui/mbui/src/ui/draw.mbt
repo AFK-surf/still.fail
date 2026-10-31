@@ -475,12 +475,14 @@ pub fn Ctx::look(self : Ctx, i : Int, look : Look) -> Unit {
 }
 
 ///|
-/// How a glyph is drawn over how it is laid out: its opacity, how far down it is moved and how it is scaled about its
-/// middle.
+/// How a glyph is drawn over how it is laid out: its opacity, offsets and uniform scale about its ink's middle. `sx`
+/// scales horizontally about its advance's middle.
 pub(all) struct GlyphLook {
   alpha : Double
+  dx : Double
   dy : Double
   scale : Double
+  sx : Double
 } derive(Show, Eq)
 
 ///|

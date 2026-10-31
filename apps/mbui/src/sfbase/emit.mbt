@@ -638,7 +638,7 @@ pub fn emit_out(c : @ui.Ctx, col : Int, head : Int, e : Emits, seq : Double) -> 
   c.glyphs_by(col, fn(at) {
     match @motion.measured_rect(c, key) {
       Some(r) => glyph_out(since(), at, r, salt)
-      None => { alpha: 1.0, dy: 0.0, scale: 1.0 }
+      None => { alpha: 1.0, dx: 0.0, dy: 0.0, scale: 1.0, sx: 1.0 }
     }
   })
 }
@@ -651,7 +651,7 @@ pub fn emit_out(c : @ui.Ctx, col : Int, head : Int, e : Emits, seq : Double) -> 
 /// of view is there at once (the user, 2026-10-31: 「应该屏幕外面不一样，在屏幕里面你不一样能他妈行吗」, then
 /// 「让它出快点」). Its size as it is (「单字不用尺寸动效吧，用淡入」).
 fn glyph_out(ms : Double, at : @ui.GlyphAt, col : (Double, Double, Double, Double), salt : Int) -> @ui.GlyphLook {
-  let still : @ui.GlyphLook = { alpha: 1.0, dy: 0.0, scale: 1.0 }
+  let still : @ui.GlyphLook = { alpha: 1.0, dx: 0.0, dy: 0.0, scale: 1.0, sx: 1.0 }
   let (x0, y0, w, h) = col
   // what shows of it, in lines; out of it, there at once
   let shown_top = dmax(at.top, y0)
@@ -664,17 +664,42 @@ fn glyph_out(ms : Double, at : @ui.GlyphAt, col : (Double, Double, Double, Doubl
   // how far into what shows it is read: its line, and along it
   let read = dmax(at.y - shown_top, 0.0) / emit_line_points +
     (if w > 0.0 { dmax(dmin((at.x - x0) / w, 1.0), 0.0) } else { 0.0 })
-  let (j0, j1) = (glyph_noise(at.index, salt), glyph_noise(at.index, salt + 7919))
-  let start = dmax(read * line_ms + (j0 - 0.5) * emit_glyph_jitter, 0.0)
+  glyph_in(ms, read * line_ms, at.index, salt)
+}
+
+///|
+/// One glyph arriving, shared by an agent's message and its activity. `turn` is when its place in reading order
+/// would come; its own little variation, fade and rise are the same in either place.
+pub fn glyph_in(ms : Double, turn : Double, index : Int, salt : Int) -> @ui.GlyphLook {
+  let still : @ui.GlyphLook = { alpha: 1.0, dx: 0.0, dy: 0.0, scale: 1.0, sx: 1.0 }
+  let (j0, j1) = (glyph_noise(index, salt), glyph_noise(index, salt + 7919))
+  let start = dmax(turn + (j0 - 0.5) * emit_glyph_jitter, 0.0)
   let p = (ms - start) / emit_glyph_ms
   if p <= 0.0 {
-    return { alpha: 0.0, dy: 0.0, scale: 1.0 }
+    return { alpha: 0.0, dx: 0.0, dy: 0.0, scale: 1.0, sx: 1.0 }
   }
   if p >= 1.0 {
     return still
   }
   let rise = emit_glyph_rise * (0.7 + 0.6 * j1)
-  { alpha: @ui.Ease::Out.at(dmin(p / 0.7, 1.0)), dy: rise * (1.0 - @ui.Ease::Out.at(p)), scale: 1.0 }
+  { alpha: @ui.Ease::Out.at(dmin(p / 0.7, 1.0)), dx: 0.0, dy: rise * (1.0 - @ui.Ease::Out.at(p)), scale: 1.0, sx: 1.0 }
+}
+
+///|
+/// One glyph giving way to its successor in the next activity. It fades away before its successor rises and fades in,
+/// so the two do not overlap. `turn` is a gentle reading-order bias; each place varies its timing and its rise.
+pub fn glyph_change(ms : Double, turn : Double, index : Int, salt : Int, incoming : Bool) -> @ui.GlyphLook {
+  let start = turn * 0.25 + glyph_change_line_ms * glyph_noise(index, salt) * 0.75
+  let duration = emit_glyph_ms * (0.8 + 0.4 * glyph_noise(index, salt + 7919))
+  let p = dmax(dmin((ms - start) / duration, 1.0), 0.0)
+  let rise = emit_glyph_rise * (0.7 + 0.6 * glyph_noise(index, salt + 15838))
+  if incoming {
+    let q = @ui.Ease::Out.at(dmax(p * 2.0 - 1.0, 0.0))
+    { alpha: q, dx: 0.0, dy: rise * (1.0 - q), scale: 1.0, sx: 1.0 }
+  } else {
+    let q = @ui.Ease::Leave.at(dmin(p * 2.0, 1.0))
+    { alpha: 1.0 - q, dx: 0.0, dy: -rise * 0.25 * q, scale: 1.0, sx: 1.0 }
+  }
 }
 
 ///|
@@ -691,6 +716,21 @@ fn glyph_noise(i : Int, salt : Int) -> Double {
 /// then shorter), a line's height for that (points), how far before or after its turn each glyph may be, how long each
 /// takes, and how far each rises.
 let emit_line_ms : Double = 120.0
+
+///|
+/// One visible line's reading and the last glyph's arrival, including its variation.
+pub let glyph_line_ms : Double = emit_line_ms
+
+///|
+pub let glyph_line_in_ms : Double = emit_line_ms + emit_glyph_jitter / 2.0 + emit_glyph_ms
+
+///|
+/// The span over which the glyphs in an activity begin changing.
+pub let glyph_change_line_ms : Double = emit_line_ms
+
+///|
+/// The last visible glyph's change, including the largest variation in its speed.
+pub let glyph_change_in_ms : Double = glyph_change_line_ms + emit_glyph_ms * 1.2
 
 ///|
 let emit_screen_ms : Double = 500.0

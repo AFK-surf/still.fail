@@ -864,9 +864,15 @@ fn Ctx::emit_text(
       None => ()
     }
     let adaptive = glass_paint.ink_r > 0.0 && !g.color
-    // (moved and scaled about its middle by its own look)
+    // (the uniform scale is about its ink's middle; an extra horizontal scale is about its advance's middle, so a
+    // glyph stays in its place while that place changes width)
     let (gx, gy, gw, gh, ga) = match own {
-      Some(l) => (gx + gw * (1.0 - l.scale) / 2.0, gy + gh * (1.0 - l.scale) / 2.0 + l.dy, gw * l.scale, gh * l.scale, alpha * l.alpha)
+      Some(l) => {
+        let ink_x = gx + gw * (1.0 - l.scale) / 2.0
+        let cell_x = ox + dx + tl.xs[c] + s.adv[c] / 2.0
+        let x = if l.sx == 1.0 { ink_x } else { cell_x + (ink_x - cell_x) * l.sx }
+        (x + l.dx, gy + gh * (1.0 - l.scale) / 2.0 + l.dy, gw * l.scale * l.sx, gh * l.scale, alpha * l.alpha)
+      }
       None => (gx, gy, gw, gh, alpha)
     }
     glyph_pushing.val = true
