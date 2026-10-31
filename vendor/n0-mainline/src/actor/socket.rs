@@ -46,6 +46,18 @@ const LEGACY_VERSION: [u8; 4] = [82, 83, 0, 5]; // "RS" version 05
 struct UdpIo {
     socket: UdpSocket,
     state: noq_udp::UdpSocketState,
+    #[cfg(test)]
+    made: u64,
+}
+
+/// ember: a fault for tests through the whole DHT (dht.rs): the sockets on `PORT` made before `MADE_BEFORE` are
+/// readable and each read fails at once, as the phone's was; one bound anew after is not.
+#[cfg(test)]
+pub(crate) mod fault {
+    use std::sync::atomic::{AtomicU16, AtomicU64};
+    pub(crate) static PORT: AtomicU16 = AtomicU16::new(0);
+    pub(crate) static MADE_BEFORE: AtomicU64 = AtomicU64::new(0);
+    pub(crate) static MADE: AtomicU64 = AtomicU64::new(1);
 }
 
 impl UdpIo {
@@ -54,7 +66,12 @@ impl UdpIo {
         let std_socket = std::net::UdpSocket::bind(addr)?;
         let state = noq_udp::UdpSocketState::new((&std_socket).into())?;
         let socket = UdpSocket::from_std(std_socket)?;
-        Ok(Self { socket, state })
+        Ok(Self {
+            socket,
+            state,
+            #[cfg(test)]
+            made: fault::MADE.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        })
     }
 
     fn local_addr(&self) -> io::Result<SocketAddr> {
@@ -86,6 +103,13 @@ impl UdpIo {
     /// Receive one datagram. Waits for readability, then calls
     /// noq-udp `recvmsg`.
     async fn recv_from(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+        #[cfg(test)]
+        {
+            use std::sync::atomic::Ordering::Relaxed;
+            if self.local_addr().is_ok_and(|a| a.port() == fault::PORT.load(Relaxed)) && self.made < fault::MADE_BEFORE.load(Relaxed) {
+                return Err(io::Error::from(ErrorKind::NotConnected));
+            }
+        }
         loop {
             self.socket.readable().await?;
             match self.try_recv(buf) {
@@ -134,6 +158,10 @@ pub struct KrpcSocket {
     /// sleep, so that the actor's select dropping a read for another branch does not cut the wait short.
     failed_reads: u32,
     read_after: Option<Instant>,
+    /// ember: when the first of the reads failing in a row failed (the record's "reads back after").
+    first_failed_at: Option<Instant>,
+    /// ember: this DHT's number in the app's record (`dht#N`).
+    pub(crate) dht: u64,
 
     #[cfg(test)]
     version: [u8; 4],
@@ -165,6 +193,8 @@ impl KrpcSocket {
             outbox: VecDeque::new(),
             failed_reads: 0,
             read_after: None,
+            first_failed_at: None,
+            dht: crate::ember::next_dht(),
 
             #[cfg(test)]
             version: if config.disable_announce_signed_peers {
@@ -264,6 +294,10 @@ impl KrpcSocket {
         }
         let received = self.io.recv_from(&mut buf).await;
         if received.is_ok() {
+            if let Some(first) = self.first_failed_at.take() {
+                let failed = self.failed_reads;
+                crate::ember::say(self.dht, || format!("reads back after {failed} failed, {}ms after the first", first.elapsed().as_millis()));
+            }
             self.failed_reads = 0;
             self.read_after = None;
         }
@@ -341,11 +375,18 @@ impl KrpcSocket {
                 // away is a guess, the error itself not recorded). Back off, longer each time (the third failure ~150 ms
                 // after the first), and bind anew from the third on.
                 self.failed_reads = self.failed_reads.saturating_add(1);
+                self.first_failed_at.get_or_insert_with(Instant::now);
                 warn!(failed = self.failed_reads, "IO error {error}");
-                if self.failed_reads >= REBIND_AFTER {
-                    self.rebind();
+                let n = self.failed_reads;
+                let says = crate::ember::says_failure(n);
+                let wait = Duration::from_millis(50 << (n - 1).min(6)).min(MAX_READ_BACKOFF);
+                if says {
+                    let os = error.raw_os_error().map_or(String::new(), |code| format!(" (os error {code})"));
+                    crate::ember::say(self.dht, || format!("read failed #{n}: {:?}{os}, next read in {}ms", error.kind(), wait.as_millis()));
                 }
-                let wait = Duration::from_millis(50 << (self.failed_reads - 1).min(6)).min(MAX_READ_BACKOFF);
+                if n >= REBIND_AFTER {
+                    self.rebind(says);
+                }
                 self.read_after = Some(Instant::now() + wait);
             }
         };
@@ -360,12 +401,17 @@ impl KrpcSocket {
     /// any unanswered) and, once the actor has gone over to server mode (it does after 15 minutes not firewalled,
     /// publishing or not), the old address in others' routing tables until they drop it; the node's id is random,
     /// not the address's.
-    fn rebind(&mut self) {
+    fn rebind(&mut self, says: bool) {
         let port = self.local_addr.port();
         let any = |port| UdpIo::bind(SocketAddr::from(([0, 0, 0, 0], port)));
         let fresh = match any(0) {
             Ok(io) => io,
-            Err(error) => return warn!("binding the socket anew failed: {error}"),
+            Err(error) => {
+                if says {
+                    crate::ember::say(self.dht, || format!("binding anew failed: {error}"));
+                }
+                return warn!("binding the socket anew failed: {error}");
+            }
         };
         drop(std::mem::replace(&mut self.io, fresh));
         if let Ok(same) = any(port) {
@@ -374,6 +420,9 @@ impl KrpcSocket {
         match self.io.local_addr() {
             Ok(SocketAddr::V4(addr)) => {
                 debug!(?addr, was = port, "socket bound anew after failed reads");
+                if says {
+                    crate::ember::say(self.dht, || format!("bound anew: port {port} -> {}", addr.port()));
+                }
                 self.local_addr = addr;
             }
             Ok(SocketAddr::V6(_)) => {}
@@ -722,6 +771,7 @@ mod test {
     #[cfg(unix)]
     #[tokio::test]
     async fn failing_reads_back_off_and_rebind() {
+        let _serial = crate::ember::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let (mut socket, port, _) = broken(false).await;
         let mut returned = 0;
         let _ = tokio::time::timeout(Duration::from_millis(500), async {
@@ -743,6 +793,7 @@ mod test {
     #[cfg(unix)]
     #[tokio::test]
     async fn failing_reads_back_off_when_the_read_is_dropped() {
+        let _serial = crate::ember::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let (mut socket, _, _) = broken(false).await;
         let start = Instant::now();
         while start.elapsed() < Duration::from_millis(120) {
@@ -757,6 +808,7 @@ mod test {
     #[cfg(unix)]
     #[tokio::test]
     async fn failing_reads_wait_at_most_the_longest_backoff() {
+        let _serial = crate::ember::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let (mut socket, _, _) = broken(false).await;
         socket.failed_reads = 40;
         let before = Instant::now();
@@ -768,6 +820,7 @@ mod test {
     #[cfg(unix)]
     #[tokio::test]
     async fn failing_reads_rebind_on_another_port_when_theirs_is_held() {
+        let _serial = crate::ember::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let (mut socket, port, _kept) = broken(true).await;
         let _ = tokio::time::timeout(Duration::from_millis(500), async {
             while socket.failed_reads < REBIND_AFTER {

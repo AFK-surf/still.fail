@@ -467,6 +467,7 @@ export function bridgeIroh(bridge: Bridge): Iroh {
     addAddr: (addr) => void bridge.sync("iroh.addAddr", { id, addr }),
     networkChange: () => Effect.ignore(bridge.call("iroh.networkChange", { id }), { log: "Unhandled", message: "network change told" }),
     relayStatus: () => (bridge.sync("iroh.relayStatus", { id }) as { url: string; connected: boolean }[]) ?? [],
+    dhtSaid: (keep) => (bridge.sync("dht.said", { keep }) as ReturnType<NonNullable<IrohEndpoint["dhtSaid"]>> | null) ?? { lines: [], dropped: 0 },
     setRelayEntries: (entries) => Effect.asVoid(bridge.call("iroh.setRelayEntries", { id, entries })),
     close: () => Effect.ignore(bridge.call("iroh.close", { id }), { log: "Unhandled", message: "endpoint closed" }),
   });

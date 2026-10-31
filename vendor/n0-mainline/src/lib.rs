@@ -18,6 +18,7 @@ mod common;
 /// Functional core testable separately from I/O
 mod core;
 mod dht;
+pub mod ember;
 
 pub use common::{
     ClosestNodes, Id, MutableItem, Node,

@@ -31,6 +31,8 @@ pub(crate) struct Actor {
 
     put_senders: HashMap<Id, Vec<oneshot::Sender<Result<Id, PutError>>>>,
     get_senders: HashMap<Id, Vec<ResponseSender>>,
+    /// ember: the lookups going, for the app's record.
+    lookups: crate::ember::Lookups,
 }
 
 impl Actor {
@@ -68,6 +70,7 @@ impl Actor {
 
             put_senders: HashMap::new(),
             get_senders: HashMap::new(),
+            lookups: Default::default(),
         })
     }
 
@@ -126,6 +129,7 @@ impl Actor {
 
         // Cleanup done iterative queries
         for (id, closest_nodes) in done_iterative_queries {
+            self.lookups.done(self.socket.dht, &id);
             if let Some(senders) = self.get_senders.remove(&id) {
                 for sender in senders {
                     // return closest_nodes to whoever was asking
@@ -160,6 +164,7 @@ impl Actor {
         if let Some((target, response)) = new_query_response
             && let Some(senders) = self.get_senders.get_mut(&target)
         {
+            self.lookups.answered(self.socket.dht, &target);
             for sender in senders.iter_mut() {
                 send(sender, response.clone());
             }
@@ -425,6 +430,7 @@ pub(crate) async fn run(mut actor: Actor, mut receiver: mpsc::Receiver<ActorMess
                         }
                         ActorMessage::Get(request, mut sender) => {
                             let target = request.target();
+                            actor.lookups.asked(actor.socket.dht, target);
 
                             let responses = actor.get(request, None);
                             for response in responses {

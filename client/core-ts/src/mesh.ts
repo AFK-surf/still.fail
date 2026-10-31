@@ -9,7 +9,7 @@
 // All of it runs as fibers (rule 1): an opening is a Deferred everyone asking for the same address meanwhile waits on, a
 // link's renewal and its first answer are fibers in the core's scope, a race and a hedge are fibers started as the UI
 // comes back, measuring and the day's tally are fibers on the clock.
-import { dialLine, record, recording, said, stationTag } from "./record.ts";
+import { dialLine, record, recordDht, recording, said, stationTag } from "./record.ts";
 import { Cause, Clock, Deferred, Effect, Exit, Fiber, type Result, Semaphore } from "effect";
 import type { Credential } from "./cloud.ts";
 import type { Inner } from "./core.ts";
@@ -1789,6 +1789,7 @@ export class Mesh {
         this.#tellHealth(addr);
         for (const w of this.#live(addr)) this.#watchPaths(addr, w);
         if (recording(this.#env.host)) this.#recordWays(addr);
+        recordDht(this.#env.host, this.#endpoint, TICK_MS);
         this.#choose(addr, null);
         this.#prune(addr);
         // The way direct requests moved to stayed: one lost after this is not lost soon after.
@@ -1939,6 +1940,7 @@ export class Mesh {
         const wake = yield* this.#env.wakes.next;
         if (!wake.suspectsConnections()) continue;
         this.#env.runner.fork(this.#endpoint.networkChange());
+        recordDht(this.#env.host, this.#endpoint);
         record(this.#env.host, "conn network-change", () => `told the main endpoint (${wake.network ? "the network changed" : wake.retry ? "retry" : `the UI back after ${Math.round(wake.away / 1000)}s`}), ${this.#openLinks().length} link(s) open, ${this.#pinned.size} relay endpoint(s) not told`);
         // On another network, the speeds seen on the last say nothing of how fast each way is from here (a laptop taken
         // from home would keep the relay it was fast through there, however slowly it brings replies now): found anew.
@@ -2166,9 +2168,14 @@ function open(
     })));
   });
   if (!recording(env.host)) return dial;
+  // the DHT's lines kept from the dial's start: a lookup it asks, a socket failing as it does (the record turned on, or
+  // a first dial, after none was kept)
+  const dialFrom = Effect.andThen(Effect.sync(() => recordDht(env.host, endpoint)), dial);
   const via = pinned === null ? (ips.length > 0 ? "main+addresses" : "main") : pinned === LAN ? "lan" : pinned === TAILNET ? "tailnet" : `relay:${relayHost(pinned)}`;
-  return Effect.onExit(dial, (exit) =>
-    Effect.sync(() =>
+  return Effect.onExit(dialFrom, (exit) =>
+    Effect.sync(() => {
+      // what the DHT went through as it dialled (a lookup of this station's address among them, if one was asked)
+      recordDht(env.host, endpoint);
       record(env.host, "conn dial", () =>
         dialLine({
           n,
@@ -2182,8 +2189,8 @@ function open(
             return m === noAnswer() ? "no-answer" : `error: ${said(m)}`;
           })(),
         }),
-      ),
-    ),
+      );
+    }),
   );
 }
 

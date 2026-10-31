@@ -67,6 +67,11 @@ export interface IrohEndpoint {
   networkChange(): Effect.Effect<void>;
   /// Its home relays, and whether it is connected to each now.
   relayStatus(): { url: string; connected: boolean; access?: string }[];
+  /// What the DHT lookup's socket and lookups went through since the last take (each line with when, ms since the Unix
+  /// epoch), kept from now on while `keep` (until a take without), none kept without; how many were dropped for want of
+  /// room.
+  /// A host whose endpoints look nothing up on the DHT has none.
+  dhtSaid?(keep: boolean): { lines: { at: number; text: string }[]; dropped: number };
   /// Update forwarding entrances without closing any station connection.
   setRelayEntries?(entries: { entry: string; relay: string }[]): Effect.Effect<void, HostError>;
   close(): Effect.Effect<void>;

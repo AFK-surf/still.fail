@@ -403,6 +403,8 @@ impl Dht {
     ) -> Result<GetStream<MutableItem>, ActorShutdown> {
         let salt = salt.map(|s| s.into());
         let target = MutableItem::target_from_key(public_key, salt.as_deref());
+        // ember: named for the app's record (an iroh endpoint's lookup: its id's first 4 bytes)
+        crate::ember::named(target, public_key);
         let (tx, rx) = mpsc::unbounded_channel();
         self.send(ActorMessage::Get(
             GetRequestSpecific::GetValue(GetValueRequestArguments {
@@ -1099,5 +1101,79 @@ mod test {
 
             assert_eq!(keys, expected_keys);
         }
+    }
+
+    // ember: a DHT whose socket's reads keep failing at once, readable all the while (what a phone's record showed
+    // after the app came back), on a runtime of two workers as client/shell's: the process is not kept busy, a task
+    // beside it keeps its time, and once the socket is bound anew a lookup finds what another node put. The record's
+    // lines say each step (crate::ember). The fault is made where the socket is read (actor/socket.rs `fault`).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn ember_failing_socket_spares_the_runtime_and_lookups_recover() {
+        use crate::actor::socket::fault;
+        use std::sync::atomic::Ordering::Relaxed;
+        use std::time::{Duration, Instant};
+        unsafe extern "C" {
+            fn clock_gettime(clock: i32, time: *mut [i64; 2]) -> i32;
+        }
+        #[cfg(target_os = "macos")]
+        const PROCESS_CPU: i32 = 12;
+        #[cfg(not(target_os = "macos"))]
+        const PROCESS_CPU: i32 = 2;
+        let cpu = || {
+            let mut t = [0i64; 2];
+            assert_eq!(unsafe { clock_gettime(PROCESS_CPU, &mut t) }, 0);
+            Duration::from_secs(t[0] as u64) + Duration::from_nanos(t[1] as u64)
+        };
+
+        let _serial = crate::ember::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        crate::ember::reset();
+        crate::ember::said(true);
+
+        let testnet = Testnet::new(10).await.unwrap();
+        let a = Dht::builder().bootstrap(&testnet.bootstrap).build().unwrap();
+        let b = Dht::builder().bootstrap(&testnet.bootstrap).build().unwrap();
+        let signer = SigningKey::from_bytes(&[7; 32]);
+        let item = MutableItem::new(&signer, b"found again", 1, None);
+        a.put_mutable(item.clone(), None).await.unwrap();
+
+        fault::PORT.store(b.info().await.unwrap().local_addr().port(), Relaxed);
+        fault::MADE_BEFORE.store(fault::MADE.load(Relaxed), Relaxed);
+        // (the actor reads again once something wakes it: the maintenance tick, within a second)
+
+        // two seconds beside it (the reads failing, the socket bound anew): how much CPU the process spent, and how
+        // late a task asking every 10 ms woke
+        let (cpu0, start) = (cpu(), Instant::now());
+        let mut latest = Duration::ZERO;
+        while start.elapsed() < Duration::from_secs(2) {
+            let asked = Instant::now();
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            latest = latest.max(asked.elapsed().saturating_sub(Duration::from_millis(10)));
+        }
+        let spent = cpu() - cpu0;
+
+        let found = tokio::time::timeout(
+            Duration::from_secs(5),
+            b.get_mutable_most_recent(signer.verifying_key().as_bytes(), None),
+        )
+        .await;
+        let said: Vec<String> = crate::ember::said(true).0.into_iter().map(|s| s.text).collect();
+        println!("cpu {spent:?} in 2 s, a 10 ms sleep at most {latest:?} late, found {:?}", found.as_ref().map(|f| f.is_ok()));
+        for line in &said {
+            println!("dht: {line}");
+        }
+        crate::ember::reset();
+        fault::PORT.store(0, Relaxed);
+
+        assert!(spent < Duration::from_millis(400), "the process spent {spent:?} of CPU in 2 s");
+        assert!(latest < Duration::from_millis(50), "a 10 ms sleep woke {latest:?} late");
+        assert_eq!(found.expect("the lookup timed out").unwrap().as_ref(), Some(&item));
+        // all b's: one DHT's number on each line
+        let b_said = said[0].split(' ').next().unwrap().to_string();
+        assert!(said.iter().all(|l| l.starts_with(&format!("{b_said} "))), "{said:?}");
+        let has = |part: &str| said.iter().any(|l| l.contains(part));
+        assert!(has(" read failed #1: NotConnected, next read in 50ms"), "{said:?}");
+        assert!(has(" bound anew: port "), "{said:?}");
+        assert!(has(" reads back after 3 failed"), "{said:?}");
+        assert!(said.iter().any(|l| l.contains(" done after ") && !l.ends_with(": 0 answer(s)")), "{said:?}");
     }
 }

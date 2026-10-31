@@ -1250,6 +1250,12 @@ impl Inner {
             let message = hex::decode(str_of(a, "message")?).map_err(err)?;
             return Ok(json!({ "publicKey": hex::encode(key.public().as_bytes()), "signature": hex::encode(key.sign(&message).to_bytes()) }));
         }
+        // What the DHT lookup's socket and lookups went through since the last take, while the core records (`keep`;
+        // false: none kept from now on): the record's `dht:` lines (client/core-ts mesh.ts, vendor/n0-mainline's ember).
+        if op == "dht.said" {
+            let (lines, dropped) = n0_mainline::ember::said(a.get("keep").and_then(Value::as_bool).unwrap_or(false));
+            return Ok(json!({ "lines": lines.into_iter().map(|s| json!({ "at": s.at_ms, "text": s.text })).collect::<Vec<_>>(), "dropped": dropped }));
+        }
         let handle = self.handle(id_of(a)?)?;
         match (op, handle) {
             ("iroh.endpointId", Handle::Endpoint(e, _)) => Ok(json!(hex::encode(e.id().as_bytes()))),
@@ -1867,6 +1873,16 @@ mod tests {
         counted("test.op", false);
         let stats = stats_json();
         assert_eq!(stats["calls"]["test.op"], json!([2, 1]));
+    }
+
+    // The DHT's lines as the core takes them: none kept until it takes with `keep`, none once it takes without.
+    #[test]
+    fn dht_said() {
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let said = |keep: bool| shell.inner.run_sync("dht.said", &json!({ "keep": keep })).unwrap();
+        assert_eq!(said(false), json!({ "lines": [], "dropped": 0 }));
+        assert_eq!(said(true), json!({ "lines": [], "dropped": 0 }));
     }
 
     #[test]

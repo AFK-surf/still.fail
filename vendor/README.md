@@ -55,6 +55,9 @@ the same.
     the error lasted (a phone's record, 2026-10-31: `n0_mainline::actor::run` → `recv_from` in every sample of the
     thread, minutes after the app came back; that iOS took the suspended app's socket away is a guess, the error not
     recorded). Upstream's 0.7.1 still returns at once.
+  - src/ember.rs: what the socket and lookups went through (failed reads, their kind and errno, the backoff, binding
+    anew, reads back; each lookup of an endpoint asked, first answered, done), lines per DHT kept for the app's
+    performance record while it is on (client/shell's `dht.said`), bounded and rate-limited. Ours alone.
 
 - **noq-udp 1.3.0** (src/linux.rs): no UDP segmentation offload (GSO) on Android, each datagram sent on its own. An
   Android emulator's network accepts a segmented burst and drops all of it; QUIC on a direct path then got nothing
