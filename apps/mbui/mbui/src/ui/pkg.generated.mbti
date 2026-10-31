@@ -901,6 +901,9 @@ pub struct Ctx {
   mut back_chain : BackList
   mut back_chain_next : BackList
   layer_gen : Map[Int32, Int32]
+  mut layer_hook : ((Dismiss) -> Unit)?
+  layer_on_dismiss : Map[Int32, (Int32, (Dismiss) -> Unit)]
+  layer_retired : Map[Int32, Int32]
   mut back_held : BackHeld?
   mut back_off : Bool
   mut back_told : Bool
@@ -1256,6 +1259,7 @@ pub fn Ctx::watch_press(Self, Int32) -> Bool
 pub fn Ctx::window_drag(Self, Int32) -> Unit
 pub fn Ctx::window_size(Self) -> (Double, Double)
 pub fn Ctx::with_direction(Self, Direction, () -> Unit) -> Unit
+pub fn Ctx::with_dismissed(Self, (Dismiss) -> Unit, () -> Unit) -> Unit
 pub fn Ctx::with_theme(Self, Theme, () -> Unit) -> Unit
 pub fn Ctx::within(Self, Int32, Double) -> Bool
 pub fn Ctx::words(Self, Int32, String, a? : Int32, b? : Int32, color? : Int64, round? : Double) -> Unit

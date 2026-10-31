@@ -851,9 +851,29 @@ pub fn close_presented() -> Unit {
 ///|
 /// Closes the one at `i` and all over it (a pick a panel opened goes with the panel).
 fn close_from(i : Int) -> Unit {
-  presented_told()
+  // (what is closed written first, then told once: what reads it finds it whole)
   for k in i..<presented_now.length() {
     presented_now[k].open = false
+  }
+  presented_told()
+}
+
+///|
+/// The one presented as `serial` dismissed by the hand at that moment (back, Escape, a press outside it: its layer told so,
+/// @ui.Ctx::with_dismissed): where it is open still, it closes, and what is over it, and what it holds is let go of, once,
+/// then; its view draws it going from the next frame on.
+fn dismissed_now(serial : Int) -> Unit {
+  match presented_now.search_by(fn(q) { q.serial == serial }) {
+    Some(i) if presented_now[i].open => {
+      // (it and what is over it, each closed unsaid let go of once, from the top)
+      let closing = presented_now[i:].to_array().filter(fn(q) { q.open && !q.ended }).rev()
+      close_from(i)
+      for q in closing {
+        q.ended = true
+        (q.gone)()
+      }
+    }
+    _ => ()
   }
 }
 
@@ -875,9 +895,12 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
     let mut open = false
     let mut built = false
     c.scope(p.serial, fn() {
-      let (o, b) = draw_presented(c, p, sheet)
-      open = o
-      built = b
+      // (dismissed by the hand, at that moment: dismissed_now)
+      c.with_dismissed(fn(_) { dismissed_now(p.serial) }, fn() {
+        let (o, b) = draw_presented(c, p, sheet)
+        open = o
+        built = b
+      })
     })
     // closed by the hand as it was drawn (back, Escape, a press outside, dragged down): it and what is over it go (one
     // closed by the app meanwhile, and what is over it then, went as it was closed: what was opened since stays)
