@@ -507,6 +507,12 @@ pub struct Ctx {
   mut back_chain : BackList
   mut back_chain_next : BackList
   layer_gen : Map[Int, Int]
+  /// what the next layer built tells as it is dismissed (Ctx::with_dismissed), and what each layer's opening does so, by
+  /// its id
+  mut layer_hook : ((Dismiss) -> Unit)?
+  layer_on_dismiss : Map[Int, (Int, (Dismiss) -> Unit)]
+  /// the layers' openings dismissed since the last frame (Ctx::layers_dismissed), by id: taking no input
+  layer_retired : Map[Int, Int]
   /// a back gesture held from its start (Ctx::back_gesture), and whether the rest of one called off is nobody's
   mut back_held : BackHeld?
   mut back_off : Bool
@@ -778,6 +784,9 @@ fn Ctx::new() -> Ctx {
     back_chain: Unsaid,
     back_chain_next: Unsaid,
     layer_gen: Map::new(),
+    layer_hook: None,
+    layer_on_dismiss: Map::new(),
+    layer_retired: Map::new(),
     back_held: None,
     back_off: false,
     back_node_next: -1,
@@ -2271,7 +2280,8 @@ fn hit_at(
       y >= rects[r + 1] &&
       y < rects[r + 3] &&
       in_round_clip(clips, k, x, y) &&
-      (!hits || old_hit_open(k)) {
+      (!hits || old_hit_open(k)) &&
+      !layer_retired_ids.contains(ids[k]) {
       break
     }
     k = k - 1

@@ -485,6 +485,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   // (the host told whether the app takes back, as what the old views said now has it: Ctx::back_told_host)
   c.back_told_host()
   let hi = c.hit_ids
+  // (the targets as this frame drew them: what a layer dismissed since the last drew is out of them as it was let go)
+  layer_retired_ids.clear()
   c.hit_ids = c.next_hit_ids
   c.next_hit_ids = hi
   let hr = c.hit_rects
@@ -771,6 +773,13 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
   if (kind <= 3 || view_holds()) && view_pointer(kind, x, y, button) {
     view_pointed()
     input_taped("pointer", h_event_time(), args)
+    // (a press the window's tree took is outside every layer of the old frame's: what it dismisses so, at its moment,
+    // as one the old frame takes is: overlay.mbt)
+    if kind == 0 {
+      let c = g()
+      c.press_down = Some((x, y))
+      c.layer_keys_now()
+    }
   } else {
     took_input("pointer", h_event_time(), args)
     view_pointed()
@@ -832,6 +841,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     // picked, the focus where it is)
     if c.bar_press(target) {
       c.press_down = Some((x, y))
+      c.layer_keys_now()
       c.down = true
       c.active = 0
       c.press_x = x
@@ -877,6 +887,8 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     }
     // what lies over the page sees it (overlay.mbt); the focus goes as a press moves it (focus.mbt)
     c.press_down = Some((x, y))
+    // (the layers it is outside of dismissed at its moment: overlay.mbt)
+    c.layer_keys_now()
     c.focus_on_press(target)
     c.press_mods = mods
     c.down = true
@@ -1613,6 +1625,10 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
   took_input("key", h_now(), [code.to_double(), mods.to_double()])
   hand_event()
   key_in(code, mods)
+  // (Escape to the topmost layer it dismisses, at its moment: overlay.mbt)
+  if code == key_escape {
+    g().layer_keys_now()
+  }
 }
 
 ///|

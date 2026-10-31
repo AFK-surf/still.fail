@@ -274,3 +274,322 @@ test "a layer's back gesture held, the layer leaving (inert, drawn going) and op
 test "a layer's back gesture held, the layer leaving (inert, drawn going): the gesture gone through as it leaves writes no dismissal" {
   assert_eq(layer_left_and_back(false), ([], false))
 }
+
+///|
+test "a layer of the old frame's over a node of the tree's taking presses: Escape with no frame after, then a press there: the node's at once" {
+  let pressed = Ref(0)
+  let menu = Ref(true)
+  let said : Array[String] = []
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=2)
+  set_view_app(fn(root) {
+    root.box(fn(n) {
+      n.over(Is(true)).width(Is(Some(100.0))).height(Is(Some(100.0))).on_press(fn() { pressed.val += 1 }) |> ignore
+    })
+    |> ignore
+    old(root, fn(c) {
+      if menu.val {
+        // (a modal one: its ground takes the presses it does not, over the node)
+        let o = c.overlay("menu", modal=true, fn() {
+          let id = c.id("item")
+          c.interact(id) |> ignore
+          c.box(id~, w=Px(100.0), h=Px(100.0), fn() {  }) |> ignore
+        })
+        if o.dismissed is Some(_) {
+          said.push("menu")
+          menu.val = false
+        }
+      }
+    })
+    .over(Is(true))
+    // (taking presses where it draws them alone, as the shell's over all of it: tape_shell.mbt)
+    |> old_takes_own
+    |> ignore
+  })
+  t.draw()
+  t.draw()
+  let at = t.time()
+  t.key_told(key_escape, 0, at)
+  t.touch_raw(0, 1, 50.0, 50.0, at)
+  t.touch_raw(2, 1, 50.0, 50.0, at)
+  let at_once = pressed.val
+  t.draw()
+  assert_eq((at_once, said), (1, ["menu"]))
+}
+
+///|
+test "a layer opened from a button with the focus, the focus in it: Escape with no frame after, the focus back on the button at once, and after frames" {
+  let open = Ref(false)
+  let button = Ref(0)
+  let t = Tester::new(
+    fn(c) {
+      let id = c.id("opener")
+      button.val = id
+      c.focusable(id)
+      c.box(id~, w=Px(80.0), h=Px(30.0), fn() {  }) |> ignore
+      if open.val {
+        let o = c.overlay("menu", modal=true, fn() {
+          let item = c.id("item")
+          c.focusable(item)
+          c.box(id=item, w=Px(100.0), h=Px(40.0), fn() {  }) |> ignore
+        })
+        if o.dismissed is Some(_) {
+          open.val = false
+        }
+      }
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+  )
+  t.draw()
+  g().focus_moved(button.val)
+  open.val = true
+  t.draw()
+  t.draw()
+  let inside = g().focused_id() != button.val
+  t.key_told(key_escape, 0, t.time())
+  let at_once = g().focused_id() == button.val
+  t.draw()
+  t.draw()
+  assert_eq((inside, at_once, g().focused_id() == button.val), (true, true, true))
+}
+
+///|
+test "a layer's back gesture held, the layer dismissed by Escape and built open again under the same key the frame after (never leaving): the gesture gone through takes nothing of that opening" {
+  let dismissed : Array[String] = []
+  let t = Tester::new(
+    fn(c) {
+      // (its view keeps it open whatever dismisses it)
+      let o = c.overlay("menu", fn() { c.box(w=Px(100.0), h=Px(100.0), fn() {  }) |> ignore })
+      match o.dismissed {
+        Some(why) => dismissed.push("\{why}")
+        None => ()
+      }
+    },
+    w=400.0,
+    h=300.0,
+    platform=2,
+  )
+  t.draw()
+  t.draw()
+  t.back_raw(0, 0.0, t.time())
+  t.back_raw(1, 60.0, t.time())
+  t.key_told(key_escape, 0, t.time())
+  t.draw()
+  t.draw()
+  t.back_raw(2, 60.0, t.time())
+  t.draw()
+  t.draw()
+  assert_eq(dismissed, ["Escape"])
+}
+
+///|
+test "two layers, neither modal, a press outside both with no frame after: both dismissed at once, the topmost told first, each once" {
+  let told : Array[String] = []
+  let open = [true, true]
+  let t = Tester::new(
+    fn(c) {
+      for k in 0..<2 {
+        if open[k] {
+          c.with_dismissed(fn(_) { told.push("layer \{k}") }, fn() {
+            let o = c.overlay("layer \{k}", fn() {
+              c.box(tx=10.0 + 120.0 * k.to_double(), ty=10.0, w=Px(100.0), h=Px(100.0), fn() {  }) |> ignore
+            })
+            if o.dismissed is Some(_) {
+              open[k] = false
+            }
+          })
+        }
+      }
+    },
+    w=400.0,
+    h=300.0,
+    platform=2,
+  )
+  t.draw()
+  t.draw()
+  let at = t.time()
+  t.touch_raw(0, 1, 300.0, 250.0, at)
+  t.touch_raw(2, 1, 300.0, 250.0, at)
+  let at_once = told.copy()
+  t.draw()
+  t.draw()
+  assert_eq((at_once, told, open), (["layer 1", "layer 0"], ["layer 1", "layer 0"], [false, false]))
+}
+
+///|
+/// A modal layer of the old frame's opened (`open`) as the focus is on `from`'s, holding a stop that takes it or none
+/// (`stops`); then Escape with no frame after: whether the focus went into it, is on `from` at once, and after frames.
+fn focus_given_back(tree_opener : Bool, stops : Bool) -> (Bool, Bool, Bool) {
+  let open = Ref(false)
+  let opener = Ref(0)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
+  set_view_app(fn(root) {
+    if tree_opener {
+      root.box(fn(n) {
+        n.width(Is(Some(80.0))).height(Is(Some(30.0))).focusable(Is(true)).on_press(fn() {  }) |> ignore
+        opener.val = tree_said_id(n.id())
+      })
+      |> ignore
+    }
+    old(root, fn(c) {
+      if !tree_opener {
+        let id = c.id("opener")
+        opener.val = id
+        c.focusable(id)
+        c.box(id~, w=Px(80.0), h=Px(30.0), fn() {  }) |> ignore
+      }
+      if open.val {
+        let o = c.overlay("menu", modal=true, fn() {
+          if stops {
+            let item = c.id("item")
+            c.focusable(item)
+            c.box(id=item, w=Px(100.0), h=Px(40.0), fn() {  }) |> ignore
+          } else {
+            c.box(w=Px(100.0), h=Px(40.0), fn() {  }) |> ignore
+          }
+        })
+        if o.dismissed is Some(_) {
+          open.val = false
+        }
+      }
+    })
+    .over(Is(true))
+    |> old_takes_own
+    |> ignore
+  })
+  t.draw()
+  g().focus_moved(opener.val)
+  t.draw()
+  open.val = true
+  t.draw()
+  t.draw()
+  let inside = g().focused_id() != opener.val
+  t.key_told(key_escape, 0, t.time())
+  let at_once = g().focused_id() == opener.val
+  t.draw()
+  t.draw()
+  (inside, at_once, g().focused_id() == opener.val)
+}
+
+///|
+test "a modal layer opened from a node of the tree's with the focus: Escape with no frame after, the focus back on that node at once, and after frames" {
+  assert_eq(focus_given_back(true, true), (true, true, true))
+}
+
+///|
+test "a modal layer holding nothing that takes the focus (its own ground has it): Escape with no frame after, the focus back on what opened it at once, and after frames" {
+  assert_eq(focus_given_back(false, false), (true, true, true))
+}
+
+///|
+test "a layer of the old frame's, not modal, a node of the tree's taking presses outside it: a finger down and up there, no frame between: the layer dismissed as it went down, the node pressed once" {
+  let pressed = Ref(0)
+  let told : Array[String] = []
+  let open = Ref(true)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=2)
+  set_view_app(fn(root) {
+    root.box(fn(n) {
+      n.over(Is(true)).offset(Is((300.0, 250.0))).width(Is(Some(80.0))).height(Is(Some(40.0))).on_press(fn() {
+        pressed.val += 1
+      })
+      |> ignore
+    })
+    |> ignore
+    old(root, fn(c) {
+      if open.val {
+        c.with_dismissed(fn(_) { told.push("menu") }, fn() {
+          let o = c.overlay("menu", fn() {
+            let id = c.id("item")
+            c.interact(id) |> ignore
+            c.box(id~, tx=10.0, ty=10.0, w=Px(100.0), h=Px(100.0), fn() {  }) |> ignore
+          })
+          if o.dismissed is Some(_) {
+            open.val = false
+          }
+        })
+      }
+    })
+    .over(Is(true))
+    |> old_takes_own
+    |> ignore
+  })
+  t.draw()
+  t.draw()
+  let at = t.time()
+  t.touch_raw(0, 1, 320.0, 260.0, at)
+  let down = told.copy()
+  t.touch_raw(2, 1, 320.0, 260.0, at)
+  let up = pressed.val
+  t.draw()
+  t.draw()
+  assert_eq((down, up, pressed.val, open.val), (["menu"], 1, 1, false))
+}
+
+///|
+test "a modal layer over a list, closed by Escape with no frame after, then the wheel over the list: the list scrolls" {
+  let open = Ref(true)
+  let t = Tester::new(
+    fn(c) {
+      c.list("rows", 100, 40.0, fn(i) { c.text("row \{i}") |> ignore }) |> ignore
+      if open.val {
+        let o = c.overlay("m", modal=true, fn() {
+          c.box(tx=20.0, ty=20.0, w=Px(100.0), h=Px(100.0), bg=0xFFFFFFFFL, id=c.id("p"), fn() {  }) |> ignore
+        })
+        if o.dismissed is Some(_) {
+          open.val = false
+        }
+      }
+    },
+  )
+  t.draw()
+  t.draw()
+  t.key_told(key_escape, 0, t.time())
+  finger_wheel(200.0, 400.0, 0.0, 300.0, 0)
+  t.draw()
+  assert_true(t.list_offset() > 0.0)
+}
+
+///|
+test "the same layer opened from one button, closed by Escape, then from another: closed by Escape again, the focus back on the second" {
+  let open = Ref(false)
+  let ids = [0, 0]
+  let t = Tester::new(
+    fn(c) {
+      for k in 0..<2 {
+        let id = c.id("opener \{k}")
+        ids[k] = id
+        c.focusable(id)
+        c.box(id~, w=Px(80.0), h=Px(30.0), fn() {  }) |> ignore
+      }
+      if open.val {
+        let o = c.overlay("menu", modal=true, fn() {
+          let item = c.id("item")
+          c.focusable(item)
+          c.box(id=item, w=Px(100.0), h=Px(40.0), fn() {  }) |> ignore
+        })
+        if o.dismissed is Some(_) {
+          open.val = false
+        }
+      }
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+  )
+  t.draw()
+  let from = fn(k : Int) {
+    g().focus_moved(ids[k])
+    t.draw()
+    open.val = true
+    t.draw()
+    t.draw()
+    t.key_told(key_escape, 0, t.time())
+    t.draw()
+    t.draw()
+    g().focused_id() == ids[k]
+  }
+  let first = from(0)
+  let second = from(1)
+  assert_eq((first, second), (true, true))
+}
