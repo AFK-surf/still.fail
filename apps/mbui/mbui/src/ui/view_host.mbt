@@ -604,10 +604,23 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   // (what is composed of content made before kept in the atlas, before anything this frame places a glyph)
   view_glyphs_held(tree)
   let n0 = self.ninst
+  // (the nodes whose clips are pushed now, the innermost last: each popped as what is drawn next is no longer in it)
+  let clipping : Array[@view.NodeId] = []
   tree.each_drawn_scaled(fn(c, x, y, a, s) {
+    while clipping.length() > 0 && !tree.holds(clipping[clipping.length() - 1], c.id) {
+      clipping.pop() |> ignore
+      pop_clip()
+    }
     // (the root, the window, is drawn by nothing of its own)
     if c.id.at == 0 || a <= 0.002 {
       return
+    }
+    // (what it holds cut to it, as an old view's clipping box cuts what it holds: push_round_clip's, after its own)
+    defer {
+      if c.clips {
+        view_push_clip(x, y, c.w * s, c.h * s, c.radius * s)
+        clipping.push(c.id)
+      }
     }
     if c.hosted {
       if old_whole.val {
@@ -618,7 +631,13 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         self.paint_held(self.nodes[root], 1.0, but=fn(ch) { self.nodes[ch].layer || self.nodes[ch].portal })
       } else {
         match old_boxes.get(c.id) {
-          Some(i) => self.in_window(fn() { self.paint(i, a) })
+          // (in a node that clips: cut by it, as what else it holds is; else by the window)
+          Some(i) =>
+            if clipping.length() > 0 {
+              self.in_window_within(fn() { self.paint(i, a) })
+            } else {
+              self.in_window(fn() { self.paint(i, a) })
+            }
           None => ()
         }
       }
@@ -628,7 +647,11 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       // (made as glass was drawn then: solid or not)
       Some(b) if c.glass is None || b.solid == glass_paint.solid => b
       _ => {
+        // (made where it is its own, cut by nothing it is drawn in: what cuts it is the clip it is composed in, as each
+        // frame composes it, view_blit; its words never left out for where a clip once was)
+        push_unclipped()
         let b = self.view_made(c)
+        pop_clip()
         view_blocks[c.id] = b
         b
       }
@@ -642,6 +665,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     view_paint_work.copied = view_paint_work.copied + 1
   })
+  for _ in clipping {
+    pop_clip()
+  }
   // what the old frame puts over all of it at its root (its layers: the overlays its views open, menus, sheets,
   // dialogs, raised to the root's end; what is built around the old views over them, a splash), over the tree, in their
   // order, the one old view the whole window or not (the way there: an old view's overlay not yet placed, cut and
@@ -656,6 +682,34 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   }
   dr.targets_said = false
   view_paint_work.handed = view_paint_work.handed + (self.ninst - n0)
+}
+
+///|
+/// A node's clip pushed, (`x`, `y`) `w` by `h` where it is drawn, its corners `r` round, within the clip it is in: as
+/// an old view's box's is (push_round_clip: as round, and as smooth, as its ground's corners are; where a corner is
+/// both's, the rounder).
+fn view_push_clip(x : Double, y : Double, w : Double, h : Double, r : Double) -> Unit {
+  let k = clip_top()
+  let s = clip_stack
+  let x0 = dmax(x, s[k])
+  let y0 = dmax(y, s[k + 1])
+  let x1 = dmin(x + w, s[k + 2])
+  let y1 = dmin(y + h, s[k + 3])
+  let room = dmin(w, h) / 2.0
+  let corner = fn(j : Int, cx : Double, cy : Double, ox : Double, oy : Double) {
+    let (pr, ps) = clip_corner_r(k, j, cx, cy)
+    let own = dmax(dmin(r, room), 0.0)
+    if own > 0.0 && cx == ox && cy == oy && own >= pr {
+      (own, smoothness(own, room))
+    } else {
+      (pr, ps)
+    }
+  }
+  let (tl, stl) = corner(0, x0, y0, x, y)
+  let (tr, s_tr) = corner(1, x1, y0, x + w, y)
+  let (br, sbr) = corner(2, x1, y1, x + w, y + h)
+  let (bl, sbl) = corner(3, x0, y1, x, y + h)
+  push_clip_r(x0, y0, x1, y1, (tl, tr, br, bl), (stl, s_tr, sbr, sbl))
 }
 
 ///|
@@ -2447,6 +2501,17 @@ fn old_said_allowed(c : Ctx, id : Int) -> Bool {
 /// Not what the tree's own nodes make (view_made: whole, where they are, cut as they are put into the frame).
 fn Ctx::in_window(self : Ctx, f : () -> Unit) -> Unit {
   push_clip(0.0, 0.0, self.width, self.height)
+  f()
+  pop_clip()
+}
+
+///|
+/// `f` painted cut to the window and to the clip it is in (a node that clips, View::clips: its corners and its outer
+/// kept where they are the window's too, push_clip's): nothing of it past either.
+fn Ctx::in_window_within(self : Ctx, f : () -> Unit) -> Unit {
+  let k = clip_top()
+  let s = clip_stack
+  push_clip(dmax(0.0, s[k]), dmax(0.0, s[k + 1]), dmin(self.width, s[k + 2]), dmin(self.height, s[k + 3]))
   f()
   pop_clip()
 }

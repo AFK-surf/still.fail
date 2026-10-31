@@ -2126,6 +2126,8 @@ pub fn viewer_bar_under() -> Double
 
 pub fn viewer_coming(@ui.Ctx, String, (Double, Double?)?, Double, ViewerInk) -> Unit
 
+pub fn viewer_coming_node(@view.View, () -> (Double, Double?)?, () -> Double, () -> ViewerInk) -> @view.View
+
 pub fn viewer_download(@ui.Ctx, String, ViewerInk, disabled? : Bool, coming? : Double) -> Bool
 
 pub fn viewer_facts(@ui.Ctx, String, Double, String) -> Unit

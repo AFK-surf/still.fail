@@ -19,13 +19,14 @@ fn EdgeWay::new(v : Double) -> EdgeWay {
 }
 
 ///|
-/// Off to `to` over `ms` (eased out) from `n`'s cause's moment, from where it is then; its end a moment of `n`'s.
-fn EdgeWay::go(self : EdgeWay, n : @view.View, to : Double, ms : Double) -> Unit {
+/// Off to `to` over `ms` (eased out, or as `ease` says) from `n`'s cause's moment, from where it is then; its end a
+/// moment of `n`'s.
+fn EdgeWay::go(self : EdgeWay, n : @view.View, to : Double, ms : Double, ease? : @ui.Ease = Out) -> Unit {
   if self.way.target() == to {
     return
   }
   (self.due)()
-  self.way.go(to, @motion.tween(ms, ease=Out), at=n.cause_at())
+  self.way.go(to, @motion.tween(ms, ease~), at=n.cause_at())
   self.due = if self.way.ends_at() >= 0.0 {
     n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
   } else {

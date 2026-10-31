@@ -594,3 +594,183 @@ test "a node kept no narrower than what it holds (View::keeps_held), sharing its
   alike("short again")
   assert_eq(b.laid_size().0, 150.0, msg="short again: its share")
 }
+
+///|
+/// The clip each instance of colour `color` was drawn in (its rect x0 y0 x1 y1, `dx` taken off its x, then its corners'
+/// radii and smoothness), as the last frame drew it.
+fn clips_of(color : Int64, dx : Double) -> Array[Array[Double]] {
+  let c = g()
+  let out = []
+  let want = [
+    ((color >> 24) & 0xFFL).to_double() / 255.0,
+    ((color >> 16) & 0xFFL).to_double() / 255.0,
+    ((color >> 8) & 0xFFL).to_double() / 255.0,
+  ]
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    if c.inst[b + 5] == 0.0 &&
+      (c.inst[b + 8] - want[0]).abs() < 0.002 &&
+      (c.inst[b + 9] - want[1]).abs() < 0.002 &&
+      (c.inst[b + 10] - want[2]).abs() < 0.002 &&
+      ((dx == 0.0 && c.inst[b] < 250.0) || (dx > 0.0 && c.inst[b] >= 250.0)) {
+      let row = [c.inst[b + 16] - dx, c.inst[b + 17], c.inst[b + 18] - dx, c.inst[b + 19]]
+      for j in 24..<32 {
+        row.push(c.inst[b + j])
+      }
+      out.push(row)
+    }
+  }
+  out
+}
+
+///|
+test "a node that clips (View::clips) cuts what it holds as an old view's box that clips does: its rect, its corners as round and as smooth as its own; what is not in it cut by nothing of it" {
+  let t = Tester::new(fn(_c) {  }, w=600.0, h=100.0)
+  t.check_looks(false)
+  let inner = 0xCC5533FFL
+  set_view_app(fn(root) {
+    root.row(Is(true)).lines_up(Is(Some(Start))) |> ignore
+    root.box(fn(h) {
+      h.width(Is(Some(200.0))).height(Is(Some(12.0))) |> ignore
+      old(h, fn(c) {
+        c.box(w=Px(120.0), h=Px(12.0), radius=6.0, bg=0xDDDDDDFFL, clip=true, dir=Row, fn() {
+          c.box(w=Px(50.0), h=Px(12.0), radius=6.0, bg=inner, fn() {  }) |> ignore
+        })
+        |> ignore
+      }).grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(g) { g.width(Is(Some(100.0))) |> ignore }) |> ignore
+    root.box(fn(b) {
+      b.width(Is(Some(120.0))).height(Is(Some(12.0))).row(Is(true)).radius(Is(6.0)).ground(Is(0xDDDDDDFFL)).clips(Is(true))
+      |> ignore
+      b.box(fn(p) { p.width(Is(Some(50.0))).height(Is(Some(12.0))).radius(Is(6.0)).ground(Is(inner)) |> ignore })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let old_clips = clips_of(inner, 0.0)
+  let node_clips = clips_of(inner, 300.0)
+  assert_eq(old_clips.length(), 1, msg="the old one's part")
+  assert_eq(node_clips, old_clips, msg="cut as the old one's")
+}
+
+///|
+/// How many glyphs drawn in the last frame are of colour `color`.
+fn glyphs_of(t : Tester, color : Int64) -> Int {
+  t.drawn_glyphs().filter(fn(g) { g.2 == color }).length()
+}
+
+///|
+test "words and words in pieces in a node that clips, 100 down the window: drawn whole the first time; that node moved, its clip let go of and said again, the same blocks drawn whole each time, cut only by the clip they are drawn in" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=400.0)
+  t.check_looks(false)
+  let (plain, runs) = (0x112233FFL, 0x445566FFL)
+  let down = @signals.signal(100.0, same=fn(a, b) { a == b })
+  let clips = @signals.signal(true, same=fn(a, b) { a == b })
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false }
+  set_view_app(fn(root) {
+    root.lines_up(Is(Some(Start))) |> ignore
+    root.box(fn(p) {
+      p
+      .width(Is(Some(300.0)))
+      .height(Is(Some(60.0)))
+      .offset(By(fn() { (0.0, down.get()) }))
+      .ground(Is(0xEEEEEEFFL))
+      .clips(By(fn() { clips.get() }))
+      |> ignore
+      p.box(fn(w) { w.words(Is("界面草图"), ink=plain, look~) |> ignore }) |> ignore
+      p.box(fn(w) { w.words_runs(Is([@view.words_run("界面"), @view.words_run("草图", weight=600)]), ink=runs, look~) |> ignore })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let first = (glyphs_of(t, plain), glyphs_of(t, runs))
+  assert_eq(first, (4, 4), msg="first: whole")
+  let seen = []
+  let made = []
+  for step in [("moved", 140.0, true), ("its clip let go of", 140.0, false), ("said again", 100.0, true)] {
+    let before = view_painted().made
+    down.set(step.1)
+    clips.set(step.2)
+    t.draw()
+    seen.push((step.0, glyphs_of(t, plain), glyphs_of(t, runs)))
+    made.push(view_painted().made - before)
+  }
+  assert_eq(seen, [("moved", 4, 4), ("its clip let go of", 4, 4), ("said again", 4, 4)], msg="whole each time")
+  assert_eq(made[0], 0, msg="moved: nothing made again, its blocks the same")
+}
+
+///|
+test "an old view hosted in a node that clips: cut by that clip, reaching past it; a node after that node, not in it, cut as it is with no clip before it" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  t.check_looks(false)
+  let (inside, after) = (0xAA2233FFL, 0x22AA33FFL)
+  let clips = @signals.signal(false, same=fn(a, b) { a == b })
+  let down = @signals.signal(50.0, same=fn(a, b) { a == b })
+  set_view_app(fn(root) {
+    root.row(Is(true)).lines_up(Is(Some(Start))) |> ignore
+    root.box(fn(p) {
+      p.width(Is(Some(100.0))).height(Is(Some(50.0))).offset(By(fn() { (50.0, down.get()) })).clips(By(fn() { clips.get() })) |> ignore
+      // (the old view itself wider and taller than the node that holds it: what of it is past that node, cut by it)
+      old(p, fn(c) { c.box(w=Px(200.0), h=Px(200.0), bg=inside, fn() {  }) |> ignore })
+      .width(Is(Some(200.0)))
+      .height(Is(Some(200.0)))
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(b) { b.width(Is(Some(60.0))).height(Is(Some(30.0))).offset(Is((100.0, 50.0))).ground(Is(after)) |> ignore })
+    |> ignore
+  })
+  t.draw()
+  let cut = fn(color : Int64) { clips_of(color, 0.0).map(fn(r) { [r[0], r[1], r[2], r[3]] }) }
+  // (the one after, with no clip before it)
+  let alone = cut(after)
+  clips.set(true)
+  t.draw()
+  assert_eq(cut(inside), [[50.0, 50.0, 150.0, 100.0]], msg="the old view: cut by the node that clips")
+  assert_eq(cut(after), alone, msg="the one after: cut as with no clip before it")
+  // (the node that clips across the window's foot (300 high: from 280, 50 high), then wholly under it: cut by the
+  // window too; nothing of it drawn past it)
+  down.set(280.0)
+  t.draw()
+  assert_eq(cut(inside), [[50.0, 280.0, 150.0, 300.0]], msg="across the window's foot: cut by both")
+  down.set(320.0)
+  t.draw()
+  assert_eq(cut(inside), [], msg="under the window: none of it drawn")
+}
+
+///|
+test "a node that clips drawn half as big (View::scale): what it holds cut where it is drawn, as big, as their place on the window is composed" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  t.check_looks(false)
+  let inner = 0x3355CCFFL
+  let half = @signals.signal(1.0, same=fn(a, b) { a == b })
+  let parent : Ref[@view.View?] = Ref(None)
+  set_view_app(fn(root) {
+    root.lines_up(Is(Some(Start))) |> ignore
+    parent.val = Some(
+      root.box(fn(p) {
+        p
+        .width(Is(Some(120.0)))
+        .height(Is(Some(60.0)))
+        .offset(Is((80.0, 60.0)))
+        .radius(Is(10.0))
+        .scale(By(fn() { half.get() }))
+        .clips(Is(true))
+        |> ignore
+        p.box(fn(c) { c.width(Is(Some(200.0))).height(Is(Some(30.0))).ground(Is(inner)) |> ignore }) |> ignore
+      }),
+    )
+  })
+  for k in [1.0, 0.5] {
+    half.set(k)
+    t.draw()
+    let d = view_app.val.unwrap().drawn_of(parent.val.unwrap().id()).unwrap()
+    let cut = clips_of(inner, 0.0).map(fn(r) { [r[0], r[1], r[2], r[3], r[4]] })
+    assert_eq(cut, [[d.x, d.y, d.x + d.w, d.y + d.h, 10.0 * k]], msg="\{k} as big: cut where it is drawn, as big, as round")
+  }
+}
