@@ -633,6 +633,8 @@ pub let go_tos : Map[String, Double]
 
 pub fn halo_of(Int64) -> Int64
 
+pub fn head_as_nodes(Viewer, Double) -> Bool
+
 pub fn held_build(Int32) -> Unit
 
 pub fn held_order(String, Array[ChatDay], Bool) -> Array[ChatDay]

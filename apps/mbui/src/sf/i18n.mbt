@@ -9,12 +9,33 @@ let words_of : Ref[(String, Array[(String, String)]) -> String] = Ref(fn(key, _)
 ///|
 /// How the words are said from now on (the web's addWords and setLang: the app's catalog in its language).
 pub fn set_words(said : (String, Array[(String, String)]) -> String) -> Unit {
+  // (the same told again, as each frame tells it: nothing new)
+  if physical_equal(said, words_of.val) {
+    return
+  }
   words_of.val = said
+  words_told_at.val += 1
+  words_told.set(words_told_at.val)
 }
+
+///|
+/// How many times other words were told (set_words): what a run checks the app tells them once.
+pub fn words_told_count() -> Int {
+  words_told_at.val
+}
+
+///|
+/// How many times the words were told (set_words): read by t, so what reads words as it changes (a node's, bound to
+/// them) says them again as they are told, whenever it was made.
+let words_told : @signals.Signal[Int] = @signals.signal(0, same=fn(a, b) { a == b })
+
+///|
+let words_told_at : Ref[Int] = Ref(0)
 
 ///|
 /// The words for `key`, its `{name}`s put in from `args` (the web's `t`).
 pub fn t(key : String, args? : Array[(String, String)] = []) -> String {
+  words_told.get() |> ignore
   (words_of.val)(key, args)
 }
 

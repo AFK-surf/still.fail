@@ -140,3 +140,36 @@ fn tool_shapes(name : String) -> Array[@ui.Shape] {
     None => []
   }
 }
+
+///|
+/// A tool's place while what it does goes on, as viewer_download draws it while a download comes (its 32 square, faint
+/// as a tool that cannot be pressed, a ring in the ink's own saying how far, `part` as it changes), in `parent`: read
+/// out as the tool it stands for (`label`), unable to be pressed; its corner `corner`. The node.
+pub fn tool_ring_node(
+  parent : @view.View,
+  part : () -> Double,
+  label : () -> String,
+  ink : () -> ViewerInk,
+  corner : @view.Live[Double],
+) -> @view.View {
+  parent.box(fn(v) {
+    v
+    .width(Is(Some(tool_side)))
+    .height(Is(Some(tool_side)))
+    .padding(Is((tool_icon_in, tool_icon_in, tool_icon_in, tool_icon_in)))
+    .radius(corner)
+    .alpha(Is(tool_faint))
+    // (read out disabled: taking no press)
+    .presses(Is(false))
+    .says(By(fn() { Some(@view.said(Button, label=label())) }))
+    |> ignore
+    v.box(fn(i) {
+      i
+      .width(Is(Some(viewer_tool_icon)))
+      .height(Is(Some(viewer_tool_icon)))
+      .shapes(By(fn() { ring_shapes(viewer_tool_icon, part(), ink().ink) }))
+      |> ignore
+    })
+    |> ignore
+  })
+}

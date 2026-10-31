@@ -103,11 +103,18 @@ pub fn vf_meta(vw : Viewer, src : Source) -> String {
 pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bool = true) -> Unit {
   let v = vw
   // (a pointer resting along the top where the bar is: where none rests (a finger's), where one is read not at all)
-  v.near_bar = if @sf.pointer_rests() {
+  let near = if @sf.pointer_rests() {
     let (_, py, _) = c.pointer()
     py >= 0.0 && py < @sf.viewer_bar_h
   } else {
     false
+  }
+  // (told as it changes: the floating bar's nodes follow it, Viewer::bars_shown)
+  if near != v.near_bar {
+    v.near_bar = near
+    if v.in_tree {
+      v.awake_told.set(@signals.untracked(fn() { v.awake_told.get() }) + 1)
+    }
   }
   // going, beside the system's bars (an iPhone Duo's): the page's tabs handed back to them as it goes, not once it is
   // gone, so that the system's change of them is under way as the picture flies back (the page's own bars coming back
@@ -142,6 +149,10 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bo
   // Pictures and HTML use the system bars on Duo; marking keeps its own tools.
   if native && (kind == Some(KImage) || kind == Some(KHtml)) && !marking.on {
     vf_native(v, c, src)
+    return
+  }
+  // (the floating bar over a picture its nodes: viewer_tree.mbt's image_head)
+  if head_as_nodes(v, c.width) {
     return
   }
   // a picture's bar goes as the pointer rests (not while it comes, nor marking); what is read stays

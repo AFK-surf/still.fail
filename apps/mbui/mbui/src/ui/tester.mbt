@@ -821,6 +821,16 @@ pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
       return Some((n.x + n.fw / 2.0, n.y + n.fh / 2.0))
     }
   }
+  // (or the words of a node of the window's tree, where it is drawn)
+  match view_tree() {
+    Some(tree) =>
+      for d in tree.drawn() {
+        if d.words.contains(s) && d.alpha > 0.0 {
+          return Some((d.x + d.w / 2.0, d.y + d.h / 2.0))
+        }
+      }
+    None => ()
+  }
   None
 }
 

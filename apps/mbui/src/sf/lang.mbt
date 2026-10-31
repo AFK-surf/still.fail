@@ -4,8 +4,9 @@
 // none, else English (client/i18n/README.md).
 
 ///|
-/// What the core said ("zh", "en"; "" before it has).
-let lang_said : Ref[String] = Ref("")
+/// What the core said ("zh", "en"; "" before it has), as it changes: what says words reads it (language, t), so what
+/// is made once says them again as it is set otherwise.
+let lang_said : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
 /// "zh" or "en" for a locale (BCP 47: zh-CN, en-US, …; "" none).
@@ -21,8 +22,9 @@ pub fn language_of(locale : String) -> String {
 ///|
 /// The language now: "zh" or "en".
 pub fn language() -> String {
-  if lang_said.val != "" {
-    lang_said.val
+  let said = lang_said.get()
+  if said != "" {
+    said
   } else {
     language_of(@ui.env("MBUI_LOCALE"))
   }
@@ -31,9 +33,11 @@ pub fn language() -> String {
 ///|
 /// The core's `lang` (its prefs'), None or anything else: the device's from now on (I18n.kt follow).
 pub fn set_language(said : String?) -> Unit {
-  lang_said.val = match said {
-    Some("zh") => "zh"
-    Some("en") => "en"
-    _ => ""
-  }
+  lang_said.set(
+    match said {
+      Some("zh") => "zh"
+      Some("en") => "en"
+      _ => ""
+    },
+  )
 }

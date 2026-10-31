@@ -1072,3 +1072,86 @@ test "viewer on the tree, a wide window: a picture as it comes says how much has
   assert_true(t.find("正在打开") is None)
   assert_true(t.find("正在读取 1 KB / 4 KB") is Some(_))
 }
+
+///|
+test "viewer on the tree, a phone's screen: its floating bar its nodes, one of each tool (标注, 复制, 下载, ×), none of the old bar's; copied, a check for copied_ms from the press, frames drawn only as the app asks the host for them; × closes it" {
+  let t = preview_tester("image", platform=1)
+  let told = @sf.words_told_count()
+  let labels = [
+    @sf.t("web-main.annotate.image"),
+    @sf.t("common.copy"),
+    @sf.t("web-main.preview.download"),
+    @sf.t("web-main.preview.closeKey"),
+  ]
+  for l in labels {
+    // (one of each: the old bar's not drawn as well)
+    assert_eq(t.all(Button, label=l).length(), 1, msg="\{l}: \{t.all(Button, label=l).length()}")
+  }
+  assert_true(viewer.get().unwrap().in_tree, msg="the tree's viewer")
+  pressed(t, Button, @sf.t("common.copy"))
+  assert_eq(t.all(Button, label=@sf.t("common.copied")).length(), 1, msg="copied: its check")
+  let pressed_at = t.time()
+  woken_till(t, pressed_at + @sf.copied_ms / 2.0)
+  assert_eq(t.all(Button, label=@sf.t("common.copied")).length(), 1, msg="half its time: still")
+  woken_till(t, pressed_at + @sf.copied_ms * 1.5)
+  assert_eq(t.all(Button, label=@sf.t("common.copy")).length(), 1, msg="past its time: copy again")
+  assert_eq(@sf.words_told_count(), told, msg="the words told once")
+  pressed(t, Button, @sf.t("web-main.preview.closeKey"))
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@sfpages.reveal_ms)
+  assert_true(viewer.get() is None && pv_leaving.get() is None, msg="closed by its ×")
+}
+
+///|
+/// Frames drawn till `end` only as the app asks its host for them (Tester::wanted_after: a frame now, a wake at a
+/// moment, none), each at the display's next frame or at the moment it woke for.
+fn woken_till(t : @ui.Tester, end : Double) -> Unit {
+  let mut n = 0
+  while t.time() < end && n < 400 {
+    n += 1
+    let w = t.wanted_after()
+    if w == 0.0 {
+      t.frame_at(t.time() + between_frames_ms)
+    } else if w <= end {
+      t.frame_at(w)
+    } else {
+      t.advance(end - t.time())
+    }
+  }
+}
+
+///|
+test "viewer on the tree, a phone's screen: its floating bar's words as the core's language says them, said again as that changes, its nodes made once" {
+  new_run()
+  let base = fixture("chat-preview-image")
+  let lang : @signals.Signal[String] = @signals.signal("zh", same=fn(a, b) { a == b })
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let got = (base.topic)(name, params)
+      match (name, got.value) {
+        ("prefs", Some(Object(m))) => {
+          let o = m.copy()
+          o["lang"] = Json::string(lang.get())
+          { ..got, value: Some(Json::object(o)) }
+        }
+        ("prefs", None) => { ..got, value: Some(Json::object({ "lang": Json::string(lang.get()) })) }
+        _ => got
+      }
+    },
+  }
+  preview_src.val = Some(src)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=1)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let zh = @sf.t("common.copy")
+  assert_eq(t.all(Button, label=zh).length(), 1, msg="in Chinese: \{zh}")
+  let copy = t.get(Button, label=zh)
+  lang.set("en")
+  t.draw()
+  let en = @sf.t("common.copy")
+  assert_true(en != zh, msg="the words in English: \{en}")
+  assert_eq(t.all(Button, label=en).length(), 1, msg="said again in English: \{en}")
+  assert_eq(t.get(Button, label=en).id, copy.id, msg="the same node, said again")
+}
