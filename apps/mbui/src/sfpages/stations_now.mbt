@@ -93,10 +93,11 @@ fn night_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
   c.box(style=if flat { pic_box_flat } else { pic_box }, id~, fn() {
     c.box(style=pic_head, fn() {
       c.box(style=pic_grow, fn() {
-        c.rich([@ui.span("still"), @ui.span(".", color=@sf.share_orange), @ui.span("fail")], style=pic_brand) |> ignore
+        let words = [@ui.span("still"), @ui.span(".", color=@sf.share_orange), @ui.span("fail")]
+        c.rich(words, style=pic_brand, face=@sfbase.share_face_given()) |> ignore
       })
       |> ignore
-      c.text(text(fleet, "at"), style=pic_at) |> ignore
+      pic_words(c, text(fleet, "at"), pic_at)
     })
     |> ignore
     if spent.length() > 0 {
@@ -109,10 +110,10 @@ fn night_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
       c.box(style=pic_hero, fn() {
         pic_rings(c, spent)
         c.box(style=pic_hero_words, fn() {
-          c.text(text(top, "tokensText"), style=pic_number) |> ignore
+          pic_words(c, text(top, "tokensText"), pic_number)
           // (the model a line of its own: with what they would cost after it, a line too long beside the rings)
-          c.text(text(top, "name"), style=pic_unit) |> ignore
-          c.text(text(top, "of"), style=pic_unit) |> ignore
+          pic_words(c, text(top, "name"), pic_unit)
+          pic_words(c, text(top, "of"), pic_unit)
         })
         |> ignore
       })
@@ -120,8 +121,8 @@ fn night_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
       pic_models(c, spent)
     } else {
       c.box(style=pic_hero, fn() {
-        c.text(count(fleet, "chats").to_string(), style=pic_number) |> ignore
-        c.box(style=pic_hero_words, fn() { c.text(text(fleet, "chatsText"), style=pic_unit) |> ignore }) |> ignore
+        pic_words(c, count(fleet, "chats").to_string(), pic_number)
+        c.box(style=pic_hero_words, fn() { pic_words(c, text(fleet, "chatsText"), pic_unit) }) |> ignore
       })
       |> ignore
     }
@@ -149,8 +150,15 @@ fn night_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
       })
       |> ignore
     }
-    c.text(@sf.t("web-main.stations.shareTagline"), style=pic_tagline) |> ignore
+    pic_words(c, @sf.t("web-main.stations.shareTagline"), pic_tagline)
   })
+}
+
+///|
+/// Words on the night's card, in the card's own face (@sfbase.share_face_given: EB Garamond and 霞鹜文楷, 2026-10-31
+/// 用户 chose it from drawn versions, 「就用右边这版」), the same on every device whatever face its app is set in.
+fn pic_words(c : @ui.Ctx, words : String, style : @ui.TextStyle) -> Unit {
+  c.rich([@ui.span(words)], style~, face=@sfbase.share_face_given()) |> ignore
 }
 
 ///|
@@ -162,12 +170,13 @@ fn pic_line(c : @ui.Ctx, mark : () -> Unit, words : String, more : String, apart
     c.box(style=pic_mark_box, mark) |> ignore
     if apart {
       c.box(style=pic_line_words, fn() {
-        c.text(words, style=pic_line_lead) |> ignore
-        c.text(more, style=pic_line_more) |> ignore
+        pic_words(c, words, pic_line_lead)
+        pic_words(c, more, pic_line_more)
       })
       |> ignore
     } else {
-      c.rich([@ui.span(words, weight=700), @ui.span("  ·  " + more, color=@sf.share_dim)], style=pic_line_one)
+      let runs = [@ui.span(words, weight=700), @ui.span("  ·  " + more, color=@sf.share_dim)]
+      c.rich(runs, style=pic_line_one, face=@sfbase.share_face_given())
       |> ignore
     }
   })
@@ -186,7 +195,7 @@ fn ring_color(k : Int) -> Int64 {
 fn pic_lead(c : @ui.Ctx, first : Json?) -> Unit {
   c.box(style=pic_lead_row, fn() {
     c.box(style=pic_lead_dot, fn() {  }) |> ignore
-    c.text(text(first, "lead"), style=pic_unit) |> ignore
+    pic_words(c, text(first, "lead"), pic_unit)
   })
   |> ignore
 }
@@ -208,8 +217,8 @@ fn pic_models(c : @ui.Ctx, spent : Array[Json]) -> Unit {
       if k > 0 {
         c.box(style=pic_other, fn() {
           c.box(style=pic_key_dot.then(@ui.style(bg=Data(ring_color(k)))), fn() {  }) |> ignore
-          c.text(text(q, "name"), style=pic_key_name) |> ignore
-          c.text(text(q, "accountsText"), style=pic_key_accounts) |> ignore
+          pic_words(c, text(q, "name"), pic_key_name)
+          pic_words(c, text(q, "accountsText"), pic_key_accounts)
         })
         |> ignore
       }
@@ -220,9 +229,9 @@ fn pic_models(c : @ui.Ctx, spent : Array[Json]) -> Unit {
         let m = Some(m)
         c.box(style=pic_model, fn() {
           c.box(style=pic_key_dot, fn() {  }) |> ignore
-          c.text(text(m, "name"), style=pic_key_name) |> ignore
+          pic_words(c, text(m, "name"), pic_key_name)
           c.box(style=pic_grow, fn() {  }) |> ignore
-          c.text(text(m, "lineText"), style=pic_key_share) |> ignore
+          pic_words(c, text(m, "lineText"), pic_key_share)
         })
         |> ignore
       }
@@ -250,13 +259,13 @@ fn pic_rings(c : @ui.Ctx, spent : Array[Json]) -> Unit {
 /// A span of days (today, the last 7) on a card: its title, then each figure over what it is.
 fn pic_span(c : @ui.Ctx, span : Json?) -> Unit {
   c.box(style=pic_span_box, fn() {
-    c.text(text(span, "title"), style=pic_span_title) |> ignore
+    pic_words(c, text(span, "title"), pic_span_title)
     c.box(style=pic_stats, fn() {
       for x in items(span, "stats") {
         let x = Some(x)
         c.box(style=pic_stat, fn() {
-          c.text(text(x, "value"), style=pic_stat_value) |> ignore
-          c.text(text(x, "label"), style=pic_stat_label) |> ignore
+          pic_words(c, text(x, "value"), pic_stat_value)
+          pic_words(c, text(x, "label"), pic_stat_label)
         })
         |> ignore
       }
@@ -281,7 +290,7 @@ fn pic_bars(c : @ui.Ctx, week : Json?) -> Unit {
           |> ignore
         })
         |> ignore
-        c.text(text(d, "label"), style=if today { pic_day_today } else { pic_day_label }) |> ignore
+        pic_words(c, text(d, "label"), if today { pic_day_today } else { pic_day_label })
       })
       |> ignore
     }
@@ -497,6 +506,6 @@ let pic_mark_side : Double = 16.0
 let pic_live_dot : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full").then(@ui.style(bg=Data(@sf.share_orange)))
 
 ///|
-/// Its foot: still.fail's line, said quietly (the white thinned).
+/// Its foot: still.fail's line, said quietly (the white thinned), its characters set apart as a line of verse.
 // kept across runs: a value (no field of it changes)
-let pic_tagline : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Data(@sf.share_dim), wrap=false)
+let pic_tagline : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Data(@sf.share_dim), tracking=Widest, wrap=false)
