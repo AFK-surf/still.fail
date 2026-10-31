@@ -2547,3 +2547,46 @@ test "viewer on the tree, a wide window, a picture of a chat's marked: 添加到
   assert_true(viewer.get() is None, msg="made: the viewer closed back to the chat")
   assert_eq(quoted() - before, 1, msg="put in the chat's draft once")
 }
+
+///|
+/// Marking on a wide window, a box drawn: its note asked for at once, what is said of it written (no frame between):
+/// the tester, the viewer, the clicker, the box's id.
+fn wide_box_noted(said : String) -> (@ui.Tester, Viewer, (String) -> Unit raise, Int) raise {
+  let (t, v, click) = wide_marking()
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  let (px, py) = (rx + rw / 3.0, ry + rh / 3.0)
+  t.touch(0, px, py)
+  t.touch(1, px + 60.0, py + 40.0)
+  t.touch(2, px + 60.0, py + 40.0)
+  t.draw()
+  assert_true(marking.note >= 0, msg="its note asked for")
+  let id = marking.note
+  if said != "" {
+    t.text_told(said, t.time())
+  }
+  (t, v, click, id)
+}
+
+///|
+test "viewer on the tree, a wide window, marking: a box's note written and its 完成 clicked: what is said of it kept and the note closed as the click is let go, before any frame; closed after a frame" {
+  let (t, _, click, id) = wide_box_noted("这里对齐")
+  click(pv("android-chat.annotate.done"))
+  assert_eq(marking.comments.get(id), Some("这里对齐"), msg="let go: what is said of it kept")
+  assert_true(marking.note < 0, msg="let go: the note closed")
+  t.draw()
+  assert_true(marking.note < 0, msg="a frame after: closed")
+  assert_eq(marking.comments.get(id), Some("这里对齐"), msg="a frame after: kept")
+}
+
+///|
+test "viewer on the tree, a wide window, marking: a note done (its card drawn), its card clicked: the note open again as the click is let go, before any frame" {
+  let (t, _, click, id) = wide_box_noted("")
+  click(pv("android-chat.annotate.done"))
+  t.draw()
+  t.draw()
+  assert_true(marking.note < 0, msg="done: closed, its card drawn")
+  let (cx, cy) = t.find(pv("android-chat.annotate.quoteOnly")).unwrap()
+  t.touch(0, cx, cy)
+  t.touch(2, cx, cy)
+  assert_eq(marking.note, id, msg="its card: its note open again as the click is let go")
+}
