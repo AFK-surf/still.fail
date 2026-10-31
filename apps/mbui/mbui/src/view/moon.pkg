@@ -1,6 +1,7 @@
 import {
   "mbui/flex",
   "mbui/paint",
+  "mbui/pixels",
   "mbui/signals",
 }
 

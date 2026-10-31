@@ -79,6 +79,8 @@ pub(all) struct Look {
   mut clips : Bool
   /// whether its words' lines each stand in the middle of its width (View::words_centered)
   mut words_center : Bool
+  /// the picture it draws as wide as it is laid out, its curves cut for the pixels it is drawn at (View::picture)
+  mut picture : @pixels.Vector?
 } derive(Eq, Debug)
 
 ///|
@@ -105,15 +107,18 @@ pub(all) struct Content {
   clips : Bool
   /// its words' lines each in the middle of its width (View::words_centered)
   words_center : Bool
+  /// the picture it draws as wide as it is (View::picture)
+  picture : @pixels.Vector?
 } derive(Eq, Debug)
 
 ///|
-/// Whether it draws anything of its own: a ground, words, shapes, glass, or what hosts it (the one place that says what
+/// Whether it draws anything of its own: a ground, words, shapes, a picture, glass, or what hosts it (the one place that says what
 /// a node draws, for what asks whether it draws nothing: Tree::alone).
 pub fn Content::draws(self : Content) -> Bool {
   self.ground != 0L ||
   self.words != "" ||
   !self.shapes.is_empty() ||
+  self.picture is Some(_) ||
   self.glass is Some(_) ||
   self.shadow.0 > 0.0 ||
   self.hosted
@@ -145,6 +150,8 @@ pub(all) struct Drawn {
   clips : Bool
   /// its words' lines each in the middle of its width (View::words_centered)
   words_center : Bool
+  /// the picture it draws as wide as it is (View::picture)
+  picture : @pixels.Vector?
 } derive(Eq, Debug)
 
 ///|
@@ -585,6 +592,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.drawn_as = ""
       n.look.clips = false
       n.look.words_center = false
+      n.look.picture = None
       n.went = None
       n.parent = parent
       n.slot = false
@@ -631,7 +639,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), drawn_as: "", clips: false, words_center: false },
+        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), drawn_as: "", clips: false, words_center: false, picture: None },
         parent,
         kids: [],
         owner: None,
@@ -1356,6 +1364,17 @@ pub fn View::clips(self : View, on : Live[Bool]) -> View {
 /// wrapped as ever, a change of it drawn again, nothing laid out again.
 pub fn View::words_centered(self : View, on : Live[Bool]) -> View {
   self.bind(36, on, Paint, fn(on) { self.tree.nodes[self.at].look.words_center = on })
+  self
+}
+
+///|
+/// The picture it draws over its ground (None: none), after its shapes, as wide as it is laid out (its height for that
+/// width given it as its own: View::height): its curves cut fine enough for the pixels the window is
+/// drawn at (its screen's, at the zoom it is drawn at), cut again as those or its width change, kept while they do not.
+/// In its tint where it has one (View::tint), each of its paths keeping its own opacity; a tint changed draws it again
+/// in it, its curves not cut again. Paint's.
+pub fn View::picture(self : View, picture : Live[@pixels.Vector?]) -> View {
+  self.bind(37, picture, Paint, fn(p) { self.tree.nodes[self.at].look.picture = p })
   self
 }
 
@@ -3702,6 +3721,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     hosted: n.hosted,
     clips: n.look.clips,
     words_center: n.look.words_center,
+    picture: n.look.picture,
   })
   self.changed.push(id)
   self.pending.push(id)
@@ -3819,6 +3839,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     hosted: c.hosted,
     clips: c.clips,
     words_center: c.words_center,
+    picture: c.picture,
   }
 }
 

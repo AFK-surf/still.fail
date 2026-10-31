@@ -117,3 +117,17 @@ test "failed, the window drawn at half its points (its content zoomed out), then
   let again = pressed()
   assert_eq((whole, half, again), ((false, 0), (true, 1), (false, 0)))
 }
+
+///|
+test "failed and starting past the second: nothing of the splash an old view hosted in the window's tree, the mark its own node's picture" {
+  let hosts = fn() {
+    match @ui.view_tree() {
+      Some(tree) => tree.said_order().filter(fn(n) { n.hosted }).length()
+      None => -1
+    }
+  }
+  let _ = splash_drawn(Some(failed_words), true, 0.0)
+  let failed = hosts()
+  let _ = splash_drawn(None, true, splash_label_ms + 50.0)
+  assert_eq((failed, hosts()), (0, 0))
+}

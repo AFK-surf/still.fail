@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "mbui/pixels"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 pub fn cubic_points(Array[Double], Double, Double, Double, Double, Double, Double, Double, Double, Double) -> Unit
 
@@ -51,7 +55,7 @@ pub(all) struct Vector {
   w : Double
   h : Double
   layers : Array[VectorPath]
-} derive(Eq, Show)
+} derive(Eq, Show, @debug.Debug)
 pub fn Vector::rgba(Self, Int32, Int32, tint? : Int64) -> FixedArray[Byte]
 
 pub(all) struct VectorPath {
@@ -64,7 +68,7 @@ pub(all) struct VectorPath {
   sy : Double
   tx : Double
   ty : Double
-} derive(Eq, Show)
+} derive(Eq, Show, @debug.Debug)
 pub fn VectorPath::outlines(Self, Double, Double) -> Array[(Array[Double], Bool)]
 
 // Type aliases
