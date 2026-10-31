@@ -10,6 +10,34 @@ pub(all) struct Topic {
 }
 
 ///|
+/// Where signing in to still.fail stands, as the sign-in page says it: nothing under way; its page being opened; out in
+/// the browser, the app waiting for it to come back; what it brought back being checked; or failed, why in the person's
+/// words ("" when there are none).
+pub(all) enum SignInStep {
+  Idle
+  Opening
+  InBrowser
+  Verifying
+  Failed(String)
+} derive(Eq, Show)
+
+///|
+/// The step a sign-in's state says (sfcore's SignIn: `failed` "" when it did not fail, "!" when it did with no words).
+pub fn SignInStep::of(busy~ : Bool, verifying~ : Bool, waiting~ : Bool, failed~ : String) -> SignInStep {
+  if verifying {
+    Verifying
+  } else if busy {
+    Opening
+  } else if waiting {
+    InBrowser
+  } else if failed != "" {
+    Failed(if failed == "!" { "" } else { failed })
+  } else {
+    Idle
+  }
+}
+
+///|
 pub(all) struct Source {
   /// the topic `name` with its params (the core's `subscribe`): the same each frame. Read in a computed (mbui/signals:
   /// derived.mbt), followed: the computed is worked out again as the topic changes, a signal of its changes set as
@@ -36,6 +64,8 @@ pub(all) struct Source {
   sign_in : () -> Unit
   /// whether a sign-in is under way
   signing_in : () -> Bool
+  /// where signing in stands: what the sign-in page's button and the line under it say
+  sign_in_step : () -> SignInStep
   /// a picture by its URL (a person's, a station's icon) as it is put up on its page's time on top `stint`
   /// (Ctx::page_stint): an image's src once it is here, "" until then (the core's `picture`: core_pictures.mbt)
   picture : (String, Int) -> String
@@ -121,6 +151,7 @@ pub fn made_source(
     cancel: fn(_) {  },
     sign_in: fn() {  },
     signing_in: fn() { false },
+    sign_in_step: fn() { Idle },
     picture: fn(_, _) { "" },
     fatal: fn() { None },
     file: fn(_, _, _) { "" },

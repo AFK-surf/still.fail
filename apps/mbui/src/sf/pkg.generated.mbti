@@ -2144,7 +2144,7 @@ pub fn waiting_page(@ui.Ctx, String, String, String, () -> Unit) -> Unit
 
 pub let wake_ms : Double
 
-pub fn way_in(@ui.Ctx, String, String, String, String, String, busy? : Bool) -> Bool
+pub fn way_in(@ui.Ctx, String, String, String, String, String, busy? : Bool, said? : String, bad? : Bool) -> Bool
 
 pub fn way_line(@ui.Ctx, String, Array[String], WayLook, (Int32) -> Unit) -> Unit
 

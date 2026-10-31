@@ -217,6 +217,24 @@ test("a device signs in with an email's code: the mail names it", { timeout: 300
   }
 });
 
+test("an app's browser sign-in ends on a page saying it is signed in, an Android app's with a link back to it", { timeout: 30000 }, async () => {
+  const h = await harness();
+  try {
+    const page = await h.fetch("/v1/auth/done", { headers: { "accept-language": "zh-CN" } });
+    assert.equal(page.status, 200);
+    const text = await page.text();
+    assert.match(text, /<h1>已登录<\/h1>/);
+    assert.doesNotMatch(text, /intent:/, "no app named, no link");
+    const android = await (await h.fetch("/v1/auth/done?app=fail.still.android", { headers: { "accept-language": "en" } })).text();
+    assert.match(android, /<h1>Signed in<\/h1>/);
+    assert.match(android, /href="intent:\/\/back#Intent;scheme=fail\.still\.android;package=fail\.still\.android;end"/);
+    const odd = await (await h.fetch("/v1/auth/done?app=" + encodeURIComponent('x"><script>'))).text();
+    assert.doesNotMatch(odd, /intent:|<script>/, "not a package: no link");
+  } finally {
+    await h.close();
+  }
+});
+
 test("without a way to send mail, signing in goes straight to Google as before", { timeout: 30000 }, async () => {
   const h = await harness();
   try {

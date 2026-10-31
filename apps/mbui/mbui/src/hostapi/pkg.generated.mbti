@@ -26,7 +26,7 @@ pub fn badge_shown() -> Bool
 
 pub fn bench_mode() -> Int32
 
-pub fn browser_login(path? : String) -> BrowserLogin?
+pub fn browser_login(path? : String, done? : String) -> BrowserLogin?
 
 pub let clip_file_max : Int32
 
@@ -800,7 +800,7 @@ pub(open) trait Host {
   fn ref_text(Self, String, Double, Int32, Int32, Double, Double, Int32, FixedArray[Double]) -> Unit = _
   fn ref_end(Self, String) -> Bool = _
   fn ref_frame(Self, String) -> Bool = _
-  fn bl_start(Self, String) -> Int32 = _
+  fn bl_start(Self, String, String) -> Int32 = _
   fn bl_port(Self, Int32) -> Int32 = _
   fn bl_open(Self, Int32, String) -> Int32 = _
   fn bl_back(Self, Int32) -> String = _

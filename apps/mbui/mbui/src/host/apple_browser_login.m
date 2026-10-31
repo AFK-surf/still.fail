@@ -23,6 +23,8 @@ void mb_host_request_frame(void);
 @interface MBBrowserLogin : NSObject
 @property(nonatomic) int lid, port;
 @property(nonatomic, copy) NSString *path;
+/// Where the browser is sent on to once it has come back (the app's page saying it is done): none, this host's page.
+@property(nonatomic, copy) NSString *done;
 /// Where the browser came back to (http://127.0.0.1:<port><path>?<query>), once it has.
 @property(nonatomic, copy) NSString *back;
 @end
@@ -63,10 +65,16 @@ static void browser_login_took(void *ctx, const char *json, size_t len, const ui
                [host isEqualToString:[NSString stringWithFormat:@"localhost:%d", login.port]]) &&
               [r[@"method"] isEqual:@"GET"] && [bare isEqualToString:login.path];
   long request = [r[@"request"] longValue];
-  const char *headers[] = {"Content-Type", "text/html; charset=utf-8", "Cache-Control", "no-store"};
-  NSData *page = ours ? browser_page(@"Signed in", @"已回到 app，可以关掉这个页面 · Back in the app: you can close this page")
-                      : browser_page(@"Not found", @"这不是这次登录的地址 · Not this sign-in");
-  mb_listen_respond(login.lid, request, ours ? 200 : 404, headers, 2, page.bytes, page.length);
+  if (ours && login.done.length) {
+    // on to the app's page saying it is done (in its look, the browser's language)
+    const char *headers[] = {"Location", login.done.UTF8String, "Cache-Control", "no-store"};
+    mb_listen_respond(login.lid, request, 302, headers, 2, NULL, 0);
+  } else {
+    const char *headers[] = {"Content-Type", "text/html; charset=utf-8", "Cache-Control", "no-store"};
+    NSData *page = ours ? browser_page(@"Signed in", @"已回到 app，可以关掉这个页面 · Back in the app: you can close this page")
+                        : browser_page(@"Not found", @"这不是这次登录的地址 · Not this sign-in");
+    mb_listen_respond(login.lid, request, ours ? 200 : 404, headers, 2, page.bytes, page.length);
+  }
   if (!ours) return;
   // After the answer (the same queue): nothing else is taken.
   mb_listen_close(login.lid);
@@ -81,10 +89,11 @@ static void browser_login_took(void *ctx, const char *json, size_t len, const ui
   });
 }
 
-int32_t mb_host_browser_login_start(moonbit_string_t path) {
+int32_t mb_host_browser_login_start(moonbit_string_t path, moonbit_string_t done) {
   if (!browser_logins) browser_logins = [NSMutableDictionary dictionary];
   MBBrowserLogin *login = [MBBrowserLogin new];
   login.path = mb_ns_from_string(path);
+  login.done = mb_ns_from_string(done);
   int bid = ++browser_login_next;
   @synchronized(browser_logins) {
     browser_logins[@(bid)] = login;

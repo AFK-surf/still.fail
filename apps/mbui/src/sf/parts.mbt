@@ -4077,9 +4077,11 @@ let wait_lead : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, color=Mute
 ///|
 /// The way into an app, signed out (the web's cloud/gate.tsx SignInPage; SignIn.kt SignInScreen), in the box it is
 /// given: its picture (`art`, a drawable), what it is (`title`, `note`), its button (`label`; `busy` while it is under
-/// way, not pressed again), what to know of it (`foot`). Keyboard and mouse's the picture and the button alone, no wider than
-/// the desktop app's (asked for, 2026-10-23); a touch screen's all of it, the button across its page. True on the frame
-/// after the button was pressed.
+/// way, not pressed again, a spinner before its words), what to know of it (`foot`), and what there is to say of
+/// signing in under the button (`said`: what it waits on, or why it failed, `bad`, in the red), coming and going with
+/// its room. Keyboard and mouse's the picture, the button and what is said of it alone, no wider than the desktop app's
+/// (asked for, 2026-10-23); a touch screen's all of it, the button across its page. True on the frame after the button
+/// was pressed.
 pub fn way_in(
   c : @ui.Ctx,
   art : String,
@@ -4088,10 +4090,20 @@ pub fn way_in(
   label : String,
   foot : String,
   busy? : Bool = false,
+  said? : String = "",
+  bad? : Bool = false,
 ) -> Bool {
+  let p = theme().p
   let bare = native_input() is Mouse
   let id = c.id("sign-in")
   let pressed = !busy && c.clicked(id)
+  // (what was said kept as it goes, its room closing under it)
+  if said != "" {
+    way_in_said.val = (said, bad)
+  }
+  let open = @motion.anim(c, "sign-in/said", if said != "" { 1.0 } else { 0.0 }, global=true)
+  open.follow(if said != "" { 1.0 } else { 0.0 }, @motion.move().per_unit(@motion.reveal_height("sign-in/said")))
+  let share = open.get()
   c.box(style=sign_in_box, fn() {
     drawable(c, art, dmin(sign_in_picture_w, c.width - sign_in_side_w - sign_in_side_w)) |> ignore
     if !bare {
@@ -4099,14 +4111,37 @@ pub fn way_in(
       c.text(note, style=sign_in_note) |> ignore
     }
     c.box(style=sign_in_gap, fn() {  }) |> ignore
-    c.box(style=if bare { sign_in_button_desk } else { sign_in_button_touch }, id~, fn() {
-      c.text(label, style=sign_in_words) |> ignore
+    let mut words_at = -1
+    let b = c.box(style=if bare { sign_in_button_desk } else { sign_in_button_touch }, id~, fn() {
+      // (as a button's: the spinner's room opening before its words, @sf.button)
+      let turning = ease_to(c, "sign-in/busy", busy)
+      let over = @motion.animate(c, "sign-in/over", if busy { 1.0 } else { 0.0 }, spec=button_reshape)
+      if busy || over > 0.0 {
+        let room = button_icon + sign_in_spin_gap
+        c.box(style=@ui.style(row=true, w=Fixed(room * over), h=Fixed(button_icon)), fn() {
+          let s = c.box(style=button_spin, fn() {
+            spinner(c, size=button_icon, ring=alpha(p.bg, 0.3), arc=p.bg) |> ignore
+          })
+          c.look(s, @ui.look(alpha=turning, scale=over, ox=0.0))
+        })
+        |> ignore
+      }
+      words_at = c.text(label, style=sign_in_words)
       // SignIn.kt: clip(CircleShape).clickable
       if !busy {
         @motion.ripple(c, id, sign_in_button_h / 2.0)
       }
     })
-    |> ignore
+    // (its words changed, 登录或注册 to 正在登录: moved to their new place, not at once)
+    @motion.layout(c, words_at, "sign-in/words", by=label, spec=button_reshape)
+    c.semantics(b, Button, id=if busy { 0 } else { id }, label~, disabled=busy)
+    if share > 0.0 {
+      let (words, red) = way_in_said.val
+      @motion.reveal(c, "sign-in/said", share, middle=true, fn() {
+        let i = c.text(words, style=if red { sign_in_said_bad } else { sign_in_said })
+        @motion.leaving(c, i, said != "")
+      })
+    }
     if !bare {
       c.text(foot, style=sign_in_many) |> ignore
     }
@@ -4114,6 +4149,25 @@ pub fn way_in(
   |> ignore
   pressed
 }
+
+///|
+/// What was last said under the sign-in button (way_in): kept as its room closes.
+// kept across runs: what the page last said, drawn as it goes
+let way_in_said : Ref[(String, Bool)] = Ref::new(("", false))
+
+///|
+/// Between the sign-in button's spinner and its words.
+let sign_in_spin_gap : Double = 8.0
+
+///|
+/// What is said of signing in under its button: small, muted, centred, wrapping.
+// kept across runs: a value (no field of it changes)
+let sign_in_said : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, w=Full)
+
+///|
+/// Why signing in failed: as what is said, in the red.
+// kept across runs: a value (no field of it changes)
+let sign_in_said_bad : @ui.TextStyle = sign_in_said.then(@ui.text_style(color=Danger))
 
 ///|
 /// The sign-in button's width at most on a desktop, as the desktop app's.

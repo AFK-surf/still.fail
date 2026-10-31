@@ -26,12 +26,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 final class BrowserLogin {
     private static final class Login {
         final String path;
+        /** Where the browser is sent on to once it has come back (the app's page saying it is done): "", this one's. */
+        final String done;
         volatile int lid, port;
         /** Where the browser came back to (http://127.0.0.1:&lt;port&gt;&lt;path&gt;?&lt;query&gt;), once it has. */
         volatile String back;
 
-        Login(String path) {
+        Login(String path, String done) {
             this.path = path;
+            this.done = done;
         }
     }
 
@@ -40,10 +43,13 @@ final class BrowserLogin {
 
     private BrowserLogin() {}
 
-    /** Listens for the browser coming back to {@code path}: the sign-in's id, 0 when no port could be had. */
-    static int start(String path) {
+    /**
+     * Listens for the browser coming back to {@code path}, to be sent on to {@code done} ("": shown this host's page):
+     * the sign-in's id, 0 when no port could be had.
+     */
+    static int start(String path, String done) {
         int bid = next.getAndIncrement();
-        Login login = new Login(path);
+        Login login = new Login(path, done);
         logins.put(bid, login);
         try {
             // Set before any request can come: one comes only once the browser has the page, which needs the port.
@@ -148,11 +154,19 @@ final class BrowserLogin {
         String pkg = a != null ? a.getPackageName() : "";
         // The way back, should the app not come forward by itself (MainActivity's intent filter for <package>://back).
         String link = a != null ? "intent://back#Intent;scheme=" + pkg + ";package=" + pkg + ";end" : null;
-        List<String[]> headers = Arrays.asList(new String[] {"Content-Type", "text/html; charset=utf-8"},
-                new String[] {"Cache-Control", "no-store"});
-        Loopback.respond(login.lid, r.request, ours ? 200 : 404, headers,
-                ours ? page("Signed in", "已回到 app，可以关掉这个页面 · Back in the app: you can close this page", link)
-                     : page("Not found", "这不是这次登录的地址 · Not this sign-in", null));
+        if (ours && !login.done.isEmpty()) {
+            // On to the app's page saying it is done (in its look, the browser's language), told the app's package for
+            // its own way back.
+            String to = login.done + (login.done.indexOf('?') < 0 ? "?" : "&") + "app=" + Uri.encode(pkg);
+            Loopback.respond(login.lid, r.request, 302,
+                    Arrays.asList(new String[] {"Location", to}, new String[] {"Cache-Control", "no-store"}), new byte[0]);
+        } else {
+            List<String[]> headers = Arrays.asList(new String[] {"Content-Type", "text/html; charset=utf-8"},
+                    new String[] {"Cache-Control", "no-store"});
+            Loopback.respond(login.lid, r.request, ours ? 200 : 404, headers,
+                    ours ? page("Signed in", "已回到 app，可以关掉这个页面 · Back in the app: you can close this page", link)
+                         : page("Not found", "这不是这次登录的地址 · Not this sign-in", null));
+        }
         Host.log("browser login: " + r.method + " " + bare + " (Host " + host + ") " + (ours ? "taken" : "refused"));
         if (!ours) return;
         Loopback.close(login.lid);  // after the answer: nothing else is taken

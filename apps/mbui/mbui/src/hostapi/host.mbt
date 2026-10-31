@@ -143,7 +143,7 @@ pub(open) trait Host {
   ref_text(Self, String, Double, Int, Int, Double, Double, Int, FixedArray[Double]) -> Unit = _
   ref_end(Self, String) -> Bool = _
   ref_frame(Self, String) -> Bool = _
-  bl_start(Self, String) -> Int = _
+  bl_start(Self, String, String) -> Int = _
   bl_port(Self, Int) -> Int = _
   bl_open(Self, Int, String) -> Int = _
   bl_back(Self, Int) -> String = _
@@ -882,7 +882,7 @@ impl Host with ref_frame(_, _) {
 }
 
 ///|
-impl Host with bl_start(_, _) {
+impl Host with bl_start(_, _, _) {
   0
 }
 
@@ -2386,8 +2386,8 @@ pub fn ref_frame(name : String) -> Bool {
 }
 
 ///|
-fn bl_start(path : String) -> Int {
-  current.val.bl_start(path)
+fn bl_start(path : String, done : String) -> Int {
+  current.val.bl_start(path, done)
 }
 
 ///|

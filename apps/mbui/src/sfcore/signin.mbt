@@ -26,7 +26,15 @@
 /// How signing in stands: what to say of it, and whether one is under way.
 pub(all) struct SignIn {
   mut status : String
+  /// its page being opened, or what the browser brought back being checked (`verifying`)
   mut busy : Bool
+  /// what the browser brought back being checked (`auth.complete`)
+  mut verifying : Bool
+  /// its page out in the browser, the app waiting for the browser to come back
+  mut waiting : Bool
+  /// why the last one did not sign in, in the person's words: "" when it did or was given up, "!" when it failed with
+  /// none to say
+  mut failed : String
   /// MBUI_CORE_SIGNIN: press 登录 once the accounts are read
   mut auto : Bool
   /// MBUI_AUTH_LOGIN: sign in as a login command
@@ -41,6 +49,9 @@ pub(all) struct SignIn {
 pub let state : SignIn = {
   status: "",
   busy: false,
+  verifying: false,
+  waiting: false,
+  failed: "",
   auto: false,
   login: false,
   by_hand: "",
@@ -248,8 +259,12 @@ let login : Ref[(@hostapi.BrowserLogin, (Result[String, String]) -> Unit)?] = Re
 ///|
 /// A sign-in on the host's browser login: `done` gets the account's email, or why not.
 fn loopback_sign_in(done : (Result[String, String]) -> Unit) -> Unit {
-  guard @hostapi.browser_login(path="/oauth/callback") is Some(l) else {
-    done(Err("this host cannot take a browser coming back"))
+  // (come back, the browser shown still.fail cloud's page saying so, in its look and the browser's language)
+  let cloud = @core.cloud()
+  let finished = if cloud == "" { "" } else { cloud + "/v1/auth/done" }
+  guard @hostapi.browser_login(path="/oauth/callback", done=finished) is Some(l) else {
+    @hostapi.log("this host cannot take a browser coming back")
+    done(Err(""))
     return
   }
   let params : Map[String, Json] = {
@@ -267,7 +282,10 @@ fn loopback_sign_in(done : (Result[String, String]) -> Unit) -> Unit {
     }
     if url == "" {
       l.end()
-      done(Err("auth.begin gave no page"))
+      done(Err(match r {
+        Err(e) => str(Some(e), "message")
+        Ok(_) => ""
+      }))
       return
     }
     @hostapi.log("Sign in to still.fail in a browser: " + url)
@@ -275,8 +293,10 @@ fn loopback_sign_in(done : (Result[String, String]) -> Unit) -> Unit {
       @hostapi.log("No browser opened: open the address above")
     }
     login.val = Some((l, done))
-    // the page out: 登录 a button again, as the desktop app's (its page may be closed: a press starts it again)
+    // the page out: 登录 a button again, as the desktop app's (its page may be closed: a press starts it again), the
+    // page saying the browser has it
     state.busy = false
+    state.waiting = true
   })
 }
 
@@ -289,8 +309,10 @@ fn login_back() -> Unit {
   l.end()
   // (not the query: its code is the sign-in's)
   @hostapi.log("Back from the browser at " + l.redirect + ": auth.complete")
-  // busy again till it is done (`done` says so)
+  // busy again till it is done (`done` says so), checking what the browser brought
   state.busy = true
+  state.waiting = false
+  state.verifying = true
   let params : Map[String, Json] = { "query": Json::string(@core.query_of(back)) }
   @core.call("auth.complete", params=Json::object(params), on_done=fn(r) {
     match r {
@@ -332,19 +354,17 @@ fn login_command() -> Unit {
 /// 登录: through the host's browser session where it has one, else the browser login (busy until its page is out; a
 /// second press starts it again: the page may have been closed).
 pub fn sign_in() -> Unit {
+  state.failed = ""
   if !@core.has_browser_session() {
     if login.val is Some((l, _)) {
       l.end()
       login.val = None
     }
     state.busy = true
+    state.waiting = false
     state.status = "正在浏览器里登录…"
     loopback_sign_in(fn(r) {
-      state.busy = false
-      state.status = match r {
-        Ok(email) => "已登录：\{email}"
-        Err(why) => "没有登录：\{why}"
-      }
+      ended(r)
       @hostapi.log("SIGN_IN " + state.status)
     })
     return
@@ -355,13 +375,39 @@ pub fn sign_in() -> Unit {
   state.busy = true
   state.status = "正在打开登录页…"
   @core.sign_in(fn(r) {
-    state.busy = false
-    state.status = match r {
-      Ok(Object(m)) => "已登录：\{str(m.get("account"), "email")}"
-      Ok(_) => "已登录"
-      Err(e) => str(Some(e), "message")
-    }
+    ended(
+      match r {
+        Ok(Object(m)) => Ok(str(m.get("account"), "email"))
+        Ok(_) => Ok("")
+        // (the person closed the browser's sheet: given up, nothing to say)
+        Err(e) if str(Some(e), "message") == "cancelled" => Err("cancelled")
+        Err(e) => Err(if str(Some(e), "code") == "auth" { "" } else { str(Some(e), "message") })
+      },
+    )
   })
+}
+
+///|
+/// A sign-in over: the account's email, or why not in the person's words ("" when there are none of the core's, the
+/// page then saying it failed; "cancelled" when the person gave it up, said nothing of).
+fn ended(r : Result[String, String]) -> Unit {
+  state.busy = false
+  state.verifying = false
+  state.waiting = false
+  match r {
+    Ok(email) => {
+      state.failed = ""
+      state.status = "已登录：\{email}"
+    }
+    Err("cancelled") => {
+      state.failed = ""
+      state.status = "没有登录：已取消"
+    }
+    Err(why) => {
+      state.failed = if why == "" { "!" } else { why }
+      state.status = "没有登录：\{why}"
+    }
+  }
 }
 
 ///|

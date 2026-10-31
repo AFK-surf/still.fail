@@ -622,7 +622,10 @@ android-settings.machine.use
 android-settings.signIn.google
 android-settings.signIn.many
 android-settings.signIn.note
+android-settings.signIn.reopen
+android-settings.signIn.signingIn
 android-settings.signIn.title
+android-settings.signIn.waiting
 android-settings.station.first
 android-settings.station.firstNote
 android-settings.title
@@ -666,6 +669,7 @@ common.search
 common.telemetry.note
 common.telemetry.title
 common.uploading
+core-logic.accounts.login.failed
 desktop.contextMenu.copy
 desktop.contextMenu.copyImage
 desktop.contextMenu.copyLink
