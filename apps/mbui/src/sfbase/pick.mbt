@@ -208,11 +208,13 @@ pub fn pickable(
 ) -> Unit {
   let key = "pick/" + ts
   let id = c.id(key)
-  // a tap on it: the keyboard goes (not a long press: Keyboard.kt letsGoOfKeyboard); a ground, its words the I-beam's
+  // Its ground takes presses for picking; a finger's tap does not leave the field being written in.
   c.cursor(id, Arrow)
   let press = c.press()
-  if c.clicked(id) && !press.long {
+  if mouse && c.clicked(id) && !press.long {
     c.blur()
+  } else {
+    c.takes_presses(id)
   }
   // (a press in it, or a hold the window's tree handed it, let go since or not: its words laid out for what the hold
   // picks, read back by the build after, Ctx::handed_hold)

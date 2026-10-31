@@ -1033,9 +1033,11 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
           }
         }
       }
-      // (on nothing: the focus let go, where it may take input now; one a modal layer of the window's tree keeps from
-      // input, kept as it is, view_host.mbt)
-      None => if target == 0 && c.focus_allowed() != 0 { c.focus_moved(0) }
+      // On a finger's tap, a field keeps the keyboard while its surroundings are read or used. A mouse on nothing
+      // still lets the focus go; another field takes it on its own tap.
+      None => if target == 0 && c.focus_allowed() != 0 && !(pointing() is Finger && c.field_focused()) {
+        c.focus_moved(0)
+      }
     }
   } else if kind == 1 {
     // a bar's thumb held: what it is for follows the pointer, nothing else sees it move
@@ -1736,7 +1738,7 @@ fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
       _ => ()
     }
     if c.editors.contains(c.focus) || c.dev.catchers.contains(c.focus) {
-      c.focus_moved(0)
+      c.blur()
       h_request_frame()
     }
     return

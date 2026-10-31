@@ -296,7 +296,7 @@ test "the composer's buttons say what they are: ＋ (发送文件), 发送" {
 }
 
 ///|
-test "a long press on a message lets the keyboard be; a tap on it lets it go" {
+test "a long press or tap on a message leaves the keyboard up" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
   t.tap_text("发消息")
@@ -311,11 +311,11 @@ test "a long press on a message lets the keyboard be; a tap on it lets it go" {
   t.release(x, y)
   let (active, _, _, _) = t.ime()
   assert_true(active)
-  // what was picked let go, then a tap on the message's words: the keyboard goes
+  // What was picked let go, then a tap on the message's words: the draft is still being written.
   t.back()
   t.tap(x, y)
   let (after, _, _, _) = t.ime()
-  assert_false(after)
+  assert_true(after)
 }
 
 ///|

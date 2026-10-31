@@ -412,7 +412,10 @@ pub fn dropdown_menu(
   let dim = if scrim != 0L { animate(c, key + "/scrim", if now { 1.0 } else { 0.0 }, transition=@motion.tween(200.0, ease=Out)) } else { 0.0 }
   let mut chosen = None
   if shown || dim > 0.0 {
-    let o = c.overlay(key, modal=!submenu, anchor=trigger, return_focus=if submenu { trigger } else { 0 }, scrim=faded(scrim, dim), initial_focus=pick(by_key, first_item(c, key, entries), pid), inert=!now, fn() {
+    // A menu opened by touch alongside a field leaves its input method in place. When opened by the keyboard, the
+    // first choice takes focus as usual; a menu without an active field focuses its panel.
+    let initial = if by_key { first_item(c, key, entries) } else if @ui.pointing() is Finger && c.field_focused() { 0 } else { pid }
+    let o = c.overlay(key, modal=!submenu, anchor=trigger, return_focus=if submenu { trigger } else { 0 }, scrim=faded(scrim, dim), initial_focus=initial, inert=!now, fn() {
       guard moved is Some(shows) else { return }
       let out = menu_panel(
         c,

@@ -64,8 +64,9 @@ pub let key_space : Int = 1032
 
 ///|
 /// `id` can take the focus (from Tab, the arrows of its group, `on_press` a press on it): said each frame it is
-/// built, in the order Tab goes. `keys`: which of Enter (press_enter) and Space (press_space) press it, and whether
-/// the arrows are its own (own_arrows).
+/// built, in the order Tab goes. A finger pressing another control leaves an active field's focus with it; another
+/// field takes it. `keys`: which of Enter (press_enter) and Space (press_space) press it, and whether the arrows are
+/// its own (own_arrows).
 pub fn Ctx::focusable(self : Ctx, id : Int, node? : Int = -1, keys? : Int = 3, on_press? : Bool = false) -> Unit {
   if id == 0 {
     return
@@ -472,8 +473,11 @@ fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
   }
   // (a field on Android takes it as the finger lifts where it came down: a tap, app.mbt editor_tap)
   let tap_later = h_feel() == 2 && self.editors.contains(target)
+  // A finger using another control can keep writing in the field; a mouse press and a tap in another field still
+  // move focus as that control asks.
+  let field_keeps = pointing() is Finger && self.editors.contains(self.focus) && !self.editors.contains(target)
   for f in self.last_focusables {
-    if f.id == target && f.on_press && !tap_later {
+    if f.id == target && f.on_press && !tap_later && !field_keeps {
       self.focus_moved(target)
       return
     }
