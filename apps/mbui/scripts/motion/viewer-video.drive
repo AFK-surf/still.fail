@@ -1,0 +1,9 @@
+# A video of the made-up chat (MBUI_FIXTURE=chat-download) opened in the viewer and closed: it grows out of its
+# thumbnail with its still, and goes back into it.
+timeout 20000
+until 演示录屏.mp4
+wait 600
+tap 演示录屏.mp4
+wait 1500
+back
+wait 1500

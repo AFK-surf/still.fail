@@ -86,6 +86,8 @@ pub fn badge_frame(@ui.Ctx, Source, Workspace) -> Unit
 
 pub fn bare_shell() -> Shell
 
+pub let bars_from : Double
+
 pub fn bars_in(Source, String) -> (Array[Array[String]], Int32)
 
 pub let bars_picked : @signals.Signal[(Array[Array[String]], Int32)?]
@@ -946,7 +948,7 @@ pub let note_row : @ui.Style
 
 pub let note_subtle : Int64
 
-pub fn note_thumb(@ui.Ctx, String, Int32, Double, picture~ : String, letterbox? : Bool, list? : String) -> Unit
+pub fn note_thumb(@ui.Ctx, String, Int32, Double, picture~ : String, letterbox? : Bool, list? : String, over? : (Double) -> Unit) -> Unit
 
 pub let notice_host : @ref.Ref[NoticeHost]
 
