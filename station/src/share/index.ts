@@ -729,6 +729,11 @@ export class Sharing {
         this.settle.get(key)?.();
         this.settle.set(key, this.time.after(SETTLE_MS, () => (this.settle.delete(key), then())));
       });
+      // Failing later (macOS turning it down: EMFILE): dropped, for the next reconcile to follow it again.
+      w.on("error", (e) => {
+        log.warn("share", "a shared skill's directory no longer followed", { dir, error: e.message });
+        if (this.watchers.get(key) === w) this.stopWatch(key);
+      });
       this.watchers.set(key, w);
     } catch (e) {
       log.warn("share", "a shared skill's directory cannot be followed", { dir, error: (e as Error).message });
