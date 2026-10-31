@@ -186,6 +186,7 @@ fn fold_look_of(r : PaneRoom, shift : Double) -> FoldLook {
   let over_bars = peek && !inset
   let updating = !r.gated && update_shown()
   let shift = if peek { shift } else { 0.0 }
+  let rail_extra = if !bar && !wide.tape && !@sf.native_on() { rail_window_in() - rail_in_px } else { 0.0 }
   // (under the window's buttons where they are the system's, at its left: macOS's)
   let above = if keys_left { closed_bar_top } else { bar_in_now() }
   let (blur, fall, shade) = if peek {
@@ -240,11 +241,11 @@ fn fold_look_of(r : PaneRoom, shift : Double) -> FoldLook {
     shade,
     corner: if bar { @sf.closed_bar_of(rail_closed_ground_in).radius(@ui.corner_roots()) } else { 0.0 },
     ground: dock_ground(bar),
-    side_w: if bar || @sf.native_on() { s } else { s + side_into_rail },
-    rail_w: if bar { rail_closed_w } else { rail_shown_w },
-    rail_pl: if bar { rail_closed_pad } else { rail_in_px },
+    side_w: if bar || @sf.native_on() { s } else { s + side_into_rail - rail_extra },
+    rail_w: if bar { rail_closed_w } else { rail_shown_w + rail_extra },
+    rail_pl: if bar { rail_closed_pad } else { rail_in_px + rail_extra },
     rail_pt: if bar { rail_closed_pad } else { 0.0 },
-    rail_pb: if bar { rail_closed_pad } else { rail_in_px },
+    rail_pb: if bar { rail_closed_pad } else { rail_in_px + rail_extra },
     rail_top: rail_top_h(bar),
     edge: if !bar {
       rail_left() + s - edge_half

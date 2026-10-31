@@ -32,6 +32,7 @@
 /// A native view: a player or a page.
 pub struct NativeView {
   priv id : Int
+  priv kind : Int
   priv read : ((Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit)?
   /// its reads under way, by the host's number for each: how each is let go of
   priv reading : Map[Int, () -> Unit]
@@ -61,6 +62,8 @@ pub struct NativeView {
   priv mut loading : Bool
   priv mut title : String
   priv mut scale : Double
+  priv mut told_zoom : Double
+  priv mut told_page_scale : Double
   /// a page's: who hears what its page says to the app (`mbuiHost.post`), how a request is answered when its answer
   /// is late or read too slowly (the app's words for it), what takes a touch on it
   priv said : ((String) -> Unit)?
@@ -205,6 +208,7 @@ fn NativeView::make(
 ) -> NativeView {
   let v = {
     id: h_view_open(kind, arg),
+    kind,
     said,
     no_answer,
     too_slow,
@@ -224,6 +228,8 @@ fn NativeView::make(
     loading: kind == 3,
     title: "",
     scale: 1.0,
+    told_zoom: 1.0,
+    told_page_scale: 1.0,
     info: FixedArray::makei(10, fn(_) { @signals.signal(0.0, same=fn(a, b) { a == b }) }),
     state: @signals.signal(0, same=fn(a, b) { a == b }),
     painted: -1,
@@ -332,7 +338,7 @@ fn script_hash(js : String) -> String {
 pub fn NativeView::touch(self : NativeView, mode : Touch) -> Unit {
   if self.id != 0 && !self.closed && mode != self.touch {
     self.touch = mode
-    h_view_tell(self.id, 2, "\{touch_name(mode)} \{touch_slop()}")
+    h_view_tell(self.id, 2, "\{touch_name(mode)} \{touch_slop() * window_zoom_drawn.val}")
   }
 }
 
@@ -373,7 +379,8 @@ pub fn NativeView::load(self : NativeView, path : String) -> Unit {
 pub fn NativeView::set_scale(self : NativeView, k : Double) -> Unit {
   if self.id != 0 && !self.closed && k > 0.0 && k != self.scale {
     self.scale = k
-    h_view_control(self.id, 8, k)
+    self.told_page_scale = k * window_zoom_drawn.val
+    h_view_control(self.id, 8, self.told_page_scale)
   }
 }
 
@@ -854,7 +861,15 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
       continue
     }
     let shown = v.painted == self.build_no
-    let mut moved = shown != v.told_shown
+    let z = window_zoom_drawn.val
+    let mut moved = shown != v.told_shown || z != v.told_zoom
+    if z != v.told_zoom && v.touch != All {
+      h_view_tell(v.id, 2, "\{touch_name(v.touch)} \{touch_slop() * z}")
+    }
+    if (v.kind == 2 || v.kind == 3) && v.told_page_scale != v.scale * z {
+      v.told_page_scale = v.scale * z
+      h_view_control(v.id, 8, v.told_page_scale)
+    }
     if shown {
       for j in 0..<12 {
         if (v.at[j] - v.told[j]).abs() > 0.01 {
@@ -870,6 +885,7 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
         v.told[j] = v.at[j]
       }
       v.told_shown = shown
+      v.told_zoom = z
       // on a run's log (MBUI_DRAW_LOG): where it was told to go, in device pixels, for the host's own saying where it
       // put it (VIEWAT) to be compared with (scripts/host_contract.sh HOST views): its rect, its clip, its roundest
       // corner, then each corner (top left, then round it)
@@ -1096,7 +1112,8 @@ fn NativeView::tell_covers(self : NativeView, c : Ctx) -> Unit {
       if n > 0 {
         out.write_string(" ")
       }
-      out.write_string("\{x0} \{y0} \{x1} \{y1}")
+      let z = window_zoom_drawn.val
+      out.write_string("\{x0 * z} \{y0 * z} \{x1 * z} \{y1 * z}")
       n += 1
     }
   }

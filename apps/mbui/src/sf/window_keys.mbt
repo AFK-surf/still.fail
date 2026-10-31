@@ -59,7 +59,7 @@ pub fn window_keys_w() -> Double {
 /// laid out Small, in the band over the page.
 pub fn window_keys_at(width : Double) -> (Double, Double) {
   match layout(width) {
-    Small => ((window_keys_band - bar_key_side) / 2.0, window_keys_in)
+    Small => ((window_keys_band - bar_key_side) / 2.0, window_key_in(window_keys_in))
     Medium => (window_in + tape_line, window_keys_side_tape())
     Large => (bar_keys_top(), window_keys_side())
   }
@@ -68,11 +68,7 @@ pub fn window_keys_at(width : Double) -> (Double, Double) {
 ///|
 /// In a window's whole, how far in from the window's side the last button stands.
 fn window_keys_side() -> Double {
-  if window_corner_key().follows(@ui.corner_roots()) {
-    bar_keys_top()
-  } else {
-    window_keys_in
-  }
+  window_key_in(window_keys_in)
 }
 
 ///|

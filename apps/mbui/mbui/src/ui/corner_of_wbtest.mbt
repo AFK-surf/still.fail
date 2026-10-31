@@ -71,14 +71,14 @@ test "corners linked: a panel's corners linked to a Mac window's follow it, a gr
 
 ///|
 test "corners linked: the window square, each stands alone, worked out again; a ground's link as round as its half, a circle" {
-  let t = Tester::new(linked_panel(6.0), w=400.0, h=200.0)
+  let t = Tester::new(linked_panel(6.0), w=400.0, h=200.0, corners_held=false)
   t.draw()
   let (p, b) = linked_nodes()
   assert_eq(corners4(p), (34.0, 34.0, 34.0, 34.0))
   // (the panel's 34 less 6 in: 29.2, past the ground's half, so drawn as a circle)
   assert_eq(b.radius, concentric(34.0, 6.0))
   assert_eq(b.corner(), 15.0)
-  assert_eq(t.corner_faults(), [])
+  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("whose drawn shape is not concentric") }), msg="\{t.corner_faults()}")
 }
 
 ///|
@@ -100,7 +100,7 @@ test "corners linked: a link's radius, whether it follows, where it stands" {
   t.draw()
   g().corner_fit = Some(fit_ranges)
   let at = corner_roots()
-  assert_eq(at, { window: 16.0, fit: Some(fit_ranges) })
+  assert_eq(at, { window: 16.0, fit: Some(fit_ranges), zoom: 1.0 })
   let edge : CornerOf = Follow(Window, 6.0, 34.0)
   assert_eq(edge.radius(at), concentric(16.0, 6.0))
   assert_true(edge.follows(at))
@@ -147,7 +147,7 @@ test "corners linked of the window's tree's nodes: worked out from the ranges of
     fit.set(f)
     seen.push((tree_corner_roots_now(), radius()))
   }
-  assert_eq(seen[0], ({ window: 8.0, fit: None }, [concentric(8.0, 6.0)]), msg="none: followed, as any is")
-  assert_eq(seen[1], ({ window: 8.0, fit: Some(fit_ranges) }, [16.0]), msg="told: too square to follow, alone, at once")
+  assert_eq(seen[0], ({ window: 8.0, fit: None, zoom: 1.0 }, [concentric(8.0, 6.0)]), msg="none: followed, as any is")
+  assert_eq(seen[1], ({ window: 8.0, fit: Some(fit_ranges), zoom: 1.0 }, [16.0]), msg="told: too square to follow, alone, at once")
   assert_eq(seen[2], seen[0], msg="none again: as before, at once")
 }

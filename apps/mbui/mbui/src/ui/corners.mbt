@@ -468,6 +468,13 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
                 out.push(
                   "\{c.named(i)} (corner \{rb}) in the \{corner_names[k]} of \{c.named(p)} (corner \{ra}): linked to follow a corner \{src} round from \{e} in, it stands \{dx} and \{dy} from its edges",
                 )
+              } else if ls[k].radius(corner_roots()) > dmin(b.fw, b.fh) / 2.0 + 0.5 &&
+                (round_like(ra, room=c.container_room(ct)) - (dmax(dx, dy) + rb)).abs() > 0.5 {
+                // A link can ask for a radius larger than its box. The renderer clips that radius to half the box,
+                // producing a circle or capsule: check that shape instead of trusting the requested linked radius.
+                out.push(
+                  "\{c.named(i)} (corner \{rb}) in the \{corner_names[k]} of \{c.named(p)} (corner \{ra}): linked corner is larger than its box, whose drawn shape is not concentric",
+                )
               }
               continue
             }

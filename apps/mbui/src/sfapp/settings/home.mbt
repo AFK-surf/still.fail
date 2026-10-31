@@ -79,7 +79,13 @@ let chosen : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 ///|
 /// A pref as the core keeps it (the `prefs` topic), or as it was chosen here a moment ago.
 pub fn pref(core : Core, name : String) -> String {
-  let kept = text((core.topic)("prefs", Map::new()).value, name)
+  pref_from((core.topic)("prefs", Map::new()).value, name)
+}
+
+///|
+/// The same preference before a workspace exists, as the core's topic and a choice already made here say it.
+pub fn pref_from(prefs : Json?, name : String) -> String {
+  let kept = text(prefs, name)
   match chosen.get(name) {
     Some(v) => {
       // the core has it now: what it keeps from here on (another device may change it)
@@ -95,8 +101,19 @@ pub fn pref(core : Core, name : String) -> String {
 ///|
 /// A pref set (prefs.set), shown as chosen at once; "" takes it away (null: the default).
 pub fn set_pref(core : Core, name : String, value : String) -> Unit {
+  set_pref_with(core.call, core.say, name, value)
+}
+
+///|
+/// Set a preference through the core's call and toast, also when no workspace has been opened yet.
+pub fn set_pref_with(
+  call : (String, Json, (Result[Json, Json]) -> Unit) -> Unit,
+  say : (String) -> Unit,
+  name : String,
+  value : String,
+) -> Unit {
   chosen[name] = value
-  (core.call)(
+  call(
     "prefs.set",
     obj([(name, if value == "" { Json::null() } else { str(value) })]),
     fn(r) {
@@ -104,7 +121,7 @@ pub fn set_pref(core : Core, name : String, value : String) -> Unit {
         Ok(_) => ()
         Err(e) => {
           chosen.remove(name)
-          (core.say)(fill("android-misc.act.failed", [("what", tr("android-settings.appearance.title")), ("error", error_text(e))]))
+          say(fill("android-misc.act.failed", [("what", tr("android-settings.appearance.title")), ("error", error_text(e))]))
         }
       }
     },

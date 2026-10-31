@@ -28,8 +28,14 @@ pub fn menu_bar_json(prefs : Json?, in_chat : Bool) -> String {
   }
   // one of the pages' actions: its words, its first key here, whether it can be done now
   let act = fn(action : String, enabled : Bool) -> Json {
+    let title = match action {
+      "zoom.in" => "desktop.menu.zoomIn"
+      "zoom.out" => "desktop.menu.zoomOut"
+      "zoom.reset" => "desktop.menu.resetZoom"
+      _ => "desktop.menu." + action
+    }
     let o : Map[String, Json] = {
-      "title": Json::string(menu_tr("desktop.menu." + action)),
+      "title": Json::string(menu_tr(title)),
       "action": Json::string(action),
       "enabled": Json::boolean(enabled),
     }
@@ -83,6 +89,10 @@ pub fn menu_bar_json(prefs : Json?, in_chat : Bool) -> String {
     ]),
     menu("desktop.menu.view", "actions", [
       act("sidebar.toggle", true),
+      sep,
+      act("zoom.in", true),
+      act("zoom.out", true),
+      act("zoom.reset", true),
       sep,
       act("chat.history", in_chat),
       act("chat.jobs", in_chat),

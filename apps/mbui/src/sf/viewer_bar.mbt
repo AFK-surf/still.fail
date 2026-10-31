@@ -319,14 +319,9 @@ pub fn viewer_back_corner(alone : Double) -> @ui.CornerOf {
 
 ///|
 /// How far in from the window's left the way back stands at the window's corner (viewer_back_at_corner): as far as from
-/// the bar's top where it follows the window's corner there (viewer_back_corner, `alone` round where it cannot), else
-/// the bar's 12.
+/// the bar's top where its corner fits and follows the window's corner there; otherwise clear of the window's arc.
 pub fn viewer_bar_start_in(alone : Double, roots : @ui.CornerRoots) -> Double {
-  if viewer_back_corner(alone).follows(roots) {
-    bar_keys_top()
-  } else {
-    viewer_bar_in
-  }
+  window_link_in(viewer_back_corner(alone), viewer_bar_in, roots)
 }
 
 ///|

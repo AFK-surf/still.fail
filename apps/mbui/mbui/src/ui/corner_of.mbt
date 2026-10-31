@@ -4,7 +4,7 @@
 /// What linked corners are worked out from as the old views ask them: the window's corner as the system draws it now,
 /// the ranges of the theme being built under (Theme::corner_fit; the window's theme between builds).
 pub fn corner_roots() -> CornerRoots {
-  { window: window_corner(), fit: g().corner_fit }
+  { window: window_corner(), fit: g().corner_fit, zoom: tree_window_zoom.get() }
 }
 
 ///|
@@ -12,6 +12,11 @@ pub fn corner_roots() -> CornerRoots {
 /// it changes (the window maximized, another system's corner), what read it worked out again.
 // kept across runs: set as each frame begins
 let tree_window_corner : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
+
+///|
+/// The content zoom of the frame being drawn, followed along with the window's corner.
+// kept across runs: set as each frame begins
+let tree_window_zoom : @signals.Signal[Double] = @signals.signal(1.0, same=fn(a, b) { a == b })
 
 ///|
 /// A node of the window's tree's corner linked so (View::radius): worked out from the window's roots as they are now
@@ -26,7 +31,7 @@ pub fn corner_of(k : CornerOf) -> @view.Live[Double] {
 /// began (tree_window_corner), the ranges of the theme its nodes are drawn in (tree_theme: the one the app tells it, as
 /// it changes, at once; else the window's): what reads it worked out again as either changes.
 pub fn tree_corner_roots_now() -> CornerRoots {
-  { window: tree_window_corner.get(), fit: tree_theme().corner_fit }
+  { window: tree_window_corner.get(), fit: tree_theme().corner_fit, zoom: tree_window_zoom.get() }
 }
 
 ///|

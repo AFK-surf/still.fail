@@ -11,6 +11,8 @@
 
 ///|
 pub(open) trait Host {
+  set_window_zoom(Self, Double) -> Unit = _
+  set_window_key(Self, FuncRef[(Int, Int) -> Int]) -> Unit = _
   window_setup(Self, Double, Double, Double, Double, Bool) -> Unit = _
   window_inset(Self) -> Bool = _
   window_hold(Self) -> Unit = _
@@ -228,6 +230,16 @@ pub(open) trait Host {
   ncall_state(Self, Int) -> Int = _
   ncall_result(Self, Int) -> String = _
   ncall_end(Self, Int) -> Unit = _
+}
+
+///|
+impl Host with set_window_zoom(_, _) {
+  ()
+}
+
+///|
+impl Host with set_window_key(_, _) {
+  ()
 }
 
 ///|
@@ -1344,6 +1356,18 @@ pub fn full_screen() -> Bool {
 /// Nothing where there is no window to size.
 pub fn set_full_screen(on : Bool) -> Unit {
   current.val.set_full_screen(on)
+}
+
+///|
+/// Draw content at this many window points per content point; it takes effect on the next frame.
+pub fn set_window_zoom(zoom : Double) -> Unit {
+  current.val.set_window_zoom(zoom)
+}
+
+///|
+/// An app's window-wide key, offered before an embedded native page takes it; nonzero when the app took it.
+pub fn set_window_key(f : FuncRef[(Int, Int) -> Int]) -> Unit {
+  current.val.set_window_key(f)
 }
 
 ///|

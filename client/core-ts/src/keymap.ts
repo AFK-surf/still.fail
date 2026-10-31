@@ -28,6 +28,9 @@ export const ACTIONS: Record<string, Spec> = {
   "nav.forward": { group: "global", keys: [], desktop: ["Mod+]"], typing: "yes" },
   "settings": { group: "global", keys: [], desktop: ["Mod+,"], typing: "yes" },
   "shortcuts": { group: "global", keys: ["Mod+/"], typing: "yes" },
+  "zoom.in": { group: "global", keys: [], desktop: ["Mod+Plus", "Mod+=", "Shift+Mod+=", "Shift+Mod+Plus"], typing: "yes" },
+  "zoom.out": { group: "global", keys: [], desktop: ["Mod+-"], typing: "yes" },
+  "zoom.reset": { group: "global", keys: [], desktop: ["Mod+0"], typing: "yes" },
   "composer.focus": { group: "chat", keys: ["Space"], typing: "no" },
   "composer.file": { group: "chat", keys: ["Mod+U"], typing: "yes" },
   "chat.stop": { group: "chat", keys: ["Mod+."], typing: "yes" },
@@ -50,8 +53,8 @@ const GROUPS = ["global", "chat", "files"] as const;
 const MODS = ["Ctrl", "Alt", "Shift", "Mod"];
 /// The keys with a name, beside a letter, a digit and F1…F99: where they are on the keyboard, so that ⌥ or ⇧ changing
 /// the character typed does not change which binding it is.
-const NAMED = ["Up", "Down", "Left", "Right", "Space", "Escape", "Enter", "\\", "[", "]", ".", ",", "/", ";"];
-const SHOWN: Record<string, string> = { Up: "↑", Down: "↓", Left: "←", Right: "→", Escape: "Esc", Enter: "↩" };
+const NAMED = ["Up", "Down", "Left", "Right", "Space", "Escape", "Enter", "\\", "[", "]", ".", ",", "/", ";", "-", "=", "Plus"];
+const SHOWN: Record<string, string> = { Up: "↑", Down: "↓", Left: "←", Right: "→", Escape: "Esc", Enter: "↩", Plus: "+" };
 const MARKS: Record<string, string> = { Ctrl: "⌃", Alt: "⌥", Shift: "⇧", Mod: "⌘" };
 
 /// A binding as said ("Mod+Shift+H", the modifiers in any order) the way the core has it: each modifier once, in

@@ -13,6 +13,7 @@ pub(all) struct Fixture {
   /// the theme chosen (the prefs' `appearance`): light unless the mode ends in -dark or MBUI_DARK=1, so that
   /// screenshots do not follow the machine's own
   mut appearance : String
+  mut window_zoom : String
   /// motion chosen (the prefs' `motion`: reduce, full; "" the system's)
   mut motion : String
   archived : Map[String, Bool]
@@ -736,6 +737,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         "listFilter": Json::object(lf),
         "sidebars": Json::object(f.sidebars),
         "appearance": Json::string(f.appearance),
+        "windowZoom": Json::string(f.window_zoom),
         "motion": Json::string(f.motion),
         "shareLook": if f.share_look == "" { Json::null() } else { Json::string(f.share_look) },
         "fonts": fixture_fonts(f.fonts),
@@ -919,6 +921,7 @@ pub fn fixture(mode : String) -> Source {
       "light"
     },
     motion: "",
+    window_zoom: "",
     archived: {},
     filters: {},
     fonts: if mode == "settings-fonts-coming" { { "ui": "noto-sans-sc" } } else { {} },
@@ -1108,6 +1111,11 @@ pub fn fixture(mode : String) -> Source {
           done(Ok(r))
         }
         "prefs.set" => {
+          match field(Some(params), "windowZoom") {
+            Some(String(z)) => f.window_zoom = z
+            Some(Null) => f.window_zoom = ""
+            _ => ()
+          }
           match field(Some(params), "workspace") {
             Some(String(w)) => f.workspace = w
             _ => ()

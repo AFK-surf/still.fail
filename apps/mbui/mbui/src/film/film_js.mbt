@@ -9,6 +9,11 @@ fn init_offscreen(w : Double, h : Double, scale : Double) -> Unit {
 }
 
 ///|
+fn set_offscreen_view(w : Double, h : Double, scale : Double) -> Unit {
+  ignore((w, h, scale))
+}
+
+///|
 fn draw_timed(
   inst : FixedArray[Double],
   count : Int,

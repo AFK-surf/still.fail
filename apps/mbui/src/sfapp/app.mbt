@@ -327,6 +327,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // frame after the menu said it (@settings.ask_action), and asked no more once that frame is built
   menu_bar(c, src)
   c.after_build("menu-asked", fn() { @settings.action_asked_done() })
+  @sfdesk.window_zoom_keys(c, src)
   appearance(src, page_dark(src))
   faces(src, @sfdesk.is_wide(c))
   // pictures put up by their address come as the core gives them (a GIF among them moves)

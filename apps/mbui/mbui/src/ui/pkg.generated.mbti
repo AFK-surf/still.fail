@@ -484,6 +484,10 @@ pub fn set_view_app((@view.View) -> Unit, around? : (Ctx) -> Unit) -> Unit
 
 pub fn set_web_lines(Bool) -> Unit
 
+pub fn set_window_key_handler((Int32, Int32) -> Bool) -> Unit
+
+pub fn set_window_zoom(Double) -> Unit
+
 pub fn set_work_clock((() -> Double)?) -> Unit
 
 pub fn shape_of(Array[(Array[Double], Bool)], fill? : Int64, even_odd? : Bool, stroke? : Int64, width? : Double) -> @paint.Shape
@@ -636,9 +640,15 @@ pub fn window_open(String) -> Bool
 
 pub fn window_opens() -> Bool
 
+pub fn window_points_to_content(Double) -> Double
+
 pub fn window_snap(Double, Double, Double, Double) -> Unit
 
 pub fn window_snap_state() -> Int32
+
+pub fn window_zoom() -> Double
+
+pub fn window_zoom_supported() -> Bool
 
 pub fn window_zoomed() -> Bool
 
@@ -2282,6 +2292,7 @@ pub struct Tester {
   between : Bool
   mut host_frames : Bool
   mut each : (() -> Unit)?
+  before : (() -> Unit)?
 }
 pub fn Tester::a11y_said(Self) -> String
 pub fn Tester::act(Self, @view.Role, @view.Action, label? : String) -> Unit raise
@@ -2443,7 +2454,7 @@ pub fn Tester::native_asked(Self) -> Array[(String, Json)]
 pub fn Tester::native_calls(Self) -> Array[(Int32, String, Json)]
 pub fn Tester::nav_said(Self) -> String
 #callsite(autofill(loc))
-pub fn Tester::new((Ctx) -> Unit, w? : Double, h? : Double, dark? : Bool, window_inset? : Bool, env? : Array[(String, String)], app_version? : Int32, images? : Array[(String, Int32, Int32)], platform? : Int32, keys? : Int32, pointing? : Pointing, native? : Pointing, keyboard? : Bool, seed? : Int32, text? : String, scale? : Double, time? : Double, stable? : Bool, finish? : Bool, run? : String, h264? : Bool, copy_shown? : Bool, live? : Live, corners_held? : Bool, window_corner? : Double, window_corners? : FixedArray[Double], words_over_held? : Bool, nav_able? : Bool, tree? : (@view.View) -> Unit, loc~ : SourceLoc) -> Self
+pub fn Tester::new((Ctx) -> Unit, w? : Double, h? : Double, dark? : Bool, window_inset? : Bool, env? : Array[(String, String)], app_version? : Int32, images? : Array[(String, Int32, Int32)], platform? : Int32, keys? : Int32, pointing? : Pointing, native? : Pointing, keyboard? : Bool, seed? : Int32, text? : String, scale? : Double, time? : Double, stable? : Bool, finish? : Bool, run? : String, h264? : Bool, copy_shown? : Bool, live? : Live, corners_held? : Bool, window_corner? : Double, window_corners? : FixedArray[Double], words_over_held? : Bool, nav_able? : Bool, tree? : (@view.View) -> Unit, before? : () -> Unit, loc~ : SourceLoc) -> Self
 pub fn Tester::next_frame_time(Self) -> Double
 pub fn Tester::next_wake(Self) -> (Double, String)?
 pub fn Tester::notice_asks(Self) -> Int32

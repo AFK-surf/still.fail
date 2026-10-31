@@ -558,6 +558,9 @@ void mb_host_a11y_tree(moonbit_string_t s) {
   (*env)->DeleteLocalRef(env, j);
 }
 
+void mb_host_set_window_zoom(double zoom) { (void)zoom; }
+void mb_host_set_window_key(int32_t (*f)(int32_t, int32_t)) { (void)f; }
+
 // How much bigger the system's words setting makes words (@hostapi.font_scale), as MainActivity keeps it (Host.fontScale:
 // the configuration's fontScale, a frame asked for when it changes).
 double mb_host_font_scale(void) {

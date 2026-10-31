@@ -129,6 +129,14 @@ static void paste_now(int mods) {
 
 static void run_script_step(int step);
 static void window_shown_now(void);
+static double window_content_zoom = 1.0;
+static int32_t (*window_key)(int32_t, int32_t);
+
+void mb_host_set_window_zoom(double zoom) {
+  if (zoom > 0) window_content_zoom = zoom;
+}
+
+void mb_host_set_window_key(int32_t (*f)(int32_t, int32_t)) { window_key = f; }
 
 // the device beyond the window (device.mbt): a key catcher's keys, the clipboard, awake, haptics
 #include "apple_device.h"
@@ -305,8 +313,8 @@ static double record_t0 = -1;
   NSSize s = self.bounds.size;
   double scale = self.window.backingScaleFactor ?: 2.0;
   ((CAMetalLayer *)self.layer).contentsScale = scale;
-  mb_text_set_scale(scale);
-  mb_render_set_size(s.width, s.height, scale);
+  mb_text_set_scale(scale * window_content_zoom);
+  mb_render_set_size(s.width / window_content_zoom, s.height / window_content_zoom, scale * window_content_zoom);
   self.wantFrame = NO;
   if (record_dir) {
     if (record_t0 < 0) {
@@ -1672,6 +1680,7 @@ static NSMenuItem *menu_item(NSDictionary *it) {
       @"Space" : @" ",
       @"Escape" : @"\e",
       @"Enter" : @"\r",
+      @"Plus" : @"+",
     };
     NSString *key = parts.lastObject;
     NSString *k = named[key] ?: key.lowercaseString;
@@ -1685,12 +1694,25 @@ static NSMenuItem *menu_item(NSDictionary *it) {
   return item;
 }
 
-// A menu of the app's own actions: its keys shown, never taken (the view has them first, MBView performKeyEquivalent:,
-// and does what they say: a key it let go of is no action of the menu's either)
+// The canvas takes its own keys first. If a native page has focus, offer window-wide keys to the app before the page.
 @interface MBShownKeysMenu : NSMenu
 @end
 @implementation MBShownKeysMenu
-- (BOOL)performKeyEquivalent:(NSEvent *)e { return NO; }
+- (BOOL)performKeyEquivalent:(NSEvent *)e {
+  if (!window_key || e.type != NSEventTypeKeyDown || !the_view.window.isKeyWindow ||
+      the_view.window.firstResponder == the_view)
+    return NO;
+  NSEventModifierFlags m = e.modifierFlags;
+  int mods = ((m & NSEventModifierFlagShift) ? 1 : 0) | ((m & NSEventModifierFlagControl) ? 2 : 0) |
+             ((m & NSEventModifierFlagOption) ? 4 : 0) | ((m & NSEventModifierFlagCommand) ? 8 : 0);
+  int code = e.keyCode == 123 ? 3 : e.keyCode == 124 ? 4 : e.keyCode == 126 ? 5 : e.keyCode == 125 ? 6 :
+             e.keyCode == 36 || e.keyCode == 76 ? 7 : e.keyCode == 53 ? 17 : 0;
+  if (!code) {
+    NSString *key = e.charactersIgnoringModifiers.lowercaseString;
+    if (key.length == 1) code = 1000 + [key characterAtIndex:0];
+  }
+  return code && window_key(code, mods);
+}
 @end
 
 void mb_host_menu_setup(moonbit_string_t json_s) {

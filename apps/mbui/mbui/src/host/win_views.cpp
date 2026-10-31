@@ -831,6 +831,29 @@ static void made(View *v, ICoreWebView2CompositionController *cc) {
   }
   int vid = v->vid;
   EventRegistrationToken tok;
+  // A page can hold keyboard focus. Offer its accelerator keys to the app's window-wide handler first; other keys
+  // stay with the page. The app decides using the same configurable bindings as it uses over its own canvas.
+  v->ctl->add_AcceleratorKeyPressed(
+      Callback<ICoreWebView2AcceleratorKeyPressedEventHandler>(
+          [vid](ICoreWebView2Controller *, ICoreWebView2AcceleratorKeyPressedEventArgs *a) -> HRESULT {
+            View *view = find(vid);
+            COREWEBVIEW2_KEY_EVENT_KIND kind;
+            UINT key = 0;
+            if (!view || view->closed || (view->kind != 2 && view->kind != 3) ||
+                FAILED(a->get_KeyEventKind(&kind)) || FAILED(a->get_VirtualKey(&key)) ||
+                (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN))
+              return S_OK;
+            int code = key == VK_LEFT ? 3 : key == VK_RIGHT ? 4 : key == VK_UP ? 5 : key == VK_DOWN ? 6 :
+                       key == VK_RETURN ? 7 : key == VK_ESCAPE ? 17 : 0;
+            if (!code) {
+              UINT ch = MapVirtualKeyW(key, MAPVK_VK_TO_CHAR) & 0x7FFF;
+              if (ch >= 'A' && ch <= 'Z') ch += 'a' - 'A';
+              if (ch >= 32) code = 1000 + (int)ch;
+            }
+            if (code && mb_host_window_key(code, mb_host_mods_held())) a->put_Handled(TRUE);
+            return S_OK;
+          }).Get(),
+      &tok);
   v->web->AddScriptToExecuteOnDocumentCreated(
       L"window.mbuiHost={post:function(t){window.chrome.webview.postMessage(String(t))}};", NULL);
   v->web->add_WebMessageReceived(
@@ -1204,7 +1227,7 @@ extern "C" void mb_host_view_control(int32_t vid, int32_t op, double value) {
     grab_page(v);
     return;
   }
-  if (!v || v->kind != 3) return;
+  if (!v || (v->kind != 2 && v->kind != 3)) return;
   if (op == 8) {
     // laid out at its rect over the scale, drawn at the scale
     if (value > 0) {
@@ -1213,7 +1236,7 @@ extern "C" void mb_host_view_control(int32_t vid, int32_t op, double value) {
     }
     return;
   }
-  if (!v->web) return;
+  if (v->kind != 3 || !v->web) return;
   BOOL can = FALSE;
   switch (op) {
     case 5: if (SUCCEEDED(v->web->get_CanGoBack(&can)) && can) v->web->GoBack(); break;

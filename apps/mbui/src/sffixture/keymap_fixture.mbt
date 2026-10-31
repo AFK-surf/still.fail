@@ -14,6 +14,9 @@ pub let fx_key_actions : Array[(String, String, Array[String], Array[String], St
   ("nav.forward", "global", [], ["Mod+]"], "yes"),
   ("settings", "global", [], ["Mod+,"], "yes"),
   ("shortcuts", "global", ["Mod+/"], [], "yes"),
+  ("zoom.in", "global", [], ["Mod+Plus", "Mod+=", "Shift+Mod+=", "Shift+Mod+Plus"], "yes"),
+  ("zoom.out", "global", [], ["Mod+-"], "yes"),
+  ("zoom.reset", "global", [], ["Mod+0"], "yes"),
   ("composer.focus", "chat", ["Space"], [], "no"),
   ("composer.file", "chat", ["Mod+U"], [], "yes"),
   ("chat.stop", "chat", ["Mod+."], [], "yes"),
@@ -40,6 +43,7 @@ pub fn fx_key_label(b : String, mac : Bool) -> String {
     "Right" => "→"
     "Escape" => "Esc"
     "Enter" => "↩"
+    "Plus" => "+"
     k => k
   }
   if mac {

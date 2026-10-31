@@ -84,6 +84,11 @@ pub fn film(
     // is the tests', not a film's to stop at)
     words_over_held=false,
     live={ host, turn: fn() { spin(1.0) } },
+    // A film draws the same logical window and rasterizes text at the same scale as a real window for every frame.
+    before=fn() {
+      let z = @ui.window_zoom()
+      set_offscreen_view(w / z, h / z, scale * z)
+    },
     window_corner~,
   )
   // (the window's buttons in the app's top row, as a Mac's window has them: Tester::set_window_inset)

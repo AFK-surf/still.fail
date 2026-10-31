@@ -6,6 +6,16 @@
 priv struct Native {}
 
 ///|
+impl @hostapi.Host for Native with set_window_zoom(_, zoom) {
+  set_window_zoom(zoom)
+}
+
+///|
+impl @hostapi.Host for Native with set_window_key(_, f) {
+  set_window_key(f)
+}
+
+///|
 fn init {
   @hostapi.set_host(Native::{  })
 }

@@ -1043,3 +1043,20 @@ test "corners: what could follow a corner within the ranges, standing where it c
   t.draw()
   assert_eq(t.corner_faults().length(), 1)
 }
+
+///|
+test "corners: a linked corner too large for its box is checked as it is drawn" {
+  // At 50% zoom a Mac's 16-point window corner is 32 content points, but its 32-point bar key is still only 32 wide.
+  // The requested linked corner is 27.2, so the key is drawn as a circle of radius 16 and no longer follows the window.
+  let link : CornerOf = Follow(Window, 6.0, 16.0)
+  let t = Tester::new(fn(c) {
+    c.with_theme({ ..Theme::light(), corner_fit: Some(fit_ranges) }, fn() {
+      c.box(w=Fill(1.0), h=Fill(1.0), pt=6.0, pr=6.0, align=AEnd, fn() {
+        c.box(style=style(w=Fixed(32.0), h=Fixed(32.0), radius=Linked(link)), bg=0x333333FFL, fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+  }, w=600.0, h=400.0, window_corner=32.0, corners_held=false)
+  t.draw()
+  assert_true(!t.corner_faults().is_empty(), msg="the drawn circle is not concentric with the window")
+}

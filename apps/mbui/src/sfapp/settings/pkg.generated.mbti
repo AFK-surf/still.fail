@@ -246,6 +246,8 @@ pub let policy_forms : Map[String, String]
 
 pub fn pref(Core, String) -> String
 
+pub fn pref_from(Json?, String) -> String
+
 pub let profile_forms : @ref.Ref[Int32]
 
 pub fn profile_groups(Array[Json]) -> Array[(String, Array[Json])]
@@ -269,6 +271,8 @@ pub fn sections_of(Json?) -> Array[(String, String, String)]
 pub fn set_font(Core, String, String?) -> Unit
 
 pub fn set_pref(Core, String, String) -> Unit
+
+pub fn set_pref_with((String, Json, (Result[Json, Json]) -> Unit) -> Unit, (String) -> Unit, String, String) -> Unit
 
 pub let settings_button_h : Double
 

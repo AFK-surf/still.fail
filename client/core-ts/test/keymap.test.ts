@@ -23,6 +23,7 @@ test("a_binding_is_kept_with_its_modifiers_in_one_order_and_what_is_none_is_refu
   assert.equal(binding("Mod+Alt+N"), "Alt+Mod+N");
   assert.equal(binding("Ctrl+Alt+Shift+Mod+F12"), "Ctrl+Alt+Shift+Mod+F12");
   for (const key of ["Space", "Escape", "Up", "\\", "[", ";", "7", "K"]) assert.equal(binding(key), key);
+  for (const key of ["Mod+-", "Mod+=", "Mod+Plus", "Shift+Mod+Plus"]) assert.equal(binding(key), key);
   for (const bad of ["", "Mod", "Mod+", "Mod++", "Mod+k", "Mod+Backspace", "Cmd+K", "Mod+Mod+K", "Shift+K+Mod", 3, null]) assert.equal(binding(bad), null, String(bad));
 });
 
@@ -34,6 +35,7 @@ test("a_key_cap_says_a_binding_as_a_mac_or_a_pc_has_it", () => {
   assert.equal(label("Alt+Down", false), "Alt+↓");
   assert.equal(label("Escape", false), "Esc");
   assert.equal(label("Space", true), t("web-main.keymap.space"));
+  assert.equal(label("Mod+Plus", true), "⌘+");
 });
 
 test("the_keymap_is_the_actions_own_keys_and_on_the_desktop_those_changed_there", () => {
@@ -63,6 +65,9 @@ test("the_keymap_is_the_actions_own_keys_and_on_the_desktop_those_changed_there"
   assert.equal(of(km, "chat.stop").text, t("web-main.shortcuts.unset"));
   assert.equal(of(km, "nav.back").listed, true);
   assert.equal(km.workspace[0], "⌃1");
+  assert.deepEqual(of(km, "zoom.out").keys, ["Mod+-"]);
+  assert.deepEqual(of(km, "zoom.reset").keys, ["Mod+0"]);
+  assert.ok(of(km, "zoom.in").keys.includes("Mod+="));
   // Nothing told yet: a page's.
   assert.deepEqual(of(view({}) as J, "chat.new").keys, ["Alt+Mod+N"]);
 });
@@ -139,5 +144,13 @@ test("the_desktop_app_changes_its_keys_and_the_prefs_say_its_keymap_anew", async
   km = v(values, 1).keymap;
   assert.ok(km.actions.every((a: J) => !a.changed));
   assert.deepEqual(of(km, "chat.switch").keys, ["Mod+K"]);
+  // The window's zoom is kept in the device prefs and invalid sizes cannot reach the UI.
+  await ask(host, core, ui, 8, "prefs.set", { windowZoom: "125" });
+  apply(host, values);
+  assert.equal(v(values, 1).windowZoom, "125");
+  assert.equal((await ask(host, core, ui, 9, "prefs.set", { windowZoom: "9999" })).error.code, "invalid_params");
+  await ask(host, core, ui, 10, "prefs.set", { windowZoom: null });
+  apply(host, values);
+  assert.equal(v(values, 1).windowZoom, undefined);
   core.close();
 });

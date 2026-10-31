@@ -67,6 +67,7 @@ let key_names : Array[(String, Int)] = [
   ("Enter", 7),
   ("Escape", 17),
   ("Space", 1032),
+  ("Plus", 1043),
 ]
 
 ///|

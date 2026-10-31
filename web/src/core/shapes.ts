@@ -4299,7 +4299,7 @@ export interface KeptTabs {
 }
 
 /** An action keys do (keymap.ts ACTIONS). */
-export type KeyActionName = "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings" | "shortcuts" | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.screen" | "chat.latest" | "chat.find" | "chat.archive" | "panel.close" | "files.preview";
+export type KeyActionName = "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings" | "shortcuts" | "zoom.in" | "zoom.out" | "zoom.reset" | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.screen" | "chat.latest" | "chat.find" | "chat.archive" | "panel.close" | "files.preview";
 
 /** Where an action works: anywhere in the app, in a chat, or in a folder of the files. */
 export type KeyGroupName = "global" | "chat" | "files";
@@ -5668,6 +5668,8 @@ export interface PrefsView {
 	 */
 	listFilter?: Record<string, ListFilter>;
 	appearance?: Appearance;
+	/** The window's content size on this device, as a percentage; none means 100%. */
+	windowZoom?: string;
 	/**
 	 * Motion on this device's pages: `reduce` (what moves only fades or is there at once), `full`, or none to
 	 * follow the system's setting.

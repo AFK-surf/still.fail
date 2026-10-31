@@ -511,7 +511,7 @@ fn side_brand_h(bar : Bool, top : Double) -> Double {
   if bar {
     0.0
   } else if @ui.window_keys_left() {
-    side_top_inset
+    dmax(side_top_inset, @ui.window_points_to_content(side_top_inset))
   } else if side_full_height(bar) {
     side_top_web + top
   } else {

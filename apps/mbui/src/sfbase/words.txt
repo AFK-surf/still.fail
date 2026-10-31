@@ -716,6 +716,7 @@ desktop.menu.hideOthers
 desktop.menu.minimize
 desktop.menu.quit
 desktop.menu.redo
+desktop.menu.resetZoom
 desktop.menu.services
 desktop.menu.settings
 desktop.menu.shortcuts
@@ -725,6 +726,8 @@ desktop.menu.undo
 desktop.menu.view
 desktop.menu.window
 desktop.menu.zoom
+desktop.menu.zoomIn
+desktop.menu.zoomOut
 desktop.tray.open
 desktop.update.available
 desktop.update.checkFailed
@@ -939,6 +942,9 @@ web-main.keymap.settings
 web-main.keymap.shortcuts
 web-main.keymap.sidebar.toggle
 web-main.keymap.space
+web-main.keymap.zoom.in
+web-main.keymap.zoom.out
+web-main.keymap.zoom.reset
 web-main.letters.back
 web-main.letters.close
 web-main.letters.count
