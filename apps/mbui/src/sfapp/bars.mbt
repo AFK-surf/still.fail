@@ -90,6 +90,17 @@ fn window_band() -> Double {
 }
 
 ///|
+/// window_band for a node of the window's tree: as the frame began, followed (whether the window's buttons are the
+/// app's, the zoom it is drawn at).
+fn window_band_now() -> Double {
+  if @ui.window_keys_own_now() {
+    @sf.window_keys_band
+  } else {
+    dmax(window_band_mac, @ui.window_points_to_content_now(window_band_mac))
+  }
+}
+
+///|
 let window_band_mac : Double = 28.0
 
 ///|

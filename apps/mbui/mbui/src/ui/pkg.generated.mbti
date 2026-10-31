@@ -642,6 +642,8 @@ pub fn window_opens() -> Bool
 
 pub fn window_points_to_content(Double) -> Double
 
+pub fn window_points_to_content_now(Double) -> Double
+
 pub fn window_snap(Double, Double, Double, Double) -> Unit
 
 pub fn window_snap_state() -> Int32
