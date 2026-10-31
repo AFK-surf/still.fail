@@ -247,8 +247,18 @@ squeeze and contrast checks; film's images before and after where a step touches
    big the stack is laid out then (View::laid_size), its end a moment of the timeline where the page that went is let
    go; a page pushed to show what the core has for it sets out at the moment that answer came, or once its wait is
    over (View::reacts, View::at_moment). The slide no longer waits for how late its first frame was to the screen (the
-   old stack's `late_check`): a host's lateness is no event of the logic. Old view still: the wide frame (sfdesk's
-   frame, panes, tape and their stacks), a window of its own, the sign-in and the splash; the theme each island is built
+   old stack's `late_check`): a host's lateness is no event of the logic. Laid out Medium with a sidebar to show (or beside the
+   system's bars), the tape (still.fail's sfdesk/tape_view.mbt): its row and its panels nodes made once, laid out by
+   the tree (the sidebar's column, the page's panel, a chat's side panel while it is open or closes, a node of its own),
+   what each holds an island; the tape's move a trajectory committed at its cause (where each thing it moves was then,
+   worked out of the move before it alone, and where it goes), drawn as the row's offset; what is no cause of a move
+   (the window, an edge dragged, the system's column) puts things where they go at once; the page brought over once
+   the core has what it shows or its stay on top has waited its while (a moment of the timeline); a cover of the tree's
+   over each panel not in use takes a tap, the secondary button and a finger's pull, each at its event's moment. Still
+   the old way there: the edges' drags and what a screen reader says of the covers (an island over the panels), a
+   finger held through a cover to pick the words under it, back, which page the page's panel draws while one is
+   waited for (Nav::shows_when). Old view still: the wide frame off the tape (sfdesk's frame: the rail, the sidebar
+   and the page side by side, laid out Large), a window of its own, the sign-in and the splash; the theme each island is built
    in; back, said by the islands as they are built, in the tree's order (the top page first, then the stack's swipe);
    which island takes a press where they lie one over another (where more than one is at a point, all of them are told
    of the input); the window's sides beside the system's bars (beside_sides: the islands are placed in the window's

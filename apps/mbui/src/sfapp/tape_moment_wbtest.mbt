@@ -17,7 +17,7 @@ fn tape_now() -> (Double, Double) {
 fn tape_brought(frames : Array[Double]) -> (Double, Double, @sfdesk.TapePane) {
   let t = tape_chat(0, 720.0, 840.0)
   let t0 = t.time()
-  t.advance(10.0)
+  t.advance(between_frames_ms)
   @sfdesk.bring_page()
   for f in frames {
     t.frame_at(t0 + f)
@@ -63,7 +63,7 @@ fn tape_turned(
   page_over(t, 720.0)
   let agent = @sfbase.view_of_chat(src, r).0.unwrap().agents[0].key
   let t0 = t.time()
-  t.advance(10.0)
+  t.advance(between_frames_ms)
   @sfdesk.side_change(src, r, "open", Some(agent))
   for f in before {
     t.frame_at(t0 + f)

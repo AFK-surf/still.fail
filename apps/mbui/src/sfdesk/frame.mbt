@@ -587,7 +587,7 @@ pub fn frame(
   ignore(invited)
   // pointed at with a mouse: the wheel and the trackpad scroll, a drag is the pointer's own; with a finger (a tablet's
   // screen, whatever the frame): it drags the lists
-  let finger = @ui.pointing() is Finger
+  let finger = pane_finger()
   c.mouse_drags_lists(finger)
   // a device waiting to be confirmed in the workspace's safe mode: beside the rail (the workspaces, settings) only
   // what it waits on, no chats' list (its stations refuse it), unless a settings page is open
@@ -725,7 +725,7 @@ pub fn frame(
         c.kept_part(
           c.id("page/kept/wide"),
           "\{main_w} \{page_h} \{gated} \{inset} \{finger} \{aside} \{w.id} \{t.p.bg} \{t.dark}",
-          fn() { page_in(c, src, w, gated, main_w, page_h, aside) },
+          fn() { page_in(c, src, w, gated, main_w, page_h, aside, finger) },
           read_out=true,
           own=true,
         )
@@ -781,6 +781,13 @@ pub fn frame(
 }
 
 ///|
+/// Whether a finger has the pointer now (the frame's panes: a finger drags their lists and holds to pick words, a mouse
+/// scrolls them by the wheel and drags to pick).
+fn pane_finger() -> Bool {
+  @ui.pointing() is Finger
+}
+
+///|
 /// The sidebar's top row's height (Sidebar.css.ts brand: none in the closed bar), the bars `top` high: beside the
 /// window's buttons where they are the system's at its left (macOS's), from the window's top where it is as high as the
 /// window beside the system's tabs (rail_native.mbt).
@@ -802,7 +809,16 @@ fn side_brand_h(bar : Bool, top : Double) -> Double {
 /// confirmed in the workspace's safe mode (`gated`), else the stack's top drawn flat, moved `aside` (the folded sidebar
 /// shown a while). On the tape the page a phone's screen: what is opened from it pushed over it, slid in and taken off
 /// by back as a phone's are, down to the page chosen to be shown in it (page_goes_on).
-fn page_in(c : @ui.Ctx, src : Source, w : Workspace, gated : Bool, main_w : Double, ph : Double, aside : Double) -> Unit {
+fn page_in(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  gated : Bool,
+  main_w : Double,
+  ph : Double,
+  aside : Double,
+  finger : Bool,
+) -> Unit {
   if @ui.window_inset() {
     title_row(c, "page-title-row", @sf.wide_bar_h + (if wide.tape { @sf.tape_bar_over() } else { 0.0 }))
   }
@@ -843,7 +859,7 @@ fn page_in(c : @ui.Ctx, src : Source, w : Workspace, gated : Bool, main_w : Doub
     }
     // the page's words are picked with the pointer and copied, as the web's (the sidebar's are not); a finger picks
     // them as on a phone (pick.mbt)
-    if @ui.pointing() is Finger {
+    if finger {
       page()
     } else {
       c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), page)

@@ -137,6 +137,7 @@
       "src/sfapp/sheet.mbt",
       "src/sfapp/sides.mbt",
       "src/sfapp/tabletop.mbt",
+      "src/sfapp/tape_shell.mbt",
       "src/sfdesk/attention.mbt",
       "src/sfdesk/brand.mbt",
       "src/sfdesk/chats.mbt",
@@ -150,7 +151,8 @@
       "src/sfdesk/rail_native.mbt",
       "src/sfdesk/side.mbt",
       "src/sfdesk/switch.mbt",
-      "src/sfdesk/switcher.mbt"
+      "src/sfdesk/switcher.mbt",
+      "src/sfdesk/tape_view.mbt"
     ],
     "reads": [
       "@sf.layout",
@@ -397,8 +399,8 @@
     "built-by-hand": {
       "src/sf/parts.mbt": 2,
       "src/sfbase/viewer.mbt": 1,
-      "src/sfdesk/frame.mbt": 1,
-      "src/sfdesk/rail_native.mbt": 1
+      "src/sfdesk/rail_native.mbt": 1,
+      "src/sfdesk/tape_view.mbt": 1
     },
     "layout-read-back": {
       "src/sf/markdown.mbt": 1,
@@ -421,7 +423,6 @@
       "src/sfdesk/drive.mbt": 1,
       "src/sfdesk/drive_views.mbt": 1,
       "src/sfdesk/files.mbt": 1,
-      "src/sfdesk/frame.mbt": 1,
       "src/sfdesk/pane_page.mbt": 1,
       "src/sfdesk/rail.mbt": 1,
       "src/sfpages/bars.mbt": 1,

@@ -775,7 +775,7 @@ pub fn tape_along_at(t : Double) -> (Double, Double) {
 /// What the tape's panels' islands are built from besides what they read: the theme, whether a finger has the pointer.
 fn tape_island_key() -> String {
   let t = @sf.theme()
-  "\{t.p.bg} \{t.dark} \{@ui.pointing() is Finger} \{@ui.window_inset()}"
+  "\{t.p.bg} \{t.dark} \{pane_finger()} \{@ui.window_inset()}"
 }
 
 ///|
@@ -993,7 +993,9 @@ fn tape_page_built(c : @ui.Ctx, src : Source) -> Unit {
         // (what is in it as wide as beside the system's column: `under` its ground alone, its right corners none of
         // what is in it, which ends where the column begins: beside_column)
         @sf.pane_round.val = Some(beside_column(corners, under))
-        c.box(style=@ui.style(w=Fixed(main_w), h=Full), fn() { page_in(c, src, w, false, main_w, c.height, 0.0) })
+        c.box(style=@ui.style(w=Fixed(main_w), h=Full), fn() {
+          page_in(c, src, w, false, main_w, c.height, 0.0, pane_finger())
+        })
         |> ignore
         @sf.pane_round.val = None
       },
@@ -1214,7 +1216,7 @@ fn tape_edge(
 /// moves), the chat landed on, the window's buttons' row, back (the panels' own taken first, said after it), the web
 /// services' pages let go.
 pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Unit {
-  c.mouse_drags_lists(@ui.pointing() is Finger)
+  c.mouse_drags_lists(pane_finger())
   wide.side_place = side_place()
   side_follow(c, src, w.id)
   wide.tape = true
