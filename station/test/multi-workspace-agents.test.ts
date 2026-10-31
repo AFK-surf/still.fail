@@ -124,8 +124,7 @@ test("chat_list and chat_read show a session its own workspace's chats; another'
   rig.store.setChatShare(two, [{ workspace: W1, name: "One" }], true, "b@x");
   assert.match(await rig.call(one, "session_send", { to: linkTwo, text: "hi from one" }), /^Sent to/);
   // (a letter: in that chat's own log of them, store/schema.ts LETTERS)
-  const letters = rig.store.db.prepare("SELECT text FROM letters WHERE thread = ? ORDER BY n").all(rig.store.homeChat(two)!.id) as { text: string }[];
-  assert.ok(letters.at(-1)!.text.endsWith("hi from one"));
+  assert.ok(rig.letters(rig.store.homeChat(two)!.id).at(-1)!.text.endsWith("hi from one"));
   // A station of another workspace W2's members said to take chats from: asked for W2's sessions only, saying so.
   await t.xshare.trust("W9", "Nine", "H", "host", W2);
   assert.deepEqual(t.xshare.address("H", { method: "session.read", workspace: W2 }), { method: "session.read", workspace: "W9", as: W2 });
