@@ -4179,15 +4179,9 @@ pub fn way_in_button(c : @ui.Ctx, key : String, label : String, solid? : Bool = 
   let bare = native_input() is Mouse
   let id = c.id(key)
   let pressed = !busy && c.clicked(id)
-  let h = ease_to(c, key + "/lit", !busy && (c.lit(id) || c.pressed(id)))
-  let (ground, ink) = if solid {
-    (mix(p.primary_hover, h, p.primary), p.bg)
-  } else {
-    (over(p.chip, alpha(p.hover, h)), p.text)
-  }
+  let ink = if solid { p.bg } else { p.text }
   let mut words_at = -1
-  // det-ok(box-loose): its ground eased between its tone's and the hover's, as @sf.button's
-  let b = c.box(style=if bare { sign_in_button_desk } else { sign_in_button_touch }, bg=ground, id~, fn() {
+  let b = c.box(style=way_in_button_style(bare, solid), id~, fn() {
     // (as a button's: the spinner's room opening before its words, @sf.button)
     let turning = ease_to(c, key + "/busy", busy)
     let over = @motion.animate(c, key + "/over", if busy { 1.0 } else { 0.0 }, spec=button_reshape)
@@ -4201,8 +4195,7 @@ pub fn way_in_button(c : @ui.Ctx, key : String, label : String, solid? : Bool = 
       })
       |> ignore
     }
-    // det-ok(box-loose): its words in the ink its ground's tone takes (the page's ground on the ink's, the ink on the chip's)
-    words_at = c.text(label, style=sign_in_words, color=ink)
+    words_at = c.text(label, style=if solid { sign_in_words } else { sign_in_words_plain })
     // SignIn.kt: clip(CircleShape).clickable
     if !busy {
       @motion.ripple(c, id, sign_in_button_h / 2.0)
@@ -4302,6 +4295,9 @@ fn sign_in_button(most : Double) -> @ui.Style {
     h=Fixed(sign_in_button_h),
     radius=Full,
     bg=Fg,
+    // (a step towards the page under the pointer, as a solid button's: @sf.button's primary_hover)
+    hovered=@ui.patch(bg=Over(Fg, A(Bg, O15))),
+    pressed=@ui.patch(bg=Over(Fg, A(Bg, O15))),
     align=ACenter,
     justify=JCenter,
   )
@@ -4316,8 +4312,39 @@ let sign_in_button_desk : @ui.Style = sign_in_button(sign_in_desk_w)
 let sign_in_button_touch : @ui.Style = sign_in_button(sign_in_touch_w)
 
 ///|
+/// A way-in page's other buttons (way_in_button `solid` false): the quiet ground of the words' colour, a step darker
+/// under the pointer.
+fn sign_in_button_plain(most : Double) -> @ui.Style {
+  sign_in_button(most).then(@ui.style(bg=Tint, hovered=@ui.patch(bg=TintStrong), pressed=@ui.patch(bg=TintStrong)))
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let sign_in_button_desk_plain : @ui.Style = sign_in_button_plain(sign_in_desk_w)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sign_in_button_touch_plain : @ui.Style = sign_in_button_plain(sign_in_touch_w)
+
+///|
+/// A way-in button's look (way_in_button): a desktop's or a touch screen's width, the ink's ground or the quiet one.
+fn way_in_button_style(bare : Bool, solid : Bool) -> @ui.Style {
+  match (bare, solid) {
+    (true, true) => sign_in_button_desk
+    (false, true) => sign_in_button_touch
+    (true, false) => sign_in_button_desk_plain
+    (false, false) => sign_in_button_touch_plain
+  }
+}
+
+///|
 // kept across runs: a value (no field of it changes)
 let sign_in_words : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Bg, wrap=false, leading=Font)
+
+///|
+/// A way-in page's other buttons' words (sign_in_button_plain): the ink's.
+// kept across runs: a value (no field of it changes)
+let sign_in_words_plain : @ui.TextStyle = sign_in_words.then(@ui.text_style(color=Fg))
 
 ///|
 /// 可同时登录多个账号: small, muted.
