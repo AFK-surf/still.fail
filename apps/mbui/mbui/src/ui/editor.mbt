@@ -867,33 +867,25 @@ pub fn Ctx::editor(
   self.focusable(id, node=i, keys=0, on_press=true)
   self.semantics(i, TextField, id~, label=placeholder, value=if secret { "" } else { st.text }, actions=[SetText("")])
   let n = self.nodes[i]
-  // (the system's size of words: as Ctx::text's)
-  let font_size = self.sp(font_size)
-  let line = if line > 0.0 { self.sp(line) } else { self.theme.text_line * font_size }
-  let (_, _, own_lh) = font_metrics(font_size, 400)
-  let lh = if line > 0.0 { line } else { own_lh }
+  let z = self.editor_sizing(font_size, line, max_lines, plain, self.theme.text_line)
   n.id = id
   self.id_built(i)
   n.hit = true
   n.w = w
-  n.font_size = font_size
-  n.line_h = line
+  n.font_size = z.font_size
+  n.line_h = z.line
   n.line_trim = trim
   n.clip = true
-  n.wrap = max_lines > 1
+  n.wrap = z.wrap
   n.text = placeholder
   n.shorter = shorter
-  if plain {
-    // no frame of its own: what holds it draws one
-    n.min_h = lh
-    n.max_h = lh * max_lines.to_double()
-  } else {
-    n.pad_l = 12.0
-    n.pad_r = 12.0
-    n.pad_t = 9.0
-    n.pad_b = 9.0
-    n.min_h = lh + 18.0
-    n.max_h = lh * max_lines.to_double() + 18.0
+  n.pad_l = z.pad_x
+  n.pad_r = z.pad_x
+  n.pad_t = z.pad_y
+  n.pad_b = z.pad_y
+  n.min_h = z.min_h
+  n.max_h = z.max_h
+  if !plain {
     n.bg = 0xFFFFFFFFL
     n.radius = 12.0
     n.border_w = if focused { 2.0 } else { 1.0 }
@@ -937,6 +929,113 @@ fn caret_blink() -> Double {
   } else {
     caret_blink_ms
   }
+}
+
+///|
+/// How an editor is laid out (Ctx::editor's, its node's): its words' size and line (the system's size of words: as
+/// Ctx::text's), whether they wrap, the room round them across and down, how tall it is at least and at most.
+priv struct EditorSizing {
+  font_size : Double
+  line : Double
+  wrap : Bool
+  pad_x : Double
+  pad_y : Double
+  min_h : Double
+  max_h : Double
+}
+
+///|
+/// An editor of words `font_size` big on lines `line` apart (0: `text_line` of its size, the theme's it is built in),
+/// `max_lines` at most, `plain` (no frame of its own: what holds it draws one) or framed, as Ctx::editor lays it out.
+fn Ctx::editor_sizing(
+  self : Ctx,
+  font_size : Double,
+  line : Double,
+  max_lines : Int,
+  plain : Bool,
+  text_line : Double,
+) -> EditorSizing {
+  let font_size = self.sp(font_size)
+  let line = if line > 0.0 { self.sp(line) } else { text_line * font_size }
+  let (_, _, own_lh) = font_metrics(font_size, 400)
+  let lh = if line > 0.0 { line } else { own_lh }
+  let (pad_x, pad_y) = if plain { (0.0, 0.0) } else { (12.0, 9.0) }
+  {
+    font_size,
+    line,
+    wrap: max_lines > 1,
+    pad_x,
+    pad_y,
+    min_h: lh + 2.0 * pad_y,
+    max_h: lh * max_lines.to_double() + 2.0 * pad_y,
+  }
+}
+
+///|
+/// How tall an editor's words `shown` are laid out `w` wide inside it (font_size, weight, wrap, line, trim as its
+/// node's): its measure as a leaf of the layout (layout.mbt's leaf_size), and FieldLaid::size's.
+fn editor_words_laid(shown : String, font_size : Double, weight : Int, w : Double, wrap : Bool, line : Double, trim : Bool) -> (Double, Double) {
+  let tl = layout_text(shown, font_size, weight, w, wrap, line~, trim~)
+  (tl.w, tl.h)
+}
+
+///|
+/// Its words with what the input method composes in them (what a field with no look of its own and nothing secret
+/// shows), followed: told once an edit is done, with its words (Field::text, its words alone) as one.
+pub fn Field::composed_said(self : Field) -> String {
+  let st = self.st
+  match st.said_composed {
+    Some(s) => s.get()
+    None => {
+      let s = @signals.signal(st.display(), same=fn(a, b) { a == b })
+      st.said_composed = Some(s)
+      s.get()
+    }
+  }
+}
+
+///|
+/// What a plain field (Ctx::editor's `plain`, no look of its own, nothing secret) shows and how its words are set, as
+/// it is laid out by (FieldLaid::size): its words with what is composed in them, their size and line (as said to
+/// Ctx::editor, before the system's size of words; none said, the theme's share of its size), how many lines at most,
+/// `trim`.
+pub(all) struct FieldLaid {
+  words : String
+  font_size : Double
+  line : Double
+  /// its line, where `line` is 0, of its size: the theme's its tree is drawn in (tree_theme)
+  text_line : Double
+  max_lines : Int
+  trim : Bool
+} derive(Eq, Debug)
+
+///|
+/// What `field` shows, followed (Field::composed_said), as a plain Ctx::editor of it set so lays it out: for a node of
+/// the window's tree holding the old view it is built in, measured by it (View::measured, FieldLaid::size).
+pub fn Field::laid(self : Field, font_size? : Double = 15.0, line? : Double = 0.0, max_lines? : Int = 5, trim? : Bool = false) -> FieldLaid {
+  // (its line, where none is said, the theme's of the tree that holds it, followed: as its editor's is, built in it)
+  let text_line = if line > 0.0 { 0.0 } else { tree_theme().text_line }
+  { words: self.composed_said(), font_size, line, text_line, max_lines, trim }
+}
+
+///|
+/// How wide and tall a plain Ctx::editor showing what `l` says is laid out in width `w` (as its node is: its words
+/// wrapped in it where it holds more than a line, as tall as they come to between a line and `max_lines`; none, as
+/// wide as its words come to on their lines), in the system's size of words as it is now (what the tree's words are
+/// measured in too: Tree::words_again as it changes).
+pub fn FieldLaid::size(self : FieldLaid, w : Double?) -> (Double, Double) {
+  let z = g().editor_sizing(self.font_size, self.line, self.max_lines, true, self.text_line)
+  let (tw, th) = editor_words_laid(self.words, z.font_size, Node::new().weight, match w {
+    Some(w) => w
+    None => 1.0e9
+  }, z.wrap, z.line, self.trim)
+  (
+    match w {
+      Some(w) => w
+      None => tw
+    },
+    dclamp(th, z.min_h, z.max_h),
+  )
 }
 
 ///|
@@ -1296,6 +1395,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     built_key: "",
     built_id: 0,
     said_words: None,
+    said_composed: None,
   }
 }
 
@@ -1312,10 +1412,18 @@ fn EditorState::put_words(self : EditorState, text : String) -> Unit {
 /// its caret, what is composed): at the end of each way in that edits it (a key, the input method's text, an undo or
 /// redo, Field::set), never between the words and the rest; nothing told where its words are as they were.
 fn EditorState::words_told(self : EditorState) -> Unit {
+  // (its words and them with what is composed in them, as the same edit leaves them, told as one: what reads both
+  // never sees one new and the other not, Field::composed_said)
+  @signals.start_batch()
   match self.said_words {
     Some(s) => s.set(self.text)
     None => ()
   }
+  match self.said_composed {
+    Some(s) => s.set(self.display())
+    None => ()
+  }
+  @signals.end_batch()
 }
 
 ///|
@@ -1454,6 +1562,8 @@ pub fn Field::pick(self : Field, from : Int, to : Int) -> Unit {
   st.pref_x = -1.0
   st.upstream = -1
   st.blink_again = true
+  // (what is composed shown at the caret where it is now: told so, Field::composed_said)
+  st.words_told()
   field_written()
 }
 

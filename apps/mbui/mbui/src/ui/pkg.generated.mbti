@@ -1397,13 +1397,25 @@ type FakeHost
 
 type Field
 pub fn Field::colors(Self, placeholder~ : Int64, caret~ : Int64) -> Unit
+pub fn Field::composed_said(Self) -> String
 pub fn Field::follow(Self, String, generation? : Int32) -> Unit
+pub fn Field::laid(Self, font_size? : Double, line? : Double, max_lines? : Int32, trim? : Bool) -> FieldLaid
 pub fn Field::new(text? : String) -> Self
 pub fn Field::pick(Self, Int32, Int32) -> Unit
 pub fn Field::selection(Self) -> (Int32, Int32)
 pub fn Field::set(Self, String, caret? : Int32) -> Unit
 pub fn Field::take(Self) -> String
 pub fn Field::text(Self) -> String
+
+pub(all) struct FieldLaid {
+  words : String
+  font_size : Double
+  line : Double
+  text_line : Double
+  max_lines : Int32
+  trim : Bool
+} derive(Eq, @debug.Debug)
+pub fn FieldLaid::size(Self, Double?) -> (Double, Double)
 
 pub struct FieldLines {
   text : String

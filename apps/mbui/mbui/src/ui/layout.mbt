@@ -220,9 +220,8 @@ fn leaf_size(
     }
   } else if n.kind == kind_editor {
     // an editor takes the width it is offered
-    let s = g().editor_display(n)
-    let tl = layout_text(s, n.font_size, n.weight, max_w, n.wrap, line=n.line_h, trim=n.line_trim)
-    (if wm == Undefined { tl.w } else { w }, tl.h)
+    let (tw, th) = editor_words_laid(g().editor_display(n), n.font_size, n.weight, max_w, n.wrap, n.line_h, n.line_trim)
+    (if wm == Undefined { tw } else { w }, th)
   } else if n.kind == kind_image {
     image_leaf_size(n, w, wm, h, hm)
   } else {
