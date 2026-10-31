@@ -5034,6 +5034,29 @@ export interface MeshStatus {
 	name?: string;
 }
 
+export interface ModelSpreadTarget {
+	/** Its station's address (where `profile.addModel` goes). */
+	station: string;
+	stationName: string;
+	profileId: string;
+	profileName: string;
+	/** Its profile's name, with its station's where two are called alike. */
+	title: string;
+	/** The model as its provider spells it there (what is added). */
+	model: string;
+}
+
+/** A model a profile may use that other profiles of the workspace list and do not have on. */
+export interface ModelSpread {
+	/** The model as this profile has it. */
+	model: string;
+	/** Its name: Claude Opus 5.5. */
+	name: string;
+	targets: ModelSpreadTarget[];
+	/** Those profiles in words: 工作、Max · mini. */
+	targetsText: string;
+}
+
 /** A figure in words, and how bad it is. */
 export interface NetFigure {
 	text: string;
@@ -5877,6 +5900,11 @@ export interface ProfileMember {
 	checkTone: string;
 	/** How many connects use it there. */
 	usedBy: number;
+	/**
+	 * Its models other profiles of the workspace could have too (views/profiles.ts spread), each
+	 * with the profiles to give it to; a model none could take is left out.
+	 */
+	spread?: ModelSpread[];
 }
 
 /** How a profile of the workspace's list is, in a few words and their tone. */

@@ -49,6 +49,8 @@ priv struct SettingsFixture {
   mut resets_used : Int
   /// the models named by hand on ChatGPT 团队 (`profile.addModel`)
   models_added : Array[String]
+  /// the models given to the other profiles from ChatGPT 团队's page (`profile.addModel` on another one: its 都加上)
+  models_given : Array[String]
   /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away or its
   /// prompt closed
   mut pairing : Bool
@@ -90,6 +92,7 @@ let fx : SettingsFixture = {
   skills_shared: {},
   resets_used: 0,
   models_added: [],
+  models_given: [],
   pairing: false,
   pair_ended: "",
   mba_online: false,
@@ -155,6 +158,7 @@ fn fixture_reset() -> Unit {
   fx.kept_cleared.clear()
   fx.resets_used = 0
   fx.models_added.clear()
+  fx.models_given.clear()
   fx.version = 0
   fx.marks.clear()
   fx.auto = false
@@ -347,6 +351,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
     "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 2)
+    // ChatGPT 团队's page at its models: GPT-6 mini to be given to 备用 key too
+    "settings-profile-spread" => up("", "settings/profile/ws1/st1/cx", 3)
     // ChatGPT 团队's models on their page (many, a filter, one to name by hand)
     "settings-profile-models" => up("", "settings/profile-models/ws1/st1/cx", 0)
     "settings-profile-login" => {
@@ -459,7 +465,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
       "profile:ws1/st1#cc"
     "settings-profile-key" => "profile:ws1/st1#k2"
-    "settings-profile-quota" => "profile:ws1/st1#cx"
+    "settings-profile-quota" | "settings-profile-spread" => "profile:ws1/st1#cx"
     "settings-profile-models" => "profile-models:ws1/st1#cx"
     "settings-me-reading" => "me"
     "settings-profiles-pick" | "settings-profiles-monthly" => "profiles"
@@ -661,6 +667,23 @@ fn fx_cc_with(more : Array[(String, Json)]) -> Array[(String, Json)] {
       ]
     _ => []
   })
+}
+
+///|
+/// A profile's models the others could have too (views/profiles.ts spread): ChatGPT 团队's GPT-6 mini, which 备用 key
+/// lists, until given to it.
+fn fx_spread(id : String) -> Json {
+  if id != "cx" || fx.models_given.contains("gpt-6-mini") {
+    return Json::array([])
+  }
+  [
+    obj([
+      ("model", str("gpt-6-mini")),
+      ("name", str("GPT-6-MINI")),
+      ("targets", [obj([("station", str("ws1/st1")), ("stationName", str("Studio")), ("profileId", str("k2")), ("profileName", str("备用 key")), ("title", str("备用 key")), ("model", str("gpt-6-mini"))])]),
+      ("targetsText", str("备用 key")),
+    ]),
+  ]
 }
 
 ///|
@@ -1958,7 +1981,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           (
             "members",
             [
-              obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Studio")), ("online", Json::boolean(true)), ("profileId", str(text(Some(p), "id"))), ("role", str("host")), ("about", str("")), ("usable", Json::boolean(true)), ("checkText", str("可用")), ("checkTone", str("green")), ("usedBy", Json::number(1.0))]),
+              obj([("station", str("ws1/st1")), ("stationId", str("st1")), ("stationName", str("Studio")), ("online", Json::boolean(true)), ("profileId", str(text(Some(p), "id"))), ("role", str("host")), ("about", str("")), ("usable", Json::boolean(true)), ("checkText", str("可用")), ("checkTone", str("green")), ("usedBy", Json::number(1.0)), ("spread", fx_spread(text(Some(p), "id")))]),
             ],
           ),
           ("editable", Json::boolean(true)),
@@ -2216,7 +2239,7 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       Some(Ok(obj([])))
     }
     "profile.addModel" => {
-      fx.models_added.push(text(p, "model"))
+      (if text(p, "id") == "cx" { fx.models_added } else { fx.models_given }).push(text(p, "model"))
       fx_changed()
       Some(Ok(obj([])))
     }

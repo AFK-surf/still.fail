@@ -6,6 +6,7 @@
 // overviews say as they come in: a station not read yet adds its own later.
 import { t } from "../i18n.ts";
 import { waitNote } from "../looks.ts";
+import * as model from "../shapes/model.ts";
 
 type J = any;
 
@@ -46,6 +47,7 @@ export function workspaceProfiles(stations: J[]): J {
   const byId = new Map(stations.map((s) => [String(s.id), s]));
   const name = (id: string) => String(byId.get(id)?.name ?? id.slice(0, 8));
   const groups = new Map<string, [J, J][]>();
+  const all: [J, J][] = [];
   const waiting: string[] = [];
   for (const s of stations) {
     const overview = s.overview;
@@ -60,12 +62,13 @@ export function workspaceProfiles(stations: J[]): J {
       const key = account(p) ?? (share ? `share:${share.id}` : `${s.station}/${p.id}`);
       const list = groups.get(key) ?? [];
       list.push([s, p]);
+      all.push([s, p]);
       groups.set(key, list);
     }
   }
   const items: J[] = [];
   for (const [key, list] of groups) {
-    const members = list.map(([s, p]) => member(s, p, name, byId));
+    const members = list.map(([s, p]) => ({ ...member(s, p, name, byId), spread: spread(s, p, all, name) }));
     // A station with two of its profiles signed in to the account: each row named by its profile too, or they read alike.
     for (const m of members) if (members.filter((x) => x.stationId === m.stationId).length > 1 && m.profileName !== "") m.title = `${m.stationName} · ${m.profileName}`;
     // What the row shows of it: the copy that has the login (a host, one signed in on its own) on a station that is up,
@@ -146,6 +149,36 @@ function troubleOn(list: [J, J][], members: J[]): { stations: string[]; p: J } |
   const found = members.flatMap((m, i) => (m.role !== "user" && m.online && isObject(list[i]![1].trouble) ? [i] : []));
   if (found.length === 0) return null;
   return { stations: [...new Set(found.map((i) => String(members[i]!.stationName)))], p: list[found[0]!]![1] };
+}
+
+/// A profile's models other profiles of the workspace could have too (`spread`): for each model it may use, the profiles
+/// on stations that are up whose provider lists it (as they spell it) and that do not have it on, each to be given it
+/// with `profile.addModel`; a model none could take is left out. Copies (a borrowed account, a key copied) are changed
+/// on the station that has them, so neither gives nor takes. The models in their order on the profile.
+function spread(s: J, p: J, all: [J, J][], name: (id: string) => string): J[] {
+  const copy = (x: J) => isObject(x.share) && x.share.role === "user";
+  if (copy(p)) return [];
+  const mine = (Array.isArray(p.models) ? p.models : []).filter((m: unknown): m is string => typeof m === "string");
+  const out: J[] = [];
+  for (const m of mine) {
+    const k = model.key(m);
+    const targets: J[] = [];
+    for (const [ts, tp] of all) {
+      if (ts === s && tp === p) continue;
+      if (ts.online !== true || copy(tp) || tp.decisionOnly === true) continue;
+      const on = (Array.isArray(tp.models) ? tp.models : []).filter((x: unknown): x is string => typeof x === "string");
+      if (on.some((x: string) => model.key(x) === k)) continue;
+      const listed = (Array.isArray(tp.available) ? tp.available : []).find((x: unknown) => typeof x === "string" && model.key(x) === k);
+      if (listed === undefined) continue;
+      targets.push({ station: String(ts.station), stationName: name(String(ts.id)), profileId: String(tp.id), profileName: String(tp.name ?? tp.id), model: listed });
+    }
+    if (targets.length === 0) continue;
+    // Each by its profile's name, with its station's where two of them are called alike.
+    const named = (x: J) => (targets.filter((y) => y.profileName === x.profileName).length > 1 ? `${x.profileName} · ${x.stationName}` : x.profileName);
+    const p0 = isObject(p.names) && typeof p.names[m] === "string" ? p.names[m] : model.name(m);
+    out.push({ model: m, name: p0, targets: targets.map((x) => ({ ...x, title: named(x) })), targetsText: targets.map(named).join(t("core-views.list_separator")) });
+  }
+  return out;
 }
 
 /// One station's copy of an account: what it is there and how it is doing.

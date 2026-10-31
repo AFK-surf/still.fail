@@ -129,7 +129,19 @@ fn profile_view(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, s : Js
     blocks.push(fn() { profile_stations(c, core, address, entry) })
   }
   if !copy {
-    blocks.push(fn() { profile_models(c, core, address, p) })
+    // its models other profiles of the workspace could have too (the core's, on its member of the list)
+    let spread = match entry {
+      Some(_) =>
+        match
+          items(entry, "members").search_by(fn(m) {
+            text(Some(m), "station") == address && text(Some(m), "profileId") == id
+          }) {
+          Some(i) => items(Some(items(entry, "members")[i]), "spread")
+          None => []
+        }
+      None => []
+    }
+    blocks.push(fn() { profile_models(c, core, address, p, spread) })
     // how it runs, in one section (the web's two of the same title: fast mode, and the background on a message)
     let fast = has(p, "fast") && !(field(p, "fast") is Some(Null))
     let background = items(p, "runtimes").iter().any(fn(r) { r == "claude" }) && has(p, "backgroundOnMessage")
@@ -830,8 +842,9 @@ fn profile_stations(c : @ui.Ctx, core : Core, here_station : String, entry : Jso
 ///|
 /// Its models (ModelPool): what it can be used for now, as chips; the whole list to tick (by series, a filter when many,
 /// all or none), each tick saved at once; one named by hand where the provider lists none. A provider that answers the
-/// automatic decisions alone: the models its probe found.
-fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
+/// automatic decisions alone: the models its probe found. Under them, those of its models other profiles of the
+/// workspace list and do not have on (`spread`), each given to all of them at a press.
+fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?, spread : Array[Json]) -> Unit {
   let id = text(p, "id")
   let key = address + "/" + id
   if flag(p, "decisionOnly") {
@@ -916,6 +929,9 @@ fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit
           }
           if flag(p, "canAddModel") {
             add_model(c, core, address, id)
+          }
+          if spread.length() > 0 {
+            model_spread(c, core, spread)
           }
       })
     },
@@ -1621,6 +1637,38 @@ fn text_toggle(c : @ui.Ctx, key : String, words : String, disabled : Bool) -> Bo
 }
 
 ///|
+/// A profile's models other profiles of the workspace list and do not have on (the core's `spread`): a line each, the
+/// model and those profiles, and 都加上 giving it to every one of them (`profile.addModel` on each one's station, as that
+/// provider spells it).
+fn model_spread(c : @ui.Ctx, core : Core, spread : Array[Json]) -> Unit {
+  c.box(style=pf_spread, fn() {
+    c.text(@sf.t("web-pages.profiles.spreadLead"), style=pf_muted) |> ignore
+    for s in spread {
+      let sv = Some(s)
+      let targets = items(sv, "targets")
+      let on = fn(x : Json) { [("station", text(Some(x), "station")), ("id", text(Some(x), "profileId"))] }
+      let adding = targets.iter().any(fn(x) { is_doing(core, ["profile.addModel"], on(x)) })
+      c.box(style=pf_input_row, fn() {
+        c.text(
+          @sf.t("web-pages.profiles.spreadLine", args=[("model", text(sv, "name")), ("profiles", text(sv, "targetsText"))]),
+          style=pf_spread_words,
+        )
+        |> ignore
+        if @sf.button(c, @sf.t("web-pages.profiles.spreadAdd"), key="profile-spread/" + text(sv, "model"), busy=adding) && !adding {
+          let what = @sf.t("web-pages.profiles.spreadWhat", args=[("model", text(sv, "name"))])
+          for x in targets {
+            let xv = Some(x)
+            @settings.act(core, what, "profile.addModel", obj([("station", str(text(xv, "station"))), ("id", str(text(xv, "profileId"))), ("model", str(text(xv, "model")))]))
+          }
+        }
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
 /// A model named by hand (AddModel), for a provider that does not list them all.
 fn add_model(c : @ui.Ctx, core : Core, address : String, id : String) -> Unit {
   let f = profile_field("add-model/" + address + "/" + id)
@@ -1754,6 +1802,15 @@ let pf_share_value : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 /// The models' parts (modelsBody: 10 apart); a chip (modelChip: 4 by 10 in, round, the hover's ground).
 // kept across runs: a value (no field of it changes)
 let pf_models_body : @ui.Style = @ui.css("w=Full gap=S2_5")
+
+///|
+/// Its models other profiles could have: 8 apart, its words taking the room before 都加上.
+// kept across runs: a value (no field of it changes)
+let pf_spread : @ui.Style = @ui.css("w=Full gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pf_spread_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)

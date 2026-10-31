@@ -2725,7 +2725,22 @@ export const SHAPES: Record<string, Shape> = {
     ["checkText", "String"],
     ["checkTone", "String"],
     ["usedBy", "i64", { client: "I54", doc: "How many connects use it there." }],
+    ["spread", vec("ModelSpread"), { default: true, doc: "Its models other profiles of the workspace could have too (views/profiles.ts spread), each\nwith the profiles to give it to; a model none could take is left out." }],
   ], { doc: "One station's copy of an account in the workspace's list." }),
+  ModelSpread: struct([
+    ["model", "String", { doc: "The model as this profile has it." }],
+    ["name", "String", { said: true, doc: "Its name: Claude Opus 5.5." }],
+    ["targets", vec("ModelSpreadTarget")],
+    ["targetsText", "String", { said: true, doc: "Those profiles in words: 工作、Max · mini." }],
+  ], { doc: "A model a profile may use that other profiles of the workspace list and do not have on." }),
+  ModelSpreadTarget: struct([
+    ["station", "String", { doc: "Its station's address (where `profile.addModel` goes)." }],
+    ["stationName", "String", { said: true }],
+    ["profileId", "String"],
+    ["profileName", "String", { said: true }],
+    ["title", "String", { said: true, doc: "Its profile's name, with its station's where two are called alike." }],
+    ["model", "String", { doc: "The model as its provider spells it there (what is added)." }],
+  ]),
   ShareStation: struct([
     ["id", "String"],
     ["station", "String"],

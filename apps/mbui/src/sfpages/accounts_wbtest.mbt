@@ -98,6 +98,18 @@ test "a profile's models, wide with a mouse: the series side by side, a model's 
   t.run_for(@kit.tooltip_delay_ms)
 }
 
+///|
+test "a profile's page, wide: a model of its that another profile lists and has not on is given to it at 都加上" {
+  let t = setting_tester(Profile("ws1/st1", "cx"), 1280.0)
+  scrolled_to(t, 1280.0, "GPT-6-MINI → 备用 key")
+  assert_true(t.find("工作区里其他 profile 也能用这些模型，还没开：") is Some(_))
+  tap_words(t, "都加上")
+  t.frame()
+  t.frame()
+  assert_true(t.find("GPT-6-MINI → 备用 key") is None, msg="given: none left to give")
+  assert_true(t.find("都加上") is None)
+}
+
 // A profile's quota reset and its models (Accounts.tsx QuotaSection, ModelPool) over ChatGPT 团队: a reset used once
 // asked, its models chosen in place (ModelChecklist): a model named by hand, a filter over the many.
 
