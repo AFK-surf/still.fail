@@ -351,7 +351,7 @@ pub fn ask_words(c : @ui.Ctx, title : String, note : String) -> Unit {
 /// Its answer's buttons, as vault_foot lays them last on its card: a line of them, on to a second what has not the room
 /// on the first, out in the card's foot corners.
 pub fn ask_buttons(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=ask_foot.then(@sf.foot_reach(@sf.button_height())), flow=true, line_gap=ask_foot_lines, body) |> ignore
+  c.box(style=ask_foot.then(@sf.foot_reach(@sf.button_height())), flow=true, line_gap=ask_foot_lines(), body) |> ignore
 }
 
 ///|
@@ -628,7 +628,7 @@ pub fn vault_foot(
     if over {
       c.box(style=if foot { ask_over.then(@sf.over_foot_reach(@sf.button_height())) } else { ask_over }, pick) |> ignore
     }
-    c.box(style=if foot { ask_foot.then(@sf.foot_reach(@sf.button_height())) } else { ask_foot }, flow=true, line_gap=ask_foot_lines, fn() {
+    c.box(style=if foot { ask_foot.then(@sf.foot_reach(@sf.button_height())) } else { ask_foot }, flow=true, line_gap=ask_foot_lines(), fn() {
       acts()
       if !over {
         pick()
@@ -705,7 +705,12 @@ let ask_over : @ui.Style = @ui.css("row mb=S2")
 
 ///|
 /// Between the foot's lines, where its buttons go on to a second (8).
-let ask_foot_lines : Double = 8.0
+/// (more where a press's room is taller than a button and the one under it: a finger's 44 round a button of 34)
+fn ask_foot_lines() -> Double {
+  let more = @ui.room_least() - @sf.button_height()
+  if more > 8.0 { more } else { 8.0 }
+}
+
 ///|
 /// How it ended: a dot and its words, a little under what is over it.
 // kept across runs: a value (no field of it changes)
