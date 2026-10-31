@@ -10,6 +10,8 @@ priv struct TreeCover {
   on : @signals.Signal[Bool]
   at : @signals.Signal[(Double, Double)]
   modal : @signals.Signal[Bool]
+  /// the button, as last made
+  button : Ref[@view.View?]
 }
 
 ///|
@@ -24,6 +26,7 @@ fn tree_cover(
   let on = @signals.signal(true, same=fn(a, b) { a == b })
   let at = @signals.signal((0.0, 0.0), same=fn(a, b) { a == b })
   let modal = @signals.signal(false, same=fn(a, b) { a == b })
+  let made : Ref[@view.View?] = Ref(None)
   let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
   t.check_looks(false)
   // (opened of the Tester's host)
@@ -44,6 +47,7 @@ fn tree_cover(
         Some(f) => b.takes(f) |> ignore
         None => ()
       }
+      made.val = Some(b)
     })
   }
   set_view_app(fn(root) {
@@ -64,7 +68,7 @@ fn tree_cover(
   })
   t.draw()
   t.frame_at(t.time() + frame_period_default)
-  { t, page, shown, on, at, modal }
+  { t, page, shown, on, at, modal, button: made }
 }
 
 ///|
@@ -172,4 +176,28 @@ test "a button of the tree's own over a native view, where it takes a finger cha
   assert_eq(k.t.wanted_after(), 0.0, msg="a frame asked for again")
   k.t.frames_owed()
   assert_eq(covers_of(k.page), [], msg="taking none again")
+}
+
+///|
+test "a button of the tree's own over a native view, where it takes a finger read of its own: followed while it is there; let go, at once no more, no frame drawn" {
+  let src = @signals.signal(true, same=fn(a, b) { a == b })
+  let k = tree_cover(over=true, areas=Some(fn(w, h, _) { if src.get() { [(0.0, 0.0, w, h)] } else { [] } }))
+  assert_eq(covers_of(k.page), [0.0, 0.0, 80.0, 40.0])
+  assert_true(src.watched(), msg="followed")
+  k.shown.set(false)
+  assert_false(src.watched(), msg="let go")
+}
+
+///|
+test "a button of the tree's own over a native view, where it takes a finger said anew: what the first read no more followed at once, a frame asked for, the host told the new" {
+  let first = @signals.signal(true, same=fn(a, b) { a == b })
+  let next = @signals.signal(true, same=fn(a, b) { a == b })
+  let k = tree_cover(over=true, areas=Some(fn(w, h, _) { if first.get() { [(0.0, 0.0, w, h)] } else { [] } }))
+  assert_eq(covers_of(k.page), [0.0, 0.0, 80.0, 40.0])
+  k.button.val.unwrap().takes(fn(w, h, _) { if next.get() { [(w / 2.0, 0.0, w, h)] } else { [] } }) |> ignore
+  assert_false(first.watched(), msg="the first no more followed")
+  assert_eq(k.t.wanted_after(), 0.0, msg="a frame asked for")
+  k.t.frames_owed()
+  assert_eq(covers_of(k.page), [40.0, 0.0, 80.0, 40.0], msg="the new told")
+  assert_true(next.watched(), msg="the new followed")
 }

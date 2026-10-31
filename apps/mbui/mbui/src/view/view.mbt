@@ -179,6 +179,9 @@ struct Node {
   mut drag_said : Int
   /// where in it a finger is taken at a moment (View::takes, View::hosted_takes; none: all of it)
   mut takes : Takes?
+  /// what reads where it takes a finger as a host is told it (Tree::finger_areas): owned by its scope, let go with it
+  /// or as it is said anew, telling the tree as what it read changes (Tree::on_takes)
+  mut takes_watch : @signals.Watch?
   /// what ends what its on_drag set going (a gesture's: its hold's moment, its dispatch), as it is said anew or let go
   mut drag_end : (() -> Unit)?
   /// a slot (show, pick, each): no box of its own, what it holds laid out as its holder's own
@@ -304,6 +307,8 @@ pub struct Tree {
   /// let go, leaving, said to take no press): what it holds of its own, an old view's press, to ask whether that may
   /// still take input (Tree::takes_presses)
   mut on_modals : () -> Unit
+  /// what hosts the tree told as where a node takes a finger may have changed (Tree::on_takes)
+  mut on_takes : () -> Unit
 }
 
 ///|
@@ -380,6 +385,7 @@ pub fn Tree::new(
     drawn_due: false,
     on_due: fn() {  },
     on_modals: fn() {  },
+    on_takes: fn() {  },
     work: {
       made: 0,
       let_go: 0,
@@ -452,6 +458,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.key_said = 0
       n.on_drag = None
       n.takes = None
+      n.takes_watch = None
       n.drag_end = None
       n.look_due = false
       n.place_due = false
@@ -491,6 +498,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         fingers: 1,
         drag_said: 0,
         takes: None,
+        takes_watch: None,
         drag_end: None,
         slot: false,
         hosted: false,
@@ -1783,9 +1791,35 @@ pub fn View::hosted_takes(self : View, f : (Double, Double, Double) -> Bool) -> 
 ///|
 fn View::takes_so(self : View, t : Takes) -> View {
   guard self.live() is Some(n) else { return self }
+  // (what read the one said before let go of what it read, at once)
+  match n.takes_watch {
+    Some(w) => w.stop()
+    None => ()
+  }
+  n.takes_watch = None
   n.takes = Some(t)
-  self.tree.hits = self.tree.hits + 1
+  if t is Areas(_) {
+    // (owned by its scope: let go with it, what it read no more followed)
+    let tree = self.tree
+    self.owning(fn() { n.takes_watch = Some(@signals.watch(fn() { tree.takes_told() })) })
+  }
+  self.tree.takes_told()
   self
+}
+
+///|
+/// Where a node takes a finger may be other than a host was told: what is pointed at worked out again, the hosts told.
+fn Tree::takes_told(self : Tree) -> Unit {
+  self.hits = self.hits + 1
+  (self.on_takes)()
+}
+
+///|
+/// What hosts the tree tells as where a node takes a finger may have changed (said anew, or what it read to say it
+/// changed: Tree::finger_areas, Tree::taken_over): `f`, at once, as it is told; nothing read or set there but to see
+/// to it that the host is told anew (a frame asked for).
+pub fn Tree::on_takes(self : Tree, f : () -> Unit) -> Unit {
+  self.on_takes = f
 }
 
 ///|
@@ -3393,8 +3427,12 @@ pub fn Tree::finger_areas(self : Tree, id : NodeId) -> FingerAreas {
 fn Tree::areas_of(self : Tree, n : Node, x : Double, y : Double, w : Double, h : Double) -> FingerAreas {
   match n.takes {
     Some(Areas(f)) => {
-      // (read so: a host told it as a frame is painted, painted again as it changes, Tree::taken_over)
-      let rs = f(w, h, self.logic_at())
+      // (read by what the node owns for it: as it changes the hosts told, Tree::on_takes; let go with the node)
+      let at = self.logic_at()
+      let rs = match n.takes_watch {
+        Some(t) => t.read(fn() { f(w, h, at) })
+        None => @signals.untracked(fn() { f(w, h, at) })
+      }
       InWindow(
         rs
         .iter()

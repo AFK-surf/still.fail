@@ -172,6 +172,17 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   let t = @view.Tree::new(make, measure=view_words_measure, time=fn() { h_event_time() })
   // (a press held on an old view a modal layer now keeps from input: called off then)
   t.on_modals(view_modals_told)
+  // (where a node takes a finger other than the hosts of native views were told (NativeView::tell_covers, as a frame
+  // is painted): painted again for it, between frames a frame asked for; in one, its painting reads it)
+  t.on_takes(fn() {
+    match paint_watch.val {
+      Some(w) => w.touch()
+      None => ()
+    }
+    if !in_frame.val {
+      h_frame_owed()
+    }
+  })
   t.on_due(fn() {
     view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
     // (between frames, a frame for it; in one, what it marked is done in it, and what goes on asks for the next as
