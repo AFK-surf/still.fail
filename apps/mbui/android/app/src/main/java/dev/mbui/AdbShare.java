@@ -58,6 +58,8 @@ final class AdbShare {
     static final String PAIR = "dev.mbui.adb.PAIR";
     static final String READ = "dev.mbui.adb.READ";
     private static final String CHANNEL = "adb";
+    /** What the share's notification opens tapped: settings' 共享调试 page (src/sfbase/notices.mbt open_notice). */
+    private static final String OPENS_PAGE = "settings:adb:";
     /** The pairing code's: heads-up, so its field shows over Settings without the shade pulled down. */
     private static final String PAIR_CHANNEL = "adb-pair";
     static final int ID = 7;
@@ -495,7 +497,9 @@ final class AdbShare {
     static Notification notificationTitled(Context c, JSONObject view, String title, String said, String stopLabel) {
         NotificationManager manager = c.getSystemService(NotificationManager.class);
         manager.createNotificationChannel(new NotificationChannel(CHANNEL, t("android-misc.adb.title"), NotificationManager.IMPORTANCE_LOW));
-        PendingIntent open = PendingIntent.getActivity(c, 0, new Intent(c, MainActivity.class), PendingIntent.FLAG_IMMUTABLE);
+        // tapped, settings' 共享调试 (its switch and the chats' grants), as a notice's tap opens what it carries (Notices.OPENS)
+        Intent page = new Intent(c, MainActivity.class).putExtra(Notices.OPENS, OPENS_PAGE).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent open = PendingIntent.getActivity(c, 0, page, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         PendingIntent stop = PendingIntent.getService(c, 1, new Intent(c, AdbShareService.class).setAction(STOP), PendingIntent.FLAG_IMMUTABLE);
         String text = said != null ? said : line(c, view);
         return new Notification.Builder(c, CHANNEL)
