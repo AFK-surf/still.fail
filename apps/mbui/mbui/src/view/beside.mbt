@@ -346,13 +346,8 @@ fn hosted_unscaled(n : Node, s : Double) -> Unit {
 /// is put in what is said to be drawn scaled (View::hosted), as what holds one is said to be (View::scale), however
 /// either came (made, shown, its scale changed); where the scene is gone through, as what holds besides.
 fn hosted_refused(s : Double) -> Unit {
-  (refused_so.val)("an old view hosted in what is drawn \{s} as big: View::scale holds no old view")
+  abort("an old view hosted in what is drawn \{s} as big: View::scale holds no old view")
 }
-
-///|
-/// What a refusal does (hosted_refused): stops the program, saying why; a test told of each in its place, to say which
-/// were refused and when.
-pub let refused_so : Ref[(String) -> Unit] = Ref(fn(why) { abort(why) })
 
 ///|
 /// The scale of what holds node `at` (it too) that is drawn other than as big as laid out, the first of them up from

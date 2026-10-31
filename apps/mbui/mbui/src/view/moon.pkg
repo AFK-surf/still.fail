@@ -6,4 +6,5 @@ import {
 
 import {
   "mbui/signals",
+  "moonbitlang/core/env",
 } for "test"
