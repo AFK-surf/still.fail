@@ -651,6 +651,26 @@ test("slack_api calls Slack as the session's bot; a thread it writes in becomes 
   await r.close();
 });
 
+test("a still.fail chat calls slack_api as the station's Slack bot, chosen by name when several fit", async () => {
+  const r = new Rig();
+  const [key] = newSession(r.hub, web());
+  await settle();
+  // Two Slack bots are bound to Claude here (cl and team): which one is the chat's to say.
+  const refusal = await r.refused(key, "slack_api", { method: "chat.postMessage", params: { channel: "C5", text: "hi" } });
+  assert.ok(refusal.includes("give bot= one of") && refusal.includes("cl (Claude bot)") && refusal.includes("team"), refusal);
+  assert.ok((await r.refused(key, "slack_api", { method: "auth.test", bot: "nobody" })).includes('no Slack bot "nobody"'));
+  // Named by its bot name: a new message in a channel, whose thread is this chat's now.
+  r.chat.answers.set("chat.postMessage", { ok: true, ts: "8888.1" });
+  await r.call(key, "slack_api", { method: "chat.postMessage", params: { channel: "C5", text: "for the team" }, bot: "Claude bot" });
+  assert.deepEqual(r.chat.calls.at(-1), ["chat.postMessage", { channel: "C5", text: "for the team" }]);
+  const started = r.thread("C5", "8888.1");
+  assert.deepEqual(r.store.threadSessions(started.id).map((m) => [m.session, m.connect]), [[key, "cl"]]);
+  // Named by its id: another bot.
+  r.gptChat.answers.set("auth.test", { ok: true, user_id: "UGPT" });
+  assert.equal(await r.call(key, "slack_api", { method: "auth.test", bot: "gpt" }), JSON.stringify({ ok: true, user_id: "UGPT" }));
+  await r.close();
+});
+
 // ── session_send ──
 
 test("an agent writes to another session's chat, which sees whom it is from", async () => {

@@ -420,14 +420,39 @@ export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, co
   return formatHistory(messages, thread.surface, threadAddress(thread.channel, thread.threadTs), key, names);
 }
 
-/// slack_api: a Slack Web API call from session `key`, as the bot of `via` (else the session's own connect). Writes keep
-/// to the threads rule: not in a thread another session of the same bot takes part in; one it writes in becomes its own.
-export async function slackApi(hub: Hub, key: string, method: string, params: Record<string, Json>, via: string | null): Promise<string> {
+/// The Slack connect a session calls as when it names none: its own, or (a still.fail chat) the station's Slack bot in its
+/// workspace, `bot` naming one by its id or bot name; with several and no name, the one bound to the session's runtime.
+export function slackConnectOf(hub: Hub, key: string, bot: string | null): string {
+  const session = hub.store.getSession(key);
+  const own = session?.connect ?? null;
+  if (bot === null && own !== null && own !== INTERNAL_CONNECT) return own;
+  const home = hub.workspaces()[0] ?? null;
+  const ws = hub.wsOf(session ?? key);
+  const bots = hub
+    .config()
+    .connects.filter((c) => c.kind === "slack" && c.enabled && (c.workspace ?? home) === ws && hub.chatOf(c.id) !== undefined);
+  const named = (c: (typeof bots)[number]) => (c.slack.botName ? `${c.id} (${c.slack.botName})` : c.id);
+  if (bot !== null) {
+    const wanted = bot.trim().toLowerCase();
+    const found = bots.find((c) => c.id.toLowerCase() === wanted || c.slack.botName?.toLowerCase() === wanted);
+    if (!found) throw new Error(`no Slack bot ${JSON.stringify(bot)} here; bot is one of: ${bots.map(named).join(", ") || "none"}`);
+    return found.id;
+  }
+  if (bots.length === 1) return bots[0].id;
+  const runtime = session?.runtime ?? null;
+  const bound = bots.filter((c) => c.bind.runtime === runtime);
+  if (bound.length === 1) return bound[0].id;
+  if (bots.length === 0) throw new Error("this station has no Slack bot in this chat's workspace");
+  throw new Error(`this chat has no Slack bot of its own: give bot= one of: ${bots.map(named).join(", ")}`);
+}
+
+/// slack_api: a Slack Web API call from session `key`, as the bot of `via` (else `slackConnectOf`). Writes keep to the
+/// threads rule: not in a thread another session of the same bot takes part in; one it writes in becomes its own.
+export async function slackApi(hub: Hub, key: string, method: string, params: Record<string, Json>, via: string | null, bot: string | null = null): Promise<string> {
   const { store } = hub;
   if (!isSlackMethod(method)) throw new Error(`not a Slack method: ${JSON.stringify(method)}`);
   if (["admin.", "apps.", "oauth."].some((p) => method.startsWith(p)) || method === "auth.revoke") throw new Error(`${method} is not for agents: it manages the Slack app itself`);
-  const connect = via ?? store.getSession(key)?.connect ?? null;
-  if (connect === null || connect === INTERNAL_CONNECT) throw new Error("this session has no Slack connect: give to= one of your Slack conversations");
+  const connect = via ?? slackConnectOf(hub, key, bot);
   const chat = hub.chat(connect);
   const textOf = (name: string): string | null => (typeof params[name] === "string" ? params[name] : null);
   const channel = textOf("channel") ?? textOf("channel_id");
