@@ -10,7 +10,7 @@
 // Pull-driven: Chrome casts a frame only once those before it are acknowledged (it keeps at most two out), and a frame
 // is acknowledged only when the one after it is asked for (`next`), so a slow viewer slows the casting rather than
 // having frames pile up. Of two waiting, the newer is given and the older let go.
-import { type Clip, type Frame, type FrameConfig, type ScreenInput, type ScreenVideo, type ScreenView, type ViewOptions, CLIP_TEXT_MAX } from "../screens/source.ts";
+import { type Clip, type Frame, type FrameConfig, type LoginField, type LoginFill, type ScreenInput, type ScreenVideo, type ScreenView, type ViewOptions, CLIP_TEXT_MAX } from "../screens/source.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
 
 /// The page's viewport in CSS pixels, as Page.getLayoutMetrics says it (what the screencast's frames show); null when
@@ -161,6 +161,77 @@ export const COPY_HOOK = `(() => {
     board.writeText = (text) => { say(String(text)); return write(text); };
   }
 })()`;
+
+/// The binding a tab's login fields call while a person driving it is offered to fill them.
+export const LOGIN_BINDING = "__stillfailLogin";
+/// What tells of the login field in focus, run in a page's top document (and each one it opens while watched): a
+/// password field, or one an account goes in (marked so, or a text field of a form with a password field, or named
+/// so), said as `{"field": …}` as the focus comes to one and `null` as it leaves; only when it changed. What it says is
+/// only a hint: the site is the station's to say (the tab's address), and the page may call the binding as it likes.
+export const LOGIN_HOOK = `(() => {
+  if (window !== window.top || window.__stillfailLoginHook) return;
+  window.__stillfailLoginHook = true;
+  const kind = (el) => {
+    if (!el || el.tagName !== "INPUT" || el.disabled || el.readOnly) return null;
+    const type = (el.type || "text").toLowerCase();
+    const auto = (el.autocomplete || "").toLowerCase();
+    if (type === "password") return "password";
+    if (!/^(text|email|tel)$/.test(type)) return null;
+    if (/username|email|webauthn/.test(auto)) return "username";
+    if (el.form && el.form.querySelector("input[type=password]")) return "username";
+    return /user|email|login|account|identifier/i.test((el.name || "") + " " + (el.id || "")) ? "username" : null;
+  };
+  const focused = (e) => (e && e.composedPath ? e.composedPath()[0] : document.activeElement);
+  let said = "";
+  const say = (field) => {
+    const now = field ? JSON.stringify({ field }) : "null";
+    if (now === said) return;
+    said = now;
+    try { if (typeof window.${LOGIN_BINDING} === "function") window.${LOGIN_BINDING}(now); } catch {}
+  };
+  document.addEventListener("focusin", (e) => say(kind(focused(e))), true);
+  document.addEventListener("focusout", () => setTimeout(() => {
+    let el = document.activeElement;
+    while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
+    say(kind(el));
+  }, 0), true);
+  say(kind(document.activeElement));
+})()`;
+
+/// Fills the login form the focus is in (or the page's first, where the focus is in none): its account field and its
+/// password field, as typing would leave them (the value set as the field's own setter does, then input and change
+/// told), the first of them focused. Run in a world of its own, so the page's scripts do not change how it goes. What
+/// was filled.
+export const fillScript = (username: string | undefined, password: string | undefined) => `((username, password) => {
+  const visible = (el) => !!el && !el.disabled && !el.readOnly && el.getClientRects().length > 0;
+  const deep = (root) => { let el = root.activeElement; while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement; return el; };
+  const active = deep(document);
+  const scope = (active && active.form) || (active && active.getRootNode && active.getRootNode()) || document;
+  const all = [...scope.querySelectorAll("input")].filter(visible);
+  const pass = all.find((el) => (el.type || "").toLowerCase() === "password");
+  const account = all.find((el) => el !== pass && /^(text|email|tel)$/.test((el.type || "text").toLowerCase())
+    && (/username|email|webauthn/.test((el.autocomplete || "").toLowerCase()) || /user|email|login|account|identifier/i.test((el.name || "") + " " + (el.id || "")) || (pass && el.compareDocumentPosition(pass) & Node.DOCUMENT_POSITION_FOLLOWING)));
+  const set = (el, value) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  const did = { username: false, password: false };
+  if (typeof username === "string" && account) { set(account, username); did.username = true; }
+  if (typeof password === "string" && pass) { set(pass, password); did.password = true; }
+  const first = did.username ? account : did.password ? pass : null;
+  if (first) first.focus();
+  return did;
+})(${JSON.stringify(username ?? null)}, ${JSON.stringify(password ?? null)})`;
+
+/// The host of an address (lower case, no trailing dot); "" for one with none (about:blank).
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/\.$/, "");
+  } catch {
+    return "";
+  }
+}
 
 type Cast = { ack: number; data: Uint8Array; meta: any };
 
@@ -332,6 +403,62 @@ export class TabView implements ScreenView {
       unlisten();
       undo();
     };
+  }
+
+  /// The login field in focus, as the page's hook says it, with the tab's host as the browser has its address (asked
+  /// each time: the page may have gone elsewhere), until the returned function.
+  watchLogin(heard: (login: LoginField | null) => void): () => void {
+    const { cdp, session, targetId } = this.#p;
+    let on = true;
+    let script: string | null = null;
+    const unlisten = cdp.on((e) => {
+      if (!on || e.method !== "Runtime.bindingCalled" || e.sessionId !== session || e.params?.name !== LOGIN_BINDING) return;
+      let said: any = null;
+      try {
+        said = JSON.parse(String(e.params.payload));
+      } catch {}
+      const field = said?.field === "username" || said?.field === "password" ? (said.field as LoginField["field"]) : null;
+      if (field === null) return heard(null);
+      void this.#host(targetId).then((host) => on && heard(host === "" ? null : { host, field }));
+    });
+    const undo = () => {
+      if (this.#ended) return;
+      void cdp.send("Runtime.removeBinding", { name: LOGIN_BINDING }, session).catch(() => {});
+      if (script !== null) void cdp.send("Page.removeScriptToEvaluateOnNewDocument", { identifier: script }, session).catch(() => {});
+    };
+    void (async () => {
+      try {
+        await cdp.send("Runtime.addBinding", { name: LOGIN_BINDING }, session);
+        script = (await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: LOGIN_HOOK }, session))?.identifier ?? null;
+        await cdp.send("Runtime.evaluate", { expression: LOGIN_HOOK }, session);
+        if (!on) undo();
+      } catch {}
+    })();
+    return () => {
+      if (!on) return;
+      on = false;
+      unlisten();
+      undo();
+    };
+  }
+
+  /// Fills the login form in focus with what the person's app gave, only while the tab is on `f.host`, in a world of
+  /// the page's top frame of its own (nothing of it logged).
+  async fill(f: LoginFill): Promise<void> {
+    if (this.#ended) return;
+    const { cdp, session, targetId } = this.#p;
+    if ((await this.#host(targetId)) !== f.host.toLowerCase()) return;
+    const { frameTree } = await cdp.send("Page.getFrameTree", {}, session);
+    const frameId = frameTree?.frame?.id;
+    if (typeof frameId !== "string") return;
+    const { executionContextId } = await cdp.send("Page.createIsolatedWorld", { frameId, worldName: "stillfail-fill" }, session);
+    await cdp.send("Runtime.evaluate", { expression: fillScript(f.username, f.password), contextId: executionContextId, returnByValue: true }, session);
+  }
+
+  /// The host of tab `targetId` as the browser has its address now ("" for none).
+  async #host(targetId: string): Promise<string> {
+    const { targetInfo } = await this.#p.cdp.send("Target.getTargetInfo", { targetId }).catch(() => ({ targetInfo: null }));
+    return hostOf(String(targetInfo?.url ?? ""));
   }
 
   close() {

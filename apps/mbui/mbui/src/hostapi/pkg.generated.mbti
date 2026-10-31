@@ -204,6 +204,12 @@ pub fn local_station_act(String) -> Unit
 
 pub fn log(String) -> Unit
 
+pub fn login_fields(String) -> (String, String)
+
+pub fn login_for_host(String, String) -> Bool
+
+pub fn logins_for(String, String) -> Array[PasswordLogin]
+
 pub fn mem_bytes() -> Double
 
 pub fn menu_setup(String) -> Unit
@@ -240,6 +246,8 @@ pub fn notice_show(channel~ : String, tag~ : String, title~ : String, body~ : St
 
 pub fn now() -> Double
 
+pub fn op_run(Array[String]) -> OpRun?
+
 pub fn open_tab(String) -> Bool
 
 pub fn open_url(String) -> Bool
@@ -247,6 +255,8 @@ pub fn open_url(String) -> Bool
 pub fn over_done(open_app~ : Bool) -> Unit
 
 pub fn own_clock() -> Bool
+
+pub fn passwords() -> Bool
 
 pub fn pdf_close(Int32) -> Unit
 
@@ -626,6 +636,24 @@ pub(all) struct NavItem {
   menu : Array[(String, String, Bool, String)]
 } derive(Eq)
 
+pub(all) struct OpDone {
+  code : Int32
+  out : String
+  err : String
+}
+
+pub struct OpRun {
+  // private fields
+}
+pub fn OpRun::done(Self) -> OpDone?
+pub fn OpRun::end(Self) -> Unit
+
+pub(all) struct PasswordLogin {
+  id : String
+  title : String
+  username : String
+} derive(Eq, Show)
+
 pub struct Pick {
   // private fields
 }
@@ -809,6 +837,10 @@ pub(open) trait Host {
   fn bl_open(Self, Int32, String) -> Int32 = _
   fn bl_back(Self, Int32) -> String = _
   fn bl_end(Self, Int32) -> Unit = _
+  fn pw_able(Self) -> Bool = _
+  fn pw_run(Self, String) -> Int32 = _
+  fn pw_out(Self, Int32) -> String = _
+  fn pw_end(Self, Int32) -> Unit = _
   fn pk_start(Self, Int32) -> Int32 = _
   fn pk_state(Self, Int32) -> Int32 = _
   fn pk_count(Self, Int32) -> Int32 = _

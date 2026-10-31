@@ -6277,6 +6277,14 @@ export interface ScreenLatency {
 	before: number;
 }
 
+/** A login field in focus on a screen (a tab of the station's browser). */
+export interface ScreenLogin {
+	/** The site's host, as the station's browser has the tab's address (not as the page says it). */
+	host: string;
+	/** `username` or `password`: which of its fields the focus is in. */
+	field: string;
+}
+
 /** A display mode's size, in pixels. */
 export interface ScreenSize {
 	width: number;
@@ -6367,6 +6375,11 @@ export interface ScreenViewState {
 	 * and put back as it was once nobody views it (a Windows station's desktop; none elsewhere, or while only looking).
 	 */
 	resolution?: ScreenResolution;
+	/**
+	 * While driving it: the login field in focus (a tab of the browser), for this device's password manager to
+	 * fill with `screen.input` `{t: "fill", host, username?, password?}`; none when the focus is in none.
+	 */
+	login?: ScreenLogin;
 }
 
 /** A station's screens (the `screens` topic; docs/remote-screens.md, client/core-ts/src/screens.ts). */

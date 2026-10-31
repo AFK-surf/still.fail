@@ -21,10 +21,10 @@ import { Tabs } from "../src/browser/tabs.ts";
 import { openAgentsDoor } from "../src/tools/http.ts";
 import { McpEndpoint } from "../src/tools/mcp.ts";
 import WebSocket, { WebSocketServer } from "ws";
-import { TabView, jpegSize, keyCode, keyEvent, toViewport } from "../src/browser/view.ts";
+import { TabView, hostOf, jpegSize, keyCode, keyEvent, toViewport } from "../src/browser/view.ts";
 import { makeScreens } from "../src/screens/source.ts";
 import { browserTools, howTo } from "../src/browser/tool.ts";
-import { asked } from "../src/mesh/screens.ts";
+import { asked, parseFill } from "../src/mesh/screens.ts";
 
 const dirs: string[] = [];
 const scratch = () => {
@@ -880,6 +880,17 @@ test("a sign-in whose grant ended while the browser was closed is taken out befo
   await next.endpoint("chat-1");
   assert.deepEqual(back, ["r_1"]);
   await next.close();
+});
+
+test("a login form filled from a person's app: what the wire takes (a host, an account or a password, bounded); the tab's host as its address has it", () => {
+  assert.deepEqual(parseFill({ t: "fill", host: "github.com", username: "a", password: "p" }), { host: "github.com", username: "a", password: "p" });
+  assert.deepEqual(parseFill({ t: "fill", host: "github.com", password: "p" }), { host: "github.com", password: "p" });
+  assert.equal(parseFill({ t: "fill", host: "github.com" }), null, "nothing to fill");
+  assert.equal(parseFill({ t: "fill", host: "", password: "p" }), null);
+  assert.equal(parseFill({ t: "fill", host: "github.com", password: "x".repeat(1025) }), null);
+  assert.equal(parseFill({ t: "text", text: "p" }), null);
+  assert.equal(hostOf("https://Accounts.Google.com./signin?x=1"), "accounts.google.com");
+  assert.equal(hostOf("about:blank"), "");
 });
 
 test("a site's cookies: its own and its subdomains', set again as DevTools takes them; taken out by setting them expired", () => {

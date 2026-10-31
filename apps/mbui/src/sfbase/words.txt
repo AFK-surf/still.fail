@@ -527,6 +527,14 @@ android-misc.screen.padOff
 android-misc.screen.padOn
 android-misc.screen.paste
 android-misc.screen.pastePath
+android-misc.screen.fill.offer
+android-misc.screen.fill.button
+android-misc.screen.fill.asking
+android-misc.screen.fill.pick
+android-misc.screen.fill.none
+android-misc.screen.fill.noOp
+android-misc.screen.fill.failed
+android-misc.screen.fill.empty
 android-misc.screen.pasteWhat
 android-misc.screen.reveal
 android-misc.screen.revealWhat

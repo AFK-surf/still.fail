@@ -1833,6 +1833,10 @@ export const SHAPES: Record<string, Shape> = {
     ["height", "u32"],
     ["modes", vec("ScreenSize"), { doc: "Those it takes, landscape, the largest first." }],
   ], { doc: "A screen's display resolution (docs/remote-screens.md `resolution`)." }),
+  ScreenLogin: struct([
+    ["host", "String", { doc: "The site's host, as the station's browser has the tab's address (not as the page says it)." }],
+    ["field", "String", { doc: "`username` or `password`: which of its fields the focus is in." }],
+  ], { doc: "A login field in focus on a screen (a tab of the station's browser)." }),
   ScreenViewState: struct([
     ["phase", "String", { doc: "`connecting`, `live`, `reconnecting`, `ended` (the station ended it, or the screen went), `outdated` (the\nstation is from before screens), `gone` (no such screen), `denied` (it cannot be seen now: no permission to\ncapture, no display) or `failed`." }],
     ["message", opt("String"), { doc: "Why, in the viewer's words, for a phase that is not `connecting` or `live`." }],
@@ -1855,6 +1859,7 @@ export const SHAPES: Record<string, Shape> = {
     ["video", opt("ScreenVideo"), { doc: "How its pictures are made, as the station said as the view opened (none from a station before it)." }],
     ["scale", opt("ScreenScale"), { doc: "While driving it: its display's scale, set with `screen.input` `{t: \"scale\", percent}` and put back as it was\nonce nobody views it (a Windows station's desktop; none elsewhere, or while only looking)." }],
     ["resolution", opt("ScreenResolution"), { doc: "While driving it: its display's resolution, set with `screen.input` `{t: \"resolution\", width, height}`\nand put back as it was once nobody views it (a Windows station's desktop; none elsewhere, or while only looking)." }],
+    ["login", opt("ScreenLogin"), { doc: "While driving it: the login field in focus (a tab of the browser), for this device's password manager to\nfill with `screen.input` `{t: \"fill\", host, username?, password?}`; none when the focus is in none." }],
   ], { doc: "A screen view as its page draws it (`screen.view`'s `{state}` values): each one whole, the latest is how it is." }),
   PrefsView: struct([
     ["onlyMine", "bool", { default: true, doc: "The lists show only the chats and connects the viewer takes part in." }],

@@ -4,6 +4,6 @@ import {
 
 options(
   targets: { "host_native.mbt": [ "native" ], "host_js.mbt": [ "js" ], "textref_native.mbt": [ "native" ], "textref_js.mbt": [ "js" ], "stream_native.mbt": [ "native" ], "stream_js.mbt": [ "js" ], "device_native.mbt": [ "native" ], "device_js.mbt": [ "js" ], "native_native.mbt": [ "native" ], "native_js.mbt": [ "js" ] },
-  "native-stub": [ "apple_render.m", "apple_text.m", "apple_image.m", "apple_listen.m", "apple_browser_login.m", "apple_views.m", "apple_stream.m", "apple_film.m", "mac_app.m" ],
+  "native-stub": [ "apple_render.m", "apple_text.m", "apple_image.m", "apple_listen.m", "apple_browser_login.m", "apple_passwords.m", "apple_views.m", "apple_stream.m", "apple_film.m", "mac_app.m" ],
   link: { "native": { "stub-cc-flags": "-fobjc-arc -O2" } },
 )

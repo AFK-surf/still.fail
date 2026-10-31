@@ -149,6 +149,10 @@ pub(open) trait Host {
   bl_open(Self, Int, String) -> Int = _
   bl_back(Self, Int) -> String = _
   bl_end(Self, Int) -> Unit = _
+  pw_able(Self) -> Bool = _
+  pw_run(Self, String) -> Int = _
+  pw_out(Self, Int) -> String = _
+  pw_end(Self, Int) -> Unit = _
   pk_start(Self, Int) -> Int = _
   pk_state(Self, Int) -> Int = _
   pk_count(Self, Int) -> Int = _
@@ -909,6 +913,26 @@ impl Host with bl_back(_, _) {
 
 ///|
 impl Host with bl_end(_, _) {
+  ()
+}
+
+///|
+impl Host with pw_able(_) {
+  false
+}
+
+///|
+impl Host with pw_run(_, _) {
+  0
+}
+
+///|
+impl Host with pw_out(_, _) {
+  ""
+}
+
+///|
+impl Host with pw_end(_, _) {
   ()
 }
 
@@ -2421,6 +2445,28 @@ fn bl_back(id : Int) -> String {
 ///|
 fn bl_end(id : Int) -> Unit {
   current.val.bl_end(id)
+}
+
+// This device's password manager (passwords.mbt): `op`, run with the arguments given (a JSON array), how it ended.
+
+///|
+fn pw_able() -> Bool {
+  current.val.pw_able()
+}
+
+///|
+fn pw_run(args : String) -> Int {
+  current.val.pw_run(args)
+}
+
+///|
+fn pw_out(id : Int) -> String {
+  current.val.pw_out(id)
+}
+
+///|
+fn pw_end(id : Int) -> Unit {
+  current.val.pw_end(id)
 }
 
 ///|

@@ -121,6 +121,14 @@ priv struct ScreenSess {
   mut asked_bounds : (Int, Int)
   /// the most device pixels the stage it is shown on has had (0 × 0 before it is laid out): 自动 asks that large
   mut stage_px : (Int, Int)
+  /// filling the page's login from this device's password manager (screen_fill.mbt): where it is (`listing`,
+  /// `choosing`, `getting`, `said`; "" nothing under way), the run of it under way, the logins to pick from, what it
+  /// said where it did not fill, and the site it is for
+  fill_step : @signals.Signal[String]
+  mut fill_run : @hostapi.OpRun?
+  mut fill_choices : Array[@hostapi.PasswordLogin]
+  mut fill_note : String
+  mut fill_host : String
 }
 
 ///|
@@ -189,6 +197,11 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         asked_fps: 0,
         asked_bounds: (0, 0),
         stage_px: (0, 0),
+        fill_step: @signals.signal(""),
+        fill_run: None,
+        fill_choices: [],
+        fill_note: "",
+        fill_host: "",
       }
       screens_open[key] = s
       s
