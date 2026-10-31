@@ -739,3 +739,105 @@ test "a layer that stays open while what it does may not be left (stays): Escape
     (["Escape"], ["Escape"], 1, false),
   ])
 }
+
+///|
+test "a layer anchored to a box with presses of its own in it: a press on one of them dismisses nothing (it is on the anchor), one past the box dismisses it as it goes down" {
+  let told : Array[String] = []
+  let pressed = Ref(0)
+  let t = Tester::new(
+    fn(c) {
+      let anchor = c.id("anchor")
+      c.box(id=anchor, w=Px(60.0), h=Px(300.0), fn() {
+        c.box(w=Px(60.0), h=Px(200.0), fn() {  }) |> ignore
+        let inner = c.id("inner")
+        c.box(id=inner, w=Px(60.0), h=Px(40.0), fn() {  }) |> ignore
+        if c.clicked(inner) {
+          pressed.val = pressed.val + 1
+        }
+      })
+      |> ignore
+      c.with_dismissed(fn(why) { told.push("\{why}") }, fn() {
+        c.overlay("beside", anchor~, fn() { c.box(w=Px(100.0), h=Px(100.0), fn() {  }) |> ignore }) |> ignore
+      })
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+  )
+  t.draw()
+  t.draw()
+  // (under the layer's own 100 square, on the anchor's own press)
+  t.touch_at(0, 30.0, 220.0, t.time())
+  let on_inner = told.copy()
+  t.touch_at(2, 30.0, 220.0, t.time())
+  t.draw()
+  let after = (told.copy(), pressed.val)
+  t.touch_at(0, 300.0, 250.0, t.time())
+  let past = told.copy()
+  assert_eq((on_inner, after, past), ([], ([], 1), ["Outside"]))
+}
+
+///|
+/// A layer anchored to a box 60 by 300 at the window's left, its own press 40 high 200 down in it; the box in one that
+/// cuts it at `cut` high, where given; and, where `cover`, a press of its own drawn over the anchor's foot (200 to 260
+/// down, in a layer of the page's: no part of the anchor). What the layer was told as a press goes down at (30, 220) and
+/// whether the cover took it.
+fn anchor_pressed(cut? : Double, cover? : Bool = false) -> (Array[String], Int) {
+  let told : Array[String] = []
+  let covered = Ref(0)
+  let t = Tester::new(
+    fn(c) {
+      let anchor = c.id("anchor")
+      let body = fn() {
+        c.box(id=anchor, w=Px(60.0), h=Px(300.0), fn() {
+          c.box(w=Px(60.0), h=Px(200.0), fn() {  }) |> ignore
+          c.box(id=c.id("inner"), w=Px(60.0), h=Px(40.0), fn() {  }) |> ignore
+        })
+        |> ignore
+      }
+      match cut {
+        Some(h) => c.box(w=Px(60.0), h=Px(h), clip=true, body) |> ignore
+        None => body()
+      }
+      if cover {
+        c.layer(fn() {
+          c.box(w=Px(60.0), h=Px(200.0), fn() {  }) |> ignore
+          let k = c.id("cover")
+          c.box(id=k, w=Px(60.0), h=Px(60.0), fn() {  }) |> ignore
+          if c.pressed(k) {
+            covered.val = covered.val + 1
+          }
+        })
+        |> ignore
+      }
+      c.with_dismissed(fn(why) { told.push("\{why}") }, fn() {
+        c.overlay("beside", anchor~, fn() { c.box(w=Px(100.0), h=Px(100.0), fn() {  }) |> ignore }) |> ignore
+      })
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+  )
+  t.draw()
+  t.draw()
+  t.touch_at(0, 30.0, 220.0, t.time())
+  let at_down = told.copy()
+  t.frame()
+  (at_down, covered.val)
+}
+
+///|
+test "a layer's anchor cut short by what holds it: a press where its box is laid out but cut away is outside it, the layer dismissed as it goes down" {
+  assert_eq(anchor_pressed(cut=150.0).0, ["Outside"])
+}
+
+///|
+test "a layer's anchor with a press of another's drawn over it there (no part of it): a press there is that one's, outside the anchor, the layer dismissed as it goes down" {
+  let (told, covered) = anchor_pressed(cover=true)
+  assert_eq((told, covered > 0), (["Outside"], true))
+}
+
+///|
+test "a layer's anchor, a press of its own in it: on the anchor, nothing dismissed" {
+  assert_eq(anchor_pressed().0, [])
+}

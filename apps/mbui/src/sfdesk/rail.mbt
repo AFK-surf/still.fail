@@ -90,6 +90,34 @@ pub fn lit_place() -> String {
 }
 
 ///|
+/// The places the rail shows: its own, and a place left out of it but in view at their foot while it is (not while the
+/// rail is changed).
+fn rail_shown(src : Source, w : Workspace) -> Array[String] {
+  let places = rail_items(src, w.id)
+  let in_view = rail_in_view(src, w)
+  let shown = places.copy()
+  if in_view != "" && !places.contains(in_view) && !wide.editing.get() {
+    shown.push(in_view)
+  }
+  shown
+}
+
+///|
+/// Whether `place` is lit in the rail now (Rail.tsx `on`): the lit place's; a list's while its list is the one shown
+/// (我参与的, 监控中 by the filter when they are in the rail, else 对话; 已归档 while the archive is open: shownList).
+fn rail_lit(src : Source, w : Workspace, place : String) -> Bool {
+  let lit = lit_place()
+  match place {
+    "chats" | "mine" | "watching" | "archive" => {
+      let list = list_place(list_mode(src, w))
+      let shown_list = if rail_shown(src, w).contains(list) { list } else { "chats" }
+      lit == "chats" && shown_list == place
+    }
+    _ => lit == place
+  }
+}
+
+///|
 /// The place whose sidebar the block holds (what it draws, the width of its group), the archive's list its own
 /// ("archive", list_place's): the lit place's; in a place with none of its own (place_bare), the one it had, which the
 /// block closes holding (the web's WorkspaceShell `kept`), not the chats' list it would fall to: nothing opens the
@@ -195,24 +223,10 @@ fn rail(
     c.box(style=rail_head, fn() {
       c.box(style=rail_top.then(@ui.style(h=Fixed(top_h))), fn() {  }) |> ignore
       let places = rail_items(src, w.id)
-      // a list's place lit while its list is the one shown (Rail.tsx `on`): 我参与的, 监控中 by the filter when they
-      // are in the rail, else 对话; 已归档 while the archive is open (shownList)
-      let list = list_place(list_mode(src, w))
-      let listy = lit == "chats"
-      // a place left out of the rail but in view: at the foot of its places, lit, while it is
-      let in_view = rail_in_view(src, w)
-      let shown = places.copy()
-      if in_view != "" && !places.contains(in_view) && !wide.editing.get() {
-        shown.push(in_view)
-      }
-      let shown_list = if shown.contains(list) { list } else { "chats" }
+      let shown = rail_shown(src, w)
       c.box(style=rail_places_col, fn() {
         for place in shown {
-          let on = match place {
-            "chats" | "mine" | "watching" | "archive" => listy && shown_list == place
-            _ => lit == place
-          }
-          rail_place(c, src, w, place, on, places)
+          rail_place(c, src, w, place, rail_lit(src, w, place), places)
         }
       })
       |> ignore
@@ -559,7 +573,18 @@ fn rail_place(
     Some((p, _, dy)) if p == place && dy.abs() > rail_slop => dy
     _ => 0.0
   }
-  if c.clicked(id) && !dragged && !wide.editing.get() {
+  ignore(dragged)
+  // pressed and let go: as it is let go, as things are then (while the rail is changed, a press of it is the change's;
+  // dragged past a few points from where it went down, to where it is let go, a drag's; lit or not as it is then)
+  c.on_press(id, fn() {
+    if wide.editing.get() {
+      return
+    }
+    match wide.rail_drag.get() {
+      Some((p, y0, _)) if p == place && (py() - y0).abs() > rail_slop => return
+      _ => ()
+    }
+    let on = rail_lit(src, w, place)
     // the lit place pressed again (not 待处理, a panel): its sidebar folded or opened, not gone to; folded so with the
     // pointer on the rail, it is shown a while (Rail.tsx's rail onClickCapture); on the tape, the page brought over
     if on && place != "attention" && !place_bare(lit_place()) {
@@ -576,7 +601,7 @@ fn rail_place(
       // pressed into a folded one)
       wide.peek_next.set(wide.crowded && !place_bare(place) && place != "attention")
     }
-  }
+  })
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
   let here = field(field(marks.value, "workspaces"), w.id)
   let dot = match place {
@@ -762,30 +787,37 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let (ax, ay, aw, ah) = by.unwrap_or((0.0, rail_menu_clear, rail_w - side_into_rail, 0.0))
   // a place's ＋: put in, the rail changed from there (once the menu has gone)
   let added : Ref[String] = Ref("")
-  let m = @sf.dropdown(
-    c,
-    "rail-menu",
-    true,
-    0,
-    entries,
-    icons,
-    @sf.menu_w,
-    side=Right,
-    offset=rail_menu_off,
-    at=(ax, dmax(ay, rail_menu_clear), aw, ah),
-    row_end=fn(c, s) {
-      if s.entry.value.has_prefix("go:") {
-        let i = s.entry.value.view(start_offset=3).to_string()
-        if rail_menu_add(c, i, rail_label(src, i), s.hot) {
-          added.val = i
-          let next = kept.copy()
-          next.push(i)
-          rail_keep(src, w.id, next)
-          wide.editing.set(true)
-        }
-      }
-    },
-  )
+  // (dismissed by the hand, Escape or a press outside it: closed at that moment)
+  let menu : Ref[@kit.Menu?] = Ref(None)
+  c.with_dismissed(fn(_) { wide.rail_menu.set(None) }, fn() {
+    menu.val = Some(
+      @sf.dropdown(
+        c,
+        "rail-menu",
+        true,
+        0,
+        entries,
+        icons,
+        @sf.menu_w,
+        side=Right,
+        offset=rail_menu_off,
+        at=(ax, dmax(ay, rail_menu_clear), aw, ah),
+        row_end=fn(c, s) {
+          if s.entry.value.has_prefix("go:") {
+            let i = s.entry.value.view(start_offset=3).to_string()
+            if rail_menu_add(c, i, rail_label(src, i), s.hot) {
+              added.val = i
+              let next = kept.copy()
+              next.push(i)
+              rail_keep(src, w.id, next)
+              wide.editing.set(true)
+            }
+          }
+        },
+      )
+    )
+  })
+  let m = menu.val.unwrap()
   if !m.open || added.val != "" {
     wide.rail_menu.set(None)
   }
@@ -945,51 +977,52 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let kept = rail_items(src, w.id)
   // beside the rail (its 56: the sidebar reaches over its last 8), 8 past it, clear of the window's buttons' row
   // (Rail.tsx: Popover.Anchor the rail, collisionPadding top 52)
-  let p = @kit.popover(
-    c,
-    "rail/adder",
-    wide.editing.get(),
-    c.id("rail"),
-    side=Right,
-    along=Start,
-    offset=rail_adder_off,
-    at=(0.0, rail_menu_clear, rail_w, 0.0),
-    look=@sf.beside_look(Px(rail_adder_w), inner=adder_body),
+  // (ended as it is dismissed, at that moment: Esc, back, a press outside it and the rail, its anchor: one in the rail
+  // dismisses nothing, its places moved and taken out there)
+  c.with_dismissed(
+    fn(_) { wide.editing.set(false) },
     fn() {
-      @sf.panel_head(c, @sf.t("web-main.rail.customize"), note=@sf.t("web-main.rail.customizeLead"))
-      // (by kind, as the core groups them: railView's `groups`)
-      let kinds = items(rail_view(src), "groups").map(fn(g) {
-        (text(Some(g), "label"), words_in(items(Some(g), "places")))
-      })
-      let mut none = true
-      for k in kinds {
-        let hidden = k.1.filter(fn(i) { !kept.contains(i) })
-        if hidden.length() == 0 {
-          continue
-        }
-        none = false
-        @sf.panel_group(c, label=k.0, fn() {
-          for i in hidden {
-            if adder_row(c, i, rail_label(src, i)) {
-              let next = kept.copy()
-              next.push(i)
-              rail_keep(src, w.id, next)
+      @kit.popover(
+        c,
+        "rail/adder",
+        wide.editing.get(),
+        c.id("rail"),
+        side=Right,
+        along=Start,
+        offset=rail_adder_off,
+        at=(0.0, rail_menu_clear, rail_w, 0.0),
+        look=@sf.beside_look(Px(rail_adder_w), inner=adder_body),
+        fn() {
+          @sf.panel_head(c, @sf.t("web-main.rail.customize"), note=@sf.t("web-main.rail.customizeLead"))
+          // (by kind, as the core groups them: railView's `groups`)
+          let kinds = items(rail_view(src), "groups").map(fn(g) {
+            (text(Some(g), "label"), words_in(items(Some(g), "places")))
+          })
+          let mut none = true
+          for k in kinds {
+            let hidden = k.1.filter(fn(i) { !kept.contains(i) })
+            if hidden.length() == 0 {
+              continue
             }
+            none = false
+            @sf.panel_group(c, label=k.0, fn() {
+              for i in hidden {
+                if adder_row(c, i, rail_label(src, i)) {
+                  let next = kept.copy()
+                  next.push(i)
+                  rail_keep(src, w.id, next)
+                }
+              }
+            })
           }
-        })
-      }
-      if none {
-        @sf.panel_note(c, @sf.t("web-main.rail.allIn"))
-      }
+          if none {
+            @sf.panel_note(c, @sf.t("web-main.rail.allIn"))
+          }
+        },
+      )
+      |> ignore
     },
   )
-  // (pressing in the rail does not end it: its places are moved and taken out there)
-  if !p.value && wide.editing.get() {
-    let (px, _, _) = c.pointer()
-    if px >= rail_w {
-      wide.editing.set(false)
-    }
-  }
 }
 
 ///|

@@ -959,6 +959,7 @@ pub struct Ctx {
   dismissals : Map[Int32, Dismiss]
   layer_return : Map[Int32, Int32]
   mut press_down : (Double, Double)?
+  mut press_down_tree : Bool
   mut inst : FixedArray[Double]
   mut ninst : Int32
   segs : Array[Double]
