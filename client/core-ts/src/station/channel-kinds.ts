@@ -68,7 +68,34 @@ export const TRANSCRIPT: Kind = {
   },
 };
 
+/// A thread's letters (GET /threads/:id/letters): what its agents and other chats' wrote each other, their own log beside
+/// its entries, numbered from 1 in it, each as an entry is said (marked `letter`). How far it goes is the thread's summary's
+/// `lettersLast`. Brought onto the device as the letters are read (their page), then kept whole. Letters from before
+/// their log are among the thread's entries.
+export const LETTERS: Kind = {
+  name: "letter",
+  first: 1,
+  page: PAGE,
+  whole: true,
+  cost: 1,
+  task: (id) => `letters/${id}`,
+  path: (id, read) => {
+    const letters = `/threads/${id}/letters`;
+    if ("latest" in read) return `${letters}?limit=${PAGE}`;
+    if ("after" in read) return `${letters}?after=${read.after}`;
+    if ("before" in read) return `${letters}?before=${read.before}&limit=${PAGE}`;
+    return `${letters}?from=${read.from}&to=${read.to}`;
+  },
+  items: (answer) =>
+    list(get(answer, "letters")).flatMap((e) => {
+      const n = nOf(e);
+      return n === null ? [] : [[n, e] as [number, unknown]];
+    }),
+  last: (answer) => u64(get(answer, "last")),
+};
+
 export const entriesOf = (station: string, thread: number): Channel => ({ kind: ENTRIES, station, id: String(thread) });
+export const lettersOf = (station: string, thread: number): Channel => ({ kind: LETTERS, station, id: String(thread) });
 export const transcriptOf = (station: string, session: string): Channel => ({ kind: TRANSCRIPT, station, id: session });
 
 /// Where the channels' items are held: the logs of the core's database, by number (data.ts), let go for room where a
@@ -78,16 +105,23 @@ export const transcriptOf = (station: string, session: string): Channel => ({ ki
 /// a transcript kept whole from its lowest item held (a station from before says neither how far one goes nor gives a
 /// stretch in brief).
 export function heldIn(data: Data, follows: (station: string) => boolean = () => true): Held {
-  const table = (c: Channel) => (c.kind === ENTRIES ? "entry" : "transcript");
+  const table = (c: Channel) => (c.kind === ENTRIES ? "entry" : c.kind === LETTERS ? "letter" : "transcript");
+  // (how far a thread's letters go, as told since its summary: a letter told before its summary is read again)
+  const lettersRaised = new Map<string, number>();
+  const lettersHead = (c: Channel) => {
+    const said = u64(get(data.thread(c.station, Number(c.id)), "lettersLast")) ?? 0;
+    return Math.max(said, lettersRaised.get(`${c.station}\u0001${c.id}`) ?? 0, data.logSpan("letter", c.station, c.id)?.max ?? 0);
+  };
   return {
     numbers: (c) => data.logNumbers(table(c), c.station, c.id),
     span: (c) => data.logSpan(table(c), c.station, c.id),
     count: (c, from, to) => data.logCount(table(c), c.station, c.id, from, to),
     put: (c, items, cutAfter) => data.putItems(table(c), c.station, c.id, items, cutAfter),
     letGo: (c) => data.evicted(table(c), c.station, c.id),
-    head: (c) => (c.kind === ENTRIES ? data.threadLast(c.station, Number(c.id)) : data.transcriptHead(c.station, c.id)),
+    head: (c) => (c.kind === ENTRIES ? data.threadLast(c.station, Number(c.id)) : c.kind === LETTERS ? lettersHead(c) : data.transcriptHead(c.station, c.id)),
     raise: (c, n) => {
       if (c.kind === ENTRIES) data.raiseLast(c.station, Number(c.id), n);
+      else if (c.kind === LETTERS) lettersRaised.set(`${c.station}\u0001${c.id}`, Math.max(n, lettersRaised.get(`${c.station}\u0001${c.id}`) ?? 0));
       else data.raiseTranscript(c.station, c.id, n);
     },
     holes: (c) => c.kind !== TRANSCRIPT || follows(c.station),

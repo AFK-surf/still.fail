@@ -1,7 +1,7 @@
 // What the readers answer, by name: each module of reads adds its own. Every op runs in a reader thread over a
 // read-only store, with the request's language set (`setSpoken`), and returns a JSON value.
 import type { Store } from "./store.ts";
-import { chatRows, chats, entries } from "./views.ts";
+import { chatRows, chats, entries, letters } from "./views.ts";
 import { usageOps } from "./ops-usage.ts";
 import { sessionOps } from "./ops-sessions.ts";
 import { saidNotices, turnNotices } from "./notices.ts";
@@ -15,6 +15,7 @@ export const ops: Record<string, ReadOp> = {
   chats: (store, a) => chats(store, a.viewer, a.archived),
   chatRows: (store, a) => chatRows(store, a.viewer, a.sessions, a.threads),
   entries: (store, a) => entries(store, a.viewer, a.thread, a.params),
+  letters: (store, a) => letters(store, a.viewer, a.thread, a.params),
   ...usageOps,
   ...sessionOps,
   turnNotices: (store, a) => turnNotices(store, a.key, a.since, a.ended, a.lang),

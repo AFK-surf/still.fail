@@ -11,6 +11,7 @@ import { cardArg, optionsArg } from "../src/sessions/args.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { fromPeer } from "../src/sessions/messages.ts";
+import { handedOf } from "../src/store/rows.ts";
 import { CREATE, MAX_OPEN, NOTICE, createForPeer, noticeForPeer } from "../src/sessions/opened.ts";
 import { stationLang, tr } from "../src/ops/i18n.ts";
 import { forPeer } from "../src/sessions/others.ts";
@@ -682,24 +683,34 @@ test("an agent writes to another session's chat, which sees whom it is from", as
   const [keyA, keyB] = [sessionKey("cl", "C1", a.threadTs), sessionKey("cl", "C1", b.threadTs)];
   const linkB = `https://ember.test/o/ws/st/${keyB.replaceAll(":", "%3A")}`;
   const posted = r.chat.posts.length;
+  const [threadA, threadB] = [r.thread("C1", a.threadTs).id, r.thread("C1", b.threadTs).id];
+  const entries = (thread: number) => (r.store.db.prepare("SELECT COUNT(*) AS n FROM entries WHERE thread = ?").get(thread) as { n: number }).n;
+  const [entriesA, entriesB] = [entries(threadA), entries(threadB)];
   const sent = await r.call(keyA, "session_send", { to: linkB, text: "the build is at /tmp/out" });
   assert.ok(sent.includes(`C1/${b.threadTs}`) && sent.includes(keyB), sent);
-  // A letter: kept in B's chat apart from what is said there, posted nowhere (not in Slack), headed with A's chat, and
-  // handed to B.
+  // A letter: kept in B's chat's own log of letters, not among what is said there (its entries, numbered, paged and
+  // synced as the chat), posted nowhere (not in Slack), headed with A's chat, and handed to B.
   assert.equal(r.chat.posts.length, posted, "posted nowhere");
+  assert.deepEqual([entries(threadA), entries(threadB)], [entriesA, entriesB], "no entry of either chat");
   const linkA = `https://ember.test/o/ws/st/${keyA.replaceAll(":", "%3A")}`;
-  const last = r.said(r.thread("C1", b.threadTs).id).at(-1)!;
-  const said = last.text;
+  const [last] = r.letters(threadB);
+  const said = last!.text;
   assert.ok(matches(said, [`<${linkA}|`, ">", "\n\nthe build is at /tmp/out"]), said);
-  assert.deepEqual([last.authorKind, last.author, last.letter?.way, last.letter?.link], ["agent", keyA, "in", linkA]);
+  assert.deepEqual([last!.n, last!.authorKind, last!.author, last!.letter?.way, last!.letter?.link], [1, "agent", keyA, "in", linkA]);
   assert.deepEqual(
-    r.store.pendingMessages(keyB).map((p) => p.message.text),
-    [said],
+    r.store.pendingMessages(keyB).map((p) => [p.message.text, p.message.apart]),
+    [[said, true]],
   );
-  // Kept in A's chat too, going out, by its agent: handed to no one.
-  const out = r.said(r.thread("C1", a.threadTs).id).at(-1)!;
-  assert.deepEqual([out.author, out.letter?.way, out.letter?.link, out.text.endsWith("\n\nthe build is at /tmp/out")], [keyA, "out", linkB, true]);
+  // Read, it is not handed again.
+  r.store.markDelivered(keyB, r.store.pendingMessages(keyB).map(handedOf));
+  assert.deepEqual(r.store.pendingMessages(keyB), []);
+  // Kept in A's chat's own log too, going out, by its agent: handed to no one.
+  const [out] = r.letters(threadA);
+  assert.deepEqual([out!.author, out!.letter?.way, out!.letter?.link, out!.text.endsWith("\n\nthe build is at /tmp/out")], [keyA, "out", linkB, true]);
   assert.deepEqual(r.store.pendingMessages(keyA), [], "not handed back to its sender");
+  // Each chat counts its letters (its summary: how many, how far their log goes).
+  const summary = r.store.listThreads("", null, threadB)[0]!;
+  assert.deepEqual([summary.letters, summary.lettersLast], [1, 1]);
   // By session key too; not to itself, nor into a conversation it is in.
   await r.call(keyB, "session_send", { to: keyA, text: "tests pass" });
   assert.ok((await r.refused(keyA, "session_send", { to: keyA, text: "hi" })).includes("chat_post"));
@@ -749,7 +760,8 @@ test("a message to another station's session goes through the station transport,
   const from = { title: "部署", link: "https://ember.test/o/ws/far/s%3A1" };
   const got = await fromPeer(r.hub, "far", { method: "session.message", session: "s:1", to: keyB, text: "yes", from });
   assert.equal(got.thread, `C1/${b.threadTs}`);
-  const last = r.said(r.thread("C1", b.threadTs).id).at(-1)!;
+  // (a letter: kept in the chat's own log of them)
+  const last = r.letters(r.thread("C1", b.threadTs).id).at(-1)!;
   assert.deepEqual([last.authorKind, last.author], ["agent", "far/s:1"]);
   assert.ok(matches(last.text, ["<https://ember.test/o/ws/far/s%3A1|部署>", "\n\nyes"]), last.text);
   assert.equal(r.store.pendingMessages(keyB).length, 1);
@@ -852,7 +864,7 @@ test("files go between stations: a chat's attachments come with reading it, and 
   writeFileSync(join(r.session(keyB).workspace, "answer.txt"), "seen it");
   await r.call(keyB, "session_send", { to: chat, text: "here is mine", files: ["answer.txt"] });
   assert.deepEqual(asked, ["session.put", "session.message"]);
-  const got = r.said(r.thread("C1", a.threadTs).id).at(-1)!;
+  const got = r.letters(r.thread("C1", a.threadTs).id).at(-1)!;
   assert.deepEqual([got.author, got.attachments.map((f) => f.name)], [`near/${keyB}`, ["answer.txt"]]);
   assert.ok(got.attachments[0]!.path.startsWith(join(workspaceA, "uploads")));
   assert.equal(readFileSync(got.attachments[0]!.path, "utf8"), "seen it");
@@ -860,7 +872,7 @@ test("files go between stations: a chat's attachments come with reading it, and 
   await assert.rejects(fromPeer(r.hub, "near", { session: keyB, to: keyA, text: "again", files: [{ id: "nope", name: "x.txt" }] }), /did not all arrive/);
   // On this station too: copied into the uploads of the chat it goes to.
   await r.call(keyB, "session_send", { to: keyA, text: "and again", files: ["answer.txt"] });
-  const local = r.said(r.thread("C1", a.threadTs).id).at(-1)!;
+  const local = r.letters(r.thread("C1", a.threadTs).id).at(-1)!;
   assert.ok(local.attachments[0]!.path.startsWith(join(workspaceA, "uploads")) && local.text.endsWith("and again"));
   assert.ok((await r.refused(keyB, "session_send", { to: chat, text: "x", files: ["missing.txt"] })).includes("no such file"));
   // Packed with its archived workspace: read out once, every chunk after from what was read out.

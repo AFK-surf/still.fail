@@ -244,8 +244,9 @@ export function lettersByChat(letters: { message: J; way: "in" | "out"; title: s
     const key = l.link ?? `\u0000${l.title}`;
     const was = chats.get(key);
     const letter = { ...l.message, way: l.way };
-    const seq = u64(l.message.seq) ?? 0;
-    chats.set(key, was === undefined ? { title: l.title, link: l.link, letters: [letter], last: seq } : { ...was, letters: [...was.letters, letter], last: Math.max(was.last, seq) });
+    // (by when written: letters from before their own log are entries, numbered among the chat's, those of it in it)
+    const at = u64(l.message.createdAt) ?? 0;
+    chats.set(key, was === undefined ? { title: l.title, link: l.link, letters: [letter], last: at } : { ...was, letters: [...was.letters, letter], last: Math.max(was.last, at) });
   }
   return [...chats.values()].sort((a, b) => b.last - a.last).map(({ title, link, letters }) => {
     const last = letters.at(-1)!;
@@ -2101,7 +2102,11 @@ export class Views implements Owner {
     const scope = ofAddress(station);
     const viewer = this.me(scope);
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
-    const letters = merge(arr(get(held.ok, "entries"))).flatMap((m) => {
+    // Those kept as entries before letters had their own log, and those of it (`letters`), in the order written.
+    const written = [...merge(arr(get(held.ok, "entries"))).filter((m) => isLetter(m, keys)), ...merge(arr(get(held.ok, "letters")))];
+    const at = (m: J) => u64(m.createdAt) ?? 0;
+    written.sort((a, b) => at(a) - at(b));
+    const letters = written.flatMap((m) => {
       if (!isLetter(m, keys)) return [];
       const l = letterWay(m);
       const shown: J = { ...shownMessage({ ...m, text: letterWords(str(m.text) ?? "") }, agents, viewer, [], members_, [], thread.creator), waiting: false };

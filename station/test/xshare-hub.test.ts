@@ -107,10 +107,10 @@ test("an agent of another workspace finds, reads and (when allowed) writes to a 
   assert.ok((await near.rig.call(keyN, "chat_list", {})).includes("you may send to it"));
   await near.rig.call(keyN, "session_send", { to: linkA, text: "send me the plan" });
   const thread = far.rig.thread("C1", a.threadTs);
-  const got = far.rig.said(thread.id).at(-1)!;
+  const got = far.rig.letters(thread.id).at(-1)!;
   assert.ok(got.author === `near/${keyN}` && got.text.endsWith("send me the plan"), got.text);
   await far.rig.call(keyA, "session_send", { to: near.rig.hub.link(keyN)!, text: "here it is" });
-  const answered = near.rig.said(near.rig.thread("C1", n.threadTs).id).at(-1)!;
+  const answered = near.rig.letters(near.rig.thread("C1", n.threadTs).id).at(-1)!;
   assert.ok(answered.author === `far/${keyA}` && answered.text.endsWith("here it is"), answered.text);
   // It cannot write to another session there.
   const other = say("<@UBOT> unrelated");

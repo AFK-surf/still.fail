@@ -1212,6 +1212,46 @@ test("what_two_chats_agents_wrote_each_other_is_not_in_the_chat_but_on_its_lette
   core.close();
 });
 
+test("letters_kept_in_their_own_log_are_no_entries_of_the_chat_and_its_letters_page_has_them_with_those_from_before_it", async () => {
+  // The user, 2026-10-31: a chat its agent and its supervisor wrote each other a page of letters in opened on nothing it
+  // shows ("早他妈说了要分开"). Letters are kept in their own log (GET /threads/:id/letters, numbered from 1 in it):
+  // the chat's entries are what it shows, its latest page its latest messages.
+  const said = (n: number, over: J = {}) => ({ thread: 7, n, kind: "message", ts: `${n}.0`, authorKind: "agent", author: "k1", authorName: null, text: "好", at: n * 10, ...over });
+  const backups = { title: "备份", link: "https://x/o/w/s/b" };
+  const coming = (n: number, at: number, text: string) => ({ ...said(n, { author: "peer/ember:c-9", text: `来自 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "in", ...backups } }), ts: `l${n}`, at });
+  const going = (n: number, at: number, text: string) => ({ ...said(n, { text: `发给 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "out", ...backups } }), ts: `l${n}`, at });
+  const s = await started({
+    ...base(),
+    "GET /threads": [{ ...threadView(7, 3), letters: 3, lettersLast: 2 }],
+    // One from before their own log, among its entries; the chat's messages around it.
+    "GET /threads/7/entries?limit=50": { first: 1, last: 3, entries: [said(1, { authorKind: "person", author: "me@x", text: "改备份" }), coming(2, 20, "旧的一封"), said(3)] },
+    "GET /threads/7/letters?from=1&to=2": { last: 2, letters: [going(1, 25, "脚本放好了吗"), coming(2, 35, "放好了")] },
+  });
+  const { host, core } = s;
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+  subscribe(core, ui, 2, { topic: "chatLetters", station: "ws/st", thread: 7 });
+  await host.settle();
+  apply(host, values);
+  const chat = v(values, 1);
+  assert.deepEqual(chat.messages.map((m: J) => m.seq), [1, 3]);
+  assert.equal(chat.letters, 3);
+  // Its letters: those from before their log and those of it, in the order written.
+  const page = () => v(values, 2).chats.map((c: J) => [c.title, c.letters.map((m: J) => [m.way, m.text])]);
+  assert.equal(v(values, 2).whole, true);
+  assert.deepEqual(page(), [["备份", [["in", "旧的一封"], ["out", "脚本放好了吗"], ["in", "放好了"]]]]);
+  // One told as it is kept: on the page, nothing of it in the chat.
+  s.push("letters", { id: 7, letters: [going(3, 45, "谢谢")] });
+  s.push("thread-view", { ...threadView(7, 3), letters: 4, lettersLast: 3 });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(page(), [["备份", [["in", "旧的一封"], ["out", "脚本放好了吗"], ["in", "放好了"], ["out", "谢谢"]]]]);
+  assert.deepEqual(v(values, 1).messages.map((m: J) => m.seq), [1, 3]);
+  assert.equal(v(values, 1).letters, 4);
+  core.close();
+});
+
 test("notifications_are_on_until_turned_off_and_kept_so_with_no_pushes", async () => {
   const { host, core } = await started();
   let ui = core.connect();

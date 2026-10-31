@@ -807,6 +807,48 @@ CREATE TRIGGER session_first_drop AFTER DELETE ON deliveries
 END;
 `;
 
+/// Letters (rows.ts Letter): what two chats' agents write each other, kept in a log of their own beside each chat's,
+/// numbered from 1 in it, not among what is said in the chat (its entries): a chat's pages, its unread and its latest
+/// page are of what it shows alone. Those from before it stay entries marked as letters (addLetterColumn).
+/// - letters: a chat's letters both ways, in the order written.
+/// - letter_deliveries: a letter coming in handed to the chat's sessions, as deliveries are a message.
+const LETTERS = `
+CREATE TABLE letters (
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  ts TEXT NOT NULL,
+  author_kind TEXT NOT NULL,
+  author TEXT NOT NULL,
+  text TEXT NOT NULL,
+  attachments TEXT,
+  at INTEGER NOT NULL,
+  letter TEXT NOT NULL,
+  PRIMARY KEY (thread, n)
+);
+CREATE TABLE letter_deliveries (
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  session TEXT NOT NULL,
+  delivered_at INTEGER,
+  PRIMARY KEY (thread, n, session)
+);
+CREATE INDEX letter_deliveries_pending ON letter_deliveries (session) WHERE delivered_at IS NULL;
+`;
+
+/// The letters' own log (LETTERS), made once (as addListState).
+export function addLetters(db: DatabaseSync): void {
+  const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'letters'").get() !== undefined;
+  if (made()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!made()) db.exec(LETTERS);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
 /// The lists' kept state (LIST_STATE), made once, with its triggers (as addUsageTotals).
 export function addListState(db: DatabaseSync): void {
   const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'thread_state'").get() !== undefined;

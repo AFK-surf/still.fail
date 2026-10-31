@@ -580,10 +580,21 @@ export class Hub {
         void actor.kick();
         continue;
       }
-      this.store.markDelivered(key, [[thread, n]]);
+      this.store.markDelivered(key, [{ thread, n, apart: false }]);
       if (command === "stop") void actor.stop();
       else if (command === "compact") void actor.compact(true);
       else void actor.clear(true);
+    }
+  }
+
+  /// Gives sessions a letter of their chat's own log (store/schema.ts LETTERS) they have not had: each runs it. A letter
+  /// is no command (`-stop` and the like are a person's, in the thread). Archived by hand, as `deliver`.
+  deliverLetter(thread: number, n: number, sessions: string[]) {
+    const hearing = sessions.filter((key) => this.store.getSession(key)?.archivedBy !== MANUAL);
+    for (const key of this.store.deliverLetter(thread, n, hearing)) {
+      this.store.touch(key);
+      const row = this.store.getSession(key);
+      if (row) void this.actor(row).kick();
     }
   }
 

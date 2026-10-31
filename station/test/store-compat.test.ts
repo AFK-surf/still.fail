@@ -54,7 +54,7 @@ const MERGED_ADDS = [", m.letter"];
 /// Tables the TS station makes as it opens (schema.ts `addUsageTotals`, `addUsageCompactions`, `addUsageQuarters`): each with its columns,
 /// and the indexes and triggers that keep it (named after it), which it makes anew as what they read changes
 /// (`addUsageColumns`).
-const MADE = ["usage_totals", "usage_compactions", "usage_quarters", "thread_state", "thread_people", "session_first"];
+const MADE = ["usage_totals", "usage_compactions", "usage_quarters", "thread_state", "thread_people", "session_first", "letters", "letter_deliveries"];
 const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`) || l.startsWith(`index ${t}_`));
 
 const noToken = <T extends { token: string }>(r: T) => {
@@ -170,7 +170,7 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
       assert.deepEqual(store.deliver(live.thread, n, [live.session]), [live.session]);
       assert.deepEqual(store.deliver(live.thread, n, [live.session]), []);
       assert.ok(store.pendingMessages(live.session).some((p) => p.message.n === n && p.message.thread === live.thread));
-      store.markDelivered(live.session, [[live.thread, n]]);
+      store.markDelivered(live.session, [{ thread: live.thread, n, apart: false }]);
       store.startTurnFor("compat-turn", live.session, "input", { profile: null, person: "local", thread: live.thread });
       store.endTurn("compat-turn", "completed", null, "all_done", null);
       assert.equal(store.lastTurn(live.session)!.ending, "all_done");

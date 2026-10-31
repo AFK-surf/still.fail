@@ -20,13 +20,13 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { readArchive, threadFile } from "./archive.ts";
 import {
   type Attachment, type AutoTitle, type CardAnswer, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
-  type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Published, type ProcessRow, type ProfileStatus,
+  type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Handed, type Letter, type AuthorKind, type Published, type ProcessRow, type ProfileStatus,
   type Quote, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
-  byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
+  byBytes, cardOf, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addListState, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addListState, addLetters, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 
@@ -40,7 +40,8 @@ export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
 export const JOBS_UP = "SELECT * FROM (SELECT * FROM jobs WHERE state = 'running' UNION ALL SELECT * FROM jobs WHERE state = 'exited' AND port IS NOT NULL) ORDER BY started_at DESC";
 export const STATS_OF = `SELECT
     (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
-    (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
+    ((SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) +
+         (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending,
     l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
   FROM sessions s
   LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
@@ -151,6 +152,7 @@ export class Store {
       addUsageCompactions(db);
       addUsageQuarters(db);
       addListState(db);
+      addLetters(db);
       db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     } catch (e) {
       db.close();
@@ -680,6 +682,7 @@ export class Store {
         const threads: number[] = this.#all("SELECT thread FROM thread_sessions WHERE session = ?", key).map((r) => r.thread);
         this.#run("DELETE FROM thread_sessions WHERE session = ?", key);
         this.#run("DELETE FROM deliveries WHERE session = ?", key);
+        this.#run("DELETE FROM letter_deliveries WHERE session = ?", key);
         this.#run("DELETE FROM turns WHERE session_key = ?", key);
         this.#run("DELETE FROM runtime_sessions WHERE session_key = ?", key);
         this.#run("DELETE FROM bindings WHERE session_key = ?", key);
@@ -698,6 +701,8 @@ export class Store {
           removed.push(thread);
           this.#run("DELETE FROM deliveries WHERE thread = ?", thread);
           this.#run("DELETE FROM entries WHERE thread = ?", thread);
+          this.#run("DELETE FROM letter_deliveries WHERE thread = ?", thread);
+          this.#run("DELETE FROM letters WHERE thread = ?", thread);
           this.#run("DELETE FROM reads WHERE thread = ?", thread);
           this.#run("DELETE FROM items WHERE thread = ?", thread);
           this.#run("DELETE FROM dismissed WHERE thread = ?", thread);
@@ -875,6 +880,7 @@ export class Store {
         people: this.#threadPeople(t.id, t.surface),
         firstText: this.#firstText(t.id),
         letters: this.#letterCount(t.id),
+        lettersLast: this.lastLetter(t.id),
         thread: t,
       };
     });
@@ -892,11 +898,13 @@ export class Store {
 
   /// How many letters the thread has (rows.ts isLetter), in either way.
   #letterCount(thread: number): number {
+    // (those kept as entries before letters had their own log, and those of it)
+    const apart = this.lastLetter(thread);
     if (this.#isArchived(thread)) {
       const keys = new Set(this.threadSessions(thread).map((m) => m.session));
-      return mergeEntries(this.#archivedEntries(thread)).filter((m) => isLetter(m, keys)).length;
+      return apart + mergeEntries(this.#archivedEntries(thread)).filter((m) => isLetter(m, keys)).length;
     }
-    return this.#one("SELECT letters FROM thread_state WHERE thread = ?", thread)?.letters ?? 0;
+    return apart + (this.#one("SELECT letters FROM thread_state WHERE thread = ?", thread)?.letters ?? 0);
   }
 
   /// The thread's latest message that is not a letter (rows.ts isLetter), for lists: what they show and sort by.
@@ -1098,6 +1106,47 @@ export class Store {
     return this.#all("SELECT * FROM merged WHERE thread = ? AND n < ? ORDER BY n DESC LIMIT ?", thread, before, limit).map(toMessage).reverse();
   }
 
+  // ── letters ──
+
+  /// Keeps a letter in thread `thread`'s own log of them (schema.ts LETTERS), not among its entries: its n there. One
+  /// coming in brings its chat back as a message does (#bringBack).
+  insertLetter(l: { thread: number; ts: string; authorKind: AuthorKind; author: string; text: string; attachments?: Attachment[]; letter: Letter }): number {
+    return this.#with((changes) => {
+      let n = 0;
+      const at = this.now();
+      this.#tx(() => {
+        n = (this.#one("SELECT MAX(n) AS n FROM letters WHERE thread = ?", l.thread).n ?? 0) + 1;
+        this.#run(
+          "INSERT INTO letters (thread, n, ts, author_kind, author, text, attachments, at, letter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          l.thread, n, l.ts, l.authorKind, l.author, l.text, jsonList<Attachment>(l.attachments ?? [], attachment), at, JSON.stringify(l.letter),
+        );
+      });
+      const entry = letterEntry(this.#one("SELECT * FROM letters WHERE thread = ? AND n = ?", l.thread, n));
+      changes.push({ type: "letters", id: l.thread, letters: [entry] });
+      this.#bringBack(entry, changes);
+      return n;
+    });
+  }
+
+  /// The last letter of the thread's own log (0: none).
+  lastLetter(thread: number): number {
+    return this.#one("SELECT MAX(n) AS n FROM letters WHERE thread = ?", thread).n ?? 0;
+  }
+
+  /// Hands a letter of the thread's own log to sessions: those that did not have it yet (as `deliver` a message).
+  deliverLetter(thread: number, n: number, sessions: string[]): string[] {
+    return this.#with((changes) => {
+      const added: string[] = [];
+      for (const s of sessions) {
+        if (this.#run("INSERT OR IGNORE INTO letter_deliveries (thread, n, session) VALUES (?, ?, ?)", thread, n, s) > 0) {
+          added.push(s);
+          changes.push({ type: "session", key: s });
+        }
+      }
+      return added;
+    });
+  }
+
   // ── deliveries ──
 
   /// Hands a message to sessions. Those that did not have it yet.
@@ -1114,23 +1163,42 @@ export class Store {
     });
   }
 
-  /// What the session has yet to read, as merged now, in the order it was handed over.
+  /// What the session has yet to read, as merged now, in the order it was handed over: its threads' messages, and the
+  /// letters of their own logs among them by when each was kept.
   pendingMessages(session: string): PendingMessage[] {
-    return this.#all(
+    const said = this.#all(
       `SELECT m.*, t.surface, t.channel, t.thread_ts, ts.connect FROM deliveries d
        JOIN merged m ON m.thread = d.thread AND m.n = d.n JOIN threads t ON t.id = d.thread
        JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
        WHERE d.session = ? AND d.delivered_at IS NULL ORDER BY d.rowid`,
       session,
     ).map((r) => ({ message: toMessage(r), surface: r.surface, channel: r.channel, threadTs: r.thread_ts, connect: r.connect }));
+    const letters = this.#all(
+      `SELECT l.*, t.surface, t.channel, t.thread_ts, ts.connect FROM letter_deliveries d
+       JOIN letters l ON l.thread = d.thread AND l.n = d.n JOIN threads t ON t.id = d.thread
+       JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
+       WHERE d.session = ? AND d.delivered_at IS NULL ORDER BY d.rowid`,
+      session,
+    ).map((r) => ({ message: letterMessage(r), surface: r.surface, channel: r.channel, threadTs: r.thread_ts, connect: r.connect }));
+    if (letters.length === 0) return said;
+    if (said.length === 0) return letters;
+    // (each in the order handed over; the two together by when each was kept, a message first at the same time)
+    const out: PendingMessage[] = [];
+    let i = 0;
+    let j = 0;
+    while (i < said.length || j < letters.length) {
+      if (j >= letters.length || (i < said.length && said[i]!.message.createdAt <= letters[j]!.message.createdAt)) out.push(said[i++]!);
+      else out.push(letters[j++]!);
+    }
+    return out;
   }
 
-  /// Marks messages (thread, n) read by the session.
-  markDelivered(session: string, messages: [number, number][]): void {
+  /// Marks messages read by the session.
+  markDelivered(session: string, messages: Handed[]): void {
     this.#with((changes) => {
       const now = this.now();
-      for (const [thread, n] of messages) {
-        this.#run("UPDATE deliveries SET delivered_at = ? WHERE thread = ? AND n = ? AND session = ? AND delivered_at IS NULL", now, thread, n, session);
+      for (const { thread, n, apart } of messages) {
+        this.#run(`UPDATE ${apart ? "letter_deliveries" : "deliveries"} SET delivered_at = ? WHERE thread = ? AND n = ? AND session = ? AND delivered_at IS NULL`, now, thread, n, session);
       }
       if (messages.length > 0) changes.push({ type: "session", key: session });
     });
@@ -1138,10 +1206,10 @@ export class Store {
 
   /// Makes messages delivered to the session pending again: the runtime they were handed to ended before it could be
   /// sure to have read them.
-  markUndelivered(session: string, messages: [number, number][]): void {
+  markUndelivered(session: string, messages: Handed[]): void {
     this.#with((changes) => {
-      for (const [thread, n] of messages) {
-        this.#run("UPDATE deliveries SET delivered_at = NULL WHERE thread = ? AND n = ? AND session = ?", thread, n, session);
+      for (const { thread, n, apart } of messages) {
+        this.#run(`UPDATE ${apart ? "letter_deliveries" : "deliveries"} SET delivered_at = NULL WHERE thread = ? AND n = ? AND session = ?`, thread, n, session);
       }
       if (messages.length > 0) changes.push({ type: "session", key: session });
     });
@@ -1153,7 +1221,9 @@ export class Store {
   }
 
   sessionsWithPending(): string[] {
-    return this.#all("SELECT DISTINCT session FROM deliveries WHERE delivered_at IS NULL").map((r) => r.session);
+    return this.#all(
+      "SELECT session FROM deliveries WHERE delivered_at IS NULL UNION SELECT session FROM letter_deliveries WHERE delivered_at IS NULL",
+    ).map((r) => r.session);
   }
 
   /// Everyone who wrote in each session's threads (or one session's), as creator references, earliest first.
@@ -1584,7 +1654,8 @@ export class Store {
   sessionStats(key: string | null): Map<string, SessionStats> {
     const sql = `SELECT s.key,
          (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
-         (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
+         ((SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) +
+         (SELECT COUNT(*) FROM letter_deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL)) AS pending,
          (SELECT substr(m.text, 1, 300) FROM session_first f JOIN merged m ON m.thread = f.thread AND m.n = f.n WHERE f.session = s.key) AS first_text,
          l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.wait_watch, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
        FROM sessions s

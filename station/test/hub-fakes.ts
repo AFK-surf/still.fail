@@ -14,6 +14,7 @@ import { type ColdStorage, Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
 import { chatTools } from "../src/tools/chat.ts";
 import { type Attachment, Store } from "../src/store/store.ts";
+import { letterMessage } from "../src/store/rows.ts";
 
 type Json = any;
 
@@ -391,6 +392,11 @@ export class Rig {
   }
   said(thread: number) {
     return this.store.messagesBefore(thread, null, 10);
+  }
+  /// What other chats' agents and this chat's wrote each other there (session_send): its own log of letters beside its
+  /// entries (store/schema.ts LETTERS), as messages.
+  letters(thread: number) {
+    return (this.store.db.prepare("SELECT * FROM letters WHERE thread = ? ORDER BY n").all(thread) as Record<string, unknown>[]).map(letterMessage);
   }
   async close() {
     await this.hub.shutdown();

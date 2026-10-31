@@ -98,6 +98,8 @@ export type MessageRow = {
   agentIdentity: Json | null; thread: number; n: number; ts: string; authorKind: AuthorKind; author: string; text: string;
   attachments: Attachment[]; quotes: Quote[]; declared: string | null; client: string | null; createdAt: number;
   editedAt: number | null; letter?: Letter;
+  /// Kept in the letters' own log (schema.ts LETTERS), numbered there, not an entry of its thread.
+  apart?: true;
 };
 
 /// A card someone answered (`answersSince`).
@@ -105,6 +107,13 @@ export type CardAnswer = { question: MessageRow; card: Json; by: string; at: num
 
 /// A message a session has yet to read, with where it was said and how the session hears that thread.
 export type PendingMessage = { message: MessageRow; surface: string; channel: string; threadTs: string; connect: string };
+
+/// A message a session was handed, by where it is kept: a thread's entry, or a letter of its own log (`apart`,
+/// schema.ts LETTERS), each numbered in its own.
+export type Handed = { thread: number; n: number; apart: boolean };
+
+/// What a pending message is, to mark it read or not.
+export const handedOf = (m: { message: MessageRow }): Handed => ({ thread: m.message.thread, n: m.message.n, apart: m.message.apart === true });
 
 /// A thread for listings: who takes part, the last thing said, and how much the viewer has not read.
 /// Whether a message is a letter (Letter): marked so when it was recorded; one from before letters were marked, by
@@ -144,6 +153,8 @@ export type ThreadSummary = {
   people: string[]; firstText: string | null;
   /// How many letters it has (Letter), in either way.
   letters: number;
+  /// Its own log of letters' last (schema.ts LETTERS; 0: none).
+  lettersLast: number;
 };
 
 /// The message a turn's state is about: its thread, entry (`seq`) and ts.
@@ -208,6 +219,8 @@ export type StoreChange =
   | { type: "sessionRemoved"; key: string; ws?: string | null }
   /// Entries were appended there (contiguous, in order), or its sessions changed (none).
   | { type: "thread"; id: number; entries: EntryRow[] }
+  /// Letters were kept in its own log of them (schema.ts LETTERS; contiguous, in order).
+  | { type: "letters"; id: number; letters: EntryRow[] }
   /// It went, with every entry it had; `ws` as its session's.
   | { type: "threadRemoved"; id: number; ws?: string | null }
   /// A viewer's read position moved.
@@ -414,6 +427,24 @@ export const withLetter = (v: unknown): { letter?: Letter } => {
   const letter = letterOf(v);
   return letter === undefined ? {} : { letter };
 };
+
+/// A row of the letters' own log (schema.ts LETTERS) as an entry: a message, never edited, numbered in that log.
+export function letterEntry(r: Json): EntryRow {
+  return {
+    agentIdentity: undefined, thread: r.thread, n: r.n, kind: "message", target: null, ts: r.ts, authorKind: authorKind(r.author_kind),
+    author: r.author, text: r.text, attachments: fromJsonList(r.attachments, attachment), quotes: [], declared: null, client: null,
+    profile: null, runtime: null, options: undefined, card: undefined, at: r.at, ...withLetter(r.letter),
+  };
+}
+
+/// A row of the letters' own log as a message (to be handed to a session, letterEntry).
+export function letterMessage(r: Json): MessageRow {
+  return {
+    agentIdentity: null, thread: r.thread, n: r.n, ts: r.ts, authorKind: authorKind(r.author_kind), author: r.author, text: r.text,
+    attachments: fromJsonList(r.attachments, attachment), quotes: [], declared: null, client: null, createdAt: r.at, editedAt: null,
+    ...withLetter(r.letter), apart: true,
+  };
+}
 
 export function toMessage(r: Json): MessageRow {
   return {
