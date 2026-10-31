@@ -163,11 +163,19 @@ for t in ${TARGETS:-native}; do
     rest=()
     for r in "${runs[@]}"; do rest+=("$(echo " $r " | sed 's| -p stillfail/sfreplay/flows | |')"); done
     runs=("${rest[@]}")
-    for ((k = 0; k < n; k++)); do
-      shard=()
-      for ((i = k; i < ${#flows[@]}; i += n)); do shard+=("${flows[i]}"); done
-      [ ${#shard[@]} = 0 ] || runs+=("${shard[*]}")
-    done
+    fx=_build/native/release/test/stillfail/sfreplay/flows/flows.blackbox_test.exe
+    if [ $t = native ] && [ -z "${UPDATE:-}" ] && [ -f $fx ]; then
+      # (native: their files in one run of the program built above, whose n programs each take the next file
+      # (test_exe.py's APP_JOBS), not dealt out beforehand: dealt by name round three, 68 s, 43 and 41, the replay
+      # part's 183 s the pipeline's longest job, chat-opener-links 41248997629, 2026-11-01)
+      runs+=("@flows ${flows[*]}")
+    else
+      for ((k = 0; k < n; k++)); do
+        shard=()
+        for ((i = k; i < ${#flows[@]}; i += n)); do shard+=("${flows[i]}"); done
+        [ ${#shard[@]} = 0 ] || runs+=("${shard[*]}")
+      done
+    fi
   fi
   # Which of APP_GROUP's n runners a run is on (k of 1..n). Four (check-mbui's): each two or three of the runs that
   # were the app part's longest side by side on one runner's four cores, 2026-10-27 (corners 188 s and 171, kept_rows'
@@ -216,6 +224,7 @@ for t in ${TARGETS:-native}; do
     runs=("${mine[@]}")
   fi
   run_name() {
+    [ "$1" = @flows ] && shift
     case " $* " in
       *" -p "*) echo "the packages$(echo " $* " | sed 's| -p stillfail/| |g')" ;;
       *" --index "*) echo "$(basename "$1") (tests $3)" ;;
@@ -227,7 +236,11 @@ for t in ${TARGETS:-native}; do
     # (a run of nothing is none: moon test of no package would be every package's)
     [ -n "${runs[i]// /}" ] || continue
     # (each run's time with TIMES: the part's run is the longest of them, and which one it is is said)
-    { if [ -n "${APP_EXE:-}" ]; then python3 "$D/test_exe.py" "$APP_EXE" "$APP_INFO" ${runs[i]} > "$out.$i" 2>&1
+    { if [ "${runs[i]%% *}" = @flows ]; then
+        f=_build/native/release/test/stillfail/sfreplay/flows
+        APP_JOBS=${REPLAY_SHARDS:-3} TEST_PKG=stillfail/sfreplay/flows python3 "$D/test_exe.py" $f/flows.blackbox_test.exe \
+          $f/__blackbox_test_info.json ${runs[i]#@flows } > "$out.$i" 2>&1
+      elif [ -n "${APP_EXE:-}" ]; then python3 "$D/test_exe.py" "$APP_EXE" "$APP_INFO" ${runs[i]} > "$out.$i" 2>&1
       else moon test $mode ${runs[i]} ${UPDATE:+--update} > "$out.$i" 2>&1; fi; c=$?
       echo "$(( $(date +%s) - s )) s: $(run_name ${runs[i]})" > "$out.time.$i"
       exit $c; } &
