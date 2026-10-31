@@ -3422,6 +3422,13 @@ pub fn Tree::reads_out(self : Tree, id : NodeId) -> Bool {
 }
 
 ///|
+/// Whether what node `id` holds may be acted on as a screen reader asks, as the tree is now: read out (Tree::reads_out),
+/// taking presses (View::presses: neither it nor what holds it off), not leaving.
+pub fn Tree::acts_on(self : Tree, id : NodeId) -> Bool {
+  self.reads_out(id) && self.takes_presses(id) && !self.leaving_at(id.at)
+}
+
+///|
 /// Whether node `at` is read out as it is now: it says what it is, and neither it nor what holds it is kept from what is
 /// read out (View::hides).
 fn Tree::said_now(self : Tree, at : Int) -> Bool {

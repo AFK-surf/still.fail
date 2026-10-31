@@ -353,3 +353,100 @@ test "an old view's button its id told the host, then its view hidden by the tre
     assert_eq(clicks.val, 1, msg="again (\{how})")
   }
 }
+
+///|
+/// An old view's button in a node of the tree's taking presses as `on` says, shown while `shown` holds (leaving
+/// `leave_ms` as it goes); its id as the host was told it; how many times it was clicked.
+fn old_in_node(
+  on : @signals.Signal[Bool],
+  shown : @signals.Signal[Bool],
+  clicks : Ref[Int],
+  id : Ref[Int],
+  host : Ref[@view.View?],
+) -> Tester {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
+  t.set_a11y(true)
+  set_view_app(fn(root) {
+    root.show(
+      fn() { shown.get() },
+      fn(v) {
+        host.val = Some(v)
+        v.grow(Is(1.0)).presses(By(fn() { on.get() })) |> ignore
+        old(v, fn(c) {
+          let b = c.id("old")
+          id.val = b
+          if c.clicked(b) {
+            clicks.val = clicks.val + 1
+          }
+          c.box(w=Px(80.0), h=Px(40.0), id=b, label="旧的", fn() {  }) |> ignore
+        }).grow(Is(1.0))
+        |> ignore
+      },
+      leave=leave_ms,
+    )
+  })
+  t.draw()
+  t
+}
+
+///|
+let leave_ms : Double = 200.0
+
+///|
+test "an old view's button in a node taking no presses: read out disabled, nothing done by a screen reader; taking them again, clicked; its node leaving, nothing" {
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let shown = @signals.signal(true, same=fn(a, b) { a == b })
+  let clicks = Ref(0)
+  let id = Ref(0)
+  let t = old_in_node(on, shown, clicks, id, Ref(None))
+  let activate = fn() {
+    t.post(@hostapi.a11y_channel, "{\"id\":\{id.val},\"action\":\"activate\"}")
+    t.draw()
+  }
+  on.set(false)
+  t.draw()
+  let s = t.get(Button, label="旧的")
+  assert_eq((s.disabled, s.actions), (true, []))
+  activate()
+  assert_eq(clicks.val, 0, msg="taking no presses")
+  on.set(true)
+  t.draw()
+  activate()
+  assert_eq(clicks.val, 1, msg="taking them again")
+  // (going: leaving a while, alive meanwhile)
+  shown.set(false)
+  activate()
+  assert_eq(clicks.val, 1, msg="leaving")
+}
+
+///|
+test "a screen reader's press asked inside an event of the tree's: nothing due at that moment done ahead of the rest of it; asked alone, what was due before done first" {
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let shown = @signals.signal(true, same=fn(a, b) { a == b })
+  let clicks = Ref(0)
+  let id = Ref(0)
+  let host : Ref[@view.View?] = Ref(None)
+  let t = old_in_node(on, shown, clicks, id, host)
+  let tree = view_tree().unwrap()
+  let step = Ref(0)
+  let seen = Ref(-1)
+  let at = t.time() + flip_ms
+  t.advance(flip_ms)
+  tree.event(at, fn() {
+    step.val = 1
+    host.val.unwrap().at_moment(at, fn() { seen.val = step.val }) |> ignore
+    g().ask_action(id.val, Activate)
+    step.val = 2
+  })
+  assert_true(seen.val != 1, msg="done in the middle of the event: \{seen.val}")
+  // (that one taken as asked: clicked as the old view is built next)
+  t.draw()
+  let before = clicks.val
+  // (alone: its node taking presses no more at a moment before it, that done first)
+  let t0 = t.time()
+  host.val.unwrap().at_moment(t0 + flip_ms, fn() { on.set(false) }) |> ignore
+  t.advance(ask_ms)
+  g().ask_action(id.val, Activate)
+  t.draw()
+  assert_eq(clicks.val, before, msg="taking presses no more by then")
+}

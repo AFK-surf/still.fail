@@ -1840,11 +1840,13 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
   let moved = Array::make(old.length(), -1)
   let said = tree.said_order()
   let at = Array::make(said.length(), -1)
-  let put_old = fn(k : Int, parent : Int, depth : Int, hidden : Bool) {
+  let put_old = fn(k : Int, parent : Int, depth : Int, hidden : Bool, disabled : Bool) {
     let s = old[k]
     let up = if s.parent >= 0 && moved[s.parent] >= 0 { moved[s.parent] } else { parent }
     let d = if up >= 0 { out[up].depth + 1 } else { depth }
-    out.push({ ..s, parent: up, depth: d, hidden: s.hidden || hidden })
+    // (in a node taking no presses: read out disabled, nothing to be done to it)
+    let off = s.disabled || disabled
+    out.push({ ..s, parent: up, depth: d, hidden: s.hidden || hidden, disabled: off, actions: if off { [] } else { s.actions } })
     moved[k] = out.length() - 1
   }
   // (those let go read out no more: their ids nobody's)
@@ -1867,7 +1869,7 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
       }
       for k in 0..<old.length() {
         if owner[k] == mine || (old_whole.val && owner[k] == -1) {
-          put_old(k, parent, sn.depth, !sn.allowed || sn.hidden)
+          put_old(k, parent, sn.depth, !sn.allowed || sn.hidden, sn.disabled)
         }
       }
       at[j] = parent
@@ -1913,7 +1915,7 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
   // (what the old frame put over all of it at its root: last)
   for k in 0..<old.length() {
     if owner[k] == -2 {
-      put_old(k, -1, 0, false)
+      put_old(k, -1, 0, false, false)
     }
   }
   out
@@ -1944,9 +1946,10 @@ fn Ctx::said_owner(self : Ctx, i : Int) -> Int {
 }
 
 ///|
-/// Whether old widget `id` may be acted on as a screen reader asks, as the window's tree is now: the node hosting the
-/// old view it says itself in (by what it said of its node: Ctx::said_owner) read out (Tree::reads_out); what the old
-/// frame put over all of it, always (its own). Where there is no tree, or nothing said by that id, as ever.
+/// Whether old widget `id` may be acted on as a screen reader asks, as the window's tree is now (in the event it is asked
+/// in: Ctx::ask_action): the node hosting the old view it says itself in (by what it said of its node:
+/// Ctx::said_owner) read out and taking presses (Tree::acts_on); what the old frame put over all of it, always (its
+/// own). Where there is no tree, or nothing said by that id, as ever.
 fn old_said_allowed(c : Ctx, id : Int) -> Bool {
   let tree = match view_app.val {
     Some(t) => t
@@ -1974,9 +1977,8 @@ fn old_said_allowed(c : Ctx, id : Int) -> Bool {
     -1 => tree.hosting()
     at => old_boxes.keys().find_first(fn(k) { k.at == at })
   }
-  tree.bring_to(view_moment())
   match host {
-    Some(h) => tree.reads_out(h)
+    Some(h) => tree.acts_on(h)
     None => true
   }
 }

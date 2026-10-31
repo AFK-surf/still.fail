@@ -133,13 +133,23 @@ pub fn Ctx::visually_hidden(self : Ctx, label : String, role? : Role = Text) -> 
 ///|
 /// `action` asked of the widget `id` (by a test, by the host's accessibility): its widget sees it the next frame.
 pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
-  ignore(self)
-  // (a node of the window's tree's: its own, as a press on it is, at the moment it is asked)
+  // (where the window is a tree: one event of the tree's at this moment, what was due by then done first; asked inside
+  // one already, that one's, nothing done ahead of it: what it is asked of found and judged as things are then)
+  match view_app.val {
+    Some(tree) => tree.event(view_moment(), fn() { self.asked(id, action) })
+    None => self.asked(id, action)
+  }
+}
+
+///|
+/// `action` asked of `id`, as things are now (Ctx::ask_action).
+fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
+  // (a node of the window's tree's: its own, as a press on it is)
   if tree_said_action(id, action) {
     return
   }
-  // (an old view's widget: none where the tree keeps that old view from being read out now, a modal layer of its over it
-  // or what holds it hidden: Tree::reads_out)
+  // (an old view's widget: none where the tree keeps that old view from being read out or acted on now: a modal layer
+  // of its over it, what holds it hidden, taking no presses, leaving: Tree::acts_on)
   if !old_said_allowed(self, id) {
     return
   }
