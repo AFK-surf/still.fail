@@ -1470,7 +1470,10 @@ pub fn list_frame(
   // (taken and played on, before the page is built, by linger_tick)
   let ek = r.station + "\u{1}" + r.session
   let em = emits_of(ek)
+  // (shown each frame its list is: built, or kept as its build left it and drawn again, as what a build marks used is
+  // marked again: linger_tick plays it on then)
   rd.shown_frame = c.frame_number()
+  @ui.built_used(fn() { rd.shown_frame = @ui.current().frame_number() })
   chat_tick(c, ek, rd, v, shown=true, in_front~)
   let read = if em.queue.length() > 0 || em.current is Some(_) {
     read.filter(fn(e) {
