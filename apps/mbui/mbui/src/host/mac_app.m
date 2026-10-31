@@ -1569,7 +1569,7 @@ static void bring_back(void) {
 static MBAppDelegate *app_delegate;
 
 // The default network as it changes: another one than before (Wi-Fi to a cable, back online after none), not the
-// first seen (ios_app.m's network_start)
+// first seen; the path's interfaces compared whole, a VPN's tunnel first whatever carries it (ios_app.m's network_start)
 static nw_path_monitor_t network_monitor;
 static void network_start(void) {
   network_monitor = nw_path_monitor_create();
@@ -1579,8 +1579,8 @@ static void network_start(void) {
     NSMutableString *now = [NSMutableString string];
     if (nw_path_get_status(path) == nw_path_status_satisfied) {
       nw_path_enumerate_interfaces(path, ^bool(nw_interface_t i) {
-        [now appendFormat:@"%s/%d", nw_interface_get_name(i), (int)nw_interface_get_type(i)];
-        return false;  // the first: the one used
+        [now appendFormat:@"%s/%d,", nw_interface_get_name(i), (int)nw_interface_get_type(i)];
+        return true;
       });
     }
     BOOL changed = was && ![was isEqualToString:now] && now.length > 0;

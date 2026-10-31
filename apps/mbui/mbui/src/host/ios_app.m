@@ -1808,6 +1808,9 @@ static void watch_keyboard(void) {
 
 // The device's default network as it changes (Network's path monitor, as Android's NetworkWatch): another one than
 // before (Wi-Fi to mobile data, back online after none) said to the app (the system's `network`); not the first seen.
+// The path's interfaces are compared whole, not only the first: under a VPN the first is its tunnel (utun…) whatever
+// carries it, and Wi-Fi gone for mobile data changed nothing of it (a phone's record, 2026-10-31: Wi-Fi left, mobile
+// data on, and the app never told).
 static nw_path_monitor_t network_monitor;
 static void network_start(void) {
   network_monitor = nw_path_monitor_create();
@@ -1817,8 +1820,8 @@ static void network_start(void) {
     NSMutableString *now = [NSMutableString string];
     if (nw_path_get_status(path) == nw_path_status_satisfied) {
       nw_path_enumerate_interfaces(path, ^bool(nw_interface_t i) {
-        [now appendFormat:@"%s/%d", nw_interface_get_name(i), (int)nw_interface_get_type(i)];
-        return false;  // the first: the one used
+        [now appendFormat:@"%s/%d,", nw_interface_get_name(i), (int)nw_interface_get_type(i)];
+        return true;
       });
     }
     BOOL changed = was && ![was isEqualToString:now] && now.length > 0;
@@ -1837,7 +1840,7 @@ static void network_start(void) {
                                               st >= 0 && st <= 3 ? states[st] : "?", [all componentsJoinedByString:@","],
                                               nw_path_is_expensive(path), nw_path_is_constrained(path),
                                               nw_path_has_ipv4(path), nw_path_has_ipv6(path),
-                                              changed ? @"said: the network changed" : was ? @"not said (the first interface the same)" : @"the first seen"]
+                                              changed ? @"said: the network changed" : was ? @"not said (the same interfaces)" : @"the first seen"]
                        .UTF8String);
     }
     was = now;
