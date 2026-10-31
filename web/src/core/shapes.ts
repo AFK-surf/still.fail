@@ -4889,7 +4889,7 @@ export interface MachineLoginTool {
 	chat?: string;
 	/** That chat's title, when it began. */
 	chatTitle?: string;
-	/** How many tries ended: 11 次. */
+	/** How many tries ended: 11 次 (the core's words). */
 	countText: string;
 	/** Each try that ended, newest first. */
 	tries: MachineLoginShown[];

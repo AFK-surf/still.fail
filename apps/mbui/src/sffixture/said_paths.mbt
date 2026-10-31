@@ -742,7 +742,6 @@ pub let said_paths : Map[String, Array[String]] = {
     "tools.*.name",
     "tools.*.summaryText",
     "tools.*.chatTitle",
-    "tools.*.countText",
     "tools.*.tries.*.stationName",
     "tools.*.tries.*.name",
     "tools.*.tries.*.title",

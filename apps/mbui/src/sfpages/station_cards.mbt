@@ -358,11 +358,12 @@ fn station_logins(c : @ui.Ctx, core : Core, station : String) -> Unit {
               c,
               "login-tool/" + station + "/" + name,
               name,
-              value=text(tv, "countText"),
               note=if failed { "" } else { said },
               trouble=if failed { said } else { "" },
               folds=open,
               lead=fn() { st_row_mark(c, "key") },
+              // (how many tries at its end, not as what it says: its name, a station's words, keeps the line)
+              tail=fn() { c.text(text(tv, "countText"), style=lg_count) |> ignore },
             ) {
             st_logins_open[station] = if open { "" } else { name }
           }
@@ -563,6 +564,11 @@ let lg_cards : @ui.Style = @ui.css("w=Full gap=S3 pb=S3")
 /// Where a try's mark would be, under its program's: its words where the program's name is.
 // kept across runs: a value (no field of it changes)
 let lg_no_mark : @ui.Style = @ui.css("w=S4")
+
+///|
+/// How many tries a program's row stands for, at its end (the meta's 13, muted, one line).
+// kept across runs: a value (no field of it changes)
+let lg_count : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

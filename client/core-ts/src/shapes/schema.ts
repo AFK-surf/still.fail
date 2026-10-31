@@ -2970,7 +2970,7 @@ export const SHAPES: Record<string, Shape> = {
     ["failed", "bool", { doc: "None went through and the latest failed (or timed out): said in red." }],
     ["chat", opt("String"), { doc: "The session of the agent that started the login the summary is of." }],
     ["chatTitle", opt("String"), { said: true, doc: "That chat's title, when it began." }],
-    ["countText", "String", { said: true, doc: "How many tries ended: 11 次." }],
+    ["countText", "String", { doc: "How many tries ended: 11 次 (the core's words)." }],
     ["tries", vec("MachineLoginShown"), { doc: "Each try that ended, newest first." }],
   ], { doc: "A program logged in to (or tried) on a station, its tries that ended together (`MachineLoginsView.tools`)." }),
   MachineLoginShown: struct([
