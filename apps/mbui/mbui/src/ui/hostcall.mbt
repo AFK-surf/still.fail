@@ -67,6 +67,9 @@ struct FakeHost {
   // what the app's words' face (face_ui), once given, adds to a cluster's advance in what is set in it, in ems (0 by
   // default: a face given measures as the system's)
   mut ui_face : Double
+  // what a face given by its number (face_add, a face's preview) adds to a cluster's advance in what is set in it, in
+  // ems (none by default: each measures as the system's)
+  faces_wider : Map[Int, Double]
   // native views: what was asked of them, a line each ("open 1 video/mp4", "place 1 0 0 390 220 shown"…)
   views : Array[String]
   mut view_ids : Int
@@ -575,6 +578,10 @@ fn h_shape(
         }
         let adv = if weight >= 600 && c != 10 { adv + size * f.bold } else { adv }
         let adv = if f.ui_face != 0.0 && c != 10 && in_ui_face(style) { adv + size * f.ui_face } else { adv }
+        let adv = match f.faces_wider.get(@hostapi.face_of_style(style)) {
+          Some(em) if c != 10 => adv + size * em
+          _ => adv
+        }
         out[k * 4] = i.to_double()
         out[k * 4 + 1] = len.to_double()
         out[k * 4 + 2] = adv

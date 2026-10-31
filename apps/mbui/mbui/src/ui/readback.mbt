@@ -163,6 +163,16 @@ fn Ctx::shown_span(self : Ctx, i : Int, left : Double, right : Double, but : Str
 /// Once laid out: the rects of the boxes read kept (those a frame before this did not read, let go), and what was read
 /// looked at again; what is not as it was read is a layout read back that moved, said as what it is.
 fn Ctx::reads_after_layout(self : Ctx) -> Unit {
+  // the boxes built `tallest`: the tallest each has been, as laid out now (Ctx::box)
+  if self.tallest_new || !self.tallest_h.is_empty() {
+    self.tallest_new = false
+    for i in 0..<self.count {
+      let n = self.nodes[i]
+      if n.tallest && n.id != 0 && n.fh > self.tallest_h.get(n.id).unwrap_or(0.0) {
+        self.tallest_h[n.id] = n.fh
+      }
+    }
+  }
   if !self.laid_watch.is_empty() {
     let gone = []
     self.laid_watch.each(fn(id, at) { if at < self.frame_no { gone.push(id) } })

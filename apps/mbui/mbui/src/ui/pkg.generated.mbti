@@ -879,6 +879,8 @@ pub struct Ctx {
   left_ids : Map[Int32, Bool]
   left_reads : Map[Int32, (Bool, SourceLoc)]
   laid_watch : Map[Int32, Int32]
+  tallest_h : Map[Int32, Double]
+  mut tallest_new : Bool
   laid_rects : Map[Int32, (Double, Double, Double, Double)]
   shown_watch : Map[Int32, (Int32, String)]
   shown_spans : Map[Int32, (Double, Double)]
@@ -975,7 +977,7 @@ pub fn Ctx::bg_by(Self, Int32, () -> Int64) -> Unit
 pub fn Ctx::blur(Self) -> Unit
 pub fn Ctx::bone_whole(Self, Int32) -> Unit
 pub fn Ctx::bones(Self, Int64, () -> Unit) -> Unit
-pub fn Ctx::box(Self, style? : Style, selected? : Bool, disabled? : Bool, dir? : Dir, w? : Size, h? : Size, pad? : Double, padx? : Double, pady? : Double, pl? : Double, pr? : Double, pt? : Double, pb? : Double, m? : Double, mx? : Double, my? : Double, ml? : Double, mr? : Double, mt? : Double, mb? : Double, left? : Double, top? : Double, right? : Double, bottom? : Double, moves? : String, gap? : Double, align? : Align, justify? : Justify, bg? : Int64, radius? : Double, border? : Double, border_color? : Int64, shadow? : Double, shadow_color? : Int64, shadow_y? : Double, min_w? : Double, max_w? : Double, min_h? : Double, max_h? : Double, clip? : Bool, tx? : Double, ty? : Double, opacity? : Double, glass? : @paint.Glass, glass_group? : Bool, notch_y? : Double, notch_r? : Double, notch_fillet? : Double, aspect? : Double, keep? : Bool, drop? : Int32, more? : Bool, one_of? : Bool, shadow_out? : Bool, flow? : Bool, line_gap? : Double, gone_empty? : Bool, label? : String, name? : String, id? : Int32, taps? : Bool, points? : Bool, () -> Unit) -> Int32
+pub fn Ctx::box(Self, style? : Style, selected? : Bool, disabled? : Bool, dir? : Dir, w? : Size, h? : Size, pad? : Double, padx? : Double, pady? : Double, pl? : Double, pr? : Double, pt? : Double, pb? : Double, m? : Double, mx? : Double, my? : Double, ml? : Double, mr? : Double, mt? : Double, mb? : Double, left? : Double, top? : Double, right? : Double, bottom? : Double, moves? : String, gap? : Double, align? : Align, justify? : Justify, bg? : Int64, radius? : Double, border? : Double, border_color? : Int64, shadow? : Double, shadow_color? : Int64, shadow_y? : Double, min_w? : Double, max_w? : Double, min_h? : Double, max_h? : Double, clip? : Bool, tx? : Double, ty? : Double, opacity? : Double, glass? : @paint.Glass, glass_group? : Bool, notch_y? : Double, notch_r? : Double, notch_fillet? : Double, aspect? : Double, keep? : Bool, drop? : Int32, more? : Bool, one_of? : Bool, tallest? : Bool, shadow_out? : Bool, flow? : Bool, line_gap? : Double, gone_empty? : Bool, label? : String, name? : String, id? : Int32, taps? : Bool, points? : Bool, () -> Unit) -> Int32
 pub fn Ctx::build_number(Self) -> Int32
 pub fn Ctx::building(Self) -> Int32
 #callsite(autofill(loc))
@@ -2311,6 +2313,7 @@ pub fn Tester::dump(Self) -> String
 pub fn Tester::each_frame(Self, (() -> Unit)?) -> Unit
 pub fn Tester::edit_can(Self) -> Int32
 pub fn Tester::enter(Self) -> Unit
+pub fn Tester::face_wider(Self, Int32, Double) -> Unit
 pub fn Tester::family_given(Self, Int32) -> String
 pub fn Tester::field_words(Self) -> String
 pub fn Tester::film(Self, String, fps? : Double, max? : Int32, draw~ : (Self) -> Unit, put~ : (Int32) -> Unit) -> Array[String]

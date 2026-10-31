@@ -151,3 +151,36 @@ fn tap_place(t : @ui.Tester, place : String) -> Unit {
   let (x, y) = t.find_last(place).unwrap()
   t.tap(x, y)
 }
+
+///|
+test "a face pointed at tried in the chat above them: the chat held at its tallest while the pointer is on the faces, nothing under it shaking" {
+  let t = settings_tester("fonts")
+  // 思源黑体 set wide enough that their message wraps once more in it, 思源宋体 a little
+  t.face_wider(preview_faces_from + 1, 0.6)
+  t.face_wider(preview_faces_from + 2, 0.3)
+  t.draw()
+  let before = t.find("Inter").unwrap()
+  let (x, y) = t.find("思源黑体").unwrap()
+  t.move(x + 4.0, y + 4.0)
+  t.draw()
+  // tried: the chat taller, the faces moved down once, and held there as the row now under the pointer is tried
+  let moved = t.find("Inter").unwrap()
+  assert_true(moved.1 > before.1)
+  // the hand still on the same spot, moving a little (the row under it now another, narrower one): nothing moves
+  for i in 0..<4 {
+    t.move(x + 5.0 + i.to_double(), y + 4.0)
+    t.draw()
+    assert_eq(t.find("Inter"), Some(moved))
+  }
+  // along the faces (a narrower one tried, the gaps between rows): still held
+  let (x2, y2) = t.find("霞鹜文楷").unwrap()
+  t.move(x2 + 4.0, y2 + 4.0)
+  t.draw()
+  t.draw()
+  assert_eq(t.find("Inter"), Some(moved))
+  // the pointer gone off the faces: as before
+  t.move(x, 4.0)
+  t.draw()
+  t.draw()
+  assert_eq(t.find("Inter"), Some(before))
+}
