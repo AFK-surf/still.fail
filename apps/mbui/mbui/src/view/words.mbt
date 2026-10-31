@@ -46,7 +46,7 @@ pub fn runs_measure(runs : Array[WordsRun], look : WordsLook, width : Double) ->
 ///|
 /// The ink its words are drawn in, as it changes (a theme's, a state's): paint's.
 pub fn View::ink(self : View, ink : Live[Int64]) -> View {
-  self.bind(22, ink, Paint, fn(k) { self.tree.nodes[self.at].look.ink = k })
+  self.bind(Ink, ink, Paint, fn(k) { self.tree.nodes[self.at].look.ink = k })
   self
 }
 
@@ -54,14 +54,14 @@ pub fn View::ink(self : View, ink : Live[Int64]) -> View {
 /// The shadow it casts under its ground, in its corners (`blur`: its sigma, `dy` how far down, `ink` its colour; 0
 /// blur: none), as it changes: paint's.
 pub fn View::shadow(self : View, cast : Live[(Double, Double, Int64)]) -> View {
-  self.bind(23, cast, Paint, fn(c) { self.tree.nodes[self.at].look.shadow = c })
+  self.bind(Shadow, cast, Paint, fn(c) { self.tree.nodes[self.at].look.shadow = c })
   self
 }
 
 ///|
 /// How wide it may grow at most (points; None: as wide as its holder lets it), as it changes: layout's.
 pub fn View::max_width(self : View, w : Live[Double?]) -> View {
-  self.bind(24, w, Layout, fn(w) {
+  self.bind(MaxWidth, w, Layout, fn(w) {
     self.tree.nodes[self.at].flex.style.set_max_width(match w {
       Some(w) => Pt(w)
       None => Auto
@@ -74,7 +74,7 @@ pub fn View::max_width(self : View, w : Live[Double?]) -> View {
 /// How its words are set, as it changes (a theme's for the window's width): layout's (what they measure) and paint's
 /// (how they are drawn), one said value read by both.
 pub fn View::words_look(self : View, look : Live[WordsLook]) -> View {
-  self.bind(25, look, Both, fn(k) { self.tree.nodes[self.at].look.words_look = k })
+  self.bind(WordsLook, look, Both, fn(k) { self.tree.nodes[self.at].look.words_look = k })
   self
 }
 
@@ -85,14 +85,14 @@ pub fn View::words_look(self : View, look : Live[WordsLook]) -> View {
 /// ellipsis: WordsLook's `wrap` false), the others kept whole. Its share alone: how wide it is at least is min_width's
 /// (one binding to a field). Layout's.
 pub fn View::shrink(self : View, s : Live[Double]) -> View {
-  self.bind(26, s, Layout, fn(s) { self.tree.nodes[self.at].flex.style.shrink = s })
+  self.bind(Shrink, s, Layout, fn(s) { self.tree.nodes[self.at].flex.style.shrink = s })
   self
 }
 
 ///|
 /// How far apart what it holds is laid out (points, along and across), as it changes: layout's.
 pub fn View::gap(self : View, g : Live[Double]) -> View {
-  self.bind(27, g, Layout, fn(g) {
+  self.bind(Gap, g, Layout, fn(g) {
     let st = self.tree.nodes[self.at].flex.style
     st.set_gap_row(Pt(g))
     st.set_gap_col(Pt(g))
@@ -103,7 +103,7 @@ pub fn View::gap(self : View, g : Live[Double]) -> View {
 ///|
 /// How wide it is at least (points; None: as what it holds makes it), as it changes: layout's.
 pub fn View::min_width(self : View, w : Live[Double?]) -> View {
-  self.bind(28, w, Layout, fn(w) {
+  self.bind(MinWidth, w, Layout, fn(w) {
     self.tree.nodes[self.at].flex.style.set_min_width(match w {
       Some(w) => Pt(w)
       None => Auto
@@ -116,7 +116,7 @@ pub fn View::min_width(self : View, w : Live[Double?]) -> View {
 /// How what it holds lines up across it (None: stretched across it; their starts, middles or ends), as it changes:
 /// layout's.
 pub fn View::lines_up(self : View, along : Live[Along?]) -> View {
-  self.bind(29, along, Layout, fn(a) {
+  self.bind(LinesUp, along, Layout, fn(a) {
     self.tree.nodes[self.at].flex.style.align_items = match a {
       None => Stretch
       Some(Start) => FlexStart
@@ -131,6 +131,6 @@ pub fn View::lines_up(self : View, along : Live[Along?]) -> View {
 /// How wide it is as a share of what holds it (0 to 1; the same binding as View::width, which says it in points), as it
 /// changes: layout's.
 pub fn View::width_share(self : View, share : Live[Double]) -> View {
-  self.bind(0, share, Layout, fn(s) { self.tree.nodes[self.at].flex.style.set_width(Pct(s * 100.0)) })
+  self.bind(Width, share, Layout, fn(s) { self.tree.nodes[self.at].flex.style.set_width(Pct(s * 100.0)) })
   self
 }

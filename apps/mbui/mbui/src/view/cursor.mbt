@@ -42,9 +42,9 @@ pub fn Cursor::code(self : Cursor) -> Int {
 /// pointer over it shows it anew by the frame then owed.
 pub fn View::cursor(self : View, shape : Live[Cursor?]) -> View {
   guard self.live() is Some(n) else { return self }
-  match n.props.get(20) {
+  match n.props.get(Cursor) {
     Some(stop) => {
-      n.props.remove(20)
+      n.props.remove(Cursor)
       stop()
     }
     None => ()
@@ -62,7 +62,7 @@ pub fn View::cursor(self : View, shape : Live[Cursor?]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[20] = stop
+        n.props[Cursor] = stop
       })
   }
   self

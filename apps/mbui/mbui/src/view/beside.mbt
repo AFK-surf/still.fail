@@ -392,7 +392,7 @@ pub fn View::words_redone(self : View) -> Int {
 /// finds things on screen by what they show (a test's, a scripted run's: Tester::locate's icon:NAME); drawn and read
 /// out as ever.
 pub fn View::drawn_as(self : View, name : Live[String]) -> View {
-  self.bind(31, name, Said, fn(s) { self.tree.nodes[self.at].look.drawn_as = s })
+  self.bind(DrawnAs, name, Said, fn(s) { self.tree.nodes[self.at].look.drawn_as = s })
   self
 }
 
