@@ -998,6 +998,10 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     Some(s) => s
     None => return
   }
+  // Paint from the node's current position, even if it was moved without laying the editor out again. Input and the
+  // host's caret position also use these origins after this paint.
+  st.ox = n.x + n.pad_l - st.scroll_x
+  st.oy = n.y + n.pad_t - st.scroll
   let tl = match st.tl {
     Some(t) => t
     None => return
@@ -1212,6 +1216,8 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
 fn EditorState::fresh(text : String, now : Double) -> EditorState {
   {
     text,
+    source_text: None,
+    source_generation: 0,
     caret: text.length(),
     anchor: text.length(),
     marked: "",
@@ -1284,6 +1290,44 @@ pub fn Field::new(text? : String = "") -> Field {
   // (its caret blinks from when its editor is first built, not from the app's start)
   st.blink_again = true
   { st, }
+}
+
+///|
+/// The field owned by the editor named `key` in the current scope. It is forgotten with its page, along with the
+/// editor's layout, selection and scrolling. Use the same key and scope when giving it to Ctx::editor.
+pub fn Ctx::editor_field(self : Ctx, key : String) -> Field {
+  let id = self.id(key)
+  match self.editors.get(id) {
+    Some(st) => { st, }
+    None => {
+      let field = Field::new()
+      self.editors[id] = field.st
+      self.own(id)
+      field
+    }
+  }
+}
+
+///|
+/// Follow shared text while this editor has no local edit. The first value preserves text typed before it arrived;
+/// changing `generation` replaces local edits too (for an explicit reset).
+pub fn Field::follow(self : Field, text : String, generation? : Int = 0) -> Unit {
+  let st = self.st
+  let reset = st.source_text is Some(_) && st.source_generation != generation
+  // A composition is a local edit even before its text is committed. Keep the previous source until it ends so a
+  // cancelled composition can still follow a newer source, and an explicit reset can discard it.
+  if st.marked != "" && !reset {
+    return
+  }
+  let replace = match st.source_text {
+    None => st.text == ""
+    Some(was) => reset || st.text == was
+  }
+  if replace && (st.text != text || (reset && st.marked != "")) {
+    self.set(text)
+  }
+  st.source_text = Some(text)
+  st.source_generation = generation
 }
 
 ///|

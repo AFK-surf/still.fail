@@ -3397,6 +3397,7 @@ pub(all) struct Viewport {
 
 pub(all) struct VizFrame {
   view : @ui.NativeView
+  mut owner : Int32?
   html : String
   page : Bool
   mut height : Int32
