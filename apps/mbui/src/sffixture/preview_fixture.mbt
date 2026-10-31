@@ -36,10 +36,15 @@ pub fn preview_files() -> Array[(Attachment, () -> Bytes)] {
 }
 
 ///|
+/// A picture coming, never whole (MBUI_FIXTURE=chat-preview-coming, -coming-part): its name, and what the core says of
+/// how much has come of it, once, as it is asked for (None: nothing); none coming (None): every file whole at once.
+pub let preview_coming : Ref[(String, Json?)?] = Ref(None)
+
+///|
 /// MBUI_FIXTURE=chat-preview-<what>: which file opens.
 pub fn fixture_preview(mode : String) -> Unit {
   let which = match mode {
-    "chat-preview-image" | "chat-preview-step" | "chat-preview-swipe" => "界面草图.png"
+    "chat-preview-image" | "chat-preview-step" | "chat-preview-swipe" | "chat-preview-coming" | "chat-preview-coming-part" => "界面草图.png"
     "chat-preview-pdf" => "设计说明.pdf"
     "chat-preview-video" => "演示录屏.mp4"
     "chat-preview-audio" => "会议录音.m4a"
@@ -55,7 +60,13 @@ pub fn fixture_preview(mode : String) -> Unit {
   }
   for f in preview_files() {
     if f.0.name == which {
-      open_preview("ws1/st1", "s-c1", f.0, steps=if mode == "chat-preview-image" {
+      // (a picture coming: nothing said of how much, or a third of it; never whole)
+      preview_coming.val = match mode {
+        "chat-preview-coming" => Some((which, None))
+        "chat-preview-coming-part" => Some((which, Some({ "loaded": 6000.0, "total": 18000.0 })))
+        _ => None
+      }
+      open_preview("ws1/st1", "s-c1", f.0, steps=if mode == "chat-preview-image" || mode.has_prefix("chat-preview-coming") {
         NoSteps
       } else {
         InChat(Some(1.0), "s-c1")

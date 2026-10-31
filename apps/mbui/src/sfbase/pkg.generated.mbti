@@ -449,6 +449,8 @@ pub let file_progress_card : @ui.Style
 
 pub let file_progress_corner : Double
 
+pub fn file_progress_node(@view.View, () -> (Double, Double?), () -> Double) -> @view.View
+
 pub let file_progress_words : @ui.TextStyle
 
 pub fn file_said(Source, FilePage, String) -> Unit

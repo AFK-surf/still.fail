@@ -70,6 +70,8 @@ struct FakeHost {
   // what the app's words' face (face_ui), once given, adds to a cluster's advance in what is set in it, in ems (0 by
   // default: a face given measures as the system's)
   mut ui_face : Double
+  // what a digit set all one width (@hostapi.style_tabular) adds to its advance, in ems (0 by default: the same either way)
+  mut tabular : Double
   // what a face given by its number (face_add, a face's preview) adds to a cluster's advance in what is set in it, in
   // ems (none by default: each measures as the system's)
   faces_wider : Map[Int, Double]
@@ -607,6 +609,11 @@ fn h_shape(
         }
         let adv = if weight >= 600 && c != 10 { adv + size * f.bold } else { adv }
         let adv = if f.ui_face != 0.0 && c != 10 && in_ui_face(style) { adv + size * f.ui_face } else { adv }
+        let adv = if f.tabular != 0.0 && c >= 48 && c <= 57 && (style & @hostapi.style_tabular) != 0 {
+          adv + size * f.tabular
+        } else {
+          adv
+        }
         let adv = match f.faces_wider.get(@hostapi.face_of_style(style)) {
           Some(em) if c != 10 => adv + size * em
           _ => adv

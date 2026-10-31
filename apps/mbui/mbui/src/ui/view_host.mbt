@@ -211,7 +211,25 @@ pub fn set_view_app(make : (@view.View) -> Unit, around? : (Ctx) -> Unit) -> Uni
 /// The window's tree made by `make`, now.
 fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   // (a change told as it is made, at the host's now: what it sets going starts then, whatever frame takes it)
-  let t = @view.Tree::new(make, measure=view_words_measure, time=fn() { h_event_time() })
+  let made : Ref[@view.Tree?] = Ref(None)
+  let t = @view.Tree::new(
+    fn(root) {
+      make(root)
+      // (its words shaped as the theme it is drawn in says (its digits all one width or not: the app's, set_tree_theme,
+      // else the window's for its width): as that changes, every word measured and drawn again so at the change's
+      // moment, whatever is read of it before a frame; followed by its root, let go with it. As made, shaped so.)
+      root.reacts(view_words_style, fn(_s) {
+        match made.val {
+          Some(tree) => tree.words_again()
+          None => ()
+        }
+      })
+    },
+    measure=view_words_measure,
+    measure_runs=view_runs_measure,
+    time=fn() { h_event_time() },
+  )
+  made.val = Some(t)
   // (a press held on an old view a modal layer now keeps from input: called off then)
   t.on_modals(view_modals_told)
   // (a hold going through to an old view: what of it takes a press there, who it is; handed so, its from then)
@@ -250,7 +268,7 @@ pub fn view_painted() -> ViewPaintWork {
 /// As a run begins: no tree, its nodes let go. What took back by the old views no more held (what calls it and what it
 /// was said in): none takes back till a frame of the next says what does; nothing held of them.
 fn view_forget() -> Unit {
-  tree_theme_of.val = None
+  @signals.untracked(fn() { tree_theme_of.set(None) })
   view_shape_of.val = OfOld
   let c = g()
   targets_forget()
@@ -304,8 +322,54 @@ fn view_forget() -> Unit {
 /// system's size of words, as an old view's are (Ctx::sp: the look's size and line said at 1).
 fn view_words_measure(words : String, look : @view.WordsLook, width : Double) -> (Double, Double) {
   let c = g()
-  let tl = layout_text(words, c.sp(look.size), look.weight, if width < 0.0 { 1.0e9 } else { width }, look.wrap, line=c.sp(look.line))
+  let tl = layout_text(words, c.sp(look.size), look.weight, if width < 0.0 { 1.0e9 } else { width }, look.wrap, line=c.sp(look.line), style=view_words_style())
   (tl.w, tl.h)
+}
+
+///|
+/// How a node's words are shaped besides their size and weight: their digits all one width where the tree's theme says
+/// so of the app's own words (Theme::tabular), as an old view's words are where they say nothing of it (Ctx::text).
+fn view_words_style() -> Int {
+  if tree_theme().tabular {
+    @hostapi.style_tabular
+  } else {
+    0
+  }
+}
+
+///|
+/// A node's words in pieces (@view.WordsRun) as the paragraph the frame lays out and draws (rich.mbt, as Ctx::rich's):
+/// each piece in its weight and ink (0: the words' own, the node's), at the system's size of words, in the theme's
+/// digits (view_words_style).
+fn view_rich(runs : Array[@view.WordsRun], look : @view.WordsLook) -> Rich {
+  let c = g()
+  {
+    runs: runs.map(fn(r) { span(r.text, weight=r.weight, color=r.ink) }),
+    size: c.sp(look.size),
+    weight: look.weight,
+    color: 0L,
+    line: c.sp(look.line),
+    trim: false,
+    wrap: look.wrap,
+    link_color: 0L,
+    pressed_bg: 0L,
+    code_color: 0L,
+    code_bg: 0L,
+    code_scale: 1.0,
+    spacing: 0.0,
+    base: 0,
+    select: false,
+    max_lines: 0,
+    faces: view_words_style(),
+    shaped_in: words_shaped_in.val,
+  }
+}
+
+///|
+/// A node's words in pieces measured as they are drawn (view_rich), in `width` (< 0: as wide as they are).
+fn view_runs_measure(runs : Array[@view.WordsRun], look : @view.WordsLook, width : Double) -> (Double, Double) {
+  let lay = layout_rich(view_rich(runs, look), if width < 0.0 || !look.wrap { 1.0e9 } else { width })
+  (lay.w, lay.h)
 }
 
 ///|
@@ -613,14 +677,33 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   if c.ground != 0L {
     self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, 0.0, 0L, 1.0)
   }
-  if c.words != "" {
+  if c.words != "" && !c.runs.is_empty() {
+    // (in pieces each set its own way: one paragraph, as Ctx::rich's; one line given less than it is wide cut to it,
+    // ending in an ellipsis, as its plain words are)
+    let r = view_rich(c.runs, c.words_look)
+    let lay = layout_rich(r, if r.wrap { c.w + 0.5 } else { 1.0e9 })
+    let over = !r.wrap && lay.w > c.w + 0.5
+    let (r, lay) = if over {
+      let cut_r = cut_rich({ ..r, max_lines: 1 }, lay, c.w)
+      (cut_r, layout_rich(cut_r, 1.0e9))
+    } else {
+      (r, lay)
+    }
+    let colors = r.runs.map(fn(run) { if run.color != 0L { run.color } else { c.ink } })
+    let k = clip_top()
+    let from = self.ninst - start
+    self.emit_rich_glyphs(r, lay, 0.0, 0.0, colors, 1.0, clip_stack[k + 1], clip_stack[k + 3], unplaced=glyphs)
+    if over && lay.w > c.w + 0.5 {
+      cut = (from, self.ninst - start)
+    }
+  } else if c.words != "" {
     let k = c.words_look
     // (one line given less than it is wide: cut to it, ending in an ellipsis, as an old view's words on one line are)
-    // (at the system's size of words, as measured: view_words_measure)
-    let (size, line) = (self.sp(k.size), self.sp(k.line))
-    let tl = layout_text(c.words, size, k.weight, if k.wrap { c.w + 0.5 } else { 1.0e9 }, k.wrap, line~)
+    // (at the system's size of words, in the theme's digits, as measured: view_words_measure)
+    let (size, line, style) = (self.sp(k.size), self.sp(k.line), view_words_style())
+    let tl = layout_text(c.words, size, k.weight, if k.wrap { c.w + 0.5 } else { 1.0e9 }, k.wrap, line~, style~)
     let tl = if !k.wrap && tl.w > c.w + 0.5 {
-      ellipsized(c.words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~) })
+      ellipsized(c.words, tl, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~) })
     } else {
       tl
     }
@@ -1049,6 +1132,10 @@ fn view_frame_end(c : Ctx) -> Unit {
   }
   if tree.clock_read() {
     c.motion_left = true
+  }
+  // (a wait drawn by the clock: its frames as an old view's cycle has them, Ctx::cycle)
+  if tree.cycle_read() {
+    c.cycling = true
   }
   match tree.wake() {
     Some(at) =>
@@ -2171,7 +2258,7 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
           pressed: s.pressed,
           disabled: sn.disabled,
           modal: false,
-          range: None,
+          range: s.range,
           actions,
           rect: sn.rect,
           focused: self.focus == tree_said_id(sn.id),

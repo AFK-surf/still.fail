@@ -223,6 +223,8 @@ pub fn progress_look_of(h? : Double, track? : Int64, fill? : Int64, period? : Do
 
 pub let progress_ms : Double
 
+pub let progress_sweep_ms : Double
+
 pub fn radio_group(@ui.Ctx, String, Array[Item], String, orientation? : @ui.Orientation, wrap? : Bool, disabled? : Bool, label? : String, gap? : Double, look? : (@ui.Ctx, RadioState) -> Unit) -> @ui.Changed[String]
 
 pub fn radio_look(@ui.Ctx, RadioState) -> Unit

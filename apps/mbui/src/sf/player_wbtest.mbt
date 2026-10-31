@@ -314,3 +314,16 @@ test "a desktop's on a narrow page with a finger: short of room for its keys a f
   t.click(Button, label="web-main.menu.more")
   assert_true(t.find("android-chat.video.saveFrame") is Some(_))
 }
+
+///|
+test "the player's volume read out as a slider whose range is its least, where it is, its most, and told so to the host" {
+  let p = @kit.Media::new()
+  p.set_volume(0.4)
+  let tt = @ui.Tester::new(fn(c) { desk_volume(c, p, true, media_ink(false)) })
+  let s = tt.get(Slider, label=t("web-pages.drive.player.volume"))
+  assert_eq(s.range, Some((desk_none, 0.4, desk_whole)))
+  let told = tt.ctx().a11y_lines().split("\n").filter(fn(l) { l.contains("Slider") }).to_array()
+  assert_eq(told.length(), 1)
+  let f = told[0].split("\u{1F}").map(fn(v) { v.to_string() }).to_array()
+  assert_eq([f[12], f[13], f[14]], [desk_none.to_string(), (0.4).to_string(), desk_whole.to_string()])
+}

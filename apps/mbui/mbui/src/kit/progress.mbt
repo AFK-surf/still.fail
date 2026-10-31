@@ -42,7 +42,7 @@ pub fn progress(
   let i = c.box(w~, fn() { look(c, { t: shown, known: k }) })
   match (value, t) {
     (Some(v), Some(k)) =>
-      c.semantics(i, ProgressBar, label~, value="\{(k * 100.0).round().to_int()}%", range=(0.0, max, v))
+      c.semantics(i, ProgressBar, label~, value="\{(k * 100.0).round().to_int()}%", range=(0.0, v, max))
     _ => c.semantics(i, ProgressBar, label~)
   }
 }
@@ -57,6 +57,10 @@ pub let progress_ms : Double = 200.0
 pub let progress_known_ms : Double = 360.0
 
 ///|
+/// How long the band of a progress bar not known takes to sweep across once (its look's `period`).
+pub let progress_sweep_ms : Double = 1400.0
+
+///|
 /// A progress bar's look (still.fail's): `h` high on `track` (the theme's line: what is empty of what fills, seen on any
 /// ground as what is drawn with nothing in it is, @ui's contrast.mbt), filled in `fill` (the theme's accent);
 /// not known, a piece 40% of it sweeps across, eased there and back, once every `period` ms; becoming known, that
@@ -65,7 +69,7 @@ pub fn progress_look_of(
   h? : Double = 3.0,
   track? : Int64,
   fill? : Int64,
-  period? : Double = 1400.0,
+  period? : Double = progress_sweep_ms,
 ) -> (@ui.Ctx, ProgressState) -> Unit {
   fn(c, s) {
     let th = c.theme()

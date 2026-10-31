@@ -1496,6 +1496,8 @@ pub fn progress(@ui.Ctx, String, Double?, w? : @ui.Size, color? : Int64) -> Unit
 
 pub fn progress_key(@ui.Ctx, String, Double, Double, String, String, Double?, failed~ : Bool) -> Bool
 
+pub fn progress_node(@view.View, () -> Double?, () -> Int64, () -> Int64, h? : Double, period? : Double) -> @view.View
+
 pub fn progress_ring(@ui.Ctx, Double, Double, Int64) -> Int32
 
 pub fn progress_spinner(@ui.Ctx, String, Double?, size? : Double, stroke? : Double) -> Int32

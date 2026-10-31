@@ -1324,7 +1324,7 @@ fn desk_volume(c : @ui.Ctx, p : @kit.Media, on : Bool, ink : MediaInk) -> Unit {
       |> ignore
       c.layer(fn() { media_head(c, shown, ink.text, small=true) }) |> ignore
     })
-    c.semantics(b, Slider, id~, label=t("web-pages.drive.player.volume"), range=(desk_none, desk_whole, shown))
+    c.semantics(b, Slider, id~, label=t("web-pages.drive.player.volume"), range=(desk_none, shown, desk_whole))
   })
   |> ignore
 }

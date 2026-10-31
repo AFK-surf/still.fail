@@ -66,13 +66,16 @@ pub(all) enum Action {
 
 ///|
 /// What a node of the window's tree says it is (View::says): its role, its label (none: the words it holds), what
-/// describes it more, its value as words, its state, what can be done to it (Activate where it is pressed: its on_press,
+/// describes it more, its value as words (and as a number in a range: a progress bar's, a slider's), its state, what can
+/// be done to it (Activate where it is pressed: its on_press,
 /// as a press there runs it). Whether it is disabled is what its presses say (View::presses), not said here.
 pub(all) struct Said {
   role : Role
   label : String
   description : String
   value : String
+  /// its least, where it is, its most (None: no number of a range)
+  range : (Double, Double, Double)?
   check : Check?
   expanded : Bool?
   selected : Bool?
@@ -87,13 +90,14 @@ pub fn said(
   label? : String = "",
   description? : String = "",
   value? : String = "",
+  range? : (Double, Double, Double),
   check? : Check,
   expanded? : Bool,
   selected? : Bool,
   pressed? : Bool,
   actions? : Array[Action] = [],
 ) -> Said {
-  { role, label, description, value, check, expanded, selected, pressed, actions }
+  { role, label, description, value, range, check, expanded, selected, pressed, actions }
 }
 
 ///|
@@ -123,9 +127,12 @@ pub fn View::says(self : View, said : Live[Said?]) -> View {
 
 ///|
 /// The nodes that say what they are, and those hosting an old view, in the tree's order (each before what it holds, what
-/// it holds in its order), as it is now: what is read out of the window's tree (ui's semantics_tree splices each old
-/// view's in at its node).
+/// it holds in its order): what is read out of the window's tree (ui's semantics_tree splices each old
+/// view's in at its node), as it is now (what was told since the last frame said, no frame waited for).
 pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
+  // (what each says as of now: what the change under way set so far pulled into it, as where things are is for an
+  // event, Tree::laid_now; no frame drawn for it)
+  @signals.untracked(fn() { self.pull() })
   let out : Array[SaidNode] = []
   fn walk(at : Int, parent : Int, depth : Int, hid : Bool) -> Unit {
     let n = self.nodes[at]

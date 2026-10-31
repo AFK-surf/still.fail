@@ -1180,83 +1180,7 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
       }
     }
   }
-  let zoom = words_zoom.val
-  let zoomed = rich_zoomed_keys(r, lay)
-  for c in 0..<lay.starts.length() {
-    let key = lay.keys[c]
-    if key == -2 {
-      match lay.drawings[lay.run_of[c]] {
-        Some(d) => {
-          let l = lay.line_of[c]
-          let x = ox + lay.xs[c]
-          let y = oy + lay.line_y[l] + lay.line_base[l] - d.baseline
-          if y > cy1 || y + d.height < cy0 { continue }
-          let color = colors[lay.run_of[c]]
-          for path in d.paths { self.emit_shape(x, y, path, true, 0.0, false, color, alpha) }
-          for word in d.words {
-            let tl = layout_text(word.0, word.3, 400, 100000.0, false, style=@hostapi.style_serif)
-            self.emit_text(tl, x + word.1, y + word.2 - tl.ascent, color, alpha, font=(word.3, 400, @hostapi.style_serif, 0.0))
-          }
-        }
-        None => ()
-      }
-      continue
-    }
-    if key < 0 {
-      continue
-    }
-    let l = lay.line_of[c]
-    let top = oy + lay.line_y[l]
-    // (its own look, where what holds it says one: Ctx::glyphs_by)
-    let own = glyph_next(ox + lay.xs[c], top, lay.line_h[l])
-    match own {
-      Some(gl) if gl.alpha <= 0.002 => continue
-      _ => ()
-    }
-    if top > cy1 || top + lay.line_h[l] < cy0 {
-      continue
-    }
-    // (made at the host's pixels a point; in a shot drawn at more, made that much larger and drawn that much smaller:
-    // emit_text)
-    let (key, z) = match zoomed {
-      Some(big) if big[c] >= 0 => (big[c], zoom)
-      _ => (key, 1.0)
-    }
-    let g = glyph(key, sc / zoom)
-    if g.gw <= 0.0 {
-      continue
-    }
-    let gx = on_pixels(ox + lay.xs[c] + lay.pre[c] + g.ox / z, sc)
-    let gy = on_glyph_row(top + lay.line_base[l], g.oy / z, sc)
-    let (gw, gh) = (g.gw / z, g.gh / z)
-    // (moved and scaled about its middle by its own look)
-    let (gx, gy, gw, gh, ga) = match own {
-      Some(gl) => (gx + gw * (1.0 - gl.scale) / 2.0, gy + gh * (1.0 - gl.scale) / 2.0 + gl.dy, gw * gl.scale, gh * gl.scale, alpha * gl.alpha)
-      None => (gx, gy, gw, gh, alpha)
-    }
-    glyph_pushing.val = true
-    self.push_inst(
-      gx,
-      gy,
-      gw,
-      gh,
-      0.0,
-      if g.color { 3.0 } else { 1.0 },
-      0.0,
-      0.0,
-      if g.color { 0xFFFFFFFFL } else { colors[lay.run_of[c]] },
-      ga,
-      g.u,
-      g.v,
-      g.gw * (sc / zoom),
-      g.gh * (sc / zoom),
-    )
-    glyph_pushing.val = false
-    if inst_owners_kept() {
-      let (x0, x1) = lay.span_x(c, c + 1)
-      inst_cell(self.ninst - 1, gx, gw, ox + x0 + lay.pre[c], ox + x1)
-    }
-  }
+  self.emit_rich_glyphs(r, lay, ox, oy, colors, alpha, cy0, cy1)
   for k, run in r.runs {
     if !run.strike && !run.underline {
       continue
@@ -1310,4 +1234,105 @@ fn link_piece(c : Ctx, id : Int, x : Double, y : Double) -> (Double, Double, Dou
     k = k - 1
   }
   (x, y, 0.0, 0.0)
+}
+
+///|
+/// The glyphs (and drawings) of paragraph `r` laid out as `lay`, its top left at (`ox`, `oy`), each run in its colour
+/// (`colors`), as opaque as `alpha`, those of lines between `cy0` and `cy1`: set on the pixels where they are made, and
+/// each told to `unplaced` where it is before that (instance, x, the line's baseline, the glyph's own offset down), for
+/// what places it again elsewhere (a node's words, view_blit), as emit_text tells its own.
+fn Ctx::emit_rich_glyphs(
+  self : Ctx,
+  r : Rich,
+  lay : RichLayout,
+  ox : Double,
+  oy : Double,
+  colors : Array[Int64],
+  alpha : Double,
+  cy0 : Double,
+  cy1 : Double,
+  unplaced? : Array[(Int, Double, Double, Double)],
+) -> Unit {
+  let sc = self.scale
+  let zoom = words_zoom.val
+  let zoomed = rich_zoomed_keys(r, lay)
+  for c in 0..<lay.starts.length() {
+    let key = lay.keys[c]
+    if key == -2 {
+      match lay.drawings[lay.run_of[c]] {
+        Some(d) => {
+          let l = lay.line_of[c]
+          let x = ox + lay.xs[c]
+          let y = oy + lay.line_y[l] + lay.line_base[l] - d.baseline
+          if y > cy1 || y + d.height < cy0 { continue }
+          let color = colors[lay.run_of[c]]
+          for path in d.paths { self.emit_shape(x, y, path, true, 0.0, false, color, alpha) }
+          for word in d.words {
+            let tl = layout_text(word.0, word.3, 400, 100000.0, false, style=@hostapi.style_serif)
+            self.emit_text(tl, x + word.1, y + word.2 - tl.ascent, color, alpha, font=(word.3, 400, @hostapi.style_serif, 0.0))
+          }
+        }
+        None => ()
+      }
+      continue
+    }
+    if key < 0 {
+      continue
+    }
+    let l = lay.line_of[c]
+    let top = oy + lay.line_y[l]
+    // (its own look, where what holds it says one: Ctx::glyphs_by)
+    let own = glyph_next(ox + lay.xs[c], top, lay.line_h[l])
+    match own {
+      Some(gl) if gl.alpha <= 0.002 => continue
+      _ => ()
+    }
+    if top > cy1 || top + lay.line_h[l] < cy0 {
+      continue
+    }
+    // (made at the host's pixels a point; in a shot drawn at more, made that much larger and drawn that much smaller:
+    // emit_text)
+    let (key, z) = match zoomed {
+      Some(big) if big[c] >= 0 => (big[c], zoom)
+      _ => (key, 1.0)
+    }
+    let g = glyph(key, sc / zoom)
+    if g.gw <= 0.0 {
+      continue
+    }
+    let gx = on_pixels(ox + lay.xs[c] + lay.pre[c] + g.ox / z, sc)
+    let gy = on_glyph_row(top + lay.line_base[l], g.oy / z, sc)
+    match unplaced {
+      Some(u) => u.push((self.ninst, ox + lay.xs[c] + lay.pre[c] + g.ox / z, top + lay.line_base[l], g.oy / z))
+      None => ()
+    }
+    let (gw, gh) = (g.gw / z, g.gh / z)
+    // (moved and scaled about its middle by its own look)
+    let (gx, gy, gw, gh, ga) = match own {
+      Some(gl) => (gx + gw * (1.0 - gl.scale) / 2.0, gy + gh * (1.0 - gl.scale) / 2.0 + gl.dy, gw * gl.scale, gh * gl.scale, alpha * gl.alpha)
+      None => (gx, gy, gw, gh, alpha)
+    }
+    glyph_pushing.val = true
+    self.push_inst(
+      gx,
+      gy,
+      gw,
+      gh,
+      0.0,
+      if g.color { 3.0 } else { 1.0 },
+      0.0,
+      0.0,
+      if g.color { 0xFFFFFFFFL } else { colors[lay.run_of[c]] },
+      ga,
+      g.u,
+      g.v,
+      g.gw * (sc / zoom),
+      g.gh * (sc / zoom),
+    )
+    glyph_pushing.val = false
+    if inst_owners_kept() {
+      let (x0, x1) = lay.span_x(c, c + 1)
+      inst_cell(self.ninst - 1, gx, gw, ox + x0 + lay.pre[c], ox + x1)
+    }
+  }
 }

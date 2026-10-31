@@ -41,7 +41,7 @@ let tree_theme_said : @signals.Signal[Theme?] = @signals.signal(None, same=fn(a,
 /// views are built in, read as it changes); an app that tells none, the window's as each frame begins (tree_theme_said;
 /// before the first frame, the window's).
 pub fn tree_theme() -> Theme {
-  match tree_theme_of.val {
+  match tree_theme_of.get() {
     Some(f) => return f()
     None => ()
   }
@@ -52,13 +52,20 @@ pub fn tree_theme() -> Theme {
 }
 
 ///|
-/// The app's theme for its window's tree (set_tree_theme), none told.
+/// The app's theme for its window's tree (set_tree_theme), none told: told to what read the theme by it (another way
+/// to it, what it reads followed from then).
 // kept across runs: told by the app as its tree is made; let go as a tree is (view_forget)
-let tree_theme_of : Ref[(() -> Theme)?] = Ref(None)
+let tree_theme_of : @signals.Signal[(() -> Theme)?] = @signals.signal(None, same=fn(a, b) {
+  match (a, b) {
+    (Some(x), Some(y)) => physical_equal(x, y)
+    (None, None) => true
+    _ => false
+  }
+})
 
 ///|
 /// The theme the window's tree is drawn in, as the app has it (what its old views are built in: Ctx::with_theme's),
 /// read where it is drawn so it follows as it changes (a signal read in `f`): told as the tree is made.
 pub fn set_tree_theme(f : () -> Theme) -> Unit {
-  tree_theme_of.val = Some(f)
+  tree_theme_of.set(Some(f))
 }

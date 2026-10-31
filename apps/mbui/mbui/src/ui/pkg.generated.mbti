@@ -2495,6 +2495,7 @@ pub fn Tester::stream_drops(Self, Int32, Double) -> Unit
 pub fn Tester::stream_fed(Self, Int32) -> Array[String]
 pub fn Tester::stream_shows(Self, Int32, Double, Int32, Int32) -> Unit
 pub fn Tester::tab(Self, back? : Bool) -> Unit
+pub fn Tester::tabular_wider(Self, Double) -> Unit
 pub fn Tester::taken_at(Self) -> Double
 pub fn Tester::takes_back(Self) -> Bool
 pub fn Tester::tap(Self, Double, Double) -> Unit
