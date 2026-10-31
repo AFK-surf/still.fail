@@ -93,7 +93,9 @@ still.fail 这边没有任何为某个使用者写的东西：谁来申请都走
   最多 500）：每条的 `n`、`kind`（`message`，或 `edit`：对第 `target` 条的改写）、`authorKind`（`person` / `agent`）、`author`、
   `text`、`at`；`last` 是这个 chat 最新的一条，`more` 说后面还有。`thread` 不是 home workspace 的 chat：`404`。
   消息不加工：chat 是干什么的（标签、摘要），由使用者自己从消息里算，still.fail 不为此多花 token。
-- 授权取消或换过：`401 { error: "revoked" }`。
+- 授权在这台 station 上被撤销：`401 { error: "revoked", grant, revokedAt }`（撤销的授权记得最近 200 个 token）。
+- token 不是这台 station 发的（别的 station 的、早已换掉的）或没带：`401 { error: "unknown token", station: { id, name } }`，
+  说的是回答的这台，程序据此知道自己问错了地方，该去发它的那台读，或在这台重新申请。
 
 授权覆盖这台 station（或 workspace 的每台 station）上这个 workspace 的全部 chat，不按 chat、不按人分（station 不做按 chat、按人的权限：同一 workspace 里所有 chat 本来就对所有成员和 agent 可见；workspace 之间的软隔离照 docs/multi-workspace.md）。
 

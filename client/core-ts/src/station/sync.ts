@@ -76,8 +76,9 @@ const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 /// A row's id as text (sessions' and chats' are strings, threads' numbers).
 const idText = (v: unknown): string | null => (typeof v === "string" ? v : typeof v === "number" ? String(v) : null);
 
-/// One `step` event, as useLiveSession applies it.
-export function applyStep(view: LiveView, event: unknown, now: number): void {
+/// One `step` event, as useLiveSession applies it. `held`: how far the transcript held here goes (its last item's number
+/// and one), kept with a step as it ends.
+export function applyStep(view: LiveView, event: unknown, now: number, held = 0): void {
   const kind = str(get(event, "kind")) ?? "";
   const id = get(event, "id") ?? null;
   if (kind === "phase") view.phase = { phase: get(event, "phase") ?? null, since: Math.round(now) };
@@ -95,8 +96,17 @@ export function applyStep(view: LiveView, event: unknown, now: number): void {
     view.steps.push(step);
   } else if (kind === "end") {
     // On new steps: the ones there are in the live topic's value as it was made (shared, docs/core-ts.md).
-    view.steps = view.steps.map((s) => (equal(get(s, "id"), id) && isObject(s) ? { ...s, ended: true } : s));
+    view.steps = view.steps.map((s) => (equal(get(s, "id"), id) && isObject(s) ? { ...s, ended: true, held } : s));
   }
+}
+
+/// Whether a step is still to be shown, the transcript held here going as far as `held`: one in flight is; one that
+/// ended, until what is held goes past where it went as the step ended (the entry that records it is in by then, however
+/// it came: told on the stream or read).
+export function stepShown(step: unknown, held: number): boolean {
+  if (get(step, "ended") !== true) return true;
+  const at = get(step, "held");
+  return typeof at === "number" && held <= at;
 }
 
 /// How long a folder's watch waits before asking again, the station not reached or its asking failed.
@@ -1285,8 +1295,6 @@ export class StationsSync {
         // lacks before there.
         if (entries.length === 0 && start > 0) this.channels.goesTo(transcriptOf(address, key), start - 1);
         view.usage = get(message, "usage") ?? null;
-        // Ended steps stay until the entries that record them arrive.
-        if (entries.length > 0) view.steps = view.steps.filter((s) => get(s, "ended") !== true);
       } else if (kind === "steps") {
         view.steps = ((get(message, "steps") as unknown[] | undefined) ?? []).slice();
         const phase = get(message, "phase");
@@ -1302,7 +1310,13 @@ export class StationsSync {
         view.plan = ((get(message, "plan") as unknown[] | undefined) ?? []).slice();
       } else if (kind === "step") {
         const event = get(message, "event");
-        if (event !== undefined) applyStep(view, event, now);
+        if (event !== undefined) {
+          const span = core.data.logSpan("transcript", address, key);
+          const held = span ? span.max + 1 : 0;
+          applyStep(view, event, now, held);
+          // Those the transcript recorded since are let go.
+          view.steps = view.steps.filter((s) => stepShown(s, held));
+        }
       } else return;
       this.onChange(address, "live", key);
     }
