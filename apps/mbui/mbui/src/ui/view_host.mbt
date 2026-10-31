@@ -160,6 +160,8 @@ priv struct ViewBlock {
   glass_at : Int
   shares : Bool
   solid : Bool
+  /// the pixels a point it was made for (its picture's curves cut for them: made again as they change, View::picture)
+  scale : Double
   /// its words' instances (from, to; none: 0, 0) cut to its own box as it is composed, within what the frame cuts it by:
   /// one line cut short whose ellipsis has not the room either (what is not cut keeps its own way out of its box, a
   /// ring's, a shadow's), and how big the box is
@@ -325,10 +327,13 @@ fn view_forget() -> Unit {
   old_around.val = false
   view_blocks.clear()
   view_shape_bands.clear()
+  view_pictures.clear()
   inst_owners.tree_words.clear()
   view_paint_work.made = 0
   view_paint_work.copied = 0
   view_paint_work.handed = 0
+  view_pictures_cut.val = 0
+  view_bands_made.val = 0
 }
 
 ///|
@@ -461,6 +466,7 @@ fn view_brought(tree : @view.Tree) -> Unit {
   for id in tree.take_removed() {
     view_blocks.remove(id)
     view_shape_bands.remove(id)
+    view_pictures.remove(id)
     inst_owners.tree_words.remove(id)
   }
   old_place(tree)
@@ -681,8 +687,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       return
     }
     let block = match view_blocks.get(c.id) {
-      // (made as glass was drawn then: solid or not)
-      Some(b) if c.glass is None || b.solid == glass_paint.solid => b
+      // (made as glass was drawn then: solid or not; a picture for the pixels it is drawn at now)
+      Some(b) if (c.glass is None || b.solid == glass_paint.solid) && (c.picture is None || b.scale == self.scale) => b
       _ => {
         // (made where it is its own, cut by nothing it is drawn in: what cuts it is the clip it is composed in, as each
         // frame composes it, view_blit; its words never left out for where a clip once was)
@@ -870,23 +876,44 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
   // its tint where it has one; their pieces its own, counted from 0)
   let shape_marks : Array[(Int, Int, Int)] = []
   let seg_start = self.segs.length()
-  if c.shapes.length() > 0 {
+  // (its picture's after them, cut for the pixels it is drawn at: View::picture; the same array while both are)
+  let shapes = match c.picture {
+    None => {
+      view_pictures.remove(c.id)
+      c.shapes
+    }
+    Some(p) => view_picture_shapes(c.id, c.shapes, p, c.w, self.scale)
+  }
+  if shapes.length() > 0 {
     let bands = match view_shape_bands.get(c.id) {
-      Some(b) if physical_equal(b.of, c.shapes) => b
+      Some(b) if physical_equal(b.of, shapes) => b
       _ => {
-        let b = shape_bands(c.shapes)
+        view_bands_made.val = view_bands_made.val + 1
+        let b = shape_bands(shapes)
         view_shape_bands[c.id] = b
         b
       }
     }
     let from = self.ninst
-    for k, s in c.shapes {
+    // (in its tint: its shapes all of it; its picture's each with the opacity of its own, as a tinted picture is drawn,
+    // @pixels.tinted)
+    let own = c.shapes.length()
+    let ink = fn(k : Int, color : Int64) {
+      if c.tint == 0L {
+        color
+      } else if k < own || c.picture is None {
+        c.tint
+      } else {
+        @pixels.tinted(color, Some(c.tint))
+      }
+    }
+    for k, s in shapes {
       let piece_from = self.ninst
       if s.fill != 0L {
-        self.emit_bands(0.0, 0.0, bands.fills[k], 0.0, if c.tint != 0L { c.tint } else { s.fill }, 1.0)
+        self.emit_bands(0.0, 0.0, bands.fills[k], 0.0, ink(k, s.fill), 1.0)
       }
       if s.stroke != 0L && s.width > 0.0 {
-        self.emit_bands(0.0, 0.0, bands.strokes[k], s.width / 2.0, if c.tint != 0L { c.tint } else { s.stroke }, 1.0)
+        self.emit_bands(0.0, 0.0, bands.strokes[k], s.width / 2.0, ink(k, s.stroke), 1.0)
       }
       // (an icon or a line by the whole shape its pieces are of, not by a piece, nor by what else its node draws)
       let (sw, sh) = shape_extent(s)
@@ -898,6 +925,9 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
         self.inst[i * inst_size + 12] = self.inst[i * inst_size + 12] - base
       }
     }
+  } else {
+    // (none drawn now: the bands of those it drew before let go)
+    view_shape_bands.remove(c.id)
   }
   let segs = self.segs[seg_start:].to_array()
   self.segs.truncate(seg_start)
@@ -930,6 +960,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
     glass_at,
     shares: c.glass.map_or(false, fn(g) { g.shares_capture }),
     solid,
+    scale: self.scale,
     cut,
     w: c.w,
     h: c.h,
@@ -2338,6 +2369,54 @@ fn Ctx::back_told_host(self : Ctx) -> Unit {
 /// the same; let go with the node.
 // kept across runs: let go as the nodes are, and with the tree (view_forget)
 let view_shape_bands : Map[@view.NodeId, ShapeBands] = Map([])
+
+///|
+/// Each node's picture as it was last cut (View::picture): of which, how wide, for how many pixels a point, the shapes
+/// it came to, and those with the node's own before them (of which); let go with the node, or as it draws none.
+// kept across runs: let go as the nodes are, and with the tree (view_forget)
+let view_pictures : Map[@view.NodeId, ViewPicture] = Map([])
+
+///|
+priv struct ViewPicture {
+  of : @pixels.Vector
+  w : Double
+  scale : Double
+  cut : Array[Shape]
+  own : Array[Shape]
+  shapes : Array[Shape]
+}
+
+///|
+/// How many times a node's picture was cut, and its shapes made into bands, since the tree was made (for a test: what is
+/// kept while nothing it is made of changes).
+// kept across runs: put back as a run begins (view_forget)
+let view_pictures_cut : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: put back as a run begins (view_forget)
+let view_bands_made : Ref[Int] = Ref(0)
+
+///|
+/// Node `id`'s shapes, `own` and then its picture `p` drawn `w` wide at `scale` pixels a point: the picture cut once for
+/// these, the two together the same array while neither changes (their bands kept with it: view_shape_bands).
+fn view_picture_shapes(id : @view.NodeId, own : Array[Shape], p : @pixels.Vector, w : Double, scale : Double) -> Array[Shape] {
+  let was = view_pictures.get(id)
+  let cut = match was {
+    Some(v) if physical_equal(v.of, p) && v.w == w && v.scale == scale => v.cut
+    _ => {
+      view_pictures_cut.val = view_pictures_cut.val + 1
+      @paint.vector_shapes(p, w, scale)
+    }
+  }
+  match was {
+    Some(v) if physical_equal(v.cut, cut) && physical_equal(v.own, own) => v.shapes
+    _ => {
+      let shapes = if own.is_empty() { cut } else { own + cut }
+      view_pictures[id] = { of: p, w, scale, cut, own, shapes }
+      shapes
+    }
+  }
+}
 
 ///|
 /// How wide and high shape `s` is, by its outlines' points (its stroke's half width round them): what it is as a whole.

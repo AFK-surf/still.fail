@@ -997,10 +997,13 @@ fn splash_tree(v : @view.View, src : Source, state : AppIs) -> Unit {
     s.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
     s.show(fn() { splash_waited.get() || label() is Some(_) }, fn(m) {
       m.gap(Is(16.0)).lines_up(Is(Some(Middle))) |> ignore
-      // (the mark a picture of curves, drawn by an old view as the window's pixels have it)
+      // (the mark, its curves cut for the pixels the window is drawn at)
       m.box(fn(k) {
-        k.width(Is(Some(56.0))).height(By(fn() { Some(@sf.drawable_height(mark(), 56.0)) })) |> ignore
-        @ui.old(k, fn(c) { @sf.drawable(c, mark(), 56.0) |> ignore }).grow(Is(1.0)) |> ignore
+        k
+        .width(Is(Some(56.0)))
+        .height(By(fn() { Some(@sf.drawable_height(mark(), 56.0)) }))
+        .picture(By(fn() { @sf.drawable_vector(mark()) }))
+        |> ignore
       })
       |> ignore
       m.show(fn() { label() is Some(_) }, fn(w) {

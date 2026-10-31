@@ -69,6 +69,12 @@ pub fn drawable_height(name : String, w : Double) -> Double {
 }
 
 ///|
+/// Drawable `name`'s picture (None: there is none so named), for a node of the window's tree to draw (View::picture).
+pub fn drawable_vector(name : String) -> @pixels.Vector? {
+  drawables.get(name)
+}
+
+///|
 pub fn drawable(c : @ui.Ctx, name : String, w : Double, tint? : Int64) -> Int {
   match drawables.get(name) {
     Some(d) => {
