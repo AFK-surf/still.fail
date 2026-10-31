@@ -48,19 +48,19 @@ fn EdgeWay::shown(self : EdgeWay, n : @view.View) -> Double {
 ///|
 /// A column's edge's look in a node of `parent`'s (as tall as it, `handle_w` across, its middle that of `parent`), as
 /// edge_look draws it: its bar while `over()` its column, longer while `on()` it (pointed at, in hand), in the field's
-/// edge grey while `active()` (pressed, dragged), else the strong line's grey; its line while on it (unless `line` is
-/// false) or active. Its bar's height and showing move over edge_bar_ms, its grey over edge_ink_ms, its line over
+/// edge grey while `active()` (pressed, dragged), else the strong line's grey; its line while on it (unless `line()` says
+/// no, as that changes: a sidebar folded) or active. Its bar's height and showing move over edge_bar_ms, its grey over edge_ink_ms, its line over
 /// edge_line_ms, each eased out, from the moment its state changed. Taking nothing. The node.
 pub fn edge_look_node(
   parent : @view.View,
   over : () -> Bool,
   on : () -> Bool,
   active : () -> Bool,
-  line? : Bool = true,
+  line? : () -> Bool = fn() { true },
 ) -> @view.View {
   parent.box(fn(v) {
     let theme = fn() { @ui.tree_theme() }
-    let state = fn() { edge_state(over(), on(), active(), line) }
+    let state = fn() { edge_state(over(), on(), active(), line()) }
     let now = @signals.untracked(state)
     // (each as the state is as it is made: still)
     let shows = EdgeWay::new(if (now & 1) != 0 { 1.0 } else { 0.0 })

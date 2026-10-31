@@ -5,8 +5,9 @@
 //   - a row: the rail and the sidebar's column (as wide as the block takes, open or folded: col), the page's pane in
 //     what it leaves (the page an island, built for the room the tree gives it);
 //   - over them, the block (the rail and the sidebar on one ground, shell.css.ts dock) an island of its own, taking
-//     presses where it draws them alone: shown a while (folded, peeking) it reaches over the page; with it the
-//     sidebar's edge and 更新 where the closed bar leaves room for it.
+//     presses where it draws them alone: shown a while (folded, peeking) it reaches over the page; with it 更新 where
+//     the closed bar leaves room for it;
+//   - over the block, the sidebar's edge, a node of its own (pane_edge: each press, drag and let go at its moment).
 //
 // The block's move (brand.tsx moveSidebar: folded or opened as chosen, shown a while or no longer, a place with no
 // sidebar of its own come to or left, another place's sidebar at its own width; and the tape left for one of those) is a
@@ -14,8 +15,8 @@
 // where it goes (FoldLook), one way from 0 to 1, read where it is drawn. What is no cause of a move (the window, the
 // edge dragged, the window's room folding it, a fold's place) puts things where they go at once.
 //
-// Still the old view's (the way there): what the block and the page hold (their islands), the edge's drag and the
-// pointer coming on the closed bar to show it a while (read as their islands build). Back is a node of the tree's
+// Still the old view's (the way there): what the block and the page hold (their islands), and the pointer coming on
+// the closed bar to show it a while (read as the block's island builds). Back is a node of the tree's
 // (wide_takes_back, wide_back_step).
 
 ///|
@@ -556,8 +557,16 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     |> ignore
   })
   |> ignore
-  // the block over them (reaching over the page shown a while), its edge, 更新: taking presses where they draw them
-  @ui.old(v, fn(c) { pane_block_built(c, src) }, key=tape_island_key).over(Is(true)) |> @ui.old_takes_own |> ignore
+  // the block over them (reaching over the page shown a while), 更新: taking presses where they draw them
+  let block = @ui.old(v, fn(c) { pane_block_built(c, src) }, key=tape_island_key).over(Is(true)) |> @ui.old_takes_own
+  // the sidebar's edge, the tree's, over the block (its rows under its strip), but where a list's thumb of the block's
+  // is shown there: the thumb's (@ui.yield_thumbs)
+  let tips = @sf.TipLayer::new(fn() { Some(v) })
+  v.box(fn(edges) {
+    edges.over(Is(true)) |> ignore
+    edges.show(fn() { pane_edge_stands(src, edges) }, fn(n) { pane_edge(n, edges, src, tips, block) })
+  })
+  |> ignore
 }
 
 ///|
@@ -699,9 +708,6 @@ fn pane_block_built(c : @ui.Ctx, src : Source) -> Unit {
   let moving = fold_going(c.moment())
   let top = if side_full_height(r.bar) { 0.0 } else { r.top }
   dock(c, src, w, all, r.bar, r.peek, r.s, f.col, top, r.foot, 0.0, held=true, fold=Some((f, moving)))
-  if !r.bare && r.on_fold is None && !r.crowded {
-    sidebar_edge(c, f.edge)
-  }
   // (with the sidebar closed, where its first row is not shown: 更新 where the bar's start leaves room for it)
   if !r.gated && update_shown() && r.bar && !r.peek {
     update_button(c, src, @ui.window_inset(), r.top)
@@ -733,4 +739,100 @@ pub fn pane_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   }
   // (back, the shell's one way: the frame's node's, pane_view, wide_takes_back)
   sv_sweep(c, src)
+}
+
+///|
+/// Whether the sidebar's edge stands beside the block (sidebar_edge's: none where the block is bare of its sidebar,
+/// folding on its own, or crowded), in the workspace in view, a window as wide as node `n` has it.
+fn pane_edge_stands(src : Source, n : @view.View) -> Bool {
+  match @sfbase.workspace_in_view(src).0 {
+    Some(w) => {
+      let r = pane_room(src, w, n.window().0)
+      !r.bare && r.on_fold is None && !r.crowded
+    }
+    None => false
+  }
+}
+
+///|
+/// The sidebar's edge (the web's SidebarEdge, Rail.css.ts edge), the tree's, in node `n` over what `holder` holds: a
+/// strip 12 wide down all of the window, its line in its middle where the block's move has the edge as it is drawn
+/// (fold_along's `edge`), the library's look 3 in (its bar shown with the pointer on the strip, its line not while the
+/// sidebar is folded). Open or shown a while, dragged, the sidebar's width (side_min to side_max), each event at its
+/// moment; folded, its width as it is, and a press of it (let go without moving, or after a drag: the web's moves go
+/// nowhere there; the second of two) the sidebar folded or opened again, as Enter, Space or a screen reader's press of
+/// it do. Held, the wide frame's edge_held, from its press to its end (let go, called off, gone with its node). Its
+/// pointer the resizing one while the sidebar is open, a button's folded; read out as a button saying what a press does;
+/// its words by the pointer along it (tips). Where a list's thumb of the block's (`block`, the old view drawing it) is
+/// shown over its strip, that thumb's.
+fn pane_edge(n : @view.View, holder : @view.View, src : Source, tips : @sf.TipLayer, block : @view.View) -> Unit {
+  let held = @signals.signal(false, same=fn(a, b) { a == b })
+  let words = fn() {
+    if wide.folded.get() {
+      @sf.t("web-main.sidebar.open")
+    } else {
+      @sf.t("web-pages.workspace.resizeSidebar") + " · " + @sf.t("web-main.sidebar.close")
+    }
+  }
+  // (its width dragged open and shown a while; folded, only pressed, any way it moves)
+  let sized = fn() { !wide.folded.get() || wide.peeking.get() }
+  let fold = fn() { wide.folded.set(!wide.folded.get()) }
+  n
+  .width(Is(Some(@ui.Space::px(S3))))
+  .height(By(fn() { Some(n.window().1) }))
+  .offset(By(fn() {
+    match @sfbase.workspace_in_view(src).0 {
+      Some(w) => {
+        let (_, now) = fold_target(src, w, n.window().0)
+        (fold_along(fold_drawn_at(holder), now).edge, 0.0)
+      }
+      None => (0.0, 0.0)
+    }
+  }))
+  |> ignore
+  let e = @sf.edge_node(
+    n,
+    words,
+    fn() { wide.side_w.get() },
+    fn() { if sized() { side_min } else { wide.side_w.get() } },
+    fn() { if sized() { side_max } else { wide.side_w.get() } },
+    Right,
+    fn(said, _) {
+      match said {
+        Dragging(x) => wide.side_w.set(x)
+        Dropped(x) if sized() => wide.side_w.set(x)
+        // (folded: the web's moves go nowhere, so a press that moved is a press)
+        Dropped(_) | Pressed | Twice => fold()
+        Untouched => ()
+      }
+    },
+    fn(h) {
+      held.set(h)
+      wide.edge_held.set(h)
+    },
+    tips~,
+    side=Right,
+  )
+  // (a button's as the web's is: its pointer the resizing one while open; read out as what a press does; Enter, Space
+  // or a screen reader's press of it, as a press of it is)
+  // (a list's thumb of the block's shown over its strip: the thumb's there)
+  @ui.yield_thumbs(e, block)
+  e
+  .cursor(By(fn() { if wide.folded.get() { None } else { Some(ResizeX) } }))
+  .says(By(fn() { Some(@view.said(Button, label=words())) }))
+  .focusable(Is(true))
+  .on_press(fold)
+  |> ignore
+  e.box(fn(g) {
+    g.over(Is(true)).padding(Is((@ui.Space::px(@sf.edge_in), 0.0, 0.0, 0.0))) |> ignore
+    @sf.edge_look_node(
+      g,
+      fn() { false },
+      fn() { e.pointed() || e.focus_shown() || held.get() },
+      fn() { held.get() },
+      line=fn() { !wide.folded.get() },
+    )
+    |> ignore
+  })
+  |> ignore
 }

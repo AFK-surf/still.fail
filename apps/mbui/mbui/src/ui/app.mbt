@@ -521,6 +521,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   let bs = c.bars
   c.bars = c.next_bars
   c.next_bars = bs
+  // (its targets published whole: what nodes yield to of them told, view_host.mbt)
+  yields_published(c)
   // (what the build made for the next frames, the layers it opened and what takes the focus, said by it: painted again
   // alone, it stands)
   if !alone {

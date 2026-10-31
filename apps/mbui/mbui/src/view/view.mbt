@@ -344,6 +344,9 @@ pub struct Tree {
   /// takes a press at a point (Tree::hosts_at)
   mut on_through : (Target, Double, Double, Double, Handed) -> Unit
   mut hosts_at : (NodeId, Double, Double) -> Int?
+  /// what the host says takes a finger at a point instead of what the tree found there (Tree::on_target), given what
+  /// takes it there in the order they are drawn
+  mut retarget : (Target, Array[Target], Double, Double) -> Target
   /// the node a finger or the pointer is held on, and the one the pointer is over (of those that take a press): each
   /// node's own cell told as it comes or goes (View::pressed, View::pointed)
   mut pressing : NodeId?
@@ -463,6 +466,7 @@ pub fn Tree::new(
     through: None,
     on_through: fn(_, _, _, _, _) {  },
     hosts_at: fn(_, _, _) { None },
+    retarget: fn(t, _, _, _) { t },
     pressing: None,
     pointed: None,
     pointer_xy: (-1.0, -1.0),
@@ -3931,10 +3935,32 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
       }
     }
   })
+  self.chosen(found, x, y)
+}
+
+///|
+/// What takes a finger at (x, y) of `found` (all that takes it there, in the order they are drawn): the topmost, unless
+/// the host says another of them does (Tree::on_target); none, nothing. Only one of `found`, whatever the host says.
+fn Tree::chosen(self : Tree, found : Array[Target], x : Double, y : Double) -> Target {
   match found.last() {
-    Some(t) => t
+    Some(t) => {
+      let said = (self.retarget)(t, found, x, y)
+      if found.contains(said) {
+        said
+      } else {
+        t
+      }
+    }
     None => Nothing
   }
+}
+
+///|
+/// What hosts the tree tells what it found takes a finger at (x, y) in the window (the topmost of `found`, all that
+/// takes it there in the order they are drawn), and asks what takes it instead (one of `found`): for what one node
+/// hosted said of another (that it yields a point to what that one hosts takes there). Not said: what was found.
+pub fn Tree::on_target(self : Tree, f : (Target, Array[Target], Double, Double) -> Target) -> Unit {
+  self.retarget = f
 }
 
 ///|

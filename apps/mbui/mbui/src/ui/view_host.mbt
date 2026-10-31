@@ -234,6 +234,8 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   t.on_modals(view_modals_told)
   // (a hold going through to an old view: what of it takes a press there, who it is; handed so, its from then)
   t.hosts_at(fn(island, x, y) { old_taker_at(t, island, x, y) })
+  // (where a node said it yields to the list's thumb of an old view under it: that view's there, yield_thumbs)
+  t.on_target(fn(picked, found, x, y) { view_retarget(t, picked, found, x, y) })
   t.on_through(view_through)
   // (the focus on one of its nodes let go of at a cause: none's from then, on either side)
   t.on_focus_lost(view_focus_lost)
@@ -2023,7 +2025,7 @@ fn view_point_tell(tree : @view.Tree, over? : Bool) -> Unit {
     (None, Some((x, y))) => old_layer_over(x, y)
     (None, None) => false
   }
-  view_point_seen.val = (tree.hits_said(), over)
+  view_point_seen.val = (tree.hits_said(), over, yields_said.val)
   match view_point.val {
     // (gone, or under the old frame's layer: nothing of the tree's followed; the old views' as they have it)
     None => {
@@ -2093,7 +2095,7 @@ fn view_old_pointed(at : (Double, Double)?) -> Unit {
 /// What a still pointer was last worked out against: the tree's hits said (Tree::hits_said), and whether what the old
 /// frame put over all of it at its root was there (by its hit targets as last drawn).
 // kept across runs: written as a pointer is told
-let view_point_seen : Ref[(Int, Bool)] = Ref((-1, false))
+let view_point_seen : Ref[(Int, Bool, Int)] = Ref((-1, false, -1))
 
 ///|
 /// As a frame begins, the tree laid out as it has it (view_frame): what a still pointer is over, where what a point hits
@@ -2116,7 +2118,7 @@ fn view_pointed_again() -> Unit {
         view_point_tell(tree)
       }
     Some((x, y)) => {
-      if view_point_seen.val != (tree.hits_said(), old_layer_over(x, y)) {
+      if view_point_seen.val != (tree.hits_said(), old_layer_over(x, y), yields_said.val) {
         view_point_tell(tree)
       }
     }
@@ -2509,4 +2511,98 @@ fn view_cursor_tell() -> Unit {
     desk.shown = kind
     h_set_cursor(kind)
   }
+}
+
+///|
+// kept across runs: put back as its nodes are let go (yield_thumbs)
+/// The nodes that yield to a list's thumb of an old view under them, by index: who each is, and who the old view is.
+let thumbs_yielded : Map[Int, (@view.NodeId, @view.NodeId)] = {}
+
+///|
+/// Node `v` (one that takes a press: an edge over the side of a block an old view draws) yields, where it is found
+/// taking a finger, to `island` (that old view, drawn under it) where what of `island` takes it there is the thumb of a
+/// list's bar shown for a mouse (bar_target's: its grab round it, its clip): the thumb's there, its pointer, its press
+/// and what follows. Nothing over `v` there, `island` living, this making of it, taking presses there (not leaving, no
+/// modal layer over it): else `v`'s. Let go with `v`.
+pub fn yield_thumbs(v : @view.View, island : @view.View) -> Unit {
+  let me = v.id()
+  thumbs_yielded[me.at] = (me, island.id())
+  v.owns(fn() {
+    match thumbs_yielded.get(me.at) {
+      Some((who, _)) if who == me => thumbs_yielded.remove(me.at)
+      _ => ()
+    }
+  })
+  |> ignore
+}
+
+///|
+/// What takes a finger at (x, y) of what the tree found (`picked`, the topmost of `found`): where it is a node that
+/// yields to an old view's thumbs (yield_thumbs), that old view found under it there and what of it takes it there a
+/// thumb shown for a mouse, the old view; else what was found.
+fn view_retarget(
+  tree : @view.Tree,
+  picked : @view.Target,
+  found : Array[@view.Target],
+  x : Double,
+  y : Double,
+) -> @view.Target {
+  let id = match picked {
+    Dragged(id) | Pressed(id) => id
+    _ => return picked
+  }
+  guard thumbs_yielded.get(id.at) is Some((who, island)) && who == id else { return picked }
+  // (a mouse's alone, as a thumb takes one: a finger takes none, whatever the frame before published)
+  guard pointing() is Mouse && found.contains(Hosted(island)) else { return picked }
+  match old_taker_at(tree, island, x, y) {
+    Some(token) if token % 2 == 0 && g().bars.iter().any(fn(b) { b.thumb == token / 2 }) => Hosted(island)
+    _ => picked
+  }
+}
+
+
+///|
+// kept across runs: counted on
+/// How many times what a node yields to (yield_thumbs) was published changed: what a still pointer follows of it.
+let yields_said : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: put back as it is published
+/// The thumbs of the old views nodes yield to as last published (yield_thumbs): which old view (this making of it),
+/// which thumb, where it takes the pointer as published (its target's rect, cut to its clip's, and that clip's rounded
+/// corners, as hit_at reads them: in_round_clip).
+let yields_seen : Ref[Array[(@view.NodeId, Int, Array[Double])]] = Ref([])
+
+///|
+/// The old frame's targets published whole (its hits and its bars, frame_paint): where nodes yield to old views' thumbs
+/// (yield_thumbs), what of those thumbs is published now; changed, told (yields_said), what a still pointer is over
+/// looked at again at once (view_pointed_again), not a frame on.
+fn yields_published(c : Ctx) -> Unit {
+  if thumbs_yielded.is_empty() && yields_seen.val.is_empty() {
+    return
+  }
+  let islands = thumbs_yielded.values().map(fn(e) { e.1 }).collect()
+  let now = []
+  for k, id in c.hit_ids {
+    guard c.bars.iter().any(fn(b) { b.thumb == id }) else { continue }
+    match old_hit_owner(k) {
+      Some(o) if islands.contains(o) => {
+        let r = k * 4
+        let at = [c.hit_rects[r], c.hit_rects[r + 1], c.hit_rects[r + 2], c.hit_rects[r + 3]]
+        for j in (k * clip_n)..<((k + 1) * clip_n) {
+          if j < c.hit_clips.length() {
+            at.push(c.hit_clips[j])
+          }
+        }
+        now.push((o, id, at))
+      }
+      _ => ()
+    }
+  }
+  if now == yields_seen.val {
+    return
+  }
+  yields_seen.val = now
+  yields_said.val = yields_said.val + 1
+  view_pointed_again()
 }
