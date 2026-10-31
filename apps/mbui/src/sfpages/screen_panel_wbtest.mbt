@@ -203,7 +203,7 @@ test "常用键 while driving: F1–F12 and the keys the row has not, each sent 
   r.t.tap_text("PgDn")
   r.t.draw()
   assert_eq(text(Some(r.inputs()[2]), "code"), "PageDown")
-  assert_true(r.t.find(tr("web-pages.screen.keys")) is Some(_))
+  assert_true(r.t.find(tr("web-pages.screen.commonKeys")) is Some(_))
   shut(r)
   screen_done(r.t)
 }
