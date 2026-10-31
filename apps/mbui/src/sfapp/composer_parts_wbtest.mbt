@@ -437,6 +437,49 @@ test "a notice over the composer wrapped to lines: round as one line is, its mar
 }
 
 ///|
+/// The notice drawn over the composer's ground and that ground, as drawn now (their glass, the lowest two on the page):
+/// how far the notice's bottom is over the ground's top, and where that top is.
+fn notice_over_ground(t : @ui.Tester) -> (Double, Double) {
+  let glass = t.drawn_glass_corners().copy()
+  glass.sort_by(fn(a, b) { a.1.compare(b.1) })
+  let n = glass.length()
+  let ground = glass[n - 1]
+  let notice = glass[n - 2]
+  (ground.1 - (notice.1 + notice.3), ground.1)
+}
+
+///|
+test "a notice over a phone's composer goes with its ground as it opens, as far over it in every frame" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) => {
+        let o2 = o.copy()
+        o2["offline"] = Json::boolean(true)
+        o2["offlineNote"] = Json::string("「ccvm」离线")
+        { ..tp, value: Some(Json::object(o2)) }
+      }
+      _ => tp
+    }
+  })
+  t.run_for(@ui.move_most_ms)
+  let (apart, top) = notice_over_ground(t)
+  t.tap_text("发消息")
+  let until = t.time() + @ui.move_most_ms
+  while t.time() < until {
+    let (now, _) = notice_over_ground(t)
+    assert_true((now - apart).abs() < 0.5, msg="\{now} over the ground at \{t.time()}, \{apart} at rest")
+    t.frame()
+  }
+  let (now, opened) = notice_over_ground(t)
+  assert_true((now - apart).abs() < 0.5, msg="\{now} over the ground opened, \{apart} at rest")
+  assert_true(top - opened > 4.0, msg="the composer opened taller: its top at \{opened}, \{top} at rest")
+}
+
+///|
 test "the composer's buttons say what they are: ＋ (发送文件), 发送" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
