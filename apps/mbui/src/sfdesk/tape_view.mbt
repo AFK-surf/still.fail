@@ -17,7 +17,7 @@
 // change has it. What brings a panel over: a cover pressed, back, what is shown in the page (show_page, bring_page:
 // wide.tape_ask), a chat's side panel opened or closed, another chat come, another place's sidebar (tape_settle, one
 // change at its moment); the page waited for till the core has given what it shows or its wait is over (the same as
-// what the page's panel shows: tape_page_waits, at its causes, the one before kept by the stack meanwhile). What the
+// what the page's panel shows: page_wait.mbt, at its causes, the one before kept by the stack meanwhile). What the
 // window, an edge dragged or the keyboard does to where things go is no move: there at once. Its end is a moment of the
 // timeline: the panel closed while in use let go there (side_left).
 //
@@ -33,10 +33,7 @@
 /// the page's panel is, where the sidebar's column ends (where the page's panel starts on the tape), how far behind each
 /// panel is (Side, Page, Panel: 0 in use, 1 its ground a step darker). Whether the tape is at rest (its way's end come),
 /// what is due at that end; the side panel last open (closed while in use: shown, as it was, while the tape moves off it);
-/// the stay the page's panel shows (the page on top's, each come on top a stay of its own: Nav::top_stay; while the one
-/// on top waits for what it shows, the one shown before it, kept by the stack: Nav::flat_keep) and what is due as the
-/// one on top's wait is over (`most` past the moment it came); the
-/// finger pulling a panel over (where it went down across, the window's; where and when it was last, how fast it went
+/// the finger pulling a panel over (where it went down across, the window's; where and when it was last, how fast it went
 /// there, px/s).
 priv struct TapeGoes {
   way : @motion.Way
@@ -47,8 +44,6 @@ priv struct TapeGoes {
   rest : @signals.Signal[Bool]
   mut end_due : () -> Unit
   last_side : @signals.Signal[SideOf?]
-  shown : @signals.Signal[(Int, Int)]
-  mut wait_due : () -> Unit
   /// told as a move is committed or where things go is put (what works out where they are from it reads it)
   said : @signals.Signal[Int]
   mut pull_x0 : Double
@@ -76,8 +71,6 @@ let tape_goes : TapeGoes = {
   rest: @signals.signal(true, same=fn(a, b) { a == b }),
   end_due: fn() {  },
   last_side: @signals.signal(None, same=fn(a, b) { a == b }),
-  shown: @signals.signal((-1, -1), same=fn(a, b) { a == b }),
-  wait_due: fn() {  },
   said: @signals.signal(0),
   pull_x0: 0.0,
   pull_last: (0.0, 0.0),
@@ -93,8 +86,7 @@ let tape_goes : TapeGoes = {
 fn tape_goes_reset() -> Unit {
   (tape_goes.end_due)()
   tape_goes.end_due = fn() {  }
-  (tape_goes.wait_due)()
-  tape_goes.wait_due = fn() {  }
+  tape_page_wait.reset()
   tape_goes.way.put(1.0)
   for a in [tape_goes.x, tape_goes.page, tape_goes.col, tape_goes.behind] {
     for i in 0..<a.length() {
@@ -103,7 +95,6 @@ fn tape_goes_reset() -> Unit {
   }
   tape_goes.rest.set(true)
   tape_goes.last_side.set(None)
-  tape_goes.shown.set((-1, -1))
   tape_goes.pull_x0 = 0.0
   tape_goes.pull_last = (0.0, 0.0)
   tape_goes.pull_v = 0.0
@@ -420,65 +411,10 @@ fn tape_to(p : TapePane, at : Double) -> Unit {
 }
 
 ///|
-/// Whether the page's panel shows the page on top (its stay: tape_goes.shown), as it does once the core has given what it
-/// shows or its wait is over (tape_page_waits).
+/// Whether the page's panel shows the page on top, as it does once the core has given what it shows or its wait is over
+/// (tape_page_wait, at its causes).
 fn tape_page_ready() -> Bool {
-  tape_goes.shown.get() == app.nav.top_stay()
-}
-
-///|
-/// The page on top shown in the page's panel from `at` (stay `stay`, still the one on top): what was kept in its place
-/// let go, its wait called off.
-fn tape_page_shows(stay : (Int, Int)) -> Unit {
-  if app.nav.top_stay() != stay || tape_goes.shown.get() == stay {
-    return
-  }
-  (tape_goes.wait_due)()
-  tape_goes.wait_due = fn() {  }
-  tape_goes.shown.set(stay)
-  app.nav.flat_keep(None)
-}
-
-///|
-/// Node `v`'s: what the page's panel shows as the page on top changes, each at its cause's moment, whatever frames are
-/// drawn. A page come on top (a stay of its own: Nav::top_stay; the one on top as the node is made too) shows at once
-/// where the core has given what it shows; else the one shown before stays (kept by the stack: Nav::flat_keep; none
-/// before, the one on top drawn as it comes, not brought over) till the core gives it (a reaction, at that answer's
-/// moment) or `most` past the moment it came (a moment of the tree's timeline), whichever comes first, once. Another come
-/// on top in the while calls this one's wait off.
-fn tape_page_waits(v : @view.View) -> Unit {
-  app.nav.flat_owned(true)
-  // (as it is made, nothing shown of it yet: the page on top waits from then, as one come on top does)
-  tape_goes.shown.set((-1, -1))
-  v.reacts(fn() { app.nav.top_stay() }, fn(stay) {
-    (tape_goes.wait_due)()
-    tape_goes.wait_due = fn() {  }
-    let before = tape_goes.shown.get()
-    if before == stay {
-      return
-    }
-    if (tape_goes.ready)(app.nav.top()) {
-      tape_goes.shown.set(stay)
-      app.nav.flat_keep(None)
-      return
-    }
-    // (the one shown before kept in its place meanwhile; none shown before, the one on top drawn as it comes)
-    app.nav.flat_keep(if before.0 >= 0 { Some(before) } else { None })
-    tape_goes.wait_due = v.at_moment(v.cause_at() + tape_goes.most, fn() { tape_page_shows(stay) })
-  })
-  // (what the core gives the page on top, at that answer's moment)
-  v.reacts(fn() { (app.nav.top_stay(), (tape_goes.ready)(app.nav.top())) }, fn(told) {
-    let (stay, ready) = told
-    if ready {
-      tape_page_shows(stay)
-    }
-  })
-  v.owns(fn() {
-    (tape_goes.wait_due)()
-    tape_goes.wait_due = fn() {  }
-    app.nav.flat_owned(false)
-  })
-  |> ignore
+  tape_page_wait.shows_top()
 }
 
 ///|
@@ -649,8 +585,6 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     fold_goes.left_tape = Some(fold_look_tape(r.s, tape_col_at(at), r.top, r.foot, x=tape_x_at(r, at)))
     (tape_goes.end_due)()
     tape_goes.end_due = fn() {  }
-    (tape_goes.wait_due)()
-    tape_goes.wait_due = fn() {  }
     tape_goes.node = None
     tape_goes.parts.clear()
     tape_goes.panel_of = fn() { None }
@@ -658,8 +592,8 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     wide.tape = false
   })
   |> ignore
-  // what the page's panel shows as the page on top changes, at its cause's moment (tape_page_waits)
-  tape_page_waits(v)
+  // what the page's panel shows as the page on top changes, at its cause's moment (page_wait.mbt)
+  tape_page_wait.follow(v, fn(p) { (tape_goes.ready)(p) }, fn() { tape_goes.most })
   // the side panel last open, kept while it closes (tape_shown_side); let go once the tape rests at the page
   v.reacts(fn() { (tape_goes.panel_of)() }, fn(side) {
     match side {
@@ -1044,7 +978,7 @@ fn tape_page_built(c : @ui.Ctx, src : Source) -> Unit {
   // (said by this build: image_item, video_item)
   @sfbase.held_pictures_waiting.val = false
   // a page pushed over the page's own stack slides in once the core has given what it shows (page_local_ms at most), as
-  // on a phone (asked as its stack is drawn: Nav::comes_when's old way); one put in its place shows as tape_page_waits
+  // on a phone (asked as its stack is drawn: Nav::comes_when's old way); one put in its place shows as tape_page_wait
   // says, at its causes
   app.nav.shows_when(fn() { (tape_goes.ready)(app.nav.top()) }, tape_goes.most)
   let r = tape_room_now()

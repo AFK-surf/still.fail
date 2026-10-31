@@ -321,6 +321,7 @@ let fold_goes : FoldGoes = {
 
 ///|
 fn fold_goes_reset() -> Unit {
+  pane_page_wait.reset()
   fold_goes.way.put(1.0)
   fold_goes.from = None
   fold_goes.to = None
@@ -459,6 +460,8 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     fold_goes.left_tape = None
   })
   |> ignore
+  // what the page's pane shows as the page on top changes, at its cause's moment (page_wait.mbt)
+  pane_page_wait.follow(v, fn(p) { (fold_goes.ready)(p) }, fn() { fold_goes.most })
   // the block moved for what it is moved for, at that moment: from where it is then; else what it goes to changed by
   // what is no cause of a move, put there at once
   let first = Ref(true)
@@ -644,8 +647,7 @@ fn pane_page_built(c : @ui.Ctx, src : Source) -> Unit {
   // (said by this build: image_item, video_item)
   @sfbase.held_pictures_waiting.val = false
   // a page opened in the pane shows once the core has given what it shows, the one before staying till then (`most` ms
-  // at most), as a page pushed on a phone slides in then (asked as its stack is drawn)
-  app.nav.shows_when(fn() { (fold_goes.ready)(app.nav.top()) }, fold_goes.most)
+  // at most): as pane_page_wait says, at its causes
   let page_id = c.id("main-page")
   fold_goes.page_id = page_id
   // (what the page shows across as it is laid out, its bars left out: where the page moves aside to as the folded sidebar
