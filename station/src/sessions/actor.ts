@@ -287,6 +287,9 @@ export class SessionActor {
   private refillAt = 0;
   /// Messages given to the running turn while it ran: the runtime may not have read them yet (suspend).
   private steered: [number, number][] = [];
+  /// The threads of those messages: a runtime that had not read them when its turn ended takes them as a turn of its
+  /// own, which works for them again.
+  private steeredFor: Working[] = [];
   private queued = 0;
 
   constructor(key: string, runtime: RuntimeKind, deps: SessionDeps) {
@@ -657,6 +660,7 @@ export class SessionActor {
       this.stopRequested = false;
       const steered = this.steered;
       this.steered = [];
+      this.steeredFor = [];
       if (!agent && !turn) return;
       const store = this.deps.store;
       const resume = (turn !== null || busy) && !(turn?.declared && settled(turn.declared));
@@ -799,6 +803,8 @@ export class SessionActor {
         this.workFor(pending);
         this.delivered(pending, widgets);
         this.steered.push(...pending.map((m: any): [number, number] => [m.message.thread, m.message.n]));
+        const from = (w: Working) => pending.some((m: any) => m.connect === w.connect && m.channel === w.channel && m.threadTs === w.threadTs);
+        this.steeredFor = [...this.steeredFor.filter((w) => !from(w)), ...this.workingFor.filter(from)];
       }
       return; // otherwise delivered when the turn ends
     }
@@ -944,6 +950,7 @@ export class SessionActor {
       // The runtime may have started a turn on its own (late input became a turn); join it.
       if (agent.busy() && (await agent.steer(prompt))) return;
       this.steered = [];
+      this.steeredFor = [];
       this.beginTurn(kind, by);
       try {
         await agent.prompt(prompt);
@@ -1109,7 +1116,15 @@ export class SessionActor {
     switch (event.type) {
       case "turnStarted":
         void this.enqueue(async () => {
-          if (this.isCurrent(generation) && !this.turn && !this.compacting) this.beginTurn("input", nobody);
+          if (!this.isCurrent(generation) || this.turn || this.compacting) return;
+          this.beginTurn("input", nobody);
+          // Given messages too late for the turn that ended (Claude reads one written as its turn ends as a turn of its
+          // own): their threads see it working again, and where the ended turn stood no longer stands.
+          if (this.workingFor.length === 0 && this.steeredFor.length > 0) {
+            this.workingFor = this.steeredFor;
+            this.steeredFor = [];
+            this.say(t("station.status.thinking"));
+          }
         });
         break;
       case "turnEnded":
