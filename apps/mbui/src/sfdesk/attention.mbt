@@ -24,6 +24,16 @@ fn attention_reset() -> Unit {
 }
 
 ///|
+/// 待处理's panel opened or closed, whatever does it: closed, this opening of it over (what it kept as it opened, the
+/// stations' trouble as looked at before, let go: the next opening reads it anew), at that moment.
+fn attention_set(open : Bool) -> Unit {
+  if !open {
+    attention.trouble_seen = None
+  }
+  wide.attention_open.set(open)
+}
+
+///|
 /// The window's width as 待处理's panel was last drawn (attention_panel: a turn closes it).
 let attention_size : FixedArray[Double] = [0.0]
 
@@ -34,7 +44,7 @@ let attention_size : FixedArray[Double] = [0.0]
 /// first; then each workspace's chats that want the viewer, not read since (the one in view's first), 忽略 on the row
 /// pointed at (`decision.dismiss`); pressed, its chat; 通知设置 at its foot.
 fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let close = fn() { wide.attention_open.set(false) }
+  let close = fn() { attention_set(false) }
   // (the window turned beside the system's tabs: what it opened from is elsewhere, closed: rail_native.mbt)
   if native_turned(c, attention_size) {
     close()
@@ -54,34 +64,35 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     if railed && long_jobs_lit(src, w) {
       c.tell("attention/jobs-seen", fn() { long_jobs_seen(src, w) })
     }
-  } else if !wide.attention_open.get() {
-    attention.trouble_seen = None
   }
-  let p = @kit.popover(
-    c,
-    "attention",
-    wide.attention_open.get(),
-    trigger,
-    // (the system's bell: in its column down the side, beside it from its top; at the top's lead, under it from its left)
-    side=if @sf.native_side() {
-      Left
-    } else if railed && !@sf.native_on() {
-      Right
-    } else {
-      Bottom
-    },
-    along=Start,
-    offset=if railed { attention_off_rail } else { attention_off_side },
-    look=@sf.beside_look(Px(attention_w), inner=att_list),
-    fn() { attention_rows(c, src, w, railed, close) },
-  )
-  wide.attention_open.set(p.value)
+  // (dismissed by the hand, Escape or a press outside it and the bell: closed at that moment)
+  c.with_dismissed(fn(_) { attention_set(false) }, fn() {
+    @kit.popover(
+      c,
+      "attention",
+      wide.attention_open.get(),
+      trigger,
+      // (the system's bell: in its column down the side, beside it from its top; at the top's lead, under it from its left)
+      side=if @sf.native_side() {
+        Left
+      } else if railed && !@sf.native_on() {
+        Right
+      } else {
+        Bottom
+      },
+      along=Start,
+      offset=if railed { attention_off_rail } else { attention_off_side },
+      look=@sf.beside_look(Px(attention_w), inner=att_list),
+      fn() { attention_rows(c, src, w, railed, close) },
+    )
+    |> ignore
+  })
 }
 
 ///|
 /// 待处理's panel open (a screen's fixture).
 pub fn open_attention() -> Unit {
-  wide.attention_open.set(true)
+  attention_set(true)
 }
 
 ///|
