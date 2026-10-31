@@ -67,32 +67,17 @@ test "a station's 设置 switches going on afresh once a session's cache is over
   t.run_for(@ui.move_most_ms)
   scrolled_to(t, 390.0, "缓存过期后自动换新上下文")
   assert_true(t.find("缓存过期后自动换新上下文") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("缓存过期且重读估算费用达到 $1 时换新；对话中的选择优先") is Some(_), msg="the default threshold is visible")
+  assert_true(t.all(Button, label="自定义金额").is_empty(), msg="only the switch is shown while it is off")
   // (the switch alone takes the press: by its label)
   t.click(Switch, label="缓存过期后自动换新上下文")
   t.draw()
   assert_eq(asked.length(), 1, msg="switched")
   assert_eq(field(Some(asked[0]), "afreshWhenCold"), Some(Json::boolean(true)))
-  scrolled_to(t, 390.0, "重读费用门槛（美元）")
-  assert_true(t.find("$1") is Some(_), msg="the default threshold is one dollar")
-  assert_true(t.all(TextField, label="重读费用门槛（美元）").is_empty(), msg="the amount is shown as a choice, not an always-open editor")
-  t.tap_text("重读费用门槛（美元）")
+  t.click(Button, label="自定义金额")
   t.draw()
   presented_in(t)
-  t.tap_text("$2")
-  t.draw()
-  assert_eq(asked.length(), 2, msg="a preset is saved")
-  assert_eq(field(Some(asked[1]), "afreshAbove"), Some(Json::number(2.0)))
-  // After a choice, the sheet is closed but still leaving; reopen at its declared closed position.
-  assert_true(!@sf.presenting())
-  presented_in(t)
-  assert_true(!@sf.presenter_visible())
-  t.tap_text("重读费用门槛（美元）")
-  t.draw()
-  presented_in(t)
-  assert_true(t.find("自定义") is Some(_), msg="the choice is open: " + t.words().map(fn(w) { w.0 }).join("|"))
-  t.tap_text("自定义")
-  t.draw()
-  presented_in(t)
+  assert_true(t.find("重读费用门槛（美元）") is Some(_), msg="customization opens the amount editor directly")
   let amount = t.get(TextField, label="重读费用门槛（美元）")
   let (fx, fy, fw, fh) = amount.rect
   t.tap(fx + fw / 2.0, fy + fh / 2.0)
@@ -106,8 +91,8 @@ test "a station's 设置 switches going on afresh once a session's cache is over
   let (x, y, w, h) = saves[0].rect
   t.tap(x + w / 2.0, y + h / 2.0)
   t.draw()
-  assert_eq(asked.length(), 3, msg="the custom threshold is saved")
-  assert_eq(field(Some(asked[2]), "afreshAbove"), Some(Json::number(2.5)))
+  assert_eq(asked.length(), 2, msg="the custom threshold is saved")
+  assert_eq(field(Some(asked[1]), "afreshAbove"), Some(Json::number(2.5)))
   assert_true(t.get(Switch, label="缓存过期后自动换新上下文").check is Some(On), msg="saving the amount leaves the switch on")
 }
 
@@ -145,7 +130,7 @@ test "an older station's cache switch does not imply that it has a cost threshol
   t.run_for(@ui.move_most_ms)
   scrolled_to(t, 390.0, "缓存过期后自动换新上下文")
   assert_true(t.find("缓存过期后，下次启动换新上下文；对话中的选择优先") is Some(_))
-  assert_true(t.find("重读费用门槛（美元）") is None)
+  assert_true(t.all(Button, label="自定义金额").is_empty())
 }
 
 ///|
@@ -176,14 +161,17 @@ test "a workspace member can see the cache threshold but cannot change it" {
         },
       }
     },
-    ready=fn() { @settings.station_parts["ws1/st1"] = "settings" },
+    ready=fn() {
+      @settings.fixture_call("context.setAfresh", obj([("afreshWhenCold", Json::boolean(true))])) |> ignore
+      @settings.station_parts["ws1/st1"] = "settings"
+    },
   )
   t.run_for(@ui.move_most_ms)
-  scrolled_to(t, 390.0, "重读费用门槛（美元）")
-  assert_true(t.find("$1") is Some(_))
-  t.tap_text("重读费用门槛（美元）")
-  t.draw()
-  assert_true(!@sf.presenting(), msg="a member cannot open the choice")
+  scrolled_to(t, 390.0, "缓存过期后自动换新上下文")
+  assert_true(t.find("缓存过期且重读估算费用达到 $1 时换新；对话中的选择优先") is Some(_))
+  assert_true(t.get(Switch, label="缓存过期后自动换新上下文").disabled)
+  assert_true(t.get(Switch, label="缓存过期后自动换新上下文").check is Some(On))
+  assert_true(t.all(Button, label="自定义金额").is_empty(), msg="a member cannot edit the amount")
   assert_eq(asked.length(), 0)
 }
 

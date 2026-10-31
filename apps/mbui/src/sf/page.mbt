@@ -1208,11 +1208,12 @@ pub fn link_row(
         }
         let said = fn() {
           let words = fn() {
-            row_value(c, key, value, if value_bad { pg_value.then(bad) } else { pg_value }, color=if value_lit {
+            c.text(value, style=if value_bad { pg_value.then(bad) } else { pg_value }, color?=if value_lit {
               Some(link_ink())
             } else {
               None
             })
+            |> ignore
           }
           if value_dot {
             c.box(style=value_dotted, fn() {
@@ -1331,11 +1332,12 @@ pub fn link_row(
         let end = fn() {
           if value != "" {
             let words = fn() {
-              row_value(c, key, value, if value_bad { wide_value.then(bad) } else { wide_value }, color=if value_lit {
+              c.text(value, style=if value_bad { wide_value.then(bad) } else { wide_value }, color?=if value_lit {
                 Some(th.p.accent_text)
               } else {
                 None
               })
+              |> ignore
             }
             if value_dot {
               c.box(style=value_dotted, fn() {
@@ -1386,74 +1388,9 @@ pub fn link_row(
       })
   }
   if goes {
-    c.semantics(b, Link, id~, label=title, value~, expanded?=folds)
+    c.semantics(b, Link, id~, label=title, expanded?=folds)
   }
   goes && c.clicked(id)
-}
-
-///|
-/// What a keyed row last said and when it was on the page (also while its part was kept without rebuilding).
-priv struct RowValue {
-  mut before : String
-  mut after : String
-  mut used : Int
-}
-
-///|
-// kept across runs: forgotten on reset and swept once rows have left the page
-let row_values : Map[Int, RowValue] = {}
-
-///|
-fn init {
-  @ui.on_reset(fn() { row_values.clear() })
-}
-
-///|
-/// A row's value changes as its own state does: the old words fade out, then the new ones fade in, never overlapping.
-/// A row newly brought onto a page says its current value at once. A new change while one is on its way takes the
-/// words and opacity currently shown as its start.
-fn row_value(c : @ui.Ctx, key : String, value : String, style : @ui.TextStyle, color~ : Int64?) -> Unit {
-  if key == "" {
-    c.text(value, style~, color?) |> ignore
-    return
-  }
-  let name = "sf-row/value/" + key
-  let id = c.id(name)
-  let frame = c.frame_number()
-  let state = match row_values.get(id) {
-    Some(s) => s
-    None => {
-      // (bounded as the motion's own keyed values are: a page gone or a row scrolled away is not held forever)
-      if row_values.length() >= 1024 {
-        let gone : Array[Int] = []
-        row_values.each(fn(k, s) { if frame - s.used > 120 { gone.push(k) } })
-        for k in gone { row_values.remove(k) }
-      }
-      let s = { before: value, after: value, used: frame }
-      row_values[id] = s
-      s
-    }
-  }
-  let way = @motion.anim(c, name, 1.0)
-  if frame - state.used > 1 {
-    state.before = value
-    state.after = value
-    way.snap(1.0)
-  }
-  state.used = frame
-  @ui.built_used(fn() { state.used = @ui.current().frame_number() })
-  if value != state.after {
-    let p = way.get()
-    let (shown, opacity) = if p < 0.5 { (state.before, 1.0 - p * 2.0) } else { (state.after, p * 2.0 - 1.0) }
-    state.before = shown
-    state.after = value
-    way.snap((1.0 - opacity) / 2.0)
-    way.animate(1.0, @motion.tween(dur_ms * 2.0, ease=Out))
-  }
-  let p = way.get()
-  let (shown, opacity) = if p < 0.5 { (state.before, 1.0 - p * 2.0) } else { (state.after, p * 2.0 - 1.0) }
-  let words = c.text(shown, style~, color?)
-  c.look(words, @ui.look(alpha=opacity))
 }
 
 ///|

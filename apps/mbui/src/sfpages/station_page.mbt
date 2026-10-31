@@ -958,17 +958,33 @@ fn station_diagnostics(c : @ui.Ctx, core : Core, address : String, diagnostics :
 /// How it goes on with a session whose prompt cache is over (StationContext.tsx ContextSection): the station default
 /// and its estimated cost threshold, said by the workspace's managers (others read them).
 fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, manager : Bool) -> Unit {
-  st_section(c, @sf.t("web-pages.stations.context.section"), fn() {
-    let has_cost = field(context, "afreshAbove") is Some(Number(_, ..))
+  let cost = match field(context, "afreshAbove") {
+    Some(Number(value, ..)) => Some(value)
+    _ => None
+  }
+  let busy = is_doing(core, ["context.setAfresh"], [("station", address)])
+  let on = flag(context, "afreshWhenCold")
+  // The default is one switch. Once enabled, its threshold can be edited directly from the section heading.
+  let actions : (() -> Unit)? = match cost {
+    Some(value) if on && manager =>
+      Some(fn() {
+        if @sf.action(c, "context-cost/" + address, @sf.t("web-pages.stations.context.customAmount"), disabled=busy) {
+          station_cold_custom(core, address, value)
+        }
+      })
+    _ => None
+  }
+  st_section(c, @sf.t("web-pages.stations.context.section"), actions?, fn() {
     @sf.group(c, fn() {
-      let busy = is_doing(core, ["context.setAfresh"], [("station", address)])
-      let on = flag(context, "afreshWhenCold")
       let now = @sf.switch_row(
         c,
         "context-afresh/" + address,
         @sf.t("web-pages.stations.context.afresh"),
         on,
-        note=@sf.t(if has_cost { "web-pages.stations.context.afreshLine" } else { "web-pages.stations.context.afreshLineLegacy" }),
+        note=match cost {
+          Some(value) => @sf.t("web-pages.stations.context.afreshCostLine", args=[("amount", "$" + value.to_string())])
+          None => @sf.t("web-pages.stations.context.afreshLineLegacy")
+        },
         disabled=!manager,
         busy~,
       )
@@ -979,11 +995,6 @@ fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, 
           "context.setAfresh",
           obj([("station", str(address)), ("afreshWhenCold", Json::boolean(now))]),
         )
-      }
-      // An older station has no cost setting; its switch continues to work as before.
-      match field(context, "afreshAbove") {
-        Some(Number(cost, ..)) => station_cold_cost(c, core, address, cost, manager, busy)
-        _ => ()
       }
     })
   })
@@ -999,7 +1010,7 @@ fn station_cold_amount(words : String) -> Double? {
 }
 
 ///|
-/// A threshold not among the offered amounts is entered in its own editor, keeping the words being typed there.
+/// A custom threshold is entered in its own editor, keeping the words being typed there.
 fn station_cold_custom(core : Core, address : String, cost : Double) -> Unit {
   let field_ = @ui.Field::new(text=cost.to_string())
   let key = "context-cost-custom/" + (desk_dialogs.val + 1).to_string()
@@ -1032,33 +1043,6 @@ fn station_cold_custom(core : Core, address : String, cost : Double) -> Unit {
       }
     },
   )
-}
-
-///|
-/// A few useful amounts, with a custom value for any other threshold. A row shows the current amount until opened.
-fn station_cold_cost(c : @ui.Ctx, core : Core, address : String, cost : Double, manager : Bool, busy : Bool) -> Unit {
-  let key = "context-cost/" + address
-  let title = @sf.t("web-pages.stations.context.threshold")
-  let current = cost.to_string()
-  if @sf.link_row(c, key, title, value="$" + current,
-      note=@sf.t("web-pages.stations.context.thresholdHint"), goes=manager && !busy, chevron=manager) {
-    let amounts : Array[Double] = [0.5, 1.0, 2.0, 5.0]
-    let choices = amounts.map(fn(v) { @sf.choice(v.to_string(), "$" + v.to_string()) })
-    if !amounts.contains(cost) {
-      choices.push(@sf.choice(current, "$" + current))
-    }
-    choices.push(@sf.choice("custom", @sf.t("web-main.viewport.custom")))
-    @sf.pick(title, choices, current, fn(picked) {
-      if picked == "custom" {
-        station_cold_custom(core, address, cost)
-      } else {
-        match station_cold_amount(picked) {
-          Some(v) if v != cost => @settings.act(core, @sf.t("web-pages.stations.context.what"), "context.setAfresh", obj([("station", str(address)), ("afreshAbove", Json::number(v))]))
-          _ => ()
-        }
-      }
-    }, from=Of(c.id(key)), search=false)
-  }
 }
 
 ///|
