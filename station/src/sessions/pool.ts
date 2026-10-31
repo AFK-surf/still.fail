@@ -17,9 +17,9 @@ import { COMPACTED_FROM } from "../store/rows.ts";
 
 type Json = any;
 
-/// How a profile is doing: its last check and allowance (profiles.rs ProfileCheck / ProfileQuota, camelCase JSON), and
-/// whether a turn on it ran into its allowance since the allowance was last read (Hub `spend`).
-export type ProfileHealth = { check?: Json | null; quota?: Json | null; spent?: boolean };
+/// How a profile is doing: its last check and allowance (profiles.rs ProfileCheck / ProfileQuota, camelCase JSON), the
+/// account whose allowance it uses when known, and whether a turn ran into that allowance since it was last read.
+export type ProfileHealth = { check?: Json | null; quota?: Json | null; account?: string | null; spent?: boolean };
 
 export type PoolSignals = {
   health(id: string): ProfileHealth;

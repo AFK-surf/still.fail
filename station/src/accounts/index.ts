@@ -47,7 +47,7 @@ import { CONSOLE_FILE, consoleIn, readConsole, RenewRefused, renewToken, writeCo
 import { CURSOR, authFile as cursorAuthFile, cursorIn } from "./cursor.ts";
 import { KIMI_AUTH, kimiDue, readKimi, renewKimiToken, writeKimi } from "./kimi.ts";
 import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
-import { codexClaimsIn, type MachineLogin, MachineLogins } from "./machine.ts";
+import { codexAccountIdentity, codexClaimsIn, type MachineLogin, MachineLogins } from "./machine.ts";
 import { adopted, OUTDATED, uncheckOutdated } from "./models.ts";
 import { claudeOAuthToken } from "./oauth.ts";
 import { accessKinds, checkProfile, devinAccountFile, devinNotedIn, grokAuthFile, grokEmailIn, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
@@ -336,9 +336,11 @@ export class Accounts {
     return this.profiles().find((p) => p.id === id);
   }
 
-  /// How a profile is doing, for the pool: its last check and allowance.
+  /// How a profile is doing, for the pool: its last check and allowance, and which Codex account the allowance is of.
   health(id: string): ProfileHealth {
-    return { check: this.checks.get(id) ?? null, quota: this.quotas.get(id) ?? null };
+    const profile = this.profile(id);
+    const account = profile?.runtime === "codex" && accessKind(profile) === "subscription" ? codexAccountIdentity(profile.home) : null;
+    return { check: this.checks.get(id) ?? null, quota: this.quotas.get(id) ?? null, ...(account === null ? {} : { account: `codex:${account}` }) };
   }
 
   /// How a profile is doing, told to a station borrowing it: its allowance asked again first when older than a round
