@@ -246,7 +246,27 @@ fn relay_mention_menu(c : @ui.Ctx, src : Source, mentions : Array[Json], focused
     }
   }
   let anchor = c.id("relay/note/field")
-  let shown = @kit.popover(
+  // Escape (or a press away): closed for this `@`, at the moment of what dismissed it
+  let pressed_keys = keyed
+  c.with_dismissed(fn(_) { relay_mentions_close() }, fn() {
+    relay_mentions_pop(c, src, key, open, anchor, mentions, n, pressed_keys, pick) |> ignore
+  })
+}
+
+///|
+/// relay_mention_menu's popover: the people, under the note.
+fn relay_mentions_pop(
+  c : @ui.Ctx,
+  src : Source,
+  key : String,
+  open : Bool,
+  anchor : Int,
+  mentions : Array[Json],
+  n : Int,
+  keyed : Bool,
+  pick : (Json) -> Unit,
+) -> @ui.Changed[Bool] {
+  @kit.popover(
     c,
     key,
     open,
@@ -293,10 +313,6 @@ fn relay_mention_menu(c : @ui.Ctx, src : Source, mentions : Array[Json], focused
       |> ignore
     },
   )
-  // Escape (or a press away): closed for this `@`
-  if open && !shown.value {
-    relay_mentions_close()
-  }
 }
 
 ///|
