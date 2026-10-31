@@ -817,8 +817,32 @@ fn Ctx::place_list(
       top = top - h
     }
     // (its last row's foot on the view's: laid from its end, or put there short of it)
-    if top > iy && st.from_end && (bottom - bottom_edge).abs() < 0.001 {
-      // short of its view, standing at its end: the room left over its rows
+    if top > iy && st.from_end {
+      // its first row in, laid from it as it stood (scrolled toward its start): the rows under the view's foot too,
+      // while they may all fit in it, to tell whether they do
+      while last + 1 < st.count && bottom - top <= bottom_edge - iy + 0.001 {
+        last = last + 1
+        let (r, h) = lay(last, bottom)
+        rows.push(r)
+        bottom = bottom + h
+      }
+    }
+    if top > iy && st.from_end && last == st.count - 1 && bottom - top <= bottom_edge - iy + 0.001 {
+      // short of its view, standing at its end: the room left over its rows. Scrolled toward its start, it was laid
+      // from its first row, its foot under the view's: put back up there, not at the view's top (rows that all show
+      // have nowhere to scroll to)
+      let d = bottom_edge - bottom
+      if d != 0.0 {
+        for r in rows {
+          self.shift(r, d)
+        }
+        for r in top_rows {
+          self.shift(r, d)
+        }
+        blocked_top = blocked_top - d
+        top = top + d
+        bottom = bottom_edge
+      }
       hit_top = true
       break
     } else if top > iy {
