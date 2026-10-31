@@ -95,25 +95,25 @@ test "signed out, at each width on either screen: where signing in stands said u
     let signed = Ref::new(0)
     let step : Ref[@sfbase.SignInStep] = Ref::new(Failed("登录已取消"))
     let t = gate_tester("signin", w, platform, regular, [], signed, step~)
-    t.run_for(1000.0)
+    t.run_for(@ui.move_most_ms)
     // the core's words under the button, the button as it was
     assert_true(t.find("登录已取消") is Some(_), msg=at)
     assert_true(t.find("登录或注册") is Some(_), msg=at)
     // none of the core's: that it failed
     step.val = Failed("")
-    t.run_for(1000.0)
+    t.run_for(@ui.move_most_ms)
     assert_true(t.find("登录失败") is Some(_), msg=at)
     assert_true(t.find("登录已取消") is None, msg=at)
     // the page out in the browser: said so, the button opening it again
     step.val = InBrowser
-    t.run_for(1000.0)
+    t.run_for(@ui.move_most_ms)
     assert_true(t.find("在浏览器中完成登录") is Some(_), msg=at)
     assert_true(t.find("登录失败") is None, msg=at)
     t.tap_text("重新打开登录页")
     assert_eq(signed.val, 1, msg=at)
     // what the browser brought being checked: 正在登录, not pressed again, nothing said under it
     step.val = Verifying
-    t.run_for(1000.0)
+    t.run_for(@ui.move_most_ms)
     assert_true(t.find("正在登录") is Some(_), msg=at)
     assert_true(t.find("在浏览器中完成登录") is None, msg=at)
     t.tap_text("正在登录")
