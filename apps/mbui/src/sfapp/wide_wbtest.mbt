@@ -2246,8 +2246,9 @@ test "wide: a reference to a chat in a message has the chat's card while the poi
   assert_eq(word(said).length(), 0)
   t.move(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
-  // read by the core as the pointer came onto it, the chat found in the workspace's list: where it stands
-  assert_true(calls.filter(fn(m) { m.name == "link.parse" }).length() >= 1)
+  // read by the core as the pointer came onto it, once each link in the run (peeks.mbt chats_named: kept across runs,
+  // so asked again by none after one has read it), the chat found in the workspace's list: where it stands
+  assert_true(calls.filter(fn(m) { m.name == "link.parse" }).length() <= 1)
   assert_eq(word(said).length(), 1, msg="where it stands")
   t.move(900.0, 100.0)
   t.run_for(@sfpages.hover_close_ms * 2.0)
@@ -2680,4 +2681,25 @@ test "wide: 通知's 服务开着很久, the bell's alone: 点亮铃铛 on every
   let set = named(calls, "prefs.set").filter(fn(m) { field(Some(m.params), "badgeKinds") is Some(_) })
   assert_eq(set.length(), 1)
   assert_eq(field(field(Some(set[0].params), "badgeKinds"), "services"), Some(Json::boolean(false)))
+}
+
+///|
+/// The chat-peeks fixture's chat on 大屏, the pointer rested on a reference to a chat in it: how often the core was
+/// asked what its link names, and whether its card shows where the chat stands.
+fn ref_rested() -> (Int, Bool) raise {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat-peeks")
+  let (x, y) = peek_words_at(t, "@首页的列表改成按天分组")
+  t.move(x, y)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  let shown = t.words().filter(fn(w) { w.0 == "奏 · 分组的标题用相对日期还是具体日期？" && w.5 > 0.5 }).length() == 1
+  (calls.filter(fn(m) { m.name == "link.parse" }).length(), shown)
+}
+
+///|
+test "wide: a reference to a chat rested on in one run and again in the next: its card shown both times, its link read by the core no more than once (what the core said of it kept across runs)" {
+  let first = ref_rested()
+  let again = ref_rested()
+  assert_true(first.0 <= 1 && first.1, msg="first: \{first}")
+  assert_eq(again, (0, true))
 }
