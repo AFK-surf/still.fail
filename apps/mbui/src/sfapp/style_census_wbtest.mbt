@@ -1,8 +1,7 @@
 // How many values of each kind the app's screens use (mbui's Tester::census over the fixtures' screens, narrow and
 // wide, light and dark): sizes of words with their lines, weights, paddings and gaps, corners, colours. The styles'
-// migration (mbui's docs/style.md) brings each down; scripts/style_census.sh prints them, and the values. Only what
-// the old views draw is counted (Tester::census reads the old frame's nodes): what is a node of the window's tree is
-// not, yet (大屏's sidebar edge's line, the field's edge grey FieldHover, left it as it became one).
+// migration (mbui's docs/style.md) brings each down; scripts/style_census.sh prints them, and the values. What the old
+// views draw and the window's tree's nodes are counted both (Tester::census: the tree's as each is set, Tree::styled).
 
 ///|
 /// The screens counted: the fixtures' modes (scripts/shots.sh's) and the settings' pages.
@@ -76,9 +75,9 @@ test "styles: how many values of each kind the app's screens use" {
   inspect(counts.to_string(), content=(
     #|text 34
     #|weight 4
-    #|space 22
-    #|radius 22
-    #|color 61
+    #|space 24
+    #|radius 23
+    #|color 63
     #|
 
 
