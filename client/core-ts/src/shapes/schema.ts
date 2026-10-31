@@ -2209,6 +2209,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A station's advanced network settings, read when it starts." }),
   StationContext: struct([
     ["afreshWhenCold", "bool", { doc: "A person's message to an agent at rest whose large context's prompt cache is over starts it afresh (its\ncontext cleared, told to read back what it needs), as 换新上下文 does by hand (`context.setAfresh`)." }],
+    ["afreshAbove", opt("f64"), { doc: "The estimated USD cost of rereading a cold context at or above which the station starts it afresh.\nAbsent on an older station, whose on/off setting applies regardless of cost." }],
   ], { doc: "How a station goes on with a session whose prompt cache is over (`Overview.context`)." }),
   StationDiagnostics: struct([
     ["logs", "bool", { doc: "It sends its log to still.fail, scrubbed (no paths under home directories, emails, keys, quoted text or what\npeople wrote), for problems to be found from our side (`diagnostics.setLogs`)." }],

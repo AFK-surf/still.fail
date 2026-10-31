@@ -3,6 +3,7 @@
 // edits apply to the next decision. A profile stays config.json's object (the drivers read its access, env, model…),
 // its home made absolute and what parse_config derives added: name, runtimes, models, backgroundOnMessage.
 import { isAbsolute, join } from "node:path";
+import { afreshThreshold } from "../../../client/core-ts/src/cache-policy.ts";
 import { runtimeKind, runtimeLabel, type Profile as RuntimeProfile } from "../agents/runtime.ts";
 import { profileRuntimes, type Runtime } from "../agents/profiles.ts";
 import { modelKey } from "../read/usage.ts";
@@ -68,9 +69,11 @@ export type HubConfig = {
   /// Sessions archived this long keep only the files sent in their chat, their history and transcripts: the rest of
   /// their workspace is removed (cold.ts `expire`); 0: never.
   archivedWorkspaceMs: number;
-  /// A person's message to an agent at rest whose large context's prompt cache is over starts it afresh, as 换新上下文
-  /// does by hand (routes/context.ts).
+  /// A message or notice to an agent whose prompt cache is over starts it afresh when its estimated reread cost reaches
+  /// the threshold, unless its chat chose otherwise (routes/context.ts).
   afreshWhenCold: boolean;
+  /// Estimated USD to reread a cold cache at which the station defaults to starting afresh.
+  afreshAbove: number;
 };
 
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
@@ -133,6 +136,7 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
     autoArchiveReviewed: raw?.autoArchiveReviewed === true,
     archivedWorkspaceMs: Math.trunc(Math.max(0, typeof raw?.archivedWorkspaceDays === "number" ? raw.archivedWorkspaceDays : 7) * 86_400_000),
     afreshWhenCold: raw?.afreshWhenCold === true,
+    afreshAbove: afreshThreshold(raw?.afreshAbove),
   };
 }
 

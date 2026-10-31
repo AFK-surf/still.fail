@@ -1,9 +1,9 @@
-// How the station goes on with a session whose prompt cache is over (config.json `afreshWhenCold`), unless its chat
-// chose otherwise (sessions `afresh`, session.settings): a message or notice to an agent, its large context's cache
-// over, starts it afresh (its context cleared, told to read back what it needs) rather than send all of it again at
-// full price. The overview says it to any member (`context`); PUT
-// /context/settings `{afreshWhenCold}` changes it, for the workspace's owners and admins.
+// How the station goes on with a session whose prompt cache is over (config.json `afreshWhenCold` and `afreshAbove`),
+// unless its chat chose otherwise (sessions `afresh`, session.settings): at the estimated USD threshold a message or
+// notice starts it afresh, told to read back what it needs. An unknown price does not start it afresh by default.
+// The overview says both settings to members; owners and admins may PUT either to /context/settings.
 import { type Answer, type Request, error, json } from "../request.ts";
+import { afreshThreshold, DEFAULT_AFRESH_ABOVE } from "../../../../client/core-ts/src/cache-policy.ts";
 import type { Route } from "../admin.ts";
 import { managesStation } from "../../mesh/credential.ts";
 import type { ConfigFile } from "../../ops/config.ts";
@@ -13,7 +13,10 @@ import { log } from "../../ops/log.ts";
 export type ContextDeps = { config: ConfigFile; changed?: () => void };
 
 /// The setting as the overview says it.
-export const contextView = (raw: unknown): { afreshWhenCold: boolean } => ({ afreshWhenCold: (raw as { afreshWhenCold?: unknown } | null)?.afreshWhenCold === true });
+export const contextView = (raw: unknown): { afreshWhenCold: boolean; afreshAbove: number } => {
+  const settings = raw as { afreshWhenCold?: unknown; afreshAbove?: unknown } | null;
+  return { afreshWhenCold: settings?.afreshWhenCold === true, afreshAbove: afreshThreshold(settings?.afreshAbove) };
+};
 
 export const routes = ({ config, changed }: ContextDeps): Route[] => [
   {
@@ -21,18 +24,29 @@ export const routes = ({ config, changed }: ContextDeps): Route[] => [
     pattern: /^\/context\/settings$/,
     handle: async (r: Request): Promise<Answer> => {
       if (!managesStation(r.viewer)) return error(403, tr(r.lang, "station.context.managersOnly"));
-      let on: unknown;
+      let settings: { afreshWhenCold?: unknown; afreshAbove?: unknown };
       try {
-        on = JSON.parse(r.body.toString("utf8") || "{}")?.afreshWhenCold;
+        const parsed: unknown = JSON.parse(r.body.toString("utf8") || "{}");
+        if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return error(400, "expected an object");
+        settings = parsed as typeof settings;
       } catch {
         return error(400, "invalid JSON");
       }
-      if (typeof on !== "boolean") return error(400, "afreshWhenCold is true or false");
+      const { afreshWhenCold: on, afreshAbove: above } = settings;
+      if (on === undefined && above === undefined) return error(400, "no context setting given");
+      if (on !== undefined && typeof on !== "boolean") return error(400, "afreshWhenCold is true or false");
+      if (above !== undefined && (typeof above !== "number" || !Number.isFinite(above) || above < 0)) return error(400, "afreshAbove is a nonnegative amount in USD");
       config.update((raw) => {
-        if (on) raw.afreshWhenCold = true;
-        else delete raw.afreshWhenCold;
+        if (on !== undefined) {
+          if (on) raw.afreshWhenCold = true;
+          else delete raw.afreshWhenCold;
+        }
+        if (above !== undefined) {
+          if (above === DEFAULT_AFRESH_ABOVE) delete raw.afreshAbove;
+          else raw.afreshAbove = above;
+        }
       });
-      log.info("context", "going on afresh once a cache is over set", { on, by: r.viewer.email });
+      log.info("context", "going on afresh once a cache is over set", { on, above, by: r.viewer.email });
       changed?.();
       return json(200, JSON.stringify(contextView(config.raw())));
     },

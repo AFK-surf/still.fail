@@ -1524,6 +1524,9 @@ web-pages.stations.page.part.overview
 web-pages.stations.page.part.settings
 web-pages.stations.context.afresh
 web-pages.stations.context.afreshLine
+web-pages.stations.context.afreshLineLegacy
+web-pages.stations.context.threshold
+web-pages.stations.context.thresholdHint
 web-pages.stations.context.section
 web-pages.stations.context.what
 web-pages.stations.diagnostics.logs

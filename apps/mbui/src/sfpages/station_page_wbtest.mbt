@@ -72,6 +72,59 @@ test "a station's 设置 switches going on afresh once a session's cache is over
   t.draw()
   assert_eq(asked.length(), 1, msg="switched")
   assert_eq(field(Some(asked[0]), "afreshWhenCold"), Some(Json::boolean(true)))
+  scrolled_to(t, 390.0, "重读费用门槛（美元）")
+  let cost = cold_cost_fields.get("ws1/st1").unwrap()
+  assert_true(cost.text() == "1" || cost.text() == "1.0", msg="the default threshold is one dollar")
+  let amount = t.get(TextField, label="重读费用门槛（美元）")
+  let (fx, fy, fw, fh) = amount.rect
+  t.tap(fx + fw / 2.0, fy + fh / 2.0)
+  t.clear()
+  t.type_text("2.5")
+  let saves = t.all(Button, label="保存").filter(fn(n) { !n.disabled })
+  assert_eq(saves.length(), 1, msg="the changed amount can be saved")
+  let (x, y, w, h) = saves[0].rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.draw()
+  assert_eq(asked.length(), 2, msg="threshold saved")
+  assert_eq(field(Some(asked[1]), "afreshAbove"), Some(Json::number(2.5)))
+  assert_true(t.get(Switch, label="缓存过期后自动换新上下文").check is Some(On), msg="saving the amount leaves the switch on")
+}
+
+///|
+test "an older station's cache switch does not imply that it has a cost threshold" {
+  fn old(v : Json) -> Json {
+    match v {
+      Object(o) => {
+        let p = o.copy()
+        for k, x in o {
+          p[k] = old(x)
+        }
+        p.remove("afreshAbove")
+        Json::object(p)
+      }
+      Array(a) => Json::array(a.map(old))
+      _ => v
+    }
+  }
+  let over = fn(base : Source) -> Source {
+    {
+      ..base,
+      topic: fn(name, params) {
+        let v = (base.topic)(name, params)
+        match v.value {
+          Some(x) => { ..v, value: Some(old(x)) }
+          None => v
+        }
+      },
+    }
+  }
+  let t = setting_tester(Station("ws1/st1"), 390.0, platform=2, h=2400.0, over~, ready=fn() {
+    @settings.station_parts["ws1/st1"] = "settings"
+  })
+  t.run_for(@ui.move_most_ms)
+  scrolled_to(t, 390.0, "缓存过期后自动换新上下文")
+  assert_true(t.find("缓存过期后，下次启动换新上下文；对话中的选择优先") is Some(_))
+  assert_true(t.find("重读费用门槛（美元）") is None)
 }
 
 ///|

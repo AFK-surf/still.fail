@@ -72,7 +72,7 @@ export const PARAMS: Record<string, string> = {
   "search.setPersonal": "personal:boolean",
   "network.setCongestion": "congestion:string",
   "station.restart": "",
-  "context.setAfresh": "afreshWhenCold:boolean",
+  "context.setAfresh": "afreshWhenCold?:boolean afreshAbove?:number",
   "diagnostics.setLogs": "logs:boolean",
   "elevation.set": "on:boolean",
   "session.warm": "key:string",
@@ -315,10 +315,10 @@ function stationOp(name: string, params: unknown): Request | null {
     // The station started again by its launcher (its routes/network.ts), managers only.
     case "station.restart":
       return op("POST", () => "/station/restart", null, OVERVIEW);
-    // Whether a message or notice to an agent whose large context's cache is over starts it afresh by itself, unless its
-    // chat chose (`session.settings` `afresh`); its station's routes/context.ts, set by the workspace's owners and admins.
+    // The station's default for a cold cache and its estimated USD threshold, unless the chat chose (`session.settings`
+    // `afresh`); its station's routes/context.ts, set by the workspace's owners and admins.
     case "context.setAfresh":
-      return op("PUT", () => "/context/settings", p.pick(["afreshWhenCold"]), OVERVIEW);
+      return op("PUT", () => "/context/settings", p.pick(["afreshWhenCold", "afreshAbove"]), OVERVIEW);
     // Whether it sends its log to still.fail, scrubbed (its station's routes/diagnostics.ts); set by the workspace's
     // owners and admins.
     case "diagnostics.setLogs":

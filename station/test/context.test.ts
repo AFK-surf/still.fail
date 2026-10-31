@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { usageNow } from "../src/read/usage.ts";
+import { goesAfresh } from "../src/sessions/afresh.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { configure } from "../src/sessions/lifecycle.ts";
 import { Rig, message, reply, settle } from "./hub-fakes.ts";
@@ -246,6 +247,32 @@ test("its chat's choice outweighs the station's: set to, a notice starts it afre
   // Given back to the station: null.
   await configure(r.hub, key, { afresh: null });
   assert.equal(r.session(key).afresh, null);
+  await r.close();
+});
+
+test("the default cold-cache choice uses the configured cost; a chat's choice overrides it", async () => {
+  const r = new Rig();
+  const { key } = await done(r);
+  const at = Date.now() - 3 * 3_600_000;
+  let n = 0;
+  const called = (model: string, context: number) => r.store.recordUsage(`/t/${key}`, { session: key, offset: ++n, model }, "claude", [[
+    { id: `cost-${n}`, at: at + n, model, subagent: false, fast: false, input: 10, cacheRead: context - 10, cacheWrite: 0, cacheWriteLong: 10, output: 1, calls: 1, context, window: null },
+    { turn: null, person: null, thread: null, profile: null },
+  ]]);
+  r.store.db.prepare("UPDATE runtime_sessions SET at = 0 WHERE session_key = ?").run(key);
+  called("claude-opus-5-5", 200_000); // $1.60 at the current list price
+  r.edit((raw) => { raw.afreshWhenCold = true; raw.afreshAbove = 2; });
+  assert.equal(goesAfresh(r.hub, key, Date.now()), false, "below the configured price");
+  r.edit((raw) => { raw.afreshAbove = 1.6; });
+  assert.equal(goesAfresh(r.hub, key, Date.now()), true, "at the configured price");
+  await configure(r.hub, key, { afresh: false });
+  assert.equal(goesAfresh(r.hub, key, Date.now()), false, "the chat can choose to continue");
+  r.edit((raw) => { raw.afreshAbove = 10; });
+  await configure(r.hub, key, { afresh: true });
+  assert.equal(goesAfresh(r.hub, key, Date.now()), true, "the chat can choose to start afresh");
+  await configure(r.hub, key, { afresh: null });
+  called("an-unpriced-model", 200_000);
+  assert.equal(goesAfresh(r.hub, key, Date.now()), false, "an unknown cost is not assumed to exceed the limit");
   await r.close();
 });
 

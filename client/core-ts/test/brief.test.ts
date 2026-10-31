@@ -95,6 +95,25 @@ test("an_agent_at_rest_whose_cache_is_over_is_offered_a_fresh_context", () => {
   ]) assert.deepEqual(cacheCold([a], 2 * HOUR), [null, Infinity]);
 });
 
+test("the cache choice follows the station's cost threshold unless the chat chose", () => {
+  const hour = 60 * MIN;
+  const agent = (cost: number | undefined, afresh?: boolean, contextTokens = 200_000) => ({
+    status: "final", wait: null,
+    session: {
+      key: "a", runtimeSessionId: "r-a", ...(afresh === undefined ? {} : { afresh }),
+      usage: { modelCalls: 1, contextTokens, lastCallAt: 0, cacheMs: hour, ...(cost === undefined ? {} : { rereadCost: cost }) },
+    },
+  });
+  assert.equal(cacheCold([agent(0.99)], hour, true, 1)[0].afresh, false);
+  assert.equal(cacheCold([agent(1)], hour, true, 1)[0].afresh, true);
+  assert.equal(cacheCold([agent(undefined)], hour, true, 1)[0].afresh, false);
+  assert.equal(cacheCold([agent(0.2, true)], hour, true, 1)[0].afresh, true);
+  assert.equal(cacheCold([agent(2, false)], hour, true, 1)[0].afresh, false);
+  // An expensive small context is offered too: the price is the configured condition.
+  assert.equal(cacheCold([agent(2, undefined, 40_000)], hour, true, 1)[0].afresh, true);
+  assert.equal(cacheCold([agent(2, undefined, 40_000)], hour, false, 1)[0].afresh, false);
+});
+
 test("the_latest_three_things_it_did_oldest_first", () => {
   const call = (tool: string, input: object, more: object = {}) => ({ kind: "tool_call", tool, text: JSON.stringify(input), ...more });
   const timeline = [

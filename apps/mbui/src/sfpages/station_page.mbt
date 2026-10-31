@@ -14,6 +14,8 @@ fn station_page_reset() -> Unit {
   env_fields.clear()
   env_seeded.clear()
   env_sent.clear()
+  cold_cost_fields.clear()
+  cold_cost_saved.clear()
   rs_shown.clear()
 }
 
@@ -955,12 +957,12 @@ fn station_diagnostics(c : @ui.Ctx, core : Core, address : String, diagnostics :
 }
 
 ///|
-/// How it goes on with a session whose prompt cache is over (StationContext.tsx ContextSection): whether a person's
-/// message to an agent at rest whose large context's cache is over starts it afresh by itself, said by the workspace's
-/// managers (others read it).
+/// How it goes on with a session whose prompt cache is over (StationContext.tsx ContextSection): the station default
+/// and its estimated cost threshold, said by the workspace's managers (others read them).
 fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, manager : Bool) -> Unit {
   st_section(c, @sf.t("web-pages.stations.context.section"), fn() {
-    @sf.group(c, fn() {
+    let has_cost = field(context, "afreshAbove") is Some(Number(_, ..))
+    let body = fn() {
       let busy = is_doing(core, ["context.setAfresh"], [("station", address)])
       let on = flag(context, "afreshWhenCold")
       let now = @sf.switch_row(
@@ -968,7 +970,7 @@ fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, 
         "context-afresh/" + address,
         @sf.t("web-pages.stations.context.afresh"),
         on,
-        note=@sf.t("web-pages.stations.context.afreshLine"),
+        note=@sf.t(if has_cost { "web-pages.stations.context.afreshLine" } else { "web-pages.stations.context.afreshLineLegacy" }),
         disabled=!manager,
         busy~,
       )
@@ -980,8 +982,72 @@ fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, 
           obj([("station", str(address)), ("afreshWhenCold", Json::boolean(now))]),
         )
       }
+      // An older station has no cost setting; its switch continues to work as before.
+      match field(context, "afreshAbove") {
+        Some(Number(cost, ..)) => station_cold_cost(c, core, address, cost, manager, busy)
+        _ => ()
+      }
+    }
+    if has_cost {
+      @sf.page_card(c, footed=true, body)
+    } else {
+      @sf.group(c, body)
+    }
+  })
+}
+
+///|
+/// The threshold is edited explicitly, so changing another station's setting never overwrites words being typed here.
+// kept across runs: a field per station; station_page_reset empties it
+let cold_cost_fields : Map[String, @ui.Field] = {}
+
+///|
+// kept across runs: the last saved value per station; station_page_reset empties it
+let cold_cost_saved : Map[String, String] = {}
+
+///|
+fn station_cold_cost(c : @ui.Ctx, core : Core, address : String, cost : Double, manager : Bool, busy : Bool) -> Unit {
+  let saved = cost.to_string()
+  let field_ = match cold_cost_fields.get(address) {
+    Some(f) => f
+    None => {
+      let f = @ui.Field::new(text=saved)
+      cold_cost_fields[address] = f
+      cold_cost_saved[address] = saved
+      f
+    }
+  }
+  match cold_cost_saved.get(address) {
+    Some(was) if was != saved => {
+      if field_.text() == was {
+        field_.set(saved)
+      }
+      cold_cost_saved[address] = saved
+    }
+    _ => ()
+  }
+  c.box(style=st_editor, fn() {
+    @sf.field(c, @sf.t("web-pages.stations.context.threshold"), hint=@sf.t("web-pages.stations.context.thresholdHint"), fn() {
+      @sf.input(c, "context-cost/" + address, placeholder=@sf.t("web-pages.stations.context.threshold"), field=field_, disabled=!manager || busy) |> ignore
+    })
+    let amount = match (try Some(@json.parse(field_.text().trim(chars=" \t\n").to_owned())) catch { _ => None }) {
+      Some(Number(v, ..)) if v >= 0.0 && !v.is_inf() && !v.is_nan() => Some(v)
+      _ => None
+    }
+    let changed = match amount {
+      Some(v) => v != cost
+      None => false
+    }
+    @sf.card_foot(c, at_end=true, fn() {
+      if @sf.button(c, @sf.t("common.save"), key="context-cost-save/" + address, tone=Primary, busy~, disabled=!manager || !changed) {
+        match amount {
+          Some(v) => @settings.act(core, @sf.t("web-pages.stations.context.what"), "context.setAfresh", obj([("station", str(address)), ("afreshAbove", Json::number(v))]))
+          None => ()
+        }
+      }
     })
   })
+  |> ignore
 }
 
 ///|

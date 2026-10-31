@@ -2237,30 +2237,37 @@ fn composer_notice(
         }
       })
       |> ignore
-      c.text(said, style=composer_notice_words) |> ignore
-      match offer {
-        Some((id, words, name, off)) => {
-          let b = c.box(id~, style=composer_notice_offer, fn() {
-            c.text(@sf.t(words), style=if off { composer_notice_quiet } else { composer_notice_button }) |> ignore
-          })
-          c.semantics(b, Button, id~, label=@sf.t(name), disabled=off)
-        }
-        None => ()
-      }
       if choices.length() > 0 {
-        c.box(style=composer_notice_choices, fn() {
-          for choice in choices {
-            let (id, words, taken) = choice
-            let b = c.box(id~, style=composer_notice_choice, fn() {
-              if taken {
-                @sf.icon(c, "check", size=composer_notice_check, color=t.p.text) |> ignore
-              }
-              c.text(@sf.t(words), style=if taken { composer_notice_button } else { composer_notice_other }) |> ignore
-            })
-            c.semantics(b, Radio, id~, label=@sf.t(words), check=if taken { On } else { Off }, disabled=held && !taken)
-          }
+        // Text and choices each take their natural width; when they cannot both fit, the choices move together to a
+        // new line, rather than narrowing the text until only its price is left on a line of its own.
+        c.box(style=composer_notice_flow, flow=true, line_gap=@ui.Space::S2.px(), fn() {
+          c.text(said, style=composer_notice_flow_words) |> ignore
+          c.box(style=composer_notice_choices, flow=true, line_gap=@ui.Space::S2.px(), fn() {
+            for choice in choices {
+              let (id, words, taken) = choice
+              let b = c.box(id~, style=composer_notice_choice, fn() {
+                if taken {
+                  @sf.icon(c, "check", size=composer_notice_check, color=t.p.text) |> ignore
+                }
+                c.text(@sf.t(words), style=if taken { composer_notice_button } else { composer_notice_other }) |> ignore
+              })
+              c.semantics(b, Radio, id~, label=@sf.t(words), check=if taken { On } else { Off }, disabled=held && !taken)
+            }
+          })
+          |> ignore
         })
         |> ignore
+      } else {
+        c.text(said, style=composer_notice_words) |> ignore
+        match offer {
+          Some((id, words, name, off)) => {
+            let b = c.box(id~, style=composer_notice_offer, fn() {
+              c.text(@sf.t(words), style=if off { composer_notice_quiet } else { composer_notice_button }) |> ignore
+            })
+            c.semantics(b, Button, id~, label=@sf.t(name), disabled=off)
+          }
+          None => ()
+        }
       }
     })
     |> ignore
@@ -2308,9 +2315,19 @@ let composer_notice_mark : Double = 16.0
 let composer_notice_offer : @ui.Style = @ui.css("pl=S3")
 
 ///|
-/// A choice a line offers: 12 from its words, its options 12 apart.
+/// Words and choices fit on one line when there is room, otherwise the choices follow the words.
 // kept across runs: a value (no field of it changes)
-let composer_notice_choices : @ui.Style = @ui.css("row pl=S3 gap=S3")
+let composer_notice_flow : @ui.Style = @ui.css("row w=Full gap=S3 justify=JBetween align=ACenter")
+
+///|
+/// The words take their own width in a flow, wrapping only if the line itself is too narrow.
+// kept across runs: a value (no field of it changes)
+let composer_notice_flow_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=true)
+
+///|
+/// A choice a line offers: its options 12 apart.
+// kept across runs: a value (no field of it changes)
+let composer_notice_choices : @ui.Style = @ui.css("row gap=S3")
 
 ///|
 /// An option of it: the one taken with its ✓ 4 before its words, across their middle.

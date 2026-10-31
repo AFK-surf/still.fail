@@ -5200,6 +5200,11 @@ export interface StationContext {
 	 * context cleared, told to read back what it needs), as 换新上下文 does by hand (`context.setAfresh`).
 	 */
 	afreshWhenCold: boolean;
+	/**
+	 * The estimated USD cost of rereading a cold context at or above which the station starts it afresh.
+	 * Absent on an older station, whose on/off setting applies regardless of cost.
+	 */
+	afreshAbove?: number;
 }
 
 /** What a station sends still.fail to find its problems by (`Overview.diagnostics`). */

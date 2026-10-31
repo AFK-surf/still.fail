@@ -229,6 +229,34 @@ test "its agent's cache over, set to go on afresh: 换新上下文 taken, 接着
 }
 
 ///|
+test "a cache notice on a narrow page keeps its cost together and both choices reachable" {
+  let calls : Array[Made] = []
+  let said = "缓存已过期，重读约 $7.50"
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) => {
+        let o2 = o.copy()
+        o2["cacheCold"] = { "session": "s-c1", "text": Json::string(said), "afresh": true }
+        { ..tp, value: Some(Json::object(o2)) }
+      }
+      _ => tp
+    }
+  })
+  t.resize(360.0, 844.0)
+  t.set_font_scale(1.3)
+  t.draw()
+  assert_eq(t.lines_of(said), [said], msg="the cost fits beside the mark when the choices do not crowd it")
+  assert_true(t.get(Radio, label="换新上下文").check is Some(On))
+  t.click(Radio, label="接着聊")
+  let asked = named(calls, "session.settings")
+  assert_eq(asked.length(), 1)
+  assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(false)))
+}
+
+///|
 test "its agent's cache over, in the wide frame: said over the composer, 换新上下文 sets it to go on afresh" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-cache-cold", wide=true)
