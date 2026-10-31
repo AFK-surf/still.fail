@@ -536,6 +536,24 @@ wait or ask; screenshots still work. A missing grant answers with the access mes
 agent to post with need_human. Clients open a view with `control: false` while a person only watches, so the agent is
 not held off by a watcher.
 
+On the desktop an agent also reads an app's window as its accessibility tree and acts on its elements by ref, with
+[agent-desktop](https://github.com/vercel-labs/agent-desktop) (screens/ui.ts; `ui` on the desktop's source). `tree`
+with `app` answers the window as text, a line an element (`e12 button "Save" [disabled]`, indented by depth; `ref`
+reads only the part under that element, `skeleton` only the outline, `window` one of several windows); `tree` without
+`app` names the apps running in the foreground. `click` (left, right, double), `type`, `set` (the element's value
+replaced with `text`; Windows refuses `type` by ref, which needs the focus there) and `scroll` (`dx`/`dy` in units of
+100 px) take `ref`, an element of the session's latest tree
+on that screen; `key` with `app` sends the keys to that app's process. These go through the accessibility API: no
+picture is taken and no view opened, the pointer and the keyboard focus stay where they are, a window behind others
+works, and a person driving the screen does not hold them off. Each answers with the app's tree read again (`wait` ms
+later, 200 by default; `tree: false` not). agent-desktop's refusals (`STALE_REF`, `AMBIGUOUS_TARGET` with the windows
+to choose from, …) reach the agent with its suggestion and whether trying again is safe. On macOS agent-desktop runs in
+still.fail Helper (the `ui` op: Ui.swift runs the copy beside its executable), so it has the Helper's Accessibility
+grant and needs no grant of its own; on Windows the station starts `agent-desktop.exe` from beside its code, in the
+person's session. Elsewhere the desktop has no trees. station/test/ui-live.test.ts drives a real editor through the
+tool with the real agent-desktop: Notepad on GitHub's Windows in the pipeline's `ui-windows` job, TextEdit on a Mac by
+hand (`STILLFAIL_UI_LIVE=1`, `STILLFAIL_AGENT_DESKTOP`).
+
 ### System audio
 
 Windows WASAPI shared loopback continuously drains the default output endpoint, retaining up to 300 ms of consecutive

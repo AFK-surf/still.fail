@@ -156,6 +156,9 @@ export interface ScreenSource {
   /// Sets its display's resolution to one of its modes, and says it as `resolution` does; until its last view ends,
   /// after which it is put back as it was before the first change.
   setResolution?(width: number, height: number): Promise<ScreenResolution>;
+  /// Its apps' accessibility trees (screens/ui.ts): one agent-desktop command run with `args` where its apps are (the
+  /// desktop's: still.fail Helper on macOS, the station on Windows), its JSON envelope; none: no trees.
+  ui?(args: string[]): Promise<unknown>;
 }
 
 /// The station's sources: parts add theirs (the desktop at start, the browser per tab) and take them away.

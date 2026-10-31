@@ -297,7 +297,7 @@ const PARTS: Record<string, Part> = {
     targets: ["darwin-arm64"],
     env: "STILLFAIL_HELPER",
     inputs: ["station/native/helper", "vendor/PermissionFlow", "vendor/serve-sim"],
-    recipe: () => ({ swift: SWIFT_BUILD, app: HELPER_APP }),
+    recipe: () => ({ swift: SWIFT_BUILD, app: HELPER_APP, agentDesktop: AGENT_DESKTOP["darwin-arm64"] }),
     build(_t, out) {
       const dir = join(ROOT, "station/native/helper");
       const scratch = process.env.CARGO_TARGET_DIR ? join(process.env.CARGO_TARGET_DIR, "native", "helper") : join(dir, ".build");
@@ -318,6 +318,13 @@ const PARTS: Record<string, Part> = {
       run("iconutil", ["-c", "icns", iconset, "-o", join(app, "Contents/Resources/AppIcon.icns")]);
       rmSync(iconset, { recursive: true });
       writeFileSync(join(app, "Contents/PkgInfo"), "APPL????");
+      // agent-desktop beside its executable (Ui.swift): run by the app, it has the app's grants. Signed before the
+      // app, which seals it (a release signs them again in the same order, scripts/station-bundle.sh).
+      const tree = ensure("agent-desktop", "darwin-arm64");
+      for (const f of AGENT_DESKTOP_FILES.darwin) {
+        copyFileSync(join(tree, f), join(app, "Contents/MacOS", f));
+        run("codesign", ["--force", "--sign", "-", "--identifier", `fail.still.${f}`, join(app, "Contents/MacOS", f)]);
+      }
       run("codesign", ["--force", "--sign", "-", "--identifier", "fail.still.helper", app]);
     },
   },
@@ -332,6 +339,25 @@ const PARTS: Record<string, Part> = {
     zig: ffmpeg.ZIG,
     recipe: (t) => ffmpeg.recipe(t as ffmpeg.FfmpegTarget),
     build: (t, out) => ffmpeg.build(t as ffmpeg.FfmpegTarget, out),
+  },
+  // agent-desktop (vercel-labs/agent-desktop, Apache-2.0): the apps' accessibility trees, read and acted on by ref
+  // (docs/remote-screens.md, "Agents on a screen"). Its release's own build, checked against the SHA-256 its
+  // checksums.txt gives: still.fail Helper carries macOS's, the station Windows' beside stillfail-screen.exe.
+  "agent-desktop": {
+    files: (t) => (t === "win32-x64" ? AGENT_DESKTOP_FILES.win32 : AGENT_DESKTOP_FILES.darwin),
+    targets: ["darwin-arm64", "win32-x64"],
+    env: "STILLFAIL_AGENT_DESKTOP",
+    rust: false,
+    recipe: (t) => AGENT_DESKTOP[t] ?? null,
+    build(t, out) {
+      const { url, sha256 } = AGENT_DESKTOP[t] ?? fail(`no agent-desktop for ${t}`);
+      const tgz = join(out, "agent-desktop.tar.gz");
+      run("curl", ["-fsSL", "--retry", "5", "--retry-all-errors", url, "-o", tgz]);
+      const got = createHash("sha256").update(readFileSync(tgz)).digest("hex");
+      if (got !== sha256) throw new Error(`${url}: sha256 ${got}, not ${sha256}`);
+      run(TAR, ["-xzf", tgz, "-C", out]);
+      rmSync(tgz);
+    },
   },
   // iroh's relay in dev mode, for the core's mesh tests (client/core-ts/test/mesh.test.ts): n0's own build, the
   // version still.fail's relays run (cloud/Dockerfile).
@@ -357,6 +383,14 @@ const RELAY: Record<string, { url: string; sha256: string }> = {
   "linux-x64": { url: RELAY_URL("x86_64-unknown-linux-musl"), sha256: "9a68108b824e4164ad2eec729cf0e8167e4cb50581cb745a242bace135df7614" },
   "linux-arm64": { url: RELAY_URL("aarch64-unknown-linux-musl"), sha256: "1b4261b6dd0d17ae9a7516aa6d122b296a77678bac174ce30262702c9f91cb00" },
 };
+const AGENT_DESKTOP_VERSION = "1.0.2";
+const AGENT_DESKTOP_URL = (triple: string) => `https://github.com/vercel-labs/agent-desktop/releases/download/v${AGENT_DESKTOP_VERSION}/agent-desktop-v${AGENT_DESKTOP_VERSION}-${triple}.tar.gz`;
+const AGENT_DESKTOP: Record<string, { url: string; sha256: string }> = {
+  "darwin-arm64": { url: AGENT_DESKTOP_URL("aarch64-apple-darwin"), sha256: "7bee385196d7b478de80cf05ca4304aaa38f0eba593b3406ad3c247c1773be19" },
+  "win32-x64": { url: AGENT_DESKTOP_URL("x86_64-pc-windows-msvc"), sha256: "2186c76e7df197c0e67365e45d36d869f74714c56bb8a73817e2a66f3e18e222" },
+};
+/// What its archives hold: the command, and on macOS the helper it starts beside itself (the clipboard's).
+const AGENT_DESKTOP_FILES = { darwin: ["agent-desktop", "agent-desktop-macos-helper"], win32: ["agent-desktop.exe"] };
 const SWIFT_BUILD = ["build", "-c", "release", "--arch", "arm64"];
 /// Where `swift build` put a release product: SwiftPM's own build system's place, or (Swift 6.4's swift-build) its
 /// `out/Products/Release`; the newer where a scratch path has both.

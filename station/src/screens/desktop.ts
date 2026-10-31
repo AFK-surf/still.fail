@@ -20,6 +20,7 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { ScreenRefused } from "./hub.ts";
 import { MacInput } from "./mac-input.ts";
+import { helperUi } from "./ui.ts";
 export type { HelperStatus } from "../helper/grants.ts";
 import { type AudioFrame, type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ViewOptions, clipFits, regionOf } from "./source.ts";
 
@@ -179,6 +180,13 @@ export class Desktop implements ScreenSource {
     } catch (error) {
       log.warn("screens", "still.fail Helper's window did not show", { error: (error as Error).message });
     }
+  }
+
+  /// Its apps' accessibility trees: agent-desktop in still.fail Helper, with the helper's Accessibility (screens/ui.ts).
+  ui(args: string[]): Promise<unknown> {
+    const helper = this.#o.helper;
+    if (!this.#o.supported || helper === null) return Promise.reject(new ScreenRefused(501, this.#o.supported ? "station.screen.noHelper" : "station.screen.unsupported", {}, this.access()));
+    return helperUi(helper)(args);
   }
 
   /// The station stopping: every view ends, and the helper (resolved once it is gone).

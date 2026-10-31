@@ -23,6 +23,7 @@ import { ScreenHub } from "./screens/hub.ts";
 import { Desktop } from "./screens/desktop.ts";
 import { Simulators } from "./screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "./screens/win-desktop.ts";
+import { uiBinary } from "./screens/ui.ts";
 import { type Drive, dropFolder, stationDrive } from "./drive/drive.ts";
 import { ModuleSet } from "./modules/modules.ts";
 import { Packages } from "./modules/packages.ts";
@@ -167,7 +168,7 @@ export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()
       // Windows': stillfail-screen, a process a view; macOS's: still.fail Helper, with its grants.
       const desktop: Desktop | WindowsDesktop =
         platform.desktopScreen === "screen"
-          ? new WindowsDesktop({ binary: screenBinary(), changed: () => hub.changed() })
+          ? new WindowsDesktop({ binary: screenBinary(), ui: uiBinary(), changed: () => hub.changed() })
           : new Desktop({ supported: platform.desktopScreen === "helper", helper, grants: yield* Grants, changed: () => hub.changed() });
       // Back after it ended by itself: the desktop asks again for a grant still missing.
       if (desktop instanceof Desktop) helper?.onBack(() => void desktop.helperBack());

@@ -17,6 +17,7 @@ import { log } from "../ops/log.ts";
 import { type HelperPipe, HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
 import type { AudioFrame, Clip, ClipType, Codec, Frame, Region, ScreenAccess, ScreenCursor, ScreenInput, ScreenResolution, ScreenScale, ScreenSource, ScreenVideo, ScreenView, ViewOptions } from "./source.ts";
+import { processUi } from "./ui.ts";
 import { WinInput } from "./win-input.ts";
 
 export const SCREEN_BINARY = "stillfail-screen.exe";
@@ -56,6 +57,8 @@ const start: Start = (binary, args) => spawn(binary, args, { stdio: ["pipe", "pi
 export type WindowsDesktopOptions = {
   /// stillfail-screen, null when the release has none.
   binary: string | null;
+  /// agent-desktop (screens/ui.ts), null when the release has none.
+  ui?: string | null;
   /// Told when its size or access changed.
   changed: () => void;
   /// Its title (default: the machine's name).
@@ -269,6 +272,13 @@ export class WindowsDesktop implements ScreenSource {
       view.close();
       throw error;
     }
+  }
+
+  /// Its apps' accessibility trees: agent-desktop started here, in the person's session as the station is.
+  ui(args: string[]): Promise<unknown> {
+    const binary = this.#o.ui ?? null;
+    if (binary === null) return Promise.reject(new Error("this station's release carries no agent-desktop (update the station)"));
+    return processUi(binary)(args);
   }
 
   /// The station stopping: every view ends.

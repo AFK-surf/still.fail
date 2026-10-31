@@ -215,6 +215,28 @@ jobs:
           shell=$(node scripts/native.ts fetch shell win32-x64)
           for t in "$shell"/tests/*.exe; do echo "== $(basename "$t")"; "$t" --test-threads=2 || exit 1; done
 
+  # The desktop's accessibility trees on Windows (station/test/ui-live.test.ts): the agent-desktop.exe a Windows station
+  # carries (the native part agent-desktop) driving Notepad through the agents' computer tool, on GitHub's Windows,
+  # whose runner has a signed-in person's session as a station's machine does. For a change to the station.
+  ui-windows:
+    needs: plan
+    if: needs.plan.outputs.station == 'true'
+    runs-on: windows-2025
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # (the natives' keys are git's blobs: the checkout as git has it)
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - name: Notepad driven by its tree
+        run: |
+          (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          export STILLFAIL_AGENT_DESKTOP="$(node scripts/native.ts file agent-desktop win32-x64)"
+          cd station && STILLFAIL_UI_LIVE=1 node --test --test-timeout=120000 test/ui-live.test.ts
+
   # main: the prebuilt Windows natives in the releases bucket's natives/ (what `prebuild --release` put in the release
   # native-artifacts, the prebuild workflow's or a Mac's, copied over: nothing is built here), once the API (which serves
   # natives/) is out. Seconds when the store has them.
@@ -386,7 +408,7 @@ jobs:
   # 2026-10-22): every job a branch runs, one skipped as passing, one failed or cancelled failing it. Its list
   # is the branch's jobs: a job added to them goes here too, or the protection does not wait for it.
   gate:
-    needs: [plan, natives, windows-natives, check, check-linux, check-mbui, check-browser, bundle, mac-build]
+    needs: [plan, natives, windows-natives, ui-windows, check, check-linux, check-mbui, check-browser, bundle, mac-build]
     if: always() && github.ref != 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 2

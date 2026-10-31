@@ -106,7 +106,7 @@ final class Daemon {
     }
     switch request["op"] as? String {
     case "hello":
-      channel.line(["ok": true, "v": 1, "pid": Int(getpid()), "app": Bundle.main.bundlePath, "capabilities": ["screen", "files", "simulator", "outflow"]])
+      channel.line(["ok": true, "v": 1, "pid": Int(getpid()), "app": Bundle.main.bundlePath, "capabilities": ["screen", "files", "simulator", "outflow", "ui"]])
     case "status":
       var status = Status.fresh() ?? Status.now()
       status["live"] = ["capture": CGPreflightScreenCaptureAccess(), "control": Status.inputAllowed()]
@@ -121,6 +121,13 @@ final class Daemon {
       let paths = request["paths"] as? [String: String] ?? [:]
       DispatchQueue.main.async { MainActor.assumeIsolated { Permissions.shared.show(words: words, grants: grants, paths: paths, daemon: self) } }
       channel.line(["ok": true])
+    case "ui":
+      // An agent-desktop command (Ui.swift): its arguments, its envelope.
+      guard let arguments = request["args"] as? [String] else {
+        channel.line(["error": "no arguments", "code": "args"])
+        return
+      }
+      channel.line(Ui.run(arguments))
     case "outflow.identify":
       // Who a program at the other end of the station's outflow socket is (docs/data-outflow.md).
       channel.line(Outflow.identify(request["auditToken"] as? String ?? ""))

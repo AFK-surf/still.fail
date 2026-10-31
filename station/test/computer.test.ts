@@ -315,3 +315,104 @@ test("over MCP: the screenshot is image content beside its text; refusals are to
   // `run`: the text alone.
   assert.match(await computerTools(computer)[0]!.run("s1", { screen: "browser:T1" }), /screenshot 640×360 px[\s\S]*\[image\/jpeg screenshot\]/);
 });
+
+/// A desktop whose apps answer as agent-desktop does: its commands recorded, its answers the test's.
+class TreeDesktop extends FakeSource {
+  commands: string[][] = [];
+  answers: unknown[] = [];
+  constructor() {
+    super("desktop", "desktop");
+  }
+  async ui(args: string[]): Promise<unknown> {
+    this.commands.push(args);
+    return this.answers.shift() ?? { ok: true, data: {} };
+  }
+}
+
+const calculator = (snapshot: string, shown: string) => ({
+  ok: true,
+  data: {
+    app: "Calculator",
+    snapshot_id: snapshot,
+    window: { id: "w-44", title: "Calculator" },
+    complete: true,
+    tree: {
+      role: "window",
+      name: "Calculator",
+      children: [
+        { role: "group", children: [{ role: "scrollarea", name: "Edit field", ref_id: `@${snapshot}:e1`, children: [{ role: "statictext", name: shown, value: shown }] }] },
+        { role: "button", name: "7", ref_id: `@${snapshot}:e2`, available_actions: ["Click"] },
+        { role: "button", name: "Zoom", ref_id: `@${snapshot}:e3`, states: ["disabled"] },
+      ],
+    },
+  },
+});
+
+test("on the desktop, an app's tree as text, a line an element with its ref; no app: the apps running", async () => {
+  const desktop = new TreeDesktop();
+  const { computer } = setup(desktop);
+  desktop.answers.push({ ok: true, data: { apps: [{ name: "Finder", presentation: "foreground" }, { name: "Dock", presentation: "background" }, { name: "imagent" }, { name: "Calculator", presentation: "foreground" }] } });
+  assert.equal(text(await computer.act("s1", { screen: "desktop", action: "tree" })), "Apps running (give one as app with action=tree): Finder, Calculator");
+  desktop.answers.push(calculator("s1", "0"));
+  const tree = await computer.act("s1", { screen: "desktop", action: "tree", app: "Calculator" });
+  assert.equal(
+    text(tree),
+    ['Calculator window w-44 "Calculator". Act on an element by its ref (ref: "e12").', 'window "Calculator"', '  e1 scrollarea "Edit field"', '    statictext "0"', '  e2 button "7"', '  e3 button "Zoom" [disabled]'].join("\n"),
+  );
+  assert.deepEqual(desktop.commands, [["list-apps"], ["snapshot", "--compact", "--app", "Calculator"]]);
+  // Nothing was opened: no picture, no view.
+  assert.deepEqual(desktop.opened, []);
+  // A part of it, and a big window's outline.
+  desktop.answers.push(calculator("s2", "0"), calculator("s3", "0"));
+  await computer.act("s1", { screen: "desktop", action: "tree", ref: "e1" });
+  await computer.act("s1", { screen: "desktop", action: "tree", app: "Calculator", skeleton: true });
+  assert.deepEqual(desktop.commands.slice(2), [
+    ["snapshot", "--compact", "--app", "Calculator", "--window-id", "w-44", "--root", "@s1:e1"],
+    ["snapshot", "--compact", "--app", "Calculator", "--skeleton"],
+  ]);
+});
+
+test("an action by ref goes to the latest tree's element and answers with the app's tree again; while a person drives the screen too", async () => {
+  const desktop = new TreeDesktop();
+  const { computer, hub, timers } = setup(desktop);
+  await assert.rejects(computer.act("s1", { screen: "desktop", action: "click", ref: "e2" }), /no tree read yet on desktop: call action=tree with app first/);
+  desktop.answers.push(calculator("s1", "0"));
+  await computer.act("s1", { screen: "desktop", action: "tree", app: "Calculator" });
+  const pat = hub.join("desktop", { name: "Pat", control: true, tell: () => {} });
+  desktop.answers.push({ ok: true, data: { action: "click" } }, calculator("s2", "7"));
+  const clicked = computer.act("s1", { screen: "desktop", action: "click", ref: "e2" });
+  await flush();
+  // The tree is read again once the app had a moment to answer.
+  assert.equal(desktop.commands.length, 2);
+  timers.advance(200);
+  assert.match(text(await clicked), /^Clicked e2\.\nCalculator window w-44[^\n]*\nwindow "Calculator"\n  e1 scrollarea "Edit field"\n    statictext "7"/);
+  assert.deepEqual(desktop.commands.slice(1), [["click", "@s1:e2"], ["snapshot", "--compact", "--app", "Calculator", "--window-id", "w-44"]]);
+  pat();
+  // The refs now are the new tree's.
+  desktop.answers.push({ ok: true, data: {} }, calculator("s3", "7"), { ok: true, data: {} }, calculator("s4", "7"), { ok: true, data: {} }, calculator("s5", "7"), { ok: true, data: {} }, calculator("s6", "7"), { ok: true, data: {} });
+  await computer.act("s1", { screen: "desktop", action: "type", ref: "e1", text: "12", wait: 0 });
+  await computer.act("s1", { screen: "desktop", action: "set", ref: "e1", text: "", wait: 0 });
+  await computer.act("s1", { screen: "desktop", action: "scroll", ref: "e1", dy: 250, wait: 0 });
+  await computer.act("s1", { screen: "desktop", action: "click", ref: "e2", button: "right", wait: 0 });
+  await computer.act("s1", { screen: "desktop", action: "key", app: "Calculator", key: "Enter", mods: ["cmd"], tree: false });
+  assert.deepEqual(
+    desktop.commands.slice(3).filter((c) => c[0] !== "snapshot"),
+    [["type", "@s2:e1", "12"], ["set-value", "@s3:e1", ""], ["scroll", "@s4:e1", "--direction", "down", "--amount", "3"], ["right-click", "@s5:e2"], ["press", "cmd+Enter", "--app", "Calculator"]],
+  );
+  // Another session's refs are its own.
+  await assert.rejects(computer.act("s2", { screen: "desktop", action: "click", ref: "e2" }), /no tree read yet/);
+});
+
+test("by ref: agent-desktop's refusal as the agent reads it, whether it may be tried again; a screen without trees says so", async () => {
+  const desktop = new TreeDesktop();
+  const { computer } = setup(desktop);
+  desktop.answers.push(calculator("s1", "0"), { ok: false, error: { code: "STALE_REF", message: "The element is gone", suggestion: "Take a new snapshot and use its refs.", disposition: { delivery: "not_delivered", retry: "safe" } } });
+  await computer.act("s1", { screen: "desktop", action: "tree", app: "Calculator" });
+  await assert.rejects(computer.act("s1", { screen: "desktop", action: "click", ref: "e2" }), (e: Error) => e.message === "click: STALE_REF: The element is gone\nTake a new snapshot and use its refs.\nIt was not done; it is safe to try again.");
+  desktop.answers.push({ ok: false, error: { code: "AMBIGUOUS_TARGET", message: "2 windows", details: { windows: ["w-1", "w-2"] } } });
+  await assert.rejects(computer.act("s1", { screen: "desktop", action: "tree", app: "Finder" }), /tree: AMBIGUOUS_TARGET: 2 windows\nDetails: \{"windows":\["w-1","w-2"\]\}/);
+  // Not driven (no Accessibility): the person's link.
+  desktop.access = () => ({ capture: true, control: false, app: "still.fail Helper" });
+  await assert.rejects(computer.act("s1", { screen: "desktop", action: "tree", app: "Calculator" }), (e: Error) => /control it yet \(Accessibility\)/.test(e.message) && e.message.includes("/screen/desktop"));
+  await assert.rejects(setup().computer.act("s1", { screen: "browser:T1", action: "tree", app: "Calculator" }), /The screen browser:T1 has no accessibility trees: use screenshots/);
+});

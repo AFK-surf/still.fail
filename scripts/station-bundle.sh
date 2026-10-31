@@ -14,7 +14,8 @@
 #                                                         (and on darwin-arm64 "still.fail Helper.app": the station's
 #                                                          macOS app for what macOS grants, docs/station-ts-native.md §4;
 #                                                          on win32-x64 stillfail-screen.exe: the desktop's screen,
-#                                                          docs/remote-screens.md)
+#                                                          docs/remote-screens.md, and agent-desktop.exe: its apps'
+#                                                          accessibility trees, which the Helper carries on macOS)
 #   stillfail/NODE_VERSION                                (the version of the Node it runs on: .node-version's)
 #   stillfail/dist/admin/posthog.json                     (only the PostHog key the station reports errors with, when
 #                                                          $STILLFAIL_POSTHOG names one: scripts/posthog-key.ts; the
@@ -42,6 +43,7 @@ mesh="$(native mesh)"
 runner="$(native runner)"
 helper=; [ "$platform" = darwin-arm64 ] && helper="$(native helper)"
 screen=; [ "$platform" = win32-x64 ] && screen="$(native screen)"
+tree=; [ "$platform" = win32-x64 ] && tree="$(native agent-desktop)"
 (cd "$root/station" && pnpm run build >&2)
 app="$out/stillfail"
 rm -rf "$app"
@@ -61,13 +63,17 @@ cp "$launcher" "$app/mesh/target/release/stillfail-station$x"
 cp "$mesh" "$runner" "$app/station/"
 [ -z "$helper" ] || cp -R "$helper" "$app/station/"
 [ -z "$screen" ] || cp "$screen" "$app/station/"
+[ -z "$tree" ] || cp "$tree" "$app/station/"
 # macOS asks "find devices on local networks?" (the mesh's mDNS) for the launcher: Node and everything it starts are
 # its. Ad hoc, the grant was its hash's: each new launcher asked again, and every Node it started while unanswered put
 # up one more. The station release job signs the native parts ($STILLFAIL_SIGN_STATION: .github/sign-station.sh), so
 # a grant stays. Not signed is a warning, not a release missed: they are put again as they were (ad hoc), which works.
 if [ "$platform" = darwin-arm64 ] && [ -n "${STILLFAIL_SIGN_STATION:-}" ]; then
+  # The Helper's agent-desktop before the Helper, which seals it.
+  hm="$app/station/still.fail Helper.app/Contents/MacOS"
   sh "$root/.github/sign-station.sh" "$app/mesh/target/release/stillfail-station" fail.still.station \
     "$app/station/$(basename "$runner")" fail.still.runner "$app/station/$(basename "$mesh")" fail.still.mesh \
+    "$hm/agent-desktop" fail.still.agent-desktop "$hm/agent-desktop-macos-helper" fail.still.agent-desktop-macos-helper \
     "$app/station/still.fail Helper.app" fail.still.helper >&2 ||
     { echo "::warning::the station's native parts were not signed (.github/sign-station.sh): ad hoc" >&2
       cp "$launcher" "$app/mesh/target/release/stillfail-station"; cp "$mesh" "$runner" "$app/station/"
