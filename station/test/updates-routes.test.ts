@@ -145,6 +145,30 @@ test("a running station is asked for the channel and keeps it itself", { skip: p
   }
 });
 
+// `stillfail update --beta` on a station already on beta (main's station-update job, every release): nothing to ask.
+// It asked the running station each time and failed when that was too busy to answer in time ("运行中的 station
+// 无响应", Studio, 2026-10-31, 41179029822).
+test("the channel the config already says is not asked of the running station", { skip: process.platform === "win32" && "no signals on Windows" }, async () => {
+  const dir = temp();
+  const runDir = join(dir, "run");
+  mkdirSync(runDir, { recursive: true });
+  new ConfigFile(dir).update((raw) => {
+    raw.updateChannel = "beta";
+  });
+  // A station that takes the ask but never answers it.
+  writeFileSync(join(runDir, "station.json"), JSON.stringify({ pid: process.pid, drain: 1, channel: 1 }));
+  const hup = () => {};
+  process.on("SIGHUP", hup);
+  try {
+    await setChannel(dir, "beta", 200, () => true);
+    assert.ok(!existsSync(join(runDir, CHANNEL_ASK)), "nothing asked");
+    // Another channel is still asked of it (and, unanswered, refused).
+    await assert.rejects(setChannel(dir, "stable", 200, () => true));
+  } finally {
+    process.off("SIGHUP", hup);
+  }
+});
+
 test("the running station takes the ask: kept in its config and read on that channel", async (t) => {
   const dir = temp();
   const updates = installed(dir, null);
