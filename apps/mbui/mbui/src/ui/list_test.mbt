@@ -12,6 +12,7 @@ fn boxes(
   count : () -> Int,
   height : (Int) -> Double,
   stick_end? : Bool = false,
+  from_end? : Bool = false,
 ) -> (@ui.Ctx) -> Unit {
   fn(c) {
     c.list(
@@ -23,6 +24,7 @@ fn boxes(
         |> ignore
       },
       stick_end~,
+      from_end~,
     )
     |> ignore
   }
@@ -145,6 +147,27 @@ test "list: sticking to its end, it follows new rows until scrolled away" {
   // the wheel to the end
   t.wheel(100.0, 100.0, 1.0e6)
   assert_true(t.at_end())
+}
+
+///|
+test "list: laid from its end and short of its view, no frame the wheel scrolls it in moves its rows, either way" {
+  let t = @ui.Tester::new(
+    boxes(fn() { 5 }, fn(_) { 30.0 }, stick_end=true, from_end=true),
+    w=300.0,
+    h=400.0,
+  )
+  // its last row's foot on the view's, the room left over its rows
+  assert_eq(bottom_of(t, 4), 400.0)
+  // every frame drawn, as a host draws it (each laid out once)
+  let firsts : Array[Double] = []
+  t.each_frame(Some(fn() { firsts.push(y_of(t, 0)) }))
+  t.move(100.0, 300.0)
+  for dy in [-40.0, -3.0, 25.0, -100.0, 60.0] {
+    t.wheel(100.0, 300.0, dy)
+    t.frame()
+  }
+  t.each_frame(None)
+  assert_true(firsts.length() > 0 && firsts.iter().all(fn(y) { y == 250.0 }), msg="\{firsts}")
 }
 
 ///|
