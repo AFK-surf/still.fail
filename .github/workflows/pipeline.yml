@@ -481,8 +481,15 @@ jobs:
         with: { fetch-depth: 0 } # the web app's build number (__BUILD__, build.json) is the commits in the history
       - uses: ./.github/actions/setup-mac
       - uses: ./.github/actions/natives
-      # (the app's page, /mbui.html: the app as mbui-web built it, which deploy.py takes as it is)
-      - uses: actions/download-artifact@v4
+      # (the app's page, /mbui.html: the app as mbui-web built it, which deploy.py takes as it is. Asked again once when
+      # GitHub's artifact service is not reached: mini1's connection to it reset, the web's deploy failed with the page
+      # there, 2026-10-31, 41207363758)
+      - id: page
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: "mbui-web-${{ github.sha }}", path: web/public/mbui }
+      - if: steps.page.outcome == 'failure'
+        uses: actions/download-artifact@v4
         with: { name: "mbui-web-${{ github.sha }}", path: web/public/mbui }
       - name: Deploy ${{ needs.plan.outputs.parts }}
         env:
