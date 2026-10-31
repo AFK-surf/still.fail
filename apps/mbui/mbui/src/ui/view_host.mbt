@@ -207,6 +207,7 @@ pub fn view_painted() -> ViewPaintWork {
 /// As a run begins: no tree, its nodes let go. What took back by the old views no more held (what calls it and what it
 /// was said in): none takes back till a frame of the next says what does; nothing held of them.
 fn view_forget() -> Unit {
+  view_shape_of.val = OfOld
   let c = g()
   targets_forget()
   c.back = None
@@ -1130,6 +1131,8 @@ fn view_hold_lost() -> Unit {
     (Some(tree), Some(Dragging(_))) | (Some(tree), Some(Node(_))) => {
       view_held.val = Some(Nowhere)
       tree.event(view_moment(), fn() { tree.hold_lost_in(0) })
+      // (the shape of what the pointer is over now, the hold's no more)
+      view_cursor_tell()
     }
     _ => ()
   }
@@ -1633,7 +1636,14 @@ fn Ctx::back_taker(self : Ctx) -> BackHeld? {
       } else {
         (0.0, self.width)
       }
-      Some({ f, left, w, owner: self.back_owner(), tree: false })
+      Some({
+        f,
+        left,
+        w,
+        owner: self.back_owner(),
+        tree: false,
+        done: fn(x, t, p) { f(4, x, w, t, p) },
+      })
     }
     None => None
   }
@@ -1641,19 +1651,34 @@ fn Ctx::back_taker(self : Ctx) -> BackHeld? {
     Some(t) => t
     None => return old
   }
+  // (the tree as of back's moment, laid out and placed as it is then: what takes it, and where it is, found so)
+  tree.bring_to(view_moment())
   let node : BackHeld? = match tree.back_taker() {
-    Some((id, f)) =>
+    Some(id) => {
+      // (where it is: x from its left, as a stack's page has it)
+      let (left, w) = match tree.drawn_of(id) {
+        Some(d) => (d.x, d.w)
+        None => (0.0, self.width)
+      }
       Some({
-        f: fn(kind, _x, _w, t, _p) {
-          if kind == 2 || kind == 4 {
-            tree.event(t, f)
+        // (each step its, as one event at its moment, to it as it said it as the gesture began: Tree::back_step)
+        f: fn(kind, x, _w, t, _p) {
+          let step : BackStep = match kind {
+            0 => Began(x, t)
+            1 => Moved(x, t)
+            2 => LetGo(x, t)
+            3 => CalledOff
+            _ => Back
           }
+          tree.back_step(id, step, t) |> ignore
         },
-        left: 0.0,
-        w: self.width,
+        left,
+        w,
         owner: Some(id),
         tree: true,
+        done: fn(_x, t, _p) { tree.back_done(id, t) |> ignore },
       })
+    }
     None => None
   }
   match (old, node) {
@@ -1759,11 +1784,15 @@ fn view_point_tell(tree : @view.Tree, over? : Bool) -> Unit {
       tree.follow_point(-1.0, -1.0, fn(_) {  })
       tree.pointed_to(None)
       view_old_pointed(None)
+      view_shape_of.val = OfOld
+      view_cursor_tell()
     }
     Some((x, y)) if over => {
       tree.follow_point(-1.0, -1.0, fn(_) {  })
       tree.pointed_to(None)
       view_old_pointed(Some((x, y)))
+      view_shape_of.val = OfOld
+      view_cursor_tell()
     }
     // (what the tree has there followed, whatever it is, and told both sides as it comes and as it changes)
     Some((x, y)) =>
@@ -1772,16 +1801,21 @@ fn view_point_tell(tree : @view.Tree, over? : Bool) -> Unit {
           Pressed(id) | Dragged(id) => {
             tree.pointed_to(Some(id))
             view_old_pointed(None)
+            view_shape_of.val = OfNode(id)
           }
           Hosted(_) => {
             tree.pointed_to(None)
             view_old_pointed(Some((x, y)))
+            view_shape_of.val = OfOld
           }
           Nothing => {
             tree.pointed_to(None)
             view_old_pointed(if old_whole.val { Some((x, y)) } else { None })
+            view_shape_of.val = if old_whole.val { OfOld } else { OfGround }
           }
         }
+        // (its shape, as what it is over is told and as that changes)
+        view_cursor_tell()
       })
   }
 }
@@ -2189,5 +2223,44 @@ fn view_press_unfocused(c : Ctx) -> Unit {
     c.focus_moved(0, visible=false)
   } else {
     c.focus_moved(c.focus, visible=false)
+  }
+}
+
+///|
+/// What the pointer's shape is the shape of, as the pointer was last told where it is (view_point_tell): a node of the
+/// window's tree's (what takes a press there), the old views' (an old view there, what the old frame put over all of it,
+/// the old frame where it is the whole window), or the tree's ground (nothing of either: the arrow).
+priv enum ShapeOf {
+  OfNode(@view.NodeId)
+  OfOld
+  OfGround
+}
+
+///|
+// kept across runs: put back as a run begins (view_forget)
+let view_shape_of : Ref[ShapeOf] = Ref(OfOld)
+
+///|
+/// The host shown the pointer's shape, where it changed: while a press is held, the shape of what holds it (a node of
+/// the tree's it went down on, a resizing edge dragged off it: its own; the old views', theirs, Ctx::show_cursor keeping
+/// the one it was pressed with); else of what the pointer is over (view_shape_of): a node's (Tree::cursor_of: what it
+/// says, an arrow said one never the hand of what lies under it), the old views', or the arrow. Told as the pointer is
+/// told where it is, as what a still pointer is over changes, as a press goes down or up, and as the old frame works
+/// its own out.
+fn view_cursor_tell() -> Unit {
+  let kind = match (view_app.val, view_held.val) {
+    (None, _) => desk.old_shape
+    (Some(tree), Some(Dragging(id))) | (Some(tree), Some(Node(id))) => tree.cursor_of(id).code()
+    (Some(_), Some(Old(_, _))) => desk.old_shape
+    (Some(tree), _) =>
+      match view_shape_of.val {
+        OfNode(id) => tree.cursor_of(id).code()
+        OfOld => desk.old_shape
+        OfGround => Cursor::Arrow.code()
+      }
+  }
+  if kind != desk.shown {
+    desk.shown = kind
+    h_set_cursor(kind)
   }
 }

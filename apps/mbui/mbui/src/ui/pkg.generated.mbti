@@ -640,14 +640,6 @@ pub(all) enum Along {
 
 type BackHeld
 
-pub(all) enum BackStep {
-  Began(Double, Double)
-  Moved(Double, Double)
-  LetGo(Double, Double)
-  CalledOff
-  Back
-} derive(Eq, Show, @debug.Debug)
-
 type Bar
 
 type BarAt
@@ -996,7 +988,7 @@ pub fn Ctx::copy_image(Self, Bytes) -> Unit
 pub fn Ctx::copy_secret(Self, String, clear_ms~ : Double) -> Unit
 pub fn Ctx::copy_text(Self, String) -> Unit
 pub fn Ctx::cover(Self, String, Int32, Array[Int32], Int32, (Self, Double, Double) -> Unit) -> Unit
-pub fn Ctx::cursor(Self, Int32, Cursor) -> Unit
+pub fn Ctx::cursor(Self, Int32, @view.Cursor) -> Unit
 pub fn Ctx::cut_to_bottom(Self, Int32, Double, soft? : Double) -> Unit
 pub fn Ctx::cut_to_left(Self, Int32, Double, soft? : Double) -> Unit
 pub fn Ctx::cut_to_right(Self, Int32, Double, soft? : Double) -> Unit
@@ -1041,7 +1033,7 @@ pub fn Ctx::focus_roved_to(Self, Int32) -> Bool
 pub fn Ctx::focus_shown(Self, Int32) -> Bool
 pub fn Ctx::focusable(Self, Int32, node? : Int32, keys? : Int32, on_press? : Bool) -> Unit
 pub fn Ctx::focused_id(Self) -> Int32
-pub fn Ctx::follow_back(Self, (BackStep) -> Unit) -> Unit
+pub fn Ctx::follow_back(Self, (@view.BackStep) -> Unit) -> Unit
 pub fn Ctx::forget_parts(Self) -> Unit
 pub fn[X] Ctx::fork(Self, async () -> X, name? : String) -> @effect.Fiber[X]
 pub fn Ctx::frame_dt(Self) -> Double
@@ -1260,18 +1252,6 @@ pub fn Ctx::words_into(Self, Int32, String) -> Unit
 pub fn Ctx::words_of(Self, String) -> Words?
 pub fn Ctx::words_shape_of(Self, String) -> Words?
 pub fn[T] Ctx::words_smaller(Self, Double, () -> T) -> T
-
-pub(all) enum Cursor {
-  Arrow
-  Hand
-  IBeam
-  ResizeX
-  ResizeY
-  Grab
-  Grabbing
-  Crosshair
-  NotAllowed
-} derive(Eq, Show, @debug.Debug)
 
 type DeviceState
 
@@ -2282,7 +2262,7 @@ pub fn Tester::compose(Self, String) -> Unit
 pub fn Tester::contrast_faults(Self, marks? : Double) -> Array[String]
 pub fn Tester::corner_faults(Self) -> Array[String]
 pub fn Tester::ctx(Self) -> Ctx
-pub fn Tester::cursor(Self) -> Cursor
+pub fn Tester::cursor(Self) -> @view.Cursor
 pub fn Tester::cycles(Self) -> Array[String]
 pub fn Tester::display_frame(Self, Double) -> Double
 pub fn Tester::drag(Self, Double, Double, Double, Double, steps? : Int32) -> Unit
@@ -2753,6 +2733,8 @@ pub struct WordsPiece {
 // Type aliases
 pub using @view {type Action}
 
+pub using @view {type BackStep}
+
 pub using @view {type Check}
 
 pub using @paint {type CornerFit}
@@ -2760,6 +2742,8 @@ pub using @paint {type CornerFit}
 pub using @paint {type CornerOf}
 
 pub using @paint {type CornerRoots}
+
+pub using @view {type Cursor}
 
 pub using @paint {type Glass}
 

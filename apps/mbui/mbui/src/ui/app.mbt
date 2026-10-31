@@ -1390,7 +1390,12 @@ fn Ctx::back_gesture(self : Ctx, kind : Int, x : Double, t : Double, progress? :
         (h.f)(3, x - h.left, h.w, t, -1.0)
         return false
       }
-      (h.f)(kind, x - h.left, h.w, t, progress)
+      // (done as the system decided: the end of the gesture held, not a back with no gesture)
+      if kind == 4 {
+        (h.done)(x - h.left, t, progress)
+      } else {
+        (h.f)(kind, x - h.left, h.w, t, progress)
+      }
       true
     }
   }
@@ -1406,6 +1411,9 @@ struct BackHeld {
   owner : @view.NodeId?
   /// whether it is a node of the window's tree's (what back does there is no input of the old views')
   tree : Bool
+  /// the gesture it holds done as the system decided (x from its left, the moment, the system's progress): told so
+  /// as that gesture's end, not as a back with no gesture (a node's: Tree::back_done)
+  done : (Double, Double, Double) -> Unit
 }
 
 ///|

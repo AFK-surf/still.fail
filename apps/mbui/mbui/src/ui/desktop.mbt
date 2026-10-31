@@ -4,40 +4,6 @@
 // with no pointer (iOS, Android) never send what these read.
 
 ///|
-/// The pointer's shape over something: the arrow, a hand (what takes presses), the text's I-beam, a resizing edge's
-/// (sideways, up and down), an open hand (what is dragged), and what another machine's pointer may be drawn as besides
-/// (a remote screen's: a closed hand dragging, a crosshair, what cannot be done). What it is over says it
-/// (Ctx::show_cursor): a field the I-beam, what takes presses the hand, words picked with the pointer the I-beam; what
-/// is none of those as it is (an edge, what a press on goes to a field, a remote screen's pointer) is said so
-/// (Ctx::cursor).
-pub(all) enum Cursor {
-  Arrow
-  Hand
-  IBeam
-  ResizeX
-  ResizeY
-  Grab
-  Grabbing
-  Crosshair
-  NotAllowed
-} derive(Eq, Show, Debug)
-
-///|
-fn Cursor::code(self : Cursor) -> Int {
-  match self {
-    Arrow => 0
-    Hand => 1
-    IBeam => 2
-    ResizeX => 3
-    ResizeY => 4
-    Grab => 5
-    Grabbing => 6
-    Crosshair => 7
-    NotAllowed => 8
-  }
-}
-
-///|
 /// A key's code as hosts send it, beyond the editor's (editor.mbt: 1 Backspace … 16 Page Down): Escape, Tab, and a
 /// character typed with ⌘ (macOS) or Ctrl (elsewhere) held: 1000 + the character (lower case).
 pub let key_escape : Int = 17
@@ -188,6 +154,9 @@ priv struct Desk {
   keys : Array[(Int, Int, Bool)]
   /// the shape the host shows
   mut shown : Int
+  /// the shape the old frame has for what is under the pointer (Ctx::show_cursor), shown where it is the old views'
+  /// (view_cursor_tell)
+  mut old_shape : Int
   /// ⌘V (Ctrl+V) with files or a picture on the clipboard, the host's app key: the read under way and the field it is
   /// for; the files read (the picture as one) for a field that takes files (Ctx::editor `files`), by its id, until the
   /// app takes them
@@ -273,6 +242,7 @@ let desk : Desk = {
   mutable_keys: [],
   keys: [],
   shown: 0,
+  old_shape: 0,
   pasting: None,
   pasted: {},
   next_mouse_drags: [],
@@ -290,6 +260,7 @@ fn desk_reset() -> Unit {
   desk.mutable_keys.clear()
   desk.keys.clear()
   desk.shown = 0
+  desk.old_shape = 0
   desk.pasting = None
   desk.pasted.clear()
   desk.next_mouse_drags.clear()
@@ -390,10 +361,9 @@ fn Ctx::show_cursor(self : Ctx) -> Unit {
         0
       }
   }
-  if kind != desk.shown {
-    desk.shown = kind
-    h_set_cursor(kind)
-  }
+  desk.old_shape = kind
+  // (shown where the pointer is the old views': what of the window's tree is under it, or holds it, its own)
+  view_cursor_tell()
 }
 
 ///|
