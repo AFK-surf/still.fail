@@ -22,6 +22,37 @@ fn taped_shell(v : @view.View, src : Source) -> Unit {
 }
 
 ///|
+/// The wide frame off the tape (laid out Large, or with no sidebar to show), in node `v`: what the frame does in every
+/// tier under all of it, the page and the block (sfdesk's pane_view.mbt), what opens over them (as taped_shell's).
+fn paned_shell(v : @view.View, src : Source) -> Unit {
+  // (on the page's ground, as the old frame's row was: what nothing covers shows it)
+  v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
+  @ui.old(v, fn(c) { paned_under(c, src) }).over(Is(true)) |> ignore
+  // a page opened in the pane shows once the core has given what it shows (page_local_ms at most: pane_page_built)
+  @sfdesk.pane_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms)
+  @ui.old(v, fn(c) { taped_over(c, src) }).over(Is(true)) |> @ui.old_takes_own |> ignore
+}
+
+///|
+/// Under the wide frame off the tape (an island): as taped_under, the frame's own sfdesk's pane_under.
+fn paned_under(c : @ui.Ctx, src : Source) -> Unit {
+  if @ui.window_inset() {
+    let id = c.id("window-ground-band")
+    c.window_drag(id)
+    c.box(style=@ui.style(h=Fixed(window_band())), left=0.0, top=0.0, right=0.0, id~, fn() {  }) |> ignore
+  }
+  frame_bare.val = false
+  let (now, all, _, _) = workspace_in_view(src)
+  match now {
+    Some(w) => {
+      signed_in_frame(c, src, w)
+      @sfdesk.pane_under(c, src, w, all)
+    }
+    None => ()
+  }
+}
+
+///|
 /// Under the tape's panels (an island): what every frame of the app's state does (app_state_island's), what the
 /// signed-in frame does before its pages (signed_in_frame), what the tape's frame does under them (sfdesk's tape_under).
 fn taped_under(c : @ui.Ctx, src : Source) -> Unit {

@@ -57,7 +57,8 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
 test "wide: a vault request's outcome line has its dot in the middle of its words' line, its name set apart without quotes" {
   reset()
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, fixture("chat-info")) }, w=1280.0, h=800.0, platform=0)
+  let src = fixture("chat-info")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   t.click(Button, label="对话信息")
   t.frame()
@@ -108,7 +109,8 @@ test "wide: a message right clicked offers 分享这一轮, which shares its tur
 test "wide: a link in a message right clicked opens its own menu alone, not the message's 分享这一轮 under it" {
   reset()
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, fixture("chat")) }, w=1280.0, h=800.0, platform=0)
+  let src = fixture("chat")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   // (Ana's message, up the list: scrolled to till it is in the list's middle)
   let link = "https://example.com/review/42"
@@ -196,7 +198,8 @@ test "wide: the message's ⋯ menu goes out where it hung, closed by Escape or a
   for how in ["escape", "away"] {
     reset()
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-    let t = @ui.Tester::new(fn(c) { view(c, fixture("chat")) }, w=1280.0, h=800.0, platform=0)
+    let src = fixture("chat")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
     t.run_for(@ui.move_most_ms)
     let (x, y, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
     t.move(x + 24.0, y + 8.0)

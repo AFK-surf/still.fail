@@ -135,7 +135,14 @@ fn list_place(mode : Int) -> String {
 /// The rail: its top (in a window with its buttons in the app's top row, their row, dragging the window), the places,
 /// then the workspaces and settings at its foot. In the closed bar (`bar`) as narrow as it (42), its places 2 from its
 /// every edge (their grounds 6), no top row: the bar starts under it.
-fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : Bool) -> Unit {
+fn rail(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  all : Array[Workspace],
+  bar : Bool,
+  moving? : FoldLook? = None,
+) -> Unit {
   let lit = lit_place()
   let rail_id = c.id("rail")
   match c.menu_asked(rail_id) {
@@ -168,18 +175,16 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
   } else {
     rail_open
   }
-  // (in a panel of the tape its first place as far under its top as its places are in from its side)
-  let top_h = if bar {
-    0.0
-  } else if inset {
-    rail_top_inset + rail_gap
-  } else if wide.tape {
-    // (and its first place's middle on the line of the sidebar's first row beside it, 新建对话's: pengxiao, 2026-10-25)
-    dmax(@sf.rail_in_tape(), tape_first_row_mid() - rail_item_side / 2.0)
-  } else {
-    rail_top_web + rail_gap
+  // (where the block's move has got: its width and padding, its top row's, between closed and open: pane_view.mbt)
+  let (look, top_h) = match moving {
+    Some(f) =>
+      (
+        look.then(@ui.style(w=Fixed(f.rail_w), pl=@sf.room_of(f.rail_pl), pt=@sf.room_of(f.rail_pt), pb=@sf.room_of(f.rail_pb))),
+        f.rail_top,
+      )
+    None => (look, rail_top_h(bar))
   }
-  c.box(style=look, moves="rail", id=rail_id, fn() {
+  c.box(style=look, id=rail_id, fn() {
     // its top row the window's title bar (the macOS app's buttons in it) across all of it, its padding too; not in the
     // closed bar
     if @ui.window_inset() && !bar {
@@ -188,7 +193,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
       title_row(c, "rail/top", dmax(top_h, closed_bar_top))
     }
     c.box(style=rail_head, fn() {
-      c.box(style=rail_top.then(@ui.style(h=Fixed(top_h))), moves="rail-top", fn() {  }) |> ignore
+      c.box(style=rail_top.then(@ui.style(h=Fixed(top_h))), fn() {  }) |> ignore
       let places = rail_items(src, w.id)
       // a list's place lit while its list is the one shown (Rail.tsx `on`): 我参与的, 监控中 by the filter when they
       // are in the rail, else 对话; 已归档 while the archive is open (shownList)
@@ -251,6 +256,26 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : 
   })
   |> ignore
 }
+
+///|
+/// The rail's top row's height (in a panel of the tape its first place as far under its top as its places are in from
+/// its side; closed, none).
+fn rail_top_h(bar : Bool) -> Double {
+  if bar {
+    0.0
+  } else if @ui.window_keys_left() {
+    rail_top_inset + rail_gap
+  } else if wide.tape {
+    // (and its first place's middle on the line of the sidebar's first row beside it, 新建对话's: pengxiao, 2026-10-25)
+    dmax(@sf.rail_in_tape(), tape_first_row_mid() - rail_item_side / 2.0)
+  } else {
+    rail_top_web + rail_gap
+  }
+}
+
+///|
+/// The closed bar's padding round its places (rail_closed's p=S0_5).
+let rail_closed_pad : Double = 2.0
 
 ///|
 /// The rail open and in the closed bar (Rail.css.ts rail): its places 8 in and 8 under the last (@sf.rail_in: where they
@@ -1083,7 +1108,7 @@ fn sidebar_edge(c : @ui.Ctx, at : Double) -> Unit {
     @sf.t("web-pages.workspace.resizeSidebar") + " · " + @sf.t("web-main.sidebar.close")
   }
   c.layer(fn() {
-    c.box(style=edge_strip, moves="edge", left=at, top=0.0, bottom=0.0, fn() {
+    c.box(style=edge_strip, left=at, top=0.0, bottom=0.0, fn() {
       @sf.edge_look(
         c,
         "sidebar-edge",

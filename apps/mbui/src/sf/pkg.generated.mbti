@@ -660,6 +660,10 @@ pub fn group_row(@ui.Ctx, Bool, Bool, () -> Unit, id? : Int32) -> Unit
 
 pub let group_row_end_radius : @ui.Radius
 
+pub fn group_rows(@ui.Ctx, String, Array[(String, () -> Unit)]) -> Unit
+
+pub fn group_rows_reset() -> Unit
+
 pub fn group_waiting(@ui.Ctx, () -> Unit, text? : String) -> Unit
 
 pub fn grouped(Double) -> String
@@ -1524,6 +1528,8 @@ pub let r_option : Double
 
 pub let radii : @ui.RadiusScale
 
+pub fn radius_between(Double) -> @ui.Radius
+
 pub fn rail_ground_radius(@ui.CornerOf, Double, alone? : Double) -> @ui.Radius
 
 pub let rail_ground_side : Double
@@ -1638,7 +1644,7 @@ pub let row_top_in_y : Double
 
 pub fn rows_head(@ui.Ctx, () -> Unit, first? : Bool) -> Unit
 
-pub fn rows_list(@ui.Ctx, String, Int32, Double, (Int32) -> Unit) -> Int32
+pub fn rows_list(@ui.Ctx, String, Int32, Double, (Int32) -> Unit, sized? : @ui.RowCauses) -> Int32
 
 pub fn rows_room(@ui.Ctx, () -> Unit) -> Unit
 
@@ -2522,7 +2528,7 @@ pub(all) struct MenuItem {
 
 pub(all) struct NativeBars {
   on : @signals.Signal[Bool]
-  mut side : Double
+  side : @signals.Signal[Double]
   corners : FixedArray[Double]
 }
 

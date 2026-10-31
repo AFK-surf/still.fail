@@ -591,6 +591,9 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   tape_goes.rest.set(true)
   tape_put(tape_to_of(tape_room_now()))
   v.owns(fn() {
+    // (left for the frame off the tape: the block closes from where the tape had it, pane_view)
+    let r = tape_room_now()
+    fold_goes.left_tape = Some(fold_look_tape(r.s, tape_col_at(@double.infinity), r.top, r.foot))
     (tape_goes.end_due)()
     tape_goes.end_due = fn() {  }
     (tape_goes.wait_due)()
@@ -1223,22 +1226,16 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   wide.crowded = false
   side_crowded()
   wide.peeking.set(false)
-  // (what the block was moved for, as the frame off the tape has it: there, as one is come to with no sidebar of its own
-  // (连接, 用量), the block moves from the tape's panel to the closed bar, as it was shown here)
-  wide.moved_as = Some((wide.folded.get(), false, false, wide.side_key, @sf.native_on()))
   native_frame(c, src, w, all)
   wide.closed.set(false)
-  // (what the frame off the tape moves from as one is come to with no sidebar of its own, as the tape has it: the
-  // block's column, the page's bars, the sidebar's parts; said as the frame's are, by their names: Ctx::moved)
+  // (what the page's bars and the sidebar's parts work out from: open, apart, nothing of them moving on the tape)
   let r = tape_room_now()
-  c.moved("--side-col", r.col) |> ignore
-  c.moved("--peek-shift", 0.0) |> ignore
-  wide.bar_pl = c.moved("--bar-pl", bar_in)
-  wide.bar_ml = c.moved("--bar-ml", 0.0)
-  wide.bar_mr = c.moved("--bar-mr", 0.0)
-  wide.brand_h = c.moved("--brand", side_brand_h(false, r.top))
-  wide.band = c.moved("--band", 1.0)
-  wide.mark = c.moved("--mark", 0.0)
+  wide.bar_pl = bar_in
+  wide.bar_ml = 0.0
+  wide.bar_mr = 0.0
+  wide.brand_h = side_brand_h(false, r.top)
+  wide.band = 1.0
+  wide.mark = 0.0
   land(src, w)
   // (beside the system's action at the column's foot, the cards' foot corners the one the composer stands concentric in
   // on its line: said before any of them is built; another than the last frame's, what was kept of them drawn anew, as

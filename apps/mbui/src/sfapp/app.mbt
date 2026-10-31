@@ -513,6 +513,7 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
           match shell {
             Stacked => narrow_shell(s, src)
             Taped => taped_shell(s, src)
+            Paned => paned_shell(s, src)
             Whole => whole(s)
           }
         })
@@ -611,28 +612,9 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
     Some(w) => {
       signed_in_frame(c, src, w)
       if @sfdesk.is_wide(c) {
-        // a page opened in the pane shows once the core has given what it shows, the one before staying till then
-        // (page_local_ms at most), as a page pushed on a phone slides in then
-        app.nav.shows_when(fn() { pane_ready(src, app.nav.top()) }, page_local_ms)
-        // the wide frame's keys (sfdesk's keys.mbt), then the rail, the sidebar and the page beside it (sfdesk's
-        // frame.mbt); what opens over them after them
-        @sfdesk.frame(c, src, w, all, invited)
-        // a station's screen: over the whole window, as Android's ScreenActivity is over the app
-        match app.nav.top() {
-          Screen(at) =>
-            c.layer(fn() { @sfpages.screen_page(c, src, at, system_frame()) }) |> ignore
-          // a drive's text read, a film played: over the whole window too, as the web's pages of a file opened
-          // (Drive.css.ts opened: fixed over everything)
-          DriveRead(at) => c.layer(fn() { @sfpages.reader_page(c, src, at) }) |> ignore
-          DrivePlay(at) => c.layer(fn() { @sfpages.play_page(c, src, at) }) |> ignore
-          _ => ()
-        }
-        // what opens over them (sfdesk's overlays.mbt)
-        @sfdesk.overlays(c, src, w)
-        // the player sideways (a phone on its side for a film): back turns it upright first
-        play_back(c)
-        pick_back(c)
-        viz_full_layer(c, src)
+        // (the wide frame is the window's tree's, its shell picked by the window's width as a frame gives it: app_tree,
+        // tape_shell.mbt; laid out wide before it is known, none of it yet)
+        ()
       } else {
         // a page opened slides in once the core has given what it shows, or said it waits on a station (page_local_ms at
         // most)

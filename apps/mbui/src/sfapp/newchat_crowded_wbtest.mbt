@@ -187,7 +187,7 @@ test "wide: the model's panel beside its control has the models, how hard it thi
 ///|
 test "wide: how hard it thinks along its line, from the model's own to the most" {
   let src = fixture_app("newchat-crowded-model")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(squeeze_opening)
   // (in their order along their line: from the model's own to the most)
   let order = ["默认", "低", "中", "高", "最高"].map(fn(l) { t.get(Radio, label=l).rect })

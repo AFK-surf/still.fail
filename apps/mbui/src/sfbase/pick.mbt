@@ -34,6 +34,18 @@ pub let pk : ChatPick = { ts: "", author: "", role: "", share: None, link: "", s
 pub let share_offered : Ref[(Int, Double, Double, () -> Unit, String)?] = Ref(None)
 
 ///|
+/// Told as a message offers its turn (share_offered): what shows the menu, built apart from the message (another old
+/// view's), follows it.
+pub let share_offered_told : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// The turn of a message right clicked offered (share_offered), told.
+fn share_offer(at : Int, x : Double, y : Double, go : () -> Unit, link : String) -> Unit {
+  share_offered.val = Some((at, x, y, go, link))
+  share_offered_told.set(@signals.untracked(fn() { share_offered_told.get() }) + 1)
+}
+
+///|
 /// What a message offers of itself (its link, its turn's picture), at the end of its author's name and time, where a
 /// mouse is the native input: one ⋯ shown while the pointer rests on the message (or its menu shows), the same two a
 /// right click offers, each in its words: two bare marks there said neither what they did nor that they were the
@@ -41,7 +53,7 @@ pub let share_offered : Ref[(Int, Double, Double, () -> Unit, String)?] = Ref(No
 /// native input both are on the bar of what it holds picked instead (pick_layer), not on every message's head.
 pub fn share_turn_tool(c : @ui.Ctx, key : String, row : Int, link : String, go : () -> Unit) -> Unit {
   match c.menu_asked(row) {
-    Some((x, y)) => share_offered.val = Some((c.frame_number(), x, y, go, link))
+    Some((x, y)) => share_offer(c.frame_number(), x, y, go, link)
     None => ()
   }
   let menu = key + "/message-menu"
@@ -182,7 +194,7 @@ pub fn pickable(
     match share {
       Some(go) =>
         match c.menu_asked(id) {
-          Some((x, y)) => share_offered.val = Some((c.frame_number(), x, y, go, link))
+          Some((x, y)) => share_offer(c.frame_number(), x, y, go, link)
           None => ()
         }
       None => ()

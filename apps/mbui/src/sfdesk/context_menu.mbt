@@ -41,6 +41,18 @@ pub let context : ContextMenu = {
 }
 
 ///|
+/// Told as the menu is opened (context_at): what shows it, built apart from what was right clicked (another old view's),
+/// follows it.
+let context_told : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// The menu opened at (x, y) by what is right clicked in a page (context_at), told to what shows it.
+fn context_asked(c : @ui.Ctx, x : Double, y : Double, link? : String = "", image? : String = "") -> Unit {
+  context_at(c, x, y, link~, image~)
+  context_told.set(@signals.untracked(fn() { context_told.get() }) + 1)
+}
+
+///|
 fn context_reset() -> Unit {
   context.open = false
   context.frame = -1
@@ -56,7 +68,7 @@ pub fn context_link(c : @ui.Ctx, href : String) -> Unit {
   let (x, y, _) = c.pointer()
   // (in an image's link too: the image's said with it)
   let image = if context.frame == c.frame_number() { context.image } else { "" }
-  context_at(c, x, y, link=href, image~)
+  context_asked(c, x, y, link=href, image~)
 }
 
 ///|
@@ -65,7 +77,7 @@ pub fn context_image(c : @ui.Ctx, id : Int, src : String) -> Unit {
   match c.right_clicked(id) {
     Some((x, y)) if src != "" && src != "!" => {
       let link = if context.frame == c.frame_number() { context.link } else { "" }
-      context_at(c, x, y, link~, image=src)
+      context_asked(c, x, y, link~, image=src)
     }
     _ => ()
   }
@@ -91,7 +103,7 @@ fn context_at(c : @ui.Ctx, x : Double, y : Double, link? : String = "", image? :
 pub fn context_page(c : @ui.Ctx, page : Int) -> Unit {
   match c.menu_asked(page) {
     Some((x, y)) if context.frame != c.frame_number() && c.selected_text().trim(chars=" \n\t") != "" =>
-      context_at(c, x, y)
+      context_asked(c, x, y)
     _ => ()
   }
 }
@@ -99,6 +111,9 @@ pub fn context_page(c : @ui.Ctx, page : Int) -> Unit {
 ///|
 /// The menu, while open: a link's items, an image's, the words'; chosen, done (what reads first, once read) and gone.
 pub fn context_menu(c : @ui.Ctx) -> Unit {
+  // (built again as the menu is opened or a message's turn offered, wherever that was built)
+  context_told.get() |> ignore
+  @sfbase.share_offered_told.get() |> ignore
   // a field right clicked anywhere: its editing
   match c.field_right_clicked() {
     Some((id, x, y)) => {
