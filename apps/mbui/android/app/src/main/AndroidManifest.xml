@@ -18,6 +18,9 @@
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <!-- mbui's Updates: a newer build of the app handed to the system's installer (the person agrees) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- mbui's Updates: the app's own newer build installed without the system asking the person each time (Android 12+:
+         PackageInstaller USER_ACTION_NOT_REQUIRED takes effect only with this) -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <!-- CoreHost's secure.* (a secret's use allowed, the workspace's lock): the system's BiometricPrompt asks the person
          (biometrics or the screen lock), which no library's manifest brings in: the app's own to ask for -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />

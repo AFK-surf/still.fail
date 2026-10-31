@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Updates: a newer build of the app handed to the system's installer (the person agrees) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- mbui's Updates: the app's own newer build installed without the system asking the person each time (Android 12+:
+         PackageInstaller USER_ACTION_NOT_REQUIRED takes effect only with this) -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <!-- BrowserLogin asks whether there is a browser to open a login page in -->
     <queries>
         <intent>

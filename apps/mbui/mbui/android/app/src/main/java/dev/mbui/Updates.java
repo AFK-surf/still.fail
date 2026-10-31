@@ -64,17 +64,22 @@ final class Updates {
         }
     }
 
+    /** The build asked for while the person's leave was asked (url, sha256, size, name): taken up as they come back. */
+    static Object[] waiting;
+
     static synchronized void install(String url, String sha256, double size, String name) {
         Context c = Host.activity;
         if (c == null || (worker != null && worker.isAlive())) return;
         if (!c.getPackageManager().canRequestPackageInstalls()) {
             phase = "allow";
+            waiting = new Object[] {url, sha256, size, name};
             Host.log("update: the person's leave to install apps asked for");
             c.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + c.getPackageName()))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             changed(1);
             return;
         }
+        waiting = null;
         Context app = c.getApplicationContext();
         phase = "downloading";
         percent = -1;
@@ -96,6 +101,18 @@ final class Updates {
             changed(phase.equals("failed") ? -1 : 1);
         }, "mbui-update");
         worker.start();
+    }
+
+    /**
+     * The app back in front (MainActivity.onResume): the build asked for while the person's leave was asked goes on
+     * once they gave it, as though asked again; not given, it waits (the system's page is not opened again).
+     */
+    static synchronized void resumed() {
+        Object[] w = waiting;
+        Context c = Host.activity;
+        if (w == null || !phase.equals("allow") || c == null || !c.getPackageManager().canRequestPackageInstalls()) return;
+        Host.log("update: the person's leave to install apps given, the download goes on");
+        install((String) w[0], (String) w[1], (Double) w[2], (String) w[3]);
     }
 
     static File download(Context c, String url, String sha256, long size, String name) throws IOException, InterruptedException {
