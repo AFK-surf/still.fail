@@ -54,3 +54,43 @@ test "a run begun anew: nothing picked told, no identity of a run before given a
   hold_on(t2, "做完了：列表、跳到最新的按钮") |> ignore
   assert_true(@sfbase.picked.get().serial > before, msg="\{@sfbase.picked.get()} after \{before}")
 }
+
+///|
+/// A mouse's passage of the page's last answer: pressed `from` past its start, dragged to `to` past it and let go there
+/// (its own moments, from `at`; a frame between each when `framed`, else none), then a frame: what is told picked then.
+fn mouse_picked(t : @ui.Tester, from : Double, to : Double, framed : Bool) -> @sfbase.Picked {
+  // (apart from the press before: a press of its own, not its double click)
+  t.run_for(@ui.move_most_ms)
+  let (rx, ry, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
+  let y = ry + 8.0
+  let at = t.time() + between_frames_ms
+  t.advance(at - t.time())
+  let steps = [(0, from, 0.0), (1, (from + to) / 2.0, 40.0), (1, to, 80.0), (2, to, 120.0)]
+  for s in steps {
+    let (kind, x, dt) = s
+    if framed && t.time() < at + dt {
+      t.frame_at(at + dt)
+    }
+    t.touch_at(kind, rx + x, y, at + dt)
+  }
+  t.frame_at(at + 140.0)
+  @sfbase.picked.get()
+}
+
+///|
+test "a mouse's passage picked anew in the same message (another passage, or the same again): another identity, frames between or none; built again, the same" {
+  for framed in [true, false] {
+    let t = tape_chat(0, 750.0, 830.0)
+    t.host_says_finger(Some(false))
+    @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Page))
+    t.run_for(@ui.move_most_ms)
+    let one = mouse_picked(t, 4.0, 120.0, framed)
+    assert_true(one.serial > 0, msg="framed \{framed}: \{one}")
+    let two = mouse_picked(t, 40.0, 200.0, framed)
+    assert_true(two.ts == one.ts && two.serial > one.serial, msg="framed \{framed}: \{one} then \{two}")
+    let three = mouse_picked(t, 40.0, 200.0, framed)
+    assert_true(three.serial > two.serial, msg="framed \{framed}: \{two} then \{three}")
+    t.run_for(@ui.move_most_ms)
+    assert_eq(@sfbase.picked.get(), three, msg="framed \{framed}")
+  }
+}

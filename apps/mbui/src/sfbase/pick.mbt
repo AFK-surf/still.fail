@@ -56,6 +56,11 @@ pub let picked : @signals.Signal[Picked] = @signals.signal(picked_none, same=fn(
 let pick_serial : Ref[Int] = Ref(0)
 
 ///|
+/// The mouse's selection last told picked (Ctx::selection_made's number; -1 none).
+// kept across runs: none as a run begins (pick_reset)
+let pick_mouse_made : Ref[Int] = Ref(-1)
+
+///|
 /// A passage of message `ts` picked anew (its metadata in `pk` already), told once: its identity, where it runs.
 fn pick_told_new(ts : String, a : Int, b : Int) -> Unit {
   pick_serial.val = pick_serial.val + 1
@@ -165,6 +170,7 @@ pub fn pick_reset() -> Unit {
   pk.taken_at = -1
   pk.sel.reset()
   picked.set(picked_none)
+  pick_mouse_made.val = -1
   // (the press last felt, by its frame: a Tester's frames count from 0 again, and a press another test's pick was felt
   // at took this one's feel, run after composer_wbtest or motion_wbtest, 2026-10-24)
   pick_felt.val = -1
@@ -231,14 +237,16 @@ pub fn pickable(
       Some((sx, sy, sw, sh)) =>
         match c.rect_of(id) {
           Some((x, y, w, h)) if sx >= x - 1.0 && sy >= y - 1.0 && sx + sw <= x + w + 1.0 && sy + sh <= y + h + 1.0 => {
-            let anew = pk.ts != ts
+            // (a selection the mouse began anew (Ctx::selection_made: its press's number), or none of this message's
+            // before: picked anew)
+            let anew = pk.ts != ts || c.selection_made() != pick_mouse_made.val
+            pick_mouse_made.val = c.selection_made()
             pk.ts = ts
             pk.author = author
             pk.role = role
             pk.share = share
             pk.link = link
-            // (a passage of this message held by the selection now, none of it before: picked anew, told once; built
-            // again, the same)
+            // (told once; built again, the same)
             if anew {
               pick_told_new(ts, -1, -1)
             }

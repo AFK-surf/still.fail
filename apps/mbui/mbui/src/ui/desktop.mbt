@@ -249,7 +249,7 @@ priv struct SelSpan {
 /// is picked of each paragraph, by its id (those scrolled out of view kept as they were); whether the pointer is
 /// still taking it; the list the press went down in (0 none), scrolled toward the pointer held past its edge; and the
 /// layer it went down in (overlay.mbt; 0 the page), the only one whose words it picks, as a browser's selection
-/// started in a dialog stays in it.
+/// started in a dialog stays in it; which it is (`made`: a number each one a press starts takes, never one given again).
 priv struct Picked {
   mut from : SelSpot
   mut to : SelSpot
@@ -257,10 +257,12 @@ priv struct Picked {
   mut dragging : Bool
   mut list : Int
   mut layer : Int
+  mut made : Int
 }
 
 ///|
-let picked : Picked = { from: no_spot, to: no_spot, spans: {}, dragging: false, list: 0, layer: 0 }
+// kept across runs: let go as a run begins (select_none), which one it was only counting on
+let picked : Picked = { from: no_spot, to: no_spot, spans: {}, dragging: false, list: 0, layer: 0, made: 0 }
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1181,6 +1183,8 @@ fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
         (paragraph_end(text, off, -1), paragraph_end(text, off, 1))
       }
       let at = target.at
+      // (another selection: the one before let go, this one begun by this press)
+      picked.made = picked.made + 1
       picked.from = { base: target.base, off: s, at }
       picked.to = { base: target.base, off: e, at }
       picked.spans[target.base] = { a: s, b: e, text, at }
@@ -1191,6 +1195,15 @@ fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
     }
     None => ()
   }
+}
+
+///|
+/// Which selection with the pointer this is (Ctx::selection_box's): the number the press that began it took (each new
+/// one another, a press on words beginning it; never one given again), whatever frames were drawn while it was
+/// taken; what reads it tells a new one from the same one built again.
+pub fn Ctx::selection_made(self : Ctx) -> Int {
+  ignore(self)
+  picked.made
 }
 
 ///|
