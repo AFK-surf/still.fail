@@ -1055,7 +1055,11 @@ let marks_notes_over_tools : Double = 10.0
 /// (ImageMarks.kt MarksTools: 选择, 框, 箭头, 画笔, 文字 · the colour · 删除 the picked · 撤销, 重做), the colours in a row
 /// over them when asked for. `tools` false: none of them, the tools nodes of the window's tree's under it
 /// (marks_tools_node).
-pub fn marks_foot(c : @ui.Ctx, tools? : Bool = true) -> Unit {
+pub fn marks_foot(c : @ui.Ctx, tools? : Bool = true, note? : Bool = true) -> Unit {
+  // (the note being written elsewhere, `note` false: nothing here while it is, note_box_node)
+  if !note && marking.note >= 0 && mark_notes().iter().any(fn(x) { x.0 == marking.note }) {
+    return
+  }
   if marking.note >= 0 {
     match mark_notes().iter().find_first(fn(x) { x.0 == marking.note }) {
       Some(note) => {

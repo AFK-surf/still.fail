@@ -1,7 +1,9 @@
 // Marking's tools as nodes of the window's tree (marks_foot's MarksTools, ImageMarks.kt): the tools, the colour and
 // its palette, the picked one's removal, undo and redo, each done at the moment it is pressed (its press let go on
 // it), as the picture's own drawing is (Viewer::finger_on): the tool a stroke is drawn with the one taken up, whatever
-// frames came between. The notes over them, and the note being written, are the old view's still (marks_foot).
+// frames came between. The note being written too (note_box_node): its pin and what it is, 删除 and 完成 nodes, done as
+// their press is let go; what is written in it an old view's field, the note as tall as it lays out. The notes' cards
+// over the tools are the old view's still (marks_foot).
 
 ///|
 /// How a marking tool is drawn (picture_button's, in the viewer's dark): its icon in the quieter white, near white on
@@ -29,11 +31,19 @@ fn marks_foot_node(h : @view.View, foot : () -> Double) -> Unit {
       // (marking as it is: built again as it changes, as image_bars' was)
       marks_said()
       c.spacer()
-      marks_foot(c, tools=false)
+      marks_foot(c, tools=false, note=false)
     })
     .grow(Is(1.0))
     |> @ui.old_takes_own
     |> ignore
+    // (the note being written, over the tools' room: note_box_node)
+    col.show(
+      fn() {
+        marks_said()
+        marks_note_shown() is Some(_)
+      },
+      fn(n) { note_box_node(n) },
+    )
     col.show(
       fn() {
         marks_said()
@@ -263,5 +273,191 @@ fn marks_actions_node_of(row : @view.View, vw : Viewer, ink : () -> @sf.ViewerIn
     fn() { vw.finish_marks(@ui.current(), true) },
     tip=tips,
   )
+  |> ignore
+}
+
+///|
+/// The note being written, as marking says (marks_foot's: none, a note asked for of no numbered mark).
+fn marks_note_shown() -> (Int, Int, String, Int64)? {
+  if marking.note < 0 {
+    return None
+  }
+  mark_notes().iter().find_first(fn(x) { x.0 == marking.note })
+}
+
+///|
+/// The note being written in `w` (note_box's, Notes.kt NoteBox, in the dark), 12 in at its sides and 8 over the
+/// navigation bar: a frosted card (26 round, its round buttons' room in from its sides and foot, 10 over, 6 between),
+/// its pin and what it is, muted; then 删除批注 (a bin, 36 round), the field (16 on 21, 添加批注（可选） till something
+/// is written, 8 lines at most: an old view's, the card as tall as it lays out), 完成 (a tick on the ink, 36 round), at
+/// their row's foot. Coming in from nothing and 97% of its size about its middle (note_pop_ms, ease out) as a note is
+/// asked for, from that moment, and again as another is. 删除 and 完成 done as their press is let go on them.
+fn note_box_node(w : @view.View) -> Unit {
+  let keys_in = @sf.capsule_in(note_box_corner, 36.0)
+  let pop = @motion.Way::new(1.0)
+  let popped = Ref(-1)
+  w.padding(Is((12.0, 0.0, 12.0, 8.0))) |> ignore
+  w.box(fn(b) {
+    // (its coming in, from the moment the note was asked for: another asked for, from then again)
+    let shown = fn() {
+      marks_said()
+      let id = marking.note
+      if id != popped.val {
+        popped.val = id
+        pop.put(0.0)
+        pop.go(1.0, @motion.tween(note_pop_ms, ease=Out), at=b.cause_at())
+      }
+      pop.value_at(b.drawn_at())
+    }
+    b
+    .padding(Is((keys_in, 10.0, keys_in, keys_in)))
+    .gap(Is(6.0))
+    .radius(Is(note_box_corner))
+    .ground(Is(note_ground))
+    .shadow(Is((@sf.floating.sigma, @sf.floating.dy, @sf.floating.color)))
+    .alpha(By(shown))
+    .scale(By(fn() { 0.97 + 0.03 * shown() }))
+    |> ignore
+    // its pin and what it is
+    b.box(fn(head) {
+      head
+      .row(Is(true))
+      .lines_up(Is(Some(Middle)))
+      .padding(Is((@ui.Space::px(S2), 0.0, @ui.Space::px(S2), 0.0)))
+      .gap(Is(@ui.Space::px(S1_5)))
+      |> ignore
+      note_pin_node(head, fn() {
+        match marks_note_shown() {
+          Some((_, n, _, color)) => (n, color)
+          None => (0, 0L)
+        }
+      })
+      head.box(fn(t) {
+        t
+        .words(By(fn() {
+          marks_said()
+          match marks_note_shown() {
+            Some((_, _, what, _)) => what
+            None => ""
+          }
+        }))
+        .words_look(By(fn() {
+          let (size, _) = @ui.tree_theme().text_size(Meta)
+          { size, weight: 400, line: 18.0, wrap: false }
+        }))
+        .ink(Is(note_muted))
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    b.box(fn(row) {
+      row.row(Is(true)).lines_up(Is(Some(End))).gap(Is(@ui.Space::px(S0_5))) |> ignore
+      // 删除批注
+      note_key_node(row, "trash", 17.0, 0L, note_muted, pv("android-chat.annotate.remove"), fn() {
+        let id = marking.note
+        if id >= 0 {
+          marking.note = -1
+          marks_remove(id)
+          @ui.current().blur()
+        }
+      })
+      // the field, an old view's: as tall as it lays out (at least as a key is, its words in its middle)
+      row.box(fn(f) {
+        f.grow(Is(1.0)).padding(Is((8.0, 7.0, 8.0, 7.0))) |> ignore
+        @ui.old(f, fn(c) {
+          c.box(w=Fill(1.0), h=Fill(1.0), justify=JCenter, fn() {
+            c.editor(
+              "marks/note",
+              placeholder=pv("android-chat.annotate.write"),
+              font_size=16.0,
+              line=21.0,
+              max_lines=8,
+              plain=true,
+              color=note_ink,
+              placeholder_color=note_subtle,
+              caret_color=note_accent,
+              enter_sends=false,
+              field=marking.note_field,
+            )
+            |> ignore
+          })
+          |> ignore
+        })
+        .grow(Is(1.0))
+        .measured(By(fn() { marking.note_field.laid(font_size=16.0, line=21.0, max_lines=8) }), fn(l, w) {
+          let (lw, lh) = l.size(w)
+          // (as tall as a key at least, its 7 over and under round it: the old box's min_h)
+          (lw, if lh > 36.0 - 14.0 { lh } else { 36.0 - 14.0 })
+        })
+        |> ignore
+      })
+      |> ignore
+      // 完成
+      note_key_node(row, "check", 18.0, note_ink, note_bg, pv("android-chat.annotate.done"), fn() {
+        marks_note_done(@ui.current())
+      })
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// One of a note's round keys (note_box's) in `row`: 36 across and round, on `ground` (0: none), icon `icon` `size`
+/// across in `ink` in its middle, read out as a button `label`; pressed (its press let go on it), `press`.
+fn note_key_node(row : @view.View, icon : String, size : Double, ground : Int64, ink : Int64, label : String, press : () -> Unit) -> Unit {
+  let inset = (36.0 - size) / 2.0
+  row.box(fn(k) {
+    k
+    .width(Is(Some(36.0)))
+    .height(Is(Some(36.0)))
+    .radius(Is(18.0))
+    .ground(Is(ground))
+    .padding(Is((inset, inset, inset, inset)))
+    .presses(Is(true))
+    .says(Is(Some(@view.said(Button, label~))))
+    .on_press(press)
+    |> ignore
+    @sf.icon_node(k, icon, size, Is(ink)) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A note's pin (picture_pin's small one, 16): round in the mark's colour but for its corner at the foot towards the
+/// mark (2), its number in white in its middle (10, 650), as `pin` says (its number, its colour) as it changes.
+fn note_pin_node(parent : @view.View, pin : () -> (Int, Int64)) -> Unit {
+  let color = fn() {
+    marks_said()
+    pin().1
+  }
+  parent.box(fn(p) {
+    p.width(Is(Some(16.0))).height(Is(Some(16.0))).radius(Is(8.0)).ground(By(color)) |> ignore
+    // its pointed corner: a square over the round one at the foot towards the mark
+    p.box(fn(q) {
+      q.over(Is(true)).offset(Is((0.0, 8.0))).width(Is(Some(8.0))).height(Is(Some(8.0))).radius(Is(2.0)).ground(By(color))
+      |> ignore
+    })
+    |> ignore
+    // its number, in its middle
+    p.box(fn(m) {
+      m.over(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+      m.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+      m.box(fn(t) {
+        t
+        .words(By(fn() {
+          marks_said()
+          "\{pin().0}"
+        }))
+        .words_look(By(fn() { { size: 10.0, weight: 650, line: @ui.tree_theme().text_line * 10.0, wrap: false } }))
+        .ink(Is(0xFFFFFFFFL))
+        |> ignore
+      })
+      |> ignore
+      m.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+    })
+    |> ignore
+  })
   |> ignore
 }
