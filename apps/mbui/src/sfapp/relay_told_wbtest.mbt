@@ -104,3 +104,33 @@ fn relay_picked_then_escape(frames : Bool) -> (String, Int) raise {
 test "wide: a person pressed in the relay's @ menu, then Escape at once: put in once, not relayed, a frame between or none" {
   assert_eq((relay_picked_then_escape(false), relay_picked_then_escape(true)), (("看下 @pengxiao ", 0), ("看下 @pengxiao ", 0)))
 }
+
+///|
+/// ↓ to the second person in the @ menu (a frame drawn), then `key` (Enter or Tab) and Escape at once as the host
+/// hands them on, a frame between or none: the note then, and whether it was relayed.
+fn relay_keyed_then_escape(key : Int, frames : Bool) -> (String, Int) raise {
+  let calls : Array[Made] = []
+  let t = relay_mentions_tester(calls~)
+  t.key(@ui.key_code_down)
+  t.frame()
+  t.key_told(key, 0, t.time())
+  if frames {
+    t.frame()
+  }
+  t.key_told(@ui.key_escape, 0, t.time())
+  t.draw()
+  t.run_for(@kit.pop_out_ms)
+  (relaying.note.text(), named(calls, "chat.relay").length())
+}
+
+///|
+test "wide: the relay's @ menu, ↓ then Enter and Escape at once: the one chosen put in once, not relayed, a frame between or none" {
+  let picked = ("看下 @peter ", 0)
+  assert_eq((relay_keyed_then_escape(@ui.key_code_enter, false), relay_keyed_then_escape(@ui.key_code_enter, true)), (picked, picked))
+}
+
+///|
+test "wide: the relay's @ menu, ↓ then Tab and Escape at once: Tab puts the one chosen in, once, a frame between or none" {
+  let picked = ("看下 @peter ", 0)
+  assert_eq((relay_keyed_then_escape(@ui.key_tab, false), relay_keyed_then_escape(@ui.key_tab, true)), (picked, picked))
+}

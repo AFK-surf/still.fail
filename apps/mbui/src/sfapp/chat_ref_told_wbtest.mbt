@@ -67,3 +67,35 @@ test "desk composer: a chat pressed in its menu, then Escape at once: referenced
   let picked = (1, "看 @[首页的列表改成按天分组] ", 0, true)
   assert_eq((ref_picked_then_escape(false), ref_picked_then_escape(true)), (picked, picked))
 }
+
+///|
+/// The chat chosen in the menu (↓ ↑ round to the first, frames drawn), then `key` (Enter or Tab) and Escape at once as
+/// the host hands them on, a frame between or none: as ref_picked_then_escape says.
+fn ref_keyed_then_escape(key : Int, frames : Bool) -> (Int, String, Int, Bool) raise {
+  let calls : Array[Made] = []
+  let (t, _, src) = ref_menu_tester(calls~)
+  t.key(@ui.key_code_down)
+  t.key(@ui.key_code_up)
+  t.frame()
+  t.key_told(key, 0, t.time())
+  if frames {
+    t.frame()
+  }
+  t.key_told(@ui.key_escape, 0, t.time())
+  t.draw()
+  let made = named(calls, "chat.ref")
+  t.draw()
+  (made.length(), desk_words(src), named(calls, "chat.send").length(), t.ctx().editor_focused(@sfpages.composer_field_key))
+}
+
+///|
+test "desk composer: its menu of chats, Enter and Escape at once: the one chosen referenced once, its mark in, nothing sent, the field keeping the focus, a frame between or none" {
+  let picked = (1, "看 @[首页的列表改成按天分组] ", 0, true)
+  assert_eq((ref_keyed_then_escape(@ui.key_code_enter, false), ref_keyed_then_escape(@ui.key_code_enter, true)), (picked, picked))
+}
+
+///|
+test "desk composer: its menu of chats, Tab and Escape at once: Tab puts the one chosen in (the focus staying in the field), once, a frame between or none" {
+  let picked = (1, "看 @[首页的列表改成按天分组] ", 0, true)
+  assert_eq((ref_keyed_then_escape(@ui.key_tab, false), ref_keyed_then_escape(@ui.key_tab, true)), (picked, picked))
+}

@@ -268,6 +268,7 @@ fn made_forget() -> Unit {
   made_roots.clear()
   made_placed.clear()
   made_presses.clear()
+  keys_taken.clear()
 }
 
 ///|
@@ -415,6 +416,52 @@ pub fn Ctx::on_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
   }
   self.takes_presses(id)
   made_presses[id] = f
+}
+
+///|
+/// What a part said the keys it takes do (Ctx::on_key), by its key, and the build that last said it (or put the part
+/// back unbuilt with it).
+priv struct KeysTaken {
+  take : (Int, Int) -> Bool
+  mut build : Int
+}
+
+///|
+// kept across runs: said as each build builds what takes them, let go as a build does not
+let keys_taken : Map[String, KeysTaken] = {}
+
+///|
+/// The keys the part being built takes as each comes (a menu over a field it has the focus of: ↑ ↓ to choose, Enter
+/// to put the one chosen in): `take` given each key (its code and what is held with it) as it comes, outside any build,
+/// before the focus or the frame sees it, saying whether it took it (taken, nothing else sees it). Said each build it is
+/// built (kept unbuilt with its part, as it was); a build that does not say it has let it go. `key` in the scope it is
+/// asked in.
+pub fn Ctx::on_key(self : Ctx, key : String, take : (Int, Int) -> Bool) -> Unit {
+  let k = key + "\u{2}" + self.id(key).to_string()
+  let w = { take, build: self.build_no }
+  keys_taken[k] = w
+  built_used(fn() { w.build = g().build_no })
+}
+
+///|
+/// A key come (`code`, `mods`): given to what the last build said takes keys, the first to take it having it.
+fn keys_taken_now(code : Int, mods : Int) -> Bool {
+  let last = builds_made.val
+  let gone : Array[String] = []
+  let mut took = false
+  keys_taken.each(fn(k, w) {
+    if w.build < last {
+      gone.push(k)
+    } else if !took {
+      @signals.start_batch()
+      took = @signals.untracked(fn() { (w.take)(code, mods) })
+      @signals.end_batch()
+    }
+  })
+  for k in gone {
+    keys_taken.remove(k)
+  }
+  took
 }
 
 ///|

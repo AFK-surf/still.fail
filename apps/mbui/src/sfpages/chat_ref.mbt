@@ -30,18 +30,28 @@ fn ref_menu(
           toast_later(@sf.t("web-main.composer.refFailed", args=[("title", item.title), ("error", why)]))
         })
       }
-      let mut keyed = false
+      // ↑ ↓ Enter Tab as each comes, before the field sees it: an Escape after them, before a frame, closes the menu,
+      // not what they chose
       if n > 0 {
-        if c.key_pressed(@ui.key_code_down, in_field=true) {
-          @sfbase.refs_active(w.key, n, by=1) |> ignore
-          keyed = true
-        } else if c.key_pressed(@ui.key_code_up, in_field=true) {
-          @sfbase.refs_active(w.key, n, by=-1) |> ignore
-          keyed = true
-        }
-        if c.key_pressed(@ui.key_code_enter, in_field=true) || c.key_pressed(@ui.key_tab, in_field=true) {
-          pick(chats[@sfbase.refs_active(w.key, n)])
-        }
+        c.on_key(key + "/" + w.key, fn(code, mods) {
+          if mods != 0 {
+            false
+          } else if code == @ui.key_code_down || code == @ui.key_code_up {
+            @sfbase.refs_active(w.key, n, by=if code == @ui.key_code_down { 1 } else { -1 }) |> ignore
+            ref_keyed.val = w.key
+            true
+          } else if code == @ui.key_code_enter || code == @ui.key_tab {
+            pick(chats[@sfbase.refs_active(w.key, n)])
+            true
+          } else {
+            false
+          }
+        })
+      }
+      // (moved to by the keys since the frame before: in view where the menu scrolls)
+      let keyed = ref_keyed.val == w.key
+      if keyed {
+        ref_keyed.val = ""
       }
       // Escape (or a press away from the composer): closed for this `@`, at the moment of what dismissed it
       let shown : Ref[Bool] = Ref(true)
@@ -83,6 +93,11 @@ fn ref_menu(
   }
   open
 }
+
+///|
+/// The draft whose `@` menu ↑ or ↓ chose another in since it was last built ("" none): what it shows it brings into
+/// view.
+let ref_keyed : Ref[String] = Ref("")
 
 ///|
 /// The composer's `@` menu's key (its popover's; its panel `/panel`).

@@ -232,26 +232,37 @@ fn relay_mention_menu(c : @ui.Ctx, src : Source, mentions : Array[Json], focused
     relaying.note.set(text(Some(p), "note"))
     relay_focus.val = "relay/note"
   }
-  let mut keyed = false
+  // ↑ ↓ Enter Tab as each comes, before the field sees it: an Escape after them, before a frame, closes the menu, not
+  // what they chose
   if open {
-    if c.key_pressed(@ui.key_code_down, in_field=true) {
-      relay_mention_active(n, by=1) |> ignore
-      keyed = true
-    } else if c.key_pressed(@ui.key_code_up, in_field=true) {
-      relay_mention_active(n, by=-1) |> ignore
-      keyed = true
-    }
-    if c.key_pressed(@ui.key_code_enter, in_field=true) || c.key_pressed(@ui.key_tab, in_field=true) {
-      pick(mentions[relay_mention_active(n)])
-    }
+    c.on_key(key, fn(code, mods) {
+      if mods != 0 {
+        false
+      } else if code == @ui.key_code_down || code == @ui.key_code_up {
+        relay_mention_active(n, by=if code == @ui.key_code_down { 1 } else { -1 }) |> ignore
+        relay_keyed.val = true
+        true
+      } else if code == @ui.key_code_enter || code == @ui.key_tab {
+        pick(mentions[relay_mention_active(n)])
+        true
+      } else {
+        false
+      }
+    })
   }
+  // (moved to by the keys since the frame before: in view where the menu scrolls)
+  let keyed = relay_keyed.val
+  relay_keyed.val = false
   let anchor = c.id("relay/note/field")
   // Escape (or a press away): closed for this `@`, at the moment of what dismissed it
-  let pressed_keys = keyed
   c.with_dismissed(fn(_) { relay_mentions_close() }, fn() {
-    relay_mentions_pop(c, src, key, open, anchor, mentions, n, pressed_keys, pick) |> ignore
+    relay_mentions_pop(c, src, key, open, anchor, mentions, n, keyed, pick) |> ignore
   })
 }
+
+///|
+/// Whether ↑ or ↓ chose another in the @ menu since it was last built (what it shows it brings into view).
+let relay_keyed : Ref[Bool] = Ref(false)
 
 ///|
 /// relay_mention_menu's popover: the people, under the note.

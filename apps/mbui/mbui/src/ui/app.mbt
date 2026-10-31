@@ -1630,6 +1630,10 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
   }
   took_input("key", h_now(), [code.to_double(), mods.to_double()])
   hand_event()
+  // (taken by what said it takes it, at its moment: Ctx::on_key)
+  if keys_taken_now(code, mods) {
+    return
+  }
   key_in(code, mods)
   // (Escape to the topmost layer it dismisses, at its moment: overlay.mbt)
   if code == key_escape {
