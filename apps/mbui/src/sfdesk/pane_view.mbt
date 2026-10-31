@@ -567,13 +567,45 @@ pub fn pane_seen() -> (Array[@view.NodeId], Double)? {
 /// Where the block's move committed has the block at `t` (how far across it is drawn, the column it takes), worked out
 /// of the move alone, for a test; None where none is committed.
 pub fn pane_fold_at(t : Double) -> (Double, Double)? {
+  match pane_look_at(t) {
+    Some(f) => Some((f.x, f.col))
+    None => None
+  }
+}
+
+///|
+/// Where the block's move committed has, at `t`, the block's margin at its right (shown a while, past the column), how
+/// far the page is moved aside, where the edge stands, how much of the sidebar shows; for a test, None where none is
+/// committed.
+pub fn pane_reach_at(t : Double) -> (Double, Double, Double, Double)? {
+  match pane_look_at(t) {
+    Some(f) => Some((f.mr, f.aside, f.edge, f.showing))
+    None => None
+  }
+}
+
+///|
+/// Where the block's last move committed set out from (how far across, the column), for a test.
+pub fn pane_fold_from() -> (Double, Double)? {
+  match fold_goes.from {
+    Some(f) => Some((f.x, f.col))
+    None => None
+  }
+}
+
+///|
+fn pane_look_at(t : Double) -> FoldLook? {
   match (fold_goes.from, fold_goes.to) {
-    (Some(a), Some(b)) => {
-      let f = if fold_goes.way.goes_at(t) { fold_mix(a, b, fold_goes.way.value_at(t)) } else { b }
-      Some((f.x, f.col))
-    }
+    (Some(a), Some(b)) =>
+      Some(if fold_goes.way.goes_at(t) { fold_mix(a, b, fold_goes.way.value_at(t)) } else { b })
     _ => None
   }
+}
+
+///|
+/// The frame off the tape's node while it shows, for a test (what is due at a moment of its own, View::at_moment).
+pub fn pane_node() -> @view.View? {
+  fold_goes.node
 }
 
 ///|

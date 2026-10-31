@@ -842,6 +842,9 @@ fn tape_cover(n : @view.View, p : TapePane, room : () -> (Double, Double, Double
         })
         .gesture(
           @ui.press_slop,
+          // (a finger held still on it the long press's while: handed to what is under it, the panel's own words
+          // picked as it is brought over)
+          through=@ui.long_press_ms,
           press=fn(d) { down.val = Some((d.wx, d.at)) },
           tap=fn(d) {
             down.val = None
