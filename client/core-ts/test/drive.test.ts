@@ -231,7 +231,7 @@ test("the reader's settings are the core's: whole, each in its bounds, one chang
   await host.settle();
   const values = new Map();
   apply(host, values);
-  assert.deepEqual(v(values, 1).reader, { size: 20, line: 1.7, margin: 22, face: "sans", indent: true, paper: "follow" });
+  assert.deepEqual(v(values, 1).reader, { size: 16, line: 1.7, margin: 22, face: "sans", indent: true, paper: "follow" });
   call(core, ui, 2, "prefs.set", { reader: { size: 40, paper: "green" } });
   await host.settle();
   call(core, ui, 3, "prefs.set", { reader: { line: 1.93, paper: "nope" } });

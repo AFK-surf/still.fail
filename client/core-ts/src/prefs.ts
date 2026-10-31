@@ -25,7 +25,7 @@ type Map_ = Record<string, unknown>;
 
 /// How the drive's reader lays text out on this device (docs/drive.md): each number within its bounds, its default
 /// where none is kept; the papers and faces there are.
-const READER_NUMBERS = { size: [12, 32, 20], line: [1.2, 2.4, 1.7], margin: [8, 44, 22] } as const;
+const READER_NUMBERS = { size: [12, 32, 16], line: [1.2, 2.4, 1.7], margin: [8, 44, 22] } as const;
 const PAPERS = ["follow", "white", "green", "grey", "night"];
 const FACES = ["serif", "sans"];
 
