@@ -160,9 +160,10 @@ fn outflow_grant(c : @ui.Ctx, core : Core, station : String, gv : Json?) -> Unit
 }
 
 ///|
-/// 不允许 and 允许 at a request's end, 8 apart, past its rows' room.
+/// 不允许 and 允许 at a request's end, 8 apart, the last in its list card's foot corner concentric with it, as a small
+/// panel's buttons stand (panel_corner_foot: a list card's corner and padding are a small panel's).
 // kept across runs: a value (no field of it changes)
-let outflow_answer : @ui.Style = @ui.css("row gap=S2 align=ACenter justify=JEnd px=S3 py=S2_5")
+let outflow_answer : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter justify=JEnd pt=S2_5").then(@sf.panel_corner_foot())
 
 ///|
 /// The programs granted the station's data, and those asking for it, as the core holds them: none from a station from

@@ -43,7 +43,7 @@ let corner_modes : Array[String] = [
   "files", "files-add-folder", "files-clash", "files-columns", "files-list", "files-preview", "files-split", "files-transfers",
   "files-tree", "place-stations", "place-profiles", "reader", "reader-bars", "reader-contents", "reader-layout", "reader-md", "newchat", "newchat-files", "newchat-lend", "share-card", "share-card-dark", "share-card-poster", "share-card-receipt", "share-card-terminal",
   "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station", "player-audio", "player-ended",
-  "player-opening", "player-video", "service", "service-restart", "service-sized", "service-stopped", "share-in",
+  "player-failed", "player-opening", "player-video", "service", "service-restart", "service-sized", "service-stopped", "share-in",
   "share-in-files", "share-in-stations", "lock-checking", "lock-code", "lock-failed", "lock-finding", "lock-nocode",
   "lock-none", "lock-refused", "lock-security", "lock-waiting", "lock-wrong", "screen-agent-driving",
   "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",

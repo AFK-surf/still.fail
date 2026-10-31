@@ -251,11 +251,11 @@ let foot_fills : Ref[Bool] = { val: false }
 let on_night : Ref[Bool] = { val: false }
 
 ///|
-/// A button's height by the native input: as tall as everything pressed is (a row, a field, a search; the theme's
-/// rows' pick: 34 with keyboard and mouse, 44 with touch): one height, not a button's of its own (2026-10-30 用户「为啥
-/// 会有一会儿 34 一会儿 36……搞这么多标准干啥」).
+/// A button's height: 34 on every screen with either native input, as keyboard and mouse's rows are (the user,
+/// 2026-10-31: a finger's 44 「太大了」「我们现在发送按钮也没那么大」「按钮既然缩，那就跟大屏一致呗」「我们本就大屏小屏都支持
+/// 触控」: drawn 44, one in a card's foot corners stood 4 from its edges); its press reaching the 44 every press has.
 pub fn button_height() -> Double {
-  theme().rows.pick
+  menu_row_min
 }
 
 ///|
@@ -892,10 +892,11 @@ pub fn page_head(
 
 ///|
 /// A page card of words (pages.css.ts card): card_pad in from every side, round by the ladder's card step; a solid
-/// button in its foot corner stands there itself (foot_reach), its corner the card's whatever is in it.
-pub fn card(c : @ui.Ctx, gap? : Double = 14.0, fill? : Bool = false, body : () -> Unit) -> Int {
+/// button in its foot corner stands there itself (foot_reach), its corner the card's whatever is in it; `ground` other
+/// than the theme's card (over a picture: a player's).
+pub fn card(c : @ui.Ctx, gap? : Double = 14.0, fill? : Bool = false, ground? : Int64, body : () -> Unit) -> Int {
   let t = theme()
-  c.box(pad=card_pad, gap~, bg=t.p.card, radius=card_corner, w=if fill { card_across } else { Auto }, body)
+  c.box(pad=card_pad, gap~, bg=ground.unwrap_or(t.p.card), radius=card_corner, w=if fill { card_across } else { Auto }, body)
 }
 
 ///|

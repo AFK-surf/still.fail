@@ -15,16 +15,17 @@
 /// settings' bar they share with settings-adb; eight fewer with every row one least height, 36 with keyboard and mouse,
 /// a sidebar's rows no more 32 high, and words at a capsule's end held by their box, not as a mark by their middle; one
 /// more with newchat-lend swept, a phone's new chat's bar newchat has too; one more with settings-profiles-monthly swept,
-/// a phone's profiles' bar settings-profiles has too).
+/// a phone's profiles' bar settings-profiles has too; one more with player-failed swept, the player's bar its
+/// other screens have).
 let gaps_known : Map[String, Int] = {
   "zh rule 1": 0,
   "zh rule 2": 0,
   "zh rule 3": 0,
-  "zh rule 4": 75,
+  "zh rule 4": 76,
   "en rule 1": 0,
   "en rule 2": 0,
   "en rule 3": 0,
-  "en rule 4": 75,
+  "en rule 4": 76,
   "zh rule 5": 0,
   "en rule 5": 0,
   "zh rule 6": 0,

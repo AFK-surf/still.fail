@@ -303,6 +303,9 @@ pub(all) struct Thumb {
   /// where its list shows it with nothing over it (under the chat's bar, over its composer: note_list), top and
   /// bottom; None, nothing is drawn over it (a composer's tile)
   clear : (Double, Double)?
+  /// what it draws over its picture (a film's play mark, its name's band), drawn in its box at the opacity given:
+  /// carried by the picture as it flies, going as it leaves the thumbnail and coming back as it lands
+  over : (Double) -> Unit
 }
 
 ///|
@@ -315,6 +318,8 @@ pub(all) struct ThumbLook {
   id : Int
   /// the list it is in (note_list), "" none
   list : String
+  /// what it draws over its picture (Thumb's)
+  over : (Double) -> Unit
 }
 
 ///|
@@ -443,7 +448,7 @@ pub let pv_hidden : Ref[String] = { val: "" }
 ///|
 /// A thumbnail of the chat built this frame as node `node`, showing `picture` (FilePreview.kt viewerThumb): where it is
 /// laid out kept as it moves (@motion.measure), under the viewer too, for the viewer to fly from and back into; in
-/// chat list `list` (note_list), if it is in one.
+/// chat list `list` (note_list), if it is in one. `over`: what it draws over its picture, at an opacity (Thumb's).
 pub fn note_thumb(
   c : @ui.Ctx,
   id : String,
@@ -452,9 +457,10 @@ pub fn note_thumb(
   picture~ : String,
   letterbox? : Bool = false,
   list? : String = "",
+  over? : (Double) -> Unit = fn(_) {  },
 ) -> Unit {
   @motion.measure(c, node, "pv-thumb/" + id)
-  pv_thumbs[id] = { radius, letterbox, picture, id: c.node_id(node), list }
+  pv_thumbs[id] = { radius, letterbox, picture, id: c.node_id(node), list, over }
 }
 
 ///|
@@ -511,6 +517,7 @@ pub fn thumb_of(c : @ui.Ctx, id : String) -> Thumb? {
         letterbox: l.letterbox,
         picture: l.picture,
         seen: if l.id != 0 { c.rect_of(l.id) } else { None },
+        over: l.over,
         clear: match (pv_lists.get(l.list), @motion.measured_rect(c, "pv-list/" + l.list)) {
           (Some((bar, room)), Some((_, ly, _, lh))) => Some((ly + bar, ly + lh - room))
           _ => None
@@ -571,6 +578,23 @@ fn fly_way(t : Thumb, to : (Double, Double, Double, Double)?) -> (Double, Double
 ///|
 /// The viewer fading in and out where there is no thumbnail to grow from (FilePreview.css.ts fp: 140 ms).
 pub let pv_fade_ms : Double = 140.0
+
+///|
+/// How much faster than its flight what a thumbnail draws over its picture goes (Thumb's over): gone halfway.
+let flight_over_gone : Double = 2.0
+
+///|
+/// How far a film's flight has come (its ground as opaque) before the player's bars and controls begin to show: what
+/// the page under it says is hidden by then (a fill this opaque covers words: @ui's words over words), so that no frame
+/// shows the player's words over the page's, both seen.
+pub let bars_from : Double = 0.9
+
+///|
+/// How much of the player's bars and controls show with its flight `p` of the way in (or still in, going back): none
+/// till its ground is whole (bars_from), all once it is in.
+fn bars_share(p : Double) -> Double {
+  dmax(0.0, (p - bars_from) / (1.0 - bars_from))
+}
 
 ///|
 /// Two taps within this long are a double tap.
@@ -2105,6 +2129,9 @@ pub fn Viewer::draw_flight(
         if picture != "" {
           c.picture(picture, x=px - bx, y=py - by, w=pw, h=ph, max_px=stage_px) |> ignore
         }
+        // what the thumbnail draws over its picture (a film's play mark, its name's band), with it in its box: gone by
+        // halfway out, back from halfway in, as a row's content goes with its room (@ui.row_held_look)
+        (from.over)(dmax(0.0, 1.0 - flight_over_gone * p))
       })
       |> ignore
     })
@@ -2892,8 +2919,9 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
   }
   z.step()
   // flying: from the thumbnail's box to the picture's place, or back from where the player last drew it, on the black
-  // the chat's box has
-  if v.flies && (!v.closing || !v.leaving_grab) {
+  // the chat's box has; the player's bars and controls over it as far as it has come (as an image's bars are)
+  let flying = v.flies && (!v.closing || !v.leaving_grab)
+  if flying {
     let to = match v.fly_to {
       Some(r) if v.fly_back => Some(r)
       _ => v.video_rect(c)
@@ -2904,7 +2932,6 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
     }
     // (the player not up yet, its Esc not read: the viewer's, as it is over an image in flight)
     v.shut_on_escape(c)
-    return
   }
   let file : @sf.ViewerFile = {
     name: v.file.name,
@@ -2923,17 +2950,26 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
     save: fn() { v.ask_save(c) },
     facts: { width: v.file.width, height: v.file.height, duration: v.file.duration, frames: v.file.frames },
   }
-  @sf.player_view(
-    c,
-    m,
-    file,
-    [],
-    back_label=v.desk_back(src),
-    on_back=fn() { v.shut(c) },
-    on_go=fn(_) {  },
-    // (the chat's still where its picture will be, until its first frame shows)
-    still~,
-  )
+  let player = fn() {
+    @sf.player_view(
+      c,
+      m,
+      file,
+      [],
+      back_label=v.desk_back(src),
+      on_back=fn() { v.shut(c) },
+      on_go=fn(_) {  },
+      // (the chat's still where its picture will be, until its first frame shows)
+      still~,
+      flying~,
+    )
+  }
+  if flying {
+    let over = c.layer(player)
+    c.look(over, @ui.look(alpha=bars_share(v.flying())))
+  } else {
+    player()
+  }
 }
 
 ///|

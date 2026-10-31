@@ -446,6 +446,8 @@ public class MainActivity extends Activity {
         setBackEnabled(Host.backWanted);
         Host.resumed = true;
         Host.tellAppState();
+        // a newer build asked for while the person was away giving the leave to install it (Updates.resumed)
+        Updates.resumed();
         // whether it is over another app, said to the app as it changes (src/hostapi/system.mbt `over`)
         if (saidOver == null || saidOver != over()) {
             saidOver = over();

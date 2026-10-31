@@ -54,9 +54,17 @@ pub fn around(Double, Double) -> Double
 
 pub fn ask(String, String, (String) -> Unit, value? : String, placeholder? : String, hint? : String, secret? : Bool, empty? : Bool, from? : Anchor) -> Unit
 
+pub fn ask_buttons(@ui.Ctx, () -> Unit) -> Unit
+
+pub fn ask_buttons_across(@ui.Ctx, () -> Unit) -> Unit
+
 pub let ask_card_room : @ui.Style
 
 pub let ask_card_room_most : @ui.Style
+
+pub let ask_foot : @ui.Style
+
+pub fn ask_foot_lines() -> Double
 
 pub fn ask_here(String, String, (String) -> Unit, () -> Unit, value? : String, placeholder? : String, hint? : String) -> Unit
 
@@ -69,6 +77,14 @@ pub fn ask_line_mark() -> @ui.Style
 pub fn ask_line_start(Double) -> @ui.Style
 
 pub fn ask_line_words(@ui.TextStyle) -> @ui.TextStyle
+
+pub let ask_note : @ui.TextStyle
+
+pub let ask_title : @ui.TextStyle
+
+pub let ask_what : @ui.Style
+
+pub fn ask_words(@ui.Ctx, String, String, centred? : Bool) -> Unit
 
 pub fn at_head_end() -> Bool
 
@@ -170,7 +186,7 @@ pub fn capsule_room(Double, Double, less? : Double) -> @ui.Space
 
 pub let caption : @ui.TextStyle
 
-pub fn card(@ui.Ctx, gap? : Double, fill? : Bool, () -> Unit) -> Int32
+pub fn card(@ui.Ctx, gap? : Double, fill? : Bool, ground? : Int64, () -> Unit) -> Int32
 
 pub let card_across : @ui.Size
 
@@ -1162,6 +1178,8 @@ pub let notice_w : @ui.Len
 
 pub fn on_corner(Double, Double, room? : Double) -> Double
 
+pub fn on_the_night(() -> Unit) -> Unit
+
 pub let one_line : @ui.TextStyle
 
 pub fn one_of(@ui.Ctx, String, String, Array[(String, String)], (String) -> Unit, label? : String, placeholder? : String, disabled? : Bool) -> Unit
@@ -1418,7 +1436,7 @@ pub let player_speeds : Array[Double]
 
 pub let player_track_inset : Double
 
-pub fn player_view(@ui.Ctx, @kit.Media, ViewerFile, Array[String], back_label~ : String, on_back~ : () -> Unit, on_go~ : (String) -> Unit, still? : String) -> Unit
+pub fn player_view(@ui.Ctx, @kit.Media, ViewerFile, Array[String], back_label~ : String, on_back~ : () -> Unit, on_go~ : (String) -> Unit, still? : String, flying? : Bool) -> Unit
 
 pub fn player_view_let_go(String) -> Unit
 
