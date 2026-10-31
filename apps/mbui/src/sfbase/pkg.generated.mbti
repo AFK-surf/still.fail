@@ -2453,13 +2453,21 @@ pub(all) struct Mark {
 }
 pub fn Mark::bounds(Self) -> (Double, Double, Double, Double)
 pub fn Mark::distance(Self, Double, Double) -> Double
+pub fn Mark::dragged(Self, MarkHandle?, Double, Double) -> Self
+pub fn Mark::handles(Self, Double) -> Array[(MarkHandle, Double, Double)]
 pub fn Mark::moved(Self, Double, Double) -> Self
 pub fn Mark::numbered(Self) -> Bool
+pub fn Mark::scaled(Self, Double, Double, Double, Double) -> Self
 
 pub(all) enum MarkDrag {
   Drawing(Mark)
-  Moving(Int32, Double, Double, Mark, Int32, Array[Mark], Bool)
+  Moving(Int32, Double, Double, Mark, MarkHandle?, Array[Mark], Bool)
 }
+
+pub(all) enum MarkHandle {
+  Corner(Int32, Int32)
+  End(Int32)
+} derive(Eq)
 
 pub(all) enum MarkTool {
   Select
