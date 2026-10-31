@@ -53,6 +53,24 @@ function effortsOf(raw: unknown): string[] | undefined {
   return levels.length > 0 ? [...new Set(levels)] : undefined;
 }
 
+/// The entry a maker sells a model by (`id`, maker/model) in its own API (`offered`, its api.json models): the one of the
+/// model's own name; else the one it names as this model (`canonical_model_id`), as a maker may sell a model under
+/// another name (DeepSeek's deepseek-flash is deepseek-v4.1-flash-1017); else, for a name without a date, the one of
+/// its dated versions it sells (deepseek-v4.1-flash, as deepseek-v4.1-flash-1017). None where those differ in price.
+function sold(offered: unknown, id: string): Record<string, any> | null {
+  if (!isObject(offered)) return null;
+  const own = id.slice(id.indexOf("/") + 1);
+  if (isObject(offered[own])) return offered[own];
+  const entries = Object.values(offered).filter(isObject);
+  const named = (m: Record<string, any>) => (typeof m.canonical_model_id === "string" ? m.canonical_model_id.trim().toLowerCase() : "");
+  const lower = id.toLowerCase();
+  let found = entries.filter((m) => named(m) === lower);
+  if (found.length === 0) found = entries.filter((m) => named(m).startsWith(`${lower}-`) && /^[0-9]{4,}$/.test(named(m).slice(lower.length + 1)));
+  if (found.length === 0) return null;
+  const price = JSON.stringify(costOf(found[0]!.cost) ?? null);
+  return found.every((m) => JSON.stringify(costOf(m.cost) ?? null) === price) ? found[0]! : null;
+}
+
 /// The catalog from models.dev's canonical models (`canonical`, models.json) and its providers' (`providers`, api.json).
 export function catalog(canonical: Json, providers: Json): Record<string, Facts> {
   const out: Record<string, Facts> = {};
@@ -72,8 +90,8 @@ export function catalog(canonical: Json, providers: Json): Record<string, Facts>
     if (context !== undefined) f.context = context;
     const output = number(m.limit?.output);
     if (output !== undefined) f.output = output;
-    const made = providers?.[maker]?.models?.[own];
-    if (isObject(made)) {
+    const made = sold(providers?.[maker]?.models, id);
+    if (made !== null) {
       const efforts = effortsOf(made.reasoning_options);
       if (efforts) f.efforts = efforts;
       const cost = costOf(made.cost);
