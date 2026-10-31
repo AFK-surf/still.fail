@@ -248,3 +248,38 @@ pub fn Tree::press_focused_at(self : Tree, id : NodeId, at : Double) -> Bool {
 pub fn Tree::focus_asked_takes(self : Tree, id : NodeId) -> Bool {
   self.reads_out(id) && self.said_now(id.at) && self.can_focus(id)
 }
+
+///|
+/// Whether it takes input now (a press, a key, the focus): living, neither it nor what holds it leaving or said to take
+/// no press, under no modal layer that does not hold it. What reads it told as that changes, at the cause that changes
+/// it, once that is committed whole, whatever frames come. Its cell made as first read, let go with it.
+pub fn View::takes_input(self : View) -> Bool {
+  guard self.live() is Some(n) else { return false }
+  let s = match n.input_cell {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(!self.tree.pressless_at(self.at), same=fn(a, b) { a == b })
+      n.input_cell = Some(s)
+      if !self.tree.inputs_at.contains(self.at) {
+        self.tree.inputs_at.push(self.at)
+      }
+      s
+    }
+  }
+  s.get()
+}
+
+///|
+/// Each node whose taking input is read told it as it is now (View::takes_input): as what decides it changes (a modal
+/// layer, a node leaving, said to take no press), once the change is committed whole. Those let go dropped.
+fn Tree::inputs_told(self : Tree) -> Unit {
+  let live = self.inputs_at.filter(fn(at) { self.nodes[at].live && self.nodes[at].input_cell is Some(_) })
+  self.inputs_at.clear()
+  self.inputs_at.append(live)
+  for at in self.inputs_at {
+    match self.nodes[at].input_cell {
+      Some(s) => s.set(!self.pressless_at(at))
+      None => ()
+    }
+  }
+}

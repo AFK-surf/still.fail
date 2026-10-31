@@ -22,3 +22,43 @@ let tree_corner_roots : @signals.Signal[CornerRoots] = @signals.signal(
 pub fn corner_of(k : CornerOf) -> @view.Live[Double] {
   By(fn() { k.radius(tree_corner_roots.get()) })
 }
+
+///|
+/// The theme the window's tree's nodes are drawn in (what the old views are built in for the window's width), as the
+/// frame began (view_frame); told as it changes (another width's, the system's dark coming), what read it worked out
+/// again.
+// kept across runs: set as each frame begins
+let tree_theme_said : @signals.Signal[Theme?] = @signals.signal(None, same=fn(a, b) {
+  match (a, b) {
+    (Some(x), Some(y)) => physical_equal(x, y)
+    (None, None) => true
+    _ => false
+  }
+})
+
+///|
+/// The theme a node of the window's tree is drawn in now: the app's, as it tells it (set_tree_theme: what its old
+/// views are built in, read as it changes); an app that tells none, the window's as each frame begins (tree_theme_said;
+/// before the first frame, the window's).
+pub fn tree_theme() -> Theme {
+  match tree_theme_of.val {
+    Some(f) => return f()
+    None => ()
+  }
+  match tree_theme_said.get() {
+    Some(t) => t
+    None => g().theme
+  }
+}
+
+///|
+/// The app's theme for its window's tree (set_tree_theme), none told.
+// kept across runs: told by the app as its tree is made; let go as a tree is (view_forget)
+let tree_theme_of : Ref[(() -> Theme)?] = Ref(None)
+
+///|
+/// The theme the window's tree is drawn in, as the app has it (what its old views are built in: Ctx::with_theme's),
+/// read where it is drawn so it follows as it changes (a signal read in `f`): told as the tree is made.
+pub fn set_tree_theme(f : () -> Theme) -> Unit {
+  tree_theme_of.val = Some(f)
+}

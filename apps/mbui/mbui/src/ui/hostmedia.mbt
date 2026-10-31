@@ -298,6 +298,23 @@ fn MarkedImage::outside_id(self : MarkedImage) -> Int {
 }
 
 ///|
+/// Whether the host has said it is drawn (or could not be), the PNG not taken: read as the host's word comes (its
+/// answers' signal, answer_here), what takes it (MarkedImage::made) then done once by whoever follows this.
+pub fn MarkedImage::ready(self : MarkedImage) -> Bool {
+  answer_here(outside_marks, self.outside_id()) &&
+  (match self.host {
+    Some(h) => h.drawn()
+    None => self.png() is Some(_)
+  })
+}
+
+///|
+/// Which drawing it is, from 1 (the host's id of it, a Tester's its place): another drawing another, whatever it draws.
+pub fn MarkedImage::id(self : MarkedImage) -> Int {
+  self.outside_id()
+}
+
+///|
 /// The PNG once drawn (Some(empty): it could not be), None while it is drawn; taken once.
 pub fn MarkedImage::made(self : MarkedImage) -> Bytes? {
   if !answer_here(outside_marks, self.outside_id()) {
@@ -318,7 +335,7 @@ fn MarkedImage::png(self : MarkedImage) -> Bytes? {
     None =>
       match fake.val {
         Some(f) if self.fake >= 0 && self.fake < f.marks.length() =>
-          if g().frame_no > f.marks[self.fake].1 {
+          if f.marks_by_hand || g().frame_no > f.marks[self.fake].1 {
             Some(f.marks_out[self.fake])
           } else {
             None
@@ -496,3 +513,18 @@ fn fake_view_said(f : FakeHost, line : String) -> Bool {
   }
 }
 
+
+///|
+/// The marks' drawings from now on answered as the test says (Tester::marks_answer), as a host answers at its own
+/// moment, not by the frame after each is asked.
+pub fn Tester::marks_by_hand(self : Tester) -> Unit {
+  self.fake.marks_by_hand = true
+}
+
+///|
+/// The host's word that drawing `n` of the marks (from 1, in the order they were asked: MarkedImage::id) is drawn, now,
+/// as its event comes (on_outside): no frame drawn for it here.
+pub fn Tester::marks_answer(self : Tester, n : Int) -> Unit {
+  ignore(self)
+  on_outside(outside_marks, n, 1)
+}

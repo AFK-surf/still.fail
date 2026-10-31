@@ -175,8 +175,11 @@ pub(all) struct Viewer {
   /// a file told of (not shown): asked for (to save)
   mut asked : Bool
   mut save_after : Bool
-  /// a chat's file asked to be downloaded by the core (downloads.mbt), said to it in the next frame
+  /// a chat's file asked to be downloaded by the core (downloads.mbt), said to it in the next frame (the old bars');
+  /// told as it is asked (`asked_told`: the window's tree's viewer says it to the core then, and saves what was asked
+  /// for to be saved as its whole comes, each once)
   mut download_asked : Bool
+  asked_told : @signals.Signal[Int]
   /// …or to be installed (an APK)
   mut install_after : Bool
   /// the bars shown: till a tap (a click) hides them, and another brings them back (the user, 2026-10-28); told as it
@@ -688,6 +691,7 @@ pub fn new_viewer(
     install_after: false,
     awake: true,
     awake_told: @signals.signal(0),
+    asked_told: @signals.signal(0),
     near_bar: false,
     zoom: @kit.Zoom::new(),
     // (a film edge to edge, enlarged, as the player puts it: what it flies to and from)
@@ -1940,11 +1944,15 @@ pub fn Viewer::ask_save(self : Viewer, c : @ui.Ctx) -> Unit {
   match self.bytes.get() {
     // kept as keep_way_of says, said once the host has answered (keep.mbt)
     Some(b) => keep_bytes(c, self.file.name, self.mime, b)
-    None if self.chat_file() => self.download_asked = true
+    None if self.chat_file() => {
+      self.download_asked = true
+      self.asked_told.set(@signals.untracked(fn() { self.asked_told.get() }) + 1)
+    }
     None => {
       self.error.set(None)
       self.asked = true
       self.save_after = true
+      self.asked_told.set(@signals.untracked(fn() { self.asked_told.get() }) + 1)
     }
   }
 }

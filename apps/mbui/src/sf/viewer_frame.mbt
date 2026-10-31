@@ -40,6 +40,13 @@ pub fn viewer_frame_bar(
 }
 
 ///|
+/// Whether a file opened `w` wide has the bar floating at its top (viewer_frame_bar's: the Small tier, no wider than a
+/// phone's, viewer_head_node's as nodes), not the bar across the top.
+pub fn viewer_bar_floats(w : Double) -> Bool {
+  layout(w) is Small && w <= viewer_small_w
+}
+
+///|
 /// The bar floating at the top (fpHead): page glass, its corner 14, 44 high, the room's top or 16 down (8 under 640),
 /// 16 in from the window's sides at most (8 under 640) and 1080 wide at most; the name first (its kind and size after
 /// it, not under 640), cut short before the tools give way, the tools and × at its end.

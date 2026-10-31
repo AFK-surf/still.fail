@@ -470,6 +470,8 @@ pub fn set_platform(Int32?) -> Unit
 
 pub fn set_pointing(Pointing?) -> Unit
 
+pub fn set_tree_theme(() -> Theme) -> Unit
+
 pub fn set_view_app((@view.View) -> Unit, around? : (Ctx) -> Unit) -> Unit
 
 pub fn set_web_lines(Bool) -> Unit
@@ -558,6 +560,8 @@ pub let tracker_horizon_ms : Double
 
 pub fn tree_cause() -> Double?
 
+pub fn tree_theme() -> Theme
+
 pub fn update_apply(String) -> Unit
 
 pub fn update_fetch(String, String, Double, String, Bool) -> Unit
@@ -633,12 +637,6 @@ pub(all) enum Align {
   AEnd
   AStretch
 } derive(Eq)
-
-pub(all) enum Along {
-  Start
-  Middle
-  End
-} derive(Eq, Show, @debug.Debug)
 
 type BackEntry
 
@@ -1166,7 +1164,7 @@ pub fn Ctx::paint_rect(Self, Double, Double, Double, Double, radius~ : Double, I
 pub fn Ctx::passes(Self, Int32) -> Unit
 pub fn Ctx::paths_into(Self, Int32, String) -> Array[DroppedPath]?
 pub fn Ctx::picture(Self, String, x~ : Double, y~ : Double, w~ : Double, h~ : Double, w_? : Size, h_? : Size, max_px? : Int32) -> Int32
-pub fn Ctx::place(Self, (Double, Double, Double, Double), Double, Double, side? : Side, along? : Along, offset? : Double, along_offset? : Double, padding? : Double, flip? : Bool) -> (Double, Double, Side)
+pub fn Ctx::place(Self, (Double, Double, Double, Double), Double, Double, side? : @view.Side, along? : @view.Along, offset? : Double, along_offset? : Double, padding? : Double, flip? : Bool) -> (Double, Double, @view.Side)
 pub fn Ctx::place_by_size(Self, Int32, (Double, Double) -> (Double, Double)) -> Unit
 pub fn Ctx::place_most(Self, padding? : Double) -> Double
 pub fn Ctx::pointer(Self) -> (Double, Double, Bool)
@@ -1668,7 +1666,9 @@ pub fn Made::on_press(Self, () -> Unit) -> Self
 pub struct MarkedImage {
   // private fields
 }
+pub fn MarkedImage::id(Self) -> Int32
 pub fn MarkedImage::made(Self) -> Bytes?
+pub fn MarkedImage::ready(Self) -> Bool
 
 type MoveRun
 
@@ -2066,17 +2066,11 @@ pub(all) enum Shadow {
   Xl
   Cast(Double, Double, Int64)
 } derive(Eq, Show, @debug.Debug)
+pub fn Shadow::blur_y(Self) -> (Double, Double)
 
 type Shaped
 
 type Shot
-
-pub(all) enum Side {
-  Top
-  Right
-  Bottom
-  Left
-} derive(Eq, Show, @debug.Debug)
 
 pub struct SiteReply {
   // private fields
@@ -2394,6 +2388,8 @@ pub fn Tester::live_image(Self, Int32) -> Int32?
 pub fn Tester::local_acts(Self) -> Array[String]
 pub fn Tester::locate(Self, String) -> Array[(Double, Double)]
 pub fn Tester::look_of(Self, String) -> (Double, Double, Double)?
+pub fn Tester::marks_answer(Self, Int32) -> Unit
+pub fn Tester::marks_by_hand(Self) -> Unit
 pub fn Tester::marks_drawn(Self) -> Array[String]
 pub fn Tester::marks_make(Self, Bytes) -> Unit
 pub fn Tester::messages_taken(Self) -> Int32
@@ -2765,6 +2761,8 @@ pub struct WordsPiece {
 // Type aliases
 pub using @view {type Action}
 
+pub using @view {type Along}
+
 pub using @view {type BackStep}
 
 pub using @view {type Check}
@@ -2782,6 +2780,8 @@ pub using @paint {type Glass}
 pub using @view {type Role}
 
 pub using @paint {type Shape}
+
+pub using @view {type Side}
 
 // Traits
 trait ClipNumbers

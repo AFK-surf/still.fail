@@ -475,6 +475,9 @@ fn app_ground(c : @ui.Ctx, src : Source) -> @ui.Made {
 /// theme, the window's sides, the layers over it).
 pub fn app_tree(src : Source) -> (@view.View) -> Unit {
   fn(root) {
+    // (its nodes drawn in still.fail's theme, the one its old views are built in, as light or dark is set: view's
+    // with_theme)
+    @ui.set_tree_theme(@sf.ui_theme_now)
     // (the window's sides beside the system's bars kept, all of it between: sides.mbt)
     root.sides(By(fn() { sides_room() })) |> ignore
     // over another app (a share sheet over the app it came from: share.mbt): nothing but the sheet, an old view of its

@@ -8,12 +8,13 @@ import {
   "mbui/pixels",
   "mbui/signals",
   "mbui/ui",
+  "mbui/view",
   "moonbitlang/core/debug",
   "moonbitlang/core/ref",
 }
 
 // Values
-pub fn about(@ui.Ctx, String, String, label~ : String, side? : @ui.Side) -> Unit
+pub fn about(@ui.Ctx, String, String, label~ : String, side? : @view.Side) -> Unit
 
 pub let accent : @ui.TextStyle
 
@@ -237,7 +238,7 @@ pub fn choice_row(@ui.Ctx, String, Bool, String, body? : () -> Unit, note? : Str
 
 pub fn choices(@ui.Ctx, String, String, Array[(String, String, String)], label? : String, icon? : (String) -> Unit, extra? : (String) -> (() -> Unit)?, disabled? : Array[String], note? : (String) -> Unit) -> String
 
-pub fn chooser(@ui.Ctx, String, String, Array[@kit.Entry], Bool, side? : @ui.Side, lead? : (Int64) -> Unit) -> @kit.Menu
+pub fn chooser(@ui.Ctx, String, String, Array[@kit.Entry], Bool, side? : @view.Side, lead? : (Int64) -> Unit) -> @kit.Menu
 
 pub let chooser_chevron : Double
 
@@ -467,7 +468,7 @@ pub fn drawable_icon(String) -> String
 
 pub fn drawable_pixels(String, Int32, tint? : Int64) -> (Int32, Int32, FixedArray[Byte])?
 
-pub fn dropdown(@ui.Ctx, String, Bool, Int32, Array[@kit.Entry], Map[String, String], Double, submenu? : Bool, side? : @ui.Side, along? : @ui.Along, offset? : Double, at? : (Double, Double, Double, Double), row_end? : (@ui.Ctx, @kit.MenuItemState) -> Unit, danger? : Array[String], marks? : Map[String, (@ui.Ctx, Double) -> Unit], notes? : Map[String, String], check_end? : Bool) -> @kit.Menu
+pub fn dropdown(@ui.Ctx, String, Bool, Int32, Array[@kit.Entry], Map[String, String], Double, submenu? : Bool, side? : @view.Side, along? : @view.Along, offset? : Double, at? : (Double, Double, Double, Double), row_end? : (@ui.Ctx, @kit.MenuItemState) -> Unit, danger? : Array[String], marks? : Map[String, (@ui.Ctx, Double) -> Unit], notes? : Map[String, String], check_end? : Bool) -> @kit.Menu
 
 pub let dur_ms : Double
 
@@ -489,7 +490,7 @@ pub fn edge_reach(Double) -> (Double, Double)
 
 pub fn edge_row(Surface, Double, first? : Bool, last? : Bool) -> @ui.Style
 
-pub fn edge_tip(@ui.Ctx, String, Int32, String, side? : @ui.Side) -> Unit
+pub fn edge_tip(@ui.Ctx, String, Int32, String, side? : @view.Side) -> Unit
 
 pub let edge_tip_gap : Double
 
@@ -677,7 +678,7 @@ pub let hairline : @ui.Len
 
 pub fn hand_stroke(@ui.Ctx, StrokeShape, Double, Double, Int64) -> Int32
 
-pub fn handle_drag(@ui.Ctx, Int32, Double, min~ : Double, max~ : Double, edge? : @ui.Side) -> Resized
+pub fn handle_drag(@ui.Ctx, Int32, Double, min~ : Double, max~ : Double, edge? : @view.Side) -> Resized
 
 pub let handle_out : Double
 
@@ -1015,7 +1016,7 @@ pub let media_track_share : Double
 
 pub let medium_from : Double
 
-pub fn menu(Array[MenuItem?], from~ : Beside, title? : String, along? : @ui.Along, gone? : () -> Unit) -> Unit
+pub fn menu(Array[MenuItem?], from~ : Beside, title? : String, along? : @view.Along, gone? : () -> Unit) -> Unit
 
 pub fn menu_along(@ui.Ctx, Double) -> Double
 
@@ -1269,7 +1270,7 @@ pub let pane_round : @ref.Ref[FixedArray[@paint.CornerOf]?]
 
 pub fn pane_top_right() -> Double?
 
-pub fn panel(String, (@ui.Ctx, () -> Unit) -> Unit, from~ : Anchor, w? : Double, fits? : Bool, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, grows? : Bool, focus? : Bool, ruled? : Bool, lists? : Bool, form? : Bool, field? : String, stage? : Bool, above? : (@ui.Ctx) -> Unit, head_end? : (@ui.Ctx) -> Unit, side? : @ui.Side, along? : @ui.Along, offset? : Double) -> Unit
+pub fn panel(String, (@ui.Ctx, () -> Unit) -> Unit, from~ : Anchor, w? : Double, fits? : Bool, description? : String, foot? : (@ui.Ctx, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, grows? : Bool, focus? : Bool, ruled? : Bool, lists? : Bool, form? : Bool, field? : String, stage? : Bool, above? : (@ui.Ctx) -> Unit, head_end? : (@ui.Ctx) -> Unit, side? : @view.Side, along? : @view.Along, offset? : Double) -> Unit
 
 pub fn panel_bleed() -> @ui.Style
 
@@ -1385,7 +1386,7 @@ pub let phone_page : @ui.Style
 
 pub let phone_row_in : @ui.Space
 
-pub fn pick(String, Array[Choice], String, (String) -> Unit, from~ : Beside, along? : @ui.Along, search? : Bool) -> Unit
+pub fn pick(String, Array[Choice], String, (String) -> Unit, from~ : Beside, along? : @view.Along, search? : Bool) -> Unit
 
 pub fn pick_high() -> @ui.Style
 
@@ -1601,7 +1602,9 @@ pub let ref_menu_corner : @ui.Radius
 
 pub let ref_row_min_h : @ui.Len
 
-pub fn resize_handle(@ui.Ctx, String, Double, min~ : Double, max~ : Double, label~ : String, edge? : @ui.Side, press? : String, over? : Bool, active? : Bool) -> Resized
+pub fn resize_handle(@ui.Ctx, String, Double, min~ : Double, max~ : Double, label~ : String, edge? : @view.Side, press? : String, over? : Bool, active? : Bool) -> Resized
+
+pub fn ring_shapes(Double, Double, Int64) -> Array[@paint.Shape]
 
 pub let ring_turn_keep : Double
 
@@ -1953,13 +1956,15 @@ pub fn theme() -> Theme
 
 pub fn tile_whole() -> Bool
 
-pub fn tip(@ui.Ctx, String, Int32, String, side? : @ui.Side, shortcut? : String, shown? : Bool) -> Unit
+pub fn tip(@ui.Ctx, String, Int32, String, side? : @view.Side, shortcut? : String, shown? : Bool) -> Unit
 
 pub let tip_delay_ms : Double
 
 pub fn tip_look(@ui.Ctx, String, String) -> Unit
 
 pub let tip_max : @ui.Len
+
+pub fn tip_node(TipLayer, @view.View, () -> String, side? : @view.Side) -> TipHand
 
 pub let title : @ui.TextStyle
 
@@ -2007,7 +2012,13 @@ pub fn tool_button(@ui.Ctx, String, String, String, on_press~ : () -> Unit, drop
 
 pub fn tool_mark(@ui.Ctx, String, Double) -> Unit
 
+pub fn tool_node(@view.View, () -> ToolSaid, () -> ViewerInk, @view.Live[Double], () -> Unit, tip? : TipLayer) -> @view.View
+
 pub fn tool_of(String, () -> Unit, drop? : Int32, instead? : Array[MenuItem]) -> Tool
+
+pub fn tool_ring_node(@view.View, () -> Double, () -> String, () -> ViewerInk, @view.Live[Double]) -> @view.View
+
+pub let tool_side : Double
 
 pub let tools_apart : Double
 
@@ -2028,6 +2039,8 @@ pub let touch_list_row_h : Double
 pub let track_h : @ui.Len
 
 pub fn ui_theme() -> @ui.Theme
+
+pub fn ui_theme_now() -> @ui.Theme
 
 pub fn under_bar_room() -> @ui.Space
 
@@ -2077,6 +2090,8 @@ pub fn viewer_bar(@ui.Ctx, String, String, String, String, Bool, ViewerInk, () -
 
 pub let viewer_bar_blur : Double
 
+pub fn viewer_bar_floats(Double) -> Bool
+
 pub let viewer_bar_h : Double
 
 pub let viewer_bar_raised : Raised
@@ -2098,6 +2113,8 @@ pub fn viewer_failed(@ui.Ctx, String) -> Unit
 pub fn viewer_frame_act(@ui.Ctx, String, String, String, String, ViewerInk, String, busy? : Bool, disabled? : Bool) -> (Bool, Bool)
 
 pub fn viewer_frame_bar(@ui.Ctx, String, String, String, String, Bool, Bool, Double, Double, ViewerInk, () -> Unit, title? : String) -> (Bool, Double)
+
+pub fn viewer_head_node(@view.View, () -> String, () -> String, () -> Bool, (@view.View) -> Double, () -> Double, () -> Double, () -> ViewerInk, () -> @paint.Glass, (@view.View) -> Unit, () -> String, () -> Unit, tips? : TipLayer) -> @view.View
 
 pub fn viewer_host() -> ViewerHost
 
@@ -2226,6 +2243,8 @@ pub fn with_ground(@ui.Ctx, Int64, () -> Unit) -> Unit
 pub fn with_look(Look, () -> Unit) -> Unit
 
 pub fn within_room(@ui.Ctx, @kit.PopState, () -> Unit, inner? : @ui.Style, most? : Double) -> Unit
+
+pub fn words_told_count() -> Int32
 
 pub fn workspace_badge(@ui.Ctx, String, String, String, Double, still? : Bool) -> Unit
 
@@ -2804,6 +2823,22 @@ pub(all) struct Theme {
   chat_list : ChatList
 }
 
+type TipFade
+
+pub struct TipHand {
+  hold : () -> Unit
+  lift : () -> Unit
+  cancel : () -> Unit
+}
+
+type TipHeld derive(Eq)
+
+pub struct TipLayer {
+  layer : () -> @view.View?
+  mut went_at : Double
+}
+pub fn TipLayer::new(() -> @view.View?) -> Self
+
 pub(all) enum Tone {
   Plain
   Primary
@@ -2819,6 +2854,13 @@ pub(all) struct Tool {
   draw : () -> Unit
   instead : Array[MenuItem]
 }
+
+pub(all) struct ToolSaid {
+  icon : String
+  label : String
+  on : Bool
+  disabled : Bool
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) struct Type {
   caption : Double

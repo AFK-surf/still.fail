@@ -5,6 +5,7 @@ import {
   "mbui/hostapi",
   "mbui/signals",
   "mbui/ui",
+  "mbui/view",
   "moonbitlang/core/ref",
   "stillfail/sf",
   "stillfail/sfapp/settings",
@@ -240,7 +241,7 @@ pub fn history_usage_line(@sfbase.Source, String, String) -> String
 
 pub let hold_ms : Double
 
-pub fn hover(@ui.Ctx, String, Int32, tile? : Bool, tap? : Bool, side? : @ui.Side, along? : @ui.Along, padded? : Bool, () -> Unit) -> Bool
+pub fn hover(@ui.Ctx, String, Int32, tile? : Bool, tap? : Bool, side? : @view.Side, along? : @view.Along, padded? : Bool, () -> Unit) -> Bool
 
 pub let hover_close_ms : Double
 
@@ -368,7 +369,7 @@ pub fn open_search_mode(String) -> Unit
 
 pub fn open_triple(String, String) -> Unit
 
-pub fn open_triple_panel(@sfbase.Source, String, String, @sf.Anchor, saved? : String, side? : @ui.Side) -> Unit
+pub fn open_triple_panel(@sfbase.Source, String, String, @sf.Anchor, saved? : String, side? : @view.Side) -> Unit
 
 pub fn open_workspaces(@sfbase.Source, @sf.Anchor, compact? : Bool) -> Unit
 
@@ -624,7 +625,7 @@ pub let video_least : Double
 
 pub let vt_actions : @ui.Style
 
-pub fn web_peek(@ui.Ctx, @sfbase.Source, String, String, String, Int32, side? : @ui.Side) -> Unit
+pub fn web_peek(@ui.Ctx, @sfbase.Source, String, String, String, Int32, side? : @view.Side) -> Unit
 
 pub fn work_mark(@ui.Ctx, @sfbase.Source, String, String, @ui.TextStyle, @ui.TextStyle, lead? : String, smallest? : Bool) -> Unit
 

@@ -66,17 +66,14 @@ fn Tree::target_under(self : Tree, id : NodeId, x : Double, y : Double) -> (Targ
   let at = self.logic_at()
   let found : Ref[(Target, Int?)] = Ref((Nothing, None))
   let past = Ref(false)
-  self.each_drawn(fn(c, cx, cy, _) {
+  self.each_drawn_scaled(fn(c, cx, cy, _, s) {
     if past.val || self.holds(id, c.id) {
       past.val = true
       return
     }
-    if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.pressless_at(c.id.at) {
+    if self.finger_on(c, cx, cy, s, x, y, at, tracked=false) {
       let n = self.nodes[c.id.at]
-      let here = @signals.untracked(fn() { self.takes_here(n, x - cx, y - cy, c.w, c.h, at) })
-      if !here {
-        ()
-      } else if n.on_drag is Some(_) {
+      if n.on_drag is Some(_) {
         found.val = (Dragged(c.id), None)
       } else if n.on_press is Some(_) {
         found.val = (Pressed(c.id), None)
@@ -146,18 +143,18 @@ fn Tree::hand_on(self : Tree, th : Through, x : Double, y : Double, now : Double
       self.held_to(Some(u))
       self.downs.clear()
       self.downs.push(th.finger)
-      let (nx, ny, _) = self.placed(u.at)
+      let (nx, ny, ns) = self.placed(u.at)
       (self.on_through)(th.under, x, y, th.down_at)
       @signals.untracked(fn() {
         f({
           kind: Down,
-          x: x - nx,
-          y: y - ny,
+          x: (x - nx) / ns,
+          y: (y - ny) / ns,
           at: now,
           wx: x,
           wy: y,
-          ox: x - nx,
-          oy: y - ny,
+          ox: (x - nx) / ns,
+          oy: (y - ny) / ns,
           finger: th.finger,
           since: th.down_at,
         })

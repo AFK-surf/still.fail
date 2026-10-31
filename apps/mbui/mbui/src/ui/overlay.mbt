@@ -610,24 +610,6 @@ fn Ctx::layers_frame_end(self : Ctx) -> Unit {
 }
 
 ///|
-/// Which side of its anchor a layer's content goes.
-pub(all) enum Side {
-  Top
-  Right
-  Bottom
-  Left
-} derive(Eq, Show, Debug)
-
-///|
-/// Where along the side it lines up with the anchor: their starts (the left, right to left the right), their middles,
-/// their ends.
-pub(all) enum Along {
-  Start
-  Middle
-  End
-} derive(Eq, Show, Debug)
-
-///|
 /// Node `i` (built this frame) offset by what `at` makes of the size it is laid out at, as it is laid out, in place of
 /// its tx and ty: what goes where its own size says (a menu by its trigger, a dialog in the middle of the window) is
 /// there in the first frame it is drawn, and follows its size as that changes, in the same frame. `at` runs in the
@@ -682,72 +664,21 @@ pub fn Ctx::place(
   padding? : Double = 8.0,
   flip? : Bool = true,
 ) -> (Double, Double, Side) {
-  let (ax, ay, aw, ah) = anchor
-  let vw = self.width
-  let vh = self.height
-  // the room on each side
-  let room = fn(s : Side) {
-    match s {
-      Top => ay - offset - padding
-      Bottom => vh - (ay + ah) - offset - padding
-      Left => ax - offset - padding
-      Right => vw - (ax + aw) - offset - padding
-    }
-  }
-  let opposite = fn(s : Side) {
-    match s {
-      Top => Bottom
-      Bottom => Top
-      Left => Right
-      Right => Left
-    }
-  }
-  let need = fn(s : Side) {
-    match s {
-      Top | Bottom => h
-      Left | Right => w
-    }
-  }
-  let side = if flip && room(side) < need(side) && room(opposite(side)) > room(side) {
-    opposite(side)
-  } else {
-    side
-  }
-  // right to left, a start is the right
-  let along = if self.direction == Rtl && (side == Top || side == Bottom) {
-    match along {
-      Start => End
-      End => Start
-      Middle => Middle
-    }
-  } else {
-    along
-  }
-  let sign = if self.direction == Rtl && (side == Top || side == Bottom) {
-    -1.0
-  } else {
-    1.0
-  }
-  let line = fn(a0 : Double, alen : Double, len : Double) {
-    match along {
-      Start => a0
-      Middle => a0 + (alen - len) / 2.0
-      End => a0 + alen - len
-    }
-  }
-  let (x, y) = match side {
-    Top => (line(ax, aw, w) + along_offset * sign, ay - offset - h)
-    Bottom => (line(ax, aw, w) + along_offset * sign, ay + ah + offset)
-    Left => (ax - offset - w, line(ay, ah, h) + along_offset)
-    Right => (ax + aw + offset, line(ay, ah, h) + along_offset)
-  }
-  // moved along to stay in the window, and across where neither side has the room for it: over its anchor rather
-  // than out of the window (never past its start)
-  let keep = fn(v : Double, len : Double, max : Double) {
-    dmax(padding, dmin(v, max - padding - len))
-  }
-  let (x, y) = (keep(x, w, vw), keep(y, h, vh))
-  (x, y, side)
+  // (one way of working it out: the window's tree's nodes said to go beside another go by it too, View::beside)
+  @view.place_beside(
+    anchor,
+    w,
+    h,
+    self.width,
+    self.height,
+    side~,
+    along~,
+    offset~,
+    along_offset~,
+    padding~,
+    flip~,
+    rtl=self.direction == Rtl,
+  )
 }
 
 ///|

@@ -1072,3 +1072,259 @@ test "viewer on the tree, a wide window: a picture as it comes says how much has
   assert_true(t.find("正在打开") is None)
   assert_true(t.find("正在读取 1 KB / 4 KB") is Some(_))
 }
+
+///|
+test "viewer on the tree, a phone's screen: its floating bar its nodes, one of each tool (标注, 复制, 下载, ×), none of the old bar's; copied, a check for copied_ms from the press, frames drawn only as the app asks the host for them; × closes it" {
+  let t = preview_tester("image", platform=1)
+  let told = @sf.words_told_count()
+  let labels = [
+    @sf.t("web-main.annotate.image"),
+    @sf.t("common.copy"),
+    @sf.t("web-main.preview.download"),
+    @sf.t("web-main.preview.closeKey"),
+  ]
+  for l in labels {
+    // (one of each: the old bar's not drawn as well)
+    assert_eq(t.all(Button, label=l).length(), 1, msg="\{l}: \{t.all(Button, label=l).length()}")
+  }
+  assert_true(viewer.get().unwrap().in_tree, msg="the tree's viewer")
+  pressed(t, Button, @sf.t("common.copy"))
+  assert_eq(t.all(Button, label=@sf.t("common.copied")).length(), 1, msg="copied: its check")
+  let pressed_at = t.time()
+  woken_till(t, pressed_at + @sf.copied_ms / 2.0)
+  assert_eq(t.all(Button, label=@sf.t("common.copied")).length(), 1, msg="half its time: still")
+  woken_till(t, pressed_at + @sf.copied_ms * 1.5)
+  assert_eq(t.all(Button, label=@sf.t("common.copy")).length(), 1, msg="past its time: copy again")
+  assert_eq(@sf.words_told_count(), told, msg="the words told once")
+  pressed(t, Button, @sf.t("web-main.preview.closeKey"))
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@sfpages.reveal_ms)
+  assert_true(viewer.get() is None && pv_leaving.get() is None, msg="closed by its ×")
+}
+
+///|
+/// Frames drawn till `end` only as the app asks its host for them (Tester::wanted_after: a frame now, a wake at a
+/// moment, none), each at the display's next frame or at the moment it woke for.
+fn woken_till(t : @ui.Tester, end : Double) -> Unit {
+  let mut n = 0
+  while t.time() < end && n < 400 {
+    n += 1
+    let w = t.wanted_after()
+    if w == 0.0 {
+      t.frame_at(t.time() + between_frames_ms)
+    } else if w <= end {
+      t.frame_at(w)
+    } else {
+      t.advance(end - t.time())
+    }
+  }
+}
+
+///|
+test "viewer on the tree, a phone's screen: its floating bar's words as the core's language says them, said again as that changes, its nodes made once" {
+  new_run()
+  let base = fixture("chat-preview-image")
+  let lang : @signals.Signal[String] = @signals.signal("zh", same=fn(a, b) { a == b })
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let got = (base.topic)(name, params)
+      match (name, got.value) {
+        ("prefs", Some(Object(m))) => {
+          let o = m.copy()
+          o["lang"] = Json::string(lang.get())
+          { ..got, value: Some(Json::object(o)) }
+        }
+        ("prefs", None) => { ..got, value: Some(Json::object({ "lang": Json::string(lang.get()) })) }
+        _ => got
+      }
+    },
+  }
+  preview_src.val = Some(src)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=1)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let zh = @sf.t("common.copy")
+  assert_eq(t.all(Button, label=zh).length(), 1, msg="in Chinese: \{zh}")
+  let copy = t.get(Button, label=zh)
+  lang.set("en")
+  t.draw()
+  let en = @sf.t("common.copy")
+  assert_true(en != zh, msg="the words in English: \{en}")
+  assert_eq(t.all(Button, label=en).length(), 1, msg="said again in English: \{en}")
+  assert_eq(t.get(Button, label=en).id, copy.id, msg="the same node, said again")
+}
+
+///|
+/// Whether the tip of the floating bar's 复制 is read out shown now.
+fn copy_tip_shown(t : @ui.Tester) -> Bool {
+  t.semantics().any(fn(s) { s.role == Tooltip && s.label == @sf.t("common.copy") && !s.hidden })
+}
+
+///|
+test "viewer on the tree, a phone's screen: its bar's tip a finger held open takes the first Escape, the viewer the next; no frame between a key and what it did" {
+  let t = preview_tester("image", platform=1)
+  let b = t.get(Button, label=@sf.t("common.copy"))
+  let (cx, cy) = (b.rect.0 + b.rect.2 / 2.0, b.rect.1 + b.rect.3 / 2.0)
+  t.touch(0, cx, cy)
+  t.run_for(@ui.long_press_ms + 50.0)
+  t.touch(2, cx, cy)
+  t.run_for(a_moment_ms)
+  assert_true(copy_tip_shown(t), msg="held open")
+  t.key_told(@ui.key_escape, 0, t.time())
+  assert_true(viewer.get() is Some(v) && !v.closing, msg="the first Escape the tip's: the viewer open still")
+  t.run_for(@kit.pop_out_ms * 2.0)
+  assert_true(!copy_tip_shown(t), msg="the tip gone")
+  t.key_told(@ui.key_escape, 0, t.time())
+  assert_true(viewer.get() is None || viewer.get().unwrap().closing, msg="the next Escape the viewer's")
+}
+
+///|
+test "viewer on the tree, a mouse: its bar's tip shown by the keyboard's focus, the picture's menu opened over it: Escape the menu's first, then the tip's, then the viewer's" {
+  let t = preview_tester("image", platform=0)
+  // (the keyboard's focus to 复制, its tip shown)
+  let mut tabs = 0
+  while !copy_tip_shown(t) && tabs < 8 {
+    t.key(@ui.key_tab)
+    t.draw()
+    tabs += 1
+  }
+  assert_true(copy_tip_shown(t), msg="the focus on 复制, its tip shown (\{tabs} tabs)")
+  let (x, y, w, h) = viewer.get().unwrap().zoom.rect().unwrap()
+  t.right_click(x + w / 2.0, y + h / 2.0)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(@sf.presenting(), msg="the picture's menu open")
+  t.key(@ui.key_escape)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time() + 50.0)
+  assert_true(!@sf.presenting(), msg="the first Escape the menu's")
+  assert_true(viewer.get() is Some(v) && !v.closing, msg="the viewer open still")
+  assert_true(copy_tip_shown(t), msg="the tip still shown")
+  t.key_told(@ui.key_escape, 0, t.time())
+  assert_true(viewer.get() is Some(v) && !v.closing, msg="the next Escape the tip's: the viewer open still")
+  t.run_for(@kit.pop_out_ms * 2.0)
+  assert_true(!copy_tip_shown(t), msg="the tip gone")
+  t.key_told(@ui.key_escape, 0, t.time())
+  assert_true(viewer.get() is None || viewer.get().unwrap().closing, msg="then the viewer's")
+}
+
+///|
+/// The floating bar's name as the window's tree draws it now: its size and its ink.
+fn head_name_drawn() -> (Double, Int64)? {
+  let name = viewer.get().unwrap().file.name
+  @ui.view_tree().unwrap().drawn().iter().find_first(fn(d) { d.words == name }).map(fn(d) { (d.words_look.size, d.ink) })
+}
+
+///|
+test "viewer on the tree: its floating bar's words in still.fail's theme as its old views are, a touch screen's sizes from its first frame; light or dark as chosen, a frame owed at once and drawn so the frame after; a window made narrower, its first frame the same" {
+  for platform in [1, 0] {
+    let look : @signals.Signal[String] = @signals.signal("light", same=fn(a, b) { a == b })
+    let t = looked_preview(look, platform)
+    let theme = @sf.ui_theme()
+    let body = theme.text_size(Body).0
+    assert_eq(head_name_drawn().map(fn(n) { n.0 }), Some(body), msg="platform \{platform}: its name as still.fail's Body")
+    // (dark chosen, as the core's prefs say it: their appearance)
+    look.set("dark")
+    assert_eq(t.wanted_after(), 0.0, msg="platform \{platform}: dark as chosen, a frame owed at once")
+    t.draw()
+    let dark = @sf.ui_theme()
+    assert_true(dark.dark, msg="dark as set")
+    assert_eq(head_name_drawn().map(fn(n) { n.1 }), Some(dark.color(Fg)), msg="platform \{platform}: its name in the dark's ink, the frame after")
+    t.resize(360.0, 844.0)
+    t.draw()
+    assert_eq(head_name_drawn().map(fn(n) { n.0 }), Some(dark.text_size(Body).0), msg="platform \{platform}: narrower, the same size")
+  }
+}
+
+///|
+/// A moment after an input (a finger let go): less than any of the motions it sets off.
+let a_moment_ms : Double = 50.0
+
+///|
+/// How many of what was kept since `before` are `png`.
+fn kept_as(t : @ui.Tester, before : Int, png : Bytes) -> Int {
+  t.kept()[before:].to_array().filter(fn(k) { k.2 == png }).length()
+}
+
+///|
+/// Marking the image open (pen_marking, a stroke), the host's drawings answered as the test says, then
+/// 下载标注后的图片 pressed by a finger: the host asked to draw the marks onto it, its picture to come as `png`.
+fn marks_asked(png : Bytes) -> @ui.Tester raise {
+  let t = pen_marking()
+  t.marks_by_hand()
+  pen_stroke(t, false)
+  t.marks_make(png)
+  pressed(t, Button, pv("android-chat.marks.downloadMarked"))
+  t
+}
+
+///|
+test "viewer on the tree, marking: the marked picture kept once at the host's word, no frame drawn for it; not before, not again with the frames after; another drawing with the same picture kept once more" {
+  let png = b"\x89PNG-marked"
+  let t = marks_asked(png)
+  let before = t.kept().length()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(kept_as(t, before, png), 0, msg="before the host's word: none")
+  t.marks_answer(1)
+  assert_eq(kept_as(t, before, png), 1, msg="at its word, no frame drawn: once")
+  t.run_for(@ui.move_most_ms)
+  t.marks_answer(1)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(kept_as(t, before, png), 1, msg="frames after, its word again: not again")
+  // (marking on, another stroke, the same picture drawn by another drawing)
+  pen_stroke(t, false)
+  t.marks_make(png)
+  pressed(t, Button, pv("android-chat.marks.downloadMarked"))
+  t.marks_answer(2)
+  assert_eq(kept_as(t, before, png), 2, msg="another drawing, the same picture: once more")
+}
+
+///|
+test "viewer on the tree, marking: its viewer closed before the host's word, the picture kept by none, another viewer opened after taking none of it" {
+  let png = b"\x89PNG-marked"
+  let t = marks_asked(png)
+  let before = t.kept().length()
+  let name = viewer.get().unwrap().file.name
+  viewer.get().unwrap().shut(t.ctx())
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@sfpages.reveal_ms)
+  assert_true(viewer.get() is None, msg="closed")
+  // (another viewer opened on the same picture, from the chat)
+  // (another viewer opened on the same file, as the app opens one: open_preview, the fixture's own file)
+  let file = preview_files().iter().find_first(fn(f) { f.0.name == name }).unwrap().0
+  open_preview("ws1/st1", "s-c1", file)
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(viewer.get() is Some(_), msg="another viewer open")
+  t.marks_answer(1)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(kept_as(t, before, png), 0, msg="kept by none")
+}
+
+///|
+/// The image open (preview_tester's), the core's prefs saying the appearance `look` says as it changes.
+fn looked_preview(look : @signals.Signal[String], platform : Int) -> @ui.Tester {
+  new_run()
+  let base = fixture("chat-preview-image")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let got = (base.topic)(name, params)
+      match (name, got.value) {
+        ("prefs", Some(Object(m))) => {
+          let o = m.copy()
+          o["appearance"] = Json::string(look.get())
+          { ..got, value: Some(Json::object(o)) }
+        }
+        ("prefs", None) => { ..got, value: Some(Json::object({ "appearance": Json::string(look.get()) })) }
+        _ => got
+      }
+    },
+  }
+  preview_src.val = Some(src)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  t
+}

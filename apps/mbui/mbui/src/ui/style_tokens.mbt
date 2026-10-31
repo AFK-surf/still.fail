@@ -630,7 +630,7 @@ pub(all) enum Shadow {
 
 ///|
 /// A shadow's blur (its sigma, as CALayer's shadowRadius) and how far down it falls.
-fn Shadow::blur_y(self : Shadow) -> (Double, Double) {
+pub fn Shadow::blur_y(self : Shadow) -> (Double, Double) {
   match self {
     NoShadow => (0.0, -1.0)
     Sm => (2.0, 1.0)

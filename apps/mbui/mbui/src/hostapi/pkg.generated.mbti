@@ -580,6 +580,7 @@ pub(all) enum Kept {
 pub struct MarkedImage {
   // private fields
 }
+pub fn MarkedImage::drawn(Self) -> Bool
 pub fn MarkedImage::id(Self) -> Int32
 pub fn MarkedImage::made(Self) -> Bytes?
 

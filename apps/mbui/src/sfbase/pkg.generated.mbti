@@ -629,6 +629,8 @@ pub let go_tos : Map[String, Double]
 
 pub fn halo_of(Int64) -> Int64
 
+pub fn head_as_nodes(Viewer, Double) -> Bool
+
 pub fn held_build(Int32) -> Unit
 
 pub fn held_order(String, Array[ChatDay], Bool) -> Array[ChatDay]
@@ -3242,6 +3244,7 @@ pub(all) struct Viewer {
   mut asked : Bool
   mut save_after : Bool
   mut download_asked : Bool
+  asked_told : @signals.Signal[Int32]
   mut install_after : Bool
   mut awake : Bool
   awake_told : @signals.Signal[Int32]

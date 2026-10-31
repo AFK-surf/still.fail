@@ -406,6 +406,13 @@ pub fn segments(c : @ui.Ctx, size : Double, stroke : Double, color : Int64, grou
 /// A ring that says how far (PreviewLoad.kt's): `size` square, a track of `color` at 18% and `part` of a turn of it
 /// from the top, clockwise, on the icon family's 24-unit grid (radius 8.5, stroke 1.75).
 pub fn progress_ring(c : @ui.Ctx, size : Double, part : Double, color : Int64) -> Int {
+  c.shapes(ring_shapes(size, part, color), w=Px(size), h=Px(size))
+}
+
+///|
+/// What progress_ring draws, `size` across: its track and as much of its ring as `part` says, in `color` (a node's
+/// shapes: tool_ring_node).
+pub fn ring_shapes(size : Double, part : Double, color : Int64) -> Array[@ui.Shape] {
   let share = if part < 0.0 { 0.0 } else if part > 1.0 { 1.0 } else { part }
   let r = 8.5 * size / 24.0
   let width = 1.75 * size / 24.0
@@ -428,5 +435,5 @@ pub fn progress_ring(c : @ui.Ctx, size : Double, part : Double, color : Int64) -
       @ui.shape_of([(circle(from, from + share * 2.0 * pi, (48.0 * share).ceil().to_int()), false)], stroke=color, width~),
     )
   }
-  c.shapes(shapes, w=Px(size), h=Px(size))
+  shapes
 }
