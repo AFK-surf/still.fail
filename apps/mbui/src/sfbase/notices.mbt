@@ -301,8 +301,25 @@ fn tell_permission(src : Source, notify : Json?) -> Unit {
 
 ///|
 /// A notification tapped (MainActivity.handle): its link opened as one from outside (links.mbt: the core's
-/// `link.parse`), an item's chat over its workspace's Home at the message it is about.
+/// `link.parse`), an item's chat over its workspace's Home at the message it is about; `settings:<page>` (the app's own
+/// notifications: 共享调试's, AdbShare.java) that settings page over Home.
 fn open_notice(src : Source, opens : String) -> Unit {
+  if opens.has_prefix("settings:") {
+    let name = opens.view(start_offset=9).to_owned()
+    @hostapi.log("notice tapped settings:\{name}")
+    match @settings.route_of(name) {
+      Some(route) if app.nav.top() != Setting(route) => {
+        (shell.val.close_overlays)()
+        (shell.val.home)()
+        if app.nav.top() != Home {
+          app.nav.replace(Home)
+        }
+        open_page(Setting(route))
+      }
+      _ => ()
+    }
+    return
+  }
   let (url, seq) = match opens.find("\n") {
     Some(i) => (opens.view(end_offset=i).to_owned(), opens.view(start_offset=i + 1).to_owned())
     None => (opens, "")

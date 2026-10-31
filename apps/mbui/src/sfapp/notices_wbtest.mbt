@@ -157,6 +157,23 @@ test "tapped, the notice's chat opens over Home at its message, which flashes; i
 }
 
 ///|
+test "共享调试's notification tapped (AdbShare.java): settings' 共享调试 opens over Home" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  let t = notify_core(calls, sys)
+  sys.opened = "settings:adb:"
+  t.frame()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(named(calls, "link.parse").length(), 0)
+  assert_eq(app.nav.depth(), 2)
+  assert_true(app.nav.top() == Setting(@settings.Route::AdbShare("")))
+  // tapped again on that page: nothing more opens
+  sys.opened = "settings:adb:"
+  t.frame()
+  assert_eq(app.nav.depth(), 2)
+}
+
+///|
 test "tapped while a file is open over the window, the file is put down and the notice's chat shows" {
   let calls : Array[Made] = []
   let sys = fake_system()
