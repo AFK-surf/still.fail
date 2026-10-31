@@ -1190,6 +1190,7 @@ pub fn Ctx::selected_text(Self) -> String
 pub fn Ctx::selection_box(Self) -> (Double, Double, Double, Double)?
 pub fn Ctx::selection_clear(Self) -> Unit
 pub fn Ctx::selection_end(Self) -> (Double, Double, Double)?
+pub fn Ctx::selection_made(Self) -> Int32
 pub fn Ctx::semantics(Self, Int32, @view.Role, id? : Int32, label? : String, description? : String, value? : String, check? : @view.Check, expanded? : Bool, selected? : Bool, pressed? : Bool, disabled? : Bool, modal? : Bool, range? : (Double, Double, Double), actions? : Array[@view.Action]) -> Unit
 pub fn Ctx::semantics_dump(Self) -> String
 pub fn Ctx::semantics_tree(Self) -> Array[SemNode]
