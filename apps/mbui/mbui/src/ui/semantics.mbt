@@ -137,7 +137,16 @@ pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
   // (where the window is a tree: one event of the tree's at this moment, what was due by then done first; asked inside
   // one already, that one's, nothing done ahead of it: what it is asked of found and judged as things are then)
   match view_app.val {
-    Some(tree) => tree.event(view_moment(), fn() { self.asked(id, action) })
+    Some(tree) => {
+      // (one of its own, not inside another's: the hand as it left it said at its moment, as each event's is
+      // (view_event_said, hand_turns.mbt); inside another's, that one says it as it ends)
+      let alone = tree.moment() is None
+      let at = view_moment()
+      tree.event(at, fn() { self.asked(id, action) })
+      if alone {
+        turns_said(self, at)
+      }
+    }
     None => self.asked(id, action)
   }
 }

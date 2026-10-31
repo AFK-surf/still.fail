@@ -194,3 +194,67 @@ test "hover card: kept open while the keyboard's focus is in it; closes hover_cl
   let seen = around(t, v, moved, hover_card_close_ms)
   assert_eq(seen.map(fn(s) { s.1 }), [true, false], msg="(ms after the focus moved, open): \{seen}")
 }
+
+///|
+test "hover card: kept open by the keyboard's focus in it; a screen reader's Focus on a button of the window's tree takes it out, its close from that moment, the frame late" {
+  let open = Ref(false)
+  let t = @ui.Tester::new(fn(_c) {  }, w=800.0, h=600.0)
+  t.set_a11y(true)
+  @ui.set_view_app(fn(root) {
+    root.row(Is(true)) |> ignore
+    root.box(fn(b) {
+      b
+      .width(Is(Some(120.0)))
+      .height(Is(Some(40.0)))
+      .focusable(Is(true))
+      .on_press(fn() {  })
+      .says(Is(Some(@view.said(Button, label="Tree button"))))
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(v) {
+      v.width(Is(Some(600.0))).height(Is(Some(600.0))) |> ignore
+      @ui.old(v, fn(c) {
+        c.column(pad=40.0, fn() {
+          let r = button(c, "@ada", key="ada", variant=Ghost)
+          open.val = hover_card(c, "card", r.id, fn() {
+            c.text("Ada's card") |> ignore
+            button(c, "Notes", key="notes") |> ignore
+          })
+        })
+        |> ignore
+      }).grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let (x, y) = middle_of(t, "@ada")
+  t.move(x, y)
+  t.run_for(hover_card_open_ms * 2.0)
+  assert_true(open.val, msg="opened")
+  let mut on = false
+  for _ in 0..<12 {
+    t.tab()
+    if t.focused() is Some(f) && f.label == "Notes" {
+      on = true
+      break
+    }
+  }
+  assert_true(on, msg="Tab to Notes: \{t.focused()}")
+  t.move(790.0, 590.0)
+  t.run_for(hover_card_close_ms * 2.0)
+  assert_true(open.val, msg="kept by the focus in it")
+  guard t.semantics().iter().find_first(fn(s) { s.label == "Tree button" }) is Some(tb) else { fail("no tree button") }
+  // Focus asked of the tree's button as a screen reader asks it, no frame after it
+  let moved = t.time()
+  @ui.current().ask_action(tb.id, Focus)
+  let tree = @ui.view_tree().unwrap()
+  assert_true(tree.focused_now().0 is Some(_), msg="the focus on the tree's button as it is asked")
+  assert_true(t.focused().map(fn(f) { f.label }) == Some("Tree button"), msg="out of the card: \{t.focused()}")
+  t.advance(hover_card_close_ms * 2.0 / 3.0)
+  t.frame()
+  let v : CardView = { shown: Ref(true), down: Ref(0.0), inner: Ref(false), kept: false, open }
+  let seen = around(t, v, moved, hover_card_close_ms)
+  assert_eq(seen.map(fn(s) { s.1 }), [true, false], msg="(ms after Focus, open): \{seen}")
+}
