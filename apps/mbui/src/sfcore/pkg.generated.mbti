@@ -28,6 +28,9 @@ pub fn str(Json?, String) -> String
 pub(all) struct SignIn {
   mut status : String
   mut busy : Bool
+  mut verifying : Bool
+  mut waiting : Bool
+  mut failed : String
   mut auto : Bool
   mut login : Bool
   mut by_hand : String

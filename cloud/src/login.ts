@@ -2,6 +2,16 @@ import { devicePage, escape } from "./page";
 import { requestLang, tr, type Lang } from "./i18n.ts";
 import { mailConfigured, sendCode } from "./mail";
 export { devicePage } from "./page";
+
+/** An Android app's package (its intent's scheme and package): letters, digits and underscores, dotted. */
+const PACKAGE = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/;
+
+/** The page an app's browser sign-in ends on (the browser come back to the app): signed in, close it; with `app` (an
+ * Android app's package) a link that brings that app back, should it not have come forward by itself. */
+export function signedInPage(lang: Lang, app: string | null): Response {
+  const back = app && PACKAGE.test(app) ? `<p class="links"><a class="button" href="intent://back#Intent;scheme=${app};package=${app};end">${tr(lang, "cloud.login.done.back")}</a></p>` : "";
+  return devicePage(lang, tr(lang, "cloud.login.done.title"), `<p>${tr(lang, "cloud.login.done.body")}</p>${back}`);
+}
 import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
 import type { Env } from "./env";

@@ -25,12 +25,14 @@ fn gate_tester(
   calls : Array[(String, Json)],
   signed : Ref[Int],
   answer? : (String, Json) -> Result[Json, Json] = fn(_, _) { Ok(Json::object({})) },
+  step? : Ref[@sfbase.SignInStep] = Ref::new(Idle),
 ) -> @ui.Tester raise {
   reset()
   let base = fixture(mode)
   let src : Source = {
     ..base,
     sign_in: fn() { signed.val += 1 },
+    sign_in_step: fn() { step.val },
     call: fn(name, params, done) {
       match name {
         "workspace.create" | "invitation.accept" | "auth.signOut" => {
@@ -81,6 +83,40 @@ test "signed out: the button across a phone's page less its sides, no wider than
     t.tap(w / 2.0 + wide / 2.0 - 8.0, y + h / 2.0)
     assert_eq(signed.val, 1, msg=at)
     t.tap(w / 2.0 + wide / 2.0 + 8.0, y + h / 2.0)
+    assert_eq(signed.val, 1, msg=at)
+  }
+}
+
+///|
+test "signed out, at each width on either screen: where signing in stands said under the button, why it failed in the red" {
+  for case in gate_cases {
+    let (w, platform, regular) = case
+    let at = "\{w} platform \{platform}"
+    let signed = Ref::new(0)
+    let step : Ref[@sfbase.SignInStep] = Ref::new(Failed("登录已取消"))
+    let t = gate_tester("signin", w, platform, regular, [], signed, step~)
+    t.run_for(@ui.move_most_ms)
+    // the core's words under the button, the button as it was
+    assert_true(t.find("登录已取消") is Some(_), msg=at)
+    assert_true(t.find("登录或注册") is Some(_), msg=at)
+    // none of the core's: that it failed
+    step.val = Failed("")
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("登录失败") is Some(_), msg=at)
+    assert_true(t.find("登录已取消") is None, msg=at)
+    // the page out in the browser: said so, the button opening it again
+    step.val = InBrowser
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("在浏览器中完成登录") is Some(_), msg=at)
+    assert_true(t.find("登录失败") is None, msg=at)
+    t.tap_text("重新打开登录页")
+    assert_eq(signed.val, 1, msg=at)
+    // what the browser brought being checked: 正在登录, not pressed again, nothing said under it
+    step.val = Verifying
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("正在登录") is Some(_), msg=at)
+    assert_true(t.find("在浏览器中完成登录") is None, msg=at)
+    t.tap_text("正在登录")
     assert_eq(signed.val, 1, msg=at)
   }
 }

@@ -144,7 +144,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_img_pump = (*env)->GetStaticMethodID(env, images_cls, "pump", "()V");
   m_text_scale = (*env)->GetStaticMethodID(env, text_cls, "setScale", "(F)V");
   login_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/BrowserLogin"));
-  m_bl_start = (*env)->GetStaticMethodID(env, login_cls, "start", "(Ljava/lang/String;)I");
+  m_bl_start = (*env)->GetStaticMethodID(env, login_cls, "start", "(Ljava/lang/String;Ljava/lang/String;)I");
   m_bl_port = (*env)->GetStaticMethodID(env, login_cls, "port", "(I)I");
   m_bl_open = (*env)->GetStaticMethodID(env, login_cls, "open", "(ILjava/lang/String;)I");
   m_bl_back = (*env)->GetStaticMethodID(env, login_cls, "back", "(I)Ljava/lang/String;");
@@ -1122,11 +1122,12 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_imageDone(JNIEnv *env, jclass c, jin
 
 // A sign-in in the browser that comes back here (host_native.mbt `browser_login`): dev.mbui.BrowserLogin, a loopback
 // listener (dev.mbui.Loopback) and a Custom Tab, the app brought back in front once the browser has come back.
-int32_t mb_host_browser_login_start(moonbit_string_t path) {
+int32_t mb_host_browser_login_start(moonbit_string_t path, moonbit_string_t done) {
   JNIEnv *env = env_();
-  jstring p = jstr(env, path);
-  jint id = (*env)->CallStaticIntMethod(env, login_cls, m_bl_start, p);
+  jstring p = jstr(env, path), d = jstr(env, done);
+  jint id = (*env)->CallStaticIntMethod(env, login_cls, m_bl_start, p, d);
   (*env)->DeleteLocalRef(env, p);
+  (*env)->DeleteLocalRef(env, d);
   return id;
 }
 

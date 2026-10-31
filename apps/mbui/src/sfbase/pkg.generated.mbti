@@ -2986,6 +2986,15 @@ pub(all) enum ShotWait {
   Draw(@ui.MarkedImage)
 }
 
+pub(all) enum SignInStep {
+  Idle
+  Opening
+  InBrowser
+  Verifying
+  Failed(String)
+} derive(Eq, Show)
+pub fn SignInStep::of(busy~ : Bool, verifying~ : Bool, waiting~ : Bool, failed~ : String) -> Self
+
 pub(all) struct Sink {
   head : (Int32, Array[(String, String)], String, Bool) -> Unit
   chunk : (Bytes) -> Unit
@@ -3004,6 +3013,7 @@ pub(all) struct Source {
   cancel : (Int32) -> Unit
   sign_in : () -> Unit
   signing_in : () -> Bool
+  sign_in_step : () -> SignInStep
   picture : (String, Int32) -> String
   fatal : () -> String?
   file : (String, String, String) -> String

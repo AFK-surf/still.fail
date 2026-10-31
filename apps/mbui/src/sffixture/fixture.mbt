@@ -1224,6 +1224,7 @@ pub fn fixture(mode : String) -> Source {
     },
     sign_in: fn() {  },
     signing_in: fn() { false },
+    sign_in_step: fn() { Idle },
     picture: fn(_, _) { "" },
     fatal: fn() { None },
     file: fn(_, _, name) { fixture_file(name) },

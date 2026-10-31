@@ -152,7 +152,7 @@ app signin 390x844
 check "the core started in Hermes" 'grep -q "started in Hermes" "$OUT/signin.log"'
 check "secure.* sealed with DPAPI, read back and deleted" 'grep -q "SECURE_TEST ok" "$OUT/signin.log"'
 check "the app handed its login page to the browser" 'grep -q "Sign in to still.fail in a browser: $ORIGIN/v1/auth/google/start" "$OUT/signin.log"'
-check "the browser came back to the app's loopback listener, which answered it" 'grep -q "^BACK 200 http://127.0.0.1:[0-9]*/oauth/callback: .*Back in the app" "$OUT/browser.log"'
+check "the browser came back to the app's loopback listener, which sent it on to the cloud's page saying it is signed in" 'grep -q "^GET http://127.0.0.1:[0-9]*/oauth/callback$" "$OUT/browser.log" && grep -q "^BACK 200 $ORIGIN/v1/auth/done: " "$OUT/browser.log"'
 check "the app took it and finished the sign-in (auth.complete)" 'grep -q "SIGN_IN 已登录：alice@example.test" "$OUT/signin.log"'
 check "the core's store holds alice's sign-in" 'core_has alice@example.test'
 check "the test station enrolled, online, and the chat made on it (e2e/peer.ts)" '[ $station_ok = 1 ]'

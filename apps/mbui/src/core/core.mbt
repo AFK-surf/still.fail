@@ -81,6 +81,12 @@ pub fn start(
 }
 
 ///|
+/// Where still.fail cloud is, as the core was started with it (`start`'s `cloud`).
+pub fn cloud() -> String {
+  engine.cloud
+}
+
+///|
 /// Ends the core (waits for its thread); nothing comes from it after.
 pub fn stop() -> Unit {
   if engine.started {
