@@ -155,15 +155,25 @@ jobs:
           name: android-apk
           path: apps/mbui/mbui/android/app/build/outputs/apk/debug/*.apk
 
-  # Android's device checks on an emulator, each push (no machine of ours): the streams' (scripts/android-streams.sh:
-  # plain, reopen, away, anew, thrown) over streamdemo, the soft keyboard's (scripts/android-keyboard.sh: up, back,
-  # behind, cold) over devicedemo; the emulator the cache's (.github/actions/mbui-android-emulator, AOSP's image)
+  # Android's device checks on an emulator, each push (no machine of ours): the soft keyboard's
+  # (scripts/android-keyboard.sh: up, back, behind, cold) over devicedemo and the streams' (scripts/android-streams.sh:
+  # plain, reopen, away, anew, thrown) over streamdemo, each on an emulator of its own beside the other; the emulator
+  # the cache's (.github/actions/mbui-android-emulator, AOSP's image), started first and its app built meanwhile. (On
+  # one emulator one after the other they were 158 s and 305 s, the job 430-520 s: the workflow's longest by some
+  # 4 minutes, what every mbui push waited for, 2026-10-31.)
   android-devices:
+    name: android-devices (${{ matrix.case }})
     defaults:
       run:
         working-directory: apps/mbui/mbui
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { case: keyboard, app: devicedemo, script: android-keyboard.sh }
+          - { case: streams, app: streamdemo, script: android-streams.sh }
     env:
       ABI: x86_64
       EMU_PORT: "5554"
@@ -178,23 +188,20 @@ jobs:
       # (configuration change 0x80000000, CONFIG_ASSETS_PATHS), which relaunches every activity whatever its
       # configChanges, the keyboard's case's mid-way, run 39525921089)
       - uses: ./.github/actions/mbui-android-emulator
-        id: emu
-        with: { target: default, profile: pixel_6 }
-      # (the keyboard's first: its first case is the first launch after the boot, as on an emulator just booted)
-      - name: "The soft keyboard (scripts/android-keyboard.sh: up, back, behind, cold)"
-        run: APP=devicedemo scripts/android.sh build && APP=devicedemo bash scripts/android-keyboard.sh
-      # (after the keyboard's whatever it said, but only on an emulator that is up: with none, adb waited for one until
-      # the job's 40 minutes ran out, run 39536847578)
-      - name: "The streams (scripts/android-streams.sh: plain, reopen, away, anew, thrown)"
-        if: (success() || failure()) && steps.emu.outcome == 'success'
-        run: APP=streamdemo scripts/android.sh build && APP=streamdemo bash scripts/android-streams.sh
+        with: { target: default, profile: pixel_6, phase: start }
+      - name: Build ${{ matrix.app }}
+        run: APP=${{ matrix.app }} scripts/android.sh build
+      # (the keyboard's first case is still the first launch after the boot, as on an emulator just booted: nothing
+      # is launched before the case's script)
+      - uses: ./.github/actions/mbui-android-emulator
+        with: { target: default, profile: pixel_6, phase: wait }
+      - name: "The ${{ matrix.case }} (scripts/${{ matrix.script }})"
+        run: APP=${{ matrix.app }} bash scripts/${{ matrix.script }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: android-devices
-          path: |
-            apps/mbui/mbui/out/android/streams/
-            apps/mbui/mbui/out/android/keyboard/
+          name: android-devices-${{ matrix.case }}
+          path: apps/mbui/mbui/out/android/${{ matrix.case }}/
 
   # The oldest Android the apps run on (minSdk 30, Android 11): the demo started there and its first frame shown, or
   # its crash. The other jobs' emulator is API 34's, so a call newer than the oldest system has went unseen until a
