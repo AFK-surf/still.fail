@@ -1167,6 +1167,7 @@ test("a_chat_that_links_others_reads_their_rows_alone_not_their_stations_lists",
   await t.read(u, 1);
   assert.deepEqual(u.value.messages[0].chats.map((c: J) => [c.title, c.archived ?? false]), [["c-live 的标题", false], ["旧的", true]]);
   assert.equal(t.data.loaded({ topic: "archivedRows", station: "ws/a" }), false, "the archive not read");
+  assert.equal(t.store.inUse({ topic: "archivedRows", station: "ws/a" }), false, "nor shown: its station not asked for it whole");
   assert.equal(t.data.loaded(rows("ws/a")), false, "nor the list");
 });
 

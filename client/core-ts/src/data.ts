@@ -72,7 +72,8 @@ export function dbName(sub: string): string {
 }
 
 /// The device's own values (not an account's): kept in the host's storage, one storage value per table, read at start.
-export const DEVICE_TABLES = ["prefs", "changelog", "choice", "chat_ref", "drive_place"] as const;
+/// (`verified`: signatures checked on this device, vault/verified.ts)
+export const DEVICE_TABLES = ["prefs", "changelog", "choice", "chat_ref", "drive_place", "verified"] as const;
 export type DeviceTable = (typeof DEVICE_TABLES)[number];
 
 class Device {

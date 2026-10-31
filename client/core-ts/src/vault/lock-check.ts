@@ -2,13 +2,12 @@
 // vault trusts to say which device a box key is and whose. The rest of the core shows the lock as the cloud keeps it
 // (views/lock.ts `fold`, unchecked); before a vault's key is sealed to a device, every entry's signature and signer is
 // checked here, so neither the cloud nor a station can put a device of their own in it.
-import { ed25519 } from "@noble/curves/ed25519.js";
-import { p256 } from "@noble/curves/nist.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { CoreError } from "../error.ts";
 import { type Entry, entryHash, signedBytes } from "../lock.ts";
 import { utf8 } from "../util.ts";
 import { fromB64url } from "./crypto.ts";
+import { ed25519Ok, p256Ok } from "./verified.ts";
 
 export type Device = { id: string; sub: string; kind: "app" | "web"; sign_key?: string; exp?: number };
 /// `cloudKeys`: the keys the cloud signs member credentials with, as the lock names them (a JWKS).
@@ -45,14 +44,14 @@ function sigValid(sig: any, hash: string, s: Checked, passkey: boolean): boolean
       const signed = new Uint8Array(auth.length + 32);
       signed.set(auth);
       signed.set(sha256(client), auth.length);
-      return p256.verify(der, signed, pub, { prehash: true, lowS: false, format: "der" });
+      return p256Ok(der, signed, pub, true);
     }
     if (passkey) return false;
     const bytes = signedBytes(hash);
-    if (sig?.alg === "Ed25519" && /^ed25519:[0-9a-f]{64}$/.test(sig.key)) return ed25519.verify(unhex(sig.sig), bytes, unhex(sig.key.slice(8)));
+    if (sig?.alg === "Ed25519" && /^ed25519:[0-9a-f]{64}$/.test(sig.key)) return ed25519Ok(unhex(sig.sig), bytes, unhex(sig.key.slice(8)));
     const pub = sig?.alg === "ES256" ? point(sig.key) : null;
     const raw = pub ? fromB64url(sig.sig) : null;
-    return pub !== null && raw !== null && p256.verify(raw, bytes, pub, { prehash: true, lowS: false });
+    return pub !== null && raw !== null && p256Ok(raw, bytes, pub);
   } catch {
     return false;
   }
