@@ -10,13 +10,14 @@ fn sized_rows(
   tall? : Int = -1,
   changed? : () -> Bool = fn() { false },
   in_place? : Bool = false,
+  moves? : Bool = false,
 ) -> (@ui.Ctx) -> Unit {
   let rows : @ui.ListRows[Int] = @ui.ListRows::new()
   fn(c) {
     let now = ids()
     let (items, keys) = rows.rows(c, now.map(fn(i) { "r" + i.to_string() }), now, fn(i) {
       if i == tall && changed() { "tall" } else { "" }
-    })
+    }, moves=fn(_) { moves })
     c.list(
       "list",
       items.length(),
@@ -122,6 +123,34 @@ test "list: a row going closes its room at once, what it holds in its middle, fa
   // (closed: out of the list)
   assert_true(t.row(19) is None)
   assert_eq(y_of(t, 18), y18 + 50.0)
+}
+
+///|
+/// What is drawn of row `i`'s words, each as many times as it is: how far it is seen.
+fn row_seen(t : @ui.Tester, i : Int) -> Array[Double] {
+  t.words().filter(fn(w) { w.0 == "Row \{i}" }).map(fn(w) { w.5 })
+}
+
+///|
+test "list: a row gone down past others is the one that moves: it leaves where it was and comes where it is, those it passed stay" {
+  // (a chat its agent finished, below today's chats at work: 2026-10-31 the user, 「忽然所有 chat 都像是新出现的一样」)
+  let order = [[0, 1, 2, 3, 4, 5]]
+  let t = @ui.Tester::new(
+    sized_rows(fn() { order[0] }, stick_end=false, in_place=true, moves=true),
+    w=300.0,
+    h=400.0,
+  )
+  order[0] = [1, 2, 3, 0, 4, 5]
+  t.draw()
+  t.run_for(@ui.row_size_ms / 4.0)
+  for i in [1, 2, 3, 4, 5] {
+    assert_eq(row_seen(t, i), [1.0], msg="Row \{i}")
+  }
+  // (row 0 on its way: a copy of it closing where it was, it opening where it is, neither seen whole)
+  let seen = row_seen(t, 0)
+  assert_true(seen.iter().all(fn(a) { a < 1.0 }), msg="\{seen}")
+  t.run_for(@ui.row_size_ms)
+  assert_eq(row_seen(t, 0), [1.0])
 }
 
 ///|
