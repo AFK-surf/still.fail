@@ -2098,6 +2098,14 @@ pub fn Tester::wheel_with(self : Tester, x : Double, y : Double, dx : Double, dy
 }
 
 ///|
+/// A key (`code`, `mods` held) the host says came at `at` (its own moment), told now, later: no frame drawn.
+pub fn Tester::key_told(self : Tester, code : Int, mods : Int, at : Double) -> Unit {
+  self.fake.event_at = at
+  on_key(code, mods)
+  self.fake.event_at = -1.0
+}
+
+///|
 /// The wheel turned (Tester::wheel_with's) at `at`, told now, later (the host's clock past it): as a host hands on an
 /// event it got a while before, its own time said with it (@hostapi.event_time). No frame drawn.
 pub fn Tester::wheel_told(

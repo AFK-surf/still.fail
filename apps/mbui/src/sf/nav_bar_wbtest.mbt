@@ -24,10 +24,10 @@ test "back whose word has not the room: the chevron alone, the word not cut, the
   // (its word left out whole, not cut)
   let ctx = t.ctx()
   assert_true(ctx.left_out(ctx.id("back/word")))
-  let b = t.get(@ui.Button, label="A folder with a long name")
+  let b = t.get(@ui.Role::Button, label="A folder with a long name")
   assert_true(b.rect.2 > 0.0)
   assert_eq(t.squeeze_faults(), [])
-  t.click(@ui.Button, label="A folder with a long name")
+  t.click(@ui.Role::Button, label="A folder with a long name")
   assert_eq(went.val, 1)
   // given the room: the word whole, on one line
   room.val = 300.0

@@ -14,7 +14,7 @@ fn model_pop(mode : String) -> @ui.Tester {
 /// The words `name` as drawn last in the panel (over what the page has under it there): how wide they are, the room
 /// they have, their weight.
 fn pop_words(t : @ui.Tester, name : String) -> @ui.Laid? raise {
-  let (px, py, pw, ph) = t.get(@ui.Dialog).rect
+  let (px, py, pw, ph) = t.get(@ui.Role::Dialog).rect
   t
   .boxes()
   .rev()
@@ -25,11 +25,11 @@ fn pop_words(t : @ui.Tester, name : String) -> @ui.Laid? raise {
 ///|
 test "wide, short names: the model's panel as wide as what it holds, not as wide as it may be" {
   let t = model_pop("newchat-model")
-  let (px, _, pw, _) = t.get(@ui.Dialog).rect
+  let (px, _, pw, _) = t.get(@ui.Role::Dialog).rect
   let effort = t.get(Radio, label="高").rect
   // (what it holds narrow, its foot the widest of it: far narrower than the most it may be)
-  assert_true(pw < 2.0 * @sfpages.triple_models_least, msg="\{t.get(@ui.Dialog).rect}")
-  assert_true(effort.0 + effort.2 <= px + pw - @sf.panel_pad, msg="\{t.get(@ui.Dialog).rect} \{effort}")
+  assert_true(pw < 2.0 * @sfpages.triple_models_least, msg="\{t.get(@ui.Role::Dialog).rect}")
+  assert_true(effort.0 + effort.2 <= px + pw - @sf.panel_pad, msg="\{t.get(@ui.Role::Dialog).rect} \{effort}")
   let model = t.get(Button, label="Opus 5.5").rect
   assert_true(model.0 + model.2 <= px + pw)
 }
@@ -75,7 +75,7 @@ test "wide: another effort picked, its thumb slides there, one thumb all the way
 ///|
 test "wide, many models and Codex's efforts and speeds: the models, how hard it thinks on a line of its own, the runtime and how fast a row each, in the panel" {
   let t = model_pop("newchat-tall-model")
-  let (px, py, pw, ph) = t.get(@ui.Dialog).rect
+  let (px, py, pw, ph) = t.get(@ui.Role::Dialog).rect
   let last = t.get(Button, label="GPT-6.1 Terra").rect
   // how hard it thinks, its levels on one line under the models
   let levels = ["默认", "最低", "低", "中", "高", "很高", "最高", "Ultra"].map(fn(l) { t.get(Radio, label=l).rect })
@@ -93,7 +93,7 @@ test "wide, many models and Codex's efforts and speeds: the models, how hard it 
 ///|
 test "wide: another model picked, its runtimes fewer, the panel as wide as it opened; every name whole on its line" {
   let t = model_pop("newchat-crowded-model")
-  let opened = t.get(@ui.Dialog).rect
+  let opened = t.get(@ui.Role::Dialog).rect
   for name in ["Opus 5.5", "Grok 4.7 Build Fast", "DeepSeek V4.1 Flash"] {
     t.click(Button, label=name)
     t.run_for(squeeze_opening)
@@ -106,7 +106,7 @@ test "wide: another model picked, its runtimes fewer, the panel as wide as it op
       None => fail("\{name} not drawn")
     }
     // (as wide, its sides where they were; as tall as what it holds now)
-    let now = t.get(@ui.Dialog).rect
+    let now = t.get(@ui.Role::Dialog).rect
     assert_true(now.0 == opened.0 && now.2 == opened.2, msg="\{name} picked: \{now}, opened \{opened}")
   }
 }

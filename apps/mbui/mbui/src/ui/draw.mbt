@@ -195,6 +195,8 @@ priv struct DrawState {
   mut bypass : Int
   /// 0 drawn and tapped, 1 only its tap rects (as laid out), 2 only drawn (as it looks)
   mut mode : Int
+  /// the frame's input targets found already, as its targets alone (Ctx::targets): what is painted after says none again
+  mut targets_said : Bool
   mut overlaying : Bool
   /// what is Flying (strata.mbt) put off where it was come to, painted at the next stratum over it (a bar, a cover, a
   /// layer opened over the page) or once its layer is painted: its node, how faded, and the moves of what held it
@@ -240,6 +242,7 @@ let dr : DrawState = {
   framing: false,
   bypass: -1,
   mode: 0,
+  targets_said: false,
   overlaying: false,
   overlay: [],
   moves: [],
@@ -303,6 +306,7 @@ fn reset_drawing() -> Unit {
   dr.any = false
   dr.bypass = -1
   dr.mode = 0
+  dr.targets_said = false
   dr.overlaying = false
   dr.overlay.clear()
   dr.raised.clear()
@@ -332,6 +336,7 @@ fn drawing_begin() -> Unit {
   dr.framing = false
   dr.bypass = -1
   dr.mode = 0
+  dr.targets_said = false
   dr.overlay.clear()
   dr.raised.clear()
   dr.scrims.clear()
@@ -790,7 +795,8 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   // (drawn otherwise than it is tapped: moved, or over everything, or cut)
   let apart = !look.is_still() || e.z >= z_flying || cutting
   if dr.mode == 0 && apart {
-    if !e.only {
+    // (found already where the frame's targets are found alone: Ctx::targets)
+    if !e.only && !dr.targets_said {
       // its tap rects, where it is laid out (what it would draw so is dropped)
       let i0 = self.ninst
       let (run, run_start, run_len) = (glass_paint.run, glass_paint.run_start, glass_paint.run_len)

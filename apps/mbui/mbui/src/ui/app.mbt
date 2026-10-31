@@ -764,13 +764,17 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
   if by >= 0 {
     args.push(by.to_double())
   }
+  // (where a mouse points, said before the event is taken; what it is over told once it is: view_host.mbt)
+  view_point_said(kind, x, y)
   // (what the tree made once routes elsewhere than to the old view (a press on a node of its own, one outside the old
   // view's island) is no input of the old view's: taped alone, view_host.mbt)
   if (kind <= 3 || view_holds()) && view_pointer(kind, x, y, button) {
+    view_pointed()
     input_taped("pointer", h_event_time(), args)
     return
   }
   took_input("pointer", h_event_time(), args)
+  view_pointed()
   // (a press down, up or called off, a second finger, the pointer gone: what reads what came is built again; a pointer
   // moved is the hand's place, read by what reads it: hand.mbt)
   if kind != 1 {
@@ -1360,18 +1364,13 @@ fn Ctx::back_gesture(self : Ctx, kind : Int, x : Double, t : Double, progress? :
         }
         return false
       }
-      guard self.back is Some(f) else { return false }
-      let (left, w) = if self.back_node >= 0 && self.back_node < self.count {
-        let n = self.nodes[self.back_node]
-        (n.x, n.fw)
-      } else {
-        (0.0, self.width)
-      }
+      // (what takes back now: a node of the window's tree's, else what the old views said: Ctx::back_taker)
+      guard self.back_taker() is Some(h) else { return false }
       if kind == 0 {
         self.back_off = false
-        self.back_held = Some({ f, left, w, owner: self.back_owner() })
+        self.back_held = Some(h)
       }
-      f(kind, x - left, w, t, progress)
+      (h.f)(kind, x - h.left, h.w, t, progress)
       true
     }
     (_, Some(h)) => {
@@ -1399,6 +1398,8 @@ struct BackHeld {
   left : Double
   w : Double
   owner : @view.NodeId?
+  /// whether it is a node of the window's tree's (what back does there is no input of the old views')
+  tree : Bool
 }
 
 ///|
@@ -1442,11 +1443,30 @@ fn on_back(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
 
 ///|
 fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
-  took_input("back", h_now(), [kind.to_double(), x, progress, edge.to_double()])
-  if kind != 1 {
-    hand_event()
-  }
   let c = g()
+  // (what takes it as it goes (held from its start), or what will as it begins: a node of the window's tree's, or the
+  // rest of one called off, nobody's: no input of the old views', taped alone; else theirs)
+  let theirs = match (kind, c.back_held) {
+    (0, _) | (_, None) =>
+      if kind != 0 && c.back_off {
+        false
+      } else {
+        match c.back_taker() {
+          Some(h) => !h.tree
+          None => true
+        }
+      }
+    (_, Some(h)) => !h.tree
+  }
+  let args = [kind.to_double(), x, progress, edge.to_double()]
+  if theirs {
+    took_input("back", h_now(), args)
+    if kind != 1 {
+      hand_event()
+    }
+  } else {
+    input_taped("back", h_now(), args)
+  }
   // (the event's own moment, taken once as it began: view_host.mbt)
   let t = view_moment()
   // from the right edge, the finger's way is mirrored
@@ -1455,7 +1475,7 @@ fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
     // (begun where what takes back may take input now (view_host.mbt's old_owner_open): held by it from here,
     // Ctx::back_gesture; else the whole of it nobody's)
     0 =>
-      if old_owner_open(c.back_owner()) {
+      if c.back_open() {
         c.back_gesture(0, from_left, t, progress~) |> ignore
       } else {
         c.back_held = None
@@ -1464,15 +1484,16 @@ fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
     1 => c.back_gesture(1, from_left, t, progress~) |> ignore
     // (back said with no gesture: what takes back now, where it may take input)
     2 if c.back_held is None && !c.back_off =>
-      if old_owner_open(c.back_owner()) {
+      if c.back_open() {
         c.back_gesture(4, 0.0, t) |> ignore
       }
     2 => c.back_gesture(4, 0.0, t) |> ignore
     _ => c.back_gesture(3, 0.0, t) |> ignore
   }
-  // (a step on: a frame owed, where the finger has it read by what reads it, as a pointer moved is; else what began,
-  // ended or was called off, come from outside what is a signal yet)
-  if kind == 1 {
+  // (a step on: a frame owed, where the finger has it read by what reads it, as a pointer moved is; one a node of the
+  // tree's took: a frame owed, what it changed told by its signals; else what began, ended or was called off, come from
+  // outside what is a signal yet)
+  if kind == 1 || !theirs {
     h_frame_owed()
   } else {
     h_request_frame()
@@ -1563,6 +1584,11 @@ fn on_key(code : Int, mods : Int) -> Unit {
 
 ///|
 fn on_key_now(code : Int, mods : Int) -> Unit {
+  // (taken by a node of the window's tree, at its moment: no input of the old views', taped alone: view_host.mbt)
+  if view_key(code, mods) {
+    input_taped("key", h_now(), [code.to_double(), mods.to_double()])
+    return
+  }
   took_input("key", h_now(), [code.to_double(), mods.to_double()])
   hand_event()
   key_in(code, mods)

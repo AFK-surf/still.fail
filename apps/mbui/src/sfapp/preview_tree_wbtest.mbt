@@ -291,6 +291,8 @@ test "viewer on the tree: opened from the chat, zoomed, closed back into its thu
   }
   t.run_for(@sfpages.reveal_ms)
   let (x, y) = t.locate("img:compare.png")[0]
+  // (the pointer over the window, what is under it followed as long as it is: the window's, not the viewer's)
+  t.move(x, y)
   let before = tree_held()
   let first = opened_closed(t, x, y, before)
   let again = opened_closed(t, x, y, before)
@@ -903,4 +905,61 @@ test "viewer on the tree, over the pages as a modal layer: the app's keys under 
   t.draw()
   assert_eq(app.nav.depth(), depth)
   assert_true(viewer.get() is Some(_))
+}
+
+///|
+/// The picture open, a key (`code`) said to have come at 20 ms past now: `how` 0 told at its moment (the host's clock
+/// there), 1 told late (the host's clock at 80 by then), 2 a frame drawn at 10 before it, told at its moment. Whether
+/// it is closing, when its way out ends (from now), and how far it is zoomed at 60.
+fn keyed(code : Int, how : Int) -> (Bool, Double, Double) {
+  let t = preview_tester("image", platform=0)
+  let v = viewer.get().unwrap()
+  let t0 = t.time()
+  if how == 2 {
+    t.frame_at(t0 + 10.0)
+  }
+  t.advance(t0 + (if how == 1 { 80.0 } else { 20.0 }) - t.time())
+  t.key_told(code, 0, t0 + 20.0)
+  let ends = if v.flies { v.fly.ends_at() } else { v.fade.ends_at() }
+  (v.closing, ends - t0, v.zoom.scale_at(t0 + 60.0))
+}
+
+///|
+test "viewer on the tree: Esc closes it and + zooms it at the key's own moment, told then, late or after a frame: the same; a menu over it, Esc closes the menu, it stays, the next Esc closes it" {
+  for code in [@ui.key_escape, @ui.key_of_char('+')] {
+    let on_time = keyed(code, 0)
+    assert_eq(keyed(code, 1), on_time, msg="\{code} late")
+    assert_eq(keyed(code, 2), on_time, msg="\{code} after a frame")
+  }
+  assert_true(keyed(@ui.key_escape, 0).0)
+  // (+ zoomed in from how it showed then; a key it takes not, nothing)
+  assert_true(keyed(@ui.key_of_char('+'), 0).2 > keyed(@ui.key_of_char('q'), 0).2)
+  assert_true(!keyed(@ui.key_of_char('q'), 0).0)
+  // its picture's menu open over it: Esc the menu's, then the next its
+  let t = preview_tester("image", platform=0)
+  let v = viewer.get().unwrap()
+  let (x, y, w, h) = v.zoom.rect().unwrap()
+  t.right_click(x + w / 2.0, y + h / 2.0)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(@sf.presenting())
+  t.key(@ui.key_escape)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(!@sf.presenting() && !v.closing && viewer.get() is Some(_))
+  t.key(@ui.key_escape)
+  assert_true(v.closing)
+}
+
+///|
+test "viewer on the tree: back its layer's; a menu over it, back the menu's, it stays, the next back closes it" {
+  let t = preview_tester("image", platform=0)
+  let v = viewer.get().unwrap()
+  let (x, y, w, h) = v.zoom.rect().unwrap()
+  t.right_click(x + w / 2.0, y + h / 2.0)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(@sf.presenting())
+  t.back()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(!@sf.presenting() && !v.closing && viewer.get() is Some(_))
+  t.back()
+  assert_true(v.closing)
 }

@@ -49,14 +49,14 @@ test "a list's panel as tall as what it holds, its share of the window the most 
   // two chats written with: the sheet as tall as they are, no room under them to spare
   let t = decide_core(calls, "chat-letters")
   sheet_rested(t, "sf-present")
-  let (_, sy, _, sh) = t.get(@ui.Dialog).rect
+  let (_, sy, _, sh) = t.get(@ui.Role::Dialog).rect
   let (_, ly, _, lh) = t.rect_of("BFT 备份尺寸分析").unwrap()
   assert_true(sh < 844.0 * 0.8 - 100.0, msg="short: \{sh}")
   assert_true(sy + sh - (ly + lh) < 120.0, msg="under its last: \{sy + sh - (ly + lh)}")
   // thirty: the sheet at its share, the last of them under its foot, scrolled to
   let t = decide_core(calls, "chat-letters-many")
   sheet_rested(t, "sf-present")
-  let (_, _, _, sh) = t.get(@ui.Dialog).rect
+  let (_, _, _, sh) = t.get(@ui.Role::Dialog).rect
   assert_true((sh - 844.0 * 0.8).abs() < 2.0, msg="capped: \{sh}")
   assert_true(t.find("往来的对话 1") is Some(_))
   assert_true(t.find("往来的对话 30") is None, msg="its last under its foot")

@@ -68,7 +68,7 @@ pub fn window_keys_at(width : Double) -> (Double, Double) {
 ///|
 /// In a window's whole, how far in from the window's side the last button stands.
 fn window_keys_side() -> Double {
-  if window_corner_key().follows() {
+  if window_corner_key().follows(@ui.corner_roots()) {
     bar_keys_top()
   } else {
     window_keys_in
@@ -79,7 +79,7 @@ fn window_keys_side() -> Double {
 /// On the tape, how far in from the window's side the last button stands: as the last key of the bar of the panel at
 /// the window's edge stands in its top right corner.
 fn window_keys_side_tape() -> Double {
-  window_in + line_end_in(tape_edge.radius(), window_keys_in - window_in)
+  window_in + line_end_in(tape_edge.radius(@ui.corner_roots()), window_keys_in - window_in)
 }
 
 ///|

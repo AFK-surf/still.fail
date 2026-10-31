@@ -21,14 +21,14 @@ test "a filling Seg short of room for equal shares: each option's words whole, t
   let mut upto = 16.0
   for words in parts {
     assert_eq(t.lines_of(words), [words], msg=words)
-    let (x, _, w, _) = t.get(@ui.Radio, label=words).rect
+    let (x, _, w, _) = t.get(@ui.Role::Radio, label=words).rect
     assert_true(x >= upto - 0.5, msg=words)
     upto = x + w
   }
   assert_true(upto <= 324.5)
   // the short ones more than their words and 8 either side, the long ones that alone
   for words in parts {
-    let (_, _, option, _) = t.get(@ui.Radio, label=words).rect
+    let (_, _, option, _) = t.get(@ui.Role::Radio, label=words).rect
     let (_, _, need, _) = t.rect_of(words).unwrap()
     if words == "Web" || words == "Cloud" {
       assert_true(option > need + 16.5, msg=words)
@@ -70,7 +70,7 @@ test "a filling Seg short of room at a larger size of words: their words smaller
   let mut upto = 17.5
   for i, words in parts {
     assert_eq(t.lines_of(words), [words], msg=words)
-    let (x, _, ow, _) = t.get(@ui.Radio, label=words).rect
+    let (x, _, ow, _) = t.get(@ui.Role::Radio, label=words).rect
     assert_true(x >= upto - 0.5, msg=words)
     upto = x + ow
     let (wx, _, ww, _) = t.rect_of(words).unwrap()
@@ -109,8 +109,8 @@ test "a filling Seg whose options do not fit side by side even at the system's o
     platform=2,
   )
   t.draw()
-  assert_eq(t.all(@ui.Radio).length(), 0)
-  let (x, _, w, h) = t.get(@ui.Button, label="Cloud").rect
+  assert_eq(t.all(@ui.Role::Radio).length(), 0)
+  let (x, _, w, h) = t.get(@ui.Role::Button, label="Cloud").rect
   assert_true((x - 16.0).abs() < 0.5 && (x + w - 244.0).abs() < 0.5 && h == 34.0, msg="\{x} \{w} \{h}")
   assert_eq(t.lines_of("Cloud"), ["Cloud"])
   assert_true(t.find("Station") is None)
@@ -121,12 +121,12 @@ test "a filling Seg whose options do not fit side by side even at the system's o
   assert_true(!presenting())
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_eq(chosen.val, 3)
-  assert_true(t.query(@ui.Button, label="Station") is Some(_))
+  assert_true(t.query(@ui.Role::Button, label="Station") is Some(_))
   // (given the room: its options side by side, the one picked chosen)
   t.resize(600.0, 700.0)
   t.draw()
-  assert_eq(t.all(@ui.Radio).length(), 5)
-  assert_eq(t.get(@ui.Radio, label="Station").check, Some(@ui.Check::On))
+  assert_eq(t.all(@ui.Role::Radio).length(), 5)
+  assert_eq(t.get(@ui.Role::Radio, label="Station").check, Some(@ui.Check::On))
 }
 
 ///|
@@ -185,8 +185,8 @@ test "segmented whose options do not fit side by side even at the system's own s
     h=700.0,
   )
   t.draw()
-  assert_eq(t.all(@ui.Radio).length(), 0)
-  let (x, _, w, _) = t.get(@ui.Button, label="Overview").rect
+  assert_eq(t.all(@ui.Role::Radio).length(), 0)
+  let (x, _, w, _) = t.get(@ui.Role::Button, label="Overview").rect
   assert_true((x - 16.0).abs() < 0.5 && (x + w - 204.0).abs() < 0.5, msg="\{x} \{w}")
   assert_eq(t.lines_of("Overview"), ["Overview"])
   assert_eq(t.squeeze_faults(), [])
@@ -197,7 +197,7 @@ test "segmented whose options do not fit side by side even at the system's own s
   assert_true(!presenting())
   t.run_for(@kit.presence_out_ms)
   assert_eq(chosen.val, 2)
-  assert_true(t.query(@ui.Button, label="Settings") is Some(_))
+  assert_true(t.query(@ui.Role::Button, label="Settings") is Some(_))
 }
 
 ///|
@@ -223,8 +223,8 @@ test "segmented short of room for its equal columns: the longer as wide as its w
   let short = widths()
   assert_true((short[1] - need()).abs() < 1.0, msg="\{short} \{need()}")
   assert_true(short[0] < short[1])
-  let (x0, _, _, _) = t.get(@ui.Radio, label="Settings").rect
-  let (x1, _, w1, _) = t.get(@ui.Radio, label="Software and devices").rect
+  let (x0, _, _, _) = t.get(@ui.Role::Radio, label="Settings").rect
+  let (x1, _, w1, _) = t.get(@ui.Role::Radio, label="Software and devices").rect
   assert_true(x0 >= 16.0 && x1 + w1 <= 304.5)
   assert_eq(t.squeeze_faults(), [])
   t.resize(600.0, 200.0)
@@ -256,7 +256,7 @@ test "option_widths: alike, none narrower than its words and sides; then their s
 ///|
 /// The choice drawn as `words` pressed, and its pick come in: a sheet risen, else the web's in.
 fn open_choice(t : @ui.Tester, words : String) -> Unit raise {
-  t.click(@ui.Button, label=words)
+  t.click(@ui.Role::Button, label=words)
   if presented_how == [AsSheet] {
     t.run_for(@kit.sheet_rest("sf-present") - t.time())
   } else {
@@ -269,7 +269,7 @@ fn open_choice(t : @ui.Tester, words : String) -> Unit raise {
 fn option_rects(t : @ui.Tester, labels : Array[String]) -> Array[(Double, Double, Double, Double)] raise {
   let out = []
   for words in labels {
-    out.push(t.get(@ui.Radio, label=words).rect)
+    out.push(t.get(@ui.Role::Radio, label=words).rect)
   }
   out
 }

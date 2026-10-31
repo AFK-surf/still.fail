@@ -195,7 +195,7 @@ test "the chat's sheet and an agent's card as tall as what they show: their last
     let (mode, last) = case
     let t = decide_core(calls, mode)
     sheet_rested(t, "sf-present")
-    let (_, sy, _, sh) = t.get(@ui.Dialog).rect
+    let (_, sy, _, sh) = t.get(@ui.Role::Dialog).rect
     let (_, ly, _, lh) = t.rect_of(last).unwrap()
     // under its last row's words: the rest of its row (and its card's padding), the sheet's foot, the bar's
     let under = sy + sh - (ly + lh)

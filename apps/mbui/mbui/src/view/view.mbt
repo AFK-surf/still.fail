@@ -49,6 +49,14 @@ pub(all) struct Look {
   mut ground : Int64
   mut ink : Int64
   mut words : String
+  /// the shapes it draws over its ground (their outlines, as said: what they come to drawn kept by them), and the one
+  /// colour they are drawn in where it is not 0 (their own where it is): View::shapes, View::tint
+  mut shapes : Array[@paint.Shape]
+  mut tint : Int64
+  /// how round its corners are (its ground's, its glass's), and the glass it is drawn as under what it draws (None: none):
+  /// View::radius, View::glass
+  mut radius : Double
+  mut glass : @paint.Glass?
   mut alpha : Double
   mut dx : Double
   mut dy : Double
@@ -68,9 +76,20 @@ pub(all) struct Content {
   ground : Int64
   ink : Int64
   words : String
+  shapes : Array[@paint.Shape]
+  tint : Int64
+  radius : Double
+  glass : @paint.Glass?
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
 } derive(Eq, Debug)
+
+///|
+/// Whether it draws anything of its own: a ground, words, shapes, glass, or what hosts it (the one place that says what
+/// a node draws, for what asks whether it draws nothing: Tree::alone).
+pub fn Content::draws(self : Content) -> Bool {
+  self.ground != 0L || self.words != "" || !self.shapes.is_empty() || self.glass is Some(_) || self.hosted
+}
 
 ///|
 /// A node's content unfolded where the window draws it (what holds it drawn off and faded with it): for a test, or a
@@ -85,6 +104,10 @@ pub(all) struct Drawn {
   ground : Int64
   ink : Int64
   words : String
+  shapes : Array[@paint.Shape]
+  tint : Int64
+  radius : Double
+  glass : @paint.Glass?
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
 } derive(Eq, Debug)
@@ -137,20 +160,35 @@ struct Node {
   mut on_menu : ((Menu) -> Unit)?
   /// what a wheel turned over it does (View::on_wheel)
   mut on_wheel : ((Wheel) -> Unit)?
+  /// what a key does to it (View::on_key): true where it took the key
+  mut on_key : ((Key) -> Bool)?
+  /// how many times what a key does to it was said (View::on_key): a key asked of it as it was said then, asked only
+  /// while it still is so (Tree::key_at)
+  mut key_said : Int
+  /// what back does to it (View::takes_back)
+  mut on_back : (() -> Unit)?
+  /// whether it is held, and pointed at, as what reads it reads it (View::pressed, View::pointed): made as first read,
+  /// let go with it
+  mut pressed_cell : @signals.Signal[Bool]?
+  mut pointed_cell : @signals.Signal[Bool]?
   /// what a finger or the pointer held on it does as it goes (View::on_drag)
   mut on_drag : ((Drag) -> Unit)?
   /// how many fingers held on it at once it takes (View::on_drag's `fingers`): one more calls the hold off
   mut fingers : Int
   /// which saying of its on_drag it is (each said anew, or let go, another): what was told by one is that one's alone
   mut drag_said : Int
-  /// where in it a finger is taken at a moment (View::takes; none: all of it)
-  mut takes : ((Double, Double, Double) -> Bool)?
+  /// where in it a finger is taken at a moment (View::takes, View::hosted_takes; none: all of it)
+  mut takes : Takes?
   /// what ends what its on_drag set going (a gesture's: its hold's moment, its dispatch), as it is said anew or let go
   mut drag_end : (() -> Unit)?
   /// a slot (show, pick, each): no box of its own, what it holds laid out as its holder's own
   mut slot : Bool
   /// drawn by what hosts the tree (View::hosted)
   mut hosted : Bool
+  /// what it says it is, read out (View::says); None nothing
+  mut said : Said?
+  /// what it and all it holds are kept from what is read out (View::hides)
+  mut said_hidden : Bool
   /// its instance to be made again (its look changed); its place (and what it holds) to be worked out again
   mut look_due : Bool
   mut place_due : Bool
@@ -235,6 +273,19 @@ pub struct Tree {
   mut modals_due : Bool
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
+  /// the node a finger or the pointer is held on, and the one the pointer is over (of those that take a press): each
+  /// node's own cell told as it comes or goes (View::pressed, View::pointed)
+  mut pressing : NodeId?
+  mut pointed : NodeId?
+  /// what follows what is under the pointer, while it is over the window (Tree::point_at)
+  mut point_stop : (() -> Unit)?
+  /// let go (Tree::dispose): what is made for it after stops at once
+  mut gone : Bool
+  /// which following of the point is the one now (Tree::follow_point): each said, and each let go, another
+  mut point_said : Int
+  /// how many times what a point would hit may have changed (a layout, a place, the order, a node made or let go, what
+  /// takes presses or holds a layer): what is pointed at worked out again only past one (Tree::hits_said)
+  mut hits : Int
   /// the fingers down on it (each by its id: Drag's `finger`), in the order they went down
   downs : Array[Int]
   /// what the last frame changed: the nodes whose content it made again, those placed or faded otherwise
@@ -315,6 +366,12 @@ pub fn Tree::new(
     committing: 0,
     modals_due: false,
     held: None,
+    pressing: None,
+    pointed: None,
+    point_stop: None,
+    gone: false,
+    point_said: 0,
+    hits: 0,
     downs: [],
     changed: [],
     composed: [],
@@ -361,6 +418,7 @@ pub fn words_measure(words : String, width : Double) -> (Double, Double) {
 /// A node made in `parent` (-1: the root), its scope its own (made with nothing reading: owned by nothing else).
 fn Tree::made(self : Tree, parent : Int) -> View {
   self.work.made = self.work.made + 1
+  self.hits = self.hits + 1
   let at = match self.free.pop() {
     Some(i) => {
       let n = self.nodes[i]
@@ -370,6 +428,12 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.ground = 0L
       n.look.ink = 0L
       n.look.words = ""
+      n.look.shapes = []
+      n.look.tint = 0L
+      n.look.radius = 0.0
+      n.look.glass = None
+      n.said = None
+      n.said_hidden = false
       n.look.alpha = 1.0
       n.look.dx = 0.0
       n.look.dy = 0.0
@@ -381,6 +445,11 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.on_press = None
       n.on_menu = None
       n.on_wheel = None
+      n.on_key = None
+      n.on_back = None
+      n.pressed_cell = None
+      n.pointed_cell = None
+      n.key_said = 0
       n.on_drag = None
       n.takes = None
       n.drag_end = None
@@ -402,7 +471,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0 },
+        look: { ground: 0L, ink: 0L, words: "", shapes: [], tint: 0L, radius: 0.0, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0 },
         parent,
         kids: [],
         owner: None,
@@ -413,6 +482,11 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         on_press: None,
         on_menu: None,
         on_wheel: None,
+        on_key: None,
+        key_said: 0,
+        on_back: None,
+        pressed_cell: None,
+        pointed_cell: None,
         on_drag: None,
         fingers: 1,
         drag_said: 0,
@@ -420,6 +494,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         drag_end: None,
         slot: false,
         hosted: false,
+        said: None,
+        said_hidden: false,
         look_due: false,
         place_due: false,
         placed: false,
@@ -534,6 +610,9 @@ pub fn Tree::alive(self : Tree) -> Int {
 ///|
 /// The whole tree let go: every node's scope stopped, what goes with it run, callbacks and measures dropped.
 pub fn Tree::dispose(self : Tree) -> Unit {
+  self.gone = true
+  // (what follows the pointer held by nothing of the tree's nodes: let go with it, told nothing more)
+  self.point_stopped()
   if self.nodes.length() > 0 && self.nodes[0].live {
     self.root().let_go()
   }
@@ -654,6 +733,7 @@ fn Tree::marked(self : Tree) -> Unit {
 /// holder's layout reused, is no sign the rest are).
 fn Tree::layout_marked_at(self : Tree, at : Int) -> Unit {
   self.layout_due = true
+  self.hits = self.hits + 1
   self.marked()
   let mut i = at
   while i >= 0 {
@@ -681,6 +761,7 @@ fn Tree::place_marked_at(self : Tree, at : Int) -> Unit {
   if !n.place_due {
     n.place_due = true
     self.places_due.push(at)
+    self.hits = self.hits + 1
     self.marked()
   }
 }
@@ -689,6 +770,7 @@ fn Tree::place_marked_at(self : Tree, at : Int) -> Unit {
 /// The order the nodes are drawn in to be made again (one made, let go or moved among its siblings).
 fn Tree::order_marked(self : Tree) -> Unit {
   self.order_due = true
+  self.hits = self.hits + 1
   self.marked()
 }
 
@@ -700,6 +782,8 @@ priv enum Phase {
   Paint
   Place
   Both
+  /// what it says it is (View::says): read out as asked, nothing laid out, placed or drawn again for it
+  Said
 }
 
 ///|
@@ -891,6 +975,7 @@ fn[T : Eq] View::bind(self : View, prop : Int, live : Live[T], phase : Phase, ap
         tree.layout_marked_at(at)
         tree.look_marked_at(at)
       }
+      Said => tree.marked()
     }
   }
   match n.props.get(prop) {
@@ -1055,6 +1140,38 @@ pub fn View::ground(self : View, ink : Live[Int64]) -> View {
 }
 
 ///|
+/// The shapes it draws over its ground, in its own terms from its top left (@paint.Shape: outlines filled and stroked):
+/// paint's. What they come to as they are drawn is worked out once for the shapes said (their outlines), whatever colour
+/// they are drawn in (View::tint).
+pub fn View::shapes(self : View, shapes : Live[Array[@paint.Shape]]) -> View {
+  self.bind(13, shapes, Paint, fn(s) { self.tree.nodes[self.at].look.shapes = s })
+  self
+}
+
+///|
+/// The one colour its shapes are drawn in (0: each its own): paint's; a change of it draws them again in it, nothing of
+/// their outlines worked out again.
+pub fn View::tint(self : View, ink : Live[Int64]) -> View {
+  self.bind(14, ink, Paint, fn(k) { self.tree.nodes[self.at].look.tint = k })
+  self
+}
+
+///|
+/// How round its corners are (its ground's and its glass's; a linked corner's as worked out where it is said): paint's.
+pub fn View::radius(self : View, r : Live[Double]) -> View {
+  self.bind(15, r, Paint, fn(r) { self.tree.nodes[self.at].look.radius = r })
+  self
+}
+
+///|
+/// The glass it is drawn as, under its ground and what it draws (@paint.Glass: frosted or liquid; None: none): paint's.
+/// What it frosts is what the frame drew under it, wherever it is composed (its capture told as the frame is).
+pub fn View::glass(self : View, g : Live[@paint.Glass?]) -> View {
+  self.bind(16, g, Paint, fn(g) { self.tree.nodes[self.at].look.glass = g })
+  self
+}
+
+///|
 /// How opaque it is drawn, what it holds with it: its place's.
 pub fn View::alpha(self : View, a : Live[Double]) -> View {
   self.bind(6, a, Place, fn(a) { self.tree.nodes[self.at].look.alpha = a })
@@ -1102,6 +1219,7 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
   let set = fn(on : Bool) {
     guard self.live() is Some(n) else { return }
     n.inert = !on
+    self.tree.hits = self.tree.hits + 1
     if !on {
       self.tree.hold_lost_in(self.at)
     }
@@ -1137,6 +1255,7 @@ pub fn View::modal(self : View, on : Live[Bool]) -> View {
   let set = fn(on : Bool) {
     guard self.live() is Some(n) else { return }
     n.modal = on
+    self.tree.hits = self.tree.hits + 1
     match self.tree.modals.search(self.at) {
       Some(i) if !on => self.tree.modals.remove(i) |> ignore
       None if on => self.tree.modals.push(self.at)
@@ -1404,6 +1523,111 @@ pub fn Tree::wheel_at(
 }
 
 ///|
+/// A key, as a node is told it (View::on_key): its code and the modifiers held (the host's, as an old view reads them:
+/// ui's key codes), at its moment.
+pub(all) struct Key {
+  code : Int
+  mods : Int
+  at : Double
+} derive(Eq, Show, Debug)
+
+///|
+/// What a key does to it, while it takes input (living, not leaving nor said to take none, no modal layer over it that
+/// does not hold it): run at the key's moment, as one change outside any tracking; true where it took the key, which
+/// nothing else is told of then. Asked topmost first (Tree::key_at).
+pub fn View::on_key(self : View, f : (Key) -> Bool) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.on_key = Some(f)
+  n.key_said = n.key_said + 1
+  self
+}
+
+///|
+/// A key (`code`, `mods` held) at `at`: asked of the nodes that take keys (View::on_key) that may take input now, the
+/// one drawn last first (after what holds it, after what is before it among what holds them both), each in turn till one
+/// takes it, as one event of that moment (the tree brought there first where it is in none). True where one took it.
+pub fn Tree::key_at(self : Tree, code : Int, mods : Int, at : Double) -> Bool {
+  if self.nodes.length() == 0 || !self.nodes[0].live {
+    return false
+  }
+  let t = if self.cause_at >= 0.0 { self.cause_at } else { at }
+  if self.cause_at < 0.0 {
+    self.bring_to(t)
+  }
+  let took = Ref(false)
+  self.event(t, fn() {
+    // (the topmost first: what a node holds after it, its later kids before its earlier)
+    let found : Array[Int] = []
+    self.topmost_from(0, fn(n) { n.on_key is Some(_) }, found)
+    // (each as it was asked: its node and what it said then, asked only while both are still so as its turn comes (one
+    // above it may have let it go, its index another's since, or said anew), the tree still there)
+    let asked = found.filter_map(fn(i) {
+      let n = self.nodes[i]
+      match n.on_key {
+        Some(f) => Some(({ at: i, gen: n.gen }, n.key_said, f))
+        None => None
+      }
+    })
+    for e in asked {
+      let (id, said, f) = e
+      guard self.nodes[0].live else { break }
+      let n = self.nodes[id.at]
+      guard n.live && n.gen == id.gen && n.key_said == said && !self.pressless_at(id.at) else {
+        continue
+      }
+      if @signals.untracked(fn() { f({ code, mods, at: t }) }) {
+        took.val = true
+        break
+      }
+    }
+  })
+  took.val
+}
+
+///|
+/// The nodes from `at` down that `has` says of, the one drawn last first (after what holds it, its later kids before its
+/// earlier): Tree::key_at's, back_taker's.
+fn Tree::topmost_from(self : Tree, at : Int, has : (Node) -> Bool, out : Array[Int]) -> Unit {
+  let n = self.nodes[at]
+  let mut k = n.kids.length() - 1
+  while k >= 0 {
+    self.topmost_from(n.kids[k], has, out)
+    k = k - 1
+  }
+  if has(n) {
+    out.push(at)
+  }
+}
+
+///|
+/// What back does to it, while it takes input (as a key's: View::on_key): `f`, as back is done (the system's back let
+/// go there, a back with no gesture, a back button), as one change outside any tracking; the topmost such takes back
+/// before any other (Tree::back_taker).
+pub fn View::takes_back(self : View, f : () -> Unit) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.on_back = Some(f)
+  self
+}
+
+///|
+/// What takes back now of the tree's: the node drawn last that takes back (View::takes_back) and may take input, with
+/// what it does; none where no node does.
+pub fn Tree::back_taker(self : Tree) -> (NodeId, () -> Unit)? {
+  if self.nodes.length() == 0 || !self.nodes[0].live {
+    return None
+  }
+  let found : Array[Int] = []
+  self.topmost_from(0, fn(n) { n.on_back is Some(_) }, found)
+  for i in found {
+    let n = self.nodes[i]
+    if n.live && !self.pressless_at(i) && n.on_back is Some(f) {
+      return Some(({ at: i, gen: n.gen }, f))
+    }
+  }
+  None
+}
+
+///|
 /// What the pointer does at (x, y) at `at` (a secondary press, a wheel), asked of the topmost node drawn there that takes
 /// a press: where it is one that `takes` it, `then` with it, where in it and when, as one event of that moment (the
 /// moment of the event it is in, the tree brought there first where it is in none; where things are as of then, as a
@@ -1430,7 +1654,7 @@ fn Tree::asked_at(
       if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.pressless_at(c.id.at) {
         let n = self.nodes[c.id.at]
         let here = match n.takes {
-          Some(f) => @signals.untracked(fn() { f(x - cx, y - cy, now) })
+          Some(f) => @signals.untracked(fn() { f.here(x - cx, y - cy, c.w, c.h, now) })
           None => true
         }
         if here && (takes(n) || n.on_drag is Some(_) || n.on_press is Some(_) || n.hosted) {
@@ -1458,6 +1682,7 @@ fn Tree::asked_at(
 pub fn View::on_press(self : View, f : () -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
   n.on_press = Some(f)
+  self.tree.hits = self.tree.hits + 1
   self
 }
 
@@ -1503,20 +1728,63 @@ pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1) -> Vie
   self.drag_ended()
   // (said anew: a finger held on it now is the one before's, ended)
   match self.tree.held {
-    Some(h) if h.at == self.at && h.gen == self.gen => self.tree.held = None
+    Some(h) if h.at == self.at && h.gen == self.gen => self.tree.held_to(None)
     _ => ()
   }
   n.on_drag = Some(f)
+  self.tree.hits = self.tree.hits + 1
   self
 }
 
 ///|
-/// Where in it a finger is taken, as of a moment (`f` given where in it, in its own terms, and the logic's moment as a
-/// finger comes: Tree::target_at): what it draws there then, the rest passed to what is under it as though it were not
-/// there. Of the same state what draws it is drawn by, worked out at that moment.
-pub fn View::takes(self : View, f : (Double, Double, Double) -> Bool) -> View {
+/// Where in a node a finger is taken at a moment, the rest passed to what is under it as though it were not there.
+pub(all) enum Takes {
+  /// rects of it (x0, y0, x1, y1, in its own terms), given how big it is and the moment: what a finger finds, and what
+  /// a host drawing under it is told covers what it draws (Tree::finger_areas)
+  Areas((Double, Double, Double) -> Array[(Double, Double, Double, Double)])
+  /// a node hosting another's (View::hosted): where what it hosts takes it, asked of the point (in its own terms) and
+  /// the moment; what it hosts tells a host its own targets
+  AsHosted((Double, Double, Double) -> Bool)
+}
+
+///|
+/// Whether a finger at (x, y) in a node `w` by `h` (in its own terms) is taken at `at`.
+fn Takes::here(self : Takes, x : Double, y : Double, w : Double, h : Double, at : Double) -> Bool {
+  match self {
+    Areas(f) => f(w, h, at).iter().any(fn(r) { x >= r.0 && y >= r.1 && x < r.2 && y < r.3 })
+    AsHosted(f) => f(x, y, at)
+  }
+}
+
+///|
+/// Where in it a finger is taken, as of a moment (`areas` given how big it is and the logic's moment as a finger comes:
+/// Tree::target_at): what it draws there then, as rects of it in its own terms (x0, y0, x1, y1), the rest passed to
+/// what is under it as though it were not there. Of the same state what draws it is drawn by, worked out at that
+/// moment; a host drawing under it told the same (Tree::finger_areas).
+pub fn View::takes(
+  self : View,
+  areas : (Double, Double, Double) -> Array[(Double, Double, Double, Double)],
+) -> View {
+  self.takes_so(Areas(areas))
+}
+
+///|
+/// A node hosting another's (View::hosted): where in it a finger is taken, as what it hosts finds it (`f` given where in
+/// it, in its own terms, and the logic's moment), the rest passed to what is under it. What it hosts tells a host
+/// drawing under it its own targets.
+pub fn View::hosted_takes(self : View, f : (Double, Double, Double) -> Bool) -> View {
+  // (a node of the tree's own says where it takes one as rects, View::takes: what a host under it is told the same)
+  if self.live() is Some(n) && !n.hosted {
+    abort("hosted_takes of a node hosting nothing: View::takes")
+  }
+  self.takes_so(AsHosted(f))
+}
+
+///|
+fn View::takes_so(self : View, t : Takes) -> View {
   guard self.live() is Some(n) else { return self }
-  n.takes = Some(f)
+  n.takes = Some(t)
+  self.tree.hits = self.tree.hits + 1
   self
 }
 
@@ -1537,7 +1805,7 @@ fn View::drag_ended(self : View) -> Unit {
 /// A finger put down on node `id` to press it (Tree::target_at's Pressed): the hold its till let go (Tree::press_held:
 /// whether it still is), called off as any hold is (Tree::hold_lost_in), never handed to another.
 pub fn Tree::hold_press(self : Tree, id : NodeId) -> Unit {
-  self.held = Some(id)
+  self.held_to(Some(id))
 }
 
 ///|
@@ -1548,7 +1816,7 @@ pub fn Tree::press_held(self : Tree, id : NodeId) -> Bool {
     None => false
   }
   if still {
-    self.held = None
+    self.held_to(None)
   }
   still
 }
@@ -1571,7 +1839,7 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
   if !under {
     return
   }
-  self.held = None
+  self.held_to(None)
   let n = self.nodes[h.at]
   if !n.live || n.gen != h.gen {
     return
@@ -1650,16 +1918,16 @@ pub fn Tree::drag_at(
       return
     }
     if id.at < 0 || id.at >= self.nodes.length() {
-      self.held = None
+      self.held_to(None)
       return
     }
     let n = self.nodes[id.at]
     if !n.live || n.gen != id.gen {
-      self.held = None
+      self.held_to(None)
       return
     }
     match n.on_drag {
-      None => self.held = None
+      None => self.held_to(None)
       Some(f) => {
         let (nx, ny, _) = self.placed(id.at)
         let told = fn(kind : DragIs, finger : Int) {
@@ -1669,7 +1937,7 @@ pub fn Tree::drag_at(
         // and this on_drag are still its: what one told let go of hears no more)
         let said = n.drag_said
         let off = fn() {
-          self.held = None
+          self.held_to(None)
           let fingers = self.fingers_off()
           for g in fingers {
             guard bound_still(n, id, said) else { break }
@@ -1696,7 +1964,7 @@ pub fn Tree::drag_at(
               off()
             }
           Down => {
-            self.held = Some(id)
+            self.held_to(Some(id))
             self.downs.clear()
             self.downs.push(finger)
             took.val = true
@@ -1709,7 +1977,7 @@ pub fn Tree::drag_at(
           Up => {
             self.downs.retain(fn(g) { g != finger })
             if self.downs.is_empty() {
-              self.held = None
+              self.held_to(None)
             }
             took.val = true
             told(Up, finger)
@@ -1938,13 +2206,19 @@ fn View::let_go(self : View) -> Unit {
   n.on_press = None
   n.on_menu = None
   n.on_wheel = None
+  n.on_key = None
+  n.on_back = None
+  n.said = None
+  n.said_hidden = false
+  n.pressed_cell = None
+  n.pointed_cell = None
   self.drag_ended()
   n.on_drag = None
   n.drag_said = n.drag_said + 1
   n.takes = None
   // (held: let go of with it, nothing more told it, nothing of it handed to what is made in its place)
   match self.tree.held {
-    Some(h) if h.at == self.at && h.gen == self.gen => self.tree.held = None
+    Some(h) if h.at == self.at && h.gen == self.gen => self.tree.held_to(None)
     _ => ()
   }
   n.flex.measure = None
@@ -1958,6 +2232,7 @@ fn View::let_go(self : View) -> Unit {
   self.tree.free.push(self.at)
   self.tree.order_marked()
   self.tree.work.let_go = self.tree.work.let_go + 1
+  self.tree.hits = self.tree.hits + 1
 }
 
 ///|
@@ -2858,6 +3133,10 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     ground: n.look.ground,
     ink: n.look.ink,
     words: n.look.words,
+    shapes: n.look.shapes,
+    tint: n.look.tint,
+    radius: n.look.radius,
+    glass: n.look.glass,
     hosted: n.hosted,
   })
   self.changed.push(id)
@@ -2947,6 +3226,10 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double) -> Drawn {
     ground: c.ground,
     ink: c.ink,
     words: c.words,
+    shapes: c.shapes,
+    tint: c.tint,
+    radius: c.radius,
+    glass: c.glass,
     hosted: c.hosted,
   }
 }
@@ -3050,7 +3333,7 @@ pub fn Tree::alone(self : Tree, id : NodeId) -> Bool {
   self.each_drawn(fn(c, _, _, _) {
     if c.id != id && c.id.at != 0 {
       let n = self.nodes[c.id.at]
-      if c.ground != 0L || c.words != "" || c.hosted || n.on_press is Some(_) || n.on_drag is Some(_) {
+      if c.draws() || n.on_press is Some(_) || n.on_drag is Some(_) {
         alone = false
       }
     }
@@ -3086,9 +3369,94 @@ pub(all) enum Target {
 } derive(Eq, Debug)
 
 ///|
+/// Where a node takes a finger as it is drawn now (Tree::finger_areas).
+pub(all) enum FingerAreas {
+  /// rects of the window (x0, y0, x1, y1): none where it takes none
+  InWindow(Array[(Double, Double, Double, Double)])
+  /// all of it drawn, where what it hosts takes one (View::hosted_takes; a hosted node saying nothing of it)
+  AsItHosts
+} derive(Eq, Debug)
+
+///|
+/// Where in the window node `id` takes a finger as it is drawn now, at the logic's moment (Tree::target_at's): none where
+/// it is not drawn, or takes none (it or what holds it leaving or said to take none, a modal layer over it that it is
+/// not in); where it hosts another's and says nothing else of it, as that finds it; else its box, or what it says it
+/// takes of it (View::takes).
+pub fn Tree::finger_areas(self : Tree, id : NodeId) -> FingerAreas {
+  let none = InWindow([])
+  guard self.alive_id(id) && !self.pressless_at(id.at) && self.drawn_of(id) is Some(d) else { return none }
+  let n = self.nodes[id.at]
+  self.areas_of(n, d.x, d.y, d.w, d.h)
+}
+
+///|
+fn Tree::areas_of(self : Tree, n : Node, x : Double, y : Double, w : Double, h : Double) -> FingerAreas {
+  match n.takes {
+    Some(Areas(f)) => {
+      // (read so: a host told it as a frame is painted, painted again as it changes, Tree::taken_over)
+      let rs = f(w, h, self.logic_at())
+      InWindow(
+        rs
+        .iter()
+        .filter_map(fn(r) {
+          let x0 = x + (if r.0 > 0.0 { r.0 } else { 0.0 })
+          let y0 = y + (if r.1 > 0.0 { r.1 } else { 0.0 })
+          let x1 = x + (if r.2 < w { r.2 } else { w })
+          let y1 = y + (if r.3 < h { r.3 } else { h })
+          if x1 > x0 && y1 > y0 {
+            Some((x0, y0, x1, y1))
+          } else {
+            None
+          }
+        })
+        .collect(),
+      )
+    }
+    Some(AsHosted(_)) => AsItHosts
+    None => if n.hosted { AsItHosts } else { InWindow([(x, y, x + w, y + h)]) }
+  }
+}
+
+///|
+/// Where in the window what of the tree's own is drawn over node `id` takes a finger now (a press or a hold: nodes drawn
+/// after it, those it holds too, taking presses, each where it takes one: Tree::finger_areas), what it hosts not of
+/// it: rects of the window (x0, y0, x1, y1). What a host drawing in it is told covers what it draws, with what is over
+/// it of what it hosts.
+pub fn Tree::taken_over(self : Tree, id : NodeId) -> Array[(Double, Double, Double, Double)] {
+  let out = []
+  guard self.alive_id(id) else { return out }
+  let past = Ref(false)
+  self.each_drawn(fn(c, cx, cy, _) {
+    if c.id == id {
+      past.val = true
+      return
+    }
+    if !past.val || self.pressless_at(c.id.at) {
+      return
+    }
+    let n = self.nodes[c.id.at]
+    if n.hosted || (n.on_press is None && n.on_drag is None) {
+      return
+    }
+    match self.areas_of(n, cx, cy, c.w, c.h) {
+      InWindow(rs) => out.append(rs)
+      AsItHosts => ()
+    }
+  })
+  out
+}
+
+///|
 /// What a press at (x, y) is for: the topmost node drawn there (by the order drawn, where the scene composed draws it:
 /// the same places as what is drawn) that is held (View::on_drag), does something when pressed or hosts the old view.
 pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
+  self.target_in(x, y, tracked=false)
+}
+
+///|
+/// The same, what decides where a node takes it (View::takes) read `tracked` (followed by what asks it: Tree::point_at)
+/// or not.
+fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Target {
   // (the logic's moment, what is where taken as of then: View::takes)
   let at = self.logic_at()
   let found : Array[Target] = []
@@ -3097,7 +3465,12 @@ pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
     if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.pressless_at(c.id.at) {
       let n = self.nodes[c.id.at]
       let here = match n.takes {
-        Some(f) => @signals.untracked(fn() { f(x - cx, y - cy, at) })
+        Some(f) =>
+          if tracked {
+            f.here(x - cx, y - cy, c.w, c.h, at)
+          } else {
+            @signals.untracked(fn() { f.here(x - cx, y - cy, c.w, c.h, at) })
+          }
         None => true
       }
       if !here {
@@ -3121,6 +3494,85 @@ pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
 /// Node `id` pressed (Tree::target_at's): its callback run outside any tracking, as one change, if it lives.
 pub fn Tree::run_press(self : Tree, id : NodeId) -> Bool {
   self.run_press_at(id, self.time_now())
+}
+
+///|
+/// Node `id` pressed as a screen reader asks it, at `at`: as one event of that moment, what had ended by then settled
+/// first, what it says worked out as of then, then asked whether it is read out so (it says what it is, nothing over it
+/// hides it: Tree::said_now), whether it takes a press now as a finger's would be taken (it lives, takes presses, is
+/// held by no modal layer it is not in) and has something done by one; only then its press. Whether it was.
+pub fn Tree::activate_at(self : Tree, id : NodeId, at : Double) -> Bool {
+  let pressed = Ref(false)
+  self.event(at, fn() {
+    // (what it says as of then: its bindings marked worked out first, Tree::pull)
+    self.pull()
+    if !self.takes_presses(id) || !self.allows(id) || self.leaving_at(id.at) || !self.said_now(id.at) {
+      return
+    }
+    match self.nodes[id.at].on_press {
+      Some(f) => {
+        pressed.val = true
+        f()
+      }
+      None => ()
+    }
+  })
+  pressed.val
+}
+
+///|
+/// Whether node `id` lives (this making of its index).
+pub fn Tree::lives(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id)
+}
+
+///|
+/// Whether what node `id` holds may be read out and acted on as a screen reader asks, as the tree is now (its bindings
+/// marked worked out first): it lives, no modal layer it is not in is over it, neither it nor what holds it is kept
+/// from what is read out (View::hides). What an old view hosted in it says, read so.
+pub fn Tree::reads_out(self : Tree, id : NodeId) -> Bool {
+  self.pull()
+  if !self.alive_id(id) || !self.allows(id) {
+    return false
+  }
+  let mut i = id.at
+  while i >= 0 {
+    if self.nodes[i].said_hidden {
+      return false
+    }
+    i = self.nodes[i].parent
+  }
+  true
+}
+
+///|
+/// Whether what node `id` holds may be acted on as a screen reader asks, as the tree is now: read out (Tree::reads_out),
+/// taking presses (View::presses: neither it nor what holds it off), not leaving.
+pub fn Tree::acts_on(self : Tree, id : NodeId) -> Bool {
+  self.reads_out(id) && self.takes_presses(id) && !self.leaving_at(id.at)
+}
+
+///|
+/// Whether node `at` is read out as it is now: it says what it is, and neither it nor what holds it is kept from what is
+/// read out (View::hides).
+fn Tree::said_now(self : Tree, at : Int) -> Bool {
+  if self.nodes[at].said is None {
+    return false
+  }
+  let mut i = at
+  while i >= 0 {
+    if self.nodes[i].said_hidden {
+      return false
+    }
+    i = self.nodes[i].parent
+  }
+  true
+}
+
+///|
+/// Whether node `id` has something done by a press (View::on_press), whatever it takes now.
+pub fn Tree::presses_do(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes[id.at].on_press is Some(_)
 }
 
 ///|
@@ -3187,4 +3639,155 @@ pub fn View::at_moment(self : View, when : Double, f : () -> Unit) -> () -> Unit
   tree.told = tree.told + 1
   tree.marked()
   stop
+}
+
+///|
+/// The node held now (`h`, none): the one it was on and the one it is on now told, each by its own cell (View::pressed),
+/// nothing else.
+fn Tree::held_to(self : Tree, h : NodeId?) -> Unit {
+  let was = self.held
+  self.held = h
+  if was != h {
+    self.pressing = h
+    self.hand_told(was, fn(n) { n.pressed_cell }, false)
+    self.hand_told(h, fn(n) { n.pressed_cell }, true)
+  }
+}
+
+///|
+/// Node `id`'s cell (`cell` of it, where one was made: something reads it) told `on`, where it lives.
+fn Tree::hand_told(self : Tree, id : NodeId?, cell : (Node) -> @signals.Signal[Bool]?, on : Bool) -> Unit {
+  guard id is Some(i) && self.alive_id(i) else { return }
+  match cell(self.nodes[i.at]) {
+    Some(s) => s.set(on)
+    None => ()
+  }
+}
+
+///|
+/// Whether a finger or the pointer is held on it now (from its down till it is let go or called off): what reads it
+/// told only as that comes or goes. Its cell made as first read, let go with it.
+pub fn View::pressed(self : View) -> Bool {
+  guard self.live() is Some(n) else { return false }
+  let s = match n.pressed_cell {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(self.tree.pressing == Some(self.id()), same=fn(a, b) { a == b })
+      n.pressed_cell = Some(s)
+      s
+    }
+  }
+  s.get()
+}
+
+///|
+/// Whether the pointer is over it now, of what takes a press there the topmost (Tree::point_at): what reads it told only
+/// as the pointer comes over it or leaves it. Its cell made as first read, let go with it.
+pub fn View::pointed(self : View) -> Bool {
+  guard self.live() is Some(n) else { return false }
+  let s = match n.pointed_cell {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(self.tree.pointed == Some(self.id()), same=fn(a, b) { a == b })
+      n.pointed_cell = Some(s)
+      s
+    }
+  }
+  s.get()
+}
+
+///|
+/// The pointer at (x, y) in the window (a mouse's: a finger points at nothing), as of now: what takes a press there, the
+/// topmost, is pointed at (View::pointed), nothing else; none where (x, y) is none (the pointer gone). The one it was
+/// over and the one it is over now told, nothing else.
+pub fn Tree::point_at(self : Tree, x : Double, y : Double) -> Unit {
+  // (none: nothing followed, nothing pointed at from now)
+  if x < 0.0 || y < 0.0 {
+    self.point_stopped()
+    self.pointed_to(None)
+    return
+  }
+  self.follow_point(x, y, fn(t) {
+    self.pointed_to(
+      match t {
+        Pressed(id) | Dragged(id) => Some(id)
+        _ => None
+      },
+    )
+  })
+}
+
+///|
+/// What is at (x, y) followed (Tree::target_at, what decides where a node takes it (View::takes) read so): `then` told
+/// it now and as it changes, whatever it is (a node's, the old view's, nothing), till the next point is followed, or
+/// none (x or y below 0: nothing told, nothing followed), or the tree is let go. What is where, as the layout or the
+/// order changes, is followed by being said again (Tree::hits_said).
+pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -> Unit) -> Unit {
+  self.point_stopped()
+  if x < 0.0 || y < 0.0 {
+    return
+  }
+  // (this one the one followed from now: what it is first told may let it go (another point, none, the tree let go),
+  // which this one's number then no longer is)
+  let mine = self.point_said
+  let stop = self.queued(fn() { self.target_in(x, y, tracked=true) }, then)
+  if self.gone || self.point_said != mine {
+    stop()
+  } else {
+    self.point_stop = Some(stop)
+  }
+}
+
+///|
+/// What follows the point let go (Tree::follow_point): told nothing more.
+fn Tree::point_stopped(self : Tree) -> Unit {
+  // (what is being made to follow one no longer the one: Tree::follow_point)
+  self.point_said = self.point_said + 1
+  match self.point_stop {
+    Some(stop) => stop()
+    None => ()
+  }
+  self.point_stop = None
+}
+
+///|
+/// What the pointer is over now `now`, of what takes a press there (View::pointed): the one it was over and the one it
+/// is over told, as they change.
+pub fn Tree::pointed_to(self : Tree, now : NodeId?) -> Unit {
+  let was = self.pointed
+  if was != now {
+    self.pointed = now
+    self.hand_told(was, fn(n) { n.pointed_cell }, false)
+    self.hand_told(now, fn(n) { n.pointed_cell }, true)
+  }
+}
+
+///|
+/// How many times what a point hits may have changed so far (Tree's `hits`): what is pointed at by a still pointer
+/// is worked out again past one, not every frame.
+pub fn Tree::hits_said(self : Tree) -> Int {
+  self.hits
+}
+
+///|
+/// What the pointer is over now, of what takes a press there (Tree::point_at), None nothing.
+pub fn Tree::pointed_now(self : Tree) -> NodeId? {
+  self.pointed
+}
+
+///|
+/// Whether node `a` is drawn after node `b` as the tree is now (after what holds it, after what is before it among what
+/// holds them both: Tree::path_of): what is over what, of two that take the same input. False where either is held by
+/// nothing the root holds.
+pub fn Tree::drawn_later(self : Tree, a : NodeId, b : NodeId) -> Bool {
+  guard self.alive_id(a) && self.alive_id(b) else { return false }
+  match (self.path_of(a.at), self.path_of(b.at)) {
+    (Some(pa), Some(pb)) => drawn_after(pa, pb)
+    _ => false
+  }
+}
+
+///|
+fn Tree::alive_id(self : Tree, id : NodeId) -> Bool {
+  id.at >= 0 && id.at < self.nodes.length() && self.nodes[id.at].live && self.nodes[id.at].gen == id.gen
 }

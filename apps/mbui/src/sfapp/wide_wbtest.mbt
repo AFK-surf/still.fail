@@ -2158,11 +2158,11 @@ test "wide: what an agent runs as, pressed in its card, opens its model's panel 
   let (x, y, w, h) = t.get(Button, label="Claude · Opus 5.5").rect
   t.click(Button, label="Claude · Opus 5.5")
   t.run_for(@ui.move_most_ms)
-  assert_true(t.query(@ui.Dialog) is Some(_), msg="its model's panel opened")
+  assert_true(t.query(@ui.Role::Dialog) is Some(_), msg="its model's panel opened")
   // (the page under the panel out of the semantics tree: pressed where it is)
   t.tap(x + w / 2.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms)
-  assert_true(t.query(@ui.Dialog) is None, msg="its model's panel closed")
+  assert_true(t.query(@ui.Role::Dialog) is None, msg="its model's panel closed")
 }
 
 ///|

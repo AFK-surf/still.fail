@@ -179,11 +179,11 @@ pub fn pressing(@ui.Ctx, Int32) -> Double
 
 pub fn progress(Double, Double, Double) -> Double
 
-pub fn reshape(@ui.Ctx, Int32, String, by~ : String, spec~ : Spec, carry? : Bool) -> Unit
+pub fn reshape(@ui.Ctx, Int32, String, by~ : String, spec~ : Spec, carry? : Bool, foot? : Bool) -> Unit
 
 pub fn reshaped_over(@ui.Ctx, String) -> Double
 
-pub fn reveal(@ui.Ctx, String, Double, from_top? : Bool, clip? : Bool, align? : @ui.Align, () -> Unit) -> Unit
+pub fn reveal(@ui.Ctx, String, Double, from_top? : Bool, clip? : Bool, middle? : Bool, align? : @ui.Align, () -> Unit) -> Unit
 
 pub fn reveal_height(String) -> Double
 

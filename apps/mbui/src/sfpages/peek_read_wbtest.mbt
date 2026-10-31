@@ -43,7 +43,7 @@ test "a link's card is read as the pointer comes onto it and let go of once it h
   )
   t.draw()
   assert_eq(read, [])
-  let (x, y, w, h) = t.get(@ui.Button, label="PR #4466").rect
+  let (x, y, w, h) = t.get(@ui.Role::Button, label="PR #4466").rect
   // pointed at: read, and its card opens over it
   t.move(x + w / 2.0, y + h / 2.0)
   t.run_for(hover_open_ms * 2.0)
