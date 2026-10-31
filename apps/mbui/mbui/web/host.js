@@ -158,6 +158,42 @@
   // a file held (Picked.held) taken by whoever sends it up: its File, let go here
   H.heldFile = (h) => { const f = heldFiles.get(h); heldFiles.delete(h); return f || null; };
 
+  // ---- notifications (src/hostapi/notify.mbt): the browser's, while the page is open ----
+  // One per tag (the browser replaces one of the same tag); a click brings the page to the front and gives `opens` to
+  // the app (noticeText(0), once). Asked only from a press, as the browser lets a page ask.
+  const notices = new Map();
+  let noticeOpened = '', noticeAnswer = -1;
+  const canNotify = () => typeof Notification !== 'undefined';
+  H.noticeShow = (channel, tag, title, body, opens) => {
+    if (!canNotify() || Notification.permission !== 'granted') { H.log('NOTICE ' + tag + '\t' + title + '\t' + body); return; }
+    try {
+      const n = new Notification(title, { body, tag: tag || undefined });
+      n.onclick = () => { window.focus(); noticeOpened = opens; n.close(); H.requestFrame(); };
+      if (tag) { notices.get(tag)?.close(); notices.set(tag, n); }
+    } catch (e) { H.log('NOTICE ' + tag + '\t' + title + '\t' + body); }
+  };
+  H.noticeCancel = (tag) => { notices.get(tag)?.close(); notices.delete(tag); };
+  // 0 what the browser lets the page show (1 granted, 2 denied, 3 not asked); 1 ask (1: asked); 2 the answer (1 yes, 0
+  // no, -1 none yet); 3 its settings (none a page opens); 4 a badge on the app's icon (none)
+  H.noticeState = (what) => {
+    if (!canNotify()) return what === 2 ? -1 : 0;
+    if (what === 0) return Notification.permission === 'granted' ? 1 : Notification.permission === 'denied' ? 2 : 3;
+    if (what === 1) {
+      if (Notification.permission !== 'default') return 0;
+      noticeAnswer = -1;
+      Notification.requestPermission().then((p) => { noticeAnswer = p === 'granted' ? 1 : 0; H.requestFrame(); }, () => { noticeAnswer = 0; H.requestFrame(); });
+      return 1;
+    }
+    if (what === 2) { const a = noticeAnswer; if (a !== -1) noticeAnswer = -1; return a; }
+    return 0;
+  };
+  H.noticeText = (what) => {
+    if (what !== 0) return '';
+    const o = noticeOpened;
+    noticeOpened = '';
+    return o;
+  };
+
   // ---- messages from outside the frames (src/ui/messages.mbt; mbui's mb_post on the native hosts) ----
   // H.post(channel, json, bytes?): kept for the next frame, which takes all that came and hands them on in their
   // order; the first since a frame took the last asks for that frame, the rest wait for it.
