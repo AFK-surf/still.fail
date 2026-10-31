@@ -14,8 +14,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
 
+use iroh::address_lookup::{AddressLookup, AddressLookupBuilder, AddressLookupBuilderError, EndpointData, Error as AddressLookupError, Item as AddressLookupItem};
 use iroh::endpoint::{Connection as IrohConnection, QuicTransportConfig, RecvStream, SendStream, presets::Minimal};
 use iroh::{Endpoint as IrohEndpoint, EndpointAddr, EndpointId, RelayMode, RelayUrl, SecretKey, Watcher};
+use n0_future::boxed::BoxStream;
 use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use tokio::sync::Mutex;
@@ -101,6 +103,40 @@ fn transport(congestion: &str) -> napi::Result<QuicTransportConfig> {
         .build())
 }
 
+/// A way of finding stations (mDNS on the LAN, the DHT) that could not be made leaves the endpoint without it, said,
+/// instead of failing the endpoint: mDNS binds UDP 5353 on the machine's networks, which fails with none up yet (a
+/// Windows station started at logon before its network) or the port held by another program, and the endpoint failing
+/// left the station off the mesh, and offline, until it was restarted.
+#[derive(Debug)]
+struct Optional<B>(&'static str, B);
+
+#[derive(Debug)]
+struct Unmade<L>(Option<L>);
+
+impl<B: AddressLookupBuilder> AddressLookupBuilder for Optional<B> {
+    fn into_address_lookup(self, endpoint: &IrohEndpoint) -> Result<impl AddressLookup, AddressLookupBuilderError> {
+        Ok(Unmade(match self.1.into_address_lookup(endpoint) {
+            Ok(lookup) => Some(lookup),
+            Err(error) => {
+                eprintln!("mesh: stations not found through {}: {error:#}", self.0);
+                None
+            }
+        }))
+    }
+}
+
+impl<L: AddressLookup> AddressLookup for Unmade<L> {
+    fn publish(&self, data: &EndpointData) {
+        if let Some(lookup) = &self.0 {
+            lookup.publish(data);
+        }
+    }
+
+    fn resolve(&self, endpoint_id: EndpointId) -> Option<BoxStream<Result<AddressLookupItem, AddressLookupError>>> {
+        self.0.as_ref().and_then(|lookup| lookup.resolve(endpoint_id))
+    }
+}
+
 #[napi]
 pub async fn bind(options: Options) -> napi::Result<Endpoint> {
     let bytes: [u8; 32] = options.secret_key.as_ref().try_into().map_err(|_| failed("the key is not 32 bytes"))?;
@@ -125,14 +161,14 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
     }
     if options.lookup.unwrap_or(false) && !relays.is_empty() {
         builder = builder
-            .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false))
-            .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false))
-            .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish());
+            .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false)))
+            .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false)))
+            .address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish()));
     } else if options.discovery.unwrap_or(true) {
         builder = builder
-            .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE))
-            .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE))
-            .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key));
+            .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE)))
+            .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE)))
+            .address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key)));
     }
     Ok(Endpoint { inner: builder.bind().await.map_err(failed)?, keepers: Arc::default(), homes: relays, held: Arc::default(), accepted: Arc::default() })
 }
@@ -644,5 +680,34 @@ impl Stream {
         let _ = self.reset.send(true);
         let _ = self.send.lock().await.reset(code.into());
         let _ = self.recv.lock().await.stop(code.into());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A way of finding stations that cannot be made, as mDNS is with UDP 5353 unavailable.
+    #[derive(Debug)]
+    struct Unavailable;
+
+    #[derive(Debug)]
+    struct Nothing;
+
+    impl AddressLookup for Nothing {}
+
+    impl AddressLookupBuilder for Unavailable {
+        fn into_address_lookup(self, _endpoint: &IrohEndpoint) -> Result<impl AddressLookup, AddressLookupBuilderError> {
+            Err::<Nothing, _>(AddressLookupBuilderError::from_err("mdns", std::io::Error::other("no network")))
+        }
+    }
+
+    #[tokio::test]
+    async fn an_unmade_lookup_leaves_the_endpoint_up() {
+        let failing = IrohEndpoint::builder(Minimal).relay_mode(RelayMode::Disabled).address_lookup(Unavailable).bind().await;
+        assert!(failing.is_err(), "iroh fails an endpoint whose lookup is not made");
+        let endpoint = IrohEndpoint::builder(Minimal).relay_mode(RelayMode::Disabled).address_lookup(Optional("mDNS", Unavailable)).bind().await;
+        assert!(endpoint.is_ok(), "{:?}", endpoint.err());
+        endpoint.unwrap().close().await;
     }
 }
