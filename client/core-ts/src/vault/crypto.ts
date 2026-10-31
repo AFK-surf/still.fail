@@ -110,22 +110,42 @@ export function signedBytes(o: Record<string, unknown>, tag: string): Uint8Array
   return concat(utf8(`${tag}\0`), sha256(utf8(canonical(rest))));
 }
 
-/// Whether `o.sig` is its key's signature over `o` under `tag` (which key may sign is the caller's to check).
+/// Whether `o.sig` is its key's signature over `o` under `tag` (which key may sign is the caller's to check). A
+/// signature is checked once for what it is over: the same record asked again (a chat's vault cards, as the chat is
+/// made again and again) is answered as it was. A P-256 signature checked in JS took a phone hundreds of ms, each of a
+/// chat's cards checking its device's certificate twice each time the chat was made: 0.87 s of opening one (2026-10-31).
 export function signedOk(o: { sig: Sig } & Record<string, unknown>, tag: string): boolean {
   try {
     const sig = o.sig;
     if (sig === null || typeof sig !== "object" || typeof sig.key !== "string" || typeof sig.sig !== "string") return false;
     const bytes = signedBytes(o, tag);
-    if (sig.alg === "Ed25519" && /^ed25519:[0-9a-f]{64}$/.test(sig.key) && /^[0-9a-f]{128}$/.test(sig.sig)) return ed25519.verify(unhex(sig.sig), bytes, unhex(sig.key.slice(8)));
-    if (sig.alg === "ES256" && sig.key.startsWith("p256:")) {
-      const point = fromB64url(sig.key.slice(5)), s = fromB64url(sig.sig);
-      return point !== null && s !== null && point.length === 65 && p256.verify(s, bytes, point, { prehash: true, lowS: false });
-    }
-    return false;
+    const key = `${sig.alg}\u0001${sig.key}\u0001${sig.sig}\u0001${hex(bytes)}`;
+    const known = checked.get(key);
+    if (known !== undefined) return known;
+    const ok = verify(sig, bytes);
+    verifies.count++;
+    if (checked.size >= CHECKED_KEPT) checked.delete(checked.keys().next().value!);
+    checked.set(key, ok);
+    return ok;
   } catch {
     return false;
   }
 }
+
+function verify(sig: Sig, bytes: Uint8Array): boolean {
+  if (sig.alg === "Ed25519" && /^ed25519:[0-9a-f]{64}$/.test(sig.key) && /^[0-9a-f]{128}$/.test(sig.sig)) return ed25519.verify(unhex(sig.sig), bytes, unhex(sig.key.slice(8)));
+  if (sig.alg === "ES256" && sig.key.startsWith("p256:")) {
+    const point = fromB64url(sig.key.slice(5)), s = fromB64url(sig.sig);
+    return point !== null && s !== null && point.length === 65 && p256.verify(s, bytes, point, { prehash: true, lowS: false });
+  }
+  return false;
+}
+
+/// Signatures checked, by what each is over, and whether it was good: the latest CHECKED_KEPT.
+const checked = new Map<string, boolean>();
+const CHECKED_KEPT = 4096;
+/// How many signatures were checked in fact (not answered as checked before).
+export const verifies = { count: 0 };
 
 /// A record signed under `tag` by an Ed25519 key, signing the bytes it is given (the lock's `Signer`).
 export function sign<T extends Record<string, unknown>>(o: T, tag: string, signer: { id: string; signBytes(bytes: Uint8Array): string }): T & { sig: Sig } {
