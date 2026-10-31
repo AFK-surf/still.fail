@@ -107,7 +107,7 @@ test "a station's 设置 switches going on afresh once a session's cache is over
   t.draw()
   assert_eq(asked.length(), 3, msg="zero can be saved")
   assert_eq(field(Some(asked[2]), "afreshAbove"), Some(Json::number(0.0)))
-  assert_true(t.find("缓存过期后换新（门槛 $0）；对话中的选择优先") is Some(_), msg="zero is described as unconditional")
+  assert_true(t.find("门槛 $0：过期就换；对话选择优先") is Some(_), msg="zero is described as unconditional")
 }
 
 ///|
