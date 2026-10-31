@@ -314,6 +314,9 @@ pub struct Tree {
   mut last_h : Double
   /// the window's size, as its frames give it: what is laid out by it (which frame a window's width calls for) follows it
   room : @signals.Signal[(Double, Double)]
+  /// how many times a finger or a button went down anywhere in the window, as the host tells each (Tree::went_down):
+  /// what closes at the next press, wherever it lands, follows it
+  pressed_anywhere : @signals.Signal[Int]
   /// the nodes drawn, in the order they are drawn (no slot), and where in it what holds each is (-1: the window)
   order : Array[Int]
   order_holder : Array[Int]
@@ -415,6 +418,7 @@ pub fn Tree::new(
   let t : Tree = {
     clock: @signals.signal(start, same=fn(a, b) { a == b }),
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
+    pressed_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
     time,
     cause_at: -1.0,
     measure,

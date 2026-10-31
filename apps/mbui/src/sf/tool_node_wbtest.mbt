@@ -22,8 +22,9 @@ fn tools_tester(
   held? : @signals.Signal[Bool] = @signals.signal(true),
   there? : @signals.Signal[Bool] = @signals.signal(true),
   modal? : @signals.Signal[Bool] = @signals.signal(false),
+  platform? : Int = 0,
 ) -> @ui.Tester {
-  let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=200.0, platform=0)
+  let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=200.0, platform~)
   t.check_looks(false)
   let count = fn(k : String) { pressed[k] = pressed.get(k).unwrap_or(0) + 1 }
   @ui.set_view_app(fn(root) {
@@ -414,7 +415,7 @@ fn tipped_tester(layer_on : Ref[Bool]) -> (@ui.Tester, Ref[@view.View?], Ref[() 
     a.val = Some(node)
     let layer = root.box(fn(l) { l.over(Is(true)) |> ignore })
     let tips = TipLayer::new(fn() { if layer_on.val { Some(layer) } else { None } })
-    attach.val = fn() { tip_node(tips, node, fn() { "A's tip" }) }
+    attach.val = fn() { tip_node(tips, node, fn() { "A's tip" }) |> ignore }
   })
   t.draw()
   (t, a, attach)
@@ -588,4 +589,110 @@ test "a tip going as kit's goes, drawn smaller as it fades about its edge toward
   assert_eq(new, old, msg="new \{new} old \{old}")
   // (going, smaller than whole: the scale itself, not only the fade)
   assert_true(new[1] != new[0], msg="half way gone as big as whole: \{new}")
+}
+
+///|
+/// A finger held on tool "复制 new" long_press_ms and let go there, frames drawn only as asked (none but the ones after
+/// each event); then `after`: whether its tip was read out shown as it was held, just after it was let go, `wait` after
+/// that, and how many times it was pressed.
+fn finger_held_tip(wait : Double, then_press : Bool) -> (Bool, Bool, Bool, Int) raise {
+  let said = @signals.signal({ icon: "copy", label: "复制", on: false, disabled: false }, same=fn(a, b) { a == b })
+  let pressed : Map[String, Int] = {}
+  // (a touch screen's app: the hand a finger's)
+  let t = tools_tester(said, @signals.signal(page_viewer_ink()), pressed, platform=1)
+  let shown = fn() { t.semantics().any(fn(s) { s.role == Tooltip && s.label == "复制 new" && !s.hidden }) }
+  let n = t.get(Button, label="复制 new")
+  let (cx, cy) = (n.rect.0 + 16.0, n.rect.1 + 16.0)
+  t.touch(0, cx, cy)
+  t.run_for(@ui.long_press_ms + 50.0)
+  let held = shown()
+  t.touch(2, cx, cy)
+  t.run_for(50.0)
+  let lifted = shown()
+  if then_press {
+    // (a press elsewhere, on nothing)
+    t.touch(0, 380.0, 190.0)
+    t.touch(2, 380.0, 190.0)
+  }
+  t.run_for(wait)
+  (held, lifted, shown(), pressed.get("new").unwrap_or(0))
+}
+
+///|
+test "a tool as a node's tip held open by a finger, as kit's tooltip: shown once held long_press_ms, the press then no tap; on a while after it is let go, gone tooltip_lifted_ms after, or at the next press wherever it lands" {
+  let (held, lifted, later, pressed) = finger_held_tip(@kit.tooltip_lifted_ms / 2.0, false)
+  assert_eq((held, lifted, later, pressed), (true, true, true, 0), msg="held, let go, half its while after: still: \{(held, lifted, later, pressed)}")
+  let (_, _, gone, _) = finger_held_tip(@kit.tooltip_lifted_ms + @kit.pop_out_ms * 2.0, false)
+  assert_true(!gone, msg="its while over: gone")
+  let (_, _, pressed_off, _) = finger_held_tip(@kit.pop_out_ms * 2.0, true)
+  assert_true(!pressed_off, msg="the next press, elsewhere: gone")
+}
+
+///|
+/// Tool "复制 new" pressed 1 in from its right edge (`platform`: 0 a mouse's, 1 a touch screen's), moved `out` points
+/// right, let go there; held `hold` ms first: how many times it was pressed.
+fn let_go_beside(platform : Int, out : Double, hold? : Double = 0.0) -> Int raise {
+  let said = @signals.signal({ icon: "copy", label: "复制", on: false, disabled: false }, same=fn(a, b) { a == b })
+  let pressed : Map[String, Int] = {}
+  let t = tools_tester(said, @signals.signal(page_viewer_ink()), pressed, platform~)
+  let n = t.get(Button, label="复制 new")
+  let (x, y) = (n.rect.0 + n.rect.2 - 1.0, n.rect.1 + 16.0)
+  t.touch(0, x, y)
+  if hold > 0.0 {
+    t.run_for(hold)
+  }
+  t.touch(1, x + out, y)
+  t.touch(2, x + out, y)
+  t.draw()
+  pressed.get("new").unwrap_or(0)
+}
+
+///|
+test "a tool as a node pressed only as it is let go on it: from inside its edge moved out a little and let go, no press, by a mouse or a finger; let go where it went down, a press; a mouse held past long_press_ms, a press let go on it, none moved off it" {
+  for p in [0, 1] {
+    assert_eq(let_go_beside(p, 3.0), 0, msg="platform \{p}: let go beside it")
+    assert_eq(let_go_beside(p, 0.0), 1, msg="platform \{p}: let go on it")
+  }
+  assert_eq(let_go_beside(0, 10.0, hold=@ui.long_press_ms + 50.0), 0, msg="a mouse held, let go off it")
+  assert_eq(let_go_beside(0, 0.0, hold=@ui.long_press_ms + 50.0), 1, msg="a mouse held, let go on it")
+}
+
+///|
+/// A finger held on tool "复制 new" long_press_ms, its tip shown, then `then` done (to the tester, what it says, how
+/// it is said): whether the tip shows pop_out_ms twice after that, and again `again` later (after `after`).
+fn held_then(then : (@ui.Tester, @signals.Signal[ToolSaid], Double, Double) -> Unit, after : (@ui.Tester, @signals.Signal[ToolSaid]) -> Unit) -> (Bool, Bool, Bool) raise {
+  let said = @signals.signal({ icon: "copy", label: "复制", on: false, disabled: false }, same=fn(a, b) { a == b })
+  let t = tools_tester(said, @signals.signal(page_viewer_ink()), {}, platform=1)
+  let shown = fn() { t.semantics().any(fn(s) { s.role == Tooltip && s.label == "复制 new" && !s.hidden }) }
+  let n = t.get(Button, label="复制 new")
+  let (cx, cy) = (n.rect.0 + 16.0, n.rect.1 + 16.0)
+  t.touch(0, cx, cy)
+  t.run_for(@ui.long_press_ms + 50.0)
+  let held = shown()
+  then(t, said, cx, cy)
+  t.run_for(@kit.pop_out_ms * 2.0)
+  let gone = !shown()
+  after(t, said)
+  t.run_for(@kit.pop_out_ms * 2.0)
+  (held, gone, !shown())
+}
+
+///|
+test "a tool as a node's tip a finger held open: called off by the system, gone then, none of it kept; the tool taken from the hand (unable), gone, not shown again as it can be pressed again; Escape, gone" {
+  let off = held_then(fn(t, _, x, y) { t.touch(3, x, y) }, fn(_, _) {  })
+  assert_eq(off, (true, true, true), msg="called off: \{off}")
+  let unable = held_then(
+    fn(_, s, _, _) { s.set({ icon: "copy", label: "复制", on: false, disabled: true }) },
+    fn(t, s) {
+      s.set({ icon: "copy", label: "复制", on: false, disabled: false })
+      t.draw()
+    },
+  )
+  assert_eq(unable, (true, true, true), msg="unable, then able again: \{unable}")
+  let escaped = held_then(fn(t, _, x, y) {
+    t.touch(2, x, y)
+    t.run_for(50.0)
+    t.key(@ui.key_escape)
+  }, fn(_, _) {  })
+  assert_eq(escaped, (true, true, true), msg="let go, Escape: \{escaped}")
 }

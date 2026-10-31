@@ -1155,3 +1155,55 @@ test "viewer on the tree, a phone's screen: its floating bar's words as the core
   assert_eq(t.all(Button, label=en).length(), 1, msg="said again in English: \{en}")
   assert_eq(t.get(Button, label=en).id, copy.id, msg="the same node, said again")
 }
+
+///|
+/// Whether the tip of the floating bar's 复制 is read out shown now.
+fn copy_tip_shown(t : @ui.Tester) -> Bool {
+  t.semantics().any(fn(s) { s.role == Tooltip && s.label == @sf.t("common.copy") && !s.hidden })
+}
+
+///|
+test "viewer on the tree, a phone's screen: its bar's tip a finger held open takes the first Escape, the viewer the next; no frame between a key and what it did" {
+  let t = preview_tester("image", platform=1)
+  let b = t.get(Button, label=@sf.t("common.copy"))
+  let (cx, cy) = (b.rect.0 + b.rect.2 / 2.0, b.rect.1 + b.rect.3 / 2.0)
+  t.touch(0, cx, cy)
+  t.run_for(@ui.long_press_ms + 50.0)
+  t.touch(2, cx, cy)
+  t.run_for(50.0)
+  assert_true(copy_tip_shown(t), msg="held open")
+  t.key(@ui.key_escape)
+  assert_true(viewer.get() is Some(v) && !v.closing, msg="the first Escape the tip's: the viewer open still")
+  t.run_for(@kit.pop_out_ms * 2.0)
+  assert_true(!copy_tip_shown(t), msg="the tip gone")
+  t.key(@ui.key_escape)
+  assert_true(viewer.get() is None || viewer.get().unwrap().closing, msg="the next Escape the viewer's")
+}
+
+///|
+test "viewer on the tree, a mouse: its bar's tip shown by the keyboard's focus, the picture's menu opened over it: Escape the menu's first, then the tip's, then the viewer's" {
+  let t = preview_tester("image", platform=0)
+  // (the keyboard's focus to 复制, its tip shown)
+  let mut tabs = 0
+  while !copy_tip_shown(t) && tabs < 8 {
+    t.key(@ui.key_tab)
+    t.draw()
+    tabs += 1
+  }
+  assert_true(copy_tip_shown(t), msg="the focus on 复制, its tip shown (\{tabs} tabs)")
+  let (x, y, w, h) = viewer.get().unwrap().zoom.rect().unwrap()
+  t.right_click(x + w / 2.0, y + h / 2.0)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(@sf.presenting(), msg="the picture's menu open")
+  t.key(@ui.key_escape)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time() + 50.0)
+  assert_true(!@sf.presenting(), msg="the first Escape the menu's")
+  assert_true(viewer.get() is Some(v) && !v.closing, msg="the viewer open still")
+  assert_true(copy_tip_shown(t), msg="the tip still shown")
+  t.key(@ui.key_escape)
+  assert_true(viewer.get() is Some(v) && !v.closing, msg="the next Escape the tip's: the viewer open still")
+  t.run_for(@kit.pop_out_ms * 2.0)
+  assert_true(!copy_tip_shown(t), msg="the tip gone")
+  t.key(@ui.key_escape)
+  assert_true(viewer.get() is None || viewer.get().unwrap().closing, msg="then the viewer's")
+}

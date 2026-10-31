@@ -125,10 +125,55 @@ pub fn tool_node(
       |> ignore
     })
     |> ignore
-    match tip {
-      Some(tips) => tip_node(tips, v, fn() { said().label }, side=Bottom)
-      None => ()
+    // (a finger on it: a tap presses it; held still long_press_ms, its tip shown while it stays down and a while after,
+    // the press then no tap (kit's tooltip's held_long); a mouse's held as long, still a press as it is let go)
+    let hand = match tip {
+      Some(tips) => Some(tip_node(tips, v, fn() { said().label }, side=Bottom))
+      None => None
     }
+    let held = Ref(false)
+    // (let go on it, as a press is: what is there for a finger as the tree is then, it and nothing over it)
+    let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
+    v.gesture(
+      @ui.touch_slop(),
+      tap=fn(d) {
+        if on_it(d) && !@signals.untracked(fn() { said().disabled }) {
+          press()
+        }
+      },
+      hold=(
+        @ui.long_press_ms,
+        fn(_) {
+          held.val = true
+          if @ui.pointing() is Finger {
+            match hand {
+              Some(h) => (h.hold)()
+              None => ()
+            }
+          }
+        },
+      ),
+      drag=fn(d) {
+        if !held.val {
+          // (a mouse's moved on it past the slop: still a press as it is let go on it, as a click is; a finger's so
+          // moved is no tap)
+          if d.kind == Up && @ui.pointing() is Mouse && on_it(d) && !@signals.untracked(fn() { said().disabled }) {
+            press()
+          }
+        } else if d.kind == Up || d.kind == Off {
+          held.val = false
+          match (hand, d.kind) {
+            // (called off: none of its holding kept)
+            (Some(h), Off) => (h.cancel)()
+            (Some(h), Up) if @ui.pointing() is Finger => (h.lift)()
+            // (a mouse's held long: a press as it is let go on it)
+            (_, Up) if @ui.pointing() is Mouse && on_it(d) && !@signals.untracked(fn() { said().disabled }) => press()
+            _ => ()
+          }
+        }
+      },
+    )
+    |> ignore
   })
 }
 

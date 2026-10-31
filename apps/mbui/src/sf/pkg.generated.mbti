@@ -1964,7 +1964,7 @@ pub fn tip_look(@ui.Ctx, String, String) -> Unit
 
 pub let tip_max : @ui.Len
 
-pub fn tip_node(TipLayer, @view.View, () -> String, side? : @view.Side) -> Unit
+pub fn tip_node(TipLayer, @view.View, () -> String, side? : @view.Side) -> TipHand
 
 pub let title : @ui.TextStyle
 
@@ -2820,6 +2820,14 @@ pub(all) struct Theme {
 }
 
 type TipFade
+
+pub struct TipHand {
+  hold : () -> Unit
+  lift : () -> Unit
+  cancel : () -> Unit
+}
+
+type TipHeld derive(Eq)
 
 pub struct TipLayer {
   layer : () -> @view.View?

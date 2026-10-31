@@ -825,6 +825,10 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   tree.bring_to(at)
   // (what the old views take presses at, where the tree has them as of then)
   old_hits_place(g(), Some(tree))
+  // (a press anywhere, told before it goes to what takes it: what closes at the next press follows it)
+  if kind == 0 {
+    tree.went_down(at)
+  }
   // (what the old frame put over all of it at its root (its overlays) is painted over the tree, whatever it draws:
   // what it takes there, a press or a pointer's move with none held, is its own before anything of the tree's under it)
   let over = (kind == 0 || (kind == 1 && view_held.val is None)) &&

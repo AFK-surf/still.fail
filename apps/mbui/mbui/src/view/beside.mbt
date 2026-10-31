@@ -370,3 +370,28 @@ fn Tree::hosts_within(self : Tree, at : Int) -> Bool {
   let n = self.nodes[at]
   n.live && (n.hosted || n.kids.iter().any(fn(k) { self.hosts_within(k) }))
 }
+
+///|
+/// A finger or a button went down in the window at `at`, wherever it lands (the host's, before it goes to
+/// what takes it): one change at that moment, told to what follows the window's presses (View::window_downs).
+pub fn Tree::went_down(self : Tree, at : Double) -> Unit {
+  self.event(at, fn() { self.pressed_anywhere.set(@signals.untracked(fn() { self.pressed_anywhere.get() }) + 1) })
+}
+
+///|
+/// How many times a finger or a button has gone down anywhere in the window (Tree::went_down), followed: what closes at
+/// the next press, wherever it lands (a tip a finger held open, once let go).
+pub fn View::window_downs(self : View) -> Int {
+  self.tree.pressed_anywhere.get()
+}
+
+
+///|
+/// Whether what a finger or a button at (`x`, `y`) of the window is for, as the tree is now, is this node (Tree::target_at:
+/// the topmost drawn there that takes it, by the one projection): where a press let go lands, its own or another's.
+pub fn View::finger_target(self : View, x : Double, y : Double) -> Bool {
+  match self.tree.target_at(x, y) {
+    Pressed(id) | Dragged(id) => id == self.id()
+    _ => false
+  }
+}

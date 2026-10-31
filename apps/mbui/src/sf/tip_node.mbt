@@ -33,8 +33,12 @@ let tip_out_scale : Double = 0.97
 ///|
 /// A tip saying `label` (as it changes; none said: no tip) of the control `anchor`, on its `side`, in `tips` (its
 /// layer over all of the window). What shows it and what shuts it as the file's head says.
-pub fn tip_node(tips : TipLayer, anchor : @view.View, label : () -> String, side? : @view.Side = Bottom) -> Unit {
+pub fn tip_node(tips : TipLayer, anchor : @view.View, label : () -> String, side? : @view.Side = Bottom) -> TipHand {
   let open : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
+  // (a finger held on its control: Held while it is down, Lifted a while once it is let go, till then or the next
+  // press, wherever it lands; Free otherwise)
+  let hand : @signals.Signal[TipHeld] = @signals.signal(Free, same=fn(a, b) { a == b })
+  let lifted_end : Ref[() -> Unit] = Ref(fn() {  })
   let shut = Ref(false)
   let rest : Ref[(() -> Unit)?] = Ref(None)
   // (how it comes in, this time it is shown: from when, from how far in it was (shown again as it went: as far as it
@@ -44,9 +48,20 @@ pub fn tip_node(tips : TipLayer, anchor : @view.View, label : () -> String, side
   // (made in its layer as it is first shown where there is one then (none yet: shown the next time it is, as there is
   // one), held there for its control, let go with it)
   let made = Ref(false)
+  // (Escape while it shows: its, before what is under it (a viewer it is over) is asked; gone, shut as a press shuts it)
+  let escaped : Ref[() -> Unit] = Ref(fn() {  })
   let make = fn() -> Bool {
     guard (tips.layer)() is Some(l) else { return false }
     let holder = l.box(fn(h) { h.over(Is(true)) |> ignore }).lives_with(anchor)
+    holder.on_key(fn(k) {
+      if k.code == @ui.key_escape && @signals.untracked(fn() { open.get() }) {
+        (escaped.val)()
+        true
+      } else {
+        false
+      }
+    })
+    |> ignore
     holder.show(fn() { open.get() }, leave=@kit.pop_out_ms, fn(t) { tip_look_node(t, anchor_id, side, label, fade) })
     true
   }
@@ -84,12 +99,25 @@ pub fn tip_node(tips : TipLayer, anchor : @view.View, label : () -> String, side
       anchor.focus_shown(),
       anchor.takes_input(),
       label() != "",
+      hand.get(),
     )
   }
   anchor.reacts(state, fn(s) {
-    let (over, pressed, focused, takes, says) = s
+    let (over, pressed, focused, takes, says, held) = s
     let at = anchor.cause_at()
     stop_rest()
+    // (held open by a finger: shown at once, as long as there is something to say and it takes input; taking none, this
+    // holding over, not shown again as it takes input again)
+    if held != Free {
+      if says && takes {
+        set_open(true)
+      } else {
+        (lifted_end.val)()
+        hand.set(Free)
+        set_open(false)
+      }
+      return
+    }
     // (a press on it shuts it till the hand and the focus have left it: neither over it nor shown on it)
     if pressed {
       shut.val = true
@@ -107,7 +135,7 @@ pub fn tip_node(tips : TipLayer, anchor : @view.View, label : () -> String, side
       // (rested on a while from now: shown then, as it is then, a pointer over it carrying no press, taking input)
       rest.val = Some(
         anchor.at_moment(at + tip_delay_ms, fn() {
-          let (over, pressed, _, takes, says) = @signals.untracked(state)
+          let (over, pressed, _, takes, says, _) = @signals.untracked(state)
           if over && !pressed && takes && says && !shut.val {
             set_open(true)
           }
@@ -115,12 +143,61 @@ pub fn tip_node(tips : TipLayer, anchor : @view.View, label : () -> String, side
       )
     }
   })
+  escaped.val = fn() {
+    shut.val = true
+    (lifted_end.val)()
+    hand.set(Free)
+    set_open(false)
+  }
+  // (let go by a finger that held it open: shown on a while, gone at the next press wherever it lands, or then)
+  anchor.reacts(fn() { anchor.window_downs() }, fn(_) {
+    if @signals.untracked(fn() { hand.get() }) == Lifted {
+      (lifted_end.val)()
+      hand.set(Free)
+    }
+  })
   // (its control let go: nothing of it left pending)
   anchor.owns(fn() {
     stop_rest()
     fade.stop()
+    (lifted_end.val)()
   })
   |> ignore
+  {
+    hold: fn() {
+      (lifted_end.val)()
+      hand.set(Held)
+    },
+    cancel: fn() {
+      (lifted_end.val)()
+      hand.set(Free)
+    },
+    lift: fn() {
+      if @signals.untracked(fn() { hand.get() }) == Held {
+        hand.set(Lifted)
+        lifted_end.val = anchor.at_moment(anchor.cause_at() + @kit.tooltip_lifted_ms, fn() { hand.set(Free) })
+      }
+    },
+  }
+}
+
+///|
+/// How a finger holds a tip open (tip_node): not at all, held down on its control, let go of it a moment ago.
+enum TipHeld {
+  Free
+  Held
+  Lifted
+} derive(Eq)
+
+///|
+/// What a control tells its tip of a finger (tip_node's): held on it long enough (`hold`: shown at once, as long as it
+/// stays down), let go after (`lift`: shown on tooltip_lifted_ms more, or till the next press, wherever it lands),
+/// called off instead (`cancel`: the system took the touch, its control was taken from the hand: gone, none of it
+/// kept).
+pub struct TipHand {
+  hold : () -> Unit
+  lift : () -> Unit
+  cancel : () -> Unit
 }
 
 ///|
