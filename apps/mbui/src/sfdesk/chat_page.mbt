@@ -329,7 +329,8 @@ fn chat_bar(
             }
           })
           |> ignore
-        None => ()
+        // (not read yet: the actions of the chat before it kept in the system's bars till its own come)
+        None => bar_chat_waiting() |> ignore
       }
     })
     |> ignore

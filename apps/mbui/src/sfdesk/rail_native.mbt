@@ -99,6 +99,15 @@ let nav_over_was : Map[String, () -> Unit] = {}
 let drawn_page : Ref[Page?] = { val: None }
 
 ///|
+/// Whether the page on top was drawn this frame: not while the one it came over is still shown in its place, its
+/// coming held for what it shows (Nav::comes_when).
+let top_drawn : Ref[Bool] = { val: false }
+
+///|
+/// The page's actions the frame before, as handed (nav_page), for a frame the page on top is not drawn in.
+let nav_page_before : Array[(@hostapi.NavItem, () -> Unit)] = []
+
+///|
 /// The page the actions were handed for: kept from frame to frame while it is the one shown (a part kept as it was
 /// drawn hands nothing again, its actions the same), dropped as another comes.
 let nav_page_of : Ref[Page?] = { val: None }
@@ -157,6 +166,11 @@ fn bar_chat(src : Source, r : ChatRef, agents : Array[Agent], info : () -> Unit,
     return false
   }
   bar_chat_of.val = Some((src, r))
+  // (what was kept of the chat before it while it was read: its own in their place, none of the other's left)
+  if bar_chat_carried.length() > 0 {
+    nav_page.retain(fn(p) { !bar_chat_carried.contains(p.0.id) })
+    bar_chat_carried.clear()
+  }
   bar_action("chat/info", @sf.t("web-pages.chat.info"), "info", info) |> ignore
   let (tabs, _) = side_now(src, r)
   let icon = if tabs.length() > 0 { "panel-close" } else { "panel-open" }
@@ -178,6 +192,40 @@ fn bar_chat(src : Source, r : ChatRef, agents : Array[Agent], info : () -> Unit,
   }
   true
 }
+
+///|
+/// A chat whose view is not read yet (another chat just opened): the actions the chat before it handed, as they were,
+/// till its own come, so the system's column keeps its buttons in place rather than taking them away and bringing them
+/// back (each brought back is a button made anew, faded in: the user, 2026-10-31, 按钮没变也会闪). Pressed meanwhile,
+/// nothing. False where there are no system's bars.
+fn bar_chat_waiting() -> Bool {
+  if !@sf.native_on() {
+    return false
+  }
+  if drawn_page.val is Some(p) && p != app.nav.top() {
+    return true
+  }
+  for item in bar_chat_last {
+    // (as bar_action hands them: the short column the info alone)
+    if column_short.get() && item.id != "page/chat/info" {
+      continue
+    }
+    if !nav_page.iter().any(fn(p) { p.0.id == item.id }) {
+      nav_page.push((item, fn() {  }))
+      bar_chat_carried.push(item.id)
+    }
+  }
+  true
+}
+
+///|
+/// The ids bar_chat_waiting put in the page's actions, taken out as the chat hands its own (bar_chat).
+let bar_chat_carried : Array[String] = []
+
+///|
+/// The chat's actions as the last chat whose view was read handed them (bar_chat_waiting).
+// kept across runs: said by nav_frame as a chat hands its own, put back as the app begins anew (rail_native_reset)
+let bar_chat_last : Array[@hostapi.NavItem] = []
 
 ///|
 /// The chat's side panel switch in the system's bars (bar_chat).
@@ -282,13 +330,29 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
   let page = app.nav.top()
   if nav_page_of.val != Some(page) {
     nav_page.clear()
+    bar_chat_carried.clear()
     bar_chat_of.val = None
     nav_page_of.val = Some(page)
   }
+  top_drawn.val = false
   body()
+  // (the page come not drawn yet, the one before it still shown in its place: that one's actions kept in the bars as
+  // they were, not taken away for a frame and brought back made anew, faded in: the user, 2026-10-31, 按钮没变也会闪)
   histories_ticked()
+  let handed = if !top_drawn.val && nav_page.is_empty() { nav_page_before.copy() } else { nav_page.copy() }
+  nav_page_before.clear()
+  nav_page_before.append(handed)
+  // (a chat's own as it handed them, not one on its way out handing none, nor what was kept for it)
+  if bar_chat_of.val is Some(_) && bar_chat_carried.length() == 0 && nav_page.iter().any(fn(p) { p.0.id.has_prefix("page/chat/") }) {
+    bar_chat_last.clear()
+    for p in nav_page {
+      if p.0.id.has_prefix("page/chat/") {
+        bar_chat_last.push(p.0)
+      }
+    }
+  }
   nav_page_was.clear()
-  for p in nav_page {
+  for p in handed {
     nav_page_was[p.0.id] = p.1
   }
   match nav_want.val {
@@ -296,8 +360,8 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
       // at the column's top the card in use's own: the chats' list's filter while it is, the page's actions while it is
       // (the page's actions said native: bar_action; the chats' list's filter stays in its card, the user 2026-10-27)
       // (a chat's agents first, on a glass of their own; its other actions, its ⋯, under them: the user 2026-10-27)
-      let page = nav_page.filter(fn(p) { p.0.id.has_prefix("page/who/") })
-      page.append(nav_page.filter(fn(p) { !p.0.id.has_prefix("page/who/") }))
+      let page = handed.filter(fn(p) { p.0.id.has_prefix("page/who/") })
+      page.append(handed.filter(fn(p) { !p.0.id.has_prefix("page/who/") }))
       let card : Array[@hostapi.NavItem] = page.map(fn(p) { p.0 })
       if nav_logged() {
         let said = card.map(fn(i) { i.id + (if i.menu.length() > 0 { "{" + i.menu.map(fn(m) { m.1 }).join(",") + "}" } else { "" }) }).join(" ")
@@ -507,6 +571,7 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   defer {
     if nav_page_of.val != Some(app.nav.top()) {
       nav_page.clear()
+      bar_chat_carried.clear()
       bar_chat_of.val = None
       nav_page_of.val = Some(app.nav.top())
     }
@@ -642,6 +707,10 @@ fn rail_native_reset() -> Unit {
   nav_over_was.clear()
   drawn_page.val = None
   nav_page_of.val = None
+  bar_chat_last.clear()
+  nav_page_before.clear()
+  bar_chat_carried.clear()
+  top_drawn.val = false
   native_mark.val = 0
   tabs_kept.clear()
   nav_log_was.val = ""
