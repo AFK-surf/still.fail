@@ -460,7 +460,10 @@ pub fn[T : Eq] View::keeps_width(self : View, by : () -> T, most? : () -> Double
   |> ignore
   // (the window's size among them: its first frame's too, the first it is laid out in)
   self.reacts(fn() { (by(), self.window()) }, fn(_) {
-    let (w, _) = self.laid_size()
+    // (laid out as of the change's moment, what the change under way set counted: the layout's own, Tree::laid_now)
+    guard self.live() is Some(n) else { return }
+    self.tree.laid_now()
+    let w = n.flex.width
     if w > @signals.untracked(fn() { widest.get() }) {
       widest.set(w)
     }

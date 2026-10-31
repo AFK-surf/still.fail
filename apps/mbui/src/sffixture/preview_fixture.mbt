@@ -14,6 +14,7 @@ pub fn preview_files() -> Array[(Attachment, () -> Bytes)] {
   }
   [
     (at("界面草图.png", 18000.0, 600.0, 400.0), fn() { fixture_png(600, 400) }),
+    (at("首页改版第三轮评审定稿前的对照截图（含深色与浅色两套）.png", 18000.0, 600.0, 400.0), fn() { fixture_png(600, 400) }),
     (at("第二版.png", 21000.0, 400.0, 560.0), fn() { fixture_png(400, 560) }),
     // the chat's own picture (chat_fixture.mbt rich_chat), opened from its thumbnail there: the same picture
     (at("compare.png", 402000.0, 1600.0, 900.0), fn() { fixture_file_png("compare.png") }),
@@ -48,6 +49,8 @@ pub fn fixture_preview(mode : String) -> Unit {
     "chat-preview-csv" => "数据.csv"
     "chat-preview-none" => "备份.bin"
     "chat-preview-apk" => "测试版.apk"
+    // (a picture whose name is far longer than a phone's bar has room for: the name cut short, the tools whole)
+    "chat-preview-long" => "首页改版第三轮评审定稿前的对照截图（含深色与浅色两套）.png"
     _ => return
   }
   for f in preview_files() {
