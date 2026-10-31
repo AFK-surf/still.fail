@@ -1607,6 +1607,7 @@
   "web-pages.screen.key.down": "Down arrow",
   "web-pages.screen.key.right": "Right arrow",
   "web-pages.screen.again": "Open again",
+  "web-pages.screen.toGrants": "Go to permissions",
   "web-pages.screen.over.ended": "Ended",
   "web-pages.screen.over.outdated": "The station needs an update",
   "web-pages.screen.over.gone": "The screen is gone",

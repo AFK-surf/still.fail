@@ -352,6 +352,12 @@ let ended_title : @ui.TextStyle = @ui.text_style(
 let ended_why : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=A(OnVeil, O70), center=true)
 
 ///|
+/// Its capsules side by side, 8 between; one a line of its own where the box is too narrow for both (English on a
+/// phone).
+// kept across runs: a value (no field of it changes)
+let ended_keys : @ui.Style = @ui.css("row gap=S2 justify=JCenter")
+
+///|
 /// 重新打开 (Controls.kt Button at 34 high, 16 in, 12 more under the words): the ink with the page's colour on it in
 /// the dark theme, a solid light grey with the ink on it in the light one (on the screen's dark veil, not the page: the
 /// neutral ground, the ink at an opacity, came out as dark as the veil, 1.2 to 1 under its words).

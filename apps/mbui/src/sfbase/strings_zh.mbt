@@ -1772,6 +1772,7 @@ let zh : Map[String, String] = {
   "web-pages.profiles.verifiedAdded": "已验证并添加 Profile",
   "web-pages.profiles.workspaces.lead": "此 station 也属于其他 workspace；Profile 默认同时用于这些 workspace",
   "web-pages.screen.again": "重新打开",
+  "web-pages.screen.toGrants": "前往权限设置",
   "web-pages.screen.and": "、",
   "web-pages.screen.combo.close": "关闭窗口",
   "web-pages.screen.combo.desktop": "显示桌面",
