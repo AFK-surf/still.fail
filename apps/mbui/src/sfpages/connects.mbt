@@ -624,9 +624,8 @@ fn mine_filter(c : @ui.Ctx, key : String, of : String, mine : Bool, set : (Bool)
   let t = @sf.theme()
   let id = c.id(key)
   let open = mine_filter_open.get(key).unwrap_or(false)
-  if c.clicked(id) {
-    mine_filter_open[key] = !open
-  }
+  // (pressed: opened or closed as it is let go, as it is then)
+  c.on_press(id, fn() { mine_filter_open[key] = !mine_filter_open.get(key).unwrap_or(false) })
   let named = if mine { @sf.t("web-main.filter." + of + ".mine") } else { @sf.t("web-main.filter.all") }
   let lit = c.lit(id) || open
   let ink = if lit { t.p.text } else { t.p.muted }
@@ -640,10 +639,12 @@ fn mine_filter(c : @ui.Ctx, key : String, of : String, mine : Bool, set : (Bool)
     @kit.menu_radio("all", !mine, label=@sf.t("web-main.filter." + of + ".all")),
     @kit.menu_radio("mine", mine, label=@sf.t("web-main.filter." + of + ".mine")),
   ]
-  let m = @sf.dropdown(c, key + "/menu", open, id, entries, {}, mine_filter_menu_w)
-  if open && !m.open {
-    mine_filter_open[key] = false
-  }
+  // (dismissed by the hand, Escape or a press outside it and its button: closed at that moment; closed as one is chosen)
+  let menu : Ref[@kit.Menu?] = Ref(None)
+  c.with_dismissed(fn(_) { mine_filter_open[key] = false }, fn() {
+    menu.val = Some(@sf.dropdown(c, key + "/menu", open, id, entries, {}, mine_filter_menu_w))
+  })
+  let m = menu.val.unwrap()
   match m.chosen {
     Some(v) => {
       mine_filter_open[key] = false
@@ -659,6 +660,12 @@ fn mine_filter(c : @ui.Ctx, key : String, of : String, mine : Bool, set : (Bool)
 /// Which filter's menu is open, by its key.
 // kept across runs: said again by each press; reset empties it
 let mine_filter_open : Map[String, Bool] = {}
+
+///|
+/// Whether filter `key`'s menu is open (tests).
+pub fn mine_filter_shown(key : String) -> Bool {
+  mine_filter_open.get(key).unwrap_or(false)
+}
 
 ///|
 let mine_filter_icon : Double = 16.0

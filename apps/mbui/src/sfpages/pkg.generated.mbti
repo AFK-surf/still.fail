@@ -325,6 +325,8 @@ pub fn message_files(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Attachm
 
 pub fn message_row(@ui.Ctx, @sfbase.Source, MessageHere, @sfbase.Message) -> Unit
 
+pub fn mine_filter_shown(String) -> Bool
+
 pub fn model_triple(@ui.Ctx, @sfbase.Source, String, String, up? : Bool, page? : Json?, small? : Bool, floating? : Bool, saved? : String) -> Unit
 
 pub let msg_name : @ui.TextStyle
