@@ -2020,8 +2020,11 @@ fn cc_chooser(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, to : Arra
             "on": Json::boolean(!o.on),
           }
           c.tell("composer/cc", fn() { (src.call)("chat.cc", params, fn(_) {  }) })
-          // one: done once ticked; several: open to tick the next
-          composing.cc_open = to.length() > 1
+          // one: done once ticked; several: left as it is, open to tick the next (a tick never opens it: closed by
+          // then, Escape after the tick, it stays closed)
+          if to.length() <= 1 {
+            composing.cc_open = false
+          }
         }
         None => ()
       }
