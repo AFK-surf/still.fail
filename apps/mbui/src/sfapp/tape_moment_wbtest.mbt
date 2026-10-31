@@ -231,3 +231,36 @@ test "on the tape the window made 大屏 and 中屏 again: off the tape, then th
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   assert_eq(tape_now(), was)
 }
+
+///|
+/// What a screen reader reads out as the cover of the panel `label` says (not hidden): each one's id.
+fn covers_said(t : @ui.Tester, label : String) -> Array[Int] {
+  t.semantics().filter(fn(s) { s.label == label && !s.hidden }).map(fn(s) { s.id })
+}
+
+///|
+test "中屏: a screen reader's press of a panel's cover brings it over at that moment, no frame drawn; one id read out before it left presses nothing once another cover is there" {
+  let t = tape_chat(0, 720.0, 840.0)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  // (the page's cover read out once: one button where it lies, no other said in its place)
+  let page = covers_said(t, "收起侧边栏")
+  assert_eq(page.length(), 1)
+  t.advance(between_frames_ms)
+  @ui.current().ask_action(page[0], Activate)
+  // (at once, as of the press's moment: no frame drawn since)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+  t.run_for(@ui.move_most_ms)
+  // the sidebar brought back by its own cover's press; the page's covered again, by a cover made anew
+  let side = covers_said(t, "展开侧边栏")
+  assert_eq(side.length(), 1)
+  t.advance(between_frames_ms)
+  @ui.current().ask_action(side[0], Activate)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(covers_said(t, "收起侧边栏").length(), 1)
+  // (the id read out before it left: its cover let go then, pressing it nothing)
+  t.advance(between_frames_ms)
+  @ui.current().ask_action(page[0], Activate)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+}
