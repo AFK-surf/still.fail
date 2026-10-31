@@ -27,6 +27,10 @@ pub fn TipLayer::new(layer : () -> @view.View?) -> TipLayer {
 let tip_in_ms : Double = 120.0
 
 ///|
+/// How big a tip is drawn as it has gone (pop_out's scale).
+let tip_out_scale : Double = 0.97
+
+///|
 /// A tip saying `label` (as it changes; none said: no tip) of the control `anchor`, on its `side`, in `tips` (its
 /// layer over all of the window). What shows it and what shuts it as the file's head says.
 pub fn tip_node(tips : TipLayer, anchor : @view.View, label : () -> String, side? : @view.Side = Bottom) -> Unit {
@@ -211,6 +215,19 @@ fn tip_look_node(t : @view.View, anchor : @view.NodeId, side : @view.Side, label
       1.0
     }
   }))
+  // (going, drawn smaller as it fades, to 0.97 of itself, about its edge toward its control (kit's pop_out, grown_from):
+  // coming, whole, as tip_in has it, from wherever it was turned back)
+  .scale(
+    By(fn() {
+      let a = fade.shown(t)
+      if fade.to > 0.5 {
+        1.0
+      } else {
+        tip_out_scale + (1.0 - tip_out_scale) * a
+      }
+    }),
+    about=@view.FromBeside,
+  )
   .says(By(fn() { Some(@view.said(Tooltip, label=label())) }))
   |> ignore
   t.box(fn(w) {

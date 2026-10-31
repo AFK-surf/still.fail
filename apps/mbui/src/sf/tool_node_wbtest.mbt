@@ -529,3 +529,63 @@ test "a tip coming in and going as kit's does: its ground the first half of the 
   // (whole at last, its words too)
   assert_true(dense[7].0 == 1.0 && dense[7].1 > 0.0, msg="whole at 400: \{dense}")
 }
+
+///|
+/// Where the tip of tool `which` ("old" or "new", tools_tester's) is drawn and how big, as its ground is drawn (the
+/// biggest box drawn under its tool, beside it), in its tool's terms: at each turn of the hand on it and away (shown
+/// whole; half way gone; back on it a moment; whole again; most of the way gone).
+fn tip_drawn_turns(which : String) -> Array[String] raise {
+  let said = @signals.signal({ icon: "copy", label: "复制", on: false, disabled: false }, same=fn(a, b) { a == b })
+  let t = tools_tester(said, @signals.signal(page_viewer_ink()), {})
+  let b = t.get(Button, label="复制 " + which)
+  let (bx, by, bw, bh) = b.rect
+  let (cx, cy) = (bx + bw / 2.0, by + bh / 2.0)
+  let look = fn(what : String) -> String {
+    let mut best = ""
+    let mut most = 0.0
+    for line in t.drawlist().split("\n") {
+      let f = line.split(" ").map(fn(v) { v.to_string() }).to_array()
+      if f.length() < 21 || f[0] != "i" || f[6] != "0" {
+        continue
+      }
+      match (number_of(f[1]), number_of(f[2]), number_of(f[3]), number_of(f[4])) {
+        (Some(x), Some(y), Some(w), Some(h)) if y >= by + bh && y < by + bh + 60.0 && x > bx - 80.0 && x < bx + bw + 80.0 && w * h > most => {
+          most = w * h
+          let r = fn(v : Double) { ((v * 100.0).round() / 100.0).to_string() }
+          best = "\{what}: \{r(x - bx)} \{r(y - by)} \{r(w)} \{r(h)}"
+        }
+        _ => ()
+      }
+    }
+    if best == "" {
+      "\{what}: none"
+    } else {
+      best
+    }
+  }
+  let out = []
+  t.move(cx, cy)
+  t.run_for(tip_delay_ms + 400.0)
+  out.push(look("whole"))
+  t.move(380.0, 190.0)
+  t.run_for(@kit.pop_out_ms / 2.0)
+  out.push(look("half way gone"))
+  t.move(cx, cy)
+  t.run_for(30.0)
+  out.push(look("back on it a moment"))
+  t.run_for(400.0)
+  out.push(look("whole again"))
+  t.move(380.0, 190.0)
+  t.run_for(@kit.pop_out_ms * 0.75)
+  out.push(look("most of the way gone"))
+  out
+}
+
+///|
+test "a tip going as kit's goes, drawn smaller as it fades about its edge toward its tool (pop_out), whole as it comes back from wherever it was turned: where and how big it is drawn at each turn, as the old one's" {
+  let old = tip_drawn_turns("old")
+  let new = tip_drawn_turns("new")
+  assert_eq(new, old, msg="new \{new} old \{old}")
+  // (going, smaller than whole: the scale itself, not only the fade)
+  assert_true(new[1] != new[0], msg="half way gone as big as whole: \{new}")
+}

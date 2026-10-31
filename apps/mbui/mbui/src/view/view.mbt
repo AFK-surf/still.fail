@@ -70,6 +70,10 @@ pub(all) struct Look {
   /// and how far besides, in its own widths and heights as it is laid out (a page slid off by its width)
   mut sx : Double
   mut sy : Double
+  /// how big it is drawn, what it holds with it (1: as laid out), about which point of it (shares of its width and
+  /// height): View::scale
+  mut scale : Double
+  mut pivot : Pivot
 } derive(Eq, Debug)
 
 ///|
@@ -208,6 +212,8 @@ struct Node {
   mut cursor : Cursor?
   /// what it is placed beside (View::beside: its anchor, the side, how along it), placed so as the tree is placed
   mut beside : Beside?
+  /// the side it went on beside its anchor, as it was last placed there (none: not placed beside one yet)
+  mut went : Side?
   mut focus_keys : Int
   mut focused_cell : @signals.Signal[Bool]?
   mut focus_shown_cell : @signals.Signal[Bool]?
@@ -246,6 +252,10 @@ struct Node {
   mut la : Double
   mut lw : Double
   mut lh : Double
+  /// how big it is drawn, about which point of it (in points, where it is its own)
+  mut ls : Double
+  mut lpx : Double
+  mut lpy : Double
   /// what it draws, as last made
   mut content : Content?
   /// leaving (View::going): since when it goes as from its start (-1: not leaving), how long all of it takes; coming
@@ -519,6 +529,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.dy = 0.0
       n.look.sx = 0.0
       n.look.sy = 0.0
+      n.look.scale = 1.0
+      n.look.pivot = At(0.5, 0.5)
+      n.went = None
       n.parent = parent
       n.slot = false
       n.hosted = false
@@ -561,7 +574,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, border: 0.0, border_ink: 0L, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0 },
+        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, border: 0.0, border_ink: 0L, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5) },
         parent,
         kids: [],
         owner: None,
@@ -583,6 +596,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         input_cell: None,
         cursor: None,
         beside: None,
+        went: None,
         focus_keys: 0,
         focused_cell: None,
         focus_shown_cell: None,
@@ -605,6 +619,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         la: 1.0,
         lw: 0.0,
         lh: 0.0,
+        ls: 1.0,
+        lpx: 0.0,
+        lpy: 0.0,
         content: None,
         left_at: -1.0,
         span: 0.0,
@@ -788,36 +805,20 @@ pub fn View::drawn_at(self : View) -> Double {
 }
 
 ///|
-/// Where it is drawn, in the window (what holds it drawn off with it, its own offset with it), and how big: where a
-/// press finds it as where it is drawn.
+/// Where it is drawn, in the window (what holds it drawn off with it, its own offset with it), and how big (as big as
+/// it and what holds it are drawn: View::scale): where a press finds it as where it is drawn.
 pub fn View::rect(self : View) -> (Double, Double, Double, Double) {
   guard self.live() is Some(n) else { return (0.0, 0.0, 0.0, 0.0) }
-  let (x, y, _) = self.tree.placed(self.at)
-  (x, y, n.flex.width, n.flex.height)
+  let (x, y, s) = self.tree.placed(self.at)
+  (x, y, n.flex.width * s, n.flex.height * s)
 }
 
 ///|
-/// Where node `at` is drawn in the window and how opaque, from the root down: its holders' places, offsets and
-/// opacities with its own (a slot adds nothing of its own).
+/// Where node `at` is drawn in the window and how big (its scale and its holders'), from the root down (Tree::projected):
+/// a point of the window in its own terms is (x - its x) / its scale.
 fn Tree::placed(self : Tree, at : Int) -> (Double, Double, Double) {
-  let chain : Array[Int] = []
-  let mut i = at
-  while i >= 0 {
-    chain.push(i)
-    i = self.nodes[i].parent
-  }
-  let mut x = 0.0
-  let mut y = 0.0
-  let mut a = 1.0
-  for k = chain.length() - 1; k >= 0; k = k - 1 {
-    let n = self.nodes[chain[k]]
-    if !n.slot {
-      x = x + n.flex.left + n.look.dx + n.look.sx * n.flex.width
-      y = y + n.flex.top + n.look.dy + n.look.sy * n.flex.height
-      a = a * n.look.alpha
-    }
-  }
-  (x, y, a)
+  let (x, y, _, s) = self.projected(at)
+  (x, y, s)
 }
 
 ///|
@@ -1316,6 +1317,27 @@ pub fn View::shift(self : View, d : Live[(Double, Double)]) -> View {
 }
 
 ///|
+/// How big it is drawn, what it holds with it, as it changes (1: as it is laid out), about the point of it `about` says
+/// (Pivot: At, shares of its width and height, (0.5, 0.5) its middle; FromBeside, the edge it goes out from beside
+/// its anchor, on the side it went to, lined up as it is: a popover's, grown from what opened it): its place's. Drawn,
+/// pressed, taken (View::takes, what a host under it is told covers it) and read out where it is drawn, as big: one
+/// projection of it and its holders (Tree::projected); laid out as before. Where what it holds cuts them, cut as far
+/// in; its words, its shapes and its corners drawn as big. It holds no old view (View::hosted) while it is drawn other
+/// than as big as laid out: refused (hosted_unscaled), whichever was said first.
+pub fn View::scale(self : View, s : Live[Double], about? : Pivot = At(0.5, 0.5)) -> View {
+  self.bind(30, s, Place, fn(s) {
+    // (an old view held in it: refused as the scale is said, hosted_unscaled)
+    if s != 1.0 && self.tree.hosts_within(self.at) {
+      hosted_refused(s)
+    }
+    let n = self.tree.nodes[self.at]
+    n.look.scale = s
+    n.look.pivot = about
+  })
+  self
+}
+
+///|
 /// Whether it, and what it holds, take presses (false: drawn only, as a page going back or one covered as another comes
 /// in): what the tree finds at a point passes over it, as of the moment of the press.
 pub fn View::presses(self : View, on : Live[Bool]) -> View {
@@ -1753,11 +1775,10 @@ fn Tree::asked_at(
     self.laid_now()
     let found : Ref[NodeId?] = Ref(None)
     let now = self.logic_at()
-    self.each_drawn(fn(c, cx, cy, _) {
-      if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.pressless_at(c.id.at) {
+    self.each_drawn_scaled(fn(c, cx, cy, _, s) {
+      if self.finger_on(c, cx, cy, s, x, y, now, tracked=false) {
         let n = self.nodes[c.id.at]
-        let here = @signals.untracked(fn() { self.takes_here(n, x - cx, y - cy, c.w, c.h, now) })
-        if here && (takes(n) || n.on_drag is Some(_) || n.on_press is Some(_) || n.hosted) {
+        if takes(n) || n.on_drag is Some(_) || n.on_press is Some(_) || n.hosted {
           found.val = Some(c.id)
         }
       }
@@ -1767,8 +1788,8 @@ fn Tree::asked_at(
         let n = self.nodes[id.at]
         if takes(n) {
           asked.val = true
-          let (nx, ny, _) = self.placed(id.at)
-          then(n, x - nx, y - ny, t)
+          let (nx, ny, ns) = self.placed(id.at)
+          then(n, (x - nx) / ns, (y - ny) / ns, t)
         }
       }
       None => ()
@@ -2114,9 +2135,9 @@ pub fn Tree::drag_at(
     match n.on_drag {
       None => self.held_to(None)
       Some(f) => {
-        let (nx, ny, _) = self.placed(id.at)
+        let (nx, ny, ns) = self.placed(id.at)
         let told = fn(kind : DragIs, finger : Int) {
-          f({ kind, x: x - nx, y: y - ny, at: t, wx: x, wy: y, ox: x - nx, oy: y - ny, finger, since: t })
+          f({ kind, x: (x - nx) / ns, y: (y - ny) / ns, at: t, wx: x, wy: y, ox: (x - nx) / ns, oy: (y - ny) / ns, finger, since: t })
         }
         // (called off, all of it: the hold and the fingers let go of first, then each finger down told so while the node
         // and this on_drag are still its: what one told let go of hears no more)
@@ -3341,7 +3362,9 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   let a = n.look.alpha
   let w = n.flex.width
   let h = n.flex.height
-  let went = !n.placed || x != n.lx || y != n.ly || a != n.la
+  let s = n.look.scale
+  let (px, py) = n.pivot_at(w, h)
+  let went = !n.placed || x != n.lx || y != n.ly || a != n.la || s != n.ls || px != n.lpx || py != n.lpy
   let sized = !n.placed || w != n.lw || h != n.lh
   n.placed = true
   n.lx = x
@@ -3349,6 +3372,9 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   n.la = a
   n.lw = w
   n.lh = h
+  n.ls = s
+  n.lpx = px
+  n.lpy = py
   if went {
     self.work.composed = self.work.composed + 1
     self.composed.push({ at, gen: n.gen })
@@ -3437,34 +3463,47 @@ pub fn Tree::composed(self : Tree) -> Array[NodeId] {
 
 ///|
 /// The scene gone through in the order it is drawn: `f` given each node's content (where it is its own) and where the
-/// window draws it and how opaque, composed as it goes from what holds it (none for a node not yet placed).
+/// window draws it and how opaque, composed as it goes from what holds it (none for a node not yet placed); drawn as
+/// big as it is laid out (each_drawn_scaled: how big besides).
 pub fn Tree::each_drawn(self : Tree, f : (Content, Double, Double, Double) -> Unit) -> Unit {
+  self.each_drawn_scaled(fn(c, x, y, a, _) { f(c, x, y, a) })
+}
+
+///|
+/// The scene gone through as each_drawn goes through it, `f` given besides how big each is drawn (its own scale and its
+/// holders', View::scale: what it draws as big about where the window draws its origin).
+pub fn Tree::each_drawn_scaled(self : Tree, f : (Content, Double, Double, Double, Double) -> Unit) -> Unit {
   let wx : Array[Double] = Array::make(self.order.length(), 0.0)
   let wy : Array[Double] = Array::make(self.order.length(), 0.0)
   let wa : Array[Double] = Array::make(self.order.length(), 1.0)
+  let ws : Array[Double] = Array::make(self.order.length(), 1.0)
   for i, at in self.order {
     let n = self.nodes[at]
     let h = self.order_holder[i]
-    let (bx, by, ba) = if h < 0 { (0.0, 0.0, 1.0) } else { (wx[h], wy[h], wa[h]) }
-    wx[i] = bx + n.lx
-    wy[i] = by + n.ly
+    let (bx, by, ba, bs) = if h < 0 { (0.0, 0.0, 1.0, 1.0) } else { (wx[h], wy[h], wa[h], ws[h]) }
+    // (where it is in what holds it, drawn as big as that is; its own scale about its point: its origin drawn in as far
+    // as that leaves it)
+    wx[i] = bx + bs * (n.lx + (1.0 - n.ls) * n.lpx)
+    wy[i] = by + bs * (n.ly + (1.0 - n.ls) * n.lpy)
     wa[i] = ba * n.la
+    ws[i] = bs * n.ls
+    hosted_unscaled(n, ws[i])
     match n.content {
-      Some(c) => f(c, wx[i], wy[i], wa[i])
+      Some(c) => f(c, wx[i], wy[i], wa[i], ws[i])
       None => ()
     }
   }
 }
 
 ///|
-/// A node's content unfolded where the window draws it.
-fn unfolded(c : Content, x : Double, y : Double, a : Double) -> Drawn {
+/// A node's content unfolded where the window draws it, as big as it is drawn.
+fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Drawn {
   {
     id: c.id,
     x,
     y,
-    w: c.w,
-    h: c.h,
+    w: c.w * s,
+    h: c.h * s,
     alpha: a,
     ground: c.ground,
     ink: c.ink,
@@ -3485,7 +3524,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double) -> Drawn {
 /// The scene unfolded, in order (a new array: for a test, or a host taking the window whole).
 pub fn Tree::drawn(self : Tree) -> Array[Drawn] {
   let out = []
-  self.each_drawn(fn(c, x, y, a) { out.push(unfolded(c, x, y, a)) })
+  self.each_drawn_scaled(fn(c, x, y, a, s) { out.push(unfolded(c, x, y, a, s)) })
   out
 }
 
@@ -3516,20 +3555,36 @@ pub fn Tree::drawn_of(self : Tree, id : NodeId) -> Drawn? {
   }
   let n = self.nodes[id.at]
   guard n.live && n.gen == id.gen && n.content is Some(c) else { return None }
+  let (x, y, a, s) = self.projected(id.at)
+  Some(unfolded(c, x, y, a, s))
+}
+
+///|
+/// Where node `at` is drawn in the window, how opaque and how big (its scale and its holders'), as it was last placed:
+/// composed from the window down as each_drawn_scaled composes it (a slot adds nothing of its own). The one way the
+/// window's terms and a node's are told apart: where it is drawn, where it takes a finger, where it is read out.
+fn Tree::projected(self : Tree, at : Int) -> (Double, Double, Double, Double) {
+  let chain = []
+  let mut i = at
+  while i >= 0 {
+    if !self.nodes[i].slot {
+      chain.push(i)
+    }
+    i = self.nodes[i].parent
+  }
   let mut x = 0.0
   let mut y = 0.0
   let mut a = 1.0
-  let mut i = id.at
-  while i >= 0 {
-    let m = self.nodes[i]
-    if !m.slot {
-      x = x + m.lx
-      y = y + m.ly
-      a = a * m.la
-    }
-    i = m.parent
+  let mut s = 1.0
+  for k = chain.length() - 1; k >= 0; k = k - 1 {
+    let m = self.nodes[chain[k]]
+    x = x + s * (m.lx + (1.0 - m.ls) * m.lpx)
+    y = y + s * (m.ly + (1.0 - m.ls) * m.lpy)
+    a = a * m.la
+    s = s * m.ls
   }
-  Some(unfolded(c, x, y, a))
+  hosted_unscaled(self.nodes[at], s)
+  (x, y, a, s)
 }
 
 ///|
@@ -3567,6 +3622,11 @@ pub fn View::hosted(self : View, make? : (View) -> Unit = fn(v) { v.grow(Is(1.0)
   let tree = self.tree
   self.box(fn(v) {
     tree.nodes[v.at].hosted = true
+    // (in what is drawn scaled: refused as it is put there, hosted_unscaled)
+    match tree.scale_over(v.at) {
+      Some(s) => hosted_refused(s)
+      None => ()
+    }
     tree.hosting = v.at
     make(v)
   })
@@ -3631,13 +3691,15 @@ pub(all) enum FingerAreas {
 /// takes of it (View::takes).
 pub fn Tree::finger_areas(self : Tree, id : NodeId) -> FingerAreas {
   let none = InWindow([])
-  guard self.alive_id(id) && !self.pressless_at(id.at) && self.drawn_of(id) is Some(d) else { return none }
+  guard self.alive_id(id) && !self.pressless_at(id.at) && self.nodes[id.at].content is Some(c) else { return none }
   let n = self.nodes[id.at]
-  self.areas_of(n, d.x, d.y, d.w, d.h)
+  let (x, y, _, s) = self.projected(id.at)
+  self.areas_of(n, x, y, c.w, c.h, s)
 }
 
 ///|
-fn Tree::areas_of(self : Tree, n : Node, x : Double, y : Double, w : Double, h : Double) -> FingerAreas {
+/// (Node `n`, `w` by `h` in its own terms, drawn at (x, y) in the window `s` as big: where it takes a finger there.)
+fn Tree::areas_of(self : Tree, n : Node, x : Double, y : Double, w : Double, h : Double, s : Double) -> FingerAreas {
   self.takes_said(n)
   match n.takes {
     Some(Areas(_)) => {
@@ -3647,10 +3709,10 @@ fn Tree::areas_of(self : Tree, n : Node, x : Double, y : Double, w : Double, h :
         rs
         .iter()
         .filter_map(fn(r) {
-          let x0 = x + (if r.0 > 0.0 { r.0 } else { 0.0 })
-          let y0 = y + (if r.1 > 0.0 { r.1 } else { 0.0 })
-          let x1 = x + (if r.2 < w { r.2 } else { w })
-          let y1 = y + (if r.3 < h { r.3 } else { h })
+          let x0 = x + s * (if r.0 > 0.0 { r.0 } else { 0.0 })
+          let y0 = y + s * (if r.1 > 0.0 { r.1 } else { 0.0 })
+          let x1 = x + s * (if r.2 < w { r.2 } else { w })
+          let y1 = y + s * (if r.3 < h { r.3 } else { h })
           if x1 > x0 && y1 > y0 {
             Some((x0, y0, x1, y1))
           } else {
@@ -3661,7 +3723,7 @@ fn Tree::areas_of(self : Tree, n : Node, x : Double, y : Double, w : Double, h :
       )
     }
     Some(AsHosted(_)) => AsItHosts
-    None => if n.hosted { AsItHosts } else { InWindow([(x, y, x + w, y + h)]) }
+    None => if n.hosted { AsItHosts } else { InWindow([(x, y, x + w * s, y + h * s)]) }
   }
 }
 
@@ -3674,7 +3736,7 @@ pub fn Tree::taken_over(self : Tree, id : NodeId) -> Array[(Double, Double, Doub
   let out = []
   guard self.alive_id(id) else { return out }
   let past = Ref(false)
-  self.each_drawn(fn(c, cx, cy, _) {
+  self.each_drawn_scaled(fn(c, cx, cy, _, s) {
     if c.id == id {
       past.val = true
       return
@@ -3686,7 +3748,7 @@ pub fn Tree::taken_over(self : Tree, id : NodeId) -> Array[(Double, Double, Doub
     if n.hosted || (n.on_press is None && n.on_drag is None) {
       return
     }
-    match self.areas_of(n, cx, cy, c.w, c.h) {
+    match self.areas_of(n, cx, cy, c.w, c.h, s) {
       InWindow(rs) => out.append(rs)
       AsItHosts => ()
     }
@@ -3702,24 +3764,44 @@ pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
 }
 
 ///|
+/// Whether a finger at (x, y) in the window is on what content `c` draws (drawn at (cx, cy), `s` as big: as the scene is
+/// composed, Tree::projected) and is taken there: it is drawn there, takes presses (neither leaving nor held by what
+/// is, nor said to take none), and takes it where it is in its own terms (View::takes, read `tracked` or not, as of
+/// `at`).
+fn Tree::finger_on(
+  self : Tree,
+  c : Content,
+  cx : Double,
+  cy : Double,
+  s : Double,
+  x : Double,
+  y : Double,
+  at : Double,
+  tracked~ : Bool,
+) -> Bool {
+  if x < cx || y < cy || x >= cx + c.w * s || y >= cy + c.h * s || self.pressless_at(c.id.at) {
+    return false
+  }
+  let n = self.nodes[c.id.at]
+  let (lx, ly) = ((x - cx) / s, (y - cy) / s)
+  if tracked {
+    self.takes_here(n, lx, ly, c.w, c.h, at)
+  } else {
+    @signals.untracked(fn() { self.takes_here(n, lx, ly, c.w, c.h, at) })
+  }
+}
+
+///|
 /// The same, what decides where a node takes it (View::takes) read `tracked` (followed by what asks it: Tree::point_at)
 /// or not.
 fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Target {
   // (the logic's moment, what is where taken as of then: View::takes)
   let at = self.logic_at()
   let found : Array[Target] = []
-  self.each_drawn(fn(c, cx, cy, _) {
-    // (what is leaving or said to take no press, or held by what is, pressed no more)
-    if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.pressless_at(c.id.at) {
+  self.each_drawn_scaled(fn(c, cx, cy, _, s) {
+    if self.finger_on(c, cx, cy, s, x, y, at, tracked~) {
       let n = self.nodes[c.id.at]
-      let here = if tracked {
-        self.takes_here(n, x - cx, y - cy, c.w, c.h, at)
-      } else {
-        @signals.untracked(fn() { self.takes_here(n, x - cx, y - cy, c.w, c.h, at) })
-      }
-      if !here {
-        ()
-      } else if n.on_drag is Some(_) {
+      if n.on_drag is Some(_) {
         found.push(Dragged(c.id))
       } else if n.on_press is Some(_) {
         found.push(Pressed(c.id))

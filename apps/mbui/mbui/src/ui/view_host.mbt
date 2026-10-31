@@ -370,15 +370,16 @@ fn old_place(tree : @view.Tree) -> Unit {
   let (w, h) = view_window.val
   old_placed.clear()
   // (in the tree's order: built so, what is over another built after it, its presses and its back taken first)
-  for d in tree.drawn() {
-    if d.hosted && old_islands.iter().any(fn(o) { o.id == d.id }) {
-      old_placed.push((d.id, d.x, d.y, d.w, d.h, d.alpha))
+  // (laid out as big as its node is, where it is drawn: old views drawn as big as they are laid out, View::scale)
+  tree.each_drawn_scaled(fn(c, x, y, a, _) {
+    if c.hosted && old_islands.iter().any(fn(o) { o.id == c.id }) {
+      old_placed.push((c.id, x, y, c.w, c.h, a))
     }
-  }
+  })
   // (and nothing else of the tree's to see or press: the old frame, its overlays with it, is all that is drawn)
   old_whole.val = old_placed.length() == 1 &&
     (match old_placed[0] {
-      (id, x, y, iw, ih, a) => x == 0.0 && y == 0.0 && iw == w && ih == h && a == 1.0 && tree.alone(id)
+      (id, x, y, iw, ih, a) => x == 0.0 && y == 0.0 && iw == w && ih == h && a == 1.0 && tree.drawn_scale(id) == 1.0 && tree.alone(id)
     })
 }
 
@@ -504,7 +505,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
   }
   dr.targets_said = true
   let n0 = self.ninst
-  tree.each_drawn(fn(c, x, y, a) {
+  tree.each_drawn_scaled(fn(c, x, y, a, s) {
     // (the root, the window, is drawn by nothing of its own)
     if c.id.at == 0 || a <= 0.002 {
       return
@@ -533,7 +534,13 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         b
       }
     }
+    let i0 = self.ninst
     self.view_blit(c.id, block, x, y, a)
+    // (drawn bigger or smaller than laid out, what holds it with it: about where it is drawn, as a look's scale is)
+    if s != 1.0 {
+      let (outer, outer_r, outer_s) = clip_at(clip_top())
+      self.transform_insts(i0, self.ninst, x, y, s, s, 0.0, 0.0, outer, outer_r, outer_s)
+    }
     view_paint_work.copied = view_paint_work.copied + 1
   })
   // what the old frame puts over all of it at its root (its layers: the overlays its views open, menus, sheets,
@@ -678,8 +685,12 @@ fn Ctx::view_blit(self : Ctx, id : @view.NodeId, made : ViewBlock, x : Double, y
     let b = at + i * inst_size
     s[b] = s[b] + x
     s[b + 1] = s[b + 1] + y
-    s[b + 11] = s[b + 11] * a
     let kind = s[b + 5]
+    // (its colour's opacity faded with it; a glass's 11 is its tint's own, faded by its opacity (15) as glass_inst
+    // fades it, not twice)
+    if kind != 5.0 && kind != 6.0 {
+      s[b + 11] = s[b + 11] * a
+    }
     if kind == 11.0 {
       s[b + 12] = s[b + 12] + seg_base
     }
