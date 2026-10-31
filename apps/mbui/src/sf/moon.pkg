@@ -5,6 +5,7 @@ import {
   "mbui/signals",
   "mbui/hostapi",
   "mbui/kit",
+  "mbui/view",
   "mbui/motion",
   "moonbitlang/core/math",
   "moonbitlang/core/json",

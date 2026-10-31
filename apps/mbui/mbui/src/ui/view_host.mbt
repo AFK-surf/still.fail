@@ -172,12 +172,6 @@ pub(all) struct ViewPaintWork {
 // kept across runs: put back as a run begins (view_forget)
 let view_paint_work : ViewPaintWork = { made: 0, copied: 0, handed: 0 }
 
-///|
-/// The words of a node made once: their size and the room a line takes.
-let view_words_size : Double = 15.0
-
-///|
-let view_line_h : Double = 22.0
 
 ///|
 /// The window made once by `make` (its root given: put the old view in it with View::hosted), from this frame on.
@@ -291,8 +285,8 @@ fn view_forget() -> Unit {
 
 ///|
 /// Words of a node made once measured as they are drawn (text.mbt), in `width` (< 0: as wide as they are).
-fn view_words_measure(words : String, width : Double) -> (Double, Double) {
-  let tl = layout_text(words, view_words_size, 400, if width < 0.0 { 1.0e9 } else { width }, true, line=view_line_h)
+fn view_words_measure(words : String, look : @view.WordsLook, width : Double) -> (Double, Double) {
+  let tl = layout_text(words, look.size, look.weight, if width < 0.0 { 1.0e9 } else { width }, look.wrap, line=look.line)
   (tl.w, tl.h)
 }
 
@@ -314,6 +308,7 @@ fn view_frame(w : Double, h : Double, t : Double) -> Unit {
   // (what its linked corners are worked out from, as of now: corner_of; the ranges the theme for this width has, as
   // this frame will pick it, not the one the last frame was built in)
   tree_corner_roots.set({ window: window_corner(), fit: g().theme_for(w).corner_fit })
+  tree_theme_said.set(Some(g().theme_for(w)))
   // (the logic's moment for all of this frame: what the host has come to as it began; brought again in the frame, the
   // tree goes no further than that, whatever time its building takes)
   view_logic_at.val = h_now()
@@ -573,11 +568,18 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
     }
     None => ()
   }
-  if c.ground != 0L {
-    self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, 0.0, 0L, 1.0)
+  // (the shadow it casts, under its ground, as a box with a shadow casts it: Ctx::paint's)
+  let (blur, dy, cast) = c.shadow
+  if blur > 0.0 && c.glass is None {
+    self.push_inst(0.0, dy, c.w, c.h, c.radius, 2.0, 0.0, blur, cast, 1.0, 0.0, 0.0, 0.0, 0.0)
+  }
+  // (its ground, and the line round its edge in it: one rect, as a box with a border draws them)
+  if c.ground != 0L || c.border > 0.0 {
+    self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, c.border, c.border_ink, 1.0)
   }
   if c.words != "" {
-    let tl = layout_text(c.words, view_words_size, 400, c.w + 0.5, true, line=view_line_h)
+    let k = c.words_look
+    let tl = layout_text(c.words, k.size, k.weight, c.w + 0.5, k.wrap, line=k.line)
     self.emit_text(tl, 0.0, 0.0, c.ink, 1.0)
   }
   // (its shapes, as bands worked out once for the outlines said (kept by them, whatever colour they are drawn in), in

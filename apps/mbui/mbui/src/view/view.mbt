@@ -49,6 +49,10 @@ pub(all) struct Look {
   mut ground : Int64
   mut ink : Int64
   mut words : String
+  /// how its words are set (View::words: their size, weight, line and whether they wrap)
+  mut words_look : WordsLook
+  /// the shadow it casts under its ground (blur, how far down, colour; 0 blur: none): View::shadow
+  mut shadow : (Double, Double, Int64)
   /// the shapes it draws over its ground (their outlines, as said: what they come to drawn kept by them), and the one
   /// colour they are drawn in where it is not 0 (their own where it is): View::shapes, View::tint
   mut shapes : Array[@paint.Shape]
@@ -57,6 +61,9 @@ pub(all) struct Look {
   /// View::radius, View::glass
   mut radius : Double
   mut glass : @paint.Glass?
+  /// the line drawn round its edge inside it, how wide and in what colour (0 wide: none): View::border
+  mut border : Double
+  mut border_ink : Int64
   mut alpha : Double
   mut dx : Double
   mut dy : Double
@@ -76,10 +83,15 @@ pub(all) struct Content {
   ground : Int64
   ink : Int64
   words : String
+  words_look : WordsLook
+  shadow : (Double, Double, Int64)
   shapes : Array[@paint.Shape]
   tint : Int64
   radius : Double
   glass : @paint.Glass?
+  /// the line round its edge, inside it (View::border)
+  border : Double
+  border_ink : Int64
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
 } derive(Eq, Debug)
@@ -88,7 +100,13 @@ pub(all) struct Content {
 /// Whether it draws anything of its own: a ground, words, shapes, glass, or what hosts it (the one place that says what
 /// a node draws, for what asks whether it draws nothing: Tree::alone).
 pub fn Content::draws(self : Content) -> Bool {
-  self.ground != 0L || self.words != "" || !self.shapes.is_empty() || self.glass is Some(_) || self.hosted
+  self.ground != 0L ||
+  self.words != "" ||
+  !self.shapes.is_empty() ||
+  self.glass is Some(_) ||
+  self.border > 0.0 ||
+  self.shadow.0 > 0.0 ||
+  self.hosted
 }
 
 ///|
@@ -104,10 +122,14 @@ pub(all) struct Drawn {
   ground : Int64
   ink : Int64
   words : String
+  words_look : WordsLook
+  shadow : (Double, Double, Int64)
   shapes : Array[@paint.Shape]
   tint : Int64
   radius : Double
   glass : @paint.Glass?
+  border : Double
+  border_ink : Int64
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
 } derive(Eq, Debug)
@@ -119,6 +141,8 @@ pub(all) struct Drawn {
 /// orders made again; structure bindings run (show, pick, each). For a test to say what work a change did, not how long
 /// it took.
 pub(all) struct Work {
+  /// what goes beside another placed by it (View::beside: each worked out)
+  mut besides : Int
   mut made : Int
   mut let_go : Int
   mut bound : Int
@@ -174,12 +198,16 @@ struct Node {
   /// let go with it
   mut pressed_cell : @signals.Signal[Bool]?
   mut pointed_cell : @signals.Signal[Bool]?
+  /// whether it takes input now as what reads it reads it (View::takes_input): made as first read, let go with it
+  mut input_cell : @signals.Signal[Bool]?
   /// whether it can take the keyboard's focus, which of Enter (1) and Space (2) press it as it has it (View::focusable;
   /// none: it takes the focus all the same, pressed by no key), and its cells of whether it has it and it shows (View::focused, View::focus_shown): made as first read, let go
   /// with it
   mut focusable : Bool
   /// the pointer's shape over it, said (View::cursor; none: as it is shown without being told, Tree::cursor_of)
   mut cursor : Cursor?
+  /// what it is placed beside (View::beside: its anchor, the side, how along it), placed so as the tree is placed
+  mut beside : Beside?
   mut focus_keys : Int
   mut focused_cell : @signals.Signal[Bool]?
   mut focus_shown_cell : @signals.Signal[Bool]?
@@ -244,8 +272,8 @@ pub struct Tree {
   time : (() -> Double)?
   /// the moment the change a queued binding works out was told, while it is (-1: none)
   mut cause_at : Double
-  /// how words are measured: (words, width offered) -> (width, height)
-  measure : (String, Double) -> (Double, Double)
+  /// how words are measured: (words, how they are set, width offered) -> (width, height)
+  measure : (String, WordsLook, Double) -> (Double, Double)
   nodes : Array[Node]
   free : Array[Int]
   /// what a frame is to do: the nodes whose look changed, those whose place changed; whether any is to be laid out,
@@ -315,6 +343,10 @@ pub struct Tree {
   mut point_stop : (() -> Unit)?
   /// let go (Tree::dispose): what is made for it after stops at once
   mut gone : Bool
+  /// the nodes said to go beside another (View::beside), as said (each let go is passed over, and dropped as placed)
+  besides_at : Array[Int]
+  /// the nodes whose taking input is read (View::takes_input), as first read
+  inputs_at : Array[Int]
   /// which following of the point is the one now (Tree::follow_point): each said, and each let go, another
   mut point_said : Int
   /// how many times what a point would hit may have changed (a layout, a place, the order, a node made or let go, what
@@ -362,7 +394,7 @@ pub struct View {
 /// A tree whose root `make` makes (as the root's own: its bindings, its nodes), its words measured by `measure`.
 pub fn Tree::new(
   make : (View) -> Unit,
-  measure? : (String, Double) -> (Double, Double) = words_measure,
+  measure? : (String, WordsLook, Double) -> (Double, Double) = words_measure,
   time? : () -> Double,
 ) -> Tree {
   // (the moment it is made, taken once: its logic and what it draws start there, and what it is made with is of then)
@@ -411,6 +443,8 @@ pub fn Tree::new(
     on_focus_lost: fn(_) {  },
     point_stop: None,
     gone: false,
+    besides_at: [],
+    inputs_at: [],
     point_said: 0,
     hits: 0,
     downs: [],
@@ -422,6 +456,7 @@ pub fn Tree::new(
     on_due: fn() {  },
     on_modals: fn() {  },
     work: {
+      besides: 0,
       made: 0,
       let_go: 0,
       bound: 0,
@@ -445,7 +480,7 @@ pub fn Tree::new(
 
 ///|
 /// Words measured as a test's are: 7 a character, 18 a line, wrapped to the width offered.
-pub fn words_measure(words : String, width : Double) -> (Double, Double) {
+pub fn words_measure(words : String, _look : WordsLook, width : Double) -> (Double, Double) {
   let full = words.length().to_double() * 7.0
   if full <= 0.0 {
     return (0.0, 0.0)
@@ -473,6 +508,10 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.tint = 0L
       n.look.radius = 0.0
       n.look.glass = None
+      n.look.border = 0.0
+      n.look.border_ink = 0L
+      n.look.words_look = words_plain
+      n.look.shadow = (0.0, 0.0, 0L)
       n.said = None
       n.said_hidden = false
       n.look.alpha = 1.0
@@ -493,7 +532,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.pointed_cell = None
       n.focusable = false
       n.focus_keys = 0
+      n.input_cell = None
       n.cursor = None
+      n.beside = None
       n.focused_cell = None
       n.focus_shown_cell = None
       n.key_said = 0
@@ -520,7 +561,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", shapes: [], tint: 0L, radius: 0.0, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0 },
+        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, radius: 0.0, glass: None, border: 0.0, border_ink: 0L, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0 },
         parent,
         kids: [],
         owner: None,
@@ -539,7 +580,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         pressed_cell: None,
         pointed_cell: None,
         focusable: false,
+        input_cell: None,
         cursor: None,
+        beside: None,
         focus_keys: 0,
         focused_cell: None,
         focus_shown_cell: None,
@@ -1215,6 +1258,18 @@ pub fn View::tint(self : View, ink : Live[Int64]) -> View {
 }
 
 ///|
+/// The line drawn round its edge, inside it, in its corners (`width` wide, in `ink`; 0 wide: none), as it changes:
+/// paint's. What draws it is its own, a ground or none under it.
+pub fn View::border(self : View, line : Live[(Double, Int64)]) -> View {
+  self.bind(21, line, Paint, fn(l) {
+    let n = self.tree.nodes[self.at]
+    n.look.border = l.0
+    n.look.border_ink = l.1
+  })
+  self
+}
+
+///|
 /// How round its corners are (its ground's and its glass's; a linked corner's as worked out where it is said): paint's.
 pub fn View::radius(self : View, r : Live[Double]) -> View {
   self.bind(15, r, Paint, fn(r) { self.tree.nodes[self.at].look.radius = r })
@@ -1372,6 +1427,8 @@ fn Tree::modals_now(self : Tree) -> Unit {
       _ => ()
     }
   }
+  // (whether each node asked takes input now told it, at this cause: View::takes_input)
+  self.inputs_told()
   // (what hosts it holds of its own, asked whether it may still take input, whatever changed it: a modal layer, a node
   // let go, leaving, said to take no press)
   (self.on_modals)()
@@ -1490,10 +1547,16 @@ pub fn Tree::takes_presses(self : Tree, id : NodeId) -> Bool {
 }
 
 ///|
-/// The words it shows: layout's (their size) and paint's.
-pub fn View::words(self : View, words : Live[String], ink? : Int64 = 0x000000FFL) -> View {
+/// The words it shows: layout's (their size) and paint's, in `ink` (View::ink as it changes), set as `look` says.
+pub fn View::words(
+  self : View,
+  words : Live[String],
+  ink? : Int64 = 0x000000FFL,
+  look? : WordsLook = words_plain,
+) -> View {
   guard self.live() is Some(n) else { return self }
   n.look.ink = ink
+  n.look.words_look = look
   let tree = self.tree
   let at = self.at
   // (it measures what the node holds now, by its index: dropped as it is let go)
@@ -1503,7 +1566,7 @@ pub fn View::words(self : View, words : Live[String], ink? : Int64 = 0x000000FFL
       Undefined => -1.0
     }
     tree.work.measured = tree.work.measured + 1
-    let (mw, mh) = (tree.measure)(tree.nodes[at].look.words, offered)
+    let (mw, mh) = (tree.measure)(tree.nodes[at].look.words, tree.nodes[at].look.words_look, offered)
     match wm {
       Exactly => (w, mh)
       _ => (mw, mh)
@@ -2376,7 +2439,9 @@ fn View::let_go(self : View) -> Unit {
   self.tree.focus_lost_in(self.at)
   n.focusable = false
   n.focus_keys = 0
+  n.input_cell = None
   n.cursor = None
+  n.beside = None
   n.focused_cell = None
   n.focus_shown_cell = None
   self.drag_ended()
@@ -3192,6 +3257,8 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   })
   self.pulls_marked.clear()
   self.pulls_marked.append(still)
+  // (what goes beside another placed by it only where anything was laid out or placed again: View::beside)
+  let placing = self.layout_due || !self.places_due.is_empty()
   if self.layout_due {
     self.layout_due = false
     self.work.computes = self.work.computes + 1
@@ -3208,6 +3275,9 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     }
   }
   self.places_due.clear()
+  if placing {
+    self.besides_placed()
+  }
   // (what changed of its look alone: its content, nothing else)
   for at in self.looks_due {
     let n = self.nodes[at]
@@ -3306,6 +3376,10 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     tint: n.look.tint,
     radius: n.look.radius,
     glass: n.look.glass,
+    border: n.look.border,
+    border_ink: n.look.border_ink,
+    words_look: n.look.words_look,
+    shadow: n.look.shadow,
     hosted: n.hosted,
   })
   self.changed.push(id)
@@ -3399,6 +3473,10 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double) -> Drawn {
     tint: c.tint,
     radius: c.radius,
     glass: c.glass,
+    border: c.border,
+    border_ink: c.border_ink,
+    words_look: c.words_look,
+    shadow: c.shadow,
     hosted: c.hosted,
   }
 }

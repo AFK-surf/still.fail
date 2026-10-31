@@ -75,7 +75,7 @@ pub let disabled_alpha : Double
 
 pub fn doubled(Int64) -> Int64
 
-pub fn dropdown_menu(@ui.Ctx, String, Bool, Int32, Array[Entry], side? : @ui.Side, along? : @ui.Along, offset? : Double, label? : String, min_w? : Double, look? : (@ui.Ctx, Double, () -> Unit) -> Unit, item_look? : (@ui.Ctx, MenuItemState) -> Unit, heading_look? : (@ui.Ctx, String) -> Unit, rule_look? : (@ui.Ctx) -> Unit, at? : (Double, Double, Double, Double), scrim? : Int64, submenu? : Bool, enter? : @motion.Trans, exit? : @motion.Trans) -> Menu
+pub fn dropdown_menu(@ui.Ctx, String, Bool, Int32, Array[Entry], side? : @view.Side, along? : @view.Along, offset? : Double, label? : String, min_w? : Double, look? : (@ui.Ctx, Double, () -> Unit) -> Unit, item_look? : (@ui.Ctx, MenuItemState) -> Unit, heading_look? : (@ui.Ctx, String) -> Unit, rule_look? : (@ui.Ctx) -> Unit, at? : (Double, Double, Double, Double), scrim? : Int64, submenu? : Bool, enter? : @motion.Trans, exit? : @motion.Trans) -> Menu
 
 pub fn felt_tick(@ui.Ctx, String) -> Unit
 
@@ -109,7 +109,7 @@ pub fn group_thumb_look(@ui.Ctx, Double, Double) -> Unit
 
 pub fn held_in_room(@ui.Ctx, PopState, key? : String, most? : Double) -> Bool
 
-pub fn hover_card(@ui.Ctx, String, Int32, open_delay? : Double, close_delay? : Double, side? : @ui.Side, along? : @ui.Along, offset? : Double, tap? : Bool, held? : Bool, look? : (@ui.Ctx, PopState, () -> Unit) -> Unit, enter? : @motion.Trans, exit? : @motion.Trans, () -> Unit) -> Bool
+pub fn hover_card(@ui.Ctx, String, Int32, open_delay? : Double, close_delay? : Double, side? : @view.Side, along? : @view.Along, offset? : Double, tap? : Bool, held? : Bool, look? : (@ui.Ctx, PopState, () -> Unit) -> Unit, enter? : @motion.Trans, exit? : @motion.Trans, () -> Unit) -> Bool
 
 pub let hover_card_close_ms : Double
 
@@ -200,7 +200,7 @@ pub let pop_out : @motion.Trans
 
 pub let pop_out_ms : Double
 
-pub fn popover(@ui.Ctx, String, Bool, Int32, side? : @ui.Side, along? : @ui.Along, offset? : Double, label? : String, modal? : Bool, focus? : Bool, look? : (@ui.Ctx, PopState, () -> Unit) -> Unit, at? : (Double, Double, Double, Double), enter? : @motion.Trans, exit? : @motion.Trans, () -> Unit) -> @ui.Changed[Bool]
+pub fn popover(@ui.Ctx, String, Bool, Int32, side? : @view.Side, along? : @view.Along, offset? : Double, label? : String, modal? : Bool, focus? : Bool, look? : (@ui.Ctx, PopState, () -> Unit) -> Unit, at? : (Double, Double, Double, Double), enter? : @motion.Trans, exit? : @motion.Trans, () -> Unit) -> @ui.Changed[Bool]
 
 pub fn popover_look(@ui.Ctx, PopState, () -> Unit) -> Unit
 
@@ -311,7 +311,7 @@ pub fn toggle_look(@ui.Ctx, ToggleState) -> Unit
 
 pub fn toolbar(@ui.Ctx, String, () -> Unit, label? : String, orientation? : @ui.Orientation) -> Unit
 
-pub fn tooltip(@ui.Ctx, String, Int32, String, delay? : Double, skip? : Double, side? : @ui.Side, along? : @ui.Along, offset? : Double, look? : (@ui.Ctx, PopState, String) -> Unit, at? : (Double, Double, Double, Double), shown? : Bool) -> Bool
+pub fn tooltip(@ui.Ctx, String, Int32, String, delay? : Double, skip? : Double, side? : @view.Side, along? : @view.Along, offset? : Double, look? : (@ui.Ctx, PopState, String) -> Unit, at? : (Double, Double, Double, Double), shown? : Bool) -> Bool
 
 pub let tooltip_delay_ms : Double
 
@@ -616,7 +616,7 @@ pub fn Pick::slide(Self, @ui.Ctx) -> Unit
 pub fn Pick::tapped_away(Self, @ui.Ctx, Array[Int32]) -> Bool
 
 pub(all) struct PopState {
-  side : @ui.Side
+  side : @view.Side
   room : Double
   panel : Int32
 }

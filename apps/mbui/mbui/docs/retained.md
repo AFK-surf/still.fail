@@ -305,6 +305,16 @@ squeeze and contrast checks; film's images before and after where a step touches
    fling: Ctx::release's `spring_back(…, -1.0)` and `fling_t0 = -1.0`) starts at the next frame, not at the moment it
    was called off (a pull called off at 50 by a modal layer and at 50 by the host, the host's next frame at 100 or at
    50: two ways back), to be set out at its cause as old input moves to the tree.
+
+   Not moved yet, and why: how far the wide frame's page moves aside as the folded sidebar is shown a while
+   (still.fail's sfdesk fold_peek_shift) is worked out at the moment it is shown, from what the page shows across
+   (Ctx::shown_across), and that is what the page's old view showed as it was last laid out (readback.mbt's
+   reads_after_layout): a page opened a moment before, with no frame drawn between, moves the page aside by the one
+   before's (a chat's page then the new chat's or the settings': 42 with no frame between, 0 with one). What a page
+   shows across can be known at a cause's moment only once the page is the tree's (laid out at that moment: its
+   structure and layout committed with the change, Tree::laid_now); filling it in at the next layout would say of the
+   cause what a later layout found (a page or its data come between: still as frames fall), and building the old view
+   outside a frame is no way there. It moves with the pages.
 5. **What goes**, as no island is left: the frame's watch, paint watch and layout watch (frame_watch.mbt), kept parts
    and rows (kept_part.mbt, kept_rows.mbt, kept_nodes.mbt), said.mbt's recorded lists, `frame_passes_most`'s passes
    for a build, `rows_check` and `looks_check` as they are, `outside_said`, `Mover`, src/damage's comparing of

@@ -699,7 +699,16 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
         }
         let r = contrast_of(shown, ground)
         let (what, least) = if is_words {
-          ("words \"\{self.by_said(Node(id))}\" \{view_words_size}/400", contrast_words_least(view_words_size, 400))
+          // (as its words are set: how big, how heavy)
+          let k = match view_app.val {
+            Some(tree) =>
+              match tree.drawn_of(id) {
+                Some(d) => d.words_look
+                None => @view.words_plain
+              }
+            None => @view.words_plain
+          }
+          ("words \"\{self.by_said(Node(id))}\" \{k.size}/\{k.weight}", contrast_words_least(k.size, k.weight))
         } else if mark == 1 {
           ("icon", contrast_icon_least)
         } else {

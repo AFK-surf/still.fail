@@ -22,3 +22,25 @@ let tree_corner_roots : @signals.Signal[CornerRoots] = @signals.signal(
 pub fn corner_of(k : CornerOf) -> @view.Live[Double] {
   By(fn() { k.radius(tree_corner_roots.get()) })
 }
+
+///|
+/// The theme the window's tree's nodes are drawn in (what the old views are built in for the window's width), as the
+/// frame began (view_frame); told as it changes (another width's, the system's dark coming), what read it worked out
+/// again.
+// kept across runs: set as each frame begins
+let tree_theme_said : @signals.Signal[Theme?] = @signals.signal(None, same=fn(a, b) {
+  match (a, b) {
+    (Some(x), Some(y)) => physical_equal(x, y)
+    (None, None) => true
+    _ => false
+  }
+})
+
+///|
+/// The theme a node of the window's tree is drawn in now (tree_theme_said; before the first frame, the window's).
+pub fn tree_theme() -> Theme {
+  match tree_theme_said.get() {
+    Some(t) => t
+    None => g().theme
+  }
+}
