@@ -35,7 +35,7 @@ import { ScreensCard } from "./Screen.tsx";
 import { PermissionsCard } from "./StationPermissions.tsx";
 import { AgentEnvText, useAgentEnvForm } from "../AgentEnvText.tsx";
 import { useSetPersonal } from "../StationSearch.tsx";
-import { ContextThreshold, useSetAfresh } from "../StationContext.tsx";
+import { useSetAfresh } from "../StationContext.tsx";
 import { useSetLogs } from "../StationDiagnostics.tsx";
 import { useSetElevation } from "../StationElevation.tsx";
 import * as elevationCss from "../StationElevation.css.ts";
@@ -322,7 +322,7 @@ function StationPage({ s, manager, login }: { s: StationView; manager: boolean; 
       {s.online && s.overview?.permissions && <PermissionsCard station={s.station} permissions={s.overview.permissions} />}
       {/* What its search finds of the machine (docs/search.md): the person's own data only where its managers say. */}
       {s.online && s.overview?.search?.files === "spotlight" && <SearchCard station={s.station} personal={s.overview.search.personal} manager={manager} />}
-      {s.overview?.context && <ContextCard station={s.station} on={s.overview.context.afreshWhenCold} above={s.overview.context.afreshAbove} manager={manager} />}
+      {s.overview?.context && <ContextCard station={s.station} on={s.overview.context.afreshWhenCold} manager={manager} />}
       {s.overview?.diagnostics && <DiagnosticsCard station={s.station} on={s.overview.diagnostics.logs} manager={manager} />}
       {s.online && s.overview?.elevation && <ElevationCard station={s.station} elevation={s.overview.elevation} />}
       <Logins station={s.station} marked={login} />
@@ -589,17 +589,16 @@ function StationMenu({ s }: { s: StationView }) {
 
 /** Whether a session whose prompt cache is over goes on afresh by itself (the wide page's StationContext.tsx): its
  *  managers switch it, others read it. */
-function ContextCard({ station, on, above, manager }: { station: string; on: boolean; above: number | undefined; manager: boolean }) {
+function ContextCard({ station, on, manager }: { station: string; on: boolean; manager: boolean }) {
   const { busy, set } = useSetAfresh(station);
   return (
     <>
       <SectionHeader title={t("web-pages.stations.context.section")} start={24} />
       <ListCard>
         <button type="button" className={connectsCss.mSwitchRow} disabled={!manager || busy} onClick={() => void set(!on)}>
-          <span className={partsCss.mGrow}><b>{t("web-pages.stations.context.afresh")}</b><span>{t(above === undefined ? "web-pages.stations.context.afreshLineLegacy" : "web-pages.stations.context.afreshLine")}</span></span>
+          <span className={partsCss.mGrow}><b>{t("web-pages.stations.context.afresh")}</b><span>{t("web-pages.stations.context.afreshLine")}</span></span>
           {busy ? <Spinner /> : <span className={connectsCss.mSwitch} data-on={on || undefined} />}
         </button>
-        {above !== undefined && <ContextThreshold station={station} above={above} manager={manager} />}
       </ListCard>
     </>
   );

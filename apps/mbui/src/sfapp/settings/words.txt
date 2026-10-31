@@ -1031,6 +1031,7 @@ web-main.shortcuts.resetAll
 web-main.shortcuts.title
 web-main.shortcuts.unset
 web-main.usage.showAll
+web-main.viewport.custom
 web-mobile.connects.deleteText.feishu
 web-mobile.connects.deleteTextSessions.feishu
 web-mobile.connects.disableNote.feishu
@@ -1527,6 +1528,8 @@ web-pages.stations.context.afreshLine
 web-pages.stations.context.afreshLineLegacy
 web-pages.stations.context.threshold
 web-pages.stations.context.thresholdHint
+web-pages.stations.context.amountHint
+web-pages.stations.context.customAmount
 web-pages.stations.context.section
 web-pages.stations.context.what
 web-pages.stations.diagnostics.logs

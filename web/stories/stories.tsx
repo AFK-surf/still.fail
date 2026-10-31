@@ -474,7 +474,7 @@ const cacheCold: DemoExtension = {
     if (t.topic !== "chat" || !value) return undefined;
     const chat = value as ChatView;
     const session = chat.agents[0]?.session.key;
-    return session ? { ...chat, cacheCold: { session, text: "缓存已过期，重读约 $1.49", afresh: false } } : undefined;
+    return session ? { ...chat, cacheCold: { session, status: "缓存已过期", detail: "重读约 $1.49", afresh: false } } : undefined;
   },
 };
 /** Its agent's prompt cache over and its station down: two notices over the composer, one over the other. */

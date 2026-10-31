@@ -135,7 +135,7 @@ export function cacheCold(agents: unknown, now: number, station = false, thresho
     // The price makes a small context worth mentioning even when automatic replacement is off: the person can still
     // choose what to do with it. An older station gives no threshold and keeps its former 50K-token rule.
     if (typeof at !== "number" || typeof ms !== "number" || typeof context !== "number" ||
-      !coldWorth(context, cost, threshold)) continue;
+      !coldWorth(context, cost, threshold, chosen)) continue;
     if (at + ms > now) {
       next = Math.min(next, at + ms - now);
       continue;
@@ -145,8 +145,9 @@ export function cacheCold(agents: unknown, now: number, station = false, thresho
   }
   if (cold === null) return [null, next];
   const tokens = format.compactNumber(cold.context);
-  const text = cold.cost !== null ? t("core-views.agent.cacheColdCost", { tokens, cost: money(cold.cost) }) : t("core-views.agent.cacheCold", { tokens });
-  return [{ session: cold.session, text, afresh: cold.afresh }, next];
+  const status = t("core-views.agent.cacheColdStatus");
+  const detail = cold.cost !== null ? t("core-views.agent.cacheColdCostDetail", { cost: money(cold.cost) }) : t("core-views.agent.cacheColdTokensDetail", { tokens });
+  return [{ session: cold.session, status, detail, afresh: cold.afresh }, next];
 }
 
 /// What it has going in the background past its turns (its live view's `tasks`, as its station says them), each with

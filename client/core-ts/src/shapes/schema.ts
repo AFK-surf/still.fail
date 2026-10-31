@@ -3136,7 +3136,8 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "An item's page: its chat (with the viewer's read position), or its agent before it has one." }),
   ChatCacheCold: struct([
     ["session", "String", { doc: "The agent's session: `session.settings` with `afresh` switches whether it goes on afresh." }],
-    ["text", "String", { said: true, doc: "What is said: its cache over, and what going on would read again (缓存已过期，重读约 $1.40)." }],
+    ["status", "String", { said: true, doc: "The cache's state, separately from its reread cost, for a compact notice." }],
+    ["detail", "String", { said: true, doc: "What rereading costs, or how many tokens it takes when it cannot be priced." }],
     ["afresh", "bool", { doc: "It goes on afresh as it is next started (by a message or a notice): its context cleared, told to read\nback what it needs. As chosen in its chat (`Session::afresh`), or else as its station is set\n(`StationContext::afreshWhenCold`); switched any time with `session.settings` `afresh`." }],
   ], { doc: "A chat's agent whose prompt cache is over (ChatView::cacheCold)." }),
   ChatCcTo: struct([

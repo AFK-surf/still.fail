@@ -276,6 +276,22 @@ test("the default cold-cache choice uses the configured cost; a chat's choice ov
   await r.close();
 });
 
+test("an explicit fresh choice is used for a small cold context", async () => {
+  const r = new Rig();
+  try {
+    const { key } = await done(r);
+    r.store.db.prepare("UPDATE runtime_sessions SET at = 0 WHERE session_key = ?").run(key);
+    r.store.recordUsage(`/t/${key}`, { session: key, offset: 1, model: "claude-opus-5-5" }, "claude", [[
+      { id: "small-cold", at: Date.now() - 3 * 3_600_000, model: "claude-opus-5-5", subagent: false, fast: false, input: 10, cacheRead: 39_990, cacheWrite: 0, cacheWriteLong: 10, output: 1, calls: 1, context: 40_000, window: null },
+      { turn: null, person: null, thread: null, profile: null },
+    ]]);
+    await configure(r.hub, key, { afresh: true });
+    assert.equal(goesAfresh(r.hub, key, Date.now()), true);
+  } finally {
+    await r.close();
+  }
+});
+
 test("clear is refused while a turn runs", async () => {
   const r = new Rig();
   const m = message();

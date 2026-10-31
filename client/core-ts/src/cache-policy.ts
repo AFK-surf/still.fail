@@ -4,9 +4,9 @@
 export const DEFAULT_AFRESH_ABOVE = 1;
 const COLD_FROM = 50_000;
 
-/** Is the cold context worth offering a choice for, or expensive enough to trigger the station's default? */
-export function coldWorth(context: number, cost: number | undefined, threshold: number | undefined): boolean {
-  return context >= COLD_FROM || (threshold !== undefined && cost !== undefined && cost >= threshold);
+/** Is the cold context worth offering a choice for? An explicit fresh choice remains in effect even for a small one. */
+export function coldWorth(context: number, cost: number | undefined, threshold: number | undefined, chosen?: unknown): boolean {
+  return chosen === true || context >= COLD_FROM || (threshold !== undefined && cost !== undefined && cost >= threshold);
 }
 
 /** The chat's explicit choice wins; an old station with no threshold keeps its former on/off behaviour. */

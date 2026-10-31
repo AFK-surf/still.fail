@@ -1692,11 +1692,6 @@ let notice_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 let notice_wrapped : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=true, w=Full)
 
 ///|
-/// (beside what is at its line's end: the rest of the line)
-// kept across runs: a value (no field of it changes)
-let notice_grown : @ui.TextStyle = notice_wrapped.then(@ui.text_style(w=@sf.grow))
-
-///|
 // kept across runs: a value (no field of it changes)
 let restore_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
@@ -1766,7 +1761,7 @@ fn composer_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, key : 
     |> ignore
   }
   match v.cache_cold {
-    Some((session, said, afresh)) if !v.archived => {
+    Some((session, status, detail, afresh)) if !v.archived => {
       let go_on = c.id("composer/goOn")
       let fresh = c.id("composer/afresh")
       let doing = "session.settings/" + r.station + "/" + session
@@ -1780,7 +1775,10 @@ fn composer_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, key : 
       c.box(style=notice_box, fn() {
         // (its words wrapped beside it where they do not fit, 接着聊 and 换新上下文 at the line's end, the one taken ✓)
         c.box(style=notice_line.then(@ui.style(gap=S3)), fn() {
-          c.text(said, style=notice_grown) |> ignore
+          c.box(style=@ui.style(w=@sf.grow), fn() {
+            c.text(status, style=notice_wrapped) |> ignore
+            c.text(detail, style=notice_wrapped) |> ignore
+          }) |> ignore
           for choice in [(go_on, "web-main.chat.goOn", !afresh), (fresh, "web-main.chat.afresh", afresh)] {
             let (id, key, taken) = choice
             let b = c.box(id~, style=notice_choice, fn() {
@@ -2835,4 +2833,3 @@ fn composer_left(src : Source, r : ChatRef) -> Unit {
   cui.attach = false
   pick_clear()
 }
-

@@ -14,8 +14,6 @@ fn station_page_reset() -> Unit {
   env_fields.clear()
   env_seeded.clear()
   env_sent.clear()
-  cold_cost_fields.clear()
-  cold_cost_saved.clear()
   rs_shown.clear()
 }
 
@@ -962,7 +960,7 @@ fn station_diagnostics(c : @ui.Ctx, core : Core, address : String, diagnostics :
 fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, manager : Bool) -> Unit {
   st_section(c, @sf.t("web-pages.stations.context.section"), fn() {
     let has_cost = field(context, "afreshAbove") is Some(Number(_, ..))
-    let body = fn() {
+    @sf.group(c, fn() {
       let busy = is_doing(core, ["context.setAfresh"], [("station", address)])
       let on = flag(context, "afreshWhenCold")
       let now = @sf.switch_row(
@@ -987,67 +985,80 @@ fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, 
         Some(Number(cost, ..)) => station_cold_cost(c, core, address, cost, manager, busy)
         _ => ()
       }
-    }
-    if has_cost {
-      @sf.page_card(c, footed=true, body)
-    } else {
-      @sf.group(c, body)
-    }
+    })
   })
 }
 
 ///|
-/// The threshold is edited explicitly, so changing another station's setting never overwrites words being typed here.
-// kept across runs: a field per station; station_page_reset empties it
-let cold_cost_fields : Map[String, @ui.Field] = {}
-
-///|
-// kept across runs: the last saved value per station; station_page_reset empties it
-let cold_cost_saved : Map[String, String] = {}
-
-///|
-fn station_cold_cost(c : @ui.Ctx, core : Core, address : String, cost : Double, manager : Bool, busy : Bool) -> Unit {
-  let saved = cost.to_string()
-  let field_ = match cold_cost_fields.get(address) {
-    Some(f) => f
-    None => {
-      let f = @ui.Field::new(text=saved)
-      cold_cost_fields[address] = f
-      cold_cost_saved[address] = saved
-      f
-    }
+/// The threshold can be any non-negative, finite amount, including zero.
+fn station_cold_amount(words : String) -> Double? {
+  match (try Some(@json.parse(words.trim(chars=" \t\n").to_owned())) catch { _ => None }) {
+    Some(Number(v, ..)) if v >= 0.0 && !v.is_inf() && !v.is_nan() => Some(v)
+    _ => None
   }
-  match cold_cost_saved.get(address) {
-    Some(was) if was != saved => {
-      if field_.text() == was {
-        field_.set(saved)
+}
+
+///|
+/// A threshold not among the offered amounts is entered in its own editor, keeping the words being typed there.
+fn station_cold_custom(core : Core, address : String, cost : Double) -> Unit {
+  let field_ = @ui.Field::new(text=cost.to_string())
+  let key = "context-cost-custom/" + (desk_dialogs.val + 1).to_string()
+  let title = @sf.t("web-pages.stations.context.threshold")
+  open_dialog(
+    @sf.t("web-pages.stations.context.customAmount"),
+    fn(c, _) {
+      @sf.field(c, title, hint=@sf.t("web-pages.stations.context.amountHint"), fn() {
+        @sf.input(c, key, placeholder=title, field=field_) |> ignore
+      })
+    },
+    fn(c, shut) {
+      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+        shut()
       }
-      cold_cost_saved[address] = saved
-    }
-    _ => ()
-  }
-  c.box(style=st_editor, fn() {
-    @sf.field(c, @sf.t("web-pages.stations.context.threshold"), hint=@sf.t("web-pages.stations.context.thresholdHint"), fn() {
-      @sf.input(c, "context-cost/" + address, placeholder=@sf.t("web-pages.stations.context.threshold"), field=field_, disabled=!manager || busy) |> ignore
-    })
-    let amount = match (try Some(@json.parse(field_.text().trim(chars=" \t\n").to_owned())) catch { _ => None }) {
-      Some(Number(v, ..)) if v >= 0.0 && !v.is_inf() && !v.is_nan() => Some(v)
-      _ => None
-    }
-    let changed = match amount {
-      Some(v) => v != cost
-      None => false
-    }
-    @sf.card_foot(c, at_end=true, fn() {
-      if @sf.button(c, @sf.t("common.save"), key="context-cost-save/" + address, tone=Primary, busy~, disabled=!manager || !changed) {
+      let amount = station_cold_amount(field_.text())
+      let changed = match amount {
+        Some(v) => v != cost
+        None => false
+      }
+      let busy = is_doing(core, ["context.setAfresh"], [("station", address)])
+      if @sf.button(c, @sf.t("common.save"), key=key + "/save", tone=Primary, busy~, disabled=!changed) {
         match amount {
-          Some(v) => @settings.act(core, @sf.t("web-pages.stations.context.what"), "context.setAfresh", obj([("station", str(address)), ("afreshAbove", Json::number(v))]))
+          Some(v) => {
+            @settings.act(core, @sf.t("web-pages.stations.context.what"), "context.setAfresh", obj([("station", str(address)), ("afreshAbove", Json::number(v))]))
+            shut()
+          }
           None => ()
         }
       }
-    })
-  })
-  |> ignore
+    },
+  )
+}
+
+///|
+/// A few useful amounts, with a custom value for any other threshold. A row shows the current amount until opened.
+fn station_cold_cost(c : @ui.Ctx, core : Core, address : String, cost : Double, manager : Bool, busy : Bool) -> Unit {
+  let key = "context-cost/" + address
+  let title = @sf.t("web-pages.stations.context.threshold")
+  let current = cost.to_string()
+  if @sf.link_row(c, key, title, value="$" + current,
+      note=@sf.t("web-pages.stations.context.thresholdHint"), goes=manager && !busy, chevron=manager) {
+    let amounts : Array[Double] = [0.5, 1.0, 2.0, 5.0]
+    let choices = amounts.map(fn(v) { @sf.choice(v.to_string(), "$" + v.to_string()) })
+    if !amounts.contains(cost) {
+      choices.push(@sf.choice(current, "$" + current))
+    }
+    choices.push(@sf.choice("custom", @sf.t("web-main.viewport.custom")))
+    @sf.pick(title, choices, current, fn(picked) {
+      if picked == "custom" {
+        station_cold_custom(core, address, cost)
+      } else {
+        match station_cold_amount(picked) {
+          Some(v) if v != cost => @settings.act(core, @sf.t("web-pages.stations.context.what"), "context.setAfresh", obj([("station", str(address)), ("afreshAbove", Json::number(v))]))
+          _ => ()
+        }
+      }
+    }, from=Of(c.id(key)), search=false)
+  }
 }
 
 ///|

@@ -186,7 +186,8 @@ test "its agent's cache over: said over the composer, 接着聊 taken, 换新上
       None => tp
     }
   })
-  assert_true(t.find("缓存已过期，重读约 $1.49") is Some(_))
+  assert_true(t.find("缓存已过期") is Some(_))
+  assert_true(t.find("重读约 $1.49") is Some(_))
   assert_true(t.get(Radio, label="接着聊").check is Some(On))
   assert_true(t.get(Radio, label="换新上下文").check is Some(Off))
   t.tap_text("接着聊")
@@ -213,13 +214,14 @@ test "its agent's cache over, set to go on afresh: 换新上下文 taken, 接着
     match tp.value {
       Some(Object(o)) => {
         let o2 = o.copy()
-        o2["cacheCold"] = { "session": "s-c1", "text": "缓存已过期，重读约 $1.49", "afresh": true }
+        o2["cacheCold"] = { "session": "s-c1", "status": "缓存已过期", "detail": "重读约 $1.49", "afresh": true }
         { ..tp, value: Some(Json::object(o2)) }
       }
       _ => tp
     }
   })
-  assert_true(t.find("缓存已过期，重读约 $1.49") is Some(_))
+  assert_true(t.find("缓存已过期") is Some(_))
+  assert_true(t.find("重读约 $1.49") is Some(_))
   assert_true(t.get(Radio, label="换新上下文").check is Some(On))
   t.tap_text("接着聊")
   t.draw()
@@ -231,7 +233,8 @@ test "its agent's cache over, set to go on afresh: 换新上下文 taken, 接着
 ///|
 test "a cache notice on a narrow page keeps its cost together and both choices reachable" {
   let calls : Array[Made] = []
-  let said = "缓存已过期，重读约 $7.50"
+  let status = "缓存已过期"
+  let detail = "重读约 $7.50"
   let t = fake_core(calls, over=fn(name, tp) {
     if name != "chat" {
       return tp
@@ -239,7 +242,7 @@ test "a cache notice on a narrow page keeps its cost together and both choices r
     match tp.value {
       Some(Object(o)) => {
         let o2 = o.copy()
-        o2["cacheCold"] = { "session": "s-c1", "text": Json::string(said), "afresh": true }
+        o2["cacheCold"] = { "session": "s-c1", "status": Json::string(status), "detail": Json::string(detail), "afresh": true }
         { ..tp, value: Some(Json::object(o2)) }
       }
       _ => tp
@@ -248,7 +251,8 @@ test "a cache notice on a narrow page keeps its cost together and both choices r
   t.resize(360.0, 844.0)
   t.set_font_scale(1.3)
   t.draw()
-  assert_eq(t.lines_of(said), [said], msg="the cost fits beside the mark when the choices do not crowd it")
+  assert_eq(t.lines_of(status), [status], msg="the status fits beside the mark")
+  assert_eq(t.lines_of(detail), [detail], msg="the cost stays together")
   assert_true(t.get(Radio, label="换新上下文").check is Some(On))
   t.click(Radio, label="接着聊")
   let asked = named(calls, "session.settings")
@@ -257,10 +261,33 @@ test "a cache notice on a narrow page keeps its cost together and both choices r
 }
 
 ///|
+test "the cache notice keeps status and cost beside the two choices when they fit" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" { return tp }
+    match tp.value {
+      Some(v) => { ..tp, value: Some(@sffixture.with_cache_cold(v)) }
+      None => tp
+    }
+  })
+  t.resize(360.0, 844.0)
+  t.draw()
+  let (sx, sy, sw, _) = t.rect_of("缓存已过期").unwrap()
+  let (dx, dy, dw, _) = t.rect_of("重读约 $1.49").unwrap()
+  let (cx, cy, _, ch) = t.get(Radio, label="接着聊").rect
+  assert_true(dy > sy, msg="the cost follows the status")
+  assert_true(cx >= sx + sw && cx >= dx + dw, msg="the choices are beside the notice")
+  assert_true(cy <= dy && cy + ch >= sy, msg="the choices align with both lines")
+  t.click(Radio, label="换新上下文")
+  assert_eq(named(calls, "session.settings").length(), 1)
+}
+
+///|
 test "its agent's cache over, in the wide frame: said over the composer, 换新上下文 sets it to go on afresh" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-cache-cold", wide=true)
-  assert_true(t.find("缓存已过期，重读约 $1.49") is Some(_))
+  assert_true(t.find("缓存已过期") is Some(_))
+  assert_true(t.find("重读约 $1.49") is Some(_))
   t.tap_text("换新上下文")
   t.draw()
   let asked = named(calls, "session.settings")

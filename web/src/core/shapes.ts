@@ -1583,8 +1583,10 @@ export interface ChatAsk {
 export interface ChatCacheCold {
 	/** The agent's session: `session.settings` with `afresh` switches whether it goes on afresh. */
 	session: string;
-	/** What is said: its cache over, and what going on would read again (缓存已过期，重读约 $1.40). */
-	text: string;
+	/** The cache's state, separately from its reread cost, for a compact notice. */
+	status: string;
+	/** What rereading costs, or how many tokens it takes when it cannot be priced. */
+	detail: string;
 	/**
 	 * It goes on afresh as it is next started (by a message or a notice): its context cleared, told to read
 	 * back what it needs. As chosen in its chat (`Session::afresh`), or else as its station is set

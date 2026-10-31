@@ -1893,6 +1893,8 @@
   "web-pages.stations.context.afreshLineLegacy": "缓存过期后，下次启动换新上下文；对话中的选择优先",
   "web-pages.stations.context.threshold": "重读费用门槛（美元）",
   "web-pages.stations.context.thresholdHint": "按 API 标价估算；无法估价时不自动换新",
+  "web-pages.stations.context.amountHint": "输入不小于 0 的美元金额",
+  "web-pages.stations.context.customAmount": "自定义金额",
   "web-pages.stations.context.what": "更改上下文设置",
   "web-pages.stations.elevation.section": "管理员",
   "web-pages.stations.elevation.admin": "以管理员身份运行",
