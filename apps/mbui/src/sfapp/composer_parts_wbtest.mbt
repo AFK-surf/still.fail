@@ -55,6 +55,47 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
 }
 
 ///|
+test "a film waiting in the composer, opened, plays from the bytes picked: none asked of the station" {
+  // (the user, 2026-11-01: 我自己上传到 composer 的视频，自己不能预览？ the player asked the station for `draft:<id>`,
+  // which only this device has, and said 无法播放此视频)
+  let calls : Array[Made] = []
+  let made : Ref[Source?] = Ref(None)
+  let t = fake_core(calls, made~)
+  let film = Bytes::from_array(FixedArray::makei(4096, fn(i) { (i % 251).to_byte() }))
+  let a : Attachment = {
+    name: "录屏.mp4",
+    path: "draft:f1",
+    size: film.length().to_double(),
+    width: 0.0,
+    height: 0.0,
+    thumbhash: "",
+    owner: "",
+    upload: "",
+    duration: 0.0,
+    frames: 0,
+    held: false,
+  }
+  // as the composer opens it (composer_picture): its bytes kept by the viewer's id of it, no session's
+  @sfbase.keep_read("ws1/st1//draft:f1", film)
+  @sfbase.open_preview("ws1/st1", "", a)
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let track = match viewer.get().unwrap().media {
+    Some(m) => m.track().unwrap()
+    None => fail("the player did not open")
+  }
+  let got : Array[(Bytes, Double, Bool)] = []
+  (track.read)(1000.0, 100, fn(b, size, more) { got.push((b, size, more)) }) |> ignore
+  assert_eq(got.length(), 1)
+  assert_eq(got[0].0, film[1000:1100].to_bytes())
+  assert_eq(got[0].1, 4096.0)
+  assert_false(got[0].2)
+  assert_eq(named(calls, "station.file.part").length(), 0)
+  t.back()
+  t.run_for(preview_rest() - t.time())
+}
+
+///|
 test "what waits to go has its ✕ hung on its corner, its centre on the curve, a picture's and a file's card alike, on a phone and a computer alike, clear of the next; tapped, it takes it out" {
   // (Android, then macOS: one design on every screen, docs/ui-panels.md)
   for platform in [2, 0] {
