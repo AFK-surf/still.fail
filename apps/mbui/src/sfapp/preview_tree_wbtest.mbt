@@ -963,3 +963,45 @@ test "viewer on the tree: back its layer's; a menu over it, back the menu's, it 
   t.back()
   assert_true(v.closing)
 }
+
+///|
+/// The image fixture's viewer (fading in: no thumbnail to grow from), the window's tree drawing it: how opaque each of
+/// its pictures is drawn at `at` from where it set out (and, `closing`, at `at` from where it is closed once in), and
+/// how far its fade had come then.
+fn fading(at : Double, closing~ : Bool = false) -> (Array[Double], Double) {
+  new_run()
+  let src = fixture("chat-preview-image")
+  preview_src.val = Some(src)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  // (its first frame: set out as its node is made, then)
+  t.draw()
+  let v = viewer.get().unwrap()
+  if closing {
+    t.run_for(@ui.move_most_ms)
+    t.back()
+  }
+  let t0 = v.fade.starts_at()
+  if at > 0.0 {
+    t.frame_at(t0 + at)
+  }
+  // (the viewer's: as wide as its stage less its sides, the chat's thumbnails under it far narrower)
+  let mine = t.drawn_images().filter(fn(i) { i[2] > 300.0 })
+  (mine.map(fn(i) { i[8] }), v.fade.value_at(t0 + at))
+}
+
+///|
+test "viewer on the tree: fading in and out, its picture as far in as its ground, never whole over a page still seen" {
+  for c in [(0.0, false), (@sfbase.pv_fade_ms / 2.0, false), (@sfbase.pv_fade_ms + 50.0, false), (@sfbase.pv_fade_ms / 2.0, true)] {
+    let (at, closing) = c
+    let (shown, fade) = fading(at, closing~)
+    // (none drawn where it is not in at all)
+    assert_true(shown.length() > 0 || fade < 0.01, msg="at \{at} (closing \{closing}) no picture drawn, its fade \{fade}")
+    if at < @sfbase.pv_fade_ms {
+      assert_true(fade < 0.99 && fade > -0.01, msg="at \{at} (closing \{closing}) its fade is not on its way: \{fade}")
+    }
+    for o in shown {
+      assert_true((o - fade).abs() < 0.01, msg="at \{at} (closing \{closing}) a picture drawn \{o} opaque, its fade \{fade}: \{shown}")
+    }
+  }
+}
