@@ -1,8 +1,7 @@
 ///|
-/// No engine on the web (mbui/core's js.mbt).
-fn core_linked() -> Int {
-  0
-}
+/// Whether the page gives the core (still.fail's web/src/mbui/core.ts: `globalThis.__mbcore`, mbui/core's js.mbt).
+extern "js" fn core_linked() -> Int =
+  #|() => (globalThis.__mbcore ? 1 : 0)
 
 ///|
 /// Nothing takes it on the web.

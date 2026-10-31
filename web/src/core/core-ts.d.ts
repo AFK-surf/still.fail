@@ -11,11 +11,11 @@ declare module "@stillfail/core-ts/web" {
     unlink(path: string): boolean;
     reserve(files: number): Promise<void>;
   };
-  /** A core in this worker: one client per port. */
+  /** A core in this worker: one client per port; `bytes`, those a page handed over beside a message (src/mbui/core.ts). */
   export interface WebCore {
     connect(): number;
     disconnect(client: number): void;
-    receive(client: number, message: unknown): void;
+    receive(client: number, message: unknown, bytes?: Uint8Array): void;
   }
   /** Whether what the core shares is frozen where it is shared (on in development: a write on it throws there). */
   export function checkShared(on: boolean): void;

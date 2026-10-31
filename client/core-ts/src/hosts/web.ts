@@ -441,7 +441,9 @@ export function webIroh(load: () => Promise<IrohModule>): Iroh {
 }
 
 /// A core in this worker: one client per port.
-export type WebCore = { connect(): number; disconnect(client: number): void; receive(client: number, message: unknown): void };
+/// `bytes`: those a page handed over beside a message (still.fail's app on the web, web/src/mbui/core.ts), as a native
+/// host's bridge hands them (bridge.ts).
+export type WebCore = { connect(): number; disconnect(client: number): void; receive(client: number, message: unknown, bytes?: Uint8Array): void };
 
 /// A core in this worker (as the Rust core's wasm `start` was): `emit(client, message)` gets what it says to each client;
 /// `testChannel` the page is the test channel's. A bug that ends a fiber ends it as a panic ended the Rust core's:
@@ -458,7 +460,7 @@ export function startWeb(emit: (client: ClientId, message: unknown) => void, tes
     return {
       connect: (): number => core.connect(),
       disconnect: (client: number): void => core.disconnect(client),
-      receive: (client: number, message: unknown): void => core.receiveRaw(client, message),
+      receive: (client: number, message: unknown, bytes?: Uint8Array): void => core.receiveRaw(client, message, bytes),
     };
   });
 }

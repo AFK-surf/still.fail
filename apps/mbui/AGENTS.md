@@ -23,8 +23,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 ## The app
 
 - The released apps are this one: Android's since 2026-10-24, the Mac's and Windows' since 2026-10-26, each built in
-  the place of the one before it. Nothing else of still.fail's apps is developed; the web app (`web/`) is the other
-  client, and the design of a page is read from it and from architecture.md.
+  the place of the one before it. Nothing else of still.fail's apps is developed; the web runs this app too (2026-10-31: mbui's
+  web host draws it on the web's own core, `web/mbui.html`, `scripts/web-app.sh`), so a page is made here once for
+  every screen; the React web app (`web/`) is read for why its pages are as they are, until it is gone.
 - What the app looks like and how it moves is what it does now; a change means to differ and says why. Nothing in this
   repository compares mbui with itself (#881 took that out); do not bring it back.
 - A change people can see (timing, rhythm, what is shown) says so in its PR with old and new side by side.

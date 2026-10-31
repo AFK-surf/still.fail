@@ -107,6 +107,57 @@
   // its zone (@hostapi.utc_offset_min): a run to a declared moment's UTC, as its day is its own
   H.utcOffsetMin = (ms) => (shotAt >= 0 ? 0 : -new Date(ms).getTimezoneOffset());
 
+  // ---- files picked (src/hostapi/pick.mbt): the page's file input, its answer told as outside kind 3 ----
+  // H.pickStart(kind): 1 photos, 2 files, 3 a photo taken now (the camera, where the browser has one), 16 more: one
+  // too big to read whole held here instead (its File, H.heldFile: what the page's core reads it from as it goes up).
+  // Opened from the press that asked (the browser lets a page open its picker only so: a frame after it is still in
+  // that press's grace). Called off: none picked.
+  const OUTSIDE_PICK = 3, HOLD_OVER = 16 * 1024 * 1024;
+  const picks = new Map(), heldFiles = new Map();
+  let nextPick = 1, nextHeld = 1;
+  H.pickStart = (kind) => {
+    const id = nextPick++;
+    const k = kind & 15, hold = (kind & 16) !== 0;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = k !== 3;
+    if (k === 1) input.accept = 'image/*,video/*';
+    if (k === 3) { input.accept = 'image/*'; input.capture = 'environment'; }
+    const pick = { state: 0, files: [] };
+    picks.set(id, pick);
+    const done = (files) => {
+      if (pick.state !== 0) return;
+      pick.files = files;
+      pick.state = 1;
+      tell(OUTSIDE_PICK, id, 1);
+      H.requestFrame();
+    };
+    input.addEventListener('cancel', () => done([]));
+    input.addEventListener('change', async () => {
+      const out = [];
+      for (const f of input.files || []) {
+        if (hold && f.size > HOLD_OVER) {
+          const h = nextHeld++;
+          heldFiles.set(h, f);
+          out.push({ name: f.name, bytes: new Uint8Array(0), info: `${h}\t${f.size}\t` });
+        } else {
+          try { out.push({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()), info: `0\t${f.size}\t` }); } catch (e) { /* unreadable: left out */ }
+        }
+      }
+      done(out);
+    });
+    input.click();
+    return id;
+  };
+  H.pickState = (id) => { const p = picks.get(id); return p ? p.state : -1; };
+  H.pickCount = (id) => picks.get(id)?.files.length || 0;
+  H.pickName = (id, i) => picks.get(id)?.files[i]?.name || '';
+  H.pickBytes = (id, i) => picks.get(id)?.files[i]?.bytes || new Uint8Array(0);
+  H.pickInfo = (id, i) => picks.get(id)?.files[i]?.info || '';
+  H.pickEnd = (id) => { picks.delete(id); };
+  // a file held (Picked.held) taken by whoever sends it up: its File, let go here
+  H.heldFile = (h) => { const f = heldFiles.get(h); heldFiles.delete(h); return f || null; };
+
   // ---- messages from outside the frames (src/ui/messages.mbt; mbui's mb_post on the native hosts) ----
   // H.post(channel, json, bytes?): kept for the next frame, which takes all that came and hands them on in their
   // order; the first since a frame took the last asks for that frame, the rest wait for it.
@@ -1689,6 +1740,9 @@
     gl.bindTexture(gl.TEXTURE_2D, atlasTex);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, held.pw, held.ph, gl.RGBA, gl.UNSIGNED_BYTE, held.img);
+    // (back as every other upload takes it: left on, it premultiplies the shapes' pieces too, segsUpload's floats
+    // each times its four's last, and every icon after the first glyph drawn came out torn)
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     held = null;
   };
 

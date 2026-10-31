@@ -188,6 +188,16 @@ scope.onmessage = (event) => {
   relay.postMessage({ from: tab, to: leader, up: data } satisfies Relayed);
 };
 
+/**
+ * A page's message as the core takes it: itself, or (`{withBytes, bytes}`: still.fail's app, src/mbui/core.ts) one
+ * with bytes beside it.
+ */
+function unwrap(data: unknown): [unknown, Uint8Array | undefined] {
+  const d = data as { withBytes?: unknown; bytes?: unknown } | null;
+  if (typeof d === "object" && d !== null && "withBytes" in d && d.bytes instanceof Uint8Array) return [d.withBytes, d.bytes];
+  return [data, undefined];
+}
+
 /** A message of this page to the core running here. */
 function local(data: unknown): void {
   const running = core!;
@@ -200,7 +210,7 @@ function local(data: unknown): void {
       mine = running.connect();
       clients.set(mine, toPage);
     }
-    running.receive(mine, data);
+    running.receive(mine, ...unwrap(data));
   });
 }
 
@@ -269,7 +279,7 @@ function fromTab(id: string, message: unknown): void {
           if (remotes.get(id) === c) gone(c);
         });
       }
-      running.receive(client, message);
+      running.receive(client, ...unwrap(message));
     });
   });
 }
