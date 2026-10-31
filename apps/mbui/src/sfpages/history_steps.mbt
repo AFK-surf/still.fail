@@ -473,7 +473,9 @@ fn ev(
     } else if rail || rail_last {
       c.layer(fn() {
         let room = if rail_last { h_rail_room_last } else { h_rail_room }
-        c.box(style=room.then(@ui.style(pt=@sf.room_of((line + h_mark) / 2.0))), fn() {
+        // (from under its mark, in the middle of its first line)
+        let under = @sf.room_of((line + h_mark) / 2.0)
+        c.box(style=room.then(@ui.style(pt=under)), fn() {
           c.box(style=h_rail, fn() {  }) |> ignore
         })
         |> ignore
