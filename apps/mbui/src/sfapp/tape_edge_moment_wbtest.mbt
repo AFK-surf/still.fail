@@ -192,3 +192,35 @@ test "中屏: the sidebar's edge held by a finger, the touch called off by the s
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   assert_eq((tip(), said_at(m, "调整侧边栏宽度") is None), (0, true), msg="gone with the edge")
 }
+
+///|
+/// 中屏 on the tape, a mouse's, the system laying out the app's tabs (`nav_able`: an iPhone's with a mouse at hand, its
+/// bars from the first frame), the sidebar in use: the gap beside the page as the bars have it then, and which pane is
+/// in use after a click (down and up at once, as a host hands them on) at `dx` from where the page shows from, the
+/// tape's move had its while.
+fn edge_gap_clicked(nav_able : Bool, dx : Double) -> (Bool, @sfdesk.TapePane) raise {
+  new_run()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=840.0, platform=0, nav_able~)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  let (_, ey) = edge_middle(t, "调整侧边栏宽度")
+  let x = covered(t, "收起侧边栏").unwrap().0 + dx
+  let (sx, _, sw, _) = said_at(t, "调整侧边栏宽度").unwrap()
+  assert_true(x > sx && x < sx + sw, msg="on the edge: \{x} in \{sx}+\{sw}")
+  let at = t.time() + between_frames_ms
+  t.advance(at - t.time())
+  t.touch_at(0, x, ey, at)
+  t.touch_at(2, x, ey, at)
+  t.frame_at(at + @ui.move_most_ms * 2.0)
+  (@sf.native_on(), @sfdesk.wide.tape_at.get())
+}
+
+///|
+test "中屏: the sidebar's edge clicked a point before where the page shows from, in the gap, the system's bars on or off: the edge's own; a point after, the page's" {
+  for able in [false, true] {
+    assert_eq(edge_gap_clicked(able, -1.0), (able, @sfdesk.TapePane::Side), msg="in the gap, bars \{able}")
+    assert_eq(edge_gap_clicked(able, 1.0), (able, @sfdesk.TapePane::Page), msg="past it, bars \{able}")
+  }
+}
