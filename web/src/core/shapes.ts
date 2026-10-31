@@ -5371,6 +5371,11 @@ export interface NewChatView {
 	 * stations are known.
 	 */
 	kept: string;
+	/**
+	 * The key its next chat is to be made under (`newChat.create` `key`): the page becomes that chat as its first
+	 * words are sent, not once the core has made it.
+	 */
+	next: string;
 	/** The scope's stations up now; none until its workspace has been read (`error`: why it could not be). */
 	stations?: StationView[];
 	error?: string;
