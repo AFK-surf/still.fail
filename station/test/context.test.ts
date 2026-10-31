@@ -292,6 +292,34 @@ test("an explicit fresh choice is used for a small cold context", async () => {
   }
 });
 
+test("a zero threshold starts afresh when the cache expires even without a price", async () => {
+  const r = new Rig();
+  try {
+    const { key } = await done(r);
+    const at = Date.now() - 3 * 3_600_000;
+    r.store.db.prepare("UPDATE runtime_sessions SET at = 0 WHERE session_key = ?").run(key);
+    r.store.recordUsage(`/t/${key}`, { session: key, offset: 1, model: "an-unpriced-model" }, "claude", [[
+      { id: "zero-cold", at, model: "an-unpriced-model", subagent: false, fast: false, input: 10, cacheRead: 39_990, cacheWrite: 0, cacheWriteLong: 10, output: 1, calls: 1, context: 40_000, window: null },
+      { turn: null, person: null, thread: null, profile: null },
+    ]]);
+    r.edit((raw) => { raw.afreshWhenCold = true; raw.afreshAbove = 0; });
+    assert.equal(goesAfresh(r.hub, key, at + 1), false, "the cache has not expired");
+    assert.equal(goesAfresh(r.hub, key, Date.now()), true, "a small unpriced cold context starts afresh");
+    r.store.recordUsage(`/t/${key}`, { session: key, offset: 2, model: "an-unpriced-model" }, "claude", [[
+      { id: "zero-unknown-context", at: at + 1, model: "an-unpriced-model", subagent: false, fast: false, input: 10, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 10, output: 1, calls: 1, context: null, window: null },
+      { turn: null, person: null, thread: null, profile: null },
+    ]]);
+    assert.equal(goesAfresh(r.hub, key, Date.now()), true, "an unknown context size does not block the zero threshold");
+    await configure(r.hub, key, { afresh: false });
+    assert.equal(goesAfresh(r.hub, key, Date.now()), false, "the chat can choose to continue");
+    await configure(r.hub, key, { afresh: null });
+    r.edit((raw) => { delete raw.afreshWhenCold; });
+    assert.equal(goesAfresh(r.hub, key, Date.now()), false, "the switch still controls the default");
+  } finally {
+    await r.close();
+  }
+});
+
 test("clear is refused while a turn runs", async () => {
   const r = new Rig();
   const m = message();

@@ -99,6 +99,7 @@
   "core-views.agent.cacheColdStatus": "缓存已过期",
   "core-views.agent.cacheColdCostDetail": "重读约 {cost}",
   "core-views.agent.cacheColdTokensDetail": "重读要 {tokens} token",
+  "core-views.agent.cacheColdUnknownDetail": "重读费用未知",
   "core-views.agent.context": "{used} / {window}",
   "core-views.agent.hours": "{h} 小时 {m} 分",
   "core-views.agent.minutes": "{m} 分钟",

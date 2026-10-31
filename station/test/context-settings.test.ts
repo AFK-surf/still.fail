@@ -28,6 +28,8 @@ test("the cold-cache threshold is editable by managers, validated, and saved ind
     assert.deepEqual(contextView(new ConfigFile(dir).raw()), { afreshWhenCold: true, afreshAbove: 2.5 });
     assert.equal((await route.handle(request("admin", { afreshWhenCold: false }), [])).status, 200);
     assert.deepEqual(contextView(new ConfigFile(dir).raw()), { afreshWhenCold: false, afreshAbove: 2.5 });
+    assert.equal((await route.handle(request("admin", { afreshAbove: 0 }), [])).status, 200);
+    assert.deepEqual(contextView(new ConfigFile(dir).raw()), { afreshWhenCold: false, afreshAbove: 0 });
     assert.equal((await route.handle(request("admin", { afreshAbove: 1 }), [])).status, 200);
     assert.deepEqual(contextView(new ConfigFile(dir).raw()), { afreshWhenCold: false, afreshAbove: 1 });
   } finally {

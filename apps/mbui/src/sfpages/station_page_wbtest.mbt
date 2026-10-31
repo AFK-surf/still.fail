@@ -94,6 +94,20 @@ test "a station's 设置 switches going on afresh once a session's cache is over
   assert_eq(asked.length(), 2, msg="the custom threshold is saved")
   assert_eq(field(Some(asked[1]), "afreshAbove"), Some(Json::number(2.5)))
   assert_true(t.get(Switch, label="缓存过期后自动换新上下文").check is Some(On), msg="saving the amount leaves the switch on")
+  presented_in(t)
+  t.click(Button, label="自定义金额")
+  t.draw()
+  presented_in(t)
+  let zero = t.get(TextField, label="重读费用门槛（美元）")
+  let (zx, zy, zw, zh) = zero.rect
+  t.tap(zx + zw / 2.0, zy + zh / 2.0)
+  t.clear()
+  t.type_text("0")
+  t.click(Button, label="保存")
+  t.draw()
+  assert_eq(asked.length(), 3, msg="zero can be saved")
+  assert_eq(field(Some(asked[2]), "afreshAbove"), Some(Json::number(0.0)))
+  assert_true(t.find("缓存过期后换新（门槛 $0）；对话中的选择优先") is Some(_), msg="zero is described as unconditional")
 }
 
 ///|

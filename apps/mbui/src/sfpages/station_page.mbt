@@ -982,6 +982,7 @@ fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, 
         @sf.t("web-pages.stations.context.afresh"),
         on,
         note=match cost {
+          Some(value) if value == 0.0 => @sf.t("web-pages.stations.context.afreshZeroLine")
           Some(value) => @sf.t("web-pages.stations.context.afreshCostLine", args=[("amount", "$" + value.to_string())])
           None => @sf.t("web-pages.stations.context.afreshLineLegacy")
         },

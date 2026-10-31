@@ -121,6 +121,23 @@ test("an explicit fresh choice remains visible for a small cold context", () => 
   assert.equal(cacheCold([agent], hour, true, 10)[0]?.afresh, true);
 });
 
+test("a zero threshold shows a fresh choice whenever the cache expires", () => {
+  const hour = 60 * MIN;
+  const agent = (contextTokens?: number, afresh?: boolean) => ({
+    status: "final",
+    session: { key: "a", runtimeSessionId: "r-a", ...(afresh === undefined ? {} : { afresh }),
+      usage: { modelCalls: 1, lastCallAt: 0, cacheMs: hour, ...(contextTokens === undefined ? {} : { contextTokens }) } },
+  });
+  // Neither an unknown price nor an unknown or small context prevents the zero-threshold default.
+  for (const context of [undefined, 40_000, 200_000]) {
+    assert.equal(cacheCold([agent(context)], hour, true, 0)[0]?.afresh, true);
+  }
+  assert.equal(cacheCold([agent()], hour, true, 0)[0]?.detail, "重读费用未知");
+  assert.deepEqual(cacheCold([agent()], hour - 1, true, 0), [null, 1]);
+  assert.deepEqual(cacheCold([agent()], hour, false, 0), [null, Infinity]);
+  assert.equal(cacheCold([agent(undefined, false)], hour, true, 0)[0]?.afresh, false);
+});
+
 test("the_latest_three_things_it_did_oldest_first", () => {
   const call = (tool: string, input: object, more: object = {}) => ({ kind: "tool_call", tool, text: JSON.stringify(input), ...more });
   const timeline = [

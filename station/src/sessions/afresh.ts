@@ -39,7 +39,7 @@ export function goesAfresh(hub: Hub, key: string, now: number): boolean {
   if (u?.lastCallAt === undefined || u.cacheMs === undefined || u.lastCallAt + u.cacheMs > now) return false;
   const { afreshWhenCold, afreshAbove } = hub.config();
   const threshold = afreshWhenCold || row.afresh === true ? afreshAbove : undefined;
-  return coldWorth(u.contextTokens ?? 0, u.rereadCost, threshold, row.afresh) && coldAfresh(row.afresh, afreshWhenCold, afreshAbove, u.rereadCost);
+  return coldWorth(u.contextTokens ?? 0, u.rereadCost, threshold, row.afresh, afreshWhenCold) && coldAfresh(row.afresh, afreshWhenCold, afreshAbove, u.rereadCost);
 }
 
 /// What a session whose runtime session could not be resumed is told as its new one starts: where its earlier

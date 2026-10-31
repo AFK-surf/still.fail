@@ -1,6 +1,7 @@
 // How the station goes on with a session whose prompt cache is over (config.json `afreshWhenCold` and `afreshAbove`),
 // unless its chat chose otherwise (sessions `afresh`, session.settings): at the estimated USD threshold a message or
-// notice starts it afresh, told to read back what it needs. An unknown price does not start it afresh by default.
+// notice starts it afresh, told to read back what it needs. An unknown price does not trigger a positive threshold;
+// zero instead means every expired cache, even when its price is unknown.
 // The overview says both settings to members; owners and admins may PUT either to /context/settings.
 import { type Answer, type Request, error, json } from "../request.ts";
 import { afreshThreshold, DEFAULT_AFRESH_ABOVE } from "../../../../client/core-ts/src/cache-policy.ts";
