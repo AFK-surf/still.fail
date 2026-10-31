@@ -1771,6 +1771,7 @@ pub(all) enum Takes {
 /// Whether a finger at (x, y) in node `n`, `w` by `h` (in its own terms), is taken at `at` (View::takes; all of it where
 /// it says nothing).
 fn Tree::takes_here(self : Tree, n : Node, x : Double, y : Double, w : Double, h : Double, at : Double) -> Bool {
+  self.takes_said(n)
   match n.takes {
     Some(Areas(_)) => self.takes_rects(n, w, h, at).iter().any(fn(r) { x >= r.0 && y >= r.1 && x < r.2 && y < r.3 })
     Some(AsHosted(f)) => f(x, y, at)
@@ -1796,15 +1797,6 @@ fn Tree::takes_rects(
   if @signals.active_sub() is None {
     return f(w, h, at)
   }
-  let ver = match n.takes_ver {
-    Some(v) => v
-    None => {
-      let v = @signals.signal(0, same=fn(a, b) { a == b })
-      n.takes_ver = Some(v)
-      v
-    }
-  }
-  ver.get() |> ignore
   // (those nothing follows let go of, what they read with them; the one of this size and moment, else one made)
   let unit : Ref[@signals.Computed[Array[(Double, Double, Double, Double)]]?] = Ref(None)
   n.takes_units = n.takes_units.filter(fn(e) {
@@ -1861,6 +1853,26 @@ fn View::takes_so(self : View, t : Takes) -> View {
   n.takes = Some(t)
   self.tree.takes_off(n)
   self
+}
+
+///|
+/// What reads where node `n` takes a finger, following what it reads (a point followed, a frame painted), follows how
+/// it is said (takes_ver: said anew, whichever way, from none on; let go), at every way of saying it: all of it where it
+/// says none, as it hosts, by rects (theirs to read by the node's reading: Tree::takes_rects).
+fn Tree::takes_said(self : Tree, n : Node) -> Unit {
+  ignore(self)
+  if @signals.active_sub() is None {
+    return
+  }
+  let v = match n.takes_ver {
+    Some(v) => v
+    None => {
+      let v = @signals.signal(0, same=fn(a, b) { a == b })
+      n.takes_ver = Some(v)
+      v
+    }
+  }
+  v.get() |> ignore
 }
 
 ///|
@@ -3513,6 +3525,7 @@ pub fn Tree::finger_areas(self : Tree, id : NodeId) -> FingerAreas {
 
 ///|
 fn Tree::areas_of(self : Tree, n : Node, x : Double, y : Double, w : Double, h : Double) -> FingerAreas {
+  self.takes_said(n)
   match n.takes {
     Some(Areas(_)) => {
       // (read by what the node owns for it: Tree::takes_rects)

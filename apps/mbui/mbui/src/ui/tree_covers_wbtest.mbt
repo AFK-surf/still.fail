@@ -385,3 +385,55 @@ test "a button of the tree's own over a native view, what it reads to say where 
   t.frames_owed()
   assert_eq(covers_of(page), [], msg="told")
 }
+
+///|
+test "a button of the tree's own over a native view saying nothing of where it takes a finger, then that it takes none, no frame drawn: a frame asked for, none told; pointed at, pointed at no more" {
+  let k = tree_cover(over=true)
+  assert_eq(covers_of(k.page), [0.0, 0.0, 80.0, 40.0])
+  k.button.val.unwrap().takes(fn(_, _, _) { [] }) |> ignore
+  assert_eq(k.t.wanted_after(), 0.0, msg="a frame asked for")
+  k.t.frames_owed()
+  assert_eq(covers_of(k.page), [], msg="none told")
+  let p = tree_cover(over=true)
+  p.t.move(60.0, 20.0)
+  assert_eq(pointed_now(), Some(p.button.val.unwrap().id()), msg="pointed at")
+  p.button.val.unwrap().takes(fn(_, _, _) { [] }) |> ignore
+  p.t.frames_owed()
+  assert_eq(pointed_now(), None, msg="pointed at no more")
+}
+
+///|
+test "an old view over another's native view, the node hosting it said to take a finger as it hosts, by rects of none, as it hosts again: told each time, no frame but those asked for" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
+  t.check_looks(false)
+  let page = NativeView::page("<p>page</p>")
+  let island : Ref[@view.View?] = Ref(None)
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.over(Is(true)).width(Is(Some(400.0))).height(Is(Some(200.0))) |> ignore
+      old(b, fn(c) { c.native(page) |> ignore }).over(Is(true)) |> ignore
+      island.val = Some(
+        old(b, fn(c) {
+          let id = c.id("over")
+          c.clicked(id) |> ignore
+          c.box(w=Px(80.0), h=Px(40.0), id~, fn() {  }) |> ignore
+        })
+        .over(Is(true))
+        |> old_takes_own,
+      )
+    })
+    |> ignore
+  })
+  t.draw()
+  t.frame_at(t.time() + frame_period_default)
+  assert_eq(covers_of(page), [0.0, 0.0, 80.0, 40.0], msg="as it hosts")
+  let v = island.val.unwrap()
+  v.takes(fn(_, _, _) { [] }) |> ignore
+  assert_eq(t.wanted_after(), 0.0, msg="by rects of none: a frame asked for")
+  t.frames_owed()
+  assert_eq(covers_of(page), [], msg="by rects of none")
+  old_takes_own(v) |> ignore
+  assert_eq(t.wanted_after(), 0.0, msg="as it hosts again: a frame asked for")
+  t.frames_owed()
+  assert_eq(covers_of(page), [0.0, 0.0, 80.0, 40.0], msg="as it hosts again")
+}
