@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ulid } from "ulid";
-import { randomSecret, type Tokens } from "../src/auth.ts";
+import { decodeJwt } from "jose";
+import { randomSecret, SESSION_IDLE_SEC, SESSION_TTL_SEC, type Tokens } from "../src/auth.ts";
 import { harness } from "./harness.ts";
 import { TEST_CONNECTIONS } from "./relay-limit.ts";
 import fs from "node:fs/promises";
@@ -309,6 +310,26 @@ test("relay budgets span anonymous and account sessions; account idle expiry sti
     );
   } finally {
     for (const socket of sockets) socket.close();
+    await h.close();
+  }
+});
+
+test("a session in use never reaches an end: each refresh gives it its whole lifetime again", { timeout: 20000 }, async () => {
+  const h = await harness();
+  try {
+    const session = await h.login("every-day");
+    const accounts: any = await h.mf.getDurableObjectNamespace("ACCOUNTS", "api");
+    const account = accounts.get(accounts.idFromName(session.subject)) as any;
+    // Signed in 30 days ago less a minute and used every day since (2026-10-31: signed out 30 days to the second after
+    // signing in, in the middle of using it).
+    await account.signedInEarlier(session.session_id, SESSION_TTL_SEC - 60);
+    const refreshed = await h.fetch("/v1/auth/refresh", { method: "POST", headers: auth(session.refresh_token), body: JSON.stringify({ request_id: ulid() }) });
+    assert.equal(refreshed.status, 200);
+    const next = (await refreshed.json()) as Tokens;
+    assert.equal(next.session_expires_at, h.now() + SESSION_TTL_SEC, "the session lives on from now");
+    assert.equal(decodeJwt(next.refresh_token).exp, h.now() + SESSION_TTL_SEC, "and so does its refresh credential");
+    assert.equal(next.refresh_expires_at, h.now() + SESSION_IDLE_SEC, "unused, it still ends after its idle time");
+  } finally {
     await h.close();
   }
 });
