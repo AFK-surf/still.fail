@@ -17,6 +17,6 @@ test("cloud.json's watch failing (macOS turning it down: EMFILE) ends the watch,
   const watcher = (cloud as any).watcher;
   assert.ok(watcher, "cloud.json is watched");
   assert.doesNotThrow(() => watcher.emit("error", Object.assign(new Error("EMFILE: too many open files, watch"), { code: "EMFILE" })));
-  assert.equal(cloud.state.name, "s0");
+  assert.equal(cloud.state?.name, "s0");
   cloud.close();
 });
