@@ -111,20 +111,23 @@ pub fn place_beside(
 
 ///|
 /// What a node goes beside (View::beside): its anchor, on which side of it, lined up how, how far off, kept how far
-/// inside the window.
+/// inside the window; `at_pointer`: beside the point of it the pointer is at while the pointer is on it, not all of it.
 pub(all) struct Beside {
   anchor : NodeId
   side : Side
   along : Along
   offset : Double
   padding : Double
+  at_pointer : Bool
 } derive(Eq, Debug)
 
 ///|
 /// Placed beside node `anchor` (place_beside: on `side`, `offset` away, lined up `along` it, kept `padding` inside the
 /// window, to the other side where it has not the room on its own), by where the anchor is and how big both are as the
 /// tree is placed, each time it is: what it holds with it. Out of its holder's flow, as big as what it holds says (its
-/// width, its words). Where the anchor is gone, where it is laid out.
+/// width, its words). Where the anchor is gone, where it is laid out. `at_pointer`: beside the point in the window the
+/// pointer is at while it is on the anchor (Tree::point_at, placed again as it moves), as the anchor were that point (a
+/// tip by the pointer along a tall thin thing); elsewhere beside all of it.
 pub fn View::beside(
   self : View,
   anchor : NodeId,
@@ -132,9 +135,10 @@ pub fn View::beside(
   along? : Along = Middle,
   offset? : Double = 4.0,
   padding? : Double = 8.0,
+  at_pointer? : Bool = false,
 ) -> View {
   guard self.live() is Some(n) else { return self }
-  n.beside = Some({ anchor, side, along, offset, padding })
+  n.beside = Some({ anchor, side, along, offset, padding, at_pointer })
   if !self.tree.besides_at.contains(self.at) {
     self.tree.besides_at.push(self.at)
   }
@@ -220,8 +224,16 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       Some(p) => p
       None => (0.0, 0.0, 1.0)
     }
+    // (where it is beside: all of its anchor as drawn now; by the pointer, the point it is at, while it is on it)
+    let (aw, ah) = (a.lw * ascale, a.lh * ascale)
+    let (px, py) = self.pointer_xy
+    let rect = if b.at_pointer && px >= ax && py >= ay && px < ax + aw && py < ay + ah {
+      (px, py, 0.0, 0.0)
+    } else {
+      (ax, ay, aw, ah)
+    }
     let (x, y, went) = place_beside(
-      (ax, ay, a.lw * ascale, a.lh * ascale),
+      rect,
       n.lw * hs,
       n.lh * hs,
       self.last_w,

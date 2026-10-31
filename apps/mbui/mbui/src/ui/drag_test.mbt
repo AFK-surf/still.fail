@@ -460,3 +460,55 @@ test "a press on a panel that stops the wheel is the panel's: the drag area unde
   t.draw()
   assert_eq(taps.val, 1)
 }
+
+///|
+/// A thin drag area across to be held first (a column's edge), alone under the finger (nothing else there that takes
+/// one); what it was moved by and its taps kept.
+fn alone_edge_view(moved : Ref[Double], taps : Ref[Int]) -> @ui.Tester {
+  @ui.Tester::new(
+    fn(c) {
+      let id = c.id("edge")
+      c.drag_on(id, axis=Horizontal, hold=true)
+      c.box(left=140.0, top=0.0, w=Px(20.0), h=Px(300.0), id~, fn() {  }) |> ignore
+      match c.drag_of(id) {
+        Some(d) => {
+          moved.val = moved.val + d.take_move().0
+          if d.take_tap() {
+            taps.val += 1
+          }
+        }
+        None => ()
+      }
+    },
+    w=300.0,
+    h=300.0,
+    pointing=Finger,
+  )
+}
+
+///|
+test "drag_on hold, alone under the finger: swiped across at once it moves not, the first press and one after a hold that dragged it alike" {
+  let moved = Ref::new(0.0)
+  let taps = Ref::new(0)
+  let t = alone_edge_view(moved, taps)
+  t.draw()
+  // (its first press, swiped at once)
+  t.drag(150.0, 100.0, 250.0, 100.0)
+  t.draw()
+  assert_eq((moved.val, taps.val), (0.0, 0), msg="the first press")
+  // (held a long press's while, then dragged 40: its)
+  t.press_at(150.0, 100.0)
+  t.run_for(@ui.long_press_ms * 2.0)
+  for i in 1..=4 {
+    t.advance(@ui.input_step_ms)
+    t.touch(1, 150.0 + i.to_double() * 10.0, 100.0)
+    t.draw()
+  }
+  t.release(190.0, 100.0)
+  t.draw()
+  assert_eq(moved.val, 40.0, msg="held, then dragged")
+  // (the next press, swiped at once: as the first)
+  t.drag(150.0, 100.0, 250.0, 100.0)
+  t.draw()
+  assert_eq((moved.val, taps.val), (40.0, 0), msg="a press after a hold")
+}

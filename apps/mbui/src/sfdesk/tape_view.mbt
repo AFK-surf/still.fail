@@ -815,9 +815,25 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
         (bar_gap_now(), t, 0.0, b)
       })
     })
-    // the edges dragged, and what a screen reader says of the covers: over the panels, taking presses where it draws
-    // them alone
-    @ui.old(row, fn(c) { tape_hand_built(c, src) }, key=tape_island_key).over(Is(true)) |> @ui.old_takes_own |> ignore
+    // how the edges look (drawn by an old view, taking nothing); over it the edges themselves, the tree's, what is done
+    // with them taken at each event's moment
+    // (drawing nothing that takes a press: a finger anywhere on it is what lies under it's)
+    // (how the edges stand as their nodes say it, this tape's: what their look is drawn by)
+    let edges_on : TapeEdgesOn = { side: tape_edge_on(), panel: tape_edge_on() }
+    @ui.old(row, fn(c) { tape_hand_built(c, src, edges_on) }, key=tape_island_key).over(Is(true))
+    |> @ui.old_takes_own
+    |> ignore
+    let tips = @sf.TipLayer::new(fn() { Some(v) })
+    row.box(fn(edges) {
+      edges.over(Is(true)) |> ignore
+      edges.show(fn() { wide.tape_at.get() == Side }, fn(e) {
+        tape_side_edge(e, edges, src, tips, edges_on.side)
+      })
+      edges.show(fn() { wide.tape_at.get() == Panel && tape_shown_side() is Some(_) }, fn(e) {
+        tape_panel_edge(e, edges, tips, edges_on.panel)
+      })
+    })
+    |> ignore
   })
   |> ignore
 }
@@ -1139,12 +1155,14 @@ fn tape_panel_built(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-/// Over the tape's panels (its island, as wide as the tape, moved with it): the edge between the sidebar or the side
-/// panel in use and the page beside it, dragged, its width (the sidebar's kept as the wide frame's is: side_follow),
-/// the page beside it showing what it leaves; a press on it where it lies over what shows of the page, the page's.
-fn tape_hand_built(c : @ui.Ctx, src : Source) -> Unit {
+/// Over the tape's panels (its island, as wide as the tape, moved with it): how the edge between the sidebar or the side
+/// panel in use and the page beside it looks (@sf.edge_look, in the gap's middle; always shown to touch, which points
+/// at nothing, else while the pointer is on the column), drawn alone: what is done with it is the tree's edge's over it
+/// (tape_side_edge, tape_panel_edge). What it reads to draw it: the tape's room and where its move has it, the gap,
+/// whether the pointer is on the column, and the edge's node's pointed and held (TapeEdgesOn, as this tape holds it).
+fn tape_hand_built(c : @ui.Ctx, src : Source, edges_on : TapeEdgesOn) -> Unit {
   let (now, _, _, _) = @sfbase.workspace_in_view(src)
-  guard now is Some(w) else { return }
+  guard now is Some(_) else { return }
   let r = tape_room_now()
   tape_goes.said.get() |> ignore
   tape_goes.way.said()
@@ -1160,105 +1178,51 @@ fn tape_hand_built(c : @ui.Ctx, src : Source) -> Unit {
   let o = x - (x * c.scale).round() / c.scale
   let col = tape_col_at(t)
   let main_w = tape_page_at(t)
-  let side = tape_shown_side()
   match wide.tape_at.get() {
-    Side => {
-      let id = c.id("tape/side-edge")
-      let said = tape_edge(
-        c,
-        "tape/side-edge",
-        @sf.t("web-pages.workspace.resizeSidebar"),
-        col + o - bar_gap_now(),
-        r.panel_top,
-        r.panel_h,
-        tape_side_w(r.tw, wide.side_w.get()),
-        side_min,
-        tape_side_most(r.tw),
-        Right,
-      )
-      match said {
-        Dragging(x) | Dropped(x) => wide.side_w.set(x)
-        Twice => wide.side_w.set(side_default(side_group(src, w.id)))
-        Pressed | Untouched => ()
-      }
-      wide.edge_held.set(c.pressed(id) || said is Dragging(_))
-      // (a press on it where it lies over what shows of the page: the page's, as a press there would be without it)
-      tape_edge_page(c, id, col, true)
-    }
-    Panel if side is Some(_) => {
-      wide.edge_held.set(false)
-      let id = c.id("tape/panel-edge")
-      match
-        tape_edge(
-          c,
-          "tape/panel-edge",
-          @sf.t("web-pages.chat.resizePanel"),
-          col + o + main_w,
-          r.panel_top,
-          r.panel_h,
-          r.panel_w,
-          dmin(panel_min, tape_one_beside(r.tw, tape_shows_left())),
-          tape_one_beside(r.tw, tape_shows_left()),
-          Left,
-        ) {
-        Dragging(x) | Dropped(x) => panel_own.width.set(Some(x))
-        Twice => panel_own.width.set(None)
-        Pressed | Untouched => ()
-      }
-      tape_edge_page(c, id, col + main_w, false)
-    }
-    _ => wide.edge_held.set(false)
+    Side =>
+      tape_edge_drawn(c, "tape/side-edge", col + o - bar_gap_now(), r.panel_top, r.panel_h, Right, edges_on.side)
+    Panel if tape_shown_side() is Some(_) =>
+      tape_edge_drawn(c, "tape/panel-edge", col + o + main_w, r.panel_top, r.panel_h, Left, edges_on.panel)
+    _ => ()
   }
 }
 
 ///|
-/// A press let go on edge `id` (tape_edge) where it lies over what shows of the page (past `line` on the tape: at its
-/// right for the sidebar's edge, `after`, at its left for the side panel's): the page brought over, as a press there
-/// without it would (the edge takes that much of it for a finger's drag); in the gap the edge's own.
-fn tape_edge_page(c : @ui.Ctx, id : Int, line : Double, after : Bool) -> Unit {
-  if !c.clicked(id) {
-    return
-  }
-  match c.drag_of(id) {
-    Some(d) => {
-      // (where it was pressed on the tape: the window's less how far the tape is moved then)
-      let x = d.x - tape_x_at(tape_room_now(), c.moment())
-      if (after && x >= line) || (!after && x < line) {
-        wide.tape_ask.set(Some(Page))
-      }
-    }
-    None => ()
+/// How the tape's two edges stand as their nodes have them: whether the pointer is on each, whether each is in hand.
+priv struct TapeEdgesOn {
+  side : TapeEdgeOn
+  panel : TapeEdgeOn
+}
+
+///|
+priv struct TapeEdgeOn {
+  pointed : @signals.Signal[Bool]
+  held : @signals.Signal[Bool]
+}
+
+///|
+fn tape_edge_on() -> TapeEdgeOn {
+  {
+    pointed: @signals.signal(false, same=fn(a, b) { a == b }),
+    held: @signals.signal(false, same=fn(a, b) { a == b }),
   }
 }
 
 ///|
-/// The edge between the sidebar or the side panel in use on the tape and the page beside it, in the gap between the two
-/// (`gap`: the gap's left on the tape; `top`, `h`: the panels'), the library's (its bar and its line, @sf.edge_look, in
-/// the gap's middle; always shown to touch, which points at nothing, else while the pointer is on it), over the gap and
-/// as far into each panel as @sf.edge_reach says (over what shows of the page there: the drags across that land on it
-/// are its own, @sf.handle_drag): dragged, the width of the one in use, from `width` between `least` and `most` (its
-/// `edge`: the sidebar's right, the side panel's left), the page beside it showing what it leaves; what was done with it
-/// said (the second of two presses: its own width again; a press on the page's part is the page's, tape_edge_page).
-fn tape_edge(
+/// The edge's look (tape_hand_built), in the gap at `gap` on the tape, `top` and `h` the panels', its `edge` the one in
+/// use's (the sidebar's right, the side panel's left), lit as `on` says, taking nothing.
+fn tape_edge_drawn(
   c : @ui.Ctx,
   key : String,
-  label : String,
   gap : Double,
   top : Double,
   h : Double,
-  width : Double,
-  least : Double,
-  most : Double,
   edge : @ui.Side,
-) -> @sf.Resized {
-  let id = c.id(key)
-  c.cursor(id, ResizeX)
-  let said = @sf.handle_drag(c, id, width, min=least, max=most, edge~)
-  let held = c.pressed(id) || said is Dragging(_)
-  // (the gap `before` from its left and `after` from its right, the look in its middle)
-  let (into_in, into_page) = @sf.edge_reach(bar_gap_now())
-  let (before, after) = if edge is Left { (into_page, into_in) } else { (into_in, into_page) }
-  let strip = c.box(
+  on : TapeEdgeOn,
+) -> Unit {
+  let (before, after) = tape_edge_reach(edge)
+  let held = on.held.get()
+  c.box(
     style=@ui.style(
       row=true,
       w=Fixed(before + bar_gap_now() + after),
@@ -1269,20 +1233,138 @@ fn tape_edge(
     ),
     left=gap - before,
     top~,
-    id~,
     fn() {
-      @sf.edge_look(
-        c,
-        key,
-        over=@sf.pointed_or_finger(c, false),
-        on=c.lit(id) || c.focus_shown(id) || held,
-        active=held,
-      )
+      @sf.edge_look(c, key, over=@sf.pointed_or_finger(c, false), on=on.pointed.get() || held, active=held)
     },
   )
-  c.semantics(strip, Separator, id~, label~)
-  @sf.edge_tip(c, key, id, label, side=if edge is Left { Left } else { Right })
-  said
+  |> ignore
+}
+
+///|
+/// How far the edge reaches past the gap, before it and after it (`edge`: the side the one in use has it on), into what
+/// is beside the gap (@sf.edge_reach: the drags across that land there its own).
+fn tape_edge_reach(edge : @ui.Side) -> (Double, Double) {
+  let (into_in, into_page) = @sf.edge_reach(bar_gap_now())
+  if edge is Left {
+    (into_page, into_in)
+  } else {
+    (into_in, into_page)
+  }
+}
+
+///|
+/// Where the edge whose gap begins at `gap(t)` across the tape is, in node `n` (over the tape's row, moved with it): as
+/// wide as the gap and what it reaches past it, as high as the panels, the tape as of the moment it is drawn at, its
+/// pointed and held said to `on` (what its look reads, tape_hand_built) as they change; the node put in it by `made`.
+fn tape_edge_at(
+  n : @view.View,
+  holder : @view.View,
+  edge : @ui.Side,
+  gap : (Double) -> Double,
+  on : TapeEdgeOn,
+  made : (@view.View) -> @view.View,
+) -> Unit {
+  n
+  .width(By(fn() {
+    let (before, after) = tape_edge_reach(edge)
+    Some(before + bar_gap_now() + after)
+  }))
+  .height(By(fn() { Some(tape_room_now().panel_h) }))
+  .offset(By(fn() {
+    let (before, _) = tape_edge_reach(edge)
+    (gap(tape_drawn_at(holder)) - before, tape_room_now().panel_top)
+  }))
+  |> ignore
+  let e = made(n)
+  n.reacts(fn() { e.pointed() }, fn(p) { on.pointed.set(p) })
+  n.owns(fn() {
+    on.pointed.set(false)
+    on.held.set(false)
+  })
+  |> ignore
+}
+
+///|
+/// The sidebar's edge on the tape while the sidebar is in use, in node `n` (over the tape's row `holder`): dragged, the
+/// sidebar's width (kept as the wide frame's is: side_follow), the page beside it showing what it leaves; the second of
+/// two presses, its own width again; a press where it lies over what shows of the page, the page brought over, as a
+/// press there without it would. Held, the wide frame's edge_held.
+fn tape_side_edge(
+  n : @view.View,
+  holder : @view.View,
+  src : Source,
+  tips : @sf.TipLayer,
+  on : TapeEdgeOn,
+) -> Unit {
+  tape_edge_at(n, holder, Right, fn(t) { tape_col_at(t) - bar_gap_now() }, on, fn(n) {
+    let (before, _) = tape_edge_reach(Right)
+    @sf.edge_node(
+      n,
+      fn() { @sf.t("web-pages.workspace.resizeSidebar") },
+      fn() { tape_side_w(tape_room_now().tw, wide.side_w.get()) },
+      fn() { side_min },
+      fn() { tape_side_most(tape_room_now().tw) },
+      Right,
+      fn(said, _) {
+        match said {
+          Dragging(x) | Dropped(x) => wide.side_w.set(x)
+          Twice =>
+            match @sfbase.workspace_in_view(src).0 {
+              Some(w) => wide.side_w.set(side_default(side_group(src, w.id)))
+              None => ()
+            }
+          Pressed | Untouched => ()
+        }
+      },
+      fn(h) {
+        on.held.set(h)
+        wide.edge_held.set(h)
+      },
+      on_beside=fn(x) { x >= before + bar_gap_now() },
+      beside=fn(at) {
+        wide.tape_ask.set(Some(Page))
+        tape_take_ask(at) |> ignore
+      },
+      tips~,
+      side=Right,
+    )
+  })
+}
+
+///|
+/// The side panel's edge on the tape while the panel is in use, in node `n` (over the tape's row `holder`): dragged, the
+/// panel's width, the page beside it showing what it leaves; the second of two presses, its own width again; a press
+/// where it lies over what shows of the page, the page brought over.
+fn tape_panel_edge(n : @view.View, holder : @view.View, tips : @sf.TipLayer, on : TapeEdgeOn) -> Unit {
+  tape_edge_at(n, holder, Left, fn(t) { tape_col_at(t) + tape_page_at(t) }, on, fn(n) {
+    let (before, _) = tape_edge_reach(Left)
+    @sf.edge_node(
+      n,
+      fn() { @sf.t("web-pages.chat.resizePanel") },
+      fn() { tape_room_now().panel_w },
+      fn() {
+        let r = tape_room_now()
+        dmin(panel_min, tape_one_beside(r.tw, tape_shows_left()))
+      },
+      fn() { tape_one_beside(tape_room_now().tw, tape_shows_left()) },
+      Left,
+      fn(said, _) {
+        match said {
+          Dragging(x) | Dropped(x) => panel_own.width.set(Some(x))
+          Twice => panel_own.width.set(None)
+          Pressed | Untouched => ()
+        }
+      },
+      fn(h) { on.held.set(h) },
+      on_beside=fn(x) { x < before },
+      beside=fn(at) {
+        wide.tape_ask.set(Some(Page))
+        tape_take_ask(at) |> ignore
+      },
+      tips~,
+      side=Left,
+    )
+  })
 }
 
 ///|

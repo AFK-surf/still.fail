@@ -332,6 +332,8 @@ pub struct Tree {
   /// be told as all of it is committed (Tree::modals_told): what a change does in between (a row put after the rest,
   /// then put in its place) never seen half done
   mut committing : Int
+  // what is to be done once the event being taken is committed whole (Tree::after_event), in order
+  afters : Array[() -> Unit]
   mut modals_due : Bool
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
@@ -340,12 +342,15 @@ pub struct Tree {
   mut through : Through?
   /// what hosts the tree told of a hold handed to what it hosts (Tree::on_through), and asked whether what it hosts
   /// takes a press at a point (Tree::hosts_at)
-  mut on_through : (Target, Double, Double, Double) -> Unit
+  mut on_through : (Target, Double, Double, Double, Handed) -> Unit
   mut hosts_at : (NodeId, Double, Double) -> Int?
   /// the node a finger or the pointer is held on, and the one the pointer is over (of those that take a press): each
   /// node's own cell told as it comes or goes (View::pressed, View::pointed)
   mut pressing : NodeId?
   mut pointed : NodeId?
+  // where the pointer is in the window, as it is said (Tree::point_at; (-1, -1) none): what goes beside it is placed
+  // by (View::beside's `at_pointer`)
+  mut pointer_xy : (Double, Double)
   /// the node with the keyboard's focus, and whether it shows (it came by the keyboard): its cells told as it comes or
   /// goes (View::focused); what hosts the tree told as it is let go of at a cause (the node let go, leaving, taking
   /// no press, under a modal layer: Tree::on_focus_lost)
@@ -452,13 +457,15 @@ pub fn Tree::new(
     hosting: -1,
     modals: [],
     committing: 0,
+    afters: [],
     modals_due: false,
     held: None,
     through: None,
-    on_through: fn(_, _, _, _) {  },
+    on_through: fn(_, _, _, _, _) {  },
     hosts_at: fn(_, _, _) { None },
     pressing: None,
     pointed: None,
+    pointer_xy: (-1.0, -1.0),
     backing: None,
     focused: None,
     focus_visible: false,
@@ -2277,7 +2284,10 @@ fn Tree::fingers_off(self : Tree) -> Array[Int] {
 /// slop with no move told before, `drag` is told its end alone (Up). One word an event, each with where the finger went
 /// down (`ox`, `oy`): what a word does (letting the node go, saying another on_drag) is done before the next event is
 /// told, never in the middle of one. `through`: a hold of that long is no hold of its own but what lies under it's, as
-/// found as the finger went down (through.mbt): its own told Off then, the finger that one's.
+/// found as the finger went down (through.mbt): its own told Off then, the finger that one's. `held_first`, asked as a
+/// finger goes down: whether it drags this node only once held (its `hold`'s while): moved past the slop before that,
+/// it is what lies under it's, as found as it went down, handed on as a hold going through is (its own told Off, the
+/// finger that one's where it is then; nothing there to take it, no drag of this one's either).
 pub fn View::gesture(
   self : View,
   slop : Double,
@@ -2286,6 +2296,7 @@ pub fn View::gesture(
   hold? : (Double, (Drag) -> Unit),
   drag? : (Drag) -> Unit,
   through? : Double,
+  held_first? : (Drag) -> Bool,
 ) -> View {
   // (a hold told, or handed through: one way of a hold, its moment the one recognizer's)
   let hold_ms = match (hold, through) {
@@ -2300,6 +2311,9 @@ pub fn View::gesture(
   let down : Ref[Drag?] = Ref(None)
   let moved = Ref(false)
   let held = Ref(false)
+  // (this finger drags it only once held (`held_first`); moved before that and not handed on: none of it its)
+  let first = Ref(false)
+  let passed = Ref(false)
   let dead = Ref(false)
   let cancel_hold : Ref[() -> Unit] = Ref(fn() {  })
   let over = fn() {
@@ -2322,6 +2336,11 @@ pub fn View::gesture(
         last.val = (d.wx, d.wy)
         moved.val = false
         held.val = false
+        passed.val = false
+        first.val = match held_first {
+          Some(f) => hold_ms is Some(_) && f(d)
+          None => false
+        }
         match press {
           Some(f) => word(f, d, d)
           None => ()
@@ -2336,7 +2355,7 @@ pub fn View::gesture(
           return
         }
         // (going through: what lies under it found now, kept by who it is)
-        if through is Some(_) {
+        if through is Some(_) || first.val {
           self.tree.through_found(id, d.wx, d.wy, d.since, d.finger)
         }
         match hold_ms {
@@ -2373,11 +2392,22 @@ pub fn View::gesture(
               moved.val = true
               (cancel_hold.val)()
               cancel_hold.val = fn() {  }
+              // (dragging it only once held, moved before: its press called off, once (Off), then what lies under it's,
+              // handed on now; nothing there to take it, none of what follows this one's)
+              if first.val && !held.val {
+                passed.val = true
+                match drag {
+                  Some(f) => word(f, { ..d, kind: Off }, o)
+                  None => ()
+                }
+                self.tree.hand_through(id, d.wx, d.wy, moved=true) |> ignore
+                return
+              }
               match drag {
                 Some(f) => word(f, { ..d, kind: Down }, o)
                 None => ()
               }
-            } else if moved.val {
+            } else if moved.val && !passed.val {
               match drag {
                 Some(f) => word(f, d, o)
                 None => ()
@@ -2392,8 +2422,23 @@ pub fn View::gesture(
         let was = down.val
         let went = moved.val
         let was_held = held.val
+        let was_passed = passed.val
+        let was_first = first.val
         over()
+        passed.val = false
         match was {
+          // (moved before it was held, when it drags only so: called off then, none of what follows this one's)
+          Some(_) if was_passed => ()
+          // (let go past the slop with no move told, before the hold of one it drags only once held: its press called
+          // off, no drag of it, no tap)
+          Some(o) if was_first &&
+            !was_held &&
+            d.kind == Up &&
+            ((d.wx - o.wx).abs() > slop || (d.wy - o.wy).abs() > slop) =>
+            match drag {
+              Some(f) => word(f, { ..d, kind: Off }, o)
+              None => ()
+            }
           // (let go, or called off, after a drag or a hold: its end, where it went down said with it)
           Some(o) if went || was_held || d.kind == Off =>
             match drag {
@@ -2989,7 +3034,28 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
   @signals.end_batch()
   self.committing -= 1
   self.modals_settled()
+  // (what waits for it committed whole, each a change of its own of this moment, in order)
+  while self.afters.length() > 0 {
+    let next = self.afters.remove(0)
+    self.committing += 1
+    @signals.start_batch()
+    @signals.untracked(next)
+    @signals.end_batch()
+    self.committing -= 1
+    self.modals_settled()
+  }
   self.cause_at = was
+}
+
+///|
+/// `f` done once the event being taken now is committed whole (what it told brought about: nodes shown, gone, made anew,
+/// a modal layer opened), as a change of its own of that moment; taken in none, now.
+fn Tree::after_event(self : Tree, f : () -> Unit) -> Unit {
+  if self.cause_at >= 0.0 {
+    self.afters.push(f)
+  } else {
+    f()
+  }
 }
 
 ///|
@@ -4089,6 +4155,7 @@ pub fn View::pointed(self : View) -> Bool {
 pub fn Tree::point_at(self : Tree, x : Double, y : Double) -> Unit {
   // (none: nothing followed, nothing pointed at from now)
   if x < 0.0 || y < 0.0 {
+    self.pointer_now(x, y)
     self.point_stopped()
     self.pointed_to(None)
     return
@@ -4109,6 +4176,7 @@ pub fn Tree::point_at(self : Tree, x : Double, y : Double) -> Unit {
 /// none (x or y below 0: nothing told, nothing followed), or the tree is let go. What is where, as the layout or the
 /// order changes, is followed by being said again (Tree::hits_said).
 pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -> Unit) -> Unit {
+  self.pointer_now(x, y)
   self.point_stopped()
   if x < 0.0 || y < 0.0 {
     return
@@ -4121,6 +4189,24 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
     stop()
   } else {
     self.point_stop = Some(stop)
+  }
+}
+
+///|
+/// The pointer at (x, y) in the window as it is said (none: below 0), what is followed there (Tree::follow_point, the
+/// host's way and Tree::point_at's): where it is kept, and only where it moved, what goes beside its point placed again
+/// (View::beside's `at_pointer`: its place alone, nothing laid out again).
+fn Tree::pointer_now(self : Tree, x : Double, y : Double) -> Unit {
+  let p = if x < 0.0 || y < 0.0 { (-1.0, -1.0) } else { (x, y) }
+  if self.pointer_xy == p {
+    return
+  }
+  self.pointer_xy = p
+  for at in self.besides_at {
+    match self.nodes[at].beside {
+      Some(b) if b.at_pointer && self.nodes[at].live => self.place_marked_at(at)
+      _ => ()
+    }
   }
 }
 

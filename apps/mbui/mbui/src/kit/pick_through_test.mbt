@@ -194,3 +194,87 @@ test "a hold handed through and not taken yet: called off, or let go and, before
   // (none of them: picked, as picked_through has it)
   assert_eq(handed_lost(Nothing), true)
 }
+
+///|
+/// Words in an old view, under a cover of the tree's: one a finger drags only once held (`held_first`; `swiped`: a
+/// finger down on the first word moved past the slop at once, let go there with no other move), or one holding through
+/// (not `swiped`: a finger held still on the first word past a long press and let go); frames drawn between or none.
+/// What was picked, whether anything was, how many times the words' hold took the press, what the cover was told, and what was felt (a hold handed to words through a
+/// cover is felt by nothing of theirs: as with picked_through).
+fn picked_under(swiped : Bool, frames : Bool) -> ((Int, Int, Bool), Int, Array[String], Array[@ui.Haptic]) {
+  let p = @kit.Pick::new()
+  // (how many times its hold took the press: picked)
+  let took = Ref(0)
+  let said : Array[String] = []
+  let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=200.0, platform=2)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.over(Is(true)).width(Is(Some(400.0))).height(Is(Some(200.0))) |> ignore
+      @ui.old(b, fn(c) {
+        let id = c.id("w")
+        c.takes_presses(id)
+        let box = c.box(id~, fn() { c.rich([@ui.plain("alpha beta gamma delta")], wrap=false) |> ignore })
+        c.words(box, "w", a=p.a, b=p.b, color=0x3B82F640L)
+        if p.hold(c, "w", id) {
+          c.take_press()
+          took.val += 1
+        }
+        p.slide(c)
+      })
+      .over(Is(true))
+      |> ignore
+      b.box(fn(cv) {
+        cv.over(Is(true)).width(Is(Some(400.0))).height(Is(Some(200.0))) |> ignore
+        let press = fn(_d : @view.Drag) { said.push("cover press") }
+        let tap = fn(_d : @view.Drag) { said.push("cover tap") }
+        let drag = fn(d : @view.Drag) { said.push("cover drag \{d.kind}") }
+        if swiped {
+          cv.gesture(@ui.touch_slop(), press~, tap~, drag~, hold=(@ui.long_press_ms, fn(_) { said.push("cover held") }), held_first=fn(_) {
+            true
+          })
+          |> ignore
+        } else {
+          cv.gesture(@ui.touch_slop(), press~, tap~, drag~, through=@ui.long_press_ms) |> ignore
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let (rx, ry, _, rh) = t.rect_of("alpha beta gamma delta").unwrap()
+  let (x, y) = (rx + 4.0, ry + rh / 2.0)
+  let t0 = t.time() + pick_later_ms
+  t.advance(t0 - t.time())
+  t.touch_raw(0, 1, x, y, t0)
+  if swiped {
+    let at = t0 + pick_later_ms
+    if frames {
+      t.frame_at(t0 + pick_later_ms / 2.0)
+    }
+    t.advance(at - t.time())
+    t.touch_raw(1, 1, x + @ui.touch_slop() * 4.0, y, at)
+    t.touch_raw(2, 1, x + @ui.touch_slop() * 4.0, y, at)
+  } else {
+    let at = t0 + @ui.long_press_ms + pick_later_ms
+    if frames {
+      t.frame_at(t0 + pick_later_ms)
+      t.frame_at(t0 + @ui.long_press_ms + pick_later_ms / 2.0)
+    }
+    t.advance(at - t.time())
+    t.touch_raw(2, 1, x, y, at)
+  }
+  t.run_for(@ui.long_press_ms * 2.0)
+  ((p.a, p.b, p.of("w")), took.val, said, t.haptics())
+}
+
+///|
+test "words under a cover a finger drags only once held, the finger moved past the slop at once and let go: nothing picked, nothing felt; under one holding through, held past a long press: the word picked once (a hold handed through felt by none, as ever); frames or none" {
+  for frames in [true, false] {
+    let (picked, took, said, felt) = picked_under(true, frames)
+    assert_eq((picked.2, took, said, felt), (false, 0, ["cover press", "cover drag Off"], []), msg="swiped, frames \{frames}: \{picked}")
+    let held = picked_under(false, frames)
+    assert_eq(held, ((0, 5, true), 1, ["cover press", "cover drag Off"], []), msg="held, frames \{frames}: \{held}")
+  }
+}
