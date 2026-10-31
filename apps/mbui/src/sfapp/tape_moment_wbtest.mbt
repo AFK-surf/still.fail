@@ -115,11 +115,13 @@ test "on the tape the real button and back: the side panel comes over, back brin
 test "on the tape a page come on top waits anew each time: one waited for before, come back to before the core has it, waits again" {
   new_run()
   let late = 10000.0
-  let src = round_trip(fixture("chat"), late)
+  let late_now = Ref(setup_answer_ms)
+  let src = round_trip_by(fixture("chat"), fn() { late_now.val })
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
-  t.run_for(late * 6.0 + @ui.move_most_ms)
+  t.run_for(setup_answer_ms * 6.0 + @ui.move_most_ms)
+  late_now.val = late
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   let a : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" }
   let b : ChatRef = { station: "ws1/st2", session: "s-c3", title: "夜里的构建又失败了", station_name: "MBA" }
@@ -146,11 +148,13 @@ test "on the tape a page come on top waits anew each time: one waited for before
 test "on the tape a page waiting as the tape is made again (大屏 and back) waits anew from then" {
   new_run()
   let late = 10000.0
-  let src = round_trip(fixture("chat"), late)
+  let late_now = Ref(setup_answer_ms)
+  let src = round_trip_by(fixture("chat"), fn() { late_now.val })
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
-  t.run_for(late * 6.0 + @ui.move_most_ms)
+  t.run_for(setup_answer_ms * 6.0 + @ui.move_most_ms)
+  late_now.val = late
   open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
   t.run_for(page_local_ms * 0.8)
   t.resize(1280.0, 800.0)
@@ -282,16 +286,25 @@ fn page_draws(t : @ui.Tester, title : String) -> Bool {
 }
 
 ///|
+/// How late the core answers what a test's first chat asks (its six asks one after another): nearly at once, the chat
+/// shown in a few frames, the core then made `late` for what the test watches. (Answered `late` from the start, a 10 s
+/// view's setup ran the window through a minute of its clock: a frame at each step of the spokes shown meanwhile, each
+/// built whole again to be checked: most of this file's 18 s on Studio, 2026-10-31.)
+let setup_answer_ms : Double = 10.0
+
+///|
 /// On the tape (the sidebar in use; a window `w` wide: Large, off it), the core answering `late` after it is asked, a
 /// second chat opened at `t0` between frames, frames drawn at `t0 +` each of `frames`, then at `t0 + at`: whether the
 /// page's pane draws the chat before it, whether it draws the one opened.
 fn page_waited(late : Double, frames : Array[Double], at : Double, w? : Double = 720.0) -> (Bool, Bool) {
   new_run()
-  let src = round_trip(fixture("chat"), late)
+  let late_now = Ref(setup_answer_ms)
+  let src = round_trip_by(fixture("chat"), fn() { late_now.val })
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=800.0, platform=0)
   t.draw()
-  t.run_for(late * 6.0 + @ui.move_most_ms)
+  t.run_for(setup_answer_ms * 6.0 + @ui.move_most_ms)
+  late_now.val = late
   let t0 = t.time() + between_frames_ms
   t.advance(t0 - t.time())
   open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
@@ -325,11 +338,13 @@ test "中屏: a page opened in the page's panel, its view on its way: the one be
 /// The same, its view come `late` after each ask, the page's panel seen at each of `at` (frames drawn there alone).
 fn page_waited_seen(late : Double, at : Array[Double]) -> Array[(Bool, Bool)] {
   new_run()
-  let src = round_trip(fixture("chat"), late)
+  let late_now = Ref(setup_answer_ms)
+  let src = round_trip_by(fixture("chat"), fn() { late_now.val })
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
-  t.run_for(10000.0 * 6.0 + @ui.move_most_ms)
+  t.run_for(setup_answer_ms * 6.0 + @ui.move_most_ms)
+  late_now.val = late
   let t0 = t.time() + between_frames_ms
   t.advance(t0 - t.time())
   open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
@@ -384,11 +399,13 @@ test "大屏: a page opened in the page's pane, its view on its way: the one bef
 fn page_across_shells(stepped : Bool) -> Array[@sfdesk.TapePane] {
   new_run()
   let late = 10000.0
-  let src = round_trip(fixture("chat"), late)
+  let late_now = Ref(setup_answer_ms)
+  let src = round_trip_by(fixture("chat"), fn() { late_now.val })
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
-  t.run_for(late * 6.0 + @ui.move_most_ms)
+  t.run_for(setup_answer_ms * 6.0 + @ui.move_most_ms)
+  late_now.val = late
   let t0 = t.time() + between_frames_ms
   t.advance(t0 - t.time())
   open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
