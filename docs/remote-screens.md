@@ -447,7 +447,15 @@ authenticatorData, signature, userHandle?}` (base64url), and a no as `{t: "passk
 The station answers the page only the ask said last, only while the tab is still on the origin it was asked on, with a
 credential made as the browser makes one (its prototype `PublicKeyCredential`'s, `rawId`, `response`'s
 `clientDataJSON` the station's own as it was signed, `toJSON`). Making a passkey (`navigator.credentials.create`) goes
-to the browser as before. macOS signs for another site only for a browser it entitles, so a Mac's app offers none.
+to the browser as before.
+
+On macOS (14 and later) the app asks as a browser does (AuthenticationServices: `ASAuthorizationWebBrowserPublicKeyCredentialManager`,
+a platform passkey's and a security key's assertion with `ASPublicKeyCredentialClientData`), which macOS lets only an
+app entitled `com.apple.developer.web-browser.public-key-credential` do (Apple grants it on a request of the developer
+account's holder, "macOS Browsers Passkeys"): until the app's signature carries it, `passkeys` is false and nothing is
+offered. macOS writes the client data itself of the challenge and origin given, so its own comes back with the
+signature (`clientData`), and the station answers the page with it only where it says the same type, challenge and
+origin as the station's (`sameClientData`).
 
 ### Clipboard and files
 

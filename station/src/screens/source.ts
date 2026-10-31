@@ -125,9 +125,10 @@ export type LoginFill = { host: string; username?: string; password?: string };
 /// any of the device's for it); whether the person is to be verified (`required`, `preferred`, `discouraged`).
 export type PasskeyAsk = { id: string; host: string; rpId: string; clientData: string; allow: string[]; userVerification: string };
 /// What a person's app answers an ask with (base64url): the credential signed with, its authenticator data, the
-/// signature and the user handle; or `error` (the person said no, or the device has none).
+/// signature and the user handle, and the client data signed where the device made its own of the station's (macOS:
+/// the same challenge, type and origin, written its way); or `error` (the person said no, or the device has none).
 export type PasskeyAnswer =
-  | { id: string; credential: string; authenticatorData: string; signature: string; userHandle?: string }
+  | { id: string; credential: string; authenticatorData: string; signature: string; userHandle?: string; clientData?: string }
   | { id: string; error: string };
 
 export type ScreenKind = "desktop" | "browser" | "simulator";

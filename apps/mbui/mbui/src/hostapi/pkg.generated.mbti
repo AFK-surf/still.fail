@@ -664,6 +664,7 @@ pub(all) struct PasskeyDone {
   signature : String
   user_handle : String
   err : String
+  client_data : String
 } derive(Eq, Show, @debug.Debug)
 
 pub struct PasskeyRun {

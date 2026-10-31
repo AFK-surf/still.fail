@@ -2,7 +2,8 @@
 // browser seen and driven from the app asks for one, ember docs/remote-screens.md): the platform's authenticator asked
 // to sign the client data the app gives for a relying party, as a browser asks it. Windows (win_passkeys.c: its WebAuthn
 // API, which asks the person itself with Windows Hello, a phone or a security key, and the passkeys of a provider such
-// as 1Password); none elsewhere (`passkeys` is false there: macOS signs only for a browser it entitles).
+// as 1Password); macOS 14 and later in an app entitled as a browser (apple_passwords.m: AuthenticationServices, which
+// makes its own client data of the challenge and origin given); none elsewhere (`passkeys` is false there).
 
 ///|
 /// A signing under way (`passkey_get`).
@@ -12,7 +13,7 @@ pub struct PasskeyRun {
 
 ///|
 /// How a signing ended: `code` 0 signed (the credential, its authenticator data, the signature and the user handle,
-/// base64url), 1 not (the person said no, or the device has no passkey the site takes), -1 none could be asked
+/// base64url, and the client data it signed where the device made its own of the one given: macOS), 1 not (the person said no, or the device has no passkey the site takes), -1 none could be asked
 /// (`err` says why).
 pub(all) struct PasskeyDone {
   code : Int
@@ -21,6 +22,7 @@ pub(all) struct PasskeyDone {
   signature : String
   user_handle : String
   err : String
+  client_data : String
 } derive(Eq, Show, Debug)
 
 ///|
@@ -59,7 +61,7 @@ pub fn PasskeyRun::done(self : PasskeyRun) -> PasskeyDone? {
     return None
   }
   // (from the host: its code, the credential, the authenticator data, the signature, the user handle (hex), and why
-  // it failed, each ended by a unit separator)
+  // it failed, then the client data it made where it made its own, each ended by a unit separator)
   let parts = s.split("\u{1f}").map(fn(p) { p.to_owned() }).to_array()
   let part = fn(i : Int) { parts.get(i).unwrap_or("") }
   let code = @string.parse_int(part(0)[:]) catch { _ => -1 }
@@ -70,6 +72,7 @@ pub fn PasskeyRun::done(self : PasskeyRun) -> PasskeyDone? {
     signature: b64url_of_hex(part(3)),
     user_handle: b64url_of_hex(part(4)),
     err: part(5),
+    client_data: b64url_of_hex(part(6)),
   })
 }
 
