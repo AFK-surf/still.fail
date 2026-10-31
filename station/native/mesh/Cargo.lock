@@ -3233,6 +3233,7 @@ dependencies = [
  "libc",
  "miniz_oxide 0.8.9",
  "moxcms",
+ "n0-future",
  "napi",
  "napi-build",
  "napi-derive",
