@@ -697,11 +697,15 @@ export function mountDemo(element: HTMLElement, options: DemoOptions = {}): Moun
       const target = event.target;
       const app = target instanceof Element && (root.contains(target) || target.closest("[role=dialog], [role=menu], [data-radix-popper-content-wrapper]"));
       if (!app) event.stopImmediatePropagation();
+      else if (type === "keydown") { touched = true; story.stop(); }
     }, true);
   }
+  // A press may still become a page scroll. Let the app focus during it, but only count it as using the demo if it
+  // ends normally: a browser that takes the gesture for scrolling sends pointercancel instead of pointerup.
+  const pressing = new Set<number>();
   const focus = HTMLElement.prototype.focus;
   HTMLElement.prototype.focus = function (options?: FocusOptions) {
-    if (root.contains(this) && !touched) return;
+    if (root.contains(this) && !touched && pressing.size === 0) return;
     focus.call(this, { ...options, preventScroll: true });
   };
   // A link out of the demo (Slack, a web service, an app's settings) opens nothing: it too needs a real still.fail instance. Only the
@@ -720,10 +724,10 @@ export function mountDemo(element: HTMLElement, options: DemoOptions = {}): Moun
     askForReal();
     return null;
   };
-  root.addEventListener("pointerdown", () => {
-    touched = true;
-    story.stop();
-  }, true);
+  root.addEventListener("pointerdown", (event) => { pressing.add(event.pointerId); }, true);
+  window.addEventListener("pointerup", (event) => { if (pressing.delete(event.pointerId)) { touched = true; story.stop(); } }, true);
+  window.addEventListener("pointercancel", (event) => { pressing.delete(event.pointerId); }, true);
+  window.addEventListener("blur", () => pressing.clear());
 
   // Played once the demo is seen: most of it in view.
   if (start === "chat" && !at) new IntersectionObserver((entries, observer) => {

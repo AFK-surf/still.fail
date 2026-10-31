@@ -202,7 +202,11 @@ export function OneComputer(props: DemoProps) {
     // How large the window is drawn just now; whether the rows are in the air just now.
     let drawn = 1, out = false;
     const sky = air.current!;
-    const leave = () => { for (const r of rows) r.el.style.visibility = ""; sky.replaceChildren(); rows = []; out = false; };
+    // A scroll outside the scene holds its first or last frame. Do not redraw it on every scroll down the rest of the
+    // page. A resize or restyle can still change that frame, so remember its room and forget it when its rows change.
+    let last: { x: number; w: number; h: number; viewportWidth: number } | undefined;
+    let appSize: { w: number; h: number; viewportWidth: number } | undefined;
+    const leave = () => { for (const r of rows) r.el.style.visibility = ""; sky.replaceChildren(); rows = []; out = false; last = undefined; };
     // In the air, or home: a row is drawn in one of the two, never both.
     const fly = (on: boolean) => {
       if (on === out) return;
@@ -242,13 +246,18 @@ export function OneComputer(props: DemoProps) {
       if (el.offsetParent === null) return;
       const size = { w: space.clientWidth, h: space.clientHeight };
       const w = windowAt(size, narrow);
-      Object.assign(outer.style, { left: `${w.x}px`, top: `${w.y}px`, width: `${w.w}px`, height: `${w.h}px` });
 
       // Where the scene is: from its first step to its last, moving all the while it is scrolled (only a little at
       // its start and end holds still), so that nothing stands still under a moving finger.
       const steps = narrow ? [0, 1] : [0, 1, 2];
       const span = el.offsetHeight - innerHeight;
       const x = clamp((clamp(-el.getBoundingClientRect().top / Math.max(1, span)) - 0.06) / 0.88) * (steps.length - 1);
+      if (last && last.x === x && last.w === size.w && last.h === size.h && last.viewportWidth === innerWidth && rows[0]?.el.isConnected) return;
+      // The phone's app is laid out at PHONE.w × PHONE.h: a height change only scales it. The laptop's app can change
+      // size, and a viewport-width change can also change its CSS. Recopy the rows only when those can change.
+      if (appSize && (appSize.w !== w.w || appSize.h !== w.h || appSize.viewportWidth !== innerWidth)) leave();
+      appSize = { w: w.w, h: w.h, viewportWidth: innerWidth };
+      Object.assign(outer.style, { left: `${w.x}px`, top: `${w.y}px`, width: `${w.w}px`, height: `${w.h}px` });
       const i = Math.min(Math.floor(x), steps.length - 2);
       const t = clamp(x - i);
       // 0 → 1: the device comes up from below, its screen's list with its rows' places empty (rise), and they fly into
@@ -273,7 +282,9 @@ export function OneComputer(props: DemoProps) {
       const home = landing === 1;
       if (outer.inert === home) {
         outer.inert = !home;
-        if (!home) { demo.current?.reopen(); leave(); }
+        // Reopening only replaces the app if it was used. Keep the already copied rows otherwise; if it was used,
+        // reopen replaces the old rows and `gone` reads the new ones below.
+        if (!home) demo.current?.reopen();
       }
       const gone = rows.length > 0 && !rows[0]!.el.isConnected;
       if ((rows.length === 0 || gone) && !read()) {
@@ -324,13 +335,14 @@ export function OneComputer(props: DemoProps) {
       }
       // All of it placed: seen from now on (site.css.ts).
       if (space.dataset.drawn === undefined) space.dataset.drawn = "";
+      last = { x, w: size.w, h: size.h, viewportWidth: innerWidth };
     };
     const ask = () => { if (!asked) asked = requestAnimationFrame(draw); };
-    const resized = () => { leave(); ask(); };
+    const resized = () => ask();
     // The rows drawn again in the air when the app is drawn otherwise: in the other theme (once it has taken it), or in
     // its own type once that has come (read before, a row keeps the widths the stand-in type gave its parts, and its
     // words are cut short in them).
-    const restyled = () => requestAnimationFrame(() => requestAnimationFrame(resized));
+    const restyled = () => requestAnimationFrame(() => requestAnimationFrame(() => { leave(); ask(); }));
     const themes = new MutationObserver(restyled), dark = matchMedia("(prefers-color-scheme: dark)");
     themes.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     dark.addEventListener("change", restyled);
