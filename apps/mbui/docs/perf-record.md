@@ -55,7 +55,7 @@ per 5 s tick of its ways.
 | `link wait: <station> Ns (backoff \| answered \| brief streams \| tried seldom: LONG_MISSES \| tried seldom: the cloud says offline) misses=N why=…` | station/link.ts | how long until the next try, and why that long |
 | `link woke: <station> by its time \| a wake (UI back, network, retry) \| the cloud or its pings (back) after Ns` | station/link.ts | what ended the wait |
 | `cloud socket: <account> open after Nms [(after a failed open: stations not reached tried now)] \| open failed after Nms: … \| ended after Ns: silent\|dropped` | sync/cloud.ts | still.fail cloud's events socket; the first open after a failed one wakes every station not reached (`networkBack`) |
-| `net: path satisfied\|unsatisfied\|satisfiable ifaces=pdp_ip0/cell,en0/wifi,… expensive= constrained= ipv4= ipv6= -> said: the network changed \| not said (the first interface the same) \| the first seen` | ios_app.m | every update of the system's network path as it comes, whether the app took it for a change (only the first interface is compared: a handover on the same interface says nothing to the core) |
+| `net: path satisfied\|unsatisfied\|satisfiable ifaces=pdp_ip0/cell,en0/wifi,… expensive= constrained= ipv4= ipv6= -> said: the network changed \| not said (the same interfaces) \| the first seen` | ios_app.m | every update of the system's network path as it comes, whether the app took it for a change (the interfaces compared whole: under a VPN the first is always its tunnel) |
 
 Reading a stuck reconnect: find the station's `link miss` lines; each is followed by `link wait` (how long and why)
 and later `link woke` (by what). A wait of 600s (`tried seldom`) with no `link woke` before it ends means nothing woke
