@@ -609,6 +609,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          build=$(git rev-list --count HEAD)
+          cache=${MBUI_MAC_CACHE:-"$HOME/stillfail-ci/mbui-mac-beta"}
+          work=${WORK:-"$cache/work"}
+          if [ "${MBUI_FRESH:-}" = 1 ]; then work="$GITHUB_WORKSPACE/apps/mbui"; fi
+          export STILLFAIL_RELEASE_CACHE_KEY="desktop/stillfail-beta-0.1.$build-arm64-mac.zip"
+          export STILLFAIL_RELEASE_CACHE_SOURCE="$work/out/mac/stillfail-beta-$build-arm64-mac.zip"
           sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
       # (handed to put through the bucket, not a run artifact: scripts/release-put.sh --hand)
       - id: hand

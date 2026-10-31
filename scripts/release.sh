@@ -144,6 +144,11 @@ for platform in $platforms; do
       echo "$app: $have_id $have_build, signed by team $have_team"
       zip="stillfail${beta:+-beta}-0.1.$build-arm64-mac.zip"
       put "$app_zip" "desktop/$zip" application/zip
+      if [ -z "${RELEASE_DIR:-}" ]; then
+        work=${WORK:-"$mbui_cache/work"}
+        if [ "${MBUI_FRESH:-}" = 1 ]; then work="$root/apps/mbui"; fi
+        sh "$root/scripts/release-put.sh" --clean-uploaded "desktop/$zip" "$work/out/mac/stillfail${beta:+-beta}-$build-arm64-mac.zip"
+      fi
       sh "$root/scripts/mac-feeds.sh" "$app_zip" "$zip" "$build" "$out/mac-latest.json" "$out/mac.yml"
       put "$out/mac-latest.json" "mac/${beta:+beta/}latest.json" application/json
       put "$out/mac.yml" "desktop/stillfail${beta:+-beta}-mac.yml" "text/yaml; charset=utf-8"
