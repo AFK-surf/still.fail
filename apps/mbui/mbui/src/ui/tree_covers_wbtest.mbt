@@ -201,3 +201,45 @@ test "a button of the tree's own over a native view, where it takes a finger sai
   assert_eq(covers_of(k.page), [40.0, 0.0, 80.0, 40.0], msg="the new told")
   assert_true(next.watched(), msg="the new followed")
 }
+
+///|
+/// The tree's node the pointer is over now (Tree::pointed_now).
+fn pointed_now() -> @view.NodeId? {
+  view_app.val.unwrap().pointed_now()
+}
+
+///|
+test "a button of the tree's own over a native view, pointed at, where it takes a finger read of its own: let go, at once followed no more; changed after, nothing woken" {
+  let src = @signals.signal(true, same=fn(a, b) { a == b })
+  let k = tree_cover(over=true, areas=Some(fn(w, h, _) { if src.get() { [(0.0, 0.0, w, h)] } else { [] } }))
+  k.t.move(60.0, 20.0)
+  assert_eq(pointed_now(), Some(k.button.val.unwrap().id()), msg="pointed at")
+  assert_true(src.watched(), msg="followed")
+  k.shown.set(false)
+  assert_false(src.watched(), msg="let go")
+  k.t.frames_owed()
+  src.set(false)
+  assert_eq(k.t.wanted_after(), @double.infinity, msg="nothing woken")
+}
+
+///|
+test "a button of the tree's own over a native view, pointed at, where it takes a finger said anew: the first followed no more at once, changed after nothing woken; the new followed, what is pointed at and the host's covers as it says" {
+  let first = @signals.signal(true, same=fn(a, b) { a == b })
+  let next = @signals.signal(true, same=fn(a, b) { a == b })
+  let k = tree_cover(over=true, areas=Some(fn(w, h, _) { if first.get() { [(0.0, 0.0, w, h)] } else { [] } }))
+  k.t.move(60.0, 20.0)
+  let id = k.button.val.unwrap().id()
+  assert_eq(pointed_now(), Some(id), msg="pointed at")
+  k.button.val.unwrap().takes(fn(w, h, _) { if next.get() { [(w / 2.0, 0.0, w, h)] } else { [] } }) |> ignore
+  assert_false(first.watched(), msg="the first no more followed")
+  k.t.frames_owed()
+  assert_eq(pointed_now(), Some(id), msg="its right half pointed at still")
+  assert_eq(covers_of(k.page), [40.0, 0.0, 80.0, 40.0], msg="the new told")
+  first.set(false)
+  assert_eq(k.t.wanted_after(), @double.infinity, msg="the first changed: nothing woken")
+  next.set(false)
+  assert_eq(k.t.wanted_after(), 0.0, msg="the new changed: a frame asked for")
+  k.t.frames_owed()
+  assert_eq(pointed_now(), None, msg="taking none: pointed at no more")
+  assert_eq(covers_of(k.page), [], msg="none told")
+}

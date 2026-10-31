@@ -775,6 +775,13 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
   }
   took_input("pointer", h_event_time(), args)
   view_pointed()
+  old_pointer_now(kind, x, y, button, mods, h_event_time())
+}
+
+///|
+/// A pointer's event the old frame takes (pointer_in_now's, or a hold the window's tree handed it: view_through_old),
+/// at `t` (the host's event's moment; a hold handed on, when the finger went down).
+fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, t : Double) -> Unit {
   // (a press down, up or called off, a second finger, the pointer gone: what reads what came is built again; a pointer
   // moved is the hand's place, read by what reads it: hand.mbt)
   if kind != 1 {
@@ -809,8 +816,7 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
   }
   c.px = x
   c.py = y
-  // the event's own time: events handled together happened apart
-  let t = h_event_time()
+  // the event's own time (`t`): events handled together happened apart
   c.pointer_t = t
   if scroll_logging() {
     h_log("TOUCH \{kind} \{t} \{x} \{y} \{h_now()}")

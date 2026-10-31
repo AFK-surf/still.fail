@@ -286,6 +286,7 @@ fn targets_forget() -> Unit {
   targets_kept.watch = None
   targets_kept.found = false
   targets_kept.stale = true
+  targets_island.val = None
 }
 
 ///|

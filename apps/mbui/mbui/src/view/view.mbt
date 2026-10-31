@@ -179,9 +179,6 @@ struct Node {
   mut drag_said : Int
   /// where in it a finger is taken at a moment (View::takes, View::hosted_takes; none: all of it)
   mut takes : Takes?
-  /// what reads where it takes a finger as a host is told it (Tree::finger_areas): owned by its scope, let go with it
-  /// or as it is said anew, telling the tree as what it read changes (Tree::on_takes)
-  mut takes_watch : @signals.Watch?
   /// what ends what its on_drag set going (a gesture's: its hold's moment, its dispatch), as it is said anew or let go
   mut drag_end : (() -> Unit)?
   /// a slot (show, pick, each): no box of its own, what it holds laid out as its holder's own
@@ -276,12 +273,22 @@ pub struct Tree {
   mut modals_due : Bool
   /// the node a finger is held on (View::on_drag), from its down till it is let go, called off or the node goes
   mut held : NodeId?
+  /// a finger held on a node a still hold of which is what lies under it's (View::holds_through): what lies there, as it
+  /// was found as the finger went down, its hold's moment set going
+  mut through : Through?
+  /// what hosts the tree told of a hold handed to what it hosts (Tree::on_through), and asked whether what it hosts
+  /// takes a press at a point (Tree::hosts_at)
+  mut on_through : (Target, Double, Double, Double) -> Unit
+  mut hosts_at : (NodeId, Double, Double) -> Int?
   /// the node a finger or the pointer is held on, and the one the pointer is over (of those that take a press): each
   /// node's own cell told as it comes or goes (View::pressed, View::pointed)
   mut pressing : NodeId?
   mut pointed : NodeId?
   /// what follows what is under the pointer, while it is over the window (Tree::point_at)
   mut point_stop : (() -> Unit)?
+  /// where the point followed is and what is told of it (Tree::follow_point): followed again as where a node takes a
+  /// finger is said anew (Tree::takes_told)
+  mut point_last : (Double, Double, (Target) -> Unit)?
   /// let go (Tree::dispose): what is made for it after stops at once
   mut gone : Bool
   /// which following of the point is the one now (Tree::follow_point): each said, and each let go, another
@@ -371,9 +378,13 @@ pub fn Tree::new(
     committing: 0,
     modals_due: false,
     held: None,
+    through: None,
+    on_through: fn(_, _, _, _) {  },
+    hosts_at: fn(_, _, _) { None },
     pressing: None,
     pointed: None,
     point_stop: None,
+    point_last: None,
     gone: false,
     point_said: 0,
     hits: 0,
@@ -458,7 +469,6 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.key_said = 0
       n.on_drag = None
       n.takes = None
-      n.takes_watch = None
       n.drag_end = None
       n.look_due = false
       n.place_due = false
@@ -498,7 +508,6 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         fingers: 1,
         drag_said: 0,
         takes: None,
-        takes_watch: None,
         drag_end: None,
         slot: false,
         hosted: false,
@@ -1661,10 +1670,7 @@ fn Tree::asked_at(
     self.each_drawn(fn(c, cx, cy, _) {
       if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.pressless_at(c.id.at) {
         let n = self.nodes[c.id.at]
-        let here = match n.takes {
-          Some(f) => @signals.untracked(fn() { f.here(x - cx, y - cy, c.w, c.h, now) })
-          None => true
-        }
+        let here = @signals.untracked(fn() { self.takes_here(n, x - cx, y - cy, c.w, c.h, now) })
         if here && (takes(n) || n.on_drag is Some(_) || n.on_press is Some(_) || n.hosted) {
           found.val = Some(c.id)
         }
@@ -1722,6 +1728,9 @@ pub(all) struct Drag {
   /// which finger: the same one from its down to its end, whichever others went down or were let go meanwhile (the
   /// first of a hold 0, the next 1 and on)
   finger : Int
+  /// when the finger went down: a hold another node held first and handed it (Tree::hand_through) keeps the moment it
+  /// began, what it counts how long it is held from
+  since : Double
 } derive(Eq, Show, Debug)
 
 ///|
@@ -1756,12 +1765,30 @@ pub(all) enum Takes {
 }
 
 ///|
-/// Whether a finger at (x, y) in a node `w` by `h` (in its own terms) is taken at `at`.
-fn Takes::here(self : Takes, x : Double, y : Double, w : Double, h : Double, at : Double) -> Bool {
-  match self {
-    Areas(f) => f(w, h, at).iter().any(fn(r) { x >= r.0 && y >= r.1 && x < r.2 && y < r.3 })
-    AsHosted(f) => f(x, y, at)
+/// Whether a finger at (x, y) in node `n`, `w` by `h` (in its own terms), is taken at `at` (View::takes; all of it where
+/// it says nothing).
+fn Tree::takes_here(self : Tree, n : Node, x : Double, y : Double, w : Double, h : Double, at : Double) -> Bool {
+  match n.takes {
+    Some(Areas(_)) => self.takes_rects(n, w, h, at).iter().any(fn(r) { x >= r.0 && y >= r.1 && x < r.2 && y < r.3 })
+    Some(AsHosted(f)) => f(x, y, at)
+    None => true
   }
+}
+
+///|
+/// Where node `n`, `w` by `h`, takes a finger at `at` as it says (View::takes): rects of it in its own terms, read as
+/// whatever asks reads (followed by it where it follows what it reads: a point followed, a frame painted). Said anew or
+/// let go, what read it is told at once (Tree::takes_told): none follows what the one before read from then.
+fn Tree::takes_rects(
+  self : Tree,
+  n : Node,
+  w : Double,
+  h : Double,
+  at : Double,
+) -> Array[(Double, Double, Double, Double)] {
+  ignore(self)
+  guard n.takes is Some(Areas(f)) else { return [] }
+  f(w, h, at)
 }
 
 ///|
@@ -1791,33 +1818,28 @@ pub fn View::hosted_takes(self : View, f : (Double, Double, Double) -> Bool) -> 
 ///|
 fn View::takes_so(self : View, t : Takes) -> View {
   guard self.live() is Some(n) else { return self }
-  // (what read the one said before let go of what it read, at once)
-  match n.takes_watch {
-    Some(w) => w.stop()
-    None => ()
-  }
-  n.takes_watch = None
   n.takes = Some(t)
-  if t is Areas(_) {
-    // (owned by its scope: let go with it, what it read no more followed)
-    let tree = self.tree
-    self.owning(fn() { n.takes_watch = Some(@signals.watch(fn() { tree.takes_told() })) })
-  }
+  // (what read the one said before told at once: it follows that one no more)
   self.tree.takes_told()
   self
 }
 
 ///|
-/// Where a node takes a finger may be other than a host was told: what is pointed at worked out again, the hosts told.
+/// Where a node takes a finger is said anew, or it is let go: what read the one before follows it no more, at once (the
+/// point followed, followed again from now: Tree::follow_point; the hosts told, Tree::on_takes, theirs to read anew).
 fn Tree::takes_told(self : Tree) -> Unit {
   self.hits = self.hits + 1
+  match (self.point_stop, self.point_last) {
+    (Some(_), Some((x, y, then))) => self.follow_point(x, y, then)
+    _ => ()
+  }
   (self.on_takes)()
 }
 
 ///|
-/// What hosts the tree tells as where a node takes a finger may have changed (said anew, or what it read to say it
-/// changed: Tree::finger_areas, Tree::taken_over): `f`, at once, as it is told; nothing read or set there but to see
-/// to it that the host is told anew (a frame asked for).
+/// What hosts the tree tells as where a node takes a finger is said anew, or a node saying it let go: `f`, at once; what
+/// they read of it (Tree::finger_areas, Tree::taken_over) to follow it no more, read anew (a frame asked for), nothing
+/// read or set there.
 pub fn Tree::on_takes(self : Tree, f : () -> Unit) -> Unit {
   self.on_takes = f
 }
@@ -1887,7 +1909,7 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
         for g in fingers {
           // (each told only while the node and this on_drag are still its: what one told let go of hears no more)
           guard bound_still(n, h, said) else { break }
-          f({ kind: Off, x: 0.0, y: 0.0, at: t, wx: 0.0, wy: 0.0, ox: 0.0, oy: 0.0, finger: g })
+          f({ kind: Off, x: 0.0, y: 0.0, at: t, wx: 0.0, wy: 0.0, ox: 0.0, oy: 0.0, finger: g, since: t })
         }
       })
     }
@@ -1965,7 +1987,7 @@ pub fn Tree::drag_at(
       Some(f) => {
         let (nx, ny, _) = self.placed(id.at)
         let told = fn(kind : DragIs, finger : Int) {
-          f({ kind, x: x - nx, y: y - ny, at: t, wx: x, wy: y, ox: x - nx, oy: y - ny, finger })
+          f({ kind, x: x - nx, y: y - ny, at: t, wx: x, wy: y, ox: x - nx, oy: y - ny, finger, since: t })
         }
         // (called off, all of it: the hold and the fingers let go of first, then each finger down told so while the node
         // and this on_drag are still its: what one told let go of hears no more)
@@ -2047,7 +2069,8 @@ fn Tree::fingers_off(self : Tree) -> Array[Int] {
 /// called off, Off). Called off before it was a drag, or let go after a hold, `drag` is told so too; let go past the
 /// slop with no move told before, `drag` is told its end alone (Up). One word an event, each with where the finger went
 /// down (`ox`, `oy`): what a word does (letting the node go, saying another on_drag) is done before the next event is
-/// told, never in the middle of one.
+/// told, never in the middle of one. `through`: a hold of that long is no hold of its own but what lies under it's, as
+/// found as the finger went down (through.mbt): its own told Off then, the finger that one's.
 pub fn View::gesture(
   self : View,
   slop : Double,
@@ -2055,7 +2078,16 @@ pub fn View::gesture(
   tap? : (Drag) -> Unit,
   hold? : (Double, (Drag) -> Unit),
   drag? : (Drag) -> Unit,
+  through? : Double,
 ) -> View {
+  // (a hold told, or handed through: one way of a hold, its moment the one recognizer's)
+  let hold_ms = match (hold, through) {
+    (Some((ms, _)), None) | (None, Some(ms)) => Some(ms)
+    (None, None) => None
+    _ => abort("a gesture's hold told or handed through, not both")
+  }
+  // (where the finger is, within the slop: where a hold handed through is handed)
+  let last = Ref((0.0, 0.0))
   // (what this finger has come to so far: where it went down, whether it moved past the slop, whether held; whether
   // this gesture is over for good (its node's on_drag said anew, the node let go): nothing more told from it)
   let down : Ref[Drag?] = Ref(None)
@@ -2080,6 +2112,7 @@ pub fn View::gesture(
       Down => {
         over()
         down.val = Some(d)
+        last.val = (d.wx, d.wy)
         moved.val = false
         held.val = false
         match press {
@@ -2095,18 +2128,33 @@ pub fn View::gesture(
         if !still {
           return
         }
-        match hold {
-          Some((ms, f)) =>
-            cancel_hold.val = self.at_moment(d.at + ms, fn() {
+        // (going through: what lies under it found now, kept by who it is)
+        if through is Some(_) {
+          self.tree.through_found(id, d.wx, d.wy, d.since, d.finger)
+        }
+        match hold_ms {
+          Some(ms) => {
+            // (as long since the finger went down (a hold handed on from what held it first counts from then), never
+            // before this down: one handed on later than that is held now, at the moment it was handed)
+            let due = if d.since + ms > d.at { d.since + ms } else { d.at }
+            cancel_hold.val = self.at_moment(due, fn() {
               let holding = match self.tree.held {
                 Some(h) => h == id
                 None => false
               }
               if !dead.val && holding && down.val is Some(o) && !moved.val {
-                held.val = true
-                word(f, { ..o, at: d.at + ms }, o)
+                match hold {
+                  Some((_, f)) => {
+                    held.val = true
+                    word(f, { ..o, at: due }, o)
+                  }
+                  // (handed through: its own hold ended by it, Off, the finger what lies under it's; nothing there to take
+                  // it then, a hold still, no tap)
+                  None => if !self.tree.hand_through(id, last.val.0, last.val.1) { held.val = true }
+                }
               }
             })
+          }
           None => ()
         }
       }
@@ -2127,6 +2175,8 @@ pub fn View::gesture(
                 Some(f) => word(f, d, o)
                 None => ()
               }
+            } else {
+              last.val = (d.wx, d.wy)
             }
           }
           None => ()
@@ -2227,6 +2277,12 @@ fn View::let_go(self : View) -> Unit {
   }
   n.stop = None
   n.owner = None
+  // (where it takes a finger let go of with it: what read it told at once, following what it read no more)
+  if n.takes is Some(Areas(_)) {
+    n.takes = None
+    self.tree.takes_told()
+  }
+  n.takes = None
   let props = n.props.values().collect()
   n.props.clear()
   for stop in props {
@@ -3426,13 +3482,9 @@ pub fn Tree::finger_areas(self : Tree, id : NodeId) -> FingerAreas {
 ///|
 fn Tree::areas_of(self : Tree, n : Node, x : Double, y : Double, w : Double, h : Double) -> FingerAreas {
   match n.takes {
-    Some(Areas(f)) => {
+    Some(Areas(_)) => {
       // (read by what the node owns for it: as it changes the hosts told, Tree::on_takes; let go with the node)
-      let at = self.logic_at()
-      let rs = match n.takes_watch {
-        Some(t) => t.read(fn() { f(w, h, at) })
-        None => @signals.untracked(fn() { f(w, h, at) })
-      }
+      let rs = self.takes_rects(n, w, h, self.logic_at())
       InWindow(
         rs
         .iter()
@@ -3502,14 +3554,10 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
     // (what is leaving or said to take no press, or held by what is, pressed no more)
     if x >= cx && y >= cy && x < cx + c.w && y < cy + c.h && !self.pressless_at(c.id.at) {
       let n = self.nodes[c.id.at]
-      let here = match n.takes {
-        Some(f) =>
-          if tracked {
-            f.here(x - cx, y - cy, c.w, c.h, at)
-          } else {
-            @signals.untracked(fn() { f.here(x - cx, y - cy, c.w, c.h, at) })
-          }
-        None => true
+      let here = if tracked {
+        self.takes_here(n, x - cx, y - cy, c.w, c.h, at)
+      } else {
+        @signals.untracked(fn() { self.takes_here(n, x - cx, y - cy, c.w, c.h, at) })
       }
       if !here {
         ()
@@ -3685,6 +3733,11 @@ pub fn View::at_moment(self : View, when : Double, f : () -> Unit) -> () -> Unit
 fn Tree::held_to(self : Tree, h : NodeId?) -> Unit {
   let was = self.held
   self.held = h
+  // (held by another, or by none: what a still hold of the one before was to hand on, no more)
+  match self.through {
+    Some(th) if h != Some(th.cover) => self.through = None
+    _ => ()
+  }
   if was != h {
     self.pressing = h
     self.hand_told(was, fn(n) { n.pressed_cell }, false)
@@ -3767,6 +3820,7 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
   }
   // (this one the one followed from now: what it is first told may let it go (another point, none, the tree let go),
   // which this one's number then no longer is)
+  self.point_last = Some((x, y, then))
   let mine = self.point_said
   let stop = self.queued(fn() { self.target_in(x, y, tracked=true) }, then)
   if self.gone || self.point_said != mine {
@@ -3779,6 +3833,7 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
 ///|
 /// What follows the point let go (Tree::follow_point): told nothing more.
 fn Tree::point_stopped(self : Tree) -> Unit {
+  self.point_last = None
   // (what is being made to follow one no longer the one: Tree::follow_point)
   self.point_said = self.point_said + 1
   match self.point_stop {
