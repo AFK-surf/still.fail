@@ -31,6 +31,40 @@ test("each model is keyed without its maker, with its maker's own prices and eff
   assert.deepEqual(catalog(null, null), {});
 });
 
+test("a model its maker sells under another name, or by its dated version, has that entry's prices", () => {
+  const canonical = {
+    "deepseek/deepseek-v4.1-flash-1017": { name: "DeepSeek V4.1 Flash 1017" },
+    "deepseek/deepseek-v4.1-flash": { name: "DeepSeek V4.1 Flash" },
+    "deepseek/deepseek-v4.1-flash-0910": { name: "DeepSeek V4.1 Flash 0910" },
+    "cohere/command-a": { name: "Command A" },
+    "meta/llama-5": { name: "Llama 5" },
+  };
+  const flash = { input: 0.15, output: 0.6, cache_read: 0.003 };
+  const providers = {
+    deepseek: { models: {
+      "deepseek-flash": { canonical_model_id: "deepseek/deepseek-v4.1-flash-1017", cost: flash },
+      "deepseek-v4-flash": { canonical_model_id: "deepseek/deepseek-v4.1-flash-1017", cost: flash },
+    } },
+    // Versions not dated, of other prices: not this model's.
+    cohere: { models: { "command-a-plus-05-2026": { canonical_model_id: "cohere/command-a-plus-05-2026", cost: { input: 9, output: 9 } } } },
+    openrouter: { models: { "meta/llama-5": { canonical_model_id: "meta/llama-5", cost: { input: 1, output: 1 } } } },
+  };
+  const priced = Object.fromEntries(Object.entries(catalog(canonical, providers)).map(([k, f]) => [k, f.cost ?? null]));
+  const cost = { input: 0.15, output: 0.6, cacheRead: 0.003 };
+  assert.deepEqual(priced, {
+    "deepseek-v4.1-flash-1017": cost,
+    "deepseek-v4.1-flash": cost,
+    // Its maker sells it no longer.
+    "deepseek-v4.1-flash-0910": null,
+    "command-a": null,
+    // Only resold: no list price of its maker's.
+    "llama-5": null,
+  });
+  // Dated versions of different prices: none of them.
+  const two = { deepseek: { models: { a: { canonical_model_id: "deepseek/deepseek-v4.1-flash-1017", cost: flash }, b: { canonical_model_id: "deepseek/deepseek-v4.1-flash-1120", cost: { input: 1, output: 1 } } } } };
+  assert.equal(catalog({ "deepseek/deepseek-v4.1-flash": {} }, two)["deepseek-v4.1-flash"]!.cost, undefined);
+});
+
 test("the catalog is made once, and a station that has it is told so", async () => {
   const asked: string[] = [];
   const h = await harness({
