@@ -52,3 +52,28 @@ test "hand: a node's cells of whether it is held or pointed at made as read, let
   assert_eq(cells(), at_first)
   assert_true(at_first > 0)
 }
+
+///|
+test "what a node said it is: let go with it; its index made another's that says nothing, nothing said of it" {
+  let a_on = @signals.signal(true, same=fn(a, b) { a == b })
+  let b_on = @signals.signal(false, same=fn(a, b) { a == b })
+  let at = Ref(-1)
+  let t = Tree::new(
+    fn(root) {
+      root.show(fn() { a_on.get() }, fn(v) {
+        at.val = v.at
+        v.says(Is(Some(said(Button, label="甲")))) |> ignore
+      })
+      root.show(fn() { b_on.get() }, fn(v) { at.val = v.at })
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let a_at = at.val
+  a_on.set(false)
+  assert_true(t.nodes[a_at].said is None)
+  b_on.set(true)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(at.val, a_at)
+  assert_true(t.nodes[at.val].said is None && t.said_order().iter().all(fn(s) { s.said is None }))
+}

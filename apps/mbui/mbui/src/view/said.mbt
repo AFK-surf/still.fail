@@ -106,6 +106,8 @@ pub(all) struct SaidNode {
   said : Said?
   hosted : Bool
   allowed : Bool
+  /// kept from what is read out (View::hides, its own or what holds it's)
+  hidden : Bool
   disabled : Bool
   rect : (Double, Double, Double, Double)
   parent : Int
@@ -125,11 +127,12 @@ pub fn View::says(self : View, said : Live[Said?]) -> View {
 /// view's in at its node).
 pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
   let out : Array[SaidNode] = []
-  fn walk(at : Int, parent : Int, depth : Int) -> Unit {
+  fn walk(at : Int, parent : Int, depth : Int, hid : Bool) -> Unit {
     let n = self.nodes[at]
     if !n.live {
       return
     }
+    let hid = hid || n.said_hidden
     let id = { at, gen: n.gen }
     let mut up = parent
     let mut d = depth
@@ -143,6 +146,7 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
         said: n.said,
         hosted: n.hosted,
         allowed: self.allows(id),
+        hidden: hid,
         disabled: self.pressless_at(at),
         rect,
         parent,
@@ -152,12 +156,20 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
       d = depth + 1
     }
     for k in n.kids {
-      walk(k, up, d)
+      walk(k, up, d, hid)
     }
   }
 
   if self.nodes.length() > 0 {
-    walk(0, -1, 0)
+    walk(0, -1, 0, false)
   }
   out
+}
+
+///|
+/// It and all it holds kept from what is read out while `hidden` holds (ARIA's aria-hidden: what only decorates, what is
+/// shown and not there to be used), whatever it says; drawn and pressed as ever.
+pub fn View::hides(self : View, hidden : Live[Bool]) -> View {
+  self.bind(18, hidden, Said, fn(h) { self.tree.nodes[self.at].said_hidden = h })
+  self
 }

@@ -187,6 +187,8 @@ struct Node {
   mut hosted : Bool
   /// what it says it is, read out (View::says); None nothing
   mut said : Said?
+  /// what it and all it holds are kept from what is read out (View::hides)
+  mut said_hidden : Bool
   /// its instance to be made again (its look changed); its place (and what it holds) to be worked out again
   mut look_due : Bool
   mut place_due : Bool
@@ -431,6 +433,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.radius = 0.0
       n.look.glass = None
       n.said = None
+      n.said_hidden = false
       n.look.alpha = 1.0
       n.look.dx = 0.0
       n.look.dy = 0.0
@@ -492,6 +495,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         slot: false,
         hosted: false,
         said: None,
+        said_hidden: false,
         look_due: false,
         place_due: false,
         placed: false,
@@ -2163,6 +2167,8 @@ fn View::let_go(self : View) -> Unit {
   n.on_wheel = None
   n.on_key = None
   n.on_back = None
+  n.said = None
+  n.said_hidden = false
   n.pressed_cell = None
   n.pointed_cell = None
   self.drag_ended()
@@ -3364,6 +3370,78 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
 /// Node `id` pressed (Tree::target_at's): its callback run outside any tracking, as one change, if it lives.
 pub fn Tree::run_press(self : Tree, id : NodeId) -> Bool {
   self.run_press_at(id, self.time_now())
+}
+
+///|
+/// Node `id` pressed as a screen reader asks it, at `at`: as one event of that moment, what had ended by then settled
+/// first, what it says worked out as of then, then asked whether it is read out so (it says what it is, nothing over it
+/// hides it: Tree::said_now), whether it takes a press now as a finger's would be taken (it lives, takes presses, is
+/// held by no modal layer it is not in) and has something done by one; only then its press. Whether it was.
+pub fn Tree::activate_at(self : Tree, id : NodeId, at : Double) -> Bool {
+  let pressed = Ref(false)
+  self.event(at, fn() {
+    // (what it says as of then: its bindings marked worked out first, Tree::pull)
+    self.pull()
+    if !self.takes_presses(id) || !self.allows(id) || self.leaving_at(id.at) || !self.said_now(id.at) {
+      return
+    }
+    match self.nodes[id.at].on_press {
+      Some(f) => {
+        pressed.val = true
+        f()
+      }
+      None => ()
+    }
+  })
+  pressed.val
+}
+
+///|
+/// Whether node `id` lives (this making of its index).
+pub fn Tree::lives(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id)
+}
+
+///|
+/// Whether what node `id` holds may be read out and acted on as a screen reader asks, as the tree is now (its bindings
+/// marked worked out first): it lives, no modal layer it is not in is over it, neither it nor what holds it is kept
+/// from what is read out (View::hides). What an old view hosted in it says, read so.
+pub fn Tree::reads_out(self : Tree, id : NodeId) -> Bool {
+  self.pull()
+  if !self.alive_id(id) || !self.allows(id) {
+    return false
+  }
+  let mut i = id.at
+  while i >= 0 {
+    if self.nodes[i].said_hidden {
+      return false
+    }
+    i = self.nodes[i].parent
+  }
+  true
+}
+
+///|
+/// Whether node `at` is read out as it is now: it says what it is, and neither it nor what holds it is kept from what is
+/// read out (View::hides).
+fn Tree::said_now(self : Tree, at : Int) -> Bool {
+  if self.nodes[at].said is None {
+    return false
+  }
+  let mut i = at
+  while i >= 0 {
+    if self.nodes[i].said_hidden {
+      return false
+    }
+    i = self.nodes[i].parent
+  }
+  true
+}
+
+///|
+/// Whether node `id` has something done by a press (View::on_press), whatever it takes now.
+pub fn Tree::presses_do(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes[id.at].on_press is Some(_)
 }
 
 ///|

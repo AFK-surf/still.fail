@@ -227,6 +227,7 @@ fn view_forget() -> Unit {
   old_hits.clear()
   next_old_hits.clear()
   tree_said_ids.clear()
+  tree_said_of.clear()
   old_hits_rects.clear()
   old_hits_clips.clear()
   nav_views.clear()
@@ -1771,17 +1772,34 @@ fn old_layer_over(x : Double, y : Double) -> Bool {
 }
 
 ///|
-/// The ids the window's tree's nodes are read out by (Ctx::semantics_spliced), each the node it is: below every id an
-/// old view's widget has (theirs are its key's, Ctx::id: never so), by the node's index.
+/// The ids the window's tree's nodes are read out by (Ctx::semantics_spliced), each the node it is, and the other way:
+/// each node its own from the first time it is read out to its letting go, never another's, none given again (another
+/// tree, another run: none of these); below every id an old view's widget has (theirs are its key's, Ctx::id).
 // kept across runs: written as the tree is read out, put back as a run begins (view_forget)
 let tree_said_ids : Map[Int, @view.NodeId] = Map([])
 
 ///|
+// kept across runs: written as the tree is read out, put back as a run begins (view_forget)
+let tree_said_of : Map[@view.NodeId, Int] = Map([])
+
+///|
+/// The next id given (tree_said_ids).
+// kept across runs: only ever counted on, never given twice
+let tree_said_next : Ref[Int] = Ref(-2_000_000_000)
+
+///|
 /// The id node `id` of the window's tree is read out by.
 fn tree_said_id(id : @view.NodeId) -> Int {
-  let k = -2_000_000_000 + id.at
-  tree_said_ids[k] = id
-  k
+  match tree_said_of.get(id) {
+    Some(k) => k
+    None => {
+      let k = tree_said_next.val
+      tree_said_next.val = k + 1
+      tree_said_of[id] = k
+      tree_said_ids[k] = id
+      k
+    }
+  }
 }
 
 ///|
@@ -1791,17 +1809,20 @@ fn tree_said_id(id : @view.NodeId) -> Int {
 fn tree_said_action(id : Int, action : Action) -> Bool {
   match (tree_said_ids.get(id), view_app.val) {
     (Some(nid), Some(tree)) => {
+      // (what the old frame put over all of it, modal, keeps it from input as from being read out)
       match action {
-        Activate =>
-          if tree.takes_presses(nid) {
-            tree.run_press_at(nid, view_moment()) |> ignore
+        Activate if g().modal_node() < 0 => {
+          // (taken, its press found and done as one event of this moment: Tree::activate_at)
+          if tree.activate_at(nid, view_moment()) {
             h_frame_owed()
           }
+        }
         _ => ()
       }
       true
     }
-    _ => false
+    // (an id the tree once read out, its node let go or another tree's: nothing; never an old view's)
+    _ => id >= -2_000_000_000 && id < tree_said_next.val
   }
 }
 
@@ -1826,7 +1847,17 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
     out.push({ ..s, parent: up, depth: d, hidden: s.hidden || hidden })
     moved[k] = out.length() - 1
   }
-  tree_said_ids.clear()
+  // (those let go read out no more: their ids nobody's)
+  let gone = tree_said_of.keys().filter(fn(id) { !tree.lives(id) }).collect()
+  for id in gone {
+    match tree_said_of.get(id) {
+      Some(k) => tree_said_ids.remove(k)
+      None => ()
+    }
+    tree_said_of.remove(id)
+  }
+  // (what the old frame put over all of it, modal: the tree under it read out as hidden, as the old views under it are)
+  let old_modal = self.modal_node() >= 0
   for j, sn in said {
     let parent = if sn.parent >= 0 { at[sn.parent] } else { -1 }
     if sn.hosted {
@@ -1836,7 +1867,7 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
       }
       for k in 0..<old.length() {
         if owner[k] == mine || (old_whole.val && owner[k] == -1) {
-          put_old(k, parent, sn.depth, !sn.allowed)
+          put_old(k, parent, sn.depth, !sn.allowed || sn.hidden)
         }
       }
       at[j] = parent
@@ -1852,14 +1883,8 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
             None => ""
           }
         }
-        let presses = !sn.disabled && tree.takes_presses(sn.id)
-        let actions = if s.actions.length() > 0 {
-          s.actions
-        } else if presses {
-          [Activate]
-        } else {
-          []
-        }
+        // (what can be done to it, of what it said or would: Activate where a press does something, nothing else yet)
+        let actions : Array[Action] = if !sn.disabled && tree.presses_do(sn.id) { [Activate] } else { [] }
         out.push({
           id: tree_said_id(sn.id),
           role: s.role,
@@ -1873,10 +1898,10 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
           disabled: sn.disabled,
           modal: false,
           range: None,
-          actions: if sn.disabled { [] } else { actions },
+          actions,
           rect: sn.rect,
           focused: false,
-          hidden: !sn.allowed,
+          hidden: !sn.allowed || sn.hidden || old_modal,
           parent,
           depth: if parent >= 0 { out[parent].depth + 1 } else { 0 },
         })
@@ -1916,4 +1941,42 @@ fn Ctx::said_owner(self : Ctx, i : Int) -> Int {
     j = n.parent
   }
   -1
+}
+
+///|
+/// Whether old widget `id` may be acted on as a screen reader asks, as the window's tree is now: the node hosting the
+/// old view it says itself in (by what it said of its node: Ctx::said_owner) read out (Tree::reads_out); what the old
+/// frame put over all of it, always (its own). Where there is no tree, or nothing said by that id, as ever.
+fn old_said_allowed(c : Ctx, id : Int) -> Bool {
+  let tree = match view_app.val {
+    Some(t) => t
+    None => return true
+  }
+  // (what said it of its node, else the node it is: a box taking presses read out by its id)
+  let node = match c.sems.iter().find_first(fn(s) { s.id == id }) {
+    Some(s) => s.node
+    None => {
+      let mut found = -1
+      for i in 0..<c.count {
+        if c.nodes[i].id == id {
+          found = i
+          break
+        }
+      }
+      if found < 0 {
+        return true
+      }
+      found
+    }
+  }
+  let host = match c.said_owner(node) {
+    -2 => return true
+    -1 => tree.hosting()
+    at => old_boxes.keys().find_first(fn(k) { k.at == at })
+  }
+  tree.bring_to(view_moment())
+  match host {
+    Some(h) => tree.reads_out(h)
+    None => true
+  }
 }

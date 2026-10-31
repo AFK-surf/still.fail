@@ -138,6 +138,11 @@ pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
   if tree_said_action(id, action) {
     return
   }
+  // (an old view's widget: none where the tree keeps that old view from being read out now, a modal layer of its over it
+  // or what holds it hidden: Tree::reads_out)
+  if !old_said_allowed(self, id) {
+    return
+  }
   self.asked_actions.push((id, action))
   // an input, as a tap is: its frame and the one after, what reads what is asked built again (hand.mbt)
   hand_event()
