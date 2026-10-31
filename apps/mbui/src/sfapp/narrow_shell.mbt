@@ -3,14 +3,16 @@
 // them old views (islands) in it:
 //
 //   - under all of it, what the frame does in every tier before its pages (signed_in_frame: what is told as the frame
-//     ends, the icon's number, the keys, whether the first page waits) and the back of the stack's root (narrow_under);
+//     ends, the icon's number, the keys, whether the first page waits: narrow_under), and the back of the stack's root
+//     a node said as what it reads changes (narrow_takes_back);
 //   - the pages: the stack (app.nav) a node, each page on it a node of its own made as it is put on and let go as it
 //     leaves (what it made forgotten), the page in it built while it shows (an island), where it is drawn bound to its
 //     slide, which sets out at its cause's moment, once the core has given what the page shows (mbui's nav_view.mbt);
 //   - over them, the bottom bar, what is open over the pages and the presenters (narrow_over, signed_in_over).
 //
 // Still the old frame's (the way there): which island takes a press where they lie one over another (all of them are
-// told of it), back (said by the islands as they are built, in the tree's order), the theme (each island built in it).
+// told of it), the back the islands take (a page's own, a menu's, a sheet's: said by them as they are built, in the
+// tree's order; the stack's root's is the node above), the theme (each island built in it).
 
 ///|
 /// What the signed-in app is laid out as (app_tree): the stack of pages laid out Small, the narrow shell made of the
@@ -46,6 +48,18 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
   // (on the window's ground, as the old view whole is (app_state_tree's): what no page covers, a page sliding, shows it)
   v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
   @ui.old(v, fn(c) { narrow_under(c, src) }).over(Is(true)) |> ignore
+  // back at the stack's root while the shell takes it (narrow_takes_back), a node of the window's tree's: before the
+  // pages, what they and what is over them say takes back (a page's own stack, a menu, a sheet) taking it first; whose
+  // it is said at the cause that changes it (a tab of the bar pressed), done as it is done (sfbase's back_step then)
+  v.show(narrow_takes_back, fn(b) {
+    b.takes_back(fn() {
+      match @sfbase.back_step() {
+        Some(f) => f()
+        None => ()
+      }
+    })
+    |> ignore
+  })
   @ui.nav_view(
     v,
     app.nav,
@@ -125,7 +139,7 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
 
 ///|
 /// Under the narrow shell's pages (an island): what every frame of the app's state does (app_state_island's), what the
-/// signed-in frame does before its pages (signed_in_frame), how the lists take a mouse, the back of the stack's root.
+/// signed-in frame does before its pages (signed_in_frame), how the lists take a mouse.
 fn narrow_under(c : @ui.Ctx, src : Source) -> Unit {
   if @ui.window_inset() {
     let id = c.id("window-ground-band")
@@ -138,8 +152,6 @@ fn narrow_under(c : @ui.Ctx, src : Source) -> Unit {
     None => ()
   }
   narrow_lists(c)
-  // (under the pages: the stack, a page or what is open over them taking back first, said after it)
-  narrow_root_back(c)
 }
 
 ///|
@@ -213,12 +225,20 @@ fn narrow_lists(c : @ui.Ctx) -> Unit {
 /// other than the chats back to the chats, in place). Above it the stack's own (swiped from the edge, the back key),
 /// which pops as back_where does.
 fn narrow_root_back(c : @ui.Ctx) -> Unit {
-  if app.nav.depth() == 1 && !app.menu && !sheet_open() && !@sf.presenting() {
+  if narrow_takes_back() {
     match @sfbase.back_step() {
       Some(f) => c.on_back(f)
       None => ()
     }
   }
+}
+
+///|
+/// Whether back at the narrow stack's root is the shell's now (back_where's: a place's top page other than the chats
+/// back to the chats): nothing pushed on the stack, no menu, sheet or presenter over it. All it reads is told as it
+/// changes (the stack, the presenters).
+fn narrow_takes_back() -> Bool {
+  app.nav.depth() == 1 && app.nav.top() != Home && !app.menu && !sheet_open() && !@sf.presenting()
 }
 
 ///|

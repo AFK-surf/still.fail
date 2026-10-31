@@ -239,7 +239,8 @@ squeeze and contrast checks; film's images before and after where a step touches
    picked by it; signed in, the shell a node picked by the window's width (View::window) and whether a workspace is in
    view. Laid out Small with one, the narrow shell's nodes (still.fail's sfapp/narrow_shell.mbt): an island under all
    of it (what the frame does in every tier before its pages: what is told as the frame ends, the icon's number, the
-   keys, whether the first page waits; the back of the stack's root), the stack, and an island over it (the bottom bar,
+   keys, whether the first page waits), the back of the stack's root a node said at the cause that changes whose it is
+   (a tab of the bar pressed: narrow_takes_back), the stack, and an island over it (the bottom bar,
    what opens over the pages, the presenters, the toasts). The stack is the tree's (src/ui/nav_view.mbt): each page on
    it a node of its own, made as it is put on and let go as it leaves (what it made forgotten then, its `on_leave`
    told), its page an island while it shows; which pages show and where they are drawn are bindings (View::shift, in
@@ -322,10 +323,10 @@ squeeze and contrast checks; film's images before and after where a step touches
    words, a key catcher, the wheel, what is read out. A press held on an old view is held by the one it is on (the old
    frame's hit target's, an empty one over another passing it on: old_press_owner), and called off once at the cause
    of a modal layer coming over it, as the host calling it off is (Ctx::press_called_off, at that cause's moment).
-   Still frame-bound there: what a press called off sets going in an old view's list (the spring back of a pull, a
-   fling: Ctx::release's `spring_back(…, -1.0)` and `fling_t0 = -1.0`) starts at the next frame, not at the moment it
-   was called off (a pull called off at 50 by a modal layer and at 50 by the host, the host's next frame at 100 or at
-   50: two ways back), to be set out at its cause as old input moves to the tree.
+   What a press called off sets going in an old view's list sets out at that moment: what it pulled past an end goes
+   back from it (Ctx::release's spring back at `at`), however late the next frame; a fling, which a press called off
+   never sets going, still sets out at its first frame on Android and iOS (Compose's playtime 0), the desktop's coast
+   as it is let go.
 
    Not moved yet, and why: how far the wide frame's page moves aside as the folded sidebar is shown a while
    (still.fail's sfdesk fold_peek_shift) is worked out at the moment it is shown, from what the page shows across
