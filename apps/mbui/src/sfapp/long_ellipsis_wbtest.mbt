@@ -80,6 +80,16 @@ test "a long model value can be read alongside its connect" {
 }
 
 ///|
+test "a long profile check keeps its refresh button beside it" {
+  for long in [false, true] {
+    let t = screen_in("settings-profile", corner_windows[1], "zh", said=long)
+    let (x, y, w, h) = t.rect_of("订阅有效").unwrap()
+    let (bx, by, _, bh) = t.get(Button, label="重新检查").rect
+    assert_true(bx >= x + w - 0.5 && by < y + h && by + bh > y, msg="long=\{long}: \{(x, y, w, h)}, \{(bx, by, bh)}")
+  }
+}
+
+///|
 test "a long activity time can be read alongside its chat" {
   let t = screen_in("settings-connect", corner_windows[1], "zh", said=true)
   whole_long_words(t, "Slack 里问的报销流程 — 后面")

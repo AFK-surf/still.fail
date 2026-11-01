@@ -202,19 +202,21 @@ fn profile_head(c : @ui.Ctx, core : Core, here : Here, address : String, name : 
       // nothing of it moving under the rest as what the check said changes); checking again kept
       let ago = text(field(field(field(p, "check"), "time"), "checkedAt"), "ago")
       let when = if ago != "" { @sf.t("web-pages.profiles.checkedAt", args=[("time", ago)]) } else { "" }
-      c.text(join([text(p, "checkLine"), when], " · "), style=pf_check_words) |> ignore
-      let checking = is_doing(core, ["profile.check"], on)
-      if @sf.icon_action(c, "refresh", "profile-check/" + address + "/" + id, @sf.t("web-pages.profiles.recheck"), disabled=checking) {
-        @settings.act(core, @sf.t("web-pages.profiles.recheck"), "profile.check", obj([("station", str(address)), ("id", str(id))]))
-        // (its allowance read again with it: how much is left, as of now)
-        let q = field(p, "quota")
-        if q is Some(Object(_)) && text(q, "state") != "unsupported" {
-          @settings.act(core, @sf.t("web-pages.profiles.refresh"), "profile.quota", obj([("station", str(address)), ("id", str(id))]))
+      c.box(style=pf_state, fn() {
+        c.text(join([text(p, "checkLine"), when], " · "), style=pf_check_words) |> ignore
+        let checking = is_doing(core, ["profile.check"], on)
+        if @sf.icon_action(c, "refresh", "profile-check/" + address + "/" + id, @sf.t("web-pages.profiles.recheck"), disabled=checking) {
+          @settings.act(core, @sf.t("web-pages.profiles.recheck"), "profile.check", obj([("station", str(address)), ("id", str(id))]))
+          // (its allowance read again with it: how much is left, as of now)
+          let q = field(p, "quota")
+          if q is Some(Object(_)) && text(q, "state") != "unsupported" {
+            @settings.act(core, @sf.t("web-pages.profiles.refresh"), "profile.quota", obj([("station", str(address)), ("id", str(id))]))
+          }
         }
-      }
-      if checking {
-        @sf.spinner(c, size=pf_spin) |> ignore
-      }
+        if checking {
+          @sf.spinner(c, size=pf_spin) |> ignore
+        }
+      }) |> ignore
     },
     actions?=if copy {
       None
