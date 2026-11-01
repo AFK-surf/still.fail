@@ -123,6 +123,89 @@ test "a profile's page, wide: its models other profiles could have are given to 
 // asked, its models chosen in place (ModelChecklist): a model named by hand, a filter over the many.
 
 ///|
+test "a profile with no models keeps its automatically opened list after the first tick" {
+  for case in page_cases {
+    let (w, platform) = case
+    let enabled : Array[Json] = []
+    let saves : Array[Json] = []
+    let t = setting_tester(Profile("ws1/st1", "cx"), w, platform~, h=2400.0, over=fn(s) {
+      fn shaped(v : Json) -> Json {
+        match v {
+          Object(o) if o.get("id") == Some(Json::string("cx")) && o.contains("available") => {
+            let p = o.copy()
+            p["models"] = Json::array(enabled.copy())
+            Json::object(p)
+          }
+          Object(o) if o.get("id") == Some(Json::string("cc")) && o.contains("available") => {
+            let p = o.copy()
+            p["models"] = []
+            Json::object(p)
+          }
+          Object(o) => {
+            let p = o.copy()
+            for k, x in o { p[k] = shaped(x) }
+            Json::object(p)
+          }
+          Array(a) => Json::array(a.map(shaped))
+          _ => v
+        }
+      }
+      {
+        ..s,
+        topic: fn(name, params) {
+          let v = (s.topic)(name, params)
+          match v.value {
+            Some(x) => { ..v, value: Some(shaped(x)) }
+            None => v
+          }
+        },
+        call: fn(name, params, done) {
+          if name == "profile.put" {
+            let next = items(field(Some(params), "input"), "models")
+            enabled.clear()
+            enabled.append(next)
+            saves.push(Json::array(next))
+            @settings.fixture_changed()
+          }
+          (s.call)(name, params, done)
+        },
+      }
+    })
+    let at = "\{w} platform \{platform}"
+    assert_true(t.find("收起") is Some(_), msg=at + ": automatically open")
+    t.click(Checkbox, label="GPT-6")
+    t.frame()
+    assert_eq(saves, [["gpt-6"]], msg=at + ": the first model saved")
+    assert_true(t.find("收起") is Some(_), msg=at + ": still open after saving")
+    assert_true(t.get(Checkbox, label="GPT-6").check == Some(On), msg=at + ": first model checked")
+    t.click(Checkbox, label="GPT-6-NANO")
+    t.frame()
+    assert_eq(saves, [["gpt-6"], ["gpt-6", "gpt-6-nano"]], msg=at + ": another model saved")
+    assert_true(t.get(Checkbox, label="GPT-6-NANO").check == Some(On), msg=at + ": second model checked")
+    t.tap_text("收起")
+    t.frame()
+    assert_true(t.find("选择模型（2 / 12）") is Some(_), msg=at + ": can collapse explicitly")
+    t.tap_text("选择模型（2 / 12）")
+    t.frame()
+    t.click(Checkbox, label="GPT-6")
+    t.frame()
+    t.click(Checkbox, label="GPT-6-NANO")
+    t.frame()
+    assert_true(t.find("收起") is Some(_), msg=at + ": still open after clearing the last model")
+    t.tap_text("收起")
+    t.frame()
+    assert_true(t.find("选择模型（0 / 12）") is Some(_), msg=at + ": can keep an empty list closed")
+    // Another profile starts from its own models; returning keeps the first profile's explicit choice.
+    app.nav.push(Setting(Profile("ws1/st1", "cc")))
+    t.frame()
+    assert_true(t.find("收起") is Some(_), msg=at + ": another empty profile opens its list")
+    app.nav.pop() |> ignore
+    t.frame()
+    assert_true(t.find("选择模型（0 / 12）") is Some(_), msg=at + ": the first profile stays closed")
+  }
+}
+
+///|
 test "a profile's quota, a narrow page with a mouse: 重置额度 asks first, then uses one of the resets left" {
   let t = setting_tester(Profile("ws1/st1", "cx"), 390.0)
   scrolled_to(t, 390.0, "还可重置 2 次")

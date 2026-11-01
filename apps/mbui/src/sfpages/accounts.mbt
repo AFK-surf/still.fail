@@ -9,7 +9,7 @@
 /// What a profile's page keeps of its own while it is open: its models' list open, what is typed to name one more,
 /// a sign-in's code, the command shown, the account's key being replaced (what is typed), the variables' rows.
 priv struct ProfileEdit {
-  mut choosing : String
+  choosing : Map[String, Bool]
   mut command : String
   mut replacing : String
   mut env_open : String
@@ -31,7 +31,7 @@ priv struct EnvRow {
 
 ///|
 // kept across runs: said by the page's presses; profile_page_reset puts it back
-let profile_edit : ProfileEdit = { choosing: "", command: "", replacing: "", env_open: "", env_rows: [], env_of: "", env_made: 0 }
+let profile_edit : ProfileEdit = { choosing: {}, command: "", replacing: "", env_open: "", env_rows: [], env_of: "", env_made: 0 }
 
 ///|
 /// The fields of a profile's page, by their key (made as first drawn).
@@ -40,7 +40,7 @@ let profile_fields : Map[String, @ui.Field] = {}
 
 ///|
 fn profile_page_reset() -> Unit {
-  profile_edit.choosing = ""
+  profile_edit.choosing.clear()
   profile_edit.command = ""
   profile_edit.replacing = ""
   profile_edit.env_open = ""
@@ -873,7 +873,18 @@ fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?, spread 
   let all = strings(p, "available")
   let names = field(p, "names")
   let name = fn(m : String) { match text(names, m) { "" => m; n => n } }
-  let choosing = profile_edit.choosing == key || (profile_edit.choosing == "" && enabled.length() == 0)
+  // Remember the initial automatic opening as well as explicit presses: saving the first model must not close the list.
+  // Wait until models are listed before choosing its initial state, since the profile may still be reading them.
+  let choosing = match profile_edit.choosing.get(key) {
+    Some(open) => open
+    None => {
+      let open = enabled.length() == 0
+      if all.length() > 0 {
+        profile_edit.choosing[key] = open
+      }
+      open
+    }
+  }
   @sf.section(
     c,
     @sf.t("web-pages.profiles.models"),
@@ -889,7 +900,7 @@ fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?, spread 
             @sf.t("web-pages.profiles.chooseModels", args=[("on", enabled.length().to_string()), ("all", all.length().to_string())])
           },
         ) {
-        profile_edit.choosing = if choosing { "-" + key } else { key }
+        profile_edit.choosing[key] = !choosing
       }
     },
     fn() {
