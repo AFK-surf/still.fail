@@ -7,7 +7,8 @@
 ///|
 /// The button in `parent`: `label` its words, `tone` its look, `busy` while what it does is under way (not pressed
 /// again, a spinner before its words), `disabled` while it cannot be pressed (faded), `across` as wide as what holds it
-/// gives (its words in its middle); `press` done as it is pressed. Its words changing go to their place for that cause.
+/// gives (its words in its middle); `press` done as it is pressed; `words_in`: how far its words are in over its ground
+/// (what holds it coming in its ground first). Its words changing go to their place for that cause.
 /// The node.
 pub fn button_node(
   parent : @view.View,
@@ -17,6 +18,7 @@ pub fn button_node(
   busy? : () -> Bool = fn() { false },
   disabled? : () -> Bool = fn() { false },
   across? : Bool = false,
+  words_in? : () -> Double = fn() { 1.0 },
 ) -> @view.View {
   let live = fn() { !disabled() && !busy() }
   let solid = tone == Primary || tone == DangerSolid
@@ -78,6 +80,8 @@ pub fn button_node(
     .ground(By(fn() { looks().0 }))
     .alpha(By(fn() { seen.shown(v) }))
     .presses(By(live))
+    // (the keyboard's focus too while it can be pressed, Enter and Space pressing it: button's c.focusable)
+    .focusable(By(live))
     .says(By(fn() { Some(@view.said(Button, label=label())) }))
     .on_press(fn() {
       if @signals.untracked(live) {
@@ -117,6 +121,8 @@ pub fn button_node(
       w
       .words(By(label), look={ size: theme().t.ui, weight: if theme().touch { 600 } else { 500 }, line: theme().t.ui_line, wrap: false })
       .ink(By(fn() { looks().2 }))
+      // (as far in as its words are where what holds it comes in its ground first: a panel's, motion's ground_first)
+      .alpha(By(words_in))
       |> ignore
     })
     v.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore

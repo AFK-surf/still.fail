@@ -117,7 +117,7 @@ pub fn Tree::focus_order(self : Tree) -> Array[FocusAt] {
     if (n.hosted || n.focusable) && !self.pressless_at(at) {
       out.push({ id: { at, gen: n.gen }, hosted: n.hosted, keys: n.focus_keys })
     }
-    for k in n.kids {
+    for k in self.kids_in_order(at) {
       walk(k)
     }
   }
@@ -282,4 +282,87 @@ fn Tree::inputs_told(self : Tree) -> Unit {
       None => ()
     }
   }
+}
+
+///|
+/// A layer (a node over others, modal or not) that gives the keyboard's focus to `to`, a node it holds, as it opens,
+/// and gives it back to what had it then as it goes (leaving, or let go), where the focus is in it or nowhere then, as
+/// the old frame's layers do (Ctx::overlay's initial_focus and return_focus). Both done once the change that opened or
+/// closed it is committed whole, as what a modal layer says is (Tree::modals_now): the layers opened in one change
+/// each in turn from the lowest, as they are drawn, the focus on the topmost's `to`, each giving it back to what the
+/// one under it gave it to (Tree::on_layers_focus).
+pub fn View::focus_opens(self : View, to : View) -> View {
+  guard self.live() is Some(_) else { return self }
+  let layer = self.id()
+  let tree = self.tree
+  let target = to.id()
+  // (gone: told once as it goes; come back as it leaves (the same node, shown again), opened again)
+  let gone = Ref(false)
+  let went = fn() {
+    if !gone.val {
+      gone.val = true
+      tree.focus_gone.push(layer)
+      tree.modals_told()
+    }
+  }
+  tree.focus_opened.push((layer, target))
+  tree.modals_told()
+  self.reacts(fn() { self.leaving() }, fn(leaving) {
+    if leaving {
+      went()
+    } else if gone.val {
+      gone.val = false
+      tree.focus_opened.push((layer, target))
+      tree.modals_told()
+    }
+  })
+  self.owns(went) |> ignore
+  self
+}
+
+///|
+/// What hosts the tree told, as a change is committed whole, of the layers that give the focus (View::focus_opens):
+/// those gone since (`gone`: the focus given back from each, where it is in it or nowhere), then those opened, the
+/// lowest first as they are drawn, each with the node it gives the focus to (`opened`: the focus to the topmost's,
+/// where it can take it; each giving it back to what had it before it, the one under it's).
+pub fn Tree::on_layers_focus(self : Tree, f : (Array[NodeId], Array[(NodeId, NodeId)]) -> Unit) -> Unit {
+  self.on_layers_focus = f
+}
+
+///|
+/// The layers that give the focus opened and gone since last told, told what hosts the tree (Tree::on_layers_focus):
+/// those opened that still are and are not leaving, as they are drawn, the lowest first.
+fn Tree::layers_focus_told(self : Tree) -> Unit {
+  if self.focus_opened.is_empty() && self.focus_gone.is_empty() {
+    return
+  }
+  let gone : Array[NodeId] = []
+  for l in self.focus_gone {
+    if !gone.contains(l) {
+      gone.push(l)
+    }
+  }
+  self.focus_gone.clear()
+  // (those open as the change leaves them: not let go, not leaving; one gone and come back in it, open)
+  let opened : Array[(NodeId, NodeId)] = []
+  for o in self.focus_opened {
+    if self.alive_id(o.0) && !self.leaving_at(o.0.at) && !opened.iter().any(fn(p) { p.0 == o.0 }) {
+      opened.push(o)
+    }
+  }
+  self.focus_opened.clear()
+  let by : Array[((NodeId, NodeId), Array[Int])] = []
+  for o in opened {
+    match self.layer_path(o.0.at) {
+      Some(p) => {
+        let mut j = by.length()
+        while j > 0 && drawn_after(by[j - 1].1, p) {
+          j = j - 1
+        }
+        by.insert(j, (o, p))
+      }
+      None => ()
+    }
+  }
+  (self.on_layers_focus)(gone, by.map(fn(e) { e.0 }))
 }

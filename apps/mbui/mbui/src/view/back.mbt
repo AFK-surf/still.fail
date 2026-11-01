@@ -32,6 +32,16 @@ pub fn View::takes_back(self : View, f : () -> Unit) -> View {
 }
 
 ///|
+/// A modal layer that lets a back gesture under way as it comes over what holds it go on to that (chosen as it began,
+/// the whole gesture's: what the old frame's layers do), not called off for it; the next gesture is what is over then
+/// (Tree::back_taker). Not said, a modal layer over what holds a gesture calls it off (Tree::back_lost_in).
+pub fn View::held_back_goes_on(self : View) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.back_goes_on = true
+  self
+}
+
+///|
 /// Back followed by it step by step, while it takes input (Tree::back_taker's order, as View::takes_back's): the system's
 /// gesture as it goes (Began, Moved, LetGo, CalledOff: x from the edge it came from, at its moment), held by it from its
 /// start; a back with no gesture one Back. Each step one change outside any tracking. Said in the place of what it took

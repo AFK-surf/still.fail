@@ -512,6 +512,9 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
         app_state_tree(o, src)
       }
     })
+    // the library's confirms in the middle of the window, each at its place in the window's stack of layers among what
+    // else is presented (src/sf presented_node.mbt)
+    @sf.presented_nodes(root)
     // what a write said, over all of it, in every state and shell (sfbase's toasts_node)
     @sfbase.toasts_node(root, fn() { toast_bottom_now(root) }) |> ignore
   }

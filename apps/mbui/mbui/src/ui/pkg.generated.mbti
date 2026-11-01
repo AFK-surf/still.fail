@@ -938,6 +938,9 @@ pub struct Ctx {
   mut back_node : Int32
   mut back_edge : Double
   mut back_next : ((Int32, Double, Double, Double, Double) -> Unit)?
+  mut back_layer_next : Int32
+  mut back_within : Int32
+  mut back_stack : Int32
   mut back_node_next : Int32
   mut back_edge_next : Double
   mut back_island : @view.NodeId?
@@ -948,6 +951,7 @@ pub struct Ctx {
   mut layer_hook : ((Dismiss) -> Unit)?
   layer_on_dismiss : Map[Int32, (Int32, (Dismiss) -> Unit)]
   layer_retired : Map[Int32, Int32]
+  layers_gone : @set.Set[Int32]
   mut back_held : BackHeld?
   mut back_off : Bool
   mut back_told : Bool
@@ -999,6 +1003,7 @@ pub struct Ctx {
   shots : Map[Int32, Shot]
   mut shot_scale : Double
   mut layer_cur : Int32
+  mut stack_cur : Int32
   mut keys_layer : Int32
   dismissals : Map[Int32, Dismiss]
   layer_return : Map[Int32, Int32]
@@ -1293,6 +1298,7 @@ pub fn Ctx::spacer(Self) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::spring(Self, String, Double, from? : Double, stiffness? : Double, damping? : Double, loc~ : SourceLoc) -> Double
 pub fn Ctx::spring_rest(Self, String) -> Double
+pub fn Ctx::stacked(Self, Int32, () -> Unit) -> Unit
 pub fn Ctx::stick(Self, Int32, Double) -> Unit
 pub fn Ctx::still(Self) -> Bool
 pub fn Ctx::stop_wheel(Self, Int32) -> Unit

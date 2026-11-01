@@ -176,7 +176,7 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
       up = out.length() - 1
       d = depth + 1
     }
-    for k in n.kids {
+    for k in self.kids_in_order(at) {
       walk(k, up, d, hid)
     }
   }
