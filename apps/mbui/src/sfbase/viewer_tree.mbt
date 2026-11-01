@@ -253,9 +253,14 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     .over(Is(true))
     |> @ui.old_takes_own
     |> ignore
-    // (over the marks it draws while it marks, once where the picture is is known: the numbered marks' pins, its
+    // (over the picture while it marks, once where it is is known: the marks drawn and the numbered marks' pins, its
     // nodes; over them the words being written, an old view's taking a finger only on them)
-    canvas.show(fn() { vw.marks_shown() }, fn(h) { marks_pins_node(h, vw) })
+    canvas.show(fn() { vw.marks_shown() }, fn(h) {
+      // (the marks drawn, over them their pins)
+      h.over(Is(true)) |> ignore
+      h.box(fn(s) { marks_shapes_node(s, vw) }) |> ignore
+      h.box(fn(p) { marks_pins_node(p, vw) }) |> ignore
+    })
     @ui.old(canvas, fn(c) {
       marks_said()
       c.box(style=viewer_under, fn() { vw.marks_writing_view(c) }) |> ignore

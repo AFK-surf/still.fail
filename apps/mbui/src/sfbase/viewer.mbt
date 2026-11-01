@@ -2322,9 +2322,9 @@ pub fn Viewer::image_view(self : Viewer, c : @ui.Ctx, src : Source, stage : Int,
   }
   if marking.on {
     match rect() {
-      // (where the window's tree draws the viewer, its pins its nodes (marks_pins_node) and the words being written
-      // over them on their own: Viewer::marks_writing_view)
-      Some(r) => marks_draw(c, r, z.nw, z.nh, pins=!v.in_tree, writing=!v.in_tree)
+      // (where the window's tree draws the viewer, its shapes and pins its nodes (marks_shapes_node, marks_pins_node)
+      // and the words being written over them on their own: Viewer::marks_writing_view)
+      Some(r) => marks_draw(c, r, z.nw, z.nh, shapes=!v.in_tree, pins=!v.in_tree, writing=!v.in_tree)
       None => ()
     }
   }

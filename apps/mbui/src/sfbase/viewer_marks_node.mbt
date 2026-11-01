@@ -712,12 +712,8 @@ fn marks_pins_node(h : @view.View, vw : Viewer) -> Unit {
       .shadow(Is((@sf.pin_raised.sigma, @sf.pin_raised.dy, @sf.pin_raised.color)))
       // (where the picture is: as each frame draws it while the zoom or the lift goes, else where they have it)
       .offset(By(fn() {
-        vw.zoom.told()
-        vw.lift.said()
-        let now = p.logic_at()
-        let t = if vw.zoom.goes_at(now) || vw.lift.goes_at(now) { p.drawn_at() } else { @double.infinity }
         let (_, _, _, x0, y0) = pin.get()
-        match vw.marks_rect(t) {
+        match vw.marks_rect_on(p) {
           Some((rx, ry, rw, _)) if vw.zoom.nw > 0.0 => {
             let k = rw / vw.zoom.nw
             let x = dmax(2.0 / k, dmin(dmax(2.0 / k, vw.zoom.nw - 22.0 / k), x0))
@@ -773,6 +769,113 @@ fn marks_pins_node(h : @view.View, vw : Viewer) -> Unit {
         |> ignore
         m.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
       })
+      |> ignore
+    },
+  )
+}
+
+///|
+/// Where viewer `vw`'s picture is for what node `n` draws over it (Viewer::marks_rect, lifted over the keyboard): as each
+/// frame draws it while the zoom or the lift goes, else where they leave it (the clock read no more). As either is told.
+fn Viewer::marks_rect_on(self : Viewer, n : @view.View) -> (Double, Double, Double, Double)? {
+  self.zoom.told()
+  self.lift.said()
+  let now = n.logic_at()
+  let t = if self.zoom.goes_at(now) || self.lift.goes_at(now) { n.drawn_at() } else { @double.infinity }
+  self.marks_rect(t)
+}
+
+///|
+/// The marks drawn over viewer `vw`'s picture in `h` (a layer over the canvas, all of it; marks_draw's, ImageMarks.kt
+/// drawMarks, drawPicked): the lines (a box's rounded edge, an arrow and its barbs, a line drawn by hand, the picked
+/// mark's dashed frame: marks_lines), words edged in their halo (eight times a little off each way, the words over
+/// them), the picked mark's handles (12 round and white, edged 1.5 in the marking colour), each where the picture is
+/// as it is drawn (Viewer::marks_rect_on), at this zoom's size. As marking is now (marks_drawn: what a finger draws now
+/// with them).
+fn marks_shapes_node(h : @view.View, vw : Viewer) -> Unit {
+  h.over(Is(true)) |> ignore
+  // (the lines and where the handles are, one working out of them as the picture is drawn)
+  let laid = fn(n : @view.View) {
+    marks_said()
+    match vw.marks_rect_on(n) {
+      Some(r) => marks_lines(r, vw.zoom.nw)
+      None => ([], [])
+    }
+  }
+  h.box(fn(l) { l.over(Is(true)).lines(By(fn() { laid(l).0 })) |> ignore }) |> ignore
+  // words, edged in their halo: each a node for the words and eight for their edge, under them
+  h.each(
+    fn() {
+      marks_said()
+      marks_drawn().filter_map(fn(m) {
+        if m.kind == "words" {
+          Some((m.id, m.text, m.color, m.w, m.pts[0], m.pts[1]))
+        } else {
+          None
+        }
+      })
+    },
+    fn(x) { x.0 },
+    fn(w, words) {
+      w.over(Is(true)) |> ignore
+      for o in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0), (-1.0, -1.0), (1.0, 1.0), (-1.0, 1.0), (1.0, -1.0), (0.0, 0.0)] {
+        let edge = o != (0.0, 0.0)
+        w.box(fn(t) {
+          t
+          .over(Is(true))
+          .words(By(fn() { words.get().1 }))
+          .words_look(By(fn() {
+            let size = match vw.marks_rect_on(t) {
+              Some((_, _, rw, _)) => words.get().3 * rw / dmax(1.0, vw.zoom.nw)
+              None => 0.0
+            }
+            { size, weight: 600, line: size * 1.3, wrap: false }
+          }))
+          .ink(By(fn() { if edge { halo_of(words.get().2) } else { words.get().2 } }))
+          .offset(By(fn() {
+            let (_, _, _, ww, x, y) = words.get()
+            match vw.marks_rect_on(t) {
+              Some((rx, ry, rw, _)) => {
+                let k = rw / dmax(1.0, vw.zoom.nw)
+                let e = ww * k * 0.08
+                (rx + x * k + o.0 * e, ry + y * k + o.1 * e)
+              }
+              None => (0.0, 0.0)
+            }
+          }))
+          |> ignore
+        })
+        |> ignore
+      }
+    },
+  )
+  // the picked mark's handles
+  h.each(
+    fn() {
+      marks_said()
+      let n = match vw.zoom.rect() {
+        Some(r) => marks_lines(r, vw.zoom.nw).1.length()
+        None => 0
+      }
+      Array::makei(n, fn(i) { i })
+    },
+    fn(i) { i },
+    fn(d, i) {
+      let at = fn() {
+        let (_, handles) = laid(d)
+        match handles.get(@signals.untracked(fn() { i.get() })) {
+          Some((x, y)) => (x - 6.0, y - 6.0)
+          None => (0.0, 0.0)
+        }
+      }
+      d
+      .over(Is(true))
+      .width(Is(Some(12.0)))
+      .height(Is(Some(12.0)))
+      .radius(Is(6.0))
+      .ground(Is(0xFFFFFFFFL))
+      .edge(Is((1.5, 0xE5704AFFL)))
+      .offset(By(at))
       |> ignore
     },
   )

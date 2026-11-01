@@ -3195,3 +3195,147 @@ test "viewer on the tree, marking a picture whose size is not known yet (none sa
   assert_true(t.find(pv("android-chat.marks.write")) is None, msg="no words being written drawn")
   marks_leave()
 }
+
+///|
+/// A picture opened on a phone (a finger's), marking: a box from (100, 100) to (300, 200) in its pixels, its note done;
+/// an arrow from (350, 250) to (500, 300); a line drawn by hand from (60, 320) to (200, 360); words 「对齐」 at (380,
+/// 60). The tester.
+fn shaped() -> @ui.Tester raise {
+  let (t, _) = pinned()
+  let v = viewer.get().unwrap()
+  let (x, y, w, _) = v.zoom.rect().unwrap()
+  let k = w / v.zoom.nw
+  marking.tool = Arrow
+  t.drag(x + 350.0 * k, y + 250.0 * k, x + 500.0 * k, y + 300.0 * k)
+  // (the arrow's note, asked for as it is drawn, done)
+  t.run_for(note_pop_ms)
+  let tick = t.reachable("icon:check")
+  assert_eq(tick.length(), 1, msg="the arrow's note's 完成, one")
+  t.tap(tick[0].0, tick[0].1)
+  t.draw()
+  assert_eq(marking.note, -1, msg="the arrow's note done")
+  marking.tool = Pen
+  t.drag(x + 60.0 * k, y + 320.0 * k, x + 200.0 * k, y + 360.0 * k)
+  marking.shapes.push({ id: marking.next_id, kind: "words", color: marking.color, w: 18.0 / k, pts: [380.0, 60.0], text: "对齐" })
+  marking.next_id += 1
+  @sfbase.marks_changed()
+  t.draw()
+  // (the four, each there, nothing being written or noted)
+  for kind in ["box", "arrow", "pen", "words"] {
+    assert_true(marking.shapes.iter().any(fn(m) { m.kind == kind }), msg="a \{kind}")
+  }
+  assert_true(marking.writing is None && marking.note == -1, msg="nothing being written or noted")
+  t
+}
+
+///|
+/// The lines the window's tree draws over the picture (marks_shapes_node's), and the words drawn there with their place
+/// (the words and their edges, in the order drawn).
+fn shapes_drawn() -> (Array[@ui.Line], Array[(String, Double, Double, Int64)]) {
+  let lines = []
+  let words = []
+  for d in @ui.view_tree().unwrap().drawn() {
+    lines.append(d.lines)
+    if d.words == "对齐" {
+      words.push((d.words, d.x, d.y, d.ink))
+    }
+  }
+  (lines, words)
+}
+
+///|
+test "viewer on the tree, marking: a box, an arrow, a line drawn by hand and words drawn by the window's tree, as marks_lines works them out where the picture is; the words edged in their halo, eight under the words themselves" {
+  let t = shaped()
+  let v = viewer.get().unwrap()
+  let (lines, words) = shapes_drawn()
+  let (want, _) = @sfbase.marks_lines(v.marks_rect(t.time()).unwrap(), v.zoom.nw)
+  assert_eq(lines.length(), want.length(), msg="as many lines")
+  assert_true(lines == want, msg="the lines as marks_lines has them")
+  assert_eq(words.length(), 9, msg="the words and their eight edges")
+  assert_eq(words[8].3, marking.color, msg="the words themselves last, in their colour")
+  marks_leave()
+}
+
+///|
+test "viewer on the tree, marking: the marks drawn where the picture is as each frame draws it while the zoom glides, and where the glide leaves it" {
+  let t = shaped()
+  let v = viewer.get().unwrap()
+  v.zoom.zoom_to(v.zoom.fit() * 2.0, v.zoom.bw / 2.0, v.zoom.bh / 2.0, true, at=t.time())
+  t.run_for(pin_glide_mid_ms)
+  assert_true(v.zoom.goes_at(t.time()), msg="the glide under way")
+  assert_true(shapes_drawn().0 == @sfbase.marks_lines(v.marks_rect(t.time()).unwrap(), v.zoom.nw).0, msg="gliding")
+  t.run_for(pin_glide_done_ms)
+  assert_true(!v.zoom.goes_at(t.time()), msg="the glide done")
+  assert_true(shapes_drawn().0 == @sfbase.marks_lines(v.marks_rect(t.time()).unwrap(), v.zoom.nw).0, msg="glided")
+  marks_leave()
+}
+
+///|
+test "viewer on the tree, marking: the box picked, its dashed frame and handles drawn in the frame it is picked; its colour changed, drawn so in the next; marking left, none of it drawn" {
+  let t = shaped()
+  let v = viewer.get().unwrap()
+  let id = marking.shapes[0].id
+  marking.tool = Select
+  marking.picked = id
+  @sfbase.marks_changed()
+  t.draw()
+  let (lines, _) = shapes_drawn()
+  let (want, handles) = @sfbase.marks_lines(v.marks_rect(t.time()).unwrap(), v.zoom.nw)
+  assert_true(lines == want, msg="its frame with them")
+  let rings = @ui.view_tree().unwrap().drawn().filter(fn(d) { d.w == 12.0 && d.h == 12.0 && d.radius == 6.0 })
+  assert_eq(rings.length(), handles.length(), msg="a handle each")
+  // (its colour changed)
+  let i = marking.shapes.search_by(fn(s) { s.id == id }).unwrap()
+  marking.shapes[i] = { ..marking.shapes[i], color: 0x2E8B57FFL }
+  @sfbase.marks_changed()
+  t.draw()
+  assert_true(shapes_drawn().0.iter().any(fn(l) { l.color == 0x2E8B57FFL }), msg="in its colour now")
+  marks_leave()
+  t.draw()
+  assert_eq(shapes_drawn().0.length(), 0, msg="marking left: no lines")
+  assert_eq(shapes_drawn().1.length(), 0, msg="marking left: no words")
+}
+
+///|
+test "viewer on the tree, marking: the marks drawn where the picture is as each frame draws it while the keyboard lifts it (words being written low on it), and where the lift leaves it" {
+  let t = shaped()
+  let v = viewer.get().unwrap()
+  // (words begun low on the picture, the keyboard up, the window laid out above it, as a host does)
+  marking.tool = Words
+  let (x, y, w, h) = v.zoom.rect().unwrap()
+  t.touch(0, x + w / 2.0, y + h * 0.9)
+  t.touch(2, x + w / 2.0, y + h * 0.9)
+  assert_true(marking.writing is Some(_), msg="words begun")
+  t.set_ime_inset(300.0)
+  t.resize_next(390.0, 844.0 - 300.0)
+  t.draw()
+  t.run_for(pin_glide_mid_ms)
+  assert_true(v.lift.goes_at(t.time()), msg="the lift under way")
+  assert_true(shapes_drawn().0 == @sfbase.marks_lines(v.marks_rect(t.time()).unwrap(), v.zoom.nw).0, msg="lifting")
+  t.run_for(pin_glide_done_ms)
+  assert_true(!v.lift.goes_at(t.time()) && v.lift.target() > 0.0, msg="lifted")
+  assert_true(shapes_drawn().0 == @sfbase.marks_lines(v.marks_rect(t.time()).unwrap(), v.zoom.nw).0, msg="lifted, the lines")
+  marks_leave()
+}
+
+///|
+test "viewer on the tree, marking: words written again and set otherwise (another colour, another size) drawn so in the next frame, by the nodes that drew them" {
+  let t = shaped()
+  let tree = @ui.view_tree().unwrap()
+  let ids = fn() { tree.drawn().filter(fn(d) { d.words.has_prefix("对齐") }).map(fn(d) { (d.id.at, d.id.gen) }) }
+  let before = ids()
+  assert_eq(before.length(), 9, msg="the words and their edges")
+  let i = marking.shapes.search_by(fn(s) { s.kind == "words" }).unwrap()
+  let m = marking.shapes[i]
+  marking.shapes[i] = { ..m, text: "对齐了", color: 0x2E8B57FFL, w: m.w * 1.5 }
+  @sfbase.marks_changed()
+  t.draw()
+  let now = tree.drawn().filter(fn(d) { d.words == "对齐了" })
+  assert_eq(now.length(), 9, msg="written again, in the next frame")
+  assert_eq(now[8].ink, 0x2E8B57FFL, msg="in its new colour")
+  let v = viewer.get().unwrap()
+  let (_, _, rw, _) = v.marks_rect(t.time()).unwrap()
+  assert_eq(now[8].words_look.size, m.w * 1.5 * rw / v.zoom.nw, msg="at its new size")
+  assert_eq(now.map(fn(d) { (d.id.at, d.id.gen) }), before, msg="by the same nodes")
+  marks_leave()
+}
