@@ -183,3 +183,117 @@ test "a new chat with its 文件 tab: the empty part of its bar drags the window
     assert_eq(t.window_drags() - before, 1)
   }
 }
+
+///|
+test "a window of its own, a station's screen live alone in it (the window's tree's frame round the page, an old view hosted): its top row drags it but for what is pressed there; 控制中心's panel (画质) a modal: a blank part of it pressed sends the screen nothing, nor drags the window; its 任务管理器 sends its keys; closed, the same point pressed sent to the screen; open, the top row's empty part pressed lets the panel go, the window not dragged till the next press" {
+  let calls : Array[Made] = []
+  let shell : Ref[ShellIs] = Ref(Whole)
+  let t = wide_tester(calls, mode="screen-live", window_inset=true, before=fn(src) {
+    // (the fixture's screen live, driven: what its stream says; it is put on the app's stack too, which a window of
+    // its own does not show)
+    @sfpages.open_screen_fixture("screen-live")
+    @sfbase.lone_page.val = Some(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone: false }))
+    shell.val = shell_is(src, 1280.0)
+  })
+  t.run_for(@ui.move_most_ms)
+  let read = fn() { t.semantics().filter(fn(s) { !s.hidden && s.label != "" }) }
+  let center = read().iter().find_first(fn(s) { s.label == @sf.t("web-pages.screen.panel") && s.role is Button })
+  // (the window of its own it is, its screen live (控制中心 there), none of the app's)
+  assert_eq((shell.val == Lone, center is Some(_), t.find("新建对话") is None), (true, true, true), msg="\{read().map(fn(s) { s.label })}")
+  row_drags(t, "a window of its own", 0.0)
+  let inputs = fn() { calls.filter(fn(c) { c.name == "screen.input" }).length() }
+  let sent_since = fn(n : Int) { calls.filter(fn(c) { c.name == "screen.input" })[n:].to_array().map(fn(c) { c.params.stringify() }) }
+  let (cx, cy) = match center {
+    Some(s) => (s.rect.0 + s.rect.2 / 2.0, s.rect.1 + s.rect.3 / 2.0)
+    None => (0.0, 0.0)
+  }
+  let dialogs = fn() { t.semantics().filter(fn(s) { !s.hidden && s.role == Dialog }) }
+  let toggle = fn() {
+    t.tap(cx, cy)
+    t.run_for(@sf.later_ms)
+  }
+  // (an empty part of the top row, the window's)
+  let mut ex = 400.0
+  while !t.drags_window_at(ex, 22.0) && ex < cx - 40.0 {
+    ex = ex + 8.0
+  }
+  let empty_drags = t.drags_window_at(ex, 22.0)
+  // open: 画质 in it; a blank part of it (the panel alone read out there), found down its middle
+  toggle()
+  let panel = dialogs()
+  let quality = t.find(@sf.t("web-pages.screen.quality")) is Some(_)
+  let (px0, py0, pw, ph) = if panel.length() > 0 { panel[0].rect } else { (0.0, 0.0, 0.0, 0.0) }
+  let px = px0 + pw / 2.0
+  let mut py = py0 + ph - 8.0
+  let alone_at = fn(y : Double) {
+    t.semantics().filter(fn(s) { !s.hidden && px >= s.rect.0 && px < s.rect.0 + s.rect.2 && y >= s.rect.1 && y < s.rect.1 + s.rect.3 }).length() == 1
+  }
+  while py > py0 && !alone_at(py) {
+    py = py - 8.0
+  }
+  let blank = py > py0
+  // (its 任务管理器: its keys sent, as it is for)
+  let task = read().iter().find_first(fn(s) { s.label == "任务管理器" && s.role is Button })
+  let before_task = inputs()
+  match task {
+    Some(s) => t.tap(s.rect.0 + s.rect.2 / 2.0, s.rect.1 + s.rect.3 / 2.0)
+    None => ()
+  }
+  let task_keys = sent_since(before_task)
+  if dialogs().length() > 0 {
+    toggle()
+  }
+  // shut: the point (the screen there) pressed: sent to the screen
+  let n = inputs()
+  t.tap(px, py)
+  let sent_before = inputs() > n
+  // open again: the same point pressed: the panel's, nothing sent, not the window's
+  toggle()
+  let open_again = dialogs().length() == 1
+  let n = inputs()
+  t.tap(px, py)
+  let sent_open = sent_since(n)
+  let drags_open = t.drags_window_at(px, py)
+  // shut again: sent again
+  t.run_for(@sf.later_ms)
+  if dialogs().length() > 0 {
+    toggle()
+  }
+  let n = inputs()
+  t.tap(px, py)
+  let sent_after = inputs() > n
+  // open once more, on its own: the top row's empty part pressed: the panel let go of by that press, which is the
+  // panel's (the modal layer's ground), the window not dragged; the next press there the window's
+  toggle()
+  let open_last = dialogs().length() == 1
+  let drags = t.window_drags()
+  t.tap(ex, 22.0)
+  t.run_for(@sf.later_ms)
+  let row_open = t.window_drags() - drags
+  let closed_by_it = dialogs().length() == 0
+  let drags = t.window_drags()
+  t.tap(ex, 22.0)
+  let row_shut = t.window_drags() - drags
+  @sfbase.lone_page.val = None
+  let saw = (
+    empty_drags,
+    panel.length(),
+    quality,
+    blank,
+    task_keys.iter().any(fn(k) { k.contains("Escape") }),
+    sent_before,
+    open_again,
+    sent_open,
+    drags_open,
+    sent_after,
+    open_last,
+    row_open,
+    closed_by_it,
+    row_shut,
+  )
+  assert_eq(
+    saw,
+    (true, 1, true, true, true, true, true, [], false, true, true, 0, true, 1),
+    msg="saw \{saw}; blank at \{(px, py)}; panel \{panel.map(fn(s) { s.rect })}; task's keys \{task_keys}",
+  )
+}
