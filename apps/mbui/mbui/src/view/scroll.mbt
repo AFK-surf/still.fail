@@ -264,6 +264,7 @@ pub fn View::scrolls(
   }
   self.box(fn(held) {
     inner.val = Some(held)
+    self.tree.nodes[self.at].scroll_held = held.at
     held
     .shrink(Is(0.0))
     .offset(By(fn() { (0.0, -s.where_at(if s.fling.get() is Some(_) { held.drawn_at() } else { 0.0 })) }))
@@ -386,4 +387,19 @@ pub fn View::scrolls(
     }
     s.at(self.tree) - x
   })
+}
+
+///|
+/// Whether node `id` scrolls what it holds up and down (View::scrolls) and it can go, as last laid out (Scroll::goes:
+/// what it holds taller than it, by more than half a point, as an old box kept to a height is, ui's scroll_still):
+/// what lies in it moves under its top and foot as it scrolls, never in its container's corners for good (ui's corner
+/// rule: a row of a list's as it scrolls).
+pub fn Tree::scrolls_now(self : Tree, id : NodeId) -> Bool {
+  guard self.alive_id(id) else { return false }
+  // (what it holds as tall as it is laid out, less its own: how far it can go, as its Scroll's room says it)
+  let n = self.nodes[id.at]
+  n.scroll_held >= 0 &&
+  n.scroll_held < self.nodes.length() &&
+  self.nodes[n.scroll_held].live &&
+  self.nodes[n.scroll_held].flex.height - n.flex.height > 0.5
 }

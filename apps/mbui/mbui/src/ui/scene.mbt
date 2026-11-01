@@ -571,6 +571,36 @@ fn on_glyph_row(base : Double, oy : Double, sc : Double) -> Double {
 }
 
 ///|
+/// How far the old view painted now is carried off the pixels from where it was laid out (an old view hosted in a node
+/// drawn bigger or smaller: island_on_pixels): its words set on the pixels where they are laid out, then carried with
+/// it, as an old view's look sets them before it moves and scales them (draw.mbt); none (0, 0) for the rest.
+// kept across runs: (0, 0) but while what is in such an old view is painted (Ctx::paint, Ctx::glyphs_carried_of)
+let glyphs_carried : Ref[(Double, Double)] = Ref((0.0, 0.0))
+
+///|
+/// Where a glyph's picture goes across, `x` as painted: on the pixels where it is laid out (glyphs_carried).
+fn glyph_x(x : Double, sc : Double) -> Double {
+  let m = glyphs_carried.val.0
+  on_pixels(x - m, sc) + m
+}
+
+///|
+/// Where a glyph's picture goes down, its line's baseline `base` as painted, then its own offset `oy` (on_glyph_row): on
+/// the pixels where it is laid out (glyphs_carried).
+fn glyph_row(base : Double, oy : Double, sc : Double) -> Double {
+  let m = glyphs_carried.val.1
+  on_glyph_row(base - m, oy, sc) + m
+}
+
+///|
+/// Where a line of words (struck through, underlined) goes down, `y` as painted: on the pixels where it is laid out
+/// (glyphs_carried).
+fn glyph_y(y : Double, sc : Double) -> Double {
+  let m = glyphs_carried.val.1
+  on_pixels(y - m, sc) + m
+}
+
+///|
 /// How much fainter the words painted now are than what holds them (the looks being painted: Look's `words`).
 // kept across runs: 1 between frames, each look that changes it putting it back as it is painted (draw.mbt)
 let words_alpha : Ref[Double] = Ref(1.0)
@@ -861,8 +891,8 @@ fn Ctx::emit_text(
     } else {
       0.0
     }
-    let gx = on_pixels(ox + dx + tl.xs[c] + s.pad + g.ox / z, sc)
-    let gy = on_glyph_row(top + tl.ascent, g.oy / z, sc)
+    let gx = glyph_x(ox + dx + tl.xs[c] + s.pad + g.ox / z, sc)
+    let gy = glyph_row(top + tl.ascent, g.oy / z, sc)
     // (where it is before it is set on the pixels, for what places it again elsewhere: a node's words, set on the
     // pixels where the scene composes them, view_blit)
     match unplaced {
@@ -1001,7 +1031,12 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     }
     _ => None
   }
+  // (its words set on the pixels where the old view it is in is laid out, carried with that to where it is drawn,
+  // whenever and from wherever it is painted: glyphs_carried)
+  let carried_was = glyphs_carried.val
+  glyphs_carried.val = self.glyphs_carried_of(i)
   self.paint_node(i, alpha_in)
+  glyphs_carried.val = carried_was
   match glyphs_was {
     Some((f, n, cut)) => {
       glyph_look.val = f

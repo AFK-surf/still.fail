@@ -25,8 +25,17 @@ fn tree_draws(p : Presented, sheet : Bool) -> Bool {
   !sheet &&
   (
     p.shows is (Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _, _) | Menu(_, _, _)) ||
-    p.shows is Pick(_, _, _, _, _, _)
+    p.shows is Pick(_, _, _, _, _, _) ||
+    (p.shows is Panel(x) && panel_popover_of(x, p.from))
   )
+}
+
+///|
+/// Whether panel `x` presented `from` is a small panel beside what opened it the window's tree draws (panel_node): not
+/// a stage, a form or one opened by nothing (a dialog in the middle of the window), nor (yet) one a share of the window
+/// tall, as wide as what it holds, or whose title is as it is now (`live`).
+fn panel_popover_of(x : PanelOf, from : Anchor) -> Bool {
+  !x.stage && !x.form && from != Unanchored && x.tall == 0.0 && !x.fits && x.live is None
 }
 
 ///|
@@ -124,6 +133,22 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             keep_field,
             fn(item) { done(item.select) },
             fn() { dismissed_now(serial) },
+            shown~,
+            gone~,
+          )
+        }
+        Panel(x) => {
+          // (beside what opened it, where it is drawn: as a menu's)
+          let (anchor, _, _, _) = @signals.untracked(fn() { menu_anchor_now(p.from) })
+          panel_node(
+            row,
+            "sf-present/\{serial}",
+            open,
+            anchor,
+            x,
+            fn() { done(fn() {  }) },
+            fn() { dismissed_now(serial) },
+            p,
             shown~,
             gone~,
           )

@@ -205,7 +205,7 @@ test "a toast going out (no longer given), no finger on it: moved away by half t
 }
 
 ///|
-test "a toast going out at a moment between whole ms: its way out over, not yet let go, nothing drawn by the clock; toast_rest its letting go, then none of it left" {
+test "a toast going out at a moment between whole ms: its way out going on till it is let go, drawn by the clock half a ms before; toast_rest its letting go, then none of it left" {
   let (t, k) = toast_case([@kit.toast("a", "一")])
   run_to_time(t, 200.0)
   // (a moment between whole ms: a display's frame, 60 a second)
@@ -213,13 +213,14 @@ test "a toast going out at a moment between whole ms: its way out over, not yet 
   k.toasts.set([])
   t.frame()
   let rest = @kit.toast_rest("toast")
-  // (its way out over, as whole ms have it, before its letting go: half a ms before it)
+  // (its way out going on till its letting go, its time from its start in whole ms as its letting go is: half a ms
+  // before it, still going)
   let early = t.time() < rest - 0.5
   run_to_time(t, rest - 0.5)
   let between = (@ui.view_tree().unwrap().clock_read(), t.query(Status, label="一") is Some(_))
   run_to_time(t, rest)
   let after = (t.query(Status, label="一") is None, @kit.toast_rest("toast"), t.next_wake())
-  assert_eq((early, rest == rest.floor(), between, after), (true, false, (false, true), (true, -1.0, None)), msg="\{rest} \{t.time()}")
+  assert_eq((early, rest == rest.floor(), between, after), (true, false, (true, true), (true, -1.0, None)), msg="\{rest} \{t.time()}")
 }
 
 ///|

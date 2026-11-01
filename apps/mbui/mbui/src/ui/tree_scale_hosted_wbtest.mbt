@@ -844,7 +844,8 @@ test "an old view hosted in a node drawn half as big, a native view in it all of
 
 ///|
 /// A card of the tree, 200×120, its ground 20 round, 6 in all round, drawn `s` as big, holding an old view all of what
-/// it holds (188×108), a box filling it `r` round.
+/// it holds (188×108), a box across its top, 60 high, `r` round (in the card's top corners alone: not made concentric
+/// with them as it is laid out, what the rule says of it as it is).
 fn hosted_card(s : @signals.Signal[Double], r : Double) -> Tester {
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
   set_view_app(fn(root) {
@@ -859,7 +860,7 @@ fn hosted_card(s : @signals.Signal[Double], r : Double) -> Tester {
       |> ignore
       card.box(fn(v) {
         v.width(Is(Some(188.0))).height(Is(Some(108.0))) |> ignore
-        old(v, fn(c) { c.box(w=Fill(1.0), h=Fill(1.0), radius=r, bg=0xEEEEEEFFL, fn() {  }) |> ignore }).grow(Is(1.0))
+        old(v, fn(c) { c.box(w=Fill(1.0), h=Px(60.0), radius=r, bg=0xEEEEEEFFL, fn() {  }) |> ignore }).grow(Is(1.0))
         |> ignore
       })
       |> ignore
@@ -957,4 +958,99 @@ test "a press's room in an old view hosted in a node drawn whole, half as big, w
     msg="half: too little room for each, said where it is drawn, as big, nothing else: \{half}",
   )
   assert_eq(again, [], msg="whole again: room enough")
+}
+
+///|
+test "an old view hosted in a node whole inside one drawn a little smaller (0.99, what holds it scaled, it offset in it): drawn, its words, read out, pressed and its editor's caret told where that scale puts it, not its top left moved onto the pixels" {
+  let s = @signals.signal(1.0, same=fn(a, b) { a == b })
+  let pressed : Map[String, Int] = {}
+  let field = Field::new(text="abcdefghij")
+  let t = hosted_scaled(s, pressed, field, nested=true)
+  // (its editor focused, its caret at its start, whole: where the host is told it is)
+  t.tap(41.0, 50.0)
+  t.draw()
+  field.set(field.text(), caret=0)
+  t.draw()
+  let (x, y, w, h) = t.ime_rect()
+  let g3 = fn(v : Double) { (v * 1000.0).round() / 1000.0 }
+  // (its words whole, and where they go drawn 0.99 as big about the window's top left: set on the pixels where they
+  // are laid out, then scaled with the rest)
+  let words_scaled = t.drawn_glyphs().map(fn(q) { (g3(q.0 * 0.99), g3(q.1 * 0.99)) })
+  // (the button laid out at (140, 60) in the window, 100 by 50, in what is drawn 0.99 as big about the window's top
+  // left: drawn at (138.6, 59.4), 99 by 49.5, as the tree draws what it holds there; its holder's top left (39.6, 39.6)
+  // on no pixel (the Tester's two to a point), 39.5 were it moved onto one)
+  s.set(0.99)
+  t.draw()
+  let f = fn(r : (Double, Double, Double, Double)) {
+    let g = fn(v : Double) { (v * 1000.0).round() / 1000.0 }
+    (g(r.0), g(r.1), g(r.2), g(r.3))
+  }
+  let blue = t.drawn_rects().filter(fn(r) { r.4 == 0x3366CCFFL }).map(fn(r) { f((r.0, r.1, r.2, r.3)) })
+  let read = f(t.get(Button, label="old button").rect)
+  let caret = f(t.ime_rect())
+  let words = t.drawn_glyphs().map(fn(q) { (g3(q.0), g3(q.1)) })
+  // (pressed just left of where it is drawn: nothing; just right of its left edge: it)
+  t.tap(138.55, 80.0)
+  t.draw()
+  let outside = hosted_pressed(pressed, "button")
+  t.tap(138.65, 80.0)
+  t.draw()
+  let inside = hosted_pressed(pressed, "button")
+  assert_eq(
+    (blue, read, caret, words, outside, inside),
+    ([(138.6, 59.4, 99.0, 49.5)], (138.6, 59.4, 99.0, 49.5), f((x * 0.99, y * 0.99, w * 0.99, h * 0.99)), words_scaled, 0, 1),
+  )
+}
+
+///|
+/// An old view 200 by 100 at (40, 40) in a node at the window's top left drawn 0.99 as big about it: its words on a box
+/// 200 by 30 at its top (put off till the frame's end where `flying`: a Stratum's Flying), a node 20 by 20 over it after
+/// it at (250, 150). Its words as drawn, how many times its box and that node are drawn, and whether its box is drawn
+/// after that node.
+fn hosted_words_flying(flying : Bool) -> (Array[(Double, Double)], (Int, Int), Bool) {
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    root.box(fn(o) {
+      o.over(Is(true)).width(Is(Some(300.0))).height(Is(Some(200.0))).scale(Is(0.99), about=At(0.0, 0.0)) |> ignore
+      o.box(fn(h) {
+        h.over(Is(true)).offset(Is((40.0, 40.0))).width(Is(Some(200.0))).height(Is(Some(100.0))) |> ignore
+        old(h, fn(c) {
+          let f = c.box(w=Px(200.0), h=Px(30.0), bg=0x336699FFL, fn() { c.text("words that fly", wrap=false) |> ignore })
+          if flying {
+            c.stratum(f, Flying)
+          }
+        }).grow(Is(1.0))
+        |> ignore
+      })
+      |> ignore
+      o.box(fn(b) {
+        b.over(Is(true)).offset(Is((250.0, 150.0))).width(Is(Some(20.0))).height(Is(Some(20.0))).ground(Is(0xCC3333FFL))
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.draw()
+  let g3 = fn(v : Double) { (v * 1000.0).round() / 1000.0 }
+  let rects = t.drawn_rects()
+  // (how many times each is drawn, and where the first is in the order)
+  let times = fn(colour : Int64) { rects.filter(fn(r) { r.4 == colour }).length() }
+  let at = fn(colour : Int64) { rects.search_by(fn(r) { r.4 == colour }).unwrap_or(-1) }
+  (
+    t.drawn_glyphs().map(fn(q) { (g3(q.0), g3(q.1)) }),
+    (times(0x336699FFL), times(0xCC3333FFL)),
+    at(0x336699FFL) > at(0xCC3333FFL),
+  )
+}
+
+///|
+test "an old view hosted in a node drawn a little smaller (0.99), its words in a box put off till the frame's end (Flying): drawn after what is over it, its words where they are drawn painted at once" {
+  let (at_once, drawn, after) = hosted_words_flying(false)
+  let (put_off, put_off_drawn, put_off_after) = hosted_words_flying(true)
+  assert_eq(
+    (at_once.length() > 0, drawn, put_off_drawn, after, put_off_after, put_off),
+    (true, (1, 1), (1, 1), false, true, at_once),
+  )
 }

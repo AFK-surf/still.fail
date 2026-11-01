@@ -991,7 +991,9 @@ pub fn Ctx::kept_as_nodes(
 /// What `body` builds, in a box of its own filling the one being built, read out or not (Ctx::kept_part's), kept as
 /// its nodes (kept_nodes.mbt's head): built again where something it read changed, or what builds it may build it
 /// otherwise (the frame built anew), or it is built elsewhere (`key`, its id's scope, its owner, its layer, ...); else
-/// its nodes put back as its build made them and what it said of the frame said again there, laid out with the rest.
+/// its nodes put back as its build made them and what it said of the frame said again there, laid out with the rest. `flows`:
+/// its box in the flow of the one being built, as wide as that and as tall as what it holds (an old view as tall as what
+/// it holds: view_host.mbt's old `natural`), not filling it over what else it holds.
 fn Ctx::part_nodes(
   self : Ctx,
   id : Int,
@@ -1001,16 +1003,21 @@ fn Ctx::part_nodes(
   own? : Bool = false,
   named? : String = "",
   made_at? : SourceLoc,
+  flows? : Bool = false,
 ) -> Unit {
   let build = fn() {
-    self.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
+    let inner = fn() {
       if read_out {
         body()
       } else {
         self.hidden_from_semantics(body)
       }
-    })
-    |> ignore
+    }
+    if flows {
+      self.box(style=part_flowing, inner) |> ignore
+    } else {
+      self.box(left=0.0, top=0.0, right=0.0, bottom=0.0, inner) |> ignore
+    }
   }
   // (a part in a row's or a part's build: kept as its nodes among that one's, which is built again as it is told
   // (RowNodes' `holder`), and put back with them)
@@ -1450,3 +1457,8 @@ fn Ctx::laid_said_again(self : Ctx, r : LaidRead) -> Unit {
 fn evented_for(id : Int) -> Bool {
   nodes_run.evented && (nodes_run.evented_only < 0 || nodes_run.evented_only == id)
 }
+
+///|
+/// A part that flows (part_nodes' `flows`): across what holds it, as tall as what it holds.
+// kept across runs: a value (no field of it changes)
+let part_flowing : Style = css("w=Full")

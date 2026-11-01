@@ -225,8 +225,10 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
 /// `f` asked of the frame just built with the window's tree's nodes among its own (view_host.mbt), as they are drawn:
 /// each a box where the window draws it, its ground, its corner, its glass, whether it cuts what it holds to it, how
 /// opaque, what holds it as drawn, whether it takes a press, its words in it; each old view's box held by the tree's node it is drawn in. The frame as it was after. Where
-/// the old view is the whole window (old_whole), none: the tree draws nothing else.
-fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T) -> T {
+/// the old view is the whole window (old_whole), none: the tree draws nothing else. `laid`: each where it is laid out instead, as
+/// big, the old views where they are laid out (Tree::laid_held): what is worked out of them before they are drawn
+/// (Ctx::corners_after_layout).
+fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
   let tree = match view_app.val {
     Some(t) if !old_whole.val => t
     _ => return f()
@@ -245,7 +247,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T) -> T {
     self.count = i + 1
     i
   }
-  let held = tree.drawn_held()
+  let held = if laid { tree.laid_held() } else { tree.drawn_held() }
   // (each drawn one's node here, and the last of what it holds so far: what follows it among them)
   let at : Array[Int] = Array::make(held.length(), -1)
   let last : Map[Int, Int] = Map([])
@@ -272,9 +274,15 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T) -> T {
     n.fh = d.h
     n.bg = d.ground
     n.radius = d.radius
+    // (its corners each where it says them, View::corners: as round as it is laid out or drawn, as its radius)
+    match d.corners {
+      Some((tl, tr, br, bl)) => n.set_radii(FixedArray::from_array([tl, tr, br, bl]))
+      None => ()
+    }
     n.glass = d.glass
     n.clip = d.clips
     n.opacity = d.alpha
+    n.tree_scrolls = tree.scrolls_now(d.id)
     n.parent = parent
     if presses {
       n.hit = true
@@ -304,8 +312,9 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T) -> T {
       }
     }
   }
-  // (what the old views hold where it is drawn, as big, as the window draws it: Ctx::with_old_drawn)
-  let out = self.with_old_drawn(f)
+  // (what the old views hold where it is drawn, as big, as the window draws it: Ctx::with_old_drawn; laid out, where
+  // their nodes are laid out, as the tree's: each old view's carried back from where it is drawn, Ctx::moved_carries)
+  let out = if laid { self.with_old_laid(count, f) } else { self.with_old_drawn(f) }
   for r in reparented {
     self.nodes[r.0].parent = r.1
   }
@@ -947,7 +956,7 @@ fn Ctx::scrolls_between(self : Ctx, i : Int, p : Int) -> (Bool, Bool) {
   let mut q = self.nodes[i].parent
   while q >= 0 && q != p {
     let n = self.nodes[q]
-    if n.kind == kind_list {
+    if n.kind == kind_list || n.tree_scrolls {
       up_down = true
     } else if n.sideways {
       match sideways.get(n.id) {
@@ -1209,12 +1218,16 @@ let inner_even : Double = 0.5
 /// distances keeps it too, said so.
 fn Ctx::corners_after_layout(self : Ctx) -> Unit {
   self.inner_faults.clear()
-  // the containers whose corner is what lies in it (`Around`), before the boxes worked out from their containers
-  self.arounds_after_layout()
-  let grounds = self.layer_grounds()
-  // then every box in a container's corner, `Inner` and the rest, outermost first (a container worked out before what
-  // is in it, as the window's corner makes a panel's)
-  self.corners_in_corners(grounds)
+  // (among the window's tree's nodes where they are laid out, each old view's box held by the one it is drawn in: what
+  // holds an old view's box a container of it as the corner rule finds it, Ctx::with_tree_nodes)
+  self.with_tree_nodes(laid=true, fn() {
+    // the containers whose corner is what lies in it (`Around`), before the boxes worked out from their containers
+    self.arounds_after_layout()
+    let grounds = self.layer_grounds()
+    // then every box in a container's corner, `Inner` and the rest, outermost first (a container worked out before
+    // what is in it, as the window's corner makes a panel's)
+    self.corners_in_corners(grounds)
+  })
 }
 
 ///|
@@ -1605,4 +1618,38 @@ fn Ctx::lies_in_bare(self : Ctx, i : Int, p : Int) -> Bool {
     q = self.nodes[q].parent
   }
   false
+}
+
+///|
+/// `f` asked with each old view hosted in a node of the window's tree (the first `count` of the frame's nodes) where its
+/// nodes are laid out, as the tree's nodes are (Tree::laid_origin): carried back from where it is drawn by what carries
+/// it there (Ctx::moved_carries, as the frame is laid out: Ctx::moved_now); put back after.
+fn[T] Ctx::with_old_laid(self : Ctx, count : Int, f : () -> T) -> T {
+  let shift = fn(i : Int, dx : Double, dy : Double) {
+    fn go(k : Int) {
+      let n = self.nodes[k]
+      n.x = n.x + dx
+      n.y = n.y + dy
+      let mut ch = n.first
+      while ch >= 0 {
+        go(ch)
+        ch = self.nodes[ch].next
+      }
+    }
+
+    go(i)
+  }
+  let carried = old_boxes
+    .values()
+    .filter(fn(b) { b < count && self.nodes[b].moved_carries })
+    .map(fn(b) { (b, self.nodes[b].moved_x, self.nodes[b].moved_y) })
+    .collect()
+  for c in carried {
+    shift(c.0, -c.1, -c.2)
+  }
+  let out = f()
+  for c in carried {
+    shift(c.0, c.1, c.2)
+  }
+  out
 }

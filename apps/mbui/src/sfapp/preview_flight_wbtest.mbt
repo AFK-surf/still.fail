@@ -528,8 +528,9 @@ test "a picture under the chat's bar goes out from under it at its own size firs
     // its box whole, moved down
     assert_true(top <= i[1] + 0.5 && foot >= i[1] + i[3] - 0.5 && i[1] > th.y + 0.5, msg="\{p}")
   }
-  // out: clear of the bar, at its own size
-  t.run_for(start + way_at(lift) * open_ms - near - t.time())
+  // out: clear of the bar, at its own size (a hair before, on the ms of its time a motion's is read at: its time from
+  // its start in whole ms, Spec::value_at)
+  t.run_for(start + (way_at(lift) * open_ms - near).ceil() - t.time())
   assert_true(v.lifted() > 0.95, msg="\{v.lifted()}")
   assert_true(drawn_at(t, (th.x, flight_bar_h + 12.0, th.w, th.h)) || v.lifted() < 1.0, msg="\{t.drawn_images()}")
   t.run_for(near * 2.0)
