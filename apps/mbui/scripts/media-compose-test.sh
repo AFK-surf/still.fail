@@ -59,4 +59,19 @@ if node scripts/media-compose.mjs film "$take/short.json" "$take/film.mp4"; then
 fi
 cmp "$take/film.mp4" "$take/previous.mp4"
 cmp "$take/film.mp4.timeline.json" "$take/previous.json"
+jq '.overlays = []' "$take/short.json" > "$take/short-no-overlay.json"
+if node scripts/media-compose.mjs film "$take/short-no-overlay.json" "$take/film.mp4"; then
+  echo 'media-compose-test: a short source without an overlay succeeded' >&2
+  exit 1
+fi
+cmp "$take/film.mp4" "$take/previous.mp4"
+cmp "$take/film.mp4.timeline.json" "$take/previous.json"
+cp "$take/still.png" "$take/previous.png"
+cp "$take/still.png.timeline.json" "$take/previous-still.json"
+if node scripts/media-compose.mjs still "$take/short.json" 15 "$take/still.png"; then
+  echo 'media-compose-test: a still after the end of a short source succeeded' >&2
+  exit 1
+fi
+cmp "$take/still.png" "$take/previous.png"
+cmp "$take/still.png.timeline.json" "$take/previous-still.json"
 echo 'media-compose-test: scenes, overlays, stills, audio and failure preservation passed'

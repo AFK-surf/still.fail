@@ -100,6 +100,20 @@ function main() {
   }
   const available = Number(process.env.STILLFAIL_CPUS ?? 4);
   const threads = Number.isSafeInteger(available) && available > 0 ? Math.min(available, 4) : 1;
+  // A concat followed by a looping overlay or constant-rate output can otherwise silently hold an earlier frame
+  // when a source ends early. Check the actual decoded frames after the same fps conversion and trim used below.
+  // A still needs only the scenes and frames up to the requested point.
+  let offset = 0;
+  for (const [i, s] of scenes.entries()) {
+    const required = frame === null ? s.frames : Math.min(s.frames, Math.max(0, frame - offset + 1));
+    offset += s.frames;
+    if (s.kind !== 'film' || required === 0) continue;
+    const progress = call('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostats', '-i', s.path,
+      '-map', '0:v:0', '-vf', `fps=${fps},trim=start_frame=${s.start}:end_frame=${s.start + required},` +
+        `select=eq(n\\,${required - 1})`, '-an', '-frames:v', '1', '-progress', 'pipe:1', '-f', 'null', '-'], true);
+    const counts = [...progress.matchAll(/^frame=\s*(\d+)/gm)];
+    if (!counts.length || Number(counts.at(-1)[1]) !== 1) fail(`scene ${i} ends before its requested frame`);
+  }
   const argv = ['-hide_banner', '-loglevel', 'error', '-y', '-filter_complex_threads', String(threads)];
   for (const s of scenes) {
     if (s.kind === 'picture') argv.push('-loop', '1', '-framerate', String(fps));
@@ -118,7 +132,7 @@ function main() {
   overlays.forEach((o, i) => {
     const overlay = scenes.length + i, next = `over${i}`;
     filters.push(`[${video}][${overlay}:v:0]overlay=x=${o.x}:y=${o.y}:format=auto:` +
-      `enable='between(n,${o.at},${o.until - 1})':eof_action=repeat[${next}]`);
+      `enable='between(n,${o.at},${o.until - 1})':eof_action=repeat:shortest=1[${next}]`);
     video = next;
   });
   if (mode === 'still') {
@@ -142,7 +156,7 @@ function main() {
   argv.push('-filter_complex', filters.join(';'), '-map', `[${video}]`);
   if (mode === 'film' && audio.length) argv.push('-map', '[sound]', '-c:a', 'aac', '-b:a', '192k');
   if (mode === 'film') argv.push('-c:v', 'libx264', '-preset', 'veryfast', '-threads', String(threads), '-pix_fmt', 'yuv420p',
-    '-r', String(fps), '-frames:v', String(total), '-movflags', '+faststart');
+    '-fps_mode', 'passthrough', '-frames:v', String(total), '-movflags', '+faststart');
   else argv.push('-frames:v', '1', '-fps_mode', 'passthrough');
   mkdirSync(dirname(output), { recursive: true });
   const tmp = mkdtempSync(join(dirname(output), '.mbui-compose-'));
