@@ -653,3 +653,58 @@ test "panel, 大屏 keyboard and mouse: tall 0.5 and not, a foot's button in its
     "head end: (654, 110.8, 221.2, 34) shows [(654, 110.8, 875.2, 144.8)] pressed [1, 1]",
   ])
 }
+
+///|
+test "panel, 大屏 keyboard and mouse: at a point, what it holds told whether it stands above what opened it: under it, flipped over it for want of room below, said to go over it: as main has it" {
+  let out = []
+  for (y, side) in [(100.0, @ui.Side::Bottom), (780.0, @ui.Side::Bottom), (400.0, @ui.Side::Top)] {
+    let t = menu_tester(1280.0, 800.0, 0)
+    let up : Array[Bool] = []
+    @sf.panel(
+      "面板",
+      fn(c, _) {
+        up.push(@sf.panel_opens_up())
+        @sf.panel_text(c, fn() { c.text("面板里的话", style=@sf.paragraph) |> ignore })
+      },
+      from=At(600.0, y, 0.0, 0.0),
+      side~,
+    )
+    t.run_for(@ui.move_most_ms)
+    out.push((y, t.get(Dialog, label="面板").rect.1 < y, up.last()))
+  }
+  // (as main has it, a4c845604)
+  assert_eq(out, [(100.0, false, Some(false)), (780.0, true, Some(true)), (400.0, true, Some(true))])
+}
+
+///|
+test "panel, 大屏 keyboard and mouse: at a point, open as the window is made too short for it below what opened it and tall again: what it holds told it stands above it the frame it goes there, below it again the frame it comes back: as main has it" {
+  let t = menu_tester(1280.0, 800.0, 0)
+  let up : Array[Bool] = []
+  @sf.panel(
+    "面板",
+    fn(c, _) {
+      up.push(@sf.panel_opens_up())
+      @sf.panel_text(c, fn() { c.text("面板里的话", style=@sf.paragraph) |> ignore })
+    },
+    from=At(600.0, 500.0, 0.0, 0.0),
+  )
+  t.run_for(@ui.move_most_ms)
+  let out = []
+  let said = fn(t : @ui.Tester, h : Double) { (h, t.query(Dialog, label="面板").map(fn(s) { s.rect.1 < 500.0 }), up.last()) }
+  out.push(said(t, 800.0))
+  for h in [560.0, 800.0] {
+    // (the frame it is drawn at that height, then once it is at rest)
+    t.resize(1280.0, h)
+    out.push(said(t, h))
+    t.run_for(@ui.move_most_ms)
+    out.push(said(t, h))
+  }
+  // (as main has it, a4c845604)
+  assert_eq(out, [
+    (800.0, Some(false), Some(false)),
+    (560.0, Some(true), Some(true)),
+    (560.0, Some(true), Some(true)),
+    (800.0, Some(false), Some(false)),
+    (800.0, Some(false), Some(false)),
+  ])
+}

@@ -33,9 +33,9 @@ fn tree_draws(p : Presented, sheet : Bool) -> Bool {
 ///|
 /// Whether panel `x` presented `from` is a small panel beside what opened it the window's tree draws (panel_node): not
 /// a stage, a form or one opened by nothing (a dialog in the middle of the window), nor (yet) one as wide as what it
-/// holds, or whose title is as it is now (`live`).
+/// holds and a share of the window tall, or whose title is as it is now (`live`).
 fn panel_popover_of(x : PanelOf, from : Anchor) -> Bool {
-  !x.stage && !x.form && from != Unanchored && !x.fits && x.live is None
+  !x.stage && !x.form && from != Unanchored && !(x.fits && x.tall > 0.0) && x.live is None
 }
 
 ///|

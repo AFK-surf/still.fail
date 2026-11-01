@@ -127,3 +127,49 @@ test "words in a node drawn half as big in one drawn twice as big, its point and
   let new = back_to_size(true)
   assert_true(old.length() > 0 && glyphs_alike(old, new), msg="old \{old[:3]}\nnode \{new[:3]}")
 }
+
+///|
+/// The words in a node 301 wide placed off where its layout puts it, at a point off the pixels (`how` 0: offset (10.3,
+/// 40.3); 1: beside an anchor at (100.3, 60.3)), drawn `s` as big about its middle: the node's own words (`old` false) or
+/// an old view's in it (as tall as they are): the glyphs drawn.
+fn off_words(how : Int, s : Double, old_view : Bool) -> Array[(Double, Double, Int64)] {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  set_view_app(fn(root) {
+    let anchor = root.box(fn(a) {
+      a.over(Is(true)).width(Is(Some(20.0))).height(Is(Some(10.0))).offset(Is((100.3, 60.3))) |> ignore
+    })
+    root.box(fn(b) {
+      b.over(Is(true)).width(Is(Some(301.0))).scale(Is(s)) |> ignore
+      if how == 0 {
+        b.offset(Is((10.3, 40.3))) |> ignore
+      } else {
+        b.beside(anchor.id(), side=Bottom, along=Start, offset=4.0) |> ignore
+      }
+      if old_view {
+        old(b, natural=true, fn(c) {
+          c.box(w=Fill(1.0), fn() { c.text(scaled_words, size=13.0, line=18.0) |> ignore }) |> ignore
+        })
+        |> ignore
+      } else {
+        b.words(Is(scaled_words), look={ size: 13.0, weight: 400, line: 18.0, wrap: true }).ink(By(fn() { tree_theme().color(Fg) })) |> ignore
+      }
+    })
+    |> ignore
+  })
+  t.draw()
+  t.draw()
+  t.drawn_glyphs()
+}
+
+///|
+test "an old view's words in a node placed off its layout at a point off the pixels, by an offset or beside another, drawn whole or 0.7 as big: each glyph where the node's own words are" {
+  let out = []
+  for c in [(0, 1.0), (0, 0.7), (1, 1.0), (1, 0.7)] {
+    let old = off_words(c.0, c.1, true)
+    let new = off_words(c.0, c.1, false)
+    if !(old.length() > 0 && glyphs_alike(old, new)) {
+      out.push("\{c}: old \{old[:dmin(3.0, old.length().to_double()).to_int()]} node \{new[:dmin(3.0, new.length().to_double()).to_int()]}")
+    }
+  }
+  assert_eq(out, [])
+}

@@ -45,6 +45,9 @@ priv struct OldIsland {
   /// as tall as what it holds at its width (old's `natural`): that height as the old frame last laid it out (None
   /// before it first is), what its node is as tall as; the box it is laid out in, as tall as it (-1: none this frame)
   natural : @signals.Signal[Double?]?
+  /// as wide as what it holds, `most` at most and never narrower than it is (old's `fits`): the least that is, as the
+  /// old frame last laid it out, told the signal (None before it first is)
+  fits : (Double, @signals.Signal[Double?])?
   mut held_box : Int
 }
 
@@ -65,6 +68,13 @@ let old_made : Ref[Int] = Ref(0)
 /// as the last says about it (old_frame).
 // kept across runs: put back as a run begins (view_forget)
 let old_placed : Array[(@view.NodeId, Double, Double, Double, Double, Double, Double, Double, Double)] = []
+
+///|
+/// How far each old view placed (old_placed) would be drawn off where its layout alone puts it were nothing in its way
+/// grown, shrunk or drawn off (Tree::each_drawn_laid less Tree::laid_origin: what places it beside another, its offset):
+/// where its words are set on the pixels, as the tree's own are (glyphs_carried_of).
+// kept across runs: put back as a run begins (view_forget)
+let old_placed_off : Map[@view.NodeId, (Double, Double)] = {}
 
 ///|
 /// Whether the one old view is the whole window, wholly opaque: the old frame is its build, as with no tree.
@@ -354,6 +364,7 @@ fn view_forget() -> Unit {
   view_input_to.val = -3
   old_islands.clear()
   old_placed.clear()
+  old_placed_off.clear()
   old_hits.clear()
   next_old_hits.clear()
   layer_hits.clear()
@@ -529,12 +540,16 @@ let view_window : Ref[(Double, Double)] = Ref((0.0, 0.0))
 fn old_place(tree : @view.Tree) -> Unit {
   let (w, h) = view_window.val
   old_placed.clear()
+  old_placed_off.clear()
   // (in the tree's order: built so, what is over another built after it, its presses and its back taken first)
   // (laid out as big as its node is, where it is drawn: old views drawn as big as they are laid out, View::scale)
-  tree.each_drawn_scaled(fn(c, x, y, a, s) {
+  tree.each_drawn_laid(fn(c, x, y, a, s, ux, uy) {
     if c.hosted && old_islands.iter().any(fn(o) { o.id == c.id }) {
       let (ox, oy) = tree.laid_origin(c.id).unwrap_or((x, y))
       old_placed.push((c.id, x, y, c.w, c.h, a, ox, oy, s))
+      // (where it would be drawn were nothing grown, shrunk or drawn off, as the tree's own words are set on the pixels
+      // there: off where its layout alone puts it by what places it beside another or offsets it)
+      old_placed_off[c.id] = (ux - ox, uy - oy)
     }
   })
   // (and nothing else of the tree's to see or press: the old frame, its overlays with it, is all that is drawn)
@@ -611,13 +626,31 @@ fn old_frame(c : Ctx) -> Unit {
             // (as tall as what it holds: built for its width, its Ctx::height the window's (where it is built, not how
             // tall it may be), never the height it is given, which is what it holds's)
             let room_h = if o.natural is Some(_) { c.height } else { h }
-            o.room.val = (w, room_h)
+            // (as wide as what it holds: built for the most it may be, whatever it is now)
+            let room_w = match o.fits {
+              Some((most, _)) => most
+              None => w
+            }
+            o.room.val = (room_w, room_h)
             let put = fn() { owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) }) }
-            c.sized(w, room_h, fn() {
+            c.sized(room_w, room_h, fn() {
               match o.natural {
                 // (as tall as what it holds at its width, in a box of its own: how tall that is laid out, its node's
-                // height, old_natural_after_layout)
-                Some(_) => o.held_box = c.box(style=style(w=Fixed(w)), fn() { put() })
+                // height, old_natural_after_layout; as wide as what it holds, `most` at most, no narrower than its node:
+                // how wide that is laid out, what its node is told)
+                Some(_) =>
+                  match o.fits {
+                    // (laid out in the room of the most it may be, at its start: as wide as what it holds there, no
+                    // narrower than its node; whatever its node is now)
+                    Some((most, _)) => {
+                      let most = dmax(w, most)
+                      c.box(style=style(w=Fixed(most), align=AStart), fn() {
+                        o.held_box = c.box(style=style(w=Hug, min_w=Fixed(w), max_w=Fixed(most)), fn() { put() })
+                      })
+                      |> ignore
+                    }
+                    None => o.held_box = c.box(style=style(w=Fixed(w)), fn() { put() })
+                  }
                 None => {
                   o.held_box = -1
                   put()
@@ -1908,12 +1941,16 @@ fn view_frame_end(c : Ctx) -> Unit {
 /// built again as that changes. `natural`: as tall as what it holds at the width it is given (laid out so by the old
 /// frame, old_natural_after_layout), not as said of it (a panel's body, as tall as its words): said no taller (max_height),
 /// cut to that. Built then for its width with the window's height as its Ctx::height (where it is built, no bound on
-/// how tall it is), again as either changes, never for the height it is given.
+/// how tall it is), again as either changes, never for the height it is given. `fits`: as wide as what it holds besides, at
+/// most its first and never narrower than its node is (a panel as wide as what it holds, never narrower than it has been):
+/// that width as the old frame last laid it out told its second (None before), built for the most whatever it is; a
+/// `natural` one's alone.
 pub fn old(
   v : @view.View,
   build : (Ctx) -> Unit,
   key? : () -> String = fn() { "" },
   natural? : Bool = false,
+  fits? : (Double, @signals.Signal[Double?]),
 ) -> @view.View {
   v.hosted(make=fn(n) {
     // (as tall as what it holds at the width it is given, as the old frame last laid that out: old_natural_after_layout)
@@ -1972,6 +2009,7 @@ pub fn old(
       part: -1,
       room,
       natural: natural_h,
+      fits: if natural { fits } else { None },
       held_box: -1,
     })
     n.owns(fn() {
@@ -2094,14 +2132,19 @@ fn island_scale(id : @view.NodeId) -> Double {
 }
 
 ///|
-/// How far what old node `i` is in is carried off where it was laid out to where it is drawn (its old view's box moved
-/// so: Ctx::moved_carries): what its words are set on the pixels by (glyphs_carried); none (0, 0)
-/// for one in no old view hosted, or in one drawn where it is laid out.
+/// How far what old node `i` is in is carried off where its words are set on the pixels to where it is drawn: its old
+/// view's box moved so (Ctx::moved_carries, from where its layout alone puts it) less what places it beside another or
+/// offsets it (old_placed_off): its words on the pixels where it would be drawn were nothing grown, shrunk or drawn off,
+/// as the tree's own words are (each_drawn_laid), then carried with what moves it from there (glyphs_carried); none (0,
+/// 0) for one in no old view hosted, or in one drawn there.
 fn Ctx::glyphs_carried_of(self : Ctx, i : Int) -> (Double, Double) {
   match self.nodes[i].island {
     Some(id) =>
       match old_boxes.get(id) {
-        Some(b) if b >= 0 && b < self.count && self.nodes[b].moved_carries => (self.nodes[b].moved_x, self.nodes[b].moved_y)
+        Some(b) if b >= 0 && b < self.count && self.nodes[b].moved_carries => {
+          let (sx, sy) = old_placed_off.get(id).unwrap_or((0.0, 0.0))
+          (self.nodes[b].moved_x - sx, self.nodes[b].moved_y - sy)
+        }
         _ => (0.0, 0.0)
       }
     None => (0.0, 0.0)
@@ -3686,6 +3729,16 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
         if @signals.untracked(fn() { s.get() }) != Some(h) {
           s.set(Some(h))
           c.read_changed("an old view's height, what it holds laid out")
+        }
+        match o.fits {
+          Some((_, f)) => {
+            let w = c.nodes[o.held_box].fw
+            if @signals.untracked(fn() { f.get() }) != Some(w) {
+              f.set(Some(w))
+              c.read_changed("an old view's width, what it holds laid out")
+            }
+          }
+          None => ()
         }
       }
       _ => ()
