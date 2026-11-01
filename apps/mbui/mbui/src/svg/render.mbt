@@ -388,3 +388,44 @@ fn apply_mask(mask : Mask, ctx : RContext, transform : @skia.Transform, pixmap :
   }
   pixmap.apply_mask(@skia.Mask::from_pixmap(mask_pixmap, kind))
 }
+
+///|
+/// An SVG document's bytes drawn with its longer side `long_side` pixels: (width, height, straight RGBA). None where
+/// they are not one, or it says no size.
+pub fn rasterize(data : Bytes, long_side : Int, opt? : Options = Options::default()) -> (Int, Int, FixedArray[Byte])? {
+  let data = if data.length() >= 2 && data[0] == b'\x1F' && data[1] == b'\x8B' {
+    match @zip.gunzip(data) {
+      Some(d) => d
+      None => return None
+    }
+  } else {
+    data
+  }
+  let text = @utf8.decode(data) catch { _ => return None }
+  guard tree_from_str(text, opt) is Some(tree) else { return None }
+  let (w, h) = (tree.size.width, tree.size.height)
+  if !(w > 0.0 && h > 0.0) || long_side <= 0 {
+    return None
+  }
+  let width = if w >= h { long_side } else { f2i(fround(fi(long_side) * w / h)) }
+  let width = if width < 1 { 1 } else { width }
+  guard size_to_int_size(tree.size).scale_to_width(width) is Some(size) else { return None }
+  guard @skia.Pixmap::new(size.width, size.height) is Some(pixmap) else { return None }
+  let ts = @skia.Transform::from_scale(fi(size.width) / w, fi(size.height) / h)
+  render_tree(tree, ts, pixmap)
+  // premultiplied to straight
+  let out = FixedArray::make(size.width * size.height * 4, b'\x00')
+  for i in 0..<(size.width * size.height) {
+    let a = pixmap.data[i * 4 + 3].to_int()
+    if a == 0 {
+      continue
+    }
+    for k in 0..<3 {
+      let c = pixmap.data[i * 4 + k].to_int()
+      let v = (c * 255 + a / 2) / a
+      out[i * 4 + k] = (if v > 255 { 255 } else { v }).to_byte()
+    }
+    out[i * 4 + 3] = a.to_byte()
+  }
+  Some((size.width, size.height, out))
+}
