@@ -65,6 +65,12 @@ int32_t sf_utc_offset_min(double at_ms);
 extern "C" __attribute__((weak)) int mb_perf_on(void) { return 0; }
 // A line into the performance record (ios_app.m), where the host keeps one.
 extern "C" __attribute__((weak)) void mb_perf_note(const char *text) { (void)text; }
+// Whether the core's thread times its tasks by what they were: the record kept, or MBUI_PROBE (its `PROBE core js:`
+// line every 5 s, probe_taps: on a Mac, which keeps no record, the only way to see what the core is busy with).
+static bool core_timed(void) {
+  static const bool probe = getenv("MBUI_PROBE") != nullptr;
+  return probe || mb_perf_on() != 0;
+}
 
 #if TARGET_OS_IPHONE
 static const char *const kOS = "ios";
@@ -733,7 +739,7 @@ static void install(jsi::Runtime &rt) {
       }
       return jsi::Value::undefined();
     }
-    if (mb_perf_on()) perf_ops[id] = op;
+    if (core_timed()) perf_ops[id] = op;
     sf_shell_call(C.shell, id, op.c_str(), reinterpret_cast<const uint8_t *>(json.data()), json.size(), p, len, has ? 1 : 0);
     return jsi::Value::undefined();
   });
@@ -907,7 +913,7 @@ static void run(void) {
     }
     if (C.dead || !rt) continue;
     // (the record kept: this task timed, by what it was)
-    bool perf = mb_perf_on() != 0;
+    bool perf = core_timed();
     double perf_t0 = perf ? clock_ms(CLOCK_MONOTONIC) : 0;
     perf_task = task ? "task" : "timer";
     @autoreleasepool {
@@ -976,7 +982,7 @@ void mb_core_send(const char *json, size_t len, const uint8_t *bytes, size_t ble
   std::string j(json, len);
   bool has = bytes != nullptr;
   std::string b = has ? std::string(reinterpret_cast<const char *>(bytes), blen) : std::string();
-  std::string what = mb_perf_on() ? perf_asked(j) : std::string();
+  std::string what = core_timed() ? perf_asked(j) : std::string();
   post([j = std::move(j), b = std::move(b), has, what = std::move(what)](jsi::Runtime &rt) {
     if (!what.empty()) perf_task = what;
     jsi::Object sf = stillfail(rt);
@@ -1017,8 +1023,8 @@ extern "C" int mb_core_tap_line(int who, char *out, size_t n) {
   NSMutableString *line = [NSMutableString string];
   for (NSString *k in taps)
     [line appendFormat:@"%@%@=%lld", line.length ? @" " : @"", k, count(calls, k) - count(was[who], k)];
-  // (the record's: the shell's other operations asked most since, the 6 most, as `ops: name=N …`)
-  if (who == 1) {
+  // (the shell's other operations asked most since, the 6 most, as `ops: name=N …`)
+  {
     NSMutableDictionary<NSString *, NSNumber *> *more = [NSMutableDictionary dictionary];
     for (NSString *k in calls) {
       long long d = count(calls, k) - count(was[who], k);
@@ -1057,7 +1063,9 @@ extern "C" int mb_core_perf_line(double span_ms, char *out, size_t n) {
   return at;
 }
 
-// MBUI_PROBE=1: what the shell did of remote screens every 5 s, on the log (`PROBE core: tap.views=…`: mb_core_tap_line).
+// MBUI_PROBE=1: what the shell did of remote screens every 5 s, on the log (`PROBE core: tap.views=…`: mb_core_tap_line),
+// and what the core's thread spent its time on (`PROBE core js: busy=…`: mb_core_perf_line), unless the record takes
+// that (the iOS host's, while it is kept: one taker, or each would see half).
 static void probe_taps(void) {
   static dispatch_source_t timer;
   if (timer || !getenv("MBUI_PROBE")) return;
@@ -1066,6 +1074,8 @@ static void probe_taps(void) {
   dispatch_source_set_event_handler(timer, ^{
     char line[512];
     if (mb_core_tap_line(0, line, sizeof line) > 0) fprintf(stderr, "PROBE core: %s\n", line);
+    char js[900];
+    if (!mb_perf_on() && mb_core_perf_line(5000, js, sizeof js) > 0) fprintf(stderr, "PROBE core js: %s\n", js);
   });
   dispatch_resume(timer);
 }
