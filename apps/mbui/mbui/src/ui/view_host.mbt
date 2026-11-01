@@ -744,9 +744,13 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     if a <= 0.002 {
       // (its picture not seen yet asked for all the same, for the pixels it is laid out at, as an old view's is as it
       // is built whatever is seen of it: decoded by the time it shows, View::image)
+      // (for the room it is judged ready for where it is said: View::image_for)
       match c.image {
-        Some((src, _, most)) =>
-          self.image_ready(src, dmin(dmax(c.w * s, c.h * s) * self.scale, most.to_double())) |> ignore
+        Some((src, _, most)) => {
+          let (fw, fh) = c.image_for
+          let room = if fw > 0.0 || fh > 0.0 { dmax(fw, fh) * s } else { dmax(c.w * s, c.h * s) }
+          self.image_ready(src, dmin(room * self.scale, most.to_double())) |> ignore
+        }
         None => ()
       }
       return
@@ -791,7 +795,12 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     // (what it holds cut to it, as an old view's clipping box cuts what it holds: push_round_clip's, after its own)
     defer {
       if c.clips {
-        view_push_clip(x, y, c.w * s, c.h * s, c.radius * s)
+        let r = c.radius * s
+        let corners = match c.corners {
+          Some((tl, tr, br, bl)) => (tl * s, tr * s, br * s, bl * s)
+          None => (r, r, r, r)
+        }
+        view_push_clip(x, y, c.w * s, c.h * s, corners)
         clipping.push(c.id)
       }
     }
@@ -851,9 +860,15 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
         inst_owners.painting = -1
         inst_owners.tree_painting = Some(c.id)
-        // (what stands in for it till it is decoded for the pixels it is drawn at, now: asked for then)
+        // (what stands in for it till it is decoded for the pixels it is drawn at, now, or for the room it is judged
+        // ready for where that is said (View::image_for): asked for then, whatever stands in)
         let (w, h) = (c.w * s, c.h * s)
-        let shown = if stand_in == "" || self.image_ready(src, dmin(dmax(w, h) * self.scale, most.to_double())) {
+        let (fw, fh) = c.image_for
+        let judged = fw > 0.0 || fh > 0.0
+        let room = if judged { dmax(fw, fh) * s } else { dmax(w, h) }
+        let shown = if stand_in == "" && !judged {
+          src
+        } else if self.image_ready(src, dmin(room * self.scale, most.to_double())) || stand_in == "" {
           src
         } else {
           stand_in
@@ -962,7 +977,13 @@ fn Ctx::view_ring_put(self : Ctx, held : FixedArray[Double], by : (Int, (Double,
 /// A node's clip pushed, (`x`, `y`) `w` by `h` where it is drawn, its corners `r` round, within the clip it is in: as
 /// an old view's box's is (push_round_clip: as round, and as smooth, as its ground's corners are; where a corner is
 /// both's, the rounder).
-fn view_push_clip(x : Double, y : Double, w : Double, h : Double, r : Double) -> Unit {
+fn view_push_clip(
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  corners : (Double, Double, Double, Double),
+) -> Unit {
   let k = clip_top()
   let s = clip_stack
   let x0 = dmax(x, s[k])
@@ -972,6 +993,12 @@ fn view_push_clip(x : Double, y : Double, w : Double, h : Double, r : Double) ->
   let room = dmin(w, h) / 2.0
   let corner = fn(j : Int, cx : Double, cy : Double, ox : Double, oy : Double) {
     let (pr, ps) = clip_corner_r(k, j, cx, cy)
+    let r = match j {
+      0 => corners.0
+      1 => corners.1
+      2 => corners.2
+      _ => corners.3
+    }
     let own = dmax(dmin(r, room), 0.0)
     if own > 0.0 && cx == ox && cy == oy && own >= pr {
       (own, smoothness(own, room))
@@ -1032,23 +1059,35 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
   // (the shadow it casts, as a box with a shadow casts it, Ctx::paint's and paint_glass's: under its ground; glass's
   // solid ground over it; frosted glass's after the glass, outside it only, so the glass frosts not its own shadow)
   let (blur, dy, cast) = c.shadow
+  // (its corners each, where it says them (View::corners), on each instance of its ground as it is emitted)
+  let each = fn() {
+    match c.corners {
+      Some((tl, tr, br, bl)) => self.corners_last_each(tl, tr, br, bl)
+      None => ()
+    }
+  }
   match c.glass {
     Some(gl) if solid => {
       if blur > 0.0 {
         self.push_inst(0.0, dy, c.w, c.h, c.radius, 2.0, 0.0, blur, cast, 1.0, 0.0, 0.0, 0.0, 0.0)
+        each()
       }
       self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, gl.solid, 0.0, 0L, 1.0)
+      each()
     }
     Some(gl) => {
       glass_at = self.ninst - start
       self.glass_inst(0.0, 0.0, c.w, c.h, c.radius, gl, 1.0)
+      each()
       if blur > 0.0 && !gl.liquid {
         self.push_inst(0.0, dy, c.w, c.h, c.radius, 2.0, 0.0, blur, cast, 1.0, 1.0, dy, 0.0, 0.0)
+        each()
       }
     }
     None =>
       if blur > 0.0 {
         self.push_inst(0.0, dy, c.w, c.h, c.radius, 2.0, 0.0, blur, cast, 1.0, 0.0, 0.0, 0.0, 0.0)
+        each()
       }
   }
   // (a ground of no opacity draws nothing, as an old view's box's: scene.mbt's paint of its bg)
@@ -1061,11 +1100,14 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
   if edged && edge_after {
     if (c.ground & 0xFFL) != 0L {
       self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, ew, 0L, 1.0)
+      each()
     }
     ring_at = self.ninst - start
     self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, 0L, ew, ec, 1.0)
+    each()
   } else if (c.ground & 0xFFL) != 0L || edged {
     self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, if edged { ew } else { 0.0 }, if edged { ec } else { 0L }, 1.0)
+    each()
   }
   // (its ground's instances: its shadow, its glass, its fill and edge, drawn off and bigger as it says, View::ground_drawn)
   let ground_n = self.ninst - start

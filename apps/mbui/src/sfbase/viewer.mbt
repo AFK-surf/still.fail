@@ -2118,34 +2118,31 @@ pub fn Viewer::shown_picture(self : Viewer, c : @ui.Ctx, src : Source, r : (Doub
 }
 
 ///|
-/// The picture in flight (FilePreview.kt viewerFlying): at the start as the chat draws its thumbnail (its box, its
-/// corners, the picture covering the box or letterboxed in it, cut by it), at the end where the stage draws it. One
-/// value takes the box to the picture's place and its corners to none, and the picture from where it lies in the box
-/// to there, at its own proportions all the way. From the thumbnail where the chat lays it out now (it may move under
-/// the viewer: the keyboard let go as it opened, a message come), else where it was last. `ground`: under the picture
-/// in the box (a film's black).
-pub fn Viewer::draw_flight(
-  self : Viewer,
-  c : @ui.Ctx,
-  picture : String,
+/// Where the picture in flight is drawn (Viewer::draw_flight): `cut`, what shows of it, on the window (from what showed
+/// of the thumbnail, cut by what it is in, to the whole stage); `box`, the box it is cut to, its corners `radius` round
+/// (from the thumbnail's box and corners, each as the thumbnail resolves it, to the picture's place and none);
+/// `picture`, the picture in it (from where it lies in the box, covering it or fitted inside it, to its place), at its
+/// own proportions all the way.
+struct FlightBox {
+  cut : (Double, Double, Double, Double)
+  box : (Double, Double, Double, Double)
+  corners : (Double, Double, Double, Double)
+  picture : (Double, Double, Double, Double)
+}
+
+///|
+/// The picture's flight from thumbnail `from` (gone out from under the bar or the composer `lifted` of the way) to
+/// `to` on a stage `stage_w` × `stage_h`, `p` of the way there (Viewer::flying's): None where it has nowhere to go.
+fn flight_box(
+  from : Thumb,
+  lifted : Double,
   to : (Double, Double, Double, Double),
   p : Double,
-  ground? : Int64 = 0L,
-) -> Unit {
-  match (thumb_of(c, self.id()), self.fly_from) {
-    // (hidden while the picture is out, it is drawn nowhere: what showed of it as it was last drawn, moved with it)
-    (Some(t), Some({ seen: Some((sx, sy, sw, sh)), x, y, .. })) if t.seen is None =>
-      self.fly_from = Some({ ..t, seen: Some((sx + t.x - x, sy + t.y - y, sw, sh)) })
-    (Some(t), _) => self.fly_from = Some(t)
-    (None, _) => ()
-  }
-  let from = match self.fly_from {
-    Some(t) => t
-    None => return
-  }
+  stage_w : Double,
+  stage_h : Double,
+) -> FlightBox? {
   // out from under the bar or the composer first, at its own size, uncut as it comes clear of what cut it there
-  let l = self.lifted()
-  let dy = lift_of(from) * l
+  let dy = lift_of(from) * lifted
   let (sx, sy, sw, sh) = from.seen.unwrap_or((from.x, from.y, from.w, from.h))
   // (a side cut by what it is in stays where that cuts it, on the screen; a side nothing cut goes with the box, its
   // corners whole all the way)
@@ -2160,21 +2157,73 @@ pub fn Viewer::draw_flight(
   let from = { ..from, y: from.y + dy }
   let (tx, ty, tw, th) = to
   if tw <= 0.0 || th <= 0.0 {
-    return
+    return None
   }
   // where the picture lies in the thumbnail's box: covering it, or fitted inside it (FilePreview.kt fitted)
   let k = if from.letterbox { dmin(from.w / tw, from.h / th) } else { dmax(from.w / tw, from.h / th) }
   let (pw0, ph0) = (tw * k, th * k)
   let (px0, py0) = (from.x + (from.w - pw0) / 2.0, from.y + (if from.top_crop { 0.0 } else { (from.h - ph0) / 2.0 }))
   let along = fn(a : Double, b : Double) { a + (b - a) * p }
-  let (bx, by, bw, bh) = (along(from.x, tx), along(from.y, ty), along(from.w, tw), along(from.h, th))
-  let (px, py, pw, ph) = (along(px0, tx), along(py0, ty), along(pw0, tw), along(ph0, th))
-  let corners = from.corners.scaled(1.0 - p)
-  // The film's black and its picture share the box's cut, with black around a letterboxed picture or while it decodes.
   // cut, at the thumbnail, as the thumbnail is by what it is in (its card's edge), the stage whole at the other end
   let (cx, cy) = (along(sx, 0.0), along(sy, 0.0))
-  let (cw, ch) = (along(sx + sw, c.width) - cx, along(sy + sh, c.height) - cy)
+  Some({
+    cut: (cx, cy, along(sx + sw, stage_w) - cx, along(sy + sh, stage_h) - cy),
+    box: (along(from.x, tx), along(from.y, ty), along(from.w, tw), along(from.h, th)),
+    corners: {
+      let (tl, tr, br, bl) = from.corners.each()
+      let k = 1.0 - p
+      (tl * k, tr * k, br * k, bl * k)
+    },
+    picture: (along(px0, tx), along(py0, ty), along(pw0, tw), along(ph0, th)),
+  })
+}
+
+///|
+/// The thumbnail the picture flies from and back into as `c` has it now: where the chat lays it out now (it may move
+/// under the viewer: the keyboard let go as it opened, a message come), what showed of it as it was last drawn moved
+/// with it where it is drawn nowhere now (hidden while the picture is out); where it is not on the screen, where it was
+/// last (Viewer's fly_from). Read only.
+pub fn Viewer::flight_from(self : Viewer, c : @ui.Ctx) -> Thumb? {
+  match (thumb_of(c, self.id()), self.fly_from) {
+    // (hidden while the picture is out, it is drawn nowhere: what showed of it as it was last drawn, moved with it)
+    (Some(t), Some({ seen: Some((sx, sy, sw, sh)), x, y, .. })) if t.seen is None =>
+      Some({ ..t, seen: Some((sx + t.x - x, sy + t.y - y, sw, sh)) })
+    (Some(t), _) => Some(t)
+    (None, last) => last
+  }
+}
+
+///|
+/// The picture in flight (FilePreview.kt viewerFlying): at the start as the chat draws its thumbnail (its box, its
+/// corners, the picture covering the box or letterboxed in it, cut by it), at the end where the stage draws it. One
+/// value takes the box to the picture's place and its corners to none, and the picture from where it lies in the box
+/// to there, at its own proportions all the way (flight_box). From the thumbnail where the chat lays it out now, else
+/// where it was last (Viewer::flight_from, kept as it is drawn). `ground`: under the picture in the box (a film's
+/// black).
+pub fn Viewer::draw_flight(
+  self : Viewer,
+  c : @ui.Ctx,
+  picture : String,
+  to : (Double, Double, Double, Double),
+  p : Double,
+  ground? : Int64 = 0L,
+) -> Unit {
+  self.fly_from = self.flight_from(c)
+  let from = match self.fly_from {
+    Some(t) => t
+    None => return
+  }
+  let f = match flight_box(from, self.lifted(), to, p, c.width, c.height) {
+    Some(f) => f
+    None => return
+  }
+  let (cx, cy, cw, ch) = f.cut
+  let (bx, by, bw, bh) = f.box
+  let (px, py, pw, ph) = f.picture
+  // The film's black and its picture share the box's cut, with black around a letterboxed picture or while it decodes.
   let flight_ground = if picture == "" { ground } else { 0L }
+  // (the thumbnail's corners as measured, as round as the flight leaves them)
+  let corners = from.corners.scaled(1.0 - p)
   c.layer(fn() {
     c.box(style=@ui.style(w=Fixed(cw), h=Fixed(ch), clip=true), tx=cx, ty=cy, fn() {
       c.box(style=@ui.style(radius=corners, clip=true), w=Px(bw), h=Px(bh), tx=bx - cx, ty=by - cy, bg=flight_ground, fn() {
@@ -2340,6 +2389,8 @@ pub fn Viewer::image_view(self : Viewer, c : @ui.Ctx, src : Source, stage : Int,
   let flying = v.flies
   match rect() {
     // (the whole picture decoded for where it lands, asked for as it sets out: it takes its stand-in's place there)
+    // (where the window's tree draws the viewer, its nodes': Viewer::flight_node)
+    Some(_) if picture != "" && flying && v.flight_node() => ()
     Some(r) if picture != "" && flying =>
       v.draw_flight(c, v.shown_picture(c, src, r), r, v.flying())
     // (lying flat where the window's tree draws the viewer: its node's, Viewer::picture_flat)

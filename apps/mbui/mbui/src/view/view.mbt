@@ -67,9 +67,16 @@ pub(all) struct Look {
   /// stands in for it till it is decoded at the size it is drawn ("" none), the most pixels it is asked at), drawn as
   /// what hosts the tree draws one (None: none): View::image
   mut image : (String, String, Int)?
+  /// the room its picture is judged ready for (its whole picture shown, not what stands in for it, once decoded for
+  /// that room; (0, 0): where it is drawn), as what a picture on its way somewhere is judged by where it goes:
+  /// View::image_for
+  mut image_for : (Double, Double)
   /// how round its corners are (its ground's, its glass's), and the glass it is drawn as under what it draws (None: none):
   /// View::radius, View::glass
   mut radius : Double
+  /// its corners each (top left, then round it), where it says them, in its radius's place (None: all as its radius):
+  /// View::corners
+  mut corners : (Double, Double, Double, Double)?
   mut glass : @paint.Glass?
   mut alpha : Double
   mut dx : Double
@@ -121,10 +128,14 @@ pub(all) struct Content {
   lines : Array[@paint.Line]
   tint : Int64
   radius : Double
+  /// its corners each, where it says them (View::corners)
+  corners : (Double, Double, Double, Double)?
   /// the edge round its ground (View::edge)
   edge : (Double, Int64)
   /// the picture it shows, all of it filled (View::image)
   image : (String, String, Int)?
+  /// the room its picture is judged ready for (View::image_for)
+  image_for : (Double, Double)
   glass : @paint.Glass?
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
@@ -173,10 +184,14 @@ pub(all) struct Drawn {
   lines : Array[@paint.Line]
   tint : Int64
   radius : Double
+  /// its corners each, where it says them (View::corners)
+  corners : (Double, Double, Double, Double)?
   /// the edge round its ground (View::edge)
   edge : (Double, Int64)
   /// the picture it shows, all of it filled (View::image)
   image : (String, String, Int)?
+  /// the room its picture is judged ready for (View::image_for)
+  image_for : (Double, Double)
   glass : @paint.Glass?
   /// drawn by what hosts it (View::hosted: the old view, built its own way, in its place)
   hosted : Bool
@@ -686,8 +701,10 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.shapes = []
       n.look.tint = 0L
       n.look.radius = 0.0
+      n.look.corners = None
       n.look.edge = (0.0, 0L)
       n.look.image = None
+      n.look.image_for = (0.0, 0.0)
       n.look.glass = None
       n.look.words_look = words_plain
       n.look.shadow = (0.0, 0.0, 0L)
@@ -765,7 +782,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, radius: 0.0, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_look: words_plain, runs: [], shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: (0.0, 0.0, 0.0, 0.0), cut_soft: false, drawn_as: "", clips: false, words_center: false, picture: None },
         parent,
         kids: [],
         owner: None,
@@ -1382,6 +1399,8 @@ priv enum Prop {
   Nowhere
   Edge
   Image
+  ImageFor
+  Corners
 } derive(Eq, Hash)
 
 ///|
@@ -1647,6 +1666,14 @@ pub fn View::radius(self : View, r : Live[Double]) -> View {
 }
 
 ///|
+/// Its corners each (top left, then round it; None: all as its radius, View::radius), as an old view's box's radius
+/// may be four (@ui.Radius::Corners): its ground's, its glass's, its edge's and its cut's (View::clips): paint's.
+pub fn View::corners(self : View, corners : Live[(Double, Double, Double, Double)?]) -> View {
+  self.bind(Corners, corners, Paint, fn(k) { self.tree.nodes[self.at].look.corners = k })
+  self
+}
+
+///|
 /// The edge drawn round its ground, inside it (how wide, its colour; 0 wide: none), as an old view's box's border is
 /// drawn with its ground (one rect, filled and edged), its corners its ground's: paint's.
 pub fn View::edge(self : View, e : Live[(Double, Int64)]) -> View {
@@ -1662,6 +1689,15 @@ pub fn View::edge(self : View, e : Live[(Double, Int64)]) -> View {
 /// done draws the frame again), which of the two decided then: paint's.
 pub fn View::image(self : View, image : Live[(String, String, Int)?]) -> View {
   self.bind(Image, image, Paint, fn(i) { self.tree.nodes[self.at].look.image = i })
+  self
+}
+
+///|
+/// The room its picture is judged ready for (View::image): its whole picture shown, not what stands in for it, once it is
+/// decoded for that room ((0, 0): for where it is drawn), as a picture on its way somewhere (a flight) is judged by
+/// where it goes, its decode for that room asked for as it sets out; paint's.
+pub fn View::image_for(self : View, room : Live[(Double, Double)]) -> View {
+  self.bind(ImageFor, room, Paint, fn(r) { self.tree.nodes[self.at].look.image_for = r })
   self
 }
 
@@ -4806,8 +4842,10 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     lines: n.look.lines,
     tint: n.look.tint,
     radius: n.look.radius,
+    corners: n.look.corners,
     edge: n.look.edge,
     image: n.look.image,
+    image_for: n.look.image_for,
     glass: n.look.glass,
     words_look: n.look.words_look,
     runs: n.look.runs,
@@ -5035,8 +5073,10 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     lines: c.lines,
     tint: c.tint,
     radius: c.radius,
+    corners: c.corners,
     edge: c.edge,
     image: c.image,
+    image_for: c.image_for,
     glass: c.glass,
     words_look: c.words_look,
     runs: c.runs,

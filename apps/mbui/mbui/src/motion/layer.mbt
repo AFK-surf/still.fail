@@ -1470,29 +1470,40 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         }
       }
       // (what reads it told as what it reads of it changes: how big it is or whether it is laid out, measured, measured_size;
-      // where it lies, measured_rect)
-      if made || r.w != nw || r.h != nh || r.seen < frame - 1 {
-        measure_changed(measure_size, e.kept, if made {
-          "first"
-        } else if r.seen < frame - 1 {
-          "laid out again"
-        } else {
-          "\{r.w}x\{r.h} to \{nw}x\{nh}"
-        })
-      }
-      if r.x != nx || r.y != ny {
-        measure_changed(measure_at, e.kept, "moved")
+      // where it lies, measured_rect; its corners, measured_radii; told once all of it is written, so what is told reads
+      // it as it is now)
+      let resized = if made || r.w != nw || r.h != nh || r.seen < frame - 1 {
+        Some(
+          if made {
+            "first"
+          } else if r.seen < frame - 1 {
+            "laid out again"
+          } else {
+            "\{r.w}x\{r.h} to \{nw}x\{nh}"
+          },
+        )
+      } else {
+        None
       }
       let radii = c.node_radii(e.node)
-      if r.rad != radii {
-        measure_changed(measure_radii, e.kept, "corners")
-      }
+      let cornered = r.rad != radii
+      let moved = r.x != nx || r.y != ny
       r.x = nx
       r.y = ny
       r.w = nw
       r.h = nh
       r.rad = radii
       r.seen = frame
+      match resized {
+        Some(why) => measure_changed(measure_size, e.kept, why)
+        None => ()
+      }
+      if moved {
+        measure_changed(measure_at, e.kept, "moved")
+      }
+      if cornered {
+        measure_changed(measure_radii, e.kept, "corners")
+      }
     }
     if e.key != 0 {
       let li = c.list_above(e.node)
