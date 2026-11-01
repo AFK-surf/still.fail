@@ -3341,15 +3341,49 @@ test "viewer on the tree, marking: words written again and set otherwise (anothe
 }
 
 ///|
-/// What the window's tree's node draws of the viewer's picture (View::image): its source, else none.
+/// What the window's tree's node draws of the open viewer's picture (View::image, its whole picture's name): its source,
+/// else none.
 fn picture_node() -> String? {
+  let main = match viewer.get() {
+    Some(v) => "mem:preview/" + v.id()
+    None => return None
+  }
   for d in @ui.view_tree().unwrap().drawn() {
     match d.image {
-      Some((src, _, _)) => return Some(src)
-      None => ()
+      Some((src, _, _)) if src == main => return Some(src)
+      _ => ()
     }
   }
   None
+}
+
+///|
+/// The window's tree's nodes drawing `src` (View::image), each where it is drawn (x, y, w, h).
+fn nodes_of(src : String) -> Array[(Double, Double, Double, Double)] {
+  @ui.view_tree().unwrap().drawn().filter_map(fn(d) {
+    match d.image {
+      Some((s, _, _)) if s == src => Some((d.x, d.y, d.w, d.h))
+      _ => None
+    }
+  })
+}
+
+///|
+/// The pictures drawn now from a decode of `src` (each instance's decode, image.mbt's draw_image), where each is.
+fn drawn_of(t : @ui.Tester, src : String) -> Array[(Double, Double, Double, Double)] {
+  t.drawn_instances().filter_map(fn(i) {
+    if i[5] == 4.0 && t.image_src(i[20].to_int()).has_prefix(src) {
+      Some((i[0], i[1], i[2], i[3]))
+    } else {
+      None
+    }
+  })
+}
+
+///|
+/// Whether `r` is at (x, y, w, h), to half a point.
+fn at_rect(r : (Double, Double, Double, Double), x : Double, y : Double, w : Double, h : Double) -> Bool {
+  (r.0 - x).abs() < 0.5 && (r.1 - y).abs() < 0.5 && (r.2 - w).abs() < 0.5 && (r.3 - h).abs() < 0.5
 }
 
 ///|
@@ -3388,32 +3422,131 @@ test "viewer on the tree: the picture lying flat drawn by its node, its stand-in
 }
 
 ///|
-test "viewer on the tree: the strip put aside and still (no way going), the picture moved with it by what draws the picture, the node drawing none; stepped and the strip come to rest (the one gone still said), the node's again" {
+test "viewer on the tree: the strip put aside and still (no way going): the picture moved with it, drawn by its node, once; the one beside it brought in drawn by a node of its own where the stage's width and the gap put it, once; at rest, it alone" {
   let t = preview_tester("step")
   let v = viewer.get().unwrap()
   t.run_for(@ui.move_most_ms)
+  let main = "mem:preview/" + v.id()
   assert_true(picture_node() is Some(_), msg="flat: the node's")
-  // (put aside 50, still: as a film's fixture holds it)
-  pv_strip.way.put(50.0)
+  // (the one after it, 第二版.png, read ahead)
+  let n = pv_strip.near.values().to_array()
+  assert_eq(n.length(), 1, msg="one beside it")
+  let next = "mem:preview/" + n[0].id()
+  // (put aside -50, still, toward it: as a film's fixture holds it)
+  pv_strip.way.put(-50.0)
   t.draw()
   assert_true(!pv_strip.way.goes_at(t.time()), msg="no way going")
-  assert_eq(picture_node(), None, msg="put aside: none of the node's")
   let (x, y, w, h) = v.zoom.rect().unwrap()
-  let moved = drawn_pictures(t).filter(fn(d) { (d.0 - (x + 50.0)).abs() < 0.5 && (d.1 - y).abs() < 0.5 && (d.2 - w).abs() < 0.5 && (d.3 - h).abs() < 0.5 })
-  assert_eq(moved.length(), 1, msg="drawn 50 aside, once: \{drawn_pictures(t)}")
+  assert_true(nodes_of(main).length() == 1 && at_rect(nodes_of(main)[0], x - 50.0, y, w, h), msg="put aside: the node's, 50 aside: \{nodes_of(main)}")
+  let shown = drawn_of(t, main)
+  assert_true(shown.length() == 1 && at_rect(shown[0], x - 50.0, y, w, h), msg="drawn 50 aside, once: \{shown}")
+  // (the one after: fitted to the stage, 390 + 24 to the right of it, 50 aside)
+  let (nx, ny, nw, nh) = @sfbase.fitted_rect(400.0, 560.0, 390.0, 844.0).unwrap()
+  let nx = nx - 50.0 + 390.0 + @sfbase.slide_gap
+  assert_true(nodes_of(next).length() == 1 && at_rect(nodes_of(next)[0], nx, ny, nw, nh), msg="the one beside it a node's: \{nodes_of(next)}")
+  let beside = drawn_of(t, next)
+  assert_true(beside.length() == 1 && at_rect(beside[0], nx, ny, nw, nh), msg="the one beside it drawn once: \{beside}")
+  // (back at rest: it alone, the one beside it out of the scene)
   pv_strip.way.put(0.0)
   t.draw()
-  // (stepped to the one after, the strip come to rest)
-  t.drag(300.0, 422.0, 100.0, 422.0)
-  t.run_for(strip_rest(t))
+  assert_true(drawn_of(t, main).length() == 1 && at_rect(drawn_of(t, main)[0], x, y, w, h), msg="at rest, drawn once where it lies")
+  assert_eq(nodes_of(next).length() + drawn_of(t, next).length(), 0, msg="at rest, the one beside it nowhere")
+}
+
+///|
+/// Stepped from `from` (a picture of the chat's, InChat) to the one after it by a swipe, the strip going: in a frame on
+/// the way, the one before it ends, and the one it ends in, the one going drawn by a node from where it lay, the stage's
+/// width and the gap out to its side, the one come in by its own node, each from its own decode, once; at the end, the
+/// one come in alone.
+fn stepped_through(from : String) -> Unit raise {
+  let t = preview_tester("step")
+  if from != "界面草图.png" {
+    let (a, _) = preview_files().iter().find_first(fn(f) { f.0.name == from }).unwrap()
+    open_preview("ws1/st1", "s-c1", a, steps=InChat(Some(1.0), "s-c1"))
+    t.run_for(@ui.move_most_ms)
+  }
+  let v = viewer.get().unwrap()
+  assert_eq(v.file.name, from, msg="open")
   t.run_for(@ui.move_most_ms)
-  assert_true(pv_strip.leaving is Some(_), msg="the one gone still said")
+  let gone = "mem:preview/" + v.id()
+  let (gx, gy, gw, gh) = v.zoom.rect().unwrap()
+  assert_true(drawn_of(t, gone).length() == 1, msg="\{from}: drawn, once")
+  t.drag(300.0, 422.0, 100.0, 422.0)
   let w2 = viewer.get().unwrap()
-  assert_true(!physical_equal(w2, v), msg="stepped")
-  assert_true(picture_node() is Some(_), msg="at rest: the node's again")
+  assert_true(!physical_equal(w2, v), msg="\{from}: stepped")
+  let come = "mem:preview/" + w2.id()
+  assert_true(come != gone, msg="another picture")
+  let end = pv_strip.way.end()
+  assert_true(end > t.time() + 2.0 * @ui.frame_period_default, msg="a way of some frames")
+  let l = pv_strip.leaving.unwrap()
+  assert_true(l.picture.has_prefix(gone) && at_rect((l.x, l.y, l.w, l.h), gx, gy, gw, gh), msg="it goes from where it lay, as it showed")
+  for at in [t.time() + @ui.frame_period_default, (t.time() + end) / 2.0, end - @ui.frame_period_default] {
+    t.frame_at(at)
+    let sx = pv_strip.way.value_at(t.time())
+    assert_true(sx != 0.0 && pv_strip.way.goes_at(t.time()), msg="\{from} \{at}: going, \{sx}")
+    let lx = l.x + sx - l.dir.to_double() * l.width
+    let going = nodes_of(l.picture)
+    assert_true(going.length() == 1 && at_rect(going[0], lx, l.y, l.w, l.h), msg="\{from} \{at}: the one going a node's: \{going}")
+    let drawn = drawn_of(t, gone)
+    assert_true(drawn.length() == 1 && at_rect(drawn[0], lx, l.y, l.w, l.h), msg="\{from} \{at}: the one going drawn once: \{drawn}")
+    let (x, y, w, h) = w2.zoom.rect().unwrap()
+    assert_true(picture_node() == Some(come), msg="\{from} \{at}: the one come in its node's")
+    let shown = drawn_of(t, come)
+    assert_true(shown.length() == 1 && at_rect(shown[0], x + sx, y, w, h), msg="\{from} \{at}: the one come in drawn once, \{sx} aside: \{shown}")
+  }
+  t.frame_at(end)
   let (x, y, w, h) = w2.zoom.rect().unwrap()
-  let at = drawn_pictures(t).filter(fn(d) { (d.0 - x).abs() < 0.5 && (d.1 - y).abs() < 0.5 && (d.2 - w).abs() < 0.5 && (d.3 - h).abs() < 0.5 })
-  assert_eq(at.length(), 1, msg="drawn once: \{drawn_pictures(t)}")
+  let shown = drawn_of(t, come)
+  assert_true(shown.length() == 1 && at_rect(shown[0], x, y, w, h), msg="\{from}: at its end, the one come in drawn once: \{shown}")
+  assert_eq(nodes_of(l.picture).length() + drawn_of(t, gone).length(), 0, msg="\{from}: at its end, the one gone nowhere")
+}
+
+///|
+test "viewer on the tree: stepped to the one after, the strip going: the one going drawn by a node from where it lay, the stage's width and the gap out to the side, the one come in by its own node, each once in each frame; at its end, the one come in alone" {
+  stepped_through("界面草图.png")
+}
+
+///|
+test "viewer on the tree: stepped to the one after as big as it (对照草图.png to 界面草图.png): each told by its own picture, the one going and the one come in each where it is, once; at its end, the one come in alone" {
+  // (as big as each other, other pictures: decoded, as wide and as tall, their pixels not the same)
+  let bytes = fn(name : String) { (preview_files().iter().find_first(fn(f) { f.0.name == name }).unwrap().1)() }
+  let (aw, ah, a) = @pixels.decode_png(bytes("对照草图.png")).unwrap()
+  let (bw, bh, b) = @pixels.decode_png(bytes("界面草图.png")).unwrap()
+  assert_eq((aw, ah), (bw, bh), msg="as big")
+  assert_true(a.length() == b.length() && (0).until(a.length()).any(fn(i) { a[i] != b[i] }), msg="other pictures")
+  stepped_through("对照草图.png")
+}
+
+///|
+test "viewer on the tree: its picture said not to decode with the strip put aside: its words alone, nothing of it or of the one beside it drawn, as before" {
+  let t = preview_tester("step", finish=false)
+  let v = viewer.get().unwrap()
+  let main = "mem:preview/" + v.id()
+  // (its own decode said not to be; every other done)
+  for _ in 0..<3 {
+    for p in t.pending() {
+      t.finish(p.0, p.1, ok=!(p.0 == 1 && t.image_src(p.1).has_prefix(main)))
+    }
+    t.draw()
+  }
+  assert_eq(@ui.image_state(main), -1, msg="not to be decoded")
+  let n = pv_strip.near.values().to_array()
+  assert_eq(n.length(), 1, msg="one beside it")
+  let next = "mem:preview/" + n[0].id()
+  pv_strip.way.put(-50.0)
+  t.draw()
+  let said = pv("android-chat.file.image.failed")
+  assert_eq(t.words().filter(fn(w) { w.0 == said }).length(), 1, msg="said once")
+  assert_eq(nodes_of(main).length() + drawn_of(t, main).length(), 0, msg="nothing of it drawn")
+  assert_eq(nodes_of(next).length() + drawn_of(t, next).length(), 0, msg="nothing beside it drawn while it failed: \{nodes_of(next)}")
+  // (one said to be going from where it lay, the strip on its way back: none of it drawn either)
+  pv_strip.leaving = Some({ picture: next, x: 20.0, y: 300.0, w: 350.0, h: 240.0, dir: 1, width: 390.0 + @sfbase.slide_gap })
+  pv_strip.way.go(0.0, @motion.sheet_spring, at=t.time())
+  t.frame_at(t.time() + @ui.frame_period_default)
+  assert_true(pv_strip.way.goes_at(t.time()), msg="going")
+  assert_eq(t.words().filter(fn(w) { w.0 == said }).length(), 1, msg="going: said once")
+  assert_eq(nodes_of(next).length() + drawn_of(t, next).length(), 0, msg="nothing going drawn while it failed: \{nodes_of(next)}")
+  pv_strip.leaving = None
 }
 
 ///|
@@ -3424,7 +3557,7 @@ fn main_pictures(t : @ui.Tester, v : Viewer, dx : Double) -> Int {
 }
 
 ///|
-test "viewer on the tree: the strip going back to rest, nothing else of it changing: the picture drawn once in each frame, by what draws the picture till the way ends, by its node from the frame it ends in" {
+test "viewer on the tree: the strip going back to rest, nothing else of it changing: the picture drawn once in each frame by its node, where the way has it as the frame is drawn" {
   let t = preview_tester("step")
   let v = viewer.get().unwrap()
   t.run_for(@ui.move_most_ms)
@@ -3433,11 +3566,13 @@ test "viewer on the tree: the strip going back to rest, nothing else of it chang
   pv_strip.way.go(0.0, @motion.animate_spring, at=t.time())
   let end = pv_strip.way.end()
   assert_true(end > t.time() + 2.0 * @ui.frame_period_default, msg="a way of some frames")
-  // (the frame before it ends: still aside, what draws the picture's)
-  t.frame_at(end - @ui.frame_period_default)
-  let aside = pv_strip.way.value_at(t.time())
-  assert_true(aside != 0.0 && picture_node() is None, msg="before its end: aside \{aside}, none of the node's")
-  assert_eq(main_pictures(t, v, aside), 1, msg="before its end: drawn once")
+  // (a frame on the way and the one before it ends: still aside, the node's)
+  for at in [(t.time() + end) / 2.0, end - @ui.frame_period_default] {
+    t.frame_at(at)
+    let aside = pv_strip.way.value_at(t.time())
+    assert_true(aside != 0.0 && picture_node() is Some(_), msg="\{at}: aside \{aside}, the node's")
+    assert_eq(main_pictures(t, v, aside), 1, msg="\{at}: drawn once")
+  }
   // (the frame it ends in, and the one after)
   t.frame_at(end)
   assert_true(picture_node() is Some(_), msg="at its end: the node's")

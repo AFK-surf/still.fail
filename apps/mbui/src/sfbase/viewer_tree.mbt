@@ -10,14 +10,16 @@
 //     two pinch, a tap shows or hides the bars, two zoom, a hold opens the picture's menu, marking draws), and so the
 //     secondary button (the picture's menu) and the wheel; the zoom told the stage's size and the picture's as either
 //     changes, at that moment; what is beside it read ahead as that is said;
-//   - in it, what draws the picture (an old view taking a press only on what it has to press: a mark's pin, the words
-//     written; the picture where its zoom has it as the frame draws it, its flight, the pictures beside it), and over
-//     it the bars: the floating bar on a small screen, its picture coming, whole or marked, nodes of its own
-//     (image_head, head_as_nodes: how much of it has come, its tools or marking's actions, their tips); the bar across
-//     the top of a wider screen, the same, nodes too (image_bar, bar_as_nodes); the ways to the pictures beside it
-//     while it is not marked (image_steps); marking's foot while it is (marks_foot_node: its tools, the notes' cards,
-//     the note being written, what is written in it an old view's field); the rest an old view taking a press only
-//     where it has something to press (the bars beside the system's, an iPhone Duo's: vf_bar's).
+//   - in it, the picture where its zoom has it, moved across with the strip as the frame draws it, the one going and
+//     those beside it while the strip moves, why it is not shown where it could not be decoded, the small decode that
+//     learns a size not known, the marks and their pins, nodes; its flight an old view's, and the words being written
+//     (an old view taking a press only on them); and over it the bars: the floating bar on a small screen, its
+//     picture coming, whole or marked, nodes of its own (image_head, head_as_nodes: how much of it has come, its tools
+//     or marking's actions, their tips); the bar across the top of a wider screen, the same, nodes too (image_bar,
+//     bar_as_nodes); the ways to the pictures beside it while it is not marked (image_steps); marking's foot while it
+//     is (marks_foot_node: its tools, the notes' cards, the note being written, what is written in it an old view's
+//     field); the rest an old view taking a press only where it has something to press (the bars beside the
+//     system's, an iPhone Duo's: vf_bar's).
 //
 // It sets out as the node is made (that moment its cause's: the thumbnail tapped), and is done at its ways' declared
 // ends (moments on the node's timeline): landed, the thumbnail shows again; gone, it is let go.
@@ -25,10 +27,10 @@
 // What a download, a save or marking's picture asks is done by the layer at its cause (image_layer), whichever bar
 // asked.
 //
-// Still the old view's here (the way there): what draws the picture (image_view: the picture, its marks, a mark's pin
-// and the words being written its presses), the bars beside the system's (theirs as the bars' view builds, so what
-// draws the picture follows them at the next frame), the flight in and out (where it flies from, recorded as it is
-// drawn; the thumbnail's place read of the old layout).
+// Still the old view's here (the way there): the picture's flight in and out (image_view: where it flies from,
+// recorded as it is drawn; the thumbnail's place read of the old layout), the words being written over the marks
+// (Viewer::marks_writing_view), the bars beside the system's (theirs as the bars' view builds, so what draws the
+// picture follows them at the next frame).
 
 ///|
 /// How many times what draws the picture and the bars over it have been built, each (what a change built again).
@@ -253,45 +255,111 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     .over(Is(true))
     |> @ui.old_takes_own
     |> ignore
-    // (the picture lying flat where its zoom has it, its node (what draws the picture leaves it to it then: a flight, a
-    // strip moved or going, the old view's still), under what is drawn over it)
+    // (the moment what draws the picture reads the strip and the flight at, in `n`: as each frame draws it while either
+    // goes; where neither goes, the clock read no more)
+    let strip_at = fn(n : @view.View) {
+      vw.fly.said()
+      pv_strip.way.said()
+      let now = n.logic_at()
+      if pv_strip.way.goes_at(now) || vw.fly.goes_at(now) {
+        n.drawn_at()
+      } else {
+        now
+      }
+    }
+    // (the picture lying flat where its zoom has it, moved across with the strip, its node (what draws the picture
+    // leaves it to it then: a flight, the old view's still), under what is drawn over it)
     canvas.box(fn(p) {
-      // (as each frame draws it while the strip or the flight goes, the moment what draws the picture reads them at;
-      // where neither goes, the clock read no more)
       let flat = fn() {
-        vw.fly.said()
-        pv_strip.way.said()
+        strip_at(p) |> ignore
         vw.bytes.get() |> ignore
-        let now = p.logic_at()
-        let t = if pv_strip.way.goes_at(now) || vw.fly.goes_at(now) { p.drawn_at() } else { now }
-        vw.picture_flat_at(t)
+        vw.picture_flat()
       }
       p
       .over(Is(true))
       .offset(By(fn() {
         match vw.marks_rect_on(p) {
-          Some((x, y, _, _)) => (x, y)
+          Some((x, y, _, _)) => (x + pv_strip.way.value_at(strip_at(p)), y)
           None => (0.0, 0.0)
         }
       }))
       .width(By(fn() { vw.marks_rect_on(p).map(fn(r) { r.2 }) }))
       .height(By(fn() { vw.marks_rect_on(p).map(fn(r) { r.3 }) }))
-      // (its whole picture once read, what stands in for it till it is decoded for the size it is drawn at, as
-      // Viewer::shown_picture has them: which of them decided as it is drawn, at its pixels then)
+      // (its picture as it is drawn: Viewer::picture_shown)
       .image(By(fn() {
         match (flat(), vw.marks_rect_on(p)) {
-          (true, Some(_)) =>
-            match vw.picture(src) {
-              "" => None
-              picture if picture != vw.image => Some((picture, "", stage_px))
-              picture => Some((picture, vw.stand_in(src), stage_px))
-            }
+          (true, Some(_)) => vw.picture_shown(src)
           _ => None
         }
       }))
       |> ignore
     })
     |> ignore
+    // (the one going while the strip's way goes, drawn from where it was, the stage's width and the gap further out to
+    // the side it goes to: it has no place of its own any more (Strip's leaving, its picture as it showed then); none
+    // where this one could not be decoded, its words alone)
+    canvas.box(fn(l) {
+      let going = fn() {
+        let t = strip_at(l)
+        match pv_strip.leaving {
+          Some(g) if pv_strip.way.goes_at(t) && !vw.picture_failed() => Some((g, pv_strip.way.value_at(t)))
+          _ => None
+        }
+      }
+      l
+      .over(Is(true))
+      .offset(By(fn() {
+        match going() {
+          Some((g, sx)) => (g.x + sx - g.dir.to_double() * g.width, g.y)
+          None => (0.0, 0.0)
+        }
+      }))
+      .width(By(fn() { going().map(fn(g) { g.0.w }) }))
+      .height(By(fn() { going().map(fn(g) { g.0.h }) }))
+      .image(By(fn() { going().map(fn(g) { (g.0.picture, "", stage_px) }) }))
+      |> ignore
+    })
+    |> ignore
+    // (those beside it, out of sight until the strip brings them in (none while one is going, none where this one could
+    // not be decoded): each fitted to the stage, the stage's width and the gap to its side, its picture as the one
+    // shown's is)
+    for side in [-1.0, 1.0] {
+      canvas.box(fn(s) {
+        let beside = fn() {
+          let t = strip_at(s)
+          let sx = pv_strip.way.value_at(t)
+          let going = pv_strip.leaving is Some(_) && pv_strip.way.goes_at(t)
+          if sx == 0.0 || going || vw.picture_failed() {
+            return None
+          }
+          let (before, after) = vw.near(src)
+          match (if side < 0.0 { before } else { after }) {
+            Some(n) => {
+              let (w0, h0) = n.natural_size(src)
+              let (bw, bh) = stage()
+              match (fitted_rect(w0, h0, bw, bh), n.picture_shown(src)) {
+                (Some((x, y, w, h)), Some(shown)) => Some((x + sx + side * (bw + slide_gap), y, w, h, shown))
+                _ => None
+              }
+            }
+            None => None
+          }
+        }
+        s
+        .over(Is(true))
+        .offset(By(fn() {
+          match beside() {
+            Some((x, y, _, _, _)) => (x, y)
+            None => (0.0, 0.0)
+          }
+        }))
+        .width(By(fn() { beside().map(fn(b) { b.2 }) }))
+        .height(By(fn() { beside().map(fn(b) { b.3 }) }))
+        .image(By(fn() { beside().map(fn(b) { b.4 }) }))
+        |> ignore
+      })
+      |> ignore
+    }
     // (its size neither sent with it nor known yet: a small decode of what it shows asked for, out of sight, that says
     // it; none drawn of it, Viewer::size_unknown)
     canvas.box(fn(s) {
@@ -705,12 +773,24 @@ pub fn Viewer::marks_rect(self : Viewer, at : Double) -> (Double, Double, Double
 }
 
 ///|
-/// Whether viewer `vw`'s picture lies flat where its zoom has it at `t` (its node draws it then, View::image; what draws
-/// the picture, Viewer::image_view, leaves it to it): drawn by the window's tree, not flying, the strip of pictures where
-/// it rests (none beside it shown, none going), not a picture that could not be decoded (what draws the picture says
-/// so alone: Viewer::picture_failed). Read the same by both at the same moment.
-pub fn Viewer::picture_flat_at(self : Viewer, t : Double) -> Bool {
-  self.in_tree && !self.flies && pv_strip.way.value_at(t) == 0.0 && !pv_strip.way.goes_at(t) && !self.picture_failed()
+/// What viewer `vw`'s picture is drawn as by a node (View::image): its whole picture once read, what stands in for it
+/// till that is decoded for the size it is drawn at, as Viewer::shown_picture has them (which of them decided as it is
+/// drawn, at its pixels then); None: nothing of it yet.
+fn Viewer::picture_shown(self : Viewer, src : Source) -> (String, String, Int)? {
+  match self.picture(src) {
+    "" => None
+    picture if picture != self.image => Some((picture, "", stage_px))
+    picture => Some((picture, self.stand_in(src), stage_px))
+  }
+}
+
+///|
+/// Whether viewer `vw`'s picture lies flat where its zoom has it, moved across with the strip of pictures (its
+/// node draws it then, View::image; what draws the picture, Viewer::image_view, leaves it to it): drawn by the window's
+/// tree, not flying, not a picture that could not be decoded (what draws the picture says so alone:
+/// Viewer::picture_failed). Read the same by both.
+pub fn Viewer::picture_flat(self : Viewer) -> Bool {
+  self.in_tree && !self.flies && !self.picture_failed()
 }
 
 ///|

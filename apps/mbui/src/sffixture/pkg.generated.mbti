@@ -355,7 +355,7 @@ pub let fixture_pictures : Map[String, (String, Bytes)]
 
 pub fn fixture_play_read(Json, (Result[(Json, Bytes), Json]) -> Unit) -> Bool
 
-pub fn fixture_png(Int32, Int32) -> Bytes
+pub fn fixture_png(Int32, Int32, mirrored? : Bool) -> Bytes
 
 pub fn fixture_preview(String) -> Unit
 
