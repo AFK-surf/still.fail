@@ -1,6 +1,7 @@
 // A workspace's presets (sessions/presets.ts, docs/presets.md): GET /presets lists them with the directories offered
 // for a new one; POST makes one, PUT /presets/:id changes it, DELETE removes it. Each member sees and changes their own
-// workspace's. A chat is opened with one by POST /sessions `preset` (routes/hub.ts).
+// workspace's. Any of those changed, or the machine's repositories found after they were asked for, is told
+// (`presets`): the devices read them again. A chat is opened with one by POST /sessions `preset` (routes/hub.ts).
 import { type Answer, type Request, error, json } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { log } from "../../ops/log.ts";
@@ -26,7 +27,7 @@ export const routes = ({ presets, reposDir, index, changed }: PresetDeps): Route
     pattern: /^\/presets$/,
     handle: async (r: Request): Promise<Answer> => {
       const list = presets.list(wsOf(r));
-      return json(200, JSON.stringify({ presets: list, candidates: await candidates(reposDir(), list, (await index?.repos()) ?? []) }));
+      return json(200, JSON.stringify({ presets: list, candidates: await candidates(reposDir(), list, (await index?.repos(changed)) ?? []) }));
     },
   },
   {

@@ -74,3 +74,21 @@ test("presets_are_read_as_shown_again_once_one_is_made_and_the_one_picked_goes_w
   assert.equal(v(values, 2).preset, "");
   core.close();
 });
+
+test("presets_shown_are_read_again_as_the_station_tells_they_changed", async () => {
+  // (the machine's repositories found after 添加目录 was opened: they come into it as it stands)
+  const said: Record<string, unknown> = { ...base(), "GET /presets": { presets: [], candidates: [] } };
+  const s = await started(said as never);
+  const ui = s.core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(s.core, ui, 1, { topic: "presets", station: S });
+  await s.host.settle();
+  apply(s.host, values);
+  assert.deepEqual(v(values, 1).candidates, []);
+  said["GET /presets"] = { presets: [], candidates: [candidate] };
+  s.push("presets", {});
+  await s.host.settle();
+  apply(s.host, values);
+  assert.deepEqual(v(values, 1).candidates.map((c: { name: string }) => c.name), ["app"]);
+  s.core.close();
+});

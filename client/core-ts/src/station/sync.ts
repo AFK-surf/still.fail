@@ -1136,6 +1136,11 @@ export class StationsSync {
         if (isObject(get(data, "login"))) this.putMachineLogin(address, get(data, "login"));
         return;
       }
+      // The presets, or the folders offered for one, changed (one made on another device, the machine's repositories
+      // found after they were asked for): read again where shown or held.
+      case "presets":
+        if (this.#core.store.inUse({ topic: "presets", station: address }) || this.#links.get(address)?.memory.has(PRESETS)) this.presetsShown(address);
+        return;
       // The programs granted the station's data changed, or read it (docs/data-outflow.md).
       case "outflow-grants": {
         const link = this.#links.get(address);

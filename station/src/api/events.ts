@@ -333,6 +333,12 @@ export class Events {
     this.emit("machine-logins", limited, { readOnly: true }, `machine-logins-limited\0${of}`);
   }
 
+  /// The presets, or the folders offered for one, changed (routes/presets.ts): told to everyone as `presets`, each
+  /// device reading its own workspace's again.
+  presetsChanged() {
+    this.emit("presets", {}, {}, "presets");
+  }
+
   /// Something the overview shows changed (config, accounts, connects, cloud, updates).
   overviewChanged() {
     this.dirty.overview = true;

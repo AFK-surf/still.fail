@@ -1,10 +1,12 @@
 // Presets (src/sessions/presets.ts, docs/presets.md): what a chat starts knowing, chosen as it is opened, kept with it.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { RepoIndex, candidates, presetCopyInput, presetCopyOf, presetInput, repoName } from "../src/sessions/presets.ts";
+import { Presets, RepoIndex, candidates, presetCopyInput, presetCopyOf, presetInput, repoName } from "../src/sessions/presets.ts";
+import { routes } from "../src/api/routes/presets.ts";
 import { newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { Rig, settle } from "./hub-fakes.ts";
 
@@ -115,6 +117,9 @@ test("the repositories on the machine are found under its home, a few levels dow
   clone(join(data, "repos"), "cached", "https://github.com/acme/cached.git", ["c-1"]);
   let now = 1_000;
   const index = new RepoIndex({ roots: () => [home], file: () => join(home, "index.json"), now: () => now, besides: () => [data] });
+  // none until the first pass ends: the folders are not waited for on it
+  assert.deepEqual(await index.repos(), []);
+  await index.walk();
   const found = await index.repos();
   // a clone's own tree is not looked into; nor what is too deep, what holds dependencies, what macOS asks before
   // reading, hidden directories and the station's own data
@@ -133,6 +138,51 @@ test("the repositories on the machine are found under its home, a few levels dow
   assert.deepEqual((await again.repos()).map((c) => c.name).sort(), ["app", "deep", "later"]);
 });
 
+test("the folders are answered while the machine's repositories are still looked for, and told of once found", { timeout: 20_000 }, async () => {
+  // (2026-11-02: Studio's walk of its home waited on ~/OrbStack for good, and 添加目录 with it)
+  const home = mkdtempSync(join(tmpdir(), "presets-home-"));
+  clone(join(home, "code"), "app", "git@github.com:acme/app.git");
+  const repos = join(home, "station", "repos");
+  clone(repos, "lib", "https://github.com/acme/lib.git", ["c-1"]);
+  let open = (): void => {};
+  const gate = new Promise<void>((done) => (open = done));
+  const index = new RepoIndex({
+    roots: () => [home],
+    file: () => join(home, "index.json"),
+    now: () => 0,
+    besides: () => [join(home, "station")],
+    list: async (dir) => (dir === join(home, "code") ? gate.then(() => readdir(dir, { withFileTypes: true })) : readdir(dir, { withFileTypes: true })),
+  });
+  let told = 0;
+  const get = routes({ presets: new Presets(() => join(home, "agent"), () => 0), reposDir: () => repos, index, changed: () => told++ }).find((r) => r.method === "GET")!;
+  const ask = async () => JSON.parse(((await get.handle({ method: "GET", path: "/presets", query: [], headers: {}, body: Buffer.alloc(0), viewer: { email: "a@b.c", workspace: "" } as never, lang: "en" }, [])).body as Buffer).toString());
+  // answered with the cache's clones, the home's walk not waited on
+  assert.deepEqual((await ask()).candidates.map((c: { name: string }) => c.name), ["lib"]);
+  assert.equal(told, 0);
+  open();
+  await index.walk();
+  assert.equal(told, 1, "the devices told the folders changed");
+  assert.deepEqual((await ask()).candidates.map((c: { name: string }) => c.name), ["lib", "app"]);
+});
+
+test("a file system mounted under the home is not opened, the home's own disk walked", async () => {
+  const home = mkdtempSync(join(tmpdir(), "presets-home-"));
+  clone(join(home, "code"), "app", "git@github.com:acme/app.git");
+  clone(join(home, "OrbStack", "docker"), "far", "https://github.com/acme/far.git");
+  const opened: string[] = [];
+  const index = new RepoIndex({
+    roots: () => [home],
+    file: () => join(home, "index.json"),
+    now: () => 0,
+    list: (dir) => (opened.push(dir), readdir(dir, { withFileTypes: true })),
+    // (OrbStack's NFS: another device than the home's)
+    disk: async (dir) => (dir.startsWith(join(home, "OrbStack")) ? 2 : 1),
+  });
+  await index.walk();
+  assert.deepEqual((await index.repos()).map((c) => c.name), ["app"]);
+  assert.ok(!opened.some((d) => d.startsWith(join(home, "OrbStack"))), `${opened}`);
+});
+
 test("a repository is offered once, the person's checkout of it where there is one, with its own picture", async () => {
   const home = mkdtempSync(join(tmpdir(), "presets-home-"));
   const mine = clone(join(home, "code"), "app", "git@github.com:acme/app.git");
@@ -143,7 +193,9 @@ test("a repository is offered once, the person's checkout of it where there is o
   const repos = join(home, "station", "repos");
   clone(repos, "app", "https://github.com/acme/app.git", ["c-1", "c-2"]);
   clone(repos, "lib", "https://github.com/acme/lib.git", ["c-3"]);
-  const found = await new RepoIndex({ roots: () => [home], file: () => join(home, "index.json"), now: () => 0, besides: () => [join(home, "station")] }).repos();
+  const index = new RepoIndex({ roots: () => [home], file: () => join(home, "index.json"), now: () => 0, besides: () => [join(home, "station")] });
+  await index.walk();
+  const found = await index.repos();
   const offered = await candidates(repos, [], found);
   assert.deepEqual(offered.map((c) => [c.name, c.path, c.chats, c.cached ?? false]), [["app", mine, 2, false], ["lib", join(repos, "lib"), 1, true]]);
   assert.equal(offered[1]!.where, "github.com/acme/lib", "a clone of the cache's said as its repository");

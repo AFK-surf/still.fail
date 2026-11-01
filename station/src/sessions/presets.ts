@@ -3,7 +3,7 @@
 // workspace as every chat does). A workspace's presets are its agent home's presets.json; a chat opened with one keeps a
 // copy of it in its session workspace (`.stillfail-preset.json`), so a preset changed later changes none of the chats
 // already opened with it.
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { type Dirent, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
@@ -452,34 +452,51 @@ const INDEX_FRESH_MS = 10 * 60 * 1000;
 const INDEX_SKIPPED = new Set(["node_modules", "Library", "Applications", "Pictures", "Movies", "Music", "Public", "Desktop", "Documents", "Downloads", "Pods", "target", "dist", "build", "vendor", "venv"]);
 
 /// The repositories on the machine (directories with a `.git`), found by walking its home a few levels down, so a
-/// preset's folders are picked rather than typed. Kept in `file` (the station's data directory) and walked again when a
-/// pass is old, in the background: what is held is answered meanwhile (the first time, the first pass is waited on).
+/// preset's folders are picked rather than typed. Kept in `file` (the station's data directory) and walked again when
+/// there is none or the last is old, in the background: what is held is answered meanwhile (none before the first pass
+/// ends: a home can take long to walk). Only the home's own disk is walked: a directory another file system is mounted
+/// on (OrbStack's, a share, a disk) is not looked into, as opening one can wait on its server, or on a dialog on that
+/// machine's screen, for as long as nobody answers.
 export class RepoIndex {
   readonly roots: () => string[];
   readonly file: () => string;
   readonly now: () => number;
   /// Directories it never looks into (the station's own data: its sessions' worktrees are its cache's clones).
   readonly besides: () => string[];
+  /// What a directory holds, and which disk it is on (null: it could not be told).
+  readonly list: (dir: string) => Promise<Dirent[]>;
+  readonly disk: (dir: string) => Promise<number | null>;
   #held: { at: number; repos: Candidate[] } | null = null;
+  #read = false;
   #walking: Promise<void> | null = null;
 
-  constructor(o: { roots: () => string[]; file: () => string; now: () => number; besides?: () => string[] }) {
+  constructor(o: {
+    roots: () => string[];
+    file: () => string;
+    now: () => number;
+    besides?: () => string[];
+    list?: (dir: string) => Promise<Dirent[]>;
+    disk?: (dir: string) => Promise<number | null>;
+  }) {
     this.roots = o.roots;
     this.file = o.file;
     this.now = o.now;
     this.besides = o.besides ?? (() => []);
+    this.list = o.list ?? ((dir) => readdir(dir, { withFileTypes: true }));
+    this.disk = o.disk ?? (async (dir) => (await stat(dir).catch(() => null))?.dev ?? null);
   }
 
-  /// The repositories found, as the last pass found them; a pass begun when that is old.
-  async repos(): Promise<Candidate[]> {
-    if (this.#held === null) {
+  /// The repositories found, as the last pass found them (none before the first ends); a pass begun when there is none
+  /// or that is old, `walked` told as it ends.
+  async repos(walked: () => void = () => {}): Promise<Candidate[]> {
+    if (!this.#read) {
+      this.#read = true;
       try {
         const kept = JSON.parse(await readFile(this.file(), "utf8"));
-        if (typeof kept?.at === "number" && Array.isArray(kept?.repos)) this.#held = { at: kept.at, repos: kept.repos };
+        if (typeof kept?.at === "number" && Array.isArray(kept?.repos)) this.#held ??= { at: kept.at, repos: kept.repos };
       } catch {}
     }
-    if (this.#held === null) await this.walk();
-    else if (this.now() - this.#held.at > INDEX_FRESH_MS) void this.walk();
+    if (this.#walking === null && (this.#held === null || this.now() - this.#held.at > INDEX_FRESH_MS)) void this.walk().then(walked);
     return this.#held?.repos ?? [];
   }
 
@@ -493,9 +510,12 @@ export class RepoIndex {
     const found: Candidate[] = [];
     const skip = new Set(this.besides().map((p) => resolve(p)));
     let looked = 0;
+    let home: number | null = null;
     const into = async (dir: string, depth: number): Promise<void> => {
       if (looked++ >= INDEX_DIRS_MOST || skip.has(dir)) return;
-      const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+      // (another file system mounted there: not opened)
+      if (depth > 0 && (await this.disk(dir)) !== home) return;
+      const entries = await this.list(dir).catch(() => []);
       if (entries.some((e) => e.name === ".git")) {
         const git = join(dir, ".git");
         const [config, head] = await Promise.all([readFile(join(git, "config"), "utf8").catch(() => ""), stat(join(git, "index")).catch(() => stat(git).catch(() => null))]);
@@ -509,7 +529,10 @@ export class RepoIndex {
         await into(join(dir, e.name), depth + 1);
       }
     };
-    for (const root of this.roots()) await into(resolve(root), 0);
+    for (const root of this.roots()) {
+      home = await this.disk(resolve(root));
+      await into(resolve(root), 0);
+    }
     this.#held = { at: this.now(), repos: found };
     try {
       await writeFile(this.file(), `${JSON.stringify(this.#held)}\n`);
