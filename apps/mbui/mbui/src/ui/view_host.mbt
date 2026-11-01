@@ -595,10 +595,9 @@ fn old_frame(c : Ctx) -> Unit {
   for p in old_placed {
     match old_islands.iter().find_first(fn(o) { o.id == p.0 }) {
       Some(o) => {
-        // (on whole pixels: what it holds, laid out where its layout puts it, drawn so, its words not crawling as it
-        // moves)
+        // (laid out where its layout puts it, on no pixel it is not on, as the old frame lays out what it holds)
         let (id, _, _, w, h, _, ox, oy, _) = p
-        let (left, top) = (on_pixels(ox, c.scale), on_pixels(oy, c.scale))
+        let (left, top) = (ox, oy)
         let i = c.box(
           // (one as tall as what it holds: as tall as that is laid out, whatever its node was given (its height its node's
           // as that is told, old_natural_after_layout), what grows in it laid out by what it holds, not the room it had)
@@ -628,12 +627,14 @@ fn old_frame(c : Ctx) -> Unit {
           },
         )
         // (moved to where it is drawn, from where it is laid out, as it is painted (Ctx::moved_by): what it holds, its
-        // clip, where it takes a finger and where its words are, with it; read again as the tree is: on whole pixels
-        // where it is drawn whole, island_on_pixels)
+        // clip, where it takes a finger and where its words are, with it; read again as the tree is: where the tree draws
+        // its node, on no pixel the tree does not put it on (what moves by a look of the tree's, on whole pixels already:
+        // Tree::each_drawn_in_order's pixel_grid), its words set on the pixels where it is laid out and carried with it,
+        // glyphs_carried)
         c.moved_carries(i, fn(_, _) {
           view_due.get() |> ignore
           match old_placed.iter().find_first(fn(q) { q.0 == id }) {
-            Some(q) => (island_on_pixels(q.1, q.8, c.scale) - left, island_on_pixels(q.2, q.8, c.scale) - top)
+            Some(q) => (q.1 - left, q.2 - top)
             None => (0.0, 0.0)
           }
         })
@@ -2093,22 +2094,8 @@ fn island_scale(id : @view.NodeId) -> Double {
 }
 
 ///|
-/// Where an old view hosted in a node is drawn across or down (`v`, the tree's), drawn `s` as big: moved onto the
-/// device's pixels (`sc` to a point) where it is drawn whole, as the tree's are as it is laid out and as what takes a
-/// press is placed; where it is drawn bigger or smaller, where that scale puts it, as the tree draws what else it holds
-/// there and an old view's look's scale puts what it holds (what it holds is off the pixels there anyway; its top left
-/// moved onto one, it would be off the rest of what is scaled with it by up to half a pixel).
-fn island_on_pixels(v : Double, s : Double, sc : Double) -> Double {
-  if s == 1.0 {
-    on_pixels(v, sc)
-  } else {
-    v
-  }
-}
-
-///|
 /// How far what old node `i` is in is carried off where it was laid out to where it is drawn (its old view's box moved
-/// so: Ctx::moved_carries, island_on_pixels): what its words are set on the pixels by (glyphs_carried); none (0, 0)
+/// so: Ctx::moved_carries): what its words are set on the pixels by (glyphs_carried); none (0, 0)
 /// for one in no old view hosted, or in one drawn where it is laid out.
 fn Ctx::glyphs_carried_of(self : Ctx, i : Int) -> (Double, Double) {
   match self.nodes[i].island {
@@ -2136,7 +2123,7 @@ fn Ctx::island_now(self : Ctx, i : Int) -> (Double, Double, Double, Double, Doub
   guard tree.drawn_of(id) is Some(d) else { return None }
   let s = tree.drawn_scale(id)
   let (px, py) = (self.nodes[b].x, self.nodes[b].y)
-  let (qx, qy) = (island_on_pixels(d.x, s, self.scale), island_on_pixels(d.y, s, self.scale))
+  let (qx, qy) = (d.x, d.y)
   guard s != 1.0 || px != qx || py != qy else { return None }
   Some((px, py, qx, qy, s))
 }
@@ -2544,7 +2531,7 @@ fn old_hits_moved(c : Ctx, h : OldHits, tree : @view.Tree?) -> ((Double) -> Doub
         // Tree::target_at; what reads them for where things are, a thumbnail's place, reads them so)
         Some(d) if t.presses_here(h.id) => {
           let s = t.drawn_scale(h.id)
-          (island_on_pixels(d.x, s, c.scale) - h.x, island_on_pixels(d.y, s, c.scale) - h.y, s > 0.0, s)
+          (d.x - h.x, d.y - h.y, s > 0.0, s)
         }
         _ => (0.0, 0.0, false, 1.0)
       }
