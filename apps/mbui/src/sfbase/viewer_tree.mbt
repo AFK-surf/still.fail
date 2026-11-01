@@ -158,6 +158,30 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     let (before, after) = vw.near(src)
     vw.read_near(src, before, after)
   })
+  // where its picture flies from and back into, kept as the chat lays its thumbnail out while it flies: where it was
+  // last, what showed of it moved with it, for the frames it is on the screen no more (Viewer::flight_from; its nodes
+  // read it where it is in the frame they draw)
+  n.reacts(
+    fn() {
+      // (followed whether it flies or not: its flight said at each cause, the thumbnail's place as it is measured)
+      vw.fly.said()
+      // (all of it that the flight is drawn by: where it is, what showed of it, where its list leaves it clear, its
+      // corners, how its picture sits in it, which; what it draws over its picture goes with it)
+      let at = vw
+        .flight_from(@ui.current())
+        .map(fn(t) -> ThumbDrawn { { box: (t.x, t.y, t.w, t.h), seen: t.seen, clear: t.clear, corners: t.corners.each(), letterbox: t.letterbox, top_crop: t.top_crop, picture: t.picture } })
+      if vw.flies {
+        at
+      } else {
+        None
+      }
+    },
+    fn(_) {
+      if vw.flies {
+        vw.fly_from = vw.flight_from(@ui.current())
+      }
+    },
+  )
   // the stage: the room it is laid out in (the keyboard over it, not the stage made shorter for it: FilePreview.kt),
   // and the picture's size (as sent, else as decoded, else its stand-in's: followed by its own decodes), told the zoom
   // at the moment either changes
@@ -292,6 +316,80 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
           _ => None
         }
       }))
+      |> ignore
+    })
+    |> ignore
+    // (the picture flying in or back, its nodes: from the thumbnail as the chat lays it out in the frame drawn
+    // (Viewer::flight_from) to where its zoom has it, as far as its flight has come then (flight_box): what shows of it
+    // on the window, the box it is cut to, its corners round, the picture in it, as Viewer::picture_shown has it, its
+    // whole picture judged ready for where it lands (View::image_for: as what draws the picture judged it,
+    // Viewer::shown_picture), which of them decided as it is drawn)
+    let flight = fn(n : @view.View) -> (FlightBox, (Double, Double, Double, Double))? {
+      let t = strip_at(n)
+      vw.bytes.get() |> ignore
+      if !vw.flight_node() {
+        return None
+      }
+      let (w, h) = stage()
+      match (vw.flight_from(@ui.current()), vw.marks_rect_on(n)) {
+        (Some(from), Some(to)) => flight_box(from, vw.lifted_at(t), to, vw.flying_at(t), w, h).map(fn(f) { (f, to) })
+        _ => None
+      }
+    }
+    canvas.box(fn(cut) {
+      cut
+      .over(Is(true))
+      .clips(Is(true))
+      .offset(By(fn() {
+        match flight(cut) {
+          Some((f, _)) => (f.cut.0, f.cut.1)
+          None => (0.0, 0.0)
+        }
+      }))
+      .width(By(fn() { flight(cut).map(fn(f) { f.0.cut.2 }) }))
+      .height(By(fn() { flight(cut).map(fn(f) { f.0.cut.3 }) }))
+      |> ignore
+      cut.box(fn(b) {
+        b
+        .over(Is(true))
+        .clips(Is(true))
+        .corners(By(fn() { flight(b).map(fn(f) { f.0.corners }) }))
+        .offset(By(fn() {
+          match flight(b) {
+            Some((f, _)) => (f.box.0 - f.cut.0, f.box.1 - f.cut.1)
+            None => (0.0, 0.0)
+          }
+        }))
+        .width(By(fn() { flight(b).map(fn(f) { f.0.box.2 }) }))
+        .height(By(fn() { flight(b).map(fn(f) { f.0.box.3 }) }))
+        |> ignore
+        b.box(fn(p) {
+          p
+          .over(Is(true))
+          .offset(By(fn() {
+            match flight(p) {
+              Some((f, _)) => (f.picture.0 - f.box.0, f.picture.1 - f.box.1)
+              None => (0.0, 0.0)
+            }
+          }))
+          .width(By(fn() { flight(p).map(fn(f) { f.0.picture.2 }) }))
+          .height(By(fn() { flight(p).map(fn(f) { f.0.picture.3 }) }))
+          .image(By(fn() {
+            match flight(p) {
+              Some(_) => vw.picture_shown(src)
+              None => None
+            }
+          }))
+          .image_for(By(fn() {
+            match (flight(p), vw.picture(src)) {
+              (Some((_, (_, _, w, h))), picture) if picture != "" && picture == vw.image => (w, h)
+              _ => (0.0, 0.0)
+            }
+          }))
+          |> ignore
+        })
+        |> ignore
+      })
       |> ignore
     })
     |> ignore
@@ -1272,3 +1370,45 @@ pub fn file_progress_node(parent : @view.View, got : () -> (Double, Double?), se
     |> ignore
   })
 }
+
+///|
+/// Whether viewer `vw`'s picture flying in or back is drawn by its nodes (what draws the picture, Viewer::image_view,
+/// leaves it to them): drawn by the window's tree, flying, not a picture that could not be decoded (its words alone,
+/// as what draws the picture has them). Read the same by both.
+pub fn Viewer::flight_node(self : Viewer) -> Bool {
+  self.in_tree && self.flies && !self.picture_failed()
+}
+
+///|
+/// How far its flight has got at `t` (Viewer::flying's, at a moment of its own).
+fn Viewer::flying_at(self : Viewer, t : Double) -> Double {
+  if !self.flies {
+    1.0
+  } else {
+    self.flight_share_at(t)
+  }
+}
+
+///|
+/// How far its thumbnail has gone out from under the bar or the composer at `t` (Viewer::lifted's, at a moment of its
+/// own).
+fn Viewer::lifted_at(self : Viewer, t : Double) -> Double {
+  if !self.flies || self.fly_lift <= 0.0 {
+    1.0
+  } else {
+    dmin(self.fly.value_at(t) / self.fly_lift, 1.0)
+  }
+}
+
+///|
+/// What a flight is drawn by of the thumbnail it flies from (Thumb's but what it draws over its picture), to tell it
+/// changed.
+struct ThumbDrawn {
+  box : (Double, Double, Double, Double)
+  seen : (Double, Double, Double, Double)?
+  clear : (Double, Double)?
+  corners : (Double, Double, Double, Double)
+  letterbox : Bool
+  top_crop : Bool
+  picture : String
+} derive(Eq)

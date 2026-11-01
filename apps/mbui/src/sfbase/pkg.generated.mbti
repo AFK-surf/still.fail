@@ -2307,6 +2307,8 @@ pub(all) struct FirstFrame {
   mut picture : String
 }
 
+type FlightBox
+
 pub(all) struct FlightPiece {
   a : Int32
   b : Int32
@@ -3191,6 +3193,8 @@ pub(all) struct Thumb {
   over : (Double) -> Unit
 }
 
+type ThumbDrawn derive(Eq)
+
 pub(all) struct ThumbLook {
   radius : Double
   letterbox : Bool
@@ -3416,6 +3420,8 @@ pub fn Viewer::drag_zoomed(Self, @kit.Zoom, @motion.Way, Double, Double, Bool, B
 pub fn Viewer::draw_flight(Self, @ui.Ctx, String, (Double, Double, Double, Double), Double, ground? : Int64) -> Unit
 pub fn Viewer::fetch(Self, @ui.Ctx, Source) -> Unit
 pub fn Viewer::finish_marks(Self, @ui.Ctx, Bool) -> Unit
+pub fn Viewer::flight_from(Self, @ui.Ctx) -> Thumb?
+pub fn Viewer::flight_node(Self) -> Bool
 pub fn Viewer::flight_target(Self, @ui.Ctx, Source) -> (Double, Double, Double, Double)?
 pub fn Viewer::flow_stage(Self, @ui.Ctx, Source, Flow, PKind, Int32) -> Unit
 pub fn Viewer::flowing(Self) -> Bool
