@@ -24,8 +24,9 @@ pub(all) struct FocusAt {
 /// It can take the keyboard's focus while `on` holds (Tab goes to it in the tree's order), pressed as it has it by
 /// `keys` (focus_enter, focus_space: its on_press, as a press on it runs it). Not on, the focus on it let go of then;
 /// what it holds takes it or not by its own saying (what holds a node said to take no press, View::presses, keeps it
-/// from it).
-pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter | focus_space) -> View {
+/// from it). `tab`: whether Tab stops on it (false: it takes the focus as it is given it, a layer's own ground as it
+/// opens, Tab passing it by).
+pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter | focus_space, tab? : Bool = true) -> View {
   // (whether it takes the focus is the logic's, as whether it takes presses is (View::presses): said at the moment it
   // changes, as the change saying it is committed, the focus on it let go of then; said anew, what was said before let
   // go of)
@@ -41,10 +42,11 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
   // what is read out of it told by the frame then owed, where it changed)
   let set = fn(on : Bool, tell : Bool) {
     guard self.live() is Some(n) else { return }
-    let was = (n.focusable, n.focus_keys)
+    let was = (n.focusable, n.focus_keys, n.focus_tab)
     n.focusable = on
     n.focus_keys = keys
-    if tell && was != (on, keys) {
+    n.focus_tab = tab
+    if tell && was != (on, keys, tab) {
       self.tree.marked()
     }
     // (its own focus let go of, not what it holds: whether they take it is their own, View::presses what holds them
@@ -114,7 +116,7 @@ pub fn Tree::focus_order(self : Tree) -> Array[FocusAt] {
     if !n.live {
       return
     }
-    if (n.hosted || n.focusable) && !self.pressless_at(at) {
+    if (n.hosted || (n.focusable && n.focus_tab)) && !self.pressless_at(at) {
       out.push({ id: { at, gen: n.gen }, hosted: n.hosted, keys: n.focus_keys })
     }
     for k in self.kids_in_order(at) {

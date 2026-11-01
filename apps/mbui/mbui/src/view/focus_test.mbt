@@ -199,3 +199,49 @@ test "focus: what holds a node, with the focus, said to take it no more: let go 
   t.event(10.0, fn() { outer_focus.set(false) })
   assert_eq(t.focused_now(), (None, false))
 }
+
+///|
+test "focus: one said to take it, Tab passing it (tab=false): given it by the program, none of Tab's; said anew with Tab's default, on and keys as they were, told as a change and Tab's again; let go and another made in its place, Tab's" {
+  let first = @signals.signal(true, same=fn(a, b) { a == b })
+  let second = @signals.signal(false, same=fn(a, b) { a == b })
+  let ids : Map[String, @view.NodeId] = {}
+  let views : Map[String, @view.View] = {}
+  let t = @view.Tree::new(
+    fn(root) {
+      root.show(fn() { first.get() }, fn(p) {
+        ids["p"] = p.id()
+        views["p"] = p
+        p.focusable(Is(true), keys=0, tab=false) |> ignore
+      })
+      root.show(fn() { second.get() }, fn(r) {
+        ids["r"] = r.id()
+        r.focusable(Is(true)) |> ignore
+      })
+      root.box(fn(q) {
+        ids["q"] = q.id()
+        q.focusable(Is(true)) |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let both = @view.focus_enter | @view.focus_space
+  assert_eq(t.focus_order(), [{ id: ids["q"], hosted: false, keys: both }], msg="Tab passing it")
+  assert_true(t.focus_to(Some(ids["p"])), msg="given it by the program")
+  assert_eq(t.focused_now(), (Some(ids["p"]), false))
+  // (said anew, Tab's default, on and keys as they were: a change told)
+  t.frame(390.0, 844.0) |> ignore
+  assert_false(t.told_since())
+  views["p"].focusable(Is(true), keys=0) |> ignore
+  assert_true(t.told_since(), msg="said anew, only Tab's: told")
+  assert_eq(t.focus_order(), [{ id: ids["p"], hosted: false, keys: 0 }, { id: ids["q"], hosted: false, keys: both }])
+  // (said to pass Tab again, let go, and another made in its place: none of the one before's)
+  views["p"].focusable(Is(true), keys=0, tab=false) |> ignore
+  t.event(10.0, fn() { first.set(false) })
+  t.frame(390.0, 844.0, now=10.0) |> ignore
+  t.event(20.0, fn() { second.set(true) })
+  t.frame(390.0, 844.0, now=20.0) |> ignore
+  assert_eq(ids["r"].at, ids["p"].at, msg="made where it was")
+  assert_eq(t.focus_order(), [{ id: ids["r"], hosted: false, keys: both }, { id: ids["q"], hosted: false, keys: both }])
+}

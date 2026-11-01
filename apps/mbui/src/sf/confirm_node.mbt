@@ -5,7 +5,8 @@
 // draws it (confirm_w wide at most, the window less dialog_margin; dialog_r round, the panel's ground, its line, its
 // shadow; its title, its words, then cancel and the action at its foot's end), coming in by @kit.dialog_in and going
 // by @kit.pop_out from the moments it opens and closes; read out a dialog named by its title. Escape, back and cancel
-// close it (`cancel`); the action does `confirm`. The focus on cancel as it opens (an alert's: Enter does not do it).
+// close it (`cancel`); the action does `confirm`. The focus on its own ground as it opens (confirm_dialog's: a layer
+// that traps it with no stop of its own), back to what had it as it goes.
 
 ///|
 /// A confirm in `parent` while `open()` (going over pop_out_ms once not): `title`, its `words`, `action` (solid red
@@ -60,6 +61,8 @@ pub fn confirm_node(
       .ground(By(fn() { confirm_faded(@ui.tree_theme().scrim, dim.shown(layer)) }))
       // (a press outside it its own: an alert stays open)
       .presses(Is(true))
+      // (the focus its own as it opens: no key presses it)
+      .focusable(Is(true), keys=0, tab=false)
       .on_key(fn(k) {
         if k.code == @ui.key_escape && @signals.untracked(live) {
           cancel()
@@ -79,9 +82,10 @@ pub fn confirm_node(
       layer.box(fn(across) {
         across.row(Is(true)) |> ignore
         across.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
-        let no = confirm_panel(across, layer, look, title, words, action, danger, cancel, confirm)
-        // (the focus on cancel as it opens: an alert's, so that Enter does not do it; back to what had it as it goes)
-        layer.focus_opens(no) |> ignore
+        confirm_panel(across, layer, look, title, words, action, danger, cancel, confirm) |> ignore
+        // (the focus on its own ground as it opens, as confirm_dialog's (an overlay that traps it, with no stop of its
+        // own: the layer's own), Enter and Space doing nothing there; back to what had it as it goes)
+        layer.focus_opens(layer) |> ignore
         across.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
       })
       |> ignore
