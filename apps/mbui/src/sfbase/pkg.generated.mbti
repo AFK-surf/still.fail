@@ -573,6 +573,8 @@ pub fn flight_placed(@ui.Ctx, SendFlight) -> Unit
 
 pub fn flight_quote_landing(@ui.Ctx, SendFlight, Int32, String, (Double, Double)) -> Unit
 
+pub fn flight_quote_words(@ui.Ctx, SendFlight, String) -> (String, Double?)
+
 pub fn flight_settled(Double, Bool) -> Double
 
 pub fn flight_settled_of(@ui.Ctx, SendFlight) -> Double
@@ -2344,6 +2346,9 @@ pub(all) struct FlyingFile {
   mut paint : ((Double, Double, @ui.Fit, Double) -> Unit)?
   face : () -> Unit
   ground : Int64
+  leaving : ((Double, Double, Double, Double), () -> Unit)?
+  quote_words : (String, Double)?
+  mut quote_to : Double?
 }
 
 pub(all) struct FoundChat {

@@ -664,7 +664,8 @@ pub(all) struct QuoteCardDone {
 /// leads to its message, `jump`), after a quote's mark and whose it is (a page's or an image's mark: its pin's number
 /// and its first line instead); its own `picture` under it; what is said about it (`comment`'s words, or `comment_field`
 /// where it is written: the composer's); ✕ at its corner where it can be let go (`remove`). In the composer
-/// (`composer`) its corner the composer's inner and its words further in. `key` names it.
+/// (`composer`) its corner the composer's inner and its words further in. `key` names it. During a send, the words'
+/// width can follow the card's flight (`words_width`); `words_key` keeps their laid-out shape for that flight.
 pub fn quote_card(
   c : @ui.Ctx,
   key : String,
@@ -677,6 +678,8 @@ pub fn quote_card(
   remove? : Bool = false,
   picture? : () -> Unit,
   comment_field? : () -> Unit,
+  words_width? : Double,
+  words_key? : String = "",
 ) -> QuoteCardDone {
   let p = theme().p
   let source = c.id(key + "/source")
@@ -692,7 +695,8 @@ pub fn quote_card(
   let hung = composer && remove
   let node = Ref::new(-1)
   let card = fn() {
-    node.val = c.box(style=if composer { quote_box_composer().then(composer_card()) } else { quote_box_message }, fn() {
+    let look = if composer { quote_box_composer().then(composer_card()) } else { quote_box_message }
+    node.val = c.box(style=look.then(@ui.style(clip=words_width is None)), fn() {
     // (a pin in its top corner: there the ladder's inset from both its edges, concentric with it)
     let source_look = match (composer, pin != "") {
       (true, false) => if hung { quote_source_hung } else { quote_source_composer }
@@ -701,7 +705,7 @@ pub fn quote_card(
       (false, true) => quote_source_pin
     }
     c.box(style=source_look, id=source, fn() {
-      c.box(style=quote_words, fn() {
+      let text_box = c.box(style=quote_words, fn() {
         if pin != "" {
           c.box(style=quote_pin, fn() { c.text(pin, style=quote_pin_words) |> ignore }) |> ignore
           c.text(words.split("\n").next().map(fn(s) { s.to_string() }).unwrap_or(""), style=quote_text) |> ignore
@@ -713,11 +717,12 @@ pub fn quote_card(
               @ui.span(words),
             ],
             style=if hot { quote_text_hot } else { quote_text },
+            w?=words_width.map(fn(w) { Px(w) }),
           )
           |> ignore
         }
       })
-      |> ignore
+      if words_key != "" { c.words(text_box, words_key) }
     })
     |> ignore
     match picture {

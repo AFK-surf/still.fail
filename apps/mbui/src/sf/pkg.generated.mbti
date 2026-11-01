@@ -1558,7 +1558,7 @@ pub fn quota_chips(@ui.Ctx, Json?, small? : Bool, marked? : Bool, worded? : Bool
 
 pub fn quota_said(Json?) -> String
 
-pub fn quote_card(@ui.Ctx, String, String, String, role? : String, comment? : String, composer? : Bool, jump? : Bool, remove? : Bool, picture? : () -> Unit, comment_field? : () -> Unit) -> QuoteCardDone
+pub fn quote_card(@ui.Ctx, String, String, String, role? : String, comment? : String, composer? : Bool, jump? : Bool, remove? : Bool, picture? : () -> Unit, comment_field? : () -> Unit, words_width? : Double, words_key? : String) -> QuoteCardDone
 
 pub let quote_pop_h : @ui.Len
 
