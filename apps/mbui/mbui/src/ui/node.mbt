@@ -356,12 +356,8 @@ struct Node {
   // held this far below the top of the list it is in as its row scrolls past, within its parent (Ctx::stick; NaN:
   // where it is laid out)
   mut stick : Double
-  // its node in the flex engine, and how the engine measures it as a leaf
+  // its node in the flex engine (how the engine measures it as a leaf told it as it is laid out as one: layout.mbt)
   fl : @flex.Node
-  mut leaf : ((Double, @flex.MeasureMode, Double, @flex.MeasureMode) -> (
-    Double,
-    Double,
-  ))?
   // what the flex node was last given (layout.mbt, Ctx::flex_tree): the
   // kind, what a leaf measures (text and its font, a rich paragraph, an
   // image's size), the layout epoch
@@ -546,7 +542,6 @@ fn Node::new() -> Node {
     item: -1,
     stick: 0.0 / 0.0,
     fl: @flex.Node::new(),
-    leaf: None,
     lk_kind: -1,
     lk_text: "",
     lk_shorter: no_words,
@@ -567,7 +562,6 @@ fn Node::new() -> Node {
     oty: 0.0,
     same: false,
   }
-  n.leaf = Some(fn(w, wm, h, hm) { leaf_size(n, w, wm, h, hm) })
   n
 }
 

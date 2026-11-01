@@ -670,9 +670,11 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     k == kind_editor ||
     k == kind_list ||
     k == kind_image {
-    // (measured or not goes with its kind, compared above)
+    // (measured or not goes with its kind, compared above: told how as it is laid out as a leaf, and let go of as it is
+    // laid out as one no more, so that a node never laid out as a leaf (one put among the frame's to be read, as the
+    // corner rule puts the window's tree's: with_tree_nodes) holds nothing that holds it, and goes when let go of)
     if f.measure is None {
-      f.measure = n.leaf
+      f.measure = Some(fn(w, wm, h, hm) { leaf_size(n, w, wm, h, hm) })
     }
     if f.children.length() > 0 {
       f.children.clear()
