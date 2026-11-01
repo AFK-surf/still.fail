@@ -21,11 +21,13 @@ import type { ContextCall } from "../store/usage.ts";
 /// an hour; fast mode doubles all of it.
 type Price = { input: number; output: number; cacheRead: number };
 
-/// usage.rs PRICES: standard short-context API list prices (2026-10-02), for a model the model catalog (accounts/catalog.ts)
-/// has no price for, or before it has said anything. Longer names first.
+/// Standard short-context API list prices, for a model the model catalog (accounts/catalog.ts) has no price for, or
+/// before it has said anything. Longer names first.
 const PRICES: [string, Price][] = [
   ["gpt-6-astra", { input: 10.0, output: 50.0, cacheRead: 1.0 }],
   ["gpt-6.1-sol", { input: 2.0, output: 10.0, cacheRead: 0.1 }],
+  // OpenAI's standard API prices: https://developers.openai.com/api/docs/models/gpt-6.1-terra (2026-11-01).
+  ["gpt-6.1-terra", { input: 1.0, output: 5.0, cacheRead: 0.05 }],
   ["gpt-6-sol", { input: 2.0, output: 10.0, cacheRead: 0.2 }],
   ["gpt-6-luna", { input: 0.1, output: 0.5, cacheRead: 0.01 }],
   ["gpt-5.6-sol", { input: 4.0, output: 20.0, cacheRead: 0.4 }],

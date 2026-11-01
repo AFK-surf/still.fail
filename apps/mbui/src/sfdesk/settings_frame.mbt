@@ -149,9 +149,10 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let here = @settings.here_of(core, w.id, w.name)
   c.box(style=settings_side_fill, fn() {
     side_top(c)
-    side_scroll(c, "settings-nav", fn() {
-      // (none beside the system's tabs: 对话 is one of them, rail_native.mbt)
-      if !@sf.native_on() {
+    // The way back belongs to the sidebar's band, not to the list that scrolls beneath it.
+    // (none beside the system's tabs: 对话 is one of them, rail_native.mbt)
+    if !@sf.native_on() {
+      c.box(style=@sf.side_list().then(settings_back_band), fn() {
         if nav_row(c, "settings-nav/back", false, fn() {
             @sf.icon(c, "arrow-left", size=settings_nav_icon, color=t.p.muted) |> ignore
             nav_words(c, @sf.t("web-pages.settings.nav.backToChats"))
@@ -167,9 +168,10 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           }
           wide.landed.set("")
         }
-        // (the way back is the frame's, not one of the list's rows: a group's room between them)
-        @sf.list_apart(c)
-      }
+      })
+      |> ignore
+    }
+    side_scroll(c, "settings-nav", fn() {
       // (a row's page in place of the one open; on the tape brought over to show it)
       @sfpages.settings_side_rows(c, core, here, lit, fn(r) {
         @sfbase.history_push()
@@ -199,4 +201,8 @@ let settings_nav_icon : Double = 16.0
 // kept across runs: a value (no field of it changes)
 let settings_side_fill : @ui.Style = @ui.css("w=Full h=Full")
 
+///|
+/// The list supplies four points of its own top room; with the band's ten the groups remain fourteen apart.
+// kept across runs: a value (no field of it changes)
+let settings_back_band : @ui.Style = @ui.css("h=Hug pb=S2_5")
 

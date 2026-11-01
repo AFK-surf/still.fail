@@ -1317,10 +1317,9 @@ fn price_card(c : @ui.Ctx, tv : Json?, tree? : Json? = None) -> Unit {
         cells.append(items(Some(r), "rates").map(fn(x) { text(Some(x), "value") }))
         md.push(line(cells))
       }
-      // (across the card's foot, its ground reaching past the card's words to the ladder's inset, round by
-      // the ladder's next step there: concentric with the card's foot corners)
+      // (the table's words start with the card's words; when it scrolls, it reaches past them to the ladder's inset)
       c.box(style=up_table_across, fn() {
-        @sf.markdown(c, md.join("\n"), key="prices/" + text(tv, "station"), tree~, size=@sf.text_scale.base.0) |> ignore
+        @sf.markdown(c, md.join("\n"), key="prices/" + text(tv, "station"), tree~, size=@sf.text_scale.base.0, bleed=@sf.card_pad - @sf.corner_inset) |> ignore
       })
       |> ignore
     }
@@ -1343,11 +1342,9 @@ fn prices_sample(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// A station's prices' table at its card's foot (@sf.block_across, and as far past the card's words under it).
+/// A station's prices' table at its card's foot, as far past the card's words under it as its scroll reaches to either side.
 // kept across runs: a value (no field of it changes)
-let up_table_across : @ui.Style = @ui.css("w=Full").then(@sf.block_across).then(
-  @ui.style(mb=@sf.room_of(@sf.corner_inset - @sf.card_pad)),
-)
+let up_table_across : @ui.Style = @ui.css("w=Full").then(@ui.style(mb=@sf.room_of(@sf.corner_inset - @sf.card_pad)))
 
 ///|
 /// What a page says in place of what it lists (none: muted; narrow, 24 in as a page's note is).

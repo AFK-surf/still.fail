@@ -23,6 +23,39 @@ let settings_list_order : Array[String] = [
 ]
 
 ///|
+test "the large settings sidebar keeps its way back visible and usable while its rows scroll" {
+  for platform in [0, 2] {
+    let t = wide_tester([], mode="settings", h=430.0, platform~)
+    t.click(Button, label=@sf.t("web-pages.settings.title"))
+    t.run_for(@ui.move_most_ms)
+    guard t.shown_of("返回会话") is Some((x, top, w, h)) else {
+      fail("platform \{platform}: no back in the settings sidebar")
+    }
+    assert_true(w > 0.0 && h > 0.0)
+    guard t.rect_of("本机缓存") is Some((_, before, _, _)) else {
+      fail("platform \{platform}: no cache row in the settings sidebar")
+    }
+    if platform == 2 {
+      t.drag(x, 380.0, x, 100.0)
+      t.drag(x, 380.0, x, 100.0)
+    } else {
+      t.wheel(x, 215.0, 3000.0)
+    }
+    t.run_for(@ui.move_most_ms)
+    let (_, after, _, row_h) = t.rect_of("本机缓存").unwrap()
+    assert_true(after < before && after + row_h <= 430.0, msg="the settings rows scrolled")
+    let (sx, sy, sw, sh) = t.shown_of("返回会话").unwrap()
+    assert_eq((sx, sy, sw, sh), (x, top, w, h), msg="back stays fully visible at the top")
+    let (rx, ry, rw, rh) = t.shown_of("本机缓存").unwrap()
+    assert_true(ry >= top + h && rw > 0.0 && rh > 0.0, msg="the scrolled row is visible below back")
+    t.tap(rx + rw / 2.0, ry + rh / 2.0)
+    assert_true(app.nav.top() == Setting(@settings.Route::KeptFiles), msg="a scrolled row is usable")
+    t.tap(x + w / 2.0, top + h / 2.0)
+    assert_true(t.find("新建对话") is Some(_), msg="back works after scrolling")
+  }
+}
+
+///|
 test "the settings' list: the same rows in the same order on a small screen's page and in a large one's sidebar, 下方栏 the small one's alone" {
   // small, with keyboard and mouse (a Mac's narrow window): the gear's page, all of it in a tall window, the bottom
   // bar's row with the bar under it
