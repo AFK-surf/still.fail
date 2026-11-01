@@ -487,4 +487,5 @@ fn signin_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, as
 
 ///|
 /// A code's field over the card's buttons, as wide as the card's foot (vault_ask's ask_typed).
+// kept across runs: a value (no field of it changes)
 let signin_typed : @ui.Style = @ui.css("w=Full gap=S2")
