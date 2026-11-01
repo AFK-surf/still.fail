@@ -20,8 +20,8 @@
 /// tape_holds), its panels the window's tree's nodes (tape_shell.mbt); the wide frame off the tape (laid out Large, or
 /// with no sidebar to show), its page and its block the tree's nodes (tape_shell.mbt's paned_shell); the landing's nodes
 /// (no workspace yet, every account answered: entry_tree.mbt); the splash's nodes while the workspaces are read or fail
-/// to be (app.mbt's reading_tree); a window of its own, its page in the tree's frame (app.mbt's lone_tree); or the old
-/// view whole (the window's width not known yet).
+/// to be (app.mbt's reading_tree); a window of its own, its page in the tree's frame (app.mbt's lone_tree); or nothing
+/// while the window's width is not known yet (the tree made before its first frame).
 priv enum ShellIs {
   Stacked
   Taped
@@ -29,14 +29,14 @@ priv enum ShellIs {
   Landing
   Reading
   Lone
-  Whole
+  Unsized
 } derive(Eq)
 
 ///|
 /// Which shell the signed-in app is in for a window `width` wide (app_tree).
 fn shell_is(src : Source, width : Double) -> ShellIs {
   if width <= 0.0 {
-    return Whole
+    return Unsized
   }
   // (a window of its own: its page alone, the window's tree's frame round it: lone_tree)
   if @sfbase.lone_page.val is Some(_) {

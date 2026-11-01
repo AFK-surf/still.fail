@@ -187,7 +187,7 @@ test "a new chat with its 文件 tab: the empty part of its bar drags the window
 ///|
 test "a window of its own, a station's screen live alone in it (the window's tree's frame round the page, an old view hosted): its top row drags it but for what is pressed there; 控制中心's panel (画质) a modal: a blank part of it pressed sends the screen nothing, nor drags the window; its 任务管理器 sends its keys; closed, the same point pressed sent to the screen; open, the top row's empty part pressed lets the panel go, the window not dragged till the next press" {
   let calls : Array[Made] = []
-  let shell : Ref[ShellIs] = Ref(Whole)
+  let shell : Ref[ShellIs] = Ref(Unsized)
   let t = wide_tester(calls, mode="screen-live", window_inset=true, before=fn(src) {
     // (the fixture's screen live, driven: what its stream says; it is put on the app's stack too, which a window of
     // its own does not show)
