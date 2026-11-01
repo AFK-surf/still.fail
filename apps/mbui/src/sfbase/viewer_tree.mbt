@@ -12,14 +12,14 @@
 //     changes, at that moment; what is beside it read ahead as that is said;
 //   - in it, the picture where its zoom has it, moved across with the strip as the frame draws it, the one going and
 //     those beside it while the strip moves, why it is not shown where it could not be decoded, the small decode that
-//     learns a size not known, the marks and their pins, nodes; its flight an old view's, and the words being written
-//     (an old view taking a press only on them); and over it the bars: the floating bar on a small screen, its
-//     picture coming, whole or marked, nodes of its own (image_head, head_as_nodes: how much of it has come, its tools
-//     or marking's actions, their tips); the bar across the top of a wider screen, the same, nodes too (image_bar,
-//     bar_as_nodes); the ways to the pictures beside it while it is not marked (image_steps); marking's foot while it
-//     is (marks_foot_node: its tools, the notes' cards, the note being written, what is written in it an old view's
-//     field); the rest an old view taking a press only where it has something to press (the bars beside the
-//     system's, an iPhone Duo's: vf_bar's).
+//     learns a size not known, the marks and their pins, its flight, nodes; the words being written an old view's
+//     (taking a press only on them);
+//   - over it the bars: the floating bar on a small screen, its picture coming, whole or marked, nodes of its own
+//     (image_head, head_as_nodes: how much of it has come, its tools or marking's actions, their tips); the bar across
+//     the top of a wider screen, the same, nodes too (image_bar, bar_as_nodes); the ways to the pictures beside it
+//     while it is not marked (image_steps); marking's foot while it is (marks_foot_node: its tools, the notes' cards,
+//     the note being written, what is written in it an old view's field); beside the system's bars (an iPhone Duo's),
+//     its actions in theirs, said to them as what it says changes (native_said).
 //
 // It sets out as the node is made (that moment its cause's: the thumbnail tapped), and is done at its ways' declared
 // ends (moments on the node's timeline): landed, the thumbnail shows again; gone, it is let go.
@@ -27,21 +27,9 @@
 // What a download, a save or marking's picture asks is done by the layer at its cause (image_layer), whichever bar
 // asked.
 //
-// Still the old view's here (the way there): the picture's flight in and out (image_view: where it flies from,
-// recorded as it is drawn; the thumbnail's place read of the old layout), the words being written over the marks
-// (Viewer::marks_writing_view), the bars beside the system's (theirs as the bars' view builds, so what draws the
-// picture follows them at the next frame).
+// Still the old view's here (the way there): the words being written over the marks (Viewer::marks_writing_view)
+// and in a note being written (marks_foot_node's field).
 
-///|
-/// How many times what draws the picture and the bars over it have been built, each (what a change built again).
-pub(all) struct ViewerBuilt {
-  mut drawing : Int
-  mut bars : Int
-}
-
-///|
-// kept across runs: counts, only ever read as how many more
-pub let viewer_built : ViewerBuilt = { drawing: 0, bars: 0 }
 
 ///|
 /// The viewer the window's tree draws: the one open, else the one going, when what it shows is an image it shows (not
@@ -120,6 +108,8 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   |> ignore
   // set out as it is made: the moment of what opened it
   vw.set_out(@ui.current(), src, n.cause_at())
+  // (what marking stamps what it makes by: this source's clock, as the old view's said it each frame)
+  src_now.val = src.now
   image_ends(n, vw)
   // what marking made, taken as the host says it is drawn (MarkedImage::ready, its answers' signal): kept, or into the
   // chat's draft, once (Viewer::marks_frame takes it), by this viewer while it is the one open and its layer here; a
@@ -267,18 +257,6 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     // (a wheel over it, at its moment, where it is on the stage then)
     .on_wheel(fn(w) { vw.wheeled(vw.zoom, w.x, w.y, w.dx, w.dy, w.mods, w.at) })
     |> ignore
-    // (what it draws takes a finger only where it has something of its own to press: a mark's pin, the words being
-    // written)
-    @ui.old(canvas, fn(c) {
-      viewer_built.drawing += 1
-      // (whether it marks, and what: what it draws decided by it, followed here where that is decided)
-      marks_said()
-      let stage = c.id("preview/stage")
-      c.box(style=viewer_under, fn() { vw.image_view(c, src, stage, false) }) |> ignore
-    })
-    .over(Is(true))
-    |> @ui.old_takes_own
-    |> ignore
     // (the moment what draws the picture reads the strip and the flight at, in `n`: as each frame draws it while either
     // goes; where neither goes, the clock read no more)
     let strip_at = fn(n : @view.View) {
@@ -291,8 +269,8 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
         now
       }
     }
-    // (the picture lying flat where its zoom has it, moved across with the strip, its node (what draws the picture
-    // leaves it to it then: a flight, the old view's still), under what is drawn over it)
+    // (the picture lying flat where its zoom has it, moved across with the strip, its node (but while it flies: its
+    // flight's nodes), under what is drawn over it)
     canvas.box(fn(p) {
       let flat = fn() {
         strip_at(p) |> ignore
@@ -514,14 +492,19 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     |> ignore
   })
   |> ignore
-  // the bars over it: theirs where they have something to press, the rest the canvas's
-  @ui.old(n, fn(c) {
-    viewer_built.bars += 1
-    image_bars(c, src, vw)
+  // beside the system's bars (an iPhone Duo's): what is up over the window said to them, its name, its tabs put away
+  // (and, not marking, its actions in their bars in place of its own bar: vf_native's), at the moment what it says
+  // changes; kept as said while it is the one open (Viewer::up_still), handed over as each frame ends
+  // (@sf.native_over_up)
+  n.reacts(fn() { native_said(vw, src) }, fn(said) {
+    match said {
+      Some(_) =>
+        if @sf.native_over_up(vw.file.name, alive=fn() { vw.up_still() }, owner="viewer", over=2) && !marking.on {
+          vf_native(vw, @ui.current(), src)
+        }
+      None => ()
+    }
   })
-  .over(Is(true))
-  |> @ui.old_takes_own
-  |> ignore
   // (the floating bar over it on a small screen, its nodes: where the old bars draw it not, head_as_nodes)
   n.show(fn() { head_as_nodes(vw, stage().0) }, fn(h) { image_head(h, src, vw, stage) })
   // (the bar across the top of a wider window, its picture whole, its nodes: where the old bars draw it not,
@@ -626,21 +609,47 @@ fn image_ends(n : @view.View, vw : Viewer) -> Unit {
 }
 
 ///|
-/// The bars over the picture and what is said with them (viewer_layer's, for a viewer the window's tree draws): its bar,
-/// what marking made said (back, what was asked to be saved, a download asked: its layer's,
-/// image_layer); the ways to the pictures beside it are nodes (image_steps).
-fn image_bars(c : @ui.Ctx, src : Source, v : Viewer) -> Unit {
-  // (marking as it is: the bars follow what a finger on the picture did to it)
+/// What viewer `vw` says to the system's bars beside the window (an iPhone Duo's; None where there are none, or it is
+/// going): what of it decides what it says there (vf_bar's: marking, its bar shown or its picture coming, its zoom
+/// fitted or not, its whole picture here, its download, the words its actions are said in), as each is told.
+fn native_said(vw : Viewer, src : Source) -> NativeSaid? {
   marks_said()
-  src_now.val = src.now
-  let shown = if v.flies { v.flying() } else { v.fade.get() }
-  c.box(style=viewer_under, fn() {
-    // (the ways to the pictures beside it its nodes: image_steps; marking's foot too: marks_foot_node)
-    // (its keys its node's: Viewer::key_on)
-    c.layer(fn() { vf_bar(v, c, src, shown, keys=false) }) |> ignore
+  vw.zoom.told()
+  pv_leaving.get() |> ignore
+  if !@sf.native_on() || vw.closing {
+    return None
+  }
+  let z = vw.zoom
+  Some({
+    marking: marking.on,
+    shown: vw.bars_shown(),
+    coming: vw.coming(),
+    fitted: z.fitted,
+    whole: z.fit() >= 1.0,
+    here: vw.bytes.get() is Some(_),
+    told: vw.told_of() && !vw.asked,
+    downloading: downloading(vw.download(src)),
+    // (the words its actions are said in there, in the language as it is: said again as that changes)
+    words: [
+      "common.close", "web-main.preview.fitKey", "web-main.preview.actualKey", "web-main.annotate.image", "common.copy",
+      "web-main.stations.saveToPhotos", "android-chat.file.download",
+    ].map(fn(k) { @sf.t(k) }),
   })
-  |> ignore
 }
+
+///|
+/// What decides what viewer `vw` says to the system's bars (native_said).
+struct NativeSaid {
+  marking : Bool
+  shown : Bool
+  coming : Bool
+  fitted : Bool
+  whole : Bool
+  here : Bool
+  told : Bool
+  downloading : Bool
+  words : Array[String]
+} derive(Eq)
 
 ///|
 /// A finger's event on the canvas of viewer `v` (node `canvas`), at its own moment: what the old view's stage worked
@@ -883,17 +892,16 @@ fn Viewer::picture_shown(self : Viewer, src : Source) -> (String, String, Int)? 
 }
 
 ///|
-/// Whether viewer `vw`'s picture lies flat where its zoom has it, moved across with the strip of pictures (its
-/// node draws it then, View::image; what draws the picture, Viewer::image_view, leaves it to it): drawn by the window's
-/// tree, not flying, not a picture that could not be decoded (what draws the picture says so alone:
-/// Viewer::picture_failed). Read the same by both.
+/// Whether viewer `vw`'s picture lies flat where its zoom has it, moved across with the strip of pictures (its node
+/// draws it then, View::image): drawn by the window's tree, not flying (its flight's nodes draw it then), not a picture
+/// that could not be decoded (its words alone: Viewer::picture_failed).
 pub fn Viewer::picture_flat(self : Viewer) -> Bool {
   self.in_tree && !self.flies && !self.picture_failed()
 }
 
 ///|
-/// Whether what draws viewer `vw`'s picture draws its marks over it (Viewer::image_view's): marking, where the picture is
-/// known, not one that could not be decoded (its words saying so alone). As each is told.
+/// Whether viewer `vw`'s marks are drawn over its picture (marks_shapes_node, marks_pins_node, the words being written):
+/// marking, where the picture is known, not one that could not be decoded (its words saying so alone). As each is told.
 fn Viewer::marks_shown(self : Viewer) -> Bool {
   marks_said()
   self.zoom.told()
@@ -902,7 +910,7 @@ fn Viewer::marks_shown(self : Viewer) -> Bool {
 
 ///|
 /// The words being written over viewer `vw`'s picture while it marks (marks_writing), where it is drawn as the frame
-/// draws it, lifted with it (Viewer::image_view's place for the marks), in `c` (an old view's, over the pins).
+/// draws it, lifted with it (where its marks are), in `c` (an old view's, over the pins).
 fn Viewer::marks_writing_view(self : Viewer, c : @ui.Ctx) -> Unit {
   if !self.marks_shown() {
     return
@@ -1372,9 +1380,8 @@ pub fn file_progress_node(parent : @view.View, got : () -> (Double, Double?), se
 }
 
 ///|
-/// Whether viewer `vw`'s picture flying in or back is drawn by its nodes (what draws the picture, Viewer::image_view,
-/// leaves it to them): drawn by the window's tree, flying, not a picture that could not be decoded (its words alone,
-/// as what draws the picture has them). Read the same by both.
+/// Whether viewer `vw`'s picture flying in or back is drawn by its flight's nodes: drawn by the window's tree, flying,
+/// not a picture that could not be decoded (its words alone).
 pub fn Viewer::flight_node(self : Viewer) -> Bool {
   self.in_tree && self.flies && !self.picture_failed()
 }

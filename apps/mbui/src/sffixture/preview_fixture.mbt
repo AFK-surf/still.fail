@@ -82,11 +82,19 @@ pub fn fixture_preview(mode : String) -> Unit {
       } else {
         InChat(Some(1.0), "s-c1")
       })
-      // (halfway to the next on a phone; on a wide window as far, the next come in)
-      match mode {
-        "chat-preview-swipe" => pv_strip.pinned = Some(-150.0)
-        "chat-preview-swipe-wide" => pv_strip.pinned = Some(-700.0)
-        _ => ()
+      // (halfway to the next on a phone; on a wide window as far, the next come in: the strip put there, held there
+      // where an old view draws it, which puts it where it is pinned as it is built)
+      let aside = match mode {
+        "chat-preview-swipe" => Some(-150.0)
+        "chat-preview-swipe-wide" => Some(-700.0)
+        _ => None
+      }
+      match aside {
+        Some(x) => {
+          pv_strip.pinned = Some(x)
+          pv_strip.way.put(x)
+        }
+        None => ()
       }
       if viewer.get() is Some(v) {
         // the song paused at 0:31 of 1:35, the same on every run

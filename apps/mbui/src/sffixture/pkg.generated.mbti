@@ -225,7 +225,6 @@ pub fn fix_session_pick() -> Json
 
 pub let fix_shared : (String, String?)
 
-
 pub fn fix_split_tabs() -> Json
 
 pub let fix_srt : String

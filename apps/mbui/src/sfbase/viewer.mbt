@@ -2275,60 +2275,38 @@ fn Viewer::picture_menu_at(self : Viewer, c : @ui.Ctx, x : Double, y : Double, b
 ///|
 /// An image fitted to the stage, to double-tap, pan and zoom (the wheel, the bar's − and +); until the whole of it
 /// comes, the chat's thumbnail (or its likeness) stands in its place.
+/// (The old view's way, what it takes of the hand and tells its zoom as it is built; where the window's tree draws the
+/// viewer, its nodes draw all of it and take the hand at their own moments: viewer_tree.mbt.)
 pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Unit {
-  self.image_view(c, src, stage, true)
-}
-
-///|
-/// The image stage (Viewer::image_stage) drawn, and with `inputs` what it takes of the hand and tells its zoom as it is
-/// built (the old view's way); without, drawing alone: where it is a node of the window's tree, what the hand does
-/// and what the zoom is told are the node's, at their own moments (viewer_tree.mbt).
-pub fn Viewer::image_view(self : Viewer, c : @ui.Ctx, src : Source, stage : Int, inputs : Bool) -> Unit {
   let v = self
   let picture = v.picture(src)
   if v.picture_failed() {
-    if inputs {
-      tap_stage(c, v, stage)
-    }
-    // (where the window's tree draws the viewer, its words a node of its own: viewer_tree.mbt)
-    if !v.in_tree {
-      v.note(c, fn() {
-        c.text(pv("android-chat.file.image.failed"), size=@sf.theme().t.body, color=@sf.theme().p.muted) |> ignore
-      })
-    }
+    tap_stage(c, v, stage)
+    v.note(c, fn() {
+      c.text(pv("android-chat.file.image.failed"), size=@sf.theme().t.body, color=@sf.theme().p.muted) |> ignore
+    })
     return
   }
   // its size: as sent, else as decoded, else its stand-in's
   let z = v.zoom
   let ime = c.ime_inset()
-  if inputs {
-    let (nw, nh) = v.natural_size(src)
-    // the keyboard over the stage, not the stage made shorter for it (FilePreview.kt: the zoom's box is the window's)
-    z.boxed(c.width, c.height + ime)
-    z.natural(nw, nh)
-    z.step()
-  }
+  let (nw, nh) = v.natural_size(src)
+  // the keyboard over the stage, not the stage made shorter for it (FilePreview.kt: the zoom's box is the window's)
+  z.boxed(c.width, c.height + ime)
+  z.natural(nw, nh)
+  z.step()
   // lifted while the keyboard is up, as far as keeps what is being written (or the open note's pin, its box under it)
   // 24 clear of it (FilePreview.kt lift: animateFloatAsState's spring)
   let below = match marks_writing_bottom(z) {
     Some(b) => b + marks_keyboard_gap - c.height
     None => 0.0
   }
-  let lift = if v.in_tree {
-    v.lift.get()
-  } else {
-    @motion.animate(c, "preview/lift", if ime > 0.0 && below > 0.0 { below } else { 0.0 })
-  }
+  let lift = @motion.animate(c, "preview/lift", if ime > 0.0 && below > 0.0 { below } else { 0.0 })
   let rect = fn() { z.rect().map(fn(r) { (r.0, r.1 - lift, r.2, r.3) }) }
   let (before, after) = v.near(src)
-  // (once the frame's builds are over: a step taken further on in this one reads beside the image it comes to; one the
-  // window's tree draws reads ahead as what is beside it is said, viewer_tree.mbt)
-  if !v.in_tree {
-    c.after_build("pv-near", fn() { v.read_near(src, before, after) })
-  }
-  if !inputs {
-    ()
-  } else if marking.on {
+  // (once the frame's builds are over: a step taken further on in this one reads beside the image it comes to)
+  c.after_build("pv-near", fn() { v.read_near(src, before, after) })
+  if marking.on {
     // marking: one finger draws, two pinch as ever (no stepping meanwhile)
     if c.second_pointer() is Some(_) || v.pinched {
       v.gestures(c, src, stage, z, false, false)
@@ -2389,12 +2367,8 @@ pub fn Viewer::image_view(self : Viewer, c : @ui.Ctx, src : Source, stage : Int,
   let flying = v.flies
   match rect() {
     // (the whole picture decoded for where it lands, asked for as it sets out: it takes its stand-in's place there)
-    // (where the window's tree draws the viewer, its nodes': Viewer::flight_node)
-    Some(_) if picture != "" && flying && v.flight_node() => ()
     Some(r) if picture != "" && flying =>
       v.draw_flight(c, v.shown_picture(c, src, r), r, v.flying())
-    // (lying flat where the window's tree draws the viewer: its node's, Viewer::picture_flat)
-    Some(_) if picture != "" && v.picture_flat() => ()
     Some(r) if picture != "" => {
       let (x, y, w, h) = r
       // flat on the canvas, as a photo viewer's (FilePreview.css.ts fpImage)
@@ -2402,9 +2376,8 @@ pub fn Viewer::image_view(self : Viewer, c : @ui.Ctx, src : Source, stage : Int,
     }
     _ => ()
   }
-  // its size not sent with it nor known yet: a small decode, out of sight, says it (meanwhile its stand-in's; where the
-  // window's tree draws the viewer, its node's: viewer_tree.mbt)
-  if !v.in_tree && v.size_unknown(src) {
+  // its size not sent with it nor known yet: a small decode, out of sight, says it (meanwhile its stand-in's)
+  if v.size_unknown(src) {
     c.box(w=Px(1.0), h=Px(1.0), opacity=0.01, fn() {
       c.image(picture, w=Px(1.0), h=Px(1.0), bg=0L, fade=false) |> ignore
     })
@@ -2412,15 +2385,9 @@ pub fn Viewer::image_view(self : Viewer, c : @ui.Ctx, src : Source, stage : Int,
   }
   if marking.on {
     match rect() {
-      // (where the window's tree draws the viewer, its shapes and pins its nodes (marks_shapes_node, marks_pins_node)
-      // and the words being written over them on their own: Viewer::marks_writing_view)
-      Some(r) => marks_draw(c, r, z.nw, z.nh, shapes=!v.in_tree, pins=!v.in_tree, writing=!v.in_tree)
+      Some(r) => marks_draw(c, r, z.nw, z.nh)
       None => ()
     }
-  }
-  // (where the window's tree draws the viewer, the one going and those beside it its nodes: viewer_tree.mbt)
-  if v.in_tree {
-    return
   }
   match pv_strip.leaving {
     // the one going, drawn from where it was (it has no place of its own any more)
@@ -2536,8 +2503,8 @@ pub fn drive_attachment(f : DriveFile) -> Attachment {
 }
 
 ///|
-/// Whether its whole picture, read, could not be decoded (what draws it then says so alone, Viewer::image_view: no
-/// picture, no stand-in, no marks). As the host says it.
+/// Whether its whole picture, read, could not be decoded (what draws it then says so alone: no picture, no stand-in,
+/// no marks, no flight). As the host says it.
 pub fn Viewer::picture_failed(self : Viewer) -> Bool {
   match self.bytes.get() {
     Some(_) => @ui.image_state(self.image_name()) == -1

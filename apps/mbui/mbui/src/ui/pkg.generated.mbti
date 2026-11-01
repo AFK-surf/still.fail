@@ -1815,7 +1815,7 @@ pub fn NativeView::shown(Self) -> Bool
 pub fn NativeView::site(String, (SiteRequest, SiteReply) -> Unit, leave? : (String) -> Unit, said? : (String) -> Unit, no_answer? : String, too_slow? : String) -> Self
 pub fn NativeView::state(Self) -> Int32
 pub fn NativeView::touch(Self, Touch) -> Unit
-pub fn NativeView::video(String, (Double, Int32, (Bytes, Double, Bool) -> Unit) -> () -> Unit) -> Self
+pub fn NativeView::video(String, (Double, Int32, (Bytes, Double, Bool) -> Unit) -> () -> Unit, direct? : String) -> Self
 pub fn NativeView::volume(Self, Double) -> Unit
 
 type Nav[P]

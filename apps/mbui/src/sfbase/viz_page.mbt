@@ -663,7 +663,7 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
           Some(now) => physical_equal(now, v)
           None => false
         }
-      })
+      }, owner="viz", over=1)
       if native {
         @sf.native_over_act("close", @sf.t("common.close"), "close", fn() { c.tell("viz/full-close", fn() { viz_close_full() }) }, lead=true)
         @sf.native_over_act("download", @sf.t("android-chat.file.download"), "download", fn() {

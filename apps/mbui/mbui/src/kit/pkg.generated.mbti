@@ -569,6 +569,7 @@ pub(all) struct MediaTrack {
   mime : String
   audio : Bool
   read : (Double, Int32, (Bytes, Double, Bool) -> Unit) -> () -> Unit
+  direct : String
 }
 
 pub(all) struct Menu {

@@ -125,7 +125,7 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bo
   let media = v.shown_kind() == Some(KAudio) || v.shown_kind() == Some(KVideo)
   // (a film filling the window: the bars put away, no title, no actions: @sf.player_full_native)
   let full = media && @sf.player_fills_native(c.width)
-  let native = @sf.native_over_up(if full { "" } else { v.file.name }, alive=fn() { v.up_still() })
+  let native = @sf.native_over_up(if full { "" } else { v.file.name }, alive=fn() { v.up_still() }, owner="viewer", over=2)
   // played in the player beside the system's bars: its close and download in them, as a picture's (the player draws
   // no bar of its own there: @sf.player_room)
   if native && media {

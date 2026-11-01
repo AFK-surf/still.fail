@@ -517,6 +517,8 @@ pub fn sample_chat(Int32) -> @sfbase.ChatItem
 
 pub fn sample_stations() -> Array[Json]
 
+pub fn screen_fix_others(Array[String]) -> Unit
+
 pub fn screen_fixture_stream(Json, (Json, Bytes?) -> Unit, (Result[Json, Json]) -> Unit) -> Int32
 
 pub fn screen_left(@sfbase.Source, String, String) -> Unit
