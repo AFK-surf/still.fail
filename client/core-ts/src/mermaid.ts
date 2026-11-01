@@ -2,7 +2,10 @@
 // of its own (mermaidDom.ts: no browser, the words measured as the app sets them) and gives an SVG the app draws
 // itself (mbui's SVG renderer), in the app's colours. Its words are SVG text, not HTML (`htmlLabels: false`): a chart
 // that would still carry HTML (a foreignObject) is refused, and a client shows it another way.
-// mermaid, and the document it lays charts out in, are loaded the first time a chart is asked for, not as the core starts.
+// mermaid, and the document it lays charts out in, are loaded the first time a chart is asked for, not as the core starts:
+// in a browser or Node from its package (mermaid-lib.ts); in Hermes, whose script has it not (mermaid-lib-hermes.ts:
+// `#mermaid-lib`'s `hermes` condition), given by the app (provideMermaid).
+import { loadMermaid } from "#mermaid-lib";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -26,6 +29,8 @@ export const LOOK_COLOURS = ["background", "card", "border", "text", "line", "ac
 export const MERMAID_FACE = "Inter, 'Noto Sans SC', sans-serif";
 
 export class MermaidRefused extends Error {}
+/// No mermaid here: the core has not been given it (`mermaid.load`).
+export class MermaidAbsent extends Error {}
 
 /// A chart: its SVG, and its width and height as it is written (its viewBox's).
 export type MermaidMade = { svg: string; width: number; height: number };
@@ -39,8 +44,10 @@ let wordsPx = 14;
 let loaded: Promise<J> | undefined;
 let queue: Promise<unknown> = Promise.resolve();
 
-function load(): Promise<J> {
-  loaded ??= (async () => {
+let ready: Promise<void> | undefined;
+/// The document mermaid lays charts out in, and the globals it and the libraries it brings read.
+function documentReady(): Promise<void> {
+  ready ??= (async () => {
     const dom = await import("./mermaidDom.ts");
     wordsPx = dom.WORDS_PX;
     window ??= dom.mermaidWindow(() => filling);
@@ -49,9 +56,32 @@ function load(): Promise<J> {
     g.document ??= window.document;
     for (const name of ["Element", "HTMLElement", "SVGElement", "Node", "DOMParser", "CSSStyleSheet"]) g[name] ??= window.window[name];
     g.navigator ??= window.window.navigator;
-    return (await import("mermaid")).default;
   })();
+  return ready;
+}
+
+function load(): Promise<J> {
+  loaded ??= (async () => {
+    await documentReady();
+    const mermaid = await loadMermaid();
+    if (!mermaid) throw new MermaidAbsent("no mermaid in this core yet (mermaid.load)");
+    return mermaid;
+  })();
+  // (not given it yet: looked for again once it is)
+  loaded.catch(() => (loaded = undefined));
   return loaded;
+}
+
+/// mermaid as the app carries it (scripts/mermaid-bundle.ts: a script setting globalThis.mermaid, as Hermes's bytecode
+/// for the app's core), run here: a core whose own script has no mermaid (Hermes's) is given it the first time a chart
+/// is drawn. Bytecode is run by the engine (`__native.evaluate`), as the core's own is: source compiled here would be
+/// slow (its first chart 1.4 s in Hermes, not 0.2).
+export async function provideMermaid(bytes: Uint8Array): Promise<void> {
+  await documentReady();
+  const native = (globalThis as J).__native;
+  if (typeof native?.evaluate === "function") native.evaluate(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), "mermaid.hbc");
+  else (0, eval)(new TextDecoder().decode(bytes));
+  loaded = undefined;
 }
 
 function config(look: MermaidLook): J {

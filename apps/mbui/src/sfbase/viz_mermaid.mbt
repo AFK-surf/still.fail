@@ -1,9 +1,9 @@
 // A ```mermaid block's chart drawn by the app itself: the core makes it (`mermaid.chart`: mermaid.js lays it out
 // there, client/core-ts/src/mermaid.ts, its words measured in the faces the app sets them in) and gives an SVG in the
 // theme's colours, drawn here as a picture (mbui's SVG renderer, as an .svg file is). No page per chart: as wide as it
-// is written, or the column's where that is less, never smaller than 0.8 (wider than that it moves sideways). One the
-// core refuses (mermaid does not read it, or part of it would be HTML) is drawn by mermaid in a page as before
-// (viz_page.mbt).
+// is written, or the column's where that is less, in its proportions. One the core refuses (mermaid does not read it,
+// or part of it would be HTML) is drawn by mermaid in a page as before (viz_page.mbt). mermaid itself is not in the
+// core's own script: the app gives it the one it carries (mermaid_lib.mbt) the first time a chart is drawn.
 
 ///|
 priv enum MermaidChart {
@@ -18,12 +18,17 @@ priv enum MermaidChart {
 let mermaid_charts : Map[String, MermaidChart] = {}
 
 ///|
-/// (a signal: a frame drawing a chart reads it, and comes again as one is made)
+// kept across runs: how many answers came (a signal: a frame drawing a chart reads it, and comes again as one does)
 let mermaid_made : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
-/// The smallest a chart is drawn at in a message, of its size as written.
-let mermaid_readable : Double = 0.8
+// kept across runs: whether the core was given mermaid (`mermaid.load`), as the core keeps it while it runs; false
+// again where it says it has none (a core started anew)
+let mermaid_given : Ref[Bool] = Ref(false)
+
+///|
+/// How wide a chart that fills its width (a gantt) is made: drawn as the others are, the column's where that is less.
+let mermaid_filling : Int = 720
 
 ///|
 /// `rgba` laid over `ground` (both 0xRRGGBBAA, the ground opaque), as `#rrggbb`: a colour of the theme as the chart
@@ -76,14 +81,7 @@ pub fn viz_mermaid_block(c : @ui.Ctx, src : Source, place : String, code : Strin
     return
   }
   ignore(mermaid_made.get())
-  let box = c.id("viz/mermaid/" + place + "/" + code)
-  let room = match c.laid_size(box) {
-    Some((w, _)) if w > 0.0 => w
-    _ => c.width
-  }
-  // (the width a chart that fills it fills, a gantt's: by 40s, not asked again for each width as a window is dragged)
-  let width = ((room / 40.0).floor() * 40.0).to_int()
-  let ask = mermaid_ask(code, if width < 200 { 200 } else { width })
+  let ask = mermaid_ask(code, mermaid_filling)
   let key = ask.stringify()
   match mermaid_charts.get(key) {
     Some(ChartRefused) => {
@@ -91,38 +89,22 @@ pub fn viz_mermaid_block(c : @ui.Ctx, src : Source, place : String, code : Strin
       return
     }
     Some(ChartMade(picture, w, h)) =>
-      c.box(style=viz_mermaid_box, id=box, fn() {
-        let scale = dmax(dmin(1.0, room / w), mermaid_readable)
-        let draw = fn() { c.image(picture, w=Px(w * scale), h=Px(h * scale), fit=FitContain, bg=0L, fade=false) |> ignore }
-        if w * scale > room {
-          c.sideways("viz-mermaid/" + key, fn() { draw() }) |> ignore
-        } else {
-          draw()
-        }
+      c.box(style=viz_mermaid_box, fn() {
+        c.box(style=@ui.style(w=Full, max_w=Fixed(w)), aspect=w / h, fn() {
+          c.image(picture, w=Fill(1.0), h=Fill(1.0), fit=FitContain, bg=0L, fade=false) |> ignore
+        })
+        |> ignore
         mermaid_ways(c, place, code, subtle)
       })
       |> ignore
     _ => {
       if mermaid_charts.get(key) is None {
         mermaid_charts[key] = ChartComing
-        (src.call)("mermaid.chart", ask, fn(r) {
-          mermaid_charts[key] = match r {
-            Ok(v) =>
-              match v {
-                { "svg": String(svg), "width": Number(w, ..), "height": Number(h, ..), .. } if w > 0.0 && h > 0.0 => {
-                  let picture = "mem:mermaid/" + mermaid_charts.length().to_string()
-                  @ui.add_image(picture, @utf8.encode(svg))
-                  ChartMade(picture, w, h)
-                }
-                _ => ChartRefused
-              }
-            Err(_) => ChartRefused
-          }
-          mermaid_made.set(mermaid_made.get() + 1)
-        })
+        // (asked once the frame's builds are over: a build tells nothing outside)
+        c.after_build("mermaid/" + key, fn() { mermaid_asked(src, key, ask) })
       }
       // its place while it is made, as a page's while it draws itself
-      c.box(style=viz_mermaid_box, id=box, fn() {
+      c.box(style=viz_mermaid_box, fn() {
         c.box(style=viz_wait_ground.then(@ui.style(h=Fixed(viz_first_height.to_double()))), fn() {
           let i = c.box(style=viz_wait_fill, fn() {  })
           @sf.breathe(c, i)
@@ -132,6 +114,36 @@ pub fn viz_mermaid_block(c : @ui.Ctx, src : Source, place : String, code : Strin
       |> ignore
     }
   }
+}
+
+///|
+/// Chart `ask` asked of the core (given mermaid first where it has none yet), its answer kept by `key`.
+fn mermaid_asked(src : Source, key : String, ask : Json) -> Unit {
+  if !mermaid_given.val {
+    match viz_mermaid_script() {
+      Some(script) => {
+        mermaid_given.val = true
+        (src.call_bytes)("mermaid.load", Json::object({}), script, fn(r) { if r is Err(_) { mermaid_given.val = false } })
+      }
+      None => ()
+    }
+  }
+  (src.call)("mermaid.chart", ask, fn(r) {
+    match r {
+      Ok({ "svg": String(svg), "width": Number(w, ..), "height": Number(h, ..), .. }) if w > 0.0 && h > 0.0 => {
+        let picture = "mem:mermaid/" + key
+        @ui.add_image(picture, @utf8.encode(svg))
+        mermaid_charts[key] = ChartMade(picture, w, h)
+      }
+      // a core that has not mermaid (started anew since it was given it): given it again, asked again
+      Err({ "code": String("mermaid_absent"), .. }) if mermaid_given.val => {
+        mermaid_given.val = false
+        mermaid_charts.remove(key)
+      }
+      _ => mermaid_charts[key] = ChartRefused
+    }
+    mermaid_made.set(mermaid_made.get() + 1)
+  })
 }
 
 ///|

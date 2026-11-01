@@ -4,7 +4,7 @@
 # pieces from the checkout and runs a headless smoke test. See core/README.md.
 #   scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
 #                   | smoke [build|run] | listen | exit | sealed | collate | login-test | vectors | sizes | clean | all
-#                   | chat-open | md-parse | mermaid | zstd-read
+#                   | chat-open | md-parse | mermaid | mermaid-lib | mermaid-smoke | zstd-read
 # EMBER: the still.fail checkout (default: this one, scripts/env.sh); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
 set -e
@@ -166,7 +166,7 @@ hermes() {
   rm -f $OUT/core-hermes.js $OUT/core.hbc $OUT/core.hbc.stamp
   # what an app's modules import from npm (media/core's effect) found in the core's own node_modules
   NODE_PATH=$CORE_TS/node_modules $CORE_TS/node_modules/.bin/esbuild ${ENTRY:-$ROOT/core/hermes.ts} --bundle \
-    --format=iife --platform=neutral --main-fields=module,main --target=es2020 --supported:async-await=false --supported:async-generator=false --minify --legal-comments=none \
+    --format=iife --platform=neutral --main-fields=module,main --conditions=hermes --target=es2020 --supported:async-await=false --supported:async-generator=false --minify --legal-comments=none \
     --alias:@core=$CORE_TS/src --alias:@ember=$EMBER --resolve-extensions=.ts,.js,.mjs \
     --outfile=$OUT/core-hermes.js --metafile=$OUT/core-hermes.meta.json --log-level=warning \
     || { echo "hermes: bundle failed"; return 1; }
@@ -350,8 +350,8 @@ writeFileSync(f, transformSync(readFileSync(f, 'utf8'), { babelrc: false, config
   $OUT/hermes/bin/hermes $o/run.hbc
 }
 
-# Mermaid's charts made in Hermes as the core makes them (client/core-ts/bench/mermaid.ts: mermaid loaded for the first,
-# then each kind of chart, timed), bundled as the core is.
+# Mermaid's charts made in Hermes as the core makes them (client/core-ts/bench/mermaid.ts: mermaid, here compiled with it as
+# the app's mermaid_hbc.mbt is, loaded for the first, then each kind of chart, timed), bundled as the core is.
 mermaid_bench() {
   have_deps
   hermes_apple || return 1
@@ -368,6 +368,25 @@ writeFileSync(f, transformSync(readFileSync(f, 'utf8'), { babelrc: false, config
   "$(hermesc)" -emit-binary -O -block-scoping -out $o/run.hbc $o/bench.js > $o/hermesc.log 2>&1 \
     || { grep -a -o ": error: .\{0,200\}" $o/hermesc.log | head -20; return 1; }
   $OUT/hermes/bin/hermes $o/run.hbc
+}
+
+# mermaid as the app carries it (client/core-ts/scripts/mermaid-bundle.ts: sfbase's mermaid_lib.mbt and mermaid_hbc.mbt),
+# made again with this hermesc: after mermaid or Hermes changes.
+mermaid_lib() {
+  have_deps
+  (cd $CORE_TS && HERMESC="$(hermesc)" node scripts/mermaid-bundle.ts "$@")
+}
+
+# The core in the app's engine for macOS (core/mermaid_smoke.m) given mermaid's bytecode as the app gives it, then asked
+# for charts: what Hermes's own command cannot try (the engine's `__native.evaluate`).
+mermaid_smoke() {
+  core_program mermaid_smoke || return 1
+  hermes || return 1
+  mermaid_lib --hbc $OUT/mermaid.hbc || return 1
+  local dir=$(mktemp -d /tmp/mbui-mermaid-smoke.XXXXXX) code=0
+  MB_CORE_BUNDLE=$OUT/core.hbc $OUT/mermaid_smoke "$dir" $OUT/mermaid.hbc || code=1
+  rm -rf "$dir"
+  return $code
 }
 
 # A station's JSON replies taken apart in Hermes as the core takes them apart (client/core-ts/bench/zstd-read.ts: fzstd,
@@ -510,6 +529,8 @@ case "${1:-all}" in
   chat-open) chat_open ;;
   md-parse) md_parse ;;
   mermaid) mermaid_bench ;;
+  mermaid-lib) mermaid_lib ;;
+  mermaid-smoke) mermaid_smoke ;;
   zstd-read) zstd_read ;;
   exit) exit_test ;;
   collate) collate_test ;;
@@ -525,5 +546,5 @@ case "${1:-all}" in
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | apple-native [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | chat-open | md-parse | mermaid | zstd-read | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | apple-native [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | chat-open | md-parse | mermaid | mermaid-lib | mermaid-smoke | zstd-read | clean | all"; exit 2 ;;
 esac

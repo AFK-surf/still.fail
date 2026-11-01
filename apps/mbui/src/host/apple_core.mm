@@ -737,6 +737,14 @@ static void install(jsi::Runtime &rt) {
     sf_shell_call(C.shell, id, op.c_str(), reinterpret_cast<const uint8_t *>(json.data()), json.size(), p, len, has ? 1 : 0);
     return jsi::Value::undefined();
   });
+  // A script more, given as bytes (bytecode, or source), run in this runtime as the core's own is: mermaid's, which the
+  // app carries and gives the core as a chart is first drawn (client/core-ts/src/mermaid.ts provideMermaid).
+  fn("evaluate", 2, [](jsi::Runtime &rt, const jsi::Value&, const jsi::Value *a, size_t n) -> jsi::Value {
+    jsi::ArrayBuffer b = a[0].asObject(rt).getArrayBuffer(rt);
+    std::string bytes(reinterpret_cast<const char *>(b.data(rt)), b.size(rt));
+    std::string name = n > 1 && a[1].isString() ? a[1].asString(rt).utf8(rt) : std::string("script");
+    return rt.evaluateJavaScript(std::make_shared<Bytes>(std::move(bytes)), name);
+  });
   fn("callSync", 2, [](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *a, size_t) -> jsi::Value {
     std::string op = a[0].asString(rt).utf8(rt);
     std::string json = a[1].asString(rt).utf8(rt);

@@ -22,6 +22,9 @@ export interface HermesNative {
   /// Whether the app keeps its performance record now, and a line into it (record.ts); absent where the host keeps none.
   recording?(): boolean;
   record?(line: string): void;
+  /// A script more run in the runtime as the core's own is, its bytes bytecode or source (mermaid's: mermaid.ts); absent
+  /// in an engine from before it.
+  evaluate?(bytes: ArrayBuffer, name: string): unknown;
 }
 
 import { lowerCase, upperCase } from "./hermes-case.ts";

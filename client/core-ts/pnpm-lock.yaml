@@ -6,6 +6,7 @@ settings:
 
 overrides:
   '@mathjax/mathjax-newcm-font': link:./no-default-font
+  '@acemir/cssom': link:./no-cssom
 
 importers:
 
@@ -77,9 +78,6 @@ importers:
         version: 2.0.4
 
 packages:
-
-  '@acemir/cssom@0.9.32':
-    resolution: {integrity: sha512-OijrAUu7rrJhSIoHNg6LMPS5e344nwUHA+1EFYYjrh64D+GmytUsfBQjci45TjT+rd5Spsp8B5xsZDT+TgyXXQ==}
 
   '@antfu/install-pkg@2.1.0':
     resolution: {integrity: sha512-sdg9NxU3zR4Mnawfbc/x6GB5Wf17WYud5qOuEuxXjaKpYpMkISSJEjItGebXJ2bQ4DIcly4NYH23mtkGJjvKUw==}
@@ -1128,8 +1126,6 @@ packages:
 
 snapshots:
 
-  '@acemir/cssom@0.9.32': {}
-
   '@antfu/install-pkg@2.1.0':
     dependencies:
       package-manager-detector: 1.9.0
@@ -1992,7 +1988,7 @@ snapshots:
 
   linkedom@0.18.14:
     dependencies:
-      '@acemir/cssom': 0.9.32
+      '@acemir/cssom': link:no-cssom
       css-select: 7.0.0
       html-escaper: 3.0.3
       htmlparser2: 10.1.0

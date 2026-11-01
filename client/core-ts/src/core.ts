@@ -11,7 +11,7 @@ import { mentionView, relayView } from "./relay-pick.ts";
 import { wordsAnswer } from "./words.ts";
 import { toolCall, toolResult, type ToolPart } from "./tool-step.ts";
 import * as fonts from "./fonts.ts";
-import { mermaidChart } from "./mermaid.ts";
+import { MermaidAbsent, mermaidChart, provideMermaid } from "./mermaid.ts";
 import { parseCall, cancellable, callStation, counts, type Call } from "./core/calls.ts";
 import { execute, handlers, hooks } from "./core/execute.ts";
 import { Router } from "./core/routing.ts";
@@ -328,6 +328,13 @@ export class Core {
         // refused: the chart's code as mermaid read it is no chart this draws (the app shows it another way)
         return Effect.tryPromise({
           try: () => mermaidChart(c.code, c.look, c.width),
+          catch: (e) => new CoreError(e instanceof MermaidAbsent ? "mermaid_absent" : "unsupported", e instanceof Error ? e.message : String(e)),
+        });
+      };
+      handlers.mermaidLoad = (_i, call) => {
+        const c = call as Extract<Call, { kind: "mermaidLoad" }>;
+        return Effect.tryPromise({
+          try: () => provideMermaid(c.bytes).then(() => null),
           catch: (e) => new CoreError("unsupported", e instanceof Error ? e.message : String(e)),
         });
       };

@@ -313,7 +313,7 @@ test "a mermaid chart is drawn as a page of its own; one that will not draw is s
 ///|
 test "a mermaid chart's page carries mermaid itself: it draws with no network to fetch it from" {
   let lib = @sfbase.viz_mermaid_lib()
-  assert_true(lib.contains("globalThis[\"mermaid\"]"))
+  assert_true(lib.contains("globalThis.mermaid="))
   let t = chat_tester("chat-viz")
   t.frame()
   let (_, chart) = viz_views(t)
