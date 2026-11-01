@@ -391,6 +391,8 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
       // (signed out, or signed in at the landing: the ways in's nodes, entry_tree.mbt)
       SignedOut => entry_said()
       SignedIn if shell_is(src, @ui.current().window_size().0) is Landing => entry_said()
+      // (signed in, its workspaces still read or failing to be: the splash's nodes)
+      SignedIn if shell_is(src, @ui.current().window_size().0) is Reading => reading_said(src)
       _ => ()
     }
     @ui.old_views_here(c)
@@ -559,6 +561,7 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
             Taped => taped_shell(s, src)
             Paned => paned_shell(s, src)
             Landing => landing_tree(s, src)
+            Reading => reading_tree(s, src)
             Whole => whole(s)
           }
         })
@@ -694,17 +697,38 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         toast(c)
         finger_loupe(c)
       } else {
-        let failed = match ws.error {
-          Some(e) => Some(text(Some(e), "message"))
-          None => None
-        }
-        splash(
-          c,
-          Some(failed.unwrap_or(t_reading_workspaces(src))),
-          failed is Some(_),
-        )
+        let (said, failed) = reading_said_words(src)
+        splash(c, Some(said), failed)
       }
   }
+}
+
+///|
+/// What the splash says while no workspace is in view yet and the landing is not shown (signed_in's): why reading the
+/// workspaces failed (the core's words), else 正在读取你的 workspace and what it waits on (t_reading_workspaces); and
+/// whether it failed (said at once, not after the splash's second).
+fn reading_said_words(src : Source) -> (String, Bool) {
+  match (src.topic)("workspaces", {}).error {
+    Some(e) => (text(Some(e), "message"), true)
+    None => (t_reading_workspaces(src), false)
+  }
+}
+
+///|
+/// Signed in, its workspaces still read or failing to be (shell_is's Reading), as the frame begins (view_in's): what the
+/// old view's build said of the frame (app_state_island, splash): no first page waiting nor its pictures; the ground
+/// alone until the splash's second, unless it failed.
+fn reading_said(src : Source) -> Unit {
+  first_waiting.val = false
+  @sfbase.held_pictures_waiting.val = false
+  frame_bare.val = !splash_waited.get() && !reading_said_words(src).1
+}
+
+///|
+/// Signed in, its workspaces still read or failing to be (shell_is's Reading), in node `v`: the splash's nodes saying so
+/// as it changes (reading_said_words).
+fn reading_tree(v : @view.View, src : Source) -> Unit {
+  splash_of_tree(v, fn() { Some(reading_said_words(src).0) }, fn() { reading_said_words(src).1 })
 }
 
 ///|
@@ -987,11 +1011,18 @@ fn splash_said(src : Source, state : AppIs) -> Unit {
 }
 
 ///|
-/// The splash (`state` Starting or Failed) as the window's tree's nodes (app_state_tree's): what `splash` draws, the
-/// ground alone till its second (splash_begin, at this moment if none has begun) unless there is something to say at
-/// once; then still.fail's mark and what it says under it, its lines each in the middle, all in the middle of the
-/// window. Where the window's buttons are in the app's top row (as that changes), its top drags it, under all of it.
+/// The splash (`state` Starting or Failed) as the window's tree's nodes (app_state_tree's): splash_of_tree saying what
+/// it waits for or what failed (splash_label), at once where there is something to say.
 fn splash_tree(v : @view.View, src : Source, state : AppIs) -> Unit {
+  splash_of_tree(v, fn() { splash_label(src, state) }, fn() { splash_label(src, state) is Some(_) })
+}
+
+///|
+/// The splash as the window's tree's nodes in `v` (splash's): saying `label` as it changes, the ground alone till the
+/// app's first splash has waited its second unless `now` says to show it at once (splash_begin, at this moment if none
+/// has begun); then still.fail's mark and what it says under it, its lines each in the middle, all in the middle of the
+/// window. Where the window's buttons are in the app's top row (as that changes), its top drags it, under all of it.
+fn splash_of_tree(v : @view.View, label : () -> String?, now : () -> Bool) -> Unit {
   v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
   v.show(fn() { @ui.window_inset_now() }, fn(o) {
     o.over(Is(true)) |> ignore
@@ -1001,13 +1032,12 @@ fn splash_tree(v : @view.View, src : Source, state : AppIs) -> Unit {
     Some(owner) if owner.alive() => splash_begin(owner, v.cause_at())
     _ => ()
   }
-  let label = fn() { splash_label(src, state) }
   let mark = fn() { if @sf.theme().dark { "stillfail_mark_dark" } else { "stillfail_mark" } }
   v.box(fn(s) {
     s.over(Is(true)).pad(Is(24.0)).lines_up(Is(Some(Middle))) |> ignore
     // (in the middle of the window's height: as much room above as below)
     s.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
-    s.show(fn() { splash_waited.get() || label() is Some(_) }, fn(m) {
+    s.show(fn() { splash_waited.get() || now() }, fn(m) {
       m.gap(Is(16.0)).lines_up(Is(Some(Middle))) |> ignore
       // (the mark, its curves cut for the pixels the window is drawn at)
       m.box(fn(k) {

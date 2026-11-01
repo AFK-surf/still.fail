@@ -31,6 +31,8 @@ pub fn decided_json(String) -> Json
 
 pub let done_state : (String, String, String)
 
+pub fn failed_topics(@sfbase.Source, Array[String], String) -> @sfbase.Source
+
 pub fn file(String, Int32, Int32, Int32) -> Json
 
 pub let file_links_answer : String

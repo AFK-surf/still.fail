@@ -19,13 +19,14 @@
 /// window's tree's nodes; the tape (laid out Medium with a sidebar to show, or beside the system's bars: sfdesk's
 /// tape_holds), its panels the window's tree's nodes (tape_shell.mbt); the wide frame off the tape (laid out Large, or
 /// with no sidebar to show), its page and its block the tree's nodes (tape_shell.mbt's paned_shell); the landing's nodes
-/// (no workspace yet, every account answered: entry_tree.mbt); or the old view whole (a window of its own, no workspace
-/// in view yet, the window's width not known yet).
+/// (no workspace yet, every account answered: entry_tree.mbt); the splash's nodes while the workspaces are read or fail
+/// to be (app.mbt's reading_tree); or the old view whole (a window of its own, the window's width not known yet).
 priv enum ShellIs {
   Stacked
   Taped
   Paned
   Landing
+  Reading
   Whole
 } derive(Eq)
 
@@ -44,7 +45,8 @@ fn shell_is(src : Source, width : Double) -> ShellIs {
     Some(_) if !wide => Stacked
     Some(w) if @sfdesk.tape_holds(src, w, width) => Taped
     Some(_) => Paned
-    None => Whole
+    // (none in view yet, the landing not shown: the workspaces still read, or failing to be: the splash's nodes)
+    None => Reading
   }
 }
 
