@@ -60,7 +60,9 @@
   ],
   "style": {
     "outside": [
-      "src/figure/figure.mbt"
+      "src/figure/figure.mbt",
+      "src/media/device.mbt",
+      "src/media/frame.mbt"
     ]
   },
   "counts": {
