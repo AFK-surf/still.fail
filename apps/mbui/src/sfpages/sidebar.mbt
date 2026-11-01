@@ -234,9 +234,9 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
       for p in (frame.after)(filter, Some(v)) {
         lines.push(Part(p))
       }
-      // while a finger is on the list, the pointer over it or it moves, the rows keep their places (a row pinned or
-      // let go moves at once: Sidebar.tsx pinMoved)
-      let days = @sfbase.held_order(key, v.days, list_held(c, key, pane) && !pin_moved(key, v.days))
+      // while a finger is on the list, the pointer over it or it moves, the rows keep their places (a row the viewer
+      // pinned, let go or wrote in moves at once: viewer_moved)
+      let days = @sfbase.held_order(key, v.days, list_held(c, key, pane) && !@sfbase.viewer_moved(key, v.days))
       rows = Some(day_lines(key, days))
     }
   }
@@ -373,30 +373,6 @@ fn list_held(c : @ui.Ctx, key : String, pane : Int) -> Bool {
   // pointer built the list's pane again, and what it read of the frame before kept it from being kept, every frame
   // the hand was on it)
   c.press_within(pane) || (@sf.pointer_rests() && c.hovered(pane))
-}
-
-///|
-/// Whether a row shown in list `key` was pinned or let go since: it moves at once, even while the list is held still
-/// (Sidebar.tsx pinMoved). Nothing come since the order shown was made, none was.
-fn pin_moved(key : String, days : Array[ChatDay]) -> Bool {
-  if !@sfbase.days_new(key, days) {
-    return false
-  }
-  let was : Map[String, Bool] = {}
-  for d in @sfbase.shown_days.get(key).unwrap_or([]) {
-    for item in d.items {
-      was[@sfbase.row_name(item)] = item.pinned == Some(true)
-    }
-  }
-  for d in days {
-    for item in d.items {
-      match was.get(@sfbase.row_name(item)) {
-        Some(p) if p != (item.pinned == Some(true)) => return true
-        _ => ()
-      }
-    }
-  }
-  false
 }
 
 ///|

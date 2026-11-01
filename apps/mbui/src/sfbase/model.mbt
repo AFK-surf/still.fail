@@ -102,6 +102,9 @@ pub(all) struct ChatItem {
   unsent : Bool
   decision_text : String?
   last : String?
+  /// its last message when the viewer wrote it, by its seq: a chat written in here or elsewhere by them goes ahead
+  /// at once, even in a list held still (rows.mbt viewer_moved)
+  wrote : Double?
   offline : String?
   /// its station gone for its update: the update's mark in place of the unplugged one
   updating : Bool
@@ -258,6 +261,14 @@ pub fn chat_item(v : Json) -> ChatItem {
     unsent: flag(s, "unsent"),
     decision_text: opt_text(field(s, "decision"), "text"),
     last: opt_text(field(s, "last"), "preview"),
+    wrote: match (field(s, "last"), flag(field(field(s, "last"), "by"), "mine")) {
+      (Some(_) as l, true) =>
+        match field(l, "seq") {
+          Some(Number(n, ..)) => Some(n)
+          _ => None
+        }
+      _ => None
+    },
     offline: opt_text(s, "offline"),
     updating: flag(s, "updating"),
     reconnecting: opt_text(s, "reconnecting"),

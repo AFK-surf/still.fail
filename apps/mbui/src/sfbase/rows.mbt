@@ -236,6 +236,34 @@ pub fn held_order(key : String, days : Array[ChatDay], hold : Bool) -> Array[Cha
 }
 
 ///|
+/// Whether a row shown in list `key` was moved by the viewer since: pinned or let go (Sidebar.tsx pinMoved), or
+/// written in by them, here or elsewhere (its last message theirs, one not shown before). It goes where it now is at
+/// once, even while the list is held still: the hand on the list keeps rows from moving away under it, not the
+/// viewer's own doing from showing (a pointer left resting on the list while they type is no tap to come). Nothing
+/// come since the order shown was made, none was.
+pub fn viewer_moved(key : String, days : Array[ChatDay]) -> Bool {
+  if !days_new(key, days) {
+    return false
+  }
+  let was : Map[String, ChatItem] = {}
+  for d in shown_days.get(key).unwrap_or([]) {
+    for item in d.items {
+      was[row_name(item)] = item
+    }
+  }
+  for d in days {
+    for item in d.items {
+      match was.get(row_name(item)) {
+        Some(w) if (w.pinned == Some(true)) != (item.pinned == Some(true)) => return true
+        Some(w) if item.wrote is Some(_) && item.wrote != w.wrote => return true
+        _ => ()
+      }
+    }
+  }
+  false
+}
+
+///|
 /// Whether `item`'s row is chat `r`'s: by its agent or its id, and a chat asked for here also by the key it went by
 /// before its station made it (`clientKey`), the key the page opened as it was sent keeps.
 pub fn row_is(item : ChatItem, r : ChatRef) -> Bool {
