@@ -8,6 +8,12 @@ import {
 // Values
 pub fn cubic_points(Array[Double], Double, Double, Double, Double, Double, Double, Double, Double, Double) -> Unit
 
+pub fn decode_jpeg(Bytes) -> (Int32, Int32, FixedArray[Byte])?
+
+pub fn decode_png(Bytes) -> (Int32, Int32, FixedArray[Byte])?
+
+pub fn decode_webp(Bytes) -> (Int32, Int32, FixedArray[Byte])?
+
 pub fn drawn_box(Int32, Int32, FixedArray[Byte]) -> (Int32, Int32, Int32, Int32)
 
 pub fn edge_colour(Int32, Int32, FixedArray[Byte]) -> String

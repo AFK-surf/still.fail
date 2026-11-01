@@ -65,6 +65,10 @@ jobs:
         run: |
           set -o pipefail
           moon test --target native -p mbui/dmath -p mbui/zip -p mbui/pixels -p mbui/codec -p mbui/damage 2>&1 | tail -3
+      - name: "Vector graphics as tiny-skia draws them, against its own pictures (mbui/skia, mbui/skiatest); SVG, fonts and OpenType shaping (mbui/svg, mbui/font, mbui/shape: resvg's suite runs where it is checked out beside them, src/svgtest)"
+        run: |
+          set -o pipefail
+          moon test --target native -p mbui/skia -p mbui/skiatest -p mbui/svg -p mbui/font -p mbui/shape -p mbui/svgtest 2>&1 | tail -3
       - name: "The tools (tools/): detlint's rules on made-up files; the C step (tools/mbc): the splitter on made-up C, then programs built with it, a MoonBit one whole and split (scripts/mbc_test.sh)"
         run: |
           set -o pipefail
