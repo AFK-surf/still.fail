@@ -40,25 +40,38 @@
   "  return (hi * u - R) * (1.0 + tn) / (u * sqrt(1.0 + tn1 * tn1));\n" \
   "}\n" \
   "// A capsule's end as Apple draws one (smooth.mbt capsule_ease): how much further in than the circle it lies, in r, u r\n" \
-  "// from the tip, k the share of the room it needs along the edge the box has; a quintic from the circle's height, slope\n" \
-  "// and bend at 0.3 r to the edge's at (1 + k) r.\n" \
+  "// from the tip, k the share of the room it needs along the edge the box has; an octic from the circle's height and\n" \
+  "// first three rates of change at 1 - 0.675 k to the edge's at 1 + 0.4 k, with k^2.5 t^4 (1 - t)^4: how much it bends\n" \
+  "// never jumps or turns at once.\n" \
   "float mb_capsule_ease(float u, float k) {\n" \
-  "  float e = 1.0 + k;\n" \
-  "  if (k <= 0.0 || u <= 0.3 || u >= e) return 0.0;\n" \
-  "  float h = e - 0.3;\n" \
-  "  float t = (u - 0.3) / h;\n" \
+  "  float u0 = 1.0 - 0.675 * k;\n" \
+  "  float u1 = 1.0 + 0.4 * k;\n" \
+  "  if (k <= 0.0 || u <= u0 || u >= u1) return 0.0;\n" \
+  "  float h = u1 - u0;\n" \
+  "  float t = (u - u0) / h;\n" \
   "  float t2 = t * t;\n" \
   "  float t3 = t2 * t;\n" \
-  "  float w0 = 1.0 - t3 * (10.0 - 15.0 * t + 6.0 * t2);\n" \
-  "  float w1 = t - t3 * (6.0 - 8.0 * t + 3.0 * t2);\n" \
-  "  float w2 = t2 * (0.5 - t * (1.5 - t * (1.5 - 0.5 * t)));\n" \
-  "  float eased = 0.285857157145715 * w0 - 0.9801960588196068 * h * w1 + 2.7456472235843328 * h * h * w2;\n" \
+  "  float t4 = t3 * t;\n" \
+  "  float m = 1.0 - t;\n" \
+  "  float m2 = m * m;\n" \
+  "  float s = sqrt(u0 * (2.0 - u0));\n" \
+  "  float v = 1.0 - u0;\n" \
+  "  float s3 = s * s * s;\n" \
+  "  float c0 = 1.0 - s;\n" \
+  "  float c1 = -v / s * h;\n" \
+  "  float c2 = h * h / s3;\n" \
+  "  float c3 = -3.0 * v * h * h * h / (s3 * s * s);\n" \
+  "  float w0 = 1.0 - t4 * (35.0 - 84.0 * t + 70.0 * t2 - 20.0 * t3);\n" \
+  "  float w1 = t - t4 * (20.0 - 45.0 * t + 36.0 * t2 - 10.0 * t3);\n" \
+  "  float w2 = (t2 - t4 * (10.0 - 20.0 * t + 15.0 * t2 - 4.0 * t3)) * 0.5;\n" \
+  "  float w3 = (t3 - t4 * (4.0 - 6.0 * t + 4.0 * t2 - t3)) / 6.0;\n" \
+  "  float eased = c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3 + k * k * sqrt(k) * t4 * m2 * m2;\n" \
   "  float circ = u < 1.0 ? 1.0 - sqrt(u * (2.0 - u)) : 0.0;\n" \
   "  return eased - circ;\n" \
   "}\n" \
   "// How much further out than the round corner's (rr) a point is once the corner eases into one of its box's edges:\n" \
   "// along the point's coordinate that way and ha that half side, across and hc the other's (from the box's middle,\n" \
-  "// positive); as far as the corner has no room across and room along, moved along the round corner's normal\n" \
+  "// positive); as far as the corner has no room across, moved along the round corner's normal\n" \
   "// (smooth.mbt capsule_tail).\n" \
   "float mb_capsule_tail(float along, float across, float ha, float hc, float rr) {\n" \
   "  float k = min((ha - rr) / rr, 1.0);\n" \
@@ -72,7 +85,7 @@
   "  float mc = max(qc, 0.0);\n" \
   "  float l = sqrt(ma * ma + mc * mc);\n" \
   "  float n = l > 0.0 ? mc / l : (qc >= qa ? 1.0 : 0.0);\n" \
-  "  return tight * k * e * rr * n;\n" \
+  "  return tight * e * rr * n;\n" \
   "}\n" \
   "// The signed distance of p (from a box's middle) from that box (mb_corner_shape's), a capsule's end easing into its\n" \
   "// long edges.\n" \

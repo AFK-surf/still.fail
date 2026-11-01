@@ -8,5 +8,7 @@
 # Made again as #3021 eased a capsule's end into its long edges as Apple's (render run 41182533876's artifact): 1527
 # pixels of the switches', the segmented controls' and the pill field's ends at most 25 steps of a channel off, the rest
 # the same to the byte.
+# Made again as #3192 eased a capsule's end with no kink in how much it bends (render run 41288264085's artifact):
+# 1521 pixels of the same ends at most 20 steps of a channel off, the rest the same to the byte.
 system 27.0.1 26A434
 gpu Apple M4

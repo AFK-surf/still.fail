@@ -11,6 +11,8 @@
 # lifted the dark segmented thumb out of its track, its PR not running this check.
 # Made again as #3021 eased a capsule's end into its long edges as Apple's (run 41182557355's artifact, its a and b
 # the same to the byte): 1539 pixels of the capsules' ends at most 25 steps of a channel off, the rest the same.
+# Made again as #3192 eased a capsule's end with no kink in how much it bends (run 41288698800's artifact, its a and b
+# the same to the byte): 1531 pixels of the same ends at most 20 steps of a channel off, the rest the same.
 image ubuntu24 20261012.334.1
 emulator 37.2.12
 system android-34/default/x86_64 2
