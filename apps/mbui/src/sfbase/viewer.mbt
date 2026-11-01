@@ -1702,9 +1702,10 @@ fn Viewer::awake_said(self : Viewer) -> Unit {
 
 ///|
 /// Whether the bars show: awake, or a mouse's pointer along the top where the bar is, or while the whole of an image
-/// comes, or over a page whose taps are its own.
+/// comes, or over a page whose taps are its own, or while it marks. As each is told (marking: marks_said).
 pub fn Viewer::bars_shown(self : Viewer) -> Bool {
   self.awake_told.get() |> ignore
+  marks_said()
   self.awake || self.near_bar || self.coming() || (self.shown_kind() == Some(KHtml) && !self.source) || marking.on
 }
 

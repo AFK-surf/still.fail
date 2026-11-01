@@ -2823,3 +2823,167 @@ fn card_label(label : String) -> Bool {
     _ => false
   }
 }
+
+///|
+/// A picture opened on a phone (a finger's), marking: its floating bar's 取消 tapped (`frames`: the frame after drawn
+/// before what is looked at; else none): whether marking is still on as the finger lifts, and after; how many of the
+/// window's tree's own buttons said 取消 there were while it marked.
+fn narrow_marking_cancel(frames : Bool) -> (Bool, Bool, Int) raise {
+  let t = preview_tester("image", w=390.0, platform=2)
+  let tap = fn(label : String) raise {
+    let (x, y, w, h) = t.get(Button, label~).rect
+    t.touch(0, x + w / 2.0, y + h / 2.0)
+    t.touch(2, x + w / 2.0, y + h / 2.0)
+  }
+  tap(@sf.t("web-main.annotate.image"))
+  t.draw()
+  assert_true(marking.on, msg="marking")
+  let cancel = pv("common.cancel")
+  let nodes = @ui.view_tree().unwrap().said_order().filter(fn(s) {
+    match s.said {
+      Some(said) => said.role == Button && said.label == cancel
+      None => false
+    }
+  })
+  tap(cancel)
+  let let_go = marking.on
+  if frames {
+    t.draw()
+  }
+  (let_go, marking.on, nodes.length())
+}
+
+///|
+test "viewer on the tree, a phone, marking: its floating bar the tree's; 取消 leaves marking as the finger lifts, the frames drawn after or none" {
+  for frames in [true, false] {
+    let (let_go, after, nodes) = narrow_marking_cancel(frames)
+    assert_true(!let_go, msg="frames \{frames}: marking left as the finger lifts")
+    assert_true(!after, msg="frames \{frames}: left")
+    assert_eq(nodes, 1, msg="frames \{frames}: 取消 a button of the tree's own")
+  }
+}
+
+///|
+test "viewer on the tree, a phone, marking: its floating bar never narrower, marking's actions in its tools' place and back: as wide after 取消 as while it marked" {
+  let t = preview_tester("image", w=390.0, platform=2)
+  let tap = fn(label : String) raise {
+    let (x, y, w, h) = t.get(Button, label~).rect
+    t.touch(0, x + w / 2.0, y + h / 2.0)
+    t.touch(2, x + w / 2.0, y + h / 2.0)
+  }
+  let close = fn() raise { t.get(Button, label=@sf.t("web-main.preview.closeKey")).rect.0 }
+  let plain = close()
+  tap(@sf.t("web-main.annotate.image"))
+  t.draw()
+  let marked = close()
+  tap(pv("common.cancel"))
+  t.draw()
+  assert_true(!marking.on, msg="left")
+  assert_true(marked >= plain, msg="as wide marking at least: \{plain} \{marked}")
+  assert_eq(close(), marked, msg="× where it was while it marked")
+}
+
+///|
+/// How far in the floating bar is drawn (its glass, 44 high along the top; 0: none).
+fn head_drawn() -> Double {
+  let mut most = 0.0
+  for d in @ui.view_tree().unwrap().drawn() {
+    if d.glass is Some(_) && d.h == @ui.Space::px(S11) && d.y < 120.0 && d.alpha > most {
+      most = d.alpha
+    }
+  }
+  most
+}
+
+///|
+test "viewer on a phone's width, a mouse: its bars hidden by a click, shown by the pointer along the top, marking begun there, the pointer back on the picture; Escape leaves marking: the floating bar goes as hidden bars do" {
+  let t = preview_tester("image", w=390.0, platform=0)
+  let v = viewer.get().unwrap()
+  let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+  let (px, py) = (rx + rw / 2.0, ry + rh / 2.0)
+  t.touch(0, px, py)
+  t.touch(2, px, py)
+  t.run_for(@sf.sleep_ms * 2.0)
+  assert_true(!v.bars_shown(), msg="hidden by a click")
+  assert_eq(head_drawn(), 0.0, msg="hidden: gone")
+  // (the pointer along the top: shown, its 标注图片 pressed there)
+  let (x, y, w, h) = t.get(Button, label=@sf.t("web-main.annotate.image")).rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(@sf.wake_ms * 2.0)
+  assert_true(v.near_bar, msg="the pointer along the top")
+  assert_eq(head_drawn(), 1.0, msg="the pointer along the top: shown")
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  t.draw()
+  assert_true(marking.on, msg="marking")
+  // (the pointer back on the picture: still shown, marking)
+  t.move(px, py)
+  t.run_for(@sf.sleep_ms * 2.0)
+  assert_true(!v.near_bar && !v.awake, msg="the pointer off the top, the bars asleep")
+  assert_eq(head_drawn(), 1.0, msg="marking: shown")
+  t.key(@ui.key_escape)
+  assert_true(!marking.on, msg="Escape: marking left")
+  t.run_for(@sf.sleep_ms * 2.0)
+  assert_true(!v.near_bar, msg="the pointer not back along the top")
+  assert_eq(head_drawn(), 0.0, msg="marking left, the bars asleep: gone")
+}
+
+///|
+test "viewer on the tree, a phone, marking: its floating bar wider as what marking says asks it (why making it failed), as wide once that is gone" {
+  let t = preview_tester("image", w=390.0, platform=2)
+  let (x, y, w, h) = t.get(Button, label=@sf.t("web-main.annotate.image")).rect
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  t.draw()
+  let close = fn() raise { t.get(Button, label=@sf.t("web-main.preview.closeKey")).rect.0 }
+  let marked = close()
+  marking.error = pv("android-chat.file.drawFailed")
+  @sfbase.marks_changed()
+  t.draw()
+  let failed = close()
+  assert_true(failed > marked, msg="why it failed: wider: \{marked} \{failed}")
+  marking.error = ""
+  @sfbase.marks_changed()
+  t.draw()
+  assert_eq(close(), failed, msg="gone: as wide: \{marked} \{failed}")
+  marks_leave()
+}
+
+///|
+test "viewer on the tree, a phone: its floating bar's tools and × as far apart as keys are (keys_apart), each from the one before it" {
+  let t = preview_tester("image", w=390.0, platform=2)
+  // (its tools and × by what they say: 标注图片, 复制, 下载, 关闭)
+  let keys = [
+    @sf.t("web-main.annotate.image"),
+    @sf.t("common.copy"),
+    @sf.t("web-main.preview.download"),
+    @sf.t("web-main.preview.closeKey"),
+  ].map(fn(label) { t.get(Button, label~).rect })
+  keys.sort_by(fn(a, b) { a.0.compare(b.0) })
+  assert_true(keys.length() >= 3, msg="its tools and ×: \{keys}")
+  for i in 1..<keys.length() {
+    let (px, _, pw, _) = keys[i - 1]
+    assert_eq(keys[i].0 - (px + pw), @sf.keys_apart(), msg="\{i}: \{keys}")
+  }
+}
+
+///|
+test "viewer on the tree, a phone, marking a picture of a long name: 添加到对话 a button of its own on the floating bar, its words 12 inside it, it before ×" {
+  let t = preview_tester("step", w=390.0, platform=0)
+  let (a, _) = preview_files().iter().find_first(fn(f) { f.0.name == "界面草图.png" }).unwrap()
+  open_preview("ws1/st1", "s-c1", { ..a, name: "web-open-2-folded-preview-of-the-chat.png" }, steps=InChat(Some(1.0), "s-c1"))
+  t.run_for(@ui.move_most_ms)
+  marks_start()
+  t.draw()
+  let put = pv("android-chat.preview.put")
+  let pills = t.semantics().filter(fn(s) { s.role == Button && s.label == put })
+  assert_eq(pills.length(), 1, msg="添加到对话 a button of its own, one")
+  let (bx, _, bw, _) = pills[0].rect
+  let words = @ui.view_tree().unwrap().drawn().filter(fn(d) { d.words == put && d.alpha > 0.0 })
+  assert_eq(words.length(), 1, msg="its words drawn, once")
+  let (xx, _, _, _) = t.get(Button, label=@sf.t("web-main.preview.closeKey")).rect
+  assert_true(words[0].x + words[0].w <= bx + bw - 12.0 + 0.5, msg="its words 12 inside it")
+  assert_true(words[0].x >= bx + 12.0 - 0.5, msg="its words 12 inside it, from its start")
+  assert_true(bx + bw <= xx + 0.5, msg="before ×")
+  marks_leave()
+}

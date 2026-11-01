@@ -12,11 +12,12 @@
 //     changes, at that moment; what is beside it read ahead as that is said;
 //   - in it, what draws the picture (an old view taking a press only on what it has to press: a mark's pin, the words
 //     written; the picture where its zoom has it as the frame draws it, its flight, the pictures beside it), and over
-//     it the bars: the floating bar on a small screen, its picture coming or whole and not marked, nodes of its own
-//     (image_head, head_as_nodes: how much of it has come, its tools, their tips); the bar across the top of a wider
-//     screen, its picture coming or whole and not marked, nodes too (image_bar, bar_as_nodes); the ways to the
-//     pictures beside it while it is not marked (image_steps); the rest an old view taking a press only where it has
-//     something to press (marking's bars).
+//     it the bars: the floating bar on a small screen, its picture coming, whole or marked, nodes of its own
+//     (image_head, head_as_nodes: how much of it has come, its tools or marking's actions, their tips); the bar across
+//     the top of a wider screen, the same, nodes too (image_bar, bar_as_nodes); the ways to the pictures beside it
+//     while it is not marked (image_steps); marking's foot while it is (marks_foot_node: its tools, the notes' cards,
+//     the note being written, what is written in it an old view's field); the rest an old view taking a press only
+//     where it has something to press (the bars beside the system's, an iPhone Duo's: vf_bar's).
 //
 // It sets out as the node is made (that moment its cause's: the thumbnail tapped), and is done at its ways' declared
 // ends (moments on the node's timeline): landed, the thumbnail shows again; gone, it is let go.
@@ -24,9 +25,10 @@
 // What a download, a save or marking's picture asks is done by the layer at its cause (image_layer), whichever bar
 // asked.
 //
-// Still the old view's here (the way there): what those old bars do (their own presses, Esc and back: a press on one
-// taken as the bars' view builds, so what draws the picture follows it at the next frame), the flight in and out
-// (where it flies from, recorded as it is drawn; the thumbnail's place read of the old layout).
+// Still the old view's here (the way there): what draws the picture (image_view: the picture, its marks, a mark's pin
+// and the words being written its presses), the bars beside the system's (theirs as the bars' view builds, so what
+// draws the picture follows them at the next frame), the flight in and out (where it flies from, recorded as it is
+// drawn; the thumbnail's place read of the old layout).
 
 ///|
 /// How many times what draws the picture and the bars over it have been built, each (what a change built again).
@@ -260,7 +262,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   // (the bar across the top of a wider window, its picture whole, its nodes: where the old bars draw it not,
   // bar_as_nodes)
   n.show(fn() { bar_as_nodes(vw, stage().0) }, fn(h) { image_bar(h, src, vw, stage) })
-  // (marking's foot while it marks: its tools nodes, its notes the old view's, one column)
+  // (marking's foot while it marks, one column: its tools, the notes' cards, the note being written)
   n.show(
     fn() {
       marks_said()
@@ -716,13 +718,12 @@ fn Viewer::key_on(self : Viewer, src : Source, k : @view.Key) -> Bool {
 
 ///|
 /// Whether viewer `v`'s floating bar is its nodes (image_head), `w` wide, the old bars' (vf_bar's) not: a picture here
-/// coming or whole (not read, played or marked), on a small screen (a phone's; a fold half open wider than one, its
+/// coming or whole or marked (not read or played), on a small screen (a phone's; a fold half open wider than one, its
 /// kind and size with it), its own bar (not the system's beside it: an iPhone Duo's). As each is told.
 pub fn head_as_nodes(v : Viewer, w : Double) -> Bool {
   marks_said()
   v.in_tree &&
   v.shown_kind() == Some(KImage) &&
-  !marking.on &&
   @sf.viewer_bar_floats(w) &&
   !@sf.native_on()
 }
@@ -767,6 +768,10 @@ fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, 
   let tips = @sf.TipLayer::new(fn() { tips_at.val })
   let whole = fn() { vw.bytes.get() is Some(_) }
   let dl = fn() { vw.download(src) }
+  let marked = fn() {
+    marks_said()
+    marking.on
+  }
   @sf.viewer_head_node(
     h,
     fn() { vw.file.name },
@@ -783,9 +788,18 @@ fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, 
       row.show(fn() { vw.coming() && vw.got.get() is Some(_) }, fn(r) {
         file_progress_node(r, fn() { vw.got.get().unwrap_or((0.0, None)) }, fn() { vw.file.size }) |> ignore
       })
-      image_tools(row, src, vw, ink, Is(@sf.tool_side / 2.0), tips)
+      // (its tools; marking, marking's actions in their place: vf_tools's)
+      row.show(fn() { !marked() }, fn(r) {
+        r.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@sf.keys_apart())) |> ignore
+        image_tools(r, src, vw, ink, Is(@sf.tool_side / 2.0), tips)
+      })
+      row.show(marked, fn(r) { marks_actions_node_of(r, vw, ink, tips) })
     },
-    fn() { "\{whole()} \{downloading(dl())} \{vw.coming()} \{vw.got.get() is Some(_)}" },
+    fn() {
+      // (marking, which of its actions: marks_actions_node's)
+      let m = if marked() { "\{marking.busy} \{marking.error} \{marks_any()} \{vw.draft_key() != ""}" } else { "" }
+      "\{whole()} \{downloading(dl())} \{vw.coming()} \{vw.got.get() is Some(_)} \{m}"
+    },
     fn() {
       if !vw.closing {
         vw.shut(@ui.current())
@@ -817,11 +831,8 @@ fn image_bar(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, D
     fn() { vw.file.name },
     fn() { vf_meta(vw, src) },
     fn() { if vw.file.path.has_prefix("draft:") { "" } else { vw.file.path } },
-    fn() {
-      // (marking, there: Viewer::bars_shown)
-      marks_said()
-      !vw.bars_shown()
-    },
+    // (marking, there: Viewer::bars_shown)
+    fn() { !vw.bars_shown() },
     fn(node) { vw.shown_on(node) },
     fn() { (@sf.viewer_host().room)().0 },
     fn() { stage().0 },

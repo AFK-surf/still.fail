@@ -941,18 +941,33 @@ test "marking a picture of a long name: the bar's 取消, download and 添加到
   t.run_for(@ui.move_most_ms)
   marks_start()
   t.draw()
-  let (px, _, pw, _) = t.rect_of("添加到对话").unwrap()
-  let (cx, _, cw, _) = t.rect_of("取消").unwrap()
+  let put = pv("android-chat.preview.put")
+  let (px, _, pw, _) = shown_words(t, put).unwrap()
+  let (cx, _, cw, _) = shown_words(t, pv("common.cancel")).unwrap()
   // the bar 8 in from the window's right (fpHead under 640), 6 inside it the × (32), 2 before it the pill, its words
   // 12 inside it
   assert_true(px + pw <= 390.0 - 8.0 - 6.0 - 32.0 - 2.0 - 12.0 + 0.5, msg="添加到对话 inside its ground, clear of ×")
+  // (× inside the window)
+  let (xx, _, xw, _) = t.get(Button, label=@sf.t("web-main.preview.closeKey")).rect
+  assert_true(xx + xw <= 390.0, msg="× inside the window")
   assert_true(cw >= 24.0, msg="取消 whole")
   assert_true(cx + cw <= px, msg="取消 before 添加到对话")
-  match t.rect_of("web-open-2") {
+  match shown_words(t, "web-open-2") {
     Some((nx, _, _, _)) => assert_true(nx < cx)
     None => ()
   }
   marks_leave()
+}
+
+///|
+/// Where words with `s` in them are drawn: the window's tree's (the first drawn so), else the old view's.
+fn shown_words(t : @ui.Tester, s : String) -> (Double, Double, Double, Double)? {
+  for d in @ui.view_tree().unwrap().drawn() {
+    if d.words.contains(s) && d.alpha > 0.0 {
+      return Some((d.x, d.y, d.w, d.h))
+    }
+  }
+  t.rect_of(s)
 }
 
 ///|

@@ -15,8 +15,8 @@ fn marks_ink() -> @sf.ViewerInk {
 
 ///|
 /// Marking's foot in `h` (a layer over the viewer's, all of it), as marks_foot lays it out, one column: the notes
-/// (the old view's, marks_foot with no tools: the cards, or the note being written) as far down as what is under them
-/// lets them; under them, while no note is written, the colours' row while asked for over the row of tools on dark
+/// (their cards, note_cards_node, or the note being written, note_box_node) as far down as what is under them lets
+/// them; under them, while no note is written, the colours' row while asked for over the row of tools on dark
 /// glass (选择, 框, 箭头, 画笔, 文字 · the colour · 删除 the picked · 撤销, 重做), each a picture_button's 32, in its
 /// middle, 8 over `foot` (the navigation bar's room) at the bottom. Each as marking says as it changes; each pressed
 /// (its press let go on it), done then. Their tips in a layer of their own over all of it.
