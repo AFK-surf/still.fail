@@ -857,11 +857,12 @@
   "web-main.preset.search": "搜仓库，或粘贴一个路径",
   "web-main.preset.addPath": "添加 {path}",
   "web-main.preset.chats": "{n} 个对话用过",
-  "web-main.preset.empty": "这台 station 的仓库缓存里还没有仓库。在上面粘贴一个目录的路径。",
+  "web-main.preset.empty": "这台 station 上还没找到仓库。在上面粘贴一个目录的路径。",
   "web-main.preset.name": "名字",
   "web-main.preset.instructions": "指令（可选）",
   "web-main.preset.instructionsHint": "各目录里的 AGENTS.md 和 skill 会自动读，不用写在这里",
   "web-main.preset.create": "创建",
   "web-main.preset.deleteTitle": "删除预设「{name}」？",
-  "web-main.preset.deleteBody": "已经用它开的对话不受影响。"
+  "web-main.preset.deleteBody": "已经用它开的对话不受影响。",
+  "web-main.preset.more": "还有 {n} 个仓库，在上面搜名字"
 }

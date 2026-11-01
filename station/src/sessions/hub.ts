@@ -23,6 +23,7 @@ import { idleSandboxes, keyPart, sandboxIdleMs, sandboxName, sandboxed, sessionS
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import { Clock, Effect, Fiber } from "effect";
 import { liveClock, within } from "../ops/fibers.ts";
 import type { AgentDriver, AgentSession, RuntimeKind } from "../agents/runtime.ts";
@@ -43,7 +44,7 @@ import { INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
 import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
-import { Presets } from "./presets.ts";
+import { Presets, RepoIndex } from "./presets.ts";
 import { type Roots, roots as machineRoots } from "../read/machine.ts";
 import { carrySubagents, goesAfresh, startsAfresh, toldCleared, toldResumeLost } from "./afresh.ts";
 import { serves } from "./pool.ts";
@@ -174,6 +175,8 @@ export class Hub {
   jobs: Jobs | null = null;
   /// Each workspace's presets, in its agent home (presets.ts).
   readonly presets = new Presets((ws) => workspaceAgentHome(this.config().agentHome, ws, this.workspaces()[0] ?? null), () => this.now());
+  /// The repositories on the machine, offered as a preset's folders (presets.ts).
+  readonly repoIndex = new RepoIndex({ roots: () => [homedir()], file: () => join(this.config().dataDir, "repo-index.json"), now: () => this.now(), besides: () => [this.config().dataDir] });
   private closedHook: ((key: string) => void) | null = null;
   private peersHook: ((station: string, request: Json) => Promise<Json>) | null = null;
   private outsideHook: ((ws: string | null) => OutsideChat[]) | null = null;

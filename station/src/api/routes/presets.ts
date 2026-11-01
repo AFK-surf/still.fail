@@ -4,9 +4,9 @@
 import { type Answer, type Request, error, json } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { log } from "../../ops/log.ts";
-import { NoPreset, type Presets, candidates } from "../../sessions/presets.ts";
+import { NoPreset, type Presets, type RepoIndex, candidates } from "../../sessions/presets.ts";
 
-export type PresetDeps = { presets: Presets; reposDir: () => string; changed?: () => void };
+export type PresetDeps = { presets: Presets; reposDir: () => string; index?: RepoIndex; changed?: () => void };
 
 function body(r: Request): unknown {
   try {
@@ -20,13 +20,13 @@ const wsOf = (r: Request) => r.viewer.workspace || null;
 
 const failed = (e: unknown): Answer => (e instanceof NoPreset ? error(404, e.message) : error(400, (e as Error).message));
 
-export const routes = ({ presets, reposDir, changed }: PresetDeps): Route[] => [
+export const routes = ({ presets, reposDir, index, changed }: PresetDeps): Route[] => [
   {
     method: "GET",
     pattern: /^\/presets$/,
     handle: async (r: Request): Promise<Answer> => {
       const list = presets.list(wsOf(r));
-      return json(200, JSON.stringify({ presets: list, candidates: await candidates(reposDir(), list) }));
+      return json(200, JSON.stringify({ presets: list, candidates: await candidates(reposDir(), list, (await index?.repos()) ?? []) }));
     },
   },
   {

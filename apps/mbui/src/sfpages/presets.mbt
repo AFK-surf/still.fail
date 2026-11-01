@@ -13,23 +13,21 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
     return
   }
   let t = @sf.theme()
-  let listed = (src.topic)("presets", { "station": Json::string(address) }).value
   let picked = text(v, "preset")
-  let name = match preset_named(listed, picked) {
-    Some(p) => text(Some(p), "name")
-    None => ""
-  }
+  // (its name as the core says it with the page: the station's presets read only as they are opened)
+  let name = if picked == "" { "" } else { text(v, "presetName") }
   let label = if name == "" { @sf.t("web-main.preset.label") } else { name }
   let asked = take_asked("preset")
   if take_asked("preset-new") {
-    preset_dialog(src, w, address, listed, None)
+    preset_dialog(src, w, address, None)
   }
   if take_asked("preset-edit") {
-    preset_dialog(src, w, address, listed, items(listed, "presets").get(0))
+    preset_dialog(src, w, address, items(presets_of(src, address), "presets").get(0))
   }
   if (new_capsule(c, "new/preset", label, floating, fn() {
-      @sf.icon(c, "folder", size=new_mark, color=if name == "" { t.p.muted } else { t.p.text }) |> ignore
-      c.box(style=new_station_name, fn() {
+      @sf.icon(c, "boxes", size=new_mark, color=if name == "" { t.p.muted } else { t.p.text }) |> ignore
+      // (its words left out first, short of room: its mark says what it is, the station's name and the model's matter more)
+      c.box(style=new_station_name, drop=preset_drop_words, fn() {
         c.text(label, style=if name == "" { preset_capsule_quiet } else { new_capsule_words }) |> ignore
       })
       |> ignore
@@ -39,22 +37,16 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
     asked {
     @sf.panel(
       @sf.t("web-main.preset.pick"),
-      fn(c, close) { preset_rows(c, src, w, address, listed, picked, close) },
+      fn(c, close) { preset_rows(c, src, w, address, presets_of(src, address), picked, close) },
       from=Of(c.id("new/preset")),
     )
   }
 }
 
 ///|
-/// The preset of id `id` among those listed.
-fn preset_named(listed : Json?, id : String) -> Json? {
-  if id == "" {
-    return None
-  }
-  match items(listed, "presets").iter().find_first(fn(p) { text(Some(p), "id") == id }) {
-    Some(p) => Some(p)
-    None => None
-  }
+/// The station's presets and the folders offered for a new one (the `presets` topic), read as they are shown.
+fn presets_of(src : Source, address : String) -> Json? {
+  (src.topic)("presets", { "station": Json::string(address) }).value
 }
 
 ///|
@@ -101,17 +93,17 @@ fn preset_rows(c : @ui.Ctx, src : Source, w : Workspace, address : String, liste
     let one = Some(x)
     let id = text(one, "id")
     let dirs = items(one, "dirs").map(fn(d) { dir_label(Some(d)) })
-    row(id, "folder", text(one, "name"), join(dirs, " · "), id == picked, fn() {
+    row(id, "boxes", text(one, "name"), join(dirs, " · "), id == picked, fn() {
       @sfbase.pick_new(src, w.id, { "preset": Json::string(id) })
       close()
     }, Some(fn() {
       close()
-      preset_dialog(src, w, address, listed, one)
+      preset_dialog(src, w, address, one)
     }))
   }
   row("+new", "plus", @sf.t("web-main.preset.newRow"), "", false, fn() {
     close()
-    preset_dialog(src, w, address, listed, None)
+    preset_dialog(src, w, address, None)
   }, None)
 }
 
@@ -145,7 +137,7 @@ let preset_serial : Ref[Int] = Ref(0)
 /// to find one among those offered or to type or paste a path; what is offered, a tap each: the station's repositories
 /// its chats worked in most first), its name (the first directory's until one is typed), what people want of its chats;
 /// at its foot 删除 for one there, 取消, 创建 or 保存. Made, it is the one picked for the station's new chats.
-fn preset_dialog(src : Source, w : Workspace, address : String, listed : Json?, was : Json?) -> Unit {
+fn preset_dialog(src : Source, w : Workspace, address : String, was : Json?) -> Unit {
   preset_serial.val += 1
   let e : PresetEditing = { dirs: items(was, "dirs").map(fn(d) { text(Some(d), "path") }), auto: "", saving: false, error: "", serial: preset_serial.val }
   let key = fn(part : String) { "preset-editor/" + e.serial.to_string() + "/" + part }
@@ -158,7 +150,6 @@ fn preset_dialog(src : Source, w : Workspace, address : String, listed : Json?, 
     }
     None => ()
   }
-  let offered = items(listed, "candidates")
   let title = match was {
     None => @sf.t("web-main.preset.new")
     Some(_) => @sf.t("web-main.preset.edit")
@@ -167,6 +158,8 @@ fn preset_dialog(src : Source, w : Workspace, address : String, listed : Json?, 
     title,
     fn(c, _) {
       let p = @sf.theme().p
+      // (what the station offers, as it is read now)
+      let offered = items(presets_of(src, address), "candidates")
       // its directories, then what can be added
       @sf.field(c, @sf.t("web-main.preset.dirs"), fn() {
         if e.dirs.length() > 0 {
@@ -182,13 +175,15 @@ fn preset_dialog(src : Source, w : Workspace, address : String, listed : Json?, 
         }
         let q = @sf.input(c, key("q"), placeholder=@sf.t("web-main.preset.search"), field=field_of(key("q"))).text.trim(chars=" \n").to_owned()
         let typed = q.has_prefix("/") || q.has_prefix("~")
-        let shown = offered.filter(fn(o) {
+        let matching = offered.filter(fn(o) {
           let one = Some(o)
           q == "" ||
           typed ||
           text(one, "name").to_lower().contains(q.to_lower()) ||
           text(one, "repo").to_lower().contains(q.to_lower())
         })
+        // (with nothing typed, the first of them: the rest found by their name)
+        let shown = if q == "" && matching.length() > preset_offered_most { matching[:preset_offered_most].to_owned() } else { matching }
         c.box(style=preset_offered, fn() {
           if typed && !e.dirs.contains(q) {
             let id = c.id(key("typed"))
@@ -231,6 +226,9 @@ fn preset_dialog(src : Source, w : Workspace, address : String, listed : Json?, 
               @sf.press_ripple(c, id, @sf.row_corner)
             })
             c.semantics(b, Button, id~, label=text(one, "name"), check=if on { On } else { Off })
+          }
+          if shown.length() < matching.length() {
+            c.text(@sf.t("web-main.preset.more", args=[("n", (matching.length() - shown.length()).to_string())]), style=preset_row_sub) |> ignore
           }
           if offered.length() == 0 && !typed {
             c.text(@sf.t("web-main.preset.empty"), style=preset_row_sub) |> ignore
@@ -323,6 +321,14 @@ fn preset_dialog(src : Source, w : Workspace, address : String, listed : Json?, 
 /// What is under a row's name: its directories, where a repository is from and how many chats worked in it.
 // kept across runs: a value (no field of it changes)
 let preset_row_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Cut)
+
+///|
+/// How many folders are offered with nothing typed.
+let preset_offered_most : Int = 8
+
+///|
+/// Short of room, the preset's words go first (before the model's parts: model_triple.mbt triple_drop_name).
+let preset_drop_words : Int = 0
 
 ///|
 /// The control's words while no preset is picked: as quiet as what says what is not chosen.

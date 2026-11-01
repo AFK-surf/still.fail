@@ -322,7 +322,7 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
       : []),
     ...(agents.updates ? updates({ updates: agents.updates }) : []),
     ...(agents.config ? agentEnv({ config: agents.config, changed: () => deps.events?.overviewChanged(), restart: () => agents.hub.everyChanged() }) : []),
-    ...(agents.hub ? presetRoutes({ presets: agents.hub.presets, reposDir: () => agents.hub.reposDir() }) : []),
+    ...(agents.hub ? presetRoutes({ presets: agents.hub.presets, reposDir: () => agents.hub.reposDir(), index: agents.hub.repoIndex }) : []),
     ...(agents.config ? contextSettings({ config: agents.config, changed: () => deps.events?.overviewChanged() }) : []),
     ...(agents.config ? diagnosticsSettings({ config: agents.config, changed: () => deps.events?.overviewChanged() }) : []),
     ...(agents.xshare ? xshare({ xshare: agents.xshare, store: deps.store }) : []),

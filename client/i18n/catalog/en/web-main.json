@@ -926,11 +926,12 @@
   "web-main.preset.search": "Search repositories, or paste a path",
   "web-main.preset.addPath": "Add {path}",
   "web-main.preset.chats": "Used in {n} chats",
-  "web-main.preset.empty": "This station has no repositories in its cache yet. Paste a folder's path above.",
+  "web-main.preset.empty": "No repositories found on this station yet. Paste a folder's path above.",
   "web-main.preset.name": "Name",
   "web-main.preset.instructions": "Instructions (optional)",
   "web-main.preset.instructionsHint": "Each folder's AGENTS.md and skills are read anyway; no need to repeat them here",
   "web-main.preset.create": "Create",
   "web-main.preset.deleteTitle": "Delete the preset “{name}”?",
-  "web-main.preset.deleteBody": "Chats already opened with it keep it."
+  "web-main.preset.deleteBody": "Chats already opened with it keep it.",
+  "web-main.preset.more": "{n} more repositories: search for them above"
 }

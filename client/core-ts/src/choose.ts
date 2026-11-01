@@ -145,6 +145,8 @@ export class Choose implements Owner {
   readonly #adding = new Map<string, J>();
   /// The key each scope's next new chat is to be made under (`next`), until one is made under it.
   readonly #next = new Map<string, string>();
+  /// The presets of the station each scope's new chat page is on, followed while the page is (its `preset`'s name).
+  readonly #presets = new Map<string, { station: string; watch: Watch }>();
 
   constructor(env: ChooseEnv) {
     this.#env = env;
@@ -184,6 +186,10 @@ export class Choose implements Owner {
     this.#watches.delete(topicKey(topic));
     this.#drafts.delete(topicKey(topic));
     for (const w of live?.watches ?? []) w.drop();
+    if (topic.topic === "newChat") {
+      this.#presets.get(topic.scope as string)?.watch.drop();
+      this.#presets.delete(topic.scope as string);
+    }
   }
 
   compute(topic: Topic): Value | undefined {
@@ -308,6 +314,7 @@ export class Choose implements Owner {
     const pick = this.#pick({ topic: "pick", station: addr, of: "new" }, addr, "new");
     view.pick = pick !== undefined && "ok" in pick ? pick.ok : null;
     view.preset = this.#preset(scope, id, addr);
+    view.presetName = view.preset === "" ? "" : text(get(arr(get(this.#followPresets(scope, addr), "presets")).find((p) => get(p, "id") === view.preset), "name")) ?? "";
     view.station = station;
     return view;
   }
@@ -316,6 +323,19 @@ export class Choose implements Owner {
     const overview = this.#env.store.get({ topic: "overview", station: addr });
     const options = models(overview, this.#env.now());
     return [options, resolve(options, this.#choice(ofAddress(addr), stationId(addr)))];
+  }
+
+  /// The presets of station `addr` as held, followed while the scope's page is on it (read as they are shown: the page
+  /// is told again once they come).
+  #followPresets(scope: string, addr: string): unknown {
+    const topic: Topic = { topic: "presets", station: addr };
+    const held = this.#presets.get(scope);
+    if (held?.station !== addr) {
+      held?.watch.drop();
+      const page: Topic = { topic: "newChat", scope };
+      this.#presets.set(scope, { station: addr, watch: this.#env.store.watch(topic, () => this.#env.store.invalidate(page)) });
+    }
+    return this.#env.store.get(topic);
   }
 
   /// The preset a new chat on station `id` (at `addr`) of the scope is opened with, as last picked there: "" for none,

@@ -2150,6 +2150,7 @@ export const SHAPES: Record<string, Shape> = {
     ["pick", opt("PickView"), { doc: "Its model control (the `pick` topic of `new` on the station), with the page." }],
     ["frequent", opt(vec("FrequentCombo")), { doc: "Up to four combinations used on this device in this workspace, filtered to this station." }],
     ["preset", "String", { default: true, doc: "The preset its chat is opened with on the station (one of the `presets` topic's ids), as last picked\nthere on this device (`newChat.pick` `preset`); \"\" for none." }],
+    ["presetName", "String", { default: true, said: true, doc: "Its name, as the station's presets say it (\"\" until they are read)." }],
   ], { doc: "A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs\nthere, as last picked on this device (`newChat.pick`); what the station no longer has gives way to the first it has." }),
   ShareInView: struct([
     ["site", opt("String"), { doc: "The site of the link shared (`youtube.com`, its www./m. left out); none for text without one." }],

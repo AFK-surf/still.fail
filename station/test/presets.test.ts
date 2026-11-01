@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { candidates, presetCopyOf, presetInput, repoName } from "../src/sessions/presets.ts";
+import { RepoIndex, candidates, presetCopyOf, presetInput, repoName } from "../src/sessions/presets.ts";
 import { newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { Rig, settle } from "./hub-fakes.ts";
 
@@ -85,4 +85,35 @@ test("the directories offered are the station's clones, those its chats worked i
   const elsewhere = mkdtempSync(join(tmpdir(), "presets-"));
   const offered = await candidates(repos, [{ id: "p", name: "p", dirs: [{ path: elsewhere, repo: null }], instructions: "", createdBy: "", createdAt: 0, updatedAt: 0 }]);
   assert.deepEqual(offered.map((c) => [c.name, c.repo, c.chats]), [["app", "github.com/acme/app", 2], ["lib", "github.com/acme/lib", 1], [elsewhere.split("/").pop(), null, 0]]);
+});
+
+test("the repositories on the machine are found under its home, a few levels down, kept and offered after the cache's", async () => {
+  const home = mkdtempSync(join(tmpdir(), "presets-home-"));
+  clone(join(home, "code"), "app", "git@github.com:acme/app.git");
+  clone(join(home, "code", "app", "sub"), "inner", "https://github.com/acme/inner.git");
+  clone(join(home, "a", "b", "c"), "deep", "https://github.com/acme/deep.git");
+  clone(join(home, "a", "b", "c", "d"), "deeper", "https://github.com/acme/deeper.git");
+  clone(join(home, "code", "node_modules"), "dep", "https://github.com/acme/dep.git");
+  clone(join(home, "Documents"), "asked", "https://github.com/acme/asked.git");
+  clone(join(home, ".hidden"), "x", "https://github.com/acme/x.git");
+  const data = join(home, "station");
+  clone(join(data, "repos"), "cached", "https://github.com/acme/cached.git", ["c-1"]);
+  let now = 1_000;
+  const index = new RepoIndex({ roots: () => [home], file: () => join(home, "index.json"), now: () => now, besides: () => [data] });
+  const found = await index.repos();
+  // a clone's own tree is not looked into; nor what is too deep, what holds dependencies, what macOS asks before
+  // reading, hidden directories and the station's own data
+  assert.deepEqual(found.map((c) => [c.name, c.repo]).sort(), [["app", "github.com/acme/app"], ["deep", "github.com/acme/deep"]]);
+  const offered = await candidates(join(data, "repos"), [], found);
+  assert.equal(offered[0]!.name, "cached", "the cache's clone its chats worked in first");
+  assert.deepEqual(offered.slice(1).map((c) => c.name).sort(), ["app", "deep"]);
+  // kept: another index reads what the first found without walking again
+  clone(join(home, "code"), "later", "https://github.com/acme/later.git");
+  const again = new RepoIndex({ roots: () => [home], file: () => join(home, "index.json"), now: () => now, besides: () => [data] });
+  assert.deepEqual((await again.repos()).map((c) => c.name).sort(), ["app", "deep"]);
+  // old: what is held is answered, a new pass found the new one
+  now += 11 * 60 * 1000;
+  assert.deepEqual((await again.repos()).map((c) => c.name).sort(), ["app", "deep"]);
+  await again.walk();
+  assert.deepEqual((await again.repos()).map((c) => c.name).sort(), ["app", "deep", "later"]);
 });

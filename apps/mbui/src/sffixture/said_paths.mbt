@@ -983,6 +983,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "pick.borrow.note",
     "pick.borrow.title",
     "pick.borrow.why",
+    "presetName",
   ],
   "notices": [
     "items.*.title",

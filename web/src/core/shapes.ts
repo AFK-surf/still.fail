@@ -5574,6 +5574,8 @@ export interface NewChatView {
 	 * there on this device (`newChat.pick` `preset`); "" for none.
 	 */
 	preset?: string;
+	/** Its name, as the station's presets say it ("" until they are read). */
+	presetName?: string;
 }
 
 /**

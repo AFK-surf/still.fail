@@ -4,7 +4,7 @@
 // copy of it in its session workspace (`.stillfail-preset.json`), so a preset changed later changes none of the chats
 // already opened with it.
 import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
@@ -245,11 +245,12 @@ export function presetInstructions(copy: PresetCopy): string {
 export type Candidate = { path: string; name: string; repo: string | null; chats: number; lastAt: number };
 
 /// The directories offered as a preset is made (GET /presets `candidates`): the clones in the station's repository
-/// cache, by the chats that made worktrees of them (most first, then the latest), and those other presets name. Read
-/// off the main thread's way (a cache can hold many clones, each many worktrees).
-export async function candidates(reposDir: string, presets: Preset[]): Promise<Candidate[]> {
+/// cache and the repositories found on the machine (`found`, RepoIndex), the ones its chats made worktrees of first
+/// (most, then the latest), the rest by when they last changed; and those other presets name. Read off the main
+/// thread's way (a cache can hold many clones, each many worktrees).
+export async function candidates(reposDir: string, presets: Preset[], found: Candidate[] = []): Promise<Candidate[]> {
   const list = async (dir: string) => readdir(dir).catch(() => [] as string[]);
-  const found = await Promise.all(
+  const cached = await Promise.all(
     (await list(reposDir)).map(async (name): Promise<Candidate | null> => {
       const path = join(reposDir, name);
       const git = join(path, ".git");
@@ -269,7 +270,83 @@ export async function candidates(reposDir: string, presets: Preset[]): Promise<C
     }),
   );
   const out = new Map<string, Candidate>();
-  for (const c of found) if (c !== null) out.set(c.path, c);
+  for (const c of cached) if (c !== null) out.set(c.path, c);
+  for (const c of found) if (!out.has(c.path)) out.set(c.path, c);
   for (const p of presets) for (const d of p.dirs) if (!out.has(d.path)) out.set(d.path, { path: d.path, name: basename(d.path), repo: d.repo, chats: 0, lastAt: p.updatedAt });
   return [...out.values()].sort((a, b) => b.chats - a.chats || b.lastAt - a.lastAt || a.name.localeCompare(b.name));
+}
+
+/// Where on the machine repositories are looked for: under its home, so many levels down.
+const INDEX_DEPTH = 4;
+/// At most so many directories looked into in one pass (a home with a huge tree is not walked all of it).
+const INDEX_DIRS_MOST = 20_000;
+/// A pass is this old before the next one (it runs while what is held is answered).
+const INDEX_FRESH_MS = 10 * 60 * 1000;
+/// Not looked into: what holds no repositories of a person's, what is huge, and what macOS asks the person before an
+/// app reads (a dialog on that machine's screen): the desktop, documents and downloads, and the libraries.
+const INDEX_SKIPPED = new Set(["node_modules", "Library", "Applications", "Pictures", "Movies", "Music", "Public", "Desktop", "Documents", "Downloads", "Pods", "target", "dist", "build", "vendor", "venv"]);
+
+/// The repositories on the machine (directories with a `.git`), found by walking its home a few levels down, so a
+/// preset's folders are picked rather than typed. Kept in `file` (the station's data directory) and walked again when a
+/// pass is old, in the background: what is held is answered meanwhile (the first time, the first pass is waited on).
+export class RepoIndex {
+  readonly roots: () => string[];
+  readonly file: () => string;
+  readonly now: () => number;
+  /// Directories it never looks into (the station's own data: its sessions' worktrees are its cache's clones).
+  readonly besides: () => string[];
+  #held: { at: number; repos: Candidate[] } | null = null;
+  #walking: Promise<void> | null = null;
+
+  constructor(o: { roots: () => string[]; file: () => string; now: () => number; besides?: () => string[] }) {
+    this.roots = o.roots;
+    this.file = o.file;
+    this.now = o.now;
+    this.besides = o.besides ?? (() => []);
+  }
+
+  /// The repositories found, as the last pass found them; a pass begun when that is old.
+  async repos(): Promise<Candidate[]> {
+    if (this.#held === null) {
+      try {
+        const kept = JSON.parse(await readFile(this.file(), "utf8"));
+        if (typeof kept?.at === "number" && Array.isArray(kept?.repos)) this.#held = { at: kept.at, repos: kept.repos };
+      } catch {}
+    }
+    if (this.#held === null) await this.walk();
+    else if (this.now() - this.#held.at > INDEX_FRESH_MS) void this.walk();
+    return this.#held?.repos ?? [];
+  }
+
+  /// One pass, the one under way if there is.
+  walk(): Promise<void> {
+    this.#walking ??= this.#walk().finally(() => (this.#walking = null));
+    return this.#walking;
+  }
+
+  async #walk(): Promise<void> {
+    const found: Candidate[] = [];
+    const skip = new Set(this.besides().map((p) => resolve(p)));
+    let looked = 0;
+    const into = async (dir: string, depth: number): Promise<void> => {
+      if (looked++ >= INDEX_DIRS_MOST || skip.has(dir)) return;
+      const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+      if (entries.some((e) => e.name === ".git")) {
+        const git = join(dir, ".git");
+        const [config, head] = await Promise.all([readFile(join(git, "config"), "utf8").catch(() => ""), stat(join(git, "index")).catch(() => stat(git).catch(() => null))]);
+        found.push({ path: dir, name: basename(dir), repo: originIn(config), chats: 0, lastAt: Math.floor(head?.mtimeMs ?? 0) });
+        return;
+      }
+      if (depth >= INDEX_DEPTH) return;
+      for (const e of entries) {
+        if (!e.isDirectory() || e.name.startsWith(".") || INDEX_SKIPPED.has(e.name)) continue;
+        await into(join(dir, e.name), depth + 1);
+      }
+    };
+    for (const root of this.roots()) await into(resolve(root), 0);
+    this.#held = { at: this.now(), repos: found };
+    try {
+      await writeFile(this.file(), `${JSON.stringify(this.#held)}\n`);
+    } catch {}
+  }
 }
