@@ -528,3 +528,61 @@ test "panel, 大屏 keyboard and mouse: tall 0.5, at a point: its title, words a
     ("dialog Some((600, 106, 280, 400)) title [(616, 118, 248, 20)] words [(616, 142, 248, 22)] button Some((826.1918000000001, 168, 44, 24)) focus None", true),
   )
 }
+
+///|
+test "panel, 大屏 keyboard and mouse: tall 0.5 with a foot of its own, its body a column: opened, the window made shorter and taller again, and opened at that height: where its body and foot are, what the wheel scrolls: as main has it" {
+  let w = fn(t : @ui.Tester, s : String) { t.words().filter(fn(x) { x.0 == s }).map(fn(x) { tenth4((x.1, x.2, x.3, x.4)) }) }
+  let said = fn(t : @ui.Tester, held : Array[Bool]) {
+    let d = t.query(Dialog, label="面板").unwrap().rect
+    let foot = t.query(Button, label="好的").map(fn(s) { tenth4(s.rect) })
+    let before = "dialog \{tenth4(d)} row0 \{w(t, "第0行")} foot \{foot} held \{held.last()}"
+    // (the wheel over the middle of what it holds)
+    t.wheel(d.0 + d.2 / 2.0, d.1 + 120.0, 120.0)
+    t.run_for(@ui.move_most_ms)
+    let after = "row0 \{w(t, "第0行")}"
+    t.wheel(d.0 + d.2 / 2.0, d.1 + 120.0, -240.0)
+    t.run_for(@ui.move_most_ms)
+    "\{before} | wheel: \{after}"
+  }
+  let open = fn(held : Array[Bool]) {
+    let rows = @signals.signal(40)
+    @sf.panel(
+      "面板",
+      panel_column_body(rows, held),
+      from=At(600.0, 100.0, 0.0, 0.0),
+      tall=0.5,
+      foot=fn(c, close) {
+        if @sf.panel_button(c, "ok", "好的", tone=Filled) {
+          close()
+        }
+      },
+    )
+  }
+  let out = []
+  let held : Array[Bool] = []
+  let t = menu_tester(1280.0, 800.0, 0)
+  open(held)
+  t.run_for(@ui.move_most_ms)
+  out.push("800: \{said(t, held)}")
+  t.resize(1280.0, 500.0)
+  t.run_for(@ui.move_most_ms)
+  out.push("800 to 500: \{said(t, held)}")
+  t.resize(1280.0, 800.0)
+  t.run_for(@ui.move_most_ms)
+  out.push("500 to 800: \{said(t, held)}")
+  let held2 : Array[Bool] = []
+  let t2 = menu_tester(1280.0, 500.0, 0)
+  open(held2)
+  t2.run_for(@ui.move_most_ms)
+  out.push("opened at 500: \{said(t2, held2)}")
+  for o in out {
+    println("PANELTALLFOOT \{o}")
+  }
+  // (as main has it, a4c845604)
+  assert_eq(out, [
+    "800: dialog (600, 106, 280, 400) row0 [(616, 142, 248, 22)] foot Some((831.2, 477.2, 44, 24)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+    "800 to 500: dialog (600, 106, 280, 250) row0 [(616, 142, 248, 22)] foot Some((831.2, 327.2, 44, 24)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+    "500 to 800: dialog (600, 106, 280, 400) row0 [(616, 142, 248, 22)] foot Some((831.2, 477.2, 44, 24)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+    "opened at 500: dialog (600, 106, 280, 250) row0 [(616, 142, 248, 22)] foot Some((831.2, 327.2, 44, 24)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+  ])
+}
