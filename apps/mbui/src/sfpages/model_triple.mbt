@@ -675,7 +675,7 @@ fn triple_model_row(
       if usual != "" || usual_w > 0.0 {
         // (as wide as the widest of them where the row has the room, giving way to the name where not: cut short,
         // left out once it would keep too little)
-        c.box(style=triple_usual_room.then(@ui.style(w=Fixed(usual_w), min_w=Fixed(1.0))), drop=1, fn() {
+        c.box(style=triple_usual_room.then(@ui.style(w=Fixed(usual_w), min_w=SPx)), drop=1, fn() {
           c.text(usual, style=triple_usual) |> ignore
         })
         |> ignore
