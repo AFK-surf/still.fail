@@ -137,6 +137,7 @@ pub(all) struct Style {
   mut soft_min : Double
   mut stretch_past_max : Bool
   mut min_held : Bool
+  mut content_share : Double
   // private fields
 }
 pub fn Style::basis_kind(Self) -> Int32

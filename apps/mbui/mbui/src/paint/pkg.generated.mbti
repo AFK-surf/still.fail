@@ -7,6 +7,8 @@ import {
 }
 
 // Values
+pub fn arc(Double, Double, Double, from~ : Double, sweep~ : Double) -> Array[(Double, Double)]
+
 pub fn concentric(Double, Double) -> Double
 
 pub fn concentric_out(Double, Double) -> Double
@@ -16,6 +18,8 @@ pub fn corner_middle(Double, Double) -> Double
 pub fn dashed_outlines(Double, Double, Double, Double) -> Array[(Array[Double], Bool)]
 
 pub fn det_pow(Double, Double) -> Double
+
+pub fn line(Array[(Double, Double)], width~ : Double, color~ : Int64, upto? : Double) -> Line
 
 pub fn round_like(Double, room? : Double) -> Double
 
@@ -89,6 +93,13 @@ pub(all) struct Glass {
 pub fn Glass::frosted(blur~ : Double, tint~ : Int64, solid~ : Int64, saturation? : Double, rim_edge? : Double, rim_lit? : Double, rim_back? : Double, shares_capture? : Bool, contained? : Bool) -> Self
 pub fn Glass::liquid(blur? : Double, tint? : Int64, solid? : Int64, saturation? : Double, rim? : Double, bezel? : Double, refraction? : Double, chroma? : Double, merge? : Double, adaptive? : Bool) -> Self
 pub fn Glass::sharing(Self) -> Self
+
+pub(all) struct Line {
+  points : Array[(Double, Double)]
+  width : Double
+  color : Int64
+  upto : Double
+} derive(Eq, Show, @debug.Debug)
 
 pub(all) struct Shape {
   outlines : Array[(Array[Double], Bool)]

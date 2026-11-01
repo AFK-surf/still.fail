@@ -166,6 +166,10 @@ pub(all) struct Style {
   // flex basis of auto would be: the old views' `keep`), whatever its flex basis and min-width say: what is beside it
   // gives way first.
   mut min_held : Bool
+  // Not CSS's: a box whose own height, not said, is this share (0 … 1; NaN: none) of the height what it holds comes to
+  // at its width, what it holds laid out whole in it (past it where the share is less than 1): a room opening on what
+  // it holds, its height and what it holds the same layout's, whatever what it holds comes to as it opens.
+  mut content_share : Double
   // bumped by every change to what the box comes from (its lengths and box
   // sizing): a node's box stands while it is the same (Node's box_ver)
   priv mut ver : Int
@@ -244,6 +248,7 @@ pub fn Style::new() -> Style {
     soft_min: 0.0 / 0.0,
     stretch_past_max: false,
     min_held: false,
+    content_share: 0.0 / 0.0,
     ver: 0,
     basis_v: 0.0,
     basis_k: LEN_AUTO,

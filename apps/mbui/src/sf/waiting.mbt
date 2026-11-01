@@ -183,6 +183,39 @@ pub fn spinner(
 }
 
 ///|
+/// The spinner (`spinner`'s) as a node of the window's tree in `parent`: the same ring and arc, their lines said once
+/// (View::lines, in the theme's colours as they change, or `ring` and `arc`'s), turned by the clock about the middle of
+/// what its pieces cover as each frame is drawn (View::cycle, View::turn): nothing made again for it while it turns; its turning let go with it.
+/// The node.
+pub fn spinner_node(
+  parent : @view.View,
+  size? : Double = 14.0,
+  stroke? : Double = spin_stroke,
+  ring? : () -> Int64,
+  arc? : () -> Int64,
+  sweep? : Double = 0.25,
+  period? : Double = spinner_turn_ms,
+) -> @view.View {
+  let pi = 3.141592653589793
+  let mid = size / 2.0
+  let r = mid - stroke / 2.0
+  let ring = ring.unwrap_or(fn() { theme().p.line_strong })
+  let arc = arc.unwrap_or(fn() { theme().p.accent })
+  // (its points worked out once: only its colours change as it lives)
+  let round = @ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi)
+  let part = @ui.arc(mid, mid, r, from=-0.75 * pi, sweep=sweep * 2.0 * pi)
+  parent.box(fn(v) {
+    v
+    .width(Is(Some(size)))
+    .height(Is(Some(size)))
+    .lines(By(fn() { [@ui.line(round, width=stroke, color=ring()), @ui.line(part, width=stroke, color=arc())] }))
+    // (about the middle of what its pieces cover, as the old one's cycle look turns it)
+    .turn(By(fn() { v.cycle(period) * 2.0 * pi }), drawn=true)
+    |> ignore
+  })
+}
+
+///|
 /// A station gone for its update (a chat's row, the line over its composer): upgrading, said as it goes on: in a ring
 /// (where check-circle draws its circle, 3.5 to 20.5 of the icons' 24 grid) an arrow up, standing a while, then off up
 /// through its top as the next comes up from its bottom to stand where it stood, eased in and out, once every

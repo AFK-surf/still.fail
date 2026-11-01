@@ -1870,6 +1870,8 @@ pub fn spinner(@ui.Ctx, size? : Double, stroke? : Double, ring? : Int64, arc? : 
 
 pub let spinner_inline : Double
 
+pub fn spinner_node(@view.View, size? : Double, stroke? : Double, ring? : () -> Int64, arc? : () -> Int64, sweep? : Double, period? : Double) -> @view.View
+
 pub let spinner_size : Double
 
 pub let spinner_turn_ms : Double
