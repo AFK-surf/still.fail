@@ -78,8 +78,7 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
   open_fixture_mode("chat-download")
   t.run_for(@ui.move_most_ms)
   // (in its picture's middle: nothing is over it there)
-  let (rx, ry, rw, rh) = t.get(Button, label=tr("web-main.file.play", args=[("name", "演示录屏.mp4")])).rect
-  let (x, y) = (rx + rw / 2.0, ry + rh / 2.0)
+  let (x, y) = t.reachable("演示录屏.mp4")[0]
   let video = fn() {
     t.right_click(x, y)
     t.draw()

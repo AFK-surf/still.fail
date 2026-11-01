@@ -1184,8 +1184,10 @@ fn pin_number_middle(t : @ui.Tester, n : Int) -> (Double, Double)? {
 }
 
 ///|
-/// A message's video `name` tapped in its middle (nothing over it says its name: its capsule its length alone).
+/// A message's video `name` tapped where a scripted run taps it: its box called by its name (nothing over it says
+/// it: its capsule its length alone), whatever words the app's tables give.
 fn tap_video(t : @ui.Tester, name : String) -> Unit raise {
-  let (x, y, w, h) = t.get(Button, label=tr("web-main.file.play", args=[("name", name)])).rect
-  t.tap(x + w / 2.0, y + h / 2.0)
+  let at = t.reachable(name)
+  guard at.length() > 0 else { fail("no video \"\{name}\" to tap") }
+  t.tap(at[0].0, at[0].1)
 }

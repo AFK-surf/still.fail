@@ -97,8 +97,8 @@ test "a video quoted: its still in its card in the composer; sent, it grows from
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")
   t.run_for(@ui.move_most_ms)
-  let (x, y, vw, vh) = t.get(Button, label=tr("web-main.file.play", args=[("name", "演示录屏.mp4")])).rect
-  t.right_click(x + vw / 2.0, y + vh / 2.0)
+  let (x, y) = t.reachable("演示录屏.mp4")[0]
+  t.right_click(x, y)
   t.draw()
   t.tap_text("引用")
   t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
@@ -132,10 +132,10 @@ test "an agent's video and file card right clicked: 引用 quotes each, its file
   open_fixture_mode("chat-download")
   t.run_for(@ui.move_most_ms)
   // (the video in its middle, nothing over it naming it; the card on its name)
-  let (x, y, vw, vh) = t.get(Button, label=tr("web-main.file.play", args=[("name", "演示录屏.mp4")])).rect
+  let (x, y) = t.reachable("演示录屏.mp4")[0]
   let card = t.words().filter(fn(w) { w.0.has_prefix("发布包") })
   assert_true(card.length() > 0)
-  for at in [(x + vw / 2.0, y + vh / 2.0), (card[0].1 + 4.0, card[0].2 + 4.0)] {
+  for at in [(x, y), (card[0].1 + 4.0, card[0].2 + 4.0)] {
     t.right_click(at.0, at.1)
     t.draw()
     t.tap_text("引用")
