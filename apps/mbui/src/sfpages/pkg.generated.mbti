@@ -203,7 +203,7 @@ pub fn finder_field() -> @ui.Field
 
 pub fn finder_kind() -> String
 
-pub fn finder_list(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Array[Offered], () -> Unit, idle_chats? : Bool, most? : Double, at? : @sf.ListAt) -> Unit
+pub fn finder_list(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, Array[Offered], () -> Unit, idle_chats? : Bool, most? : Double, at? : @sf.ListAt, foot_in? : Double) -> Unit
 
 pub fn finder_query() -> String
 

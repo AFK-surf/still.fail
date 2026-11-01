@@ -288,6 +288,78 @@ test "⌘K laid out Medium and Large: its panel, room round it on every side" {
 }
 
 ///|
+test "⌘K's scrolling results reach its curved foot and fade towards it" {
+  for width in [600.0, 1280.0] {
+    let height = 180.0
+    let calls : Array[Made] = []
+    // A short window cuts the first, initially selected result partway through, without moving the pointer.
+    let t = wide_tester(calls, w=width, h=height, platform=0)
+    t.draw()
+    t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+    t.run_for(@ui.move_most_ms)
+    let c = t.ctx()
+    let (px, py, pw, ph) = c.rect_of(c.id("switcher")).unwrap()
+    let lists = t.boxes().filter(fn(b) { b.kind == "list" && b.w > pw * 0.8 && b.x >= px && b.x + b.w <= px + pw && b.y >= py && b.y < py + ph })
+    assert_eq(lists.length(), 1, msg="\{width}: lists")
+    let list = lists[0]
+    let foot = list.y + list.h
+    let rows = t.drawn_instances().filter(fn(a) {
+      a[5] == 0.0 && (a[0] - list.x).abs() < 0.5 && (a[2] - list.w).abs() < 0.5 && a[1] < foot && a[1] + a[3] > foot
+    })
+    assert_eq(rows.length(), 1, msg="\{width}x\{height}: a selected row crosses the foot")
+    let row = rows[0]
+    // The viewport reaches the panel's edge; the panel itself cuts its contents to its outline.
+    assert_true((foot - (py + ph)).abs() < 0.5, msg="\{width}: list ends at \{foot}, panel at \{py + ph}")
+    assert_true(corner_cover(row, list.x + list.w / 2.0, foot - 2.0, 2.0) > 0.9, msg="\{width}: middle")
+    let panels = t.boxes().filter(fn(b) { (b.x - px).abs() < 0.5 && (b.y - py).abs() < 0.5 && (b.w - pw).abs() < 0.5 && b.border_w > 0.0 })
+    assert_eq(panels.length(), 1, msg="\{width}: panel")
+    let inset = list.x - px
+    let line = panels[0].border_w
+    let r = @ui.concentric(panels[0].radius, line)
+    // Its colour fades per pixel to the foot; the panel and its border stay whole.
+    assert_true((row[54] - foot).abs() < 0.5 && (row[55] - inset).abs() < 0.5, msg="\{width}: fade \{row[54]}, \{row[55]}")
+    let cover = fn(d : Double) { dmax(0.0, dmin(1.0, 0.5 - d * 2.0)) }
+    for x0 in [list.x, list.x + list.w - 22.0] {
+      for i in 0..<44 {
+        for j in 0..<44 {
+          let x = x0 + (i.to_double() + 0.5) / 2.0
+          let y = foot - 22.0 + (j.to_double() + 0.5) / 2.0
+          let own = cover(@ui.sd_box(x - (row[0] + row[2] / 2.0), y - (row[1] + row[3] / 2.0), row[2] / 2.0, row[3] / 2.0, row[4]))
+          let inside = cover(@ui.sd_clip(x, y, px + line, py + line, px + pw - line, py + ph - line, (r, r, r, r), (1.0, 1.0, 1.0, 1.0)))
+          let have = corner_cover(row, x, y, 2.0)
+          assert_true((have - own * inside).abs() < 0.06, msg="\{width}x\{height}: (\{x}, \{y}) covers \{have}, expected \{own * inside}")
+        }
+      }
+    }
+  }
+}
+
+///|
+test "⌘K at its end leaves its last result as far from the foot as from the sides" {
+  for width in [600.0, 1280.0] {
+    let calls : Array[Made] = []
+    let t = wide_tester(calls, w=width, h=800.0, platform=0)
+    t.draw()
+    t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+    t.run_for(@ui.move_most_ms)
+    let c = t.ctx()
+    let (px, py, pw, ph) = c.rect_of(c.id("switcher")).unwrap()
+    let lists = t.boxes().filter(fn(b) { b.kind == "list" && b.w > pw * 0.8 && b.x >= px && b.x + b.w <= px + pw && b.y >= py && b.y < py + ph })
+    assert_eq(lists.length(), 1, msg="\{width}: list")
+    let list = lists[0]
+    t.wheel(list.x + list.w / 2.0, list.y + list.h / 2.0, 3000.0)
+    t.run_for(@ui.move_most_ms)
+    let children = t.boxes().filter(fn(b) { b.parent == list.index })
+    assert_true(children.length() >= 2, msg="\{width}: last row and its foot")
+    let last = children[children.length() - 2]
+    let blank = children[children.length() - 1]
+    let inset = list.x - px
+    assert_true(((last.y + last.h) - (py + ph - inset)).abs() < 0.5, msg="\{width}: last result ends at \{last.y + last.h}, panel at \{py + ph}")
+    assert_true((blank.h - inset).abs() < 0.5, msg="\{width}: foot room \{blank.h}, side room \{inset}")
+  }
+}
+
+///|
 test "small with a mouse: back (⌘[, the keymap's nav.back) goes back one page only; forward (⌘]) brings it again" {
   let calls : Array[Made] = []
   let t = small_mouse(calls)
