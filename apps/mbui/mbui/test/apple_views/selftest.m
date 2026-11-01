@@ -5,6 +5,7 @@
 // where the view shows and a bar over it, snapshots checked pixel by pixel.
 //   selftest <out dir> <pdf> "<file>|<mime>|<duration ms>|<width>|<height>"...
 #import <Cocoa/Cocoa.h>
+#import <AVFoundation/AVFoundation.h>
 #import <ImageIO/ImageIO.h>
 #import "apple.h"
 
@@ -12,6 +13,10 @@
 mb_callbacks mb_cb;
 static int frames_asked;
 void mb_host_request_frame(void) { frames_asked++; }
+void mb_host_outside(int32_t kind, int32_t id, int32_t state) { (void)kind; (void)id; (void)state; }
+void mb_stream_attach_layer(int sid, CALayer *layer) { (void)sid; (void)layer; }
+void mb_stream_layout(int sid, double w, double h) { (void)sid; (void)w; (void)h; }
+id<MTLTexture> mb_stream_texture(int sid) { (void)sid; return nil; }
 double mb_now_ms(void) { return CACurrentMediaTime() * 1000.0; }
 CTFontRef mb_platform_font(double size, int weight, int mono) {
   return (CTFontRef)CFBridgingRetain([NSFont systemFontOfSize:size]);
@@ -55,19 +60,20 @@ static moonbit_bytes_t mbytes(const void *p, size_t n) {
 
 // ---- frames and snapshots ----
 
-static double inst[24 * 8];
+static double inst[60 * 8];
 static int ninst;
 static void add(double x, double y, double w, double h, int kind, double r, double g, double b, double a) {
-  double *f = inst + 24 * ninst++;
-  memset(f, 0, 24 * sizeof(double));
+  double *f = inst + 60 * ninst++;
+  memset(f, 0, 60 * sizeof(double));
   f[0] = x; f[1] = y; f[2] = w; f[3] = h; f[5] = kind;
   f[8] = r; f[9] = g; f[10] = b; f[11] = a;
   f[16] = 0; f[17] = 0; f[18] = 1e9; f[19] = 1e9;
 }
 // the view's hole at (x, y, w, h), a red bar over its top left, the background light grey
-static NSString *snapshot(NSString *name, double x, double y, double w, double h) {
+static NSString *snapshot(NSString *name, int32_t vid, double x, double y, double w, double h) {
   ninst = 0;
   add(x, y, w, h, 9, 0, 0, 0, 0);
+  inst[20] = MB_VIEW_TEX + vid;
   add(x, y, 100, 50, 0, 1, 0, 0, 1);
   mb_render_present(inst, ninst, 0.9, 0.9, 0.9);
   NSString *p = [out_dir stringByAppendingPathComponent:name];
@@ -111,7 +117,7 @@ static void video_steps(NSString *file, NSString *mime, double dur, double vw, d
   __block int32_t vid = 0;
   __block int reads = 0, partial = 0;
   __block double maxlen = 0, given = 0;
-  double *info = calloc(8, sizeof(double));
+  double *info = calloc(10, sizeof(double));
   __block int state = 0;
   NSString *tag = file.lastPathComponent;
   const double X = 40, Y = 30, VW = 320, VH = 240;
@@ -169,7 +175,7 @@ static void video_steps(NSString *file, NSString *mime, double dur, double vw, d
     check(fabs(info[1] - 2500) <= 0.5 && info[2] == 0,
           [NSString stringWithFormat:@"%@: paused, sought to %.1f ms exactly", tag, info[1]]);
     check(info[5] == given, [NSString stringWithFormat:@"%@: bytes told %.0f", tag, info[5]]);
-    NSString *p = snapshot([NSString stringWithFormat:@"video-%@.png", tag], X, Y, VW, VH);
+    NSString *p = snapshot([NSString stringWithFormat:@"video-%@.png", tag], vid, X, Y, VW, VH);
     uint8_t px[4];
     pixel(p, 10 * S, 10 * S, px);
     check(near(px, 230, 230, 230, 2) && px[3] == 255, [NSString stringWithFormat:@"%@: background %@", tag, rgba(px)]);
@@ -204,9 +210,53 @@ static void video_steps(NSString *file, NSString *mime, double dur, double vw, d
   }];
 }
 
+// The same host reads: a valid WebM, a damaged MP4, and a read that fails. The first may become playable on a future
+// system, so compare it to the same system opening the file directly instead of assuming a particular codec set.
+static void failure_steps(NSString *file, NSString *mime, int kind) {
+  NSData *data = [NSData dataWithContentsOfFile:file];
+  __block int32_t vid = 0;
+  __block BOOL directDone = kind != 0, directPlayable = NO;
+  if (kind == 0) {
+    AVURLAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL fileURLWithPath:file] options:nil];
+    [asset loadValuesAsynchronouslyForKeys:@[@"playable"] completionHandler:^{
+      BOOL playable = asset.playable;
+      dispatch_async(dispatch_get_main_queue(), ^{ directPlayable = playable; directDone = YES; });
+    }];
+  }
+  [steps addObject:^BOOL(int t) {
+    vid = mb_host_view_open(1, mb_string_from_ns(mime));
+    check(vid > 0 && data.length > 0, [NSString stringWithFormat:@"%@: opened", file.lastPathComponent]);
+    mb_host_view_place(vid, 0, 0, 320, 240, 0, 0, 320, 240, 0, 0, 0, 0, 1);
+    mb_host_view_control(vid, 1, 0);
+    return YES;
+  }];
+  [steps addObject:^BOOL(int t) {
+    double o[2], info[10];
+    int32_t rid;
+    while ((rid = mb_host_view_read_next(vid, o)) != 0) {
+      if (rid < 0) continue;
+      if (kind == 2) {
+        mb_host_view_read_answer(vid, rid, mbytes(NULL, 0), -2, 0);
+        continue;
+      }
+      long long off = (long long)o[0], len = (long long)o[1];
+      long long n = MAX(0, MIN(len, (long long)data.length - off));
+      mb_host_view_read_answer(vid, rid, mbytes((const uint8_t *)data.bytes + MIN(off, (long long)data.length), n),
+                               data.length, 0);
+    }
+    int state = mb_host_view_info(vid, info);
+    if ((!directDone || state == 0) && t < 20 * 60) return NO;
+    int expected = kind == 0 ? (directPlayable ? 1 : -2) : kind == 1 ? -3 : -1;
+    check(directDone && state == expected,
+          [NSString stringWithFormat:@"%@: state %d, expected %d", file.lastPathComponent, state, expected]);
+    mb_host_view_close(vid);
+    return YES;
+  }];
+}
+
 static void web_steps(void) {
   __block int32_t vid = 0;
-  double *info = calloc(8, sizeof(double));
+  double *info = calloc(10, sizeof(double));
   const double X = 40, Y = 30, VW = 320, VH = 240;
   NSString *html = @"<!doctype html><html><body style=\"margin:0;background:#c00000\">"
                     "<a id=l href=\"https://example.com/\">a link</a>"
@@ -228,7 +278,7 @@ static void web_steps(void) {
     check(info[5] == [html lengthOfBytesUsingEncoding:NSUTF8StringEncoding], @"web: its HTML's length told");
     check(mb_views_pass_through(X + 100, Y + 100) == 1, @"web: the pointer over it goes to it");
     check(mb_views_pass_through(10, 10) == 0, @"web: not elsewhere");
-    NSString *p = snapshot(@"web.png", X, Y, VW, VH);
+    NSString *p = snapshot(@"web.png", vid, X, Y, VW, VH);
     uint8_t px[4];
     pixel(p, (X + 200) * S, (Y + 150) * S, px);
     check(near(px, 0, 160, 0, 30) && px[3] == 255, [NSString stringWithFormat:@"web: its script ran, the page green %@", rgba(px)]);
@@ -349,6 +399,9 @@ int main(int argc, char **argv) {
       NSArray<NSString *> *a = [@(argv[i]) componentsSeparatedByString:@"|"];
       video_steps(a[0], a[1], a[2].doubleValue, a[3].doubleValue, a[4].doubleValue);
     }
+    failure_steps([out_dir stringByAppendingPathComponent:@"test.webm"], @"video/webm", 0);
+    failure_steps([out_dir stringByAppendingPathComponent:@"damaged.mp4"], @"video/mp4", 1);
+    failure_steps([out_dir stringByAppendingPathComponent:@"test.mp4"], @"video/mp4", 2);
     web_steps();
     pdf_steps(@(argv[2]));
     save_steps();

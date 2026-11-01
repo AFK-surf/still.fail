@@ -350,7 +350,9 @@ android-misc.drive.pick.unreadableNote
 android-misc.drive.player.ahead
 android-misc.drive.player.back
 android-misc.drive.player.back15
+android-misc.drive.player.damaged
 android-misc.drive.player.ended
+android-misc.drive.player.failed
 android-misc.drive.player.fill
 android-misc.drive.player.fit
 android-misc.drive.player.forward15
@@ -365,6 +367,10 @@ android-misc.drive.player.speed
 android-misc.drive.player.subtitlesOff
 android-misc.drive.player.subtitlesOn
 android-misc.drive.player.unfull
+android-misc.drive.player.unplayable
+android-misc.drive.player.unplayableFormat
+android-misc.drive.player.unsupported
+android-misc.drive.player.unsupportedFormat
 android-misc.drive.read.done
 android-misc.drive.reader.contents
 android-misc.drive.reader.failed

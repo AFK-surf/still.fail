@@ -411,7 +411,7 @@ fn grab_first(c : @ui.Ctx, id : String, name : String, open : () -> @ui.NativeVi
           let got = match n.grabbed() {
             Some(png) => Some(png)
             // (no player here, or one that cannot read it: none to be had)
-            None => if n.state() == -1 && !n.grabbing() { Some(b"") } else { None }
+            None => if n.state() < 0 && !n.grabbing() { Some(b"") } else { None }
           }
           match got {
             Some(png) => {

@@ -47,6 +47,8 @@ typedef struct {
   X(gboolean, gst_element_query_position, (void *, int, gint64 *))                                                   \
   X(gboolean, gst_element_query_duration, (void *, int, gint64 *))                                                   \
   X(void, gst_message_parse_error, (void *, GError **, char **))                                                     \
+  X(GQuark, gst_core_error_quark, (void))                                                                            \
+  X(GQuark, gst_stream_error_quark, (void))                                                                          \
   X(void *, gst_buffer_new_memdup, (const void *, gsize))                                                            \
   X(void *, gst_sample_get_buffer, (void *))                                                                         \
   X(void *, gst_sample_get_caps, (void *))                                                                           \

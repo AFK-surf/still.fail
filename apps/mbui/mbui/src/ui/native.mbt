@@ -579,7 +579,8 @@ pub fn NativeView::rate(self : NativeView, rate : Double) -> Unit {
 }
 
 ///|
-/// -1 failed (cannot be played, or loaded; or no such view here), 0 opening, 1 ready.
+/// -1 failed (or no such view here), -2 a player's format unsupported, -3 its file not parseable, -4 unsupported or
+/// damaged, 0 opening, 1 ready.
 pub fn NativeView::state(self : NativeView) -> Int {
   self.state.get()
 }

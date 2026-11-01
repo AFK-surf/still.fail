@@ -1365,7 +1365,13 @@
       });
       // its first frame can be shown: ready for the app
       el.addEventListener('loadeddata', () => { v.info[6] = 1; ready(id, v, 1); stood(id); });
-      el.addEventListener('error', () => { v.state = -1; ready(id, v, -1); stood(id); });
+      el.addEventListener('error', () => {
+        if (v.state < 0) return; // a failed read was already reported, before the media element heard of it
+        // A source or decode error can mean either an unsupported format or a damaged file.
+        v.state = el.error?.code === 4 || el.error?.code === 3 ? -4 : -1;
+        ready(id, v, -1);
+        stood(id);
+      });
       // how it stands told as it changes: as it plays, waits, stops, jumps, has more; and each frame of its picture
       // shown as it plays (a sound's: each of the page's frames)
       for (const e of ['play', 'playing', 'waiting', 'pause', 'stalled', 'canplay', 'ended', 'seeking', 'seeked',

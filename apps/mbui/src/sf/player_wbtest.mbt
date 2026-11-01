@@ -2,6 +2,12 @@
 // paused): a phone's and a desktop's, watched and looked at closely.
 
 ///|
+test "a media type names a known format but does not guess an unknown one" {
+  assert_eq(player_format(" VIDEO/WEBM; codecs=vp9 "), Some("WebM"))
+  assert_true(player_format("application/octet-stream") is None)
+}
+
+///|
 /// A film (or a song) of a folder, as a viewer opens it: played as it comes (the fake host's view needs no bytes);
 /// what its message says of it, `facts`.
 fn film(name : String, kind? : String = "video", facts? : FileFacts = no_facts) -> ViewerFile {

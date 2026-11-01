@@ -17,6 +17,8 @@ ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=1280x720:rate=30 -f lavfi -i
   -c:a aac -shortest "$OUT/test.mp4"
 ffmpeg -loglevel error -y -f lavfi -i testsrc=size=320x240:rate=30 -t 5 \
   -c:v libx264 -pix_fmt yuv420p -movflags +faststart "$OUT/test.mov"
+ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=32x32:rate=1 -frames:v 1 -c:v libvpx "$OUT/test.webm"
+head -c 4096 /dev/zero > "$OUT/damaged.mp4"
 python3 "$D/make_pdf.py" "$OUT/test.pdf"
 RT=""
 for f in runtime; do RT="$RT $MOON_HOME/lib/runtime/$f.c"; done
