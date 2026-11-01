@@ -2,7 +2,8 @@
 // web/src/styles/global.css.ts): a rounded rectangle's corner is a superellipse(1.5) one, |x|^n + |y|^n = 1 with
 // n = 2^1.5, over a radius a quarter longer than the one it is given. A corner needs room for the longer radius, and
 // where the box has none (the radius half its shorter side) it is round across: a circle is a circle, and a capsule's
-// end a circle's arc that eases into its long edges as Apple's does (capsule_ease) rather than meeting them at once.
+// end a circle's arc that eases into its long edges as Apple's does (capsule_ease) rather than meeting them at once,
+// how much it bends never jumping or turning at once.
 // Between the two it goes over evenly, so a box that grows (a capsule of one line taking a second) changes shape with
 // its size, and never at once.
 //
@@ -157,50 +158,51 @@ fn corner_shape(
 }
 
 ///|
-/// A capsule's end as Apple draws one (measured off iOS 26's alert buttons, the user, 2026-10-31: 苹果的那个按钮就看不出直线
-/// 和半圆的接点): a circle's arc at its middle, but where the circle meets the long edge at once at r from the tip, bending
-/// all the way round there and then not at all, Apple's curve leaves it from 0.3 r and eases into the edge only 2 r from
-/// the tip, bending less and less to none. As how much further in than the circle it lies, in r, at `u` r from the tip,
-/// `k` the share of the room it needs along the edge (r more) the box has (a shorter capsule eases in sooner, a circle
-/// not at all): a quintic from the circle's height, slope and bend at 0.3 to the edge's at 1 + k (fitted to Apple's
-/// within 0.0017 r; it never bends back, at most 1.2 times the circle's bend).
+/// A capsule's end (a corner with no room across its box but room along it), as Apple draws one (iOS 26's alert
+/// buttons, the user, 2026-10-31: 苹果的那个按钮就看不出直线和半圆的接点): a circle's arc at its middle, leaving it and easing
+/// into the long edge further along than a circle meets it. How much it bends goes with no jump and no kink (the user,
+/// 2026-11-01: 要的是平滑): from none on the edge it rises once to at most 1.15 the circle's and comes back to the
+/// circle's, never stepping and never turning at once. As how much further in than the circle it lies, in r, at `u` r
+/// from the tip, `k` the share of the room it needs along the edge (r more) the box has: from u0 = 1 - 0.675 k (the
+/// circle's height and its first three rates of change there) to u1 = 1 + 0.4 k (the edge's, all four none) an octic,
+/// the four of each end's weights and k^2.5 t^4 (1 - t)^4, t from 0 to 1 between them (fitted to a capsule the user
+/// measured, 2026-11-01, within 0.008 r; with less room the ease is shorter and less, a circle not at all).
 fn capsule_ease(u : Double, k : Double) -> Double {
-  let end = 1.0 + k
-  if k <= 0.0 || u <= ease_from || u >= end {
+  let u0 = 1.0 - 0.675 * k
+  let u1 = 1.0 + 0.4 * k
+  if k <= 0.0 || u <= u0 || u >= u1 {
     return 0.0
   }
-  let h = end - ease_from
-  let t = (u - ease_from) / h
+  let h = u1 - u0
+  let t = (u - u0) / h
   let t2 = t * t
   let t3 = t2 * t
-  // the quintic's three weights: of the height, the slope and the bend at the start (all three 0 at the end)
-  let w0 = 1.0 - t3 * (10.0 - 15.0 * t + 6.0 * t2)
-  let w1 = t - t3 * (6.0 - 8.0 * t + 3.0 * t2)
-  let w2 = t2 * (0.5 - t * (1.5 - t * (1.5 - 0.5 * t)))
-  let eased = ease_height * w0 + ease_slope * h * w1 + ease_bend * h * h * w2
+  let t4 = t3 * t
+  let m = 1.0 - t
+  let m2 = m * m
+  // the circle at u0: its height below the edge and its first three rates of change, each times h to its order
+  let s = (u0 * (2.0 - u0)).sqrt()
+  let v = 1.0 - u0
+  let s3 = s * s * s
+  let c0 = 1.0 - s
+  let c1 = -v / s * h
+  let c2 = h * h / s3
+  let c3 = -3.0 * v * h * h * h / (s3 * s * s)
+  // the septic's weights of those four at the start (all four and theirs none at the end)
+  let w0 = 1.0 - t4 * (35.0 - 84.0 * t + 70.0 * t2 - 20.0 * t3)
+  let w1 = t - t4 * (20.0 - 45.0 * t + 36.0 * t2 - 10.0 * t3)
+  let w2 = (t2 - t4 * (10.0 - 20.0 * t + 15.0 * t2 - 4.0 * t3)) / 2.0
+  let w3 = (t3 - t4 * (4.0 - 6.0 * t + 4.0 * t2 - t3)) / 6.0
+  let eased = c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3 + k * k * k.sqrt() * t4 * m2 * m2
   let round = if u < 1.0 { 1.0 - (u * (2.0 - u)).sqrt() } else { 0.0 }
   eased - round
 }
 
 ///|
-/// Where the ease leaves the circle (in r from the tip), and the circle's height below the edge, slope and bend there
-/// (1 - √0.51, -0.7 / √0.51, 0.51^-1.5).
-let ease_from : Double = 0.3
-
-///|
-let ease_height : Double = 0.285857157145715
-
-///|
-let ease_slope : Double = -0.9801960588196068
-
-///|
-let ease_bend : Double = 2.7456472235843328
-
-///|
 /// How much further out than the round corner's (`rr`) a point is once the corner eases into the edge along `along`'s
 /// side (`ha` that half side, `hc` the other's; both of the point's coordinates from the box's middle, made positive):
-/// the ease as far as the corner has no room across (its own smoothness that way) and room along, moved along the
-/// round corner's normal there (to first order: the ease is under 2% of r).
+/// the ease as far as the corner has no room across (its own smoothness that way), moved along the round corner's normal
+/// there (to first order: the ease is under 1% of r).
 fn capsule_tail(along : Double, across : Double, ha : Double, hc : Double, rr : Double) -> Double {
   let k = dmin((ha - rr) / rr, 1.0)
   let tight = 1.0 - smoothness(rr, hc)
@@ -217,7 +219,7 @@ fn capsule_tail(along : Double, across : Double, ha : Double, hc : Double, rr : 
   let mc = dmax(qc, 0.0)
   let l = (ma * ma + mc * mc).sqrt()
   let n = if l > 0.0 { mc / l } else if qc >= qa { 1.0 } else { 0.0 }
-  tight * k * e * rr * n
+  tight * e * rr * n
 }
 
 ///|

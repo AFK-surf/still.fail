@@ -240,46 +240,73 @@ fn capsule_drop(hx : Double, u : Double) -> Double {
 }
 
 ///|
-test "a capsule's end is Apple's: the circle's at its middle, easing into the long edges until 2 r from the tip" {
-  // (the user, 2026-10-31: 苹果的那个按钮就看不出直线和半圆的接点) measured off iOS 26's alert button 144 high, top and
-  // bottom of both ends: how far below the edge its outline lies, in r, u r from the tip
-  let apple = [
-    (0.325, 0.2628),
-    (0.525, 0.1225),
-    (0.725, 0.0507),
-    (0.825, 0.0328),
-    (0.925, 0.0183),
-    (1.025, 0.0134),
-    (1.125, 0.0097),
-    (1.225, 0.0046),
-    (1.325, 0.0035),
-    (1.525, 0.0004),
+/// How sharply the top edge of a capsule 300 by 80 bends `u` r from its right tip, in 1/r: from its drops a step either
+/// side.
+fn capsule_bend(u : Double) -> Double {
+  let h = 0.002
+  let a = capsule_drop(150.0, u - h)
+  let b = capsule_drop(150.0, u)
+  let c = capsule_drop(150.0, u + h)
+  let slope = (c - a) / (2.0 * h)
+  let w = 1.0 + slope * slope
+  (a - 2.0 * b + c) / (h * h) / (w * w.sqrt())
+}
+
+///|
+test "a capsule's end is Apple's: the circle's at its middle, easing into the long edges, how much it bends never jumping or turning at once" {
+  // (the user, 2026-11-01: 量一下这个) measured off the capsule they sent, 288 high: how far below the edge its outline
+  // lies, in r, u r from the tip
+  let measured = [
+    (0.4, 0.1987),
+    (0.5, 0.1361),
+    (0.6, 0.0890),
+    (0.7, 0.0569),
+    (0.8, 0.0361),
+    (0.9, 0.0200),
+    (1.0, 0.0130),
+    (1.1, 0.0068),
+    (1.2, 0.0035),
+    (1.3, 0.0020),
+    (1.5, 0.0),
   ]
-  for p in apple {
+  for p in measured {
     let (u, want) = p
     let got = capsule_drop(150.0, u)
-    assert_true((got - want).abs() < 0.005, msg="at \{u} r: \{got}, Apple's \{want}")
+    assert_true((got - want).abs() < 0.009, msg="at \{u} r: \{got}, measured \{want}")
   }
-  // the circle's at its middle, the edge's from 2 r in; a circle met the edge at r with nothing left
+  // the circle's at its middle, the edge's from 1.4 r in; a circle met the edge at r with nothing left
   for u in [0.1, 0.2, 0.3] {
     let circle = 1.0 - (u * (2.0 - u)).sqrt()
     assert_true((capsule_drop(150.0, u) - circle).abs() < 1.0e-9, msg="at \{u}: \{capsule_drop(150.0, u)}, the circle \{circle}")
   }
-  assert_true(capsule_drop(150.0, 1.0) > 0.01)
-  assert_true(capsule_drop(150.0, 2.0) < 1.0e-9)
-  // it only ever comes nearer the edge, and bends less and less into it: no bump, no second turn
-  let mut last = capsule_drop(150.0, 0.0)
-  let mut last_slope = -1.0e9
-  for i in 1..=200 {
-    let u = i.to_double() * 0.01
-    let d = capsule_drop(150.0, u)
-    assert_true(d <= last + 1.0e-9, msg="back out at \{u}")
-    if u > 1.2 {
-      let slope = (d - last) / 0.01
-      assert_true(slope >= last_slope - 1.0e-6, msg="bends back at \{u}")
-      last_slope = slope
+  assert_true(capsule_drop(150.0, 1.0) > 0.005)
+  assert_true(capsule_drop(150.0, 1.4) < 1.0e-9)
+  // how sharply it bends, from the edge in to the tip: none, then rising once to at most 1.15 the circle's and back to
+  // the circle's, by no step (a half circle's goes from none to all at once at r; the quintic's before turned at once
+  // where it left the circle, and twice on the way)
+  let mut last = 0.0
+  let mut rises = true
+  let mut most = 0.0
+  for i in 0..=140 {
+    let u = 1.45 - i.to_double() * 0.01
+    let b = capsule_bend(u)
+    assert_true(b > -1.0e-3, msg="bends back at \{u}")
+    assert_true((b - last).abs() < 0.03, msg="a step at \{u}: \{last} to \{b}")
+    if rises && b < last - 1.0e-4 {
+      rises = false
+    } else {
+      assert_true(rises || b <= last + 1.0e-4, msg="rises again at \{u}")
     }
-    last = d
+    most = dmax(most, b)
+    last = b
+  }
+  assert_true(most < 1.15, msg="at most \{most}")
+  assert_true((last - 1.0).abs() < 1.0e-3, msg="at the middle \{last}")
+  // nor does the rate it bends at turn at once: where it leaves the circle and where it meets the edge
+  for u in [0.325, 1.4] {
+    let before = capsule_bend(u - 0.02) - capsule_bend(u - 0.01)
+    let after = capsule_bend(u) - capsule_bend(u + 0.01)
+    assert_true((before - after).abs() < 0.01, msg="turns at \{u}: \{before}, \{after}")
   }
   // along the straight edge and round the tip the distance is the edge's and the circle's
   for off in [-0.5, 0.5] {

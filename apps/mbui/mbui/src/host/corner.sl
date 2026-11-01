@@ -37,25 +37,38 @@ float mb_corner_shape(float2 p, float2 hs, float r, float s, float band) {
   return (hi * u - R) * (1.0 + tn) / (u * sqrt(1.0 + tn1 * tn1));
 }
 // A capsule's end as Apple draws one (smooth.mbt capsule_ease): how much further in than the circle it lies, in r, u r
-// from the tip, k the share of the room it needs along the edge the box has; a quintic from the circle's height, slope
-// and bend at 0.3 r to the edge's at (1 + k) r.
+// from the tip, k the share of the room it needs along the edge the box has; an octic from the circle's height and
+// first three rates of change at 1 - 0.675 k to the edge's at 1 + 0.4 k, with k^2.5 t^4 (1 - t)^4: how much it bends
+// never jumps or turns at once.
 float mb_capsule_ease(float u, float k) {
-  float e = 1.0 + k;
-  if (k <= 0.0 || u <= 0.3 || u >= e) return 0.0;
-  float h = e - 0.3;
-  float t = (u - 0.3) / h;
+  float u0 = 1.0 - 0.675 * k;
+  float u1 = 1.0 + 0.4 * k;
+  if (k <= 0.0 || u <= u0 || u >= u1) return 0.0;
+  float h = u1 - u0;
+  float t = (u - u0) / h;
   float t2 = t * t;
   float t3 = t2 * t;
-  float w0 = 1.0 - t3 * (10.0 - 15.0 * t + 6.0 * t2);
-  float w1 = t - t3 * (6.0 - 8.0 * t + 3.0 * t2);
-  float w2 = t2 * (0.5 - t * (1.5 - t * (1.5 - 0.5 * t)));
-  float eased = 0.285857157145715 * w0 - 0.9801960588196068 * h * w1 + 2.7456472235843328 * h * h * w2;
+  float t4 = t3 * t;
+  float m = 1.0 - t;
+  float m2 = m * m;
+  float s = sqrt(u0 * (2.0 - u0));
+  float v = 1.0 - u0;
+  float s3 = s * s * s;
+  float c0 = 1.0 - s;
+  float c1 = -v / s * h;
+  float c2 = h * h / s3;
+  float c3 = -3.0 * v * h * h * h / (s3 * s * s);
+  float w0 = 1.0 - t4 * (35.0 - 84.0 * t + 70.0 * t2 - 20.0 * t3);
+  float w1 = t - t4 * (20.0 - 45.0 * t + 36.0 * t2 - 10.0 * t3);
+  float w2 = (t2 - t4 * (10.0 - 20.0 * t + 15.0 * t2 - 4.0 * t3)) * 0.5;
+  float w3 = (t3 - t4 * (4.0 - 6.0 * t + 4.0 * t2 - t3)) / 6.0;
+  float eased = c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3 + k * k * sqrt(k) * t4 * m2 * m2;
   float circ = u < 1.0 ? 1.0 - sqrt(u * (2.0 - u)) : 0.0;
   return eased - circ;
 }
 // How much further out than the round corner's (rr) a point is once the corner eases into one of its box's edges:
 // along the point's coordinate that way and ha that half side, across and hc the other's (from the box's middle,
-// positive); as far as the corner has no room across and room along, moved along the round corner's normal
+// positive); as far as the corner has no room across, moved along the round corner's normal
 // (smooth.mbt capsule_tail).
 float mb_capsule_tail(float along, float across, float ha, float hc, float rr) {
   float k = min((ha - rr) / rr, 1.0);
@@ -69,7 +82,7 @@ float mb_capsule_tail(float along, float across, float ha, float hc, float rr) {
   float mc = max(qc, 0.0);
   float l = sqrt(ma * ma + mc * mc);
   float n = l > 0.0 ? mc / l : (qc >= qa ? 1.0 : 0.0);
-  return tight * k * e * rr * n;
+  return tight * e * rr * n;
 }
 // The signed distance of p (from a box's middle) from that box (mb_corner_shape's), a capsule's end easing into its
 // long edges.

@@ -100,12 +100,12 @@ fn lines(args : Array[String]) -> Int {
   }
   let bad = []
   // the line against the rounded rect 40 under it, row by row over the band they are in; but where the rect, a
-  // capsule, eases into its long edges (from 0.3 to 2 of its radius in from either tip, mbui's capsule_ease) and the
+  // capsule, eases into its long edges (from 0.325 to 1.4 of its radius in from either tip, mbui's capsule_ease) and the
   // line's round cap does not
   let mut worst = 0
   let eases = fn(x : Int) {
     let from_tip = @cmp.minimum(x - 16 * s, 104 * s - x).to_double()
-    from_tip > 0.3 * 4.0 * s.to_double() && from_tip < 2.0 * 4.0 * s.to_double()
+    from_tip > 0.3 * 4.0 * s.to_double() && from_tip < 1.4 * 4.0 * s.to_double()
   }
   for y in (12 * s)..<(28 * s) {
     for x in 0..<(160 * s) {
