@@ -25,7 +25,7 @@ import * as refs from "../refs.ts";
 import { chatsLinked } from "../refLinks.ts";
 import { timed } from "../spent.ts";
 import type { Value, Watch } from "../store.ts";
-import { arr as arrU, deepFreeze, get as getU, isObject, shaped, sharedValue } from "../util.ts";
+import { arr as arrU, deepFreeze, equal, get as getU, isObject, shaped, sharedValue } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
 import { archiveHintOf, badgeKindsOf, jobsSeenOf, type ArchiveHint } from "../prefs.ts";
@@ -767,7 +767,24 @@ export class Views implements Owner {
     }
     for (const [key, topic] of wanted) {
       if (live.watches.has(key)) continue;
-      const watch = this.#core.store.watch(topic, () => this.#core.store.invalidate(view));
+      // Profiles and usage read a station's profiles and whether it is up, not its other overview or link fields.
+      // Those other fields change often while agents work and would otherwise make usage total every row again.
+      const relevant = (view.topic === "profiles" || view.topic === "usage") && (topic.topic === "overview" || topic.topic === "link")
+        ? () => {
+            if (topic.topic === "link") return down(this.link(topic.station as string));
+            const overview = this.ok(topic);
+            return isObject(overview) ? [get(overview, "profiles"), get(overview, "sharing")] : null;
+          }
+        : null;
+      let before = relevant?.();
+      const watch = this.#core.store.watch(topic, () => {
+        if (relevant !== null) {
+          const after = relevant();
+          if (equal(before, after)) return;
+          before = after;
+        }
+        this.#core.store.invalidate(view);
+      });
       // Released meanwhile (a watch's start can stop the view).
       if (this.#views.get(topicKey(view)) !== live) {
         watch.drop();
@@ -799,10 +816,13 @@ export class Views implements Owner {
         break;
       }
       case "stations":
-      case "profiles":
       case "settings":
         scope = view.scope as string;
         perStation = (s) => [{ topic: "link", station: s }, { topic: "overview", station: s }, { topic: "host", station: s }, { topic: "way", station: s }];
+        break;
+      case "profiles":
+        scope = view.scope as string;
+        perStation = (s) => [{ topic: "link", station: s }, { topic: "overview", station: s }];
         break;
       case "archive":
         scope = view.scope as string;
@@ -822,7 +842,7 @@ export class Views implements Owner {
       case "usage":
         scope = view.scope as string;
         // (and its accounts, as the profiles page reads them: each subscription's allowance)
-        perStation = (s) => [{ topic: "stationUsage", station: s }, { topic: "link", station: s }, { topic: "overview", station: s }, { topic: "host", station: s }, { topic: "way", station: s }];
+        perStation = (s) => [{ topic: "stationUsage", station: s }, { topic: "link", station: s }, { topic: "overview", station: s }];
         break;
       case "fleet":
         // (the card shared of the agents at work: views/fleet.ts)
@@ -1216,9 +1236,7 @@ export class Views implements Owner {
         return { ok: withDrive(stations.ok as J[], typeof view.here === "string" ? view.here : null) };
       }
       case "profiles": {
-        const stations = this.#stationsView(view.scope as string);
-        if (stations === undefined || !("ok" in stations)) return stations;
-        return { ok: workspaceProfiles(stations.ok as J[]) };
+        return this.#profilesView(view.scope as string);
       }
       case "settings": {
         const stations = this.#stationsView(view.scope as string);
@@ -1302,8 +1320,8 @@ export class Views implements Owner {
         const sources = stations.map((s) => ({ address: s.address, name: s.name, online: s.online, value: s.online ? this.value({ topic: "stationUsage", station: s.address }) : undefined }));
         const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
         const now = this.#core.host.nowMs();
-        const listed = this.#stationsView(scope);
-        const accounts = listed !== undefined && "ok" in listed ? arr(get(workspaceProfiles(listed.ok as J[]), "items")) : [];
+        const listed = this.#profilesView(scope);
+        const accounts = listed !== undefined && "ok" in listed ? arr(get(listed.ok, "items")) : [];
         return { ok: usageView(sources, typeof view.days === "number" ? view.days : 7, now, this.#core.host.utcOffsetMin(now), this.me(scope), members_, { split: view.split, only: view.only, day: view.day }, accounts) };
       }
       case "fleet": {
@@ -1315,8 +1333,8 @@ export class Views implements Owner {
         const now = this.#core.host.nowMs();
         const usage = usageView(sources, 7, now, this.#core.host.utcOffsetMin(now), this.me(scope), arr(get(this.ok({ topic: "workspace", workspace: scope }), "members")));
         // the subscriptions, as the profiles page lists them
-        const listed = this.#stationsView(scope);
-        const profiles = listed !== undefined && "ok" in listed ? arr(get(workspaceProfiles(listed.ok as J[]), "items")) : [];
+        const listed = this.#profilesView(scope);
+        const profiles = listed !== undefined && "ok" in listed ? arr(get(listed.ok, "items")) : [];
         // the chats at work, when each archived one was archived (as the archive has it: views/archive.ts), the jobs (the
         // tasks other stations' chats run there now), the tasks they ran there before
         const read = stations.map((s) => {
@@ -1779,6 +1797,22 @@ export class Views implements Owner {
 
   // ── stations and connects ──
 
+  /// The accounts need the stations' identities, availability and decorated profiles, not their changing host
+  /// readings or network routes. The usage view uses these same accounts for their allowances.
+  #profilesView(scope: string): Value | undefined {
+    const stations = this.#stationsOr(scope);
+    if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+    const c = this.#clock();
+    return { ok: workspaceProfiles(stations.map((s) => ({
+      station: s.address,
+      id: s.id,
+      name: s.name,
+      online: s.online,
+      joined: s.joined,
+      overview: this.#stationOverview(s.address, this.ok({ topic: "overview", station: s.address }), c),
+    }))) };
+  }
+
   /// `view`: the topic asking, computed again when one of its stations has been silent long enough to say so.
   #stationsView(scope: string, view?: Topic): Value | undefined {
     const stations = this.#stationsOr(scope);
@@ -1848,10 +1882,8 @@ export class Views implements Owner {
     return { ok: items };
   }
 
-  /// A station's host reading and overview as its list's item shows them: made once for each the station said (and each
-  /// minute, for the overview's times in words), shared after (`shaped`: never changed, not copied or shaped again as
-  /// they go out).
-  #stationParts(station: string, overview: J, hostRaw: J, c: present.Clock): { host: J; shown: J } {
+  /// The decorated overview, shared by station and profile views until it or its times in words change.
+  #stationOverview(station: string, overview: J, c: present.Clock): J {
     const minute = Math.floor(c.now / 60_000);
     let kept = this.#stationShown.get(station);
     if (!kept || kept.overview !== overview || kept.minute !== minute) {
@@ -1859,12 +1891,19 @@ export class Views implements Owner {
       kept = { overview, minute, shown, host: kept?.host, presented: kept?.presented ?? null };
       this.#stationShown.set(station, kept);
     }
+    return kept.shown;
+  }
+
+  /// A station's host reading and overview as its list's item shows them, shared after they are made.
+  #stationParts(station: string, overview: J, hostRaw: J, c: present.Clock): { host: J; shown: J } {
+    const shown = this.#stationOverview(station, overview, c);
+    const kept = this.#stationShown.get(station)!;
     if (kept.host !== hostRaw || kept.presented === undefined) {
       const presented = hostRaw === undefined ? null : asShaped("Host", present.host(hostRaw));
       kept.host = hostRaw;
       kept.presented = presented;
     }
-    return { host: kept.presented, shown: kept.shown };
+    return { host: kept.presented, shown };
   }
 
   #connects(scope: string, mine: boolean): Value | undefined {
