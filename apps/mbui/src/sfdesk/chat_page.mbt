@@ -919,8 +919,10 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
   let outward = th is Some(_) && (relayable || share is Some(Object(_)) || publish is Some(_))
   if pulls.length() > 0 || said > 0 || files || v.letters > 0 || slack != "" || feishu != "" {
     c.box(style=info_tools(!outward), fn() {
+      // (beside the system's tabs, a phone's room: none of them by itself, 全部 N 个 alone, the user 2026-11-01)
+      let named = if @sf.native_on() { 0 } else { info_pulls_most }
       for i, p in pulls {
-        if i == info_pulls_most {
+        if i == named {
           break
         }
         let pv = Some(p)
@@ -930,7 +932,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
           c.tell("info-pop/pull", fn() { @sfbase.open_link_in(src, url) })
         }
       }
-      if pulls.length() > info_pulls_most &&
+      if pulls.length() > named &&
         info_row(c, "info-pop/pulls", "list", @sf.t("web-main.things.pullsAll", args=[("n", pulls.length().to_string())]), "") {
         chat_own.info_open.set(false)
         @sfpages.things_choose(r, "pulls")
@@ -1422,12 +1424,20 @@ let info_tools_base : @ui.Style = @ui.css("w=Full pt=S4 gap=S0_5")
 /// (`last` in the panel: its last row, a capsule with keyboard and mouse, in the panel's foot corners as far in as
 /// makes it concentric with them, @sf.pick_reach)
 fn info_tools(last : Bool) -> @ui.Style {
+  // (beside the system's tabs, a phone's room: the groups nearer, the user 2026-11-01, 收紧内容)
+  let base = if @sf.native_on() { info_tools_near } else { info_tools_base }
   if last {
-    info_tools_base.then(@ui.style(mb=@sf.room_of(-@sf.menu_row_reach(@sf.theme().rows.pick))))
+    base.then(@ui.style(mb=@sf.room_of(-@sf.menu_row_reach(@sf.theme().rows.pick))))
   } else {
-    info_tools_base
+    base
   }
 }
+
+///|
+/// A group of its rows beside the system's tabs (info_tools): 4 under what is over it, its rows as tall as a finger's
+/// keeping them apart enough.
+// kept across runs: a value (no field of it changes)
+let info_tools_near : @ui.Style = @ui.css("w=Full pt=S1 gap=S0_5")
 
 ///|
 fn info_tool() -> @ui.Style {

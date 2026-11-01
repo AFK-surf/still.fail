@@ -463,6 +463,24 @@ test "an iPhone Duo: the chat's info chosen in the system's column opens its pop
   // (its coming over in its own time, then at rest)
   t.run_for(@ui.move_most_ms)
   t.assert_idle()
+  // (a phone's room, the user 2026-11-01: no pull request by itself, 全部 N 个 alone; its groups near one another, all
+  // of it shorter than the 534 it was)
+  let sems = t.semantics()
+  guard sems.iter().find_first(fn(s) { s.role == @ui.Role::Dialog }) is Some(d) else { fail("no popover") }
+  let (dx, dy, dw, dh) = d.rect
+  let inside = sems.filter(fn(s) {
+    let (x, y, _, _) = s.rect
+    s.role != @ui.Role::Dialog && x >= dx && x < dx + dw && y >= dy && y < dy + dh
+  })
+  assert_false(inside.iter().any(fn(s) { s.role == @ui.Role::Link }), msg="a pull request's row in it")
+  assert_true(inside.iter().any(fn(s) { s.label == @sf.t("web-main.things.pullsAll", args=[("n", "4")]) }))
+  let rows = inside.filter(fn(s) { s.role == @ui.Role::Button && s.rect.2 > dw / 2.0 })
+  for i in 1..<rows.length() {
+    let (_, y0, _, h0) = rows[i - 1].rect
+    let gap = rows[i].rect.1 - (y0 + h0)
+    assert_true(gap <= 8.0, msg="\{rows[i].label} \{gap} under the row over it")
+  }
+  assert_true(dh < 534.0, msg="the popover \{dh} tall")
   // (chosen again: closed, in the frames that take it)
   t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/info\",\"at\":[867,40,84,44]}")
   t.frames_owed()
