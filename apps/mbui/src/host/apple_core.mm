@@ -65,6 +65,11 @@ int32_t sf_utc_offset_min(double at_ms);
 extern "C" __attribute__((weak)) int mb_perf_on(void) { return 0; }
 // A line into the performance record (ios_app.m), where the host keeps one.
 extern "C" __attribute__((weak)) void mb_perf_note(const char *text) { (void)text; }
+// MBUI_PROBE_JS's seconds (probe_js, below), 0 none.
+static int probe_js_seconds(void) {
+  static const int s = getenv("MBUI_PROBE_JS") ? atoi(getenv("MBUI_PROBE_JS")) : 0;
+  return s;
+}
 // Whether the core's thread times its tasks by what they were: the record kept, or MBUI_PROBE (its `PROBE core js:`
 // line every 5 s, probe_taps: on a Mac, which keeps no record, the only way to see what the core is busy with).
 static bool core_timed(void) {
@@ -856,6 +861,8 @@ static void run(void) {
     if (!C.dead) {
       auto config = ::hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).withEnableBlockScoping(true).withIntl(true).build();
       rt = facebook::hermes::makeHermesRuntime(config);
+      // (MBUI_PROBE_JS: the core sampled, probe_js; a runtime is sampled only once registered, on its own thread)
+      if (probe_js_seconds() > 0) rt->registerForProfiling();
       double t1 = clock_ms(CLOCK_MONOTONIC), t2 = t1;
       try {
         install(*rt);
@@ -931,6 +938,7 @@ static void run(void) {
 
   @autoreleasepool {
     core_listen_close_all();
+    if (rt && probe_js_seconds() > 0) rt->unregisterForProfiling();
     rt.reset();
   }
 }
@@ -945,9 +953,37 @@ static void stop_at_exit(void) {
 
 static void probe_taps(void);
 
+// MBUI_PROBE_JS=<seconds>: the core's JS sampled for that long, from MBUI_PROBE_JS_AFTER seconds (10) after it starts
+// (what it spends its time on, in the app as shipped: Android's CoreProfile, engine.cpp sf_engine_profile), written as
+// a Chrome trace to MBUI_PROBE_JS_OUT (default $TMPDIR/stillfail-core-<pid>.cpuprofile). Its frames say where in the
+// core's script each function is (core-hermes.js's line and column: that script, made again from the build's commit
+// with its source map, names them). 0: none.
+static void probe_js(void) {
+  static bool asked = false;
+  int seconds = probe_js_seconds();
+  if (asked || seconds <= 0) return;
+  asked = true;
+  const char *o = getenv("MBUI_PROBE_JS_OUT");
+  const char *after = getenv("MBUI_PROBE_JS_AFTER");
+  int64_t wait = after ? atoi(after) : 10;
+  std::string out = o ? o : std::string(NSTemporaryDirectory().UTF8String) + "stillfail-core-" + std::to_string(getpid()) + ".cpuprofile";
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, wait * NSEC_PER_SEC), dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+    auto *root = jsi::castInterface<facebook::hermes::IHermesRootAPI>(facebook::hermes::makeHermesRootAPI());
+    if (!root) return;
+    root->enableSamplingProfiler();
+    fprintf(stderr, "PROBE core js sampled for %d s\n", seconds);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)seconds * NSEC_PER_SEC), dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+      root->dumpSampledTraceToFile(out);
+      root->disableSamplingProfiler();
+      fprintf(stderr, "PROBE core js profile: %s\n", out.c_str());
+    });
+  });
+}
+
 void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_core_message_fn on_message, void *ctx) {
   if (C.running) return;
   probe_taps();
+  probe_js();
   static bool at_exit = false;
   if (!at_exit) at_exit = atexit(stop_at_exit) == 0;
   C.on_message = on_message;

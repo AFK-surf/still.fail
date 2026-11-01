@@ -5,7 +5,10 @@ device spends its time on to files of its own, every 5 s, until it is turned off
 it is on (a setting of the device's, not synced). Nothing leaves the device. It is MBUI_PROBE=1's probe, kept in a
 file, with what it takes to find the culprit, not only the totals. A Mac keeps no record: started with MBUI_PROBE=1
 (`open --env MBUI_PROBE=1 --stderr <file> -b <its id>`), its log says the app's lines as `PROBE <line>` (frames, frames
-why, messages, core, page) and the core's thread as `PROBE core js:` every 5 s.
+why, messages, core, page) and the core's thread as `PROBE core js:` every 5 s. With MBUI_PROBE_JS=<seconds> as well,
+it samples the core's JS for that long (from MBUI_PROBE_JS_AFTER seconds, 10) into a Chrome trace (MBUI_PROBE_JS_OUT,
+default `$TMPDIR/stillfail-core-<pid>.cpuprofile`) whose frames are lines and columns of the build's core-hermes.js
+(`scripts/core.sh hermes` at its commit makes the same script).
 
 ## Where it is
 
