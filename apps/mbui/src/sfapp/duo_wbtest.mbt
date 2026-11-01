@@ -148,6 +148,26 @@ test "a picture looked at on an iPhone Duo: the system's tabs put away, its acti
 }
 
 ///|
+test "a picture looked at on an iPhone Duo, its bars' part kept as a host keeps it: the system's bars its own all along, not the tabs back for a frame as the page under it is built again" {
+  let t = native_chat(669.0, 951.0, true, side=84.0, mode="chat-preview-image")
+  // (parts kept between frames as a host keeps them, frames drawn as the display draws them)
+  t.drawn_again(true)
+  t.check_looks(false)
+  t.finish_all()
+  t.run_for(@ui.move_most_ms)
+  let bars = viewer_built.bars
+  // what the page under it reads changing (the app no longer the one focused), the viewer's bars not built again
+  t.app_state(true, false)
+  for i in 0..<30 {
+    t.frame_at(t.time() + 1000.0 / 60.0)
+    let said = t.nav_said()
+    assert_true(said.contains("\"bare\":true") && said.contains("lead/over/close"), msg="frame \{i}: \{said}")
+    assert_false(said.contains("page/chat/"), msg="frame \{i}")
+  }
+  assert_true(viewer_built.bars - bars <= 1, msg="the bars built \{viewer_built.bars - bars} times")
+}
+
+///|
 test "a picture looked at elsewhere: its own bar, as it was" {
   let t = native_chat(951.0, 669.0, false, mode="chat-preview-image")
   t.run_for(@ui.move_most_ms)

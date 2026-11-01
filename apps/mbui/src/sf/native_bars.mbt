@@ -160,8 +160,11 @@ pub fn native_card_corner() -> Double {
 }
 
 // ---- what is up over the whole window (the viewer): the system's tabs put away while it is, its actions in their
-// bars in place of its own (the user, 2026-10-27: as Slack's). Said by it as it is drawn, each frame; rail_native.mbt
-// hands it over as the frame ends.
+// bars in place of its own (the user, 2026-10-27: as Slack's). Said by it as it is built, and kept as it said them
+// while it is up (its `alive`), whether it is built again in a frame or its part kept as it was; rail_native.mbt
+// hands them over as the frame ends, gone once it is not (native_over_gone). Not cleared as each frame starts: a part
+// kept from a frame before says nothing again, and the bars would hand the tabs for that frame and its actions again
+// after it, the system fading between them (the user, 2026-11-01: 打开图片时不停闪烁).
 
 ///|
 /// What is over the whole window this frame: whether it is up, its title, its actions (an id, words, an icon's name,
@@ -171,28 +174,41 @@ pub(all) struct NativeOver {
   mut title : String
   acts : Array[(String, String, String, () -> Unit)]
   active : Array[String]
+  /// Whether what said them is still up (its page shown, the viewer open and not closing)
+  mut alive : () -> Bool
 }
 
 ///|
-// kept across runs: put back each frame (native_over_clear), native_bars_reset as the app begins anew
-pub let native_over : NativeOver = { up: false, title: "", acts: [], active: [] }
+// kept across runs: put back as what said it is gone (native_over_gone), native_bars_reset as the app begins anew
+pub let native_over : NativeOver = { up: false, title: "", acts: [], active: [], alive: fn() { false } }
 
 ///|
-/// None up, as a frame starts.
+/// None up.
 pub fn native_over_clear() -> Unit {
   native_over.up = false
   native_over.title = ""
   native_over.acts.clear()
   native_over.active.clear()
+  native_over.alive = fn() { false }
+}
+
+///|
+/// What said it no longer up (its `alive`): none up, the tabs back; asked as the frame ends, before the bars are
+/// handed. While it is, what it said last stays, built again this frame or not.
+pub fn native_over_gone() -> Unit {
+  if native_over.up && !(native_over.alive)() {
+    native_over_clear()
+  }
 }
 
 ///|
 /// Something is up over the whole window this frame, `title` its name: the system's tabs put away while it is. True
 /// where the system's bars are (native_on): it then hands them its actions (native_over_act) for what it would
 /// draw of its own; false elsewhere, nothing done. Its actions are one set, said whole as it is built: this begins
-/// it anew, in place of what was said before (by it built again within the frame, or by what was up before it), so
-/// an action it no longer says is gone; as the frame starts none is (native_over_clear), till what is up says its own.
-pub fn native_over_up(title : String) -> Bool {
+/// it anew, in place of what was said before (by it built before, or by what was up before it), so an action it no
+/// longer says is gone. Kept as said while `alive` (it is still up: its page shown, the viewer open), whether it is
+/// built again or not; gone as the frame ends once it is not (native_over_gone).
+pub fn native_over_up(title : String, alive~ : () -> Bool) -> Bool {
   if !native_bars.on.get() {
     return false
   }
@@ -200,6 +216,7 @@ pub fn native_over_up(title : String) -> Bool {
   native_over.title = title
   native_over.acts.clear()
   native_over.active.clear()
+  native_over.alive = alive
   true
 }
 
