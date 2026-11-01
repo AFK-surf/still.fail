@@ -137,6 +137,7 @@ fn notify(first : ReactiveNode) -> Unit {
     // so as the batch ends: Watch::on_marked)
     if effect.kind is WatchNode {
       let o : WatchOwn = coerce(effect.own)
+      o.marked_by.val = setting.val
       match o.marked.val {
         Some(f) => f()
         None => ()
@@ -410,10 +411,18 @@ fn run_effect(e : ReactiveNode) -> Unit {
         })
       )
     e.flags = WATCHING
+    let o : WatchOwn = coerce(e.own)
     if dirty {
-      let o : WatchOwn = coerce(e.own)
+      // (told where no set is under way (a batch's end): the set that marked it said, as it would be had it been told
+      // as it was set)
+      let was = setting.val
+      if was is None {
+        setting.val = o.marked_by.val
+      }
       (o.told)()
+      setting.val = was
     }
+    o.marked_by.val = None
     return
   }
   if (flags & DIRTY) != 0 || ((flags & PENDING) != 0 && check_dirty(e.deps.unwrap(), e)) {
@@ -769,6 +778,9 @@ priv struct WatchOwn {
   /// stale, as Watch's; and stopped (Watch::stop, or by what owns it as that one stops: Watch::gone)
   stale : Ref[Bool]
   gone : Ref[Bool]
+  /// the set that marked it, as it marked it (`setting`, None: a trigger, …): said as it is told (setting_at), where
+  /// that is later (a batch's end) and no set is under way then
+  marked_by : Ref[SourceLoc?]
 }
 
 ///|
@@ -803,7 +815,7 @@ pub fn watch(changed : () -> Unit) -> Watch {
     }
   }
   // (told, it runs nothing of what it read: what it read stays followed till it reads anew, run_effect)
-  let own : WatchOwn = { told, marked: Ref(None), stale, gone: Ref(false) }
+  let own : WatchOwn = { told, marked: Ref(None), stale, gone: Ref(false), marked_by: Ref(None) }
   let node = ReactiveNode::new(NONE, WatchNode, own=coerce(own))
   // (made where an owner is set (set_owner: a scope that is not reading, an old view's): that owner's, let go with it;
   // not what is reading's, whose reading anew would let it go)
@@ -915,7 +927,8 @@ let setting : Ref[SourceLoc?] = Ref(None)
 
 ///|
 /// Where the signal being set now was set, while what follows it is told (a watch told as it is set: the place that
-/// told it); None when what is told comes of anything else, so it is not the place of some earlier set.
+/// told it; told as a batch ends, the set in it that marked it); None when what is told comes of anything else, so it
+/// is not the place of some earlier set.
 pub fn setting_at() -> SourceLoc? {
   setting.val
 }

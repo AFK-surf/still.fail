@@ -419,6 +419,7 @@ fn Ctx::list_key(self : Ctx, id : Int, code : Int) -> Bool {
 /// its way to its new height has it now (list_size.mbt). `from_end`: rows short of
 /// its view stand at its end, the room left over them (a chat's: what comes pushes
 /// what is over it up from the first, as once it is full, never down then up).
+#callsite(autofill(loc))
 pub fn Ctx::list(
   self : Ctx,
   key : String,
@@ -433,6 +434,7 @@ pub fn Ctx::list(
   rows_read? : Bool = false,
   sized? : RowCauses,
   from_end? : Bool = false,
+  loc~ : SourceLoc,
 ) -> Int {
   let id = self.id(key)
   let st = match self.lists.get(id) {
@@ -471,6 +473,8 @@ pub fn Ctx::list(
         fresh: true,
         rows_read: false,
         glide_shows: false,
+        named: "",
+        made_at: None,
         bar: Bar::new(),
         laid: -1,
         pinned_by: 0.0,
@@ -521,6 +525,9 @@ pub fn Ctx::list(
       s
     }
   }
+  // (who it is, for the performance record: kept_nodes.mbt's told_said)
+  st.named = key
+  st.made_at = Some(loc)
   if self.bench_list == 0 {
     self.bench_list = id
   }

@@ -1129,8 +1129,10 @@ pub fn Ctx::in_frame(Self) -> Bool
 pub fn Ctx::interact(Self, Int32, node? : Int32, focusable? : Bool, disabled? : Bool, keys? : Int32, focus_on_press? : Bool, holds? : Bool) -> Response
 pub fn Ctx::keep_drawing(Self, Int32, Int32, Drawing) -> Unit
 pub fn Ctx::keeps_selection(Self, Int32) -> Unit
-pub fn Ctx::kept_as_nodes(Self, Int32, String, () -> Unit, read_out? : Bool) -> Unit
-pub fn Ctx::kept_part(Self, Int32, String, () -> Unit, read_out? : Bool, own? : Bool) -> Unit
+#callsite(autofill(loc))
+pub fn Ctx::kept_as_nodes(Self, Int32, String, () -> Unit, read_out? : Bool, loc~ : SourceLoc) -> Unit
+#callsite(autofill(loc))
+pub fn Ctx::kept_part(Self, Int32, String, () -> Unit, read_out? : Bool, own? : Bool, loc~ : SourceLoc) -> Unit
 pub fn Ctx::key_catcher(Self, String) -> KeyCatch
 pub fn Ctx::key_pressed(Self, Int32, mods? : Int32, in_field? : Bool) -> Bool
 pub fn Ctx::keyboard_in_overlay(Self, Int32) -> Bool
@@ -1149,7 +1151,8 @@ pub fn Ctx::layer_ended(Self, Int32) -> Unit
 pub fn Ctx::left_out(Self, Int32, loc~ : SourceLoc) -> Bool
 pub fn Ctx::lifetime(Self, String) -> @effect.Scope
 pub fn Ctx::lines(Self, Array[@paint.Line], w~ : Size, h~ : Size) -> Int32
-pub fn Ctx::list(Self, String, Int32, Double, (Int32) -> Unit, w? : Size, h? : Size, stick_end? : Bool, bg? : Int64, glide_on_growth? : Bool, rows_read? : Bool, sized? : RowCauses, from_end? : Bool) -> Int32
+#callsite(autofill(loc))
+pub fn Ctx::list(Self, String, Int32, Double, (Int32) -> Unit, w? : Size, h? : Size, stick_end? : Bool, bg? : Int64, glide_on_growth? : Bool, rows_read? : Bool, sized? : RowCauses, from_end? : Bool, loc~ : SourceLoc) -> Int32
 pub fn Ctx::list_above(Self, Int32) -> Int32
 pub fn Ctx::list_follow_from(Self, String, Int32, margin? : Double) -> Unit
 pub fn Ctx::list_info(Self, String) -> ListInfo?

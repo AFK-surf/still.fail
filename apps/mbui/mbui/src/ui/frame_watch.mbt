@@ -914,7 +914,9 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
       "what its layout read changed"
     }
   } else if nodes_run.told {
+    let part = c.told_said()
     "what a part or a list's row read changed" +
+    (if part != "" { ", \{part}" } else { "" }) +
     (match nodes_run.told_at {
       Some(at) => ", set at \{at}"
       None => ""
