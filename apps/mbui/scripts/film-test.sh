@@ -59,6 +59,20 @@ fi
 printf 'until 整理发布清单\ntap 整理发布清单\nexit\n' > "$take/prepare.drive"
 printf 'until 推送截图前要先登录 gh。\nexit\n' > "$take/prepared.drive"
 MBUI_FILM_PREPARE="$take/prepare.drive" film "$take/prepared.drive" "$take/last.png"
+# The image and the film use the very same application, settings, preparation and actions. Compare their
+# uncompressed pixels, before H.264 encoding: this also checks that both choose the same final frame.
+env MBUI_FIXTURE=home MBUI_WIN=320x560 MBUI_FILM_SCALE=1 MBUI_FILM_PREPARE="$take/prepare.drive" \
+  MBUI_FILM_DRIVE="$take/prepared.drive" MBUI_PICTURE="$take/picture.png" "$exe"
+ffmpeg -v error -i "$take/last.png" -frames:v 1 -f rawvideo -pix_fmt rgba "$take/last.rgba"
+ffmpeg -v error -i "$take/picture.png" -frames:v 1 -f rawvideo -pix_fmt rgba "$take/picture.rgba"
+cmp "$take/last.rgba" "$take/picture.rgba"
+cp "$take/picture.png" "$take/previous-picture.png"
+if env MBUI_FIXTURE=home MBUI_WIN=320x560 MBUI_FILM_SCALE=1 MBUI_FILM_DRIVE="$take/fail.drive" \
+  MBUI_PICTURE="$take/picture.png" "$exe"; then
+  echo "film-test: a failed picture script succeeded" >&2
+  exit 1
+fi
+cmp "$take/picture.png" "$take/previous-picture.png"
 MBUI_FILM_FPS=120 film "$take/pass.drive" "$take/last.png"
 ffprobe -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate \
   -of csv=p=0 "$take/film.mp4" | rg -q '^320,560,120/1$'

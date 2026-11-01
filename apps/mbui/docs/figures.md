@@ -35,8 +35,33 @@ Add a view function in `src/sfgraphic` and give it a name in `src/sffigure/main.
 `@film.picture` and select its pixel scale there. Extend the command's name check for the new view. A graphic can
 therefore use the actual component being explained instead of an independent approximation of it.
 
-The exporter draws the view's first frame. The tester resets framework state before that frame, so initialize any
-theme or font the view needs on its first call, as the example does. Use `mbui/film` for a later frame or animation.
+The exporter accepts the same `tree` as `@film.film`, for an application whose window is built as a view tree. Pass
+drive steps in `prepare` and `script` to navigate or require a picture before capture, and `at` for milliseconds after
+those steps; without them it draws the first frame. `fps` sets the display rate during the steps, just as for a film.
+`transparent=true` produces a PNG with a transparent ground for later
+compositing. The tester resets framework state before its first frame, so initialize any theme or font the view needs
+on its first call, as the example does.
+
+## Capture an application scene
+
+The same program that films the application can capture its current scene, using the same view tree, fixture,
+window size, scale and drive scripts. For example, after `APP=sffilm MODE=release bash scripts/mac.sh build`:
+
+```sh
+printf 'until 整理发布清单\nexit\n' > out/scene.drive
+MBUI_FIXTURE=home MBUI_WIN=320x560 MBUI_FILM_SCALE=1 \
+  MBUI_FILM_DRIVE=out/scene.drive MBUI_PICTURE=out/scene.png \
+  ./_build/native/release/build/stillfail/sffilm/sffilm.exe
+```
+
+`MBUI_FILM_PREPARE` is an optional drive file applied first, before the recorded actions. `MBUI_PICTURE_AT` advances
+the scene by that many milliseconds after the scripts. To capture a frame within the action instead, set
+`MBUI_PICTURE_FRAME` to its zero-based frame number: frame 0 is the scene after preparation and before the action.
+An action that fails before that frame, or ends before reaching it, makes the capture fail. Set
+`MBUI_PICTURE_TRANSPARENT=1` to clear the ground. Set
+`MBUI_FILM_FPS` to the same rate as the matching film and `MBUI_NATIVE_INPUT` to `finger` or `mouse` when the scene
+needs a particular native input. Other film settings, including platform, dark theme, locale and font scale, apply
+to the image as well. A failed step leaves an existing picture untouched.
 
 `@film.picture` currently uses the Mac offscreen host, like `mbui/film`; it does not open a window. It rejects a frame
 whose images or native views are still pending, whose images failed, or that contains a native web or video view,

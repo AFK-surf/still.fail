@@ -2440,6 +2440,7 @@ pub fn Tester::failed_images(Self) -> Array[Int32]
 pub fn Tester::family_given(Self, Int32) -> String
 pub fn Tester::field_words(Self) -> String
 pub fn Tester::film(Self, String, fps? : Double, max? : Int32, draw~ : (Self) -> Bool, put~ : (Int32) -> Bool) -> FilmRun
+pub fn Tester::film_frame(Self, String, Int32, max? : Int32) -> (Bool, Array[String])
 pub fn Tester::find(Self, String) -> (Double, Double)?
 pub fn Tester::find_last(Self, String) -> (Double, Double)?
 pub fn Tester::finish(Self, Int32, Int32, ok? : Bool) -> Unit
@@ -2561,6 +2562,7 @@ pub fn Tester::rows_as_nodes(Self) -> (Int32, Int32)
 pub fn Tester::rows_kept(Self) -> Int32
 pub fn Tester::rows_read_built(Self) -> Int32
 pub fn Tester::run_for(Self, Double) -> Unit
+pub fn Tester::run_for_exact(Self, Double) -> Unit
 pub fn Tester::run_rects(Self, String) -> Array[(Double, Double, Double, Double)]
 pub fn Tester::said(Self) -> String
 pub fn Tester::scroll_to(Self, Int32) -> Unit

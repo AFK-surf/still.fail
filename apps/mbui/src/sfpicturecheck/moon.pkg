@@ -1,0 +1,18 @@
+import {
+  "mbui/figure",
+  "mbui/film",
+  "mbui/host",
+  "mbui/motion",
+  "mbui/signals",
+  "mbui/ui",
+  "mbui/view",
+}
+
+options(
+  "is-main": true,
+  link: {
+    "native": {
+      "cc-link-flags": "-framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics -framework ImageIO -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit",
+    },
+  },
+)
