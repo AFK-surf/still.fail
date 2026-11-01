@@ -10,8 +10,8 @@ pub struct ShapeFont {
 }
 
 ///|
-pub fn ShapeFont::new(face : @font.Face) -> ShapeFont {
-  { face, ot: OtData::new(face), plans: [] }
+pub fn ShapeFont::new(face : @font.Face, coords~ : Array[Int] = []) -> ShapeFont {
+  { face, ot: OtData::new(face, coords), plans: [] }
 }
 
 ///|
@@ -80,7 +80,7 @@ pub fn shape(font : ShapeFont, buffer : Buffer, features : Array[Feature]) -> Un
   for i in 0..<buffer.len {
     let g = buffer.info[i].glyph_id
     if horizontal {
-      buffer.pos[i].x_advance = face.advance(g)
+      buffer.pos[i].x_advance = face.advance_at(g, plan.ot.coords)
     } else {
       let v = match face.vertical_advance(g) {
         Some(v) => v

@@ -52,6 +52,8 @@ priv struct TextSpan {
   font_size : Float
   small_caps : Bool
   apply_kerning : Bool
+  /// font-optical-sizing: auto (the default) sets an opsz axis the font has to the font size
+  optical_auto : Bool
   underline : TDeco?
   overline : TDeco?
   line_through : TDeco?
@@ -276,6 +278,7 @@ fn collect_chunks_impl(doc : SDoc, parent : Int, pos : Array[CharPos], state : S
       font_size,
       small_caps: doc.find_attr(parent, "font-variant") == Some("small-caps"),
       apply_kerning,
+      optical_auto: doc.find_attr(parent, "font-optical-sizing") != Some("none"),
       underline,
       overline,
       line_through,

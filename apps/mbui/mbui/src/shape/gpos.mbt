@@ -14,7 +14,7 @@ fn value_size(format : Int) -> Int {
 
 ///|
 /// Adds the value record at `at` (of `format`) to the glyph at `idx`; answers whether it changed something.
-fn apply_value(ctx : ApplyContext, idx : Int, at : Int, format : Int) -> Bool {
+fn apply_value(ctx : ApplyContext, idx : Int, at : Int, format : Int, base : Int) -> Bool {
   let d = ctx.ot.data
   let horizontal = ctx.buffer.direction.is_horizontal()
   if idx >= ctx.buffer.pos.length() {
@@ -45,9 +45,48 @@ fn apply_value(ctx : ApplyContext, idx : Int, at : Int, format : Int) -> Bool {
   }
   if (format & 0x08) != 0 {
     let v = rds16(d, p)
+    p += 2
     if !horizontal {
       pos.y_advance -= v
       worked = worked || v != 0
+    }
+  }
+  if (format & 0xF0) == 0 || ctx.ot.coords.length() == 0 || ctx.ot.face.gdef_var_store() == 0 {
+    return worked
+  }
+  // the variation deltas of the device fields, from the record's parent table
+  let delta = fn(applies : Bool) -> Float? {
+    let device = rd16(d, p)
+    p += 2
+    if !applies {
+      return None
+    }
+    let v = ctx.ot.device_delta(if device == 0 { 0 } else { base + device })
+    worked = worked || v != 0.0
+    Some(v)
+  }
+  if (format & 0x10) != 0 {
+    match delta(true) {
+      Some(v) => pos.x_offset += round_f(v)
+      None => ()
+    }
+  }
+  if (format & 0x20) != 0 {
+    match delta(true) {
+      Some(v) => pos.y_offset += round_f(v)
+      None => ()
+    }
+  }
+  if (format & 0x40) != 0 {
+    match delta(horizontal) {
+      Some(v) => pos.x_advance += round_f(v)
+      None => ()
+    }
+  }
+  if (format & 0x80) != 0 {
+    match delta(!horizontal) {
+      Some(v) => pos.y_advance -= round_f(v)
+      None => ()
     }
   }
   worked
@@ -61,12 +100,12 @@ fn apply_gpos_subtable(ctx : ApplyContext, kind : Int, s : Int, index : Int) -> 
     1 => {
       let vf = rd16(d, s + 4)
       if format == 1 {
-        ignore(apply_value(ctx, ctx.buffer.idx, s + 6, vf))
+        ignore(apply_value(ctx, ctx.buffer.idx, s + 6, vf, s))
       } else if format == 2 {
         if index >= rd16(d, s + 6) {
           return false
         }
-        ignore(apply_value(ctx, ctx.buffer.idx, s + 8 + index * value_size(vf), vf))
+        ignore(apply_value(ctx, ctx.buffer.idx, s + 8 + index * value_size(vf), vf, s))
       } else {
         return false
       }
@@ -85,13 +124,13 @@ fn apply_gpos_subtable(ctx : ApplyContext, kind : Int, s : Int, index : Int) -> 
 }
 
 ///|
-fn apply_pair(ctx : ApplyContext, second : Int, at1 : Int, vf1 : Int, at2 : Int, vf2 : Int) -> Bool {
+fn apply_pair(ctx : ApplyContext, second : Int, at1 : Int, vf1 : Int, at2 : Int, vf2 : Int, base : Int) -> Bool {
   if vf1 != 0 {
-    ignore(apply_value(ctx, ctx.buffer.idx, at1, vf1))
+    ignore(apply_value(ctx, ctx.buffer.idx, at1, vf1, base))
   }
   let mut buf_idx = second
   if vf2 != 0 {
-    ignore(apply_value(ctx, second, at2, vf2))
+    ignore(apply_value(ctx, second, at2, vf2, base))
     buf_idx += 1
   }
   ctx.buffer.idx = buf_idx
@@ -145,7 +184,7 @@ fn apply_pair_pos(ctx : ApplyContext, s : Int, index : Int) -> Bool {
       } else if g > second {
         hi = mid
       } else {
-        return apply_pair(ctx, second_index, r + 2, vf1, r + 2 + len1, vf2)
+        return apply_pair(ctx, second_index, r + 2, vf1, r + 2 + len1, vf2, set)
       }
     }
     false
@@ -158,7 +197,7 @@ fn apply_pair_pos(ctx : ApplyContext, s : Int, index : Int) -> Bool {
       return false
     }
     let r = s + 16 + (class1 * c2 + class2) * (len1 + len2)
-    apply_pair(ctx, second_index, r, vf1, r + len1, vf2)
+    apply_pair(ctx, second_index, r, vf1, r + len1, vf2, s)
   }
 }
 
@@ -215,6 +254,8 @@ fn apply_cursive(ctx : ApplyContext, s : Int, index : Int) -> Bool {
   }
   let (exit_x, exit_y) = ctx.ot.anchor(exit_prev)
   let (entry_x, entry_y) = ctx.ot.anchor(entry_this)
+  let (exit_x, exit_y) = (round_f(exit_x), round_f(exit_y))
+  let (entry_x, entry_y) = (round_f(entry_x), round_f(entry_y))
   let direction = buffer.direction
   let j = buffer.idx
   let pos = buffer.pos
@@ -316,8 +357,8 @@ fn attach_mark(ctx : ApplyContext, base_anchor : Int, mark_anchor : Int, base_po
     buffer.idx += 1
     return true
   }
-  pos.x_offset = base_x - mark_x
-  pos.y_offset = base_y - mark_y
+  pos.x_offset = round_f(base_x - mark_x)
+  pos.y_offset = round_f(base_y - mark_y)
   if buffer.direction.is_horizontal() {
     pos.y_offset += base_offset
   } else {

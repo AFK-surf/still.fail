@@ -73,12 +73,14 @@ fn f2i16(x : Float) -> Int {
 }
 
 ///|
-fn load_resolved_font(db : @font.FontDb, id : Int) -> ResolvedFont? {
+fn load_resolved_font(db : @font.FontDb, id : Int, variations : Array[(String, Float)]) -> ResolvedFont? {
   let face = match db.face(id) {
     Some(f) => f
     None => return None
   }
-  let m = face.metrics()
+  // metrics vary with the location (MVAR)
+  let coords = face.coords(variations)
+  let m = face.metrics(coords~)
   let upem = m.units_per_em
   if upem < 16 || upem > 16384 {
     return None
@@ -119,6 +121,14 @@ fn load_resolved_font(db : @font.FontDb, id : Int) -> ResolvedFont? {
   let (sub, sup) = match face.script_offsets() {
     Some((a, b)) => (a, b)
     None => (f2i16(fi(upem) / 0.2), f2i16(fi(upem) / 0.4))
+  }
+  let (sub, sup) = if coords.length() > 0 && face.has_table("MVAR") {
+    (
+      i16_wrap(sub + f2i16(face.metric_delta("sbyo", coords))),
+      i16_wrap(sup + f2i16(face.metric_delta("spyo", coords))),
+    )
+  } else {
+    (sub, sup)
   }
   Some({
     id,
@@ -241,6 +251,8 @@ priv struct LSpan {
   stroke : SStroke?
   paint_order : PaintOrder
   font_size : Float
+  variations : Array[(String, Float)]
+  optical_auto : Bool
   visible : Bool
   glyphs : Array[PosGlyph]
   underline : SPath?
@@ -258,7 +270,7 @@ fn layout_and_flatten(text : ParsedText, opt : Options) -> SText? {
       if !fonts.contains(key) {
         match select_font(db, span.font) {
           Some(id) =>
-            match load_resolved_font(db, id) {
+            match load_resolved_font(db, id, span.font.variations) {
               Some(f) => fonts[key] = f
               None => ()
             }
@@ -364,6 +376,8 @@ fn layout_and_flatten(text : ParsedText, opt : Options) -> SText? {
             stroke: span.stroke,
             paint_order: span.paint_order,
             font_size: span.font_size,
+            variations: span.font.variations,
+            optical_auto: span.optical_auto,
             visible: span.visible,
             glyphs,
             underline,
@@ -455,7 +469,7 @@ fn layout_and_flatten(text : ParsedText, opt : Options) -> SText? {
         }
         None => ()
       }
-      match g.face.outline(g.id) {
+      match g.face.outline(g.id, coords=g.face.coords(effective_variations(g.face, span.variations, span.font_size, span.optical_auto))) {
         Some(cmds) => {
           let gb = @skia.PathBuilder::new()
           for c in cmds {
@@ -825,7 +839,7 @@ fn process_chunk(chunk : TextChunk, fonts : Map[String, ResolvedFont], db : @fon
       Some(f) => f
       None => continue
     }
-    let tmp = shape_text(chunk, font, span.small_caps, span.apply_kerning, db)
+    let tmp = shape_text(chunk, font, span.small_caps, span.apply_kerning, db, span.font.variations, span.font_size, span.optical_auto)
     if glyphs.is_empty() {
       glyphs = tmp
       continue
@@ -1069,8 +1083,18 @@ fn apply_word_spacing(chunk : TextChunk, clusters : Array[Cluster]) -> Unit {
 // ── shaping ───────────────────────────────────────────────────────────
 
 ///|
-fn shape_text(chunk : TextChunk, font : ResolvedFont, small_caps : Bool, kerning : Bool, db : @font.FontDb) -> Array[TGlyph] {
-  let mut glyphs = shape_with_font(chunk, font, small_caps, kerning)
+fn shape_text(
+  chunk : TextChunk,
+  font : ResolvedFont,
+  small_caps : Bool,
+  kerning : Bool,
+  db : @font.FontDb,
+  variations : Array[(String, Float)],
+  font_size : Float,
+  optical_auto : Bool,
+) -> Array[TGlyph] {
+  let shape = fn(f : ResolvedFont) { shape_with_font(chunk, f, small_caps, kerning, variations, font_size, optical_auto) }
+  let mut glyphs = shape(font)
   let used = [font.id]
   while true {
     let mut missing = -1
@@ -1085,13 +1109,13 @@ fn shape_text(chunk : TextChunk, font : ResolvedFont, small_caps : Bool, kerning
     }
     let fallback = match select_fallback(db, missing, used) {
       Some(id) =>
-        match load_resolved_font(db, id) {
+        match load_resolved_font(db, id, variations) {
           Some(f) => f
           None => break
         }
       None => break
     }
-    let fb = shape_with_font(chunk, fallback, small_caps, kerning)
+    let fb = shape(fallback)
     if fb.iter().all(fn(g) { g.id != 0 }) {
       glyphs = fb
       break
@@ -1146,8 +1170,22 @@ fn visual_runs(chunk : TextChunk) -> Array[(Int, Int, Bool)] {
 }
 
 ///|
-fn shape_with_font(chunk : TextChunk, font : ResolvedFont, small_caps : Bool, kerning : Bool) -> Array[TGlyph] {
+fn shape_with_font(
+  chunk : TextChunk,
+  font : ResolvedFont,
+  small_caps : Bool,
+  kerning : Bool,
+  variations : Array[(String, Float)],
+  font_size : Float,
+  optical_auto : Bool,
+) -> Array[TGlyph] {
   let out : Array[TGlyph] = []
+  // an instance at the variations' location, with opsz following the font size when sizing is automatic
+  let shaper = if variations.length() == 0 && !(optical_auto && font.face.has_axis("opsz")) {
+    font.shaper
+  } else {
+    @shape.ShapeFont::new(font.face, coords=font.face.coords(effective_variations(font.face, variations, font_size, optical_auto)))
+  }
   for run in visual_runs(chunk) {
     let (a, b, rtl) = run
     if a >= b {
@@ -1155,7 +1193,7 @@ fn shape_with_font(chunk : TextChunk, font : ResolvedFont, small_caps : Bool, ke
     }
     let run_start = chunk.bytes[a]
     let run_end = if b < chunk.chars.length() { chunk.bytes[b] } else { chunk.byte_len }
-    let shaped = shape_run(font.shaper, chunk, a, b, rtl, kerning, small_caps)
+    let shaped = shape_run(shaper, chunk, a, b, rtl, kerning, small_caps)
     for i, g in shaped {
       let start = g.cluster
       let next = if rtl { i - 1 } else { i + 1 }
@@ -1257,4 +1295,26 @@ fn raster_glyph(g : PosGlyph) -> (SImage, @skia.Transform)? {
     g.transform().pre_concat(@skia.Transform::from_scale(upem / ppem, upem / ppem)).pre_translate(x, -y)
   }
   Some((image, ts))
+}
+
+///|
+/// The span's variations, plus opsz at the font size where sizing is automatic and the font has that axis without
+/// it being set (usvg's effective_variations).
+fn effective_variations(face : @font.Face, variations : Array[(String, Float)], font_size : Float, optical_auto : Bool) -> Array[(String, Float)] {
+  if optical_auto && !variations.iter().any(fn(v) { v.0 == "opsz" }) && face.has_axis("opsz") {
+    variations + [("opsz", font_size)]
+  } else {
+    variations
+  }
+}
+
+///|
+/// Rust's i16 wrapping addition result as an Int.
+fn i16_wrap(v : Int) -> Int {
+  let w = v & 0xFFFF
+  if w >= 0x8000 {
+    w - 0x10000
+  } else {
+    w
+  }
 }

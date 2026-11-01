@@ -404,6 +404,9 @@ fn LayoutTable::feature_lookups(self : LayoutTable, d : Bytes, index : Int) -> A
 ///|
 /// The font's layout data: GDEF's classes and the two tables.
 priv struct OtData {
+  face : @font.Face
+  /// the location (normalized coordinates); empty at the default one
+  coords : Array[Int]
   data : Bytes
   glyph_classes : Int
   mark_classes : Int
@@ -414,7 +417,7 @@ priv struct OtData {
 }
 
 ///|
-fn OtData::new(face : @font.Face) -> OtData {
+fn OtData::new(face : @font.Face, coords : Array[Int]) -> OtData {
   let d = face.data()
   let at = fn(t : String) -> Int {
     match face.table(t) {
@@ -439,6 +442,8 @@ fn OtData::new(face : @font.Face) -> OtData {
     }
   }
   {
+    face,
+    coords,
     data: d,
     glyph_classes,
     mark_classes,
@@ -479,7 +484,30 @@ fn OtData::is_mark_glyph(self : OtData, glyph : Int, set : Int) -> Bool {
 }
 
 ///|
-/// An anchor's coordinates (formats 1 to 3: without hinting and variations the same).
-fn OtData::anchor(self : OtData, at : Int) -> (Int, Int) {
-  (rds16(self.data, at + 2), rds16(self.data, at + 4))
+/// A device or variation index table's delta at the location (0 for a device table, which hints).
+fn OtData::device_delta(self : OtData, device : Int) -> Float {
+  if device == 0 || self.coords.length() == 0 || rd16(self.data, device + 4) != 0x8000 {
+    return 0.0
+  }
+  self.face.var_index_delta(rd16(self.data, device), rd16(self.data, device + 2), self.coords)
+}
+
+///|
+/// An anchor's coordinates at the location (formats 1 and 2 as they are, format 3 with its variation deltas).
+fn OtData::anchor(self : OtData, at : Int) -> (Float, Float) {
+  let d = self.data
+  let x = Float::from_int(rds16(d, at + 2))
+  let y = Float::from_int(rds16(d, at + 4))
+  if rd16(d, at) == 3 && self.coords.length() > 0 && self.face.gdef_var_store() != 0 {
+    (x + self.device_delta(off16(d, at, at + 6)), y + self.device_delta(off16(d, at, at + 8)))
+  } else {
+    (x, y)
+  }
+}
+
+///|
+/// harfrust's scale_x_f at scale one: f32 rounded half away from zero.
+fn round_f(x : Float) -> Int {
+  let t = x.to_double()
+  (if t < 0.0 { -(-t + 0.5).floor() } else { (t + 0.5).floor() }).to_int()
 }

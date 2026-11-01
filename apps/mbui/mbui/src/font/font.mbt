@@ -373,7 +373,7 @@ pub(all) struct Metrics {
 }
 
 ///|
-pub fn Face::metrics(self : Face) -> Metrics {
+pub fn Face::metrics(self : Face, coords~ : Array[Int] = []) -> Metrics {
   let b = self.data
   let fi = fn(v : Int) -> Float { Float::from_int(v) }
   let mut ascent : Float = 0.0
@@ -440,6 +440,16 @@ pub fn Face::metrics(self : Face) -> Metrics {
         None => ()
       }
     }
+  }
+  if coords.length() > 0 && self.tables.contains("MVAR") {
+    let d = fn(t : String) { self.metric_delta(t, coords) }
+    ascent = ascent + d("hasc")
+    descent = descent + d("hdsc")
+    leading = leading + d("hlgp")
+    cap_height = cap_height.map(fn(v) { v + d("cpht") })
+    x_height = x_height.map(fn(v) { v + d("xhgt") })
+    underline = underline.map(fn(u) { (u.0 + d("undo"), u.1 + d("unds")) })
+    strikeout = strikeout.map(fn(u) { (u.0 + d("stro"), u.1 + d("strs")) })
   }
   {
     units_per_em: self.units_per_em,
@@ -629,10 +639,10 @@ pub fn Face::glyph_bbox(self : Face, glyph : Int) -> (Int, Int, Int, Int)? {
 
 ///|
 /// A glyph's outline in font units, None where it has none (an empty glyph has an empty one).
-pub fn Face::outline(self : Face, glyph : Int) -> Array[PathCmd]? {
+pub fn Face::outline(self : Face, glyph : Int, coords~ : Array[Int] = []) -> Array[PathCmd]? {
   if self.tables.contains("glyf") {
     let pts = GlyfPoints::new()
-    if !self.load_glyf(glyph, pts, 0) {
+    if !self.load_glyf(glyph, pts, 0, coords) {
       return None
     }
     let out : Array[PathCmd] = []
@@ -662,7 +672,7 @@ fn GlyfPoints::new() -> GlyfPoints {
 }
 
 ///|
-fn Face::load_glyf(self : Face, glyph : Int, pts : GlyfPoints, depth : Int) -> Bool {
+fn Face::load_glyf(self : Face, glyph : Int, pts : GlyfPoints, depth : Int, coords : Array[Int]) -> Bool {
   if depth > 32 {
     return false
   }
@@ -723,6 +733,7 @@ fn Face::load_glyf(self : Face, glyph : Int, pts : GlyfPoints, depth : Int) -> B
       xs[k] = x
     }
     let mut y = 0
+    let ys = Array::make(n_points, 0)
     for k in 0..<n_points {
       let f = flags[k]
       let mut d = 0
@@ -737,8 +748,25 @@ fn Face::load_glyf(self : Face, glyph : Int, pts : GlyfPoints, depth : Int) -> B
         p += 2
       }
       y = y + d
+      ys[k] = y
+    }
+    if coords.length() > 0 {
+      // gvar's deltas, with four phantom points after the outline's
+      let vx = xs + [0, 0, 0, 0]
+      let vy = ys + [0, 0, 0, 0]
+      let local = Array::makei(n_contours, fn(k) { u16(b, ends + k * 2) })
+      match self.simple_deltas(glyph, vx, vy, local, coords) {
+        Some((dx, dy)) =>
+          for k in 0..<n_points {
+            xs[k] = xs[k] + fx_round(dx[k])
+            ys[k] = ys[k] + fx_round(dy[k])
+          }
+        None => ()
+      }
+    }
+    for k in 0..<n_points {
       pts.xs.push(xs[k] << 6)
-      pts.ys.push(y << 6)
+      pts.ys.push(ys[k] << 6)
       // on curve 0x01, a cubic off-curve point 0x80
       pts.flags.push(flags[k] & 0x81)
     }
@@ -747,6 +775,24 @@ fn Face::load_glyf(self : Face, glyph : Int, pts : GlyfPoints, depth : Int) -> B
   // a composite
   let point_base = pts.xs.length()
   let mut p = at + 10
+  // gvar's deltas for the components' offsets
+  let comp_deltas = if coords.length() > 0 {
+    let mut q = at + 10
+    let mut c = 0
+    while true {
+      let flags = u16(b, q)
+      c += 1
+      q += 4 + (if (flags & 1) != 0 { 4 } else { 2 })
+      q += if (flags & 8) != 0 { 2 } else if (flags & 0x40) != 0 { 4 } else if (flags & 0x80) != 0 { 8 } else { 0 }
+      if (flags & 0x20) == 0 {
+        break
+      }
+    }
+    self.composite_deltas(glyph, c + 4, coords)
+  } else {
+    None
+  }
+  let mut component_index = 0
   while true {
     let flags = u16(b, p)
     let component = u16(b, p + 2)
@@ -789,7 +835,7 @@ fn Face::load_glyf(self : Face, glyph : Int, pts : GlyfPoints, depth : Int) -> B
       p += 8
     }
     let start = pts.xs.length()
-    if !self.load_glyf(component, pts, depth + 1) {
+    if !self.load_glyf(component, pts, depth + 1, coords) {
       return false
     }
     let end = pts.xs.length()
@@ -821,6 +867,13 @@ fn Face::load_glyf(self : Face, glyph : Int, pts : GlyfPoints, depth : Int) -> B
         x = fixed_mul(x, hypot(xx, xy))
         y = fixed_mul(y, hypot(yy, yx))
       }
+      match comp_deltas {
+        Some((dx, dy)) => {
+          x = x + fx_round(dx[component_index])
+          y = y + fx_round(dy[component_index])
+        }
+        None => ()
+      }
       (x << 6, y << 6)
     } else {
       // matching points
@@ -839,6 +892,7 @@ fn Face::load_glyf(self : Face, glyph : Int, pts : GlyfPoints, depth : Int) -> B
         pts.ys[k] = pts.ys[k] + oy
       }
     }
+    component_index += 1
     if (flags & 0x20) == 0 {
       break
     }
