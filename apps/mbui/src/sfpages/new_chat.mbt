@@ -372,7 +372,11 @@ fn new_controls(
   if text(station, "name") != "" {
     new_station_control(c, src, w, v, station, floating, going)
   }
-  new_preset_control(c, src, w, v, station, floating, going)
+  // (the preset's in the composer's row, laid out either way: over the composer narrow, where it runs and what on are
+  // what is chosen most and have its room; new_composer_place)
+  if !floating {
+    new_preset_control(c, src, w, v, station, floating, going)
+  }
   let p = field(v, "pick")
   if flag(v, "waiting") {
     // (its profiles read: a made-up model's, in its bones)
@@ -645,7 +649,13 @@ fn new_composer_place(
         draft: "new:" + w.id,
         session: "",
         placeholder: @sf.t("web-main.newChat.placeholder"),
-        toolbar: if wide && !held { Some(fn() { new_tools(c, src, w, v, station) }) } else { None },
+        toolbar: if held {
+          None
+        } else if wide {
+          Some(fn() { new_tools(c, src, w, v, station) })
+        } else {
+          Some(fn() { new_preset_control(c, src, w, v, station, false, false) })
+        },
         note: [],
         tail: None,
         roomy: wide,
