@@ -673,7 +673,8 @@ fn triple_model_row(
   } else {
     Some(fn() {
       if usual != "" || usual_w > 0.0 {
-        c.box(style=triple_usual_room.then(@ui.style(min_w=Within(usual_w))), fn() {
+        // (left out where its row has not the room even for it cut short: the name never)
+        c.box(style=triple_usual_room.then(@ui.style(min_w=Within(usual_w))), drop=1, fn() {
           c.text(usual, style=triple_usual) |> ignore
         })
         |> ignore
