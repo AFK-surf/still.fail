@@ -373,8 +373,8 @@ fn doing_matches(d : Json, calls : Array[String], on : Array[(String, String)]) 
 }
 
 ///|
-/// What a person did, let go on by itself (AppState.act): the call made; failed, `没能<what>：<why>` said; gone
-/// through, `done` (when there is one) said and `then` run.
+/// What a person did, let go on by itself (AppState.act): the call made; failed, `没能<what>：<why>` said (felt as
+/// something refused); gone through, `done` (when there is one) said (felt as something done) and `then` run.
 pub fn act(
   core : Core,
   what : String,
@@ -388,10 +388,12 @@ pub fn act(
       Ok(v) => {
         if done != "" {
           (core.say)(done)
+          @ui.haptic(Confirm)
         }
         then(v)
       }
-      Err(e) =>
+      Err(e) => {
+        @ui.haptic(Reject)
         (core.say)(
           fill(
             if text(Some(e), "code") == "unconfirmed" {
@@ -402,6 +404,7 @@ pub fn act(
             [("what", what), ("error", error_text(e))],
           ),
         )
+      }
     }
   })
 }

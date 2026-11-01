@@ -159,6 +159,8 @@ test "words typed go with send: by the chat's thread, the field emptied, Enter a
   tap_send(t)
   let sent = named(calls, "chat.send")
   assert_eq(sent.length(), 1)
+  // sent, felt as a key's light tap
+  assert_eq(t.haptics(), [@ui.KeyboardTap])
   let p = Some(sent[0].params)
   assert_eq(text(p, "text"), "第一行\n第二行")
   assert_eq(text(p, "station"), "ws1/st1")
@@ -237,6 +239,8 @@ test "refused before the outbox, the words come back and why is said" {
   let sent = named(calls, "chat.send")
   (sent[0].done)(Err({ "code": "invalid_params", "message": "没有这个对话" }))
   t.draw()
+  // sent, then refused: felt each
+  assert_eq(t.haptics(), [@ui.KeyboardTap, @ui.Reject])
   assert_true(t.dump().contains("发不出去的话"))
   assert_true(t.find("没有这个对话") is Some(_))
   // the words sent wait over the field for their row, which this core never gives; the composer's room held as

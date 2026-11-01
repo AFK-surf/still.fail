@@ -147,6 +147,8 @@
   "web-pages.appearance.motion.system": "System",
   "web-pages.appearance.motion.reduce": "Reduced",
   "web-pages.appearance.motion.full": "Full",
+  "web-pages.appearance.haptics.title": "Haptics",
+  "web-pages.appearance.haptics.description": "A light tap as you long-press, answer a card, send, copy or drag to the end, and when the chat you have open needs you. Only while the app is open. This device only.",
   "web-pages.appearance.drop.title": "Files dragged into a chat",
   "web-pages.appearance.drop.description": "How files dragged in from station files or Finder are sent by default. Path tells the agent which station has the file and where it is; File puts the file on the chat's station. Each chat can override this from the file card's hover panel; folders are sent as paths, or as a zip.",
   "web-pages.appearance.drop.path": "Path",

@@ -5756,6 +5756,11 @@ export interface PrefsView {
 	 * follow the system's setting.
 	 */
 	motion?: string;
+	/**
+	 * Haptics on this device: `off`, or none for on (a long press taken, a card answered, what is copied, a
+	 * chat open in front coming to need the viewer).
+	 */
+	haptics?: string;
 	rowPicture?: RowPictureSetting;
 	/** Times are shown as dates rather than "3 分钟前". */
 	absoluteTime?: boolean;

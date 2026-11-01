@@ -168,6 +168,8 @@ pub fn haptic(Haptic) -> Unit
 
 pub fn has_image(String) -> Bool
 
+pub let hold_slop : Double
+
 pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit
 
 pub let image_fade_ms : Double
@@ -481,6 +483,8 @@ pub fn sd_corner(Double, Double, Double, Double, Double, Double, band? : Double)
 pub fn set_badge(Int32) -> Unit
 
 pub fn set_glass_solid(Bool?) -> Unit
+
+pub fn set_haptics(Bool) -> Unit
 
 pub fn set_motion_chosen(Bool?) -> Unit
 

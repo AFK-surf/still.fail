@@ -249,6 +249,8 @@ pub fn reset() -> Unit {
   history_reset()
   app.picked.set("")
   @ui.set_motion_chosen(None)
+  @ui.set_haptics(true)
+  felt_reset()
   app.filters.clear()
   app.menu = false
   app.switch_way = 0

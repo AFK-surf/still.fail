@@ -138,6 +138,8 @@
   "web-pages.appearance.motion.system": "跟随系统",
   "web-pages.appearance.motion.reduce": "减少",
   "web-pages.appearance.motion.full": "不减少",
+  "web-pages.appearance.haptics.title": "震动",
+  "web-pages.appearance.haptics.description": "长按、回答卡片、发送、复制、拖到头时轻震一下；开着的对话需要你时也会震。只在 app 打开时震，只对这台设备生效。",
   "web-pages.appearance.drop.title": "拖入 chat 的文件",
   "web-pages.appearance.drop.description": "从 station 文件或 Finder 拖入 chat 时的默认发送方式。发路径：agent 收到文件所在的 station 和位置；发文件：文件放入 chat 所在的 station。每个 chat 可在文件卡片的悬停面板中单独设置；文件夹按路径发送，也可压缩为 zip 发送。",
   "web-pages.appearance.drop.path": "发路径",

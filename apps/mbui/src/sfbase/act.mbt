@@ -41,7 +41,8 @@ pub fn toast_words() -> String {
 /// Has the core do something (AppState.act): `key` under way until it answers (its button's spinner), `done` said
 /// when it did (with a button of `done_action`'s words doing `done_run`, "" none), why not said when it could not
 /// (`failed` told then); `at_once`: `done` said as it is asked, where the core has it done on the device at once (its
-/// rows: an archive), the station's answer said only when it is a no. Nothing with MBUI_READONLY=1.
+/// rows: an archive), the station's answer said only when it is a no. What `done` says is felt as something done, a
+/// no as something refused. Nothing with MBUI_READONLY=1.
 pub fn act(
   src : Source,
   what : String,
@@ -66,6 +67,7 @@ pub fn act(
   }
   if at_once && done != "" {
     toast_later(done, action=done_action, run=done_run)
+    @ui.haptic(Confirm)
   }
   (src.call)(call, params, fn(res) {
     if key != "" {
@@ -80,11 +82,13 @@ pub fn act(
       Ok(v) => {
         if done != "" && !at_once {
           toast_later(done, action=done_action, run=done_run)
+          @ui.haptic(Confirm)
         }
         ok(v)
       }
       Err(e) => {
         let code = text(Some(e), "code")
+        @ui.haptic(Reject)
         toast_later(
           @sf.t(if code == "unconfirmed" { "android-misc.act.unconfirmed" } else { "android-misc.act.failed" }, args=[
             ("what", what),

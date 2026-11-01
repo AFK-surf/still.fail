@@ -1116,6 +1116,8 @@ web-pages.appearance.fonts.searchLocal
 web-pages.appearance.fonts.text
 web-pages.appearance.fonts.title
 web-pages.appearance.fonts.ui
+web-pages.appearance.haptics.description
+web-pages.appearance.haptics.title
 web-pages.appearance.language.description
 web-pages.appearance.motion.description
 web-pages.appearance.motion.full

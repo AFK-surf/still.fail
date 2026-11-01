@@ -990,3 +990,32 @@ test "a picture looked at and marked on an iPhone Duo on its side: laid out clea
     assert_true(bx + bw <= clear + 0.5, msg="\{s.label} under the system's column: \{s.rect}")
   }
 }
+
+///|
+test "an iPhone Duo on its side: the sidebar's edge held by a finger that wanders a little, then dragged; one that wanders off is not" {
+  let t = native_chat(951.0, 669.0, true, side=84.0)
+  let (x, _, w, _) = t.get(Separator, label="调整侧边栏宽度").rect
+  let x = x + w / 2.0
+  let from = @sfdesk.wide.side_w.get()
+  // (a finger held still is never quite still: 6 across and down while it is held, within @ui.hold_slop; the width
+  // goes as far as the finger from where it went down)
+  t.press_at(x, 300.0)
+  t.run_for(@ui.tap_indication_ms)
+  t.move(x + 6.0, 306.0)
+  t.run_for(@ui.long_press_ms)
+  t.move(x + 40.0, 306.0)
+  t.move(x + 60.0, 306.0)
+  t.release(x + 60.0, 306.0)
+  t.draw()
+  assert_eq(@sfdesk.wide.side_w.get(), from + 60.0)
+  // past it before it is held: not the edge's
+  let x = x + 60.0
+  t.press_at(x, 300.0)
+  t.run_for(@ui.tap_indication_ms)
+  t.move(x + 12.0, 300.0)
+  t.run_for(@ui.long_press_ms)
+  t.move(x + 60.0, 300.0)
+  t.release(x + 60.0, 300.0)
+  t.draw()
+  assert_eq(@sfdesk.wide.side_w.get(), from + 60.0)
+}

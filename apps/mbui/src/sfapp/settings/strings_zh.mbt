@@ -1125,6 +1125,8 @@ let zh : Map[String, String] = {
   "web-pages.appearance.fonts.text": "正文",
   "web-pages.appearance.fonts.title": "字体",
   "web-pages.appearance.fonts.ui": "界面",
+  "web-pages.appearance.haptics.description": "长按、回答卡片、发送、复制、拖到头时轻震一下；开着的对话需要你时也会震。只在 app 打开时震，只对这台设备生效。",
+  "web-pages.appearance.haptics.title": "震动",
   "web-pages.appearance.language.description": "界面显示语言。跟随系统时使用此设备的语言。",
   "web-pages.appearance.motion.description": "减少后，页面切换、消息出现、面板展开等都直接到位，不再滑动或缩放，转圈也会慢下来。跟随系统时按系统的动画设置。只对这台设备生效。",
   "web-pages.appearance.motion.full": "不减少",
