@@ -386,6 +386,7 @@ fn reset() -> Unit {
   mo.entries.clear()
   measure_at.clear()
   measure_size.clear()
+  measure_radii.clear()
   measure_names.clear()
   measure_told.clear()
   mo.at.clear()
@@ -711,6 +712,19 @@ pub fn measured_rect(c : @ui.Ctx, key : String) -> (Double, Double, Double, Doub
   measure_read(measure_size, motion_key("measure\u{1}" + key), name=key)
   match mo.recs.get(motion_key("measure\u{1}" + key)) {
     Some(r) if r.seen >= c.frame_number() - 1 => Some((r.x, r.y, r.w, r.h))
+    _ => None
+  }
+}
+
+///|
+/// The four corners of the node kept as `key` (measure), as the last layout resolved them. What reads them is told
+/// when their shape changes, even if the node's size stays the same.
+pub fn measured_radii(c : @ui.Ctx, key : String) -> (Double, Double, Double, Double)? {
+  let k = motion_key("measure\u{1}" + key)
+  measure_read(measure_size, k, name=key)
+  measure_read(measure_radii, k, name=key)
+  match mo.recs.get(k) {
+    Some(r) if r.seen >= c.frame_number() - 1 => Some(r.rad)
     _ => None
   }
 }
@@ -1444,10 +1458,15 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       if r.x != nx || r.y != ny {
         measure_changed(measure_at, e.kept, "moved")
       }
+      let radii = c.node_radii(e.node)
+      if r.rad != radii {
+        measure_changed(measure_radii, e.kept, "corners")
+      }
       r.x = nx
       r.y = ny
       r.w = nw
       r.h = nh
+      r.rad = radii
       r.seen = frame
     }
     if e.key != 0 {
@@ -1966,6 +1985,11 @@ let measure_at : Map[Int, @signals.Signal[Int]] = {}
 let measure_size : Map[Int, @signals.Signal[Int]] = {}
 
 ///|
+/// What reads the resolved corners of a measured node, independently of its position and size.
+// kept across runs: forgotten as a Tester starts anew (reset), each let go once nothing reads it
+let measure_radii : Map[Int, @signals.Signal[Int]] = {}
+
+///|
 /// Measure `key` read of `said` as what is built is built: built again as what it reads of it changes.
 fn measure_read(said : Map[Int, @signals.Signal[Int]], key : Int, name~ : String) -> Unit {
   if @ui.perf_counting() && !measure_names.contains(key) {
@@ -2049,6 +2073,11 @@ fn measures_lapsed(frame : Int) -> Unit {
   measure_at.each(fn(k, s) { if !s.watched() { unread.push(k) } })
   for k in unread {
     measure_at.remove(k)
+  }
+  unread.clear()
+  measure_radii.each(fn(k, s) { if !s.watched() { unread.push(k) } })
+  for k in unread {
+    measure_radii.remove(k)
   }
   if measure_size.is_empty() {
     return

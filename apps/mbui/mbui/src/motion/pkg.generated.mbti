@@ -144,6 +144,8 @@ pub fn measure(@ui.Ctx, Int32, String) -> Unit
 
 pub fn measured(@ui.Ctx, String) -> Double?
 
+pub fn measured_radii(@ui.Ctx, String) -> (Double, Double, Double, Double)?
+
 pub fn measured_rect(@ui.Ctx, String) -> (Double, Double, Double, Double)?
 
 pub fn measured_size(@ui.Ctx, String) -> (Double, Double)?
