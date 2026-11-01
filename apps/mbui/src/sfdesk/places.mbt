@@ -190,6 +190,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         // where it is and who uses it
         let used = items(p, "usedBy").length()
         let facts = [
+          text(p, "planText"),
           text(e, "where"),
           if used > 0 {
             @sf.t("web-pages.settings.profiles.usedBy", args=[("n", used.to_string())])

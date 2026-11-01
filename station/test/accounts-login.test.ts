@@ -130,6 +130,19 @@ test("the machine's own logins are read from the machine's own homes", async () 
   assert.deepEqual([got[1]!.email, got[1]!.plan, got[1]!.text], ["b@x.com", "plus", "Codex 已登录 b@x.com（Plus）"]);
 });
 
+test("the machine's Claude login distinguishes Ultra from Max using its tier metadata", async () => {
+  const m = machine({ claude: `echo '{"loggedIn":true,"subscriptionType":"max"}'` });
+  mkdirSync(join(m.home, ".claude"));
+  const credentials = (tier: string) => writeFileSync(join(m.home, ".claude/.credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "at", expiresAt: Date.now() + 3_600_000, subscriptionType: "max", rateLimitTier: tier } }));
+  const logins = new MachineLogins(m.env, undefined, () => "zh");
+  credentials("default_claude_max_20x");
+  await logins.refresh();
+  assert.equal(logins.get()[0]!.plan, "ultra");
+  credentials("default_claude_max_5x");
+  await logins.refresh();
+  assert.equal(logins.get()[0]!.plan, "max");
+});
+
 test("signed out, not installed and keychain only are said as such", async () => {
   let m = machine({ claude: `echo '{"loggedIn":false}'; exit 1` });
   let logins = new MachineLogins(m.env, undefined, () => "zh");
