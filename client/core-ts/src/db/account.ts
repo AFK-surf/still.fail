@@ -381,6 +381,7 @@ export class AccountDb {
       this.#logCache.clear();
       this.#logIndices.clear();
       this.#lists.clear();
+      this.#slackNames.clear();
       const again = [...this.#unwritten, ...precious];
       this.#unwritten = [];
       if (again.length > 0) {

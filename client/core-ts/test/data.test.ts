@@ -1012,6 +1012,28 @@ test("the_slack_people_a_stations_agents_heard_from_are_named_by_their_slack_id_
   runner.shutdown();
 });
 
+test("a_rolled_back_transcript_does_not_leave_a_slack_name_in_the_cache", async () => {
+  const { data, open, db, runner } = fresh();
+  await open();
+  try {
+    const heard = (i: number, from: string) => [i, { at: `1970-01-01T00:00:0${i}Z`, kind: "user", text: `<message via="slack" thread="C0OPS/1.2" from="${from}" ts="${i}">hi</message>` }] as [number, J];
+    data.putItems("transcript", "w/a", "k1", [heard(3, "Mia (U9)")]);
+    await flush();
+    assert.deepEqual(data.slackNames("w/a"), [["U9", "Mia"]]);
+
+    let fail = true;
+    db().failing = (q) => {
+      if (q !== "COMMIT" || !fail) return null;
+      fail = false;
+      return new SqlError("database or disk is full", "full");
+    };
+    data.putItems("transcript", "w/a", "k2", [heard(4, "Mia Wu (U9)")]);
+    assert.deepEqual(data.slackNames("w/a"), [["U9", "Mia Wu"]], "reads see the open transaction");
+    await flush();
+    assert.deepEqual(data.slackNames("w/a"), [["U9", "Mia"]], "the cache reflects the rolled-back database");
+  } finally { runner.shutdown(); }
+});
+
 
 test("a_hot_logs_number_index_tracks_appends_holes_and_truncation_without_rescanning_sql", async () => {
   const { data, open, db, runner } = fresh();
