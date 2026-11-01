@@ -39,6 +39,7 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
       @sf.t("web-main.preset.pick"),
       fn(c, close) { preset_rows(c, src, w, address, presets_of(src, address), picked, close) },
       from=Of(c.id("new/preset")),
+      foot=fn(c, close) { preset_rows_foot(c, src, w, address, close) },
     )
   }
 }
@@ -50,61 +51,40 @@ fn presets_of(src : Source, address : String) -> Json? {
 }
 
 ///|
-/// The station's presets to pick from (as station_rows): 不用预设 first, each preset its name over its directories and
-/// a check on the one picked, its edit at its end; 新预设 at their foot.
+/// The station's presets to pick from, as a pick's choices are (@sf.choice_row): 不用预设 first, each preset its name
+/// over its folders, the one picked checked, its 编辑 at its end; 新预设 at the panel's foot.
 fn preset_rows(c : @ui.Ctx, src : Source, w : Workspace, address : String, listed : Json?, picked : String, close : () -> Unit) -> Unit {
-  let p = @sf.theme().p
-  let row = fn(key : String, icon : String, name : String, sub : String, on : Bool, chosen : () -> Unit, edit : (() -> Unit)?) {
-    let id = c.id("pick-preset/" + key)
-    if c.clicked(id) {
-      chosen()
-    }
-    let b = c.box(style=station_row.then(@sf.panel_row_in()), id~, fn() {
-      c.box(style=station_row_mark_box, fn() { @sf.icon(c, icon, size=new_mark, color=p.text) |> ignore }) |> ignore
-      c.box(style=station_row_words, fn() {
-        c.box(style=station_row_head, fn() {
-          c.text(name, style=station_row_name) |> ignore
-          if on {
-            @sf.icon(c, "check", size=new_mark, color=p.accent) |> ignore
-          }
-        })
-        |> ignore
-        if sub != "" {
-          c.text(sub, style=preset_row_sub) |> ignore
-        }
-      })
-      |> ignore
-      match edit {
-        Some(f) =>
-          if @sf.icon_button(c, "edit", key="pick-preset-edit/" + key, size=28.0, label=@sf.t("web-main.preset.edit")) {
-            f()
-          }
-        None => ()
-      }
-      @sf.press_ripple(c, id, @sf.row_corner)
-    })
-    c.semantics(b, Button, id~, label=name, check=if on { On } else { Off })
-  }
-  row("", "minus", @sf.t("web-main.preset.none"), @sf.t("web-main.preset.noneNote"), picked == "", fn() {
+  if @sf.choice_row(c, "pick-preset/", picked == "", @sf.t("web-main.preset.none"), note=@sf.t("web-main.preset.noneNote")) {
     @sfbase.pick_new(src, w.id, { "preset": Json::string("") })
     close()
-  }, None)
+  }
   for x in items(listed, "presets") {
     let one = Some(x)
     let id = text(one, "id")
     let dirs = items(one, "dirs").map(fn(d) { dir_label(Some(d)) })
-    row(id, "boxes", text(one, "name"), join(dirs, " · "), id == picked, fn() {
+    let chosen = @sf.choice_row(c, "pick-preset/" + id, id == picked, text(one, "name"), note=join(dirs, " · "), trail=fn() {
+      // (as high as its name's line, so its note stands under its name as the others' do: its press reaches round it,
+      // in the row's room)
+      if @sf.icon_button(c, "edit", key="pick-preset-edit/" + id, size=preset_edit_side, label=@sf.t("web-main.preset.edit")) {
+        close()
+        preset_dialog(src, w, address, one)
+      }
+    })
+    if chosen {
       @sfbase.pick_new(src, w.id, { "preset": Json::string(id) })
       close()
-    }, Some(fn() {
-      close()
-      preset_dialog(src, w, address, one)
-    }))
+    }
   }
-  row("+new", "plus", @sf.t("web-main.preset.newRow"), "", false, fn() {
+}
+
+///|
+/// The picker's foot: 新预设, the dialog that makes one.
+fn preset_rows_foot(c : @ui.Ctx, src : Source, w : Workspace, address : String, close : () -> Unit) -> Unit {
+  c.spacer()
+  if @sf.button(c, @sf.t("web-main.preset.new"), key="pick-preset-new", icon="plus") {
     close()
     preset_dialog(src, w, address, None)
-  }, None)
+  }
 }
 
 ///|
@@ -157,80 +137,46 @@ fn preset_dialog(src : Source, w : Workspace, address : String, was : Json?) -> 
   open_dialog(
     title,
     fn(c, _) {
-      let p = @sf.theme().p
       // (what the station offers, as it is read now)
       let offered = items(presets_of(src, address), "candidates")
-      // its directories, then what can be added
+      // its folders: a line to find one or to paste a path, then those picked (ticked) and the rest offered, a tick each
       @sf.field(c, @sf.t("web-main.preset.dirs"), fn() {
-        if e.dirs.length() > 0 {
-          c.box(style=preset_chips, flow=true, line_gap=6.0, fn() {
-            for path in e.dirs {
-              let at = path
-              if @sf.chip(c, dir_label(Some(Json::object({ "path": Json::string(at) }))), key=key("dir/" + at), icon="close", inner=true) {
-                e.dirs.retain(fn(x) { x != at })
-              }
-            }
-          })
-          |> ignore
-        }
         let q = @sf.input(c, key("q"), placeholder=@sf.t("web-main.preset.search"), field=field_of(key("q"))).text.trim(chars=" \n").to_owned()
         let typed = q.has_prefix("/") || q.has_prefix("~")
-        let matching = offered.filter(fn(o) {
+        let found = fn(o : Json) {
           let one = Some(o)
-          q == "" ||
-          typed ||
-          text(one, "name").to_lower().contains(q.to_lower()) ||
-          text(one, "repo").to_lower().contains(q.to_lower())
-        })
-        // (with nothing typed, the first of them: the rest found by their name)
-        let shown = if q == "" && matching.length() > preset_offered_most { matching[:preset_offered_most].to_owned() } else { matching }
+          q == "" || typed || text(one, "name").to_lower().contains(q.to_lower()) || text(one, "repo").to_lower().contains(q.to_lower())
+        }
+        let rest = offered.filter(fn(o) { !e.dirs.contains(text(Some(o), "path")) && found(o) })
+        // (with nothing typed, the first of the rest: the others found by their name)
+        let shown = if q == "" && rest.length() > preset_offered_most { rest[:preset_offered_most].to_owned() } else { rest }
+        let tick = fn(path : String, label : String, note : String) {
+          let on = e.dirs.contains(path)
+          if @sf.check_row(c, key("dir/" + path), label, on, note~) != on {
+            if on {
+              e.dirs.retain(fn(x) { x != path })
+            } else {
+              e.dirs.push(path)
+            }
+          }
+        }
         c.box(style=preset_offered, fn() {
           if typed && !e.dirs.contains(q) {
-            let id = c.id(key("typed"))
-            if c.clicked(id) {
-              e.dirs.push(q)
-              field_of(key("q")).set("")
+            tick(q, @sf.t("web-main.preset.addPath", args=[("path", q)]), "")
+          }
+          for path in e.dirs {
+            match offered.iter().find_first(fn(o) { text(Some(o), "path") == path }) {
+              Some(o) => tick(path, text(Some(o), "name"), offer_note(Some(o)))
+              None => tick(path, dir_label(Some(Json::object({ "path": Json::string(path) }))), path)
             }
-            let b = c.box(style=station_row.then(@sf.panel_row_in()), id~, fn() {
-              c.box(style=station_row_mark_box, fn() { @sf.icon(c, "folder-plus", size=new_mark, color=p.text) |> ignore }) |> ignore
-              c.text(@sf.t("web-main.preset.addPath", args=[("path", q)]), style=station_row_name) |> ignore
-              @sf.press_ripple(c, id, @sf.row_corner)
-            })
-            c.semantics(b, Button, id~, label=q)
           }
           for o in shown {
-            let one = Some(o)
-            let path = text(one, "path")
-            let on = e.dirs.contains(path)
-            let id = c.id(key("offer/" + path))
-            if c.clicked(id) {
-              if on {
-                e.dirs.retain(fn(x) { x != path })
-              } else {
-                e.dirs.push(path)
-              }
-            }
-            let chats = count(one, "chats")
-            let sub = [text(one, "repo"), if chats > 0 { @sf.t("web-main.preset.chats", args=[("n", chats.to_string())]) } else { "" }].filter(fn(s) { s != "" })
-            let b = c.box(style=station_row.then(@sf.panel_row_in()), id~, fn() {
-              c.box(style=station_row_mark_box, fn() { @sf.icon(c, if text(one, "repo") != "" { "file-code" } else { "folder" }, size=new_mark, color=p.text) |> ignore }) |> ignore
-              c.box(style=station_row_words, fn() {
-                c.box(style=station_row_head, fn() {
-                  c.text(text(one, "name"), style=station_row_name) |> ignore
-                  @sf.icon(c, if on { "check" } else { "plus" }, size=new_mark, color=if on { p.accent } else { p.muted }) |> ignore
-                })
-                |> ignore
-                c.text(join(sub, " · "), style=preset_row_sub) |> ignore
-              })
-              |> ignore
-              @sf.press_ripple(c, id, @sf.row_corner)
-            })
-            c.semantics(b, Button, id~, label=text(one, "name"), check=if on { On } else { Off })
+            tick(text(Some(o), "path"), text(Some(o), "name"), offer_note(Some(o)))
           }
-          if shown.length() < matching.length() {
-            c.text(@sf.t("web-main.preset.more", args=[("n", (matching.length() - shown.length()).to_string())]), style=preset_row_sub) |> ignore
+          if shown.length() < rest.length() {
+            c.text(@sf.t("web-main.preset.more", args=[("n", (rest.length() - shown.length()).to_string())]), style=preset_row_sub) |> ignore
           }
-          if offered.length() == 0 && !typed {
+          if offered.length() == 0 && e.dirs.length() == 0 && !typed {
             c.text(@sf.t("web-main.preset.empty"), style=preset_row_sub) |> ignore
           }
         })
@@ -318,6 +264,14 @@ fn preset_dialog(src : Source, w : Workspace, address : String, was : Json?) -> 
 }
 
 ///|
+/// What an offered folder's row says under its name: the repository it is a clone of, how many chats worked in it.
+fn offer_note(o : Json?) -> String {
+  let chats = count(o, "chats")
+  let parts = [text(o, "repo"), if chats > 0 { @sf.t("web-main.preset.chats", args=[("n", chats.to_string())]) } else { "" }]
+  join(parts.filter(fn(x) { x != "" }), " · ")
+}
+
+///|
 /// What is under a row's name: its directories, where a repository is from and how many chats worked in it.
 // kept across runs: a value (no field of it changes)
 let preset_row_sub : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Cut)
@@ -337,11 +291,11 @@ let preset_drop_words : Int = 1
 let preset_capsule_quiet : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Cut)
 
 ///|
-/// The directories picked, a chip each, wrapping.
+/// The folders' tick rows, straight on the dialog, out past its words by a row's own room (as accounts.mbt
+/// pf_spread_rows: each box under the field's label, not indented past it).
 // kept across runs: a value (no field of it changes)
-let preset_chips : @ui.Style = @ui.css("row w=Full gap=S1_5")
+let preset_offered : @ui.Style = @sf.outset_start(@sf.row_corner)
 
 ///|
-/// What is offered to add, under the line to find it: as tall as some rows, scrolled past that.
-// kept across runs: a value (no field of it changes)
-let preset_offered : @ui.Style = @ui.css("w=Full gap=S0_5")
+/// A preset's 编辑 in its row: as high as the row's name's line.
+let preset_edit_side : Double = 24.0

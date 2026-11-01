@@ -2021,7 +2021,6 @@ web-main.preset.pick
 web-main.preset.none
 web-main.preset.noneNote
 web-main.preset.new
-web-main.preset.newRow
 web-main.preset.edit
 web-main.preset.dirs
 web-main.preset.search

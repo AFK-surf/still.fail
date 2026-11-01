@@ -851,7 +851,6 @@
   "web-main.preset.none": "不用预设",
   "web-main.preset.noneNote": "只带通用的记忆和 skill",
   "web-main.preset.new": "新预设",
-  "web-main.preset.newRow": "新预设…",
   "web-main.preset.edit": "编辑预设",
   "web-main.preset.dirs": "目录",
   "web-main.preset.search": "搜仓库，或粘贴一个路径",

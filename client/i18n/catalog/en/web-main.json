@@ -920,7 +920,6 @@
   "web-main.preset.none": "No preset",
   "web-main.preset.noneNote": "Only the shared memory and skills",
   "web-main.preset.new": "New preset",
-  "web-main.preset.newRow": "New preset…",
   "web-main.preset.edit": "Edit preset",
   "web-main.preset.dirs": "Folders",
   "web-main.preset.search": "Search repositories, or paste a path",
