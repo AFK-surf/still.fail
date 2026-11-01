@@ -239,13 +239,13 @@ test "under the page: the whole screen, its name and a close over it; back close
   t.frame()
   assert_true(t.find("release.html") is Some(_))
   let full = opened_views(t, 2)
-  assert_eq(full.length(), 3)
+  assert_eq(full.length(), 2)
   // a page of its own: it keeps its touches
-  assert_false(t.views().iter().any(fn(l) { l.has_prefix("touch \{full[2]} ") }))
+  assert_false(t.views().iter().any(fn(l) { l.has_prefix("touch \{full[1]} ") }))
   t.back()
   t.frame()
   assert_true(t.find("release.html") is None)
-  assert_true(t.views().contains("close \{full[2]}"))
+  assert_true(t.views().contains("close \{full[1]}"))
 }
 
 ///|
@@ -314,10 +314,13 @@ test "a mermaid chart is the app's own picture, no page for it; over the whole s
   let (page, other) = viz_views(t)
   assert_true(page != 0)
   assert_eq(other, 0)
-  assert_true(t.image_loads().iter().any(fn(l) { l.0.has_prefix("mem:mermaid/") }))
-  // the way under it to the whole screen: the viewer, the chart's picture in it
-  let full = t.semantics().iter().find_first(fn(s) { s.label == viz_tr("android-misc.viz.fullscreen") && !s.hidden })
-  guard full is Some(f) else { fail("no way to the whole screen under the chart") }
+  // a picture, not its code
+  assert_true(t.find("graph LR; 构建-->签名-->发布") is None)
+  // the way under it to the whole screen (the lower of the two: the page the message places is over it): the viewer,
+  // the chart's picture in it
+  let ways = t.semantics().filter(fn(s) { s.label == viz_tr("android-misc.viz.fullscreen") && !s.hidden })
+  assert_eq(ways.length(), 2)
+  let f = if ways[0].rect.1 > ways[1].rect.1 { ways[0] } else { ways[1] }
   t.tap(f.rect.0 + f.rect.2 / 2.0, f.rect.1 + f.rect.3 / 2.0)
   t.frames_owed()
   match @sfbase.viewer.get() {

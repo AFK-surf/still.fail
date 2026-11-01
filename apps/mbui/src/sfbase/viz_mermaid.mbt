@@ -93,8 +93,8 @@ pub fn viz_mermaid_block(c : @ui.Ctx, src : Source, station : String, place : St
     _ => {
       if mermaid_charts.get(key) is None {
         mermaid_charts[key] = ChartComing
-        // (asked once the frame's builds are over: a build tells nothing outside)
-        c.after_build("mermaid/" + key, fn() { mermaid_asked(src, key, ask) })
+        // (asked as a viz's file is fetched: told, not done while the frame builds)
+        c.tell("viz/mermaid/" + key, fn() { mermaid_asked(src, key, ask) })
       }
       // its place while it is made, as a page's while it draws itself
       c.box(style=viz_mermaid_box, fn() {
