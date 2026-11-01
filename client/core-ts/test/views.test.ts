@@ -14,6 +14,7 @@ import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts"
 import { FakeHost } from "../src/testing.ts";
 import { attention, choices, runnableOn } from "../src/views/models.ts";
 import { Views, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage } from "../src/views/views.ts";
+import { localDay } from "../src/views/usage.ts";
 import { installView, profile as presentProfile } from "../src/present.ts";
 import { markdown } from "../src/markdown.ts";
 
@@ -22,7 +23,7 @@ holdLanguage();
 type J = any;
 const DAY_MS = 86_400_000;
 
-const VIEWS = new Set(["chats", "chatSearch", "stations", "stationNet", "connects", "chat", "history", "archive", "workspaceMarks", "chatJobs", "imageNear", "longJobs"]);
+const VIEWS = new Set(["chats", "chatSearch", "stations", "stationNet", "connects", "chat", "history", "archive", "workspaceMarks", "chatJobs", "imageNear", "longJobs", "usage", "profiles"]);
 
 class Router implements Source {
   views!: Views;
@@ -172,6 +173,93 @@ const overviewOf = (connects: J[], profiles: J[]): J => ({
 const hostInfo = (hostname: string): J => ({
   hostname, os: "macOS 26", arch: "arm64", cpus: 8, cpuModel: "M4", load: 0.2, uptimeSec: 100,
   memory: { totalBytes: 1024, usedBytes: 512, swapUsedBytes: null }, disk: { path: "/", totalBytes: 1024, freeBytes: 512 }, emberRssBytes: 10, checkedAt: 1,
+});
+
+for (const name of ["usage", "profiles"]) {
+  test(`${name}_is_not_rebuilt_for_a_stations_host_or_route_reading`, async () => {
+    const t = setup();
+    const u = ui();
+    const topic: Topic = name === "usage" ? { topic: name, scope: "ws", days: 7 } : { topic: name, scope: "ws" };
+    // The stations page also watches these readings, so they continue to arrive while this view is live.
+    t.store.watch(hostOf("ws/st"), () => {});
+    t.store.watch({ topic: "way", station: "ws/st" }, () => {});
+    t.set(workspace(), oneStation());
+    t.set(link("ws/st"), { state: "online" });
+    t.set(overview("ws/st"), overviewOf([], [profile("p1")]));
+    t.set(hostOf("ws/st"), hostInfo("studio"));
+    t.set({ topic: "stationUsage", station: "ws/st" }, { rows: [], since: 0, reading: false });
+    t.subscribe(1, topic);
+    await t.read(u, 1);
+    assert.ok(u.value, `${name} is shown`);
+    const before = t.router.computed;
+    t.set(hostOf("ws/st"), { ...hostInfo("studio"), load: 0.8, checkedAt: 2 });
+    await t.read(u, 1);
+    assert.equal(t.router.computed, before, `${name} did not change when the host's load changed`);
+    t.set({ topic: "way", station: "ws/st" }, { via: "relay", rttMs: 123 });
+    await t.read(u, 1);
+    assert.equal(t.router.computed, before, `${name} did not change when the route changed`);
+  });
+
+  test(`${name}_is_not_rebuilt_for_unrelated_station_overview_or_link_changes`, async () => {
+    const t = setup();
+    const u = ui();
+    const topic: Topic = name === "usage" ? { topic: name, scope: "ws", days: 7 } : { topic: name, scope: "ws" };
+    const over = overviewOf([], [profile("p1")]);
+    t.store.watch(link("ws/st"), () => {});
+    t.set(workspace(), oneStation());
+    t.set(link("ws/st"), { state: "online" });
+    t.set(overview("ws/st"), over);
+    t.set({ topic: "stationUsage", station: "ws/st" }, { rows: [], since: 0, reading: false });
+    t.subscribe(1, topic);
+    await t.read(u, 1);
+    const before = t.router.computed;
+    t.set(overview("ws/st"), { ...over, counts: { sessions: 3, running: 2, warm: 1 } });
+    await t.read(u, 1);
+    assert.equal(t.router.computed, before, `${name} did not change when an agent started`);
+    t.set(link("ws/st"), { state: "online", catching: 2 });
+    await t.read(u, 1);
+    assert.equal(t.router.computed, before, `${name} did not change while the link stayed online`);
+  });
+}
+
+test("usage_keeps_its_spending_and_account_allowance_current", async () => {
+  const t = setup();
+  const u = ui();
+  const quota = (usedPercent: number) => ({ state: "ok", windows: [{ label: "5h", usedPercent }], checkedAt: 1 });
+  t.set(workspace(), oneStation());
+  t.set(link("ws/st"), { state: "online" });
+  t.set(overview("ws/st"), overviewOf([], [profile("p1", { quota: quota(20) })]));
+  t.set({ topic: "stationUsage", station: "ws/st" }, { rows: [], since: 0, reading: false });
+  t.subscribe(1, { topic: "usage", scope: "ws", days: 7 });
+  await t.read(u, 1);
+  assert.equal(u.value.accounts[0].quota.windows[0].usedPercent, 20);
+  const now = t.host.nowMs();
+  const day = localDay(now, t.host.utcOffsetMin(now));
+  t.set({ topic: "stationUsage", station: "ws/st" }, { rows: [{ day, session: "s1", thread: 7, person: "Me@x.com", profile: "p1", model: "claude-opus-5-5", calls: 1, cost: 2 }], since: 0, reading: false });
+  await t.read(u, 1);
+  assert.equal(u.value.tiles[0].value, "$2.00");
+  t.set(overview("ws/st"), overviewOf([], [profile("p1", { quota: quota(70) })]));
+  await t.read(u, 1);
+  assert.equal(u.value.accounts[0].quota.windows[0].usedPercent, 70);
+  t.set(link("ws/st"), { state: "offline" });
+  await t.read(u, 1);
+  assert.ok(u.value.notes.some((s: string) => s.includes("studio")));
+});
+
+test("profiles_keep_their_names_and_online_state_current", async () => {
+  const t = setup();
+  const u = ui();
+  t.set(workspace(), oneStation());
+  t.set(overview("ws/st"), overviewOf([], [profile("p1", { name: "Old" })]));
+  t.subscribe(1, { topic: "profiles", scope: "ws" });
+  await t.read(u, 1);
+  assert.equal(u.value.items[0].title, "Old");
+  t.set(overview("ws/st"), overviewOf([], [profile("p1", { name: "New" })]));
+  await t.read(u, 1);
+  assert.equal(u.value.items[0].title, "New");
+  t.set(link("ws/st"), { state: "offline" });
+  await t.read(u, 1);
+  assert.equal(u.value.items[0].members[0].online, false);
 });
 const slackThread = (id: number): J => ({
   id, surface: "slack:T1", channel: "C1", channelName: "ops", threadTs: "1.0", title: null, createdBy: null, creator: null, createdAt: 1, sessions: [], last: 0,
