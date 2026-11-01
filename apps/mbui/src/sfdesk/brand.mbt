@@ -41,12 +41,22 @@ let update_key_side : Double = 32.0
 let update_key_mark : Double = 16.0
 
 ///|
-/// What the key says, its tip, and whether it is under way.
+/// What the key says, its tip (the key is a mark alone: what it does or what is under way is said there, in every
+/// state it shows in), and whether it is under way.
 fn update_said() -> (String, String, Bool) {
   match update_now() {
     Allow(_) =>
       (@sf.t("android-misc.updates.allow"), @sf.t("android-misc.updates.allowWhy", args=[("app", "still.fail")]), false)
-    Installing(_) => (@sf.t("web-main.appUpdate.restarting"), "", true)
+    Checking => {
+      let checking = @sf.t("android-misc.updates.checking")
+      (checking, checking, true)
+    }
+    Installing(v) =>
+      (
+        @sf.t("web-main.appUpdate.restarting"),
+        @sf.t("android-misc.updates.installingVersion", args=[("version", text(Some(v), "versionName"))]),
+        true,
+      )
     Ready(v, ..) =>
       (
         @sf.t("desktop.update.restart"),

@@ -713,6 +713,41 @@ test "wide: a newer build of the desktop app ready: 重启更新 the update key 
 }
 
 ///|
+test "wide: 重启更新 a mark alone, its tip as the pointer rests on it says what it does in every state it shows in: to which build; while still.fail cloud is asked first, that (the key staying); while it goes in, that" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  t.frame()
+  t.run_for(@ui.move_most_ms)
+  let said = fn(s : String) { t.words().filter(fn(w) { w.0.contains(s) && w.5 > 0.5 }) }
+  assert_eq(said("重启以更新到 0.1.9999").length(), 0)
+  let (x, y, w, h) = t.query(Button, label="重启更新").unwrap().rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(@sf.tip_delay_ms * 2.0)
+  let tip = said("重启以更新到 0.1.9999")
+  assert_eq(tip.length(), 1, msg="its tip: \{t.words().map(fn(w) { w.0 }).join("|")}")
+  // under the key, in the window
+  assert_true(tip[0].2 >= y + h, msg="\{tip[0]} under \{y + h}")
+  assert_true(tip[0].1 >= 0.0, msg="\{tip[0]}")
+  // pressed, still.fail cloud asked first: the key stays, under way, said so
+  @sfbase.update.checking.set(true)
+  t.frame()
+  t.run_for(@sf.tip_delay_ms * 2.0)
+  let checking = t.query(Button, label="正在检查最新版本")
+  assert_true(checking is Some(_), msg="the key while it asks")
+  assert_true(checking.unwrap().disabled)
+  assert_eq(said("正在检查最新版本").length(), 1, msg="\{t.words().map(fn(w) { w.0 }).join("|")}")
+  @sfbase.update.checking.set(false)
+  // going in
+  t.tells_update("{\"phase\":\"installing\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-beta-0.1.9999.apk\"}")
+  t.frame()
+  t.run_for(@sf.tip_delay_ms * 2.0)
+  assert_true(t.query(Button, label="正在重启").unwrap().disabled)
+  assert_eq(said("正在安装 0.1.9999").length(), 1, msg="\{t.words().map(fn(w) { w.0 }).join("|")}")
+}
+
+///|
 test "wide: under a phone's status bar, 重启更新 below it (the bar takes what is pressed on it), in the sidebar's first row" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")

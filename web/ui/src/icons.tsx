@@ -541,6 +541,10 @@ export function Unplug(props: IconProps) {
   return <Svg {...props}><path d="M8.5 3.5V8 M15.5 3.5V6 M6 8H12 M18 11V12Q18 17 12 17Q6 17 6 12V8 M12 17V20.5 M3.5 20.5L20.5 3.5" /></Svg>;
 }
 
+export function Update(props: IconProps) {
+  return <Svg {...props}><circle cx="12" cy="12" r="8.5" /><path d="M12 16V8 M9 11L12 8L15 11" /></Svg>;
+}
+
 export function Upload(props: IconProps) {
   return <Svg {...props}><path d="M12 15V3.5 M7.5 8L12 3.5L16.5 8 M4.5 20H19.5" /></Svg>;
 }
@@ -727,6 +731,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "trackpad": Trackpad,
   "trash": Trash,
   "unplug": Unplug,
+  "update": Update,
   "upload": Upload,
   "user-plus": UserPlus,
   "user": User,
