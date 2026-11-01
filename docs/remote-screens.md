@@ -577,7 +577,9 @@ In a message the link alone on its line is the screen's card (the core's `screen
 the list, `gone` once the list has it no more); within a sentence, its title. A screen the list says `peek` shows live
 in its card: a preview view (JPEG, about the card's width in device pixels) while the card is on the screen and the
 app shown, each frame acknowledged half a second after the one before, so about two pictures a second; its mark until
-the first comes.
+the first comes. In the app, a browser's preview has a fixed 16:10 shape: its changing viewport does not resize the
+message or move the rest of the list. A simulator's preview follows the screen's size within bounds. The picture fills
+its preview, cropped from the top when it is taller than the preview.
 
 On a chat's page (web: pages/ChatPage.tsx) a card not `gone` also opens its screen beside the chat, from a button at
 the end of its words: a tab of the side panel (`screen:["<station>","<id>"]`, client/core-ts/src/chat-tabs.ts), named

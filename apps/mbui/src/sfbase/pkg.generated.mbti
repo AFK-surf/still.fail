@@ -1109,7 +1109,7 @@ pub let peek_frame : @ui.Style
 
 pub let peek_ms : Double
 
-pub fn peek_picture(@ui.Ctx, String, Double, Double) -> Unit
+pub fn peek_picture(@ui.Ctx, String) -> Unit
 
 pub let peek_ratio : Double
 

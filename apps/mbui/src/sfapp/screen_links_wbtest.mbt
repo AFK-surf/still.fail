@@ -170,6 +170,14 @@ fn middle_words(t : @ui.Tester, words : String) -> Unit {
 }
 
 ///|
+/// The height of the preview above the title, including its fixed spacing to the preceding paragraph.
+fn preview_gap(t : @ui.Tester) -> Double {
+  let (_, y, _, h) = t.rect_of("预览在它的浏览器里").unwrap()
+  let (_, below, _, _) = t.rect_of("发布清单预览").unwrap()
+  below - y - h
+}
+
+///|
 /// A button on 共享调试's card by its words, where it has one: its middle.
 fn adb_button_at(t : @ui.Tester, label : String) -> (Double, Double)? {
   for s in t.semantics() {
@@ -308,6 +316,100 @@ test "a tab's preview: asked for while its card is on the screen, cancelled as i
   // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
   t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
+}
+
+///|
+test "a tall browser picture fills its preview from the top of the page" {
+  let frame_w = @sf.peek_frame_px
+  let frame_h = frame_w / 1.6
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(style=@ui.style(w=Fixed(frame_w), h=Fixed(frame_h), clip=true), fn() {
+        @sfbase.peek_picture(c, "screen.png")
+      })
+      |> ignore
+    },
+    w=frame_w,
+    h=frame_h,
+    images=[("screen.png", 390, 760)],
+  )
+  t.draw()
+  let drawn = t.drawn_images()
+  assert_eq(drawn.length(), 1)
+  let image = drawn[0]
+  assert_true(
+    image[0].abs() < 0.01 && image[1].abs() < 0.01 && (image[2] - frame_w).abs() < 0.01 &&
+    (image[3] - frame_h).abs() < 0.01,
+    msg="the picture fills the card without empty sides",
+  )
+  assert_true(image[5].abs() < 0.01 && image[7] < 1.0, msg="the card shows the top of the page")
+}
+
+///|
+test "a browser's card keeps its size as the browser is opened and closed on a small screen" {
+  let size = Ref((1280.0, 800.0))
+  let streams = []
+  let cancelled = []
+  let calls : Array[Made] = []
+  let t = screen_links_core(streams, cancelled, calls, over=fn(name, topic) {
+    guard name == "screenCard" && topic.value is Some(Object(card)) && text(topic.value, "kind") == "browser" &&
+      !flag(topic.value, "gone") else { topic }
+    let next = card.copy()
+    next["width"] = Json::number(size.val.0)
+    next["height"] = Json::number(size.val.1)
+    { ..topic, value: Some(Json::object(next)) }
+  })
+  scroll_to_words(t, "发布清单预览")
+  middle_words(t, "发布清单预览")
+  let gap = fn() { preview_gap(t) }
+  let before = gap()
+  let s = streams[running(streams, cancelled)[0] - 1]
+  (s.on_value)({ "frame": { "ts": 101 } }, Some(fixture_file_png("peek.png")))
+  t.frame()
+  assert_eq(gap(), before, msg="the picture arriving does not change the card")
+  // The browser is laid out for a small screen while its viewer is open. Its reported viewport changes in the
+  // screen list, including while the chat is still visible; it goes back when the viewer closes.
+  size.val = (390.0, 760.0)
+  t.frame()
+  assert_eq(gap(), before, msg="the browser adapting to its viewer does not resize its card")
+  // A new, portrait picture can arrive too; it replaces the old one inside the same card.
+  let view = text(Some(s.params), "view")
+  (s.on_value)({ "frame": { "ts": 102 } }, Some(fixture_file_png("after.png")))
+  t.run_for(@ui.move_most_ms)
+  assert_true(image_line(t, "mem:sf/peek/\{view}/1") != "")
+  assert_eq(gap(), before, msg="a picture in the new shape does not resize the card")
+  t.tap_text("发布清单预览")
+  t.frame()
+  assert_true(app.nav.top() is Screen(_))
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(gap(), before, msg="the card has the same size on returning to the chat")
+  size.val = (1280.0, 800.0)
+  t.frame()
+  assert_eq(gap(), before, msg="the browser returning to its former size does not resize its card")
+  size.val = (0.0, 0.0)
+  t.frame()
+  assert_eq(gap(), before, msg="the screen's size not yet known does not resize its card")
+}
+
+///|
+test "a simulator's preview follows the simulated screen when it turns" {
+  let size = Ref((390.0, 844.0))
+  let t = screen_links_core([], [], [], over=fn(name, topic) {
+    guard name == "screenCard" && topic.value is Some(Object(card)) && text(topic.value, "kind") == "browser" &&
+      !flag(topic.value, "gone") else { topic }
+    let next = card.copy()
+    next["kind"] = Json::string("simulator")
+    next["width"] = Json::number(size.val.0)
+    next["height"] = Json::number(size.val.1)
+    { ..topic, value: Some(Json::object(next)) }
+  })
+  scroll_to_words(t, "发布清单预览")
+  middle_words(t, "发布清单预览")
+  let before = preview_gap(t)
+  size.val = (844.0, 390.0)
+  t.frame()
+  assert_true(preview_gap(t) < before, msg="the landscape simulator has a shorter preview")
 }
 
 ///|
