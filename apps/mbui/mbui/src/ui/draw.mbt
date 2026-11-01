@@ -278,6 +278,18 @@ let mode_draw : Int = 2
 let after_layout_hooks : Array[(Ctx) -> Unit] = []
 
 ///|
+/// What runs once a frame's builds are over (each built and laid out), before it is painted: what it tells is for the
+/// next frame (the motion package: a measure laid out the frame before and not in this one, none from the next).
+// kept across runs: installed once in the process by the packages over ui (their `installed`)
+let frame_built_hooks : Array[(Ctx) -> Unit] = []
+
+///|
+/// `f` runs every frame once its builds are over, before it is painted: what it changes is read from the next frame.
+pub fn on_frame_built(f : (Ctx) -> Unit) -> Unit {
+  frame_built_hooks.push(f)
+}
+
+///|
 /// What is drawn under a list's rows (its node), before them.
 // kept across runs: installed once in the process by the packages over ui (their `installed`)
 let underlay_hooks : Array[(Ctx, Int) -> Unit] = []

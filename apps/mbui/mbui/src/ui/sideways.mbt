@@ -372,6 +372,10 @@ fn Ctx::sideways_after_layout(self : Ctx) -> Unit {
   }
   let gone : Array[Int] = []
   sideways.each(fn(id, st) {
+    // (a field of the window's tree's: kept as long as its node is, tree_field.mbt; not built by the old frame)
+    if st.field && tree_field_scrolls(id) {
+      return
+    }
     if st.frame != self.build_no {
       if !st.held {
         gone.push(id)

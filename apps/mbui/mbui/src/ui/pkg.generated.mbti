@@ -140,6 +140,8 @@ pub let fake_passkey_asks : Array[(String, String, String, String)]
 
 pub fn feel_as(Int32) -> Unit
 
+pub fn field(@view.View, Field, placeholder? : String, font_size? : Double, line? : Double, max_lines? : Int32, color? : Int64, placeholder_color? : Int64, caret_color? : Int64, enter_sends? : Bool, shorter? : Array[String], trim? : Bool, leaves? : Array[Int32], ime_action? : Int32, paste_limit? : Int32, secret? : Bool, words? : Bool, look? : (String) -> (String, Array[(Int32, Int32, Int64)]), submitted? : (String) -> Unit, pasted? : (String) -> Unit, files? : (Array[(String, Bytes)]) -> Unit, size_by? : () -> Double, colors_by? : () -> (Int64, Int64, Int64)) -> @view.View
+
 pub fn files_held() -> (Double, Double)?
 
 pub fn finger_target() -> Double
@@ -375,6 +377,8 @@ pub fn old_views_look(Ctx, Look) -> Bool
 pub fn on_after_layout((Ctx) -> Unit) -> Unit
 
 pub fn on_app_change((Bool, Bool) -> Unit) -> Unit
+
+pub fn on_frame_built((Ctx) -> Unit) -> Unit
 
 pub fn on_list_underlay((Ctx, Int32) -> Unit) -> Unit
 
@@ -917,6 +921,7 @@ pub struct Ctx {
   mut took_input : Bool
   mut read_back_moved : Bool
   mut read_back_key : String
+  mut read_back_whole : Bool
   laid_reads : Map[Int32, ((Double, Double, Double, Double)?, SourceLoc)]
   size_reads : Map[Int32, ((Double, Double)?, SourceLoc)]
   place_reads : Map[Int32, (String, (Int32, Double, Double)?)]
@@ -1101,6 +1106,7 @@ pub fn Ctx::finger_reads(Self) -> (Double, Double)?
 pub fn Ctx::fitting_width(Self, Double, Array[Double]) -> Double
 pub fn Ctx::floats_over(Self, Int32) -> Unit
 pub fn Ctx::focus_editor(Self, String) -> Unit
+pub fn Ctx::focus_field(Self, Field) -> Unit
 pub fn Ctx::focus_gained(Self, Int32) -> Bool
 pub fn Ctx::focus_on(Self, Int32, visible? : Bool) -> Unit
 pub fn Ctx::focus_roved_to(Self, Int32) -> Bool
@@ -1202,7 +1208,7 @@ pub fn Ctx::moved(Self, String, Double) -> Double
 pub fn Ctx::moved_by(Self, Int32, (Double, Double) -> (Double, Double)) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::moving(Self, Mover, &Moving, what? : String, loc~ : SourceLoc) -> Unit
-pub fn Ctx::moving_as(Self, Mover, &Moving, String) -> Unit
+pub fn Ctx::moving_as(Self, Mover, &Moving, String, tell? : Bool) -> Unit
 pub fn Ctx::narrow(Self) -> Bool
 pub fn Ctx::native(Self, NativeView, w? : Size, h? : Size, content? : (Double, Double, Double, Double)?, radius? : Double, corners? : (Double, Double, Double, Double)) -> Int32
 pub fn[P] Ctx::nav(Self, Nav[P], (P) -> Unit, bg? : Int64, edge? : Double, floor? : Int32, takes_back? : Bool) -> Int32
@@ -1436,6 +1442,7 @@ type FakeHost
 type Field
 pub fn Field::colors(Self, placeholder~ : Int64, caret~ : Int64) -> Unit
 pub fn Field::composed_said(Self) -> String
+pub fn Field::focus(Self) -> Unit
 pub fn Field::follow(Self, String, generation? : Int32) -> Unit
 pub fn Field::laid(Self, font_size? : Double, line? : Double, max_lines? : Int32, trim? : Bool) -> FieldLaid
 pub fn Field::new(text? : String) -> Self

@@ -321,6 +321,10 @@ fn view_forget() -> Unit {
   view_shape_of.val = OfOld
   let c = g()
   targets_forget()
+  // (each field of the tree's its editor no longer: tree_field_gone, as its node is let go)
+  for id in tree_fields.keys().collect() {
+    tree_field_gone(id)
+  }
   c.back = None
   c.back_node = -1
   c.back_island = None
@@ -923,6 +927,12 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         inst_owners.painting = was
         inst_owners.tree_painting = was_tree
       }
+      None => ()
+    }
+    // (a field of its own (ui's field): its words, what is picked or composed, its caret, each frame where it is drawn and
+    // as big, as an old view's field is painted; not in its block, kept as it was made)
+    match tree_fields.get(c.id) {
+      Some(tf) => self.paint_tree_field(c.id, tf, x, y, c.w, c.h, s, a, laid=(ux, uy))
       None => ()
     }
     // (what it draws itself turned where it is drawn, as a look's turn is: about its middle, or the middle of what it
@@ -1554,7 +1564,11 @@ fn view_claimed(tree : @view.Tree, x : Double, y : Double, at : Double) -> Bool 
     g().scroll_lets_go(-1)
   }
   match view_held.val {
-    Some(Node(n)) => tree.press_held(n) |> ignore
+    Some(Node(n)) => {
+      tree.press_held(n) |> ignore
+      // (a field's press taken over: nothing of it kept)
+      tree_field_let_go(n, x, y, false)
+    }
     Some(Old(part, _)) => {
       view_input_went(part)
       old_pointer_now(3, x, y, 0, 0, h_event_time())
@@ -1655,6 +1669,8 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       false
     }
     (1, None) if over => {
+      // (no field of the tree's thumb pointed at under it)
+      tree_fields_pointed(None)
       view_input_went(-1)
       false
     }
@@ -1665,6 +1681,8 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       h_frame_owed()
       true
     }
+    // (a handle of the focused field of the tree's under it (Android's), before what is under it: that field's)
+    (0, _) if button != 2 && tree_field_handle_down(x, y, at) => true
     (0, _) =>
       match tree.target_at(x, y) {
         // (held by a node of the tree's: the finger its, each event at its moment)
@@ -1691,6 +1709,11 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
           // (the hold its, called off as any is: the window behind, the node taking no press, a second finger)
           if button != 2 {
             tree.event(at, fn() { tree.hold_press(id) })
+            // (a field of the tree's that takes it as it goes down (its caret put there, what is picked dragged on from
+            // there): its own from here, nothing of the tree's taking it over, as an old view's field's: view_old_moved)
+            if tree_field_bar_down(id, x, y, at) || tree_field_down(id, x, y, at) {
+              view_down.val = None
+            }
           }
           true
         }
@@ -1734,6 +1757,9 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       }
     // (moved: taken over by what holds where it went down, where that says it takes it (a column scrolling it up or
     // down: View::claims), what had it called off)
+    // (a field of the tree's the press went down on: what is picked dragged on, where it took it as it went down; how far
+    // a finger went, where it waits for a tap: tree_field_moved)
+    (1, Some(Node(id))) if tree_field_moved(id, x, y, at) => true
     (1, Some(Node(_) | Nowhere)) if view_claimed(tree, x, y, at) => true
     (1, Some(Old(part, _))) => {
       view_input_went(part)
@@ -1748,7 +1774,9 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       true
     }
     (1, Some(_)) => true
-    (1, None) =>
+    (1, None) => {
+      // (a field of the tree's thumb pointed at or not as the pointer goes: tree_field.mbt)
+      tree_fields_pointed(tree_field_at(x, y))
       match tree.target_at(x, y) {
         Hosted(_) => {
           view_input_went(if old_whole.val { -1 } else { old_part_hit(g(), x, y) })
@@ -1762,11 +1790,13 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
         }
         Pressed(_) | Dragged(_) | TopRow(_) => true
       }
+    }
     (2, Some(Node(id))) => {
       view_held.val = None
       if tree.press_held(id) && tree.target_at(x, y) == Pressed(id) {
         tree.run_press_at(id, at) |> ignore
       }
+      tree_field_let_go(id, x, y, true)
       h_frame_owed()
       true
     }
@@ -1799,8 +1829,9 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       h_frame_owed()
       true
     }
-    (4 | 5 | 6 | 8, Some(Node(_))) => {
-      // (a second finger on a press: called off, the rest nobody's)
+    (4 | 5 | 6 | 8, Some(Node(id))) => {
+      // (a second finger on a press: called off, the rest nobody's; a field's, nothing of it kept)
+      tree_field_let_go(id, x, y, false)
       view_held.val = Some(Nowhere)
       tree.event(at, fn() { tree.hold_lost_in(0) })
       true
@@ -1821,6 +1852,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
       // (called off: the press's hold let go, nothing pressed)
       view_held.val = None
       tree.press_held(id) |> ignore
+      tree_field_let_go(id, x, y, false)
       true
     }
     (2 | 3, Some(_)) => {
@@ -2158,6 +2190,11 @@ fn view_event_said(said : () -> Unit, f : () -> Unit) -> Unit {
 fn view_hold_lost() -> Unit {
   match (view_app.val, view_held.val) {
     (Some(tree), Some(Dragging(_))) | (Some(tree), Some(Node(_))) => {
+      // (a field of the tree's holding it: the press called off, nothing of it kept, tree_field.mbt)
+      match view_held.val {
+        Some(Node(n)) => tree_field_let_go(n, 0.0, 0.0, false)
+        _ => ()
+      }
       view_held.val = Some(Nowhere)
       tree.event(view_moment(), fn() { tree.hold_lost_in(0) })
       // (the shape of what the pointer is over now, the hold's no more)
@@ -3337,6 +3374,8 @@ fn tree_said_action(id : Int, action : Action) -> Bool {
           })
           h_frame_owed()
         }
+        // (words put in a field of its own in place of what it held: as an old view's editor takes them, tree_field.mbt)
+        SetText(_) if free => tree.event(view_moment(), fn() { tree_field_asked(nid, action) |> ignore })
         _ => ()
       }
       true

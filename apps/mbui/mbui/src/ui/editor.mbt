@@ -792,6 +792,20 @@ pub fn Ctx::editor(
       "Ctx::editor: one Field given to two editors in one build (\{st.built_key} id \{st.built_id} and \{key} id \{id}): a Field is one editor's",
     )
   }
+  // (nor a Field a field of the window's tree holds still: ui's field)
+  match st.tree_node {
+    Some(n) if field is Some(_) && tree_fields.contains(n) =>
+      abort("Ctx::editor: a Field given to \{key} that a field of the window's tree holds: a Field is one editor's")
+    _ => ()
+  }
+  // (the focus asked for it before anything held it (Ctx::focus_field): given now this editor holds it, where the old
+  // view it is being built in takes input (that one: its node not made yet, nothing found of it by its id))
+  if field is Some(_) && st.focus_asked {
+    st.focus_asked = false
+    if island_allows(self.island_said()) {
+      self.focus_moved(id)
+    }
+  }
   st.built_frame = self.build_no
   st.built_key = key
   st.built_id = id
@@ -1057,14 +1071,47 @@ fn EditorState::on_handle(self : EditorState, x : Double, y : Double) -> Bool {
 ///|
 /// A point in the window (`x`, `y`: where a pointer is, as the window is now) as a point of its words as they are
 /// placed (the terms st.ox, st.oy and its caret's place are in): where it is in an old view hosted in a node drawn
-/// moved, bigger or smaller since its words were placed (Ctx::island_now), the point of it drawn there now; else the
+/// moved, bigger or smaller since its words were placed (EditorState::drawn_now), the point of it drawn there now; else the
 /// same. None where it is drawn as nothing: no point of it there, nothing to do with the input. What takes a pointer
 /// in the window turns it so as it takes it (app.mbt); what is in its words' terms already (a trackpad's float,
 /// moved by its own way) is not turned again.
 fn EditorState::local(self : EditorState, x : Double, y : Double) -> (Double, Double)? {
-  match g().island_now_of_id(self.built_id) {
+  match self.drawn_now() {
     Some((px, py, qx, qy, s)) => if s > 0.0 { Some((px + (x - qx) / s, py + (y - qy) / s)) } else { None }
     None => Some((x, y))
+  }
+}
+
+///|
+/// How field `st` is drawn now against where its words were placed (the terms st.ox, st.oy and its caret's place are
+/// in): the top left they were placed about (px, py), where that is drawn now (qx, qy) and how big (s); a point p of
+/// them as placed is drawn at q + s·(p − p0). None where it is drawn as placed. The one place the way between the two
+/// is worked out, each way: a pointer brought into its words (EditorState::local), what is told the host of it where it
+/// is drawn (EditorState::drawn_box: its caret, its floating menu).
+fn EditorState::drawn_now(self : EditorState) -> (Double, Double, Double, Double, Double)? {
+  match self.tree_node {
+    // (held by a node of the window's tree: where it was placed as it was last drawn, where that node is drawn now and
+    // how big; drawn as nothing, no point of it anywhere)
+    Some(id) =>
+      match view_app.val {
+        Some(tree) =>
+          match tree.drawn_of(id) {
+            // (where its node is drawn, as its paint has it: Ctx::paint_tree_field's place, not set on the pixels)
+            Some(d) => Some((self.placed_x, self.placed_y, d.x, d.y, tree.drawn_scale(id)))
+            None => Some((self.placed_x, self.placed_y, 0.0, 0.0, 0.0))
+          }
+        None => None
+      }
+    None => g().island_now_of_id(self.built_id)
+  }
+}
+
+///|
+/// A box (`x`, `y`, `w`, `h`) of field `st`'s words as placed, where it is drawn now, as big (EditorState::drawn_now).
+fn EditorState::drawn_box(self : EditorState, x : Double, y : Double, w : Double, h : Double) -> (Double, Double, Double, Double) {
+  match self.drawn_now() {
+    Some((px, py, qx, qy, s)) => (qx + (x - px) * s, qy + (y - py) * s, w * s, h * s)
+    None => (x, y, w, h)
   }
 }
 
@@ -1073,7 +1120,7 @@ fn EditorState::local(self : EditorState, x : Double, y : Double) -> (Double, Do
 let caret_w : Double = 2.0
 
 ///|
-/// Where the caret at `off` is drawn in the field `n`, laid out as `tl` (x, y, w, h; round, its ends half circles):
+/// Where the caret at `off` is drawn in the field placed as `b`, laid out as `tl` (x, y, w, h; round, its ends half circles):
 /// about where it stands, kept in the field (where the words start at the field's edge, as a field with no frame of its
 /// own has them, the field's clip would cut half of it at a line's start; Compose's TextFieldCursor.kt coerces it so
 /// too); its line's whole height on Android (Compose's), elsewhere 2 short of each end. Android's handle hangs from its
@@ -1081,12 +1128,12 @@ let caret_w : Double = 2.0
 fn EditorState::caret_box(
   self : EditorState,
   tl : TextLayout,
-  n : Node,
+  b : FieldBox,
   off : Int,
 ) -> (Double, Double, Double, Double) {
   let (cx, cl) = self.place_of(tl, off)
   let top = self.oy + cl.to_double() * tl.line_h
-  let x = dmax(n.x, dmin(self.ox + cx - caret_w / 2.0, n.x + n.fw - caret_w))
+  let x = dmax(b.x, dmin(self.ox + cx - caret_w / 2.0, b.x + b.w - caret_w))
   if h_feel() == 2 {
     (x, top, caret_w, tl.line_h)
   } else {
@@ -1099,26 +1146,107 @@ fn EditorState::caret_box(
 /// line, as words that do not wrap, said the longest way that fits the room its words have (Ctx::editor `shorter`), the
 /// shortest cut with an ellipsis where none does; never cut by the field's edge.
 fn Node::hint_shown(self : Node, line : Double) -> TextLayout {
-  let lay = self.hint_lay(line)
-  said_in(self.text, lay(self.text), self.shorter, self.fw - self.pad_l - self.pad_r, lay)
+  self.field_box().hint_shown(line)
 }
 
 ///|
 /// How the field `n` lays its placeholder out on one line, in its `line`.
 fn Node::hint_lay(self : Node, line : Double) -> (String) -> TextLayout {
-  fn(s) { layout_text(s, self.font_size, 400, 1.0e9, false, line~, trim=self.line_trim) }
+  self.field_box().hint_lay(line)
+}
+
+///|
+/// What the field placed as `b` shows while nothing is typed in it (Node::hint_shown's).
+fn FieldBox::hint_shown(self : FieldBox, line : Double) -> TextLayout {
+  let lay = self.hint_lay(line)
+  said_in(self.hint, lay(self.hint), self.shorter, self.w - self.pad_l - self.pad_r, lay)
+}
+
+///|
+/// How the field placed as `b` lays its placeholder out on one line, in its `line`.
+fn FieldBox::hint_lay(self : FieldBox, line : Double) -> (String) -> TextLayout {
+  fn(s) { layout_text(s, self.font_size, 400, 1.0e9, false, line~, trim=self.trim) }
+}
+
+///|
+/// A field as it is placed, what its words are laid out and drawn by (whatever holds it: an old view's node, Node::
+/// field_box): what it is known by (its editor's, its focus's, its scroll's id), its box (x, y, w, h) and the room round
+/// its words in it, its words' size, weight, line, whether they wrap, `trim`; its placeholder and the shorter ways to
+/// say it.
+priv struct FieldBox {
+  id : Int
+  x : Double
+  y : Double
+  w : Double
+  h : Double
+  pad_l : Double
+  pad_t : Double
+  pad_r : Double
+  pad_b : Double
+  font_size : Double
+  weight : Int
+  line_h : Double
+  wrap : Bool
+  trim : Bool
+  hint : String
+  shorter : Array[String]
+}
+
+///|
+/// Field node `n` as it is placed.
+fn Node::field_box(self : Node) -> FieldBox {
+  {
+    id: self.id,
+    x: self.x,
+    y: self.y,
+    w: self.fw,
+    h: self.fh,
+    pad_l: self.pad_l,
+    pad_t: self.pad_t,
+    pad_r: self.pad_r,
+    pad_b: self.pad_b,
+    font_size: self.font_size,
+    weight: self.weight,
+    line_h: self.line_h,
+    wrap: self.wrap,
+    trim: self.line_trim,
+    hint: self.text,
+    shorter: self.shorter,
+  }
+}
+
+///|
+/// Its words' origin (st.ox, st.oy) where field `st` is placed as `b`, scrolled as it is.
+fn EditorState::placed_in(self : EditorState, b : FieldBox) -> Unit {
+  self.ox = b.x + b.pad_l - self.scroll_x
+  self.oy = b.y + b.pad_t - self.scroll
 }
 
 ///|
 fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
-  let st = match self.editors.get(n.id) {
+  // (its scroll bar, where its words scroll in it, found where it is drawn: in its own clip, scroll_bar.mbt)
+  self.paint_field(n.field_box(), fn() { if sideways.contains(n.id) { self.bar_at(n) } else { None } }, alpha)
+}
+
+///|
+/// The field placed as `fb` drawn (its words, what is picked, what is composed, its caret and handles; `bar`, where it
+/// is found as it is drawn, in its own clip: its scroll bar where it has one), at `alpha`: wherever it is held, as it is
+/// placed.
+fn Ctx::paint_field(
+  self : Ctx,
+  fb : FieldBox,
+  bar : () -> BarAt?,
+  alpha : Double,
+  bar_targets? : Bool = true,
+  bar_pointed? : (BarAt) -> Bool = fn(_) { false },
+) -> Unit {
+  let st = match self.editors.get(fb.id) {
     Some(s) => s
     None => return
   }
-  // Paint from the node's current position, even if it was moved without laying the editor out again. Input and the
+  // Paint from where it is placed now, even if it was moved without laying the editor out again. Input and the
   // host's caret position also use these origins after this paint.
-  st.ox = n.x + n.pad_l - st.scroll_x
-  st.oy = n.y + n.pad_t - st.scroll
+  st.placed_in(fb)
   let tl = match st.tl {
     Some(t) => t
     None => return
@@ -1127,15 +1255,15 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   // it, a growing composer's new line under its foot over its send, 2026-10-30)
   let k = clip_top()
   push_clip(
-    dmax(n.x, clip_stack[k]),
-    dmax(n.y, clip_stack[k + 1]),
-    dmin(n.x + n.fw, clip_stack[k + 2]),
-    dmin(n.y + n.fh, clip_stack[k + 3]),
+    dmax(fb.x, clip_stack[k]),
+    dmax(fb.y, clip_stack[k + 1]),
+    dmin(fb.x + fb.w, clip_stack[k + 2]),
+    dmin(fb.y + fb.h, clip_stack[k + 3]),
   )
   let i0 = self.ninst
   // its scroll bar, where its words scroll in it (scroll_bar.mbt)
-  let bar = if sideways.contains(n.id) { self.bar_at(n) } else { None }
-  let focused = self.has_focus(n.id)
+  let bar = bar()
+  let focused = self.has_focus(fb.id)
   let ml = st.marked.length()
   // selection
   let (a, b) = st.sel()
@@ -1158,10 +1286,10 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
       )
     }
   }
-  if st.text.length() == 0 && ml == 0 && n.text.length() > 0 {
+  if st.text.length() == 0 && ml == 0 && fb.hint.length() > 0 {
     // (a placeholder in no ink at all, hidden for now, is not drawn: nothing there to be seen or read)
     if (st.ph_color & 0xFFL) != 0L {
-      self.emit_text(n.hint_shown(st.line), st.ox, st.oy, st.ph_color, alpha)
+      self.emit_text(fb.hint_shown(st.line), st.ox, st.oy, st.ph_color, alpha)
     }
   } else {
     let spans = if st.secret { [] } else { st.look_shown().1 }
@@ -1198,25 +1326,25 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     }
     let coff = if ml > 0 { st.caret + st.msel_a } else { st.caret }
     if resting || phase % 2 == 0 {
-      let (x, y, w, h) = st.caret_box(tl, n, coff)
+      let (x, y, w, h) = st.caret_box(tl, fb, coff)
       self.emit_rect(x, y, w, h, w / 2.0, st.caret_color, 0.0, 0L, alpha)
     }
   }
   // where its words go on past an edge (scrolled up, down, along), they fade out towards it, as far as they go on (a
   // line's worth at most): not cut off there (the user, 2026-10-30: 「现在有很多粗暴裁剪的」)
   let up = st.scroll
-  let down = dmax(0.0, tl.h - (n.fh - n.pad_t - n.pad_b)) - st.scroll
+  let down = dmax(0.0, tl.h - (fb.h - fb.pad_t - fb.pad_b)) - st.scroll
   let back = st.scroll_x
-  let on = dmax(0.0, tl.w - dmax(0.0, n.fw - n.pad_l - n.pad_r - caret_w)) - st.scroll_x
+  let on = dmax(0.0, tl.w - dmax(0.0, fb.w - fb.pad_l - fb.pad_r - caret_w)) - st.scroll_x
   if up > 0.0 || down > 0.0 || back > 0.0 || on > 0.0 {
     let a = self.inst
     for q in i0..<self.ninst {
-      inst_fade(a, q * inst_size, n.y, cut_soft(up, up), n.y + n.fh, cut_soft(down, down))
-      inst_fade_across(a, q * inst_size, n.x, cut_soft(back, back), n.x + n.fw, cut_soft(on, on))
+      inst_fade(a, q * inst_size, fb.y, cut_soft(up, up), fb.y + fb.h, cut_soft(down, down))
+      inst_fade_across(a, q * inst_size, fb.x, cut_soft(back, back), fb.x + fb.w, cut_soft(on, on))
     }
   }
   match bar {
-    Some(b) => self.paint_bar(b, alpha)
+    Some(bar) => self.paint_bar(bar, alpha, target=bar_targets, pointed=bar_pointed(bar))
     None => ()
   }
   pop_clip()
@@ -1225,7 +1353,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   // popup's, a window of its own over the app's on Android: no box cuts it and nothing painted after it covers it,
   // Ctx::paint_top)
   if focused && st.handle && h_feel() == 2 && a == b && ml == 0 && st.text.length() > 0 {
-    let (cx, cy, cw, ch) = st.caret_box(tl, n, st.caret)
+    let (cx, cy, cw, ch) = st.caret_box(tl, fb, st.caret)
     let x = cx + cw / 2.0
     let y = cy + ch
     st.handle_on = true
@@ -1311,11 +1439,8 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
           let (cx, cl) = st.place_of(tl, coff)
           let x = st.ox + cx
           let y = st.oy + cl.to_double() * tl.line_h
-          // (where it is drawn: an old view hosted in a node drawn bigger or smaller, as big, about its top left)
-          let (x, y, w, h) = match self.island_now_of_id(st.built_id) {
-            Some((px, py, qx, qy, s)) => (qx + (x - px) * s, qy + (y - py) * s, 2.0 * s, tl.line_h * s)
-            None => (x, y, 2.0, tl.line_h)
-          }
+          // (where it is drawn, as big)
+          let (x, y, w, h) = st.drawn_box(x, y, 2.0, tl.line_h)
           let (a, b) = st.sel()
           let sig = "\{x.to_int()},\{y.to_int()},\{w},\{h},\{a},\{b},\{st.text.length()},\{stable_hash(st.text)}"
           if sig != self.ime_sig {
@@ -1392,6 +1517,10 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     built_frame: -1,
     built_key: "",
     built_id: 0,
+    tree_node: None,
+    focus_asked: false,
+    placed_x: 0.0,
+    placed_y: 0.0,
     said_words: None,
     said_composed: None,
     written: @signals.signal(0),
@@ -1913,7 +2042,9 @@ fn Ctx::sync_text_menu(self : Ctx) -> Unit {
           } else {
             (st.ox, tl.w)
           }
-          Some((x, top, w, bottom - top, st.can()))
+          // (where it is drawn, as big)
+          let (x, top, w, h) = st.drawn_box(x, top, w, bottom - top)
+          Some((x, top, w, h, st.can()))
         }
         None => None
       }

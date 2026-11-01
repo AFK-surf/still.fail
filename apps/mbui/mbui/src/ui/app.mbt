@@ -274,6 +274,10 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   // what came from outside and of the hand, taken: read, so that the next frame is built again as more comes
   // (frame_watch.mbt)
   frame_inputs_read()
+  // ⌘V's words for a field of the window's tree come with this frame (a Tester's answers by the frame: this one's from
+  // here, ClipboardRead::got), taken before the tree is brought for its paint: what it is laid out and drawn by
+  // (tree_field.mbt; a host's, at its answer's own moment: on_outside_now)
+  tree_fields_pasting(c.clock)
   // what is said to move, handed this frame's time, before the view reads where it is (motion_data.mbt)
   c.movers_sample()
   // what the boxes moved by a move_state were shown as in the last frame: where a move set out now starts (move_state.mbt)
@@ -300,11 +304,16 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     // is no signal of its own: its words measured, a row that cuts them so built again)
     if pass > 1 {
       nodes_run.fresh = true
-      nodes_run.whole = true
+      // (but what changed a signal its parts follow alone, Ctx::read_followed_changed: what read it built again, what
+      // did not kept)
+      if c.read_back_whole {
+        nodes_run.whole = true
+      }
     }
     let kept0 = nodes_run.kept
     layout_coming.val = true
     c.read_back_moved = false
+    c.read_back_whole = false
     old_built.val = false
     building.val = true
     c.build_no = next_build()
@@ -386,6 +395,10 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       continue
     }
     break
+  }
+  // what the packages over ui tell once the frame's builds are over, for the next (on_frame_built)
+  for f in frame_built_hooks {
+    f(c)
   }
   // the parts kept that this frame did not show let go (kept_part.mbt)
   parts_frame_end(c)
@@ -1765,6 +1778,8 @@ fn on_key(code : Int, mods : Int) -> Unit {
     if !window_key_taken(code, mods) {
       on_key_now(code, mods)
     }
+    // (what a field of the window's tree gave up of its words by it, told at its moment: tree_field.mbt)
+    tree_field_said()
   })
 }
 
@@ -1874,7 +1889,11 @@ fn key_in(code : Int, mods : Int) -> Unit {
 ///|
 fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
   // (one event, at its own moment: view_host.mbt)
-  view_event(fn() { on_text_now(kind, s, a, b) })
+  view_event(fn() {
+    on_text_now(kind, s, a, b)
+    // (what a field of the window's tree gave up of its words by it, told at its moment: tree_field.mbt)
+    tree_field_said()
+  })
 }
 
 ///|

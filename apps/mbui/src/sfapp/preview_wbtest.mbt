@@ -1059,7 +1059,10 @@ test "marking: a box's pin up and right of its corner wherever the marks before 
   assert_eq(marking.note, marking.shapes[1].id)
   t.run_for(note_pop_ms)
   assert_true(t.find("框") is Some(_))
-  assert_true(t.find("添加批注（可选）") is Some(_))
+  // (its field's placeholder: read out as the field's, drawn as a line of words)
+  assert_true(
+    t.all(TextField, label="添加批注（可选）").length() == 1 && t.text_runs().iter().any(fn(r) { r.text == "添加批注（可选）" }),
+  )
   assert_true(t.find("只引用") is None)
   t.type_text("这里对齐")
   let tick = t.reachable("icon:check")

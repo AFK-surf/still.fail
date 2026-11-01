@@ -411,6 +411,32 @@ test "an editor in an old view hosted in a node drawn half as big, a finger on i
 }
 
 ///|
+/// A finger's double tap 120 along the hosted editor's line drawn at `scale` (Android's host): the word there picked,
+/// the floating menu over it as the host was told it (shown, x, y, w, h).
+fn hosted_menu(scale : Double) -> (Bool, Double, Double, Double, Double) {
+  let s = @signals.signal(scale, same=fn(a, b) { a == b })
+  let field = Field::new(text="ab cd ef gh ij kl mn op qr st uv wx yz")
+  let t = hosted_scaled(s, {}, field, platform=2)
+  let (x, y) = (20.0 + 120.0 * scale, 20.0 + 10.0 * scale)
+  t.tap(x, y)
+  t.tap(x, y)
+  t.draw()
+  let (shown, mx, my, mw, mh, _) = t.text_menu()
+  (shown, mx, my, mw, mh)
+}
+
+///|
+test "an editor in an old view hosted in a node drawn half as big, a word picked by a finger: the floating menu told over it where it is drawn, as big" {
+  let (whole_shown, x, y, w, h) = hosted_menu(1.0)
+  assert_true(whole_shown, msg="whole: the menu up")
+  assert_eq(
+    hosted_menu(0.5),
+    (true, 20.0 + (x - 20.0) * 0.5, 20.0 + (y - 20.0) * 0.5, w * 0.5, h * 0.5),
+    msg="half: told over the word where it is drawn, as big: \{(x, y, w, h)} whole",
+  )
+}
+
+///|
 /// The hosted editor drawn at `scale`, its words double clicked 33 along its line and the pointer dragged on `dx`
 /// along (its own terms): what is picked.
 fn hosted_widened(scale : Double, dx : Double) -> (Int, Int) {

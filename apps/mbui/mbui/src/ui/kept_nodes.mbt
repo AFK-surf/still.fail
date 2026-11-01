@@ -414,11 +414,9 @@ fn rows_frame_start() -> Unit {
 /// part is built again; among another's nodes (`holder`), that one with it.
 fn row_watch(list : Int, item : Int, laid_pass : Ref[Int], holder : Ref[RowNodes?]) -> @signals.Watch {
   @signals.watch(fn() {
-    // (among another's nodes: that one built again for it, it with it)
-    match holder.val {
-      Some(o) => o.watch.touch()
-      None => ()
-    }
+    // (among another's nodes: that one built again for it, it with it, and what holds that, out to the last: one put
+    // back puts back what it holds as it was)
+    touch_holders(holder.val)
     if frame_running.val && frame_built.val && laid_pass.val != nodes_run.pass {
       return
     }
@@ -428,8 +426,64 @@ fn row_watch(list : Int, item : Int, laid_pass : Ref[Int], holder : Ref[RowNodes
     // (between frames: one owed; in one, the next asked for as it ends: on_frame)
     if !frame_running.val {
       h_frame_owed()
+    } else if building.val &&
+      (match old_view_of(kept_nodes.get((list, item))) {
+        Some(island) => !part_built_now(island)
+        None => false
+      }) {
+      // (an old view's, built in this pass already (laid_pass: one this pass has not come to yet builds from it as it
+      // is), its build over (one setting what it reads as it builds keeps to the next frame): what it read set by what
+      // came after it (a press on another taken as that one was built, a picture tapped in a list's row as it was laid
+      // out, its viewer set out as its node is made): the frame built again in it, that old view alone built anew, so
+      // that it is drawn in the frame that changed it)
+      let at = match nodes_run.told_at {
+        Some(at) => ", set at \{at}"
+        None => ""
+      }
+      g().read_followed_changed("what an old view read changed as the frame was built" + at)
     }
   })
+}
+
+///|
+/// What holds `r` built again with it, and what holds that, out to the last.
+fn touch_holders(r : RowNodes?) -> Unit {
+  match r {
+    Some(o) => {
+      o.watch.touch()
+      touch_holders(o.holder.val)
+    }
+    None => ()
+  }
+}
+
+///|
+/// The old view's own part (made_island: `own`, no list's) that part or row `r` is, or that holds it among its nodes.
+fn old_view_of(r : RowNodes?) -> RowNodes? {
+  match r {
+    Some(rn) if rn.own && rn.item < 0 => Some(rn)
+    Some(rn) => old_view_of(rn.holder.val)
+    None => None
+  }
+}
+
+///|
+/// Whether part `rn` is being built now: it, or one it holds being built (nodes_run's `building`, out along what holds
+/// each).
+fn part_built_now(rn : RowNodes) -> Bool {
+  let mut b = nodes_run.building
+  while true {
+    match b {
+      Some(o) => {
+        if physical_equal(o, rn) {
+          return true
+        }
+        b = o.holder.val
+      }
+      None => return false
+    }
+  }
+  false
 }
 
 ///|

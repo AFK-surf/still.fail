@@ -244,6 +244,13 @@ struct EditorState {
   mut built_frame : Int
   mut built_key : String
   mut built_id : Int
+  /// the node of the window's tree that holds it where one does (ui's field), and the top left it was last placed at
+  /// there, as it was drawn (its words' terms: EditorState::drawn_now)
+  mut tree_node : @view.NodeId?
+  /// the focus asked for it (Field::focus) before a node of the tree's held it: given it as one does
+  mut focus_asked : Bool
+  mut placed_x : Double
+  mut placed_y : Double
   /// what its words are told as, as they change (a Field's: Field::text followed), none for an editor of its own
   mut said_words : @signals.Signal[String]?
   /// its words with what the input method composes in them told as, as that changes (Field::composed_said), once
@@ -460,6 +467,9 @@ pub struct Ctx {
   /// focus given, a list scrolled): built again in this frame (frame_body); the last that changed (what it is)
   mut read_back_moved : Bool
   mut read_back_key : String
+  /// whether what changed is no signal the parts kept follow (a layout read back, the focus given): the frame built
+  /// again whole, none kept; else (Ctx::read_followed_changed) only what read it built again
+  mut read_back_whole : Bool
   /// what the view read of the layout as it built (readback.mbt), as read (and where, a laid rect): boxes' laid rects,
   /// lists' places, rows' heights, whether words are laid out; the boxes whose laid rect is read, and when last, with
   /// their rects as last laid out
@@ -784,6 +794,7 @@ fn Ctx::new() -> Ctx {
     took_input: false,
     read_back_moved: false,
     read_back_key: "",
+    read_back_whole: false,
     laid_reads: Map::new(),
     size_reads: Map::new(),
     place_reads: Map::new(),
@@ -2210,9 +2221,21 @@ let in_frame : Ref[Bool] = Ref::new(false)
 fn Ctx::read_changed(self : Ctx, what : String, loc~ : SourceLoc) -> Unit {
   if building.val {
     self.read_back_moved = true
+    self.read_back_whole = true
     self.read_back_key = what
   } else {
     self.request_frame(loc~)
+  }
+}
+
+///|
+/// What a part kept as its nodes read, a signal it follows, set as the frame is built after the part was (`what`): the
+/// frame built again in it before it is drawn, as for Ctx::read_changed, but that part alone built anew (its watch told),
+/// what read nothing of it kept as it was.
+fn Ctx::read_followed_changed(self : Ctx, what : String) -> Unit {
+  if building.val {
+    self.read_back_moved = true
+    self.read_back_key = what
   }
 }
 

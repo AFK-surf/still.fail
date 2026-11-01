@@ -1317,6 +1317,10 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
   if answer {
     answers_waiting[outside_key(kind, id)] = true
     answer_told(kind)
+    // (the clipboard's words for a field of the tree's: taken at the answer's moment, tree_field.mbt)
+    if kind == outside_clip {
+      tree_fields_pasting(view_moment())
+    }
   }
   if answer || (kind == outside_view && state != 0) {
     h_request_frame()

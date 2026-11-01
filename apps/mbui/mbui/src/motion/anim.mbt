@@ -37,6 +37,84 @@ pub struct Anim {
 }
 
 ///|
+/// Where an Anim goes, all of it: what is built from where it is is built again only as this changes.
+priv struct AnimWay {
+  running : Bool
+  value : Double
+  from : Double
+  target : Double
+  end : Double
+  /// its spec (one of Motion's transitions by what it was said with: Transition's Eq)
+  spec : Spec
+  v0 : Double
+  start : Double
+  dur : Double
+} derive(Eq)
+
+///|
+fn Anim::way(self : Anim) -> AnimWay {
+  // (going by its way at this moment: where it is, stepped by the clock, and its getting to its end as the frame goes
+  // are no change of it; still, or at its end by now: where it is)
+  let now = @ui.current().moment()
+  let going = self.running && !(self.start >= 0.0 && @ui.whole_ms(now - self.start) >= self.dur)
+  {
+    running: going,
+    value: if going {
+      0.0
+    } else if self.running {
+      self.end
+    } else {
+      self.value
+    },
+    from: self.from,
+    target: self.target,
+    end: self.end,
+    spec: self.spec,
+    v0: self.v0,
+    start: self.start,
+    dur: self.dur,
+  }
+}
+
+///|
+/// While a layout's motions are worked out (laid_once): each Anim told and where it went before, told once it is done
+/// where it goes came out otherwise. Each build of a frame lays it out again from where the frame began (layer.mbt's
+/// was_*), its motions told again as they were: the same way told again is no change.
+// kept across runs: set and let go within one layout's motions
+let laid_ways : Ref[Array[(Anim, AnimWay)]?] = Ref(None)
+
+///|
+/// `f`, the motions it tells told only once it is done, each whose way came out otherwise than before it: where each
+/// went taken as it is first told or set by hand (Anim::tells_now).
+fn laid_once(f : () -> Unit) -> Unit {
+  let ways : Array[(Anim, AnimWay)] = []
+  let was = laid_ways.val
+  laid_ways.val = Some(ways)
+  f()
+  laid_ways.val = was
+  for w in ways {
+    if w.0.way() != w.1 {
+      w.0.id.changed()
+    }
+  }
+}
+
+///|
+/// Whether what is built from where it is is told now (false: once the layout's motions are done, laid_once), where it
+/// went before kept for that the first time: said before it is told anew or its place set by hand.
+fn Anim::tells_now(self : Anim) -> Bool {
+  match laid_ways.val {
+    Some(ways) => {
+      if !ways.iter().any(fn(w) { physical_equal(w.0, self) }) {
+        ways.push((self, self.way()))
+      }
+      false
+    }
+    None => true
+  }
+}
+
+///|
 /// A number at `v`, still.
 pub fn Anim::new(v : Double) -> Anim {
   {
@@ -222,6 +300,7 @@ pub fn Anim::animate(
 ) -> Unit {
   let c = @ui.current()
   self.step(c)
+  let tell = self.tells_now()
   self.from = self.value
   self.v0 = match velocity {
     Some(v) => v
@@ -276,7 +355,7 @@ pub fn Anim::animate(
   let over = start_at is Some(at) && at + self.dur <= c.moment()
   if c.still() || over || (self.dur <= 0.0 && self.from == self.end) {
     // (there at once: what was built from where it was, built again)
-    if self.value != self.end {
+    if self.value != self.end && tell {
       self.id.changed()
     }
     self.finish()
@@ -286,7 +365,7 @@ pub fn Anim::animate(
     let what = if self.name == "" { "an Anim" } else { "Anim \"" + self.name + "\"" }
     self.told = what + " to \{target}, told at \{loc}"
     if c.in_frame() {
-      c.moving_as(self.id, self as &@ui.Moving, self.told)
+      c.moving_as(self.id, self as &@ui.Moving, self.told, tell~)
     } else {
       // (told between frames: from the moment it was told, a frame asked for to show it)
       ignore(c.set_out(self.id, self as &@ui.Moving, what=self.told))
@@ -311,7 +390,7 @@ pub fn Anim::follow(self : Anim, target : Double, spec : Spec, loc~ : SourceLoc)
 ///|
 /// There at once, still (Animatable.snapTo).
 pub fn Anim::snap(self : Anim, v : Double) -> Unit {
-  if self.value != v || self.target != v || self.running {
+  if (self.value != v || self.target != v || self.running) && self.tells_now() {
     self.id.changed()
   }
   self.value = v

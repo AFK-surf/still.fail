@@ -12,13 +12,13 @@
 //     changes, at that moment; what is beside it read ahead as that is said;
 //   - in it, the picture where its zoom has it, moved across with the strip as the frame draws it, the one going and
 //     those beside it while the strip moves, why it is not shown where it could not be decoded, the small decode that
-//     learns a size not known, the marks and their pins, its flight, nodes; the words being written an old view's
-//     (taking a press only on them);
+//     learns a size not known, the marks and their pins, its flight, nodes; the words being written a field of the
+//     tree's (marks_writing_node);
 //   - over it the bars: the floating bar on a small screen, its picture coming, whole or marked, nodes of its own
 //     (image_head, head_as_nodes: how much of it has come, its tools or marking's actions, their tips); the bar across
 //     the top of a wider screen, the same, nodes too (image_bar, bar_as_nodes); the ways to the pictures beside it
 //     while it is not marked (image_steps); marking's foot while it is (marks_foot_node: its tools, the notes' cards,
-//     the note being written, what is written in it an old view's field); beside the system's bars (an iPhone Duo's),
+//     the note being written, what is written in it a field of the tree's); beside the system's bars (an iPhone Duo's),
 //     its actions in theirs, said to them as what it says changes (native_said).
 //
 // It sets out as the node is made (that moment its cause's: the thumbnail tapped), and is done at its ways' declared
@@ -27,8 +27,8 @@
 // What a download, a save or marking's picture asks is done by the layer at its cause (image_layer), whichever bar
 // asked.
 //
-// Still the old view's here (the way there): the words being written over the marks (Viewer::marks_writing_view)
-// and in a note being written (marks_foot_node's field).
+// No old view of its own is left in it: what is written, over the picture or in a note, is the window's tree's fields
+// (@ui.field).
 
 
 ///|
@@ -476,20 +476,21 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       f.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
     })
     // (over the picture while it marks, once where it is is known: the marks drawn and the numbered marks' pins, its
-    // nodes; over them the words being written, an old view's taking a finger only on them)
+    // nodes; over them the words being written, a field of the tree's)
     canvas.show(fn() { vw.marks_shown() }, fn(h) {
       // (the marks drawn, over them their pins)
       h.over(Is(true)) |> ignore
       h.box(fn(s) { marks_shapes_node(s, vw) }) |> ignore
       h.box(fn(p) { marks_pins_node(p, vw) }) |> ignore
     })
-    @ui.old(canvas, fn(c) {
-      marks_said()
-      c.box(style=viewer_under, fn() { vw.marks_writing_view(c) }) |> ignore
-    })
-    .over(Is(true))
-    |> @ui.old_takes_own
-    |> ignore
+    // (over them the words being written, where they begin on the picture, a field of the tree's: marks_writing_node)
+    canvas.show(
+      fn() {
+        marks_said()
+        vw.marks_shown() && marking.writing is Some(_)
+      },
+      fn(h) { marks_writing_node(h, vw) },
+    )
   })
   |> ignore
   // beside the system's bars (an iPhone Duo's): what is up over the window said to them, its name, its tabs put away
@@ -906,21 +907,6 @@ fn Viewer::marks_shown(self : Viewer) -> Bool {
   marks_said()
   self.zoom.told()
   marking.on && !self.picture_failed() && self.zoom.rect() is Some(_)
-}
-
-///|
-/// The words being written over viewer `vw`'s picture while it marks (marks_writing), where it is drawn as the frame
-/// draws it, lifted with it (where its marks are), in `c` (an old view's, over the pins).
-fn Viewer::marks_writing_view(self : Viewer, c : @ui.Ctx) -> Unit {
-  if !self.marks_shown() {
-    return
-  }
-  let z = self.zoom
-  let lift = self.lift.get()
-  match z.rect() {
-    Some(r) => marks_writing(c, (r.0, r.1 - lift, r.2, r.3), z.nw)
-    None => ()
-  }
 }
 
 ///|

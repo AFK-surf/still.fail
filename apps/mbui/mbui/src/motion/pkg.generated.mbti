@@ -392,6 +392,7 @@ pub struct Transition {
   kind : String
   delay : Double
   make : (Double, Double, Double) -> Generator
+  said : (Array[Double], Array[(Double) -> Double])?
 }
 pub fn Transition::delayed(Self, Double) -> Self
 pub fn Transition::generator(Self, Double, Double, Double) -> Generator
