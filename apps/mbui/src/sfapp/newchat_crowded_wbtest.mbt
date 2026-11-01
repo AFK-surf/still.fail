@@ -95,12 +95,16 @@ test "narrow: the models used most nearest how hard it thinks, at the sheet's fo
     let (x, _, w, _) = row.rect
     assert_true(x >= sx && x + w <= sx + sw + 0.5, msg="\{row.label} \{row.rect}")
   }
-  // what DeepSeek last ran with after its name, on its line: the runtime it runs on of three, how hard it thinks
-  let deep = rows[2].rect
-  let words = runs_in(t, deep).filter(fn(r) { r.x0 >= deep.0 && r.x1 <= deep.0 + deep.2 })
-  // (whole where the row has the room, else cut short: the name whole)
-  assert_true(words.iter().any(fn(r) { r.text.has_prefix("DeepSeek H") }), msg="\{words.map(fn(r) { r.text })}")
-  assert_true(words.iter().any(fn(r) { r.text == "DeepSeek V4.1 Flash" }), msg="\{words.map(fn(r) { r.text })}")
+  // how each last ran after its name, on its line: GPT-6 Astra's 中; DeepSeek's, the runtime it runs on of three and how
+  // hard it thinks, giving way to its name where the row is short (cut short, else left out: the text's widths differ
+  // by machine)
+  let runs_of = fn(r : (Double, Double, Double, Double)) {
+    runs_in(t, r).filter(fn(w) { w.x0 >= r.0 && w.x1 <= r.0 + r.2 }).map(fn(w) { w.text })
+  }
+  assert_true(runs_of(rows[3].rect).contains("中"), msg="\{runs_of(rows[3].rect)}")
+  let deep = runs_of(rows[2].rect)
+  assert_true(deep.contains("DeepSeek V4.1 Flash"), msg="\{deep}")
+  assert_true(deep.iter().all(fn(w) { w == "DeepSeek V4.1 Flash" || w.has_prefix("DeepSeek H") }), msg="\{deep}")
 }
 
 ///|
