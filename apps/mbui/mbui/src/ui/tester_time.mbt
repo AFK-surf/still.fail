@@ -160,6 +160,16 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
 }
 
 ///|
+/// Advance by exactly `ms`, drawing due wakes on the way and the requested moment itself, even when the tester is
+/// otherwise running on a display's frame grid. Afterwards it keeps the same display clock for subsequent inputs.
+pub fn Tester::run_for_exact(self : Tester, ms : Double) -> Unit {
+  let host_frames = self.host_frames
+  self.host_frames = false
+  self.run_for(ms)
+  self.host_frames = host_frames
+}
+
+///|
 /// `t`, or the display's frame a hair after it (within a millionth of a ms): a moment summed one way or another, the
 /// same.
 fn Tester::on_grid(self : Tester, t : Double) -> Double {

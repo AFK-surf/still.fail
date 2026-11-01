@@ -266,3 +266,51 @@ test "a run filmed: every frame of the film once, in order, from the Tester's fi
   let last = drawn[drawn.length() - 1]
   assert_eq(put.length() - 1, ((last - t0) / @ui.frame_period_default).round().to_int())
 }
+
+///|
+fn film_frame_view(value : Ref[Int]) -> (@ui.Ctx) -> Unit {
+  fn(c) {
+    if c.button("go") {
+      value.val = value.val + 1
+    }
+    c.text("count \{value.val}", wrap=false) |> ignore
+  }
+}
+
+///|
+test "a requested frame of a scripted scene is the same picture that its film writes" {
+  let script = "wait 40\ntap go\nwait 40\nexit"
+  let t = @ui.Tester::new(film_frame_view(Ref(0)))
+  t.set_frame_period(1000.0 / 120.0)
+  let shown = Ref(0L)
+  let pictures : Array[Int64] = []
+  let film = t.film(
+    script,
+    fps=120.0,
+    draw=fn(t) {
+      shown.val = t.frame_hash()
+      true
+    },
+    put=fn(_) {
+      pictures.push(shown.val)
+      true
+    },
+  )
+  assert_eq(film.failure, None)
+  assert_true(pictures.length() > 3)
+  assert_true(pictures.iter().any(fn(h) { h != pictures[0] }))
+  for k in 0..<pictures.length() {
+    let t = @ui.Tester::new(film_frame_view(Ref(0)))
+    t.set_frame_period(1000.0 / 120.0)
+    let (reached, logs) = t.film_frame(script, k)
+    assert_true(reached, msg="frame \{k}: \{logs}")
+    assert_eq(t.frame_hash(), pictures[k], msg="frame \{k}")
+  }
+  let t = @ui.Tester::new(film_frame_view(Ref(0)))
+  let (reached, logs) = t.film_frame("no-such-step", 1)
+  assert_false(reached)
+  assert_true(logs.iter().any(fn(l) { l.has_prefix("DRIVE FAIL") }), msg=logs.join("\n"))
+  let t = @ui.Tester::new(film_frame_view(Ref(0)))
+  let (reached, _) = t.film_frame("exit", 10)
+  assert_false(reached)
+}

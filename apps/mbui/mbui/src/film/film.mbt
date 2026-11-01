@@ -11,6 +11,10 @@
 //   [MBUI_DARK=1] [MBUI_FILM_INSET=1: the window's buttons in the app's top row, a Mac's] [MBUI_FILM_FRAMES=3000]
 //   [MBUI_FILM_FPS=60: the rate both the app and the video are drawn at]
 //   [MBUI_FILM_PREPARE=<script>: actions and named resource requirements before filming begins]
+//   [MBUI_NATIVE_INPUT=finger|mouse: the input the scene was started for; otherwise the platform's]
+//   MBUI_PICTURE=<out.png> selects a still image from the same scene instead; MBUI_PICTURE_AT is milliseconds after
+//   the supplied preparation and drive, or MBUI_PICTURE_FRAME selects a zero-based frame of the drive. Set
+//   MBUI_PICTURE_TRANSPARENT=1 to clear its ground to transparent.
 //   [MBUI_FILM_WINDOW_CORNER=16: how round the system draws the window's corners, a Mac's: @hostapi.window_corner]
 //   [MBUI_LOCALE=en-US: the app's language, as a device's] [MBUI_FONT_SCALE=1.3: the system's size of words, as a
 //   device's set bigger] [MBUI_FILM_LAST=<last.png>: the run's last frame as the renderer drew it]
@@ -65,10 +69,7 @@ pub fn film(
     say("film: fps must be positive")
     return false
   }
-  // (this host, asked before the Tester gives its own: what the Tester's text and pictures are, and what draws)
-  let host = @hostapi.host()
-  init_offscreen(w, h, scale)
-  let t = @ui.Tester::new(
+  let t = scene_tester(
     view,
     tree?,
     w~,
@@ -76,50 +77,14 @@ pub fn film(
     scale~,
     platform~,
     dark~,
-    // (what it is pointed with: MBUI_POINTING, finger or mouse, as a program's; else the platform's)
-    pointing?=match arg("MBUI_POINTING") {
-      "finger" => Some(@ui.Pointing::Finger)
-      "mouse" => Some(@ui.Pointing::Mouse)
-      _ => None
-    },
-    // (a keyboard at hand: MBUI_KEYBOARD, 1 or 0, as one plugged in or not; else the platform's)
-    keyboard?=match arg("MBUI_KEYBOARD") {
-      "1" => Some(true)
-      "0" => Some(false)
-      _ => None
-    },
-    // (the app's words in the language the film says: MBUI_LOCALE, as a device's; MBUI_DARK=1, an app's own reading of
-    // it (sffix's fixture choosing its dark theme) as a program's)
-    env=[("MBUI_TEXT_RECORD", "1"), ("MBUI_LOCALE", arg("MBUI_LOCALE")), ("MBUI_DARK", arg("MBUI_DARK"))],
-    // (a film is for people to see a motion as it is, words over words too: what a test holds it to, words_over.mbt,
-    // is the tests', not a film's to stop at)
-    words_over_held=false,
-    live={ host, turn: fn() { spin(1.0) } },
-    // A film draws the same logical window and rasterizes text at the same scale as a real window for every frame.
-    before=fn() {
-      let z = @ui.window_zoom()
-      set_offscreen_view(w / z, h / z, scale * z)
-    },
+    inset~,
     window_corner~,
-    // (where the system has bars of its own for the app's tabs: MBUI_FILM_NAV_ABLE, an iPhone Duo's)
-    nav_able=arg("MBUI_FILM_NAV_ABLE") == "1",
+    corners_held=true,
+    words_over_held=false,
   )
   // The application's clock must advance at the film's rate too. Merely giving the encoder a higher rate would
   // duplicate frames of a run still drawn at the Tester's default 60 Hz.
   t.set_frame_period(1000.0 / fps.to_double())
-  // (the window's buttons in the app's top row, as a Mac's window has them: Tester::set_window_inset)
-  if inset {
-    t.set_window_inset(true)
-  }
-  match number(arg("MBUI_FONT_SCALE")) {
-    Some(f) if f > 0.0 => t.set_font_scale(f)
-    _ => ()
-  }
-  // (this machine's station as its host would say it: MBUI_LOCAL_STATION, its JSON, Tester::set_local_station)
-  match arg("MBUI_LOCAL_STATION") {
-    "" => ()
-    ls => t.set_local_station(ls)
-  }
   if prepare != "" {
     let setup = t.drive(prepare, max~)
     if !drive_passed(setup) {
@@ -258,6 +223,10 @@ fn host_frame(t : @ui.Tester, buf : Ref[FixedArray[Double]]) -> (Int, (Double, D
 /// A film made of the process's arguments (the head of this file says which), `view` the app's: the process ends
 /// with 0 when it was made and the script passed, 1 when not, 2 when it was not asked for rightly.
 pub fn run(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
+  if arg("MBUI_PICTURE") != "" {
+    run_picture(view, tree?)
+    return
+  }
   // (a tool's arguments, from the process: not an app's reads of where it runs)
   let out = arg("MBUI_FILM")
   let drive = arg("MBUI_FILM_DRIVE")
@@ -291,17 +260,13 @@ pub fn run(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
     _ => (390.0, 844.0)
   }
   let scale = number(arg("MBUI_FILM_SCALE")).unwrap_or(2.0)
-  let fps = match arg("MBUI_FILM_FPS") {
-    "" => film_fps
-    s =>
-      match number(s) {
-        Some(n) if n >= 1.0 && n <= 2147483647.0 && n == n.floor() => n.to_int()
-        _ => {
-          say("film: MBUI_FILM_FPS must be a positive whole number")
-          exit(2)
-          return
-        }
-      }
+  let fps = match frame_rate_arg() {
+    Some(fps) => fps
+    None => {
+      say("film: MBUI_FILM_FPS must be a positive whole number")
+      exit(2)
+      return
+    }
   }
   let platform = number(arg("MBUI_FILM_PLATFORM")).unwrap_or(0.0).to_int()
   let max = number(arg("MBUI_FILM_FRAMES")).unwrap_or(3000.0).to_int()
@@ -325,6 +290,19 @@ pub fn run(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
     copied=arg("MBUI_FILM_COPIED"),
   )
   exit(if ok { 0 } else { 1 })
+}
+
+///|
+/// The scene's display and recording rate, as a whole number of frames per second.
+fn frame_rate_arg() -> Int? {
+  match arg("MBUI_FILM_FPS") {
+    "" => Some(film_fps)
+    s =>
+      match number(s) {
+        Some(n) if n >= 1.0 && n <= 2147483647.0 && n == n.floor() => Some(n.to_int())
+        _ => None
+      }
+  }
 }
 
 ///|

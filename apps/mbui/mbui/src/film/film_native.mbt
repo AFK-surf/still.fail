@@ -58,6 +58,10 @@ extern "C" fn ffi_exit(code : Int) -> Unit = "mbf_exit"
 extern "C" fn ffi_snapshot(path : String) -> Int = "mbf_snapshot"
 
 ///|
+#borrow(path)
+extern "C" fn ffi_snapshot_transparent(path : String) -> Int = "mbf_snapshot_transparent"
+
+///|
 #borrow(inst, out)
 extern "C" fn ffi_draw_timed(
   inst : FixedArray[Double],
@@ -143,6 +147,11 @@ fn finish(publish : Bool) -> Bool {
 /// The frame drawn last, as the renderer drew it, written to `path` (a PNG).
 fn snapshot(path : String) -> Bool {
   ffi_snapshot(path) != 0
+}
+
+///|
+fn snapshot_transparent(path : String) -> Bool {
+  ffi_snapshot_transparent(path) != 0
 }
 
 ///|

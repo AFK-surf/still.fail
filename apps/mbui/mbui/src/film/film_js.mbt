@@ -70,6 +70,12 @@ fn snapshot(path : String) -> Bool {
 }
 
 ///|
+fn snapshot_transparent(path : String) -> Bool {
+  ignore(path)
+  false
+}
+
+///|
 fn spin(ms : Double) -> Unit {
   ignore(ms)
 }

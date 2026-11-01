@@ -669,7 +669,7 @@ static void blur(id<MTLCommandBuffer> cb, id<MTLTexture> target, const Grab *m) 
 static float *kept_under;
 static size_t kept_under_cap, kept_under_n;
 static Grab kept_grab;
-static double kept_key[6];
+static double kept_key[7];
 
 // The floats a capture of the run at start is of, and their count: those before it and the shapes' pieces (from
 // seg_base on), 0 when a stream is among them.
@@ -679,7 +679,7 @@ static size_t under_of(const float *f, int32_t start, int32_t count, int32_t pie
   return (size_t)(start + (count - pieces)) * MB_INST;
 }
 
-static int same_under(const float *f, int32_t start, int32_t count, int32_t pieces, const Grab *m, const double key[6]) {
+static int same_under(const float *f, int32_t start, int32_t count, int32_t pieces, const Grab *m, const double key[7]) {
   size_t n = under_of(f, start, count, pieces);
   if (!kept_ok || n == 0 || n != kept_under_n || memcmp(&kept_grab, m, sizeof *m) != 0 || memcmp(kept_key, key, sizeof kept_key) != 0)
     return 0;
@@ -688,7 +688,7 @@ static int same_under(const float *f, int32_t start, int32_t count, int32_t piec
          memcmp(kept_under + a, f + (size_t)pieces * MB_INST, (n - a) * sizeof(float)) == 0;
 }
 
-static void keep_under(const float *f, int32_t start, int32_t count, int32_t pieces, const Grab *m, const double key[6]) {
+static void keep_under(const float *f, int32_t start, int32_t count, int32_t pieces, const Grab *m, const double key[7]) {
   size_t n = under_of(f, start, count, pieces);
   kept_ok = 0;
   if (n == 0) return;
@@ -774,12 +774,12 @@ static int grab_in_part(const Grab *m) {
 }
 
 static id<MTLRenderCommandEncoder> begin_pass(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderPipelineState> p,
-                                              id<MTLBuffer> buf, int clear, double r, double g, double b) {
+                                              id<MTLBuffer> buf, int clear, double r, double g, double b, double alpha) {
   MTLRenderPassDescriptor *rp = [MTLRenderPassDescriptor renderPassDescriptor];
   rp.colorAttachments[0].texture = target;
   rp.colorAttachments[0].loadAction = clear ? MTLLoadActionClear : MTLLoadActionLoad;
   rp.colorAttachments[0].storeAction = MTLStoreActionStore;
-  rp.colorAttachments[0].clearColor = MTLClearColorMake(r, g, b, 1);
+  rp.colorAttachments[0].clearColor = MTLClearColorMake(r, g, b, alpha);
   id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:rp];
   struct { float vp[2]; float scale; float pad; } u = {{(float)vw, (float)vh}, (float)vscale, (float)seg_base};
   [enc setRenderPipelineState:p];
@@ -799,7 +799,7 @@ static id<MTLRenderCommandEncoder> begin_pass(id<MTLCommandBuffer> cb, id<MTLTex
 // `part`: only that part of the target drawn again, over what it holds (the frame's ground first: the instance after
 // the frame's, upload's); NULL, all of it, cleared to the ground.
 static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderPipelineState> p,
-                   id<MTLBuffer> buf, int32_t count, double r, double g, double b, const MTLScissorRect *part) {
+                   id<MTLBuffer> buf, int32_t count, double r, double g, double b, double alpha, const MTLScissorRect *part) {
   gtex = nil;
   memset(&gu, 0, sizeof gu);
   encode_missing = 0;
@@ -808,7 +808,7 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
   while (seg_base > 0 && (int)(f[(seg_base - 1) * MB_INST + 5] + 0.5f) == 12) seg_base--;
   sc_on = part != NULL;
   if (part) sc = *part;
-  id<MTLRenderCommandEncoder> enc = begin_pass(cb, target, p, buf, part ? 0 : 1, r, g, b);
+  id<MTLRenderCommandEncoder> enc = begin_pass(cb, target, p, buf, part ? 0 : 1, r, g, b, alpha);
   if (part) {
     [enc setRenderPipelineState:hpipe];
     [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:1 baseInstance:count];
@@ -831,7 +831,7 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
         // (a capture outside the part drawn: neither copied nor drawn, the blur kept as it was. One that meets it is
         // in it whole: the app's part takes in all a capture it reaches copies, @damage)
         shows = shows && grab_in_part(&m);
-        double key[6] = {target.width, target.height, vscale, r, g, b};
+        double key[7] = {target.width, target.height, vscale, r, g, b, alpha};
         if (shows && same_under(f, start, count, seg_base, &m, key)) {
           // what it sees is what the levels hold: shown on in this pass
           show_blur(&m);
@@ -842,7 +842,7 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
           [enc endEncoding];
           blur(cb, target, &m);
           keep_under(f, start, count, seg_base, &m, key);
-          enc = begin_pass(cb, target, p, buf, 0, r, g, b);
+          enc = begin_pass(cb, target, p, buf, 0, r, g, b, alpha);
         }
         bound = tid;
       }
@@ -882,11 +882,11 @@ static int draw_parts(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLBuff
   int n = take_parts((int)target.width, (int)target.height, kept, parts);
   int missing = 0;
   if (n < 0) {
-    encode(cb, target, mpipe, buf, count, r, g, b, NULL);
+    encode(cb, target, mpipe, buf, count, r, g, b, 1, NULL);
     missing = encode_missing;
   }
   for (int i = 0; i < n; i++) {
-    encode(cb, target, mpipe, buf, count, r, g, b, &parts[i]);
+    encode(cb, target, mpipe, buf, count, r, g, b, 1, &parts[i]);
     missing |= encode_missing;
   }
   if (n != 0) pictures_missing = missing;
@@ -1078,7 +1078,7 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
   int tw = (int)mlayer.drawableSize.width, th = (int)mlayer.drawableSize.height;
   int checked = 0;
   if (drawable && ((int)drawable.texture.width != tw || (int)drawable.texture.height != th)) {
-    encode(cb, drawable.texture, mpipe, buf, count, r, g, b, NULL);
+    encode(cb, drawable.texture, mpipe, buf, count, r, g, b, 1, NULL);
     canvas_ok = 0;
     dirty_told = dirty_whole = dirty_n = 0;
   } else {
@@ -1139,7 +1139,7 @@ static id<MTLTexture> read_tex;
 // Instances `f` (`count` of them, as upload copies a frame's) drawn on the ground `bg` into a texture the CPU reads,
 // and its pixels: BGRA, premultiplied, rows from the top, the size set (mb_render_set_size), *pw × *ph; the caller
 // frees them.
-static uint8_t *read_of(const float *f, int32_t count, const double bg[3], int *pw, int *ph) {
+static uint8_t *read_of(const float *f, int32_t count, const double bg[3], double alpha, int *pw, int *ph) {
   int w = (int)round(vw * vscale), h = (int)round(vh * vscale);
   if (!read_tex || (int)read_tex.width != w || (int)read_tex.height != h) {
     MTLTextureDescriptor *td = [MTLTextureDescriptor
@@ -1155,7 +1155,7 @@ static uint8_t *read_of(const float *f, int32_t count, const double bg[3], int *
   id<MTLTexture> tex = read_tex;
   id<MTLBuffer> buf = [dev newBufferWithBytes:f length:(count > 0 ? count : 1) * MB_INST * sizeof(float) options:MTLResourceStorageModeShared];
   id<MTLCommandBuffer> cb = [queue commandBuffer];
-  encode(cb, tex, rpipe_off, buf, count, bg[0], bg[1], bg[2], NULL);
+  encode(cb, tex, rpipe_off, buf, count, bg[0], bg[1], bg[2], alpha, NULL);
 #if TARGET_OS_OSX
   id<MTLBlitCommandEncoder> bl = [cb blitCommandEncoder];
   [bl synchronizeResource:tex];
@@ -1205,7 +1205,7 @@ static uint8_t *read_texture(id<MTLTexture> src, int *pw, int *ph) {
 
 // The last frame's instances (upload's copy) drawn again, read back as read_of reads them.
 static uint8_t *read_last(int *pw, int *ph) {
-  return read_of(last_inst, last_count, last_bg, pw, ph);
+  return read_of(last_inst, last_count, last_bg, 1, pw, ph);
 }
 
 // A frame drawn offscreen and read back (a film's, mbui/src/film): `inst` as mb_render_present takes them, kept as
@@ -1265,7 +1265,7 @@ int32_t mb_render_pixels_of(const double *inst, int32_t count, double r, double 
     vw = w / scale;
     vh = h / scale;
     int fw, fh;
-    uint8_t *px = read_of(f, count, bg, &fw, &fh);
+    uint8_t *px = read_of(f, count, bg, 1, &fw, &fh);
     vw = kw;
     vh = kh;
     vscale = ks;
@@ -1341,6 +1341,15 @@ static int snapshot_of(uint8_t *px, int w, int h, const char *path) {
 int mb_render_snapshot(const char *path) {
   int w, h;
   uint8_t *px = read_last(&w, &h);
+  return snapshot_of(px, w, h, path);
+}
+
+// The same last frame over a transparent ground, for an image used in another composition. Clear RGB to zero with
+// alpha so the readback remains premultiplied; the window and video paths continue to clear opaque.
+int mb_render_snapshot_transparent(const char *path) {
+  int w, h;
+  const double clear[3] = {0, 0, 0};
+  uint8_t *px = read_of(last_inst, last_count, clear, 0, &w, &h);
   return snapshot_of(px, w, h, path);
 }
 
