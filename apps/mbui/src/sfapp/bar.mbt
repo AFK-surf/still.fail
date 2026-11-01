@@ -703,6 +703,8 @@ priv struct BarModel {
   /// a bar chosen sliding down into the bar's place; a finger that went down meanwhile (the finger's once it lands)
   mut swap : Swap?
   mut waits : Bool
+  /// the place last felt under a finger ("<bar>/<place>"): another one under it is felt as it gets there
+  mut felt : String
   /// the notch's icon going as another swaps in ("" none), how far the swap is (0 to 1)
   mut icon_was : String
   icon_swap : Glide
@@ -749,6 +751,7 @@ let bar : BarModel = {
   width: 0.0,
   swap: None,
   waits: false,
+  felt: "",
   icon_was: "",
   told: None,
   icon_swap: glide("icon-swap", 1.0),
@@ -785,6 +788,7 @@ fn bar_reset() -> Unit {
   bar.width = 0.0
   bar.swap = None
   bar.waits = false
+  bar.felt = ""
   bar.icon_was = ""
   back_glide(bar.icon_swap, 1.0)
   m_face.val = ""
@@ -2138,6 +2142,7 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
   // waits); a tap on one of its places is that place's at once, where it is then (src/motion's rule)
   // pressed: the panel open, opening or closing, the finger has it from here
   let pressed = fn() {
+    m.felt = "\{l.cur}/\{told.active.unwrap_or("")}"
     m.y0 = py
     m.o0 = o_at
     // (opening: short of the rest its spring declared as it set out, toward open)
@@ -2174,6 +2179,7 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
       }
     }
   }
+  let open_was = m.open
   match how {
     Pressed => pressed()
     Dragging => {
@@ -2267,6 +2273,24 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
         tap_bar()
       }
     }
+  }
+  // felt as the finger goes (a switch's ticks): the panel snapping open or shut under it, a click; the ball taken to
+  // another place (a row's too), a tick, once as it gets there. Let go, nothing more: what it chose was felt already.
+  match how {
+    Dragging | Held => {
+      let cs = bar_centres(l.w, if told.action != "" && !m.mode.get() { 1.0 } else { 0.0 }, l.items.length())
+      let under = match bar_finger(told, cs, m.drag, m.drag_y) {
+        Some((_, _, i, key)) => "\{i}/\{key}"
+        None => m.felt
+      }
+      if m.open != open_was {
+        @ui.haptic(ContextClick)
+      } else if under != m.felt {
+        @ui.haptic(TextHandleMove)
+      }
+      m.felt = under
+    }
+    _ => ()
   }
   // (what the finger did told at its moment: the ball, the lens, the places lit set out from then)
   bar_retell(t)
