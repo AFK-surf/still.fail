@@ -184,7 +184,7 @@ shoot() {
       build_mac sffix
       rm -rf out/shot-newchat; mkdir -p out/shot-newchat
       names=
-      for m in newchat newchat-station newchat-model newchat-preset newchat-preset-new newchat-preset-edit newchat-preset-picked home-bars place; do
+      for m in newchat newchat-station newchat-model newchat-preset newchat-preset-new newchat-preset-edit newchat-preset-add newchat-preset-picked home-bars place; do
         MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-newchat on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-newchat/$m.png out/shots/mac-newchat-$m.png
         names="$names mac-newchat-$m"
@@ -192,7 +192,7 @@ shoot() {
     web-newchat)
       WAPP=sffix
       names=
-      for m in newchat newchat-station newchat-model newchat-preset newchat-preset-new newchat-preset-edit newchat-preset-picked home-bars place; do
+      for m in newchat newchat-station newchat-model newchat-preset newchat-preset-new newchat-preset-edit newchat-preset-add newchat-preset-picked home-bars place; do
         web_shot "MBUI_FIXTURE=$m" out/shots/web-newchat-$m.png
         names="$names web-newchat-$m"
       done ;;

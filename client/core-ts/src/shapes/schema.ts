@@ -2151,7 +2151,13 @@ export const SHAPES: Record<string, Shape> = {
     ["frequent", opt(vec("FrequentCombo")), { doc: "Up to four combinations used on this device in this workspace, filtered to this station." }],
     ["preset", "String", { default: true, doc: "The preset its chat is opened with on the station (one of the `presets` topic's ids), as last picked\nthere on this device (`newChat.pick` `preset`); \"\" for none." }],
     ["presetName", "String", { default: true, said: true, doc: "Its name, as the station's presets say it (\"\" until they are read)." }],
+    ["presets", vec("NewChatPreset"), { default: true, doc: "The station's presets, to pick from (none until they are read)." }],
   ], { doc: "A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs\nthere, as last picked on this device (`newChat.pick`); what the station no longer has gives way to the first it has." }),
+  NewChatPreset: struct([
+    ["id", "String"],
+    ["name", "String", { said: true }],
+    ["dirs", "i64", { client: "I54", doc: "How many folders it names." }],
+  ], { doc: "A preset a new chat can be opened with, as its page lists them." }),
   ShareInView: struct([
     ["site", opt("String"), { doc: "The site of the link shared (`youtube.com`, its www./m. left out); none for text without one." }],
     ["items", vec("ChatItem"), { doc: "The chats it can go to: the workspace's own on still.fail's page, newest first, the one `kept` first; those\nthe query finds when one is given. At most 30." }],

@@ -314,7 +314,10 @@ export class Choose implements Owner {
     const pick = this.#pick({ topic: "pick", station: addr, of: "new" }, addr, "new");
     view.pick = pick !== undefined && "ok" in pick ? pick.ok : null;
     view.preset = this.#preset(scope, id, addr);
-    view.presetName = view.preset === "" ? "" : text(get(arr(get(this.#followPresets(scope, addr), "presets")).find((p) => get(p, "id") === view.preset), "name")) ?? "";
+    // The station's presets, to pick from where the page's control opens (their folders kept for their dialog).
+    const presets = arr(get(this.#followPresets(scope, addr), "presets"));
+    view.presets = presets.map((p) => ({ id: text(get(p, "id")) ?? "", name: text(get(p, "name")) ?? "", dirs: arr(get(p, "dirs")).length }));
+    view.presetName = view.preset === "" ? "" : text(get(presets.find((p) => get(p, "id") === view.preset), "name")) ?? "";
     view.station = station;
     return view;
   }

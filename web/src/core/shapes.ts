@@ -5165,6 +5165,14 @@ export interface NetMeasured {
 	moved?: string;
 }
 
+/** A preset a new chat can be opened with, as its page lists them. */
+export interface NewChatPreset {
+	id: string;
+	name: string;
+	/** How many folders it names. */
+	dirs: number;
+}
+
 /** Something wrong with a station, in words (StationView `problems`). */
 export interface StationProblem {
 	/** silent | blocked | away */
@@ -5576,6 +5584,8 @@ export interface NewChatView {
 	preset?: string;
 	/** Its name, as the station's presets say it ("" until they are read). */
 	presetName?: string;
+	/** The station's presets, to pick from (none until they are read). */
+	presets?: NewChatPreset[];
 }
 
 /**

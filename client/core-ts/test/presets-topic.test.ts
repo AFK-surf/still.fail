@@ -51,6 +51,7 @@ test("presets_are_read_as_shown_again_once_one_is_made_and_the_one_picked_goes_w
   apply(host, values);
   assert.equal(v(values, 2).preset, "lib");
   assert.equal(v(values, 2).presetName, "Lib", "named as the station says, the page asking nothing more");
+  assert.deepEqual(v(values, 2).presets, [{ id: "app", name: "App", dirs: 1 }, { id: "lib", name: "Lib", dirs: 1 }]);
   call(core, ui, 5, "newChat.create", { station: S, key: v(values, 2).next });
   await host.settle();
   const asked = host.requests.find((r) => r.method === "POST" && r.url.endsWith("/admin/api/sessions"));

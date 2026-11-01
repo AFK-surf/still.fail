@@ -492,6 +492,20 @@ fn fix_new_chat_of(f : Fixture) -> Json {
     "frequent": if n.crowded { fix_crowded_frequent() } else { fix_frequent() },
     "label": Json::string(effort_word),
     "preset": Json::string(n.preset),
+    "presets": Json::array(
+      n.presets.map(fn(p) {
+        {
+          "id": field(Some(p), "id").unwrap_or(Json::string("")),
+          "name": field(Some(p), "name").unwrap_or(Json::string("")),
+          "dirs": Json::number(
+            match field(Some(p), "dirs") {
+              Some(Array(a)) => a.length().to_double()
+              _ => 0.0
+            },
+          ),
+        }
+      }),
+    ),
     "presetName": Json::string(
       match n.presets.iter().find_first(fn(p) { field(Some(p), "id") == Some(Json::string(n.preset)) }) {
         Some(p) => field(Some(p), "name").unwrap_or(Json::string("")).as_string().unwrap_or("")
