@@ -46,6 +46,45 @@ impl Moving for ImageEntry with rest_at(self, now, frame) {
 let image_cache : Map[String, Array[ImageEntry]] = {}
 
 ///|
+/// Whether a named picture's current decodes are ready, still coming, or failed. An exact source wins over a suffix
+/// or prefix; an incomplete name matching more than one picture is an error, not whichever the map happens to visit.
+/// Old decodes with px=0 only stand in while a replacement is drawn and do not make the replacement ready.
+fn named_image_state(name : String) -> (Int, Array[String]) {
+  let named = []
+  if image_cache.contains(name) {
+    named.push(name)
+  } else {
+    for src, _ in image_cache {
+      if src.has_prefix(name) || src.has_suffix(name) {
+        named.push(src)
+      }
+    }
+  }
+  if named.length() > 1 {
+    named.sort()
+    return (-2, named)
+  }
+  if named.is_empty() {
+    return (0, named)
+  }
+  let mut pending = false
+  let mut failed = false
+  let mut ready = false
+  for e in image_cache[named[0]] {
+    if e.px > 0 {
+      if e.state == 0 {
+        pending = true
+      } else if e.state < 0 {
+        failed = true
+      } else {
+        ready = true
+      }
+    }
+  }
+  (if pending { 0 } else if failed { -1 } else if ready { 1 } else { 0 }, named)
+}
+
+///|
 /// Encoded images the app handed over (thumbnails from the core, say), by
 /// the key views show them by.
 let image_data : Map[String, Bytes] = {}
