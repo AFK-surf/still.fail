@@ -72,13 +72,8 @@ test "no workspace yet as nodes: none yet, asked for a code, an invitation waiti
   let seen = []
   let same = cases.map(fn(k) {
     let (old, new) = (landing_case(false, k.0, k.1), landing_case(true, k.0, k.1))
-    // (asked for a code: its field an old view the tree hosts, put where it is laid out on the window's pixels (view
-    // host's islands: on_pixels of its node's place, 2 a point here), what it draws so from there)
-    let raw = old
-    let (old, field) = if k.1 { landing_field_on_pixels(old) } else { (old, 2) }
-    let near = landing_near(old, new) && field == 2
+    let near = landing_near(old, new)
     if !near {
-      let old = raw
       // (the first rect, glyph and shape apart)
       seen.push(
         "\{k}: rects \{old.0.length()}/\{new.0.length()} \{landing_first_apart(old.0, new.0)}; glyphs \{old.1.length()}/\{new.1.length()} \{landing_first_apart(old.1, new.1)}; shapes \{old.2.length()}/\{new.2.length()} \{landing_first_apart(old.2, new.2)}",
@@ -192,22 +187,3 @@ fn[T : Eq + Show] landing_first_apart(a : Array[T], b : Array[T]) -> String {
   "none apart"
 }
 
-///|
-/// What a page draws, the invite code's field put where the tree hosts it: an old view's island, its top left on the
-/// window's pixels (2 a point: view_host's on_pixels of its node's place), all of it moved by as much. Its rects are its
-/// ground and its edge, the two of the field's room (as wide as its row leaves it, 41 tall: 10 over and under its
-/// line of 21) at its top left; how many were found so, and what is drawn so.
-fn landing_field_on_pixels(
-  d : (Array[(Double, Double, Double, Double, Int64)], Array[(Double, Double)], Array[(Double, Double, Double, Double, Double, Int64)]),
-) -> (
-  (Array[(Double, Double, Double, Double, Int64)], Array[(Double, Double)], Array[(Double, Double, Double, Double, Double, Int64)]),
-  Int,
-) {
-  let field = d.0.filter(fn(r) { r.3 == 41.0 && r.2 < 330.0 && r.0 == 30.0 })
-  guard field.length() > 0 else { return (d, 0) }
-  let (x0, y0) = (field[0].0, field[0].1)
-  let on = fn(v : Double) { (v * 2.0).round() / 2.0 }
-  let (dx, dy) = (on(x0) - x0, on(y0) - y0)
-  let moved = d.0.map(fn(r) { if r.3 == 41.0 && r.2 < 330.0 && r.0 == x0 && r.1 == y0 { (r.0 + dx, r.1 + dy, r.2, r.3, r.4) } else { r } })
-  ((moved, d.1, d.2), field.filter(fn(r) { r.1 == y0 }).length())
-}
