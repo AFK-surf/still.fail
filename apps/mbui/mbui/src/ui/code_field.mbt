@@ -23,6 +23,12 @@ let code_fields : Map[Int, CodeState] = Map([])
 let code_clears : Array[String] = []
 
 ///|
+/// How many times a code field was asked to be emptied (Ctx::clear_code_field), read by each as it is built: one kept
+/// as it was drawn (a list's row, a part, kept_part.mbt) is built again to empty it.
+// kept across runs: it only counts on
+let code_clears_said : @signals.Signal[Int] = @signals.signal(0)
+
+///|
 /// A code field (see the file's head): `length` boxes, `box_w` by `box_h`, `gap` apart, `group_gap` more between the
 /// `groups` (their sizes in order; what they leave out is one more group). Its digits in `font_size` and `weight`, the
 /// code face unless not `mono`, in `color` (`disabled_color` while not `enabled`, when typing changes nothing); its
@@ -67,6 +73,7 @@ pub fn Ctx::code_field(
     }
   }
   // emptied as asked (a code refused): the next try starts from nothing
+  code_clears_said.get() |> ignore
   let mut cleared = false
   for k = code_clears.length() - 1; k >= 0; k = k - 1 {
     if code_clears[k] == key {
@@ -254,5 +261,6 @@ pub fn Ctx::clear_code_field(self : Ctx, key : String) -> Unit {
   if !code_clears.contains(key) {
     code_clears.push(key)
   }
+  code_clears_said.set(@signals.untracked(fn() { code_clears_said.get() }) + 1)
   self.read_changed("clear_code_field \"\{key}\"")
 }

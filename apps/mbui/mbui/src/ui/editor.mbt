@@ -756,10 +756,6 @@ pub fn Ctx::editor(
   if self.down && (self.active == id || self.word_drag == id || self.handle_drag == id) {
     hand.pointer.get() |> ignore
   }
-  // (the focus in it: its caret and what the keys do, each frame; a part kept builds it each frame, kept_part.mbt)
-  if self.has_focus(id) {
-    part_live()
-  }
   let st = match (self.editors.get(id), field) {
     // what the app keeps (Field): this editor shows it from now on
     (Some(s), Some(f)) if physical_equal(s, f.st) => s
@@ -778,6 +774,8 @@ pub fn Ctx::editor(
       s
     }
   }
+  // (what the app wrote in it from outside the hand: a part kept is built again to show it)
+  st.written.get() |> ignore
   st.limit = paste_limit
   st.enter_sends = enter_sends.unwrap_or(enter_sends_by(max_lines, ime_action))
   st.leaves = leaves
@@ -1396,6 +1394,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     built_id: 0,
     said_words: None,
     said_composed: None,
+    written: @signals.signal(0),
   }
 }
 
@@ -1538,6 +1537,7 @@ pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
   st.blink_again = true
   // (told as the whole of it is so: its words, its caret, nothing composed)
   st.words_told()
+  st.written.set(@signals.untracked(fn() { st.written.get() }) + 1)
   field_written()
 }
 
@@ -1564,6 +1564,7 @@ pub fn Field::pick(self : Field, from : Int, to : Int) -> Unit {
   st.blink_again = true
   // (what is composed shown at the caret where it is now: told so, Field::composed_said)
   st.words_told()
+  st.written.set(@signals.untracked(fn() { st.written.get() }) + 1)
   field_written()
 }
 

@@ -249,6 +249,9 @@ struct EditorState {
   /// its words with what the input method composes in them told as, as that changes (Field::composed_said), once
   /// asked for
   mut said_composed : @signals.Signal[String]?
+  /// how many times the app wrote it (Field::set, Field::pick), read by its editor as it is built: one kept as it was
+  /// drawn (a list's row, a part, kept_part.mbt) is built again to show what was written
+  written : @signals.Signal[Int]
 }
 
 ///|

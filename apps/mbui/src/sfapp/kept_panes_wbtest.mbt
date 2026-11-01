@@ -13,12 +13,13 @@ fn kept_panes_run(again : Bool, w : Double, h : Double) -> (Array[Array[String]]
   t.set_a11y(true)
   t.said() |> ignore
   let out = []
+  // (counted as each frame is drawn: a frame of the working marks' looks alone builds nothing, keeps nothing)
   let mut kept = 0
+  t.each_frame(Some(fn() { kept = kept + t.parts_kept() }))
   let look = fn() {
     for _ in 0..<6 {
       t.run_for(kept_rows_still_ms)
       out.push(drawn_from(t, -1000.0).map(kept_rows_inst) + kept_rows_read_out(t, true) + kept_rows_said(t))
-      kept = kept + t.parts_kept()
     }
   }
   look()
@@ -29,6 +30,7 @@ fn kept_panes_run(again : Bool, w : Double, h : Double) -> (Array[Array[String]]
   let x = if w >= 1000.0 { 120.0 } else { w * 0.3 }
   t.drag(x, h * 0.7, x, h * 0.4, steps=6)
   look()
+  t.each_frame(None)
   (out, kept)
 }
 
