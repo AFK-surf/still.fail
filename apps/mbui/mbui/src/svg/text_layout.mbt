@@ -1009,20 +1009,6 @@ fn apply_writing_mode(vertical : Bool, clusters : Array[Cluster]) -> Unit {
 }
 
 ///|
-/// Unicode's Vertical_Orientation U or Tu (upright in vertical text), approximately: the East Asian scripts and
-/// their symbols. (The full table comes with the shaping port.)
-fn is_upright(c : Int) -> Bool {
-  (c >= 0x1100 && c <= 0x11FF) ||
-  (c >= 0x2E80 && c <= 0xA4CF) ||
-  (c >= 0xAC00 && c <= 0xD7AF) ||
-  (c >= 0xF900 && c <= 0xFAFF) ||
-  (c >= 0xFE30 && c <= 0xFE4F) ||
-  (c >= 0xFF00 && c <= 0xFFEF) ||
-  (c >= 0x1F000 && c <= 0x1FAFF) ||
-  (c >= 0x20000 && c <= 0x3FFFD)
-}
-
-///|
 fn apply_letter_spacing(chunk : TextChunk, clusters : Array[Cluster]) -> Unit {
   if !chunk.spans.iter().any(fn(s) { !approx_zero(s.letter_spacing) }) {
     return

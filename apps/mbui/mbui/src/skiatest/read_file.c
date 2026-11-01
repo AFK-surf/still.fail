@@ -15,3 +15,13 @@ moonbit_bytes_t mbui_skiatest_read_file(moonbit_bytes_t path) {
   if ((long)got != n) return moonbit_make_bytes(0, 0);
   return b;
 }
+
+// Writes a file (for looking at a test's picture); 0 when it could not.
+int32_t mbui_skiatest_write_file(moonbit_bytes_t path, moonbit_bytes_t data) {
+  FILE *f = fopen((const char *)path, "wb");
+  if (!f) return 0;
+  size_t n = Moonbit_array_length(data);
+  size_t put = n ? fwrite(data, 1, n, f) : 0;
+  fclose(f);
+  return put == n;
+}

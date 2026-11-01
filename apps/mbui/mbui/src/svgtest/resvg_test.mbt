@@ -107,6 +107,12 @@ test "resvg suite" {
     if result == 0 {
       passed += 1
     }
+    // with only.txt, each picture is kept beside its reference to be looked at
+    match @svg.render_svg_to_width(svg, 300, opt) {
+      Some(p) if only != "" =>
+        ignore(@skiatest.write_file(dir + name + ".out.png", @pixels.png(p.width, p.height, demultiplied(p))))
+      _ => ()
+    }
     println("SVGTEST \{name} \{result}")
   }
   println("SVGTEST passed \{passed} of \{total}")
