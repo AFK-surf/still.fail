@@ -1191,3 +1191,23 @@ fn tap_video(t : @ui.Tester, name : String) -> Unit raise {
   guard at.length() > 0 else { fail("no video \"\{name}\" to tap") }
   t.tap(at[0].0, at[0].1)
 }
+
+///|
+test "a picture said not to decode: why, its glyphs drawn in the theme's muted ink, readable on the page's canvas it lies on, not in white" {
+  let t = preview_tester("image", w=390.0, platform=2, finish=false)
+  // (each picture asked for could not be decoded, as the host says)
+  for _ in 0..<3 {
+    for p in t.pending() {
+      t.finish(p.0, p.1, ok=p.0 != 1)
+    }
+    t.draw()
+  }
+  let said = pv("android-chat.file.image.failed")
+  let at = t.words().filter(fn(w) { w.0 == said })
+  assert_eq(at.length(), 1, msg="said once: \{at}")
+  let (_, x, y, w, h, _) = at[0]
+  let inks = t.drawn_glyphs().filter(fn(g) { g.0 >= x - 1.0 && g.0 <= x + w + 1.0 && g.1 >= y - 1.0 && g.1 <= y + h + 1.0 }).map(fn(g) { g.2 })
+  assert_true(inks.length() > 0, msg="its glyphs drawn where it is: \{x} \{y} \{w} \{h}")
+  let muted = @sf.theme().p.muted
+  assert_true(inks.iter().all(fn(i) { i == muted }), msg="each in the theme's muted ink \{muted}: \{inks}")
+}

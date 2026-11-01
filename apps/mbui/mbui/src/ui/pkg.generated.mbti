@@ -2443,6 +2443,7 @@ pub fn Tester::holes(Self) -> Array[(Double, Double, Double, Double)]
 pub fn Tester::host_says_finger(Self, Bool?) -> Unit
 pub fn Tester::hover_only_faults(Self) -> Array[String]
 pub fn Tester::image_loads(Self) -> Array[(String, Int32)]
+pub fn Tester::image_nodes(Self) -> Array[(String, Double, Double)]
 pub fn Tester::image_src(Self, Int32) -> String
 pub fn Tester::images_kept(Self) -> Int32
 pub fn Tester::ime(Self) -> (Bool, String, Int32, Int32)

@@ -292,6 +292,45 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       |> ignore
     })
     |> ignore
+    // (its size neither sent with it nor known yet: a small decode of what it shows asked for, out of sight, that says
+    // it; none drawn of it, Viewer::size_unknown)
+    canvas.box(fn(s) {
+      s
+      .over(Is(true))
+      .width(Is(Some(1.0)))
+      .height(Is(Some(1.0)))
+      .alpha(Is(0.0))
+      .image(By(fn() {
+        vw.bytes.get() |> ignore
+        if !vw.picture_failed() && vw.size_unknown(src) {
+          Some((vw.picture(src), "", stage_px))
+        } else {
+          None
+        }
+      }))
+      |> ignore
+    })
+    |> ignore
+    // (its whole picture read and said not to decode: why, alone in the middle of the stage, 24 in from its sides, as
+    // Viewer::note has it; in the theme's muted ink, as the viewer's other words: a picture lies on the page's own
+    // canvas, Viewer::dark)
+    canvas.show(fn() { vw.picture_failed() }, fn(f) {
+      f.over(Is(true)).padding(Is((24.0, 24.0, 24.0, 24.0))).lines_up(Is(Some(Middle))) |> ignore
+      f.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+      f.box(fn(w) {
+        w
+        .words(By(fn() { pv("android-chat.file.image.failed") }))
+        .words_look(By(fn() {
+          // (a size alone said, its line the theme's text_line times it, as Ctx::text has it)
+          let size = @sf.theme().t.body
+          { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true }
+        }))
+        .ink(By(fn() { @sf.theme().p.muted }))
+        |> ignore
+      })
+      |> ignore
+      f.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+    })
     // (over the picture while it marks, once where it is is known: the marks drawn and the numbered marks' pins, its
     // nodes; over them the words being written, an old view's taking a finger only on them)
     canvas.show(fn() { vw.marks_shown() }, fn(h) {
