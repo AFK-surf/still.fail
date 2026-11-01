@@ -50,8 +50,9 @@ pub struct NativeView {
   priv told : FixedArray[Double]
   priv mut told_shown : Bool
   priv mut closed : Bool
-  /// a video's frames' times asked of the host
+  /// a video's frames' times asked of the host, and read once it said them (asked for in every frame it plays)
   priv mut frames_asked : Bool
+  priv mut frame_times : Array[Double]?
   /// a site's: who answers its requests, who hears of a link left by, the replies under way, where its page is
   priv serve : ((SiteRequest, SiteReply) -> Unit)?
   priv leave : (String) -> Unit
@@ -240,6 +241,7 @@ fn NativeView::make(
     told_shown: false,
     closed: false,
     frames_asked: false,
+    frame_times: None,
   }
   if v.id == 0 {
     v.state.set(-1)
@@ -446,7 +448,11 @@ pub fn NativeView::frames(self : NativeView) -> Array[Double]? {
     self.frames_asked = true
     h_view_control(self.id, 20, 0.0)
   }
-  match h_view_text(self.id, 1) {
+  if self.frame_times is Some(_) {
+    return self.frame_times
+  }
+  // (said once, all of them: read once, not again in each frame, a long film's tens of thousands of times)
+  self.frame_times = match h_view_text(self.id, 1) {
     Some(t) =>
       Some(
         t
@@ -462,6 +468,7 @@ pub fn NativeView::frames(self : NativeView) -> Array[Double]? {
       )
     None => None
   }
+  self.frame_times
 }
 
 ///|
