@@ -78,6 +78,47 @@ pub fn add_image(key : String, data : Bytes) -> Unit {
 }
 
 ///|
+// kept across runs: set once as the app starts (its main), what draws vector pictures for every run after
+/// What draws a vector picture (SVG) handed over as bytes: its bytes and the pixels wanted on its longer side to its
+/// width, height and straight RGBA; None where it is not one. The app's main gives it (mbui/svg's rasterize), so a
+/// program that shows none links no vector drawing.
+let vector_pictures : Array[(Bytes, Int) -> (Int, Int, FixedArray[Byte])?] = []
+
+///|
+/// Sets what draws vector pictures (SVG) handed over as bytes (`add_image`, `Ctx::image_bytes`).
+pub fn set_vector_pictures(draw : (Bytes, Int) -> (Int, Int, FixedArray[Byte])?) -> Unit {
+  vector_pictures.clear()
+  vector_pictures.push(draw)
+}
+
+///|
+/// An encoded picture as the host decodes it: a vector one drawn here at `px` on its longer side, as a PNG.
+fn host_bytes(data : Bytes, px : Int) -> Bytes {
+  if vector_pictures.length() > 0 && looks_like_svg(data) {
+    match vector_pictures[0](data, px) {
+      Some((w, h, rgba)) => return png_of(w, h, rgba)
+      None => ()
+    }
+  }
+  data
+}
+
+///|
+/// An `<svg` near the start of the bytes, or gzip's magic (an .svgz).
+fn looks_like_svg(data : Bytes) -> Bool {
+  if data.length() >= 2 && data[0] == b'\x1F' && data[1] == b'\x8B' {
+    return true
+  }
+  let n = if data.length() < 1024 { data.length() } else { 1024 }
+  for i in 0..<(n - 3) {
+    if data[i] == b'<' && data[i + 1] == b's' && data[i + 2] == b'v' && data[i + 3] == b'g' {
+      return true
+    }
+  }
+  false
+}
+
+///|
 fn bucket(px : Double) -> Int {
   let mut b = 64
   while b.to_double() < px && b < 8192 {
@@ -146,7 +187,7 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
   }
   if good is None && !pending && !failed {
     let id = match image_data.get(src) {
-      Some(d) => h_image_load_bytes(d, want, src)
+      Some(d) => h_image_load_bytes(host_bytes(d, want), want, src)
       None =>
         if src.has_prefix("pdf:") {
           pdf_page_load(src, want)

@@ -333,6 +333,8 @@ fn main {
   // MBUI_PLATFORM=android: run as a phone's system has it (a test's trace recorded again on a Mac on the system its
   // Tester plays: scripts/rerecord.sh), and pointed at by a finger as a phone is; MBUI_POINTING=finger or mouse: pointed
   // at so, whatever the system
+  // SVG pictures (a chat's .svg files) drawn by mbui's own SVG renderer, whatever the system decodes
+  @ui.set_vector_pictures(fn(data, px) { @svg.rasterize(data, px) })
   match @ui.env("MBUI_PLATFORM") {
     "android" => @ui.set_platform(Some(2))
     "ios" => @ui.set_platform(Some(1))

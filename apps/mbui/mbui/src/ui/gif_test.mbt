@@ -87,3 +87,30 @@ let gif_frame : Double = 100.0
 
 ///|
 let a_moment : Double = 10.0
+
+///|
+test "an SVG handed over goes to the host drawn as a picture, at the size it is shown at" {
+  let asked : Array[Int] = []
+  @ui.set_vector_pictures(fn(data, px) {
+    ignore(data)
+    asked.push(px)
+    Some((2, 1, FixedArray::make(8, b'\xFF')))
+  })
+  let svg = b"<svg xmlns='http://www.w3.org/2000/svg' width='2' height='1'/>"
+  let t = @ui.Tester::new(
+    fn(c) { c.image("mem:svg", w=Px(100.0), h=Px(50.0), fade=false) |> ignore },
+    w=200.0,
+    h=200.0,
+  )
+  // (handed over again: a Tester starts with no images)
+  @ui.add_image("mem:svg", svg)
+  t.draw()
+  t.run_for(a_moment)
+  // drawn at the decode's size (100 wide at the Tester's scale 2: 200 px, its bucket 256), handed to the host as a PNG,
+  // not as the SVG's text
+  assert_eq(asked, [256])
+  let loads = t.image_loads()
+  assert_true(loads.length() == 1 && loads[0].0 != "bytes:\{svg.length()}")
+  // (the tests after this one draw no vector pictures)
+  @ui.set_vector_pictures(fn(_, _) { None })
+}

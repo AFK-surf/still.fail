@@ -5,6 +5,7 @@ import {
   "mbui/host",
   "mbui/hostapi",
   "mbui/ui",
+  "mbui/svg",
   "stillfail/sfcore",
   "stillfail/sfbase",
   "stillfail/sfapp",

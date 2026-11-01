@@ -486,6 +486,8 @@ pub fn set_pointing(Pointing?) -> Unit
 
 pub fn set_tree_theme(() -> Theme) -> Unit
 
+pub fn set_vector_pictures((Bytes, Int32) -> (Int32, Int32, FixedArray[Byte])?) -> Unit
+
 pub fn set_view_app((@view.View) -> Unit, around? : (Ctx) -> Unit) -> Unit
 
 pub fn set_web_lines(Bool) -> Unit
