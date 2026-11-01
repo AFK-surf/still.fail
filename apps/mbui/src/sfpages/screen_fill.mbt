@@ -41,11 +41,11 @@ fn ScreenSess::fill_start(self : ScreenSess) -> Unit {
 }
 
 ///|
-/// The login picked in the system's autofill service: filled, where it is for the site asked for and the focus is
-/// still in that site's login.
+/// The login picked in the system's autofill service: filled, where it is for the site asked for (the station fills
+/// the page's form only while its tab is on that site, as for 1Password's).
 fn ScreenSess::fill_auto_took(self : ScreenSess, got : (String, String, String)) -> Unit {
   let (host, username, password) = got
-  guard self.fill_step.get() == "auto" && host == self.fill_host && self.login_host() == Some(host) else { return }
+  guard self.fill_step.get() == "auto" && host == self.fill_host else { return }
   @hostapi.autofill_end()
   self.fill_step.set("")
   self.fill_send(username, password)
@@ -162,15 +162,12 @@ fn login_fill(c : @ui.Ctx, s : ScreenSess) -> Unit {
   let step = s.fill_step.get()
   let host = s.login_host()
   let op = @hostapi.passwords()
+  // the login picked in the service's offer, once it came (the page's focus may have left the login meanwhile: the
+  // app's own tap on 填入 can take it, before the service answers; it is filled as 1Password's is, below)
   if step == "auto" {
-    if host != Some(s.fill_host) {
-      // the focus left the login it was asked for: the service's offer let go of
-      c.tell("screen-fill-gone/" + s.view, fn() { s.fill_stop() })
-    } else {
-      match @hostapi.autofill_take() {
-        Some(got) => c.tell("screen-fill-auto/" + s.view, fn() { s.fill_auto_took(got) })
-        None => ()
-      }
+    match @hostapi.autofill_take() {
+      Some(got) => c.tell("screen-fill-auto/" + s.view, fn() { s.fill_auto_took(got) })
+      None => ()
     }
   }
   if (!op && !@hostapi.autofill()) || (host is None && step == "") {

@@ -45,6 +45,7 @@ final class Autofills {
         if (m == null || !m.isEnabled() || h == null || h.isEmpty()) return 0;
         host = h;
         picked = "";
+        Host.log("autofill: asked for a login of " + h);
         Host.main.post(() -> {
             if (Host.view != v || !h.equals(host)) return;
             // a session already open (an ask before) is ended, so the service reads the form anew, with this site
@@ -65,6 +66,7 @@ final class Autofills {
     /** Lets go of the ask: the service's offer withdrawn, nothing kept. */
     static void end() {
         if (host == null) return;
+        Host.log("autofill: let go of the ask for " + host);
         host = null;
         picked = "";
         MBView v = Host.view;
@@ -86,6 +88,7 @@ final class Autofills {
     static void provide(View v, ViewStructure s) {
         String h = host;
         if (h == null) return;
+        Host.log("autofill: the form of " + h + " given to the service");
         s.setClassName("android.webkit.WebView");
         s.setWebDomain(h);
         s.setChildCount(2);
@@ -120,6 +123,7 @@ final class Autofills {
         String h = host;
         if (h == null) return;
         String user = text(values.get(USERNAME)), pass = text(values.get(PASSWORD));
+        Host.log("autofill: the service filled " + values.size() + " fields for " + h);
         if (user.isEmpty() && pass.isEmpty()) return;
         picked = h + "\u001f" + user + "\u001f" + pass + "\u001f";
         Host.requestFrame();
