@@ -16,10 +16,11 @@
 | `PUT /presets/:id {name, dirs, instructions?}` | 改 |
 | `DELETE /presets/:id` | 删 |
 | `POST /sessions {…, preset}` | 用它开对话；不是本 workspace 的预设就不开 |
+| 事件 `presets` | 预设或可选目录变了（别的设备改了预设、扫完了家目录）：设备在显示或存着时重读 `GET /presets` |
 
 `candidates`：给人挑的目录，不用打字。两部分合起来：
 - station 仓库缓存（`<data>/repos`）里的每个克隆，带「有多少个对话在里面建过 worktree」（从 `.git/worktrees/*/gitdir` 读出是哪个会话工作区）；
-- 这台机器上可能是仓库的目录（`RepoIndex`，2026-11-01 用户：「应该先索引出可能是仓库的目录，用来提供选择」）：从家目录往下最多 4 层找有 `.git` 的目录，找到就不再往里走；跳过隐藏目录、`node_modules` 这类依赖和构建目录、`Library` 等，以及 macOS 读之前要弹框问人的 `Desktop`、`Documents`、`Downloads`（会在那台机器屏幕上弹授权框），也跳过 station 自己的数据目录；一次最多看 2 万个目录。结果存在 `<data>/repo-index.json`，超过 10 分钟再被问到时在后台重扫，先答存着的；第一次没有就等第一遍扫完。
+- 这台机器上可能是仓库的目录（`RepoIndex`，2026-11-01 用户：「应该先索引出可能是仓库的目录，用来提供选择」）：从家目录往下最多 4 层找有 `.git` 的目录，找到就不再往里走；跳过隐藏目录、`node_modules` 这类依赖和构建目录、`Library` 等，以及 macOS 读之前要弹框问人的 `Desktop`、`Documents`、`Downloads`（会在那台机器屏幕上弹授权框），也跳过 station 自己的数据目录；一次最多看 2 万个目录。只扫家目录所在的那块盘：挂在家目录下的别的文件系统（OrbStack 的 NFS、网络共享、外接盘）不打开，打开它可能要等服务器或等那台机器屏幕上的授权框，没人点就一直不返回（2026-11-02 Studio 卡在 `~/OrbStack`，「添加目录」一直空着）。结果存在 `<data>/repo-index.json`，没有或超过 10 分钟再被问到时在后台扫，请求从不等它，先答存着的（第一次只有仓库缓存里的）；扫完 station 发 `presets` 事件，设备再读一次。
 
 排序：对话用过的在前（多的在前），其余按最近改动（`.git/index` 的修改时间）。再加上别的预设用到的目录。全程异步读，不卡主线程。
 

@@ -4,11 +4,15 @@
 ///|
 /// A phone's window, a new preset's dialog with its 添加目录 open over it (newchat-preset-new-add); the first station's
 /// folders said only when `late` is let go.
-fn preset_add(late : Bool) -> @ui.Tester {
+fn preset_add(late : Bool, wide? : Bool = false) -> @ui.Tester {
   new_run()
   @sffixture.new_fix.presets_late = late
   let src = fixture("newchat-preset-new-add")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  let t = if wide {
+    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  } else {
+    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  }
   open_mode("newchat-preset-new-add")
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -33,6 +37,18 @@ test "添加目录 opens before the station's folders are said, and they come in
   t.run_for(@ui.move_most_ms)
   assert_true(shows(t, "tstst"), msg="\{t.text_runs().map(fn(r) { r.text })}")
   assert_true(shows(t, "浏览文件夹…"))
+}
+
+///|
+test "wide, 添加目录 shows the other stations' folders while its own says nothing, and its own as they come, frames going on" {
+  let t = preset_add(true, wide=true)
+  assert_true(shows(t, "浏览文件夹…"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  // (MBA's, said: there whatever the preset's station says)
+  assert_true(shows(t, "still.fail 设计稿"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  // said: the frames that follow show it, none drawn on purpose
+  @sffixture.fix_presets_say()
+  t.run_for(@ui.move_most_ms)
+  assert_true(shows(t, "tstst"), msg="\{t.text_runs().map(fn(r) { r.text })}")
 }
 
 ///|
