@@ -90,6 +90,9 @@ export interface OperationParams {
   "job.log": { id: string; lines: number };
   "job.stop": { id: string };
   "screen.close": { screen: string };
+  "signin.fill": { id: string; login: unknown; keep?: boolean | null | undefined };
+  "signin.self": { id: string; done?: boolean | null | undefined };
+  "signin.deny": { id: string };
   "job.clearEnded": { session: string };
   "memory.get": {  };
   "outflow.revoke": { id: string };
@@ -244,6 +247,9 @@ export function bindStationOperations(call: Call) {
     jobLog: <T = unknown>(params: OperationParams["job.log"]) => call("job.log", params) as Promise<T>,
     jobStop: <T = unknown>(params: OperationParams["job.stop"]) => call("job.stop", params) as Promise<T>,
     screenClose: <T = unknown>(params: OperationParams["screen.close"]) => call("screen.close", params) as Promise<T>,
+    signinFill: <T = unknown>(params: OperationParams["signin.fill"]) => call("signin.fill", params) as Promise<T>,
+    signinSelf: <T = unknown>(params: OperationParams["signin.self"]) => call("signin.self", params) as Promise<T>,
+    signinDeny: <T = unknown>(params: OperationParams["signin.deny"]) => call("signin.deny", params) as Promise<T>,
     jobClearEnded: <T = unknown>(params: OperationParams["job.clearEnded"]) => call("job.clearEnded", params) as Promise<T>,
     memoryGet: <T = unknown>(params: OperationParams["memory.get"] = {}) => call("memory.get", params) as Promise<T>,
     outflowRevoke: <T = unknown>(params: OperationParams["outflow.revoke"]) => call("outflow.revoke", params) as Promise<T>,

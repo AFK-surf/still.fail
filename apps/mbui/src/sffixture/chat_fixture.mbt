@@ -1338,6 +1338,34 @@ pub fn phone_post() -> Json {
 }
 
 ///|
+/// chat-signin's last post: an agent asking the person to sign in to github.com on the chat's tab (docs/vault.md 登录态),
+/// its card as the core says it; how it stands by the mode (chat-signin-code: a code asked; -person: a captcha, the
+/// person's; -done: signed in, its keeping waiting for this device; -kept: kept).
+pub fn signin_post(mode : String) -> Json {
+  let ask : Map[String, Json] = { "id": "g-1", "site": "github.com", "reason": "查看 PR #512 的 Actions 日志", "screen": "browser:T1" }
+  match mode {
+    "chat-signin-code" => ask["status"] = Json::string("code")
+    "chat-signin-person" => {
+      ask["status"] = Json::string("person")
+      ask["why"] = Json::string("blocked")
+    }
+    "chat-signin-done" | "chat-signin-kept" => {
+      ask["status"] = Json::string("done")
+      ask["keep"] = Json::boolean(true)
+      ask["save"] = Json::string("r-save")
+      if mode == "chat-signin-kept" {
+        ask["kept"] = Json::string("granted")
+      }
+    }
+    _ => ()
+  }
+  msg(63, "agent", by_agent("Anthropic", "claude", "s-c1"), "要登录 github.com：查看 PR #512 的 Actions 日志", "刚刚", {
+    "card": { "type": "options", "signinAsk": Json::object(ask) },
+    "createdAt": Json::number(1.0e9),
+  })
+}
+
+///|
 /// chat-ask-end's last post: an agent asking with an options card, waiting; anything sent in the chat answers it at
 /// once, as the core says it (decisions.ts inMessages: what is sending answers the last card).
 pub fn ask_end_post() -> Json {
@@ -1364,6 +1392,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let ask_end = f.mode == "chat-ask-end"
   let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file"
   let linked = f.mode.has_prefix("chat-phone-linked-")
+  let signin = f.mode.has_prefix("chat-signin")
   let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off" || linked
   // (chat-phone-granted: its request approved already; chat-phone-lacks: waiting, on a phone without Developer options;
   // chat-phone-linked-<link>[-desk]: approved, its station holding the phone as <link> says, on the phone or (-desk)
@@ -1378,7 +1407,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       None => rest
     }
   }
-  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault && !phone && !ask_end) {
+  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault && !phone && !signin && !ask_end) {
     return v
   }
   match v {
@@ -1422,6 +1451,9 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       // chat-phone's request for the person's phone, last
       if phone {
         all.push(phone_post())
+      }
+      if signin {
+        all.push(signin_post(f.mode))
       }
       // chat-ask-end's card, last
       if ask_end {

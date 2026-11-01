@@ -58,7 +58,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     return
   }
   // an agent's request about a vault item that says what it is: its card is in place of the words (message.mbt)
-  if m.card is Some({ ask: Some(_), .. }) || m.card is Some({ phone: Some(_), .. }) {
+  if m.card is Some({ ask: Some(_), .. }) || m.card is Some({ phone: Some(_), .. }) || m.card is Some({ signin: Some(_), .. }) {
     return
   }
   let resolved = match m.decision {

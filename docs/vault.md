@@ -144,6 +144,19 @@ chat EMBER/1793439516.811000。station 浏览器里每个 chat 一个只在内�
 - **写回**：到期取出时把那一刻的 cookie 交回密钥库（网站中途会换新的）：不加锁的库 station 直接写成条目的新版本。加锁的库 station 解不开也签不了：新 cookie 封给这个库各成员已设置的设备（`saveContext`，id `n_…`），存在 `vault_renewals`（每条只留最新一份），跟着这一条下一次的申请走（`Request.renewal`）；批准那次 app 本来就要解开设备箱钥匙（同一次指纹），顺手解开它、写成条目的新版本，授权给出去的也是新的。授权里的 cookie 和它对得上（station 只存它的摘要比对），station 才删掉这份；老 app 批准时不认它，就留给下一次。
 - **环境重建**：Chrome 重启后环境没了，chat 再要浏览器时新建一个，还在授权期内的登录态重新放进去（`signInAgain`）。
 
+### 从卡片登录（2026-11-01 用户定）
+
+chat EMBER/1793439516.811000（「agent 那边只剩一个动作」）。agent 要在自己 chat 的浏览器里登录某个网站，只调一个工具 `sign_in {site, reason}`（`station/src/vault/signin.ts`）：
+
+- **密钥库里有这个网站的登录态**：照 `secret_use`（方式 `browser`）申请，批准后放进浏览器。已经授权着就直接说。授权了网站还要登录（cookie 过期）：网站支持通行密钥就点通行密钥登录（浏览器自己签），否则 `again: true` 重新走下面这条。
+- **没有**：agent 先在 chat 的浏览器里打开网站的登录页（station 检查那个标签页上确有登录框，否则拒绝），station 在 chat 里发一张卡片（`card.signin {id, site, reason, screen}`，`screen` 是那个标签页的 `browser:<targetId>`），给 chat 的发起人。Slack/飞书里没有卡片，文字里给标签页的画面链接。
+- **卡片上**：「用 1Password 登录」（电脑上用 `op`，会再取一次性验证码 `--otp`；安卓用系统自动填充服务，和远程画面里的「填入」同一套，docs/remote-screens.md「Filling a login」）→ 账号密码（和验证码）经 `signin.fill {id, login, keep}` 交给 station（`login` 是对象，core 的 `doing` 不留副本）→ station 另开一条 DevTools 连接，在页面自己的隔离环境里找登录框（账号、密码、验证码；一位一格的验证码按格输入），用 `Input.insertText` 当作键入，回车提交，页面没动就点它的提交按钮，一步步走完（`browser/signin-form.ts drive`）。只在标签页还在那个网站时输入。输入的值只在 station 内存里，最后一次使用 15 分钟后丢掉，从不写日志、不写盘。
+- **中途**：页面要验证码而没给 → 卡片 `code`，在卡片上输入；人机验证、网页不接受、页面不动、跑到别的网站 → 卡片 `person`，按钮打开那个标签页的画面，人处理完点「我已登录」（`signin.self {done: true}`）。人也可以一开始就选「在画面中登录」。
+- **结束**：页面离开登录框（或人说登好了）→ 卡片 `left`，告诉 agent 去看；agent 看过确认登录了调 `sign_in {site, done: true}`，没登好调 `stuck: "还要做什么"`（卡片转给人）。确认后若卡片上选了「登录后存入密钥库」（默认），station 照 `secret_save {kind: browser, hosts: [site]}` 申请存入，但**不发存入卡片**（`quiet`），申请号写在登录卡片上（`outcome.save`），登录的那台设备直接 `vault.approve` 批准；存入结果（`outcome.kept`）出来后收回卡片。密钥库没开的人照常发存入卡片（要先开启）。
+- **通行密钥**：登录后网站支持通行密钥的，agent 在网站设置里加一把（chat 浏览器自带的验证器直接建好），再 `done`：存进密钥库的登录态带上它，以后 cookie 过期由浏览器自己用通行密钥登录，不用找人。
+- 记录在 station 的 `signin_asks` 表（不含任何输入的值）；一天没人处理就过期，chat 归档时结束。
+
+
 ## agent 存入（2026-10-24 用户定）
 
 chat EMBER/1792782824.926000（「当然是 agent 申请添加我来审批」）。agent 手上有了以后还要用的凭据（用 `op`/`bw` 读出的密码、人给的 token、自己建的 key），由 agent 申请存进库，人在卡片上批准，不让人自己去 app 里填。

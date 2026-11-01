@@ -221,6 +221,7 @@ pub fn fix_session_pick() -> Json
 
 pub let fix_shared : (String, String?)
 
+
 pub fn fix_split_tabs() -> Json
 
 pub let fix_srt : String
@@ -508,6 +509,8 @@ pub fn seeded_draft(String, String) -> Json
 pub fn seeded_outbox(String) -> Array[Json]
 
 pub fn seeded_pictures(String, Array[Json]) -> Unit
+
+pub fn signin_post(String) -> Json
 
 pub fn small_chat(String, String) -> Json
 

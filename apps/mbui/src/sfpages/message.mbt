@@ -548,6 +548,10 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       phone_ask_card(c, here, m, card, phone)
       return
     }
+    Some({ signin: Some(ask), .. } as card) => {
+      signin_ask_card(c, here, m, card, ask)
+      return
+    }
     _ => ()
   }
   let placed : Map[String, Attachment] = {}

@@ -15,6 +15,7 @@ import { type BrowserOptions, type BrowserStatus, StationBrowser } from "./brows
 import type { GateParts } from "./gate.ts";
 import { sitePasskeys } from "./passkeys.ts";
 import { type SignedIn, expired, keptOf, siteCookies, stateOf } from "./signins.ts";
+import { TabForm } from "./signin-form.ts";
 import type { TabInfo } from "./tabs.ts";
 
 /// A sign-in taken out of a chat's context as its grant ended: its cookies (and passkeys) as they were then (the site may
@@ -162,6 +163,14 @@ export class Browsers {
   /// The tabs of `session`'s chat.
   tabs(session: string): TabInfo[] {
     return this.station.tabs().filter((t) => t.session === session);
+  }
+
+  /// The sign-in form of `session`'s chat's tab `targetId`, on a connection of its own (signin-form.ts); refused for a
+  /// tab not its chat's.
+  async form(session: string, targetId: string): Promise<TabForm> {
+    if (!this.tabs(session).some((t) => t.id === targetId)) throw new Error("no such tab in this chat's browser");
+    const { cdp, session: tab } = await this.station.attach(targetId);
+    return new TabForm(cdp, tab, targetId);
   }
 
   status(session: string): BrowserStatus {

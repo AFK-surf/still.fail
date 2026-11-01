@@ -548,6 +548,9 @@ export class Secrets {
     a: {
       name: string; kind: string; reason: string; value?: string; command?: string; path?: string; username?: string; public_key?: string; filename?: string; modes?: string[]; hosts?: string[]; env?: string;
       cwd: string; station?: string; browser?: "chat" | "station";
+      /// Kept from a sign-in's card (signin.ts), the person having chosen there to keep it: no card of its own, its
+      /// request told to `made` (the app that signed in approves it in place).
+      quiet?: (request: string) => void;
     },
   ): Promise<string> {
     const { ws, lock } = this.#placeOf(session);
@@ -626,10 +629,11 @@ export class Secrets {
     const thread = this.#d.hub.store.latestThread(session);
     if (thread !== null) {
       request.chat = threadAddress(thread.thread.channel, thread.thread.threadTs);
-      kept.cardTs = await this.#postSave(session, thread, request);
+      kept.cardTs = a.quiet ? null : await this.#postSave(session, thread, request);
       kept.thread = thread.thread.id;
     }
     this.#save(kept);
+    a.quiet?.(id);
     this.#audit(request, "save-request", [modes.join(" "), hosts.join(" "), from ? `${from.name}: ${command}` : (command ?? ""), typed ? "typed" : ""].filter((x) => x !== "").join(" · "));
     this.#told(request);
     return this.#saidSave(request);

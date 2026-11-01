@@ -13,6 +13,10 @@ import { Agents } from "../sessions/agents.ts";
 import { sender } from "../sessions/messages.ts";
 import { ControlPlane, Events, Parts, Paths, Previous, Store } from "../services.ts";
 import { vaultTools } from "./tool.ts";
+import { SignIns } from "./signin.ts";
+import { routes as signInRoutes } from "../api/routes/signins.ts";
+import { drive } from "../browser/signin-form.ts";
+import { ofSites } from "../browser/signins.ts";
 import { plainStore, shown } from "./plain.ts";
 import { Secrets } from "./secrets.ts";
 import { vaultStore } from "./store.ts";
@@ -23,7 +27,8 @@ export const VaultLive = Layer.effectDiscard(
     const store = yield* Store;
     const events = yield* Events;
     const parts = yield* Parts;
-    const cloud = (yield* ControlPlane).state;
+    const plane = yield* ControlPlane;
+    const cloud = plane.state;
     const { hub, remote } = yield* Agents;
     // A workspace's lock: the home workspace's is the station's own (null), another's by its id.
     const lock = (ws: string | null) => cloud.locked(ws === null || ws === cloud.home() ? null : ws)?.state ?? null;
@@ -54,6 +59,49 @@ export const VaultLive = Layer.effectDiscard(
     browsers.onTakenOut((session, request, cookies) => secrets.renewed(session, request, cookies));
     browsers.onFresh((session) => secrets.signInAgain(session));
     browsers.onResumed((session) => secrets.passkeysAgain(session));
+    // A site signed in to from a card (signin.ts): the vault's sign-in for it asked for, else the person's own
+    // password manager filling the chat's tab.
+    const covers = (hosts: string[], site: string) => ofSites(site, hosts) || hosts.some((h) => ofSites(h, [site]));
+    const signIns = new SignIns({
+      db: store.db, hub, now: () => wall.now(), after: (ms, f) => wall.after(ms, f),
+      workspace: (session) => store.getSession(session)?.ws ?? cloud.home(),
+      screenLink: (tab) => {
+        const s = cloud.state;
+        return s && s.workspace && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}/screen/${encodeURIComponent(`browser:${tab}`)}` : null;
+      },
+      browser: {
+        tabs: (session) => browsers.tabs(session),
+        look: async (session, tab) => {
+          const form = await browsers.form(session, tab);
+          try {
+            return await form.look();
+          } finally {
+            form.close();
+          }
+        },
+        drive: async (session, tab, site, values, used) => {
+          const form = await browsers.form(session, tab);
+          try {
+            return await drive(form, site, values, used, (ms) => wall.sleep(ms));
+          } finally {
+            form.close();
+          }
+        },
+      },
+      vault: {
+        listed: (session, site) => secrets.listings(session).find((l) => l.listing.kind === "browser" && covers(l.listing.hosts, site))?.item ?? null,
+        held: (session, site) => {
+          const h = secrets.held(session).find((g) => g.grant.mode === "browser" && covers(g.grant.hosts, site));
+          return h === undefined ? null : `A sign-in to ${h.grant.hosts.join(", ")} is granted to this chat already (grant ${h.request.id}, until ${new Date(h.grant.exp * 1000).toISOString()}): it is in this chat's browser.`;
+        },
+        use: (session, item, reason) => secrets.ask(session, { item, mode: "browser", reason }),
+        keep: (session, site, reason, made) => {
+          const on = secrets.status(session);
+          return secrets.save(session, { name: `${site} 登录态`, kind: "browser", hosts: [site], reason, cwd: "", ...(on === "on" || on === "plain" ? { quiet: made } : {}) });
+        },
+      },
+    });
+    secrets.listen((r) => signIns.heard(r));
     secrets.onPlainWritten((i) => events.tell("vault-plain", shown(i), `vault-plain\0${i.id}`, { workspace: i.ws, email: i.owner }));
     // The grants, the boxes of requests waiting and the secrets to keep, only in memory: over to the next process at a
     // handover (an update), so no agent asks again.
@@ -79,7 +127,8 @@ export const VaultLive = Layer.effectDiscard(
     parts.routes([
       ...vaultRoutes({ vaults, lock: (ws) => lock(ws), events, boxed: (l, cert) => secrets.boxed(l, cert) }),
       ...requestRoutes({ secrets, plain: secrets.plain, lock: (ws) => lock(ws), events }),
+      ...signInRoutes(signIns),
     ]);
-    parts.tools(vaultTools(secrets, (k) => store.getSession(k)?.workspace ?? null));
+    parts.tools(vaultTools(secrets, (k) => store.getSession(k)?.workspace ?? null, signIns));
   }),
 );

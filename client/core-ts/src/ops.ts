@@ -155,6 +155,9 @@ export const PARAMS: Record<string, string> = {
   "job.log": "id:string lines:number",
   "job.stop": "id:string",
   "screen.close": "screen:string",
+  "signin.fill": "id:string login:json keep?:boolean",
+  "signin.self": "id:string done?:boolean",
+  "signin.deny": "id:string",
   "job.clearEnded": "session:string",
   "memory.get": "",
   "outflow.revoke": "id:string",
@@ -551,6 +554,25 @@ function stationOp(name: string, params: unknown): Request | null {
     // the station tells it (`screens` on its stream).
     case "screen.close":
       return op("POST", () => `/screens/${p.at("screen")}/close`, null, NONE);
+    // A sign-in its card asks of the person (station/src/vault/signin.ts, docs/vault.md 登录态): what their password
+    // manager gave (`login`: username, password, code; an object, so `doing` keeps no copy of it), typed into the chat's
+    // tab by the station; they sign in themselves on its screen (`signin.self`, `done` once they did); or they will not.
+    // The card says how it goes, restated by the station.
+    case "signin.fill": {
+      const login = p.value("login");
+      const given: Record<string, string> = {};
+      if (login !== null && typeof login === "object" && !Array.isArray(login)) {
+        for (const k of ["username", "password", "code"]) {
+          const v = (login as Record<string, unknown>)[k];
+          if (typeof v === "string" && v !== "") given[k] = v;
+        }
+      }
+      return op("POST", () => `/browser/sign-ins/${p.at("id")}/fill`, { ...given, ...(p.has("keep") ? { keep: p.bool("keep") } : {}) }, NONE);
+    }
+    case "signin.self":
+      return op("POST", () => `/browser/sign-ins/${p.at("id")}/self`, { done: p.bool("done") }, NONE);
+    case "signin.deny":
+      return op("POST", () => `/browser/sign-ins/${p.at("id")}/deny`, null, NONE);
     case "job.clearEnded":
       return op("DELETE", () => `/sessions/${p.at("session")}/jobs`, null, session("session"));
     case "memory.get":

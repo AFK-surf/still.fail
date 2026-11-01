@@ -1948,6 +1948,7 @@ pub(all) struct Card {
   vault : String
   ask : VaultAsk?
   phone : PhoneAsk?
+  signin : SignInAsk?
 }
 
 pub(all) struct ChatCcTo {
@@ -3068,6 +3069,19 @@ pub(all) enum ShotWait {
   Place(Bool)
   Grab(Bool)
   Draw(@ui.MarkedImage)
+}
+
+pub(all) struct SignInAsk {
+  id : String
+  site : String
+  reason : String
+  screen : String
+  status : String
+  why : String
+  said : String
+  keep : Bool
+  save : String
+  kept : String
 }
 
 pub(all) enum SignInStep {

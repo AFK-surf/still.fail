@@ -54,6 +54,9 @@ export function cardShown(card: J): J {
   if (request !== null) v.vault = request;
   const ask = vaultAsk(get(card, "vault"));
   if (ask !== null) v.vaultAsk = ask;
+  // An agent's ask to sign in to a site (docs/vault.md 登录态): which, why, on which tab, how it goes.
+  const signin = signinAsk(get(card, "signin"));
+  if (signin !== null) v.signinAsk = signin;
   // An agent's request for its person's phone (docs/adb-share.md): what it asks, and once decided, how.
   const phone = phoneAsk(get(card, "adb"));
   if (phone !== null) v.phoneAsk = phone;
@@ -94,6 +97,23 @@ function vaultAsk(v: J): J | null {
     const filename = trimmed(get(get(v, "save"), "filename"));
     out.save = { kind, ...(username !== null ? { username } : {}), ...(filename !== null ? { filename } : {}), ...(get(get(v, "save"), "typed") === true ? { typed: true } : {}) };
   }
+  return out;
+}
+
+/// A site's sign-in as its card says it (station/src/vault/signin.ts): its id, site, why, tab, and how it goes.
+function signinAsk(v: J): J | null {
+  const id = trimmed(get(v, "id"));
+  const site = trimmed(get(v, "site"));
+  const screen = trimmed(get(v, "screen"));
+  if (id === null || site === null || screen === null) return null;
+  const out: J = { id, site, reason: str(get(v, "reason")) ?? "", screen };
+  const outcome = get(v, "outcome");
+  for (const field of ["status", "why", "said", "save", "kept"]) {
+    const said = trimmed(get(outcome, field));
+    if (said !== null) out[field] = said;
+  }
+  const keep = get(outcome, "keep");
+  if (typeof keep === "boolean") out.keep = keep;
   return out;
 }
 
