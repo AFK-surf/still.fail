@@ -485,3 +485,46 @@ test "panel, 大屏 keyboard and mouse: at a point, a column of its own in it: i
     "short, grown, 4 rows: dialog (600, 106, 280, 130) row0 [(616, 142, 248, 22)] row4 [] held Some(false) | wheel: row0 [(616, 142, 248, 22)] row4 [] held Some(false)",
   ])
 }
+
+///|
+test "panel, 大屏 keyboard and mouse: tall 0.5, at a point high and low in the window, its body a column that fills it and its rows: where it is, how tall, what the wheel scrolls: as main has it" {
+  let out = []
+  for at in [100.0, 500.0, 700.0] {
+    let held : Array[Bool] = []
+    let rows = @signals.signal(40)
+    let t = menu_tester(1280.0, 800.0, 0)
+    @sf.panel("面板", panel_column_body(rows, held), from=At(600.0, at, 0.0, 0.0), tall=0.5)
+    t.run_for(@ui.move_most_ms)
+    let w = fn(s : String) { t.words().filter(fn(x) { x.0 == s }).map(fn(x) { tenth4((x.1, x.2, x.3, x.4)) }) }
+    let d = t.query(Dialog, label="面板").map(fn(s) { tenth4(s.rect) })
+    let before = "dialog \{d} row0 \{w("第0行")} held \{held.last()}"
+    match d {
+      Some((x, y, dw, dh)) => t.wheel(x + dw / 2.0, y + dh / 2.0, 120.0)
+      None => ()
+    }
+    t.run_for(@ui.move_most_ms)
+    out.push("at \{at}: \{before} | wheel: row0 \{w("第0行")}")
+  }
+  for o in out {
+    println("PANELTALL \{o}")
+  }
+  // (as main has it, a4c845604)
+  assert_eq(out, [
+    "at 100: dialog Some((600, 106, 280, 400)) row0 [(616, 142, 248, 22)] held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+    "at 500: dialog Some((600, 94, 280, 400)) row0 [(616, 130, 248, 22)] held Some(false) | wheel: row0 [(616, 10, 248, 22)]",
+    "at 700: dialog Some((600, 294, 280, 400)) row0 [(616, 330, 248, 22)] held Some(false) | wheel: row0 [(616, 210, 248, 22)]",
+  ])
+}
+
+///|
+test "panel, 大屏 keyboard and mouse: tall 0.5, at a point: its title, words and button where main has them, drawn by the window's tree" {
+  let said : Array[String] = []
+  let t = menu_tester(1280.0, 800.0, 0)
+  @sf.panel("面板", panel_test_body(said), from=At(600.0, 100.0, 0.0, 0.0), tall=0.5)
+  t.run_for(@ui.move_most_ms)
+  // (as main has it, a4c845604: PANELSAID kinds' tall)
+  assert_eq(
+    (panel_said(t), tree_said(Dialog, "面板") is Some(_)),
+    ("dialog Some((600, 106, 280, 400)) title [(616, 118, 248, 20)] words [(616, 142, 248, 22)] button Some((826.1918000000001, 168, 44, 24)) focus None", true),
+  )
+}
