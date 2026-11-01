@@ -1176,6 +1176,22 @@ fn dump_node(sb : StringBuilder, i : Int, depth : Int) -> Unit {
 }
 
 ///|
+/// The images the old views built in the last frame (Ctx::image), each its source and its size as laid out, drawn or
+/// not (none decoded yet, faded out): what an old view asked to be shown.
+pub fn Tester::image_nodes(self : Tester) -> Array[(String, Double, Double)] {
+  ignore(self)
+  let c = g()
+  let out = []
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if n.kind == kind_image {
+      out.push((n.text, n.fw, n.fh))
+    }
+  }
+  out
+}
+
+///|
 /// The words drawn now, as another app's frame is compared with this one's (still.fail's apps/mbui tape.mbt): each
 /// text node's words, where its top left is drawn (moved by its own look and its ancestors': Ctx::drawn_at), its size
 /// as laid out, and how opaque it is drawn (its and its ancestors' opacities and looks' alphas, multiplied).

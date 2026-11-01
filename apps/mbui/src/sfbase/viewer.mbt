@@ -2208,9 +2208,12 @@ pub fn Viewer::image_view(self : Viewer, c : @ui.Ctx, src : Source, stage : Int,
     if inputs {
       tap_stage(c, v, stage)
     }
-    v.note(c, fn() {
-      c.text(pv("android-chat.file.image.failed"), size=@sf.theme().t.body, color=dark_muted) |> ignore
-    })
+    // (where the window's tree draws the viewer, its words a node of its own: viewer_tree.mbt)
+    if !v.in_tree {
+      v.note(c, fn() {
+        c.text(pv("android-chat.file.image.failed"), size=@sf.theme().t.body, color=@sf.theme().p.muted) |> ignore
+      })
+    }
     return
   }
   // its size: as sent, else as decoded, else its stand-in's
@@ -2315,8 +2318,9 @@ pub fn Viewer::image_view(self : Viewer, c : @ui.Ctx, src : Source, stage : Int,
     }
     _ => ()
   }
-  // its size not sent with it nor known yet: a small decode, out of sight, says it (meanwhile its stand-in's)
-  if picture != "" && !(v.file.width > 0.0 && v.file.height > 0.0) && @ui.image_natural(picture) is None {
+  // its size not sent with it nor known yet: a small decode, out of sight, says it (meanwhile its stand-in's; where the
+  // window's tree draws the viewer, its node's: viewer_tree.mbt)
+  if !v.in_tree && v.size_unknown(src) {
     c.box(w=Px(1.0), h=Px(1.0), opacity=0.01, fn() {
       c.image(picture, w=Px(1.0), h=Px(1.0), bg=0L, fade=false) |> ignore
     })
@@ -2451,6 +2455,14 @@ pub fn Viewer::picture_failed(self : Viewer) -> Bool {
     Some(_) => @ui.image_state(self.image_name()) == -1
     None => false
   }
+}
+
+///|
+/// Whether the size of what it shows (Viewer::picture) is neither sent with it nor known yet, nothing of it decoded:
+/// what draws it asks a small decode of it, out of sight, that says it. As the host says it.
+fn Viewer::size_unknown(self : Viewer, src : Source) -> Bool {
+  let picture = self.picture(src)
+  picture != "" && !(self.file.width > 0.0 && self.file.height > 0.0) && @ui.image_natural(picture) is None
 }
 
 ///|

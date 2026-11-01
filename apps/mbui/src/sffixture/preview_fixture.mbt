@@ -42,10 +42,14 @@ pub fn preview_files() -> Array[(Attachment, () -> Bytes)] {
 pub let preview_coming : Ref[(String, Json?)?] = Ref(None)
 
 ///|
+/// A picture whose bytes are no picture (MBUI_FIXTURE=chat-preview-broken): its name; none (None), each file's own.
+pub let preview_broken : Ref[String?] = Ref(None)
+
+///|
 /// MBUI_FIXTURE=chat-preview-<what>: which file opens.
 pub fn fixture_preview(mode : String) -> Unit {
   let which = match mode {
-    "chat-preview-image" | "chat-preview-step" | "chat-preview-swipe" | "chat-preview-coming" | "chat-preview-coming-part" => "界面草图.png"
+    "chat-preview-image" | "chat-preview-step" | "chat-preview-swipe" | "chat-preview-coming" | "chat-preview-coming-part" | "chat-preview-broken" => "界面草图.png"
     "chat-preview-pdf" => "设计说明.pdf"
     "chat-preview-video" => "演示录屏.mp4"
     "chat-preview-webm" | "chat-preview-webm-unsupported" => "演示录屏.webm"
@@ -68,7 +72,9 @@ pub fn fixture_preview(mode : String) -> Unit {
         "chat-preview-coming-part" => Some((which, Some({ "loaded": 6000.0, "total": 18000.0 })))
         _ => None
       }
-      open_preview("ws1/st1", "s-c1", f.0, steps=if mode == "chat-preview-image" || mode.has_prefix("chat-preview-coming") {
+      // (its bytes read whole, no picture in them: the host says it cannot decode them)
+      preview_broken.val = if mode == "chat-preview-broken" { Some(which) } else { None }
+      open_preview("ws1/st1", "s-c1", f.0, steps=if mode == "chat-preview-image" || mode.has_prefix("chat-preview-coming") || mode == "chat-preview-broken" {
         NoSteps
       } else {
         InChat(Some(1.0), "s-c1")
@@ -131,7 +137,7 @@ pub fn fixture_fetch(
   let mut found : Bytes? = None
   for f in preview_files() {
     if base_name(f.0.path) == file {
-      found = Some((f.1)())
+      found = Some(if preview_broken.val == Some(file) { Bytes::makei(18000, fn(i) { (i % 11).to_byte() }) } else { (f.1)() })
     }
   }
   let bytes = match found {

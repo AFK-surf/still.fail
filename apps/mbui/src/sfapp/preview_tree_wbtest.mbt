@@ -3478,6 +3478,105 @@ test "viewer on the tree: its stand-in decoded and shown, then the picture itsel
 }
 
 ///|
+/// The window's tree's nodes drawing `src` as small decodes asked for out of sight (Viewer::size_unknown's): 1 by 1,
+/// drawn at none.
+fn size_asks(src : String) -> Array[@view.Drawn] {
+  @ui.view_tree().unwrap().drawn().filter(fn(d) {
+    match d.image {
+      Some((s, _, _)) => s == src && d.w == 1.0 && d.h == 1.0
+      None => false
+    }
+  })
+}
+
+///|
+test "viewer on the tree: its picture said not to decode: why, in words of the window's tree's node alone, none of the old view's, in the middle of the stage, muted; nothing of its picture asked for or drawn there" {
+  let t = preview_tester("image", w=390.0, platform=2, finish=false)
+  let v = viewer.get().unwrap()
+  // (each picture asked for could not be decoded, as the host says)
+  for _ in 0..<3 {
+    for p in t.pending() {
+      t.finish(p.0, p.1, ok=p.0 != 1)
+    }
+    t.draw()
+  }
+  let main = "mem:preview/" + v.id()
+  assert_eq(@ui.image_state(main), -1, msg="its picture not decoded")
+  let said = pv("android-chat.file.image.failed")
+  let all = t.words().filter(fn(w) { w.0 == said })
+  let nodes = @ui.view_tree().unwrap().drawn().filter(fn(d) { d.words == said })
+  assert_eq(nodes.length(), 1, msg="said by the tree's node: \{all}")
+  assert_eq(all.length(), 1, msg="said once: \{all}")
+  let d = nodes[0]
+  assert_eq(d.ink, @sf.theme().p.muted, msg="in the theme's muted ink, as the viewer's other words on its canvas")
+  assert_eq(d.words_look.size, @sf.theme().t.body, msg="the body's size")
+  assert_eq((d.x + d.w / 2.0, d.y + d.h / 2.0), (195.0, 422.0), msg="in the middle: \{all}")
+  assert_eq(size_asks(main).length(), 0, msg="its size asked for no more")
+  assert_eq(picture_node(), None, msg="no picture drawn by the tree")
+}
+
+///|
+test "viewer on the tree: a picture whose size is not known yet (none said, nothing standing in): a small decode of it asked for by the window's tree's node, drawing none of it, none of the old view's; decoded, it lies where its size says, asked for no more" {
+  let t = preview_tester("step", w=390.0, platform=2, finish=false)
+  let (a, _) = preview_files().iter().find_first(fn(f) { f.0.name == "界面草图.png" }).unwrap()
+  open_preview("ws1/st1", "s-c1", { ..a, width: 0.0, height: 0.0, thumbhash: "" }, steps=InChat(Some(1.0), "s-c1"))
+  t.run_for(@ui.move_most_ms)
+  let v = viewer.get().unwrap()
+  assert_true(v.zoom.rect() is None, msg="where it is not known")
+  let main = "mem:preview/" + v.id()
+  let asks = size_asks(main)
+  assert_eq(asks.length(), 1, msg="asked by the tree's node")
+  assert_eq(asks[0].alpha, 0.0, msg="drawn at none")
+  // (nothing of it drawn: the old view's 1 by 1 at 0.01 none)
+  let small = t.drawn_instances().filter(fn(i) { i[5] == 4.0 && t.image_src(i[20].to_int()).has_prefix(main) })
+  assert_eq(small.length(), 0, msg="none drawn: \{small}")
+  // (nor asked for by the old view: no picture of it built there, drawn or not)
+  let built = t.image_nodes().filter(fn(n) { n.0 == main })
+  assert_eq(built.length(), 0, msg="none of the old view's: \{built}")
+  // (asked for small: the host's decode of it, at the 1 drawn at the window's pixels)
+  let own = t.pending().filter(fn(p) { p.0 == 1 && t.image_src(p.1).has_prefix(main) })
+  assert_eq(own.length(), 1, msg="its decode asked for, one")
+  for p in t.pending() {
+    t.finish(p.0, p.1)
+  }
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(v.zoom.rect() is Some(_), msg="where it lies, known")
+  // (its whole decode, asked for as it is drawn where it lies, done)
+  for p in t.pending() {
+    t.finish(p.0, p.1)
+  }
+  t.draw()
+  let (x, y, w, h) = v.zoom.rect().unwrap()
+  let lying = t.drawn_instances().filter(fn(i) { i[5] == 4.0 && t.image_src(i[20].to_int()).has_prefix(main) && (i[0] - x).abs() < 0.5 && (i[1] - y).abs() < 0.5 && (i[2] - w).abs() < 0.5 && (i[3] - h).abs() < 0.5 })
+  assert_eq(lying.length(), 1, msg="the picture itself drawn where it lies, once: \{lying.length()}")
+  assert_eq(size_asks(main).length(), 0, msg="asked for no more")
+}
+
+///|
+test "viewer on the tree: a picture whose size is not known yet (none said, nothing standing in) said not to decode: why, in words of the window's tree's node; its size asked for no more" {
+  let t = preview_tester("step", w=390.0, platform=2, finish=false)
+  let (a, _) = preview_files().iter().find_first(fn(f) { f.0.name == "界面草图.png" }).unwrap()
+  open_preview("ws1/st1", "s-c1", { ..a, width: 0.0, height: 0.0, thumbhash: "" }, steps=InChat(Some(1.0), "s-c1"))
+  t.run_for(@ui.move_most_ms)
+  let v = viewer.get().unwrap()
+  let main = "mem:preview/" + v.id()
+  assert_true(v.zoom.rect() is None, msg="its size not known")
+  assert_eq(size_asks(main).length(), 1, msg="its size asked for")
+  // (each picture asked for said not to decode, as the host says: its own, and what would stand in for it, the
+  // station's thumbnail, so no size is known of either)
+  for p in t.pending() {
+    t.finish(p.0, p.1, ok=p.0 != 1)
+  }
+  t.draw()
+  assert_eq(@ui.image_state(main), -1, msg="not to be decoded")
+  assert_true(v.zoom.rect() is None, msg="its size still not known: \{v.zoom.nw} x \{v.zoom.nh}")
+  let said = pv("android-chat.file.image.failed")
+  assert_eq(@ui.view_tree().unwrap().drawn().filter(fn(d) { d.words == said }).length(), 1, msg="said by the tree's node, unknown")
+  assert_eq(size_asks(main).length(), 0, msg="its size asked for no more once it failed")
+}
+
+///|
 /// A picture of the chat opened by its thumbnail tapped (preview_wbtest's flight back: chat-preview-named, the chat at
 /// rest, a row put up at a time till compare.png shows), its flight set out, nothing run yet: the tester.
 fn opening() -> @ui.Tester raise {
