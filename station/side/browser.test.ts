@@ -15,6 +15,7 @@ import { StationBrowser } from "../src/browser/browser.ts";
 import { type Cdp, connectCdp } from "../src/browser/cdp.ts";
 import { chromeHost } from "../src/browser/chrome.ts";
 import { BEHIND } from "../src/browser/proxy.ts";
+import { type FormField, TabForm, drive } from "../src/browser/signin-form.ts";
 import { COPY_BINDING, LOGIN_BINDING, PASSKEY_BINDING, jpegSize } from "../src/browser/view.ts";
 import type { Clip, LoginField, PasskeyAsk } from "../src/screens/source.ts";
 import { makeScreens } from "../src/screens/source.ts";
@@ -242,6 +243,79 @@ test("a tab's login form, for a person driving it: the field in focus said with 
     assert.deepEqual(await evaluate("typed"), { u: "a@x.com", p: "correct horse" }, "the page heard it as typed");
     unwatch();
     view.close();
+  } finally {
+    agent?.close();
+    await browser.stop().catch(() => {});
+    await browser.close();
+    server.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a site's sign-in filled by the station from what a person's app gave: an account, then a password, then a code it asks for, each typed as keys and sent; refused, stuck behind a captcha or on another site, a person is needed", { skip: binary === undefined && "no Chrome here" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "side-browser-signin-"));
+  const screens = makeScreens();
+  const browser = new StationBrowser({ dir, chrome: chromeHost({ dir, headless: true }), screens });
+  // A site's sign-in in three steps, as large sites make them: the account (sent by its button only, by script), the
+  // password (Enter sends its form), a code split one digit to a box (the page moving the focus on as each is typed).
+  const pages: Record<string, string> = {
+    "/": `<title>a</title><input id=u autocomplete=username><button id=next type=button>Next</button>
+<script>window.typed = ""; u.addEventListener("keydown", (e) => (typed += e.key)); u.addEventListener("input", () => (typed = typed || "input"));
+next.onclick = () => (location.href = "/password?u=" + encodeURIComponent(u.value));</script>`,
+    "/password": `<title>p</title><form action=/check><input type=password name=p id=p></form>`,
+    "/code": `<title>c</title><form action=/home>${[0, 1, 2, 3, 4, 5].map((i) => `<input name=d${i} maxlength=1 inputmode=numeric autocomplete=${i === 0 ? "one-time-code" : "off"}>`).join("")}<button>Verify</button></form>
+<script>const boxes = [...document.querySelectorAll("input")]; boxes.forEach((b, i) => b.addEventListener("input", () => { if (b.value && boxes[i + 1]) boxes[i + 1].focus(); }));</script>`,
+    "/home": `<title>home</title><p>signed in</p>`,
+    "/captcha": `<title>x</title><form><input type=password id=p></form><iframe src="/recaptcha/api2/anchor" style="width:300px;height:80px"></iframe>`,
+  };
+  let account = "";
+  const server = createServer((req, res) => {
+    const u = new URL(req.url ?? "/", "http://x");
+    if (u.pathname === "/password") account = u.searchParams.get("u") ?? "";
+    if (u.pathname === "/check") return res.writeHead(302, { location: u.searchParams.get("p") === "correct horse" && account === "a@x.com" ? "/code" : "/password" }).end();
+    if (u.pathname === "/home" && [0, 1, 2, 3, 4, 5].map((i) => u.searchParams.get(`d${i}`)).join("") !== "123456") return res.writeHead(302, { location: "/code" }).end();
+    res.writeHead(200, { "content-type": "text/html" }).end(pages[u.pathname] ?? "<title>none</title>");
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+  let agent: Cdp | null = null;
+  try {
+    const s = await browser.endpoint();
+    agent = await connectCdp(s.ws!);
+    const open = async (path: string) => {
+      const { targetId } = await agent!.send("Target.createTarget", { url: `${base}${path}` });
+      await until(() => browser.hasTab(targetId), "the tab is there");
+      const { cdp, session } = await browser.attach(targetId);
+      await until(async () => (await cdp.send("Runtime.evaluate", { expression: "document.readyState", returnByValue: true }, session)).result?.value === "complete", "the page loads");
+      return { targetId, form: new TabForm(cdp, session, targetId), cdp, session };
+    };
+
+    const { form, cdp, session } = await open("/");
+    assert.deepEqual(await form.look(), { username: true, password: false, code: false, blocked: false });
+    const used = new Set<FormField>();
+    // Another site's: nothing typed.
+    assert.deepEqual(await drive(form, "example.com", { username: "a@x.com", password: "correct horse" }, used, wait), { state: "person", why: "elsewhere" });
+    assert.equal(used.size, 0);
+    const first = await drive(form, "127.0.0.1", { username: "a@x.com", password: "correct horse" }, used, wait);
+    assert.deepEqual(first, { state: "code" }, "account, then password, then the code it was not given");
+    assert.equal(new URL(await form.url()).pathname, "/code");
+    assert.equal(account, "a@x.com");
+    assert.deepEqual([...used].sort(), ["password", "username"]);
+    const done = await drive(form, "127.0.0.1", { username: "a@x.com", password: "correct horse", code: "123456" }, used, wait);
+    assert.deepEqual(done, { state: "left" });
+    assert.equal(new URL(await form.url()).pathname, "/home");
+    assert.equal((await cdp.send("Runtime.evaluate", { expression: "document.title", returnByValue: true }, session)).result?.value, "home");
+    form.close();
+
+    // A wrong password: the page asks again for what was typed.
+    const wrong = await open("/password");
+    assert.deepEqual(await drive(wrong.form, "127.0.0.1", { password: "nope" }, new Set(), wait), { state: "person", why: "refused" });
+    wrong.form.close();
+    // A captcha on the page: a person's.
+    const captcha = await open("/captcha");
+    assert.deepEqual(await drive(captcha.form, "127.0.0.1", { password: "x" }, new Set(), wait), { state: "person", why: "blocked" });
+    captcha.form.close();
   } finally {
     agent?.close();
     await browser.stop().catch(() => {});

@@ -135,6 +135,22 @@ export class StationBrowser {
     return up.cdp.send(method, params);
   }
 
+  /// A connection of its own to tab `targetId` (a sign-in's form filled by the station: signin-form.ts), the tab's
+  /// session on it; closing it lets go of the tab.
+  async attach(targetId: string): Promise<{ cdp: Cdp; session: string }> {
+    this.used();
+    const up = await this.#ensure();
+    if (!up.tabs.has(targetId)) throw new Error("This tab is closed.");
+    const cdp = await this.#o.chrome.connect(up.running.ws);
+    try {
+      const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
+      return { cdp, session: sessionId };
+    } catch (e) {
+      cdp.close();
+      throw e;
+    }
+  }
+
   /// The chats' tabs' authenticators (passkeys.ts), the browser started if it is not running.
   async passkeys(): Promise<Authenticators> {
     this.used();

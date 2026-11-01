@@ -59,6 +59,7 @@ pub fn reset() -> Unit {
   profile_page_reset()
   local_menu.val = false
   memory_doc_reset()
+  signin_reset()
   fx_policy_up.val = ""
   fx_vault_add_up.val = false
   fx_spread_up.val = false

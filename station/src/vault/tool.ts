@@ -7,6 +7,7 @@ import { joinPath } from "../ops/paths.ts";
 import { accountOf } from "./keeper.ts";
 import { placeholder } from "./proxy.ts";
 import type { Secrets } from "./secrets.ts";
+import type { SignIns } from "./signin.ts";
 import type { Tool } from "../tools/mcp.ts";
 
 const text = (args: Record<string, unknown>, key: string): string => (typeof args[key] === "string" ? (args[key] as string) : "");
@@ -32,8 +33,37 @@ export const SECRET_RUN_DESCRIPTION =
 export const SECRET_SAVE_DESCRIPTION =
   "Ask to keep a credential in the vault of the person you work for (whoever started this chat): a password, token, API key, SSH key or credential file (a kubeconfig, a service account's JSON key, a certificate) you need again, or a sign-in to a website (kind browser, hosts the sites: its cookies, and the passkeys a person added on the site's account page there, read from this chat's browser once a person signed in there, or from the station's browser with browser: station, where sign-ins were made before each chat had its own; other chats then ask for it with secret_use instead of signing in again), read from a password manager's CLI (op, bw), given by a person or made by you. A card goes to them in your chat (what it is, your reason, where it came from); they approve it in the still.fail app, and agents use it later only through secret_use, each use approved. A file: give path (a file here, or with station there), read as it is. Prefer command (it runs in your workspace here, or with station on that station in this chat's directory there, and what it prints is the secret, never shown to you) over value. None of these: one you do not have and cannot read (an API key only they can get), typed in (a file: picked) by them on the card and never shown to you; say in reason where they get it. Their vault not turned on: the card offers to turn it on first. Kept, this chat may use it at once (the request's id is its grant for secret_run); other chats ask with secret_use. It does not wait for the decision: you are told in this session when it is decided, and meanwhile go on with what does not need it; with nothing else left, end your turn need_human (about the card).";
 
-export function vaultTools(secrets: Secrets, workspace: (session: string) => string | null): Tool[] {
+export const SIGN_IN_DESCRIPTION =
+  "Get this chat's browser signed in to a website (github.com, accounts.google.com): the one way to ask for it. A sign-in the person you work for keeps in their vault for the site is asked for (as secret_use does: a card they approve, then it is put into this chat's browser). None kept: first open the site's sign-in page in this chat's browser (the `browser` tool), then call this: a card asks them to sign in, and their app fills the form from their own password manager (1Password, the system's autofill), the station typing it into the page step by step (account, password, one-time code) and sending it; where only they can go on (a captcha, a code by mail), the card gives them the tab's screen. You never see what they typed. It does not wait: you are told in this session when the page has left its sign-in; then look whether it is signed in (a site taking passkeys: add one on its account page there first; asked for the password again there, call sign_in again and it is typed in again) and call again with done: true (it is then kept in their vault, if they chose so on the card, for other chats to ask for), or with stuck saying what is left for them to do (in their language). The vault's sign-in ran out (the site asks you to sign in again although it was granted): sign in with the site's passkey if it offers one (this chat's browser signs it itself), else call with again: true. Never ask for a password or a code in the chat, and do not post the tab's screen yourself for a sign-in: the card does.";
+
+export function vaultTools(secrets: Secrets, workspace: (session: string) => string | null, signIns?: SignIns): Tool[] {
   return [
+    ...(signIns === undefined ? [] : [{
+      name: "sign_in",
+      description: SIGN_IN_DESCRIPTION,
+      inputSchema: {
+        type: "object",
+        properties: {
+          site: { type: "string", description: "The site's host (github.com)." },
+          reason: { type: "string", description: "Why you need to be signed in, for the person, in the language they use (e.g. 查看 PR #512 的 Actions 日志)." },
+          tab: { type: "string", description: "The tab (its target id, from the browser tool's tabs) whose sign-in page it is; default this chat's last tab on the site." },
+          again: { type: "boolean", description: "The sign-in kept in the vault ran out: ask the person to sign in anew (kept again)." },
+          done: { type: "boolean", description: "You looked after being told the page left its sign-in: it is signed in." },
+          stuck: { type: "string", description: "You looked: it is not signed in yet; what is left for the person to do there, in their language." },
+        },
+        required: ["site"],
+        additionalProperties: false,
+      },
+      run: (key: string, args: Record<string, unknown>) =>
+        signIns.ask(key, {
+          site: text(args, "site"),
+          ...(text(args, "reason") ? { reason: text(args, "reason") } : {}),
+          ...(text(args, "tab") ? { tab: text(args, "tab") } : {}),
+          ...(args.again === true ? { again: true } : {}),
+          ...(args.done === true ? { done: true } : {}),
+          ...(typeof args.stuck === "string" ? { stuck: args.stuck } : {}),
+        }),
+    } satisfies Tool]),
     {
       name: "secret_list",
       description: SECRET_LIST_DESCRIPTION,

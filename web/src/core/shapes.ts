@@ -1803,6 +1803,35 @@ export interface VaultAsk {
 	lasts?: string;
 }
 
+/** A site's sign-in asked of the person on a card, as it stands. */
+export interface SignInAsk {
+	/** Its id (`signin.fill`, `signin.self`, `signin.deny`). */
+	id: string;
+	/** The site, its host (github.com): the logins of the password manager asked for are this site's. */
+	site: string;
+	reason: string;
+	/** The chat's tab it is signed in on, as a screen of the chat's station (browser:<id>), for the person to open. */
+	screen: string;
+	/**
+	 * How it goes: filling | code (the page asks a one-time code) | person (only the person can go on, on the
+	 * screen) | left (the page left its sign-in; the agent looks) | done | denied | expired | ended. Absent while it waits.
+	 */
+	status?: string;
+	/**
+	 * person: why (blocked: a captcha; refused: the page asked again for what was typed; stuck: it did not move on;
+	 * elsewhere: the tab is on another site; self: the person chose to; agent: the agent said what is left, `said`).
+	 */
+	why?: string;
+	/** What is left for the person, as the agent said it. */
+	said?: string;
+	/** Whether the person chose to keep it in their vault. */
+	keep?: boolean;
+	/** Signed in and kept: the vault request that keeps it, for this device to approve in place (`vault.approve`). */
+	save?: string;
+	/** That request decided: granted | denied | expired. */
+	kept?: string;
+}
+
 /**
  * What an agent's message asks people to answer it with (core decisions.ts): `type` options (`options`, as shown: the
  * recommended one last; a tap answers, `decision.answer`) or text (a field to write in, with a `placeholder`;
@@ -1830,6 +1859,11 @@ export interface MessageCard {
 	 * from before it did (the words say it).
 	 */
 	vaultAsk?: VaultAsk;
+	/**
+	 * An agent's ask to sign in to a site (station/src/vault/signin.ts): drawn in place of the post's words, answered
+	 * with `signin.fill` (from this device's password manager), `signin.self`, `signin.deny` (the chat's station).
+	 */
+	signinAsk?: SignInAsk;
 	/** A login card: the login's id on its station (the `machineLogin` topic has the rest). */
 	login?: string;
 	/** A login card for a login on another station than the chat's: that station's key. */

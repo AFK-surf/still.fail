@@ -135,6 +135,26 @@ pub(all) struct Card {
   ask : VaultAsk?
   /// an agent's request for its person's phone (MessageCard.phoneAsk), drawn in place of the post's words
   phone : PhoneAsk?
+  /// an agent's ask to sign in to a site (MessageCard.signinAsk), drawn in place of the post's words
+  signin : SignInAsk?
+}
+
+///|
+/// An agent's ask to sign in to a site as its card says it (SignInAsk, ember docs/vault.md 登录态): its id, the site,
+/// why, the chat's tab it is on (a screen of the chat's station), and how it goes (`status`: "" waiting, filling, code,
+/// person, left, done, denied, expired, ended; `why` a person is needed; what the agent `said` is left; whether it is
+/// to be kept, `keep`; the vault request keeping it, `save`, and how that went, `kept`).
+pub(all) struct SignInAsk {
+  id : String
+  site : String
+  reason : String
+  screen : String
+  status : String
+  why : String
+  said : String
+  keep : Bool
+  save : String
+  kept : String
 }
 
 ///|
@@ -400,6 +420,25 @@ pub fn message_of(m : Json) -> Message {
                 station: text(a, "station"),
                 answer: text(a, "answer"),
                 lasts: text(a, "lasts"),
+              })
+            _ => None
+          },
+          signin: match field(c, "signinAsk") {
+            Some(Object(_)) as a =>
+              Some({
+                id: text(a, "id"),
+                site: text(a, "site"),
+                reason: text(a, "reason"),
+                screen: text(a, "screen"),
+                status: text(a, "status"),
+                why: text(a, "why"),
+                said: text(a, "said"),
+                keep: match field(a, "keep") {
+                  Some(False) => false
+                  _ => true
+                },
+                save: text(a, "save"),
+                kept: text(a, "kept"),
               })
             _ => None
           },
