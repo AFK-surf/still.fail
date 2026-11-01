@@ -205,7 +205,7 @@ pub let dark_muted : Int64
 
 pub let dark_text : Int64
 
-pub fn dashes(Array[(Double, Double)], Array[@ui.Line]) -> Unit
+pub fn dashes(Array[(Double, Double)], Array[@paint.Line]) -> Unit
 
 pub fn days_new(String, Array[ChatDay]) -> Bool
 

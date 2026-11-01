@@ -4,44 +4,6 @@
 // by hand under words as it is drawn (`upto`).
 
 ///|
-/// A line through `points` (from the top left of the box it is drawn in), `width` wide, its ends and joins round, in
-/// `color` (RRGGBBAA), drawn as far along its length as `upto` (a share of it, 0 … 1: a line as it is being drawn).
-/// Its pieces' round ends lie over each other where they join: a colour that lets what is under it show (its alpha
-/// under 1) shows darker there.
-pub(all) struct Line {
-  points : Array[(Double, Double)]
-  width : Double
-  color : Int64
-  upto : Double
-} derive(Eq, Show)
-
-///|
-/// A line (see `Line`): whole unless `upto` says how much of it.
-pub fn line(points : Array[(Double, Double)], width~ : Double, color~ : Int64, upto? : Double = 1.0) -> Line {
-  { points, width, color, upto }
-}
-
-///|
-/// How far from its circle a piece of an arc may stray at its middle: pieces short enough that the line through them
-/// is round to the eye at any scale a screen has.
-let arc_sag = 0.05
-
-///|
-/// Points along the arc of the circle about (`cx`, `cy`) of radius `r` from the angle `from` through `sweep` (radians,
-/// clockwise on the screen from the right: 0 is 3 o'clock, π/2 is 6 o'clock), as many as keep each piece within
-/// `arc_sag` of the circle.
-pub fn arc(cx : Double, cy : Double, r : Double, from~ : Double, sweep~ : Double) -> Array[(Double, Double)] {
-  let step = (8.0 * arc_sag / dmax(r, arc_sag)).sqrt()
-  let n = imax(1, @math.ceil(sweep.abs() / step).to_int())
-  let out = []
-  for k in 0..=n {
-    let a = from + sweep * k.to_double() / n.to_double()
-    out.push((cx + r * @dmath.cos(a), cy + r * @dmath.sin(a)))
-  }
-  out
-}
-
-///|
 /// A box `w` by `h` that draws `lines` over its ground (in its own coordinates, from its top left).
 pub fn Ctx::lines(self : Ctx, lines : Array[Line], w~ : Size, h~ : Size) -> Int {
   let i = self.alloc_part(kind_box, true, false)
@@ -55,7 +17,13 @@ pub fn Ctx::lines(self : Ctx, lines : Array[Line], w~ : Size, h~ : Size) -> Int 
 ///|
 /// A node's lines painted, each as far along it as it is drawn.
 fn Ctx::paint_lines(self : Ctx, n : Node, alpha : Double) -> Unit {
-  for ln in n.lines {
+  self.emit_lines(n.x, n.y, n.lines, alpha)
+}
+
+///|
+/// `lines` drawn from (`ox`, `oy`) (an old view's box's, a node of the window's tree's), each as far along it as it says.
+fn Ctx::emit_lines(self : Ctx, ox : Double, oy : Double, lines : Array[Line], alpha : Double) -> Unit {
+  for ln in lines {
     let pts = ln.points
     if pts.is_empty() || ln.upto <= 0.0 || ln.width <= 0.0 {
       continue
@@ -68,7 +36,7 @@ fn Ctx::paint_lines(self : Ctx, n : Node, alpha : Double) -> Unit {
     // a single point, or none of its length: a dot
     if total == 0.0 {
       let (x, y) = pts[0]
-      self.emit_line(n.x + x, n.y + y, n.x + x, n.y + y, hw, ln.color, alpha)
+      self.emit_line(ox + x, oy + y, ox + x, oy + y, hw, ln.color, alpha)
       continue
     }
     let mut left = total * dmin(ln.upto, 1.0)
@@ -78,10 +46,10 @@ fn Ctx::paint_lines(self : Ctx, n : Node, alpha : Double) -> Unit {
       let d = dist(pts[k - 1], pts[k])
       if d >= left {
         let t = if d > 0.0 { left / d } else { 0.0 }
-        self.emit_line(n.x + ax, n.y + ay, n.x + ax + (bx - ax) * t, n.y + ay + (by - ay) * t, hw, ln.color, alpha)
+        self.emit_line(ox + ax, oy + ay, ox + ax + (bx - ax) * t, oy + ay + (by - ay) * t, hw, ln.color, alpha)
         break
       }
-      self.emit_line(n.x + ax, n.y + ay, n.x + bx, n.y + by, hw, ln.color, alpha)
+      self.emit_line(ox + ax, oy + ay, ox + bx, oy + by, hw, ln.color, alpha)
       left = left - d
     }
   }

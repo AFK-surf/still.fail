@@ -272,7 +272,7 @@ pub fn keyboard() -> Bool
 
 pub fn keys_system() -> Int32
 
-pub fn line(Array[(Double, Double)], width~ : Double, color~ : Int64, upto? : Double) -> Line
+pub fn line(Array[(Double, Double)], width~ : Double, color~ : Int64, upto? : Double) -> @paint.Line
 
 pub fn line_baseline(Double, size? : Double, weight? : Int32, em? : (Double, Double)) -> Double
 
@@ -1141,7 +1141,7 @@ pub fn Ctx::layer_ended(Self, Int32) -> Unit
 #callsite(autofill(loc))
 pub fn Ctx::left_out(Self, Int32, loc~ : SourceLoc) -> Bool
 pub fn Ctx::lifetime(Self, String) -> @effect.Scope
-pub fn Ctx::lines(Self, Array[Line], w~ : Size, h~ : Size) -> Int32
+pub fn Ctx::lines(Self, Array[@paint.Line], w~ : Size, h~ : Size) -> Int32
 pub fn Ctx::list(Self, String, Int32, Double, (Int32) -> Unit, w? : Size, h? : Size, stick_end? : Bool, bg? : Int64, glide_on_growth? : Bool, rows_read? : Bool, sized? : RowCauses, from_end? : Bool) -> Int32
 pub fn Ctx::list_above(Self, Int32) -> Int32
 pub fn Ctx::list_follow_from(Self, String, Int32, margin? : Double) -> Unit
@@ -1662,13 +1662,6 @@ pub(all) enum Len {
   S80
   S96
 } derive(Eq, Show, @debug.Debug)
-
-pub(all) struct Line {
-  points : Array[(Double, Double)]
-  width : Double
-  color : Int64
-  upto : Double
-} derive(Eq, Show)
 
 pub(all) struct ListInfo {
   count : Int32
@@ -2855,6 +2848,8 @@ pub using @paint {type CornerRoots}
 pub using @view {type Cursor}
 
 pub using @paint {type Glass}
+
+pub using @paint {type Line}
 
 pub using @view {type Role}
 

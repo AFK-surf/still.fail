@@ -245,7 +245,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
     )
     // (where it grows from, where it is drawn bigger or smaller about the side it went on: View::scale's FromBeside)
     n.went = Some(went)
-    let (px, py) = n.pivot_at(n.lw, n.lh)
+    let (px, py) = self.pivot_of(at, n.lw, n.lh)
     let (lx, ly) = ((x - hx) / hs, (y - hy) / hs)
     if lx != n.lx || ly != n.ly || px != n.lpx || py != n.lpy {
       n.lx = lx
@@ -295,10 +295,14 @@ pub fn View::lives_with(self : View, owner : View) -> View {
 /// About which point of it a node is drawn bigger or smaller (View::scale): `At` shares of its width and height (0.5,
 /// 0.5: its middle); `FromBeside` the edge of it toward what it goes beside (View::beside), on the side it went on as
 /// it was last placed (the side it was said to go on before), where along it it is lined up: grown out of its anchor,
-/// as a popover grows from what opened it (kit's grown_from). Not beside anything: its middle.
+/// as a popover grows from what opened it (kit's grown_from). Not beside anything: its middle. `Drawn` the middle of what
+/// it and what it holds draw, as they are laid out (the boxes of those with a ground, words, shapes, lines, a picture or
+/// an old view of their own): what is grown and shrunk where it is, not about a page's width (a room opening on a line
+/// to one side: reveal's, an old view's Ctx::held_look).
 pub(all) enum Pivot {
   At(Double, Double)
   FromBeside
+  Drawn
 } derive(Eq, Show, Debug)
 
 ///|
@@ -319,7 +323,7 @@ fn Node::pivot_at(self : Node, w : Double, h : Double) -> (Double, Double) {
         Left => (1.0, across)
       }
     }
-    (FromBeside, None) => (0.5, 0.5)
+    (FromBeside, None) | (Drawn, _) => (0.5, 0.5)
   }
   (sx * w, sy * h)
 }
@@ -431,9 +435,10 @@ pub fn[T : Eq] View::keeps_width(self : View, by : () -> T, most? : () -> Double
   |> ignore
   // (the window's size among them: its first frame's too, the first it is laid out in)
   self.reacts(fn() { (by(), self.window()) }, fn(_) {
-    // (laid out as of the change's moment, what the change under way set counted: the layout's own, Tree::laid_now)
+    // (laid out as of the change's moment, what the change under way set counted: the layout's own, read and not placed
+    // by, Tree::measured_now)
     guard self.live() is Some(n) else { return }
-    self.tree.laid_now()
+    self.tree.measured_now()
     let w = n.flex.width
     if w > @signals.untracked(fn() { widest.get() }) {
       widest.set(w)

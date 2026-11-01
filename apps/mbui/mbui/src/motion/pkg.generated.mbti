@@ -4,6 +4,7 @@ package "mbui/motion"
 import {
   "mbui/effect",
   "mbui/ui",
+  "mbui/view",
   "moonbitlang/core/debug",
 }
 
@@ -161,6 +162,8 @@ pub fn move(points? : Double, over? : Double, delay? : Double) -> Spec
 
 pub let move_spring : Spec
 
+pub fn[T : Eq] moves_together(@view.View, () -> T, spec? : Spec) -> MoveGroup
+
 pub fn ms_to_seconds(Double) -> Double
 
 pub fn offsets_to_times(Array[Double], Double) -> Array[Double]
@@ -186,6 +189,8 @@ pub fn reshaped_over(@ui.Ctx, String) -> Double
 pub fn reveal(@ui.Ctx, String, Double, from_top? : Bool, clip? : Bool, middle? : Bool, align? : @ui.Align, () -> Unit) -> Unit
 
 pub fn reveal_height(String) -> Double
+
+pub fn reveal_node(@view.View, () -> Bool, (@view.View) -> Unit) -> @view.View
 
 pub fn reverse_easing((Double) -> Double) -> (Double) -> Double
 
@@ -324,6 +329,11 @@ pub fn Generator::next(Self, Double) -> GenState
 pub fn Generator::retarget(Self, Double, Double, Double) -> Unit
 pub fn Generator::to_css(Self) -> String
 pub fn Generator::velocity(Self, Double, initial? : Double) -> Double
+
+pub struct MoveGroup {
+  // private fields
+}
+pub fn MoveGroup::add(Self, @view.View, reshapes? : Bool) -> Unit
 
 pub(all) enum Offset {
   Pixels(Double)

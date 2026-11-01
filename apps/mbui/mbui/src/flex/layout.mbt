@@ -712,6 +712,15 @@ fn size_uncached(
         }
       }
   }
+  // as tall as its share of what it holds comes to at its width, what it holds laid out whole in that (Style's
+  // content_share): what it holds sized first, then laid out in the height that comes to
+  if known(s.content_share) && !known(h) {
+    let fw = layout_flex(node, b, w, h, aw, ah, false)
+    let natural = out_h.val
+    let share = fmax(fmin(s.content_share, 1.0), 0.0)
+    let sized = clamp_size(pbh + (natural - pbh) * share, b.min_h, b.max_h)
+    return layout_flex(node, b, if known(w) { w } else { fw }, sized, aw, ah, perform)
+  }
   layout_flex(node, b, w, h, aw, ah, perform)
 }
 

@@ -28,6 +28,12 @@ priv struct Run {
   /// apart from its Listener: `untracked` stops following reads, never owning)
   mut owner : ReactiveNode?
   queued : Array[ReactiveNode?]
+  /// how deep in flushes, and what is to be done once the outermost is over (after_flush): not this library's
+  /// algorithm, a hook beside it for what reads where a change left things once all it told is told
+  mut flushing : Int
+  afters : Array[() -> Unit]
+  /// doing what waits for a change told whole (after_flush): one at a time, in order, whatever they set meanwhile
+  mut draining : Bool
 }
 
 ///|
@@ -40,6 +46,9 @@ let run : Run = {
   active_sub: None,
   owner: None,
   queued: [],
+  flushing: 0,
+  afters: [],
+  draining: false,
 }
 
 ///|
@@ -451,6 +460,7 @@ fn run_effect(e : ReactiveNode) -> Unit {
 
 ///|
 fn flush() -> Unit {
+  run.flushing += 1
   while run.notify_index < run.queued_length {
     let effect = run.queued[run.notify_index].unwrap()
     run.queued[run.notify_index] = None
@@ -459,6 +469,29 @@ fn flush() -> Unit {
   }
   run.notify_index = 0
   run.queued_length = 0
+  run.flushing -= 1
+  // (the change told whole, every effect it set going run: what waits for that, in order; what one of them sets
+  // flushed in its turn, what waits on that after it)
+  if run.flushing == 0 && run.batch_depth == 0 && !run.draining {
+    run.draining = true
+    while run.afters.length() > 0 {
+      let f = run.afters.remove(0)
+      f()
+    }
+    run.draining = false
+  }
+}
+
+///|
+/// `f` done once the change being told now is told whole (the outermost flush of the batch or the set under way over,
+/// every effect it set going run); none under way, now. Not alien-signals': a hook beside it, for what must see where
+/// one change left things and never half of it (where a window's tree stands as the next change comes).
+pub fn after_flush(f : () -> Unit) -> Unit {
+  if run.flushing > 0 || run.batch_depth > 0 || run.draining {
+    run.afters.push(f)
+  } else {
+    f()
+  }
 }
 
 ///|

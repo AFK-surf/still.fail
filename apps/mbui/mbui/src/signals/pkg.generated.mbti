@@ -18,6 +18,8 @@ pub const WATCHING : Int32 = 2
 
 pub fn active_sub() -> ReactiveNode?
 
+pub fn after_flush(() -> Unit) -> Unit
+
 pub fn batch_depth() -> Int32
 
 pub fn[T] computed((T?) -> T, same? : (T, T) -> Bool) -> Computed[T]
