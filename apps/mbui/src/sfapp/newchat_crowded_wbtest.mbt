@@ -93,7 +93,8 @@ test "narrow: the model's panel has each frequent combination over the models on
   for row in rows {
     let (x, _, w, _) = row.rect
     assert_true(x >= sx && x + w <= sx + sw + 0.5, msg="\{row.label} \{row.rect}")
-    let runs = runs_in(t, row.rect)
+    // (its own words: the page's under the sheet, dimmed behind it, not)
+    let runs = runs_in(t, row.rect).filter(fn(r) { row.label.contains(r.text) })
     assert_true(runs.length() > 0)
     for r in runs {
       assert_true(r.base == runs[0].base, msg="\{row.label} on more than one line")
