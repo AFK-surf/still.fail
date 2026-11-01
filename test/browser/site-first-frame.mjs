@@ -31,15 +31,18 @@ const ownScripts = own('index.html');
 const browser = await playwright.chromium.launch(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {});
 const shot = async (page, name) => { if (out) writeFileSync(join(out, `${name}.png`), await page.screenshot()); };
 const report = [];
+const openingImbalance = [];
 
 for (const [label, size, path, colorScheme] of [
+  ['wide-en-dark', { width: 1440, height: 900 }, '/en/', 'dark'],
   ['wide', { width: 1440, height: 900 }, '/'],
+  ['wide-compact', { width: 1024, height: 768 }, '/'],
   ['narrow', { width: 390, height: 844 }, '/'],
   ['narrow-en', { width: 390, height: 844 }, '/en/'],
   ['narrow-dark', { width: 360, height: 780 }, '/', 'dark'],
-  ['wide-en', { width: 1440, height: 900 }, '/en/'],
+  ['wide-en', { width: 1920, height: 1080 }, '/en/'],
 ]) {
-  const context = await browser.newContext({ viewport: size, locale: path === '/en/' ? 'en-US' : 'zh-CN', ...(colorScheme ? { colorScheme } : {}) });
+  const context = await browser.newContext({ viewport: size, deviceScaleFactor: out ? 2 : 1, locale: path === '/en/' ? 'en-US' : 'zh-CN', ...(colorScheme ? { colorScheme } : {}) });
   if (colorScheme === 'dark') await context.addInitScript(() => localStorage.setItem('stillfail.site.theme', 'dark'));
 
   // Before any script: the scene unseen, nothing of it drawn out of its place.
@@ -95,6 +98,20 @@ for (const [label, size, path, colorScheme] of [
   assert.ok(first.frame, `${label}: the window's frame is gone before the demo's script is here`);
   if (colorScheme === 'dark') assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark', `${label}: the chosen theme was not applied`);
   if (!label.startsWith('narrow')) assert.ok(first.phoneFrame, `${label}: the phone shows no frame while its app is on its way`);
+  if (!label.startsWith('narrow')) {
+    const balance = await page.evaluate(() => {
+      const room = document.querySelector('[data-drawn]');
+      const box = room.getBoundingClientRect();
+      const cards = [...room.lastElementChild.children].filter((e) => e.tagName !== 'STYLE' && getComputedStyle(e).display !== 'none');
+      const phone = room.querySelector('iframe').parentElement;
+      const bounds = [...cards, phone].map((e) => e.getBoundingClientRect());
+      const left = Math.min(...bounds.map((b) => b.left));
+      const right = Math.max(...bounds.map((b) => b.right));
+      return { shift: (left + right - box.left - box.right) / 2, roomWidth: box.width };
+    });
+    report.push(`${label}: opening devices' centre is ${Math.round(balance.shift)} px from the room's centre`);
+    if (Math.abs(balance.shift) > balance.roomWidth * 0.03) openingImbalance.push(label);
+  }
 
   // The demo's scripts arrive: it takes its boxes over. The narrow opening frame has the same cards as the app.
   for (const route of held.splice(0)) await route.continue();
@@ -121,10 +138,21 @@ for (const [label, size, path, colorScheme] of [
   assert.deepEqual(said.filter((m) => m.startsWith('error')), [], `${label}: errors as the page was taken over`);
 
   // Played through: the rows land, then (wide) the phone comes to the front.
-  for (const at of [0.35, 1]) {
+  for (const at of out ? [0.15, 0.25, 0.35, 1] : [0.35, 1]) {
     await page.evaluate((f) => { const s = document.querySelector('[data-idea="1"] section[style]'); window.scrollTo(0, s.offsetTop + (s.offsetHeight - innerHeight) * f); }, at);
     await page.waitForTimeout(700);
     await shot(page, `${label}-3-scrolled-${at}`);
+    if (label === 'wide-en-dark' && at === 0.35) {
+      const overlap = await page.evaluate(() => {
+        const cards = [...document.querySelector('[data-drawn]').lastElementChild.children];
+        const studio = cards.find((e) => e.textContent.includes('Studio') && getComputedStyle(e).display !== 'none');
+        const mini = cards.find((e) => e.textContent.includes('Mini') && getComputedStyle(e).display !== 'none');
+        if (!studio || !mini) return null;
+        const a = studio.getBoundingClientRect(), b = mini.getBoundingClientRect();
+        return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      });
+      assert.equal(overlap, false, `${label}: the flying Studio and Mini cards overlap`);
+    }
   }
   if (label.startsWith('narrow')) {
     // The row taken over from the opening frame must respond to input, not just retain its appearance.
@@ -141,3 +169,4 @@ for (const [label, size, path, colorScheme] of [
 await browser.close();
 server.close();
 console.log(report.join('\n'));
+assert.deepEqual(openingImbalance, [], 'the opening devices leave much more empty space on one side');

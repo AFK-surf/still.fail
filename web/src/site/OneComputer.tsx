@@ -62,7 +62,7 @@ function windowAt(room: { w: number; h: number }, narrow: boolean): Box & { k: n
  * The devices apart, each a centre in a design box fitted into the room: the machines, and on a wide screen the
  * phone before them. A narrow screen's are its cards, drawn smaller (`scale`).
  */
-function apart(room: { w: number; h: number }, narrow: boolean) {
+function apart(room: { w: number; h: number }, narrow: boolean, cards: readonly { box: Box }[], phoneWidth: number) {
   const design = narrow ? { w: 360, h: 560 } : { w: 1000, h: 540 };
   // In NAMES' order, placed so that none crosses another on its way into the list (Studio, Mini, 笔记本, 服务器 down it).
   const machines = narrow ? [[150, 340], [150, 70], [210, 205], [210, 475]] : [[560, 300], [360, 100], [790, 90], [850, 430]];
@@ -70,7 +70,19 @@ function apart(room: { w: number; h: number }, narrow: boolean) {
   const ox = (room.w - design.w * s) / 2, oy = Math.min((room.h - design.h * s) / 2, 24);
   const at = ([x, y]: number[]) => ({ x: ox + x! * s, y: oy + y! * s });
   // The phone on the right, the side the window will have it on: it goes there without passing over the machines.
-  return { machines: machines.map(at), phone: at([960, 260]), scale: narrow ? 0.7 : 1 };
+  const placed = machines.map(at), phone = at([960, 260]);
+  let shift = 0;
+  if (!narrow) {
+    // The positions occupy only part of the design box. Centre their visible bounds, including the phone, rather
+    // than the box itself; card widths and the phone's scale can differ with the window and its contents.
+    let left = phone.x - phoneWidth / 2, right = phone.x + phoneWidth / 2;
+    for (let i = 0; i < placed.length; i++) {
+      left = Math.min(left, placed[i]!.x - cards[i]!.box.w / 2);
+      right = Math.max(right, placed[i]!.x + cards[i]!.box.w / 2);
+    }
+    shift = (room.w - left - right) / 2;
+  }
+  return { machines: placed, phone, shift, scale: narrow ? 0.7 : 1 };
 }
 
 /** The app's row for a machine: its name where the app writes it (and shows it: of the frame the page was built with,
@@ -304,12 +316,16 @@ export function OneComputer(props: DemoProps) {
 
       // The devices are the app's rows: from where they stand apart (in the room) to their places in its list, in the
       // air until they are there; a shadow under each, as under the devices, closing up as it comes down into the screen.
-      const parts = apart(size, narrow);
+      const small = Math.min(0.32, (size.h * 0.42) / HAND.h);
+      const parts = apart(size, narrow, rows, HAND.w * small);
+      // The opening is centred as one group. Move that shared origin back before the first card lands, so cards
+      // keep their spacing on the way into the list even though they land at different times.
+      const shift = parts.shift * (1 - landingOf(0));
       const order = parts.machines.map((_, k) => k).sort((a, b) => parts.machines[b]!.y - parts.machines[a]!.y);
       const placed = rows.map((r, k) => {
         const from = parts.machines[k]!, home = inRoom(r.box), landed = landingOf(order.indexOf(k));
         const scale = lerp(parts.scale, s, landed);
-        const x = lerp(from.x - (r.box.w * parts.scale) / 2, home.x, landed), y = lerp(from.y - (r.box.h * parts.scale) / 2, home.y, landed);
+        const x = lerp(from.x - (r.box.w * parts.scale) / 2, home.x, landed) + shift, y = lerp(from.y - (r.box.h * parts.scale) / 2, home.y, landed);
         if (landing < 1) {
           const up = 1 - landed;
           r.flying.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
@@ -327,11 +343,12 @@ export function OneComputer(props: DemoProps) {
       // The phone (a wide screen's): small among the devices, then beside the window, then in front at full size.
       let phoneAt: Box | undefined;
       if (!narrow) {
-        const small = Math.min(0.32, (size.h * 0.42) / HAND.h), beside = Math.min(0.5, (w.h * 0.85) / HAND.h), full = Math.min(1, (size.h - 24) / HAND.h);
+        const beside = Math.min(0.5, (w.h * 0.85) / HAND.h), full = Math.min(1, (size.h - 24) / HAND.h);
         const p0 = { ...parts.phone, s: small };
         const p1 = { x: w.x + w.w - 20, y: w.y + w.h * 0.58, s: beside };
         const p2 = { x: size.w / 2 + size.w * 0.16, y: size.h / 2, s: full };
         const p = i === 0 ? { x: lerp(p0.x, p1.x, t), y: lerp(p0.y, p1.y, t), s: lerp(p0.s, p1.s, t) } : { x: lerp(p1.x, p2.x, front), y: lerp(p1.y, p2.y, front), s: lerp(p1.s, p2.s, front) };
+        p.x += shift;
         hand.style.transform = `translate(${p.x - (HAND.w * p.s) / 2}px, ${p.y - (HAND.h * p.s) / 2}px) scale(${p.s})`;
         if (hand.inert !== front < 1) hand.inert = front < 1;
         phoneAt = { x: p.x - (HAND.w * p.s) / 2, y: p.y - (HAND.h * p.s) / 2, w: HAND.w * p.s, h: HAND.h * p.s };
