@@ -17,6 +17,11 @@ pub fn Transform::identity() -> Transform {
 }
 
 ///|
+pub fn Transform::default() -> Transform {
+  Transform::identity()
+}
+
+///|
 pub fn Transform::from_row(sx : Float, ky : Float, kx : Float, sy : Float, tx : Float, ty : Float) -> Transform {
   { sx, ky, kx, sy, tx, ty }
 }

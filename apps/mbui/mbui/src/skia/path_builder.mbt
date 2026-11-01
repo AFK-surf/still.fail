@@ -20,6 +20,11 @@ pub fn PathBuilder::new() -> PathBuilder {
 }
 
 ///|
+pub fn PathBuilder::default() -> PathBuilder {
+  PathBuilder::new()
+}
+
+///|
 pub fn PathBuilder::from_rect(rect : Rect) -> Path {
   {
     bounds: rect,

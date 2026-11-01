@@ -3,16 +3,26 @@
 
 ///|
 pub(all) struct Paint {
-  shader : Shader
-  blend_mode : BlendMode
-  anti_alias : Bool
-  colorspace : ColorSpace
-  force_hq_pipeline : Bool
+  mut shader : Shader
+  mut blend_mode : BlendMode
+  mut anti_alias : Bool
+  mut colorspace : ColorSpace
+  mut force_hq_pipeline : Bool
 }
 
 ///|
 pub fn Paint::default() -> Paint {
   { shader: SolidColor(color_black), blend_mode: SourceOver, anti_alias: true, colorspace: Linear, force_hq_pipeline: false }
+}
+
+///|
+pub fn Paint::set_color(self : Paint, color : Color) -> Unit {
+  self.shader = SolidColor(color)
+}
+
+///|
+pub fn Paint::set_color_rgba8(self : Paint, r : Int, g : Int, b : Int, a : Int) -> Unit {
+  self.set_color(Color::from_rgba8(r, g, b, a))
 }
 
 ///|
@@ -531,28 +541,39 @@ fn treat_as_hairline(paint : Paint, stroke : Stroke, ts : Transform) -> Float? {
 }
 
 ///|
+/// How a pixmap is drawn into another (PixmapPaint).
+pub(all) struct PixmapPaint {
+  mut opacity : Float
+  mut blend_mode : BlendMode
+  mut quality : FilterQuality
+}
+
+///|
+pub fn PixmapPaint::default() -> PixmapPaint {
+  { opacity: 1.0, blend_mode: SourceOver, quality: Nearest }
+}
+
+///|
 /// Draws `pixmap` at (x, y) under `transform` (Pixmap::draw_pixmap).
 pub fn Pixmap::draw_pixmap(
   self : Pixmap,
   x : Int,
   y : Int,
   pixmap : Pixmap,
-  opacity : Float,
-  blend_mode : BlendMode,
-  quality : FilterQuality,
+  paint : PixmapPaint,
   transform : Transform,
   mask : Mask?,
 ) -> Unit {
   let rect = pixmap.size().to_int_rect(x, y).to_rect()
   let patt_transform = Transform::from_translate(fi(x), fi(y))
-  let paint : Paint = {
-    shader: Pattern::new(pixmap, Pad, quality, opacity, patt_transform),
-    blend_mode,
+  let p : Paint = {
+    shader: Pattern::new(pixmap, Pad, paint.quality, paint.opacity, patt_transform),
+    blend_mode: paint.blend_mode,
     anti_alias: false,
     force_hq_pipeline: false,
     colorspace: Linear,
   }
-  self.fill_rect(rect, paint, transform, mask)
+  self.fill_rect(rect, p, transform, mask)
 }
 
 ///|

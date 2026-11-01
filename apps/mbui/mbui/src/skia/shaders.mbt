@@ -208,8 +208,8 @@ pub(all) struct Pattern {
 ///|
 pub(all) enum FilterQuality {
   Nearest
-  QBilinear
-  QBicubic
+  Bilinear
+  Bicubic
 } derive(Eq, Show, Debug)
 
 ///|
@@ -649,7 +649,7 @@ fn Pattern::push_stages(self : Pattern, cs : ColorSpace, p : RasterPipelineBuild
   if ts.is_identity() || ts.is_translate() {
     quality = Nearest
   }
-  if quality == QBilinear {
+  if quality == Bilinear {
     if ts.is_translate() {
       if ts.tx == ts.tx.trunc() && ts.ty == ts.ty.trunc() {
         quality = Nearest
@@ -669,17 +669,17 @@ fn Pattern::push_stages(self : Pattern, cs : ColorSpace, p : RasterPipelineBuild
       }
       p.push(Gather)
     }
-    QBilinear => {
+    Bilinear => {
       p.ctx.sampler_spread = self.spread_mode
       p.ctx.sampler_inv_width = 1.0 / w
       p.ctx.sampler_inv_height = 1.0 / h
-      p.push(Bilinear)
+      p.push(StBilinear)
     }
-    QBicubic => {
+    Bicubic => {
       p.ctx.sampler_spread = self.spread_mode
       p.ctx.sampler_inv_width = 1.0 / w
       p.ctx.sampler_inv_height = 1.0 / h
-      p.push(Bicubic)
+      p.push(StBicubic)
       p.push(Clamp0)
       p.push(ClampA)
     }

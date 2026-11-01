@@ -19,11 +19,11 @@ pub(all) enum LineJoin {
 
 ///|
 pub(all) struct Stroke {
-  width : Float
-  miter_limit : Float
-  line_cap : LineCap
-  line_join : LineJoin
-  dash : StrokeDash?
+  mut width : Float
+  mut miter_limit : Float
+  mut line_cap : LineCap
+  mut line_join : LineJoin
+  mut dash : StrokeDash?
 }
 
 ///|

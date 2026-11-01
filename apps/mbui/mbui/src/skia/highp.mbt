@@ -406,8 +406,8 @@ fn HighP::stage(self : HighP, s : Stage) -> Bool {
         p.g[i] = exclusive_repeat(p.g[i], sy, iy)
       }
     }
-    Bilinear => p.sampler(2)
-    Bicubic => p.sampler(4)
+    StBilinear => p.sampler(2)
+    StBicubic => p.sampler(4)
     PadX1 => for i in 0..<8 { p.r[i] = lnormalize(p.r[i]) }
     ReflectX1 =>
       for i in 0..<8 {

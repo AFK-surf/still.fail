@@ -53,8 +53,8 @@ priv enum Stage {
   StTransform
   StReflect
   StRepeat
-  Bilinear
-  Bicubic
+  StBilinear
+  StBicubic
   PadX1
   ReflectX1
   RepeatX1
@@ -90,7 +90,7 @@ priv enum Stage {
 fn Stage::lowp(self : Stage) -> Bool {
   match self {
     Clamp0 | ClampA | Gather | StColorBurn | StColorDodge | StSoftLight | StHue | StSaturation | StColor | StLuminosity
-    | StReflect | StRepeat | Bilinear | Bicubic | XYToUnitAngle | XYTo2PtConicalFocalOnCircle
+    | StReflect | StRepeat | StBilinear | StBicubic | XYToUnitAngle | XYTo2PtConicalFocalOnCircle
     | XYTo2PtConicalWellBehaved | XYTo2PtConicalSmaller | XYTo2PtConicalGreater | XYTo2PtConicalStrip
     | Mask2PtConicalNan | Mask2PtConicalDegenerates | ApplyVectorMask | Alter2PtConicalCompensateFocal
     | Alter2PtConicalUnswap | NegateX | ApplyConcentricScaleBias | GammaExpand2 | GammaExpandDestination2

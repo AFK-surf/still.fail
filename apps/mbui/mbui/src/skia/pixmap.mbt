@@ -6,7 +6,7 @@ pub(all) struct Pixmap {
   data : FixedArray[Byte]
   width : Int
   height : Int
-}
+} derive(Eq, Debug)
 
 ///|
 pub fn Pixmap::new(width : Int, height : Int) -> Pixmap? {
@@ -157,7 +157,7 @@ pub(all) struct Mask {
   data : FixedArray[Byte]
   width : Int
   height : Int
-}
+} derive(Eq, Debug)
 
 ///|
 pub fn Mask::new(width : Int, height : Int) -> Mask? {
@@ -304,4 +304,24 @@ pub fn Mask::clear(self : Mask) -> Unit {
   for i in 0..<self.data.length() {
     self.data[i] = b'\x00'
   }
+}
+
+///|
+/// The pixmap itself (Rust's borrow of it).
+pub fn Pixmap::as_ref(self : Pixmap) -> Pixmap {
+  self
+}
+
+///|
+/// The pixmap itself (Rust's mutable borrow of it).
+pub fn Pixmap::as_mut(self : Pixmap) -> Pixmap {
+  self
+}
+
+///|
+/// Its pixels, rows from the top.
+pub fn Pixmap::pixels(self : Pixmap) -> Array[PremultipliedColorU8] {
+  Array::makei(self.width * self.height, fn(i) {
+    { r: self.data[i * 4].to_int(), g: self.data[i * 4 + 1].to_int(), b: self.data[i * 4 + 2].to_int(), a: self.data[i * 4 + 3].to_int() }
+  })
 }
