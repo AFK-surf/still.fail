@@ -2112,7 +2112,7 @@ pub let under_card_words : @ui.Style
 
 pub fn untitled_clear() -> @ui.Style
 
-pub fn update_key(@ui.Ctx, String, Double, Double, String, String, Double?, Bool) -> Bool
+pub fn update_key(@ui.Ctx, String, Double, Double, String, String, Bool) -> Bool
 
 pub let update_raised : Raised
 

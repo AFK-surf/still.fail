@@ -28,7 +28,7 @@ fn update_button(c : @ui.Ctx, src : Source, inset : Bool, top : Double) -> Unit 
 /// turning while it is.
 fn update_in_row(c : @ui.Ctx, src : Source) -> Unit {
   let (label, tip, busy) = update_said()
-  if @sf.update_key(c, "side/update", update_key_side, update_key_mark, label, tip, None, busy) {
+  if @sf.update_key(c, "side/update", update_key_side, update_key_mark, label, tip, busy) {
     update_go(src)
   }
 }
