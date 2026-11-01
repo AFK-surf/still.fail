@@ -218,7 +218,7 @@ fn keeping_row(c : @ui.Ctx, src : Source, k : Json) -> Unit {
       // (its words say it is kept here as it comes: 后台缓存 …; pressed, it is opened again where it was)
       opened_title(c, j, "keeping/open/" + kid, None)
       @sf.progress(c, "keeping/" + kid, Some(number(j, "progress")))
-      c.text(text(j, "statusText"), style=ftransfer_status) |> ignore
+      c.text(text(j, "statusText"), style=ftransfer_status, allow_ellipsis=true) |> ignore
     })
     |> ignore
     c.box(style=ftransfer_actions, fn() {
@@ -241,10 +241,10 @@ fn opened_title(c : @ui.Ctx, j : Json?, key : String, way : String?) -> Unit {
   if there && c.clicked(id) {
     open_coming(j)
   }
-  let b = c.box(style=ftransfer_title, flow=true, id=if there { id } else { 0 }, fn() {
-    c.text(text(j, "title"), style=ftransfer_title_words) |> ignore
+  let b = c.box(style=ftransfer_title, id=if there { id } else { 0 }, fn() {
+    c.text(text(j, "title"), style=ftransfer_title_words, allow_ellipsis=true) |> ignore
     match way {
-      Some(w) => c.text(w, style=ftransfer_way) |> ignore
+      Some(w) => c.text(w, style=ftransfer_way, allow_ellipsis=true) |> ignore
       None => ()
     }
   })
@@ -310,9 +310,9 @@ fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> 
     }
     c.box(style=ftransfer_mark, fn() { @sf.icon(c, mark, size=transfer_icon, color=ink) |> ignore }) |> ignore
     c.box(style=ftransfer_text, fn() {
-      c.box(style=ftransfer_title, flow=true, fn() {
-        c.text(text(j, "title"), style=ftransfer_title_words) |> ignore
-        c.text(if flag(j, "move") { @sf.t("web-pages.files.moving", args=[("way", way)]) } else { way }, style=ftransfer_way) |> ignore
+      c.box(style=ftransfer_title, fn() {
+        c.text(text(j, "title"), style=ftransfer_title_words, allow_ellipsis=true) |> ignore
+        c.text(if flag(j, "move") { @sf.t("web-pages.files.moving", args=[("way", way)]) } else { way }, style=ftransfer_way, allow_ellipsis=true) |> ignore
       })
       |> ignore
       if state == "copying" {
@@ -325,7 +325,7 @@ fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> 
         } else {
           ""
         })
-      c.text(status, style=if state == "failed" { ftransfer_failed } else { ftransfer_status }) |> ignore
+      c.text(status, style=if state == "failed" { ftransfer_failed } else { ftransfer_status }, allow_ellipsis=true) |> ignore
     })
     |> ignore
     c.box(style=ftransfer_actions, fn() {
@@ -364,7 +364,7 @@ fn download_row(c : @ui.Ctx, src : Source, d : Json) -> Unit {
       if flag(j, "active") {
         @sf.progress(c, "download/" + did, Some(number(j, "progress")))
       }
-      c.text(text(j, "statusText"), style=if failed { ftransfer_failed } else { ftransfer_status }) |> ignore
+      c.text(text(j, "statusText"), style=if failed { ftransfer_failed } else { ftransfer_status }, allow_ellipsis=true) |> ignore
     })
     |> ignore
     c.box(style=ftransfer_actions, fn() {
@@ -411,19 +411,19 @@ let ftransfer_title : @ui.Style = @ui.css("row gap=S1 clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_title_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg)
+let ftransfer_title_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_way : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
+let ftransfer_way : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_status : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
+let ftransfer_status : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
+let ftransfer_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

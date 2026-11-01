@@ -794,6 +794,8 @@ fn profile_used_by(c : @ui.Ctx, core : Core, address : String, o : Json?, p : Js
             "profile-user/" + address + "/" + text(cv, "id"),
             text(cv, "name"),
             value=model,
+            title_cut=true,
+            value_cut=true,
             lead=fn() { @sf.avatar(c, text(cv, "id"), text(cv, "name"), "", pf_user_avatar) },
           ) {
           (core.push)(Connect(address, text(cv, "id")))

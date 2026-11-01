@@ -1,4 +1,4 @@
-// Names in choices and station cards, and a transfer's status, must remain readable when the source makes them long.
+// Long names in choices and headings stay readable; list summaries stay compact where their content may be shortened.
 
 ///|
 fn whole_long_words(t : @ui.Tester, fragment : String) -> Unit raise {
@@ -23,33 +23,33 @@ test "a choice keeps the badges beside its short name" {
 }
 
 ///|
-test "a long station name can be read on its card" {
-  let t = screen_in("settings-stations", corner_windows[0], "zh", said=true)
-  whole_long_words(t, "Studio — 后面")
-}
-
-///|
 test "a long station name can be read at the top of its sheet" {
   let t = screen_in("chat-peek", corner_windows[0], "zh", said=true)
   whole_long_words(t, "Studio — 后面")
 }
 
 ///|
-test "a long transfer status can be read in the list" {
+test "a transfer's long name remains a compact one-line summary" {
   let t = screen_in("files-transfers", corner_windows[1], "zh", said=true)
-  whole_long_words(t, "18.3 MB / 48.2 MB — 后面")
+  let lines = t.lines_of("演示录屏.mp4 — 后面")
+  assert_eq(lines.length(), 1, msg="\{lines}")
+  assert_true(lines[0].has_suffix("…"), msg="\{lines}")
 }
 
 ///|
-test "a long transfer name can be read in the list" {
-  let t = screen_in("files-transfers", corner_windows[1], "zh", said=true)
-  whole_long_words(t, "演示录屏.mp4 — 后面")
+test "a station card's long name remains a one-line summary" {
+  let t = screen_in("settings-stations", corner_windows[0], "zh", said=true)
+  let lines = t.lines_of("Studio — 后面")
+  assert_eq(lines.length(), 1, msg="\{lines}")
+  assert_true(lines[0].has_suffix("…"), msg="\{lines}")
 }
 
 ///|
-test "a long selected model can be read in its setting" {
+test "a long selected model remains a one-line setting" {
   let t = screen_in("settings-run", corner_windows[1], "zh", said=true)
-  whole_long_words(t, "Opus 5.5 — 后面")
+  let lines = t.lines_of("Opus 5.5 — 后面")
+  assert_eq(lines.length(), 1, msg="\{lines}")
+  assert_true(lines[0].has_suffix("…"), msg="\{lines}")
 }
 
 ///|
@@ -73,10 +73,11 @@ test "a long destination can be read in the history" {
 }
 
 ///|
-test "a long model value can be read alongside its connect" {
+test "a connect in a profile keeps its long name as a one-line summary" {
   let t = screen_in("settings-profile", corner_windows[1], "zh", said=true)
-  whole_long_words(t, "星火助手 — 后面")
-  whole_long_words(t, "Opus 5.5 — 后面")
+  let lines = t.lines_of("星火助手 — 后面")
+  assert_eq(lines.length(), 1, msg="\{lines}")
+  assert_true(lines[0].has_suffix("…"), msg="\{lines}")
 }
 
 ///|
@@ -90,10 +91,14 @@ test "a long profile check keeps its refresh button beside it" {
 }
 
 ///|
-test "a long activity time can be read alongside its chat" {
+test "a long chat and activity time both have room on their row" {
   let t = screen_in("settings-connect", corner_windows[1], "zh", said=true)
-  whole_long_words(t, "Slack 里问的报销流程 — 后面")
-  whole_long_words(t, "昨天 — 后面")
+  let chat = t.lines_of("Slack 里问的报销流程 — 后面")
+  let time = t.lines_of("昨天 — 后面")
+  assert_eq(chat.length(), 1, msg="\{chat}")
+  assert_eq(time.length(), 1, msg="\{time}")
+  assert_true(chat[0].starts_with("Slack") && chat[0].has_suffix("…"), msg="\{chat}")
+  assert_true(time[0].starts_with("昨天") && time[0].has_suffix("…"), msg="\{time}")
 }
 
 ///|
