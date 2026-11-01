@@ -1467,13 +1467,32 @@ pub fn Tester::drive(
   max? : Int = 3000,
   each? : (Tester) -> Unit,
 ) -> Array[String] {
+  self.drive_while(script, max~, each=fn(t) {
+    if each is Some(f) {
+      f(t)
+    }
+    true
+  })
+}
+
+///|
+/// A driven run whose observer can stop it when its own work fails (a film's renderer or writer).
+fn Tester::drive_while(
+  self : Tester,
+  script : String,
+  max~ : Int,
+  each~ : (Tester) -> Bool,
+) -> Array[String] {
   self.fake.logs.clear()
   drive_start(script, "")
   let mut n = 0
   while driver.val is Some(_) && n < max {
     self.frame()
-    if each is Some(f) {
-      f(self)
+    if !each(self) {
+      if driver.val is Some(_) {
+        drive_end(1)
+      }
+      break
     }
     n = n + 1
   }

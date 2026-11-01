@@ -153,16 +153,82 @@ test "a Tester over a live host: the words laid out and drawn by its text, the f
 let inst_numbers = 60
 
 ///|
+test "a failed drawing must not be written as an old film frame" {
+  let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
+  let drawn = Ref::new(0)
+  let written : Array[Int] = []
+  let film = t.film(
+    "tap go\ntap go\nexit",
+    draw=fn(_) {
+      drawn.val = drawn.val + 1
+      // The renderer was unable to draw this frame; its previous picture is still in the encoder.
+      drawn.val != 3
+    },
+    put=fn(k) {
+      written.push(k)
+      true
+    },
+  )
+  assert_eq(film.failure, Some(@ui.FilmFailure::Draw))
+  assert_eq(drawn.val, 3)
+  assert_eq(written, [0, 1])
+}
+
+///|
+test "a film stops when a frame cannot be written" {
+  let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
+  let written : Array[Int] = []
+  let drawn = Ref::new(0)
+  let film = t.film(
+    "tap go\ntap go\nexit",
+    draw=fn(_) {
+      drawn.val = drawn.val + 1
+      true
+    },
+    put=fn(k) {
+      written.push(k)
+      k != 1
+    },
+  )
+  assert_eq(film.failure, Some(@ui.FilmFailure::Write(1)))
+  assert_eq(written, [0, 1])
+  assert_eq(drawn.val, 2)
+}
+
+///|
+test "a film cannot begin without its first drawing" {
+  let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
+  let written : Array[Int] = []
+  let film = t.film(
+    "tap go\nexit",
+    draw=fn(_) { false },
+    put=fn(k) {
+      written.push(k)
+      true
+    },
+  )
+  assert_eq(film.failure, Some(@ui.FilmFailure::Draw))
+  assert_eq(written, [])
+}
+
+///|
 test "a run filmed: every frame of the film once, in order, from the Tester's first, each the last drawn by its moment" {
   let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
   let drawn : Array[Double] = []
   let put : Array[(Int, Double)] = []
-  let log = t.film(
+  let film = t.film(
     "until go\nwait 100\ntap go\nwait 50\nexit",
-    draw=fn(t) { drawn.push(t.time()) },
-    put=fn(k) { put.push((k, drawn[drawn.length() - 1])) },
+    draw=fn(t) {
+      drawn.push(t.time())
+      true
+    },
+    put=fn(k) {
+      put.push((k, drawn[drawn.length() - 1]))
+      true
+    },
   )
-  assert_true(log.iter().any(fn(l) { l.contains("DRIVE PASS") }), msg=log.join("\n"))
+  assert_eq(film.failure, None)
+  assert_true(film.logs.iter().any(fn(l) { l.contains("DRIVE PASS") }), msg=film.logs.join("\n"))
   let t0 = drawn[0]
   for i, p in put {
     let (k, picture) = p

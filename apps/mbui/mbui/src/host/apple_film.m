@@ -31,6 +31,10 @@ static moonbit_string_t mb(NSString *s) {
 static AVAssetWriter *writer;
 static AVAssetWriterInput *input;
 static AVAssetWriterInputPixelBufferAdaptor *adaptor;
+// Write beside the destination and replace it only after the whole run succeeds. A failed take must not destroy the
+// previous good one or leave a partial video where the caller expects the finished film.
+static NSURL *film_destination;
+static NSURL *film_temporary;
 // the picture drawn last, what the next frames written are
 static CVPixelBufferRef shown;
 static int32_t film_w, film_h, film_fps;
@@ -38,16 +42,30 @@ static int32_t film_w, film_h, film_fps;
 // How long the writer may take to want the next frame, or to finish (s): what it has not done by then failed.
 static const double writer_most = 60;
 
-// A film begun at `path` (what was there gone), `w` × `h` pixels (to even numbers, as H.264's 4:2:0 has them),
+// A writer that could not be opened must not leave its temporary file or state behind.
+static void mbf_discard_open(void) {
+  if (writer.status == AVAssetWriterStatusWriting) [writer cancelWriting];
+  if (film_temporary) [[NSFileManager defaultManager] removeItemAtURL:film_temporary error:nil];
+  writer = nil;
+  input = nil;
+  adaptor = nil;
+  film_temporary = nil;
+  film_destination = nil;
+}
+
+// A film begun for `path`, `w` × `h` pixels (to even numbers, as H.264's 4:2:0 has them),
 // `fps` frames a second: 1, or 0 with what went wrong said.
 int32_t mbf_open(moonbit_string_t path, int32_t w, int32_t h, int32_t fps) {
   @autoreleasepool {
     NSURL *url = [NSURL fileURLWithPath:ns(path)];
-    [[NSFileManager defaultManager] removeItemAtURL:url error:nil];
+    film_destination = url;
+    NSString *temporary = [NSString stringWithFormat:@".%@.%@.tmp.mp4", url.lastPathComponent, NSUUID.UUID.UUIDString];
+    film_temporary = [[url URLByDeletingLastPathComponent] URLByAppendingPathComponent:temporary];
     NSError *err = nil;
-    writer = [[AVAssetWriter alloc] initWithURL:url fileType:AVFileTypeMPEG4 error:&err];
+    writer = [[AVAssetWriter alloc] initWithURL:film_temporary fileType:AVFileTypeMPEG4 error:&err];
     if (!writer) {
       fprintf(stderr, "film: %s\n", err.localizedDescription.UTF8String);
+      mbf_discard_open();
       return 0;
     }
     film_w = w & ~1;
@@ -82,15 +100,34 @@ int32_t mbf_open(moonbit_string_t path, int32_t w, int32_t h, int32_t fps) {
                                                                                sourcePixelBufferAttributes:px];
     if (![writer canAddInput:input]) {
       fprintf(stderr, "film: the writer takes no H.264 of %d x %d\n", film_w, film_h);
+      mbf_discard_open();
       return 0;
     }
     [writer addInput:input];
     if (![writer startWriting]) {
       fprintf(stderr, "film: %s\n", writer.error.localizedDescription.UTF8String);
+      mbf_discard_open();
       return 0;
     }
     [writer startSessionAtSourceTime:kCMTimeZero];
     return 1;
+  }
+}
+
+// Publish a completed take by an atomic rename, or discard an unsuccessful one. The old destination is untouched on
+// failure. Both paths are in the same directory, so the rename does not cross filesystems.
+int32_t mbf_finish(int32_t publish) {
+  @autoreleasepool {
+    if (!film_temporary || !film_destination) return 0;
+    int ok = 1;
+    if (publish && rename(film_temporary.fileSystemRepresentation, film_destination.fileSystemRepresentation) != 0) {
+      perror("film: could not publish");
+      ok = 0;
+    }
+    if (!publish || !ok) [[NSFileManager defaultManager] removeItemAtURL:film_temporary error:nil];
+    film_temporary = nil;
+    film_destination = nil;
+    return ok;
   }
 }
 

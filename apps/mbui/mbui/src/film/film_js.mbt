@@ -40,8 +40,9 @@ fn open(path : String, w : Int, h : Int, fps : Int) -> Bool {
 }
 
 ///|
-fn draw(inst : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Unit {
+fn draw(inst : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Bool {
   ignore((inst, count, r, g, b))
+  false
 }
 
 ///|
@@ -53,6 +54,12 @@ fn put_frame(k : Int) -> Bool {
 ///|
 fn close(frames : Int) -> Bool {
   ignore(frames)
+  false
+}
+
+///|
+fn finish(publish : Bool) -> Bool {
+  ignore(publish)
   false
 }
 
