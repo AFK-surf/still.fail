@@ -2,7 +2,8 @@
 // the dark theme) in a Tester of this Mac's text and pictures, a scripted run over them (MBUI_FILM_DRIVE: one of
 // scripts/motion's), each frame drawn offscreen and written into MBUI_FILM, an MP4. No window: scripts/film.sh.
 // MBUI_HOLD=<topic>,…: those topics of the made-up core never come (their pages as they are read the first time).
-// MBUI_FAILED=<topic>,…: those topics fail to be read, the core saying why as MBUI_FAILED_WHY.
+// MBUI_FAILED=<topic>,…: those topics fail to be read, the core saying why as MBUI_FAILED_WHY. MBUI_WINDOW=<its text>:
+// a window of its own (sfbase's window_text), its page alone.
 // MBUI_CORE_MS: the made-up core answers each call and gives each topic's first value that many ms late, as a phone's
 // core does a round trip later (what shows meanwhile filmed too); by default at once. MBUI_SAID=1: what people, agents
 // and stations wrote at its longest (sfapp's fixture_said.mbt: scripts/squeeze.sh's MBUI_SAID). MBUI_UPDATE=<version>:
@@ -26,6 +27,11 @@ fn main {
       Some(s) => s
       None => {
         let s = @sfapp.fixture_app(mode)
+        // MBUI_WINDOW=<what a window of its own is started with>: this run that window, its page alone (sfbase's
+        // window_page, as src/stillfail's main reads it)
+        if @film.arg("MBUI_WINDOW") != "" {
+          @sfbase.lone_page.val = @sfbase.window_page(@film.arg("MBUI_WINDOW"))
+        }
         // MBUI_UPDATES_MS=<ms>: a made-up source of newer builds answering that late (none newer unless offered);
         // MBUI_UPDATE=<version>: a newer build offered
         if @film.arg("MBUI_UPDATES_MS") != "" {

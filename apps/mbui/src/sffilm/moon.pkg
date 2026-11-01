@@ -4,6 +4,7 @@ import {
   "stillfail/sf",
   "stillfail/sfkept",
   "stillfail/sfapp",
+  "stillfail/sfbase",
   "stillfail/sffixture",
   "stillfail/sfkept",
 }

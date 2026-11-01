@@ -393,6 +393,8 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
       SignedIn if shell_is(src, @ui.current().window_size().0) is Landing => entry_said()
       // (signed in, its workspaces still read or failing to be: the splash's nodes)
       SignedIn if shell_is(src, @ui.current().window_size().0) is Reading => reading_said(src)
+      // (a window of its own: its page, an old view the tree hosts, says nothing of the first page or the splash)
+      SignedIn if shell_is(src, @ui.current().window_size().0) is Lone => entry_said()
       _ => ()
     }
     @ui.old_views_here(c)
@@ -562,6 +564,7 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
             Paned => paned_shell(s, src)
             Landing => landing_tree(s, src)
             Reading => reading_tree(s, src)
+            Lone => lone_tree(s, src)
             Whole => whole(s)
           }
         })
@@ -618,10 +621,37 @@ fn app_state(c : @ui.Ctx, src : Source, state : AppIs) -> Unit {
 }
 
 ///|
-/// A window of its own (sfbase's window.mbt): page `p` alone over all of it, closing it ending the run (its window
-/// closed as its own close button closes it); the library's presenters and the toasts over it. None of the app's: no
-/// workspace, its notifications, the number on its icon, its updates (the app's run beside it has them).
-fn lone_view(c : @ui.Ctx, src : Source, p : Page) -> Unit {
+/// A window of its own (sfbase's window.mbt) in node `v` (shell_is's Lone): on the window's ground, its top dragging it
+/// where its buttons are in the app's top row (under all of it), its page alone over all of it, an old view the tree
+/// hosts (lone_page_view: closing it ends the run), the library's presenters and the toasts over that, taking a finger
+/// only where they draw something.
+fn lone_tree(v : @view.View, src : Source) -> Unit {
+  v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
+  v.show(fn() { @ui.window_inset_now() }, fn(o) {
+    o.over(Is(true)) |> ignore
+    o.box(fn(b) { b.height(By(fn() { Some(window_band_now()) })).moves_window(Is(true)) |> ignore }) |> ignore
+  })
+  @ui.old(v, fn(c) {
+    match @sfbase.lone_page.val {
+      Some(p) => lone_page_view(c, src, p)
+      None => ()
+    }
+  })
+  .over(Is(true))
+  |> ignore
+  @ui.old(v, fn(c) {
+    @sf.presented(c)
+    toast(c)
+  })
+  .over(Is(true))
+  |> @ui.old_takes_own
+  |> ignore
+}
+
+///|
+/// Page `p` of a window of its own, alone over all of it (lone_view's, lone_tree's): a station's screen, closing it
+/// ending the run (its window closed as its own close button closes it).
+fn lone_page_view(c : @ui.Ctx, src : Source, p : Page) -> Unit {
   match p {
     Screen(at) =>
       @sfpages.screen_page(c, src, at, system_frame(), on_close=fn() {
@@ -629,6 +659,14 @@ fn lone_view(c : @ui.Ctx, src : Source, p : Page) -> Unit {
       })
     _ => ()
   }
+}
+
+///|
+/// A window of its own (sfbase's window.mbt): page `p` alone over all of it, closing it ending the run (its window
+/// closed as its own close button closes it); the library's presenters and the toasts over it. None of the app's: no
+/// workspace, its notifications, the number on its icon, its updates (the app's run beside it has them).
+fn lone_view(c : @ui.Ctx, src : Source, p : Page) -> Unit {
+  lone_page_view(c, src, p)
   @sf.presented(c)
   toast(c)
 }

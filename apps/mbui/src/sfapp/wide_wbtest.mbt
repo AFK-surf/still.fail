@@ -10,6 +10,7 @@ fn wide_tester(
   platform? : Int = 0,
   window_corner? : Double = 0.0,
   window_inset? : Bool = false,
+  before? : (Source) -> Unit = fn(_) {  },
 ) -> @ui.Tester {
   new_run()
   let base = fixture(mode)
@@ -23,6 +24,8 @@ fn wide_tester(
   if mode.has_prefix("chat") {
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   }
+  // (what the run is made with, said after it is begun and before the window is: a window of its own's page)
+  before(src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~, window_corner~, window_inset~)
   t
 }
