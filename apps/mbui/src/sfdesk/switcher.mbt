@@ -307,7 +307,7 @@ fn switcher_offered(c : @ui.Ctx, src : Source, w : Workspace) -> Array[@sfpages.
     offer(action_offered("sidebar.toggle", "panel-open", fn() { sidebar_toggle() }))
   }
   offer(action_offered("settings", "settings", fn() { open_settings() }))
-  offer(action_offered("shortcuts", "command", fn() { wide.keys_open.set(true) }))
+  offer(action_offered("shortcuts", "keyboard", fn() { wide.keys_open.set(true) }))
   let routes : Array[(String, @settings.Route, String)] = [
     ("appearance", @settings.Route::Appearance, @sf.t("web-pages.settings.nav.appearance")),
     ("notifications", @settings.Route::Notifications, @sf.t("web-pages.settings.nav.notifications")),

@@ -220,7 +220,7 @@ pub fn settings_parts(c : @ui.Ctx, core : Core, here : @settings.Here) -> Array[
   }
   let platform = @ui.platform()
   if platform == 0 || platform == 3 || platform == 5 {
-    device.push(settings_row(Shortcuts, "shortcuts", "command", @sf.t("web-pages.settings.nav.shortcuts")))
+    device.push(settings_row(Shortcuts, "shortcuts", "keyboard", @sf.t("web-pages.settings.nav.shortcuts")))
   }
   if platform == 0 {
     device.push(settings_row(LocalStation, "local-station", "monitor", @sf.t("web-pages.localStation.title")))
