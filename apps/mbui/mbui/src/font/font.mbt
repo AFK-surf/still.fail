@@ -629,6 +629,41 @@ fn Face::glyph_range(self : Face, glyph : Int) -> (Int, Int)? {
 ///|
 /// A glyph's ink box from its `glyf` header: x min, y min, x max, y max (all 0 for an empty glyph).
 pub fn Face::glyph_bbox(self : Face, glyph : Int) -> (Int, Int, Int, Int)? {
+  if !self.tables.contains("glyf") {
+    // CFF: the bounds of the outline's points, control points too (skrifa's bounds_from_outline)
+    guard self.outline(glyph) is Some(cmds) else { return None }
+    let xs : Array[Float] = []
+    let ys : Array[Float] = []
+    for c in cmds {
+      match c {
+        MoveTo(x, y) | LineTo(x, y) => {
+          xs.push(x)
+          ys.push(y)
+        }
+        QuadTo(a, b, x, y) => {
+          xs.push(a)
+          ys.push(b)
+          xs.push(x)
+          ys.push(y)
+        }
+        CubicTo(a, b, c2, d, x, y) => {
+          xs.push(a)
+          ys.push(b)
+          xs.push(c2)
+          ys.push(d)
+          xs.push(x)
+          ys.push(y)
+        }
+        Close => ()
+      }
+    }
+    if xs.length() == 0 {
+      return None
+    }
+    let mn = fn(a : Array[Float]) { a.fold(init=a[0], fn(m, v) { if v < m { v } else { m } }).to_int() }
+    let mx = fn(a : Array[Float]) { a.fold(init=a[0], fn(m, v) { if v > m { v } else { m } }).to_int() }
+    return Some((mn(xs), mn(ys), mx(xs), mx(ys)))
+  }
   match self.glyph_range(glyph) {
     Some((_, 0)) => Some((0, 0, 0, 0))
     Some((at, _)) =>
@@ -650,8 +685,8 @@ pub fn Face::outline(self : Face, glyph : Int, coords~ : Array[Int] = []) -> Arr
       return None
     }
     Some(out)
-  } else if self.tables.contains("CFF ") {
-    cff_outline(self, glyph)
+  } else if self.tables.contains("CFF ") || self.tables.contains("CFF2") {
+    self.cff_glyph_outline(glyph, coords)
   } else {
     None
   }
@@ -1033,15 +1068,6 @@ fn glyf_to_path(pts : GlyfPoints, out : Array[PathCmd]) -> Bool {
   }
   true
 }
-
-///|
-/// CFF outlines: not read yet.
-fn cff_outline(face : Face, glyph : Int) -> Array[PathCmd]? {
-  ignore((face, glyph))
-  None
-}
-
-// ── kerning (kern) ────────────────────────────────────────────────────
 
 ///|
 /// The `kern` table's horizontal kerning (format 0 subtables) between two glyphs, in font units.
