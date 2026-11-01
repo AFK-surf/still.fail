@@ -139,9 +139,10 @@ jobs:
             .ci/mbc-store
             .ci/hbc
           key: mbui-android-m-${{ github.sha }}
-          restore-keys: |
-            mbui-android-m-
-            mbui-android-
+          # (m- alone: GitHub tries every restore key on the branch's own caches before main's, so a wider name took the
+          # branch's last push for main's newest, a push after main's moved compiling it all again: 286 of 494 units,
+          # fix/card-foot-text-alignment, 41348175675, its first push 34)
+          restore-keys: mbui-android-m-
       - if: github.ref != 'refs/heads/main'
         run: mkdir -p .ci && mv .ci "$RUNNER_TEMP/ci-main"
       - uses: actions/cache/restore@v4
@@ -254,10 +255,9 @@ jobs:
             .ci/mbc-store
             .ci/hbc
           key: mbui-linux-${{ matrix.arch }}-m-${{ github.sha }}
-          # (m- only, then the names before m- and b-: GitHub looks through the branch's own caches first)
-          restore-keys: |
-            mbui-linux-${{ matrix.arch }}-m-
-            mbui-linux-${{ matrix.arch }}-
+          # (m- alone: GitHub tries every restore key on the branch's own caches before main's, so a wider name took the
+          # branch's last push for main's newest, as the android job's did: see there)
+          restore-keys: mbui-linux-${{ matrix.arch }}-m-
       - if: github.ref != 'refs/heads/main'
         run: mkdir -p .ci && mv .ci "$RUNNER_TEMP/ci-main"
       - uses: actions/cache/restore@v4
