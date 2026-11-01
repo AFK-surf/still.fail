@@ -262,6 +262,36 @@ test "a row held long: its menu (固定, 重命名, 复制会话链接, 归档),
 }
 
 ///|
+test "a row held and let down as its menu goes: its shadow fades with its card, none without it" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  let (_, ry) = t.find("夜里的构建又失败了").unwrap()
+  hold_row(t, "夜里的构建又失败了")
+  t.run_for(@ui.move_most_ms)
+  let bare : Ref[String?] = Ref(None)
+  t.each_frame(
+    Some(fn() {
+      let near = fn(y : Double, h : Double) { y < ry + 30.0 && y + h > ry - 20.0 }
+      // (the card: a row's height, a row's width; its shadow cast by it, as strong as the card is of its whole)
+      let cards = t.drawn_rects().filter(fn(r) { r.2 > 200.0 && r.3 < 100.0 && near(r.1, r.3) })
+      let whole = (@sf.held_raised.color & 0xFFL).to_double()
+      for s in t.drawn_shadows() {
+        if s.2 > 200.0 && near(s.1, s.3) && bare.val is None {
+          let a = (s.6 & 0xFFL).to_double()
+          if !cards.iter().any(fn(r) { a <= (r.4 & 0xFFL).to_double() / 255.0 * whole + 1.0 }) {
+            bare.val = Some("shadow \{s} over cards \{cards}")
+          }
+        }
+      }
+    }),
+  )
+  t.tap(200.0, 60.0)
+  t.run_for(@ui.move_most_ms * 2.0)
+  t.each_frame(None)
+  assert_eq(bare.val, None)
+}
+
+///|
 test "a row's menu: 复制会话链接 copies its link, 固定 pins it (chat.pin)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
