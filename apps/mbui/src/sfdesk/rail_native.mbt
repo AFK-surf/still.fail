@@ -323,7 +323,6 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
     @sf.native_bars.on.set(true)
   }
   floating_bar.val = None
-  @sf.native_over_clear()
   // (the column as the window is now, turned or not, before anything is laid out beside it)
   native_side_now()
   // (the page's actions as they were while the same page is shown: one built again hands them again)
@@ -336,6 +335,8 @@ pub fn nav_frame(body : () -> Unit) -> Unit {
   }
   top_drawn.val = false
   body()
+  // (what is up over the whole window as it said it, built again this frame or its part kept; gone once it is not)
+  @sf.native_over_gone()
   // (the page come not drawn yet, the one before it still shown in its place: that one's actions kept in the bars as
   // they were, not taken away for a frame and brought back made anew, faded in: the user, 2026-10-31, 按钮没变也会闪)
   histories_ticked()

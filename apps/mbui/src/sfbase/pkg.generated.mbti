@@ -3430,6 +3430,7 @@ pub fn Viewer::still(Self, Source) -> String
 pub fn Viewer::text_stage(Self, @ui.Ctx, PKind, Bytes, Int32) -> Unit
 pub fn Viewer::toggle(Self) -> Unit
 pub fn Viewer::told_of(Self) -> Bool
+pub fn Viewer::up_still(Self) -> Bool
 pub fn Viewer::view(Self) -> @ui.NativeView?
 pub fn Viewer::wake(Self) -> Unit
 pub fn Viewer::wheel(Self, @ui.Ctx, Int32, @kit.Zoom) -> Unit

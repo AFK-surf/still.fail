@@ -657,7 +657,13 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
       toast_later(viz_tr("android-misc.viz.cantRead"))
     }
     Some(Ok((html, state))) => {
-      let native = @sf.native_over_up(v.name)
+      // (while this one is open, built again or not)
+      let native = @sf.native_over_up(v.name, alive=fn() {
+        match @signals.untracked(fn() { viz_full.get() }) {
+          Some(now) => physical_equal(now, v)
+          None => false
+        }
+      })
       if native {
         @sf.native_over_act("close", @sf.t("common.close"), "close", fn() { c.tell("viz/full-close", fn() { viz_close_full() }) }, lead=true)
         @sf.native_over_act("download", @sf.t("android-chat.file.download"), "download", fn() {

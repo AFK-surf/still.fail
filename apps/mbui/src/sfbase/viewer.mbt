@@ -623,6 +623,15 @@ pub(all) enum Stepping {
 pub let viewer : @signals.Signal[Viewer?] = @signals.signal(None)
 
 ///|
+/// Whether this viewer is still the one open and not closing (what it said in the system's bars still its own).
+pub fn Viewer::up_still(self : Viewer) -> Bool {
+  match @signals.untracked(fn() { viewer.get() }) {
+    Some(v) => physical_equal(v, self) && !self.closing
+    None => false
+  }
+}
+
+///|
 /// The viewer closed and still drawn going (its fade or its flight back), no longer the one open: closing takes it
 /// out of `viewer` at once, and what is under it is the page's again.
 pub let pv_leaving : @signals.Signal[Viewer?] = @signals.signal(None)

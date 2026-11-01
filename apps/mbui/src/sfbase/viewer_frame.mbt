@@ -120,8 +120,9 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double, keys? : Bo
   if v.closing && @sf.native_on() {
     return
   }
-  // (beside the system's bars, an iPhone Duo's: its tabs put away while a file is looked at, the user 2026-10-27)
-  let native = @sf.native_over_up(v.file.name)
+  // (beside the system's bars, an iPhone Duo's: its tabs put away while a file is looked at, the user 2026-10-27;
+  // while this one is open and not closing, its bars' part kept or built again)
+  let native = @sf.native_over_up(v.file.name, alive=fn() { v.up_still() })
   // read in the reader, played in the player: their own bars
   if vf_reads(v) || v.shown_kind() == Some(KAudio) || v.shown_kind() == Some(KVideo) {
     return

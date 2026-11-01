@@ -260,7 +260,11 @@ pub fn screen_page(
   let sideways = ww > wh
   // 全屏 there: the system's bars put away too (no title, no actions), the frame edge to edge with its tools folded as
   // anywhere else
-  let native = !in_tab && @sf.native_over_up(if u.full { "" } else { title }) && !u.full
+  // (while it is the page shown, or the window it has of its own: its part kept or built again)
+  let lone = on_close is Some(_) && !in_tab
+  let native = !in_tab &&
+    @sf.native_over_up(if u.full { "" } else { title }, alive=fn() { lone || @sfbase.app.nav.top() == Screen(at) }) &&
+    !u.full
   if native {
     screen_native(c, s, u, typing, catcher, close)
   }
