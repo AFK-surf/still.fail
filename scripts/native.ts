@@ -42,11 +42,14 @@
 // a vendored crate built from two checkouts in one target confuses rustc, docs/operations.md).
 import { execFileSync, spawnSync, type SpawnSyncOptions } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
+import { Resolver } from "node:dns/promises";
 import {
   copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync,
 } from "node:fs";
 import { homedir, hostname, platform as osPlatform, arch as osArch, tmpdir } from "node:os";
+import { request as httpsRequest } from "node:https";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
+import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import * as ffmpeg from "./ffmpeg.ts";
 
@@ -63,6 +66,53 @@ const RELEASE = process.env.STILLFAIL_NATIVE_RELEASE ?? "native-artifacts";
 /// The store of the parts prebuilt on a development machine (`prebuild`): the releases bucket's natives/, served by
 /// still.fail cloud (install.ts releaseType) to anyone, as the release is by GitHub.
 const STORE = process.env.STILLFAIL_NATIVE_STORE ?? "https://app.still.fail/releases/natives";
+
+/// Mini1's CI may resolve the release store directly, just as release-put.sh does for Cloudflare's API. Keep the
+/// original Host and TLS name, and leave GitHub and any other store or redirect to the machine's usual routing.
+export async function fetchNative(at: string, init: RequestInit = {}, redirects = 0): Promise<Response> {
+  const url = new URL(at), dns = process.env.STILLFAIL_DIRECT_DNS;
+  if (!dns || url.protocol !== "https:" || url.hostname !== "app.still.fail" || (init.method && init.method !== "GET")) return fetch(at, init);
+  if (redirects > 20) throw new Error("too many native store redirects");
+  try {
+    const resolver = new Resolver();
+    resolver.setServers([dns]);
+    const abort = () => resolver.cancel();
+    init.signal?.addEventListener("abort", abort, { once: true });
+    let addresses: string[];
+    try {
+      init.signal?.throwIfAborted();
+      addresses = await resolver.resolve4(url.hostname);
+    } finally { init.signal?.removeEventListener("abort", abort); }
+    const address = addresses[0];
+    if (!address) throw new Error("no IPv4 address for the native store");
+    const headers = Object.fromEntries(new Headers(init.headers));
+    headers.host = url.host;
+    const response = await new Promise<import("node:http").IncomingMessage>((ok, fail) => {
+      const request = httpsRequest({ hostname: address, port: url.port || 443, servername: url.hostname,
+        path: `${url.pathname}${url.search}`, method: "GET", headers, signal: init.signal ?? undefined }, ok);
+      request.on("error", fail);
+      request.end();
+    });
+    const status = response.statusCode ?? 0, location = response.headers.location;
+    if ([301, 302, 303, 307, 308].includes(status) && location && init.redirect !== "manual") {
+      response.resume();
+      if (init.redirect === "error") throw new Error("native store redirected");
+      return fetchNative(new URL(location, url).toString(), init, redirects + 1);
+    }
+    const resultHeaders = new Headers();
+    for (const [name, value] of Object.entries(response.headers)) {
+      if (Array.isArray(value)) for (const item of value) resultHeaders.append(name, item);
+      else if (value !== undefined) resultHeaders.set(name, value);
+    }
+    const body = [204, 205, 304].includes(status) ? null : Readable.toWeb(response) as ReadableStream<Uint8Array>;
+    if (!body) response.resume();
+    return new Response(body, { status, headers: resultHeaders });
+  } catch (error) {
+    if (init.signal?.aborted) throw error;
+    log(`direct native store connection failed (${(error as Error).message}); using the usual route`);
+    return fetch(at, init);
+  }
+}
 /// still.fail Helper's icon (design/brand/make.py draws it): in its own directory, one of its inputs.
 const HELPER_ICON = "station/native/helper/icon.png";
 const VENDORED = ["vendor/iroh", "vendor/iroh-mdns-address-lookup", "vendor/n0-mainline", "vendor/noq-udp", "vendor/swarm-discovery"];
@@ -834,7 +884,7 @@ async function download(part: string, target: Target, k: string): Promise<string
   for (const at of [`${STORE}/${name}`, `https://github.com/${REPO}/releases/download/${RELEASE}/${name}`]) {
     let answered = false;
     try {
-      const r = await fetch(at, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
+      const r = await fetchNative(at, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
       if (!r.ok) {
         if (r.status !== 404) log(`${part} ${target}: ${at} answered ${r.status}`);
         continue;
@@ -1020,7 +1070,7 @@ async function exists(name: string): Promise<boolean> {
 async function inStore(name: string): Promise<boolean> {
   try {
     // (its first byte: the store answers HEAD 404 for what it has)
-    const r = await fetch(`${STORE}/${name}`, { headers: { Range: "bytes=0-0" }, redirect: "follow", signal: AbortSignal.timeout(30_000) });
+    const r = await fetchNative(`${STORE}/${name}`, { headers: { Range: "bytes=0-0" }, redirect: "follow", signal: AbortSignal.timeout(30_000) });
     await r.body?.cancel();
     return r.ok;
   } catch {
