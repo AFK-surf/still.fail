@@ -2987,3 +2987,211 @@ test "viewer on the tree, a phone, marking a picture of a long name: 添加到�
   assert_true(bx + bw <= xx + 0.5, msg="before ×")
   marks_leave()
 }
+
+///|
+/// A picture opened on a phone (a finger's), marking: a box drawn from (100, 100) to (300, 200) in its pixels, its
+/// note done (完成); the tester and the box's mark.
+fn pinned() -> (@ui.Tester, Int) raise {
+  let t = preview_tester("image", w=390.0, platform=2)
+  marks_start()
+  t.draw()
+  let v = viewer.get().unwrap()
+  let (x, y, w, _) = v.zoom.rect().unwrap()
+  let k = w / v.zoom.nw
+  marking.tool = Rect
+  t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
+  t.run_for(note_pop_ms)
+  let tick = t.reachable("icon:check")
+  assert_eq(tick.length(), 1, msg="完成 where a finger reaches it")
+  t.tap(tick[0].0, tick[0].1)
+  t.draw()
+  assert_eq(marking.note, -1, msg="its note done")
+  (t, marking.shapes[0].id)
+}
+
+///|
+test "viewer on the tree, marking: a mark's pin drawn by the window's tree, its 24 round ground one" {
+  let (_, _) = pinned()
+  assert_eq(pin_grounds(), 1, msg="its pin's 24 round ground drawn, one")
+  marks_leave()
+}
+
+///|
+/// How many pins' own grounds are drawn (24 round, 12 its corners: a note card's 16 pin is not one).
+fn pin_grounds() -> Int {
+  @ui.view_tree().unwrap().drawn().filter(fn(d) { d.w == 24.0 && d.h == 24.0 && d.radius == 12.0 }).length()
+}
+
+///|
+/// How far into the zoom's glide a pin is looked at (well before its end), and long enough for it to be done.
+let pin_glide_mid_ms : Double = 60.0
+
+///|
+let pin_glide_done_ms : Double = 2000.0
+
+///|
+/// Mark 1's pin pressed in `t` where it is at the tester's moment (its press and its let go, no frame between): its
+/// rect then.
+fn pin_pressed(t : @ui.Tester) -> (Double, Double, Double, Double) raise {
+  let label = pv_fill("android-chat.marks.pin", [("n", "1")])
+  let (x, y, w, h) = t.get(Button, label~).rect
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  (x, y, w, h)
+}
+
+///|
+test "viewer on the tree, marking: a mark's pin pressed opens its note as the finger lifts, again closes it, the frames drawn after or none; the pin a button of the tree's own" {
+  for frames in [true, false] {
+    let (t, id) = pinned()
+    pin_pressed(t) |> ignore
+    assert_eq(marking.note, id, msg="frames \{frames}: pressed, its note open as the finger lifts")
+    if frames {
+      t.draw()
+    }
+    t.run_for(note_pop_ms)
+    pin_pressed(t) |> ignore
+    assert_eq(marking.note, -1, msg="frames \{frames}: pressed again, closed as the finger lifts")
+    if frames {
+      t.draw()
+    }
+    let label = pv_fill("android-chat.marks.pin", [("n", "1")])
+    let pins = @ui.view_tree().unwrap().said_order().filter(fn(s) {
+      match s.said {
+        Some(said) => said.role == Button && said.label == label
+        None => false
+      }
+    })
+    assert_eq(pins.length(), 1, msg="frames \{frames}: a button of the tree's own")
+    marks_leave()
+  }
+}
+
+///|
+test "viewer on the tree, marking: a mark's pin where the picture is as it is drawn while the zoom glides and where the glide leaves it; pressed between two frames, where it is at that moment, its note opened" {
+  let (t, id) = pinned()
+  let v = viewer.get().unwrap()
+  let label = pv_fill("android-chat.marks.pin", [("n", "1")])
+  // (where its point is: the box's corner, as the picture is at the tester's moment)
+  let expected = fn() {
+    let (rx, ry, rw, _) = v.marks_rect(t.time()).unwrap()
+    let k = rw / v.zoom.nw
+    (rx + 100.0 * k, ry + 100.0 * k)
+  }
+  // (its point as it is drawn: 2 in and 22 down of its 24, as big as its note being open says)
+  let point = fn() raise {
+    let (x, y, w, h) = t.get(Button, label~).rect
+    let k = if marking.note == id { @sfbase.pin_open_scale } else { 1.0 }
+    assert_true((w - 24.0 * k).abs() < 0.01 && (h - 24.0 * k).abs() < 0.01, msg="as big as \{k}: \{(w, h)}")
+    (x + 2.0 * k, y + 22.0 * k)
+  }
+  let near = fn(a : (Double, Double), b : (Double, Double)) { (a.0 - b.0).abs() < 0.01 && (a.1 - b.1).abs() < 0.01 }
+  let (bw, bh) = (v.zoom.bw, v.zoom.bh)
+  v.zoom.zoom_to(v.zoom.fit() * 2.0, bw / 2.0, bh / 2.0, true, at=t.time())
+  t.run_for(pin_glide_mid_ms)
+  assert_true(v.zoom.goes_at(t.time()), msg="the glide under way")
+  let p = point()
+  assert_true(near(p, expected()), msg="gliding: \{p} where the picture has it, \{expected()}")
+  // (the clock on, no frame drawn: pressed where the pin is at that moment)
+  t.advance(pin_glide_mid_ms / 2.0)
+  assert_true(v.zoom.goes_at(t.time()), msg="the glide under way still")
+  // (its middle: 10 right of its point and 10 up)
+  let (ex, ey) = expected()
+  t.touch(0, ex + 10.0, ey - 10.0)
+  t.touch(2, ex + 10.0, ey - 10.0)
+  assert_eq(marking.note, id, msg="pressed where it is between two frames: its note open")
+  t.run_for(pin_glide_done_ms)
+  assert_true(!v.zoom.goes_at(t.time()), msg="the glide done")
+  let p = point()
+  assert_true(near(p, expected()), msg="glided: \{p} where the picture has it, \{expected()}")
+  marks_leave()
+}
+
+///|
+test "viewer on the tree, marking: words being written over a mark's pin over it, as before: a press there theirs, the note not opened" {
+  let (t, _) = pinned()
+  let v = viewer.get().unwrap()
+  let (rx, ry, rw, _) = v.marks_rect(t.time()).unwrap()
+  let k = rw / v.zoom.nw
+  // (the box's corner, its pin up and right of it; words begun 30 left of it and 5 up: their field over the pin)
+  let (cx, cy) = (rx + 100.0 * k, ry + 100.0 * k)
+  marking.tool = Words
+  t.touch(0, cx - 30.0, cy - 5.0)
+  t.touch(2, cx - 30.0, cy - 5.0)
+  t.draw()
+  assert_true(marking.writing is Some(_), msg="words begun")
+  t.touch(0, cx + 10.0, cy - 10.0)
+  t.touch(2, cx + 10.0, cy - 10.0)
+  t.draw()
+  assert_eq(marking.note, -1, msg="the words' field over the pin: the press theirs, no note")
+  assert_true(marking.writing is Some(_), msg="still written")
+  marks_leave()
+}
+
+///|
+test "viewer on the tree, marking a picture that could not be decoded: as what draws it draws none of its marks, no pin drawn, read out or pressed, no words being written drawn" {
+  let t = preview_tester("image", w=390.0, platform=2, finish=false)
+  let v = viewer.get().unwrap()
+  // (each picture asked for could not be decoded, as the host says)
+  for _ in 0..<3 {
+    for p in t.pending() {
+      t.finish(p.0, p.1, ok=p.0 != 1)
+    }
+    t.draw()
+  }
+  assert_eq(@ui.image_state("mem:preview/" + v.id()), -1, msg="its picture not decoded")
+  // (where it is known all the same: where its pin would be)
+  let (rx, ry, rw, _) = v.marks_rect(t.time()).unwrap()
+  let k = rw / v.zoom.nw
+  marks_start()
+  // (a box from (100, 100) to (300, 200) in its pixels, numbered 1; words being written at (50, 50))
+  marking.shapes.push({ id: marking.next_id, kind: "box", color: marking.color, w: 4.0, pts: [100.0, 100.0, 300.0, 200.0], text: "" })
+  marking.next_id += 1
+  marking.writing = Some((-1, 50.0, 50.0, 16.0, marking.color))
+  @sfbase.marks_changed()
+  t.draw()
+  let label = pv_fill("android-chat.marks.pin", [("n", "1")])
+  let pins = @ui.view_tree().unwrap().said_order().filter(fn(s) {
+    match s.said {
+      Some(said) => said.label == label
+      None => false
+    }
+  })
+  assert_eq(pins.length(), 0, msg="no pin of the tree's")
+  assert_true(t.semantics().iter().all(fn(s) { s.label != label }), msg="no pin read out")
+  assert_eq(pin_grounds(), 0, msg="no pin drawn")
+  // (where its pin would be, picking: nothing of a pin's there to press)
+  marking.tool = Select
+  t.touch(0, rx + 100.0 * k + 10.0, ry + 100.0 * k - 10.0)
+  t.touch(2, rx + 100.0 * k + 10.0, ry + 100.0 * k - 10.0)
+  assert_eq(marking.note, -1, msg="no note opened")
+  assert_true(t.find(pv("android-chat.marks.write")) is None, msg="no words being written drawn")
+  marks_leave()
+}
+
+///|
+test "viewer on the tree, marking a picture whose size is not known yet (none said, nothing decoded): as what draws it draws none of its marks, no pin drawn, read out or pressed, no words being written drawn" {
+  let t = preview_tester("step", w=390.0, platform=2, finish=false)
+  // (the same picture under no size of its own, nothing standing in for it)
+  let (a, _) = preview_files().iter().find_first(fn(f) { f.0.name == "界面草图.png" }).unwrap()
+  open_preview("ws1/st1", "s-c1", { ..a, width: 0.0, height: 0.0, thumbhash: "" }, steps=InChat(Some(1.0), "s-c1"))
+  t.run_for(@ui.move_most_ms)
+  let v = viewer.get().unwrap()
+  assert_true(v.zoom.rect() is None, msg="where it is not known")
+  marks_start()
+  marking.shapes.push({ id: marking.next_id, kind: "box", color: marking.color, w: 4.0, pts: [100.0, 100.0, 300.0, 200.0], text: "" })
+  marking.next_id += 1
+  marking.writing = Some((-1, 50.0, 50.0, 16.0, marking.color))
+  @sfbase.marks_changed()
+  t.draw()
+  let label = pv_fill("android-chat.marks.pin", [("n", "1")])
+  assert_true(t.semantics().iter().all(fn(s) { s.label != label }), msg="no pin read out")
+  assert_eq(pin_grounds(), 0, msg="no pin drawn")
+  // (where a pin with no place would be put: nothing of a pin's there to press)
+  marking.tool = Select
+  t.touch(0, 12.0, 12.0)
+  t.touch(2, 12.0, 12.0)
+  assert_eq(marking.note, -1, msg="no note opened")
+  assert_true(t.find(pv("android-chat.marks.write")) is None, msg="no words being written drawn")
+  marks_leave()
+}

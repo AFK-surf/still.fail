@@ -2322,7 +2322,9 @@ pub fn Viewer::image_view(self : Viewer, c : @ui.Ctx, src : Source, stage : Int,
   }
   if marking.on {
     match rect() {
-      Some(r) => marks_draw(c, r, z.nw, z.nh)
+      // (where the window's tree draws the viewer, its pins its nodes (marks_pins_node) and the words being written
+      // over them on their own: Viewer::marks_writing_view)
+      Some(r) => marks_draw(c, r, z.nw, z.nh, pins=!v.in_tree, writing=!v.in_tree)
       None => ()
     }
   }
@@ -2440,11 +2442,17 @@ pub fn drive_attachment(f : DriveFile) -> Attachment {
 }
 
 ///|
+/// What its whole picture is called once read (Viewer::picture).
+fn Viewer::image_name(self : Viewer) -> String {
+  "mem:preview/" + self.id()
+}
+
+///|
 /// What shows of an image: its whole picture once read, else what stands in for it; "" while none is here.
 pub fn Viewer::picture(self : Viewer, src : Source) -> String {
   match self.bytes.get() {
     Some(b) if self.image == "" => {
-      self.image = "mem:preview/" + self.id()
+      self.image = self.image_name()
       @ui.add_image(self.image, b)
     }
     _ => ()

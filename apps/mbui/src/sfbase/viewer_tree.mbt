@@ -247,6 +247,16 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     .over(Is(true))
     |> @ui.old_takes_own
     |> ignore
+    // (over the marks it draws while it marks, once where the picture is is known: the numbered marks' pins, its
+    // nodes; over them the words being written, an old view's taking a finger only on them)
+    canvas.show(fn() { vw.marks_shown() }, fn(h) { marks_pins_node(h, vw) })
+    @ui.old(canvas, fn(c) {
+      marks_said()
+      c.box(style=viewer_under, fn() { vw.marks_writing_view(c) }) |> ignore
+    })
+    .over(Is(true))
+    |> @ui.old_takes_own
+    |> ignore
   })
   |> ignore
   // the bars over it: theirs where they have something to press, the rest the canvas's
@@ -603,6 +613,34 @@ fn Viewer::menu_on(self : Viewer, m : @view.Menu) -> Unit {
 pub fn Viewer::marks_rect(self : Viewer, at : Double) -> (Double, Double, Double, Double)? {
   let lift = self.lift.value_at(at)
   self.zoom.rect_at(at).map(fn(r) { (r.0, r.1 - lift, r.2, r.3) })
+}
+
+///|
+/// Whether what draws viewer `vw`'s picture draws its marks over it (Viewer::image_view's): marking, where the picture is
+/// known, not one that could not be decoded (its words saying so alone). As each is told.
+fn Viewer::marks_shown(self : Viewer) -> Bool {
+  marks_said()
+  self.zoom.told()
+  let failed = match self.bytes.get() {
+    Some(_) => @ui.image_state(self.image_name()) == -1
+    None => false
+  }
+  marking.on && !failed && self.zoom.rect() is Some(_)
+}
+
+///|
+/// The words being written over viewer `vw`'s picture while it marks (marks_writing), where it is drawn as the frame
+/// draws it, lifted with it (Viewer::image_view's place for the marks), in `c` (an old view's, over the pins).
+fn Viewer::marks_writing_view(self : Viewer, c : @ui.Ctx) -> Unit {
+  if !self.marks_shown() {
+    return
+  }
+  let z = self.zoom
+  let lift = self.lift.get()
+  match z.rect() {
+    Some(r) => marks_writing(c, (r.0, r.1 - lift, r.2, r.3), z.nw)
+    None => ()
+  }
 }
 
 ///|

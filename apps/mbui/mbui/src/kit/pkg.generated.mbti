@@ -767,6 +767,7 @@ pub fn Zoom::fit(Self) -> Double
 pub fn Zoom::fit_now(Self, at? : Double) -> Unit
 pub fn Zoom::fling(Self, Double, Double, at? : Double) -> Unit
 pub fn Zoom::fling_ends(Self) -> Double
+pub fn Zoom::goes_at(Self, Double) -> Bool
 pub fn Zoom::keep(Self, (Double, Double), Double, when? : Double) -> Unit
 pub fn Zoom::max_scale(Self) -> Double
 pub fn Zoom::min_scale(Self) -> Double

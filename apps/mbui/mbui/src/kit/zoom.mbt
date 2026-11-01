@@ -659,6 +659,12 @@ pub fn Zoom::step(self : Zoom) -> Unit {
 }
 
 ///|
+/// Whether a glide or a fling still moves it at `t` (where it shows then not where it shows at their end: Zoom::rect_at).
+pub fn Zoom::goes_at(self : Zoom, t : Double) -> Bool {
+  (self.flinging && t < self.fling_end()) || (self.gliding && self.glide.on && t < self.glide.end())
+}
+
+///|
 /// When a fling has it where it rests (the frames' clock, ms; -1 none going).
 pub fn Zoom::fling_ends(self : Zoom) -> Double {
   if !self.flinging {
