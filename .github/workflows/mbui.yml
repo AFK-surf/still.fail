@@ -64,6 +64,7 @@ jobs:
       linux: ${{ steps.what.outputs.linux }}
       ios: ${{ steps.what.outputs.ios }}
       handoff: ${{ steps.what.outputs.handoff }}
+      win_build: ${{ steps.what.outputs.win_build }}
     steps:
       # (the history's commits and trees, the files' contents only for beta.sh: what changed is told by the trees)
       - uses: actions/checkout@v5
@@ -96,6 +97,18 @@ jobs:
           fi
           echo "handoff=$v" >> "$GITHUB_OUTPUT"
           echo "handoff: $v"
+          # How the Windows app is built (its compiler, mbc, the release variants' build), since main (a branch): what
+          # the windows job's check that the beta app reuses the app's objects goes by. On every push it was 14-25 s of
+          # a job at 180-200 s, for a change it could not catch (no-dup-tooltips 41277416265, 2026-11-01).
+          v=no
+          if [ "$GITHUB_EVENT_NAME" != push ] || [ -z "$branch" ]; then v=yes
+          else
+            base=$(git merge-base origin/main HEAD)
+            if git cat-file -e "$base^{commit}" 2>/dev/null && git diff --name-only "$base" HEAD |
+              grep -qE '^(apps/mbui/scripts/(win|win-compiler|beta|env)\.sh$|apps/mbui/mbui/scripts/(win\.sh|mbc|env\.sh)$|apps/mbui/mbui/tools/mbc/|\.github/workflows/(mbui|pipeline|stable)\.yml$|\.github/actions/(msvc|mbui-moonbit)/|scripts/release\.sh$)'; then v=yes; fi
+          fi
+          echo "win_build=$v" >> "$GITHUB_OUTPUT"
+          echo "win_build: $v"
 
   android:
     needs: what
@@ -822,7 +835,7 @@ jobs:
       # The release variants change only resources. Rebuilding one from this app's cache must reuse its C objects;
       # otherwise a release recompiles the whole app before it can publish any platform's update.
       - name: The beta Windows app reuses the app's compiled objects
-        if: github.ref != 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref != 'refs/heads/main' && github.event_name == 'push' && needs.what.outputs.win_build == 'yes'
         run: |
           MBUI_VARIANT=beta MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build > "$RUNNER_TEMP/beta-cache.log" 2>&1 || { cat "$RUNNER_TEMP/beta-cache.log"; exit 1; }
           grep 'stillfail.c: .* of .* compiled' "$RUNNER_TEMP/beta-cache.log"
