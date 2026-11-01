@@ -112,21 +112,28 @@ fn panel_node(
         .presses(Is(true))
         .on_press(fn() {  })
         |> ignore
+        // (each part of it out to the panel's edges it stands by, the panel's padding round what it holds inside it: what
+        // reaches into that padding on purpose (a head's search in its top corner, a foot's buttons in its foot corner, a
+        // row out to its sides) drawn and pressed there, cut by the panel alone, as small_panel's are)
+        let headed = x.title != "" || x.head_end is Some(_)
+        let footed = x.foot is Some(_)
+        let (over, under) = (if headed { 0.0 } else { panel_pad }, if footed { 0.0 } else { panel_pad })
         // (its title, panel_head's)
-        if x.title != "" || x.head_end is Some(_) {
+        if headed {
           @ui.old(p, natural=true, key=fn() { key + "/head" }, fn(c) {
-            let held = c.box(style=panel_part_at, fn() { panel_head(c, x.title, end?=x.head_end) })
+            let held = c.box(style=panel_part_in(panel_pad, 0.0), fn() { panel_head(c, x.title, end?=x.head_end) })
             words_look(c, held)
           })
+          .margin(Is((-panel_pad, -panel_pad, -panel_pad, 0.0)))
           |> ignore
         }
         // (`tall`: what it holds fills the room it is given, laid out in it, scrolling as it does itself: panel_grows)
         if x.tall > 0.0 {
           p.box(fn(b) {
-            b.grow(Is(1.0)).min_height(Is(Some(0.0))).focusable(Is(x.focus), keys=0, tab=false) |> ignore
+            b.grow(Is(1.0)).min_height(Is(Some(0.0))).margin(Is((-panel_pad, -over, -panel_pad, -under))).focusable(Is(x.focus), keys=0, tab=false) |> ignore
             body_box.val = Some(b)
             @ui.old(b, key=fn() { key + "/body" }, fn(c) {
-              let held = c.box(style=panel_grows, fn() {
+              let held = c.box(style=panel_grows.then(panel_part_in(over, under)), fn() {
                 panel_sides_in.val = panel_pad
                 small_panel_now.val = true
                 words_in_now.val = text_in
@@ -158,7 +165,7 @@ fn panel_node(
             body_box.val = Some(b)
             b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
               @ui.old(s, natural=true, key=fn() { key + "/body" }, fn(c) {
-                let held = c.box(style=held_in(), fn() {
+                let held = c.box(style=held_in().then(@ui.style(pt=room(over), pb=room(under))), fn() {
                   // (held shorter than what it holds: what would scroll in itself there laid out whole, panel_held)
                   panel_held_now.val = scroll.goes()
                   panel_sides_in.val = panel_pad
@@ -174,6 +181,7 @@ fn panel_node(
                 })
                 words_look(c, held)
               })
+              .margin(Is((0.0, -over, 0.0, -under)))
               |> ignore
             })
             // (cut at its box while what it holds is taller than it, as @kit.in_room's held list (pick_node's): else what
@@ -189,7 +197,7 @@ fn panel_node(
         match x.foot {
           Some(f) =>
             @ui.old(p, natural=true, key=fn() { key + "/foot" }, fn(c) {
-              let held = c.box(style=panel_part_at, fn() {
+              let held = c.box(style=panel_part_in(0.0, panel_pad), fn() {
                 if x.ruled {
                   c.box(style=foot_rule.then(@ui.style(mx=room(-panel_pad), mt=room(panel_pad))), fn() {  }) |> ignore
                 }
@@ -198,6 +206,7 @@ fn panel_node(
               })
               words_look(c, held)
             })
+            .margin(Is((-panel_pad, 0.0, -panel_pad, -panel_pad)))
             |> ignore
           None => ()
         }
@@ -215,5 +224,8 @@ fn panel_node(
 }
 
 ///|
-// kept across runs: a value (no field of it changes)
-let panel_part_at : @ui.Style = @ui.css("w=Full")
+/// A part of a panel's out to its sides (and `over` above it, `under` below it, where it stands by the panel's top or
+/// foot): the panel's padding round what it holds, inside it.
+fn panel_part_in(over : Double, under : Double) -> @ui.Style {
+  @ui.style(w=Full, pl=room(panel_pad), pt=room(over), pr=room(panel_pad), pb=room(under))
+}

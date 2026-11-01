@@ -552,7 +552,7 @@ test "panel, 大屏 keyboard and mouse: tall 0.5 with a foot of its own, its bod
       from=At(600.0, 100.0, 0.0, 0.0),
       tall=0.5,
       foot=fn(c, close) {
-        if @sf.panel_button(c, "ok", "好的", tone=Filled) {
+        if @sf.button(c, "好的", key="ok34", tone=Primary) {
           close()
         }
       },
@@ -580,9 +580,76 @@ test "panel, 大屏 keyboard and mouse: tall 0.5 with a foot of its own, its bod
   }
   // (as main has it, a4c845604)
   assert_eq(out, [
-    "800: dialog (600, 106, 280, 400) row0 [(616, 142, 248, 22)] foot Some((831.2, 477.2, 44, 24)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
-    "800 to 500: dialog (600, 106, 280, 250) row0 [(616, 142, 248, 22)] foot Some((831.2, 327.2, 44, 24)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
-    "500 to 800: dialog (600, 106, 280, 400) row0 [(616, 142, 248, 22)] foot Some((831.2, 477.2, 44, 24)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
-    "opened at 500: dialog (600, 106, 280, 250) row0 [(616, 142, 248, 22)] foot Some((831.2, 327.2, 44, 24)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+    "800: dialog (600, 106, 280, 400) row0 [(616, 142, 248, 22)] foot Some((817.2, 467.2, 58, 34)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+    "800 to 500: dialog (600, 106, 280, 250) row0 [(616, 142, 248, 22)] foot Some((817.2, 317.2, 58, 34)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+    "500 to 800: dialog (600, 106, 280, 400) row0 [(616, 142, 248, 22)] foot Some((817.2, 467.2, 58, 34)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+    "opened at 500: dialog (600, 106, 280, 250) row0 [(616, 142, 248, 22)] foot Some((817.2, 317.2, 58, 34)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+  ])
+}
+
+///|
+/// A panel's body: the words `words` says.
+fn fits_words_body(words : @signals.Signal[String]) -> (@ui.Ctx, () -> Unit) -> Unit {
+  fn(c, _) { @sf.panel_text(c, fn() { c.text(words.get(), style=@sf.paragraph) |> ignore }) }
+}
+
+///|
+/// A button `label` of a panel's as the window shows it: where it is, how much of its ground the clips' rects it is drawn
+/// in leave (x0, y0, x1, y1: its own, scene.mbt 16-19, and the rounded one outside it, 40-43; their round corners not:
+/// the corner rule's), and whether presses just inside its capsule by its edges are its own (`pressed` told so): 0.5 in
+/// from its right end and from its foot, each at its middle (`top`: from its top instead of its foot).
+fn panel_reach_said(t : @ui.Tester, label : String, pressed : Ref[Int], top? : Bool = false) -> String raise {
+  let (x, y, w, h) = t.get(Button, label~).rect
+  let shown = t
+    .drawn_instances()
+    .filter(fn(d) { d[5] == 0.0 && (d[0] - x).abs() < 0.01 && (d[1] - y).abs() < 0.01 && (d[2] - w).abs() < 0.01 && (d[3] - h).abs() < 0.01 })
+    .map(fn(d) {
+      let outer = d[44] > 0.0 || d[45] > 0.0 || d[46] > 0.0 || d[47] > 0.0
+      let (x0, y0) = (dmax(x, dmax(d[16], if outer { d[40] } else { x })), dmax(y, dmax(d[17], if outer { d[41] } else { y })))
+      let (x1, y1) = (dmin(x + w, dmin(d[18], if outer { d[42] } else { x + w })), dmin(y + h, dmin(d[19], if outer { d[43] } else { y + h })))
+      tenth4((x0, y0, x1, y1))
+    })
+  let points = [(x + w - 0.5, y + h / 2.0), (x + w / 2.0, if top { y + 0.5 } else { y + h - 0.5 })]
+  let presses = []
+  for q in points {
+    let was = pressed.val
+    t.tap(q.0, q.1)
+    t.run_for(@ui.move_most_ms)
+    presses.push(pressed.val - was)
+  }
+  "\{tenth4((x, y, w, h))} shows \{shown} pressed \{presses}"
+}
+
+///|
+test "panel, 大屏 keyboard and mouse: tall 0.5 and not, a foot's button in its foot corner, a head's at its end in its top corner: drawn whole where they reach into the panel's padding, pressed there: as main has it" {
+  let out = []
+  for kind in ["tall foot", "foot", "head end"] {
+    let t = menu_tester(1280.0, 800.0, 0)
+    let pressed = Ref(0)
+    let foot = fn(c : @ui.Ctx, _close : () -> Unit) {
+      if @sf.button(c, "好的", key="ok34", tone=Primary) {
+        pressed.val = pressed.val + 1
+      }
+    }
+    match kind {
+      "tall foot" =>
+        @sf.panel("面板", panel_column_body(@signals.signal(40), []), from=At(600.0, 100.0, 0.0, 0.0), tall=0.5, foot~)
+      "foot" => @sf.panel("面板", fits_words_body(@signals.signal("面板里的话")), from=At(600.0, 100.0, 0.0, 0.0), foot~)
+      _ =>
+        @sf.panel("面板", fits_words_body(@signals.signal("面板里的话")), from=At(600.0, 100.0, 0.0, 0.0), head_end=fn(c) {
+          if @sf.button(c, "尾", key="end34", tone=Primary) {
+            pressed.val = pressed.val + 1
+          }
+        })
+    }
+    t.run_for(@ui.move_most_ms)
+    out.push("\{kind}: \{panel_reach_said(t, if kind == "head end" { "尾" } else { "好的" }, pressed, top=kind == "head end")}")
+  }
+  // (as main has it, a4c845604: each wholly within the panel's clip there, (601, 107) to (879, 505), (879, 209.8),
+  // (879, 175.8))
+  assert_eq(out, [
+    "tall foot: (817.2, 467.2, 58, 34) shows [(817.2, 467.2, 875.2, 501.2)] pressed [1, 1]",
+    "foot: (817.2, 172, 58, 34) shows [(817.2, 172, 875.2, 206)] pressed [1, 1]",
+    "head end: (654, 110.8, 221.2, 34) shows [(654, 110.8, 875.2, 144.8)] pressed [1, 1]",
   ])
 }
