@@ -247,9 +247,14 @@ fn signin_over(ask : SignInAsk) -> Bool {
 
 ///|
 /// How it ended, in a line (vault_outcome's).
-fn signin_outcome(c : @ui.Ctx, ask : SignInAsk, inline : Bool) -> Unit {
+fn signin_outcome(c : @ui.Ctx, ask : SignInAsk, inline : Bool, history? : (String, (Int) -> Unit)? = None) -> Unit {
+  @settings.ask_outcome(c, ask.status == "done", [@ui.span(signin_outcome_words(ask))], inline~, history~)
+}
+
+///|
+fn signin_outcome_words(ask : SignInAsk) -> String {
   let site = [("site", ask.site)]
-  let words = match ask.status {
+  match ask.status {
     "done" if ask.kept == "granted" => @sf.t("android-misc.signin.outcome.kept", args=site)
     "done" if ask.save != "" || !ask.keep => @sf.t("android-misc.signin.outcome.notKept", args=site)
     "done" => @sf.t("android-misc.signin.outcome.done", args=site)
@@ -257,7 +262,6 @@ fn signin_outcome(c : @ui.Ctx, ask : SignInAsk, inline : Bool) -> Unit {
     "expired" => @sf.t("android-misc.signin.outcome.expired", args=site)
     _ => @sf.t("android-misc.signin.outcome.ended")
   }
-  @settings.ask_outcome(c, ask.status == "done", [@ui.span(words)], inline~)
 }
 
 ///|
@@ -482,7 +486,16 @@ fn signin_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, as
         open=close_gap,
         exit=@motion.trans(spec=@motion.Snap(0.0)),
         close=@motion.Snap(0.0),
-        ended,
+        fn() {
+          signin_outcome(c, ask, here.inline, history=Some(("signin/" + key, fn(id) {
+            card_history(c, "signin/" + key, id, fn(p) {
+              p.box(style=card_history_contents, fn() {
+                @sf.ask_words(p, @sf.t("android-misc.signin.title", args=[("site", ask.site)]), ask.reason)
+                p.text(signin_outcome_words(ask), style=@sf.ask_note) |> ignore
+              }) |> ignore
+            })
+          })))
+        },
       )
     }
     None => if decided { ended() } else { asking() }

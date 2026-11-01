@@ -41,7 +41,7 @@ pub fn ask(String, String, String, String, (String) -> Unit, hint? : String, sec
 
 pub fn ask_action(String) -> Unit
 
-pub fn ask_outcome(@ui.Ctx, Bool, Array[@ui.Run], inline? : Bool) -> Unit
+pub fn ask_outcome(@ui.Ctx, Bool, Array[@ui.Run], inline? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
 
 pub fn avatar(@ui.Ctx, Core, String, String, Double, picture? : String) -> Unit
 
@@ -234,7 +234,7 @@ pub fn phone_lends(@ui.Ctx) -> Bool
 
 pub fn phone_link(Core?, String, String) -> String
 
-pub fn phone_outcome(@ui.Ctx, String, String, String, inline? : Bool, link? : String, paired_here? : Bool) -> Unit
+pub fn phone_outcome(@ui.Ctx, String, String, String, inline? : Bool, link? : String, paired_here? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
 
 pub fn phone_outcome_words(String, String, String) -> String
 
@@ -324,6 +324,8 @@ pub fn vault_actions(@ui.Ctx, Core, String, String, Bool, who? : String?) -> Uni
 
 pub fn vault_ask(@ui.Ctx, Core, String, String, Asked, Bool, who? : String?, extra? : (() -> Unit)?, said? : Array[String]) -> Unit
 
+pub fn vault_ask_details(@ui.Ctx, Asked) -> Unit
+
 pub fn vault_ask_words(@ui.Ctx, Asked) -> Unit
 
 pub fn vault_card(@ui.Ctx, Core, String, String, Asked, Answer, ended? : (String, String)?) -> Unit
@@ -340,7 +342,7 @@ pub let vault_lasts : Array[String]
 
 pub fn vault_menu_open() -> String
 
-pub fn vault_outcome(@ui.Ctx, Asked, String, String, inline? : Bool) -> Unit
+pub fn vault_outcome(@ui.Ctx, Asked, String, String, inline? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
 
 pub fn vault_outcome_words(Asked, String, String) -> Array[@ui.Run]
 

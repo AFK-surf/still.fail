@@ -1291,9 +1291,11 @@ pub let fix_vault : Ref[String] = Ref("")
 
 ///|
 /// chat-vault's last post: an agent asking to keep a password (`typed`: a token the person types in; `file`: a file
-/// they pick), its card as the core says it, answered here; decided, how it went.
-pub fn vault_post(typed : Bool, file? : Bool = false) -> Json {
-  let ask : Map[String, Json] = if file {
+/// they pick), or `use_secret` for an already answered request to use a token; its card as the core says it.
+pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false) -> Json {
+  let ask : Map[String, Json] = if use_secret {
+    { "name": "Axiom 查询 token", "mode": "proxy", "command": "curl -s https://api.axiom.co/v1/datasets/_apl", "answer": "approve", "scope": "chat" }
+  } else if file {
     { "name": "生产集群", "mode": "file", "save": { "kind": "file", "typed": true }, "answer": "approve" }
   } else if typed {
     { "name": "OpenCode Go", "mode": "proxy", "hosts": ["opencode.ai"], "save": { "kind": "token", "typed": true }, "answer": "approve" }
@@ -1303,7 +1305,7 @@ pub fn vault_post(typed : Bool, file? : Bool = false) -> Json {
   if fix_vault.val != "" {
     ask["status"] = Json::string(fix_vault.val)
   }
-  msg(60, "agent", by_agent("Anthropic", "claude", "s-c1"), if file { "请选择生产集群的 kubeconfig" } else if typed { "请填入 OpenCode Go 的 API key" } else { "要存入 UniFi UX7 的密码" }, "刚刚", {
+  msg(60, "agent", by_agent("Anthropic", "claude", "s-c1"), if use_secret { "申请使用 Axiom 查询 token 查询日志" } else if file { "请选择生产集群的 kubeconfig" } else if typed { "请填入 OpenCode Go 的 API key" } else { "要存入 UniFi UX7 的密码" }, "刚刚", {
     "card": { "type": "options", "vault": "r-ux7", "vaultAsk": Json::object(ask) },
     "createdAt": Json::number(1.0e9),
   })
@@ -1390,7 +1392,7 @@ pub fn ask_end_post() -> Json {
 pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
   let ask_end = f.mode == "chat-ask-end"
-  let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file"
+  let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file" || f.mode == "chat-vault-use"
   let linked = f.mode.has_prefix("chat-phone-linked-")
   let signin = f.mode.has_prefix("chat-signin")
   let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off" || linked
@@ -1399,6 +1401,9 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   // on a computer)
   if (f.mode == "chat-phone-granted" || linked) && fix_phone.val == "" {
     fix_phone.val = "granted"
+  }
+  if f.mode == "chat-vault-use" && fix_vault.val == "" {
+    fix_vault.val = "granted"
   }
   if linked && fix_phone_link.val == "" {
     let rest = f.mode.unsafe_substring(start="chat-phone-linked-".length(), end=f.mode.length())
@@ -1446,7 +1451,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       }
       // chat-vault's request to keep a password, last
       if vault {
-        all.push(vault_post(f.mode == "chat-vault-typed", file=f.mode == "chat-vault-file"))
+        all.push(vault_post(f.mode == "chat-vault-typed", file=f.mode == "chat-vault-file", use_secret=f.mode == "chat-vault-use"))
       }
       // chat-phone's request for the person's phone, last
       if phone {

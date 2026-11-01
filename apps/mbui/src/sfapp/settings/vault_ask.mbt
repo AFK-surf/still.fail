@@ -302,10 +302,16 @@ pub fn vault_ask_words(c : @ui.Ctx, ask : Asked) -> Unit {
 }
 
 ///|
+/// The request's original contents without its card or its answer, for a read-only history panel.
+pub fn vault_ask_details(c : @ui.Ctx, ask : Asked) -> Unit {
+  vault_asked(c, ask, full_command=true)
+}
+
+///|
 /// What is asked (AskCard's what): its title (使用 …, 存入密码 … and the account; the item's name in it heavier than the
 /// words around it, not in quotes), the command, and only what is
 /// out of the ordinary: a command that reads the secret itself, one run on another station.
-fn vault_asked(c : @ui.Ctx, ask : Asked) -> Unit {
+fn vault_asked(c : @ui.Ctx, ask : Asked, full_command? : Bool = false) -> Unit {
   let t = @sf.theme()
   let save = ask.save_kind != ""
   c.box(style=@sf.ask_what, fn() {
@@ -327,7 +333,7 @@ fn vault_asked(c : @ui.Ctx, ask : Asked) -> Unit {
     }
     c.rich(runs, style=@sf.ask_title) |> ignore
     if !save && ask.command != "" {
-      c.rich([@ui.span(ask.command, mono=true)], style=ask_command) |> ignore
+      c.rich([@ui.span(ask.command, mono=true)], style=if full_command { @sf.ask_note } else { ask_command }, breaks=full_command) |> ignore
     }
     let risky = !save && (ask.mode == "env" || ask.mode == "file")
     let elsewhere = !save && ask.station != ""
@@ -351,19 +357,28 @@ fn vault_asked(c : @ui.Ctx, ask : Asked) -> Unit {
 ///|
 /// How a request ended (`status`: granted, denied, else expired; `scope`: how long a use was granted), in a line: a dot
 /// (green once granted) and 已存入密码 …, 已允许使用 … · 本对话内, 已拒绝使用 ….
-pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String, inline? : Bool = true) -> Unit {
-  ask_outcome(c, status == "granted", vault_outcome_words(ask, status, scope), inline~)
+pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String, inline? : Bool = true, history? : (String, (Int) -> Unit)? = None) -> Unit {
+  ask_outcome(c, status == "granted", vault_outcome_words(ask, status, scope), inline~, history~)
 }
 
 ///|
 /// A request's outcome line (vault_outcome's, phone_outcome's): a dot (green once `granted`) and its words.
-pub fn ask_outcome(c : @ui.Ctx, granted : Bool, words : Array[@ui.Run], inline? : Bool = true) -> Unit {
+pub fn ask_outcome(c : @ui.Ctx, granted : Bool, words : Array[@ui.Run], inline? : Bool = true, history? : (String, (Int) -> Unit)? = None) -> Unit {
   // the dot in the middle of the words' first line, not of all of them (on two lines it stays by the first); under the
   // message's picture, as wide as it, laid over the line as the picture is over its head (message.mbt: inline at the
   // head's start, the words past it where the name is; else out in the margin, the words at the row's start)
   let line = c.sp(c.theme().leading(ask_ended_leading).unwrap_or(c.text_size(ask_ended_size).1))
   c.box(style=ask_ended, fn() {
-    c.box(style=if inline { ask_ended_past } else { ask_ended_at }, fn() { c.rich(words, style=ask_ended_words) |> ignore })
+    let base_style = if inline { ask_ended_past } else { ask_ended_at }
+    c.box(style=if history is Some(_) { base_style.then(ask_ended_start) } else { base_style }, fn() {
+      match history {
+        Some((key, show)) => {
+          let id = @sf.ask_history_trigger(c, key, words, ask_ended_words)
+          show(id)
+        }
+        None => c.rich(words, style=ask_ended_words) |> ignore
+      }
+    })
     |> ignore
     c.layer(fn() {
       c.box(style=(if inline { ask_dot_line } else { ask_dot_line_out }).then(@ui.style(h=Fixed(line))), fn() {
@@ -696,6 +711,10 @@ let ask_ended_past : @ui.Style = @ui.style(w=Full, pl=@sf.message_head_in)
 /// Its words with the picture out in the margin: at the row's start, as the name is.
 // kept across runs: a value (no field of it changes)
 let ask_ended_at : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ask_ended_start : @ui.Style = @ui.css("align=AStart")
 
 ///|
 /// Where the dot stands: as wide as the message's picture (18) and under it, the dot in its middle; as high as a line
