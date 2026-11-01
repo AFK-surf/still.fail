@@ -252,7 +252,7 @@ fn outbox_unsent(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) ->
       @sf.t("web-main.draft.notSent", args=[("error", o.error)])
     } else {
       @sf.t("web-main.chat.notSent")
-    })
+    }, repeats=true)
     if o.final {
       // refused as it is (a file this station does not have): its words back in the composer, to be sent anew
       if unsent_button(c, "unsent/edit/" + o.id, "edit", @sf.t("common.edit"), !locked && !busy, false, None) {

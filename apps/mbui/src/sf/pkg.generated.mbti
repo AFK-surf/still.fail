@@ -1986,7 +1986,7 @@ pub fn theme() -> Theme
 
 pub fn tile_whole() -> Bool
 
-pub fn tip(@ui.Ctx, String, Int32, String, side? : @view.Side, shortcut? : String, shown? : Bool) -> Unit
+pub fn tip(@ui.Ctx, String, Int32, String, side? : @view.Side, shortcut? : String, shown? : Bool, repeats? : Bool) -> Unit
 
 pub let tip_delay_ms : Double
 

@@ -471,6 +471,8 @@ pub struct Ctx {
   /// it built (Ctx::left_out: what it was told)
   left_ids : Map[Int, Bool]
   left_reads : Map[Int, (Bool, SourceLoc)]
+  /// the boxes some words in which showed cut short as last laid out (Ctx::shows_cut), by id
+  cut_ids : Map[Int, Bool]
   laid_watch : Map[Int, Int]
   /// the boxes built `tallest` (Ctx::box), by id: the tallest each has been laid out since it was first built so
   tallest_h : Map[Int, Double]
@@ -772,6 +774,7 @@ fn Ctx::new() -> Ctx {
     words_shape_reads: Map::new(),
     left_ids: Map::new(),
     left_reads: Map::new(),
+    cut_ids: Map::new(),
     laid_watch: Map::new(),
     tallest_h: Map::new(),
     tallest_new: false,

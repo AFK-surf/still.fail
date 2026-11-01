@@ -91,6 +91,43 @@ fn Ctx::left_out_after_layout(self : Ctx) -> Unit {
 }
 
 ///|
+/// Whether some words in box `id` showed cut short as the last frame laid them out: ended in an ellipsis where they had
+/// not the room, said one of their shorter ways, lines left off after their last. For what is said over the box (a
+/// tip saying its words whole, wanted only where they do not show whole), not for what is built by it: not read back.
+pub fn Ctx::shows_cut(self : Ctx, id : Int) -> Bool {
+  self.cut_ids.contains(id)
+}
+
+///|
+/// Once laid out: the boxes words show cut short in (Ctx::shows_cut), the words' own and every box holding them.
+fn Ctx::cut_after_layout(self : Ctx) -> Unit {
+  self.cut_ids.clear()
+  for i in 0..<self.count {
+    let n = self.nodes[i]
+    let cut = if n.kind == kind_text {
+      match (n.tl, n.full) {
+        (Some(shown), Some(whole)) => n.full_cut || !physical_equal(shown, whole)
+        _ => false
+      }
+    } else {
+      n.kind == kind_rich && n.rcut is Some(_)
+    }
+    // (up from the words; a box already said has every box over it said too)
+    let mut p = if cut { i } else { -1 }
+    while p >= 0 {
+      let a = self.nodes[p]
+      if a.id != 0 {
+        if self.cut_ids.contains(a.id) {
+          break
+        }
+        self.cut_ids[a.id] = true
+      }
+      p = a.parent
+    }
+  }
+}
+
+///|
 /// What box `id` shows across, as the last frame laid it out (x of the left of what is leftmost, of the right of what
 /// is rightmost): its innermost parts that show something (words, a field, a picture, a drawing; not an empty box,
 /// whose ground may reach past what is drawn), those of them inside the box, none in a box moved by the name `but`

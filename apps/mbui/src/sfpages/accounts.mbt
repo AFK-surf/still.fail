@@ -921,7 +921,7 @@ fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?, spread 
                     c.text(name(m), style=pf_chip_words) |> ignore
                   })
                   |> ignore
-                  @sf.tip(c, "profile-model-chip/" + key + "/" + m + "/tip", chip, m)
+                  @sf.tip(c, "profile-model-chip/" + key + "/" + m + "/tip", chip, m, repeats=name(m) == m)
                 }
               })
               |> ignore
@@ -1619,7 +1619,7 @@ fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Uni
                 }
               })
               |> ignore
-              @sf.tip(c, "profile-model-item/" + key + "/" + m + "/tip", item, m)
+              @sf.tip(c, "profile-model-item/" + key + "/" + m + "/tip", item, m, repeats=name(m) == m)
             }
           })
           |> ignore

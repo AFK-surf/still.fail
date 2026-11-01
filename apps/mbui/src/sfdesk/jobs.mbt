@@ -524,7 +524,7 @@ fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit 
         c.rich([@ui.span(command, mono=true)], style=job_command_words) |> ignore
       })
       |> ignore
-      @sf.tip(c, "jobs-tab/command", cid, command)
+      @sf.tip(c, "jobs-tab/command", cid, command, repeats=true)
     }
     if jobs_own.output {
       job_output(c, src, station, id)

@@ -101,6 +101,40 @@ test "what a row left out is said as it is built (Ctx::left_out), in the same fr
 }
 
 ///|
+test "the boxes words show cut short in are said so (Ctx::shows_cut), and not where they show whole" {
+  let width = Ref(100.0)
+  let said : Ref[(Bool, Bool, Bool)] = Ref((false, false, false))
+  let t = Tester::new(
+    fn(c) {
+      let (x, y, z) = (c.id("x"), c.id("y"), c.id("z"))
+      c.box(dir=Column, w=Px(width.val), fn() {
+        // one line, cut with an ellipsis where it has not the room
+        c.box(dir=Row, id=x, taps=false, fn() {
+          c.text("words longer than the row has room for", w=Cut, wrap=false) |> ignore
+        })
+        |> ignore
+        // short: whole in any of these widths
+        c.box(dir=Row, id=y, taps=false, fn() { c.text("short", wrap=false) |> ignore }) |> ignore
+        // wrapped, its lines after the first left off
+        c.box(id=z, taps=false, fn() { c.text("words longer than the row has room for", max_lines=1) |> ignore }) |> ignore
+      })
+      |> ignore
+      said.val = (c.shows_cut(x), c.shows_cut(y), c.shows_cut(z))
+    },
+    w=800.0,
+    h=200.0,
+  )
+  t.draw()
+  t.frame()
+  assert_eq(said.val, (true, false, true))
+  // with the room for all of it, nothing is cut
+  width.val = 700.0
+  t.frame()
+  t.frame()
+  assert_eq(said.val, (false, false, false))
+}
+
+///|
 test "words said to be cut (Cut) are as wide as they are, and cut with an ellipsis where the row has less" {
   let ids = Ref(0)
   let t = Tester::new(

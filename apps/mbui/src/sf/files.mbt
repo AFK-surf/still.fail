@@ -361,8 +361,8 @@ pub fn file_card(
     },
   )
   c.semantics(b, Group, id~, label=if title != "" { title } else { name })
-  // (pasted words: all of what is said of them, a failure at length)
-  tip(c, key + "/tip", id, if path != "" { path } else if title != "" { meta } else { name })
+  // (where it is; else what it says, whole where it is cut short: pasted words' meta, a failure at length)
+  tip(c, key + "/tip", id, if path != "" { path } else if title != "" { meta } else { name }, repeats=path == "")
   let removed = remove && c.clicked(x)
   let retried = retry && c.clicked(again)
   let restored = restore && c.clicked(back)

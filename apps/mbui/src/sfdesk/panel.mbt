@@ -698,7 +698,7 @@ fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : Strin
   })
   c.semantics(b, Tab, id~, label~, selected=front)
   if !(tab == "jobs" || tab == "files" || tab == "letters" || tab == "things") {
-    @sf.tip(c, "side/tab-tip/" + tab, id, label)
+    @sf.tip(c, "side/tab-tip/" + tab, id, label, repeats=true)
   }
 }
 

@@ -838,7 +838,8 @@ fn blocked_line(c : @ui.Ctx, src : Source, station : String, key : String, b : I
       c.rich([@ui.span(b.action, underline=hot)], style=blocked_act) |> ignore
     }
   })
-  @sf.tip(c, "blocked/" + key, line, if b.detail != "" { b.detail } else { b.note })
+  // (its note whole where it is cut short, or said here only: its action in its place)
+  @sf.tip(c, "blocked/" + key, line, if b.detail != "" { b.detail } else { b.note }, repeats=b.detail == "" && b.action == "")
 }
 
 ///|

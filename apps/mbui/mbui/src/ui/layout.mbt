@@ -38,11 +38,8 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
     spacing=self.spacing,
     style=self.words_style(),
   )
-  let tl = if self.wrap && self.max_lines > 0 && tl.line_start.length() > self.max_lines {
-    cut_to_lines(self, tl, max_w)
-  } else {
-    tl
-  }
+  self.full_cut = self.wrap && self.max_lines > 0 && tl.line_start.length() > self.max_lines
+  let tl = if self.full_cut { cut_to_lines(self, tl, max_w) } else { tl }
   self.full = Some(tl)
   self.full_max = max_w
   tl
