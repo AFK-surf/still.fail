@@ -3,8 +3,8 @@
 // reads are never answered: the player waits, as on a slow link, the same on every run), a song (its reads the same,
 // how its player stands pinned), a page of HTML, code,
 // Markdown, a table, and a file of no kind that can be shown; a second picture beside the first (the `imageNear` view:
-// chat-preview-step with the ways to it, chat-preview-swipe halfway to it under a finger). Its bytes are made here;
-// none is a real document.
+// chat-preview-step with the ways to it, chat-preview-swipe halfway to it under a finger, chat-preview-swipe-wide as
+// far on a wide window). Its bytes are made here; none is a real document.
 
 ///|
 /// The made-up files, by the name the preview fetches them by: the file as a message has it, and its bytes.
@@ -16,6 +16,9 @@ pub fn preview_files() -> Array[(Attachment, () -> Bytes)] {
     (at("界面草图.png", 18000.0, 600.0, 400.0), fn() { fixture_png(600, 400) }),
     (at("首页改版第三轮评审定稿前的对照截图（含深色与浅色两套）.png", 18000.0, 600.0, 400.0), fn() { fixture_png(600, 400) }),
     (at("第二版.png", 21000.0, 400.0, 560.0), fn() { fixture_png(400, 560) }),
+    // 界面草图.png mirrored, before it (fixture_image_near): one stepped from as big as the one stepped to, another
+    // picture
+    (at("对照草图.png", 18000.0, 600.0, 400.0), fn() { fixture_png(600, 400, mirrored=true) }),
     // the chat's own picture (chat_fixture.mbt rich_chat), opened from its thumbnail there: the same picture
     (at("compare.png", 402000.0, 1600.0, 900.0), fn() { fixture_file_png("compare.png") }),
     (at("设计说明.pdf", 2400.0, 0.0, 0.0), fn() { fixture_pdf() }),
@@ -49,7 +52,7 @@ pub let preview_broken : Ref[String?] = Ref(None)
 /// MBUI_FIXTURE=chat-preview-<what>: which file opens.
 pub fn fixture_preview(mode : String) -> Unit {
   let which = match mode {
-    "chat-preview-image" | "chat-preview-step" | "chat-preview-swipe" | "chat-preview-coming" | "chat-preview-coming-part" | "chat-preview-broken" => "界面草图.png"
+    "chat-preview-image" | "chat-preview-step" | "chat-preview-swipe" | "chat-preview-swipe-wide" | "chat-preview-coming" | "chat-preview-coming-part" | "chat-preview-broken" => "界面草图.png"
     "chat-preview-pdf" => "设计说明.pdf"
     "chat-preview-video" => "演示录屏.mp4"
     "chat-preview-webm" | "chat-preview-webm-unsupported" => "演示录屏.webm"
@@ -79,8 +82,11 @@ pub fn fixture_preview(mode : String) -> Unit {
       } else {
         InChat(Some(1.0), "s-c1")
       })
-      if mode == "chat-preview-swipe" {
-        pv_strip.pinned = Some(-150.0)
+      // (halfway to the next on a phone; on a wide window as far, the next come in)
+      match mode {
+        "chat-preview-swipe" => pv_strip.pinned = Some(-150.0)
+        "chat-preview-swipe-wide" => pv_strip.pinned = Some(-700.0)
+        _ => ()
       }
       if viewer.get() is Some(v) {
         // the song paused at 0:31 of 1:35, the same on every run
@@ -203,12 +209,14 @@ pub fn fixture_log() -> Bytes {
 
 ///|
 /// A picture of its own: a soft gradient with a few shapes on it, as a sketch of a screen.
-pub fn fixture_png(w : Int, h : Int) -> Bytes {
+pub fn fixture_png(w : Int, h : Int, mirrored? : Bool = false) -> Bytes {
   let rgba = FixedArray::make(w * h * 4, b'\x00')
   for y in 0..<h {
-    for x in 0..<w {
+    for at in 0..<w {
+      // (mirrored: the same picture, its card and button on the other side)
+      let x = if mirrored { w - 1 - at } else { at }
       let k = (x + y).to_double() / (w + h - 2).to_double()
-      let i = (y * w + x) * 4
+      let i = (y * w + at) * 4
       let mut r = 245.0 + (91.0 - 245.0) * k
       let mut g = 243.0 + (123.0 - 243.0) * k
       let mut b = 239.0 + (178.0 - 239.0) * k
@@ -338,7 +346,8 @@ pub let fixture_csv : String =
   #|"设置, 外观",web,0.66,否
 
 ///|
-/// The `imageNear` view of the made-up chat: 界面草图.png has 第二版.png after it, the first of the two.
+/// The `imageNear` view of the made-up chat: 界面草图.png has 第二版.png after it, the first of the two; 对照草图.png (no
+/// message of the chat's) has 界面草图.png after it, as big as it.
 pub fn fixture_image_near(params : Map[String, Json]) -> Json? {
   match params.get("path") {
     Some(String("uploads/fx/界面草图.png")) =>
@@ -359,6 +368,20 @@ pub fn fixture_image_near(params : Map[String, Json]) -> Json? {
         "index": 1,
         "count": 2,
         "before": {
+          "name": "界面草图.png",
+          "path": "uploads/fx/界面草图.png",
+          "size": 18000,
+          "width": 600,
+          "height": 400,
+          "owner": "s-c1",
+        },
+      })
+    // (as big as the one after it, 界面草图.png)
+    Some(String("uploads/fx/对照草图.png")) =>
+      Some({
+        "index": 0,
+        "count": 2,
+        "after": {
           "name": "界面草图.png",
           "path": "uploads/fx/界面草图.png",
           "size": 18000,

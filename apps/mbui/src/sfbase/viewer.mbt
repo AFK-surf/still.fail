@@ -2309,8 +2309,8 @@ pub fn Viewer::image_view(self : Viewer, c : @ui.Ctx, src : Source, stage : Int,
     // (the whole picture decoded for where it lands, asked for as it sets out: it takes its stand-in's place there)
     Some(r) if picture != "" && flying =>
       v.draw_flight(c, v.shown_picture(c, src, r), r, v.flying())
-    // (lying flat where the window's tree draws the viewer: its node's, Viewer::picture_flat_at)
-    Some(_) if picture != "" && v.picture_flat_at(c.moment()) => ()
+    // (lying flat where the window's tree draws the viewer: its node's, Viewer::picture_flat)
+    Some(_) if picture != "" && v.picture_flat() => ()
     Some(r) if picture != "" => {
       let (x, y, w, h) = r
       // flat on the canvas, as a photo viewer's (FilePreview.css.ts fpImage)
@@ -2333,6 +2333,10 @@ pub fn Viewer::image_view(self : Viewer, c : @ui.Ctx, src : Source, stage : Int,
       Some(r) => marks_draw(c, r, z.nw, z.nh, shapes=!v.in_tree, pins=!v.in_tree, writing=!v.in_tree)
       None => ()
     }
+  }
+  // (where the window's tree draws the viewer, the one going and those beside it its nodes: viewer_tree.mbt)
+  if v.in_tree {
+    return
   }
   match pv_strip.leaving {
     // the one going, drawn from where it was (it has no place of its own any more)
