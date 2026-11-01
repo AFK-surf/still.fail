@@ -56,6 +56,31 @@ pub fn open_cards_fixture(mode : String) -> Unit {
         title="排序",
         from=@sf.at_point(700.0, 300.0),
       )
+    // a short pick at a point: its title, the one chosen checked, one with what it is under its words, one with a value at
+    // its end, one with its own mark (a station's)
+    // a long pick at a point: its search over its list, scrolling past its most
+    "chat-pick-long" =>
+      @sf.pick(
+        "选一个对话",
+        Array::makei(14, fn(i) {
+          @sf.choice("c\{i}", "对话 \{i + 1}", note=if i == 0 { "刚刚看过" } else { "" }, value=if i == 2 { "3 条新消息" } else { "" })
+        }),
+        "c1",
+        fn(_) {  },
+        from=@sf.at_point(700.0, 200.0),
+      )
+    "chat-pick-short" =>
+      @sf.pick(
+        "切换工作站",
+        [
+          @sf.choice("st1", "Studio", note="这台 Mac", mark=fn(c, size) { @sf.station_icon(c, "", "", size, @sf.theme().p.muted, here=true) }),
+          @sf.choice("st2", "Mini1", value="离线", mark=fn(c, size) { @sf.station_icon(c, "", "", size, @sf.theme().p.muted) }),
+          @sf.choice("st3", "ccvm", value="2 个任务"),
+        ],
+        "st1",
+        fn(_) {  },
+        from=@sf.at_point(700.0, 300.0),
+      )
     // the bare address in the long answer held: its menu (link_menu.mbt)
     "chat-link-menu" => {
       link_menu_at("https://example.com/bench/list", 220.0, 360.0, 383.0)

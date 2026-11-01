@@ -207,7 +207,8 @@ test "wide: the model's panel beside its control has the models, how hard it thi
   // pressed, the runtimes in a pick
   t.click(Button, label="DeepSeek Harness")
   t.run_for(squeeze_opening)
-  assert_true(t.boxes().iter().any(fn(b) { b.kind == "text" && b.text == "Claude Code" }), msg="no pick of the runtimes")
+  // (its words, whatever draws the pick: an old view's or the window's tree's)
+  assert_true(t.words().iter().any(fn(w) { w.0 == "Claude Code" }), msg="no pick of the runtimes")
 }
 
 ///|

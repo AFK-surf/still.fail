@@ -1056,7 +1056,7 @@ pub fn menu_item(@ui.Ctx, String, key? : String, icon? : String, mark? : (@ui.Ct
 
 pub fn menu_item_of(String, () -> Unit, icon? : String, danger? : Bool, disabled? : Bool, chosen? : Bool, heading? : Bool) -> MenuItem
 
-pub fn menu_node(@view.View, () -> Bool, (@view.View) -> @view.View, () -> Array[MenuItem?], String, @view.Along, Double, Bool, Bool, (MenuItem) -> Unit, () -> Unit, shown? : () -> Unit, gone? : () -> Unit) -> Unit
+pub fn menu_node(@view.View, () -> Bool, (@view.View) -> @view.View, () -> Array[MenuItem?], String, @view.Along, Double, Bool, Bool, (MenuItem) -> Unit, () -> Unit, shown? : () -> Unit, gone? : () -> Unit, extras? : (Int32) -> MenuExtra, min_w? : Double) -> Unit
 
 pub fn menu_of(@ui.Ctx, String, Array[MenuItem?], label~ : String, size? : Double) -> Bool
 
@@ -1433,6 +1433,8 @@ pub let pick_line_r : @ui.Radius
 pub let pick_line_y : @ui.Space
 
 pub let pick_list_most : Double
+
+pub fn pick_node(@view.View, String, () -> Bool, (@view.View) -> @view.View, String, Array[Choice], String, @ui.Field, @view.Along, Double, (String) -> Unit, () -> Unit, shown? : () -> Unit, gone? : () -> Unit) -> Unit
 
 pub let pick_raised : Raised
 
@@ -2650,6 +2652,12 @@ pub(all) struct MediaInk {
   muted : Int64
   ground : Int64
   stage : Int64
+}
+
+pub(all) struct MenuExtra {
+  note : String
+  value : String
+  mark : ((@ui.Ctx, Double) -> Unit)?
 }
 
 pub(all) struct MenuItem {

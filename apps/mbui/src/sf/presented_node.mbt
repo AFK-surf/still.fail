@@ -1,6 +1,6 @@
 // What is presented drawn as nodes of the window's tree, where a tree hosts them (presented_nodes), not on a sheet
 // (小屏's, the host's still): a confirm (confirm_node) and a question (ask_node) in the middle of the window, a menu
-// (menu_node) beside what opened it, each at its place in the window's stack of layers (its serial), over or under the
+// (menu_node) and a pick (short, as a menu of its choices; long, pick_node) beside what opened it, each at its place in the window's stack of layers (its serial), over or under the
 // old frame's presented as each was presented; the rest the host's (presented) still. Closed (cancel, Escape, back), it
 // closes as the host's closes it (dismissed_now: what is over it too, what it holds let go of, once); said, it closes
 // and what it says goes on, at that moment. A confirm or a question going is presented till its way out is over
@@ -18,11 +18,21 @@ let tree_presented : Set[Int] = Set::new()
 let presented_in_tree : Ref[Bool] = Ref(false)
 
 ///|
-/// Whether `p` is the window's tree's to draw: a confirm, a question or a menu not on a sheet, where a tree draws them.
+/// Whether `p` is the window's tree's to draw: a confirm, a question, a menu or a pick not on a sheet, where a tree
+/// draws them.
 fn tree_draws(p : Presented, sheet : Bool) -> Bool {
   presented_in_tree.val &&
   !sheet &&
-  p.shows is (Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _, _) | Menu(_, _, _))
+  (
+    p.shows is (Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _, _) | Menu(_, _, _)) ||
+    p.shows is Pick(_, _, _, _, _, _)
+  )
+}
+
+///|
+/// Whether a pick of `choices` is a menu of them (pick_popover's: short, or with no search), not a panel with a search.
+fn pick_menu_of(choices : Array[Choice], search : Bool) -> Bool {
+  choices.length() < pick_search_from || !search
 }
 
 ///|
@@ -116,6 +126,67 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             fn() { dismissed_now(serial) },
             shown~,
             gone~,
+          )
+        }
+        Pick(title, choices, chosen, choose, along, search) if !pick_menu_of(choices, search) => {
+          // (a panel with its search over its list: pick_node)
+          // (panel_offset off what opened it, a point too: @kit.popover's, as pick_popover's long one gives no other)
+          let (anchor, _, _, _) = @signals.untracked(fn() { menu_anchor_now(p.from) })
+          let offset = panel_offset
+          pick_node(
+            row,
+            "sf-present/\{serial}",
+            open,
+            anchor,
+            title,
+            choices,
+            chosen,
+            p.line,
+            along,
+            offset,
+            fn(k) { done(fn() { choose(k) }) },
+            fn() { dismissed_now(serial) },
+            shown~,
+            gone~,
+          )
+        }
+        Pick(title, choices, chosen, choose, along, _) => {
+          // (a menu of its choices, as pick_popover's short one: the one chosen checked where one is, else each its icon;
+          // what each is under its words, its value at its row's end, its own mark after its check)
+          let (anchor, by_key, offset, keep_field) = @signals.untracked(fn() { menu_anchor_now(p.from) })
+          let one_chosen = choices.iter().any(fn(x) { x.key == chosen })
+          let items : Array[MenuItem?] = choices.map(fn(x) {
+            Some({
+              label: x.label,
+              icon: if one_chosen { "" } else { x.icon },
+              danger: false,
+              disabled: false,
+              chosen: if one_chosen { Some(x.key == chosen) } else { None },
+              heading: false,
+              select: fn() { choose(x.key) },
+            })
+          })
+          menu_node(
+            row,
+            open,
+            anchor,
+            fn() { items },
+            title,
+            along,
+            offset,
+            by_key,
+            keep_field,
+            fn(item) { done(item.select) },
+            fn() { dismissed_now(serial) },
+            shown~,
+            gone~,
+            extras=fn(i) {
+              match choices.get(i) {
+                Some(x) => { note: x.note, value: x.value, mark: x.mark }
+                None => menu_no_extra
+              }
+            },
+            min_w=chooser_menu_w,
           )
         }
         _ => ()

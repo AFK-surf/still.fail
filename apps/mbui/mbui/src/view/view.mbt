@@ -1476,6 +1476,7 @@ priv enum Prop {
   Width
   Height
   Padding
+  Margin
   Row
   Grow
   Ground
@@ -1625,6 +1626,21 @@ pub fn View::padding(self : View, p : Live[(Double, Double, Double, Double)]) ->
     s.set_padding_top(Pt(p.1))
     s.set_padding_right(Pt(p.2))
     s.set_padding_bottom(Pt(p.3))
+  })
+  self
+}
+
+///|
+/// Room outside it (left, top, right, bottom), as CSS's margin: negative, it reaches past where it would stand into
+/// what is round it (a small panel's last row into the panel's padding at its foot), what holds it laid out as though it
+/// were that much smaller (or bigger).
+pub fn View::margin(self : View, m : Live[(Double, Double, Double, Double)]) -> View {
+  self.bind(Margin, m, Layout, fn(m) {
+    let s = self.tree.nodes[self.at].flex.style
+    s.set_margin_left(Pt(m.0))
+    s.set_margin_top(Pt(m.1))
+    s.set_margin_right(Pt(m.2))
+    s.set_margin_bottom(Pt(m.3))
   })
   self
 }
