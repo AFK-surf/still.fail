@@ -593,7 +593,7 @@ test "a picture restored in the composer remains visible in the sending message"
   assert_true(t.locate("img:mem:test/restored").length() > 0)
   tap_send(t)
   let flying = send_flight.get().unwrap().files
-  assert_eq(flying.map(fn(f) { (f.key, f.picture) }), [("upload:kept-1", "mem:test/restored")])
+  assert_eq(flying.map(fn(f) { (f.key, f.picture) }), [("upload:kept-1", Some("mem:test/restored"))])
   t.run_for(@sfbase.flight_most_ms)
   let points = t.locate("img:mem:test/restored")
   assert_true(points.length() > 0, msg="the sending message has no picture")
@@ -645,7 +645,7 @@ test "files sent fly from their tiles to their places in the message, then are i
   let ff = f.files[0]
   // (put up from here: its upload, as its message has it, file_key)
   assert_true(ff.key.has_prefix("upload:"))
-  assert_true(ff.picture != "")
+  assert_true(ff.picture is Some(_))
   // from its tile: 56 across
   assert_eq(ff.from.2, 56.0)
   // its row in the list (the outbox's, at once): the picture goes to where the message has it

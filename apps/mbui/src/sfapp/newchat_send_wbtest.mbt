@@ -261,7 +261,7 @@ test "a new chat's restored picture travels from its composer into its first mes
   assert_true(t.locate("img:mem:test/new-restored").length() > 0)
   tap_send(t)
   let flying = send_flight.get().unwrap().files
-  assert_true(flying.iter().any(fn(f) { f.key == "upload:seed-0" && f.picture == "mem:test/new-restored" }))
+  assert_true(flying.iter().any(fn(f) { f.key == "upload:seed-0" && f.picture == Some("mem:test/new-restored") }))
   let row = sending_of(send_flight.get().unwrap().turns)[0].row
   assert_eq(sent_picture("ws1/st1", row.attachments[0]), Some("mem:test/new-restored"))
 }

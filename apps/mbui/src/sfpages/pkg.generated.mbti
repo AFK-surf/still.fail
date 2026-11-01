@@ -305,6 +305,8 @@ pub fn local_menu_open() -> Bool
 
 pub let local_open : @ref.Ref[Bool]
 
+pub fn local_picture(@ui.Ctx, String, String, Double, Double) -> Unit
+
 pub fn local_station_page(@ui.Ctx, @settings.Core, @sf.PageFrame) -> Unit
 
 pub fn local_stopped(String) -> Json?
@@ -331,7 +333,7 @@ pub fn memory_doc_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, S
 
 pub fn memory_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String) -> Unit
 
-pub fn message_files(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Attachment], Bool, by? : (String, String, String)?) -> Unit
+pub fn message_files(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Attachment], Bool, by? : (String, String, String)?, landing_key? : String) -> Unit
 
 pub fn message_row(@ui.Ctx, @sfbase.Source, MessageHere, @sfbase.Message) -> Unit
 

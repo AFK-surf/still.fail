@@ -143,7 +143,7 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
     lines: None,
     lead: 0,
     marks: [],
-    files: [{ key: path, from: (16.0, 640.0, 56.0, 56.0), picture: "strip", face: fn() {  }, ground: 0L }],
+    files: [{ key: path, from: (16.0, 640.0, 56.0, 56.0), picture: Some("strip"), paint: None, face: fn() {  }, ground: 0L }],
     key: "o:1",
     placed: false,
     placed_frame: -1,
@@ -161,7 +161,9 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
     fn(c) {
       // its box in the message, 360 × 16, the picture's share of it its own proportions'
       let item = c.box(style=@ui.style(w=Fixed(360.0), h=Fixed(16.0)), fn() {  })
-      flight_landing(c, f, item, path, share=@sfpages.picture_share(strip("line.png"), @sfpages.image_least))
+      flight_landing(c, f, item, path, share=@sfpages.picture_share(strip("line.png"), @sfpages.image_least), paint=Some(fn(w, h, fit, radius) {
+        c.image("strip", w=Px(w), h=Px(h), fit~, radius~, bg=0L) |> ignore
+      }))
       flight_placed(c, f)
       flight_files(c, f.chat)
     },
@@ -201,7 +203,7 @@ test "a tall sent picture moves its crop to the top as it lands" {
     lines: None,
     lead: 0,
     marks: [],
-    files: [{ key: path, from: (16.0, 640.0, 56.0, 56.0), picture: "tall", face: fn() {  }, ground: 0L }],
+    files: [{ key: path, from: (16.0, 640.0, 56.0, 56.0), picture: Some("tall"), paint: None, face: fn() {  }, ground: 0L }],
     key: "o:1",
     placed: false,
     placed_frame: -1,
@@ -218,7 +220,9 @@ test "a tall sent picture moves its crop to the top as it lands" {
   let t = @ui.Tester::new(
     fn(c) {
       let item = c.box(style=@ui.style(w=Fixed(160.0), h=Fixed(300.0)), fn() {  })
-      flight_landing(c, f, item, path, top_crop=true)
+      flight_landing(c, f, item, path, top_crop=true, paint=Some(fn(w, h, fit, radius) {
+        c.image("tall", w=Px(w), h=Px(h), fit~, radius~, bg=0L) |> ignore
+      }))
       flight_placed(c, f)
       flight_files(c, f.chat)
     },
@@ -275,7 +279,7 @@ test "an image sent while it goes up flies on to its place once it is up: its me
     lines: None,
     lead: 0,
     marks: [],
-    files: [{ key: @sfbase.upload_path("u1"), from: (16.0, 640.0, 56.0, 56.0), picture: "shot", face: fn() { faced.val += 1 }, ground: 0L }],
+    files: [{ key: @sfbase.upload_path("u1"), from: (16.0, 640.0, 56.0, 56.0), picture: Some("shot"), paint: None, face: fn() { faced.val += 1 }, ground: 0L }],
     key: "o:1",
     placed: false,
     placed_frame: -1,
@@ -292,7 +296,9 @@ test "an image sent while it goes up flies on to its place once it is up: its me
   let t = @ui.Tester::new(
     fn(c) {
       let item = c.box(style=@ui.style(w=Fixed(240.0), h=Fixed(160.0)), fn() {  })
-      flight_landing(c, f, item, @sfbase.file_key(shot.val))
+      flight_landing(c, f, item, @sfbase.file_key(shot.val), paint=Some(fn(w, h, fit, radius) {
+        c.image("shot", w=Px(w), h=Px(h), fit~, radius~, bg=0L) |> ignore
+      }))
       flight_placed(c, f)
       flight_files(c, f.chat)
     },

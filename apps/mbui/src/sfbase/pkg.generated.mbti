@@ -549,7 +549,7 @@ pub fn flight_ground_of(@ui.Ctx, SendFlight) -> Double
 
 pub fn flight_hint_away(@ui.Ctx, String) -> Bool
 
-pub fn flight_landing(@ui.Ctx, SendFlight, Int32, String, share? : (Double, Double), top_crop? : Bool) -> Unit
+pub fn flight_landing(@ui.Ctx, SendFlight, Int32, String, share? : (Double, Double), top_crop? : Bool, paint? : ((Double, Double, @ui.Fit, Double) -> Unit)?) -> Unit
 
 pub fn flight_landing_words(@ui.Ctx, SendFlight, Int32) -> Unit
 
@@ -1254,6 +1254,8 @@ pub fn quote_file_into(String, String, String, String, Json) -> Unit
 pub fn quote_key(Int32) -> String
 
 pub fn quote_of(Json) -> Quote
+
+pub fn quote_picture_key(Int32) -> String
 
 pub let quoted_into : Map[String, Array[(String, String, String, Json)]]
 
@@ -2329,7 +2331,8 @@ pub(all) struct FlowPiece {
 pub(all) struct FlyingFile {
   key : String
   from : (Double, Double, Double, Double)
-  picture : String
+  picture : String?
+  mut paint : ((Double, Double, @ui.Fit, Double) -> Unit)?
   face : () -> Unit
   ground : Int64
 }

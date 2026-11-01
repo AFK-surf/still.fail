@@ -43,6 +43,22 @@ fn chat_draft() -> @sfbase.Writing {
 }
 
 ///|
+/// Instances drawing `source`, in order with their position in the whole draw list.
+fn picture_instances(t : @ui.Tester, source : String) -> Array[(Int, Array[Double])] raise {
+  let named = t.drawlist_images().filter(fn(x) { x.1 == source })
+  assert_true(named.length() > 0, msg="\{source} is not drawn")
+  let insts = t.drawn_instances()
+  let ids : Array[Int] = []
+  for a in insts {
+    if a[5] == 4.0 && !ids.contains(a[20].to_int()) {
+      ids.push(a[20].to_int())
+    }
+  }
+  let wanted = named.map(fn(x) { ids[x.0] })
+  insts.mapi(fn(i, a) { (i, a) }).filter(fn(p) { p.1[5] == 4.0 && wanted.contains(p.1[20].to_int()) })
+}
+
+///|
 test "a person's image held: quoted (whose, the file named), its file once in the draft as the station has it, felt; not opened" {
   let (t, x, y) = image_in_chat("插画参考.png")
   hold_quote(t, x, y)
@@ -86,6 +102,271 @@ test "an image quoted: its picture in its card in the composer; sent, it grows f
   let rest = t.drawn_images().map(fn(i) { i[2] })
   let between = mid.filter(fn(w) { w > 56.5 && rest.iter().all(fn(r) { (r - w).abs() > 0.5 }) })
   assert_true(between.length() > 0, msg="drawn \{mid} on its way, at rest \{rest}")
+}
+
+///|
+test "a quoted picture remains visible over its card as they fly to the message" {
+  let calls : Array[Made] = []
+  let made : Ref[Source?] = Ref(None)
+  let t = fake_core(calls, made~)
+  let src = made.val.unwrap()
+  let file : Json = {
+    "name": "quoted-order.png", "path": "/w/uploads/quoted-order.png", "size": 120,
+    "width": 1200, "height": 800, "owner": "s-c1",
+  }
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  @sfbase.writing_quote(src, w, { "author": "Ana", "text": "quoted-order.png", "ts": "ts8" }, file~)
+  t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
+  tap_send(t)
+  t.run_for(@sfbase.flight_len(true) * 0.4)
+  let insts = t.drawn_instances()
+  let moving = picture_instances(t, "mem:fixture/quoted-order.png").filter(fn(p) {
+    let a = p.1
+    a[2] > 56.5 && a[11] > 0.9
+  })
+  assert_eq(moving.length(), 1, msg="the quoted picture on its way: \{moving}")
+  let (index, picture) = moving[0]
+  let (x, y) = (picture[0] + picture[2] / 2.0, picture[1] + picture[3] / 2.0)
+  assert_true(corner_cover(picture, x, y, 2.0) > 0.9, msg="the picture is clipped away")
+  let over = insts.mapi(fn(i, a) { (i, a) }).filter(fn(p) {
+    let a = p.1
+    p.0 > index && (a[5] == 0.0 || a[5] == 4.0) && a[11] > 0.9 && corner_cover(a, x, y, 2.0) > 0.9
+  })
+  assert_eq(over.length(), 0, msg="the picture is covered on its way: \{over}")
+}
+
+///|
+fn local_quote_visible(name : String) -> Unit raise {
+  new_run()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    // The original message draws the picture it already has; a station thumbnail is not available yet.
+    file: fn(station, owner, file) {
+      if file == name { "" } else { (base.file)(station, owner, file) }
+    },
+    poster: fn(station, owner, file) {
+      if file == name { "" } else { (base.poster)(station, owner, file) }
+    },
+    // Keep the message on screen while its station does not answer.
+    call: fn(name, params, done) {
+      if name != "chat.send" { (base.call)(name, params, done) }
+    },
+  }
+  let station = "ws1/st1"
+  let path = "/w/uploads/" + name
+  let picture = "mem:test/quoted-local"
+  open_chat({ station, session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  @ui.add_image(picture, png_head())
+  @sfbase.sent_pictures[@sfbase.sent_key(station, path)] = picture
+  let file = attachment_of({
+    "name": Json::string(name), "path": path, "size": 120, "width": 1600, "height": 900,
+    "owner": "s-c1", "upload": "original-upload",
+  })
+  let w = @sfbase.writing(src, station + ":s-c1")
+  @sfbase.writing_quote(src, w, { "author": "Ana", "text": Json::string(name), "ts": "ts8" }, file=@sfbase.attachment_json(file, "s-c1"))
+  t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
+  assert_true(t.drawlist().contains(picture), msg="the quoted picture is missing from the composer")
+  tap_send(t)
+  let sent = t.time()
+  while t.time() < sent + @sfbase.flight_most_ms {
+    assert_true(t.drawlist().contains(picture), msg="the quoted picture disappeared at \{t.time()}")
+    t.frame()
+  }
+  assert_true(t.drawlist().contains(picture), msg="the quoted picture is missing from the message")
+}
+
+///|
+test "a local picture stays visible throughout sending its quote without the station" {
+  local_quote_visible("quoted-local.png")
+}
+
+///|
+test "a local video cover stays visible throughout sending its quote without the station" {
+  local_quote_visible("quoted-local.mp4")
+}
+
+///|
+/// A picture counts as visible only where nothing painted later covers its centre.
+fn quote_picture_visible(t : @ui.Tester, source : String) -> Bool {
+  let instances = t.drawn_instances()
+  instances.mapi(fn(i, a) { (i, a) }).iter().any(fn(p) {
+    let (index, a) = p
+    if a[5] != 4.0 || t.image_src(a[20].to_int()) != source || a[11] < 0.99 { return false }
+    let (x, y) = (a[0] + a[2] / 2.0, a[1] + a[3] / 2.0)
+    if corner_cover(a, x, y, 2.0) < 0.99 { return false }
+    !instances.mapi(fn(i, v) { (i, v) }).iter().any(fn(p) {
+      let (i, v) = p
+      i > index && (v[5] == 0.0 || v[5] == 4.0) && v[11] > 0.01 && corner_cover(v, x, y, 2.0) > 0.99
+    })
+  })
+}
+
+///|
+fn local_quote_uncovered(name : String) -> Unit raise {
+  new_run()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    file: fn(station, owner, file) {
+      if file == name { "" } else { (base.file)(station, owner, file) }
+    },
+    poster: fn(station, owner, file) {
+      if file == name { "" } else { (base.poster)(station, owner, file) }
+    },
+  }
+  let station = "ws1/st1"
+  let path = "/w/uploads/" + name
+  let picture = "mem:test/uncovered-quote"
+  open_chat({ station, session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  @ui.add_image(picture, png_head())
+  @sfbase.sent_pictures[@sfbase.sent_key(station, path)] = picture
+  @sffixture.fix_put_up[path] = "original-upload"
+  let file : Json = {
+    "name": Json::string(name), "path": path, "size": 120, "width": 1600, "height": 900, "owner": "s-c1",
+  }
+  let w = @sfbase.writing(src, station + ":s-c1")
+  @sfbase.writing_quote(src, w, { "author": "Ana", "text": Json::string(name), "ts": "ts8" }, file~)
+  t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
+  assert_true(quote_picture_visible(t, picture), msg="the picture in the composer is covered")
+  tap_send(t)
+  let sent = t.time()
+  while send_flight.get() is Some(_) {
+    assert_true(quote_picture_visible(t, picture), msg="the picture is hidden at \{t.time() - sent} ms")
+    t.frame()
+  }
+  assert_true(quote_picture_visible(t, picture), msg="the picture in the message is covered")
+}
+
+///|
+test "a quoted local picture is never covered as its card flies to the message" {
+  local_quote_uncovered("uncovered.png")
+}
+
+///|
+test "a quoted local video cover is never covered as its card flies to the message" {
+  local_quote_uncovered("uncovered.mp4")
+}
+
+///|
+fn quoted_media_handoff(name : String) -> Unit raise {
+  let has = Ref(false)
+  let made : Ref[Source?] = Ref(None)
+  let calls : Array[Made] = []
+  let path = "/w/uploads/" + name
+  let file : Json = {
+    "name": Json::string(name), "path": path, "size": 120, "width": 1600, "height": 900,
+    "owner": "s-c1",
+  }
+  let t = fake_core(calls, made~, over=fn(topic, tp) {
+    match (topic, tp.value) {
+      ("chat", Some(Object(m))) if has.val => {
+        let v = m.copy()
+        v["outbox"] = [{
+          "id": "out-1", "text": "", "createdAt": 0, "state": "sending",
+          "attachments": [{
+            "name": Json::string(name), "path": path, "size": 120, "width": 1600, "height": 900,
+            "owner": "s-c1", "upload": "original-upload",
+          }],
+          "quotes": [{ "author": "Ana", "text": Json::string(name), "ts": "ts8", "comment": "", "file": Json::string(name) }],
+        }]
+        { ..tp, value: Some(Json::object(v)), version: tp.version + 1 }
+      }
+      _ => tp
+    }
+  })
+  let src = made.val.unwrap()
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  @sfbase.writing_quote(src, w, { "author": "Ana", "text": Json::string(name), "ts": "ts8" }, file~)
+  t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
+  tap_send(t)
+  has.val = true
+  t.frame()
+  t.run_for(@sfbase.flight_len(true) * 0.4)
+  let images = picture_instances(t, "mem:fixture/" + name).map(fn(p) { p.1 }).filter(fn(a) { a[11] > 0.9 })
+  assert_eq(images.length(), 1, msg="the picture as the core's row takes over: \{images}")
+  assert_true(images[0][2] > 56.5 && images[0][2] < 300.0, msg="the picture jumped rather than flying: \{images}")
+}
+
+///|
+test "a quoted picture keeps its identity when the core's row takes over during its flight" {
+  quoted_media_handoff("quoted-upload.png")
+}
+
+///|
+test "a quoted video cover keeps its identity when the core's row takes over during its flight" {
+  quoted_media_handoff("quoted-upload.mp4")
+}
+
+///|
+test "a quoted video cover that arrives during the flight is shown on that same flight" {
+  new_run()
+  let base = fixture("chat")
+  let available = @signals.signal(false)
+  let name = "late-quote.mp4"
+  let src : Source = {
+    ..base,
+    poster: fn(station, owner, file) {
+      if file == name && !available.get() { "" } else { (base.poster)(station, owner, file) }
+    },
+  }
+  let station = "ws1/st1"
+  open_chat({ station, session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  let file : Json = {
+    "name": Json::string(name), "path": "/w/uploads/late-quote.mp4", "size": 120,
+    "width": 1600, "height": 900, "owner": "s-c1",
+  }
+  let w = @sfbase.writing(src, station + ":s-c1")
+  @sfbase.writing_quote(src, w, { "author": "Ana", "text": "late-quote.mp4", "ts": "ts8" }, file~)
+  t.run_for(@ui.move_most_ms)
+  tap_send(t)
+  let pictures = send_flight.get().unwrap().files.filter(fn(f) { f.key == @sfbase.quote_picture_key(0) })
+  assert_eq(pictures.length(), 1, msg="the waiting cover has no flight")
+  assert_eq(pictures[0].picture, Some(""))
+  // Deliver the cover between host frames, without a test step rebuilding the whole page at that moment.
+  let arrival = t.time() + @sfbase.flight_len(true) * 0.2
+  let given = Ref(false)
+  t.set_frame_period(t.period)
+  t.between_frames(fn() {
+    if !given.val && t.time() >= arrival {
+      given.val = true
+      available.set(true)
+    }
+  })
+  t.run_for(@sfbase.flight_len(true) * 0.2 + @ui.image_fade_ms + 20.0)
+  t.between_frames(fn() {  })
+  assert_true(given.val, msg="the cover did not arrive")
+  assert_true(send_flight.get() is Some(_), msg="the flight ended before the cover arrived")
+  let shown = picture_instances(t, "mem:fixture/" + name).filter(fn(p) { p.1[11] > 0.9 })
+  assert_eq(shown.length(), 1, msg="the cover was not drawn on its flight: \{shown}")
+  assert_true(shown[0].1[2] > 56.5, msg="the cover remained at its starting tile: \{shown}")
+}
+
+///|
+test "the same picture quoted twice flies to each quote's own place" {
+  let calls : Array[Made] = []
+  let made : Ref[Source?] = Ref(None)
+  let t = fake_core(calls, made~)
+  let src = made.val.unwrap()
+  let file : Json = {
+    "name": "twice.png", "path": "/w/uploads/twice.png", "size": 120,
+    "width": 1200, "height": 800, "owner": "s-c1",
+  }
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  @sfbase.writing_quote(src, w, { "author": "Ana", "text": "第一处", "ts": "ts8" }, file~)
+  @sfbase.writing_quote(src, w, { "author": "Ana", "text": "第二处", "ts": "ts8" }, file~)
+  t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
+  tap_send(t)
+  t.draw()
+  t.draw()
+  let pictures = send_flight.get().unwrap().files.filter(fn(f) { f.picture == Some("mem:fixture/twice.png") })
+  assert_eq(pictures.length(), 2)
+  let first = @motion.measured_rect(t.ctx(), "flight/to/" + pictures[0].key).unwrap()
+  let second = @motion.measured_rect(t.ctx(), "flight/to/" + pictures[1].key).unwrap()
+  assert_true((first.1 - second.1).abs() > 0.5, msg="both pictures fly to the same place: \{first}, \{second}")
 }
 
 ///|
@@ -196,5 +477,3 @@ test "an image right clicked: its one menu, again on that menu still the one; in
   assert_true(t.reachable("复制图片").length() > 0)
   assert_eq(quotes(), 0)
 }
-
-
