@@ -1943,12 +1943,19 @@ void mb_host_wake_after(double ms) {
 // Whether the window can be seen now (tell_state's `shown`: not hidden, minimized or covered).
 static int window_seen = 1;
 
+// Whether this run stands for someone looking at it, wherever its window is (a CI runner's is never shown): a scripted,
+// driven, recorded or settled one, a bench's (scripts/textdiff.sh's MBUI_BENCH), one that takes pictures
+// (MBUI_SHOT_DIR) or is given its window (MBUI_WIN). The app as people run it is none of these.
+static int looked_at_run(void) {
+  return script || settle || record_dir || shot_path || getenv("MBUI_DRIVE") || getenv("MBUI_DRIVE_B64") ||
+         getenv("MBUI_BENCH") || getenv("MBUI_SHOT_DIR") || getenv("MBUI_WIN") || getenv("MBUI_RECORD");
+}
+
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   // (a window nobody can see draws nothing: what drawing holds was given back as it went (mb_render_trim), and a
   // frame drawn now would take it again, the GPU drawing it for nobody, a frame for each answer the core gives; shown
   // again, tell_state asks a frame, which draws what it shows then, whole)
-  // (a scripted or recorded run stands for someone looking at it, wherever its window is: drawn all the same)
-  if (!window_seen && !script && !settle && !record_dir && !getenv("MBUI_DRIVE") && !getenv("MBUI_DRIVE_B64")) return;
+  if (!window_seen && !looked_at_run()) return;
   mb_render_present(buf, count, r, g, b);
 }
 
