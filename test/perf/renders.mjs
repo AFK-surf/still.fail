@@ -59,7 +59,7 @@ if (opt.compare) {
 if (!opt.dist || !opt.chat) throw new Error("--dist and --chat are needed");
 if (opt.phone && !opt.title) throw new Error("--phone needs --title, words of the chat's title (its row is tapped)");
 const root = join(opt.dist, "cloud-web");
-if (!existsSync(join(root, "index.html"))) throw new Error(`no ${root}/index.html: build with STILLFAIL_PROFILE=1`);
+if (!existsSync(join(root, "web.html"))) throw new Error(`no ${root}/web.html: build with STILLFAIL_PROFILE=1`);
 const cloud = new URL(opt.url);
 const server = await proxy(root, cloud);
 const origin = `http://127.0.0.1:${server.address().port}`;

@@ -384,14 +384,18 @@ def main() -> None:
         if not POSTHOG.exists():
             print(f"note: no {POSTHOG}; building the web app without analytics")
         env = {**os.environ, "STILLFAIL_POSTHOG": str(POSTHOG), "EMBER_POSTHOG": str(POSTHOG)} if POSTHOG.exists() else None
-        # still.fail's app for the browser (/mbui.html: apps/mbui/scripts/web-app.sh into web/public/mbui): as it is when
-        # it is there (CI's static job has it from mbui-web), else built where MoonBit is (the bundle job's), else none
+        # still.fail's app for the browser (apps/mbui/scripts/web-app.sh into web/public/mbui), the page of every one of
+        # the web app's pages (web/vite.config.ts): as it is when it is there (CI's static job has it from mbui-web), else
+        # built where MoonBit is (the bundle job's). Without it the web app would be a page with nothing to draw.
         if (REPO / "web" / "public" / "mbui" / "app.js").exists():
             print("note: the app's page as web/public/mbui has it", flush=True)
         elif shutil.which("moon"):
             subprocess.run(["bash", "apps/mbui/scripts/web-app.sh"], cwd=REPO, check=True)
+        elif {"web", "web-beta"} & set(parts):
+            sys.exit("no moon and no web/public/mbui/app.js: the web app's pages are the app's, built by "
+                     "apps/mbui/scripts/web-app.sh where MoonBit is")
         else:
-            print("note: no moon; building the web app without the app's page (/mbui.html)", flush=True)
+            print("note: no moon; building without the app (no web app deployed)", flush=True)
         subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, env=env, check=True)
     if not args.skip_build and "site" in parts:
         subprocess.run(["pnpm", "run", "build:site"], cwd=REPO, check=True)

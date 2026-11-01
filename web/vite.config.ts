@@ -1,7 +1,8 @@
 import react from "@vitejs/plugin-react";
 import { vanillaExtractPlugin } from "@vanilla-extract/vite-plugin";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, renameSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { uiAlias } from "./ui/alias.ts";
 import { defineConfig } from "vite";
@@ -61,6 +62,18 @@ export default defineConfig(({ mode }) => {
         apply: "build",
         generateBundle() {
           if (!consoleBuild && build) this.emitFile({ type: "asset", fileName: "build.json", source: `${JSON.stringify({ version: build, build: Number(build.split(".")[2]), revision })}\n` });
+        },
+      },
+      // The app's page is the built index.html, what every page of the app's answers with (the Worker's
+      // single-page-application fallback): the app drawn by mbui (mbui.html), as every device runs it. The web's own
+      // React pages (index.html) become web.html, which src/web.ts serves at the few pages the app has none of yet.
+      {
+        name: "stillfail-app-page",
+        apply: "build",
+        writeBundle(options) {
+          if (consoleBuild || !options.dir) return;
+          renameSync(join(options.dir, "index.html"), join(options.dir, "web.html"));
+          renameSync(join(options.dir, "mbui.html"), join(options.dir, "index.html"));
         },
       },
     ],

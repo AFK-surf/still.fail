@@ -23,8 +23,8 @@ export function chromium() {
 }
 
 /**
- * Serves the build's web app (`root`, a dist/cloud-web) at /: its files, and its index.html for the app's pages; the
- * rest (the API, /auth, /__dev, the core's sockets) goes on to the cloud as if asked there (Host and Origin its own).
+ * Serves the build's web app (`root`, a dist/cloud-web) at /: its files, and the web's own React pages (web.html) for
+ * its pages; the rest (the API, /auth, /__dev, the core's sockets) goes on to the cloud as if asked there (Host and Origin its own).
  */
 export function proxy(root, cloud) {
   const types = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".json": "application/json", ".wasm": "application/wasm", ".woff2": "font/woff2", ".webmanifest": "application/manifest+json" };
@@ -41,7 +41,7 @@ export function proxy(root, cloud) {
     const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
     if (req.method !== "GET" || SERVERS.test(path)) return pass(req, res);
     const file = normalize(join(root, path));
-    const hit = file.startsWith(root) && existsSync(file) && statSync(file).isFile() ? file : !extname(path) ? join(root, "index.html") : null;
+    const hit = file.startsWith(root) && existsSync(file) && statSync(file).isFile() ? file : !extname(path) ? join(root, "web.html") : null;
     if (!hit) return pass(req, res);
     res.writeHead(200, { "content-type": types[extname(hit)] ?? "application/octet-stream" });
     res.end(readFileSync(hit));

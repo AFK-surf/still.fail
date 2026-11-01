@@ -348,6 +348,7 @@ export async function harness(
 /** The static sites' files, by site (`/web/…`, `/admin/…`, `/preview/…`, `/share/…`: see test/static-worker.ts). */
 export const STAND_IN_FILES: Record<string, string> = {
   "/web/index.html": "<title>still.fail</title>",
+  "/web/web.html": "<title>still.fail · web</title>",
   "/web/assets/app.js": "// the web app",
   "/web/sw.js": "// the notifications' worker",
   "/admin/index.html": "<title>still.fail 管理后台</title>",

@@ -44,7 +44,7 @@ export function betaNamed(text: string): string {
 }
 
 /**
- * The app's pages (index.html, at whichever of its routes) are not kept: not by the browser's cache, and not in its
+ * The app's pages (index.html, at whichever of its routes, and web.html) are not kept: not by the browser's cache, and not in its
  * back/forward cache, where a page keeps its core worker too, frozen holding the lock the core runs under
  * (web/src/core/worker.ts) while the next page waits on it (an iOS home-screen app coming back from Google's sign-in
  * stuck at 正在登录…, 2026-10-09). WebKit never keeps a page sent as no-store there.
@@ -56,10 +56,26 @@ function unkept(file: Response): Response {
   return answer;
 }
 
+/**
+ * The pages the app (index.html: mbui's, web/vite.config.ts) has none of yet, which the web's own React pages (web.html)
+ * still answer: a sign-in coming back (/auth/callback, which goes on to the app's page), Slack sending back an app a
+ * station made, what another app shares in, and a station's web service on a page of its own. Every other page is the
+ * app's.
+ */
+const WEB_PAGES = /^\/(auth\/callback|slack\/installed|share|w\/[^/]+\/s\/[^/]+\/services\/[^/]+)\/?$/;
+
+/** The file that answers `request`: web.html (at /web, as Cloudflare serves a page's .html) for one of WEB_PAGES. */
+function fileOf(request: Request): Request {
+  const url = new URL(request.url);
+  if (!WEB_PAGES.test(url.pathname)) return request;
+  return new Request(new URL(`/web${url.search}`, url), request);
+}
+
 /** The web app's answer to `request`, its files got by `files`: as above, on the test channel's host or the others. */
-export async function serveWeb(request: Request, env: Omit<WebEnv, "ASSETS">, files: (request: Request) => Promise<Response> | Response): Promise<Response> {
+export async function serveWeb(request: Request, env: Omit<WebEnv, "ASSETS">, assets: (request: Request) => Promise<Response> | Response): Promise<Response> {
   const redirect = moved(request, env);
   if (redirect) return redirect;
+  const files = (r: Request) => assets(fileOf(r));
   if (new URL(request.url).origin !== betaOrigin(env)) return unkept(await files(request));
   if (new URL(request.url).pathname === "/robots.txt") {
     return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain; charset=utf-8", "x-robots-tag": NOINDEX } });
