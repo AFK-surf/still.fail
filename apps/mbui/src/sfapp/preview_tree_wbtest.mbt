@@ -2690,3 +2690,136 @@ test "viewer on the tree, a wide window, marking: a note asked for, come in: its
     assert_eq(t.reachable("=" + name).length(), 1, msg="\{name}: where a finger reaches it")
   }
 }
+///|
+test "viewer on the tree, a wide window, marking: a note done (its card drawn), its card clicked: the note open again as the click is let go, before any frame" {
+  let (t, _, click, id) = wide_box_noted("")
+  click(pv("android-chat.annotate.done"))
+  t.draw()
+  t.draw()
+  assert_true(marking.note < 0, msg="done: closed, its card drawn")
+  let (cx, cy) = t.find(pv("android-chat.annotate.quoteOnly")).unwrap()
+  t.touch(0, cx, cy)
+  t.touch(2, cx, cy)
+  assert_eq(marking.note, id, msg="its card: its note open again as the click is let go")
+}
+
+
+///|
+/// Marking on a wide window `w` across, `k` boxes drawn one after another on the picture, each note done with nothing
+/// said: the tester, its clicker, the marks' ids in their order.
+fn wide_notes(k : Int, w? : Double = 1280.0) -> (@ui.Tester, (String) -> Unit raise, Array[Int]) raise {
+  let (t, v, click) = wide_marking()
+  if w != 1280.0 {
+    t.resize(w, 844.0)
+  }
+  let ids = []
+  for i in 0..<k {
+    let (rx, ry, rw, rh) = v.zoom.rect().unwrap()
+    let (px, py) = (rx + rw * (0.05 + 0.1 * i.to_double()), ry + rh * (0.1 + 0.08 * i.to_double()))
+    t.touch(0, px, py)
+    t.touch(1, px + 30.0, py + 20.0)
+    t.touch(2, px + 30.0, py + 20.0)
+    t.draw()
+    ids.push(marking.note)
+    click(pv("android-chat.annotate.done"))
+    t.draw()
+  }
+  t.run_for(note_pop_ms)
+  (t, click, ids)
+}
+
+///|
+/// The notes' cards read out (their labels, in order), and what the +N card says ("" none read out).
+fn cards_read(t : @ui.Tester) -> (Array[String], String) {
+  let cards = []
+  let mut more = ""
+  for s in t.semantics() {
+    if s.role == Button && s.label.has_prefix("+") {
+      more = s.label
+    } else if s.role == Button && card_label(s.label) {
+      cards.push(s.label)
+    }
+  }
+  (cards, more)
+}
+
+///|
+test "viewer on the tree, marking: more notes than the foot holds cards for: the last left out first, +N saying how many as they leave, in the first frame so laid out; the window wider again, the same cards back, +N gone; narrow again, its menu listing them in order, one picked opening its note" {
+  // (eight cards 160 wide, 8 between, 16 in at either side: 1368; a window 1600 wide holds them, one 1000 wide not, a
+  // large screen's both: its frame the same, laid out narrower)
+  let (t, click, ids) = wide_notes(8)
+  t.resize(1600.0, 844.0)
+  let (all, more) = cards_read(t)
+  assert_eq((all.length(), more), (8, ""), msg="1600 wide: all eight, no +N: \{all} \{more}")
+  let card_ids = card_nodes()
+  t.resize(1000.0, 844.0)
+  let (shown, more) = cards_read(t)
+  let left = 8 - shown.length()
+  assert_true(left > 0 && shown.length() > 0, msg="1000 wide: some left out: \{shown}")
+  assert_eq(more, "+\{left}", msg="+N says how many, the first frame so laid out")
+  // (+N as tall as its one line, at the row's top as the cards are: marks_notes_row's)
+  let (_, my, _, mh) = t.get(Button, label=more).rect
+  let (_, cy, _, ch) = t.get(Button, label=shown[0]).rect
+  assert_true(my == cy && mh < ch, msg="+N at the cards' top, as tall as its one line: \{(my, mh)} \{(cy, ch)}")
+  for i in 0..<shown.length() {
+    assert_true(shown[i].has_prefix("\{i + 1}  "), msg="the first kept, in order: \{shown}")
+  }
+  t.resize(1600.0, 844.0)
+  let (back, more) = cards_read(t)
+  assert_eq((back.length(), more), (8, ""), msg="wider again: all back, +N gone")
+  assert_eq(card_nodes(), card_ids, msg="wider again: the same cards' nodes")
+  // (narrow again: what +N's menu holds, one picked)
+  t.resize(1000.0, 844.0)
+  let (shown, more) = cards_read(t)
+  click(more)
+  t.draw()
+  for i in shown.length()..<8 {
+    assert_true(t.find("\{i + 1}  " + pv("android-chat.annotate.quoteOnly")) is Some(_), msg="its menu: note \{i + 1}")
+  }
+  t.tap_text("8  " + pv("android-chat.annotate.quoteOnly"))
+  t.draw()
+  assert_eq(marking.note, ids[7], msg="picked in its menu: its note open")
+}
+
+///|
+/// The notes' cards' nodes as the window's tree reads them out, in order.
+fn card_nodes() -> Array[@view.NodeId] {
+  @ui.view_tree().unwrap().said_order().filter(fn(s) {
+    match s.said {
+      Some(said) => said.role == Button && card_label(said.label)
+      None => false
+    }
+  }).map(fn(s) { s.id })
+}
+
+///|
+test "viewer on the tree, marking: a note's card left out of the foot as the window narrows: not read out, no press there its; one held as it is left out, let go: its note not opened" {
+  let (t, _, ids) = wide_notes(8)
+  t.resize(1600.0, 844.0)
+  // (the last card held)
+  let (x, y, w, h) = t.get(Button, label="8  " + pv("android-chat.annotate.quoteOnly")).rect
+  t.touch(0, x + w / 2.0, y + h / 2.0)
+  t.resize(1000.0, 844.0)
+  let (shown, _) = cards_read(t)
+  assert_false(shown.iter().any(fn(s) { s.has_prefix("8  ") }), msg="left out: not read out")
+  t.touch(2, x + w / 2.0, y + h / 2.0)
+  t.draw()
+  assert_true(marking.note < 0, msg="held as it left, let go: its note not opened")
+  ignore(ids)
+}
+
+///|
+/// Whether `label` is a note's card's: its number, two spaces, what is said of it.
+fn card_label(label : String) -> Bool {
+  match label.find("  ") {
+    Some(i) if i > 0 => {
+      for ch in label.unsafe_substring(start=0, end=i) {
+        if ch < '0' || ch > '9' {
+          return false
+        }
+      }
+      true
+    }
+    _ => false
+  }
+}

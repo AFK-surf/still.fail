@@ -269,6 +269,9 @@ struct Node {
   /// where it is in what holds it (its layout's place and its own offset), how opaque of itself, how big: worked out
   /// once it is placed
   mut placed : Bool
+  /// left out of its row as it was last laid out (View::drops): laid out nowhere, what it holds with it; none of it drawn,
+  /// pressed or read out
+  mut out : Bool
   mut lx : Double
   mut ly : Double
   mut la : Double
@@ -345,6 +348,12 @@ pub struct Tree {
   pressed_anywhere : @signals.Signal[Int]
   /// how many times its words were measured anew for all of them (Tree::words_again: the system's size of words)
   words_redone : @signals.Signal[Int]
+  /// how many times what its rows left out changed, as it was laid out (View::left_out)
+  outs_said : @signals.Signal[Int]
+  /// what its rows left out changed in this layout, to be told as it is done
+  mut outs_changed : Bool
+  /// the nodes left out in this layout, what they held, their focus and their back to be let go of as it is done
+  outs_gone : Array[Int]
   /// the nodes drawn, in the order they are drawn (no slot), and where in it what holds each is (-1: the window)
   order : Array[Int]
   order_holder : Array[Int]
@@ -467,6 +476,9 @@ pub fn Tree::new(
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
     pressed_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
     words_redone: @signals.signal(0, same=fn(a, b) { a == b }),
+    outs_said: @signals.signal(0, same=fn(a, b) { a == b }),
+    outs_changed: false,
+    outs_gone: [],
     time,
     cause_at: -1.0,
     measure,
@@ -624,6 +636,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look_due = false
       n.place_due = false
       n.placed = false
+      n.out = false
       n.content = None
       n.left_at = -1.0
       n.span = 0.0
@@ -682,6 +695,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         look_due: false,
         place_due: false,
         placed: false,
+        out: false,
         lx: 0.0,
         ly: 0.0,
         la: 1.0,
@@ -1192,6 +1206,8 @@ priv enum Prop {
   Measured
   WordsCentered
   Picture
+  Drop
+  Fits
 } derive(Eq, Hash)
 
 ///|
@@ -1793,6 +1809,34 @@ pub fn View::words(
     tree.nodes[at].look.runs = []
   })
   self
+}
+
+///|
+/// Left out of its row where the row has not the room for all it holds (`k` > 0: the k-th to go, the last in the row
+/// first of the same k; -1: there only while something of its row is left out, its ⋯; 0: always there), as it
+/// changes: laid out nowhere while it is, none of it drawn, pressed or read out; back where it was as the room comes.
+/// Its row says it lets them go so (View::fits). Layout's.
+pub fn View::drops(self : View, k : Live[Int]) -> View {
+  self.bind(Drop, k, Layout, fn(k) { self.tree.nodes[self.at].flex.style.drop = k })
+  self
+}
+
+///|
+/// A row that leaves out of what it holds what has not the room (View::drops), as it changes. Layout's.
+pub fn View::fits(self : View, on : Live[Bool]) -> View {
+  self.bind(Fits, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.fits = on })
+  self
+}
+
+///|
+/// Whether its row left it out as it was last laid out (View::drops), followed: told once all of the layout is done, as
+/// one change of all its rows left out.
+pub fn View::left_out(self : View) -> Bool {
+  self.tree.outs_said.get() |> ignore
+  match self.live() {
+    Some(n) => n.out
+    None => false
+  }
 }
 
 ///|
@@ -3143,11 +3187,27 @@ fn Tree::pressless_at(self : Tree, at : Int) -> Bool {
 }
 
 ///|
-/// Whether node `at` or what holds it is leaving or said to take no press (whatever a modal layer says of it).
+/// Whether node `at` or what holds it is leaving, said to take no press or left out of its row (View::drops: laid out
+/// nowhere), whatever a modal layer says of it.
 fn Tree::pressless_own_at(self : Tree, at : Int) -> Bool {
   let mut i = at
   while i >= 0 {
-    if self.nodes[i].left_at >= 0.0 || self.nodes[i].inert {
+    if self.nodes[i].left_at >= 0.0 || self.nodes[i].inert || self.nodes[i].out {
+      return true
+    }
+    i = self.nodes[i].parent
+  }
+  false
+}
+
+///|
+///|
+/// Whether node `at` or what holds it is left out of its row as it was last laid out (View::drops): none of it in the
+/// scene, nothing of it drawn, pressed, read out or found where it is.
+fn Tree::out_at(self : Tree, at : Int) -> Bool {
+  let mut i = at
+  while i >= 0 {
+    if self.nodes[i].out {
       return true
     }
     i = self.nodes[i].parent
@@ -3666,6 +3726,14 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   }
   self.work.changes = self.work.changes + self.changed.length() + self.composed.length()
   self.due = false
+  // (what its rows left out told once all of it is laid out, and what that tells (a ⋯ saying how many) laid out in this
+  // same pass: one result, the frame drawing all of it)
+  if self.outs_changed {
+    self.outs_told()
+    if self.due {
+      self.laid_out(upto)
+    }
+  }
   if ordered || self.changed.length() > 0 || self.composed.length() > 0 {
     self.drawn_due = true
   }
@@ -3679,6 +3747,29 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     }
     self.withins_passing = false
   }
+}
+
+///|
+/// What its rows left out, all of it laid out, told as one (as one said to take presses no more is, View::presses, at
+/// the change's end): where a finger is found; of each left out, what was held in it, its focus and its back let go of;
+/// what follows whether each takes input, what hosts it, and what reads which are left out (View::left_out) told
+/// once, none seeing half of it.
+fn Tree::outs_told(self : Tree) -> Unit {
+  self.outs_changed = false
+  let gone = self.outs_gone.copy()
+  self.outs_gone.clear()
+  self.hits = self.hits + 1
+  @signals.start_batch()
+  for at in gone {
+    if self.nodes[at].live && self.nodes[at].out {
+      self.hold_lost_in(at)
+      self.focus_lost_in(at)
+      self.back_lost_in(at)
+    }
+  }
+  self.modals_told()
+  self.outs_said.set(@signals.untracked(fn() { self.outs_said.get() }) + 1)
+  @signals.end_batch()
 }
 
 ///|
@@ -3722,7 +3813,17 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   let h = n.flex.height
   let s = n.look.scale
   let (px, py) = n.pivot_at(w, h)
-  let went = !n.placed || x != n.lx || y != n.ly || a != n.la || s != n.ls || px != n.lpx || py != n.lpy
+  // (left out of its row: laid out nowhere; told once all of it is laid out, View::left_out)
+  let out = n.flex.left_out()
+  let went = !n.placed || x != n.lx || y != n.ly || a != n.la || s != n.ls || px != n.lpx || py != n.lpy || out != n.out
+  if out != n.out {
+    n.out = out
+    self.outs_changed = true
+    // (what of it is let go of told once all of the layout is done: Tree::outs_told)
+    if out {
+      self.outs_gone.push(at)
+    }
+  }
   let sized = !n.placed || w != n.lw || h != n.lh
   n.placed = true
   n.lx = x
@@ -3844,9 +3945,15 @@ fn Tree::each_drawn_in_order(self : Tree, f : (Int, Content, Double, Double, Dou
   let wy : Array[Double] = Array::make(self.order.length(), 0.0)
   let wa : Array[Double] = Array::make(self.order.length(), 1.0)
   let ws : Array[Double] = Array::make(self.order.length(), 1.0)
+  // (left out of its row, or held by what is: nothing of it in the scene)
+  let gone : Array[Bool] = Array::make(self.order.length(), false)
   for i, at in self.order {
     let n = self.nodes[at]
     let h = self.order_holder[i]
+    if n.out || (h >= 0 && gone[h]) {
+      gone[i] = true
+      continue
+    }
     let (bx, by, ba, bs) = if h < 0 { (0.0, 0.0, 1.0, 1.0) } else { (wx[h], wy[h], wa[h], ws[h]) }
     // (where it is in what holds it, drawn as big as that is; its own scale about its point: its origin drawn in as far
     // as that leaves it)
@@ -3943,7 +4050,7 @@ pub fn Tree::drawn_of(self : Tree, id : NodeId) -> Drawn? {
     return None
   }
   let n = self.nodes[id.at]
-  guard n.live && n.gen == id.gen && n.content is Some(c) else { return None }
+  guard n.live && n.gen == id.gen && n.content is Some(c) && !self.out_at(id.at) else { return None }
   let (x, y, a, s) = self.projected(id.at)
   Some(unfolded(c, x, y, a, s))
 }
@@ -4295,7 +4402,8 @@ pub fn Tree::lives(self : Tree, id : NodeId) -> Bool {
 /// from what is read out (View::hides). What an old view hosted in it says, read so.
 pub fn Tree::reads_out(self : Tree, id : NodeId) -> Bool {
   self.pull()
-  if !self.alive_id(id) || !self.allows(id) {
+  // (left out of its row, or held by what is: nothing of it read out, Tree::out_at)
+  if !self.alive_id(id) || !self.allows(id) || self.out_at(id.at) {
     return false
   }
   let mut i = id.at
@@ -4348,7 +4456,8 @@ pub fn Tree::run_press_at(self : Tree, id : NodeId, at : Double) -> Bool {
       return
     }
     let n = self.nodes[id.at]
-    if !n.live || n.gen != id.gen || self.leaving_at(id.at) {
+    // (as a press there would be: what takes none, under a modal layer, left out of its row, none: Tree::takes_presses)
+    if !n.live || n.gen != id.gen || self.leaving_at(id.at) || !self.takes_presses(id) || !self.allows(id) {
       return
     }
     match n.on_press {

@@ -149,7 +149,8 @@ pub fn Tree::said_order(self : Tree) -> Array[SaidNode] {
   let out : Array[SaidNode] = []
   fn walk(at : Int, parent : Int, depth : Int, hid : Bool) -> Unit {
     let n = self.nodes[at]
-    if !n.live {
+    // (left out of its row: none of it read out, Tree::out_at)
+    if !n.live || n.out {
       return
     }
     let hid = hid || n.said_hidden
