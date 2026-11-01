@@ -5,8 +5,8 @@ fn main {
   let name = @film.arg("MBUI_FIGURE")
   let path = @film.arg("MBUI_FIGURE_OUT")
   let font = @film.arg("MBUI_FIGURE_FONT")
-  if name != "wrap" || path == "" {
-    @film.say("figure: MBUI_FIGURE=wrap MBUI_FIGURE_OUT=<out.png> [MBUI_FIGURE_FONT=<font.ttf>]")
+  if (name != "wrap" && name != "align") || path == "" {
+    @film.say("figure: MBUI_FIGURE=wrap|align MBUI_FIGURE_OUT=<out.png> [MBUI_FIGURE_FONT=<font.ttf>]")
     @film.exit(2)
     return
   }
@@ -30,8 +30,10 @@ fn main {
       @sf.set_dark(Some(true))
       initialized.val = true
     }
-    @sfgraphic.wrap_figure(c)
+    if name == "wrap" { @sfgraphic.wrap_figure(c) } else { @sfgraphic.alignment_figure(c) }
   }
-  let ok = @film.picture(view, path~, w=960.0, h=540.0, scale=2.5)
+  let ok = @film.picture(view, path~, w=960.0, h=540.0, scale=2.5, corner_faults_ok=fn(faults) {
+    if name == "align" { @sfgraphic.alignment_corner_faults_ok(faults) } else { faults.is_empty() }
+  })
   @film.exit(if ok { 0 } else { 1 })
 }
