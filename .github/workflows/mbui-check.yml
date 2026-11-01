@@ -58,6 +58,11 @@ jobs:
       OWN: ${{ github.ref == 'refs/heads/main' && 'm-' || 'b-' }}
     steps: &native-steps
       - uses: actions/checkout@v5
+      - name: The core takes input and due timers in order
+        if: env.PART == 'replay'
+        run: |
+          clang++ -std=c++20 -O2 apps/mbui/engine/tests/ready_queue.cpp -o "$RUNNER_TEMP/core-ready-queue-test"
+          "$RUNNER_TEMP/core-ready-queue-test"
       - uses: actions/setup-node@v5
         with: { node-version-file: .node-version, package-manager-cache: false }
       # (from the Actions cache the moonbit workflow fills, never downloaded here)

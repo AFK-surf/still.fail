@@ -43,6 +43,7 @@
 #include "listen_api.h"
 #include "electron_sealed.h"
 #include "apple_collate.h"
+#include "../../engine/ready_queue.h"
 
 namespace jsi = facebook::jsi;
 
@@ -172,7 +173,7 @@ struct Gate {
 
 using Task = std::function<void(jsi::Runtime &)>;
 
-/// The one core. `tasks`, `timers`, `dues` and `stopping` under `mutex`; the rest is the core thread's, but for what
+/// The one core. `queue` and `stopping` under `mutex`; the rest is the core thread's, but for what
 /// mb_core_start sets before the thread starts and mb_core_stop reads after it ended.
 struct Core {
   pthread_t thread{};
@@ -181,9 +182,7 @@ struct Core {
   void *shell = nullptr;
   std::mutex mutex;
   std::condition_variable wake;
-  std::deque<Task> tasks;
-  std::unordered_map<uint64_t, double> timers;
-  std::multimap<double, uint64_t> dues;
+  ReadyQueue<Task> queue;
   bool stopping = false;
   bool dead = false;
   mb_core_message_fn on_message = nullptr;
@@ -212,7 +211,7 @@ void post(Task task) {
   {
     std::lock_guard<std::mutex> lock(C.mutex);
     if (C.stopping || !C.running) return;
-    C.tasks.push_back(std::move(task));
+    C.queue.post(std::move(task), timer_ms());
   }
   C.wake.notify_one();
 }
@@ -805,15 +804,13 @@ static void install(jsi::Runtime &rt) {
   });
   fn("setTimer", 2, [](jsi::Runtime &, const jsi::Value &, const jsi::Value *a, size_t) -> jsi::Value {
     uint64_t id = uint64_t(a[0].asNumber());
-    double due = timer_ms() + std::max(0.0, a[1].asNumber());
     std::lock_guard<std::mutex> lock(C.mutex);
-    C.timers[id] = due;
-    C.dues.emplace(due, id);
+    C.queue.setTimer(id, timer_ms() + std::max(0.0, a[1].asNumber()));
     return jsi::Value::undefined();
   });
   fn("clearTimer", 1, [](jsi::Runtime &, const jsi::Value &, const jsi::Value *a, size_t) -> jsi::Value {
     std::lock_guard<std::mutex> lock(C.mutex);
-    C.timers.erase(uint64_t(a[0].asNumber()));
+    C.queue.clearTimer(uint64_t(a[0].asNumber()));
     return jsi::Value::undefined();
   });
   // the performance record (the core's record.ts): whether it is kept now, and a line into it
@@ -888,29 +885,9 @@ static void run(void) {
       std::unique_lock<std::mutex> lock(C.mutex);
       for (;;) {
         if (C.stopping) break;
-        if (!C.tasks.empty()) {
-          task = std::move(C.tasks.front());
-          C.tasks.pop_front();
-          break;
-        }
-        // The next timer still set (one cleared, or set again later, is passed over).
-        while (!C.dues.empty()) {
-          auto first = C.dues.begin();
-          auto it = C.timers.find(first->second);
-          if (it == C.timers.end() || it->second != first->first) {
-            C.dues.erase(first);
-            continue;
-          }
-          break;
-        }
-        if (!C.dues.empty()) {
-          double left = C.dues.begin()->first - timer_ms();
-          if (left <= 0) {
-            timer = C.dues.begin()->second;
-            C.timers.erase(timer);
-            C.dues.erase(C.dues.begin());
-            break;
-          }
+        double left;
+        if (C.queue.take(timer_ms(), task, timer, left)) break;
+        if (left >= 0) {
           C.wake.wait_for(lock, std::chrono::microseconds(int64_t(left * 1000)));
         } else {
           C.wake.wait(lock);
@@ -996,9 +973,7 @@ void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_
   C.gate = new Gate();
   {
     std::lock_guard<std::mutex> lock(C.mutex);
-    C.tasks.clear();
-    C.timers.clear();
-    C.dues.clear();
+    C.queue.clear();
     C.stopping = false;
     C.running = true;
   }
@@ -1133,6 +1108,6 @@ void mb_core_stop(void) {
   if (C.shell) sf_shell_stop(C.shell);
   C.shell = nullptr;
   std::lock_guard<std::mutex> lock(C.mutex);
-  C.tasks.clear();
+  C.queue.clear();
   C.running = false;
 }

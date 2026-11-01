@@ -3,7 +3,7 @@
 # Apple apps (src/host/apple_core.mm) and Android's (src/host/android_core.c on still.fail's prebuilt engine): builds the
 # pieces from the checkout and runs a headless smoke test. See core/README.md.
 #   scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
-#                   | smoke [build|run] | listen | exit | sealed | collate | login-test | vectors | sizes | clean | all
+#                   | smoke [build|run] | listen | exit | fairness | sealed | collate | login-test | vectors | sizes | clean | all
 #                   | chat-open | md-parse | mermaid | mermaid-lib | mermaid-smoke | zstd-read
 # EMBER: the still.fail checkout (default: this one, scripts/env.sh); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
@@ -246,7 +246,7 @@ engine() {
     *) echo "engine: no target $target"; return 1 ;;
   esac
   local lib=$OUT/$target/libmbui_core.a
-  if [ -f $lib ] && [ $lib -nt src/host/apple_core.mm ] && [ $lib -nt src/host/apple_collate.h ] && [ $lib -nt src/host/electron_sealed.h ] && [ $lib -nt src/host/core_api.h ] && [ $lib -nt src/host/listen_api.h ] && [ $lib -nt "$D/core.sh" ]; then
+  if [ -f $lib ] && [ $lib -nt src/host/apple_core.mm ] && [ $lib -nt engine/ready_queue.h ] && [ $lib -nt src/host/apple_collate.h ] && [ $lib -nt src/host/electron_sealed.h ] && [ $lib -nt src/host/core_api.h ] && [ $lib -nt src/host/listen_api.h ] && [ $lib -nt "$D/core.sh" ]; then
     return 0
   fi
   mkdir -p $OUT/$target
@@ -441,6 +441,27 @@ exit_test() {
   return $code
 }
 
+# Inputs and due timers on both native core loops, in Hermes (engine/tests/fairness.*), plus deterministic ordering,
+# cancellation and equal-clock cases on the queue itself. Neither test depends on how long a task takes to run.
+fairness_test() {
+  local target=aarch64-apple-darwin fw
+  apple_native $target || return 1
+  fw=$(hermes_fw $target)
+  hermes_script "$ROOT/engine/tests/fairness.js" "$OUT/fairness-test.hbc" || return 1
+  clang++ -std=c++20 -O2 "$ROOT/engine/tests/ready_queue.cpp" -o "$OUT/ready-queue-test" || return 1
+  "$OUT/ready-queue-test" || return 1
+  clang++ -std=c++20 -O2 -fexceptions -frtti -I"$OUT/hermes/include" -I"$ROOT/engine" \
+    "$ROOT/engine/engine.cpp" "$ROOT/engine/tests/fairness.cpp" -F"$fw" -framework hermes -Wl,-rpath,"$fw" \
+    -o "$OUT/fairness-engine" || return 1
+  "$OUT/fairness-engine" "$OUT/fairness-test.hbc" || return 1
+  clang -fobjc-arc -O2 -Isrc/host -c mbui/src/host/apple_listen.m -o "$OUT/fairness-listen.o" || return 1
+  clang++ -std=c++20 -O2 -DTEST_APPLE_HOST -Isrc/host "$ROOT/engine/tests/fairness.cpp" "$OUT/fairness-listen.o" \
+    "$OUT/$target/libmbui_core.a" "$OUT/$target/libstillfail_shell.a" $(libs $target) -F"$fw" -framework hermes \
+    -Wl,-rpath,"$fw" -framework LocalAuthentication -framework Foundation -o "$OUT/fairness-apple" || return 1
+  mkdir -p "$OUT/fairness-test-data"
+  "$OUT/fairness-apple" "$OUT/fairness-test.hbc" "$OUT/fairness-test-data"
+}
+
 # What still.fail's desktop app (Electron's safeStorage) sealed, opened as the app built in its place opens it
 # (src/host/electron_sealed.h): core/sealed_test.m against files made as that app makes them. No core, no Keychain.
 sealed_test() {
@@ -533,6 +554,7 @@ case "${1:-all}" in
   mermaid-smoke) mermaid_smoke ;;
   zstd-read) zstd_read ;;
   exit) exit_test ;;
+  fairness) fairness_test ;;
   collate) collate_test ;;
   sealed) sealed_test ;;
   login-test) login_test ;;
@@ -546,5 +568,5 @@ case "${1:-all}" in
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | apple-native [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | chat-open | md-parse | mermaid | mermaid-lib | mermaid-smoke | zstd-read | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | apple-native [TARGET] | smoke [build|run] | listen | exit | fairness | collate | login-test | vectors | sizes | chat-open | md-parse | mermaid | mermaid-lib | mermaid-smoke | zstd-read | clean | all"; exit 2 ;;
 esac
