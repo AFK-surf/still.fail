@@ -498,6 +498,10 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.back_island = c.back_island_next
   c.back_edge = c.back_edge_next
   c.back_chain = c.back_chain_next
+  c.back_stack = match c.back_chain {
+    Said(e, _) => e.stack
+    Unsaid => -3
+  }
   // (a layer's that took back already, said again as it was kept: what it was said over, in its place)
   c.back_layer_spent()
   // (the host told whether the app takes back, as what the old views said now has it: Ctx::back_told_host)
@@ -1443,7 +1447,7 @@ fn Ctx::back_gesture(self : Ctx, kind : Int, x : Double, t : Double, progress? :
       if kind >= 2 {
         self.back_held = None
       }
-      if kind != 3 && !old_owner_open(h.owner) {
+      if kind != 3 && !held_back_open(h.owner) {
         // (its old view taking input no more: called off for it, once, the rest of the gesture nobody's)
         self.back_held = None
         self.back_off = kind < 2

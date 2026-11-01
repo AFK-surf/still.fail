@@ -258,6 +258,9 @@ struct Node {
   mut portal : Bool
   // a layer's own node (portal): the layer's id (overlay.mbt), 0 for any other
   mut portal_id : Int
+  // a layer's own node: where it is in the window's stack of layers, the old frame's and the tree's (Ctx::stacked);
+  // -1 none said (where the old frame built it among its own)
+  mut stack : Int
   // the stratum it starts over what is put off under it (strata.mbt: 0 none, its bar's or its cover's)
   mut mark : Int
   // a shot's layer (shot.mbt): drawn not on the screen but into the shot's own instances
@@ -493,6 +496,7 @@ fn Node::new() -> Node {
     aspect: 0.0,
     portal: false,
     portal_id: 0,
+    stack: -1,
     mark: 0,
     shot: false,
     paints: None,
@@ -615,6 +619,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.moves = ""
   self.portal = false
   self.portal_id = 0
+  self.stack = -1
   self.mark = 0
   self.shot = false
   self.paints = None

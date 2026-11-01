@@ -511,6 +511,13 @@ pub struct Ctx {
   mut back_node : Int
   mut back_edge : Double
   mut back_next : ((Int, Double, Double, Double, Double) -> Unit)?
+  /// the layer's opening saying back now (Ctx::overlay; 0 none), for what it says (Ctx::back_says)
+  mut back_layer_next : Int
+  /// the layer's opening whose body is being built (Ctx::overlay; 0 none): what is said in it is its, for where its back
+  /// stands (raise_layers)
+  mut back_within : Int
+  /// where what takes back as published is in the window's stack of layers (Ctx::stacked; -3 none said)
+  mut back_stack : Int
   mut back_node_next : Int
   mut back_edge_next : Double
   /// the old view what takes back was said in by Ctx::on_back (its back_node none), none in a layer of its own
@@ -528,6 +535,9 @@ pub struct Ctx {
   layer_on_dismiss : Map[Int, (Int, (Dismiss) -> Unit)]
   /// the layers' openings dismissed since the last frame (Ctx::layers_dismissed), by id: taking no input
   layer_retired : Map[Int, Int]
+  /// the last frame's layers (`last_layers`) dismissed since it published them or built going in this frame, by id: taking no input as that frame has them, whatever this frame's builds have done to their openings
+  /// meanwhile (Ctx::layer_takes)
+  layers_gone : Set[Int]
   /// a back gesture held from its start (Ctx::back_gesture), and whether the rest of one called off is nobody's
   mut back_held : BackHeld?
   mut back_off : Bool
@@ -622,6 +632,8 @@ pub struct Ctx {
   /// while a shot taken at its own pixels a point is built, those (Ctx::drawn_scale); else 0
   mut shot_scale : Double
   mut layer_cur : Int
+  /// where the layers built now are in the window's stack of layers (Ctx::stacked; -1 none said)
+  mut stack_cur : Int
   /// the layer the keys go to this frame (the topmost open one that takes them, as the frame before built it; 0: the
   /// page): what is built under it reads none (Ctx::key_pressed, Ctx::keys)
   mut keys_layer : Int
@@ -798,6 +810,9 @@ fn Ctx::new() -> Ctx {
     back_node: -1,
     back_edge: 20.0,
     back_next: None,
+    back_layer_next: 0,
+    back_within: 0,
+    back_stack: -3,
     back_island: None,
     back_island_next: None,
     back_chain: Unsaid,
@@ -806,6 +821,7 @@ fn Ctx::new() -> Ctx {
     layer_hook: None,
     layer_on_dismiss: Map::new(),
     layer_retired: Map::new(),
+    layers_gone: Set::new(),
     back_held: None,
     back_off: false,
     back_node_next: -1,
@@ -859,6 +875,7 @@ fn Ctx::new() -> Ctx {
     shots: Map::new(),
     shot_scale: 0.0,
     layer_cur: 0,
+    stack_cur: -1,
     keys_layer: 0,
     dismissals: Map::new(),
     layer_return: Map::new(),

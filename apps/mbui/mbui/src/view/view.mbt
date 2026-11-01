@@ -343,8 +343,12 @@ struct Node {
   mut inert : Bool
   /// it is a modal layer while this holds (View::modal): what it does not hold takes no input
   mut modal : Bool
+  /// as a modal layer, a back gesture under way as it comes over what holds it goes on to that (View::held_back_goes_on)
+  mut back_goes_on : Bool
   /// it, and what it holds, are over all else of the window while this holds (View::over_all)
   mut over_all : Bool
+  /// where it is in the window's stack of layers, the old frame's among them (View::stacked); -1 none
+  mut stack : Int
 }
 
 ///|
@@ -409,6 +413,11 @@ pub struct Tree {
   order_holder : Array[Int]
   /// the node hosting the old view, if any (View::hosted)
   mut hosting : Int
+  /// where in the window's stack of layers the topmost modal layer of what hosts it is (an old frame's: Tree::hold_under;
+  /// -1 in none of it, over only what is in none), -2 none: what of it is not over that takes no input; as told each
+  /// frame (what is told to follow it), and as it is as asked (`held_under_of`: Tree::held_under_by)
+  mut held_under : Int
+  mut held_under_of : (() -> Int)?
   /// the nodes said to be modal layers (View::modal, on), living: which is topmost asked of where each is among what
   /// holds it (Tree::modal_top)
   modals : Array[Int]
@@ -450,6 +459,12 @@ pub struct Tree {
   mut focused : NodeId?
   mut focus_visible : Bool
   mut on_focus_lost : (NodeId) -> Unit
+  /// the layers that give the focus as they open (View::focus_opens) opened and gone since what a modal layer said was
+  /// last told (Tree::modals_now), each with the node it gives it to; and what hosts the tree is told of them
+  /// (Tree::on_layers_focus)
+  focus_opened : Array[(NodeId, NodeId)]
+  focus_gone : Array[NodeId]
+  mut on_layers_focus : (Array[NodeId], Array[(NodeId, NodeId)]) -> Unit
   /// what follows what is under the pointer, while it is over the window (Tree::point_at)
   mut point_stop : (() -> Unit)?
   /// let go (Tree::dispose): what is made for it after stops at once
@@ -569,6 +584,8 @@ pub fn Tree::new(
     order: [],
     order_holder: [],
     hosting: -1,
+    held_under: -2,
+    held_under_of: None,
     modals: [],
     committing: 0,
     afters: [],
@@ -586,6 +603,9 @@ pub fn Tree::new(
     focused: None,
     focus_visible: false,
     on_focus_lost: fn(_) {  },
+    focus_opened: [],
+    focus_gone: [],
+    on_layers_focus: fn(_, _) {  },
     point_stop: None,
     gone: false,
     besides_at: [],
@@ -732,7 +752,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.going = None
       n.inert = false
       n.modal = false
+      n.back_goes_on = false
       n.over_all = false
+      n.stack = -1
       i
     }
     None => {
@@ -805,7 +827,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         going: None,
         inert: false,
         modal: false,
+        back_goes_on: false,
         over_all: false,
+        stack: -1,
       })
       self.nodes.length() - 1
     }
@@ -1333,6 +1357,7 @@ priv enum Prop {
   Scale
   DrawnAs
   OverAll
+  Stacked
   MovesWindow
   KeepsHeld
   Clips
@@ -2128,33 +2153,120 @@ pub fn Tree::over_all(self : Tree, id : NodeId) -> Bool {
 ///|
 /// (Whether what of the root's holds node `at`, or is it, says it is over all else: View::over_all.)
 fn Tree::over_all_at(self : Tree, at : Int) -> Bool {
-  let mut i = at
-  while i >= 0 {
-    let p = self.nodes[i].parent
-    if p == 0 {
-      return self.nodes[i].over_all
-    }
-    i = p
-  }
-  false
+  let top = self.top_of(at)
+  top >= 0 && self.nodes[top].over_all
 }
 
 ///|
-/// What the root holds over all else of the window (View::over_all) put after the rest of what it holds, each kept in
-/// its order: the window's top, whatever was made after it.
-fn Tree::top_last(self : Tree) -> Unit {
-  guard self.nodes.length() > 0 else { return }
-  let kids = self.nodes[0].kids
-  let top = kids.filter(fn(k) { self.nodes[k].over_all })
-  guard !top.is_empty() else { return }
-  let rest = kids.filter(fn(k) { !self.nodes[k].over_all })
-  let now = rest + top
-  if now.mapi(fn(i, k) { kids[i] != k }).contains(true) {
-    kids.clear()
-    kids.append(now)
-    self.order_marked()
-    self.layout_marked_at(0)
+/// (The node of the root's that node `at` is, or is in: the outermost that is a node of its own, what holds it up to
+/// the root slots alone (show, pick, each); -1 where it is held by no such one.)
+fn Tree::top_of(self : Tree, at : Int) -> Int {
+  let mut i = at
+  let mut top = -1
+  while i > 0 {
+    if !self.nodes[i].slot {
+      top = i
+    }
+    i = self.nodes[i].parent
   }
+  if i == 0 {
+    top
+  } else {
+    -1
+  }
+}
+
+///|
+/// At `stack` in the window's stack of layers while `on` says so, where it is one of what the root holds, or in a slot of
+/// its (show, pick, each) alone (elsewhere,
+/// nothing): over what the root holds that is in none, with the old frame's layers at their places in it
+/// (Ctx::stacked), one over another by their places, under what is over all else (View::over_all); so drawn, found by a
+/// press and the pointer, read out, gone to by Tab and given the keys; the topmost modal one, the tree's or the old
+/// frame's, holding all under it. -1: in none.
+pub fn View::stacked(self : View, stack : Live[Int]) -> View {
+  self.bind(Stacked, stack, Layout, fn(k) {
+    self.tree.nodes[self.at].stack = k
+    self.tree.top_last()
+    self.tree.hits = self.tree.hits + 1
+    self.tree.modals_told()
+  })
+  self
+}
+
+///|
+/// Whether node `id` is one the root holds (its own, not in another).
+pub fn Tree::root_holds(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.top_of(id.at) == id.at
+}
+
+///|
+/// Where in the window's stack of layers its topmost modal layer is (View::stacked; -1 in none), -2 none: what of what
+/// hosts it is under that takes no input.
+pub fn Tree::modal_stack(self : Tree) -> Int {
+  match self.modal_top() {
+    Some(m) => self.stack_at(m.at)
+    None => -2
+  }
+}
+
+///|
+/// Where in the window's stack of layers what takes a finger at (x, y) is (Tree::target_at's; -1 in none), -2 nothing
+/// of the tree's taking it.
+pub fn Tree::stack_takes(self : Tree, x : Double, y : Double) -> Int {
+  match self.target_at(x, y) {
+    Pressed(id) | Dragged(id) | Hosted(id) | TopRow(id) => self.stack_at(id.at)
+    Nothing => -2
+  }
+}
+
+///|
+/// How what hosts it says where its own topmost modal layer is in the window's stack of layers as it is, whenever it is
+/// asked (an input's moment: one it dismissed at that moment holding nothing from then; Tree::hold_under says it as each
+/// frame ends, what follows it told then).
+pub fn Tree::held_under_by(self : Tree, f : () -> Int) -> Unit {
+  self.held_under_of = Some(f)
+}
+
+///|
+/// What hosts it says where in the window's stack of layers its own topmost modal layer is (an old frame's, built at
+/// `stack` there: Ctx::stacked; -1 at none, over what is in none alone), -2 none: what of the tree is not over that takes no press, focus or key, and is read
+/// out hidden, as under a modal layer of its own (Tree::allows). Said as it changes, each frame.
+pub fn Tree::hold_under(self : Tree, stack : Int) -> Unit {
+  if self.held_under != stack {
+    self.held_under = stack
+    self.hits = self.hits + 1
+    self.modals_told()
+  }
+}
+
+///|
+/// Where node `id` is in the window's stack of layers (what of the root's holds it, or is it, says: View::stacked,
+/// View::over_all): -1 in none, Int's most over all else. One let go, -1.
+pub fn Tree::stack_of(self : Tree, id : NodeId) -> Int {
+  guard self.alive_id(id) else { return -1 }
+  self.stack_at(id.at)
+}
+
+///|
+fn Tree::stack_at(self : Tree, at : Int) -> Int {
+  let top = self.top_of(at)
+  if top < 0 {
+    return -1
+  }
+  let n = self.nodes[top]
+  if n.over_all {
+    2147483647
+  } else {
+    n.stack
+  }
+}
+
+///|
+/// What the root holds ordered again by its places in the window's stack of layers (View::stacked, View::over_all:
+/// Tree::root_layers), as one says it or is made.
+fn Tree::top_last(self : Tree) -> Unit {
+  // (the order they are drawn, found and read out in is worked out again: Tree::root_layers)
+  self.order_marked()
 }
 
 ///|
@@ -2243,6 +2355,9 @@ fn Tree::withins_settled(self : Tree) -> Unit {
 
 ///|
 fn Tree::modals_now(self : Tree) -> Unit {
+  // (the layers that give the focus: given back from those gone, then to the topmost of those opened, what had it kept
+  // first, before what a modal layer keeps from the focus lets it go)
+  self.layers_focus_told()
   if !self.modals.is_empty() {
     match self.held {
       Some(h) if !self.allows(h) => self.hold_lost_in(0)
@@ -2253,7 +2368,8 @@ fn Tree::modals_now(self : Tree) -> Unit {
       _ => ()
     }
     match self.backing {
-      Some((b, _)) if !self.allows(b) => self.back_lost_in(0)
+      // (one the topmost modal layer over it lets go on: View::held_back_goes_on)
+      Some((b, _)) if !self.allows(b) && !(self.modal_top_lets_back() && self.presses_here(b)) => self.back_lost_in(0)
       _ => ()
     }
   }
@@ -2262,6 +2378,15 @@ fn Tree::modals_now(self : Tree) -> Unit {
   // (what hosts it holds of its own, asked whether it may still take input, whatever changed it: a modal layer, a node
   // let go, leaving, said to take no press)
   (self.on_modals)()
+}
+
+///|
+/// Whether the topmost modal layer now lets a back gesture under way go on (View::held_back_goes_on).
+pub fn Tree::modal_top_lets_back(self : Tree) -> Bool {
+  match self.modal_top() {
+    Some(m) => self.nodes[m.at].back_goes_on
+    None => false
+  }
 }
 
 ///|
@@ -2276,7 +2401,7 @@ pub fn Tree::modal_top(self : Tree) -> NodeId? {
     if !n.live || !n.modal || self.leaving_at(at) {
       continue
     }
-    guard self.path_of(at) is Some(path) else { continue }
+    guard self.layer_path(at) is Some(path) else { continue }
     if top < 0 || drawn_after(path, top_path) {
       top = at
       top_path = path
@@ -2338,12 +2463,25 @@ pub fn Tree::allows(self : Tree, id : NodeId) -> Bool {
 }
 
 ///|
-fn Tree::allows_at(self : Tree, at : Int) -> Bool {
+fn Tree::allows_at(self : Tree, at : Int, held? : Bool = true) -> Bool {
+  // (an old frame's modal layer over it in the window's stack of layers: Tree::held_under)
+  // (as it is as asked where what hosts it said how to ask it, else as last told)
+  let under = if !held {
+    -2
+  } else {
+    match self.held_under_of {
+      Some(f) => f()
+      None => self.held_under
+    }
+  }
+  if under > -2 && self.stack_at(at) <= under {
+    return false
+  }
   match self.modal_top() {
     None => true
     Some(m) => {
-      // (over all else of the window, a modal layer under it: View::over_all)
-      if self.over_all_at(at) && !self.over_all_at(m.at) {
+      // (over it in the window's stack of layers, over all else among them: View::stacked, View::over_all)
+      if self.stack_at(at) > self.stack_at(m.at) {
         return true
       }
       let mut i = at
@@ -2372,6 +2510,30 @@ pub fn Tree::presses_here(self : Tree, id : NodeId) -> Bool {
 
 ///|
 /// Whether node `id` takes presses now: it lives, and neither it nor what holds it is leaving or said to take none.
+///|
+/// Whether a modal layer of the tree's own over node `id` keeps it from input (Tree::allows, whatever an old frame's
+/// modal layer over it says: what the old frame keeps itself, its focus on a field under a menu it opened, asks this).
+pub fn Tree::allows_as_its_own(self : Tree, id : NodeId) -> Bool {
+  if id.at < 0 || id.at >= self.nodes.length() {
+    return false
+  }
+  let n = self.nodes[id.at]
+  n.live && n.gen == id.gen && self.allows_at(id.at, held=false)
+}
+
+///|
+/// Whether node `id` takes presses now as the tree's own modal layers have it, whatever an old frame's modal layer over
+/// it says (Tree::held_under): what the old frame orders itself (its back, said in the old view the node hosts, after
+/// what its layer said or under it: the old frame's own chain) asks this, not Tree::takes_presses.
+pub fn Tree::takes_presses_as_its_own(self : Tree, id : NodeId) -> Bool {
+  if id.at < 0 || id.at >= self.nodes.length() {
+    return false
+  }
+  let n = self.nodes[id.at]
+  n.live && n.gen == id.gen && self.allows_at(id.at, held=false) && !self.pressless_own_at(id.at)
+}
+
+///|
 pub fn Tree::takes_presses(self : Tree, id : NodeId) -> Bool {
   if id.at < 0 || id.at >= self.nodes.length() {
     return false
@@ -2601,10 +2763,10 @@ pub fn View::on_key(self : View, f : (Key) -> Bool) -> View {
 ///|
 /// A key (`code`, `mods` held) at `at`: asked of the nodes that take keys (View::on_key) that may take input now, the
 /// one drawn last first (after what holds it, after what is before it among what holds them both), each in turn till one
-/// takes it, as one event of that moment (the tree brought there first where it is in none); `top_only`, only what is
-/// over all else of the window (View::over_all: the old frame's layer under it taking the keys, View::over_all's). True
-/// where one took it.
-pub fn Tree::key_at(self : Tree, code : Int, mods : Int, at : Double, top_only? : Bool = false) -> Bool {
+/// takes it, as one event of that moment (the tree brought there first where it is in none); `above`, only what is over
+/// that in the window's stack of layers (View::stacked: the old frame's layer under it taking the keys). True where one
+/// took it.
+pub fn Tree::key_at(self : Tree, code : Int, mods : Int, at : Double, above? : Int = -3) -> Bool {
   if self.nodes.length() == 0 || !self.nodes[0].live {
     return false
   }
@@ -2617,8 +2779,8 @@ pub fn Tree::key_at(self : Tree, code : Int, mods : Int, at : Double, top_only? 
     // (the topmost first: what a node holds after it, its later kids before its earlier)
     let found : Array[Int] = []
     self.topmost_from(0, fn(n) { n.on_key is Some(_) }, found)
-    // (`top_only`: of what is over all else of the window alone, View::over_all)
-    let found = if top_only { found.filter(fn(i) { self.over_all_at(i) }) } else { found }
+    // (`above`: of what is over that in the window's stack of layers alone, View::stacked)
+    let found = if above > -3 { found.filter(fn(i) { self.stack_at(i) > above }) } else { found }
     // (each as it was asked: its node and what it said then, asked only while both are still so as its turn comes (one
     // above it may have let it go, its index another's since, or said anew), the tree still there)
     let asked = found.filter_map(fn(i) {
@@ -4665,9 +4827,81 @@ fn Tree::ordered(self : Tree, at : Int, holder : Int) -> Unit {
   self.order.push(at)
   self.order_holder.push(holder)
   let me = self.order.length() - 1
-  for k in n.kids {
+  // (what the root holds, each by its place in the window's stack of layers: Tree::kids_in_order)
+  for k in self.kids_in_order(at) {
     self.ordered(k, me)
   }
+}
+
+///|
+/// What node `at` holds in the order it is drawn, found, read out and gone to by Tab in: its kids as they are; the
+/// root's each by its place in the window's stack of layers (Tree::root_layers), what is in a slot of its (show, pick,
+/// each) each its own, those of the same place in their order.
+fn Tree::kids_in_order(self : Tree, at : Int) -> Array[Int] {
+  if at == 0 {
+    self.root_layers()
+  } else {
+    self.nodes[at].kids
+  }
+}
+
+///|
+/// What the root holds, each a node of its own (what is in a slot of its (show, pick, each) its own, the slot left
+/// out), in the order of their places in the window's stack of layers (in none first, then by their places, then
+/// what is over all else; those of the same place in the order they are held in).
+fn Tree::root_layers(self : Tree) -> Array[Int] {
+  let tops : Array[Int] = []
+  fn flat(k : Int) -> Unit {
+    let n = self.nodes[k]
+    if n.slot {
+      for c in n.kids {
+        flat(c)
+      }
+    } else {
+      tops.push(k)
+    }
+  }
+  for k in self.nodes[0].kids {
+    flat(k)
+  }
+  let place = fn(k : Int) {
+    let n = self.nodes[k]
+    if n.over_all {
+      2147483647
+    } else {
+      n.stack
+    }
+  }
+  let out : Array[Int] = []
+  for k in tops {
+    let p = place(k)
+    let mut j = out.length()
+    while j > 0 && place(out[j - 1]) > p {
+      j = j - 1
+    }
+    out.insert(j, k)
+  }
+  out
+}
+
+///|
+/// Where node `at` is drawn among the rest (Tree::path_of), what the root holds counted in their order in the window's
+/// stack of layers (Tree::root_layers): what is over what, of two.
+fn Tree::layer_path(self : Tree, at : Int) -> Array[Int]? {
+  let top = self.top_of(at)
+  guard top >= 0 else { return None }
+  guard self.root_layers().search(top) is Some(rank) else { return None }
+  let path : Array[Int] = []
+  let mut i = at
+  while i != top {
+    let p = self.nodes[i].parent
+    guard p >= 0 && self.nodes[p].kids.search(i) is Some(k) else { return None }
+    path.push(k)
+    i = p
+  }
+  path.push(rank)
+  path.rev_in_place()
+  Some(path)
 }
 
 ///|
@@ -4833,6 +5067,14 @@ pub fn Tree::drawn_held(self : Tree) -> Array[(Drawn, Int, Bool)] {
     out.push((d, if h >= 0 { at_out[h] } else { -1 }, self.nodes[c.id.at].on_press is Some(_)))
   })
   out
+}
+
+///|
+/// Whether node `id` holds a node of its own in the scene now (one living, not left out of its row): what is drawn over
+/// its ground, under the edge round it (an old view's box's border_over: drawn after what it holds).
+pub fn Tree::holds_drawn(self : Tree, id : NodeId) -> Bool {
+  guard self.alive_id(id) else { return false }
+  self.nodes[id.at].kids.iter().any(fn(k) { self.nodes[k].live && !self.nodes[k].out })
 }
 
 ///|
@@ -5611,7 +5853,7 @@ pub fn Tree::pointed_now(self : Tree) -> NodeId? {
 /// nothing the root holds.
 pub fn Tree::drawn_later(self : Tree, a : NodeId, b : NodeId) -> Bool {
   guard self.alive_id(a) && self.alive_id(b) else { return false }
-  match (self.path_of(a.at), self.path_of(b.at)) {
+  match (self.layer_path(a.at), self.layer_path(b.at)) {
     (Some(pa), Some(pb)) => drawn_after(pa, pb)
     _ => false
   }

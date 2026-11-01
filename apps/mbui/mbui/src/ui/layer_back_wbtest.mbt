@@ -905,3 +905,84 @@ test "the same layer opened from one button, ended by what it is for (Ctx::layer
   t.draw()
   assert_eq((pressed.val, told.val, at_once, open.val, g().focused_id() == ids[1]), (1, 1, false, false, true))
 }
+
+///|
+/// focus_given_back's opener and modal menu, its focus stop inside, closed by what opened it (no dismissal: drawn going,
+/// inert, as a presenter closed by the app draws its own going) and, where `again`, opened again by the same key the
+/// frame after: whether the focus was inside as it was open, on the opener once it closed, and, opened again, inside
+/// the new opening once more.
+fn focus_closed_by_app(tree_opener : Bool, again : Bool, gone? : Bool = false) -> (Bool, Bool, Bool) {
+  let shown = Ref(false)
+  let going = Ref(false)
+  let opener = Ref(0)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
+  set_view_app(fn(root) {
+    if tree_opener {
+      root.box(fn(n) {
+        n.width(Is(Some(80.0))).height(Is(Some(30.0))).focusable(Is(true)).on_press(fn() {  }) |> ignore
+        opener.val = tree_said_id(n.id())
+      })
+      |> ignore
+    }
+    old(root, fn(c) {
+      if !tree_opener {
+        let id = c.id("opener")
+        opener.val = id
+        c.focusable(id)
+        c.box(id~, w=Px(80.0), h=Px(30.0), fn() {  }) |> ignore
+      }
+      if shown.val {
+        c.overlay("menu", modal=true, inert=going.val, fn() {
+          let item = c.id("item")
+          c.focusable(item)
+          c.box(id=item, w=Px(100.0), h=Px(40.0), fn() {  }) |> ignore
+        })
+        |> ignore
+      }
+    })
+    .over(Is(true))
+    |> old_takes_own
+    |> ignore
+  })
+  t.draw()
+  g().focus_moved(opener.val)
+  t.draw()
+  shown.val = true
+  t.draw()
+  t.draw()
+  let inside = g().focused_id() != opener.val && g().focused_id() != 0
+  // (closed by what opened it, drawn going: no frame between the two, as a presenter's close and its next build; where
+  // `gone`, built no more at once)
+  if gone {
+    shown.val = false
+  } else {
+    going.val = true
+  }
+  t.draw()
+  t.draw()
+  let back = g().focused_id() == opener.val
+  if !again {
+    return (inside, back, true)
+  }
+  // (opened again by the same key once the frame it closed in has been published)
+  going.val = false
+  shown.val = true
+  t.draw()
+  t.draw()
+  (inside, back, g().focused_id() != opener.val && g().focused_id() != 0)
+}
+
+///|
+test "a modal layer of the old frame's closed by what opened it (drawn going, no dismissal), its opener the tree's or an old view's: the focus back on its opener" {
+  assert_eq([focus_closed_by_app(true, false), focus_closed_by_app(false, false)], [(true, true, true), (true, true, true)])
+}
+
+///|
+test "a modal layer of the old frame's closed by what opened it, opened again by the same key once the frame it closed in is published: the new opening takes the focus as it opens" {
+  assert_eq([focus_closed_by_app(true, true), focus_closed_by_app(false, true)], [(true, true, true), (true, true, true)])
+}
+
+///|
+test "a modal layer of the old frame's closed by what opened it by building it no more, then opened again by the same key once that frame is published, its opener the tree's or an old view's: the focus back on its opener, then the new opening's" {
+  assert_eq([focus_closed_by_app(true, true, gone=true), focus_closed_by_app(false, true, gone=true)], [(true, true, true), (true, true, true)])
+}

@@ -172,7 +172,7 @@ pub let button_h : Double
 
 pub fn button_height() -> Double
 
-pub fn button_node(@view.View, () -> String, () -> Unit, tone? : Tone, busy? : () -> Bool, disabled? : () -> Bool, across? : Bool) -> @view.View
+pub fn button_node(@view.View, () -> String, () -> Unit, tone? : Tone, busy? : () -> Bool, disabled? : () -> Bool, across? : Bool, words_in? : () -> Double) -> @view.View
 
 pub let button_raised : Raised
 
@@ -309,6 +309,8 @@ pub fn concentric_out(Double, Double) -> Double
 pub fn confirm(String, String, String, () -> Unit, danger? : Bool, from? : Anchor) -> Unit
 
 pub fn confirm_dialog(@ui.Ctx, String, Bool, String, String, String, cancel~ : String, busy? : Bool, error? : String, danger? : Bool) -> Confirmed
+
+pub fn confirm_node(@view.View, () -> Bool, () -> String, () -> String, () -> String, Bool, () -> Unit, () -> Unit, shown? : () -> Unit, gone? : () -> Unit) -> Unit
 
 pub let confirm_w : Double
 
@@ -1505,6 +1507,8 @@ pub fn presented_changed() -> Unit
 pub fn presented_drawn() -> Bool
 
 pub fn presented_drawn_of(Int32) -> Bool
+
+pub fn presented_nodes(@view.View) -> Unit
 
 pub fn presented_open_of(Int32) -> Bool
 

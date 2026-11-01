@@ -936,6 +936,8 @@ pub fn[P] Ctx::nav(
     edge,
     island: self.island_said(),
     layer: 0,
+    stack: self.back_stack_said(),
+    within: self.back_within,
   }
   if self.back_next is Some(_) && !leaving && takes_back {
     // (what the top page said first, the stack under it, what was before it under that: what takes back as each over

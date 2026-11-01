@@ -11,6 +11,7 @@ fn backed(
   b_on : @signals.Signal[Bool],
   modal : @signals.Signal[Bool],
   told : Array[String],
+  lets? : Bool = false,
 ) -> @view.Tree {
   let t = @view.Tree::new(
     fn(root) {
@@ -20,7 +21,13 @@ fn backed(
       root.show(fn() { b_on.get() }, fn(b) {
         b.over(Is(true)).takes_back(fn() { told.push("B done") }) |> ignore
       })
-      root.box(fn(m) { m.over(Is(true)).modal(By(fn() { modal.get() })) |> ignore }) |> ignore
+      root.box(fn(m) {
+        m.over(Is(true)).modal(By(fn() { modal.get() })) |> ignore
+        if lets {
+          m.held_back_goes_on() |> ignore
+        }
+      })
+      |> ignore
     },
     time=fn() { 0.0 },
   )
@@ -131,4 +138,21 @@ test "a gesture held by a node said anew to follow back: the rest of it to neith
   assert_false(t.back_step(a, LetGo(80.0, 30.0), 30.0))
   t.back_step(a, Back, 40.0) |> ignore
   assert_eq(told.copy(), ["first Began(0, 10)", "second Back"])
+}
+
+///|
+test "a gesture held by a node, a modal layer over it that lets a gesture under way go on: the rest of it the node's; said to take no press then, called off for it once; the next gesture none of its" {
+  let told : Array[String] = []
+  let (a_on, a_presses, b_on, modal) = back_signals()
+  let t = backed(a_on, a_presses, b_on, modal, told, lets=true)
+  let a = t.back_taker().unwrap()
+  t.back_step(a, Began(0.0, 10.0), 10.0) |> ignore
+  t.event(15.0, fn() { modal.set(true) })
+  let moved = t.back_step(a, Moved(40.0, 20.0), 20.0)
+  t.event(25.0, fn() { a_presses.set(false) })
+  let after = t.back_step(a, Moved(60.0, 30.0), 30.0)
+  a_presses.set(true)
+  let next = t.back_taker()
+  assert_eq((moved, after, next == Some(a)), (true, false, false))
+  assert_eq(told.copy(), ["A Began(0, 10)", "A Moved(40, 20)", "A CalledOff"])
 }

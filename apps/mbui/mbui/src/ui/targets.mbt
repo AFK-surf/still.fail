@@ -227,11 +227,15 @@ fn Ctx::targets_found(self : Ctx, root : Int, tree : @view.Tree) -> Int {
   })
   targets_island.val = None
   let layers_from = self.next_hit_ids.length()
+  next_layer_hits.clear()
   let mut ch = self.nodes[root].first
   while ch >= 0 {
     let n = self.nodes[ch]
     if (n.layer || n.portal) && !old_boxes.values().any(fn(i) { i == ch }) {
+      let from = self.next_hit_ids.length()
       self.paint(ch, 1.0)
+      // (where it is in the window's stack of layers, each target of it: old_layer_stack)
+      next_layer_hits.push((from, self.next_hit_ids.length(), self.old_layer_stack(root, ch)))
     }
     ch = n.next
   }
@@ -332,6 +336,7 @@ fn Ctx::targets_key(self : Ctx, tree : @view.Tree) -> (Int, Int, Int, Int, Bool,
 /// bars; each old view's place among them as it was.
 fn Ctx::targets_again(self : Ctx) -> Unit {
   next_old_hits.append(old_hits)
+  next_layer_hits.append(layer_hits)
   self.next_hit_ids.append(self.hit_ids)
   self.next_hit_marks.append(self.hit_marks)
   self.next_hit_ends.append(self.hit_ends)

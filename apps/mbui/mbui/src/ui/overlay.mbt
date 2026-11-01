@@ -44,6 +44,18 @@ struct Layer {
 }
 
 ///|
+/// The layers `body` builds (and those built in them: a menu a panel opens) at `stack` in the window's stack of layers,
+/// the old frame's and the window's tree's alike (View::stacked): drawn, pressed, read out, gone to by Tab and given the
+/// keys in that order, one over another, the topmost modal one holding all under it, whichever builds it; those of the
+/// same place in the order they are built. Where none is said, as the old frame orders them among its own.
+pub fn Ctx::stacked(self : Ctx, stack : Int, body : () -> Unit) -> Unit {
+  let was = self.stack_cur
+  self.stack_cur = stack
+  body()
+  self.stack_cur = was
+}
+
+///|
 /// What a layer reports: whether it was dismissed since the last frame (and why); its node.
 pub(all) struct Overlay {
   id : Int
@@ -82,8 +94,10 @@ pub fn Ctx::overlay(
 ) -> Overlay {
   let id = self.id(key)
   let dismissed = self.dismissals.get(id)
-  // (leaving, its exit drawn: the opening it was over, its back given up with it; open again, another)
+  // (leaving, its exit drawn: the opening it was over, its back given up with it; open again, another; as the last
+  // frame has it, taking nothing from here: Ctx::layer_takes)
   if inert {
+    self.layers_gone.add(id)
     match self.layer_gen.get(id) {
       Some(g) => {
         self.layer_gen.remove(id)
@@ -149,6 +163,7 @@ pub fn Ctx::overlay(
   n.layer = true
   n.portal = true
   n.portal_id = id
+  n.stack = self.stack_cur
   self.layers.push({
     id,
     node: i,
@@ -187,13 +202,15 @@ pub fn Ctx::overlay(
   // the back to it, unless a layer built in it (over it) takes it after: what it is said over taking back once it took it
   // (Ctx::layer_back_taken)
   if escape && !inert {
-    // (the system's back is an input: its frames are the framework's)
+    // (the system's back is an input: its frames are the framework's; said of this opening, at its place in the
+    // window's stack of layers as the layers built are put in it: Ctx::back_says, raise_layers)
+    self.back_layer_next = gen
     self.take_back(fn() { self.layer_back_taken(id, gen) })
-    self.back_chain_next = match self.back_chain_next {
-      Said(e, under) => Said({ ..e, layer: gen }, under)
-      none => none
-    }
+    self.back_layer_next = 0
   }
+  // (what is said in it, its: Ctx::back_within)
+  let within_was = self.back_within
+  self.back_within = gen
   self.with_parent(i, fn() {
     if modal && (!inert || scrim != 0L) {
       // the ground that takes what the layer does not; leaving, its scrim still fading with it, taking nothing
@@ -213,6 +230,7 @@ pub fn Ctx::overlay(
       body()
     }
   })
+  self.back_within = within_was
   self.cur = saved_cur
   self.layer_cur = saved_layer
   self.group_cur = saved_group
@@ -495,14 +513,103 @@ fn Ctx::raise_layers(self : Ctx) -> Unit {
     }
     ch = self.nodes[ch].next
   }
+  // (each at its place in the window's stack of layers, those of the same place, and those said at none after the one
+  // built before them, in the order they were opened: Ctx::stacked)
+  let key = Map([])
+  let mut at = -1
+  for i in tops {
+    if self.nodes[i].stack >= 0 {
+      at = self.nodes[i].stack
+    }
+    key[i] = if self.nodes[i].stack >= 0 { self.nodes[i].stack } else { at }
+  }
+  let sorted = stack_sorted(tops, fn(i) { key.get(i).unwrap_or(-1) })
   root.first = -1
   root.last = -1
   for i in rest {
     self.link_last(0, i)
   }
-  for i in tops {
+  for i in sorted {
     self.link_last(0, i)
   }
+  // (and the layers so: the topmost, what takes back, Escape and the keys, the last: Ctx::modal_node, keys_layer)
+  let ordered = stack_sorted(self.layers, fn(l) {
+    let mut r = l.node
+    while r >= 0 && r < self.count && self.nodes[r].parent > 0 {
+      r = self.nodes[r].parent
+    }
+    if r >= 0 && r < self.count { key.get(r).unwrap_or(-1) } else { -1 }
+  })
+  self.layers.clear()
+  self.layers.append(ordered)
+  // (what takes back, each layer's opening at its place as the layers are put (one said at none where the one built
+  // before it is, kept or built anew) and where it is among them; the rest at the place said, under the layers there,
+  // in the order said; what takes it now the topmost)
+  let gens : Map[Int, (Int, Int)] = Map([])
+  for rank, l in self.layers {
+    match self.layer_gen.get(l.id) {
+      Some(g) => {
+        let mut r = l.node
+        while r >= 0 && r < self.count && self.nodes[r].parent > 0 {
+          r = self.nodes[r].parent
+        }
+        gens[g] = (key.get(r).unwrap_or(-1), rank)
+      }
+      None => ()
+    }
+  }
+  let entries : Array[(BackEntry, Int, Int, Int)] = []
+  let mut l = self.back_chain_next
+  let mut said = 0
+  while l is Said(e, rest) {
+    // (a layer's close and what was said in it at that layer's place and rank, those said later over those before)
+    let of = if e.layer != 0 { e.layer } else { e.within }
+    match gens.get(of) {
+      Some((at, rank)) if of != 0 => entries.push(({ ..e, stack: at }, at, rank, said))
+      _ => entries.push((e, e.stack, -1, said))
+    }
+    said = said + 1
+    l = rest
+  }
+  // (the topmost first: by place, a layer over what else is there, the later put layer over the earlier, else as said)
+  let over = fn(a : (BackEntry, Int, Int, Int), b : (BackEntry, Int, Int, Int)) {
+    if a.1 != b.1 {
+      a.1 > b.1
+    } else if a.2 != b.2 {
+      a.2 > b.2
+    } else {
+      a.3 < b.3
+    }
+  }
+  let sorted : Array[(BackEntry, Int, Int, Int)] = []
+  for e in entries {
+    let mut j = sorted.length()
+    while j > 0 && over(e, sorted[j - 1]) {
+      j = j - 1
+    }
+    sorted.insert(j, e)
+  }
+  let mut chain = Unsaid
+  for i = sorted.length() - 1; i >= 0; i = i - 1 {
+    chain = Said(sorted[i].0, chain)
+  }
+  self.back_chain_next = chain
+  self.back_from_chain()
+}
+
+///|
+/// `xs` by `key`, those of the same kept in their order.
+fn[T] stack_sorted(xs : Array[T], key : (T) -> Int) -> Array[T] {
+  let out : Array[T] = []
+  for x in xs {
+    let k = key(x)
+    let mut i = out.length()
+    while i > 0 && key(out[i - 1]) > k {
+      i = i - 1
+    }
+    out.insert(i, x)
+  }
+  out
 }
 
 ///|
@@ -634,6 +741,8 @@ fn Ctx::layers_frame_end(self : Ctx) -> Unit {
   self.last_layers = self.layers
   last.clear()
   self.layers = last
+  // (what was dismissed of the layers published before: as these say now)
+  self.layers_gone.clear()
 }
 
 ///|
@@ -717,6 +826,11 @@ struct BackEntry {
   edge : Double
   island : @view.NodeId?
   layer : Int
+  /// where what said it is in the window's stack of layers (Ctx::stacked; -1 in none)
+  stack : Int
+  /// the layer's opening it was said in (Ctx::overlay's body; 0: none's): it stands with that layer, over what the
+  /// layer said before it (its close), as it was said after it
+  within : Int
 }
 
 ///|
@@ -728,15 +842,51 @@ enum BackList {
 }
 
 ///|
-/// What takes back said as it is now (Ctx's `back_next` and what goes with it) over what was said before it.
+/// What takes back said as it is now (Ctx's `back_next` and what goes with it) over what was said before it: where it
+/// is in the window's stack of layers (Ctx::stacked) said with it, the chain put in that order once, as the layers are
+/// (raise_layers).
 fn Ctx::back_says(self : Ctx) -> Unit {
   match self.back_next {
     Some(f) =>
       self.back_chain_next = Said(
-        { f, node: self.back_node_next, edge: self.back_edge_next, island: self.back_island_next, layer: 0 },
+        {
+          f,
+          node: self.back_node_next,
+          edge: self.back_edge_next,
+          island: self.back_island_next,
+          layer: self.back_layer_next,
+          stack: self.back_stack_said(),
+          within: self.back_within,
+        },
         self.back_chain_next,
       )
     None => ()
+  }
+}
+
+///|
+/// Where what takes back said now stands in the window's stack of layers: a layer's (its close, what is said in it), at
+/// the place said for it (Ctx::stacked); none's, at none (where its view is among the tree's, Ctx::back_taker), whatever
+/// place it is built under.
+fn Ctx::back_stack_said(self : Ctx) -> Int {
+  if self.back_layer_next != 0 || self.back_within != 0 {
+    self.stack_cur
+  } else {
+    -1
+  }
+}
+
+///|
+/// What takes back now said as the chain has it (Ctx's `back_chain_next`: its topmost, in the window's stack of layers).
+fn Ctx::back_from_chain(self : Ctx) -> Unit {
+  match self.back_chain_next {
+    Said(top, _) => {
+      self.back_next = Some(top.f)
+      self.back_node_next = top.node
+      self.back_edge_next = top.edge
+      self.back_island_next = top.island
+    }
+    Unsaid => ()
   }
 }
 
@@ -809,6 +959,7 @@ fn Ctx::layers_dismissed(self : Ctx, gone : Array[(Int, Dismiss)], tell? : Bool 
     // (this opening takes no input from here: what it drew pressed or scrolled, its keys, a press held in it; the last
     // frame's facts of it kept as they are, its view drawing it going from the next)
     self.layer_retired[id] = gen
+    self.layers_gone.add(id)
     layer_back_spent[gen] = id
     for i in 0..<self.count {
       let n = self.nodes[i]
@@ -864,7 +1015,9 @@ pub fn Ctx::layer_ended(self : Ctx, id : Int) -> Unit {
 /// Whether layer `l`, as the last frame built it, takes input now: not leaving, its opening not dismissed since (what
 /// reads the last frame's layers for an input asks it: keys, the focus, Tab, presses and wheels over a modal one).
 fn Ctx::layer_takes(self : Ctx, l : Layer) -> Bool {
-  !l.inert && !self.layer_retired_now(l.id)
+  // (one dismissed since: none, though this frame's build has read its dismissal and let its opening go before the frame
+  // publishes it inert or gone, layers_frame_end)
+  !l.inert && !self.layer_retired_now(l.id) && !self.layers_gone.contains(l.id)
 }
 
 ///|
@@ -938,7 +1091,9 @@ pub fn Ctx::with_dismissed(self : Ctx, f : (Dismiss) -> Unit, body : () -> Unit)
 /// what it was said over, and so on down, in its place.
 fn Ctx::back_layer_spent(self : Ctx) -> Unit {
   let mut moved = false
-  while self.back_chain is Said(e, under) && e.layer != 0 && layer_back_spent.contains(e.layer) {
+  // (a layer's close, and what was said in it: the layer gone, none of it takes back)
+  while self.back_chain is Said(e, under) &&
+        ((e.layer != 0 && layer_back_spent.contains(e.layer)) || (e.within != 0 && layer_back_spent.contains(e.within))) {
     self.back_chain = under
     moved = true
   }
@@ -949,11 +1104,13 @@ fn Ctx::back_layer_spent(self : Ctx) -> Unit {
         self.back_node = e.node
         self.back_edge = e.edge
         self.back_island = e.island
+        self.back_stack = e.stack
       }
       Unsaid => {
         self.back = None
         self.back_node = -1
         self.back_island = None
+        self.back_stack = -3
       }
     }
   }

@@ -269,8 +269,12 @@ fn Ctx::tab_stops(self : Ctx) -> Array[Focusable] {
   let out : Array[Focusable] = []
   let seen : Map[Int, Bool] = {}
   for f in self.focus_spliced() {
-    // (and what of the window's tree is over all else of it: no layer under it traps it, View::over_all)
-    if trap != 0 && !self.layer_within(f.layer, trap) && !focus_over_all(f.id) {
+    // (and what of the window's tree is over the trapping layer in the window's stack of layers: no layer under it
+    // traps it, View::stacked; under a modal layer of the tree's over it, an old one's none: Tree::allows)
+    if trap != 0 && !self.layer_within(f.layer, trap) && focus_stack(f.id) <= self.trap_stack(trap) {
+      continue
+    }
+    if f.layer != 0 && self.layer_stack_of(f.layer) < tree_modal_stack() {
       continue
     }
     if self.layer_inert(f.layer) || !island_allows(f.island) {
@@ -586,4 +590,29 @@ fn Ctx::focus_moved(self : Ctx, id : Int, visible? : Bool) -> Unit {
     h_frame_owed()
   }
   @signals.end_batch()
+}
+
+///|
+/// Where the old frame's layer `id` (as the last frame built it) is in the window's stack of layers (Ctx::layer_stack);
+/// -1 where it is none of them.
+fn Ctx::layer_stack_of(self : Ctx, id : Int) -> Int {
+  match self.last_layers.iter().find_first(fn(l) { l.id == id }) {
+    Some(l) => self.layer_stack(l)
+    None => -1
+  }
+}
+
+///|
+/// Where the layer trapping the focus is in the window's stack of layers (Ctx::layer_stack_of).
+fn Ctx::trap_stack(self : Ctx, trap : Int) -> Int {
+  self.layer_stack_of(trap)
+}
+
+///|
+/// Where the window's tree's topmost modal layer is in the window's stack of layers (Tree::modal_stack), -2 none.
+fn tree_modal_stack() -> Int {
+  match view_app.val {
+    Some(tree) => tree.modal_stack()
+    None => -2
+  }
 }

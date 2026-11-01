@@ -189,6 +189,7 @@ let presented_how : Array[How] = []
 /// Nothing presented (the app begun again).
 pub fn presenters_reset() -> Unit {
   presented_now.clear()
+  tree_presented.clear()
   presented_drawn_said.set([])
   lists_of.clear()
   presented_count.val = 0
@@ -199,7 +200,7 @@ pub fn presenters_reset() -> Unit {
 ///|
 fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit = fn() {  }) -> Unit {
   presented_count.val += 1
-  presented_told()
+  // (what is presented written whole, then told as one change: what reads it as it is told finds it there)
   presented_now.push({
     serial: presented_count.val,
     shows,
@@ -212,7 +213,10 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     over: false,
     widest: 0.0,
   })
+  @signals.start_batch()
+  presented_told()
   presented_drawn_said.set(presented_now.map(fn(p) { p.serial }))
+  @signals.end_batch()
 }
 
 ///|
@@ -903,11 +907,15 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
     let mut open = false
     let mut built = false
     c.scope(p.serial, fn() {
-      // (dismissed by the hand, at that moment: dismissed_now)
-      c.with_dismissed(fn(_) { dismissed_now(p.serial) }, fn() {
-        let (o, b) = draw_presented(c, p, sheet)
-        open = o
-        built = b
+      // (at its place in the window's stack of layers, what it opens in it there too: one presented as nodes of the
+      // window's tree, at its own, over it or under it as each was presented)
+      c.stacked(p.serial, fn() {
+        // (dismissed by the hand, at that moment: dismissed_now)
+        c.with_dismissed(fn(_) { dismissed_now(p.serial) }, fn() {
+          let (o, b) = draw_presented(c, p, sheet)
+          open = o
+          built = b
+        })
       })
     })
     // closed by the hand as it was drawn (back, Escape, a press outside, dragged down): it and what is over it go (one
@@ -962,6 +970,10 @@ fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
   match p.shows {
     Panel(x) if x.stage => return stage_centred(c, key, p, x)
     _ => ()
+  }
+  // (a confirm the window's tree draws: its node's, open as said, drawn till its way out is over: presented_node.mbt)
+  if tree_draws(p, sheet) {
+    return (p.open, p.open || tree_presented.contains(p.serial))
   }
   if sheet {
     return present_sheet(c, key, p)
