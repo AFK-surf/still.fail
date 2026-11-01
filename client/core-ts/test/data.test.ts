@@ -429,6 +429,54 @@ test("a_burst_says_each_chat_row_before_and_after", async () => {
   runner.shutdown();
 });
 
+test("a_rolled_back_chat_row_does_not_announce_a_change", async () => {
+  const { data, open, db, runner } = fresh();
+  await open();
+  try {
+    data.set(rows("w/a"), [{ id: "x", unread: false }]);
+    await run(data.written);
+    const heard: [string, RowChange[], boolean][] = [];
+    data.onChats((station, changes, first) => heard.push([station, changes, first]));
+    let fail = true;
+    db().failing = (sql) => {
+      if (sql !== "COMMIT" || !fail) return null;
+      fail = false;
+      return new SqlError("database or disk is full", "full");
+    };
+    data.putChat("w/a", { id: "x", unread: true });
+    await run(data.written);
+    assert.deepEqual(data.chat("w/a", "x"), { id: "x", unread: false });
+    assert.deepEqual(heard, [], "a rolled-back row cannot create an unread notice");
+
+    data.putChat("w/a", { id: "x", unread: true });
+    await run(data.written);
+    assert.deepEqual(heard, [["w/a", [{ id: "x", before: { id: "x", unread: false }, after: { id: "x", unread: true } }], false]]);
+  } finally { runner.shutdown(); }
+});
+
+test("a_rolled_back_first_chat_list_does_not_start_noticing", async () => {
+  const { data, open, db, runner } = fresh();
+  await open();
+  try {
+    const heard: [string, RowChange[], boolean][] = [];
+    data.onChats((station, changes, first) => heard.push([station, changes, first]));
+    let fail = true;
+    db().failing = (sql) => {
+      if (sql !== "COMMIT" || !fail) return null;
+      fail = false;
+      return new SqlError("database or disk is full", "full");
+    };
+    data.set(rows("w/a"), [{ id: "x", unread: true }]);
+    await run(data.written);
+    assert.equal(data.listed("w/a", "chats"), false);
+    assert.deepEqual(heard, [], "a rolled-back first list cannot initialize notices");
+
+    data.set(rows("w/a"), [{ id: "x", unread: true }]);
+    await run(data.written);
+    assert.deepEqual(heard, [["w/a", [{ id: "x", before: undefined, after: { id: "x", unread: true } }], true]]);
+  } finally { runner.shutdown(); }
+});
+
 test("the_rows_that_ask_something_and_the_first_screen_are_found_by_their_columns", async () => {
   const { host, runner } = fresh();
   const data = new Data(host, runner, { owner: () => "s1", derive: { tone: (r) => (r.unread === true && r.mine === true ? "done" : null), asks: (r) => r.decision !== undefined } });
