@@ -130,15 +130,33 @@ jobs:
         with: { distribution: temurin, java-version: 21 }
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/mbui-moonbit
-      # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB)
+      # (mbc's units and the core's bytecode: main's newest, and on a branch its own last push's over them, m- and b-, as
+      # the linux job keeps them: with main's alone each push of a branch compiled all it had changed again)
       - uses: actions/cache/restore@v4
         id: store
         with:
           path: |
             .ci/mbc-store
             .ci/hbc
-          key: mbui-android-${{ github.sha }}
-          restore-keys: mbui-android-
+          key: mbui-android-m-${{ github.sha }}
+          restore-keys: |
+            mbui-android-m-
+            mbui-android-
+      - if: github.ref != 'refs/heads/main'
+        run: mkdir -p .ci && mv .ci "$RUNNER_TEMP/ci-main"
+      - uses: actions/cache/restore@v4
+        id: own
+        if: github.ref != 'refs/heads/main'
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: mbui-android-b-${{ github.sha }}
+          restore-keys: mbui-android-b-
+      - if: github.ref != 'refs/heads/main'
+        run: |
+          mkdir -p .ci && cp -a -n "$RUNNER_TEMP/ci-main/." .ci/ && rm -rf "$RUNNER_TEMP/ci-main"
+          echo "units: $(find .ci/mbc-store -mindepth 2 -maxdepth 2 -type d 2>/dev/null | wc -l)"
       # (the APK's own, apart: a cache's paths are part of what it is, and the one above stays the one main has)
       - uses: actions/cache/restore@v4
         id: apk-store
@@ -176,12 +194,12 @@ jobs:
       # (main's, saved under a key by what they hold: as restored, not saved again; under the commit's key each job of
       # each run saved the same, ~25 s a job, 2026-10-22)
       - name: The caches' keys, by what they hold
-        if: github.ref == 'refs/heads/main'
         run: |
           sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
-          echo "STORE_KEY=mbui-android-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
+          echo "STORE_KEY=mbui-android-${{ github.ref == 'refs/heads/main' && 'm' || 'b' }}-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
           echo "APK_KEY=mbui-apk-$(sh apps/mbui/scripts/held.sh .ci/apk)" >> "$GITHUB_ENV"
-      - if: github.ref == 'refs/heads/main' && env.STORE_KEY != steps.store.outputs.cache-matched-key
+      # (the units on every ref, a branch's under b-; the APK's, 400 MB, main's alone)
+      - if: env.STORE_KEY != steps.store.outputs.cache-matched-key && env.STORE_KEY != steps.own.outputs.cache-matched-key
         uses: actions/cache/save@v4
         with:
           path: |
@@ -225,14 +243,36 @@ jobs:
           packages: libgtk-4-dev libepoxy-dev libsoup-3.0-dev libsecret-1-dev clang
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/mbui-moonbit
+      # mbc's units and the core's bytecode: main's newest, and on a branch its own last push's over them (m- and b-, as
+      # check-mbui keeps its own). With main's alone, every push of a branch compiled all it had changed since main
+      # again: presets' two pushes 273 and 276 of 480 units, 78 s of each Linux x64 build (41288956328, 41289661355,
+      # 2026-11-01).
       - uses: actions/cache/restore@v4
         id: store
         with:
           path: |
             .ci/mbc-store
             .ci/hbc
-          key: mbui-linux-${{ matrix.arch }}-${{ github.sha }}
-          restore-keys: mbui-linux-${{ matrix.arch }}-
+          key: mbui-linux-${{ matrix.arch }}-m-${{ github.sha }}
+          # (m- only, then the names before m- and b-: GitHub looks through the branch's own caches first)
+          restore-keys: |
+            mbui-linux-${{ matrix.arch }}-m-
+            mbui-linux-${{ matrix.arch }}-
+      - if: github.ref != 'refs/heads/main'
+        run: mkdir -p .ci && mv .ci "$RUNNER_TEMP/ci-main"
+      - uses: actions/cache/restore@v4
+        id: own
+        if: github.ref != 'refs/heads/main'
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: mbui-linux-${{ matrix.arch }}-b-${{ github.sha }}
+          restore-keys: mbui-linux-${{ matrix.arch }}-b-
+      - if: github.ref != 'refs/heads/main'
+        run: |
+          mkdir -p .ci && cp -a -n "$RUNNER_TEMP/ci-main/." .ci/ && rm -rf "$RUNNER_TEMP/ci-main"
+          echo "units: $(find .ci/mbc-store -mindepth 2 -maxdepth 2 -type d 2>/dev/null | wc -l)"
       # (the Linux engine and shell in the native cache, as a run before fetched them, as the windows job keeps its own:
       # one download from the store took 84 s for 2.9 MB, main 9440b484, 40668393099)
       - name: The Linux natives' keys
@@ -262,11 +302,10 @@ jobs:
         if: github.ref != 'refs/heads/main'
         with: { name: "mbui-linux-${{ matrix.arch }}-${{ github.sha }}", path: ".ci/release/release/${{ matrix.part }}", retention-days: 7 }
       - name: The caches' keys, by what they hold
-        if: github.ref == 'refs/heads/main'
         run: |
           sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
-          echo "STORE_KEY=mbui-linux-${{ matrix.arch }}-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
-      - if: github.ref == 'refs/heads/main' && env.STORE_KEY != steps.store.outputs.cache-matched-key
+          echo "STORE_KEY=mbui-linux-${{ matrix.arch }}-${{ github.ref == 'refs/heads/main' && 'm' || 'b' }}-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
+      - if: env.STORE_KEY != steps.store.outputs.cache-matched-key && env.STORE_KEY != steps.own.outputs.cache-matched-key
         uses: actions/cache/save@v4
         with:
           path: |
