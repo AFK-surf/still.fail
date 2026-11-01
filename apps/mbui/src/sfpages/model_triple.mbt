@@ -435,6 +435,10 @@ fn triple_body(
   // 的最顶上去啊」): opening up from it (a composer's, at the foot of its page) or a sheet risen from the screen's foot,
   // from the foot up how it runs, the models used most (the most used lowest), then the rest; opening down, the same
   // from the top down. What is used most stays put; the rest scrolls by itself.
+  // (the panel at least as wide as a row with the widest name and the widest of how it runs, where it has the room:
+  // as wide whatever depth is picked in it)
+  let row_least = names_w + usual_w + 14.0 + 3.0 * @ui.Space::px(S1_5) + 2.0 * @ui.Space::px(S2_5) + @ui.Space::px(S3_5)
+  c.box(style=@ui.style(min_w=Within(row_least)), fn() {  }) |> ignore
   let up = @sf.panel_opens_up()
   let models = fn() {
     if rest.length() == 0 && !searching {
@@ -445,7 +449,7 @@ fn triple_body(
       // saying it again, most of them a series of one (2026-10-30 用户「有点丑」): a series' models together)
       for s in series {
         for o in s.1 {
-          triple_model_row(c, src, station, of, v, Some(o), names_w, usual_w, saved, close)
+          triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close)
         }
       }
       if listed.length() == 0 {
@@ -462,7 +466,7 @@ fn triple_body(
       // (named, as what they are: 2026-11-01 用户「感觉还是得标注一下常用」)
       triple_column_head(c, @sf.t("web-main.combos.short"))
       for o in if up { near.rev() } else { near } {
-        triple_model_row(c, src, station, of, v, Some(o), names_w, usual_w, saved, close)
+        triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close)
       }
     })
     |> ignore
@@ -628,7 +632,7 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, close :
 
 ///|
 /// A model's row: its maker's mark, its name (what it has spent under it) `names_w` wide (the widest of the models'),
-/// at its end how it runs picked `usual_w` wide where the row has the room (its words cut short first where not),
+/// at its end how it runs picked (cut short first where the row is short),
 /// the station it comes from at its end.
 fn triple_model_row(
   c : @ui.Ctx,
@@ -638,7 +642,6 @@ fn triple_model_row(
   v : Json?,
   o : Json?,
   names_w : Double,
-  usual_w : Double,
   saved : String,
   close : () -> Unit,
 ) -> Unit {
@@ -668,14 +671,13 @@ fn triple_model_row(
     _ => None
   }
   // (at its end how it runs picked: as it last ran here, the one picked as it runs now; then where it comes from)
-  let trail = if usual_w == 0.0 && from_station is None {
+  let trail = if usual == "" && from_station is None {
     None
   } else {
     Some(fn() {
-      if usual != "" || usual_w > 0.0 {
-        // (as wide as the widest of them where the row has the room, giving way to the name where not: cut short,
-        // left out once it would keep too little)
-        c.box(style=triple_usual_room.then(@ui.style(w=Fixed(usual_w), min_w=SPx)), drop=1, fn() {
+      if usual != "" {
+        // (giving way to the name where the row is short: cut short, left out once it would keep too little)
+        c.box(style=triple_usual_room, drop=1, fn() {
           c.text(usual, style=triple_usual) |> ignore
         })
         |> ignore
@@ -1283,7 +1285,7 @@ let triple_usual : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 ///|
 /// Its room: its words at its end.
 // kept across runs: a value (no field of it changes)
-let triple_usual_room : @ui.Style = @ui.css("row justify=JEnd")
+let triple_usual_room : @ui.Style = @ui.css("row w=Cut justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
