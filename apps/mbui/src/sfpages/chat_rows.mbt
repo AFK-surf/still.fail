@@ -399,6 +399,8 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
   }
   let row = c.id("activity-row/" + a.key)
   let row_key = rk + "\u{1}" + a.key
+  let show_stop = here.view.agents.length() > 1 && (c.hovered(row) || c.hovered(id))
+  let stop_room = if show_stop { c.space(S6) + c.space(S1) } else { 0.0 }
   let area = c.box(style=activity_row_box, id=row, fn() {
     let line = c.box(style=if here.inline { activity_line_narrow } else { activity_line }, id~, fn() {
       let face = c.box(style=activity_face, fn() {
@@ -430,7 +432,7 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
         // Keep the measured content at its whole width inside the clipping room. If it stops being measured while
         // folded, the next build loses that width and opens it again, alternating between the two on every frame.
         let inner = c.box(style=activity_tail, keep=cut, fn() {
-          steady_words(c, row_key, said, c.hovered(id), came, clock)
+          steady_words(c, row_key, said, c.hovered(id), came, clock, stop_room)
           if clock != "" {
             let time = c.text(clock, style=activity_clock)
             // The row can be kept after its arrival cause is forgotten. Its paint stays the same: the settled look
@@ -453,7 +455,7 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
     })
     c.semantics(line, Button, id~, label=a.who + "：" + said.1)
     // one of several agents: stopped alone from its row, under the pointer
-    if here.view.agents.length() > 1 && (c.hovered(row) || c.hovered(id)) {
+    if show_stop {
       let stop = c.id("activity-stop/" + a.key)
       let label = @sf.t("web-main.activity.stop", args=[("who", a.who)])
       @sf.tip(c, "activity-stop/" + a.key, stop, label)
@@ -489,11 +491,21 @@ fn work_ring(c : @ui.Ctx, waiting : Bool) -> Unit {
 }
 
 ///|
+/// The space the activity's words can use, leaving its clock and any stop control whole at the end of the row.
+fn activity_visible_width(c : @ui.Ctx, row : String, clock : String, stop_room : Double) -> Double {
+  match (@motion.measured_rect(c, "activity-area/" + row), @motion.measured_rect(c, "now-room/" + row)) {
+    (Some((x, _, w, _)), Some((start, _, _, _))) =>
+      dmax(x + w - start - stop_room - (if clock == "" { 0.0 } else { c.words_across(clock, activity_clock) + c.space(S2) }), 0.0)
+    _ => dmax(c.width - stop_room, 0.0)
+  }
+}
+
+///|
 /// What an activity says now, steadied: brief routine steps are coalesced, while important ones have a turn even if
 /// they have finished. Each step has time to be read; each glyph gives way to the next step's at its place.
 /// The line goes from the one's width to the other's (its clock with it); the same thing's new words show at once.
 /// In the muted ink, the text's under the pointer.
-fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), hot : Bool, came : Double?, clock : String) -> Unit {
+fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), hot : Bool, came : Double?, clock : String, stop_room : Double) -> Unit {
   let (key, words, mono, important) = said
   let st = match steadies.get(row) {
     Some(s) => s
@@ -611,14 +623,10 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
       let old_cells = c.words_glyph_cells(st.was, style, mono=st.was_mono)
       let new_cells = c.words_glyph_cells(st.words, style, mono=st.mono)
       // The reading order spans the part that can actually be seen, even when one step is much longer than the line.
-      let visible = match (@motion.measured_rect(c, "activity-area/" + row), @motion.measured_rect(c, "now-room/" + row)) {
-        (Some((x, _, w, _)), Some((start, _, _, _))) =>
-          dmax(x + w - start - (if clock == "" { 0.0 } else { c.words_across(clock, activity_clock) + c.space(S2) }), 0.0)
-        _ => c.width
-      }
+      let visible = activity_visible_width(c, row, clock, stop_room)
       st.places = activity_change_places(old_cells, new_cells, visible)
       reveal.animate(1.0, @motion.tween(@sfbase.glyph_change_in_ms, ease=Linear), start_at=at)
-      let widened = c.words_across(st.words, style, mono=st.mono) - c.words_across(st.was, style, mono=st.was_mono)
+      let widened = dmin(c.words_across(st.words, style, mono=st.mono), visible) - dmin(c.words_across(st.was, style, mono=st.was_mono), visible)
       swap.animate(1.0, @motion.move(over=dmax(c.text_size(Meta).1, widened.abs())), start_at=at)
     }
   }
@@ -634,16 +642,22 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
       // Both steps keep their shaped text. At each place the outgoing glyph fades before the incoming one arrives,
       // so their ink does not overlap. The window keeps the line no wider than it has room for.
       let line = c.text_size(Meta).1
-      let from = c.words_across(st.was, style, mono=st.was_mono)
-      let to = c.words_across(st.words, style, mono=st.mono)
+      let whole_from = c.words_across(st.was, style, mono=st.was_mono)
+      let whole_to = c.words_across(st.words, style, mono=st.mono)
+      let visible = activity_visible_width(c, row, clock, stop_room)
+      // The clock travels between the widths actually visible at each end, not through text beyond the row.
+      let from = dmin(whole_from, visible)
+      let to = dmin(whole_to, visible)
       let old_cells = c.words_glyph_cells(st.was, style, mono=st.was_mono)
       let new_cells = c.words_glyph_cells(st.words, style, mono=st.mono)
       let across = from + (to - from) * k
       st.asked = across
       let mut changing = -1
       let window = c.box(style=@ui.style(w=Cut, max_w=Fixed(across), h=Fixed(line), clip=true), fn() {
-        let wide = if from > to { from } else { to }
-        let both = c.box(style=@ui.style(w=if cut { Full } else { Fixed(wide) }, h=Fixed(line)), fn() {
+        let wide = if whole_from > whole_to { whole_from } else { whole_to }
+        let clipped = whole_from > visible + 0.5 || whole_to > visible + 0.5
+        // Both lines are layered, so the incoming one cannot open a content-sized box on its own.
+        let both = c.box(style=@ui.style(w=Fixed(if cut || clipped { across } else { wide }), h=Fixed(line)), fn() {
           let before = c.rich([@ui.span(st.was, mono=st.was_mono)], style~)
           activity_change_glyphs(c, before, row, reveal, false, k, old_cells, new_cells, st.places)
           c.layer(fn() {
@@ -657,7 +671,11 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
       })
       // Fade the end where the window widens, narrows, or cuts the line short.
       let gone = (to - from).abs()
-      let end = if cut { @ui.cut_soft_most } else { @ui.cut_soft(gone * k, gone * (1.0 - k)) }
+      let from_fade = if whole_from > visible + 0.5 { @ui.cut_soft_most } else { 0.0 }
+      let to_fade = if whole_to > visible + 0.5 { @ui.cut_soft_most } else { 0.0 }
+      let end = if cut { @ui.cut_soft_most } else {
+        dmax(@ui.cut_soft(gone * k, gone * (1.0 - k)), from_fade * (1.0 - k) + to_fade * k)
+      }
       c.fade_to(changing, window, end~)
     } else {
       st.asked = c.words_across(st.words, style, mono=st.mono)
