@@ -152,7 +152,8 @@ fn Ctx::cycle_looks(self : Ctx) -> Unit {
         if next < 0.0 {
           self.cycling = true
           looks_own.cycling = true
-        } else if next < @double.infinity {
+        } else if next < @double.infinity && app_visible() {
+          // (a step nobody can see waits: the window shown again asks a frame, which draws the step it is at)
           self.wake_at_time(next, later=true)
         }
       }
