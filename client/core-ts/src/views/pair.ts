@@ -46,6 +46,10 @@ const unhex = (h: string) => (/^([0-9a-f]{2})*$/.test(h) ? Uint8Array.from(h.mat
 
 /// How long a code waits to be typed, on the trusted device.
 export const PAIR_WAIT_MS = 5 * 60_000;
+/// When a code shown now is too old, in whole ms (the shapes' i64: LockPairing.until, LockPair.until). An app's clock
+/// says fractions of one: kept as they were, they failed the trusted device's prompt and the new device's lock page
+/// (2026-11-01: 设置 › 安全 left loading on the new device, no code to type).
+const codeUntil = (inner: Inner) => Math.floor(inner.host.nowMs()) + PAIR_WAIT_MS;
 /// How long the new device waits past PAIR_WAIT_MS before it takes a code for gone though its trusted device said
 /// nothing (the connection lost without a word, an app put away).
 export const PAIR_GRACE_MS = 10_000;
@@ -89,7 +93,7 @@ export function credentialOf(token: string, keys: unknown, ws: string, device: s
 // ── the trusted device ──
 
 /// A new device showing this one's code: who, where it asks, the code, how to turn it away.
-/// `hidden`: its prompt closed here, the code still good. `until`: when the code is too old (ms).
+/// `hidden`: its prompt closed here, the code still good. `until`: when the code is too old (whole ms: `codeUntil`).
 type Asking = { device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; until: number; places: { ws: string; sub: string; account: string }[]; hidden: boolean; away: Deferred.Deferred<void> };
 
 const askings = new WeakMap<Inner, Map<string, Asking>>();
@@ -168,7 +172,7 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
     const asking: Asking = {
       device: peer, name: who.name, email: who.email, kind, label: (str(get(hello.value, "label")) ?? "").slice(0, 120),
       signKey: kind === "app" ? str(get(hello.value, "sign_key")) : null, code: pairCode((b) => inner.host.randomBytes(b)),
-      at: Math.floor(inner.host.nowMs() / 1000), until: inner.host.nowMs() + PAIR_WAIT_MS, places, hidden: false, away: Deferred.makeUnsafe<void>(),
+      at: Math.floor(inner.host.nowMs() / 1000), until: codeUntil(inner), places, hidden: false, away: Deferred.makeUnsafe<void>(),
     };
     all.set(peer, asking);
     told(inner);
@@ -269,7 +273,7 @@ function hide(inner: Inner, device: string): void {
 // ── the new device ──
 
 /// A trusted device that showed a code, and the workspaces it approves this one in; `until`, when its code is too old
-/// (ms, as this device saw it come).
+/// (whole ms, as this device saw it come: `codeUntil`).
 export type Met = { id: string; d: Duplex; workspaces: string[]; until?: number };
 /// This device's try: how far it got, the trusted devices showing a code.
 export type Trying = { state: "finding" | "code" | "checking" | "wrong" | "none" | "failed" | "done"; left?: number; error?: string; workspaces: string[]; met: Map<string, Met>; run: number };
@@ -386,7 +390,7 @@ export function keep(inner: Inner, y: Trying, id: string, raw: Duplex, workspace
       raw.close();
     },
   };
-  const m: Met = { id, d, workspaces, until: inner.host.nowMs() + PAIR_WAIT_MS };
+  const m: Met = { id, d, workspaces, until: codeUntil(inner) };
   // Whether it is still one of this try's, nothing being checked with it now: what it says then is said to nobody.
   const idle = () => tryings.get(inner) === y && y.met.get(id) === m && y.state !== "checking";
   const end = (why: CoreError) => {
