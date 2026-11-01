@@ -595,6 +595,8 @@ jobs:
     env:
       MSYS: winsymlinks:nativestrict
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
+      # a branch's units kept for its next push (MBC_STORE, below the app's build cache, which is main's alone)
+      MBC_STORE: ${{ github.ref != 'refs/heads/main' && format('{0}/.ci/mbc-store', github.workspace) || '' }}
       # The app run end to end (e2e/win.sh: signed in against a local still.fail, its files, a notice, its update; the
       # desktop app moved over to it, handoff.sh) once a day and when asked, never on a push: a window on a machine,
       # its browser, its notices and its installer, is no gate (2026-10-31, as asked: "这种不确定测试只定期跑，永远不阻塞
@@ -666,6 +668,18 @@ jobs:
             apps/mbui/mbui/out
           key: mbui-win-build-mono-${{ github.sha }}
           restore-keys: mbui-win-build-mono-
+      # A branch's own units over main's build (MBC_STORE: those of its last push, by content, which main's build has
+      # not): without, each push of a branch compiled all it changed against main again, presets' 277 of 480 units on
+      # every push, ~55 s (2026-11-01, 41291664812). Its objects alone (some tens of MB), not the build's 160; main's
+      # build is restored above for the rest. Pruned to what the run used and saved below, as the Linux jobs' are.
+      - uses: actions/cache/restore@v4
+        id: own
+        if: github.ref != 'refs/heads/main'
+        with:
+          path: .ci/mbc-store
+          key: mbui-win-store-b-${{ github.sha }}
+          restore-keys: mbui-win-store-b-
+      - run: touch "$RUNNER_TEMP/start"
       # The app (APP=stillfail) built in the background from here on: cl /O2 of its C (some 46 MB) is ~55 s on the
       # runner's four cores, and needs nothing of what the steps after it do (pnpm, the packages, the core's bytecode),
       # which were ~60 s before it, one after another (2026-10-20). "Build (APP=stillfail)" waits for it.
@@ -837,6 +851,16 @@ jobs:
             apps/mbui/mbui/_build
             apps/mbui/mbui/out
           key: ${{ env.BUILD_KEY }}
+      - name: The branch's units, by what they hold
+        if: github.ref != 'refs/heads/main'
+        run: |
+          sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
+          echo "STORE_KEY=mbui-win-store-b-$(sh apps/mbui/scripts/held.sh .ci/mbc-store)" >> "$GITHUB_ENV"
+      - if: github.ref != 'refs/heads/main' && env.STORE_KEY != steps.own.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: .ci/mbc-store
+          key: ${{ env.STORE_KEY }}
       - name: The Windows app's installer signed, put, checked, then its feed
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |

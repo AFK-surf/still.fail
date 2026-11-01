@@ -292,10 +292,20 @@ int32_t mbc_stat(moonbit_bytes_t path) {
 int64_t mbc_stat_size(void) { return st_size; }
 int64_t mbc_stat_mtime(void) { return st_mtime_ns; }
 
+// (a file's or a directory's: Windows' _utime opens what it touches as a file, and a directory then is not touched,
+// so MBC_STORE's units taken from it were pruned as unused)
 int32_t mbc_touch(moonbit_bytes_t path) {
   char *p = cpath(path);
 #if defined(_WIN32)
-  int r = _utime(p, NULL);
+  int r = -1;
+  HANDLE h = CreateFileA(p, FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                         OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+  if (h != INVALID_HANDLE_VALUE) {
+    FILETIME t;
+    GetSystemTimeAsFileTime(&t);
+    if (SetFileTime(h, NULL, &t, &t)) r = 0;
+    CloseHandle(h);
+  }
 #else
   int r = utime(p, NULL);
 #endif
