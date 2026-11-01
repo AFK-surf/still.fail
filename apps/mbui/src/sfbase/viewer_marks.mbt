@@ -620,14 +620,16 @@ pub fn marks_finger_off() -> Unit {
 /// The marks drawn over the picture at `r` (x, y, w, h on the stage), of `nw` × `nh` natural pixels (ImageMarks.kt
 /// drawMarks, drawPicked, Pins, WritingField): the lines (a box's rounded edge, an arrow and its barbs, a line drawn by
 /// hand smoothed through its midpoints) in one drawing over the stage; words with their halo; the picked mark's
-/// dashed frame and its handles; the numbered marks' pins (`pins`: else nodes of the window's tree's, marks_pins_node);
-/// the words being written (`writing`: else on their own, marks_writing). Each placed where it is on the stage, a layer
-/// of its own (nothing in it flows after what came before).
+/// dashed frame and its handles (`shapes`: else nodes of the window's tree's, marks_shapes_node); the numbered marks'
+/// pins (`pins`: else nodes of the window's tree's, marks_pins_node); the words being written (`writing`: else on
+/// their own, marks_writing). Each placed where it is on the stage, a layer of its own (nothing in it flows after what
+/// came before).
 pub fn marks_draw(
   c : @ui.Ctx,
   r : (Double, Double, Double, Double),
   nw : Double,
   nh : Double,
+  shapes? : Bool = true,
   pins? : Bool = true,
   writing? : Bool = true,
 ) -> Unit {
@@ -639,47 +641,11 @@ pub fn marks_draw(
   let at_place = fn(x : Double, y : Double, body : () -> Unit) {
     c.layer(fn() { c.box(tx=x, ty=y, body) |> ignore }) |> ignore
   }
-  let lines : Array[@ui.Line] = []
-  let drawn = marks_drawn()
-  for m in drawn {
-    let lw = m.w * k
-    let at = fn(i : Int) -> (Double, Double) { (rx + m.pts[2 * i] * k, ry + m.pts[2 * i + 1] * k) }
-    match m.kind {
-      "box" => {
-        let (bx, by, bw, bh) = m.bounds()
-        lines.push(@ui.line(round_rect(rx + bx * k, ry + by * k, bw * k, bh * k, dmin(lw * 1.5, dmin(bw * k, bh * k) / 2.0)), width=lw, color=m.color))
-      }
-      "arrow" => {
-        let (ax, ay) = at(0)
-        let (bx, by) = at(1)
-        let (lx, ly, qx, qy) = arrow_barbs(ax, ay, bx, by, lw)
-        lines.push(@ui.line([(ax, ay), (bx, by)], width=lw, color=m.color))
-        lines.push(@ui.line([(lx, ly), (bx, by), (qx, qy)], width=lw, color=m.color))
-      }
-      "pen" => lines.push(@ui.line(smoothed(m.pts.length() / 2, at), width=lw, color=m.color))
-      _ => ()
-    }
+  let drawn = if shapes { marks_drawn() } else { [] }
+  let (lines, handles) = if shapes { marks_lines(r, nw) } else { ([], []) }
+  if shapes {
+    c.layer(fn() { c.lines(lines, w=Fill(1.0), h=Fill(1.0)) |> ignore }) |> ignore
   }
-  // the picked mark's dashed frame (white at 85%, 1 wide, 4 on 3 off), its handles round and white, ringed in the ink
-  let handles : Array[(Double, Double)] = []
-  match marking.shapes.iter().find_first(fn(s) { s.id == marking.picked && marking.tool == Select }) {
-    Some(s) => {
-      if s.kind != "arrow" {
-        let (bx, by, bw, bh) = s.bounds()
-        let reach = mark_reach / 2.0
-        let x0 = rx + bx * k - reach
-        let y0 = ry + by * k - reach
-        let x1 = rx + (bx + bw) * k + reach
-        let y1 = ry + (by + bh) * k + reach
-        dashes([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)], lines)
-      }
-      for h in s.handles(k) {
-        handles.push((rx + h.1 * k, ry + h.2 * k))
-      }
-    }
-    None => ()
-  }
-  c.layer(fn() { c.lines(lines, w=Fill(1.0), h=Fill(1.0)) |> ignore }) |> ignore
   // words, edged in their halo
   for m in drawn {
     if m.kind == "words" {
@@ -745,6 +711,57 @@ pub fn marks_draw(
   if writing {
     marks_writing(c, r, nw)
   }
+}
+
+///|
+/// The marks' lines over the picture at `r` (x, y, w, h on the stage), of `nw` natural pixels wide (ImageMarks.kt
+/// drawMarks, drawPicked): a box's rounded edge, an arrow and its barbs, a line drawn by hand smoothed through its
+/// midpoints, each in its colour and its width at this zoom; the picked mark's dashed frame (white at 85%, 1 wide, 4 on
+/// 3 off); and where its handles are. As marking is now (marks_drawn: what a finger draws now with them).
+pub fn marks_lines(r : (Double, Double, Double, Double), nw : Double) -> (Array[@ui.Line], Array[(Double, Double)]) {
+  let (rx, ry, rw, _) = r
+  let k = rw / dmax(1.0, nw)
+  let lines : Array[@ui.Line] = []
+  let drawn = marks_drawn()
+  for m in drawn {
+    let lw = m.w * k
+    let at = fn(i : Int) -> (Double, Double) { (rx + m.pts[2 * i] * k, ry + m.pts[2 * i + 1] * k) }
+    match m.kind {
+      "box" => {
+        let (bx, by, bw, bh) = m.bounds()
+        lines.push(@ui.line(round_rect(rx + bx * k, ry + by * k, bw * k, bh * k, dmin(lw * 1.5, dmin(bw * k, bh * k) / 2.0)), width=lw, color=m.color))
+      }
+      "arrow" => {
+        let (ax, ay) = at(0)
+        let (bx, by) = at(1)
+        let (lx, ly, qx, qy) = arrow_barbs(ax, ay, bx, by, lw)
+        lines.push(@ui.line([(ax, ay), (bx, by)], width=lw, color=m.color))
+        lines.push(@ui.line([(lx, ly), (bx, by), (qx, qy)], width=lw, color=m.color))
+      }
+      "pen" => lines.push(@ui.line(smoothed(m.pts.length() / 2, at), width=lw, color=m.color))
+      _ => ()
+    }
+  }
+  // the picked mark's dashed frame (white at 85%, 1 wide, 4 on 3 off), its handles round and white, ringed in the ink
+  let handles : Array[(Double, Double)] = []
+  match marking.shapes.iter().find_first(fn(s) { s.id == marking.picked && marking.tool == Select }) {
+    Some(s) => {
+      if s.kind != "arrow" {
+        let (bx, by, bw, bh) = s.bounds()
+        let reach = mark_reach / 2.0
+        let x0 = rx + bx * k - reach
+        let y0 = ry + by * k - reach
+        let x1 = rx + (bx + bw) * k + reach
+        let y1 = ry + (by + bh) * k + reach
+        dashes([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)], lines)
+      }
+      for h in s.handles(k) {
+        handles.push((rx + h.1 * k, ry + h.2 * k))
+      }
+    }
+    None => ()
+  }
+  (lines, handles)
 }
 
 ///|

@@ -855,7 +855,7 @@ pub fn marks_changed() -> Unit
 
 pub fn marks_commit(Array[Mark], before? : Array[Mark]) -> Unit
 
-pub fn marks_draw(@ui.Ctx, (Double, Double, Double, Double), Double, Double, pins? : Bool, writing? : Bool) -> Unit
+pub fn marks_draw(@ui.Ctx, (Double, Double, Double, Double), Double, Double, shapes? : Bool, pins? : Bool, writing? : Bool) -> Unit
 
 pub fn marks_drawn() -> Array[Mark]
 
@@ -870,6 +870,8 @@ pub fn marks_json(Double, Double) -> String
 pub let marks_keyboard_gap : Double
 
 pub fn marks_leave() -> Unit
+
+pub fn marks_lines((Double, Double, Double, Double), Double) -> (Array[@paint.Line], Array[(Double, Double)])
 
 pub fn marks_note_done(@ui.Ctx) -> Unit
 

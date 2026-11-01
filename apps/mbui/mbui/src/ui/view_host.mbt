@@ -865,8 +865,11 @@ fn Ctx::view_made(self : Ctx, c : @view.Content) -> ViewBlock {
       }
   }
   // (a ground of no opacity draws nothing, as an old view's box's: scene.mbt's paint of its bg)
-  if (c.ground & 0xFFL) != 0L {
-    self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, 0.0, 0L, 1.0)
+  // (and its edge round it, inside it, one rect filled and edged as an old view's box's border is: View::edge)
+  let (ew, ec) = c.edge
+  let edged = ew > 0.0 && (ec & 0xFFL) != 0L
+  if (c.ground & 0xFFL) != 0L || edged {
+    self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, c.ground, if edged { ew } else { 0.0 }, if edged { ec } else { 0L }, 1.0)
   }
   // (its ground's instances: its shadow, its glass, its fill and edge, drawn off and bigger as it says, View::ground_drawn)
   let ground_n = self.ninst - start
