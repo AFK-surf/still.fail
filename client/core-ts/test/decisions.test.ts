@@ -113,10 +113,13 @@ test("a_vault_requests_card_says_the_request_and_how_it_ended", () => {
   const vault = { request: "r_1", name: "GitHub token", reason: "重跑 CI", command: "gh run rerun 1", mode: "proxy", hosts: ["api.github.com"] };
   const waiting = d.cardShown({ type: "options", options: [{ label: "仅本次" }], vault });
   assert.equal(waiting.vault, "r_1");
-  assert.deepEqual(waiting.vaultAsk, { name: "GitHub token", reason: "重跑 CI", command: "gh run rerun 1", mode: "proxy", hosts: ["api.github.com"] });
+  assert.deepEqual(waiting.vaultAsk, { name: "GitHub token", reason: "重跑 CI", command: "gh run rerun 1", mode: "proxy", hosts: ["api.github.com"], howText: "代理 · 限 api.github.com" });
   shape("MessageCard", waiting);
   const granted = d.cardShown({ type: "options", vault: { ...vault, outcome: { status: "granted", scope: "hour" } } });
   assert.deepEqual([granted.vaultAsk.status, granted.vaultAsk.scope], ["granted", "hour"]);
+  const save = d.cardShown({ type: "options", vault: { ...vault, save: { kind: "login", username: "user" } } });
+  assert.equal(save.vaultAsk.howText, undefined, "a future allowed mode is not how the item is saved");
+  shape("MessageCard", save);
   assert.equal(d.cardShown({ type: "options", vault: { request: "r_1" } }).vaultAsk, undefined, "a card from before: its words say it");
 });
 

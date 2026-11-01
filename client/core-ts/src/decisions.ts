@@ -4,6 +4,7 @@
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import * as present from "./present.ts";
+import { howText } from "./vault-words.ts";
 import { arr as arrU, get as getU, isObject, str, u64 } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -80,7 +81,8 @@ function vaultAsk(v: J): J | null {
   const name = trimmed(get(v, "name"));
   const mode = trimmed(get(v, "mode"));
   if (name === null || mode === null) return null;
-  const out: J = { name, reason: str(get(v, "reason")) ?? "", mode, hosts: arr(get(v, "hosts")).filter((h) => typeof h === "string") };
+  const hosts = arr(get(v, "hosts")).filter((h): h is string => typeof h === "string");
+  const out: J = { name, reason: str(get(v, "reason")) ?? "", mode, hosts };
   const command = trimmed(get(v, "command"));
   if (command !== null) out.command = command;
   // Another station its commands run on (or a secret to keep was read on), by name.
@@ -96,6 +98,8 @@ function vaultAsk(v: J): J | null {
     const username = trimmed(get(get(v, "save"), "username"));
     const filename = trimmed(get(get(v, "save"), "filename"));
     out.save = { kind, ...(username !== null ? { username } : {}), ...(filename !== null ? { filename } : {}), ...(get(get(v, "save"), "typed") === true ? { typed: true } : {}) };
+  } else {
+    out.howText = howText(mode, hosts);
   }
   return out;
 }

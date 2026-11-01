@@ -139,11 +139,12 @@ pub fn phone_outcome(
   inline? : Bool = true,
   link? : String = "",
   paired_here? : Bool = false,
+  history? : (String, (Int) -> Unit)? = None,
 ) -> Unit {
   let granted = status == "granted"
   let words = phone_outcome_words(status, scope, why)
   let linked = if granted && link != "" { words + " · " + phone_link_words(link) } else { words }
-  ask_outcome(c, granted && (link == "" || link == "connected"), [@ui.span(linked)], inline~)
+  ask_outcome(c, granted && (link == "" || link == "connected"), [@ui.span(linked)], inline~, history~)
   // (elsewhere than on the phone: where it is paired, under the line's words where they start)
   if granted && link == "unpaired" && !paired_here {
     c.box(style=if inline { ask_ended_past } else { ask_ended_at }, fn() {

@@ -420,8 +420,10 @@ fn vault_request(c : @ui.Ctx, core : Core, ws : String, r : Json) -> Unit {
       Some(n) => n
       None => text(rv, "item")
     },
+    reason: text(rv, "reason"),
     mode: text(rv, "mode"),
     command: text(rv, "command"),
+    how_text: text(rv, "howText"),
     save_kind: text(save, "kind"),
     username: text(save, "username"),
     filename: text(save, "filename"),
@@ -438,8 +440,7 @@ fn vault_request(c : @ui.Ctx, core : Core, ws : String, r : Json) -> Unit {
       }
     })
   }
-  // (here, away from its chat: why the agent asks, and how it would be given)
-  c.box(style=vt_request, fn() { vault_ask(c, core, ws, id, asked, true, extra~, said=[text(rv, "reason"), text(rv, "howText")]) }) |> ignore
+  c.box(style=vt_request, fn() { vault_ask(c, core, ws, id, asked, true, extra~) }) |> ignore
 }
 
 ///|

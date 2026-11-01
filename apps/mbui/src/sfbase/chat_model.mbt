@@ -179,8 +179,11 @@ pub(all) struct PhoneAsk {
 /// types it in (`typed`); once decided, how (`status`, `scope`).
 pub(all) struct VaultAsk {
   name : String
+  reason : String
   mode : String
   command : String
+  /// How it is given, including the allowed hosts, as the core says it.
+  how_text : String
   save_kind : String
   username : String
   /// a file's name, where the agent gave one
@@ -409,8 +412,10 @@ pub fn message_of(m : Json) -> Message {
             Some(Object(_)) as a =>
               Some({
                 name: text(a, "name"),
+                reason: text(a, "reason"),
                 mode: text(a, "mode"),
                 command: text(a, "command"),
+                how_text: text(a, "howText"),
                 save_kind: text(field(a, "save"), "kind"),
                 username: text(field(a, "save"), "username"),
                 filename: text(field(a, "save"), "filename"),

@@ -320,6 +320,7 @@ export const SHAPES: Record<string, Shape> = {
     ["command", opt("String"), { said: true }],
     ["mode", "String", { doc: "proxy | env | ssh | file" }],
     ["hosts", vec("String"), { said: true, doc: "By the proxy: the hosts it is sent to." }],
+    ["howText", opt("String"), { said: true, doc: "How a use is given, including the allowed hosts; absent on a request to save." }],
     ["status", opt("String"), { doc: "Decided: granted | denied | expired. Absent while it waits (or before its station said)." }],
     ["scope", opt("String"), { doc: "Granted: once | hour | chat." }],
     ["save", opt("VaultSave"), { doc: "A request to keep a secret (secret_save) rather than use one: approved, it is kept (granted)." }],

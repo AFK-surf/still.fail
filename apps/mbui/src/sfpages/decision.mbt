@@ -163,29 +163,29 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       fn() {
         match outcome {
           Some(w) => {
-            let id = c.id("outcome-options/" + key)
-            c.box(style=settled_room, fn() {
-              c.box(id~, fn() { c.text(w, style=settled_line) |> ignore }) |> ignore
-            }) |> ignore
             match options {
               Some(list) if list.length() > 0 => {
                 let chosen = match m.decision {
                   Some(d) => d.chosen
                   None => None
                 }
-                hover(c, "outcome-options/" + key, id, padded=false, fn() {
-                  @sf.options_card(
-                    c,
-                    "history-options/" + key,
-                    list.map(fn(o) { (o.label, o.detail, o.recommended) }),
-                    false,
-                    None,
-                    chosen=list.search_by(fn(o) { Some(o.label) == chosen }),
-                    history=true,
-                  ) |> ignore
+                c.box(style=settled_room, fn() {
+                  let line = c.sp(c.theme().leading(settled_leading).unwrap_or(c.text_size(settled_size).1))
+                  let id = @sf.ask_history_trigger(c, "options/" + key, [@ui.span(w)], settled_line, line)
+                  card_history(c, "options/" + key, id, padded=false, fn(p) {
+                    @sf.options_card(
+                      p,
+                      "history-options/" + key,
+                      list.map(fn(o) { (o.label, o.detail, o.recommended) }),
+                      false,
+                      None,
+                      chosen=list.search_by(fn(o) { Some(o.label) == chosen }),
+                      history=true,
+                    ) |> ignore
+                  })
                 }) |> ignore
               }
-              _ => ()
+              _ => c.text(w, style=settled_line) |> ignore
             }
           }
           None => ()
@@ -194,6 +194,26 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     )
   })
   |> ignore
+}
+
+///|
+/// A result's read-only history: a pointer can rest on the line, while a press opens the same contents in a panel
+/// (a sheet on a small screen). Both use the original card's content rather than its now-inactive actions.
+fn card_history(c : @ui.Ctx, key : String, id : Int, padded? : Bool = true, body : (@ui.Ctx) -> Unit) -> Unit {
+  if c.clicked(id) {
+    @sf.panel(
+      @sf.t("web-main.history.details"),
+      fn(p, _) {
+        if padded {
+          p.box(style=@sf.panel_words_in(), fn() { body(p) }) |> ignore
+        } else {
+          body(p)
+        }
+      },
+      from=Of(id),
+    )
+  }
+  hover(c, "history/" + key, id, padded~, fn() { body(c) }) |> ignore
 }
 
 ///|
@@ -207,8 +227,10 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
 fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask : VaultAsk) -> Unit {
   let asked : Asked = {
     name: ask.name,
+    reason: ask.reason,
     mode: ask.mode,
     command: ask.command,
+    how_text: ask.how_text,
     save_kind: ask.save_kind,
     username: ask.username,
     filename: ask.filename,
@@ -237,7 +259,9 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
     })
     |> ignore
   }
-  let ended = fn() { @settings.vault_outcome(c, asked, ask.status, ask.scope, inline=here.inline) }
+  let ended = fn(history : (String, (Int) -> Unit)?) {
+    @settings.vault_outcome(c, asked, ask.status, ask.scope, inline=here.inline, history~)
+  }
   match here.list {
     Some(l) => {
       let key = here.station + "/" + m.ts
@@ -265,10 +289,16 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
         open=close_gap,
         exit=@motion.trans(spec=@motion.Snap(0.0)),
         close=@motion.Snap(0.0),
-        ended,
+        fn() {
+          ended(Some(("vault/" + key, fn(id) {
+            card_history(c, "vault/" + key, id, fn(p) {
+              @settings.vault_ask_details(p, asked)
+            })
+          })))
+        },
       )
     }
-    None => if decided { ended() } else { asking() }
+    None => if decided { ended(None) } else { asking() }
   }
 }
 
@@ -285,7 +315,7 @@ fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
     |> ignore
   }
   // (granted: how its station holds the phone, and on the phone, its pairing a tap away)
-  let ended = fn() {
+  let ended = fn(history : (String, (Int) -> Unit)?) {
     let mine = mine_to(here, card.assignee)
     let link = @settings.phone_link(here.core, here.station, ask.link)
     @settings.phone_outcome(
@@ -296,6 +326,7 @@ fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
       inline=here.inline,
       link~,
       paired_here=mine && @settings.phone_lends(c),
+      history~,
     )
     // (on the phone, its pairing a tap away, as a login's card is under its message)
     if link == "unpaired" && ask.status == "granted" && mine && @settings.phone_lends(c) {
@@ -331,10 +362,16 @@ fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
         open=close_gap,
         exit=@motion.trans(spec=@motion.Snap(0.0)),
         close=@motion.Snap(0.0),
-        ended,
+        fn() {
+          ended(Some(("phone/" + key, fn(id) {
+            card_history(c, "phone/" + key, id, fn(p) {
+              @sf.ask_words(p, @sf.t("android-misc.adb.ask.chat.title"), ask.reason)
+            })
+          })))
+        },
       )
     }
-    None => if decided { ended() } else { asking() }
+    None => if decided { ended(None) } else { asking() }
   }
 }
 
@@ -528,7 +565,15 @@ let options_room : @ui.Style = @ui.css("w=Full pt=S0_5 align=AStart")
 ///|
 /// How it was settled, who decides (settledLine): 12 on 18, the subtle ink.
 // kept across runs: a value (no field of it changes)
-let settled_line : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle)
+let settled_line : @ui.TextStyle = @ui.text_style(size=settled_size, leading=settled_leading, color=Subtle)
+
+///|
+// kept across runs: a value (no field of it changes)
+let settled_size : @ui.TextSize = Meta
+
+///|
+// kept across runs: a value (no field of it changes)
+let settled_leading : @ui.Leading = L5
 
 ///|
 // kept across runs: a value (no field of it changes)
