@@ -270,11 +270,19 @@ fn NativeView::make(
 /// fewer is fine, none only at the end), the file's whole size (-1 not known; -2: it could not be read) and whether
 /// more of it comes (the last answer may bring none). What `read` gives back stops the read: called when the player
 /// lets go of it or the view closes before its last answer (nothing more of it is taken). Paused until `play`.
+/// `direct` ("": none) says how a host with a reader of its own reads those bytes itself, past the app (view_tell 6):
+/// its reads then never wait on the app's frames; one asked before it is told, or of a host with no such reader,
+/// goes through `read`.
 pub fn NativeView::video(
   type_ : String,
   read : (Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit,
+  direct? : String = "",
 ) -> NativeView {
-  NativeView::make(1, type_, Some(read))
+  let v = NativeView::make(1, type_, Some(read))
+  if v.id != 0 && direct != "" {
+    h_view_tell(v.id, 6, direct)
+  }
+  v
 }
 
 ///|

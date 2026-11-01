@@ -2266,6 +2266,8 @@ pub fn view_site_load(id : Int, path : String) -> Unit {
 /// page to read them before the host says `{"slow":n}` and takes no more of it). 4 where the app draws what takes a
 /// press over it. 5 (any view, `text` "") raised over all the others: stacked under none of them, the one a press goes
 /// to where they meet (ui's stack_views, as the app paints them); a view opened goes over those opened before it.
+/// 6 (a video) how the host's own reader, where it has one, reads its bytes itself rather than asking the app
+/// (`view_read_next`): what the app's reader of it gave it (still.fail's: a core call; Android's NativeViews.Direct).
 pub fn view_tell(id : Int, what : Int, text : String) -> Unit {
   current.val.view_tell(id, what, text)
 }

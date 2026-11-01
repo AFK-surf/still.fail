@@ -27,6 +27,8 @@ public final class StillfailApp extends Application {
         BarTiming.start(this);
         // 共享调试's native calls for the app (adb.phone, adb.open, adb.switch, adb.start: AdbShare.java)
         AdbShare.install(this);
+        // a video's player reading its parts of the core itself, past the app's (GL) thread (NativeViews.Direct)
+        NativeViews.direct = AdbCore::read;
         // FCM's token for the app to register as the core says (Push.java; none where this package has no Firebase app)
         Push.start(this);
     }

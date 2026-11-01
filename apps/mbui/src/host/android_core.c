@@ -154,26 +154,30 @@ static int java_said(const char *p, size_t n) {
   return id >= JAVA_IDS;
 }
 
-static void to_java(JNIEnv *env, jbyteArray json) {
+// What the core said to the app's Java, the bytes beside it (NULL: none), to AdbCore.says on the core's thread.
+static void to_java(const char *json, size_t len, const uint8_t *bytes, size_t blen) {
   if (!A.adb_core) return;
-  (*env)->CallStaticVoidMethod(env, A.adb_core, A.adb_says, json);
+  JNIEnv *env = core_env();
+  jbyteArray j = jbytes(env, json, len);
+  jbyteArray b = bytes ? jbytes(env, bytes, blen) : NULL;
+  (*env)->CallStaticVoidMethod(env, A.adb_core, A.adb_says, j, b);
   cleared(env);
+  (*env)->DeleteLocalRef(env, j);
+  if (b) (*env)->DeleteLocalRef(env, b);
 }
 
-// What the core says: to the app, or (an answer to the app's Java) to AdbCore; a frame's bytes beside its JSON.
+// What the core says: to the app, or (an answer to the app's Java: 共享调试's calls, a video's parts its player reads
+// past the app, NativeViews.Direct) to AdbCore; a frame's bytes beside its JSON.
 static void engine_say(void *ctx, const char *json, size_t len, const uint8_t *bytes, size_t blen) {
   (void)ctx;
   static const uint8_t none = 0;
-  if (bytes) {
-    if (A.on_message) A.on_message(json, len, blen ? bytes : &none, blen, A.ctx);
+  if (!bytes && tracing()) CORE_LOG("core says %.*s%s", len < 400 ? (int)len : 400, json, len > 400 ? "…" : "");
+  if (java_said(json, len)) {
+    to_java(json, len, bytes, blen);
     return;
   }
-  if (tracing()) CORE_LOG("core says %.*s%s", len < 400 ? (int)len : 400, json, len > 400 ? "…" : "");
-  if (java_said(json, len)) {
-    JNIEnv *env = core_env();
-    jbyteArray b = jbytes(env, json, len);
-    to_java(env, b);
-    (*env)->DeleteLocalRef(env, b);
+  if (bytes) {
+    if (A.on_message) A.on_message(json, len, blen ? bytes : &none, blen, A.ctx);
     return;
   }
   if (A.on_message) A.on_message(json, len, NULL, 0, A.ctx);
@@ -337,7 +341,7 @@ static int core_init(JNIEnv *env) {
   if (!cleared(env) && adb) {
     JNINativeMethod sends[] = {{"send", "(Ljava/lang/String;)V", (void *)java_send}};
     (*env)->RegisterNatives(env, adb, sends, 1);
-    A.adb_says = (*env)->GetStaticMethodID(env, adb, "says", "([B)V");
+    A.adb_says = (*env)->GetStaticMethodID(env, adb, "says", "([B[B)V");
     if (!cleared(env)) A.adb_core = (*env)->NewGlobalRef(env, adb);
     (*env)->DeleteLocalRef(env, adb);
   }

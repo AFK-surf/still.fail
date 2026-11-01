@@ -14,7 +14,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * 共享调试's own way to the core (AdbShare.java): its service asks the core and follows the `adbShare` topic while the
  * app is behind, when the app's frames (and so its MoonBit client) have stopped. On the UI's own client
  * (src/host/android_core.c java_send), with ids of its own from 1e9 on, which the app's client never reaches; what the
- * core says to them comes back to {@link #says} instead of the app. Its answers and values on the main thread.
+ * core says to them comes back to {@link #says} instead of the app. Its answers and values on the main thread; a video's
+ * parts its player reads past the app ({@link #read}) on the core's.
  */
 final class AdbCore {
     private AdbCore() {}
@@ -90,8 +91,55 @@ final class AdbCore {
         }
     }
 
-    /** What the core said to one of these ids (android_core.c, the core's thread). */
-    static void says(byte[] json) {
+    /** A part read for a video's player (Read), its pieces handed on as they come, on the core's thread. */
+    private static final class Part {
+        final NativeViews.Answers to;
+        final double size;
+
+        Part(NativeViews.Answers to, double size) {
+            this.to = to;
+            this.size = size;
+        }
+    }
+
+    private static final ConcurrentHashMap<Long, Part> parts = new ConcurrentHashMap<>();
+
+    /**
+     * A video's reads past the app (NativeViews.Direct): `how` the call its reader would make (sfbase direct_part:
+     * `{call, params, size}`), asked here with each read's offset and length, its bytes handed to the player as they
+     * come, on the core's own thread: as the app's own stream_part, none of it waiting on the app's (GL) thread.
+     */
+    static Runnable read(String how, long offset, int length, NativeViews.Answers to) {
+        long id = next.getAndIncrement();
+        try {
+            JSONObject h = new JSONObject(how);
+            JSONObject params = new JSONObject(h.getJSONObject("params").toString());
+            params.put("offset", offset);
+            params.put("length", length);
+            double size = h.optDouble("size", 0);
+            parts.put(id, new Part(to, size > 0 ? size : -1));
+            JSONObject m = new JSONObject();
+            m.put("id", id);
+            m.put("call", h.getString("call"));
+            m.put("params", params);
+            send(m.toString());
+        } catch (Throwable e) {
+            parts.remove(id);
+            Host.log("adb core: a part not asked: " + e);
+            return null;
+        }
+        return () -> {
+            if (parts.remove(id) == null) return;
+            try {
+                send(new JSONObject().put("id", id).put("cancel", true).toString());
+            } catch (Throwable e) {
+                Host.log("adb core: " + e);
+            }
+        };
+    }
+
+    /** What the core said to one of these ids, `bytes` beside it (null: none) (android_core.c, the core's thread). */
+    static void says(byte[] json, byte[] bytes) {
         final JSONObject m;
         try {
             m = new JSONObject(new String(json, StandardCharsets.UTF_8));
@@ -100,7 +148,29 @@ final class AdbCore {
             return;
         }
         long id = m.optLong("id", -1);
+        Part part = parts.get(id);
+        if (part != null) {
+            took(id, part, m, bytes);
+            return;
+        }
         main.post(() -> take(id, m));
+    }
+
+    /** A part's piece (a value, its bytes beside it), or its end: how many bytes the whole has, or that it failed. */
+    private static void took(long id, Part part, JSONObject m, byte[] bytes) {
+        if (m.has("value")) {
+            if (bytes != null && bytes.length > 0) part.to.answer(bytes, part.size, true);
+            return;
+        }
+        if (parts.remove(id) == null) return;
+        if (m.has("error")) {
+            Host.log("adb core: a part failed: " + why(m.opt("error")));
+            part.to.answer(new byte[0], -2, false);
+            return;
+        }
+        JSONObject ok = m.optJSONObject("ok");
+        double total = ok != null && ok.has("total") ? ok.optDouble("total", part.size) : part.size;
+        part.to.answer(new byte[0], total, false);
     }
 
     private static void take(long id, JSONObject m) {

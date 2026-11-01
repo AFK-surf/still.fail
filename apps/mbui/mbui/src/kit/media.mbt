@@ -10,12 +10,13 @@
 ///|
 /// What is played: its name, its media type, whether it is known to be a song, and how its bytes are read
 /// (`read(offset, length, answer)`: `answer(bytes, total, more)` as they come, what it gives back stopping it, as
-/// `@ui.NativeView::video` reads).
+/// `@ui.NativeView::video` reads), and how a host may read them itself (its `direct`; "": none).
 pub(all) struct MediaTrack {
   name : String
   mime : String
   audio : Bool
   read : (Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit
+  direct : String
 }
 
 ///|
@@ -229,7 +230,7 @@ pub fn Media::new(
 /// `track` played from `start` ms in (0: its start), at the speed chosen; what played before stops.
 pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0) -> Unit {
   self.close_view()
-  let n = @ui.NativeView::video(track.mime, track.read)
+  let n = @ui.NativeView::video(track.mime, track.read, direct=track.direct)
   if self.speed != 1.0 {
     n.rate(self.speed)
   }
