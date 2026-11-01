@@ -6,7 +6,7 @@
 // the order, hidden files, read again. The keys are the rows' wherever on the page they are pressed but a field (the
 // core says which act: browse.mbt). Deleted to the machine's trash, as Finder does, nothing asked; where none takes it,
 // asked first, then for good. The preview beside it (⌘⇧P: drive_pane.mbt). What a folder's bar holds (its ways, put
-// up, a new folder, read again, 收藏, pin, its ⋯) is `folder_actions`, put in the files' page's bar by it.
+// up, a new folder, read again, 收藏, its ⋯) is `folder_actions`, put in the files' page's bar by it.
 
 ///|
 /// What opens an entry, by its kind (drive/model.ts openerOf): a folder gone into, read, played, previewed, saved.
@@ -36,7 +36,6 @@ pub(all) struct FolderOf {
   go : (DriveAt, Bool) -> Unit
   open_in : ((DriveAt, Bool) -> Unit)?
   go_to : (() -> Unit)?
-  manage : (() -> Unit)?
 }
 
 ///|
@@ -182,27 +181,6 @@ pub fn refresh_folder(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
 /// Whether the folder is being read again.
 pub fn refreshing(at : DriveAt) -> Bool {
   held.refreshing.contains(at.station + "\n" + at.root.unwrap_or("") + "\n" + at.path)
-}
-
-///|
-/// A folder pinned for everyone or not (drive.setRoots: the station's folders lent, with it or without it).
-pub fn pin_folder(c : @ui.Ctx, src : Source, st : DvStation, abs : String, on : Bool) -> Unit {
-  let roots = st.roots.map(fn(r) { r.path }).filter(fn(p) { p != abs })
-  if on {
-    roots.push(abs)
-  }
-  let name = dv_name(abs.trim_end(chars="/\\").to_string())
-  c.tell("pin/" + st.station + "/" + abs, fn() {
-    (src.call)(
-      "drive.setRoots",
-      { "station": Json::string(st.station), "roots": Json::array(roots.map(fn(p) { Json::string(p) })) },
-      act_done(
-        c,
-        @sf.t("web-pages.drive.rootsWhat"),
-        done=@sf.t(if on { "web-pages.drive.shared" } else { "web-pages.drive.unpinned" }, args=[("name", name)]),
-      ),
-    )
-  })
 }
 
 ///|
@@ -415,7 +393,7 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
   let name = folder_name(st, at)
   // what goes into a folder dropped on it, where the viewer may write there
   let into = fn(folder : DriveAt) -> DriveAt? { if write { Some(folder) } else { None } }
-  let favs = favorites(src, f.ws)
+  let favs = favorites_in(src, f.ws, [st])
   let row_of = fn(in_ : DriveAt, e : DvEntry) -> RowProps {
     {
       items: fn() { row_items(c, src, f, b, in_, e, favs) },
@@ -608,12 +586,7 @@ pub fn folder_name(st : DvStation, at : DriveAt) -> String {
     if root == st.home {
       @sf.t("web-pages.drive.home")
     } else {
-      let n = dv_name(root.trim_end(chars="/\\").to_string())
-      if n == "" {
-        root
-      } else {
-        n
-      }
+      dv_root_label([], root)
     }
   } else {
     dv_root_label(st.roots, root)
@@ -684,15 +657,14 @@ fn row_items(
     }
     _ => ()
   }
-  if e.dir && !favorite_has(favs, in_.station, root, full) {
-    item(@sf.t("web-pages.files.favoriteIt"), "star", fn() {
-      favorite_add(src, f.ws, { station: in_.station, root, path: full, name: e.name })
-    })
-  }
-  if e.dir && st.anywhere {
-    let on = st.roots.iter().any(fn(r) { r.path == abs })
-    item(@sf.t(if on { "web-pages.drive.unpin" } else { "web-pages.drive.pin" }), "pin", fn() {
-      pin_folder(c, src, st, abs, !on)
+  if e.dir {
+    let kept = favorite_has(favs, in_.station, root, full)
+    item(@sf.t(if kept { "web-pages.files.unfavorite" } else { "web-pages.files.favorite" }, args=[("name", e.name)]), "star", fn() {
+      if kept {
+        favorite_remove(src, f.ws, in_.station, root, full)
+      } else {
+        favorite_add(src, f.ws, { station: in_.station, root, path: full, name: e.name })
+      }
     })
   }
   if write {
@@ -714,9 +686,8 @@ fn row_items(
 
 ///|
 /// What can be done to the folder (FolderView's actions), for the bar it is shown under (the files' page's while it
-/// is in front, or its own): the ways its room has, the preview, put up and a new folder (who may write), read again
-/// (turning while it is read), 收藏 (lit while it is kept), pin (for one who browses every folder: lit while pinned),
-/// its ⋯ (复制路径, 前往文件夹, 管理). Short of room they go into the ⋯, what is needed least first.
+/// is in front, or its own): the views, preview, upload and new folder. Its ⋯ holds refresh, favorite, order and path
+/// actions. Short of room the bar's actions go into the ⋯, what is needed least first.
 pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Style = actions_row()) -> Unit {
   let at = f.at
   let root = at.root.unwrap_or("")
@@ -726,8 +697,7 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Styl
   let previewing = preview_shown(src, "page")
   let here = dv_absolute(root, at.path)
   let name = folder_name(st, at)
-  let pinned = st.roots.iter().any(fn(r) { r.path == here })
-  let kept = favorite_has(favorites(src, f.ws), at.station, root, at.path)
+  let kept = favorite_has(favorites_in(src, f.ws, [st]), at.station, root, at.path)
   let b = browse(c, src, f.key, "page", view, at, f.rights.write, {
     open: fn(_, _) {  },
     preview: fn(_, _) {  },
@@ -790,13 +760,7 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Styl
       },
     )),
   ]
-  if st.anywhere {
-    more.push(Some(@sf.menu_item_of(@sf.t(if pinned { "web-pages.drive.unpin" } else { "web-pages.drive.pin" }), icon="pin", fn() {
-      pin_folder(c, src, st, here, !pinned)
-    })))
-  }
-  // its ⋯: the order and hidden files (where its rows have no heads to sort by, and no right click: a finger's), then
-  // its path, a folder by its path, 管理
+  // Its ⋯ also has the order and hidden files, the path and a folder by its path.
   let a = b.arrangement()
   more.push(None)
   for by in ["name", "time", "size", "kind"] {
@@ -812,11 +776,6 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Styl
   match f.go_to {
     Some(g) => more.push(Some(@sf.menu_item_of(@sf.t("web-pages.files.goTo"), icon="search", g)))
     None => ()
-  }
-  match f.manage {
-    Some(m) if f.rights.manage || st.anywhere =>
-      more.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.manage"), icon="folder", m)))
-    _ => ()
   }
   @sf.tools_row(c, "files/more", tools, more~, label=@sf.t("web-main.menu.more"), style~)
 }

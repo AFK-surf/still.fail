@@ -1693,6 +1693,6 @@ let zh : Map[String, String] = {
   "web-pages.vault.uses.title": "使用记录",
   "web-pages.vault.vaults": "库",
   "web-pages.drive.viewAll": "查看所有文件",
-  "web-pages.drive.pinnedFolders": "共享文件夹",
+  "web-pages.drive.pinnedFolders": "可访问的文件夹",
   "web-pages.screen.none": "暂无屏幕",
 }

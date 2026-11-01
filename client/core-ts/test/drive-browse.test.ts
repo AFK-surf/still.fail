@@ -105,7 +105,7 @@ test("the folder's count follows the files actually shown", async () => {
   assert.equal(now().countText, "2 个文件夹 · 3 个文件");
   assert.equal(hidden().countText, "1 个文件");
   const empty = await watch(2, { topic: "driveBrowse", ...place("empty", "columns", "b") });
-  assert.equal(empty().countText, "空文件夹");
+  assert.equal(empty().countText, "暂无内容");
   core.close();
 });
 

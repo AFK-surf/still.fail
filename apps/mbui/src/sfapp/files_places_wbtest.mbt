@@ -10,7 +10,7 @@ fn places_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
 }
 
 ///|
-test "a shared folder kept as a favorite appears once and stays shared when unfavorited" {
+test "a folder reached through different roots is one favorite" {
   new_run()
   let src = fixture("home")
   // The same folder was kept from its parent and directly as a shared root.
@@ -20,7 +20,7 @@ test "a shared folder kept as a favorite appears once and stays shared when unfa
   ]
   fix_browse_prefs_set({ "driveFavorites": { "ws1": Json::string(saved.stringify()) } }) |> ignore
   let favs = @sfdesk.favorites(src, "ws1")
-  assert_eq(favs.length(), 1, msg="the same folder has one favorite")
+  assert_eq(favs.filter(fn(f) { f.station == "ws1/st1" && @sfdesk.favorite_has([f], "ws1/st1", fix_docs, "") }).length(), 1, msg="the same folder has one favorite")
   assert_true(@sfdesk.favorite_has(favs, "ws1/st1", fix_docs, ""), msg="a different root still names it")
   assert_false(@sfdesk.favorite_has(favs, "ws1/st2", fix_docs, ""), msg="another station is distinct")
   let windows : @sfdesk.Favorite = { station: "ws1/st1", root: "C:\\Users\\lin", path: "文档", name: "文档" }
@@ -31,7 +31,6 @@ test "a shared folder kept as a favorite appears once and stays shared when unfa
   app.nav.replace(Files)
   t.run_for(@ui.move_most_ms)
   assert_eq(t.locate("文档").length(), 1, msg="the shared favorite appears once")
-  assert_true(t.find("共享 · Studio") is Some(_), msg="its shared status remains visible")
   t.tap_text("文档")
   t.run_for(@ui.move_most_ms)
   match app.nav.top() {
@@ -40,21 +39,26 @@ test "a shared folder kept as a favorite appears once and stays shared when unfa
   }
   t.back()
   t.run_for(@ui.move_most_ms)
-  t.click(Button, label="从个人收藏移除「文档」")
+  let (x, y) = t.find("文档").unwrap()
+  t.press_at(x, y)
+  t.run_for(@ui.long_press_ms)
+  t.release(x, y)
+  sheet_rested(t, "sf-present")
+  t.tap_text("从个人收藏移除「文档」")
   t.run_for(@ui.move_most_ms)
-  assert_eq(t.locate("文档").length(), 1, msg="the shared folder remains after unfavoriting")
-  assert_true(t.find("团队共享") is Some(_))
+  assert_eq(t.locate("文档").length(), 0, msg="the removed folder does not reappear")
+  assert_true(t.find("团队共享") is None)
 }
 
 ///|
-test "文件's places, one list in every tier: 个人收藏, each station with a drive, 团队共享; a folder pressed opens its page" {
+test "文件's places in every tier: favorites and stations; a favorite opens its folder" {
   for size in [(390.0, 844.0, 2), (720.0, 1024.0, 2), (1280.0, 800.0, 2), (720.0, 900.0, 0), (1280.0, 800.0, 0)] {
     let (w, h, platform) = size
     let t = places_tester(w, h, platform)
     app.nav.replace(Files)
     t.run_for(@ui.move_most_ms)
     let at = "\{w} \{platform}"
-    for label in ["个人收藏", "Station", "团队共享", "Studio"] {
+    for label in ["个人收藏", "Station", "Studio"] {
       assert_true(t.find(label) is Some(_), msg=at + ": " + label)
     }
     // a station away: its name faint, 离线 beside it

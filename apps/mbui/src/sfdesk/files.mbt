@@ -150,7 +150,6 @@ pub fn files_shell(
           go: fn(to, _) { files_go(to) },
           open_in: Some(fn(to, beside) { show(if beside { "besides" } else { "open" }, Some(to), None, None) }),
           go_to: Some(go_to_open),
-          manage: Some(fn() { manage_roots(src, ws, p.station) }),
         })
       None => None
     }

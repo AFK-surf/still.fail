@@ -466,40 +466,55 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
       })
     })
   }
-  // its drive (docs/drive.md): opened whole from here, or at one of the folders pinned
+  // Its drive: a station that offers its home opens there; older ones still show their configured folders.
   match field(o, "drive") {
     Some(Object(_)) as drive => {
       let roots = items(drive, "roots")
       out.push(fn() {
-        st_section(
-          c,
-          @sf.t("web-pages.drive.title"),
-          count=roots.length(),
-          actions=fn() {
-            if @sf.action(c, "station-files/" + address, @sf.t("web-pages.stations.page.openFiles"), icon="folder") {
-              @sfbase.open_page(Drive({ station: address, root: None, path: "" }))
-            }
-          },
-          fn() {
+        if flag(drive, "anywhere") {
+          st_section(c, @sf.t("web-pages.drive.title"), fn() {
             @sf.group(c, fn() {
-              if roots.length() == 0 {
-                @sf.said_row(c, @sf.t("web-pages.drive.noneYet"), "")
-              }
-              for r in roots {
-                let rv = Some(r)
-                if @sf.link_row(
-                    c,
-                    "station-folder/" + address + "/" + text(rv, "path"),
-                    text(rv, "name"),
-                    note=text(rv, "path"),
-                    lead=fn() { st_row_mark(c, "folder") },
-                  ) {
-                  @sfbase.open_page(Drive({ station: address, root: Some(text(rv, "path")), path: "" }))
-                }
+              if @sf.link_row(
+                  c,
+                  "station-files/" + address,
+                  @sf.t("web-pages.stations.page.openFiles"),
+                  lead=fn() { st_row_mark(c, "folder") },
+                ) {
+                @sfbase.open_page(Drive({ station: address, root: None, path: "" }))
               }
             })
-          },
-        )
+          })
+        } else {
+          st_section(
+            c,
+            @sf.t("web-pages.drive.title"),
+            count=roots.length(),
+            actions=fn() {
+              if @sf.action(c, "station-files/" + address, @sf.t("web-pages.stations.page.openFiles"), icon="folder") {
+                @sfbase.open_page(Drive({ station: address, root: None, path: "" }))
+              }
+            },
+            fn() {
+              @sf.group(c, fn() {
+                if roots.length() == 0 {
+                  @sf.said_row(c, @sf.t("web-pages.drive.noneYet"), "")
+                }
+                for r in roots {
+                  let rv = Some(r)
+                  if @sf.link_row(
+                      c,
+                      "station-folder/" + address + "/" + text(rv, "path"),
+                      text(rv, "name"),
+                      note=text(rv, "path"),
+                      lead=fn() { st_row_mark(c, "folder") },
+                    ) {
+                    @sfbase.open_page(Drive({ station: address, root: Some(text(rv, "path")), path: "" }))
+                  }
+                }
+              })
+            },
+          )
+        }
       })
     }
     _ => ()

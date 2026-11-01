@@ -193,8 +193,22 @@ pub fn dv_parent(path : String) -> String {
 }
 
 ///|
+/// Whether an absolute path names a Windows drive or UNC share. A backslash in a Unix name is not a separator.
+pub fn dv_windows_path(path : String) -> Bool {
+  path.has_prefix("\\\\") ||
+  (path.find(":") is Some(1) && (path.view(start_offset=2).has_prefix("\\") || path.view(start_offset=2).has_prefix("/")))
+}
+
+///|
 pub fn dv_name(path : String) -> String {
-  match path.rev_find("/") {
+  let slash = path.rev_find("/")
+  let backslash = if dv_windows_path(path) { path.rev_find("\\") } else { None }
+  let last = match (slash, backslash) {
+    (Some(a), Some(b)) => Some(if a > b { a } else { b })
+    (Some(a), None) | (None, Some(a)) => Some(a)
+    _ => None
+  }
+  match last {
     Some(i) => path.view(start_offset=i + 1).to_owned()
     None => path
   }
@@ -206,7 +220,7 @@ pub fn dv_root_label(roots : Array[DvRoot], root : String) -> String {
   match roots.iter().find_first(fn(r) { r.path == root }) {
     Some(r) => r.name
     None => {
-      let p = root.trim_end(chars="/\\").to_owned()
+      let p = dv_trim_root(root)
       match dv_name(p) {
         "" => root
         n => n
@@ -216,12 +230,18 @@ pub fn dv_root_label(roots : Array[DvRoot], root : String) -> String {
 }
 
 ///|
+/// Remove trailing path separators without treating a Unix name's backslash as one.
+pub fn dv_trim_root(root : String) -> String {
+  root.trim_end(chars=if dv_windows_path(root) { "/\\" } else { "/" }).to_owned()
+}
+
+///|
 /// Where a path under a root is on the station.
 pub fn dv_absolute(root : String, path : String) -> String {
   if path == "" {
     root
   } else {
-    root.trim_end(chars="/\\").to_owned() + "/" + path
+    dv_trim_root(root) + "/" + path
   }
 }
 

@@ -240,7 +240,7 @@ test "a narrow folder's ⋯: the order and hidden files, its path, 收藏; chose
 }
 
 ///|
-test "Pin 文件夹 on a phone: which station, then the picker in a sheet from the foot, the station's places over its folders; one entered and pinned (drive.setRoots)" {
+test "adding a favorite on a narrow screen chooses a station and folder without changing its settings" {
   new_run()
   let calls : Array[Made] = []
   let base = fixture("home")
@@ -254,16 +254,16 @@ test "Pin 文件夹 on a phone: which station, then the picker in a sheet from t
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   app.nav.replace(Files)
   t.run_for(@ui.move_most_ms)
-  @sfdesk.add_folder(src, "ws1", @sfdesk.pin_stations(src, "ws1"))
+  @sfdesk.add_favorite_folder(src, "ws1", @sfdesk.favorite_stations(src, "ws1"))
   sheet_rested(t, "sf-present")
   // (two stations it can be done on: which first)
-  assert_true(t.find("选择一台 station，然后选择其中要共享的文件夹") is Some(_), msg="which station")
+  assert_true(t.find("选择一台 station，然后选择要收藏的文件夹") is Some(_), msg="which station")
   t.click(Button, label="Studio")
   t.frame()
   sheet_rested(t, "sf-present")
   assert_eq(named(calls, "drive.folders").length(), 1)
   // a sheet from the foot; the places (a disk among them) over the folders here (those not among the places)
-  let (_, pin_y) = t.find("共享此文件夹").unwrap()
+  let (_, pin_y) = t.find("收藏此文件夹").unwrap()
   assert_true(pin_y > 844.0 / 2.0)
   let (_, disk_y) = t.find("外接硬盘").unwrap()
   let (x, folder_y) = t.find("项目").unwrap()
@@ -272,11 +272,10 @@ test "Pin 文件夹 on a phone: which station, then the picker in a sheet from t
   t.frame()
   assert_eq(text(Some(named(calls, "drive.folders")[1].params), "path"), "/Users/lin/项目")
   t.frame()
-  t.click(Button, label="共享此文件夹")
+  t.click(Button, label="收藏此文件夹")
   t.frame()
-  let set = named(calls, "drive.setRoots")
-  assert_eq(set.length(), 1)
-  assert_true(set[0].params.stringify().contains("/Users/lin/项目"))
+  assert_eq(named(calls, "drive.setRoots").length(), 0)
+  assert_true(@sfdesk.favorite_has(@sfdesk.favorites(src, "ws1"), "ws1/st1", "/Users/lin/项目", ""))
   assert_true(!@sf.presenting())
 }
 

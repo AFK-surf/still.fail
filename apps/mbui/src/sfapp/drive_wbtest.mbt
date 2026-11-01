@@ -56,9 +56,9 @@ fn hold(t : @ui.Tester, s : String) -> Unit {
 }
 
 ///|
-test "文件: the files' places (the wide frame's sidebar's list): 个人收藏, each station with a drive, one away said so; 团队共享 the folders pinned" {
+test "文件: favorites and each station with a drive, with an offline station said so" {
   let t = drive_tester("files")
-  for words in ["文件", "个人收藏", "Station", "Studio", "离线", "团队共享", "文档", "照片"] {
+  for words in ["文件", "个人收藏", "Station", "Studio", "离线", "文档", "照片"] {
     assert_true(t.find(words) is Some(_), msg=words)
   }
   // back says the page under it

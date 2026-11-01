@@ -1,16 +1,14 @@
-# 文件 (pushed over Home: MBUI_OPEN_PAGE=files, the bottom bar's place until there is one): the files' places, ＋ pins
-# another folder through the folder picker (Pin 文件夹: the station's home, its folders), this run's own e2e-{T}.
+# 文件: ＋ adds this run's own folder to the personal favorites through the folder picker.
 #env MBUI_OPEN_PAGE=files
 timeout 90000
 until 个人收藏
 shot 1-files
 tap icon:plus
-until 共享此文件夹
+until 收藏此文件夹
 until e2e-{T}
 shot 2-picker
 tap e2e-{T}
 until 子文件夹
-tap =共享此文件夹
-until 已共享「e2e-{T}」
+tap =收藏此文件夹
 until =e2e-{T}
 shot 3-lent

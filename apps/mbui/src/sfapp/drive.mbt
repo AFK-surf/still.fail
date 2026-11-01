@@ -1,7 +1,6 @@
 // A station's drive on the phone's stack (docs/drive.md): 文件 (the files' places, the wide frame's sidebar's list) and a
 // page of a station's drive (the files' page, laid out by its width: @sfdesk files_start.mbt, drive_narrow.mbt), each in
-// the stack's frame; a folder gone into is a page pushed over it, so going in and coming back is the stack's slide and
-// the edge swipe. ＋ pins another folder (the files' page's own: Pin 文件夹).
+// the stack's frame; a folder gone into is a page pushed over it. ＋ adds a folder to the personal shortcuts.
 
 ///|
 /// 文件 on the phone's stack: its places (the files' places, the same list the wide frame's sidebar is:
@@ -9,7 +8,7 @@
 /// place of the bottom bar (its top bar as Home's, the ＋ the bar's: files_lend).
 pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = false) -> Unit {
   let t = @sf.theme()
-  let lenders = @sfdesk.pin_stations(src, w.id)
+  let lenders = @sfdesk.favorite_stations(src, w.id)
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     if !place {
       let back = match app.nav.under() {
@@ -18,8 +17,8 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
       }
       if dv_nav_bar(c, back, tr("android-misc.bar.place.files"), fn() {
           if lenders.length() > 0 &&
-            dv_nav_button(c, "files-lend", "plus", size=20.0, said=tr("android-misc.bar.action.files")) {
-            @sfdesk.add_folder(src, w.id, lenders)
+            dv_nav_button(c, "files-lend", "plus", size=20.0, said=@sf.t("web-pages.files.addFavorite")) {
+            @sfdesk.add_favorite_folder(src, w.id, lenders)
           }
         }) {
         @sfbase.go_back() |> ignore
@@ -45,14 +44,14 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
 /// Whether 文件 offers ＋ (another folder pinned: one who may pin, on a station with a drive), for the bottom bar's
 /// notch.
 pub fn files_can_lend(src : Source, w : Workspace) -> Bool {
-  @sfdesk.pin_stations(src, w.id).length() > 0
+  @sfdesk.favorite_stations(src, w.id).length() > 0
 }
 
 ///|
 /// ＋ of 文件 (the bottom bar's notch): Pin 文件夹, on the one station there is or one chosen first.
 pub fn files_lend(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   ignore(c)
-  @sfdesk.add_folder(src, w.id, @sfdesk.pin_stations(src, w.id))
+  @sfdesk.add_favorite_folder(src, w.id, @sfdesk.favorite_stations(src, w.id))
 }
 
 ///|
@@ -137,4 +136,3 @@ fn drive_go_back_to(station : String, root : String, path : String) -> Unit {
     open_page(Drive({ station, root: Some(root), path }))
   }
 }
-

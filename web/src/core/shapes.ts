@@ -5879,6 +5879,11 @@ export interface PrefsView {
 	 */
 	driveFavorites?: Record<string, string>;
 	/**
+	 * Formerly pinned folders the person removed from their shortcuts on this device, by workspace (JSON places).
+	 * This leaves the station's existing pinned folders and access rules unchanged.
+	 */
+	driveFavoritesHidden?: Record<string, string>;
+	/**
 	 * The look the card shared of the agents at work is drawn in, as last chosen under it on this device:
 	 * `poster`, `receipt`, `terminal`, or (none) `night`.
 	 */

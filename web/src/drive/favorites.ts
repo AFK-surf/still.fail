@@ -4,7 +4,6 @@
 import { useMemo } from "react";
 import { setPrefs, usePrefs } from "../prefs.ts";
 import type { Pane } from "./tabs.ts";
-import { absoluteOf } from "./useDrive.ts";
 
 export interface Favorite extends Pane { name: string }
 
@@ -15,25 +14,13 @@ function read(raw: string | undefined): Favorite[] {
   if (!raw) return [];
   try {
     const v = JSON.parse(raw) as unknown;
-    if (!Array.isArray(v)) return [];
-    const parsed = v.filter((f): f is Favorite => !!f && typeof f === "object" && ["station", "root", "path", "name"].every((k) => typeof (f as Record<string, unknown>)[k] === "string"));
-    return parsed.filter((f, i) => parsed.findIndex((other) => sameFolder(f, other)) === i);
+    return Array.isArray(v) ? v.filter((f): f is Favorite => !!f && typeof f === "object" && ["station", "root", "path", "name"].every((k) => typeof (f as Record<string, unknown>)[k] === "string")) : [];
   } catch {
     return [];
   }
 }
 
-/** The absolute folder named by a root and a path; Windows separators differ from a backslash in a Unix name. */
-function folderPath(p: Pane): string {
-  const abs = absoluteOf(p.root, p.path);
-  const separated = p.root.includes("\\") && !p.root.startsWith("/") ? abs.replaceAll("\\", "/") : abs;
-  return separated === "/" ? separated : separated.replace(/\/+$/, "");
-}
-
-/** A shared root and the same folder reached from its parent are one place, on that station. */
-export function sameFolder(a: Pane, b: Pane): boolean {
-  return a.station === b.station && folderPath(a) === folderPath(b);
-}
+const same = (a: Pane, b: Pane) => a.station === b.station && a.root === b.root && a.path === b.path;
 
 /** The workspace's favourites, and how to change them. */
 export function useFavorites(workspace: string): { list: Favorite[]; has: (p: Pane) => boolean; add: (f: Favorite) => void; remove: (p: Pane) => void } {
@@ -42,8 +29,8 @@ export function useFavorites(workspace: string): { list: Favorite[]; has: (p: Pa
   const keep = (next: Favorite[]) => setPrefs({ driveFavorites: { [workspace]: JSON.stringify(next.slice(0, MOST)) } });
   return {
     list,
-    has: (p) => list.some((f) => sameFolder(f, p)),
-    add: (f) => { if (!list.some((x) => sameFolder(x, f))) keep([...list, f]); },
-    remove: (p) => keep(list.filter((f) => !sameFolder(f, p))),
+    has: (p) => list.some((f) => same(f, p)),
+    add: (f) => { if (!list.some((x) => same(x, f))) keep([...list, f]); },
+    remove: (p) => keep(list.filter((f) => !same(f, p))),
   };
 }

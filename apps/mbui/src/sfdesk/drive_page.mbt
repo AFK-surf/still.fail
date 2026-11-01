@@ -1,6 +1,6 @@
 // A folder of a station's drive: one page on every screen (docs/architecture.md: the same on every screen, and what
 // differs). What it is for: a person comes to find a file and open it (read, played, previewed, saved), and to put
-// files in and keep them in order (up, a new folder, a name changed, deleted, dragged into a folder, pinned, 收藏). So,
+// files in and keep them in order (up, a new folder, a name changed, deleted, dragged into a folder, 收藏). So,
 // top to bottom: its bar (back where its frame has one, its name, what can be done to it), its way down from its root
 // (the station's switch first), what it holds in a line (why it could not be read, 重试), the files going up into it,
 // its entries in the way it is shown (columns, a tree, a list: drive_views.mbt), the preview beside them where the room
@@ -213,16 +213,13 @@ let folder_crumb_here : @ui.TextStyle = @ui.text_style(weight=Medium, color=Fg, 
 ///|
 let folder_crumb_chevron : Double = 12.0
 
-// ── a station's folders pinned ──────────────────────────────────────────
+// ── a station's older configured folders ─────────────────────────────────
 
 ///|
 /// A station's drive with no folder to show (Roots; the phone's RootsPage): one page on every screen, made of the
 /// library's page parts (its frame laid out by its width: back over a large title, or its head). What it is for: which
-/// of the station's folders can be gone into, and what is wrong with one. 文件, the station's name under it; ⋯ 管理
-/// for one who may; what it holds in a line, then a row each (its name, where it is, or what is wrong with it in red);
-/// pressed, gone into; held or right clicked, for one who may: no longer pinned, asked first. Read, says so; none,
-/// says so (选择文件夹 for one who may); from before drives, says so. `n`: the frame it is drawn in (back, the room
-/// over and under it).
+/// of the station's configured folders can be gone into, and what is wrong with one. A station that offers its home
+/// opens there instead. `n` is the frame it is drawn in.
 pub fn roots_page(
   c : @ui.Ctx,
   src : Source,
@@ -230,7 +227,6 @@ pub fn roots_page(
   st : DvStation?,
   reading : Bool,
   error : String?,
-  manage : Bool,
   n : NarrowOf,
   go : (DriveAt) -> Unit,
 ) -> Unit {
@@ -242,11 +238,9 @@ pub fn roots_page(
     @sf.empty(c, fn() {
       c.text(words, style=roots_empty_words) |> ignore
       match pick {
-        Some(s) =>
-          if @sf.button(c, @sf.t("web-pages.drive.pick"), key="files-roots/pick", tone=Primary) {
-            add_folder(src, ws, [s])
-          }
-        None => ()
+        Some(s) if @sf.button(c, @sf.t("web-pages.files.addFavorite"), key="files-roots/pick", tone=Primary) =>
+          add_favorite_folder(src, ws, [s], picked=fn(f) { go({ station: f.station, root: Some(f.root), path: f.path }) })
+        _ => ()
       }
     })
   }
@@ -257,12 +251,8 @@ pub fn roots_page(
       Some(s) if !s.overview => @sf.waiting(c, fn() { roots_sample(c) })
       Some(s) if !s.drive => empty(@sf.t("web-pages.drive.oldStation"), None)
       Some(s) if s.roots.length() == 0 =>
-        empty(@sf.t(if manage { "web-pages.drive.noneManage" } else { "web-pages.drive.noneMember" }), if manage {
-          Some(s)
-        } else {
-          None
-        })
-      Some(s) => roots_section(c, src, s, manage, go)
+        empty(@sf.t("web-pages.drive.noneMember"), if favorite_stations(src, ws).iter().any(fn(x) { x.station == s.station }) { Some(s) } else { None })
+      Some(s) => roots_section(c, s, go)
     }
   }
   @sf.page(
@@ -273,25 +263,16 @@ pub fn roots_page(
     on_back=n.back,
     frame=n.frame,
     lead=name,
-    actions?=match st {
-      Some(s) if manage && s.drive && s.roots.length() > 0 =>
-        Some(fn() {
-          if @sf.icon_button(c, "more", key="files-roots/manage", round=true, label=@sf.t("web-pages.drive.manage")) {
-            manage_roots(src, ws, s.station)
-          }
-        })
-      _ => None
-    },
   )
 }
 
 ///|
 /// The folders station `s` pins: how many, the title over their card (as far over it as any card's), a row each.
-fn roots_section(c : @ui.Ctx, src : Source, s : DvStation, manage : Bool, go : (DriveAt) -> Unit) -> Unit {
+fn roots_section(c : @ui.Ctx, s : DvStation, go : (DriveAt) -> Unit) -> Unit {
   @sf.section(c, @sf.t("web-pages.drive.rootsCount", args=[("n", s.roots.length().to_string())]), fn() {
     @sf.group(c, fn() {
       for r in s.roots {
-        root_row(c, src, s, r, manage, go)
+        root_row(c, s, r, go)
       }
     })
   })
@@ -304,25 +285,14 @@ fn roots_sample(c : @ui.Ctx) -> Unit {
     { path: @sf.sample_words(r.1), name: @sf.sample_words(r.0), state: "ok" }
   })
   let s = @sfbase.dv_station({ "station": "sample", "name": Json::string(@sf.sample_words(4)) })
-  roots_section(c, @sfbase.sample_source, { ..s, roots }, false, fn(_) {  })
+  roots_section(c, { ..s, roots }, fn(_) {  })
 }
 
 ///|
-/// A folder pinned (RootRow): its mark, its name, where it is (which disk, which folder: what finding it again turns
-/// on), what is wrong with it and what to do in red under that where it cannot be browsed now, a chevron; pressed, gone into; held or right clicked, for one who may, no longer pinned.
-fn root_row(c : @ui.Ctx, src : Source, s : DvStation, r : DvRoot, manage : Bool, go : (DriveAt) -> Unit) -> Unit {
+/// A configured folder: its name, path and any reason it cannot be browsed now.
+fn root_row(c : @ui.Ctx, s : DvStation, r : DvRoot, go : (DriveAt) -> Unit) -> Unit {
   let t = @sf.theme()
   let key = "files-root/" + s.station + "/" + r.path
-  let id = c.id(key)
-  match c.menu_asked(id) {
-    Some((x, y)) if manage =>
-      @sf.menu(
-        [Some(@sf.menu_item_of(@sf.t("web-pages.drive.unshare"), icon="close", danger=true, fn() { ask_unpin(c, src, s, r) }))],
-        from=@sf.at_point(x, y),
-        title=r.name,
-      )
-    _ => ()
-  }
   let trouble = match dv_trouble(r.state) {
     Some((what, hint)) => what + " · " + hint
     None => ""

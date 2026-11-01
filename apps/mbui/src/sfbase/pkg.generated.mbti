@@ -365,6 +365,8 @@ pub fn dv_stations(Source, String) -> (Array[DvStation]?, String?)
 
 pub fn dv_take_picked(Source, DriveAt, Array[DvEntry]) -> Unit
 
+pub fn dv_trim_root(String) -> String
+
 pub fn dv_trouble(String) -> (String, String)?
 
 pub fn dv_up_done(Source, DvUpload) -> Unit
@@ -372,6 +374,8 @@ pub fn dv_up_done(Source, DvUpload) -> Unit
 pub fn dv_up_part(Source, DvUpload, Int32, Int32) -> Unit
 
 pub fn dv_upload(@ui.Ctx, DriveAt) -> Unit
+
+pub fn dv_windows_path(String) -> Bool
 
 pub fn dv_words(Array[String], String) -> String
 

@@ -14,15 +14,13 @@ import {
 // Values
 pub fn act_done(@ui.Ctx, String, done? : String) -> (Result[Json, Json]) -> Unit
 
-pub fn add_folder(@sfbase.Source, String, Array[@sfbase.DvStation]) -> Unit
+pub fn add_favorite_folder(@sfbase.Source, String, Array[@sfbase.DvStation], picked? : (Favorite) -> Unit) -> Unit
 
 pub fn apart_ground() -> Int64
 
 pub let archive_side : ArchiveSide
 
 pub let archive_side_page : Int32
-
-pub fn ask_unpin(@ui.Ctx, @sfbase.Source, @sfbase.DvStation, @sfbase.DvRoot) -> Unit
 
 pub let bar_in : Double
 
@@ -98,6 +96,8 @@ pub fn favorite_has(Array[Favorite], String, String, String) -> Bool
 
 pub fn favorite_remove(@sfbase.Source, String, String, String, String) -> Unit
 
+pub fn favorite_stations(@sfbase.Source, String) -> Array[@sfbase.DvStation]
+
 pub fn favorites(@sfbase.Source, String) -> Array[Favorite]
 
 pub fn file_tab(String, String, String) -> String
@@ -165,8 +165,6 @@ pub fn list_head(@ui.Ctx, @sfbase.Arrangement, (String) -> Unit) -> Unit
 pub fn list_mode(@sfbase.Source, @sfbase.Workspace) -> Int32
 
 pub fn lit_place() -> String
-
-pub fn manage_roots(@sfbase.Source, String, String) -> Unit
 
 pub fn narrow_bare() -> NarrowOf
 
@@ -240,10 +238,6 @@ pub let peek_leave_ms : Double
 
 pub fn pick_job(String) -> Unit
 
-pub fn pin_folder(@ui.Ctx, @sfbase.Source, @sfbase.DvStation, String, Bool) -> Unit
-
-pub fn pin_stations(@sfbase.Source, String) -> Array[@sfbase.DvStation]
-
 pub fn place_bare(String) -> Bool
 
 pub fn place_name(String) -> String
@@ -272,7 +266,7 @@ pub fn remove_entries(@ui.Ctx, @sfbase.Source, @sfbase.DvStation, Array[(@sfbase
 
 pub fn reset() -> Unit
 
-pub fn roots_page(@ui.Ctx, @sfbase.Source, String, @sfbase.DvStation?, Bool, String?, Bool, NarrowOf, (@sfbase.DriveAt) -> Unit) -> Unit
+pub fn roots_page(@ui.Ctx, @sfbase.Source, String, @sfbase.DvStation?, Bool, String?, NarrowOf, (@sfbase.DriveAt) -> Unit) -> Unit
 
 pub fn row_key(String, String) -> String
 
@@ -550,7 +544,6 @@ pub(all) struct FolderOf {
   go : (@sfbase.DriveAt, Bool) -> Unit
   open_in : ((@sfbase.DriveAt, Bool) -> Unit)?
   go_to : (() -> Unit)?
-  manage : (() -> Unit)?
 }
 
 pub(all) struct NarrowOf {

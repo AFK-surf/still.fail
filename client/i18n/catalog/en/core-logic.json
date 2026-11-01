@@ -628,7 +628,7 @@
     "one": "{n} file",
     "other": "{n} files"
   },
-  "core-logic.drive.empty": "Empty folder",
+  "core-logic.drive.empty": "No items",
   "core-logic.drive.noVisible": "No visible items",
   "core-logic.drive.name.empty": "Name can't be empty",
   "core-logic.drive.name.bad": "Name can't contain / or \\",

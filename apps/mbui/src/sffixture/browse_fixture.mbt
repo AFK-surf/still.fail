@@ -42,7 +42,7 @@ pub fn fix_browse_reset() -> Unit {
 ///|
 /// The prefs the browsing reads and the pages keep, as the core's prefs topic gives them.
 // kept across runs: a table, never written
-pub let fix_browse_prefs : Array[String] = ["driveViews", "filesTabs", "driveFavorites"]
+pub let fix_browse_prefs : Array[String] = ["driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden"]
 
 ///|
 /// The prefs kept here, into the prefs topic's value.

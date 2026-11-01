@@ -136,7 +136,7 @@ while the card moved the list):
 | 12 offline-retry | the station frozen (SIGSTOP) as a message goes: 未发送 after some 30 s; thawed, 重试 | the station has the message, once · Tester 重放（src/sfreplay/flows/offline_retry_test.mbt） |
 | 13 delete-failed | the same, 删除 | the station never gets it, even once thawed · Tester 重放（src/sfreplay/flows/delete_failed_test.mbt） |
 | 14 mark-read | on Home, the other device asks; the answer comes unread; the chat opened at its end | the station's reads: alice unread before, read to the end after · Tester 重放（src/sfreplay/flows/mark_read_test.mbt） |
-| 15 drive-lend | 文件 (MBUI_OPEN_PAGE=files): the station's home; ＋, the folder picker into the station's home, this run's e2e-<tag>, 选择此文件夹 | the station's config lends the folder (drive.roots); Tester 重放（src/sfreplay/flows/drive_lend_test.mbt）；端到端里仍留着，借出文件夹是 18、21、35、45、48、52、90、91、92、98 等的前提 |
+| 15 drive-lend | 文件 (MBUI_OPEN_PAGE=files): ＋, the folder picker into the station's home, this run's e2e-<tag>, 收藏此文件夹 | the folder is in the person's favorites on this device; Tester 重放（src/sfreplay/flows/drive_lend_test.mbt）；this shortcut is used by 18、21、35、45、48、52、90、91、92、98 等 |
 | 16 drive-list | the folder: 1 个文件夹 · 2 个文件, its entries; into its folder and back by the crumbs | the station's folder holds what was listed; nothing written; Tester 重放（src/sfreplay/flows/drive_list_test.mbt） |
 | 17 drive-read | a novel of made-up chapters read: the bars, 目录 → 第三章; left, its row says how far | drive.read through the core; drive.place past the second chapter; the core keeps the place on the device; Tester 重放（src/sfreplay/flows/drive_read_test.mbt） |
 | 18 drive-upload | ＋ → 上传文件: a photo and a 9 MB file, each a row going up in parts, then entries | both files in the station's folder, byte for byte; several drive.upload.part |
@@ -238,4 +238,3 @@ agent 未在对话中回复…) as the fake claude only echoes it, and a station
 tests; the mock account is taken in through `migrate` instead), pushes, the camera and the system's photo picker
 (MBUI_PICK_FILES stands for the pickers), the soft keyboard's own typing (the InputConnection is driven, not the
 keyboard), and anything only a real agent runtime does.
-

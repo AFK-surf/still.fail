@@ -89,9 +89,9 @@ test "laid out Small, 文件 with a presenter over it (Pin 文件夹's): back cl
   for case in narrow_cases {
     let (platform, w, h, width, height) = case
     let (t, src) = narrow_at_files(platform, w, h, width, height)
-    @sfdesk.add_folder(src, "ws1", @sfdesk.pin_stations(src, "ws1"))
+    @sfdesk.add_favorite_folder(src, "ws1", @sfdesk.favorite_stations(src, "ws1"))
     t.run_for(@ui.move_most_ms)
-    let shown = @sf.presenting() && t.find("选择一台 station，然后选择其中要共享的文件夹") is Some(_)
+    let shown = @sf.presenting() && t.find("选择一台 station，然后选择要收藏的文件夹") is Some(_)
     t.back_raw(2, 0.0, t.time())
     t.run_for(@ui.move_most_ms)
     let first = (@sf.presenting(), app.nav.top() == Files)
