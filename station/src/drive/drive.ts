@@ -21,7 +21,7 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { platform } from "../platform/index.ts";
 import { wall } from "../ops/fibers.ts";
-import { unreadableDir } from "../ops/files.ts";
+import { unreadableDir, unreadableDirAsync } from "../ops/files.ts";
 import { TooBig, zipFolder } from "./zip.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { type Fs, type Grant, type Protected, direct, protectedTop, realOf } from "./fs.ts";
@@ -232,6 +232,8 @@ export type DriveDeps = {
   files?: Protected | null;
   /// The machine's home: whose trash what is deleted goes to, and where Documents, Desktop and Downloads are (a test's own).
   home?: string;
+  /// Which disk a folder is on (its file system's device; null: it could not be told).
+  disk?: (dir: string) => Promise<number | null>;
 };
 
 /// The station's drive, one for the admin API's routes and the modules' local API (modules/local.ts): config.json's
@@ -273,10 +275,14 @@ export class Drive {
     return fs.helper && this.#locked(path) !== null ? fs.real(path) : real(path);
   }
 
-  /// Whether the station may not list `dir`, even through still.fail Helper.
-  #unreadable(dir: string): boolean {
+  #disk(dir: string): Promise<number | null> {
+    return this.deps.disk ? this.deps.disk(dir) : stat(dir).then((s) => s.dev, () => null);
+  }
+
+  /// Whether the station may not list `dir`, even through still.fail Helper: looked at off the main thread.
+  async #unreadable(dir: string): Promise<boolean> {
     const top = this.#locked(dir);
-    return top === null ? unreadableDir(dir) : !this.#granted(top);
+    return top === null ? unreadableDirAsync(dir) : !this.#granted(top);
   }
 
   /// How paths in these scopes (the root each is told to stay in) are reached: through still.fail Helper when any is in
@@ -615,10 +621,15 @@ export class Drive {
       });
       const protect = await this.protectedNow();
       const entries: Folder[] = [];
+      // (a folder another file system is mounted on is a disk: not opened to see whether it may be listed, as one whose
+      // server is gone holds what opens it for good, 2026-11-02 Studio's ~/OrbStack)
+      const here = await this.#disk(at);
       for (const d of listed.d) {
         if (d.name.startsWith(".")) continue;
         const asked = join(at, d.name);
-        if (d.stat?.dir && !(await this.isProtected(asked, d.real, protect))) entries.push({ name: d.name, path: asked, unreadable: this.#unreadable(asked) });
+        if (!d.stat?.dir || (await this.isProtected(asked, d.real, protect))) continue;
+        if (here !== null && (await this.#disk(asked)) !== here) entries.push({ name: d.name, path: asked, unreadable: false, disk: true });
+        else entries.push({ name: d.name, path: asked, unreadable: await this.#unreadable(asked) });
       }
       entries.sort((a, b) => collator.compare(a.name, b.name));
       const parent = dirname(at);
@@ -630,15 +641,15 @@ export class Drive {
 
   /// Where a folder to lend usually is: the home's own folders that are there, then the disks mounted.
   private async places(home: string, lang: Lang, protect: string[]): Promise<Folder[]> {
-    const found: Folder[] = [{ name: tr(lang, "station.drive.place.home"), path: home, unreadable: this.#unreadable(home) }];
+    const found: Folder[] = [{ name: tr(lang, "station.drive.place.home"), path: home, unreadable: await this.#unreadable(home) }];
     for (const name of PLACES) {
       const path = join(home, name);
-      if (await isDir(path)) found.push({ name: tr(lang, `station.drive.place.${name}`), path, unreadable: this.#unreadable(path) });
+      if (await isDir(path)) found.push({ name: tr(lang, `station.drive.place.${name}`), path, unreadable: await this.#unreadable(path) });
     }
     // Disks: those the machine has (macOS's own, in /Volumes a link to /, left out).
     for (const { name, path } of await platform.disks(home)) {
       if (!(await isDir(path)) || (await real(path)) === "/" || (await this.isProtected(path, await real(path), protect))) continue;
-      found.push({ name, path, unreadable: this.#unreadable(path), disk: true });
+      found.push({ name, path, unreadable: await this.#unreadable(path), disk: true });
     }
     return found;
   }
