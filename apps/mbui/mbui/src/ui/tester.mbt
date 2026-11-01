@@ -46,7 +46,7 @@ pub fn run_let_go() -> Unit {
 /// End this test run and restore the host that was current before it began. Release its window tree, bindings and the
 /// faces the run gave to its live host, so a later run starts with its own fonts. An older tester cannot close a newer
 /// one. A live host used here must be dedicated to the test: a face the run replaced on it cannot be restored.
-pub fn Tester::close(self : Tester, restore : &@hostapi.Host) -> Unit {
+pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
   match fake.val {
     Some(f) if physical_equal(f, self.fake) => {
       run_let_go()

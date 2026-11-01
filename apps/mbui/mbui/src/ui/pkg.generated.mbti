@@ -2396,7 +2396,6 @@ pub fn Tester::clipboard_label(Self) -> String
 pub fn Tester::clipboard_png(Self) -> Bytes?
 pub fn Tester::clipboard_reads(Self) -> Int32
 pub fn Tester::clipboard_secret(Self) -> Double?
-pub fn Tester::close(Self, &@hostapi.Host) -> Unit
 pub fn Tester::compose(Self, String) -> Unit
 pub fn Tester::contrast_faults(Self, marks? : Double) -> Array[String]
 pub fn Tester::corner_faults(Self) -> Array[String]
@@ -2435,6 +2434,7 @@ pub fn Tester::drop_words(Self, Double, Double, String) -> Unit
 pub fn Tester::dump(Self) -> String
 pub fn Tester::each_frame(Self, (() -> Unit)?) -> Unit
 pub fn Tester::edit_can(Self) -> Int32
+pub fn Tester::end_run(Self, &@hostapi.Host) -> Unit
 pub fn Tester::enter(Self) -> Unit
 pub fn Tester::face_wider(Self, Int32, Double) -> Unit
 pub fn Tester::failed_images(Self) -> Array[Int32]
