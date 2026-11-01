@@ -121,8 +121,11 @@ jobs:
       - name: The simulator shut down again (when these runs booted it)
         if: always()
         run: scripts/host_contract.sh ios done
+      # (the pictures are for people, not the contract: mini1's connection to GitHub's artifact service reset once and
+      # failed a contract that had passed, main acb00686, 41356526828, 2026-11-01)
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: host-ios
           path: apps/mbui/mbui/out/host/
