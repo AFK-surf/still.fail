@@ -155,6 +155,93 @@ test "a picture sent from here flies out as its message shows it: the picture pi
 }
 
 ///|
+/// The share of a white, opaque video frame's partly covered corner that would come from a black box under it. A
+/// rounded edge is covered once; drawing another rounded black edge under it leaves black in those same pixels.
+fn video_corner_black(t : @ui.Tester) -> Double raise {
+  let insts = t.drawn_instances()
+  let pictures = insts.mapi(fn(k, a) { (k, a) }).filter(fn(p) {
+    let a = p.1
+    a[5] == 4.0 && a[11] > 0.99 && a[24] > 1.0 && a[2] > 100.0
+  })
+  assert_eq(pictures.length(), 1, msg="rounded video pictures: \{pictures}")
+  let (index, picture) = pictures[0]
+  let (x, y, right, foot) = (picture[16], picture[17], picture[18], picture[19])
+  let frame = picture.copy()
+  frame[0] = x
+  frame[1] = y
+  frame[2] = right - x
+  frame[3] = foot - y
+  frame[4] = 0.0
+  let blacks = insts.mapi(fn(k, a) { (k, a) }).filter(fn(p) {
+    let (k, a) = p
+    k < index && a[5] == 0.0 && a[8] == 0.0 && a[9] == 0.0 && a[10] == 0.0 && a[11] > 0.0 &&
+    (a[0] - x).abs() < 0.1 && (a[1] - y).abs() < 0.1 &&
+    (a[0] + a[2] - right).abs() < 0.1 && (a[1] + a[3] - foot).abs() < 0.1
+  })
+  let scale = 2.0
+  let side = picture[24] * 1.25
+  let n = (side * scale).ceil().to_int()
+  let mut partial = 0
+  let mut black = 0.0
+  for ix in 0..<n {
+    for iy in 0..<n {
+      let px = x + (ix.to_double() + 0.5) / scale
+      let py = y + (iy.to_double() + 0.5) / scale
+      let image = corner_cover(picture, px, py, scale)
+      // Only where the picture covers the frame as much as it can: a letterbox's black outside the picture is wanted.
+      if image > 0.0 && image < 1.0 && (image - corner_cover(frame, px, py, scale)).abs() < 0.000001 {
+        partial += 1
+        for (_, a) in blacks {
+          black = dmax(black, corner_cover(a, px, py, scale) * a[11] * (1.0 - image))
+        }
+      }
+    }
+  }
+  assert_true(partial > 0, msg="no partially covered corner pixels")
+  black
+}
+
+///|
+test "a video's fully shown poster leaves no black in its light rounded corners" {
+  let t = video_in_chat()
+  assert_eq(video_corner_black(t), 0.0)
+}
+
+///|
+test "a letterboxed video's light picture has no black rim where it meets its rounded frame" {
+  new_run()
+  let src : Source = { ..fixture("chat"), poster: fn(_, _, _) { "wide-still" } }
+  let a : Attachment = {
+    name: "wide.mp4", path: "uploads/fx/wide.mp4", size: 4096.0, width: 360.0, height: 95.0,
+    thumbhash: "", owner: "s-c1", upload: "", duration: 0.0, frames: 0, held: false,
+  }
+  let t = @ui.Tester::new(
+    fn(c) { chat_file(c, src, a) },
+    w=390.0,
+    h=844.0,
+    images=[("wide-still", 360, 95)],
+  )
+  t.draw()
+  t.run_for(@ui.image_fade_ms)
+  assert_eq(video_corner_black(t), 0.0)
+}
+
+///|
+test "a video's light rounded corners leave no black as it returns to its thumbnail" {
+  let t = video_in_chat()
+  t.tap_text("演示录屏.mp4")
+  t.run_for(@ui.move_most_ms)
+  t.set_player(1, position=4000.0)
+  t.draw()
+  t.back()
+  assert_true(t.view_said("{\"still\":{\"view\":1},\"b\":\"\{hex_bytes(fixture_file_png("演示录屏.mp4"))}\"}"))
+  t.draw()
+  t.run_for(@ui.move_most_ms / 4.0)
+  assert_true(pv_leaving.get() is Some(v) && v.flies && v.fly_back)
+  assert_eq(video_corner_black(t), 0.0)
+}
+
+///|
 test "a picture's whole come once it is in takes its stand-in's place once decoded: never a frame of nothing there" {
   let held : Ref[(() -> Unit)?] = Ref(None)
   let t = photo_sent(Ref(0.0), held)
@@ -405,15 +492,12 @@ test "a video taken down and let go goes from where the finger left it: its pict
   let left = t.holes()
   assert_eq(left.length(), 1)
   assert_true((left[0].1 - down).abs() < 0.5, msg="\{left} taken down to \{down}")
-  // grabbed: flown back from there, on the black its box has
+  // grabbed: the frame flies back from where the finger left it
   let frame = fixture_file_png("演示录屏.mp4")
   assert_true(t.view_said("{\"still\":{\"view\":1},\"b\":\"\{hex_bytes(frame)}\"}"))
   t.draw()
   assert_eq(t.holes().length(), 0)
-  let black = t
-    .drawn_rects()
-    .filter(fn(r) { r.4 == 0x000000FFL && (r.0 - x).abs() < 0.5 && (r.2 - w).abs() < 0.5 && (r.3 - h).abs() < 0.5 })
-  assert_true(black.iter().any(fn(r) { (r.1 - down).abs() < 0.5 }), msg="\{t.drawn_rects()}")
+  assert_true(drawn_at(t, (x, down, w, h)), msg="\{t.drawn_images()}")
 }
 
 ///|

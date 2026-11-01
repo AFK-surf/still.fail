@@ -548,10 +548,14 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     })
     |> ignore
   }
-  let b = c.box(style=video_frame.then(@ui.style(w=Fixed(w), h=Fixed(h))), id=open, fn() {
-    if still != "" && still != "!" {
+  // The black and the still share one cut: drawing the black underneath a separately cut picture leaves a rim at
+  // their rounded edge. The same ground fills the room around a letterboxed picture and while it is decoded.
+  let has_still = still != "" && still != "!"
+  let frame = if has_still { video_frame } else { video_frame.then(@ui.style(bg=@sf.video_ground)) }
+  let b = c.box(style=frame.then(@ui.style(w=Fixed(w), h=Fixed(h))), id=open, fn() {
+    if has_still {
       c.layer(fn() {
-        c.image(still, w=Px(w), h=Px(h), fit=if letterbox { FitContain } else { FitCover }, bg=0L)
+        c.image(still, w=Px(w), h=Px(h), fit=if letterbox { FitContain } else { FitCover }, bg=c.color(@sf.video_ground), matte=true)
         |> ignore
       })
       |> ignore
@@ -862,7 +866,7 @@ let no_preview_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted,
 /// A video's box (msgVideo): black, clipped to its corners; its play mark 40 round in its middle on black at 65%
 /// (msgVideoPlay); its name at its foot 6 by 8 in on the same (msgVideoName), 12, white, cut short; a bar 4 under it.
 // kept across runs: a value (no field of it changes)
-let video_frame : @ui.Style = @ui.style(radius=InnerOr(@sf.message_file_radius), clip=true, bg=@sf.video_ground)
+let video_frame : @ui.Style = @ui.style(radius=InnerOr(@sf.message_file_radius), clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)

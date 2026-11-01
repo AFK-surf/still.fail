@@ -5,7 +5,8 @@
 //   8-11 color rgba · 12-15 border color, or the glyph's atlas rect
 //   16-19 clip x0 y0 x1 y1 · 20 image id · 21-23 a notch in its top edge
 //   (kinds 0 and 5: its circle's middle below the top, its radius, its
-//   fillets'; 0 none: Ctx::box notch_r) · 24-27 the clip's corners' radii
+//   fillets'; 0 none: Ctx::box notch_r); an image's matte alpha, flag and
+//   picture fade (kind 4: composited before its clips) · 24-27 the clip's corners' radii
 //   (top left, top right, bottom right, bottom left: 16-19 is a rounded rect)
 //   · 28-31 how smooth those corners are (smooth.mbt: 0 round, 1 wholly
 //   smooth; as the box whose corner it is had room for). A shape's own

@@ -1423,7 +1423,8 @@ let picture_at : Map[Int, (Double, Double, Double, Double, Int)] = Map([])
 ///|
 /// The image from `src` drawn stretched to (x, y, w, h) from the top left of a node filling its parent (or `w_` ×
 /// `h_`), which may be bigger than the node (zoomed in): only what is inside the clip it is painted in shows. Loaded at
-/// the size it is drawn, at most `max_px` on its longer side.
+/// the size it is drawn, at most `max_px` on its longer side. `bg` stands in until decoded; with `matte` it is also
+/// composited under the picture, within the node, before its edge is cut, as for image.
 pub fn Ctx::picture(
   self : Ctx,
   src : String,
@@ -1434,8 +1435,10 @@ pub fn Ctx::picture(
   w_? : Size = Fill(1.0),
   h_? : Size = Fill(1.0),
   max_px? : Int = 4096,
+  bg? : Int64 = 0L,
+  matte? : Bool = false,
 ) -> Int {
-  let i = self.image(src, w=w_, h=h_, fit=FitFill, bg=0L, fade=false)
+  let i = self.image(src, w=w_, h=h_, fit=FitFill, bg~, fade=false, matte~)
   let at = (x, y, w, h, max_px)
   picture_at[i] = at
   // (said again of its node where what built it is kept, its nodes put back elsewhere among the frame's: a part or a

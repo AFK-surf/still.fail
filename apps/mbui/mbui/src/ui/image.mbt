@@ -286,7 +286,8 @@ fn Ctx::trim_images(self : Ctx) -> Unit {
 /// An image from `src` (a file path, an http(s) URL, or a key given to
 /// image_bytes). With one side Auto it keeps the image's proportions
 /// (until the image is known that side is 0); `bg` shows until it has
-/// loaded, and it fades in.
+/// loaded, and it fades in. With `matte`, the image is composited over `bg` before either is cut to its rounded edge;
+/// the background remains in any part the image does not fill (as around a letterboxed video).
 pub fn Ctx::image(
   self : Ctx,
   src : String,
@@ -297,10 +298,12 @@ pub fn Ctx::image(
   bg? : Int64 = 0xE5E5EAFFL,
   fade? : Bool = true,
   still? : Bool = false,
+  matte? : Bool = false,
 ) -> Int {
   let i = self.alloc_part(kind_image, true, false)
   let n = self.nodes[i]
   n.fade = fade
+  n.matte = matte
   // a GIF that moves held at its first frame (gif.mbt)
   n.still = still
   // (its frame is picked as it is painted, after the build: what is built kept as it was drawn (a part, a list's row)
@@ -385,6 +388,9 @@ fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
         alpha,
         fade=n.fade,
         max_px~,
+        ground=n.bg,
+        matte=n.matte,
+        frame=if n.matte { Some((n.x, n.y, n.fw, n.fh)) } else { None },
       )
     None =>
       self.draw_image(
@@ -398,6 +404,7 @@ fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
         alpha,
         fade=n.fade,
         ground=n.bg,
+        matte=n.matte,
       )
   }
   // (its corners each its own, where it was drawn: its ground's, its picture's)
@@ -440,7 +447,8 @@ pub let image_fade_ms : Double = 150.0
 ///|
 /// Draws the image from `src` in the box (x, y, w, h), loading it at the
 /// size of the box; `ground` under it until it is in (decoded, faded in), never under it once it is: its edge's
-/// pixels, partly covered by it, would show that through as a rim round it.
+/// pixels, partly covered by it, would show that through as a rim round it. A `matte` is instead composited into the
+/// same image before its edge is cut. `frame`, when given, is the box in which a picture and matte are drawn.
 fn Ctx::draw_image(
   self : Ctx,
   src : String,
@@ -454,8 +462,11 @@ fn Ctx::draw_image(
   fade? : Bool = true,
   max_px? : Int = 8192,
   ground? : Int64 = 0L,
+  matte? : Bool = false,
+  frame? : (Double, Double, Double, Double)? = None,
 ) -> Unit {
-  let grounded = (ground & 0xFFL) != 0L && bw > 0.0 && bh > 0.0
+  let (gx, gy, gw, gh) = frame.unwrap_or((bx, by, bw, bh))
+  let grounded = (ground & 0xFFL) != 0L && gw > 0.0 && gh > 0.0
   // a side still 0 waits for the image's proportions: load it anyway,
   // small if it has no size yet at all
   let px = dmin(self.image_px(src, bw, bh, fit), max_px.to_double())
@@ -467,12 +478,12 @@ fn Ctx::draw_image(
         shot_waits.val = true
       }
       if grounded {
-        self.emit_rect(bx, by, bw, bh, radius, ground, 0.0, 0L, alpha)
+        self.emit_rect(gx, gy, gw, gh, radius, ground, 0.0, 0L, alpha)
       }
       return
     }
   }
-  if bw <= 0.0 || bh <= 0.0 {
+  if bw <= 0.0 || bh <= 0.0 || (matte && (gw <= 0.0 || gh <= 0.0)) {
     return
   }
   // (in a shot: whole, and one still decoding there waited for)
@@ -484,7 +495,7 @@ fn Ctx::draw_image(
   } else {
     1.0
   }
-  if grounded && fade < 1.0 {
+  if grounded && fade < 1.0 && !matte {
     self.emit_rect(bx, by, bw, bh, radius, ground, 0.0, 0L, alpha)
   }
   if fade < 1.0 && !e.fade_told {
@@ -508,10 +519,29 @@ fn Ctx::draw_image(
       (bx + (bw - w) / 2.0, by + (bh - h) / 2.0, w, h, 0.0, 0.0, 1.0, 1.0)
     }
   }
-  self.push_inst(
-    x, y, w, h, radius, 4.0, 0.0, 0.0, 0xFFFFFFFFL, alpha * fade, u0, v0, du,
-    dv,
-  )
+  if w <= 0.0 || h <= 0.0 {
+    return
+  }
+  if matte {
+    // Draw the whole frame once. UVs outside the fitted picture say where its matte shows; the shader composites the
+    // picture over the matte before the frame's own and enclosing clips cover their edges.
+    self.push_inst(
+      gx, gy, gw, gh, radius, 4.0, 0.0, 0.0, 0xFFFFFFFFL, alpha,
+      u0 + (gx - x) * du / w, v0 + (gy - y) * dv / h, gw * du / w, gh * dv / h,
+    )
+    let base = (self.ninst - 1) * inst_size
+    self.inst[base + 8] = ((ground >> 24) & 0xFFL).to_double() / 255.0
+    self.inst[base + 9] = ((ground >> 16) & 0xFFL).to_double() / 255.0
+    self.inst[base + 10] = ((ground >> 8) & 0xFFL).to_double() / 255.0
+    self.inst[base + 21] = (ground & 0xFFL).to_double() / 255.0
+    self.inst[base + 22] = 1.0
+    self.inst[base + 23] = fade
+  } else {
+    self.push_inst(
+      x, y, w, h, radius, 4.0, 0.0, 0.0, 0xFFFFFFFFL, alpha * fade, u0, v0, du,
+      dv,
+    )
+  }
   self.inst[(self.ninst - 1) * inst_size + 20] = e.id.to_double()
 }
 

@@ -1112,7 +1112,7 @@ pub fn Ctx::holds_through(Self, Int32) -> Unit
 pub fn Ctx::hover_since(Self, Int32) -> Double
 pub fn Ctx::hovered(Self, Int32) -> Bool
 pub fn Ctx::id(Self, String) -> Int32
-pub fn Ctx::image(Self, String, w? : Size, h? : Size, fit? : Fit, radius? : Double, bg? : Int64, fade? : Bool, still? : Bool) -> Int32
+pub fn Ctx::image(Self, String, w? : Size, h? : Size, fit? : Fit, radius? : Double, bg? : Int64, fade? : Bool, still? : Bool, matte? : Bool) -> Int32
 pub fn Ctx::image_bytes(Self, String, Bytes) -> Unit
 pub fn Ctx::image_pixels(Self, String, Int32) -> ImagePixels
 pub fn Ctx::image_ready(Self, String, Double) -> Bool
@@ -1212,7 +1212,7 @@ pub fn Ctx::pager_rest(Self, String) -> Double
 pub fn Ctx::paint_rect(Self, Double, Double, Double, Double, radius~ : Double, Int64) -> Unit
 pub fn Ctx::passes(Self, Int32) -> Unit
 pub fn Ctx::paths_into(Self, Int32, String) -> Array[DroppedPath]?
-pub fn Ctx::picture(Self, String, x~ : Double, y~ : Double, w~ : Double, h~ : Double, w_? : Size, h_? : Size, max_px? : Int32) -> Int32
+pub fn Ctx::picture(Self, String, x~ : Double, y~ : Double, w~ : Double, h~ : Double, w_? : Size, h_? : Size, max_px? : Int32, bg? : Int64, matte? : Bool) -> Int32
 pub fn Ctx::place(Self, (Double, Double, Double, Double), Double, Double, side? : @view.Side, along? : @view.Along, offset? : Double, along_offset? : Double, padding? : Double, flip? : Bool) -> (Double, Double, @view.Side)
 pub fn Ctx::place_by_size(Self, Int32, (Double, Double) -> (Double, Double)) -> Unit
 pub fn Ctx::place_most(Self, padding? : Double) -> Double

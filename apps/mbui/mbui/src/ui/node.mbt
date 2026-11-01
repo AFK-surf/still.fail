@@ -223,6 +223,8 @@ struct Node {
   mut fit : Fit
   // an image fades in as it arrives
   mut fade : Bool
+  // an image and its background composited before their shared edge is cut
+  mut matte : Bool
   // a GIF that moves, held at its first frame (Ctx::image `still`)
   mut still : Bool
   // a page of a book, and which
@@ -469,6 +471,7 @@ fn Node::new() -> Node {
     max_lines: 0,
     fit: FitCover,
     fade: true,
+    matte: false,
     still: false,
     pages: None,
     page_no: -1,
@@ -592,6 +595,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.room_held = false
   self.fit = FitCover
   self.fade = true
+  self.matte = false
   self.still = false
   self.pages = None
   self.page_no = -1
