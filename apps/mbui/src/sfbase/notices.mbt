@@ -30,7 +30,7 @@ pub(all) struct NoticeHost {
   answer : () -> Bool?
   opened : () -> String
   token : () -> String
-  /// the push service that knows the token: "fcm", "apns", "apns-sandbox"
+  /// the push service that knows the token: "fcm", "apns", "apns-sandbox", "web" (the token a browser's subscription)
   service : () -> String
 }
 
@@ -131,12 +131,25 @@ pub fn push_sync(src : Source, wanted : Bool?) -> Unit {
       match (notice_host.val.token)() {
         "" => ()
         token => {
-          let registration : Map[String, Json] = match (notice_host.val.service)() {
-            "apns" => { "kind": "apns", "token": Json::string(token), "sandbox": false }
-            "apns-sandbox" => { "kind": "apns", "token": Json::string(token), "sandbox": true }
-            _ => { "kind": "fcm", "token": Json::string(token) }
+          let registration : Map[String, Json]? = match (notice_host.val.service)() {
+            "apns" => Some({ "kind": "apns", "token": Json::string(token), "sandbox": false })
+            "apns-sandbox" => Some({ "kind": "apns", "token": Json::string(token), "sandbox": true })
+            // a browser's: its push subscription as the page has it (`{endpoint, keys}`, web/src/mbui/core.ts)
+            "web" =>
+              match (try Some(@json.parse(token)) catch { _ => None }) {
+                Some(Object(sub)) =>
+                  match (sub.get("endpoint"), sub.get("keys")) {
+                    (Some(String(_) as endpoint), Some(Object(_) as keys)) =>
+                      Some({ "kind": "web", "endpoint": endpoint, "keys": keys })
+                    _ => None
+                  }
+                _ => None
+              }
+            _ => Some({ "kind": "fcm", "token": Json::string(token) })
           }
-          (src.call)("push.register", Json::object(registration), fn(_) {  })
+          if registration is Some(r) {
+            (src.call)("push.register", Json::object(r), fn(_) {  })
+          }
         }
       }
     None => ()

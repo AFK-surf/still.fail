@@ -148,6 +148,48 @@ await load(`/mbui/app.js?b=${BUILT_AT}`);
 for (const name of ["jetbrains_mono.ttf", "math_glyphs.gz", "share_400.gz", "share_600.gz"])
   void fetchCarried(name).then(() => (host() as { requestFrame?(): void } | undefined)?.requestFrame?.());
 
+/// The host's say of pushes (web/host.js: H.pushToken, H.pushService, H.noticeTapped).
+interface MbHostPush {
+  pushToken: string;
+  pushService: string;
+  noticeTapped(opens: string): void;
+  requestFrame?(): void;
+}
+
+/// Pushes while no page of the app is open (docs/notifications.md), through the service worker (/sw.js) as the web's
+/// pages had them (src/notify.ts syncPush): once the browser lets the page notify, this browser's subscription to the
+/// cloud's key, given to the app as its push token (`web`), which registers it with the accounts as its `notify` says
+/// (apps/mbui sfbase/notices.mbt push_sync). A push's notification clicked opens its chat in the app.
+async function subscribePush(): Promise<void> {
+  const h = host() as (MbHost & MbHostPush) | undefined;
+  if (!h || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window) || Notification.permission !== "granted") return;
+  try {
+    const registration = await navigator.serviceWorker.register("/sw.js");
+    const answer = await fetch("/v1/push/key");
+    if (!answer.ok) return;
+    const { vapid } = await answer.json() as { vapid: string };
+    const key = Uint8Array.from(atob(vapid.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+    const current = await registration.pushManager.getSubscription();
+    const same = current && new Uint8Array(current.options.applicationServerKey ?? new ArrayBuffer(0)).join() === key.join();
+    if (current && !same) await current.unsubscribe();
+    const subscription = same ? current : await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    h.pushService = "web";
+    h.pushToken = JSON.stringify(subscription.toJSON());
+    h.requestFrame?.();
+  } catch {
+    // Not now: the page shows them alone while it is open.
+  }
+}
+void subscribePush();
+// allowed later (asked from the app): subscribed then
+void navigator.permissions?.query({ name: "notifications" }).then((status) => {
+  status.addEventListener("change", () => void subscribePush());
+}, () => undefined);
+navigator.serviceWorker?.addEventListener("message", (event: MessageEvent) => {
+  const opens = (event.data as { stillfailNavigate?: unknown } | null)?.stillfailNavigate;
+  if (typeof opens === "string") (host() as (MbHost & MbHostPush) | undefined)?.noticeTapped(opens);
+});
+
 /// The page's address as a link the app was opened with (mbui's system channel, `{"link": url}`: a chat's
 /// /w/…/chats/… or /o/… page, as the app takes one the system opens it with), as it loads and as the browser goes back
 /// or forward to another; the app's own page names nothing.

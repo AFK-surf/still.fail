@@ -337,6 +337,19 @@ test "pushes: none registered without a token, taken off while off; a token regi
   let reg = named(calls4, "push.register")
   assert_eq(reg.length(), 1)
   assert_eq(reg[0].params, { "kind": "apns", "token": "ab12", "sandbox": true })
+  // a browser's: its push subscription, registered as the web's pages registered it
+  let calls5 : Array[Made] = []
+  let sys5 = fake_system()
+  sys5.token = "{\"endpoint\":\"https://push.example/e1\",\"expirationTime\":null,\"keys\":{\"p256dh\":\"pk\",\"auth\":\"au\"}}"
+  sys5.service = "web"
+  notify_core(calls5, sys5, notify=Ref({ "on": true, "asked": true, "push": true, "show": [] })) |> ignore
+  let reg = named(calls5, "push.register")
+  assert_eq(reg.length(), 1)
+  assert_eq(reg[0].params, {
+    "kind": "web",
+    "endpoint": "https://push.example/e1",
+    "keys": { "p256dh": "pk", "auth": "au" },
+  })
 }
 
 ///|

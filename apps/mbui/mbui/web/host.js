@@ -177,15 +177,20 @@
 
   // ---- notifications (src/hostapi/notify.mbt): the browser's, while the page is open ----
   // One per tag (the browser replaces one of the same tag); a click brings the page to the front and gives `opens` to
-  // the app (noticeText(0), once). Asked only from a press, as the browser lets a page ask.
+  // the app (noticeText(0), once). Asked only from a press, as the browser lets a page ask. Pushes while no page is
+  // open are the page's own (its service worker): it says its subscription as H.pushToken and its kind as
+  // H.pushService (noticeText(1), (2)), and a push's notification clicked as H.noticeTapped(opens).
   const notices = new Map();
   let noticeOpened = '', noticeAnswer = -1;
+  H.pushToken = '';
+  H.pushService = '';
+  H.noticeTapped = (opens) => { noticeOpened = String(opens); H.requestFrame(); };
   const canNotify = () => typeof Notification !== 'undefined';
   H.noticeShow = (channel, tag, title, body, opens) => {
     if (!canNotify() || Notification.permission !== 'granted') { H.log('NOTICE ' + tag + '\t' + title + '\t' + body); return; }
     try {
       const n = new Notification(title, { body, tag: tag || undefined });
-      n.onclick = () => { window.focus(); noticeOpened = opens; n.close(); H.requestFrame(); };
+      n.onclick = () => { window.focus(); n.close(); H.noticeTapped(opens); };
       if (tag) { notices.get(tag)?.close(); notices.set(tag, n); }
     } catch (e) { H.log('NOTICE ' + tag + '\t' + title + '\t' + body); }
   };
@@ -205,6 +210,8 @@
     return 0;
   };
   H.noticeText = (what) => {
+    if (what === 1) return H.pushToken;
+    if (what === 2) return H.pushToken ? H.pushService : '';
     if (what !== 0) return '';
     const o = noticeOpened;
     noticeOpened = '';
