@@ -11,6 +11,7 @@ pub let said_paths : Map[String, Array[String]] = {
   ],
   "adbShare": [
     "message",
+    "grants.*.chatTitle",
     "grants.*.reason",
     "lends.*.message",
   ],

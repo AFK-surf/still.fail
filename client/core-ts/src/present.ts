@@ -39,7 +39,7 @@ export function stamp(ms: number, c: Clock): Record<string, unknown> {
 
 /// Times kept in seconds (still.fail cloud's) and in milliseconds (the station's).
 const SECONDS = ["created_at", "expires_at", "used_at", "revoked_at", "last_seen", "lastSeen"];
-const MILLIS = ["createdAt", "lastActiveAt", "checkedAt", "resetsAt"];
+const MILLIS = ["createdAt", "lastActiveAt", "lastUsedAt", "checkedAt", "resetsAt"];
 
 /// What a window with `used` percent of it used has left, and how full it is.
 export function leftLevel(used: number): [number, string] {
@@ -124,7 +124,7 @@ export function times(value: unknown, c: Clock): unknown {
   return changed ? map : value;
 }
 
-const NO_TICK = new Set(["live", "thread", "letters", "history", "host", "net", "way", "stationNet", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "adbShare", "slackTokens", "joinable", "memberships", "screens", "screenCard"]);
+const NO_TICK = new Set(["live", "thread", "letters", "history", "host", "net", "way", "stationNet", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "slackTokens", "joinable", "memberships", "screens", "screenCard"]);
 
 /// Whether a topic shows times in words, sent again each minute while shown.
 export function ticks(topic: Topic): boolean {

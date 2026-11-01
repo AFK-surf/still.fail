@@ -92,17 +92,20 @@ export class GrantServers {
     return [...this.#servers.keys()];
   }
 
-  /// Whether the process at the other end of `socket` (a loopback connection to a phone's port) is one of `ids`'
-  /// servers.
-  async allowed(socket: net.Socket, ids: string[]): Promise<boolean> {
-    const pids = new Set<number>();
+  /// Which grant's server is at the other end of `socket` (a loopback connection to a phone's port), if any.
+  async owner(socket: net.Socket, ids: string[]): Promise<string | null> {
+    const pids = new Map<number, string>();
     for (const id of ids) {
       const s = await this.#servers.get(id);
-      if (s?.child.pid !== undefined) pids.add(s.child.pid);
+      if (s?.child.pid !== undefined) pids.set(s.child.pid, id);
     }
-    if (pids.size === 0 || socket.remotePort === undefined) return false;
+    if (pids.size === 0 || socket.remotePort === undefined) return null;
     const holders = await platform.tcpPortPids(socket.remotePort);
-    return holders.some((p) => pids.has(p));
+    for (const p of holders) {
+      const id = pids.get(p);
+      if (id !== undefined) return id;
+    }
+    return null;
   }
 
   async close(): Promise<void> {

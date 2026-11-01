@@ -16,12 +16,14 @@ function world() {
   const told: string[] = [];
   const heard: PhoneRequest[] = [];
   const audiences: (string | null | undefined)[] = [];
+  const changes: string[] = [];
+  const titles = new Map([["s1", "First chat"], ["s2", "Second chat"], ["s3", "Home chat"]]);
   const sessions = new Map<string, { archivedAt?: number | null; ws: string | null; workspace: string }>([
     ["s1", { ws: "work-a", workspace: "/chat/s1" }],
     ["s2", { ws: "work-b", workspace: "/chat/s2" }],
     ["s3", { ws: null, workspace: "/chat/s3" }],
   ]);
-  const subscribers: ((c: { type: string; key: string; ws?: string | null }) => void)[] = [];
+  const subscribers: ((c: { type: string; key?: string; id?: number; ws?: string | null }) => void)[] = [];
   let n = 0;
   const hub = {
     store: {
@@ -38,16 +40,17 @@ function world() {
         c.card = f(c.card);
         return true;
       },
-      subscribe: (f: (c: { type: string; key: string; ws?: string | null }) => void) => void subscribers.push(f),
+      threadSessions: (thread: number) => thread === 1 ? [{ session: "s1" }] : [],
+      subscribe: (f: (c: { type: string; key?: string; id?: number; ws?: string | null }) => void) => void subscribers.push(f),
     },
     chat: () => ({ post: async () => `t${n + 1}` }),
     shared: () => {},
     notify: (_s: string, text: string) => void told.push(text),
   };
   let ids = 0;
-  const grants = new PhoneGrants({ db: new DatabaseSync(":memory:"), hub, home: () => "home", now: () => now, told: (r, workspace) => { heard.push({ ...r }); audiences.push(workspace); }, id: () => `p${++ids}` });
+  const grants = new PhoneGrants({ db: new DatabaseSync(":memory:"), hub, home: () => "home", title: (r) => titles.get(r.session) ?? null, now: () => now, told: (r, workspace, change) => { heard.push({ ...r }); audiences.push(workspace); changes.push(change); }, id: () => `p${++ids}` });
   return {
-    grants, cards, told, heard, audiences,
+    grants, cards, told, heard, audiences, changes,
     pass: (ms: number) => void (now += ms),
     archive: (s: string) => {
       sessions.set(s, { ...sessions.get(s)!, archivedAt: now });
@@ -57,6 +60,10 @@ function world() {
       const ws = sessions.get(s)!.ws;
       sessions.delete(s);
       for (const f of subscribers) f({ type: "sessionRemoved", key: s, ws });
+    },
+    rename: (s: string, title: string) => {
+      titles.set(s, title);
+      for (const f of subscribers) f({ type: "thread", id: 1 });
     },
   };
 }
@@ -82,6 +89,30 @@ test("phone grants are listed, decided and announced only in their chat's worksp
   assert.equal(w.grants.get("p1")!.status, "ended");
   assert.equal(w.audiences.at(-1), "work-a");
   assert.deepEqual(listed("work-a"), []);
+});
+
+test("a grant reports its chat title and actual use, and follows a rename", async () => {
+  const w = world();
+  await w.grants.ask("s1", "look at the keyboard");
+  assert.equal(w.grants.decide("pat@example.com", "p1", "chat", "work-a"), null);
+  assert.equal(w.grants.ofOwner("pat@example.com", "work-a")[0]!.chatTitle, "First chat");
+  assert.equal(w.grants.get("p1")!.lastUsedAt, undefined);
+  w.pass(5000);
+  w.grants.used("p1", true);
+  const at = w.grants.get("p1")!.lastUsedAt;
+  assert.equal(at, 1_800_000_005_000);
+  assert.equal(w.changes.at(-1), "used");
+  assert.equal(w.audiences.at(-1), "work-a");
+  // A rename is sent even while no command is run, without changing the use time.
+  w.rename("s1", "Keyboard investigation");
+  assert.equal((w.heard.at(-1) as PhoneRequest & { chatTitle: string }).chatTitle, "Keyboard investigation");
+  assert.equal(w.changes.at(-1), "title");
+  assert.equal(w.grants.get("p1")!.lastUsedAt, at);
+  assert.equal(w.grants.revoke("pat@example.com", "p1", "work-a"), null);
+  assert.equal(w.grants.get("p1")!.lastUsedAt, undefined);
+  w.pass(5000);
+  w.grants.used("p1", true);
+  assert.equal(w.grants.get("p1")!.lastUsedAt, undefined);
 });
 
 test("a phone asked for in a chat: a card to the person its agent works for, granted to that chat alone", async () => {

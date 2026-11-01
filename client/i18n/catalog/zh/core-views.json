@@ -442,6 +442,7 @@
   "core-views.adb.card.elsewhere": "正在共享给另一台 station",
   "core-views.adb.card.connecting": "正在连接 station",
   "core-views.adb.card.attaching": "正在连接 adb",
+  "core-views.adb.card.shared": "共享中",
   "core-views.adb.card.connected": "共享中 · 剩余 {n} 分钟",
   "core-views.adb.card.unpaired": "尚未配对",
   "core-views.adb.card.wireless_off": "手机上的无线调试未开启",

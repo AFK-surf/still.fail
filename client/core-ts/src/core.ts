@@ -288,7 +288,7 @@ export class Core {
       });
       handlers.adb = (_i, call) => inner.adb.run((call as Extract<Call, { kind: "adb" }>).call);
       // This person's chats' grants of their phone, as each station says them (docs/adb-share.md).
-      inner.stations.also.push({ read: (address) => inner.adb.readGrants(address), event: (address, name, data) => (name === "adb-grant" ? inner.adb.heard(address, data) : undefined) });
+      inner.stations.also.push({ read: (address) => inner.adb.readGrants(address), event: (address, name, data) => (name === "adb-grant" ? inner.adb.heard(address, data) : undefined), resume: true });
       handlers.ask = (_i, call) => asks.run((call as Extract<Call, { kind: "ask" }>).ask, inner.accounts);
       inner.changelog = new Changelog(inner.host, inner.store, inner.data);
       inner.router.owners.push(inner.changelog);

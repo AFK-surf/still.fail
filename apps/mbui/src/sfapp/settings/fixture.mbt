@@ -344,6 +344,8 @@ pub fn fixture_page(mode : String) -> String {
     ))
   }
   match m {
+    // The grants list with long reasons is itself in view for the spacing and corner sweeps.
+    "settings-adb-chats-long" => up("", "settings/adb/", 4)
     "settings-station-mark" => up("mark", "", 0)
     // the page's 设置 (its variables' sheet up over it), its 软件与设备
     "settings-station-env" => station_parts["ws1/st1"] = "settings"
@@ -454,7 +456,7 @@ pub fn fixture_page(mode : String) -> String {
       "stations"
     "settings-adb" | "settings-adb-off" | "settings-adb-unpaired" | "settings-adb-pairing" | "settings-adb-connected" | "settings-adb-failed" =>
       "adb:ws1/st1"
-    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-idle" => "adb:"
+    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-idle" => "adb:"
     // the second station a phone is lent to, its first paired already
     "settings-adb-second" => "adb:ws1/st2"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-login" | "settings-profile-login-station" =>
@@ -2939,6 +2941,22 @@ fn fx_adb_share() -> Json {
           ]),
         ),
       ])
+    // The length and mix of reasons people see in the grants list, including one from before use times were recorded.
+    "chats-long" =>
+      obj([
+        ("sharing", Json::boolean(true)),
+        ("station", str("ws1/st1")),
+        ("phase", str("offered")),
+        ("adb", str("connected")),
+        ("on", Json::boolean(true)),
+        ("tunnels", Json::number(0.0)),
+        ("lends", [obj([("station", str("ws1/st1")), ("phase", str("offered")), ("adb", str("connected")), ("tunnels", Json::number(1.0))])]),
+        ("grants", [
+          obj([("station", str("ws1/st1")), ("id", str("p-long-1")), ("session", str("s-c1")), ("chatTitle", str("键盘升起卡顿排查")), ("reason", str("在固定的开发版里用假数据打开对话，让键盘升起再收起，记录每一帧的时间和显示时刻，量完就停")), ("status", str("granted")), ("scope", str("chat")), ("time", obj([("lastUsedAt", stamp_of("3 分钟前"))]))]),
+          obj([("station", str("ws1/st1")), ("id", str("p-long-2")), ("session", str("s-c2")), ("chatTitle", str("客户端卡顿排查")), ("reason", str("量整页重搭那一帧实际跑多久，CPU 跑在什么频率，并比较改动前后的差别")), ("status", str("granted")), ("scope", str("chat")), ("time", obj([("lastUsedAt", stamp_of("2 小时前"))]))]),
+          obj([("station", str("ws1/st1")), ("id", str("p-long-3")), ("session", str("s-c3")), ("chatTitle", str("检查登录页面")), ("reason", str("检查登录页面")), ("status", str("granted")), ("scope", str("hour"))]),
+        ]),
+      ])
     // settings' 共享调试, its switch on: two chats granted it, one asking; lent to both their stations, Studio's adb
     // holding the phone and the other's waiting to be paired
     "chats" | "chats-off" =>
@@ -2961,7 +2979,7 @@ fn fx_adb_share() -> Json {
           Json::array([
             obj([("station", str("ws1/st1")), ("id", str("p-1")), ("reason", str("装上刚编好的测试包，看首屏在折叠屏展开时排得对不对")), ("status", str("granted")), ("scope", str("chat"))]),
             obj([("station", str("ws1/st2")), ("id", str("p-2")), ("reason", str("录一段登录流程的视频")), ("status", str("granted")), ("scope", str("hour"))]),
-            obj([("station", str("ws1/st1")), ("id", str("p-3")), ("session", str("s-c1")), ("reason", str("看通知权限弹窗的文案")), ("status", str("pending"))]),
+            obj([("station", str("ws1/st1")), ("id", str("p-3")), ("session", str("s-c1")), ("chatTitle", str("通知权限检查")), ("reason", str("看通知权限弹窗的文案")), ("status", str("pending"))]),
           ]),
         ),
       ])

@@ -273,12 +273,71 @@ test "settings' 共享调试: a pending request comes before information and ope
   guard t.find("等你允许") is Some((_, pending_y)) else { fail("the request is shown") }
   guard t.find("共享给的 station") is Some((_, stations_y)) else { fail("the stations are shown") }
   assert_true(pending_y < stations_y)
-  t.tap_text("看通知权限弹窗的文案")
+  t.tap_text("通知权限检查")
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("发消息") is Some(_))
   guard app.nav.top() is Chat(opened) else { fail("the request's chat is open") }
   assert_eq(opened.station, "ws1/st1")
   assert_eq(opened.session, "s-c1")
+}
+
+///|
+test "settings' 共享调试: grants show each chat, its reason and when it was last used" {
+  let t = settings_tester("adb:", shows="settings-adb-chats-long", platform=2)
+  assert_true(t.find("键盘升起卡顿排查") is Some(_))
+  assert_true(t.find("客户端卡顿排查") is Some(_))
+  assert_true(t.find("3 分钟前") is Some(_))
+  assert_true(t.find("2 小时前") is Some(_))
+  assert_true(t.find("暂无使用记录") is Some(_))
+  // Long reasons take the same single line, not as many lines as their words need.
+  let long = t.rect_of("在固定的开发版里").unwrap()
+  let short = t.rect_of("量整页重搭").unwrap()
+  assert_eq(long.3, short.3)
+  // Each action is at the same end of its row, regardless of the title or the time's length.
+  let actions = t.words().filter(fn(w) { w.0 == "收回" })
+  assert_eq(actions.length(), 3)
+  assert_eq(actions[0].1, actions[1].1)
+  assert_eq(actions[1].1, actions[2].1)
+  // Each action has a full touch target inside its own row.
+  let rooms = t.room_faults()
+  assert_true(!rooms.iter().any(fn(f) { f.contains("「收回」") }), msg="\{rooms}")
+}
+
+///|
+test "settings' 共享调试: the grants list keeps its spacing and each action has room" {
+  for win in corner_windows {
+    for lang in ["zh", "en"] {
+      let t = screen_in("settings-adb-chats-long", win, lang)
+      let gaps = t.gap_faults()
+      assert_true(gaps.is_empty(), msg="\{win.0}-\{lang}: \{gaps}")
+      let rooms = t.room_faults().filter(fn(f) { f.contains("「收回」") || f.contains("「Take back」") })
+      assert_true(rooms.is_empty(), msg="\{win.0}-\{lang}: \{rooms}")
+    }
+  }
+}
+
+///|
+test "settings' 共享调试: the take back button acts on its own chat" {
+  new_run()
+  @settings.fixture_page("settings-adb-chats-long") |> ignore
+  let base = fixture("settings")
+  let calls : Array[Made] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting("adb:")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("收回")
+  t.draw()
+  let asked = calls.filter(fn(call) { call.name == "adb.revoke" })
+  assert_eq(asked.length(), 1)
+  assert_eq(asked[0].params, { "station": "ws1/st1", "request": "p-long-1" })
 }
 
 ///|
