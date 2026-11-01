@@ -1188,6 +1188,7 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// what the pointer is moving over, held still under it).
 /// `flow`: a row that goes on in lines when what it holds does not fit, each thing in it as wide as it is, `gap` apart
 /// along the line and between the lines, or `line_gap` between the lines (Compose's FlowRow and its two spacedBy).
+/// `flow_reverse`: a flow whose later lines go above its first, which stays at the bottom; implies `flow`.
 /// `gone_empty`: built holding nothing, it takes no room, its padding and margins none (CSS's :empty { display: none }):
 /// the room over a part that has nothing in it this time (a dialog's body) not left standing empty.
 /// `label`: what it is called where it shows no words (an icon's button, as Compose's contentDescription), found by
@@ -1267,6 +1268,7 @@ pub fn Ctx::box(
   tallest? : Bool = false,
   shadow_out? : Bool = false,
   flow? : Bool = false,
+  flow_reverse? : Bool = false,
   line_gap? : Double = -1.0,
   gone_empty? : Bool = false,
   label? : String = "",
@@ -1321,7 +1323,8 @@ pub fn Ctx::box(
   n.drop = if more { -1 } else { drop }
   n.one_of = one_of
   n.shadow_out = shadow_out
-  n.flow = flow
+  n.flow = flow || flow_reverse
+  n.flow_reverse = flow_reverse
   n.line_gap = line_gap
   n.label = label
   n.name = name

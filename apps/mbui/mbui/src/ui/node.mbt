@@ -314,6 +314,8 @@ struct Node {
   // a row that goes on in lines when what it holds does not fit (Ctx::box `flow`: Compose's FlowRow), what it holds
   // as wide as it is
   mut flow : Bool
+  // a flow's later lines go above its first (Ctx::box `flow_reverse`)
+  mut flow_reverse : Bool
   // between a flow's lines (-1: its gap)
   mut line_gap : Double
   // what it is called where it shows no words of its own (an icon's button: Compose's contentDescription), found by
@@ -520,6 +522,7 @@ fn Node::new() -> Node {
     fit_least: 0.0,
     soft_least: 0.0,
     flow: false,
+    flow_reverse: false,
     line_gap: -1.0,
     label: "",
     name: "",
@@ -640,6 +643,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.one_of = false
   self.tallest = false
   self.flow = false
+  self.flow_reverse = false
   self.line_gap = -1.0
   self.label = ""
   self.name = ""

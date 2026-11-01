@@ -5,7 +5,8 @@
 // MBUI_FAILED=<topic>,…: those topics fail to be read, the core saying why as MBUI_FAILED_WHY. MBUI_WINDOW=<its text>:
 // a window of its own (sfbase's window_text), its page alone.
 // MBUI_CORE_MS: the made-up core answers each call and gives each topic's first value that many ms late, as a phone's
-// core does a round trip later (what shows meanwhile filmed too); by default at once. MBUI_SAID=1: what people, agents
+// core does a round trip later (what shows meanwhile filmed too); by default at once. MBUI_FILM_AUTOFILL=1: a password
+// manager is available. MBUI_SAID=1: what people, agents
 // and stations wrote at its longest (sfapp's fixture_said.mbt: scripts/squeeze.sh's MBUI_SAID). MBUI_UPDATE=<version>:
 // a newer build offered; MBUI_UPDATES_MS=<ms>: newer builds asked of a made-up source answering that late.
 
@@ -26,6 +27,9 @@ fn main {
     match src.val {
       Some(s) => s
       None => {
+        if @film.arg("MBUI_FILM_AUTOFILL") == "1" {
+          @ui.fake_autofill.val = true
+        }
         let s = @sfapp.fixture_app(mode)
         // MBUI_WINDOW=<what a window of its own is started with>: this run that window, its page alone (sfbase's
         // window_page, as src/stillfail's main reads it)

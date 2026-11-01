@@ -138,9 +138,11 @@ fn item_blocks(
         c.text(@sf.t("web-pages.vault.risk.body", args=[("station", text(vv, "stationName"))]), style=desk_muted) |> ignore
         // (its button in its foot corner, concentric with it)
         c.box(style=pf_card_foot.then(@sf.foot_reach(@sf.button_height())), fn() {
-          if @sf.button(c, @sf.t("web-pages.vault.lib.turnOn"), key=key + "/lock", tone=Primary) {
-            (core.push)(Security)
-          }
+          @sf.card_foot_words(fn() {
+            if @sf.button(c, @sf.t("web-pages.vault.lib.turnOn"), key=key + "/lock", tone=Primary) {
+              (core.push)(Security)
+            }
+          })
         })
         |> ignore
       })

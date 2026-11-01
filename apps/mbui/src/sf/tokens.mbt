@@ -604,6 +604,26 @@ pub fn foot_across(height : Double) -> @ui.Style {
 }
 
 ///|
+/// How much room a control in the card's corner leaves before its words, so they start at the card's words.
+fn card_foot_words_in(height : Double) -> Double {
+  card_pad - card_foot_in(height)
+}
+
+///|
+/// Build controls at a card's foot, or fields immediately above them, with their words on the card's line (`on` when
+/// they are on a card). The previous setting is put back afterwards.
+pub fn card_foot_words(body : () -> Unit, on? : Bool = true) -> Unit {
+  let was = card_foot_words_now.val
+  card_foot_words_now.val = was || on
+  body()
+  card_foot_words_now.val = was
+}
+
+///|
+// kept across runs: set while a card's foot and its fields are built, and put back afterwards
+let card_foot_words_now : Ref[Bool] = Ref(false)
+
+///|
 pub fn foot_start(height : Double, words_in : Double) -> @ui.Style {
   @ui.style(ml=room(card_foot_in(height) - card_pad), pl=room(words_in + card_pad - card_foot_in(height)))
 }

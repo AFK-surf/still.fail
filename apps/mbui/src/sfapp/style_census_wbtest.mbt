@@ -72,10 +72,12 @@ test "styles: how many values of each kind the app's screens use" {
     println("census " + k.0 + " " + values.length().to_string() + ": " + values.join(" "))
     counts.write_string(k.0 + " " + values.length().to_string() + "\n")
   }
+  // Two fractional spaces are derived from the card's corner for a button and a shorter chooser in its foot; they
+  // follow that corner and the controls' heights, rather than adding independent spacing tokens.
   inspect(counts.to_string(), content=(
     #|text 35
     #|weight 4
-    #|space 23
+    #|space 25
     #|radius 23
     #|color 65
     #|

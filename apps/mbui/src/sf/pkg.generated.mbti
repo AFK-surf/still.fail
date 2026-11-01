@@ -204,6 +204,8 @@ pub fn card_foot(@ui.Ctx, () -> Unit, at_end? : Bool) -> Unit
 
 pub fn card_foot_in(Double) -> Double
 
+pub fn card_foot_words(() -> Unit, on? : Bool) -> Unit
+
 pub let card_line : @ui.TextStyle
 
 pub fn card_lines(@ui.Ctx, String, words? : String, note? : String, bad? : String, title_after? : () -> Unit) -> Unit
@@ -244,7 +246,7 @@ pub fn choice_row(@ui.Ctx, String, Bool, String, body? : () -> Unit, note? : Str
 
 pub fn choices(@ui.Ctx, String, String, Array[(String, String, String)], label? : String, icon? : (String) -> Unit, extra? : (String) -> (() -> Unit)?, disabled? : Array[String], note? : (String) -> Unit) -> String
 
-pub fn chooser(@ui.Ctx, String, String, Array[@kit.Entry], () -> Bool, (Bool) -> Unit, side? : @view.Side, lead? : (Int64) -> Unit, disabled? : Bool, capsule? : Bool) -> @kit.Menu
+pub fn chooser(@ui.Ctx, String, String, Array[@kit.Entry], () -> Bool, (Bool) -> Unit, side? : @view.Side, lead? : (Int64) -> Unit, disabled? : Bool, capsule? : Bool, as_button? : Bool) -> @kit.Menu
 
 pub let chooser_chevron : Double
 

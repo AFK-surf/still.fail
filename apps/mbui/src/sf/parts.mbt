@@ -53,11 +53,33 @@ pub fn button(
   reach? : @ui.Style,
   hint? : String = "",
 ) -> Bool {
+  button_part(c, label, key~, tone~, icon~, busy~, disabled~, w~, reach?, hint~).0
+}
+
+///|
+// The same button can anchor a choice's menu. Keep its node for focus and its expanded state for accessibility.
+fn button_part(
+  c : @ui.Ctx,
+  label : String,
+  key? : String = "",
+  tone? : Tone = Plain,
+  icon? : String = "",
+  busy? : Bool = false,
+  disabled? : Bool = false,
+  w? : @ui.Size = Auto,
+  reach? : @ui.Style,
+  hint? : String = "",
+  end_icon? : String = "",
+  lead? : (Int64) -> Unit,
+  ink_override? : Int64,
+  active? : Bool = false,
+  expanded? : Bool,
+) -> (Bool, Int) {
   let t = theme()
   let p = t.p
   let id = c.id(if key == "" { "sf-btn/" + label } else { key })
   let live = !disabled && !busy
-  let h = ease_to(c, "sf-btn-h/\{id}", live && (c.lit(id) || c.pressed(id)))
+  let h = ease_to(c, "sf-btn-h/\{id}", live && (c.lit(id) || c.pressed(id) || active))
   // (turning and greyed as a control answers: over dur_ms, never at once. With an icon, the spinner in its place, the
   // icon fading out under it as it fades in, nothing moved; with none, the spinner coming in before its words, which
   // stay: they are what it does, said on as it does it. At work is not greyed: it is the button pressed, at full
@@ -74,7 +96,7 @@ pub fn button(
     },
     spec=@motion.tween(dur_ms, ease=Out),
   )
-  let (ground, line, ink) = if on_night.val {
+  let (ground, line, tone_ink) = if on_night.val {
     // (on a stage: the night under it whatever the theme)
     match tone {
       Primary | DangerSolid => (mix(0xFFFFFFFFL, h, share_ink), 0L, share_ground)
@@ -105,6 +127,7 @@ pub fn button(
       }
     }
   }
+  let ink = ink_override.unwrap_or(tone_ink)
   // (among the tools of a bar across the top: level with them and the window's buttons)
   let height = if tools_across.val { viewer_tool_h } else { button_height() }
   let solid = tone == Primary || tone == DangerSolid
@@ -115,6 +138,11 @@ pub fn button(
     None if (tone == Ghost || tone == GhostDanger) && at_row_end() => Some(outset_end(button_padx))
     r => r
   }
+  // The corner sets the outside edge; padding puts the words on the card's line. In a fixed row only the first button
+  // can stand at its start; in a wrapping row any of them can. A button with an icon keeps its balanced ends.
+  let aligned = card_foot_first.val || card_foot_words_now.val
+  card_foot_first.val = false
+  let padx = if aligned && icon == "" && lead is None && w is Auto && reach is None { card_foot_words_in(height) } else { button_padx }
   // (its words' node, as built: how they move with it)
   let mut words_at = -1
   let b = c.box(
@@ -123,7 +151,7 @@ pub fn button(
     w~,
     keep=foot_fills.val && w is Fill(_),
     h=Px(height),
-    padx=button_padx,
+    padx~,
     gap=if t.touch { 8.0 } else { 6.0 },
     align=ACenter,
     justify=JCenter,
@@ -161,6 +189,10 @@ pub fn button(
         })
         |> ignore
       }
+      match lead {
+        Some(f) => f(ink)
+        None => ()
+      }
       let words_in = fn() {
         let words = c.text(
           label,
@@ -193,6 +225,9 @@ pub fn button(
       } else {
         words_in()
       }
+      if end_icon != "" {
+        draw_icon(c, end_icon, button_icon, ink, by_ink=true)
+      }
     },
   )
   // its words changed (复制图片 to 已复制): its ground goes from the width it had to the new one, its words with it, on
@@ -208,11 +243,11 @@ pub fn button(
   }
   // (said a button whether it takes presses or not: one that cannot is said disabled, not left out of the tree, and its
   // faded words are asked no contrast)
-  c.semantics(b, Button, id=if live { id } else { 0 }, label~, disabled=!live)
+  c.semantics(b, Button, id=if live { id } else { 0 }, label~, expanded?, disabled=!live)
   if live {
     tip(c, "sf-btn/" + key + label + "/tip", id, hint)
   }
-  live && c.clicked(id)
+  (live && c.clicked(id), b)
 }
 
 ///|
@@ -2570,6 +2605,7 @@ pub fn input(
       (true, false) => input_box_small
       (true, true) => input_box_small_hot
     }
+    let look = if card_foot_words_now.val { look.then(@ui.style(px=room(card_foot_words_in(button_height())))) } else { look }
     c.box(
       id=s.id,
       style=if solid {
@@ -2630,6 +2666,7 @@ pub fn textarea(
     None => field_corner().then(@ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in)))
   }
   let look = if hot { textarea_box_hot } else { textarea_box }
+  let look = if card_foot_words_now.val { look.then(@ui.style(px=room(card_foot_words_in(button_height())))) } else { look }
   let look = if solid { look.then(if hot { field_solid_hot } else { field_solid }) } else { look }
   c.box(id=box_id, style=look.then(tall), fn() {
     words = c.editor(
@@ -3419,7 +3456,8 @@ let command_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 /// view's; `set_open`: what opens or closes it, as it is pressed (as it is let go) or dismissed (at that moment: Escape,
 /// a press beside it). What was chosen comes back. `lead`: what stands before its words (a station's mark), in the ink
 /// its words have. `disabled`: out of reach, with any open menu closed. `capsule`: round it as a capsule when it sits
-/// at the end of another capsule, so the two can share a centre.
+/// at the end of another capsule, so the two can share a centre. `as_button`: the size and text style of a button,
+/// retaining the chooser's quiet colors, with a chevron after its words.
 pub fn chooser(
   c : @ui.Ctx,
   key : String,
@@ -3431,6 +3469,7 @@ pub fn chooser(
   lead? : (Int64) -> Unit,
   disabled? : Bool = false,
   capsule? : Bool = false,
+  as_button? : Bool = false,
 ) -> @kit.Menu {
   let p = theme().p
   let id = c.id(key)
@@ -3452,18 +3491,49 @@ pub fn chooser(
   let opened = open() && !disabled
   let focused = !disabled && c.focus_shown(id)
   let lit = !disabled && (c.lit(id) || opened || focused)
-  let b = c.box(style=if capsule { chooser_box.then(chooser_capsule) } else { chooser_box }, selected=opened || focused, disabled~, id=if disabled { 0 } else { id }, fn() {
-    match lead {
-      Some(f) => f(if lit { p.text } else { p.muted })
-      None => ()
-    }
-    c.text(words, style=if lit { chooser_words_lit } else { chooser_words }) |> ignore
-    icon(c, "chevron-down", size=chooser_chevron, color=if lit { p.text } else { p.muted }) |> ignore
-  })
+  let at_foot = card_foot_words_now.val
+  let height = @ui.Space::px(S7)
+  let mut b = -1
+  let draw = fn() {
+    let look = if capsule || at_foot { chooser_box.then(chooser_capsule) } else { chooser_box }
+    let look = if at_foot && lead is None { look.then(@ui.style(px=room(card_foot_words_in(height)))) } else { look }
+    b = c.box(style=look, selected=opened || focused, disabled~, id=if disabled { 0 } else { id }, fn() {
+      match lead {
+        Some(f) => f(if lit { p.text } else { p.muted })
+        None => ()
+      }
+      c.text(words, style=if lit { chooser_words_lit } else { chooser_words }) |> ignore
+      icon(c, "chevron-down", size=chooser_chevron, color=if lit { p.text } else { p.muted }) |> ignore
+    })
+  }
+  if as_button {
+    let (_, node) = button_part(
+      c,
+      words,
+      key~,
+      tone=Ghost,
+      disabled~,
+      end_icon="chevron-down",
+      lead?,
+      ink_override=if lit { p.text } else { p.muted },
+      active=opened || focused,
+      expanded=opened,
+    )
+    b = node
+  } else if at_foot {
+    // A 28-high chooser may wrap to the foot's corner on its own. Give it a button-high line and put its capsule
+    // where that height meets the card's corner; its words then meet the card's words as the buttons' do.
+    let inset = card_foot_in(height) - card_foot_in(button_height())
+    c.box(style=@ui.style(row=true, h=Fixed(button_height()), pl=room(inset), align=ACenter), draw) |> ignore
+  } else {
+    draw()
+  }
   if !disabled {
     c.focusable(id, node=b)
   }
-  c.semantics(b, Button, id=if disabled { 0 } else { id }, label=words, expanded=opened, disabled~)
+  if !as_button {
+    c.semantics(b, Button, id=if disabled { 0 } else { id }, label=words, expanded=opened, disabled~)
+  }
   let menu : Ref[@kit.Menu?] = Ref(None)
   c.with_dismissed(fn(_) { set_open(false) }, fn() {
     menu.val = Some(dropdown(c, key + "/menu", opened, if disabled { 0 } else { id }, entries, {}, chooser_menu_w, side~))
