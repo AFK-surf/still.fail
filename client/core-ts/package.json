@@ -2,6 +2,9 @@
   "name": "@stillfail/core-ts",
   "private": true,
   "type": "module",
+  "imports": {
+    "#mermaid-lib": { "hermes": "./src/mermaid-lib-hermes.ts", "default": "./src/mermaid-lib.ts" }
+  },
   "description": "The still.fail client core in TypeScript (docs/core-ts.md): the same protocol, data and words as client/core-ts",
   "scripts": {
     "check": "tsgo --noEmit",
@@ -22,6 +25,8 @@
     "fzstd": "0.1.1",
     "markdown-it": "14.1.0",
     "markdown-it-cjk-friendly": "2.0.3",
+    "linkedom": "0.18.14",
+    "mermaid": "11.17.2",
     "ws": "8.22.0"
   },
   "devDependencies": {
@@ -31,7 +36,8 @@
     "@types/node": "24.10.1",
     "@types/ws": "8.18.2",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "fontkit": "2.0.4"
   },
   "packageManager": "pnpm@10.33.0"
 }

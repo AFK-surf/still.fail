@@ -626,7 +626,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
           let block = mermaid_blocks.val
           mermaid_blocks.val += 1
           Some(fn() {
-            c.scope(block, fn() { viz_mermaid_block(c, "chat/" + here.station + ":" + here.session + "/" + m.ts, code, @sf.theme().p.subtle) })
+            c.scope(block, fn() { viz_mermaid_block(c, src, here.station, "chat/" + here.station + ":" + here.session + "/" + m.ts, code, @sf.theme().p.subtle) })
           })
         } else {
           None

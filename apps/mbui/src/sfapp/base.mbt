@@ -40,7 +40,6 @@ pub using @sfbase {
   viz_full,
   viz_ground,
   viz_mermaid_block,
-  viz_mermaid_document,
   viz_open_full,
   drive_player,
   drive_reader,

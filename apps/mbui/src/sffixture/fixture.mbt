@@ -1170,6 +1170,24 @@ pub fn fixture(mode : String) -> Source {
         }
         None => ()
       }
+      // a ```mermaid block's chart, as the core makes it (its code a box's words: what the core's mermaid.ts makes of it
+      // is the core's to test) and mermaid as the app gives it the core
+      if name == "mermaid.load" {
+        done(Ok(Json::object({})))
+        return
+      }
+      if name == "mermaid.chart" {
+        let code = text(Some(params), "code").replace_all(old="&", new="&amp;").replace_all(old="<", new="&lt;")
+        done(
+          Ok({
+            "svg": ("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 320 160\"><rect width=\"320\" height=\"160\" fill=\"#ffffff\"/>" +
+            "<text x=\"16\" y=\"80\">" + code + "</text></svg>").to_json(),
+            "width": 320.0.to_json(),
+            "height": 160.0.to_json(),
+          }),
+        )
+        return
+      }
       // the faces' files (fonts_fixture.mbt)
       if fixture_fonts_call(f, name, params, done) {
         return

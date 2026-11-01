@@ -22,7 +22,6 @@ using @sfbase {
   viz_frame,
   viz_full,
   viz_mermaid_block,
-  viz_mermaid_document,
   viz_open_full,
   drive_player,
   drive_reader,

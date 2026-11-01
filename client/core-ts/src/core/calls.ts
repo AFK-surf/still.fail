@@ -14,6 +14,7 @@ import { t } from "../i18n.ts";
 import * as keymap from "../keymap.ts";
 import * as ops from "../ops.ts";
 import type { Topic } from "../protocol.ts";
+import { LOOK_COLOURS, type MermaidLook } from "../mermaid.ts";
 import { draftAt } from "../refs.ts";
 import { StationAddr } from "../station/addr.ts";
 import type { FindAt, FindHit } from "../chat-find.ts";
@@ -147,6 +148,10 @@ export type Call =
   | { kind: "words"; what: "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" | "drive.check"; text: string; caret: number; here: string }
   /// A face's files on a device that keeps none of its own (font-files.ts): fetched, kept, given back.
   | { kind: "fonts"; call: FontsCall }
+  /// A ```mermaid block's chart as SVG (mermaid.ts), in the app's colours, `width` wide where it fills its width.
+  | { kind: "mermaidChart"; code: string; look: MermaidLook; width: number }
+  /// mermaid's script, beside the call (a core whose own has none: the app gives it the one it carries)
+  | { kind: "mermaidLoad"; bytes: Uint8Array }
   | { kind: "ask"; ask: Ask }
   | { kind: "adb"; call: AdbCall }
   /// A station's screen seen and driven (screens.ts): `screen.view` and what goes on it.
@@ -855,6 +860,25 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     case "fonts.preview": {
       const id = read(params, [["id", S, "req"]]).id as string;
       return { kind: "fonts", call: name === "fonts.fetch" ? { kind: "fetch", id } : { kind: "preview", id } };
+    }
+    case "mermaid.load":
+      return { kind: "mermaidLoad", bytes: beside(bytes) };
+    case "mermaid.chart": {
+      const p = read(params, [
+        ["code", S, "req"],
+        ["dark", "bool", "default"],
+        ["colours", "value", "req"],
+        ["width", "u32", "req"],
+      ]);
+      // each colour as `#rrggbb`: what goes into the chart's styles is a colour and nothing else
+      const colours = isObject(p.colours) ? p.colours : {};
+      const look = { dark: p.dark as boolean } as MermaidLook;
+      for (const name of LOOK_COLOURS) {
+        const c = colours[name];
+        if (typeof c !== "string" || !/^#[0-9a-fA-F]{6}$/.test(c)) throw CoreError.invalid(t("core-misc.params.invalid", { error: `colours.${name}: expected #rrggbb` }));
+        look[name] = c;
+      }
+      return { kind: "mermaidChart", code: p.code as string, look, width: Math.max(200, Math.min(4000, p.width as number)) };
     }
     // The file the app unzipped comes beside the call.
     case "fonts.file":

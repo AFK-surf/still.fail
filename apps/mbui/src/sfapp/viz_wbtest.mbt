@@ -1,5 +1,5 @@
 // Visualizations (viz.mbt) over the made-up chat (MBUI_FIXTURE=chat-viz: its last message places release.html and has
-// a mermaid chart), as Android's Viz.kt and VizFiles.kt have them.
+// a mermaid chart, the app's own picture), as Android's Viz.kt and VizFiles.kt have them.
 
 ///|
 /// A number as a line of the fake host's says it.
@@ -24,20 +24,28 @@ fn opened_views(t : @ui.Tester, kind : Int) -> Array[Int] {
 }
 
 ///|
-/// The page of the visualization the message places, and the mermaid chart's: by what each draws (the order they are
-/// opened in is the frame's builds', not the message's).
+/// The page of the visualization the message places, by what it draws, and no other.
 fn viz_views(t : @ui.Tester) -> (Int, Int) {
   ignore(t)
   let mut page = 0
-  let mut chart = 0
+  let mut other = 0
   for k, f in viz_frames {
     if k.has_suffix("/release.html") {
       page = f.view.id()
-    } else if k.contains("/mermaid/") {
-      chart = f.view.id()
+    } else {
+      other = f.view.id()
     }
   }
-  (page, chart)
+  (page, other)
+}
+
+///|
+/// A fragment's page in a message, for what all pages do.
+fn a_page(c : @ui.Ctx) -> Unit {
+  c.box(style=@sfbase.viz_mermaid_box, fn() {
+    @sfbase.viz_frame(c, "chat/ws1/st1:s-c1/message/page.html", "<p>图</p>", None, { keep: None, failed: None, follow_up: None })
+  })
+  |> ignore
 }
 
 ///|
@@ -65,7 +73,7 @@ test "two scoped copies of a visualization each own their native view" {
     c.with_theme(@sf.ui_theme(), fn() {
       for page in [1, 2] {
         c.scope(page, fn() {
-          viz_mermaid_block(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
+          a_page(c)
         })
       }
     })
@@ -74,7 +82,7 @@ test "two scoped copies of a visualization each own their native view" {
   t.check_looks(false)
   t.draw()
   let views = opened_views(t, 2)
-  assert_eq(views.length(), 2, msg="each page has its own Mermaid view")
+  assert_eq(views.length(), 2, msg="each page has its own view")
   assert_true(view_rect(t, views[0]).unwrap().1 != view_rect(t, views[1]).unwrap().1, msg="each view is placed at its own node")
 }
 
@@ -87,7 +95,7 @@ test "two copies of a visualization move with their rows while scrolling" {
       c.list("rows", 6, 160.0, fn(i) {
         c.column(h=Px(160.0), fn() {
           if i == 1 || i == 2 {
-            viz_mermaid_block(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
+            a_page(c)
           } else {
             c.text("row \{i}") |> ignore
           }
@@ -117,7 +125,7 @@ test "a visualization view is reused after its page leaves and all its copies cl
     @sf.begin(c) |> ignore
     c.with_theme(@sf.ui_theme(), fn() {
       c.nav(nav, fn(_) {
-        viz_mermaid_block(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
+        a_page(c)
       }) |> ignore
     })
   }, w=390.0, h=700.0, platform=1)
@@ -231,13 +239,13 @@ test "under the page: the whole screen, its name and a close over it; back close
   t.frame()
   assert_true(t.find("release.html") is Some(_))
   let full = opened_views(t, 2)
-  assert_eq(full.length(), 3)
+  assert_eq(full.length(), 2)
   // a page of its own: it keeps its touches
-  assert_false(t.views().iter().any(fn(l) { l.has_prefix("touch \{full[2]} ") }))
+  assert_false(t.views().iter().any(fn(l) { l.has_prefix("touch \{full[1]} ") }))
   t.back()
   t.frame()
   assert_true(t.find("release.html") is None)
-  assert_true(t.views().contains("close \{full[2]}"))
+  assert_true(t.views().contains("close \{full[1]}"))
 }
 
 ///|
@@ -298,62 +306,30 @@ test "beside: the visualization as a page of its own, served from here with what
 }
 
 ///|
-test "a mermaid chart is drawn as a page of its own; one that will not draw is shown as code from then on" {
+test "a mermaid chart is the app's own picture, no page for it; over the whole screen, the viewer's picture" {
   let t = chat_tester("chat-viz")
   t.frame()
-  let (_, chart) = viz_views(t)
+  t.frames_owed()
+  // the page the message places, and nothing else drawn in a page
+  let (page, other) = viz_views(t)
+  assert_true(page != 0)
+  assert_eq(other, 0)
+  // a picture, not its code
   assert_true(t.find("graph LR; 构建-->签名-->发布") is None)
-  t.view_says(chart, "{\"emberViz\":true,\"type\":\"failed\",\"message\":\"mermaid 加载失败\"}")
-  t.frame()
-  t.frame()
-  assert_true(t.find("graph LR; 构建-->签名-->发布") is Some(_))
-  assert_true(view_rect(t, chart) is None)
-}
-
-///|
-test "a mermaid chart's page carries mermaid itself: it draws with no network to fetch it from" {
-  let lib = @sfbase.viz_mermaid_lib()
-  assert_true(lib.contains("globalThis[\"mermaid\"]"))
-  let t = chat_tester("chat-viz")
-  t.frame()
-  let (_, chart) = viz_views(t)
-  let opened = t.views().iter().find_first(fn(l) { l.has_prefix("open \{chart} ") }).unwrap()
-  let words = opened.split(" ").map(fn(x) { x.to_owned() }).to_array()
-  assert_true(test_num(words[words.length() - 1]).to_int() > lib.length())
-  // ahead of the chart's own script, closed only where it ends
-  let doc = viz_document("<p>图</p>", None, false, 0xFFFFFFFFL, lib="globalThis.mermaid={s:\"</script>\"}")
-  assert_true(doc.contains("<script>globalThis.mermaid={s:\"<\\/script>\"}</script></head><body><p>图</p>"))
-}
-
-///|
-test "under a mermaid chart: the whole screen, the chart as written to pinch, its touches its own; back closes it" {
-  let t = chat_tester("chat-viz")
-  t.frame()
-  let (_, chart) = viz_views(t)
-  // drawn (a line of it, so what is under it is above the composer)
-  t.view_says(chart, "{\"emberViz\":true,\"type\":\"height\",\"height\":40}")
-  t.frame()
-  t.frame()
-  let (x, y, w, h) = view_rect(t, chart).unwrap()
-  // one 22 box under it, at its right
-  t.tap(x + w - 11.0, y + h + 2.0 + 11.0)
-  t.frame()
-  assert_true(t.find("Mermaid") is Some(_))
-  let mut full = 0
-  for k, f in viz_frames {
-    if k.has_prefix("full/mermaid/") {
-      full = f.view.id()
-      // fitted to the screen, the page moving it under the fingers
-      assert_true(f.html.contains("const FULL = true"))
-      assert_true(f.html.contains("touch-action:none"))
+  // the way under it to the whole screen (the lower of the two: the page the message places is over it): the viewer,
+  // the chart's picture in it
+  let ways = t.semantics().filter(fn(s) { s.label == viz_tr("android-misc.viz.fullscreen") && !s.hidden })
+  assert_eq(ways.length(), 2)
+  let f = if ways[0].rect.1 > ways[1].rect.1 { ways[0] } else { ways[1] }
+  t.tap(f.rect.0 + f.rect.2 / 2.0, f.rect.1 + f.rect.3 / 2.0)
+  t.frames_owed()
+  match @sfbase.viewer.get() {
+    Some(v) => {
+      assert_eq(v.file.name, "Mermaid.svg")
+      assert_true(v.file.path.has_prefix("draft:mermaid/"))
     }
+    None => fail("no viewer")
   }
-  assert_true(full != 0)
-  assert_false(t.views().iter().any(fn(l) { l.has_prefix("touch \{full} ") }))
-  t.back()
-  t.frame()
-  assert_true(t.find("Mermaid") is None)
-  assert_true(t.views().contains("close \{full}"))
 }
 
 ///|

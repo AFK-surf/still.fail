@@ -22,7 +22,11 @@ const built = await build({
   format: "iife",
   platform: "neutral",
   mainFields: ["module", "main"],
+  // (#mermaid-lib's: no mermaid in it, the app gives it: src/mermaid.ts)
+  conditions: ["hermes"],
   target: "es2020",
+  // Hermes 0.81 has no async functions: as generators (mermaid's, mermaid.ts's)
+  supported: { "async-await": false, "async-generator": false },
   // STILLFAIL_CORE_NAMES keeps the core's own names (a profile of it read as written: CoreProfileReceiver.kt).
   minifyWhitespace: true,
   minifySyntax: true,
